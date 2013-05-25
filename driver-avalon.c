@@ -309,7 +309,7 @@ static int avalon_write(int fd, char *buf, ssize_t len)
 		fd_set wd;
 
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 1000;
+		timeout.tv_usec = 100000;
 		FD_ZERO(&wd);
 		FD_SET((SOCKETTYPE)fd, &wd);
 		ret = select(fd + 1, NULL, &wd, NULL, &timeout);
@@ -339,7 +339,7 @@ static int avalon_read(int fd, char *buf, ssize_t len)
 		fd_set rd;
 
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 1000;
+		timeout.tv_usec = 100000;
 		FD_ZERO(&rd);
 		FD_SET((SOCKETTYPE)fd, &rd);
 		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
