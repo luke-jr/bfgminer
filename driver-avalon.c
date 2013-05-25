@@ -404,6 +404,7 @@ static void avalon_idle(struct cgpu_info *avalon, int fd)
 		struct avalon_task at;
 		int ret;
 
+		avalon_clear_readbuf(fd);
 		if (unlikely(avalon_buffer_full(fd))) {
 			applog(LOG_WARNING, "Avalon buffer full in avalon_idle after %d tasks", i);
 			break;
@@ -426,11 +427,6 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	int ret, i = 0;
 	struct timespec p;
 
-	if (!avalon_wait_write(fd)) {
-		applog(LOG_WARNING, "Avalon not ready for writes in avalon_reset");
-		return 1;
-	}
-
 	/* Reset once, then send command to go idle */
 	ret = avalon_write(fd, &reset, 1);
 	if (unlikely(ret == AVA_SEND_ERROR))
@@ -443,9 +439,6 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 	avalon_idle(avalon, fd);
-	avalon_wait_write(fd);
-	avalon_clear_readbuf(fd);
-	applog(LOG_ERR, "Avalon: Idle");
 
 	/* Reset again, then check result */
 	ret = avalon_write(fd, &reset, 1);
@@ -475,6 +468,8 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 		applog(LOG_WARNING, "Avalon: Reset succeeded");
 
 	avalon_idle(avalon, fd);
+	if (!avalon_wait_write(fd))
+		applog(LOG_WARNING, "Avalon: Not ready for writes?");
 	return 0;
 }
 
