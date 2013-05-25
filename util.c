@@ -44,6 +44,7 @@
 # include <winsock2.h>
 # include <mstcpip.h>
 # include <ws2tcpip.h>
+# include <mmsystem.h>
 #endif
 
 #include "miner.h"
