@@ -3454,23 +3454,15 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
-	applog(LOG_DEBUG, "Stopping mining threads");
-	/* Stop the mining threads*/
-	for (i = 0; i < mining_threads; i++) {
-		thr = get_thread(i);
-		if (thr->cgpu->threads)
-			thr_info_freeze(thr);
-		thr->pause = true;
-	}
-
-	nmsleep(1000);
-
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = get_thread(i);
 		if (thr->cgpu->threads)
+		{
 			thr_info_cancel(thr);
+			pthread_join(thr->pth, NULL);
+		}
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
