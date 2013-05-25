@@ -120,6 +120,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 
 			va_copy(apc, ap);
 			vfprintf(stderr, f, apc);	/* atomic write to stderr */
+			va_end(apc);
 			fflush(stderr);
 		}
 
