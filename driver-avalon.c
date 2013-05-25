@@ -622,9 +622,6 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 	size_t i, spare = AVALON_READ_SIZE - *offset;
 	bool found = false;
 
-	if (spare > AVALON_READ_SIZE - 1)
-		spare = AVALON_READ_SIZE - 1;
-
 	for (i = 0; i <= spare; i++) {
 		struct avalon_result *ar;
 		struct work *work;
@@ -650,7 +647,10 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		}
 	}
 
-	spare = AVALON_READ_SIZE + i;
+	if (!found)
+		spare = *offset - AVALON_READ_SIZE - 1;
+	else
+		spare = AVALON_READ_SIZE + i;
 	*offset -= spare;
 	memmove(buf, buf + spare, *offset);
 	if (!found) {
