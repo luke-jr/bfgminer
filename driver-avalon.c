@@ -741,7 +741,6 @@ static void do_avalon_close(struct thr_info *thr)
 	struct avalon_info *info = avalon->device_data;
 
 	avalon_free_work(thr);
-	sleep(1);
 	avalon_reset(avalon, avalon->device_fd);
 	avalon_close(avalon->device_fd);
 	avalon->device_fd = -1;
@@ -885,7 +884,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			first_try = 0;
-			sleep(1);
 			avalon_init(avalon);
 			return 0;	/* This should never happen */
 		}
@@ -971,7 +969,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			"AVA%i: FPGA controller messed up, %d wrong results",
 			avalon->device_id, result_wrong);
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		sleep(1);
 		avalon_init(avalon);
 		return 0;
 	}
