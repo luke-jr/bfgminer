@@ -4787,14 +4787,44 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
+	
+	// We can only remove devices or disable them by default, but not both...
+	if (!(opt_removedisabled && devices_enabled))
+	{
+		// Don't need to remove any, so we can set defaults here
+		for (i = 0; i < total_devices; ++i)
+			if (devices[i]->deven == DEV_DISABLED)
+			{
+				// At least one device is in fact disabled, so include device params
+				fprintf(fcfg, ",\n\"device\" : [");
+				bool first = true;
+				for (i = 0; i < total_devices; ++i)
+					if (devices[i]->deven != DEV_DISABLED)
+					{
+						fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
+						first = false;
+					}
+				fprintf(fcfg, "\n]");
+				
+				break;
+			}
+	}
+	else
 	if (devices_enabled) {
+		// Mark original device params and remove-disabled
+		fprintf(fcfg, ",\n\"device\" : [");
+		bool first = true;
 		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
 			if (devices_enabled & (1 << i))
-				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+			{
+				fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
+				first = false;
+			}
 		}
-	}
-	if (opt_removedisabled)
+		fprintf(fcfg, "\n]");
 		fprintf(fcfg, ",\n\"remove-disabled\" : true");
+	}
+	
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
