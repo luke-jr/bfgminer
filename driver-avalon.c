@@ -649,7 +649,7 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 	}
 
 	if (!found)
-		spare = *offset - AVALON_READ_SIZE - 1;
+		spare = *offset - AVALON_READ_SIZE;
 	else
 		spare = AVALON_READ_SIZE + i;
 	applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
