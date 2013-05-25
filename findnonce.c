@@ -136,7 +136,7 @@ void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
 struct pc_data {
 	struct thr_info *thr;
 	struct work work;
-	uint32_t res[MAXBUFFERS];
+	uint32_t res[SCRYPT_MAXBUFFERS];
 	pthread_t pth;
 	int found;
 };
@@ -146,21 +146,22 @@ static void *postcalc_hash(void *userdata)
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
 	unsigned int entry = 0;
+	int found = opt_scrypt ? SCRYPT_FOUND : FOUND;
 
 	pthread_detach(pthread_self());
 	RenameThread("postcalchsh");
 
 	/* To prevent corrupt values in FOUND from trying to read beyond the
 	 * end of the res[] array */
-	if (unlikely(pcd->res[FOUND] & ~FOUND)) {
+	if (unlikely(pcd->res[found] & ~found)) {
 		applog(LOG_WARNING, "%"PRIpreprv": invalid nonce count - HW error",
 				thr->cgpu->proc_repr);
 		hw_errors++;
 		thr->cgpu->hw_errors++;
-		pcd->res[FOUND] &= FOUND;
+		pcd->res[found] &= found;
 	}
 
-	for (entry = 0; entry < pcd->res[FOUND]; entry++) {
+	for (entry = 0; entry < pcd->res[found]; entry++) {
 		uint32_t nonce = pcd->res[entry];
 
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
@@ -176,6 +177,8 @@ static void *postcalc_hash(void *userdata)
 void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 {
 	struct pc_data *pcd = malloc(sizeof(struct pc_data));
+	int buffersize;
+
 	if (unlikely(!pcd)) {
 		applog(LOG_ERR, "Failed to malloc pc_data in postcalc_hash_async");
 		return;
@@ -185,7 +188,8 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		.thr = thr,
 	};
 	__copy_work(&pcd->work, work);
-	memcpy(&pcd->res, res, BUFFERSIZE);
+	buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	memcpy(&pcd->res, res, buffersize);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
 		applog(LOG_ERR, "Failed to create postcalc_hash thread");

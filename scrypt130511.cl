@@ -808,8 +808,8 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 	unshittify(X);
 }
 
-#define FOUND (0x0F)
-#define SETFOUND(Xnonce) output[output[FOUND]++] = Xnonce
+#define SCRYPT_FOUND (0xFF)
+#define SETFOUND(Xnonce) output[output[SCRYPT_FOUND]++] = Xnonce
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search(__global const uint4 * restrict input,
