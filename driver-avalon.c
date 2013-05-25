@@ -650,23 +650,24 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 
 	if (!found) {
 		spare = *offset - AVALON_READ_SIZE;
-		if (spare)
-			applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
+		/* We are buffering and haven't accumulated one more corrupt
+		 * work result. */
+		if (spare < (int)AVALON_READ_SIZE)
+			return;
+		applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", spare);
+
+		inc_hw_errors(thr);
+		mutex_lock(&info->lock);
+		info->no_matching_work++;
+		mutex_unlock(&info->lock);
 	} else {
 		spare = AVALON_READ_SIZE + i;
 		if (i)
 			applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", i);
 	}
-	if (spare) {
-		*offset -= spare;
-		memmove(buf, buf + spare, *offset);
-	}
 
-	if (!found) {
-		mutex_lock(&info->lock);
-		info->no_matching_work++;
-		mutex_unlock(&info->lock);
-	}
+	*offset -= spare;
+	memmove(buf, buf + spare, *offset);
 }
 
 static void *avalon_get_results(void *userdata)
