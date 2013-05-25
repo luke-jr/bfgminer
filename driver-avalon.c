@@ -659,16 +659,16 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
-	avalon->device_fd = -1;
-
 	ret = avalon_reset(avalon, fd);
 	if (ret) {
 		; /* FIXME: I think IT IS avalon and wait on reset;
 		   * avalon_close(fd);
 		   * return false; */
 	}
-
 	avalon_close(fd);
+
+	avalon->device_fd = -1;
+
 	return true;
 }
 
