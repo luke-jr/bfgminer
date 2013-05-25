@@ -645,7 +645,7 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 			found = true;
 
 			mutex_lock(&info->lock);
-			if (!avalon->results++ % info->miner_count) {
+			if (!(++avalon->results % info->miner_count)) {
 				gettemp = true;
 				avalon->results = 0;
 			}
