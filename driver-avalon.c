@@ -703,7 +703,7 @@ static void *avalon_send_tasks(void *userdata)
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			if (unlikely(avalon_buffer_full(fd) == AVA_BUFFER_FULL)) {
 				applog(LOG_WARNING,
-				       "AVA%i: Buffer full before all  work queued",
+				       "AVA%i: Buffer full before all work queued",
 					avalon->device_id);
 				break;
 			}
@@ -764,6 +764,10 @@ static bool avalon_prepare(struct thr_info *thr)
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
+
+	mutex_lock(&info->qlock);
+	pthread_cond_wait(&info->qcond, &info->qlock);
+	mutex_unlock(&info->qlock);
 
 	avalon_init(avalon);
 
