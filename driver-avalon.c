@@ -967,6 +967,19 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	return hash_count;
 }
 
+static void avalon_flush_work(struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	struct thr_info *thr = info->thr;
+
+	mutex_lock(&info->qlock);
+	avalon_rotate_array(avalon);
+	pthread_cond_signal(&info->qcond);
+	mutex_unlock(&info->qlock);
+
+	thr->work_restart = false;
+}
+
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -1013,6 +1026,7 @@ struct device_drv avalon_drv = {
 	.hash_work = hash_queued_work,
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
+	.flush_work = avalon_flush_work,
 	.get_api_stats = avalon_api_stats,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
