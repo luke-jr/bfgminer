@@ -102,7 +102,10 @@ struct avalon_info {
 
 	struct thr_info *thr;
 	pthread_t read_thr;
+	pthread_t write_thr;
 	pthread_mutex_t lock;
+	pthread_mutex_t qlock;
+	pthread_cond_t qcond;
 	int nonces;
 };
 
