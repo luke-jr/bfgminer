@@ -121,19 +121,47 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
+static int avalon_write(int fd, char *buf, ssize_t len)
+{
+	ssize_t wrote = 0;
+
+	while (len > 0) {
+		struct timeval timeout;
+		ssize_t ret;
+		fd_set wd;
+
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 100000;
+		FD_ZERO(&wd);
+		FD_SET((SOCKETTYPE)fd, &wd);
+		ret = select(fd + 1, NULL, &wd, NULL, &timeout);
+		if (unlikely(ret < 1)) {
+			applog(LOG_WARNING, "Select error on avalon_write");
+			return AVA_SEND_ERROR;
+		}
+		ret = write(fd, buf + wrote, len);
+		if (unlikely(ret < 1)) {
+			applog(LOG_WARNING, "Write error on avalon_write");
+			return AVA_SEND_ERROR;
+		}
+		wrote += ret;
+		len -= ret;
+	}
+
+	return AVA_SEND_OK;
+}
+
 static int avalon_send_task(int fd, const struct avalon_task *at,
 			    struct cgpu_info *avalon)
 
 {
-	size_t ret;
-	int full;
 	struct timespec p;
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	size_t nr_len;
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
-	int i;
+	int ret, i;
 
 	if (at->nonce_elf)
 		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
@@ -182,25 +210,16 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 		nr_len = 1;
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
-		hexdump((uint8_t *)buf, nr_len);
+		hexdump(buf, nr_len);
 	}
-	ret = write(fd, buf, nr_len);
-	if (unlikely(ret != nr_len))
-		return AVA_SEND_ERROR;
+	ret = avalon_write(fd, (char *)buf, nr_len);
 
 	p.tv_sec = 0;
 	p.tv_nsec = (long)delay + 4000000;
 	nanosleep(&p, NULL);
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %ld", p.tv_nsec);
 
-	full = avalon_buffer_full(fd);
-	applog(LOG_DEBUG, "Avalon: Sent: Buffer full: %s",
-	       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
-
-	if (unlikely(full == AVA_BUFFER_FULL))
-		return AVA_SEND_BUFFER_FULL;
-
-	return AVA_SEND_BUFFER_EMPTY;
+	return ret;
 }
 
 static void avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,

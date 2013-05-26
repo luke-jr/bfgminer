@@ -120,8 +120,6 @@ struct avalon_info {
 
 #define AVA_SEND_ERROR -1
 #define AVA_SEND_OK 0
-#define AVA_SEND_BUFFER_EMPTY 1
-#define AVA_SEND_BUFFER_FULL 2
 
 #define AVA_BUFFER_FULL 0
 #define AVA_BUFFER_EMPTY 1
