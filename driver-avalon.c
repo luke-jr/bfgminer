@@ -691,9 +691,13 @@ static void *avalon_get_results(void *userdata)
 		if (unlikely(avalon->results <= -info->miner_count)) {
 			applog(LOG_ERR, "AVA%d: %d invalid consecutive results, resetting",
 			       avalon->device_id, -avalon->results);
+
+			/* Lock to prevent more work being sent during reset */
+			mutex_lock(&info->qlock);
 			avalon_reset(avalon, fd);
 			avalon_idle(avalon, info, fd);
 			avalon->results = 0;
+			mutex_unlock(&info->qlock);
 		}
 
 		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
