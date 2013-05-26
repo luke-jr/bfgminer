@@ -276,25 +276,6 @@ static int avalon_read(int fd, char *buf, ssize_t len)
 	return 0;
 }
 
-/* Non blocking clearing of anything in the buffer */
-static void avalon_clear_readbuf(int fd)
-{
-	ssize_t ret;
-
-	do {
-		struct timeval timeout;
-		char buf[AVALON_FTDI_READSIZE];
-		fd_set rd;
-
-		timeout.tv_sec = timeout.tv_usec = 0;
-		FD_ZERO(&rd);
-		FD_SET((SOCKETTYPE)fd, &rd);
-		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-		if (ret > 0)
-			ret = read(fd, buf, AVALON_FTDI_READSIZE);
-	} while (ret > 0);
-}
-
 static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
@@ -303,10 +284,7 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	int ret, i = 0;
 	struct timespec p;
 
-	/* There's usually a one byte response after opening */
-	avalon_clear_readbuf(fd);
-
-	/* Reset once, then send command to go idle */
+	/* Send reset, then check for result */
 	ret = avalon_write(fd, &reset, 1);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
@@ -315,6 +293,9 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	if (unlikely(ret == AVA_GETS_ERROR))
 		return -1;
 
+	/* What do these sleeps do?? */
+	p.tv_sec = 0;
+	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 
 	buf = (uint8_t *)&ar;
@@ -338,11 +319,6 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	} else
 		applog(LOG_WARNING, "AVA%d: Reset succeeded",
 		       avalon->device_id);
-
-	/* What do these sleeps do?? */
-	p.tv_sec = 0;
-	p.tv_nsec = AVALON_RESET_PITCH;
-	nanosleep(&p, NULL);
 
 	return 0;
 }
@@ -503,7 +479,6 @@ static bool avalon_detect_one(const char *devpath)
 		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
 		return false;
 	}
-	avalon_clear_readbuf(fd);
 
 	/* We have a real Avalon! */
 	avalon = calloc(1, sizeof(struct cgpu_info));
@@ -787,8 +762,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
-
-	avalon_clear_readbuf(avalon->device_fd);
 
 	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
 		quit(1, "Failed to create avalon write_thr");
