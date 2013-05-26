@@ -216,36 +216,6 @@ static void avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	submit_nonce(thr, work, nonce);
 }
 
-static int avalon_write(int fd, char *buf, ssize_t len)
-{
-	ssize_t wrote = 0;
-
-	while (len > 0) {
-		struct timeval timeout;
-		ssize_t ret;
-		fd_set wd;
-
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 100000;
-		FD_ZERO(&wd);
-		FD_SET((SOCKETTYPE)fd, &wd);
-		ret = select(fd + 1, NULL, &wd, NULL, &timeout);
-		if (unlikely(ret < 1)) {
-			applog(LOG_WARNING, "Select error on avalon_write");
-			return AVA_SEND_ERROR;
-		}
-		ret = write(fd, buf + wrote, len);
-		if (unlikely(ret < 1)) {
-			applog(LOG_WARNING, "Write error on avalon_write");
-			return AVA_SEND_ERROR;
-		}
-		wrote += ret;
-		len -= ret;
-	}
-
-	return 0;
-}
-
 static int avalon_read(int fd, char *buf, ssize_t len)
 {
 	ssize_t aread = 0;
@@ -279,13 +249,20 @@ static int avalon_read(int fd, char *buf, ssize_t len)
 static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
-	char reset = 0xad;
+	struct avalon_task at;
 	uint8_t *buf;
 	int ret, i = 0;
 	struct timespec p;
 
 	/* Send reset, then check for result */
-	ret = avalon_write(fd, &reset, 1);
+	avalon_init_task(&at, 1, 0,
+			 AVALON_DEFAULT_FAN_MAX_PWM,
+			 AVALON_DEFAULT_TIMEOUT,
+			 AVALON_DEFAULT_ASIC_NUM,
+			 AVALON_DEFAULT_MINER_NUM,
+			 0, 0,
+			 AVALON_DEFAULT_FREQUENCY);
+	ret = avalon_send_task(fd, &at, NULL);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 
