@@ -336,7 +336,12 @@ struct usb_in_use_list {
 // List of in use devices
 static struct usb_in_use_list *in_use_head = NULL;
 
+// Set this to 0 to remove stats processing
+#define DO_USB_STATS 1
+
 static bool stats_initialised = false;
+
+#if DO_USB_STATS
 
 // NONE must be 0 - calloced
 #define MODE_NONE 0
@@ -385,6 +390,17 @@ struct cg_usb_stats {
 
 static struct cg_usb_stats *usb_stats = NULL;
 static int next_stat = 0;
+
+#define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq) \
+		stats(cgpu, sta, fin, err, mode, cmd, seq)
+#define STATS_TIMEVAL(tv) cgtime(tv)
+#define USB_REJECT(sgpu, mode) rejected_inc(sgpu, mode)
+#else
+#define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq)
+#define STATS_TIMEVAL(tv)
+#define USB_REJECT(sgpu, mode)
+
+#endif // DO_USB_STATS
 
 static const char **usb_commands;
 
@@ -1801,20 +1817,6 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 	libusb_free_device_list(list, 1);
 }
 
-// Set this to 0 to remove stats processing
-#define DO_USB_STATS 1
-
-#if DO_USB_STATS
-#define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq) \
-		stats(cgpu, sta, fin, err, mode, cmd, seq)
-#define STATS_TIMEVAL(tv) cgtime(tv)
-#define USB_REJECT(sgpu, mode) rejected_inc(sgpu, mode)
-#else
-#define USB_STATS(sgpu, sta, fin, err, cmd, seq)
-#define STATS_TIMEVAL(tv)
-#define USB_REJECT(sgpu, mode)
-#endif
-
 #if DO_USB_STATS
 static void modes_str(char *buf, uint32_t modes)
 {
@@ -2029,7 +2031,7 @@ static void rejected_inc(struct cgpu_info *cgpu, uint32_t mode)
 
 #define USB_MAX_READ 8192
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 	bool ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
@@ -2040,7 +2042,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned int initial_timeout;
 	double max, done;
 	int bufleft, err, got, tot;
-	bool first = true;
+	__maybe_unused bool first = true;
 	unsigned char *search;
 	int endlen;
 
@@ -2082,7 +2084,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			err = libusb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep,
 					ptr, usbbufread, &got, timeout);
-			STATS_TIMEVAL(&tv_finish);
+			cgtime(&tv_finish);
 			USB_STATS(cgpu, &tv_start, &tv_finish, err,
 					MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 			ptr[got] = '\0';
@@ -2208,7 +2210,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	return err;
 }
 
-int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
+int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
@@ -2217,7 +2219,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
 	double max, done;
-	bool first = true;
+	__maybe_unused bool first = true;
 	int err, sent, tot;
 
 	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),ep=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
@@ -2245,7 +2247,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 				usbdev->found->eps[ep].ep,
 				(unsigned char *)buf,
 				bufsiz, &sent, timeout);
-		STATS_TIMEVAL(&tv_finish);
+		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err,
 				MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
 
@@ -2277,7 +2279,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	return err;
 }
 
-int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd)
+int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
@@ -2328,7 +2330,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	return err;
 }
 
-int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd)
+int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 #if DO_USB_STATS
