@@ -455,6 +455,33 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 }
 
+static void wait_avalon_ready(int fd)
+{
+	while (avalon_buffer_full(fd) == AVA_BUFFER_FULL) {
+		nmsleep(40);
+	}
+}
+
+static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info,
+			int fd)
+{
+	int i;
+
+	info->idle = true;
+	wait_avalon_ready(fd);
+	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id,
+	       info->miner_count);
+	/* Send idle to all miners */
+	for (i = 0; i < info->miner_count; i++) {
+		struct avalon_task at;
+
+		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
+				 info->asic_count, info->miner_count, 1, 1,
+				 info->frequency);
+		avalon_send_task(fd, &at, avalon);
+	}
+}
+
 static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
@@ -521,6 +548,7 @@ static bool avalon_detect_one(const char *devpath)
 		   * avalon_close(fd);
 		   * return false; */
 	}
+	avalon_idle(avalon, info, fd);
 
 	return true;
 }
@@ -651,6 +679,7 @@ static void *avalon_get_results(void *userdata)
 			applog(LOG_ERR, "AVA%d: %d invalid consecutive results, resetting",
 			       avalon->device_id, -avalon->results);
 			avalon_reset(avalon, fd);
+			avalon_idle(avalon, info, fd);
 			avalon->results = 0;
 		}
 
@@ -693,13 +722,6 @@ static void avalon_rotate_array(struct cgpu_info *avalon)
 	avalon->queued = 0;
 	if (++avalon->work_array >= AVALON_ARRAY_SIZE)
 		avalon->work_array = 0;
-}
-
-static void wait_avalon_ready(int fd)
-{
-	while (avalon_buffer_full(fd) == AVA_BUFFER_FULL) {
-		nmsleep(40);
-	}
 }
 
 static void *avalon_send_tasks(void *userdata)
@@ -751,6 +773,7 @@ static void *avalon_send_tasks(void *userdata)
 				       avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
 				avalon_reset(avalon, fd);
+				avalon_idle(avalon, info, fd);
 			}
 		}
 		avalon_rotate_array(avalon);
@@ -778,7 +801,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 
-	info->idle = true;
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
@@ -828,23 +850,12 @@ static void do_avalon_close(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
-	int i, fd = avalon->device_fd;
+	int fd = avalon->device_fd;
 
 	pthread_cancel(info->read_thr);
 	pthread_cancel(info->write_thr);
 	avalon_reset(avalon, fd);
-	wait_avalon_ready(fd);
-	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id,
-	       info->miner_count);
-	/* Send idle to all miners */
-	for (i = 0; i < info->miner_count; i++) {
-		struct avalon_task at;
-
-		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
-				 info->asic_count, info->miner_count, 1, 1,
-				 info->frequency);
-		avalon_send_task(fd, &at, avalon);
-	}
+	avalon_idle(avalon, info, fd);
 	avalon_free_work(thr);
 	avalon_close(fd);
 	avalon->device_fd = -1;
