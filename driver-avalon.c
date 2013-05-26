@@ -318,6 +318,11 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	nanosleep(&p, NULL);
 
 	buf = (uint8_t *)&ar;
+	/* We may also get 0x00 and 0x18 first */
+	if (buf[0] != 0xAA)
+		buf = &buf[1];
+	if (buf[0] != 0xAA)
+		buf = &buf[1];
 	if (buf[0] == 0xAA && buf[1] == 0x55 &&
 	    buf[2] == 0xAA && buf[3] == 0x55) {
 		for (i = 4; i < 11; i++)
