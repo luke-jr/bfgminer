@@ -113,7 +113,7 @@ struct avalon_info {
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
-#define AVALON_ARRAY_SIZE 4
+#define AVALON_ARRAY_SIZE 3
 
 #define AVA_GETS_ERROR -1
 #define AVA_GETS_OK 0
