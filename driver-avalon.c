@@ -972,12 +972,13 @@ static void avalon_flush_work(struct cgpu_info *avalon)
 	struct avalon_info *info = avalon->device_data;
 	struct thr_info *thr = info->thr;
 
+	thr->work_restart = false;
+
 	mutex_lock(&info->qlock);
-	avalon_rotate_array(avalon);
+	/* Will overwrite any work queued */
+	avalon->queued = 0;
 	pthread_cond_signal(&info->qcond);
 	mutex_unlock(&info->qlock);
-
-	thr->work_restart = false;
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
