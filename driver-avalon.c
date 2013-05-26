@@ -262,7 +262,7 @@ static int avalon_read(int fd, char *buf, ssize_t len)
 		len -= ret;
 	}
 
-	return 0;
+	return AVA_GETS_OK;
 }
 
 static int avalon_reset(struct cgpu_info *avalon, int fd)

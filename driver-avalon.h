@@ -115,8 +115,6 @@ struct avalon_info {
 
 #define AVA_GETS_ERROR -1
 #define AVA_GETS_OK 0
-#define AVA_GETS_RESTART 1
-#define AVA_GETS_TIMEOUT 2
 
 #define AVA_SEND_ERROR -1
 #define AVA_SEND_OK 0
