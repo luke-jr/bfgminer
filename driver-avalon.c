@@ -546,6 +546,9 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 
 static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
 {
+	if (unlikely(info->idle))
+		return;
+
 	applog(LOG_WARNING, "%s%d: No valid work - HW error",
 			thr->cgpu->drv->name, thr->cgpu->device_id);
 
@@ -681,7 +684,6 @@ static void *avalon_send_tasks(void *userdata)
 	const int avalon_get_work_count = info->miner_count;
 	int fd = avalon->device_fd;
 	char threadname[24];
-	bool idle = false;
 
 	pthread_detach(pthread_self());
 
@@ -709,7 +711,7 @@ static void *avalon_send_tasks(void *userdata)
 			}
 
 			if (likely(j < avalon->queued)) {
-				idle = false;
+				info->idle = false;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
 						info->miner_count, 1, 0, info->frequency);
@@ -731,8 +733,8 @@ static void *avalon_send_tasks(void *userdata)
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
 
-		if (unlikely(idled && !idle)) {
-			idle = true;
+		if (unlikely(idled && !info->idle)) {
+			info->idle = true;
 			applog(LOG_WARNING, "AVA%i: Idled %d miners",
 			       avalon->device_id, idled);
 		}
@@ -753,6 +755,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 
+	info->idle = true;
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
@@ -762,12 +765,12 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
 		quit(1, "Failed to create avalon write_thr");
 
-	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
-		quit(1, "Failed to create avalon read_thr");
-
 	mutex_lock(&info->qlock);
 	pthread_cond_wait(&info->qcond, &info->qlock);
 	mutex_unlock(&info->qlock);
+
+	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
+		quit(1, "Failed to create avalon read_thr");
 
 	avalon_init(avalon);
 

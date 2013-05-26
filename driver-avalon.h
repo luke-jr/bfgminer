@@ -107,6 +107,8 @@ struct avalon_info {
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
 	int nonces;
+
+	bool idle;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
