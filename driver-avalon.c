@@ -621,9 +621,8 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 
 			if (avalon_decode_nonce(thr, avalon, info, ar, work)) {
 				mutex_lock(&info->lock);
-				if (avalon->results < 0)
-					avalon->results = 0;
-				if (!(++avalon->results % info->miner_count)) {
+				if (++avalon->results > 0 &&
+				    !(avalon->results % info->miner_count)) {
 					gettemp = true;
 					avalon->results = 0;
 				}
@@ -689,7 +688,7 @@ static void *avalon_get_results(void *userdata)
 
 		/* Check for nothing but consecutive bad results and reset the
 		 * FPGA if necessary */
-		if (unlikely(avalon->results < -info->miner_count)) {
+		if (unlikely(avalon->results <= -info->miner_count)) {
 			applog(LOG_ERR, "AVA%d: %d invalid consecutive results, resetting",
 			       avalon->device_id, -avalon->results);
 			avalon_reset(avalon, fd);
@@ -766,6 +765,7 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_WARNING,
 				       "AVA%i: Buffer full before all work queued",
 					avalon->device_id);
+				avalon->results -= avalon_get_work_count - j;
 				break;
 			}
 
