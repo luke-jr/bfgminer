@@ -674,7 +674,7 @@ static void *avalon_send_tasks(void *userdata)
 		struct avalon_task at;
 		int idled = 0;
 
-		while (avalon_buffer_full(fd)) {
+		while (avalon_buffer_full(fd) == AVA_BUFFER_FULL) {
 			nmsleep(40);
 		}
 
@@ -682,7 +682,7 @@ static void *avalon_send_tasks(void *userdata)
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
-			if (unlikely(avalon_buffer_full(fd))) {
+			if (unlikely(avalon_buffer_full(fd) == AVA_BUFFER_FULL)) {
 				applog(LOG_WARNING,
 				       "AVA%i: Buffer full before all  work queued",
 					avalon->device_id);
