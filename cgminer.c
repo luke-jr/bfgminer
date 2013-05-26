@@ -5565,13 +5565,15 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	uint32_t diff1targ;
+	bool ret = true;
 
 	thread_reportout(thr);
 
@@ -5594,6 +5596,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		inc_hw_errors(thr);
+		ret = false;
 		goto out;
 	}
 
@@ -5609,6 +5612,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	submit_work_async(work, &tv_work_found);
 out:
 	thread_reportin(thr);
+
+	return ret;
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)

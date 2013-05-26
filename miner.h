@@ -1249,7 +1249,7 @@ struct modminer_fpga_state {
 
 extern void get_datestamp(char *, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
-extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
