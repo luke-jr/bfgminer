@@ -730,6 +730,7 @@ static void *avalon_send_tasks(void *userdata)
 				avalon_reset(avalon, fd);
 			}
 		}
+		avalon_rotate_array(avalon);
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
 
@@ -738,7 +739,6 @@ static void *avalon_send_tasks(void *userdata)
 			applog(LOG_WARNING, "AVA%i: Idled %d miners",
 			       avalon->device_id, idled);
 		}
-		avalon_rotate_array(avalon);
 	}
 	return NULL;
 }
