@@ -309,6 +309,11 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	 * AA 55 AA 55 00 00 00 00 00 00 */
 	spare = AVALON_READ_SIZE - 10;
 	tmp = (uint8_t *)&ar;
+	if (opt_debug) {
+		applog(LOG_DEBUG, "AVA%d reset: get:", avalon->device_id);
+		hexdump(tmp, AVALON_READ_SIZE);
+	}
+
 	for (i = 0; i <= spare; i++) {
 		buf = &tmp[i];
 		if (buf[0] == 0xAA)
