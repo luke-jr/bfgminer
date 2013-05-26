@@ -494,6 +494,7 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info,
 				 info->frequency);
 		avalon_send_task(fd, &at, avalon);
 	}
+	wait_avalon_ready(fd);
 }
 
 static bool avalon_detect_one(const char *devpath)
