@@ -269,8 +269,8 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
 	struct avalon_task at;
-	uint8_t *buf;
-	int ret, i = 0;
+	uint8_t *buf, *tmp;
+	int ret, i, spare;
 	struct timespec p;
 
 	/* Send reset, then check for result */
@@ -294,12 +294,17 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 	p.tv_nsec = AVALON_RESET_PITCH;
 	nanosleep(&p, NULL);
 
-	buf = (uint8_t *)&ar;
-	/* We may also get 0x00 and 0x18 first */
-	if (buf[0] != 0xAA)
-		buf = &buf[1];
-	if (buf[0] != 0xAA)
-		buf = &buf[1];
+	/* Look for the first occurrence of 0xAA, the reset response should be:
+	 * AA 55 AA 55 00 00 00 00 00 00 */
+	spare = AVALON_READ_SIZE - 10;
+	tmp = (uint8_t *)&ar;
+	for (i = 0; i <= spare; i++) {
+		buf = &tmp[i];
+		if (buf[0] == 0xAA)
+			break;
+	}
+	i = 0;
+
 	if (buf[0] == 0xAA && buf[1] == 0x55 &&
 	    buf[2] == 0xAA && buf[3] == 0x55) {
 		for (i = 4; i < 11; i++)
