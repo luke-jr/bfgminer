@@ -265,6 +265,15 @@ static int avalon_read(int fd, char *buf, ssize_t len)
 	return AVA_GETS_OK;
 }
 
+/* Wait until the ftdi chip returns a CTS saying we can send more data. The
+ * status is updated every 40ms. */
+static void wait_avalon_ready(int fd)
+{
+	while (avalon_buffer_full(fd) == AVA_BUFFER_FULL) {
+		nmsleep(40);
+	}
+}
+
 static int avalon_reset(struct cgpu_info *avalon, int fd)
 {
 	struct avalon_result ar;
@@ -281,6 +290,8 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 			 AVALON_DEFAULT_MINER_NUM,
 			 0, 0,
 			 AVALON_DEFAULT_FREQUENCY);
+
+	wait_avalon_ready(fd);
 	ret = avalon_send_task(fd, &at, NULL);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
@@ -457,13 +468,6 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				}
 			}
 		}
-	}
-}
-
-static void wait_avalon_ready(int fd)
-{
-	while (avalon_buffer_full(fd) == AVA_BUFFER_FULL) {
-		nmsleep(40);
 	}
 }
 
