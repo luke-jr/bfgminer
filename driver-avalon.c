@@ -291,7 +291,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 
 	wait_avalon_ready(avalon);
 
-	ret = avalon_send_task(&at, NULL);
+	ret = avalon_send_task(&at, avalon);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
 
