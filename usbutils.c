@@ -2210,6 +2210,21 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	return err;
 }
 
+#define FTDI_STATUS_B0_MASK     (FTDI_RS0_CTS | FTDI_RS0_DSR | FTDI_RS0_RI | FTDI_RS0_RLSD)
+#define FTDI_RS0_CTS    (1 << 4)
+#define FTDI_RS0_DSR    (1 << 5)
+#define FTDI_RS0_RI     (1 << 6)
+#define FTDI_RS0_RLSD   (1 << 7)
+
+int usb_ftdi_cts(struct cgpu_info *cgpu)
+{
+	libusb_control_transfer(usbdev->handle, (uint8_t)FTDI_TYPE_IN,
+				(uint8_t)5, (uint16_t)0, (uint16_t)0, buf, 2,
+				DEVTIMEOUT);
+	ret = buf[0] & FTDI_STATUS_B0_MASK;
+	return (ret & FTDI_RS0_CTS);
+}
+
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
