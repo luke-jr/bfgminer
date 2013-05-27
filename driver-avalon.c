@@ -796,6 +796,7 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		memcpy(&readbuf[offset], &buf, ret);
+		offset += ret;
 	}
 	return NULL;
 }
