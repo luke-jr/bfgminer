@@ -877,15 +877,18 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
 
+	info->reset = true;
+
+	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
+		quit(1, "Failed to create avalon read_thr");
+
 	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
 		quit(1, "Failed to create avalon write_thr");
 
 	mutex_lock(&info->qlock);
+	info->reset = false;
 	pthread_cond_wait(&info->qcond, &info->qlock);
 	mutex_unlock(&info->qlock);
-
-	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
-		quit(1, "Failed to create avalon read_thr");
 
 	avalon_init(avalon);
 
