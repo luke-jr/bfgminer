@@ -2277,6 +2277,24 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 	hashrate_to_bufstr(out[2], sharebased, unit, longfmt);
 }
 
+static const char *
+percentf(unsigned p, unsigned t, char *buf)
+{
+	if (!p)
+		return "none";
+	if (!t)
+		return "100%";
+	p = p * 10000 / (p + t);
+	if (p < 100)
+		sprintf(buf, ".%02u%%", p);  // ".01%"
+	else
+	if (p < 1000)
+		sprintf(buf, "%u.%u%%", p / 100, (p % 100) / 10);  // "9.1%"
+	else
+		sprintf(buf, " %2u%%", p / 100);  // " 99%"
+	return buf;
+}
+
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
 #endif
@@ -2292,6 +2310,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	char rejpcbuf[6];
 	
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
@@ -2396,22 +2415,24 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		adj_width(rejected, &rwidth);
 		adj_width(hwerrs, &hwwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d(%s) HW:%*d",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
+		            percentf(rejected, accepted, rejpcbuf),
 		            hwwidth, hwerrs
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d(%s) HW:%d",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
+			percentf(rejected, accepted, rejpcbuf),
 			hwerrs);
 	}
 	
@@ -5834,6 +5855,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	char rejpcbuf[6];
 	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
@@ -5917,12 +5939,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d(%s) S:%d HW:%d",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
-		total_accepted, total_rejected, total_stale,
+		total_accepted,
+		total_rejected,
+		percentf(total_rejected, total_accepted, rejpcbuf),
+		total_stale,
 		hw_errors);
 
 
