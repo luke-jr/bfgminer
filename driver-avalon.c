@@ -593,8 +593,7 @@ static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
 				struct avalon_result *ar);
 
-static void avalon_inc_nvw(struct cgpu_info *avalon, struct avalon_info *info,
-			   struct thr_info *thr)
+static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
 {
 	if (unlikely(info->idle))
 		return;
@@ -603,10 +602,7 @@ static void avalon_inc_nvw(struct cgpu_info *avalon, struct avalon_info *info,
 			thr->cgpu->drv->name, thr->cgpu->device_id);
 
 	inc_hw_errors(thr);
-	mutex_lock(&info->lock);
 	info->no_matching_work++;
-	avalon->results--;
-	mutex_unlock(&info->lock);
 }
 
 static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
@@ -628,16 +624,8 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 
 			if (avalon_decode_nonce(thr, avalon, info, ar, work)) {
 				mutex_lock(&info->lock);
-				if (++avalon->results > 0 &&
-				    !(avalon->results % info->miner_count)) {
+				if (!info->nonces++)
 					gettemp = true;
-					avalon->results = 0;
-				}
-				info->nonces++;
-				mutex_unlock(&info->lock);
-			} else {
-				mutex_lock(&info->lock);
-				avalon->results--;
 				mutex_unlock(&info->lock);
 			}
 
@@ -653,12 +641,12 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 		 * work result. */
 		if (spare < (int)AVALON_READ_SIZE)
 			return;
-		avalon_inc_nvw(avalon, info, thr);
+		avalon_inc_nvw(info, thr);
 	} else {
 		spare = AVALON_READ_SIZE + i;
 		if (i) {
 			if (i >= (int)AVALON_READ_SIZE)
-				avalon_inc_nvw(avalon, info, thr);
+				avalon_inc_nvw(info, thr);
 			else
 				applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", i);
 		}
@@ -711,14 +699,6 @@ static void *avalon_get_results(void *userdata)
 
 		if (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
-
-		/* Check for nothing but consecutive bad results and reset the
-		 * FPGA if necessary */
-		if (unlikely(avalon->results <= -info->miner_count)) {
-			applog(LOG_ERR, "AVA%d: %d invalid consecutive results, resetting",
-			       avalon->device_id, -avalon->results);
-			avalon_running_reset(avalon, info, fd);
-		}
 
 		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
 			/* This should never happen */
@@ -1012,6 +992,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
+	const int miner_count = info->miner_count;
 	struct timeval now, then, tdiff;
 	int64_t hash_count, us_timeout;
 	struct timespec abstime;
@@ -1033,8 +1014,21 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
+	avalon->results += info->nonces;
+	if (avalon->results > miner_count)
+		avalon->results = miner_count;
+	if (!info->idle)
+		avalon->results -= miner_count / 3;
 	info->nonces = 0;
 	mutex_unlock(&info->lock);
+
+	/* Check for nothing but consecutive bad results or consistently less
+	 * results than we should be getting and reset the FPGA if necessary */
+	if (avalon->results < -miner_count) {
+		applog(LOG_ERR, "AVA%d: Result return rate low, resetting!",
+			avalon->device_id);
+		avalon_running_reset(avalon, info, avalon->device_fd);
+	}
 
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
