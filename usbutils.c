@@ -319,6 +319,8 @@ static struct driver_count {
 static struct usb_busdev {
 	int bus_number;
 	int device_address;
+	void *resource1;
+	void *resource2;
 } *busdev;
 
 static int busdev_count = 0;
@@ -335,6 +337,27 @@ struct usb_in_use_list {
 
 // List of in use devices
 static struct usb_in_use_list *in_use_head = NULL;
+
+struct resource_work {
+	bool lock;
+	const char *dname;
+	uint8_t bus_number;
+	uint8_t device_address;
+	struct resource_work *next;
+};
+
+// Pending work for the reslock thread
+struct resource_work *res_work_head = NULL;
+
+struct resource_reply {
+	uint8_t bus_number;
+	uint8_t device_address;
+	bool got;
+	struct resource_reply *next;
+};
+
+// Replies to lock requests
+struct resource_reply *res_reply_head = NULL;
 
 // Set this to 0 to remove stats processing
 #define DO_USB_STATS 1
@@ -956,6 +979,80 @@ void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount
                         err, amount);
 }
 
+#ifdef WIN32
+static void in_use_store_ress(uint8_t bus_number, uint8_t device_address, void *resource1, void *resource2)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false, empty = true;
+
+	mutex_lock(&cgusb_lock);
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+			in_use_tmp->in_use.device_address == (int)device_address) {
+			found = true;
+
+			if (in_use_tmp->in_use.resource1)
+				empty = false;
+			in_use_tmp->in_use.resource1 = resource1;
+
+			if (in_use_tmp->in_use.resource2)
+				empty = false;
+			in_use_tmp->in_use.resource2 = resource2;
+
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+	mutex_unlock(&cgusb_lock);
+
+	if (found == false)
+		applog(LOG_ERR, "FAIL: USB store_ress not found (%d:%d)",
+				(int)bus_number, (int)device_address);
+
+	if (empty == false)
+		applog(LOG_ERR, "FAIL: USB store_ress not empty (%d:%d)",
+				(int)bus_number, (int)device_address);
+}
+
+static void in_use_get_ress(uint8_t bus_number, uint8_t device_address, void **resource1, void **resource2)
+{
+	struct usb_in_use_list *in_use_tmp;
+	bool found = false, empty = false;
+
+	mutex_lock(&cgusb_lock);
+	in_use_tmp = in_use_head;
+	while (in_use_tmp) {
+		if (in_use_tmp->in_use.bus_number == (int)bus_number &&
+			in_use_tmp->in_use.device_address == (int)device_address) {
+			found = true;
+
+			if (!in_use_tmp->in_use.resource1)
+				empty = true;
+			*resource1 = in_use_tmp->in_use.resource1;
+			in_use_tmp->in_use.resource1 = NULL;
+
+			if (!in_use_tmp->in_use.resource2)
+				empty = true;
+			*resource2 = in_use_tmp->in_use.resource2;
+			in_use_tmp->in_use.resource2 = NULL;
+
+			break;
+		}
+		in_use_tmp = in_use_tmp->next;
+	}
+	mutex_unlock(&cgusb_lock);
+
+	if (found == false)
+		applog(LOG_ERR, "FAIL: USB get_lock not found (%d:%d)",
+				(int)bus_number, (int)device_address);
+
+	if (empty == true)
+		applog(LOG_ERR, "FAIL: USB get_lock empty (%d:%d)",
+				(int)bus_number, (int)device_address);
+}
+#endif
+
 static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
 {
 	struct usb_in_use_list *in_use_tmp;
@@ -1049,178 +1146,61 @@ static void remove_in_use(uint8_t bus_number, uint8_t device_address)
 				(int)bus_number, (int)device_address);
 }
 
-#ifndef WIN32
-#include <errno.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/ipc.h>
-#include <sys/sem.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-union semun {
-	int sem;
-	struct semid_ds *seminfo;
-	ushort *all;
-};
-#endif
-
-// Any errors should always be printed since they will rarely if ever occur
-// and thus it is best to always display them
 static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
-	applog(LOG_DEBUG, "USB lock %s %d-%d", drv->name, (int)bus_number, (int)device_address);
+	struct resource_work *res_work;
+	bool ret;
 
-#ifdef WIN32
-	struct cgpu_info *cgpu;
-	HANDLE usbMutex;
-	char name[64];
-	DWORD res;
-	int i;
+	applog(LOG_DEBUG, "USB lock %s %d-%d", drv->dname, (int)bus_number, (int)device_address);
 
-	if (is_in_use_bd(bus_number, device_address))
-		return false;
+	res_work = calloc(1, sizeof(*res_work));
+	res_work->lock = true;
+	res_work->dname = (const char *)(drv->dname);
+	res_work->bus_number = bus_number;
+	res_work->device_address = device_address;
 
-	sprintf(name, "cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	mutex_lock(&cgusbres_lock);
 
-	usbMutex = CreateMutex(NULL, FALSE, name);
-	if (usbMutex == NULL) {
-		applog(LOG_ERR,
-			"MTX: %s USB failed to get '%s' err (%d)",
-			drv->dname, name, GetLastError());
-		return false;
-	}
+	res_work->next = res_work_head;
+	res_work_head = res_work;
 
-	res = WaitForSingleObject(usbMutex, 0);
-	switch(res) {
-		case WAIT_OBJECT_0:
-		case WAIT_ABANDONED:
-			// Am I using it already?
-			for (i = 0; i < total_devices; i++) {
-				cgpu = get_devices(i);
-				if (cgpu->usbinfo.bus_number == bus_number &&
-				    cgpu->usbinfo.device_address == device_address &&
-				    cgpu->usbinfo.nodev == false) {
-					if (ReleaseMutex(usbMutex)) {
-						applog(LOG_WARNING,
-							"MTX: %s USB can't get '%s' - device in use",
-							drv->dname, name);
-						goto fail;
-					}
-					applog(LOG_ERR,
-						"MTX: %s USB can't get '%s' - device in use - failure (%d)",
-						drv->dname, name, GetLastError());
-					goto fail;
+	mutex_unlock(&cgusbres_lock);
+
+	nmsleep(46);
+
+	// TODO: add a timeout fail - restart the resource thread?
+	while (true) {
+		mutex_lock(&cgusbres_lock);
+
+		if (res_reply_head) {
+			struct resource_reply *res_reply_prev = NULL;
+			struct resource_reply *res_reply = res_reply_head;
+			while (res_reply) {
+				if (res_reply->bus_number == bus_number &&
+					res_reply->device_address == device_address) {
+
+					if (res_reply_prev)
+						res_reply_prev->next = res_reply->next;
+					else
+						res_reply_head = res_reply->next;
+
+					mutex_unlock(&cgusbres_lock);
+
+					ret = res_reply->got;
+
+					free(res_reply);
+
+					return ret;
 				}
+				res_reply_prev = res_reply;
+				res_reply = res_reply->next;
 			}
-			add_in_use(bus_number, device_address);
-			return true;
-		case WAIT_TIMEOUT:
-			if (!hotplug_mode)
-				applog(LOG_WARNING,
-					"MTX: %s USB failed to get '%s' - device in use",
-					drv->dname, name);
-			goto fail;
-		case WAIT_FAILED:
-			applog(LOG_ERR,
-				"MTX: %s USB failed to get '%s' err (%d)",
-				drv->dname, name, GetLastError());
-			goto fail;
-		default:
-			applog(LOG_ERR,
-				"MTX: %s USB failed to get '%s' unknown reply (%d)",
-				drv->dname, name, res);
-			goto fail;
-	}
-
-	CloseHandle(usbMutex);
-	add_in_use(bus_number, device_address);
-	return true;
-fail:
-	CloseHandle(usbMutex);
-	return false;
-#else
-	struct semid_ds seminfo;
-	union semun opt;
-	char name[64];
-	key_t key;
-	int fd, sem, count;
-
-	if (is_in_use_bd(bus_number, device_address))
-		return false;
-
-	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
-	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	if (fd == -1) {
-		applog(LOG_ERR,
-			"SEM: %s USB open failed '%s' err (%d) %s",
-			drv->dname, name, errno, strerror(errno));
-		return false;
-	}
-	close(fd);
-	key = ftok(name, 'K');
-	sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 438);
-	if (sem < 0) {
-		if (errno != EEXIST) {
-			applog(LOG_ERR,
-				"SEM: %s USB failed to get '%s' err (%d) %s",
-				drv->dname, name, errno, strerror(errno));
-			return false;
 		}
 
-		sem = semget(key, 1, 0);
-		if (sem < 0) {
-			applog(LOG_ERR,
-				"SEM: %s USB failed to access '%s' err (%d) %s",
-				drv->dname, name, errno, strerror(errno));
-			return false;
-		}
+		mutex_unlock(&cgusbres_lock);
 
-		opt.seminfo = &seminfo;
-		count = 0;
-		while (++count) {
-			// Should NEVER take 100ms
-			if (count > 99) {
-				applog(LOG_ERR,
-					"SEM: %s USB timeout waiting for (%d) '%s'",
-					drv->dname, sem, name);
-				return false;
-			}
-			if (semctl(sem, 0, IPC_STAT, opt) == -1) {
-				applog(LOG_ERR,
-					"SEM: %s USB failed to wait for (%d) '%s' count %d err (%d) %s",
-					drv->dname, sem, name, count, errno, strerror(errno));
-				return false;
-			}
-			if (opt.seminfo->sem_otime != 0)
-				break;
-			nmsleep(1);
-		}
+		nmsleep(45);
 	}
-
-	struct sembuf sops[] = {
-		{ 0, 0, IPC_NOWAIT | SEM_UNDO },
-		{ 0, 1, IPC_NOWAIT | SEM_UNDO }
-	};
-
-	if (semop(sem, sops, 2)) {
-		if (errno == EAGAIN) {
-			if (!hotplug_mode)
-				applog(LOG_WARNING,
-					"SEM: %s USB failed to get (%d) '%s' - device in use",
-					drv->dname, sem, name);
-		} else {
-			applog(LOG_DEBUG,
-				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
-				drv->dname, sem, name, errno, strerror(errno));
-		}
-		return false;
-	}
-
-	add_in_use(bus_number, device_address);
-	return true;
-#endif
 }
 
 static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
@@ -1228,76 +1208,26 @@ static bool cgminer_usb_lock(struct device_drv *drv, libusb_device *dev)
 	return cgminer_usb_lock_bd(drv, libusb_get_bus_number(dev), libusb_get_device_address(dev));
 }
 
-// Any errors should always be printed since they will rarely if ever occur
-// and thus it is best to always display them
 static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, uint8_t device_address)
 {
-	applog(LOG_DEBUG, "USB unlock %s %d-%d", drv->name, (int)bus_number, (int)device_address);
+	struct resource_work *res_work;
 
-#ifdef WIN32
-	HANDLE usbMutex;
-	char name[64];
+	applog(LOG_DEBUG, "USB unlock %s %d-%d", drv->dname, (int)bus_number, (int)device_address);
 
-	sprintf(name, "cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	res_work = calloc(1, sizeof(*res_work));
+	res_work->lock = false;
+	res_work->dname = (const char *)(drv->dname);
+	res_work->bus_number = bus_number;
+	res_work->device_address = device_address;
 
-	usbMutex = CreateMutex(NULL, FALSE, name);
-	if (usbMutex == NULL) {
-		applog(LOG_ERR,
-			"MTX: %s USB failed to get '%s' for release err (%d)",
-			drv->dname, name, GetLastError());
-		return;
-	}
+	mutex_lock(&cgusbres_lock);
 
-	if (!ReleaseMutex(usbMutex))
-		applog(LOG_ERR,
-			"MTX: %s USB failed to release '%s' err (%d)",
-			drv->dname, name, GetLastError());
+	res_work->next = res_work_head;
+	res_work_head = res_work;
 
-	CloseHandle(usbMutex);
-	remove_in_use(bus_number, device_address);
+	mutex_unlock(&cgusbres_lock);
+
 	return;
-#else
-	char name[64];
-	key_t key;
-	int fd, sem;
-
-	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
-	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	if (fd == -1) {
-		applog(LOG_ERR,
-			"SEM: %s USB open failed '%s' for release err (%d) %s",
-			drv->dname, name, errno, strerror(errno));
-		return;
-	}
-	close(fd);
-	key = ftok(name, 'K');
-
-	sem = semget(key, 1, 0);
-	if (sem < 0) {
-		applog(LOG_ERR,
-			"SEM: %s USB failed to get '%s' for release err (%d) %s",
-			drv->dname, name, errno, strerror(errno));
-		return;
-	}
-
-	struct sembuf sops[] = {
-		{ 0, -1, SEM_UNDO }
-	};
-
-	// Allow a 10ms timeout
-	// exceeding this timeout means it would probably never succeed anyway
-	struct timespec timeout = { 0, 10000000 };
-
-	// Wait forever since we shoud be the one who has it
-	if (semtimedop(sem, sops, 1, &timeout)) {
-		applog(LOG_ERR,
-			"SEM: %s USB failed to release '%s' err (%d) %s",
-			drv->dname, name, errno, strerror(errno));
-	}
-
-	remove_in_use(bus_number, device_address);
-	return;
-#endif
 }
 
 static void cgminer_usb_unlock(struct device_drv *drv, libusb_device *dev)
@@ -2511,4 +2441,400 @@ void usb_initialise()
 			free(fre);
 		}
 	}
+}
+
+#ifndef WIN32
+#include <errno.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+union semun {
+	int sem;
+	struct semid_ds *seminfo;
+	ushort *all;
+};
+#else
+static LPSECURITY_ATTRIBUTES unsec(LPSECURITY_ATTRIBUTES sec)
+{
+	FreeSid(((PSECURITY_DESCRIPTOR)(sec->lpSecurityDescriptor))->Group);
+	free(sec->lpSecurityDescriptor);
+	free(sec);
+	return NULL;
+}
+
+static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_t device_address)
+{
+	SID_IDENTIFIER_AUTHORITY SIDAuthWorld = {SECURITY_WORLD_SID_AUTHORITY};
+	PSID gsid = NULL;
+	LPSECURITY_ATTRIBUTES sec_att = NULL;
+	PSECURITY_DESCRIPTOR sec_des = NULL;
+
+	sec_des = malloc(sizeof(*sec_des));
+	if (unlikely(!sec_des))
+		quit(1, "MTX: Failed to malloc LPSECURITY_DESCRIPTOR");
+
+	if (!InitializeSecurityDescriptor(sec_des, SECURITY_DESCRIPTOR_REVISION)) {
+		applog(LOG_ERR,
+			"MTX: %s (%d:%d) USB failed to init secdes err (%d)",
+			dname, (int)bus_number, (int)device_address,
+			GetLastError());
+		free(sec_des);
+		return NULL;
+	}
+
+	if (!SetSecurityDescriptorDacl(sec_des, TRUE, NULL, FALSE)) {
+		applog(LOG_ERR,
+			"MTX: %s (%d:%d) USB failed to secdes dacl err (%d)",
+			dname, (int)bus_number, (int)device_address,
+			GetLastError());
+		free(sec_des);
+		return NULL;
+	}
+
+	if(!AllocateAndInitializeSid(&SIDAuthWorld, 1, SECURITY_WORLD_RID, 0, 0, 0, 0, 0, 0, 0, &gsid)) {
+		applog(LOG_ERR,
+			"MTX: %s (%d:%d) USB failed to create gsid err (%d)",
+			dname, (int)bus_number, (int)device_address,
+			GetLastError());
+		free(sec_des);
+		return NULL;
+	}
+
+	if (!SetSecurityDescriptorGroup(sec_des, gsid, FALSE)) {
+		applog(LOG_ERR,
+			"MTX: %s (%d:%d) USB failed to secdes grp err (%d)",
+			dname, (int)bus_number, (int)device_address,
+			GetLastError());
+		FreeSid(gsid);
+		free(sec_des);
+		return NULL;
+	}
+
+	sec_att = malloc(sizeof(*sec_att));
+	if (unlikely(!sec_att))
+		quit(1, "MTX: Failed to malloc LPSECURITY_ATTRIBUTES");
+
+	sec_att->nLength = sizeof(*sec_att);
+	sec_att->lpSecurityDescriptor = sec_des;
+	sec_att->bInheritHandle = FALSE;
+
+	return sec_att;
+}
+#endif
+
+// Any errors should always be printed since they will rarely if ever occur
+// and thus it is best to always display them
+static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_address)
+{
+	applog(LOG_DEBUG, "USB res lock %s %d-%d", dname, (int)bus_number, (int)device_address);
+
+#ifdef WIN32
+	struct cgpu_info *cgpu;
+	LPSECURITY_ATTRIBUTES sec;
+	HANDLE usbMutex;
+	char name[64];
+	DWORD res;
+	int i;
+
+	if (is_in_use_bd(bus_number, device_address))
+		return false;
+
+	sprintf(name, "cg-usb-%d-%d", (int)bus_number, (int)device_address);
+
+	sec = mksec(dname, bus_number, device_address);
+	if (!sec)
+		return false;
+
+	usbMutex = CreateMutex(sec, FALSE, name);
+	if (usbMutex == NULL) {
+		applog(LOG_ERR,
+			"MTX: %s USB failed to get '%s' err (%d)",
+			dname, name, GetLastError());
+		sec = unsec(sec);
+		return false;
+	}
+
+	res = WaitForSingleObject(usbMutex, 0);
+
+	switch(res) {
+		case WAIT_OBJECT_0:
+		case WAIT_ABANDONED:
+			// Am I using it already?
+			for (i = 0; i < total_devices; i++) {
+				cgpu = get_devices(i);
+				if (cgpu->usbinfo.bus_number == bus_number &&
+				    cgpu->usbinfo.device_address == device_address &&
+				    cgpu->usbinfo.nodev == false) {
+					if (ReleaseMutex(usbMutex)) {
+						applog(LOG_WARNING,
+							"MTX: %s USB can't get '%s' - device in use",
+							dname, name);
+						goto fail;
+					}
+					applog(LOG_ERR,
+						"MTX: %s USB can't get '%s' - device in use - failure (%d)",
+						dname, name, GetLastError());
+					goto fail;
+				}
+			}
+			break;
+		case WAIT_TIMEOUT:
+			if (!hotplug_mode)
+				applog(LOG_WARNING,
+					"MTX: %s USB failed to get '%s' - device in use",
+					dname, name);
+			goto fail;
+		case WAIT_FAILED:
+			applog(LOG_ERR,
+				"MTX: %s USB failed to get '%s' err (%d)",
+				dname, name, GetLastError());
+			goto fail;
+		default:
+			applog(LOG_ERR,
+				"MTX: %s USB failed to get '%s' unknown reply (%d)",
+				dname, name, res);
+			goto fail;
+	}
+
+	add_in_use(bus_number, device_address);
+	in_use_store_ress(bus_number, device_address, (void *)usbMutex, (void *)sec);
+
+	return true;
+fail:
+	sec = unsec(sec);
+	CloseHandle(usbMutex);
+	return false;
+#else
+	struct semid_ds seminfo;
+	union semun opt;
+	char name[64];
+	key_t key;
+	int fd, sem, count;
+
+	if (is_in_use_bd(bus_number, device_address))
+		return false;
+
+	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (fd == -1) {
+		applog(LOG_ERR,
+			"SEM: %s USB open failed '%s' err (%d) %s",
+			dname, name, errno, strerror(errno));
+		return false;
+	}
+	close(fd);
+	key = ftok(name, 'K');
+	sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 438);
+	if (sem < 0) {
+		if (errno != EEXIST) {
+			applog(LOG_ERR,
+				"SEM: %s USB failed to get '%s' err (%d) %s",
+				dname, name, errno, strerror(errno));
+			return false;
+		}
+
+		sem = semget(key, 1, 0);
+		if (sem < 0) {
+			applog(LOG_ERR,
+				"SEM: %s USB failed to access '%s' err (%d) %s",
+				dname, name, errno, strerror(errno));
+			return false;
+		}
+
+		opt.seminfo = &seminfo;
+		count = 0;
+		while (++count) {
+			// Should NEVER take 100ms
+			if (count > 99) {
+				applog(LOG_ERR,
+					"SEM: %s USB timeout waiting for (%d) '%s'",
+					dname, sem, name);
+				return false;
+			}
+			if (semctl(sem, 0, IPC_STAT, opt) == -1) {
+				applog(LOG_ERR,
+					"SEM: %s USB failed to wait for (%d) '%s' count %d err (%d) %s",
+					dname, sem, name, count, errno, strerror(errno));
+				return false;
+			}
+			if (opt.seminfo->sem_otime != 0)
+				break;
+			nmsleep(1);
+		}
+	}
+
+	struct sembuf sops[] = {
+		{ 0, 0, IPC_NOWAIT | SEM_UNDO },
+		{ 0, 1, IPC_NOWAIT | SEM_UNDO }
+	};
+
+	if (semop(sem, sops, 2)) {
+		if (errno == EAGAIN) {
+			if (!hotplug_mode)
+				applog(LOG_WARNING,
+					"SEM: %s USB failed to get (%d) '%s' - device in use",
+					dname, sem, name);
+		} else {
+			applog(LOG_DEBUG,
+				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
+				dname, sem, name, errno, strerror(errno));
+		}
+		return false;
+	}
+
+	add_in_use(bus_number, device_address);
+	return true;
+#endif
+}
+
+// Any errors should always be printed since they will rarely if ever occur
+// and thus it is best to always display them
+static void resource_unlock(const char *dname, uint8_t bus_number, uint8_t device_address)
+{
+	applog(LOG_DEBUG, "USB res unlock %s %d-%d", dname, (int)bus_number, (int)device_address);
+
+#ifdef WIN32
+	LPSECURITY_ATTRIBUTES sec = NULL;
+	HANDLE usbMutex = NULL;
+	char name[64];
+
+	sprintf(name, "cg-usb-%d-%d", (int)bus_number, (int)device_address);
+
+	in_use_get_ress(bus_number, device_address, (void **)(&usbMutex), (void **)(&sec));
+
+	if (!usbMutex || !sec)
+		goto fila;
+
+	usbMutex = CreateMutex(sec, FALSE, name);
+	if (usbMutex == NULL) {
+		applog(LOG_ERR,
+			"MTX: %s USB failed to get '%s' for release err (%d)",
+			dname, name, GetLastError());
+		goto fila;
+	}
+
+	if (!ReleaseMutex(usbMutex))
+		applog(LOG_ERR,
+			"MTX: %s USB failed to release '%s' err (%d)",
+			dname, name, GetLastError());
+
+fila:
+
+	if (sec)
+		unsec(sec);
+	if (usbMutex)
+		CloseHandle(usbMutex);
+	remove_in_use(bus_number, device_address);
+	return;
+#else
+	char name[64];
+	key_t key;
+	int fd, sem;
+
+	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (fd == -1) {
+		applog(LOG_ERR,
+			"SEM: %s USB open failed '%s' for release err (%d) %s",
+			dname, name, errno, strerror(errno));
+		return;
+	}
+	close(fd);
+	key = ftok(name, 'K');
+
+	sem = semget(key, 1, 0);
+	if (sem < 0) {
+		applog(LOG_ERR,
+			"SEM: %s USB failed to get '%s' for release err (%d) %s",
+			dname, name, errno, strerror(errno));
+		return;
+	}
+
+	struct sembuf sops[] = {
+		{ 0, -1, SEM_UNDO }
+	};
+
+	// Allow a 10ms timeout
+	// exceeding this timeout means it would probably never succeed anyway
+	struct timespec timeout = { 0, 10000000 };
+
+	// Wait forever since we shoud be the one who has it
+	if (semtimedop(sem, sops, 1, &timeout)) {
+		applog(LOG_ERR,
+			"SEM: %s USB failed to release '%s' err (%d) %s",
+			dname, name, errno, strerror(errno));
+	}
+
+	remove_in_use(bus_number, device_address);
+	return;
+#endif
+}
+
+static void resource_process()
+{
+	struct resource_work *res_work = NULL;
+	struct resource_reply *res_reply = NULL;
+	bool ok;
+
+	applog(LOG_DEBUG, "RES: %s (%d:%d) lock=%d",
+			res_work_head->dname,
+			(int)res_work_head->bus_number,
+			(int)res_work_head->device_address,
+			res_work_head->lock);
+
+	if (res_work_head->lock) {
+		ok = resource_lock(res_work_head->dname,
+					res_work_head->bus_number,
+					res_work_head->device_address);
+
+		applog(LOG_DEBUG, "RES: %s (%d:%d) lock ok=%d",
+				res_work_head->dname,
+				(int)res_work_head->bus_number,
+				(int)res_work_head->device_address,
+				ok);
+
+		res_reply = calloc(1, sizeof(*res_reply));
+
+		res_reply->bus_number = res_work_head->bus_number;
+		res_reply->device_address = res_work_head->device_address;
+		res_reply->got = ok;
+		res_reply->next = res_reply_head;
+
+		res_reply_head = res_reply;
+	}
+	else
+		resource_unlock(res_work_head->dname,
+				res_work_head->bus_number,
+				res_work_head->device_address);
+
+	res_work = res_work_head;
+	res_work_head = res_work_head->next;
+	free(res_work);
+}
+
+void *usb_resource_thread(void __maybe_unused *userdata)
+{
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("usbresource");
+
+	applog(LOG_DEBUG, "RES: thread starting");
+
+	while (0*1337+1) {
+		mutex_lock(&cgusbres_lock);
+
+		while (res_work_head)
+			resource_process();
+
+		mutex_unlock(&cgusbres_lock);
+
+		nmsleep(45);
+	}
+
+	return NULL;
 }
