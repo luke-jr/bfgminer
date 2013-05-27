@@ -751,8 +751,6 @@ static void *avalon_get_results(void *userdata)
 	char threadname[24];
 	int offset = 0;
 
-	pthread_detach(pthread_self());
-
 	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
 	RenameThread(threadname);
 
@@ -771,7 +769,11 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		cgtime(&tv_start);
+		/* Threads don't like being cancelled while being inside
+		 * libusb functions */
+		pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT);
+		pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 		if (ret < 1) {
 			int ms_delay;
@@ -815,8 +817,6 @@ static void *avalon_send_tasks(void *userdata)
 	const int avalon_get_work_count = info->miner_count;
 	char threadname[24];
 
-	pthread_detach(pthread_self());
-
 	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
 	RenameThread(threadname);
 
@@ -850,7 +850,11 @@ static void *avalon_send_tasks(void *userdata)
 						info->timeout, info->asic_count,
 						info->miner_count, 1, 1, info->frequency);
 			}
+
+			pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
 			ret = avalon_send_task(&at, avalon);
+			pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
+
 			if (unlikely(ret == AVA_SEND_ERROR)) {
 				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 				       avalon->device_id);
@@ -939,11 +943,12 @@ static void do_avalon_close(struct thr_info *thr)
 	struct avalon_info *info = avalon->device_data;
 
 	pthread_cancel(info->read_thr);
+	pthread_join(info->read_thr, NULL);
 	pthread_cancel(info->write_thr);
+	pthread_join(info->write_thr, NULL);
 	__avalon_running_reset(avalon, info);
 	avalon_idle(avalon, info);
 	avalon_free_work(thr);
-	//avalon_close();
 
 	info->no_matching_work = 0;
 }
