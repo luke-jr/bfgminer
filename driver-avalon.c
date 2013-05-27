@@ -757,7 +757,7 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		avalon_wait_ready(avalon);
-		amount = avalon_read(avalon, buf, C_AVALON_READ);
+		amount = avalon_read(avalon, buf, rsize);
 
 		if (amount < 3)
 			continue;
