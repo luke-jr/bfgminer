@@ -354,7 +354,7 @@ Q quits the application.
 
 G gives you something like:
 
-GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33( 42%)  HW:0]
+GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33+0( 42%)  HW:0]
 Temp: 67.0 C
 Fan Speed: 35% (2500 RPM)
 Engine Clock: 960 MHz
@@ -387,18 +387,18 @@ dedicated to this program,
 	https://bitcointalk.org/?topic=78192
 
 The output line shows the following:
- 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8(.01%) S:0 HW:0
+ 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8+0(.01%) HW:0
 
 Each column is as follows:
 5s:  A 5 second exponentially decaying average hash rate
 avg: An all time average hash rate
 u:   An all time average hash rate based on actual accepted shares
 A:   The number of Accepted shares
-R:   The number of Rejected shares (and percentage of total submitted)
-S:   Stale shares discarded (not submitted so don't count as rejects)
+R:   The number of Rejected shares, stale shares discarded (never submitted),
+     and the percentage these are of total found.
 HW:  The number of HardWare errors
 
- GPU 1: 73.5C 2551RPM | 427.3/443.0/442.1Mh/s | A:8 R:0(none) HW:0 U:4.39/m
+ GPU 1: 73.5C 2551RPM | 427.3/443.0/442.1Mh/s | A:8 R:0+0(none) HW:0 U:4.39/m
 
 Each column is as follows:
 Temperature (if supported)

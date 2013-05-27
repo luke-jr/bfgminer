@@ -458,6 +458,7 @@ struct cgpu_info {
 	enum dev_enable deven;
 	int accepted;
 	int rejected;
+	int stale;
 	int hw_errors;
 	double rolling;
 	double total_mhashes;

@@ -2302,7 +2302,7 @@ static void adj_width(int var, int *length);
 static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 {
 #ifdef HAVE_CURSES
-	static int awidth = 1, rwidth = 1, hwwidth = 1;
+	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 #else
 	assert(for_curses == false);
 #endif
@@ -2323,6 +2323,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	double wutil = cgpu->utility_diff1;
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
+	int stale = cgpu->stale;
 	int hwerrs = cgpu->hw_errors;
 	
 	if (!opt_show_procs)
@@ -2336,6 +2337,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			wutil += slave->utility_diff1;
 			accepted += slave->accepted;
 			rejected += slave->rejected;
+			stale += slave->stale;
 			hwerrs += slave->hw_errors;
 		}
 	
@@ -2413,26 +2415,29 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		
 		adj_width(accepted, &awidth);
 		adj_width(rejected, &rwidth);
+		adj_width(stale, &swidth);
 		adj_width(hwerrs, &hwwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d(%s) HW:%*d",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
-		            percentf(rejected, accepted, rejpcbuf),
+		            swidth, stale,
+		            percentf(rejected + stale, accepted, rejpcbuf),
 		            hwwidth, hwerrs
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d(%s) HW:%d",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
-			percentf(rejected, accepted, rejpcbuf),
+			stale,
+			percentf(rejected + stale, accepted, rejpcbuf),
 			hwerrs);
 	}
 	
@@ -3959,10 +3964,13 @@ static void rebuild_hash(struct work *work)
 
 static void submit_discard_share2(const char *reason, struct work *work)
 {
+	struct cgpu_info *cgpu = get_thr_cgpu(work->thr_id);
+
 	sharelog(reason, work);
 
 	mutex_lock(&stats_lock);
 	++total_stale;
+	++cgpu->stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
@@ -5307,6 +5315,7 @@ void zero_stats(void)
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
+		cgpu->stale = 0;
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
 		cgpu->utility_diff1 = 0;
@@ -5939,15 +5948,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d(%s) S:%d HW:%d",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
 		total_accepted,
 		total_rejected,
-		percentf(total_rejected, total_accepted, rejpcbuf),
 		total_stale,
+		percentf(total_rejected + total_stale, total_accepted, rejpcbuf),
 		hw_errors);
 
 
@@ -6105,6 +6114,7 @@ void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
+	struct cgpu_info *cgpu;
 	double diff_cleared = 0;
 	int cleared = 0;
 
@@ -6116,6 +6126,8 @@ void clear_stratum_shares(struct pool *pool)
 			work = sshare->work;
 			sharelog("disconnect", work);
 			
+			cgpu = get_thr_cgpu(work->thr_id);
+			++cgpu->stale;
 			diff_cleared += sshare->work->work_difficulty;
 			free_work(sshare->work);
 			free(sshare);
