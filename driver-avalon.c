@@ -134,6 +134,7 @@ static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len)
 	while (len > 0) {
 		int amount, err;
 
+		avalon_wait_ready(avalon);
 		err = usb_write(avalon, buf + wrote, len, &amount, C_AVALON_TASK);
 		applog(LOG_DEBUG, "%s%i: usb_write got err %d",
 		       avalon->drv->name, avalon->device_id, err);
@@ -238,6 +239,7 @@ static int avalon_read(struct cgpu_info *avalon, char *buf, ssize_t len)
 	int amount, err, offset, cp;
 	char readbuf[AVALON_FTDI_READSIZE];
 
+	avalon_wait_ready(avalon);
 	err = usb_read_once_timeout(avalon, readbuf, len, &amount,
 				    AVALON_READ_TIMEOUT, C_AVALON_READ);
 	if (err && err != LIBUSB_ERROR_TIMEOUT) {
@@ -776,6 +778,7 @@ static void *avalon_get_results(void *userdata)
 			offset = 0;
 		}
 
+		avalon_wait_ready(avalon);
 		err = usb_read_once_timeout(avalon, buf, rsize, &amount,
 					    AVALON_READ_TIMEOUT, C_AVALON_READ);
 		if (err && err != LIBUSB_ERROR_TIMEOUT) {
