@@ -242,10 +242,23 @@ static void wait_avalon_ready(struct cgpu_info *avalon)
 	}
 }
 
+static int avalon_read(struct cgpu_info *avalon, unsigned char *buf, size_t bufsize)
+{
+	struct cg_usb_device *usbdev = avalon->usbdev;
+	int err, amount;
+
+	wait_avalon_ready(avalon);
+	err = libusb_bulk_transfer(usbdev->handle, usbdev->found->eps[DEFAULT_EP_IN].ep,
+				   buf, bufsize, &amount, AVALON_READ_TIMEOUT);
+	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
+	       avalon->drv->name, avalon->device_id, err);
+	return amount;
+}
+
 static int avalon_reset(struct cgpu_info *avalon, bool initial)
 {
 	struct avalon_result ar;
-	int ret, i, spare, err;
+	int ret, i, spare;
 	struct avalon_task at;
 	uint8_t *buf, *tmp;
 	struct timespec p;
@@ -270,12 +283,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 		return 0;
 	}
 
-	err = usb_read_once(avalon, (char *)&ar, AVALON_READ_SIZE, &ret,
-			    C_AVALON_READ);
-	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
-	       avalon->drv->name, avalon->device_id, err);
-	if (unlikely(err))
-		return -1;
+	ret = avalon_read(avalon, (unsigned char *)&ar, AVALON_READ_SIZE);
 
 	/* What do these sleeps do?? */
 	p.tv_sec = 0;
@@ -736,8 +744,8 @@ static void *avalon_get_results(void *userdata)
 	RenameThread(threadname);
 
 	while (42) {
-		int amount, err, ofs, cp;
-		char buf[rsize];
+		unsigned char buf[rsize];
+		int amount, ofs, cp;
 
 		if (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
@@ -749,14 +757,7 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		avalon_wait_ready(avalon);
-		err = usb_read_once_timeout(avalon, buf, rsize, &amount,
-					    AVALON_READ_TIMEOUT, C_AVALON_READ);
-		if (err && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_WARNING, "%s%i: Get avalon read got err %d",
-			       avalon->drv->name, avalon->device_id, err);
-			nmsleep(AVALON_READ_TIMEOUT);
-			continue;
-		}
+		amount = avalon_read(avalon, buf, C_AVALON_READ);
 
 		if (amount < 3)
 			continue;
