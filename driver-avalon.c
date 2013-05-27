@@ -274,7 +274,7 @@ static void wait_avalon_ready(int fd)
 	}
 }
 
-static int avalon_reset(struct cgpu_info *avalon, int fd)
+static int avalon_reset(struct cgpu_info *avalon, int fd, bool initial)
 {
 	struct avalon_result ar;
 	struct avalon_task at;
@@ -292,9 +292,15 @@ static int avalon_reset(struct cgpu_info *avalon, int fd)
 			 AVALON_DEFAULT_FREQUENCY);
 
 	wait_avalon_ready(fd);
+
 	ret = avalon_send_task(fd, &at, NULL);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
+
+	if (!initial) {
+		applog(LOG_ERR, "AVA%d reset sequence sent", avalon->device_id);
+		return 0;
+	}
 
 	ret = avalon_read(fd, (char *)&ar, AVALON_READ_SIZE);
 	if (unlikely(ret == AVA_GETS_ERROR))
@@ -557,7 +563,7 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_old = 0;
 	info->frequency = frequency;
 
-	ret = avalon_reset(avalon, fd);
+	ret = avalon_reset(avalon, fd, true);
 	if (ret) {
 		; /* FIXME: I think IT IS avalon and wait on reset;
 		   * avalon_close(fd);
@@ -695,7 +701,7 @@ static void *avalon_get_results(void *userdata)
 
 			/* Lock to prevent more work being sent during reset */
 			mutex_lock(&info->qlock);
-			avalon_reset(avalon, fd);
+			avalon_reset(avalon, fd, false);
 			avalon_idle(avalon, info, fd);
 			avalon->results = 0;
 			mutex_unlock(&info->qlock);
@@ -771,7 +777,7 @@ static void *avalon_send_tasks(void *userdata)
 				       "AVA%i: Buffer full before all work queued",
 					avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				avalon_reset(avalon, fd);
+				avalon_reset(avalon, fd, false);
 				avalon_idle(avalon, info, fd);
 				break;
 			}
@@ -793,8 +799,9 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 				       avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				avalon_reset(avalon, fd);
+				avalon_reset(avalon, fd, false);
 				avalon_idle(avalon, info, fd);
+				break;
 			}
 		}
 
@@ -876,7 +883,7 @@ static void do_avalon_close(struct thr_info *thr)
 
 	pthread_cancel(info->read_thr);
 	pthread_cancel(info->write_thr);
-	avalon_reset(avalon, fd);
+	avalon_reset(avalon, fd, false);
 	avalon_idle(avalon, info, fd);
 	avalon_free_work(thr);
 	avalon_close(fd);
