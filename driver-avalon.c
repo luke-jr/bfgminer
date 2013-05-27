@@ -770,7 +770,9 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_WARNING,
 				       "AVA%i: Buffer full before all work queued",
 					avalon->device_id);
-				avalon->results -= avalon_get_work_count - j;
+				dev_error(avalon, REASON_DEV_COMMS_ERROR);
+				avalon_reset(avalon, fd);
+				avalon_idle(avalon, info, fd);
 				break;
 			}
 
@@ -795,6 +797,7 @@ static void *avalon_send_tasks(void *userdata)
 				avalon_idle(avalon, info, fd);
 			}
 		}
+
 		avalon_rotate_array(avalon);
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
