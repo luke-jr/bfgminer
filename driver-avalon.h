@@ -30,6 +30,7 @@
 
 #define AVALON_FTDI_READSIZE 512
 #define AVALON_READBUF_SIZE 8192
+#define AVALON_RESET_TIMEOUT 100
 #define AVALON_READ_TIMEOUT 10
 
 struct avalon_task {
