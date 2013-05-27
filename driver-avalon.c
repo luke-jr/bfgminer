@@ -793,10 +793,8 @@ static void *avalon_send_tasks(void *userdata)
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			if (unlikely(avalon_buffer_full(fd) == AVA_BUFFER_FULL)) {
 				applog(LOG_WARNING,
-				       "AVA%i: Buffer full before all work queued",
-					avalon->device_id);
-				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				__avalon_running_reset(avalon, info, fd);
+				       "AVA%i: Buffer full after only %d of %d work queued",
+					avalon->device_id, j, avalon_get_work_count);
 				break;
 			}
 
