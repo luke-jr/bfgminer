@@ -247,7 +247,6 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf, size_t bufs
 	struct cg_usb_device *usbdev = avalon->usbdev;
 	int err, amount;
 
-	wait_avalon_ready(avalon);
 	err = libusb_bulk_transfer(usbdev->handle, usbdev->found->eps[DEFAULT_EP_IN].ep,
 				   buf, bufsize, &amount, AVALON_READ_TIMEOUT);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
@@ -273,7 +272,6 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 			 AVALON_DEFAULT_FREQUENCY);
 
 	wait_avalon_ready(avalon);
-
 	ret = avalon_send_task(&at, avalon);
 	if (unlikely(ret == AVA_SEND_ERROR))
 		return -1;
@@ -756,7 +754,6 @@ static void *avalon_get_results(void *userdata)
 			offset = 0;
 		}
 
-		avalon_wait_ready(avalon);
 		amount = avalon_read(avalon, buf, rsize);
 
 		if (amount < 3)
