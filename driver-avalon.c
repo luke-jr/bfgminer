@@ -42,7 +42,6 @@
 #include "util.h"
 
 static int option_offset = -1;
-struct avalon_info **avalon_infos;
 struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
@@ -613,16 +612,10 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	avalon->device_path = strdup(devpath);
 	add_cgpu(avalon);
 
-	avalon_infos = realloc(avalon_infos,
-			       sizeof(struct avalon_info *) *
-			       (total_devices + 1));
-	if (unlikely(!avalon_infos))
-		quit(1, "Failed to malloc avalon_infos");
-
-	avalon_infos[avalon->device_id] = calloc(sizeof(struct avalon_info), 1);
-	if (unlikely(!(avalon_infos[avalon->device_id])))
-		quit(1, "Failed to malloc avalon_infos device");
-	info = avalon_infos[avalon->device_id];
+	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
+	if (unlikely(!(avalon->device_data)))
+		quit(1, "Failed to malloc avalon_info data");
+	info = avalon->device_data;
 
 	info->baud = baud;
 	info->miner_count = miner_count;
@@ -1036,11 +1029,12 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	int subid, slot, mc = avalon_infos[avalon->device_id]->miner_count;
 	struct avalon_info *info = avalon->device_data;
+	int subid, slot, mc;
 	struct work *work;
 	bool ret = true;
 
+	mc = info->miner_count;
 	mutex_lock(&info->qlock);
 	if (avalon->queued >= mc)
 		goto out_unlock;
