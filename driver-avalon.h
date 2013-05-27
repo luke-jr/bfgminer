@@ -109,6 +109,7 @@ struct avalon_info {
 	int nonces;
 
 	bool idle;
+	bool reset;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))

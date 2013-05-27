@@ -668,6 +668,25 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 	memmove(buf, buf + spare, *offset);
 }
 
+static void __avalon_running_reset(struct cgpu_info *avalon,
+				   struct avalon_info *info, int fd)
+{
+	info->reset = true;
+	avalon_reset(avalon, fd, false);
+	avalon_idle(avalon, info, fd);
+	avalon->results = 0;
+	info->reset = false;
+}
+
+static void avalon_running_reset(struct cgpu_info *avalon,
+				 struct avalon_info *info, int fd)
+{
+	/* Lock to prevent more work being sent during reset */
+	mutex_lock(&info->qlock);
+	__avalon_running_reset(avalon, info, fd);
+	mutex_unlock(&info->qlock);
+}
+
 static void *avalon_get_results(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
@@ -698,13 +717,7 @@ static void *avalon_get_results(void *userdata)
 		if (unlikely(avalon->results <= -info->miner_count)) {
 			applog(LOG_ERR, "AVA%d: %d invalid consecutive results, resetting",
 			       avalon->device_id, -avalon->results);
-
-			/* Lock to prevent more work being sent during reset */
-			mutex_lock(&info->qlock);
-			avalon_reset(avalon, fd, false);
-			avalon_idle(avalon, info, fd);
-			avalon->results = 0;
-			mutex_unlock(&info->qlock);
+			avalon_running_reset(avalon, info, fd);
 		}
 
 		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
@@ -733,6 +746,12 @@ static void *avalon_get_results(void *userdata)
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
 			hexdump((uint8_t *)buf, ret);
+		}
+
+		/* During a reset, goes on reading but discards anything */
+		if (unlikely(info->reset)) {
+			offset = 0;
+			continue;
 		}
 
 		memcpy(&readbuf[offset], buf, ret);
@@ -777,8 +796,7 @@ static void *avalon_send_tasks(void *userdata)
 				       "AVA%i: Buffer full before all work queued",
 					avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				avalon_reset(avalon, fd, false);
-				avalon_idle(avalon, info, fd);
+				__avalon_running_reset(avalon, info, fd);
 				break;
 			}
 
@@ -799,8 +817,7 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 				       avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				avalon_reset(avalon, fd, false);
-				avalon_idle(avalon, info, fd);
+				__avalon_running_reset(avalon, info, fd);
 				break;
 			}
 		}
@@ -883,7 +900,7 @@ static void do_avalon_close(struct thr_info *thr)
 
 	pthread_cancel(info->read_thr);
 	pthread_cancel(info->write_thr);
-	avalon_reset(avalon, fd, false);
+	__avalon_running_reset(avalon, info, fd);
 	avalon_idle(avalon, info, fd);
 	avalon_free_work(thr);
 	avalon_close(fd);
