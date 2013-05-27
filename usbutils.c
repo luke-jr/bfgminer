@@ -455,6 +455,12 @@ static const char *C_SENDTESTWORK_S = "SendTestWork";
 static const char *C_LATENCY_S = "SetLatency";
 static const char *C_SETLINE_S = "SetLine";
 static const char *C_VENDOR_S = "Vendor";
+static const char *C_AVALON_TASK_S = "AvalonTask";
+static const char *C_AVALON_READ_S = "AvalonRead";
+static const char *C_GET_AVALON_READY_S = "AvalonReady";
+static const char *C_AVALON_RESET_S = "AvalonReset";
+static const char *C_GET_AR_S = "AvalonResult";
+static const char *C_FTDI_STATUS_S = "FTDIStatus";
 
 #ifdef EOL
 #undef EOL
@@ -927,6 +933,12 @@ static void cgusb_check_init()
 		usb_commands[C_LATENCY] = C_LATENCY_S;
 		usb_commands[C_SETLINE] = C_SETLINE_S;
 		usb_commands[C_VENDOR] = C_VENDOR_S;
+		usb_commands[C_AVALON_TASK] = C_AVALON_TASK_S;
+		usb_commands[C_AVALON_READ] = C_AVALON_READ_S;
+		usb_commands[C_GET_AVALON_READY] = C_GET_AVALON_READY_S;
+		usb_commands[C_AVALON_RESET] = C_AVALON_RESET_S;
+		usb_commands[C_GET_AR] = C_GET_AR_S;
+		usb_commands[C_FTDI_STATUS] = C_FTDI_STATUS_S;
 
 		stats_initialised = true;
 	}
@@ -2218,6 +2230,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 int usb_ftdi_cts(struct cgpu_info *cgpu)
 {
+	struct cg_usb_device *usbdev = cgpu->usbdev;
+	unsigned char buf[2], ret;
+
 	libusb_control_transfer(usbdev->handle, (uint8_t)FTDI_TYPE_IN,
 				(uint8_t)5, (uint16_t)0, (uint16_t)0, buf, 2,
 				DEVTIMEOUT);

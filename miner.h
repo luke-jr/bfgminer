@@ -430,9 +430,6 @@ struct cgpu_info {
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
 #endif
-#ifdef USE_AVALON
-		int device_fd;
-#endif
 	};
 #ifdef USE_AVALON
 	struct work **works;

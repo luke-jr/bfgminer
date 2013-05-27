@@ -18,6 +18,7 @@
 
 // For 0x0403:0x6014/0x6001 FT232H (and possibly others?) - BFL, BAS, BLT, LLT, AVA
 #define FTDI_TYPE_OUT (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_OUT)
+#define FTDI_TYPE_IN (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE | LIBUSB_ENDPOINT_IN)
 
 #define FTDI_REQUEST_RESET ((uint8_t)0)
 #define FTDI_REQUEST_MODEM ((uint8_t)1)
@@ -39,6 +40,11 @@
 // LLT = BLT (same code)
 #define FTDI_VALUE_BAUD_BLT 0x001a
 #define FTDI_INDEX_BAUD_BLT 0x0000
+
+#define FTDI_VALUE_BAUD_AVA 0x001A
+#define FTDI_INDEX_BAUD_AVA 0x0000
+
+#define FTDI_VALUE_DATA_AVA 8
 
 // Data control
 #define FTDI_VALUE_DATA_BFL 0
@@ -210,6 +216,12 @@ enum usb_cmds {
 	C_LATENCY,
 	C_SETLINE,
 	C_VENDOR,
+	C_AVALON_TASK,
+	C_AVALON_READ,
+	C_GET_AVALON_READY,
+	C_AVALON_RESET,
+	C_GET_AR,
+	C_FTDI_STATUS,
 	C_MAX
 };
 
@@ -237,6 +249,9 @@ void usb_initialise();
 
 #define usb_read_once(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, true)
+
+#define usb_read_once_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
+	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, true)
 
 #define usb_read_nl(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false)
