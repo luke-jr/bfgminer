@@ -233,39 +233,6 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	return submit_nonce(thr, work, nonce);
 }
 
-static int avalon_read(struct cgpu_info *avalon, char *buf, ssize_t len)
-{
-	ssize_t aread = 0;
-	int amount, err, offset, cp;
-	char readbuf[AVALON_FTDI_READSIZE];
-
-	avalon_wait_ready(avalon);
-	err = usb_read_once_timeout(avalon, readbuf, len, &amount,
-				    AVALON_READ_TIMEOUT, C_AVALON_READ);
-	if (err && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s%i: Get avalon read got err %d",
-			avalon->drv->name, avalon->device_id, err);
-		nmsleep(AVALON_READ_TIMEOUT);
-		return 0;
-	}
-
-	if (amount < 3)
-		return 0;
-
-	offset = 2;
-	do {
-		cp = amount - 2;
-		if (cp > 62)
-			cp = 62;
-		memcpy(&buf[aread], readbuf, cp);
-		aread += cp;
-		amount -= cp + 2;
-		offset += 64;
-	} while (amount > 2);
-
-	return aread;
-}
-
 /* Wait until the ftdi chip returns a CTS saying we can send more data. The
  * status is updated every 40ms. */
 static void wait_avalon_ready(struct cgpu_info *avalon)
@@ -278,9 +245,9 @@ static void wait_avalon_ready(struct cgpu_info *avalon)
 static int avalon_reset(struct cgpu_info *avalon, bool initial)
 {
 	struct avalon_result ar;
+	int ret, i, spare, err;
 	struct avalon_task at;
 	uint8_t *buf, *tmp;
-	int ret, i, spare;
 	struct timespec p;
 
 	/* Send reset, then check for result */
@@ -303,8 +270,11 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 		return 0;
 	}
 
-	ret = avalon_read(avalon, (char *)&ar, AVALON_READ_SIZE);
-	if (unlikely(ret == AVA_GETS_ERROR))
+	err = usb_read_once(avalon, (char *)&ar, AVALON_READ_SIZE, &ret,
+			    C_AVALON_READ);
+	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
+	       avalon->drv->name, avalon->device_id, err);
+	if (unlikely(err))
 		return -1;
 
 	/* What do these sleeps do?? */
@@ -314,8 +284,8 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 
 	/* Look for the first occurrence of 0xAA, the reset response should be:
 	 * AA 55 AA 55 00 00 00 00 00 00 */
-	spare = AVALON_READ_SIZE - 10;
-	tmp = (uint8_t *)&ar;
+	spare = ret - 10;
+	buf = tmp = (uint8_t *)&ar;
 	if (opt_debug) {
 		applog(LOG_DEBUG, "AVA%d reset: get:", avalon->device_id);
 		hexdump(tmp, AVALON_READ_SIZE);
