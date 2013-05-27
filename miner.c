@@ -2284,7 +2284,7 @@ static void adj_width(int var, int *length);
 static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 {
 #ifdef HAVE_CURSES
-	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
+	static int awidth = 1, rwidth = 1, hwwidth = 1;
 #else
 	assert(for_curses == false);
 #endif
@@ -2305,7 +2305,6 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
 	int hwerrs = cgpu->hw_errors;
-	double util = cgpu->utility;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2319,7 +2318,6 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted += slave->accepted;
 			rejected += slave->rejected;
 			hwerrs += slave->hw_errors;
-			util += slave->utility;
 		}
 	
 	ti_hashrate_bufstr(
@@ -2397,27 +2395,24 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		adj_width(accepted, &awidth);
 		adj_width(rejected, &rwidth);
 		adj_width(hwerrs, &hwwidth);
-		adj_width(util, &uwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
-		            hwwidth, hwerrs,
-		            uwidth + 3, util
+		            hwwidth, hwerrs
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
-			hwerrs,
-			util);
+			hwerrs);
 	}
 	
 	if (drv->get_dev_statline_after || drv->get_statline)
@@ -2451,6 +2446,7 @@ static void curses_print_status(void)
 	struct pool *pool = current_pool();
 	struct timeval now, tv;
 	float efficiency;
+	double utility;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
@@ -2479,13 +2475,18 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
+
+	utility = total_accepted / total_secs * 60;
+
+	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f  U:%.1f/m  BS:%s",
 		total_staged(),
 		total_go,
 		new_blocks,
 		total_submitting,
 		total_ro,
-		efficiency);
+		efficiency,
+		utility,
+		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -5828,7 +5829,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
-	double utility;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
@@ -5910,8 +5910,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	utility = total_accepted / total_secs * 60;
-
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
@@ -5919,15 +5917,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m BS:%s",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
 		total_accepted, total_rejected, total_stale,
-		hw_errors,
-		utility,
-		best_share);
+		hw_errors);
 
 
 	local_mhashes_done = 0;
