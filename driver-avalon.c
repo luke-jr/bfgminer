@@ -246,13 +246,26 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 		       size_t bufsize, int timeout)
 {
 	struct cg_usb_device *usbdev = avalon->usbdev;
-	int err, amount;
+	unsigned char readbuf[AVALON_READBUF_SIZE];
+	size_t total = 0, readsize = bufsize + 2;
+	int err, amount, ofs = 2, cp;
 
 	err = libusb_bulk_transfer(usbdev->handle, usbdev->found->eps[DEFAULT_EP_IN].ep,
-				   buf, bufsize, &amount, timeout);
+				   readbuf, readsize, &amount, timeout);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
-	return amount;
+
+	/* The first 2 of every 64 bytes are status on FTDIRL */
+	while (amount > 2) {
+		cp = amount - 2;
+		if (cp > 62)
+			cp = 62;
+		memcpy(&buf[total], &readbuf[ofs], cp);
+		total += cp;
+		amount -= cp + 2;
+		ofs += 64;
+	}
+	return total;
 }
 
 static int avalon_reset(struct cgpu_info *avalon, bool initial)
@@ -746,7 +759,7 @@ static void *avalon_get_results(void *userdata)
 	while (42) {
 		struct timeval tv_start, now, tdiff;
 		unsigned char buf[rsize];
-		int amount, ofs, cp;
+		int ret;
 
 		if (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
@@ -758,9 +771,9 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		cgtime(&tv_start);
-		amount = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT);
+		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT);
 
-		if (amount < 3) {
+		if (ret < 1) {
 			int ms_delay;
 
 			cgtime(&now);
@@ -773,7 +786,7 @@ static void *avalon_get_results(void *userdata)
 
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
-			hexdump((uint8_t *)buf, amount);
+			hexdump((uint8_t *)buf, ret);
 		}
 
 		/* During a reset, goes on reading but discards anything */
@@ -782,16 +795,7 @@ static void *avalon_get_results(void *userdata)
 			continue;
 		}
 
-		ofs = 2;
-		do {
-			cp = amount - 2;
-			if (cp > 62)
-				cp = 62;
-			memcpy(&readbuf[offset], &buf[ofs], cp);
-			offset += cp;
-			amount -= cp + 2;
-			ofs += 64;
-		} while (amount > 2);
+		memcpy(&readbuf[offset], &buf, ret);
 	}
 	return NULL;
 }
