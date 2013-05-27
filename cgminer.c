@@ -60,9 +60,6 @@
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#if defined(USE_AVALON)
-#	define USE_FPGA_SERIAL
-#endif
 #elif defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
@@ -1089,7 +1086,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for Avalon Mining device"),
+		     "Serial port to probe for Serial FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,

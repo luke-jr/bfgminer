@@ -35,6 +35,7 @@
 
 #include "elist.h"
 #include "miner.h"
+#include "usbutils.h"
 #include "fpgautils.h"
 #include "driver-avalon.h"
 #include "hexdump.c"
