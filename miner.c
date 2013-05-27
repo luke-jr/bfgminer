@@ -2479,9 +2479,8 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
+	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
 		total_staged(),
-		local_work,
 		total_go,
 		new_blocks,
 		total_submitting,

@@ -414,10 +414,9 @@ The number of hardware erorrs
 The utility defines as the number of shares / minute
 
 The BFGMiner status line shows:
- ST: 1  LW: 8  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42
+ ST: 1  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42
 
 ST is STaged work items (ready to use).
-LW is Locally generated Work items
 GF is Getwork Fail Occasions (server slow to provide work)
 NB is New Blocks detected on the network
 AS is Active Submissions (shares in the process of submitting)
