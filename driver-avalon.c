@@ -121,6 +121,12 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
+static void avalon_wait_ready(struct cgpu_info *avalon)
+{
+	while (!avalon_ready(avalon))
+		nmsleep(40);
+}
+
 static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len)
 {
 	ssize_t wrote = 0;

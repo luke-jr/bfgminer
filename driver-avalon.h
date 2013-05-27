@@ -123,6 +123,7 @@ struct avalon_info {
 #define AVA_SEND_OK 0
 
 #define avalon_buffer_full(avalon) !usb_ftdi_cts(avalon)
+#define avalon_ready(avalon)	usb_ftdi_ctw(avalon)
 
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
