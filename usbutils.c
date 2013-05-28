@@ -499,7 +499,7 @@ static const char *C_AVALON_TASK_S = "AvalonTask";
 static const char *C_AVALON_READ_S = "AvalonRead";
 static const char *C_GET_AVALON_READY_S = "AvalonReady";
 static const char *C_AVALON_RESET_S = "AvalonReset";
-static const char *C_GET_AR_S = "AvalonResult";
+static const char *C_GET_AVALON_RESET_S = "GetAvalonReset";
 static const char *C_FTDI_STATUS_S = "FTDIStatus";
 
 #ifdef EOL
@@ -983,7 +983,7 @@ static void cgusb_check_init()
 		usb_commands[C_AVALON_READ] = C_AVALON_READ_S;
 		usb_commands[C_GET_AVALON_READY] = C_GET_AVALON_READY_S;
 		usb_commands[C_AVALON_RESET] = C_AVALON_RESET_S;
-		usb_commands[C_GET_AR] = C_GET_AR_S;
+		usb_commands[C_GET_AVALON_RESET] = C_GET_AVALON_RESET_S;
 		usb_commands[C_FTDI_STATUS] = C_FTDI_STATUS_S;
 
 		stats_initialised = true;

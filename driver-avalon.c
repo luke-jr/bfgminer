@@ -236,15 +236,13 @@ static void wait_avalon_ready(struct cgpu_info *avalon)
 }
 
 static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
-		       size_t bufsize, int timeout)
+		       size_t bufsize, int timeout, int ep)
 {
-	struct cg_usb_device *usbdev = avalon->usbdev;
-	unsigned char readbuf[AVALON_READBUF_SIZE];
 	size_t total = 0, readsize = bufsize + 2;
+	char readbuf[AVALON_READBUF_SIZE];
 	int err, amount, ofs = 2, cp;
 
-	err = libusb_bulk_transfer(usbdev->handle, usbdev->found->eps[DEFAULT_EP_IN].ep,
-				   readbuf, readsize, &amount, timeout);
+	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
 
@@ -289,7 +287,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	}
 
 	ret = avalon_read(avalon, (unsigned char *)&ar, AVALON_READ_SIZE,
-			  AVALON_RESET_TIMEOUT);
+			  AVALON_RESET_TIMEOUT, C_GET_AVALON_RESET);
 
 	/* What do these sleeps do?? */
 	p.tv_sec = 0;
@@ -586,6 +584,10 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	if (!usb_init(avalon, dev, found))
 		return false;
 
+	/* Even though this is an FTDI type chip, we want to do the parsing
+	 * all ourselves so set it to std usb type */
+	avalon->usbdev->usb_type = USB_TYPE_STD;
+
 	/* We have a real Avalon! */
 	sprintf(devpath, "%d:%d",
 			(int)(avalon->usbinfo.bus_number),
@@ -762,7 +764,8 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		cgtime(&tv_start);
-		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT);
+		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
+				  C_AVALON_READ);
 
 		if (ret < 1) {
 			int us_delay;
