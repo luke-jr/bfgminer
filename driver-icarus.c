@@ -253,7 +253,8 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 	switch (icarus->usbdev->ident) {
 		case IDENT_BLT:
 		case IDENT_LLT:
-		case IDENT_CMR:
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			// Latency
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
 				 icarus->usbdev->found->interface, C_LATENCY);
@@ -275,10 +276,14 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
-			// Set the baud
-			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BLT,
-				 (FTDI_INDEX_BAUD_BLT & 0xff00) | icarus->usbdev->found->interface,
-				 C_SETBAUD);
+			// TODO: Get the baud settings for the 2 CMRs
+			if (icarus->usbdev->ident != IDENT_CMR1 &&
+			    icarus->usbdev->ident != IDENT_CMR2) {
+				// Set the baud
+				transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BLT,
+					 (FTDI_INDEX_BAUD_BLT & 0xff00) | icarus->usbdev->found->interface,
+					 C_SETBAUD);
+			}
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -484,7 +489,9 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		case IDENT_AMU:
 			info->Hs = ASICMINERUSB_HASH_TIME;
 			break;
-		case IDENT_CMR:
+		// TODO: ?
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE1_HASH_TIME;
 			break;
 		default:
@@ -617,7 +624,9 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			*work_division = 1;
 			*fpga_count = 1;
 			break;
-		case IDENT_CMR:
+		// TODO: ?
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 2;
 			*fpga_count = 2;

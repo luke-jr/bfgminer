@@ -106,7 +106,24 @@ static struct usb_endpoints llt_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
-static struct usb_endpoints cmr_eps[] = {
+static struct usb_endpoints cmr1_eps[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+/*
+ Interface 1
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 },
+
+ Interface 2
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0 },
+
+ Interface 3
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0 }
+*/
+};
+static struct usb_endpoints cmr2_eps[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
@@ -230,7 +247,7 @@ static struct usb_find_devices find_dev[] = {
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
-		.ident = IDENT_CMR,
+		.ident = IDENT_CMR1,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x8350,
 		.iProduct = "Cairnsmore1",
@@ -238,12 +255,12 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
-		.epcount = ARRAY_SIZE(cmr_eps),
+		.epcount = ARRAY_SIZE(cmr1_eps),
 		.eps = cmr_eps },
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
-		.ident = IDENT_CMR,
+		.ident = IDENT_CMR2,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iProduct = "Cairnsmore1",
@@ -251,7 +268,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
-		.epcount = ARRAY_SIZE(cmr_eps),
+		.epcount = ARRAY_SIZE(cmr2_eps),
 		.eps = cmr_eps },
 #endif
 #ifdef USE_ZTEX
