@@ -183,6 +183,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	ssize_t ret = 0;
 	int rc = 0;
 	int epollfd = -1;
+	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
 	int read_amount = ICARUS_READ_SIZE;
 	bool first = true;
 
@@ -192,7 +193,6 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		.data.fd = fd,
 	};
 	struct epoll_event evr[2];
-	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
 	if (thr && thr->work_restart_fd != -1)
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
@@ -260,7 +260,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			if (opt_debug) {
 				applog(LOG_DEBUG,
 					"Icarus Read: No data in %.2f seconds",
-					(float)rc/(float)TIME_FACTOR);
+					(float)rc * epoll_timeout / 1000.);
 			}
 			return ICA_GETS_TIMEOUT;
 		}
@@ -270,8 +270,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 				close(epollfd);
 			if (opt_debug) {
 				applog(LOG_DEBUG,
-					"Icarus Read: Work restart at %.2f seconds",
-					(float)(rc)/(float)TIME_FACTOR);
+					"Icarus Read: Interrupted by work restart");
 			}
 			return ICA_GETS_RESTART;
 		}
