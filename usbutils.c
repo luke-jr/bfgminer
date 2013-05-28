@@ -644,6 +644,8 @@ static void append(char **buf, char *append, size_t *off, size_t *len)
 	{
 		*len *= 2;
 		*buf = realloc(*buf, *len);
+		if (unlikely(!*buf))
+			quit(1, "USB failed to realloc append");
 	}
 
 	strcpy(*buf + *off, append);
@@ -857,6 +859,8 @@ void usb_all(int level)
 	{
 		len = 10000;
 		buf = malloc(len+1);
+		if (unlikely(!buf))
+			quit(1, "USB failed to malloc buf in usb_all");
 
 		sprintf(buf, "USB all: found %d devices", (int)count);
 		off = strlen(buf);
@@ -895,6 +899,8 @@ static void cgusb_check_init()
 		}
 
 		usb_commands = malloc(sizeof(*usb_commands) * C_MAX);
+		if (unlikely(!usb_commands))
+			quit(1, "USB failed to malloc usb_commands");
 
 		// use constants so the stat generation is very quick
 		// and the association between number and name can't
@@ -1098,6 +1104,8 @@ static void add_in_use(uint8_t bus_number, uint8_t device_address)
 	}
 
 	in_use_tmp = calloc(1, sizeof(*in_use_tmp));
+	if (unlikely(!in_use_tmp))
+		quit(1, "USB failed to calloc in_use_tmp");
 	in_use_tmp->in_use.bus_number = (int)bus_number;
 	in_use_tmp->in_use.device_address = (int)device_address;
 	in_use_tmp->next = in_use_head;
@@ -1154,6 +1162,8 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 	applog(LOG_DEBUG, "USB lock %s %d-%d", drv->dname, (int)bus_number, (int)device_address);
 
 	res_work = calloc(1, sizeof(*res_work));
+	if (unlikely(!res_work))
+		quit(1, "USB failed to calloc lock res_work");
 	res_work->lock = true;
 	res_work->dname = (const char *)(drv->dname);
 	res_work->bus_number = bus_number;
@@ -1215,6 +1225,8 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 	applog(LOG_DEBUG, "USB unlock %s %d-%d", drv->dname, (int)bus_number, (int)device_address);
 
 	res_work = calloc(1, sizeof(*res_work));
+	if (unlikely(!res_work))
+		quit(1, "USB failed to calloc unlock res_work");
 	res_work->lock = false;
 	res_work->dname = (const char *)(drv->dname);
 	res_work->bus_number = bus_number;
@@ -1334,6 +1346,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 
 	cgusb = calloc(1, sizeof(*cgusb));
+	if (unlikely(!cgusb))
+		quit(1, "USB failed to calloc _usb_init cgusb");
 	cgusb->found = found;
 
 	if (found->idVendor == IDVENDOR_FTDI)
@@ -1342,6 +1356,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	cgusb->ident = found->ident;
 
 	cgusb->descriptor = calloc(1, sizeof(*(cgusb->descriptor)));
+	if (unlikely(!cgusb->descriptor))
+		quit(1, "USB failed to calloc _usb_init cgusb descriptor");
 
 	err = libusb_get_device_descriptor(dev, cgusb->descriptor);
 	if (err) {
@@ -1642,6 +1658,8 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 		if (find_dev[i].drv == drvnum) {
 			if (usb_check_device(drv, dev, &(find_dev[i]))) {
 				found = malloc(sizeof(*found));
+				if (unlikely(!found))
+					quit(1, "USB failed to malloc found");
 				memcpy(found, &(find_dev[i]), sizeof(*found));
 				return found;
 			}
@@ -1879,13 +1897,13 @@ static void newstats(struct cgpu_info *cgpu)
 	mutex_unlock(&cgusb_lock);
 
 	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * next_stat);
-	if (!usb_stats)
+	if (unlikely(!usb_stats))
 		quit(1, "USB failed to realloc usb_stats %d", next_stat);
 
 	usb_stats[next_stat-1].name = cgpu->drv->name;
 	usb_stats[next_stat-1].device_id = -1;
 	usb_stats[next_stat-1].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
-	if (!usb_stats[next_stat-1].details)
+	if (unlikely(!usb_stats[next_stat-1].details))
 		quit(1, "USB failed to calloc details for %d", next_stat);
 
 	for (i = 1; i < C_MAX * 2; i += 2)
@@ -2374,6 +2392,8 @@ void usb_initialise()
 				}
 
 				busdev = realloc(busdev, sizeof(*busdev) * (++busdev_count));
+				if (unlikely(!busdev))
+					quit(1, "USB failed to realloc busdev");
 
 				busdev[busdev_count-1].bus_number = bus;
 				busdev[busdev_count-1].device_address = dev;
@@ -2799,6 +2819,8 @@ static void resource_process()
 				ok);
 
 		res_reply = calloc(1, sizeof(*res_reply));
+		if (unlikely(!res_reply))
+			quit(1, "USB failed to calloc res_reply");
 
 		res_reply->bus_number = res_work_head->bus_number;
 		res_reply->device_address = res_work_head->device_address;
