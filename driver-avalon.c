@@ -121,12 +121,6 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
-static void avalon_wait_ready(struct cgpu_info *avalon)
-{
-	while (!avalon_ready(avalon))
-		nmsleep(40);
-}
-
 static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len)
 {
 	ssize_t wrote = 0;
@@ -134,7 +128,6 @@ static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len)
 	while (len > 0) {
 		int amount, err;
 
-		avalon_wait_ready(avalon);
 		err = usb_write(avalon, buf + wrote, len, &amount, C_AVALON_TASK);
 		applog(LOG_DEBUG, "%s%i: usb_write got err %d",
 		       avalon->drv->name, avalon->device_id, err);
@@ -1078,7 +1071,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 static void avalon_flush_work(struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon->device_data;
-	struct thr_info *thr = info->thr;
 
 	mutex_lock(&info->qlock);
 	/* Will overwrite any work queued */
