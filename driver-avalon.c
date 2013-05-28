@@ -769,11 +769,7 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		cgtime(&tv_start);
-		/* Threads don't like being cancelled while being inside
-		 * libusb functions */
-		pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT);
-		pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 		if (ret < 1) {
 			int us_delay;
@@ -827,6 +823,7 @@ static void *avalon_send_tasks(void *userdata)
 
 		wait_avalon_ready(avalon);
 
+		pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
@@ -851,9 +848,7 @@ static void *avalon_send_tasks(void *userdata)
 						info->miner_count, 1, 1, info->frequency);
 			}
 
-			pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
 			ret = avalon_send_task(&at, avalon);
-			pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
 				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
@@ -867,6 +862,7 @@ static void *avalon_send_tasks(void *userdata)
 		avalon_rotate_array(avalon);
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
+		pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 		if (unlikely(idled && !info->idle)) {
 			info->idle = true;
@@ -915,28 +911,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void avalon_free_work(struct thr_info *thr)
-{
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
-	struct work **works;
-	int i;
-
-	avalon = thr->cgpu;
-	avalon->queued = 0;
-	if (unlikely(!avalon->works))
-		return;
-	works = avalon->works;
-	info = avalon->device_data;
-
-	for (i = 0; i < info->miner_count * 4; i++) {
-		if (works[i]) {
-			work_completed(avalon, works[i]);
-			works[i] = NULL;
-		}
-	}
-}
-
 static void do_avalon_close(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
@@ -947,8 +921,6 @@ static void do_avalon_close(struct thr_info *thr)
 	pthread_cancel(info->write_thr);
 	pthread_join(info->write_thr, NULL);
 	__avalon_running_reset(avalon, info);
-	avalon_idle(avalon, info);
-	avalon_free_work(thr);
 
 	info->no_matching_work = 0;
 }
