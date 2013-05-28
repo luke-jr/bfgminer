@@ -2277,6 +2277,24 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 	hashrate_to_bufstr(out[2], sharebased, unit, longfmt);
 }
 
+static const char *
+percentf(unsigned p, unsigned t, char *buf)
+{
+	if (!p)
+		return "none";
+	if (!t)
+		return "100%";
+	p = p * 10000 / (p + t);
+	if (p < 100)
+		sprintf(buf, ".%02u%%", p);  // ".01%"
+	else
+	if (p < 1000)
+		sprintf(buf, "%u.%u%%", p / 100, (p % 100) / 10);  // "9.1%"
+	else
+		sprintf(buf, " %2u%%", p / 100);  // " 99%"
+	return buf;
+}
+
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
 #endif
@@ -2284,7 +2302,7 @@ static void adj_width(int var, int *length);
 static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 {
 #ifdef HAVE_CURSES
-	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
+	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 #else
 	assert(for_curses == false);
 #endif
@@ -2292,6 +2310,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	char rejpcbuf[6];
 	
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
@@ -2304,8 +2323,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	double wutil = cgpu->utility_diff1;
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
+	int stale = cgpu->stale;
 	int hwerrs = cgpu->hw_errors;
-	double util = cgpu->utility;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2318,8 +2337,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			wutil += slave->utility_diff1;
 			accepted += slave->accepted;
 			rejected += slave->rejected;
+			stale += slave->stale;
 			hwerrs += slave->hw_errors;
-			util += slave->utility;
 		}
 	
 	ti_hashrate_bufstr(
@@ -2396,28 +2415,30 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		
 		adj_width(accepted, &awidth);
 		adj_width(rejected, &rwidth);
+		adj_width(stale, &swidth);
 		adj_width(hwerrs, &hwwidth);
-		adj_width(util, &uwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d HW:%*d U:%*.2f/m",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
-		            hwwidth, hwerrs,
-		            uwidth + 3, util
+		            swidth, stale,
+		            percentf(rejected + stale, accepted, rejpcbuf),
+		            hwwidth, hwerrs
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d HW:%d U:%.1f/m",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
-			hwerrs,
-			util);
+			stale,
+			percentf(rejected + stale, accepted, rejpcbuf),
+			hwerrs);
 	}
 	
 	if (drv->get_dev_statline_after || drv->get_statline)
@@ -2451,6 +2472,7 @@ static void curses_print_status(void)
 	struct pool *pool = current_pool();
 	struct timeval now, tv;
 	float efficiency;
+	double utility;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
@@ -2479,14 +2501,18 @@ static void curses_print_status(void)
 	mvwhline(statuswin, 1, 0, '-', 80);
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
+
+	utility = total_accepted / total_secs * 60;
+
+	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f  U:%.1f/m  BS:%s",
 		total_staged(),
-		local_work,
 		total_go,
 		new_blocks,
 		total_submitting,
 		total_ro,
-		efficiency);
+		efficiency,
+		utility,
+		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
 		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
@@ -3938,10 +3964,13 @@ static void rebuild_hash(struct work *work)
 
 static void submit_discard_share2(const char *reason, struct work *work)
 {
+	struct cgpu_info *cgpu = get_thr_cgpu(work->thr_id);
+
 	sharelog(reason, work);
 
 	mutex_lock(&stats_lock);
 	++total_stale;
+	++cgpu->stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
@@ -5286,6 +5315,7 @@ void zero_stats(void)
 		cgpu->total_mhashes = 0;
 		cgpu->accepted = 0;
 		cgpu->rejected = 0;
+		cgpu->stale = 0;
 		cgpu->hw_errors = 0;
 		cgpu->utility = 0.0;
 		cgpu->utility_diff1 = 0;
@@ -5829,12 +5859,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
-	double utility;
 	static double local_mhashes_done = 0;
 	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	char rejpcbuf[6];
 	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
@@ -5911,8 +5941,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	utility = total_accepted / total_secs * 60;
-
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
@@ -5920,15 +5948,16 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d S:%d HW:%d U:%.1f/m BS:%s",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
-		total_accepted, total_rejected, total_stale,
-		hw_errors,
-		utility,
-		best_share);
+		total_accepted,
+		total_rejected,
+		total_stale,
+		percentf(total_rejected + total_stale, total_accepted, rejpcbuf),
+		hw_errors);
 
 
 	local_mhashes_done = 0;
@@ -6085,6 +6114,7 @@ void clear_stratum_shares(struct pool *pool)
 {
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
+	struct cgpu_info *cgpu;
 	double diff_cleared = 0;
 	int cleared = 0;
 
@@ -6096,6 +6126,8 @@ void clear_stratum_shares(struct pool *pool)
 			work = sshare->work;
 			sharelog("disconnect", work);
 			
+			cgpu = get_thr_cgpu(work->thr_id);
+			++cgpu->stale;
 			diff_cleared += sshare->work->work_difficulty;
 			free_work(sshare->work);
 			free(sshare);
