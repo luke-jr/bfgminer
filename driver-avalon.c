@@ -776,13 +776,13 @@ static void *avalon_get_results(void *userdata)
 		pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 		if (ret < 1) {
-			int ms_delay;
+			int us_delay;
 
 			cgtime(&now);
 			timersub(&now, &tv_start, &tdiff);
-			ms_delay = AVALON_READ_TIMEOUT - (tdiff.tv_usec / 1000);
-			if (ms_delay > 0)
-				nmsleep(ms_delay);
+			us_delay = AVALON_READ_TIMEOUT * 1000 - (tdiff.tv_usec);
+			if (us_delay > 0)
+				nusleep(us_delay);
 			continue;
 		}
 
