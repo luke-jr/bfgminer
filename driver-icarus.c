@@ -253,6 +253,16 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			continue;
 		}
 			
+		if (thr && thr->work_restart) {
+			if (epollfd != -1)
+				close(epollfd);
+			if (opt_debug) {
+				applog(LOG_DEBUG,
+					"Icarus Read: Interrupted by work restart");
+			}
+			return ICA_GETS_RESTART;
+		}
+
 		rc++;
 		if (rc >= read_count) {
 			if (epollfd != -1)
@@ -263,16 +273,6 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 					(float)rc * epoll_timeout / 1000.);
 			}
 			return ICA_GETS_TIMEOUT;
-		}
-
-		if (thr && thr->work_restart) {
-			if (epollfd != -1)
-				close(epollfd);
-			if (opt_debug) {
-				applog(LOG_DEBUG,
-					"Icarus Read: Interrupted by work restart");
-			}
-			return ICA_GETS_RESTART;
 		}
 	}
 }
