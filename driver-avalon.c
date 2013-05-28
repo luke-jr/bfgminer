@@ -1080,8 +1080,6 @@ static void avalon_flush_work(struct cgpu_info *avalon)
 	struct avalon_info *info = avalon->device_data;
 	struct thr_info *thr = info->thr;
 
-	thr->work_restart = false;
-
 	mutex_lock(&info->qlock);
 	/* Will overwrite any work queued */
 	avalon->queued = 0;
