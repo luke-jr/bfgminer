@@ -58,6 +58,7 @@ int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (
 void thr_info_freeze(struct thr_info *thr);
 void thr_info_cancel(struct thr_info *thr);
 void nmsleep(unsigned int msecs);
+void nusleep(unsigned int usecs);
 void cgtime(struct timeval *tv);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
