@@ -121,23 +121,21 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
-static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len)
+static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len, int ep)
 {
-	ssize_t wrote = 0;
+	int err, amount;
 
-	while (len > 0) {
-		int amount, err;
+	err = usb_write(avalon, buf, len, &amount, ep);
+	applog(LOG_DEBUG, "%s%i: usb_write got err %d", avalon->drv->name,
+	       avalon->device_id, err);
 
-		err = usb_write(avalon, buf + wrote, len, &amount, C_AVALON_TASK);
-		applog(LOG_DEBUG, "%s%i: usb_write got err %d",
-		       avalon->drv->name, avalon->device_id, err);
-
-		if (unlikely(err != 0)) {
-			applog(LOG_WARNING, "usb_write error on avalon_write");
-			return AVA_SEND_ERROR;
-		}
-		wrote += amount;
-		len -= amount;
+	if (unlikely(err != 0)) {
+		applog(LOG_WARNING, "usb_write error on avalon_write");
+		return AVA_SEND_ERROR;
+	}
+	if (amount != len) {
+		applog(LOG_WARNING, "usb_write length mismatch on avalon_write");
+		return AVA_SEND_ERROR;
 	}
 
 	return AVA_SEND_OK;
@@ -152,7 +150,7 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
-	int ret, i;
+	int ret, i, ep = C_AVALON_TASK;
 
 	if (at->nonce_elf)
 		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
@@ -197,13 +195,15 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 		delay = delay / info->baud;
 	}
 
-	if (at->reset)
+	if (at->reset) {
+		ep = C_AVALON_RESET;
 		nr_len = 1;
+	}
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
 		hexdump(buf, nr_len);
 	}
-	ret = avalon_write(avalon, (char *)buf, nr_len);
+	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
 
 	p.tv_sec = 0;
 	p.tv_nsec = (long)delay + 4000000;
