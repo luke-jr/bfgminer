@@ -2626,8 +2626,8 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 
 	return true;
 fail:
-	sec = unsec(sec);
 	CloseHandle(usbMutex);
+	sec = unsec(sec);
 	return false;
 #else
 	struct semid_ds seminfo;
@@ -2730,14 +2730,6 @@ static void resource_unlock(const char *dname, uint8_t bus_number, uint8_t devic
 	if (!usbMutex || !sec)
 		goto fila;
 
-	usbMutex = CreateMutex(sec, FALSE, name);
-	if (usbMutex == NULL) {
-		applog(LOG_ERR,
-			"MTX: %s USB failed to get '%s' for release err (%d)",
-			dname, name, GetLastError());
-		goto fila;
-	}
-
 	if (!ReleaseMutex(usbMutex))
 		applog(LOG_ERR,
 			"MTX: %s USB failed to release '%s' err (%d)",
@@ -2745,10 +2737,10 @@ static void resource_unlock(const char *dname, uint8_t bus_number, uint8_t devic
 
 fila:
 
-	if (sec)
-		unsec(sec);
 	if (usbMutex)
 		CloseHandle(usbMutex);
+	if (sec)
+		unsec(sec);
 	remove_in_use(bus_number, device_address);
 	return;
 #else
