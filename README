@@ -411,9 +411,10 @@ pool. The 2 diff values are the actual difficulty target that share reached
 followed by the difficulty target the pool is currently asking for.
 
 ---
-Also many issues and FAQs are covered in the forum thread
+Also many issues and FAQs are covered in the forum threads
 dedicated to this program,
 	https://bitcointalk.org/?topic=78192
+	https://bitcointalk.org/?topic=168174
 
 The output line shows the following:
 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8 S:0 HW:0 U:22.53/m
