@@ -4924,7 +4924,10 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Queued work requests: %d\n", pool->getwork_requested);
 		wlog(" Share submissions: %d\n", pool->accepted + pool->rejected);
 		wlog(" Accepted shares: %d\n", pool->accepted);
-		wlog(" Rejected shares: %d\n", pool->rejected);
+		wlog(" Rejected shares: %d + %d stale (%.2f%%)\n",
+		     pool->rejected, pool->stale_shares,
+		     (float)(pool->rejected + pool->stale_shares) / (float)(pool->rejected + pool->stale_shares + pool->accepted)
+		);
 		wlog(" Accepted difficulty shares: %1.f\n", pool->diff_accepted);
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		if (pool->accepted || pool->rejected)
@@ -4933,7 +4936,6 @@ static void display_pool_summary(struct pool *pool)
 		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
 
-		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
 		wlog(" Unable to get work from server occasions: %d\n", pool->getfail_occasions);
 		wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
@@ -7906,7 +7908,10 @@ void print_summary(void)
 	applog(LOG_WARNING, "Best share difficulty: %s", best_share);
 	applog(LOG_WARNING, "Share submissions: %d", total_accepted + total_rejected);
 	applog(LOG_WARNING, "Accepted shares: %d", total_accepted);
-	applog(LOG_WARNING, "Rejected shares: %d", total_rejected);
+	applog(LOG_WARNING, "Rejected shares: %d + %d stale (%.2f%%)",
+	       total_rejected, total_stale,
+	       (float)(total_rejected + total_stale) / (float)(total_rejected + total_stale + total_accepted)
+	);
 	applog(LOG_WARNING, "Accepted difficulty shares: %1.f", total_diff_accepted);
 	applog(LOG_WARNING, "Rejected difficulty shares: %1.f", total_diff_rejected);
 	if (total_accepted || total_rejected)
@@ -7915,7 +7920,6 @@ void print_summary(void)
 	applog(LOG_WARNING, "Efficiency (accepted shares * difficulty / 2 KB): %.2f", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
 
-	applog(LOG_WARNING, "Stale submissions discarded due to new blocks: %d", total_stale);
 	applog(LOG_WARNING, "Unable to get work from server occasions: %d", total_go);
 	applog(LOG_WARNING, "Work items generated locally: %d", local_work);
 	applog(LOG_WARNING, "Submitting work remotely delay occasions: %d", total_ro);
@@ -7930,7 +7934,10 @@ void print_summary(void)
 				applog(LOG_WARNING, "SOLVED %d BLOCK%s!", pool->solved, pool->solved > 1 ? "S" : "");
 			applog(LOG_WARNING, " Share submissions: %d", pool->accepted + pool->rejected);
 			applog(LOG_WARNING, " Accepted shares: %d", pool->accepted);
-			applog(LOG_WARNING, " Rejected shares: %d", pool->rejected);
+			applog(LOG_WARNING, " Rejected shares: %d + %d stale (%.2f%%)",
+			       pool->rejected, pool->stale_shares,
+			       (float)(pool->rejected + pool->stale_shares) / (float)(pool->rejected + pool->stale_shares + pool->accepted)
+			);
 			applog(LOG_WARNING, " Accepted difficulty shares: %1.f", pool->diff_accepted);
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			if (pool->accepted || pool->rejected)
@@ -7939,7 +7946,6 @@ void print_summary(void)
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 
-			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
 			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
 		}
