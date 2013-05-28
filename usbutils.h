@@ -41,10 +41,18 @@
 #define FTDI_VALUE_BAUD_BLT 0x001a
 #define FTDI_INDEX_BAUD_BLT 0x0000
 
+// Avalon
 #define FTDI_VALUE_BAUD_AVA 0x001A
 #define FTDI_INDEX_BAUD_AVA 0x0000
 
 #define FTDI_VALUE_DATA_AVA 8
+
+// CMR = 115200 & 57600
+#define FTDI_VALUE_BAUD_CMR_115 0xc068
+#define FTDI_INDEX_BAUD_CMR_115 0x0200
+
+#define FTDI_VALUE_BAUD_CMR_57 0x80d0
+#define FTDI_INDEX_BAUD_CMR_57 0x0200
 
 // Data control
 #define FTDI_VALUE_DATA_BFL 0
@@ -114,7 +122,8 @@ enum sub_ident {
 	IDENT_AMU,
 	IDENT_BLT,
 	IDENT_LLT,
-	IDENT_CMR,
+	IDENT_CMR1,
+	IDENT_CMR2,
 	IDENT_ZTX
 };
 
@@ -244,6 +253,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd);
 void usb_cleanup();
 void usb_initialise();
+void *usb_resource_thread(void *userdata);
 
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false)

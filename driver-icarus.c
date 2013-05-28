@@ -244,16 +244,18 @@ static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bR
 #define transfer(icarus, request_type, bRequest, wValue, wIndex, cmd) \
 		_transfer(icarus, request_type, bRequest, wValue, wIndex, NULL, 0, cmd)
 
-// TODO: handle baud
-static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
+static void icarus_initialise(struct cgpu_info *icarus, int baud)
 {
+	uint16_t wValue, wIndex;
+
 	if (icarus->usbinfo.nodev)
 		return;
 
 	switch (icarus->usbdev->ident) {
 		case IDENT_BLT:
 		case IDENT_LLT:
-		case IDENT_CMR:
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			// Latency
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
 				 icarus->usbdev->found->interface, C_LATENCY);
@@ -275,9 +277,30 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
+			// default to BLT/LLT 115200
+			wValue = FTDI_VALUE_BAUD_BLT;
+			wIndex = FTDI_INDEX_BAUD_BLT;
+
+			if (icarus->usbdev->ident == IDENT_CMR1 ||
+			    icarus->usbdev->ident == IDENT_CMR2) {
+				switch (baud) {
+					case 115200:
+						wValue = FTDI_VALUE_BAUD_CMR_115;
+						wIndex = FTDI_INDEX_BAUD_CMR_115;
+						break;
+					case 57600:
+						wValue = FTDI_VALUE_BAUD_CMR_57;
+						wIndex = FTDI_INDEX_BAUD_CMR_57;
+						break;
+					default:
+						quit(1, "icarus_intialise() invalid baud (%d) for Cairnsmore1", baud);
+						break;
+				}
+			}
+
 			// Set the baud
-			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BLT,
-				 (FTDI_INDEX_BAUD_BLT & 0xff00) | icarus->usbdev->found->interface,
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, wValue,
+				 (wIndex & 0xff00) | icarus->usbdev->found->interface,
 				 C_SETBAUD);
 
 			if (icarus->usbinfo.nodev)
@@ -387,7 +410,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		err = usb_read_timeout(icarus, (char *)buf, read_amount, &amt, ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
 		cgtime(&read_finish);
 		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_ERR, "%s%i: Comms error (err=%d amt=%d)",
+			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
 					icarus->drv->name, icarus->device_id, err, amt);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 			return ICA_NONCE_ERROR;
@@ -484,7 +507,9 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		case IDENT_AMU:
 			info->Hs = ASICMINERUSB_HASH_TIME;
 			break;
-		case IDENT_CMR:
+		// TODO: ?
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE1_HASH_TIME;
 			break;
 		default:
@@ -617,7 +642,9 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			*work_division = 1;
 			*fpga_count = 1;
 			break;
-		case IDENT_CMR:
+		// TODO: ?
+		case IDENT_CMR1:
+		case IDENT_CMR2:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 2;
 			*fpga_count = 2;
@@ -860,7 +887,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(ob_bin)) {
-		applog(LOG_ERR, "%s%i: Comms error (err=%d amt=%d)",
+		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
 				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
