@@ -2813,6 +2813,12 @@ static void __kill_work(void)
 		pthread_t *pth = NULL;
 
 		thr = get_thread(i);
+		if (thr) {
+			struct device_drv *drv = thr->cgpu->drv;
+
+			drv->thread_shutdown(thr);
+		}
+
 		if (thr && PTH(thr) != 0L)
 			pth = &thr->pth;
 		thr_info_cancel(thr);
@@ -5661,7 +5667,7 @@ static void hash_sole_work(struct thr_info *mythr)
 	sdiff.tv_sec = sdiff.tv_usec = 0;
 	cgtime(&tv_lastupdate);
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct work *work = get_work(mythr, thr_id);
 		int64_t hashes;
 
@@ -5937,7 +5943,7 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
 

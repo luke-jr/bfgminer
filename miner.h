@@ -542,6 +542,8 @@ struct cgpu_info {
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
 	unsigned int queued_count;
+
+	bool shutdown;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
