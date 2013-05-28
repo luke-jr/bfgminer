@@ -256,7 +256,7 @@ static struct usb_find_devices find_dev[] = {
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(cmr1_eps),
-		.eps = cmr_eps },
+		.eps = cmr1_eps },
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
@@ -269,7 +269,7 @@ static struct usb_find_devices find_dev[] = {
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.epcount = ARRAY_SIZE(cmr2_eps),
-		.eps = cmr_eps },
+		.eps = cmr2_eps },
 #endif
 #ifdef USE_ZTEX
 // This is here so cgminer -n shows them

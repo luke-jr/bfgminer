@@ -244,9 +244,10 @@ static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bR
 #define transfer(icarus, request_type, bRequest, wValue, wIndex, cmd) \
 		_transfer(icarus, request_type, bRequest, wValue, wIndex, NULL, 0, cmd)
 
-// TODO: handle baud
-static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
+static void icarus_initialise(struct cgpu_info *icarus, int baud)
 {
+	uint16_t wValue, wIndex;
+
 	if (icarus->usbinfo.nodev)
 		return;
 
@@ -276,14 +277,31 @@ static void icarus_initialise(struct cgpu_info *icarus, __maybe_unused int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
-			// TODO: Get the baud settings for the 2 CMRs
-			if (icarus->usbdev->ident != IDENT_CMR1 &&
-			    icarus->usbdev->ident != IDENT_CMR2) {
-				// Set the baud
-				transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BLT,
-					 (FTDI_INDEX_BAUD_BLT & 0xff00) | icarus->usbdev->found->interface,
-					 C_SETBAUD);
+			// default to BLT/LLT 115200
+			wValue = FTDI_VALUE_BAUD_BLT;
+			wIndex = FTDI_INDEX_BAUD_BLT;
+
+			if (icarus->usbdev->ident == IDENT_CMR1 ||
+			    icarus->usbdev->ident == IDENT_CMR2) {
+				switch (baud) {
+					case 115200:
+						wValue = FTDI_VALUE_BAUD_CMR_115;
+						wIndex = FTDI_INDEX_BAUD_CMR_115;
+						break;
+					case 57600:
+						wValue = FTDI_VALUE_BAUD_CMR_57;
+						wIndex = FTDI_INDEX_BAUD_CMR_57;
+						break;
+					default:
+						quit(1, "icarus_intialise() invalid baud (%d) for Cairnsmore1", baud);
+						break;
+				}
 			}
+
+			// Set the baud
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, wValue,
+				 (wIndex & 0xff00) | icarus->usbdev->found->interface,
+				 C_SETBAUD);
 
 			if (icarus->usbinfo.nodev)
 				return;
