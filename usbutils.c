@@ -2363,8 +2363,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
-		bRequest, htole16(wValue), htole16(wIndex),
-		(unsigned char *)buf, (uint16_t)siz,
+		bRequest, wValue, wIndex, (unsigned char *)buf, (uint16_t)siz,
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0);
