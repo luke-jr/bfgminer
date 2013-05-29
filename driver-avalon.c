@@ -984,6 +984,23 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 	}
 }
 
+static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	int temp = 0, pwm = 0;
+
+	if (info->temp0 > temp)
+		temp = info->temp0;
+	if (info->temp1 > temp)
+		temp = info->temp1;
+	if (info->temp2 > temp)
+		temp = info->temp2;
+
+	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
+
+	tailsprintf(buf, " max %3dC %3d%% | ", temp, pwm);
+}
+
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
@@ -1129,6 +1146,7 @@ struct device_drv avalon_drv = {
 	.scanwork = avalon_scanhash,
 	.flush_work = avalon_flush_work,
 	.get_api_stats = avalon_api_stats,
+	.get_statline_before = get_avalon_statline_before,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };
