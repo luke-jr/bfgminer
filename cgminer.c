@@ -7148,6 +7148,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			icarus_drv.drv_detect();
 #endif
 
+#ifdef USE_AVALON
+			avalon_drv.drv_detect();
+#endif
+
 #ifdef USE_BFLSC
 			bflsc_drv.drv_detect();
 #endif
