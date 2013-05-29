@@ -12,6 +12,8 @@
 
 #ifdef USE_AVALON
 
+#include <semaphore.h>
+
 #define AVALON_RESET_FAULT_DECISECONDS 1
 #define AVALON_MINER_THREADS 1
 
@@ -107,6 +109,8 @@ struct avalon_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
+	sem_t read_sem;
+	sem_t write_sem;
 	int nonces;
 
 	bool idle;

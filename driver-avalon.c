@@ -716,23 +716,13 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 	memmove(buf, buf + spare, *offset);
 }
 
-static void __avalon_running_reset(struct cgpu_info *avalon,
+static void avalon_running_reset(struct cgpu_info *avalon,
 				   struct avalon_info *info)
 {
-	info->reset = true;
 	avalon_reset(avalon, false);
 	avalon_idle(avalon, info);
 	avalon->results = 0;
 	info->reset = false;
-}
-
-static void avalon_running_reset(struct cgpu_info *avalon,
-				 struct avalon_info *info)
-{
-	/* Lock to prevent more work being sent during reset */
-	mutex_lock(&info->qlock);
-	__avalon_running_reset(avalon, info);
-	mutex_unlock(&info->qlock);
 }
 
 static void *avalon_get_results(void *userdata)
@@ -762,6 +752,15 @@ static void *avalon_get_results(void *userdata)
 			offset = 0;
 		}
 
+		if (unlikely(info->reset)) {
+			/* Tell the write thread it can start the reset */
+			sem_post(&info->write_sem);
+			sem_wait(&info->read_sem);
+
+			/* Discard anything in the buffer */
+			offset = 0;
+		}
+
 		cgtime(&tv_start);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
 				  C_AVALON_READ);
@@ -780,12 +779,6 @@ static void *avalon_get_results(void *userdata)
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
 			hexdump((uint8_t *)buf, ret);
-		}
-
-		/* During a reset, goes on reading but discards anything */
-		if (unlikely(info->reset)) {
-			offset = 0;
-			continue;
 		}
 
 		memcpy(&readbuf[offset], &buf, ret);
@@ -818,7 +811,14 @@ static void *avalon_send_tasks(void *userdata)
 
 		wait_avalon_ready(avalon);
 
-		pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, NULL);
+		if (unlikely(info->reset)) {
+			/* Wait till read thread tells us it's received the
+			 * reset message */
+			sem_wait(&info->write_sem);
+			avalon_running_reset(avalon, info);
+			sem_post(&info->read_sem);
+		}
+
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
@@ -849,7 +849,7 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
 				       avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				__avalon_running_reset(avalon, info);
+				info->reset = true;
 				break;
 			}
 		}
@@ -857,7 +857,6 @@ static void *avalon_send_tasks(void *userdata)
 		avalon_rotate_array(avalon);
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
-		pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
 
 		if (unlikely(idled && !info->idle)) {
 			info->idle = true;
@@ -885,19 +884,16 @@ static bool avalon_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
-
-	info->reset = true;
+	if (unlikely(sem_init(&info->read_sem, 0, 0)))
+		quit(1, "Failed to sem_init avalon read_sem");
+	if (unlikely(sem_init(&info->write_sem, 0, 0)))
+		quit(1, "Failed to sem_init avalon write_sem");
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
 
 	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
 		quit(1, "Failed to create avalon write_thr");
-
-	mutex_lock(&info->qlock);
-	info->reset = false;
-	pthread_cond_wait(&info->qcond, &info->qlock);
-	mutex_unlock(&info->qlock);
 
 	avalon_init(avalon);
 
@@ -911,11 +907,12 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
 
+	info->reset = true;
 	pthread_cancel(info->read_thr);
 	pthread_join(info->read_thr, NULL);
 	pthread_cancel(info->write_thr);
 	pthread_join(info->write_thr, NULL);
-	__avalon_running_reset(avalon, info);
+	avalon_running_reset(avalon, info);
 
 	info->no_matching_work = 0;
 }
@@ -1051,7 +1048,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	avalon->results += info->nonces;
 	if (avalon->results > miner_count)
 		avalon->results = miner_count;
-	if (!info->idle)
+	if (!info->idle && !info->reset)
 		avalon->results -= miner_count / 3;
 	else
 		avalon->results = miner_count;
@@ -1060,10 +1057,10 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
-	if (avalon->results < -miner_count) {
+	if (avalon->results < -miner_count && !info->reset) {
 		applog(LOG_ERR, "AVA%d: Result return rate low, resetting!",
 			avalon->device_id);
-		avalon_running_reset(avalon, info);
+		info->reset = true;
 	}
 
 	/* This hashmeter is just a utility counter based on returned shares */
