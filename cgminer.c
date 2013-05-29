@@ -5821,6 +5821,7 @@ static void hash_sole_work(struct thr_info *mythr)
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 		free_work(work);
 	}
+	cgpu->deven = DEV_DISABLED;
 }
 
 /* Create a hashtable of work items for devices with a queue. The device
@@ -5993,6 +5994,7 @@ void hash_queued_work(struct thr_info *mythr)
 			drv->flush_work(cgpu);
 		}
 	}
+	cgpu->deven = DEV_DISABLED;
 }
 
 void *miner_thread(void *userdata)
