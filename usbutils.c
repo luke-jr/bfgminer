@@ -2027,16 +2027,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
 	size_t usbbufread;
 
-	if (unlikely(!usbdev))
-		return LIBUSB_ERROR_NO_DEVICE;
-
-	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
-
-	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
-
-	if (bufsiz > USB_MAX_READ)
-		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, bufsiz, USB_MAX_READ);
-
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
 		*processed = 0;
@@ -2044,6 +2034,13 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
+
+	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
+
+	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
+
+	if (bufsiz > USB_MAX_READ)
+		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, bufsiz, USB_MAX_READ);
 
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
@@ -2203,6 +2200,11 @@ int usb_ftdi_cts(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
 	unsigned char buf[2], ret;
+
+	/* We return true in case drivers are waiting indefinitely to try and
+	 * write to something that's not there. */
+	if (cgpu->usbinfo.nodev)
+		return true;
 
 	libusb_control_transfer(usbdev->handle, (uint8_t)FTDI_TYPE_IN,
 				(uint8_t)5, (uint16_t)0, (uint16_t)0, buf, 2,
