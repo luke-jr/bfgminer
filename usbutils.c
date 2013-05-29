@@ -2011,7 +2011,7 @@ static void rejected_inc(struct cgpu_info *cgpu, uint32_t mode)
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
-	bool ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
+	bool ftdi;
 #if DO_USB_STATS
 	struct timeval tv_start;
 #endif
@@ -2026,6 +2026,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	// We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
 	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
 	size_t usbbufread;
+
+	if (unlikely(!usbdev))
+		return LIBUSB_ERROR_NO_DEVICE;
+
+	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
 	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
 
