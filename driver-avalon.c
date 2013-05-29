@@ -1060,6 +1060,12 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 		info->reset = true;
 	}
 
+	if (unlikely(avalon->usbinfo.nodev)) {
+		applog(LOG_ERR, "AVA%d: Device disappeared, shutting down thread",
+		       avalon->device_id);
+		avalon->shutdown = true;
+	}
+
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
 }
