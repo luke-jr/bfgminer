@@ -738,7 +738,7 @@ static void *avalon_get_results(void *userdata)
 	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
 	RenameThread(threadname);
 
-	while (42) {
+	while (likely(!avalon->shutdown)) {
 		struct timeval tv_start, now, tdiff;
 		unsigned char buf[rsize];
 		int ret;
@@ -804,7 +804,7 @@ static void *avalon_send_tasks(void *userdata)
 	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
 	RenameThread(threadname);
 
-	while (42) {
+	while (likely(!avalon->shutdown)) {
 		int start_count, end_count, i, j, ret;
 		struct avalon_task at;
 		int idled = 0;
@@ -907,10 +907,7 @@ static void do_avalon_close(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
 
-	info->reset = true;
-	pthread_cancel(info->read_thr);
 	pthread_join(info->read_thr, NULL);
-	pthread_cancel(info->write_thr);
 	pthread_join(info->write_thr, NULL);
 	avalon_running_reset(avalon, info);
 
