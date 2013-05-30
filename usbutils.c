@@ -2368,12 +2368,14 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 void usb_cleanup()
 {
 	struct cgpu_info *cgpu;
+	int count;
 	int i;
 
 	hotplug_time = 0;
 
 	nmsleep(10);
 
+	count = 0;
 	for (i = 0; i < total_devices; i++) {
 		cgpu = devices[i];
 		switch (cgpu->drv->drv_id) {
@@ -2383,10 +2385,39 @@ void usb_cleanup()
 			case DRIVER_ICARUS:
 			case DRIVER_AVALON:
 				release_cgpu(cgpu);
+				count++;
 				break;
 			default:
 				break;
 		}
+	}
+
+	/*
+	 * Must attempt to wait for the resource thread to release coz
+	 * during a restart it won't automatically release them in linux
+	 */
+	if (count) {
+		struct timeval start, now;
+
+		cgtime(&start);
+		while (42) {
+			nmsleep(50);
+
+			mutex_lock(&cgusbres_lock);
+
+			if (!res_work_head)
+				break;
+
+			cgtime(&now);
+			if (tdiff(&now, &start) > 0.366) {
+				applog(LOG_WARNING,
+					"usb_cleanup gave up waiting for resource thread");
+				break;
+			}
+
+			mutex_unlock(&cgusbres_lock);
+		}
+		mutex_unlock(&cgusbres_lock);
 	}
 }
 
