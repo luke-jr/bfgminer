@@ -724,7 +724,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	const uint32_t golden_nonce_val = 0x000187a2;
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
-	int baud, work_division, fpga_count;
+	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries;
 	bool ok;
