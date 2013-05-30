@@ -315,6 +315,14 @@ static const char *BLANK = "";
 static const char *space = " ";
 static const char *nodatareturned = "no data returned ";
 
+#define IOERR_CHECK(cgpu, err) \
+		if (err == LIBUSB_ERROR_IO) { \
+			cgpu->usbinfo.ioerr_count++; \
+			cgpu->usbinfo.continuous_ioerr_count++; \
+		} else { \
+			cgpu->usbinfo.continuous_ioerr_count = 0; \
+		}
+
 #if 0 // enable USBDEBUG - only during development testing
  static const char *debug_true_str = "true";
  static const char *debug_false_str = "false";
@@ -2066,6 +2074,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 			USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
 
+			IOERR_CHECK(cgpu, err);
+
 			if (ftdi) {
 				// first 2 bytes returned are an FTDI status
 				if (got > 2) {
@@ -2128,6 +2138,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		ptr[got] = '\0';
 
 		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
+
+		IOERR_CHECK(cgpu, err);
 
 		if (ftdi) {
 			// first 2 bytes returned are an FTDI status
@@ -2252,6 +2264,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
 
+		IOERR_CHECK(cgpu, err);
+
 		tot += sent;
 
 		if (err)
@@ -2319,6 +2333,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
 
+	IOERR_CHECK(cgpu, err);
+
 	if (buf)
 		free(buf);
 
@@ -2355,6 +2371,8 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0);
 
 	USBDEBUG("USB debug: @_usb_transfer_read(%s (nodev=%s)) amt/err=%d%s%s%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), err > 0 ? " = " : BLANK, err > 0 ? bin2hex((unsigned char *)buf, (size_t)err) : BLANK);
+
+	IOERR_CHECK(cgpu, err);
 
 	if (err > 0) {
 		*amount = err;

@@ -171,6 +171,8 @@ struct cg_usb_info {
 	bool nodev;
 	int nodev_count;
 	struct timeval last_nodev;
+	uint32_t ioerr_count;
+	uint32_t continuous_ioerr_count;
 };
 
 enum usb_cmds {
