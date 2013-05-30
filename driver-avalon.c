@@ -1000,7 +1000,7 @@ static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 
 	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
 
-	tailsprintf(buf, "%2d/%3dC %3d%%/%04dR| ", info->temp0, info->temp2,
+	tailsprintf(buf, "%2d/%3dC %3d%%/%4dR| ", info->temp0, info->temp2,
 		    pwm, lowfan);
 }
 
