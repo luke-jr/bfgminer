@@ -7374,7 +7374,7 @@ int main(int argc, char *argv[])
 
 	// before device detection
 	if (!opt_scrypt) {
-		if (!sem_init(&usb_resource_sem, 0, 0))
+		if (sem_init(&usb_resource_sem, 0, 0))
 			quit(1, "Failed to sem_init usb_resource_sem");
 		usbres_thr_id = 1;
 		thr = &control_thr[usbres_thr_id];
