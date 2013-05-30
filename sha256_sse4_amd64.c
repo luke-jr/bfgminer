@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-extern void CalcSha256_x64_sse4(__m128i *res, __m128i *data, uint32_t init[8]);
+extern void CalcSha256_x64_sse4(__m128i *res, __m128i *data, uint32_t init[8])__asm__("CalcSha256_x64_sse4");
 
 static uint32_t g_sha256_k[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -46,7 +46,7 @@ static uint32_t g_sha256_k[] = {
 static uint32_t g_sha256_hinit[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
-__m128i g_4sha256_k[64];
+__m128i g_4sha256_k[64]__asm__("g_4sha256_k");
 
 bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
 	unsigned char *pdata,
