@@ -987,7 +987,7 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon->device_data;
-	int lowfan = 0, pwm;
+	int lowfan = 10000, pwm;
 
 	/* Find the lowest fan speed. Fan0 is often not populated. */
 	if (info->fan0 > 0)
