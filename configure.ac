@@ -73,10 +73,12 @@ case $target in
   amd64-* | x86_64-*)
     have_x86_32=false
     have_x86_64=true
+    bitness="64"
     ;;
   i386-* | i486-* | i586-* | i686-* | x86-*)
     have_x86_32=true
     have_x86_64=false
+    bitness="32"
     ;;
   *)
     have_x86_32=false
@@ -533,18 +535,17 @@ fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
 else
-  if test "x$have_x86_64" = xtrue; then
-    if test "x$have_win32" = xtrue; then
-      YASM_FMT="win64"
-    else
-      YASM_FMT="elf64"
-    fi
-  elif test "x$have_win32" = xtrue; then
-    YASM_FMT="coff"
-  else
-    YASM_FMT="elf32"
-  fi
+	if test "x$have_win32$have_cygwin" != "xfalsefalse"; then
+		if test "x$have_x86_64" = xtrue; then
+			YASM_FMT="win64"
+		else
+			YASM_FMT="coff"
+		fi
+	else
+		YASM_FMT="elf$bitness"
+	fi
 fi
+
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
