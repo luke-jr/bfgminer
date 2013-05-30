@@ -1199,18 +1199,17 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 	res_work->device_address = device_address;
 
 	mutex_lock(&cgusbres_lock);
-
 	res_work->next = res_work_head;
 	res_work_head = res_work;
-
 	mutex_unlock(&cgusbres_lock);
 
-	nmsleep(46);
+	sem_post(&usb_resource_sem);
 
 	// TODO: add a timeout fail - restart the resource thread?
 	while (true) {
-		mutex_lock(&cgusbres_lock);
+		nmsleep(50);
 
+		mutex_lock(&cgusbres_lock);
 		if (res_reply_head) {
 			struct resource_reply *res_reply_prev = NULL;
 			struct resource_reply *res_reply = res_reply_head;
@@ -1235,10 +1234,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 				res_reply = res_reply->next;
 			}
 		}
-
 		mutex_unlock(&cgusbres_lock);
-
-		nmsleep(45);
 	}
 }
 
@@ -1262,11 +1258,11 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 	res_work->device_address = device_address;
 
 	mutex_lock(&cgusbres_lock);
-
 	res_work->next = res_work_head;
 	res_work_head = res_work;
-
 	mutex_unlock(&cgusbres_lock);
+
+	sem_post(&usb_resource_sem);
 
 	return;
 }
@@ -2893,15 +2889,14 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 
 	applog(LOG_DEBUG, "RES: thread starting");
 
-	while (0*1337+1) {
-		mutex_lock(&cgusbres_lock);
+	while (42) {
+		/* Wait to be told we have work to do */
+		sem_wait(&usb_resource_sem);
 
+		mutex_lock(&cgusbres_lock);
 		while (res_work_head)
 			resource_process();
-
 		mutex_unlock(&cgusbres_lock);
-
-		nmsleep(45);
 	}
 
 	return NULL;

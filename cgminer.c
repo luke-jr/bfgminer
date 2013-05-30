@@ -28,6 +28,10 @@
 #include <assert.h>
 #include <signal.h>
 
+#ifdef USE_USBUTILS
+#include <semaphore.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -144,6 +148,7 @@ char *opt_avalon_options = NULL;
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
 bool opt_usb_list_all;
+sem_t usb_resource_sem;
 #endif
 
 char *opt_kernel_path;
@@ -7358,6 +7363,8 @@ int main(int argc, char *argv[])
 
 	// before device detection
 	if (!opt_scrypt) {
+		if (!sem_init(&usb_resource_sem, 0, 0))
+			quit(1, "Failed to sem_init usb_resource_sem");
 		usbres_thr_id = 1;
 		thr = &control_thr[usbres_thr_id];
 		if (thr_info_create(thr, NULL, usb_resource_thread, thr))

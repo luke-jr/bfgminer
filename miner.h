@@ -19,6 +19,10 @@
 # include <netdb.h>
 #endif
 
+#ifdef USE_USBUTILS
+#include <semaphore.h>
+#endif
+
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
@@ -846,6 +850,7 @@ extern char *opt_avalon_options;
 extern char *opt_usb_select;
 extern int opt_usbdump;
 extern bool opt_usb_list_all;
+extern sem_t usb_resource_sem;
 #endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
