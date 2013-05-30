@@ -12,6 +12,8 @@
 
 #ifdef USE_AVALON
 
+#include <semaphore.h>
+
 #define AVALON_RESET_FAULT_DECISECONDS 1
 #define AVALON_MINER_THREADS 1
 
@@ -23,10 +25,15 @@
 #define AVALON_DEFAULT_FAN_MAX_PWM 0xA0 /* 100% */
 #define AVALON_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
 
-#define AVALON_DEFAULT_TIMEOUT 0x32
-#define AVALON_DEFAULT_FREQUENCY 256
+#define AVALON_DEFAULT_TIMEOUT 0x2D
+#define AVALON_DEFAULT_FREQUENCY 282
 #define AVALON_DEFAULT_MINER_NUM 0x20
 #define AVALON_DEFAULT_ASIC_NUM 0xA
+
+#define AVALON_FTDI_READSIZE 510
+#define AVALON_READBUF_SIZE 8192
+#define AVALON_RESET_TIMEOUT 100
+#define AVALON_READ_TIMEOUT 10
 
 struct avalon_task {
 	uint8_t reset		:1;
@@ -95,30 +102,32 @@ struct avalon_info {
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
 
 	int frequency;
+
+	struct thr_info *thr;
+	pthread_t read_thr;
+	pthread_t write_thr;
+	pthread_mutex_t lock;
+	pthread_mutex_t qlock;
+	pthread_cond_t qcond;
+	sem_t read_sem;
+	sem_t write_sem;
+	int nonces;
+
+	bool idle;
+	bool reset;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
-#define AVALON_ARRAY_SIZE 4
+#define AVALON_ARRAY_SIZE 3
 
 #define AVA_GETS_ERROR -1
 #define AVA_GETS_OK 0
-#define AVA_GETS_RESTART 1
-#define AVA_GETS_TIMEOUT 2
 
 #define AVA_SEND_ERROR -1
 #define AVA_SEND_OK 0
-#define AVA_SEND_BUFFER_EMPTY 1
-#define AVA_SEND_BUFFER_FULL 2
 
-#define AVA_BUFFER_FULL 0
-#define AVA_BUFFER_EMPTY 1
-
-#define avalon_open2(devpath, baud, purge)  serial_open(devpath, baud, AVALON_RESET_FAULT_DECISECONDS, purge)
-#define avalon_open(devpath, baud)  avalon_open2(devpath, baud, true)
-#define avalon_close(fd) close(fd)
-
-#define avalon_buffer_full(fd)	get_serial_cts(fd)
+#define avalon_buffer_full(avalon) !usb_ftdi_cts(avalon)
 
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]

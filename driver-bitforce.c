@@ -101,7 +101,7 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 
 	// Set data control
 	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
-				FTDI_VALUE_DATA, bitforce->usbdev->found->interface, C_SETDATA);
+				FTDI_VALUE_DATA_BFL, bitforce->usbdev->found->interface, C_SETDATA);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setdata got err %d",
 			bitforce->drv->name, bitforce->device_id, err);
@@ -110,8 +110,8 @@ static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 		goto failed;
 
 	// Set the baud
-	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
-				(FTDI_INDEX_BAUD & 0xff00) | bitforce->usbdev->found->interface,
+	err = usb_transfer(bitforce, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BFL,
+				(FTDI_INDEX_BAUD_BFL & 0xff00) | bitforce->usbdev->found->interface,
 				C_SETBAUD);
 	if (opt_debug)
 		applog(LOG_DEBUG, "%s%i: setbaud got err %d",
@@ -200,7 +200,7 @@ reinit:
 		goto unshin;
 	}
 
-	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
+	if ((err = usb_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY)) < 0 || amount < 1) {
 		init_count++;
 		cgtime(&init_now);
 		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
@@ -395,7 +395,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		return false;
 	}
 
-	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETTEMPERATURE)) < 0 || amount < 1) {
+	if ((err = usb_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETTEMPERATURE)) < 0 || amount < 1) {
 		mutex_unlock(&bitforce->device_mutex);
 		if (err < 0) {
 			applog(LOG_ERR, "%s%i: Error: Get temp return invalid/timed out (%d:%d)",
@@ -470,7 +470,7 @@ re_send:
 		return false;
 	}
 
-	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_REQUESTSENDWORKSTATUS)) < 0) {
+	if ((err = usb_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_REQUESTSENDWORKSTATUS)) < 0) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%d: read request send work status failed (%d:%d)",
 				bitforce->drv->name, bitforce->device_id, amount, err);
@@ -524,7 +524,7 @@ re_send:
 		return false;
 	}
 
-	if ((err = usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_SENDWORKSTATUS)) < 0) {
+	if ((err = usb_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_SENDWORKSTATUS)) < 0) {
 		mutex_unlock(&bitforce->device_mutex);
 		applog(LOG_ERR, "%s%d: read send work status failed (%d:%d)",
 				bitforce->drv->name, bitforce->device_id, amount, err);
@@ -573,7 +573,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		mutex_lock(&bitforce->device_mutex);
 		usb_write(bitforce, BITFORCE_WORKSTATUS, BITFORCE_WORKSTATUS_LEN, &amount, C_REQUESTWORKSTATUS);
-		usb_ftdi_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETWORKSTATUS);
+		usb_read_nl(bitforce, buf, sizeof(buf)-1, &amount, C_GETWORKSTATUS);
 		mutex_unlock(&bitforce->device_mutex);
 
 		cgtime(&now);

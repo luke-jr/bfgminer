@@ -28,6 +28,10 @@
 #include <assert.h>
 #include <signal.h>
 
+#ifdef USE_USBUTILS
+#include <semaphore.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -60,9 +64,6 @@
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#if defined(USE_ICARUS) || defined(USE_AVALON)
-#	define USE_FPGA_SERIAL
-#endif
 #elif defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
@@ -147,6 +148,7 @@ char *opt_avalon_options = NULL;
 char *opt_usb_select = NULL;
 int opt_usbdump = -1;
 bool opt_usb_list_all;
+sem_t usb_resource_sem;
 #endif
 
 char *opt_kernel_path;
@@ -169,6 +171,7 @@ static int input_thr_id;
 int gpur_thr_id;
 static int api_thr_id;
 #ifdef USE_USBUTILS
+static int usbres_thr_id;
 static int hotplug_thr_id;
 #endif
 static int total_control_threads;
@@ -180,6 +183,7 @@ int hotplug_time = 5;
 
 #ifdef USE_USBUTILS
 pthread_mutex_t cgusb_lock;
+pthread_mutex_t cgusbres_lock;
 #endif
 
 pthread_mutex_t hash_lock;
@@ -1089,7 +1093,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for Icarus FPGA Mining device"),
+		     "Serial port to probe for Serial FPGA Mining device"),
 #endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
@@ -2221,6 +2225,7 @@ void logwin_update(void)
 	if (curses_active_locked()) {
 		touchwin(logwin);
 		wrefresh(logwin);
+		unlock_curses();
 	}
 }
 #endif
@@ -2809,6 +2814,22 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
+	applog(LOG_DEBUG, "Shutting down mining threads");
+	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+
+		thr = get_thread(i);
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+
+		cgpu->shutdown = true;
+	}
+
+	sleep(1);
+
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
@@ -2818,8 +2839,13 @@ static void __kill_work(void)
 		if (thr && PTH(thr) != 0L)
 			pth = &thr->pth;
 		thr_info_cancel(thr);
-		if (pth)
+#ifndef WIN32
+		if (pth && *pth)
 			pthread_join(*pth, NULL);
+#else
+		if (pth && pth->p)
+			pthread_join(*pth, NULL);
+#endif
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -2837,6 +2863,10 @@ static void __kill_work(void)
 	if (!opt_scrypt) {
 		applog(LOG_DEBUG, "Releasing all USB devices");
 		usb_cleanup();
+
+		applog(LOG_DEBUG, "Killing off usbres thread");
+		thr = &control_thr[usbres_thr_id];
+		thr_info_cancel(thr);
 	}
 #endif
 
@@ -5505,7 +5535,7 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 	return work;
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
 	struct pool *pool = work->pool;
@@ -5559,13 +5589,17 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
 	unsigned char hash2[32];
 	uint32_t *hash2_32 = (uint32_t *)hash2;
 	uint32_t diff1targ;
+	bool ret = true;
+
+	thread_reportout(thr);
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
@@ -5586,7 +5620,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 				thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		inc_hw_errors(thr);
-		return;
+		ret = false;
+		goto out;
 	}
 
 	mutex_lock(&stats_lock);
@@ -5595,10 +5630,14 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	if (!fulltest(hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
-		return;
+		goto out;
 	}
 
 	submit_work_async(work, &tv_work_found);
+out:
+	thread_reportin(thr);
+
+	return ret;
 }
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
@@ -5649,7 +5688,7 @@ static void hash_sole_work(struct thr_info *mythr)
 	sdiff.tv_sec = sdiff.tv_usec = 0;
 	cgtime(&tv_lastupdate);
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct work *work = get_work(mythr, thr_id);
 		int64_t hashes;
 
@@ -5788,6 +5827,7 @@ static void hash_sole_work(struct thr_info *mythr)
 		} while (!abandon_work(work, &wdiff, cgpu->max_hashes));
 		free_work(work);
 	}
+	cgpu->deven = DEV_DISABLED;
 }
 
 /* Create a hashtable of work items for devices with a queue. The device
@@ -5925,7 +5965,7 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
 
@@ -5960,6 +6000,7 @@ void hash_queued_work(struct thr_info *mythr)
 			drv->flush_work(cgpu);
 		}
 	}
+	cgpu->deven = DEV_DISABLED;
 }
 
 void *miner_thread(void *userdata)
@@ -7111,6 +7152,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			new_devices = 0;
 			new_threads = 0;
 
+#ifdef USE_ICARUS
+			icarus_drv.drv_detect();
+#endif
+
 #ifdef USE_BFLSC
 			bflsc_drv.drv_detect();
 #endif
@@ -7121,6 +7166,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 #ifdef USE_MODMINER
 			modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_AVALON
+			avalon_drv.drv_detect();
 #endif
 
 			if (new_devices)
@@ -7175,6 +7224,7 @@ int main(int argc, char *argv[])
 	}
 #ifdef USE_USBUTILS
 	mutex_init(&cgusb_lock);
+	mutex_init(&cgusbres_lock);
 #endif
 #endif
 
@@ -7301,8 +7351,27 @@ int main(int argc, char *argv[])
 	/* Use a shorter scantime for scrypt */
 	if (opt_scantime < 0)
 		opt_scantime = opt_scrypt ? 30 : 60;
+
+	total_control_threads = 9;
+	control_thr = calloc(total_control_threads, sizeof(*thr));
+	if (!control_thr)
+		quit(1, "Failed to calloc control_thr");
+
+	gwsched_thr_id = 0;
+
 #ifdef USE_USBUTILS
 	usb_initialise();
+
+	// before device detection
+	if (!opt_scrypt) {
+		if (sem_init(&usb_resource_sem, 0, 0))
+			quit(1, "Failed to sem_init usb_resource_sem");
+		usbres_thr_id = 1;
+		thr = &control_thr[usbres_thr_id];
+		if (thr_info_create(thr, NULL, usb_resource_thread, thr))
+			quit(1, "usb resource thread create failed");
+		pthread_detach(thr->pth);
+	}
 #endif
 
 #ifdef HAVE_OPENCL
@@ -7314,11 +7383,6 @@ int main(int argc, char *argv[])
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 		icarus_drv.drv_detect();
-#endif
-
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
 #endif
 
 #ifdef USE_BFLSC
@@ -7339,6 +7403,13 @@ int main(int argc, char *argv[])
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
 #endif
 
 	if (devices_enabled == -1) {
@@ -7442,13 +7513,7 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to calloc mining_thr[%d]", i);
 	}
 
-	total_control_threads = 8;
-	control_thr = calloc(total_control_threads, sizeof(*thr));
-	if (!control_thr)
-		quit(1, "Failed to calloc control_thr");
-
-	gwsched_thr_id = 0;
-	stage_thr_id = 1;
+	stage_thr_id = 2;
 	thr = &control_thr[stage_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -7569,14 +7634,14 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 
-	watchpool_thr_id = 2;
+	watchpool_thr_id = 3;
 	thr = &control_thr[watchpool_thr_id];
 	/* start watchpool thread */
 	if (thr_info_create(thr, NULL, watchpool_thread, NULL))
 		quit(1, "watchpool thread create failed");
 	pthread_detach(thr->pth);
 
-	watchdog_thr_id = 3;
+	watchdog_thr_id = 4;
 	thr = &control_thr[watchdog_thr_id];
 	/* start watchdog thread */
 	if (thr_info_create(thr, NULL, watchdog_thread, NULL))
@@ -7585,7 +7650,7 @@ begin_bench:
 
 #ifdef HAVE_OPENCL
 	/* Create reinit gpu thread */
-	gpur_thr_id = 4;
+	gpur_thr_id = 5;
 	thr = &control_thr[gpur_thr_id];
 	thr->q = tq_new();
 	if (!thr->q)
@@ -7595,14 +7660,14 @@ begin_bench:
 #endif	
 
 	/* Create API socket thread */
-	api_thr_id = 5;
+	api_thr_id = 6;
 	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
 
 #ifdef USE_USBUTILS
 	if (!opt_scrypt) {
-		hotplug_thr_id = 6;
+		hotplug_thr_id = 7;
 		thr = &control_thr[hotplug_thr_id];
 		if (thr_info_create(thr, NULL, hotplug_thread, thr))
 			quit(1, "hotplug thread create failed");
@@ -7614,7 +7679,7 @@ begin_bench:
 	/* Create curses input thread for keyboard input. Create this last so
 	 * that we know all threads are created since this can call kill_work
 	 * to try and shut down all previous threads. */
-	input_thr_id = 7;
+	input_thr_id = 8;
 	thr = &control_thr[input_thr_id];
 	if (thr_info_create(thr, NULL, input_thread, thr))
 		quit(1, "input thread create failed");
@@ -7622,8 +7687,8 @@ begin_bench:
 #endif
 
 	/* Just to be sure */
-	if (total_control_threads != 8)
-		quit(1, "incorrect total_control_threads (%d) should be 8", total_control_threads);
+	if (total_control_threads != 9)
+		quit(1, "incorrect total_control_threads (%d) should be 9", total_control_threads);
 
 	/* Once everything is set up, main() becomes the getwork scheduler */
 	while (42) {

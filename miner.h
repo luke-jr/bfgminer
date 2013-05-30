@@ -19,6 +19,10 @@
 # include <netdb.h>
 #endif
 
+#ifdef USE_USBUTILS
+#include <semaphore.h>
+#endif
+
 #ifdef HAVE_OPENCL
 #ifdef __APPLE_CC__
 #include <OpenCL/opencl.h>
@@ -422,16 +426,13 @@ struct cgpu_info {
 	int device_id;
 	char *name;
 	char *device_path;
-	FILE *device_file;
+	void *device_data;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
-#endif
-#if defined(USE_ICARUS) || defined(USE_AVALON)
-		int device_fd;
 #endif
 	};
 #ifdef USE_AVALON
@@ -545,6 +546,8 @@ struct cgpu_info {
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
 	unsigned int queued_count;
+
+	bool shutdown;
 };
 
 extern bool add_cgpu(struct cgpu_info*);
@@ -847,6 +850,7 @@ extern char *opt_avalon_options;
 extern char *opt_usb_select;
 extern int opt_usbdump;
 extern bool opt_usb_list_all;
+extern sem_t usb_resource_sem;
 #endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
@@ -881,6 +885,7 @@ extern int opt_expiry;
 
 #ifdef USE_USBUTILS
 extern pthread_mutex_t cgusb_lock;
+extern pthread_mutex_t cgusbres_lock;
 #endif
 
 extern cglock_t control_lock;
@@ -1249,7 +1254,7 @@ struct modminer_fpga_state {
 
 extern void get_datestamp(char *, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
-extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);

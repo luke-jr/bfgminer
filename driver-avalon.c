@@ -35,13 +35,12 @@
 
 #include "elist.h"
 #include "miner.h"
-#include "fpgautils.h"
+#include "usbutils.h"
 #include "driver-avalon.h"
 #include "hexdump.c"
 #include "util.h"
 
 static int option_offset = -1;
-struct avalon_info **avalon_infos;
 struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
@@ -121,19 +120,36 @@ static inline void avalon_create_task(struct avalon_task *at,
 	memcpy(at->data, work->data + 64, 12);
 }
 
-static int avalon_send_task(int fd, const struct avalon_task *at,
-			    struct cgpu_info *avalon)
+static int avalon_write(struct cgpu_info *avalon, char *buf, ssize_t len, int ep)
+{
+	int err, amount;
+
+	err = usb_write(avalon, buf, len, &amount, ep);
+	applog(LOG_DEBUG, "%s%i: usb_write got err %d", avalon->drv->name,
+	       avalon->device_id, err);
+
+	if (unlikely(err != 0)) {
+		applog(LOG_WARNING, "usb_write error on avalon_write");
+		return AVA_SEND_ERROR;
+	}
+	if (amount != len) {
+		applog(LOG_WARNING, "usb_write length mismatch on avalon_write");
+		return AVA_SEND_ERROR;
+	}
+
+	return AVA_SEND_OK;
+}
+
+static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *avalon)
 
 {
-	size_t ret;
-	int full;
 	struct timespec p;
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	size_t nr_len;
 	struct avalon_info *info;
 	uint64_t delay = 32000000; /* Default 32ms for B19200 */
 	uint32_t nonce_range;
-	int i;
+	int ret, i, ep = C_AVALON_TASK;
 
 	if (at->nonce_elf)
 		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
@@ -173,176 +189,84 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	buf[4] = tt;
 #endif
 	if (likely(avalon)) {
-		info = avalon_infos[avalon->device_id];
+		info = avalon->device_data;
 		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
 	}
 
-	if (at->reset)
+	if (at->reset) {
+		ep = C_AVALON_RESET;
 		nr_len = 1;
+	}
 	if (opt_debug) {
 		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
-		hexdump((uint8_t *)buf, nr_len);
+		hexdump(buf, nr_len);
 	}
-	ret = write(fd, buf, nr_len);
-	if (unlikely(ret != nr_len))
-		return AVA_SEND_ERROR;
+	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
 
 	p.tv_sec = 0;
 	p.tv_nsec = (long)delay + 4000000;
 	nanosleep(&p, NULL);
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %ld", p.tv_nsec);
 
-	full = avalon_buffer_full(fd);
-	applog(LOG_DEBUG, "Avalon: Sent: Buffer full: %s",
-	       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
-
-	if (unlikely(full == AVA_BUFFER_FULL))
-		return AVA_SEND_BUFFER_FULL;
-
-	return AVA_SEND_BUFFER_EMPTY;
-}
-
-static inline int avalon_gets(int fd, uint8_t *buf, struct thr_info *thr,
-		       struct timeval *tv_finish)
-{
-	int read_amount = AVALON_READ_SIZE;
-	bool first = true;
-	ssize_t ret = 0;
-
-	while (true) {
-		struct timeval timeout;
-		fd_set rd;
-
-		if (unlikely(thr->work_restart)) {
-			applog(LOG_DEBUG, "Avalon: Work restart");
-			return AVA_GETS_RESTART;
-		}
-
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 100000;
-
-		FD_ZERO(&rd);
-		FD_SET((SOCKETTYPE)fd, &rd);
-		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-		if (unlikely(ret < 0)) {
-			applog(LOG_ERR, "Avalon: Error %d on select in avalon_gets", errno);
-			return AVA_GETS_ERROR;
-		}
-		if (ret) {
-			ret = read(fd, buf, read_amount);
-			if (unlikely(ret < 0)) {
-				applog(LOG_ERR, "Avalon: Error %d on read in avalon_gets", errno);
-				return AVA_GETS_ERROR;
-			}
-			if (likely(first)) {
-				cgtime(tv_finish);
-				first = false;
-			}
-			if (likely(ret >= read_amount))
-				return AVA_GETS_OK;
-			buf += ret;
-			read_amount -= ret;
-			continue;
-		}
-
-		if (unlikely(thr->work_restart)) {
-			applog(LOG_DEBUG, "Avalon: Work restart");
-			return AVA_GETS_RESTART;
-		}
-
-		return AVA_GETS_TIMEOUT;
-	}
-}
-
-static int avalon_get_result(int fd, struct avalon_result *ar,
-			     struct thr_info *thr, struct timeval *tv_finish)
-{
-	uint8_t result[AVALON_READ_SIZE];
-	int ret;
-
-	memset(result, 0, AVALON_READ_SIZE);
-	ret = avalon_gets(fd, result, thr, tv_finish);
-
-	if (ret == AVA_GETS_OK) {
-		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: get:");
-			hexdump((uint8_t *)result, AVALON_READ_SIZE);
-		}
-		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
-	}
-
 	return ret;
 }
 
-static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
-				uint32_t *nonce)
+static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
+				struct avalon_info *info, struct avalon_result *ar,
+				struct work *work)
 {
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
-	struct work *work;
+	uint32_t nonce;
 
-	avalon = thr->cgpu;
-	if (unlikely(!avalon->works))
-		return false;
-
-	work = find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
-					   (char *)ar->data, 64, 12);
-	if (!work)
-		return false;
-
-	info = avalon_infos[avalon->device_id];
+	info = avalon->device_data;
 	info->matching_work[work->subid]++;
-	*nonce = htole32(ar->nonce);
-	submit_nonce(thr, work, *nonce);
-
-	return true;
+	nonce = htole32(ar->nonce);
+	applog(LOG_DEBUG, "Avalon: nonce = %0x08x", nonce);
+	return submit_nonce(thr, work, nonce);
 }
 
-static void avalon_get_reset(int fd, struct avalon_result *ar)
+/* Wait until the ftdi chip returns a CTS saying we can send more data. The
+ * status is updated every 40ms. */
+static void wait_avalon_ready(struct cgpu_info *avalon)
 {
-	int read_amount = AVALON_READ_SIZE;
-	uint8_t result[AVALON_READ_SIZE];
-	struct timeval timeout = {1, 0};
-	ssize_t ret = 0, offset = 0;
-	fd_set rd;
-
-	memset(result, 0, AVALON_READ_SIZE);
-	memset(ar, 0, AVALON_READ_SIZE);
-	FD_ZERO(&rd);
-	FD_SET((SOCKETTYPE)fd, &rd);
-	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
-	if (unlikely(ret < 0)) {
-		applog(LOG_WARNING, "Avalon: Error %d on select in avalon_get_reset", errno);
-		return;
+	while (avalon_buffer_full(avalon)) {
+		nmsleep(40);
 	}
-	if (!ret) {
-		applog(LOG_WARNING, "Avalon: Timeout on select in avalon_get_reset");
-		return;
-	}
-	do {
-		ret = read(fd, result + offset, read_amount);
-		if (unlikely(ret < 0)) {
-			applog(LOG_WARNING, "Avalon: Error %d on read in avalon_get_reset", errno);
-			return;
-		}
-		read_amount -= ret;
-		offset += ret;
-	} while (read_amount > 0);
-	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: get:");
-		hexdump((uint8_t *)result, AVALON_READ_SIZE);
-	}
-	memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
 }
 
-static int avalon_reset(int fd, struct avalon_result *ar)
+static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
+		       size_t bufsize, int timeout, int ep)
 {
+	size_t total = 0, readsize = bufsize + 2;
+	char readbuf[AVALON_READBUF_SIZE];
+	int err, amount, ofs = 2, cp;
+
+	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
+	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
+	       avalon->drv->name, avalon->device_id, err);
+
+	/* The first 2 of every 64 bytes are status on FTDIRL */
+	while (amount > 2) {
+		cp = amount - 2;
+		if (cp > 62)
+			cp = 62;
+		memcpy(&buf[total], &readbuf[ofs], cp);
+		total += cp;
+		amount -= cp + 2;
+		ofs += 64;
+	}
+	return total;
+}
+
+static int avalon_reset(struct cgpu_info *avalon, bool initial)
+{
+	struct avalon_result ar;
+	int ret, i, spare;
 	struct avalon_task at;
-	uint8_t *buf;
-	int ret, i = 0;
+	uint8_t *buf, *tmp;
 	struct timespec p;
 
+	/* Send reset, then check for result */
 	avalon_init_task(&at, 1, 0,
 			 AVALON_DEFAULT_FAN_MAX_PWM,
 			 AVALON_DEFAULT_TIMEOUT,
@@ -350,17 +274,41 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 			 AVALON_DEFAULT_MINER_NUM,
 			 0, 0,
 			 AVALON_DEFAULT_FREQUENCY);
-	ret = avalon_send_task(fd, &at, NULL);
-	if (ret == AVA_SEND_ERROR)
-		return 1;
 
-	avalon_get_reset(fd, ar);
+	wait_avalon_ready(avalon);
+	ret = avalon_send_task(&at, avalon);
+	if (unlikely(ret == AVA_SEND_ERROR))
+		return -1;
 
-	buf = (uint8_t *)ar;
-	/* Sometimes there is one extra 0 byte for some reason in the buffer,
-	 * so work around it. */
-	if (buf[0] == 0)
-		buf = (uint8_t  *)(ar + 1);
+	if (!initial) {
+		applog(LOG_ERR, "AVA%d reset sequence sent", avalon->device_id);
+		return 0;
+	}
+
+	ret = avalon_read(avalon, (unsigned char *)&ar, AVALON_READ_SIZE,
+			  AVALON_RESET_TIMEOUT, C_GET_AVALON_RESET);
+
+	/* What do these sleeps do?? */
+	p.tv_sec = 0;
+	p.tv_nsec = AVALON_RESET_PITCH;
+	nanosleep(&p, NULL);
+
+	/* Look for the first occurrence of 0xAA, the reset response should be:
+	 * AA 55 AA 55 00 00 00 00 00 00 */
+	spare = ret - 10;
+	buf = tmp = (uint8_t *)&ar;
+	if (opt_debug) {
+		applog(LOG_DEBUG, "AVA%d reset: get:", avalon->device_id);
+		hexdump(tmp, AVALON_READ_SIZE);
+	}
+
+	for (i = 0; i <= spare; i++) {
+		buf = &tmp[i];
+		if (buf[0] == 0xAA)
+			break;
+	}
+	i = 0;
+
 	if (buf[0] == 0xAA && buf[1] == 0x55 &&
 	    buf[2] == 0xAA && buf[3] == 0x55) {
 		for (i = 4; i < 11; i++)
@@ -368,53 +316,19 @@ static int avalon_reset(int fd, struct avalon_result *ar)
 				break;
 	}
 
-	p.tv_sec = 0;
-	p.tv_nsec = AVALON_RESET_PITCH;
-	nanosleep(&p, NULL);
-
 	if (i != 11) {
-		applog(LOG_ERR, "Avalon: Reset failed! not an Avalon?"
-		       " (%d: %02x %02x %02x %02x)",
+		applog(LOG_ERR, "AVA%d: Reset failed! not an Avalon?"
+		       " (%d: %02x %02x %02x %02x)", avalon->device_id,
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		/* FIXME: return 1; */
 	} else
-		applog(LOG_WARNING, "Avalon: Reset succeeded");
+		applog(LOG_WARNING, "AVA%d: Reset succeeded",
+		       avalon->device_id);
+
 	return 0;
 }
 
-static void avalon_idle(struct cgpu_info *avalon)
-{
-	int i, ret;
-	struct avalon_task at;
-
-	int fd = avalon->device_fd;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
-	int avalon_get_work_count = info->miner_count;
-
-	i = 0;
-	while (true) {
-		avalon_init_task(&at, 0, 0, info->fan_pwm,
-				 info->timeout, info->asic_count,
-				 info->miner_count, 1, 1, info->frequency);
-		ret = avalon_send_task(fd, &at, avalon);
-		if (unlikely(ret == AVA_SEND_ERROR ||
-			     (ret == AVA_SEND_BUFFER_EMPTY &&
-			      (i + 1 == avalon_get_work_count * 2)))) {
-			applog(LOG_ERR, "AVA%i: Comms error", avalon->device_id);
-			return;
-		}
-		if (i + 1 == avalon_get_work_count * 2)
-			break;
-
-		if (ret == AVA_SEND_BUFFER_FULL)
-			break;
-
-		i++;
-	}
-	applog(LOG_ERR, "Avalon: Goto idle mode");
-}
-
-static void get_options(int this_option_offset, int *baud, int *miner_count,
+static bool get_options(int this_option_offset, int *baud, int *miner_count,
 			int *asic_count, int *timeout, int *frequency)
 {
 	char err_buf[BUFSIZ+1];
@@ -446,14 +360,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		buf[max] = '\0';
 	}
 
-	*baud = AVALON_IO_SPEED;
-	*miner_count = AVALON_DEFAULT_MINER_NUM - 8;
-	*asic_count = AVALON_DEFAULT_ASIC_NUM;
-	*timeout = AVALON_DEFAULT_TIMEOUT;
-	*frequency = AVALON_DEFAULT_FREQUENCY;
-
 	if (!(*buf))
-		return;
+		return false;
 
 	colon = strchr(buf, ':');
 	if (colon)
@@ -548,65 +456,162 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			}
 		}
 	}
+	return true;
 }
 
-static bool avalon_detect_one(const char *devpath)
+static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 {
-	struct avalon_info *info;
-	struct avalon_result ar;
-	int fd, ret;
-	int baud, miner_count, asic_count, timeout, frequency = 0;
-	struct cgpu_info *avalon;
+	int i;
 
-	int this_option_offset = ++option_offset;
-	get_options(this_option_offset, &baud, &miner_count, &asic_count,
-		    &timeout, &frequency);
+	info->idle = true;
+	wait_avalon_ready(avalon);
+	/* Send idle to all miners */
+	for (i = 0; i < info->miner_count; i++) {
+		struct avalon_task at;
 
-	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
-	       "(baud=%d miner_count=%d asic_count=%d timeout=%d frequency=%d)",
-	       devpath, baud, miner_count, asic_count, timeout, frequency);
-
-	fd = avalon_open2(devpath, baud, true);
-	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
-		return false;
+		if (unlikely(avalon_buffer_full(avalon)))
+			break;
+		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
+				 info->asic_count, info->miner_count, 1, 1,
+				 info->frequency);
+		avalon_send_task(&at, avalon);
 	}
+	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id, i);
+	wait_avalon_ready(avalon);
+}
+
+static void avalon_initialise(struct cgpu_info *avalon)
+{
+	int err, interface;
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	interface = avalon->usbdev->found->interface;
+	// Reset
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
+				FTDI_VALUE_RESET, interface, C_RESET);
+
+	applog(LOG_DEBUG, "%s%i: reset got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	// Set data
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
+				FTDI_VALUE_DATA_AVA, interface, C_SETDATA);
+
+	applog(LOG_DEBUG, "%s%i: data got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	// Set the baud
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_AVA,
+				(FTDI_INDEX_BAUD_AVA & 0xff00) | interface,
+				C_SETBAUD);
+
+	applog(LOG_DEBUG, "%s%i: setbaud got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	// Set Modem Control
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
+				FTDI_VALUE_MODEM, interface, C_SETMODEM);
+
+	applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	// Set Flow Control
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
+				FTDI_VALUE_FLOW, interface, C_SETFLOW);
+
+	applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	/* Avalon repeats the following */
+	// Set Modem Control
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
+				FTDI_VALUE_MODEM, interface, C_SETMODEM);
+
+	applog(LOG_DEBUG, "%s%i: setmodemctrl 2 got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
+	// Set Flow Control
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
+				FTDI_VALUE_FLOW, interface, C_SETFLOW);
+
+	applog(LOG_DEBUG, "%s%i: setflowctrl 2 got err %d",
+		avalon->drv->name, avalon->device_id, err);
+}
+
+static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
+{
+	int baud, miner_count, asic_count, timeout, frequency = 0;
+	int this_option_offset = ++option_offset;
+	struct avalon_info *info;
+	struct cgpu_info *avalon;
+	char devpath[20];
+	bool configured;
+	int ret;
+
+	avalon = calloc(1, sizeof(struct cgpu_info));
+	if (unlikely(!avalon))
+		quit(1, "Failed to calloc avalon in avalon_detect_one");;
+	avalon->drv = &avalon_drv;
+	avalon->threads = AVALON_MINER_THREADS;
+
+	configured = get_options(this_option_offset, &baud, &miner_count,
+				 &asic_count, &timeout, &frequency);
+
+	if (!usb_init(avalon, dev, found))
+		return false;
+
+	/* Even though this is an FTDI type chip, we want to do the parsing
+	 * all ourselves so set it to std usb type */
+	avalon->usbdev->usb_type = USB_TYPE_STD;
 
 	/* We have a real Avalon! */
-	avalon = calloc(1, sizeof(struct cgpu_info));
-	avalon->drv = &avalon_drv;
+	sprintf(devpath, "%d:%d",
+			(int)(avalon->usbinfo.bus_number),
+			(int)(avalon->usbinfo.device_address));
+
+	avalon_initialise(avalon);
+
 	avalon->device_path = strdup(devpath);
-	avalon->device_fd = fd;
-	avalon->threads = AVALON_MINER_THREADS;
 	add_cgpu(avalon);
 
-	ret = avalon_reset(fd, &ar);
-	if (ret) {
-		; /* FIXME: I think IT IS avalon and wait on reset;
-		   * avalon_close(fd);
-		   * return false; */
+	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
+	if (unlikely(!(avalon->device_data)))
+		quit(1, "Failed to malloc avalon_info data");
+	info = avalon->device_data;
+
+	if (configured) {
+		info->baud = baud;
+		info->miner_count = miner_count;
+		info->asic_count = asic_count;
+		info->timeout = timeout;
+		info->frequency = frequency;
+	} else {
+		info->baud = AVALON_IO_SPEED;
+		info->miner_count = AVALON_DEFAULT_MINER_NUM;
+		info->asic_count = AVALON_DEFAULT_ASIC_NUM;
+		info->timeout = AVALON_DEFAULT_TIMEOUT;
+		info->frequency = AVALON_DEFAULT_FREQUENCY;
 	}
-	
-	avalon_infos = realloc(avalon_infos,
-			       sizeof(struct avalon_info *) *
-			       (total_devices + 1));
-
-	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
-	       devpath, avalon->device_id);
-
-	avalon_infos[avalon->device_id] = (struct avalon_info *)
-		malloc(sizeof(struct avalon_info));
-	if (unlikely(!(avalon_infos[avalon->device_id])))
-		quit(1, "Failed to malloc avalon_infos");
-
-	info = avalon_infos[avalon->device_id];
-
-	memset(info, 0, sizeof(struct avalon_info));
-
-	info->baud = baud;
-	info->miner_count = miner_count;
-	info->asic_count = asic_count;
-	info->timeout = timeout;
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -618,54 +623,260 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->frequency = frequency;
 
-	/* Set asic to idle mode after detect */
-	avalon_idle(avalon);
-	avalon->device_fd = -1;
+	ret = avalon_reset(avalon, true);
+	if (ret && !configured) {
+		usb_uninit(avalon);
+		return false;
+	}
 
-	avalon_close(fd);
+	avalon_idle(avalon, info);
+
+	applog(LOG_DEBUG, "Avalon Detected: %s "
+	       "(miner_count=%d asic_count=%d timeout=%d frequency=%d)",
+	       devpath, info->miner_count, info->asic_count, info->timeout,
+	       info->frequency);
+
 	return true;
 }
 
-static inline void avalon_detect()
+static void avalon_detect(void)
 {
-	serial_detect(&avalon_drv, avalon_detect_one);
-}
-
-static void __avalon_init(struct cgpu_info *avalon)
-{
-	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
+	usb_detect(&avalon_drv, avalon_detect_one);
 }
 
 static void avalon_init(struct cgpu_info *avalon)
 {
-	struct avalon_result ar;
-	int fd, ret;
+	applog(LOG_INFO, "Avalon: Opened on %s", avalon->device_path);
+}
 
-	avalon->device_fd = -1;
-	fd = avalon_open(avalon->device_path,
-			     avalon_infos[avalon->device_id]->baud);
-	if (unlikely(fd == -1)) {
-		applog(LOG_ERR, "Avalon: Failed to open on %s",
-		       avalon->device_path);
+static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_result *ar)
+{
+	return find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+					   (char *)ar->data, 64, 12);
+}
+
+static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
+				struct avalon_result *ar);
+
+static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
+{
+	if (unlikely(info->idle))
 		return;
+
+	applog(LOG_WARNING, "%s%d: No valid work - HW error",
+			thr->cgpu->drv->name, thr->cgpu->device_id);
+
+	inc_hw_errors(thr);
+	info->no_matching_work++;
+}
+
+static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *info,
+				 struct thr_info *thr, char *buf, int *offset)
+{
+	int i, spare = *offset - AVALON_READ_SIZE;
+	bool found = false;
+
+	for (i = 0; i <= spare; i++) {
+		struct avalon_result *ar;
+		struct work *work;
+
+		ar = (struct avalon_result *)&buf[i];
+		work = avalon_valid_result(avalon, ar);
+		if (work) {
+			bool gettemp = false;
+
+			found = true;
+
+			if (avalon_decode_nonce(thr, avalon, info, ar, work)) {
+				mutex_lock(&info->lock);
+				if (!info->nonces++)
+					gettemp = true;
+				mutex_unlock(&info->lock);
+			}
+
+			if (gettemp)
+				avalon_update_temps(avalon, info, ar);
+			break;
+		}
 	}
 
-	ret = avalon_reset(fd, &ar);
-	if (ret) {
-		avalon_close(fd);
-		return;
+	if (!found) {
+		spare = *offset - AVALON_READ_SIZE;
+		/* We are buffering and haven't accumulated one more corrupt
+		 * work result. */
+		if (spare < (int)AVALON_READ_SIZE)
+			return;
+		avalon_inc_nvw(info, thr);
+	} else {
+		spare = AVALON_READ_SIZE + i;
+		if (i) {
+			if (i >= (int)AVALON_READ_SIZE)
+				avalon_inc_nvw(info, thr);
+			else
+				applog(LOG_WARNING, "Avalon: Discarding %d bytes from buffer", i);
+		}
 	}
 
-	avalon->device_fd = fd;
-	__avalon_init(avalon);
+	*offset -= spare;
+	memmove(buf, buf + spare, *offset);
+}
+
+static void avalon_running_reset(struct cgpu_info *avalon,
+				   struct avalon_info *info)
+{
+	avalon_reset(avalon, false);
+	avalon_idle(avalon, info);
+	avalon->results = 0;
+	info->reset = false;
+}
+
+static void *avalon_get_results(void *userdata)
+{
+	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
+	struct avalon_info *info = avalon->device_data;
+	const int rsize = AVALON_FTDI_READSIZE;
+	char readbuf[AVALON_READBUF_SIZE];
+	struct thr_info *thr = info->thr;
+	char threadname[24];
+	int offset = 0;
+
+	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
+	RenameThread(threadname);
+
+	while (likely(!avalon->shutdown)) {
+		struct timeval tv_start, now, tdiff;
+		unsigned char buf[rsize];
+		int ret;
+
+		if (offset >= (int)AVALON_READ_SIZE)
+			avalon_parse_results(avalon, info, thr, readbuf, &offset);
+
+		if (unlikely(offset + rsize >= AVALON_READBUF_SIZE)) {
+			/* This should never happen */
+			applog(LOG_ERR, "Avalon readbuf overflow, resetting buffer");
+			offset = 0;
+		}
+
+		if (unlikely(info->reset)) {
+			/* Tell the write thread it can start the reset */
+			sem_post(&info->write_sem);
+			sem_wait(&info->read_sem);
+
+			/* Discard anything in the buffer */
+			offset = 0;
+		}
+
+		cgtime(&tv_start);
+		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
+				  C_AVALON_READ);
+
+		if (ret < 1) {
+			int us_delay;
+
+			cgtime(&now);
+			timersub(&now, &tv_start, &tdiff);
+			us_delay = AVALON_READ_TIMEOUT * 1000 - (tdiff.tv_usec);
+			if (us_delay > 0)
+				nusleep(us_delay);
+			continue;
+		}
+
+		if (opt_debug) {
+			applog(LOG_DEBUG, "Avalon: get:");
+			hexdump((uint8_t *)buf, ret);
+		}
+
+		memcpy(&readbuf[offset], &buf, ret);
+		offset += ret;
+	}
+	return NULL;
+}
+
+static void avalon_rotate_array(struct cgpu_info *avalon)
+{
+	avalon->queued = 0;
+	if (++avalon->work_array >= AVALON_ARRAY_SIZE)
+		avalon->work_array = 0;
+}
+
+static void *avalon_send_tasks(void *userdata)
+{
+	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
+	struct avalon_info *info = avalon->device_data;
+	const int avalon_get_work_count = info->miner_count;
+	char threadname[24];
+
+	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
+	RenameThread(threadname);
+
+	while (likely(!avalon->shutdown)) {
+		int start_count, end_count, i, j, ret;
+		struct avalon_task at;
+		int idled = 0;
+
+		wait_avalon_ready(avalon);
+
+		if (unlikely(info->reset)) {
+			/* Wait till read thread tells us it's received the
+			 * reset message */
+			sem_wait(&info->write_sem);
+			avalon_running_reset(avalon, info);
+			sem_post(&info->read_sem);
+		}
+
+		mutex_lock(&info->qlock);
+		start_count = avalon->work_array * avalon_get_work_count;
+		end_count = start_count + avalon_get_work_count;
+		for (i = start_count, j = 0; i < end_count; i++, j++) {
+			if (avalon_buffer_full(avalon)) {
+				applog(LOG_INFO,
+				       "AVA%i: Buffer full after only %d of %d work queued",
+					avalon->device_id, j, avalon_get_work_count);
+				break;
+			}
+
+			if (likely(j < avalon->queued)) {
+				info->idle = false;
+				avalon_init_task(&at, 0, 0, info->fan_pwm,
+						info->timeout, info->asic_count,
+						info->miner_count, 1, 0, info->frequency);
+				avalon_create_task(&at, avalon->works[i]);
+			} else {
+				idled++;
+				avalon_init_task(&at, 0, 0, info->fan_pwm,
+						info->timeout, info->asic_count,
+						info->miner_count, 1, 1, info->frequency);
+			}
+
+			ret = avalon_send_task(&at, avalon);
+
+			if (unlikely(ret == AVA_SEND_ERROR)) {
+				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
+				       avalon->device_id);
+				dev_error(avalon, REASON_DEV_COMMS_ERROR);
+				info->reset = true;
+				break;
+			}
+		}
+
+		avalon_rotate_array(avalon);
+		pthread_cond_signal(&info->qcond);
+		mutex_unlock(&info->qlock);
+
+		if (unlikely(idled && !info->idle)) {
+			info->idle = true;
+			applog(LOG_WARNING, "AVA%i: Idled %d miners",
+			       avalon->device_id, idled);
+		}
+	}
+	return NULL;
 }
 
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
+	struct avalon_info *info = avalon->device_data;
 	struct timeval now;
 
 	free(avalon->works);
@@ -673,50 +884,38 @@ static bool avalon_prepare(struct thr_info *thr)
 			       AVALON_ARRAY_SIZE);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
-	if (avalon->device_fd == -1)
-		avalon_init(avalon);
-	else
-		__avalon_init(avalon);
+
+	info->thr = thr;
+	mutex_init(&info->lock);
+	mutex_init(&info->qlock);
+	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
+		quit(1, "Failed to pthread_cond_init avalon qcond");
+	if (unlikely(sem_init(&info->read_sem, 0, 0)))
+		quit(1, "Failed to sem_init avalon read_sem");
+	if (unlikely(sem_init(&info->write_sem, 0, 0)))
+		quit(1, "Failed to sem_init avalon write_sem");
+
+	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
+		quit(1, "Failed to create avalon read_thr");
+
+	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
+		quit(1, "Failed to create avalon write_thr");
+
+	avalon_init(avalon);
 
 	cgtime(&now);
 	get_datestamp(avalon->init, &now);
 	return true;
 }
 
-static void avalon_free_work(struct thr_info *thr)
-{
-	struct cgpu_info *avalon;
-	struct avalon_info *info;
-	struct work **works;
-	int i;
-
-	avalon = thr->cgpu;
-	avalon->queued = 0;
-	if (unlikely(!avalon->works))
-		return;
-	works = avalon->works;
-	info = avalon_infos[avalon->device_id];
-
-	for (i = 0; i < info->miner_count * 4; i++) {
-		if (works[i]) {
-			work_completed(avalon, works[i]);
-			works[i] = NULL;
-		}
-	}
-}
-
 static void do_avalon_close(struct thr_info *thr)
 {
-	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
+	struct avalon_info *info = avalon->device_data;
 
-	avalon_free_work(thr);
-	sleep(1);
-	avalon_reset(avalon->device_fd, &ar);
-	avalon_idle(avalon);
-	avalon_close(avalon->device_fd);
-	avalon->device_fd = -1;
+	pthread_join(info->read_thr, NULL);
+	pthread_join(info->write_thr, NULL);
+	avalon_running_reset(avalon, info);
 
 	info->no_matching_work = 0;
 }
@@ -771,211 +970,146 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
+static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
+				struct avalon_result *ar)
+{
+	record_temp_fan(info, ar, &(avalon->temp));
+	applog(LOG_INFO,
+		"Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
+		"Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
+		info->fan0, info->fan1, info->fan2,
+		info->temp0, info->temp1, info->temp2, info->temp_max);
+	info->temp_history_index++;
+	info->temp_sum += avalon->temp;
+	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
+		info->temp_history_index, info->temp_history_count, info->temp_old);
+	if (info->temp_history_index == info->temp_history_count) {
+		adjust_fan(info);
+		info->temp_history_index = 0;
+		info->temp_sum = 0;
+	}
+}
+
+static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	int lowfan = 10000, pwm;
+
+	/* Find the lowest fan speed. Fan0 is often not populated. */
+	if (info->fan0 > 0)
+		lowfan = info->fan0;
+	if (info->fan1 >= 0 && info->fan1 < lowfan)
+		lowfan = info->fan1;
+	if (info->fan2 >= 0 && info->fan2 < lowfan)
+		lowfan = info->fan2;
+
+	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
+
+	tailsprintf(buf, "%2d/%3dC %3d%%/%04dR| ", info->temp0, info->temp2,
+		    pwm, lowfan);
+}
+
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	int subid, slot, mc = avalon_infos[avalon->device_id]->miner_count;
+	struct avalon_info *info = avalon->device_data;
+	int subid, slot, mc;
 	struct work *work;
+	bool ret = true;
 
+	mc = info->miner_count;
+	mutex_lock(&info->qlock);
 	if (avalon->queued >= mc)
-		return true;
+		goto out_unlock;
 	work = get_queued(avalon);
-	if (unlikely(!work))
-		return false;
+	if (unlikely(!work)) {
+		ret = false;
+		goto out_unlock;
+	}
 	subid = avalon->queued++;
 	work->subid = subid;
 	slot = avalon->work_array * mc + subid;
 	if (likely(avalon->works[slot]))
 		work_completed(avalon, avalon->works[slot]);
 	avalon->works[slot] = work;
-	if (avalon->queued >= mc)
-		return true;
-	return false;
-}
+	if (avalon->queued < mc)
+		ret = false;
+out_unlock:
+	mutex_unlock(&info->qlock);
 
-static void avalon_rotate_array(struct cgpu_info *avalon)
-{
-	avalon->queued = 0;
-	if (++avalon->work_array >= AVALON_ARRAY_SIZE)
-		avalon->work_array = 0;
+	return ret;
 }
 
 static int64_t avalon_scanhash(struct thr_info *thr)
 {
-	struct cgpu_info *avalon;
-	struct work **works;
-	int fd, ret = AVA_GETS_OK, full;
+	struct cgpu_info *avalon = thr->cgpu;
+	struct avalon_info *info = avalon->device_data;
+	const int miner_count = info->miner_count;
+	struct timeval now, then, tdiff;
+	int64_t hash_count, us_timeout;
+	struct timespec abstime;
 
-	struct avalon_info *info;
-	struct avalon_task at;
-	struct avalon_result ar;
-	int i;
-	int avalon_get_work_count;
-	int start_count, end_count;
+	/* Full nonce range */
+	us_timeout = 0x100000000ll / info->asic_count / info->frequency;
+	tdiff.tv_sec = us_timeout / 1000000;
+	tdiff.tv_usec = us_timeout - (tdiff.tv_sec * 1000000);
+	cgtime(&now);
+	timeradd(&now, &tdiff, &then);
+	abstime.tv_sec = then.tv_sec;
+	abstime.tv_nsec = then.tv_usec * 1000;
 
-	struct timeval tv_start, tv_finish, elapsed;
-	uint32_t nonce;
-	int64_t hash_count;
-	static int first_try = 0;
-	int result_wrong;
+	/* Wait until avalon_send_tasks signals us that it has completed
+	 * sending its work or a full nonce range timeout has occurred */
+	mutex_lock(&info->qlock);
+	pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
+	mutex_unlock(&info->qlock);
 
-	avalon = thr->cgpu;
-	works = avalon->works;
-	info = avalon_infos[avalon->device_id];
-	avalon_get_work_count = info->miner_count;
+	mutex_lock(&info->lock);
+	hash_count = 0xffffffffull * (uint64_t)info->nonces;
+	avalon->results += info->nonces;
+	if (avalon->results > miner_count)
+		avalon->results = miner_count;
+	if (!info->idle && !info->reset)
+		avalon->results -= miner_count / 3;
+	else
+		avalon->results = miner_count;
+	info->nonces = 0;
+	mutex_unlock(&info->lock);
 
-	if (unlikely(avalon->device_fd == -1)) {
-		if (!avalon_prepare(thr)) {
-			applog(LOG_ERR, "AVA%i: Comms error(open)",
-			       avalon->device_id);
-			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			/* fail the device if the reopen attempt fails */
-			return -1;
-		}
-	}
-	fd = avalon->device_fd;
-#ifndef WIN32
-	tcflush(fd, TCOFLUSH);
-#endif
-
-	start_count = avalon->work_array * avalon_get_work_count;
-	end_count = start_count + avalon_get_work_count;
-	i = start_count;
-	while (true) {
-		avalon_init_task(&at, 0, 0, info->fan_pwm,
-				 info->timeout, info->asic_count,
-				 info->miner_count, 1, 0, info->frequency);
-		avalon_create_task(&at, works[i]);
-		ret = avalon_send_task(fd, &at, avalon);
-		if (unlikely(ret == AVA_SEND_ERROR ||
-			     (ret == AVA_SEND_BUFFER_EMPTY &&
-			      (i + 1 == end_count) &&
-			      first_try))) {
-			do_avalon_close(thr);
-			applog(LOG_ERR, "AVA%i: Comms error(buffer)",
-			       avalon->device_id);
-			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			first_try = 0;
-			sleep(1);
-			avalon_init(avalon);
-			return 0;	/* This should never happen */
-		}
-		if (ret == AVA_SEND_BUFFER_EMPTY && (i + 1 == end_count)) {
-			first_try = 1;
-			avalon_rotate_array(avalon);
-			return 0xffffffff;
-		}
-
-		works[i]->blk.nonce = 0xffffffff;
-
-		if (ret == AVA_SEND_BUFFER_FULL)
-			break;
-
-		i++;
-	}
-	if (unlikely(first_try))
-		first_try = 0;
-
-	elapsed.tv_sec = elapsed.tv_usec = 0;
-	cgtime(&tv_start);
-
-	result_wrong = 0;
-	hash_count = 0;
-	while (true) {
-		full = avalon_buffer_full(fd);
-		applog(LOG_DEBUG, "Avalon: Buffer full: %s",
-		       ((full == AVA_BUFFER_FULL) ? "Yes" : "No"));
-		if (unlikely(full == AVA_BUFFER_EMPTY))
-			break;
-
-		ret = avalon_get_result(fd, &ar, thr, &tv_finish);
-		if (unlikely(ret == AVA_GETS_ERROR)) {
-			do_avalon_close(thr);
-			applog(LOG_ERR,
-			       "AVA%i: Comms error(read)", avalon->device_id);
-			dev_error(avalon, REASON_DEV_COMMS_ERROR);
-			return 0;
-		}
-		if (unlikely(ret == AVA_GETS_RESTART))
-			break;
-		if (unlikely(ret == AVA_GETS_TIMEOUT)) {
-			timersub(&tv_finish, &tv_start, &elapsed);
-			applog(LOG_DEBUG, "Avalon: no nonce in (%ld.%06lds)",
-			       elapsed.tv_sec, elapsed.tv_usec);
-			continue;
-		}
-
-		if (!avalon_decode_nonce(thr, &ar, &nonce)) {
-			info->no_matching_work++;
-			result_wrong++;
-
-			if (unlikely(result_wrong >= avalon_get_work_count))
-				break;
-
-			if (opt_debug) {
-				timersub(&tv_finish, &tv_start, &elapsed);
-				applog(LOG_DEBUG,"Avalon: no matching work: %d"
-				" (%ld.%06lds)", info->no_matching_work,
-				elapsed.tv_sec, elapsed.tv_usec);
-			}
-			continue;
-		}
-
-		hash_count += 0xffffffff;
-		if (opt_debug) {
-			timersub(&tv_finish, &tv_start, &elapsed);
-			applog(LOG_DEBUG,
-			       "Avalon: nonce = 0x%08x = 0x%08llx hashes "
-			       "(%ld.%06lds)", nonce, (unsigned long long)hash_count,
-			       elapsed.tv_sec, elapsed.tv_usec);
-		}
-	}
-	if (hash_count && avalon->results < AVALON_ARRAY_SIZE)
-		avalon->results++;
-	if (unlikely((result_wrong >= avalon_get_work_count) ||
-	    (!hash_count && ret != AVA_GETS_RESTART && --avalon->results < 0))) {
-		/* Look for all invalid results, or consecutive failure
-		 * to generate any results suggesting the FPGA
-		 * controller has screwed up. */
-		do_avalon_close(thr);
-		applog(LOG_ERR,
-			"AVA%i: FPGA controller messed up, %d wrong results",
-			avalon->device_id, result_wrong);
-		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		sleep(1);
-		avalon_init(avalon);
-		return 0;
+	/* Check for nothing but consecutive bad results or consistently less
+	 * results than we should be getting and reset the FPGA if necessary */
+	if (avalon->results < -miner_count && !info->reset) {
+		applog(LOG_ERR, "AVA%d: Result return rate low, resetting!",
+			avalon->device_id);
+		info->reset = true;
 	}
 
-	avalon_rotate_array(avalon);
-
-	if (hash_count) {
-		record_temp_fan(info, &ar, &(avalon->temp));
-		applog(LOG_INFO,
-		       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
-		       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
-		       info->fan0, info->fan1, info->fan2,
-		       info->temp0, info->temp1, info->temp2, info->temp_max);
-		info->temp_history_index++;
-		info->temp_sum += avalon->temp;
-		applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
-		       info->temp_history_index, info->temp_history_count, info->temp_old);
-		if (info->temp_history_index == info->temp_history_count) {
-			adjust_fan(info);
-			info->temp_history_index = 0;
-			info->temp_sum = 0;
-		}
+	if (unlikely(avalon->usbinfo.nodev)) {
+		applog(LOG_ERR, "AVA%d: Device disappeared, shutting down thread",
+		       avalon->device_id);
+		avalon->shutdown = true;
 	}
 
 	/* This hashmeter is just a utility counter based on returned shares */
 	return hash_count;
 }
 
+static void avalon_flush_work(struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+
+	mutex_lock(&info->qlock);
+	/* Will overwrite any work queued */
+	avalon->queued = 0;
+	pthread_cond_signal(&info->qcond);
+	mutex_unlock(&info->qlock);
+}
+
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct avalon_info *info = avalon_infos[cgpu->device_id];
+	struct avalon_info *info = cgpu->device_data;
 	int i;
 
 	root = api_add_int(root, "baud", &(info->baud), false);
@@ -1018,7 +1152,9 @@ struct device_drv avalon_drv = {
 	.hash_work = hash_queued_work,
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
+	.flush_work = avalon_flush_work,
 	.get_api_stats = avalon_api_stats,
+	.get_statline_before = get_avalon_statline_before,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

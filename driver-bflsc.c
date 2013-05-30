@@ -99,11 +99,6 @@ struct bflsc_dev {
 	bool flushed; // are any flushed?
 };
 
-// TODO: I stole cgpu_info.device_file
-//  ... need to update miner.h to instead have a generic void *device_info = NULL;
-//  ... and these structure definitions need to be in miner.h if API needs to see them
-//  ... but then again maybe not - maybe another devinfo that the driver provides
-//  However, clean up all that for all devices in miner.h ... miner.h is a mess at the moment
 struct bflsc_info {
 	pthread_rwlock_t stat_lock;
 	struct thr_info results_thr;
@@ -328,7 +323,7 @@ static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
 
 static void bflsc_applog(struct cgpu_info *bflsc, int dev, enum usb_cmds cmd, int amount, int err)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char xlink[17];
 
 	xlinkstr(xlink, dev, sc_info);
@@ -487,7 +482,7 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 {
 	char buf[BFLSC_BUFSIZ+1];
 
-	*err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
+	*err = usb_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else
@@ -496,7 +491,7 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 
 static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
 {
-	*err = usb_ftdi_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
+	*err = usb_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else {
@@ -529,7 +524,7 @@ static void bflsc_send_flush_work(struct cgpu_info *bflsc, int dev)
 	}
 }
 
-/* return True = attempted usb_ftdi_read_ok()
+/* return True = attempted usb_read_ok()
  * set ignore to true means no applog/ignore errors */
 static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int dev, int *err, int *amount, bool ignore)
 {
@@ -550,7 +545,7 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 		// of course all other I/O must also be failing ...
 	} else {
 		readok = true;
-		*err = usb_ftdi_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
+		*err = usb_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
 		mutex_unlock(&(bflsc->device_mutex));
 
 		if (*err < 0 || *amount < 1) {
@@ -568,8 +563,6 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
 
-// TODO: this is a standard BFL FPGA Initialisation
-// it probably will need changing ...
 // TODO: does x-link bypass the other device FTDI? (I think it does)
 //	So no initialisation required except for the master device?
 
@@ -588,7 +581,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set data control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
-				FTDI_VALUE_DATA, bflsc->usbdev->found->interface, C_SETDATA);
+				FTDI_VALUE_DATA_BAS, bflsc->usbdev->found->interface, C_SETDATA);
 
 	applog(LOG_DEBUG, "%s%i: setdata got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -597,8 +590,8 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 		return;
 
 	// Set the baud
-	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD,
-				(FTDI_INDEX_BAUD & 0xff00) | bflsc->usbdev->found->interface,
+	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BAS,
+				(FTDI_INDEX_BAUD_BAS & 0xff00) | bflsc->usbdev->found->interface,
 				C_SETBAUD);
 
 	applog(LOG_DEBUG, "%s%i: setbaud got err %d",
@@ -648,7 +641,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
 	int dev;
@@ -665,7 +658,7 @@ static void bflsc_initialise(struct cgpu_info *bflsc)
 
 static bool getinfo(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct bflsc_dev sc_dev;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
@@ -695,7 +688,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETDETAILS);
+	err = usb_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETDETAILS);
 	if (err < 0 || amount < 1) {
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) get details return invalid/timed out (%d:%d)",
@@ -805,7 +798,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	if (unlikely(!sc_info))
 		quit(1, "Failed to calloc sc_info in bflsc_detect_one");
 	// TODO: fix ... everywhere ...
-	bflsc->device_file = (FILE *)sc_info;
+	bflsc->device_data = (FILE *)sc_info;
 
 	if (!usb_init(bflsc, dev, found))
 		goto shin;
@@ -830,7 +823,7 @@ reinit:
 		goto unshin;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
+	err = usb_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
 	if (err < 0 || amount < 1) {
 		init_count++;
 		cgtime(&init_now);
@@ -897,17 +890,20 @@ reinit:
 		sc_info->scan_sleep_time = BAM_SCAN_TIME;
 		sc_info->results_sleep_time = BAM_RES_TIME;
 		sc_info->default_ms_work = BAM_WORK_TIME;
+		bflsc->usbdev->ident = IDENT_BAM;
 	} else {
 		if (sc_info->sc_devs[0].engines < 34) { // 16 * 2 + 2
 			newname = BFLSC_JALAPENO;
 			sc_info->scan_sleep_time = BAJ_SCAN_TIME;
 			sc_info->results_sleep_time = BAJ_RES_TIME;
 			sc_info->default_ms_work = BAJ_WORK_TIME;
+			bflsc->usbdev->ident = IDENT_BAJ;
 		} else if (sc_info->sc_devs[0].engines < 130)  { // 16 * 8 + 2
 			newname = BFLSC_LITTLESINGLE;
 			sc_info->scan_sleep_time = BAL_SCAN_TIME;
 			sc_info->results_sleep_time = BAL_RES_TIME;
 			sc_info->default_ms_work = BAL_WORK_TIME;
+			bflsc->usbdev->ident = IDENT_BAL;
 		}
 	}
 
@@ -941,7 +937,7 @@ unshin:
 shin:
 
 	free(bflsc->device_path);
-	free(bflsc->device_file);
+	free(bflsc->device_data);
 
 	if (bflsc->name != blank)
 		free(bflsc->name);
@@ -961,7 +957,7 @@ static void bflsc_detect(void)
 
 static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	float temp = 0;
 	float vcc1 = 0;
 	int i;
@@ -982,7 +978,7 @@ static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct work *work, *tmp;
 	bool did = false;
 
@@ -1011,7 +1007,7 @@ static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 
 static void bflsc_flush_work(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int dev;
 
 	for (dev = 0; dev < sc_info->sc_count; dev++)
@@ -1020,7 +1016,7 @@ static void bflsc_flush_work(struct cgpu_info *bflsc)
 
 static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int err, amount;
 
 	// Device is gone
@@ -1051,7 +1047,7 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 
 static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct bflsc_dev *sc_dev;
 	char temp_buf[BFLSC_BUFSIZ+1];
 	char volt_buf[BFLSC_BUFSIZ+1];
@@ -1095,7 +1091,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
+	err = usb_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
 	if (err < 0 || amount < 1) {
 		mutex_unlock(&(bflsc->device_mutex));
 		if (err < 0) {
@@ -1117,7 +1113,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_ftdi_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
+	err = usb_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
 	if (err < 0 || amount < 1) {
 		mutex_unlock(&(bflsc->device_mutex));
 		if (err < 0) {
@@ -1256,7 +1252,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *data, int count, char **fields, int *nonces)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
 	struct work *work;
 	uint32_t nonce;
@@ -1340,7 +1336,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *nonces)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char **items, *firstname, **fields, *lf;
 	int que, i, lines, count;
 	char xlink[17];
@@ -1423,7 +1419,7 @@ arigatou:
 static void *bflsc_get_results(void *userdata)
 {
 	struct cgpu_info *bflsc = (struct cgpu_info *)userdata;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct timeval elapsed, now;
 	float oldest, f;
 	char buf[BFLSC_BUFSIZ+1];
@@ -1488,7 +1484,7 @@ utsura:
 static bool bflsc_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct timeval now;
 
 	if (thr_info_create(&(sc_info->results_thr), NULL, bflsc_get_results, (void *)bflsc)) {
@@ -1506,7 +1502,7 @@ static bool bflsc_thread_prepare(struct thr_info *thr)
 static void bflsc_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 
 	bflsc_flush_work(bflsc);
 	sc_info->shutdown = true;
@@ -1524,7 +1520,7 @@ static void bflsc_thread_enable(struct thr_info *thr)
 
 static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct FullNonceRangeJob data;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
@@ -1598,7 +1594,7 @@ re_send:
 
 static bool bflsc_queue_full(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct work *work = NULL;
 	int i, dev, tried, que;
 	bool ret = false;
@@ -1666,7 +1662,7 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 static int64_t bflsc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	int64_t ret, unsent;
 	bool flushed, cleanup;
 	struct work *work, *tmp;
@@ -1773,7 +1769,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 
 static bool bflsc_get_stats(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	bool allok = true;
 	int i;
 
@@ -1798,7 +1794,7 @@ static bool bflsc_get_stats(struct cgpu_info *bflsc)
 
 static void bflsc_identify(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 
 	// TODO: handle x-link
 	sc_info->flash_led = true;
@@ -1822,7 +1818,7 @@ static bool bflsc_thread_init(struct thr_info *thr)
 
 static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 {
-	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_file);
+	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct api_data *root = NULL;
 
 //if no x-link ... etc

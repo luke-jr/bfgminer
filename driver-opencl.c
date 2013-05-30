@@ -1570,9 +1570,9 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	const int thr_id = thr->id;
 	_clState *clState = clStates[thr_id];
 
-	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseKernel(clState->kernel);
 	clReleaseProgram(clState->program);
+	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
 
