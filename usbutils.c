@@ -2825,7 +2825,6 @@ fila:
 	// exceeding this timeout means it would probably never succeed anyway
 	struct timespec timeout = { 0, 10000000 };
 
-	// Wait forever since we shoud be the one who has it
 	if (semtimedop(sem, sops, 1, &timeout)) {
 		applog(LOG_ERR,
 			"SEM: %s USB failed to release '%s' err (%d) %s",
