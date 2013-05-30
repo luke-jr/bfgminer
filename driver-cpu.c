@@ -839,7 +839,7 @@ CPUSearch:
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
 		applog(LOG_DEBUG, "%"PRIpreprv" found something?", thr->cgpu->proc_repr);
-		submit_nonce(thr, work, last_nonce);
+		submit_nonce(thr, work, le32toh(*(uint32_t*)&work->data[76]));
 		work->blk.nonce = last_nonce + 1;
 		goto CPUSearch;
 	}
