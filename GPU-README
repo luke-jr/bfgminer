@@ -437,7 +437,10 @@ Work Utility (WU) value will confirm you are not generating garbage. You
 should be getting about .9WU per kHash. If not, then try decreasing your
 intensity, do not increase the number of gpu-threads, and consider adding
 system RAM to match your GPU ram. You may also be using a bad combination
-of driver and/or SDK.
+of driver and/or SDK. If you are getting a lot more HW errors with the
+current version of cgminer but were not on an older version, chances are that
+the older version simply wasn't reporting them so going back to and older
+version is not a real solution.
 
 Q: Scrypt fails to initialise the kernel every time?
 A: Your parameters are too high. Don't add GPU threads, don't set intensity
@@ -462,6 +465,11 @@ Q: I change my GPU engine/memory/voltage and cgminer reports back no change?
 A: Cgminer asks the GPU using the ATI Display Library to change settings, but
 the driver and hardware are free to do what it wants with that query, including
 ignoring it. Some GPUs are locked with one or more of those properties as well.
+The most common of these is that many GPUs only allow a fixed difference
+between the engine clock speed and the memory clock speed (such as the memory
+being no lower than the engine - 150). Other 3rd party tools have unofficial
+data on these devices on windows and can get the memory clock speed down
+further but cgminer does not have access to these means.
 
 Q: I have multiple GPUs and although many devices show up, it appears to be
 working only on one GPU splitting it up.
@@ -483,6 +491,9 @@ A: No. The software is unchanged regardless of which driver/SDK/ADL_SDK version
 you are running. However if you change SDKs you should delete any generated
 .bin files for them to be recreated with the new SDK.
 
+Q: I do not want cgminer to modify my engine/clock/fanspeed?
+A: Cgminer only modifies values if you tell it to via some parameters.
+Otherwise it will just monitor the values.
 
 ---
 

@@ -1,3 +1,245 @@
+Version 3.2.0
+
+- Add FAQ about windows USB keyboards and hotplug interactions.
+- Fix mingw build warnings in icarus driver.
+- Make usb_ftdi_cts use the _usb_transfer_read function.
+- Update ASIC-README with avalon info regarding default behaviour.
+- Break out of idling loop in avalon_idle if the buffer is full.
+- Provide some defaults for avalon if none are specified and do not try to claim
+the device if it fails to reset with them and no options are specified.
+- usbutils automatically track IO errors
+- usbutils allow a short wait for resources to be released
+- correct semaphore timeout comment
+- Set the fanspeed to the nominal chosen for GPUs.
+- Inverted sem_init logic.
+- Document avalon options in ASIC-README
+- Do avalon driver detection last as it will try to claim any similar device and
+they are not reliably detected.
+- Clamp initial GPU fanspeed to within user specified range.
+- Use a counting semaphore to signal the usb resource thread that it has work to
+do.
+- Avalon fan factor is already multiplied into the info values.
+- Get rid of zeros which corrupt display.
+- Logic fail on minimum fanspeed reporting.
+- Provide a workaround for fan0 sensor not being used on avalon and pad fan RPM
+with zeros.
+- Add ambient temp and lowest fan RPM information to avalon statline.
+- Display max temperature and fanspeed data for avalon.
+- Set devices to disabled after they exit the hashing loops to prevent the
+watchdog thread from trying to act on them.
+- Add avalon driver to hotplug.
+- Shut down the avalon mining thread if the device disappears.
+- Check for no usb device in usb_ftdi_cts
+- Check for valid usbdev in _usb_read in case the device has been unplugged.
+- Scanhash functions perform driver shutdown so don't repeat it.
+- Change the opencl shutdown sequence.
+- Send the shutdown message to threads and do the thread shutdown functions
+before more forcefully sending pthread_cancel to threads.
+- Use the cgpu_info shutdown to determine when to stop the avalon read and write
+threads.
+- Use semaphores to signal a reset to pause the read thread while the write
+thread does the actual reset, making all writes come from the same place.
+- Remove now unneeded fgpautils.h include from avalon.
+- usb_transfer_read should also not play with the endianness.
+- Use the USB wrappers for avalon, telling usbutils that we want the raw data.
+- Use separate ep for avalon tasks vs avalon reset and do not loop in write
+indefinitely.
+- Remove unneeded function and checks in avalon write code.
+- CMR handle baud options
+- work_restart is reset within the queued hash work loop.
+- Fix avalon shutdown sequence.
+- Execute driver shutdown sequence during kill_work.
+- Use nusleep in avalon_get_results in place of nmsleep.
+- Provide an nusleep equivalent function to nmsleep.
+- usb/ica add more (incomplete) CMR settings
+- Give a buffer of perceived results in avalon during idle periods to allow for
+results once it becomes active again.
+- libusb_control_transfer are meant to be endian specific, but host endianness
+so no conversion is needed.
+- Reuse old MTX Handle
+- usbutils check all memory allocation
+- usb separate thread for resource locking and modified windows locking code
+- Icarus report data direction with comms errors
+- Set the read and write threads for avalon to not cancel within libusb
+functions and wait for the threads to pthread_join on shutdown.
+- Offset needs to be incremented after avalon reads.
+- Make the avalon_read function parse the ftdi responses appopriately.
+- Use the avalon read timeout to completion if no data has been read.
+- wait_avalon_ready should only be used before writes.
+- Ask for the correct amount to read in avalon get results.
+- Spawn the avalon read thread first with info->reset set to discard any data
+till work is adequately queued.
+- Use direct usb read commands to avoid ftdi data being automatically cut off in
+avalon reads.
+- Do a simple usb_read_once for the avalon result from a reset command.
+- Make sure avalon is ready to receive more usb commands before sending them.
+- Implement avalon_ready and avalon_wait_ready functions for when usb is ready
+to receive commands.
+- avalon_read should not loop but just return whatever it has succeeded in
+reading.
+- Set avalon_info to device data void struct.
+- Specify avalon in avalon_reset.
+- First pass rewriting serialdev into direct usb dev for avalon driver.
+- Define a cts equivalent for direct usb and use it for avalon driver full.
+- Compile usbutils into avalon driver.
+- Check results come in at least at 2/3 the rate they should be on avalon and if
+not, reset it.
+- Give a warning but don't reset if the avalon buffer is full early.
+- Discard any reads obtained from the avalon get results thread during a reset.
+- Differentiate initial reset in avalon from subsequent ones.
+- Perform a mandatory reset if the avalon buffer signals it's full before it has
+queued its normal quota of work.
+- Wait till buffer is cleared after sending idle tasks to avalon before
+returning from avalon_idle.
+- Lock qlock mutex during reset from read thread in avalon to prevent more work
+being sent till the reset is over.
+- Reset avalon if we continue to be unable to send all the work items.
+- Add avalon reset response to debugging output.
+- Do a wait_avalon_ready before sending a reset code.
+- Iterate over spare bytes in the avalon result returned from a reset request
+trying to find the beginning of the reset.
+- Idle avalon after reset.
+- Check for nothing but consecutive bad results on avalon and reset the FPGA if
+it happens.
+- Make submit_nonce return a bool for whether it's a valid share or not.
+- Unset the work restart flag sooner in avalon_flush_work to avoid re-entering
+the flush work function and just reset the queued counter instead of rotating
+the array to avoid runs of no valid work.
+- Implement an avalon_flush_work function for work restarts.
+- Shut down avalon read and write threads and idle the miners on closing it.
+- Tighter control over work submissions in avalon allows us to use a smaller
+array.
+- Rotate avalon array to reset the queued count before releasing the lock so
+work will always be available on next pass.
+- Move avalon read thread start till after conditional wait, store idle status
+in avalon_info and use it to determine whether an error is appropriate or not.
+- Wait till the avalon_send_tasks thread has filled the avalon with idle work
+before starting the avalon_get_results thread.
+- Use AVA_GETS_OK macro in avalon_read.
+- Do all writes on avalon with a select() timeout to prevent indefinite blocking
+and loop if less than desired is written.
+- Check explicitly that ava_buffer_full equals the macro.
+- Send initial reset as an avalon task to remove avalon_write function.
+- avalon_clear_readbuf is no longer required.
+- Check for 2 stray bytes on avalon reset.
+- Create a separate thread for handling all work and idle submission to the
+avalon which messages the scanhash function it has completed to update
+statistics.
+- usbutils ensure it compiles without stats
+- usbutils include transfer mode in usbstats
+- Give the avalon get results thread name the device number as well.
+- Make sure we're not adjusting temps on every successful work retrieval on
+avalon.
+- Count missing work items from behind a successful work read in avalon as well.
+- Change message for work not found in avalon parser.
+- usbutils handle bulk_transfer partial writes
+- Simplify debugging and only discard from avalon read buffer if at least one
+full result has been discarded.
+- Only display discarded bytes in avalon if they're not used as nonces.
+- Only loop once through avalon_parse_results, but do so after timeouts as well.
+- Only debug and move ram if spare bytes exist in avalon buffer.
+- Remove off by one error.
+- Inverted logic.
+- Add more debugging to avalon reads.
+- Convert unsigned size_ts to ints for parsing avalon messages.
+- Cope with not finding nonces in avalon parsing gracefully by not overflowing
+buffers.
+- Adjust avalon temp values on one lot of valid nonces from the parser.
+- Created a threaded message parser for avalon reads.
+- Avalon_wait_write is not effective during resets so do it after going idle.
+- Send only a single byte reset.
+- Repeat going idle after avalon reset, and wait for write ready before sending
+each reset request instead of some arbitrary sleep time.
+- Timeouts on avalon_read and avalon_write should be 100ms.
+- Don't close avalon after detecting it until we're cleaning up, instead using
+reset for comms failures.
+- Check for avalon_wait_write before sending reset command.
+- Sleep in avalon_write_ready.
+- Make avalon_wait_write a bool function and check its return value.
+- Show how many idle tasks are sent to avalon if it aborts on buffer full.
+- Reset avalon->device_fd after it is closed.
+- Create an avalon_wait_write function that is used before sending avalon idle
+command.
+- Avoid repeating avalon_idle in do_avalon_close and extra sleep.
+- Pass fd to avalon_idle.
+- Do avalon_reset after info structure is set up.
+- Rework avalon reset sequence to include idling of chips and waiting for them
+to go idle followed by 2nd reset and then checking result.
+- Do a non-blocking read of anything in the avalon buffer after opening the
+device.
+- Assign the avalon info data to the device_data in cgpu_info.
+- thread shutdown is different on windows
+- usbutils make all windows timeouts 999ms
+- usb add another Cairnsmore1 USB chip
+- icarus do the full detect test twice if required
+- CMR usb config guess
+- usb add transfer_read and commented out in icarus
+- usbutils allow unrounded control transfers
+- icarus ICA initialisation
+- icarus report err on read failure
+- icarus correct device_id and use device_data for icarus_info
+- miner.h remove unused device_file and add device_data
+- miner.h icarus no long uses fd
+- icarus AMU config transfers
+- Create a logwin_update function which mandatorily updates the logwin and use
+it when input is expected to prevent display refresh delays.
+- usbutils force an unknown IDENT for zero
+- icarus set default options/timing based on device
+- Must unlock curses as well in logwin_update.
+- Create a logwin_update function which mandatorily updates the logwin and use
+it when input is expected to prevent display refresh delays.
+- icarus report usb write error information
+- Add name to icarus copyright notice.
+- Check for *pth dereference on pthread_join
+- usbutils name latency correctly
+- Check for restart before buffering more reads in Icarus.
+- Icarus should timeout if it's greater than the timeout duration even if it's
+receiving data.
+- We should check for amount buffered in icarus get_nonce against amount already
+received.
+- Make mining threads report out during work submission.
+- submit_work_async is no longer used directly by driver code.
+- Fix first read timeout on icarus get nonce.
+- Retry icarus_initialise if the first read attempt fails.
+- Properly pthread_join miner threads on shutdown.
+- Properly pthread_join miner threads on shutdown.
+- Use a persistent single separate thread for stratum share submission that uses
+workqueues since all stratum sends are serialised.
+- All stratum calls to recv_line are serialised from the one place so there is
+no need to use locking around recv().
+- Only allow the mining thread to be cancelled when it is not within driver
+code, making for cleaner shutdown and allowing us to pthread_join the miner
+threads on kill_work().
+- Only allow the mining thread to be cancelled when it is not within driver
+code, making for cleaner shutdown and allowing us to pthread_join the miner
+threads on kill_work().
+- Set pool->probed to true after an attempt to resolve the url via stratum code.
+- icarus test nodev everywhere
+- usbutils/icarus separate FTDI transfer values and more debug
+- add icarus to hotplug
+- usbutils add rest of icarus
+- simple serial-USB python test script
+- icarus->USB v0.1 incomplete - missing initialise()
+- README spelling
+- Update documentation for icarus switch to USB
+- Add USB rules for supported USB devices
+- switch icarus configuration to usb
+- usbutils new command for icarus
+- usb add a numeric sub-indentity for each name
+- usbutils - make FTDI handling automatic
+- fix duplicate name
+- usbutils set Black Arrow Lancelot's as BAL and match the lot->llt name
+- usbutils identify Icarus devices
+- libusb_control_transfer 16 bit words are endian specific.
+- usb_applog separate amt display
+- Show pool difficulty more verbosely if it changes via stratum.
+- Attribute whatever stats we can get on untracked stratum shares based on
+current pool diff.
+- Provide a --lowmem option which does not cache shares on failed submission to
+prevent low memory hardware (eg Avalon) from crashing.
+- Update util.c
+
+
 Version 3.1.1 - May 11th, 2013
 
 - Use a discrete device target for scrypt that dynamically changes to ensure we

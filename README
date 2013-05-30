@@ -27,8 +27,8 @@ irc://irc.freenode.net/cgminer
 
 License: GPLv3.  See COPYING for details.
 
-SEE ALSO ASIC-README, FGPA-README, GPU-README AND SCRYPT-README FOR MORE
-INFORMATION ON EACH.
+SEE ALSO API-README, ASIC-README, FGPA-README, GPU-README AND SCRYPT-README FOR
+MORE INFORMATION ON EACH.
 
 ---
 
@@ -117,7 +117,6 @@ CGMiner specific configuration options:
 	--enable-avalon         Compile support for Avalon (default disabled)
 	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
-	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
 	To actually build:
@@ -234,10 +233,17 @@ See SCRYPT-README for more information regarding litecoin mining.
 ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
 
-Cgminer will automatically find all of your BFL ASIC, BitForce FPGAs,
-ModMiner FPGAs, Icarus bitstream FPGAs or Ztex FPGAs
+--avalon-options    (See ASIC-README)
+--bfl-range         Use nonce range on bitforce devices if supported
+--icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
+--icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
+--usb <arg>         USB device selection (See below)
+--usb-dump          (See FPGA-README)
 
-The --usb option can restrict how many BFL ASIC, BitForce FPGAs,
+Cgminer will automatically find all of your Avalon ASIC, BFL ASIC, BitForce
+FPGAs, Icarus bitstream FPGAs, ModMiner FPGAs, or Ztex FPGAs
+
+The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
 ModMiner FPGAs or Icarus bitstream FPGAs it finds:
 
   --usb 1:2,1:3,1:4,1:*
@@ -288,7 +294,8 @@ If one of the 10 devices stops working, hotplug - if enabled, as is default
   --usb :0 will disable all USB I/O other than to initialise libusb
 
 
-For other FPGA details see the FPGA-README
+For more ASIC details see the ASIC-README
+For more FPGA details see the FPGA-README
 
 
 ---
@@ -518,6 +525,10 @@ A: No, cgminer keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
+Q: Can I configure cgminer to mine with different login credentials or pools
+for each separate device?
+A: No.
+
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
 the command line or via the menu after startup and choose settings->write
@@ -678,6 +689,11 @@ A: The USB implementation on windows can be very flaky on some hardware and
 every time cgminer looks for new hardware to hotplug it it can cause these
 sorts of problems. You can disable hotplug with:
 --hotplug 0
+
+Q: Can I use a proxy?
+A: Proxies only work with the getwork and GBT protocols using the --proxy
+command. If you wish to use a proxy with stratum, people have supported
+success with various 3rd party tools like proxifier.
 
 ---
 

@@ -19,7 +19,7 @@ The best solution for this is to use a tool called Zadig to set the driver:
 This allows you set the driver for the device to be WinUSB which is usually
 required to make it work if you're having problems
 
-With Zaidg, you may need to run it as administrator and if your device is
+With Zadig, you may need to run it as administrator and if your device is
 plugged in but you cannot see it, use the Menu: Options -> List All Devices
 
 You must also make sure you are using the latest libusb-1.0.dll supplied
