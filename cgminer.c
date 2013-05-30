@@ -2889,6 +2889,9 @@ static void clean_up(void);
 
 void app_restart(void)
 {
+	pid_t parent, child;
+	int status;
+
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
 
 	__kill_work();
@@ -2901,7 +2904,15 @@ void app_restart(void)
 	}
 #endif
 
+	parent = getpid();
+	child = fork();
+	if (child) {
+		applog(LOG_WARNING, "Shutting down original process");
+		exit(0);
+	}
+	waitpid(parent, &status, 0);
 	execv(initial_args[0], (EXECV_2ND_ARG_TYPE)initial_args);
+	/* We shouldn't get here */
 	applog(LOG_WARNING, "Failed to restart application");
 }
 
