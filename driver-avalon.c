@@ -465,17 +465,18 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 
 	info->idle = true;
 	wait_avalon_ready(avalon);
-	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id,
-	       info->miner_count);
 	/* Send idle to all miners */
 	for (i = 0; i < info->miner_count; i++) {
 		struct avalon_task at;
 
+		if (unlikely(avalon_buffer_full(avalon)))
+			break;
 		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
 				 info->asic_count, info->miner_count, 1, 1,
 				 info->frequency);
 		avalon_send_task(&at, avalon);
 	}
+	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id, i);
 	wait_avalon_ready(avalon);
 }
 
