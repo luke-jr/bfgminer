@@ -502,6 +502,7 @@ void init_adl(int nDevs)
 				nominal = gpus[gpu].gpu_fan;
 			if (nominal < gpus[gpu].min_fan)
 				nominal = gpus[gpu].min_fan;
+			set_fanspeed(gpu, nominal);
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
