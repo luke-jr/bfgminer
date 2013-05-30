@@ -7155,10 +7155,6 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			icarus_drv.drv_detect();
 #endif
 
-#ifdef USE_AVALON
-			avalon_drv.drv_detect();
-#endif
-
 #ifdef USE_BFLSC
 			bflsc_drv.drv_detect();
 #endif
@@ -7169,6 +7165,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 #ifdef USE_MODMINER
 			modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_AVALON
+			avalon_drv.drv_detect();
 #endif
 
 			if (new_devices)
@@ -7384,11 +7384,6 @@ int main(int argc, char *argv[])
 		icarus_drv.drv_detect();
 #endif
 
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
 #ifdef USE_BFLSC
 	if (!opt_scrypt)
 		bflsc_drv.drv_detect();
@@ -7407,6 +7402,13 @@ int main(int argc, char *argv[])
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
 #endif
 
 	if (devices_enabled == -1) {
