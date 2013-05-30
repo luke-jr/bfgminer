@@ -59,10 +59,12 @@ AVALON DEVICES
 Currently all known Avalon devices come with their own operating system and
 a preinstalled version of cgminer as part of the flash firmware, based on the
 most current cgminer version so no configuration should be necessary. It is
-possible to plug a USB cable from a PC into the Avalon device and use the
---avalon-options copying the command as used by the internal router used by the
-Avalon. eg:
+possible to plug a USB cable from a PC into the Avalon device and mine using
+cgminer as per any other device. It will autodetect and hotplug using default
+options. You can customise the avalon behaviour by using the --avalon-options
+command.
 
+eg:
 --avalon-options 115200:24:10:45:282
 
 The values are baud : miners : asic count : timeout : frequency.
@@ -87,7 +89,7 @@ duplicate shares.
 
 Sample settings for different frequencies (last 2 values):
 43:300
-45:282
+45:282 (default)
 47:270
 50:256
 
