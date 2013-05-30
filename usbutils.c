@@ -2197,30 +2197,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	return err;
 }
 
-#define FTDI_STATUS_B0_MASK     (FTDI_RS0_CTS | FTDI_RS0_DSR | FTDI_RS0_RI | FTDI_RS0_RLSD)
-#define FTDI_RS0_CTS    (1 << 4)
-#define FTDI_RS0_DSR    (1 << 5)
-#define FTDI_RS0_RI     (1 << 6)
-#define FTDI_RS0_RLSD   (1 << 7)
-
-/* Clear to send for FTDI */
-int usb_ftdi_cts(struct cgpu_info *cgpu)
-{
-	struct cg_usb_device *usbdev = cgpu->usbdev;
-	unsigned char buf[2], ret;
-
-	/* We return true in case drivers are waiting indefinitely to try and
-	 * write to something that's not there. */
-	if (cgpu->usbinfo.nodev)
-		return true;
-
-	libusb_control_transfer(usbdev->handle, (uint8_t)FTDI_TYPE_IN,
-				(uint8_t)5, (uint16_t)0, (uint16_t)0, buf, 2,
-				DEVTIMEOUT);
-	ret = buf[0] & FTDI_STATUS_B0_MASK;
-	return (ret & FTDI_RS0_CTS);
-}
-
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev = cgpu->usbdev;
@@ -2381,6 +2357,30 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		release_cgpu(cgpu);
 
 	return err;
+}
+
+#define FTDI_STATUS_B0_MASK     (FTDI_RS0_CTS | FTDI_RS0_DSR | FTDI_RS0_RI | FTDI_RS0_RLSD)
+#define FTDI_RS0_CTS    (1 << 4)
+#define FTDI_RS0_DSR    (1 << 5)
+#define FTDI_RS0_RI     (1 << 6)
+#define FTDI_RS0_RLSD   (1 << 7)
+
+/* Clear to send for FTDI */
+int usb_ftdi_cts(struct cgpu_info *cgpu)
+{
+	char buf[2], ret;
+	int err, amount;
+
+	err = _usb_transfer_read(cgpu, (uint8_t)FTDI_TYPE_IN, (uint8_t)5,
+				 (uint16_t)0, (uint16_t)0, buf, 2,
+				 &amount, DEVTIMEOUT, C_FTDI_STATUS);
+	/* We return true in case drivers are waiting indefinitely to try and
+	 * write to something that's not there. */
+	if (err)
+		return true;
+
+	ret = buf[0] & FTDI_STATUS_B0_MASK;
+	return (ret & FTDI_RS0_CTS);
 }
 
 void usb_cleanup()
