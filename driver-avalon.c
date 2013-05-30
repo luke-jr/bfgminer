@@ -328,7 +328,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	return 0;
 }
 
-static void get_options(int this_option_offset, int *baud, int *miner_count,
+static bool get_options(int this_option_offset, int *baud, int *miner_count,
 			int *asic_count, int *timeout, int *frequency)
 {
 	char err_buf[BUFSIZ+1];
@@ -360,14 +360,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		buf[max] = '\0';
 	}
 
-	*baud = AVALON_IO_SPEED;
-	*miner_count = AVALON_DEFAULT_MINER_NUM - 8;
-	*asic_count = AVALON_DEFAULT_ASIC_NUM;
-	*timeout = AVALON_DEFAULT_TIMEOUT;
-	*frequency = AVALON_DEFAULT_FREQUENCY;
-
 	if (!(*buf))
-		return;
+		return false;
 
 	colon = strchr(buf, ':');
 	if (colon)
@@ -462,6 +456,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			}
 		}
 	}
+	return true;
 }
 
 static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
@@ -569,6 +564,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	struct avalon_info *info;
 	struct cgpu_info *avalon;
 	char devpath[20];
+	bool configured;
 	int ret;
 
 	avalon = calloc(1, sizeof(struct cgpu_info));
@@ -577,8 +573,8 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	avalon->drv = &avalon_drv;
 	avalon->threads = AVALON_MINER_THREADS;
 
-	get_options(this_option_offset, &baud, &miner_count, &asic_count,
-		    &timeout, &frequency);
+	configured = get_options(this_option_offset, &baud, &miner_count,
+				 &asic_count, &timeout, &frequency);
 
 	if (!usb_init(avalon, dev, found))
 		return false;
@@ -594,10 +590,6 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 
 	avalon_initialise(avalon);
 
-	applog(LOG_DEBUG, "Avalon Detected: %s "
-	       "(miner_count=%d asic_count=%d timeout=%d frequency=%d)",
-	       devpath, miner_count, asic_count, timeout, frequency);
-
 	avalon->device_path = strdup(devpath);
 	add_cgpu(avalon);
 
@@ -606,10 +598,19 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		quit(1, "Failed to malloc avalon_info data");
 	info = avalon->device_data;
 
-	info->baud = baud;
-	info->miner_count = miner_count;
-	info->asic_count = asic_count;
-	info->timeout = timeout;
+	if (configured) {
+		info->baud = baud;
+		info->miner_count = miner_count;
+		info->asic_count = asic_count;
+		info->timeout = timeout;
+		info->frequency = frequency;
+	} else {
+		info->baud = AVALON_IO_SPEED;
+		info->miner_count = AVALON_DEFAULT_MINER_NUM;
+		info->asic_count = AVALON_DEFAULT_ASIC_NUM;
+		info->timeout = AVALON_DEFAULT_TIMEOUT;
+		info->frequency = AVALON_DEFAULT_FREQUENCY;
+	}
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -621,15 +622,19 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->frequency = frequency;
 
 	ret = avalon_reset(avalon, true);
-	if (ret) {
-		/* FIXME:
-		 * avalon_close(fd);
-		 * return false; */
+	if (ret && !configured) {
+		usb_uninit(avalon);
+		return false;
 	}
+
 	avalon_idle(avalon, info);
+
+	applog(LOG_DEBUG, "Avalon Detected: %s "
+	       "(miner_count=%d asic_count=%d timeout=%d frequency=%d)",
+	       devpath, info->miner_count, info->asic_count, info->timeout,
+	       info->frequency);
 
 	return true;
 }
@@ -823,8 +828,8 @@ static void *avalon_send_tasks(void *userdata)
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
-			if (unlikely(avalon_buffer_full(avalon))) {
-				applog(LOG_WARNING,
+			if (avalon_buffer_full(avalon)) {
+				applog(LOG_INFO,
 				       "AVA%i: Buffer full after only %d of %d work queued",
 					avalon->device_id, j, avalon_get_work_count);
 				break;
