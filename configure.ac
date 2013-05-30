@@ -64,6 +64,7 @@ AC_FUNC_ALLOCA
 
 have_cygwin=false
 have_win32=false
+have_macho=false
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MM_LIBS=""
@@ -100,7 +101,11 @@ case $target in
 	;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
+		have_macho=true
     ;;
+	*-*-darwin*)
+		have_macho=true
+		;;
 esac
 
 
@@ -541,6 +546,8 @@ else
 		else
 			YASM_FMT="coff"
 		fi
+	elif test "x$have_macho" = "xtrue"; then
+		YASM_FMT="macho$bitness"
 	else
 		YASM_FMT="elf$bitness"
 	fi
