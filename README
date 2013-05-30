@@ -512,10 +512,6 @@ For RPC API details see the API-README file
 
 FAQ
 
-Q: cgminer segfaults when I change my shell window size.
-A: Older versions of libncurses have a bug to do with refreshing a window
-after a size change. Upgrading to a new version of curses will fix it.
-
 Q: Can I mine on servers from different networks (eg smartcoin and bitcoin) at
 the same time?
 A: No, cgminer keeps a database of the block it's working on to ensure it does
@@ -675,6 +671,13 @@ expressed by cgminer is as multiples of difficulty 1 shares.
 Q: Can I make a donation in litecoin?
 A: Yes, see SCRYPT-README for the address, but the author prefers bitcoin if
 possible.
+
+Q: My keyboard input momentarily pauses or repeats keys every so often on
+windows while mining?
+A: The USB implementation on windows can be very flaky on some hardware and
+every time cgminer looks for new hardware to hotplug it it can cause these
+sorts of problems. You can disable hotplug with:
+--hotplug 0
 
 ---
 
