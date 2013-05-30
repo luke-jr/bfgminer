@@ -989,8 +989,8 @@ static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 	struct avalon_info *info = avalon->device_data;
 	int lowfan = 0, pwm;
 
-	/* Find the lowest fan speed */
-	if (info->fan0 >= 0)
+	/* Find the lowest fan speed. Fan0 is often not populated. */
+	if (info->fan0 > 0)
 		lowfan = info->fan0;
 	if (info->fan1 >= 0 && info->fan1 < lowfan)
 		lowfan = info->fan1;
@@ -1000,7 +1000,7 @@ static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 
 	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
 
-	tailsprintf(buf, "%2d/%3dC %3d%%/%4dR| ", info->temp0, info->temp2,
+	tailsprintf(buf, "%2d/%3dC %3d%%/%04dR| ", info->temp0, info->temp2,
 		    pwm, lowfan);
 }
 
