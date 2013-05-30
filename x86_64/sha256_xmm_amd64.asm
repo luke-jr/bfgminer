@@ -40,19 +40,10 @@ BITS 64
 
 %define SHA_ROUND_LOOP_UNROLL   16
 
-%ifidn __YASM_OBJFMT__, macho64
-extern _sha256_consts_m128i
-extern _sha256_init
-%else
 extern sha256_consts_m128i
 extern sha256_init
-%endif
 
-%ifidn __YASM_OBJFMT__, macho64
-global _sha256_sse2_64_new
-%else
 global sha256_sse2_64_new
-%endif
 
 %define sr1   xmm6
 %define sr2   xmm1
@@ -227,11 +218,7 @@ global sha256_sse2_64_new
 
 ; _sha256_sse2_64_new hash(rdi), hash1(rsi), data(rdx), init(rcx),
 
-%ifidn __YASM_OBJFMT__, macho64
-_sha256_sse2_64_new:
-%else
 sha256_sse2_64_new:
-%endif
 
     push        rbx
 %ifidn __OUTPUT_FORMAT__,win64
@@ -279,7 +266,7 @@ sha256_sse2_64_new:
     pshufd    rE, rE, 0             ; rE == E
 
 %ifidn __YASM_OBJFMT__, macho64
-    lea       rcx, [_sha256_consts_m128i wrt rip]
+    lea       rcx, [sha256_consts_m128i wrt rip]
 %endif
 
 %%SHAROUND_LOOP:
