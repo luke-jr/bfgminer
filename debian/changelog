@@ -1,3 +1,10 @@
+bfgminer (3.0.2-1precise1) precise; urgency=low
+
+  * Added scrypt build option.
+  * Fixed dependancies on raring.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Apr 2013 05:22:53 -0000
+
 bfgminer (3.0.2-0precise1) precise; urgency=low
 
   * Fix stratum on Windows.
