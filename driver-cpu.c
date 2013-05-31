@@ -166,6 +166,8 @@ const char *algo_names[] = {
 #ifdef WANT_SCRYPT
     [ALGO_SCRYPT] = "scrypt",
 #endif
+	[ALGO_FASTAUTO] = "fastauto",
+	[ALGO_AUTO] = "auto",
 };
 
 static const sha256_func sha256_funcs[] = {
@@ -201,15 +203,7 @@ static const sha256_func sha256_funcs[] = {
 
 
 #ifdef WANT_CPUMINE
-#if defined(WANT_X8664_SSE4) && defined(__SSE4_1__)
-enum sha256_algos opt_algo = ALGO_SSE4_64;
-#elif defined(WANT_X8664_SSE2) && defined(__SSE2__)
-enum sha256_algos opt_algo = ALGO_SSE2_64;
-#elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
-enum sha256_algos opt_algo = ALGO_SSE2_32;
-#else
-enum sha256_algos opt_algo = ALGO_C;
-#endif
+enum sha256_algos opt_algo = ALGO_FASTAUTO;
 bool opt_usecpu = false;
 static bool forced_n_threads;
 #endif
@@ -245,7 +239,7 @@ double bench_algo_stage3(
 
 	struct timeval end;
 	struct timeval start;
-	uint32_t max_nonce = (1<<22);
+	uint32_t max_nonce = opt_algo == ALGO_FASTAUTO ? (1<<8) : (1<<22);
 	uint32_t last_nonce = 0;
 
 	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
@@ -684,11 +678,6 @@ char *set_algo(const char *arg, enum sha256_algos *algo)
 	if (opt_scrypt)
 		return "Can only use scrypt algorithm";
 
-	if (!strcmp(arg, "auto")) {
-		*algo = pick_fastest_algo();
-		return NULL;
-	}
-
 	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
 			*algo = i;
@@ -780,8 +769,15 @@ static void cpu_detect()
 	}
 }
 
+static pthread_mutex_t cpualgo_lock;
+
 static bool cpu_thread_prepare(struct thr_info *thr)
 {
+	struct cgpu_info *cgpu = thr->cgpu;
+	
+	if (!(cgpu->device_id || thr->device_thread || cgpu->proc_id))
+		mutex_init(&cpualgo_lock);
+	
 	thread_reportin(thr);
 
 	return true;
@@ -795,6 +791,17 @@ static uint64_t cpu_can_limit_work(struct thr_info __maybe_unused *thr)
 static bool cpu_thread_init(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
+
+	mutex_lock(&cpualgo_lock);
+	switch (opt_algo)
+	{
+		case ALGO_AUTO:
+		case ALGO_FASTAUTO:
+			opt_algo = pick_fastest_algo();
+		default:
+			break;
+	}
+	mutex_unlock(&cpualgo_lock);
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an

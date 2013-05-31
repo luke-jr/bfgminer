@@ -72,12 +72,16 @@ bfgminer_SOURCES += scrypt.c scrypt.h
 endif
 
 if HAS_CPUMINE
-# original CPU related sources, unchanged
 bfgminer_SOURCES	+= \
-		  sha256_generic.c sha256_4way.c sha256_via.c	\
+		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
-		  sha256_sse4_amd64.c sha256_sse2_i386.c	\
+		  sha256_sse4_amd64.c 	\
 		  sha256_altivec_4way.c
+
+bfgminer_LDADD += libsse2cpuminer.a
+noinst_LIBRARIES = libsse2cpuminer.a
+libsse2cpuminer_a_SOURCES = sha256_4way.c sha256_sse2_i386.c
+libsse2cpuminer_a_CFLAGS = $(bfgminer_CPPFLAGS) -msse2
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c

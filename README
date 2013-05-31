@@ -298,13 +298,17 @@ For other FPGA details see the README.FPGA
 CPU only options (not included in binaries):
 
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
+        fastauto*       Quick benchmark at startup to pick a working algorithm
         auto            Benchmark at startup and pick fastest algorithm
         c               Linux kernel sha256, implemented in C
         4way            tcatm's 4-way SSE2 implementation
         via             VIA padlock implementation
         cryptopp        Crypto++ C/C++ implementation
+        cryptopp_asm32  Crypto++ 32-bit assembler implementation
+        sse2_32         SSE2 32 bit implementation for i386 machines
         sse2_64         SSE2 64 bit implementation for x86_64 machines
-        sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
+        sse4_64         SSE4.1 64 bit implementation for x86_64 machines
+        altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
 --enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
