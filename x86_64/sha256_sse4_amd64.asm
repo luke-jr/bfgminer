@@ -166,8 +166,7 @@ LAB_LOOP:
 
 %macro	lab_loop_blk 0
 	movntdqa	xmm6, [data+rax*4]
-	movntdqa	xmm1, g_4sha256_k[rax*4]
-	paddd	xmm6, xmm1
+	paddd	xmm6, g_4sha256_k[rax*4]
 	add	rax, 4
 
 	paddd	xmm6, xmm10	; +h

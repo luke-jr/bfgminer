@@ -540,6 +540,7 @@ fi
 if test "x$has_yasm" = "xfalse" ; then
   AC_MSG_NOTICE([yasm is required for the assembly algorithms. They will be skipped.])
 else
+	AC_DEFINE([HAVE_YASM], [1], [Defined to 1 if yasm is being used])
 	if test "x$have_win32$have_cygwin" != "xfalsefalse"; then
 		if test "x$have_x86_64" = xtrue; then
 			YASM_FMT="win64"
