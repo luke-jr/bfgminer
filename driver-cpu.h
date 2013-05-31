@@ -10,7 +10,7 @@
 #define OPT_SHOW_LEN 80
 #endif
 
-#ifdef __SSE2__
+#ifdef __i386__
 #define WANT_SSE2_4WAY 1
 #endif
 
@@ -18,19 +18,19 @@
 #define WANT_ALTIVEC_4WAY 1
 #endif
 
-#if defined(__i386__) && defined(HAS_YASM) && defined(__SSE2__)
+#ifdef __i386__
 #define WANT_X8632_SSE2 1
 #endif
 
-#if (defined(__i386__) || defined(__x86_64__)) &&  !defined(__APPLE__)
+#ifdef __i386__
 #define WANT_VIA_PADLOCK 1
 #endif
 
-#if defined(__x86_64__) && defined(HAS_YASM)
+#ifdef __x86_64__
 #define WANT_X8664_SSE2 1
 #endif
 
-#if defined(__x86_64__) && defined(HAS_YASM) && defined(__SSE4_1__)
+#ifdef __x86_64__
 #define WANT_X8664_SSE4 1
 #endif
 
