@@ -2569,15 +2569,18 @@ void usb_initialise()
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/sem.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#ifndef __APPLE__
 union semun {
-	int sem;
-	struct semid_ds *seminfo;
-	ushort *all;
+	int val;
+	struct semid_ds *buf;
+	unsigned short *array;
+	struct seminfo *__buf;
 };
+#endif
+
 #else
 static LPSECURITY_ATTRIBUTES unsec(LPSECURITY_ATTRIBUTES sec)
 {
@@ -2766,7 +2769,7 @@ fail:
 			return false;
 		}
 
-		opt.seminfo = &seminfo;
+		opt.buf = &seminfo;
 		count = 0;
 		while (++count) {
 			// Should NEVER take 100ms
@@ -2782,7 +2785,7 @@ fail:
 					dname, sem, name, count, errno, strerror(errno));
 				return false;
 			}
-			if (opt.seminfo->sem_otime != 0)
+			if (opt.buf->sem_otime != 0)
 				break;
 			nmsleep(1);
 		}
