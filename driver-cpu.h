@@ -18,7 +18,7 @@
 #define WANT_ALTIVEC_4WAY 1
 #endif
 
-#ifdef __i386__
+#if defined(__i386__) && defined(HAVE_YASM)
 #define WANT_X8632_SSE2 1
 #endif
 
@@ -26,11 +26,11 @@
 #define WANT_VIA_PADLOCK 1
 #endif
 
-#ifdef __x86_64__
+#if defined(__x86_64__) && defined(HAVE_YASM)
 #define WANT_X8664_SSE2 1
 #endif
 
-#ifdef __x86_64__
+#if defined(__x86_64__) && defined(HAVE_YASM)
 #define WANT_X8664_SSE4 1
 #endif
 
