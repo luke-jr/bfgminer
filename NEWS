@@ -1,4 +1,4 @@
-Version 3.2.0
+Version 3.2.0 - 31st May 2013
 
 - Add FAQ about windows USB keyboards and hotplug interactions.
 - Fix mingw build warnings in icarus driver.
