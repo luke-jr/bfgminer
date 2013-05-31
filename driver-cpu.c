@@ -166,6 +166,7 @@ const char *algo_names[] = {
 #ifdef WANT_SCRYPT
     [ALGO_SCRYPT] = "scrypt",
 #endif
+	[ALGO_FASTAUTO] = "fastauto",
 	[ALGO_AUTO] = "auto",
 };
 
@@ -202,7 +203,7 @@ static const sha256_func sha256_funcs[] = {
 
 
 #ifdef WANT_CPUMINE
-enum sha256_algos opt_algo = ALGO_AUTO;
+enum sha256_algos opt_algo = ALGO_FASTAUTO;
 bool opt_usecpu = false;
 static bool forced_n_threads;
 #endif
@@ -238,7 +239,7 @@ double bench_algo_stage3(
 
 	struct timeval end;
 	struct timeval start;
-	uint32_t max_nonce = (1<<22);
+	uint32_t max_nonce = opt_algo == ALGO_FASTAUTO ? (1<<8) : (1<<22);
 	uint32_t last_nonce = 0;
 
 	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
@@ -792,8 +793,14 @@ static bool cpu_thread_init(struct thr_info *thr)
 	const int thr_id = thr->id;
 
 	mutex_lock(&cpualgo_lock);
-	if (opt_algo == ALGO_AUTO)
-		opt_algo = pick_fastest_algo();
+	switch (opt_algo)
+	{
+		case ALGO_AUTO:
+		case ALGO_FASTAUTO:
+			opt_algo = pick_fastest_algo();
+		default:
+			break;
+	}
 	mutex_unlock(&cpualgo_lock);
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE

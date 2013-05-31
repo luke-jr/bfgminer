@@ -50,6 +50,7 @@ enum sha256_algos {
 	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
 	ALGO_SCRYPT,		/* scrypt */
 	
+	ALGO_FASTAUTO,		/* fast autodetect */
 	ALGO_AUTO		/* autodetect */
 };
 

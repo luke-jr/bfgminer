@@ -1124,6 +1124,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--algo|-a",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
+		     "\tfastauto*\tQuick benchmark at startup to pick a working algorithm\n"
 		     "\tauto\t\tBenchmark at startup and pick fastest algorithm"
 		     "\n\tc\t\tLinux kernel sha256, implemented in C"
 #ifdef WANT_SSE2_4WAY

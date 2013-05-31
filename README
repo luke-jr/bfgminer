@@ -298,6 +298,7 @@ For other FPGA details see the README.FPGA
 CPU only options (not included in binaries):
 
 --algo|-a <arg>     Specify sha256 implementation for CPU mining:
+        fastauto*       Quick benchmark at startup to pick a working algorithm
         auto            Benchmark at startup and pick fastest algorithm
         c               Linux kernel sha256, implemented in C
         4way            tcatm's 4-way SSE2 implementation
