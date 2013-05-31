@@ -4800,6 +4800,9 @@ static bool cnx_needed(struct pool *pool)
 {
 	struct pool *cp;
 
+	if (pool->enabled != POOL_ENABLED)
+		return false;
+
 	/* Balance strategies need all pools online */
 	if (pool_strategy == POOL_BALANCE)
 		return true;
