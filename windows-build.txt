@@ -14,9 +14,6 @@ versions and links change over time. The best way is to use your browser, go to 
 links directly, and see for yourself which versions you want to install.
 Winrar was used to do the extracting of archive files in the making of this guide.
 
-If you think that this documentation was helpful and you wish to donate, you can
-do so at the following address. 12KaKtrK52iQjPdtsJq7fJ7smC32tXWbWr
-
 **************************************************************************************
 * A tip that might help you along the way                                            *
 **************************************************************************************
