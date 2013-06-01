@@ -1,3 +1,14 @@
+/*
+ * Copyright 2010-2011 Jeff Garzik
+ * Copyright 2002-2010 Wei Dai (released as public domain)
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011 Con Kolivas
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
 
 #include "config.h"
 
