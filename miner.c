@@ -152,7 +152,7 @@ static char detect_algo;
 bool opt_restart = true;
 static bool opt_nogpu;
 
-struct list_head scan_devices;
+struct string_elist *scan_devices;
 bool opt_force_dev_init;
 static signed int devices_enabled;
 static bool opt_removedisabled;
@@ -8505,8 +8505,6 @@ int main(int argc, char *argv[])
 		strcat(block->hash, "0");
 	HASH_ADD_STR(blocks, hash, block);
 	strcpy(current_block, block->hash);
-
-	INIT_LIST_HEAD(&scan_devices);
 
 	mutex_init(&submitting_lock);
 	INIT_LIST_HEAD(&submit_waiting);

@@ -39,6 +39,7 @@
 #include "uthash.h"
 #include "logging.h"
 #include "util.h"
+#include "utlist.h"
 
 #ifdef HAVE_OPENCL
 #include "CL/cl.h"
@@ -627,24 +628,25 @@ struct string_elist {
 	char *string;
 	bool free_me;
 
-	struct list_head list;
+	struct string_elist *prev;
+	struct string_elist *next;
 };
 
-static inline void string_elist_add(const char *s, struct list_head *head)
+static inline void string_elist_add(const char *s, struct string_elist **head)
 {
 	struct string_elist *n;
 
 	n = calloc(1, sizeof(*n));
 	n->string = strdup(s);
 	n->free_me = true;
-	list_add_tail(&n->list, head);
+	DL_APPEND(*head, n);
 }
 
-static inline void string_elist_del(struct string_elist *item)
+static inline void string_elist_del(struct string_elist **head, struct string_elist *item)
 {
 	if (item->free_me)
 		free(item->string);
-	list_del(&item->list);
+	DL_DELETE(*head, item);
 	free(item);
 }
 
@@ -936,7 +938,7 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define _MAX_INTENSITY_STR "14"
 #endif
 
-extern struct list_head scan_devices;
+extern struct string_elist *scan_devices;
 extern bool opt_force_dev_init;
 extern int nDevs;
 extern int opt_n_threads;
