@@ -6936,6 +6936,8 @@ void __thr_being_msg(struct thr_info *thr, const char *being)
 void mt_disable_start(struct thr_info *mythr)
 {
 	hashmeter2(mythr);
+	if (mythr->prev_work)
+		free_work(mythr->prev_work);
 	mythr->prev_work = mythr->work;
 	mythr->work = NULL;
 	mythr->_job_transition_in_progress = false;
