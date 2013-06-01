@@ -1022,7 +1022,7 @@ typedef struct {
 
 struct curl_ent {
 	CURL *curl;
-	struct list_head node;
+	struct curl_ent *next;
 	struct timeval tv;
 };
 
@@ -1128,7 +1128,7 @@ struct pool {
 
 	int curls;
 	pthread_cond_t cr_cond;
-	struct list_head curlring;
+	struct curl_ent *curllist;
 	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_work_time;

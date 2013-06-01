@@ -59,6 +59,7 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
+#include "utlist.h"
 
 #ifdef USE_AVALON
 #include "driver-avalon.h"
@@ -505,7 +506,6 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
-	INIT_LIST_HEAD(&pool->curlring);
 	pool->swork.transparency_time = (time_t)-1;
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -3570,7 +3570,7 @@ static void recruit_curl(struct pool *pool)
 	if (unlikely(!ce->curl))
 		quit(1, "Failed to init in recruit_curl");
 
-	list_add(&ce->node, &pool->curlring);
+	LL_PREPEND(pool->curllist, ce);
 	pool->curls++;
 }
 
@@ -3590,7 +3590,7 @@ retry:
 	if (!pool->curls) {
 		recruit_curl(pool);
 		recruited = true;
-	} else if (list_empty(&pool->curlring)) {
+	} else if (!pool->curllist) {
 		if (blocking < 2 && pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
 			if (!blocking) {
 				mutex_unlock(&pool->pool_lock);
@@ -3603,8 +3603,8 @@ retry:
 			recruited = true;
 		}
 	}
-	ce = list_entry(pool->curlring.next, struct curl_ent, node);
-	list_del(&ce->node);
+	ce = pool->curllist;
+	LL_DELETE(pool->curllist, ce);
 	mutex_unlock(&pool->pool_lock);
 
 	if (recruited)
@@ -3628,7 +3628,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_lock(&pool->pool_lock);
 	if (!ce || !ce->curl)
 		quit(1, "Attempted to add NULL in push_curl_entry");
-	list_add_tail(&ce->node, &pool->curlring);
+	LL_PREPEND(pool->curllist, ce);
 	cgtime(&ce->tv);
 	pthread_cond_broadcast(&pool->cr_cond);
 	mutex_unlock(&pool->pool_lock);
@@ -7569,13 +7569,13 @@ static void reap_curl(struct pool *pool)
 	cgtime(&now);
 
 	mutex_lock(&pool->pool_lock);
-	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
+	LL_FOREACH_SAFE(pool->curllist, ent, iter) {
 		if (pool->curls < 2)
 			break;
 		if (now.tv_sec - ent->tv.tv_sec > 300) {
 			reaped++;
 			pool->curls--;
-			list_del(&ent->node);
+			LL_DELETE(pool->curllist, ent);
 			curl_easy_cleanup(ent->curl);
 			free(ent);
 		}
