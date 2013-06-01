@@ -4219,6 +4219,13 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 			int fd = pool->sock;
 			bool sessionid_match;
 			
+			if (fd == INVSOCK || (!pool->stratum_init) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
+next_write_sws:
+				// TODO: Check if stale, possibly discard etc
+				swsp = &sws->next;
+				continue;
+			}
+			
 			cg_rlock(&pool->data_lock);
 			// NOTE: cgminer only does this check on retries, but BFGMiner does it for even the first/normal submit; therefore, it needs to be such that it always is true on the same connection regardless of session management
 			// NOTE: Worst case scenario for a false positive: the pool rejects it as H-not-zero
@@ -4236,13 +4243,6 @@ next_write_sws_del:
 				*swsp = sws->next;
 				free_sws(sws);
 				--wip;
-				continue;
-			}
-			
-			if (fd == INVSOCK || (!pool->stratum_init) || (!pool->stratum_notify) || !FD_ISSET(fd, &wfds)) {
-next_write_sws:
-				// TODO: Check if stale, possibly discard etc
-				swsp = &sws->next;
 				continue;
 			}
 			
