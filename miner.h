@@ -1,3 +1,16 @@
+/*
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2012-2013 Andrew Smith
+ * Copyright 2011 Glenn Francis Murray
+ * Copyright 2010-2011 Jeff Garzik
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
+
 #ifndef __MINER_H__
 #define __MINER_H__
 
