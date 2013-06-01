@@ -4139,6 +4139,7 @@ next_write_sws:
 			
 			char *s = sws->s;
 			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
+			int sshare_id;
 			uint32_t nonce;
 			char *noncehex;
 			
@@ -4149,6 +4150,7 @@ next_write_sws:
 			
 			mutex_lock(&sshare_lock);
 			/* Give the stratum share a unique id */
+			sshare_id =
 			sshare->id = swork_id++;
 			HASH_ADD_INT(stratum_shares, id, sshare);
 			sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
@@ -4167,14 +4169,24 @@ next_write_sws:
 			} else if (!pool_tset(pool, &pool->submit_fail)) {
 				// Undo stuff
 				mutex_lock(&sshare_lock);
-				HASH_DEL(stratum_shares, sshare);
+				// NOTE: Need to find it again in case something else has consumed it already (like the stratum-disconnect resubmitter...)
+				HASH_FIND_INT(stratum_shares, &sshare_id, sshare);
+				if (sshare)
+					HASH_DEL(stratum_shares, sshare);
 				mutex_unlock(&sshare_lock);
-				free_work(sshare->work);
-				free(sshare);
+				if (sshare)
+				{
+					free_work(sshare->work);
+					free(sshare);
+				}
 				
 				applog(LOG_WARNING, "Pool %d stratum share submission failure", pool->pool_no);
 				total_ro++;
 				pool->remotefail_occasions++;
+				
+				if (!sshare)
+					goto next_write_sws_del;
+				
 				goto next_write_sws;
 			}
 		}
