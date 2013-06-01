@@ -238,7 +238,7 @@ pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
 static int total_submitting;
-static struct list_head submit_waiting;
+static struct work *submit_waiting;
 notifier_t submit_waiting_notifier;
 
 int hw_errors;
@@ -4153,9 +4153,9 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		}
 		
 		// Receive any new submissions
-		while (!list_empty(&submit_waiting)) {
-			struct work *work = list_entry(submit_waiting.next, struct work, list);
-			list_del(&work->list);
+		while (submit_waiting) {
+			struct work *work = submit_waiting;
+			DL_DELETE(submit_waiting, work);
 			if ( (sws = begin_submission(work)) ) {
 				if (sws->ce)
 					curl_multi_add_handle(curlm, sws->ce->curl);
@@ -6179,7 +6179,7 @@ static void resubmit_stratum_shares(struct pool *pool)
 		HASH_DEL(stratum_shares, sshare);
 		
 		work = sshare->work;
-		list_add_tail(&work->list, &submit_waiting);
+		DL_APPEND(submit_waiting, work);
 		
 		free(sshare);
 		++resubmitted;
@@ -6954,7 +6954,7 @@ void _submit_work_async(struct work *work)
 
 	mutex_lock(&submitting_lock);
 	++total_submitting;
-	list_add_tail(&work->list, &submit_waiting);
+	DL_APPEND(submit_waiting, work);
 	mutex_unlock(&submitting_lock);
 
 	notifier_wake(submit_waiting_notifier);
@@ -8507,7 +8507,6 @@ int main(int argc, char *argv[])
 	strcpy(current_block, block->hash);
 
 	mutex_init(&submitting_lock);
-	INIT_LIST_HEAD(&submit_waiting);
 
 #ifdef HAVE_OPENCL
 	memset(gpus, 0, sizeof(gpus));

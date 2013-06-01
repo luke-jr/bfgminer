@@ -616,7 +616,7 @@ struct thr_info {
 	notifier_t mutex_request;
 
 	// Used by minerloop_queue
-	struct list_head work_list;
+	struct work *work_list;
 	bool queue_full;
 	bool _last_sbr_state;
 
@@ -1229,7 +1229,8 @@ struct work {
 	char		getwork_mode;
 
 	/* Used to queue shares in submit_waiting */
-	struct list_head list;
+	struct work *prev;
+	struct work *next;
 };
 
 extern void get_datestamp(char *, struct timeval *);
