@@ -1,3 +1,15 @@
+dnl * Copyright 2012-2013 Luke Dashjr
+dnl * Copyright 2011-2013 Con Kolivas
+dnl * Copyright 2010-2011 Jeff Garzik
+dnl * Copyright 2012 Xiangfu
+dnl * Copyright 2011 Rusty Russell
+dnl * Copyright 2011 Mark Crichton
+dnl *
+dnl * This program is free software; you can redistribute it and/or modify it
+dnl * under the terms of the GNU General Public License as published by the Free
+dnl * Software Foundation; either version 3 of the License, or (at your option)
+dnl * any later version.  See COPYING for more details.
+
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
