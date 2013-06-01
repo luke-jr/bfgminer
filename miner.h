@@ -558,8 +558,10 @@ struct cgpu_info {
 extern void renumber_cgpu(struct cgpu_info *);
 extern bool add_cgpu(struct cgpu_info*);
 
+struct tq_ent;
+
 struct thread_q {
-	struct list_head	q;
+	struct tq_ent *q;
 
 	bool frozen;
 

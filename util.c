@@ -49,9 +49,9 @@
 #endif
 
 #include "miner.h"
-#include "elist.h"
 #include "compat.h"
 #include "util.h"
+#include "utlist.h"
 
 bool successful_connect = false;
 struct timeval nettime;
@@ -79,7 +79,8 @@ struct header_info {
 
 struct tq_ent {
 	void			*data;
-	struct list_head	q_node;
+	struct tq_ent *prev;
+	struct tq_ent *next;
 };
 
 static void databuf_free(struct data_buffer *db)
@@ -817,7 +818,6 @@ struct thread_q *tq_new(void)
 	if (!tq)
 		return NULL;
 
-	INIT_LIST_HEAD(&tq->q);
 	pthread_mutex_init(&tq->mutex, NULL);
 	pthread_cond_init(&tq->cond, NULL);
 
@@ -831,8 +831,8 @@ void tq_free(struct thread_q *tq)
 	if (!tq)
 		return;
 
-	list_for_each_entry_safe(ent, iter, &tq->q, q_node) {
-		list_del(&ent->q_node);
+	DL_FOREACH_SAFE(tq->q, ent, iter) {
+		DL_DELETE(tq->q, ent);
 		free(ent);
 	}
 
@@ -871,11 +871,10 @@ bool tq_push(struct thread_q *tq, void *data)
 		return false;
 
 	ent->data = data;
-	INIT_LIST_HEAD(&ent->q_node);
 
 	mutex_lock(&tq->mutex);
 	if (!tq->frozen) {
-		list_add_tail(&ent->q_node, &tq->q);
+		DL_APPEND(tq->q, ent);
 	} else {
 		free(ent);
 		rc = false;
@@ -893,7 +892,7 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 	int rc;
 
 	mutex_lock(&tq->mutex);
-	if (!list_empty(&tq->q))
+	if (tq->q)
 		goto pop;
 
 	if (abstime)
@@ -902,13 +901,13 @@ void *tq_pop(struct thread_q *tq, const struct timespec *abstime)
 		rc = pthread_cond_wait(&tq->cond, &tq->mutex);
 	if (rc)
 		goto out;
-	if (list_empty(&tq->q))
+	if (!tq->q)
 		goto out;
 pop:
-	ent = list_entry(tq->q.next, struct tq_ent, q_node);
+	ent = tq->q;
 	rval = ent->data;
 
-	list_del(&ent->q_node);
+	DL_DELETE(tq->q, ent);
 	free(ent);
 out:
 	mutex_unlock(&tq->mutex);
@@ -938,8 +937,8 @@ void thr_info_freeze(struct thr_info *thr)
 
 	mutex_lock(&tq->mutex);
 	tq->frozen = true;
-	list_for_each_entry_safe(ent, iter, &tq->q, q_node) {
-		list_del(&ent->q_node);
+	DL_FOREACH_SAFE(tq->q, ent, iter) {
+		DL_DELETE(tq->q, ent);
 		free(ent);
 	}
 	mutex_unlock(&tq->mutex);
