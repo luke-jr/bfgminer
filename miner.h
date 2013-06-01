@@ -35,10 +35,11 @@
 #define __BIG_ENDIAN__ 1
 #endif
 
-#include "uthash.h"
+#include <uthash.h>
+#include <utlist.h>
+
 #include "logging.h"
 #include "util.h"
-#include "utlist.h"
 
 #ifdef HAVE_OPENCL
 #include "CL/cl.h"

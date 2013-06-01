@@ -45,6 +45,7 @@
 #include <curl/curl.h>
 #include <libgen.h>
 #include <sha2.h>
+#include <utlist.h>
 
 #include <blkmaker.h>
 #include <blkmaker_jansson.h>
@@ -59,7 +60,6 @@
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
-#include "utlist.h"
 
 #ifdef USE_AVALON
 #include "driver-avalon.h"

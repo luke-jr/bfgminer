@@ -39,7 +39,7 @@
 #include <windows.h>
 #include <io.h>
 
-#include "utlist.h"
+#include <utlist.h>
 
 #define dlsym (void*)GetProcAddress
 #define dlclose FreeLibrary

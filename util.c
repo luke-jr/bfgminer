@@ -48,10 +48,11 @@
 # include <mmsystem.h>
 #endif
 
+#include <utlist.h>
+
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
-#include "utlist.h"
 
 bool successful_connect = false;
 struct timeval nettime;

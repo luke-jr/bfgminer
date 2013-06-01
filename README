@@ -88,6 +88,8 @@ Dependencies:
 	libcurl4-gnutls-dev  http://curl.haxx.se/libcurl/
 
 	libjansson-dev 2.0+  http://www.digip.org/jansson/
+	
+	uthash-dev           http://troydhanson.github.io/uthash/
 
 Optional Dependencies:
 	Text-User-Interface (TUI): curses dev library; any one of:
