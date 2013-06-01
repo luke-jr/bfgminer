@@ -7,7 +7,7 @@
  * e.g. INCREASING THE VOLTAGES AND FREQUENCIES IN CONJUNCTION WITH LOWERING THE
  *      FAN SPEED IS NOT ADVISABLE!
 
- * Copyright(C) Thorsten Gilling (tgilling@web.de)
+ * Copyright 2010-2011 Thorsten Gilling
 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
