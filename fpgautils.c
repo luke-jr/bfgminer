@@ -63,7 +63,6 @@ enum {
 #include <sys/ioctl.h>
 #endif
 
-#include "elist.h"
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"

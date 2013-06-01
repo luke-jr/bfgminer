@@ -35,7 +35,6 @@
 #define __BIG_ENDIAN__ 1
 #endif
 
-#include "elist.h"
 #include "uthash.h"
 #include "logging.h"
 #include "util.h"

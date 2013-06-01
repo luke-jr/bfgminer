@@ -34,7 +34,6 @@
 #endif
 
 #include "deviceapi.h"
-#include "elist.h"
 #include "miner.h"
 #include "fpgautils.h"
 #include "driver-avalon.h"

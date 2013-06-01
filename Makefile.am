@@ -43,7 +43,7 @@ bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
 # common sources
 bfgminer_SOURCES := miner.c
 
-bfgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
+bfgminer_SOURCES	+= utlist.h miner.h compat.h bench_block.h	\
 	deviceapi.c deviceapi.h \
 		   util.c util.h uthash.h logging.h		\
 		   sha2.c sha2.h api.c
