@@ -391,8 +391,8 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
 		DL_FOREACH_SAFE(thr->work_list, work, tmp)
 		{
-			free_work(work);
 			DL_DELETE(thr->work_list, work);
+			free_work(work);
 		}
 		data->queued = 0;
 		data->ready_to_queue = 0;
