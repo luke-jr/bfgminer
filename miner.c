@@ -45,6 +45,7 @@
 #include <curl/curl.h>
 #include <libgen.h>
 #include <sha2.h>
+#include <utlist.h>
 
 #include <blkmaker.h>
 #include <blkmaker_jansson.h>
@@ -152,7 +153,7 @@ static char detect_algo;
 bool opt_restart = true;
 static bool opt_nogpu;
 
-struct list_head scan_devices;
+struct string_elist *scan_devices;
 bool opt_force_dev_init;
 static signed int devices_enabled;
 static bool opt_removedisabled;
@@ -237,7 +238,7 @@ pthread_mutex_t stats_lock;
 
 static pthread_mutex_t submitting_lock;
 static int total_submitting;
-static struct list_head submit_waiting;
+static struct work *submit_waiting;
 notifier_t submit_waiting_notifier;
 
 int hw_errors;
@@ -505,7 +506,6 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
-	INIT_LIST_HEAD(&pool->curlring);
 	pool->swork.transparency_time = (time_t)-1;
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -3570,7 +3570,7 @@ static void recruit_curl(struct pool *pool)
 	if (unlikely(!ce->curl))
 		quit(1, "Failed to init in recruit_curl");
 
-	list_add(&ce->node, &pool->curlring);
+	LL_PREPEND(pool->curllist, ce);
 	pool->curls++;
 }
 
@@ -3590,7 +3590,7 @@ retry:
 	if (!pool->curls) {
 		recruit_curl(pool);
 		recruited = true;
-	} else if (list_empty(&pool->curlring)) {
+	} else if (!pool->curllist) {
 		if (blocking < 2 && pool->curls >= curl_limit && (blocking || pool->curls >= opt_submit_threads)) {
 			if (!blocking) {
 				mutex_unlock(&pool->pool_lock);
@@ -3603,8 +3603,8 @@ retry:
 			recruited = true;
 		}
 	}
-	ce = list_entry(pool->curlring.next, struct curl_ent, node);
-	list_del(&ce->node);
+	ce = pool->curllist;
+	LL_DELETE(pool->curllist, ce);
 	mutex_unlock(&pool->pool_lock);
 
 	if (recruited)
@@ -3628,7 +3628,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_lock(&pool->pool_lock);
 	if (!ce || !ce->curl)
 		quit(1, "Attempted to add NULL in push_curl_entry");
-	list_add_tail(&ce->node, &pool->curlring);
+	LL_PREPEND(pool->curllist, ce);
 	cgtime(&ce->tv);
 	pthread_cond_broadcast(&pool->cr_cond);
 	mutex_unlock(&pool->pool_lock);
@@ -4153,9 +4153,9 @@ static void *submit_work_thread(__maybe_unused void *userdata)
 		}
 		
 		// Receive any new submissions
-		while (!list_empty(&submit_waiting)) {
-			struct work *work = list_entry(submit_waiting.next, struct work, list);
-			list_del(&work->list);
+		while (submit_waiting) {
+			struct work *work = submit_waiting;
+			DL_DELETE(submit_waiting, work);
 			if ( (sws = begin_submission(work)) ) {
 				if (sws->ce)
 					curl_multi_add_handle(curlm, sws->ce->curl);
@@ -6179,7 +6179,7 @@ static void resubmit_stratum_shares(struct pool *pool)
 		HASH_DEL(stratum_shares, sshare);
 		
 		work = sshare->work;
-		list_add_tail(&work->list, &submit_waiting);
+		DL_APPEND(submit_waiting, work);
 		
 		free(sshare);
 		++resubmitted;
@@ -6954,7 +6954,7 @@ void _submit_work_async(struct work *work)
 
 	mutex_lock(&submitting_lock);
 	++total_submitting;
-	list_add_tail(&work->list, &submit_waiting);
+	DL_APPEND(submit_waiting, work);
 	mutex_unlock(&submitting_lock);
 
 	notifier_wake(submit_waiting_notifier);
@@ -7569,13 +7569,13 @@ static void reap_curl(struct pool *pool)
 	cgtime(&now);
 
 	mutex_lock(&pool->pool_lock);
-	list_for_each_entry_safe(ent, iter, &pool->curlring, node) {
+	LL_FOREACH_SAFE(pool->curllist, ent, iter) {
 		if (pool->curls < 2)
 			break;
 		if (now.tv_sec - ent->tv.tv_sec > 300) {
 			reaped++;
 			pool->curls--;
-			list_del(&ent->node);
+			LL_DELETE(pool->curllist, ent);
 			curl_easy_cleanup(ent->curl);
 			free(ent);
 		}
@@ -8506,10 +8506,7 @@ int main(int argc, char *argv[])
 	HASH_ADD_STR(blocks, hash, block);
 	strcpy(current_block, block->hash);
 
-	INIT_LIST_HEAD(&scan_devices);
-
 	mutex_init(&submitting_lock);
-	INIT_LIST_HEAD(&submit_waiting);
 
 #ifdef HAVE_OPENCL
 	memset(gpus, 0, sizeof(gpus));

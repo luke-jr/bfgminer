@@ -383,20 +383,17 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	
 	if (bitforce->drv == &bitforce_queue_api)
 	{
-		struct list_head *pos, *npos;
-		struct work *work;
+		struct work *work, *tmp;
 		
 		timer_set_delay_from_now(&thr->tv_poll, 0);
 		notifier_wake(thr->notifier);
 		
 		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
-		for (pos = thr->work_list.prev; pos != &thr->work_list; pos = npos)
+		DL_FOREACH_SAFE(thr->work_list, work, tmp)
 		{
-			npos = pos->next;
-			work = list_entry(pos, typeof(*work), list);
+			DL_DELETE(thr->work_list, work);
 			free_work(work);
 		}
-		INIT_LIST_HEAD(&thr->work_list);
 		data->queued = 0;
 		data->ready_to_queue = 0;
 		data->already_have_results = false;
@@ -1175,7 +1172,6 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			
 			if (bitforce->drv == &bitforce_queue_api)
 			{
-				INIT_LIST_HEAD(&thr->work_list);
 				bitforce_change_mode(bitforce, BFP_BQUEUE);
 				bitforce->sleep_ms = data->sleep_ms_default = 100;
 				timer_set_delay_from_now(&thr->tv_poll, 0);
@@ -1332,7 +1328,6 @@ bool bitforce_send_queue(struct thr_info *thr)
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fd = bitforce->device->device_fd;
 	struct work *work;
-	struct list_head *pos;
 	
 	if (unlikely(!(fd && data->ready_to_queue)))
 		return false;
@@ -1348,10 +1343,9 @@ bool bitforce_send_queue(struct thr_info *thr)
 	qjp[qjp_sz - 1] = 0xfe;
 	qjs = &qjp[qjp_sz - 1];
 	
-	pos = thr->work_list.prev;
-	for (int i = data->ready_to_queue; i > 0; --i, pos = pos->prev)
+	work = thr->work_list->prev;
+	for (int i = data->ready_to_queue; i > 0; --i, work = work->prev)
 	{
-		work = list_entry(pos, typeof(*work), list);
 		*(--qjs) = 0xaa;
 		memcpy(qjs -= 12, work->data + 64, 12);
 		memcpy(qjs -= 32, work->midstate, 32);
@@ -1396,12 +1390,9 @@ bool bitforce_send_queue(struct thr_info *thr)
 	return true;
 }
 
-void work_list_del(struct list_head *pos)
+void work_list_del(struct work **head, struct work *work)
 {
-	struct work *work;
-	
-	work = list_entry(pos, typeof(*work), list);
-	list_del(pos);
+	DL_DELETE(*head, work);
 	free_work(work);
 }
 
@@ -1414,8 +1405,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	int count;
 	char *noncebuf = &data->noncebuf[0], *buf, *end;
 	unsigned char midstate[32], datatail[12];
-	struct work *work;
-	struct list_head *pos, *next_pos;
+	struct work *work, *tmpwork, *thiswork;
 	struct timeval tv_now, tv_elapsed;
 	
 	if (unlikely(!fd))
@@ -1437,7 +1427,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		return false;
 	}
 	
-	if (unlikely(list_empty(&thr->work_list)))
+	if (unlikely(!thr->work_list))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Received %d queued results when there was no queue", bitforce->proc_repr, count);
 		++bitforce->hw_errors;
@@ -1463,22 +1453,22 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		hex2bin(midstate, buf, 32);
 		hex2bin(datatail, &buf[65], 12);
 		
-		for (pos = thr->work_list.next; ; pos = pos->next)
+		thiswork = NULL;
+		DL_FOREACH(thr->work_list, work)
 		{
-			if (unlikely(pos == &thr->work_list))
-			{
-				applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queue results", bitforce->proc_repr);
-				++bitforce->hw_errors;
-				++hw_errors;
-				goto next_qline;
-			}
-			
-			work = list_entry(pos, typeof(*work), list);
 			if (unlikely(memcmp(work->midstate, midstate, 32)))
 				continue;
 			if (unlikely(memcmp(&work->data[64], datatail, 12)))
 				continue;
+			thiswork = work;
 			break;
+		}
+		if (unlikely(!thiswork))
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queue results", bitforce->proc_repr);
+			++bitforce->hw_errors;
+			++hw_errors;
+			goto next_qline;
 		}
 		
 		++count;
@@ -1487,11 +1477,12 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		
 		// Queue results are in order, so anything queued prior this is lost
 		// Delete all queued work up to, and including, this one
-		for ( ; pos != &thr->work_list; pos = next_pos)
+		DL_FOREACH_SAFE(thr->work_list, work, tmpwork)
 		{
-			next_pos = pos->prev;
-			work_list_del(pos);
+			DL_DELETE(thr->work_list, work);
 			--data->queued;
+			if (work == thiswork)
+				break;
 		}
 next_qline: (void)0;
 	}
@@ -1530,7 +1521,7 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 	rv = !thr->queue_full;
 	if (rv)
 	{
-		list_add_tail(&work->list, &thr->work_list);
+		DL_APPEND(thr->work_list, work);
 		++data->ready_to_queue;
 		applog(LOG_DEBUG, "%"PRIpreprv": Appending to driver queue (max=%u, ready=%d, queued<=%d)",
 		       bitforce->proc_repr,
@@ -1581,7 +1572,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	flushed += data->ready_to_queue;
 	data->ready_to_queue = 0;
 	while (flushed--)
-		work_list_del(thr->work_list.prev);
+		work_list_del(&thr->work_list, thr->work_list->prev);
 	bitforce_set_queue_full(thr);
 	data->just_flushed = true;
 	

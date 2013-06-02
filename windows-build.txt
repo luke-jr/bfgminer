@@ -86,6 +86,14 @@ Ctrl-D or typing "logout" and pressing the enter key should get you out of the
 window.
 
 **************************************************************************************
+* Install UTHash/UTList                                                              *
+**************************************************************************************
+Go to the website http://troydhanson.github.io/uthash/
+Download uthash-master.zip and unzip anywhere
+Go to the directory uthash-master/src
+Copy all the files to c:/mingw/include
+
+**************************************************************************************
 * Install GTK-WIN, required for Pkg-config in the next step                          *
 **************************************************************************************
 Go to this url ==> http://sourceforge.net/projects/gtk-win/

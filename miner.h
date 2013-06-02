@@ -35,8 +35,9 @@
 #define __BIG_ENDIAN__ 1
 #endif
 
-#include "elist.h"
-#include "uthash.h"
+#include <uthash.h>
+#include <utlist.h>
+
 #include "logging.h"
 #include "util.h"
 
@@ -558,8 +559,10 @@ struct cgpu_info {
 extern void renumber_cgpu(struct cgpu_info *);
 extern bool add_cgpu(struct cgpu_info*);
 
+struct tq_ent;
+
 struct thread_q {
-	struct list_head	q;
+	struct tq_ent *q;
 
 	bool frozen;
 
@@ -613,7 +616,7 @@ struct thr_info {
 	notifier_t mutex_request;
 
 	// Used by minerloop_queue
-	struct list_head work_list;
+	struct work *work_list;
 	bool queue_full;
 	bool _last_sbr_state;
 
@@ -625,24 +628,25 @@ struct string_elist {
 	char *string;
 	bool free_me;
 
-	struct list_head list;
+	struct string_elist *prev;
+	struct string_elist *next;
 };
 
-static inline void string_elist_add(const char *s, struct list_head *head)
+static inline void string_elist_add(const char *s, struct string_elist **head)
 {
 	struct string_elist *n;
 
 	n = calloc(1, sizeof(*n));
 	n->string = strdup(s);
 	n->free_me = true;
-	list_add_tail(&n->list, head);
+	DL_APPEND(*head, n);
 }
 
-static inline void string_elist_del(struct string_elist *item)
+static inline void string_elist_del(struct string_elist **head, struct string_elist *item)
 {
 	if (item->free_me)
 		free(item->string);
-	list_del(&item->list);
+	DL_DELETE(*head, item);
 	free(item);
 }
 
@@ -934,7 +938,7 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define _MAX_INTENSITY_STR "14"
 #endif
 
-extern struct list_head scan_devices;
+extern struct string_elist *scan_devices;
 extern bool opt_force_dev_init;
 extern int nDevs;
 extern int opt_n_threads;
@@ -1018,7 +1022,7 @@ typedef struct {
 
 struct curl_ent {
 	CURL *curl;
-	struct list_head node;
+	struct curl_ent *next;
 	struct timeval tv;
 };
 
@@ -1124,7 +1128,7 @@ struct pool {
 
 	int curls;
 	pthread_cond_t cr_cond;
-	struct list_head curlring;
+	struct curl_ent *curllist;
 	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_work_time;
@@ -1225,7 +1229,8 @@ struct work {
 	char		getwork_mode;
 
 	/* Used to queue shares in submit_waiting */
-	struct list_head list;
+	struct work *prev;
+	struct work *next;
 };
 
 extern void get_datestamp(char *, struct timeval *);

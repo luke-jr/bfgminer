@@ -39,6 +39,8 @@
 #include <windows.h>
 #include <io.h>
 
+#include <utlist.h>
+
 #define dlsym (void*)GetProcAddress
 #define dlclose FreeLibrary
 
@@ -61,7 +63,6 @@ enum {
 #include <sys/ioctl.h>
 #endif
 
-#include "elist.h"
 #include "logging.h"
 #include "miner.h"
 #include "fpgautils.h"
@@ -363,7 +364,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
-	list_for_each_entry_safe(iter, tmp, &scan_devices, list) {
+	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
 		dev = iter->string;
 		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
 			size_t idlen = colon - dev;
@@ -392,10 +393,10 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 		if (serial_claim(dev, NULL))
 		{
 			applog(LOG_DEBUG, "%s is already claimed... skipping probes", dev);
-			string_elist_del(iter);
+			string_elist_del(&scan_devices, iter);
 		}
 		else if (detectone(dev)) {
-			string_elist_del(iter);
+			string_elist_del(&scan_devices, iter);
 			inhibitauto = true;
 			++found;
 		}

@@ -61,7 +61,6 @@
 
 #include "compat.h"
 #include "dynclock.h"
-#include "elist.h"
 #include "icarus-common.h"
 #include "fpgautils.h"
 
