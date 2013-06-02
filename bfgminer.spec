@@ -1,7 +1,7 @@
 Summary: 	A bitcoin miner
 Name: 		bfgminer
 Version: 	3.0.2
-Release: 	0%{?dist}
+Release: 	1%{?dist}
 License: 	GPL
 Group:		Applications/System
 Source: 	http://luke.dashjr.org/programs/bitcoin/files/bfgminer/%{version}/bfgminer-%{version}.tbz2
@@ -20,7 +20,6 @@ coins.
 
 
 %build
-./autogen.sh
 ./configure --prefix=%{_prefix} --bindir=%{_bindir} --libdir=%{_libdir} --includedir=%{_includedir} --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining
 
 %install
@@ -50,15 +49,14 @@ make DESTDIR=$RPM_BUILD_ROOT install
 %{_includedir}/libblkmaker-0.1/blkmaker.h
 %{_includedir}/libblkmaker-0.1/blktemplate.h
 %{_libdir}/libblkmaker-0.1.la
-%{_libdir}/libblkmaker-0.1.so
-%{_libdir}/libblkmaker-0.1.so.0
-%{_libdir}/libblkmaker-0.1.so.0.3.1
+%{_libdir}/libblkmaker-0.1.so*
 %{_libdir}/libblkmaker_jansson-0.1.la
-%{_libdir}/libblkmaker_jansson-0.1.so
-%{_libdir}/libblkmaker_jansson-0.1.so.0
-%{_libdir}/libblkmaker_jansson-0.1.so.0.3.1
+%{_libdir}/libblkmaker_jansson*.so*
 %{_libdir}/pkgconfig/libblkmaker_jansson-0.1.pc
 
 %changelog
+* Sun Jun 02 2013 Arnoud Vermeer <rpms@freshway.biz> 3.0.2-1
+- Now with the latest 3.0.2 release
+
 * Sun Mar 24 2013 Arnoud Vermeer <rpms@freshway.biz> 3.0.2-0
 - Initial packaging
