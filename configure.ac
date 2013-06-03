@@ -509,7 +509,7 @@ AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 dnl Find YASM
 has_yasm=false
 if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
-AC_PATH_PROG([YASM],[yxasm],[false])
+AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
   yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
@@ -562,7 +562,7 @@ have_sse2=no
 if test "x$cpumining$have_x86_32" = "xyestrue"; then
 	AC_MSG_CHECKING([if SSE2 code compiles])
 	save_CFLAGS="$CFLAGS"
-	for flags in '' '-mssex2'; do
+	for flags in '' '-msse2'; do
 		CFLAGS="$CFLAGS $flags"
 		AC_TRY_LINK([
 			#include <xmmintrin.h>
