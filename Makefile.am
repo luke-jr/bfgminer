@@ -81,6 +81,13 @@ bfgminer_SOURCES	+= \
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 
+if HAVE_SSE2
+bfgminer_LDADD  += libsse2cpuminer.a
+noinst_LIBRARIES = libsse2cpuminer.a
+libsse2cpuminer_a_SOURCES = sha256_4way.c
+libsse2cpuminer_a_CFLAGS = $(bfgminer_CPPFLAGS) $(SSE2_CFLAGS)
+endif
+
 if HAS_YASM
 
 AM_CFLAGS	= -DHAS_YASM
@@ -89,11 +96,11 @@ SUBDIRS		+= x86_64
 bfgminer_LDADD	+= x86_64/libx8664.a
 else # HAVE_x86_64
 SUBDIRS		+= x86_32
-bfgminer_LDADD  += libsse2cpuminer.a x86_32/libx8632.a
+bfgminer_LDADD	+= x86_32/libx8632.a
 
-noinst_LIBRARIES = libsse2cpuminer.a
-libsse2cpuminer_a_SOURCES = sha256_4way.c sha256_sse2_i386.c
-libsse2cpuminer_a_CFLAGS = $(bfgminer_CPPFLAGS) -msse2
+if HAVE_SSE2
+libsse2cpuminer_a_SOURCES +=  sha256_sse2_i386.c
+endif
 
 endif # HAVE_x86_64
 endif # HAS_YASM
