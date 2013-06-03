@@ -2114,6 +2114,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			 * if we don't sleep here, but do it only if we're not
 			 * receiving any data. */
 			timeout = initial_timeout - (done * 1000);
+			if (!timeout)
+				break;
 			if (!got && sleep_time) {
 				if (timeout <= sleep_time)
 					sleep_time = timeout - 1;
@@ -2206,6 +2208,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			break;
 
 		timeout = initial_timeout - (done * 1000);
+		if (!timeout)
+			break;
 		if (!got && sleep_time) {
 			if (timeout <= sleep_time)
 				sleep_time = timeout - 1;
