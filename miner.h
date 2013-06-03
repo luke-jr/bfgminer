@@ -1242,7 +1242,7 @@ enum test_nonce2_result {
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
-extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);

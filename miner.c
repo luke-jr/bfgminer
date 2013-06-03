@@ -7042,12 +7042,14 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	return hashtest2(work, checktarget);
 }
 
-void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
+	bool ret = true;
 
 	thread_reportout(thr);
 
@@ -7070,6 +7072,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
 			       cgpu->proc_repr);
 			inc_hw_errors(thr);
+			ret = false;
 			goto out;
 		}
 	
@@ -7090,6 +7093,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 out:
 	*work_nonce = bak_nonce;
 	thread_reportin(thr);
+
+	return ret;
 }
 
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
