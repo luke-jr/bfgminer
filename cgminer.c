@@ -2184,7 +2184,7 @@ static void check_winsizes(void)
 	}
 }
 
-static void switch_compact(void)
+static void switch_logsize(void)
 {
 	if (curses_active_locked()) {
 		if (opt_compact) {
@@ -4342,7 +4342,7 @@ retry:
 		opt_compact = false;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
@@ -4354,7 +4354,7 @@ retry:
 	} else if (!strncasecmp(&input, "m", 1)) {
 		opt_compact ^= true;
 		wlogprint("Compact mode %s\n", opt_compact ? "enabled" : "disabled");
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
