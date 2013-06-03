@@ -96,6 +96,7 @@ static int ztex_autodetect(void)
 		ztex_master = ztex_devices[i]->dev;
 		ztex_master->root = ztex_master;
 		fpgacount = libztex_numberOfFpgas(ztex_master);
+		ztex_master->handles = fpgacount;
 		ztex = ztex_setup(ztex_master, fpgacount);
 
 		totaldevs += fpgacount;
@@ -395,9 +396,12 @@ static void ztex_shutdown(struct thr_info *thr)
 		return;
 	
 	cgpu->device_ztex = NULL;
-	if (ztex->root->numberOfFpgas > 1 /*&& ztex->fpgaNum == 0*/)
-		pthread_mutex_destroy(&ztex->mutex);
 	applog(LOG_DEBUG, "%"PRIpreprv": shutdown", cgpu->proc_repr);
+	if (--ztex->handles)
+		return;
+	applog(LOG_DEBUG, "%s: No handles remaining, destroying libztex device", cgpu->dev_repr);
+	if (ztex->root->numberOfFpgas > 1)
+		pthread_mutex_destroy(&ztex->mutex);
 	libztex_destroy_device(ztex);
 }
 

@@ -66,6 +66,7 @@ struct libztex_device {
 	struct dclk_data dclk;
 
 	int16_t numberOfFpgas;
+	int handles;
 	int selectedFpga;
 	bool parallelConfigSupport;
 	
