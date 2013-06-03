@@ -2704,6 +2704,14 @@ void clear_logwin(void)
 		unlock_curses();
 	}
 }
+
+void logwin_update(void)
+{
+	if (curses_active_locked()) {
+		touchwin(logwin);
+		wrefresh(logwin);
+	}
+}
 #endif
 
 static void enable_pool(struct pool *pool)
@@ -3481,23 +3489,15 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
-	applog(LOG_DEBUG, "Stopping mining threads");
-	/* Stop the mining threads*/
-	for (i = 0; i < mining_threads; i++) {
-		thr = get_thread(i);
-		if (thr->cgpu->threads)
-			thr_info_freeze(thr);
-		thr->pause = true;
-	}
-
-	nmsleep(1000);
-
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = get_thread(i);
 		if (thr->cgpu->threads)
+		{
 			thr_info_cancel(thr);
+			pthread_join(thr->pth, NULL);
+		}
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -5425,6 +5425,7 @@ retry:
 	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool [P]rioritize pool\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
+	logwin_update();
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
@@ -5577,6 +5578,7 @@ retry:
 		summary_detail_level_str(),
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
+	logwin_update();
 	input = getch();
 	if (!strncasecmp(&input, "q", 1)) {
 		opt_quiet ^= true;
@@ -5694,6 +5696,7 @@ retry:
 		  "[W]rite config file\n[B]FGMiner restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries);
 	wlogprint("Select an option or any other key to return\n");
+	logwin_update();
 	input = getch();
 
 	if (!strncasecmp(&input, "q", 1)) {
@@ -6087,10 +6090,35 @@ fishy:
 	mutex_unlock(&sshare_lock);
 
 	if (!sshare) {
-		if (json_is_true(res_val))
+		double pool_diff;
+
+		/* Since the share is untracked, we can only guess at what the
+		 * work difficulty is based on the current pool diff. */
+		cg_rlock(&pool->data_lock);
+		pool_diff = pool->swork.diff;
+		cg_runlock(&pool->data_lock);
+
+		if (json_is_true(res_val)) {
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
-		else
+
+			/* We don't know what device this came from so we can't
+			 * attribute the work to the relevant cgpu */
+			mutex_lock(&stats_lock);
+			total_accepted++;
+			pool->accepted++;
+			total_diff_accepted += pool_diff;
+			pool->diff_accepted += pool_diff;
+			mutex_unlock(&stats_lock);
+		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
+
+			mutex_lock(&stats_lock);
+			total_rejected++;
+			pool->rejected++;
+			total_diff_rejected += pool_diff;
+			pool->diff_rejected += pool_diff;
+			mutex_unlock(&stats_lock);
+		}
 		goto out;
 	}
 	else {
@@ -6960,7 +6988,7 @@ void _submit_work_async(struct work *work)
 	notifier_wake(submit_waiting_notifier);
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
 
@@ -7020,6 +7048,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
 
+	thread_reportout(thr);
+
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
@@ -7058,6 +7088,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	submit_work_async(work, &tv_work_found);
 out:
 	*work_nonce = bak_nonce;
+	thread_reportin(thr);
 }
 
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)

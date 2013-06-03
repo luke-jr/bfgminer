@@ -153,6 +153,10 @@ void minerloop_scanhash(struct thr_info *mythr)
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	
+#ifdef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+#endif
+	
 	while (1) {
 		mythr->work_restart = false;
 		request_work(mythr);
@@ -163,9 +167,14 @@ void minerloop_scanhash(struct thr_info *mythr)
 		
 		do {
 			thread_reportin(mythr);
+			/* Only allow the mining thread to be cancelled when
+			* it is not in the driver code. */
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			gettimeofday(&tv_start, NULL);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
 			gettimeofday(&tv_end, NULL);
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+			pthread_testcancel();
 			thread_reportin(mythr);
 			
 			timersub(&tv_end, &tv_start, &tv_hashes);

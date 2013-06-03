@@ -159,6 +159,7 @@ typedef long suseconds_t;
 #include <pthread.h>
 #include <signal.h>
 #define pthread_cancel(pth)  pthread_kill(pth, SIGTERM)
+extern void pthread_testcancel(void);
 #ifndef PTHREAD_CANCEL_ENABLE
 #define PTHREAD_CANCEL_ENABLE  0
 #define PTHREAD_CANCEL_DISABLE 1
