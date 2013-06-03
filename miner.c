@@ -7001,6 +7001,8 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
 
+	thread_reportout(thr);
+
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
@@ -7039,6 +7041,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	submit_work_async(work, &tv_work_found);
 out:
 	*work_nonce = bak_nonce;
+	thread_reportin(thr);
 }
 
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
