@@ -403,10 +403,7 @@ static void ztex_shutdown(struct thr_info *thr)
 		return;
 	
 	cgpu->device_ztex = NULL;
-	if (ztex->root->numberOfFpgas > 1 && ztex->fpgaNum == 0)
-		pthread_mutex_destroy(&ztex->mutex);
 	applog(LOG_DEBUG, "%s: shutdown", ztex->repr);
-	libztex_destroy_device(ztex);
 }
 
 static void ztex_disable(struct thr_info *thr)
