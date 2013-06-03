@@ -21,6 +21,12 @@ PKG_INSTALL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
+define Download/uthash
+	FILE:=v1.9.8
+	URL:=https://codeload.github.com/troydhanson/uthash/tar.gz/
+endef
+$(eval $(call Download,uthash))
+
 define Package/$(PKG_NAME)/Default
 	MAINTAINER:="Luke Dashjr" <luke_openwrt@dashjr.org>
 	SECTION:=utils
@@ -61,9 +67,15 @@ CONFIGURE_ARGS += --disable-x6500 --disable-ztex
 endif
 
 TARGET_CFLAGS += -std=gnu99
+TARGET_CFLAGS += -Iuthash-1.9.8/src
 
 CONFIGURE_ARGS += --without-libudev
 CONFIGURE_ARGS += --without-sensors
+
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	gzip -dc $(DL_DIR)/v1.9.8 | $(HOST_TAR) -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
+endef
 
 define Build/Configure
 	# Need to remake configure etc to pick up on cross-compiler libtool
