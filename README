@@ -243,7 +243,7 @@ only options:
 See FGPA-README and ASIC-README for more information regarding these.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
-FPGAs, Icarus bitstream FPGAs, ASICMINER usb block eruptors, ModMiner FPGAs,
+FPGAs, Icarus bitstream FPGAs, ASICMINER usb block erupters, ModMiner FPGAs,
 or Ztex FPGAs
 
 ---
