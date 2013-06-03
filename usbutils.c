@@ -64,6 +64,8 @@
 #define ICARUS_TIMEOUT_MS 200
 #endif
 
+#define USB_READ_MINPOLL 40
+
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_endpoints bas_eps[] = {
@@ -2057,6 +2059,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
 		sleep_time = initial_timeout / 2;
+		if (sleep_time > USB_READ_MINPOLL)
+			sleep_time = USB_READ_MINPOLL;
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
@@ -2134,6 +2138,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	sleep_time = initial_timeout / 2;
+	if (sleep_time > USB_READ_MINPOLL)
+		sleep_time = USB_READ_MINPOLL;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
