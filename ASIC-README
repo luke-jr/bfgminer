@@ -1,7 +1,7 @@
 SUPPORTED DEVICES
 
 Currently supported devices include the Avalon, the Butterfly Labs SC range
-of devices and the ASICMINER block eruptors.
+of devices and the ASICMINER block erupters.
 
 The BFL devices should come up as one of the following:
 
@@ -16,7 +16,7 @@ Avalon will come up as AVA.
 
 Avalon devices need the --enable-avalon option when compiling cgminer.
 
-ASICMINER block eruptors will come up as AMU.
+ASICMINER block erupters will come up as AMU.
 
 ASICMINER devices need the --enable-icarus option when compiling cgminer.
 
