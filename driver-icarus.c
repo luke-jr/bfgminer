@@ -768,7 +768,7 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	ret = icarus_write(fd, ob_bin, 64);
 	if (ret) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+		applog(LOG_ERR, "%"PRIpreprv": Comms error (%d)", icarus->proc_repr, ret);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return false;	/* This should never happen */
 	}
@@ -851,7 +851,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 					return 0;
 				case ICA_GETS_ERROR:
 					do_icarus_close(thr);
-					applog(LOG_ERR, "ICA%i: Comms error", icarus->device_id);
+					applog(LOG_ERR, "%"PRIpreprv": Comms error", icarus->proc_repr);
 					dev_error(icarus, REASON_DEV_COMMS_ERROR);
 					if (!icarus_reopen(icarus, state, &fd))
 						return -1;
