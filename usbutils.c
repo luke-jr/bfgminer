@@ -2021,7 +2021,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	struct timeval tv_start;
 #endif
 	struct timeval read_start, tv_finish;
-	unsigned int initial_timeout;
+	unsigned int initial_timeout, half_time;
 	double max, done;
 	int bufleft, err, got, tot;
 	__maybe_unused bool first = true;
@@ -2056,6 +2056,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		bufleft = bufsiz;
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
+		half_time = initial_timeout / 2;
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
@@ -2103,7 +2104,16 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			if (unlikely(done >= max))
 				break;
 
+			/* Controversial. Even though libusb gives the device
+			 * a timeout, many devices (eg ftdi) simply time out
+			 * after only 1ms making this function poll every ms
+			 * if we don't sleep here, but do it only if we're not
+			 * receiving any data. */
 			timeout = initial_timeout - (done * 1000);
+			if (!got && half_time && timeout > half_time) {
+				timeout -= half_time;
+				nmsleep(half_time);
+			}
 		}
 
 		*processed = tot;
@@ -2121,6 +2131,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
+	half_time = initial_timeout / 2;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
@@ -2187,6 +2198,10 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			break;
 
 		timeout = initial_timeout - (done * 1000);
+		if (!got && half_time && timeout > half_time) {
+			timeout -= half_time;
+			nmsleep(half_time);
+		}
 	}
 
 	*processed = tot;
