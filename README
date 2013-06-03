@@ -280,6 +280,7 @@ can use "-S all"; note that this may write data to non-mining devices which may
 then behave in unexpected ways!
 
 On Linux, <arg> is usually of the format /dev/ttyUSBn
+On Mac OS X, <arg> is usually of the format /dev/cu.usb*
 On Windows, <arg> is usually of the format \\.\COMn
 (where n = the correct device number for the device)
 
