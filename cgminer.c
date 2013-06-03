@@ -7204,6 +7204,8 @@ static void hotplug_process()
 		total_devices++;
 		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
 	}
+
+	switch_logsize();
 }
 
 static void *hotplug_thread(void __maybe_unused *userdata)
