@@ -152,6 +152,7 @@ Options for both config file and command line:
 --benchmark         Run cgminer in benchmark mode - produces no shares
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
+--device|-d <arg>   Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all
 --disable-rejecting Automatically disable pools that continually reject shares
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
@@ -198,7 +199,6 @@ GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
 --disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
@@ -220,6 +220,7 @@ GPU only options:
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
+See GPU-README for more information regarding GPU mining.
 
 SCRYPT only options:
 
@@ -228,7 +229,6 @@ SCRYPT only options:
 --thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
 
 See SCRYPT-README for more information regarding litecoin mining.
-
 
 ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
@@ -240,8 +240,52 @@ only options:
 --usb <arg>         USB device selection (See below)
 --usb-dump          (See FPGA-README)
 
-Cgminer will automatically find all of your Avalon ASIC, BFL ASIC, BitForce
-FPGAs, Icarus bitstream FPGAs, ModMiner FPGAs, or Ztex FPGAs
+See FGPA-README and ASIC-README for more information regarding these.
+
+Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
+FPGAs, Icarus bitstream FPGAs, ASICMINER usb block eruptors, ModMiner FPGAs,
+or Ztex FPGAs
+
+---
+
+USB DEVICES
+
+WINDOWS:
+
+On windows, the direct USB support requires the installation of a WinUSB
+driver (NOT the ftdi_sio driver), and attach it to your devices.
+The easiest way to do this is to use the zadig utility which will install the
+drivers for you and then once you plug in your device you can choose the
+"list all devices" from the "option" menu and you should be able to see the
+device as something like: "BitFORCE SHA256 SC". Choose the install or replace
+driver option and select WinUSB. You can either google for zadig or download
+it from the cgminer directoy in the DOWNLOADS link above.
+
+LINUX:
+
+On linux, the direct USB support requires no drivers at all. However due to
+permissions issues, you may not be able to mine directly on the devices as a
+regular user without giving the user access to the device or by mining as
+root (administrator). In order to give your regular user access, you can make
+him a member of the plugdev group with the following commands:
+
+ sudo usermod -G plugdev -a `whoami`
+
+If your distribution does not have the plugdev group you can create it with:
+
+ sudo groupadd plugdev
+
+In order for the BFL devices to instantly be owned by the plugdev group and
+accessible by anyone from the plugdev group you can copy the file
+"01-cgminer.rules" from the cgminer archive into the /etc/udev/rules.d
+directory with the following command:
+
+ sudo cp 01-cgminer.rules /etc/udev/rules.d/
+
+After this you can either manually restart udev and re-login, or more easily
+just reboot.
+
+Advanced USB options:
 
 The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
 ModMiner FPGAs or Icarus bitstream FPGAs it finds:
@@ -293,10 +337,9 @@ If one of the 10 devices stops working, hotplug - if enabled, as is default
 
   --usb :0 will disable all USB I/O other than to initialise libusb
 
-
-For more ASIC details see the ASIC-README
-For more FPGA details see the FPGA-README
-
+NOTE: The --device option will limit which devices are in use based on their
+numbering order of the total devices, so if you hotplug USB devices regularly,
+it will not reliably be the same devices.
 
 ---
 
