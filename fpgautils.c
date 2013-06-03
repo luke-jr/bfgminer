@@ -223,15 +223,10 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 				
 				strcpy(&buf[5], de->d_name);
 				if (detectone(buf))
-				{
 					++found;
-					closedir(DT);
-					goto nextdev;
-				}
 			}
 			closedir(DT);
 		}
-nextdev:
 		closedir(DS);
 	}
 	closedir(D);
