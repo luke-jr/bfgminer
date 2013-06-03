@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=3.0.2
+PKG_VERSION:=9999
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
@@ -63,6 +63,7 @@ endif
 TARGET_CFLAGS += -std=gnu99
 
 CONFIGURE_ARGS += --without-libudev
+CONFIGURE_ARGS += --without-sensors
 
 define Build/Configure
 	# Need to remake configure etc to pick up on cross-compiler libtool
