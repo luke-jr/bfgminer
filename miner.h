@@ -465,7 +465,6 @@ struct cgpu_info {
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	bool flash_led;
 #endif
-	void *cgpu_data;
 	pthread_mutex_t		device_mutex;
 	pthread_cond_t	device_cond;
 

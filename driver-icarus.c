@@ -319,7 +319,7 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 
 static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 {
-	struct ICARUS_INFO *info = icarus->cgpu_data;
+	struct ICARUS_INFO *info = icarus->device_data;
 	double Hs;
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *eq;
@@ -618,7 +618,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 		icarus->proc_repr,
 		baud, work_division, fpga_count);
 
-	icarus->cgpu_data = info;
+	icarus->device_data = info;
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
@@ -653,7 +653,7 @@ static void icarus_detect()
 static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->cgpu_data;
+	struct ICARUS_INFO *info = icarus->device_data;
 
 	struct timeval now;
 
@@ -691,7 +691,7 @@ static bool icarus_prepare(struct thr_info *thr)
 static bool icarus_init(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->cgpu_data;
+	struct ICARUS_INFO *info = icarus->device_data;
 	int fd = icarus->device_fd;
 	
 	if (!info->work_division)
@@ -741,7 +741,7 @@ static bool icarus_init(struct thr_info *thr)
 
 static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, int *fdp)
 {
-	struct ICARUS_INFO *info = icarus->cgpu_data;
+	struct ICARUS_INFO *info = icarus->device_data;
 
 	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
 	icarus_close(icarus->device_fd);
@@ -830,7 +830,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
-	info = icarus->cgpu_data;
+	info = icarus->device_data;
 
 	if (!state->firstrun) {
 		if (state->changework)
@@ -1094,7 +1094,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct ICARUS_INFO *info = cgpu->cgpu_data;
+	struct ICARUS_INFO *info = cgpu->device_data;
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than

@@ -197,7 +197,7 @@ static bool bitforce_detect_one(const char *devpath)
 		s[0] = '\0';
 		bitforce->name = strdup(pdevbuf + 7);
 	}
-	bitforce->cgpu_data = initdata;
+	bitforce->device_data = initdata;
 
 	mutex_init(&bitforce->device_mutex);
 
@@ -241,7 +241,7 @@ static
 void bitforce_comm_error(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	int *p_fdDev = &bitforce->device->device_fd;
 	
 	data->noncebuf[0] = '\0';
@@ -262,7 +262,7 @@ void bitforce_comm_error(struct thr_info *thr)
 
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 {
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
@@ -322,7 +322,7 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 
 void bitforce_reinit(struct cgpu_info *bitforce)
 {
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	struct thr_info *thr = bitforce->thr[0];
 	const char *devpath = bitforce->device_path;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
@@ -407,7 +407,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 static void bitforce_flash_led(struct cgpu_info *bitforce)
 {
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 
@@ -461,7 +461,7 @@ void set_float_if_gt_zero(float *var, float value)
 
 static bool bitforce_get_temp(struct cgpu_info *bitforce)
 {
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
@@ -534,7 +534,7 @@ void dbg_block_data(struct cgpu_info *bitforce)
 	if (!opt_debug)
 		return;
 	
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	char *s;
 	s = bin2hex(&data->next_work_ob[8], 44);
 	applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
@@ -547,7 +547,7 @@ static
 bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob_ms = &data->next_work_ob[8];
 	unsigned char *ob_dt = &ob_ms[32];
@@ -609,7 +609,7 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 static
 void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 {
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	
 	if (data->proto == proto)
 		return;
@@ -666,7 +666,7 @@ static
 void bitforce_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob = data->next_work_obs;
@@ -744,7 +744,7 @@ static
 int bitforce_zox(struct thr_info *thr, const char *cmd)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fd = bitforce->device->device_fd;
 	char *pdevbuf = &data->noncebuf[0];
@@ -802,7 +802,7 @@ static
 void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	int fdDev = bitforce->device->device_fd;
 	unsigned int delay_time_ms;
 	struct timeval elapsed;
@@ -1007,7 +1007,7 @@ static
 void bitforce_process_result_nonces(struct thr_info *thr, struct work *work, char *pnoncebuf)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	uint32_t nonce;
 	
 	while (1) {
@@ -1076,7 +1076,7 @@ static
 int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __maybe_unused bool stopping)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	char *pnoncebuf = &data->noncebuf[0];
 	int count;
 	
@@ -1139,7 +1139,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	unsigned int wait;
 	struct bitforce_data *data;
-	struct bitforce_init_data *initdata = bitforce->cgpu_data;
+	struct bitforce_init_data *initdata = bitforce->device_data;
 	bool sc = initdata->sc;
 	int xlink_id = 0;
 	
@@ -1156,7 +1156,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		}
 		
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
-		bitforce->cgpu_data = data = malloc(sizeof(*data));
+		bitforce->device_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
 			.xlink_id = xlink_id,
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
@@ -1210,7 +1210,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 {
-	struct bitforce_data *data = cgpu->cgpu_data;
+	struct bitforce_data *data = cgpu->device_data;
 	struct api_data *root = NULL;
 
 	// Warning, access to these is not locked - but we don't really
@@ -1232,7 +1232,7 @@ static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 void bitforce_poll(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	int poll = data->poll_func;
 	thr->tv_poll.tv_sec = -1;
 	data->poll_func = 0;
@@ -1252,7 +1252,7 @@ void bitforce_poll(struct thr_info *thr)
 static
 char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, char *replybuf)
 {
-	struct bitforce_data *data = proc->cgpu_data;
+	struct bitforce_data *data = proc->device_data;
 	pthread_mutex_t *mutexp = &proc->device->device_mutex;
 	int fd;
 	
@@ -1315,7 +1315,7 @@ static inline
 void bitforce_set_queue_full(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	
 	thr->queue_full = (data->queued + data->ready_to_queue >= BITFORCE_MAX_QUEUED) || (data->ready_to_queue >= BITFORCE_MAX_BQUEUE_AT_ONCE);
 }
@@ -1324,7 +1324,7 @@ static
 bool bitforce_send_queue(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fd = bitforce->device->device_fd;
 	struct work *work;
@@ -1400,7 +1400,7 @@ static
 bool bitforce_queue_do_results(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	int fd = bitforce->device->device_fd;
 	int count;
 	char *noncebuf = &data->noncebuf[0], *buf, *end;
@@ -1514,7 +1514,7 @@ static
 bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	bool rv, ndq;
 	
 	bitforce_set_queue_full(thr);
@@ -1548,7 +1548,7 @@ static
 void bitforce_queue_flush(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fd = bitforce->device->device_fd;
 	char buf[100];
@@ -1583,7 +1583,7 @@ static
 void bitforce_queue_poll(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	struct bitforce_data *data = bitforce->cgpu_data;
+	struct bitforce_data *data = bitforce->device_data;
 	unsigned long sleep_us;
 	
 	if (data->queued)

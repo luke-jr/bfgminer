@@ -1476,7 +1476,7 @@ static void opencl_detect()
 		
 #ifdef HAVE_SENSORS
 		cn = (c == -1) ? NULL : sensors_get_detected_chips(&cnm, &c);
-		cgpu->cgpu_data = data = malloc(sizeof(*data));
+		cgpu->device_data = data = malloc(sizeof(*data));
 		*data = (struct opencl_device_data){
 			.sensor = cn,
 		};
@@ -1497,7 +1497,7 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 {
 #ifdef HAVE_SENSORS
-	struct opencl_device_data *data = gpu->cgpu_data;
+	struct opencl_device_data *data = gpu->device_data;
 	if (data->sensor)
 	{
 		const sensors_chip_name *cn = data->sensor;
