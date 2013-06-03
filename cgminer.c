@@ -7140,8 +7140,12 @@ static void hotplug_process()
 	int i, j;
 
 	for (i = 0; i < new_devices; i++) {
-		struct cgpu_info *cgpu = devices[total_devices + i];
-		enable_device(cgpu);
+		struct cgpu_info *cgpu;
+		int dev_no = total_devices + i;
+
+		cgpu = devices[dev_no];
+		if (!opt_devs_enabled || (opt_devs_enabled && devices_enabled[dev_no]))
+			enable_device(cgpu);
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->rolling = cgpu->total_mhashes = 0;
 	}
