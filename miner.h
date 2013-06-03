@@ -437,7 +437,7 @@ struct cgpu_info {
 	struct cgpu_info *next_proc;
 	
 	const char *device_path;
-	FILE *device_file;
+	void *device_data;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
