@@ -2288,6 +2288,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 			break;
 
 		timeout = initial_timeout - (done * 1000);
+		if (!timeout)
+			break;
 	}
 
 	*processed = tot;
