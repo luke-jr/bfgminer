@@ -620,7 +620,7 @@ if test "x$cpumining$have_x86_32" = "xyestrue"; then
 fi
 AM_CONDITIONAL([HAVE_SSE2], [test "x$have_sse2" = "xyes"])
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce$modminer$icarus" != "xnonono"; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
