@@ -298,7 +298,7 @@ fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$bitforce$modminer$icarus" != "xnonono"; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
