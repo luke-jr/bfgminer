@@ -919,12 +919,14 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
+extern void get_intrange(char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
+#define MAX_DEVICES 4096
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"

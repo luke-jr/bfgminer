@@ -110,7 +110,9 @@ bool opt_restart = true;
 static bool opt_nogpu;
 
 struct list_head scan_devices;
-static signed int devices_enabled;
+static bool devices_enabled[MAX_DEVICES];
+static int opt_devs_enabled;
+static bool opt_display_devs;
 static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
@@ -576,21 +578,52 @@ static char *add_serial(char *arg)
 }
 #endif
 
+void get_intrange(char *arg, int *val1, int *val2)
+{
+	if (sscanf(arg, "%d-%d", val1, val2) == 1)
+		*val2 = *val1;
+}
+
 static char *set_devices(char *arg)
 {
-	int i = strtol(arg, &arg, 0);
+	int i, val1 = 0, val2 = 0;
+	char *nextptr;
 
 	if (*arg) {
 		if (*arg == '?') {
-			devices_enabled = -1;
+			opt_display_devs = true;
 			return NULL;
 		}
-		return "Invalid device number";
+	} else
+		return "Invalid device parameters";
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set devices";
+	get_intrange(nextptr, &val1, &val2);
+	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
+	    val1 > val2) {
+		return "Invalid value passed to set devices";
 	}
 
-	if (i < 0 || i >= (int)(sizeof(devices_enabled) * 8) - 1)
-		return "Invalid device number";
-	devices_enabled |= 1 << i;
+	for (i = val1; i <= val2; i++) {
+		devices_enabled[i] = true;
+		opt_devs_enabled++;
+	}
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		get_intrange(nextptr, &val1, &val2);
+		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
+		val1 > val2) {
+			return "Invalid value passed to set devices";
+		}
+
+		for (i = val1; i <= val2; i++) {
+			devices_enabled[i] = true;
+			opt_devs_enabled++;
+		}
+	}
+
 	return NULL;
 }
 
@@ -921,7 +954,7 @@ static struct opt_table opt_config_table[] = {
 		     "Enable debug output"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
-	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
+	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 #ifdef HAVE_OPENCL
@@ -4007,11 +4040,24 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"stop-time\" : \"%d:%d\"", schedstop.tm.tm_hour, schedstop.tm.tm_min);
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
-	if (devices_enabled) {
-		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
-			if (devices_enabled & (1 << i))
-				fprintf(fcfg, ",\n\"device\" : \"%d\"", i);
+	if (opt_devs_enabled) {
+		fprintf(fcfg, ",\n\"device\" : \"");
+		bool extra_devs = false;
+
+		for (i = 0; i < MAX_DEVICES; i++) {
+			if (devices_enabled[i]) {
+				int startd = i;
+
+				if (extra_devs)
+					fprintf(fcfg, ",");
+				while (i < MAX_DEVICES && devices_enabled[i + 1])
+					++i;
+				fprintf(fcfg, "%d", startd);
+				if (i > startd)
+					fprintf(fcfg, "-%d", i);
+			}
 		}
+		fprintf(fcfg, "\"");
 	}
 	if (opt_removedisabled)
 		fprintf(fcfg, ",\n\"remove-disabled\" : true");
@@ -7321,7 +7367,7 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef HAVE_CURSES
-	if (opt_realquiet || devices_enabled == -1)
+	if (opt_realquiet || opt_display_devs)
 		use_curses = false;
 
 	if (use_curses)
@@ -7417,7 +7463,7 @@ int main(int argc, char *argv[])
 		avalon_drv.drv_detect();
 #endif
 
-	if (devices_enabled == -1) {
+	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
@@ -7430,9 +7476,9 @@ int main(int argc, char *argv[])
 	}
 
 	mining_threads = 0;
-	if (devices_enabled) {
-		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
-			if (devices_enabled & (1 << i)) {
+	if (opt_devs_enabled) {
+		for (i = 0; i < MAX_DEVICES; i++) {
+			if (devices_enabled[i]) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");
 				enable_device(devices[i]);
