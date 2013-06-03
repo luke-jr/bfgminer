@@ -180,7 +180,6 @@ static int total_control_threads;
 bool hotplug_mode;
 static int new_devices;
 static int new_threads;
-static int start_devices;
 int hotplug_time = 5;
 
 #ifdef USE_USBUTILS
@@ -2077,7 +2076,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	if (opt_compact)
 		return;
 
-	if (count >= start_devices || devcursor + count > LINES - 2)
+	if (devcursor + count > LINES - 2)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
@@ -7527,8 +7526,6 @@ int main(int argc, char *argv[])
 	if (!total_devices)
 		quit(1, "All devices disabled, cannot mine!");
 #endif
-
-	start_devices = total_devices;
 
 	load_temp_cutoffs();
 
