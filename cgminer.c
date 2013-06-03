@@ -6434,8 +6434,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			change_logwinsize();
 			curses_print_status();
 			count = 0;
-			for (i = 0; i < mining_threads; i++) {
-				cgpu = get_thr_cgpu(i);
+			for (i = 0; i < total_devices; i++) {
+				cgpu = get_devices(i);
 #ifndef USE_USBUTILS
 				if (cgpu)
 #else
@@ -6444,8 +6444,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					curses_print_devstatus(cgpu, count++);
 			}
 #ifdef USE_USBUTILS
-			for (i = 0; i < mining_threads; i++) {
-				cgpu = get_thr_cgpu(i);
+			for (i = 0; i < total_devices; i++) {
+				cgpu = get_devices(i);
 				if (cgpu && cgpu->usbinfo.nodev)
 					curses_print_devstatus(cgpu, count++);
 			}
