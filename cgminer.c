@@ -2034,10 +2034,9 @@ static void adj_width(int var, int *length)
 
 static int dev_width;
 
-static void curses_print_devstatus(int thr_id)
+static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 {
 	static int awidth = 1, rwidth = 1, hwwidth = 1, uwidth = 1;
-	struct cgpu_info *cgpu;
 	char logline[256];
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
@@ -2045,14 +2044,12 @@ static void curses_print_devstatus(int thr_id)
 	if (opt_compact)
 		return;
 
-	cgpu = get_thr_cgpu(thr_id);
-
-	if (cgpu->cgminer_id >= start_devices || devcursor + cgpu->cgminer_id > LINES - 2)
+	if (count >= start_devices || devcursor + count > LINES - 2)
 		return;
 
 	cgpu->utility = cgpu->accepted / total_secs * 60;
 
-	wmove(statuswin,devcursor + cgpu->cgminer_id, 0);
+	wmove(statuswin,devcursor + count, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
 	logline[0] = '\0';
 	cgpu->drv->get_statline_before(logline, cgpu);
@@ -6385,10 +6382,28 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 #ifdef HAVE_CURSES
 		if (curses_active_locked()) {
+			struct cgpu_info *cgpu;
+			int count;
+
 			change_logwinsize();
 			curses_print_status();
-			for (i = 0; i < mining_threads; i++)
-				curses_print_devstatus(i);
+			count = 0;
+			for (i = 0; i < mining_threads; i++) {
+				cgpu = get_thr_cgpu(i);
+#ifndef USE_USBUTILS
+				if (cgpu)
+#else
+				if (cgpu && !cgpu->usbinfo.nodev)
+#endif
+					curses_print_devstatus(cgpu, count++);
+			}
+#ifdef USE_USBUTILS
+			for (i = 0; i < mining_threads; i++) {
+				cgpu = get_thr_cgpu(i);
+				if (cgpu && cgpu->usbinfo.nodev)
+					curses_print_devstatus(cgpu, count++);
+			}
+#endif
 			touchwin(statuswin);
 			wrefresh(statuswin);
 			touchwin(logwin);
