@@ -1,12 +1,24 @@
 SUPPORTED DEVICES
 
-Currently supported devices include the Avalon and the Butterfly Labs SC range
-of devices. The BFL devices should come up as one of the following:
+Currently supported devices include the Avalon, the Butterfly Labs SC range
+of devices and the ASICMINER block eruptors.
+
+The BFL devices should come up as one of the following:
 
 BAJ: BFL ASIC Jalapeño
 BAL: BFL ASIC Little Single
 BAS: BFL ASIC Single
 BAM: BFL ASIC Minirig
+
+BFL devices need the --enable-bflsc option when compiling cgminer yourself.
+
+Avalon will come up as AVA.
+
+Avalon devices need the --enable-avalon option when compiling cgminer.
+
+ASICMINER block eruptors will come up as AMU.
+
+ASICMINER devices need the --enable-icarus option when compiling cgminer.
 
 
 GETTING STARTED WITH BUTTERFLY LABS ASICS
