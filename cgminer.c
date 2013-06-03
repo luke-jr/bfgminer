@@ -2186,12 +2186,15 @@ static void check_winsizes(void)
 
 static void switch_compact(void)
 {
-	if (opt_compact) {
-		logstart = devcursor + 1;
-		logcursor = logstart + 1;
-	} else {
-		logstart = devcursor + total_devices + 1;
-		logcursor = logstart + 1;
+	if (curses_active_locked()) {
+		if (opt_compact) {
+			logstart = devcursor + 1;
+			logcursor = logstart + 1;
+		} else {
+			logstart = devcursor + total_devices + 1;
+			logcursor = logstart + 1;
+		}
+		unlock_curses();
 	}
 	check_winsizes();
 }
