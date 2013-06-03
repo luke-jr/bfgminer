@@ -521,7 +521,7 @@ AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 dnl Find YASM
 has_yasm=false
 if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
-AC_PATH_PROG([YASM],[yasm],[false])
+AC_PATH_PROG([YASM],[yxasm],[false])
 if test "x$YASM" != "xfalse" ; then
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
   yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
@@ -569,6 +569,47 @@ fi
 fi
 
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
+
+have_sse2=no
+if test "x$cpumining$have_x86_32" = "xyestrue"; then
+	AC_MSG_CHECKING([if SSE2 code compiles])
+	save_CFLAGS="$CFLAGS"
+	for flags in '' '-mssex2'; do
+		CFLAGS="$CFLAGS $flags"
+		AC_TRY_LINK([
+			#include <xmmintrin.h>
+		],[
+			int *i = (int *)0xdeadbeef;
+			__m128i a, b;
+			a = _mm_set1_epi32(i[0]);
+			b = _mm_set_epi32(i[0], i[1], i[2], i[3]);
+			a = _mm_add_epi32(a, b);
+			a = _mm_andnot_si128(a, b);
+			a = _mm_or_si128(a, b);
+			a = _mm_slli_epi32(a, i[4]);
+			a = _mm_and_si128(a, b);
+			a = _mm_xor_si128(a, b);
+		],[
+			if test "x$flags" = "x"; then
+				AC_MSG_RESULT([yes])
+			else
+				AC_MSG_RESULT([with $flags])
+			fi
+			SSE2_CFLAGS="$flags"
+			have_sse2=yes
+			break
+		],[
+			true
+		])
+	done
+	CFLAGS="${save_CFLAGS}"
+	if test "x$have_sse2" = "xyes"; then
+		AC_DEFINE([HAVE_SSE2], [1], [Defined to 1 if yasm is being used])
+	else
+		AC_MSG_RESULT([no])
+	fi
+fi
+AM_CONDITIONAL([HAVE_SSE2], [test "x$have_sse2" = "xyes"])
 
 if test "x$bitforce$modminer" != xnono; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
@@ -778,6 +819,7 @@ AC_SUBST(WS2_LIBS)
 AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
 AC_SUBST(UDEV_LIBS)
+AC_SUBST(SSE2_CFLAGS)
 AC_SUBST(YASM_FMT)
 
 AC_CONFIG_FILES([

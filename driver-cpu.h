@@ -22,7 +22,7 @@
 #define OPT_SHOW_LEN 80
 #endif
 
-#ifdef __i386__
+#if defined(__i386__) && defined(HAVE_SSE2)
 #define WANT_SSE2_4WAY 1
 #endif
 
@@ -30,7 +30,7 @@
 #define WANT_ALTIVEC_4WAY 1
 #endif
 
-#if defined(__i386__) && defined(HAVE_YASM)
+#if defined(__i386__) && defined(HAVE_YASM) && defined(HAVE_SSE2)
 #define WANT_X8632_SSE2 1
 #endif
 
