@@ -356,7 +356,7 @@ static int libztex_getFpgaState(struct libztex_device *ztex, struct libztex_fpga
 	return 0;
 }
 
-static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firmware, bool force, char bs)
+static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firmware, bool force, char bs, const char *repr)
 {
 	struct libztex_fpgastate state;
 	const int transactionBytes = 65536;
@@ -386,7 +386,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	for (tries = 3; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%s: failed to read bitstream '%s'", ztex->repr, firmware);
+			applog(LOG_ERR, "%"PRIpreprv": failed to read bitstream '%s'", repr, firmware);
 			libusb_release_interface(ztex->hndl, settings[1]);
 			return -2;
 		}
@@ -425,7 +425,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 
 		libztex_getFpgaState(ztex, &state);
 		if (!state.fpgaConfigured) {
-			applog(LOG_ERR, "%s: HS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+			applog(LOG_ERR, "%"PRIpreprv": HS FPGA configuration failed: DONE pin does not go high", repr);
 			libusb_release_interface(ztex->hndl, settings[1]);
 			return -3;
 		}
@@ -434,11 +434,11 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 	libusb_release_interface(ztex->hndl, settings[1]);
 
 	nmsleep(200);
-	applog(LOG_INFO, "%s: HS FPGA configuration done", ztex->repr);
+	applog(LOG_INFO, "%"PRIpreprv": HS FPGA configuration done", repr);
 	return 0;
 }
 
-static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firmware, bool force, char bs)
+static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firmware, bool force, char bs, const char *repr)
 {
 	struct libztex_fpgastate state;
 	const int transactionBytes = 2048;
@@ -458,7 +458,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	for (tries = 10; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%s: failed to read bitstream '%s'", ztex->repr, firmware);
+			applog(LOG_ERR, "%"PRIpreprv": failed to read bitstream '%s'", repr, firmware);
 			return -2;
 		}
 
@@ -494,25 +494,25 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 
 	libztex_getFpgaState(ztex, &state);
 	if (!state.fpgaConfigured) {
-		applog(LOG_ERR, "%s: LS FPGA configuration failed: DONE pin does not go high", ztex->repr);
+		applog(LOG_ERR, "%"PRIpreprv": LS FPGA configuration failed: DONE pin does not go high", repr);
 		return -3;
 	}
 
 	nmsleep(200);
-	applog(LOG_INFO, "%s: FPGA configuration done", ztex->repr);
+	applog(LOG_INFO, "%"PRIpreprv": FPGA configuration done", repr);
 	return 0;
 }
 
-int libztex_configureFpga(struct libztex_device *ztex)
+int libztex_configureFpga(struct libztex_device *ztex, const char *repr)
 {
 	char buf[256];
 	int rv;
 
 	strcpy(buf, ztex->bitFileName);
 	strcat(buf, ".bit");
-	rv = libztex_configureFpgaHS(ztex, buf, true, 2);
+	rv = libztex_configureFpgaHS(ztex, buf, true, 2, repr);
 	if (rv != 0)
-		rv = libztex_configureFpgaLS(ztex, buf, true, 2);
+		rv = libztex_configureFpgaLS(ztex, buf, true, 2, repr);
 	return rv;
 }
 
@@ -540,10 +540,9 @@ int libztex_numberOfFpgas(struct libztex_device *ztex)
 	return ztex->numberOfFpgas;
 }
 
-int libztex_selectFpga(struct libztex_device *ztex)
+int libztex_selectFpga(struct libztex_device *ztex, int16_t number)
 {
 	int cnt, fpgacnt = libztex_numberOfFpgas(ztex->root);
-	int16_t number = ztex->fpgaNum;
 
 	if (number < 0 || number >= fpgacnt) {
 		applog(LOG_WARNING, "%s: Trying to select wrong fpga (%d in %d)", ztex->repr, number, fpgacnt);
@@ -561,7 +560,7 @@ int libztex_selectFpga(struct libztex_device *ztex)
 	return 0;
 }
 
-int libztex_setFreq(struct libztex_device *ztex, uint16_t freq)
+int libztex_setFreq(struct libztex_device *ztex, uint16_t freq, const char *repr)
 {
 	int cnt;
 	uint16_t oldfreq = ztex->dclk.freqM;
@@ -576,14 +575,14 @@ int libztex_setFreq(struct libztex_device *ztex, uint16_t freq)
 	}
 	ztex->dclk.freqM = freq;
 	if (oldfreq > ztex->dclk.freqMaxM)
-		applog(LOG_WARNING, "%s: Frequency set to %u MHz (range: %u-%u)",
-		       ztex->repr,
+		applog(LOG_WARNING, "%"PRIpreprv": Frequency set to %u MHz (range: %u-%u)",
+		       repr,
 		       (unsigned)(ztex->freqM1 * (ztex->dclk.freqM + 1)),
 		       (unsigned)ztex->freqM1,
 		       (unsigned)(ztex->freqM1 * (ztex->dclk.freqMaxM + 1))
 		);
 	else
-		dclk_msg_freqchange(ztex->repr,
+		dclk_msg_freqchange(repr,
 		                    ztex->freqM1 * (oldfreq + 1),
 		                    ztex->freqM1 * (ztex->dclk.freqM + 1),
 		                    NULL);
