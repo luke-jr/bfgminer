@@ -6941,7 +6941,7 @@ void _submit_work_async(struct work *work)
 	notifier_wake(submit_waiting_notifier);
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
 
