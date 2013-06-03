@@ -143,6 +143,15 @@ m4_define([BFG_PREPROC_IFELSE],
 )
 
 
+AC_CHECK_HEADER([uthash.h], [
+	AC_CHECK_HEADER([utlist.h], [true], [
+		AC_MSG_ERROR([Could not find utlist header - please install uthash-dev])
+	])
+], [
+	AC_MSG_ERROR([Could not find uthash header - please install uthash-dev])
+])
+
+
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],
