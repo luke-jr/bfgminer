@@ -167,6 +167,9 @@ struct cg_usb_device {
 	char *serial_string;
 	unsigned char fwVersion;	// ??
 	unsigned char interfaceVersion;	// ??
+	char *buffer;
+	uint32_t bufsiz;
+	uint32_t bufamt;
 };
 
 struct cg_usb_info {
@@ -258,6 +261,10 @@ int usb_ftdi_ctw(struct cgpu_info *cgpu);
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd);
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd);
+void usb_buffer_enable(struct cgpu_info *cgpu);
+void usb_buffer_disable(struct cgpu_info *cgpu);
+void usb_buffer_clear(struct cgpu_info *cgpu);
+uint32_t usb_buffer_size(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
 void *usb_resource_thread(void *userdata);

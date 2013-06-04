@@ -1311,6 +1311,9 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 	free(cgusb->found);
 
+	if (cgusb->buffer)
+		free(cgusb->buffer);
+
 	free(cgusb);
 
 	return NULL;
@@ -2024,6 +2027,36 @@ static void rejected_inc(struct cgpu_info *cgpu, uint32_t mode)
 }
 #endif
 
+static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int tot, char *end, int endlen, bool first)
+{
+	unsigned char *search;
+
+	if (endlen > tot)
+		return NULL;
+
+	// If end is only 1 char - do a faster search
+	if (endlen == 1) {
+		if (first)
+			search = buf;
+		else
+			search = ptr;
+
+		return strchr((char *)search, *end);
+	} else {
+		if (first)
+			search = buf;
+		else {
+			// must allow end to have been chopped in 2
+			if ((tot - ptrlen) >= (endlen - 1))
+				search = ptr - (endlen - 1);
+			else
+				search = ptr - (tot - ptrlen);
+		}
+
+		return strstr((char *)search, end);
+	}
+}
+
 #define USB_MAX_READ 8192
 
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
@@ -2037,8 +2070,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned int initial_timeout;
 	double max, done;
 	int bufleft, err, got, tot;
-	__maybe_unused bool first = true;
-	unsigned char *search;
+	bool first = true;
+	char *search;
 	int endlen;
 
 	// We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
@@ -2064,19 +2097,34 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		timeout = usbdev->found->timeout;
 
 	if (end == NULL) {
-		tot = 0;
-		ptr = usbbuf;
-		bufleft = bufsiz;
+		if (usbdev->buffer && usbdev->bufamt) {
+			tot = usbdev->bufamt;
+			bufleft = bufsiz - tot;
+			memcpy(usbbuf, usbdev->buffer, tot);
+			ptr = usbbuf + tot;
+			usbdev->bufamt = 0;
+		} else {
+			tot = 0;
+			bufleft = bufsiz;
+			ptr = usbbuf;
+		}
+
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
-			if (ftdi)
-				usbbufread = bufleft + 2;
-			else
-				usbbufread = bufleft;
+			// TODO: use (USB_MAX_READ - tot) always?
+			if (usbdev->buffer)
+				usbbufread = USB_MAX_READ - tot;
+			else {
+				if (ftdi)
+					usbbufread = bufleft + 2;
+				else
+					usbbufread = bufleft;
+			}
 			got = 0;
+
 			STATS_TIMEVAL(&tv_start);
 			err = libusb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep,
@@ -2120,6 +2168,16 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				break;
 		}
 
+		// N.B. usbdev->buffer was emptied before the while() loop
+		if (usbdev->buffer && tot > (int)bufsiz) {
+			usbdev->bufamt = tot - bufsiz;
+			memcpy(usbdev->buffer, ptr + bufsiz, usbdev->bufamt);
+			tot -= usbdev->bufamt;
+			usbbuf[tot] = '\0';
+			applog(LOG_ERR, "USB: %s%i read1 buffering %d extra bytes",
+					cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+		}
+
 		*processed = tot;
 		memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
@@ -2129,19 +2187,33 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		return err;
 	}
 
-	tot = 0;
-	ptr = usbbuf;
-	bufleft = bufsiz;
+	if (usbdev->buffer && usbdev->bufamt) {
+		tot = usbdev->bufamt;
+		bufleft = bufsiz - tot;
+		memcpy(usbbuf, usbdev->buffer, tot);
+		ptr = usbbuf + tot;
+		usbdev->bufamt = 0;
+	} else {
+		tot = 0;
+		bufleft = bufsiz;
+		ptr = usbbuf;
+	}
+
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
-		if (ftdi)
-			usbbufread = bufleft + 2;
-		else
-			usbbufread = bufleft;
+		// TODO: use (USB_MAX_READ - tot) always?
+		if (usbdev->buffer)
+			usbbufread = USB_MAX_READ - tot;
+		else {
+			if (ftdi)
+				usbbufread = bufleft + 2;
+			else
+				usbbufread = bufleft;
+		}
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
 		err = libusb_bulk_transfer(usbdev->handle,
@@ -2172,23 +2244,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		if (err || readonce)
 			break;
 
-		// WARNING - this will return data past END ('if' there is extra data)
-		if (endlen <= tot) {
-			// If END is only 1 char - do a faster search
-			if (endlen == 1) {
-				if (strchr((char *)ptr, *end))
-					break;
-			} else {
-				// must allow END to have been chopped in 2 transfers
-				if ((tot - got) >= (endlen - 1))
-					search = ptr - (endlen - 1);
-				else
-					search = ptr - (tot - got);
-
-				if (strstr((char *)search, end))
-					break;
-			}
-		}
+		if (find_end(usbbuf, ptr, got, tot, (char *)end, endlen, first))
+			break;
 
 		ptr += got;
 		bufleft -= got;
@@ -2202,6 +2259,38 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		timeout = initial_timeout - (done * 1000);
 		if (!timeout)
 			break;
+	}
+
+	if (usbdev->buffer) {
+		bool dobuffer = false;
+
+		if ((search = find_end(usbbuf, usbbuf, tot, tot, (char *)end, endlen, true))) {
+			// end finishes after bufsiz
+			if ((search + endlen - (char *)usbbuf) > (int)bufsiz) {
+				usbdev->bufamt = tot - bufsiz;
+				dobuffer = true;
+			} else {
+				// extra data after end
+				if (*(search + endlen)) {
+					usbdev->bufamt = tot - (search + endlen - (char *)usbbuf);
+					dobuffer = true;
+				}
+			}
+		} else {
+			// no end, but still bigger than bufsiz
+			if (tot > (int)bufsiz) {
+				usbdev->bufamt = tot - bufsiz;
+				dobuffer = true;
+			}
+		}
+
+		if (dobuffer) {
+			tot -= usbdev->bufamt;
+			memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
+			usbbuf[tot] = '\0';
+			applog(LOG_ERR, "USB: %s%i read2 buffering %d extra bytes",
+					cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+		}
 	}
 
 	*processed = tot;
@@ -2398,6 +2487,45 @@ int usb_ftdi_cts(struct cgpu_info *cgpu)
 
 	ret = buf[0] & FTDI_STATUS_B0_MASK;
 	return (ret & FTDI_RS0_CTS);
+}
+
+void usb_buffer_enable(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+
+	if (!cgusb->buffer) {
+		cgusb->bufamt = 0;
+		cgusb->buffer = malloc(USB_MAX_READ+1);
+		if (!cgusb->buffer)
+			quit(1, "Failed to malloc buffer for USB %s%i",
+				cgpu->drv->name, cgpu->device_id);
+		cgusb->bufsiz = USB_MAX_READ;
+	}
+}
+
+void usb_buffer_disable(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+
+	if (cgusb->buffer) {
+		cgusb->bufamt = 0;
+		cgusb->bufsiz = 0;
+		free(cgusb->buffer);
+	}
+}
+
+void usb_buffer_clear(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+
+	cgusb->bufamt = 0;
+}
+
+uint32_t usb_buffer_size(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+
+	return cgusb->bufamt;
 }
 
 void usb_cleanup()
