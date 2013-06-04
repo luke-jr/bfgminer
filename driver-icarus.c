@@ -725,8 +725,8 @@ static bool icarus_init(struct thr_info *thr)
 				info->work_division = 4;
 				break;
 			default:
-				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed: got %08x", icarus->proc_repr, res);
-				return false;
+				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed (assuming 2): got %08x", icarus->proc_repr, res);
+				info->work_division = 2;
 		}
 		applog(LOG_DEBUG, "%"PRIpreprv": Work division autodetection got %08x (=%d)", icarus->proc_repr, res, info->work_division);
 	}
