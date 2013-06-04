@@ -140,9 +140,13 @@ struct usb_find_devices {
 	int config;
 	int interface;
 	unsigned int timeout;
+	uint16_t latency;
 	int epcount;
 	struct usb_endpoints *eps;
 };
+
+#define LATENCY_UNUSED 0
+#define LATENCY_STD 40
 
 enum usb_types {
 	USB_TYPE_STD = 0,

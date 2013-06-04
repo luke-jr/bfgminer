@@ -32,10 +32,11 @@
 
 /*
  * With Firmware 1.0.0 and a result queue of 20 the Max is:
- * header = 9
- * 64+1+32+1+1+(1+8)*8+1 per line = 172 * 20
+ * inprocess = 12
+ * max count = 9
+ * 64+1+24+1+1+(1+8)*8+1 per line = 164 * 20
  * OK = 3
- * Total: 3452
+ * Total: 3304
  */
 #define BFLSC_BUFSIZ (0x1000)
 
@@ -288,6 +289,11 @@ struct SaveString {
 #define BAJ_SCAN_TIME 1000
 #define BAJ_RES_TIME 100
 #define BFLSC_MAX_SLEEP 2000
+
+#define BAJ_LATENCY LATENCY_STD
+#define BAL_LATENCY LATENCY_STD
+#define BAS_LATENCY LATENCY_STD
+#define BAM_LATENCY 2
 
 #define BFLSC_TEMP_SLEEPMS 5
 #define BFLSC_QUE_SIZE 20
@@ -559,6 +565,25 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 	return readok;
 }
 
+static void __set_latency(struct cgpu_info *bflsc)
+{
+	int err;
+
+	if (bflsc->usbinfo.nodev)
+		return;
+
+	// Latency
+	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
+				bflsc->usbdev->found->latency,
+				bflsc->usbdev->found->interface, C_LATENCY);
+
+	applog(LOG_DEBUG, "%s%i: latency got err %d",
+		bflsc->drv->name, bflsc->device_id, err);
+
+	if (bflsc->usbinfo.nodev)
+		return;
+}
+
 static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
@@ -575,6 +600,11 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	applog(LOG_DEBUG, "%s%i: reset got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
+
+	if (bflsc->usbinfo.nodev)
+		return;
+
+	__set_latency(bflsc);
 
 	if (bflsc->usbinfo.nodev)
 		return;
@@ -785,6 +815,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	int init_sleep, init_count;
 	bool ident_first;
 	char *newname;
+	uint16_t latency;
 
 	struct cgpu_info *bflsc = calloc(1, sizeof(*bflsc));
 
@@ -880,6 +911,7 @@ reinit:
 	sc_info->scan_sleep_time = BAS_SCAN_TIME;
 	sc_info->results_sleep_time = BAS_RES_TIME;
 	sc_info->default_ms_work = BAS_WORK_TIME;
+	latency = BAS_LATENCY;
 
 	/* When getinfo() "FREQUENCY: [UNKNOWN]" is fixed -
 	 * use 'freq * engines' to estimate.
@@ -891,6 +923,7 @@ reinit:
 		sc_info->results_sleep_time = BAM_RES_TIME;
 		sc_info->default_ms_work = BAM_WORK_TIME;
 		bflsc->usbdev->ident = IDENT_BAM;
+		latency = BAM_LATENCY;
 	} else {
 		if (sc_info->sc_devs[0].engines < 34) { // 16 * 2 + 2
 			newname = BFLSC_JALAPENO;
@@ -898,13 +931,20 @@ reinit:
 			sc_info->results_sleep_time = BAJ_RES_TIME;
 			sc_info->default_ms_work = BAJ_WORK_TIME;
 			bflsc->usbdev->ident = IDENT_BAJ;
+			latency = BAJ_LATENCY;
 		} else if (sc_info->sc_devs[0].engines < 130)  { // 16 * 8 + 2
 			newname = BFLSC_LITTLESINGLE;
 			sc_info->scan_sleep_time = BAL_SCAN_TIME;
 			sc_info->results_sleep_time = BAL_RES_TIME;
 			sc_info->default_ms_work = BAL_WORK_TIME;
 			bflsc->usbdev->ident = IDENT_BAL;
+			latency = BAL_LATENCY;
 		}
+	}
+
+	if (latency != bflsc->usbdev->found->latency) {
+		bflsc->usbdev->found->latency = latency;
+		__set_latency(bflsc);
 	}
 
 	for (i = 0; i < sc_info->sc_count; i++)

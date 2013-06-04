@@ -256,16 +256,21 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_LLT:
 		case IDENT_CMR1:
 		case IDENT_CMR2:
-			// Latency
-			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY, FTDI_VALUE_LATENCY,
-				 icarus->usbdev->found->interface, C_LATENCY);
-
-			if (icarus->usbinfo.nodev)
-				return;
+			if (icarus->usbdev->found->latency == LATENCY_UNUSED)
+				quit(1, "%s: cgid %d invalid latency (UNUSED)",
+					icarus->drv->name, icarus->cgminer_id);
 
 			// Reset
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
 				 icarus->usbdev->found->interface, C_RESET);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			// Latency
+			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
+				 icarus->usbdev->found->latency,
+				 icarus->usbdev->found->interface, C_LATENCY);
 
 			if (icarus->usbinfo.nodev)
 				return;

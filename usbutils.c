@@ -149,6 +149,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = BFLSC_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(bas_eps),
 		.eps = bas_eps },
 #endif
@@ -165,6 +166,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = BITFORCE_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(bfl_eps),
 		.eps = bfl_eps },
 #endif
@@ -179,6 +181,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 1,
 		.timeout = MODMINER_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
 		.epcount = ARRAY_SIZE(mmq_eps),
 		.eps = mmq_eps },
 #endif
@@ -193,6 +196,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = AVALON_TIMEOUT_MS,
+		.latency = 10,
 		.epcount = ARRAY_SIZE(ava_eps),
 		.eps = ava_eps },
 #endif
@@ -207,6 +211,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
 		.epcount = ARRAY_SIZE(ica_eps),
 		.eps = ica_eps },
 	{
@@ -219,6 +224,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
 		.epcount = ARRAY_SIZE(amu_eps),
 		.eps = amu_eps },
 	{
@@ -232,6 +238,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(llt_eps),
 		.eps = llt_eps },
 	// For any that don't match the above "BLT"
@@ -245,6 +252,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(llt_eps),
 		.eps = llt_eps },
 	{
@@ -258,6 +266,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(cmr1_eps),
 		.eps = cmr1_eps },
 	{
@@ -271,6 +280,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
+		.latency = LATENCY_STD,
 		.epcount = ARRAY_SIZE(cmr2_eps),
 		.eps = cmr2_eps },
 #endif
@@ -287,10 +297,11 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.interface = 1,
 		.timeout = 100,
+		.latency = LATENCY_UNUSED,
 		.epcount = 0,
 		.eps = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -2023,7 +2034,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	struct timeval tv_start;
 #endif
 	struct timeval read_start, tv_finish;
-	unsigned int initial_timeout, sleep_time;
+	unsigned int initial_timeout;
 	double max, done;
 	int bufleft, err, got, tot;
 	__maybe_unused bool first = true;
@@ -2058,9 +2069,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		bufleft = bufsiz;
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
-		sleep_time = initial_timeout / 2;
-		if (sleep_time > USB_READ_MINPOLL)
-			sleep_time = USB_READ_MINPOLL;
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
@@ -2107,21 +2115,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
 			if (unlikely(done >= max))
 				break;
-
-			/* Controversial. Even though libusb gives the device
-			 * a timeout, many devices (eg ftdi) simply time out
-			 * after only 1ms making this function poll every ms
-			 * if we don't sleep here, but do it only if we're not
-			 * receiving any data. */
 			timeout = initial_timeout - (done * 1000);
 			if (!timeout)
 				break;
-			if (!got && sleep_time) {
-				if (timeout <= sleep_time)
-					sleep_time = timeout - 1;
-				timeout -= sleep_time;
-				nmsleep(sleep_time);
-			}
 		}
 
 		*processed = tot;
@@ -2139,9 +2135,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
-	sleep_time = initial_timeout / 2;
-	if (sleep_time > USB_READ_MINPOLL)
-		sleep_time = USB_READ_MINPOLL;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
@@ -2206,16 +2199,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
 		if (unlikely(done >= max))
 			break;
-
 		timeout = initial_timeout - (done * 1000);
 		if (!timeout)
 			break;
-		if (!got && sleep_time) {
-			if (timeout <= sleep_time)
-				sleep_time = timeout - 1;
-			timeout -= sleep_time;
-			nmsleep(sleep_time);
-		}
 	}
 
 	*processed = tot;
@@ -2286,7 +2272,6 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 		// N.B. this is: return LIBUSB_SUCCESS with whatever size was written
 		if (unlikely(done >= max))
 			break;
-
 		timeout = initial_timeout - (done * 1000);
 		if (!timeout)
 			break;
