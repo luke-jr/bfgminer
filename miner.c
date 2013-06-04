@@ -714,11 +714,14 @@ tryagain: ;
 	memcpy(devpath, devdir, devdirlen);
 	devpath[devdirlen] = '/';
 	while ( (de = readdir(D)) ) {
+		if (!strncmp(de->d_name, "cu.usb", 6))
+			goto trydev;
 		if (strncmp(de->d_name, "tty", 3))
 			continue;
 		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
 			continue;
 		
+trydev:
 		strcpy(devfile, de->d_name);
 		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", devpath);
 		string_elist_add(devpath, &scan_devices);
