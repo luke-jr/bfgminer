@@ -2493,6 +2493,18 @@ int usb_ftdi_set_latency(struct cgpu_info *cgpu)
 {
 	int err;
 
+	if (cgpu->usbdev->usb_type != USB_TYPE_FTDI) {
+		applog(LOG_ERR, "%s: cgid %d latency request on non-FTDI device",
+			cgpu->drv->name, cgpu->cgminer_id);
+		return LIBUSB_ERROR_NOT_SUPPORTED;
+	}
+
+	if (cgpu->usbdev->found->latency == LATENCY_UNUSED) {
+		applog(LOG_ERR, "%s: cgid %d invalid latency (UNUSED)",
+			cgpu->drv->name, cgpu->cgminer_id);
+		return LIBUSB_ERROR_NOT_SUPPORTED;
+	}
+
 	err = usb_transfer_data(cgpu, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
 				cgpu->usbdev->found->latency,
 				cgpu->usbdev->found->interface, NULL, 0, C_LATENCY);
