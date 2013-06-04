@@ -2489,6 +2489,21 @@ int usb_ftdi_cts(struct cgpu_info *cgpu)
 	return (ret & FTDI_RS0_CTS);
 }
 
+int usb_ftdi_set_latency(struct cgpu_info *cgpu)
+{
+	int err;
+
+	err = usb_transfer_data(cgpu, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
+				cgpu->usbdev->found->latency,
+				cgpu->usbdev->found->interface, NULL, 0, C_LATENCY);
+
+	applog(LOG_DEBUG, "%s: cgid %d %s got err %d",
+				cgpu->drv->name, cgpu->cgminer_id,
+				usb_cmdname(C_LATENCY), err);
+
+	return err;
+}
+
 void usb_buffer_enable(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
