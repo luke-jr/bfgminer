@@ -565,25 +565,6 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 	return readok;
 }
 
-static void __set_latency(struct cgpu_info *bflsc)
-{
-	int err;
-
-	if (bflsc->usbinfo.nodev)
-		return;
-
-	// Latency
-	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
-				bflsc->usbdev->found->latency,
-				bflsc->usbdev->found->interface, C_LATENCY);
-
-	applog(LOG_DEBUG, "%s%i: latency got err %d",
-		bflsc->drv->name, bflsc->device_id, err);
-
-	if (bflsc->usbinfo.nodev)
-		return;
-}
-
 static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
 	int err;
@@ -604,7 +585,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 	if (bflsc->usbinfo.nodev)
 		return;
 
-	__set_latency(bflsc);
+	usb_ftdi_set_latency(bflsc);
 
 	if (bflsc->usbinfo.nodev)
 		return;
@@ -944,7 +925,7 @@ reinit:
 
 	if (latency != bflsc->usbdev->found->latency) {
 		bflsc->usbdev->found->latency = latency;
-		__set_latency(bflsc);
+		usb_ftdi_set_latency(bflsc);
 	}
 
 	for (i = 0; i < sc_info->sc_count; i++)
