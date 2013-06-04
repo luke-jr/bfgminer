@@ -32,10 +32,11 @@
 
 /*
  * With Firmware 1.0.0 and a result queue of 20 the Max is:
- * header = 9
- * 64+1+32+1+1+(1+8)*8+1 per line = 172 * 20
+ * inprocess = 12
+ * max count = 9
+ * 64+1+24+1+1+(1+8)*8+1 per line = 164 * 20
  * OK = 3
- * Total: 3452
+ * Total: 3304
  */
 #define BFLSC_BUFSIZ (0x1000)
 
