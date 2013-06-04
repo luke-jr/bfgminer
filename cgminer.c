@@ -2220,6 +2220,10 @@ void wlogprint(const char *f, ...)
 		unlock_curses();
 	}
 }
+#else
+static void switch_logsize(void)
+{
+}
 #endif
 
 #ifdef HAVE_CURSES
