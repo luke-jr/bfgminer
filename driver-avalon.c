@@ -498,6 +498,16 @@ static void avalon_initialise(struct cgpu_info *avalon)
 	if (avalon->usbinfo.nodev)
 		return;
 
+	// Set latency
+	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
+				AVALON_READ_TIMEOUT, interface, C_LATENCY);
+
+	applog(LOG_DEBUG, "%s%i: latency got err %d",
+		avalon->drv->name, avalon->device_id, err);
+
+	if (avalon->usbinfo.nodev)
+		return;
+
 	// Set data
 	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
 				FTDI_VALUE_DATA_AVA, interface, C_SETDATA);
@@ -745,7 +755,6 @@ static void *avalon_get_results(void *userdata)
 	RenameThread(threadname);
 
 	while (likely(!avalon->shutdown)) {
-		struct timeval tv_start, now, tdiff;
 		unsigned char buf[rsize];
 		int ret;
 
@@ -767,20 +776,11 @@ static void *avalon_get_results(void *userdata)
 			offset = 0;
 		}
 
-		cgtime(&tv_start);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
 				  C_AVALON_READ);
 
-		if (ret < 1) {
-			int us_delay;
-
-			cgtime(&now);
-			timersub(&now, &tv_start, &tdiff);
-			us_delay = AVALON_READ_TIMEOUT * 1000 - (tdiff.tv_usec);
-			if (us_delay > 0)
-				nusleep(us_delay);
+		if (ret < 1)
 			continue;
-		}
 
 		if (opt_debug) {
 			applog(LOG_DEBUG, "Avalon: get:");
