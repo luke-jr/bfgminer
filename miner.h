@@ -210,6 +210,11 @@ static inline int fsync (int fd)
 #endif
 #endif
 
+/* No semtimedop on apple so ignore timeout till we implement one */
+#ifdef __APPLE__
+#define semtimedop(SEM, SOPS, VAL, TIMEOUT) semop(SEM, SOPS, VAL)
+#endif
+
 #define MIN(x, y)	((x) > (y) ? (y) : (x))
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 
