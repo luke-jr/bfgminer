@@ -471,6 +471,12 @@ static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen,
 	struct DataForwardToChain data;
 	int len;
 
+	/*
+	 * The protocol is syncronous so any previous excess can be
+	 * discarded and assumed corrupt data or failed USB transfers
+	 */
+	usb_buffer_clear(bflsc);
+
 	if (dev == 0)
 		return usb_write(bflsc, buf, buflen, amount, cmd);
 
@@ -948,6 +954,8 @@ reinit:
 
 	mutex_init(&bflsc->device_mutex);
 	rwlock_init(&sc_info->stat_lock);
+
+	usb_buffer_enable(bflsc);
 
 	return true;
 
