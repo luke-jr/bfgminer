@@ -432,7 +432,6 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		if (first)
 			copy_time(tv_finish, &read_finish);
 
-		// TODO: test if there is more data? to read a 2nd nonce?
 		if (amt >= read_amount)
 			return ICA_NONCE_OK;
 
@@ -830,6 +829,8 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	set_timing_mode(this_option_offset, icarus);
 
+	usb_buffer_enable(icarus);
+
 	return true;
 
 unshin:
@@ -898,6 +899,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	rev(ob_bin, 32);
 	rev(ob_bin + 52, 12);
 
+	// We only want results for the work we are about to send
+	usb_buffer_clear(icarus);
+
 	err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(ob_bin)) {
 		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
@@ -955,6 +959,20 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	hash_count = (nonce & info->nonce_mask);
 	hash_count++;
 	hash_count *= info->fpga_count;
+
+#if 0
+	// This appears to only return zero nonce values
+	if (usb_buffer_size(icarus) > 3) {
+		memcpy((char *)&nonce, icarus->usbdev->buffer, sizeof(nonce_bin));
+		nonce = htobe32(nonce);
+		applog(LOG_WARNING, "%s%d: attempting to submit 2nd nonce = 0x%08lX",
+				icarus->drv->name, icarus->device_id,
+				(long unsigned int)nonce);
+		curr_hw_errors = icarus->hw_errors;
+		submit_nonce(thr, work, nonce);
+		was_hw_error = (curr_hw_errors > icarus->hw_errors);
+	}
+#endif
 
 	if (opt_debug || info->do_icarus_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
