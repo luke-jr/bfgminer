@@ -2538,6 +2538,7 @@ void usb_buffer_disable(struct cgpu_info *cgpu)
 		cgusb->bufamt = 0;
 		cgusb->bufsiz = 0;
 		free(cgusb->buffer);
+		cgusb->buffer = NULL;
 	}
 }
 
