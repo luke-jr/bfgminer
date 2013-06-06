@@ -1319,23 +1319,32 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 	return NULL;
 }
 
+/* Called with cgpu->usbinfo.lock held */
+static void __usb_uninit(struct cgpu_info *cgpu)
+{
+	// May have happened already during a failed initialisation
+	//  if __release_cgpu() was called due to a USB NODEV(err)
+	if (!cgpu->usbdev)
+		return;
+	if  (!libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface))
+		libusb_close(cgpu->usbdev->handle);
+	cgpu->usbdev = free_cgusb(cgpu->usbdev);
+}
+
 void usb_uninit(struct cgpu_info *cgpu)
 {
 	applog(LOG_DEBUG, "USB uninit %s%i",
 			cgpu->drv->name, cgpu->device_id);
 
-	// May have happened already during a failed initialisation
-	//  if release_cgpu() was called due to a USB NODEV(err)
-	if (!cgpu->usbdev)
-		return;
-	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
-	libusb_close(cgpu->usbdev->handle);
-	cgpu->usbdev = free_cgusb(cgpu->usbdev);
+	mutex_lock(&cgpu->usbinfo.lock);
+	__usb_uninit(cgpu);
+	mutex_unlock(&cgpu->usbinfo.lock);
 }
 
-static void release_cgpu(struct cgpu_info *cgpu)
+/* Called with cgpu->usbinfo.lock held */
+static void __release_cgpu(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cg_usb_device *cgusb;
 	struct cgpu_info *lookcgpu;
 	int i;
 
@@ -1346,6 +1355,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	if (cgpu->usbinfo.nodev)
 		return;
 
+	cgusb = cgpu->usbdev;
 	total_count--;
 	drv_count[cgpu->drv->drv_id].count--;
 
@@ -1369,9 +1379,18 @@ static void release_cgpu(struct cgpu_info *cgpu)
 		}
 	}
 
-	usb_uninit(cgpu);
+	applog(LOG_DEBUG, "USB uninit %s%i",
+			cgpu->drv->name, cgpu->device_id);
+	__usb_uninit(cgpu);
 
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+}
+
+static void release_cgpu(struct cgpu_info *cgpu)
+{
+	mutex_lock(&cgpu->usbinfo.lock);
+	__release_cgpu(cgpu);
+	mutex_unlock(&cgpu->usbinfo.lock);
 }
 
 #define USB_INIT_FAIL 0
@@ -1620,6 +1639,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			cgpu->drv = copy_drv(cgpu->drv);
 		cgpu->drv->name = (char *)(found->name);
 	}
+
+	mutex_init(&cgpu->usbinfo.lock);
 
 	return USB_INIT_OK;
 
@@ -2061,7 +2082,7 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 	bool ftdi;
 #if DO_USB_STATS
 	struct timeval tv_start;
@@ -2078,14 +2099,17 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
 	size_t usbbufread;
 
+	mutex_lock(&cgpu->usbinfo.lock);
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
 		*processed = 0;
 		USB_REJECT(cgpu, MODE_BULK_READ);
 
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 
+	usbdev = cgpu->usbdev;
 	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
 	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
@@ -2182,9 +2206,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
 		if (NODEV(err))
-			release_cgpu(cgpu);
+			__release_cgpu(cgpu);
 
-		return err;
+		goto out_unlock;
 	}
 
 	if (usbdev->buffer && usbdev->bufamt) {
@@ -2297,14 +2321,17 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
 	if (NODEV(err))
-		release_cgpu(cgpu);
+		__release_cgpu(cgpu);
+
+out_unlock:
+	mutex_unlock(&cgpu->usbinfo.lock);
 
 	return err;
 }
 
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start;
 #endif
@@ -2318,11 +2345,15 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 	*processed = 0;
 
+	mutex_lock(&cgpu->usbinfo.lock);
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_BULK_WRITE);
 
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
+
+	usbdev = cgpu->usbdev;
 
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
@@ -2369,14 +2400,17 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	*processed = tot;
 
 	if (NODEV(err))
-		release_cgpu(cgpu);
+		__release_cgpu(cgpu);
+
+out_unlock:
+	mutex_unlock(&cgpu->usbinfo.lock);
 
 	return err;
 }
 
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2385,10 +2419,12 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
 
+	mutex_lock(&cgpu->usbinfo.lock);
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_WRITE);
 
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 
 	USBDEBUG("USB debug: @_usb_transfer() data=%s", bin2hex((unsigned char *)data, (size_t)siz));
@@ -2406,6 +2442,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
 
+	usbdev = cgpu->usbdev;
+
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex, (unsigned char *)buf, (uint16_t)siz,
@@ -2421,14 +2459,16 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 		free(buf);
 
 	if (NODEV(err))
-		release_cgpu(cgpu);
+		__release_cgpu(cgpu);
+out_unlock:
+	mutex_unlock(&cgpu->usbinfo.lock);
 
 	return err;
 }
 
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2436,13 +2476,17 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 
 	USBDEBUG("USB debug: _usb_transfer_read(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",bufsiz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, bufsiz, timeout, usb_cmdname(cmd));
 
+	mutex_lock(&cgpu->usbinfo.lock);
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_READ);
 
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 
 	*amount = 0;
+
+	usbdev = cgpu->usbdev;
 
 	STATS_TIMEVAL(&tv_start);
 	err = libusb_control_transfer(usbdev->handle, request_type,
@@ -2460,7 +2504,10 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		*amount = err;
 		err = 0;
 	} else if (NODEV(err))
-		release_cgpu(cgpu);
+		__release_cgpu(cgpu);
+
+out_unlock:
+	mutex_unlock(&cgpu->usbinfo.lock);
 
 	return err;
 }
