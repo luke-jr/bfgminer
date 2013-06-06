@@ -1,3 +1,58 @@
+Version 3.2.1 - 7th June 2013
+
+- AMU usbstatus correct name from enable UART
+- Icarus AMU enable the UART
+- Only libusb close if libusb release succeeds.
+- Failed reads and writes on cgsem_post and cgsem_wait should be extremely rare.
+- Implement cgminer specific cgsem semaphores to imitate unnamed semaphore
+behaviour on osx which does not support them.
+- Set cgusb->buffer to NULL when doing usb_buffer_disable.
+- Temporarily fix apple not having semtimedop by ignoring the timeout value.
+- BFLSC enable buffered USB reading
+- Icarus use buffered USB reading
+- bflsc & icarus use usb_ftdi_set_latency
+- usb_ftdi_set_latency LOG_ERRs if called incorrectly
+- add usb_ftdi_set_latency
+- usbutils optional read buffering
+- Set the avalon read transfer latency to avoid sleeping when no data is
+returned after very short latency settings.
+- correct bflsc BFLSC_BUFSIZ max calculation
+- Fix build for !curses
+- restore max code - since timeout is unsigned
+- compile warning - remove unused max
+- usb set FTDI latency higher to minimise status bytes
+- Check for zero timeout on _usb_write.
+- Check for zero timeout in usb read.
+- Define a minimum polling time based on frequency of mandatory updates of ftdi
+responses at 40ms.
+- Sleep right up to the timeout instead of the first half if we find ourselves
+polling in _usb_read
+- Enforce half timeout sized sleeps in usb_read if we find the device is not
+respecting libusb timeouts to avoid polling frequently.
+- Add more ASIC documentation.
+- Update README
+- Remove start device limitation on log window size to allow it to get larger
+with hotplugged devices.
+- Switch logsize after hotplugging a device.
+- Change switch_compact function name to switch_logsize to be used for other
+changes.
+- Only adjust cursor positions with curses locked.
+- devs display - fix GPU duplicate bug
+- Do not hotplug enable a device if devices have been specified and the hotplug
+device falls outside this range.
+- Change the --device parameter parsing and configuration to use ranges and
+comma separated values.
+- basic copyright statement in API.java
+- devs display - show ZOMBIEs after all others
+- Modify scrypt kernel message.
+- Check for pool_disabled in wait_lp_current
+- usbutils semun use proper def for linux which fixes OSX also
+- Check for pool enabled in cnx_needed.
+- Icarus add delays during intialisation
+- Update documentation.
+- Update copyrights of modified files.
+
+
 Version 3.2.0 - 31st May 2013
 
 - Add FAQ about windows USB keyboards and hotplug interactions.
