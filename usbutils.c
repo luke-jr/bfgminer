@@ -2063,7 +2063,7 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 	bool ftdi;
 #if DO_USB_STATS
 	struct timeval tv_start;
@@ -2088,6 +2088,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
 
+	usbdev = cgpu->usbdev;
 	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
 	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
@@ -2306,7 +2307,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start;
 #endif
@@ -2325,6 +2326,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
+
+	usbdev = cgpu->usbdev;
 
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
@@ -2378,7 +2381,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2392,6 +2395,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
+	usbdev = cgpu->usbdev;
 
 	USBDEBUG("USB debug: @_usb_transfer() data=%s", bin2hex((unsigned char *)data, (size_t)siz));
 
@@ -2430,7 +2434,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
-	struct cg_usb_device *usbdev = cgpu->usbdev;
+	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2443,6 +2447,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
+	usbdev = cgpu->usbdev;
 
 	*amount = 0;
 
