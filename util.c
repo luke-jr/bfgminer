@@ -1898,7 +1898,7 @@ void cgsem_post(cgsem_t *cgsem)
 	int ret;
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
-	if (ret == 0)
+	if (unlikely(ret == 0))
 		quit(1, "Failed to write in cgsem_post");
 }
 
@@ -1908,7 +1908,7 @@ void cgsem_wait(cgsem_t *cgsem)
 	int ret;
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
-	if (ret == 0)
+	if (unlikely(ret == 0))
 		quit(1, "Failed to read in cgsem_wait");
 }
 
