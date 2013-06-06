@@ -994,20 +994,15 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon->device_data;
-	int lowfan = 10000, pwm;
+	int lowfan = 10000;
 
-	/* Find the lowest fan speed. Fan0 is often not populated. */
-	if (info->fan0 > 0)
-		lowfan = info->fan0;
+	/* Find the lowest fan speed of the ASIC cooling fans. */
 	if (info->fan1 >= 0 && info->fan1 < lowfan)
 		lowfan = info->fan1;
 	if (info->fan2 >= 0 && info->fan2 < lowfan)
 		lowfan = info->fan2;
 
-	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
-
-	tailsprintf(buf, "%2d/%3dC %3d%%/%04dR| ", info->temp0, info->temp2,
-		    pwm, lowfan);
+	tailsprintf(buf, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
 }
 
 /* We use a replacement algorithm to only remove references to work done from
