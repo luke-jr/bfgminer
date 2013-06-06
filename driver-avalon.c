@@ -769,8 +769,8 @@ static void *avalon_get_results(void *userdata)
 
 		if (unlikely(info->reset)) {
 			/* Tell the write thread it can start the reset */
-			sem_post(&info->write_sem);
-			sem_wait(&info->read_sem);
+			cgsem_post(&info->write_sem);
+			cgsem_wait(&info->read_sem);
 
 			/* Discard anything in the buffer */
 			offset = 0;
@@ -820,9 +820,9 @@ static void *avalon_send_tasks(void *userdata)
 		if (unlikely(info->reset)) {
 			/* Wait till read thread tells us it's received the
 			 * reset message */
-			sem_wait(&info->write_sem);
+			cgsem_wait(&info->write_sem);
 			avalon_running_reset(avalon, info);
-			sem_post(&info->read_sem);
+			cgsem_post(&info->read_sem);
 		}
 
 		mutex_lock(&info->qlock);
@@ -890,10 +890,8 @@ static bool avalon_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
-	if (unlikely(sem_init(&info->read_sem, 0, 0)))
-		quit(1, "Failed to sem_init avalon read_sem");
-	if (unlikely(sem_init(&info->write_sem, 0, 0)))
-		quit(1, "Failed to sem_init avalon write_sem");
+	cgsem_init(&info->read_sem);
+	cgsem_init(&info->write_sem);
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
@@ -918,6 +916,9 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon_running_reset(avalon, info);
 
 	info->no_matching_work = 0;
+
+	cgsem_destroy(&info->read_sem);
+	cgsem_destroy(&info->write_sem);
 }
 
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)

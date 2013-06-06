@@ -1225,7 +1225,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 	res_work_head = res_work;
 	mutex_unlock(&cgusbres_lock);
 
-	sem_post(&usb_resource_sem);
+	cgsem_post(&usb_resource_sem);
 
 	// TODO: add a timeout fail - restart the resource thread?
 	while (true) {
@@ -1284,7 +1284,7 @@ static void cgminer_usb_unlock_bd(struct device_drv *drv, uint8_t bus_number, ui
 	res_work_head = res_work;
 	mutex_unlock(&cgusbres_lock);
 
-	sem_post(&usb_resource_sem);
+	cgsem_post(&usb_resource_sem);
 
 	return;
 }
@@ -2610,6 +2610,8 @@ void usb_cleanup()
 		}
 		mutex_unlock(&cgusbres_lock);
 	}
+
+	cgsem_destroy(&usb_resource_sem);
 }
 
 void usb_initialise()
@@ -3115,7 +3117,7 @@ void *usb_resource_thread(void __maybe_unused *userdata)
 
 	while (42) {
 		/* Wait to be told we have work to do */
-		sem_wait(&usb_resource_sem);
+		cgsem_wait(&usb_resource_sem);
 
 		mutex_lock(&cgusbres_lock);
 		while (res_work_head)

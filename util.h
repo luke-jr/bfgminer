@@ -1,6 +1,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <semaphore.h>
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <sys/socket.h>
@@ -50,6 +52,18 @@
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
 
+/* cgminer specific unnamed semaphore implementations to cope with osx not
+ * implementing them. */
+#ifdef __APPLE__
+struct cgsem {
+	int pipefd[2];
+};
+
+typedef struct cgsem cgsem_t;
+#else
+typedef sem_t cgsem_t;
+#endif
+
 struct thr_info;
 struct pool;
 enum dev_reason;
@@ -80,6 +94,10 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void *str_text(char *ptr);
 void RenameThread(const char* name);
+void cgsem_init(cgsem_t *cgsem);
+void cgsem_post(cgsem_t *cgsem);
+void cgsem_wait(cgsem_t *cgsem);
+void cgsem_destroy(cgsem_t *cgsem);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)

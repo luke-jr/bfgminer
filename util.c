@@ -1870,3 +1870,74 @@ void RenameThread(const char* name)
 #endif
 }
 
+/* cgminer specific wrappers for true unnamed semaphore usage on platforms
+ * that support them and for apple which does not. We use a single byte across
+ * a pipe to emulate semaphore behaviour there. */
+#ifdef __APPLE__
+void cgsem_init(cgsem_t *cgsem)
+{
+	int flags, fd, i;
+
+	if (pipe(cgsem->pipefd) == -1)
+		quit(1, "Failed pipe in cgsem_init");
+
+	/* Make the pipes FD_CLOEXEC to allow them to close should we call
+	 * execv on restart. */
+	for (i = 0; i < 2; i++) {
+		fd = cgsem->pipefd[i];
+		flags = fcntl(fd, F_GETFD, 0);
+		flags |= FD_CLOEXEC;
+		if (fcntl(fd, F_SETFD, flags) == -1)
+			quit(1, "Failed to fcntl in cgsem_init");
+	}
+}
+
+void cgsem_post(cgsem_t *cgsem)
+{
+	const char buf = 1;
+	int ret;
+
+	ret = write(cgsem->pipefd[1], &buf, 1);
+	if (ret == 0)
+		quit(1, "Failed to write in cgsem_post");
+}
+
+void cgsem_wait(cgsem_t *cgsem)
+{
+	char buf;
+	int ret;
+
+	ret = read(cgsem->pipefd[0], &buf, 1);
+	if (ret == 0)
+		quit(1, "Failed to read in cgsem_wait");
+}
+
+void cgsem_destroy(cgsem_t *cgsem)
+{
+	close(cgsem->pipefd[1]);
+	close(cgsem->pipefd[0]);
+}
+#else
+void cgsem_init(cgsem_t *cgsem)
+{
+	if (sem_init(cgsem, 0, 0))
+		quit(1, "Failed to sem_init in cgsem_init");
+}
+
+void cgsem_post(cgsem_t *cgsem)
+{
+	if (unlikely(sem_post(cgsem)))
+		quit(1, "Failed to sem_post in cgsem_post");
+}
+
+void cgsem_wait(cgsem_t *cgsem)
+{
+	if (unlikely(sem_wait(cgsem)))
+		quit(1, "Failed to sem_wait in cgsem_wait");
+}
+
+void cgsem_destroy(cgsem_t *cgsem)
+{
+	sem_destroy(cgsem);
+}
+#endif
