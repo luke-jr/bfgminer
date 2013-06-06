@@ -367,7 +367,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
-				 icarus->usbdev->found->interface, C_PURGETX);
+				 icarus->usbdev->found->interface, C_ENABLE_UART);
 
 			if (icarus->usbinfo.nodev)
 				return;

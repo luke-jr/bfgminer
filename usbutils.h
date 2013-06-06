@@ -243,6 +243,7 @@ enum usb_cmds {
 	C_AVALON_RESET,
 	C_GET_AVALON_RESET,
 	C_FTDI_STATUS,
+	C_ENABLE_UART,
 	C_MAX
 };
 
