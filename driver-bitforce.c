@@ -38,6 +38,7 @@
 #define BITFORCE_MAX_QUEUED 10
 #define BITFORCE_MAX_QRESULTS 10
 #define BITFORCE_GOAL_QRESULTS (BITFORCE_MAX_QRESULTS / 2)
+#define BITFORCE_MIN_QRESULT_WAIT BITFORCE_CHECK_INTERVAL_MS
 #define BITFORCE_MAX_QRESULT_WAIT 1000
 #define BITFORCE_MAX_BQUEUE_AT_ONCE 5
 
@@ -1489,12 +1490,15 @@ next_qline: (void)0;
 	
 	bitforce_set_queue_full(thr);
 	
-	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1) || count > BITFORCE_GOAL_QRESULTS)
+	if ((count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1)
+	 || (count > BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms > BITFORCE_MIN_QRESULT_WAIT))
 	{
 		unsigned int old_sleep_ms = bitforce->sleep_ms;
 		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
 		if (bitforce->sleep_ms > BITFORCE_MAX_QRESULT_WAIT)
 			bitforce->sleep_ms = BITFORCE_MAX_QRESULT_WAIT;
+		if (bitforce->sleep_ms < BITFORCE_MIN_QRESULT_WAIT)
+			bitforce->sleep_ms = BITFORCE_MIN_QRESULT_WAIT;
 		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time changed to: %ums (queued<=%d)",
 		       bitforce->proc_repr, count, old_sleep_ms, bitforce->sleep_ms, data->queued);
 	}
