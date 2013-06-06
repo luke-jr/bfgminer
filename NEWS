@@ -1,5 +1,7 @@
 Version 3.2.1 - 7th June 2013
 
+- Set usbdev in usbutils after checking for nodev to avoid trying to access a
+dereferenced value.
 - AMU usbstatus correct name from enable UART
 - Icarus AMU enable the UART
 - Only libusb close if libusb release succeeds.
