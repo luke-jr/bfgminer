@@ -364,6 +364,16 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_AMU:
 			nmsleep(20);
 
+			// Enable the UART
+			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
+				 CP210X_VALUE_UART_ENABLE,
+				 icarus->usbdev->found->interface, C_PURGETX);
+
+			if (icarus->usbinfo.nodev)
+				return;
+
+			nmsleep(20);
+
 			// Set data control
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_DATA, CP210X_VALUE_DATA,
 				 icarus->usbdev->found->interface, C_SETDATA);
