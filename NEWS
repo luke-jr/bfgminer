@@ -1,5 +1,7 @@
 Version 3.2.1 - 7th June 2013
 
+- Shorten the avalon statline to fit in the curses interface and show the lowest
+speed fan cooling the asic devices.
 - Set usbdev in usbutils after checking for nodev to avoid trying to access a
 dereferenced value.
 - AMU usbstatus correct name from enable UART
