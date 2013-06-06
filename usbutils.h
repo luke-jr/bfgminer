@@ -156,6 +156,7 @@ enum usb_types {
 struct cg_usb_device {
 	struct usb_find_devices *found;
 	libusb_device_handle *handle;
+	pthread_mutex_t *mutex;
 	struct libusb_device_descriptor *descriptor;
 	enum usb_types usb_type;
 	enum sub_ident ident;
@@ -172,7 +173,6 @@ struct cg_usb_device {
 };
 
 struct cg_usb_info {
-	pthread_mutex_t lock;
 	uint8_t bus_number;
 	uint8_t device_address;
 	int usbstat;
