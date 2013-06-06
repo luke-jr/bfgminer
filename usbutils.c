@@ -1328,8 +1328,8 @@ void usb_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
-	libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface);
-	libusb_close(cgpu->usbdev->handle);
+	if (!libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface))
+		libusb_close(cgpu->usbdev->handle);
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }
 
