@@ -1363,13 +1363,19 @@ struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
 #ifdef HAVE_CURSES
+static bool _curses_cancel_disabled;
+static int _curses_prev_cancelstate;
+
 static inline void unlock_curses(void)
 {
 	mutex_unlock(&console_lock);
+	if (_curses_cancel_disabled)
+		pthread_setcancelstate(_curses_prev_cancelstate, &_curses_prev_cancelstate);
 }
 
 static inline void lock_curses(void)
 {
+	_curses_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_curses_prev_cancelstate);
 	mutex_lock(&console_lock);
 }
 
