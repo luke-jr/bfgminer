@@ -25,6 +25,10 @@ plugged in but you cannot see it, use the Menu: Options -> List All Devices
 You must also make sure you are using the latest libusb-1.0.dll supplied
 with cgminer (not the libusbx version)
 
+When you first switch a device over to WinUSB with Zadig and it shows that
+correctly on the left of the Zadig window, but it still gives permission
+errors, you may need to unplug the USB miner and then plug it back in
+
 -
 
 When mining on linux, but not using 'sudo' and not logged into 'root' you
