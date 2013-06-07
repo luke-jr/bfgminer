@@ -3496,6 +3496,9 @@ static void __kill_work(void)
 		thr = get_thread(i);
 		if (thr->cgpu->threads)
 		{
+			struct device_drv *drv = thr->cgpu->drv;
+
+			drv->thread_shutdown(thr);
 			thr_info_cancel(thr);
 			pthread_join(thr->pth, NULL);
 		}
@@ -7266,7 +7269,7 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
 

@@ -157,7 +157,7 @@ void minerloop_scanhash(struct thr_info *mythr)
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 #endif
 	
-	while (1) {
+	while (likely(!cgpu->shutdown)) {
 		mythr->work_restart = false;
 		request_work(mythr);
 		work = get_and_prepare_work(mythr);
@@ -401,7 +401,7 @@ void minerloop_async(struct thr_info *mythr)
 	if (mythr->work_restart_notifier[1] == -1)
 		notifier_init(mythr->work_restart_notifier);
 	
-	while (1) {
+	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
 		for (proc = cgpu; proc; proc = proc->next_proc)
@@ -486,7 +486,7 @@ void minerloop_queue(struct thr_info *thr)
 	if (thr->work_restart_notifier[1] == -1)
 		notifier_init(thr->work_restart_notifier);
 	
-	while (1) {
+	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
 		for (proc = cgpu; proc; proc = proc->next_proc)
