@@ -1540,8 +1540,13 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 	)
 	{
 		if (!bitforce_send_queue(thr))
+		{
 			// Problem sending queue, retry again in a few seconds
+			applog(LOG_ERR, "%"PRIpreprv": Failed to send queue", bitforce->proc_repr);
+			++bitforce->hw_errors;
+			++hw_errors;
 			data->want_to_send_queue = true;
+		}
 	}
 	
 	return rv;
@@ -1596,7 +1601,12 @@ void bitforce_queue_poll(struct thr_info *thr)
 	if (data->want_to_send_queue)
 		if (!bitforce_send_queue(thr))
 			if (!data->queued)
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Failed to send queue, and queue empty; retrying after 1 second", bitforce->proc_repr);
+				++bitforce->hw_errors;
+				++hw_errors;
 				sleep_us = 1000000;
+			}
 	
 	timer_set_delay_from_now(&thr->tv_poll, sleep_us);
 }
