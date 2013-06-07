@@ -1082,6 +1082,29 @@ void nmsleep(unsigned int msecs)
 #endif
 }
 
+/* Same for usecs */
+void nusleep(unsigned int usecs)
+{
+	struct timespec twait, tleft;
+	int ret;
+	ldiv_t d;
+
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	d = ldiv(usecs, 1000000);
+	tleft.tv_sec = d.quot;
+	tleft.tv_nsec = d.rem * 1000;
+	do {
+		twait.tv_sec = tleft.tv_sec;
+		twait.tv_nsec = tleft.tv_nsec;
+		ret = nanosleep(&twait, &tleft);
+	} while (ret == -1 && errno == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
 /* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
  * with tz set to NULL, and windows' default resolution is only 15ms, this
  * gives us higher resolution times on windows. */
