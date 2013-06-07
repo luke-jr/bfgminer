@@ -3541,6 +3541,7 @@ static void __kill_work(void)
 			continue;
 
 		cgpu->shutdown = true;
+		notifier_wake(thr->notifier);
 	}
 
 	sleep(1);
