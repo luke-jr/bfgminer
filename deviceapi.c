@@ -577,6 +577,7 @@ void *miner_thread(void *userdata)
 		drv->minerloop(mythr);
 	else
 		minerloop_scanhash(mythr);
+	cgpu->deven = DEV_DISABLED;
 
 out:
 	if (drv->thread_shutdown)

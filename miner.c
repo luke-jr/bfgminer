@@ -7321,6 +7321,7 @@ void hash_queued_work(struct thr_info *mythr)
 				drv->flush_work(cgpu);
 		}
 	}
+	// cgpu->deven = DEV_DISABLED; set in miner_thread
 }
 
 void mt_disable_finish(struct thr_info *mythr)
