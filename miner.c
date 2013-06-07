@@ -2575,16 +2575,13 @@ static void adj_width(int var, int *length)
 
 static int dev_width;
 
-static void curses_print_devstatus(int thr_id)
+static void curses_print_devstatus(struct cgpu_info *cgpu)
 {
-	struct cgpu_info *cgpu;
 	char logline[256];
 	int ypos;
 
 	if (opt_compact)
 		return;
-
-	cgpu = get_thr_cgpu(thr_id);
 
 	/* Check this isn't out of the window size */
 	if (opt_show_procs)
@@ -5874,8 +5871,8 @@ static void *input_thread(void __maybe_unused *userdata)
 			++devsummaryYOffset;
 			if (curses_active_locked()) {
 				int i;
-				for (i = 0; i < mining_threads; i++)
-					curses_print_devstatus(i);
+				for (i = 0; i < total_devices; i++)
+					curses_print_devstatus(get_devices(i));
 				touchwin(statuswin);
 				wrefresh(statuswin);
 				unlock_curses();
@@ -7797,8 +7794,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status();
-			for (i = 0; i < mining_threads; i++)
-				curses_print_devstatus(i);
+			for (i = 0; i < total_devices; i++)
+				curses_print_devstatus(get_devices(i));
 			touchwin(statuswin);
 			wrefresh(statuswin);
 			touchwin(logwin);
