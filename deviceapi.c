@@ -566,6 +566,7 @@ void *miner_thread(void *userdata)
 		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
 		for (struct cgpu_info *slave = cgpu->next_proc; slave && !slave->threads; slave = slave->next_proc)
 			dev_error(slave, REASON_THREAD_FAIL_INIT);
+		__thr_being_msg(LOG_ERR, mythr, "failure, exiting");
 		goto out;
 	}
 
@@ -577,14 +578,14 @@ void *miner_thread(void *userdata)
 		drv->minerloop(mythr);
 	else
 		minerloop_scanhash(mythr);
-	cgpu->deven = DEV_DISABLED;
+	__thr_being_msg(LOG_NOTICE, mythr, "shutting down");
 
 out:
+	cgpu->deven = DEV_DISABLED;
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
 
 	thread_reportin(mythr);
-	__thr_being_msg(mythr, "failure, exiting");
 	notifier_destroy(mythr->notifier);
 
 	return NULL;

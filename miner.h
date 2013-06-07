@@ -906,7 +906,7 @@ extern void set_target(unsigned char *dest_target, double diff);
 extern void kill_work(void);
 extern void app_restart(void);
 
-extern void __thr_being_msg(struct thr_info *, const char *);
+extern void __thr_being_msg(int prio, struct thr_info *, const char *);
 extern void mt_enable(struct thr_info *thr);
 extern void proc_enable(struct cgpu_info *);
 extern void reinit_device(struct cgpu_info *cgpu);
