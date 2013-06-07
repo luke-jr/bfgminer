@@ -459,7 +459,7 @@ char *set_kernel(char *arg)
 	char *nextptr;
 
 	if (opt_scrypt)
-		return "Cannot use sha256 kernel with scrypt";
+		return "Cannot specify a kernel with scrypt";
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set kernel";
