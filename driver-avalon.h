@@ -1,5 +1,6 @@
 /*
  * Copyright 2013 Avalon project
+ * Copyright 2013 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -27,6 +28,8 @@
 #define AVALON_DEFAULT_FREQUENCY 256
 #define AVALON_DEFAULT_MINER_NUM 0x20
 #define AVALON_DEFAULT_ASIC_NUM 0xA
+
+#define AVALON_FTDI_READSIZE 512
 
 struct avalon_task {
 	uint8_t reset		:1;

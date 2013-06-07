@@ -459,7 +459,7 @@ char *set_kernel(char *arg)
 	char *nextptr;
 
 	if (opt_scrypt)
-		return "Cannot use sha256 kernel with scrypt";
+		return "Cannot specify a kernel with scrypt";
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set kernel";
@@ -513,14 +513,6 @@ char *set_gpu_map(char *arg)
 	}
 
 	return NULL;
-}
-
-void get_intrange(char *arg, int *val1, int *val2)
-{
-	if (sscanf(arg, "%d-%d", val1, val2) == 1) {
-		*val2 = *val1;
-		*val1 = 0;
-	}
 }
 
 char *set_gpu_engine(char *arg)
@@ -951,6 +943,7 @@ retry:
 	wlogprint("[E]nable [D]isable [I]ntensity [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
 
 	wlogprint("Or press any other key to continue\n");
+	logwin_update();
 	input = getch();
 
 	if (nDevs == 1)
@@ -1475,7 +1468,7 @@ static void opencl_detect()
 		
 #ifdef HAVE_SENSORS
 		cn = (c == -1) ? NULL : sensors_get_detected_chips(&cnm, &c);
-		cgpu->cgpu_data = data = malloc(sizeof(*data));
+		cgpu->device_data = data = malloc(sizeof(*data));
 		*data = (struct opencl_device_data){
 			.sensor = cn,
 		};
@@ -1496,7 +1489,7 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 {
 #ifdef HAVE_SENSORS
-	struct opencl_device_data *data = gpu->cgpu_data;
+	struct opencl_device_data *data = gpu->device_data;
 	if (data->sensor)
 	{
 		const sensors_chip_name *cn = data->sensor;
@@ -1832,9 +1825,9 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	const int thr_id = thr->id;
 	_clState *clState = clStates[thr_id];
 
-	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseKernel(clState->kernel);
 	clReleaseProgram(clState->program);
+	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
 

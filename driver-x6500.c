@@ -134,7 +134,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->procs = 2;
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
-	x6500->cgpu_data = dev;
+	x6500->device_data = dev;
 
 	return add_cgpu(x6500);
 }
@@ -161,7 +161,7 @@ static bool x6500_prepare(struct thr_info *thr)
 	if (x6500->proc_id)
 		return true;
 	
-	struct ft232r_device_handle *ftdi = ft232r_open(x6500->cgpu_data);
+	struct ft232r_device_handle *ftdi = ft232r_open(x6500->device_data);
 	x6500->device_ft232r = NULL;
 	if (!ftdi)
 		return false;
@@ -176,12 +176,12 @@ static bool x6500_prepare(struct thr_info *thr)
 	*pdone = 101;
 	jtag_a = (void*)(pdone + 1);
 	jtag_a->ftdi = ftdi;
-	x6500->cgpu_data = jtag_a;
+	x6500->device_data = jtag_a;
 	
 	for (struct cgpu_info *slave = x6500->next_proc; slave; slave = slave->next_proc)
 	{
 		slave->device_ft232r = x6500->device_ft232r;
-		slave->cgpu_data = x6500->cgpu_data;
+		slave->device_data = x6500->device_data;
 	}
 	
 	return true;
@@ -213,7 +213,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 {
 	char buf[0x100];
 	unsigned long len, flen;
-	unsigned char *pdone = (unsigned char*)x6500->cgpu_data - 1;
+	unsigned char *pdone = (unsigned char*)x6500->device_data - 1;
 	struct ft232r_device_handle *ftdi = jp1->a->ftdi;
 
 	FILE *f = open_xilinx_bitstream(x6500->drv->dname, x6500->dev_repr, X6500_BITSTREAM_FILENAME, &len);
@@ -357,7 +357,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	
 	fpga = calloc(1, sizeof(*fpga));
 	jp = &fpga->jtag;
-	jp->a = x6500->cgpu_data;
+	jp->a = x6500->device_data;
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
 	
@@ -561,7 +561,7 @@ bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500)
 {
 	char info[18] = "               | ";
 
-	unsigned char pdone = *((unsigned char*)x6500->cgpu_data - 1);
+	unsigned char pdone = *((unsigned char*)x6500->device_data - 1);
 	if (pdone != 101) {
 		sprintf(&info[1], "%3d%%", pdone);
 		info[5] = ' ';

@@ -1,0 +1,69 @@
+SUPPORTED DEVICES
+
+Currently supported ASIC devices include ASICMiner's Block Erupter USB miners,
+Avalon, and Butterfly Labs' SC range of devices.
+
+AVALON
+
+Currently, Avalon boards are supported only by connecting them directly (or via
+a hub) to a regular PC running BFGMiner. It is also possible to install the
+OpenWrt packages of BFGMiner to the Avalon's embedded controller, but this is
+not a simple task due to its lack of available flash space.
+
+To use the Avalon from a regular PC, you will need to specify two options:
+First, add the -S option specifying the avalon driver specifically. For example,
+
+-S avalon:\\.\COM9
+
+Next, use the --avalon-options copying the command as used by the internal
+router used by the Avalon. eg:
+
+--avalon-options 115200:24:10:45:282
+
+The values are baud : miners : asic count : timeout : frequency.
+
+Baud:
+The device is pretty much hard coded to emulate 115200 baud so you shouldn't
+change this.
+
+Miners:
+Most Avalons are 3 module devices, which come to 24 miners. 4 module devices
+would use 32 here.
+
+Asic count:
+Virtually all have 10, so don't change this.
+
+Timeout:
+This is how long the device will work on a work item before accepting new work
+to replace it. It should be changed according to the frequency (last setting).
+It is possible to set this a little lower if you are trying to tune for short
+block mining (eg p2pool) but much lower and the device will start creating
+duplicate shares.
+
+Sample settings for different frequencies (last 2 values):
+43:300
+45:282
+47:270
+50:256
+
+Frequency:
+This is the clock speed of the devices. Only specific values work, 256, 270,
+282 (default) and 300.
+
+If you use the full curses based interface with Avalons you will get this
+information:
+AVA 0: 22/ 46C  60%/2400R
+
+The values are:
+ambient temp / highest device temp  set fan % / lowest detected fan RPM.
+
+Use the API for more detailed information than this.
+
+---
+
+This code is provided entirely free of charge by the programmer in his spare
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
+
+Luke-Jr <luke-jr+bfgminer@utopios.org>
+1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh

@@ -41,7 +41,6 @@
 #include "util.h"
 
 static int option_offset = -1;
-struct avalon_info **avalon_infos;
 struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
@@ -173,7 +172,7 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	buf[4] = tt;
 #endif
 	if (likely(avalon)) {
-		info = avalon_infos[avalon->device_id];
+		info = avalon->device_data;
 		delay = nr_len * 10 * 1000000000ULL;
 		delay = delay / info->baud;
 	}
@@ -291,7 +290,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	if (!work)
 		return false;
 
-	info = avalon_infos[avalon->device_id];
+	info = avalon->device_data;
 	info->matching_work[work->subid]++;
 	*nonce = htole32(ar->nonce);
 	submit_nonce(thr, work, *nonce);
@@ -388,7 +387,7 @@ static void avalon_idle(struct cgpu_info *avalon)
 	struct avalon_task at;
 
 	int fd = avalon->device_fd;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
+	struct avalon_info *info = avalon->device_data;
 	int avalon_get_work_count = info->miner_count;
 
 	i = 0;
@@ -544,6 +543,25 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 	}
 }
 
+/* Non blocking clearing of anything in the buffer */
+static void avalon_clear_readbuf(int fd)
+{
+	ssize_t ret;
+
+	do {
+		struct timeval timeout;
+		char buf[AVALON_FTDI_READSIZE];
+		fd_set rd;
+
+		timeout.tv_sec = timeout.tv_usec = 0;
+		FD_ZERO(&rd);
+		FD_SET((SOCKETTYPE)fd, &rd);
+		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+		if (ret > 0)
+			ret = read(fd, buf, AVALON_FTDI_READSIZE);
+	} while (ret > 0);
+}
+
 static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
@@ -565,6 +583,7 @@ static bool avalon_detect_one(const char *devpath)
 		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
 		return false;
 	}
+	avalon_clear_readbuf(fd);
 
 	/* We have a real Avalon! */
 	avalon = calloc(1, sizeof(struct cgpu_info));
@@ -581,21 +600,13 @@ static bool avalon_detect_one(const char *devpath)
 		   * return false; */
 	}
 	
-	avalon_infos = realloc(avalon_infos,
-			       sizeof(struct avalon_info *) *
-			       (total_devices + 1));
-
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
 
-	avalon_infos[avalon->device_id] = (struct avalon_info *)
-		malloc(sizeof(struct avalon_info));
-	if (unlikely(!(avalon_infos[avalon->device_id])))
-		quit(1, "Failed to malloc avalon_infos");
-
-	info = avalon_infos[avalon->device_id];
-
-	memset(info, 0, sizeof(struct avalon_info));
+	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
+	if (unlikely(!(avalon->device_data)))
+		quit(1, "Failed to malloc avalon_info data");
+	info = avalon->device_data;
 
 	info->baud = baud;
 	info->miner_count = miner_count;
@@ -634,12 +645,12 @@ static void __avalon_init(struct cgpu_info *avalon)
 
 static void avalon_init(struct cgpu_info *avalon)
 {
+	struct avalon_info *info = avalon->device_data;
 	struct avalon_result ar;
 	int fd, ret;
 
 	avalon->device_fd = -1;
-	fd = avalon_open(avalon->device_path,
-			     avalon_infos[avalon->device_id]->baud);
+	fd = avalon_open(avalon->device_path, info->baud);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon: Failed to open on %s",
 		       avalon->device_path);
@@ -659,7 +670,7 @@ static void avalon_init(struct cgpu_info *avalon)
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
+	struct avalon_info *info = avalon->device_data;
 	struct timeval now;
 
 	free(avalon->works);
@@ -689,7 +700,7 @@ static void avalon_free_work(struct thr_info *thr)
 	if (unlikely(!avalon->works))
 		return;
 	works = avalon->works;
-	info = avalon_infos[avalon->device_id];
+	info = avalon->device_data;
 
 	for (i = 0; i < info->miner_count * 4; i++) {
 		if (works[i]) {
@@ -703,7 +714,7 @@ static void do_avalon_close(struct thr_info *thr)
 {
 	struct avalon_result ar;
 	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon_infos[avalon->device_id];
+	struct avalon_info *info = avalon->device_data;
 
 	avalon_free_work(thr);
 	nmsleep(1000);
@@ -765,13 +776,29 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
+static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	int lowfan = 10000;
+
+	/* Find the lowest fan speed of the ASIC cooling fans. */
+	if (info->fan1 >= 0 && info->fan1 < lowfan)
+		lowfan = info->fan1;
+	if (info->fan2 >= 0 && info->fan2 < lowfan)
+		lowfan = info->fan2;
+
+	tailsprintf(buf, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
+}
+
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	int subid, slot, mc = avalon_infos[avalon->device_id]->miner_count;
+	struct avalon_info *info = avalon->device_data;
+	int subid, slot, mc;
 	struct work *work;
 
+	mc = info->miner_count;
 	if (avalon->queued >= mc)
 		return true;
 	work = get_queued(avalon);
@@ -816,7 +843,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	avalon = thr->cgpu;
 	works = avalon->works;
-	info = avalon_infos[avalon->device_id];
+	info = avalon->device_data;
 	avalon_get_work_count = info->miner_count;
 
 	if (unlikely(avalon->device_fd == -1)) {
@@ -969,7 +996,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct avalon_info *info = avalon_infos[cgpu->device_id];
+	struct avalon_info *info = cgpu->device_data;
 	int i;
 
 	root = api_add_int(root, "baud", &(info->baud), false);
@@ -1012,6 +1039,7 @@ struct device_drv avalon_drv = {
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
 	.get_api_stats = avalon_api_stats,
+	.get_statline_before = get_avalon_statline_before,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

@@ -450,6 +450,11 @@ Q: I change my GPU engine/memory/voltage and BFGMiner reports back no change?
 A: BFGMiner asks the GPU using the ATI Display Library to change settings, but
 the driver and hardware are free to do what it wants with that query, including
 ignoring it. Some GPUs are locked with one or more of those properties as well.
+The most common of these is that many GPUs only allow a fixed difference
+between the engine clock speed and the memory clock speed (such as the memory
+being no lower than the engine - 150). Other 3rd party tools have unofficial
+data on these devices on windows and can get the memory clock speed down
+further but BFGMiner does not have access to these means.
 
 Q: I have multiple GPUs and although many devices show up, it appears to be
 working only on one GPU splitting it up.
@@ -465,6 +470,10 @@ or do it manually.
 Q: Do I need to recompile after updating my driver/SDK?
 A: No. The software is unchanged regardless of which driver/SDK/ADL version you
 are running.
+
+Q: I do not want BFGMiner to modify my engine/clock/fanspeed?
+A: BFGMiner only modifies values if you tell it to via some parameters.
+Otherwise it will just monitor the values.
 
 Q: Should I use crossfire/SLI?
 A: It does not benefit mining at all and depending on the GPU may actually

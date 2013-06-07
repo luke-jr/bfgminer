@@ -109,7 +109,7 @@ bool cairnsmore_supports_dynclock(int fd)
 static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 {
 	struct cgpu_info *cm1 = thr->cgpu;
-	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct ICARUS_INFO *info = cm1->device_data;
 
 	if (unlikely(!cairnsmore_send_cmd(cm1->device_fd, 0, bestM)))
 		return false;
@@ -126,7 +126,7 @@ static bool cairnsmore_change_clock_func(struct thr_info *thr, int bestM)
 static bool cairnsmore_init(struct thr_info *thr)
 {
 	struct cgpu_info *cm1 = thr->cgpu;
-	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct ICARUS_INFO *info = cm1->device_data;
 	struct icarus_state *state = thr->cgpu_data;
 
 	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
@@ -160,7 +160,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 
 void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 {
-	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct ICARUS_INFO *info = cm1->device_data;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
 	info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 	info->timing_mode = MODE_LONG;
@@ -172,7 +172,7 @@ void convert_icarus_to_cairnsmore(struct cgpu_info *cm1)
 
 static struct api_data *cairnsmore_drv_extra_device_status(struct cgpu_info *cm1)
 {
-	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct ICARUS_INFO *info = cm1->device_data;
 	struct api_data*root = NULL;
 
 	if (info->dclk.freqM) {
@@ -185,7 +185,7 @@ static struct api_data *cairnsmore_drv_extra_device_status(struct cgpu_info *cm1
 
 static bool cairnsmore_identify(struct cgpu_info *cm1)
 {
-	struct ICARUS_INFO *info = cm1->cgpu_data;
+	struct ICARUS_INFO *info = cm1->device_data;
 	if (!info->dclk.freqM)
 		return false;
 	

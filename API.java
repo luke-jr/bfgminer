@@ -1,5 +1,7 @@
 /*
  *
+ * Copyright (C) Andrew Smith 2012-2013
+ *
  * Usage: java API command ip port
  *
  * If any are missing or blank they use the defaults:

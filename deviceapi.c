@@ -153,7 +153,11 @@ void minerloop_scanhash(struct thr_info *mythr)
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
 	
-	while (1) {
+#ifdef HAVE_PTHREAD_CANCEL
+	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
+#endif
+	
+	while (likely(!cgpu->shutdown)) {
 		mythr->work_restart = false;
 		request_work(mythr);
 		work = get_and_prepare_work(mythr);
@@ -163,9 +167,14 @@ void minerloop_scanhash(struct thr_info *mythr)
 		
 		do {
 			thread_reportin(mythr);
+			/* Only allow the mining thread to be cancelled when
+			* it is not in the driver code. */
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			gettimeofday(&tv_start, NULL);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
 			gettimeofday(&tv_end, NULL);
+			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+			pthread_testcancel();
 			thread_reportin(mythr);
 			
 			timersub(&tv_end, &tv_start, &tv_hashes);
@@ -392,7 +401,7 @@ void minerloop_async(struct thr_info *mythr)
 	if (mythr->work_restart_notifier[1] == -1)
 		notifier_init(mythr->work_restart_notifier);
 	
-	while (1) {
+	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
 		for (proc = cgpu; proc; proc = proc->next_proc)
@@ -477,7 +486,7 @@ void minerloop_queue(struct thr_info *thr)
 	if (thr->work_restart_notifier[1] == -1)
 		notifier_init(thr->work_restart_notifier);
 	
-	while (1) {
+	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		gettimeofday(&tv_now, NULL);
 		for (proc = cgpu; proc; proc = proc->next_proc)
@@ -568,6 +577,7 @@ void *miner_thread(void *userdata)
 		drv->minerloop(mythr);
 	else
 		minerloop_scanhash(mythr);
+	cgpu->deven = DEV_DISABLED;
 
 out:
 	if (drv->thread_shutdown)

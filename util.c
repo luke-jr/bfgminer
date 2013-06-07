@@ -1004,6 +1004,13 @@ void sighandler_pthread_cancel(int sig)
 	do_pthread_cancel_exit(flags);
 }
 
+void pthread_testcancel(void)
+{
+	int flags = (int)pthread_getspecific(key_pcwm);
+	if (flags & PCWM_CANCELLED && !(flags & PCWM_DISABLED))
+		do_pthread_cancel_exit(flags);
+}
+
 int pthread_setcancelstate(int state, int *oldstate)
 {
 	int flags = (int)pthread_getspecific(key_pcwm);
@@ -1065,6 +1072,29 @@ void nmsleep(unsigned int msecs)
 	d = ldiv(msecs, 1000);
 	tleft.tv_sec = d.quot;
 	tleft.tv_nsec = d.rem * 1000000;
+	do {
+		twait.tv_sec = tleft.tv_sec;
+		twait.tv_nsec = tleft.tv_nsec;
+		ret = nanosleep(&twait, &tleft);
+	} while (ret == -1 && errno == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
+/* Same for usecs */
+void nusleep(unsigned int usecs)
+{
+	struct timespec twait, tleft;
+	int ret;
+	ldiv_t d;
+
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	d = ldiv(usecs, 1000000);
+	tleft.tv_sec = d.quot;
+	tleft.tv_nsec = d.rem * 1000;
 	do {
 		twait.tv_sec = tleft.tv_sec;
 		twait.tv_nsec = tleft.tv_nsec;
@@ -1317,12 +1347,6 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	pool->sockbuf_size = new;
 }
 
-enum recv_ret {
-	RECV_OK,
-	RECV_CLOSED,
-	RECV_RECVFAIL
-};
-
 /* Peeks at a socket to find the first end of line and then reads just that
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
@@ -1331,7 +1355,6 @@ char *recv_line(struct pool *pool)
 	char *tok, *sret = NULL;
 
 	if (!strstr(pool->sockbuf, "\n")) {
-		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
 
 		cgtime(&rstart);
@@ -1340,7 +1363,6 @@ char *recv_line(struct pool *pool)
 			goto out;
 		}
 
-		mutex_lock(&pool->stratum_lock);
 		do {
 			char s[RBUFSIZE];
 			size_t slen;
@@ -1349,12 +1371,12 @@ char *recv_line(struct pool *pool)
 			memset(s, 0, RBUFSIZE);
 			n = recv(pool->sock, s, RECVSIZE, 0);
 			if (!n) {
-				ret = RECV_CLOSED;
+				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
 				break;
 			}
 			if (n < 0) {
 				if (!sock_blocks() || !socket_full(pool, false)) {
-					ret = RECV_RECVFAIL;
+					applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 					break;
 				}
 			} else {
@@ -1364,19 +1386,6 @@ char *recv_line(struct pool *pool)
 			}
 			cgtime(&now);
 		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
-		mutex_unlock(&pool->stratum_lock);
-
-		switch (ret) {
-			default:
-			case RECV_OK:
-				break;
-			case RECV_CLOSED:
-				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
-				goto out;
-			case RECV_RECVFAIL:
-				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
-				goto out;
-		}
 	}
 
 	buflen = strlen(pool->sockbuf);

@@ -437,7 +437,7 @@ struct cgpu_info {
 	struct cgpu_info *next_proc;
 	
 	const char *device_path;
-	FILE *device_file;
+	void *device_data;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
@@ -465,7 +465,6 @@ struct cgpu_info {
 #if defined(USE_BITFORCE) || defined(USE_ICARUS)
 	bool flash_led;
 #endif
-	void *cgpu_data;
 	pthread_mutex_t		device_mutex;
 	pthread_cond_t	device_cond;
 
@@ -554,6 +553,8 @@ struct cgpu_info {
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
 	unsigned int queued_count;
+
+	bool shutdown;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
@@ -921,12 +922,14 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
+extern void get_intrange(char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
+#define MAX_DEVICES 4096
 
 #define MIN_INTENSITY -10
 #define _MIN_INTENSITY_STR "-10"
@@ -1243,7 +1246,7 @@ enum test_nonce2_result {
 extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool checktarget);
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
-extern void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
@@ -1266,6 +1269,7 @@ extern void zero_stats(void);
 extern void default_save_file(char *filename);
 extern bool log_curses_only(int prio, const char *f, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
 extern void clear_logwin(void);
+extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);

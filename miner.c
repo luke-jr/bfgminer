@@ -155,7 +155,9 @@ static bool opt_nogpu;
 
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
-static signed int devices_enabled;
+static bool devices_enabled[MAX_DEVICES];
+static int opt_devs_enabled;
+static bool opt_display_devs;
 static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
@@ -749,21 +751,52 @@ static char *add_serial(char *arg)
 }
 #endif
 
+void get_intrange(char *arg, int *val1, int *val2)
+{
+	if (sscanf(arg, "%d-%d", val1, val2) == 1)
+		*val2 = *val1;
+}
+
 static char *set_devices(char *arg)
 {
-	int i = strtol(arg, &arg, 0);
+	int i, val1 = 0, val2 = 0;
+	char *nextptr;
 
 	if (*arg) {
 		if (*arg == '?') {
-			devices_enabled = -1;
+			opt_display_devs = true;
 			return NULL;
 		}
-		return "Invalid device number";
+	} else
+		return "Invalid device parameters";
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return "Invalid parameters for set devices";
+	get_intrange(nextptr, &val1, &val2);
+	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
+	    val1 > val2) {
+		return "Invalid value passed to set devices";
 	}
 
-	if (i < 0 || i >= (int)(sizeof(devices_enabled) * 8) - 1)
-		return "Invalid device number";
-	devices_enabled |= 1 << i;
+	for (i = val1; i <= val2; i++) {
+		devices_enabled[i] = true;
+		opt_devs_enabled++;
+	}
+
+	while ((nextptr = strtok(NULL, ",")) != NULL) {
+		get_intrange(nextptr, &val1, &val2);
+		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
+		val1 > val2) {
+			return "Invalid value passed to set devices";
+		}
+
+		for (i = val1; i <= val2; i++) {
+			devices_enabled[i] = true;
+			opt_devs_enabled++;
+		}
+	}
+
 	return NULL;
 }
 
@@ -1230,7 +1263,7 @@ static struct opt_table opt_config_table[] = {
 		     "Enable debug logging"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
-	             "Select device to use, (Use repeat -d for multiple devices, default: all)"),
+	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
 #ifdef HAVE_OPENCL
@@ -2094,13 +2127,19 @@ struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
 #ifdef HAVE_CURSES
+static bool _curses_cancel_disabled;
+static int _curses_prev_cancelstate;
+
 static inline void unlock_curses(void)
 {
 	mutex_unlock(&console_lock);
+	if (_curses_cancel_disabled)
+		pthread_setcancelstate(_curses_prev_cancelstate, &_curses_prev_cancelstate);
 }
 
 static inline void lock_curses(void)
 {
+	_curses_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_curses_prev_cancelstate);
 	mutex_lock(&console_lock);
 }
 
@@ -2545,16 +2584,13 @@ static void adj_width(int var, int *length)
 
 static int dev_width;
 
-static void curses_print_devstatus(int thr_id)
+static void curses_print_devstatus(struct cgpu_info *cgpu)
 {
-	struct cgpu_info *cgpu;
 	char logline[256];
 	int ypos;
 
 	if (opt_compact)
 		return;
-
-	cgpu = get_thr_cgpu(thr_id);
 
 	/* Check this isn't out of the window size */
 	if (opt_show_procs)
@@ -2640,20 +2676,21 @@ static void check_winsizes(void)
 
 static int device_line_id_count;
 
-static void switch_compact(void)
+static void switch_logsize(void)
 {
-	if (opt_compact) {
-		logstart = devcursor + 1;
-		logcursor = logstart + 1;
-	} else {
-		total_lines = (opt_show_procs ? total_devices : device_line_id_count);
-		logstart = devcursor + total_lines + 1;
-		logcursor = logstart + 1;
+	if (curses_active_locked()) {
+		if (opt_compact) {
+			logstart = devcursor + 1;
+			logcursor = logstart + 1;
+		} else {
+			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
+			logstart = devcursor + total_lines + 1;
+			logcursor = logstart + 1;
+		}
+		unlock_curses();
 	}
 	check_winsizes();
 }
-
-#define change_summarywinsize  switch_compact
 
 /* For mandatory printing when mutex is already locked */
 void wlog(const char *f, ...)
@@ -2704,6 +2741,15 @@ void clear_logwin(void)
 {
 	if (curses_active_locked()) {
 		wclear(logwin);
+		unlock_curses();
+	}
+}
+
+void logwin_update(void)
+{
+	if (curses_active_locked()) {
+		touchwin(logwin);
+		wrefresh(logwin);
 		unlock_curses();
 	}
 }
@@ -3484,23 +3530,37 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
-	applog(LOG_DEBUG, "Stopping mining threads");
-	/* Stop the mining threads*/
+	applog(LOG_DEBUG, "Shutting down mining threads");
 	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+
 		thr = get_thread(i);
-		if (thr->cgpu->threads)
-			thr_info_freeze(thr);
-		thr->pause = true;
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+		if (!cgpu->threads)
+			continue;
+
+		cgpu->shutdown = true;
+		notifier_wake(thr->notifier);
 	}
 
-	nmsleep(1000);
+	sleep(1);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
+		pthread_t *pth = NULL;
+		
 		thr = get_thread(i);
-		if (thr->cgpu->threads)
-			thr_info_cancel(thr);
+		if (!(thr && thr->cgpu->threads))
+			continue;
+		
+		applog(LOG_WARNING, "Killing %"PRIpreprv, thr->cgpu->proc_repr);
+		thr_info_cancel(thr);
+		pthread_join(thr->pth, NULL);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -5193,7 +5253,7 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
 	// We can only remove devices or disable them by default, but not both...
-	if (!(opt_removedisabled && devices_enabled))
+	if (!(opt_removedisabled && opt_devs_enabled))
 	{
 		// Don't need to remove any, so we can set defaults here
 		for (i = 0; i < total_devices; ++i)
@@ -5214,13 +5274,12 @@ void write_config(FILE *fcfg)
 			}
 	}
 	else
-	if (devices_enabled) {
+	if (opt_devs_enabled) {
 		// Mark original device params and remove-disabled
 		fprintf(fcfg, ",\n\"device\" : [");
 		bool first = true;
-		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
-			if (devices_enabled & (1 << i))
-			{
+		for (i = 0; i < MAX_DEVICES; i++) {
+			if (devices_enabled[i]) {
 				fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
 				first = false;
 			}
@@ -5428,6 +5487,7 @@ retry:
 	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool [P]rioritize pool\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
+	logwin_update();
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
@@ -5580,6 +5640,7 @@ retry:
 		summary_detail_level_str(),
 		opt_log_interval);
 	wlogprint("Select an option or any other key to return\n");
+	logwin_update();
 	input = getch();
 	if (!strncasecmp(&input, "q", 1)) {
 		opt_quiet ^= true;
@@ -5601,7 +5662,7 @@ retry:
 		devsummaryYOffset = 0;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug = true;
@@ -5624,7 +5685,7 @@ retry:
 			devsummaryYOffset = 0;
 		}
 		wlogprint("su[M]mary detail level changed to: %s\n", summary_detail_level_str());
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
@@ -5697,6 +5758,7 @@ retry:
 		  "[W]rite config file\n[B]FGMiner restart\n",
 		opt_queue, opt_scantime, opt_expiry, opt_retries);
 	wlogprint("Select an option or any other key to return\n");
+	logwin_update();
 	input = getch();
 
 	if (!strncasecmp(&input, "q", 1)) {
@@ -5821,8 +5883,8 @@ static void *input_thread(void __maybe_unused *userdata)
 			++devsummaryYOffset;
 			if (curses_active_locked()) {
 				int i;
-				for (i = 0; i < mining_threads; i++)
-					curses_print_devstatus(i);
+				for (i = 0; i < total_devices; i++)
+					curses_print_devstatus(get_devices(i));
 				touchwin(statuswin);
 				wrefresh(statuswin);
 				unlock_curses();
@@ -6090,10 +6152,35 @@ fishy:
 	mutex_unlock(&sshare_lock);
 
 	if (!sshare) {
-		if (json_is_true(res_val))
+		double pool_diff;
+
+		/* Since the share is untracked, we can only guess at what the
+		 * work difficulty is based on the current pool diff. */
+		cg_rlock(&pool->data_lock);
+		pool_diff = pool->swork.diff;
+		cg_runlock(&pool->data_lock);
+
+		if (json_is_true(res_val)) {
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
-		else
+
+			/* We don't know what device this came from so we can't
+			 * attribute the work to the relevant cgpu */
+			mutex_lock(&stats_lock);
+			total_accepted++;
+			pool->accepted++;
+			total_diff_accepted += pool_diff;
+			pool->diff_accepted += pool_diff;
+			mutex_unlock(&stats_lock);
+		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
+
+			mutex_lock(&stats_lock);
+			total_rejected++;
+			pool->rejected++;
+			total_diff_rejected += pool_diff;
+			pool->diff_rejected += pool_diff;
+			mutex_unlock(&stats_lock);
+		}
 		goto out;
 	}
 	else {
@@ -6228,6 +6315,9 @@ static int cp_prio(void)
 static bool cnx_needed(struct pool *pool)
 {
 	struct pool *cp;
+
+	if (pool->enabled != POOL_ENABLED)
+		return false;
 
 	/* Balance strategies need all pools online */
 	if (pool_strategy == POOL_BALANCE)
@@ -6963,7 +7053,7 @@ void _submit_work_async(struct work *work)
 	notifier_wake(submit_waiting_notifier);
 }
 
-void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
 {
 	struct work *work = copy_work(work_in);
 
@@ -7016,12 +7106,16 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	return hashtest2(work, checktarget);
 }
 
-void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
+	bool ret = true;
+
+	thread_reportout(thr);
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
@@ -7042,6 +7136,7 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
 			       cgpu->proc_repr);
 			inc_hw_errors(thr);
+			ret = false;
 			goto out;
 		}
 	
@@ -7061,6 +7156,9 @@ void submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	submit_work_async(work, &tv_work_found);
 out:
 	*work_nonce = bak_nonce;
+	thread_reportin(thr);
+
+	return ret;
 }
 
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
@@ -7232,7 +7330,7 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 
-	while (42) {
+	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
 
@@ -7267,6 +7365,7 @@ void hash_queued_work(struct thr_info *mythr)
 				drv->flush_work(cgpu);
 		}
 	}
+	// cgpu->deven = DEV_DISABLED; set in miner_thread
 }
 
 void mt_disable_finish(struct thr_info *mythr)
@@ -7372,7 +7471,9 @@ static void wait_lpcurrent(struct pool *pool)
 	if (cnx_needed(pool))
 		return;
 
-	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
+	while (pool->enabled == POOL_DISABLED ||
+	       (pool != current_pool() && pool_strategy != POOL_LOADBALANCE &&
+	       pool_strategy != POOL_BALANCE)) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
@@ -7705,8 +7806,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status();
-			for (i = 0; i < mining_threads; i++)
-				curses_print_devstatus(i);
+			for (i = 0; i < total_devices; i++)
+				curses_print_devstatus(get_devices(i));
 			touchwin(statuswin);
 			wrefresh(statuswin);
 			touchwin(logwin);
@@ -8559,7 +8660,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef HAVE_CURSES
-	if (opt_realquiet || devices_enabled == -1)
+	if (opt_realquiet || opt_display_devs)
 		use_curses = false;
 
 	if (use_curses)
@@ -8650,11 +8751,6 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
 		bitforce_drv.drv_detect();
@@ -8675,6 +8771,13 @@ int main(int argc, char *argv[])
 		ztex_drv.drv_detect();
 #endif
 
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
+#endif
+
 #ifdef WANT_CPUMINE
 	cpu_drv.drv_detect();
 #endif
@@ -8687,7 +8790,7 @@ int main(int argc, char *argv[])
 		if (!devices[i]->devtype)
 			devices[i]->devtype = "PGA";
 
-	if (devices_enabled == -1) {
+	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
@@ -8700,9 +8803,9 @@ int main(int argc, char *argv[])
 	}
 
 	mining_threads = 0;
-	if (devices_enabled) {
-		for (i = 0; i < (int)(sizeof(devices_enabled) * 8) - 1; ++i) {
-			if (devices_enabled & (1 << i)) {
+	if (opt_devs_enabled) {
+		for (i = 0; i < MAX_DEVICES; i++) {
+			if (devices_enabled[i]) {
 				if (i >= total_devices)
 					quit (1, "Command line options set a device that doesn't exist");
 				register_device(devices[i]);
@@ -8738,7 +8841,7 @@ int main(int argc, char *argv[])
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 #ifdef HAVE_CURSES
-	change_summarywinsize();
+	switch_logsize();
 #endif
 
 	if (!total_pools) {
