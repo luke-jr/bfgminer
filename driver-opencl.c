@@ -515,14 +515,6 @@ char *set_gpu_map(char *arg)
 	return NULL;
 }
 
-void get_intrange(char *arg, int *val1, int *val2)
-{
-	if (sscanf(arg, "%d-%d", val1, val2) == 1) {
-		*val2 = *val1;
-		*val1 = 0;
-	}
-}
-
 char *set_gpu_engine(char *arg)
 {
 	int i, val1 = 0, val2 = 0, device = 0;
