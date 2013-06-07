@@ -3555,6 +3555,7 @@ static void __kill_work(void)
 		if (!(thr && thr->cgpu->threads))
 			continue;
 		
+		applog(LOG_WARNING, "Killing %"PRIpreprv, thr->cgpu->proc_repr);
 		thr_info_cancel(thr);
 		pthread_join(thr->pth, NULL);
 	}
