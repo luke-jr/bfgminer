@@ -501,9 +501,16 @@ void init_adl(int nDevs)
 		if (!gpus[gpu].cutofftemp)
 			gpus[gpu].cutofftemp = opt_cutofftemp;
 		if (opt_autofan) {
-			ga->autofan = true;
 			/* Set a safe starting default if we're automanaging fan speeds */
-			set_fanspeed(gpu, 50);
+			int nominal = 50;
+
+			ga->autofan = true;
+			/* Clamp fanspeed values to range provided */
+			if (nominal > gpus[gpu].gpu_fan)
+				nominal = gpus[gpu].gpu_fan;
+			if (nominal < gpus[gpu].min_fan)
+				nominal = gpus[gpu].min_fan;
+			set_fanspeed(gpu, nominal);
 		}
 		if (opt_autoengine) {
 			ga->autoengine = true;
