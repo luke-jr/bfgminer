@@ -2667,20 +2667,21 @@ static void check_winsizes(void)
 
 static int device_line_id_count;
 
-static void switch_compact(void)
+static void switch_logsize(void)
 {
-	if (opt_compact) {
-		logstart = devcursor + 1;
-		logcursor = logstart + 1;
-	} else {
-		total_lines = (opt_show_procs ? total_devices : device_line_id_count);
-		logstart = devcursor + total_lines + 1;
-		logcursor = logstart + 1;
+	if (curses_active_locked()) {
+		if (opt_compact) {
+			logstart = devcursor + 1;
+			logcursor = logstart + 1;
+		} else {
+			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
+			logstart = devcursor + total_lines + 1;
+			logcursor = logstart + 1;
+		}
+		unlock_curses();
 	}
 	check_winsizes();
 }
-
-#define change_summarywinsize  switch_compact
 
 /* For mandatory printing when mutex is already locked */
 void wlog(const char *f, ...)
@@ -5650,7 +5651,7 @@ retry:
 		devsummaryYOffset = 0;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug = true;
@@ -5673,7 +5674,7 @@ retry:
 			devsummaryYOffset = 0;
 		}
 		wlogprint("su[M]mary detail level changed to: %s\n", summary_detail_level_str());
-		switch_compact();
+		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
@@ -8829,7 +8830,7 @@ int main(int argc, char *argv[])
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 #ifdef HAVE_CURSES
-	change_summarywinsize();
+	switch_logsize();
 #endif
 
 	if (!total_pools) {
