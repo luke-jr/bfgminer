@@ -1532,6 +1532,9 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 		       (unsigned)BITFORCE_MAX_QUEUED, data->ready_to_queue, data->queued);
 		bitforce_set_queue_full(thr);
 	}
+	else
+	if (!data->ready_to_queue)
+		return rv;
 	
 	ndq = !data->queued;
 	if ((ndq)              // Device is idle
