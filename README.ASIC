@@ -1,0 +1,20 @@
+SUPPORTED DEVICES
+
+Currently supported ASIC devices include ASICMiner's Block Erupter USB miners,
+Avalon, and Butterfly Labs' SC range of devices.
+
+AVALON
+
+Currently, Avalon boards are supported only by connecting them directly (or via
+a hub) to a regular PC running BFGMiner. It is also possible to install the
+OpenWrt packages of BFGMiner to the Avalon's embedded controller, but this is
+not a simple task due to its lack of available flash space.
+
+---
+
+This code is provided entirely free of charge by the programmer in his spare
+time so donations would be greatly appreciated. Please consider donating to the
+address below.
+
+Luke-Jr <luke-jr+bfgminer@utopios.org>
+1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
