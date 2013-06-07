@@ -41,7 +41,6 @@
 #include "util.h"
 
 static int option_offset = -1;
-struct avalon_info **avalon_infos;
 struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
@@ -601,21 +600,13 @@ static bool avalon_detect_one(const char *devpath)
 		   * return false; */
 	}
 	
-	avalon_infos = realloc(avalon_infos,
-			       sizeof(struct avalon_info *) *
-			       (total_devices + 1));
-
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
 
-	avalon_infos[avalon->device_id] = calloc(sizeof(struct avalon_info), 1);
-	if (unlikely(!(avalon_infos[avalon->device_id])))
-		quit(1, "Failed to calloc avalon_infos");
-
-	avalon->device_data = avalon_infos[avalon->device_id];
+	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
+	if (unlikely(!(avalon->device_data)))
+		quit(1, "Failed to malloc avalon_info data");
 	info = avalon->device_data;
-
-	memset(info, 0, sizeof(struct avalon_info));
 
 	info->baud = baud;
 	info->miner_count = miner_count;
@@ -789,9 +780,11 @@ static inline void adjust_fan(struct avalon_info *info)
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
 {
-	int subid, slot, mc = avalon_infos[avalon->device_id]->miner_count;
+	struct avalon_info *info = avalon->device_data;
+	int subid, slot, mc;
 	struct work *work;
 
+	mc = info->miner_count;
 	if (avalon->queued >= mc)
 		return true;
 	work = get_queued(avalon);
