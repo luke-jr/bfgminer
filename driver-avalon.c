@@ -776,6 +776,25 @@ static inline void adjust_fan(struct avalon_info *info)
 	}
 }
 
+static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	int lowfan = 10000, pwm;
+
+	/* Find the lowest fan speed. Fan0 is often not populated. */
+	if (info->fan0 > 0)
+		lowfan = info->fan0;
+	if (info->fan1 >= 0 && info->fan1 < lowfan)
+		lowfan = info->fan1;
+	if (info->fan2 >= 0 && info->fan2 < lowfan)
+		lowfan = info->fan2;
+
+	pwm = info->fan_pwm * 100 / AVALON_DEFAULT_FAN_MAX_PWM;
+
+	tailsprintf(buf, "%2d/%3dC %3d%%/%04dR| ", info->temp0, info->temp2,
+		    pwm, lowfan);
+}
+
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool avalon_fill(struct cgpu_info *avalon)
@@ -1025,6 +1044,7 @@ struct device_drv avalon_drv = {
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
 	.get_api_stats = avalon_api_stats,
+	.get_statline_before = get_avalon_statline_before,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };
