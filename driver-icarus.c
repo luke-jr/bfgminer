@@ -250,6 +250,13 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			return ICA_GETS_OK;
 		}
 
+		if (ret > 0) {
+			buf += ret;
+			read_amount -= ret;
+			first = false;
+			continue;
+		}
+			
 		if (thr && thr->work_restart) {
 			if (epollfd != -1)
 				close(epollfd);
@@ -270,13 +277,6 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 					(float)rc * epoll_timeout / 1000.);
 			}
 			return ICA_GETS_TIMEOUT;
-		}
-		
-		if (ret > 0) {
-			buf += ret;
-			read_amount -= ret;
-			first = false;
-			continue;
 		}
 	}
 }
