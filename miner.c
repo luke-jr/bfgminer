@@ -7171,15 +7171,14 @@ bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 	return false;
 }
 
-static
 void __thr_being_msg(struct thr_info *thr, const char *being)
 {
 	struct cgpu_info *proc = thr->cgpu;
 	
 	if (proc->threads > 1)
-		applog(LOG_WARNING, "%"PRIpreprv" (thread %d) being %s", proc->proc_repr, thr->id, being);
+		applog(LOG_WARNING, "%"PRIpreprv" (thread %d) %s", proc->proc_repr, thr->id, being);
 	else
-		applog(LOG_WARNING, "%"PRIpreprv" being %s", proc->proc_repr, being);
+		applog(LOG_WARNING, "%"PRIpreprv" %s", proc->proc_repr, being);
 }
 
 void mt_disable_start(struct thr_info *mythr)
@@ -7190,7 +7189,7 @@ void mt_disable_start(struct thr_info *mythr)
 	mythr->prev_work = mythr->work;
 	mythr->work = NULL;
 	mythr->_job_transition_in_progress = false;
-	__thr_being_msg(mythr, "disabled");
+	__thr_being_msg(mythr, "being disabled");
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
 }
@@ -7373,7 +7372,7 @@ void mt_disable_finish(struct thr_info *mythr)
 	struct device_drv *drv = mythr->cgpu->drv;
 	
 	thread_reportin(mythr);
-	__thr_being_msg(mythr, "re-enabled");
+	__thr_being_msg(mythr, "being re-enabled");
 	if (drv->thread_enable)
 		drv->thread_enable(mythr);
 }

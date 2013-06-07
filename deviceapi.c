@@ -584,7 +584,7 @@ out:
 		drv->thread_shutdown(mythr);
 
 	thread_reportin(mythr);
-	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
+	__thr_being_msg(mythr, "failure, exiting");
 	notifier_destroy(mythr->notifier);
 
 	return NULL;
