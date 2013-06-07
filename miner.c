@@ -8705,11 +8705,6 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
 		bitforce_drv.drv_detect();
@@ -8728,6 +8723,13 @@ int main(int argc, char *argv[])
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
 #endif
 
 #ifdef WANT_CPUMINE
