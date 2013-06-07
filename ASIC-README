@@ -38,7 +38,11 @@ drivers for you and then once you plug in your device you can choose the
 "list all devices" from the "option" menu and you should be able to see the
 device as something like: "BitFORCE SHA256 SC". Choose the install or replace
 driver option and select WinUSB. You can either google for zadig or download
-it from the cgminer directoy in the DOWNLOADS link above.
+it from the cgminer directory in the DOWNLOADS link above.
+
+When you first switch a device over to WinUSB with zadig and it shows that
+correctly on the left of the zadig window, but it still gives permission
+errors, you may need to unplug the USB miner and then plug it back in
 
 
 LINUX:
