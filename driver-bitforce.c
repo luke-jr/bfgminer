@@ -1388,6 +1388,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 		work_list_del(thr->work_list.prev);
 	thr->queue_full = false;
 	data->just_flushed = true;
+	data->want_to_send_queue = false;
 	
 	bitforce_queue_do_results(thr);
 }
