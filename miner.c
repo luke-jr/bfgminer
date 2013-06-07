@@ -3490,18 +3490,38 @@ static void __kill_work(void)
 	thr = &control_thr[watchdog_thr_id];
 	thr_info_cancel(thr);
 
+	applog(LOG_DEBUG, "Shutting down mining threads");
+	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+		struct device_drv *drv;
+
+		thr = get_thread(i);
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+		if (!cgpu->threads)
+			continue;
+		drv = cgpu->drv;
+		if (!drv)
+			continue;
+
+		cgpu->shutdown = true;
+		drv->thread_shutdown(thr);
+	}
+
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
+		pthread_t *pth = NULL;
+		
 		thr = get_thread(i);
-		if (thr->cgpu->threads)
-		{
-			struct device_drv *drv = thr->cgpu->drv;
-
-			drv->thread_shutdown(thr);
-			thr_info_cancel(thr);
-			pthread_join(thr->pth, NULL);
-		}
+		if (!(thr && thr->cgpu->threads))
+			continue;
+		
+		thr_info_cancel(thr);
+		pthread_join(thr->pth, NULL);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
