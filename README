@@ -31,8 +31,8 @@ irc://irc.freenode.net/eligius
 
 License: GPLv3.  See COPYING for details.
 
-SEE ALSO README.FPGA, README.GPU, README.RPC, AND README.scrypt FOR MORE
-INFORMATION ON EACH.
+SEE ALSO README.ASIC, README.FPGA, README.GPU, README.RPC, AND README.scrypt FOR
+MORE INFORMATION ON EACH.
 
 ---
 
@@ -584,6 +584,10 @@ the same time?
 A: No, BFGMiner keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
+
+Q: Can I configure BFGMiner to mine with different login credentials or pools
+for each separate device?
+A: No.
 
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
