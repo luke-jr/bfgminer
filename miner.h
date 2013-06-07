@@ -314,6 +314,7 @@ struct device_drv {
 
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
+	void (*thread_disable)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
 
 	// Can be used per-thread or per-processor (only with minerloop async or queue!)

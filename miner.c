@@ -7187,6 +7187,12 @@ void __thr_being_msg(int prio, struct thr_info *thr, const char *being)
 
 void mt_disable_start(struct thr_info *mythr)
 {
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	
+	if (drv->thread_disable)
+		drv->thread_disable(mythr);
+	
 	hashmeter2(mythr);
 	if (mythr->prev_work)
 		free_work(mythr->prev_work);
