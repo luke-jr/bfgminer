@@ -7430,7 +7430,9 @@ static void wait_lpcurrent(struct pool *pool)
 	if (cnx_needed(pool))
 		return;
 
-	while (pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
+	while (pool->enabled == POOL_DISABLED ||
+	       (pool != current_pool() && pool_strategy != POOL_LOADBALANCE &&
+	       pool_strategy != POOL_BALANCE)) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
