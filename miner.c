@@ -3493,7 +3493,6 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Shutting down mining threads");
 	for (i = 0; i < mining_threads; i++) {
 		struct cgpu_info *cgpu;
-		struct device_drv *drv;
 
 		thr = get_thread(i);
 		if (!thr)
@@ -3503,13 +3502,11 @@ static void __kill_work(void)
 			continue;
 		if (!cgpu->threads)
 			continue;
-		drv = cgpu->drv;
-		if (!drv)
-			continue;
 
 		cgpu->shutdown = true;
-		drv->thread_shutdown(thr);
 	}
+
+	sleep(1);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
