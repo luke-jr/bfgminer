@@ -1577,10 +1577,11 @@ void bitforce_queue_flush(struct thr_info *thr)
 	else
 		flushed = atoi(&buf[10]);
 	
-	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver",
-	       bitforce->proc_repr, flushed, data->ready_to_queue);
-	
 	data->queued -= flushed;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver (queued<=%d)",
+	       bitforce->proc_repr, flushed, data->ready_to_queue, data->queued);
+	
 	flushed += data->ready_to_queue;
 	data->ready_to_queue = 0;
 	while (flushed--)
