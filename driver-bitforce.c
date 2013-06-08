@@ -1474,7 +1474,15 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		
 		++count;
 		if (strtol(&buf[90], &end, 10))
-			bitforce_process_result_nonces(thr, work, &end[1]);
+		{
+			if (unlikely(!end[0]))
+			{
+				--count;
+				applog(LOG_ERR, "%"PRIpreprv": Missing nonces in queue results: %s", bitforce->proc_repr, buf);
+			}
+			else
+				bitforce_process_result_nonces(thr, work, &end[1]);
+		}
 		
 		// Queue results are in order, so anything queued prior this is lost
 		// Delete all queued work up to, and including, this one
