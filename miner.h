@@ -746,6 +746,7 @@ static inline void rwlock_init(pthread_rwlock_t *lock)
 struct pool;
 
 extern bool opt_protocol;
+extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern bool have_longpoll;
 extern int opt_skip_checks;
