@@ -658,7 +658,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (!bflsc->cutofftemp)
-		bflsc->cutofftemp = 90;
+		bflsc->cutofftemp = 80;
 }
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
@@ -1267,7 +1267,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 		bflsc->temp = temp;
 
-		if (bflsc->cutofftemp > 0 && temp > bflsc->cutofftemp) {
+		if (bflsc->cutofftemp > 0 && temp >= bflsc->cutofftemp) {
 			applog(LOG_WARNING, "%s%i:%s temp (%.1f) hit thermal cutoff limit %d, stopping work!",
 						bflsc->drv->name, bflsc->device_id, xlink,
 						temp, bflsc->cutofftemp);
