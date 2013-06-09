@@ -64,12 +64,16 @@ struct device_drv bitforce_queue_api;
 
 static void BFgets(char *buf, size_t bufLen, int fd)
 {
+	char *obuf = buf;
 	do {
 		buf[0] = '\0';
 		--bufLen;
 	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
 
 	buf[0] = '\0';
+	
+	if (unlikely(opt_dev_protocol))
+		applog(LOG_DEBUG, "DEVPROTO: GETS (fd=%d): %s", fd, obuf);
 }
 
 static ssize_t BFwrite(int fd, const void *buf, ssize_t bufLen)
@@ -109,6 +113,9 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 static
 void bitforce_cmd1(int fd, int procid, void *buf, size_t bufsz, const char *cmd)
 {
+	if (unlikely(opt_dev_protocol))
+		applog(LOG_DEBUG, "DEVPROTO: CMD1 (fd=%d xlink=%d): %s", fd, procid, cmd);
+	
 	bitforce_send(fd, procid, cmd, 3);
 	BFgets(buf, bufsz, fd);
 }
@@ -119,6 +126,14 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 	bitforce_cmd1(fd, procid, buf, bufsz, cmd);
 	if (strncasecmp(buf, "OK", 2))
 		return;
+	
+	if (unlikely(opt_dev_protocol))
+	{
+		char *hex = bin2hex(data, datasz);
+		applog(LOG_DEBUG, "DEVPROTO: CMD2 (fd=%d xlink=%d): %s", fd, procid, hex);
+		free(hex);
+	}
+	
 	bitforce_send(fd, procid, data, datasz);
 	BFgets(buf, bufsz, fd);
 }
