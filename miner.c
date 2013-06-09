@@ -2300,10 +2300,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 	if (hashrate >= 100 || unit < 2)
 		prec = 1;
 	else
-	if (hashrate >= 10)
 		prec = 2;
-	else
-		prec = 3;
 	ucp = (fmt == H2B_NOUNIT ? '\0' : buf[5]);
 	sprintf(buf, "%5.*f", prec, hashrate);
 	buf[5] = ucp;
