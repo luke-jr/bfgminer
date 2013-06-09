@@ -7123,6 +7123,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
+	work->thr_id = thr->id;
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
