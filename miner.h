@@ -572,6 +572,7 @@ struct thr_info {
 	bool		primary_thread;
 
 	pthread_t	pth;
+	cgsem_t		sem;
 	struct thread_q	*q;
 	struct cgpu_info *cgpu;
 	void *cgpu_data;

@@ -292,8 +292,6 @@ static int include_count;
 	static int forkpid;
 #endif // defined(unix)
 
-bool ping = true;
-
 struct sigaction termhandler, inthandler;
 
 struct thread_q *getq;
@@ -5707,11 +5705,9 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 {
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
-	applog(LOG_DEBUG, "Popping wakeup ping in miner thread");
+	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	thread_reportout(mythr);
-	do {
-		tq_pop(mythr->q, NULL); /* Ignore ping that's popped */
-	} while (mythr->pause);
+	cgsem_wait(&mythr->sem);
 	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 	drv->thread_enable(mythr);
@@ -6072,8 +6068,8 @@ void *miner_thread(void *userdata)
 	}
 
 	thread_reportout(mythr);
-	applog(LOG_DEBUG, "Popping ping in miner thread");
-	tq_pop(mythr->q, NULL); /* Wait for a ping to start */
+	applog(LOG_DEBUG, "Waiting on sem in miner thread");
+	cgsem_wait(&mythr->sem);
 
 	drv->hash_work(mythr);
 out:
@@ -6081,7 +6077,6 @@ out:
 
 	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
-	tq_freeze(mythr->q);
 
 	return NULL;
 }
@@ -6499,7 +6494,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (thr->cgpu->deven == DEV_DISABLED)
 					continue;
 				thr->pause = false;
-				tq_push(thr->q, &ping);
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
 			}
 		}
 
@@ -7181,15 +7177,11 @@ static void hotplug_process()
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			thr->q = tq_new();
-			if (!thr->q)
-				quit(1, "tq_new hotplug failed in starting %s%d mining thread (#%d)", cgpu->drv->name, cgpu->device_id, total_devices);
-
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
 			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing hotplug ping to thread %d", thr->id);
-				tq_push(thr->q, &ping);
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
 			}
 
 			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
@@ -7676,16 +7668,11 @@ begin_bench:
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			thr->q = tq_new();
-			if (!thr->q)
-				quit(1, "tq_new failed in starting %s%d mining thread (#%d)", cgpu->drv->name, cgpu->device_id, i);
-
 			/* Enable threads for devices set not to mine but disable
 			 * their queue in case we wish to enable them later */
 			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
-
-				tq_push(thr->q, &ping);
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
 			}
 
 			if (!cgpu->drv->thread_prepare(thr))

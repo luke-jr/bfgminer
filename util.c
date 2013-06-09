@@ -785,28 +785,9 @@ out:
 
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg)
 {
+	cgsem_init(&thr->sem);
+
 	return pthread_create(&thr->pth, attr, start, arg);
-}
-
-void thr_info_freeze(struct thr_info *thr)
-{
-	struct tq_ent *ent, *iter;
-	struct thread_q *tq;
-
-	if (!thr)
-		return;
-
-	tq = thr->q;
-	if (!tq)
-		return;
-
-	mutex_lock(&tq->mutex);
-	tq->frozen = true;
-	list_for_each_entry_safe(ent, iter, &tq->q, q_node) {
-		list_del(&ent->q_node);
-		free(ent);
-	}
-	mutex_unlock(&tq->mutex);
 }
 
 void thr_info_cancel(struct thr_info *thr)
@@ -818,6 +799,7 @@ void thr_info_cancel(struct thr_info *thr)
 		pthread_cancel(thr->pth);
 		PTH(thr) = 0L;
 	}
+	cgsem_destroy(&thr->sem);
 }
 
 /* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
