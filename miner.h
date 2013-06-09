@@ -223,8 +223,12 @@ static inline int fsync (int fd)
 #define semtimedop(SEM, SOPS, VAL, TIMEOUT) semop(SEM, SOPS, VAL)
 #endif
 
+#ifndef MIN
 #define MIN(x, y)	((x) > (y) ? (y) : (x))
+#endif
+#ifndef MAX
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
+#endif
 
 /* Put avalon last to make it the last device it tries to detect to prevent it
  * trying to claim same chip but different devices. Adding a device here will
