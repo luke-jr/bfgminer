@@ -59,7 +59,7 @@ struct bflsc_dev {
 	int work_complete;
 	int nonces_hw; // TODO: this - need to add a paramter to submit_nonce()
 			// so can pass 'dev' to hw_error
-	uint64_t nonces_unsent;
+	uint64_t hashes_unsent;
 	uint64_t hashes_sent;
 	uint64_t nonces_found;
 
@@ -1360,7 +1360,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	if (res)
 		sc_info->sc_devs[dev].result_id++;
 	sc_info->sc_devs[dev].work_complete++;
-	sc_info->sc_devs[dev].nonces_unsent++;
+	sc_info->sc_devs[dev].hashes_unsent += FULLNONCE;
 	// If not flushed (stale)
 	if (!(work->devflag))
 		sc_info->sc_devs[dev].work_queued -= 1;
@@ -1698,10 +1698,10 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
-	struct work *work, *tmp;
+	int64_t ret, unsent;
 	bool flushed, cleanup;
+	struct work *work, *tmp;
 	int dev, waited, i;
-	int64_t ret;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1791,14 +1791,11 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	ret = 0;
 	wr_lock(&(sc_info->stat_lock));
 	for (dev = 0; dev < sc_info->sc_count; dev++) {
-		/* Only return one nonce range per cycle through scanwork to
-		 * avoid batching of results during downtime. */
-		if (sc_info->sc_devs[dev].nonces_unsent) {
-			sc_info->sc_devs[dev].nonces_unsent--;
-			sc_info->sc_devs[dev].hashes_sent += FULLNONCE;
-			sc_info->hashes_sent += FULLNONCE;
-			ret += FULLNONCE;
-		}
+		unsent = sc_info->sc_devs[dev].hashes_unsent;
+		sc_info->sc_devs[dev].hashes_unsent = 0;
+		sc_info->sc_devs[dev].hashes_sent += unsent;
+		sc_info->hashes_sent += unsent;
+		ret += unsent;
 	}
 	wr_unlock(&(sc_info->stat_lock));
 
