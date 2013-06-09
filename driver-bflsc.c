@@ -497,7 +497,8 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 {
 	char buf[BFLSC_BUFSIZ+1];
 
-	*err = usb_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
+	*err = usb_read_ok_timeout(bflsc, buf, sizeof(buf)-1, amount,
+				   BFLSC_INFO_TIMEOUT, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else
@@ -506,7 +507,8 @@ static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amo
 
 static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
 {
-	*err = usb_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
+	*err = usb_read_ok_timeout(bflsc, buf, bufsiz-1, amount,
+				   BFLSC_INFO_TIMEOUT, cmd);
 	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
 		return false;
 	else {
@@ -560,7 +562,8 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 		// of course all other I/O must also be failing ...
 	} else {
 		readok = true;
-		*err = usb_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
+		*err = usb_read_ok_timeout(bflsc, buf, bufsiz-1, amount,
+					   BFLSC_INFO_TIMEOUT, C_GETRESULTS);
 		mutex_unlock(&(bflsc->device_mutex));
 
 		if (*err < 0 || *amount < 1) {
