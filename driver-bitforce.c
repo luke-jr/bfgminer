@@ -1502,6 +1502,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	long chipno = 0;  // Initialized value is used for non-parallelized boards
 	struct cgpu_info *chip_cgpu;
 	struct thr_info *chip_thr;
+	int counts[data->parallel];
 	
 	if (unlikely(!fd))
 		return false;
@@ -1523,6 +1524,8 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	}
 	
 	count = 0;
+	for (int i = 0; i < data->parallel; ++i)
+		counts[i] = 0;
 	noncebuf = next_line(noncebuf);
 	while ((buf = noncebuf)[0])
 	{
@@ -1554,7 +1557,12 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		if (data->parallel > 1)
 		{
 			chipno = strtol(&end[1], &end, 16);
-			while (chipno--)
+			if (chipno >= data->parallel)
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Chip number out of range for queue result: %s", chip_cgpu->proc_repr, buf);
+				chipno = 0;
+			}
+			for (int i = 0; i < chipno; ++i)
 				chip_cgpu = chip_cgpu->next_proc;
 			if (unlikely(!end[0]))
 			{
@@ -1584,6 +1592,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 			bitforce_process_result_nonces(chip_thr, work, &end[1]);
 		}
 		++count;
+		++counts[chipno];
 		
 finishresult:
 		if (data->parallel == 1)
@@ -1631,7 +1640,12 @@ next_qline: (void)0;
 	
 	cgtime(&tv_now);
 	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
-	hashes_done(thr, (uint64_t)bitforce->nonces * count, &tv_elapsed, NULL);
+	chip_cgpu = bitforce;
+	for (int i = 0; i < data->parallel; ++i, (chip_cgpu = chip_cgpu->next_proc))
+	{
+		chip_thr = chip_cgpu->thr[0];
+		hashes_done(chip_thr, (uint64_t)bitforce->nonces * counts[i], &tv_elapsed, NULL);
+	}
 	data->tv_hashmeter_start = tv_now;
 	
 	return true;
