@@ -657,6 +657,8 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 	applog(LOG_DEBUG, "%s%i: purgerx got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
 
+	if (!bflsc->cutofftemp)
+		bflsc->cutofftemp = 85;
 }
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
