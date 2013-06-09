@@ -116,6 +116,7 @@ struct bflsc_info {
 	bool shutdown;
 	bool flash_led;
 	bool not_first_work; // allow ignoring the first nonce error
+	bool fanauto;
 };
 
 #define BFLSC_XLINKHDR '@'
@@ -1799,6 +1800,29 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	return ret;
 }
 
+static void bflsc_set_fanspeed(struct cgpu_info *bflsc)
+{
+	struct bflsc_info *sc_info = (struct bflsc_info *)bflsc->device_data;
+	int amount, err;
+
+	if ((bflsc->temp <= 60 && sc_info->fanauto) ||
+	    (bflsc->temp > 60 && !sc_info->fanauto))
+		return;
+
+	mutex_lock(&bflsc->device_mutex);
+	if (bflsc->temp > 60) {
+		write_to_dev(bflsc, 0, BFLSC_FAN4, BFLSC_FAN4_LEN, &amount,
+			     C_SETFAN);
+		sc_info->fanauto = false;
+	} else {
+		write_to_dev(bflsc, 0, BFLSC_FANAUTO, BFLSC_FANOUT_LEN,
+			     &amount, C_SETFAN);
+		sc_info->fanauto = true;
+	}
+	getok(bflsc, C_FANREPLY, &err, &amount);
+	mutex_unlock(&bflsc->device_mutex);
+}
+
 static bool bflsc_get_stats(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
@@ -1820,6 +1844,8 @@ static bool bflsc_get_stats(struct cgpu_info *bflsc)
 		if (i < (sc_info->sc_count - 1))
 			nmsleep(BFLSC_TEMP_SLEEPMS);
 	}
+
+	bflsc_set_fanspeed(bflsc);
 
 	return allok;
 }

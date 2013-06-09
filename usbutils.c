@@ -517,6 +517,8 @@ static const char *C_SENDTESTWORK_S = "SendTestWork";
 static const char *C_LATENCY_S = "SetLatency";
 static const char *C_SETLINE_S = "SetLine";
 static const char *C_VENDOR_S = "Vendor";
+static const char *C_SETFAN_S = "SetFan";
+static const char *C_FANREPLY_S = "GetFan";
 static const char *C_AVALON_TASK_S = "AvalonTask";
 static const char *C_AVALON_READ_S = "AvalonRead";
 static const char *C_GET_AVALON_READY_S = "AvalonReady";
@@ -1002,6 +1004,8 @@ static void cgusb_check_init()
 		usb_commands[C_LATENCY] = C_LATENCY_S;
 		usb_commands[C_SETLINE] = C_SETLINE_S;
 		usb_commands[C_VENDOR] = C_VENDOR_S;
+		usb_commands[C_SETFAN] = C_SETFAN_S;
+		usb_commands[C_FANREPLY] = C_FANREPLY_S;
 		usb_commands[C_AVALON_TASK] = C_AVALON_TASK_S;
 		usb_commands[C_AVALON_READ] = C_AVALON_READ_S;
 		usb_commands[C_GET_AVALON_READY] = C_GET_AVALON_READY_S;
