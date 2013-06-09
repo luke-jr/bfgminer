@@ -615,7 +615,7 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 		hex_byte[1] = hexstr[1];
 
 		if (unlikely(sscanf(hex_byte, "%x", &v) != 1)) {
-			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
+			applog(LOG_INFO, "hex2bin sscanf '%s' failed", hex_byte);
 			return ret;
 		}
 

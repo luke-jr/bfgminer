@@ -1322,8 +1322,12 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 	memset(midstate, 0, MIDSTATE_BYTES);
 	memset(blockdata, 0, MERKLE_BYTES);
-	hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES);
-	hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES);
+	if (!hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES) ||
+	    !hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES)) {
+		applog(LOG_ERR, "%s%i:%s Failed to convert binary data to hex result - ignored",
+		       bflsc->drv->name, bflsc->device_id, xlink);
+		inc_hw_errors(bflsc->thr[0]);
+	}
 
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
