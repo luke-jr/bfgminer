@@ -658,7 +658,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (!bflsc->cutofftemp)
-		bflsc->cutofftemp = 85;
+		bflsc->cutofftemp = 90;
 }
 
 static void bflsc_initialise(struct cgpu_info *bflsc)
