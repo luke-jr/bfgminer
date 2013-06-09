@@ -1327,6 +1327,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		applog(LOG_ERR, "%s%i:%s Failed to convert binary data to hex result - ignored",
 		       bflsc->drv->name, bflsc->device_id, xlink);
 		inc_hw_errors(bflsc->thr[0]);
+		return;
 	}
 
 	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
