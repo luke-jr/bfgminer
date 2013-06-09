@@ -147,8 +147,11 @@ struct usb_find_devices {
 	struct usb_endpoints *eps;
 };
 
+/* Latency is set to 32ms to prevent a transfer ever being more than 512 bytes
+ * +2 bytes of status such as the ftdi chip, when the chips emulate a 115200
+ * baud rate, to avoid status bytes being interleaved in larger transfers. */
 #define LATENCY_UNUSED 0
-#define LATENCY_STD 40
+#define LATENCY_STD 32
 
 enum usb_types {
 	USB_TYPE_STD = 0,
