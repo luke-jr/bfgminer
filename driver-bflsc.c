@@ -705,7 +705,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		return false;
 	}
 
-	err = usb_read_ok(bflsc, buf, sizeof(buf)-1, &amount, C_GETDETAILS);
+	err = usb_read_ok_timeout(bflsc, buf, sizeof(buf)-1, &amount,
+				  BFLSC_INFO_TIMEOUT, C_GETDETAILS);
 	if (err < 0 || amount < 1) {
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) get details return invalid/timed out (%d:%d)",

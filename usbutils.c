@@ -50,6 +50,8 @@
 
 #define USB_CONFIG 1
 
+#define BFLSC_INFO_TIMEOUT 999
+
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
