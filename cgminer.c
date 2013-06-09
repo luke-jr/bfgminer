@@ -7177,13 +7177,6 @@ static void hotplug_process()
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
-				cgsem_post(&thr->sem);
-			}
-
 			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
 				continue;
 
@@ -7193,6 +7186,13 @@ static void hotplug_process()
 				quit(1, "hotplug thread %d create failed", thr->id);
 
 			cgpu->thr[j] = thr;
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
+			}
 
 			mining_threads++;
 		}
@@ -7668,13 +7668,6 @@ begin_bench:
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
 
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->deven != DEV_DISABLED) {
-				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
-				cgsem_post(&thr->sem);
-			}
-
 			if (!cgpu->drv->thread_prepare(thr))
 				continue;
 
@@ -7684,6 +7677,13 @@ begin_bench:
 				quit(1, "thread %d create failed", thr->id);
 
 			cgpu->thr[j] = thr;
+
+			/* Enable threads for devices set not to mine but disable
+			 * their queue in case we wish to enable them later */
+			if (cgpu->deven != DEV_DISABLED) {
+				applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
+				cgsem_post(&thr->sem);
+			}
 		}
 	}
 
