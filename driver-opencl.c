@@ -44,7 +44,6 @@ extern void enable_curses(void);
 extern int mining_threads;
 extern double total_secs;
 extern int opt_g_threads;
-extern bool ping;
 extern bool opt_loginput;
 extern char *opt_kernel_path;
 extern int gpur_thr_id;
@@ -618,7 +617,7 @@ void pause_dynamic_threads(int gpu)
 
 		thr->pause = cgpu->dynamic;
 		if (!cgpu->dynamic && cgpu->deven != DEV_DISABLED)
-			tq_push(thr->q, &ping);
+			cgsem_post(&thr->sem);
 	}
 }
 
@@ -764,9 +763,9 @@ retry:
 				wlogprint("Must restart device before enabling it");
 				goto retry;
 			}
-			applog(LOG_DEBUG, "Pushing ping to thread %d", thr->id);
+			applog(LOG_DEBUG, "Pushing sem post to thread %d", thr->id);
 
-			tq_push(thr->q, &ping);
+			cgsem_post(&thr->sem);
 		}
 		goto retry;
 	} if (!strncasecmp(&input, "d", 1)) {
@@ -1210,7 +1209,7 @@ select_cgpu:
 		if (dev_from_id(thr_id) != gpu)
 			continue;
 
-		tq_push(thr->q, &ping);
+		cgsem_post(&thr->sem);
 	}
 
 	goto select_cgpu;

@@ -1888,8 +1888,8 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		pga = thr->cgpu->cgminer_id;
 		if (pga == dev) {
 			cgpu->deven = DEV_ENABLED;
-			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
-			tq_push(thr->q, &ping);
+			applog(LOG_DEBUG, "API: Pushing sem post to thread %d", thr->id);
+			cgsem_post(&thr->sem);
 		}
 	}
 
@@ -2157,8 +2157,8 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 				return;
 			}
 			gpus[id].deven = DEV_ENABLED;
-			applog(LOG_DEBUG, "API: pushing ping (%d) to thread %d", ping, thr->id);
-			tq_push(thr->q, &ping);
+			applog(LOG_DEBUG, "API Pushing sem post to thread %d", thr->id);
+			cgsem_post(&thr->sem);
 		}
 	}
 

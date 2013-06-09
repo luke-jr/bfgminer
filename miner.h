@@ -861,7 +861,6 @@ extern cgsem_t usb_resource_sem;
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif
-extern bool ping;
 extern int swork_id;
 
 extern pthread_rwlock_t netacc_lock;
