@@ -95,6 +95,7 @@ struct strategies strategies[] = {
 static char packagename[256];
 
 bool opt_protocol;
+bool opt_dev_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
@@ -1261,6 +1262,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debuglog",
 		     opt_set_bool, &opt_debug,
 		     "Enable debug logging"),
+	OPT_WITHOUT_ARG("--device-protocol-dump",
+			opt_set_bool, &opt_dev_protocol,
+			"Verbose dump of device protocol-level activities"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
@@ -2296,10 +2300,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 	if (hashrate >= 100 || unit < 2)
 		prec = 1;
 	else
-	if (hashrate >= 10)
 		prec = 2;
-	else
-		prec = 3;
 	ucp = (fmt == H2B_NOUNIT ? '\0' : buf[5]);
 	sprintf(buf, "%5.*f", prec, hashrate);
 	buf[5] = ucp;
@@ -7121,6 +7122,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
+	work->thr_id = thr->id;
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
@@ -7185,6 +7187,12 @@ void __thr_being_msg(int prio, struct thr_info *thr, const char *being)
 
 void mt_disable_start(struct thr_info *mythr)
 {
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	
+	if (drv->thread_disable)
+		drv->thread_disable(mythr);
+	
 	hashmeter2(mythr);
 	if (mythr->prev_work)
 		free_work(mythr->prev_work);
