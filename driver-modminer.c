@@ -214,7 +214,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		added = true;
 	}
 
-	modminer = usb_free_cgpu(modminer);
+	modminer = usb_free_cgpu_devlock(modminer, !added);
 
 	return true;
 

@@ -1401,7 +1401,7 @@ struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
 
 	memcpy(&(copy->usbinfo), &(orig->usbinfo), sizeof(copy->usbinfo));
 
-	copy->usbinfo.nodev = (copy->usbdev != NULL);
+	copy->usbinfo.nodev = (copy->usbdev == NULL);
 
 	copy->usbinfo.devlock = orig->usbinfo.devlock;
 
