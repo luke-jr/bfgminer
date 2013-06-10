@@ -1564,11 +1564,6 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 			}
 			for (int i = 0; i < chipno; ++i)
 				chip_cgpu = chip_cgpu->next_proc;
-			if (unlikely(!end[0]))
-			{
-				applog(LOG_ERR, "%"PRIpreprv": Missing nonce count in queue results: %s", chip_cgpu->proc_repr, buf);
-				goto finishresult;
-			}
 		}
 		chip_thr = chip_cgpu->thr[0];
 		
@@ -1582,6 +1577,11 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 			goto next_qline;
 		}
 		
+		if (unlikely(!end[0]))
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Missing nonce count in queue results: %s", chip_cgpu->proc_repr, buf);
+			goto finishresult;
+		}
 		if (strtol(&end[1], &end, 10))
 		{
 			if (unlikely(!end[0]))
