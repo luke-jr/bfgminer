@@ -325,7 +325,7 @@ static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 	struct bitforce_proc_data *procdata = bitforce->thr[0]->cgpu_data;
 	
 	if (!procdata->handles_board)
-		return;
+		goto nostats;
 
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
@@ -333,6 +333,7 @@ static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 	if (bitforce->temp > 0)
 		tailsprintf(buf, "%5.1fC         | ", bitforce->temp);
 	else
+nostats:
 		tailsprintf(buf, "               | ");
 }
 
