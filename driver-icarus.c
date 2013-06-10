@@ -843,6 +843,7 @@ unshin:
 	usb_uninit(icarus);
 
 	free(icarus->device_path);
+	icarus->device_path = NULL;
 
 shin:
 

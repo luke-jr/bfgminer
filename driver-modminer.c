@@ -210,6 +210,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 		if (!add_cgpu(tmp)) {
 			free(tmp->device_path);
+			tmp->device_path = NULL;
 			tmp = usb_free_cgpu(tmp);
 			goto unshin;
 		}
@@ -228,8 +229,10 @@ unshin:
 		usb_uninit(modminer);
 
 shin:
-	if (!added)
+	if (!added) {
 		free(modminer->modminer_mutex);
+		modminer->modminer_mutex = NULL;
+	}
 
 	modminer = usb_free_cgpu(modminer);
 
@@ -1096,6 +1099,7 @@ static void modminer_hw_error(struct thr_info *thr)
 static void modminer_fpga_shutdown(struct thr_info *thr)
 {
 	free(thr->cgpu_data);
+	thr->cgpu_data = NULL;
 }
 
 static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)

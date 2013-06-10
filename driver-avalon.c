@@ -653,11 +653,11 @@ unshin:
 
 shin:
 
-	if (avalon->device_data)
-		free(avalon->device_data);
+	free(avalon->device_data);
+	avalon->device_data = NULL;
 
-	if (avalon->device_path)
-		free(avalon->device_path);
+	free(avalon->device_path);
+	avalon->device_path = NULL;
 
 	avalon = usb_free_cgpu(avalon);
 

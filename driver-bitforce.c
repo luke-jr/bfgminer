@@ -287,12 +287,12 @@ unshin:
 shin:
 
 	free(bitforce->device_path);
+	bitforce->device_path = NULL;
 
-	if (bitforce->name != blank)
+	if (bitforce->name != blank) {
 		free(bitforce->name);
-
-	if (bitforce->drv->copy)
-		free(bitforce->drv);
+		bitforce->name = NULL;
+	}
 
 	bitforce = usb_free_cgpu(bitforce);
 

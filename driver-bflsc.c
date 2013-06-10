@@ -966,13 +966,15 @@ unshin:
 shin:
 
 	free(bflsc->device_path);
+	bflsc->device_path = NULL;
+
 	free(bflsc->device_data);
+	bflsc->device_data = NULL;
 
-	if (bflsc->name != blank)
+	if (bflsc->name != blank) {
 		free(bflsc->name);
-
-	if (bflsc->drv->copy)
-		free(bflsc->drv);
+		bflsc->name = NULL;
+	}
 
 	bflsc = usb_free_cgpu(bflsc);
 
