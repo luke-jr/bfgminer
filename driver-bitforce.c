@@ -525,6 +525,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	char *s;
+	struct cgpu_info *chip_cgpu;
 
 	if (!fdDev)
 		return false;
@@ -570,7 +571,12 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 			}
 		}
 
-		set_float_if_gt_zero(&bitforce->temp, temp);
+		if (temp > 0)
+		{
+			chip_cgpu = bitforce;
+			for (int i = 0; i < data->parallel; ++i, (chip_cgpu = chip_cgpu->next_proc))
+				chip_cgpu->temp = temp;
+		}
 	} else {
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
