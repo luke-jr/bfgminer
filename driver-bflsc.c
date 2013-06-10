@@ -810,13 +810,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	char *newname;
 	uint16_t latency;
 
-	struct cgpu_info *bflsc = calloc(1, sizeof(*bflsc));
-
-	if (unlikely(!bflsc))
-		quit(1, "Failed to calloc bflsc in bflsc_detect_one");
-	bflsc->drv = &bflsc_drv;
-	bflsc->deven = DEV_ENABLED;
-	bflsc->threads = 1;
+	struct cgpu_info *bflsc = usb_alloc_cgpu(&bflsc_drv, 1);
 
 	sc_info = calloc(1, sizeof(*sc_info));
 	if (unlikely(!sc_info))
@@ -980,7 +974,7 @@ shin:
 	if (bflsc->drv->copy)
 		free(bflsc->drv);
 
-	free(bflsc);
+	bflsc = usb_free_cgpu(bflsc);
 
 	return false;
 }

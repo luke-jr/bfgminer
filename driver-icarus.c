@@ -751,12 +751,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	int ret, err, amount, tries;
 	bool ok;
 
-	icarus = calloc(1, sizeof(struct cgpu_info));
-	if (unlikely(!icarus))
-		quit(1, "Failed to calloc icarus in icarus_detect_one");
-	icarus->drv = &icarus_drv;
-	icarus->deven = DEV_ENABLED;
-	icarus->threads = 1;
+	icarus = usb_alloc_cgpu(&icarus_drv, 1);
 
 	if (!usb_init(icarus, dev, found))
 		goto shin;
@@ -851,7 +846,7 @@ unshin:
 
 shin:
 
-	free(icarus);
+	icarus = usb_free_cgpu(icarus);
 
 	return false;
 }

@@ -451,7 +451,7 @@ struct cg_usb_stats {
 #define SEQ1 1
 
 static struct cg_usb_stats *usb_stats = NULL;
-static int next_stat = 0;
+static int next_stat = USB_NOSTAT;
 
 #define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq) \
 		stats(cgpu, sta, fin, err, mode, cmd, seq)
@@ -1380,6 +1380,54 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
+// Currently only used by MMQ
+struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
+{
+	struct cgpu_info *copy = calloc(1, sizeof(*copy));
+
+	if (unlikely(!copy))
+		quit(1, "Failed to calloc cgpu for %s in usb_copy_cgpu", orig->drv->dname);
+
+	copy->name = orig->name;
+	copy->drv = copy_drv(orig->drv);
+	copy->deven = orig->deven;
+	copy->threads = orig->threads;
+
+	copy->usbdev = orig->usbdev;
+
+	memcpy(&(copy->usbinfo), &(orig->usbinfo), sizeof(copy->usbinfo));
+
+	copy->usbinfo.nodev = (copy->usbdev != NULL);
+
+	return copy;
+}
+
+struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads)
+{
+	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
+
+	if (unlikely(!cgpu))
+		quit(1, "Failed to calloc cgpu for %s in usb_alloc_cgpu", drv->dname);
+
+	cgpu->drv = drv;
+	cgpu->deven = DEV_ENABLED;
+	cgpu->threads = threads;
+
+	cgpu->usbinfo.nodev = true;
+
+	return cgpu;
+}
+
+struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu)
+{
+	if (cgpu->drv->copy)
+		free(cgpu->drv);
+
+	free(cgpu);
+
+	return NULL;
+}
+
 #define USB_INIT_FAIL 0
 #define USB_INIT_OK 1
 #define USB_INIT_IGNORE 2
@@ -1616,6 +1664,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		cgusb->manuf_string, cgusb->serial_string);
 
 	cgpu->usbdev = cgusb;
+	cgpu->usbinfo.nodev = false;
 
 	libusb_free_config_descriptor(config);
 
@@ -1876,7 +1925,7 @@ struct api_data *api_usb_stats(__maybe_unused int *count)
 	int cmdseq;
 	char modes_s[32];
 
-	if (next_stat == 0)
+	if (next_stat == USB_NOSTAT)
 		return NULL;
 
 	while (*count < next_stat * C_MAX * 2) {
@@ -1949,21 +1998,25 @@ static void newstats(struct cgpu_info *cgpu)
 	int i;
 
 	mutex_lock(&cgusb_lock);
-	cgpu->usbinfo.usbstat = ++next_stat;
-	mutex_unlock(&cgusb_lock);
 
-	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * next_stat);
+	cgpu->usbinfo.usbstat = next_stat + 1;
+
+	usb_stats = realloc(usb_stats, sizeof(*usb_stats) * (next_stat+1));
 	if (unlikely(!usb_stats))
-		quit(1, "USB failed to realloc usb_stats %d", next_stat);
+		quit(1, "USB failed to realloc usb_stats %d", next_stat+1);
 
-	usb_stats[next_stat-1].name = cgpu->drv->name;
-	usb_stats[next_stat-1].device_id = -1;
-	usb_stats[next_stat-1].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
-	if (unlikely(!usb_stats[next_stat-1].details))
-		quit(1, "USB failed to calloc details for %d", next_stat);
+	usb_stats[next_stat].name = cgpu->drv->name;
+	usb_stats[next_stat].device_id = -1;
+	usb_stats[next_stat].details = calloc(1, sizeof(struct cg_usb_stats_details) * C_MAX * 2);
+	if (unlikely(!usb_stats[next_stat].details))
+		quit(1, "USB failed to calloc details for %d", next_stat+1);
 
 	for (i = 1; i < C_MAX * 2; i += 2)
-		usb_stats[next_stat-1].details[i].seq = 1;
+		usb_stats[next_stat].details[i].seq = 1;
+
+	next_stat++;
+
+	mutex_unlock(&cgusb_lock);
 }
 #endif
 

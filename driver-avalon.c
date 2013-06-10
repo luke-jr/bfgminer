@@ -578,17 +578,13 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	bool configured;
 	int ret;
 
-	avalon = calloc(1, sizeof(struct cgpu_info));
-	if (unlikely(!avalon))
-		quit(1, "Failed to calloc avalon in avalon_detect_one");;
-	avalon->drv = &avalon_drv;
-	avalon->threads = AVALON_MINER_THREADS;
+	avalon = usb_alloc_cgpu(&avalon_drv, AVALON_MINER_THREADS);
 
 	configured = get_options(this_option_offset, &baud, &miner_count,
 				 &asic_count, &timeout, &frequency);
 
 	if (!usb_init(avalon, dev, found))
-		return false;
+		goto shin;
 
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
@@ -602,11 +598,10 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	avalon_initialise(avalon);
 
 	avalon->device_path = strdup(devpath);
-	add_cgpu(avalon);
 
 	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
 	if (unlikely(!(avalon->device_data)))
-		quit(1, "Failed to malloc avalon_info data");
+		quit(1, "Failed to calloc avalon_info data");
 	info = avalon->device_data;
 
 	if (configured) {
@@ -635,10 +630,13 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	info->temp_old = 0;
 
 	ret = avalon_reset(avalon, true);
-	if (ret && !configured) {
-		usb_uninit(avalon);
-		return false;
-	}
+	if (ret && !configured)
+		goto unshin;
+
+	if (!add_cgpu(avalon))
+		goto unshin;
+
+	update_usb_stats(avalon);
 
 	avalon_idle(avalon, info);
 
@@ -648,6 +646,22 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	       info->frequency);
 
 	return true;
+
+unshin:
+
+	usb_uninit(avalon);
+
+shin:
+
+	if (avalon->device_data)
+		free(avalon->device_data);
+
+	if (avalon->device_path)
+		free(avalon->device_path);
+
+	avalon = usb_free_cgpu(avalon);
+
+	return false;
 }
 
 static void avalon_detect(void)

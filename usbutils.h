@@ -177,6 +177,8 @@ struct cg_usb_device {
 	uint32_t bufamt;
 };
 
+#define USB_NOSTAT 0
+
 struct cg_usb_info {
 	uint8_t bus_number;
 	uint8_t device_address;
@@ -258,6 +260,9 @@ struct cgpu_info;
 void usb_all(int level);
 const char *usb_cmdname(enum usb_cmds cmd);
 void usb_applog(struct cgpu_info *bflsc, enum usb_cmds cmd, char *msg, int amount, int err);
+struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig);
+struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
+struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu);
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));

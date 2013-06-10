@@ -173,11 +173,7 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	int init_sleep, init_count;
 	bool ident_first;
 
-	struct cgpu_info *bitforce = NULL;
-	bitforce = calloc(1, sizeof(*bitforce));
-	bitforce->drv = &bitforce_drv;
-	bitforce->deven = DEV_ENABLED;
-	bitforce->threads = 1;
+	struct cgpu_info *bitforce = usb_alloc_cgpu(&bitforce_drv, 1);
 
 	if (!usb_init(bitforce, dev, found))
 		goto shin;
@@ -298,7 +294,7 @@ shin:
 	if (bitforce->drv->copy)
 		free(bitforce->drv);
 
-	free(bitforce);
+	bitforce = usb_free_cgpu(bitforce);
 
 	return false;
 }

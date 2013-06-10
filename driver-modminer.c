@@ -119,9 +119,8 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	int err, i, amount;
 	bool added = false;
 
-	struct cgpu_info *modminer = NULL;
-	modminer = calloc(1, sizeof(*modminer));
-	modminer->drv = &modminer_drv;
+	struct cgpu_info *modminer = usb_alloc_cgpu(&modminer_drv, 1);
+
 	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
 	mutex_init(modminer->modminer_mutex);
 	modminer->fpgaid = (char)0;
@@ -193,10 +192,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	// TODO: test with 1 board missing in the middle and each end
 	// to see how that affects the sequence numbers
 	for (i = 0; i < buf[0]; i++) {
-		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
-
-		tmp->drv = copy_drv(modminer->drv);
-		tmp->name = devname;
+		struct cgpu_info *tmp = usb_copy_cgpu(modminer);
 
 		sprintf(devpath, "%d:%d:%d",
 			(int)(modminer->usbinfo.bus_number),
@@ -204,22 +200,17 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 			i);
 
 		tmp->device_path = strdup(devpath);
-		tmp->usbdev = modminer->usbdev;
-		tmp->usbinfo.bus_number = modminer->usbinfo.bus_number;
-		tmp->usbinfo.device_address = modminer->usbinfo.device_address;
+
 		// Only the first copy gets the already used stats
-		if (!added)
-			tmp->usbinfo.usbstat = modminer->usbinfo.usbstat;
+		if (added)
+			tmp->usbinfo.usbstat = USB_NOSTAT;
+
 		tmp->fpgaid = (char)i;
 		tmp->modminer_mutex = modminer->modminer_mutex;
-		tmp->deven = DEV_ENABLED;
-		tmp->threads = 1;
 
 		if (!add_cgpu(tmp)) {
 			free(tmp->device_path);
-			if (tmp->drv->copy)
-				free(tmp->drv);
-			free(tmp);
+			tmp = usb_free_cgpu(tmp);
 			goto unshin;
 		}
 
@@ -228,10 +219,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		added = true;
 	}
 
-	if (modminer->drv->copy)
-		free(modminer->drv);
-
-	free(modminer);
+	modminer = usb_free_cgpu(modminer);
 
 	return true;
 
@@ -243,10 +231,7 @@ shin:
 	if (!added)
 		free(modminer->modminer_mutex);
 
-	if (modminer->drv->copy)
-		free(modminer->drv);
-
-	free(modminer);
+	modminer = usb_free_cgpu(modminer);
 
 	if (added)
 		return true;
