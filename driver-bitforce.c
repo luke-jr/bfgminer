@@ -322,6 +322,10 @@ void bitforce_comm_error(struct thr_info *thr)
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 {
 	struct bitforce_data *data = bitforce->device_data;
+	struct bitforce_proc_data *procdata = bitforce->thr[0]->cgpu_data;
+	
+	if (!procdata->handles_board)
+		return;
 
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
