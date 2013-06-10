@@ -531,8 +531,9 @@ static void avalon_clear_readbuf(int fd)
 	ssize_t ret;
 
 	do {
-		struct timeval timeout;
 		char buf[AVALON_FTDI_READSIZE];
+#ifndef WIN32
+		struct timeval timeout;
 		fd_set rd;
 
 		timeout.tv_sec = timeout.tv_usec = 0;
@@ -540,6 +541,8 @@ static void avalon_clear_readbuf(int fd)
 		FD_SET((SOCKETTYPE)fd, &rd);
 		ret = select(fd + 1, &rd, NULL, NULL, &timeout);
 		if (ret > 0)
+#endif
+			// Relies on serial timeout for Windows
 			ret = read(fd, buf, AVALON_FTDI_READSIZE);
 	} while (ret > 0);
 }
