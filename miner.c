@@ -597,7 +597,7 @@ char* add_serial_all(char*arg, char*p) {
 
 #elif defined(WIN32)
 
-	size_t bufLen = 0x10;  // temp!
+	size_t bufLen = 0x100;
 tryagain: ;
 	char buf[bufLen];
 	if (!QueryDosDevice(NULL, buf, bufLen)) {
