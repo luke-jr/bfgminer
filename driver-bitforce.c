@@ -322,6 +322,10 @@ void bitforce_comm_error(struct thr_info *thr)
 static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
 {
 	struct bitforce_data *data = bitforce->device_data;
+	struct bitforce_proc_data *procdata = bitforce->thr[0]->cgpu_data;
+	
+	if (!procdata->handles_board)
+		return;
 
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
@@ -525,6 +529,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	int fdDev = bitforce->device->device_fd;
 	char pdevbuf[0x100];
 	char *s;
+	struct cgpu_info *chip_cgpu;
 
 	if (!fdDev)
 		return false;
@@ -570,7 +575,12 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 			}
 		}
 
-		set_float_if_gt_zero(&bitforce->temp, temp);
+		if (temp > 0)
+		{
+			chip_cgpu = bitforce;
+			for (int i = 0; i < data->parallel; ++i, (chip_cgpu = chip_cgpu->next_proc))
+				chip_cgpu->temp = temp;
+		}
 	} else {
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
@@ -1279,6 +1289,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			*procdata = *first_on_this_board;
 			procdata->handles_board = false;
 			procdata->cgpu = bitforce;
+			bitforce->device_data = data;
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		
