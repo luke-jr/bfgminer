@@ -205,7 +205,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		tmp->modminer_mutex = modminer->modminer_mutex;
 
 		if (!add_cgpu(tmp)) {
-			tmp = usb_free_cgpu(tmp);
+			tmp = usb_free_cgpu_devlock(tmp, !added);
 			goto unshin;
 		}
 
@@ -228,7 +228,7 @@ shin:
 		modminer->modminer_mutex = NULL;
 	}
 
-	modminer = usb_free_cgpu(modminer);
+	modminer = usb_free_cgpu_devlock(modminer, !added);
 
 	if (added)
 		return true;
