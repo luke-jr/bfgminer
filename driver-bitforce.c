@@ -166,7 +166,6 @@ failed:
 static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	char buf[BITFORCE_BUFSIZ+1];
-	char devpath[20];
 	int err, amount;
 	char *s;
 	struct timeval init_start, init_now;
@@ -178,10 +177,6 @@ static bool bitforce_detect_one(struct libusb_device *dev, struct usb_find_devic
 	if (!usb_init(bitforce, dev, found))
 		goto shin;
 
-	sprintf(devpath, "%d:%d",
-			(int)(bitforce->usbinfo.bus_number),
-			(int)(bitforce->usbinfo.device_address));
-
 	// Allow 2 complete attempts if the 1st time returns an unrecognised reply
 	ident_first = true;
 retry:
@@ -192,7 +187,7 @@ reinit:
 	bitforce_initialise(bitforce, false);
 	if ((err = usb_write(bitforce, BITFORCE_IDENTIFY, BITFORCE_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY)) < 0 || amount != BITFORCE_IDENTIFY_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
-			bitforce->drv->dname, devpath, amount, err);
+			bitforce->drv->dname, bitforce->device_path, amount, err);
 		goto unshin;
 	}
 
@@ -202,7 +197,7 @@ reinit:
 		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
 			if (init_count == 2) {
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
-					bitforce->drv->dname, devpath, amount, err);
+					bitforce->drv->dname, bitforce->device_path, amount, err);
 			}
 			nmsleep(init_sleep);
 			if ((init_sleep * 2) <= REINIT_TIME_MAX_MS)
@@ -212,14 +207,14 @@ reinit:
 
 		if (init_count > 0)
 			applog(LOG_WARNING, "%s detect (%s) init failed %d times %.2fs",
-				bitforce->drv->dname, devpath, init_count, tdiff(&init_now, &init_start));
+				bitforce->drv->dname, bitforce->device_path, init_count, tdiff(&init_now, &init_start));
 
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
-				bitforce->drv->dname, devpath, amount, err);
+				bitforce->drv->dname, bitforce->device_path, amount, err);
 		} else {
 			applog(LOG_ERR, "%s detect (%s) empty identify reply (%d)",
-				bitforce->drv->dname, devpath, amount);
+				bitforce->drv->dname, bitforce->device_path, amount);
 		}
 
 		goto unshin;
@@ -229,12 +224,12 @@ reinit:
 	if (unlikely(!strstr(buf, "SHA256"))) {
 		if (ident_first) {
 			applog(LOG_WARNING, "%s detect (%s) didn't recognise '%s' trying again ...",
-				bitforce->drv->dname, devpath, buf);
+				bitforce->drv->dname, bitforce->device_path, buf);
 			ident_first = false;
 			goto retry;
 		}
 		applog(LOG_ERR, "%s detect (%s) didn't recognise '%s' on 2nd attempt",
-			bitforce->drv->dname, devpath, buf);
+			bitforce->drv->dname, bitforce->device_path, buf);
 		goto unshin;
 	}
 
@@ -256,7 +251,7 @@ reinit:
 
 	// We have a real BitForce!
 	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
-		bitforce->drv->dname, devpath, bitforce->name);
+		bitforce->drv->dname, bitforce->device_path, bitforce->name);
 
 	/* Initially enable support for nonce range and disable it later if it
 	 * fails */
@@ -268,8 +263,6 @@ reinit:
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS * 5;
 		bitforce->kname = KNAME_WORK;
 	}
-
-	bitforce->device_path = strdup(devpath);
 
 	if (!add_cgpu(bitforce))
 		goto unshin;
@@ -285,9 +278,6 @@ unshin:
 	usb_uninit(bitforce);
 
 shin:
-
-	free(bitforce->device_path);
-	bitforce->device_path = NULL;
 
 	if (bitforce->name != blank) {
 		free(bitforce->name);

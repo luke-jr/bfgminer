@@ -574,7 +574,6 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	int this_option_offset = ++option_offset;
 	struct avalon_info *info;
 	struct cgpu_info *avalon;
-	char devpath[20];
 	bool configured;
 	int ret;
 
@@ -591,13 +590,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	avalon->usbdev->usb_type = USB_TYPE_STD;
 
 	/* We have a real Avalon! */
-	sprintf(devpath, "%d:%d",
-			(int)(avalon->usbinfo.bus_number),
-			(int)(avalon->usbinfo.device_address));
-
 	avalon_initialise(avalon);
-
-	avalon->device_path = strdup(devpath);
 
 	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
 	if (unlikely(!(avalon->device_data)))
@@ -642,7 +635,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 
 	applog(LOG_DEBUG, "Avalon Detected: %s "
 	       "(miner_count=%d asic_count=%d timeout=%d frequency=%d)",
-	       devpath, info->miner_count, info->asic_count, info->timeout,
+	       avalon->device_path, info->miner_count, info->asic_count, info->timeout,
 	       info->frequency);
 
 	return true;
@@ -655,9 +648,6 @@ shin:
 
 	free(avalon->device_data);
 	avalon->device_data = NULL;
-
-	free(avalon->device_path);
-	avalon->device_path = NULL;
 
 	avalon = usb_free_cgpu(avalon);
 

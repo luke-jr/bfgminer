@@ -1423,6 +1423,8 @@ struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu)
 	if (cgpu->drv->copy)
 		free(cgpu->drv);
 
+	free(cgpu->device_path);
+
 	free(cgpu);
 
 	return NULL;
@@ -1439,6 +1441,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	const struct libusb_interface_descriptor *idesc;
 	const struct libusb_endpoint_descriptor *epdesc;
 	unsigned char strbuf[STRBUFLEN+1];
+	char devpath[32];
 	char devstr[STRBUFLEN+1];
 	int err, i, j, k;
 	int bad = USB_INIT_FAIL;
@@ -1446,8 +1449,13 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
 
-	sprintf(devstr, "- %s device %d:%d", found->name,
-		cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+	sprintf(devpath, "%d:%d",
+		(int)(cgpu->usbinfo.bus_number),
+		(int)(cgpu->usbinfo.device_address));
+
+	cgpu->device_path = strdup(devpath);
+
+	sprintf(devstr, "- %s device %s", found->name, devpath);
 
 	cgusb = calloc(1, sizeof(*cgusb));
 	if (unlikely(!cgusb))

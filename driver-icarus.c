@@ -728,7 +728,6 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
-	char devpath[20];
 	struct ICARUS_INFO *info;
 	struct timeval tv_start, tv_finish;
 
@@ -758,12 +757,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 
-	sprintf(devpath, "%d:%d",
-			(int)(icarus->usbinfo.bus_number),
-			(int)(icarus->usbinfo.device_address));
-
-	icarus->device_path = strdup(devpath);
-
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 
 	tries = 2;
@@ -789,7 +782,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 				applog(LOG_ERR,
 					"Icarus Detect: "
 					"Test failed at %s: get %s, should: %s",
-					devpath, nonce_hex, golden_nonce);
+					icarus->device_path, nonce_hex, golden_nonce);
 			}
 		}
 		free(nonce_hex);
@@ -801,7 +794,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
-			devpath, golden_nonce);
+			icarus->device_path, golden_nonce);
 
 	/* We have a real Icarus! */
 	if (!add_cgpu(icarus))
@@ -810,7 +803,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	update_usb_stats(icarus);
 
 	applog(LOG_INFO, "%s%d: Found at %s",
-		icarus->drv->name, icarus->device_id, devpath);
+		icarus->drv->name, icarus->device_id, icarus->device_path);
 
 	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
@@ -841,9 +834,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 unshin:
 
 	usb_uninit(icarus);
-
-	free(icarus->device_path);
-	icarus->device_path = NULL;
 
 shin:
 
