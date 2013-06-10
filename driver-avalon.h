@@ -13,6 +13,7 @@
 
 #ifdef USE_AVALON
 
+#define AVALON_TIME_FACTOR 10
 #define AVALON_RESET_FAULT_DECISECONDS 1
 #define AVALON_MINER_THREADS 1
 
@@ -75,6 +76,8 @@ struct avalon_result {
 } __attribute__((packed, aligned(4)));
 
 struct avalon_info {
+	int read_count;
+
 	int baud;
 	int miner_count;
 	int asic_count;
