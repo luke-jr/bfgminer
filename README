@@ -738,6 +738,15 @@ A: Proxies only work with the getwork and GBT protocols using the --proxy
 command. If you wish to use a proxy with stratum, people have supported
 success with various 3rd party tools like proxifier.
 
+Q: What should my Work Utility (WU) be?
+A: Work utility is the product of hashrate * luck and only stabilises over a
+very long period of time. Assuming all your work is valid work, bitcoin mining
+should produce a work utility of approximately 1 per 71.6MH. This means at
+5GH you should have a WU of 5000 / 71.6 or ~ 69. You cannot make your machine
+do "better WU" than this - it is luck related. However you can make it much
+worse if your machine produces a lot of hardware errors producing invalid work.
+
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
