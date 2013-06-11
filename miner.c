@@ -7136,7 +7136,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	if (unlikely(res == TNR_BAD))
 		{
 			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
 			       cgpu->proc_repr);
 			inc_hw_errors(thr);
 			ret = false;
