@@ -618,11 +618,13 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		int ns;
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
+		const bool manylp = (lpcount > 26);
+		const char *as = (manylp ? "aa" : "a");
 		
 		// Note, strcpy instead of assigning a byte to get the \0 too
-		strcpy(&cgpu->proc_repr[5], "a");
+		strcpy(&cgpu->proc_repr[5], as);
 		ns = strlen(cgpu->proc_repr_ns);
-		strcpy(&cgpu->proc_repr_ns[ns], "a");
+		strcpy(&cgpu->proc_repr_ns[ns], as);
 		
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
@@ -630,8 +632,18 @@ bool add_cgpu(struct cgpu_info *cgpu)
 			slave = malloc(sizeof(*slave));
 			*slave = *cgpu;
 			slave->proc_id = i;
-			slave->proc_repr[5] += i;
-			slave->proc_repr_ns[ns] += i;
+			if (manylp)
+			{
+				slave->proc_repr[5] += i / 26;
+				slave->proc_repr[6] += i % 26;
+				slave->proc_repr_ns[ns    ] += i / 26;
+				slave->proc_repr_ns[ns + 1] += i % 26;
+			}
+			else
+			{
+				slave->proc_repr[5] += i;
+				slave->proc_repr_ns[ns] += i;
+			}
 			slave->threads = tpp;
 			devices[total_devices++] = slave;
 			*nlp_p = slave;
