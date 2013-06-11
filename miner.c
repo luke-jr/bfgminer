@@ -4885,8 +4885,8 @@ static void display_options(void)
 
 	opt_loginput = true;
 	immedok(logwin, true);
-	clear_logwin();
 retry:
+	clear_logwin();
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nco[M]pact: %s\n"
