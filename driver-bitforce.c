@@ -388,12 +388,16 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 {
 	struct bitforce_data *data = bitforce->device_data;
 	struct thr_info *thr = bitforce->thr[0];
+	struct bitforce_proc_data *procdata = thr->cgpu_data;
 	const char *devpath = bitforce->device_path;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int *p_fdDev = &bitforce->device->device_fd;
 	int fdDev, retries = 0;
 	char pdevbuf[0x100];
 	char *s;
+	
+	if (!procdata->handles_board)
+		return;
 
 	mutex_lock(mutexp);
 	fdDev = *p_fdDev;
