@@ -384,6 +384,8 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 	mutex_unlock(mutexp);
 }
 
+void work_list_del(struct work **head, struct work *);
+
 void bitforce_reinit(struct cgpu_info *bitforce)
 {
 	struct bitforce_data *data = bitforce->device_data;
@@ -454,10 +456,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		
 		bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
 		DL_FOREACH_SAFE(thr->work_list, work, tmp)
-		{
-			DL_DELETE(thr->work_list, work);
-			free_work(work);
-		}
+			work_list_del(&thr->work_list, work);
 		data->queued = 0;
 		data->ready_to_queue = 0;
 		data->already_have_results = false;
@@ -1614,7 +1613,7 @@ finishresult:
 		// Delete all queued work up to, and including, this one
 		DL_FOREACH_SAFE(thr->work_list, work, tmpwork)
 		{
-			DL_DELETE(thr->work_list, work);
+			work_list_del(&thr->work_list, work);
 			--data->queued;
 			if (work == thiswork)
 				break;
@@ -1625,7 +1624,7 @@ finishresult:
 		{
 			// Parallel processors means the results might not be in order
 			// This could leak if jobs get lost, hence the sanity checks using "ZqX"
-			DL_DELETE(thr->work_list, thiswork);
+			work_list_del(&thr->work_list, thiswork);
 			--data->queued;
 		}
 next_qline: (void)0;
@@ -1804,8 +1803,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 				char *hex = bin2hex(key, 32+12);
 				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is missing queued job! %s", bitforce->proc_repr, hex);
 				free(hex);
-				DL_DELETE(thr->work_list, work);
-				free_work(work);
+				work_list_del(&thr->work_list, work);
 				continue;
 			}
 			if (likely(!--item->instances))
