@@ -445,7 +445,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		if (amt >= read_amount)
 			return ICA_NONCE_OK;
 
-		rc += SECTOMS(tdiff(&read_finish, &read_start));
+		rc = SECTOMS(tdiff(&read_finish, tv_start));
 		if (rc >= read_time) {
 			if (amt > 0)
 				applog(LOG_DEBUG, "Icarus Read: Timeout reading for %d ms", rc);
