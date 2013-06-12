@@ -316,8 +316,9 @@ AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 avalon="no"
 
 AC_ARG_ENABLE([avalon],
-	[AC_HELP_STRING([--enable-avalon],[Compile support for Avalon (default disabled)])],
-	[avalon=$enableval]
+	[AC_HELP_STRING([--disable-avalon],[Compile support for Avalon (default enabled)])],
+	[avalon=$enableval],
+	[avalon=yes]
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
