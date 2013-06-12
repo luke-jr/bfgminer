@@ -6222,18 +6222,23 @@ void clear_stratum_shares(struct pool *pool)
 	struct cgpu_info *cgpu;
 	double diff_cleared = 0;
 	int cleared = 0;
+	int my_mining_threads = mining_threads;  // Cached outside of locking
+	int thr_cleared[my_mining_threads];
+	
+	// NOTE: This is per-thread rather than per-device to avoid getting devices lock in stratum_shares loop
+	for (int i = 0; i < my_mining_threads; ++i)
+		thr_cleared[i] = 0;
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		if (sshare->work->pool == pool) {
+		if (sshare->work->pool == pool && work->thr_id < my_mining_threads) {
 			HASH_DEL(stratum_shares, sshare);
 			
 			work = sshare->work;
 			sharelog("disconnect", work);
 			
-			cgpu = get_thr_cgpu(work->thr_id);
-			++cgpu->stale;
 			diff_cleared += sshare->work->work_difficulty;
+			++thr_cleared[work->thr_id];
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -6248,6 +6253,12 @@ void clear_stratum_shares(struct pool *pool)
 		total_stale += cleared;
 		pool->diff_stale += diff_cleared;
 		total_diff_stale += diff_cleared;
+		for (int i = 0; i < my_mining_threads; ++i)
+			if (thr_cleared[i])
+			{
+				cgpu = get_thr_cgpu(i);
+				cgpu->stale += thr_cleared[i];
+			}
 		mutex_unlock(&stats_lock);
 
 		mutex_lock(&submitting_lock);
