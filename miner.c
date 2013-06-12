@@ -2321,20 +2321,20 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 }
 
 static const char *
-percentf(unsigned p, unsigned t, char *buf)
+percentf(double p, double t, char *buf)
 {
 	if (!p)
 		return "none";
 	if (!t)
 		return "100%";
-	p = p * 10000 / (p + t);
-	if (p < 100)
-		sprintf(buf, ".%02u%%", p);  // ".01%"
+	p /= p + t;
+	if (p < 0.01)
+		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
 	else
-	if (p < 1000)
-		sprintf(buf, "%u.%u%%", p / 100, (p % 100) / 10);  // "9.1%"
+	if (p < 0.1)
+		sprintf(buf, "%.1f%%", p * 100);  // "9.1%"
 	else
-		sprintf(buf, " %2u%%", p / 100);  // " 99%"
+		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
 	return buf;
 }
 
@@ -2367,6 +2367,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
 	int stale = cgpu->stale;
+	double waccepted = cgpu->diff_accepted;
+	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
 	
 	if (!opt_show_procs)
@@ -2381,6 +2383,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted += slave->accepted;
 			rejected += slave->rejected;
 			stale += slave->stale;
+			waccepted += slave->diff_accepted;
+			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
 		}
 	
@@ -2467,7 +2471,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		            awidth, accepted,
 		            rwidth, rejected,
 		            swidth, stale,
-		            percentf(rejected + stale, accepted, rejpcbuf),
+		            percentf(wnotaccepted, waccepted, rejpcbuf),
 		            hwwidth, hwerrs
 		);
 	}
@@ -2480,7 +2484,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted,
 			rejected,
 			stale,
-			percentf(rejected + stale, accepted, rejpcbuf),
+			percentf(wnotaccepted, waccepted, rejpcbuf),
 			hwerrs);
 	}
 	
@@ -6037,7 +6041,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_accepted,
 		total_rejected,
 		total_stale,
-		percentf(total_rejected + total_stale, total_accepted, rejpcbuf),
+		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
 		hw_errors);
 
 
