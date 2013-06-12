@@ -622,7 +622,7 @@ static bool avalon_detect_one(const char *devpath)
 
 static inline void avalon_detect()
 {
-	serial_detect(&avalon_drv, avalon_detect_one);
+	serial_detect_byname(&avalon_drv, avalon_detect_one);
 }
 
 static void __avalon_init(struct cgpu_info *avalon)
