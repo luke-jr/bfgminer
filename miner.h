@@ -529,6 +529,7 @@ struct cgpu_info {
 	int diff1;
 	double diff_accepted;
 	double diff_rejected;
+	double diff_stale;
 	int last_share_pool;
 	time_t last_share_pool_time;
 	double last_share_diff;

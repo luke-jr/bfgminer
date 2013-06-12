@@ -2321,20 +2321,20 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 }
 
 static const char *
-percentf(unsigned p, unsigned t, char *buf)
+percentf(double p, double t, char *buf)
 {
 	if (!p)
 		return "none";
 	if (!t)
 		return "100%";
-	p = p * 10000 / (p + t);
-	if (p < 100)
-		sprintf(buf, ".%02u%%", p);  // ".01%"
+	p /= p + t;
+	if (p < 0.01)
+		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
 	else
-	if (p < 1000)
-		sprintf(buf, "%u.%u%%", p / 100, (p % 100) / 10);  // "9.1%"
+	if (p < 0.1)
+		sprintf(buf, "%.1f%%", p * 100);  // "9.1%"
 	else
-		sprintf(buf, " %2u%%", p / 100);  // " 99%"
+		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
 	return buf;
 }
 
@@ -2367,6 +2367,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
 	int stale = cgpu->stale;
+	double waccepted = cgpu->diff_accepted;
+	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
 	
 	if (!opt_show_procs)
@@ -2381,6 +2383,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted += slave->accepted;
 			rejected += slave->rejected;
 			stale += slave->stale;
+			waccepted += slave->diff_accepted;
+			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
 		}
 	
@@ -2467,7 +2471,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		            awidth, accepted,
 		            rwidth, rejected,
 		            swidth, stale,
-		            percentf(rejected + stale, accepted, rejpcbuf),
+		            percentf(wnotaccepted, waccepted, rejpcbuf),
 		            hwwidth, hwerrs
 		);
 	}
@@ -2480,7 +2484,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted,
 			rejected,
 			stale,
-			percentf(rejected + stale, accepted, rejpcbuf),
+			percentf(wnotaccepted, waccepted, rejpcbuf),
 			hwerrs);
 	}
 	
@@ -4039,6 +4043,7 @@ static void submit_discard_share2(const char *reason, struct work *work)
 	++cgpu->stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
+	cgpu->diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
 	mutex_unlock(&stats_lock);
 }
@@ -6036,7 +6041,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_accepted,
 		total_rejected,
 		total_stale,
-		percentf(total_rejected + total_stale, total_accepted, rejpcbuf),
+		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
 		hw_errors);
 
 
@@ -6217,23 +6222,33 @@ static void shutdown_stratum(struct pool *pool)
 
 void clear_stratum_shares(struct pool *pool)
 {
+	int my_mining_threads = mining_threads;  // Cached outside of locking
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
 	struct cgpu_info *cgpu;
 	double diff_cleared = 0;
+	double thr_diff_cleared[my_mining_threads];
 	int cleared = 0;
+	int thr_cleared[my_mining_threads];
+	
+	// NOTE: This is per-thread rather than per-device to avoid getting devices lock in stratum_shares loop
+	for (int i = 0; i < my_mining_threads; ++i)
+	{
+		thr_diff_cleared[i] = 0;
+		thr_cleared[i] = 0;
+	}
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		if (sshare->work->pool == pool) {
+		if (sshare->work->pool == pool && work->thr_id < my_mining_threads) {
 			HASH_DEL(stratum_shares, sshare);
 			
 			work = sshare->work;
 			sharelog("disconnect", work);
 			
-			cgpu = get_thr_cgpu(work->thr_id);
-			++cgpu->stale;
 			diff_cleared += sshare->work->work_difficulty;
+			thr_diff_cleared[work->thr_id] += work->work_difficulty;
+			++thr_cleared[work->thr_id];
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -6248,6 +6263,13 @@ void clear_stratum_shares(struct pool *pool)
 		total_stale += cleared;
 		pool->diff_stale += diff_cleared;
 		total_diff_stale += diff_cleared;
+		for (int i = 0; i < my_mining_threads; ++i)
+			if (thr_cleared[i])
+			{
+				cgpu = get_thr_cgpu(i);
+				cgpu->diff_stale += thr_diff_cleared[i];
+				cgpu->stale += thr_cleared[i];
+			}
 		mutex_unlock(&stats_lock);
 
 		mutex_lock(&submitting_lock);
