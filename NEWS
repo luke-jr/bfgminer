@@ -1,5 +1,8 @@
 BFGMiner Version 2.10.9 - June 13, 2013
 
+- make-release: Include all submodules, recursively
+- Remove API.java example (no copyright license)
+- Minimally fix "make install" to ignore bitstream sources
 - Add submodule for ZtexBTCMiner (aka ztex_ufm1_*)
 - Add submodule for X6000_ztex_comm4 (aka x6500-overclocker-0402)
 - ztex: Use standard file header/comment formatting, and update license to GPLv3
