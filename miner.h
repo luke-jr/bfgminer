@@ -9,6 +9,8 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <sched.h>
+
 #include "elist.h"
 #include "uthash.h"
 #include "logging.h"
@@ -721,6 +723,7 @@ static inline void mutex_unlock(pthread_mutex_t *lock)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+	sched_yield();
 }
 
 static inline int mutex_trylock(pthread_mutex_t *lock)
@@ -744,6 +747,7 @@ static inline void rw_unlock(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_unlock(lock)))
 		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
+	sched_yield();
 }
 
 static inline void rd_unlock(pthread_rwlock_t *lock)
