@@ -1,27 +1,18 @@
-/**
- *   ztex.c - BFGMiner worker for Ztex 1.15x/y fpga board
+/*
+ * Copyright 2012 nelisky
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2013 Denis Ahrens
+ * Copyright 2012 Xiangfu
  *
- *   Copyright 2012 nelisky
- *   Copyright 2012-2013 Luke Dashjr
- *   Copyright 2012-2013 Denis Ahrens
- *   Copyright 2012 Xiangfu
+ * This work is based upon the Java SDK provided by ztex which is
+ * Copyright (C) 2009-2011 ZTEX GmbH.
+ * http://www.ztex.de
  *
- *   This work is based upon the Java SDK provided by ztex which is
- *   Copyright (C) 2009-2011 ZTEX GmbH.
- *   http://www.ztex.de
- *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License version 2 as
- *   published by the Free Software Foundation.
- *
- *   This program is distributed in the hope that it will be useful, but
- *   WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *   General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, see http://www.gnu.org/licenses/.
-**/
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
 
 #include "config.h"
 
