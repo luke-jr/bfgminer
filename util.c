@@ -1881,7 +1881,7 @@ void cgsem_post(cgsem_t *cgsem)
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
 	if (unlikely(ret == 0))
-		quit(1, "Failed to write in cgsem_post");
+		applog(LOG_WARNING, "Failed to write in cgsem_post");
 }
 
 void cgsem_wait(cgsem_t *cgsem)
@@ -1891,7 +1891,7 @@ void cgsem_wait(cgsem_t *cgsem)
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
 	if (unlikely(ret == 0))
-		quit(1, "Failed to read in cgsem_wait");
+		applog(LOG_WARNING, "Failed to read in cgsem_wait");
 }
 
 void cgsem_destroy(cgsem_t *cgsem)
