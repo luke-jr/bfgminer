@@ -163,7 +163,10 @@ static bool bitforce_detect_one(const char *devpath)
 	*initdata = (struct bitforce_init_data){
 		.sc = false,
 	};
-	for ( bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
+	bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
+	for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
+		BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
+	for ( ;
 	      strncasecmp(pdevbuf, "OK", 2);
 	      BFgets(pdevbuf, sizeof(pdevbuf), fdDev) )
 	{
