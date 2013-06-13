@@ -622,11 +622,11 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	info->temp_sum = 0;
 	info->temp_old = 0;
 
-	ret = avalon_reset(avalon, true);
-	if (ret && !configured)
+	if (!add_cgpu(avalon))
 		goto unshin;
 
-	if (!add_cgpu(avalon))
+	ret = avalon_reset(avalon, true);
+	if (ret && !configured)
 		goto unshin;
 
 	update_usb_stats(avalon);
