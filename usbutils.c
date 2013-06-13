@@ -1718,9 +1718,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		cgpu->drv->name = (char *)(found->name);
 	}
 
-	DEVUNLOCK(cgpu, pstate);
-
-	return USB_INIT_OK;
+	bad = USB_INIT_OK;
+	goto out_unlock;
 
 cldame:
 
@@ -1733,6 +1732,7 @@ dame:
 
 	cgusb = free_cgusb(cgusb);
 
+out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return bad;
@@ -2190,9 +2190,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		*processed = 0;
 		USB_REJECT(cgpu, MODE_BULK_READ);
 
-		DEVUNLOCK(cgpu, pstate);
-
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 
 	usbdev = cgpu->usbdev;
@@ -2294,9 +2293,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		if (NODEV(err))
 			release_cgpu(cgpu);
 
-		DEVUNLOCK(cgpu, pstate);
-
-		return err;
+		goto out_unlock;
 	}
 
 	if (usbdev->buffer && usbdev->bufamt) {
@@ -2411,6 +2408,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
+out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2437,9 +2435,8 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_BULK_WRITE);
 
-		DEVUNLOCK(cgpu, pstate);
-
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 
 	usbdev = cgpu->usbdev;
@@ -2491,6 +2488,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
+out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2512,9 +2510,8 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_WRITE);
 
-		DEVUNLOCK(cgpu, pstate);
-
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 	usbdev = cgpu->usbdev;
 
@@ -2550,6 +2547,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
+out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2570,9 +2568,8 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_READ);
 
-		DEVUNLOCK(cgpu, pstate);
-
-		return LIBUSB_ERROR_NO_DEVICE;
+		err = LIBUSB_ERROR_NO_DEVICE;
+		goto out_unlock;
 	}
 	usbdev = cgpu->usbdev;
 
@@ -2596,6 +2593,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	} else if (NODEV(err))
 		release_cgpu(cgpu);
 
+out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
