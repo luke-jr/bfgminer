@@ -13,7 +13,7 @@ ACLOCAL_AMFLAGS = -I m4
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  api-example.php miner.php	\
 		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/* API-README FPGA-README SCRYPT-README
+		  bitstreams/*.bi? bitstreams/COPYING_* API-README FPGA-README SCRYPT-README
 
 SUBDIRS		= lib ccan
 
@@ -120,19 +120,19 @@ endif
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = bitstreams/*.bi? bitstreams/COPYING_*
 endif
 
 if HAS_X6500
 bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = bitstreams/*.bi? bitstreams/COPYING_*
 endif
 
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = bitstreams/*
+dist_bitstreams_DATA = bitstreams/*.bi? bitstreams/COPYING_*
 endif
 
 bin_PROGRAMS += bfgminer-rpc
