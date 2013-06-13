@@ -115,13 +115,12 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 {
 	char buf[0x100+1];
 	char *devname = NULL;
-	char devpath[20];
+	char devpath[32];
 	int err, i, amount;
 	bool added = false;
 
-	struct cgpu_info *modminer = NULL;
-	modminer = calloc(1, sizeof(*modminer));
-	modminer->drv = &modminer_drv;
+	struct cgpu_info *modminer = usb_alloc_cgpu(&modminer_drv, 1);
+
 	modminer->modminer_mutex = calloc(1, sizeof(*(modminer->modminer_mutex)));
 	mutex_init(modminer->modminer_mutex);
 	modminer->fpgaid = (char)0;
@@ -129,44 +128,40 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 	if (!usb_init(modminer, dev, found))
 		goto shin;
 
-	sprintf(devpath, "%d:%d",
-			(int)(modminer->usbinfo.bus_number),
-			(int)(modminer->usbinfo.device_address));
-
 	do_ping(modminer);
 
 	if ((err = usb_write(modminer, MODMINER_GET_VERSION, 1, &amount, C_REQUESTVERSION)) < 0 || amount != 1) {
 		applog(LOG_ERR, "%s detect (%s) send version request failed (%d:%d)",
-			modminer->drv->dname, devpath, amount, err);
+			modminer->drv->dname, modminer->device_path, amount, err);
 		goto unshin;
 	}
 
 	if ((err = usb_read_once(modminer, buf, sizeof(buf)-1, &amount, C_GETVERSION)) < 0 || amount < 1) {
 		if (err < 0)
 			applog(LOG_ERR, "%s detect (%s) no version reply (%d)",
-				modminer->drv->dname, devpath, err);
+				modminer->drv->dname, modminer->device_path, err);
 		else
 			applog(LOG_ERR, "%s detect (%s) empty version reply (%d)",
-				modminer->drv->dname, devpath, amount);
+				modminer->drv->dname, modminer->device_path, amount);
 
 		applog(LOG_DEBUG, "%s detect (%s) check the firmware",
-				modminer->drv->dname, devpath);
+				modminer->drv->dname, modminer->device_path);
 
 		goto unshin;
 	}
 	buf[amount] = '\0';
 	devname = strdup(buf);
-	applog(LOG_DEBUG, "%s (%s) identified as: %s", modminer->drv->dname, devpath, devname);
+	applog(LOG_DEBUG, "%s (%s) identified as: %s", modminer->drv->dname, modminer->device_path, devname);
 
 	if ((err = usb_write(modminer, MODMINER_FPGA_COUNT, 1, &amount, C_REQUESTFPGACOUNT) < 0 || amount != 1)) {
 		applog(LOG_ERR, "%s detect (%s) FPGA count request failed (%d:%d)",
-			modminer->drv->dname, devpath, amount, err);
+			modminer->drv->dname, modminer->device_path, amount, err);
 		goto unshin;
 	}
 
 	if ((err = usb_read(modminer, buf, 1, &amount, C_GETFPGACOUNT)) < 0 || amount != 1) {
 		applog(LOG_ERR, "%s detect (%s) no FPGA count reply (%d:%d)",
-			modminer->drv->dname, devpath, amount, err);
+			modminer->drv->dname, modminer->device_path, amount, err);
 		goto unshin;
 	}
 
@@ -175,28 +170,25 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 
 	if (buf[0] == 0) {
 		applog(LOG_ERR, "%s detect (%s) zero FPGA count from %s",
-			modminer->drv->dname, devpath, devname);
+			modminer->drv->dname, modminer->device_path, devname);
 		goto unshin;
 	}
 
 	if (buf[0] < 1 || buf[0] > 4) {
 		applog(LOG_ERR, "%s detect (%s) invalid FPGA count (%u) from %s",
-			modminer->drv->dname, devpath, buf[0], devname);
+			modminer->drv->dname, modminer->device_path, buf[0], devname);
 		goto unshin;
 	}
 
 	applog(LOG_DEBUG, "%s (%s) %s has %u FPGAs",
-		modminer->drv->dname, devpath, devname, buf[0]);
+		modminer->drv->dname, modminer->device_path, devname, buf[0]);
 
 	modminer->name = devname;
 
 	// TODO: test with 1 board missing in the middle and each end
 	// to see how that affects the sequence numbers
 	for (i = 0; i < buf[0]; i++) {
-		struct cgpu_info *tmp = calloc(1, sizeof(*tmp));
-
-		tmp->drv = copy_drv(modminer->drv);
-		tmp->name = devname;
+		struct cgpu_info *tmp = usb_copy_cgpu(modminer);
 
 		sprintf(devpath, "%d:%d:%d",
 			(int)(modminer->usbinfo.bus_number),
@@ -204,22 +196,16 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 			i);
 
 		tmp->device_path = strdup(devpath);
-		tmp->usbdev = modminer->usbdev;
-		tmp->usbinfo.bus_number = modminer->usbinfo.bus_number;
-		tmp->usbinfo.device_address = modminer->usbinfo.device_address;
+
 		// Only the first copy gets the already used stats
-		if (!added)
-			tmp->usbinfo.usbstat = modminer->usbinfo.usbstat;
+		if (added)
+			tmp->usbinfo.usbstat = USB_NOSTAT;
+
 		tmp->fpgaid = (char)i;
 		tmp->modminer_mutex = modminer->modminer_mutex;
-		tmp->deven = DEV_ENABLED;
-		tmp->threads = 1;
 
 		if (!add_cgpu(tmp)) {
-			free(tmp->device_path);
-			if (tmp->drv->copy)
-				free(tmp->drv);
-			free(tmp);
+			tmp = usb_free_cgpu_devlock(tmp, !added);
 			goto unshin;
 		}
 
@@ -228,10 +214,7 @@ static bool modminer_detect_one(struct libusb_device *dev, struct usb_find_devic
 		added = true;
 	}
 
-	if (modminer->drv->copy)
-		free(modminer->drv);
-
-	free(modminer);
+	modminer = usb_free_cgpu_devlock(modminer, !added);
 
 	return true;
 
@@ -240,13 +223,12 @@ unshin:
 		usb_uninit(modminer);
 
 shin:
-	if (!added)
+	if (!added) {
 		free(modminer->modminer_mutex);
+		modminer->modminer_mutex = NULL;
+	}
 
-	if (modminer->drv->copy)
-		free(modminer->drv);
-
-	free(modminer);
+	modminer = usb_free_cgpu_devlock(modminer, !added);
 
 	if (added)
 		return true;
@@ -1111,6 +1093,7 @@ static void modminer_hw_error(struct thr_info *thr)
 static void modminer_fpga_shutdown(struct thr_info *thr)
 {
 	free(thr->cgpu_data);
+	thr->cgpu_data = NULL;
 }
 
 static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)

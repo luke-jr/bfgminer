@@ -802,7 +802,6 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 {
 	struct bflsc_info *sc_info = NULL;
 	char buf[BFLSC_BUFSIZ+1];
-	char devpath[20];
 	int i, err, amount;
 	struct timeval init_start, init_now;
 	int init_sleep, init_count;
@@ -810,13 +809,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	char *newname;
 	uint16_t latency;
 
-	struct cgpu_info *bflsc = calloc(1, sizeof(*bflsc));
-
-	if (unlikely(!bflsc))
-		quit(1, "Failed to calloc bflsc in bflsc_detect_one");
-	bflsc->drv = &bflsc_drv;
-	bflsc->deven = DEV_ENABLED;
-	bflsc->threads = 1;
+	struct cgpu_info *bflsc = usb_alloc_cgpu(&bflsc_drv, 1);
 
 	sc_info = calloc(1, sizeof(*sc_info));
 	if (unlikely(!sc_info))
@@ -826,11 +819,6 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 
 	if (!usb_init(bflsc, dev, found))
 		goto shin;
-
-	sprintf(devpath, "%d:%d",
-			(int)(bflsc->usbinfo.bus_number),
-			(int)(bflsc->usbinfo.device_address));
-
 
 	// Allow 2 complete attempts if the 1st time returns an unrecognised reply
 	ident_first = true;
@@ -843,7 +831,7 @@ reinit:
 	err = write_to_dev(bflsc, 0, BFLSC_IDENTIFY, BFLSC_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY);
 	if (err < 0 || amount != BFLSC_IDENTIFY_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
-			bflsc->drv->dname, devpath, amount, err);
+			bflsc->drv->dname, bflsc->device_path, amount, err);
 		goto unshin;
 	}
 
@@ -854,7 +842,7 @@ reinit:
 		if (us_tdiff(&init_now, &init_start) <= REINIT_TIME_MAX) {
 			if (init_count == 2) {
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
-					bflsc->drv->dname, devpath, amount, err);
+					bflsc->drv->dname, bflsc->device_path, amount, err);
 			}
 			nmsleep(init_sleep);
 			if ((init_sleep * 2) <= REINIT_TIME_MAX_MS)
@@ -864,14 +852,14 @@ reinit:
 
 		if (init_count > 0)
 			applog(LOG_WARNING, "%s detect (%s) init failed %d times %.2fs",
-				bflsc->drv->dname, devpath, init_count, tdiff(&init_now, &init_start));
+				bflsc->drv->dname, bflsc->device_path, init_count, tdiff(&init_now, &init_start));
 
 		if (err < 0) {
 			applog(LOG_ERR, "%s detect (%s) error identify reply (%d:%d)",
-				bflsc->drv->dname, devpath, amount, err);
+				bflsc->drv->dname, bflsc->device_path, amount, err);
 		} else {
 			applog(LOG_ERR, "%s detect (%s) empty identify reply (%d)",
-				bflsc->drv->dname, devpath, amount);
+				bflsc->drv->dname, bflsc->device_path, amount);
 		}
 
 		goto unshin;
@@ -880,23 +868,21 @@ reinit:
 
 	if (unlikely(!strstr(buf, BFLSC_BFLSC))) {
 		applog(LOG_DEBUG, "%s detect (%s) found an FPGA '%s' ignoring",
-			bflsc->drv->dname, devpath, buf);
+			bflsc->drv->dname, bflsc->device_path, buf);
 		goto unshin;
 	}
 
 	if (unlikely(strstr(buf, BFLSC_IDENTITY))) {
 		if (ident_first) {
 			applog(LOG_DEBUG, "%s detect (%s) didn't recognise '%s' trying again ...",
-				bflsc->drv->dname, devpath, buf);
+				bflsc->drv->dname, bflsc->device_path, buf);
 			ident_first = false;
 			goto retry;
 		}
 		applog(LOG_DEBUG, "%s detect (%s) didn't recognise '%s' on 2nd attempt",
-			bflsc->drv->dname, devpath, buf);
+			bflsc->drv->dname, bflsc->device_path, buf);
 		goto unshin;
 	}
-
-	bflsc->device_path = strdup(devpath);
 
 	if (!getinfo(bflsc, 0))
 		goto unshin;
@@ -951,7 +937,7 @@ reinit:
 
 	// We have a real BFLSC!
 	applog(LOG_DEBUG, "%s (%s) identified as: '%s'",
-		bflsc->drv->dname, devpath, bflsc->drv->name);
+		bflsc->drv->dname, bflsc->device_path, bflsc->drv->name);
 
 	if (!add_cgpu(bflsc))
 		goto unshin;
@@ -971,16 +957,15 @@ unshin:
 
 shin:
 
-	free(bflsc->device_path);
 	free(bflsc->device_data);
+	bflsc->device_data = NULL;
 
-	if (bflsc->name != blank)
+	if (bflsc->name != blank) {
 		free(bflsc->name);
+		bflsc->name = NULL;
+	}
 
-	if (bflsc->drv->copy)
-		free(bflsc->drv);
-
-	free(bflsc);
+	bflsc = usb_free_cgpu(bflsc);
 
 	return false;
 }

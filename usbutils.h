@@ -177,6 +177,8 @@ struct cg_usb_device {
 	uint32_t bufamt;
 };
 
+#define USB_NOSTAT 0
+
 struct cg_usb_info {
 	uint8_t bus_number;
 	uint8_t device_address;
@@ -186,6 +188,17 @@ struct cg_usb_info {
 	struct timeval last_nodev;
 	uint32_t ioerr_count;
 	uint32_t continuous_ioerr_count;
+
+	/*
+	 * for nodev and cgusb access (read and write)
+	 * it's a pointer so MMQ can have it in multiple devices
+	 *
+	 * N.B. general mining code doesn't need to use the read
+	 * lock for 'nodev' if it calls a usb_read/write/etc function
+	 * that uses the lock - however, all usbutils code MUST use it
+	 * to avoid devices disappearing while in use by multiple threads
+	 */
+	pthread_rwlock_t *devlock;
 };
 
 enum usb_cmds {
@@ -258,6 +271,10 @@ struct cgpu_info;
 void usb_all(int level);
 const char *usb_cmdname(enum usb_cmds cmd);
 void usb_applog(struct cgpu_info *bflsc, enum usb_cmds cmd, char *msg, int amount, int err);
+struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig);
+struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
+struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devlock);
+#define usb_free_cgpu(cgpu) usb_free_cgpu_devlock(cgpu, true)
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));

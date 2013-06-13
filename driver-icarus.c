@@ -445,7 +445,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		if (amt >= read_amount)
 			return ICA_NONCE_OK;
 
-		rc += SECTOMS(tdiff(&read_finish, &read_start));
+		rc = SECTOMS(tdiff(&read_finish, tv_start));
 		if (rc >= read_time) {
 			if (amt > 0)
 				applog(LOG_DEBUG, "Icarus Read: Timeout reading for %d ms", rc);
@@ -728,7 +728,6 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	int this_option_offset = ++option_offset;
-	char devpath[20];
 	struct ICARUS_INFO *info;
 	struct timeval tv_start, tv_finish;
 
@@ -751,23 +750,12 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	int ret, err, amount, tries;
 	bool ok;
 
-	icarus = calloc(1, sizeof(struct cgpu_info));
-	if (unlikely(!icarus))
-		quit(1, "Failed to calloc icarus in icarus_detect_one");
-	icarus->drv = &icarus_drv;
-	icarus->deven = DEV_ENABLED;
-	icarus->threads = 1;
+	icarus = usb_alloc_cgpu(&icarus_drv, 1);
 
 	if (!usb_init(icarus, dev, found))
 		goto shin;
 
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
-
-	sprintf(devpath, "%d:%d",
-			(int)(icarus->usbinfo.bus_number),
-			(int)(icarus->usbinfo.device_address));
-
-	icarus->device_path = strdup(devpath);
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 
@@ -794,7 +782,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 				applog(LOG_ERR,
 					"Icarus Detect: "
 					"Test failed at %s: get %s, should: %s",
-					devpath, nonce_hex, golden_nonce);
+					icarus->device_path, nonce_hex, golden_nonce);
 			}
 		}
 		free(nonce_hex);
@@ -806,7 +794,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
-			devpath, golden_nonce);
+			icarus->device_path, golden_nonce);
 
 	/* We have a real Icarus! */
 	if (!add_cgpu(icarus))
@@ -815,7 +803,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	update_usb_stats(icarus);
 
 	applog(LOG_INFO, "%s%d: Found at %s",
-		icarus->drv->name, icarus->device_id, devpath);
+		icarus->drv->name, icarus->device_id, icarus->device_path);
 
 	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
@@ -847,11 +835,9 @@ unshin:
 
 	usb_uninit(icarus);
 
-	free(icarus->device_path);
-
 shin:
 
-	free(icarus);
+	icarus = usb_free_cgpu(icarus);
 
 	return false;
 }
