@@ -12,7 +12,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 		  api-example.php miner.php	\
-		  API.class API.java api-example.c windows-build.txt \
+		  api-example.c windows-build.txt \
 		  bitstreams/*.bi? bitstreams/COPYING_* API-README FPGA-README SCRYPT-README
 
 SUBDIRS		= lib ccan
