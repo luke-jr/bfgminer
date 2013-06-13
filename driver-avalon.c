@@ -242,9 +242,10 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 	int err, amount, ofs = 2, cp;
 
 	/* If the buffer is ready to take more work, yield once in case the
-	 * write thread is waiting to be scheduled. */
+	 * write thread is waiting to be scheduled. Keep it under the time
+	 * it would take to fill the entire 512 byte buffer. */
 	if (!avalon_buffer_full(avalon))
-		nmsleep(40);
+		nmsleep(32);
 
 	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
