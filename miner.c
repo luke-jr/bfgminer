@@ -573,6 +573,11 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 
 static
 char* add_serial_all(char*arg, char*p) {
+	size_t pLen = p - arg;
+	char dev[pLen + PATH_MAX];
+	memcpy(dev, arg, pLen);
+	char *devp = &dev[pLen];
+
 #ifdef HAVE_LIBUDEV
 
 	struct udev *udev = udev_new();
@@ -592,11 +597,7 @@ char* add_serial_all(char*arg, char*p) {
 
 		const char *devpath = udev_device_get_devnode(device);
 		if (devpath) {
-			size_t pLen = p - arg;
-			size_t dLen = strlen(devpath) + 1;
-			char dev[dLen + pLen];
-			memcpy(dev, arg, pLen);
-			memcpy(&dev[pLen], devpath, dLen);
+			strcpy(devp, devpath);
 			applog(LOG_DEBUG, "scan-serial: libudev all-adding %s", dev);
 			string_elist_add(dev, &scan_devices);
 		}
@@ -605,7 +606,6 @@ char* add_serial_all(char*arg, char*p) {
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
-	return NULL;
 
 #elif defined(WIN32)
 
@@ -620,11 +620,9 @@ tryagain: ;
 		}
 		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";
 	}
-	size_t tLen = p - arg;
-	char dev[12 + tLen];
-	memcpy(dev, arg, tLen);
-	memcpy(&dev[tLen], "\\\\.\\", 4);
-	char *devp = &dev[tLen + 4];
+	size_t tLen;
+	memcpy(devp, "\\\\.\\", 4);
+	devp = &devp[4];
 	for (char *t = buf; *t; t += tLen) {
 		tLen = strlen(t) + 1;
 		if (strncmp("COM", t, 3))
@@ -633,7 +631,6 @@ tryagain: ;
 		applog(LOG_DEBUG, "scan-serial: QueryDosDevice all-adding %s", dev);
 		string_elist_add(dev, &scan_devices);
 	}
-	return NULL;
 
 #else
 
@@ -641,7 +638,7 @@ tryagain: ;
 	struct dirent *de;
 	const char devdir[] = "/dev";
 	const size_t devdirlen = sizeof(devdir) - 1;
-	char devpath[sizeof(devdir) + NAME_MAX];
+	char *devpath = devp;
 	char *devfile = devpath + devdirlen + 1;
 	
 	D = opendir(devdir);
@@ -656,14 +653,16 @@ tryagain: ;
 			continue;
 		
 		strcpy(devfile, de->d_name);
-		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", devpath);
-		string_elist_add(devpath, &scan_devices);
+		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", dev);
+		string_elist_add(dev, &scan_devices);
 	}
 	closedir(D);
 	
 	return NULL;
 
 #endif
+
+	return NULL;
 }
 
 #ifdef USE_FPGA_SERIAL
