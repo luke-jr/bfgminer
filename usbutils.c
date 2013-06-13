@@ -2690,6 +2690,27 @@ uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 	return cgusb->bufamt;
 }
 
+// Need to set all devices with matching usbdev
+void usb_set_dev_start(struct cgpu_info *cgpu)
+{
+	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cgpu_info *cgpu2;
+	struct timeval now;
+
+	// If the device wasn't dropped
+	if (cgusb != NULL) {
+		int i;
+
+		cgtime(&now);
+
+		for (i = 0; i < total_devices; i++) {
+			cgpu2 = get_devices(i);
+			if (cgpu2->usbdev == cgusb)
+				copy_time(&(cgpu2->dev_start_tv), &now);
+		}
+	}
+}
+
 void usb_cleanup()
 {
 	struct cgpu_info *cgpu;

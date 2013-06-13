@@ -555,6 +555,8 @@ struct cgpu_info {
 	unsigned int queued_count;
 
 	bool shutdown;
+
+	struct timeval dev_start_tv;
 };
 
 extern bool add_cgpu(struct cgpu_info*);

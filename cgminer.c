@@ -1989,8 +1989,20 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 {
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
+	struct timeval now;
+	double dev_runtime;
 
-	dh64 = (double)cgpu->total_mhashes / total_secs * 1000000ull;
+	if (cgpu->dev_start_tv.tv_sec == 0)
+		dev_runtime = total_secs;
+	else {
+		cgtime(&now);
+		dev_runtime = tdiff(&now, &(cgpu->dev_start_tv));
+	}
+
+	if (dev_runtime < 1.0)
+		dev_runtime = 1.0;
+
+	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
@@ -2070,6 +2082,8 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	char logline[256];
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
+	struct timeval now;
+	double dev_runtime;
 
 	if (opt_compact)
 		return;
@@ -2077,7 +2091,17 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	if (devcursor + count > LINES - 2)
 		return;
 
-	cgpu->utility = cgpu->accepted / total_secs * 60;
+	if (cgpu->dev_start_tv.tv_sec == 0)
+		dev_runtime = total_secs;
+	else {
+		cgtime(&now);
+		dev_runtime = tdiff(&now, &(cgpu->dev_start_tv));
+	}
+
+	if (dev_runtime < 1.0)
+		dev_runtime = 1.0;
+
+	cgpu->utility = cgpu->accepted / dev_runtime * 60;
 
 	wmove(statuswin,devcursor + count, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
@@ -2085,7 +2109,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	cgpu->drv->get_statline_before(logline, cgpu);
 	wprintw(statuswin, "%s", logline);
 
-	dh64 = (double)cgpu->total_mhashes / total_secs * 1000000ull;
+	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
@@ -2432,6 +2456,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	struct timeval tv_submit, tv_submit_reply;
 	char hashshow[64 + 4] = "";
 	char worktime[200] = "";
+	struct timeval now;
+	double dev_runtime;
 
 	cgpu = get_thr_cgpu(thr_id);
 
@@ -2570,7 +2596,17 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 	share_result(val, res, err, work, hashshow, resubmit, worktime);
 
-	cgpu->utility = cgpu->accepted / total_secs * 60;
+	if (cgpu->dev_start_tv.tv_sec == 0)
+		dev_runtime = total_secs;
+	else {
+		cgtime(&now);
+		dev_runtime = tdiff(&now, &(cgpu->dev_start_tv));
+	}
+
+	if (dev_runtime < 1.0)
+		dev_runtime = 1.0;
+
+	cgpu->utility = cgpu->accepted / dev_runtime * 60;
 
 	if (!opt_realquiet)
 		print_status(thr_id);
@@ -7170,6 +7206,7 @@ static void hotplug_process()
 		cgpu->thr = malloc(sizeof(*cgpu->thr) * (cgpu->threads+1));
 		cgpu->thr[cgpu->threads] = NULL;
 		cgpu->status = LIFE_INIT;
+		cgtime(&(cgpu->dev_start_tv));
 
 		for (j = 0; j < cgpu->threads; ++j) {
 			thr = get_thread(mining_threads);
