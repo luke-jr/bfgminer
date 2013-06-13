@@ -38,6 +38,7 @@ lib/c++defs.h
 lib/libgnu.a
 lib/signal.h
 lib/string.h
+lib/stdint.h
 lib/warn-on-use.h
 
 mkinstalldirs
