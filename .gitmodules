@@ -4,3 +4,6 @@
 [submodule "bitstream/X6000_ztex_comm4"]
 	path = bitstreams/src/X6000_ztex_comm4
 	url = git://github.com/luke-jr/X6000_ztex_comm4.git
+[submodule "bitstream/ZtexBTCMiner"]
+	path = bitstreams/src/ZtexBTCMiner
+	url = git://github.com/luke-jr/ZtexBTCMiner.git
