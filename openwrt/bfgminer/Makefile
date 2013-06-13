@@ -127,7 +127,7 @@ endef
 
 define Package/$(PKG_NAME)-bitstream-$(1)/install
 	$(INSTALL_DIR) $$(1)/usr/share/$(PKG_NAME)/bitstreams
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/share/$(PKG_NAME)/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
 endef
 
 ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)-bitstream-$(1)
