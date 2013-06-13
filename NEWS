@@ -1,3 +1,61 @@
+BFGMiner Version 2.10.9 - June 13, 2013
+
+- Add submodule for ZtexBTCMiner (aka ztex_ufm1_*)
+- Add submodule for X6000_ztex_comm4 (aka x6500-overclocker-0402)
+- ztex: Use standard file header/comment formatting, and update license to GPLv3
+- Bugfix: pdcurses doesn't like changing logwin size without clearing it also,
+so do that in display options
+- Use common code to ensure the prefix of -S *:all remains in all
+implementations of it (/dev glob was removing prefixes)
+- README: Document serial device format for Mac OS X
+- Bugfix: cairnsmore1: Enable building with libudev autodetection even if only
+icarus drivers are enabled
+- Bugfix: sysfs autodetect: Continue searching even after finding one tty (fixes
+multiple ttys per device, such as some Cairnsmore1s)
+- Bugfix: ztex: Avoid destroying libztex device in case other processors are
+still in use (fixes crash when 1.15y becomes unavailable)
+- Update windows-build.txt
+- ccan: Add missing copyright comment headers
+- Remove obsolete mknsis.sh
+- Add missing copyright sections to files that may need them
+- Standard copyright format (including year) for adl_functions.h
+- README: Add missing documentation for CPU algorithms cryptopp_asm32, sse2_32,
+and altivec_4way
+- Bugfix: icarus: Check work restart before timeout
+- Bugfix: icarus: Debuglog the correct read timeout (and omit from work restart
+since there's no trivial way to get it)
+- README: Update links
+- Bugfix: bitforce: Fix formatting on temperature-less statline
+- Bugfix: cpu: Fix warning on Win64
+- Bugfix: Cleanup trivial warnings
+- Bugfix: Really fix device entries in saved config file
+- Update the write config to properly record device entries and remove disabled
+option.
+- va_copy is meant to be matched by a va_end in log_generic.
+- Fulltest is true if value is <= target.
+- Fix warning with no curses built in.
+- Bugfix: configure: Check NEED_FPGAUTILS correctly
+- configure: Better grammar for --enable-cpumining help
+- Bugfix: Check for SSE 4.1 support before building sse4_64 asm CPU miner (uses
+MOVNTDQA instruction)
+- Bugfix: elist: Use uintptr_t for member offset
+- Bugfix: opencl/adl: Fix format string
+- Bugfix: opencl: Correct usage of formatted prints
+- Fixed deps for raring, which has newer libudev1.
+- Bugfix: Missing 'else' can result in null pointer dereference in race
+- Fix the problem of seting up termio of ttyUSB0 for icarus. the CSIZE is the
+mask of CS2/4/8
+- bufsize is an unsigned integer, make it so for debug.
+- Bugfix: Always compile support for commandline --temp-target and
+--temp-cutoff, and write them in the config for all devices
+- Bugfix: modminer: Use correct format for bytes left in bitstream upload
+message
+- Bugfix: Access strategy name string directly instead of accidentally
+- Add printf-format syntax checks to more functions that should use it
+- AUTHORS: Add more contributors
+- Bugfix: Use HTTP/1.1 compatible product token for User-Agent header
+
+
 BFGMiner Version 2.10.8 - April 28, 2013
 
 - Receive failures in recv_line should unconditionally fail.
