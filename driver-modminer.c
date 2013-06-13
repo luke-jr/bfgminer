@@ -552,6 +552,8 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 	// Give it a 2/3s delay after programming
 	nmsleep(666);
 
+	usb_set_dev_start(modminer);
+
 	return true;
 undame:
 	;

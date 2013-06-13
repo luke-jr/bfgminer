@@ -1581,8 +1581,20 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 
 		struct cgpu_info *cgpu = get_devices(dev);
 		float temp = cgpu->temp;
+		struct timeval now;
+		double dev_runtime;
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+		if (cgpu->dev_start_tv.tv_sec == 0)
+			dev_runtime = total_secs;
+		else {
+			cgtime(&now);
+			dev_runtime = tdiff(&now, &(cgpu->dev_start_tv));
+		}
+
+		if (dev_runtime < 1.0)
+			dev_runtime = 1.0;
+
+		cgpu->utility = cgpu->accepted / dev_runtime * 60;
 
 		if (cgpu->deven != DEV_DISABLED)
 			enabled = (char *)YES;
@@ -1597,7 +1609,7 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		root = api_add_string(root, "Enabled", enabled, false);
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_temp(root, "Temperature", &temp, false);
-		double mhs = cgpu->total_mhashes / total_secs;
+		double mhs = cgpu->total_mhashes / dev_runtime;
 		root = api_add_mhs(root, "MHS av", &mhs, false);
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);
@@ -1643,6 +1655,18 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		struct cgpu_info *cgpu = get_devices(dev);
 		double frequency = 0;
 		float temp = cgpu->temp;
+		struct timeval now;
+		double dev_runtime;
+
+		if (cgpu->dev_start_tv.tv_sec == 0)
+			dev_runtime = total_secs;
+		else {
+			cgtime(&now);
+			dev_runtime = tdiff(&now, &(cgpu->dev_start_tv));
+		}
+
+		if (dev_runtime < 1.0)
+			dev_runtime = 1.0;
 
 #ifdef USE_ZTEX
 		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
@@ -1653,7 +1677,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 			frequency = cgpu->clock;
 #endif
 
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+		cgpu->utility = cgpu->accepted / dev_runtime * 60;
 
 		if (cgpu->deven != DEV_DISABLED)
 			enabled = (char *)YES;
@@ -1668,7 +1692,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		root = api_add_string(root, "Enabled", enabled, false);
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_temp(root, "Temperature", &temp, false);
-		double mhs = cgpu->total_mhashes / total_secs;
+		double mhs = cgpu->total_mhashes / dev_runtime;
 		root = api_add_mhs(root, "MHS av", &mhs, false);
 		char mhsname[27];
 		sprintf(mhsname, "MHS %ds", opt_log_interval);

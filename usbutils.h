@@ -290,6 +290,7 @@ void usb_buffer_enable(struct cgpu_info *cgpu);
 void usb_buffer_disable(struct cgpu_info *cgpu);
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
+void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
 void *usb_resource_thread(void *userdata);
