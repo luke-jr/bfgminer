@@ -27,7 +27,7 @@ dist_doc_DATA = \
 rpcexamplesdir = $(docdir)/rpc-examples
 dist_rpcexamples_DATA = \
 		  api-example.php miner.php \
-		  API.class API.java api-example.c \
+		  api-example.c \
                   api-example.py
 
 SUBDIRS		= lib ccan

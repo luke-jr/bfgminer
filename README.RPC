@@ -390,12 +390,6 @@ api-example.php - a PHP script to access the API
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
  beginning of "function request($cmd)" to change where it looks for BFGMiner
 
-API.java/API.class
- a java program to access the API (with source code)
-  usage is: java API command address port
- Any missing or blank parameters are replaced as if you entered:
-  java API summary 127.0.0.1 4028
-
 api-example.c - a 'C' program to access the API (with source code)
   usage: api-example [command [ip/host [port]]]
  again, as above, missing or blank parameters are replaced as if you entered:
