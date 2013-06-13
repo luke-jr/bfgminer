@@ -1,27 +1,25 @@
-/**
- *   libztex.c - Ztex 1.15x/1.15y fpga board support library
+/*
+ * Copyright 2012 nelisky
+ * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2013 Denis Ahrens~
+ * Copyright 2012 Peter Stuge~
  *
- *   Copyright 2012 nelisky
- *   Copyright 2012-2013 Luke Dashjr
- *   Copyright 2012-2013 Denis Ahrens
- *   Copyright 2012 Peter Stuge
+ * This work is based upon the Java SDK provided by ztex which is
+ * Copyright (C) 2009-2011 ZTEX GmbH.
+ * http://www.ztex.de
  *
- *   This work is based upon the Java SDK provided by ztex which is
- *   Copyright (C) 2009-2011 ZTEX GmbH.
- *   http://www.ztex.de
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
  *
- *   This program is free software; you can redistribute it and/or modify
- *   it under the terms of the GNU General Public License version 2 as
- *   published by the Free Software Foundation.
- *
- *   This program is distributed in the hope that it will be useful, but
- *   WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *   General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, see http://www.gnu.org/licenses/.
-**/
+ * The copyright status of some of this code is currently a bit confused. They
+ * were initially released under a license (GPLv2 only) incompatible with the
+ * rest of the program at the time (GPLv3 or newer), and I haven't had luck
+ * getting in touch with some later contributors (denoted above with a tilde) to
+ * clarify it. Since their modifications would have been a license violation,
+ * I'm assuming it was just an innocent mistake on their part.
+ */
 
 #define _GNU_SOURCE
 
