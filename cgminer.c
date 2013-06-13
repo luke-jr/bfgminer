@@ -1808,6 +1808,12 @@ static bool getwork_decode(json_t *res_val, struct work *work)
 	return true;
 }
 
+/* Returns whether the pool supports local work generation or not. */
+static bool pool_localgen(struct pool *pool)
+{
+	return (pool->has_gbt || pool->has_stratum);
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -3466,7 +3472,7 @@ void switch_pools(struct pool *selected)
 
 	if (pool != last_pool && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 		applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
-		if (pool->has_gbt || pool->has_stratum || opt_fail_only)
+		if (pool_localgen(pool) || opt_fail_only)
 			clear_pool_work(last_pool);
 	}
 
@@ -4901,7 +4907,7 @@ static bool cnx_needed(struct pool *pool)
 	cp = current_pool();
 	if (cp == pool)
 		return true;
-	if (!cp->has_gbt && !cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
+	if (!pool_localgen(cp) && (!opt_fail_only || !cp->hdr_path))
 		return true;
 	/* If we're waiting for a response from shares submitted, keep the
 	 * connection open. */
@@ -7801,13 +7807,13 @@ begin_bench:
 
 		/* If the primary pool is a getwork pool and cannot roll work,
 		 * try to stage one extra work per mining thread */
-		if (!cp->has_stratum && !cp->has_gbt && !staged_rollable)
+		if (!pool_localgen(cp) && !staged_rollable)
 			max_staged += mining_threads;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
 
-		if (!cp->has_stratum && !cp->has_gbt && !ts && !opt_fail_only)
+		if (!pool_localgen(cp) && !ts && !opt_fail_only)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
