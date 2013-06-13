@@ -3,11 +3,11 @@ Priority: optional
 Section: misc
 Maintainer: Luke Dashjr <luke_bfgminer@dashjr.org>
 Standards-Version: 3.1.0
-Build-Depends: build-essential, debhelper, autoconf, automake, libtool, libssl-dev, yasm, pkg-config, libudev-dev, libcurl4-openssl-dev, wget, unzip, libjansson-dev, libncurses5-dev, libudev-dev, libusb-1.0-0-dev, git, quilt, uthash-dev
+Build-Depends: build-essential, debhelper, autoconf, automake, libtool, libssl-dev, yasm, pkg-config, libudev-dev, libcurl4-openssl-dev, wget, unzip, libjansson-dev, libncurses5-dev, libudev-dev, libusb-1.0-0-dev, git, quilt, uthash-dev, libsensors4-dev
 
 Package: bfgminer
 Architecture: any
-Depends: libjansson4, libudev0 | libudev1, libcurl3, libncurses5, libusb-1.0-0
+Depends: libjansson4, libudev0 | libudev1, libcurl3, libncurses5, libusb-1.0-0, libsensors4
 Description: This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
  monitoring, (over)clocking and fanspeed support for bitcoin and derivative
  coins.
