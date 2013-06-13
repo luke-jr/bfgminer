@@ -708,10 +708,10 @@ static bool icarus_init(struct thr_info *thr)
 		
 		// Special packet to probe work_division
 		unsigned char pkt[64] =
-			"\x6C\x0E\x85\x6F\xD5\xB7\x0D\x39\xB3\xEB\xCF\x26\x21\x22\xD5\x1F"
-			"\x7E\x89\x6B\x26\x92\x2A\xD8\xFC\x66\xDF\x8C\x66\xB8\x2C\x37\x7C"
+			"\x2e\x4c\x8f\x91\xfd\x59\x5d\x2d\x7e\xa2\x0a\xaa\xcb\x64\xa2\xa0"
+			"\x43\x82\x86\x02\x77\xcf\x26\xb6\xa1\xee\x04\xc5\x6a\x5b\x50\x4a"
 			"BFGMiner Probe\0\0"
-			"BFG\0\xE9\x7F\x01\x1A\x3B\xE1\x91\x51\xD3\x58\xC5\xFF";
+			"BFG\0\x64\x61\x01\x1a\xc9\x06\xa9\x51\xfb\x9b\x3c\x73";
 		
 		icarus_write(fd, pkt, sizeof(pkt));
 		if (ICA_GETS_OK == icarus_gets((unsigned char*)&res, fd, &tv_finish, NULL, info->read_count))
@@ -720,14 +720,17 @@ static bool icarus_init(struct thr_info *thr)
 			res = 0;
 		
 		switch (res) {
-			case 0x06448360:
+			case 0x04C0FDB4:
 				info->work_division = 1;
 				break;
-			case 0x85C55B5B:
+			case 0x82540E46:
 				info->work_division = 2;
 				break;
-			case 0xC0DC6008:
+			case 0x417C0F36:
 				info->work_division = 4;
+				break;
+			case 0x60C994D5:
+				info->work_division = 8;
 				break;
 			default:
 				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed (assuming 2): got %08x", icarus->proc_repr, res);
