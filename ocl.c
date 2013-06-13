@@ -225,11 +225,8 @@ char *file_contents(const char *filename, int *length)
 	void *buffer;
 	FILE *f;
 
-	strcpy(fullpath, opt_kernel_path);
-	strcat(fullpath, filename);
-
 	/* Try in the optional kernel path or installed prefix first */
-	f = fopen(fullpath, "rb");
+	f = open_bitstream("opencl", filename);
 	if (!f) {
 		/* Then try from the path BFGMiner was called */
 		strcpy(fullpath, cgminer_path);
