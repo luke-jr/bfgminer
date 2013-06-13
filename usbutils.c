@@ -1341,7 +1341,7 @@ void usb_uninit(struct cgpu_info *cgpu)
 
 /*
  * N.B. this is always called inside
- *	DEVLOCK(cgpu);
+ *	DEVLOCK(cgpu, pstate);
  */
 static void release_cgpu(struct cgpu_info *cgpu)
 {
@@ -1450,17 +1450,21 @@ struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devloc
 #define USB_INIT_IGNORE 2
 
 /*
- * WARNING - these assume DEVLOCK(cgpu) is called first and
- *  DEVUNLOCK(cgpu) in called in the same function inside the same brace level
- *  You must call DEVUNLOCK(cgpu) before exiting the function or it will leave
+ * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
+ *  DEVUNLOCK(cgpu, pstate) in called in the same function with the same pstate
+ *  given to DEVLOCK.
+ *  You must call DEVUNLOCK(cgpu, pstate) before exiting the function or it will leave
  *  the thread Cancelability unrestored
  */
-#define DEVLOCK(cgpu) int _pth_state; \
+#define DEVLOCK(cgpu, _pth_state) do { \
 			pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &_pth_state); \
-			wr_lock(cgpu->usbinfo.devlock);
+			wr_lock(cgpu->usbinfo.devlock); \
+			} while (0)
 
-#define DEVUNLOCK(cgpu) wr_unlock(cgpu->usbinfo.devlock); \
-			pthread_setcanceltype(_pth_state, NULL);
+#define DEVUNLOCK(cgpu, _pth_state) do { \
+			wr_unlock(cgpu->usbinfo.devlock); \
+			pthread_setcanceltype(_pth_state, NULL); \
+			} while (0)
 
 static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
 {
@@ -1471,10 +1475,10 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	unsigned char strbuf[STRBUFLEN+1];
 	char devpath[32];
 	char devstr[STRBUFLEN+1];
-	int err, i, j, k;
+	int err, i, j, k, pstate;
 	int bad = USB_INIT_FAIL;
 
-	DEVLOCK(cgpu);
+	DEVLOCK(cgpu, pstate);
 
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
@@ -1714,7 +1718,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		cgpu->drv->name = (char *)(found->name);
 	}
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return USB_INIT_OK;
 
@@ -1729,7 +1733,7 @@ dame:
 
 	cgusb = free_cgusb(cgusb);
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return bad;
 }
@@ -2170,7 +2174,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
 	double max, done;
-	int bufleft, err, got, tot;
+	int bufleft, err, got, tot, pstate;
 	bool first = true;
 	char *search;
 	int endlen;
@@ -2179,14 +2183,14 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
 	size_t usbbufread;
 
-	DEVLOCK(cgpu);
+	DEVLOCK(cgpu, pstate);
 
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
 		*processed = 0;
 		USB_REJECT(cgpu, MODE_BULK_READ);
 
-		DEVUNLOCK(cgpu);
+		DEVUNLOCK(cgpu, pstate);
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
@@ -2290,7 +2294,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		if (NODEV(err))
 			release_cgpu(cgpu);
 
-		DEVUNLOCK(cgpu);
+		DEVUNLOCK(cgpu, pstate);
 
 		return err;
 	}
@@ -2407,7 +2411,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2422,9 +2426,9 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	unsigned int initial_timeout;
 	double max, done;
 	__maybe_unused bool first = true;
-	int err, sent, tot;
+	int err, sent, tot, pstate;
 
-	DEVLOCK(cgpu);
+	DEVLOCK(cgpu, pstate);
 
 	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),ep=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
 
@@ -2433,7 +2437,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_BULK_WRITE);
 
-		DEVUNLOCK(cgpu);
+		DEVUNLOCK(cgpu, pstate);
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
@@ -2487,7 +2491,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2499,16 +2503,16 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	struct timeval tv_start, tv_finish;
 #endif
 	uint32_t *buf = NULL;
-	int err, i, bufsiz;
+	int err, i, bufsiz, pstate;
 
-	DEVLOCK(cgpu);
+	DEVLOCK(cgpu, pstate);
 
 	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
 
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_WRITE);
 
-		DEVUNLOCK(cgpu);
+		DEVUNLOCK(cgpu, pstate);
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
@@ -2546,7 +2550,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2557,16 +2561,16 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
-	int err;
+	int err, pstate;
 
-	DEVLOCK(cgpu);
+	DEVLOCK(cgpu, pstate);
 
 	USBDEBUG("USB debug: _usb_transfer_read(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",bufsiz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, bufsiz, timeout, usb_cmdname(cmd));
 
 	if (cgpu->usbinfo.nodev) {
 		USB_REJECT(cgpu, MODE_CTRL_READ);
 
-		DEVUNLOCK(cgpu);
+		DEVUNLOCK(cgpu, pstate);
 
 		return LIBUSB_ERROR_NO_DEVICE;
 	}
@@ -2592,7 +2596,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	} else if (NODEV(err))
 		release_cgpu(cgpu);
 
-	DEVUNLOCK(cgpu);
+	DEVUNLOCK(cgpu, pstate);
 
 	return err;
 }
