@@ -3848,7 +3848,8 @@ static void display_pool_summary(struct pool *pool)
 		if (pool->accepted || pool->rejected)
 			wlog(" Reject ratio: %.1f%%\n", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 		efficiency = pool->getwork_requested ? pool->accepted * 100.0 / pool->getwork_requested : 0.0;
-		wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
+		if (!pool_localgen(pool))
+			wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
 		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
