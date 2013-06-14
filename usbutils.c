@@ -1339,9 +1339,9 @@ void usb_uninit(struct cgpu_info *cgpu)
 	if (!cgpu->usbdev)
 		return;
 	if (!libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface)) {
-		wr_lock(&cgusb_fd_lock);
+		cg_wlock(&cgusb_fd_lock);
 		libusb_close(cgpu->usbdev->handle);
-		wr_unlock(&cgusb_fd_lock);
+		cg_wunlock(&cgusb_fd_lock);
 	}
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
 }
@@ -1520,9 +1520,9 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto dame;
 	}
 
-	wr_lock(&cgusb_fd_lock);
+	cg_wlock(&cgusb_fd_lock);
 	err = libusb_open(dev, &(cgusb->handle));
-	wr_unlock(&cgusb_fd_lock);
+	cg_wunlock(&cgusb_fd_lock);
 	if (err) {
 		switch (err) {
 			case LIBUSB_ERROR_ACCESS:
@@ -1732,9 +1732,9 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 cldame:
 
-	wr_lock(&cgusb_fd_lock);
+	cg_wlock(&cgusb_fd_lock);
 	libusb_close(cgusb->handle);
-	wr_unlock(&cgusb_fd_lock);
+	cg_wunlock(&cgusb_fd_lock);
 
 dame:
 
@@ -2184,10 +2184,10 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 {
 	int err, tries = 0;
 
-	rd_lock(&cgusb_fd_lock);
+	cg_rlock(&cgusb_fd_lock);
 	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
 				   transferred, timeout);
-	rd_unlock(&cgusb_fd_lock);
+	cg_runlock(&cgusb_fd_lock);
 
 	if (unlikely(err == LIBUSB_ERROR_PIPE)) {
 		applog(LOG_WARNING, "%s: libusb pipe error, trying to clear",
@@ -2198,10 +2198,10 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 				     err == LIBUSB_ERROR_NO_DEVICE))
 					break;
 
-			rd_lock(&cgusb_fd_lock);
+			cg_rlock(&cgusb_fd_lock);
 			err = libusb_bulk_transfer(dev_handle, endpoint, data,
 						   length, transferred, timeout);
-			rd_unlock(&cgusb_fd_lock);
+			cg_runlock(&cgusb_fd_lock);
 		} while (err == LIBUSB_ERROR_PIPE && tries++ < USB_RETRY_MAX);
 		applog(LOG_DEBUG, "%s: libusb pipe error%scleared",
 		       cgpu->drv->name, err ? " not " : " ");
@@ -2578,11 +2578,11 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
 
 	STATS_TIMEVAL(&tv_start);
-	rd_lock(&cgusb_fd_lock);
+	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex, (unsigned char *)buf, (uint16_t)siz,
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
-	rd_unlock(&cgusb_fd_lock);
+	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0);
 
@@ -2625,12 +2625,12 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	*amount = 0;
 
 	STATS_TIMEVAL(&tv_start);
-	rd_lock(&cgusb_fd_lock);
+	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex,
 		(unsigned char *)buf, (uint16_t)bufsiz,
 		timeout == DEVTIMEOUT ? usbdev->found->timeout : timeout);
-	rd_unlock(&cgusb_fd_lock);
+	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0);
 
