@@ -2100,6 +2100,9 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	if (devcursor + count > LINES - 2)
 		return;
 
+	if (count > most_devices)
+		return;
+
 	if (cgpu->dev_start_tv.tv_sec == 0)
 		dev_runtime = total_secs;
 	else {
