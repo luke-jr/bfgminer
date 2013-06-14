@@ -185,6 +185,7 @@ int hotplug_time = 5;
 #ifdef USE_USBUTILS
 pthread_mutex_t cgusb_lock;
 pthread_mutex_t cgusbres_lock;
+pthread_rwlock_t cgusb_fd_lock;
 #endif
 
 pthread_mutex_t hash_lock;
@@ -7339,6 +7340,7 @@ int main(int argc, char *argv[])
 #ifdef USE_USBUTILS
 	mutex_init(&cgusb_lock);
 	mutex_init(&cgusbres_lock);
+	rwlock_init(&cgusb_fd_lock);
 #endif
 #endif
 
