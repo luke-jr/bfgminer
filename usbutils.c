@@ -22,6 +22,10 @@
 			(err) == LIBUSB_ERROR_PIPE || \
 			(err) == LIBUSB_ERROR_OTHER)
 
+#define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
+			(err) == LIBUSB_ERROR_OTHER)
+
+			
 #ifdef USE_BFLSC
 #define DRV_BFLSC 1
 #endif
@@ -2568,7 +2572,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 	if (buf)
 		free(buf);
 
-	if (NODEV(err))
+	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
 
 out_unlock:
@@ -2614,7 +2618,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	if (err > 0) {
 		*amount = err;
 		err = 0;
-	} else if (NODEV(err))
+	} else if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
 
 out_unlock:
