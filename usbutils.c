@@ -2172,13 +2172,16 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 static int
 usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 		  unsigned char endpoint, unsigned char *data, int length,
-		  int *transferred, unsigned int timeout)
+		  int *transferred, unsigned int timeout,
+		  struct cgpu_info *cgpu)
 {
 	int err, tries = 0;
 
 	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
 				   transferred, timeout);
 	if (unlikely(err == LIBUSB_ERROR_PIPE)) {
+		applog(LOG_WARNING, "%s: libusb pipe error, trying to clear",
+		       cgpu->drv->name);
 		do {
 			err = libusb_clear_halt(dev_handle, endpoint);
 			if (unlikely(err == LIBUSB_ERROR_NOT_FOUND ||
@@ -2187,6 +2190,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 			err = libusb_bulk_transfer(dev_handle, endpoint, data,
 						   length, transferred, timeout);
 		} while (err == LIBUSB_ERROR_PIPE && tries++ < USB_RETRY_MAX);
+		applog(LOG_DEBUG, "%s: libusb pipe error%scleared",
+		       cgpu->drv->name, err ? " not " : " ");
 	}
 
 	return err;
@@ -2265,7 +2270,8 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			STATS_TIMEVAL(&tv_start);
 			err = usb_bulk_transfer(usbdev->handle,
 						usbdev->found->eps[ep].ep,
-						ptr, usbbufread, &got, timeout);
+						ptr, usbbufread, &got, timeout,
+						cgpu);
 			cgtime(&tv_finish);
 			USB_STATS(cgpu, &tv_start, &tv_finish, err,
 					MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
@@ -2355,7 +2361,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		STATS_TIMEVAL(&tv_start);
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep, ptr,
-					usbbufread, &got, timeout);
+					usbbufread, &got, timeout, cgpu);
 		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err,
 				MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
@@ -2483,7 +2489,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep,
 					(unsigned char *)buf, bufsiz, &sent,
-					timeout);
+					timeout, cgpu);
 		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err,
 				MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
