@@ -2163,6 +2163,30 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 }
 
 #define USB_MAX_READ 8192
+#define USB_RETRY_MAX 5
+
+static int
+usb_bulk_transfer(struct libusb_device_handle *dev_handle,
+		  unsigned char endpoint, unsigned char *data, int length,
+		  int *transferred, unsigned int timeout)
+{
+	int err, tries = 0;
+
+	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
+				   transferred, timeout);
+	if (unlikely(err == LIBUSB_ERROR_PIPE)) {
+		do {
+			err = libusb_clear_halt(dev_handle, endpoint);
+			if (unlikely(err == LIBUSB_ERROR_NOT_FOUND ||
+				     err == LIBUSB_ERROR_NO_DEVICE))
+					break;
+			err = libusb_bulk_transfer(dev_handle, endpoint, data,
+						   length, transferred, timeout);
+		} while (err == LIBUSB_ERROR_PIPE && tries++ < USB_RETRY_MAX);
+	}
+
+	return err;
+}
 
 int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, __maybe_unused enum usb_cmds cmd, bool readonce)
 {
@@ -2235,9 +2259,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			got = 0;
 
 			STATS_TIMEVAL(&tv_start);
-			err = libusb_bulk_transfer(usbdev->handle,
-					usbdev->found->eps[ep].ep,
-					ptr, usbbufread, &got, timeout);
+			err = usb_bulk_transfer(usbdev->handle,
+						usbdev->found->eps[ep].ep,
+						ptr, usbbufread, &got, timeout);
 			cgtime(&tv_finish);
 			USB_STATS(cgpu, &tv_start, &tv_finish, err,
 					MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
@@ -2325,9 +2349,9 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 		}
 		got = 0;
 		STATS_TIMEVAL(&tv_start);
-		err = libusb_bulk_transfer(usbdev->handle,
-				usbdev->found->eps[ep].ep,
-				ptr, usbbufread, &got, timeout);
+		err = usb_bulk_transfer(usbdev->handle,
+					usbdev->found->eps[ep].ep, ptr,
+					usbbufread, &got, timeout);
 		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err,
 				MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
@@ -2452,10 +2476,10 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	while (bufsiz > 0) {
 		sent = 0;
 		STATS_TIMEVAL(&tv_start);
-		err = libusb_bulk_transfer(usbdev->handle,
-				usbdev->found->eps[ep].ep,
-				(unsigned char *)buf,
-				bufsiz, &sent, timeout);
+		err = usb_bulk_transfer(usbdev->handle,
+					usbdev->found->eps[ep].ep,
+					(unsigned char *)buf, bufsiz, &sent,
+					timeout);
 		cgtime(&tv_finish);
 		USB_STATS(cgpu, &tv_start, &tv_finish, err,
 				MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
