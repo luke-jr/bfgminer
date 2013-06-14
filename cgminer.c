@@ -115,6 +115,8 @@ static int opt_devs_enabled;
 static bool opt_display_devs;
 static bool opt_removedisabled;
 int total_devices;
+int zombie_devs;
+static int most_devices;
 struct cgpu_info **devices;
 bool have_opencl;
 int mining_threads;
@@ -2219,7 +2221,7 @@ static void switch_logsize(void)
 			logstart = devcursor + 1;
 			logcursor = logstart + 1;
 		} else {
-			logstart = devcursor + total_devices + 1;
+			logstart = devcursor + most_devices + 1;
 			logcursor = logstart + 1;
 		}
 		unlock_curses();
@@ -7134,6 +7136,12 @@ struct _cgpu_devid_counter {
 	UT_hash_handle hh;
 };
 
+static void adjust_mostdevs(void)
+{
+	if (total_devices - zombie_devs > most_devices)
+		most_devices = total_devices - zombie_devs;
+}
+
 bool add_cgpu(struct cgpu_info *cgpu)
 {
 	static struct _cgpu_devid_counter *devids = NULL;
@@ -7161,6 +7169,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		devices[total_devices + new_devices++] = cgpu;
 	else
 		devices[total_devices++] = cgpu;
+
+	adjust_mostdevs();
 	return true;
 }
 
@@ -7245,6 +7255,7 @@ static void hotplug_process()
 		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
 	}
 
+	adjust_mostdevs();
 	switch_logsize();
 }
 

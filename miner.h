@@ -970,6 +970,7 @@ extern bool opt_scrypt;
 extern double total_secs;
 extern int mining_threads;
 extern int total_devices;
+extern int zombie_devs;
 extern struct cgpu_info **devices;
 extern int total_pools;
 extern struct pool **pools;

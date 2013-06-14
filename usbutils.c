@@ -1363,6 +1363,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	if (cgpu->usbinfo.nodev)
 		return;
 
+	zombie_devs++;
 	total_count--;
 	drv_count[cgpu->drv->drv_id].count--;
 
