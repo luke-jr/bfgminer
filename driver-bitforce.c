@@ -155,7 +155,7 @@ static bool bitforce_detect_one(const char *devpath)
 	char pdevbuf[0x100];
 	size_t pdevbuf_len;
 	char *s;
-	int procs = 1, parallel = 1;
+	int procs = 1, parallel = -1;
 	struct bitforce_init_data *initdata;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
@@ -210,11 +210,12 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 	initdata->parallels = malloc(sizeof(initdata->parallels[0]) * procs);
 	initdata->parallels[0] = parallel;
+	parallel = abs(parallel);
 	for (int proc = 1; proc < procs; ++proc)
 	{
 		applog(LOG_DEBUG, "Slave board %d:", proc);
-		initdata->parallels[proc] = 1;
-		bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
+		initdata->parallels[proc] = -1;
+		bitforce_cmd1(fdDev, proc, pdevbuf, sizeof(pdevbuf), "ZCX");
 		for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
 			BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		for ( ;
@@ -231,14 +232,14 @@ static bool bitforce_detect_one(const char *devpath)
 			if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 				initdata->parallels[proc] = atoi(&pdevbuf[27]);
 		}
-		parallel += initdata->parallels[proc];
+		parallel += abs(initdata->parallels[proc]);
 	}
 	BFclose(fdDev);
 	
-	if (unlikely(procs < parallel && !initdata->sc))
+	if (unlikely((procs != 1 || parallel != 1) && !initdata->sc))
 	{
-		// Only bitforce_queue supports parallelization, so force SC mode and hope for the best
-		applog(LOG_WARNING, "Chip parallelization detected with non-SC device; this is not supported!");
+		// Only bitforce_queue supports parallelization and XLINK, so force SC mode and hope for the best
+		applog(LOG_WARNING, "SC features detected with non-SC device; this is not supported!");
 		initdata->sc = true;
 	}
 	
@@ -286,6 +287,7 @@ struct bitforce_data {
 	int queued;
 	int queued_max;
 	int parallel;
+	bool parallel_protocol;
 	bool already_have_results;
 	bool just_flushed;
 	int ready_to_queue;
@@ -1249,7 +1251,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.proto = BFP_RANGE,
 			.sc = sc,
 			.sleep_ms_default = BITFORCE_SLEEP_MS,
-			.parallel = initdata->parallels[boardno],
+			.parallel = abs(initdata->parallels[boardno]),
+			.parallel_protocol = (initdata->parallels[boardno] != -1),
 		};
 		thr->cgpu_data = procdata = malloc(sizeof(*procdata));
 		*procdata = (struct bitforce_proc_data){
@@ -1577,7 +1580,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		
 		end = &buf[89];
 		chip_cgpu = bitforce;
-		if (data->parallel > 1)
+		if (data->parallel_protocol)
 		{
 			chipno = strtol(&end[1], &end, 16);
 			if (chipno >= data->parallel)
