@@ -2408,6 +2408,12 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 #endif
 		sprintf(buf, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
 	
+	if (unlikely(cgpu->status == LIFE_INIT))
+	{
+		tailsprintf(buf, "Initializing...");
+		return;
+	}
+	
 	if (drv->get_dev_statline_before || drv->get_statline_before)
 	{
 		if (drv->get_dev_statline_before && drv->get_statline_before)
@@ -7897,7 +7903,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->drv->get_stats)
+			if (cgpu->drv->get_stats && likely(cgpu->status != LIFE_INIT))
 			  cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
