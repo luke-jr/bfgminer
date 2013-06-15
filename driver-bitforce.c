@@ -76,13 +76,14 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 	realbuf[1] = procid;
 	realbuf[2] = bufLen;
 	bufp = realbuf;
-	while (true)
+	do
 	{
 		rv = BFwrite(fd, bufp, bufLeft);
 		if (rv <= 0)
 			return rv;
 		bufLeft -= rv;
 	}
+	while (bufLeft > 0);
 	return bufLen;
 }
 
