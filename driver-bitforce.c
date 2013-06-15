@@ -73,8 +73,8 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 	ssize_t rv;
 	memcpy(&realbuf[3], buf, bufLen);
 	realbuf[0] = '@';
-	realbuf[1] = procid;
-	realbuf[2] = bufLen;
+	realbuf[1] = bufLen;
+	realbuf[2] = procid;
 	bufp = realbuf;
 	do
 	{
