@@ -1304,6 +1304,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		
+		++boardno;
 		while (xlink_id < 31 && !(initdata->devmask & (1 << ++xlink_id)))
 		{}
 	}
