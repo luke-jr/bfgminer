@@ -34,7 +34,7 @@ static void my_log_curses(int prio, const char *datetime, const char *str)
 #endif
 	{
 		mutex_lock(&console_lock);
-		printf("%s%s%s\n", datetime, str, "                    \n");
+		printf("%s%s%s", datetime, str, "                    \n");
 		mutex_unlock(&console_lock);
 	}
 }
