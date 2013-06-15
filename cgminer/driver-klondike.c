@@ -36,21 +36,34 @@
 
 struct device_drv klondike_drv;
 
+struct klondike_info {
+	bool shutdown;
+};
+
 struct klondike_id {
-	char id[8];
 	uint8_t version;
 	uint32_t serial;
-	char product[16];
+	char product[8];
 };
 
 struct klondike_status {
-	
+	uint8_t state;
+	uint8_t chipcount;
+	uint8_t slavecount;
+	uint8_t workqc;
+	uint8_t workid;
+	uint8_t temp;
+	uint8_t fanspeed;
+	uint16_t hashcount;
+	uint16_t errorcount;
 };
 
 struct kondike_cfg {
-	
+	uint16_t hashclock;
+	uint8_t temptarget;
+	uint8_t tempcritical;
+	uint8_t fantarget;
 };
-
 
 static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
@@ -103,6 +116,107 @@ static void klondike_detect(void)
 	usb_detect(&klondike_drv, klondike_detect_one);
 }
 
+static void klondike_identify(struct cgpu_info *klninfo)
+{
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+
+}
+
+static bool klondike_thread_prepare(struct thr_info *thr)
+{
+	struct cgpu_info *klninfo = thr->cgpu;
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+
+	return true;
+}
+
+static bool klondike_thread_init(struct thr_info *thr)
+{
+	struct cgpu_info *klninfo = thr->cgpu;
+
+	if (klninfo->usbinfo.nodev)
+		return false;
+
+	//klondike_initialise(klninfo);
+
+	return true;
+}
+
+static void klondike_flush_work(struct cgpu_info *klninfo)
+{
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+
+}
+
+static void klondike_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *klninfo = thr->cgpu;
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+
+	klondike_flush_work(klninfo);
+	k_info->shutdown = true;
+}
+
+static void klondike_thread_enable(struct thr_info *thr)
+{
+	struct cgpu_info *klninfo = thr->cgpu;
+
+	if (klninfo->usbinfo.nodev)
+		return;
+
+	//klondike_initialise(bflsc);
+}
+
+static bool klondike_send_work(struct cgpu_info *klninfo, int dev, struct work *work)
+{
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+	
+	// Device is gone
+	if (klninfo->usbinfo.nodev)
+		return false;
+			
+}
+
+static bool klondike_queue_full(struct cgpu_info *klninfo)
+{
+	struct klondike_info *sc_info = (struct klondike_info *)(klninfo->device_file);
+	
+	
+}
+
+static int64_t klondike_scanwork(struct thr_info *thr)
+{
+	struct cgpu_info *klninfo = thr->cgpu;
+	struct klondike_info *sc_info = (struct klondike_info *)(klninfo->device_file);
+
+	// Device is gone
+	if (klninfo->usbinfo.nodev)
+		return -1;
+		
+}
+
+static bool klondike_get_stats(struct cgpu_info *klninfo)
+{
+	struct klondike_info *k_info = (struct klondike_info *)(klninfo->device_file);
+	bool allok = true;
+	int i;
+
+	// Device is gone
+	if (klninfo->usbinfo.nodev)
+		return false;
+
+	return allok;
+}
+
+static void get_klondike_statline_before(char *buf, struct cgpu_info *klninfo)
+{
+	
+}
+
+static struct api_data *klondike_api_stats(struct cgpu_info *klninfo)
+{
+	
+}
 
 struct device_drv klondike_drv = {
 	.drv_id = DRIVER_KLONDIKE,
