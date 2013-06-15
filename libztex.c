@@ -238,7 +238,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	fp = NULL;
 
 	if (got_bytes < length) {
-		applog(LOG_ERR, "%s: Incomplete firmware read: %zu/%zu", __func__, got_bytes, length);
+		applog(LOG_ERR, "%s: Incomplete firmware read: %d/%d", __func__, (int)got_bytes, (int)length);
 		goto done;
 	}
 
@@ -735,7 +735,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 	do {
 		cnt = libusb_get_device_list(NULL, &list);
 		if (unlikely(cnt < 0)) {
-			applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %zd", cnt);
+			applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %d", (int)cnt);
 			goto done;
 		}
 
