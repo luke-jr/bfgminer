@@ -2164,6 +2164,13 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		H2B_SPACED);
 
 	sprintf(buf, "%s%d ", cgpu->api->name, cgpu->device_id);
+	
+	if (unlikely(cgpu->status == LIFE_INIT))
+	{
+		tailsprintf(buf, "Initializing...");
+		return;
+	}
+	
 	if (cgpu->api->get_statline_before)
 		cgpu->api->get_statline_before(buf, cgpu);
 	else
@@ -2289,6 +2296,14 @@ static void curses_print_devstatus(int thr_id)
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	wprintw(statuswin, " %s %*d: ", cgpu->api->name, dev_width, cgpu->device_id);
+	
+	if (unlikely(cgpu->status == LIFE_INIT))
+	{
+		wprintw(statuswin, "Initializing...");
+		wclrtoeol(statuswin);
+		return;
+	}
+	
 	if (cgpu->api->get_statline_before) {
 		logline[0] = '\0';
 		cgpu->api->get_statline_before(logline, cgpu);
@@ -7180,7 +7195,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char dev_str[8];
 			int gpu;
 
-			if (cgpu->api->get_stats)
+			if (cgpu->api->get_stats && likely(cgpu->status != LIFE_INIT))
 			  cgpu->api->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
