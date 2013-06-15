@@ -595,7 +595,6 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 static uint32_t mask(int work_division)
 {
-	char err_buf[BUFSIZ+1];
 	uint32_t nonce_mask = 0x7fffffff;
 
 	// yes we can calculate these, but this way it's easy to see what they are
@@ -613,8 +612,7 @@ static uint32_t mask(int work_division)
 		nonce_mask = 0x1fffffff;
 		break;
 	default:
-		sprintf(err_buf, "Invalid2 icarus-options for work_division (%d) must be 1, 2, 4 or 8", work_division);
-		quit(1, err_buf);
+		quit(1, "Invalid2 icarus-options for work_division (%d) must be 1, 2, 4 or 8", work_division);
 	}
 
 	return nonce_mask;
@@ -622,7 +620,6 @@ static uint32_t mask(int work_division)
 
 static void get_options(int this_option_offset, struct cgpu_info *icarus, int *baud, int *work_division, int *fpga_count)
 {
-	char err_buf[BUFSIZ+1];
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2;
 	size_t max;
@@ -691,8 +688,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 				*baud = 57600;
 				break;
 			default:
-				sprintf(err_buf, "Invalid icarus-options for baud (%s) must be 115200 or 57600", buf);
-				quit(1, err_buf);
+				quit(1, "Invalid icarus-options for baud (%s) must be 115200 or 57600", buf);
 			}
 		}
 
@@ -707,8 +703,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 					*work_division = tmp;
 					*fpga_count = tmp;	// default to the same
 				} else {
-					sprintf(err_buf, "Invalid icarus-options for work_division (%s) must be 1, 2, 4 or 8", colon);
-					quit(1, err_buf);
+					quit(1, "Invalid icarus-options for work_division (%s) must be 1, 2, 4 or 8", colon);
 				}
 			}
 
@@ -717,8 +712,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 				if (tmp > 0 && tmp <= *work_division)
 					*fpga_count = tmp;
 				else {
-					sprintf(err_buf, "Invalid icarus-options for fpga_count (%s) must be >0 and <=work_division (%d)", colon2, *work_division);
-					quit(1, err_buf);
+					quit(1, "Invalid icarus-options for fpga_count (%s) must be >0 and <=work_division (%d)", colon2, *work_division);
 				}
 			}
 		}
