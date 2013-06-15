@@ -735,10 +735,15 @@ static inline void mutex_lock(pthread_mutex_t *lock)
 		quit(1, "WTF MUTEX ERROR ON LOCK!");
 }
 
-static inline void mutex_unlock(pthread_mutex_t *lock)
+static inline void mutex_unlock_noyield(pthread_mutex_t *lock)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+}
+
+static inline void mutex_unlock(pthread_mutex_t *lock)
+{
+	mutex_unlock_noyield(lock);
 	sched_yield();
 }
 
@@ -818,7 +823,7 @@ static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	rd_lock(&lock->rwlock);
-	mutex_unlock(&lock->mutex);
+	mutex_unlock_noyield(&lock->mutex);
 }
 
 /* Intermediate variant of cglock */
