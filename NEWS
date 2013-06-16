@@ -1,3 +1,71 @@
+Version 3.2.2 - 16th June 2013
+
+- Suspend stratum connections when we know they've failed and don't try to recv
+data from them once the socket no longer exists.
+- Pipe error is quite common on usb3 so drop logging to verbose level only.
+- ocl.c fix applog warnings on windows
+- applog/quit fix GPU errors created
+- usbutils - DEVLOCK other usbdev access
+- applog usb device list can be > LOGBUFSIZ
+- fix windows log warnings
+- logging remove extra added <LF>
+- remove varargs from logging/quit/in general as much as possible
+- Don't yield when downgrading a cg ilock.
+- Don't yield on grabbing the read lock variant of cglocks.
+- Off by one error in device count for display.
+- Don't display devices beyond the most_devices count in the curses status.
+- Only display as many device rows as the maximum live existed at any time.
+- usb lock out use cg locks
+- usb lock out transfers during open/close
+- Add error message to libusb pipe error
+- Differentiate libusb control transfer pipe errors from transfer errors since
+they're not fatal.
+- Create a usb_bulk_transfer wrapper for libusb_bulk_transfer to cope with pipe
+errors.
+- Only show efficiency in pool information for pools that don't support local
+work generation.
+- Create a pool_localgen bool function for testing when a pool can generate work
+locally.
+- ignore file that is generated on Macs
+- compile unix code on Mac OS X fixes not finding the config file in $HOME
+- Use mining start time for device MH/U calculations
+- Decrease the sleep duration before reading in avalon to not let the read
+buffer overflow.
+- Failure to read and write on pseudo semaphores on apple happens routinely on
+shut down so should not be a quit error, just a warning.
+- Unlock usb dev lock in the same place in usbutils.
+- Sleep if the avalon buffer is empty and we've requested a read to allow the
+write thread to take precedence.
+- Yield after releasing a lock in case we are on a device with limited CPU
+resources.
+- Add the cgpu_info structure before avalon reset.
+- Tidy up DEVLOCK/UNLOCK to have consistent use of the pstate variable without
+needing brace level match.
+- Icarus driver elaspsed timeout shouldn't be just USB I/O
+- usbutils avoid leaving devlock locked when thread cancelled
+- MMQ fix nodev failure caused by changes
+- ubsutils lock all access to nodev and cgusb
+- USB make device_path handled by usbutils
+- tidy up free in device detect functions
+- USB control creation and free of cgpu
+- Add FAQ regarding Work Utility.
+- Throttling the BFLSC at 80 seems to prevent generating garbled responses of
+higher temps.
+- Return after failed bin2hex conversion in bflsc.
+- Demote failed hex2bin result to LOG_INFO and check return result in
+driver-bflsc to avoid doing find_work_by_midstate.
+- Set BFLSC fan speed coarsely to keep it under 60 or auto as per specs saying
+it tries to stay below 60.
+- Limit usbutils LATENCY_STD to 32ms to keep transfers under 512 bytes.
+- Move macro definition to bflsc driver
+- Use a longer timeout for retrieving bflsc details.
+- Add a usb_read_ok_timeout wrapper to cope with slow init'ing devices.
+- cgsem_post after creating the thread info
+- Fix build.
+- Use cgsem structures instead of the flaky pings in the work queue to start
+mining threads and remove the unused thr_info_freeze function.
+
+
 Version 3.2.1 - 7th June 2013
 
 - Shorten the avalon statline to fit in the curses interface and show the lowest
