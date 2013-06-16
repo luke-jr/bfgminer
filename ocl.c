@@ -363,7 +363,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Max work group size reported %zu", clState->max_work_size);
+	applog(LOG_DEBUG, "Max work group size reported %d", (int)(clState->max_work_size));
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&cgpu->max_alloc, NULL);
 	if (status != CL_SUCCESS) {
@@ -495,7 +495,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 				if (cgpu->thread_concurrency > cgpu->shaders * 5)
 					cgpu->thread_concurrency = cgpu->shaders * 5;
 			}
-			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %zu", gpu, cgpu->thread_concurrency);
+			applog(LOG_DEBUG, "GPU %d: selecting thread concurrency of %d", gpu, (int)(cgpu->thread_concurrency));
 		} else
 			cgpu->thread_concurrency = cgpu->opt_tc;
 	}
@@ -610,7 +610,7 @@ build:
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
 			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
 	}
-	applog(LOG_DEBUG, "Setting worksize to %zu", clState->wsize);
+	applog(LOG_DEBUG, "Setting worksize to %d", (int)(clState->wsize));
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
 
@@ -689,7 +689,7 @@ build:
 			break;
 
 	/* copy over all of the generated binaries. */
-	applog(LOG_DEBUG, "Binary size for gpu %d found in binary slot %d: %zu", gpu, slot, binary_sizes[slot]);
+	applog(LOG_DEBUG, "Binary size for gpu %d found in binary slot %d: %d", gpu, slot, (int)(binary_sizes[slot]));
 	if (!binary_sizes[slot]) {
 		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
 		return NULL;
@@ -771,8 +771,8 @@ built:
 	free(binaries);
 	free(binary_sizes);
 
-	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %zu",
-	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, clState->wsize);
+	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %d vectors and worksize %d",
+	       filename, clState->hasBitAlign ? "" : "out", clState->vwidth, (int)(clState->wsize));
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */
@@ -806,9 +806,9 @@ built:
 		if (bufsize > cgpu->max_alloc) {
 			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu",
 						gpu, (long unsigned int)(cgpu->max_alloc));
-			applog(LOG_WARNING, "Your scrypt settings come to %zu", bufsize);
+			applog(LOG_WARNING, "Your scrypt settings come to %d", (int)bufsize);
 		}
-		applog(LOG_DEBUG, "Creating scrypt buffer sized %zu", bufsize);
+		applog(LOG_DEBUG, "Creating scrypt buffer sized %d", (int)bufsize);
 		clState->padbufsize = bufsize;
 
 		/* This buffer is weird and might work to some degree even if
