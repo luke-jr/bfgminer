@@ -1,5 +1,6 @@
 Version 3.2.2 - 16th June 2013
 
+- Record and report USB pipe errors via API stats
 - Suspend stratum connections when we know they've failed and don't try to recv
 data from them once the socket no longer exists.
 - Pipe error is quite common on usb3 so drop logging to verbose level only.
