@@ -2542,16 +2542,14 @@ out_unlock:
 	return err;
 }
 
-int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
+int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
 	uint32_t *buf = NULL;
-	int err, i, bufsiz, pstate;
-
-	DEVLOCK(cgpu, pstate);
+	int err, i, bufsiz;
 
 	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
 
@@ -2559,7 +2557,7 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 		USB_REJECT(cgpu, MODE_CTRL_WRITE);
 
 		err = LIBUSB_ERROR_NO_DEVICE;
-		goto out_unlock;
+		goto out_;
 	}
 	usbdev = cgpu->usbdev;
 
@@ -2591,13 +2589,23 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	IOERR_CHECK(cgpu, err);
 
-	if (buf)
-		free(buf);
+	free(buf);
 
 	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
 
-out_unlock:
+out_:
+	return err;
+}
+
+int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd)
+{
+	int pstate, err;
+
+	DEVLOCK(cgpu, pstate);
+
+	err = __usb_transfer(cgpu, request_type, bRequest, wValue, wIndex, data, siz, timeout, cmd);
+
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2677,23 +2685,30 @@ int usb_ftdi_cts(struct cgpu_info *cgpu)
 
 int usb_ftdi_set_latency(struct cgpu_info *cgpu)
 {
-	int err;
+	int err = 0;
+	int pstate;
 
-	if (cgpu->usbdev->usb_type != USB_TYPE_FTDI) {
-		applog(LOG_ERR, "%s: cgid %d latency request on non-FTDI device",
-			cgpu->drv->name, cgpu->cgminer_id);
-		return LIBUSB_ERROR_NOT_SUPPORTED;
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev) {
+		if (cgpu->usbdev->usb_type != USB_TYPE_FTDI) {
+			applog(LOG_ERR, "%s: cgid %d latency request on non-FTDI device",
+				cgpu->drv->name, cgpu->cgminer_id);
+			err = LIBUSB_ERROR_NOT_SUPPORTED;
+		} else if (cgpu->usbdev->found->latency == LATENCY_UNUSED) {
+			applog(LOG_ERR, "%s: cgid %d invalid latency (UNUSED)",
+				cgpu->drv->name, cgpu->cgminer_id);
+			err = LIBUSB_ERROR_NOT_SUPPORTED;
+		}
+
+		if (!err)
+			err = __usb_transfer(cgpu, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
+						cgpu->usbdev->found->latency,
+						cgpu->usbdev->found->interface,
+						NULL, 0, DEVTIMEOUT, C_LATENCY);
 	}
 
-	if (cgpu->usbdev->found->latency == LATENCY_UNUSED) {
-		applog(LOG_ERR, "%s: cgid %d invalid latency (UNUSED)",
-			cgpu->drv->name, cgpu->cgminer_id);
-		return LIBUSB_ERROR_NOT_SUPPORTED;
-	}
-
-	err = usb_transfer_data(cgpu, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
-				cgpu->usbdev->found->latency,
-				cgpu->usbdev->found->interface, NULL, 0, C_LATENCY);
+	DEVUNLOCK(cgpu, pstate);
 
 	applog(LOG_DEBUG, "%s: cgid %d %s got err %d",
 				cgpu->drv->name, cgpu->cgminer_id,
@@ -2704,9 +2719,13 @@ int usb_ftdi_set_latency(struct cgpu_info *cgpu)
 
 void usb_buffer_enable(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cg_usb_device *cgusb;
+	int pstate;
 
-	if (!cgusb->buffer) {
+	DEVLOCK(cgpu, pstate);
+
+	cgusb = cgpu->usbdev;
+	if (cgusb && !cgusb->buffer) {
 		cgusb->bufamt = 0;
 		cgusb->buffer = malloc(USB_MAX_READ+1);
 		if (!cgusb->buffer)
@@ -2714,40 +2733,66 @@ void usb_buffer_enable(struct cgpu_info *cgpu)
 				cgpu->drv->name, cgpu->device_id);
 		cgusb->bufsiz = USB_MAX_READ;
 	}
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 void usb_buffer_disable(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cg_usb_device *cgusb;
+	int pstate;
 
-	if (cgusb->buffer) {
+	DEVLOCK(cgpu, pstate);
+
+	cgusb = cgpu->usbdev;
+	if (cgusb && cgusb->buffer) {
 		cgusb->bufamt = 0;
 		cgusb->bufsiz = 0;
 		free(cgusb->buffer);
 		cgusb->buffer = NULL;
 	}
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 void usb_buffer_clear(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	int pstate;
 
-	cgusb->bufamt = 0;
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		cgpu->usbdev->bufamt = 0;
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	uint32_t ret = 0;
+	int pstate;
 
-	return cgusb->bufamt;
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		ret = cgpu->usbdev->bufamt;
+
+	DEVUNLOCK(cgpu, pstate);
+
+	return ret;
 }
 
 // Need to set all devices with matching usbdev
 void usb_set_dev_start(struct cgpu_info *cgpu)
 {
-	struct cg_usb_device *cgusb = cgpu->usbdev;
+	struct cg_usb_device *cgusb;
 	struct cgpu_info *cgpu2;
 	struct timeval now;
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	cgusb = cgpu->usbdev;
 
 	// If the device wasn't dropped
 	if (cgusb != NULL) {
@@ -2761,6 +2806,8 @@ void usb_set_dev_start(struct cgpu_info *cgpu)
 				copy_time(&(cgpu2->dev_start_tv), &now);
 		}
 	}
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 void usb_cleanup()
