@@ -126,7 +126,6 @@ char *WSAErrorMsg(void) {
 #endif
 
 static const char *UNAVAILABLE = " - API will not be available";
-static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -3587,30 +3586,21 @@ static void setup_groups()
 			colon = strchr(ptr, ':');
 			if (colon)
 				*colon = '\0';
-			applog(LOG_WARNING, "API invalid group name '%s'", ptr);
-			quit(1, INVAPIGROUPS);
+			quit(1, "API invalid group name '%s'", ptr);
 		}
 
 		group = GROUP(*ptr);
-		if (!VALIDGROUP(group)) {
-			applog(LOG_WARNING, "API invalid group name '%c'", *ptr);
-			quit(1, INVAPIGROUPS);
-		}
+		if (!VALIDGROUP(group))
+			quit(1, "API invalid group name '%c'", *ptr);
 
-		if (group == PRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'", PRIVGROUP);
-			quit(1, INVAPIGROUPS);
-		}
+		if (group == PRIVGROUP)
+			quit(1, "API group name can't be '%c'", PRIVGROUP);
 
-		if (group == NOPRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'", NOPRIVGROUP);
-			quit(1, INVAPIGROUPS);
-		}
+		if (group == NOPRIVGROUP)
+			quit(1, "API group name can't be '%c'", NOPRIVGROUP);
 
-		if (apigroups[GROUPOFFSET(group)].commands != NULL) {
-			applog(LOG_WARNING, "API duplicate group name '%c'", *ptr);
-			quit(1, INVAPIGROUPS);
-		}
+		if (apigroups[GROUPOFFSET(group)].commands != NULL)
+			quit(1, "API duplicate group name '%c'", *ptr);
 
 		ptr += 2;
 
@@ -3644,8 +3634,7 @@ static void setup_groups()
 						*cmd = '\0';
 					}
 				} else {
-					applog(LOG_WARNING, "API unknown command '%s' in group '%c'", ptr, group);
-					quit(1, INVAPIGROUPS);
+					quit(1, "API unknown command '%s' in group '%c'", ptr, group);
 				}
 			}
 
