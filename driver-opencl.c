@@ -685,7 +685,7 @@ retry:
 				if (powertune != -1)
 					tailsprintf(logline, "P: %d%%", powertune);
 				tailsprintf(logline, "\n");
-				wlog(logline);
+				_wlog(logline);
 			}
 		}
 #endif
