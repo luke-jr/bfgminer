@@ -385,13 +385,16 @@ void get_timestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
+static char exit_buf[512];
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	vapplog(LOG_ERR, fmt, ap);
+	vsnprintf(exit_buf, sizeof(exit_buf), fmt, ap);
 	va_end(ap);
+	_applog(LOG_ERR, exit_buf);
 	exit(1);
 }
 
@@ -2233,24 +2236,16 @@ static void switch_logsize(void)
 }
 
 /* For mandatory printing when mutex is already locked */
-void wlog(const char *f, ...)
+void _wlog(const char *str)
 {
-	va_list ap;
-
-	va_start(ap, f);
-	vw_printw(logwin, f, ap);
-	va_end(ap);
+	wprintw(logwin, "%s", str);
 }
 
 /* Mandatory printing */
-void wlogprint(const char *f, ...)
+void _wlogprint(const char *str)
 {
-	va_list ap;
-
 	if (curses_active_locked()) {
-		va_start(ap, f);
-		vw_printw(logwin, f, ap);
-		va_end(ap);
+		wprintw(logwin, "%s", str);
 		unlock_curses();
 	}
 }
@@ -2261,7 +2256,7 @@ static void switch_logsize(void)
 #endif
 
 #ifdef HAVE_CURSES
-bool log_curses_only(int prio, const char *f, va_list ap)
+bool log_curses_only(int prio, const char *datetime, const char *str)
 {
 	bool high_prio;
 
@@ -2269,7 +2264,7 @@ bool log_curses_only(int prio, const char *f, va_list ap)
 
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
-			vw_printw(logwin, f, ap);
+			wprintw(logwin, "%s%s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);
@@ -4242,7 +4237,7 @@ updated:
 	}
 retry:
 	wlogprint("\nCurrent pool management strategy: %s\n",
-		strategies[pool_strategy]);
+		strategies[pool_strategy].s);
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
 	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
@@ -4313,7 +4308,7 @@ retry:
 		goto updated;
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
-			wlogprint("%d: %s\n", i, strategies[i]);
+			wlogprint("%d: %s\n", i, strategies[i].s);
 		selected = curses_int("Select strategy number type");
 		if (selected < 0 || selected > TOP_STRATEGY) {
 			wlogprint("Invalid selection\n");
@@ -6736,15 +6731,8 @@ static void clean_up(void)
 	curl_global_cleanup();
 }
 
-void quit(int status, const char *format, ...)
+void _quit(int status)
 {
-	if (format) {
-		va_list ap;
-		va_start(ap, format);
-		vapplog(LOG_ERR, format, ap);
-		va_end(ap);
-	}
-
 	clean_up();
 
 #if defined(unix) || defined(__APPLE__)
@@ -7180,12 +7168,10 @@ bool add_cgpu(struct cgpu_info *cgpu)
 struct device_drv *copy_drv(struct device_drv *drv)
 {
 	struct device_drv *copy;
-	char buf[100];
 
 	if (unlikely(!(copy = malloc(sizeof(*copy))))) {
-		sprintf(buf, "Failed to allocate device_drv copy of %s (%s)",
+		quit(1, "Failed to allocate device_drv copy of %s (%s)",
 				drv->name, drv->copy ? "copy" : "original");
-		quit(1, buf);
 	}
 	memcpy(copy, drv, sizeof(*copy));
 	copy->copy = true;

@@ -53,7 +53,6 @@ extern bool have_opencl;
 extern void *miner_thread(void *userdata);
 extern int dev_from_id(int thr_id);
 extern void tailsprintf(char *f, const char *fmt, ...);
-extern void wlog(const char *f, ...);
 extern void decay_time(double *f, double fadd);
 
 /**********************************************/

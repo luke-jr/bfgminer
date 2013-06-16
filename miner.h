@@ -713,7 +713,7 @@ endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
 }
 #endif
 
-extern void quit(int status, const char *format, ...);
+extern void _quit(int status);
 
 static inline void mutex_lock(pthread_mutex_t *lock)
 {
@@ -1281,7 +1281,8 @@ extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *mi
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void tailsprintf(char *f, const char *fmt, ...);
-extern void wlogprint(const char *f, ...);
+extern void _wlog(const char *str);
+extern void _wlogprint(const char *str);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
 extern void kill_work(void);
@@ -1292,7 +1293,7 @@ extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
 extern void zero_stats(void);
 extern void default_save_file(char *filename);
-extern bool log_curses_only(int prio, const char *f, va_list ap);
+extern bool log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);

@@ -924,7 +924,7 @@ void usb_all(int level)
 		for (i = 0; i < count; i++)
 			usb_full(&j, list[i], &buf, &off, &len, level);
 
-		applog(LOG_WARNING, "%s", buf);
+		_applog(LOG_WARNING, buf);
 
 		free(buf);
 
@@ -1537,7 +1537,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			case LIBUSB_ERROR_NOT_SUPPORTED:
 				applog(LOG_ERR,
 					"USB init, open device failed, err %d, "
-					"you need to install a Windows USB driver for %s",
+					"you need to install a WinUSB driver for %s",
 					err, devstr);
 				break;
 #endif
@@ -1890,7 +1890,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 	count = libusb_get_device_list(NULL, &list);
 	if (count < 0) {
-		applog(LOG_DEBUG, "USB scan devices: failed, err %zd", count);
+		applog(LOG_DEBUG, "USB scan devices: failed, err %d", (int)count);
 		return;
 	}
 
@@ -2247,7 +2247,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
 
 	if (bufsiz > USB_MAX_READ)
-		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, bufsiz, USB_MAX_READ);
+		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, (int)bufsiz, USB_MAX_READ);
 
 	if (timeout == DEVTIMEOUT)
 		timeout = usbdev->found->timeout;
@@ -2988,7 +2988,7 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 		applog(LOG_ERR,
 			"MTX: %s (%d:%d) USB failed to init secdes err (%d)",
 			dname, (int)bus_number, (int)device_address,
-			GetLastError());
+			(int)GetLastError());
 		free(sec_des);
 		return NULL;
 	}
@@ -2997,7 +2997,7 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 		applog(LOG_ERR,
 			"MTX: %s (%d:%d) USB failed to secdes dacl err (%d)",
 			dname, (int)bus_number, (int)device_address,
-			GetLastError());
+			(int)GetLastError());
 		free(sec_des);
 		return NULL;
 	}
@@ -3006,7 +3006,7 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 		applog(LOG_ERR,
 			"MTX: %s (%d:%d) USB failed to create gsid err (%d)",
 			dname, (int)bus_number, (int)device_address,
-			GetLastError());
+			(int)GetLastError());
 		free(sec_des);
 		return NULL;
 	}
@@ -3015,7 +3015,7 @@ static LPSECURITY_ATTRIBUTES mksec(const char *dname, uint8_t bus_number, uint8_
 		applog(LOG_ERR,
 			"MTX: %s (%d:%d) USB failed to secdes grp err (%d)",
 			dname, (int)bus_number, (int)device_address,
-			GetLastError());
+			(int)GetLastError());
 		FreeSid(gsid);
 		free(sec_des);
 		return NULL;
@@ -3060,7 +3060,7 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 	if (usbMutex == NULL) {
 		applog(LOG_ERR,
 			"MTX: %s USB failed to get '%s' err (%d)",
-			dname, name, GetLastError());
+			dname, name, (int)GetLastError());
 		sec = unsec(sec);
 		return false;
 	}
@@ -3084,7 +3084,7 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 					}
 					applog(LOG_ERR,
 						"MTX: %s USB can't get '%s' - device in use - failure (%d)",
-						dname, name, GetLastError());
+						dname, name, (int)GetLastError());
 					goto fail;
 				}
 			}
@@ -3098,12 +3098,12 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 		case WAIT_FAILED:
 			applog(LOG_ERR,
 				"MTX: %s USB failed to get '%s' err (%d)",
-				dname, name, GetLastError());
+				dname, name, (int)GetLastError());
 			goto fail;
 		default:
 			applog(LOG_ERR,
 				"MTX: %s USB failed to get '%s' unknown reply (%d)",
-				dname, name, res);
+				dname, name, (int)res);
 			goto fail;
 	}
 
@@ -3219,7 +3219,7 @@ static void resource_unlock(const char *dname, uint8_t bus_number, uint8_t devic
 	if (!ReleaseMutex(usbMutex))
 		applog(LOG_ERR,
 			"MTX: %s USB failed to release '%s' err (%d)",
-			dname, name, GetLastError());
+			dname, name, (int)GetLastError());
 
 fila:
 

@@ -511,9 +511,9 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 				ptr += amount;
 
 				if (opt_debug)
-					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %zu tries %d",
+					applog(LOG_DEBUG, "%s%u: Program timeout (%d:%d) sent %d tries %d",
 						modminer->drv->name, modminer->device_id,
-						amount, err, remaining, tries);
+						amount, err, (int)remaining, tries);
 
 				if (!get_status(modminer, "write status", C_PROGRAMSTATUS2))
 					goto dame;
@@ -521,8 +521,8 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 			} else {
 				mutex_unlock(modminer->modminer_mutex);
 
-				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %zu",
-					modminer->drv->name, modminer->device_id, amount, err, remaining);
+				applog(LOG_ERR, "%s%u: Program failed (%d:%d) sent %d",
+					modminer->drv->name, modminer->device_id, amount, err, (int)remaining);
 
 				goto dame;
 			}
