@@ -2933,7 +2933,7 @@ void dosave(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, b
 	ptr = NULL;
 }
 
-static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, bool isjson)
+static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_stats *stats, struct cgminer_pool_stats *pool_stats, struct api_data *extra, struct cgpu_info *cgpu, bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -2973,6 +2973,25 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 	if (extra)
 		root = api_add_extra(root, extra);
 
+	if (cgpu) {
+#ifdef USE_USBUTILS
+		char pipe_details[128];
+
+		if (cgpu->usbinfo.pipe_count)
+			snprintf(pipe_details, sizeof(pipe_details),
+				 "%"PRIu64" %"PRIu64"/%"PRIu64"/%"PRIu64" %lu",
+				 cgpu->usbinfo.pipe_count,
+				 cgpu->usbinfo.clear_err_count,
+				 cgpu->usbinfo.retry_err_count,
+				 cgpu->usbinfo.clear_fail_count,
+				 (unsigned long)(cgpu->usbinfo.last_pipe));
+		else
+			strcpy(pipe_details, "0");
+
+		root = api_add_string(root, "USB Pipe", pipe_details, true);
+#endif
+	}
+
 	root = print_data(root, buf, isjson, isjson && (i > 0));
 	io_add(io_data, buf);
 
@@ -3003,7 +3022,7 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 				extra = NULL;
 
 			sprintf(id, "%s%d", cgpu->drv->name, cgpu->device_id);
-			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, isjson);
+			i = itemstats(io_data, i, id, &(cgpu->cgminer_stats), NULL, extra, cgpu, isjson);
 		}
 	}
 
@@ -3011,7 +3030,7 @@ static void minerstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		struct pool *pool = pools[j];
 
 		sprintf(id, "POOL%d", j);
-		i = itemstats(io_data, i, id, &(pool->cgminer_stats), &(pool->cgminer_pool_stats), NULL, isjson);
+		i = itemstats(io_data, i, id, &(pool->cgminer_stats), &(pool->cgminer_pool_stats), NULL, NULL, isjson);
 	}
 
 	if (isjson && io_open)

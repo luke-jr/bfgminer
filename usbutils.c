@@ -2191,21 +2191,31 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 	cg_runlock(&cgusb_fd_lock);
 
 	if (err == LIBUSB_ERROR_PIPE) {
-		applog(LOG_INFO, "%s: libusb pipe error, trying to clear",
-		       cgpu->drv->name);
+		cgpu->usbinfo.last_pipe = time(NULL);
+		cgpu->usbinfo.pipe_count++;
+		applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
+			cgpu->drv->name, cgpu->device_id);
 		do {
 			err = libusb_clear_halt(dev_handle, endpoint);
 			if (unlikely(err == LIBUSB_ERROR_NOT_FOUND ||
-				     err == LIBUSB_ERROR_NO_DEVICE))
+				     err == LIBUSB_ERROR_NO_DEVICE)) {
+					cgpu->usbinfo.clear_err_count++;
 					break;
+			}
 
 			cg_rlock(&cgusb_fd_lock);
 			err = libusb_bulk_transfer(dev_handle, endpoint, data,
 						   length, transferred, timeout);
 			cg_runlock(&cgusb_fd_lock);
+
+			if (err)
+				cgpu->usbinfo.retry_err_count++;
 		} while (err == LIBUSB_ERROR_PIPE && tries++ < USB_RETRY_MAX);
-		applog(LOG_DEBUG, "%s: libusb pipe error%scleared",
-		       cgpu->drv->name, err ? " not " : " ");
+		applog(LOG_DEBUG, "%s%i: libusb pipe error%scleared",
+			cgpu->drv->name, cgpu->device_id, err ? " not " : " ");
+
+		if (err)
+			cgpu->usbinfo.clear_fail_count++;
 	}
 
 	return err;
