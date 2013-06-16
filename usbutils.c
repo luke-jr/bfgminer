@@ -2190,8 +2190,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 				   transferred, timeout);
 	cg_runlock(&cgusb_fd_lock);
 
-	if (unlikely(err == LIBUSB_ERROR_PIPE)) {
-		applog(LOG_WARNING, "%s: libusb pipe error, trying to clear",
+	if (err == LIBUSB_ERROR_PIPE) {
+		applog(LOG_INFO, "%s: libusb pipe error, trying to clear",
 		       cgpu->drv->name);
 		do {
 			err = libusb_clear_halt(dev_handle, endpoint);
