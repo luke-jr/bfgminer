@@ -8549,6 +8549,10 @@ int main(int argc, char *argv[])
 	int i, j;
 	char *s;
 
+#ifdef WIN32
+	LoadLibrary("backtrace.dll");
+#endif
+
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
 #ifndef HAVE_PTHREAD_CANCEL
