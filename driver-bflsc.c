@@ -192,7 +192,7 @@ struct SaveString {
 #define BFLSC_QRES_LEN (sizeof(BFLSC_QRES)-1)
 #define BFLSC_QFLUSH "ZQX"
 #define BFLSC_QFLUSH_LEN (sizeof(BFLSC_QFLUSH)-1)
-#define BFLSC_FANAUTO "Z5X"
+#define BFLSC_FANAUTO "Z9X"
 #define BFLSC_FANOUT_LEN (sizeof(BFLSC_FANAUTO)-1)
 #define BFLSC_FAN0 "Z0X"
 #define BFLSC_FAN0_LEN (sizeof(BFLSC_FAN0)-1)
