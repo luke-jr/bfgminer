@@ -1046,7 +1046,6 @@ void usb_applog(struct cgpu_info *cgpu, enum usb_cmds cmd, char *msg, int amount
                         err, amount);
 }
 
-#ifdef WIN32
 static void in_use_store_ress(uint8_t bus_number, uint8_t device_address, void *resource1, void *resource2)
 {
 	struct usb_in_use_list *in_use_tmp;
@@ -1118,7 +1117,6 @@ static void in_use_get_ress(uint8_t bus_number, uint8_t device_address, void **r
 		applog(LOG_ERR, "FAIL: USB get_lock empty (%d:%d)",
 				(int)bus_number, (int)device_address);
 }
-#endif
 
 static bool __is_in_use(uint8_t bus_number, uint8_t device_address)
 {
@@ -3176,8 +3174,9 @@ fail:
 	struct semid_ds seminfo;
 	union semun opt;
 	char name[64];
-	key_t key;
-	int fd, sem, count;
+	key_t *key;
+	int *sem;
+	int fd, count;
 
 	if (is_in_use_bd(bus_number, device_address))
 		return false;
@@ -3188,25 +3187,34 @@ fail:
 		applog(LOG_ERR,
 			"SEM: %s USB open failed '%s' err (%d) %s",
 			dname, name, errno, strerror(errno));
-		return false;
+		goto _out;
 	}
 	close(fd);
-	key = ftok(name, 'K');
-	sem = semget(key, 1, IPC_CREAT | IPC_EXCL | 438);
-	if (sem < 0) {
+
+	key = malloc(sizeof(*key));
+	if (unlikely(!key))
+		quit(1, "SEM: Failed to malloc key");
+
+	sem = malloc(sizeof(*sem));
+	if (unlikely(!sem))
+		quit(1, "SEM: Failed to malloc sem");
+
+	*key = ftok(name, 'K');
+	*sem = semget(*key, 1, IPC_CREAT | IPC_EXCL | 438);
+	if (*sem < 0) {
 		if (errno != EEXIST) {
 			applog(LOG_ERR,
 				"SEM: %s USB failed to get '%s' err (%d) %s",
 				dname, name, errno, strerror(errno));
-			return false;
+			goto free_out;
 		}
 
-		sem = semget(key, 1, 0);
-		if (sem < 0) {
+		*sem = semget(*key, 1, 0);
+		if (*sem < 0) {
 			applog(LOG_ERR,
 				"SEM: %s USB failed to access '%s' err (%d) %s",
 				dname, name, errno, strerror(errno));
-			return false;
+			goto free_out;
 		}
 
 		opt.buf = &seminfo;
@@ -3216,14 +3224,14 @@ fail:
 			if (count > 99) {
 				applog(LOG_ERR,
 					"SEM: %s USB timeout waiting for (%d) '%s'",
-					dname, sem, name);
-				return false;
+					dname, *sem, name);
+				goto free_out;
 			}
-			if (semctl(sem, 0, IPC_STAT, opt) == -1) {
+			if (semctl(*sem, 0, IPC_STAT, opt) == -1) {
 				applog(LOG_ERR,
 					"SEM: %s USB failed to wait for (%d) '%s' count %d err (%d) %s",
-					dname, sem, name, count, errno, strerror(errno));
-				return false;
+					dname, *sem, name, count, errno, strerror(errno));
+				goto free_out;
 			}
 			if (opt.buf->sem_otime != 0)
 				break;
@@ -3236,22 +3244,29 @@ fail:
 		{ 0, 1, IPC_NOWAIT | SEM_UNDO }
 	};
 
-	if (semop(sem, sops, 2)) {
+	if (semop(*sem, sops, 2)) {
 		if (errno == EAGAIN) {
 			if (!hotplug_mode)
 				applog(LOG_WARNING,
 					"SEM: %s USB failed to get (%d) '%s' - device in use",
-					dname, sem, name);
+					dname, *sem, name);
 		} else {
 			applog(LOG_DEBUG,
 				"SEM: %s USB failed to get (%d) '%s' err (%d) %s",
-				dname, sem, name, errno, strerror(errno));
+				dname, *sem, name, errno, strerror(errno));
 		}
-		return false;
+		goto free_out;
 	}
 
 	add_in_use(bus_number, device_address);
+	in_use_store_ress(bus_number, device_address, (void *)key, (void *)sem);
 	return true;
+
+free_out:
+	free(sem);
+	free(key);
+_out:
+	return false;
 #endif
 }
 
@@ -3288,27 +3303,15 @@ fila:
 	return;
 #else
 	char name[64];
-	key_t key;
-	int fd, sem;
+	key_t *key;
+	int *sem;
 
 	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
-	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
-	if (fd == -1) {
-		applog(LOG_ERR,
-			"SEM: %s USB open failed '%s' for release err (%d) %s",
-			dname, name, errno, strerror(errno));
-		return;
-	}
-	close(fd);
-	key = ftok(name, 'K');
 
-	sem = semget(key, 1, 0);
-	if (sem < 0) {
-		applog(LOG_ERR,
-			"SEM: %s USB failed to get '%s' for release err (%d) %s",
-			dname, name, errno, strerror(errno));
-		return;
-	}
+	in_use_get_ress(bus_number, device_address, (void **)(&key), (void **)(&sem));
+
+	if (!key || !sem)
+		goto fila;
 
 	struct sembuf sops[] = {
 		{ 0, -1, SEM_UNDO }
@@ -3318,12 +3321,22 @@ fila:
 	// exceeding this timeout means it would probably never succeed anyway
 	struct timespec timeout = { 0, 10000000 };
 
-	if (semtimedop(sem, sops, 1, &timeout)) {
+	if (semtimedop(*sem, sops, 1, &timeout)) {
 		applog(LOG_ERR,
 			"SEM: %s USB failed to release '%s' err (%d) %s",
 			dname, name, errno, strerror(errno));
 	}
 
+	if (semctl(*sem, 0, IPC_RMID)) {
+		applog(LOG_WARNING,
+			"SEM: %s USB failed to remove SEM '%s' err (%d) %s",
+			dname, name, errno, strerror(errno));
+	}
+
+fila:
+
+	free(sem);
+	free(key);
 	remove_in_use(bus_number, device_address);
 	return;
 #endif
