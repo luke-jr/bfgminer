@@ -1465,13 +1465,13 @@ struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devloc
  *  the thread Cancelability unrestored
  */
 #define DEVLOCK(cgpu, _pth_state) do { \
-			pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, &_pth_state); \
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_pth_state); \
 			wr_lock(cgpu->usbinfo.devlock); \
 			} while (0)
 
 #define DEVUNLOCK(cgpu, _pth_state) do { \
 			wr_unlock(cgpu->usbinfo.devlock); \
-			pthread_setcanceltype(_pth_state, NULL); \
+			pthread_setcancelstate(_pth_state, NULL); \
 			} while (0)
 
 static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
