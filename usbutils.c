@@ -1465,7 +1465,7 @@ struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devloc
  *  the thread Cancelability unrestored
  */
 #define DEVLOCK(cgpu, _pth_state) do { \
-			pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, &_pth_state); \
+			pthread_setcanceltype(PTHREAD_CANCEL_DISABLE, &_pth_state); \
 			wr_lock(cgpu->usbinfo.devlock); \
 			} while (0)
 
