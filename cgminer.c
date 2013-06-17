@@ -3655,7 +3655,7 @@ static void set_blockdiff(const struct work *work)
 		data64 = (uint64_t *)(rhash + 2);
 	else
 		data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
+	d64 = bswap_64(*data64);
 	if (unlikely(!d64))
 		d64 = 1;
 
