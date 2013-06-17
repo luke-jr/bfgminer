@@ -3303,8 +3303,8 @@ fila:
 	return;
 #else
 	char name[64];
-	key_t *key;
-	int *sem;
+	key_t *key = NULL;
+	int *sem = NULL;
 
 	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 
