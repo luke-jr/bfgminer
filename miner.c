@@ -5868,7 +5868,10 @@ static void *stratum_thread(void *userdata)
 			total_go++;
 
 			// Make any pending work/shares stale
+			mutex_lock(&pool->stratum_lock);
+			pool->stratum_active = pool->stratum_notify = false;
 			pool->sock = INVSOCK;
+			mutex_unlock(&pool->stratum_lock);
 			pool->submit_old = false;
 			++pool->work_restart_id;
 
