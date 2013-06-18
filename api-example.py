@@ -2,6 +2,9 @@
 
 #Short Python Example for connecting to The Cgminer API
 #Written By: setkeh <https://github.com/setkeh>
+#Thanks to Jezzz for all his Support.
+#NOTE: When adding a param with a pipe | in bash or ZSH you must wrap the arg in quotes
+#E.G "pga|0"
 
 import socket
 import json
@@ -20,8 +23,6 @@ def linesplit(socket):
 		return buffer
 
 api_command = sys.argv[1].split('|')
-#api_ip = sys.argv[3]
-#api_port = sys.argv[4]
 
 if len(sys.argv) < 3:
 	api_ip = '127.0.0.1'
@@ -30,10 +31,13 @@ else:
 	api_ip = sys.argv[2]
 	api_port = sys.argv[3]
 
-print api_ip, api_port
 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 s.connect((api_ip,int(api_port)))
-s.send(json.dumps({"command":api_command[0],"parameter":api_command[1]}))    
+if len(api_command) == 2:
+	s.send(json.dumps({"command":api_command[0],"parameter":api_command[1]}))
+else:
+	s.send(json.dumps({"command":api_command[0]}))
+
 response = linesplit(s)
 response = response.replace('\x00','')
 response = json.loads(response)
