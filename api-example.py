@@ -30,6 +30,7 @@ else:
 	api_ip = sys.argv[2]
 	api_port = sys.argv[3]
 
+print api_ip, api_port
 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 s.connect((api_ip,int(api_port)))
 s.send(json.dumps({"command":api_command[0],"parameter":api_command[1]}))    
