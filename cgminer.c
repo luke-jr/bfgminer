@@ -4599,15 +4599,20 @@ static void *api_thread(void *userdata)
 
 void thread_reportin(struct thr_info *thr)
 {
+	thr->getwork = false;
 	cgtime(&thr->last);
 	thr->cgpu->status = LIFE_WELL;
-	thr->getwork = false;
 	thr->cgpu->device_last_well = time(NULL);
 }
 
+/* Tell the watchdog thread this thread is waiting on get work and should not
+ * be restarted */
 static inline void thread_reportout(struct thr_info *thr)
 {
 	thr->getwork = true;
+	cgtime(&thr->last);
+	thr->cgpu->status = LIFE_WELL;
+	thr->cgpu->device_last_well = time(NULL);
 }
 
 static void hashmeter(int thr_id, struct timeval *diff,
@@ -5608,10 +5613,6 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct work *work = NULL;
 
-	/* Tell the watchdog thread this thread is waiting on getwork and
-	 * should not be restarted */
-	thread_reportout(thr);
-
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
 	while (!work) {
 		work = hash_pop();
@@ -5693,8 +5694,6 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	uint32_t diff1targ;
 	bool ret = true;
 
-	thread_reportout(thr);
-
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
@@ -5750,9 +5749,7 @@ static void mt_disable(struct thr_info *mythr, const int thr_id,
 	applog(LOG_WARNING, "Thread %d being disabled", thr_id);
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
-	thread_reportout(mythr);
 	cgsem_wait(&mythr->sem);
-	thread_reportin(mythr);
 	applog(LOG_WARNING, "Thread %d being re-enabled", thr_id);
 	drv->thread_enable(mythr);
 }
@@ -5839,12 +5836,14 @@ static void hash_sole_work(struct thr_info *mythr)
 
 			cgtime(&(work->tv_work_start));
 
-			thread_reportin(mythr);
 			/* Only allow the mining thread to be cancelled when
 			 * it is not in the driver code. */
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
+
 			thread_reportin(mythr);
+			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			thread_reportout(mythr);
+
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_testcancel();
 
@@ -5931,7 +5930,6 @@ static void hash_sole_work(struct thr_info *mythr)
  * while still in use. */
 static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
 {
-	thread_reportout(mythr);
 	do {
 		bool need_work;
 
@@ -6067,6 +6065,8 @@ void hash_queued_work(struct thr_info *mythr)
 
 		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);
+		thread_reportout(mythr);
+
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
@@ -6119,7 +6119,6 @@ void *miner_thread(void *userdata)
 out:
 	drv->thread_shutdown(mythr);
 
-	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 
 	return NULL;
@@ -7224,8 +7223,6 @@ static void hotplug_process()
 			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
 				continue;
 
-			thread_reportout(thr);
-
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "hotplug thread %d create failed", thr->id);
 
@@ -7716,8 +7713,6 @@ begin_bench:
 
 			if (!cgpu->drv->thread_prepare(thr))
 				continue;
-
-			thread_reportout(thr);
 
 			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 				quit(1, "thread %d create failed", thr->id);
