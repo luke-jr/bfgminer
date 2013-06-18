@@ -37,8 +37,7 @@
  * in bursts due to e.g. a 16 chip device doing 16 items at a time and
  * returning 16 results at a time
  * If the device has varying chip speeds, it will gradually break up the
- * burst of results as we progress from the last LP
- * The next LP will restart all chips approximately together again
+ * burst of results as we progress
  */
 enum driver_version {
 	BFLSC_DRVUNDEF = 0,
