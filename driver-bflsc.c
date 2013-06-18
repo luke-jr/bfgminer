@@ -346,8 +346,8 @@ struct SaveString {
 // TODO: use 5 batch jobs
 // TODO: base these numbers on the chip count?
 #define BFLSC_QUE_SIZE_V2 40
-#define BFLSC_QUE_FULL_ENOUGH_V2 35
-#define BFLSC_QUE_WATERMARK_V2 20
+#define BFLSC_QUE_FULL_ENOUGH_V2 36
+#define BFLSC_QUE_WATERMARK_V2 32
 
 // Must drop this far below cutoff before resuming work
 #define BFLSC_TEMP_RECOVER 5
