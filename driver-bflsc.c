@@ -1978,6 +1978,15 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_temp(root, "Temp2 Max", &(sc_info->sc_devs[0].temp2_max), true);
 	root = api_add_time(root, "Temp1 Max Time", &(sc_info->sc_devs[0].temp1_max_time), true);
 	root = api_add_time(root, "Temp2 Max Time", &(sc_info->sc_devs[0].temp2_max_time), true);
+	root = api_add_int(root, "Work Queued", &(sc_info->sc_devs[0].work_queued), true);
+	root = api_add_int(root, "Work Complete", &(sc_info->sc_devs[0].work_complete), true);
+	root = api_add_bool(root, "Overheat", &(sc_info->sc_devs[0].overheat), true);
+	root = api_add_uint64(root, "Flush ID", &(sc_info->sc_devs[0].flush_id), true);
+	root = api_add_uint64(root, "Result ID", &(sc_info->sc_devs[0].result_id), true);
+	root = api_add_bool(root, "Flushed", &(sc_info->sc_devs[0].flushed), true);
+	root = api_add_uint(root, "Scan Sleep", &(sc_info->scan_sleep_time), true);
+	root = api_add_uint(root, "Results Sleep", &(sc_info->results_sleep_time), true);
+	root = api_add_uint(root, "Work ms", &(sc_info->default_ms_work), true);
 	rd_unlock(&(sc_info->stat_lock));
 
 	i = (int)(sc_info->driver_version);
@@ -1987,9 +1996,6 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_int(root, "Que Size", &(sc_info->que_size), false);
 	root = api_add_int(root, "Que Full", &(sc_info->que_full_enough), false);
 	root = api_add_int(root, "Que Watermark", &(sc_info->que_watermark), false);
-	root = api_add_uint(root, "Scan Sleep", &(sc_info->scan_sleep_time), false);
-	root = api_add_uint(root, "Results Sleep", &(sc_info->results_sleep_time), false);
-	root = api_add_uint(root, "Work ms", &(sc_info->default_ms_work), false);
 	root = api_add_escape(root, "GetInfo", sc_info->sc_devs[0].getinfo, false);
 
 /*
