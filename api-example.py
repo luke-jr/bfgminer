@@ -17,17 +17,24 @@ def linesplit(socket):
 		else:
 			buffer = buffer+more
 	if buffer:
-				return buffer
-api_command = raw_input("Enter Api Command: ")
-api_param   = raw_input("Enter Api Param: ")
-reply_command = raw_input("Enter Json Reply command: ")
-reply_param = raw_input("Enter Json Reply Param: ")
+		return buffer
+
+api_command = sys.argv[1].split('|')
+#api_ip = sys.argv[3]
+#api_port = sys.argv[4]
+
+if len(sys.argv) < 3:
+	api_ip = '127.0.0.1'
+	api_port = 4028
+else:
+	api_ip = sys.argv[2]
+	api_port = sys.argv[3]
+
 s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-s.connect(('127.0.0.1',4028))
-s.send(json.dumps({"command":api_command,"parameter":api_param}))    
+s.connect((api_ip,int(api_port)))
+s.send(json.dumps({"command":api_command[0],"parameter":api_command[1]}))    
 response = linesplit(s)
 response = response.replace('\x00','')
 response = json.loads(response)
-#print response
-print response[reply_command][0][reply_param]
+print response
 s.close()
