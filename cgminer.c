@@ -6078,7 +6078,7 @@ void hash_queued_work(struct thr_info *mythr)
 		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
 		/* Update the hashmeter at most 5 times per second */
-		if (diff.tv_sec > 0 || diff.tv_usec > 200) {
+		if (diff.tv_sec > 0 || diff.tv_usec > 200000) {
 			hashmeter(thr_id, &diff, hashes_done);
 			hashes_done = 0;
 			copy_time(&tv_start, &tv_end);
