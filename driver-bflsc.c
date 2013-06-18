@@ -754,8 +754,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
 	char **items, *firstname, **fields, *lf;
+	bool res, ok = false;
 	int i, lines, count;
-	bool res, ok;
 	char *tmp;
 
 	/*
@@ -776,7 +776,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	if (err < 0 || amount != BFLSC_DETAILS_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send details request failed (%d:%d)",
 			bflsc->drv->dname, bflsc->device_path, amount, err);
-		return false;
+		return ok;
 	}
 
 	err = usb_read_ok_timeout(bflsc, buf, sizeof(buf)-1, &amount,
@@ -789,14 +789,14 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			applog(LOG_ERR, "%s detect (%s) get details returned nothing (%d:%d)",
 					bflsc->drv->dname, bflsc->device_path, amount, err);
 		}
-		return false;
+		return ok;
 	}
 
 	memset(&sc_dev, 0, sizeof(struct bflsc_dev));
 	sc_info->sc_count = 1;
 	res = tolines(bflsc, dev, &(buf[0]), &lines, &items, C_GETDETAILS);
 	if (!res)
-		return false;
+		return ok;
 
 	tmp = str_text(buf);
 	strcpy(sc_dev.getinfo, tmp);
