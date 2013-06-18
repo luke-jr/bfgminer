@@ -371,7 +371,7 @@ static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 	if (strcmp(ver, "1.0.0") == 0)
 		return BFLSC_DRV1;
 
-	if (strncmp(ver, "1.0", 3) == 0 || strncmp(ver, "1.1", 3)) {
+	if (strncmp(ver, "1.0", 3) == 0 || strncmp(ver, "1.1", 3) == 0) {
 		applog(LOG_WARNING, "%s detect (%s) Warning assuming firmware '%s' is Ver1",
 			bflsc->drv->dname, bflsc->device_path, ver);
 		return BFLSC_DRV1;
