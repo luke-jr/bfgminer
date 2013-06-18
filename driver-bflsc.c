@@ -1965,6 +1965,7 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct api_data *root = NULL;
+	int i;
 
 //if no x-link ... etc
 	rd_lock(&(sc_info->stat_lock));
@@ -1978,6 +1979,17 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_time(root, "Temp1 Max Time", &(sc_info->sc_devs[0].temp1_max_time), true);
 	root = api_add_time(root, "Temp2 Max Time", &(sc_info->sc_devs[0].temp2_max_time), true);
 	rd_unlock(&(sc_info->stat_lock));
+
+	i = (int)(sc_info->driver_version);
+	root = api_add_int(root, "Driver", &i, true);
+	root = api_add_string(root, "Firmware", sc_info->sc_devs[0].firmware, false);
+	root = api_add_string(root, "Chips", sc_info->sc_devs[0].chips, false);
+	root = api_add_int(root, "Que Size", &(sc_info->que_size), false);
+	root = api_add_int(root, "Que Full", &(sc_info->que_full_enough), false);
+	root = api_add_int(root, "Que Watermark", &(sc_info->que_watermark), false);
+	root = api_add_uint(root, "Scan Sleep", &(sc_info->scan_sleep_time), false);
+	root = api_add_uint(root, "Results Sleep", &(sc_info->results_sleep_time), false);
+	root = api_add_uint(root, "Work ms", &(sc_info->default_ms_work), false);
 	root = api_add_escape(root, "GetInfo", sc_info->sc_devs[0].getinfo, false);
 
 /*
