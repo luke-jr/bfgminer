@@ -146,6 +146,7 @@ struct bflsc_info {
 	int que_size;
 	int que_full_enough;
 	int que_watermark;
+	int que_low;
 	int que_noncecount;
 	int que_fld_min;
 	int que_fld_max;
@@ -342,12 +343,14 @@ struct SaveString {
 #define BFLSC_QUE_SIZE_V1 20
 #define BFLSC_QUE_FULL_ENOUGH_V1 13
 #define BFLSC_QUE_WATERMARK_V1 6
+#define BFLSC_QUE_LOW_V1 3
 
 // TODO: use 5 batch jobs
 // TODO: base these numbers on the chip count?
 #define BFLSC_QUE_SIZE_V2 40
 #define BFLSC_QUE_FULL_ENOUGH_V2 36
 #define BFLSC_QUE_WATERMARK_V2 32
+#define BFLSC_QUE_LOW_V2 16
 
 // Must drop this far below cutoff before resuming work
 #define BFLSC_TEMP_RECOVER 5
@@ -964,6 +967,7 @@ reinit:
 			sc_info->que_size = BFLSC_QUE_SIZE_V1;
 			sc_info->que_full_enough = BFLSC_QUE_FULL_ENOUGH_V1;
 			sc_info->que_watermark = BFLSC_QUE_WATERMARK_V1;
+			sc_info->que_low = BFLSC_QUE_LOW_V1;
 			sc_info->que_noncecount = QUE_NONCECOUNT_V1;
 			sc_info->que_fld_min = QUE_FLD_MIN_V1;
 			sc_info->que_fld_max = QUE_FLD_MAX_V1;
@@ -976,6 +980,7 @@ reinit:
 			sc_info->que_size = BFLSC_QUE_SIZE_V2;
 			sc_info->que_full_enough = BFLSC_QUE_FULL_ENOUGH_V2;
 			sc_info->que_watermark = BFLSC_QUE_WATERMARK_V2;
+			sc_info->que_low = BFLSC_QUE_LOW_V2;
 			sc_info->que_noncecount = QUE_NONCECOUNT_V2;
 			sc_info->que_fld_min = QUE_FLD_MIN_V2;
 			sc_info->que_fld_max = QUE_FLD_MAX_V2;
@@ -1765,7 +1770,7 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 			}
 			if (que > sc_info->que_full_enough)
 				dev = -1;
-			else if (que == 0)
+			else if (que < sc_info->que_low)
 				mandatory = true;
 		}
 		rd_unlock(&(sc_info->stat_lock));
@@ -2009,6 +2014,7 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_int(root, "Que Size", &(sc_info->que_size), false);
 	root = api_add_int(root, "Que Full", &(sc_info->que_full_enough), false);
 	root = api_add_int(root, "Que Watermark", &(sc_info->que_watermark), false);
+	root = api_add_int(root, "Que Low", &(sc_info->que_low), false);
 	root = api_add_escape(root, "GetInfo", sc_info->sc_devs[0].getinfo, false);
 
 /*
