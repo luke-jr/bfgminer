@@ -1371,6 +1371,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
+	OPT_WITHOUT_ARG("--log-microseconds",
+	                opt_set_bool, &opt_log_microseconds,
+	                "Include microseconds in log output"),
 #if defined(unix)
 	OPT_WITH_ARG("--monitor|-m",
 		     opt_set_charp, NULL, &opt_stderr_cmd,

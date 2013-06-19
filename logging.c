@@ -20,6 +20,7 @@
 bool opt_debug = false;
 bool opt_debug_console = false;  // Only used if opt_debug is also enabled
 bool opt_log_output = false;
+bool opt_log_microseconds;
 
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_NOTICE;
@@ -104,8 +105,20 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 
 		localtime_r(&tv.tv_sec, tm);
 
-		len = 40 + strlen(fmt) + 22;
+		// NOTE: my_log_curses appends 20 spaces
+		len = 40 + strlen(fmt) + 22  + 7 /* microseconds */;
 		f = alloca(len);
+		if (opt_log_microseconds)
+			sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d.%06ld] %s\n",
+				tm->tm_year + 1900,
+				tm->tm_mon + 1,
+				tm->tm_mday,
+				tm->tm_hour,
+				tm->tm_min,
+				tm->tm_sec,
+				(long)tv.tv_usec,
+				fmt);
+		else
 		sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d] %s\n",
 			tm->tm_year + 1900,
 			tm->tm_mon + 1,
