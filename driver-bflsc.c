@@ -1638,7 +1638,8 @@ static void bflsc_thread_enable(struct thr_info *thr)
 	bflsc_initialise(bflsc);
 }
 
-static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
+static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
+			    bool mandatory)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct FullNonceRangeJob data;
@@ -1663,7 +1664,15 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work)
 
 	try = 0;
 
-	mutex_lock(&(bflsc->device_mutex));
+	/* On faster devices we have a lot of lock contention so only
+	 * mandatorily grab the lock and send work if the queue is empty since
+	 * we have a submit queue. */
+	if (mandatory)
+		mutex_lock(&(bflsc->device_mutex));
+	else {
+		if (mutex_trylock(&bflsc->device_mutex))
+			return false;
+	}
 re_send:
 	err = write_to_dev(bflsc, dev, BFLSC_QJOB, BFLSC_QJOB_LEN, &amount, C_REQUESTQUEJOB);
 	if (err < 0 || amount != BFLSC_QJOB_LEN) {
@@ -1724,6 +1733,8 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 	// if something is wrong with a device try the next one available
 	// TODO: try them all? Add an unavailable flag to sc_devs[i] init to 0 here first
 	while (++tries < 3) {
+		bool mandatory = false;
+
 		// Device is gone - shouldn't normally get here
 		if (bflsc->usbinfo.nodev) {
 			ret = true;
@@ -1754,6 +1765,8 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 			}
 			if (que > sc_info->que_full_enough)
 				dev = -1;
+			else if (que == 0)
+				mandatory = true;
 		}
 		rd_unlock(&(sc_info->stat_lock));
 
@@ -1767,7 +1780,7 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 			work = get_queued(bflsc);
 		if (unlikely(!work))
 			break;
-		if (bflsc_send_work(bflsc, dev, work)) {
+		if (bflsc_send_work(bflsc, dev, work, mandatory)) {
 			work = NULL;
 			break;
 		} else
