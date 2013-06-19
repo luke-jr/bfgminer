@@ -1796,10 +1796,10 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
-	int dev, waited = 0, i, min_queued;
 	int64_t ret, unsent;
 	bool flushed, cleanup;
 	struct work *work, *tmp;
+	int dev, waited, i;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1845,21 +1845,10 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		}
 	}
 
-	min_queued = sc_info->que_size;
-
-	rd_lock(&sc_info->stat_lock);
-	for (i = 0; i < sc_info->sc_count; i++) {
-		if (sc_info->sc_devs[i].work_queued < min_queued)
-			min_queued = sc_info->sc_devs[i].work_queued;
-	}
-	rd_unlock(&sc_info->stat_lock);
-
-	if (min_queued >= sc_info->que_watermark)
-		waited = restart_wait(sc_info->scan_sleep_time);
+	waited = restart_wait(sc_info->scan_sleep_time);
 	if (waited == ETIMEDOUT) {
 		unsigned int old_sleep_time, new_sleep_time = 0;
-
-		min_queued = sc_info->que_size;
+		int min_queued = sc_info->que_size;
 		/* Only adjust the scan_sleep_time if we did not receive a
 		 * restart message while waiting. Try to adjust sleep time
 		 * so we drop to sc_info->que_watermark before getting more work.
