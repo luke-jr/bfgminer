@@ -1,5 +1,12 @@
 #!/usr/bin/env python2.7
 
+# Copyright 2013 Setkeh Mkfr
+#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.  See COPYING for more details.
+
 #Short Python Example for connecting to The Cgminer API
 #Written By: setkeh <https://github.com/setkeh>
 #Thanks to Jezzz for all his Support.
