@@ -333,8 +333,8 @@ struct SaveString {
 #define BFLSC_MAX_SLEEP 2000
 
 #define BAJ_LATENCY LATENCY_STD
-#define BAL_LATENCY LATENCY_STD
-#define BAS_LATENCY LATENCY_STD
+#define BAL_LATENCY 12
+#define BAS_LATENCY 12
 // For now a BAM doesn't really exist - it's currently 8 independent BASs
 #define BAM_LATENCY 2
 
