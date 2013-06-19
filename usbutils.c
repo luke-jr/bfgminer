@@ -305,7 +305,7 @@ static struct usb_find_devices find_dev[] = {
 		.epcount = 0,
 		.eps = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -1647,6 +1647,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					&&  epdesc->wMaxPacketSize >= found->eps[k].size
 					&&  epdesc->bEndpointAddress == found->eps[k].ep) {
 						found->eps[k].found = true;
+						found->wMaxPacketSize = epdesc->wMaxPacketSize;
 						break;
 					}
 				}
@@ -2182,6 +2183,11 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 		  struct cgpu_info *cgpu)
 {
 	int err, tries = 0;
+
+	/* Limit length of transfer to the largest this descriptor supports
+	 * and leave the higher level functions to transfer more if needed. */
+	if (length > cgpu->usbdev->found->wMaxPacketSize)
+		length = cgpu->usbdev->found->wMaxPacketSize;
 
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,

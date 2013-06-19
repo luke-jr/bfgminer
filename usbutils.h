@@ -142,6 +142,7 @@ struct usb_find_devices {
 	int config;
 	int interface;
 	unsigned int timeout;
+	uint16_t wMaxPacketSize;
 	uint16_t latency;
 	int epcount;
 	struct usb_endpoints *eps;
