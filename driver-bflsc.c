@@ -1905,17 +1905,19 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	return ret;
 }
 
+/* Set the fanspeed to auto for any valid value under 60, or max for any value
+ * above 60 or if we don't know the temperature. */
 static void bflsc_set_fanspeed(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)bflsc->device_data;
 	int amount, err;
 
-	if ((bflsc->temp <= 60 && sc_info->fanauto) ||
-	    (bflsc->temp > 60 && !sc_info->fanauto))
+	if ((bflsc->temp <= 60 && bflsc->temp > 0 && sc_info->fanauto) ||
+	    ((bflsc->temp > 60 || !bflsc->temp) && !sc_info->fanauto))
 		return;
 
 	mutex_lock(&bflsc->device_mutex);
-	if (bflsc->temp > 60) {
+	if (bflsc->temp > 60 || !bflsc->temp) {
 		write_to_dev(bflsc, 0, BFLSC_FAN4, BFLSC_FAN4_LEN, &amount,
 			     C_SETFAN);
 		sc_info->fanauto = false;
