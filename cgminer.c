@@ -7128,8 +7128,11 @@ struct _cgpu_devid_counter {
 
 static void adjust_mostdevs(void)
 {
+// device window resize crashes on windows - disable resize now
+#ifndef WIN32
 	if (total_devices - zombie_devs > most_devices)
 		most_devices = total_devices - zombie_devs;
+#endif
 }
 
 bool add_cgpu(struct cgpu_info *cgpu)
@@ -7565,13 +7568,20 @@ int main(int argc, char *argv[])
 		quit(1, "All devices disabled, cannot mine!");
 #endif
 
+// device window resize crashes on windows - disable resize now
+#ifdef WIN32
+	most_devices = total_devices + 1; // Allow space for 1 hotplug
+#else
+	most_devices = total_devices;
+#endif
+
 	load_temp_cutoffs();
 
 	for (i = 0; i < total_devices; ++i)
 		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 	if (!opt_compact) {
-		logstart += total_devices;
+		logstart += most_devices;
 		logcursor = logstart + 1;
 #ifdef HAVE_CURSES
 		check_winsizes();
