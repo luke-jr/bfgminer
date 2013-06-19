@@ -148,6 +148,18 @@ struct bitforce_init_data {
 	int *parallels;
 };
 
+static
+int bitforce_chips_to_plan_for(int parallel, int chipcount) {
+	if (parallel < 1)
+		return parallel;
+	if (chipcount > 15) return 32;
+	if (chipcount >  7) return 16;
+	if (chipcount >  3) return  8;
+	if (chipcount >  1) return  4;
+	if (chipcount     ) return  2;
+	                    return  1;
+}
+
 static bool bitforce_detect_one(const char *devpath)
 {
 	int fdDev = serial_open(devpath, 0, 10, true);
@@ -156,6 +168,7 @@ static bool bitforce_detect_one(const char *devpath)
 	size_t pdevbuf_len;
 	char *s;
 	int procs = 1, parallel = -1;
+	long maxchipno = 0;
 	struct bitforce_init_data *initdata;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
@@ -196,6 +209,9 @@ static bool bitforce_detect_one(const char *devpath)
 		
 		applog(LOG_DEBUG, "  %s", pdevbuf);
 		
+		if (!strncasecmp(pdevbuf, "PROCESSOR ", 10))
+			maxchipno = max(maxchipno, atoi(&pdevbuf[10]));
+		else
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
 		else
@@ -208,6 +224,7 @@ static bool bitforce_detect_one(const char *devpath)
 		if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 			parallel = atoi(&pdevbuf[27]);
 	}
+	parallel = bitforce_chips_to_plan_for(parallel, maxchipno);
 	initdata->parallels = malloc(sizeof(initdata->parallels[0]) * procs);
 	initdata->parallels[0] = parallel;
 	parallel = abs(parallel);
@@ -215,6 +232,7 @@ static bool bitforce_detect_one(const char *devpath)
 	{
 		applog(LOG_DEBUG, "Slave board %d:", proc);
 		initdata->parallels[proc] = -1;
+		maxchipno = 0;
 		bitforce_cmd1(fdDev, proc, pdevbuf, sizeof(pdevbuf), "ZCX");
 		for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
 			BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
@@ -229,9 +247,13 @@ static bool bitforce_detect_one(const char *devpath)
 			
 			applog(LOG_DEBUG, "  %s", pdevbuf);
 			
+			if (!strncasecmp(pdevbuf, "PROCESSOR ", 10))
+				maxchipno = max(maxchipno, atoi(&pdevbuf[10]));
+			else
 			if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 				initdata->parallels[proc] = atoi(&pdevbuf[27]);
 		}
+		initdata->parallels[proc] = bitforce_chips_to_plan_for(initdata->parallels[proc], maxchipno);
 		parallel += abs(initdata->parallels[proc]);
 	}
 	BFclose(fdDev);
