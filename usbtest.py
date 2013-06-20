@@ -1,9 +1,12 @@
 #!/usr/bin/env python2.7
+# Copyright 2012 Xiangfu
+# Copyright 2012-2013 Andrew Smith
 #
-# Original version supplied to me (Kano/kanoi) by xiangfu
-#
-# Modified to allow supplying the data to send
-#
+# This program is free software; you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.  See COPYING for more details.
+
 # Linux usAge: ./ubstest.py /dev/ttyUSB0 0xhexcodes|string|icarus
 #  OR		python ubstest.py /dev/ttyUSB0 0xhexcodes|string|icarus
 #
