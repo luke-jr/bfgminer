@@ -2208,6 +2208,12 @@ double stats_elapsed(struct cgminer_stats *stats)
 	return elapsed;
 }
 
+double cgpu_utility(struct cgpu_info *cgpu)
+{
+	double dev_runtime = cgpu_runtime(cgpu);
+	return cgpu->utility = cgpu->accepted / dev_runtime * 60;
+}
+
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
 static void suffix_string(uint64_t val, char *buf, int sigdigits)
@@ -2377,12 +2383,14 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
 	char rejpcbuf[6];
+	double dev_runtime;
 	
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
 	
-	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
+	dev_runtime = cgpu_runtime(cgpu);
+	cgpu_utility(cgpu);
+	cgpu->utility_diff1 = cgpu->diff_accepted / dev_runtime * 60;
 	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
@@ -2397,8 +2405,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
 		{
-			slave->utility = slave->accepted / total_secs * 60;
-			slave->utility_diff1 = slave->diff_accepted / total_secs * 60;
+			slave->utility = slave->accepted / dev_runtime * 60;
+			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
 			rolling += slave->rolling;
 			mhashes += slave->total_mhashes;
@@ -2414,7 +2422,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
-		1e6*mhashes / total_secs,
+		1e6*mhashes / dev_runtime,
 		utility_to_hashrate(wutil),
 		hashrate_style);
 

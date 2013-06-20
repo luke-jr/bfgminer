@@ -1485,7 +1485,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	char buf[TMPBUFSIZ];
 	int n = 0, i;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu_utility(cgpu);
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -1519,7 +1519,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	char buf[TMPBUFSIZ];
 	int n = 0, i;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu_utility(cgpu);
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -1536,7 +1536,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_string(root, "Status", status2str(cgpu->status), false);
 	if (cgpu->temp)
 		root = api_add_temp(root, "Temperature", &cgpu->temp, false);
-	double mhs = cgpu->total_mhashes / total_secs;
+	double mhs = cgpu->total_mhashes / cgpu_runtime(cgpu);
 	root = api_add_mhs(root, "MHS av", &mhs, false);
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
