@@ -454,8 +454,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		*baud = 19200;
 		break;
 	default:
-		quit(1,
-			"Invalid avalon-options for baud (%s) "
+		quit(1, "Invalid avalon-options for baud (%s) "
 			"must be 115200, 57600, 38400 or 19200", buf);
 	}
 
@@ -469,8 +468,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
 				*miner_count = tmp;
 			} else {
-				quit(1,
-					"Invalid avalon-options for "
+				quit(1, "Invalid avalon-options for "
 					"miner_count (%s) must be 1 ~ %d",
 					colon, AVALON_DEFAULT_MINER_NUM);
 			}
@@ -485,8 +483,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 			if (tmp > 0 && tmp <= AVALON_DEFAULT_ASIC_NUM)
 				*asic_count = tmp;
 			else {
-				quit(1,
-					"Invalid avalon-options for "
+				quit(1, "Invalid avalon-options for "
 					"asic_count (%s) must be 1 ~ %d",
 					colon2, AVALON_DEFAULT_ASIC_NUM);
 			}
@@ -500,8 +497,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 				if (tmp > 0 && tmp <= 0xff)
 					*timeout = tmp;
 				else {
-					quit(1,
-						"Invalid avalon-options for "
+					quit(1, "Invalid avalon-options for "
 						"timeout (%s) must be 1 ~ %d",
 						colon3, 0xff);
 				}
@@ -515,8 +511,7 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 						*frequency = tmp;
 						break;
 					default:
-						quit(1,
-							"Invalid avalon-options for "
+						quit(1, "Invalid avalon-options for "
 							"frequency must be 256/270/282/300");
 					}
 				}

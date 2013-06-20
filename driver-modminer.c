@@ -85,9 +85,12 @@ _bailout(int fd, struct cgpu_info*modminer, int prio, const char *fmt, ...)
 	}
 
 	va_list ap;
+	char buf[LOGBUFSIZ];
+	
 	va_start(ap, fmt);
-	vapplog(prio, fmt, ap);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
 	va_end(ap);
+	_applog(prio, buf);
 	return false;
 }
 #define bailout(...)  return _bailout(fd, NULL, __VA_ARGS__);

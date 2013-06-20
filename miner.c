@@ -408,13 +408,16 @@ void get_timestamp(char *f, struct timeval *tv)
 
 static void applog_and_exit(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 
+static char exit_buf[512];
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	vapplog(LOG_ERR, fmt, ap);
+	vsnprintf(exit_buf, sizeof(exit_buf), fmt, ap);
 	va_end(ap);
+	_applog(LOG_ERR, exit_buf);
 	exit(1);
 }
 
@@ -2740,31 +2743,23 @@ static void switch_logsize(void)
 }
 
 /* For mandatory printing when mutex is already locked */
-void wlog(const char *f, ...)
+void _wlog(const char *str)
 {
-	va_list ap;
-
-	va_start(ap, f);
-	vw_printw(logwin, f, ap);
-	va_end(ap);
+	wprintw(logwin, "%s", str);
 }
 
 /* Mandatory printing */
-void wlogprint(const char *f, ...)
+void _wlogprint(const char *str)
 {
-	va_list ap;
-
 	if (curses_active_locked()) {
-		va_start(ap, f);
-		vw_printw(logwin, f, ap);
-		va_end(ap);
+		wprintw(logwin, "%s", str);
 		unlock_curses();
 	}
 }
 #endif
 
 #ifdef HAVE_CURSES
-bool log_curses_only(int prio, const char *f, va_list ap)
+bool log_curses_only(int prio, const char *datetime, const char *str)
 {
 	bool high_prio;
 
@@ -2772,7 +2767,7 @@ bool log_curses_only(int prio, const char *f, va_list ap)
 
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
-			vw_printw(logwin, f, ap);
+			wprintw(logwin, "%s%s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);
@@ -8189,26 +8184,16 @@ static void clean_up(void)
 	curl_global_cleanup();
 }
 
-void quit(int status, const char *format, ...)
+void _quit(int status)
 {
-	va_list ap;
-
 	clean_up();
-
-	if (format) {
-		va_start(ap, format);
-		vfprintf(stderr, format, ap);
-		va_end(ap);
-	}
-	fprintf(stderr, "\n");
-	fflush(stderr);
 
 	if (status) {
 		const char *ev = getenv("__BFGMINER_SEGFAULT_ERRQUIT");
 		if (unlikely(ev && ev[0] && ev[0] != '0')) {
-			const char **p = NULL;
+			int *p = NULL;
 			// NOTE debugger can bypass with: p = &p
-			*p = format;  // Segfault, hopefully dumping core
+			*p = status;  // Segfault, hopefully dumping core
 		}
 	}
 

@@ -1,6 +1,7 @@
 /*
  * Copyright 2011-2012 Con Kolivas
  * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -15,7 +16,6 @@
 #include "compat.h"
 #include "logging.h"
 #include "miner.h"
-// #include "util.h"
 
 bool opt_debug = false;
 bool opt_debug_console = false;  // Only used if opt_debug is also enabled
@@ -25,66 +25,39 @@ bool opt_log_microseconds;
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_NOTICE;
 
-static void my_log_curses(int prio, char *f, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
-
-static void my_log_curses(__maybe_unused int prio, char *f, va_list ap)
+static void my_log_curses(int prio, const char *datetime, const char *str)
 {
 	if (opt_quiet && prio != LOG_ERR)
 		return;
 
 #ifdef HAVE_CURSES
 	extern bool use_curses;
-	if (use_curses && log_curses_only(prio, f, ap))
+	if (use_curses && log_curses_only(prio, datetime, str))
 		;
 	else
 #endif
 	{
-		int len = strlen(f);
 		int cancelstate;
 		bool scs;
-
-		strcpy(f + len - 1, "                    \n");
-
 		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
 		mutex_lock(&console_lock);
-		vprintf(f, ap);
+		printf("%s%s%s", datetime, str, "                    \n");
 		mutex_unlock(&console_lock);
 		if (scs)
 			pthread_setcancelstate(cancelstate, &cancelstate);
 	}
 }
 
-static void log_generic(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
-
-void vapplog(int prio, const char *fmt, va_list ap)
-{
-	if (!opt_debug && prio == LOG_DEBUG)
-		return;
-
-	log_generic(prio, fmt, ap);
-}
-
-void applog(int prio, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vapplog(prio, fmt, ap);
-	va_end(ap);
-}
-
-
-/* high-level logging functions, based on global opt_log_level */
+/* high-level logging function, based on global opt_log_level */
 
 /*
- * generic log function used by priority specific ones
- * equals vapplog() without additional priority checks
+ * log function
  */
-static void log_generic(int prio, const char *fmt, va_list ap)
+void _applog(int prio, const char *str)
 {
 #ifdef HAVE_SYSLOG_H
 	if (use_syslog) {
-		vsyslog(prio, fmt, ap);
+		syslog(prio, "%s", str);
 	}
 #else
 	if (0) {}
@@ -95,8 +68,7 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 		if (!(writetocon || writetofile))
 			return;
 
-		char *f;
-		int len;
+		char datetime[64];
 		struct timeval tv = {0, 0};
 		struct tm _tm;
 		struct tm *tm = &_tm;
@@ -105,72 +77,31 @@ static void log_generic(int prio, const char *fmt, va_list ap)
 
 		localtime_r(&tv.tv_sec, tm);
 
-		// NOTE: my_log_curses appends 20 spaces
-		len = 40 + strlen(fmt) + 22  + 7 /* microseconds */;
-		f = alloca(len);
 		if (opt_log_microseconds)
-			sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d.%06ld] %s\n",
+			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d.%06ld] ",
 				tm->tm_year + 1900,
 				tm->tm_mon + 1,
 				tm->tm_mday,
 				tm->tm_hour,
 				tm->tm_min,
 				tm->tm_sec,
-				(long)tv.tv_usec,
-				fmt);
+				(long)tv.tv_usec);
 		else
-		sprintf(f, " [%d-%02d-%02d %02d:%02d:%02d] %s\n",
-			tm->tm_year + 1900,
-			tm->tm_mon + 1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			fmt);
+			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d] ",
+				tm->tm_year + 1900,
+				tm->tm_mon + 1,
+				tm->tm_mday,
+				tm->tm_hour,
+				tm->tm_min,
+				tm->tm_sec);
+
 		/* Only output to stderr if it's not going to the screen as well */
 		if (writetofile) {
-			va_list apc;
-
-			va_copy(apc, ap);
-			vfprintf(stderr, f, apc);	/* atomic write to stderr */
-			va_end(apc);
+			fprintf(stderr, "%s%s\n", datetime, str);	/* atomic write to stderr */
 			fflush(stderr);
 		}
 
 		if (writetocon)
-			my_log_curses(prio, f, ap);
+			my_log_curses(prio, datetime, str);
 	}
-}
-/* we can not generalize variable argument list */
-#define LOG_TEMPLATE(PRIO)		\
-	if (PRIO <= opt_log_level) {	\
-		va_list ap;		\
-		va_start(ap, fmt);	\
-		vapplog(PRIO, fmt, ap);	\
-		va_end(ap);		\
-	}
-
-void log_error(const char *fmt, ...)
-{
-	LOG_TEMPLATE(LOG_ERR);
-}
-
-void log_warning(const char *fmt, ...)
-{
-	LOG_TEMPLATE(LOG_WARNING);
-}
-
-void log_notice(const char *fmt, ...)
-{
-	LOG_TEMPLATE(LOG_NOTICE);
-}
-
-void log_info(const char *fmt, ...)
-{
-	LOG_TEMPLATE(LOG_INFO);
-}
-
-void log_debug(const char *fmt, ...)
-{
-	LOG_TEMPLATE(LOG_DEBUG);
 }

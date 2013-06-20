@@ -26,7 +26,7 @@ enum {
 };
 #endif
 
-/* original / legacy debug flags */
+/* debug flags */
 extern bool opt_debug;
 extern bool opt_debug_console;
 extern bool opt_log_output;
@@ -37,21 +37,47 @@ extern bool want_per_device_stats;
 /* global log_level, messages with lower or equal prio are logged */
 extern int opt_log_level;
 
-/* low-level logging functions with priority parameter */
-extern void vapplog(int prio, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
-extern void applog(int prio, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
+#define LOGBUFSIZ 256
+
+extern void _applog(int prio, const char *str);
+
+#define applog(prio, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+			char tmp42[LOGBUFSIZ]; \
+			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			_applog(prio, tmp42); \
+	} \
+} while (0)
 
 #define applogr(rv, prio, ...)  do {  \
 	applog(prio, __VA_ARGS__);  \
 	return rv;  \
 } while (0)
 
-/* high-level logging functions with implicit priority */
-extern void log_error(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
-extern void log_warning(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
-extern void log_notice(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
-extern void log_info(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
-extern void log_debug(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
+#define quit(status, fmt, ...) do { \
+	if (fmt) { \
+		char tmp42[LOGBUFSIZ]; \
+		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+		_applog(LOG_ERR, tmp42); \
+	} \
+	_quit(status); \
+} while (0)
+
+#ifdef HAVE_CURSES
+
+#define wlog(fmt, ...) do { \
+	char tmp42[LOGBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	_wlog(tmp42); \
+} while (0)
+
+#define wlogprint(fmt, ...) do { \
+	char tmp42[LOGBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	_wlogprint(tmp42); \
+} while (0)
+
+#endif
 
 extern void hexdump(const void *, unsigned int len);
 
