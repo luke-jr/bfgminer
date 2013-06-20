@@ -384,6 +384,8 @@ enum {
 };
 
 struct cgminer_stats {
+	struct timeval start_tv;
+	
 	uint32_t getwork_calls;
 	struct timeval getwork_wait;
 	struct timeval getwork_wait_max;
@@ -1262,6 +1264,7 @@ extern void wlog(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern void wlogprint(const char *f, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
+extern double stats_elapsed(struct cgminer_stats *);
 extern void kill_work(void);
 extern int prioritize_pools(char *param, int *pid);
 extern void validate_pool_priorities(void);

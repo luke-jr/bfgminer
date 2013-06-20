@@ -513,6 +513,8 @@ struct pool *add_pool(void)
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
+	
+	cgtime(&pool->cgminer_stats.start_tv);
 
 	pool->rpc_proxy = NULL;
 
@@ -2186,6 +2188,24 @@ void tailsprintf(char *f, const char *fmt, ...)
 	va_start(ap, fmt);
 	vsprintf(f + strlen(f), fmt, ap);
 	va_end(ap);
+}
+
+double stats_elapsed(struct cgminer_stats *stats)
+{
+	struct timeval now;
+	double elapsed;
+
+	if (stats->start_tv.tv_sec == 0)
+		elapsed = total_secs;
+	else {
+		cgtime(&now);
+		elapsed = tdiff(&now, &stats->start_tv);
+	}
+
+	if (elapsed < 1.0)
+		elapsed = 1.0;
+
+	return elapsed;
 }
 
 /* Convert a uint64_t value into a truncated string for displaying with its
@@ -5376,6 +5396,7 @@ void zero_stats(void)
 		pool->diff_rejected = 0;
 		pool->diff_stale = 0;
 		pool->last_share_diff = 0;
+		pool->cgminer_stats.start_tv = total_tv_start;
 		pool->cgminer_stats.getwork_calls = 0;
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_stats.getwork_wait_max.tv_sec = 0;
@@ -5425,6 +5446,7 @@ void zero_stats(void)
 		cgpu->dev_thermal_cutoff_count = 0;
 		cgpu->dev_comms_error_count = 0;
 		cgpu->dev_throttle_count = 0;
+		cgpu->cgminer_stats.start_tv = total_tv_start;
 		cgpu->cgminer_stats.getwork_calls = 0;
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->cgminer_stats.getwork_wait_max.tv_sec = 0;
