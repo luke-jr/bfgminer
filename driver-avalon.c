@@ -225,12 +225,11 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	return submit_nonce(thr, work, nonce);
 }
 
-/* Wait until the ftdi chip returns a CTS saying we can send more data. The
- * status is updated every 40ms. */
+/* Wait until the ftdi chip returns a CTS saying we can send more data. */
 static void wait_avalon_ready(struct cgpu_info *avalon)
 {
 	while (avalon_buffer_full(avalon)) {
-		nmsleep(40);
+		nmsleep(AVALON_READ_TIMEOUT);
 	}
 }
 
@@ -242,10 +241,9 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 	int err, amount, ofs = 2, cp;
 
 	/* If the buffer is ready to take more work, yield once in case the
-	 * write thread is waiting to be scheduled. Keep it under the time
-	 * it would take to fill the entire 512 byte buffer. */
+	 * write thread is waiting to be scheduled. */
 	if (!avalon_buffer_full(avalon))
-		nmsleep(32);
+		nmsleep(AVALON_READ_TIMEOUT);
 
 	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
