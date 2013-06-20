@@ -1277,7 +1277,7 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 			sprintf(replybuf, "missing fanmode setting");
 			return replybuf;
 		}
-		if (setting[1] || setting[0] < '0' || setting[0] > '5')
+		if (setting[1] || ((setting[0] < '0' || setting[0] > '5') && setting[0] != '9'))
 		{
 			sprintf(replybuf, "invalid fanmode setting");
 			return replybuf;
