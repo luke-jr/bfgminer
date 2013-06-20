@@ -2186,8 +2186,12 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 
 	/* Limit length of transfer to the largest this descriptor supports
 	 * and leave the higher level functions to transfer more if needed. */
+#if 0
 	if (length > cgpu->usbdev->found->wMaxPacketSize)
 		length = cgpu->usbdev->found->wMaxPacketSize;
+#endif
+	if (length > 512)
+		length = 512;
 
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
