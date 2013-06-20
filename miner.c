@@ -7669,7 +7669,7 @@ int main(int argc, char *argv[])
 #ifdef HAVE_LIBUSB
 	int err = libusb_init(NULL);
 	if (err) {
-		fprintf(stderr, "libusb_init() failed err %d", err);
+		fprintf(stderr, "libusb_init() failed err %d\n", err);
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
