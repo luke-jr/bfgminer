@@ -69,7 +69,7 @@
 #include "ft232r.h"
 #endif
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <fcntl.h>
 	#include <sys/wait.h>
@@ -324,7 +324,7 @@ static int include_count;
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
 	static int forkpid;
 #endif // defined(unix)
@@ -1376,7 +1376,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--log-microseconds",
 	                opt_set_bool, &opt_log_microseconds,
 	                "Include microseconds in log output"),
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	OPT_WITH_ARG("--monitor|-m",
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
@@ -3647,7 +3647,7 @@ void app_restart(void)
 	__kill_work();
 	clean_up();
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
 		forkpid = 0;
@@ -5285,7 +5285,7 @@ void write_config(FILE *fcfg)
 		fputs(",\n\"round-robin\" : true", fcfg);
 	if (pool_strategy == POOL_ROTATE)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
 		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", json_escape(opt_stderr_cmd));
 #endif // defined(unix)
@@ -5780,7 +5780,7 @@ retry:
 
 void default_save_file(char *filename)
 {
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (getenv("HOME") && *getenv("HOME")) {
 	        strcpy(filename, getenv("HOME"));
 		strcat(filename, "/");
@@ -8212,7 +8212,7 @@ void quit(int status, const char *format, ...)
 		}
 	}
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
 		forkpid = 0;
@@ -8351,7 +8351,7 @@ out:
 }
 #endif
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 static void fork_monitor()
 {
 	// Make a pipe: [readFD, writeFD]
@@ -8966,7 +8966,7 @@ int main(int argc, char *argv[])
 		openlog(PACKAGE, LOG_PID, LOG_USER);
 #endif
 
-	#if defined(unix)
+	#if defined(unix) || defined(__APPLE__)
 		if (opt_stderr_cmd)
 			fork_monitor();
 	#endif // defined(unix)
