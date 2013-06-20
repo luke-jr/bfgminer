@@ -564,6 +564,7 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
 
+	gettimeofday(&cgpu->cgminer_stats.start_tv, NULL);
 	if (api->minerloop)
 		api->minerloop(mythr);
 	else
