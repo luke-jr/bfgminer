@@ -2755,10 +2755,12 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	double elapsed;
 
 	root = api_add_int(root, "STATS", &i, false);
 	root = api_add_string(root, "ID", id, false);
-	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
+	elapsed = stats_elapsed(stats);
+	root = api_add_elapsed(root, "Elapsed", &elapsed, false);
 	root = api_add_uint32(root, "Calls", &(stats->getwork_calls), false);
 	root = api_add_timeval(root, "Wait", &(stats->getwork_wait), false);
 	root = api_add_timeval(root, "Max", &(stats->getwork_wait_max), false);
