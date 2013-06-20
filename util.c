@@ -1375,8 +1375,11 @@ char *recv_line(struct pool *pool)
 				break;
 			}
 			if (n < 0) {
+				//Save errno from being overweitten bei socket_ commands 
+				int socket_recv_errno;
+				socket_recv_errno = errno;
 				if (!sock_blocks() || !socket_full(pool, false)) {
-					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", errno);
+					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", socket_recv_errno);
 					break;
 				}
 			} else {
