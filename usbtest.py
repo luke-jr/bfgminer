@@ -7,10 +7,10 @@
 # Foundation; either version 3 of the License, or (at your option) any later
 # version.  See COPYING for more details.
 
-# Linux usAge: ./ubstest.py /dev/ttyUSB0 0xhexcodes|string|icarus
-#  OR		python ubstest.py /dev/ttyUSB0 0xhexcodes|string|icarus
+# Linux usage: ./usbtest.py /dev/ttyUSB0 0xhexcodes|string|icarus
+#  OR          python usbtest.py /dev/ttyUSB0 0xhexcodes|string|icarus
 #
-# Windows usAge: ./ubstest.py COM1 0xhexcodes|string|icarus
+# Windows usage: ./usbtest.py COM1 0xhexcodes|string|icarus
 #
 #   sends the data sepcified to the USB device and waits
 #   for a reply then displays it
@@ -30,7 +30,7 @@ import serial
 import binascii
 
 if len(sys.argv) < 2:
-	sys.stderr.write("usAge: " + sys.argv[0] + " device strings...\n")
+	sys.stderr.write("Usage: " + sys.argv[0] + " device strings...\n")
 	sys.stderr.write(" where device is either like /dev/ttyUSB0 or COM1\n")
 	sys.stderr.write(" and strings are either '0xXXXX' or 'text'\n")
 	sys.stderr.write(" if the first string is 'icarus' the rest are ignored\n")
