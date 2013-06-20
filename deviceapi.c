@@ -552,7 +552,6 @@ redo:
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 

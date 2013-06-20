@@ -3596,8 +3596,6 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		pthread_t *pth = NULL;
-		
 		thr = get_thread(i);
 		if (!(thr && thr->cgpu->threads))
 			continue;
