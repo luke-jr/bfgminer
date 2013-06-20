@@ -265,7 +265,6 @@ extern void enable_curses(void);
 #endif
 
 extern int mining_threads;
-extern double total_secs;
 extern int opt_g_threads;
 extern bool ping;
 extern bool opt_loginput;
@@ -856,7 +855,7 @@ retry:
 		bool mhash_base = true;
 
 		displayed_rolling = cgpu->rolling;
-		displayed_total = cgpu->total_mhashes / total_secs;
+		displayed_total = cgpu->total_mhashes / cgpu_runtime(cgpu);
 		if (displayed_rolling < 1) {
 			displayed_rolling *= 1000;
 			displayed_total *= 1000;
@@ -898,7 +897,7 @@ retry:
 				if (powertune != -1)
 					tailsprintf(logline, "P: %d%%", powertune);
 				tailsprintf(logline, "\n");
-				wlog("%s", logline);
+				_wlog(logline);
 			}
 		}
 #endif
