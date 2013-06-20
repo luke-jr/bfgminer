@@ -1270,9 +1270,11 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 			break;
 		case SEND_SELECTFAIL:
 			applog(LOG_DEBUG, "Write select failed on pool %d sock", pool->pool_no);
+			suspend_stratum(pool);
 			break;
 		case SEND_SENDFAIL:
-			applog(LOG_DEBUG, "Failed to curl_easy_send in stratum_send");
+			applog(LOG_DEBUG, "Failed to send in stratum_send");
+			suspend_stratum(pool);
 			break;
 		case SEND_INACTIVE:
 			applog(LOG_DEBUG, "Stratum send failed due to no pool stratum_active");
@@ -1319,7 +1321,10 @@ static void clear_sock(struct pool *pool)
 
 	mutex_lock(&pool->stratum_lock);
 	do {
-		n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
+		if (pool->sock)
+			n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
+		else
+			n = 0;
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1372,11 +1377,13 @@ char *recv_line(struct pool *pool)
 			n = recv(pool->sock, s, RECVSIZE, 0);
 			if (!n) {
 				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
+				suspend_stratum(pool);
 				break;
 			}
 			if (n < 0) {
 				if (!sock_blocks() || !socket_full(pool, false)) {
 					applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+					suspend_stratum(pool);
 					break;
 				}
 			} else {
