@@ -6211,7 +6211,10 @@ static void *stratum_thread(void *userdata)
 			pool->getfail_occasions++;
 			total_go++;
 
+			mutex_lock(&pool->stratum_lock);
+			pool->stratum_active = pool->stratum_notify = false;
 			pool->sock = INVSOCK;
+			mutex_unlock(&pool->stratum_lock);
 
 			/* If the socket to our stratum pool disconnects, all
 			 * submissions need to be discarded or resent. */
