@@ -225,12 +225,13 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 	return submit_nonce(thr, work, nonce);
 }
 
-/* Wait until the ftdi chip returns a CTS saying we can send more data. The
- * status is updated every 40ms. */
+/* Wait until the ftdi chip returns a CTS saying we can send more data. Sleep
+ * for less time than the avalon_read function will wait so we are guaranteed
+ * to go first. */
 static void wait_avalon_ready(struct cgpu_info *avalon)
 {
 	while (avalon_buffer_full(avalon)) {
-		nmsleep(40);
+		nmsleep(16);
 	}
 }
 
