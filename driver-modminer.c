@@ -792,6 +792,7 @@ static void
 modminer_fpga_shutdown(struct thr_info *thr)
 {
 	free(thr->cgpu_data);
+	thr->cgpu_data = NULL;
 }
 
 static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)
