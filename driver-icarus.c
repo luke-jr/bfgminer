@@ -433,8 +433,8 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		err = usb_read_timeout(icarus, (char *)buf, read_amount, &amt, ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
 		cgtime(&read_finish);
 		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d, eno=%d)",
-					icarus->drv->name, icarus->device_id, err, amt, errno);
+			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
+					icarus->drv->name, icarus->device_id, err, amt);
 			dev_error(icarus, REASON_DEV_COMMS_ERROR);
 			return ICA_NONCE_ERROR;
 		}
@@ -894,8 +894,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(ob_bin)) {
-		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d eno=%d)",
-				icarus->drv->name, icarus->device_id, err, amount, errno);
+		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
+				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
 		return 0;
