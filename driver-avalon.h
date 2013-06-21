@@ -32,6 +32,7 @@
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
 #define AVALON_FTDI_READSIZE 510
+#define AVALON_USB_PACKETSIZE 512
 #define AVALON_READBUF_SIZE 8192
 #define AVALON_RESET_TIMEOUT 100
 #define AVALON_READ_TIMEOUT 18 /* Enough to only half fill the buffer */
