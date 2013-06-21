@@ -96,18 +96,36 @@ static int avalon_init_task(struct avalon_task *at,
 	buf[9] = 0x01;
 	buf[10] = 0x00;
 	buf[11] = 0x00;
-	if (frequency == 256) {
-		buf[6] = 0x03;
-		buf[7] = 0x08;
-	} else if (frequency == 270) {
-		buf[6] = 0x73;
-		buf[7] = 0x08;
-	} else if (frequency == 282) {
-		buf[6] = 0xd3;
-		buf[7] = 0x08;
-	} else if (frequency == 300) {
-		buf[6] = 0x63;
-		buf[7] = 0x09;
+	switch (frequency) {
+		case 256:
+			buf[6] = 0x03;
+			buf[7] = 0x08;
+			break;
+		default:
+		case 270:
+			buf[6] = 0x73;
+			buf[7] = 0x08;
+			break;
+		case 282:
+			buf[6] = 0xd3;
+			buf[7] = 0x08;
+			break;
+		case 300:
+			buf[6] = 0x63;
+			buf[7] = 0x09;
+			break;
+		case 325:
+			buf[6] = 0x28;
+			buf[7] = 0x0a;
+			break;
+		case 350:
+			buf[6] = 0xf0;
+			buf[7] = 0x0a;
+			break;
+		case 375:
+			buf[6] = 0xb8;
+			buf[7] = 0x0b;
+			break;
 	}
 
 	return 0;
@@ -508,11 +526,14 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 					case 270:
 					case 282:
 					case 300:
+					case 325:
+					case 350:
+					case 375:
 						*frequency = tmp;
 						break;
 					default:
 						quit(1, "Invalid avalon-options for "
-							"frequency must be 256/270/282/300");
+							"frequency must be 256/270/282/300/325/350/375");
 					}
 				}
 			}
