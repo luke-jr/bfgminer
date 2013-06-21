@@ -901,6 +901,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		return 0;
 	}
 
+	/* Simple attempt to emulate writing at 115200 baud */
+	nusleep(4444);
+
 	if (opt_debug) {
 		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 		applog(LOG_DEBUG, "%s%d: sent %s",
