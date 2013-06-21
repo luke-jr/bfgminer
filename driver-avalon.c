@@ -233,9 +233,17 @@ static void wait_avalon_ready(struct cgpu_info *avalon)
 	}
 }
 
+#define AVALON_CTS    (1 << 4)
+
+static inline bool avalon_cts(char c)
+{
+	return (c & AVALON_CTS);
+}
+
 static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 		       size_t bufsize, int timeout, int ep)
 {
+	struct avalon_info *info = avalon->device_data;
 	size_t total = 0, readsize = bufsize + 2;
 	char readbuf[AVALON_READBUF_SIZE];
 	int err, amount, ofs = 2, cp;
@@ -243,6 +251,15 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
+
+	if (amount < 2)
+		goto out;
+
+	/* Use the fact that we're reading the status with the buffer to tell
+	 * the write thread it should send more work without needing to call
+	 * avalon_buffer_full directly. */
+	if (avalon_cts(buf[0]))
+		cgsem_post(&info->write_sem);
 
 	/* The first 2 of every 64 bytes are status on FTDIRL */
 	while (amount > 2) {
@@ -254,6 +271,7 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 		amount -= cp + 2;
 		ofs += 64;
 	}
+out:
 	return total;
 }
 
@@ -762,10 +780,7 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		if (unlikely(info->reset)) {
-			/* Tell the write thread it can start the reset */
-			cgsem_post(&info->write_sem);
-			cgsem_wait(&info->read_sem);
-
+			avalon_running_reset(avalon, info);
 			/* Discard anything in the buffer */
 			offset = 0;
 		}
@@ -823,15 +838,8 @@ static void *avalon_send_tasks(void *userdata)
 		struct avalon_task at;
 		int idled = 0;
 
-		wait_avalon_ready(avalon);
-
-		if (unlikely(info->reset)) {
-			/* Wait till read thread tells us it's received the
-			 * reset message */
+		while (avalon_buffer_full(avalon))
 			cgsem_wait(&info->write_sem);
-			avalon_running_reset(avalon, info);
-			cgsem_post(&info->read_sem);
-		}
 
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
@@ -898,7 +906,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
-	cgsem_init(&info->read_sem);
 	cgsem_init(&info->write_sem);
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
@@ -925,7 +932,6 @@ static void do_avalon_close(struct thr_info *thr)
 
 	info->no_matching_work = 0;
 
-	cgsem_destroy(&info->read_sem);
 	cgsem_destroy(&info->write_sem);
 }
 

@@ -111,7 +111,6 @@ struct avalon_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
-	cgsem_t read_sem;
 	cgsem_t write_sem;
 	int nonces;
 
