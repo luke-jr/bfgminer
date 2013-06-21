@@ -311,7 +311,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 		if (FT_OK != ftStatus || lComPortNumber < 0)
 			continue;
 		
-		applog(LOG_ERR, "FT_GetComPortNumber(0x%lx (%ld), %ld)", (unsigned long)ftHandle, (long)i, (long)lComPortNumber);
+		applog(LOG_ERR, "FT_GetComPortNumber(%p (%ld), %ld)", ftHandle, (long)i, (long)lComPortNumber);
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
 		if (detectone(devpath))
