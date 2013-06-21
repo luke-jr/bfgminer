@@ -11,7 +11,9 @@
 #define __LOGGING_H__
 
 #include "config.h"
+
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdarg.h>
 
 #ifdef HAVE_SYSLOG_H
