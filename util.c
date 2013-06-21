@@ -1310,10 +1310,18 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	pool->swork.diff = diff;
 	cg_wunlock(&pool->data_lock);
 
-	if (old_diff != diff)
-		applog(LOG_NOTICE, "Pool %d difficulty changed to %f", pool->pool_no, diff);
-	else
-		applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no, diff);
+	if (old_diff != diff) {
+		int idiff = diff;
+
+		if ((double)idiff == diff)
+			applog(LOG_NOTICE, "Pool %d difficulty changed to %d",
+			       pool->pool_no, idiff);
+		else
+			applog(LOG_NOTICE, "Pool %d difficulty changed to %f",
+			       pool->pool_no, diff);
+	} else
+		applog(LOG_DEBUG, "Pool %d difficulty set to %f", pool->pool_no,
+		       diff);
 
 	return true;
 }
