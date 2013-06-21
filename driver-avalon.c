@@ -229,7 +229,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 static void wait_avalon_ready(struct cgpu_info *avalon)
 {
 	while (avalon_buffer_full(avalon)) {
-		nmsleep(AVALON_READ_TIMEOUT);
+		nmsleep(40);
 	}
 }
 
@@ -239,11 +239,6 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 	size_t total = 0, readsize = bufsize + 2;
 	char readbuf[AVALON_READBUF_SIZE];
 	int err, amount, ofs = 2, cp;
-
-	/* If the buffer is ready to take more work, yield once in case the
-	 * write thread is waiting to be scheduled. */
-	if (!avalon_buffer_full(avalon))
-		nmsleep(AVALON_READ_TIMEOUT);
 
 	err = usb_read_once_timeout(avalon, readbuf, readsize, &amount, timeout, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
@@ -493,7 +488,7 @@ static void avalon_initialise(struct cgpu_info *avalon)
 
 	// Set latency
 	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
-				AVALON_READ_TIMEOUT, interface, C_LATENCY);
+			   AVALON_LATENCY, interface, C_LATENCY);
 
 	applog(LOG_DEBUG, "%s%i: latency got err %d",
 		avalon->drv->name, avalon->device_id, err);
@@ -742,18 +737,20 @@ static void *avalon_get_results(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
 	struct avalon_info *info = avalon->device_data;
+	int offset = 0, read_delay = 0, ret = 0;
 	const int rsize = AVALON_FTDI_READSIZE;
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
+	struct timeval tv_start, tv_end;
 	char threadname[24];
-	int offset = 0;
 
 	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
 	RenameThread(threadname);
 
 	while (likely(!avalon->shutdown)) {
 		unsigned char buf[rsize];
-		int ret;
+		struct timeval tv_diff;
+		int us_diff;
 
 		if (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
@@ -773,6 +770,20 @@ static void *avalon_get_results(void *userdata)
 			offset = 0;
 		}
 
+		/* As the usb read returns after just 1ms, sleep long enough
+		 * to leave the interface idle for writes to occur, but do not
+		 * sleep if we have been receiving data as more may be coming. */
+		if (ret < 1) {
+			cgtime(&tv_end);
+			timersub(&tv_end, &tv_start, &tv_diff);
+			/* Assume it has not been > 1 second so ignore tv_sec */
+			us_diff = tv_diff.tv_usec;
+			read_delay = AVALON_READ_TIMEOUT * 1000 - us_diff;
+			if (likely(read_delay >= 1000))
+				nusleep(read_delay);
+		}
+
+		cgtime(&tv_start);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
 				  C_AVALON_READ);
 
