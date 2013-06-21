@@ -666,7 +666,7 @@ static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
 	if (unlikely(info->idle))
 		return;
 
-	applog(LOG_WARNING, "%s%d: No valid work - HW error",
+	applog(LOG_WARNING, "%s%d: No matching work - HW error",
 			thr->cgpu->drv->name, thr->cgpu->device_id);
 
 	inc_hw_errors(thr);
