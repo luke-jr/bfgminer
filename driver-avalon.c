@@ -108,6 +108,15 @@ static int avalon_init_task(struct avalon_task *at,
 	} else if (frequency == 300) {
 		buf[6] = 0x63;
 		buf[7] = 0x09;
+	} else if (frequency == 325) {
+		buf[6] = 0x2b;
+		buf[7] = 0x0a;
+	} else if (frequency == 350) {
+		buf[6] = 0xf3;
+		buf[7] = 0x0a;
+	} else if (frequency == 375) {
+		buf[6] = 0xbb;
+		buf[7] = 0x0b;
 	}
 
 	return 0;
