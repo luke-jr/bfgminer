@@ -166,6 +166,11 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
+#ifdef HAVE_LIBUSB
+bool have_libusb = true;
+#else
+const bool have_libusb;
+#endif
 static bool opt_submit_stale = true;
 static int opt_shares;
 static int opt_submit_threads = 0x40;
@@ -7695,6 +7700,7 @@ static void clean_up(void)
 	clear_adl(nDevs);
 #endif
 #ifdef HAVE_LIBUSB
+	if (likely(have_libusb))
         libusb_exit(NULL);
 #endif
 
@@ -8086,9 +8092,8 @@ int main(int argc, char *argv[])
 #ifdef HAVE_LIBUSB
 	int err = libusb_init(NULL);
 	if (err) {
-		fprintf(stderr, "libusb_init() failed err %d", err);
-		fflush(stderr);
-		quit(1, "libusb_init() failed");
+		applog(LOG_WARNING, "libusb_init() failed err %d", err);
+		have_libusb = false;
 	}
 #endif
 
@@ -8212,7 +8217,8 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef USE_X6500
-	ft232r_scan();
+	if (likely(have_libusb))
+		ft232r_scan();
 #endif
 
 #ifdef HAVE_CURSES
@@ -8323,12 +8329,12 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_X6500
-	if (!opt_scrypt)
+	if (likely(have_libusb) && !opt_scrypt)
 		x6500_api.api_detect();
 #endif
 
 #ifdef USE_ZTEX
-	if (!opt_scrypt)
+	if (likely(have_libusb) && !opt_scrypt)
 		ztex_api.api_detect();
 #endif
 
@@ -8337,7 +8343,8 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_X6500
-	ft232r_scan_free();
+	if (likely(have_libusb))
+		ft232r_scan_free();
 #endif
 
 	for (i = 0; i < total_devices; ++i)
