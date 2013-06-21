@@ -176,6 +176,7 @@ struct cg_usb_device {
 	char *buffer;
 	uint32_t bufsiz;
 	uint32_t bufamt;
+	uint16_t PrefPacketSize;
 };
 
 #define USB_NOSTAT 0
