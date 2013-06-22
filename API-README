@@ -60,7 +60,7 @@ response, otherwise it replies with text formatted as described further below.
 The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
 (though of course parameter is not required for all requests)
 where "CMD" is from the "Request" column below and "PARAM" would be e.g.
-the CPU/GPU number if required.
+the ASC/GPU number if required.
 
 An example request in both formats to set GPU 0 fan to 80%:
   gpufan|0,80
@@ -115,8 +115,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  config        CONFIG         Some miner configuration information:
                               GPU Count=N, <- the number of GPUs
+                              ASC Count=N, <- the number of ASCs
                               PGA Count=N, <- the number of PGAs
-                              CPU Count=N, <- the number of CPUs
                               Pool Count=N, <- the number of Pools
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
@@ -135,7 +135,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
  pools         POOLS          The status of each pool
                               e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
- devs          DEVS           Each available GPU, PGA and CPU with their details
+ devs          DEVS           Each available GPU, PGA and ASC with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
                               Last Share Time=NNN, <- standand long time in seconds
                                (or 0 if none) of last accepted share
@@ -143,7 +143,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               Last Valid Work=NNN, <- standand long time in seconds
                                of last work returned that wasn't an HW:
                               Will not report PGAs if PGA mining is disabled
-                              Will not report CPUs if CPU mining is disabled
+                              Will not report ASCs if ASC mining is disabled
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
@@ -153,18 +153,10 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               This is only available if PGA mining is enabled
                               Use 'pgacount' or 'config' first to see if there are any
 
- cpu|N         CPU            The details of a single CPU number N in the same
-                              format and details as for DEVS
-                              This is only available if CPU mining is enabled
-                              Use 'cpucount' or 'config' first to see if there are any
-
  gpucount      GPUS           Count=N| <- the number of GPUs
 
  pgacount      PGAS           Count=N| <- the number of PGAs
                               Always returns 0 if PGA mining is disabled
-
- cpucount      CPUS           Count=N| <- the number of CPUs
-                              Always returns 0 if CPU mining is disabled
 
  switchpool|N (*)
                none           There is no reply section just the STATUS section
@@ -370,8 +362,39 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               If N>0 && <=9999, then hotplug will check for new
                               devices every N seconds
 
-When you enable, disable or restart a GPU or PGA, you will also get Thread messages
-in the cgminer status window
+ asc|N         ASC            The details of a single ASC number N in the same
+                              format and details as for DEVS
+                              This is only available if ASC mining is enabled
+                              Use 'asccount' or 'config' first to see if there
+                              are any
+
+ ascenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+                              You cannot enable a ASC if it's status is not WELL
+                              This is only available if ASC mining is enabled
+
+ ascdisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+                              This is only available if ASC mining is enabled
+
+ ascidentify|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the identify request
+                              This is only available if ASC mining is enabled
+                              and currently only BFL ASICs support this command
+                              On a BFL single it will flash the led on the front
+                              of the device for appoximately 4s
+                              All other non BFL ASIC devices will return a
+                              warning status message stating that they dont
+                              support it
+
+ asccount      ASCS           Count=N| <- the number of ASCs
+                              Always returns 0 if ASC mining is disabled
+
+When you enable, disable or restart a GPU, PGA or ASC, you will also get
+Thread messages in the cgminer status window
 
 The 'poolpriority' command can be used to reset the priority order of multiple
 pools with a single command - 'switchpool' only sets a single pool to first priority
@@ -422,6 +445,21 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.26 (cgminer v3.2.3)
+
+Remove all CPU support (cgminer v3.0.0)
+
+Added API commands:
+ 'asc'
+ 'ascenable'
+ 'ascdisable'
+ 'ascidentify|N' (only works for BFL ASICs so far)
+ 'asccount'
+
+Various additions to the debug 'stats' command
+
+----------
 
 API V1.25
 
