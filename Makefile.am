@@ -60,7 +60,7 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 	deviceapi.c deviceapi.h \
 		   util.c util.h logging.h		\
 		   sha2.c sha2.h api.c
-bfgminer_DEPENDENCIES =
+EXTRA_bfgminer_DEPENDENCIES =
 
 bitstreamsdir = $(pkgdatadir)/bitstreams
 dist_bitstreams_DATA =
@@ -69,7 +69,7 @@ if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 
 if HAVE_CYGWIN
-bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
+EXTRA_bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
 
 cyg%.dll: libblkmaker/.libs/cyg%.dll
 	cp -p $< $@
