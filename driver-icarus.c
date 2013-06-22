@@ -55,6 +55,10 @@
 // The size of a successful nonce read
 #define ICARUS_READ_SIZE 4
 
+#define AMU_PREF_PACKET 256
+#define BLT_PREF_PACKET 512
+#define ICA_PREF_PACKET 256
+
 // Ensure the sizes are correct for the Serial read
 #if (ICARUS_READ_SIZE != 4)
 #error ICARUS_READ_SIZE must be 4
@@ -330,18 +334,15 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_PURGE_RX,
 				 icarus->usbdev->found->interface, C_PURGERX);
 
+			icarus->usbdev->PrefPacketSize = BLT_PREF_PACKET;
 			break;
 		case IDENT_ICA:
-			nmsleep(20);
-
 			// Set Data Control
 			transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
 				 icarus->usbdev->found->interface, C_SETDATA);
 
 			if (icarus->usbinfo.nodev)
 				return;
-
-			nmsleep(20);
 
 			// Set Line Control
 			uint32_t ica_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
@@ -352,18 +353,13 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
-			nmsleep(20);
-
 			// Vendor
 			transfer(icarus, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
 				 icarus->usbdev->found->interface, C_VENDOR);
 
-			nmsleep(20);
-
+			icarus->usbdev->PrefPacketSize = ICA_PREF_PACKET;
 			break;
 		case IDENT_AMU:
-			nmsleep(20);
-
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
@@ -372,8 +368,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
-			nmsleep(20);
-
 			// Set data control
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_DATA, CP210X_VALUE_DATA,
 				 icarus->usbdev->found->interface, C_SETDATA);
@@ -381,16 +375,13 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			if (icarus->usbinfo.nodev)
 				return;
 
-			nmsleep(20);
-
 			// Set the baud
 			uint32_t data = CP210X_DATA_BAUD;
 			_transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
 				 icarus->usbdev->found->interface,
 				 &data, sizeof(data), C_SETBAUD);
 
-			nmsleep(20);
-
+			icarus->usbdev->PrefPacketSize = AMU_PREF_PACKET;
 			break;
 		default:
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",

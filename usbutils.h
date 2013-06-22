@@ -167,7 +167,7 @@ struct cg_usb_device {
 	enum usb_types usb_type;
 	enum sub_ident ident;
 	uint16_t usbver;
-	int speed;
+	int cps;
 	char *prod_string;
 	char *manuf_string;
 	char *serial_string;
