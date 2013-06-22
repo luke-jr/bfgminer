@@ -1,3 +1,11 @@
+bfgminer (3.1.1-0precise1) precise; urgency=low
+
+  * bitforce: Support for Little Single boards, and Jalapenos with 1.2 firmware.
+  * avalon: Support new overclocking speeds (325, 350 and 375).
+  * Fixed a bunch of bugs, including GPU mining and at least one stratum-related crash.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 22 Jun 2013 17:41:21 -0000
+
 bfgminer (3.1.0-1precise1) precise; urgency=low
 
   * Properly added in new submodules to Debian packaging.
