@@ -134,7 +134,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.25";
+static const char *APIVERSION = "1.26";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
@@ -219,8 +219,13 @@ static const char *OSINFO =
 #define _PGA		"PGA"
 #endif
 
+#ifdef HAVE_AN_ASIC
+#define _ASC		"ASC"
+#endif
+
 #define _GPUS		"GPUS"
 #define _PGAS		"PGAS"
+#define _ASCS		"ASCS"
 #define _NOTIFY		"NOTIFY"
 #define _DEVDETAILS	"DEVDETAILS"
 #define _BYE		"BYE"
@@ -255,8 +260,13 @@ static const char ISJSON = '{';
 #define JSON_PGA	JSON1 _PGA JSON2
 #endif
 
+#ifdef HAVE_AN_ASIC
+#define JSON_ASC	JSON1 _ASC JSON2
+#endif
+
 #define JSON_GPUS	JSON1 _GPUS JSON2
 #define JSON_PGAS	JSON1 _PGAS JSON2
+#define JSON_ASCS	JSON1 _ASCS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
 #define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_BYE	JSON1 _BYE JSON1
@@ -381,12 +391,27 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERINV 95
 #define MSG_ZERSUM 96
 #define MSG_ZERNOSUM 97
-#define MSG_USBNODEV 98
+#define MSG_PGAUSBNODEV 98
 #define MSG_INVHPLG 99
 #define MSG_HOTPLUG 100
 #define MSG_DISHPLG 101
 #define MSG_NOHPLG 102
 #define MSG_MISHPLG 103
+
+#define MSG_NUMASC 104
+#ifdef HAVE_AN_ASIC
+#define MSG_ASCNON 105
+#define MSG_ASCDEV 106
+#define MSG_INVASC 107
+#define MSG_ASCLRENA 108
+#define MSG_ASCLRDIS 109
+#define MSG_ASCENA 110
+#define MSG_ASCDIS 111
+#define MSG_ASCUNW 112
+#define MSG_ASCIDENT 113
+#define MSG_ASCNOID 114
+#define MSG_ASCUSBNODEV 115
+#endif
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -399,9 +424,11 @@ enum code_severity {
 enum code_parameters {
 	PARAM_GPU,
 	PARAM_PGA,
+	PARAM_ASC,
 	PARAM_PID,
 	PARAM_GPUMAX,
 	PARAM_PGAMAX,
+	PARAM_ASCMAX,
 	PARAM_PMAX,
 	PARAM_POOLMAX,
 
@@ -487,6 +514,7 @@ struct CODES {
 #endif
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMPGA,	PARAM_NONE,	"PGA count" },
+ { SEVERITY_SUCC,  MSG_NUMASC,	PARAM_NONE,	"ASC count" },
  { SEVERITY_SUCC,  MSG_VERSION,	PARAM_NONE,	"CGMiner versions" },
  { SEVERITY_ERR,   MSG_INVJSON,	PARAM_NONE,	"Invalid JSON" },
  { SEVERITY_ERR,   MSG_MISCMD,	PARAM_CMD,	"Missing JSON '%s'" },
@@ -561,13 +589,26 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
 #ifdef USE_USBUTILS
- { SEVERITY_ERR,   MSG_USBNODEV, PARAM_PGA,	"PGA%d has no device" },
+ { SEVERITY_ERR,   MSG_PGAUSBNODEV, PARAM_PGA,	"PGA%d has no device" },
+ { SEVERITY_ERR,   MSG_ASCUSBNODEV, PARAM_PGA,	"ASC%d has no device" },
 #endif
  { SEVERITY_ERR,   MSG_INVHPLG,	PARAM_STR,	"Invalid value for hotplug (%s) must be 0..9999" },
  { SEVERITY_SUCC,  MSG_HOTPLUG,	PARAM_INT,	"Hotplug check set to %ds" },
  { SEVERITY_SUCC,  MSG_DISHPLG,	PARAM_NONE,	"Hotplug disabled" },
  { SEVERITY_WARN,  MSG_NOHPLG,	PARAM_NONE,	"Hotplug is not available" },
  { SEVERITY_ERR,   MSG_MISHPLG,	PARAM_NONE,	"Missing hotplug parameter" },
+#ifdef HAVE_AN_ASIC
+ { SEVERITY_ERR,   MSG_ASCNON,	PARAM_NONE,	"No ASCs" },
+ { SEVERITY_SUCC,  MSG_ASCDEV,	PARAM_ASC,	"ASC%d" },
+ { SEVERITY_ERR,   MSG_INVASC,	PARAM_ASCMAX,	"Invalid ASC id %d - range is 0 - %d" },
+ { SEVERITY_INFO,  MSG_ASCLRENA,PARAM_ASC,	"ASC %d already enabled" },
+ { SEVERITY_INFO,  MSG_ASCLRDIS,PARAM_ASC,	"ASC %d already disabled" },
+ { SEVERITY_INFO,  MSG_ASCENA,	PARAM_ASC,	"ASC %d sent enable message" },
+ { SEVERITY_INFO,  MSG_ASCDIS,	PARAM_ASC,	"ASC %d set disable flag" },
+ { SEVERITY_ERR,   MSG_ASCUNW,	PARAM_ASC,	"ASC %d is not flagged WELL, cannot enable" },
+ { SEVERITY_SUCC,  MSG_ASCIDENT,PARAM_ASC,	"Identify command sent to ASC%d" },
+ { SEVERITY_WARN,  MSG_ASCNOID,	PARAM_ASC,	"ASC%d does not support identify" },
+#endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1296,6 +1337,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			switch(codes[i].params) {
 				case PARAM_GPU:
 				case PARAM_PGA:
+				case PARAM_ASC:
 				case PARAM_PID:
 				case PARAM_INT:
 					sprintf(buf, codes[i].description, paramid);
@@ -1312,6 +1354,12 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 				case PARAM_PGAMAX:
 					pga = numpgas();
 					sprintf(buf, codes[i].description, paramid, pga - 1);
+					break;
+#endif
+#ifdef HAVE_AN_ASIC
+				case PARAM_ASCMAX:
+					asc = numascs();
+					sprintf(buf, codes[i].description, paramid, asc - 1);
 					break;
 #endif
 				case PARAM_PMAX:
@@ -1901,7 +1949,7 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 #ifdef USE_USBUTILS
 	if (cgpu->usbinfo.nodev) {
-		message(io_data, MSG_USBNODEV, id, NULL, isjson);
+		message(io_data, MSG_PGAUSBNODEV, id, NULL, isjson);
 		return;
 	}
 #endif
@@ -3386,6 +3434,214 @@ static void dohotplug(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 #endif
 }
 
+#ifdef HAVE_AN_ASIC
+static void ascdev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	bool io_open = false;
+	int numasc = numascs();
+	int id;
+
+	if (numasc == 0) {
+		message(io_data, MSG_ASCNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numasc) {
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	message(io_data, MSG_ASCDEV, id, NULL, isjson);
+
+	if (isjson)
+		io_open = io_add(io_data, COMSTR JSON_ASC);
+
+	ascstatus(io_data, id, isjson, false);
+
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
+static void ascenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	int numasc = numascs();
+	struct thr_info *thr;
+	int asc;
+	int id;
+	int i;
+
+	if (numasc == 0) {
+		message(io_data, MSG_ASCNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numasc) {
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	int dev = ascdevice(id);
+	if (dev < 0) { // Should never happen
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	cgpu = get_devices(dev);
+
+	applog(LOG_DEBUG, "API: request to ascenable ascid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
+
+	if (cgpu->deven != DEV_DISABLED) {
+		message(io_data, MSG_ASCLRENA, id, NULL, isjson);
+		return;
+	}
+
+#if 0 /* A DISABLED device wont change status FIXME: should disabling make it WELL? */
+	if (cgpu->status != LIFE_WELL) {
+		message(io_data, MSG_ASCUNW, id, NULL, isjson);
+		return;
+	}
+#endif
+
+#ifdef USE_USBUTILS
+	if (cgpu->usbinfo.nodev) {
+		message(io_data, MSG_ASCUSBNODEV, id, NULL, isjson);
+		return;
+	}
+#endif
+
+	for (i = 0; i < mining_threads; i++) {
+		thr = get_thread(i);
+		asc = thr->cgpu->cgminer_id;
+		if (asc == dev) {
+			cgpu->deven = DEV_ENABLED;
+			applog(LOG_DEBUG, "API: Pushing sem post to thread %d", thr->id);
+			cgsem_post(&thr->sem);
+		}
+	}
+
+	message(io_data, MSG_ASCENA, id, NULL, isjson);
+}
+
+static void ascdisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	int numasc = numascs();
+	int id;
+
+	if (numasc == 0) {
+		message(io_data, MSG_ASCNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numasc) {
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	int dev = ascdevice(id);
+	if (dev < 0) { // Should never happen
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	cgpu = get_devices(dev);
+
+	applog(LOG_DEBUG, "API: request to ascdisable ascid %d device %d %s%u",
+			id, dev, cgpu->drv->name, cgpu->device_id);
+
+	if (cgpu->deven == DEV_DISABLED) {
+		message(io_data, MSG_ASCLRDIS, id, NULL, isjson);
+		return;
+	}
+
+	cgpu->deven = DEV_DISABLED;
+
+	message(io_data, MSG_ASCDIS, id, NULL, isjson);
+}
+
+static void ascidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
+	int numasc = numascs();
+	int id;
+
+	if (numasc == 0) {
+		message(io_data, MSG_ASCNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= numasc) {
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	int dev = ascdevice(id);
+	if (dev < 0) { // Should never happen
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	cgpu = get_devices(dev);
+	drv = cgpu->drv;
+
+	if (!drv->identify_device)
+		message(io_data, MSG_ASCNOID, id, NULL, isjson);
+	else {
+		drv->identify_device(cgpu);
+		message(io_data, MSG_ASCIDENT, id, NULL, isjson);
+	}
+}
+#endif
+
+static void asccount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+	bool io_open;
+	int count = 0;
+
+#ifdef HAVE_AN_ASIC
+	count = numascs();
+#endif
+
+	message(io_data, MSG_NUMASC, 0, NULL, isjson);
+	io_open = io_add(io_data, isjson ? COMSTR JSON_ASCS : _ASCS COMSTR);
+
+	root = api_add_int(root, "Count", &count, false);
+
+	root = print_data(root, buf, isjson, false);
+	io_add(io_data, buf);
+	if (isjson && io_open)
+		io_close(io_data);
+}
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3443,6 +3699,13 @@ struct CMDS {
 #endif
 	{ "zero",		dozero,		true },
 	{ "hotplug",		dohotplug,	true },
+#ifdef HAVE_AN_ASIC
+	{ "asc",		ascdev,		false },
+	{ "ascenable",		ascenable,	true },
+	{ "ascdisable",		ascdisable,	true },
+	{ "ascidentify",	ascidentify,	true },
+#endif
+	{ "asccount",		asccount,	false },
 	{ NULL,			NULL,		false }
 };
 
