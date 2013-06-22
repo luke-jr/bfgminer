@@ -1140,6 +1140,7 @@ char *recv_line(struct pool *pool)
 	if (!strstr(pool->sockbuf, "\n")) {
 		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
+		int socket_recv_errno;
 
 		gettimeofday(&rstart, NULL);
 		if (!socket_full(pool, true)) {
@@ -1160,6 +1161,7 @@ char *recv_line(struct pool *pool)
 				break;
 			}
 			if (n < 0) {
+				socket_recv_errno = errno;
 				if (!sock_blocks()) {
 					ret = RECV_RECVFAIL;
 					break;
@@ -1181,7 +1183,7 @@ char *recv_line(struct pool *pool)
 				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
 				goto out;
 			case RECV_RECVFAIL:
-				applog(LOG_DEBUG, "Failed to recv sock in recv_line");
+				applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", socket_recv_errno);
 				goto out;
 		}
 	}
