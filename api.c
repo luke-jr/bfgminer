@@ -410,8 +410,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ASCUNW 112
 #define MSG_ASCIDENT 113
 #define MSG_ASCNOID 114
-#define MSG_ASCUSBNODEV 115
 #endif
+#define MSG_ASCUSBNODEV 115
 
 enum code_severity {
 	SEVERITY_ERR,
