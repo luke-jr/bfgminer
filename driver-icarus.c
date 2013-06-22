@@ -749,6 +749,8 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	if (!usb_init(icarus, dev, found))
 		goto shin;
 
+	usb_buffer_enable(icarus);
+
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
@@ -820,8 +822,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
-
-	usb_buffer_enable(icarus);
 
 	return true;
 
