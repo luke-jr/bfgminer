@@ -1,3 +1,25 @@
+BFGMiner Version 2.10.10 - June 22, 2013
+
+- stratum: Deliver exact socket-error within the debug error message
+- Bugfix: Handle make dependencies on subdirectory files properly
+- Bugfix: Use EXTRA_*_DEPENDENCIES for Cygwin workaround, to fix program make
+dependencies
+- ignore file that is generated on Macs
+- compile unix code on Mac OS X fixes not finding the config file in $HOME
+- Bugfix: serial_autodetect_ftdi: Debuglog FTDI COM port mappings returned, fix
+type of FT_HANDLE
+- Bugfix: Allow starting non-libusb devices if libusb_init fails
+- Bugfix: Add missing newline to libusb_init failure message
+- Bugfix: Save start time for stats to correct "Elapsed" key on "stats" RPC
+request
+- serial_autodetect_ftdi: Debuglog FTDI COM port mappings returned
+- Bugfix: On stratum disconnect, clear stratum_active and stratum_notify
+atomically along with sock
+- Windows: Use backtrace.dll to print usable backtraces to stderr on crash
+- Bugfix: Do not try to call get_stats or get_statline* if device is still
+initializing
+
+
 BFGMiner Version 2.10.9 - June 13, 2013
 
 - make-release: Include all submodules, recursively

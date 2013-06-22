@@ -1,3 +1,10 @@
+bfgminer (2.10.10-0precise1) precise; urgency=low
+
+  * Fixed a bunch of bugs, including at least one stratum-related crash.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 22 Jun 2013 18:13:32 -0000
+
+
 bfgminer (2.10.9-0precise1) precise; urgency=low
 
   * Bugfixes only.
