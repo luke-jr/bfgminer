@@ -17,6 +17,14 @@ EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
 
 SUBDIRS		= lib ccan
 
+# Without a redirected rule, code depending on different lib/*.h files may try to build dependencies of that in parallel, which can fail
+lib/%: lib_directory
+	@test -e $@
+lib_directory:
+	$(MAKE) -C lib
+ccan/libccan.a:
+	$(MAKE) -C ccan $*
+
 INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
@@ -46,6 +54,9 @@ SUBDIRS           += libblkmaker
 bfgminer_CPPFLAGS += -Ilibblkmaker
 bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs
 bfgminer_LDADD    += -lblkmaker_jansson-0.1 -lblkmaker-0.1
+EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
+libblkmaker_directory:
+	cd libblkmaker && $(MAKE)
 
 if HAVE_CYGWIN
 EXTRA_bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
@@ -86,9 +97,13 @@ if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
 if HAVE_x86_64
 SUBDIRS		+= x86_64
+x86_64/libx8664.a:
+	$(MAKE) -C x86_64 $*
 bfgminer_LDADD	+= x86_64/libx8664.a
 else # HAVE_x86_64
 SUBDIRS		+= x86_32
+x86_32/libx8632.a:
+	$(MAKE) -C x86_32 $*
 bfgminer_LDADD	+= x86_32/libx8632.a
 endif # HAVE_x86_64
 endif # HAS_YASM
