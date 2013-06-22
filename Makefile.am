@@ -18,11 +18,7 @@ EXTRA_DIST	= \
 dist_doc_DATA = \
 		  AUTHORS COPYING HACKING NEWS README \
 		  example.conf \
-		  README.ASIC \
-		  README.FPGA \
-		  README.GPU \
-		  README.RPC \
-		  README.scrypt
+		  README.RPC
 
 rpcexamplesdir = $(docdir)/rpc-examples
 dist_rpcexamples_DATA = \
@@ -105,6 +101,8 @@ bfgminer_SOURCES += *.cl
 kernelsdir = $(pkgdatadir)/opencl
 dist_kernels_DATA = $(top_srcdir)/*.cl
 
+dist_doc_DATA += README.GPU
+
 if HAVE_SENSORS
 bfgminer_LDADD += $(sensors_LIBS)
 endif
@@ -114,6 +112,7 @@ endif
 
 if HAS_SCRYPT
 bfgminer_SOURCES += scrypt.c scrypt.h
+dist_doc_DATA += README.scrypt
 endif
 
 if HAS_CPUMINE
@@ -163,6 +162,10 @@ if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif
 
+if HAS_FPGA
+dist_doc_DATA += README.FPGA
+endif
+
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 
@@ -180,6 +183,7 @@ endif
 
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
+dist_doc_DATA += README.ASIC
 endif
 
 if HAS_MODMINER
