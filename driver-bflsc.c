@@ -836,7 +836,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strcmp(firstname, BFLSC_DI_XLINKPRESENT) == 0)
 			sc_dev.xlink_present = strdup(fields[0]);
 		else if (strcmp(firstname, BFLSC_DI_DEVICESINCHAIN) == 0) {
-			sc_info->sc_count = atoi(fields[0]) + 1;
+			sc_info->sc_count = atoi(fields[0]);
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
 				applog(LOG_WARNING, "%s detect (%s) invalid s-link count: '%s'",
