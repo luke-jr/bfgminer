@@ -210,7 +210,7 @@ struct SaveString {
 	uint8_t payloadData[BFLSC_MAXPAYLOAD];
 };
 
-// Commands
+// Commands (Single Stage)
 #define BFLSC_IDENTIFY "ZGX"
 #define BFLSC_IDENTIFY_LEN (sizeof(BFLSC_IDENTIFY)-1)
 #define BFLSC_DETAILS "ZCX"
@@ -223,10 +223,6 @@ struct SaveString {
 #define BFLSC_VOLTAGE_LEN (sizeof(BFLSC_VOLTAGE)-1)
 #define BFLSC_TEMPERATURE "ZLX"
 #define BFLSC_TEMPERATURE_LEN (sizeof(BFLSC_TEMPERATURE)-1)
-#define BFLSC_QJOB "ZNX"
-#define BFLSC_QJOB_LEN (sizeof(BFLSC_QJOB)-1)
-#define BFLSC_QJOBS "ZWX"
-#define BFLSC_QJOBS_LEN (sizeof(BFLSC_QJOBS)-1)
 #define BFLSC_QRES "ZOX"
 #define BFLSC_QRES_LEN (sizeof(BFLSC_QRES)-1)
 #define BFLSC_QFLUSH "ZQX"
@@ -243,10 +239,16 @@ struct SaveString {
 #define BFLSC_FAN3_LEN (sizeof(BFLSC_FAN3)-1)
 #define BFLSC_FAN4 "Z4X"
 #define BFLSC_FAN4_LEN (sizeof(BFLSC_FAN4)-1)
-#define BFLSC_SAVESTR "ZSX"
-#define BFLSC_SAVESTR_LEN (sizeof(BFLSC_SAVESTR)-1)
 #define BFLSC_LOADSTR "ZUX"
 #define BFLSC_LOADSTR_LEN (sizeof(BFLSC_LOADSTR)-1)
+
+// Commands (Dual Stage)
+#define BFLSC_QJOB "ZNX"
+#define BFLSC_QJOB_LEN (sizeof(BFLSC_QJOB)-1)
+#define BFLSC_QJOBS "ZWX"
+#define BFLSC_QJOBS_LEN (sizeof(BFLSC_QJOBS)-1)
+#define BFLSC_SAVESTR "ZSX"
+#define BFLSC_SAVESTR_LEN (sizeof(BFLSC_SAVESTR)-1)
 
 // Replies
 #define BFLSC_IDENTITY "BitFORCE SC"
@@ -264,6 +266,9 @@ struct SaveString {
 #define BFLSC_ANERR_LEN (sizeof(BFLSC_ANERR)-1)
 #define BFLSC_TIMEOUT BFLSC_ANERR "TIMEOUT"
 #define BFLSC_TIMEOUT_LEN (sizeof(BFLSC_TIMEOUT)-1)
+// x-link timeout has a space (a number follows)
+#define BFLSC_XTIMEOUT BFLSC_ANERR "TIMEOUT "
+#define BFLSC_XTIMEOUT_LEN (sizeof(BFLSC_XTIMEOUT)-1)
 #define BFLSC_INVALID BFLSC_ANERR "INVALID DATA"
 #define BFLSC_INVALID_LEN (sizeof(BFLSC_INVALID)-1)
 #define BFLSC_ERRSIG BFLSC_ANERR "SIGNATURE"
@@ -284,11 +289,9 @@ struct SaveString {
 #define FullNonceRangeJob QueueJobStructure
 #define BFLSC_JOBSIZ BFLSC_QJOBSIZ
 
-// Non queued commands
+// Non queued commands (not used)
 #define BFLSC_SENDWORK "ZDX"
 #define BFLSC_SENDWORK_LEN (sizeof(BFLSC_SENDWORK)-1)
-
-// Non queued commands (not used)
 #define BFLSC_WORKSTATUS "ZFX"
 #define BFLSC_WORKSTATUS_LEN (sizeof(BFLSC_WORKSTATUS)-1)
 #define BFLSC_SENDRANGE "ZPX"
@@ -541,6 +544,174 @@ static void freebreakdown(int *count, char **firstname, char ***fields)
 	*fields = NULL;
 }
 
+static bool isokerr(int err, char *buf, int amount)
+{
+	if (err < 0 || amount < (int)BFLSC_OK_LEN)
+		return false;
+	else {
+		if (strncmp(buf, BFLSC_ANERR, BFLSC_ANERR_LEN) == 0)
+			return false;
+		else
+			return true;
+	}
+}
+
+// send+receive dual stage - always single line replies
+static int send_recv_ds(struct cgpu_info *bflsc, int dev, int *stage, bool *sent, int *amount, char *send1, int send1_len, enum usb_cmds send1_cmd,  enum usb_cmds recv1_cmd, char *send2, int send2_len, enum usb_cmds send2_cmd, enum usb_cmds recv2_cmd, char *recv, int recv_siz)
+{
+	struct DataForwardToChain data;
+	int len, err, tried;
+
+	if (dev == 0) {
+		usb_buffer_clear(bflsc);
+
+		*stage = 1;
+		*sent = false;
+		err = usb_write(bflsc, send1, send1_len, amount, send1_cmd);
+		if (err < 0 || *amount < send1_len)
+			return err;
+
+		*sent = true;
+		err = usb_read_nl(bflsc, recv, recv_siz, amount, recv1_cmd);
+		if (!isokerr(err, recv, *amount))
+			return err;
+
+		usb_buffer_clear(bflsc);
+
+		*stage = 2;
+		*sent = false;
+		err = usb_write(bflsc, send2, send2_len, amount, send2_cmd);
+		if (err < 0 || *amount < send2_len)
+			return err;
+
+		*sent = true;
+		err = usb_read_nl(bflsc, recv, recv_siz, amount, recv2_cmd);
+
+		return err;
+	}
+
+	data.header = BFLSC_XLINKHDR;
+	data.deviceAddress = (uint8_t)dev;
+	tried = 0;
+	while (tried++ < 3) {
+		data.payloadSize = send1_len;
+		memcpy(data.payloadData, send1, send1_len);
+		len = DATAFORWARDSIZE(data);
+
+		usb_buffer_clear(bflsc);
+
+		*stage = 1;
+		*sent = false;
+		err = usb_write(bflsc, (char *)&data, len, amount, send1_cmd);
+		if (err < 0 || *amount < send1_len)
+			return err;
+
+		*sent = true;
+		err = usb_read_nl(bflsc, recv, recv_siz, amount, recv1_cmd);
+
+		if (err != LIBUSB_SUCCESS)
+			return err;
+
+		// x-link timeout? - try again?
+		if (strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+			continue;
+
+		if (!isokerr(err, recv, *amount))
+			return err;
+
+		data.payloadSize = send2_len;
+		memcpy(data.payloadData, send2, send2_len);
+		len = DATAFORWARDSIZE(data);
+
+		usb_buffer_clear(bflsc);
+
+		*stage = 2;
+		*sent = false;
+		err = usb_write(bflsc, (char *)&data, len, amount, send2_cmd);
+		if (err < 0 || *amount < send2_len)
+			return err;
+
+		*sent = true;
+		err = usb_read_nl(bflsc, recv, recv_siz, amount, recv2_cmd);
+
+		if (err != LIBUSB_SUCCESS)
+			return err;
+
+		// x-link timeout? - try again?
+		if (strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+			continue;
+
+		// SUCCESS - return it
+		break;
+	}
+	return err;
+}
+
+#define READ_OK true
+#define READ_NL false
+
+// send+receive single stage
+static int send_recv_ss(struct cgpu_info *bflsc, int dev, bool *sent, int *amount, char *send, int send_len, enum usb_cmds send_cmd, char *recv, int recv_siz, enum usb_cmds recv_cmd, bool read_ok)
+{
+	struct DataForwardToChain data;
+	int len, err, tried;
+
+	if (dev == 0) {
+		usb_buffer_clear(bflsc);
+
+		*sent = false;
+		err = usb_write(bflsc, send, send_len, amount, send_cmd);
+		if (err < 0 || *amount < send_len) {
+			// N.B. thus !(*sent) directly implies err < 0 or *amount < send_len
+			return err;
+		}
+
+		*sent = true;
+		if (read_ok == READ_OK)
+			err = usb_read_ok(bflsc, recv, recv_siz, amount, recv_cmd);
+		else
+			err = usb_read_nl(bflsc, recv, recv_siz, amount, recv_cmd);
+
+		return err;
+	}
+
+	data.header = BFLSC_XLINKHDR;
+	data.deviceAddress = (uint8_t)dev;
+	data.payloadSize = send_len;
+	memcpy(data.payloadData, send, send_len);
+	len = DATAFORWARDSIZE(data);
+
+	tried = 0;
+	while (tried++ < 3) {
+		usb_buffer_clear(bflsc);
+
+		*sent = false;
+		err = usb_write(bflsc, (char *)&data, len, amount, recv_cmd);
+		if (err < 0 || *amount < send_len)
+			return err;
+
+		*sent = true;
+		if (read_ok == READ_OK)
+			err = usb_read_ok(bflsc, recv, recv_siz, amount, recv_cmd);
+		else
+			err = usb_read_nl(bflsc, recv, recv_siz, amount, recv_cmd);
+
+		if (err != LIBUSB_SUCCESS && err != LIBUSB_ERROR_TIMEOUT)
+			return err;
+
+		// read_ok can err timeout if it's looking for OK<LF>
+		// TODO: add a usb_read() option to spot the ERR: and convert end=OK<LF> to just <LF>
+		// x-link timeout? - try again?
+		if ((err == LIBUSB_SUCCESS || (read_ok == READ_OK && err == LIBUSB_ERROR_TIMEOUT)) &&
+			strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+				continue;
+
+		// SUCCESS or TIMEOUT - return it
+		break;
+	}
+	return err;
+}
+
 static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen, int *amount, enum usb_cmds cmd)
 {
 	struct DataForwardToChain data;
@@ -561,53 +732,29 @@ static int write_to_dev(struct cgpu_info *bflsc, int dev, char *buf, int buflen,
 	memcpy(data.payloadData, buf, buflen);
 	len = DATAFORWARDSIZE(data);
 
-	// TODO: handle xlink timeout message - here or at call?
 	return usb_write(bflsc, (char *)&data, len, amount, cmd);
-}
-
-static bool getok(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount)
-{
-	char buf[BFLSC_BUFSIZ+1];
-
-	*err = usb_read_nl(bflsc, buf, sizeof(buf)-1, amount, cmd);
-	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
-		return false;
-	else
-		return true;
-}
-
-static bool getokerr(struct cgpu_info *bflsc, enum usb_cmds cmd, int *err, int *amount, char *buf, size_t bufsiz)
-{
-	*err = usb_read_nl(bflsc, buf, bufsiz-1, amount, cmd);
-	if (*err < 0 || *amount < (int)BFLSC_OK_LEN)
-		return false;
-	else {
-		if (*amount > (int)BFLSC_ANERR_LEN && strncmp(buf, BFLSC_ANERR, BFLSC_ANERR_LEN) == 0)
-			return false;
-		else
-			return true;
-	}
 }
 
 static void bflsc_send_flush_work(struct cgpu_info *bflsc, int dev)
 {
+	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
+	bool sent;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
 		return;
 
 	mutex_lock(&bflsc->device_mutex);
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				BFLSC_QFLUSH, BFLSC_QFLUSH_LEN, C_QUEFLUSH,
+				buf, sizeof(buf)-1, C_QUEFLUSHREPLY, READ_NL);
+	mutex_unlock(&bflsc->device_mutex);
 
-	err = write_to_dev(bflsc, dev, BFLSC_QFLUSH, BFLSC_QFLUSH_LEN, &amount, C_QUEFLUSH);
-	if (err < 0 || amount != BFLSC_QFLUSH_LEN) {
-		mutex_unlock(&bflsc->device_mutex);
+	if (!sent)
 		bflsc_applog(bflsc, dev, C_QUEFLUSH, amount, err);
-	} else {
+	else {
 		// TODO: do we care if we don't get 'OK'? (always will in normal processing)
-		err = getok(bflsc, C_QUEFLUSHREPLY, &err, &amount);
-		mutex_unlock(&bflsc->device_mutex);
-		// TODO: report an error if not 'OK' ?
 	}
 }
 
@@ -618,10 +765,12 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 	bool readok = false;
 
 	mutex_lock(&(bflsc->device_mutex));
+	*err = send_recv_ss(bflsc, dev, &readok, amount,
+				BFLSC_QRES, BFLSC_QRES_LEN, C_REQUESTRESULTS,
+				buf, bufsiz-1, C_GETRESULTS, READ_OK);
+	mutex_unlock(&(bflsc->device_mutex));
 
-	*err = write_to_dev(bflsc, dev, BFLSC_QRES, BFLSC_QRES_LEN, amount, C_REQUESTRESULTS);
-	if (*err < 0 || *amount != BFLSC_QRES_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
+	if (!readok) {
 		if (!ignore)
 			bflsc_applog(bflsc, dev, C_REQUESTRESULTS, *amount, *err);
 
@@ -631,10 +780,6 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 		// has failed after some limit of this?
 		// of course all other I/O must also be failing ...
 	} else {
-		readok = true;
-		*err = usb_read_ok(bflsc, buf, bufsiz-1, amount, C_GETRESULTS);
-		mutex_unlock(&(bflsc->device_mutex));
-
 		if (*err < 0 || *amount < 1) {
 			if (!ignore)
 				bflsc_applog(bflsc, dev, C_GETRESULTS, *amount, *err);
@@ -774,7 +919,10 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 	 * OK<LF>
 	 */
 
-	// TODO: if dev is ever > 0 must handle xlink timeout message
+	/*
+	 * Don't use send_recv_ss() since we have a different receive timeout
+	 * Also getinfo() is called multiple times if it fails anyway
+	 */
 	err = write_to_dev(bflsc, dev, BFLSC_DETAILS, BFLSC_DETAILS_LEN, &amount, C_REQUESTDETAILS);
 	if (err < 0 || amount != BFLSC_DETAILS_LEN) {
 		applog(LOG_ERR, "%s detect (%s) send details request failed (%d:%d)",
@@ -836,7 +984,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strcmp(firstname, BFLSC_DI_XLINKPRESENT) == 0)
 			sc_dev.xlink_present = strdup(fields[0]);
 		else if (strcmp(firstname, BFLSC_DI_DEVICESINCHAIN) == 0) {
-			sc_info->sc_count = atoi(fields[0]);
+			sc_info->sc_count = atoi(fields[0]) + 1;
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
 				applog(LOG_WARNING, "%s detect (%s) invalid s-link count: '%s'",
@@ -880,7 +1028,7 @@ static bool bflsc_detect_one(struct libusb_device *dev, struct usb_find_devices 
 	int i, err, amount;
 	struct timeval init_start, init_now;
 	int init_sleep, init_count;
-	bool ident_first;
+	bool ident_first, sent;
 	char *newname;
 	uint16_t latency;
 
@@ -903,14 +1051,17 @@ retry:
 	cgtime(&init_start);
 reinit:
 	__bflsc_initialise(bflsc);
-	err = write_to_dev(bflsc, 0, BFLSC_IDENTIFY, BFLSC_IDENTIFY_LEN, &amount, C_REQUESTIDENTIFY);
-	if (err < 0 || amount != BFLSC_IDENTIFY_LEN) {
+
+	err = send_recv_ss(bflsc, 0, &sent, &amount,
+				BFLSC_IDENTIFY, BFLSC_IDENTIFY_LEN, C_REQUESTIDENTIFY,
+				buf, sizeof(buf)-1, C_GETIDENTIFY, READ_NL);
+
+	if (!sent) {
 		applog(LOG_ERR, "%s detect (%s) send identify request failed (%d:%d)",
 			bflsc->drv->dname, bflsc->device_path, amount, err);
 		goto unshin;
 	}
 
-	err = usb_read_nl_timeout(bflsc, buf, sizeof(buf)-1, &amount, BFLSC_INFO_TIMEOUT, C_GETIDENTIFY);
 	if (err < 0 || amount < 1) {
 		init_count++;
 		cgtime(&init_now);
@@ -1146,7 +1297,9 @@ static void bflsc_flush_work(struct cgpu_info *bflsc)
 static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
+	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
+	bool sent;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1157,14 +1310,15 @@ static void bflsc_flash_led(struct cgpu_info *bflsc, int dev)
 	if (mutex_trylock(&bflsc->device_mutex))
 		return;
 
-	err = write_to_dev(bflsc, dev, BFLSC_FLASH, BFLSC_FLASH_LEN, &amount, C_REQUESTFLASH);
-	if (err < 0 || amount != BFLSC_FLASH_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_REQUESTFLASH, amount, err);
-	} else {
-		getok(bflsc, C_FLASHREPLY, &err, &amount);
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				BFLSC_FLASH, BFLSC_FLASH_LEN, C_REQUESTFLASH,
+				buf, sizeof(buf)-1, C_FLASHREPLY, READ_NL);
+	mutex_unlock(&(bflsc->device_mutex));
 
-		mutex_unlock(&(bflsc->device_mutex));
+	if (!sent)
+		bflsc_applog(bflsc, dev, C_REQUESTFLASH, amount, err);
+	else {
+		// Don't care
 	}
 
 	// Once we've tried - don't do it until told to again
@@ -1185,7 +1339,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	char *firstname, **fields, *lf;
 	char xlink[17];
 	int count;
-	bool res;
+	bool res, sent;
 	float temp, temp1, temp2;
 	float vcc1, vcc2, vmain;
 
@@ -1205,58 +1359,61 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return true;
 	}
 
+	xlinkstr(&(xlink[0]), dev, sc_info);
+
 	/* It is not very critical getting temp so don't get stuck if we
 	 * can't grab the mutex here */
 	if (mutex_trylock(&bflsc->device_mutex))
 		return false;
 
-	xlinkstr(&(xlink[0]), dev, sc_info);
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				BFLSC_TEMPERATURE, BFLSC_TEMPERATURE_LEN, C_REQUESTTEMPERATURE,
+				temp_buf, sizeof(temp_buf)-1, C_GETTEMPERATURE, READ_NL);
+	mutex_unlock(&(bflsc->device_mutex));
 
-	err = write_to_dev(bflsc, dev, BFLSC_TEMPERATURE, BFLSC_TEMPERATURE_LEN, &amount, C_REQUESTTEMPERATURE);
-	if (err < 0 || amount != BFLSC_TEMPERATURE_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
+	if (!sent) {
 		applog(LOG_ERR, "%s%i: Error: Request%s temp invalid/timed out (%d:%d)",
 				bflsc->drv->name, bflsc->device_id, xlink, amount, err);
 		return false;
-	}
-
-	err = usb_read_nl(bflsc, temp_buf, sizeof(temp_buf)-1, &amount, C_GETTEMPERATURE);
-	if (err < 0 || amount < 1) {
-		mutex_unlock(&(bflsc->device_mutex));
-		if (err < 0) {
-			applog(LOG_ERR, "%s%i: Error: Get%s temp return invalid/timed out (%d:%d)",
-					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
-		} else {
-			applog(LOG_ERR, "%s%i: Error: Get%s temp returned nothing (%d:%d)",
-					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+	} else {
+		if (err < 0 || amount < 1) {
+			if (err < 0) {
+				applog(LOG_ERR, "%s%i: Error: Get%s temp return invalid/timed out (%d:%d)",
+						bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+			} else {
+				applog(LOG_ERR, "%s%i: Error: Get%s temp returned nothing (%d:%d)",
+						bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+			}
+			return false;
 		}
-		return false;
 	}
 
-	// N.B. we only get the voltages if the temp succeeds - temp is the important one
-	err = write_to_dev(bflsc, dev, BFLSC_VOLTAGE, BFLSC_VOLTAGE_LEN, &amount, C_REQUESTVOLTS);
-	if (err < 0 || amount != BFLSC_VOLTAGE_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
+	// Ignore it if we can't get the V
+	if (mutex_trylock(&bflsc->device_mutex))
+		return false;
+
+	err = send_recv_ss(bflsc, dev, &sent, &amount,
+				BFLSC_VOLTAGE, BFLSC_VOLTAGE_LEN, C_REQUESTVOLTS,
+				volt_buf, sizeof(volt_buf)-1, C_GETTEMPERATURE, READ_NL);
+	mutex_unlock(&(bflsc->device_mutex));
+
+	if (!sent) {
 		applog(LOG_ERR, "%s%i: Error: Request%s volts invalid/timed out (%d:%d)",
 				bflsc->drv->name, bflsc->device_id, xlink, amount, err);
 		return false;
-	}
-
-	err = usb_read_nl(bflsc, volt_buf, sizeof(volt_buf)-1, &amount, C_GETTEMPERATURE);
-	if (err < 0 || amount < 1) {
-		mutex_unlock(&(bflsc->device_mutex));
-		if (err < 0) {
-			applog(LOG_ERR, "%s%i: Error: Get%s temp return invalid/timed out (%d:%d)",
-					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
-		} else {
-			applog(LOG_ERR, "%s%i: Error: Get%s temp returned nothing (%d:%d)",
-					bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+	} else {
+		if (err < 0 || amount < 1) {
+			if (err < 0) {
+				applog(LOG_ERR, "%s%i: Error: Get%s volt return invalid/timed out (%d:%d)",
+						bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+			} else {
+				applog(LOG_ERR, "%s%i: Error: Get%s volt returned nothing (%d:%d)",
+						bflsc->drv->name, bflsc->device_id, xlink, amount, err);
+			}
+			return false;
 		}
-		return false;
 	}
 
-	mutex_unlock(&(bflsc->device_mutex));
-	
 	res = breakdown(ALLCOLON, temp_buf, &count, &firstname, &fields, &lf);
 	if (lf)
 		*lf = '\0';
@@ -1272,6 +1429,8 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	temp = temp1 = (float)atoi(fields[0]);
 	temp2 = (float)atoi(fields[1]);
+
+	freebreakdown(&count, &firstname, &fields);
 
 	res = breakdown(NOCOLON, volt_buf, &count, &firstname, &fields, &lf);
 	if (lf)
@@ -1290,6 +1449,9 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 	vcc1 = (float)atoi(fields[0]) / 1000.0;
 	vcc2 = (float)atoi(fields[1]) / 1000.0;
 	vmain = (float)atoi(fields[2]) / 1000.0;
+
+	freebreakdown(&count, &firstname, &fields);
+
 	if (vcc1 > 0 || vcc2 > 0 || vmain > 0) {
 		wr_lock(&(sc_info->stat_lock));
 		if (vcc1 > 0) {
@@ -1375,7 +1537,6 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 			sc_dev->overheat = false;
 	}
 
-	freebreakdown(&count, &firstname, &fields);
 	return true;
 }
 
@@ -1659,8 +1820,9 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
 	struct FullNonceRangeJob data;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
-	int len;
-	int try;
+	int len, try;
+	int stage;
+	bool sent;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1676,7 +1838,7 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
 	memcpy(data.blockData, work->data + MERKLE_OFFSET, MERKLE_BYTES);
 	data.endOfBlock = BFLSC_EOB;
 
-	try = 0;
+	len = sizeof(struct FullNonceRangeJob);
 
 	/* On faster devices we have a lot of lock contention so only
 	 * mandatorily grab the lock and send work if the queue is empty since
@@ -1687,7 +1849,55 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
 		if (mutex_trylock(&bflsc->device_mutex))
 			return false;
 	}
+
+	try = 0;
 re_send:
+	err = send_recv_ds(bflsc, dev, &stage, &sent, &amount,
+				BFLSC_QJOB, BFLSC_QJOB_LEN, C_REQUESTQUEJOB, C_REQUESTQUEJOBSTATUS,
+				(char *)&data, len, C_QUEJOB, C_QUEJOBSTATUS,
+				buf, sizeof(buf)-1);
+	mutex_unlock(&(bflsc->device_mutex));
+
+	switch (stage) {
+		case 1:
+			if (!sent) {
+				bflsc_applog(bflsc, dev, C_REQUESTQUEJOB, amount, err);
+				return false;
+			} else {
+				// TODO: handle other errors ...
+
+				// Try twice
+				if (try++ < 1 && amount > 1 &&
+					strncasecmp(buf, BFLSC_TIMEOUT, BFLSC_TIMEOUT_LEN) == 0)
+						goto re_send;
+
+				bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
+				return false;
+			}
+			break;
+		case 2:
+			if (!sent) {
+				bflsc_applog(bflsc, dev, C_QUEJOB, amount, err);
+				return false;
+			} else {
+				if (!isokerr(err, buf, amount)) {
+					// TODO: check for QUEUE FULL and set work_queued to sc_info->que_size
+					//  and report a code bug LOG_ERR - coz it should never happen
+					// TODO: handle other errors ...
+
+					// Try twice
+					if (try++ < 1 && amount > 1 &&
+						strncasecmp(buf, BFLSC_TIMEOUT, BFLSC_TIMEOUT_LEN) == 0)
+							goto re_send;
+
+					bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
+					return false;
+				}
+			}
+			break;
+	}
+
+/*
 	err = write_to_dev(bflsc, dev, BFLSC_QJOB, BFLSC_QJOB_LEN, &amount, C_REQUESTQUEJOB);
 	if (err < 0 || amount != BFLSC_QJOB_LEN) {
 		mutex_unlock(&(bflsc->device_mutex));
@@ -1725,6 +1935,7 @@ re_send:
 	}
 
 	mutex_unlock(&(bflsc->device_mutex));
+*/
 
 	wr_lock(&(sc_info->stat_lock));
 	sc_info->sc_devs[dev].work_queued++;
@@ -1914,28 +2125,38 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 	return ret;
 }
 
-/* Set the fanspeed to auto for any valid value under 60, or max for any value
- * above 60 or if we don't know the temperature. */
+#define BFLSC_OVER_TEMP 60
+
+/* Set the fanspeed to auto for any valid value <= BFLSC_OVER_TEMP,
+ * or max for any value > BFLSC_OVER_TEMP or if we don't know the temperature. */
 static void bflsc_set_fanspeed(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)bflsc->device_data;
-	int amount, err;
+	char buf[BFLSC_BUFSIZ+1];
+	char data[16+1];
+	int amount;
+	bool sent;
 
-	if ((bflsc->temp <= 60 && bflsc->temp > 0 && sc_info->fanauto) ||
-	    ((bflsc->temp > 60 || !bflsc->temp) && !sc_info->fanauto))
+	if ((bflsc->temp <= BFLSC_OVER_TEMP && bflsc->temp > 0 && sc_info->fanauto) ||
+	    ((bflsc->temp > BFLSC_OVER_TEMP || !bflsc->temp) && !sc_info->fanauto))
 		return;
 
-	mutex_lock(&bflsc->device_mutex);
-	if (bflsc->temp > 60 || !bflsc->temp) {
-		write_to_dev(bflsc, 0, BFLSC_FAN4, BFLSC_FAN4_LEN, &amount,
-			     C_SETFAN);
+	if (bflsc->temp > BFLSC_OVER_TEMP || !bflsc->temp) {
+		strcpy(data, BFLSC_FAN4);
 		sc_info->fanauto = false;
 	} else {
-		write_to_dev(bflsc, 0, BFLSC_FANAUTO, BFLSC_FANOUT_LEN,
-			     &amount, C_SETFAN);
+		strcpy(data, BFLSC_FANAUTO);
 		sc_info->fanauto = true;
 	}
-	getok(bflsc, C_FANREPLY, &err, &amount);
+
+	applog(LOG_DEBUG, "%s%i: temp=%.0f over=%d set fan to %s",
+				bflsc->drv->name, bflsc->device_id, bflsc->temp,
+				BFLSC_OVER_TEMP, data);
+
+	mutex_lock(&bflsc->device_mutex);
+	send_recv_ss(bflsc, 0, &sent, &amount,
+				data, strlen(data), C_SETFAN,
+				buf, sizeof(buf)-1, C_FANREPLY, READ_NL);
 	mutex_unlock(&bflsc->device_mutex);
 }
 
