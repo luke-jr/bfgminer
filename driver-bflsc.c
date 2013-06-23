@@ -959,8 +959,17 @@ reinit:
 		goto unshin;
 	}
 
-	if (!getinfo(bflsc, 0))
-		goto unshin;
+	int tries = 0;
+	while (7734) {
+		if (getinfo(bflsc, 0))
+			break;
+
+		// N.B. we will get displayed errors each time it fails
+		if (++tries > 2)
+			goto unshin;
+
+		nmsleep(40);
+	}
 
 	switch (sc_info->driver_version) {
 		case BFLSC_DRV1:
