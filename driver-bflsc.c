@@ -1391,7 +1391,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 	if (count < sc_info->que_fld_min) {
 		tmp = str_text(data);
-		applog(LOG_ERR, "%s%i:%s work returned too small (%d,%s)",
+		applog(LOG_INFO, "%s%i:%s work returned too small (%d,%s)",
 				bflsc->drv->name, bflsc->device_id, xlink, count, tmp);
 		free(tmp);
 		inc_hw_errors(bflsc->thr[0]);
@@ -1399,8 +1399,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	}
 
 	if (count > sc_info->que_fld_max) {
-		applog(LOG_ERR, "%s%i:%s work returned too large (%d) processing %d anyway",
-				bflsc->drv->name, bflsc->device_id, xlink, count, sc_info->que_fld_max);
+		applog(LOG_INFO, "%s%i:%s work returned too large (%d) processing %d anyway",
+		       bflsc->drv->name, bflsc->device_id, xlink, count, sc_info->que_fld_max);
 		count = sc_info->que_fld_max;
 		inc_hw_errors(bflsc->thr[0]);
 	}
@@ -1408,8 +1408,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	num = atoi(fields[sc_info->que_noncecount]);
 	if (num != count - sc_info->que_fld_min) {
 		tmp = str_text(data);
-		applog(LOG_ERR, "%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
-				bflsc->drv->name, bflsc->device_id, xlink, num, count - sc_info->que_fld_max, tmp);
+		applog(LOG_INFO, "%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
+		       bflsc->drv->name, bflsc->device_id, xlink, num, count - sc_info->que_fld_max, tmp);
 		free(tmp);
 		inc_hw_errors(bflsc->thr[0]);
 	}
@@ -1418,7 +1418,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	memset(blockdata, 0, MERKLE_BYTES);
 	if (!hex2bin((unsigned char *)midstate, fields[QUE_MIDSTATE], MIDSTATE_BYTES) ||
 	    !hex2bin((unsigned char *)blockdata, fields[QUE_BLOCKDATA], MERKLE_BYTES)) {
-		applog(LOG_ERR, "%s%i:%s Failed to convert binary data to hex result - ignored",
+		applog(LOG_INFO, "%s%i:%s Failed to convert binary data to hex result - ignored",
 		       bflsc->drv->name, bflsc->device_id, xlink);
 		inc_hw_errors(bflsc->thr[0]);
 		return;
@@ -1428,9 +1428,9 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
 		if (sc_info->not_first_work) {
-			applog(LOG_ERR, "%s%i:%s failed to find nonce work - can't be processed - ignored",
-					bflsc->drv->name, bflsc->device_id, xlink);
-					inc_hw_errors(bflsc->thr[0]);
+			applog(LOG_INFO, "%s%i:%s failed to find nonce work - can't be processed - ignored",
+			       bflsc->drv->name, bflsc->device_id, xlink);
+			inc_hw_errors(bflsc->thr[0]);
 		}
 		return;
 	}
@@ -1439,8 +1439,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	for (i = sc_info->que_fld_min; i < count; i++) {
 		if (strlen(fields[i]) != 8) {
 			tmp = str_text(data);
-			applog(LOG_ERR, "%s%i:%s invalid nonce (%s) will try to process anyway",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+			applog(LOG_INFO, "%s%i:%s invalid nonce (%s) will try to process anyway",
+			       bflsc->drv->name, bflsc->device_id, xlink, tmp);
 			free(tmp);
 		}
 
