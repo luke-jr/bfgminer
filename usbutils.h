@@ -315,7 +315,7 @@ void *usb_resource_thread(void *userdata);
 #define usb_read_nl(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, "\n", cmd, false)
 
-#define usb_read_nl_timeout(cgpu, buf, bufsiz, read, timeotu, cmd) \
+#define usb_read_nl_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
 	_usb_read(cgpu, DEFAULT_EP_IN, buf, bufsiz, read, timeout, "\n", cmd, false)
 
 #define usb_read_ok(cgpu, buf, bufsiz, read, cmd) \

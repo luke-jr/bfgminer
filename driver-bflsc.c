@@ -910,7 +910,7 @@ reinit:
 		goto unshin;
 	}
 
-	err = usb_read_nl(bflsc, buf, sizeof(buf)-1, &amount, C_GETIDENTIFY);
+	err = usb_read_nl_timeout(bflsc, buf, sizeof(buf)-1, &amount, BFLSC_INFO_TIMEOUT, C_GETIDENTIFY);
 	if (err < 0 || amount < 1) {
 		init_count++;
 		cgtime(&init_now);
