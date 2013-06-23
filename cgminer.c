@@ -5709,8 +5709,8 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
 	if (be32toh(hash2_32[7]) > diff1targ) {
-		applog(LOG_WARNING, "%s%d: invalid nonce - HW error",
-				thr->cgpu->drv->name, thr->cgpu->device_id);
+		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
+		       thr->cgpu->drv->name, thr->cgpu->device_id);
 
 		inc_hw_errors(thr);
 		ret = false;
