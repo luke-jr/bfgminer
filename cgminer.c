@@ -568,10 +568,12 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
+#ifdef USE_AVALON
 static char *set_int_0_to_100(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 0, 100);
 }
+#endif
 
 static char *set_int_1_to_10(const char *arg, int *i)
 {
