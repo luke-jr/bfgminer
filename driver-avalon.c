@@ -984,22 +984,60 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 		info->temp_max = info->temp2;
 }
 
+static void temp_rise(struct avalon_info *info, int temp)
+{
+	if (temp >= AVALON_TEMP_TARGET + AVALON_TEMP_HYSTERESIS * 3) {
+		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
+		return;
+	}
+	if (temp >= AVALON_TEMP_TARGET + AVALON_TEMP_HYSTERESIS * 2)
+		info->fan_pwm += 10;
+	else if (temp > AVALON_TEMP_TARGET)
+		info->fan_pwm += 5;
+	else if (temp >= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+		info->fan_pwm += 1;
+	else
+		return;
+
+	if (info->fan_pwm > AVALON_DEFAULT_FAN_MAX_PWM)
+		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
+}
+
+static void temp_drop(struct avalon_info *info, int temp)
+{
+	if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS * 3) {
+		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
+		return;
+	}
+	if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS * 2)
+		info->fan_pwm -= 10;
+	else if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+		info->fan_pwm -= 5;
+	else if (temp < AVALON_TEMP_TARGET)
+		info->fan_pwm -= 1;
+
+	if (info->fan_pwm < AVALON_DEFAULT_FAN_MIN_PWM)
+		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
+}
+
 static inline void adjust_fan(struct avalon_info *info)
 {
 	int temp_new;
 
 	temp_new = info->temp_sum / info->temp_history_count;
 
-	if (temp_new < 35) {
-		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
-		info->temp_old = temp_new;
-	} else if (temp_new > 55) {
-		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
-		info->temp_old = temp_new;
-	} else if (abs(temp_new - info->temp_old) >= 2) {
-		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM + (temp_new - 35) * 6.4;
-		info->temp_old = temp_new;
+	if (temp_new > info->temp_old)
+		temp_rise(info, temp_new);
+	else if (temp_new < info->temp_old)
+		temp_drop(info, temp_new);
+	else {
+		/* temp_new == info->temp_old */
+		if (temp_new > AVALON_TEMP_TARGET)
+			temp_rise(info, temp_new);
+		else if (temp_new < AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+			temp_drop(info, temp_new);
 	}
+	info->temp_old = temp_new;
 }
 
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
