@@ -568,6 +568,11 @@ static char *set_int_0_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 0, 10);
 }
 
+static char *set_int_0_to_100(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 100);
+}
+
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -1052,7 +1057,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_AVALON
 	OPT_WITH_ARG("--avalon-options",
 		     set_avalon_options, NULL, NULL,
-		     opt_hidden),
+		     "Set avalon options baud:miners:asic:timeout:freq"),
+	OPT_WITH_ARG("--avalon-temp",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon_temp,
+		     "Set avalon target temperature"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,

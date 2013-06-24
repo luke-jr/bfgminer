@@ -138,6 +138,7 @@ struct avalon_info {
 ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct avalon_info **avalon_info;
+extern int opt_avalon_temp;
 
 #endif /* USE_AVALON */
 #endif	/* AVALON_H */

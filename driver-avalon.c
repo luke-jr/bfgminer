@@ -40,6 +40,7 @@
 #include "hexdump.c"
 #include "util.h"
 
+int opt_avalon_temp = AVALON_TEMP_TARGET;
 static int option_offset = -1;
 struct device_drv avalon_drv;
 
@@ -986,15 +987,15 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 
 static void temp_rise(struct avalon_info *info, int temp)
 {
-	if (temp >= AVALON_TEMP_TARGET + AVALON_TEMP_HYSTERESIS * 3) {
+	if (temp >= opt_avalon_temp + AVALON_TEMP_HYSTERESIS * 3) {
 		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
 		return;
 	}
-	if (temp >= AVALON_TEMP_TARGET + AVALON_TEMP_HYSTERESIS * 2)
+	if (temp >= opt_avalon_temp + AVALON_TEMP_HYSTERESIS * 2)
 		info->fan_pwm += 10;
-	else if (temp > AVALON_TEMP_TARGET)
+	else if (temp > opt_avalon_temp)
 		info->fan_pwm += 5;
-	else if (temp >= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+	else if (temp >= opt_avalon_temp - AVALON_TEMP_HYSTERESIS)
 		info->fan_pwm += 1;
 	else
 		return;
@@ -1005,15 +1006,15 @@ static void temp_rise(struct avalon_info *info, int temp)
 
 static void temp_drop(struct avalon_info *info, int temp)
 {
-	if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS * 3) {
+	if (temp <= opt_avalon_temp - AVALON_TEMP_HYSTERESIS * 3) {
 		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
 		return;
 	}
-	if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS * 2)
+	if (temp <= opt_avalon_temp - AVALON_TEMP_HYSTERESIS * 2)
 		info->fan_pwm -= 10;
-	else if (temp <= AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+	else if (temp <= opt_avalon_temp - AVALON_TEMP_HYSTERESIS)
 		info->fan_pwm -= 5;
-	else if (temp < AVALON_TEMP_TARGET)
+	else if (temp < opt_avalon_temp)
 		info->fan_pwm -= 1;
 
 	if (info->fan_pwm < AVALON_DEFAULT_FAN_MIN_PWM)
@@ -1032,9 +1033,9 @@ static inline void adjust_fan(struct avalon_info *info)
 		temp_drop(info, temp_new);
 	else {
 		/* temp_new == info->temp_old */
-		if (temp_new > AVALON_TEMP_TARGET)
+		if (temp_new > opt_avalon_temp)
 			temp_rise(info, temp_new);
-		else if (temp_new < AVALON_TEMP_TARGET - AVALON_TEMP_HYSTERESIS)
+		else if (temp_new < opt_avalon_temp - AVALON_TEMP_HYSTERESIS)
 			temp_drop(info, temp_new);
 	}
 	info->temp_old = temp_new;

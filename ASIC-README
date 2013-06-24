@@ -77,8 +77,17 @@ a preinstalled version of cgminer as part of the flash firmware, based on the
 most current cgminer version so no configuration should be necessary. It is
 possible to plug a USB cable from a PC into the Avalon device and mine using
 cgminer as per any other device. It will autodetect and hotplug using default
-options. You can customise the avalon behaviour by using the --avalon-options
-command.
+options. You can customise the avalon behaviour by using the avalon-options
+command, and adjust its fan control-temperature relationship with avalon-temp.
+
+eg:
+--avalon-temp 50
+
+This will adjust fanspeed to keep the temperature at or slightly below 50.
+If you wish the fans to run at maximum speed, setting the target temperature
+very low such as 0 will achieve this. This option can be added to the "More
+options" entry in the web interface if you do not have a direct way of setting
+it.
 
 eg:
 --avalon-options 115200:24:10:45:282
@@ -104,9 +113,9 @@ block mining (eg p2pool) but much lower and the device will start creating
 duplicate shares.
 
 Sample settings for valid different frequencies (last 2 values):
-34:375
-36:350
-39:325
+34:375 *
+36:350 *
+39:325 *
 43:300
 45:282 (default)
 47:270
@@ -115,6 +124,9 @@ Sample settings for valid different frequencies (last 2 values):
 Frequency:
 This is the clock speed of the devices. Only specific values work, 256, 270,
 282 (default), 300, 325, 350 and 375.
+
+Note that setting a value with an asterisk next to it will be using your
+avalon outside its spec and you do so at your own risk.
 
 If you use the full curses based interface with Avalons you will get this
 information:
