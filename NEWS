@@ -1,3 +1,89 @@
+Version 3.3.0 - 24th June 2013
+
+- Add an --avalon-temp option to allow a user specified target temperature.
+- Demote no matching work message to verbose logging only on avalon.
+- Make the fan control on the avalon a simple PID controller with a target
+temperature of 45.
+- Demote bflsc hw error messages to verbose logging only.
+- bflsc - handle xlink timeouts by having generic IO functions
+- Demote the invalid nonce warning to log info.
+- Ignore iManufacturer for BFLSC devices since the device name will still match
+and some unbinned chips are missing it.
+- sc_count shouldn't be +1 in bflsc.
+- Use the info timeout for read_nl in getidentify bflsc.
+- Add a usb_read_nl_timeout macro.
+- bflsc try getinfo twice
+- set MSG_ASCUSBNODEV always defined
+- Hard code the preferred packet size for AMU, BLT and ICA.
+- API V1.26 update ASIC support
+- Icarus enable the read buffer for the detect nonce
+- Support new overclocking speeds for avalon: 325, 350 and 375
+- undo icarus show errno, put it as debug in ubsutils
+- icarus add errno to rerr and werr
+- Sleep after sending icarus work to emulate working at 115200 baud.
+- Use the nusleep function for sleeping after sending work in avalon.
+- Show an integer only for diff if it is one.
+- Set the avalon preferred packet size to 512.
+- Reinstate the maxPacketSize determined by the end descriptor but allow the
+driver to override it.
+- Only update hashmeter if we have done hashes or haven't updated longer than
+the log interval, fixing a us/ms error.
+- Use only one cgsem in avalon signalling when the write thread should commit
+work by reading the status bytes off during an avalon_read, minimising the
+number of usb calls and resetting from only one place.
+- Change avalon no valid work message to no matching work to match API
+terminology.
+- Use low latency usb transfers on the avalon, sleeping up to half a buffer's
+worth only if no data is returning to increase hashrate, abolish lost work and
+decrease CPU.
+- Minimise the sleep times in avalon read to avoid result loss.
+- Use a half nonce range before cycling through avalon's scanwork to ensure it
+gets a chance to fill work if time is tight for the write thread to signal a
+wakeup.
+- Temporarily limit usb transfer sizes to 512 till we provide a way for each
+driver to choose the upper limit.
+- Increase watchdog sick time to longer than it takes for a pool to be detected
+dead.
+- Limit USB transfers to the max size reported by the descriptors.
+- Increase the BFLSC timeout to allow the maximum number of results to be
+returned for BAS in time.
+- Decrease BAL and BAS latency to be just larger than one result read.
+- disable curses device resize that crashes on windows
+- BFLSC latest firmware has its own thermal cutoff set to 90, so use the same
+value in case we have an old firmware that isn't throttling by itself.
+- Drop watermark low limits for bflsc.
+- Set the fanspeed on bflsc to max if we don't know the temperature.
+- Use a low watermark for queueing mandatory work on bflsc instead of zero.
+- Only mandatorily grab the bflsc mutex on submitting work when the queue is
+empty.
+- Adjust bflsc v2 watermarks.
+- Only increase sleep time on bflsc if the queue isn't emptying at all over the
+sleep duration.
+- Fix warning.
+- bflsc yet more API stats
+- bflsc add some more API stats
+- bflsc correct firmware matching
+- bflsc correct comment
+- Fixed Commands with No params
+- bflsc driver support for v2 firmware
+- Odd Issues
+- Fixed Python Example
+- Added Python Api Example
+- Added Python Api Example
+- Multiplier fail for microseconds vs milliseconds when updating hashmeter in
+hash_queued_work.
+- Only make threads report in/out across the actual driver code and update their
+status on reporting out as well as in.
+- usbutils initialise close key/sem
+- usbutils cleanup linux semaphores on release
+- Difficulty should be unconditionally byteswapped, not swapped to big endian.
+- We should be setting cancelstate, not canceltype when disabling it for usb
+locking.
+- Pthread cancel state should be set to disable on usb DEVLOCK.
+- Fanauto on bflsc is Z9X according to the source code, not 5 as per the draft
+protocol document.
+
+
 Version 3.2.2 - 16th June 2013
 
 - Record and report USB pipe errors via API stats
