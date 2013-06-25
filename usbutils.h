@@ -210,6 +210,11 @@ struct cg_usb_info {
 	uint64_t clear_err_count;
 	uint64_t retry_err_count;
 	uint64_t clear_fail_count;
+
+	uint64_t read_delay_count;
+	double total_read_delay;
+	uint64_t write_delay_count;
+	double total_write_delay;
 };
 
 enum usb_cmds {

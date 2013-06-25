@@ -2323,8 +2323,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 						tdiff(&(usbdev->last_write_tv), &now);
 
 					// Simple error condition check/avoidance '< 1.0'
-					if (need > 0.0 && need < 1.0)
+					if (need > 0.0 && need < 1.0) {
+						cgpu->usbinfo.read_delay_count++;
+						cgpu->usbinfo.total_read_delay += need;
 						nmsleep((unsigned int)(need * 1000.0));
+					}
 				}
 			}
 			STATS_TIMEVAL(&tv_start);
@@ -2429,8 +2432,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 					tdiff(&(usbdev->last_write_tv), &now);
 
 				// Simple error condition check/avoidance '< 1.0'
-				if (need > 0.0 && need < 1.0)
+				if (need > 0.0 && need < 1.0) {
+					cgpu->usbinfo.read_delay_count++;
+					cgpu->usbinfo.total_read_delay += need;
 					nmsleep((unsigned int)(need * 1000.0));
+				}
 			}
 		}
 		STATS_TIMEVAL(&tv_start);
@@ -2572,8 +2578,11 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 					tdiff(&(usbdev->last_write_tv), &now);
 
 				// Simple error condition check/avoidance '< 1.0'
-				if (need > 0.0 && need < 1.0)
+				if (need > 0.0 && need < 1.0) {
+					cgpu->usbinfo.write_delay_count++;
+					cgpu->usbinfo.total_write_delay += need;
 					nmsleep((unsigned int)(need * 1000.0));
+				}
 			}
 			cgtime(&(usbdev->last_write_tv));
 			usbdev->last_write_siz = bufsiz;
@@ -2666,8 +2675,11 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 				tdiff(&(usbdev->last_write_tv), &now);
 
 			// Simple error condition check/avoidance '< 1.0'
-			if (need > 0.0 && need < 1.0)
+			if (need > 0.0 && need < 1.0) {
+				cgpu->usbinfo.write_delay_count++;
+				cgpu->usbinfo.total_write_delay += need;
 				nmsleep((unsigned int)(need * 1000.0));
+			}
 		}
 		cgtime(&(usbdev->last_write_tv));
 		usbdev->last_write_siz = siz;
@@ -2740,8 +2752,11 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 				tdiff(&(usbdev->last_write_tv), &now);
 
 			// Simple error condition check/avoidance '< 1.0'
-			if (need > 0.0 && need < 1.0)
+			if (need > 0.0 && need < 1.0) {
+				cgpu->usbinfo.read_delay_count++;
+				cgpu->usbinfo.total_read_delay += need;
 				nmsleep((unsigned int)(need * 1000.0));
+			}
 		}
 	}
 	STATS_TIMEVAL(&tv_start);
