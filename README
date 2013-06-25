@@ -234,7 +234,7 @@ ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
 
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
---avalon-temp <arg> Set avalon target temperature (default: 45)
+--avalon-temp <arg> Set avalon target temperature (default: 50)
 --bfl-range         Use nonce range on bitforce devices if supported
 --icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
