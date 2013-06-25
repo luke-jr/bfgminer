@@ -84,15 +84,17 @@ degrees.
 
 Avalon commands:
 
+--avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 
-eg:
---avalon-cutoff 65
 
-This will cut off the avalon should it get up to 65 degrees and will then
-re-enable it when it gets to the target temperature as specified by avalon-temp.
+Avalon auto will enable dynamic overclocking gradually increasing and
+decreasing the frequency till the highest hashrate that keeps hardware errors
+around 1% is achieved. This WILL run your avalon beyond its normal specification
+so the usual warnings apply. When avalon-auto is enabled, the avalon-options
+for frequency and timeout are used as the starting point only.
 
 eg:
 --avalon-temp 55
@@ -102,6 +104,12 @@ If you wish the fans to run at maximum speed, setting the target temperature
 very low such as 0 will achieve this. This option can be added to the "More
 options" entry in the web interface if you do not have a direct way of setting
 it.
+
+eg:
+--avalon-cutoff 65
+
+This will cut off the avalon should it get up to 65 degrees and will then
+re-enable it when it gets to the target temperature as specified by avalon-temp.
 
 eg:
 --avalon-options 115200:24:10:45:282

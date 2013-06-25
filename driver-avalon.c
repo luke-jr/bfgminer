@@ -42,6 +42,8 @@
 
 int opt_avalon_temp = AVALON_TEMP_TARGET;
 int opt_avalon_overheat = AVALON_TEMP_OVERHEAT;
+bool opt_avalon_auto;
+
 static int option_offset = -1;
 struct device_drv avalon_drv;
 
@@ -51,6 +53,7 @@ static int avalon_init_task(struct avalon_task *at,
 			    uint8_t miner_num, uint8_t nonce_elf,
 			    uint8_t gate_miner, int frequency)
 {
+	uint16_t *lefreq16;
 	uint8_t *buf;
 	static bool first = true;
 
@@ -98,37 +101,8 @@ static int avalon_init_task(struct avalon_task *at,
 	buf[9] = 0x01;
 	buf[10] = 0x00;
 	buf[11] = 0x00;
-	switch (frequency) {
-		case 256:
-			buf[6] = 0x03;
-			buf[7] = 0x08;
-			break;
-		default:
-		case 270:
-			buf[6] = 0x73;
-			buf[7] = 0x08;
-			break;
-		case 282:
-			buf[6] = 0xd3;
-			buf[7] = 0x08;
-			break;
-		case 300:
-			buf[6] = 0x63;
-			buf[7] = 0x09;
-			break;
-		case 325:
-			buf[6] = 0x28;
-			buf[7] = 0x0a;
-			break;
-		case 350:
-			buf[6] = 0xf0;
-			buf[7] = 0x0a;
-			break;
-		case 375:
-			buf[6] = 0xb8;
-			buf[7] = 0x0b;
-			break;
-	}
+	lefreq16 = (uint16_t *)&buf[6];
+	*lefreq16 = htole16(frequency * 8);
 
 	return 0;
 }
@@ -731,6 +705,11 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 				mutex_lock(&info->lock);
 				if (!info->nonces++)
 					gettemp = true;
+				info->auto_nonces++;
+				mutex_unlock(&info->lock);
+			} else if (opt_avalon_auto) {
+				mutex_lock(&info->lock);
+				info->auto_hw++;
 				mutex_unlock(&info->lock);
 			}
 
@@ -842,6 +821,31 @@ static void avalon_rotate_array(struct cgpu_info *avalon)
 		avalon->work_array = 0;
 }
 
+static void avalon_set_timeout(struct avalon_info *info)
+{
+	info->timeout = AVALON_TIMEOUT_FACTOR / info->frequency;
+}
+
+static void avalon_inc_freq(struct avalon_info *info)
+{
+	info->frequency += 2;
+	if (info->frequency > AVALON_MAX_FREQUENCY)
+		info->frequency = AVALON_MAX_FREQUENCY;
+	avalon_set_timeout(info);
+	applog(LOG_NOTICE, "Avalon increasing frequency to %d, timeout %d",
+	       info->frequency, info->timeout);
+}
+
+static void avalon_dec_freq(struct avalon_info *info)
+{
+	info->frequency -= 1;
+	if (info->frequency < AVALON_MIN_FREQUENCY)
+		info->frequency = AVALON_MIN_FREQUENCY;
+	avalon_set_timeout(info);
+	applog(LOG_NOTICE, "Avalon decreasing frequency to %d, timeout %d",
+	       info->frequency, info->timeout);
+}
+
 static void *avalon_send_tasks(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
@@ -860,6 +864,24 @@ static void *avalon_send_tasks(void *userdata)
 		while (avalon_buffer_full(avalon))
 			cgsem_wait(&info->write_sem);
 
+		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
+			mutex_lock(&info->lock);
+			if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
+			    info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
+				int total = info->auto_nonces + info->auto_hw;
+
+				/* Try to keep hw errors ~1-1.5% */
+				if (info->auto_hw * 100 < total)
+					avalon_inc_freq(info);
+				else if (info->auto_hw * 66 > total)
+					avalon_dec_freq(info);
+			}
+			info->auto_queued =
+			info->auto_nonces =
+			info->auto_hw = 0;
+			mutex_unlock(&info->lock);
+		}
+
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
@@ -877,11 +899,15 @@ static void *avalon_send_tasks(void *userdata)
 						info->timeout, info->asic_count,
 						info->miner_count, 1, 0, info->frequency);
 				avalon_create_task(&at, avalon->works[i]);
+				info->auto_queued++;
 			} else {
 				idled++;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
 						info->miner_count, 1, 1, info->frequency);
+				/* Reset the auto_queued count if we end up
+				 * idling any miners. */
+				info->auto_queued = 0;
 			}
 
 			ret = avalon_send_task(&at, avalon);

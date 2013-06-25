@@ -233,6 +233,7 @@ See SCRYPT-README for more information regarding litecoin mining.
 ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
 
+--avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)

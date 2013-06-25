@@ -25,14 +25,20 @@
 #define AVALON_FAN_FACTOR 120
 #define AVALON_DEFAULT_FAN_MAX_PWM 0xA0 /* 100% */
 #define AVALON_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
+
 #define AVALON_TEMP_TARGET 50
 #define AVALON_TEMP_HYSTERESIS 3
 #define AVALON_TEMP_OVERHEAT 60
 
 #define AVALON_DEFAULT_TIMEOUT 0x2D
+#define AVALON_MIN_FREQUENCY 256
+#define AVALON_MAX_FREQUENCY 450
+#define AVALON_TIMEOUT_FACTOR 12000
 #define AVALON_DEFAULT_FREQUENCY 282
 #define AVALON_DEFAULT_MINER_NUM 0x20
 #define AVALON_DEFAULT_ASIC_NUM 0xA
+
+#define AVALON_AUTO_CYCLE 1024
 
 #define AVALON_FTDI_READSIZE 510
 #define AVALON_USB_PACKETSIZE 512
@@ -118,6 +124,10 @@ struct avalon_info {
 	cgsem_t write_sem;
 	int nonces;
 
+	int auto_queued;
+	int auto_nonces;
+	int auto_hw;
+
 	bool idle;
 	bool reset;
 	bool overheat;
@@ -142,6 +152,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 extern struct avalon_info **avalon_info;
 extern int opt_avalon_temp;
 extern int opt_avalon_overheat;
+extern bool opt_avalon_auto;
 
 #endif /* USE_AVALON */
 #endif	/* AVALON_H */
