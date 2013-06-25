@@ -2945,7 +2945,7 @@ void usb_initialise()
 				if (bus <= 0)
 					quit(1, "Invalid --usb bus:dev - bus must be > 0");
 
-				if (!colon == '*')
+				if (*colon == '*')
 					dev = -1;
 				else {
 					dev = atoi(colon);
