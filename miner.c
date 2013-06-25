@@ -7135,9 +7135,11 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 
 void inc_hw_errors(struct thr_info *thr)
 {
+	struct cgpu_info * const cgpu = thr->cgpu;
+	
 	mutex_lock(&stats_lock);
 	hw_errors++;
-	thr->cgpu->hw_errors++;
+	++cgpu->hw_errors;
 	mutex_unlock(&stats_lock);
 
 	if (thr->cgpu->drv->hw_error)
