@@ -2365,13 +2365,13 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 }
 
 static const char *
-percentf(double p, double t, char *buf)
+percentf2(double p, double t, char *buf)
 {
 	if (!p)
 		return "none";
-	if (!t)
+	if (t <= p)
 		return "100%";
-	p /= p + t;
+	p /= t;
 	if (p < 0.01)
 		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
 	else
@@ -2381,6 +2381,7 @@ percentf(double p, double t, char *buf)
 		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
 	return buf;
 }
+#define percentf(p, t, buf)  percentf2(p, p + t, buf)
 
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
