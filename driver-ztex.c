@@ -266,7 +266,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				if (count > 2)
 					dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
 
-				inc_hw_errors(thr);
+				inc_hw_errors_only(thr);
 			}
 
 			for (j=0; j<=ztex->extraSolutions; j++) {

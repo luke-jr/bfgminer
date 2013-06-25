@@ -251,6 +251,7 @@ notifier_t submit_waiting_notifier;
 
 int hw_errors;
 int total_accepted, total_rejected, total_diff1;
+int total_bad_nonces;
 int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_xfer;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
@@ -7133,13 +7134,22 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 	_submit_work_async(work);
 }
 
-void inc_hw_errors(struct thr_info *thr)
+void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
+	
+	if (work)
+		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
+		       cgpu->proc_repr, (unsigned long)be32toh(bad_nonce));
 	
 	mutex_lock(&stats_lock);
 	hw_errors++;
 	++cgpu->hw_errors;
+	if (work)
+	{
+		++total_bad_nonces;
+		++cgpu->bad_nonces;
+	}
 	mutex_unlock(&stats_lock);
 
 	if (thr->cgpu->drv->hw_error)
@@ -7205,10 +7215,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	
 	if (unlikely(res == TNR_BAD))
 		{
-			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
-			       cgpu->proc_repr);
-			inc_hw_errors(thr);
+			inc_hw_errors(thr, work, nonce);
 			ret = false;
 			goto out;
 		}
