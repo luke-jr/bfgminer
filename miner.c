@@ -7148,6 +7148,9 @@ void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t
 	++cgpu->hw_errors;
 	if (work)
 	{
+		++total_diff1;
+		++cgpu->diff1;
+		++work->pool->diff1;
 		++total_bad_nonces;
 		++cgpu->bad_nonces;
 	}
@@ -7204,12 +7207,6 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	*work_nonce = htole32(nonce);
 	work->thr_id = thr->id;
 
-	mutex_lock(&stats_lock);
-	total_diff1++;
-	thr->cgpu->diff1++;
-	work->pool->diff1++;
-	mutex_unlock(&stats_lock);
-
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
 	res = test_nonce2(work, nonce);
@@ -7222,6 +7219,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		}
 	
 	mutex_lock(&stats_lock);
+	total_diff1++;
+	thr->cgpu->diff1++;
+	work->pool->diff1++;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	
