@@ -2320,7 +2320,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 					cgtime(&now);
 					need = (double)(usbdev->last_write_siz) /
 						(double)(usbdev->cps) -
-						tdiff(&(usbdev->last_write_tv), &now);
+						tdiff(&now, &(usbdev->last_write_tv));
 
 					// Simple error condition check/avoidance '< 1.0'
 					if (need > 0.0 && need < 1.0) {
@@ -2429,7 +2429,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				cgtime(&now);
 				need = (double)(usbdev->last_write_siz) /
 					(double)(usbdev->cps) -
-					tdiff(&(usbdev->last_write_tv), &now);
+					tdiff(&now, &(usbdev->last_write_tv));
 
 				// Simple error condition check/avoidance '< 1.0'
 				if (need > 0.0 && need < 1.0) {
@@ -2575,7 +2575,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 				cgtime(&now);
 				need = (double)(usbdev->last_write_siz) /
 					(double)(usbdev->cps) -
-					tdiff(&(usbdev->last_write_tv), &now);
+					tdiff(&now, &(usbdev->last_write_tv));
 
 				// Simple error condition check/avoidance '< 1.0'
 				if (need > 0.0 && need < 1.0) {
@@ -2672,7 +2672,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 			cgtime(&now);
 			need = (double)(usbdev->last_write_siz) /
 				(double)(usbdev->cps) -
-				tdiff(&(usbdev->last_write_tv), &now);
+				tdiff(&now, &(usbdev->last_write_tv));
 
 			// Simple error condition check/avoidance '< 1.0'
 			if (need > 0.0 && need < 1.0) {
@@ -2749,7 +2749,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 			cgtime(&now);
 			need = (double)(usbdev->last_write_siz) /
 				(double)(usbdev->cps) -
-				tdiff(&(usbdev->last_write_tv), &now);
+				tdiff(&now, &(usbdev->last_write_tv));
 
 			// Simple error condition check/avoidance '< 1.0'
 			if (need > 0.0 && need < 1.0) {
