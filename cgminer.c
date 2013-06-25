@@ -1057,6 +1057,9 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden),
 #endif
 #ifdef USE_AVALON
+	OPT_WITH_ARG("--avalon-cutoff",
+		     set_int_0_to_100, opt_show_intval, &opt_avalon_overheat,
+		     "Set avalon overheat cut off temperature"),
 	OPT_WITH_ARG("--avalon-options",
 		     set_avalon_options, NULL, NULL,
 		     "Set avalon options baud:miners:asic:timeout:freq"),

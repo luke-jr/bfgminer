@@ -27,6 +27,7 @@
 #define AVALON_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
 #define AVALON_TEMP_TARGET 50
 #define AVALON_TEMP_HYSTERESIS 3
+#define AVALON_TEMP_OVERHEAT 60
 
 #define AVALON_DEFAULT_TIMEOUT 0x2D
 #define AVALON_DEFAULT_FREQUENCY 282
@@ -119,6 +120,7 @@ struct avalon_info {
 
 	bool idle;
 	bool reset;
+	bool overheat;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
@@ -139,6 +141,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 extern struct avalon_info **avalon_info;
 extern int opt_avalon_temp;
+extern int opt_avalon_overheat;
 
 #endif /* USE_AVALON */
 #endif	/* AVALON_H */

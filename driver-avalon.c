@@ -41,6 +41,7 @@
 #include "util.h"
 
 int opt_avalon_temp = AVALON_TEMP_TARGET;
+int opt_avalon_overheat = AVALON_TEMP_OVERHEAT;
 static int option_offset = -1;
 struct device_drv avalon_drv;
 
@@ -870,7 +871,7 @@ static void *avalon_send_tasks(void *userdata)
 				break;
 			}
 
-			if (likely(j < avalon->queued)) {
+			if (likely(j < avalon->queued && !info->overheat)) {
 				info->idle = false;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
@@ -1058,6 +1059,13 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 		adjust_fan(info);
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
+	}
+	if (unlikely(info->temp_old >= opt_avalon_overheat)) {
+		applog(LOG_WARNING, "AVA%d overheat! Idling", avalon->device_id);
+		info->overheat = true;
+	} else if (info->overheat && info->temp_old <= opt_avalon_temp) {
+		applog(LOG_WARNING, "AVA%d cooled, restarting", avalon->device_id);
+		info->overheat = false;
 	}
 }
 

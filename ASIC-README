@@ -79,11 +79,25 @@ possible to plug a USB cable from a PC into the Avalon device and mine using
 cgminer as per any other device. It will autodetect and hotplug using default
 options. You can customise the avalon behaviour by using the avalon-options
 command, and adjust its fan control-temperature relationship with avalon-temp.
+By default the avalon will also cut off when its temperature reaches 60
+degrees.
+
+Avalon commands:
+
+--avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
+--avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
+--avalon-temp <arg> Set avalon target temperature (default: 50)
 
 eg:
---avalon-temp 50
+--avalon-cutoff 65
 
-This will adjust fanspeed to keep the temperature at or slightly below 50.
+This will cut off the avalon should it get up to 65 degrees and will then
+re-enable it when it gets to the target temperature as specified by avalon-temp.
+
+eg:
+--avalon-temp 55
+
+This will adjust fanspeed to keep the temperature at or slightly below 55.
 If you wish the fans to run at maximum speed, setting the target temperature
 very low such as 0 will achieve this. This option can be added to the "More
 options" entry in the web interface if you do not have a direct way of setting
