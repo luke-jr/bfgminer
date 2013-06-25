@@ -168,6 +168,7 @@ struct cg_usb_device {
 	enum sub_ident ident;
 	uint16_t usbver;
 	int cps;
+	bool usecps;
 	char *prod_string;
 	char *manuf_string;
 	char *serial_string;
@@ -177,6 +178,8 @@ struct cg_usb_device {
 	uint32_t bufsiz;
 	uint32_t bufamt;
 	uint16_t PrefPacketSize;
+	struct timeval last_write_tv;
+	size_t last_write_siz;
 };
 
 #define USB_NOSTAT 0
@@ -298,6 +301,9 @@ void usb_buffer_enable(struct cgpu_info *cgpu);
 void usb_buffer_disable(struct cgpu_info *cgpu);
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
+void usb_set_cps(struct cgpu_info *cgpu, int cps);
+void usb_enable_cps(struct cgpu_info *cgpu);
+void usb_disable_cps(struct cgpu_info *cgpu);
 void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();

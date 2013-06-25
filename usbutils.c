@@ -2312,6 +2312,21 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			}
 			got = 0;
 
+			if (first && usbdev->usecps) {
+				if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
+					struct timeval now;
+					double need;
+
+					cgtime(&now);
+					need = (double)(usbdev->last_write_siz) /
+						(double)(usbdev->cps) -
+						tdiff(&(usbdev->last_write_tv), &now);
+
+					// Simple error condition check/avoidance '< 1.0'
+					if (need > 0.0 && need < 1.0)
+						nmsleep((unsigned int)(need * 1000.0));
+				}
+			}
 			STATS_TIMEVAL(&tv_start);
 			err = usb_bulk_transfer(usbdev->handle,
 						usbdev->found->eps[ep].ep,
@@ -2403,6 +2418,21 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				usbbufread = bufleft;
 		}
 		got = 0;
+		if (first && usbdev->usecps) {
+			if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
+				struct timeval now;
+				double need;
+
+				cgtime(&now);
+				need = (double)(usbdev->last_write_siz) /
+					(double)(usbdev->cps) -
+					tdiff(&(usbdev->last_write_tv), &now);
+
+				// Simple error condition check/avoidance '< 1.0'
+				if (need > 0.0 && need < 1.0)
+					nmsleep((unsigned int)(need * 1000.0));
+			}
+		}
 		STATS_TIMEVAL(&tv_start);
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep, ptr,
@@ -2531,6 +2561,23 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	cgtime(&read_start);
 	while (bufsiz > 0) {
 		sent = 0;
+		if (usbdev->usecps) {
+			if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
+				struct timeval now;
+				double need;
+
+				cgtime(&now);
+				need = (double)(usbdev->last_write_siz) /
+					(double)(usbdev->cps) -
+					tdiff(&(usbdev->last_write_tv), &now);
+
+				// Simple error condition check/avoidance '< 1.0'
+				if (need > 0.0 && need < 1.0)
+					nmsleep((unsigned int)(need * 1000.0));
+			}
+			cgtime(&(usbdev->last_write_tv));
+			usbdev->last_write_siz = bufsiz;
+		}
 		STATS_TIMEVAL(&tv_start);
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep,
@@ -2608,6 +2655,23 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 
 	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
 
+	if (usbdev->usecps) {
+		if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
+			struct timeval now;
+			double need;
+
+			cgtime(&now);
+			need = (double)(usbdev->last_write_siz) /
+				(double)(usbdev->cps) -
+				tdiff(&(usbdev->last_write_tv), &now);
+
+			// Simple error condition check/avoidance '< 1.0'
+			if (need > 0.0 && need < 1.0)
+				nmsleep((unsigned int)(need * 1000.0));
+		}
+		cgtime(&(usbdev->last_write_tv));
+		usbdev->last_write_siz = siz;
+	}
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
@@ -2665,6 +2729,21 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 
 	*amount = 0;
 
+	if (usbdev->usecps) {
+		if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
+			struct timeval now;
+			double need;
+
+			cgtime(&now);
+			need = (double)(usbdev->last_write_siz) /
+				(double)(usbdev->cps) -
+				tdiff(&(usbdev->last_write_tv), &now);
+
+			// Simple error condition check/avoidance '< 1.0'
+			if (need > 0.0 && need < 1.0)
+				nmsleep((unsigned int)(need * 1000.0));
+		}
+	}
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
@@ -2812,6 +2891,42 @@ uint32_t usb_buffer_size(struct cgpu_info *cgpu)
 	DEVUNLOCK(cgpu, pstate);
 
 	return ret;
+}
+
+void usb_set_cps(struct cgpu_info *cgpu, int cps)
+{
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		cgpu->usbdev->cps = cps;
+
+	DEVUNLOCK(cgpu, pstate);
+}
+
+void usb_enable_cps(struct cgpu_info *cgpu)
+{
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		cgpu->usbdev->usecps = true;
+
+	DEVUNLOCK(cgpu, pstate);
+}
+
+void usb_disable_cps(struct cgpu_info *cgpu)
+{
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		cgpu->usbdev->usecps = false;
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 // Need to set all devices with matching usbdev
