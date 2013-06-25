@@ -9,7 +9,7 @@ When mining on windows, the driver being used will determine if mining will work
 
 If the driver doesn't allow mining, you will get a "USB init," error message
 i.e. one of:
- open device failed, err %d, you need to install a Windows USB driver for the device
+ open device failed, err %d, you need to install a WinUSB driver for the device
 or
  claim interface %d failed, err %d
 
