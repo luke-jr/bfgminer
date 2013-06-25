@@ -715,8 +715,7 @@ modminer_process_results(struct thr_info*thr)
 				applog(LOG_DEBUG, "%s: Nonce with H not zero  : %02x%02x%02x%02x",
 				       modminer->proc_repr,
 				       NONCE_CHARS(nonce));
-				++hw_errors;
-				++modminer->hw_errors;
+				inc_hw_errors(thr);
 				++state->bad_share_counter;
 				++immediate_bad_nonces;
 			}

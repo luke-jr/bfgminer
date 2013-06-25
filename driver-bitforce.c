@@ -337,8 +337,7 @@ void bitforce_comm_error(struct thr_info *thr)
 	data->noncebuf[0] = '\0';
 	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
 	dev_error(bitforce, REASON_DEV_COMMS_ERROR);
-	++bitforce->hw_errors;
-	++hw_errors;
+	inc_hw_errors(thr);
 	BFclose(*p_fdDev);
 	int fd = *p_fdDev = BFopen(bitforce->device_path);
 	if (fd == -1)
@@ -589,9 +588,9 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	mutex_unlock(mutexp);
 	
 	if (unlikely(!pdevbuf[0])) {
+		struct thr_info *thr = bitforce->thr[0];
 		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
-		bitforce->hw_errors++;
-		++hw_errors;
+		inc_hw_errors(thr);
 		return false;
 	}
 
@@ -617,14 +616,14 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 				chip_cgpu->temp = temp;
 		}
 	} else {
+		struct thr_info *thr = bitforce->thr[0];
 		/* Use the temperature monitor as a kind of watchdog for when
 		 * our responses are out of sync and flush the buffer to
 		 * hopefully recover */
 		applog(LOG_WARNING, "%"PRIpreprv": Garbled response probably throttling, clearing buffer", bitforce->proc_repr);
 		dev_error(bitforce, REASON_DEV_THROTTLE);
 		/* Count throttling episodes as hardware errors */
-		bitforce->hw_errors++;
-		++hw_errors;
+		inc_hw_errors(thr);
 		bitforce_clear_buffer(bitforce);
 		return false;
 	}
@@ -1035,8 +1034,7 @@ noqr:
 		applog(LOG_ERR, "%"PRIpreprv": took %lums - longer than %lums", bitforce->proc_repr,
 			tv_to_ms(elapsed), (unsigned long)BITFORCE_TIMEOUT_MS);
 		dev_error(bitforce, REASON_DEV_OVER_HEAT);
-		++bitforce->hw_errors;
-		++hw_errors;
+		inc_hw_errors(thr);
 
 		/* If the device truly throttled, it didn't process the job and there
 		 * are no results. But check first, just in case we're wrong about it
@@ -1092,8 +1090,7 @@ noqr:
 
 	applog(LOG_DEBUG, "%"PRIpreprv": waited %dms until %s", bitforce->proc_repr, bitforce->wait_ms, pdevbuf);
 	if (count < 0 && strncasecmp(pdevbuf, "I", 1)) {
-		bitforce->hw_errors++;
-		++hw_errors;
+		inc_hw_errors(thr);
 		applog(LOG_WARNING, "%"PRIpreprv": Error: Get result reports: %s", bitforce->proc_repr, pdevbuf);
 		bitforce_clear_buffer(bitforce);
 	}
@@ -1163,8 +1160,7 @@ void bitforce_process_qresult_line(struct thr_info *thr, char *buf, struct work 
 	    || bitforce_process_qresult_line_i(thr, midstate, datatail, buf, thr->next_work) ))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queued results", bitforce->proc_repr);
-		++bitforce->hw_errors;
-		++hw_errors;
+		inc_hw_errors(thr);
 	}
 }
 
@@ -1566,8 +1562,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	if (unlikely(count < 0))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, noncebuf);
-		++bitforce->hw_errors;
-		++hw_errors;
+		inc_hw_errors(thr);
 		return false;
 	}
 	
@@ -1620,8 +1615,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		if (unlikely(!thiswork))
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Failed to find work for queue results: %s", chip_cgpu->proc_repr, buf);
-			++chip_cgpu->hw_errors;
-			++hw_errors;
+			inc_hw_errors(chip_thr);
 			goto next_qline;
 		}
 		
@@ -1732,8 +1726,7 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 		{
 			// Problem sending queue, retry again in a few seconds
 			applog(LOG_ERR, "%"PRIpreprv": Failed to send queue", bitforce->proc_repr);
-			++bitforce->hw_errors;
-			++hw_errors;
+			inc_hw_errors(thr);
 			data->want_to_send_queue = true;
 		}
 	}
@@ -1879,8 +1872,7 @@ void bitforce_queue_poll(struct thr_info *thr)
 			if (!data->queued)
 			{
 				applog(LOG_ERR, "%"PRIpreprv": Failed to send queue, and queue empty; retrying after 1 second", bitforce->proc_repr);
-				++bitforce->hw_errors;
-				++hw_errors;
+				inc_hw_errors(thr);
 				sleep_us = 1000000;
 			}
 	
