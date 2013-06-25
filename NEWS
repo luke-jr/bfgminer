@@ -1,3 +1,15 @@
+Version 3.3.1 - 25th June 2013
+
+- Add an avalon-auto option which enables dynamic overclocking based on hardware
+error rate for maximum effective hashrate.
+- Add an --avalon-cutoff feature which puts the avalon idle should it reach this
+temperature, defaulting to 60, re-enabling it when it gets to target
+temperature.
+- Change default avalon target temperature to 50 degrees.
+- usbutils - incorrect test for * in bus:dev
+- Redo +1 fix in bflsc.
+
+
 Version 3.3.0 - 24th June 2013
 
 - Add an --avalon-temp option to allow a user specified target temperature.
