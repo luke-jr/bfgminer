@@ -157,8 +157,8 @@ struct bflsc_info {
 
 struct DataForwardToChain {
 	uint8_t header;
-	uint8_t deviceAddress;
 	uint8_t payloadSize;
+	uint8_t deviceAddress;
 	uint8_t payloadData[BFLSC_MAXPAYLOAD];
 };
 
