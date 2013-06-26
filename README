@@ -322,7 +322,13 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+[M]anage devices [P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+
+M gives you something like:
+
+Select processor to manage using up/down arrow keys
+ ICA 0 :                | 212.4/340.6/448.7Mh/s | A:4 R:0+0(none) HW:0/none
+
 
 P gives you:
 
