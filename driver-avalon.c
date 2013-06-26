@@ -846,6 +846,13 @@ static void avalon_dec_freq(struct avalon_info *info)
 	       info->frequency, info->timeout);
 }
 
+static void avalon_reset_auto(struct avalon_info *info)
+{
+	info->auto_queued =
+	info->auto_nonces =
+	info->auto_hw = 0;
+}
+
 static void *avalon_send_tasks(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
@@ -876,9 +883,7 @@ static void *avalon_send_tasks(void *userdata)
 				else if (info->auto_hw * 66 > total)
 					avalon_dec_freq(info);
 			}
-			info->auto_queued =
-			info->auto_nonces =
-			info->auto_hw = 0;
+			avalon_reset_auto(info);
 			mutex_unlock(&info->lock);
 		}
 
@@ -907,7 +912,7 @@ static void *avalon_send_tasks(void *userdata)
 						info->miner_count, 1, 1, info->frequency);
 				/* Reset the auto_queued count if we end up
 				 * idling any miners. */
-				info->auto_queued = 0;
+				avalon_reset_auto(info);
 			}
 
 			ret = avalon_send_task(&at, avalon);
