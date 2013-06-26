@@ -1627,7 +1627,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->device_data;
-	char *buf = &data->noncebuf[0], *buf2;
+	char *buf = &data->noncebuf[0], *buf2 = NULL;
 	const char *cmd = "ZqX";
 	unsigned flushed;
 	struct _jobinfo *processing = NULL, *item, *this;
@@ -1638,10 +1638,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	// TODO: Call "ZQX" most of the time: don't need to do sanity checks so often
 	bitforce_zox(thr, cmd);
 	if (!strncasecmp(buf, "OK:FLUSHED", 10))
-	{
 		flushed = atoi(&buf[10]);
-		buf2 = NULL;
-	}
 	else
 	if ((!strncasecmp(buf, "COUNT:", 6)) && (buf2 = strstr(buf, "FLUSHED:")) )
 	{
