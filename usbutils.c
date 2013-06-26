@@ -2944,6 +2944,53 @@ void usb_disable_cps(struct cgpu_info *cgpu)
 	DEVUNLOCK(cgpu, pstate);
 }
 
+/*
+ * The value returned (0) when usbdev is NULL
+ * doesn't matter since it also means the next call to
+ * any usbutils function will fail with a nodev
+ */
+int usb_interface(struct cgpu_info *cgpu)
+{
+	int interface = 0;
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		interface = cgpu->usbdev->found->interface;
+
+	DEVUNLOCK(cgpu, pstate);
+
+	return interface;
+}
+
+enum sub_ident usb_ident(struct cgpu_info *cgpu)
+{
+	enum sub_ident ident = IDENT_UNK;
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		ident = cgpu->usbdev->ident;
+
+	DEVUNLOCK(cgpu, pstate);
+
+	return ident;
+}
+
+void usb_set_pps(struct cgpu_info *cgpu, uint16_t PrefPacketSize)
+{
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	if (cgpu->usbdev)
+		cgpu->usbdev->PrefPacketSize = PrefPacketSize;
+
+	DEVUNLOCK(cgpu, pstate);
+}
+
 // Need to set all devices with matching usbdev
 void usb_set_dev_start(struct cgpu_info *cgpu)
 {
