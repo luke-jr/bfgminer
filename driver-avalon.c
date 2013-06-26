@@ -436,20 +436,11 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 				}
 				if (colon4 && *colon4) {
 					tmp = atoi(colon4);
-					switch (tmp) {
-					case 256:
-					case 270:
-					case 282:
-					case 300:
-					case 325:
-					case 350:
-					case 375:
-						*frequency = tmp;
-						break;
-					default:
-						quit(1, "Invalid avalon-options for "
-							"frequency must be 256/270/282/300/325/350/375");
+					if (tmp < AVALON_MIN_FREQUENCY || tmp > AVALON_MAX_FREQUENCY) {
+						quit(1, "Invalid avalon-options for frequency, must be %d <= frequency <= %d",
+						     AVALON_MIN_FREQUENCY, AVALON_MAX_FREQUENCY);
 					}
+					*frequency = tmp;
 				}
 			}
 		}
