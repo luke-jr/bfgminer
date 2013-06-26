@@ -256,7 +256,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		return;
 
 	usb_set_cps(icarus, baud / 10);
-//	usb_enable_cps(icarus);
+	usb_enable_cps(icarus);
 
 	switch (icarus->usbdev->ident) {
 		case IDENT_BLT:
