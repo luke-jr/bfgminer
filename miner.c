@@ -2399,6 +2399,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
 	char rejpcbuf[6];
+	char bnbuf[6];
 	double dev_runtime;
 	
 	if (!opt_show_procs)
@@ -2417,6 +2418,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	double waccepted = cgpu->diff_accepted;
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
+	int badnonces = cgpu->bad_nonces;
+	int allnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2433,6 +2436,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			waccepted += slave->diff_accepted;
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
+			badnonces += slave->bad_nonces;
+			allnonces += slave->diff1;
 		}
 	
 	ti_hashrate_bufstr(
@@ -2518,27 +2523,30 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		adj_width(stale, &swidth);
 		adj_width(hwerrs, &hwwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
 		            swidth, stale,
 		            percentf(wnotaccepted, waccepted, rejpcbuf),
-		            hwwidth, hwerrs
+		            hwwidth, hwerrs,
+		            percentf2(badnonces, allnonces, bnbuf)
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
 			stale,
 			percentf(wnotaccepted, waccepted, rejpcbuf),
-			hwerrs);
+			hwerrs,
+			percentf2(badnonces, allnonces, bnbuf)
+		);
 	}
 	
 	if (drv->get_dev_statline_after || drv->get_statline)
@@ -5995,6 +6003,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
 	char rejpcbuf[6];
+	char bnbuf[6];
 	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
@@ -6078,7 +6087,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
@@ -6087,7 +6096,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_rejected,
 		total_stale,
 		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
-		hw_errors);
+		hw_errors,
+		percentf2(total_bad_nonces, total_diff1, bnbuf)
+	);
 
 
 	local_mhashes_done = 0;
