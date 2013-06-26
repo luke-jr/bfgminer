@@ -5929,6 +5929,7 @@ retry:
 void manage_device(void)
 {
 	char logline[256];
+	const char *msg = NULL;
 	struct cgpu_info *cgpu;
 	
 	opt_loginput = true;
@@ -5939,6 +5940,7 @@ devchange:
 	cgpu = devices[selected_device];
 	refresh_devstatus();
 	
+refresh:
 	clear_logwin();
 	wlogprint("Select processor to manage using up/down arrow keys\n");
 	
@@ -5948,12 +5950,44 @@ devchange:
 	wattroff(logwin, A_BOLD);
 	
 	wlogprint("\n");
+	// TODO: Last share at TIMESTAMP on pool N
+	// TODO: Custom device info/commands
+	if (cgpu->deven != DEV_ENABLED)
+		wlogprint("[E]nable ");
+	if (cgpu->deven != DEV_DISABLED)
+		wlogprint("[D]isable ");
+	wlogprint("\n");
+	if (msg)
+	{
+		wattron(logwin, A_BOLD);
+		waddstr(logwin, msg);
+		wattroff(logwin, A_BOLD);
+		msg = NULL;
+	}
 	logwin_update();
 	
 	while (true)
 	{
 		int input = getch();
 		switch (input) {
+			case 'd': case 'D':
+				if (cgpu->deven == DEV_DISABLED)
+					msg = "Processor already disabled\n";
+				else
+				{
+					cgpu->deven = DEV_DISABLED;
+					msg = "Processor being disabled\n";
+				}
+				goto refresh;
+			case 'e': case 'E':
+				if (cgpu->deven == DEV_ENABLED)
+					msg = "Processor already enabled\n";
+				else
+				{
+					proc_enable(cgpu);
+					msg = "Processor being enabled\n";
+				}
+				goto refresh;
 			case KEY_DOWN:
 				if (selected_device >= total_devices - 1)
 					break;
