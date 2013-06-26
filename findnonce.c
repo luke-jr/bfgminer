@@ -156,8 +156,7 @@ static void *postcalc_hash(void *userdata)
 	if (unlikely(pcd->res[found] & ~found)) {
 		applog(LOG_WARNING, "%"PRIpreprv": invalid nonce count - HW error",
 				thr->cgpu->proc_repr);
-		hw_errors++;
-		thr->cgpu->hw_errors++;
+		inc_hw_errors_only(thr);
 		pcd->res[found] &= found;
 	}
 

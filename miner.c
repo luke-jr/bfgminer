@@ -251,6 +251,7 @@ notifier_t submit_waiting_notifier;
 
 int hw_errors;
 int total_accepted, total_rejected, total_diff1;
+int total_bad_nonces;
 int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_xfer;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
@@ -2364,13 +2365,13 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 }
 
 static const char *
-percentf(double p, double t, char *buf)
+percentf2(double p, double t, char *buf)
 {
 	if (!p)
 		return "none";
-	if (!t)
+	if (t <= p)
 		return "100%";
-	p /= p + t;
+	p /= t;
 	if (p < 0.01)
 		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
 	else
@@ -2380,6 +2381,7 @@ percentf(double p, double t, char *buf)
 		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
 	return buf;
 }
+#define percentf(p, t, buf)  percentf2(p, p + t, buf)
 
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
@@ -2397,6 +2399,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
 	char rejpcbuf[6];
+	char bnbuf[6];
 	double dev_runtime;
 	
 	if (!opt_show_procs)
@@ -2415,6 +2418,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	double waccepted = cgpu->diff_accepted;
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
+	int badnonces = cgpu->bad_nonces;
+	int allnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2431,6 +2436,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			waccepted += slave->diff_accepted;
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
+			badnonces += slave->bad_nonces;
+			allnonces += slave->diff1;
 		}
 	
 	ti_hashrate_bufstr(
@@ -2516,27 +2523,30 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		adj_width(stale, &swidth);
 		adj_width(hwerrs, &hwwidth);
 		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d",
+		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 		            cHrStatsOpt[cHrStatsI],
 		            aHr, uHr,
 		            awidth, accepted,
 		            rwidth, rejected,
 		            swidth, stale,
 		            percentf(wnotaccepted, waccepted, rejpcbuf),
-		            hwwidth, hwerrs
+		            hwwidth, hwerrs,
+		            percentf2(badnonces, allnonces, bnbuf)
 		);
 	}
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
+		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
 			stale,
 			percentf(wnotaccepted, waccepted, rejpcbuf),
-			hwerrs);
+			hwerrs,
+			percentf2(badnonces, allnonces, bnbuf)
+		);
 	}
 	
 	if (drv->get_dev_statline_after || drv->get_statline)
@@ -5993,6 +6003,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
 	char rejpcbuf[6];
+	char bnbuf[6];
 	struct thr_info *thr;
 
 	/* Update the last time this thread reported in */
@@ -6076,7 +6087,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
 		H2B_SPACED);
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d",
+	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
@@ -6085,7 +6096,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_rejected,
 		total_stale,
 		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
-		hw_errors);
+		hw_errors,
+		percentf2(total_bad_nonces, total_diff1, bnbuf)
+	);
 
 
 	local_mhashes_done = 0;
@@ -7133,11 +7146,25 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 	_submit_work_async(work);
 }
 
-void inc_hw_errors(struct thr_info *thr)
+void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
 {
+	struct cgpu_info * const cgpu = thr->cgpu;
+	
+	if (work)
+		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
+		       cgpu->proc_repr, (unsigned long)be32toh(bad_nonce));
+	
 	mutex_lock(&stats_lock);
 	hw_errors++;
-	thr->cgpu->hw_errors++;
+	++cgpu->hw_errors;
+	if (work)
+	{
+		++total_diff1;
+		++cgpu->diff1;
+		++work->pool->diff1;
+		++total_bad_nonces;
+		++cgpu->bad_nonces;
+	}
 	mutex_unlock(&stats_lock);
 
 	if (thr->cgpu->drv->hw_error)
@@ -7191,27 +7218,21 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	*work_nonce = htole32(nonce);
 	work->thr_id = thr->id;
 
-	mutex_lock(&stats_lock);
-	total_diff1++;
-	thr->cgpu->diff1++;
-	work->pool->diff1++;
-	mutex_unlock(&stats_lock);
-
 	/* Do one last check before attempting to submit the work */
 	/* Side effect: sets work->data for us */
 	res = test_nonce2(work, nonce);
 	
 	if (unlikely(res == TNR_BAD))
 		{
-			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
-			       cgpu->proc_repr);
-			inc_hw_errors(thr);
+			inc_hw_errors(thr, work, nonce);
 			ret = false;
 			goto out;
 		}
 	
 	mutex_lock(&stats_lock);
+	total_diff1++;
+	thr->cgpu->diff1++;
+	work->pool->diff1++;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	

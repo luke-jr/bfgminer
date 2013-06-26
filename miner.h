@@ -475,6 +475,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int stale;
+	int bad_nonces;
 	int hw_errors;
 	double rolling;
 	double total_mhashes;
@@ -1243,7 +1244,8 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
-extern void inc_hw_errors(struct thr_info *thr);
+extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
+#define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
 	TNR_GOOD = 1,
 	TNR_HIGH = 0,
