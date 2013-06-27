@@ -8592,6 +8592,8 @@ static void raise_fd_limits(void)
 #endif
 }
 
+extern void bfg_init_threadlocal();
+
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
@@ -8607,6 +8609,7 @@ int main(int argc, char *argv[])
 
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
+	bfg_init_threadlocal();
 #ifndef HAVE_PTHREAD_CANCEL
 	setup_pthread_cancel_workaround();
 #endif

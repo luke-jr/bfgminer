@@ -2256,6 +2256,151 @@ static const char *WindowsErrorStr(DWORD dwMessageId)
 }
 #endif
 
+static pthread_key_t key_bfgtls;
+struct bfgtls_data {
+	char *bfg_strerror_result;
+	size_t bfg_strerror_resultsz;
+#ifdef WIN32
+	LPSTR bfg_strerror_socketresult;
+#endif
+};
+
+void bfg_init_threadlocal()
+{
+	struct bfgtls_data *bfgtls;
+	void *p;
+	
+	bfgtls = malloc(sizeof(*bfgtls));
+	if (!bfgtls)
+		quit(1, "malloc bfgtls failed");
+	p = malloc(64);
+	if (!p)
+		quit(1, "malloc bfg_strerror_result failed");
+	*bfgtls = (struct bfgtls_data){
+		.bfg_strerror_resultsz = 64,
+		.bfg_strerror_result = p,
+	};
+	if (pthread_key_create(&key_bfgtls, NULL))
+		quit(1, "pthread_key_create failed");
+	if (pthread_setspecific(key_bfgtls, bfgtls))
+		quit(1, "pthread_setspecific failed");
+}
+
+static
+struct bfgtls_data *get_bfgtls()
+{
+	return pthread_getspecific(key_bfgtls);
+}
+
+static
+bool bfg_grow_buffer(char ** const bufp, size_t * const bufszp, size_t minimum)
+{
+	if (minimum <= *bufszp)
+		return false;
+	
+	while (minimum > *bufszp)
+		*bufszp = 2;
+	*bufp = realloc(*bufp, *bufszp);
+	if (unlikely(!*bufp))
+		quit(1, "realloc failed in bfg_grow_buffer");
+	
+	return true;
+}
+
+static
+const char *bfg_strcpy_growing_buffer(char ** const bufp, size_t * const bufszp, const char *src)
+{
+	if (!src)
+		return NULL;
+	
+	const size_t srcsz = strlen(src) + 1;
+	
+	bfg_grow_buffer(bufp, bufszp, srcsz);
+	memcpy(*bufp, src, srcsz);
+	
+	return *bufp;
+}
+
+// Guaranteed to always return some string (or quit)
+const char *bfg_strerror(int e, enum bfg_strerror_type type)
+{
+	static __maybe_unused pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	struct bfgtls_data *bfgtls = get_bfgtls();
+	size_t * const bufszp = &bfgtls->bfg_strerror_resultsz;
+	char ** const bufp = &bfgtls->bfg_strerror_result;
+	const char *have = NULL;
+	
+	switch (type) {
+		case BST_LIBUSB:
+#ifdef HAVE_LIBUSB
+#	if HAVE_DECL_LIBUSB_ERROR_NAME
+			// libusb makes no guarantees for thread-safety or persistence
+			mutex_lock(&mutex);
+			have = bfg_strcpy_growing_buffer(bufp, bufszp, libusb_error_name(e));
+			mutex_unlock(&mutex);
+#	endif
+#endif
+			break;
+		case BST_SOCKET:
+		{
+#ifdef WIN32
+			// Windows has a different namespace for socket errors
+			LPSTR *msg = &bfgtls->bfg_strerror_socketresult;
+			if (*msg)
+				LocalFree(*msg);
+			if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, e, 0, (LPSTR)msg, 0, 0))
+				return *msg;
+			*msg = NULL;
+			
+			break;
+#endif
+		}
+			// Fallthru on non-WIN32
+		case BST_ERRNO:
+		{
+#ifdef __STRERROR_S_WORKS
+			// FIXME: Not sure how to get this on MingW64
+retry:
+			if (likely(!strerror_s(*bufp, *bufszp, e)))
+			{
+				if (bfg_grow_buffer(bufp, bufszp, strlen(*bufp) + 2))
+					goto retry;
+				return *bufp;
+			}
+// TODO: XSI strerror_r
+// TODO: GNU strerror_r
+#else
+			mutex_lock(&mutex);
+			have = bfg_strcpy_growing_buffer(bufp, bufszp, strerror(e));
+			mutex_unlock(&mutex);
+#endif
+		}
+	}
+	
+	if (have)
+		return *bufp;
+	
+	// Failback: Stringify the number
+	static const char fmt[] = "%s error #%d", *typestr;
+	switch (type) {
+		case BST_ERRNO:
+			typestr = "System";
+			break;
+		case BST_SOCKET:
+			typestr = "Socket";
+			break;
+		case BST_LIBUSB:
+			typestr = "libusb";
+			break;
+		default:
+			typestr = "Unexpected";
+	}
+	int sz = snprintf((char*)bfgtls, 0, fmt, typestr, e) + 1;
+	bfg_grow_buffer(bufp, bufszp, sz);
+	sprintf(*bufp, fmt, typestr, e);
+	return *bufp;
+}
+
 void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32

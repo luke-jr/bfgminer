@@ -111,6 +111,13 @@ void *realloc_strcat(char *ptr, char *s);
 extern char *sanestr(char *o, char *s);
 void RenameThread(const char* name);
 
+enum bfg_strerror_type {
+	BST_ERRNO,
+	BST_SOCKET,
+	BST_LIBUSB,
+};
+extern const char *bfg_strerror(int, enum bfg_strerror_type);
+
 typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
