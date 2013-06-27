@@ -30,6 +30,7 @@
 	#define INVINETADDR -1
 	#define CLOSESOCKET close
 
+	#define SOCKERR (errno)
 	#define SOCKERRMSG bfg_strerror(errno, BST_SOCKET)
 	static inline bool sock_blocks(void)
 	{
@@ -45,6 +46,7 @@
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
 
+	#define SOCKERR (WSAGetLastError())
 	#define SOCKERRMSG bfg_strerror(WSAGetLastError(), BST_SOCKET)
 
 	static inline bool sock_blocks(void)
