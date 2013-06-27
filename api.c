@@ -3023,10 +3023,10 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 
 	if (cgpu) {
 #ifdef USE_USBUTILS
-		char pipe_details[128];
+		char details[128];
 
 		if (cgpu->usbinfo.pipe_count)
-			snprintf(pipe_details, sizeof(pipe_details),
+			snprintf(details, sizeof(details),
 				 "%"PRIu64" %"PRIu64"/%"PRIu64"/%"PRIu64" %lu",
 				 cgpu->usbinfo.pipe_count,
 				 cgpu->usbinfo.clear_err_count,
@@ -3034,9 +3034,18 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 				 cgpu->usbinfo.clear_fail_count,
 				 (unsigned long)(cgpu->usbinfo.last_pipe));
 		else
-			strcpy(pipe_details, "0");
+			strcpy(details, "0");
 
-		root = api_add_string(root, "USB Pipe", pipe_details, true);
+		root = api_add_string(root, "USB Pipe", details, true);
+
+		snprintf(details, sizeof(details),
+			 "r%"PRIu64" %.6f w%"PRIu64" %.6f",
+			 cgpu->usbinfo.read_delay_count,
+			 cgpu->usbinfo.total_read_delay,
+			 cgpu->usbinfo.write_delay_count,
+			 cgpu->usbinfo.total_write_delay);
+
+		root = api_add_string(root, "USB Delay", details, true);
 #endif
 	}
 

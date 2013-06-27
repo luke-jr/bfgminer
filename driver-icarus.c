@@ -251,18 +251,28 @@ static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bR
 static void icarus_initialise(struct cgpu_info *icarus, int baud)
 {
 	uint16_t wValue, wIndex;
+	enum sub_ident ident;
+	int interface;
 
 	if (icarus->usbinfo.nodev)
 		return;
 
-	switch (icarus->usbdev->ident) {
+	usb_set_cps(icarus, baud / 10);
+	usb_enable_cps(icarus);
+
+	interface = usb_interface(icarus);
+	ident = usb_ident(icarus);
+
+	switch (ident) {
 		case IDENT_BLT:
 		case IDENT_LLT:
 		case IDENT_CMR1:
 		case IDENT_CMR2:
+			usb_set_pps(icarus, BLT_PREF_PACKET);
+
 			// Reset
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
-				 icarus->usbdev->found->interface, C_RESET);
+				 interface, C_RESET);
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -275,7 +285,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 
 			// Set data control
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_DATA, FTDI_VALUE_DATA_BLT,
-				 icarus->usbdev->found->interface, C_SETDATA);
+				 interface, C_SETDATA);
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -284,8 +294,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			wValue = FTDI_VALUE_BAUD_BLT;
 			wIndex = FTDI_INDEX_BAUD_BLT;
 
-			if (icarus->usbdev->ident == IDENT_CMR1 ||
-			    icarus->usbdev->ident == IDENT_CMR2) {
+			if (ident == IDENT_CMR1 || ident == IDENT_CMR2) {
 				switch (baud) {
 					case 115200:
 						wValue = FTDI_VALUE_BAUD_CMR_115;
@@ -303,43 +312,42 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 
 			// Set the baud
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, wValue,
-				 (wIndex & 0xff00) | icarus->usbdev->found->interface,
-				 C_SETBAUD);
+				 (wIndex & 0xff00) | interface, C_SETBAUD);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Set Modem Control
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM, FTDI_VALUE_MODEM,
-				 icarus->usbdev->found->interface, C_SETMODEM);
+				 interface, C_SETMODEM);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Set Flow Control
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW, FTDI_VALUE_FLOW,
-				 icarus->usbdev->found->interface, C_SETFLOW);
+				 interface, C_SETFLOW);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Clear any sent data
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_PURGE_TX,
-				 icarus->usbdev->found->interface, C_PURGETX);
+				 interface, C_PURGETX);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Clear any received data
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_PURGE_RX,
-				 icarus->usbdev->found->interface, C_PURGERX);
-
-			icarus->usbdev->PrefPacketSize = BLT_PREF_PACKET;
+				 interface, C_PURGERX);
 			break;
 		case IDENT_ICA:
+			usb_set_pps(icarus, ICA_PREF_PACKET);
+
 			// Set Data Control
 			transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
-				 icarus->usbdev->found->interface, C_SETDATA);
+				 interface, C_SETDATA);
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -347,30 +355,29 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			// Set Line Control
 			uint32_t ica_data[2] = { PL2303_VALUE_LINE0, PL2303_VALUE_LINE1 };
 			_transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_LINE, PL2303_VALUE_LINE,
-				 icarus->usbdev->found->interface,
-				 &ica_data[0], PL2303_VALUE_LINE_SIZE, C_SETLINE);
+				 interface, &ica_data[0], PL2303_VALUE_LINE_SIZE, C_SETLINE);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Vendor
 			transfer(icarus, PL2303_VENDOR_OUT, PL2303_REQUEST_VENDOR, PL2303_VALUE_VENDOR,
-				 icarus->usbdev->found->interface, C_VENDOR);
-
-			icarus->usbdev->PrefPacketSize = ICA_PREF_PACKET;
+				 interface, C_VENDOR);
 			break;
 		case IDENT_AMU:
+			usb_set_pps(icarus, AMU_PREF_PACKET);
+
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
-				 icarus->usbdev->found->interface, C_ENABLE_UART);
+				 interface, C_ENABLE_UART);
 
 			if (icarus->usbinfo.nodev)
 				return;
 
 			// Set data control
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_DATA, CP210X_VALUE_DATA,
-				 icarus->usbdev->found->interface, C_SETDATA);
+				 interface, C_SETDATA);
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -378,15 +385,11 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			// Set the baud
 			uint32_t data = CP210X_DATA_BAUD;
 			_transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_BAUD, 0,
-				 icarus->usbdev->found->interface,
-				 &data, sizeof(data), C_SETBAUD);
-
-			icarus->usbdev->PrefPacketSize = AMU_PREF_PACKET;
+				 interface, &data, sizeof(data), C_SETBAUD);
 			break;
 		default:
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
-				icarus->drv->name, icarus->cgminer_id,
-				icarus->usbdev->ident);
+				icarus->drv->name, icarus->cgminer_id, ident);
 	}
 }
 
@@ -480,6 +483,7 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 {
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+	enum sub_ident ident;
 	double Hs;
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *eq;
@@ -509,7 +513,8 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		buf[max] = '\0';
 	}
 
-	switch (icarus->usbdev->ident) {
+	ident = usb_ident(icarus);
+	switch (ident) {
 		case IDENT_ICA:
 			info->Hs = ICARUS_REV3_HASH_TIME;
 			break;
@@ -527,7 +532,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
-				icarus->drv->name, icarus->usbdev->ident);
+				icarus->drv->name, ident);
 	}
 
 	info->read_time = 0;
@@ -613,6 +618,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2;
+	enum sub_ident ident;
 	size_t max;
 	int i, tmp;
 
@@ -639,7 +645,8 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 		buf[max] = '\0';
 	}
 
-	switch (icarus->usbdev->ident) {
+	ident = usb_ident(icarus);
+	switch (ident) {
 		case IDENT_ICA:
 		case IDENT_BLT:
 		case IDENT_LLT:
@@ -661,7 +668,7 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
-				icarus->drv->name, icarus->usbdev->ident);
+				icarus->drv->name, ident);
 	}
 
 	if (*buf) {
