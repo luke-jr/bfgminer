@@ -30,7 +30,8 @@
 	#define INVINETADDR -1
 	#define CLOSESOCKET close
 
-	#define SOCKERRMSG strerror(errno)
+	#define SOCKERR (errno)
+	#define SOCKERRMSG bfg_strerror(errno, BST_SOCKET)
 	static inline bool sock_blocks(void)
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
@@ -45,8 +46,8 @@
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
 
-	extern char *WSAErrorMsg(void);
-	#define SOCKERRMSG WSAErrorMsg()
+	#define SOCKERR (WSAGetLastError())
+	#define SOCKERRMSG bfg_strerror(WSAGetLastError(), BST_SOCKET)
 
 	static inline bool sock_blocks(void)
 	{
@@ -110,6 +111,13 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 extern char *sanestr(char *o, char *s);
 void RenameThread(const char* name);
+
+enum bfg_strerror_type {
+	BST_ERRNO,
+	BST_SOCKET,
+	BST_LIBUSB,
+};
+extern const char *bfg_strerror(int, enum bfg_strerror_type);
 
 typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);

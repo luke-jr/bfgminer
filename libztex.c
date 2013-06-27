@@ -34,6 +34,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "libztex.h"
+#include "util.h"
 
 //* Capability index for EEPROM support.
 #define CAPABILITY_EEPROM 0,0
@@ -72,7 +73,7 @@ static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_
 	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | 0,
 	    0x0000, buf, sizeof(buf), 1000);
 	if (cnt < 0) {
-		applog(LOG_ERR, "%s: Failed to read LANGIDs: %s", __func__, libusb_error_name(cnt));
+		applog(LOG_ERR, "%s: Failed to read LANGIDs: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 		return cnt;
 	}
 
@@ -82,7 +83,7 @@ static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_
 	    LIBUSB_REQUEST_GET_DESCRIPTOR, (LIBUSB_DT_STRING << 8) | desc_index,
 	    langid, buf, sizeof(buf), 1000);
 	if (cnt < 0) {
-		applog(LOG_ERR, "%s: Failed to read string descriptor: %s", __func__, libusb_error_name(cnt));
+		applog(LOG_ERR, "%s: Failed to read string descriptor: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 		return cnt;
 	}
 
@@ -109,7 +110,7 @@ static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable
 	int cnt = libusb_control_transfer(hndl, 0x40, 0xA0, 0xE600, 0, &reset, 1, 1000);
 	if (cnt < 0)
 	{
-		applog(LOG_ERR, "Ztex reset %d failed: %s", enable, libusb_error_name(cnt));
+		applog(LOG_ERR, "Ztex reset %d failed: %s", enable, bfg_strerror(cnt, BST_LIBUSB));
 		return 1;
 	}
 
@@ -139,7 +140,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	err = libusb_open(dev, &hndl);
 	if (err != LIBUSB_SUCCESS) {
-		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, libusb_error_name(err));
+		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, bfg_strerror(err, BST_LIBUSB));
 		goto done;
 	}
 
@@ -224,7 +225,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	}
 
 	if (0 != fseek(fp, 0, SEEK_END)) {
-		applog(LOG_ERR, "Ztex firmware fseek: %s", strerror(errno));
+		applog(LOG_ERR, "Ztex firmware fseek: %s", bfg_strerror(errno, BST_ERRNO));
 		goto done;
 	}
 
@@ -232,7 +233,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	rewind(fp);
 	fw_buf = malloc(length);
 	if (!fw_buf) {
-		applog(LOG_ERR, "%s: Can not allocate memory: %s", __func__, strerror(errno));
+		applog(LOG_ERR, "%s: Can not allocate memory: %s", __func__, bfg_strerror(errno, BST_ERRNO));
 		goto done;
 	}
 
@@ -271,7 +272,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		int k = libusb_control_transfer(hndl, 0x40, 0xA0, i, 0, fw_buf + i, numbytes, 1000);
 		if (k < numbytes)
 		{
-			applog(LOG_ERR, "Ztex device: Failed to write firmware at %d with: %s", i, libusb_error_name(k));
+			applog(LOG_ERR, "Ztex device: Failed to write firmware at %d with: %s", i, bfg_strerror(k, BST_LIBUSB));
 			goto done;
 		}
 	}
@@ -611,7 +612,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	dclk_prepare(&newdev->dclk);
 	err = libusb_open(dev, &newdev->hndl);
 	if (err != LIBUSB_SUCCESS) {
-		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, libusb_error_name(err));
+		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, bfg_strerror(err, BST_LIBUSB));
 		return CHECK_ERROR;
 	}
 
@@ -749,7 +750,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 			err = libztex_checkDevice(list[i]);
 			switch (err) {
 			case CHECK_ERROR:
-				applog(LOG_ERR, "Ztex: Can not check device: %s", libusb_error_name(err));
+				applog(LOG_ERR, "Ztex: Can not check device: %s", bfg_strerror(err, BST_LIBUSB));
 				continue;
 			case CHECK_IS_NOT_ZTEX:
 				continue;
@@ -786,7 +787,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 		if (!ztex) {
 			ztex = malloc(sizeof(*ztex));
 			if (!ztex) {
-				applog(LOG_ERR, "%s: Can not allocate memory for device struct: %s", __func__, strerror(errno));
+				applog(LOG_ERR, "%s: Can not allocate memory for device struct: %s", __func__, bfg_strerror(errno, BST_ERRNO));
 				goto done;
 			}
 		}
@@ -804,7 +805,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 
 		devs[pos] = malloc(sizeof(struct libztex_dev_list));
 		if (NULL == devs[pos]) {
-			applog(LOG_ERR, "%s: Can not allocate memory for device: %s", __func__, strerror(errno));
+			applog(LOG_ERR, "%s: Can not allocate memory for device: %s", __func__, bfg_strerror(errno, BST_ERRNO));
 			libztex_destroy_device(ztex);
 			ztex = NULL;
 			continue;
