@@ -5725,7 +5725,7 @@ retry:
 		switch_logsize();
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
-		opt_debug = true;
+		opt_debug ^= true;
 		opt_debug_console ^= true;
 		opt_log_output = opt_debug_console;
 		if (opt_debug_console)
