@@ -2239,23 +2239,6 @@ void RenameThread(const char* name)
 #endif
 }
 
-#ifdef WIN32
-static const char *WindowsErrorStr(DWORD dwMessageId)
-{
-	static LPSTR msg = NULL;
-	if (msg)
-		LocalFree(msg);
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, dwMessageId, 0, (LPSTR)&msg, 0, 0))
-		return msg;
-	static const char fmt[] = "Error #%ld";
-	signed long ldMsgId = dwMessageId;
-	int sz = snprintf((char*)&sz, 0, fmt, ldMsgId) + 1;
-	msg = (LPTSTR)LocalAlloc(LMEM_FIXED, sz);
-	sprintf((char*)msg, fmt, ldMsgId);
-	return msg;
-}
-#endif
-
 static pthread_key_t key_bfgtls;
 struct bfgtls_data {
 	char *bfg_strerror_result;
@@ -2332,6 +2315,7 @@ const char *bfg_strerror(int e, enum bfg_strerror_type type)
 	
 	switch (type) {
 		case BST_LIBUSB:
+// NOTE: Nested preprocessor checks since the latter isn't defined at all without the former
 #ifdef HAVE_LIBUSB
 #	if HAVE_DECL_LIBUSB_ERROR_NAME
 			// libusb makes no guarantees for thread-safety or persistence
@@ -2404,6 +2388,7 @@ retry:
 void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32
+#define WindowsErrorStr(e)  bfg_strerror(e, true)
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
