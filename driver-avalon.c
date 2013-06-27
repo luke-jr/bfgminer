@@ -233,7 +233,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, int read_count,
 		ret = read(fd, buf, 1);
 		if (ret < 0)
 		{
-			applog(LOG_ERR, "Avalon: Error %d on read in avalon_gets", errno);
+			applog(LOG_ERR, "Avalon: Error on read in avalon_gets: %s", bfg_strerror(errno, BST_ERRNO));
 			return AVA_GETS_ERROR;
 		}
 

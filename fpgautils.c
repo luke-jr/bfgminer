@@ -680,7 +680,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		if (errno == EACCES)
 			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
 		else
-			applog(LOG_DEBUG, "Open %s failed, errno:%d", devpath, errno);
+			applog(LOG_DEBUG, "Open %s failed: %s", devpath, bfg_strerror(errno, BST_ERRNO));
 
 		return -1;
 	}
