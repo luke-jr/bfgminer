@@ -1298,6 +1298,7 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
+extern int scan_serial(const char *);
 
 enum api_data_type {
 	API_ESCAPE,

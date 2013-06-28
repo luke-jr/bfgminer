@@ -8697,6 +8697,104 @@ void start_cgpu(struct cgpu_info *cgpu)
 		proc_enable(cgpu);
 }
 
+int scan_serial(const char *s)
+{
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	struct string_elist *orig_scan_devices;
+	int devcount, i, mining_threads_new = 0;
+	unsigned int k;
+	struct string_elist *iter, *tmp;
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	void *p;
+	char *dummy = "\0";
+	
+	mutex_lock(&mutex);
+	orig_scan_devices = scan_devices;
+	devcount = total_devices;
+	
+	if (s)
+	{
+		// Make temporary scan_devices list
+		scan_devices = NULL;
+		string_elist_add("noauto", &scan_devices);
+		string_elist_add(s, &scan_devices);
+	}
+	
+	drv_detect_all();
+	
+	wr_lock(&devices_lock);
+	p = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + total_devices_new + 1));
+	if (unlikely(!p))
+	{
+		wr_unlock(&devices_lock);
+		applog(LOG_ERR, "scan_serial: realloc failed trying to grow devices array");
+		goto out;
+	}
+	devices = p;
+	wr_unlock(&devices_lock);
+	
+	for (i = 0; i < total_devices_new; ++i)
+	{
+		cgpu = devices_new[i];
+		mining_threads_new += cgpu->threads ?: 1;
+	}
+	
+	wr_lock(&mining_thr_lock);
+	mining_threads_new += mining_threads;
+	p = realloc(mining_thr, sizeof(struct thr_info *) * mining_threads_new);
+	if (unlikely(!p))
+	{
+		wr_unlock(&mining_thr_lock);
+		applog(LOG_ERR, "scan_serial: realloc failed trying to grow mining_thr");
+		goto out;
+	}
+	mining_thr = p;
+	wr_unlock(&mining_thr_lock);
+	for (i = mining_threads; i < mining_threads_new; ++i) {
+		mining_thr[i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[i])
+		{
+			applog(LOG_ERR, "scan_serial: Failed to calloc mining_thr[%d]", i);
+			for ( ; --i >= mining_threads; )
+				free(mining_thr[i]);
+			goto out;
+		}
+	}
+	
+	k = mining_threads;
+	for (i = 0; i < total_devices_new; ++i)
+	{
+		cgpu = devices_new[i];
+		load_temp_config_cgpu(cgpu, &dummy, &dummy);
+		allocate_cgpu(cgpu, &k);
+		start_cgpu(cgpu);
+		register_device(cgpu);
+		++total_devices;
+	}
+	
+#ifdef HAVE_CURSES
+	switch_logsize();
+#endif
+	
+out:
+	if (s)
+	{
+		DL_FOREACH_SAFE(scan_devices, iter, tmp)
+		{
+			string_elist_del(&scan_devices, iter);
+		}
+		scan_devices = orig_scan_devices;
+	}
+	
+	total_devices_new = 0;
+	
+	devcount = total_devices - devcount;
+	mutex_unlock(&mutex);
+	
+	return devcount;
+}
+
 static void probe_pools(void)
 {
 	int i;
