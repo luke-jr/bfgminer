@@ -628,6 +628,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	{
 	case 'GPU.Last Share Time':
 	case 'PGA.Last Share Time':
+	case 'ASC.Last Share Time':
 	case 'DEVS.Last Share Time':
 		if ($value == 0
 		||  (isset($alldata['Last Share Pool']) && $alldata['Last Share Pool'] == -1))
@@ -643,6 +644,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Last Valid Work':
 	case 'PGA.Last Valid Work':
+	case 'ASC.Last Valid Work':
 	case 'DEVS.Last Valid Work':
 		if ($value == 0)
 			$ret = 'Never';
@@ -657,6 +659,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Last Share Pool':
 	case 'PGA.Last Share Pool':
+	case 'ASC.Last Share Pool':
 	case 'DEVS.Last Share Pool':
 		if ($value == -1)
 		{
@@ -721,6 +724,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Utility':
 	case 'PGA.Utility':
+	case 'ASC.Utility':
 	case 'DEVS.Utility':
 	case 'SUMMARY.Utility':
 	case 'total.Utility':
@@ -754,8 +758,9 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Work Utility':
 		$ret = $value.'/m';
 		break;
-	case 'PGA.Temperature':
 	case 'GPU.Temperature':
+	case 'PGA.Temperature':
+	case 'ASC.Temperature':
 	case 'DEVS.Temperature':
 		$ret = $value.'&deg;C';
 		if (!isset($alldata['GPU']))
@@ -801,6 +806,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.MHS av':
 	case 'PGA.MHS av':
+	case 'ASC.MHS av':
 	case 'DEVS.MHS av':
 	case 'SUMMARY.MHS av':
 	case 'total.MHS av':
@@ -838,6 +844,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Total MH':
 	case 'PGA.Total MH':
+	case 'ASC.Total MH':
 	case 'DEVS.Total MH':
 	case 'SUMMARY.Total MH':
 	case 'total.Total MH':
@@ -846,12 +853,14 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Getworks':
 	case 'GPU.Accepted':
 	case 'PGA.Accepted':
+	case 'ASC.Accepted':
 	case 'DEVS.Accepted':
 	case 'SUMMARY.Accepted':
 	case 'POOL.Accepted':
 	case 'total.Accepted':
 	case 'GPU.Rejected':
 	case 'PGA.Rejected':
+	case 'ASC.Rejected':
 	case 'DEVS.Rejected':
 	case 'SUMMARY.Rejected':
 	case 'POOL.Rejected':
@@ -865,6 +874,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Diff1 Shares':
 	case 'GPU.Diff1 Work':
 	case 'PGA.Diff1 Work':
+	case 'ASC.Diff1 Work':
 	case 'total.Diff1 Work':
 	case 'STATS.Times Sent':
 	case 'STATS.Bytes Sent':
@@ -904,6 +914,7 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Status':
 	case 'PGA.Status':
+	case 'ASC.Status':
 	case 'DEVS.Status':
 	case 'POOL.Status':
 		if ($value != 'Alive')
@@ -911,6 +922,8 @@ function fmt($section, $name, $value, $when, $alldata)
 		break;
 	case 'GPU.Enabled':
 	case 'PGA.Enabled':
+	case 'ASC.Enabled':
+	case 'ASC.Enabled':
 	case 'DEVS.Enabled':
 		if ($value != 'Y')
 			$class = $warnclass;
@@ -927,12 +940,14 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'SUMMARY.Difficulty Accepted':
 	case 'GPU.Difficulty Accepted':
 	case 'PGA.Difficulty Accepted':
+	case 'ASC.Difficulty Accepted':
 	case 'DEVS.Difficulty Accepted':
 	case 'POOL.Difficulty Accepted':
 	case 'total.Difficulty Accepted':
 	case 'SUMMARY.Difficulty Rejected':
 	case 'GPU.Difficulty Rejected':
 	case 'PGA.Difficulty Rejected':
+	case 'ASC.Difficulty Rejected':
 	case 'DEVS.Difficulty Rejected':
 	case 'POOL.Difficulty Rejected':
 	case 'total.Difficulty Rejected':
@@ -941,6 +956,7 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'total.Difficulty Stale':
 	case 'GPU.Last Share Difficulty':
 	case 'PGA.Last Share Difficulty':
+	case 'ASC.Last Share Difficulty':
 	case 'DEVS.Last Share Difficulty':
 	case 'POOL.Last Share Difficulty':
 		if ($value != '')
@@ -1685,7 +1701,7 @@ function doOne($rig, $preprocess)
 #
 global $sectionmap;
 # map sections to their api command
-# DEVS is a special case that will match GPU or PGA
+# DEVS is a special case that will match GPU, PGA or ASC
 # so you can have a single table with both in it
 # DATE is hard coded so not in here
 $sectionmap = array(
@@ -1695,6 +1711,7 @@ $sectionmap = array(
 	'DEVS' => 'devs',
 	'GPU' => 'devs',	// You would normally use DEVS
 	'PGA' => 'devs',	// You would normally use DEVS
+	'ASC' => 'devs',	// You would normally use DEVS
 	'NOTIFY' => 'notify',
 	'DEVDETAILS' => 'devdetails',
 	'STATS' => 'stats',
@@ -1966,7 +1983,7 @@ function secmatch($section, $field)
 	return true;
 
  if ($section == 'DEVS'
- &&  ($field == 'GPU' || $field == 'PGA'))
+ &&  ($field == 'GPU' || $field == 'PGA' || $field == 'ASC'))
 	return true;
 
  return false;
