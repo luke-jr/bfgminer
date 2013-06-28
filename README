@@ -420,7 +420,7 @@ dedicated to this program,
 	http://forum.bitcoin.org/index.php?topic=28402.0
 
 The output line shows the following:
-(5s):1713.6 (avg):1707.8 Mh/s | DA:729  DR:8  HW:0  U:22.53/m  WU:22.53/m
+(5s):1713.6 (avg):1707.8 Mh/s | DA:729  DR:8  HW:0  WU:22.53/m
 
 Each column is as follows:
 5s:  A 5 second exponentially decaying average hash rate
@@ -428,7 +428,6 @@ avg: An all time average hash rate
 DA:  The total difficulty of Accepted shares
 DR:  The total difficulty of Rejected shares
 HW:  The number of HardWare errors
-U:   The Utility defined as the number of shares / minute
 WU:  The Work Utility defined as the number of diff1 shares work / minute
      (accepted or rejected).
 
