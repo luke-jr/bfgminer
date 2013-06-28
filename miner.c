@@ -8620,6 +8620,9 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	int j;
 	
 	struct device_drv *api = cgpu->drv;
+	if (!cgpu->devtype)
+		cgpu->devtype = "PGA";
+	
 	int threadobj = cgpu->threads;
 	if (!threadobj)
 		// Create a fake thread object to handle hashmeter etc
@@ -8954,10 +8957,6 @@ int main(int argc, char *argv[])
 #endif
 
 	drv_detect_all();
-
-	for (i = 0; i < total_devices; ++i)
-		if (!devices[i]->devtype)
-			devices[i]->devtype = "PGA";
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
