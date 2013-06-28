@@ -1099,7 +1099,7 @@ char *recv_line(struct pool *pool)
 				break;
 			}
 			if (n < 0) {
-				if (!sock_blocks() || !socket_full(pool, false)) {
+				if (!sock_blocks() || !socket_full(pool, true)) {
 					ret = RECV_RECVFAIL;
 					break;
 				}
