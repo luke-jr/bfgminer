@@ -8554,6 +8554,65 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+static
+void drv_detect_all()
+{
+#ifdef USE_X6500
+	if (likely(have_libusb))
+		ft232r_scan();
+#endif
+
+#ifdef HAVE_OPENCL
+	if (!opt_nogpu)
+		opencl_api.drv_detect();
+	gpu_threads = 0;
+#endif
+
+#ifdef USE_ICARUS
+	if (!opt_scrypt)
+	{
+		cairnsmore_drv.drv_detect();
+		icarus_drv.drv_detect();
+	}
+#endif
+
+#ifdef USE_BITFORCE
+	if (!opt_scrypt)
+		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_MODMINER
+	if (!opt_scrypt)
+		modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_X6500
+	if (likely(have_libusb) && !opt_scrypt)
+		x6500_api.drv_detect();
+#endif
+
+#ifdef USE_ZTEX
+	if (likely(have_libusb) && !opt_scrypt)
+		ztex_drv.drv_detect();
+#endif
+
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
+#endif
+
+#ifdef WANT_CPUMINE
+	cpu_drv.drv_detect();
+#endif
+
+#ifdef USE_X6500
+	if (likely(have_libusb))
+		ft232r_scan_free();
+#endif
+}
+
 static void probe_pools(void)
 {
 	int i;
@@ -8749,11 +8808,6 @@ int main(int argc, char *argv[])
 		successful_connect = true;
 	}
 
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan();
-#endif
-
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs)
 		use_curses = false;
@@ -8832,55 +8886,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
-	gpu_threads = 0;
-#endif
-
-#ifdef USE_ICARUS
-	if (!opt_scrypt)
-	{
-		cairnsmore_drv.drv_detect();
-		icarus_drv.drv_detect();
-	}
-#endif
-
-#ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (likely(have_libusb) && !opt_scrypt)
-		x6500_api.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-	if (likely(have_libusb) && !opt_scrypt)
-		ztex_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpu_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan_free();
-#endif
+	drv_detect_all();
 
 	for (i = 0; i < total_devices; ++i)
 		if (!devices[i]->devtype)
