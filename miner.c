@@ -8613,6 +8613,46 @@ void drv_detect_all()
 #endif
 }
 
+static
+void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
+{
+	struct thr_info *thr;
+	int j;
+	
+	struct device_drv *api = cgpu->drv;
+	int threadobj = cgpu->threads;
+	if (!threadobj)
+		// Create a fake thread object to handle hashmeter etc
+		threadobj = 1;
+	cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
+	cgpu->thr[threadobj] = NULL;
+	cgpu->status = LIFE_INIT;
+
+	cgpu->max_hashes = 0;
+
+	// Setup thread structs before starting any of the threads, in case they try to interact
+	for (j = 0; j < threadobj; ++j, ++*kp) {
+		thr = get_thread(*kp);
+		thr->id = *kp;
+		thr->cgpu = cgpu;
+		thr->device_thread = j;
+		thr->work_restart_notifier[1] = INVSOCK;
+		thr->mutex_request[1] = INVSOCK;
+		thr->_job_transition_in_progress = true;
+		timerclear(&thr->tv_morework);
+		thr->_last_sbr_state = true;
+
+		thr->scanhash_working = true;
+		thr->hashes_done = 0;
+		timerclear(&thr->tv_hashes_done);
+		cgtime(&thr->tv_lastupdate);
+		thr->tv_poll.tv_sec = -1;
+		thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
+
+		cgpu->thr[j] = thr;
+	}
+}
+
 static void probe_pools(void)
 {
 	int i;
@@ -9097,38 +9137,7 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		struct device_drv *api = cgpu->drv;
-		int threadobj = cgpu->threads;
-		if (!threadobj)
-			// Create a fake thread object to handle hashmeter etc
-			threadobj = 1;
-		cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
-		cgpu->thr[threadobj] = NULL;
-		cgpu->status = LIFE_INIT;
-
-		cgpu->max_hashes = 0;
-
-		// Setup thread structs before starting any of the threads, in case they try to interact
-		for (j = 0; j < threadobj; ++j, ++k) {
-			thr = get_thread(k);
-			thr->id = k;
-			thr->cgpu = cgpu;
-			thr->device_thread = j;
-			thr->work_restart_notifier[1] = INVSOCK;
-			thr->mutex_request[1] = INVSOCK;
-			thr->_job_transition_in_progress = true;
-			timerclear(&thr->tv_morework);
-			thr->_last_sbr_state = true;
-
-			thr->scanhash_working = true;
-			thr->hashes_done = 0;
-			timerclear(&thr->tv_hashes_done);
-			cgtime(&thr->tv_lastupdate);
-			thr->tv_poll.tv_sec = -1;
-			thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
-
-			cgpu->thr[j] = thr;
-		}
+		allocate_cgpu(cgpu, &k);
 	}
 
 	// Start threads
