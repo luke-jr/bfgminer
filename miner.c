@@ -1069,9 +1069,42 @@ static int temp_strtok(char *base, char **n)
 	return atoi(i);
 }
 
+static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char **target_np)
+{
+	int target_off, val;
+	
+	// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
+	if (!cgpu->cutofftemp)
+		cgpu->cutofftemp = opt_cutofftemp;
+	
+	// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
+	if (cgpu->targettemp)
+		target_off = cgpu->targettemp - cgpu->cutofftemp;
+	else
+		target_off = -6;
+	
+	val = temp_strtok(temp_cutoff_str, cutoff_np);
+	if (val < 0 || val > 200)
+		quit(1, "Invalid value passed to set temp cutoff");
+	if (val)
+		cgpu->cutofftemp = val;
+	
+	val = temp_strtok(temp_target_str, target_np);
+	if (val < 0 || val > 200)
+		quit(1, "Invalid value passed to set temp target");
+	if (val)
+		cgpu->targettemp = val;
+	else
+		cgpu->targettemp = cgpu->cutofftemp + target_off;
+	
+	applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
+	       cgpu->proc_repr,
+	       cgpu->targettemp, cgpu->cutofftemp);
+}
+
 static void load_temp_config()
 {
-	int i, val = 0, target_off;
+	int i;
 	char *cutoff_n, *target_n;
 	struct cgpu_info *cgpu;
 
@@ -1080,34 +1113,7 @@ static void load_temp_config()
 
 	for (i = 0; i < total_devices; ++i) {
 		cgpu = get_devices(i);
-		
-		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
-		if (!cgpu->cutofftemp)
-			cgpu->cutofftemp = opt_cutofftemp;
-		
-		// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
-		if (cgpu->targettemp)
-			target_off = cgpu->targettemp - cgpu->cutofftemp;
-		else
-			target_off = -6;
-		
-		val = temp_strtok(temp_cutoff_str, &cutoff_n);
-		if (val < 0 || val > 200)
-			quit(1, "Invalid value passed to set temp cutoff");
-		if (val)
-			cgpu->cutofftemp = val;
-		
-		val = temp_strtok(temp_target_str, &target_n);
-		if (val < 0 || val > 200)
-			quit(1, "Invalid value passed to set temp target");
-		if (val)
-			cgpu->targettemp = val;
-		else
-			cgpu->targettemp = cgpu->cutofftemp + target_off;
-		
-		applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
-		       cgpu->proc_repr,
-		       cgpu->targettemp, cgpu->cutofftemp);
+		load_temp_config_cgpu(cgpu, &cutoff_n, &target_n);
 	}
 	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
 		quit(1, "Too many values passed to set temp cutoff");
