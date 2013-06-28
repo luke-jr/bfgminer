@@ -1384,7 +1384,7 @@ char *recv_line(struct pool *pool)
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
 				socket_recv_errno = SOCKERR;
-				if (!sock_blocks() || !socket_full(pool, false)) {
+				if (!sock_blocks() || !socket_full(pool, true)) {
 					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %s", bfg_strerror(socket_recv_errno, BST_SOCKET));
 					suspend_stratum(pool);
 					break;
