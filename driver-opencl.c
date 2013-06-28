@@ -1284,7 +1284,8 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 		else
 			tailsprintf(buf, "       ", gt);
 		if (gf != -1)
-			tailsprintf(buf, "%4dRPM ", gf);
+			// show invalid as 9999
+			tailsprintf(buf, "%4dRPM ", gf > 9999 ? 9999 : gf);
 		else if ((gp = gpu_fanpercent(gpuid)) != -1)
 			tailsprintf(buf, "%3d%%    ", gp);
 		else
