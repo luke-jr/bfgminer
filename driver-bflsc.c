@@ -1394,7 +1394,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 
 	err = send_recv_ss(bflsc, dev, &sent, &amount,
 				BFLSC_VOLTAGE, BFLSC_VOLTAGE_LEN, C_REQUESTVOLTS,
-				volt_buf, sizeof(volt_buf)-1, C_GETTEMPERATURE, READ_NL);
+				volt_buf, sizeof(volt_buf)-1, C_GETVOLTS, READ_NL);
 	mutex_unlock(&(bflsc->device_mutex));
 
 	if (!sent) {

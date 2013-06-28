@@ -517,6 +517,7 @@ static const char *C_QUEJOBSTATUS_S = "QueJobStatus";
 static const char *C_QUEFLUSH_S = "QueFlush";
 static const char *C_QUEFLUSHREPLY_S = "QueFlushReply";
 static const char *C_REQUESTVOLTS_S = "RequestVolts";
+static const char *C_GETVOLTS_S = "GetVolts";
 static const char *C_SENDTESTWORK_S = "SendTestWork";
 static const char *C_LATENCY_S = "SetLatency";
 static const char *C_SETLINE_S = "SetLine";
@@ -1004,6 +1005,7 @@ static void cgusb_check_init()
 		usb_commands[C_QUEFLUSH] = C_QUEFLUSH_S;
 		usb_commands[C_QUEFLUSHREPLY] = C_QUEFLUSHREPLY_S;
 		usb_commands[C_REQUESTVOLTS] = C_REQUESTVOLTS_S;
+		usb_commands[C_GETVOLTS] = C_GETVOLTS_S;
 		usb_commands[C_SENDTESTWORK] = C_SENDTESTWORK_S;
 		usb_commands[C_LATENCY] = C_LATENCY_S;
 		usb_commands[C_SETLINE] = C_SETLINE_S;
