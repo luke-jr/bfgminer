@@ -8622,6 +8622,7 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	struct device_drv *api = cgpu->drv;
 	if (!cgpu->devtype)
 		cgpu->devtype = "PGA";
+	cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 	
 	int threadobj = cgpu->threads;
 	if (!threadobj)
@@ -8654,6 +8655,15 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 
 		cgpu->thr[j] = thr;
 	}
+	
+	if (!cgpu->threads)
+		memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
+	else
+	for (j = 0; j < cgpu->threads; ++j)
+	{
+		thr = cgpu->thr[j];
+		notifier_init(thr->notifier);
+	}
 }
 
 static
@@ -8662,12 +8672,8 @@ void start_cgpu(struct cgpu_info *cgpu)
 	struct thr_info *thr;
 	int j;
 	
-	if (!cgpu->threads)
-		memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
 	for (j = 0; j < cgpu->threads; ++j) {
 		thr = cgpu->thr[j];
-
-		notifier_init(thr->notifier);
 
 		/* Enable threads for devices set not to mine but disable
 		 * their queue in case we wish to enable them later */
@@ -9004,9 +9010,6 @@ int main(int argc, char *argv[])
 #endif
 
 	load_temp_config();
-
-	for (i = 0; i < total_devices; ++i)
-		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 #ifdef HAVE_CURSES
 	switch_logsize();
