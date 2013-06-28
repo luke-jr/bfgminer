@@ -8653,6 +8653,33 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	}
 }
 
+static
+void start_cgpu(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int j;
+	
+	if (!cgpu->threads)
+		memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
+	for (j = 0; j < cgpu->threads; ++j) {
+		thr = cgpu->thr[j];
+
+		notifier_init(thr->notifier);
+
+		/* Enable threads for devices set not to mine but disable
+		 * their queue in case we wish to enable them later */
+		if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
+			continue;
+
+		thread_reportout(thr);
+
+		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+			quit(1, "thread %d create failed", thr->id);
+	}
+	if (cgpu->deven == DEV_ENABLED)
+		proc_enable(cgpu);
+}
+
 static void probe_pools(void)
 {
 	int i;
@@ -8699,7 +8726,7 @@ int main(int argc, char *argv[])
 	struct thr_info *thr;
 	struct block *block;
 	unsigned int k;
-	int i, j;
+	int i;
 	char *s;
 
 #ifdef WIN32
@@ -9143,25 +9170,7 @@ begin_bench:
 	// Start threads
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		if (!cgpu->threads)
-			memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
-		for (j = 0; j < cgpu->threads; ++j) {
-			thr = cgpu->thr[j];
-
-			notifier_init(thr->notifier);
-
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
-				continue;
-
-			thread_reportout(thr);
-
-			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-				quit(1, "thread %d create failed", thr->id);
-		}
-		if (cgpu->deven == DEV_ENABLED)
-			proc_enable(cgpu);
+		start_cgpu(cgpu);
 	}
 
 #ifdef HAVE_OPENCL
