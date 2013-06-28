@@ -745,7 +745,7 @@ static void cpu_detect()
 	#endif /* !WIN32 */
 
 	if (opt_n_threads < 0 || !forced_n_threads) {
-		if (total_devices && !opt_usecpu)
+		if ((total_devices || total_devices_new) && !opt_usecpu)
 			opt_n_threads = 0;
 		else
 			opt_n_threads = num_processors;

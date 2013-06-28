@@ -970,6 +970,8 @@ extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_devices;
 extern struct cgpu_info **devices;
+extern int total_devices_new;
+extern struct cgpu_info **devices_new;
 extern int total_pools;
 extern struct pool **pools;
 extern const char *algo_names[];

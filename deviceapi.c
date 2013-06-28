@@ -608,8 +608,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
-	devices[total_devices++] = cgpu;
+	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
+	devices_new[total_devices_new++] = cgpu;
 	
 	if (lpcount > 1)
 	{
@@ -643,7 +643,7 @@ bool add_cgpu(struct cgpu_info *cgpu)
 				slave->proc_repr_ns[ns] += i;
 			}
 			slave->threads = tpp;
-			devices[total_devices++] = slave;
+			devices_new[total_devices_new++] = slave;
 			*nlp_p = slave;
 			nlp_p = &slave->next_proc;
 		}

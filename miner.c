@@ -162,6 +162,8 @@ static bool opt_display_devs;
 static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
+int total_devices_new;
+struct cgpu_info **devices_new;
 bool have_opencl;
 int opt_n_threads = -1;
 int mining_threads;
@@ -8963,6 +8965,10 @@ int main(int argc, char *argv[])
 #endif
 
 	drv_detect_all();
+	total_devices = total_devices_new;
+	devices = devices_new;
+	total_devices_new = 0;
+	devices_new = NULL;
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
