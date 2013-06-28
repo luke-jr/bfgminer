@@ -2248,9 +2248,13 @@ struct bfgtls_data {
 #endif
 };
 
-void bfg_init_threadlocal()
+static
+struct bfgtls_data *get_bfgtls()
 {
-	struct bfgtls_data *bfgtls;
+	struct bfgtls_data *bfgtls = pthread_getspecific(key_bfgtls);
+	if (bfgtls)
+		return bfgtls;
+	
 	void *p;
 	
 	bfgtls = malloc(sizeof(*bfgtls));
@@ -2263,16 +2267,16 @@ void bfg_init_threadlocal()
 		.bfg_strerror_resultsz = 64,
 		.bfg_strerror_result = p,
 	};
-	if (pthread_key_create(&key_bfgtls, NULL))
-		quit(1, "pthread_key_create failed");
 	if (pthread_setspecific(key_bfgtls, bfgtls))
 		quit(1, "pthread_setspecific failed");
+	
+	return bfgtls;
 }
 
-static
-struct bfgtls_data *get_bfgtls()
+void bfg_init_threadlocal()
 {
-	return pthread_getspecific(key_bfgtls);
+	if (pthread_key_create(&key_bfgtls, NULL))
+		quit(1, "pthread_key_create failed");
 }
 
 static
