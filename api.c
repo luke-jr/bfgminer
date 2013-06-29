@@ -320,6 +320,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERSUM 96
 #define MSG_ZERNOSUM 97
 
+#define MSG_DEVSCAN 0x100
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -329,6 +331,7 @@ enum code_severity {
 };
 
 enum code_parameters {
+	PARAM_COUNT,
 	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_CPU,
@@ -494,6 +497,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
+ { SEVERITY_SUCC,  MSG_DEVSCAN, PARAM_COUNT,	"Added %d new device(s)" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1184,6 +1188,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			severity[1] = '\0';
 
 			switch(codes[i].params) {
+				case PARAM_COUNT:
 				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_CPU:
@@ -1582,6 +1587,31 @@ static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 		io_close(io_data);
 }
 #endif
+
+static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	int n;
+	bool io_open = false;
+	
+	applog(LOG_DEBUG, "RPC: request to scan %s for devices",
+	       param);
+	
+	if (param && !param[0])
+		param = NULL;
+	
+	n = scan_serial(param);
+	
+	message(io_data, MSG_DEVSCAN, n, NULL, isjson);
+	
+	io_open = io_add(io_data, isjson ? COMSTR JSON_DEVS : _DEVS COMSTR);
+
+	n = total_devices - n;
+	for (int i = n; i < total_devices; ++i)
+		devdetail_an(io_data, get_devices(i), isjson, i > n);
+	
+	if (isjson && io_open)
+		io_close(io_data);
+}
 
 #ifdef HAVE_AN_FPGA
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -3072,6 +3102,7 @@ struct CMDS {
 } cmds[] = {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
+	{ "devscan",		devscan,	false },
 	{ "devs",		devstatus,	false },
 	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
