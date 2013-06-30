@@ -2039,7 +2039,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 
 	sprintf(buf, "%s%d ", cgpu->drv->name, cgpu->device_id);
 	cgpu->drv->get_statline_before(buf, cgpu);
-	tailsprintf(buf, "(%ds):%s (avg):%sh/s | DA:%.0f DR:%.0f HW:%d WU:%.1f/m",
+	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
 		displayed_hashes,
@@ -2174,7 +2174,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(wu, &wuwidth);
 
-	wprintw(statuswin, "/%6sh/s | DA:%*.0f DR:%*.0f HW:%*d WU:%*.2f/m",
+	wprintw(statuswin, "/%6sh/s | A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
 			displayed_hashes,
 			dawidth, cgpu->diff_accepted,
 			drwidth, cgpu->diff_rejected,
@@ -4732,7 +4732,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	suffix_string(dh64, displayed_hashes, 4);
 	suffix_string(dr64, displayed_rolling, 4);
 
-	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | DA:%.0f  DR:%.0f  HW:%d  WU:%.1f/m",
+	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, displayed_rolling, displayed_hashes,
 		total_diff_accepted, total_diff_rejected, hw_errors,
