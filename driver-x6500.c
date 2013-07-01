@@ -226,7 +226,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 
 	applog(LOG_WARNING, "%s: Programming %s...",
 	       x6500->dev_repr, x6500->device_path);
-	x6500->status = LIFE_INIT;
+	x6500->status = LIFE_INIT2;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
 	struct jtag_port jpt = {
@@ -343,6 +343,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	notifier_init(thr->mutex_request);
 	pthread_cond_init(&x6500->device_cond, NULL);
 	
+	// This works because x6500_thread_init is only called for the first processor now that they're all using the same thread
 	for ( ; x6500; x6500 = x6500->next_proc)
 	{
 		thr = x6500->thr[0];
@@ -362,6 +363,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	jp->a = x6500->cgpu_data;
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
+	x6500->status = LIFE_INIT2;
 	
 	if (!jtag_reset(jp)) {
 		applog(LOG_ERR, "%s: JTAG reset failed",

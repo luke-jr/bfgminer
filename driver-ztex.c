@@ -382,6 +382,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	ztex_releaseFpga(ztex);
 	notifier_init(thr->work_restart_notifier);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
+	cgpu->status = LIFE_INIT2;
 	return true;
 }
 

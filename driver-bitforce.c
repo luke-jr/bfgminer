@@ -1198,6 +1198,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			if (opt_bfl_noncerange)
 				bitforce_change_mode(bitforce, BFP_RANGE);
 		}
+		bitforce->status = LIFE_INIT2;
 		
 		while (xlink_id < 31 && !(initdata->devmask & (1 << ++xlink_id)))
 		{}
