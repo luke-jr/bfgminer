@@ -738,6 +738,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 	int found, max_found = 0, pos = 0, err, rescan, ret = 0;
 	libusb_device **list = NULL;
 	ssize_t cnt, i;
+	int skipped = 0;
 
 	do {
 		cnt = libusb_get_device_list(NULL, &list);
@@ -747,6 +748,12 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 		}
 
 		for (found = rescan = i = 0; i < cnt; i++) {
+			if (bfg_claim_libusb(NULL, false, list[i]))
+			{
+				++skipped;
+				continue;
+			}
+			
 			err = libztex_checkDevice(list[i]);
 			switch (err) {
 			case CHECK_ERROR:
@@ -828,6 +835,10 @@ done:
 		free(devs);
 	if (list)
 		libusb_free_device_list(list, 1);
+	
+	if (skipped)
+		applog(LOG_DEBUG, "%s: Skipping probe of %d claimed devices", __func__, skipped);
+	
 	return ret;
 }
 

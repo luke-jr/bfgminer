@@ -85,6 +85,8 @@ static int ztex_autodetect(void)
 
 	for (i = 0; i < cnt; i++) {
 		ztex_master = ztex_devices[i]->dev;
+		if (bfg_claim_usb(&ztex_drv, true, ztex_master->usbbus, ztex_master->usbaddress))
+			return false;
 		ztex_master->root = ztex_master;
 		fpgacount = libztex_numberOfFpgas(ztex_master);
 		ztex_master->handles = fpgacount;

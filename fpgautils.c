@@ -100,6 +100,18 @@ bool search_needles(const char *haystack, va_list needles)
 
 #define SEARCH_NEEDLES(haystack)  search_needles(haystack, needles)
 
+static
+int _detectone_wrap(const detectone_func_t detectone, const char * const param, const char *fname)
+{
+	if (bfg_claim_serial(NULL, false, param))
+	{
+		applog(LOG_DEBUG, "%s: %s is already claimed, skipping probe", fname, param);
+		return 0;
+	}
+	return detectone(param);
+}
+#define detectone(param)  _detectone_wrap(detectone, param, __func__)
+
 #ifdef HAVE_LIBUDEV
 static
 int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
@@ -331,6 +343,8 @@ out:
 #	define _serial_autodetect_ftdi(...)  (0)
 #endif
 
+#undef detectone
+
 int _serial_autodetect(detectone_func_t detectone, ...)
 {
 	int rv;
@@ -347,13 +361,11 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api);
-
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
 	const char *dev, *colon;
-	bool inhibitauto = false;
+	bool inhibitauto = flags & 4;
 	char found = 0;
 	bool forceauto = flags & 1;
 	bool hasname;
@@ -404,11 +416,27 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	return found;
 }
 
+enum bfg_device_bus {
+	BDB_SERIAL,
+	BDB_USB,
+};
+
+// TODO: claim USB side of USB-Serial devices
+typedef
+struct my_dev_t {
+	enum bfg_device_bus bus;
+	union {
+		struct {
+			uint8_t usbbus;
+			uint8_t usbaddr;
+		};
 #ifndef WIN32
-typedef dev_t my_dev_t;
+		dev_t dev;
 #else
-typedef int my_dev_t;
+		int com;
 #endif
+	};
+} my_dev_t;
 
 struct _device_claim {
 	struct device_drv *drv;
@@ -416,42 +444,73 @@ struct _device_claim {
 	UT_hash_handle hh;
 };
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
+static
+struct device_drv *bfg_claim_any(struct device_drv * const api, const char * const verbose, const my_dev_t * const dev)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
-	my_dev_t dev;
+	
+	HASH_FIND(hh, claims, dev, sizeof(*dev), c);
+	if (c)
+	{
+		if (verbose)
+			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
+			       api->dname, verbose, c->drv->dname);
+		return c->drv;
+	}
+	
+	if (!api)
+		return NULL;
+	
+	c = malloc(sizeof(*c));
+	c->dev = *dev;
+	c->drv = api;
+	HASH_ADD(hh, claims, dev, sizeof(*dev), c);
+	return NULL;
+}
 
+struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
+{
+	my_dev_t dev;
+	
+	dev.bus = BDB_SERIAL;
 #ifndef WIN32
 	{
 		struct stat my_stat;
 		if (stat(devpath, &my_stat))
 			return NULL;
-		dev = my_stat.st_rdev;
+		dev.dev = my_stat.st_rdev;
 	}
 #else
 	{
 		char *p = strstr(devpath, "COM"), *p2;
 		if (!p)
 			return NULL;
-		dev = strtol(&p[3], &p2, 10);
+		dev.com = strtol(&p[3], &p2, 10);
 		if (p2 == p)
 			return NULL;
 	}
 #endif
+	
+	return bfg_claim_any(api, (verbose ? devpath : NULL), &dev);
+}
 
-	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
-	if (c)
-		return c->drv;
-
-	if (!api)
-		return NULL;
-
-	c = malloc(sizeof(*c));
-	c->dev = dev;
-	c->drv = api;
-	HASH_ADD(hh, claims, dev, sizeof(dev), c);
-	return NULL;
+struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
+{
+	const my_dev_t dev = {
+		.bus = BDB_USB,
+		.usbbus = usbbus,
+		.usbaddr = usbaddr,
+	};
+	char *desc = NULL;
+	
+	if (verbose)
+	{
+		desc = alloca(3 + 1 + 3 + 1);
+		sprintf(desc, "%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	}
+	
+	return bfg_claim_any(api, desc, &dev);
 }
 
 // This code is purely for debugging but is very useful for that

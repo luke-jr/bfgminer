@@ -30,8 +30,10 @@
 #include <libgen.h>
 
 #include "compat.h"
+#include "fpgautils.h"
 #include "miner.h"
 #include "bench_block.h"
+#include "util.h"
 #include "driver-cpu.h"
 
 #if defined(unix)
@@ -709,7 +711,7 @@ char *force_nthreads_int(const char *arg, int *i)
 #endif
 
 #ifdef WANT_CPUMINE
-static void cpu_detect()
+static int cpu_autodetect()
 {
 	int i;
 
@@ -745,13 +747,10 @@ static void cpu_detect()
 	#endif /* !WIN32 */
 
 	if (opt_n_threads < 0 || !forced_n_threads) {
-		if (total_devices && !opt_usecpu)
-			opt_n_threads = 0;
-		else
 			opt_n_threads = num_processors;
 	}
 	if (num_processors < 1)
-		return;
+		return 0;
 
 	cpus = calloc(opt_n_threads, sizeof(struct cgpu_info));
 	if (unlikely(!cpus))
@@ -767,6 +766,19 @@ static void cpu_detect()
 		cgpu->kname = algo_names[opt_algo];
 		add_cgpu(cgpu);
 	}
+	return opt_n_threads;
+}
+
+static void cpu_detect()
+{
+	RUNONCE();
+	
+	if ((opt_n_threads < 0 || !forced_n_threads)
+	 && ((total_devices || total_devices_new) && !opt_usecpu))
+		// If there are any other devices, only act if the user has explicitly enabled it
+		noserial_detect_manual(&cpu_drv, cpu_autodetect);
+	else
+		noserial_detect(&cpu_drv, cpu_autodetect);
 }
 
 static pthread_mutex_t cpualgo_lock;

@@ -162,6 +162,8 @@ static bool opt_display_devs;
 static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
+int total_devices_new;
+struct cgpu_info **devices_new;
 bool have_opencl;
 int opt_n_threads = -1;
 int mining_threads;
@@ -1067,9 +1069,42 @@ static int temp_strtok(char *base, char **n)
 	return atoi(i);
 }
 
+static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char **target_np)
+{
+	int target_off, val;
+	
+	// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
+	if (!cgpu->cutofftemp)
+		cgpu->cutofftemp = opt_cutofftemp;
+	
+	// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
+	if (cgpu->targettemp)
+		target_off = cgpu->targettemp - cgpu->cutofftemp;
+	else
+		target_off = -6;
+	
+	val = temp_strtok(temp_cutoff_str, cutoff_np);
+	if (val < 0 || val > 200)
+		quit(1, "Invalid value passed to set temp cutoff");
+	if (val)
+		cgpu->cutofftemp = val;
+	
+	val = temp_strtok(temp_target_str, target_np);
+	if (val < 0 || val > 200)
+		quit(1, "Invalid value passed to set temp target");
+	if (val)
+		cgpu->targettemp = val;
+	else
+		cgpu->targettemp = cgpu->cutofftemp + target_off;
+	
+	applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
+	       cgpu->proc_repr,
+	       cgpu->targettemp, cgpu->cutofftemp);
+}
+
 static void load_temp_config()
 {
-	int i, val = 0, target_off;
+	int i;
 	char *cutoff_n, *target_n;
 	struct cgpu_info *cgpu;
 
@@ -1078,34 +1113,7 @@ static void load_temp_config()
 
 	for (i = 0; i < total_devices; ++i) {
 		cgpu = get_devices(i);
-		
-		// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
-		if (!cgpu->cutofftemp)
-			cgpu->cutofftemp = opt_cutofftemp;
-		
-		// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
-		if (cgpu->targettemp)
-			target_off = cgpu->targettemp - cgpu->cutofftemp;
-		else
-			target_off = -6;
-		
-		val = temp_strtok(temp_cutoff_str, &cutoff_n);
-		if (val < 0 || val > 200)
-			quit(1, "Invalid value passed to set temp cutoff");
-		if (val)
-			cgpu->cutofftemp = val;
-		
-		val = temp_strtok(temp_target_str, &target_n);
-		if (val < 0 || val > 200)
-			quit(1, "Invalid value passed to set temp target");
-		if (val)
-			cgpu->targettemp = val;
-		else
-			cgpu->targettemp = cgpu->cutofftemp + target_off;
-		
-		applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
-		       cgpu->proc_repr,
-		       cgpu->targettemp, cgpu->cutofftemp);
+		load_temp_config_cgpu(cgpu, &cutoff_n, &target_n);
 	}
 	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
 		quit(1, "Too many values passed to set temp cutoff");
@@ -8554,6 +8562,239 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+static
+void drv_detect_all()
+{
+#ifdef USE_X6500
+	if (likely(have_libusb))
+		ft232r_scan();
+#endif
+
+#ifdef HAVE_OPENCL
+	if (!opt_nogpu)
+		opencl_api.drv_detect();
+	gpu_threads = 0;
+#endif
+
+#ifdef USE_ICARUS
+	if (!opt_scrypt)
+	{
+		cairnsmore_drv.drv_detect();
+		icarus_drv.drv_detect();
+	}
+#endif
+
+#ifdef USE_BITFORCE
+	if (!opt_scrypt)
+		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_MODMINER
+	if (!opt_scrypt)
+		modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_X6500
+	if (likely(have_libusb) && !opt_scrypt)
+		x6500_api.drv_detect();
+#endif
+
+#ifdef USE_ZTEX
+	if (likely(have_libusb) && !opt_scrypt)
+		ztex_drv.drv_detect();
+#endif
+
+	/* Detect avalon last since it will try to claim the device regardless
+	 * as detection is unreliable. */
+#ifdef USE_AVALON
+	if (!opt_scrypt)
+		avalon_drv.drv_detect();
+#endif
+
+#ifdef WANT_CPUMINE
+	cpu_drv.drv_detect();
+#endif
+
+#ifdef USE_X6500
+	if (likely(have_libusb))
+		ft232r_scan_free();
+#endif
+}
+
+static
+void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
+{
+	struct thr_info *thr;
+	int j;
+	
+	struct device_drv *api = cgpu->drv;
+	if (!cgpu->devtype)
+		cgpu->devtype = "PGA";
+	cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+	
+	int threadobj = cgpu->threads;
+	if (!threadobj)
+		// Create a fake thread object to handle hashmeter etc
+		threadobj = 1;
+	cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
+	cgpu->thr[threadobj] = NULL;
+	cgpu->status = LIFE_INIT;
+
+	cgpu->max_hashes = 0;
+
+	// Setup thread structs before starting any of the threads, in case they try to interact
+	for (j = 0; j < threadobj; ++j, ++*kp) {
+		thr = get_thread(*kp);
+		thr->id = *kp;
+		thr->cgpu = cgpu;
+		thr->device_thread = j;
+		thr->work_restart_notifier[1] = INVSOCK;
+		thr->mutex_request[1] = INVSOCK;
+		thr->_job_transition_in_progress = true;
+		timerclear(&thr->tv_morework);
+		thr->_last_sbr_state = true;
+
+		thr->scanhash_working = true;
+		thr->hashes_done = 0;
+		timerclear(&thr->tv_hashes_done);
+		cgtime(&thr->tv_lastupdate);
+		thr->tv_poll.tv_sec = -1;
+		thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
+
+		cgpu->thr[j] = thr;
+	}
+	
+	if (!cgpu->threads)
+		memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
+	else
+	for (j = 0; j < cgpu->threads; ++j)
+	{
+		thr = cgpu->thr[j];
+		notifier_init(thr->notifier);
+	}
+}
+
+static
+void start_cgpu(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int j;
+	
+	for (j = 0; j < cgpu->threads; ++j) {
+		thr = cgpu->thr[j];
+
+		/* Enable threads for devices set not to mine but disable
+		 * their queue in case we wish to enable them later */
+		if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
+			continue;
+
+		thread_reportout(thr);
+
+		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
+			quit(1, "thread %d create failed", thr->id);
+	}
+	if (cgpu->deven == DEV_ENABLED)
+		proc_enable(cgpu);
+}
+
+int scan_serial(const char *s)
+{
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	struct string_elist *orig_scan_devices;
+	int devcount, i, mining_threads_new = 0;
+	unsigned int k;
+	struct string_elist *iter, *tmp;
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	void *p;
+	char *dummy = "\0";
+	
+	mutex_lock(&mutex);
+	orig_scan_devices = scan_devices;
+	devcount = total_devices;
+	
+	if (s)
+	{
+		// Make temporary scan_devices list
+		scan_devices = NULL;
+		string_elist_add("noauto", &scan_devices);
+		string_elist_add(s, &scan_devices);
+	}
+	
+	drv_detect_all();
+	
+	wr_lock(&devices_lock);
+	p = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + total_devices_new + 1));
+	if (unlikely(!p))
+	{
+		wr_unlock(&devices_lock);
+		applog(LOG_ERR, "scan_serial: realloc failed trying to grow devices array");
+		goto out;
+	}
+	devices = p;
+	wr_unlock(&devices_lock);
+	
+	for (i = 0; i < total_devices_new; ++i)
+	{
+		cgpu = devices_new[i];
+		mining_threads_new += cgpu->threads ?: 1;
+	}
+	
+	wr_lock(&mining_thr_lock);
+	mining_threads_new += mining_threads;
+	p = realloc(mining_thr, sizeof(struct thr_info *) * mining_threads_new);
+	if (unlikely(!p))
+	{
+		wr_unlock(&mining_thr_lock);
+		applog(LOG_ERR, "scan_serial: realloc failed trying to grow mining_thr");
+		goto out;
+	}
+	mining_thr = p;
+	wr_unlock(&mining_thr_lock);
+	for (i = mining_threads; i < mining_threads_new; ++i) {
+		mining_thr[i] = calloc(1, sizeof(*thr));
+		if (!mining_thr[i])
+		{
+			applog(LOG_ERR, "scan_serial: Failed to calloc mining_thr[%d]", i);
+			for ( ; --i >= mining_threads; )
+				free(mining_thr[i]);
+			goto out;
+		}
+	}
+	
+	k = mining_threads;
+	for (i = 0; i < total_devices_new; ++i)
+	{
+		cgpu = devices_new[i];
+		load_temp_config_cgpu(cgpu, &dummy, &dummy);
+		allocate_cgpu(cgpu, &k);
+		start_cgpu(cgpu);
+		register_device(cgpu);
+		++total_devices;
+	}
+	
+#ifdef HAVE_CURSES
+	switch_logsize();
+#endif
+	
+out:
+	if (s)
+	{
+		DL_FOREACH_SAFE(scan_devices, iter, tmp)
+		{
+			string_elist_del(&scan_devices, iter);
+		}
+		scan_devices = orig_scan_devices;
+	}
+	
+	total_devices_new = 0;
+	
+	devcount = total_devices - devcount;
+	mutex_unlock(&mutex);
+	
+	return devcount;
+}
+
 static void probe_pools(void)
 {
 	int i;
@@ -8600,7 +8841,7 @@ int main(int argc, char *argv[])
 	struct thr_info *thr;
 	struct block *block;
 	unsigned int k;
-	int i, j;
+	int i;
 	char *s;
 
 #ifdef WIN32
@@ -8749,11 +8990,6 @@ int main(int argc, char *argv[])
 		successful_connect = true;
 	}
 
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan();
-#endif
-
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs)
 		use_curses = false;
@@ -8832,59 +9068,11 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
-	gpu_threads = 0;
-#endif
-
-#ifdef USE_ICARUS
-	if (!opt_scrypt)
-	{
-		cairnsmore_drv.drv_detect();
-		icarus_drv.drv_detect();
-	}
-#endif
-
-#ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (likely(have_libusb) && !opt_scrypt)
-		x6500_api.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-	if (likely(have_libusb) && !opt_scrypt)
-		ztex_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpu_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan_free();
-#endif
-
-	for (i = 0; i < total_devices; ++i)
-		if (!devices[i]->devtype)
-			devices[i]->devtype = "PGA";
+	drv_detect_all();
+	total_devices = total_devices_new;
+	devices = devices_new;
+	total_devices_new = 0;
+	devices_new = NULL;
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
@@ -8932,9 +9120,6 @@ int main(int argc, char *argv[])
 #endif
 
 	load_temp_config();
-
-	for (i = 0; i < total_devices; ++i)
-		devices[i]->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 #ifdef HAVE_CURSES
 	switch_logsize();
@@ -9091,62 +9276,13 @@ begin_bench:
 	k = 0;
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		struct device_drv *api = cgpu->drv;
-		int threadobj = cgpu->threads;
-		if (!threadobj)
-			// Create a fake thread object to handle hashmeter etc
-			threadobj = 1;
-		cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
-		cgpu->thr[threadobj] = NULL;
-		cgpu->status = LIFE_INIT;
-
-		cgpu->max_hashes = 0;
-
-		// Setup thread structs before starting any of the threads, in case they try to interact
-		for (j = 0; j < threadobj; ++j, ++k) {
-			thr = get_thread(k);
-			thr->id = k;
-			thr->cgpu = cgpu;
-			thr->device_thread = j;
-			thr->work_restart_notifier[1] = INVSOCK;
-			thr->mutex_request[1] = INVSOCK;
-			thr->_job_transition_in_progress = true;
-			timerclear(&thr->tv_morework);
-			thr->_last_sbr_state = true;
-
-			thr->scanhash_working = true;
-			thr->hashes_done = 0;
-			timerclear(&thr->tv_hashes_done);
-			cgtime(&thr->tv_lastupdate);
-			thr->tv_poll.tv_sec = -1;
-			thr->_max_nonce = api->can_limit_work ? api->can_limit_work(thr) : 0xffffffff;
-
-			cgpu->thr[j] = thr;
-		}
+		allocate_cgpu(cgpu, &k);
 	}
 
 	// Start threads
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = devices[i];
-		if (!cgpu->threads)
-			memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
-		for (j = 0; j < cgpu->threads; ++j) {
-			thr = cgpu->thr[j];
-
-			notifier_init(thr->notifier);
-
-			/* Enable threads for devices set not to mine but disable
-			 * their queue in case we wish to enable them later */
-			if (cgpu->drv->thread_prepare && !cgpu->drv->thread_prepare(thr))
-				continue;
-
-			thread_reportout(thr);
-
-			if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
-				quit(1, "thread %d create failed", thr->id);
-		}
-		if (cgpu->deven == DEV_ENABLED)
-			proc_enable(cgpu);
+		start_cgpu(cgpu);
 	}
 
 #ifdef HAVE_OPENCL
