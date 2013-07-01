@@ -571,7 +571,7 @@ static bool avalon_detect_one(const char *devpath)
 	int baud, miner_count, asic_count, timeout, frequency = 0;
 	struct cgpu_info *avalon;
 
-	if (serial_claim(devpath, avalon_drv))
+	if (serial_claim(devpath, &avalon_drv))
 		return false;
 	
 	int this_option_offset = ++option_offset;
