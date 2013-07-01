@@ -889,10 +889,10 @@ static void *avalon_send_tasks(void *userdata)
 			    info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
 				int total = info->auto_nonces + info->auto_hw;
 
-				/* Try to keep hw errors ~1-1.5% */
-				if (info->auto_hw * 100 < total)
+				/* Try to keep hw errors ~1% */
+				if (info->auto_hw * 200 < total)
 					avalon_inc_freq(info);
-				else if (info->auto_hw * 66 > total)
+				else if (info->auto_hw * 100 > total)
 					avalon_dec_freq(info);
 			}
 			avalon_reset_auto(info);
