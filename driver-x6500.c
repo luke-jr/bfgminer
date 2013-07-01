@@ -216,7 +216,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 
 	applog(LOG_WARNING, "%s %u: Programming %s...",
 	       x6500->api->name, x6500->device_id, x6500->device_path);
-	x6500->status = LIFE_INIT;
+	x6500->status = LIFE_INIT2;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
 	struct jtag_port jpt = {
@@ -349,6 +349,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 	jp->a = x6500->cgpu_data;
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
+	x6500->status = LIFE_INIT2;
 	
 	mutex_lock(&x6500->device_mutex);
 	if (!jtag_reset(jp)) {
@@ -382,7 +383,7 @@ static bool x6500_fpga_init(struct thr_info *thr)
 		       x6500->api->name, x6500->device_id, fpgaid);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
-	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
+	} else if (opt_force_dev_init && x6500->status == LIFE_INIT2) {
 		applog(LOG_DEBUG, "%s %u.%u: FPGA is already programmed, but --force-dev-init is set",
 		       x6500->api->name, x6500->device_id, fpgaid);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))

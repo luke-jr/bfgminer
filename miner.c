@@ -7304,7 +7304,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 #endif
 			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
-				if (cgpu->status != LIFE_INIT)
+				if (likely(cgpu->status != LIFE_INIT && cgpu->status != LIFE_INIT2))
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);

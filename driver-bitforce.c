@@ -154,6 +154,8 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	gettimeofday(&now, NULL);
 	get_datestamp(bitforce->init, &now);
 
+	bitforce->status = LIFE_INIT2;
+	
 	return true;
 }
 

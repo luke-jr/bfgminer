@@ -1452,6 +1452,7 @@ static const char *status2str(enum alive status)
 		case LIFE_NOSTART:
 			return NOSTART;
 		case LIFE_INIT:
+		case LIFE_INIT2:
 			return INIT;
 		case LIFE_WAIT:
 			return WAIT;

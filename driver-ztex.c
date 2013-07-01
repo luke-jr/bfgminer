@@ -371,6 +371,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	libztex_setFreq(ztex, ztex->dclk.freqMDefault);
 	ztex_releaseFpga(ztex);
 	applog(LOG_DEBUG, "%s: prepare", ztex->repr);
+	cgpu->status = LIFE_INIT2;
 	return true;
 }
 
