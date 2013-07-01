@@ -234,6 +234,8 @@ ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
 only options:
 
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
+--avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
+--avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)

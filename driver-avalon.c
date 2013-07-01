@@ -44,6 +44,8 @@ int opt_avalon_temp = AVALON_TEMP_TARGET;
 int opt_avalon_overheat = AVALON_TEMP_OVERHEAT;
 int opt_avalon_fan_min = AVALON_DEFAULT_FAN_MIN;
 int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX;
+int opt_avalon_freq_min = AVALON_MIN_FREQUENCY;
+int opt_avalon_freq_max = AVALON_MAX_FREQUENCY;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
@@ -469,6 +471,27 @@ char *set_avalon_fan(char *arg)
 	return NULL;
 }
 
+char *set_avalon_freq(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon-freq";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < AVALON_MIN_FREQUENCY || val1 > AVALON_MAX_FREQUENCY ||
+	    val2 < AVALON_MIN_FREQUENCY || val2 > AVALON_MAX_FREQUENCY ||
+	    val2 < val1)
+		return "Invalid value passed to avalon-freq";
+
+	opt_avalon_freq_min = val1;
+	opt_avalon_freq_max = val2;
+
+	return NULL;
+}
+
 static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 {
 	int i;
@@ -841,8 +864,8 @@ static void avalon_set_timeout(struct avalon_info *info)
 static void avalon_inc_freq(struct avalon_info *info)
 {
 	info->frequency += 2;
-	if (info->frequency > AVALON_MAX_FREQUENCY)
-		info->frequency = AVALON_MAX_FREQUENCY;
+	if (info->frequency > opt_avalon_freq_max)
+		info->frequency = opt_avalon_freq_max;
 	avalon_set_timeout(info);
 	applog(LOG_NOTICE, "Avalon increasing frequency to %d, timeout %d",
 	       info->frequency, info->timeout);
@@ -851,8 +874,8 @@ static void avalon_inc_freq(struct avalon_info *info)
 static void avalon_dec_freq(struct avalon_info *info)
 {
 	info->frequency -= 1;
-	if (info->frequency < AVALON_MIN_FREQUENCY)
-		info->frequency = AVALON_MIN_FREQUENCY;
+	if (info->frequency < opt_avalon_freq_min)
+		info->frequency = opt_avalon_freq_min;
 	avalon_set_timeout(info);
 	applog(LOG_NOTICE, "Avalon decreasing frequency to %d, timeout %d",
 	       info->frequency, info->timeout);

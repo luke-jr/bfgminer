@@ -158,8 +158,11 @@ extern int opt_avalon_temp;
 extern int opt_avalon_overheat;
 extern int opt_avalon_fan_min;
 extern int opt_avalon_fan_max;
+extern int opt_avalon_freq_min;
+extern int opt_avalon_freq_max;
 extern bool opt_avalon_auto;
 extern char *set_avalon_fan(char *arg);
+extern char *set_avalon_freq(char *arg);
 
 #endif /* USE_AVALON */
 #endif	/* AVALON_H */
