@@ -791,6 +791,7 @@ static uint64_t cpu_can_limit_work(struct thr_info __maybe_unused *thr)
 static bool cpu_thread_init(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
+	struct cgpu_info *cgpu = thr->cgpu;
 
 	mutex_lock(&cpualgo_lock);
 	switch (opt_algo)
@@ -803,6 +804,8 @@ static bool cpu_thread_init(struct thr_info *thr)
 	}
 	mutex_unlock(&cpualgo_lock);
 
+	cgpu->kname = algo_names[opt_algo];
+	
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
