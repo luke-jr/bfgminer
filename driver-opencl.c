@@ -39,6 +39,7 @@
 #define OMIT_OPENCL_API
 
 #include "compat.h"
+#include "fpgautils.h"
 #include "miner.h"
 #include "driver-opencl.h"
 #include "findnonce.h"
@@ -1408,7 +1409,7 @@ void *reinit_gpu(__maybe_unused void *userdata)
 #ifdef HAVE_OPENCL
 struct device_drv opencl_api;
 
-static void opencl_detect()
+static int opencl_autodetect()
 {
 #ifndef WIN32
 	if (!getenv("DISPLAY")) {
@@ -1419,7 +1420,7 @@ static void opencl_detect()
 
 	if (!load_opencl_symbols()) {
 		nDevs = 0;
-		return;
+		return 0;
 	}
 
 
@@ -1432,7 +1433,7 @@ static void opencl_detect()
 	}
 
 	if (!nDevs)
-		return;
+		return 0;
 
 	/* If opt_g_threads is not set, use default 1 thread on scrypt and
 	 * 2 for regular mining */
@@ -1478,6 +1479,14 @@ static void opencl_detect()
 
 	if (!opt_noadl)
 		init_adl(nDevs);
+	
+	return nDevs;
+}
+
+static void opencl_detect()
+{
+	// This wrapper ensures users can specify -S opencl:noauto to disable it
+	noserial_detect(&opencl_api, opencl_autodetect);
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)

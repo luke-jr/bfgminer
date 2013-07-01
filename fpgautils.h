@@ -25,6 +25,8 @@ extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_fun
 	_serial_detect(api, detectone,     NULL, 2)
 #define noserial_detect(api, autoscan)  \
 	_serial_detect(api, NULL     , autoscan, 0)
+#define noserial_detect_manual(api, autoscan)  \
+	_serial_detect(api, NULL     , autoscan, 4)
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 

@@ -365,7 +365,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 {
 	struct string_elist *iter, *tmp;
 	const char *dev, *colon;
-	bool inhibitauto = false;
+	bool inhibitauto = flags & 4;
 	char found = 0;
 	bool forceauto = flags & 1;
 	bool hasname;
