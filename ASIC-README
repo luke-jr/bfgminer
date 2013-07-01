@@ -86,6 +86,7 @@ Avalon commands:
 
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
 --avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
+--avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 

@@ -42,6 +42,8 @@
 
 int opt_avalon_temp = AVALON_TEMP_TARGET;
 int opt_avalon_overheat = AVALON_TEMP_OVERHEAT;
+int opt_avalon_fan_min = AVALON_DEFAULT_FAN_MIN;
+int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
@@ -446,6 +448,25 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 		}
 	}
 	return true;
+}
+
+char *set_avalon_fan(char *arg)
+{
+	int val1, val2, ret;
+
+	ret = sscanf(arg, "%d-%d", &val1, &val2);
+	if (ret < 1)
+		return "No values passed to avalon-fan";
+	if (ret == 1)
+		val2 = val1;
+
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
+		return "Invalid value passed to avalon-fan";
+
+	opt_avalon_fan_min = val1 * AVALON_PWM_MAX / 100;
+	opt_avalon_fan_max = val2 * AVALON_PWM_MAX / 100;
+
+	return NULL;
 }
 
 static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
@@ -1011,7 +1032,7 @@ static inline void record_temp_fan(struct avalon_info *info, struct avalon_resul
 static void temp_rise(struct avalon_info *info, int temp)
 {
 	if (temp >= opt_avalon_temp + AVALON_TEMP_HYSTERESIS * 3) {
-		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
+		info->fan_pwm = AVALON_PWM_MAX;
 		return;
 	}
 	if (temp >= opt_avalon_temp + AVALON_TEMP_HYSTERESIS * 2)
@@ -1023,14 +1044,14 @@ static void temp_rise(struct avalon_info *info, int temp)
 	else
 		return;
 
-	if (info->fan_pwm > AVALON_DEFAULT_FAN_MAX_PWM)
-		info->fan_pwm = AVALON_DEFAULT_FAN_MAX_PWM;
+	if (info->fan_pwm > opt_avalon_fan_max)
+		info->fan_pwm = opt_avalon_fan_max;
 }
 
 static void temp_drop(struct avalon_info *info, int temp)
 {
 	if (temp <= opt_avalon_temp - AVALON_TEMP_HYSTERESIS * 3) {
-		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
+		info->fan_pwm = opt_avalon_fan_min;
 		return;
 	}
 	if (temp <= opt_avalon_temp - AVALON_TEMP_HYSTERESIS * 2)
@@ -1040,8 +1061,8 @@ static void temp_drop(struct avalon_info *info, int temp)
 	else if (temp < opt_avalon_temp)
 		info->fan_pwm -= 1;
 
-	if (info->fan_pwm < AVALON_DEFAULT_FAN_MIN_PWM)
-		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
+	if (info->fan_pwm < opt_avalon_fan_min)
+		info->fan_pwm = opt_avalon_fan_min;
 }
 
 static inline void adjust_fan(struct avalon_info *info)

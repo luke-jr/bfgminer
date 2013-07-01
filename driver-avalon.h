@@ -23,6 +23,9 @@
 #define AVALON_RESET_PITCH	(300*1000*1000)
 
 #define AVALON_FAN_FACTOR 120
+#define AVALON_PWM_MAX 0xA0
+#define AVALON_DEFAULT_FAN_MIN 20
+#define AVALON_DEFAULT_FAN_MAX 100
 #define AVALON_DEFAULT_FAN_MAX_PWM 0xA0 /* 100% */
 #define AVALON_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
 
@@ -152,7 +155,10 @@ ASSERT1(sizeof(uint32_t) == 4);
 extern struct avalon_info **avalon_info;
 extern int opt_avalon_temp;
 extern int opt_avalon_overheat;
+extern int opt_avalon_fan_min;
+extern int opt_avalon_fan_max;
 extern bool opt_avalon_auto;
+extern char *set_avalon_fan(char *arg);
 
 #endif /* USE_AVALON */
 #endif	/* AVALON_H */
