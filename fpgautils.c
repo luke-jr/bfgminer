@@ -483,12 +483,15 @@ struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool ve
 
 struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
 {
-	const my_dev_t dev = {
-		.bus = BDB_USB,
-		.usbbus = usbbus,
-		.usbaddr = usbaddr,
-	};
+	my_dev_t dev;
 	char *desc = NULL;
+	
+	// We should be able to just initialize a const my_dev_t for this, but Xcode's clang is broken
+	// Affected: Apple LLVM version 4.2 (clang-425.0.28) (based on LLVM 3.2svn) AKA Xcode 4.6.3
+	// Works with const: GCC 4.6.3, LLVM 3.1
+	dev.bus = BDB_USB;
+	dev.usbbus = usbbus;
+	dev.usbaddr = usbaddr;
 	
 	if (verbose)
 	{
