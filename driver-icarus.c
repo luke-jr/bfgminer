@@ -595,11 +595,8 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			devpath, nonce_hex);
 	free(nonce_hex);
 
-	if (serial_claim(devpath, api)) {
-		const char *claimedby = serial_claim(devpath, api)->dname;
-		applog(LOG_DEBUG, "Icarus device %s already claimed by other driver: %s", devpath, claimedby);
+	if (serial_claim_v(devpath, api))
 		return false;
-	}
 
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;

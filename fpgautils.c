@@ -347,8 +347,6 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api);
-
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
@@ -416,7 +414,7 @@ struct _device_claim {
 	UT_hash_handle hh;
 };
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
+struct device_drv *_serial_claim(const char *devpath, struct device_drv *api, bool verbose)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
@@ -442,7 +440,12 @@ struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
 
 	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
 	if (c)
+	{
+		if (verbose)
+			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
+			       api->dname, devpath, c->drv->dname);
 		return c->drv;
+	}
 
 	if (!api)
 		return NULL;

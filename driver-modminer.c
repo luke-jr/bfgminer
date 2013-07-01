@@ -123,6 +123,9 @@ modminer_detect_one(const char *devpath)
 	char*devname = strdup(buf);
 	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
 
+	if (serial_claim_v(devpath, &modminer_drv))
+		return false;
+	
 	if (1 != write(fd, MODMINER_FPGA_COUNT, 1))
 		bailout(LOG_DEBUG, "ModMiner detect: write failed on %s (get FPGA count)", devpath);
 	len = read(fd, buf, 1);
