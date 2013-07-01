@@ -84,7 +84,6 @@ else:
 	b=ser.readline()
 	print("Result: hex 0x" + binascii.hexlify(b))
 
-	# This could mess up the display - do it last
-	print("Result: asc '" + b + "'")
+	print("Result: asc %s" % (repr(b),))
 
 ser.close()
