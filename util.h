@@ -189,4 +189,12 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }
 
 
+#define RUNONCE(rv)  do {  \
+	static bool _runonce = false;  \
+	if (_runonce)  \
+		return rv;  \
+	_runonce = true;  \
+} while(0)
+
+
 #endif /* __UTIL_H__ */

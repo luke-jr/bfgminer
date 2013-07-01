@@ -33,6 +33,7 @@
 #include "fpgautils.h"
 #include "miner.h"
 #include "bench_block.h"
+#include "util.h"
 #include "driver-cpu.h"
 
 #if defined(unix)
@@ -770,6 +771,8 @@ static int cpu_autodetect()
 
 static void cpu_detect()
 {
+	RUNONCE();
+	
 	if ((opt_n_threads < 0 || !forced_n_threads)
 	 && ((total_devices || total_devices_new) && !opt_usecpu))
 		// If there are any other devices, only act if the user has explicitly enabled it
