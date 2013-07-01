@@ -392,7 +392,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
-	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
+	} else if (opt_force_dev_init && x6500 == x6500->device) {
 		applog(LOG_DEBUG, "%"PRIprepr": FPGA is already programmed, but --force-dev-init is set",
 		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
