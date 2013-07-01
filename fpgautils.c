@@ -100,6 +100,18 @@ bool search_needles(const char *haystack, va_list needles)
 
 #define SEARCH_NEEDLES(haystack)  search_needles(haystack, needles)
 
+static
+int _detectone_wrap(const detectone_func_t detectone, const char * const param, const char *fname)
+{
+	if (bfg_claim_serial(NULL, false, param))
+	{
+		applog(LOG_DEBUG, "%s: %s is already claimed, skipping probe", fname, param);
+		return 0;
+	}
+	return detectone(param);
+}
+#define detectone(param)  _detectone_wrap(detectone, param, __func__)
+
 #ifdef HAVE_LIBUDEV
 static
 int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
@@ -330,6 +342,8 @@ out:
 #else
 #	define _serial_autodetect_ftdi(...)  (0)
 #endif
+
+#undef detectone
 
 int _serial_autodetect(detectone_func_t detectone, ...)
 {
