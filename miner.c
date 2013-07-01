@@ -727,7 +727,7 @@ tryagain: ;
 	memcpy(devpath, devdir, devdirlen);
 	devpath[devdirlen] = '/';
 	while ( (de = readdir(D)) ) {
-		if (!strncmp(de->d_name, "cu.usb", 6))
+		if (!strncmp(de->d_name, "cu.", 3))
 			goto trydev;
 		if (strncmp(de->d_name, "tty", 3))
 			continue;
