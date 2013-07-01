@@ -99,6 +99,20 @@ so the usual warnings apply. When avalon-auto is enabled, the avalon-options
 for frequency and timeout are used as the starting point only.
 
 eg:
+--avalon-fan 50
+--avalon-fan 40-80
+
+By default the avalon fans will be adjusted to maintain a target temperature
+over a range from 20 to 100% fanspeed. avalon-fan allows you to limit the
+range of fanspeeds to a single value or a range of values.
+
+eg:
+--avalon-freq 300-350
+
+In combination with the avalon-auto command, the avalon-freq command allows you
+to limit the range of frequencies which auto will adjust to.
+
+eg:
 --avalon-temp 55
 
 This will adjust fanspeed to keep the temperature at or slightly below 55.
