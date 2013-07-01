@@ -922,10 +922,14 @@ static void *avalon_send_tasks(void *userdata)
 				avalon_create_task(&at, avalon->works[i]);
 				info->auto_queued++;
 			} else {
+				int idle_freq = info->frequency;
+
 				idled++;
+				if (unlikely(info->overheat && opt_avalon_auto))
+					idle_freq = AVALON_MIN_FREQUENCY;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
-						info->miner_count, 1, 1, info->frequency);
+						info->miner_count, 1, 1, idle_freq);
 				/* Reset the auto_queued count if we end up
 				 * idling any miners. */
 				avalon_reset_auto(info);
