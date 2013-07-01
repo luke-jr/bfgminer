@@ -1607,13 +1607,14 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 		hex2bin((void*)&nonce, fields[i], 4);
 		nonce = htobe32(nonce);
-		wr_lock(&(sc_info->stat_lock));
-		sc_info->sc_devs[dev].nonces_found++;
-		wr_unlock(&(sc_info->stat_lock));
+		res = submit_nonce(bflsc->thr[0], work, nonce);
+		if (res) {
+			wr_lock(&(sc_info->stat_lock));
+			sc_info->sc_devs[dev].nonces_found++;
+			wr_unlock(&(sc_info->stat_lock));
 
-		submit_nonce(bflsc->thr[0], work, nonce);
-		(*nonces)++;
-		res = true;
+			(*nonces)++;
+		}
 	}
 
 	wr_lock(&(sc_info->stat_lock));
