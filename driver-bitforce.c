@@ -37,7 +37,7 @@
 #define BITFORCE_QRESULT_LINE_LEN 165
 #define BITFORCE_MAX_QUEUED_MAX 40
 #define BITFORCE_MIN_QUEUED_MAX 10
-#define BITFORCE_MAX_QRESULTS 40
+#define BITFORCE_MAX_QRESULTS 16
 #define BITFORCE_GOAL_QRESULTS 5
 #define BITFORCE_MIN_QRESULT_WAIT BITFORCE_CHECK_INTERVAL_MS
 #define BITFORCE_MAX_QRESULT_WAIT 1000
@@ -1539,7 +1539,8 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->device_data;
 	int fd = bitforce->device->device_fd;
 	int count;
-	char *noncebuf = &data->noncebuf[0], *buf, *end;
+	int fcount;
+	char *noncebuf, *buf, *end;
 	unsigned char midstate[32], datatail[12];
 	struct work *work, *tmpwork, *thiswork;
 	struct timeval tv_now, tv_elapsed;
@@ -1551,13 +1552,9 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	if (unlikely(!fd))
 		return false;
 	
+again:
+	noncebuf = &data->noncebuf[0];
 	count = bitforce_zox(thr, "ZOX");
-	
-	if (!count)
-	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Received 0 queued results on poll", bitforce->proc_repr);
-		return true;
-	}
 	
 	if (unlikely(count < 0))
 	{
@@ -1566,7 +1563,11 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		return false;
 	}
 	
-	count = 0;
+	applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results on poll (max=%d)", bitforce->proc_repr, count, (int)BITFORCE_MAX_QRESULTS);
+	if (!count)
+		return true;
+	
+	fcount = 0;
 	for (int i = 0; i < data->parallel; ++i)
 		counts[i] = 0;
 	noncebuf = next_line(noncebuf);
@@ -1633,7 +1634,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 			}
 			bitforce_process_result_nonces(chip_thr, work, &end[1]);
 		}
-		++count;
+		++fcount;
 		++counts[chipno];
 		
 finishresult:
@@ -1663,22 +1664,25 @@ next_qline: (void)0;
 	
 	bitforce_set_queue_full(thr);
 	
+	if (count >= BITFORCE_MAX_QRESULTS)
+		goto again;
+	
 	if (data->parallel == 1 && (
-	        (count < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1)
-	     || (count > BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms > BITFORCE_MIN_QRESULT_WAIT)  ))
+	        (fcount < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1)
+	     || (fcount > BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms > BITFORCE_MIN_QRESULT_WAIT)  ))
 	{
 		unsigned int old_sleep_ms = bitforce->sleep_ms;
-		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (count ?: 1);
+		bitforce->sleep_ms = (uint32_t)bitforce->sleep_ms * BITFORCE_GOAL_QRESULTS / (fcount ?: 1);
 		if (bitforce->sleep_ms > BITFORCE_MAX_QRESULT_WAIT)
 			bitforce->sleep_ms = BITFORCE_MAX_QRESULT_WAIT;
 		if (bitforce->sleep_ms < BITFORCE_MIN_QRESULT_WAIT)
 			bitforce->sleep_ms = BITFORCE_MIN_QRESULT_WAIT;
 		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time changed to: %ums (queued<=%d)",
-		       bitforce->proc_repr, count, old_sleep_ms, bitforce->sleep_ms, data->queued);
+		       bitforce->proc_repr, fcount, old_sleep_ms, bitforce->sleep_ms, data->queued);
 	}
 	else
 		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged (queued<=%d)",
-		       bitforce->proc_repr, count, bitforce->sleep_ms, data->queued);
+		       bitforce->proc_repr, fcount, bitforce->sleep_ms, data->queued);
 	
 	cgtime(&tv_now);
 	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
