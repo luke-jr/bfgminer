@@ -425,12 +425,35 @@ struct _device_claim {
 	UT_hash_handle hh;
 };
 
-struct device_drv *_serial_claim(const char *devpath, struct device_drv *api, bool verbose)
+static
+struct device_drv *bfg_claim_any(struct device_drv * const api, const char * const verbose, const my_dev_t * const dev)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
-	my_dev_t dev;
+	
+	HASH_FIND(hh, claims, dev, sizeof(*dev), c);
+	if (c)
+	{
+		if (verbose)
+			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
+			       api->dname, verbose, c->drv->dname);
+		return c->drv;
+	}
+	
+	if (!api)
+		return NULL;
+	
+	c = malloc(sizeof(*c));
+	c->dev = *dev;
+	c->drv = api;
+	HASH_ADD(hh, claims, dev, sizeof(*dev), c);
+	return NULL;
+}
 
+struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
+{
+	my_dev_t dev;
+	
 	dev.bus = BDB_SERIAL;
 #ifndef WIN32
 	{
@@ -449,24 +472,8 @@ struct device_drv *_serial_claim(const char *devpath, struct device_drv *api, bo
 			return NULL;
 	}
 #endif
-
-	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
-	if (c)
-	{
-		if (verbose)
-			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
-			       api->dname, devpath, c->drv->dname);
-		return c->drv;
-	}
-
-	if (!api)
-		return NULL;
-
-	c = malloc(sizeof(*c));
-	c->dev = dev;
-	c->drv = api;
-	HASH_ADD(hh, claims, dev, sizeof(dev), c);
-	return NULL;
+	
+	return bfg_claim_any(api, (verbose ? devpath : NULL), &dev);
 }
 
 // This code is purely for debugging but is very useful for that
