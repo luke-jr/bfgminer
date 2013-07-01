@@ -134,6 +134,7 @@ struct avalon_info {
 	bool idle;
 	bool reset;
 	bool overheat;
+	bool optimal;
 };
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))

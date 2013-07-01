@@ -885,15 +885,19 @@ static void *avalon_send_tasks(void *userdata)
 
 		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
 			mutex_lock(&info->lock);
-			if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
-			    info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
-				int total = info->auto_nonces + info->auto_hw;
+			if (!info->optimal) {
+				applog(LOG_WARNING, "AVA%i: Above optimal temperature, throttling",
+				       avalon->device_id);
+				avalon_dec_freq(info);
+			} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
+				   info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
+					int total = info->auto_nonces + info->auto_hw;
 
-				/* Try to keep hw errors ~1% */
-				if (info->auto_hw * 200 < total)
-					avalon_inc_freq(info);
-				else if (info->auto_hw * 100 > total)
-					avalon_dec_freq(info);
+					/* Try to keep hw errors ~1% */
+					if (info->auto_hw * 200 < total)
+						avalon_inc_freq(info);
+					else if (info->auto_hw * 100 > total)
+						avalon_dec_freq(info);
 			}
 			avalon_reset_auto(info);
 			mutex_unlock(&info->lock);
@@ -1083,6 +1087,10 @@ static inline void adjust_fan(struct avalon_info *info)
 			temp_drop(info, temp_new);
 	}
 	info->temp_old = temp_new;
+	if (info->temp_old <= opt_avalon_temp)
+		info->optimal = true;
+	else
+		info->optimal = false;
 }
 
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
