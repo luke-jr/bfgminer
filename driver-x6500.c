@@ -124,6 +124,13 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 
 static bool x6500_foundusb(libusb_device *dev, const char *product, const char *serial)
 {
+	{
+		uint8_t usbbus = libusb_get_bus_number(dev);
+		uint8_t usbaddr = libusb_get_device_address(dev);
+		if (bfg_claim_usb(&x6500_api, true, usbbus, usbaddr))
+			return false;
+	}
+	
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
 	x6500->drv = &x6500_api;
