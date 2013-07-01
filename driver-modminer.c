@@ -22,6 +22,8 @@
 #include "fpgautils.h"
 #include "util.h"
 
+extern pthread_mutex_t stats_lock;
+
 #define BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
 #define BISTREAM_USER_ID "\2\4$B"
 
@@ -712,8 +714,13 @@ modminer_process_results(struct thr_info*thr)
 				applog(LOG_DEBUG, "%s: Nonce with H not zero  : %02x%02x%02x%02x",
 				       modminer->proc_repr,
 				       NONCE_CHARS(nonce));
+				mutex_lock(&stats_lock);
+				++total_diff1;
+				++modminer->diff1;
+				++work->pool->diff1;
 				++hw_errors;
 				++modminer->hw_errors;
+				mutex_unlock(&stats_lock);
 				++state->bad_share_counter;
 				++immediate_bad_nonces;
 			}

@@ -27,6 +27,8 @@
 #include "fpgautils.h"
 #include "ft232r.h"
 
+extern pthread_mutex_t stats_lock;
+
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
 #define X6500_BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
@@ -748,8 +750,13 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				applog(LOG_DEBUG, "%"PRIprepr": Nonce with H not zero  : %08lx",
 				       x6500->proc_repr,
 				       (unsigned long)nonce);
+				mutex_lock(&stats_lock);
+				++total_diff1;
+				++x6500->diff1;
+				++work->pool->diff1;
 				++hw_errors;
 				++x6500->hw_errors;
+				mutex_unlock(&stats_lock);
 
 				dclk_gotNonces(&fpga->dclk);
 				dclk_errorCount(&fpga->dclk, 1.);
