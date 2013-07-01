@@ -404,6 +404,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 
 enum bfg_device_bus {
 	BDB_SERIAL,
+	BDB_USB,
 };
 
 // TODO: claim USB side of USB-Serial devices
@@ -411,6 +412,10 @@ typedef
 struct my_dev_t {
 	enum bfg_device_bus bus;
 	union {
+		struct {
+			uint8_t usbbus;
+			uint8_t usbaddr;
+		};
 #ifndef WIN32
 		dev_t dev;
 #else
@@ -474,6 +479,24 @@ struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool ve
 #endif
 	
 	return bfg_claim_any(api, (verbose ? devpath : NULL), &dev);
+}
+
+struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
+{
+	const my_dev_t dev = {
+		.bus = BDB_USB,
+		.usbbus = usbbus,
+		.usbaddr = usbaddr,
+	};
+	char *desc = NULL;
+	
+	if (verbose)
+	{
+		desc = alloca(3 + 1 + 3 + 1);
+		sprintf(desc, "%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	}
+	
+	return bfg_claim_any(api, desc, &dev);
 }
 
 // This code is purely for debugging but is very useful for that

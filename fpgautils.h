@@ -31,6 +31,7 @@ extern int _serial_autodetect(detectone_func_t, ...);
 extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool verbose, const char * const devpath);
 #define serial_claim(devpath, drv)    bfg_claim_serial(drv, false, devpath)
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
+extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
 
 extern int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
