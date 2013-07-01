@@ -404,7 +404,7 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_ERR, "%s: FPGA not programmed", modminer->proc_repr);
 		if (!modminer_fpga_upload_bitstream(modminer))
 			return false;
-	} else if (opt_force_dev_init && modminer->status == LIFE_INIT) {
+	} else if (opt_force_dev_init && !((struct modminer_fpga_state *)modminer->device->thr[0]->cgpu_data)->pdone) {
 		applog(LOG_DEBUG, "%s: FPGA is already programmed, but --force-dev-init is set",
 		       modminer->proc_repr);
 		if (!modminer_fpga_upload_bitstream(modminer))
