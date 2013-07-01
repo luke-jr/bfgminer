@@ -650,7 +650,7 @@ static bool avalon_prepare(struct thr_info *thr)
 
 	gettimeofday(&now, NULL);
 	get_datestamp(avalon->init, &now);
-	proc->status = LIFE_INIT2;
+	avalon->status = LIFE_INIT2;
 	return true;
 }
 
