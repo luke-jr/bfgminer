@@ -42,8 +42,8 @@
 
 int opt_avalon_temp = AVALON_TEMP_TARGET;
 int opt_avalon_overheat = AVALON_TEMP_OVERHEAT;
-int opt_avalon_fan_min = AVALON_DEFAULT_FAN_MIN;
-int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX;
+int opt_avalon_fan_min = AVALON_DEFAULT_FAN_MIN_PWM;
+int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX_PWM;
 int opt_avalon_freq_min = AVALON_MIN_FREQUENCY;
 int opt_avalon_freq_max = AVALON_MAX_FREQUENCY;
 bool opt_avalon_auto;
