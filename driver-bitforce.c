@@ -1286,6 +1286,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			if (opt_bfl_noncerange)
 				bitforce_change_mode(bitforce, BFP_RANGE);
 		}
+		bitforce->status = LIFE_INIT2;
 		
 		first_on_this_board = procdata;
 		for (int proc = 1; proc < data->parallel; ++proc)
@@ -1300,6 +1301,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			procdata->handles_board = false;
 			procdata->cgpu = bitforce;
 			bitforce->device_data = data;
+			bitforce->status = LIFE_INIT2;
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		

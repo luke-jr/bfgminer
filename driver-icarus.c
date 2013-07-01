@@ -685,6 +685,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	}
 #endif
 
+	icarus->status = LIFE_INIT2;
+	
 	return true;
 }
 
