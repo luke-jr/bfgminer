@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 # Copyright 2012 Xiangfu
 # Copyright 2012-2013 Andrew Smith
+# Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -39,7 +40,7 @@ if len(sys.argv) < 2:
 	sys.exit("Aborting")
 
 # Open with a 10 second timeout - just to be sure
-ser = serial.Serial(sys.argv[1], 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE, 10, False, False, 5, False, None)
+ser = serial.Serial(sys.argv[1], 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE, 10, False, False, 5)
 
 if sys.argv[2] == "icarus":
 
