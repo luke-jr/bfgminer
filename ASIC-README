@@ -94,7 +94,7 @@ Avalon commands:
 
 Avalon auto will enable dynamic overclocking gradually increasing and
 decreasing the frequency till the highest hashrate that keeps hardware errors
-around 1% is achieved. This WILL run your avalon beyond its normal specification
+under 2% is achieved. This WILL run your avalon beyond its normal specification
 so the usual warnings apply. When avalon-auto is enabled, the avalon-options
 for frequency and timeout are used as the starting point only.
 
