@@ -300,6 +300,8 @@ modminer_fpga_prepare(struct thr_info *thr)
 	dclk_prepare(&state->dclk);
 	state->next_work_cmd[0] = MODMINER_SEND_WORK;
 	state->next_work_cmd[1] = proc->proc_id;  // FPGA id
+	
+	proc->status = LIFE_INIT2;
 
 	return true;
 }
