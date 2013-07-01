@@ -402,11 +402,22 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	return found;
 }
 
+enum bfg_device_bus {
+	BDB_SERIAL,
+};
+
+// TODO: claim USB side of USB-Serial devices
+typedef
+struct my_dev_t {
+	enum bfg_device_bus bus;
+	union {
 #ifndef WIN32
-typedef dev_t my_dev_t;
+		dev_t dev;
 #else
-typedef int my_dev_t;
+		int com;
 #endif
+	};
+} my_dev_t;
 
 struct _device_claim {
 	struct device_drv *drv;
@@ -420,19 +431,20 @@ struct device_drv *_serial_claim(const char *devpath, struct device_drv *api, bo
 	struct _device_claim *c;
 	my_dev_t dev;
 
+	dev.bus = BDB_SERIAL;
 #ifndef WIN32
 	{
 		struct stat my_stat;
 		if (stat(devpath, &my_stat))
 			return NULL;
-		dev = my_stat.st_rdev;
+		dev.dev = my_stat.st_rdev;
 	}
 #else
 	{
 		char *p = strstr(devpath, "COM"), *p2;
 		if (!p)
 			return NULL;
-		dev = strtol(&p[3], &p2, 10);
+		dev.com = strtol(&p[3], &p2, 10);
 		if (p2 == p)
 			return NULL;
 	}
