@@ -2643,8 +2643,7 @@ static void curses_print_status(void)
 		  current_hash, block_diff, net_hashrate, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	mvwprintw(statuswin, devcursor - 1, 1, "[M]anage devices [P]ool management %s[S]ettings [D]isplay options [Q]uit",
-		have_opencl ? "[G]PU management " : "");
+	mvwprintw(statuswin, devcursor - 1, 1, "[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit");
 }
 
 static void adj_width(int var, int *length)
@@ -6055,10 +6054,6 @@ static void *input_thread(void __maybe_unused *userdata)
 			break;
 		case 's': case 'S':
 			set_options();
-			break;
-		case 'g': case 'G':
-			if (have_opencl)
-				manage_gpu();
 			break;
 #ifdef HAVE_CURSES
 		case KEY_DOWN:

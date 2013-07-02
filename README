@@ -322,7 +322,7 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[M]anage devices [P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit
 
 M gives you something like:
 
@@ -364,24 +364,6 @@ co[M]pact: off
 
 
 Q quits the application.
-
-
-G gives you something like:
-
-GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33+0( 42%)  HW:0]
-Temp: 67.0 C
-Fan Speed: 35% (2500 RPM)
-Engine Clock: 960 MHz
-Memory Clock: 480 MHz
-Vddc: 1.200 V
-Activity: 93%
-Powertune: 0%
-Last initialised: [2011-09-06 12:03:56]
-Thread 0: 62.4 Mh/s Enabled ALIVE
-Thread 1: 60.2 Mh/s Enabled ALIVE
-
-[E]nable [D]isable [R]estart GPU [C]hange settings
-Or press any other key to continue
 
 
 The running log shows output like this:
