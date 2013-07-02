@@ -5962,7 +5962,10 @@ refresh:
 		wlogprint("[E]nable ");
 	if (cgpu->deven != DEV_DISABLED)
 		wlogprint("[D]isable ");
+	if (drv->proc_tui_wlogprint_choices && likely(cgpu->status != LIFE_INIT))
+		drv->proc_tui_wlogprint_choices(cgpu);
 	wlogprint("\n");
+	wlogprint("Or press Enter when done\n");
 	if (msg)
 	{
 		wattron(logwin, A_BOLD);
@@ -6009,6 +6012,13 @@ refresh:
 			case '\x1b':  // ESC
 			case '\n':
 				goto out;
+			default:
+				if (drv->proc_tui_handle_choice && likely(cgpu->status != LIFE_INIT))
+				{
+					msg = drv->proc_tui_handle_choice(cgpu, input);
+					if (msg)
+						goto refresh;
+				}
 		}
 	}
 
