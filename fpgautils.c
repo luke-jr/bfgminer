@@ -473,6 +473,7 @@ struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool ve
 {
 	my_dev_t dev;
 	
+	memset(&dev, 0, sizeof(dev));
 	dev.bus = BDB_SERIAL;
 #ifndef WIN32
 	{
@@ -503,6 +504,7 @@ struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbo
 	// We should be able to just initialize a const my_dev_t for this, but Xcode's clang is broken
 	// Affected: Apple LLVM version 4.2 (clang-425.0.28) (based on LLVM 3.2svn) AKA Xcode 4.6.3
 	// Works with const: GCC 4.6.3, LLVM 3.1
+	memset(&dev, 0, sizeof(dev));
 	dev.bus = BDB_USB;
 	dev.usbbus = usbbus;
 	dev.usbaddr = usbaddr;
