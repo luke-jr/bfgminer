@@ -193,7 +193,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 
 static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
-	struct cgpu_info *klncgpu = calloc(1, sizeof(*klncgpu));
+	struct cgpu_info *klncgpu = usb_alloc_cgpu(&klondike_drv, 1);
 	struct klondike_info *klninfo = NULL;
 
 	int attempts = 0;
@@ -201,10 +201,6 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 	if (unlikely(!klncgpu))
 		quit(1, "Failed to calloc klncgpu in klondike_detect_one");
 		
-	klncgpu->drv = &klondike_drv;
-	klncgpu->deven = DEV_ENABLED;
-	klncgpu->threads = 1;
-	
 	klninfo = calloc(1, sizeof(*klninfo));
 	if (unlikely(!klninfo))
 		quit(1, "Failed to calloc klninfo in klondke_detect_one");
@@ -278,7 +274,8 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, WORKRESULT *result)
 			
 			result->nonce = le32toh(result->nonce - 0xC0);
 			applog(LOG_DEBUG, "Klondike SUBMIT NONCE (x%08x)", result->nonce);
-			submit_nonce(klncgpu->thr[0], work, result->nonce);	
+			if(submit_nonce(klncgpu->thr[0], work, result->nonce))
+				work_completed(klncgpu, work);
 			}
 			return;
 		}
