@@ -296,6 +296,7 @@ struct device_drv {
 	bool (*get_stats)(struct cgpu_info *);
 	bool (*identify_device)(struct cgpu_info *);  // e.g. to flash a led
 	char *(*set_device)(struct cgpu_info *, char *option, char *setting, char *replybuf);
+	void (*proc_wlogprint_status)(struct cgpu_info *);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);

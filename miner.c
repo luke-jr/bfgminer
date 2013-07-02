@@ -5931,6 +5931,7 @@ void manage_device(void)
 	char logline[256];
 	const char *msg = NULL;
 	struct cgpu_info *cgpu;
+	const struct device_drv *drv;
 	
 	opt_loginput = true;
 	selecting_device = true;
@@ -5938,6 +5939,7 @@ void manage_device(void)
 	
 devchange:
 	cgpu = devices[selected_device];
+	drv = cgpu->drv;
 	refresh_devstatus();
 	
 refresh:
@@ -5948,6 +5950,10 @@ refresh:
 	wattron(logwin, A_BOLD);
 	waddstr(logwin, logline);
 	wattroff(logwin, A_BOLD);
+	wlogprint("\n");
+	
+	if (drv->proc_wlogprint_status && likely(cgpu->status != LIFE_INIT))
+		drv->proc_wlogprint_status(cgpu);
 	
 	wlogprint("\n");
 	// TODO: Last share at TIMESTAMP on pool N
