@@ -297,6 +297,9 @@ struct device_drv {
 	bool (*get_stats)(struct cgpu_info *);
 	bool (*identify_device)(struct cgpu_info *);  // e.g. to flash a led
 	char *(*set_device)(struct cgpu_info *, char *option, char *setting, char *replybuf);
+	void (*proc_wlogprint_status)(struct cgpu_info *);
+	void (*proc_tui_wlogprint_choices)(struct cgpu_info *);
+	const char *(*proc_tui_handle_choice)(struct cgpu_info *, int input);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
@@ -1264,6 +1267,7 @@ extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *mi
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
+extern void get_statline3(char *buf, struct cgpu_info *, bool for_curses, bool opt_show_procs);
 extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);

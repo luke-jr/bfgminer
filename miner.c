@@ -278,6 +278,11 @@ const
 #endif
 bool curses_active;
 
+#ifdef HAVE_CURSES
+bool selecting_device;
+unsigned selected_device;
+#endif
+
 static char current_block[40];
 
 /* Protected by ch_lock */
@@ -2395,7 +2400,7 @@ percentf2(double p, double t, char *buf)
 static void adj_width(int var, int *length);
 #endif
 
-static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
+void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
 #ifdef HAVE_CURSES
 	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
@@ -2567,7 +2572,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	}
 }
 
-#define get_statline(buf, cgpu)  get_statline2(buf, cgpu, false)
+#define get_statline(buf, cgpu)               get_statline3(buf, cgpu, false, opt_show_procs)
+#define get_statline2(buf, cgpu, for_curses)  get_statline3(buf, cgpu, for_curses, opt_show_procs)
 
 static void text_print_status(int thr_id)
 {
@@ -2645,8 +2651,7 @@ static void curses_print_status(void)
 		  current_hash, block_diff, net_hashrate, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
-		have_opencl ? "[G]PU management " : "");
+	mvwprintw(statuswin, devcursor - 1, 1, "[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit");
 }
 
 static void adj_width(int var, int *length)
@@ -2685,10 +2690,26 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 		return;
 	
 	get_statline2(logline, cgpu, true);
+	if (selecting_device && (opt_show_procs ? (selected_device == cgpu->cgminer_id) : (devices[selected_device]->device == cgpu)))
+		wattron(statuswin, A_REVERSE);
 	waddstr(statuswin, logline);
+	wattroff(statuswin, A_REVERSE);
 
 	wclrtoeol(statuswin);
 }
+
+static
+void refresh_devstatus() {
+	if (curses_active_locked()) {
+		int i;
+		for (i = 0; i < total_devices; i++)
+			curses_print_devstatus(get_devices(i));
+		touchwin(statuswin);
+		wrefresh(statuswin);
+		unlock_curses();
+	}
+}
+
 #endif
 
 static void print_status(int thr_id)
@@ -5912,6 +5933,109 @@ retry:
 	opt_loginput = false;
 }
 
+void manage_device(void)
+{
+	char logline[256];
+	const char *msg = NULL;
+	struct cgpu_info *cgpu;
+	const struct device_drv *drv;
+	
+	opt_loginput = true;
+	selecting_device = true;
+	immedok(logwin, true);
+	
+devchange:
+	cgpu = devices[selected_device];
+	drv = cgpu->drv;
+	refresh_devstatus();
+	
+refresh:
+	clear_logwin();
+	wlogprint("Select processor to manage using up/down arrow keys\n");
+	
+	get_statline3(logline, cgpu, true, true);
+	wattron(logwin, A_BOLD);
+	waddstr(logwin, logline);
+	wattroff(logwin, A_BOLD);
+	wlogprint("\n");
+	
+	if (drv->proc_wlogprint_status && likely(cgpu->status != LIFE_INIT))
+		drv->proc_wlogprint_status(cgpu);
+	
+	wlogprint("\n");
+	// TODO: Last share at TIMESTAMP on pool N
+	// TODO: Custom device info/commands
+	if (cgpu->deven != DEV_ENABLED)
+		wlogprint("[E]nable ");
+	if (cgpu->deven != DEV_DISABLED)
+		wlogprint("[D]isable ");
+	if (drv->proc_tui_wlogprint_choices && likely(cgpu->status != LIFE_INIT))
+		drv->proc_tui_wlogprint_choices(cgpu);
+	wlogprint("\n");
+	wlogprint("Or press Enter when done\n");
+	if (msg)
+	{
+		wattron(logwin, A_BOLD);
+		waddstr(logwin, msg);
+		wattroff(logwin, A_BOLD);
+		msg = NULL;
+	}
+	logwin_update();
+	
+	while (true)
+	{
+		int input = getch();
+		switch (input) {
+			case 'd': case 'D':
+				if (cgpu->deven == DEV_DISABLED)
+					msg = "Processor already disabled\n";
+				else
+				{
+					cgpu->deven = DEV_DISABLED;
+					msg = "Processor being disabled\n";
+				}
+				goto refresh;
+			case 'e': case 'E':
+				if (cgpu->deven == DEV_ENABLED)
+					msg = "Processor already enabled\n";
+				else
+				{
+					proc_enable(cgpu);
+					msg = "Processor being enabled\n";
+				}
+				goto refresh;
+			case KEY_DOWN:
+				if (selected_device >= total_devices - 1)
+					break;
+				++selected_device;
+				goto devchange;
+			case KEY_UP:
+				if (selected_device <= 0)
+					break;
+				--selected_device;
+				goto devchange;
+			case 'Q': case 'q':
+			case KEY_BREAK: case KEY_BACKSPACE: case KEY_CANCEL: case KEY_CLOSE: case KEY_EXIT:
+			case '\x1b':  // ESC
+			case '\n':
+				goto out;
+			default:
+				if (drv->proc_tui_handle_choice && likely(cgpu->status != LIFE_INIT))
+				{
+					msg = drv->proc_tui_handle_choice(cgpu, input);
+					if (msg)
+						goto refresh;
+				}
+		}
+	}
+
+out:
+	selecting_device = false;
+	clear_logwin();
+	immedok(logwin, false);
+	opt_loginput = false;
+}
+
 static void *input_thread(void __maybe_unused *userdata)
 {
 	RenameThread("input");
@@ -5930,15 +6054,14 @@ static void *input_thread(void __maybe_unused *userdata)
 		case 'd': case 'D':
 			display_options();
 			break;
+		case 'm': case 'M':
+			manage_device();
+			break;
 		case 'p': case 'P':
 			display_pools();
 			break;
 		case 's': case 'S':
 			set_options();
-			break;
-		case 'g': case 'G':
-			if (have_opencl)
-				manage_gpu();
 			break;
 #ifdef HAVE_CURSES
 		case KEY_DOWN:
@@ -5949,14 +6072,7 @@ static void *input_thread(void __maybe_unused *userdata)
 			if (devsummaryYOffset == 0)
 				break;
 			++devsummaryYOffset;
-			if (curses_active_locked()) {
-				int i;
-				for (i = 0; i < total_devices; i++)
-					curses_print_devstatus(get_devices(i));
-				touchwin(statuswin);
-				wrefresh(statuswin);
-				unlock_curses();
-			}
+			refresh_devstatus();
 			break;
 #endif
 		}
