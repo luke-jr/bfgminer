@@ -942,8 +942,19 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			reinit_device(cgpu);
 			return "Attempting to restart\n";
 		case 'c': case 'C':
+		{
+			char logline[256];
+			
+			clear_logwin();
+			get_statline3(logline, cgpu, true, true);
+			wattron(logwin, A_BOLD);
+			waddstr(logwin, logline);
+			wattroff(logwin, A_BOLD);
+			wlogprint("\n");
+			
 			change_gpusettings(cgpu->device_id);
 			return "";  // Force refresh
+		}
 	}
 	return NULL;
 }

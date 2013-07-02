@@ -2392,7 +2392,7 @@ percentf2(double p, double t, char *buf)
 static void adj_width(int var, int *length);
 #endif
 
-static void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
+void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
 #ifdef HAVE_CURSES
 	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
