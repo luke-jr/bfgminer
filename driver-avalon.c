@@ -909,9 +909,12 @@ static void *avalon_send_tasks(void *userdata)
 		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
 			mutex_lock(&info->lock);
 			if (!info->optimal) {
-				applog(LOG_WARNING, "AVA%i: Above optimal temperature, throttling",
-				       avalon->device_id);
-				avalon_dec_freq(info);
+				if (info->fan_pwm >= opt_avalon_fan_max) {
+					applog(LOG_WARNING,
+					       "AVA%i: Above optimal temperature, throttling",
+					       avalon->device_id);
+					avalon_dec_freq(info);
+				}
 			} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
 				   info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
 					int total = info->auto_nonces + info->auto_hw;
