@@ -834,6 +834,120 @@ struct device_drv opencl_api;
 #endif /* HAVE_OPENCL */
 
 #if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
+static
+void opencl_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct thr_info *thr;
+	int i;
+	char checkin[40];
+	double displayed_rolling;
+	bool mhash_base = !(cgpu->rolling < 1);
+	char logline[255];
+	strcpy(logline, ""); // In case it has no data
+	
+	tailsprintf(logline, "I:%s%d  ", (cgpu->dynamic ? "d" : ""), cgpu->intensity);
+#ifdef HAVE_ADL
+	if (cgpu->has_adl) {
+		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
+		float temp = 0, vddc = 0;
+
+		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
+			if (engineclock != -1)
+				tailsprintf(logline, "E: %d MHz  ", engineclock);
+			if (memclock != -1)
+				tailsprintf(logline, "M: %d MHz  ", memclock);
+			if (vddc != -1)
+				tailsprintf(logline, "V: %.3fV  ", vddc);
+			if (activity != -1)
+				tailsprintf(logline, "A: %d%%  ", activity);
+			if (powertune != -1)
+				tailsprintf(logline, "P: %d%%", powertune);
+		}
+	}
+#endif
+	
+	wlogprint("%s\n", logline);
+	
+	wlogprint("Last initialised: %s\n", cgpu->init);
+	
+	for (i = 0; i < mining_threads; i++) {
+		thr = get_thread(i);
+		if (thr->cgpu != cgpu)
+			continue;
+		
+		get_datestamp(checkin, &thr->last);
+		displayed_rolling = thr->rolling;
+		if (!mhash_base)
+			displayed_rolling *= 1000;
+		sprintf(logline, "Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+		switch (cgpu->status) {
+			default:
+			case LIFE_WELL:
+				tailsprintf(logline, "ALIVE");
+				break;
+			case LIFE_SICK:
+				tailsprintf(logline, "SICK reported in %s", checkin);
+				break;
+			case LIFE_DEAD:
+				tailsprintf(logline, "DEAD reported in %s", checkin);
+				break;
+			case LIFE_INIT:
+			case LIFE_NOSTART:
+				tailsprintf(logline, "Never started");
+				break;
+		}
+		if (thr->pause)
+			tailsprintf(logline, " paused");
+		wlogprint("%s\n", logline);
+	}
+}
+
+static
+void opencl_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[I]ntensity [R]estart GPU ");
+	if (cgpu->has_adl)
+		wlogprint("[C]hange settings ");
+}
+
+static
+const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	switch (input)
+	{
+		case 'i': case 'I':
+		{
+			int intensity;
+			char *intvar;
+
+			intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
+			if (!intvar)
+				return "Invalid intensity\n";
+			if (!strncasecmp(intvar, "d", 1)) {
+				cgpu->dynamic = true;
+				pause_dynamic_threads(cgpu->device_id);
+				free(intvar);
+				return "Dynamic mode enabled\n";
+			}
+			intensity = atoi(intvar);
+			free(intvar);
+			if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY)
+				return "Invalid intensity (out of range)\n";
+			cgpu->dynamic = false;
+			cgpu->intensity = intensity;
+			pause_dynamic_threads(cgpu->device_id);
+			return "Intensity changed\n";
+		}
+		case 'r': case 'R':
+			reinit_device(cgpu);
+			return "Attempting to restart\n";
+		case 'c': case 'C':
+			change_gpusettings(cgpu->device_id);
+			return "";  // Force refresh
+	}
+	return NULL;
+}
+
 void manage_gpu(void)
 {
 	struct thr_info *thr;
@@ -1836,6 +1950,11 @@ struct device_drv opencl_api = {
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.get_statline_before = get_opencl_statline_before,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = opencl_wlogprint_status,
+	.proc_tui_wlogprint_choices = opencl_tui_wlogprint_choices,
+	.proc_tui_handle_choice = opencl_tui_handle_choice,
+#endif
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
