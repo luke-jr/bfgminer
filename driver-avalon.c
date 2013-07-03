@@ -940,7 +940,7 @@ static void *avalon_send_tasks(void *userdata)
 				break;
 			}
 
-			if (likely(j < avalon->queued && !info->overheat)) {
+			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
 				info->idle = false;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
