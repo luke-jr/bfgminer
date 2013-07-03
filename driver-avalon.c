@@ -496,7 +496,6 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 {
 	int i;
 
-	info->idle = true;
 	wait_avalon_ready(avalon);
 	/* Send idle to all miners */
 	for (i = 0; i < info->miner_count; i++) {
@@ -504,6 +503,7 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 
 		if (unlikely(avalon_buffer_full(avalon)))
 			break;
+		info->idle++;
 		avalon_init_task(&at, 0, 0, info->fan_pwm, info->timeout,
 				 info->asic_count, info->miner_count, 1, 1,
 				 info->frequency);
@@ -709,9 +709,6 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 
 static void avalon_inc_nvw(struct avalon_info *info, struct thr_info *thr)
 {
-	if (unlikely(info->idle))
-		return;
-
 	applog(LOG_INFO, "%s%d: No matching work - HW error",
 	       thr->cgpu->drv->name, thr->cgpu->device_id);
 
@@ -901,7 +898,7 @@ static void *avalon_send_tasks(void *userdata)
 	while (likely(!avalon->shutdown)) {
 		int start_count, end_count, i, j, ret;
 		struct avalon_task at;
-		int idled = 0;
+		bool idled = false;
 
 		while (avalon_buffer_full(avalon))
 			cgsem_wait(&info->write_sem);
@@ -941,7 +938,6 @@ static void *avalon_send_tasks(void *userdata)
 			}
 
 			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
-				info->idle = false;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
 						info->timeout, info->asic_count,
 						info->miner_count, 1, 0, info->frequency);
@@ -950,7 +946,8 @@ static void *avalon_send_tasks(void *userdata)
 			} else {
 				int idle_freq = info->frequency;
 
-				idled++;
+				if (!info->idle++)
+					idled = true;
 				if (unlikely(info->overheat && opt_avalon_auto))
 					idle_freq = AVALON_MIN_FREQUENCY;
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
@@ -976,8 +973,7 @@ static void *avalon_send_tasks(void *userdata)
 		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
 
-		if (unlikely(idled && !info->idle)) {
-			info->idle = true;
+		if (unlikely(idled)) {
 			applog(LOG_WARNING, "AVA%i: Idled %d miners",
 			       avalon->device_id, idled);
 		}
@@ -1222,14 +1218,12 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
-	avalon->results += info->nonces;
+	avalon->results += info->nonces + info->idle;
 	if (avalon->results > miner_count)
 		avalon->results = miner_count;
-	if (!info->idle && !info->reset)
+	if (!info->reset)
 		avalon->results -= miner_count / 3;
-	else
-		avalon->results = miner_count;
-	info->nonces = 0;
+	info->nonces = info->idle = 0;
 	mutex_unlock(&info->lock);
 
 	/* Check for nothing but consecutive bad results or consistently less

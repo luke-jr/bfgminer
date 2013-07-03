@@ -131,7 +131,7 @@ struct avalon_info {
 	int auto_nonces;
 	int auto_hw;
 
-	bool idle;
+	int idle;
 	bool reset;
 	bool overheat;
 	bool optimal;
