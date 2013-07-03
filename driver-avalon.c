@@ -1200,6 +1200,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	struct timeval now, then, tdiff;
 	int64_t hash_count, us_timeout;
 	struct timespec abstime;
+	int ret;
 
 	/* Half nonce range */
 	us_timeout = 0x80000000ll / info->asic_count / info->frequency;
@@ -1213,8 +1214,13 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	/* Wait until avalon_send_tasks signals us that it has completed
 	 * sending its work or a full nonce range timeout has occurred */
 	mutex_lock(&info->qlock);
-	pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
+	ret = pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
 	mutex_unlock(&info->qlock);
+
+	/* If we timed out, avalon_send_tasks may be stuck waiting on the
+	 * write_sem, so force it to check for avalon_buffer_full itself. */
+	if (ret)
+		cgsem_post(&info->write_sem);
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
