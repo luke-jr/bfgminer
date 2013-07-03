@@ -18,6 +18,10 @@
 
 #include <stdbool.h>
 
+#if !(defined(WIN32) || defined(unix))
+#define unix
+#endif
+
 #ifdef WIN32
 #include <errno.h>
 #include <time.h>
