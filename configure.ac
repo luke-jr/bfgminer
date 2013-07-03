@@ -514,7 +514,7 @@ if test "x$with_system_libblkmaker" = "xyes"; then
 	])
 else
 	libblkmaker_CFLAGS='-Ilibblkmaker'
-	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs'
+	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs,-z,origin'
 	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
 	AC_CONFIG_SUBDIRS([libblkmaker])
 fi
