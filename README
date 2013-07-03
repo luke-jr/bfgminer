@@ -230,7 +230,6 @@ GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-engine <arg>  GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
@@ -249,6 +248,8 @@ GPU only options:
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
+
+GPU mining can be disabled by specifying the -S opencl:noauto option.
 
 See README.GPU for more information regarding GPU mining.
 
@@ -313,7 +314,6 @@ CPU only options (not included in binaries):
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines
         altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
---enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
 
 ---
@@ -630,7 +630,9 @@ Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
 no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
-released but CPU mining can be built into BFGMiner when it is compiled.
+released for Windows but CPU mining can be built into BFGMiner when it is
+compiled. For builds which do support CPU mining, it is still disabled by
+default, and must be enabled using the -S cpu:auto option.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one

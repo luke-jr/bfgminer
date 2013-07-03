@@ -1293,11 +1293,7 @@ static struct opt_table opt_config_table[] = {
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
 			opt_set_bool, &opt_nogpu,
-#ifdef HAVE_OPENCL
-			"Disable GPU mining even if suitable devices exist"
-#else
 			opt_hidden
-#endif
 	),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
@@ -1305,7 +1301,7 @@ static struct opt_table opt_config_table[] = {
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
-			"Enable CPU mining with other mining (default: no CPU mining if other devices exist)"),
+			opt_hidden),
 #endif
 	OPT_WITH_ARG("--expiry|-E",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
