@@ -1222,7 +1222,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	if (avalon->results > miner_count)
 		avalon->results = miner_count;
 	if (!info->reset)
-		avalon->results -= miner_count / 3;
+		avalon->results--;
 	info->nonces = info->idle = 0;
 	mutex_unlock(&info->lock);
 
