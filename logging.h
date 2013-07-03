@@ -56,12 +56,15 @@ extern void _applog(int prio, const char *str);
 	return rv;  \
 } while (0)
 
+extern void _bfg_clean_up(void);
+
 #define quit(status, fmt, ...) do { \
+	_bfg_clean_up();  \
 	if (fmt) { \
-		char tmp42[LOGBUFSIZ]; \
-		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-		_applog(LOG_ERR, tmp42); \
+		fprintf(stderr, fmt, ##__VA_ARGS__);  \
 	} \
+	fprintf(stderr, "\n");  \
+	fflush(stderr);  \
 	_quit(status); \
 } while (0)
 

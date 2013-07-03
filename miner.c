@@ -3675,14 +3675,14 @@ const
 #endif
 char **initial_args;
 
-static void clean_up(void);
+void _bfg_clean_up(void);
 
 void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
 
 	__kill_work();
-	clean_up();
+	_bfg_clean_up();
 
 #if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
@@ -8310,7 +8310,7 @@ void print_summary(void)
 	fflush(stdout);
 }
 
-static void clean_up(void)
+void _bfg_clean_up(void)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
@@ -8335,8 +8335,6 @@ static void clean_up(void)
 
 void _quit(int status)
 {
-	clean_up();
-
 	if (status) {
 		const char *ev = getenv("__BFGMINER_SEGFAULT_ERRQUIT");
 		if (unlikely(ev && ev[0] && ev[0] != '0')) {
