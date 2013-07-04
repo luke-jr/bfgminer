@@ -2232,6 +2232,17 @@ double stats_elapsed(struct cgminer_stats *stats)
 	return elapsed;
 }
 
+bool drv_ready(struct cgpu_info *cgpu)
+{
+	switch (cgpu->status) {
+		case LIFE_INIT:
+		case LIFE_DEAD2:
+			return false;
+		default:
+			return true;
+	}
+}
+
 double cgpu_utility(struct cgpu_info *cgpu)
 {
 	double dev_runtime = cgpu_runtime(cgpu);
@@ -2475,7 +2486,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 		return;
 	}
 	
-	if (drv->get_dev_statline_before || drv->get_statline_before)
+	if ((drv->get_dev_statline_before || drv->get_statline_before) && likely(drv_ready(cgpu)))
 	{
 		if (drv->get_dev_statline_before && drv->get_statline_before)
 			statline_func = opt_show_procs ? drv->get_statline_before : drv->get_dev_statline_before;
@@ -2505,7 +2516,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 					if (proc->deven == DEV_RECOVER)
 						cHrStatsI = 3;
 				case 3:
-					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD)
+					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD || proc->status == LIFE_DEAD2)
 					{
 						cHrStatsI = 1;
 						all_off = false;
@@ -2516,7 +2527,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 				case 1:
 					break;
 			}
-			if (likely(proc->status != LIFE_DEAD))
+			if (likely(proc->status != LIFE_DEAD && proc->status != LIFE_DEAD2))
 				all_dead = false;
 			if (opt_show_procs)
 				break;
@@ -6016,7 +6027,7 @@ refresh:
 			case '\n':
 				goto out;
 			default:
-				if (drv->proc_tui_handle_choice && likely(cgpu->status != LIFE_INIT))
+				if (drv->proc_tui_handle_choice && likely(drv_ready(cgpu)))
 				{
 					msg = drv->proc_tui_handle_choice(cgpu, input);
 					if (msg)
@@ -8084,7 +8095,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->drv->get_stats && likely(cgpu->status != LIFE_INIT))
+			if (cgpu->drv->get_stats && likely(drv_ready(cgpu)))
 			  cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;

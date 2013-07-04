@@ -580,12 +580,21 @@ void *miner_thread(void *userdata)
 		minerloop_scanhash(mythr);
 	__thr_being_msg(LOG_NOTICE, mythr, "shutting down");
 
-out:
-	cgpu->deven = DEV_DISABLED;
+out: ;
+	struct cgpu_info *proc = cgpu;
+	do
+	{
+		proc->deven = DEV_DISABLED;
+		proc->status = LIFE_DEAD2;
+	}
+	while ( (proc = proc->next_proc) && !proc->threads);
+	mythr->getwork = 0;
+	mythr->has_pth = false;
+	nmsleep(1000);
+	
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
 
-	thread_reportin(mythr);
 	notifier_destroy(mythr->notifier);
 
 	return NULL;
