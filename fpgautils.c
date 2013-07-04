@@ -845,8 +845,13 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 
 	FILE *f = open_bitstream(dname, fwfile);
 	if (!f)
-		bailout(LOG_ERR, "%s: Error opening bitstream file %s",
+	{
+		applog(LOG_ERR, "%s: Error opening bitstream file %s",
 		        repr, fwfile);
+		applog(LOG_ERR, "%s: Did you install the necessary bitstream package?",
+		       repr);
+		return NULL;
+	}
 	if (1 != fread(buf, 2, 1, f))
 		bailout(LOG_ERR, "%s: Error reading bitstream (magic)",
 		        repr);
