@@ -215,6 +215,7 @@ enum alive {
 	LIFE_INIT,
 	LIFE_WAIT,
 	LIFE_INIT2,  // Still initializing, but safe to call functions
+	LIFE_DEAD2,  // Totally dead, NOT safe to call functions
 };
 
 

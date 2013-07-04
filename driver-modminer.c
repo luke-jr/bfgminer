@@ -800,6 +800,8 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 static void
 modminer_fpga_shutdown(struct thr_info *thr)
 {
+	for (struct cgpu_info *proc = thr->cgpu->device; proc; proc = proc->next_proc)
+		proc->status = LIFE_DEAD2;
 	free(thr->cgpu_data);
 }
 

@@ -2118,6 +2118,17 @@ double stats_elapsed(struct cgminer_stats *stats)
 	return elapsed;
 }
 
+bool drv_ready(struct cgpu_info *cgpu)
+{
+	switch (cgpu->status) {
+		case LIFE_INIT:
+		case LIFE_DEAD2:
+			return false;
+		default:
+			return true;
+	}
+}
+
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
 static void suffix_string(uint64_t val, char *buf, int sigdigits)
@@ -2327,7 +2338,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		return;
 	}
 	
-	if (api->get_dev_statline_before || api->get_statline_before)
+	if ((api->get_dev_statline_before || api->get_statline_before) && likely(drv_ready(cgpu)))
 	{
 		if (api->get_dev_statline_before && api->get_statline_before)
 			statline_func = opt_show_procs ? api->get_statline_before : api->get_dev_statline_before;
@@ -2357,7 +2368,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 					if (proc->deven == DEV_RECOVER)
 						cHrStatsI = 3;
 				case 3:
-					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD)
+					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD || proc->status == LIFE_DEAD2)
 					{
 						cHrStatsI = 1;
 						all_off = false;
@@ -2368,7 +2379,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 				case 1:
 					break;
 			}
-			if (likely(proc->status != LIFE_DEAD))
+			if (likely(proc->status != LIFE_DEAD && proc->status != LIFE_DEAD2))
 				all_dead = false;
 			if (opt_show_procs)
 				break;
@@ -7471,7 +7482,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->api->get_stats && likely(cgpu->status != LIFE_INIT))
+			if (cgpu->api->get_stats && likely(drv_ready(cgpu)))
 			  cgpu->api->get_stats(cgpu);
 
 			gpu = cgpu->device_id;

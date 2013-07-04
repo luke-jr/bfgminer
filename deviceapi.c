@@ -570,11 +570,20 @@ void *miner_thread(void *userdata)
 	else
 		minerloop_scanhash(mythr);
 
-out:
+out: ;
+	struct cgpu_info *proc = cgpu;
+	do
+	{
+		proc->status = LIFE_DEAD2;
+	}
+	while ( (proc = proc->next_proc) && !proc->threads);
+	mythr->getwork = 0;
+	PTH(mythr) = false;
+	nmsleep(1000);
+	
 	if (api->thread_shutdown)
 		api->thread_shutdown(mythr);
 
-	thread_reportin(mythr);
 	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 	notifier_destroy(mythr->notifier);
 
