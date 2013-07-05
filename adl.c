@@ -251,12 +251,16 @@ void init_adl(int nDevs)
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
 			if (result == -10)
 				applog(LOG_INFO, "This error says the device is not enabled");
-			continue;
 		}
-
+		else
 		/* Each adapter may have multiple entries */
 		if (lpAdapterID == last_adapter)
 			continue;
+		else
+		if (!lpAdapterID)
+			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
+		else
+			last_adapter = lpAdapterID;
 
 		applog(LOG_DEBUG, "GPU %d "
 		       "iAdapterIndex %d "
@@ -288,12 +292,6 @@ void init_adl(int nDevs)
 			applog(LOG_ERR, "There is possibly at least one GPU that doesn't support OpenCL");
 			applog(LOG_ERR, "Use the gpu map feature to reliably map OpenCL to ADL");
 			devs_match = false;
-		}
-		last_adapter = lpAdapterID;
-
-		if (!lpAdapterID) {
-			applog(LOG_INFO, "Adapter returns ID 0 meaning not AMD. Card order might be confused");
-			continue;
 		}
 	}
 
@@ -367,7 +365,7 @@ void init_adl(int nDevs)
 		result = ADL_Adapter_ID_Get(iAdapterIndex, &lpAdapterID);
 		if (result != ADL_OK) {
 			applog(LOG_INFO, "Failed to ADL_Adapter_ID_Get. Error %d", result);
-			continue;
+			lpAdapterID = -1;
 		}
 
 		if (gpus[gpu].deven == DEV_DISABLED) {
