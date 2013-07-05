@@ -495,6 +495,15 @@ Q: I do not want cgminer to modify my engine/clock/fanspeed?
 A: Cgminer only modifies values if you tell it to via some parameters.
 Otherwise it will just monitor the values.
 
+Q: Cgminer does not disable my GPU even though it hit the overheat temperature?
+A: It only disables GPUs if you enable the --auto-gpu option. If you don't give
+it parameters for engine clock it will not adjust engine clocks with this
+option.
+
+Q: Can I use the open source radeon driver for AMD GPUs or the nouveau driver
+for NVIDIA GPUs?
+A: None of them currently support OpenCL, so no you cannot.
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
