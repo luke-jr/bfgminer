@@ -407,6 +407,20 @@ else
 fi
 
 
+save_LDFLAGS="$LDFLAGS"
+LDFLAGS="$LDFLAGS -Wl,-zorigin"
+origin_LDFLAGS=
+AC_MSG_CHECKING([whether the linker recognizes the -zorigin option])
+AC_TRY_LINK([],[],[
+	AC_MSG_RESULT([yes])
+	origin_LDFLAGS=',-zorigin'
+],[
+	AC_MSG_RESULT([no])
+])
+LDFLAGS="$save_LDFLAGS"
+AC_SUBST(origin_LDFLAGS)
+
+
 AC_CONFIG_SUBDIRS([libblkmaker])
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [true])

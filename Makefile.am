@@ -52,7 +52,7 @@ EXTRA_bfgminer_DEPENDENCIES =
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 bfgminer_CPPFLAGS += -Ilibblkmaker
-bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs,-z,origin
+bfgminer_LDFLAGS  += -Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs$(origin_LDFLAGS)
 bfgminer_LDADD    += -lblkmaker_jansson-0.1 -lblkmaker-0.1
 EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
 libblkmaker_directory:
