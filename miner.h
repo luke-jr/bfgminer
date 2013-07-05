@@ -125,6 +125,10 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
+#ifdef USE_BITFURY
+  #include "libbitfury.h"
+#endif
+
 #ifdef USE_USBUTILS
   #include "usbutils.h"
 #endif
@@ -226,6 +230,7 @@ enum drv_driver {
 	DRIVER_BITFORCE,
 	DRIVER_MODMINER,
 	DRIVER_ZTEX,
+	DRIVER_BITFURY,
 	DRIVER_BFLSC,
 	DRIVER_AVALON,
 	DRIVER_MAX
@@ -438,6 +443,9 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
+/*#ifdef USE_BITFURY
+		struct libbitfury_device *device_bitfury;
+#endif */
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
 #endif

@@ -7015,6 +7015,10 @@ extern struct device_drv modminer_drv;
 extern struct device_drv ztex_drv;
 #endif
 
+#ifdef USE_BITFURY
+extern struct device_drv bitfury_drv;
+#endif
+
 static int cgminer_id_count = 0;
 
 /* Various noop functions for drivers that don't support or need their
@@ -7539,6 +7543,11 @@ int main(int argc, char *argv[])
 #ifdef USE_ZTEX
 	if (!opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+#ifdef USE_BITFURY
+	if (!opt_scrypt)
+		bitfury_drv.drv_detect();
 #endif
 
 	/* Detect avalon last since it will try to claim the device regardless
