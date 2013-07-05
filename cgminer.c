@@ -2176,7 +2176,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 			dawidth, cgpu->diff_accepted,
 			drwidth, cgpu->diff_rejected,
 			hwwidth, cgpu->hw_errors,
-			wuwidth + 3, wu);
+			wuwidth + 2, wu);
 
 	logline[0] = '\0';
 	cgpu->drv->get_statline(logline, cgpu);
