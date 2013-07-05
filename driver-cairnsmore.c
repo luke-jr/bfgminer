@@ -196,8 +196,6 @@ static bool cairnsmore_identify(struct cgpu_info *cm1)
 	return true;
 }
 
-extern struct device_drv icarus_drv;
-
 static void cairnsmore_drv_init()
 {
 	cairnsmore_drv = icarus_drv;

@@ -8603,6 +8603,7 @@ extern struct device_drv bitforce_drv;
 
 #ifdef USE_ICARUS
 extern struct device_drv cairnsmore_drv;
+extern struct device_drv erupter_drv;
 extern struct device_drv icarus_drv;
 #endif
 
@@ -8701,6 +8702,7 @@ void drv_detect_all()
 	if (!opt_scrypt)
 	{
 		cairnsmore_drv.drv_detect();
+		erupter_drv.drv_detect();
 		icarus_drv.drv_detect();
 	}
 #endif
