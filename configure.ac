@@ -55,7 +55,7 @@ AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
 
 dnl Make sure anyone changing configure.ac/Makefile.am has a clue
-AM_MAINTAINER_MODE
+AM_MAINTAINER_MODE([enable])
 
 dnl Checks for programs
 AC_PROG_CC_C99
