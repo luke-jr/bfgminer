@@ -907,8 +907,10 @@ static
 void opencl_tui_wlogprint_choices(struct cgpu_info *cgpu)
 {
 	wlogprint("[I]ntensity [R]estart GPU ");
+#ifdef HAVE_ADL
 	if (cgpu->has_adl)
 		wlogprint("[C]hange settings ");
+#endif
 }
 
 static
