@@ -38,11 +38,12 @@
 #define MERKLE_OFFSET 64
 #define MERKLE_BYTES 12
 
-#define REPLY_SIZE			15	// adequate for all types of replies
-#define REPLY_BUFSIZE 		16	// reply + 1 byte to mark used
-#define MAX_REPLY_COUNT		32	// more unhandled replies than this will result in data loss
-#define REPLY_WAIT_TIME		100 // poll interval for a cmd waiting it's reply
-#define MAX_WORK_COUNT      4   // for now, must be binary multiple and match firmware
+#define REPLY_SIZE			15		// adequate for all types of replies
+#define REPLY_BUFSIZE 		16		// reply + 1 byte to mark used
+#define MAX_REPLY_COUNT		32		// more unhandled replies than this will result in data loss
+#define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
+#define MAX_WORK_COUNT      4   	// for now, must be binary multiple and match firmware
+#define TACH_FACTOR			87890	// fan rpm divisor
 
 struct device_drv klondike_drv;
 
@@ -141,14 +142,26 @@ static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, in
 	}
 	return NULL;
 }
+static bool klondike_get_cfgs(struct cgpu_info *klncgpu)
+{
+	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
+	int dev;
+	
+	if (klncgpu->usbinfo.nodev || klninfo->status == NULL)
+		return false;
+	
+	for(dev = 0; dev <= klninfo->status->slavecount; dev++) {
+		char *reply = SendCmdGetReply(klncgpu, 'C', dev, 1, "");
+		if(reply != NULL)
+			klninfo->cfg[dev] = *(WORKCFG *)(reply+2);
+		}
+	return true;	
+}
 
 static bool klondike_get_stats(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	char replybuf[REPLY_BUFSIZE];
-	char devpath[20];
 	bool allok = false;
-	int sent, recd, err;
 	int slaves, dev;
 
 	if (klncgpu->usbinfo.nodev)
@@ -384,6 +397,7 @@ static void klondike_thread_enable(struct thr_info *thr)
 		return;
 
 	klondike_flush_work(klncgpu);
+	klondike_get_cfgs(klncgpu);
 }
 
 static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *work)
@@ -459,9 +473,8 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 			klninfo->devinfo[dev].lasthashcount = klninfo->status[dev].hashcount;
 			newhashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
 			
-			// discard old work
+			// check stats for critical conditions
 			
-			//	work_completed(klncgpu, work);
 		}
 		rd_unlock(&(klninfo->stat_lock));
 	}
@@ -486,29 +499,38 @@ static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 	}
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, " %3.0fC 1.2V | ", convertKlnTemp(temp));
+	tailsprintf(buf, "     %3.0fC 1.2V | ", convertKlnTemp(temp));
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	struct api_data *root = NULL;
-	char buf[12];
+	char buf[32];
 	int dev;
-		
+	
 	rd_lock(&(klninfo->stat_lock));
 	for (dev = 0; dev <= klninfo->status->slavecount; dev++) { 
 
-		float ftemp = convertKlnTemp(klninfo->status[dev].temp);
-		sprintf(buf, "Temp%d", dev);
-		root = api_add_temp(root, buf, &ftemp, true);
+		float fTemp = convertKlnTemp(klninfo->status[dev].temp);
+		sprintf(buf, "Temp %d", dev);
+		root = api_add_temp(root, buf, &fTemp, true);
+	
+		double dClk = (double)klninfo->cfg[dev].hashclock / 2;
+		sprintf(buf, "Clock %d", dev);
+		root = api_add_freq(root, buf, &dClk, true);
 		
-		double dclk = (double)klninfo->cfg[dev].hashclock / 2;
-		sprintf(buf, "Clock%d", dev);
-		root = api_add_freq(root, buf, &dclk, true);
+		unsigned int iFan = (unsigned int)100 * klninfo->cfg[dev].fantarget / 256;
+		sprintf(buf, "Fan Percent %d", dev);
+		root = api_add_int(root, buf, &iFan, true);
+
+		iFan = (unsigned int)TACH_FACTOR / klninfo->status[dev].fanspeed;
+		sprintf(buf, "Fan RPM %d", dev);
+		root = api_add_int(root, buf, &iFan, true);
 	}
 	rd_unlock(&(klninfo->stat_lock));
-
+	
+	return root;
 }
 
 struct device_drv klondike_drv = {
