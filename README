@@ -33,6 +33,10 @@ License: GPLv3.  See COPYING for details.
 
 READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
 
+Everything you probably want, condensed:
+	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
+	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
+
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
 	automake             http://www.gnu.org/software/automake/
