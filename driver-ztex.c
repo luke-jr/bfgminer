@@ -362,11 +362,11 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	return noncecnt;
 }
 
-static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
+static void ztex_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	if (cgpu->deven == DEV_ENABLED) {
-		tailsprintf(buf, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
-		tailsprintf(buf, "%0.1fMHz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
+		tailsprintf(buf, bufsiz, "%s-%d | ", cgpu->device_ztex->snString, cgpu->device_ztex->fpgaNum+1);
+		tailsprintf(buf, bufsiz, "%0.1fMHz | ", cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1));
 	}
 }
 

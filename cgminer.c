@@ -1944,15 +1944,6 @@ static bool curses_active_locked(void)
 }
 #endif
 
-void tailsprintf(char *f, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vsprintf(f + strlen(f), fmt, ap);
-	va_end(ap);
-}
-
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
 static void suffix_string(uint64_t val, char *buf, int sigdigits)
@@ -2010,7 +2001,7 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	}
 }
 
-static void get_statline(char *buf, struct cgpu_info *cgpu)
+static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
@@ -2035,8 +2026,8 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 	suffix_string(dr64, displayed_rolling, 4);
 
 	sprintf(buf, "%s%d ", cgpu->drv->name, cgpu->device_id);
-	cgpu->drv->get_statline_before(buf, cgpu);
-	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
+	cgpu->drv->get_statline_before(buf, bufsiz, cgpu);
+	tailsprintf(buf, bufsiz, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
 		displayed_hashes,
@@ -2044,7 +2035,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->diff_rejected,
 		cgpu->hw_errors,
 		wu);
-	cgpu->drv->get_statline(buf, cgpu);
+	cgpu->drv->get_statline(buf, bufsiz, cgpu);
 }
 
 static void text_print_status(int thr_id)
@@ -2054,7 +2045,7 @@ static void text_print_status(int thr_id)
 
 	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		printf("%s\n", logline);
 	}
 }
@@ -2143,7 +2134,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	wmove(statuswin,devcursor + count, 0);
 	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
 	logline[0] = '\0';
-	cgpu->drv->get_statline_before(logline, cgpu);
+	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
 	wprintw(statuswin, "%s", logline);
 
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
@@ -2179,7 +2170,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 			wuwidth + 2, wu);
 
 	logline[0] = '\0';
-	cgpu->drv->get_statline(logline, cgpu);
+	cgpu->drv->get_statline(logline, sizeof(logline), cgpu);
 	wprintw(statuswin, "%s", logline);
 
 	wclrtoeol(statuswin);
@@ -2642,7 +2633,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (!want_per_device_stats) {
 		char logline[256];
 
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		applog(LOG_INFO, "%s", logline);
 	}
 
@@ -4693,7 +4684,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 				cgpu->last_message_tv = now;
 
-				get_statline(logline, cgpu);
+				get_statline(logline, sizeof(logline), cgpu);
 				if (!curses_active) {
 					printf("%s          \r", logline);
 					fflush(stdout);
@@ -6643,7 +6634,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-	get_statline(logline, cgpu);
+	get_statline(logline, sizeof(logline), cgpu);
 	applog(LOG_WARNING, "%s", logline);
 }
 
@@ -7023,12 +7014,12 @@ static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
-void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu)
 {
-	tailsprintf(buf, "               | ");
+	tailsprintf(buf, bufsiz, "               | ");
 }
 
-static void noop_get_statline(char __maybe_unused *buf, struct cgpu_info __maybe_unused *cgpu)
+static void noop_get_statline(char __maybe_unused *buf, size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu)
 {
 }
 

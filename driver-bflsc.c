@@ -1235,7 +1235,7 @@ static void bflsc_detect(void)
 	usb_detect(&bflsc_drv, bflsc_detect_one);
 }
 
-static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
+static void get_bflsc_statline_before(char *buf, size_t bufsiz, struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	float temp = 0;
@@ -1253,7 +1253,7 @@ static void get_bflsc_statline_before(char *buf, struct cgpu_info *bflsc)
 	}
 	rd_unlock(&(sc_info->stat_lock));
 
-	tailsprintf(buf, " max%3.0fC %4.2fV | ", temp, vcc1);
+	tailsprintf(buf, bufsiz, " max%3.0fC %4.2fV | ", temp, vcc1);
 }
 
 static void flush_one_dev(struct cgpu_info *bflsc, int dev)

@@ -1146,7 +1146,7 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 	}
 }
 
-static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
+static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon->device_data;
 	int lowfan = 10000;
@@ -1157,7 +1157,7 @@ static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
 	if (info->fan2 >= 0 && info->fan2 < lowfan)
 		lowfan = info->fan2;
 
-	tailsprintf(buf, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
+	tailsprintf(buf, bufsiz, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
 }
 
 /* We use a replacement algorithm to only remove references to work done from
