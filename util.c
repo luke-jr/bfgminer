@@ -642,39 +642,42 @@ char *bin2hex(const unsigned char *p, size_t len)
 	return s;
 }
 
+static inline
+int _hex2bin_char(const char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return (c - 'a') + 10;
+	if (c >= 'A' && c <= 'F')
+		return (c - 'A') + 10;
+	return -1;
+}
+
 /* Does the reverse of bin2hex but does not allocate any ram */
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
-	bool ret = false;
-
-	while (*hexstr && len) {
-		char hex_byte[4];
-		unsigned int v;
-
-		if (unlikely(!hexstr[1])) {
-			applog(LOG_ERR, "hex2bin str truncated");
-			return ret;
+	int n, o;
+	
+	while (len--)
+	{
+		n = _hex2bin_char((hexstr++)[0]);
+		if (unlikely(n == -1))
+		{
+badchar:
+			if (!hexstr[-1])
+				applog(LOG_ERR, "hex2bin: str truncated");
+			else
+				applog(LOG_ERR, "hex2bin: invalid character 0x%02x", (int)hexstr[-1]);
+			return false;
 		}
-
-		memset(hex_byte, 0, 4);
-		hex_byte[0] = hexstr[0];
-		hex_byte[1] = hexstr[1];
-
-		if (unlikely(sscanf(hex_byte, "%x", &v) != 1)) {
-			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
-			return ret;
-		}
-
-		*p = (unsigned char) v;
-
-		p++;
-		hexstr += 2;
-		len--;
+		o = _hex2bin_char((hexstr++)[0]);
+		if (unlikely(o == -1))
+			goto badchar;
+		(p++)[0] = (n << 4) | o;
 	}
-
-	if (likely(len == 0 && *hexstr == 0))
-		ret = true;
-	return ret;
+	
+	return likely(!hexstr[0]);
 }
 
 void hash_data(unsigned char *out_hash, const unsigned char *data)
