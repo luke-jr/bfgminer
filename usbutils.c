@@ -712,7 +712,7 @@ static bool setgetdes(ssize_t count, libusb_device *dev, struct libusb_device_ha
 
 	err = libusb_set_configuration(handle, cd);
 	if (err) {
-		sprintf(tmp, EOL "  ** dev %d: Failed to set config descriptor to %d, err %d",
+		snprintf(tmp, sizeof(tmp), EOL "  ** dev %d: Failed to set config descriptor to %d, err %d",
 				(int)count, cd, err);
 		append(buf, tmp, off, len);
 		return false;
@@ -720,13 +720,13 @@ static bool setgetdes(ssize_t count, libusb_device *dev, struct libusb_device_ha
 
 	err = libusb_get_active_config_descriptor(dev, config);
 	if (err) {
-		sprintf(tmp, EOL "  ** dev %d: Failed to get active config descriptor set to %d, err %d",
+		snprintf(tmp, sizeof(tmp), EOL "  ** dev %d: Failed to get active config descriptor set to %d, err %d",
 				(int)count, cd, err);
 		append(buf, tmp, off, len);
 		return false;
 	}
 
-	sprintf(tmp, EOL "  ** dev %d: Set & Got active config descriptor to %d, err %d",
+	snprintf(tmp, sizeof(tmp), EOL "  ** dev %d: Set & Got active config descriptor to %d, err %d",
 			(int)count, cd, err);
 	append(buf, tmp, off, len);
 	return true;
@@ -749,7 +749,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_device_descriptor(dev, &desc);
 	if (opt_usb_list_all && err) {
-		sprintf(tmp, EOL ".USB dev %d: Failed to get descriptor, err %d",
+		snprintf(tmp, sizeof(tmp), EOL ".USB dev %d: Failed to get descriptor, err %d",
 					(int)(++(*count)), err);
 		append(buf, tmp, off, len);
 		return;
@@ -775,11 +775,11 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 	(*count)++;
 
 	if (level == 0) {
-		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d ID: %04x:%04x",
+		snprintf(tmp, sizeof(tmp), EOL ".USB dev %d: Bus %d Device %d ID: %04x:%04x",
 				(int)(*count), (int)bus_number, (int)device_address,
 				desc.idVendor, desc.idProduct);
 	} else {
-		sprintf(tmp, EOL ".USB dev %d: Bus %d Device %d Device Descriptor:" EOL "\tLength: %d" EOL
+		snprintf(tmp, sizeof(tmp), EOL ".USB dev %d: Bus %d Device %d Device Descriptor:" EOL "\tLength: %d" EOL
 			"\tDescriptor Type: %s" EOL "\tUSB: %04x" EOL "\tDeviceClass: %d" EOL
 			"\tDeviceSubClass: %d" EOL "\tDeviceProtocol: %d" EOL "\tMaxPacketSize0: %d" EOL
 			"\tidVendor: %04x" EOL "\tidProduct: %04x" EOL "\tDeviceRelease: %x" EOL
@@ -795,28 +795,28 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_open(dev, &handle);
 	if (err) {
-		sprintf(tmp, EOL "  ** dev %d: Failed to open, err %d", (int)(*count), err);
+		snprintf(tmp, sizeof(tmp), EOL "  ** dev %d: Failed to open, err %d", (int)(*count), err);
 		append(buf, tmp, off, len);
 		return;
 	}
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iManufacturer, man, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)man, "** err(%d)%s", err, usberrstr(err));
+		snprintf((char *)man, sizeof(man), "** err(%d)%s", err, usberrstr(err));
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)prod, "** err(%d)%s", err, usberrstr(err));
+		snprintf((char *)prod, sizeof(prod), "** err(%d)%s", err, usberrstr(err));
 
 	if (level == 0) {
 		libusb_close(handle);
-		sprintf(tmp, EOL "  Manufacturer: '%s'" EOL "  Product: '%s'", man, prod);
+		snprintf(tmp, sizeof(tmp), EOL "  Manufacturer: '%s'" EOL "  Product: '%s'", man, prod);
 		append(buf, tmp, off, len);
 		return;
 	}
 
 	if (libusb_kernel_driver_active(handle, 0) == 1) {
-		sprintf(tmp, EOL "   * dev %d: kernel attached", (int)(*count));
+		snprintf(tmp, sizeof(tmp), EOL "   * dev %d: kernel attached", (int)(*count));
 		append(buf, tmp, off, len);
 	}
 
@@ -825,14 +825,14 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 		if (!setgetdes(*count, dev, handle, &config, 1, buf, off, len)
 		&&  !setgetdes(*count, dev, handle, &config, 0, buf, off, len)) {
 			libusb_close(handle);
-			sprintf(tmp, EOL "  ** dev %d: Failed to set config descriptor to %d or %d",
+			snprintf(tmp, sizeof(tmp), EOL "  ** dev %d: Failed to set config descriptor to %d or %d",
 					(int)(*count), 1, 0);
 			append(buf, tmp, off, len);
 			return;
 		}
 	}
 
-	sprintf(tmp, EOL "     dev %d: Active Config:" EOL "\tDescriptorType: %s" EOL
+	snprintf(tmp, sizeof(tmp), EOL "     dev %d: Active Config:" EOL "\tDescriptorType: %s" EOL
 			"\tNumInterfaces: %d" EOL "\tConfigurationValue: %d" EOL
 			"\tAttributes: %d" EOL "\tMaxPower: %d",
 				(int)(*count), destype(config->bDescriptorType),
@@ -844,7 +844,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 		for (j = 0; j < config->interface[i].num_altsetting; j++) {
 			idesc = &(config->interface[i].altsetting[j]);
 
-			sprintf(tmp, EOL "     _dev %d: Interface Descriptor %d:" EOL
+			snprintf(tmp, sizeof(tmp), EOL "     _dev %d: Interface Descriptor %d:" EOL
 					"\tDescriptorType: %s" EOL "\tInterfaceNumber: %d" EOL
 					"\tNumEndpoints: %d" EOL "\tInterfaceClass: %d" EOL
 					"\tInterfaceSubClass: %d" EOL "\tInterfaceProtocol: %d",
@@ -859,7 +859,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 			for (k = 0; k < (int)(idesc->bNumEndpoints); k++) {
 				epdesc = &(idesc->endpoint[k]);
 
-				sprintf(tmp, EOL "     __dev %d: Interface %d Endpoint %d:" EOL
+				snprintf(tmp, sizeof(tmp), EOL "     __dev %d: Interface %d Endpoint %d:" EOL
 						"\tDescriptorType: %s" EOL
 						"\tEndpointAddress: %s0x%x" EOL
 						"\tAttributes: %s" EOL "\tMaxPacketSize: %d" EOL
@@ -882,9 +882,9 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, ser, STRBUFLEN);
 	if (err < 0)
-		sprintf((char *)ser, "** err(%d)%s", err, usberrstr(err));
+		snprintf((char *)ser, sizeof(ser), "** err(%d)%s", err, usberrstr(err));
 
-	sprintf(tmp, EOL "     dev %d: More Info:" EOL "\tManufacturer: '%s'" EOL
+	snprintf(tmp, sizeof(tmp), EOL "     dev %d: More Info:" EOL "\tManufacturer: '%s'" EOL
 			"\tProduct: '%s'" EOL "\tSerial '%s'",
 				(int)(*count), man, prod, ser);
 	append(buf, tmp, off, len);
@@ -1491,13 +1491,13 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
 
-	sprintf(devpath, "%d:%d",
+	snprintf(devpath, sizeof(devpath), "%d:%d",
 		(int)(cgpu->usbinfo.bus_number),
 		(int)(cgpu->usbinfo.device_address));
 
 	cgpu->device_path = strdup(devpath);
 
-	sprintf(devstr, "- %s device %s", found->name, devpath);
+	snprintf(devstr, sizeof(devstr), "- %s device %s", found->name, devpath);
 
 	cgusb = calloc(1, sizeof(*cgusb));
 	if (unlikely(!cgusb))
@@ -3308,7 +3308,7 @@ static bool resource_lock(const char *dname, uint8_t bus_number, uint8_t device_
 	if (is_in_use_bd(bus_number, device_address))
 		return false;
 
-	sprintf(name, "cg-usb-%d-%d", (int)bus_number, (int)device_address);
+	snprintf(name, sizeof(name), "cg-usb-%d-%d", (int)bus_number, (int)device_address);
 
 	sec = mksec(dname, bus_number, device_address);
 	if (!sec)
@@ -3384,7 +3384,7 @@ fail:
 	if (is_in_use_bd(bus_number, device_address))
 		return false;
 
-	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	snprintf(name, sizeof(name), "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 	fd = open(name, O_CREAT|O_RDONLY, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
 	if (fd == -1) {
 		applog(LOG_ERR,
@@ -3484,7 +3484,7 @@ static void resource_unlock(const char *dname, uint8_t bus_number, uint8_t devic
 	HANDLE usbMutex = NULL;
 	char name[64];
 
-	sprintf(name, "cg-usb-%d-%d", (int)bus_number, (int)device_address);
+	snprintf(name, sizeof(name), "cg-usb-%d-%d", (int)bus_number, (int)device_address);
 
 	in_use_get_ress(bus_number, device_address, (void **)(&usbMutex), (void **)(&sec));
 
@@ -3509,7 +3509,7 @@ fila:
 	key_t *key = NULL;
 	int *sem = NULL;
 
-	sprintf(name, "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
+	snprintf(name, sizeof(name), "/tmp/cgminer-usb-%d-%d", (int)bus_number, (int)device_address);
 
 	in_use_get_ress(bus_number, device_address, (void **)(&key), (void **)(&sem));
 
