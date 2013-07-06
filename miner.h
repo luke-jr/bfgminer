@@ -1284,7 +1284,7 @@ struct modminer_fpga_state {
 	strcat(buf, tmp13); \
 } while (0)
 
-extern void get_datestamp(char *, struct timeval *);
+extern void get_datestamp(char *, size_t, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);

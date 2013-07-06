@@ -1781,16 +1781,12 @@ static bool bflsc_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bflsc = thr->cgpu;
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
-	struct timeval now;
 
 	if (thr_info_create(&(sc_info->results_thr), NULL, bflsc_get_results, (void *)bflsc)) {
 		applog(LOG_ERR, "%s%i: thread create failed", bflsc->drv->name, bflsc->device_id);
 		return false;
 	}
 	pthread_detach(sc_info->results_thr.pth);
-
-	cgtime(&now);
-	get_datestamp(bflsc->init, &now);
 
 	return true;
 }

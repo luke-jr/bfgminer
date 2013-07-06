@@ -569,13 +569,9 @@ dame:
 
 static bool modminer_fpga_prepare(struct thr_info *thr)
 {
-	struct cgpu_info *modminer = thr->cgpu;
-	struct timeval now;
-
-	cgtime(&now);
-	get_datestamp(modminer->init, &now);
-
+//	struct cgpu_info *modminer = thr->cgpu;
 	struct modminer_fpga_state *state;
+
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
 	state->shares_to_good = MODMINER_EARLY_UP;
 	state->overheated = false;

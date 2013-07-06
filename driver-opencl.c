@@ -698,7 +698,7 @@ retry:
 			thr = get_thread(i);
 			if (thr->cgpu != cgpu)
 				continue;
-			get_datestamp(checkin, &thr->last);
+			get_datestamp(checkin, sizeof(checkin), &thr->last);
 			displayed_rolling = thr->rolling;
 			if (!mhash_base)
 				displayed_rolling *= 1000;
@@ -1197,7 +1197,7 @@ select_cgpu:
 	}
 
 	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
+	get_datestamp(cgpu->init, sizeof(cgpu->init), &now);
 
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = get_thread(thr_id);
@@ -1382,7 +1382,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
+	get_datestamp(cgpu->init, sizeof(cgpu->init), &now);
 
 	have_opencl = true;
 

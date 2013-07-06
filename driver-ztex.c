@@ -372,12 +372,8 @@ static void ztex_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgp
 
 static bool ztex_prepare(struct thr_info *thr)
 {
-	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
-
-	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
 
 	ztex_selectFpga(ztex);
 	if (libztex_configureFpga(ztex) != 0) {

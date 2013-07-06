@@ -839,14 +839,9 @@ static void icarus_detect()
 	usb_detect(&icarus_drv, icarus_detect_one);
 }
 
-static bool icarus_prepare(struct thr_info *thr)
+static bool icarus_prepare(__maybe_unused struct thr_info *thr)
 {
-	struct cgpu_info *icarus = thr->cgpu;
-
-	struct timeval now;
-
-	cgtime(&now);
-	get_datestamp(icarus->init, &now);
+//	struct cgpu_info *icarus = thr->cgpu;
 
 	return true;
 }

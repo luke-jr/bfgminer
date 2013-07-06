@@ -358,13 +358,13 @@ static bool should_run(void)
 	return true;
 }
 
-void get_datestamp(char *f, struct timeval *tv)
+void get_datestamp(char *f, size_t fsiz, struct timeval *tv)
 {
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
 	tm = localtime(&tmp_time);
-	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
 		tm->tm_mday,
@@ -373,13 +373,13 @@ void get_datestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
-void get_timestamp(char *f, struct timeval *tv)
+static void get_timestamp(char *f, size_t fsiz, struct timeval *tv)
 {
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
 	tm = localtime(&tmp_time);
-	sprintf(f, "[%02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
 		tm->tm_sec);
@@ -3597,7 +3597,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	current_hash = bin2hex(hash_swap + 2, 8);
 	free(current_fullhash);
 	current_fullhash = bin2hex(block_hash_swap, 32);
-	get_timestamp(blocktime, &block_timeval);
+	get_timestamp(blocktime, sizeof(blocktime), &block_timeval);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
@@ -7717,7 +7717,7 @@ begin_bench:
 	
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
-	get_datestamp(datestamp, &total_tv_start);
+	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
 
 	// Start threads
 	k = 0;
