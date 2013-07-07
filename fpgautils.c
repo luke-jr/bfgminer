@@ -16,6 +16,7 @@
 #include <winsock2.h>
 #endif
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -112,7 +113,50 @@ int _detectone_wrap(const detectone_func_t detectone, const char * const param, 
 }
 #define detectone(param)  _detectone_wrap(detectone, param, __func__)
 
+struct detectone_meta_info_t detectone_meta_info;
+
+static
+void clear_detectone_meta_info(void)
+{
+	detectone_meta_info = (struct detectone_meta_info_t){
+		.manufacturer = NULL,
+	};
+}
+
 #ifdef HAVE_LIBUDEV
+static
+void _decode_udev_enc(char *o, const char *s)
+{
+	while(s[0])
+	{
+		if (s[0] == '\\' && s[1] == 'x' && s[2] && s[3])
+		{
+			hex2bin((void*)(o++), &s[2], 1);
+			s += 4;
+		}
+		else
+			(o++)[0] = (s++)[0];
+	}
+	o[0] = '\0';
+}
+
+static
+char *_decode_udev_enc_dup(const char *s)
+{
+	if (!s)
+		return NULL;
+	
+	char *o = malloc(strlen(s));
+	if (!o)
+	{
+		applog(LOG_ERR, "Failed to malloc in _decode_udev_enc_dup");
+		return NULL;
+	}
+	
+	_decode_udev_enc(o, s);
+	return o;
+}
+
 static
 int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 {
@@ -138,14 +182,24 @@ int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 			continue;
 		}
 
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.manufacturer = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_VENDOR_ENC")),
+			.product = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_MODEL_ENC")),
+			.serial = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_SERIAL_SHORT")),
+		};
+		
 		const char *devpath = udev_device_get_devnode(device);
 		if (devpath && detectone(devpath))
 			++found;
 
+		free((void*)detectone_meta_info.manufacturer);
+		free((void*)detectone_meta_info.product);
+		free((void*)detectone_meta_info.serial);
 		udev_device_unref(device);
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
+	clear_detectone_meta_info();
 
 	return found;
 }
@@ -164,6 +218,9 @@ int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
 	char *devfile = devpath + sizeof(udevdir);
 	char found = 0;
 
+	// No way to split this out of the filename reliably
+	clear_detectone_meta_info();
+	
 	D = opendir(udevdir);
 	if (!D)
 		return 0;
@@ -187,17 +244,40 @@ int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
 
 #ifndef WIN32
 static
+char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile, const char *append)
+{
+	FILE *F;
+	
+	strcpy(devfile, append);
+	F = fopen(devpath, "r");
+	if (F)
+	{
+		if (fgets(buf, bufsz, F))
+		{
+			size_t L = strlen(buf);
+			while (isspace(buf[--L]))
+				buf[L] = '\0';
+		}
+		else
+			buf[0] = '\0';
+		fclose(F);
+	}
+	else
+		buf[0] = '\0';
+	
+	return buf[0] ? buf : NULL;
+}
+
+static
 int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 {
 	DIR *D, *DS, *DT;
-	FILE *F;
 	struct dirent *de;
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char buf[0x100];
+	char ttybuf[0x10], manuf[0x40], prod[0x40], serial[0x40];
 	char *devfile, *upfile;
-	char *rs;
 	char found = 0;
 	size_t len, len2;
 	
@@ -212,16 +292,11 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		upfile = &devpath[devrootlen + 1];
 		memcpy(upfile, de->d_name, len);
 		devfile = upfile + len;
-		strcpy(devfile, "/product");
-		F = fopen(devpath, "r");
-		if (!F)
-			continue;
-		rs = fgets(buf, sizeof(buf), F);
-		fclose(F);
-		if (!rs)
+		
+		if (!_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product"))
 			continue;
 		
-		if (!SEARCH_NEEDLES(buf))
+		if (!SEARCH_NEEDLES(prod))
 			continue;
 		
 		devfile[0] = '\0';
@@ -231,7 +306,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		devfile[0] = '/';
 		++devfile;
 		
-		memcpy(buf, "/dev/", 5);
+		memcpy(ttybuf, "/dev/", 5);
 		
 		while ( (de = readdir(DS)) )
 		{
@@ -252,8 +327,15 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 				if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
 					continue;
 				
-				strcpy(&buf[5], de->d_name);
-				if (detectone(buf))
+				
+				detectone_meta_info = (struct detectone_meta_info_t){
+					.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
+					.product = prod,
+					.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
+				};
+				
+				strcpy(&ttybuf[5], de->d_name);
+				if (detectone(ttybuf))
 					++found;
 			}
 			closedir(DT);
@@ -261,6 +343,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		closedir(DS);
 	}
 	closedir(D);
+	clear_detectone_meta_info();
 	
 	return found;
 }
@@ -276,6 +359,16 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 	}  \
 } while(0)
 
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+static
+char *_ftdi_get_string(char *buf, int i, DWORD flags)
+{
+	if (FT_OK != FT_ListDevices((PVOID)i, buf, FT_LIST_BY_INDEX | flags))
+		return NULL;
+	return buf[0] ? buf : NULL;
+}
+#endif
+
 static
 int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 {
@@ -283,6 +376,9 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	char *devpathnum = &devpath[7];
 	char **bufptrs;
 	char *buf;
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+	char manuf[64], serial[64];
+#endif
 	int found = 0;
 	DWORD i;
 
@@ -317,6 +413,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 		goto out;
 	}
 	
+	clear_detectone_meta_info();
 	for (i = numDevs; i > 0; ) {
 		--i;
 		bufptrs[i][64] = '\0';
@@ -334,6 +431,13 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 			continue;
 		
 		applog(LOG_ERR, "FT_GetComPortNumber(%p (%ld), %ld)", ftHandle, (long)i, (long)lComPortNumber);
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.product = bufptrs[i],
+			.serial = _ftdi_get_string(serial, i, FT_OPEN_BY_SERIAL_NUMBER),
+		};
+#endif
+		
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
 		if (detectone(devpath))
@@ -341,6 +445,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	}
 
 out:
+	clear_detectone_meta_info();
 	dlclose(dll);
 	return found;
 }
@@ -377,6 +482,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
+	clear_detectone_meta_info();
 	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
 		dev = iter->string;
 		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {

@@ -9,6 +9,15 @@
 struct device_drv;
 struct cgpu_info;
 
+struct detectone_meta_info_t {
+	const char *manufacturer;
+	const char *product;
+	const char *serial;
+};
+
+// NOTE: Should detectone become run multithreaded, this will become a threadsafe #define
+extern struct detectone_meta_info_t detectone_meta_info;
+
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 
