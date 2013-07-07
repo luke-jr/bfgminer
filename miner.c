@@ -1006,6 +1006,37 @@ static char *set_schedtime(const char *arg, struct schedtime *st)
 	return NULL;
 }
 
+static
+char *set_log_file(char *arg)
+{
+	char *r = "";
+	long int i = strtol(arg, &r, 10);
+	int fd, stderr_fd = fileno(stderr);
+
+	if ((!*r) && i >= 0 && i <= INT_MAX)
+		fd = i;
+	else
+	if (!strcmp(arg, "-"))
+	{
+		fd = fileno(stdout);
+		if (unlikely(fd == -1))
+			return "Standard output missing for log-file";
+	}
+	else
+	{
+		fd = open(arg, O_WRONLY | O_APPEND | O_CREAT, S_IRUSR | S_IWUSR);
+		if (unlikely(fd == -1))
+			return "Failed to open %s for log-file";
+	}
+	
+	close(stderr_fd);
+	if (unlikely(-1 == dup2(fd, stderr_fd)))
+		return "Failed to dup2 for log-file";
+	close(fd);
+	
+	return NULL;
+}
+
 static char* set_sharelog(char *arg)
 {
 	char *r = "";
@@ -1392,6 +1423,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
+	OPT_WITH_ARG("--log-file|-L",
+	             set_log_file, NULL, NULL,
+	             "Append log file for output messages"),
+	OPT_WITH_ARG("--logfile",
+	             set_log_file, NULL, NULL,
+	             opt_hidden),
 	OPT_WITHOUT_ARG("--log-microseconds",
 	                opt_set_bool, &opt_log_microseconds,
 	                "Include microseconds in log output"),

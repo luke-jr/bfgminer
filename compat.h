@@ -24,6 +24,7 @@
 
 #ifdef WIN32
 #include <errno.h>
+#include <fcntl.h>
 #include <time.h>
 #include <pthread.h>
 #include <sys/time.h>
