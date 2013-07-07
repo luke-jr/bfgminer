@@ -24,6 +24,10 @@
 #include <dirent.h>
 #include <string.h>
 
+#ifdef HAVE_LIBUSB
+#include <libusb.h>
+#endif
+
 #include "miner.h"
 
 #ifndef WIN32
@@ -628,6 +632,27 @@ struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbo
 	
 	return bfg_claim_any(api, desc, &dev);
 }
+
+#ifdef HAVE_LIBUSB
+void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
+{
+	unsigned char buf[0x20];
+	libusb_device_handle *h;
+	struct libusb_device_descriptor desc;
+	
+	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
+		return;
+	if (libusb_get_device_descriptor(usb, &desc))
+		return;
+	
+	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
+		cgpu->dev_manufacturer = strdup((void *)buf);
+	if ((!cgpu->dev_product) && libusb_get_string_descriptor_ascii(h, desc.iProduct, buf, sizeof(buf)) >= 0)
+		cgpu->dev_product = strdup((void *)buf);
+	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
+		cgpu->dev_serial = strdup((void *)buf);
+}
+#endif
 
 // This code is purely for debugging but is very useful for that
 // It also took quite a bit of effort so I left it in

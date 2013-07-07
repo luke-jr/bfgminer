@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#ifdef HAVE_LIBUSB
+#include <libusb.h>
+#endif
+
 struct device_drv;
 struct cgpu_info;
 
@@ -44,6 +48,10 @@ extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
 extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
 #define bfg_claim_libusb(api, verbose, dev)  bfg_claim_usb(api, verbose, libusb_get_bus_number(dev), libusb_get_device_address(dev))
+
+#ifdef HAVE_LIBUSB
+extern void cgpu_copy_libusb_strings(struct cgpu_info *, libusb_device *);
+#endif
 
 extern int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);

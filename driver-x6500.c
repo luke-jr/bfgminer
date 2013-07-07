@@ -138,6 +138,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
 	x6500->device_data = dev;
+	cgpu_copy_libusb_strings(x6500, dev);
 
 	return add_cgpu(x6500);
 }
