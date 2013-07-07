@@ -5966,6 +5966,15 @@ refresh:
 	wattroff(logwin, A_BOLD);
 	wlogprint("\n");
 	
+	if (cgpu->dev_manufacturer)
+		wlogprint("  %s from %s\n", (cgpu->dev_product ?: "Device"), cgpu->dev_manufacturer);
+	else
+	if (cgpu->dev_product)
+		wlogprint("  %s\n", cgpu->dev_product);
+	
+	if (cgpu->dev_serial)
+		wlogprint("Serial: %s\n", cgpu->dev_serial);
+	
 	if (drv->proc_wlogprint_status && likely(cgpu->status != LIFE_INIT))
 		drv->proc_wlogprint_status(cgpu);
 	
