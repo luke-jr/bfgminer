@@ -643,68 +643,12 @@ struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbo
 int tiospeed(speed_t speed)
 {
 	switch (speed) {
-	case B0:
-		return 0;
-	case B50:
-		return 50;
-	case B75:
-		return 75;
-	case B110:
-		return 110;
-	case B134:
-		return 134;
-	case B150:
-		return 150;
-	case B200:
-		return 200;
-	case B300:
-		return 300;
-	case B600:
-		return 600;
-	case B1200:
-		return 1200;
-	case B1800:
-		return 1800;
-	case B2400:
-		return 2400;
-	case B4800:
-		return 4800;
-	case B9600:
-		return 9600;
-	case B19200:
-		return 19200;
-	case B38400:
-		return 38400;
-	case B57600:
-		return 57600;
-	case B115200:
-		return 115200;
-	case B230400:
-		return 230400;
-	case B460800:
-		return 460800;
-	case B500000:
-		return 500000;
-	case B576000:
-		return 576000;
-	case B921600:
-		return 921600;
-	case B1000000:
-		return 1000000;
-	case B1152000:
-		return 1152000;
-	case B1500000:
-		return 1500000;
-	case B2000000:
-		return 2000000;
-	case B2500000:
-		return 2500000;
-	case B3000000:
-		return 3000000;
-	case B3500000:
-		return 3500000;
-	case B4000000:
-		return 4000000;
+#define IOSPEED(baud)  \
+		case B ## baud:  \
+			return baud;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
 	default:
 		return -1;
 	}
@@ -794,8 +738,37 @@ void termios_debug(const char *devpath, struct termios *my_termios, const char *
 #endif
 			);
 }
-#endif
-#endif
+#endif  /* TERMIOS_DEBUG */
+
+speed_t tiospeed_t(int baud)
+{
+	switch (baud) {
+#define IOSPEED(baud)  \
+		case baud:  \
+			return B ## baud;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
+	default:
+		return B0;
+	}
+}
+
+#endif  /* WIN32 */
+
+bool valid_baud(int baud)
+{
+	switch (baud) {
+#define IOSPEED(baud)  \
+		case baud:  \
+			return true;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
+		default:
+			return false;
+	}
+}
 
 /* NOTE: Linux only supports uint8_t (decisecond) timeouts; limiting it in
  *       this interface buys us warnings when bad constants are passed in.
@@ -868,30 +841,15 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	termios_debug(devpath, &my_termios, "before");
 #endif
 
-	switch (baud) {
-	case 0:
-		break;
-	case 19200:
-		cfsetispeed(&my_termios, B19200);
-		cfsetospeed(&my_termios, B19200);
-		break;
-	case 38400:
-		cfsetispeed(&my_termios, B38400);
-		cfsetospeed(&my_termios, B38400);
-		break;
-	case 57600:
-		cfsetispeed(&my_termios, B57600);
-		cfsetospeed(&my_termios, B57600);
-		break;
-	case 115200:
-		cfsetispeed(&my_termios, B115200);
-		cfsetospeed(&my_termios, B115200);
-		break;
-	// TODO: try some higher speeds with the Icarus and BFL to see
-	// if they support them and if setting them makes any difference
-	// N.B. B3000000 doesn't work on Icarus
-	default:
-		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
+	{
+		speed_t speed = tiospeed_t(baud);
+		if (speed == B0)
+			applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
+		else
+		{
+			cfsetispeed(&my_termios, speed);
+			cfsetospeed(&my_termios, speed);
+		}
 	}
 
 	my_termios.c_cflag &= ~(CSIZE | PARENB);

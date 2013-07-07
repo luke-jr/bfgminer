@@ -156,6 +156,10 @@ endif # HAS_CPUMINE
 
 if NEED_FPGAUTILS
 bfgminer_SOURCES += fpgautils.c fpgautils.h
+if HAVE_WINDOWS
+else
+bfgminer_SOURCES += iospeeds.h
+endif
 endif
 
 if NEED_DYNCLOCK
