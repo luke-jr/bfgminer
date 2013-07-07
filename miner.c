@@ -347,6 +347,7 @@ struct sigaction termhandler, inthandler;
 struct thread_q *getq;
 
 static int total_work;
+static bool staged_full;
 struct work *staged_work = NULL;
 
 struct schedtime {
@@ -4743,6 +4744,7 @@ static void discard_stale(void)
 			HASH_DEL(staged_work, work);
 			discard_work(work);
 			stale++;
+			staged_full = false;
 		}
 	}
 	pthread_cond_signal(&gws_cond);
@@ -5002,17 +5004,30 @@ static bool work_rollable(struct work *work)
 static bool hash_push(struct work *work)
 {
 	bool rc = true;
+	bool was_empty;
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
 		staged_rollable++;
 	if (likely(!getq->frozen)) {
+		was_empty = unlikely(staged_full && !HASH_COUNT(staged_work));
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
 	} else
 		rc = false;
 	pthread_cond_broadcast(&getq->cond);
 	mutex_unlock(stgd_lock);
+	
+	if (unlikely(was_empty))
+	{
+		if (likely(opt_queue < 10 + mining_threads))
+		{
+			++opt_queue;
+			applog(LOG_WARNING, "Staged work underrun; increasing queue minimum to %d", opt_queue);
+		}
+		else
+			applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
+	}
 
 	return rc;
 }
@@ -6505,6 +6520,7 @@ static void clear_pool_work(struct pool *pool)
 			HASH_DEL(staged_work, work);
 			free_work(work);
 			cleared++;
+			staged_full = false;
 		}
 	}
 	mutex_unlock(stgd_lock);
@@ -9497,6 +9513,7 @@ begin_bench:
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
+			staged_full = true;
 			pthread_cond_wait(&gws_cond, stgd_lock);
 			ts = __total_staged();
 		}
