@@ -627,6 +627,18 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 		applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
 		return cnt;
 	}
+	
+	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iProduct, buf, sizeof(buf));
+	if (unlikely(cnt < 0))
+		applog(LOG_WARNING, "Ztex check device: Failed to read device product with err %d", cnt);
+	else
+		newdev->dev_product = buf[0] ? strdup((void*)buf) : NULL;
+	
+	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iManufacturer, buf, sizeof(buf));
+	if (unlikely(cnt < 0))
+		applog(LOG_WARNING, "Ztex check device: Failed to read device manufacturer with err %d", cnt);
+	else
+		newdev->dev_manufacturer = buf[0] ? strdup((void*)buf) : NULL;
 
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
 	if (unlikely(cnt < 0)) {

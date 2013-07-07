@@ -61,6 +61,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 	ztex->device_ztex = dev;
 	ztex->procs = fpgacount;
 	ztex->threads = fpgacount;
+	ztex->dev_manufacturer = dev->dev_manufacturer;
+	ztex->dev_product = dev->dev_product;
+	ztex->dev_serial = (char*)&dev->snString[0];
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->dev_repr);
 	ztex->name = fpganame;

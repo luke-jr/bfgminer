@@ -203,5 +203,12 @@ char *maybe_strdup(const char *s)
 	return s ? strdup(s) : NULL;
 }
 
+static inline
+void maybe_strdup_if_null(const char **p, const char *s)
+{
+	if (!*p)
+		*p = maybe_strdup(s);
+}
+
 
 #endif /* __UTIL_H__ */

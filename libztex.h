@@ -27,6 +27,8 @@ struct libztex_device {
 	libusb_device_handle *hndl; 
 	unsigned char usbbus;
 	unsigned char usbaddress;
+	char *dev_manufacturer;
+	char *dev_product;
 	unsigned char snString[LIBZTEX_SNSTRING_LEN+1];
 	unsigned char productId[4];
 	unsigned char fwVersion;

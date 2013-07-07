@@ -618,9 +618,9 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
-	cgpu->dev_manufacturer = maybe_strdup(detectone_meta_info.manufacturer);
-	cgpu->dev_product = maybe_strdup(detectone_meta_info.product);
-	cgpu->dev_serial = maybe_strdup(detectone_meta_info.serial);
+	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
+	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
+	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
 	
 	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
 	devices_new[total_devices_new++] = cgpu;
