@@ -197,4 +197,11 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 } while(0)
 
 
+static inline
+char *maybe_strdup(const char *s)
+{
+	return s ? strdup(s) : NULL;
+}
+
+
 #endif /* __UTIL_H__ */
