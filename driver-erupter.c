@@ -10,7 +10,7 @@
 #include "fpgautils.h"
 #include "icarus-common.h"
 
-#define ERUPTER_IO_SPEED 1500000
+#define ERUPTER_IO_SPEED 115200
 #define ERUPTER_HASH_TIME 0.0000000029761
 
 extern struct device_drv erupter_drv;
