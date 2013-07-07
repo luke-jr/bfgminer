@@ -26,6 +26,7 @@
 
 #include "compat.h"
 #include "deviceapi.h"
+#include "fpgautils.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
@@ -616,6 +617,10 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id % 100);
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
+	
+	cgpu->dev_manufacturer = maybe_strdup(detectone_meta_info.manufacturer);
+	cgpu->dev_product = maybe_strdup(detectone_meta_info.product);
+	cgpu->dev_serial = maybe_strdup(detectone_meta_info.serial);
 	
 	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
 	devices_new[total_devices_new++] = cgpu;

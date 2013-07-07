@@ -446,6 +446,9 @@ struct cgpu_info {
 	
 	const char *device_path;
 	void *device_data;
+	char *dev_manufacturer;
+	char *dev_product;
+	char *dev_serial;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;

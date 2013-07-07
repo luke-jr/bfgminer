@@ -179,6 +179,7 @@ endif
 if HAS_ICARUS
 bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c
+bfgminer_SOURCES += driver-erupter.c
 endif
 
 if HAS_AVALON
