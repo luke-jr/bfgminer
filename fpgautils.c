@@ -180,6 +180,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
 	char buf[0x100];
 	char *devfile, *upfile;
+	char *rs;
 	char found = 0;
 	size_t len, len2;
 	
@@ -196,7 +197,11 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		devfile = upfile + len;
 		strcpy(devfile, "/product");
 		F = fopen(devpath, "r");
-		if (!(F && fgets(buf, sizeof(buf), F)))
+		if (!F)
+			continue;
+		rs = fgets(buf, sizeof(buf), F);
+		fclose(F);
+		if (!rs)
 			continue;
 		
 		if (!SEARCH_NEEDLES(buf))
