@@ -458,23 +458,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		*(colon++) = '\0';
 
 	tmp = atoi(buf);
-	switch (tmp) {
-	case 115200:
-		*baud = 115200;
-		break;
-	case 57600:
-		*baud = 57600;
-		break;
-	case 38400:
-		*baud = 38400;
-		break;
-	case 19200:
-		*baud = 19200;
-		break;
-	default:
-		quit(1, "Invalid avalon-options for baud (%s) "
-			"must be 115200, 57600, 38400 or 19200", buf);
-	}
+	if (!valid_baud(*baud = tmp))
+		quit(1, "Invalid avalon-options for baud (%s)", buf);
 
 	if (colon && *colon) {
 		colon2 = strchr(colon, ':');

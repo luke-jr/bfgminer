@@ -472,16 +472,8 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 
 		if (*buf) {
 			tmp = atoi(buf);
-			switch (tmp) {
-			case 115200:
-				*baud = 115200;
-				break;
-			case 57600:
-				*baud = 57600;
-				break;
-			default:
-				quit(1, "Invalid icarus-options for baud (%s) must be 115200 or 57600", buf);
-			}
+			if (!valid_baud(*baud = tmp))
+				quit(1, "Invalid icarus-options for baud (%s)", buf);
 		}
 
 		if (colon && *colon) {
@@ -630,6 +622,9 @@ static bool icarus_detect_one(const char *devpath)
 	if (unlikely(!info))
 		quit(1, "Failed to malloc ICARUS_INFO");
 
+	// TODO: try some higher speeds with the Icarus and BFL to see
+	// if they support them and if setting them makes any difference
+	// N.B. B3000000 doesn't work on Icarus
 	info->baud = ICARUS_IO_SPEED;
 	info->quirk_reopen = 1;
 	info->Hs = ICARUS_REV3_HASH_TIME;
