@@ -866,6 +866,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	termios_debug(devpath, &my_termios, "before");
 #endif
 
+	if (baud)
 	{
 		speed_t speed = tiospeed_t(baud);
 		if (speed == B0)
