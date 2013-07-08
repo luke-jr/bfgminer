@@ -2522,16 +2522,10 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 		return;
 	}
 	
-	if ((drv->get_dev_statline_before || drv->get_statline_before) && likely(drv_ready(cgpu)))
-	{
-		if (drv->get_dev_statline_before && drv->get_statline_before)
-			statline_func = opt_show_procs ? drv->get_statline_before : drv->get_dev_statline_before;
-		else
-			statline_func = drv->get_statline_before ?: drv->get_dev_statline_before;
-		statline_func(buf, cgpu);
-	}
+	if (cgpu->temp > 0.)
+		tailsprintf(buf, "%4.1fC | ", cgpu->temp);
 	else
-		tailsprintf(buf, "               | ");
+		tailsprintf(buf, "      | ");
 	
 #ifdef HAVE_CURSES
 	if (for_curses)
