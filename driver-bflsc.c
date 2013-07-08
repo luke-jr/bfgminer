@@ -150,6 +150,7 @@ struct bflsc_info {
 	int que_noncecount;
 	int que_fld_min;
 	int que_fld_max;
+	int flush_size;
 };
 
 #define BFLSC_XLINKHDR '@'
@@ -1131,6 +1132,8 @@ reinit:
 			sc_info->que_noncecount = QUE_NONCECOUNT_V1;
 			sc_info->que_fld_min = QUE_FLD_MIN_V1;
 			sc_info->que_fld_max = QUE_FLD_MAX_V1;
+			// Only Jalapeno uses 1.0.0
+			sc_info->flush_size = 1;
 			break;
 		case BFLSC_DRV2:
 		case BFLSC_DRVUNDEF:
@@ -1144,6 +1147,8 @@ reinit:
 			sc_info->que_noncecount = QUE_NONCECOUNT_V2;
 			sc_info->que_fld_min = QUE_FLD_MIN_V2;
 			sc_info->que_fld_max = QUE_FLD_MAX_V2;
+			// TODO: this can be reduced to total chip count
+			sc_info->flush_size = 16 * sc_info->sc_count;
 			break;
 	}
 
@@ -2043,7 +2048,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 			// Is there any flushed work that can be removed?
 			rd_lock(&(sc_info->stat_lock));
 			if (sc_info->sc_devs[dev].flushed) {
-				if (sc_info->sc_devs[dev].result_id > (sc_info->sc_devs[dev].flush_id + 1))
+				if (sc_info->sc_devs[dev].result_id > (sc_info->sc_devs[dev].flush_id + sc_info->flush_size))
 					cleanup = true;
 			}
 			rd_unlock(&(sc_info->stat_lock));
