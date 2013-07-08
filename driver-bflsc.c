@@ -127,6 +127,8 @@ struct bflsc_dev {
 	bool flushed; // are any flushed?
 };
 
+#define QUE_MAX_RESULTS 8
+
 struct bflsc_info {
 	enum driver_version driver_version;
 	pthread_rwlock_t stat_lock;
@@ -151,6 +153,8 @@ struct bflsc_info {
 	int que_fld_min;
 	int que_fld_max;
 	int flush_size;
+	// count of given size, [+2] is for any > QUE_MAX_RESULTS
+	uint64_t result_size[QUE_MAX_RESULTS+2];
 };
 
 #define BFLSC_XLINKHDR '@'
@@ -184,12 +188,12 @@ struct QueueJobStructure {
 
 #define QUE_NONCECOUNT_V1 2
 #define QUE_FLD_MIN_V1 3
-#define QUE_FLD_MAX_V1 11
+#define QUE_FLD_MAX_V1 (QUE_MAX_RESULTS+QUE_FLD_MIN_V1)
 
 #define QUE_CHIP_V2 2
 #define QUE_NONCECOUNT_V2 3
 #define QUE_FLD_MIN_V2 4
-#define QUE_FLD_MAX_V2 12
+#define QUE_FLD_MAX_V2 (QUE_MAX_RESULTS+QUE_FLD_MIN_V2)
 
 #define BFLSC_SIGNATURE 0xc1
 #define BFLSC_EOW 0xfe
@@ -1551,7 +1555,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	char midstate[MIDSTATE_BYTES], blockdata[MERKLE_BYTES];
 	struct work *work;
 	uint32_t nonce;
-	int i, num;
+	int i, num, x;
 	bool res;
 	char *tmp;
 
@@ -1602,6 +1606,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	}
 
 	res = false;
+	x = 0;
 	for (i = sc_info->que_fld_min; i < count; i++) {
 		if (strlen(fields[i]) != 8) {
 			tmp = str_text(data);
@@ -1619,12 +1624,16 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 			wr_unlock(&(sc_info->stat_lock));
 
 			(*nonces)++;
+			x++;
 		}
 	}
 
 	wr_lock(&(sc_info->stat_lock));
 	if (res)
 		sc_info->sc_devs[dev].result_id++;
+	if (x > QUE_MAX_RESULTS)
+		x = QUE_MAX_RESULTS + 1;
+	(sc_info->result_size[x])++;
 	sc_info->sc_devs[dev].work_complete++;
 	sc_info->sc_devs[dev].hashes_unsent += FULLNONCE;
 	// If not flushed (stale)
@@ -2217,6 +2226,7 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct api_data *root = NULL;
+	char buf[256];
 	int i;
 
 //if no x-link ... etc
@@ -2239,6 +2249,12 @@ static struct api_data *bflsc_api_stats(struct cgpu_info *bflsc)
 	root = api_add_uint(root, "Scan Sleep", &(sc_info->scan_sleep_time), true);
 	root = api_add_uint(root, "Results Sleep", &(sc_info->results_sleep_time), true);
 	root = api_add_uint(root, "Work ms", &(sc_info->default_ms_work), true);
+
+	buf[0] = '\0';
+	for (i = 0; i <= QUE_MAX_RESULTS + 1; i++)
+		tailsprintf(buf, sizeof(buf), "%s%"PRIu64, (i > 0) ? "/" : "", sc_info->result_size[i]);
+	root = api_add_string(root, "Result Size", buf, true);
+
 	rd_unlock(&(sc_info->stat_lock));
 
 	i = (int)(sc_info->driver_version);
