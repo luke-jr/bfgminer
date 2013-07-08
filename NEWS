@@ -1,3 +1,21 @@
+BFGMiner Version 2.10.11 - July 8, 2013
+
+- README: Update statlines
+- Bugfix: fpgautils: Close product string file from sysfs (autodetect)
+- README: Add condensed list of dependencies
+- Bugfix: Detect whether the linker accepts -zorigin before attempting to use it
+- opencl: ADL: ADL_Adapter_ID_Get fails with newer drivers, so tolerate its
+failure best we can
+- opencl: Don't try to use BFI_INT patching with APP-SDK newer than 1084
+(Catalyst 13.1), since it doesn't work
+- Bugfix: Set ELF rpath for bundled libblkmaker to use $ORIGIN so it can be run
+from other directories
+- Add LIFE_INIT2 status (safe to call functions, but not mining yet) for devices
+that want to report initialization status in their statline
+- Bugfix: modminer & x6500: Increment *->diff1 for all bad nonces, and do stats
+changes within stats_lock
+
+
 BFGMiner Version 2.10.10 - June 22, 2013
 
 - stratum: Deliver exact socket-error within the debug error message
