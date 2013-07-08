@@ -7146,10 +7146,16 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cg_ilock(&pool->data_lock);
 
 	/* Generate coinbase */
-	// FIXME: This only works if (n2size == 4) || (n2size < 4 && littleendian)
 	bytes_resize(&work->nonce2, pool->n2size);
-	memcpy(bytes_buf(&work->nonce2), &pool->nonce2, pool->n2size);
-	memcpy(&coinbase[pool->swork.nonce2_offset], &pool->nonce2, pool->n2size);
+	memcpy(bytes_buf(&work->nonce2),
+#ifdef WORDS_BIGENDIAN
+	// NOTE: On big endian, the most significant bits are stored at the end, so skip the LSBs
+	       &((char*)&pool->nonce2)[pool->nonce2off],
+#else
+	       &pool->nonce2,
+#endif
+	       pool->nonce2sz);
+	memcpy(&coinbase[pool->swork.nonce2_offset], bytes_buf(&work->nonce2), pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */

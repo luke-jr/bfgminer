@@ -2048,6 +2048,10 @@ resend:
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
 	pool->n2size = n2size;
+	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
+#ifdef WORDS_BIGENDIAN
+	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
+#endif
 	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)

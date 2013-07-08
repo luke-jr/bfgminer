@@ -1162,6 +1162,10 @@ struct pool {
 	char *nonce1;
 	size_t n1_len;
 	uint32_t nonce2;
+	int nonce2sz;
+#ifdef WORDS_BIGENDIAN
+	int nonce2off;
+#endif
 	int n2size;
 	char *sessionid;
 	bool has_stratum;
