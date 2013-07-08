@@ -467,7 +467,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 				float temp2 = my_strtof(s + 1, &s);
 				set_float_if_gt_zero(&data->temp[1], temp2);
 				if (temp2 > temp)
-					temp = temp;
+					temp = temp2;
 			}
 		}
 
