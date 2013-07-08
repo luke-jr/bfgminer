@@ -1412,7 +1412,9 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 	tq_push(control_thr[gpur_thr_id].q, gpu);
 }
 
-static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
+// FIXME: Legacy (called by TUI) for side effects
+static
+bool override_opencl_statline_temp(char *buf, struct cgpu_info *gpu, __maybe_unused bool per_processor)
 {
 #ifdef HAVE_SENSORS
 	struct opencl_device_data *data = gpu->device_data;
@@ -1433,33 +1435,18 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 				continue;
 			
 			gpu->temp = val;
-			tailsprintf(buf, "%5.1fC         | ", val);
-			return;
+			return false;
 		}
 	}
 #endif
 #ifdef HAVE_ADL
 	if (gpu->has_adl) {
 		int gpuid = gpu->device_id;
-		float gt = gpu_temp(gpuid);
-		int gf = gpu_fanspeed(gpuid);
-		int gp;
-
-		if (gt != -1)
-			tailsprintf(buf, "%5.1fC ", gt);
-		else
-			tailsprintf(buf, "       ");
-		if (gf != -1)
-			tailsprintf(buf, "%4dRPM ", gf);
-		else if ((gp = gpu_fanpercent(gpuid)) != -1)
-			tailsprintf(buf, "%3d%%    ", gp);
-		else
-			tailsprintf(buf, "        ");
-		tailsprintf(buf, "| ");
+		gpu_temp(gpuid);
+		gpu_fanspeed(gpuid);
 	}
-	else
 #endif
-		tailsprintf(buf, "               | ");
+	return false;
 }
 
 static struct api_data*
@@ -1762,7 +1749,7 @@ struct device_drv opencl_api = {
 	.name = "OCL",
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
-	.get_statline_before = get_opencl_statline_before,
+	.override_statline_temp = override_opencl_statline_temp,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = opencl_wlogprint_status,
 	.proc_tui_wlogprint_choices = opencl_tui_wlogprint_choices,
