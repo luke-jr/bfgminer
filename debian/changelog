@@ -1,3 +1,16 @@
+bfgminer (3.1.2-0precise1) precise; urgency=low
+
+  * TUI: The "GPU management" interface has been replaced with a new generic "Manage devices" interface, allowing easy enable and disable of non-GPU devices.
+  * Major CPU usage reduction for faster mining rigs (on my minirig host system, from 35% down to 13%!).
+  * erupter: New icarus-based driver to handle autodetection of (branded) Block Erupter devices.
+  * opencl: Add support for AMD Catalyst 13.2+ drivers.
+  * The device statlines have been condensed by reducing the device-specific space down to a single temperature reading. More detailed information (such as GPU fan speeds) is still available via RPC and the new "Manage devices" interface.
+  * RPC: New "devscan" command to probe for new devices on demand. The effect is the same as starting BFGMiner with -S noauto -S <parameter>.
+  * TUI: Display percentage invalid of found nonces with hw errors.
+  * cpu & opencl: These legacy drivers now respect the --scan-serial auto/noauto directives, and the old -C (enable CPU) and -G (disable GPU) options are now deprecated.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 08 Jul 2013 18:46:53 -0000
+
 bfgminer (3.1.1-0precise1) precise; urgency=low
 
   * bitforce: Support for Little Single boards, and Jalapenos with 1.2 firmware.

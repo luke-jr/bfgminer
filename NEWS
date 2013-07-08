@@ -1,3 +1,131 @@
+BFGMiner Version 3.1.2 - July 8, 2013
+- When not compiling with optimizations, initialize unused nonce2 space to avoid
+warnings from memory checking tools
+- TUI Manage devices: Support PgUp/PgDn keys to skip over processors within the
+same device
+- Bugfix: bitforce: Prefer 2nd temperature if higher than 1st
+- When displaying device summary statlines, use the highest temperature reported
+by any processor
+- Stratum: Fix nonce2 sizes greater than 4 and (on big-endian) smaller than 4
+- bitforce: Manage TUI: Display both temperatures (if two), and enable changing
+fan speed
+- opencl: Add fan speed to Manage device TUI now that it's been removed from
+statline
+- DevAPI: Remove old statline APIs entirely, and add new override_statline_temp
+(used by modminer/x6500 for upload %)
+- README: Update statlines
+- TUI: Replace DevAPI statline_before with a predefined temperature column to
+free up statline space
+- Refactor and simplify bin2hex to speed up and avoid unnecessary heap use
+- stratum: Refactor work generation to do hex2bin conversions once, rather than
+every single header generated
+- Implement bytes_t for generic binary data storage (including smart realloc-
+based resize)
+- Bugfix: fpgautils: Only try to change baud rate when requested
+- x6500: Provide manuf/product/serial to cgpu interface
+- ztex: Provide manuf/product/serial to cgpu interface
+- erupter: Use baud 115200 by default
+- List valid baud rates once in iospeeds.h and standardize conversions
+- TUI: Display device manufacturer/product/serial in Manage device screen, when
+available
+- DevAPI: Store manufacturer/product/serial for each device
+- fpgautils: detectone_meta_info to provide metainformation (manufacturer,
+product, serial) on devices to detectone functions
+- Bugfix: fpgautils: Close product string file from sysfs (autodetect)
+- erupter: New icarus-based driver to handle autodetection of Block Erupter
+devices
+- Add --log-file option which redirects stderr to a file, but valid anywhere in
+the commandline or config file
+- Detect staged work underruns and increase queue to avoid them
+- Rewrite hex2bin to perform much faster (reduces minirig CPU usage by more than
+half!)
+- README: Add condensed list of dependencies
+- Enable "maintainer mode" by default
+- Bugfix: opencl: TUI manage: "Change settings" must not be compiled in with
+no-ADL builds
+- Bugfix: Detect whether the linker accepts -zorigin before attempting to use it
+- opencl: ADL: ADL_Adapter_ID_Get fails with newer drivers, so tolerate its
+failure best we can
+- opencl: Don't try to use BFI_INT patching with APP-SDK newer than 1084
+(Catalyst 13.1), since it doesn't work
+- fpgautils: Elaborate that bitstream open failures are probably due to missing
+bitstream package
+- fpgautils: s/firmware/bitstream/
+- Bugfix: Cleanup handling of complete device/driver failure
+- Deprecate -C (enable CPU) and -G (disable GPU) options, now that -S
+drv:[no]auto can be used for the same purposes
+- Bugfix: Since at least one of unix (or __APPLE__) or WIN32 is required by
+util.h, make sure unix is defined if WIN32 is not
+- Bugfix: Set ELF rpath for bundled libblkmaker to use $ORIGIN so it can be run
+from other directories
+- Bugfix: Cleanup needs to happen before printing the final quit message, or it
+gets lost in TUI mode
+- Bugfix: fpgautils: Initialize my_dev_t instances with null bytes, to ensure
+random unused data cannot influence hash keys
+- opencl: ManageTUI: Clear log cleanly for changing settings
+- Remove "GPU management" TUI entirely
+- opencl: Use new "Manage device" interface to do everything "GPU management"
+used to be used for
+- DevAPI: Add interface for drivers to define custom "Manage device" options
+- DevAPI: New function called to display additional processor information for
+"Manage devices"
+- TUI: Add enable/disable commands to device management
+- TUI: Implement beginnings of generic device management interface
+- Bugfix: avalon: Fix LIFE_INIT2 setting
+- Add LIFE_INIT2 status (safe to call functions, but not mining yet) for devices
+that want to report initialization status in their statline
+- Bugfix: modminer: Only program once for --force-dev-init
+- Bugfix: x6500: Only program once for --force-dev-init
+- fpgautils: Workaround and document Xcode clang bug
+- Bugfix: avalon: Correctly claim serial port
+- Bugfix: -S all: Mac OS X needs to probe /dev/cu.*, not just /dev/cu.usb*
+- cpu & opencl: Refuse to detect more than once
+- cpu & opencl: Respect scan-serial auto/noauto instructions
+- ft232r & libztex: Skip probe of claimed devices
+- fpgautils: Check for devices being claimed before calling detectone from autodetectors
+- x6500 & ztex: Claim USB devices
+- fpgautils: Implement bfg_claim_usb for claiming devices by USB bus number and
+address
+- fpgautils: Replace serial_claim with bfg_claim_serial using a more cleanly
+extensible interface and implementation
+- fpgautils: serial_claim: Include a bus enum in hash key
+- Add serial port claiming logic to avalon, bitforce, and modminer drivers
+- RPC: "devscan" command to probe for new devices
+- New (internal) scan_serial function to probe for new devices at runtime
+- Split out per-cgpu temperature configuration code to load_temp_config_cgpu
+- DevAPI: Modify add_cgpu to use temporary devices_new array, so detection can
+be done without touching live variables
+- Move more cgpu initialization to allocate_cgpu
+- Move devtype default assignment to allocate_cgpu
+- Move cgpu startup routine to new start_cgpu function
+- Move cgpu_info allocation to new allocate_cgpu function
+- Move *.drv_detect calls to a new drv_detect_all function
+- DevAPI: add_cgpu: There is no need to hold mutexes while creating devices
+- Bugfix: cpu: Update device "kernel name" with auto-selected algorithm
+- usbtest: Improve portability to at least 2.7 and 3.2
+- usbtest: Avoid messing up the display by escaping weird bytes via repr()
+- usbtest: Skip last 2 optional parameters, since we use the defaults and they
+are not in older versions of pyserial
+- Bugfix: bitforce: ZOX limits results to 16 results per call, so repeat ZOX
+until there are fewer
+- Bugfix: Initialization for bfgtls needs to be done in each thread
+- Bugfix: stratum: Be patient with stratum lines that come in slower than we can
+process them
+- Use bfg_strerror in locations previously just logging raw error numbers
+- Bugfix: stratum: Log WSAGetLastError() for error number on recv failures on
+Windows
+- Use bfg_strerror where it is already needed (for thread-safety)
+- New thread-safe bfg_strerror function to portably stringify error codes
+- Bugfix: bitforce_queue: Initialize buf2 so errors don't cause the work queue
+to flush
+- TUI: Display percentage invalid of found nonces with hw errors
+- Bugfix: modminer & x6500: Increment *->diff1 for all bad nonces
+- percentf2 that takes t as precalculated total
+- Keep track of bad nonces independently from generic hw errors
+- inc_hw_errors: Resolve cgpu outside of mutex
+- Use inc_hw_errors function at every site which increases hw_errors
+
+
 BFGMiner Version 3.1.1 - June 22, 2013
 - stratum: Deliver exact socket-error within the debug error message
 - Don't install docs for (compile-time) disabled functionality
