@@ -1914,8 +1914,7 @@ static struct work *make_work(void)
 void clean_work(struct work *work)
 {
 	free(work->job_id);
-	free(work->nonce2);
-	free(work->ntime);
+	bytes_free(&work->nonce2);
 	free(work->nonce1);
 
 	if (work->tmpl) {
@@ -1940,7 +1939,7 @@ void free_work(struct work *work)
 	free(work);
 }
 
-static char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
+static const char *workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
 
 // Must only be called with ch_lock held!
 static
@@ -2071,7 +2070,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
 			return false;
 		swap32yes(work->data, work->data, 80 / 4);
-		memcpy(&work->data[80], "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0", 48);
+		memcpy(&work->data[80], workpadding_bin, 48);
 
 		const struct blktmpl_longpoll_req *lp;
 		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
@@ -3918,10 +3917,7 @@ void __copy_work(struct work *work, const struct work *base_work)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce1)
 		work->nonce1 = strdup(base_work->nonce1);
-	if (base_work->nonce2)
-		work->nonce2 = strdup(base_work->nonce2);
-	if (base_work->ntime)
-		work->ntime = strdup(base_work->ntime);
+	bytes_cpy(&work->nonce2, &base_work->nonce2);
 
 	if (base_work->tmpl) {
 		struct pool *pool = work->pool;
@@ -4445,12 +4441,16 @@ next_write_sws_del:
 			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 			int sshare_id;
 			uint32_t nonce;
+			char *nonce2hex;
 			char *noncehex;
+			char *ntimehex;
 			
 			sshare->sshare_time = time(NULL);
 			sshare->work = copy_work(work);
+			nonce2hex = bin2hex(bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
 			nonce = *((uint32_t *)(work->data + 76));
 			noncehex = bin2hex((const unsigned char *)&nonce, 4);
+			ntimehex = bin2hex((void *)&work->data[68], 4);
 			
 			mutex_lock(&sshare_lock);
 			/* Give the stratum share a unique id */
@@ -4458,10 +4458,12 @@ next_write_sws_del:
 			sshare->id = swork_id++;
 			HASH_ADD_INT(stratum_shares, id, sshare);
 			sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-				pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+				pool->rpc_user, work->job_id, nonce2hex, ntimehex, noncehex, sshare->id);
 			mutex_unlock(&sshare_lock);
 			
+			free(nonce2hex);
 			free(noncehex);
+			free(ntimehex);
 			
 			applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
@@ -6756,14 +6758,14 @@ static void *stratum_thread(void *userdata)
 			gen_stratum_work(pool, work);
 
 			/* Try to extract block height from coinbase scriptSig */
-			char *hex_height = &pool->swork.coinbase1[8 /*version*/ + 2 /*txin count*/ + 72 /*prevout*/ + 2 /*scriptSig len*/ + 2 /*push opcode*/];
+			uint8_t *bin_height = &bytes_buf(&pool->swork.coinbase)[4 /*version*/ + 1 /*txin count*/ + 36 /*prevout*/ + 1 /*scriptSig len*/ + 1 /*push opcode*/];
 			unsigned char cb_height_sz;
-			hex2bin(&cb_height_sz, &hex_height[-2], 1);
+			cb_height_sz = bin_height[-1];
 			if (cb_height_sz == 3) {
 				// FIXME: The block number will overflow this by AD 2173
 				uint32_t block_id = ((uint32_t*)work->data)[1];
 				uint32_t height = 0;
-				hex2bin((unsigned char*)&height, hex_height, 3);
+				memcpy(&height, bin_height, 3);
 				height = le32toh(height);
 				have_block_height(block_id, height);
 			}
@@ -7148,10 +7150,11 @@ void set_target(unsigned char *dest_target, double diff)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	char *header, *merkle_hash;
+	uint8_t *merkle_bin;
 	uint32_t *data32, *swap32;
-	size_t alloc_len;
 	int i;
+	
+	coinbase = bytes_buf(&pool->swork.coinbase);
 
 	clean_work(work);
 
@@ -7159,29 +7162,20 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cg_ilock(&pool->data_lock);
 
 	/* Generate coinbase */
-	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	// FIXME: This only works if (n2size == 4) || (n2size < 4 && littleendian)
+	bytes_resize(&work->nonce2, pool->n2size);
+	memcpy(bytes_buf(&work->nonce2), &pool->nonce2, pool->n2size);
+	memcpy(&coinbase[pool->swork.nonce2_offset], &pool->nonce2, pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dlock(&pool->data_lock);
-	alloc_len = pool->swork.cb_len;
-	align_len(&alloc_len);
-	coinbase = calloc(alloc_len, 1);
-	if (unlikely(!coinbase))
-		quit(1, "Failed to calloc coinbase in gen_stratum_work");
-	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
-	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
-	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, pool->swork.cb_len);
-	free(coinbase);
+	gen_hash(coinbase, merkle_root, bytes_len(&pool->swork.coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
-	for (i = 0; i < pool->swork.merkles; i++) {
-		unsigned char merkle_bin[32];
-
-		hex2bin(merkle_bin, pool->swork.merkle[i], 32);
+	merkle_bin = bytes_buf(&pool->swork.merkle_bin);
+	for (i = 0; i < pool->swork.merkles; ++i, merkle_bin += 32) {
 		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
@@ -7189,19 +7183,14 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
-	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
-
-	header = calloc(pool->swork.header_len, 1);
-	if (unlikely(!header))
-		quit(1, "Failed to calloc header in gen_stratum_work");
-	sprintf(header, "%s%s%s%s%s%s%s",
-		pool->swork.bbversion,
-		pool->swork.prev_hash,
-		merkle_hash,
-		pool->swork.ntime,
-		pool->swork.nbit,
-		"00000000", /* nonce */
-		workpadding);
+	
+	memcpy(&work->data[0], pool->swork.header1, 36);
+	memcpy(&work->data[36], merkle_root, 32);
+	*((uint32_t*)&work->data[68]) = 0; // FIXME: big endian time
+	memcpy(&work->data[68], pool->swork.ntime, 4);
+	memcpy(&work->data[72], pool->swork.diffbits, 4);
+	memset(&work->data[76], 0, 4);  // nonce
+	memcpy(&work->data[80], workpadding_bin, 48);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -7210,19 +7199,18 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	/* Copy parameters required for share submission */
 	work->job_id = strdup(pool->swork.job_id);
 	work->nonce1 = strdup(pool->nonce1);
-	work->ntime = strdup(pool->swork.ntime);
 	cg_runlock(&pool->data_lock);
 
-	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
-	applog(LOG_DEBUG, "Generated stratum header %s", header);
-	applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
+	if (opt_debug)
+	{
+		char *header = bin2hex(work->data, 80);
+		char *nonce2hex = bin2hex(bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
+		free(header);
+		free(nonce2hex);
+	}
 
-	free(merkle_hash);
-
-	/* Convert hex data to binary data for work */
-	if (unlikely(!hex2bin(work->data, header, 128)))
-		quit(1, "Failed to convert header to data in gen_stratum_work");
-	free(header);
 	calc_midstate(work);
 
 	set_target(work->target, work->sdiff);

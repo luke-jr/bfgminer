@@ -1062,21 +1062,18 @@ enum pool_protocol {
 
 struct stratum_work {
 	char *job_id;
-	char *prev_hash;
-	char *coinbase1;
-	char *coinbase2;
-	char **merkle;
-	char *bbversion;
-	char *nbit;
-	char *ntime;
 	bool clean;
-
-	size_t cb1_len;
-	size_t cb2_len;
-	size_t cb_len;
-
-	size_t header_len;
+	
+	bytes_t coinbase;
+	size_t nonce2_offset;
+	
 	int merkles;
+	bytes_t merkle_bin;
+	
+	uint8_t header1[36];
+	uint8_t diffbits[4];
+	uint8_t ntime[4];
+
 	double diff;
 
 	bool transparency_probed;
@@ -1221,8 +1218,7 @@ struct work {
 
 	bool		stratum;
 	char 		*job_id;
-	char		*nonce2;
-	char		*ntime;
+	bytes_t		nonce2;
 	double		sdiff;
 	char		*nonce1;
 
