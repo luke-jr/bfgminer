@@ -6069,6 +6069,26 @@ refresh:
 					break;
 				--selected_device;
 				goto devchange;
+			case KEY_NPAGE:
+			{
+				if (selected_device >= total_devices - 1)
+					break;
+				struct cgpu_info *mdev = devices[selected_device]->device;
+				do {
+					++selected_device;
+				} while (devices[selected_device]->device == mdev && selected_device < total_devices - 1);
+				goto devchange;
+			}
+			case KEY_PPAGE:
+			{
+				if (selected_device <= 0)
+					break;
+				struct cgpu_info *mdev = devices[selected_device]->device;
+				do {
+					--selected_device;
+				} while (devices[selected_device]->device == mdev && selected_device > 0);
+				goto devchange;
+			}
 			case 'Q': case 'q':
 			case KEY_BREAK: case KEY_BACKSPACE: case KEY_CANCEL: case KEY_CLOSE: case KEY_EXIT:
 			case '\x1b':  // ESC
