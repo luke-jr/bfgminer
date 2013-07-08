@@ -1,3 +1,11 @@
+bfgminer (3.0.5-0precise1) precise; urgency=low
+
+  * Catalyst 13.2+ support.
+  * Bug fixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 08 Jul 2013 19:08:22 -0000
+
+
 bfgminer (3.0.4-0precise1) precise; urgency=low
 
   * Fixed a bunch of bugs, including at least one stratum-related crash.
