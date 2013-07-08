@@ -284,14 +284,9 @@ struct device_drv {
 	// DRV-global functions
 	void (*drv_detect)();
 
-	// Device-specific functions
-	void (*get_dev_statline_before)(char *, struct cgpu_info *);
-	void (*get_dev_statline_after)(char *, struct cgpu_info *);
-
 	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);
-	void (*get_statline_before)(char *, struct cgpu_info *);
-	void (*get_statline)(char *, struct cgpu_info *);
+	bool (*override_statline_temp)(char *buf, struct cgpu_info *, bool per_processor);
 	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info *);
 	struct api_data* (*get_api_extra_device_status)(struct cgpu_info *);
 	struct api_data *(*get_api_stats)(struct cgpu_info *);

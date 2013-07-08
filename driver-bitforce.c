@@ -352,24 +352,6 @@ void bitforce_comm_error(struct thr_info *thr)
 	bitforce_clear_buffer(bitforce);
 }
 
-static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
-{
-	struct bitforce_data *data = bitforce->device_data;
-	struct bitforce_proc_data *procdata = bitforce->thr[0]->cgpu_data;
-	
-	if (!procdata->handles_board)
-		goto nostats;
-
-	if (data->temp[0] > 0 && data->temp[1] > 0)
-		tailsprintf(buf, "%5.1fC/%4.1fC   | ", data->temp[0], data->temp[1]);
-	else
-	if (bitforce->temp > 0)
-		tailsprintf(buf, "%5.1fC         | ", bitforce->temp);
-	else
-nostats:
-		tailsprintf(buf, "               | ");
-}
-
 static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -1435,7 +1417,6 @@ struct device_drv bitforce_drv = {
 	.get_api_stats = bitforce_drv_stats,
 	.minerloop = minerloop_async,
 	.reinit_device = bitforce_reinit,
-	.get_statline_before = get_bitforce_statline_before,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
@@ -1918,7 +1899,6 @@ struct device_drv bitforce_queue_api = {
 	.name = "BFL",
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_reinit,
-	.get_statline_before = get_bitforce_statline_before,
 	.get_api_stats = bitforce_drv_stats,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,

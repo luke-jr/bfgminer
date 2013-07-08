@@ -456,71 +456,14 @@ modminer_fpga_init(struct thr_info *thr)
 }
 
 static
-bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer)
+bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer, __maybe_unused bool per_processor)
 {
-	char info[18] = "               | ";
-
 	char pdone = ((struct modminer_fpga_state*)(modminer->device->thr[0]->cgpu_data))->pdone;
 	if (pdone != 101) {
-		sprintf(&info[1], "%3d%%", pdone);
-		info[5] = ' ';
-		strcat(buf, info);
+		tailsprintf(buf, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
-}
-
-static
-void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
-{
-	if (get_modminer_upload_percent(buf, modminer))
-		return;
-
-	struct thr_info*thr = modminer->thr[0];
-	struct modminer_fpga_state *state = thr->cgpu_data;
-	float gt = state->temp;
-	
-	if (gt > 0)
-		tailsprintf(buf, "%5.1fC ", gt);
-	else
-		tailsprintf(buf, "       ");
-	tailsprintf(buf, "        | ");
-}
-
-static
-void get_modminer_dev_statline_before(char *buf, struct cgpu_info *modminer)
-{
-	if (get_modminer_upload_percent(buf, modminer))
-		return;
-
-	char info[18] = "               | ";
-	int tc = modminer->procs;
-	bool havetemp = false;
-	int i;
-
-	if (tc > 4)
-		tc = 4;
-
-	for (i = 0; i < tc; ++i, modminer = modminer->next_proc) {
-		struct thr_info*thr = modminer->thr[0];
-		struct modminer_fpga_state *state = thr->cgpu_data;
-		unsigned char temp = state->temp;
-
-		info[i*3+2] = '/';
-		if (temp) {
-			havetemp = true;
-			if (temp > 9)
-				info[i*3+0] = 0x30 + (temp / 10);
-			info[i*3+1] = 0x30 + (temp % 10);
-		}
-	}
-	if (havetemp) {
-		info[tc*3-1] = ' ';
-		info[tc*3] = 'C';
-		strcat(buf, info);
-	}
-	else
-		strcat(buf, "               | ");
 }
 
 static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info *thr)
@@ -851,8 +794,7 @@ struct device_drv modminer_drv = {
 	.dname = "modminer",
 	.name = "MMQ",
 	.drv_detect = modminer_detect,
-	.get_dev_statline_before = get_modminer_dev_statline_before,
-	.get_statline_before = get_modminer_statline_before,
+	.override_statline_temp = get_modminer_upload_percent,
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,

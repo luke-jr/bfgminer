@@ -323,19 +323,6 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	return noncecnt;
 }
 
-static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
-{
-	char before[] = "               ";
-	if (cgpu->device_ztex) {
-		const char *snString = (char*)cgpu->device_ztex->snString;
-		size_t snStringLen = strlen(snString);
-		if (snStringLen > 14)
-			snStringLen = 14;
-		memcpy(before, snString, snStringLen);
-	}
-	tailsprintf(buf, "%s| ", &before[0]);
-}
-
 static struct api_data*
 get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 {
@@ -412,7 +399,6 @@ struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
 	.drv_detect = ztex_detect,
-	.get_statline_before = ztex_statline_before,
 	.get_api_extra_device_status = get_ztex_drv_extra_device_status,
 	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,

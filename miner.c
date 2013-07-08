@@ -2451,7 +2451,6 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	assert(for_curses == false);
 #endif
 	struct device_drv *drv = cgpu->drv;
-	void (*statline_func)(char *, struct cgpu_info *);
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
 	char rejpcbuf[6];
@@ -2522,16 +2521,13 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 		return;
 	}
 	
-	if ((drv->get_dev_statline_before || drv->get_statline_before) && likely(drv_ready(cgpu)))
-	{
-		if (drv->get_dev_statline_before && drv->get_statline_before)
-			statline_func = opt_show_procs ? drv->get_statline_before : drv->get_dev_statline_before;
-		else
-			statline_func = drv->get_statline_before ?: drv->get_dev_statline_before;
-		statline_func(buf, cgpu);
-	}
+	if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp && drv->override_statline_temp(buf, cgpu, opt_show_procs))
+		strcat(buf, " | ");
 	else
-		tailsprintf(buf, "               | ");
+	if (cgpu->temp > 0.)
+		tailsprintf(buf, "%4.1fC | ", cgpu->temp);
+	else
+		strcat(buf, "      | ");
 	
 #ifdef HAVE_CURSES
 	if (for_curses)
@@ -2603,15 +2599,6 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 			hwerrs,
 			percentf2(badnonces, allnonces, bnbuf)
 		);
-	}
-	
-	if (drv->get_dev_statline_after || drv->get_statline)
-	{
-		if (drv->get_dev_statline_after && drv->get_statline)
-			statline_func = opt_show_procs ? drv->get_statline : drv->get_dev_statline_after;
-		else
-			statline_func = drv->get_statline ?: drv->get_dev_statline_after;
-		statline_func(buf, cgpu);
 	}
 }
 
