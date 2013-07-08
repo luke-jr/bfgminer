@@ -655,10 +655,10 @@ fd_set fds;
 	status_read("start work");
 	mutex_unlock(mutexp);
 	if (opt_debug) {
-		char *xdata = bin2hex(state->running_work.data, 80);
+		char xdata[161];
+		bin2hex(xdata, state->running_work.data, 80);
 		applog(LOG_DEBUG, "%s: Started work: %s",
 		       modminer->proc_repr, xdata);
-		free(xdata);
 	}
 
 	return true;

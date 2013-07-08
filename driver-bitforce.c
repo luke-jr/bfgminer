@@ -131,9 +131,9 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 	
 	if (unlikely(opt_dev_protocol))
 	{
-		char *hex = bin2hex(data, datasz);
+		char hex[(datasz * 2) + 1];
+		bin2hex(hex, data, datasz);
 		applog(LOG_DEBUG, "DEVPROTO: CMD2 (fd=%d xlink=%d): %s", fd, procid, hex);
-		free(hex);
 	}
 	
 	bitforce_send(fd, procid, data, datasz);
@@ -641,10 +641,9 @@ void dbg_block_data(struct cgpu_info *bitforce)
 		return;
 	
 	struct bitforce_data *data = bitforce->device_data;
-	char *s;
-	s = bin2hex(&data->next_work_ob[8], 44);
+	char s[89];
+	bin2hex(s, &data->next_work_ob[8], 44);
 	applog(LOG_DEBUG, "%"PRIpreprv": block data: %s", bitforce->proc_repr, s);
-	free(s);
 }
 
 static void bitforce_change_mode(struct cgpu_info *, enum bitforce_proto);
@@ -983,14 +982,14 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			{
 				// Didn't find the one we're waiting on
 				// Must be extra stuff in the queue results
-				char *xmid = bin2hex(work->midstate, 32);
-				char *xdt = bin2hex(&work->data[64], 12);
+				char xmid[65];
+				char xdt[25];
+				bin2hex(xmid, work->midstate, 32);
+				bin2hex(xdt, &work->data[64], 12);
 				applog(LOG_WARNING, "%"PRIpreprv": Found extra garbage in queue results: %s",
 				       bitforce->proc_repr, pdevbuf);
 				applog(LOG_WARNING, "%"PRIpreprv": ...while waiting on: %s,%s",
 				       bitforce->proc_repr, xmid, xdt);
-				free(xmid);
-				free(xdt);
 				count = 0;
 			}
 			else
@@ -1836,9 +1835,9 @@ void bitforce_queue_flush(struct thr_info *thr)
 			HASH_FIND(hh, processing, &key[0], sizeof(key), item);
 			if (unlikely(!item))
 			{
-				char *hex = bin2hex(key, 32+12);
+				char hex[89];
+				bin2hex(hex, key, 32+12);
 				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is missing queued job! %s", bitforce->proc_repr, hex);
-				free(hex);
 				work_list_del(&thr->work_list, work);
 				continue;
 			}

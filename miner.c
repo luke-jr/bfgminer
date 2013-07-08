@@ -469,7 +469,9 @@ struct cgpu_info *get_devices(int id)
 
 static void sharelog(const char*disposition, const struct work*work)
 {
-	char *target, *hash, *data;
+	char target[(sizeof(work->target) * 2) + 1];
+	char hash[(sizeof(work->hash) * 2) + 1];
+	char data[(sizeof(work->data) * 2) + 1];
 	struct cgpu_info *cgpu;
 	unsigned long int t;
 	struct pool *pool;
@@ -484,15 +486,12 @@ static void sharelog(const char*disposition, const struct work*work)
 	cgpu = get_thr_cgpu(thr_id);
 	pool = work->pool;
 	t = (unsigned long int)(work->tv_work_found.tv_sec);
-	target = bin2hex(work->target, sizeof(work->target));
-	hash = bin2hex(work->hash, sizeof(work->hash));
-	data = bin2hex(work->data, sizeof(work->data));
+	bin2hex(target, work->target, sizeof(work->target));
+	bin2hex(hash, work->hash, sizeof(work->hash));
+	bin2hex(data, work->data, sizeof(work->data));
 
 	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
 	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->proc_repr_ns, thr_id, hash, data);
-	free(target);
-	free(hash);
-	free(data);
 	if (rv >= (int)(sizeof(s)))
 		s[sizeof(s) - 1] = '\0';
 	else if (rv < 0) {
@@ -647,7 +646,8 @@ char *set_request_diff(const char *arg, float *p)
 	
 	request_bdiff = (double)*p * 0.9999847412109375;
 	bdiff_target_leadzero(target, request_bdiff);
-	request_target_str = bin2hex(target, 32);
+	request_target_str = malloc(65);
+	bin2hex(request_target_str, target, 32);
 	
 	return NULL;
 }
@@ -1945,14 +1945,13 @@ static const char *workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0
 static
 void __update_block_title(const unsigned char *hash_swap)
 {
-	char *tmp;
 	if (hash_swap) {
+		char tmp[17];
 		// Only provided when the block has actually changed
 		free(current_hash);
 		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
-		tmp = bin2hex(&hash_swap[24], 8);
+		bin2hex(tmp, &hash_swap[24], 8);
 		sprintf(current_hash, "...%s", tmp);
-		free(tmp);
 		known_blkheight_current = false;
 	} else if (likely(known_blkheight_current)) {
 		return;
@@ -3127,11 +3126,13 @@ static char *submit_upstream_work_request(struct work *work)
 			req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
 		s = json_dumps(req, 0);
 		json_decref(req);
-		sd = bin2hex(data, 80);
+		sd = malloc(161);
+		bin2hex(sd, data, 80);
 	} else {
 
 	/* build hex string */
-	hexstr = bin2hex(work->data, sizeof(work->data));
+		hexstr = malloc((sizeof(work->data) * 2) + 1);
+		bin2hex(hexstr, work->data, sizeof(work->data));
 
 	/* build JSON-RPC request */
 		s = strdup("{\"method\": \"getwork\", \"params\": [ \"");
@@ -4441,16 +4442,16 @@ next_write_sws_del:
 			struct stratum_share *sshare = calloc(sizeof(struct stratum_share), 1);
 			int sshare_id;
 			uint32_t nonce;
-			char *nonce2hex;
-			char *noncehex;
-			char *ntimehex;
+			char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+			char noncehex[9];
+			char ntimehex[9];
 			
 			sshare->sshare_time = time(NULL);
 			sshare->work = copy_work(work);
-			nonce2hex = bin2hex(bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+			bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
 			nonce = *((uint32_t *)(work->data + 76));
-			noncehex = bin2hex((const unsigned char *)&nonce, 4);
-			ntimehex = bin2hex((void *)&work->data[68], 4);
+			bin2hex(noncehex, (const unsigned char *)&nonce, 4);
+			bin2hex(ntimehex, (void *)&work->data[68], 4);
 			
 			mutex_lock(&sshare_lock);
 			/* Give the stratum share a unique id */
@@ -4460,10 +4461,6 @@ next_write_sws_del:
 			sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 				pool->rpc_user, work->job_id, nonce2hex, ntimehex, noncehex, sshare->id);
 			mutex_unlock(&sshare_lock);
-			
-			free(nonce2hex);
-			free(noncehex);
-			free(ntimehex);
 			
 			applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->stratum_url, s);
 
@@ -4842,12 +4839,14 @@ static void restart_threads(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static char *blkhashstr(unsigned char *hash)
+static
+void blkhashstr(char *rv, const unsigned char *hash)
 {
 	unsigned char hash_swap[32];
+	
 	swap256(hash_swap, hash);
 	swap32tole(hash_swap, hash_swap, 32 / 4);
-	return bin2hex(hash_swap, 32);
+	bin2hex(rv, hash_swap, 32);
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)
@@ -4863,7 +4862,8 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	cgtime(&block_timeval);
 	__update_block_title(hash_swap);
 	free(current_fullhash);
-	current_fullhash = bin2hex(hash_swap, 32);
+	current_fullhash = malloc(65);
+	bin2hex(current_fullhash, hash_swap, 32);
 	get_timestamp(blocktime, &block_timeval);
 	cg_wunlock(&ch_lock);
 
@@ -4887,11 +4887,11 @@ static bool block_exists(char *hexstr)
 /* Tests if this work is from a block that has been seen before */
 static inline bool from_existing_block(struct work *work)
 {
-	char *hexstr = bin2hex(work->data + 8, 18);
+	char hexstr[37];
 	bool ret;
 
+	bin2hex(hexstr, work->data + 8, 18);
 	ret = block_exists(hexstr);
-	free(hexstr);
 	return ret;
 }
 
@@ -4920,7 +4920,7 @@ static void set_blockdiff(const struct work *work)
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char *hexstr;
+	char hexstr[37];
 
 	if (work->mandatory)
 		return ret;
@@ -4928,7 +4928,7 @@ static bool test_work_current(struct work *work)
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
 
 	/* Hack to work around dud work sneaking into test */
-	hexstr = bin2hex(work->data + 8, 18);
+	bin2hex(hexstr, work->data + 8, 18);
 	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
 		goto out_free;
 
@@ -5001,8 +5001,7 @@ static bool test_work_current(struct work *work)
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
-					free(hexstr);
-					hexstr = blkhashstr(&work->data[4]);
+					blkhashstr(hexstr, &work->data[4]);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       work->pool->pool_no,
@@ -5026,7 +5025,6 @@ static bool test_work_current(struct work *work)
 	}
 	work->longpoll = false;
 out_free:
-	free(hexstr);
 	return ret;
 }
 
@@ -7137,10 +7135,9 @@ void set_target(unsigned char *dest_target, double diff)
 	swab256(dest_target, rtarget);
 	
 	if (opt_debug) {
-		char *htarget = bin2hex(rtarget, 32);
-
+		char htarget[65];
+		bin2hex(htarget, rtarget, 32);
 		applog(LOG_DEBUG, "Generated target %s", htarget);
-		free(htarget);
 	}
 }
 
@@ -7203,12 +7200,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	if (opt_debug)
 	{
-		char *header = bin2hex(work->data, 80);
-		char *nonce2hex = bin2hex(bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		char header[161];
+		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+		bin2hex(header, work->data, 80);
+		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
 		applog(LOG_DEBUG, "Generated stratum header %s", header);
 		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
-		free(header);
-		free(nonce2hex);
 	}
 
 	calc_midstate(work);

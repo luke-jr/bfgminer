@@ -884,7 +884,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
 extern bool our_curl_supports_proxy_uris();
-extern char *bin2hex(const unsigned char *p, size_t len);
+extern void bin2hex(char *out, const void *in, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
 typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,

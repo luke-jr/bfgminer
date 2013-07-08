@@ -547,7 +547,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	const char golden_nonce[] = "000187a2";
 
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
-	char *nonce_hex;
+	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
 	get_options(this_option_offset, info);
 
@@ -572,20 +572,18 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 
 	icarus_close(fd);
 
-	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
+	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
 	if (strncmp(nonce_hex, golden_nonce, 8)) {
 		applog(LOG_DEBUG,
 			"Icarus Detect: "
 			"Test failed at %s: get %s, should: %s",
 			devpath, nonce_hex, golden_nonce);
-		free(nonce_hex);
 		return false;
 	}
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
 			devpath, nonce_hex);
-	free(nonce_hex);
 
 	if (serial_claim_v(devpath, api))
 		return false;
@@ -758,7 +756,6 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	struct icarus_state *state = thr->cgpu_data;
 	int fd = icarus->device_fd;
 	int ret;
-	char *ob_hex;
 
 	cgtime(&state->tv_workstart);
 
@@ -771,11 +768,11 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	}
 
 	if (opt_debug) {
-		ob_hex = bin2hex(ob_bin, 64);
+		char ob_hex[129];
+		bin2hex(ob_hex, ob_bin, 64);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
 			ob_hex);
-		free(ob_hex);
 	}
 
 	return true;

@@ -688,10 +688,10 @@ void x6500_job_start(struct thr_info *thr)
 	mt_job_transition(thr);
 	
 	if (opt_debug) {
-		char *xdata = bin2hex(thr->work->data, 80);
+		char xdata[161];
+		bin2hex(xdata, thr->work->data, 80);
 		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
 		       x6500->proc_repr, xdata);
-		free(xdata);
 	}
 
 	uint32_t usecs = 0x80000000 / fpga->dclk.freqM;

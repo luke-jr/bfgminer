@@ -668,26 +668,18 @@ char *absolute_uri(char *uri, const char *ref)
 	return abs;
 }
 
-/* Returns a malloced array string of a binary value of arbitrary length. The
- * array is rounded up to a 4 byte size to appease architectures that need
- * aligned array  sizes */
-char *bin2hex(const unsigned char *p, size_t len)
+static const char _hexchars[0x10] = "0123456789abcdef";
+
+void bin2hex(char *out, const void *in, size_t len)
 {
-	unsigned int i;
-	ssize_t slen;
-	char *s;
-
-	slen = len * 2 + 1;
-	if (slen % 4)
-		slen += 4 - (slen % 4);
-	s = calloc(slen, 1);
-	if (unlikely(!s))
-		quit(1, "Failed to calloc in bin2hex");
-
-	for (i = 0; i < len; i++)
-		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
-
-	return s;
+	const unsigned char *p = in;
+	while (len--)
+	{
+		(out++)[0] = _hexchars[p[0] >> 4];
+		(out++)[0] = _hexchars[p[0] & 0xf];
+		++p;
+	}
+	out[0] = '\0';
 }
 
 static inline
@@ -782,24 +774,22 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 
 	if (opt_debug) {
 		unsigned char hash_swap[32], target_swap[32];
-		char *hash_str, *target_str;
+		char hash_str[65];
+		char target_str[65];
 
 		for (int i = 0; i < 32; ++i) {
 			hash_swap[i] = hash[31-i];
 			target_swap[i] = target[31-i];
 		}
 
-		hash_str = bin2hex(hash_swap, 32);
-		target_str = bin2hex(target_swap, 32);
+		bin2hex(hash_str, hash_swap, 32);
+		bin2hex(target_str, target_swap, 32);
 
 		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
 			hash_str,
 			target_str,
 			rc ? "YES (hash <= target)" :
 			     "no (false positive; hash > target)");
-
-		free(hash_str);
-		free(target_str);
 	}
 
 	return rc;
