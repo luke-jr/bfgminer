@@ -389,6 +389,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	struct cgpu_info *cgpu = &gpus[gpu];
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
+	char *s;
 	cl_platform_id* platforms;
 	cl_uint preferred_vwidth;
 	cl_device_id *devices;
@@ -819,7 +820,14 @@ build:
 		    strstr(name, "Wrestler" ) ||
 		    strstr(name, "Zacate" ) ||
 		    strstr(name, "WinterPark" ))
-			patchbfi = true;
+		{
+			// BFI_INT patching only works with AMD-APP up to 1084
+			if (strstr(vbuff, "ATI-Stream"))
+				patchbfi = true;
+			else
+			if ((s = strstr(vbuff, "AMD-APP")) && (s = strchr(s, '(')) && atoi(&s[1]) < 1085)
+				patchbfi = true;
+		}
 	} else
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
