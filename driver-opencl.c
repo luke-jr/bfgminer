@@ -853,6 +853,18 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		float temp = 0, vddc = 0;
 
 		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
+			if (fanspeed != -1 || fanpercent != -1) {
+				tailsprintf(logline, "F: ");
+				if (fanpercent != -1)
+				{
+					tailsprintf(logline, "%d%% ", fanpercent);
+					if (fanspeed != -1)
+						tailsprintf(logline, "(%d RPM) ", fanspeed);
+				}
+				else
+					tailsprintf(logline, "%d RPM ", fanspeed);
+				tailsprintf(logline, " ");
+			}
 			if (engineclock != -1)
 				tailsprintf(logline, "E: %d MHz  ", engineclock);
 			if (memclock != -1)
