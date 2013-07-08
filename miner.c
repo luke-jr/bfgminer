@@ -2524,10 +2524,20 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp && drv->override_statline_temp(buf, cgpu, opt_show_procs))
 		strcat(buf, " | ");
 	else
-	if (cgpu->temp > 0.)
-		tailsprintf(buf, "%4.1fC | ", cgpu->temp);
-	else
-		strcat(buf, "      | ");
+	{
+		float temp = cgpu->temp;
+		if (!opt_show_procs)
+		{
+			// Find the highest temperature of all processors
+			for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+				if (proc->temp > temp)
+					temp = proc->temp;
+		}
+		if (temp > 0.)
+			tailsprintf(buf, "%4.1fC | ", cgpu->temp);
+		else
+			strcat(buf, "      | ");
+	}
 	
 #ifdef HAVE_CURSES
 	if (for_curses)
