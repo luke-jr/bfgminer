@@ -2469,3 +2469,8 @@ void notifier_destroy(notifier_t fd)
 #endif
 	fd[0] = fd[1] = INVSOCK;
 }
+
+void _bytes_alloc_failure(size_t sz)
+{
+	quit(1, "bytes_resize failed to allocate %lu bytes", (unsigned long)sz);
+}
