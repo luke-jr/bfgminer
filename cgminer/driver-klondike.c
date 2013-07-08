@@ -109,6 +109,17 @@ struct klondike_info {
 
 IDENTITY KlondikeID;
 
+static double cvtKlnToC(uint8_t temp)
+{
+	return (double)1/((double)1/(25+273.15) + log((double)temp*1000/(256-temp)/2200)/3987) - 273.15;
+}
+
+static int cvtCToKln(double deg)
+{
+	double R = exp((1/(deg+273.15)-1/(273.15+25))*3987)*2200;
+	return 256*R/(R+1000);
+}
+
 static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, int datalen, void *data)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
@@ -167,14 +178,28 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 		if (unlikely(!klninfo->cfg))
 			quit(1, "Failed to calloc cfg array in klondke_get_stats");
 		}
-			
-	// where does saved user cfg info come from?
-	// todo: set user cfg to devices
+		
+	WORKCFG cfgset = { 0,0,0,0,0 }; // zero init triggers read back only
+	double temp1, temp2;
+	int size = 2;
+	
+	if(opt_klondike_options != NULL) {  // boundaries are checked by device, with valid values returned
+		sscanf(opt_klondike_options, "%hu,%lf,%lf,%hhu", &cfgset.hashclock, &temp1, &temp2, &cfgset.fantarget);
+		cfgset.temptarget = cvtCToKln(temp1);
+		cfgset.tempcritical = cvtCToKln(temp2);
+		cfgset.fantarget = (int)256*cfgset.fantarget/100;
+		size = sizeof(cfgset); 
+	}
+	
 	for(dev = 0; dev <= slaves; dev++) {
-		char *reply = SendCmdGetReply(klncgpu, 'C', dev, 2, "\0");
+		char *reply = SendCmdGetReply(klncgpu, 'C', dev, size, &cfgset);
 		if(reply != NULL) {
 			klninfo->cfg[dev] = *(WORKCFG *)(reply+2);
-			applog(LOG_DEBUG, "Klondike config (%d: Clk: %d)", dev, klninfo->cfg[dev].hashclock);
+			applog(LOG_NOTICE, "Klondike config (%d: Clk: %d, T:%.0lf, C:%.0lf, F:%d)", 
+				dev, klninfo->cfg[dev].hashclock, 
+				cvtKlnToC(klninfo->cfg[dev].temptarget), 
+				cvtKlnToC(klninfo->cfg[dev].tempcritical), 
+				(int)100*klninfo->cfg[dev].fantarget/256);
 			}
 		}
 		
@@ -384,9 +409,9 @@ static void klondike_shutdown(struct thr_info *thr)
 	struct cgpu_info *klncgpu = thr->cgpu;
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 
-	klondike_flush_work(klncgpu);
+	//SendCmdGetReply(klncgpu, 'E', 0, 1, "0");
 	
-	SendCmdGetReply(klncgpu, 'E', 0, 1, "0");
+	klondike_flush_work(klncgpu);
 	
 	klninfo->shutdown = true;
 }
@@ -405,6 +430,7 @@ static void klondike_thread_enable(struct thr_info *thr)
 static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *work)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
+	struct work *tmp;
 	WORKTASK data;
 	
 	if (klncgpu->usbinfo.nodev)
@@ -427,6 +453,12 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 		wr_lock(&(klninfo->stat_lock));
 		klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
 		wr_unlock(&(klninfo->stat_lock));
+		
+		// remove old work 
+		HASH_ITER(hh, klncgpu->queued_work, work, tmp) {
+		if (work->queued && (work->subid == (dev*256 + data.workid-2*MAX_WORK_COUNT)))
+			work_completed(klncgpu, work);
+		}
 		return true;
 	}
 	return false;
@@ -483,10 +515,6 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 	return newhashcount;
 }
 
-static double convertKlnTemp(uint8_t temp)
-{
-	return (double)1/((double)1/(25+273.15) + log((double)temp*1000/(256-temp)/2200)/3987) - 273.15;
-}
 
 static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 {
@@ -504,7 +532,7 @@ static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 		}
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, "     %3.0fC 1.2V | ", convertKlnTemp(temp));
+	tailsprintf(buf, "     %3.0fC 1.2V | ", cvtKlnToC(temp));
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
@@ -520,7 +548,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 	rd_lock(&(klninfo->stat_lock));
 	for (dev = 0; dev <= klninfo->status->slavecount; dev++) { 
 
-		float fTemp = convertKlnTemp(klninfo->status[dev].temp);
+		float fTemp = cvtKlnToC(klninfo->status[dev].temp);
 		sprintf(buf, "Temp %d", dev);
 		root = api_add_temp(root, buf, &fTemp, true);
 	
