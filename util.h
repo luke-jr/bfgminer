@@ -133,6 +133,69 @@ static inline void align_len(size_t *len)
 }
 
 
+typedef struct bytes_t {
+	uint8_t *buf;
+	size_t sz;
+	size_t allocsz;
+} bytes_t;
+
+// This can't be inline without ugly const/non-const issues
+#define bytes_buf(b)  ((b)->buf)
+
+static inline
+size_t bytes_len(const bytes_t *b)
+{
+	return b->sz;
+}
+
+extern void _bytes_alloc_failure(size_t);
+
+static inline
+void bytes_resize(bytes_t *b, size_t newsz)
+{
+	b->sz = newsz;
+	if (newsz <= b->allocsz)
+		return;
+	
+	if (!b->allocsz)
+		b->allocsz = 0x10;
+	do {
+		b->allocsz *= 2;
+	} while (newsz > b->allocsz);
+	b->buf = realloc(b->buf, b->allocsz);
+	if (!b->buf)
+		_bytes_alloc_failure(b->allocsz);
+}
+
+static inline
+void bytes_cat(bytes_t *b, const bytes_t *cat)
+{
+	size_t origsz = bytes_len(b);
+	size_t addsz = bytes_len(cat);
+	bytes_resize(b, origsz + addsz);
+	memcpy(&bytes_buf(b)[origsz], bytes_buf(cat), addsz);
+}
+
+static inline
+void bytes_cpy(bytes_t *dst, const bytes_t *src)
+{
+	dst->allocsz = src->allocsz;
+	dst->sz = src->sz;
+	size_t half;
+	while (dst->sz <= (half = dst->allocsz / 2))
+		dst->allocsz = half;
+	dst->buf = malloc(dst->allocsz);
+	memcpy(dst->buf, src->buf, dst->sz);
+}
+
+static inline
+void bytes_free(bytes_t *b)
+{
+	free(b->buf);
+	b->sz = b->allocsz = 0;
+}
+
+
 static inline
 void set_maxfd(int *p_maxfd, int fd)
 {
