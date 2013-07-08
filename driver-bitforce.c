@@ -1330,6 +1330,62 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	return true;
 }
 
+#ifdef HAVE_CURSES
+static
+void bitforce_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	struct bitforce_data *data = cgpu->device_data;
+	if (data->sc)
+		wlogprint("[F]an control ");
+}
+
+static
+const char *bitforce_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	struct bitforce_data *data = cgpu->device_data;
+	pthread_mutex_t *mutexp;
+	int fd;
+	static char replybuf[0x100];
+	
+	if (!data->sc)
+		return NULL;
+	switch (input)
+	{
+		case 'f': case 'F':
+		{
+			int fanspeed;
+			char *intvar;
+
+			intvar = curses_input("Set fan speed (range 0-4 for low to fast or 5 for auto)");
+			if (!intvar)
+				return "Invalid fan speed\n";
+			fanspeed = atoi(intvar);
+			free(intvar);
+			if (fanspeed < 0 || fanspeed > 5)
+				return "Invalid fan speed\n";
+			
+			char cmd[4] = "Z0X";
+			cmd[1] += fanspeed;
+			mutexp = &cgpu->device->device_mutex;
+			mutex_lock(mutexp);
+			fd = cgpu->device->device_fd;
+			bitforce_cmd1(fd, data->xlink_id, replybuf, sizeof(replybuf), cmd);
+			mutex_unlock(mutexp);
+			return replybuf;
+		}
+	}
+	return NULL;
+}
+
+static
+void bitforce_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct bitforce_data *data = cgpu->device_data;
+	if (data->temp[0] > 0 && data->temp[1] > 0)
+		wlogprint("Temperatures: %4.1fC %4.1fC\n", data->temp[0], data->temp[1]);
+}
+#endif
+
 static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 {
 	struct bitforce_data *data = cgpu->device_data;
@@ -1414,6 +1470,11 @@ struct device_drv bitforce_drv = {
 	.dname = "bitforce",
 	.name = "BFL",
 	.drv_detect = bitforce_detect,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bitforce_wlogprint_status,
+	.proc_tui_wlogprint_choices = bitforce_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bitforce_tui_handle_choice,
+#endif
 	.get_api_stats = bitforce_drv_stats,
 	.minerloop = minerloop_async,
 	.reinit_device = bitforce_reinit,
@@ -1899,6 +1960,11 @@ struct device_drv bitforce_queue_api = {
 	.name = "BFL",
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_reinit,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bitforce_wlogprint_status,
+	.proc_tui_wlogprint_choices = bitforce_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bitforce_tui_handle_choice,
+#endif
 	.get_api_stats = bitforce_drv_stats,
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
