@@ -480,8 +480,7 @@ difficulty (including the network hashrate that difficulty represents), and when
 the search for the new block started.
 
 Each device shows:
- BFL 2: 74.0C          | 51.97/58.90/57.17Gh/s | A:847 R:15+0(.54%) HW:496/.91%
- BFL 0:  69.4C         | 803.9/828.4/602.5Mh/s | A:8 R:0 HW:0 U: 8.42/m
+ BFL 0:  68.7C         | 872.7/866.7/992.0Mh/s | A:95 R:3 HW:0 U:13.86/m
 
 Column are as follows:
 Temperature (if supported)
