@@ -115,6 +115,9 @@ bfgminer_SOURCES += scrypt.c scrypt.h
 dist_doc_DATA += README.scrypt
 endif
 
+bfgminer_SOURCES += prime.c
+bfgminer_LDADD += -lgmp
+
 if HAS_CPUMINE
 bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\

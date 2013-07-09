@@ -9032,7 +9032,7 @@ static void raise_fd_limits(void)
 
 extern void bfg_init_threadlocal();
 
-int main(int argc, char *argv[])
+int xmain(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
