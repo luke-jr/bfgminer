@@ -647,7 +647,7 @@ int tiospeed(speed_t speed)
 		case B ## baud:  \
 			return baud;  \
 // END
-#include "iospeeds.h"
+#include "iospeeds_local.h"
 #undef IOSPEED
 	default:
 		return -1;
@@ -747,7 +747,7 @@ speed_t tiospeed_t(int baud)
 		case baud:  \
 			return B ## baud;  \
 // END
-#include "iospeeds.h"
+#include "iospeeds_local.h"
 #undef IOSPEED
 	default:
 		return B0;
@@ -763,7 +763,7 @@ bool valid_baud(int baud)
 		case baud:  \
 			return true;  \
 // END
-#include "iospeeds.h"
+#include "iospeeds_local.h"
 #undef IOSPEED
 		default:
 			return false;
