@@ -117,6 +117,7 @@ endif
 
 bfgminer_SOURCES += prime.c
 bfgminer_LDADD += -lgmp
+bfgminer_CPPFLAGS += -DWANT_PRIMEPOW
 
 if HAS_CPUMINE
 bfgminer_SOURCES	+= \
