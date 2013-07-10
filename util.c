@@ -2217,15 +2217,7 @@ void RenameThread(const char* name)
 }
 
 static pthread_key_t key_bfgtls;
-struct bfgtls_data {
-	char *bfg_strerror_result;
-	size_t bfg_strerror_resultsz;
-#ifdef WIN32
-	LPSTR bfg_strerror_socketresult;
-#endif
-};
 
-static
 struct bfgtls_data *get_bfgtls()
 {
 	struct bfgtls_data *bfgtls = pthread_getspecific(key_bfgtls);

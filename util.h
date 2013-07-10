@@ -112,6 +112,16 @@ void *realloc_strcat(char *ptr, char *s);
 extern char *sanestr(char *o, char *s);
 void RenameThread(const char* name);
 
+struct bfgtls_data {
+	char *bfg_strerror_result;
+	size_t bfg_strerror_resultsz;
+#ifdef WIN32
+	LPSTR bfg_strerror_socketresult;
+#endif
+};
+
+extern struct bfgtls_data *get_bfgtls();
+
 enum bfg_strerror_type {
 	BST_ERRNO,
 	BST_SOCKET,
