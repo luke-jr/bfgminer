@@ -567,15 +567,37 @@ void set_mpz_to_hash(mpz_t *hash, const uint8_t *hashb)
 	mpz_import(*hash, 8, -1, 4, -1, 0, hashb);
 }
 
-unsigned int nPrimorialHashFactor = 7;
-int64_t nTimeExpected = 0;   // time expected to prime chain (micro-second)
-int64_t nTimeExpectedPrev = 0; // time expected to prime chain last time
-bool fIncrementPrimorial = true; // increase or decrease primorial factor
-unsigned current_prime = 3;  // index 3 is prime number 7
-int64_t nHPSTimerStart = 0;
+struct prime_longterms {
+	unsigned int nPrimorialHashFactor;
+	int64_t nTimeExpected;   // time expected to prime chain (micro-second)
+	int64_t nTimeExpectedPrev; // time expected to prime chain last time
+	bool fIncrementPrimorial; // increase or decrease primorial factor
+	unsigned current_prime;
+	int64_t nHPSTimerStart;
+};
+
+static
+struct prime_longterms *get_prime_longterms()
+{
+	struct bfgtls_data *bfgtls = get_bfgtls();
+	
+	struct prime_longterms *pl = bfgtls->prime_longterms;
+	if (unlikely(!pl))
+	{
+		pl = bfgtls->prime_longterms = malloc(sizeof(*pl));
+		*pl = (struct prime_longterms){
+			.nPrimorialHashFactor = 7,
+			.fIncrementPrimorial = true,
+			.current_prime = 3,  // index 3 is prime number 7
+			.nHPSTimerStart = 0,
+		};
+	}
+	return pl;
+}
 
 bool prime(uint8_t *header, struct work *work)
 {
+	struct prime_longterms *pl = get_prime_longterms();
 	bool rv = false;
 	
 	uint32_t *nonce = (void*)(&header[76]);
@@ -623,23 +645,23 @@ bool prime(uint8_t *header, struct work *work)
 	unsigned int nRoundTests = 0;
 	unsigned int nRoundPrimesHit = 0;
 	int64_t nPrimeTimerStart = GetTimeMicros();
-	if (nTimeExpected > nTimeExpectedPrev)
-	    fIncrementPrimorial = !fIncrementPrimorial;
-	nTimeExpectedPrev = nTimeExpected;
+	if (pl->nTimeExpected > pl->nTimeExpectedPrev)
+	    pl->fIncrementPrimorial = !pl->fIncrementPrimorial;
+	pl->nTimeExpectedPrev = pl->nTimeExpected;
 	// dynamic adjustment of primorial multiplier
-	if (fIncrementPrimorial)
+	if (pl->fIncrementPrimorial)
 	{
-		++current_prime;
-		if (current_prime >= PRIMORIAL_COUNT)
+		++pl->current_prime;
+		if (pl->current_prime >= PRIMORIAL_COUNT)
 			quit(1, "primorial increment overflow");
 	}
-	else if (vPrimes[current_prime] > nPrimorialHashFactor)
+	else if (vPrimes[pl->current_prime] > pl->nPrimorialHashFactor)
 	{
-		if (!current_prime)
+		if (!pl->current_prime)
 			quit(1, "primorial decrement overflow");
-		--current_prime;
+		--pl->current_prime;
 	}
-	mpz_set(bnPrimorial, vPrimorials[current_prime]);
+	mpz_set(bnPrimorial, vPrimorials[pl->current_prime]);
 	
 	
 	while (true)
@@ -656,10 +678,10 @@ bool prime(uint8_t *header, struct work *work)
 		
 		while (mpz_cmp(bnPrimorial, bnMultiplierMin) < 0)
 		{
-			++current_prime;
-			if (current_prime >= PRIMORIAL_COUNT)
+			++pl->current_prime;
+			if (pl->current_prime >= PRIMORIAL_COUNT)
 				quit(1, "primorial minimum overflow");
-			mpz_set(bnPrimorial, vPrimorials[current_prime]);
+			mpz_set(bnPrimorial, vPrimorials[pl->current_prime]);
 		}
 		mpz_clear(bnMultiplierMin);
 		
@@ -678,7 +700,7 @@ bool prime(uint8_t *header, struct work *work)
 #ifdef SUPERDEBUG
 		fprintf(stderr,"bnFixedMultiplier=");
 		mpz_out_str(stderr, 0x10, bnFixedMultiplier);
-		fprintf(stderr, " nPrimorialMultiplier=%u nTriedMultiplier=%u\n", vPrimes[current_prime], nTriedMultiplier);
+		fprintf(stderr, " nPrimorialMultiplier=%u nTriedMultiplier=%u\n", vPrimes[pl->current_prime], nTriedMultiplier);
 #endif
 		
 		
@@ -698,9 +720,9 @@ bool prime(uint8_t *header, struct work *work)
 	    // Meter primes/sec
 	    static int64_t nPrimeCounter;
 	    static int64_t nTestCounter;
-	    if (nHPSTimerStart == 0)
+	    if (pl->nHPSTimerStart == 0)
 	    {
-	        nHPSTimerStart = GetTimeMillis();
+	        pl->nHPSTimerStart = GetTimeMillis();
 	        nPrimeCounter = 0;
 	        nTestCounter = 0;
 	    }
@@ -710,17 +732,17 @@ bool prime(uint8_t *header, struct work *work)
 	        nTestCounter += nTests;
 	    }
 #if 0
-	    if (GetTimeMillis() - nHPSTimerStart > 60000)
+	    if (GetTimeMillis() - pl->nHPSTimerStart > 60000)
 	    {
 	        static CCriticalSection cs;
 	        {
 	            LOCK(cs);
-	            if (GetTimeMillis() - nHPSTimerStart > 60000)
+	            if (GetTimeMillis() - pl->nHPSTimerStart > 60000)
 	            {
-	                double dPrimesPerMinute = 60000.0 * nPrimeCounter / (GetTimeMillis() - nHPSTimerStart);
+	                double dPrimesPerMinute = 60000.0 * nPrimeCounter / (GetTimeMillis() - pl->nHPSTimerStart);
 	                dPrimesPerSec = dPrimesPerMinute / 60.0;
-	                double dTestsPerMinute = 60000.0 * nTestCounter / (GetTimeMillis() - nHPSTimerStart);
-	                nHPSTimerStart = GetTimeMillis();
+	                double dTestsPerMinute = 60000.0 * nTestCounter / (GetTimeMillis() - pl->nHPSTimerStart);
+	                pl->nHPSTimerStart = GetTimeMillis();
 	                nPrimeCounter = 0;
 	                nTestCounter = 0;
 	                static int64 nLogTime = 0;
@@ -749,12 +771,12 @@ bool prime(uint8_t *header, struct work *work)
 	mpz_clear(bnPrimorial);
 
 	// Primecoin: estimate time to block
-	nTimeExpected = (GetTimeMicros() - nPrimeTimerStart) / max(1u, nRoundTests);
-	nTimeExpected = nTimeExpected * max(1u, nRoundTests) / max(1u, nRoundPrimesHit);
+	pl->nTimeExpected = (GetTimeMicros() - nPrimeTimerStart) / max(1u, nRoundTests);
+	pl->nTimeExpected = pl->nTimeExpected * max(1u, nRoundTests) / max(1u, nRoundPrimesHit);
 //TODO
 // 	for (unsigned int n = 1; n < TargetGetLength(pblock->nBits); n++)
 // 	     nTimeExpected = nTimeExpected * max(1u, nRoundTests) * 3 / max(1u, nRoundPrimesHit);
-	applog(LOG_DEBUG, "PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us", vPrimes[current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(nTimeExpected/1000000));
+	applog(LOG_DEBUG, "PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us", vPrimes[pl->current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(pl->nTimeExpected/1000000));
 
 	mpz_clear(hash);
 	mpz_clear(bnPrimeMin);

@@ -118,6 +118,9 @@ struct bfgtls_data {
 #ifdef WIN32
 	LPSTR bfg_strerror_socketresult;
 #endif
+#ifdef WANT_PRIMEPOW
+	void *prime_longterms;
+#endif
 };
 
 extern struct bfgtls_data *get_bfgtls();
