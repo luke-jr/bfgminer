@@ -431,6 +431,26 @@ if test "x$scrypt" = xyes; then
 fi
 
 
+need_fpgautils=no
+if test x$avalon$icarus$bitforce$modminer$opencl$x6500$ztex != xnonononononono; then
+	need_fpgautils=yes
+	
+	if $have_win32; then
+		echo '#include <iospeeds.h>' >iospeeds_local.h
+	else
+		AC_PROG_CPP
+		AC_MSG_CHECKING([what baud rates your system supports])
+		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.* B\([0-9]\+\) .*/IOSPEED(\1)/;t;d' >iospeeds_local.h
+		if grep -q IOSPEED iospeeds_local.h; then
+			AC_MSG_RESULT([done])
+		else
+			AC_MSG_RESULT([failed, using standard POSIX])
+			echo '#include <iospeeds_posix.h>' >iospeeds_local.h
+		fi
+	fi
+fi
+
+
 curses="auto"
 
 AC_ARG_WITH([curses],
@@ -537,7 +557,7 @@ AC_SUBST(libblkmaker_LIBS)
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon$icarus$bitforce$modminer$opencl$x6500$ztex != xnonononononono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
