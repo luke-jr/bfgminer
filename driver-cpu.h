@@ -60,6 +60,7 @@ enum sha256_algos {
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
+	ALGO_PRIME,
 	ALGO_SCRYPT,		/* scrypt */
 	
 	ALGO_FASTAUTO,		/* fast autodetect */

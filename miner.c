@@ -2359,8 +2359,9 @@ hashrate_pick_unit(float hashrate, unsigned char*unit)
 	while (hashrate >= 1000)
 	{
 		hashrate /= 1e3;
-		if (likely(_unitchar[*unit] != '?'))
-			++*unit;
+		if (unlikely(_unitchar[*unit] == '?'))
+			break;
+		++*unit;
 	}
 }
 
@@ -3120,8 +3121,13 @@ static char *submit_upstream_work_request(struct work *work)
 			req = blkmk_submit_foreign_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
 		else
 #endif
-			req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
+			req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])), work->sig, work->sigsz);
 		s = json_dumps(req, 0);
+		{
+			char hex[1 + (work->sigsz * 2)];
+			bin2hex(hex, work->sig, work->sigsz);
+			applog(LOG_DEBUG, "SIGSUBMIT: %s\n", hex);
+		}
 		json_decref(req);
 		sd = malloc(161);
 		bin2hex(sd, data, 80);
@@ -7427,7 +7433,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	/* Side effect: sets work->data for us */
 	res = test_nonce2(work, nonce);
 	
-	if (unlikely(res == TNR_BAD))
+	if (0&&unlikely(res == TNR_BAD))
 		{
 			inc_hw_errors(thr, work, nonce);
 			ret = false;
@@ -9032,7 +9038,7 @@ static void raise_fd_limits(void)
 
 extern void bfg_init_threadlocal();
 
-int xmain(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
@@ -9221,6 +9227,9 @@ int xmain(int argc, char *argv[])
 		opt_log_output = true;
 
 #ifdef WANT_CPUMINE
+#ifdef WANT_PRIMEPOW
+	GeneratePrimeTable();
+#endif
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		set_scrypt_algo(&opt_algo);

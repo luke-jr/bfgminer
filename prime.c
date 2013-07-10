@@ -12,13 +12,15 @@
 #include "miner.h"
 
 #define nMaxSieveSize 1000000u
-#define nPrimeTableLimit 100000u //nMaxSieveSize
+#define nPrimeTableLimit nMaxSieveSize
+#define nPrimorialTableLimit 100000u
 
-#define PRIME_COUNT 9592 //78498
+#define PRIME_COUNT 78498
+#define PRIMORIAL_COUNT 9592
 
 static
 unsigned vPrimes[PRIME_COUNT];
-mpz_t vPrimorials[PRIME_COUNT];
+mpz_t vPrimorials[PRIMORIAL_COUNT];
 
 static
 int64_t GetTimeMicros()
@@ -41,7 +43,6 @@ bool error(const char *fmt, ...)
 	return false;
 }
 
-static
 void GeneratePrimeTable()
 {
 	mpz_t bnOne;
@@ -62,12 +63,16 @@ void GeneratePrimeTable()
 		if (!vfComposite[n])
 		{
 			vPrimes[i] = n;
-			mpz_init(vPrimorials[i]);
-			mpz_mul_ui(vPrimorials[i], *bnLastPrimorial, n);
-			bnLastPrimorial = &vPrimorials[i];
+			if (n < nPrimorialTableLimit)
+			{
+				mpz_init(vPrimorials[i]);
+				mpz_mul_ui(vPrimorials[i], *bnLastPrimorial, n);
+				bnLastPrimorial = &vPrimorials[i];
+			}
 			++i;
 		}
-	printf("GeneratePrimeTable() : prime table [1, %d] generated with %lu primes\n", nPrimeTableLimit, (unsigned long)i);
+	mpz_clear(bnOne);
+	applog(LOG_DEBUG, "GeneratePrimeTable() : prime table [1, %d] generated with %lu primes", nPrimeTableLimit, (unsigned long)i);
 }
 
 #define nFractionalBits 24
@@ -87,8 +92,13 @@ bool FermatProbablePrimalityTest(mpz_t *n, unsigned int *pnLength)
 	mpz_init(r);
 	
 	mpz_powm(r, a, e, *n);
+	mpz_clear(a);
+	mpz_clear(e);
 	if (!mpz_cmp_ui(r, 1))
+	{
+		mpz_clear(r);
 		return true;
+	}
 	
 	// Failed Fermat test, calculate fractional length
 	// nFractionalLength = ( (n-r) << nFractionalBits ) / n
@@ -96,6 +106,7 @@ bool FermatProbablePrimalityTest(mpz_t *n, unsigned int *pnLength)
 	mpz_mul_2exp(r, r, nFractionalBits);
 	mpz_fdiv_q(r, r, *n);
 	unsigned int nFractionalLength = mpz_get_ui(r);
+	mpz_clear(r);
 	
 	if (nFractionalLength >= (1 << nFractionalBits))
 		return error("FermatProbablePrimalityTest() : fractional assert");
@@ -133,6 +144,8 @@ bool EulerLagrangeLifchitzPrimalityTest(mpz_t *n, bool fSophieGermain, unsigned 
 	mpz_init(r);
 	
 	mpz_powm(r, a, e, *n);
+	mpz_clear(a);
+	mpz_clear(e);
 	unsigned nMod8 = mpz_fdiv_ui(*n, 8);
 	bool fPassedTest = false;
 	if (fSophieGermain && (nMod8 == 7)) // Euler & Lagrange
@@ -148,10 +161,16 @@ bool EulerLagrangeLifchitzPrimalityTest(mpz_t *n, bool fSophieGermain, unsigned 
 	else if ((!fSophieGermain) && (nMod8 == 1)) // LifChitz
 		fPassedTest = !mpz_cmp_ui(r, 1);
 	else
+	{
+		mpz_clear(r);
 		return error("EulerLagrangeLifchitzPrimalityTest() : invalid n %% 8 = %d, %s", nMod8, (fSophieGermain? "first kind" : "second kind"));
+	}
 
 	if (fPassedTest)
+	{
+		mpz_clear(r);
 		return true;
+	}
 	// Failed test, calculate fractional length
 	
 	// derive Fermat test remainder
@@ -163,6 +182,7 @@ bool EulerLagrangeLifchitzPrimalityTest(mpz_t *n, bool fSophieGermain, unsigned 
 	mpz_mul_2exp(r, r, nFractionalBits);
 	mpz_fdiv_q(r, r, *n);
 	unsigned int nFractionalLength = mpz_get_ui(r);
+	mpz_clear(r);
 	
 	if (nFractionalLength >= (1 << nFractionalBits))
 		return error("EulerLagrangeLifchitzPrimalityTest() : fractional assert");
@@ -180,20 +200,37 @@ bool EulerLagrangeLifchitzPrimalityTest(mpz_t *n, bool fSophieGermain, unsigned 
 static
 bool ProbableCunninghamChainTest(mpz_t *n, bool fSophieGermain, bool fFermatTest, unsigned int *pnProbableChainLength)
 {
+#ifdef SUPERDEBUG
+	printf("ProbableCunninghamChainTest(");
+	mpz_out_str(stdout, 0x10, *n);
+	printf(", %d, %d, %u)\n", (int)fSophieGermain, (int)fFermatTest, *pnProbableChainLength);
+#endif
+	
 	*pnProbableChainLength = 0;
 	mpz_t N;
 	mpz_init_set(N, *n);
 	
 	// Fermat test for n first
 	if (!FermatProbablePrimalityTest(&N, pnProbableChainLength))
+	{
+		mpz_clear(N);
 		return false;
+	}
+#ifdef SUPERDEBUG
+	printf("N=");
+	mpz_out_str(stdout, 0x10, N);
+	printf("\n");
+#endif
 
 	// Euler-Lagrange-Lifchitz test for the following numbers in chain
 	while (true)
 	{
 		TargetIncrementLength(pnProbableChainLength);
 		mpz_add(N, N, N);
-		mpz_add_ui(N, N, (fSophieGermain? 1 : (-1)));
+		if (fSophieGermain)
+			mpz_add_ui(N, N, 1);
+		else
+			mpz_sub_ui(N, N, 1);
 		if (fFermatTest)
 		{
 			if (!FermatProbablePrimalityTest(&N, pnProbableChainLength))
@@ -201,11 +238,23 @@ bool ProbableCunninghamChainTest(mpz_t *n, bool fSophieGermain, bool fFermatTest
 		}
 		else
 		{
+#ifdef SUPERDEBUG
+			if (!fSophieGermain)
+			{
+				printf("EulerLagrangeLifchitzPrimalityTest(");
+				mpz_out_str(stdout, 0x10, N);
+				printf(", 1, %d)\n", *pnProbableChainLength);
+			}
+#endif
 			if (!EulerLagrangeLifchitzPrimalityTest(&N, fSophieGermain, pnProbableChainLength))
 				break;
 		}
 	}
+	mpz_clear(N);
 
+#ifdef SUPERDEBUG
+	printf("PCCT => %u (%u)\n", TargetGetLength(*pnProbableChainLength), *pnProbableChainLength);
+#endif
 	return (TargetGetLength(*pnProbableChainLength) >= 2);
 }
 
@@ -235,6 +284,7 @@ bool ProbablePrimeChainTest(mpz_t *bnPrimeChainOrigin, unsigned int nBits, bool 
 	// Test for Cunningham Chain of second kind
 	mpz_add_ui(mp, *bnPrimeChainOrigin, 1);
 	ProbableCunninghamChainTest(&mp, false, fFermatTest, pnChainLengthCunningham2);
+	mpz_clear(mp);
 	// Figure out BiTwin Chain length
 	// BiTwin Chain allows a single prime at the end for odd length chain
 	*pnChainLengthBiTwin = (TargetGetLength(*pnChainLengthCunningham1) > TargetGetLength(*pnChainLengthCunningham2)) ? (*pnChainLengthCunningham2 + TargetFromInt(TargetGetLength(*pnChainLengthCunningham2)+1)) : (*pnChainLengthCunningham1 + TargetFromInt(TargetGetLength(*pnChainLengthCunningham1)));
@@ -262,13 +312,15 @@ struct SieveOfEratosthenes {
 static
 void psieve_reset(struct SieveOfEratosthenes *psieve)
 {
-	// FIXME: if valid, free stuff?
+	mpz_clear(psieve->hashBlockHeader);
+	mpz_clear(psieve->bnFixedFactor);
 	psieve->valid = false;
 }
 
 static
 void psieve_init(struct SieveOfEratosthenes *psieve, unsigned nSieveSize, unsigned nBits, mpz_t *hashBlockHeader, mpz_t *bnFixedMultiplier)
 {
+	assert(!psieve->valid);
 	*psieve = (struct SieveOfEratosthenes){
 		.valid = true,
 		.nSieveSize = nSieveSize,
@@ -301,12 +353,24 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 	mpz_init(bnFixedInverse);
 	mpz_init_set_ui(p, nPrime);
 	if (!mpz_invert(bnFixedInverse, psieve->bnFixedFactor, p))
+	{
+		mpz_clear(p);
+		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of fixed factor failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
+	}
 	mpz_t bnTwo, bnTwoInverse;
 	mpz_init_set_ui(bnTwo, 2);
 	mpz_init(bnTwoInverse);
 	if (!mpz_invert(bnTwoInverse, bnTwo, p))
+	{
+		mpz_clear(bnTwoInverse);
+		mpz_clear(bnTwo);
+		mpz_clear(p);
+		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of 2 failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
+	}
+	mpz_clear(bnTwo);
+	mpz_clear(p);
 
 	mpz_t mp;
 	mpz_init(mp);
@@ -333,6 +397,9 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
 				psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
 	}
+	mpz_clear(mp);
+	mpz_clear(bnTwoInverse);
+	mpz_clear(bnFixedInverse);
 	++psieve->nPrimeSeq;
 	return true;
 }
@@ -358,8 +425,21 @@ bool psieve_GetNextCandidateMultiplier(struct SieveOfEratosthenes *psieve, unsig
 	}
 }
 
+// Get total number of candidates for power test
+static
+unsigned int psieve_GetCandidateCount(struct SieveOfEratosthenes *psieve)
+{
+	unsigned int nCandidates = 0;
+	for (unsigned int nMultiplier = 0; nMultiplier < psieve->nSieveSize; nMultiplier++)
+	{
+		if (!psieve->vfCompositeCunningham1[nMultiplier] || !psieve->vfCompositeCunningham2[nMultiplier] || !psieve->vfCompositeBiTwin[nMultiplier])
+		nCandidates++;
+	}
+	return nCandidates;
+}
+
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit)
+bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit, struct work *work)
 {
 	const uint32_t *pnbits = (void*)&header[72];
 	*pnProbableChainLength = 0;
@@ -378,9 +458,16 @@ bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *h
 	{
 		// Build sieve
 		nStart = GetTimeMicros();
+#ifdef SUPERDEBUG
+		fprintf(stderr, "psieve_init(?, %u, %08x, ", nMaxSieveSize, *pnbits);
+		mpz_out_str(stderr, 0x10, *hash);
+		fprintf(stderr, ", ");
+		mpz_out_str(stderr, 0x10, *bnFixedMultiplier);
+		fprintf(stderr, ")\n");
+#endif
 		psieve_init(psieve, nMaxSieveSize, *pnbits, hash, bnFixedMultiplier);
 		while (psieve_Weave(psieve));
-// 		printf("MineProbablePrimeChain() : new sieve (%u/%u) ready in %uus\n", psieve_GetCandidateCount(psieve), nMaxSieveSize, (unsigned int) (GetTimeMicros() - nStart));
+ 		applog(LOG_DEBUG, "MineProbablePrimeChain() : new sieve (%u/%u) ready in %uus", psieve_GetCandidateCount(psieve), nMaxSieveSize, (unsigned int) (GetTimeMicros() - nStart));
 	}
 
 	mpz_t bnChainOrigin;
@@ -397,23 +484,60 @@ bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *h
 			// power tests completed for the sieve
 			psieve_reset(psieve);
 			*pfNewBlock = true; // notify caller to change nonce
+			mpz_clear(bnChainOrigin);
 			return false;
 		}
+#ifdef SUPERDEBUG
+		printf("nTriedMultiplier=%d\n", *pnTriedMultiplier=640150);
+#endif
 		mpz_mul(bnChainOrigin, *hash, *bnFixedMultiplier);
 		mpz_mul_ui(bnChainOrigin, bnChainOrigin, *pnTriedMultiplier);
 		unsigned int nChainLengthCunningham1 = 0;
 		unsigned int nChainLengthCunningham2 = 0;
 		unsigned int nChainLengthBiTwin = 0;
+#ifdef SUPERDEBUG
+		printf("ProbablePrimeChainTest(bnChainOrigin=");
+		mpz_out_str(stdout, 0x10, bnChainOrigin);
+		printf(", nbits=%08lx, false, %d, %d, %d)\n", (unsigned long)*pnbits, nChainLengthCunningham1, nChainLengthCunningham2, nChainLengthBiTwin);
+#endif
 		if (ProbablePrimeChainTest(&bnChainOrigin, *pnbits, false, &nChainLengthCunningham1, &nChainLengthCunningham2, &nChainLengthBiTwin))
 		{
-// TODO		    block.bnPrimeChainMultiplier = *bnFixedMultiplier * *pnTriedMultiplier;
+			// bnChainOrigin is not used again, so recycled here for the result
+
+			// block.bnPrimeChainMultiplier = *bnFixedMultiplier * *pnTriedMultiplier;
+			mpz_mul_ui(bnChainOrigin, *bnFixedMultiplier, *pnTriedMultiplier);
+			
+			size_t exportsz, resultoff;
+			uint8_t *export = mpz_export(NULL, &exportsz, -1, 1, -1, 0, bnChainOrigin);
+			assert(exportsz < 250);  // FIXME: bitcoin varint
+			resultoff = 1;
+			if (export[0] & 0x80)
+				++resultoff;
+			uint8_t *result = malloc(exportsz + resultoff);
+			result[0] = exportsz + resultoff - 1;
+			result[1] = '\0';
+			memcpy(&result[resultoff], export, exportsz);
+			if (mpz_sgn(bnChainOrigin) < 0)
+				result[1] |= 0x80;
+			free(export);
+			
+			work->sig = result;
+			work->sigsz = exportsz + resultoff;
+			
+			char hex[1 + (work->sigsz * 2)];
+			bin2hex(hex, work->sig, work->sigsz);
+			applog(LOG_DEBUG, "SIGNATURE: %s\n", hex);
+			
+			
 // 		    printf("Probable prime chain found for block=%s!!\n  Target: %s\n  Length: (%s %s %s)\n", block.GetHash().GetHex().c_str(),
 // 		    TargetToString(nbits).c_str(), TargetToString(nChainLengthCunningham1).c_str(), TargetToString(nChainLengthCunningham2).c_str(), TargetToString(nChainLengthBiTwin).c_str());
+			applog(LOG_DEBUG, "Probable prime chain found for block");
 			*pnProbableChainLength = nChainLengthCunningham1;
 			if (*pnProbableChainLength < nChainLengthCunningham2)
 				*pnProbableChainLength = nChainLengthCunningham2;
 			if (*pnProbableChainLength < nChainLengthBiTwin)
 				*pnProbableChainLength = nChainLengthBiTwin;
+			mpz_clear(bnChainOrigin);
 		    return true;
 		}
 		*pnProbableChainLength = nChainLengthCunningham1;
@@ -426,6 +550,7 @@ bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *h
 
 		nCurrent = GetTimeMicros();
 	}
+	mpz_clear(bnChainOrigin);
 	return false; // stop as timed out
 }
 
@@ -439,7 +564,7 @@ bool check_ends(const uint8_t *hash)
 static inline
 void set_mpz_to_hash(mpz_t *hash, const uint8_t *hashb)
 {
-	mpz_import(*hash, 4, 1, 8, -1, 0, hashb);
+	mpz_import(*hash, 8, -1, 4, -1, 0, hashb);
 }
 
 unsigned int nPrimorialHashFactor = 7;
@@ -449,8 +574,10 @@ bool fIncrementPrimorial = true; // increase or decrease primorial factor
 unsigned current_prime = 3;  // index 3 is prime number 7
 int64_t nHPSTimerStart = 0;
 
-void prime(uint8_t *header)
+bool prime(uint8_t *header, struct work *work)
 {
+	bool rv = false;
+	
 	uint32_t *nonce = (void*)(&header[76]);
 	unsigned char hashb[32];
 	mpz_t hash, bnPrimeMin;
@@ -477,13 +604,17 @@ void prime(uint8_t *header)
 				break;
 		}
 		if (unlikely(*nonce == 0xffffffff))
-			return;
+		{
+			mpz_clear(hash);
+			mpz_clear(bnPrimeMin);
+			return false;
+		}
 		++*nonce;
 	}
 	{
 		char hex[9];
 		bin2hex(hex, nonce, 4);
-		fprintf(stderr, "Pass 1 found: %s\n", hex);
+		applog(LOG_DEBUG, "Pass 1 found: %s", hex);
 	}
 	
 	// primorial fixed multiplier
@@ -499,7 +630,7 @@ void prime(uint8_t *header)
 	if (fIncrementPrimorial)
 	{
 		++current_prime;
-		if (current_prime >= PRIME_COUNT)
+		if (current_prime >= PRIMORIAL_COUNT)
 			quit(1, "primorial increment overflow");
 	}
 	else if (vPrimes[current_prime] > nPrimorialHashFactor)
@@ -526,10 +657,11 @@ void prime(uint8_t *header)
 		while (mpz_cmp(bnPrimorial, bnMultiplierMin) < 0)
 		{
 			++current_prime;
-			if (current_prime >= PRIME_COUNT)
+			if (current_prime >= PRIMORIAL_COUNT)
 				quit(1, "primorial minimum overflow");
 			mpz_set(bnPrimorial, vPrimorials[current_prime]);
 		}
+		mpz_clear(bnMultiplierMin);
 		
 		mpz_t bnFixedMultiplier;
 		mpz_init(bnFixedMultiplier);
@@ -539,19 +671,27 @@ void prime(uint8_t *header)
 			mpz_t bnHashFactor;
 			mpz_init_set_ui(bnHashFactor, nHashFactor);
 			mpz_fdiv_q(bnFixedMultiplier, bnPrimorial, bnHashFactor);
+			mpz_clear(bnHashFactor);
 		}
 		else
 			mpz_set_ui(bnFixedMultiplier, 1);
+#ifdef SUPERDEBUG
+		fprintf(stderr,"bnFixedMultiplier=");
+		mpz_out_str(stderr, 0x10, bnFixedMultiplier);
+		fprintf(stderr, " nPrimorialMultiplier=%u nTriedMultiplier=%u\n", vPrimes[current_prime], nTriedMultiplier);
+#endif
 		
 		
 		// mine for prime chain
 		unsigned int nProbableChainLength;
-		if (MineProbablePrimeChain(&sieve, header, &hash, &bnFixedMultiplier, &fNewBlock, &nTriedMultiplier, &nProbableChainLength, &nTests, &nPrimesHit))
+		if (MineProbablePrimeChain(&sieve, header, &hash, &bnFixedMultiplier, &fNewBlock, &nTriedMultiplier, &nProbableChainLength, &nTests, &nPrimesHit, work))
 		{
 // TODO			CheckWork(pblock, *pwalletMain, reservekey);
-			fprintf(stderr, "CHECK WORK\n");
+			mpz_clear(bnFixedMultiplier);
+			rv = true;
 			break;
 		}
+		mpz_clear(bnFixedMultiplier);
 		nRoundTests += nTests;
 		nRoundPrimesHit += nPrimesHit;
 
@@ -599,13 +739,14 @@ void prime(uint8_t *header)
 // 	    boost::this_thread::interruption_point();
 // 	    if (vNodes.empty())
 // 	        break;
-// 	    if (fNewBlock || pblock->nNonce >= 0xffff0000)
-// 	        break;
+	    if (fNewBlock /*|| pblock->nNonce >= 0xffff0000*/)
+	        break;
 // 	    if (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60)
 // 	        break;
 // 	    if (pindexPrev != pindexBest)
 // 	        break;
 	}
+	mpz_clear(bnPrimorial);
 
 	// Primecoin: estimate time to block
 	nTimeExpected = (GetTimeMicros() - nPrimeTimerStart) / max(1u, nRoundTests);
@@ -613,26 +754,54 @@ void prime(uint8_t *header)
 //TODO
 // 	for (unsigned int n = 1; n < TargetGetLength(pblock->nBits); n++)
 // 	     nTimeExpected = nTimeExpected * max(1u, nRoundTests) * 3 / max(1u, nRoundPrimesHit);
-	printf("PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us\n", vPrimes[current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(nTimeExpected/1000000));
+	applog(LOG_DEBUG, "PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us", vPrimes[current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(nTimeExpected/1000000));
+
+	mpz_clear(hash);
+	mpz_clear(bnPrimeMin);
+	
+	return rv;
 }
 
-void main()
+#if 0
+void pmain()
 {
+	setbuf(stderr, NULL);
+	setbuf(stdout, NULL);
 	GeneratePrimeTable();
 	unsigned char array[80] = {
-		0x02, 0x00, 0x00, 0x00,
-		
-		0x06, 0x21, 0x15, 0xa0, 0xb9, 0x7d, 0x83, 0x26, 0xff, 0xad, 0x2b, 0x82, 0x46, 0x25, 0x4e, 0x67,
-		0xf9, 0x3a, 0xfb, 0x6a, 0xf5, 0xa2, 0x78, 0x80, 0x13, 0x53, 0xc7, 0x4d, 0xba, 0x17, 0x3d, 0x96,
-		
-		0xee, 0x52, 0x24, 0xd0, 0xf6, 0xcd, 0x53, 0x50, 0x8c, 0x4b, 0x63, 0x39, 0x1d, 0x28, 0x86, 0x9d,
-		0x35, 0x21, 0xeb, 0x8d, 0x43, 0xbe, 0x82, 0xcf, 0x58, 0x48, 0x1d, 0xa0, 0xd0, 0xe4, 0x13, 0x72,
-		
-		0x30, 0xb3, 0xd9, 0x51,
-		
-		0x00, 0x00, 0x00, 0x07,
-		
-		0x1d, 0x00, 0x00, 0x00
+		0x02,0x00,0x00,0x00,
+		0x59,0xf7,0x56,0x1c,0x21,0x25,0xc1,0xad,0x0d,0xee,0xbd,0x05,0xb8,0x41,0x38,0xab,
+		0x2e,0xfb,0x65,0x40,0xc8,0xc7,0xa3,0xef,0x90,0x3d,0x75,0x8c,0x03,0x1c,0x7a,0xcc,
+		0x8d,0x27,0x4d,0xeb,0x7b,0x6a,0xf8,0xe0,0x44,0x2d,0x7c,0xf6,0xb9,0x71,0x12,0xd8,
+		0x61,0x60,0x5b,0x1f,0xa5,0xa3,0xf7,0x4f,0x61,0xe3,0x59,0x67,0x03,0xc2,0xfb,0x56,
+		0xed,0x78,0xdb,0x51,
+		0xd5,0xbe,0x38,0x07,
+		0xe8,0x02,0x00,0x00,
 	};
 	prime(array);
 }
+#endif
+
+bool scanhash_prime(struct thr_info *thr, const unsigned char *pmidstate, unsigned char *pdata, unsigned char *phash1, unsigned char *phash, const unsigned char *ptarget, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce)
+{
+	struct work *work = (struct work *)(&pmidstate[-offsetof(struct work, midstate)]);
+	
+	unsigned char header[80];
+	swap32yes(header, pdata, 80 / 4);
+#if 0
+	memcpy(header,(unsigned char[80]){
+		0x02,0x00,0x00,0x00,
+		0x59,0xf7,0x56,0x1c,0x21,0x25,0xc1,0xad,0x0d,0xee,0xbd,0x05,0xb8,0x41,0x38,0xab,
+		0x2e,0xfb,0x65,0x40,0xc8,0xc7,0xa3,0xef,0x90,0x3d,0x75,0x8c,0x03,0x1c,0x7a,0xcc,
+		0x8d,0x27,0x4d,0xeb,0x7b,0x6a,0xf8,0xe0,0x44,0x2d,0x7c,0xf6,0xb9,0x71,0x12,0xd8,
+		0x61,0x60,0x5b,0x1f,0xa5,0xa3,0xf7,0x4f,0x61,0xe3,0x59,0x67,0x03,0xc2,0xfb,0x56,
+		0xed,0x78,0xdb,0x51,
+		0xd5,0xbe,0x38,0x07,
+		0xe8,0x02,0x00,0x00,
+	},80);
+#endif
+	bool rv = prime(header, work);
+	swap32yes(pdata, header, 80 / 4);
+	return rv;
+}
+

@@ -181,6 +181,8 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 {
 	dst->allocsz = src->allocsz;
 	dst->sz = src->sz;
+	if (!dst->allocsz)
+		return;
 	size_t half;
 	while (dst->sz <= (half = dst->allocsz / 2))
 		dst->allocsz = half;

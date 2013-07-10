@@ -132,6 +132,8 @@ extern bool scanhash_sse2_32(struct thr_info*, const unsigned char *pmidstate, u
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
+extern bool scanhash_prime(struct thr_info *, const unsigned char *pmidstate, unsigned char *pdata, unsigned char *phash1, unsigned char *phash, const unsigned char *ptarget, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
 extern bool scanhash_scrypt(struct thr_info *thr, int thr_id, unsigned char *pdata, unsigned char *scratchbuf,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, unsigned long *hashes_done);
@@ -165,6 +167,9 @@ const char *algo_names[] = {
 #ifdef WANT_ALTIVEC_4WAY
     [ALGO_ALTIVEC_4WAY] = "altivec_4way",
 #endif
+#ifdef WANT_PRIMEPOW
+	[ALGO_PRIME] = "prime",
+#endif
 #ifdef WANT_SCRYPT
     [ALGO_SCRYPT] = "scrypt",
 #endif
@@ -195,6 +200,9 @@ static const sha256_func sha256_funcs[] = {
 #endif
 #ifdef WANT_X8664_SSE4
 	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64,
+#endif
+#ifdef WANT_PRIMEPOW
+	[ALGO_PRIME]		= (sha256_func)scanhash_prime,
 #endif
 #ifdef WANT_SCRYPT
 	[ALGO_SCRYPT]		= (sha256_func)scanhash_scrypt

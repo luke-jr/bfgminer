@@ -1193,6 +1193,9 @@ struct work {
 	unsigned char	midstate[32];
 	unsigned char	target[32];
 	unsigned char	hash[32];
+	
+	uint8_t *sig;
+	size_t sigsz;
 
 	uint64_t	share_diff;
 
