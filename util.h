@@ -182,7 +182,7 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 	dst->allocsz = src->allocsz;
 	dst->sz = src->sz;
 	size_t half;
-	while (dst->sz <= (half = dst->allocsz / 2))
+	while (dst->allocsz > 0 && dst->sz <= (half = dst->allocsz / 2))
 		dst->allocsz = half;
 	dst->buf = malloc(dst->allocsz);
 	memcpy(dst->buf, src->buf, dst->sz);
