@@ -387,21 +387,24 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 	unsigned int nChainLength = TargetGetLength(psieve->nBits);
 	for (unsigned int nBiTwinSeq = 0; nBiTwinSeq < 2 * nChainLength; nBiTwinSeq++)
 	{
+		bool b = nBiTwinSeq & 1;
 		// Find the first number that's divisible by this prime
-		int nDelta = ((nBiTwinSeq % 2 == 0) ? (-1) : 1);
+		int nDelta = (b ? 1 : -1);
 		mpz_mul_ui(p, bnFixedInverse, nPrime - nDelta);
 		unsigned int nSolvedMultiplier = mpz_fdiv_ui(p, nPrime);
 		
-		if (nBiTwinSeq % 2 == 1)
+		if (b)
 			mpz_mul(bnFixedInverse, bnFixedInverse, *pbnTwoInverse); // for next number in chain
 
 		if (nBiTwinSeq < nChainLength)
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
 				psieve->vfCompositeBiTwin[nVariableMultiplier] = true;
-		if (((nBiTwinSeq & 1u) == 0))
+		if (!b)
+		{
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
 				psieve->vfCompositeCunningham1[nVariableMultiplier] = true;
-		if (((nBiTwinSeq & 1u) == 1u))
+		}
+		else
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
 				psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
 	}
