@@ -1,3 +1,14 @@
+BFGMiner Version 3.1.3 - July 11, 2013
+- Bugfix: Reset staged_full flag when discarding (stale) popped work, or
+increasing the queue minimum
+- Bugfix: Only trigger staged work underrun if a mining thread was actually
+waiting for it (and do so sooner, before it has the work made)
+- bytes_cpy: avoid malloc and memcpy when size is zero
+- fix infinite loop in bytes_cpy when size is zero
+- Bugfix: Generate iospeeds_local.h based on termios.h defines, and only try to
+use POSIX standard if that fails
+
+
 BFGMiner Version 3.1.2 - July 8, 2013
 - When not compiling with optimizations, initialize unused nonce2 space to avoid
 warnings from memory checking tools
