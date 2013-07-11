@@ -20,6 +20,7 @@
 
 static
 unsigned vPrimes[PRIME_COUNT];
+mpz_t bnTwoInverses[PRIME_COUNT];
 mpz_t vPrimorials[PRIMORIAL_COUNT];
 
 static
@@ -74,12 +75,23 @@ void GeneratePrimeTable()
 		if (!vfComposite[n])
 		{
 			vPrimes[i] = n;
+			
+			if (n > 2)
+			{
+				// bnOne isn't 1 here, which is okay since it is no longer needed as 1 after prime 2
+				mpz_init(bnTwoInverses[i]);
+				mpz_set_ui(bnOne, n);
+				if (!mpz_invert(bnTwoInverses[i], bnTwo, bnOne))
+					quit(1, "mpz_invert of 2 failed for prime %u", n);
+			}
+			
 			if (n < nPrimorialTableLimit)
 			{
 				mpz_init(vPrimorials[i]);
 				mpz_mul_ui(vPrimorials[i], *bnLastPrimorial, n);
 				bnLastPrimorial = &vPrimorials[i];
 			}
+			
 			++i;
 		}
 	mpz_clear(bnOne);
@@ -369,16 +381,8 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of fixed factor failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
 	}
-	mpz_t bnTwoInverse;
-	mpz_init(bnTwoInverse);
-	if (!mpz_invert(bnTwoInverse, bnTwo, p))
-	{
-		mpz_clear(bnTwoInverse);
-		mpz_clear(p);
-		mpz_clear(bnFixedInverse);
-		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of 2 failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
-	}
 	mpz_clear(p);
+	mpz_t *pbnTwoInverse = &bnTwoInverses[psieve->nPrimeSeq];
 
 	mpz_t mp;
 	mpz_init(mp);
@@ -393,7 +397,7 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 		unsigned int nSolvedMultiplier = mpz_fdiv_ui(mp, nPrime);
 		
 		if (nBiTwinSeq % 2 == 1)
-			mpz_mul(bnFixedInverse, bnFixedInverse, bnTwoInverse); // for next number in chain
+			mpz_mul(bnFixedInverse, bnFixedInverse, *pbnTwoInverse); // for next number in chain
 
 		if (nBiTwinSeq < nChainLength)
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
@@ -406,7 +410,6 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 				psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
 	}
 	mpz_clear(mp);
-	mpz_clear(bnTwoInverse);
 	mpz_clear(bnFixedInverse);
 	++psieve->nPrimeSeq;
 	return true;
