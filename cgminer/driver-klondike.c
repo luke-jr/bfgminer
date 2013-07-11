@@ -94,7 +94,9 @@ typedef struct device_info {
 	uint32_t noncecount;
 	uint32_t nextworkid;
 	uint16_t lasthashcount;
-	uint64_t totalhashcount;	
+	uint64_t totalhashcount;
+	uint32_t rangesize;
+	uint32_t *chipstats;
 } DEVINFO;
 
 struct klondike_info {
@@ -154,6 +156,31 @@ static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, in
 	}
 	return NULL;
 }
+			
+static bool klondike_get_stats(struct cgpu_info *klncgpu)
+{
+	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
+	int slaves, dev;
+
+	if (klncgpu->usbinfo.nodev || klninfo->status == NULL)
+		return false;
+
+	applog(LOG_DEBUG, "Klondike getting status");
+	slaves = klninfo->status[0].slavecount;
+	
+	// loop thru devices and get status for each
+	wr_lock(&(klninfo->stat_lock));
+	for(dev = 0; dev <= slaves; dev++) {
+		char *reply = SendCmdGetReply(klncgpu, 'S', dev, 0, NULL);
+		if(reply != NULL)
+			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
+		}
+	wr_unlock(&(klninfo->stat_lock));
+	
+	// todo: detect slavecount change and realloc space
+		
+	return true;
+}
 
 static bool klondike_init(struct cgpu_info *klncgpu)
 {
@@ -203,33 +230,13 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 				(int)100*klninfo->cfg[dev].fantarget/256);
 			}
 		}
+	klondike_get_stats(klncgpu);
+	for(dev = 0; dev <= slaves; dev++) {
+		klninfo->devinfo[dev].rangesize = ((uint64_t)1<<32) / klninfo->status[dev].chipcount;
+		klninfo->devinfo[dev].chipstats = calloc(klninfo->status[dev].chipcount*2 , sizeof(uint32_t));
+	}
 		
 	SendCmdGetReply(klncgpu, 'E', 0, 1, "1");
-		
-	return true;
-}
-			
-static bool klondike_get_stats(struct cgpu_info *klncgpu)
-{
-	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	int slaves, dev;
-
-	if (klncgpu->usbinfo.nodev || klninfo->status == NULL)
-		return false;
-
-	applog(LOG_DEBUG, "Klondike getting status");
-	slaves = klninfo->status[0].slavecount;
-	
-	// loop thru devices and get status for each
-	wr_lock(&(klninfo->stat_lock));
-	for(dev = 0; dev <= slaves; dev++) {
-		char *reply = SendCmdGetReply(klncgpu, 'S', dev, 0, NULL);
-		if(reply != NULL)
-			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
-		}
-	wr_unlock(&(klninfo->stat_lock));
-	
-	// todo: detect slavecount change and realloc space
 		
 	return true;
 }
@@ -314,12 +321,15 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, WORKRESULT *result)
 			
 			result->nonce = le32toh(result->nonce - 0xC0);
 			applog(LOG_DEBUG, "Klondike SUBMIT NONCE (%02x:%08x)", result->workid, result->nonce);
-			submit_nonce(klncgpu->thr[0], work, result->nonce);
+			bool ok = submit_nonce(klncgpu->thr[0], work, result->nonce);
+			
+			applog(LOG_DEBUG, "Klondike chip stats %d, %08x, %d, %d", result->device, result->nonce, klninfo->devinfo[result->device].rangesize, klninfo->status[result->device].chipcount);
+			klninfo->devinfo[result->device].chipstats[(result->nonce / klninfo->devinfo[result->device].rangesize) + (ok ? 0 : klninfo->status[result->device].chipcount)]++;
 			return;
 			}
 		}
 	
-	applog(LOG_ERR, "%s%i:%d unknown work (%02x:%08x) - can't be processed - ignored",	
+	applog(LOG_ERR, "%s%i:%d unknown work (%02x:%08x) - ignored",	
 		klncgpu->drv->name, klncgpu->device_id, result->device, result->workid, result->nonce);
 	//inc_hw_errors(klncgpu->thr[0]);
 }
@@ -458,7 +468,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 		
 		// remove old work 
 		HASH_ITER(hh, klncgpu->queued_work, work, tmp) {
-		if (work->queued && (work->subid == (dev*256 + data.workid-2*MAX_WORK_COUNT)))
+		if (work->queued && (work->subid == (dev*256 + ((klninfo->devinfo[dev].nextworkid-2*MAX_WORK_COUNT) & 0xFF))))
 			work_completed(klncgpu, work);
 		}
 		return true;
@@ -562,9 +572,27 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		sprintf(buf, "Fan Percent %d", dev);
 		root = api_add_int(root, buf, &iFan, true);
 
-		iFan = (unsigned int)TACH_FACTOR / klninfo->status[dev].fanspeed;
+		iFan = 0;
+		if(klninfo->status[dev].fanspeed > 0)
+			iFan = (unsigned int)TACH_FACTOR / klninfo->status[dev].fanspeed;
 		sprintf(buf, "Fan RPM %d", dev);
 		root = api_add_int(root, buf, &iFan, true);
+		
+		if(klninfo->devinfo[dev].chipstats != NULL) {
+			char data[80];
+			int n;
+			sprintf(buf, "Nonces / Chip %d", dev);
+			for(n = 0; n < klninfo->status[dev].chipcount; n++)
+				sprintf(data+n*5, "%04d ", klninfo->devinfo[dev].chipstats[n]);
+			data[79] = 0;
+			root = api_add_string(root, buf, data, true);
+		
+			sprintf(buf, "Errors / Chip %d", dev);
+			for(n = 0; n < klninfo->status[dev].chipcount; n++)
+				sprintf(data+n*5, "%04d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
+			data[79] = 0;
+			root = api_add_string(root, buf, data, true);
+		}
 	}
 	rd_unlock(&(klninfo->stat_lock));
 	
