@@ -381,20 +381,16 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of fixed factor failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
 	}
-	mpz_clear(p);
 	mpz_t *pbnTwoInverse = &bnTwoInverses[psieve->nPrimeSeq];
 
-	mpz_t mp;
-	mpz_init(mp);
-	
 	// Weave the sieve for the prime
 	unsigned int nChainLength = TargetGetLength(psieve->nBits);
 	for (unsigned int nBiTwinSeq = 0; nBiTwinSeq < 2 * nChainLength; nBiTwinSeq++)
 	{
 		// Find the first number that's divisible by this prime
 		int nDelta = ((nBiTwinSeq % 2 == 0) ? (-1) : 1);
-		mpz_mul_ui(mp, bnFixedInverse, nPrime - nDelta);
-		unsigned int nSolvedMultiplier = mpz_fdiv_ui(mp, nPrime);
+		mpz_mul_ui(p, bnFixedInverse, nPrime - nDelta);
+		unsigned int nSolvedMultiplier = mpz_fdiv_ui(p, nPrime);
 		
 		if (nBiTwinSeq % 2 == 1)
 			mpz_mul(bnFixedInverse, bnFixedInverse, *pbnTwoInverse); // for next number in chain
@@ -409,7 +405,7 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 			for (unsigned int nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += nPrime)
 				psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
 	}
-	mpz_clear(mp);
+	mpz_clear(p);
 	mpz_clear(bnFixedInverse);
 	++psieve->nPrimeSeq;
 	return true;
