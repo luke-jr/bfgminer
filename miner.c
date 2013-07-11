@@ -6969,6 +6969,7 @@ retry:
 			}
 			else
 				applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
+			staged_full = false;  // Let it fill up before triggering an underrun again
 		}
 		pthread_cond_wait(&getq->cond, stgd_lock);
 	}
@@ -7227,6 +7228,7 @@ struct work *get_work(struct thr_info *thr)
 	while (!work) {
 		work = hash_pop();
 		if (stale_work(work, false)) {
+			staged_full = false;  // It wasn't really full, since it was stale :(
 			discard_work(work);
 			work = NULL;
 			wake_gws();
