@@ -27,13 +27,19 @@ int64_t GetTimeMicros()
 {
 	struct timeval tv;
 	cgtime(&tv);
-	return (tv.tv_sec * 1000000) + tv.tv_usec;
+	return ((int64_t)tv.tv_sec * 1000000) + tv.tv_usec;
 }
 
 static
 int64_t GetTimeMillis()
 {
 	return GetTimeMicros() / 1000;
+}
+
+static
+int64_t GetTime()
+{
+	return GetTimeMicros() / 1000000;
 }
 
 static
@@ -574,6 +580,9 @@ struct prime_longterms {
 	bool fIncrementPrimorial; // increase or decrease primorial factor
 	unsigned current_prime;
 	int64_t nHPSTimerStart;
+	int64_t nLogTime;
+	int64_t nPrimeCounter;
+	int64_t nTestCounter;
 };
 
 static
@@ -589,7 +598,7 @@ struct prime_longterms *get_prime_longterms()
 			.nPrimorialHashFactor = 7,
 			.fIncrementPrimorial = true,
 			.current_prime = 3,  // index 3 is prime number 7
-			.nHPSTimerStart = 0,
+			.nHPSTimerStart = GetTimeMillis(),
 		};
 	}
 	return pl;
@@ -718,44 +727,35 @@ bool prime(uint8_t *header, struct work *work)
 		nRoundPrimesHit += nPrimesHit;
 
 	    // Meter primes/sec
-	    static int64_t nPrimeCounter;
-	    static int64_t nTestCounter;
 	    if (pl->nHPSTimerStart == 0)
 	    {
 	        pl->nHPSTimerStart = GetTimeMillis();
-	        nPrimeCounter = 0;
-	        nTestCounter = 0;
+	        pl->nPrimeCounter = 0;
+	        pl->nTestCounter = 0;
 	    }
 	    else
 	    {
-	        nPrimeCounter += nPrimesHit;
-	        nTestCounter += nTests;
+	        pl->nPrimeCounter += nPrimesHit;
+	        pl->nTestCounter += nTests;
 	    }
-#if 0
-	    if (GetTimeMillis() - pl->nHPSTimerStart > 60000)
-	    {
-	        static CCriticalSection cs;
-	        {
-	            LOCK(cs);
-	            if (GetTimeMillis() - pl->nHPSTimerStart > 60000)
-	            {
-	                double dPrimesPerMinute = 60000.0 * nPrimeCounter / (GetTimeMillis() - pl->nHPSTimerStart);
-	                dPrimesPerSec = dPrimesPerMinute / 60.0;
-	                double dTestsPerMinute = 60000.0 * nTestCounter / (GetTimeMillis() - pl->nHPSTimerStart);
-	                pl->nHPSTimerStart = GetTimeMillis();
-	                nPrimeCounter = 0;
-	                nTestCounter = 0;
-	                static int64 nLogTime = 0;
-	                if (GetTime() - nLogTime > 60)
-	                {
-	                    nLogTime = GetTime();
-	                    printf("%s primemeter %9.0f prime/h %9.0f test/h\n", DateTimeStrFormat("%Y-%m-%d %H:%M:%S", nLogTime).c_str(), dPrimesPerMinute * 60.0, dTestsPerMinute * 60.0);
-	                }
-	            }
-	        }
-	    }
-#endif
-
+		
+		
+		if (GetTimeMillis() - pl->nHPSTimerStart > 60000)
+		{
+			double dPrimesPerMinute = 60000.0 * pl->nPrimeCounter / (GetTimeMillis() - pl->nHPSTimerStart);
+			double dPrimesPerSec = dPrimesPerMinute / 60.0;
+			double dTestsPerMinute = 60000.0 * pl->nTestCounter / (GetTimeMillis() - pl->nHPSTimerStart);
+			pl->nHPSTimerStart = GetTimeMillis();
+			pl->nPrimeCounter = 0;
+			pl->nTestCounter = 0;
+			if (GetTime() - pl->nLogTime > 60)
+			{
+				pl->nLogTime = GetTime();
+				applog(LOG_NOTICE, "primemeter %9.0f prime/h %9.0f test/h %5dpps", dPrimesPerMinute * 60.0, dTestsPerMinute * 60.0, (int)dPrimesPerSec);
+			}
+		}
+		
+		
 	    // Check for stop or if block needs to be rebuilt
 	    // TODO
 // 	    boost::this_thread::interruption_point();
