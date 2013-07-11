@@ -5038,30 +5038,17 @@ static bool work_rollable(struct work *work)
 static bool hash_push(struct work *work)
 {
 	bool rc = true;
-	bool was_empty;
 
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
 		staged_rollable++;
 	if (likely(!getq->frozen)) {
-		was_empty = unlikely(staged_full && !HASH_COUNT(staged_work));
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
 	} else
 		rc = false;
 	pthread_cond_broadcast(&getq->cond);
 	mutex_unlock(stgd_lock);
-	
-	if (unlikely(was_empty))
-	{
-		if (likely(opt_queue < 10 + mining_threads))
-		{
-			++opt_queue;
-			applog(LOG_WARNING, "Staged work underrun; increasing queue minimum to %d", opt_queue);
-		}
-		else
-			applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
-	}
 
 	return rc;
 }
@@ -7035,7 +7022,20 @@ static struct work *hash_pop(void)
 retry:
 	mutex_lock(stgd_lock);
 	while (!getq->frozen && !HASH_COUNT(staged_work))
+	{
+		if (unlikely(staged_full))
+		{
+			if (likely(opt_queue < 10 + mining_threads))
+			{
+				++opt_queue;
+				applog(LOG_WARNING, "Staged work underrun; increasing queue minimum to %d", opt_queue);
+			}
+			else
+				applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
+			staged_full = false;  // Let it fill up before triggering an underrun again
+		}
 		pthread_cond_wait(&getq->cond, stgd_lock);
+	}
 
 	hc = HASH_COUNT(staged_work);
 	/* Find clone work if possible, to allow masters to be reused */
@@ -7286,6 +7286,7 @@ struct work *get_work(struct thr_info *thr)
 	while (!work) {
 		work = hash_pop();
 		if (stale_work(work, false)) {
+			staged_full = false;  // It wasn't really full, since it was stale :(
 			discard_work(work);
 			work = NULL;
 			wake_gws();
