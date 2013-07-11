@@ -179,8 +179,13 @@ void bytes_cat(bytes_t *b, const bytes_t *cat)
 static inline
 void bytes_cpy(bytes_t *dst, const bytes_t *src)
 {
-	dst->allocsz = src->allocsz;
 	dst->sz = src->sz;
+	if (!dst->sz) {
+		dst->allocsz = 0;
+		dst->buf = NULL;
+		return;
+	}
+	dst->allocsz = src->allocsz;
 	size_t half;
 	while (dst->sz <= (half = dst->allocsz / 2))
 		dst->allocsz = half;
