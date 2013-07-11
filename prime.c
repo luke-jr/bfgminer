@@ -49,8 +49,13 @@ bool error(const char *fmt, ...)
 	return false;
 }
 
+mpz_t bnTwo;
+
 void GeneratePrimeTable()
 {
+	mpz_init_set_ui(bnTwo, 2);
+	
+	
 	mpz_t bnOne;
 	mpz_init_set_ui(bnOne, 1);
 	
@@ -364,18 +369,15 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of fixed factor failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
 	}
-	mpz_t bnTwo, bnTwoInverse;
-	mpz_init_set_ui(bnTwo, 2);
+	mpz_t bnTwoInverse;
 	mpz_init(bnTwoInverse);
 	if (!mpz_invert(bnTwoInverse, bnTwo, p))
 	{
 		mpz_clear(bnTwoInverse);
-		mpz_clear(bnTwo);
 		mpz_clear(p);
 		mpz_clear(bnFixedInverse);
 		return error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of 2 failed for prime #%u=%u", psieve->nPrimeSeq, nPrime);
 	}
-	mpz_clear(bnTwo);
 	mpz_clear(p);
 
 	mpz_t mp;
