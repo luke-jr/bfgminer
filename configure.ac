@@ -440,7 +440,7 @@ if test x$avalon$icarus$bitforce$modminer$opencl$x6500$ztex != xnonononononono; 
 	else
 		AC_PROG_CPP
 		AC_MSG_CHECKING([what baud rates your system supports])
-		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.* B\([0-9]\+\) .*/IOSPEED(\1)/;t;d' >iospeeds_local.h
+		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
 		if grep -q IOSPEED iospeeds_local.h; then
 			AC_MSG_RESULT([done])
 		else
