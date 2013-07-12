@@ -580,6 +580,7 @@ unsigned psieve_GetProgressPercentage(struct SieveOfEratosthenes *psieve)
 // Mine probable prime chain of form: n = h * p# +/- 1
 bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit, struct work *work)
 {
+	const char *proc_repr = thr->cgpu->proc_repr;
 #ifdef USE_WEAVE_CHEMISIST
 	struct prime_longterms *pl = get_prime_longterms();
 #endif
@@ -618,10 +619,10 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 #endif
 			if (unlikely(thr->work_restart))
 			{
-				applog(LOG_DEBUG, "MineProbablePrimeChain() : weaved interrupted by work restart");
+				applog(LOG_DEBUG, "%"PRIpreprv": MineProbablePrimeChain() : weaved interrupted by work restart", proc_repr);
 				return false;
 			}
- 		applog(LOG_DEBUG, "MineProbablePrimeChain() : new sieve (%u/%u@%u%%) ready in %uus", psieve_GetCandidateCount(psieve), nMaxSieveSize, psieve_GetProgressPercentage(psieve), (unsigned int) (GetTimeMicros() - nStart));
+ 		applog(LOG_DEBUG, "%"PRIpreprv": MineProbablePrimeChain() : new sieve (%u/%u@%u%%) ready in %uus", proc_repr, psieve_GetCandidateCount(psieve), nMaxSieveSize, psieve_GetProgressPercentage(psieve), (unsigned int) (GetTimeMicros() - nStart));
 	}
 
 	mpz_t bnChainOrigin;
@@ -638,7 +639,7 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 	{
 		if (unlikely(thr->work_restart))
 		{
-			applog(LOG_DEBUG, "MineProbablePrimeChain() : interrupted by work restart");
+			applog(LOG_DEBUG, "%"PRIpreprv": MineProbablePrimeChain() : interrupted by work restart", proc_repr);
 			return false;
 		}
 		++*pnTests;
@@ -654,7 +655,7 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 				pl->sieveBuildTime *= 0.99;
 			else
 				pl->sieveBuildTime *= 1.01;
-			applog(LOG_DEBUG, "%u ms (Timers: num power tests completed: %u\n", (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
+			applog(LOG_DEBUG, "%"PRIpreprv": %u ms (Timers: num power tests completed: %u", proc_repr, (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
 #endif
 			mpz_clear(bnChainOrigin);
 			return false;
@@ -698,12 +699,12 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 			
 			char hex[1 + (work->sigsz * 2)];
 			bin2hex(hex, work->sig, work->sigsz);
-			applog(LOG_DEBUG, "SIGNATURE: %s\n", hex);
+			applog(LOG_DEBUG, "%"PRIpreprv": SIGNATURE: %s", proc_repr, hex);
 			
 			
 // 		    printf("Probable prime chain found for block=%s!!\n  Target: %s\n  Length: (%s %s %s)\n", block.GetHash().GetHex().c_str(),
 // 		    TargetToString(nbits).c_str(), TargetToString(nChainLengthCunningham1).c_str(), TargetToString(nChainLengthCunningham2).c_str(), TargetToString(nChainLengthBiTwin).c_str());
-			applog(LOG_DEBUG, "Probable prime chain found for block");
+			applog(LOG_DEBUG, "%"PRIpreprv": Probable prime chain found for block", proc_repr);
 			*pnProbableChainLength = nChainLengthCunningham1;
 			if (*pnProbableChainLength < nChainLengthCunningham2)
 				*pnProbableChainLength = nChainLengthCunningham2;
@@ -726,7 +727,7 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 #ifdef USE_WEAVE_CHEMISIST
 	++pl->timeouts;
 	pl->sieveBuildTime *= 1.025;
-	applog(LOG_DEBUG, "%u ms (Timers: num total time outs: %u\n", (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
+	applog(LOG_DEBUG, "%"PRIpreprv": %u ms (Timers: num total time outs: %u", proc_repr, (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
 #endif
 	return false; // stop as timed out
 }
@@ -768,6 +769,7 @@ struct prime_longterms *get_prime_longterms()
 
 bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 {
+	const char *proc_repr = thr->cgpu->proc_repr;
 	struct prime_longterms *pl = get_prime_longterms();
 	bool rv = false;
 	
@@ -807,7 +809,7 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 	{
 		char hex[9];
 		bin2hex(hex, nonce, 4);
-		applog(LOG_DEBUG, "Pass 1 found: %s", hex);
+		applog(LOG_DEBUG, "%"PRIpreprv": Pass 1 found: %s", proc_repr, hex);
 	}
 	
 	// primorial fixed multiplier
@@ -886,7 +888,7 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 		}
 		if (unlikely(thr->work_restart))
 		{
-			applog(LOG_DEBUG, "prime interrupted by work restart");
+			applog(LOG_DEBUG, "%"PRIpreprv": prime interrupted by work restart", proc_repr);
 			break;
 		}
 		mpz_clear(bnFixedMultiplier);
@@ -918,7 +920,7 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 			if (GetTime() - pl->nLogTime > 60)
 			{
 				pl->nLogTime = GetTime();
-				applog(LOG_NOTICE, "primemeter %9.0f prime/h %9.0f test/h %5dpps", dPrimesPerMinute * 60.0, dTestsPerMinute * 60.0, (int)dPrimesPerSec);
+				applog(LOG_NOTICE, "%"PRIpreprv": primemeter %6d test/s %5dpps", proc_repr, (int)(dTestsPerMinute / 60.0), (int)dPrimesPerSec);
 			}
 		}
 		
@@ -943,7 +945,7 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 //TODO
 // 	for (unsigned int n = 1; n < TargetGetLength(pblock->nBits); n++)
 // 	     nTimeExpected = nTimeExpected * max(1u, nRoundTests) * 3 / max(1u, nRoundPrimesHit);
-	applog(LOG_DEBUG, "PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us", vPrimes[pl->current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(pl->nTimeExpected/1000000));
+	applog(LOG_DEBUG, "%"PRIpreprv": PrimecoinMiner() : Round primorial=%u tests=%u primes=%u expected=%us", proc_repr, vPrimes[pl->current_prime], nRoundTests, nRoundPrimesHit, (unsigned int)(pl->nTimeExpected/1000000));
 
 	mpz_clear(hash);
 	mpz_clear(bnPrimeMin);
