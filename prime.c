@@ -448,8 +448,23 @@ unsigned int psieve_GetCandidateCount(struct SieveOfEratosthenes *psieve)
 	return nCandidates;
 }
 
+// Get progress percentage of the sieve
+static
+unsigned psieve_GetProgressPercentage(struct SieveOfEratosthenes *psieve)
+{
+	unsigned rv;
+	if (psieve->nPrimeSeq >= PRIME_COUNT)
+		rv = nPrimeTableLimit;
+	else
+		rv = vPrimes[psieve->nPrimeSeq];
+	rv = rv * 100 / psieve->nSieveSize;
+	if (rv > 100)
+		rv = 100;
+	return rv;
+}
+
 // Mine probable prime chain of form: n = h * p# +/- 1
-bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit, struct work *work)
+bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit, struct work *work)
 {
 	const uint32_t *pnbits = (void*)&header[72];
 	*pnProbableChainLength = 0;
@@ -476,8 +491,13 @@ bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *h
 		fprintf(stderr, ")\n");
 #endif
 		psieve_init(psieve, nMaxSieveSize, *pnbits, hash, bnFixedMultiplier);
-		while (psieve_Weave(psieve));
- 		applog(LOG_DEBUG, "MineProbablePrimeChain() : new sieve (%u/%u) ready in %uus", psieve_GetCandidateCount(psieve), nMaxSieveSize, (unsigned int) (GetTimeMicros() - nStart));
+		while (psieve_Weave(psieve))
+			if (unlikely(!thr->work_restart))
+			{
+				applog(LOG_DEBUG, "MineProbablePrimeChain() : weaved interrupted by work restart");
+				return false;
+			}
+ 		applog(LOG_DEBUG, "MineProbablePrimeChain() : new sieve (%u/%u@%u%%) ready in %uus", psieve_GetCandidateCount(psieve), nMaxSieveSize, psieve_GetProgressPercentage(psieve), (unsigned int) (GetTimeMicros() - nStart));
 	}
 
 	mpz_t bnChainOrigin;
@@ -488,6 +508,11 @@ bool MineProbablePrimeChain(struct SieveOfEratosthenes *psieve, const uint8_t *h
 
 	while (nCurrent - nStart < 10000 && nCurrent >= nStart)
 	{
+		if (unlikely(!thr->work_restart))
+		{
+			applog(LOG_DEBUG, "MineProbablePrimeChain() : interrupted by work restart");
+			return false;
+		}
 		++*pnTests;
 		if (!psieve_GetNextCandidateMultiplier(psieve, pnTriedMultiplier))
 		{
@@ -608,7 +633,7 @@ struct prime_longterms *get_prime_longterms()
 	return pl;
 }
 
-bool prime(uint8_t *header, struct work *work)
+bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 {
 	struct prime_longterms *pl = get_prime_longterms();
 	bool rv = false;
@@ -719,7 +744,7 @@ bool prime(uint8_t *header, struct work *work)
 		
 		// mine for prime chain
 		unsigned int nProbableChainLength;
-		if (MineProbablePrimeChain(&sieve, header, &hash, &bnFixedMultiplier, &fNewBlock, &nTriedMultiplier, &nProbableChainLength, &nTests, &nPrimesHit, work))
+		if (MineProbablePrimeChain(thr, &sieve, header, &hash, &bnFixedMultiplier, &fNewBlock, &nTriedMultiplier, &nProbableChainLength, &nTests, &nPrimesHit, work))
 		{
 // TODO			CheckWork(pblock, *pwalletMain, reservekey);
 			mpz_clear(bnFixedMultiplier);
@@ -826,7 +851,7 @@ bool scanhash_prime(struct thr_info *thr, const unsigned char *pmidstate, unsign
 		0xe8,0x02,0x00,0x00,
 	},80);
 #endif
-	bool rv = prime(header, work);
+	bool rv = prime(thr, header, work);
 	swap32yes(pdata, header, 80 / 4);
 	return rv;
 }
