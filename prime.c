@@ -884,6 +884,11 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 			rv = true;
 			break;
 		}
+		if (unlikely(thr->work_restart))
+		{
+			applog(LOG_DEBUG, "prime interrupted by work restart");
+			break;
+		}
 		mpz_clear(bnFixedMultiplier);
 		nRoundTests += nTests;
 		nRoundPrimesHit += nPrimesHit;
@@ -923,7 +928,7 @@ bool prime(struct thr_info *thr, uint8_t *header, struct work *work)
 // 	    boost::this_thread::interruption_point();
 // 	    if (vNodes.empty())
 // 	        break;
-	    if (fNewBlock /*|| pblock->nNonce >= 0xffff0000*/)
+	    if (fNewBlock || thr->work_restart /*|| pblock->nNonce >= 0xffff0000*/)
 	        break;
 // 	    if (nTransactionsUpdated != nTransactionsUpdatedLast && GetTime() - nStart > 60)
 // 	        break;
