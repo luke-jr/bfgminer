@@ -969,6 +969,13 @@ void pmain()
 bool scanhash_prime(struct thr_info *thr, const unsigned char *pmidstate, unsigned char *pdata, unsigned char *phash1, unsigned char *phash, const unsigned char *ptarget, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce)
 {
 	struct work *work = (struct work *)(&pmidstate[-offsetof(struct work, midstate)]);
+	if (work->blk.nonce == 0x10000)
+	{
+		// HACK: After we found a nonce
+next_header:
+		*last_nonce = 0xfffffffe;  // HACK: force next header
+		return false;
+	}
 	
 	unsigned char header[80];
 	swap32yes(header, pdata, 80 / 4);
@@ -984,8 +991,15 @@ bool scanhash_prime(struct thr_info *thr, const unsigned char *pmidstate, unsign
 		0xe8,0x02,0x00,0x00,
 	},80);
 #endif
-	bool rv = prime(thr, header, work);
-	swap32yes(pdata, header, 80 / 4);
-	return rv;
+#ifdef SUPERDEBUG
+	char hex[161];
+	bin2hex(hex, header, 80);
+	applog(LOG_DEBUG, "HEADER: %s", hex);
+#endif
+	if (!prime(thr, header, work))
+		goto next_header;
+	swap32yes(&pdata[76], &header[76], 1);
+	*last_nonce = 0xffff;  // Trigger HACK above
+	return true;
 }
 
