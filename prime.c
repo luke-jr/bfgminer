@@ -23,6 +23,25 @@ unsigned vPrimes[PRIME_COUNT];
 mpz_t bnTwoInverses[PRIME_COUNT];
 mpz_t vPrimorials[PRIMORIAL_COUNT];
 
+struct prime_longterms {
+	unsigned int nPrimorialHashFactor;
+	int64_t nTimeExpected;   // time expected to prime chain (micro-second)
+	int64_t nTimeExpectedPrev; // time expected to prime chain last time
+	bool fIncrementPrimorial; // increase or decrease primorial factor
+	unsigned current_prime;
+	int64_t nHPSTimerStart;
+	int64_t nLogTime;
+	int64_t nPrimeCounter;
+	int64_t nTestCounter;
+#ifdef USE_WEAVE_CHEMISIST
+	unsigned timeouts;
+	unsigned completed;
+	int sieveBuildTime;
+#endif
+};
+
+static struct prime_longterms *get_prime_longterms();
+
 static
 int64_t GetTimeMicros()
 {
@@ -355,6 +374,99 @@ void psieve_init(struct SieveOfEratosthenes *psieve, unsigned nSieveSize, unsign
 	mpz_mul(psieve->bnFixedFactor, *bnFixedMultiplier, *hashBlockHeader);
 }
 
+#ifdef USE_WEAVE_CHEMISIST
+
+#define TESTING_FREQUENCY 1000
+
+static
+void Weave_Chemisist(struct thr_info *thr, struct SieveOfEratosthenes *psieve) {
+	struct prime_longterms *pl = get_prime_longterms();
+	
+	int64_t nStart = GetTimeMicros(), nCurrent = GetTimeMicros();
+	mpz_t bnFixedInverse, p;
+	mpz_init(bnFixedInverse);
+	mpz_init(p);
+	unsigned int nChainLength = TargetGetLength(psieve->nBits);
+	unsigned int nChainLength2 = 2*nChainLength;
+	unsigned int nSolvedMultiplier, nVariableMultiplier, nBiTwinSeq, uP;
+	unsigned int nPrimeSeqMax;
+	mpz_t *pbnTwoInverse;
+	if(vPrimes[PRIME_COUNT-1] < psieve->nSieveSize) {
+		nPrimeSeqMax = PRIME_COUNT;
+	} else {
+		for(nPrimeSeqMax = 0; nPrimeSeqMax < PRIME_COUNT && vPrimes[nPrimeSeqMax] < psieve->nSieveSize; nPrimeSeqMax++) ;
+	}
+
+	// create no new variables during the loop to eliminate all malloc() operations
+	for(psieve->nPrimeSeq = 0; psieve->nPrimeSeq < nPrimeSeqMax; psieve->nPrimeSeq++) {
+		uP = vPrimes[psieve->nPrimeSeq];  // aka nPrime
+		mpz_set_ui(p, uP);
+
+		if (mpz_fdiv_ui(psieve->bnFixedFactor, uP) == 0)
+		{
+			// Nothing in the sieve is divisible by this prime
+			continue;
+		}
+		// Find the modulo inverse of fixed factor
+		if (!mpz_invert(bnFixedInverse, psieve->bnFixedFactor, p))
+		{
+			// TODO: mpz_clear
+			error("CSieveOfEratosthenes::Weave(): BN_mod_inverse of fixed factor failed for prime #%u=%u", psieve->nPrimeSeq, uP);
+			return;
+		}
+		pbnTwoInverse = &bnTwoInverses[psieve->nPrimeSeq];
+		// calling the GetTimeMicros() method and the additional boolean testing ends up taking a while, so the speed can be increased by just calculating it every so often.
+		if(psieve->nPrimeSeq % TESTING_FREQUENCY == 0)
+		{
+			nCurrent = GetTimeMicros() - nStart;
+			if(nCurrent > (pl->sieveBuildTime))
+				return;
+		}
+
+		for (nBiTwinSeq = 0; nBiTwinSeq < nChainLength; nBiTwinSeq++)
+		{
+			if((nBiTwinSeq & 1u) == 0)
+			{
+				mpz_mul_ui(p, bnFixedInverse, uP + 1);
+				nSolvedMultiplier = mpz_fdiv_ui(p, uP);
+				for (nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += uP)
+					psieve->vfCompositeCunningham1[nVariableMultiplier] = true;
+			}
+			else
+			{
+				mpz_mul_ui(p, bnFixedInverse, uP - 1);
+				nSolvedMultiplier = mpz_fdiv_ui(p, uP);
+				mpz_mul(bnFixedInverse, bnFixedInverse, *pbnTwoInverse); // for next number in chain
+				for (nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += uP)
+					psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
+			}
+			for (nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += uP)
+				psieve->vfCompositeBiTwin[nVariableMultiplier] = true;
+		}
+		// continue loop without the composite_bi_twin
+		for (; nBiTwinSeq < nChainLength2; nBiTwinSeq++)
+		{
+			if((nBiTwinSeq & 1u) == 0)
+			{
+				mpz_mul_ui(p, bnFixedInverse, uP + 1);
+				nSolvedMultiplier = mpz_fdiv_ui(p, uP);
+				for (nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += uP)
+					psieve->vfCompositeCunningham1[nVariableMultiplier] = true;
+			}
+			else
+			{
+				mpz_mul_ui(p, bnFixedInverse, uP - 1);
+				nSolvedMultiplier = mpz_fdiv_ui(p, uP);
+				mpz_mul(bnFixedInverse, bnFixedInverse, *pbnTwoInverse); // for next number in chain
+				for (nVariableMultiplier = nSolvedMultiplier; nVariableMultiplier < psieve->nSieveSize; nVariableMultiplier += uP)
+					psieve->vfCompositeCunningham2[nVariableMultiplier] = true;
+			}
+		}
+	}
+}
+
+#else
+
 // Weave sieve for the next prime in table
 // Return values:
 //   True  - weaved another prime; nComposite - number of composites removed
@@ -414,6 +526,8 @@ bool psieve_Weave(struct SieveOfEratosthenes *psieve)
 	return true;
 }
 
+#endif
+
 static
 bool psieve_GetNextCandidateMultiplier(struct SieveOfEratosthenes *psieve, unsigned int *pnVariableMultiplier)
 {
@@ -466,6 +580,9 @@ unsigned psieve_GetProgressPercentage(struct SieveOfEratosthenes *psieve)
 // Mine probable prime chain of form: n = h * p# +/- 1
 bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *psieve, const uint8_t *header, mpz_t *hash, mpz_t *bnFixedMultiplier, bool *pfNewBlock, unsigned *pnTriedMultiplier, unsigned *pnProbableChainLength, unsigned *pnTests, unsigned *pnPrimesHit, struct work *work)
 {
+#ifdef USE_WEAVE_CHEMISIST
+	struct prime_longterms *pl = get_prime_longterms();
+#endif
 	const uint32_t *pnbits = (void*)&header[72];
 	*pnProbableChainLength = 0;
 	*pnTests = 0;
@@ -479,6 +596,9 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 	*pfNewBlock = false;
 
 	int64_t nStart, nCurrent; // microsecond timer
+#ifdef USE_WEAVE_CHEMISIST
+	int64_t nSearch;
+#endif
 	if (!psieve->valid)
 	{
 		// Build sieve
@@ -491,8 +611,12 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 		fprintf(stderr, ")\n");
 #endif
 		psieve_init(psieve, nMaxSieveSize, *pnbits, hash, bnFixedMultiplier);
+#ifdef USE_WEAVE_CHEMISIST
+		Weave_Chemisist(thr, psieve);
+#else
 		while (psieve_Weave(psieve))
-			if (unlikely(!thr->work_restart))
+#endif
+			if (unlikely(thr->work_restart))
 			{
 				applog(LOG_DEBUG, "MineProbablePrimeChain() : weaved interrupted by work restart");
 				return false;
@@ -506,9 +630,13 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 	nStart = GetTimeMicros();
 	nCurrent = nStart;
 
+#ifdef USE_WEAVE_CHEMISIST
+	while (nCurrent - nStart < pl->sieveBuildTime * 3 && nCurrent >= nStart)
+#else
 	while (nCurrent - nStart < 10000 && nCurrent >= nStart)
+#endif
 	{
-		if (unlikely(!thr->work_restart))
+		if (unlikely(thr->work_restart))
 		{
 			applog(LOG_DEBUG, "MineProbablePrimeChain() : interrupted by work restart");
 			return false;
@@ -519,6 +647,15 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 			// power tests completed for the sieve
 			psieve_reset(psieve);
 			*pfNewBlock = true; // notify caller to change nonce
+#ifdef USE_WEAVE_CHEMISIST
+			++pl->completed;
+			nSearch = GetTimeMicros() - nStart;
+			if (nSearch < pl->sieveBuildTime)
+				pl->sieveBuildTime *= 0.99;
+			else
+				pl->sieveBuildTime *= 1.01;
+			applog(LOG_DEBUG, "%u ms (Timers: num power tests completed: %u\n", (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
+#endif
 			mpz_clear(bnChainOrigin);
 			return false;
 		}
@@ -586,6 +723,11 @@ bool MineProbablePrimeChain(struct thr_info *thr, struct SieveOfEratosthenes *ps
 		nCurrent = GetTimeMicros();
 	}
 	mpz_clear(bnChainOrigin);
+#ifdef USE_WEAVE_CHEMISIST
+	++pl->timeouts;
+	pl->sieveBuildTime *= 1.025;
+	applog(LOG_DEBUG, "%u ms (Timers: num total time outs: %u\n", (unsigned int) (GetTimeMicros() - nStart)/1000, pl->completed);
+#endif
 	return false; // stop as timed out
 }
 
@@ -602,18 +744,6 @@ void set_mpz_to_hash(mpz_t *hash, const uint8_t *hashb)
 	mpz_import(*hash, 8, -1, 4, -1, 0, hashb);
 }
 
-struct prime_longterms {
-	unsigned int nPrimorialHashFactor;
-	int64_t nTimeExpected;   // time expected to prime chain (micro-second)
-	int64_t nTimeExpectedPrev; // time expected to prime chain last time
-	bool fIncrementPrimorial; // increase or decrease primorial factor
-	unsigned current_prime;
-	int64_t nHPSTimerStart;
-	int64_t nLogTime;
-	int64_t nPrimeCounter;
-	int64_t nTestCounter;
-};
-
 static
 struct prime_longterms *get_prime_longterms()
 {
@@ -628,6 +758,9 @@ struct prime_longterms *get_prime_longterms()
 			.fIncrementPrimorial = true,
 			.current_prime = 3,  // index 3 is prime number 7
 			.nHPSTimerStart = GetTimeMillis(),
+#ifdef USE_WEAVE_CHEMISIST
+			.sieveBuildTime = 400000,
+#endif
 		};
 	}
 	return pl;

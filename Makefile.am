@@ -117,7 +117,7 @@ endif
 
 bfgminer_SOURCES += prime.c
 bfgminer_LDADD += -lgmp
-bfgminer_CPPFLAGS += -DWANT_PRIMEPOW
+bfgminer_CPPFLAGS += -DWANT_PRIMEPOW -DUSE_WEAVE_CHEMISIST
 
 if HAS_CPUMINE
 bfgminer_SOURCES	+= \
