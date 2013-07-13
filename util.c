@@ -1111,6 +1111,23 @@ void _now_gettimeofday(struct timeval *tv)
 #endif
 }
 
+#ifdef WIN32
+static LARGE_INTEGER _perffreq;
+
+static
+void _now_queryperformancecounter(struct timeval *tv)
+{
+	LARGE_INTEGER now;
+	if (unlikely(!QueryPerformanceCounter(&now)))
+		quit(1, "QueryPerformanceCounter failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = now.QuadPart / _perffreq.QuadPart,
+		.tv_usec = (now.QuadPart % _perffreq.QuadPart) * 1000000 / _perffreq.QuadPart,
+	};
+}
+#endif
+
 static
 void _now_is_not_set(__maybe_unused struct timeval *tv)
 {
@@ -1125,8 +1142,18 @@ void bfg_init_time()
 	if (timer_set_now != _now_is_not_set)
 		return;
 	
-	timer_set_now = _now_gettimeofday;
-	applog(LOG_DEBUG, "Timers: Using gettimeofday");
+#ifdef WIN32
+	if (QueryPerformanceFrequency(&_perffreq) && _perffreq.QuadPart)
+	{
+		timer_set_now = _now_queryperformancecounter;
+		applog(LOG_DEBUG, "Timers: Using QueryPerformanceCounter");
+	}
+	else
+#endif
+	{
+		timer_set_now = _now_gettimeofday;
+		applog(LOG_DEBUG, "Timers: Using gettimeofday");
+	}
 }
 
 void subtime(struct timeval *a, struct timeval *b)
