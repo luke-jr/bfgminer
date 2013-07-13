@@ -888,7 +888,7 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		if (thr->cgpu != cgpu)
 			continue;
 		
-		get_datestamp(checkin, thr->last.tv_sec);
+		get_datestamp(checkin, time(NULL) - timer_elapsed(&thr->last, NULL));
 		displayed_rolling = thr->rolling;
 		if (!mhash_base)
 			displayed_rolling *= 1000;

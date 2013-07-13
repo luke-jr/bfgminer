@@ -3160,9 +3160,11 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	int thr_id = work->thr_id;
 	struct pool *pool = work->pool;
 	struct timeval tv_submit_reply;
+	time_t ts_submit_reply;
 	char worktime[200] = "";
 
 	cgtime(&tv_submit_reply);
+	ts_submit_reply = time(NULL);
 
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
@@ -3195,9 +3197,9 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			double submit_time = tdiff(&tv_submit_reply, ptv_submit);
 			int diffplaces = 3;
 
-			localtime_r(&(work->tv_getwork.tv_sec), tm);
+			localtime_r(&work->ts_getwork, tm);
 			memcpy(&tm_getwork, tm, sizeof(struct tm));
-			localtime_r(&(tv_submit_reply.tv_sec), tm);
+			localtime_r(&ts_submit_reply, tm);
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
@@ -9476,7 +9478,7 @@ begin_bench:
 		localtime_r(&miner_start_ts, &schedstart.tm);
 	if (schedstop.tm.tm_sec)
 		localtime_r(&miner_start_ts, &schedstop .tm);
-	get_datestamp(datestamp, total_tv_start.tv_sec);
+	get_datestamp(datestamp, miner_start_ts);
 
 	// Initialise processors and threads
 	k = 0;

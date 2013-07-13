@@ -1239,6 +1239,7 @@ struct work {
 	bool		do_foreign_submit;
 
 	struct timeval	tv_getwork;
+	time_t		ts_getwork;
 	struct timeval	tv_getwork_reply;
 	struct timeval	tv_cloned;
 	struct timeval	tv_work_start;
