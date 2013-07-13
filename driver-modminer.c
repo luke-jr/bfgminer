@@ -64,7 +64,7 @@ struct modminer_fpga_state {
 	// Number of nonces did meet pdiff 1, ever
 	int good_share_counter;
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
 	unsigned char temp;
 
@@ -484,9 +484,10 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 		state->temp = temperature;
 		if (temperature > modminer->targettemp + opt_hysteresis) {
 			{
-				time_t now = time(NULL);
-				if (state->last_cutoff_reduced != now) {
-					state->last_cutoff_reduced = now;
+				struct timeval now;
+				cgtime(&now);
+				if (timer_elapsed(&state->tv_last_cutoff_reduced, &now)) {
+					state->tv_last_cutoff_reduced = now;
 					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
 						applog(LOG_NOTICE, "%s: Frequency %s from %u to %u MHz (temp: %d)",

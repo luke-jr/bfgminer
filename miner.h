@@ -543,6 +543,7 @@ struct cgpu_info {
 
 	time_t device_last_well;
 	time_t device_last_not_well;
+	struct timeval tv_device_last_not_well;
 	enum dev_reason device_not_well_reason;
 	float reinit_backoff;
 	int thread_fail_init_count;
@@ -1072,7 +1073,7 @@ struct stratum_work {
 	double diff;
 
 	bool transparency_probed;
-	time_t transparency_time;
+	struct timeval tv_transparency;
 	bool opaque;
 };
 
@@ -1144,6 +1145,7 @@ struct pool {
 	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_work_time;
+	struct timeval tv_last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;

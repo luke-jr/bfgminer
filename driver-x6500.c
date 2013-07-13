@@ -200,7 +200,7 @@ struct x6500_fpga_data {
 	uint8_t freqMaxMaxM;
 
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
 	float temp;
 	
@@ -498,9 +498,10 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 
 		int temperature = round(fpga->temp);
 		if (temperature > x6500->targettemp + opt_hysteresis) {
-			time_t now = time(NULL);
-			if (fpga->last_cutoff_reduced != now) {
-				fpga->last_cutoff_reduced = now;
+			struct timeval now;
+			cgtime(&now);
+			if (timer_elapsed(&fpga->tv_last_cutoff_reduced, &now)) {
+				fpga->tv_last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
 					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",

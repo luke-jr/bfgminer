@@ -1503,8 +1503,8 @@ void stratum_probe_transparency(struct pool *pool)
 	        pool->swork.job_id,
 	        pool->swork.job_id);
 	stratum_send(pool, s, sLen);
-	if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
-		pool->swork.transparency_time = time(NULL);
+	if ((!pool->swork.opaque) && !timer_isset(&pool->swork.tv_transparency))
+		cgtime(&pool->swork.tv_transparency);
 	pool->swork.transparency_probed = true;
 }
 
@@ -1590,7 +1590,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 
-	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
+	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || timer_isset(&pool->swork.tv_transparency))
 		if (pool->stratum_init)
 			stratum_probe_transparency(pool);
 
@@ -1839,7 +1839,7 @@ static bool setup_stratum_curl(struct pool *pool)
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
-	pool->swork.transparency_time = (time_t)-1;
+	timer_unset(&pool->swork.tv_transparency);
 	pool->stratum_active = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
@@ -2099,6 +2099,7 @@ bool restart_stratum(struct pool *pool)
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
+	cgtime(&dev->tv_device_last_not_well);
 	dev->device_not_well_reason = reason;
 
 	switch (reason) {

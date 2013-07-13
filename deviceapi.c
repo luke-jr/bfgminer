@@ -37,8 +37,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	const long cycle = opt_log_interval / 5 ? : 1;
 	
 	if (unlikely(hashes == -1)) {
-		time_t now = time(NULL);
-		if (difftime(now, cgpu->device_last_not_well) > 1.)
+		if (timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > 0)
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
 		
 		if (thr->scanhash_working && opt_restart) {

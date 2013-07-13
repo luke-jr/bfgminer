@@ -211,6 +211,18 @@ void set_maxfd(int *p_maxfd, int fd)
 }
 
 
+static inline
+void timer_unset(struct timeval *tvp)
+{
+	tvp->tv_sec = -1;
+}
+
+static inline
+bool timer_isset(const struct timeval *tvp)
+{
+	return tvp->tv_sec != -1;
+}
+
 #define TIMEVAL_USECS(usecs)  (  \
 	(struct timeval){  \
 		.tv_sec = (usecs) / 1000000,  \
@@ -230,24 +242,48 @@ void set_maxfd(int *p_maxfd, int fd)
 } while(0)
 
 static inline
-bool timer_passed(struct timeval *tvp_timer, struct timeval *tvp_now)
+const struct timeval *_bfg_nullisnow(const struct timeval *tvp, struct timeval *tvp_buf)
 {
-	return (tvp_timer->tv_sec != -1 && timercmp(tvp_timer, tvp_now, <));
+	if (tvp)
+		return tvp;
+	cgtime(tvp_buf);
+	return tvp_buf;
+}
+
+static inline
+int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(_tvp_now, tvp_timer, &tv);
+	return tv.tv_sec;
+}
+
+static inline
+bool timer_passed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	if (!timer_isset(tvp_timer))
+		return false;
+	
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	
+	return timercmp(tvp_timer, _tvp_now, <);
 }
 
 static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 {
-	if (tvp_time->tv_sec == -1)
+	if (!timer_isset(tvp_time))
 		return;
-	if (tvp_timeout->tv_sec == -1 /* no timeout */ || timercmp(tvp_time, tvp_timeout, <))
+	if ((!timer_isset(tvp_timeout)) || timercmp(tvp_time, tvp_timeout, <))
 		*tvp_timeout = *tvp_time;
 }
 
 static inline
 struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_now)
 {
-	if (tvp_timeout->tv_sec == -1)
+	if (!timer_isset(tvp_timeout))
 		return NULL;
 	
 	if (timercmp(tvp_timeout, tvp_now, <))
