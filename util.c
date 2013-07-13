@@ -1098,18 +1098,35 @@ void nusleep(unsigned int usecs)
 #endif
 }
 
-/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
- * with tz set to NULL, and windows' default resolution is only 15ms, this
- * gives us higher resolution times on windows. */
-void cgtime(struct timeval *tv)
+static
+void _now_gettimeofday(struct timeval *tv)
 {
 #ifdef WIN32
+	// Windows' default resolution is only 15ms. This requests 1ms.
 	timeBeginPeriod(1);
 #endif
 	gettimeofday(tv, NULL);
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
+}
+
+static
+void _now_is_not_set(__maybe_unused struct timeval *tv)
+{
+	// Might be unclean to swap algorithms after getting a timer
+	quit(1, "timer_set_now called before bfg_init_time");
+}
+
+void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
+
+void bfg_init_time()
+{
+	if (timer_set_now != _now_is_not_set)
+		return;
+	
+	timer_set_now = _now_gettimeofday;
+	applog(LOG_DEBUG, "Timers: Using gettimeofday");
 }
 
 void subtime(struct timeval *a, struct timeval *b)
