@@ -18,6 +18,8 @@
 
 #include "compat.h"
 
+#define INVALID_TIMESTAMP ((time_t)-1)
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <sys/socket.h>

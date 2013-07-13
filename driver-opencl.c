@@ -888,7 +888,7 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		if (thr->cgpu != cgpu)
 			continue;
 		
-		get_datestamp(checkin, &thr->last);
+		get_datestamp(checkin, thr->last.tv_sec);
 		displayed_rolling = thr->rolling;
 		if (!mhash_base)
 			displayed_rolling *= 1000;
@@ -1251,7 +1251,6 @@ void *reinit_gpu(void *userdata)
 	struct thr_info *mythr = userdata;
 	struct cgpu_info *cgpu, *sel_cgpu;
 	struct thr_info *thr;
-	struct timeval now;
 	char name[256];
 	int thr_id;
 	int i;
@@ -1317,8 +1316,7 @@ select_cgpu:
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
 
-	cgtime(&now);
-	get_datestamp(sel_cgpu->init, &now);
+	get_now_datestamp(sel_cgpu->init);
 
 	proc_enable(cgpu);
 
@@ -1500,7 +1498,6 @@ static uint32_t *blank_res;
 static bool opencl_thread_prepare(struct thr_info *thr)
 {
 	char name[256];
-	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	int gpu = cgpu->device_id;
 	int virtual_gpu = cgpu->virtual_gpu;
@@ -1571,8 +1568,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
-	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
+	get_now_datestamp(cgpu->init);
 
 	have_opencl = true;
 

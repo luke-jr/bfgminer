@@ -69,25 +69,26 @@ void _applog(int prio, const char *str)
 			return;
 
 		char datetime[64];
-		struct timeval tv = {0, 0};
-		struct tm _tm;
-		struct tm *tm = &_tm;
-
-		cgtime(&tv);
-
-		localtime_r(&tv.tv_sec, tm);
 
 		if (opt_log_microseconds)
+		{
+			struct timeval tv;
+			struct tm tm;
+			
+			cgtime(&tv);
+			localtime_r(&tv.tv_sec, &tm);
+			
 			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec,
+				tm.tm_year + 1900,
+				tm.tm_mon + 1,
+				tm.tm_mday,
+				tm.tm_hour,
+				tm.tm_min,
+				tm.tm_sec,
 				(long)tv.tv_usec);
+		}
 		else
-			get_datestamp(datetime, &tv);
+			get_now_datestamp(datetime);
 
 		/* Only output to stderr if it's not going to the screen as well */
 		if (writetofile) {

@@ -339,12 +339,10 @@ get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 
 static bool ztex_prepare(struct thr_info *thr)
 {
-	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
+	get_now_datestamp(cgpu->init);
 	
 	{
 		char fpganame[LIBZTEX_SNSTRING_LEN+3+1];

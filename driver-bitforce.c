@@ -356,7 +356,6 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = BFopen(bitforce->device_path);
-	struct timeval now;
 
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
@@ -366,8 +365,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-	cgtime(&now);
-	get_datestamp(bitforce->init, &now);
+	get_now_datestamp(bitforce->init);
 
 	return true;
 }

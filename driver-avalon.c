@@ -662,7 +662,6 @@ static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
-	struct timeval now;
 
 	free(avalon->works);
 	avalon->works = calloc(info->miner_count * sizeof(struct work *),
@@ -674,8 +673,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	else
 		__avalon_init(avalon);
 
-	cgtime(&now);
-	get_datestamp(avalon->init, &now);
+	get_now_datestamp(avalon->init);
 	avalon->status = LIFE_INIT2;
 	return true;
 }
