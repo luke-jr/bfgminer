@@ -1137,11 +1137,50 @@ void _now_is_not_set(__maybe_unused struct timeval *tv)
 
 void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
 
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+static clockid_t bfg_timer_clk;
+
+static
+void _now_clock_gettime(struct timeval *tv)
+{
+	struct timespec ts;
+	if (unlikely(clock_gettime(bfg_timer_clk, &ts)))
+		quit(1, "clock_gettime failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = ts.tv_sec,
+		.tv_usec = ts.tv_nsec / 1000,
+	};
+}
+
+static
+bool _bfg_try_clock_gettime(clockid_t clk)
+{
+	struct timespec ts;
+	if (clock_gettime(clk, &ts))
+		return false;
+	
+	bfg_timer_clk = clk;
+	timer_set_now = _now_clock_gettime;
+	return true;
+}
+#endif
+
 void bfg_init_time()
 {
 	if (timer_set_now != _now_is_not_set)
 		return;
 	
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC_RAW
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC_RAW))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC_RAW)");
+	else
+#endif
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+	else
+#endif
 #ifdef WIN32
 	if (QueryPerformanceFrequency(&_perffreq) && _perffreq.QuadPart)
 	{
