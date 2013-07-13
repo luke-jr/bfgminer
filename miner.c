@@ -2851,7 +2851,7 @@ bool log_curses_only(int prio, const char *datetime, const char *str)
 
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
-			wprintw(logwin, "%s%s\n", datetime, str);
+			wprintw(logwin, " %s %s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);

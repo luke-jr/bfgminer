@@ -41,7 +41,7 @@ static void my_log_curses(int prio, const char *datetime, const char *str)
 		bool scs;
 		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
 		mutex_lock(&console_lock);
-		printf("%s%s%s", datetime, str, "                    \n");
+		printf(" %s %s%s", datetime, str, "                    \n");
 		mutex_unlock(&console_lock);
 		if (scs)
 			pthread_setcancelstate(cancelstate, &cancelstate);
@@ -78,7 +78,7 @@ void _applog(int prio, const char *str)
 		localtime_r(&tv.tv_sec, tm);
 
 		if (opt_log_microseconds)
-			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d.%06ld] ",
+			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
 				tm->tm_year + 1900,
 				tm->tm_mon + 1,
 				tm->tm_mday,
@@ -87,17 +87,11 @@ void _applog(int prio, const char *str)
 				tm->tm_sec,
 				(long)tv.tv_usec);
 		else
-			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d] ",
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec);
+			get_datestamp(datetime, &tv);
 
 		/* Only output to stderr if it's not going to the screen as well */
 		if (writetofile) {
-			fprintf(stderr, "%s%s\n", datetime, str);	/* atomic write to stderr */
+			fprintf(stderr, " %s %s\n", datetime, str);	/* atomic write to stderr */
 			fflush(stderr);
 		}
 
