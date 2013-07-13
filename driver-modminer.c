@@ -592,7 +592,7 @@ fd_set fds;
 
 	if (46 != write(fd, state->next_work_cmd, 46))
 		bailout2(LOG_ERR, "%s: Error writing (start work)", modminer->proc_repr);
-	gettimeofday(&state->tv_workstart, NULL);
+	timer_set_now(&state->tv_workstart);
 	state->hashes = 0;
 	status_read("start work");
 	mutex_unlock(mutexp);
@@ -673,7 +673,7 @@ modminer_process_results(struct thr_info*thr)
 	}
 
 	struct timeval tv_workend, elapsed;
-	gettimeofday(&tv_workend, NULL);
+	timer_set_now(&tv_workend);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
 	uint64_t hashes = (uint64_t)state->dclk.freqM * 2 * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);

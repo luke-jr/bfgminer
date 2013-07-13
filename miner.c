@@ -2644,7 +2644,7 @@ static void curses_print_status(void)
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
-	if (!gettimeofday(&now, NULL))
+	timer_set_now(&now);
 	{
 		unsigned int days, hours;
 		div_t d;

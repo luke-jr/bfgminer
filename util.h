@@ -223,6 +223,8 @@ bool timer_isset(const struct timeval *tvp)
 	return tvp->tv_sec != -1;
 }
 
+#define timer_set_now(tvp)  cgtime(tvp)
+
 #define TIMEVAL_USECS(usecs)  (  \
 	(struct timeval){  \
 		.tv_sec = (usecs) / 1000000,  \
@@ -237,7 +239,7 @@ bool timer_isset(const struct timeval *tvp)
 
 #define timer_set_delay_from_now(tvp_timer, usecs)  do {  \
 	struct timeval tv_now;  \
-	gettimeofday(&tv_now, NULL);  \
+	timer_set_now(&tv_now);  \
 	timer_set_delay(tvp_timer, &tv_now, usecs);  \
 } while(0)
 

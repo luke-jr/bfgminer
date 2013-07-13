@@ -638,7 +638,7 @@ void x6500_job_start(struct thr_info *thr)
 
 	ft232r_flush(jp->a->ftdi);
 
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	if (!thr->prev_work)
 		fpga->tv_hashstart = tv_now;
 	else
@@ -694,7 +694,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		nonce = x6500_get_register(jtag, 0xE);
 		if (nonce != 0xffffffff) {
 			bad = !(work && test_nonce(work, nonce, false));
