@@ -69,9 +69,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j, int fpgac
 	ztex->procs = fpgacount;
 	ztex->threads = fpgacount;
 	dev->fpgaNum = j;
+	ztex->name = fpganame;
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->proc_repr);
-	ztex->name = fpganame;
 	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->dev_repr, fpganame);
 
 	return ztex;
