@@ -746,10 +746,19 @@ void x6500_fpga_poll(struct thr_info *thr)
 }
 
 static
+void x6500_user_set_clock(struct cgpu_info *cgpu, const int val)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	const int multiplier = val / 2;
+	fpga->dclk.freqMDefault = multiplier;
+}
+
+static
 char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
 {
 	int val;
-
+	
 	if (strcasecmp(option, "help") == 0) {
 		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
 		        X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
@@ -757,8 +766,6 @@ char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char
 	}
 	
 	if (strcasecmp(option, "clock") == 0) {
-		int multiplier;
-		
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing clock setting");
 			return replybuf;
@@ -771,10 +778,7 @@ char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char
 			return replybuf;
 		}
 		
-		multiplier = val / 2;
-		struct thr_info *thr = cgpu->thr[0];
-		struct x6500_fpga_data *fpga = thr->cgpu_data;
-		fpga->dclk.freqMDefault = multiplier;
+		x6500_user_set_clock(cgpu, val);
 		
 		return NULL;
 	}
@@ -782,6 +786,49 @@ char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
+
+#ifdef HAVE_CURSES
+static
+void x6500_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *x6500_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	static char buf[0x100];  // Static for replies
+	
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set clock speed (range %d-%d, multiple of 2)", X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid clock speed\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < X6500_MINIMUM_CLOCK || val > X6500_MAXIMUM_CLOCK || (val & 1) != 0)
+				return "Invalid clock speed\n";
+			
+			x6500_user_set_clock(cgpu, val);
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void x6500_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct x6500_fpga_data *fpga = cgpu->thr[0]->cgpu_data;
+	wlogprint("Clock speed: %d\n", (int)(fpga->dclk.freqM * 2));
+}
+#endif
 
 struct device_drv x6500_api = {
 	.dname = "x6500",
@@ -793,6 +840,11 @@ struct device_drv x6500_api = {
 	.override_statline_temp = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.set_device = x6500_set_device,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = x6500_wlogprint_status,
+	.proc_tui_wlogprint_choices = x6500_tui_wlogprint_choices,
+	.proc_tui_handle_choice = x6500_tui_handle_choice,
+#endif
 	.poll = x6500_fpga_poll,
 	.minerloop = minerloop_async,
 	.job_prepare = x6500_job_prepare,
