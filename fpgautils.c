@@ -643,7 +643,10 @@ void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
 	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
 		return;
 	if (libusb_get_device_descriptor(usb, &desc))
+	{
+		libusb_close(h);
 		return;
+	}
 	
 	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
 		cgpu->dev_manufacturer = strdup((void *)buf);
@@ -651,6 +654,8 @@ void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
 		cgpu->dev_product = strdup((void *)buf);
 	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
 		cgpu->dev_serial = strdup((void *)buf);
+	
+	libusb_close(h);
 }
 #endif
 
