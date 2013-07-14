@@ -61,9 +61,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int j, int fpgac
 	ztex->procs = fpgacount;
 	ztex->threads = fpgacount;
 	dev->fpgaNum = j;
+	ztex->name = fpganame;
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->proc_repr);
-	ztex->name = fpganame;
 	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->dev_repr, fpganame);
 
 	return ztex;
@@ -363,7 +363,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	}
 	
 	{
-		char fpganame[LIBZTEX_SNSTRING_LEN+3+1];
+		char *fpganame = malloc(LIBZTEX_SNSTRING_LEN+3+1);
 		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);
 		cgpu->name = fpganame;
 	}
