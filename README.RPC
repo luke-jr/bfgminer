@@ -351,7 +351,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               help message about the options available
 
                               The current options are:
-                               MMQ opt=clock val=2 to 230 (and a multiple of 2)
+                               MMQ opt=clock val=2 to 250 (and a multiple of 2)
+                               XBS opt=clock val=2 to 250 (and a multiple of 2)
 
  zero|Which,true/false (*)
                none           There is no reply section just the STATUS section
@@ -413,6 +414,13 @@ api-example.py - a Python script to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.25.2
+
+Modified API commands:
+ 'pgaset' - added: XBS opt=clock val=2 to 250 (and a multiple of 2)
+
+----------
 
 API V1.25.1 (BFGMiner v3.1.2)
 

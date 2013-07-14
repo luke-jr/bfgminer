@@ -1,5 +1,6 @@
 /*
  * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -13,6 +14,7 @@
 #include <winsock2.h>
 #endif
 
+#include <limits.h>
 #include <math.h>
 #include <sys/time.h>
 
@@ -743,6 +745,44 @@ void x6500_fpga_poll(struct thr_info *thr)
 		timer_set_delay_from_now(&thr->tv_poll, 10000);
 }
 
+static
+char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
+{
+	int val;
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
+		        X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+		return replybuf;
+	}
+	
+	if (strcasecmp(option, "clock") == 0) {
+		int multiplier;
+		
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+		
+		val = atoi(setting);
+		if (val < X6500_MINIMUM_CLOCK || val > X6500_MAXIMUM_CLOCK || (val & 1) != 0) {
+			sprintf(replybuf, "invalid clock: '%s' valid range %d-%d and a multiple of 2",
+			        setting, X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+			return replybuf;
+		}
+		
+		multiplier = val / 2;
+		struct thr_info *thr = cgpu->thr[0];
+		struct x6500_fpga_data *fpga = thr->cgpu_data;
+		fpga->dclk.freqMDefault = multiplier;
+		
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 struct device_drv x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
@@ -752,6 +792,7 @@ struct device_drv x6500_api = {
 	.get_stats = x6500_get_stats,
 	.override_statline_temp = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
+	.set_device = x6500_set_device,
 	.poll = x6500_fpga_poll,
 	.minerloop = minerloop_async,
 	.job_prepare = x6500_job_prepare,
