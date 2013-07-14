@@ -198,8 +198,6 @@ struct x6500_fpga_data {
 	// Time the clock was last reduced due to temperature
 	time_t last_cutoff_reduced;
 
-	float temp;
-	
 	uint32_t prepwork_last_register;
 };
 
@@ -482,15 +480,16 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 		if (!fpga) continue;
 
 		if (code[i] == 0xffff || !code[i]) {
-			fpga->temp = 0;
+			x6500->temp = 0;
 			continue;
 		}
 		if ((code[i] >> 15) & 1)
 			code[i] -= 0x10000;
-		fpga->temp = (float)(code[i] >> 2) * 0.03125f;
-		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",i,fpga->temp);
+		x6500->temp = (float)(code[i] >> 2) * 0.03125f;
+		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",
+		       i, x6500->temp);
 
-		int temperature = round(fpga->temp);
+		int temperature = round(x6500->temp);
 		if (temperature > x6500->targettemp + opt_hysteresis) {
 			time_t now = time(NULL);
 			if (fpga->last_cutoff_reduced != now) {
@@ -500,7 +499,7 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",
 					       x6500->proc_repr,
 					       oldFreq * 2, fpga->dclk.freqM * 2,
-					       fpga->temp
+					       x6500->temp
 					);
 				fpga->dclk.freqMaxM = fpga->dclk.freqM;
 			}
@@ -528,7 +527,6 @@ bool x6500_all_idle(struct cgpu_info *any_proc)
 
 static bool x6500_get_stats(struct cgpu_info *x6500)
 {
-	float hottest = 0;
 	if (x6500_all_idle(x6500)) {
 		struct cgpu_info *cgpu = x6500->device;
 		// Getting temperature more efficiently while running
@@ -540,18 +538,6 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 		pthread_cond_signal(&cgpu->device_cond);
 		mutex_unlock(mutexp);
 	}
-
-	for (int i = x6500->threads; i--; ) {
-		struct thr_info *thr = x6500->thr[i];
-		struct x6500_fpga_data *fpga = thr->cgpu_data;
-		if (!fpga)
-			continue;
-		float temp = fpga->temp;
-		if (temp > hottest)
-			hottest = temp;
-	}
-
-	x6500->temp = hottest;
 
 	return true;
 }
@@ -578,10 +564,9 @@ void get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
 		return;
 
 	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
 
-	if (fpga->temp) {
-		sprintf(&info[1], "%.1fC", fpga->temp);
+	if (x6500->temp) {
+		sprintf(&info[1], "%.1fC", x6500->temp);
 		info[strlen(info)] = ' ';
 		strcat(buf, info);
 		return;
@@ -596,8 +581,8 @@ void get_x6500_dev_statline_before(char *buf, struct cgpu_info *x6500)
 		return;
 
 	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
-	struct x6500_fpga_data *fpga1 = x6500->next_proc->thr[0]->cgpu_data;
+	struct cgpu_info *fpga0 = x6500;
+	struct cgpu_info *fpga1 = x6500->next_proc;
 
 	if (x6500->temp) {
 		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
@@ -616,8 +601,6 @@ get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	double d;
 
-	if (fpga->temp)
-		root = api_add_temp(root, "Temperature", &fpga->temp, true);
 	d = (double)fpga->dclk.freqM * 2;
 	root = api_add_freq(root, "Frequency", &d, true);
 	d = (double)fpga->dclk.freqMaxM * 2;
