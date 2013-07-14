@@ -1098,17 +1098,144 @@ void nusleep(unsigned int usecs)
 #endif
 }
 
-/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
- * with tz set to NULL, and windows' default resolution is only 15ms, this
- * gives us higher resolution times on windows. */
-void cgtime(struct timeval *tv)
+static
+void _now_gettimeofday(struct timeval *tv)
 {
 #ifdef WIN32
+	// Windows' default resolution is only 15ms. This requests 1ms.
 	timeBeginPeriod(1);
 #endif
 	gettimeofday(tv, NULL);
 #ifdef WIN32
 	timeEndPeriod(1);
+#endif
+}
+
+#ifdef HAVE_POOR_GETTIMEOFDAY
+static struct timeval tv_timeofday_offset;
+static struct timeval _tv_timeofday_lastchecked;
+static pthread_mutex_t _tv_timeofday_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static
+void bfg_calibrate_timeofday(struct timeval *expected, char *buf)
+{
+	struct timeval actual, delta;
+	timeradd(expected, &tv_timeofday_offset, expected);
+	_now_gettimeofday(&actual);
+	if (expected->tv_sec >= actual.tv_sec - 1 && expected->tv_sec <= actual.tv_sec + 1)
+		// Within reason - no change necessary
+		return;
+	
+	timersub(&actual, expected, &delta);
+	timeradd(&tv_timeofday_offset, &delta, &tv_timeofday_offset);
+	sprintf(buf, "Recalibrating timeofday offset (delta %ld.%06lds)", (long)delta.tv_sec, (long)delta.tv_usec);
+	*expected = actual;
+}
+
+void bfg_gettimeofday(struct timeval *out)
+{
+	char buf[64] = "";
+	timer_set_now(out);
+	mutex_lock(&_tv_timeofday_mutex);
+	if (_tv_timeofday_lastchecked.tv_sec < out->tv_sec - 21)
+		bfg_calibrate_timeofday(out, buf);
+	else
+		timeradd(out, &tv_timeofday_offset, out);
+	mutex_unlock(&_tv_timeofday_mutex);
+	if (unlikely(buf[0]))
+		applog(LOG_WARNING, "%s", buf);
+}
+#endif
+
+#ifdef WIN32
+static LARGE_INTEGER _perffreq;
+
+static
+void _now_queryperformancecounter(struct timeval *tv)
+{
+	LARGE_INTEGER now;
+	if (unlikely(!QueryPerformanceCounter(&now)))
+		quit(1, "QueryPerformanceCounter failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = now.QuadPart / _perffreq.QuadPart,
+		.tv_usec = (now.QuadPart % _perffreq.QuadPart) * 1000000 / _perffreq.QuadPart,
+	};
+}
+#endif
+
+static
+void _now_is_not_set(__maybe_unused struct timeval *tv)
+{
+	// Might be unclean to swap algorithms after getting a timer
+	quit(1, "timer_set_now called before bfg_init_time");
+}
+
+void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
+
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+static clockid_t bfg_timer_clk;
+
+static
+void _now_clock_gettime(struct timeval *tv)
+{
+	struct timespec ts;
+	if (unlikely(clock_gettime(bfg_timer_clk, &ts)))
+		quit(1, "clock_gettime failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = ts.tv_sec,
+		.tv_usec = ts.tv_nsec / 1000,
+	};
+}
+
+static
+bool _bfg_try_clock_gettime(clockid_t clk)
+{
+	struct timespec ts;
+	if (clock_gettime(clk, &ts))
+		return false;
+	
+	bfg_timer_clk = clk;
+	timer_set_now = _now_clock_gettime;
+	return true;
+}
+#endif
+
+void bfg_init_time()
+{
+	if (timer_set_now != _now_is_not_set)
+		return;
+	
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC_RAW
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC_RAW))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC_RAW)");
+	else
+#endif
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+	else
+#endif
+#ifdef WIN32
+	if (QueryPerformanceFrequency(&_perffreq) && _perffreq.QuadPart)
+	{
+		timer_set_now = _now_queryperformancecounter;
+		applog(LOG_DEBUG, "Timers: Using QueryPerformanceCounter");
+	}
+	else
+#endif
+	{
+		timer_set_now = _now_gettimeofday;
+		applog(LOG_DEBUG, "Timers: Using gettimeofday");
+	}
+	
+#ifdef HAVE_POOR_GETTIMEOFDAY
+	char buf[64] = "";
+	struct timeval tv;
+	timer_set_now(&tv);
+	bfg_calibrate_timeofday(&tv, buf);
+	applog(LOG_DEBUG, "%s", buf);
 #endif
 }
 
@@ -1503,8 +1630,8 @@ void stratum_probe_transparency(struct pool *pool)
 	        pool->swork.job_id,
 	        pool->swork.job_id);
 	stratum_send(pool, s, sLen);
-	if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
-		pool->swork.transparency_time = time(NULL);
+	if ((!pool->swork.opaque) && !timer_isset(&pool->swork.tv_transparency))
+		cgtime(&pool->swork.tv_transparency);
 	pool->swork.transparency_probed = true;
 }
 
@@ -1590,7 +1717,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 
-	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
+	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || timer_isset(&pool->swork.tv_transparency))
 		if (pool->stratum_init)
 			stratum_probe_transparency(pool);
 
@@ -1839,7 +1966,7 @@ static bool setup_stratum_curl(struct pool *pool)
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
-	pool->swork.transparency_time = (time_t)-1;
+	timer_unset(&pool->swork.tv_transparency);
 	pool->stratum_active = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
@@ -2099,6 +2226,7 @@ bool restart_stratum(struct pool *pool)
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
+	cgtime(&dev->tv_device_last_not_well);
 	dev->device_not_well_reason = reason;
 
 	switch (reason) {

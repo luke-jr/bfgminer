@@ -64,7 +64,7 @@ struct modminer_fpga_state {
 	// Number of nonces did meet pdiff 1, ever
 	int good_share_counter;
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
 	unsigned char temp;
 
@@ -276,9 +276,7 @@ modminer_device_prepare(struct cgpu_info *modminer)
 	modminer->device->device_fd = fd;
 	applog(LOG_INFO, "%s: Opened %s", modminer->dev_repr, modminer->device_path);
 
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	get_datestamp(modminer->init, &now);
+	get_now_datestamp(modminer->init);
 
 	return true;
 }
@@ -486,9 +484,10 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 		state->temp = temperature;
 		if (temperature > modminer->targettemp + opt_hysteresis) {
 			{
-				time_t now = time(NULL);
-				if (state->last_cutoff_reduced != now) {
-					state->last_cutoff_reduced = now;
+				struct timeval now;
+				cgtime(&now);
+				if (timer_elapsed(&state->tv_last_cutoff_reduced, &now)) {
+					state->tv_last_cutoff_reduced = now;
 					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
 						applog(LOG_NOTICE, "%s: Frequency %s from %u to %u MHz (temp: %d)",
@@ -593,7 +592,7 @@ fd_set fds;
 
 	if (46 != write(fd, state->next_work_cmd, 46))
 		bailout2(LOG_ERR, "%s: Error writing (start work)", modminer->proc_repr);
-	gettimeofday(&state->tv_workstart, NULL);
+	timer_set_now(&state->tv_workstart);
 	state->hashes = 0;
 	status_read("start work");
 	mutex_unlock(mutexp);
@@ -674,7 +673,7 @@ modminer_process_results(struct thr_info*thr)
 	}
 
 	struct timeval tv_workend, elapsed;
-	gettimeofday(&tv_workend, NULL);
+	timer_set_now(&tv_workend);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
 	uint64_t hashes = (uint64_t)state->dclk.freqM * 2 * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);

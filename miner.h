@@ -543,6 +543,7 @@ struct cgpu_info {
 
 	time_t device_last_well;
 	time_t device_last_not_well;
+	struct timeval tv_device_last_not_well;
 	enum dev_reason device_not_well_reason;
 	float reinit_backoff;
 	int thread_fail_init_count;
@@ -1072,7 +1073,7 @@ struct stratum_work {
 	double diff;
 
 	bool transparency_probed;
-	time_t transparency_time;
+	struct timeval tv_transparency;
 	bool opaque;
 };
 
@@ -1144,6 +1145,7 @@ struct pool {
 	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_work_time;
+	struct timeval tv_last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;
@@ -1237,6 +1239,7 @@ struct work {
 	bool		do_foreign_submit;
 
 	struct timeval	tv_getwork;
+	time_t		ts_getwork;
 	struct timeval	tv_getwork_reply;
 	struct timeval	tv_cloned;
 	struct timeval	tv_work_start;
@@ -1248,7 +1251,8 @@ struct work {
 	struct work *next;
 };
 
-extern void get_datestamp(char *, struct timeval *);
+extern void get_datestamp(char *, time_t);
+#define get_now_datestamp(buf)  get_datestamp(buf, INVALID_TIMESTAMP)
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {

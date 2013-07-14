@@ -202,7 +202,7 @@ struct x6500_fpga_data {
 	uint8_t freqMaxMaxM;
 
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
 	uint32_t prepwork_last_register;
 };
@@ -499,9 +499,10 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 
 		int temperature = round(x6500->temp);
 		if (temperature > x6500->targettemp + opt_hysteresis) {
-			time_t now = time(NULL);
-			if (fpga->last_cutoff_reduced != now) {
-				fpga->last_cutoff_reduced = now;
+			struct timeval now;
+			cgtime(&now);
+			if (timer_elapsed(&fpga->tv_last_cutoff_reduced, &now)) {
+				fpga->tv_last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
 					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",
@@ -623,7 +624,7 @@ void x6500_job_start(struct thr_info *thr)
 
 	ft232r_flush(jp->a->ftdi);
 
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	if (!thr->prev_work)
 		fpga->tv_hashstart = tv_now;
 	else
@@ -679,7 +680,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		nonce = x6500_get_register(jtag, 0xE);
 		if (nonce != 0xffffffff) {
 			bad = !(work && test_nonce(work, nonce, false));

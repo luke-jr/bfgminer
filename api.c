@@ -3565,7 +3565,7 @@ void api(int api_thr_id)
 	int n, bound;
 	char *connectaddr;
 	const char *binderror;
-	time_t bindstart;
+	struct timeval bindstart;
 	short int port = opt_api_port;
 	struct sockaddr_in serv;
 	struct sockaddr_in cli;
@@ -3650,11 +3650,11 @@ void api(int api_thr_id)
 
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;
-	bindstart = time(NULL);
+	cgtime(&bindstart);
 	while (bound == 0) {
 		if (SOCKETFAIL(bind(*apisock, (struct sockaddr *)(&serv), sizeof(serv)))) {
 			binderror = SOCKERRMSG;
-			if ((time(NULL) - bindstart) > 61)
+			if (timer_elapsed(&bindstart, NULL) > 61)
 				break;
 			else {
 				applog(LOG_WARNING, "API bind to port %d failed - trying again in 30sec", port);

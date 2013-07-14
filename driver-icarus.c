@@ -645,8 +645,6 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
 
-	struct timeval now;
-
 	icarus->device_fd = -1;
 
 	int fd = icarus_open2(icarus->device_path, info->baud, true);
@@ -659,8 +657,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	icarus->device_fd = fd;
 
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
-	cgtime(&now);
-	get_datestamp(icarus->init, &now);
+	get_now_datestamp(icarus->init);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));

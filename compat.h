@@ -85,7 +85,8 @@ struct tm *localtime_convert(time_t t)
 #endif
 
 #ifndef HAVE_NANOSLEEP
-extern void cgtime(struct timeval *);
+extern void (*timer_set_now)(struct timeval *);
+#define cgtime(tvp)  timer_set_now(tvp)
 
 static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 {
@@ -118,6 +119,8 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 	}
 	return 0;
 }
+
+#undef cgtime
 #endif
 
 #ifdef WIN32

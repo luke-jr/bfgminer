@@ -844,6 +844,35 @@ AC_TRY_COMPILE([
 ])
 
 
+AC_MSG_CHECKING([for clock_gettime(CLOCK_MONOTONIC)])
+AC_TRY_COMPILE([
+	#define _GNU_SOURCE
+	#include <time.h>
+],[
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE([HAVE_CLOCK_GETTIME_MONOTONIC], [1], [Defined to 1 if clock_gettime(CLOCK_MONOTONIC) is defined])
+	AC_SEARCH_LIBS([clock_gettime],[rt posix4])
+	AC_MSG_CHECKING([for clock_gettime(CLOCK_MONOTONIC_RAW)])
+	AC_TRY_COMPILE([
+		#define _GNU_SOURCE
+		#include <time.h>
+	],[
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+	],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE([HAVE_CLOCK_GETTIME_MONOTONIC_RAW], [1], [Defined to 1 if clock_gettime(CLOCK_MONOTONIC_RAW) is defined])
+	],[
+		AC_MSG_RESULT([no])
+	])
+],[
+	AC_MSG_RESULT([no])
+])
+
+
 if test "x$prefix" = xNONE; then
 	prefix=/usr/local
 fi

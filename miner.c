@@ -321,7 +321,6 @@ struct stratum_share {
 	bool block;
 	struct work *work;
 	int id;
-	time_t sshare_time;
 };
 
 static struct stratum_share *stratum_shares = NULL;
@@ -370,15 +369,15 @@ static bool time_before(struct tm *tm1, struct tm *tm2)
 
 static bool should_run(void)
 {
-	struct timeval tv;
 	struct tm tm;
+	time_t tt;
 	bool within_range;
 
 	if (!schedstart.enable && !schedstop.enable)
 		return true;
 
-	cgtime(&tv);
-	localtime_r(&tv.tv_sec, &tm);
+	tt = time(NULL);
+	localtime_r(&tt, &tm);
 
 	// NOTE: This is delicately balanced so that should_run is always false if schedstart==schedstop
 	if (time_before(&schedstop.tm, &schedstart.tm))
@@ -393,12 +392,15 @@ static bool should_run(void)
 	return within_range;
 }
 
-void get_datestamp(char *f, struct timeval *tv)
+void get_datestamp(char *f, time_t tt)
 {
 	struct tm _tm;
 	struct tm *tm = &_tm;
+	
+	if (tt == INVALID_TIMESTAMP)
+		tt = time(NULL);
 
-	localtime_r(&tv->tv_sec, tm);
+	localtime_r(&tt, tm);
 	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
@@ -408,12 +410,12 @@ void get_datestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
-void get_timestamp(char *f, struct timeval *tv)
+void get_timestamp(char *f, time_t tt)
 {
 	struct tm _tm;
 	struct tm *tm = &_tm;
 
-	localtime_r(&tv->tv_sec, tm);
+	localtime_r(&tt, tm);
 	sprintf(f, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
@@ -525,11 +527,12 @@ struct pool *add_pool(void)
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
-	pool->swork.transparency_time = (time_t)-1;
+	timer_unset(&pool->swork.tv_transparency);
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 	
+	bfg_init_time();
 	cgtime(&pool->cgminer_stats.start_tv);
 
 	pool->rpc_proxy = NULL;
@@ -1994,12 +1997,14 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 	
 	if (work->tmpl) {
-		const char *err = blktmpl_add_jansson(work->tmpl, res_val, time(NULL));
+		struct timeval tv_now;
+		cgtime(&tv_now);
+		const char *err = blktmpl_add_jansson(work->tmpl, res_val, tv_now.tv_sec);
 		if (err) {
 			applog(LOG_ERR, "blktmpl error: %s", err);
 			return false;
 		}
-		work->rolltime = blkmk_time_left(work->tmpl, time(NULL));
+		work->rolltime = blkmk_time_left(work->tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
 		if (opt_coinbase_script.sz)
 		{
@@ -2066,7 +2071,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			}
 		}
 #endif
-		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
+		if (blkmk_get_data(work->tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
 			return false;
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], workpadding_bin, 48);
@@ -2640,7 +2645,7 @@ static void curses_print_status(void)
 
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
-	if (!gettimeofday(&now, NULL))
+	timer_set_now(&now);
 	{
 		unsigned int days, hours;
 		div_t d;
@@ -2851,7 +2856,7 @@ bool log_curses_only(int prio, const char *datetime, const char *str)
 
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
-			wprintw(logwin, "%s%s\n", datetime, str);
+			wprintw(logwin, " %s %s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);
@@ -3156,9 +3161,11 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	int thr_id = work->thr_id;
 	struct pool *pool = work->pool;
 	struct timeval tv_submit_reply;
+	time_t ts_submit_reply;
 	char worktime[200] = "";
 
 	cgtime(&tv_submit_reply);
+	ts_submit_reply = time(NULL);
 
 	if (unlikely(!val)) {
 		applog(LOG_INFO, "submit_upstream_work json_rpc_call failed");
@@ -3191,9 +3198,9 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			double submit_time = tdiff(&tv_submit_reply, ptv_submit);
 			int diffplaces = 3;
 
-			localtime_r(&(work->tv_getwork.tv_sec), tm);
+			localtime_r(&work->ts_getwork, tm);
 			memcpy(&tm_getwork, tm, sizeof(struct tm));
-			localtime_r(&(tv_submit_reply.tv_sec), tm);
+			localtime_r(&ts_submit_reply, tm);
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
@@ -3873,7 +3880,9 @@ static inline bool can_roll(struct work *work)
 static void roll_work(struct work *work)
 {
 	if (work->tmpl) {
-		if (blkmk_get_data(work->tmpl, work->data, 80, time(NULL), NULL, &work->dataid) < 76)
+		struct timeval tv_now;
+		cgtime(&tv_now);
+		if (blkmk_get_data(work->tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
 			applog(LOG_ERR, "Failed to get next data from template; spinning wheels!");
 		swap32yes(work->data, work->data, 80 / 4);
 		calc_midstate(work);
@@ -4089,9 +4098,9 @@ bool stale_work(struct work *work, bool share)
 
 	}
 
-	double elapsed_since_staged = difftime(time(NULL), work->tv_staged.tv_sec);
+	int elapsed_since_staged = timer_elapsed(&work->tv_staged, NULL);
 	if (elapsed_since_staged > work_expiry) {
-		applog(LOG_DEBUG, "%s stale due to expiry (%.0f >= %u)", share?"Share":"Work", elapsed_since_staged, work_expiry);
+		applog(LOG_DEBUG, "%s stale due to expiry (%d >= %u)", share?"Share":"Work", elapsed_since_staged, work_expiry);
 		return true;
 	}
 
@@ -4177,7 +4186,7 @@ struct submit_work_state {
 	bool resubmit;
 	struct curl_ent *ce;
 	int failures;
-	time_t staleexpire;
+	struct timeval tv_staleexpire;
 	char *s;
 	struct timeval tv_submit;
 	struct submit_work_state *next;
@@ -4227,7 +4236,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 			submit_discard_share(work);
 			goto out;
 		}
-		sws->staleexpire = time(NULL) + 300;
+		timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 	}
 
 	if (work->stratum) {
@@ -4275,7 +4284,7 @@ static bool retry_submission(struct submit_work_state *sws)
 				submit_discard_share(work);
 				return false;
 			}
-			sws->staleexpire = time(NULL) + 300;
+			timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 		}
 		if (unlikely((opt_retries >= 0) && (++sws->failures > opt_retries))) {
 			applog(LOG_ERR, "Pool %d failed %d submission retries, discarding", pool->pool_no, opt_retries);
@@ -4283,7 +4292,8 @@ static bool retry_submission(struct submit_work_state *sws)
 			return false;
 		}
 		else if (work->stale) {
-			if (unlikely(opt_retries < 0 && sws->staleexpire <= time(NULL))) {
+			if (unlikely(opt_retries < 0 && timer_passed(&sws->tv_staleexpire, NULL)))
+			{
 				applog(LOG_NOTICE, "Pool %d stale share failed to submit for 5 minutes, discarding", pool->pool_no);
 				submit_discard_share(work);
 				return false;
@@ -4443,7 +4453,6 @@ next_write_sws_del:
 			char noncehex[9];
 			char ntimehex[9];
 			
-			sshare->sshare_time = time(NULL);
 			sshare->work = copy_work(work);
 			bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
 			nonce = *((uint32_t *)(work->data + 76));
@@ -4861,7 +4870,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	free(current_fullhash);
 	current_fullhash = malloc(65);
 	bin2hex(current_fullhash, hash_swap, 32);
-	get_timestamp(blocktime, &block_timeval);
+	get_timestamp(blocktime, block_timeval.tv_sec);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
@@ -5096,6 +5105,7 @@ static void stage_work(struct work *work)
 	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
 	work->work_restart_id = work->pool->work_restart_id;
 	work->pool->last_work_time = time(NULL);
+	cgtime(&work->pool->tv_last_work_time);
 	test_work_current(work);
 	hash_push(work);
 }
@@ -6393,7 +6403,7 @@ bool parse_stratum_response(struct pool *pool, char *s)
 				applog(LOG_NOTICE, "Pool %u now providing block contents to us",
 				       pool->pool_no);
 			}
-			pool->swork.transparency_time = (time_t)-1;
+			timer_unset(&pool->swork.tv_transparency);
 
 fishy:
 			ret = true;
@@ -6616,7 +6626,7 @@ static bool cnx_needed(struct pool *pool)
 
 	/* Keep the connection open to allow any stray shares to be submitted
 	 * on switching pools for 2 minutes. */
-	if (difftime(time(NULL), pool->last_work_time) < 120)
+	if (!timer_passed(&pool->tv_last_work_time, NULL))
 		return true;
 
 	/* If the pool has only just come to life and is higher priority than
@@ -6787,9 +6797,9 @@ static void *stratum_thread(void *userdata)
 			free_work(work);
 		}
 
-		if (pool->swork.transparency_time != (time_t)-1 && difftime(time(NULL), pool->swork.transparency_time) > 21.09375) {
+		if (timer_passed(&pool->swork.tv_transparency, NULL)) {
 			// More than 4 timmills past since requested transactions
-			pool->swork.transparency_time = (time_t)-1;
+			timer_unset(&pool->swork.tv_transparency);
 			pool->swork.opaque = true;
 			applog(LOG_WARNING, "Pool %u is hiding block contents from us",
 			       pool->pool_no);
@@ -7066,6 +7076,7 @@ retry:
 	pthread_cond_signal(&getq->cond);
 	mutex_unlock(stgd_lock);
 	work->pool->last_work_time = time(NULL);
+	cgtime(&work->pool->tv_last_work_time);
 
 	return work;
 }
@@ -8194,7 +8205,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				continue;
 			else
 			if (*denable == DEV_RECOVER_ERR) {
-				if (opt_restart && difftime(time(NULL), cgpu->device_last_not_well) > cgpu->reinit_backoff) {
+				if (opt_restart && timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > cgpu->reinit_backoff) {
 					applog(LOG_NOTICE, "Attempting to reinitialize %s",
 					       dev_str);
 					if (cgpu->reinit_backoff < 300)
@@ -8210,8 +8221,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					       dev_str);
 					device_recovered(cgpu);
 				}
-				cgpu->device_last_not_well = time(NULL);
-				cgpu->device_not_well_reason = REASON_DEV_THERMAL_CUTOFF;
+				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
 				continue;
 			}
 			else
@@ -9173,6 +9183,7 @@ int main(int argc, char *argv[])
 #endif
 
 	raise_fd_limits();
+	bfg_init_time();
 	
 	if (opt_benchmark) {
 		struct pool *pool;
@@ -9464,11 +9475,12 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 	miner_started = total_tv_start;
+	time_t miner_start_ts = time(NULL);
 	if (schedstart.tm.tm_sec)
-		localtime_r(&miner_started.tv_sec, &schedstart.tm);
+		localtime_r(&miner_start_ts, &schedstart.tm);
 	if (schedstop.tm.tm_sec)
-		localtime_r(&miner_started.tv_sec, &schedstop .tm);
-	get_datestamp(datestamp, &total_tv_start);
+		localtime_r(&miner_start_ts, &schedstop .tm);
+	get_datestamp(datestamp, miner_start_ts);
 
 	// Initialise processors and threads
 	k = 0;
@@ -9614,11 +9626,13 @@ retry:
 				{}
 			else
 			if (can_roll(last_work) && should_roll(last_work)) {
+				struct timeval tv_now;
+				cgtime(&tv_now);
 				free_work(work);
 				work = make_clone(pool->last_work_copy);
 				mutex_unlock(&pool->last_work_lock);
 				roll_work(work);
-				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tmpl, time(NULL)));
+				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tmpl, tv_now.tv_sec));
 				stage_work(work);
 				continue;
 			} else if (last_work->tmpl && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tmpl) > (unsigned long)mining_threads) {
