@@ -744,6 +744,21 @@ modminer_fpga_shutdown(struct thr_info *thr)
 	thr->cgpu_data = NULL;
 }
 
+static
+bool modminer_user_set_clock(struct cgpu_info *cgpu, const int val)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct modminer_fpga_state * const state = thr->cgpu_data;
+	const int multiplier = val / 2;
+	const uint8_t oldFreqM = state->dclk.freqM;
+	const signed char delta = (multiplier - oldFreqM) * 2;
+	state->dclk.freqMDefault = multiplier;
+	const bool rv = modminer_change_clock(thr, true, delta);
+	if (likely(rv))
+		dclk_msg_freqchange(cgpu->proc_repr, oldFreqM * 2, state->dclk.freqM * 2, " on user request");
+	return rv;
+}
+
 static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)
 {
 	int val;
@@ -755,8 +770,6 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	}
 
 	if (strcasecmp(option, "clock") == 0) {
-		int multiplier;
-
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing clock setting");
 			return replybuf;
@@ -769,19 +782,12 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 			return replybuf;
 		}
 
-		multiplier = val / 2;
-		struct thr_info *thr = modminer->thr[0];
-		struct modminer_fpga_state *state = thr->cgpu_data;
-		uint8_t oldFreqM = state->dclk.freqM;
-		signed char delta = (multiplier - oldFreqM) * 2;
-		state->dclk.freqMDefault = multiplier;
-		if (unlikely(!modminer_change_clock(thr, true, delta))) {
+		if (unlikely(!modminer_user_set_clock(modminer, val)))
+		{
 			sprintf(replybuf, "Set clock failed: %s",
 			        modminer->proc_repr);
 			return replybuf;
 		}
-
-		dclk_msg_freqchange(modminer->proc_repr, oldFreqM * 2, state->dclk.freqM * 2, " on user request");
 
 		return NULL;
 	}
@@ -789,6 +795,50 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
+
+#ifdef HAVE_CURSES
+static
+void modminer_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *modminer_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	static char buf[0x100];  // Static for replies
+	
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set clock speed (range %d-%d, multiple of 2)", MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid clock speed\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < MODMINER_MIN_CLOCK || val > MODMINER_MAX_CLOCK || (val & 1) != 0)
+				return "Invalid clock speed\n";
+			
+			if (unlikely(!modminer_user_set_clock(cgpu, val)))
+				return "Set clock failed\n";
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void modminer_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct modminer_fpga_state *state = cgpu->thr[0]->cgpu_data;
+	wlogprint("Clock speed: %d\n", (int)(state->dclk.freqM * 2));
+}
+#endif
 
 struct device_drv modminer_drv = {
 	.dname = "modminer",
@@ -798,6 +848,11 @@ struct device_drv modminer_drv = {
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = modminer_wlogprint_status,
+	.proc_tui_wlogprint_choices = modminer_tui_wlogprint_choices,
+	.proc_tui_handle_choice = modminer_tui_handle_choice,
+#endif
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,
