@@ -1280,6 +1280,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			}
 			else
 				bitforce_change_mode(bitforce, BFP_QUEUE);
+			
+			// Clear job queue to start fresh; ignore response
+			bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
 		}
 		else
 		{
@@ -1293,9 +1296,6 @@ static bool bitforce_thread_init(struct thr_info *thr)
 				bitforce_change_mode(bitforce, BFP_RANGE);
 		}
 		bitforce->status = LIFE_INIT2;
-		
-		// Clear job queue to start fresh; ignore response
-		bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
 		
 		first_on_this_board = procdata;
 		for (int proc = 1; proc < data->parallel; ++proc)
@@ -1331,9 +1331,12 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	nmsleep(wait);
 
-	// Clear results queue last, to start fresh; ignore response
-	for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
-		bitforce_zox(thr, "ZOX");
+	if (sc)
+	{
+		// Clear results queue last, to start fresh; ignore response
+		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
+			bitforce_zox(thr, "ZOX");
+	}
 	
 	return true;
 }
