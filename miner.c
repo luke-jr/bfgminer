@@ -2534,7 +2534,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 					temp = proc->temp;
 		}
 		if (temp > 0.)
-			tailsprintf(buf, "%4.1fC | ", cgpu->temp);
+			tailsprintf(buf, "%4.1fC | ", temp);
 		else
 			strcat(buf, "      | ");
 	}
