@@ -13,6 +13,8 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <sys/time.h>
+
 #include <curl/curl.h>
 #include <jansson.h>
 
@@ -273,6 +275,16 @@ bool timer_passed(const struct timeval *tvp_timer, const struct timeval *tvp_now
 	
 	return timercmp(tvp_timer, _tvp_now, <);
 }
+
+#if defined(WIN32) && !defined(HAVE_POOR_GETTIMEOFDAY)
+#define HAVE_POOR_GETTIMEOFDAY
+#endif
+
+#ifdef HAVE_POOR_GETTIMEOFDAY
+extern void bfg_gettimeofday(struct timeval *);
+#else
+#define bfg_gettimeofday(out)  gettimeofday(out, NULL)
+#endif
 
 static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)

@@ -75,8 +75,8 @@ void _applog(int prio, const char *str)
 			struct timeval tv;
 			struct tm tm;
 			
-			// NOTE: cgtime is for timers, not time of day!
-			gettimeofday(&tv, NULL);
+			bfg_init_time();
+			bfg_gettimeofday(&tv);
 			localtime_r(&tv.tv_sec, &tm);
 			
 			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",

@@ -1111,6 +1111,42 @@ void _now_gettimeofday(struct timeval *tv)
 #endif
 }
 
+#ifdef HAVE_POOR_GETTIMEOFDAY
+static struct timeval tv_timeofday_offset;
+static struct timeval _tv_timeofday_lastchecked;
+static pthread_mutex_t _tv_timeofday_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static
+void bfg_calibrate_timeofday(struct timeval *expected, char *buf)
+{
+	struct timeval actual, delta;
+	timeradd(expected, &tv_timeofday_offset, expected);
+	_now_gettimeofday(&actual);
+	if (expected->tv_sec >= actual.tv_sec - 1 && expected->tv_sec <= actual.tv_sec + 1)
+		// Within reason - no change necessary
+		return;
+	
+	timersub(&actual, expected, &delta);
+	timeradd(&tv_timeofday_offset, &delta, &tv_timeofday_offset);
+	sprintf(buf, "Recalibrating timeofday offset (delta %ld.%06lds)", (long)delta.tv_sec, (long)delta.tv_usec);
+	*expected = actual;
+}
+
+void bfg_gettimeofday(struct timeval *out)
+{
+	char buf[64] = "";
+	timer_set_now(out);
+	mutex_lock(&_tv_timeofday_mutex);
+	if (_tv_timeofday_lastchecked.tv_sec < out->tv_sec - 21)
+		bfg_calibrate_timeofday(out, buf);
+	else
+		timeradd(out, &tv_timeofday_offset, out);
+	mutex_unlock(&_tv_timeofday_mutex);
+	if (unlikely(buf[0]))
+		applog(LOG_WARNING, "%s", buf);
+}
+#endif
+
 #ifdef WIN32
 static LARGE_INTEGER _perffreq;
 
@@ -1193,6 +1229,14 @@ void bfg_init_time()
 		timer_set_now = _now_gettimeofday;
 		applog(LOG_DEBUG, "Timers: Using gettimeofday");
 	}
+	
+#ifdef HAVE_POOR_GETTIMEOFDAY
+	char buf[64] = "";
+	struct timeval tv;
+	timer_set_now(&tv);
+	bfg_calibrate_timeofday(&tv, buf);
+	applog(LOG_DEBUG, "%s", buf);
+#endif
 }
 
 void subtime(struct timeval *a, struct timeval *b)
