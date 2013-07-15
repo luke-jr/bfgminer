@@ -37,14 +37,9 @@ static void my_log_curses(int prio, const char *datetime, const char *str)
 	else
 #endif
 	{
-		int cancelstate;
-		bool scs;
-		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
-		mutex_lock(&console_lock);
+		bfg_console_lock();
 		printf(" %s %s%s", datetime, str, "                    \n");
-		mutex_unlock(&console_lock);
-		if (scs)
-			pthread_setcancelstate(cancelstate, &cancelstate);
+		bfg_console_unlock();
 	}
 }
 
