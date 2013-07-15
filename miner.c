@@ -2199,22 +2199,12 @@ struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
 struct cgpu_info *cpus;
 
+bool _bfg_console_cancel_disabled;
+int _bfg_console_prev_cancelstate;
+
 #ifdef HAVE_CURSES
-static bool _curses_cancel_disabled;
-static int _curses_prev_cancelstate;
-
-static inline void unlock_curses(void)
-{
-	mutex_unlock(&console_lock);
-	if (_curses_cancel_disabled)
-		pthread_setcancelstate(_curses_prev_cancelstate, &_curses_prev_cancelstate);
-}
-
-static inline void lock_curses(void)
-{
-	_curses_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_curses_prev_cancelstate);
-	mutex_lock(&console_lock);
-}
+#define   lock_curses()  bfg_console_lock()
+#define unlock_curses()  bfg_console_unlock()
 
 static bool curses_active_locked(void)
 {
@@ -2848,13 +2838,14 @@ void _wlogprint(const char *str)
 #endif
 
 #ifdef HAVE_CURSES
-bool log_curses_only(int prio, const char *datetime, const char *str)
+bool _log_curses_only(int prio, const char *datetime, const char *str)
 {
 	bool high_prio;
 
 	high_prio = (prio == LOG_WARNING || prio == LOG_ERR);
 
-	if (curses_active_locked()) {
+	if (curses_active)
+	{
 		if (!opt_loginput || high_prio) {
 			wprintw(logwin, " %s %s\n", datetime, str);
 			if (high_prio) {
@@ -2862,7 +2853,6 @@ bool log_curses_only(int prio, const char *datetime, const char *str)
 				wrefresh(logwin);
 			}
 		}
-		unlock_curses();
 		return true;
 	}
 	return false;

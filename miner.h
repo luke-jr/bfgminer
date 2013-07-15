@@ -905,6 +905,26 @@ extern cglock_t ch_lock;
 extern pthread_rwlock_t mining_thr_lock;
 extern pthread_rwlock_t devices_lock;
 
+
+extern bool _bfg_console_cancel_disabled;
+extern int _bfg_console_prev_cancelstate;
+
+static inline
+void bfg_console_lock(void)
+{
+	_bfg_console_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_bfg_console_prev_cancelstate);
+	mutex_lock(&console_lock);
+}
+
+static inline
+void bfg_console_unlock(void)
+{
+	mutex_unlock(&console_lock);
+	if (_bfg_console_cancel_disabled)
+		pthread_setcancelstate(_bfg_console_prev_cancelstate, &_bfg_console_prev_cancelstate);
+}
+
+
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
 extern void clear_stratum_shares(struct pool *pool);
@@ -1288,7 +1308,7 @@ extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
 extern void zero_stats(void);
 extern void default_save_file(char *filename);
-extern bool log_curses_only(int prio, const char *datetime, const char *str);
+extern bool _log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
