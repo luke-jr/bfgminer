@@ -358,13 +358,13 @@ static bool should_run(void)
 	return true;
 }
 
-void get_datestamp(char *f, struct timeval *tv)
+void get_datestamp(char *f, size_t fsiz, struct timeval *tv)
 {
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
 	tm = localtime(&tmp_time);
-	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
 		tm->tm_mday,
@@ -373,13 +373,13 @@ void get_datestamp(char *f, struct timeval *tv)
 		tm->tm_sec);
 }
 
-void get_timestamp(char *f, struct timeval *tv)
+static void get_timestamp(char *f, size_t fsiz, struct timeval *tv)
 {
 	struct tm *tm;
 
 	const time_t tmp_time = tv->tv_sec;
 	tm = localtime(&tmp_time);
-	sprintf(f, "[%02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
 		tm->tm_sec);
@@ -1311,7 +1311,7 @@ static char *parse_config(json_t *config, bool fileconf)
 					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
 					fileconf_load = -1;
 				} else {
-					sprintf(err_buf, "Parsing JSON option %s: %s",
+					snprintf(err_buf, sizeof(err_buf), "Parsing JSON option %s: %s",
 						p, err);
 					return err_buf;
 				}
@@ -1334,6 +1334,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_error_t err;
 	json_t *config;
 	char *json_error;
+	size_t siz;
 
 	if (!cnfbuf)
 		cnfbuf = strdup(arg);
@@ -1347,11 +1348,12 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	config = json_load_file(arg, &err);
 #endif
 	if (!json_is_object(config)) {
-		json_error = malloc(JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text));
+		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
+		json_error = malloc(siz);
 		if (!json_error)
 			quit(1, "Malloc failure in json error");
 
-		sprintf(json_error, JSON_LOAD_ERROR, arg, err.text);
+		snprintf(json_error, siz, JSON_LOAD_ERROR, arg, err.text);
 		return json_error;
 	}
 
@@ -1944,18 +1946,9 @@ static bool curses_active_locked(void)
 }
 #endif
 
-void tailsprintf(char *f, const char *fmt, ...)
-{
-	va_list ap;
-
-	va_start(ap, fmt);
-	vsprintf(f + strlen(f), fmt, ap);
-	va_end(ap);
-}
-
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
-static void suffix_string(uint64_t val, char *buf, int sigdigits)
+static void suffix_string(uint64_t val, char *buf, size_t bufsiz, int sigdigits)
 {
 	const double  dkilo = 1000.0;
 	const uint64_t kilo = 1000ull;
@@ -1971,26 +1964,26 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	if (val >= exa) {
 		val /= peta;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "E");
+		strcpy(suffix, "E");
 	} else if (val >= peta) {
 		val /= tera;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "P");
+		strcpy(suffix, "P");
 	} else if (val >= tera) {
 		val /= giga;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "T");
+		strcpy(suffix, "T");
 	} else if (val >= giga) {
 		val /= mega;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "G");
+		strcpy(suffix, "G");
 	} else if (val >= mega) {
 		val /= kilo;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "M");
+		strcpy(suffix, "M");
 	} else if (val >= kilo) {
 		dval = (double)val / dkilo;
-		sprintf(suffix, "K");
+		strcpy(suffix, "K");
 	} else {
 		dval = val;
 		decimal = false;
@@ -1998,19 +1991,19 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (!sigdigits) {
 		if (decimal)
-			sprintf(buf, "%.3g%s", dval, suffix);
+			snprintf(buf, bufsiz, "%.3g%s", dval, suffix);
 		else
-			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+			snprintf(buf, bufsiz, "%d%s", (unsigned int)dval, suffix);
 	} else {
 		/* Always show sigdigits + 1, padded on right with zeroes
 		 * followed by suffix */
 		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
 
-		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
+		snprintf(buf, bufsiz, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
 	}
 }
 
-static void get_statline(char *buf, struct cgpu_info *cgpu)
+static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 {
 	char displayed_hashes[16], displayed_rolling[16];
 	uint64_t dh64, dr64;
@@ -2031,12 +2024,12 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
-	suffix_string(dh64, displayed_hashes, 4);
-	suffix_string(dr64, displayed_rolling, 4);
+	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
+	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
-	sprintf(buf, "%s%d ", cgpu->drv->name, cgpu->device_id);
-	cgpu->drv->get_statline_before(buf, cgpu);
-	tailsprintf(buf, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
+	snprintf(buf, bufsiz, "%s%d ", cgpu->drv->name, cgpu->device_id);
+	cgpu->drv->get_statline_before(buf, bufsiz, cgpu);
+	tailsprintf(buf, bufsiz, "(%ds):%s (avg):%sh/s | A:%.0f R:%.0f HW:%d WU:%.1f/m",
 		opt_log_interval,
 		displayed_rolling,
 		displayed_hashes,
@@ -2044,7 +2037,7 @@ static void get_statline(char *buf, struct cgpu_info *cgpu)
 		cgpu->diff_rejected,
 		cgpu->hw_errors,
 		wu);
-	cgpu->drv->get_statline(buf, cgpu);
+	cgpu->drv->get_statline(buf, bufsiz, cgpu);
 }
 
 static void text_print_status(int thr_id)
@@ -2054,44 +2047,56 @@ static void text_print_status(int thr_id)
 
 	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		printf("%s\n", logline);
 	}
 }
 
 #ifdef HAVE_CURSES
+#define CURBUFSIZ 256
+#define cg_mvwprintw(win, y, x, fmt, ...) do { \
+	char tmp42[CURBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	mvwprintw(win, y, x, "%s", tmp42); \
+} while (0)
+#define cg_wprintw(win, fmt, ...) do { \
+	char tmp42[CURBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	wprintw(win, "%s", tmp42); \
+} while (0)
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
 	struct pool *pool = current_pool();
 
 	wattron(statuswin, A_BOLD);
-	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	wattroff(statuswin, A_BOLD);
 	mvwhline(statuswin, 1, 0, '-', 80);
-	mvwprintw(statuswin, 2, 0, " %s", statusline);
+	cg_mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
+	cg_mvwprintw(statuswin, 3, 0, " ST: %d  SS: %d  NB: %d  LW: %d  GF: %d  RF: %d",
 		total_staged(), total_stale, new_blocks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
+		cg_mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
+		cg_mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
 			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s %s as user %s",
+		cg_mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s %s as user %s",
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out",
 			pool->has_gbt ? "GBT" : "LP", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
+	cg_mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
 		  current_hash, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
+	cg_mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
 		have_opencl ? "[G]PU management " : "");
 }
 
@@ -2141,37 +2146,37 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	wu = cgpu->diff1 / dev_runtime * 60;
 
 	wmove(statuswin,devcursor + count, 0);
-	wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
+	cg_wprintw(statuswin, " %s %*d: ", cgpu->drv->name, dev_width, cgpu->device_id);
 	logline[0] = '\0';
-	cgpu->drv->get_statline_before(logline, cgpu);
-	wprintw(statuswin, "%s", logline);
+	cgpu->drv->get_statline_before(logline, sizeof(logline), cgpu);
+	cg_wprintw(statuswin, "%s", logline);
 
 	dh64 = (double)cgpu->total_mhashes / dev_runtime * 1000000ull;
 	dr64 = (double)cgpu->rolling * 1000000ull;
-	suffix_string(dh64, displayed_hashes, 4);
-	suffix_string(dr64, displayed_rolling, 4);
+	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
+	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
 #ifdef USE_USBUTILS
 	if (cgpu->usbinfo.nodev)
-		wprintw(statuswin, "ZOMBIE");
+		cg_wprintw(statuswin, "ZOMBIE");
 	else
 #endif
 	if (cgpu->status == LIFE_DEAD)
-		wprintw(statuswin, "DEAD  ");
+		cg_wprintw(statuswin, "DEAD  ");
 	else if (cgpu->status == LIFE_SICK)
-		wprintw(statuswin, "SICK  ");
+		cg_wprintw(statuswin, "SICK  ");
 	else if (cgpu->deven == DEV_DISABLED)
-		wprintw(statuswin, "OFF   ");
+		cg_wprintw(statuswin, "OFF   ");
 	else if (cgpu->deven == DEV_RECOVER)
-		wprintw(statuswin, "REST  ");
+		cg_wprintw(statuswin, "REST  ");
 	else
-		wprintw(statuswin, "%6s", displayed_rolling);
+		cg_wprintw(statuswin, "%6s", displayed_rolling);
 	adj_fwidth(cgpu->diff_accepted, &dawidth);
 	adj_fwidth(cgpu->diff_rejected, &drwidth);
 	adj_width(cgpu->hw_errors, &hwwidth);
 	adj_width(wu, &wuwidth);
 
-	wprintw(statuswin, "/%6sh/s | A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
+	cg_wprintw(statuswin, "/%6sh/s | A:%*.0f R:%*.0f HW:%*d WU:%*.1f/m",
 			displayed_hashes,
 			dawidth, cgpu->diff_accepted,
 			drwidth, cgpu->diff_rejected,
@@ -2179,8 +2184,8 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 			wuwidth + 2, wu);
 
 	logline[0] = '\0';
-	cgpu->drv->get_statline(logline, cgpu);
-	wprintw(statuswin, "%s", logline);
+	cgpu->drv->get_statline(logline, sizeof(logline), cgpu);
+	cg_wprintw(statuswin, "%s", logline);
 
 	wclrtoeol(statuswin);
 }
@@ -2419,7 +2424,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 			strcpy(reason, "");
 			if (total_pools > 1)
-				sprintf(where, "pool %d", work->pool->pool_no);
+				snprintf(where, sizeof(where), "pool %d", work->pool->pool_no);
 			else
 				strcpy(where, "");
 
@@ -2574,9 +2579,10 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			outhash = bin2hex(rhash + 2, 4);
 		else
 			outhash = bin2hex(rhash + 4, 4);
-		suffix_string(work->share_diff, diffdisp, 0);
-		sprintf(hashshow, "%s Diff %s/%d%s", outhash, diffdisp, intdiff,
-			work->block? " BLOCK!" : "");
+		suffix_string(work->share_diff, diffdisp, sizeof(diffdisp), 0);
+		snprintf(hashshow, sizeof(hashshow), "%s Diff %s/%d%s",
+				outhash, diffdisp, intdiff,
+				work->block? " BLOCK!" : "");
 		free(outhash);
 
 		if (opt_worktime) {
@@ -2601,8 +2607,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
-				sprintf(workclone, "C:%1.3f",
-					tdiff((struct timeval *)&(work->tv_cloned),
+				snprintf(workclone, sizeof(workclone), "C:%1.3f",
+						tdiff((struct timeval *)&(work->tv_cloned),
 						(struct timeval *)&(work->tv_getwork_reply)));
 			}
 			else
@@ -2611,7 +2617,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 			if (work->work_difficulty < 1)
 				diffplaces = 6;
 
-			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+			snprintf(worktime, sizeof(worktime),
+				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
 				work->getwork_mode, diffplaces, work->work_difficulty,
@@ -2642,7 +2649,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	if (!want_per_device_stats) {
 		char logline[256];
 
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		applog(LOG_INFO, "%s", logline);
 	}
 
@@ -2761,7 +2768,7 @@ static void calc_diff(struct work *work, int known)
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
-	suffix_string((uint64_t)difficulty, work->pool->diff, 0);
+	suffix_string((uint64_t)difficulty, work->pool->diff, sizeof(work->pool->diff), 0);
 
 	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
@@ -3305,7 +3312,7 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(ret > best_diff)) {
 		new_best = true;
 		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
+		suffix_string(best_diff, best_share, sizeof(best_share), 0);
 	}
 	if (unlikely(ret > work->pool->best_diff))
 		work->pool->best_diff = ret;
@@ -3606,7 +3613,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	current_hash = bin2hex(hash_swap + 2, 8);
 	free(current_fullhash);
 	current_fullhash = bin2hex(block_hash_swap, 32);
-	get_timestamp(blocktime, &block_timeval);
+	get_timestamp(blocktime, sizeof(blocktime), &block_timeval);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
@@ -3683,7 +3690,7 @@ static void set_blockdiff(const struct work *work)
 
 	previous_diff = current_diff;
 	diff64 = diffone / d64;
-	suffix_string(diff64, block_diff, 0);
+	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
 	current_diff = (double)diffone / (double)d64;
 	if (unlikely(current_diff != previous_diff))
 		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
@@ -4153,7 +4160,7 @@ void zero_bestshare(void)
 
 	best_diff = 0;
 	memset(best_share, 0, 8);
-	suffix_string(best_diff, best_share, 0);
+	suffix_string(best_diff, best_share, sizeof(best_share), 0);
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -4530,7 +4537,7 @@ retry:
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
 		default_save_file(filename);
-		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
+		snprintf(prompt, sizeof(prompt), "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
 		if (strcmp(str, "-1")) {
 			struct stat statbuf;
@@ -4693,7 +4700,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 				cgpu->last_message_tv = now;
 
-				get_statline(logline, cgpu);
+				get_statline(logline, sizeof(logline), cgpu);
 				if (!curses_active) {
 					printf("%s          \r", logline);
 					fflush(stdout);
@@ -4726,10 +4733,11 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
 	dr64 = (double)rolling * 1000000ull;
-	suffix_string(dh64, displayed_hashes, 4);
-	suffix_string(dr64, displayed_rolling, 4);
+	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
+	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
-	sprintf(statusline, "%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
+	snprintf(statusline, sizeof(statusline),
+		"%s(%ds):%s (avg):%sh/s | A:%.0f  R:%.0f  HW:%d  WU:%.1f/m",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval, displayed_rolling, displayed_hashes,
 		total_diff_accepted, total_diff_rejected, hw_errors,
@@ -4752,15 +4760,16 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 				 struct stratum_share *sshare)
 {
 	struct work *work = sshare->work;
-	char hashshow[65];
+	char hashshow[64];
 	uint32_t *hash32;
 	char diffdisp[16];
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
 	intdiff = floor(work->work_difficulty);
-	suffix_string(work->share_diff, diffdisp, 0);
-	sprintf(hashshow, "%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
+	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
+	snprintf(hashshow, sizeof(hashshow),
+		"%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
 		work->block? " BLOCK!" : "");
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
@@ -5136,7 +5145,8 @@ static void *stratum_sthread(void *userdata)
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
 
-		sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+		snprintf(s, sizeof(s),
+			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
@@ -5362,6 +5372,7 @@ retry_stratum:
 		if (pool->hdr_path) {
 			char *copy_start, *hdr_path;
 			bool need_slash = false;
+			size_t siz;
 
 			hdr_path = pool->hdr_path;
 			if (strstr(hdr_path, "://")) {
@@ -5373,13 +5384,14 @@ retry_stratum:
 				if (pool->rpc_url[strlen(pool->rpc_url) - 1] != '/')
 					need_slash = true;
 
-				pool->lp_url = malloc(strlen(pool->rpc_url) + strlen(copy_start) + 2);
+				siz = strlen(pool->rpc_url) + strlen(copy_start) + 2;
+				pool->lp_url = malloc(siz);
 				if (!pool->lp_url) {
 					applog(LOG_ERR, "Malloc failure in pool_active");
 					return false;
 				}
 
-				sprintf(pool->lp_url, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
+				snprintf(pool->lp_url, siz, "%s%s%s", pool->rpc_url, need_slash ? "/" : "", copy_start);
 			}
 		} else
 			pool->lp_url = NULL;
@@ -5582,7 +5594,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	header = calloc(pool->swork.header_len, 1);
 	if (unlikely(!header))
 		quit(1, "Failed to calloc header in gen_stratum_work");
-	sprintf(header, "%s%s%s%s%s%s%s",
+	snprintf(header, pool->swork.header_len,
+		"%s%s%s%s%s%s%s",
 		pool->swork.bbversion,
 		pool->swork.prev_hash,
 		merkle_hash,
@@ -6307,7 +6320,8 @@ retry_pool:
 		 * avoid races */
 		if (pool->has_gbt) {
 			cg_rlock(&pool->gbt_lock);
-			sprintf(lpreq, "{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
+			snprintf(lpreq, sizeof(lpreq),
+				"{\"id\": 0, \"method\": \"getblocktemplate\", \"params\": "
 				"[{\"capabilities\": [\"coinbasetxn\", \"workid\", \"coinbase/append\"], "
 				"\"longpollid\": \"%s\"}]}\n", pool->longpollid);
 			cg_runlock(&pool->gbt_lock);
@@ -6574,7 +6588,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
-			sprintf(dev_str, "%s%d", cgpu->drv->name, gpu);
+			snprintf(dev_str, sizeof(dev_str), "%s%d", cgpu->drv->name, gpu);
 
 #ifdef HAVE_ADL
 			if (adl_active && cgpu->has_adl)
@@ -6643,7 +6657,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-	get_statline(logline, cgpu);
+	get_statline(logline, sizeof(logline), cgpu);
 	applog(LOG_WARNING, "%s", logline);
 }
 
@@ -6820,15 +6834,18 @@ static void *test_pool_thread(void *arg)
  * active it returns false. */
 bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
+	size_t siz;
+
 	url = get_proxy(url, pool);
 
 	pool->rpc_url = url;
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
-	pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+	siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
+	pool->rpc_userpass = malloc(siz);
 	if (!pool->rpc_userpass)
 		quit(1, "Failed to malloc userpass");
-	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+	snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
 	pool->testing = true;
 	pool->idle = true;
@@ -7023,12 +7040,12 @@ static void noop_reinit_device(struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
-void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu)
+void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu)
 {
-	tailsprintf(buf, "               | ");
+	tailsprintf(buf, bufsiz, "               | ");
 }
 
-static void noop_get_statline(char __maybe_unused *buf, struct cgpu_info __maybe_unused *cgpu)
+static void noop_get_statline(char __maybe_unused *buf, size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu)
 {
 }
 
@@ -7388,7 +7405,7 @@ int main(int argc, char *argv[])
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
 
-	sprintf(packagename, "%s %s", PACKAGE, VERSION);
+	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
 	handler.sa_handler = &sighandler;
 	handler.sa_flags = 0;
@@ -7619,6 +7636,7 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+		size_t siz;
 
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
@@ -7626,10 +7644,11 @@ int main(int argc, char *argv[])
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)
 				quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
-			pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
+			pool->rpc_userpass = malloc(siz);
 			if (!pool->rpc_userpass)
 				quit(1, "Failed to malloc userpass");
-			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
 	/* Set the currentpool to pool 0 */
@@ -7726,7 +7745,7 @@ begin_bench:
 	
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
-	get_datestamp(datestamp, &total_tv_start);
+	get_datestamp(datestamp, sizeof(datestamp), &total_tv_start);
 
 	// Start threads
 	k = 0;

@@ -294,7 +294,7 @@ struct gpu_adl {
 };
 #endif
 
-extern void blank_get_statline_before(char *buf, struct cgpu_info __maybe_unused *cgpu);
+extern void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu);
 
 struct api_data;
 struct thr_info;
@@ -311,8 +311,8 @@ struct device_drv {
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info *);
-	void (*get_statline_before)(char *, struct cgpu_info *);
-	void (*get_statline)(char *, struct cgpu_info *);
+	void (*get_statline_before)(char *, size_t, struct cgpu_info *);
+	void (*get_statline)(char *, size_t, struct cgpu_info *);
 	struct api_data *(*get_api_stats)(struct cgpu_info *);
 	bool (*get_stats)(struct cgpu_info *);
 	void (*identify_device)(struct cgpu_info *); // e.g. to flash a led
@@ -1272,7 +1272,19 @@ struct modminer_fpga_state {
 };
 #endif
 
-extern void get_datestamp(char *, struct timeval *);
+#define TAILBUFSIZ 64
+
+#define tailsprintf(buf, bufsiz, fmt, ...) do { \
+	char tmp13[TAILBUFSIZ]; \
+	size_t len13, buflen = strlen(buf); \
+	snprintf(tmp13, sizeof(tmp13), fmt, ##__VA_ARGS__); \
+	len13 = strlen(tmp13); \
+	if ((buflen + len13) >= bufsiz) \
+		quit(1, "tailsprintf buffer overflow in %s %s line %d", __FILE__, __func__, __LINE__); \
+	strcat(buf, tmp13); \
+} while (0)
+
+extern void get_datestamp(char *, size_t, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
@@ -1280,7 +1292,6 @@ extern struct work *__find_work_bymidstate(struct work *que, char *midstate, siz
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern void hash_queued_work(struct thr_info *mythr);
-extern void tailsprintf(char *f, const char *fmt, ...);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);
 extern int curses_int(const char *query);

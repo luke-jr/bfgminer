@@ -294,24 +294,21 @@ static void bitforce_detect(void)
 	usb_detect(&bitforce_drv, bitforce_detect_one);
 }
 
-static void get_bitforce_statline_before(char *buf, struct cgpu_info *bitforce)
+static void get_bitforce_statline_before(char *buf, size_t bufsiz, struct cgpu_info *bitforce)
 {
 	float gt = bitforce->temp;
 
 	if (gt > 0)
-		tailsprintf(buf, "%5.1fC ", gt);
+		tailsprintf(buf, bufsiz, "%5.1fC ", gt);
 	else
-		tailsprintf(buf, "       ", gt);
-	tailsprintf(buf, "        | ");
+		tailsprintf(buf, bufsiz, "       ");
+
+	tailsprintf(buf, bufsiz, "        | ");
 }
 
-static bool bitforce_thread_prepare(struct thr_info *thr)
+static bool bitforce_thread_prepare(__maybe_unused struct thr_info *thr)
 {
-	struct cgpu_info *bitforce = thr->cgpu;
-	struct timeval now;
-
-	cgtime(&now);
-	get_datestamp(bitforce->init, &now);
+//	struct cgpu_info *bitforce = thr->cgpu;
 
 	return true;
 }

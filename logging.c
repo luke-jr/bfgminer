@@ -63,7 +63,7 @@ void _applog(int prio, const char *str)
 		const time_t tmp_time = tv.tv_sec;
 		tm = localtime(&tmp_time);
 
-		sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d] ",
+		snprintf(datetime, sizeof(datetime), " [%d-%02d-%02d %02d:%02d:%02d] ",
 			tm->tm_year + 1900,
 			tm->tm_mon + 1,
 			tm->tm_mday,
