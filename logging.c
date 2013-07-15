@@ -27,9 +27,6 @@ int opt_log_level = LOG_NOTICE;
 
 static void _my_log_curses(int prio, const char *datetime, const char *str)
 {
-	if (opt_quiet && prio != LOG_ERR)
-		return;
-
 #ifdef HAVE_CURSES
 	extern bool use_curses;
 	if (use_curses && _log_curses_only(prio, datetime, str))
@@ -54,7 +51,9 @@ void _applog(int prio, const char *str)
 	if (0) {}
 #endif
 	else {
-		bool writetocon = opt_debug_console || (opt_log_output && prio != LOG_DEBUG) || prio <= LOG_NOTICE;
+		bool writetocon =
+			(opt_debug_console || (opt_log_output && prio != LOG_DEBUG) || prio <= LOG_NOTICE)
+		 && !(opt_quiet && prio != LOG_ERR);
 		bool writetofile = !isatty(fileno((FILE *)stderr));
 		if (!(writetocon || writetofile))
 			return;
