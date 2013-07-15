@@ -88,8 +88,10 @@ void _applog(int prio, const char *str)
 
 		/* Only output to stderr if it's not going to the screen as well */
 		if (writetofile) {
+			bfg_console_lock();
 			fprintf(stderr, " %s %s\n", datetime, str);	/* atomic write to stderr */
 			fflush(stderr);
+			bfg_console_unlock();
 		}
 
 		if (writetocon)
