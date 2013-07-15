@@ -215,7 +215,7 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 		sscanf(opt_klondike_options, "%hu,%lf,%lf,%hhu", &cfgset.hashclock, &temp1, &temp2, &cfgset.fantarget);
 		cfgset.temptarget = cvtCToKln(temp1);
 		cfgset.tempcritical = cvtCToKln(temp2);
-		cfgset.fantarget = (int)256*cfgset.fantarget/100;
+		cfgset.fantarget = (int)255*cfgset.fantarget/100;
 		size = sizeof(cfgset); 
 	}
 	
@@ -532,6 +532,7 @@ static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	uint8_t temp = 0xFF;
+	uint16_t fan = 0;
 	int dev;
 	
 	if(klninfo->status == NULL)
@@ -541,10 +542,12 @@ static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 	for (dev = 0; dev <= klninfo->status->slavecount; dev++) { 
 		if (klninfo->status[dev].temp < temp)
 			temp = klninfo->status[dev].temp;
+		fan += klninfo->cfg[dev].fantarget;
 		}
+	fan /= klninfo->status->slavecount+1;
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, "     %3.0fC 1.2V | ", cvtKlnToC(temp));
+	tailsprintf(buf, "     %3.0fC %3d% | ", cvtKlnToC(temp), fan*100/255);
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
@@ -568,7 +571,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		sprintf(buf, "Clock %d", dev);
 		root = api_add_freq(root, buf, &dClk, true);
 		
-		unsigned int iFan = (unsigned int)100 * klninfo->cfg[dev].fantarget / 256;
+		unsigned int iFan = (unsigned int)100 * klninfo->cfg[dev].fantarget / 255;
 		sprintf(buf, "Fan Percent %d", dev);
 		root = api_add_int(root, buf, &iFan, true);
 
