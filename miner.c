@@ -2199,22 +2199,12 @@ struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
 struct cgpu_info *cpus;
 
+bool _bfg_console_cancel_disabled;
+int _bfg_console_prev_cancelstate;
+
 #ifdef HAVE_CURSES
-static bool _curses_cancel_disabled;
-static int _curses_prev_cancelstate;
-
-static inline void unlock_curses(void)
-{
-	mutex_unlock(&console_lock);
-	if (_curses_cancel_disabled)
-		pthread_setcancelstate(_curses_prev_cancelstate, &_curses_prev_cancelstate);
-}
-
-static inline void lock_curses(void)
-{
-	_curses_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_curses_prev_cancelstate);
-	mutex_lock(&console_lock);
-}
+#define   lock_curses()  bfg_console_lock()
+#define unlock_curses()  bfg_console_unlock()
 
 static bool curses_active_locked(void)
 {
