@@ -2292,9 +2292,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	bool first = true;
 	char *search;
 	int endlen;
-
-	// We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
-	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
+	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	size_t usbbufread;
 
 	DEVLOCK(cgpu, pstate);
