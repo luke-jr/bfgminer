@@ -7152,8 +7152,6 @@ void enable_device(struct cgpu_info *cgpu)
 		gpu_threads += cgpu->threads;
 	}
 #endif
-	fill_device_drv(cgpu);
-
 	rwlock_init(&cgpu->qlock);
 	cgpu->queued_work = NULL;
 }
@@ -7195,6 +7193,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	mutex_lock(&stats_lock);
 	cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
+
+	fill_device_drv(cgpu);
 
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
