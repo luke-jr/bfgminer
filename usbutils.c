@@ -1485,6 +1485,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	char devstr[STRBUFLEN+1];
 	int err, i, j, k, pstate;
 	int bad = USB_INIT_FAIL;
+	int cfg;
 
 	DEVLOCK(cgpu, pstate);
 
@@ -1606,20 +1607,28 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		}
 	}
 
-	err = libusb_set_configuration(cgusb->handle, found->config);
-	if (err) {
-		switch(err) {
-			case LIBUSB_ERROR_BUSY:
-				applog(LOG_WARNING,
-					"USB init, set config %d in use %s",
-					found->config, devstr);
-				break;
-			default:
-				applog(LOG_DEBUG,
-					"USB init, failed to set config to %d, err %d %s",
-					found->config, err, devstr);
+	cfg = -1;
+	err = libusb_get_configuration(cgusb->handle, &cfg);
+	if (err)
+		cfg = -1;
+
+	// Try to set it if we can't read it or it's different
+	if (cfg != found->config) {
+		err = libusb_set_configuration(cgusb->handle, found->config);
+		if (err) {
+			switch(err) {
+				case LIBUSB_ERROR_BUSY:
+					applog(LOG_WARNING,
+						"USB init, set config %d in use %s",
+						found->config, devstr);
+					break;
+				default:
+					applog(LOG_DEBUG,
+						"USB init, failed to set config to %d, err %d %s",
+						found->config, err, devstr);
+			}
+			goto cldame;
 		}
-		goto cldame;
 	}
 
 	err = libusb_get_active_config_descriptor(dev, &config);
@@ -1681,6 +1690,17 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 
+	cfg = -1;
+	err = libusb_get_configuration(cgusb->handle, &cfg);
+	if (err)
+		cfg = -1;
+	if (cfg != found->config) {
+		applog(LOG_WARNING,
+			"USB init, incorrect config (%d!=%d) after claim of %s",
+			cfg, found->config, devstr);
+		goto reldame;
+	}
+
 	cgusb->usbver = cgusb->descriptor->bcdUSB;
 
 // TODO: allow this with the right version of the libusb include and running library
@@ -1731,6 +1751,10 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 	bad = USB_INIT_OK;
 	goto out_unlock;
+
+reldame:
+
+	libusb_release_interface(cgusb->handle, found->interface);
 
 cldame:
 
@@ -1897,6 +1921,8 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 
 	if (count == 0)
 		applog(LOG_DEBUG, "USB scan devices: found no devices");
+	else
+		nmsleep(166);
 
 	for (i = 0; i < count; i++) {
 		if (total_count >= total_limit) {
