@@ -30,7 +30,7 @@
 #include <libgen.h>
 
 #include "compat.h"
-#include "fpgautils.h"
+#include "deviceapi.h"
 #include "miner.h"
 #include "bench_block.h"
 #include "util.h"

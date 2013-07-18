@@ -617,9 +617,11 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
+#ifdef HAVE_FPGAUTILS
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
 	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
 	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
+#endif
 	
 	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
 	devices_new[total_devices_new++] = cgpu;
@@ -668,4 +670,109 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	cgpu->last_device_valid_work = time(NULL);
 	
 	return true;
+}
+
+int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
+{
+	struct string_elist *iter, *tmp;
+	const char *dev, *colon;
+	bool inhibitauto = flags & 4;
+	char found = 0;
+	bool forceauto = flags & 1;
+	bool hasname;
+	size_t namel = strlen(api->name);
+	size_t dnamel = strlen(api->dname);
+
+#ifdef HAVE_FPGAUTILS
+	clear_detectone_meta_info();
+#endif
+	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
+		dev = iter->string;
+		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
+			size_t idlen = colon - dev;
+
+			// allow either name:device or dname:device
+			if ((idlen != namel || strncasecmp(dev, api->name, idlen))
+			&&  (idlen != dnamel || strncasecmp(dev, api->dname, idlen)))
+				continue;
+
+			dev = colon + 1;
+			hasname = true;
+		}
+		else
+			hasname = false;
+		if (!strcmp(dev, "auto"))
+			forceauto = true;
+		else if (!strcmp(dev, "noauto"))
+			inhibitauto = true;
+		else
+		if ((flags & 2) && !hasname)
+			continue;
+		else
+		if (!detectone)
+		{}  // do nothing
+#ifdef HAVE_FPGAUTILS
+		else
+		if (serial_claim(dev, NULL))
+		{
+			applog(LOG_DEBUG, "%s is already claimed... skipping probes", dev);
+			string_elist_del(&scan_devices, iter);
+		}
+#endif
+		else if (detectone(dev)) {
+			string_elist_del(&scan_devices, iter);
+			inhibitauto = true;
+			++found;
+		}
+	}
+
+	if ((forceauto || !inhibitauto) && autoscan)
+		found += autoscan();
+
+	return found;
+}
+
+static
+FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, const char *filename)
+{
+	char fullpath[PATH_MAX];
+	strcpy(fullpath, path);
+	strcat(fullpath, "/");
+	if (subdir) {
+		strcat(fullpath, subdir);
+		strcat(fullpath, "/");
+	}
+	if (sub2) {
+		strcat(fullpath, sub2);
+		strcat(fullpath, "/");
+	}
+	strcat(fullpath, filename);
+	return fopen(fullpath, "rb");
+}
+#define _open_bitstream(path, subdir, sub2)  do {  \
+	f = _open_bitstream(path, subdir, sub2, filename);  \
+	if (f)  \
+		return f;  \
+} while(0)
+
+#define _open_bitstream2(path, path3)  do {  \
+	_open_bitstream(path, NULL, path3);  \
+	_open_bitstream(path, "../share/" PACKAGE, path3);  \
+} while(0)
+
+#define _open_bitstream3(path)  do {  \
+	_open_bitstream2(path, dname);  \
+	_open_bitstream2(path, "bitstreams");  \
+	_open_bitstream2(path, NULL);  \
+} while(0)
+
+FILE *open_bitstream(const char *dname, const char *filename)
+{
+	FILE *f;
+
+	_open_bitstream3(opt_kernel_path);
+	_open_bitstream3(cgminer_path);
+	_open_bitstream3(".");
+
+	return NULL;
 }

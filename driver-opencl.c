@@ -39,8 +39,8 @@
 #define OMIT_OPENCL_API
 
 #include "compat.h"
-#include "fpgautils.h"
 #include "miner.h"
+#include "deviceapi.h"
 #include "driver-opencl.h"
 #include "findnonce.h"
 #include "ocl.h"

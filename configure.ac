@@ -432,8 +432,9 @@ fi
 
 
 need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$opencl$x6500$ztex != xnonononononono; then
+if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
 	need_fpgautils=yes
+	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h
