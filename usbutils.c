@@ -402,12 +402,9 @@ struct resource_reply {
 // Replies to lock requests
 struct resource_reply *res_reply_head = NULL;
 
-// Set this to 0 to remove stats processing
-#define DO_USB_STATS 1
-
-static bool stats_initialised = false;
-
-#if DO_USB_STATS
+// Some stats need to always be defined
+#define SEQ0 0
+#define SEQ1 1
 
 // NONE must be 0 - calloced
 #define MODE_NONE 0
@@ -415,6 +412,13 @@ static bool stats_initialised = false;
 #define MODE_CTRL_WRITE (1 << 1)
 #define MODE_BULK_READ (1 << 2)
 #define MODE_BULK_WRITE (1 << 3)
+
+// Set this to 0 to remove stats processing
+#define DO_USB_STATS 1
+
+static bool stats_initialised = false;
+
+#if DO_USB_STATS
 
 #define MODE_SEP_STR "+"
 #define MODE_NONE_STR "X"
@@ -450,9 +454,6 @@ struct cg_usb_stats {
 	int device_id;
 	struct cg_usb_stats_details *details;
 };
-
-#define SEQ0 0
-#define SEQ1 1
 
 static struct cg_usb_stats *usb_stats = NULL;
 static int next_stat = USB_NOSTAT;
@@ -2208,10 +2209,14 @@ static int
 usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 		  unsigned char endpoint, unsigned char *data, int length,
 		  int *transferred, unsigned int timeout,
-		  struct cgpu_info *cgpu, enum usb_cmds cmd)
+		  struct cgpu_info *cgpu, __maybe_unused int mode,
+		  enum usb_cmds cmd, __maybe_unused int seq)
 {
 	uint16_t MaxPacketSize;
 	int err, errn, tries = 0;
+#if DO_USB_STATS
+	struct timeval tv_start, tv_finish;
+#endif
 
 	/* Limit length of transfer to the largest this descriptor supports
 	 * and leave the higher level functions to transfer more if needed. */
@@ -2222,11 +2227,14 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 	if (length > MaxPacketSize)
 		length = MaxPacketSize;
 
+	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
 				   transferred, timeout);
 	errn = errno;
 	cg_runlock(&cgusb_fd_lock);
+	STATS_TIMEVAL(&tv_finish);
+	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq);
 
 	if (err < 0)
 		applog(LOG_DEBUG, "%s%i: %s (amt=%d err=%d ern=%d)",
@@ -2246,11 +2254,14 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 					break;
 			}
 
+			STATS_TIMEVAL(&tv_start);
 			cg_rlock(&cgusb_fd_lock);
 			err = libusb_bulk_transfer(dev_handle, endpoint, data,
 						   length, transferred, timeout);
 			errn = errno;
 			cg_runlock(&cgusb_fd_lock);
+			STATS_TIMEVAL(&tv_finish);
+			USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq);
 
 			if (err < 0)
 				applog(LOG_DEBUG, "%s%i: %s (amt=%d err=%d ern=%d)",
@@ -2274,9 +2285,6 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
-#if DO_USB_STATS
-	struct timeval tv_start;
-#endif
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
 	double max, done;
@@ -2284,9 +2292,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	bool first = true;
 	char *search;
 	int endlen;
-
-	// We add 4: 1 for null, 2 for FTDI status and 1 to round to 4 bytes
-	unsigned char usbbuf[USB_MAX_READ+4], *ptr;
+	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	size_t usbbufread;
 
 	DEVLOCK(cgpu, pstate);
@@ -2358,14 +2364,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 					}
 				}
 			}
-			STATS_TIMEVAL(&tv_start);
 			err = usb_bulk_transfer(usbdev->handle,
 						usbdev->found->eps[ep].ep,
 						ptr, usbbufread, &got, timeout,
-						cgpu, cmd);
+						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 			cgtime(&tv_finish);
-			USB_STATS(cgpu, &tv_start, &tv_finish, err,
-					MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 			ptr[got] = '\0';
 
 			USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
@@ -2467,14 +2470,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				}
 			}
 		}
-		STATS_TIMEVAL(&tv_start);
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep, ptr,
 					usbbufread, &got, timeout,
-					cgpu, cmd);
+					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
-		USB_STATS(cgpu, &tv_start, &tv_finish, err,
-				MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 		ptr[got] = '\0';
 
 		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
@@ -2561,9 +2561,6 @@ out_unlock:
 int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
-#if DO_USB_STATS
-	struct timeval tv_start;
-#endif
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
 	double max, done;
@@ -2615,14 +2612,11 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 			cgtime(&(usbdev->last_write_tv));
 			usbdev->last_write_siz = bufsiz;
 		}
-		STATS_TIMEVAL(&tv_start);
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep,
 					(unsigned char *)buf, bufsiz, &sent,
-					timeout, cgpu, cmd);
+					timeout, cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
-		USB_STATS(cgpu, &tv_start, &tv_finish, err,
-				MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
 
