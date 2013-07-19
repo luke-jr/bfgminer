@@ -458,14 +458,14 @@ struct cg_usb_stats {
 static struct cg_usb_stats *usb_stats = NULL;
 static int next_stat = USB_NOSTAT;
 
-#define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq) \
-		stats(cgpu, sta, fin, err, mode, cmd, seq)
-#define STATS_TIMEVAL(tv) cgtime(tv)
-#define USB_REJECT(sgpu, mode) rejected_inc(sgpu, mode)
+#define USB_STATS(sgpu_, sta_, fin_, err_, mode_, cmd_, seq_) \
+		stats(sgpu_, sta_, fin_, err_, mode_, cmd_, seq_)
+#define STATS_TIMEVAL(tv_) cgtime(tv_)
+#define USB_REJECT(sgpu_, mode_) rejected_inc(sgpu_, mode_)
 #else
-#define USB_STATS(sgpu, sta, fin, err, mode, cmd, seq)
-#define STATS_TIMEVAL(tv)
-#define USB_REJECT(sgpu, mode)
+#define USB_STATS(sgpu_, sta_, fin_, err_, mode_, cmd_, seq_)
+#define STATS_TIMEVAL(tv_)
+#define USB_REJECT(sgpu_, mode_)
 
 #endif // DO_USB_STATS
 
