@@ -50,6 +50,8 @@
 #include "compat.h"
 #include "util.h"
 
+#define DEFAULT_SOCKWAIT 60
+
 bool successful_connect = false;
 struct timeval nettime;
 
@@ -1188,7 +1190,7 @@ bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force)
 	return (ret == SEND_OK);
 }
 
-static bool socket_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, int wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
@@ -1197,10 +1199,7 @@ static bool socket_full(struct pool *pool, bool wait)
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
 	timeout.tv_usec = 0;
-	if (wait)
-		timeout.tv_sec = 60;
-	else
-		timeout.tv_sec = 0;
+	timeout.tv_sec = wait;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
@@ -1212,7 +1211,7 @@ bool sock_full(struct pool *pool)
 	if (strlen(pool->sockbuf))
 		return true;
 
-	return (socket_full(pool, false));
+	return (socket_full(pool, 0));
 }
 
 static void clear_sockbuf(struct pool *pool)
@@ -1263,8 +1262,9 @@ enum recv_ret {
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	ssize_t len, buflen;
 	char *tok, *sret = NULL;
+	ssize_t len, buflen;
+	int waited = 0;
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		enum recv_ret ret = RECV_OK;
@@ -1272,7 +1272,7 @@ char *recv_line(struct pool *pool)
 		int socket_recv_errno;
 
 		gettimeofday(&rstart, NULL);
-		if (!socket_full(pool, true)) {
+		if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
@@ -1289,6 +1289,8 @@ char *recv_line(struct pool *pool)
 				ret = RECV_CLOSED;
 				break;
 			}
+			gettimeofday(&now, NULL);
+			waited = tdiff(&now, &rstart);
 			if (n < 0) {
 				socket_recv_errno = errno;
 				if (!sock_blocks()) {
@@ -1300,8 +1302,7 @@ char *recv_line(struct pool *pool)
 				recalloc_sock(pool, slen);
 				strcat(pool->sockbuf, s);
 			}
-			gettimeofday(&now, NULL);
-		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
+		} while (waited < DEFAULT_SOCKWAIT && !strstr(pool->sockbuf, "\n"));
 		mutex_unlock(&pool->stratum_lock);
 
 		switch (ret) {
@@ -1913,7 +1914,7 @@ resend:
 		goto out;
 	}
 
-	if (!socket_full(pool, true)) {
+	if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
