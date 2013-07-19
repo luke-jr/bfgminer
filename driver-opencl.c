@@ -1281,7 +1281,7 @@ static void get_opencl_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 		if (gt != -1)
 			tailsprintf(buf, bufsiz, "%5.1fC ", gt);
 		else
-			tailsprintf(buf, bufsiz, "       ", gt);
+			tailsprintf(buf, bufsiz, "       ");
 		if (gf != -1)
 			// show invalid as 9999
 			tailsprintf(buf, bufsiz, "%4dRPM ", gf > 9999 ? 9999 : gf);
