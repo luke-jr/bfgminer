@@ -6011,6 +6011,9 @@ refresh:
 	if (cgpu->dev_serial)
 		wlogprint("Serial: %s\n", cgpu->dev_serial);
 	
+	if (cgpu->kname)
+		wlogprint("Kernel: %s\n", cgpu->kname);
+	
 	if (drv->proc_wlogprint_status && likely(cgpu->status != LIFE_INIT))
 		drv->proc_wlogprint_status(cgpu);
 	
