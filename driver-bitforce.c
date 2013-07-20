@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -323,6 +324,7 @@ struct bitforce_data {
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
 	float temp[2];
+	char *voltinfo;
 };
 
 struct bitforce_proc_data {
@@ -546,7 +548,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
-	char pdevbuf[0x100];
+	char pdevbuf[0x40];
+	char voltbuf[0x40];
 	char *s;
 	struct cgpu_info *chip_cgpu;
 
@@ -569,9 +572,51 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(mutexp))
 		return false;
 
+	if (data->sc)
+		bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "ZTX");
 	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
+	if (data->sc && likely(voltbuf[0]))
+	{
+		// Process voltage info
+		// "NNNxxx,NNNxxx,NNNxxx" -> "NNN.xxx / NNN.xxx / NNN.xxx"
+		size_t sz = strlen(voltbuf) * 4;
+		char *saveptr, *v, *outbuf = malloc(sz);
+		char *out = outbuf;
+		if (!out)
+			goto skipvolts;
+		for (v = strtok_r(voltbuf, ",", &saveptr); v; v = strtok_r(NULL, ",", &saveptr))
+		{
+			while (isspace(v[0]))
+				++v;
+			sz = strlen(v);
+			while (isspace(v[sz - 1]))
+				--sz;
+			if (sz < 4)
+			{
+				memcpy(out, "0.00? / ", 8);
+				memcpy(&out[5 - sz], v, sz);
+				out += 8;
+			}
+			else
+			{
+				memcpy(out, v, sz - 3);
+				out += sz - 3;
+				out[0] = '.';
+				memcpy(&out[1], &v[sz - 3], 3);
+				memcpy(&out[4], " / ", 3);
+				out += 7;
+			}
+		}
+		out[-3] = '\0';
+		assert(out[-2]=='/');
+		saveptr = data->voltinfo;
+		data->voltinfo = outbuf;
+		free(saveptr);
+	}
+	
+skipvolts:
 	if (unlikely(!pdevbuf[0])) {
 		struct thr_info *thr = bitforce->thr[0];
 		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
@@ -1398,6 +1443,8 @@ void bitforce_wlogprint_status(struct cgpu_info *cgpu)
 	struct bitforce_data *data = cgpu->device_data;
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		wlogprint("Temperatures: %4.1fC %4.1fC\n", data->temp[0], data->temp[1]);
+	if (data->voltinfo)
+		wlogprint("Voltages: %s\n", data->voltinfo);
 }
 #endif
 
