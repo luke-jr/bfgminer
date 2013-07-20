@@ -6029,6 +6029,7 @@ refresh:
 	wlogprint("Or press Enter when done\n");
 	if (msg)
 	{
+		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": %s", cgpu->proc_repr, msg);
 		wattron(logwin, A_BOLD);
 		waddstr(logwin, msg);
 		wattroff(logwin, A_BOLD);
@@ -6039,6 +6040,7 @@ refresh:
 	while (true)
 	{
 		int input = getch();
+		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": (choice %d)", cgpu->proc_repr, input);
 		switch (input) {
 			case 'd': case 'D':
 				if (cgpu->deven == DEV_DISABLED)
