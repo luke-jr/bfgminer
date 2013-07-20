@@ -3048,8 +3048,8 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		root = api_add_string(root, "USB Delay", details, true);
 
 		if (cgpu->usbinfo.usb_tmo[0].count == 0 &&
-			cgpu->usbinfo.usb_tmo[0].count == 0 &&
-			cgpu->usbinfo.usb_tmo[0].count == 0) {
+			cgpu->usbinfo.usb_tmo[1].count == 0 &&
+			cgpu->usbinfo.usb_tmo[2].count == 0) {
 				snprintf(details, sizeof(details),
 					 "%"PRIu64" 0", cgpu->usbinfo.tmo_count);
 		} else {
