@@ -1088,7 +1088,7 @@ struct stratum_work {
 	
 	uint8_t header1[36];
 	uint8_t diffbits[4];
-	uint8_t ntime[4];
+	uint32_t ntime;  // Always big endian
 
 	double diff;
 
