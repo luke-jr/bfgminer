@@ -48,6 +48,7 @@ enum bitforce_proto {
 	BFP_RANGE,
 	BFP_QUEUE,
 	BFP_BQUEUE,
+	BFP_PQUEUE,
 };
 
 static const char *protonames[] = {
@@ -55,6 +56,7 @@ static const char *protonames[] = {
 	"nonce range",
 	"work queue",
 	"bulk queue",
+	"parallel queue",
 };
 
 struct device_drv bitforce_drv;
@@ -650,6 +652,8 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	{
 		case BFP_BQUEUE:
 			quit(1, "%"PRIpreprv": Impossible BFP_BQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+		case BFP_PQUEUE:
+			quit(1, "%"PRIpreprv": Impossible BFP_PQUEUE in bitforce_job_prepare", bitforce->proc_repr);
 		case BFP_RANGE:
 		{
 			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
@@ -1269,7 +1273,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			
 			if (bitforce->drv == &bitforce_queue_api)
 			{
-				bitforce_change_mode(bitforce, BFP_BQUEUE);
+				bitforce_change_mode(bitforce, data->parallel_protocol ? BFP_PQUEUE : BFP_BQUEUE);
 				bitforce->sleep_ms = data->sleep_ms_default = 100;
 				timer_set_delay_from_now(&thr->tv_poll, 0);
 				data->queued_max = data->parallel * 2;
@@ -1407,7 +1411,7 @@ static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
-	if (data->proto != BFP_BQUEUE)
+	if (data->proto != BFP_BQUEUE && data->proto != BFP_PQUEUE)
 		root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 	{
