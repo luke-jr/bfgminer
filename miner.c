@@ -2768,7 +2768,7 @@ static inline void change_logwinsize(void)
 			statusy = y - 2;
 		else
 			statusy = logstart;
-		logcursor = statusy + 1;
+		logcursor = statusy;
 		mvwin(logwin, logcursor, 0);
 		wresize(statuswin, statusy, x);
 	}
@@ -2793,7 +2793,7 @@ static void check_winsizes(void)
 			statusy = LINES - 2;
 		else
 			statusy = logstart;
-		logcursor = statusy + 1;
+		logcursor = statusy;
 		wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
@@ -2814,7 +2814,7 @@ static void switch_logsize(void)
 		} else {
 			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
 			logstart = devcursor + total_lines + 1;
-			logcursor = logstart + 1;
+			logcursor = logstart;
 		}
 		unlock_curses();
 	}
@@ -9145,7 +9145,7 @@ int main(int argc, char *argv[])
 
 	devcursor = 8;
 	logstart = devcursor + 1;
-	logcursor = logstart + 1;
+	logcursor = logstart;
 
 	block = calloc(sizeof(struct block), 1);
 	if (unlikely(!block))
