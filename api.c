@@ -3023,7 +3023,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 
 	if (cgpu) {
 #ifdef USE_USBUTILS
-		char details[128];
+		char details[256];
 
 		if (cgpu->usbinfo.pipe_count)
 			snprintf(details, sizeof(details),
@@ -3046,6 +3046,36 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 			 cgpu->usbinfo.total_write_delay);
 
 		root = api_add_string(root, "USB Delay", details, true);
+
+		if (cgpu->usbinfo.usb_tmo[0].count == 0 &&
+			cgpu->usbinfo.usb_tmo[1].count == 0 &&
+			cgpu->usbinfo.usb_tmo[2].count == 0) {
+				snprintf(details, sizeof(details),
+					 "%"PRIu64" 0", cgpu->usbinfo.tmo_count);
+		} else {
+			snprintf(details, sizeof(details),
+				 "%"PRIu64" %d=%d/%d/%d/%"PRIu64"/%"PRIu64
+				 " %d=%d/%d/%d/%"PRIu64"/%"PRIu64
+				 " %d=%d/%d/%d/%"PRIu64"/%"PRIu64" ",
+				 cgpu->usbinfo.tmo_count,
+				 USB_TMO_0, cgpu->usbinfo.usb_tmo[0].count,
+				 cgpu->usbinfo.usb_tmo[0].min_tmo,
+				 cgpu->usbinfo.usb_tmo[0].max_tmo,
+				 cgpu->usbinfo.usb_tmo[0].total_over,
+				 cgpu->usbinfo.usb_tmo[0].total_tmo,
+				 USB_TMO_1, cgpu->usbinfo.usb_tmo[1].count,
+				 cgpu->usbinfo.usb_tmo[1].min_tmo,
+				 cgpu->usbinfo.usb_tmo[1].max_tmo,
+				 cgpu->usbinfo.usb_tmo[1].total_over,
+				 cgpu->usbinfo.usb_tmo[1].total_tmo,
+				 USB_TMO_2, cgpu->usbinfo.usb_tmo[2].count,
+				 cgpu->usbinfo.usb_tmo[2].min_tmo,
+				 cgpu->usbinfo.usb_tmo[2].max_tmo,
+				 cgpu->usbinfo.usb_tmo[2].total_over,
+				 cgpu->usbinfo.usb_tmo[2].total_tmo);
+		}
+
+		root = api_add_string(root, "USB tmo", details, true);
 #endif
 	}
 

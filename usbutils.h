@@ -186,6 +186,19 @@ struct cg_usb_device {
 
 #define USB_MAX_READ 8192
 
+#define USB_TMO_0 50
+#define USB_TMO_1 100
+#define USB_TMO_2 500
+#define USB_TMOS 3
+
+struct cg_usb_tmo {
+	uint32_t count;
+	uint32_t min_tmo;
+	uint32_t max_tmo;
+	uint64_t total_over;
+	uint64_t total_tmo;
+};
+
 struct cg_usb_info {
 	uint8_t bus_number;
 	uint8_t device_address;
@@ -224,6 +237,9 @@ struct cg_usb_info {
 	 * multiple of these
 	 */
 	unsigned char bulkbuf[USB_MAX_READ+4];
+
+	uint64_t tmo_count;
+	struct cg_usb_tmo usb_tmo[USB_TMOS];
 };
 
 enum usb_cmds {
