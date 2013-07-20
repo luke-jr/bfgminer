@@ -149,7 +149,7 @@ char *_decode_udev_enc_dup(const char *s)
 	if (!s)
 		return NULL;
 	
-	char *o = malloc(strlen(s));
+	char *o = malloc(strlen(s) + 1);
 	if (!o)
 	{
 		applog(LOG_ERR, "Failed to malloc in _decode_udev_enc_dup");
