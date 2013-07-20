@@ -460,9 +460,6 @@ static int next_stat = USB_NOSTAT;
 
 #define SECTOMS(s) ((int)((s) * 1000))
 
-// timeout checks are only done when stats are enabled
-#define TIMEOUT_OVER_MS 500
-
 #define USB_STATS(sgpu_, sta_, fin_, err_, mode_, cmd_, seq_, tmo_) \
 		stats(sgpu_, sta_, fin_, err_, mode_, cmd_, seq_, tmo_)
 #define STATS_TIMEVAL(tv_) cgtime(tv_)
@@ -2128,17 +2125,29 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 {
 	struct cg_usb_stats_details *details;
 	double diff;
-	int item, elapsedms;
+	int item, extrams;
 
 	if (cgpu->usbinfo.usbstat < 1)
 		newstats(cgpu);
 
+	cgpu->usbinfo.tmo_count++;
+
 	// timeout checks are only done when stats are enabled
-	elapsedms = SECTOMS(tdiff(tv_finish, tv_start));
-	if (elapsedms > (timeout + TIMEOUT_OVER_MS)) {
-		applog(LOG_ERR, "%s%i: TIMEOUT %s took %dms but was %dms",
-				cgpu->drv->name, cgpu->device_id,
-				usb_cmdname(cmd), elapsedms, timeout) ;
+	extrams = SECTOMS(tdiff(tv_finish, tv_start)) - timeout;
+	if (extrams >= USB_TMO_0) {
+		int offset = 0;
+
+		if (extrams >= USB_TMO_2) {
+			applog(LOG_ERR, "%s%i: TIMEOUT %s took %dms but was %dms",
+					cgpu->drv->name, cgpu->device_id,
+					usb_cmdname(cmd), extrams+timeout, timeout) ;
+			offset = 2;
+		} else if (extrams >= USB_TMO_1)
+			offset = 1;
+
+		cgpu->usbinfo.usb_tmo[offset].count++;
+		cgpu->usbinfo.usb_tmo[offset].total_over += extrams;
+		cgpu->usbinfo.usb_tmo[offset].total_tmo += timeout;
 	}
 
 	details = &(usb_stats[cgpu->usbinfo.usbstat - 1].details[cmd * 2 + seq]);
