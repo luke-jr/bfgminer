@@ -1668,6 +1668,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 
 	cg_wlock(&pool->data_lock);
+	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
 	pool->submit_old = !clean;
@@ -1675,7 +1676,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	
 	hex2bin(&pool->swork.header1[0], bbversion,  4);
 	hex2bin(&pool->swork.header1[4], prev_hash, 32);
-	hex2bin(&pool->swork.ntime[0], ntime, 4);
+	hex2bin((void*)&pool->swork.ntime, ntime, 4);
+	pool->swork.ntime = be32toh(pool->swork.ntime);
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
 	
 	cb1_len = strlen(coinbase1) / 2;
