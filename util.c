@@ -1668,6 +1668,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 
 	cg_wlock(&pool->data_lock);
+	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
 	pool->submit_old = !clean;

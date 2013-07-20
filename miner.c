@@ -7221,7 +7221,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	
 	memcpy(&work->data[0], pool->swork.header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
-	*((uint32_t*)&work->data[68]) = htobe32(pool->swork.ntime);
+	*((uint32_t*)&work->data[68]) = htobe32(pool->swork.ntime + timer_elapsed(&pool->swork.tv_received, NULL));
 	memcpy(&work->data[72], pool->swork.diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);

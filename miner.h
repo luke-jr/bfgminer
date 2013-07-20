@@ -1089,6 +1089,7 @@ struct stratum_work {
 	uint8_t header1[36];
 	uint8_t diffbits[4];
 	uint32_t ntime;
+	struct timeval tv_received;
 
 	double diff;
 
