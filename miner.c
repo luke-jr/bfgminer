@@ -6021,6 +6021,8 @@ refresh:
 		wlogprint("[E]nable ");
 	if (cgpu->deven != DEV_DISABLED)
 		wlogprint("[D]isable ");
+	if (drv->identify_device)
+		wlogprint("[I]dentify ");
 	if (drv->proc_tui_wlogprint_choices && likely(cgpu->status != LIFE_INIT))
 		drv->proc_tui_wlogprint_choices(cgpu);
 	wlogprint("\n");
@@ -6055,6 +6057,12 @@ refresh:
 					proc_enable(cgpu);
 					msg = "Processor being enabled\n";
 				}
+				goto refresh;
+			case 'i': case 'I':
+				if (drv->identify_device && drv->identify_device(cgpu))
+					msg = "Identify command sent\n";
+				else
+					msg = "Error: Identify not supported\n";
 				goto refresh;
 			case KEY_DOWN:
 				if (selected_device >= total_devices - 1)
