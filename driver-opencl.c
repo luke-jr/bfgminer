@@ -963,7 +963,7 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			clear_logwin();
 			get_statline3(logline, cgpu, true, true);
 			wattron(logwin, A_BOLD);
-			waddstr(logwin, logline);
+			wlogprint("%s", logline);
 			wattroff(logwin, A_BOLD);
 			wlogprint("\n");
 			

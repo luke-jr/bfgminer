@@ -6017,7 +6017,7 @@ refresh:
 	
 	get_statline3(logline, cgpu, true, true);
 	wattron(logwin, A_BOLD);
-	waddstr(logwin, logline);
+	wlogprint("%s", logline);
 	wattroff(logwin, A_BOLD);
 	wlogprint("\n");
 	
@@ -6053,7 +6053,7 @@ refresh:
 	{
 		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": %s", cgpu->proc_repr, msg);
 		wattron(logwin, A_BOLD);
-		waddstr(logwin, msg);
+		wlogprint("%s", msg);
 		wattroff(logwin, A_BOLD);
 		msg = NULL;
 	}
