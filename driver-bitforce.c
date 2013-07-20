@@ -1360,6 +1360,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			procdata->cgpu = bitforce;
 			bitforce->device_data = data;
 			bitforce->status = LIFE_INIT2;
+			bitforce->kname = first_on_this_board->cgpu->kname;
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		
