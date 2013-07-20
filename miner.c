@@ -2824,6 +2824,25 @@ static void switch_logsize(void)
 /* For mandatory printing when mutex is already locked */
 void _wlog(const char *str)
 {
+	static bool newline;
+	size_t end = strlen(str) - 1;
+	
+	if (newline)
+		wprintw(logwin, "\n");
+	
+	if (str[end] == '\n')
+	{
+		char *s;
+		
+		newline = true;
+		s = alloca(end);
+		memcpy(s, str, end);
+		s[end] = '\0';
+		str = s;
+	}
+	else
+		newline = false;
+	
 	wprintw(logwin, "%s", str);
 }
 
