@@ -2135,12 +2135,13 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 	// timeout checks are only done when stats are enabled
 	extrams = SECTOMS(tdiff(tv_finish, tv_start)) - timeout;
 	if (extrams >= USB_TMO_0) {
+		uint32_t totms = (uint32_t)(timeout + extrams);
 		int offset = 0;
 
 		if (extrams >= USB_TMO_2) {
 			applog(LOG_ERR, "%s%i: TIMEOUT %s took %dms but was %dms",
 					cgpu->drv->name, cgpu->device_id,
-					usb_cmdname(cmd), extrams+timeout, timeout) ;
+					usb_cmdname(cmd), totms, timeout) ;
 			offset = 2;
 		} else if (extrams >= USB_TMO_1)
 			offset = 1;
@@ -2148,6 +2149,15 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		cgpu->usbinfo.usb_tmo[offset].count++;
 		cgpu->usbinfo.usb_tmo[offset].total_over += extrams;
 		cgpu->usbinfo.usb_tmo[offset].total_tmo += timeout;
+		if (cgpu->usbinfo.usb_tmo[offset].min_tmo == 0) {
+			cgpu->usbinfo.usb_tmo[offset].min_tmo = totms;
+			cgpu->usbinfo.usb_tmo[offset].max_tmo = totms;
+		} else {
+			if (cgpu->usbinfo.usb_tmo[offset].min_tmo > totms)
+				cgpu->usbinfo.usb_tmo[offset].min_tmo = totms;
+			if (cgpu->usbinfo.usb_tmo[offset].max_tmo < totms)
+				cgpu->usbinfo.usb_tmo[offset].max_tmo = totms;
+		}
 	}
 
 	details = &(usb_stats[cgpu->usbinfo.usbstat - 1].details[cmd * 2 + seq]);

@@ -193,6 +193,8 @@ struct cg_usb_device {
 
 struct cg_usb_tmo {
 	uint32_t count;
+	uint32_t min_tmo;
+	uint32_t max_tmo;
 	uint64_t total_over;
 	uint64_t total_tmo;
 };

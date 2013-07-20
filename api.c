@@ -3054,17 +3054,23 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 					 "%"PRIu64" 0", cgpu->usbinfo.tmo_count);
 		} else {
 			snprintf(details, sizeof(details),
-				 "%"PRIu64" %d=%d/%"PRIu64"/%"PRIu64
-				 " %d=%d/%"PRIu64"/%"PRIu64
-				 " %d=%d/%"PRIu64"/%"PRIu64" ",
+				 "%"PRIu64" %d=%d/%d/%d/%"PRIu64"/%"PRIu64
+				 " %d=%d/%d/%d/%"PRIu64"/%"PRIu64
+				 " %d=%d/%d/%d/%"PRIu64"/%"PRIu64" ",
 				 cgpu->usbinfo.tmo_count,
 				 USB_TMO_0, cgpu->usbinfo.usb_tmo[0].count,
+				 cgpu->usbinfo.usb_tmo[0].min_tmo,
+				 cgpu->usbinfo.usb_tmo[0].max_tmo,
 				 cgpu->usbinfo.usb_tmo[0].total_over,
 				 cgpu->usbinfo.usb_tmo[0].total_tmo,
 				 USB_TMO_1, cgpu->usbinfo.usb_tmo[1].count,
+				 cgpu->usbinfo.usb_tmo[1].min_tmo,
+				 cgpu->usbinfo.usb_tmo[1].max_tmo,
 				 cgpu->usbinfo.usb_tmo[1].total_over,
 				 cgpu->usbinfo.usb_tmo[1].total_tmo,
 				 USB_TMO_2, cgpu->usbinfo.usb_tmo[2].count,
+				 cgpu->usbinfo.usb_tmo[2].min_tmo,
+				 cgpu->usbinfo.usb_tmo[2].max_tmo,
 				 cgpu->usbinfo.usb_tmo[2].total_over,
 				 cgpu->usbinfo.usb_tmo[2].total_tmo);
 		}
