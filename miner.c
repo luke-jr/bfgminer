@@ -2831,7 +2831,7 @@ void _wlog(const char *str)
 void _wlogprint(const char *str)
 {
 	if (curses_active_locked()) {
-		wprintw(logwin, "%s", str);
+		_wlog(str);
 		unlock_curses();
 	}
 }
@@ -2847,7 +2847,7 @@ bool _log_curses_only(int prio, const char *datetime, const char *str)
 	if (curses_active)
 	{
 		if (!opt_loginput || high_prio) {
-			wprintw(logwin, " %s %s\n", datetime, str);
+			wlog(" %s %s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);
