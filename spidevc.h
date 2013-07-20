@@ -1,3 +1,7 @@
+/*
+ *  Copyright 2013 www.bitfury.org
+ */
+
 #ifndef SPIDEVC_H
 #define SPIDEVC_H
 
@@ -18,7 +22,7 @@ void spi_emit_buf(const char *str, unsigned sz); /* INTERNAL USE: EMIT BYTE SEQU
 
 void spi_emit_break(void); /* BREAK CONNECTIONS AFTER RESET */
 void spi_emit_fsync(void); /* FEED-THROUGH TO NEXT CHIP SYNCHRONOUSLY (WITH FLIP-FLOP) */
-void spi_emit_fasync(void); /* FEED-THROUGH TO NEXT CHIP ASYNCHRONOUSLY (WITHOUT FLIP-FLOP INTERMEDIATE) */
+void spi_emit_fasync(int n); /* FEED-THROUGH TO NEXT CHIP ASYNCHRONOUSLY (WITHOUT FLIP-FLOP INTERMEDIATE) */
 
 /* TRANSMIT PROGRAMMING SEQUENCE (AND ALSO READ-BACK) */
 /* addr is the destination address in bits (16-bit - 0 to 0xFFFF valid ones)

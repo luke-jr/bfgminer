@@ -478,6 +478,9 @@ struct cgpu_info {
 #if defined(USE_BITFORCE) || defined(USE_BFLSC)
 	pthread_mutex_t device_mutex;
 #endif /* USE_BITFORCE || USE_BFLSC */
+#ifdef USE_BITFURY
+	int chip_n;
+#endif
 	enum dev_enable deven;
 	int accepted;
 	int rejected;
