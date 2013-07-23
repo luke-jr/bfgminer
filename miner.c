@@ -2418,6 +2418,7 @@ char *_multi_format_unit(char *bufin, bool floatprec, const char *measurement, e
 	int i;
 	size_t delimsz = strlen(delim);
 	char *buf = bufin;
+	size_t itemwidth = (floatprec ? 5 : 3);
 	
 	for (i = 0; i < count; ++i)
 		pick_unit(numbers[i], &unit);
@@ -2426,7 +2427,7 @@ char *_multi_format_unit(char *bufin, bool floatprec, const char *measurement, e
 	for (i = 0; i < count; ++i)
 	{
 		format_unit(buf, floatprec, NULL, H2B_NOUNIT, numbers[i], unit);
-		buf += strlen(buf);
+		buf += itemwidth;
 		memcpy(buf, delim, delimsz);
 		buf += delimsz;
 	}
