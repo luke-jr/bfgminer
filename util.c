@@ -1797,7 +1797,6 @@ static bool setup_stratum_curl(struct pool *pool)
 		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
-	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
 	if (!pool->sockbuf) {
@@ -1854,6 +1853,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.times_received++;
 
+	mutex_unlock(&pool->stratum_lock);
+	
 	return true;
 }
 
