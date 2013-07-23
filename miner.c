@@ -2345,8 +2345,8 @@ utility_to_hashrate(double utility)
 
 static const char*_unitchar = " kMGTPEZY?";
 
-static void
-hashrate_pick_unit(float hashrate, unsigned char*unit)
+static
+void pick_unit(float hashrate, unsigned char *unit)
 {
 	unsigned char i;
 	for (i = 0; i < *unit; ++i)
@@ -2358,6 +2358,7 @@ hashrate_pick_unit(float hashrate, unsigned char*unit)
 			++*unit;
 	}
 }
+#define hashrate_pick_unit(hashrate, unit)  pick_unit(hashrate, unit)
 
 enum h2bs_fmt {
 	H2B_NOUNIT,  // "xxx.x"
@@ -2366,8 +2367,8 @@ enum h2bs_fmt {
 };
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
-static char*
-hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt fmt)
+static
+char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
 	unsigned char prec, i, ucp, unit;
 	if (unitin == -1)
@@ -2384,7 +2385,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 		buf[i++] = ' ';
 	case H2B_SHORT:
 		buf[i++] = _unitchar[unit];
-		strcpy(&buf[i], "h/s");
+		strcpy(&buf[i], measurement);
 	default:
 		break;
 	}
@@ -2400,6 +2401,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 	buf[5] = ucp;
 	return buf;
 }
+#define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, "h/s", fmt, hashrate, unitin)
 
 static void
 ti_hashrate_bufstr(char**out, float current, float average, float sharebased, enum h2bs_fmt longfmt)
