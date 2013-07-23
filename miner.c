@@ -2368,7 +2368,7 @@ enum h2bs_fmt {
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
 static
-char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
+char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
 	unsigned char prec, i, unit;
 	if (unitin == -1)
@@ -2382,12 +2382,21 @@ char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float h
 	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
 	
-	if (hashrate >= 100 || unit < 2)
-		prec = 1;
+	if (floatprec)
+	{
+		if (hashrate >= 100 || unit < 2)
+			prec = 1;
+		else
+			prec = 2;
+		sprintf(buf, "%5.*f", prec, hashrate);
+		i = 5;
+	}
 	else
-		prec = 2;
-	sprintf(buf, "%5.*f", prec, hashrate);
-	i = 5;
+	{
+		sprintf(buf, "%3d", (int)hashrate);
+		i = 3;
+	}
+	
 	switch (fmt) {
 	case H2B_SPACED:
 		buf[i++] = ' ';
@@ -2400,7 +2409,7 @@ char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float h
 	
 	return buf;
 }
-#define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, "h/s", fmt, hashrate, unitin)
+#define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, true, "h/s", fmt, hashrate, unitin)
 
 static void
 ti_hashrate_bufstr(char**out, float current, float average, float sharebased, enum h2bs_fmt longfmt)
