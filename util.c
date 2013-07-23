@@ -1679,6 +1679,7 @@ bool initiate_stratum(struct pool *pool)
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		mutex_unlock(&pool->stratum_lock);
 		goto out;
 	}
 	if (pool->sock == INVSOCK)
@@ -1686,6 +1687,7 @@ bool initiate_stratum(struct pool *pool)
 		pool->stratum_curl = NULL;
 		curl_easy_cleanup(curl);
 		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
+		mutex_unlock(&pool->stratum_lock);
 		goto out;
 	}
 	keep_sockalive(pool->sock);
