@@ -1965,6 +1965,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	char curl_err_str[CURL_ERROR_SIZE];
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
+	bool ret = false;
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -2021,25 +2022,26 @@ static bool setup_stratum_curl(struct pool *pool)
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+errout:
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
-		return false;
+		goto out;
 	}
 	if (pool->sock == INVSOCK)
 	{
-		pool->stratum_curl = NULL;
-		curl_easy_cleanup(curl);
 		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
-		return false;
+		goto errout;
 	}
 	keep_sockalive(pool->sock);
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.times_received++;
+	ret = true;
 
+out:
 	mutex_unlock(&pool->stratum_lock);
 	
-	return true;
+	return ret;
 }
 
 static char *get_sessionid(json_t *val)
