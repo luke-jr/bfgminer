@@ -2412,13 +2412,16 @@ char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_
 #define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, true, "h/s", fmt, hashrate, unitin)
 
 static
-char *_multi_format_unit(char *bufin, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers)
+char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
 {
 	unsigned char unit = 0;
 	int i;
-	size_t delimsz = strlen(delim);
-	char *buf = bufin;
+	size_t delimsz;
+	char *buf = buflist[0];
 	size_t itemwidth = (floatprec ? 5 : 3);
+	
+	if (!isarray)
+		delimsz = strlen(delim);
 	
 	for (i = 0; i < count; ++i)
 		pick_unit(numbers[i], &unit);
@@ -2427,17 +2430,23 @@ char *_multi_format_unit(char *bufin, bool floatprec, const char *measurement, e
 	for (i = 0; i < count; ++i)
 	{
 		format_unit(buf, floatprec, NULL, H2B_NOUNIT, numbers[i], unit);
-		buf += itemwidth;
-		memcpy(buf, delim, delimsz);
-		buf += delimsz;
+		if (isarray)
+			buf = buflist[i + 1];
+		else
+		{
+			buf += itemwidth;
+			memcpy(buf, delim, delimsz);
+			buf += delimsz;
+		}
 	}
 	
 	// Last entry has the unit
 	format_unit(buf, floatprec, measurement, fmt, numbers[count], unit);
 	
-	return bufin;
+	return buflist[0];
 }
-#define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit(buf, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ })
+#define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
+#define multi_format_unit_array(buflist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
 
 static void
 ti_hashrate_bufstr(char**out, float current, float average, float sharebased, enum h2bs_fmt longfmt)
