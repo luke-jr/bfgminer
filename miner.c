@@ -5986,6 +5986,9 @@ static bool stratum_works(struct pool *pool)
 	if (!extract_sockaddr(pool, pool->stratum_url))
 		return false;
 
+	if (pool->stratum_active)
+		return true;
+	
 	if (!initiate_stratum(pool))
 		return false;
 
