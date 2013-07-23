@@ -2443,7 +2443,7 @@ static void text_print_status(int thr_id)
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
-	struct pool *pool = current_pool();
+	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
 
@@ -2475,7 +2475,7 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 2, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 3, 0, " ST: %d  DW: %d  GW: %d  LW: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f",
-		total_staged(), total_discarded,
+		__total_staged(), total_discarded,
 		total_getworks,
 		local_work,
 		total_go,
