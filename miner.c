@@ -2409,7 +2409,6 @@ char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_
 	
 	return buf;
 }
-#define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, true, "h/s", fmt, hashrate, unitin)
 
 static
 char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
@@ -2447,20 +2446,6 @@ char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement
 }
 #define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
 #define multi_format_unit_array(buflist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
-
-static void
-ti_hashrate_bufstr(char**out, float current, float average, float sharebased, enum h2bs_fmt longfmt)
-{
-	unsigned char unit = 0;
-	
-	hashrate_pick_unit(current, &unit);
-	hashrate_pick_unit(average, &unit);
-	hashrate_pick_unit(sharebased, &unit);
-	
-	hashrate_to_bufstr(out[0], current, unit, H2B_NOUNIT);
-	hashrate_to_bufstr(out[1], average, unit, H2B_NOUNIT);
-	hashrate_to_bufstr(out[2], sharebased, unit, longfmt);
-}
 
 static const char *
 percentf2(double p, double t, char *buf)
@@ -2537,12 +2522,13 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 			allnonces += slave->diff1;
 		}
 	
-	ti_hashrate_bufstr(
-		(char*[]){cHr, aHr, uHr},
+	multi_format_unit_array(
+		((char*[]){cHr, aHr, uHr}),
+		true, "h/s", hashrate_style,
+		3,
 		1e6*rolling,
 		1e6*mhashes / dev_runtime,
-		utility_to_hashrate(wutil),
-		hashrate_style);
+		utility_to_hashrate(wutil));
 
 	// Processor representation
 #ifdef HAVE_CURSES
@@ -4976,7 +4962,7 @@ static void set_blockdiff(const struct work *work)
 	diff64 = diff;
 
 	suffix_string(diff64, block_diff, 0);
-	hashrate_to_bufstr(net_hashrate, diff * 7158278, -1, H2B_SHORT);
+	format_unit(net_hashrate, true, "h/s", H2B_SHORT, diff * 7158278, -1);
 	if (unlikely(current_diff != diff))
 		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
 	current_diff = diff;
@@ -6368,12 +6354,13 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	ti_hashrate_bufstr(
-		(char*[]){cHr, aHr, uHr},
+	multi_format_unit_array(
+		((char*[]){cHr, aHr, uHr}),
+		true, "h/s", H2B_SPACED,
+		3,
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
-		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60),
-		H2B_SPACED);
+		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60));
 
 	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
