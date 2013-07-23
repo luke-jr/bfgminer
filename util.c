@@ -339,14 +339,14 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 		case CURLINFO_DATA_IN:
 		case CURLINFO_SSL_DATA_IN:
 			pool->cgminer_pool_stats.bytes_received += size;
-			total_bytes_xfer += size;
+			total_bytes_rcvd += size;
 			pool->cgminer_pool_stats.net_bytes_received += size;
 			break;
 		case CURLINFO_HEADER_OUT:
 		case CURLINFO_DATA_OUT:
 		case CURLINFO_SSL_DATA_OUT:
 			pool->cgminer_pool_stats.bytes_sent += size;
-			total_bytes_xfer += size;
+			total_bytes_sent += size;
 			pool->cgminer_pool_stats.net_bytes_sent += size;
 			break;
 		case CURLINFO_TEXT:
@@ -1366,7 +1366,7 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
-	total_bytes_xfer += ssent;
+	total_bytes_sent += ssent;
 	pool->cgminer_pool_stats.net_bytes_sent += ssent;
 	return SEND_OK;
 }
@@ -1536,7 +1536,7 @@ char *recv_line(struct pool *pool)
 
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
-	total_bytes_xfer += len;
+	total_bytes_rcvd += len;
 	pool->cgminer_pool_stats.net_bytes_received += len;
 
 out:
