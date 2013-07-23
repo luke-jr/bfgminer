@@ -255,7 +255,7 @@ int hw_errors;
 int total_accepted, total_rejected, total_diff1;
 int total_bad_nonces;
 int total_getworks, total_stale, total_discarded;
-uint64_t total_bytes_xfer;
+uint64_t total_bytes_rcvd, total_bytes_sent;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int staged_rollable;
 unsigned int new_blocks;
@@ -5479,7 +5479,7 @@ void zero_stats(void)
 	hw_errors = 0;
 	total_stale = 0;
 	total_discarded = 0;
-	total_bytes_xfer = 0;
+	total_bytes_rcvd = total_bytes_sent = 0;
 	new_blocks = 0;
 	local_work = 0;
 	total_go = 0;

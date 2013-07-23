@@ -1008,7 +1008,8 @@ extern unsigned int new_blocks;
 extern unsigned int found_blocks;
 extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
-extern uint64_t total_bytes_xfer;
+extern uint64_t total_bytes_rcvd, total_bytes_sent;
+#define total_bytes_xfer (total_bytes_rcvd + total_bytes_sent)
 extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
