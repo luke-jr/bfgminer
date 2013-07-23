@@ -2698,12 +2698,16 @@ static void curses_print_status(void)
 
 	utility = total_accepted / total_secs * 60;
 
-	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  E: %.2f  U:%.1f/m  BS:%s",
+	char bwstr[12];
+	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  BW: %s  E: %.2f  U:%.1f/m  BS:%s",
 		total_staged(),
 		total_go,
 		new_blocks,
 		total_submitting,
 		total_ro,
+		multi_format_unit(bwstr, false, "B/s", H2B_SHORT, "/", 2,
+		                  (float)(total_bytes_rcvd / total_secs),
+		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
 		utility,
 		best_share);
@@ -5177,6 +5181,8 @@ static bool input_pool(bool live);
 static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
+	char xfer[17], bw[19];
+	int pool_secs;
 
 	if (curses_active_locked()) {
 		wlog("Pool: %s\n", pool->rpc_url);
@@ -5192,6 +5198,14 @@ static void display_pool_summary(struct pool *pool)
 		);
 		wlog(" Accepted difficulty shares: %1.f\n", pool->diff_accepted);
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
+		pool_secs = timer_elapsed(&pool->cgminer_stats.start_tv, NULL);
+		wlog(" Network transfer: %s  (%s)\n",
+		     multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+		                       (float)pool->cgminer_pool_stats.net_bytes_received,
+		                       (float)pool->cgminer_pool_stats.net_bytes_sent),
+		     multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+		                       (float)(pool->cgminer_pool_stats.net_bytes_received / pool_secs),
+		                       (float)(pool->cgminer_pool_stats.net_bytes_sent / pool_secs)));
 		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
@@ -8373,6 +8387,8 @@ void print_summary(void)
 	struct timeval diff;
 	int hours, mins, secs, i;
 	double utility, efficiency = 0.0;
+	char xfer[17], bw[19];
+	int pool_secs;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
 	hours = diff.tv_sec / 3600;
@@ -8403,6 +8419,13 @@ void print_summary(void)
 	applog(LOG_WARNING, "Accepted difficulty shares: %1.f", total_diff_accepted);
 	applog(LOG_WARNING, "Rejected difficulty shares: %1.f", total_diff_rejected);
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
+	applog(LOG_WARNING, "Network transfer: %s  (%s)",
+	       multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+	                         (float)total_bytes_rcvd,
+	                         (float)total_bytes_sent),
+	       multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+	                         (float)(total_bytes_rcvd / total_secs),
+	                         (float)(total_bytes_sent / total_secs)));
 	applog(LOG_WARNING, "Efficiency (accepted shares * difficulty / 2 KB): %.2f", efficiency);
 	applog(LOG_WARNING, "Utility (accepted shares / min): %.2f/min\n", utility);
 
@@ -8426,6 +8449,14 @@ void print_summary(void)
 			);
 			applog(LOG_WARNING, " Accepted difficulty shares: %1.f", pool->diff_accepted);
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
+			pool_secs = timer_elapsed(&pool->cgminer_stats.start_tv, NULL);
+			applog(LOG_WARNING, " Network transfer: %s  (%s)",
+			       multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+			                         (float)pool->cgminer_pool_stats.net_bytes_received,
+			                         (float)pool->cgminer_pool_stats.net_bytes_sent),
+			       multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+			                         (float)(pool->cgminer_pool_stats.net_bytes_received / pool_secs),
+			                         (float)(pool->cgminer_pool_stats.net_bytes_sent / pool_secs)));
 			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
