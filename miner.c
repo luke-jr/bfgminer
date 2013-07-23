@@ -2343,13 +2343,13 @@ utility_to_hashrate(double utility)
 	return utility * 0x4444444;
 }
 
-static const char*_unitchar = "kMGTPEZY?";
+static const char*_unitchar = " kMGTPEZY?";
 
 static void
 hashrate_pick_unit(float hashrate, unsigned char*unit)
 {
 	unsigned char i;
-	for (i = 0; i <= *unit; ++i)
+	for (i = 0; i < *unit; ++i)
 		hashrate /= 1e3;
 	while (hashrate >= 1000)
 	{
@@ -2389,7 +2389,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 		break;
 	}
 	
-	for (i = 0; i <= unit; ++i)
+	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
 	if (hashrate >= 100 || unit < 2)
 		prec = 1;
