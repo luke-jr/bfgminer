@@ -2699,12 +2699,11 @@ static void curses_print_status(void)
 	utility = total_accepted / total_secs * 60;
 
 	char bwstr[12];
-	mvwprintw(statuswin, 3, 0, " ST: %d  GF: %d  NB: %d  AS: %d  RF: %d  BW: %s  E: %.2f  U:%.1f/m  BS:%s",
+	mvwprintw(statuswin, 3, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
 		total_staged(),
-		total_go,
+		total_go + total_ro,
 		new_blocks,
 		total_submitting,
-		total_ro,
 		multi_format_unit(bwstr, false, "B/s", H2B_SHORT, "/", 2,
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
