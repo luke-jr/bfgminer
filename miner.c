@@ -2370,7 +2370,7 @@ static const size_t h2bs_fmt_size[] = {6, 10, 11};
 static
 char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
-	unsigned char prec, i, ucp, unit;
+	unsigned char prec, i, unit;
 	if (unitin == -1)
 	{
 		unit = 0;
@@ -2379,6 +2379,14 @@ char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float h
 	else
 		unit = unitin;
 	
+	for (i = 0; i < unit; ++i)
+		hashrate /= 1000;
+	
+	if (hashrate >= 100 || unit < 2)
+		prec = 1;
+	else
+		prec = 2;
+	sprintf(buf, "%5.*f", prec, hashrate);
 	i = 5;
 	switch (fmt) {
 	case H2B_SPACED:
@@ -2390,15 +2398,6 @@ char *format_unit(char *buf, const char *measurement, enum h2bs_fmt fmt, float h
 		break;
 	}
 	
-	for (i = 0; i < unit; ++i)
-		hashrate /= 1000;
-	if (hashrate >= 100 || unit < 2)
-		prec = 1;
-	else
-		prec = 2;
-	ucp = (fmt == H2B_NOUNIT ? '\0' : buf[5]);
-	sprintf(buf, "%5.*f", prec, hashrate);
-	buf[5] = ucp;
 	return buf;
 }
 #define hashrate_to_bufstr(buf, hashrate, unitin, fmt)  format_unit(buf, "h/s", fmt, hashrate, unitin)
