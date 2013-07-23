@@ -1638,7 +1638,6 @@ bool initiate_stratum(struct pool *pool)
 	}
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
-	mutex_unlock(&pool->stratum_lock);
 	curl = pool->stratum_curl;
 
 	if (!pool->sockbuf) {
@@ -1694,6 +1693,8 @@ bool initiate_stratum(struct pool *pool)
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.times_received++;
 
+	mutex_unlock(&pool->stratum_lock);
+	
 	sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
 	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
