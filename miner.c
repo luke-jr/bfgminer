@@ -2656,6 +2656,8 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static int menu_attr = A_REVERSE;
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
@@ -2688,14 +2690,13 @@ static void curses_print_status(void)
 		);
 	}
 	wattroff(statuswin, A_BOLD);
-	mvwhline(statuswin, 1, 0, '-', 80);
-	mvwprintw(statuswin, 2, 0, " %s", statusline);
+	mvwprintw(statuswin, 5, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 
 	utility = total_accepted / total_secs * 60;
 
 	char bwstr[12];
-	mvwprintw(statuswin, 3, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
 		__total_staged(),
 		total_go + total_ro,
 		new_blocks,
@@ -2708,21 +2709,24 @@ static void curses_print_status(void)
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
+		mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
+		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
 			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s LP as user %s",
+		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s (%s)  Started: %s",
+	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	mvwprintw(statuswin, devcursor - 1, 1, "[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit");
+	
+	wattron(statuswin, menu_attr);
+	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit         ");
+	wattroff(statuswin, menu_attr);
 }
 
 static void adj_width(int var, int *length)
@@ -2753,7 +2757,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 	ypos += devsummaryYOffset;
 	if (ypos < 0)
 		return;
-	ypos += devcursor;
+	ypos += devcursor - 1;
 	if (ypos >= statusy - 1)
 		return;
 
@@ -2845,11 +2849,11 @@ static void switch_logsize(void)
 {
 	if (curses_active_locked()) {
 		if (opt_compact) {
-			logstart = devcursor + 1;
+			logstart = devcursor - 1;
 			logcursor = logstart + 1;
 		} else {
 			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
-			logstart = devcursor + total_lines + 1;
+			logstart = devcursor + total_lines;
 			logcursor = logstart;
 		}
 		unlock_curses();
@@ -8744,6 +8748,9 @@ void enable_curses(void) {
 	}
 
 	mainwin = initscr();
+	start_color();
+	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
+		menu_attr = COLOR_PAIR(1);
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
@@ -9230,7 +9237,7 @@ int main(int argc, char *argv[])
 #endif
 
 	devcursor = 8;
-	logstart = devcursor + 1;
+	logstart = devcursor;
 	logcursor = logstart;
 
 	block = calloc(sizeof(struct block), 1);
