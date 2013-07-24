@@ -2470,11 +2470,34 @@ percentf2(double p, double t, char *buf)
 static void adj_width(int var, int *length);
 #endif
 
+#ifdef HAVE_CURSES
+static
+void format_statline(char *buf, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int badnonces, int allnonces)
+{
+	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
+	char rejpcbuf[6];
+	char bnbuf[6];
+	
+	adj_width(accepted, &awidth);
+	adj_width(rejected, &rwidth);
+	adj_width(stale, &swidth);
+	adj_width(hwerrs, &hwwidth);
+	
+	tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
+	            cHr, aHr, uHr,
+	            awidth, accepted,
+	            rwidth, rejected,
+	            swidth, stale,
+	            percentf(wnotaccepted, waccepted, rejpcbuf),
+	            hwwidth, hwerrs,
+	            percentf2(badnonces, allnonces, bnbuf)
+	);
+}
+#endif
+
 void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
-#ifdef HAVE_CURSES
-	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
-#else
+#ifndef HAVE_CURSES
 	assert(for_curses == false);
 #endif
 	struct device_drv *drv = cgpu->drv;
@@ -2608,21 +2631,13 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 		if (unlikely(all_off))
 			cHrStatsI = 2;
 		
-		adj_width(accepted, &awidth);
-		adj_width(rejected, &rwidth);
-		adj_width(stale, &swidth);
-		adj_width(hwerrs, &hwwidth);
-		
-		tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
-		            cHrStatsOpt[cHrStatsI],
-		            aHr, uHr,
-		            awidth, accepted,
-		            rwidth, rejected,
-		            swidth, stale,
-		            percentf(wnotaccepted, waccepted, rejpcbuf),
-		            hwwidth, hwerrs,
-		            percentf2(badnonces, allnonces, bnbuf)
-		);
+		format_statline(buf,
+		                cHrStatsOpt[cHrStatsI],
+		                aHr, uHr,
+		                accepted, rejected, stale,
+		                wnotaccepted, waccepted,
+		                hwerrs,
+		                badnonces, allnonces);
 	}
 	else
 #endif
@@ -2656,6 +2671,8 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static int menu_attr = A_REVERSE;
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
@@ -2688,14 +2705,13 @@ static void curses_print_status(void)
 		);
 	}
 	wattroff(statuswin, A_BOLD);
-	mvwhline(statuswin, 1, 0, '-', 80);
-	mvwprintw(statuswin, 2, 0, " %s", statusline);
+	mvwprintw(statuswin, 5, 0, " %s", statusline);
 	wclrtoeol(statuswin);
 
 	utility = total_accepted / total_secs * 60;
 
 	char bwstr[12];
-	mvwprintw(statuswin, 3, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
 		__total_staged(),
 		total_go + total_ro,
 		new_blocks,
@@ -2708,21 +2724,24 @@ static void curses_print_status(void)
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s LP",
+		mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with stratum as user %s",
+		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
 			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 4, 0, " Connected to %s diff %s with%s LP as user %s",
+		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 5, 0, " Block: %s  Diff:%s (%s)  Started: %s",
+	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	mvwprintw(statuswin, devcursor - 1, 1, "[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit");
+	
+	wattron(statuswin, menu_attr);
+	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit         ");
+	wattroff(statuswin, menu_attr);
 }
 
 static void adj_width(int var, int *length)
@@ -2753,7 +2772,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 	ypos += devsummaryYOffset;
 	if (ypos < 0)
 		return;
-	ypos += devcursor;
+	ypos += devcursor - 1;
 	if (ypos >= statusy - 1)
 		return;
 
@@ -2845,11 +2864,11 @@ static void switch_logsize(void)
 {
 	if (curses_active_locked()) {
 		if (opt_compact) {
-			logstart = devcursor + 1;
+			logstart = devcursor - 1;
 			logcursor = logstart + 1;
 		} else {
 			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
-			logstart = devcursor + total_lines + 1;
+			logstart = devcursor + total_lines;
 			logcursor = logstart;
 		}
 		unlock_curses();
@@ -6268,6 +6287,7 @@ void thread_reportout(struct thr_info *thr)
 static void hashmeter(int thr_id, struct timeval *diff,
 		      uint64_t hashes_done)
 {
+	char logstatusline[256];
 	struct timeval temp_tv_end, total_diff;
 	double secs;
 	double local_secs;
@@ -6356,13 +6376,60 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	multi_format_unit_array(
 		((char*[]){cHr, aHr, uHr}),
-		true, "h/s", H2B_SPACED,
+		true, "h/s", H2B_SHORT,
 		3,
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
 		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60));
 
-	sprintf(statusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
+#ifdef HAVE_CURSES
+	if (curses_active_locked()) {
+		float temp = 0;
+		struct cgpu_info *proc;
+		int i, working_devs = 0, working_procs = 0;
+		
+		// Find the highest temperature of all processors
+		for (i = 0; i < total_devices; ++i)
+		{
+			proc = get_devices(i);
+			
+			if (proc->temp > temp)
+				temp = proc->temp;
+			
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
+			{
+				++working_procs;
+				if (proc->device == proc)
+					++working_devs;
+			}
+		}
+		
+		if (working_devs == working_procs)
+			sprintf(statusline, "%d      ", working_devs);
+		else
+			sprintf(statusline, "%d/%d    ", working_devs, working_procs);
+		if (temp > 0.)
+			sprintf(&statusline[7], "%4.1fC | ", temp);
+		else
+			strcpy(&statusline[7], "      | ");
+		
+		format_statline(&statusline[15],
+		                cHr, aHr,
+		                uHr,
+		                total_accepted,
+		                total_rejected,
+		                total_stale,
+		                total_diff_rejected + total_diff_stale, total_diff_accepted,
+		                hw_errors, total_bad_nonces, total_diff1);
+		unlock_curses();
+	}
+#endif
+	
+	// Add a space
+	memmove(&uHr[6], &uHr[5], strlen(&uHr[5]) + 1);
+	uHr[5] = ' ';
+	
+	sprintf(logstatusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
@@ -6382,10 +6449,10 @@ out_unlock:
 
 	if (showlog) {
 		if (!curses_active) {
-			printf("%s          \r", statusline);
+			printf("%s          \r", logstatusline);
 			fflush(stdout);
 		} else
-			applog(LOG_INFO, "%s", statusline);
+			applog(LOG_INFO, "%s", logstatusline);
 	}
 }
 
@@ -8744,6 +8811,9 @@ void enable_curses(void) {
 	}
 
 	mainwin = initscr();
+	start_color();
+	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
+		menu_attr = COLOR_PAIR(1);
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
@@ -9230,7 +9300,7 @@ int main(int argc, char *argv[])
 #endif
 
 	devcursor = 8;
-	logstart = devcursor + 1;
+	logstart = devcursor;
 	logcursor = logstart;
 
 	block = calloc(sizeof(struct block), 1);
