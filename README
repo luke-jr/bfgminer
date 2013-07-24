@@ -413,10 +413,10 @@ U  is Utility defined as the number of shares / minute
 BS is the all time Best Share difficulty you've found
 
 The totals line shows the following:
- (32)   75.0C | 171.3/170.8/171.2Gh/s | A:729 R:8+0(.01%) HW:0/.81%
+ 6/32   75.0C | 171.3/170.8/171.2Gh/s | A:729 R:8+0(.01%) HW:0/.81%
 
 Each column is as follows:
-  The number of processors registered with BFGMiner
+  The number of devices and processors currently mining
   Hottest temperature reported by any processor
   5 second exponentially decaying average hash rate
   An all time average hash rate

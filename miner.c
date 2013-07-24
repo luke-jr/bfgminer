@@ -6386,17 +6386,28 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	if (curses_active_locked()) {
 		float temp = 0;
 		struct cgpu_info *proc;
-		int i;
-		
-		sprintf(statusline, "(%d)    ", total_devices);
+		int i, working_devs = 0, working_procs = 0;
 		
 		// Find the highest temperature of all processors
 		for (i = 0; i < total_devices; ++i)
 		{
 			proc = get_devices(i);
+			
 			if (proc->temp > temp)
 				temp = proc->temp;
+			
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
+			{
+				++working_procs;
+				if (proc->device == proc)
+					++working_devs;
+			}
 		}
+		
+		if (working_devs == working_procs)
+			sprintf(statusline, "%d      ", working_devs);
+		else
+			sprintf(statusline, "%d/%d    ", working_devs, working_procs);
 		if (temp > 0.)
 			sprintf(&statusline[7], "%4.1fC | ", temp);
 		else
