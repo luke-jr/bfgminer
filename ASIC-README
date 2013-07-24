@@ -19,6 +19,8 @@ Avalon devices need the --enable-avalon option when compiling cgminer.
 ASICMINER block erupters will come up as AMU.
 
 ASICMINER devices need the --enable-icarus option when compiling cgminer.
+Also note that the AMU is managed by the Icarus driver which is detailed
+in the FPGA-README
 
 
 GETTING STARTED WITH BUTTERFLY LABS ASICS
