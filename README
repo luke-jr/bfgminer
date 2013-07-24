@@ -689,13 +689,15 @@ performance per unit power due to being dedicated to only one purpose.
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only
 thing that needs to be done is to load the driver for them:
-BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
-Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
-Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
-Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
-On windows you must install the pl2303 or ftdi driver required for the device
-pl2303: http://prolificusa.com/pl-2303hx-drivers/
-ftdi: http://www.ftdichip.com/Drivers/VCP.htm
+  BitForce:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+  Erupter:    sudo modprobe cp210x   vendor=0x10c4 product=0xea60
+  Icarus:     sudo modprobe pl2303   vendor=0x067b product=0x0230
+  Lancelot:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
+  Cairnsmore: sudo modprobe ftdi_sio vendor=0x0403 product=0x8350
+On Windows, you must install the driver required for the device:
+  FTDI:       http://www.ftdichip.com/Drivers/VCP.htm
+  Erupter:    http://www.silabs.com/products/mcu/pages/usbtouartbridgevcpdrivers.aspx
+  Icarus:     http://prolificusa.com/pl-2303hx-drivers/
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them
