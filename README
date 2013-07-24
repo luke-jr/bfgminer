@@ -412,29 +412,24 @@ E  is Efficiency defined as number of shares accepted (multiplied by their
 U  is Utility defined as the number of shares / minute
 BS is the all time Best Share difficulty you've found
 
-The output line shows the following:
- 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8+0(.01%) HW:0/.81%
+The totals line shows the following:
+ (32)   75.0C | 171.3/170.8/171.2Gh/s | A:729 R:8+0(.01%) HW:0/.81%
 
 Each column is as follows:
-5s:  A 5 second exponentially decaying average hash rate
-avg: An all time average hash rate
-u:   An all time average hash rate based on actual accepted shares
-A:   The number of Accepted shares
-R:   The number of Rejected shares, stale shares discarded (never submitted),
-     and the percentage these are of total found.
-HW:  The number of HardWare errors, and percentage invalid of nonces returned
+  The number of processors registered with BFGMiner
+  Hottest temperature reported by any processor
+  5 second exponentially decaying average hash rate
+  An all time average hash rate
+  An all time average hash rate based on actual accepted shares
+  The number of Accepted shares
+  The number of Rejected shares and stale shares discarded (never submitted),
+      and the percentage these are of total found.
+  The number of HardWare errors, and percentage invalid of nonces returned
 
 Each device shows:
  BFL 2: 74.0C | 51.97/58.90/57.17Gh/s | A:847 R:15+0(.54%) HW:496/.91%
 
-Column are as follows:
-Temperature (if supported)
-5 second exponentially decaying average hash rate
-An all time average hash rate
-An all time average hash rate based on actual accepted shares
-The number of accepted shares
-The number of rejected plus discarded shares (and percentage of total submitted)
-The number of hardware errors and percentage of nonces invalid
+Columns are the same as in the totals line.
 
 
 ---
