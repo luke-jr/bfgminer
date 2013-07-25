@@ -26,7 +26,7 @@
 #define BISTREAM_USER_ID "\2\4$B"
 
 #define MODMINER_MAX_CLOCK 250
-#define MODMINER_DEF_CLOCK 210
+#define MODMINER_DEF_CLOCK 190
 #define MODMINER_MIN_CLOCK   2
 
 // Commands
