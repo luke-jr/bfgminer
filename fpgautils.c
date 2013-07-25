@@ -278,15 +278,23 @@ void _sysfs_find_tty(detectone_func_t detectone, char *devpath, char *devfile, c
 	struct dirent *de;
 	char ttybuf[0x10] = "/dev/";
 	char manuf[0x40], serial[0x40];
+	char *mydevfile = strdup(devfile);
 	
 	DT = opendir(devpath);
 	if (!DT)
-		return;
+		goto out;
 	
 	while ( (de = readdir(DT)) )
 	{
 		if (strncmp(de->d_name, "tty", 3))
 			continue;
+		if (!de->d_name[3])
+		{
+			// "tty" directory: recurse (needed for ttyACM)
+			sprintf(devfile, "%s/tty", mydevfile);
+			_sysfs_find_tty(detectone, devpath, devfile, prod, pfound);
+			continue;
+		}
 		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
 			continue;
 		
@@ -302,6 +310,9 @@ void _sysfs_find_tty(detectone_func_t detectone, char *devpath, char *devfile, c
 			++*pfound;
 	}
 	closedir(DT);
+	
+out:
+	free(mydevfile);
 }
 
 static
