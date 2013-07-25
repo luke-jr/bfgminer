@@ -272,14 +272,47 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 }
 
 static
+void _sysfs_find_tty(detectone_func_t detectone, char *devpath, char *devfile, const char *prod, char *pfound)
+{
+	DIR *DT;
+	struct dirent *de;
+	char ttybuf[0x10] = "/dev/";
+	char manuf[0x40], serial[0x40];
+	
+	DT = opendir(devpath);
+	if (!DT)
+		return;
+	
+	while ( (de = readdir(DT)) )
+	{
+		if (strncmp(de->d_name, "tty", 3))
+			continue;
+		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
+			continue;
+		
+		
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
+			.product = prod,
+			.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
+		};
+		
+		strcpy(&ttybuf[5], de->d_name);
+		if (detectone(ttybuf))
+			++*pfound;
+	}
+	closedir(DT);
+}
+
+static
 int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 {
-	DIR *D, *DS, *DT;
+	DIR *D, *DS;
 	struct dirent *de;
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char ttybuf[0x10], manuf[0x40], prod[0x40], serial[0x40];
+	char prod[0x40];
 	char *devfile, *upfile;
 	char found = 0;
 	size_t len, len2;
@@ -309,8 +342,6 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		devfile[0] = '/';
 		++devfile;
 		
-		memcpy(ttybuf, "/dev/", 5);
-		
 		while ( (de = readdir(DS)) )
 		{
 			if (strncmp(de->d_name, upfile, len))
@@ -319,29 +350,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 			len2 = strlen(de->d_name);
 			memcpy(devfile, de->d_name, len2 + 1);
 			
-			DT = opendir(devpath);
-			if (!DT)
-				continue;
-			
-			while ( (de = readdir(DT)) )
-			{
-				if (strncmp(de->d_name, "tty", 3))
-					continue;
-				if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
-					continue;
-				
-				
-				detectone_meta_info = (struct detectone_meta_info_t){
-					.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
-					.product = prod,
-					.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
-				};
-				
-				strcpy(&ttybuf[5], de->d_name);
-				if (detectone(ttybuf))
-					++found;
-			}
-			closedir(DT);
+			_sysfs_find_tty(detectone, devpath, devfile, prod, &found);
 		}
 		closedir(DS);
 	}
