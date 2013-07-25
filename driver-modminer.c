@@ -157,7 +157,7 @@ modminer_detect_one(const char *devpath)
 static int
 modminer_detect_auto()
 {
-	return serial_autodetect(modminer_detect_one, "BTCFPGA", "ModMiner");
+	return serial_autodetect(modminer_detect_one, "ModMiner");
 }
 
 static void
