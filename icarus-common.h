@@ -94,6 +94,8 @@ struct icarus_state {
 	struct timeval tv_workfinish;
 	struct work last_work;
 	bool changework;
+	
+	uint8_t ob_bin[64];
 };
 
 bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);

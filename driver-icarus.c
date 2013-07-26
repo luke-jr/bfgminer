@@ -747,10 +747,33 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	return true;
 }
 
-static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
+static
+bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
+{
+	struct cgpu_info * const icarus = thr->cgpu;
+	struct icarus_state * const state = thr->cgpu_data;
+	uint8_t * const ob_bin = state->ob_bin;
+	
+	memcpy(ob_bin, work->midstate, 32);
+	memcpy(ob_bin + 52, work->data + 64, 12);
+	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
+	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
+		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
+		       icarus->proc_repr);
+		ob_bin[56] = 0;
+	}
+	rev(ob_bin, 32);
+	rev(ob_bin + 52, 12);
+	
+	return true;
+}
+
+static bool icarus_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct icarus_state *state = thr->cgpu_data;
+	const uint8_t * const ob_bin = state->ob_bin;
 	int fd = icarus->device_fd;
 	int ret;
 
@@ -784,7 +807,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	unsigned char ob_bin[64] = {0}, nonce_bin[ICARUS_READ_SIZE] = {0};
+	unsigned char nonce_bin[ICARUS_READ_SIZE] = {0};
 	uint32_t nonce;
 	int64_t hash_count;
 	struct timeval tv_start, elapsed;
@@ -806,18 +829,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	icarus = thr->cgpu;
 	struct icarus_state *state = thr->cgpu_data;
 
-	// Prepare the next work immediately
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
-	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
-		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
-		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
-		       icarus->proc_repr);
-		ob_bin[56] = 0;
-	}
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
+	icarus_job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
@@ -881,7 +893,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
 	}
 
-	if (!icarus_start_work(thr, ob_bin))
+	if (!icarus_job_start(thr))
 		/* This should never happen */
 		state->firstrun = true;
 
@@ -932,7 +944,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			if (!icarus_reopen(icarus, state, &fd))
 				state->firstrun = true;
 			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
-			if (!icarus_start_work(thr, ob_bin))
+			if (!icarus_job_start(thr))
 				state->firstrun = true;
 		}
 
