@@ -772,11 +772,19 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 static bool icarus_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = icarus->device_data;
 	struct icarus_state *state = thr->cgpu_data;
 	const uint8_t * const ob_bin = state->ob_bin;
 	int fd = icarus->device_fd;
 	int ret;
 
+	// Handle dynamic clocking for "subclass" devices
+	// This needs to run before sending next job, since it hashes the command too
+	if (info->dclk.freqM && likely(!state->firstrun)) {
+		dclk_preUpdate(&info->dclk);
+		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
+	}
+	
 	cgtime(&state->tv_workstart);
 
 	ret = icarus_write(fd, ob_bin, 64);
@@ -889,8 +897,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			dclk_gotNonces(&info->dclk);
 		if (nonce && !test_nonce(&state->last_work, nonce, false))
 			dclk_errorCount(&info->dclk, qsec);
-		dclk_preUpdate(&info->dclk);
-		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
 	}
 
 	if (!icarus_job_start(thr))
