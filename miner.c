@@ -5386,6 +5386,7 @@ void zero_stats(void)
 	total_ro = 0;
 	total_secs = 1.0;
 	total_diff1 = 0;
+	total_bad_nonces = 0;
 	found_blocks = 0;
 	total_diff_accepted = 0;
 	total_diff_rejected = 0;
