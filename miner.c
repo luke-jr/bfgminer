@@ -2740,7 +2740,7 @@ static void curses_print_status(void)
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	
 	wattron(statuswin, menu_attr);
-	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit         ");
+	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
 	wattroff(statuswin, menu_attr);
 }
 
@@ -6208,6 +6208,36 @@ out:
 	opt_loginput = false;
 }
 
+void show_help(void)
+{
+	opt_loginput = true;
+	clear_logwin();
+	
+	// NOTE: wlogprint is a macro with a buffer limit
+	_wlogprint(
+		"ST: work in queue              | F: network fails  | NB: new blocks detected\n"
+		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
+		"E: # shares * diff per 2kB bw  | U: shares/minute  | BS: best share ever found\n"
+		"--------------------------------------------------------------------------------\n"
+		"devices/processors hashing (only for totals line), hottest temperature\n"
+	);
+	wlogprint(
+		"hashrates: %ds decaying / all-time average / all-time average (effective)\n"
+		, opt_log_interval);
+	_wlogprint(
+		"A: accepted shares | R: rejected+discarded(%% of total)\n"
+		"HW: hardware errors / %% nonces invalid\n"
+		"\n"
+		"Press any key to clear"
+	);
+	
+	logwin_update();
+	getch();
+	
+	clear_logwin();
+	opt_loginput = false;
+}
+
 static void *input_thread(void __maybe_unused *userdata)
 {
 	RenameThread("input");
@@ -6220,6 +6250,9 @@ static void *input_thread(void __maybe_unused *userdata)
 
 		input = getch();
 		switch (input) {
+			case 'h': case 'H': case '?':
+				show_help();
+				break;
 		case 'q': case 'Q':
 			kill_work();
 			return NULL;
