@@ -61,7 +61,9 @@ static void erupter_detect()
 {
 	erupter_drv_init();
 	// Actual serial detection is handled by Icarus driver
+	erupter_drv_emerald.dname = "eruptere";  // temporary, so erupter:all is treated as Sapphire
 	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
+	erupter_drv_emerald.dname = "erupter";
 	serial_detect_auto_byname(&erupter_drv, erupter_detect_one, erupter_detect_auto);
 }
 
