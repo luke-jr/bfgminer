@@ -823,6 +823,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	double Ti, Xi;
 	int curr_hw_errors, i;
 	bool was_hw_error;
+	bool was_first_run;
 
 	struct ICARUS_HISTORY *history0, *history;
 	int count;
@@ -836,6 +837,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	icarus = thr->cgpu;
 	struct icarus_state *state = thr->cgpu_data;
+	was_first_run = state->firstrun;
 
 	icarus_job_prepare(thr, work, max_nonce);
 
@@ -891,7 +893,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
-	if (info->dclk.freqM && likely(!state->firstrun)) {
+	if (info->dclk.freqM && likely(!was_first_run)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
@@ -908,7 +910,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (state->firstrun) {
+	if (was_first_run) {
 		state->firstrun = false;
 		__copy_work(&state->last_work, work);
 		return 0;
