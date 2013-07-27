@@ -1139,9 +1139,17 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
 		nmsleep(3000);
 		
+		// Check for work restart in the meantime
+		if (thr->work_restart)
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
+			goto no_job_start;
+		}
+		
 		// 4. Start next job
 		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
 		if (!icarus_job_start(thr))
+no_job_start:
 			state->firstrun = true;
 		
 		state->identify = false;
