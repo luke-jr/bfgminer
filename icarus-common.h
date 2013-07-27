@@ -94,6 +94,7 @@ struct icarus_state {
 	struct timeval tv_workfinish;
 	struct work last_work;
 	bool changework;
+	bool identify;
 	
 	uint8_t ob_bin[64];
 };

@@ -901,6 +901,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			dclk_errorCount(&info->dclk, qsec);
 	}
 
+	if (unlikely(state->identify))
+	{
+		// Delay job start until later...
+	}
+	else
 	if (!icarus_job_start(thr))
 		/* This should never happen */
 		state->firstrun = true;
@@ -1099,6 +1104,49 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
 	}
 
+	if (unlikely(state->identify))
+	{
+		struct timeval tv_now;
+		double delapsed;
+		
+		// If identify is requested (block erupters):
+		// 1. Don't start the next job right away (above)
+		// 2. Wait for the current job to complete 100%
+		
+		if (!was_first_run)
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
+			while (true)
+			{
+				cgtime(&tv_now);
+				delapsed = tdiff(&tv_now, &state->tv_workstart);
+				if (delapsed + 0.1 > info->fullnonce)
+					break;
+				
+				// Try to get more nonces (ignoring work restart)
+				ret = icarus_gets(nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10);
+				if (ret == ICA_GETS_OK)
+				{
+					nonce = be32toh(*(uint32_t*)&nonce_bin[0]);
+					submit_nonce(thr, &state->last_work, nonce);
+				}
+			}
+		}
+		else
+			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
+		
+		// 3. Delay 3 more seconds
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
+		nmsleep(3000);
+		
+		// 4. Start next job
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+		if (!icarus_job_start(thr))
+			state->firstrun = true;
+		
+		state->identify = false;
+	}
+	
 	return hash_count;
 }
 
