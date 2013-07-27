@@ -6062,7 +6062,7 @@ refresh:
 				if (drv->identify_device && drv->identify_device(cgpu))
 					msg = "Identify command sent\n";
 				else
-					msg = "Error: Identify not supported\n";
+					goto key_default;
 				goto refresh;
 			case KEY_DOWN:
 				if (selected_device >= total_devices - 1)
@@ -6100,6 +6100,8 @@ refresh:
 			case '\n':
 				goto out;
 			default:
+				;
+key_default:
 				if (drv->proc_tui_handle_choice && likely(drv_ready(cgpu)))
 				{
 					msg = drv->proc_tui_handle_choice(cgpu, input);
