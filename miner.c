@@ -1912,6 +1912,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	memset(work->hash, 0, sizeof(work->hash));
 
 	gettimeofday(&work->tv_staged, NULL);
+	
+	pool_set_opaque(pool, !work->tmpl);
 
 	ret = true;
 
