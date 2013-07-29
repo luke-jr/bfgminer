@@ -1758,6 +1758,21 @@ void have_block_height(uint32_t block_id, uint32_t blkheight)
 	mutex_unlock(&ch_lock);
 }
 
+static
+void pool_set_opaque(struct pool *pool, bool opaque)
+{
+	if (pool->swork.opaque == opaque)
+		return;
+	
+	pool->swork.opaque = opaque;
+	if (opaque)
+		applog(LOG_WARNING, "Pool %u is hiding block contents from us",
+		       pool->pool_no);
+	else
+		applog(LOG_NOTICE, "Pool %u now providing block contents to us",
+		       pool->pool_no);
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -5575,11 +5590,7 @@ bool parse_stratum_response(struct pool *pool, char *s)
 				// TODO: Check hashes match actual merkle links
 			}
 
-			if (pool->swork.opaque) {
-				pool->swork.opaque = false;
-				applog(LOG_NOTICE, "Pool %u now providing block contents to us",
-				       pool->pool_no);
-			}
+			pool_set_opaque(pool, false);
 			pool->swork.transparency_time = (time_t)-1;
 
 fishy:
@@ -5860,9 +5871,7 @@ static void *stratum_thread(void *userdata)
 		if (pool->swork.transparency_time != (time_t)-1 && difftime(time(NULL), pool->swork.transparency_time) > 21.09375) {
 			// More than 4 timmills past since requested transactions
 			pool->swork.transparency_time = (time_t)-1;
-			pool->swork.opaque = true;
-			applog(LOG_WARNING, "Pool %u is hiding block contents from us",
-			       pool->pool_no);
+			pool_set_opaque(pool, true);
 		}
 	}
 
