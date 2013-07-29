@@ -37,12 +37,19 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 
 static bool erupter_emerald_detect_one(const char *devpath)
 {
+	// For detection via BEE:*
 	return _erupter_detect_one(devpath, &erupter_drv_emerald);
 }
 
 static bool erupter_detect_one(const char *devpath)
 {
-	return _erupter_detect_one(devpath, &erupter_drv);
+	struct device_drv *drv = &erupter_drv;
+	
+	// For autodetection
+	if (unlikely(detectone_meta_info.product && strstr(detectone_meta_info.product, "Emerald")))
+		drv = &erupter_drv_emerald;
+	
+	return _erupter_detect_one(devpath, drv);
 }
 
 static int erupter_emerald_detect_auto(void)
@@ -61,10 +68,8 @@ static void erupter_detect()
 {
 	erupter_drv_init();
 	// Actual serial detection is handled by Icarus driver
-	erupter_drv_emerald.dname = "eruptere";  // temporary, so erupter:all is treated as Sapphire
-	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
-	erupter_drv_emerald.dname = "erupter";
 	serial_detect_auto_byname(&erupter_drv, erupter_detect_one, erupter_detect_auto);
+	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
 }
 
 static void erupter_drv_init()
