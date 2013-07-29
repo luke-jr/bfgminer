@@ -773,10 +773,61 @@ static char *add_serial(char *arg)
 }
 #endif
 
-void get_intrange(char *arg, int *val1, int *val2)
+bool get_intrange(const char *arg, int *val1, int *val2)
 {
-	if (sscanf(arg, "%d-%d", val1, val2) == 1)
-		*val2 = *val1;
+	int pos, n;
+	// Is is unclear whether %n is counted in the returned value, so %n is doubled up to make 2 unambiguous
+	n = sscanf(arg, "%d%n%n -%d %n", val1, &pos, &pos, val2, &pos);
+	if (unlikely(arg[pos]))
+		return false;
+	switch (n)
+	{
+		case 1:  // %n not counted (only one number)
+		case 3:  // %n     counted
+			*val2 = *val1;
+		case 2:  // %n not counted (two numbers)
+		case 5:  // %n     counted
+			return true;
+		default:
+			return false;
+	}
+}
+
+static
+void _test_intrange(const char *s, const int v[2])
+{
+	int a[2];
+	if (!get_intrange(s, &a[0], &a[1]))
+		applog(LOG_ERR, "Test \"%s\" failed: returned false", s);
+	for (int i = 0; i < 2; ++i)
+		if (unlikely(a[i] != v[i]))
+			applog(LOG_ERR, "Test \"%s\" failed: value %d should be %d but got %d", s, i, v[i], a[i]);
+}
+#define _test_intrange(s, ...)  _test_intrange(s, (int[]){ __VA_ARGS__ })
+
+static
+void _test_intrange_fail(const char *s)
+{
+	int a[2];
+	if (get_intrange(s, &a[0], &a[1]))
+		applog(LOG_ERR, "Test !\"%s\" failed: returned true with %d and %d", s, a[0], a[1]);
+}
+
+static
+void test_intrange()
+{
+	_test_intrange("-1--2", -1, -2);
+	_test_intrange("-1-2", -1, 2);
+	_test_intrange("1--2", 1, -2);
+	_test_intrange("1-2", 1, 2);
+	_test_intrange("111-222", 111, 222);
+	_test_intrange(" 11 - 22 ", 11, 22);
+	_test_intrange("+11-+22", 11, 22);
+	_test_intrange("-1", -1, -1);
+	_test_intrange_fail("all");
+	_test_intrange_fail("1-");
+	_test_intrange_fail("");
+	_test_intrange_fail("1-54x");
 }
 
 static char *set_devices(char *arg)
@@ -795,7 +846,8 @@ static char *set_devices(char *arg)
 	nextptr = strtok(arg, ",");
 	if (nextptr == NULL)
 		return "Invalid parameters for set devices";
-	get_intrange(nextptr, &val1, &val2);
+	if (!get_intrange(nextptr, &val1, &val2))
+		return "Invalid device number";
 	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
 	    val1 > val2) {
 		return "Invalid value passed to set devices";
@@ -807,7 +859,8 @@ static char *set_devices(char *arg)
 	}
 
 	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		get_intrange(nextptr, &val1, &val2);
+		if (!get_intrange(nextptr, &val1, &val2))
+			return "Invalid device number";
 		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
 		val1 > val2) {
 			return "Invalid value passed to set devices";
@@ -9392,6 +9445,8 @@ int main(int argc, char *argv[])
 		pool->idle = false;
 		successful_connect = true;
 	}
+	
+	test_intrange();
 
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs)
