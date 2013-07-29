@@ -52,11 +52,6 @@ bool opt_avalon_auto;
 static int option_offset = -1;
 struct device_drv avalon_drv;
 
-static int avalon_is_bitburner(struct cgpu_info *avalon)
-{
-	return strcmp(avalon->drv->name, "BTB") == 0;
-}
-
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t asic_num,
@@ -612,7 +607,7 @@ static void bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltag
 	uint8_t buf[2];
 	int err;
 
-	if (avalon_is_bitburner(avalon)) {
+	if (usb_ident(avalon) == IDENT_BTB) {
 		buf[0] = (uint8_t)core_voltage;
 		buf[1] = (uint8_t)(core_voltage >> 8);
 		err = usb_transfer_data(avalon, FTDI_TYPE_OUT, BITBURNER_REQUEST,
@@ -635,7 +630,7 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 	int err;
 	int amount;
 
-	if (avalon_is_bitburner(avalon)) {
+	if (usb_ident(avalon) == IDENT_BTB) {
 		err = usb_transfer_read(avalon, FTDI_TYPE_IN, BITBURNER_REQUEST,
 				BITBURNER_VALUE, BITBURNER_INDEX_GET_VOLTAGE,
 				(char *)buf, sizeof(buf), &amount,
@@ -723,7 +718,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	       avalon->device_path, info->miner_count, info->asic_count, info->timeout,
 	       info->frequency);
 
-	if (avalon_is_bitburner(avalon) &&
+	if (usb_ident(avalon) == IDENT_BTB &&
 	    opt_bitburner_core_voltage != BITBURNER_DEFAULT_CORE_VOLTAGE)
 		bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
 
@@ -1184,7 +1179,7 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 		info->temp_history_index, info->temp_history_count, info->temp_old);
-	if (avalon_is_bitburner(avalon)) {
+	if (usb_ident(avalon) == IDENT_BTB) {
 		info->core_voltage = bitburner_get_core_voltage(avalon);
 	}
 	if (info->temp_history_index == info->temp_history_count) {
@@ -1206,7 +1201,7 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	struct avalon_info *info = avalon->device_data;
 	int lowfan = 10000;
 
-	if (avalon_is_bitburner(avalon)) {
+	if (usb_ident(avalon) == IDENT_BTB) {
 		tailsprintf(buf, bufsiz, "%2d/%3dC %4dmV | ", info->temp0, info->temp2, info->core_voltage);
 	} else {
 		/* Find the lowest fan speed of the ASIC cooling fans. */
@@ -1293,7 +1288,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
-	if (!avalon_is_bitburner(avalon)) {
+	if (usb_ident(avalon) != IDENT_BTB) {
 		if (avalon->results < -miner_count && !info->reset) {
 			applog(LOG_ERR, "%s%d: Result return rate low, resetting!",
 				avalon->drv->name, avalon->device_id);
