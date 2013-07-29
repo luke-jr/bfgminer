@@ -647,6 +647,8 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 		} else {
 			return (int)(buf[0] + ((unsigned int)buf[1] << 8));
 		}
+	} else {
+		return 0;
 	}
 }
 
