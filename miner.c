@@ -768,6 +768,43 @@ bool get_intrange(const char *arg, int *val1, int *val2)
 	}
 }
 
+static
+void _test_intrange(const char *s, const int v[2])
+{
+	int a[2];
+	if (!get_intrange(s, &a[0], &a[1]))
+		applog(LOG_ERR, "Test \"%s\" failed: returned false", s);
+	for (int i = 0; i < 2; ++i)
+		if (unlikely(a[i] != v[i]))
+			applog(LOG_ERR, "Test \"%s\" failed: value %d should be %d but got %d", s, i, v[i], a[i]);
+}
+#define _test_intrange(s, ...)  _test_intrange(s, (int[]){ __VA_ARGS__ })
+
+static
+void _test_intrange_fail(const char *s)
+{
+	int a[2];
+	if (get_intrange(s, &a[0], &a[1]))
+		applog(LOG_ERR, "Test !\"%s\" failed: returned true with %d and %d", s, a[0], a[1]);
+}
+
+static
+void test_intrange()
+{
+	_test_intrange("-1--2", -1, -2);
+	_test_intrange("-1-2", -1, 2);
+	_test_intrange("1--2", 1, -2);
+	_test_intrange("1-2", 1, 2);
+	_test_intrange("111-222", 111, 222);
+	_test_intrange(" 11 - 22 ", 11, 22);
+	_test_intrange("+11-+22", 11, 22);
+	_test_intrange("-1", -1, -1);
+	_test_intrange_fail("all");
+	_test_intrange_fail("1-");
+	_test_intrange_fail("");
+	_test_intrange_fail("1-54x");
+}
+
 static char *set_devices(char *arg)
 {
 	int i, val1 = 0, val2 = 0;
@@ -8661,6 +8698,8 @@ int main(int argc, char *argv[])
 		pool->idle = false;
 		successful_connect = true;
 	}
+	
+	test_intrange();
 
 #ifdef USE_X6500
 	ft232r_scan();
