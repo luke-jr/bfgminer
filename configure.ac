@@ -248,7 +248,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 		AC_CHECK_LIB($usb_lib, libusb_init, [
 			libusb=yes
 			break
-		], [])
+		])
 	done
 	if test "x$libusb" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
@@ -317,7 +317,7 @@ if test "x$libusb" = xyes; then
 	AC_DEFINE([HAVE_LIBUSB], [1], [Define if you have libusb-1.0])
 	save_CFLAGS="$CFLAGS"
 	CFLAGS="$LIBUSB_CFLAGS $CFLAGS"
-	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
+	AC_CHECK_DECLS([libusb_error_name],[true],[true],[#include <libusb.h>])
 	CFLAGS="$save_CFLAGS"
 fi
 
@@ -560,7 +560,7 @@ for sym in bswap_ __builtin_bswap __bswap_ __swap swap OSSwapInt; do
 				AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$headerfile]), 1)
 			fi
 			break 2
-		],[])
+		])
 	done
 	AC_MSG_RESULT([no])
 done
