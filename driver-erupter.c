@@ -7,6 +7,9 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
+#include "miner.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
 
