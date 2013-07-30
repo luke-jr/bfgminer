@@ -101,7 +101,8 @@ bool time_less(struct timeval *a, struct timeval *b);
 void copy_time(struct timeval *dest, const struct timeval *src);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
-bool stratum_send(struct pool *pool, char *s, ssize_t len);
+bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);
+#define stratum_send(pool, s, len)  _stratum_send(pool, s, len, false)
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
