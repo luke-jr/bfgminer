@@ -753,8 +753,6 @@ bool get_intrange(const char *arg, int *val1, int *val2)
 	int pos, n;
 	// Is is unclear whether %n is counted in the returned value, so %n is doubled up to make 2 unambiguous
 	n = sscanf(arg, "%d%n%n -%d %n", val1, &pos, &pos, val2, &pos);
-	if (unlikely(arg[pos]))
-		return false;
 	switch (n)
 	{
 		case 1:  // %n not counted (only one number)
@@ -762,10 +760,13 @@ bool get_intrange(const char *arg, int *val1, int *val2)
 			*val2 = *val1;
 		case 2:  // %n not counted (two numbers)
 		case 5:  // %n     counted
-			return true;
+			break;
 		default:
 			return false;
 	}
+	if (unlikely(arg[pos]))
+		return false;
+	return true;
 }
 
 static
