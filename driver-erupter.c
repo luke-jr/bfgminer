@@ -72,12 +72,21 @@ static void erupter_detect()
 	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
 }
 
+static bool erupter_identify(struct cgpu_info *erupter)
+{
+	struct thr_info *thr = erupter->thr[0];
+	struct icarus_state *state = thr->cgpu_data;
+	state->identify = true;
+	return true;
+}
+
 static void erupter_drv_init()
 {
 	erupter_drv = icarus_drv;
 	erupter_drv.dname = "erupter";
 	erupter_drv.name = "BES";
 	erupter_drv.drv_detect = erupter_detect;
+	erupter_drv.identify_device = erupter_identify;
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";
