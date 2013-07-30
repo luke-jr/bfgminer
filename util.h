@@ -79,7 +79,8 @@ extern void real_block_target(unsigned char *target, const unsigned char *data);
 extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
 extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);
 
-bool stratum_send(struct pool *pool, char *s, ssize_t len);
+bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);
+#define stratum_send(pool, s, len)  _stratum_send(pool, s, len, false)
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
