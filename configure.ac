@@ -145,6 +145,7 @@ m4_define([BFG_PREPROC_IFELSE],
 
 AC_CHECK_DECL([HASH_ITER],[
 	AC_CHECK_DECL([DL_FOREACH_SAFE],[
+		true
 	],[
 		AC_MSG_ERROR([Could not find DL_FOREACH_SAFE - install uthash-dev 1.9.2+])
 	],[
@@ -204,7 +205,7 @@ m4_define([BFG_PTHREAD_FLAG_CHECK],
 				fi
 				$2
 				break 2
-			],[])
+			])
 		done
 	done
 	if test "x${found_pthread}" = "xfalse"; then
@@ -346,7 +347,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 		AC_CHECK_LIB($usb_lib, libusb_init, [
 			libusb=yes
 			break
-		], [])
+		])
 	done
 	if test "x$libusb" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
@@ -415,7 +416,7 @@ if test "x$libusb" = xyes; then
 	AC_DEFINE([HAVE_LIBUSB], [1], [Define if you have libusb-1.0])
 	save_CFLAGS="$CFLAGS"
 	CFLAGS="$LIBUSB_CFLAGS $CFLAGS"
-	AC_CHECK_DECLS([libusb_error_name],[],[],[#include <libusb.h>])
+	AC_CHECK_DECLS([libusb_error_name],[true],[true],[#include <libusb.h>])
 	CFLAGS="$save_CFLAGS"
 fi
 
@@ -526,7 +527,7 @@ else
 fi
 
 
-AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[],[with_system_libblkmaker=no])
+AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[true],[with_system_libblkmaker=no])
 if test "x$with_system_libblkmaker" = "xyes"; then
 	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
 		true
@@ -773,7 +774,7 @@ for sym in bswap_ __builtin_bswap __bswap_ __swap swap OSSwapInt; do
 				AC_DEFINE_UNQUOTED(AS_TR_CPP([HAVE_$headerfile]), 1)
 			fi
 			break 2
-		],[])
+		])
 	done
 	AC_MSG_RESULT([no])
 done
