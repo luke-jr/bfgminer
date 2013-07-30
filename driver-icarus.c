@@ -806,6 +806,63 @@ static bool icarus_job_start(struct thr_info *thr)
 	return true;
 }
 
+static
+void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
+{
+	const struct cgpu_info * const icarus = thr->cgpu;
+	const struct ICARUS_INFO * const info = icarus->device_data;
+	struct icarus_state * const state = thr->cgpu_data;
+	int fd = icarus->device_fd;
+	struct timeval tv_now;
+	double delapsed;
+	uint32_t nonce;
+	
+	// If identify is requested (block erupters):
+	// 1. Don't start the next job right away (above)
+	// 2. Wait for the current job to complete 100%
+	
+	if (!was_first_run)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
+		while (true)
+		{
+			cgtime(&tv_now);
+			delapsed = tdiff(&tv_now, &state->tv_workstart);
+			if (delapsed + 0.1 > info->fullnonce)
+				break;
+			
+			// Try to get more nonces (ignoring work restart)
+			ret = icarus_gets((void *)&nonce, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10);
+			if (ret == ICA_GETS_OK)
+			{
+				nonce = be32toh(nonce);
+				submit_nonce(thr, &state->last_work, nonce);
+			}
+		}
+	}
+	else
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
+	
+	// 3. Delay 3 more seconds
+	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
+	nmsleep(3000);
+	
+	// Check for work restart in the meantime
+	if (thr->work_restart)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
+		goto no_job_start;
+	}
+	
+	// 4. Start next job
+	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+	if (!icarus_job_start(thr))
+no_job_start:
+		state->firstrun = true;
+	
+	state->identify = false;
+}
+
 static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
@@ -1108,55 +1165,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 out:
 	if (unlikely(state->identify))
-	{
-		struct timeval tv_now;
-		double delapsed;
-		
-		// If identify is requested (block erupters):
-		// 1. Don't start the next job right away (above)
-		// 2. Wait for the current job to complete 100%
-		
-		if (!was_first_run)
-		{
-			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
-			while (true)
-			{
-				cgtime(&tv_now);
-				delapsed = tdiff(&tv_now, &state->tv_workstart);
-				if (delapsed + 0.1 > info->fullnonce)
-					break;
-				
-				// Try to get more nonces (ignoring work restart)
-				ret = icarus_gets(nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10);
-				if (ret == ICA_GETS_OK)
-				{
-					nonce = be32toh(*(uint32_t*)&nonce_bin[0]);
-					submit_nonce(thr, &state->last_work, nonce);
-				}
-			}
-		}
-		else
-			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
-		
-		// 3. Delay 3 more seconds
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
-		nmsleep(3000);
-		
-		// Check for work restart in the meantime
-		if (thr->work_restart)
-		{
-			applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
-			goto no_job_start;
-		}
-		
-		// 4. Start next job
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
-		if (!icarus_job_start(thr))
-no_job_start:
-			state->firstrun = true;
-		
-		state->identify = false;
-	}
+		handle_identify(thr, ret, was_first_run);
 	
 	return hash_count;
 }
