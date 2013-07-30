@@ -2541,10 +2541,11 @@ static void adj_width(int var, int *length);
 #endif
 
 #ifdef HAVE_CURSES
+static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
+
 static
 void format_statline(char *buf, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int badnonces, int allnonces)
 {
-	static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 	char rejpcbuf[6];
 	char bnbuf[6];
 	
@@ -5626,6 +5627,7 @@ void zero_stats(void)
 	total_diff_accepted = 0;
 	total_diff_rejected = 0;
 	total_diff_stale = 0;
+	awidth = rwidth = swidth = hwwidth = 1;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
