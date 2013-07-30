@@ -16,6 +16,7 @@
 #include <curses.h>
 #endif
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -775,21 +776,40 @@ static char *add_serial(char *arg)
 
 bool get_intrange(const char *arg, int *val1, int *val2)
 {
-	int pos, n;
-	// Is is unclear whether %n is counted in the returned value, so %n is doubled up to make 2 unambiguous
-	n = sscanf(arg, "%d%n%n -%d %n", val1, &pos, &pos, val2, &pos);
-	if (unlikely(arg[pos]))
+	// NOTE: This could be done with sscanf, but its %n is broken in strange ways on Windows
+	char *p, *p2;
+	
+	*val1 = strtol(arg, &p, 0);
+	if (arg == p)
+		// Zero-length ending number, invalid
 		return false;
-	switch (n)
+	while (true)
 	{
-		case 1:  // %n not counted (only one number)
-		case 3:  // %n     counted
+		if (!p[0])
+		{
 			*val2 = *val1;
-		case 2:  // %n not counted (two numbers)
-		case 5:  // %n     counted
 			return true;
-		default:
+		}
+		if (p[0] == '-')
+			break;
+		if (!isspace(p[0]))
+			// Garbage, invalid
 			return false;
+		++p;
+	}
+	p2 = &p[1];
+	*val2 = strtol(p2, &p, 0);
+	if (p2 == p)
+		// Zero-length ending number, invalid
+		return false;
+	while (true)
+	{
+		if (!p[0])
+			return true;
+		if (!isspace(p[0]))
+			// Garbage, invalid
+			return false;
+		++p;
 	}
 }
 
