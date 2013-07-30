@@ -1718,7 +1718,6 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		work->job_id = strdup(pool->gbt_workid);
 	cg_runlock(&pool->gbt_lock);
 
-	memcpy(work->data + 4 + 32, merkleroot, 32);
 	flip32(work->data + 4 + 32, merkleroot);
 	free(merkleroot);
 	memset(work->data + 4 + 32 + 32 + 4 + 4, 0, 4); /* nonce */
