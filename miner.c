@@ -6259,6 +6259,11 @@ refresh:
 			case 'Q': case 'q':
 			case KEY_BREAK: case KEY_BACKSPACE: case KEY_CANCEL: case KEY_CLOSE: case KEY_EXIT:
 			case '\x1b':  // ESC
+			case KEY_ENTER:
+			case '\r':  // Ctrl-M on Windows, with nonl
+#ifdef PADENTER
+			case PADENTER:  // pdcurses, used by Enter key on Windows with nonl
+#endif
 			case '\n':
 				goto out;
 			default:
@@ -8928,6 +8933,7 @@ void enable_curses(void) {
 	leaveok(logwin, true);
 	cbreak();
 	noecho();
+	nonl();
 	curses_active = true;
 	statusy = logstart;
 	unlock_curses();
