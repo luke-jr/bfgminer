@@ -5627,7 +5627,9 @@ void zero_stats(void)
 	total_diff_accepted = 0;
 	total_diff_rejected = 0;
 	total_diff_stale = 0;
+#ifdef HAVE_CURSES
 	awidth = rwidth = swidth = hwwidth = 1;
+#endif
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
