@@ -1158,7 +1158,7 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 	return SEND_OK;
 }
 
-bool stratum_send(struct pool *pool, char *s, ssize_t len)
+bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force)
 {
 	enum send_ret ret = SEND_INACTIVE;
 
@@ -1166,7 +1166,7 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	mutex_lock(&pool->stratum_lock);
-	if (pool->stratum_active)
+	if (pool->stratum_active || force)
 		ret = __stratum_send(pool, s, len);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1903,7 +1903,7 @@ resend:
 	} else
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 
-	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
+	if (!_stratum_send(pool, s, strlen(s), true)) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
