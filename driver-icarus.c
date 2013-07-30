@@ -918,7 +918,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (was_first_run) {
 		state->firstrun = false;
 		__copy_work(&state->last_work, work);
-		return 0;
+		hash_count = 0;
+		goto out;
 	}
 
 	// OK, done starting Icarus's next job... now process the last run's result!
@@ -943,7 +944,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 					(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 		}
 
-		return estimate_hashes;
+		hash_count = estimate_hashes;
+		goto out;
 	}
 
 	curr_hw_errors = icarus->hw_errors;
@@ -1104,6 +1106,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
 	}
 
+out:
 	if (unlikely(state->identify))
 	{
 		struct timeval tv_now;
