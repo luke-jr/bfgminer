@@ -2795,6 +2795,50 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+#ifdef USE_UNICODE
+static
+void bfg_waddstr(WINDOW *win, const char *s)
+{
+	const char *p = s;
+	wchar_t buf[2] = {0, 0};
+	
+#define PREP_ADDCH  do {  \
+	if (p != s)  \
+		waddnstr(win, s, p - s);  \
+	s = ++p;  \
+}while(0)
+	while (true)
+	{
+next:
+		switch(p[0])
+		{
+			case '\0':
+				goto done;
+			default:
+				++p;
+				goto next;
+			case '\xb0':  // Degrees symbol
+				buf[0] = ((unsigned char *)p)[0];
+		}
+		PREP_ADDCH;
+		waddwstr(win, buf);
+	}
+done:
+	PREP_ADDCH;
+	return;
+#undef PREP_ADDCH
+}
+#define bfg_waddstr(win, s)  do {  \
+	if (use_unicode)  \
+		bfg_waddstr(win, s);  \
+	else  \
+		waddstr(win, s);  \
+}while(0)
+
+#else
+#define bfg_waddstr(win, s)  waddstr(win, s)
+#endif
+
 static inline
 void bfg_hline(WINDOW *win, int y)
 {
@@ -2838,7 +2882,8 @@ static void curses_print_status(void)
 		);
 	}
 	wattroff(statuswin, A_BOLD);
-	mvwprintw(statuswin, 5, 0, " %s", statusline);
+	wmove(statuswin, 5, 1);
+	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 
 	utility = total_accepted / total_secs * 60;
@@ -2916,7 +2961,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 	get_statline2(logline, cgpu, true);
 	if (selecting_device && (opt_show_procs ? (selected_device == cgpu->cgminer_id) : (devices[selected_device]->device == cgpu)))
 		wattron(statuswin, A_REVERSE);
-	waddstr(statuswin, logline);
+	bfg_waddstr(statuswin, logline);
 	wattroff(statuswin, A_REVERSE);
 
 	wclrtoeol(statuswin);
@@ -3017,7 +3062,7 @@ void _wlog(const char *str)
 	size_t end = strlen(str) - 1;
 	
 	if (newline)
-		wprintw(logwin, "\n");
+		bfg_waddstr(logwin, "\n");
 	
 	if (str[end] == '\n')
 	{
@@ -3032,7 +3077,7 @@ void _wlog(const char *str)
 	else
 		newline = false;
 	
-	wprintw(logwin, "%s", str);
+	bfg_waddstr(logwin, str);
 }
 
 /* Mandatory printing */
