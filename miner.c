@@ -2795,6 +2795,15 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static inline
+void bfg_hline(WINDOW *win, int y)
+{
+	if (use_unicode)
+		mvwhline_set(win, y, 0, WACS_HLINE, 80);
+	else
+		mvwhline(win, y, 0, '-', 80);
+}
+
 static int menu_attr = A_REVERSE;
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -2860,8 +2869,9 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
-	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, statusy - 1, 0, '-', 80);
+	
+	bfg_hline(statuswin, 6);
+	bfg_hline(statuswin, statusy - 1);
 	
 	wattron(statuswin, menu_attr);
 	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
