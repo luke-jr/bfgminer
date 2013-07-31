@@ -13,11 +13,17 @@
 #include "config.h"
 
 #ifdef HAVE_CURSES
+#define PDC_WIDE
 #include <curses.h>
+
+#ifdef WACS_HLINE
+#define USE_UNICODE
+#endif
 #endif
 
 #include <ctype.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -280,6 +286,13 @@ const
 bool curses_active;
 
 #ifdef HAVE_CURSES
+static
+#ifdef USE_UNICODE
+bool use_unicode = true;
+#else
+const bool use_unicode;
+#endif
+
 bool selecting_device;
 unsigned selected_device;
 #endif
@@ -1557,6 +1570,14 @@ static struct opt_table opt_config_table[] = {
 	                opt_set_invbool, &opt_opencl_binaries,
 	                "Don't attempt to use or save OpenCL kernel binaries"),
 #endif
+	OPT_WITHOUT_ARG("--no-unicode",
+	                opt_set_invbool, &use_unicode,
+#ifdef USE_UNICODE
+	                "Don't use Unicode characters in TUI"
+#else
+	                opt_hidden
+#endif
+	),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
@@ -2589,6 +2610,8 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 static inline
 void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
 {
+	if (!use_unicode)
+		maybe_unicode = false;
 	if (temp && *temp > 0.)
 			sprintf(buf, "%4.1fC", *temp);
 	else
@@ -8952,6 +8975,8 @@ void enable_curses(void) {
 		return;
 	}
 
+	if (use_unicode)
+		setlocale(LC_CTYPE, "");
 	mainwin = initscr();
 	start_color();
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
