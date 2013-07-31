@@ -2586,6 +2586,19 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 }
 #endif
 
+static inline
+void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
+{
+	if (temp && *temp > 0.)
+			sprintf(buf, "%4.1fC", *temp);
+	else
+	{
+		if (temp)
+			strcpy(buf, "     ");
+	}
+	strcat(buf, " | ");
+}
+
 void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
 #ifndef HAVE_CURSES
@@ -2664,7 +2677,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	}
 	
 	if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp && drv->override_statline_temp(buf, cgpu, opt_show_procs))
-		strcat(buf, " | ");
+		temperature_column_tail(&buf[strlen(buf)], for_curses, NULL);
 	else
 	{
 		float temp = cgpu->temp;
@@ -2675,10 +2688,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 				if (proc->temp > temp)
 					temp = proc->temp;
 		}
-		if (temp > 0.)
-			tailsprintf(buf, "%4.1fC | ", temp);
-		else
-			strcat(buf, "      | ");
+		temperature_column_tail(&buf[strlen(buf)], for_curses, &temp);
 	}
 	
 #ifdef HAVE_CURSES
@@ -6549,10 +6559,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		if (opt_show_procs && !opt_compact)
 			++divx;
 		
-		if (temp > 0.)
-			sprintf(&statusline[divx], "%4.1fC | ", temp);
-		else
-			strcpy(&statusline[divx], "      | ");
+		temperature_column_tail(&statusline[divx], true, &temp);
 		
 		format_statline(&statusline[15],
 		                cHr, aHr,
