@@ -258,7 +258,7 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 		if (fgets(buf, bufsz, F))
 		{
 			size_t L = strlen(buf);
-			while (isspace(buf[--L]))
+			while (isCspace(buf[--L]))
 				buf[L] = '\0';
 		}
 		else

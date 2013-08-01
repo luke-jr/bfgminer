@@ -588,10 +588,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 			goto skipvolts;
 		for (v = strtok_r(voltbuf, ",", &saveptr); v; v = strtok_r(NULL, ",", &saveptr))
 		{
-			while (isspace(v[0]))
+			while (isCspace(v[0]))
 				++v;
 			sz = strlen(v);
-			while (isspace(v[sz - 1]))
+			while (isCspace(v[sz - 1]))
 				--sz;
 			if (sz < 4)
 			{

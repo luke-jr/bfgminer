@@ -3468,7 +3468,7 @@ static void setup_ipaccess()
 
 		group = NOPRIVGROUP;
 
-		if (isalpha(*ptr) && *(ptr+1) == ':') {
+		if (VALIDGROUP(*ptr) && *(ptr+1) == ':') {
 			if (DEFINEDGROUP(*ptr))
 				group = GROUP(*ptr);
 

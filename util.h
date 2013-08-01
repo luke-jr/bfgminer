@@ -13,6 +13,7 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
 #include <sys/time.h>
 
 #include <curl/curl.h>
@@ -72,6 +73,18 @@
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
 extern char *json_dumps_ANY(json_t *, size_t flags);
+
+static inline
+bool isCspace(int c)
+{
+	switch (c)
+	{
+		case ' ': case '\f': case '\n': case '\r': case '\t': case '\v':
+			return true;
+		default:
+			return false;
+	}
+}
 
 struct thr_info;
 struct pool;
