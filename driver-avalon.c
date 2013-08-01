@@ -907,9 +907,9 @@ static int64_t avalon_scanhash(struct thr_info *thr, struct work **work,
 		if (opt_debug) {
 			timersub(&tv_finish, &tv_start, &elapsed);
 			applog(LOG_DEBUG,
-			       "Avalon: nonce = 0x%08x = 0x%08"PRIx64" hashes "
+			       "Avalon: nonce = 0x%08"PRIx32" = 0x%08"PRIx64" hashes "
 			       "(%ld.%06lds)", nonce, (uint64_t)hash_count,
-			       elapsed.tv_sec, elapsed.tv_usec);
+			       (long)elapsed.tv_sec, (long)elapsed.tv_usec);
 		}
 	}
 	if (result_count == result_wrong) {
