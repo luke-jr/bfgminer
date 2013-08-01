@@ -36,6 +36,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
+#include <wctype.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -289,8 +290,10 @@ bool curses_active;
 static
 #ifdef USE_UNICODE
 bool use_unicode = true;
+bool have_unicode_degrees;
 #else
 const bool use_unicode;
+const bool have_unicode_degrees;
 #endif
 
 bool selecting_device;
@@ -2610,14 +2613,19 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 static inline
 void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
 {
-	if (!use_unicode)
+	if (!(use_unicode && have_unicode_degrees))
 		maybe_unicode = false;
 	if (temp && *temp > 0.)
+		if (maybe_unicode)
+			sprintf(buf, "%4.1f\xb0""C", *temp);
+		else
 			sprintf(buf, "%4.1fC", *temp);
 	else
 	{
 		if (temp)
 			strcpy(buf, "     ");
+		if (maybe_unicode)
+			strcat(buf, " ");
 	}
 	strcat(buf, " | ");
 }
@@ -9031,7 +9039,11 @@ void enable_curses(void) {
 	}
 
 	if (use_unicode)
+	{
 		setlocale(LC_CTYPE, "");
+		if (iswprint(0xb0))
+			have_unicode_degrees = true;
+	}
 	mainwin = initscr();
 	start_color();
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
