@@ -2809,7 +2809,11 @@ static
 void bfg_waddstr(WINDOW *win, const char *s)
 {
 	const char *p = s;
+#ifdef USE_UNICODE
 	wchar_t buf[2] = {0, 0};
+#else
+	char buf[1];
+#endif
 	
 #define PREP_ADDCH  do {  \
 	if (p != s)  \
@@ -2835,12 +2839,14 @@ def:
 				PREP_ADDCH;
 				wattron(win, attr_bad);
 				goto next;
+#ifdef USE_UNICODE
 			case '|':
 				if (!use_unicode)
 					goto def;
 				PREP_ADDCH;
 				wadd_wch(win, WACS_VLINE);
 				goto next;
+#endif
 			case '\xc1':
 			case '\xc4':
 				if (!use_unicode)
@@ -2848,14 +2854,20 @@ def:
 					buf[0] = '-';
 					break;
 				}
+#ifdef USE_UNICODE
 				PREP_ADDCH;
 				wadd_wch(win, (p[-1] == '\xc4') ? WACS_HLINE : WACS_BTEE);
 				goto next;
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
+#endif
 		}
 		PREP_ADDCH;
+#ifdef USE_UNICODE
 		waddwstr(win, buf);
+#else
+		waddch(win, buf[0]);
+#endif
 	}
 done:
 	PREP_ADDCH;
@@ -2866,9 +2878,11 @@ done:
 static inline
 void bfg_hline(WINDOW *win, int y)
 {
+#ifdef USE_UNICODE
 	if (use_unicode)
 		mvwhline_set(win, y, 0, WACS_HLINE, 80);
 	else
+#endif
 		mvwhline(win, y, 0, '-', 80);
 }
 
@@ -2943,6 +2957,7 @@ static void curses_print_status(void)
 	logdiv = statusy - 1;
 	bfg_hline(statuswin, 6);
 	bfg_hline(statuswin, logdiv);
+#ifdef USE_UNICODE
 	if (use_unicode)
 	{
 		int offset = 8 /* device */ + 5 /* temperature */ + 1 /* padding space */;
@@ -2956,6 +2971,7 @@ static void curses_print_status(void)
 		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 	}
+#endif
 	
 	wattron(statuswin, menu_attr);
 	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
@@ -9082,12 +9098,14 @@ void enable_curses(void) {
 		return;
 	}
 
+#ifdef USE_UNICODE
 	if (use_unicode)
 	{
 		setlocale(LC_CTYPE, "");
 		if (iswprint(0xb0))
 			have_unicode_degrees = true;
 	}
+#endif
 	mainwin = initscr();
 	start_color();
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
