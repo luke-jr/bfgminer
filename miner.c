@@ -2825,6 +2825,10 @@ next:
 			default:
 				++p;
 				goto next;
+			case '|':
+				PREP_ADDCH;
+				wadd_wch(win, WACS_VLINE);
+				goto next;
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
 		}
