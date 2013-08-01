@@ -2725,7 +2725,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 #ifdef HAVE_CURSES
 	if (for_curses)
 	{
-		const char *cHrStatsOpt[] = {"DEAD ", "SICK ", "OFF  ", "REST ", " ERR ", "WAIT ", cHr};
+		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true;
 		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
@@ -2803,6 +2803,8 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static int attr_bad = A_BOLD;
+
 #ifdef USE_UNICODE
 static
 void bfg_waddstr(WINDOW *win, const char *s)
@@ -2824,6 +2826,14 @@ next:
 				goto done;
 			default:
 				++p;
+				goto next;
+			case '\1':
+				PREP_ADDCH;
+				wattroff(win, attr_bad);
+				goto next;
+			case '\2':
+				PREP_ADDCH;
+				wattron(win, attr_bad);
 				goto next;
 			case '|':
 				PREP_ADDCH;
@@ -6638,6 +6648,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		struct cgpu_info *proc;
 		int i, working_devs = 0, working_procs = 0;
 		int divx;
+		bool bad = false;
 		
 		// Find the highest temperature of all processors
 		for (i = 0; i < total_devices; ++i)
@@ -6647,26 +6658,38 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (proc->temp > temp)
 				temp = proc->temp;
 			
-			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
+			if (unlikely(proc->deven == DEV_DISABLED || proc->rolling < .1))
+				;  // Just need to block it off from both conditions
+			else
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED))
 			{
 				++working_procs;
 				if (proc->device == proc)
 					++working_devs;
 			}
+			else
+				bad = true;
 		}
 		
 		if (working_devs == working_procs)
-			sprintf(statusline, "%d        ", working_devs);
+			sprintf(statusline, "%s%d        ", bad ? "\2" : "", working_devs);
 		else
-			sprintf(statusline, "%d/%d     ", working_devs, working_procs);
+			sprintf(statusline, "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
 			++divx;
 		
+		if (bad)
+		{
+			++divx;
+			statusline[divx] = '\1';
+			++divx;
+		}
+		
 		temperature_column_tail(&statusline[divx], true, &temp);
 		
-		format_statline(&statusline[15],
+		format_statline(statusline,
 		                cHr, aHr,
 		                uHr,
 		                total_accepted,
@@ -9066,7 +9089,11 @@ void enable_curses(void) {
 	mainwin = initscr();
 	start_color();
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
+	{
 		menu_attr = COLOR_PAIR(1);
+		if (ERR != init_pair(2, COLOR_RED, COLOR_BLACK))
+			attr_bad |= COLOR_PAIR(2);
+	}
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
