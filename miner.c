@@ -2841,6 +2841,16 @@ def:
 				PREP_ADDCH;
 				wadd_wch(win, WACS_VLINE);
 				goto next;
+			case '\xc1':
+			case '\xc4':
+				if (!use_unicode)
+				{
+					buf[0] = '-';
+					break;
+				}
+				PREP_ADDCH;
+				wadd_wch(win, (p[-1] == '\xc4') ? WACS_HLINE : WACS_BTEE);
+				goto next;
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
 		}
@@ -6434,7 +6444,7 @@ void show_help(void)
 		"ST: work in queue              | F: network fails  | NB: new blocks detected\n"
 		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
 		"E: # shares * diff per 2kB bw  | U: shares/minute  | BS: best share ever found\n"
-		"--------------------------------------------------------------------------------\n"
+		"\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\n"
 		"devices/processors hashing (only for totals line), hottest temperature\n"
 	);
 	wlogprint(
