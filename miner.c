@@ -2805,7 +2805,6 @@ static void text_print_status(int thr_id)
 #ifdef HAVE_CURSES
 static int attr_bad = A_BOLD;
 
-#ifdef USE_UNICODE
 static
 void bfg_waddstr(WINDOW *win, const char *s)
 {
@@ -2825,6 +2824,7 @@ next:
 			case '\0':
 				goto done;
 			default:
+def:
 				++p;
 				goto next;
 			case '\1':
@@ -2836,6 +2836,8 @@ next:
 				wattron(win, attr_bad);
 				goto next;
 			case '|':
+				if (!use_unicode)
+					goto def;
 				PREP_ADDCH;
 				wadd_wch(win, WACS_VLINE);
 				goto next;
@@ -2850,16 +2852,6 @@ done:
 	return;
 #undef PREP_ADDCH
 }
-#define bfg_waddstr(win, s)  do {  \
-	if (use_unicode)  \
-		bfg_waddstr(win, s);  \
-	else  \
-		waddstr(win, s);  \
-}while(0)
-
-#else
-#define bfg_waddstr(win, s)  waddstr(win, s)
-#endif
 
 static inline
 void bfg_hline(WINDOW *win, int y)
