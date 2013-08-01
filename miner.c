@@ -6522,6 +6522,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		float temp = 0;
 		struct cgpu_info *proc;
 		int i, working_devs = 0, working_procs = 0;
+		int divx;
 		
 		// Find the highest temperature of all processors
 		for (i = 0; i < total_devices; ++i)
@@ -6540,13 +6541,18 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		}
 		
 		if (working_devs == working_procs)
-			sprintf(statusline, "%d      ", working_devs);
+			sprintf(statusline, "%d        ", working_devs);
 		else
-			sprintf(statusline, "%d/%d    ", working_devs, working_procs);
+			sprintf(statusline, "%d/%d     ", working_devs, working_procs);
+		
+		divx = 7;
+		if (opt_show_procs && !opt_compact)
+			++divx;
+		
 		if (temp > 0.)
-			sprintf(&statusline[7], "%4.1fC | ", temp);
+			sprintf(&statusline[divx], "%4.1fC | ", temp);
 		else
-			strcpy(&statusline[7], "      | ");
+			strcpy(&statusline[divx], "      | ");
 		
 		format_statline(&statusline[15],
 		                cHr, aHr,
