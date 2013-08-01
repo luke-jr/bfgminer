@@ -2869,6 +2869,7 @@ static void curses_print_status(void)
 	struct timeval now, tv;
 	float efficiency;
 	double utility;
+	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
@@ -2927,8 +2928,22 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
 	
+	logdiv = statusy - 1;
 	bfg_hline(statuswin, 6);
-	bfg_hline(statuswin, statusy - 1);
+	bfg_hline(statuswin, logdiv);
+	if (use_unicode)
+	{
+		int offset = 8 /* device */ + 5 /* temperature */ + 1 /* padding space */;
+		if (opt_show_procs && !opt_compact)
+			++offset;  // proc letter
+		if (have_unicode_degrees)
+			++offset;  // degrees symbol
+		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
+		offset += 24;  // hashrates etc
+		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
+	}
 	
 	wattron(statuswin, menu_attr);
 	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
