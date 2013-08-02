@@ -1021,7 +1021,7 @@ extern unsigned long long global_hashrate;
 extern char *current_fullhash;
 extern double current_diff;
 extern uint64_t best_diff;
-extern struct timeval block_timeval;
+extern time_t block_time;
 
 #ifdef HAVE_OPENCL
 typedef struct {

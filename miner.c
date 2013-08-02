@@ -309,7 +309,7 @@ char *current_fullhash;
 
 static char datestamp[40];
 static char blocktime[32];
-struct timeval block_timeval;
+time_t block_time;
 static char best_share[8] = "0";
 double current_diff = 0xFFFFFFFFFFFFFFFFULL;
 static char block_diff[8];
@@ -5163,12 +5163,12 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	swap32tole(hash_swap, hash_swap, 32 / 4);
 
 	cg_wlock(&ch_lock);
-	cgtime(&block_timeval);
+	block_time = time(NULL);
 	__update_block_title(hash_swap);
 	free(current_fullhash);
 	current_fullhash = malloc(65);
 	bin2hex(current_fullhash, hash_swap, 32);
-	get_timestamp(blocktime, block_timeval.tv_sec);
+	get_timestamp(blocktime, block_time);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
