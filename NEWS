@@ -1,3 +1,146 @@
+BFGMiner Version 3.1.4 - August 2, 2013
+- Windows: Rebuild pdcurses with UTF-8 and wide character support
+- Bugfix: Avoid using wide curses symbols/macros when USE_UNICODE is not defined
+- Unicode: Use line drawing in TUI Help
+- Use bfg_waddstr even with Unicode disabled, since it's needed for red
+highlight
+- Colour bad conditions in red
+- Unicode: Cross-tee intersecting lines
+- Unicode: Use WACS_VLINE for vertical lines
+- Unicode: If degrees symbol is available, add it to temperatures
+- Unicode: bfg_waddstr wrapper to handle non-ASCII characters, currently used
+only by logging and statlines
+- Unicode: Use WACS_HLINE for horizontal lines
+- Add framework for using Unicode in TUI (can be disabled with --no-unicode)
+- Avoid using potentially locale-dependent ctype functions in locale-independent
+contexts
+- Refactor temperature in TUI statlines to share code nicer
+- Bugfix: avalon: Fix applog formatting
+- Bugfix: Align totals columns in per-processor view
+- Bugfix: Fix curses-less build
+- configure: Workaround buggy autoconf versions
+- Bugfix: erupter: Include headers in order necessary for Windows
+- Bugfix: Reimplement get_intrange using strtol instead of sscanf (which is
+broken on Windows)
+- Bugfix: get_intrange: Check for extra garbage at the end, only after we know
+we have an end-position
+- Bugfix: Fix Enter key in TUI on Windows
+- erupter: Split identify-handling logic into handle_identify function
+- Bugfix: erupter: Ensure identify is handled during no-once or firstrun
+- erupter: After identify, check if a work restart is needed immediately
+- erupter: Implement identify function by pausing hashing for 3 seconds
+- Bugfix: icarus: Remember firstrun state in case it gets changed for the next
+run
+- icarus: Move actual dynclock updates to icarus_job_start
+- icarus: Split out icarus_job_prepare, and rename icarus_job_start
+- Bugfix: ZeroStats: Reset column widths to 1
+- miner.php: Include max temperature in device totals line
+- Bugfix: Stratum Fix debug logging of initial mining.subscribe command
+- Bugfix: Call pool_set_opaque from work_decode, so block content hiding/
+providing messages work for getwork/GBT
+- Split block contents hiding/providing notices out from stratum code
+- Add test suite for get_intrange
+- Bugfix: Check for error conditions in get_intrange to not have weird --device
+behaviour when bad values are provided
+- Bugfix: erupter: Take advantage of detectone_meta_info to handle Emerald
+autodetection
+- TUI Help describing the various status fields (contributed by midnightmagic)
+- Bugfix: ManageTUI: Allow 'I' key to be used by devices not supporting identify
+- Bugfix: Prefer Sapphire over Emerald for -S erupter:*
+- Bugfix: Clear total_bad_nonces when zeroing statistics
+- Bugfix: modminer: Since we are not searching iManuf string for needles, only
+look for "ModMiner"
+- Bugfix: sysfs autodetect: Recurse into tty/ subdirectory (necessary for
+CDC/ACM ttys)
+- sysfs autodetect: Split tty* directory search into new _sysfs_find_tty
+function
+- modminer: Reduce default clock to 190 MHz
+- README: Update driver info to include Erupter driver
+- README: FAQ about scrypt and difficulty
+- Include count of working devices/processors in totals statline
+- Format totals statline the same way as individual device/processor statlines
+- Rearrange TUI a bit, including menu at the top (+1 log line) and hashrate
+total closer to device summaries
+- Bugfix: setup_stratum_curl: Need to release stratum lock on connection failure
+too
+- Bugfix: Avoid unnecessary locks inside curses_print_status, which is called
+with the console lock held
+- Bugfix: setup_stratum_curl: Hold stratum lock until connection completes, to
+avoid potential races
+- Bugfix: stratum_works: If stratum is already active, it works (avoid trying to
+initialise it again)
+- Replace hashrate_to_bufstr/ti_hashrate_bufstr with format_unit/
+multi_format_unit_array
+- New multi_format_unit_array to fill multiple buffers instead of building a
+delimited string
+- multi_format_unit: Skip recounting length of fixed-length strings
+- Shrink status line to fit in 80 columns
+- Add network bandwidth rate to TUI
+- New multi_format_unit variadic macro to handle formatting multiple numbers at
+once
+- format_unit: Option to choose 3-digit integer display vs 5-character floating-
+point display
+- Optimization: format_unit: Handle number first, to avoid having to restore
+suffix later
+- Generalise hashrate_pick_unit/hashrate_to_bufstr into pick_unit/format_unit
+- Extend hashrate_pick_unit/hashrate_to_bufstr to handle sub-kilo units
+- Split total_bytes_xfer to total_bytes_rcvd and total_bytes_sent
+- Bugfix: _decode_udev_enc_dup: Allocate enough space for full string
+- Bugfix: Never use waddstr for logwin, since it would bypass special newline
+handling
+- Bugfix: bitforce: Set kname on chip processors
+- bitforce: Include voltages in Manage device TUI
+- Defer newlines going to curses logwin, to avoid a useless blank line at the
+bottom of the window
+- Ensure printing to logwin always goes through _wlog
+- Remove blank line above log window
+- bitforce: Identify parallel queue protocol distinctly from mere bulk queue
+- ManageTUI: Include kernel name, when available
+- Stratum: Roll ntime as we generate work
+- Stratum: Make swork.ntime native-endian
+- Stratum: Treat ntime as uint32_t (as it should be), still always big endian
+- Debuglog ManageTUI actions/responses
+- ManageTUI: Add generic Identify support
+- Bugfix: Move serial_detect* and open_bitstream to DevAPI code so CPU/OpenCL
+can build properly without fpgautils
+- Short-circuit logging sooner in quiet mode
+- Write to both stderr and console within same console lock "session"
+- Bugfix: Also hold the console lock when writing to stderr
+- Use common console locking function for stdout in logging.c
+- Move console lock and unlock functions (which also handle thread cancelstate)
+to miner.h
+- Bugfix: bitforce: Only try to clear queues of SC devices, since FPGA MR boards
+interpret ZQX/ZOX differently
+- Timer-based gettimeofday substitute for systems with poor time-of-day clocks
+(Windows)
+- Use clock_gettime(CLOCK_MONOTONIC) for timers when available
+- Use QueryPerformanceCounter for timers on Windows
+- Generic refactoring for timer_set_now
+- Replace all remaining uses of gettimeofday for timers, with timer_set_now (aka
+cgtime)
+- Don't mix timers with timestamps (visual only)
+- Always use struct timeval for timers, and don't mix timers with timestamps
+(functional only)
+- get_datestamp: Change timeval parameter to time_t, and implement
+get_now_datestamp for common "current time" use case
+- Use get_datestamp for (non-microsecond) log timestamps
+- Bugfix: ztex: Allocate final processor names on the heap, so they survive when
+the stack for ztex_prepare is gone
+- Bugfix: ztex: Copy serial number to device "name" before cloning it for other
+processors
+- Bugfix: x6500: Use cgpu->temp directly since there is only one sensor per
+processor
+- Bugfix: Actually show the highest temperature, not just calculate it
+- x6500: Allow changing clock speed from TUI Manage device
+- x6500: Port pgaset clock from modminer driver at
+66d2a3ab072fcdbc3c7ed41a97f265afa917bbee
+- modminer: Allow changing clock speed from TUI Manage device
+- bitforce: Flush job and result queues at startup to avoid unnecessary warnings
+- x6500: Reduce default clock to 190 MHz
+- Bugfix: fpgautils: Close libusb handle after copying USB strings
+- use BSD sed syntax to generate iospeed_local.h
+
+
 BFGMiner Version 3.1.3 - July 11, 2013
 - Bugfix: Reset staged_full flag when discarding (stale) popped work, or
 increasing the queue minimum

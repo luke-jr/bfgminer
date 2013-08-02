@@ -1,3 +1,19 @@
+bfgminer (3.1.4-0precise1) precise; urgency=low
+
+  * Enable triggering "identify" (flash LED) function from Manage device TUI for devices that support it.
+  * modminer & x6500: Enable changing clock frequency from Manage devices TUI interface.
+  * Device ailments (SICK, ERR, etc) are now displayed in red/pink.
+  * erupter: Add support for "identify" (flash LED) function. After some delay (up to 13 seconds), the LED will light for 3 seconds (hashing stops during this time).
+  * bitforce: Display voltages in Manage device TUI.
+  * Reorganised TUI display, adding network transfer rate, and totals summary line including count of total devices/processors hashing as well as hottest temperature across all sensors.
+  * Improved timer functionality under the hood, taking advantage of clock_gettime. This should fix issues (eg, erupters reporting insane hashrates) related to system clock changes (such as NTP drift adjustment).
+  * Removed blank/wasted lines above/below log window in TUI mode.
+  * bitforce: Clear queues at startup to avoid spurious warnings.
+  * Stratum: Add support for rolling ntime header.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 02 Aug 2013 02:28:17 -0000
+
+
 bfgminer (3.1.3-0precise1) precise; urgency=low
 
   * Fix 100% CPU usage hang with GBT/getwork pools.
