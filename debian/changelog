@@ -1,3 +1,10 @@
+bfgminer (3.0.6-0precise1) precise; urgency=low
+
+  * Bug fixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 02 Aug 2013 02:45:58 -0000
+
+
 bfgminer (3.0.5-0precise1) precise; urgency=low
 
   * Catalyst 13.2+ support.

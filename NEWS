@@ -1,3 +1,28 @@
+BFGMiner Version 3.0.6 - August 2, 2013
+
+- Windows: Rebuild pdcurses with UTF-8 and wide character support
+- Bugfix: avalon: Fix applog formatting
+- configure: Workaround buggy autoconf versions
+- Bugfix: icarus: Remember firstrun state in case it gets changed for the next
+run
+- Bugfix: Stratum Fix debug logging of initial mining.subscribe command
+- Bugfix: setup_stratum_curl: Need to release stratum lock on connection failure
+too
+- Bugfix: Avoid unnecessary locks inside curses_print_status, which is called
+with the console lock held
+- Bugfix: setup_stratum_curl: Hold stratum lock until connection completes, to
+avoid potential races
+- Bugfix: stratum_works: If stratum is already active, it works (avoid trying to
+initialise it again)
+- Bugfix: ztex: Allocate final processor names on the heap, so they survive when
+the stack for ztex_prepare is gone
+- Bugfix: ztex: Copy serial number to device "name" before cloning it for other
+processors
+- Bugfix: x6500: Use cgpu->temp directly since there is only one sensor per
+processor
+- bitforce: Flush job and result queues at startup to avoid unnecessary warnings
+
+
 BFGMiner Version 3.0.5 - July 8, 2013
 
 - README: Fix statline example
