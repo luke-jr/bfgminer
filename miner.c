@@ -13,11 +13,17 @@
 #include "config.h"
 
 #ifdef HAVE_CURSES
+#define PDC_WIDE
 #include <curses.h>
+
+#ifdef WACS_HLINE
+#define USE_UNICODE
+#endif
 #endif
 
 #include <ctype.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +36,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
+#include <wctype.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -280,6 +287,15 @@ const
 bool curses_active;
 
 #ifdef HAVE_CURSES
+static
+#ifdef USE_UNICODE
+bool use_unicode = true;
+bool have_unicode_degrees;
+#else
+const bool use_unicode;
+const bool have_unicode_degrees;
+#endif
+
 bool selecting_device;
 unsigned selected_device;
 #endif
@@ -1557,6 +1573,14 @@ static struct opt_table opt_config_table[] = {
 	                opt_set_invbool, &opt_opencl_binaries,
 	                "Don't attempt to use or save OpenCL kernel binaries"),
 #endif
+	OPT_WITHOUT_ARG("--no-unicode",
+	                opt_set_invbool, &use_unicode,
+#ifdef USE_UNICODE
+	                "Don't use Unicode characters in TUI"
+#else
+	                opt_hidden
+#endif
+	),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
@@ -2586,6 +2610,26 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 }
 #endif
 
+static inline
+void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
+{
+	if (!(use_unicode && have_unicode_degrees))
+		maybe_unicode = false;
+	if (temp && *temp > 0.)
+		if (maybe_unicode)
+			sprintf(buf, "%4.1f\xb0""C", *temp);
+		else
+			sprintf(buf, "%4.1fC", *temp);
+	else
+	{
+		if (temp)
+			strcpy(buf, "     ");
+		if (maybe_unicode)
+			strcat(buf, " ");
+	}
+	strcat(buf, " | ");
+}
+
 void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
 #ifndef HAVE_CURSES
@@ -2664,7 +2708,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	}
 	
 	if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp && drv->override_statline_temp(buf, cgpu, opt_show_procs))
-		strcat(buf, " | ");
+		temperature_column_tail(&buf[strlen(buf)], for_curses, NULL);
 	else
 	{
 		float temp = cgpu->temp;
@@ -2675,16 +2719,13 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 				if (proc->temp > temp)
 					temp = proc->temp;
 		}
-		if (temp > 0.)
-			tailsprintf(buf, "%4.1fC | ", temp);
-		else
-			strcat(buf, "      | ");
+		temperature_column_tail(&buf[strlen(buf)], for_curses, &temp);
 	}
 	
 #ifdef HAVE_CURSES
 	if (for_curses)
 	{
-		const char *cHrStatsOpt[] = {"DEAD ", "SICK ", "OFF  ", "REST ", " ERR ", "WAIT ", cHr};
+		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true;
 		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
@@ -2762,6 +2803,89 @@ static void text_print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static int attr_bad = A_BOLD;
+
+static
+void bfg_waddstr(WINDOW *win, const char *s)
+{
+	const char *p = s;
+#ifdef USE_UNICODE
+	wchar_t buf[2] = {0, 0};
+#else
+	char buf[1];
+#endif
+	
+#define PREP_ADDCH  do {  \
+	if (p != s)  \
+		waddnstr(win, s, p - s);  \
+	s = ++p;  \
+}while(0)
+	while (true)
+	{
+next:
+		switch(p[0])
+		{
+			case '\0':
+				goto done;
+			default:
+def:
+				++p;
+				goto next;
+			case '\1':
+				PREP_ADDCH;
+				wattroff(win, attr_bad);
+				goto next;
+			case '\2':
+				PREP_ADDCH;
+				wattron(win, attr_bad);
+				goto next;
+#ifdef USE_UNICODE
+			case '|':
+				if (!use_unicode)
+					goto def;
+				PREP_ADDCH;
+				wadd_wch(win, WACS_VLINE);
+				goto next;
+#endif
+			case '\xc1':
+			case '\xc4':
+				if (!use_unicode)
+				{
+					buf[0] = '-';
+					break;
+				}
+#ifdef USE_UNICODE
+				PREP_ADDCH;
+				wadd_wch(win, (p[-1] == '\xc4') ? WACS_HLINE : WACS_BTEE);
+				goto next;
+			case '\xb0':  // Degrees symbol
+				buf[0] = ((unsigned char *)p)[0];
+#endif
+		}
+		PREP_ADDCH;
+#ifdef USE_UNICODE
+		waddwstr(win, buf);
+#else
+		waddch(win, buf[0]);
+#endif
+	}
+done:
+	PREP_ADDCH;
+	return;
+#undef PREP_ADDCH
+}
+
+static inline
+void bfg_hline(WINDOW *win, int y)
+{
+#ifdef USE_UNICODE
+	if (use_unicode)
+		mvwhline_set(win, y, 0, WACS_HLINE, 80);
+	else
+#endif
+		mvwhline(win, y, 0, '-', 80);
+}
+
 static int menu_attr = A_REVERSE;
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -2771,6 +2895,7 @@ static void curses_print_status(void)
 	struct timeval now, tv;
 	float efficiency;
 	double utility;
+	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
@@ -2796,7 +2921,8 @@ static void curses_print_status(void)
 		);
 	}
 	wattroff(statuswin, A_BOLD);
-	mvwprintw(statuswin, 5, 0, " %s", statusline);
+	wmove(statuswin, 5, 1);
+	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 
 	utility = total_accepted / total_secs * 60;
@@ -2827,8 +2953,25 @@ static void curses_print_status(void)
 	wclrtoeol(statuswin);
 	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
-	mvwhline(statuswin, 6, 0, '-', 80);
-	mvwhline(statuswin, statusy - 1, 0, '-', 80);
+	
+	logdiv = statusy - 1;
+	bfg_hline(statuswin, 6);
+	bfg_hline(statuswin, logdiv);
+#ifdef USE_UNICODE
+	if (use_unicode)
+	{
+		int offset = 8 /* device */ + 5 /* temperature */ + 1 /* padding space */;
+		if (opt_show_procs && !opt_compact)
+			++offset;  // proc letter
+		if (have_unicode_degrees)
+			++offset;  // degrees symbol
+		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
+		offset += 24;  // hashrates etc
+		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
+	}
+#endif
 	
 	wattron(statuswin, menu_attr);
 	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
@@ -2873,7 +3016,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 	get_statline2(logline, cgpu, true);
 	if (selecting_device && (opt_show_procs ? (selected_device == cgpu->cgminer_id) : (devices[selected_device]->device == cgpu)))
 		wattron(statuswin, A_REVERSE);
-	waddstr(statuswin, logline);
+	bfg_waddstr(statuswin, logline);
 	wattroff(statuswin, A_REVERSE);
 
 	wclrtoeol(statuswin);
@@ -2974,7 +3117,7 @@ void _wlog(const char *str)
 	size_t end = strlen(str) - 1;
 	
 	if (newline)
-		wprintw(logwin, "\n");
+		bfg_waddstr(logwin, "\n");
 	
 	if (str[end] == '\n')
 	{
@@ -2989,7 +3132,7 @@ void _wlog(const char *str)
 	else
 		newline = false;
 	
-	wprintw(logwin, "%s", str);
+	bfg_waddstr(logwin, str);
 }
 
 /* Mandatory printing */
@@ -6317,7 +6460,7 @@ void show_help(void)
 		"ST: work in queue              | F: network fails  | NB: new blocks detected\n"
 		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
 		"E: # shares * diff per 2kB bw  | U: shares/minute  | BS: best share ever found\n"
-		"--------------------------------------------------------------------------------\n"
+		"\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\n"
 		"devices/processors hashing (only for totals line), hottest temperature\n"
 	);
 	wlogprint(
@@ -6523,6 +6666,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		struct cgpu_info *proc;
 		int i, working_devs = 0, working_procs = 0;
 		int divx;
+		bool bad = false;
 		
 		// Find the highest temperature of all processors
 		for (i = 0; i < total_devices; ++i)
@@ -6532,29 +6676,38 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (proc->temp > temp)
 				temp = proc->temp;
 			
-			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
+			if (unlikely(proc->deven == DEV_DISABLED || proc->rolling < .1))
+				;  // Just need to block it off from both conditions
+			else
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED))
 			{
 				++working_procs;
 				if (proc->device == proc)
 					++working_devs;
 			}
+			else
+				bad = true;
 		}
 		
 		if (working_devs == working_procs)
-			sprintf(statusline, "%d        ", working_devs);
+			sprintf(statusline, "%s%d        ", bad ? "\2" : "", working_devs);
 		else
-			sprintf(statusline, "%d/%d     ", working_devs, working_procs);
+			sprintf(statusline, "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
 			++divx;
 		
-		if (temp > 0.)
-			sprintf(&statusline[divx], "%4.1fC | ", temp);
-		else
-			strcpy(&statusline[divx], "      | ");
+		if (bad)
+		{
+			++divx;
+			statusline[divx] = '\1';
+			++divx;
+		}
 		
-		format_statline(&statusline[15],
+		temperature_column_tail(&statusline[divx], true, &temp);
+		
+		format_statline(statusline,
 		                cHr, aHr,
 		                uHr,
 		                total_accepted,
@@ -8945,10 +9098,22 @@ void enable_curses(void) {
 		return;
 	}
 
+#ifdef USE_UNICODE
+	if (use_unicode)
+	{
+		setlocale(LC_CTYPE, "");
+		if (iswprint(0xb0))
+			have_unicode_degrees = true;
+	}
+#endif
 	mainwin = initscr();
 	start_color();
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
+	{
 		menu_attr = COLOR_PAIR(1);
+		if (ERR != init_pair(2, COLOR_RED, COLOR_BLACK))
+			attr_bad |= COLOR_PAIR(2);
+	}
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);

@@ -117,7 +117,7 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	if (db->idlemarker) {
 		const unsigned char *cptr = ptr;
 		for (size_t i = 0; i < len; ++i)
-			if (!(isspace(cptr[i]) || cptr[i] == '{')) {
+			if (!(isCspace(cptr[i]) || cptr[i] == '{')) {
 				*db->idlemarker = CURL_SOCKET_BAD;
 				db->idlemarker = NULL;
 				break;
@@ -182,14 +182,14 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	rem = ptr + slen + 1;		/* trim value's leading whitespace */
 	remlen = ptrlen - slen - 1;
-	while ((remlen > 0) && (isspace(*rem))) {
+	while ((remlen > 0) && (isCspace(*rem))) {
 		remlen--;
 		rem++;
 	}
 
 	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
 	val[remlen] = 0;
-	while ((*val) && (isspace(val[strlen(val) - 1])))
+	while ((*val) && (isCspace(val[strlen(val) - 1])))
 		val[strlen(val) - 1] = 0;
 
 	if (!*val)			/* skip blank value */
@@ -356,7 +356,7 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 			// data is not null-terminated, so we need to copy and terminate it for applog
 			char datacp[size + 1];
 			memcpy(datacp, data, size);
-			while (likely(size) && unlikely(isspace(datacp[size-1])))
+			while (likely(size) && unlikely(isCspace(datacp[size-1])))
 				--size;
 			if (unlikely(!size))
 				break;
@@ -1578,7 +1578,7 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 	if (!s)
 		return NULL;
 	for (i = 0; s[i] != '['; ++i)
-		if (unlikely(!(s[i] && isspace(s[i]))))
+		if (unlikely(!(s[i] && isCspace(s[i]))))
 			quit(1, "json_dumps_ANY failed to find opening bracket in array dump");
 	len = strlen(&s[++i]) - 1;
 	if (unlikely(s[i+len] != ']'))
