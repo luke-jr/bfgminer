@@ -2844,11 +2844,11 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 
 	cg_rlock(&ch_lock);
 	if (current_fullhash && *current_fullhash) {
-		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
+		root = api_add_time(root, "Current Block Time", &block_time, true);
 		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
 	} else {
-		struct timeval t = {0,0};
-		root = api_add_timeval(root, "Current Block Time", &t, true);
+		time_t t = 0;
+		root = api_add_time(root, "Current Block Time", &t, true);
 		root = api_add_const(root, "Current Block Hash", BLANK, false);
 	}
 	cg_runlock(&ch_lock);
