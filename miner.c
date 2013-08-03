@@ -286,16 +286,18 @@ const
 #endif
 bool curses_active;
 
-#ifdef HAVE_CURSES
 static
-#ifdef USE_UNICODE
+#if defined(HAVE_CURSES) && defined(USE_UNICODE)
 bool use_unicode = true;
+static
 bool have_unicode_degrees;
 #else
 const bool use_unicode;
+static
 const bool have_unicode_degrees;
 #endif
 
+#ifdef HAVE_CURSES
 bool selecting_device;
 unsigned selected_device;
 #endif
