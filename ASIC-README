@@ -44,7 +44,8 @@ it from the cgminer directory in the DOWNLOADS link above.
 
 When you first switch a device over to WinUSB with zadig and it shows that
 correctly on the left of the zadig window, but it still gives permission
-errors, you may need to unplug the USB miner and then plug it back in
+errors, you may need to unplug the USB miner and then plug it back in. Some
+users may need to reboot at this point.
 
 
 LINUX:
