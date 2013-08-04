@@ -6219,9 +6219,13 @@ static void *input_thread(void __maybe_unused *userdata)
 			break;
 #ifdef HAVE_CURSES
 		case KEY_DOWN:
-			if (devsummaryYOffset < -(total_lines + devcursor - statusy))
+		{
+			const int visible_lines = logcursor - devcursor;
+			const int invisible_lines = total_lines - visible_lines;
+			if (devsummaryYOffset <= -invisible_lines)
 				break;
 			devsummaryYOffset -= 2;
+		}
 		case KEY_UP:
 			if (devsummaryYOffset == 0)
 				break;
