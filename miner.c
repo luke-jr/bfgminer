@@ -286,6 +286,11 @@ const
 #endif
 bool curses_active;
 
+#if !(defined(PDCURSES) || defined(NCURSES_VERSION))
+const
+#endif
+short default_bgcolor = COLOR_BLACK;
+
 static
 #if defined(HAVE_CURSES) && defined(USE_UNICODE)
 bool use_unicode = true;
@@ -9114,10 +9119,14 @@ void enable_curses(void) {
 #endif
 	mainwin = initscr();
 	start_color();
+#if defined(PDCURSES) || defined(NCURSES_VERSION)
+	if (ERR != use_default_colors())
+		default_bgcolor = -1;
+#endif
 	if (has_colors() && ERR != init_pair(1, COLOR_WHITE, COLOR_BLUE))
 	{
 		menu_attr = COLOR_PAIR(1);
-		if (ERR != init_pair(2, COLOR_RED, COLOR_BLACK))
+		if (ERR != init_pair(2, COLOR_RED, default_bgcolor))
 			attr_bad |= COLOR_PAIR(2);
 	}
 	keypad(mainwin, true);
