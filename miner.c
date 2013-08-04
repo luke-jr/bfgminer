@@ -416,36 +416,6 @@ static bool should_run(void)
 	return within_range;
 }
 
-void get_datestamp(char *f, time_t tt)
-{
-	struct tm _tm;
-	struct tm *tm = &_tm;
-	
-	if (tt == INVALID_TIMESTAMP)
-		tt = time(NULL);
-
-	localtime_r(&tt, tm);
-	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
-		tm->tm_year + 1900,
-		tm->tm_mon + 1,
-		tm->tm_mday,
-		tm->tm_hour,
-		tm->tm_min,
-		tm->tm_sec);
-}
-
-void get_timestamp(char *f, time_t tt)
-{
-	struct tm _tm;
-	struct tm *tm = &_tm;
-
-	localtime_r(&tt, tm);
-	sprintf(f, "[%02d:%02d:%02d]",
-		tm->tm_hour,
-		tm->tm_min,
-		tm->tm_sec);
-}
-
 static void applog_and_exit(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 
 static char exit_buf[512];

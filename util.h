@@ -300,6 +300,19 @@ extern void bfg_gettimeofday(struct timeval *);
 #define bfg_gettimeofday(out)  gettimeofday(out, NULL)
 #endif
 
+enum timestamp_format {
+	BTF_DATE = 1,
+	BTF_TIME = 2,
+	BTF_USEC = 4,
+	BTF_BRACKETS = 8,
+};
+
+extern int format_timestamp(char * const buf, const int fmt, const struct timeval * const);
+#define format_time_t(buf, fmt, tt)  format_timestamp(buf, fmt, (struct timeval[1]){ { .tv_sec = tt } })
+#define get_datestamp(buf, tt)  format_time_t(buf, BTF_DATE | BTF_TIME | BTF_BRACKETS, tt)
+#define get_now_datestamp(buf)  get_datestamp(buf, time(NULL))
+#define get_timestamp(buf, tt)  format_time_t(buf, BTF_TIME | BTF_BRACKETS, tt)
+
 static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 {

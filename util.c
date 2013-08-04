@@ -1239,6 +1239,44 @@ void bfg_init_time()
 #endif
 }
 
+int format_timestamp(char * const buf, const int fmt, const struct timeval * const tv)
+{
+	struct tm tm;
+	char *s = buf;
+	time_t tt = tv->tv_sec;
+	
+	localtime_r(&tt, &tm);
+	
+	if (fmt & BTF_BRACKETS)
+		(s++)[0] = '[';
+	if (fmt & BTF_DATE)
+	{
+		s +=
+		sprintf(s, "%d-%02d-%02d",
+		        tm.tm_year + 1900,
+		        tm.tm_mon + 1,
+		        tm.tm_mday);
+		if (fmt & BTF_TIME)
+			(s++)[0] = ' ';
+	}
+	if (fmt & BTF_TIME)
+	{
+		s +=
+		sprintf(s, "%02d:%02d:%02d",
+		        tm.tm_hour,
+		        tm.tm_min,
+		        tm.tm_sec);
+		if (fmt & BTF_USEC)
+			s +=
+			sprintf(s, ".%06ld", (long)tv->tv_usec);
+	}
+	if (fmt & BTF_BRACKETS)
+		s +=
+		sprintf(s, "]");
+	
+	return (s - buf);
+}
+
 void subtime(struct timeval *a, struct timeval *b)
 {
 	timersub(a, b, b);

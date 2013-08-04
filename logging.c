@@ -63,20 +63,9 @@ void _applog(int prio, const char *str)
 		if (opt_log_microseconds)
 		{
 			struct timeval tv;
-			struct tm tm;
-			
 			bfg_init_time();
 			bfg_gettimeofday(&tv);
-			localtime_r(&tv.tv_sec, &tm);
-			
-			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
-				tm.tm_year + 1900,
-				tm.tm_mon + 1,
-				tm.tm_mday,
-				tm.tm_hour,
-				tm.tm_min,
-				tm.tm_sec,
-				(long)tv.tv_usec);
+			format_timestamp(datetime, BTF_DATE | BTF_TIME | BTF_USEC | BTF_BRACKETS, &tv);
 		}
 		else
 			get_now_datestamp(datetime);
