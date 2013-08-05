@@ -340,6 +340,10 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }
 
 
+extern int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp);
+extern int format_temperature_sz(const int numsz, const bool unicode);
+
+
 #define RUNONCE(rv)  do {  \
 	static bool _runonce = false;  \
 	if (_runonce)  \

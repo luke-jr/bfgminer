@@ -1345,6 +1345,24 @@ double tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }
 
+
+int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp)
+{
+	return
+	sprintf(buf, "%*.*f%sC"
+	        , pad
+	        , (highprecision ? 1 : 0)
+	        , temp
+	        , (unicode ? "\xb0" : "")
+	);
+}
+
+int format_temperature_sz(const int numsz, const bool unicode)
+{
+	return numsz + (unicode ? 2 : 1);
+}
+
+
 bool extract_sockaddr(struct pool *pool, char *url)
 {
 	char *url_begin, *url_end, *ipv6_begin, *ipv6_end, *port_start = NULL;

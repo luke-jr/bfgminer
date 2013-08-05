@@ -2590,21 +2590,22 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 static inline
 void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
 {
+	int sz;
 	if (!(use_unicode && have_unicode_degrees))
 		maybe_unicode = false;
 	if (temp && *temp > 0.)
-		if (maybe_unicode)
-			sprintf(buf, "%4.1f\xb0""C", *temp);
-		else
-			sprintf(buf, "%4.1fC", *temp);
+	{
+		format_temperature(buf, 4, true, maybe_unicode, *temp);
+		sz = 1;
+	}
 	else
 	{
-		if (temp)
-			strcpy(buf, "     ");
-		if (maybe_unicode)
-			strcat(buf, " ");
+		buf[0] = '\0';
+		sz = format_temperature_sz(4, maybe_unicode) + 1;
+		if (!temp)
+			sz -= 5;
 	}
-	strcat(buf, " | ");
+	tailsprintf(buf, "%*s| ", sz, "");
 }
 
 void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
