@@ -8535,15 +8535,16 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		cgtime(&now);
 
 		if (!sched_paused && !should_run()) {
-			applog(LOG_WARNING, "Pausing execution as per stop time %02d:%02d scheduled",
-			       schedstop.tm.tm_hour, schedstop.tm.tm_min);
+			char timestr[6];
+			format_tm(timestr, BTF_LRTIME, &schedstop.tm, 0);
+			applog(LOG_WARNING, "Pausing execution as per stop time %s scheduled", timestr);
 			if (!schedstart.enable) {
 				quit(0, "Terminating execution as planned");
 				break;
 			}
 
-			applog(LOG_WARNING, "Will restart execution as scheduled at %02d:%02d",
-			       schedstart.tm.tm_hour, schedstart.tm.tm_min);
+			format_tm(timestr, BTF_LRTIME, &schedstart.tm, 0);
+			applog(LOG_WARNING, "Will restart execution as scheduled at %s", timestr);
 			sched_paused = true;
 
 			rd_lock(&mining_thr_lock);
@@ -8551,11 +8552,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				mining_thr[i]->pause = true;
 			rd_unlock(&mining_thr_lock);
 		} else if (sched_paused && should_run()) {
-			applog(LOG_WARNING, "Restarting execution as per start time %02d:%02d scheduled",
-				schedstart.tm.tm_hour, schedstart.tm.tm_min);
+			char timestr[6];
+			format_tm(timestr, BTF_LRTIME, &schedstart.tm, 0);
+			applog(LOG_WARNING, "Restarting execution as per start time %s scheduled", timestr);
 			if (schedstop.enable)
-				applog(LOG_WARNING, "Will pause execution as scheduled at %02d:%02d",
-					schedstop.tm.tm_hour, schedstop.tm.tm_min);
+			{
+				format_tm(timestr, BTF_LRTIME, &schedstop.tm, 0);
+				applog(LOG_WARNING, "Will pause execution as scheduled at %s", timestr);
+			}
 			sched_paused = false;
 
 			for (i = 0; i < mining_threads; i++) {
