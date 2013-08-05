@@ -2451,14 +2451,8 @@ void pick_unit(float hashrate, unsigned char *unit)
 }
 #define hashrate_pick_unit(hashrate, unit)  pick_unit(hashrate, unit)
 
-enum h2bs_fmt {
-	H2B_NOUNIT,  // "xxx.x"
-	H2B_SHORT,   // "xxx.xMH/s"
-	H2B_SPACED,  // "xxx.x MH/s"
-};
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
-static
 char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
 	unsigned char prec, i, unit;
@@ -2538,13 +2532,16 @@ char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement
 #define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
 #define multi_format_unit_array(buflist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
 
-static const char *
-percentf2(double p, double t, char *buf)
+void percentf3(char * const buf, double p, const double t)
 {
 	if (!p)
-		return "none";
+		strcpy(buf, "none");
+	else
 	if (t <= p)
-		return "100%";
+		strcpy(buf, "100%");
+	else
+	{
+
 	p /= t;
 	if (p < 0.01)
 		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
@@ -2553,8 +2550,10 @@ percentf2(double p, double t, char *buf)
 		sprintf(buf, "%.1f%%", p * 100);  // "9.1%"
 	else
 		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
-	return buf;
+
+	}
 }
+#define percentf2(p, t, buf)  (percentf3(buf, p, t), buf)
 #define percentf(p, t, buf)  percentf2(p, p + t, buf)
 
 #ifdef HAVE_CURSES

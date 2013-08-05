@@ -340,8 +340,32 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }
 
 
+enum h2bs_fmt {
+	H2B_NOUNIT,  // "xxx.x"
+	H2B_SHORT,   // "xxx.xMh/s"
+	H2B_SPACED,  // "xxx.x Mh/s"
+};
+
+extern char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float n, signed char unitin);
+extern void percentf3(char * const buf, double p, const double t);
 extern int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp);
 extern int format_temperature_sz(const int numsz, const bool unicode);
+
+#define BPRItm "\b\x01%d%p%ld"
+#define BPRIts "\b\x02%d%p"
+#define BPRItt "\b\x03%d%"PRId64
+#define BPRIte "\b\x04%d%d"
+#define BPRInd "\b\x05%s%d%f%c"
+#define BPRInf "\b\x06%s%d%f%c"
+#define BPRItp "\b\x07%f"
+#define BPRIpgo "\b\x08%f%f"
+#define BPRIpgt "\b\x09%f%f"
+
+#ifdef va_arg
+extern int bfg_vsprintf(char * const buf, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
+#endif
+extern int bfg_sprintf(char * const buf, const char * const fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
+extern void test_bfg_sprintf();
 
 
 #define RUNONCE(rv)  do {  \

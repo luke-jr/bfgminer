@@ -13,10 +13,10 @@
 
 #include "config.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
-#include <stdarg.h>
 #include <string.h>
 #include <pthread.h>
 #include <jansson.h>
@@ -1360,6 +1360,212 @@ int format_temperature(char * const buf, const int pad, const bool highprecision
 int format_temperature_sz(const int numsz, const bool unicode)
 {
 	return numsz + (unicode ? 2 : 1);
+}
+
+
+int bfg_vsprintf(char * const buf, const char *fmt, va_list ap)
+{
+	char *s = buf;
+	size_t L;
+	int arg_d, arg_d_2;
+	void *arg_p;
+	long arg_ld;
+	int64_t arg_d64;
+	double arg_f, arg_f_2;
+	
+	for (const char *p = fmt; ; ++p)
+	{
+		switch (p[0])
+		{
+			case '\0':
+			case '\b':
+			case '%':
+				if ( (L = (p - fmt)) )
+				{
+					char fmtcp[L+1];
+					memcpy(fmtcp, fmt, L);
+					fmtcp[L] = '\0';
+					s += vsprintf(s, fmtcp, ap);
+					fmt += L;
+				}
+				if (!fmt[0])
+					return (s - buf);
+				if (fmt[0] == '\b')
+				{
+// BFGMiner custom formatting
+switch (fmt[1])
+{
+	case 1:  // format_tm
+		arg_d = va_arg(ap, int);
+		arg_p = va_arg(ap, void*);
+		arg_ld = va_arg(ap, long);
+		s += format_tm(s, arg_d, arg_p, arg_ld);
+		L = sizeof(BPRItm);
+		break;
+	case 2:  // format_timestamp
+		arg_d = va_arg(ap, int);
+		arg_p = va_arg(ap, void*);
+		s += format_timestamp(s, arg_d, arg_p);
+		L = sizeof(BPRIts);
+		break;
+	case 3:  // format_time_t
+		arg_d = va_arg(ap, int);
+		arg_d64 = va_arg(ap, int64_t);
+		s += format_time_t(s, arg_d, arg_d64);
+		L = sizeof(BPRItt);
+		break;
+	case 4:  // format_elapsed
+		arg_d = va_arg(ap, int);
+		arg_d_2 = va_arg(ap, int);
+		s += format_elapsed(s, arg_d, arg_d_2);
+		L = sizeof(BPRIte);
+		break;
+	case 5:  // format_unit (int-precision)
+	case 6:  // format_unit (float-precision)
+		arg_p = va_arg(ap, void*);
+		arg_d = va_arg(ap, int);
+		arg_f = va_arg(ap, double);
+		arg_d_2 = va_arg(ap, int);
+		format_unit(s, (fmt[1] == 6), arg_p, arg_d, arg_f, arg_d_2);
+		s += strlen(s);
+		L = sizeof(BPRInd);
+		break;
+	case 7:  // temperature
+		arg_f = va_arg(ap, double);
+		s += format_temperature(s, 0, false, true, arg_f);
+		L = sizeof(BPRItp);
+		break;
+	case 8:  // percentage, 2nd arg is OTHERS
+	case 9:  // percentage, 2nd arg is TOTAL
+		arg_f = va_arg(ap, double);
+		arg_f_2 = va_arg(ap, double);
+		if (fmt[1] == 8)
+			arg_f_2 += arg_f;
+		percentf3(s, arg_f, arg_f_2);
+		s += 4;
+		L = sizeof(BPRIpgo);
+		break;
+}
+					fmt += (L - 1);
+					p = fmt - 1;
+					break;
+				}
+				
+				// Pass anything else through vsprintf above
+		}
+	}
+}
+
+int bfg_sprintf(char * const buf, const char * const fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	int rv = bfg_vsprintf(buf, fmt, ap);
+	va_end(ap);
+	return rv;
+}
+
+static
+void _test_bfg_sprintf(const char * const testname, const char * const fmt, const char * const expected, ...)
+{
+	char buf[0x100];
+	int len = strlen(expected), rv;
+	
+	va_list ap;
+	va_start(ap, expected);
+	rv = bfg_vsprintf(buf, fmt, ap);
+	va_end(ap);
+	
+	if (len != rv || memcmp(buf, expected, len))
+		applog(LOG_WARNING, "bfg_sprintf test %s failed: returned %d bytes \"%s\"", testname, rv, buf);
+}
+#define _test_bfg_sprintf(fmt, ...)  _test_bfg_sprintf(#fmt, fmt, __VA_ARGS__)
+
+void test_bfg_sprintf()
+{
+	struct tm tm = {
+		.tm_year = 115,
+		.tm_mon = 5,
+		.tm_mday = 3,
+		.tm_hour = 13,
+		.tm_min = 44,
+		.tm_sec = 22,
+	};
+	struct timeval tv;
+	time_t tt;
+	
+	_test_bfg_sprintf("abc", "abc");
+	
+	_test_bfg_sprintf("a%dbc", "a4bc", 4);
+	_test_bfg_sprintf("a%2dbc", "a 4bc", 4);
+	_test_bfg_sprintf("a%-2dbc", "a4 bc", 4);
+	_test_bfg_sprintf("a%02dbc1", "a04bc1", 4);
+	_test_bfg_sprintf("a%02dbc2", "a44bc2", 44);
+	
+	_test_bfg_sprintf("a%sbc", "axyzbc", "xyz");
+	
+	_test_bfg_sprintf("a%ubc", "a255bc", 255);
+	
+	_test_bfg_sprintf("a"BPRItm"bc1", "a[2015-06-03 13:44:22.000001]bc1", (BTF_BRACKETS | BTF_DATE | BTF_HRTIME), &tm, 1L);
+	_test_bfg_sprintf("a"BPRItm"bc2", "a[2015-06-03 13:44:22]bc2", (BTF_BRACKETS | BTF_DATE | BTF_TIME), &tm, 0L);
+	_test_bfg_sprintf("a"BPRItm"bc3", "a[2015-06-03 13:44]bc3", (BTF_BRACKETS | BTF_DATE | BTF_LRTIME), &tm, 0L);
+	_test_bfg_sprintf("a"BPRItm"bc4", "a[13:44:22.123456]bc4", (BTF_BRACKETS | BTF_HRTIME), &tm, 123456L);
+	_test_bfg_sprintf("a"BPRItm"bc5", "a13:44:22.999999bc5", (BTF_HRTIME), &tm, 999999L);
+	_test_bfg_sprintf("a"BPRItm"bc6", "a[2015-06-03]bc6", (BTF_BRACKETS | BTF_DATE), &tm, 0L);
+	_test_bfg_sprintf("a"BPRItm"bc7", "a2015-06-03bc7", (BTF_DATE), &tm, 0L);
+	
+	tt = mktime(&tm);
+	_test_bfg_sprintf("a"BPRItt"bc", "a[2015-06-03 13:44:22.000000]bc", (BTF_BRACKETS | BTF_DATE | BTF_HRTIME), (int64_t)tt);
+	tv = (struct timeval){
+		.tv_sec = tt,
+		.tv_usec = 987654,
+	};
+	_test_bfg_sprintf("a"BPRIts"bc", "a[2015-06-03 13:44:22.987654]bc", (BTF_BRACKETS | BTF_DATE | BTF_HRTIME), &tv);
+	
+	_test_bfg_sprintf("a"BPRIte"bc", "a[  1 day  05:04:03]bc", (BTF_BRACKETS | BTF_DATE | BTF_TIME), 104643);
+	_test_bfg_sprintf("a"BPRIte"bc", "a[  2 days 05:04:03]bc", (BTF_BRACKETS | BTF_DATE | BTF_TIME), 191043);
+	
+	_test_bfg_sprintf("a"BPRInd"bc1", "a  1bc1", "x/y", H2B_NOUNIT, 1., -1);
+	_test_bfg_sprintf("a"BPRInd"bc2", "a  1 x/ybc2", "x/y", H2B_SHORT, 1., -1);
+	_test_bfg_sprintf("a"BPRInd"bc3", "a  1  x/ybc3", "x/y", H2B_SPACED, 1., -1);
+	_test_bfg_sprintf("a"BPRInd"bc4", "a  1 x/ybc4", "x/y", H2B_SHORT, 1., 0);
+	_test_bfg_sprintf("a"BPRInd"bc5", "a  0kx/ybc5", "x/y", H2B_SHORT, 1., 1);
+	_test_bfg_sprintf("a"BPRInd"bc6", "a  0Mx/ybc6", "x/y", H2B_SHORT, 1., 2);
+	_test_bfg_sprintf("a"BPRInd"bc7", "a  0Gx/ybc7", "x/y", H2B_SHORT, 1., 3);
+	_test_bfg_sprintf("a"BPRInd"bc8", "a  0Tx/ybc8", "x/y", H2B_SHORT, 1., 4);
+	_test_bfg_sprintf("a"BPRInd"bc9", "a  1kx/ybc9", "x/y", H2B_SHORT, 1e3, -1);
+	_test_bfg_sprintf("a"BPRInd"bcA", "a  1Mx/ybcA", "x/y", H2B_SHORT, 1e6, -1);
+	_test_bfg_sprintf("a"BPRInd"bcB", "a  1Gx/ybcB", "x/y", H2B_SHORT, 1e9, -1);
+	_test_bfg_sprintf("a"BPRInd"bcC", "a  1Tx/ybcC", "x/y", H2B_SHORT, 1e12, -1);
+	
+	_test_bfg_sprintf("a"BPRInf"bc1", "a  1.0bc1", "x/y", H2B_NOUNIT, 1., -1);
+	_test_bfg_sprintf("a"BPRInf"bc2", "a  1.0 x/ybc2", "x/y", H2B_SHORT, 1., -1);
+	_test_bfg_sprintf("a"BPRInf"bc3", "a  1.0  x/ybc3", "x/y", H2B_SPACED, 1., -1);
+	_test_bfg_sprintf("a"BPRInf"bc4", "a  1.0 x/ybc4", "x/y", H2B_SHORT, 1., 0);
+	_test_bfg_sprintf("a"BPRInf"bc5", "a  0.0kx/ybc5", "x/y", H2B_SHORT, 1., 1);
+	_test_bfg_sprintf("a"BPRInf"bc6", "a 0.00Mx/ybc6", "x/y", H2B_SHORT, 1., 2);
+	_test_bfg_sprintf("a"BPRInf"bc7", "a 0.00Gx/ybc7", "x/y", H2B_SHORT, 1., 3);
+	_test_bfg_sprintf("a"BPRInf"bc8", "a 0.00Tx/ybc8", "x/y", H2B_SHORT, 1., 4);
+	_test_bfg_sprintf("a"BPRInf"bc9", "a  1.0kx/ybc9", "x/y", H2B_SHORT, 1e3, -1);
+	_test_bfg_sprintf("a"BPRInf"bcA", "a 1.00Mx/ybcA", "x/y", H2B_SHORT, 1e6, -1);
+	_test_bfg_sprintf("a"BPRInf"bcB", "a 1.00Gx/ybcB", "x/y", H2B_SHORT, 1e9, -1);
+	_test_bfg_sprintf("a"BPRInf"bcC", "a 1.00Tx/ybcC", "x/y", H2B_SHORT, 1e12, -1);
+	
+	_test_bfg_sprintf("a"BPRItp"bc", "a80\xb0""Cbc", 80.);
+	
+	_test_bfg_sprintf("a"BPRIpgo"bc1", "anonebc1",  0.,  40.);
+	_test_bfg_sprintf("a"BPRIpgo"bc2", "a100%bc2", 10.,   0.);
+	_test_bfg_sprintf("a"BPRIpgo"bc3", "a 20%bc3", 10.,  40.);
+	_test_bfg_sprintf("a"BPRIpgo"bc4", "a 80%bc4", 40.,  10.);
+	_test_bfg_sprintf("a"BPRIpgo"bc5", "a2.4%bc5",  1.,  40.);
+	_test_bfg_sprintf("a"BPRIpgo"bc6", "a.24%bc6",  1., 414.);
+	
+	_test_bfg_sprintf("a"BPRIpgt"bc1", "anonebc1",  0.,  40.);
+	_test_bfg_sprintf("a"BPRIpgt"bc2", "a100%bc2", 10.,  10.);
+	_test_bfg_sprintf("a"BPRIpgt"bc3", "a 25%bc3", 10.,  40.);
+	_test_bfg_sprintf("a"BPRIpgt"bc4", "a 40%bc4", 40., 100.);
+	_test_bfg_sprintf("a"BPRIpgt"bc5", "a2.5%bc5",  1.,  40.);
+	_test_bfg_sprintf("a"BPRIpgt"bc6", "a.24%bc6",  1., 414.);
 }
 
 
