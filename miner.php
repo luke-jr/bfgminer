@@ -962,6 +962,10 @@ function fmt($section, $name, $value, $when, $alldata)
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
 		break;
+	case 'SUMMARY.Best Share':
+		if ($value != '')
+			$ret = number_format((float)$value);
+		break;
 	}
 
  if ($section == 'NOTIFY' && substr($name, 0, 1) == '*' && $value != '0')
