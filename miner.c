@@ -3438,6 +3438,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	struct timeval tv_submit_reply;
 	time_t ts_submit_reply;
 	char worktime[200] = "";
+	char *p;
 
 	cgtime(&tv_submit_reply);
 	ts_submit_reply = time(NULL);
@@ -3459,9 +3460,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 	if (!QUIET) {
 		if (opt_worktime) {
 			char workclone[20];
-			struct tm _tm;
-			struct tm *tm, tm_getwork, tm_submit_reply;
-			tm = &_tm;
 			double getwork_time = tdiff((struct timeval *)&(work->tv_getwork_reply),
 							(struct timeval *)&(work->tv_getwork));
 			double getwork_to_work = tdiff((struct timeval *)&(work->tv_work_start),
@@ -3472,11 +3470,6 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 							(struct timeval *)&(work->tv_work_found));
 			double submit_time = tdiff(&tv_submit_reply, ptv_submit);
 			int diffplaces = 3;
-
-			localtime_r(&work->ts_getwork, tm);
-			memcpy(&tm_getwork, tm, sizeof(struct tm));
-			localtime_r(&ts_submit_reply, tm);
-			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
 				sprintf(workclone, "C:%1.3f",
@@ -3489,15 +3482,17 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			if (work->work_difficulty < 1)
 				diffplaces = 6;
 
-			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+			p = worktime +
+			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:",
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
-				work->getwork_mode, diffplaces, work->work_difficulty,
-				tm_getwork.tm_hour, tm_getwork.tm_min,
-				tm_getwork.tm_sec, getwork_time, workclone,
-				getwork_to_work, work_time, work_to_submit, submit_time,
-				tm_submit_reply.tm_hour, tm_submit_reply.tm_min,
-				tm_submit_reply.tm_sec);
+				work->getwork_mode, diffplaces, work->work_difficulty);
+			p += format_time_t(p, BTF_TIME, work->ts_getwork);
+			p +=
+			sprintf(p, ":%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:",
+				getwork_time, workclone,
+				getwork_to_work, work_time, work_to_submit, submit_time);
+			format_time_t(p, BTF_TIME, ts_submit_reply);
 		}
 	}
 
