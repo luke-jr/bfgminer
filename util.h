@@ -308,6 +308,7 @@ enum timestamp_format {
 	BTF_BRACKETS = 0x10,
 };
 
+extern int format_elapsed(char * const buf, const int fmt, int elapsed);
 extern int format_tm(char * const buf, const int fmt, const struct tm * const, const long usecs);
 extern int format_timestamp(char * const buf, const int fmt, const struct timeval * const);
 #define format_time_t(buf, fmt, tt)  format_timestamp(buf, fmt, (struct timeval[1]){ { .tv_sec = tt } })

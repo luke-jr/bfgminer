@@ -2869,7 +2869,7 @@ static int menu_attr = A_REVERSE;
 static void curses_print_status(void)
 {
 	struct pool *pool = currentpool;
-	struct timeval now, tv;
+	struct timeval now;
 	float efficiency;
 	double utility;
 	int logdiv;
@@ -2880,22 +2880,9 @@ static void curses_print_status(void)
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	timer_set_now(&now);
 	{
-		unsigned int days, hours;
-		div_t d;
-		
-		timersub(&now, &miner_started, &tv);
-		d = div(tv.tv_sec, 86400);
-		days = d.quot;
-		d = div(d.rem, 3600);
-		hours = d.quot;
-		d = div(d.rem, 60);
-		wprintw(statuswin, " - [%3u day%c %02d:%02d:%02d]"
-			, days
-			, (days == 1) ? ' ' : 's'
-			, hours
-			, d.quot
-			, d.rem
-		);
+		char timerstr[20];
+		format_elapsed(timerstr, BTF_BRACKETS | BTF_DATE | BTF_TIME, timer_elapsed(&miner_started, &now));
+		wprintw(statuswin, " - %s", timerstr);
 	}
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 5, 1);

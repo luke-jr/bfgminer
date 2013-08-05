@@ -1239,6 +1239,27 @@ void bfg_init_time()
 #endif
 }
 
+// NOTE: Only supports (BTF_BRACKETS | BTF_DATE | BTF_TIME) for now
+int format_elapsed(char * const buf, const int fmt, int elapsed)
+{
+	unsigned int days, hours;
+	div_t d;
+	
+	d = div(elapsed, 86400);
+	days = d.quot;
+	d = div(d.rem, 3600);
+	hours = d.quot;
+	d = div(d.rem, 60);
+	return
+	sprintf(buf, "[%3u day%c %02d:%02d:%02d]"
+		, days
+		, (days == 1) ? ' ' : 's'
+		, hours
+		, d.quot
+		, d.rem
+	);
+}
+
 int format_tm(char * const buf, const int fmt, const struct tm * const tm, const long usecs)
 {
 	char *s = buf;
