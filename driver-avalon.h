@@ -33,6 +33,8 @@
 #define AVALON_TEMP_HYSTERESIS 3
 #define AVALON_TEMP_OVERHEAT 60
 
+#define BITBURNER_DEFAULT_CORE_VOLTAGE 1200 /* in millivolts */
+
 #define AVALON_DEFAULT_TIMEOUT 0x2D
 #define AVALON_MIN_FREQUENCY 256
 #define AVALON_MAX_FREQUENCY 450
@@ -113,6 +115,8 @@ struct avalon_info {
 	int temp_old;
 	int fan_pwm;
 
+	int core_voltage;
+
 	int no_matching_work;
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
 
@@ -161,6 +165,7 @@ extern int opt_avalon_fan_max;
 extern int opt_avalon_freq_min;
 extern int opt_avalon_freq_max;
 extern bool opt_avalon_auto;
+extern int opt_bitburner_core_voltage;
 extern char *set_avalon_fan(char *arg);
 extern char *set_avalon_freq(char *arg);
 

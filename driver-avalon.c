@@ -46,6 +46,7 @@ int opt_avalon_fan_min = AVALON_DEFAULT_FAN_MIN_PWM;
 int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX_PWM;
 int opt_avalon_freq_min = AVALON_MIN_FREQUENCY;
 int opt_avalon_freq_max = AVALON_MAX_FREQUENCY;
+int opt_bitburner_core_voltage = BITBURNER_DEFAULT_CORE_VOLTAGE;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
@@ -291,7 +292,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 		return -1;
 
 	if (!initial) {
-		applog(LOG_ERR, "AVA%d reset sequence sent", avalon->device_id);
+		applog(LOG_ERR, "%s%d reset sequence sent", avalon->drv->name, avalon->device_id);
 		return 0;
 	}
 
@@ -308,7 +309,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	spare = ret - 10;
 	buf = tmp = (uint8_t *)&ar;
 	if (opt_debug) {
-		applog(LOG_DEBUG, "AVA%d reset: get:", avalon->device_id);
+		applog(LOG_DEBUG, "%s%d reset: get:", avalon->drv->name, avalon->device_id);
 		hexdump(tmp, AVALON_READ_SIZE);
 	}
 
@@ -327,13 +328,13 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	}
 
 	if (i != 11) {
-		applog(LOG_ERR, "AVA%d: Reset failed! not an Avalon?"
-		       " (%d: %02x %02x %02x %02x)", avalon->device_id,
+		applog(LOG_ERR, "%s%d: Reset failed! not an Avalon?"
+		       " (%d: %02x %02x %02x %02x)", avalon->drv->name, avalon->device_id,
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		/* FIXME: return 1; */
 	} else
-		applog(LOG_WARNING, "AVA%d: Reset succeeded",
-		       avalon->device_id);
+		applog(LOG_WARNING, "%s%d: Reset succeeded",
+		       avalon->drv->name, avalon->device_id);
 
 	return 0;
 }
@@ -509,7 +510,7 @@ static void avalon_idle(struct cgpu_info *avalon, struct avalon_info *info)
 				 info->frequency);
 		avalon_send_task(&at, avalon);
 	}
-	applog(LOG_WARNING, "AVA%i: Idling %d miners", avalon->device_id, i);
+	applog(LOG_WARNING, "%s%i: Idling %d miners", avalon->drv->name, avalon->device_id, i);
 	wait_avalon_ready(avalon);
 }
 
@@ -601,6 +602,51 @@ static void avalon_initialise(struct cgpu_info *avalon)
 		avalon->drv->name, avalon->device_id, err);
 }
 
+static void bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltage)
+{
+	uint8_t buf[2];
+	int err;
+
+	if (usb_ident(avalon) == IDENT_BTB) {
+		buf[0] = (uint8_t)core_voltage;
+		buf[1] = (uint8_t)(core_voltage >> 8);
+		err = usb_transfer_data(avalon, FTDI_TYPE_OUT, BITBURNER_REQUEST,
+				BITBURNER_VALUE, BITBURNER_INDEX_SET_VOLTAGE,
+				(uint32_t *)buf, sizeof(buf), C_BB_SET_VOLTAGE);
+		if (unlikely(err < 0)) {
+			applog(LOG_ERR, "%s%i: SetCoreVoltage failed: err = %d",
+				avalon->drv->name, avalon->device_id, err);
+		} else {
+			applog(LOG_WARNING, "%s%i: Core voltage set to %d millivolts",
+				avalon->drv->name, avalon->device_id,
+				core_voltage);
+		}
+	}
+}
+
+static int bitburner_get_core_voltage(struct cgpu_info *avalon)
+{
+	uint8_t buf[2];
+	int err;
+	int amount;
+
+	if (usb_ident(avalon) == IDENT_BTB) {
+		err = usb_transfer_read(avalon, FTDI_TYPE_IN, BITBURNER_REQUEST,
+				BITBURNER_VALUE, BITBURNER_INDEX_GET_VOLTAGE,
+				(char *)buf, sizeof(buf), &amount,
+				C_BB_GET_VOLTAGE);
+		if (unlikely(err != 0 || amount != 2)) {
+			applog(LOG_ERR, "%s%i: GetCoreVoltage failed: err = %d, amount = %d",
+				avalon->drv->name, avalon->device_id, err, amount);
+			return 0;
+		} else {
+			return (int)(buf[0] + ((unsigned int)buf[1] << 8));
+		}
+	} else {
+		return 0;
+	}
+}
+
 static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, miner_count, asic_count, timeout, frequency = 0;
@@ -671,6 +717,10 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	       "(miner_count=%d asic_count=%d timeout=%d frequency=%d)",
 	       avalon->device_path, info->miner_count, info->asic_count, info->timeout,
 	       info->frequency);
+
+	if (usb_ident(avalon) == IDENT_BTB &&
+	    opt_bitburner_core_voltage != BITBURNER_DEFAULT_CORE_VOLTAGE)
+		bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
 
 	return true;
 
@@ -908,8 +958,8 @@ static void *avalon_send_tasks(void *userdata)
 			if (!info->optimal) {
 				if (info->fan_pwm >= opt_avalon_fan_max) {
 					applog(LOG_WARNING,
-					       "AVA%i: Above optimal temperature, throttling",
-					       avalon->device_id);
+					       "%s%i: Above optimal temperature, throttling",
+					       avalon->drv->name, avalon->device_id);
 					avalon_dec_freq(info);
 				}
 			} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
@@ -932,8 +982,8 @@ static void *avalon_send_tasks(void *userdata)
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			if (avalon_buffer_full(avalon)) {
 				applog(LOG_INFO,
-				       "AVA%i: Buffer full after only %d of %d work queued",
-					avalon->device_id, j, avalon_get_work_count);
+				       "%s%i: Buffer full after only %d of %d work queued",
+					avalon->drv->name, avalon->device_id, j, avalon_get_work_count);
 				break;
 			}
 
@@ -961,8 +1011,8 @@ static void *avalon_send_tasks(void *userdata)
 			ret = avalon_send_task(&at, avalon);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
-				applog(LOG_ERR, "AVA%i: Comms error(buffer)",
-				       avalon->device_id);
+				applog(LOG_ERR, "%s%i: Comms error(buffer)",
+				       avalon->drv->name, avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
 				info->reset = true;
 				break;
@@ -974,8 +1024,8 @@ static void *avalon_send_tasks(void *userdata)
 		mutex_unlock(&info->qlock);
 
 		if (unlikely(idled)) {
-			applog(LOG_WARNING, "AVA%i: Idled %d miners",
-			       avalon->device_id, idled);
+			applog(LOG_WARNING, "%s%i: Idled %d miners",
+			       avalon->drv->name, avalon->device_id, idled);
 		}
 	}
 	return NULL;
@@ -1129,16 +1179,19 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 		info->temp_history_index, info->temp_history_count, info->temp_old);
+	if (usb_ident(avalon) == IDENT_BTB) {
+		info->core_voltage = bitburner_get_core_voltage(avalon);
+	}
 	if (info->temp_history_index == info->temp_history_count) {
 		adjust_fan(info);
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
 	if (unlikely(info->temp_old >= opt_avalon_overheat)) {
-		applog(LOG_WARNING, "AVA%d overheat! Idling", avalon->device_id);
+		applog(LOG_WARNING, "%s%d overheat! Idling", avalon->drv->name, avalon->device_id);
 		info->overheat = true;
 	} else if (info->overheat && info->temp_old <= opt_avalon_temp) {
-		applog(LOG_WARNING, "AVA%d cooled, restarting", avalon->device_id);
+		applog(LOG_WARNING, "%s%d cooled, restarting", avalon->drv->name, avalon->device_id);
 		info->overheat = false;
 	}
 }
@@ -1148,13 +1201,17 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	struct avalon_info *info = avalon->device_data;
 	int lowfan = 10000;
 
-	/* Find the lowest fan speed of the ASIC cooling fans. */
-	if (info->fan1 >= 0 && info->fan1 < lowfan)
-		lowfan = info->fan1;
-	if (info->fan2 >= 0 && info->fan2 < lowfan)
-		lowfan = info->fan2;
+	if (usb_ident(avalon) == IDENT_BTB) {
+		tailsprintf(buf, bufsiz, "%2d/%3dC %4dmV | ", info->temp0, info->temp2, info->core_voltage);
+	} else {
+		/* Find the lowest fan speed of the ASIC cooling fans. */
+		if (info->fan1 >= 0 && info->fan1 < lowfan)
+			lowfan = info->fan1;
+		if (info->fan2 >= 0 && info->fan2 < lowfan)
+			lowfan = info->fan2;
 
-	tailsprintf(buf, bufsiz, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
+		tailsprintf(buf, bufsiz, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
+	}
 }
 
 /* We use a replacement algorithm to only remove references to work done from
@@ -1231,15 +1288,17 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
-	if (avalon->results < -miner_count && !info->reset) {
-		applog(LOG_ERR, "AVA%d: Result return rate low, resetting!",
-			avalon->device_id);
-		info->reset = true;
+	if (usb_ident(avalon) != IDENT_BTB) {
+		if (avalon->results < -miner_count && !info->reset) {
+			applog(LOG_ERR, "%s%d: Result return rate low, resetting!",
+				avalon->drv->name, avalon->device_id);
+			info->reset = true;
+		}
 	}
 
 	if (unlikely(avalon->usbinfo.nodev)) {
-		applog(LOG_ERR, "AVA%d: Device disappeared, shutting down thread",
-		       avalon->device_id);
+		applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread",
+		       avalon->drv->name, avalon->device_id);
 		avalon->shutdown = true;
 	}
 
@@ -1278,6 +1337,8 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp2", &(info->temp1), false);
 	root = api_add_int(root, "temp3", &(info->temp2), false);
 	root = api_add_int(root, "temp_max", &(info->temp_max), false);
+
+	root = api_add_int(root, "core_voltage", &(info->core_voltage), false);
 
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
 	for (i = 0; i < info->miner_count; i++) {
