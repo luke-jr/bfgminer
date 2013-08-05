@@ -301,10 +301,11 @@ extern void bfg_gettimeofday(struct timeval *);
 #endif
 
 enum timestamp_format {
-	BTF_DATE = 1,
-	BTF_TIME = 2,
-	BTF_USEC = 4,
-	BTF_BRACKETS = 8,
+	BTF_LRTIME = 2,  // low resolution time (eg, HH:MM)
+	BTF_TIME   = 1,  // eg, HH:MM:SS
+	BTF_HRTIME = 3,  // high resolution time (eg, HH:MM:SS.MICROS)
+	BTF_DATE   = 8,
+	BTF_BRACKETS = 0x10,
 };
 
 extern int format_tm(char * const buf, const int fmt, const struct tm * const, const long usecs);

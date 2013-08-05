@@ -1252,19 +1252,23 @@ int format_tm(char * const buf, const int fmt, const struct tm * const tm, const
 		        tm->tm_year + 1900,
 		        tm->tm_mon + 1,
 		        tm->tm_mday);
-		if (fmt & BTF_TIME)
+		if (fmt & 3 /* any time */)
 			(s++)[0] = ' ';
 	}
-	if (fmt & BTF_TIME)
+	if (fmt & 3 /* any time */)
 	{
 		s +=
-		sprintf(s, "%02d:%02d:%02d",
+		sprintf(s, "%02d:%02d",
 		        tm->tm_hour,
-		        tm->tm_min,
-		        tm->tm_sec);
-		if (fmt & BTF_USEC)
+		        tm->tm_min);
+		if (fmt & 1 /* with seconds */)
+		{
 			s +=
-			sprintf(s, ".%06ld", usecs);
+			sprintf(s, ":%02d", tm->tm_sec);
+			if ((fmt & BTF_HRTIME) == BTF_HRTIME)
+				s +=
+				sprintf(s, ".%06ld", usecs);
+		}
 	}
 	if (fmt & BTF_BRACKETS)
 		s +=

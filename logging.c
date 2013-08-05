@@ -65,7 +65,7 @@ void _applog(int prio, const char *str)
 			struct timeval tv;
 			bfg_init_time();
 			bfg_gettimeofday(&tv);
-			format_timestamp(datetime, BTF_DATE | BTF_TIME | BTF_USEC | BTF_BRACKETS, &tv);
+			format_timestamp(datetime, BTF_DATE | BTF_HRTIME | BTF_BRACKETS, &tv);
 		}
 		else
 			get_now_datestamp(datetime);
