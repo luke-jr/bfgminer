@@ -918,6 +918,21 @@ static void avalon_set_timeout(struct avalon_info *info)
 	info->timeout = AVALON_TIMEOUT_FACTOR / info->frequency;
 }
 
+static void avalon_set_freq(struct cgpu_info *avalon, int frequency)
+{
+	struct avalon_info *info = avalon->device_data;
+
+	info->frequency = frequency;
+	if (info->frequency > opt_avalon_freq_max)
+		info->frequency = opt_avalon_freq_max;
+	if (info->frequency < opt_avalon_freq_min)
+		info->frequency = opt_avalon_freq_min;
+	avalon_set_timeout(info);
+	applog(LOG_WARNING, "%s%i: Set frequency to %d, timeout %d",
+		avalon->drv->name, avalon->device_id,
+		info->frequency, info->timeout);
+}
+
 static void avalon_inc_freq(struct avalon_info *info)
 {
 	info->frequency += 2;
@@ -1376,18 +1391,19 @@ static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *set
 {
 	int val;
 
-	if (usb_ident(avalon) != IDENT_BTB) {
-		sprintf(replybuf, "%s has no set options", avalon->drv->name);
-		return replybuf;
-	}
-
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "millivolts: range %d-%d",
+		sprintf(replybuf, "freq: range %d-%d millivolts: range %d-%d",
+					AVALON_MIN_FREQUENCY, AVALON_MAX_FREQUENCY,
 					BITBURNER_MIN_COREMV, BITBURNER_MAX_COREMV);
 		return replybuf;
 	}
 
 	if (strcasecmp(option, "millivolts") == 0 || strcasecmp(option, "mv") == 0) {
+		if (usb_ident(avalon) != IDENT_BTB) {
+			sprintf(replybuf, "%s cannot set millivolts", avalon->drv->name);
+			return replybuf;
+		}
+
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing millivolts setting");
 			return replybuf;
@@ -1406,6 +1422,23 @@ static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *set
 			sprintf(replybuf, "Set millivolts failed");
 			return replybuf;
 		}
+	}
+
+	if (strcasecmp(option, "freq") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing freq setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < AVALON_MIN_FREQUENCY || val > AVALON_MAX_FREQUENCY) {
+			sprintf(replybuf, "invalid freq: '%s' valid range %d-%d",
+						setting, AVALON_MIN_FREQUENCY, AVALON_MAX_FREQUENCY);
+			return replybuf;
+		}
+
+		avalon_set_freq(avalon, val);
+		return NULL;
 	}
 
 	sprintf(replybuf, "Unknown option: %s", option);

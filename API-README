@@ -405,6 +405,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               help message about the options available
 
                               The current options are:
+                               AVA+BTB opt=freq val=256 to 450 - chip frequency
                                BTB opt=millivolts val=1000 to 1310 - core voltage
 
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
