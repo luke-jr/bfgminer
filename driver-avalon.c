@@ -984,7 +984,13 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_INFO,
 				       "%s%i: Buffer full after only %d of %d work queued",
 					avalon->drv->name, avalon->device_id, j, avalon_get_work_count);
-				break;
+
+					if (usb_ident(avalon) != IDENT_BTB)
+						break;
+					else {
+						while (avalon_buffer_full(avalon))
+							cgsem_wait(&info->write_sem);
+					}
 			}
 
 			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
