@@ -405,7 +405,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               help message about the options available
 
                               The current options are:
-                               BTB opt=millivolts val=1000 to 1400 - core voltage
+                               BTB opt=millivolts val=1000 to 1310 - core voltage
 
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window
@@ -463,7 +463,7 @@ Feature Changelog for external applications using the API:
 API V1.27 (cgminer v3.3.2)
 
 Added API commands:
- 'ascset' - with: BTB opt=millivolts val=1000 to 1400 - core voltage
+ 'ascset' - with: BTB opt=millivolts val=1000 to 1310 - core voltage
 
 ----------
 
