@@ -393,6 +393,20 @@ The list of requests - a (*) means it requires privileged access - and replies a
  asccount      ASCS           Count=N| <- the number of ASCs
                               Always returns 0 if ASC mining is disabled
 
+ ascset|N,opt[,val] (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting ASC N with opt[,val]
+                              This is only available if ASC mining is enabled
+
+                              If the ASC does not support any set options, it will
+                              always return a WARN stating ascset isn't supported
+
+                              If opt=help it will return an INFO status with a
+                              help message about the options available
+
+                              The current options are:
+                               BTB opt=millivolts val=1000 to 1310 - core voltage
+
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window
 
@@ -445,6 +459,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.27 (cgminer v3.3.2)
+
+Added API commands:
+ 'ascset' - with: BTB opt=millivolts val=1000 to 1310 - core voltage
+
+----------
 
 API V1.26 (cgminer v3.2.3)
 

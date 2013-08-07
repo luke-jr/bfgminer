@@ -34,6 +34,10 @@
 #define AVALON_TEMP_OVERHEAT 60
 
 #define BITBURNER_DEFAULT_CORE_VOLTAGE 1200 /* in millivolts */
+#define BITBURNER_MIN_COREMV 1000
+/* change here if you want to risk killing it :)  */
+#define BITBURNER_MAX_COREMV 1310
+
 
 #define AVALON_DEFAULT_TIMEOUT 0x2D
 #define AVALON_MIN_FREQUENCY 256

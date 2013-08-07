@@ -602,7 +602,7 @@ static void avalon_initialise(struct cgpu_info *avalon)
 		avalon->drv->name, avalon->device_id, err);
 }
 
-static void bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltage)
+static bool bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltage)
 {
 	uint8_t buf[2];
 	int err;
@@ -616,12 +616,15 @@ static void bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltag
 		if (unlikely(err < 0)) {
 			applog(LOG_ERR, "%s%i: SetCoreVoltage failed: err = %d",
 				avalon->drv->name, avalon->device_id, err);
+			return false;
 		} else {
 			applog(LOG_WARNING, "%s%i: Core voltage set to %d millivolts",
 				avalon->drv->name, avalon->device_id,
 				core_voltage);
 		}
+		return true;
 	}
+	return false;
 }
 
 static int bitburner_get_core_voltage(struct cgpu_info *avalon)
@@ -718,9 +721,16 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	       avalon->device_path, info->miner_count, info->asic_count, info->timeout,
 	       info->frequency);
 
-	if (usb_ident(avalon) == IDENT_BTB &&
-	    opt_bitburner_core_voltage != BITBURNER_DEFAULT_CORE_VOLTAGE)
-		bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
+	if (usb_ident(avalon) == IDENT_BTB) {
+		if (opt_bitburner_core_voltage < BITBURNER_MIN_COREMV ||
+		    opt_bitburner_core_voltage > BITBURNER_MAX_COREMV) {
+			quit(1, "Invalid bitburner-voltage %d must be %dmv - %dmv",
+				opt_bitburner_core_voltage,
+				BITBURNER_MIN_COREMV,
+				BITBURNER_MAX_COREMV);
+		} else
+			bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
+	}
 
 	return true;
 
@@ -1362,6 +1372,46 @@ static void avalon_shutdown(struct thr_info *thr)
 	do_avalon_close(thr);
 }
 
+static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *setting, char *replybuf)
+{
+	int val;
+
+	if (usb_ident(avalon) != IDENT_BTB) {
+		sprintf(replybuf, "%s has no set options", avalon->drv->name);
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "millivolts: range %d-%d",
+					BITBURNER_MIN_COREMV, BITBURNER_MAX_COREMV);
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "millivolts") == 0 || strcasecmp(option, "mv") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing millivolts setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < BITBURNER_MIN_COREMV || val > BITBURNER_MAX_COREMV) {
+			sprintf(replybuf, "invalid millivolts: '%s' valid range %d-%d",
+						setting, BITBURNER_MIN_COREMV, BITBURNER_MAX_COREMV);
+			return replybuf;
+		}
+
+		if (bitburner_set_core_voltage(avalon, val))
+			return NULL;
+		else {
+			sprintf(replybuf, "Set millivolts failed");
+			return replybuf;
+		}
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
 struct device_drv avalon_drv = {
 	.drv_id = DRIVER_AVALON,
 	.dname = "avalon",
@@ -1374,6 +1424,7 @@ struct device_drv avalon_drv = {
 	.flush_work = avalon_flush_work,
 	.get_api_stats = avalon_api_stats,
 	.get_statline_before = get_avalon_statline_before,
+	.set_device = avalon_set_device,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

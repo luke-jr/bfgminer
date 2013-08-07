@@ -134,7 +134,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.26";
+static const char *APIVERSION = "1.27";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
@@ -413,6 +413,14 @@ static const char *JSON_PARAMETER = "parameter";
 #endif
 #define MSG_ASCUSBNODEV 115
 
+#ifdef HAVE_AN_ASIC
+#define MSG_MISASCOPT 116
+#define MSG_ASCNOSET 117
+#define MSG_ASCHELP 118
+#define MSG_ASCSETOK 119
+#define MSG_ASCSETERR 120
+#endif
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -608,6 +616,11 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ASCUNW,	PARAM_ASC,	"ASC %d is not flagged WELL, cannot enable" },
  { SEVERITY_SUCC,  MSG_ASCIDENT,PARAM_ASC,	"Identify command sent to ASC%d" },
  { SEVERITY_WARN,  MSG_ASCNOID,	PARAM_ASC,	"ASC%d does not support identify" },
+ { SEVERITY_ERR,   MSG_MISASCOPT, PARAM_NONE,	"Missing option after ASC number" },
+ { SEVERITY_WARN,  MSG_ASCNOSET, PARAM_ASC,	"ASC %d does not support pgaset" },
+ { SEVERITY_INFO,  MSG_ASCHELP, PARAM_BOTH,	"ASC %d set help: %s" },
+ { SEVERITY_SUCC,  MSG_ASCSETOK, PARAM_BOTH,	"ASC %d set OK" },
+ { SEVERITY_ERR,   MSG_ASCSETERR, PARAM_BOTH,	"ASC %d set failed: %s" },
 #endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
@@ -3681,6 +3694,66 @@ static void asccount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		io_close(io_data);
 }
 
+#ifdef HAVE_AN_ASIC
+static void ascset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	struct device_drv *drv;
+	char buf[TMPBUFSIZ];
+	int numasc = numascs();
+
+	if (numasc == 0) {
+		message(io_data, MSG_ASCNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	char *opt = strchr(param, ',');
+	if (opt)
+		*(opt++) = '\0';
+	if (!opt || !*opt) {
+		message(io_data, MSG_MISASCOPT, 0, NULL, isjson);
+		return;
+	}
+
+	int id = atoi(param);
+	if (id < 0 || id >= numasc) {
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	int dev = ascdevice(id);
+	if (dev < 0) { // Should never happen
+		message(io_data, MSG_INVASC, id, NULL, isjson);
+		return;
+	}
+
+	cgpu = get_devices(dev);
+	drv = cgpu->drv;
+
+	char *set = strchr(opt, ',');
+	if (set)
+		*(set++) = '\0';
+
+	if (!drv->set_device)
+		message(io_data, MSG_ASCNOSET, id, NULL, isjson);
+	else {
+		char *ret = drv->set_device(cgpu, opt, set, buf);
+		if (ret) {
+			if (strcasecmp(opt, "help") == 0)
+				message(io_data, MSG_ASCHELP, id, ret, isjson);
+			else
+				message(io_data, MSG_ASCSETERR, id, ret, isjson);
+		} else
+			message(io_data, MSG_ASCSETOK, id, NULL, isjson);
+	}
+}
+#endif
+
 static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, char group);
 
 struct CMDS {
@@ -3743,6 +3816,7 @@ struct CMDS {
 	{ "ascenable",		ascenable,	true },
 	{ "ascdisable",		ascdisable,	true },
 	{ "ascidentify",	ascidentify,	true },
+	{ "ascset",		ascset,		true },
 #endif
 	{ "asccount",		asccount,	false },
 	{ NULL,			NULL,		false }
