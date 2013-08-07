@@ -465,6 +465,7 @@ API V1.27 (cgminer v3.3.2)
 
 Added API commands:
  'ascset' - with: BTB opt=millivolts val=1000 to 1310 - core voltage
+                  AVA+BTB opt=freq val=256 to 450 - chip frequency
 
 ----------
 
