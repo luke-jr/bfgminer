@@ -1525,6 +1525,15 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 		return replybuf;
 	}
 	
+	if (!strcasecmp(option, "_cmd1"))
+	{
+		mutex_lock(mutexp);
+		fd = proc->device->device_fd;
+		bitforce_cmd1(fd, data->xlink_id, replybuf, 8000, setting);
+		mutex_unlock(mutexp);
+		return replybuf;
+	}
+	
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
