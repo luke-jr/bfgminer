@@ -326,6 +326,10 @@ const char unicode_micro = 'u';
 #endif
 
 #ifdef HAVE_CURSES
+#define U8_BAD_START "\xef\x80\x81"
+#define U8_BAD_END   "\xef\x80\x80"
+#define AS_BAD(x) U8_BAD_START x U8_BAD_END
+
 bool selecting_device;
 unsigned selected_device;
 #endif
@@ -3128,7 +3132,7 @@ void temperature_column(char *buf, size_t bufsz, bool maybe_unicode, const float
 		maybe_unicode = false;
 	if (temp && *temp > 0.)
 		if (maybe_unicode)
-			snprintf(buf, bufsz, "%4.1f\xb0""C", *temp);
+			snprintf(buf, bufsz, "%4.1f"U8_DEGREE"C", *temp);
 		else
 			snprintf(buf, bufsz, "%4.1fC", *temp);
 	else
@@ -3248,7 +3252,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 #ifdef HAVE_CURSES
 	if (for_curses)
 	{
-		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
+		const char *cHrStatsOpt[] = {AS_BAD("DEAD "), AS_BAD("SICK "), "OFF  ", AS_BAD("REST "), AS_BAD(" ERR "), AS_BAD("WAIT "), cHr};
 		const char *cHrStats;
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true, all_rdrv = true;
@@ -3343,73 +3347,71 @@ static
 void bfg_waddstr(WINDOW *win, const char *s)
 {
 	const char *p = s;
-#ifdef USE_UNICODE
-	wchar_t buf[2] = {0, 0};
-#else
-	char buf[1];
-#endif
+	int32_t w;
+	int wlen;
+	unsigned char stop_ascii = (use_unicode ? '|' : 0x80);
 	
-#define PREP_ADDCH  do {  \
-	if (p != s)  \
-		waddnstr(win, s, p - s);  \
-	s = ++p;  \
-}while(0)
 	while (true)
 	{
-next:
-		switch(p[0])
+		while (likely(p[0] >= 0x20 && p[0] < stop_ascii))
 		{
+			// Printable ASCII
+			++p;
+		}
+		if (p != s)
+			waddnstr(win, s, p - s);
+		w = utf8_decode(p, &wlen);
+		if (unlikely(p[0] == '\xb5'))  // HACK for Mu (SI prefix micro-)
+		{
+			w = unicode_micro;
+			wlen = 1;
+		}
+		s = p += wlen;
+		switch(w)
+		{
+			// NOTE: U+F000-U+F7FF are reserved for font hacks
 			case '\0':
-				goto done;
-			default:
-def:
-				++p;
-				goto next;
-			case '\1':
-				PREP_ADDCH;
+				return;
+			case 0xf000:  // "bad" off
 				wattroff(win, attr_bad);
-				goto next;
-			case '\2':
-				PREP_ADDCH;
+				break;
+			case 0xf001:  // "bad" on
 				wattron(win, attr_bad);
-				goto next;
+				break;
 #ifdef USE_UNICODE
 			case '|':
-				if (!use_unicode)
-					goto def;
-				PREP_ADDCH;
 				wadd_wch(win, WACS_VLINE);
-				goto next;
+				break;
 #endif
-			case '\xc1':
-			case '\xc4':
+			case 0x2500:  // BOX DRAWINGS LIGHT HORIZONTAL
+			case 0x2534:  // BOX DRAWINGS LIGHT UP AND HORIZONTAL
 				if (!use_unicode)
 				{
-					buf[0] = '-';
+					waddch(win, '-');
 					break;
 				}
 #ifdef USE_UNICODE
-				PREP_ADDCH;
-				wadd_wch(win, (p[-1] == '\xc4') ? WACS_HLINE : WACS_BTEE);
-				goto next;
-			case '\xb0':  // Degrees symbol
-				buf[0] = ((unsigned char *)p)[0];
+				wadd_wch(win, (w == 0x2500) ? WACS_HLINE : WACS_BTEE);
 				break;
 #endif
-			case '\xb5':  // Mu (SI prefix micro-)
-				buf[0] = unicode_micro;
-		}
-		PREP_ADDCH;
+			default:
 #ifdef USE_UNICODE
-		waddwstr(win, buf);
+				if (w > WCHAR_MAX)
+#if REPLACEMENT_CHAR > WCHAR_MAX
+					w = '?';
 #else
-		waddch(win, buf[0]);
+					w = REPLACEMENT_CHAR;
 #endif
+				{
+					wchar_t wc = w;
+					waddnwstr(win, &wc, 1);
+				}
+#else
+				// TODO: Maybe try using sprintf with %ls?
+				waddch(win, '?');
+#endif
+		}
 	}
-done:
-	PREP_ADDCH;
-	return;
-#undef PREP_ADDCH
 }
 
 static inline
@@ -7195,7 +7197,17 @@ void show_help(void)
 		"ST: work in queue              | F: network fails  | NB: new blocks detected\n"
 		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
 		"E: # shares * diff per 2kB bw  | U: shares/minute  | BS: best share ever found\n"
-		"\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\n"
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_BTEE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_BTEE  U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		"\n"
 		"devices/processors hashing (only for totals line), hottest temperature\n"
 	);
 	wlogprint(
@@ -7437,9 +7449,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		}
 		
 		if (working_devs == working_procs)
-			snprintf(statusline, sizeof(statusline), "%s%d        ", bad ? "\2" : "", working_devs);
+			snprintf(statusline, sizeof(statusline), "%s%d        ", bad ? U8_BAD_START : "", working_devs);
 		else
-			snprintf(statusline, sizeof(statusline), "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
+			snprintf(statusline, sizeof(statusline), "%s%d/%d     ", bad ? U8_BAD_START : "", working_devs, working_procs);
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
@@ -7447,9 +7459,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		
 		if (bad)
 		{
-			++divx;
-			statusline[divx] = '\1';
-			++divx;
+			divx += sizeof(U8_BAD_START)-1;
+			strcpy(&statusline[divx], U8_BAD_END);
+			divx += sizeof(U8_BAD_END)-1;
 		}
 		
 		temperature_column(&statusline[divx], sizeof(statusline)-divx, true, &temp);
