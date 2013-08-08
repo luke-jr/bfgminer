@@ -286,10 +286,12 @@ const
 #endif
 bool curses_active;
 
+#ifdef HAVE_CURSES
 #if !(defined(PDCURSES) || defined(NCURSES_VERSION))
 const
 #endif
 short default_bgcolor = COLOR_BLACK;
+#endif
 
 static
 #if defined(HAVE_CURSES) && defined(USE_UNICODE)
