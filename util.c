@@ -1452,7 +1452,7 @@ int format_temperature(char * const buf, const int pad, const bool highprecision
 	        , pad
 	        , (highprecision ? 1 : 0)
 	        , temp
-	        , (unicode ? "\xb0" : "")
+	        , (unicode ? U8_DEGREE : "")
 	);
 }
 

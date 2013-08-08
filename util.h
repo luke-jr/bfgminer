@@ -347,6 +347,9 @@ enum h2bs_fmt {
 };
 
 #define REPLACEMENT_CHAR (0xFFFD)
+#define U8_DEGREE "\xc2\xb0"
+#define U8_HLINE  "\xe2\x94\x80"
+#define U8_BTEE   "\xe2\x94\xb4"
 extern int32_t utf8_decode(const void *, int *out_len);
 extern void utf8_test();
 
