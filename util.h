@@ -440,6 +440,12 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 #define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
 
 
+#define REPLACEMENT_CHAR (0xFFFD)
+extern int32_t utf8_decode(const void *, int *out_len);
+extern void utf8_test();
+
+
+
 #define RUNONCE(rv)  do {  \
 	static bool _runonce = false;  \
 	if (_runonce)  \

@@ -1385,6 +1385,106 @@ double tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }
 
+
+int32_t utf8_decode(const void *b, int *out_len)
+{
+	int32_t w;
+	const unsigned char *s = b;
+	
+	if (!(s[0] & 0x80))
+	{
+		// ASCII
+		*out_len = 1;
+		return s[0];
+	}
+	
+#ifdef STRICT_UTF8
+	if (unlikely(!(s[0] & 0x40)))
+		goto invalid;
+#endif
+	
+	if (!(s[0] & 0x20))
+		*out_len = 2;
+	else
+	if (!(s[0] & 0x10))
+		*out_len = 3;
+	else
+	if (likely(!(s[0] & 8)))
+		*out_len = 4;
+	else
+		goto invalid;
+	
+	w = s[0] & ((2 << (6 - *out_len)) - 1);
+	for (int i = 1; i < *out_len; ++i)
+	{
+#ifdef STRICT_UTF8
+		if (unlikely((s[i] & 0xc0) != 0x80))
+			goto invalid;
+#endif
+		w = (w << 6) | (s[i] & 0x3f);
+	}
+	
+#if defined(STRICT_UTF8)
+	if (unlikely(w > 0x10FFFF))
+		goto invalid;
+	
+	// FIXME: UTF-8 requires smallest possible encoding; check it
+#endif
+	
+	return w;
+
+invalid:
+	*out_len = 1;
+	return REPLACEMENT_CHAR;
+}
+
+static
+void _utf8_test(const char *s, const wchar_t expected, int expectedlen)
+{
+	int len;
+	wchar_t r;
+	
+	r = utf8_decode(s, &len);
+	if (unlikely(r != expected || expectedlen != len))
+		applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got U+%06lX (len %d)", (unsigned long)expected, expectedlen, (unsigned long)r, len);
+}
+#define _test_intrange(s, ...)  _test_intrange(s, (int[]){ __VA_ARGS__ })
+
+void utf8_test()
+{
+	_utf8_test("", 0, 1);
+	_utf8_test("\1", 1, 1);
+	_utf8_test("\x7f", 0x7f, 1);
+#if WCHAR_MAX >= 0x80
+	_utf8_test("\xc2\x80", 0x80, 2);
+#if WCHAR_MAX >= 0xff
+	_utf8_test("\xc3\xbf", 0xff, 2);
+#if WCHAR_MAX >= 0x7ff
+	_utf8_test("\xdf\xbf", 0x7ff, 2);
+#if WCHAR_MAX >= 0x800
+	_utf8_test("\xe0\xa0\x80", 0x800, 3);
+#if WCHAR_MAX >= 0xffff
+	_utf8_test("\xef\xbf\xbf", 0xffff, 3);
+#if WCHAR_MAX >= 0x10000
+	_utf8_test("\xf0\x90\x80\x80", 0x10000, 4);
+#if WCHAR_MAX >= 0x10ffff
+	_utf8_test("\xf4\x8f\xbf\xbf", 0x10ffff, 4);
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
+#ifdef STRICT_UTF8
+	_utf8_test("\x80", REPLACEMENT_CHAR, 1);
+	_utf8_test("\xbf", REPLACEMENT_CHAR, 1);
+	_utf8_test("\xfe", REPLACEMENT_CHAR, 1);
+	_utf8_test("\xff", REPLACEMENT_CHAR, 1);
+#endif
+}
+
+
 bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 {
 	char *url_begin, *url_end, *ipv6_begin, *ipv6_end, *port_start = NULL;

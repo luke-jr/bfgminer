@@ -10824,6 +10824,7 @@ int main(int argc, char *argv[])
 		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
+		utf8_test();
 	}
 
 #ifdef HAVE_CURSES
