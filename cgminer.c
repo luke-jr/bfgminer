@@ -56,6 +56,10 @@
 #include "driver-avalon.h"
 #endif
 
+#ifdef USE_BFLSC
+#include "driver-bflsc.h"
+#endif
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <fcntl.h>
