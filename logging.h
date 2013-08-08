@@ -28,6 +28,8 @@ enum {
 };
 #endif
 
+extern int bfg_snprintf(char * const buf, size_t, const char * const fmt, ...) FORMAT_SYNTAX_CHECK(printf, 3, 4);
+
 /* debug flags */
 extern bool opt_debug;
 extern bool opt_debug_console;
@@ -43,10 +45,10 @@ extern int opt_log_level;
 
 extern void _applog(int prio, const char *str);
 
-#define applog(prio, fmt, ...) do { \
+#define applog(prio, ...) do { \
 	if (opt_debug || prio != LOG_DEBUG) { \
 			char tmp42[LOGBUFSIZ]; \
-			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			bfg_snprintf(tmp42, sizeof(tmp42), __VA_ARGS__); \
 			_applog(prio, tmp42); \
 	} \
 } while (0)
@@ -70,15 +72,15 @@ extern void _bfg_clean_up(void);
 
 #ifdef HAVE_CURSES
 
-#define wlog(fmt, ...) do { \
+#define wlog(...) do { \
 	char tmp42[LOGBUFSIZ]; \
-	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	bfg_snprintf(tmp42, sizeof(tmp42), __VA_ARGS__); \
 	_wlog(tmp42); \
 } while (0)
 
-#define wlogprint(fmt, ...) do { \
+#define wlogprint(...) do { \
 	char tmp42[LOGBUFSIZ]; \
-	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	bfg_snprintf(tmp42, sizeof(tmp42), __VA_ARGS__); \
 	_wlogprint(tmp42); \
 } while (0)
 
