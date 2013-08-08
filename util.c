@@ -1475,10 +1475,7 @@ int bfg_vsnprintf(char * const buf, size_t sz, const char *fmt, va_list ap)
 			case '%':
 				if ( (L = (p - fmt)) )
 				{
-					char fmtcp[L+1];
-					memcpy(fmtcp, fmt, L);
-					fmtcp[L] = '\0';
-					_SNP2(vsnprintf, fmtcp, ap);
+					_SNP("%.*s", L, fmt);
 					fmt += L;
 				}
 				if (!fmt[0])
@@ -1541,8 +1538,57 @@ switch (fmt[1])
 					p = fmt - 1;
 					break;
 				}
-				
-				// Pass anything else through vsprintf above
+				else
+				{
+					// Standard printf % conversions
+					// Thanks to va_list passing not being nice, we have to go into detail here :(
+					++p;
+					while (true)
+					{
+						switch (p++[0])
+						{
+							// NOTE: Subset of standard and Windows types
+							case 'd': case 'i': case 'u': case 'x': case 'X': case 'o': case 'e': case 'E': case 'f': case 'g': case 'G': case 'a': case 'A': case 'c': case 's': case 'p': case '%':
+								goto foundend;
+							case '0':
+								// TODO: invalid sequence
+								break;
+						}
+					}
+foundend:
+					L = (p - fmt);
+					char fmtcp[L+1];
+					memcpy(fmtcp, fmt, L);
+					fmtcp[L] = '\0';
+					fmt += L;
+					p = fmt - 1;
+switch (p[0])
+{
+	case 'd': case 'i':
+	case 'u':
+	case 'x': case 'X':
+	case 'o':
+	case 'c':
+		arg_d = va_arg(ap, int);
+		_SNP(fmtcp, arg_d);
+		break;
+	case 'e': case 'E':
+	case 'f':
+	case 'g': case 'G':
+	case 'a': case 'A':
+		arg_f = va_arg(ap, double);
+		_SNP(fmtcp, arg_f);
+		break;
+	case 's':
+	case 'p':
+		arg_p = va_arg(ap, void*);
+		_SNP(fmtcp, arg_p);
+		break;
+	case '%':
+		_SNP(fmtcp, "%%");
+}
+
+				}
 		}
 	}
 }
@@ -1609,6 +1655,7 @@ void test_bfg_snprintf()
 	_test_bfg_sprintf("a%02dbc2", "a44bc2", 44);
 	
 	_test_bfg_sprintf("a%sbc", "axyzbc", "xyz");
+	_test_bfg_sprintf("a%sb%sc", "axyzb123c", "xyz", "123");
 	
 	_test_bfg_sprintf("a%ubc", "a255bc", 255);
 	

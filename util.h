@@ -363,7 +363,7 @@ extern void utf8_test();
 #define _SNP2(fn, ...)  do{  \
 	int __n42 = fn(s, sz, __VA_ARGS__);  \
 	s += __n42;  \
-	sz -= __n42;  \
+	sz = (sz <= __n42) ? 0 : (sz - __n42);  \
 	rv += __n42;  \
 }while(0)
 
