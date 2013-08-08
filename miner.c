@@ -2896,11 +2896,9 @@ static void curses_print_status(void)
 	wattron(statuswin, A_BOLD);
 	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	timer_set_now(&now);
-	{
-		char timerstr[20];
-		format_elapsed(timerstr, BTF_BRACKETS | BTF_DATE | BTF_TIME, timer_elapsed(&miner_started, &now));
-		wprintw(statuswin, " - %s", timerstr);
-	}
+	bfg_wprintw(statuswin, " - "BPRIte,
+	            (BTF_BRACKETS | BTF_DATE | BTF_TIME),
+	            timer_elapsed(&miner_started, &now));
 	wattroff(statuswin, A_BOLD);
 	wmove(statuswin, 5, 1);
 	bfg_waddstr(statuswin, statusline);
