@@ -342,6 +342,7 @@ struct SaveString {
 #define BFLSC_QUE_WATERMARK_V2 32
 #define BFLSC_QUE_LOW_V2 8
 
+#define BFLSC_TEMP_OVERHEAT 90
 // Must drop this far below cutoff before resuming work
 #define BFLSC_TEMP_RECOVER 5
 
@@ -352,5 +353,7 @@ struct SaveString {
 #define REINIT_TIME_MAX_MS 800
 // Keep trying up to this many us
 #define REINIT_TIME_MAX 3000000
+
+int opt_bflsc_overheat;
 
 #endif /* BFLSC_H */

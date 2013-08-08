@@ -28,6 +28,8 @@
 #include "usbutils.h"
 #include "driver-bflsc.h"
 
+int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
+
 static const char *blank = "";
 
 struct device_drv bflsc_drv;
@@ -537,7 +539,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 		bflsc->drv->name, bflsc->device_id, err);
 
 	if (!bflsc->cutofftemp)
-		bflsc->cutofftemp = 90;
+		bflsc->cutofftemp = opt_bflsc_overheat;
 }
 
 static void bflsc_initialise(struct cgpu_info *bflsc)

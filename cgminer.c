@@ -579,6 +579,13 @@ static char *set_int_0_to_100(const char *arg, int *i)
 }
 #endif
 
+#ifdef USE_BFLSC
+static char *set_int_0_to_200(const char *arg, int *i)
+{
+	return set_int_range(arg, i, 0, 200);
+}
+#endif
+
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
@@ -957,6 +964,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--bfl-range",
 			opt_set_bool, &opt_bfl_noncerange,
 			"Use nonce range on bitforce devices if supported"),
+#endif
+#ifdef USE_BFLSC
+	OPT_WITH_ARG("--bflsc-overheat",
+		     set_int_0_to_200, opt_show_intval, &opt_bflsc_overheat,
+		     "Set overheat temperature where BFLSC devices throttle, 0 to disable"),
 #endif
 #ifdef HAVE_CURSES
 	OPT_WITHOUT_ARG("--compact",

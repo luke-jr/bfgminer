@@ -73,6 +73,17 @@ After this you can either manually restart udev and re-login, or more easily
 just reboot.
 
 
+ASIC SPECIFIC COMMANDS
+
+--avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
+--avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
+--avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
+--avalon-freq <arg> Set frequency range for avalon-auto, single value or range
+--avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
+--avalon-temp <arg> Set avalon target temperature (default: 50)
+--bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
+
+
 AVALON DEVICES
 
 Currently all known Avalon devices come with their own operating system and
@@ -177,6 +188,15 @@ The values are:
 ambient temp / highest device temp  lowest detected ASIC cooling fan RPM.
 
 Use the API for more detailed information than this.
+
+
+BFLSC Devices
+
+--bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
+
+This will allow you to change or disable the default temperature where cgminer
+throttles BFLSC devices by allowing them to temporarily go idle.
+
 
 ---
 
