@@ -370,6 +370,16 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }
 
 
+#define _SNP2(fn, ...)  do{  \
+        int __n42 = fn(s, sz, __VA_ARGS__);  \
+        s += __n42;  \
+        sz = (sz <= __n42) ? 0 : (sz - __n42);  \
+        rv += __n42;  \
+}while(0)
+
+#define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
+
+
 #define RUNONCE(rv)  do {  \
 	static bool _runonce = false;  \
 	if (_runonce)  \
