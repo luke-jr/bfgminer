@@ -2457,9 +2457,12 @@ void pick_unit(float hashrate, unsigned char *unit)
 
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
-char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
+int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
+	char *s = buf;
 	unsigned char prec, i, unit;
+	int rv = 0;
+	
 	if (unitin == -1)
 	{
 		unit = 0;
@@ -2477,27 +2480,24 @@ char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_
 			prec = 1;
 		else
 			prec = 2;
-		sprintf(buf, "%5.*f", prec, hashrate);
-		i = 5;
+		_SNP("%5.*f", prec, hashrate);
 	}
 	else
-	{
-		sprintf(buf, "%3d", (int)hashrate);
-		i = 3;
-	}
+		_SNP("%3d", (int)hashrate);
 	
 	switch (fmt) {
 	case H2B_SPACED:
-		buf[i++] = ' ';
+		_SNP(" ");
 	case H2B_SHORT:
-		buf[i++] = _unitchar[unit];
-		strcpy(&buf[i], measurement);
+		_SNP("%c%s", _unitchar[unit], measurement);
 	default:
 		break;
 	}
 	
-	return buf;
+	return rv;
 }
+#define format_unit(buf, floatprec, measurement, fmt, rate, unitin)  \
+	(void)format_unit2(buf, SSIZE_MAX, floatprec, measurement, fmt, rate, unitin);
 
 static
 char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
@@ -2536,28 +2536,32 @@ char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement
 #define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
 #define multi_format_unit_array(buflist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
 
-void percentf3(char * const buf, double p, const double t)
+int percentf3(char * const buf, size_t sz, double p, const double t)
 {
+	char *s = buf;
+	int rv = 0;
 	if (!p)
-		strcpy(buf, "none");
+		_SNP("none");
 	else
 	if (t <= p)
-		strcpy(buf, "100%");
+		_SNP("100%%");
 	else
 	{
 
 	p /= t;
 	if (p < 0.01)
-		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
+		_SNP(".%02.0f%%", p * 10000);  // ".01%"
 	else
 	if (p < 0.1)
-		sprintf(buf, "%.1f%%", p * 100);  // "9.1%"
+		_SNP("%.1f%%", p * 100);  // "9.1%"
 	else
-		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
+		_SNP("%3.0f%%", p * 100);  // " 99%"
 
 	}
+	
+	return rv;
 }
-#define percentf2(p, t, buf)  (percentf3(buf, p, t), buf)
+#define percentf2(p, t, buf)  (percentf3(buf, SIZE_MAX, p, t), buf)
 #define percentf(p, t, buf)  percentf2(p, p + t, buf)
 
 #ifdef HAVE_CURSES

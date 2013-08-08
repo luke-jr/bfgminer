@@ -1240,7 +1240,7 @@ void bfg_init_time()
 }
 
 // NOTE: Only supports (BTF_BRACKETS | BTF_DATE | BTF_TIME) for now
-int format_elapsed(char * const buf, const int fmt, int elapsed)
+int format_elapsed2(char * const buf, size_t sz, const int fmt, int elapsed)
 {
 	unsigned int days, hours;
 	div_t d;
@@ -1251,7 +1251,7 @@ int format_elapsed(char * const buf, const int fmt, int elapsed)
 	hours = d.quot;
 	d = div(d.rem, 60);
 	return
-	sprintf(buf, "[%3u day%c %02d:%02d:%02d]"
+	snprintf(buf, sz, "[%3u day%c %02d:%02d:%02d]"
 		, days
 		, (days == 1) ? ' ' : 's'
 		, hours
@@ -1260,52 +1260,45 @@ int format_elapsed(char * const buf, const int fmt, int elapsed)
 	);
 }
 
-int format_tm(char * const buf, const int fmt, const struct tm * const tm, const long usecs)
+int format_tm2(char * const buf, size_t sz, const int fmt, const struct tm * const tm, const long usecs)
 {
 	char *s = buf;
+	int rv = 0;
 	
 	if (fmt & BTF_BRACKETS)
-		(s++)[0] = '[';
+		_SNP("[");
 	if (fmt & BTF_DATE)
-	{
-		s +=
-		sprintf(s, "%d-%02d-%02d",
+		_SNP("%d-%02d-%02d%s",
 		        tm->tm_year + 1900,
 		        tm->tm_mon + 1,
-		        tm->tm_mday);
-		if (fmt & 3 /* any time */)
-			(s++)[0] = ' ';
-	}
+		        tm->tm_mday,
+		     (fmt & 3 /* any time */) ? " " : "");
 	if (fmt & 3 /* any time */)
 	{
-		s +=
-		sprintf(s, "%02d:%02d",
+		_SNP("%02d:%02d",
 		        tm->tm_hour,
 		        tm->tm_min);
 		if (fmt & 1 /* with seconds */)
 		{
-			s +=
-			sprintf(s, ":%02d", tm->tm_sec);
+			_SNP(":%02d", tm->tm_sec);
 			if ((fmt & BTF_HRTIME) == BTF_HRTIME)
-				s +=
-				sprintf(s, ".%06ld", usecs);
+				_SNP(".%06ld", usecs);
 		}
 	}
 	if (fmt & BTF_BRACKETS)
-		s +=
-		sprintf(s, "]");
+		_SNP("]");
 	
-	return (s - buf);
+	return rv;
 }
 
-int format_timestamp(char * const buf, const int fmt, const struct timeval * const tv)
+int format_timestamp2(char * const buf, size_t sz, const int fmt, const struct timeval * const tv)
 {
 	struct tm tm;
 	time_t tt = tv->tv_sec;
 	
 	localtime_r(&tt, &tm);
 	
-	return format_tm(buf, fmt, &tm, tv->tv_usec);
+	return format_tm2(buf, sz, fmt, &tm, tv->tv_usec);
 }
 
 void subtime(struct timeval *a, struct timeval *b)
@@ -1445,10 +1438,10 @@ void utf8_test()
 }
 
 
-int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp)
+int format_temperature2(char * const buf, size_t sz, const int pad, const bool highprecision, const bool unicode, const float temp)
 {
 	return
-	sprintf(buf, "%*.*f%sC"
+	snprintf(buf, sz, "%*.*f%sC"
 	        , pad
 	        , (highprecision ? 1 : 0)
 	        , temp
@@ -1462,7 +1455,7 @@ int format_temperature_sz(const int numsz, const bool unicode)
 }
 
 
-int bfg_vsprintf(char * const buf, const char *fmt, va_list ap)
+int bfg_vsnprintf(char * const buf, size_t sz, const char *fmt, va_list ap)
 {
 	char *s = buf;
 	size_t L;
@@ -1471,6 +1464,7 @@ int bfg_vsprintf(char * const buf, const char *fmt, va_list ap)
 	long arg_ld;
 	int64_t arg_d64;
 	double arg_f, arg_f_2;
+	int rv = 0;
 	
 	for (const char *p = fmt; ; ++p)
 	{
@@ -1484,7 +1478,7 @@ int bfg_vsprintf(char * const buf, const char *fmt, va_list ap)
 					char fmtcp[L+1];
 					memcpy(fmtcp, fmt, L);
 					fmtcp[L] = '\0';
-					s += vsprintf(s, fmtcp, ap);
+					_SNP2(vsnprintf, fmtcp, ap);
 					fmt += L;
 				}
 				if (!fmt[0])
@@ -1498,25 +1492,25 @@ switch (fmt[1])
 		arg_d = va_arg(ap, int);
 		arg_p = va_arg(ap, void*);
 		arg_ld = va_arg(ap, long);
-		s += format_tm(s, arg_d, arg_p, arg_ld);
+		_SNP2(format_tm2, arg_d, arg_p, arg_ld);
 		L = sizeof(BPRItm);
 		break;
 	case 2:  // format_timestamp
 		arg_d = va_arg(ap, int);
 		arg_p = va_arg(ap, void*);
-		s += format_timestamp(s, arg_d, arg_p);
+		_SNP2(format_timestamp2, arg_d, arg_p);
 		L = sizeof(BPRIts);
 		break;
 	case 3:  // format_time_t
 		arg_d = va_arg(ap, int);
 		arg_d64 = va_arg(ap, int64_t);
-		s += format_time_t(s, arg_d, arg_d64);
+		_SNP2(format_time_t2, arg_d, arg_d64);
 		L = sizeof(BPRItt);
 		break;
 	case 4:  // format_elapsed
 		arg_d = va_arg(ap, int);
 		arg_d_2 = va_arg(ap, int);
-		s += format_elapsed(s, arg_d, arg_d_2);
+		_SNP2(format_elapsed2, arg_d, arg_d_2);
 		L = sizeof(BPRIte);
 		break;
 	case 5:  // format_unit (int-precision)
@@ -1525,13 +1519,12 @@ switch (fmt[1])
 		arg_d = va_arg(ap, int);
 		arg_f = va_arg(ap, double);
 		arg_d_2 = va_arg(ap, int);
-		format_unit(s, (fmt[1] == 6), arg_p, arg_d, arg_f, arg_d_2);
-		s += strlen(s);
+		_SNP2(format_unit2, (fmt[1] == 6), arg_p, arg_d, arg_f, arg_d_2);
 		L = sizeof(BPRInd);
 		break;
 	case 7:  // temperature
 		arg_f = va_arg(ap, double);
-		s += format_temperature(s, 0, false, true, arg_f);
+		_SNP2(format_temperature2, 0, false, true, arg_f);
 		L = sizeof(BPRItp);
 		break;
 	case 8:  // percentage, 2nd arg is OTHERS
@@ -1540,8 +1533,7 @@ switch (fmt[1])
 		arg_f_2 = va_arg(ap, double);
 		if (fmt[1] == 8)
 			arg_f_2 += arg_f;
-		percentf3(s, arg_f, arg_f_2);
-		s += 4;
+		_SNP2(percentf3, arg_f, arg_f_2);
 		L = sizeof(BPRIpgo);
 		break;
 }
@@ -1555,11 +1547,11 @@ switch (fmt[1])
 	}
 }
 
-int bfg_sprintf(char * const buf, const char * const fmt, ...)
+int bfg_snprintf(char * const buf, size_t sz, const char * const fmt, ...)
 {
 	va_list ap;
 	va_start(ap, fmt);
-	int rv = bfg_vsprintf(buf, fmt, ap);
+	int rv = bfg_vsnprintf(buf, sz, fmt, ap);
 	va_end(ap);
 	return rv;
 }
@@ -1567,20 +1559,35 @@ int bfg_sprintf(char * const buf, const char * const fmt, ...)
 static
 void _test_bfg_sprintf(const char * const testname, const char * const fmt, const char * const expected, ...)
 {
-	char buf[0x100];
 	int len = strlen(expected), rv;
+	char buf[len + 3];
 	
-	va_list ap;
+	va_list ap, ap2;
 	va_start(ap, expected);
-	rv = bfg_vsprintf(buf, fmt, ap);
-	va_end(ap);
+	buf[len + 2] = '\0';
 	
-	if (len != rv || memcmp(buf, expected, len))
-		applog(LOG_WARNING, "bfg_sprintf test %s failed: returned %d bytes \"%s\"", testname, rv, buf);
+	// NOTE: Some systems error on 0-sized buffers :(
+	for (int i = 1; i < len + 2; ++i)
+	{
+		memset(buf, 'X', len + 2);
+		va_copy(ap2, ap);
+		rv = bfg_vsnprintf(buf, i, fmt, ap2);
+		va_end(ap2);
+		
+		if ( (len != rv)  // Return value must be full length
+		  || ((i > 1) ? memcmp(buf, expected, i - 1) : 0)  // Data before end point must match expectations
+		  || (buf[i - 1]) )  // Final byte in buffer must be null
+			applog(LOG_WARNING, "bfg_snprintf test %s/%d failed: returned %d bytes \"%s\" with size %d", testname, i, strlen(buf), buf, rv);
+	}
+	
+	// Check extra buffer
+	rv = bfg_vsnprintf(buf, len + 2, fmt, ap2);
+	if (len != rv || memcmp(buf, expected, len + 1))
+		applog(LOG_WARNING, "bfg_snprintf test %s/x failed: returned %d bytes \"%s\" with size %d", testname, strlen(buf), buf, rv);
 }
 #define _test_bfg_sprintf(fmt, ...)  _test_bfg_sprintf(#fmt, fmt, __VA_ARGS__)
 
-void test_bfg_sprintf()
+void test_bfg_snprintf()
 {
 	struct tm tm = {
 		.tm_year = 115,
@@ -1650,7 +1657,7 @@ void test_bfg_sprintf()
 	_test_bfg_sprintf("a"BPRInf"bcB", "a 1.00Gx/ybcB", "x/y", H2B_SHORT, 1e9, -1);
 	_test_bfg_sprintf("a"BPRInf"bcC", "a 1.00Tx/ybcC", "x/y", H2B_SHORT, 1e12, -1);
 	
-	_test_bfg_sprintf("a"BPRItp"bc", "a80\xb0""Cbc", 80.);
+	_test_bfg_sprintf("a"BPRItp"bc", "a80"U8_DEGREE"Cbc", 80.);
 	
 	_test_bfg_sprintf("a"BPRIpgo"bc1", "anonebc1",  0.,  40.);
 	_test_bfg_sprintf("a"BPRIpgo"bc2", "a100%bc2", 10.,   0.);

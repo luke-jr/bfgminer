@@ -308,10 +308,17 @@ enum timestamp_format {
 	BTF_BRACKETS = 0x10,
 };
 
-extern int format_elapsed(char * const buf, const int fmt, int elapsed);
-extern int format_tm(char * const buf, const int fmt, const struct tm * const, const long usecs);
-extern int format_timestamp(char * const buf, const int fmt, const struct timeval * const);
+extern int format_elapsed2(char * const buf, size_t sz, const int fmt, int elapsed);
+#define format_elapsed(buf, fmt, elapsed)  \
+	format_elapsed2(buf, SIZE_MAX, fmt, elapsed)
+extern int format_tm2(char * const buf, size_t sz, const int fmt, const struct tm * const, const long usecs);
+#define format_tm(buf, fmt, tm, usecs)  \
+	format_tm2(buf, SIZE_MAX, fmt, tm, usecs)
+extern int format_timestamp2(char * const buf, size_t sz, const int fmt, const struct timeval * const);
+#define format_timestamp(buf, fmt, tv)  \
+	format_timestamp2(buf, SIZE_MAX, fmt, tv)
 #define format_time_t(buf, fmt, tt)  format_timestamp(buf, fmt, (struct timeval[1]){ { .tv_sec = tt } })
+#define format_time_t2(buf, sz, fmt, tt)  format_timestamp2(buf, sz, fmt, (struct timeval[1]){ { .tv_sec = tt } })
 #define get_datestamp(buf, tt)  format_time_t(buf, BTF_DATE | BTF_TIME | BTF_BRACKETS, tt)
 #define get_now_datestamp(buf)  get_datestamp(buf, time(NULL))
 #define get_timestamp(buf, tt)  format_time_t(buf, BTF_TIME | BTF_BRACKETS, tt)
@@ -353,9 +360,20 @@ enum h2bs_fmt {
 extern int32_t utf8_decode(const void *, int *out_len);
 extern void utf8_test();
 
-extern char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float n, signed char unitin);
-extern void percentf3(char * const buf, double p, const double t);
-extern int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp);
+#define _SNP2(fn, ...)  do{  \
+	int __n42 = fn(s, sz, __VA_ARGS__);  \
+	s += __n42;  \
+	sz -= __n42;  \
+	rv += __n42;  \
+}while(0)
+
+#define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
+
+extern int format_unit2(char *buf, size_t, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float n, signed char unitin);
+extern int percentf3(char * const buf, size_t, double p, const double t);
+extern int format_temperature2(char * const buf, size_t, const int pad, const bool highprecision, const bool unicode, const float temp);
+#define format_temperature(buf, pad, highprecision, unicode, temp)  \
+	format_temperature2(buf, SIZE_MAX, pad, highprecision, unicode, temp)
 extern int format_temperature_sz(const int numsz, const bool unicode);
 
 #define BPRItm "\b\x01%d%p%ld"
@@ -369,9 +387,9 @@ extern int format_temperature_sz(const int numsz, const bool unicode);
 #define BPRIpgt "\b\x09%f%f"
 
 #ifdef va_arg
-extern int bfg_vsprintf(char * const buf, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 2, 0);
+extern int bfg_vsnprintf(char * const buf, size_t, const char *fmt, va_list ap) FORMAT_SYNTAX_CHECK(printf, 3, 0);
 #endif
-extern int bfg_sprintf(char * const buf, const char * const fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
+extern int bfg_snprintf(char * const buf, size_t, const char * const fmt, ...) FORMAT_SYNTAX_CHECK(printf, 3, 4);
 extern void test_bfg_sprintf();
 
 
