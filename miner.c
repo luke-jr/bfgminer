@@ -6658,10 +6658,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (proc->temp > temp)
 				temp = proc->temp;
 			
-			if (unlikely(proc->deven == DEV_DISABLED || proc->rolling < .1))
+			if (unlikely(proc->deven == DEV_DISABLED))
 				;  // Just need to block it off from both conditions
 			else
-			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED))
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
 			{
 				++working_procs;
 				if (proc->device == proc)
