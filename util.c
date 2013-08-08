@@ -1438,6 +1438,116 @@ void utf8_test()
 }
 
 
+#ifdef USE_TONAL
+enum format_flag {
+	BFT_PAD_SPACE = 0,
+	BFT_PAD_ZERO  = 1,
+	BFT_PAD_RIGHT = 2,
+	
+	BFT_POS_OMIT  = 0,
+	BFT_POS_PLUS  = 4,
+	BFT_POS_SPACE = 8,
+};
+
+#define _AddCh(c)  do{  \
+	++rv;  \
+	if (sz > 1)  \
+	{  \
+		s++[0] = c;  \
+		--sz;  \
+	}  \
+}while(0)
+
+int _tonal_fmt(char *s, size_t sz, const uintmax_t n, const int flags, const int width, const int precision)
+{
+	const char * const digits[] = {
+		          NULL,           NULL,           NULL,           NULL,
+		          NULL,           NULL,           NULL,           NULL,
+		          NULL, "\xee\xa7\x99", "\xee\xa7\x9a", "\xee\xa7\x9b",
+		"\xee\xa7\x9c", "\xee\xa7\x9d", "\xee\xa7\x9e", "\xee\xa7\x9f"
+	};
+	int d, i, rv = 0;
+	int pad;
+	pad = ((flags & 3) == BFT_PAD_ZERO) ? '0' : ' ';
+	
+	// FIXME: left-padding of digits we can't support
+	for (i = sizeof(n) * 8; (i -= 4) >= 0; )
+	{
+		d = (n >> i) & 0xf;
+		if (d || (i / 4 < precision))
+			break;
+		if (i / 4 < width && !(flags & BFT_PAD_RIGHT))
+			_AddCh(pad);
+	}
+	for ( ; i >= 0; i -= 4, d = (n >> i) & 0xf)
+	{
+		if (d < 9)
+			_AddCh('0' + d);
+		else
+			_SNP("%.3s", digits[d]);
+	}
+	if (flags & BFT_PAD_RIGHT && rv < width)
+		_SNP("%*s", width - rv, "");
+	s[0] = '\0';
+	return rv;
+}
+
+int tonal_ufmt(char *s, size_t sz, const uintmax_t n, const int flags, const int width, const int precision)
+{
+	int rv = 0;
+	
+	if (flags & BFT_POS_PLUS)
+		_AddCh('+');
+	else
+	if (flags & BFT_POS_SPACE)
+		_AddCh(' ');
+	
+	return rv + _tonal_fmt(s, sz, n, flags, width, precision);
+}
+
+int tonal_sfmt(char *s, size_t sz, const intmax_t n, const int flags, const int width, const int precision)
+{
+	if (n >= 0)
+		return tonal_ufmt(s, sz, n, flags, width, precision);
+	
+	int rv = 0;
+	
+	_AddCh('-');
+	
+	return rv + _tonal_fmt(s, sz, -n, flags, width, precision);
+}
+
+static
+void _parse_printf_flags(char **q, int *flags, int *width, int *precision)
+{
+	*flags = 0;
+	for ( ; *q[0]; ++*q)
+	{
+		switch (*q[0])
+		{
+			case '0':
+				*flags |= BFT_PAD_ZERO;
+				break;
+			case '-':
+				*flags |= BFT_PAD_RIGHT;
+				break;
+			case ' ':
+				*flags |= BFT_POS_SPACE;
+				break;
+			case '+':
+				*flags |= BFT_POS_PLUS;
+				break;
+			default:
+				goto haveflags;
+		}
+	}
+haveflags:
+	*width = strtol(*q, q, 10);
+	*precision = (*q[0] == '.') ? strtol(&(*q)[1], q, 10) : 1;
+}
+#endif
+
+
 int format_temperature2(char * const buf, size_t sz, const int pad, const bool highprecision, const bool unicode, const float temp)
 {
 	return
@@ -1566,6 +1676,64 @@ switch (p[0])
 {
 	case 'd': case 'i':
 	case 'u':
+#ifdef USE_TONAL
+	{
+		intmax_t n;
+		int flags, width, prec;
+		char *q = &fmtcp[1];
+		_parse_printf_flags(&q, &flags, &width, &prec);
+		if (!q[1])
+		{
+			switch (q[0])
+			{
+				case 'd': case 'i':
+					n = va_arg(ap, int);
+					break;
+				case 'u':
+					n = va_arg(ap, unsigned);
+					break;
+				default:
+					; // FIXME: not supported
+			}
+		}
+		else
+		if (q[0] == 'l' && !q[2])
+		{
+			switch (q[0])
+			{
+				case 'd': case 'i':
+					n = va_arg(ap, long);
+					break;
+				case 'u':
+					n = va_arg(ap, unsigned long);
+					break;
+				default:
+					; // FIXME: not supported
+			}
+		}
+		else
+		if (!strcmp(q, PRId32))
+			n = va_arg(ap, int32_t);
+		else
+		if (!strcmp(q, PRIu32))
+			n = va_arg(ap, uint32_t);
+		else
+		if (!strcmp(q, PRId64))
+			n = va_arg(ap, int64_t);
+		else
+		if (!strcmp(q, PRIu64))
+		{
+			uint64_t n64;
+			n64 = va_arg(ap, uint64_t);
+			_SNP2(tonal_ufmt, n64, flags, width, prec);
+			break;
+		}
+		else
+			; // FIXME: not supported
+		_SNP2(tonal_sfmt, n, flags, width, prec);
+		break;
+	}
+#endif
 	case 'x': case 'X':
 	case 'o':
 	case 'c':

@@ -2907,7 +2907,7 @@ static void curses_print_status(void)
 	utility = total_accepted / total_secs * 60;
 
 	char bwstr[12];
-	mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	bfg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
 		__total_staged(),
 		total_go + total_ro,
 		new_blocks,
