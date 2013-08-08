@@ -293,6 +293,17 @@ else
 	adl="no"
 fi
 
+################################################################################
+AC_ARG_ENABLE([bf1],
+	[AC_HELP_STRING([--disable-bf1],[Compile support for Bitfury BF1 (default enabled)])],
+	[bf1=$enableval],
+	[bf1=yes]
+	)
+if test "x$bf1" = xyes; then
+	AC_DEFINE([USE_BF1], [1], [Defined to 1 if Bitfury BF1 support is wanted])
+fi
+AM_CONDITIONAL([HAS_BF1], [test x$bf11 = xyes])
+
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
 	[bitforce=$enableval],
@@ -892,6 +903,12 @@ if test "x$avalon" = xyes; then
 	echo "  Avalon.ASICs.........: Enabled"
 else
 	echo "  Avalon.ASICs.........: Disabled"
+fi
+
+if test "x$bf1" = xyes; then
+	echo "  Bitfury BF1.ASICs....: Enabled"
+else
+	echo "  Bitfury BF1.ASICs....: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then

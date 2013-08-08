@@ -134,6 +134,10 @@ bitforce_firmware_flash_SOURCES = bitforce-firmware-flash.c
 endif
 endif
 
+if HAS_BF1
+bfgminer_SOURCES += driver-bf1.c
+endif
+
 if HAS_ICARUS
 bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c

@@ -8383,6 +8383,10 @@ struct device_drv cpu_drv = {
 extern struct device_drv bitforce_drv;
 #endif
 
+#ifdef USE_BF1
+extern struct device_drv bf1_drv;
+#endif
+
 #ifdef USE_ICARUS
 extern struct device_drv cairnsmore_drv;
 extern struct device_drv icarus_drv;
@@ -8753,6 +8757,11 @@ int main(int argc, char *argv[])
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
 		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_BF1
+	if (!opt_scrypt)
+		bf1_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
