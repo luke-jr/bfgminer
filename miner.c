@@ -2856,6 +2856,19 @@ void bfg_waddstr(WINDOW *win, const char *s)
 	}
 }
 
+static
+void bfg_wprintw(WINDOW *win, const char *fmt, ...)
+{
+	va_list ap;
+	char buf[0x100];
+	
+	va_start(ap, fmt);
+	bfg_vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	bfg_waddstr(win, buf);
+}
+#define bfg_mvwprintw(win, y, x, ...)  (wmove(win, y, x), bfg_wprintw(win, __VA_ARGS__))
+
 static inline
 void bfg_hline(WINDOW *win, int y)
 {
