@@ -9630,6 +9630,7 @@ int main(int argc, char *argv[])
 	}
 	
 	test_intrange();
+	utf8_test();
 
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs)

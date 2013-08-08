@@ -346,6 +346,10 @@ enum h2bs_fmt {
 	H2B_SPACED,  // "xxx.x Mh/s"
 };
 
+#define REPLACEMENT_CHAR (0xFFFD)
+extern int32_t utf8_decode(const void *, int *out_len);
+extern void utf8_test();
+
 extern char *format_unit(char *buf, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float n, signed char unitin);
 extern void percentf3(char * const buf, double p, const double t);
 extern int format_temperature(char * const buf, const int pad, const bool highprecision, const bool unicode, const float temp);
