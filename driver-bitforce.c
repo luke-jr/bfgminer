@@ -116,14 +116,15 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 }
 
 static
-void bitforce_cmd1(int fd, int procid, void *buf, size_t bufsz, const char *cmd)
+void bitforce_cmd1b(int fd, int procid, void *buf, size_t bufsz, const char *cmd, size_t cmdsz)
 {
 	if (unlikely(opt_dev_protocol))
 		applog(LOG_DEBUG, "DEVPROTO: CMD1 (fd=%d xlink=%d): %s", fd, procid, cmd);
 	
-	bitforce_send(fd, procid, cmd, 3);
+	bitforce_send(fd, procid, cmd, cmdsz);
 	BFgets(buf, bufsz, fd);
 }
+#define bitforce_cmd1(fd, xlinkid, buf, bufsz, cmd)  bitforce_cmd1b(fd, xlinkid, buf, bufsz, cmd, 3)
 
 static
 void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
@@ -1529,7 +1530,7 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 	{
 		mutex_lock(mutexp);
 		fd = proc->device->device_fd;
-		bitforce_cmd1(fd, data->xlink_id, replybuf, 8000, setting);
+		bitforce_cmd1b(fd, data->xlink_id, replybuf, 8000, setting, strlen(setting));
 		mutex_unlock(mutexp);
 		return replybuf;
 	}
