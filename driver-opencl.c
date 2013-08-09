@@ -789,7 +789,15 @@ retry:
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
-		intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
+		if (opt_scrypt) {
+			intvar = curses_input("Set GPU scan intensity (d or "
+					      MIN_SCRYPT_INTENSITY_STR " -> "
+					      MAX_SCRYPT_INTENSITY_STR ")");
+		} else {
+			intvar = curses_input("Set GPU scan intensity (d or "
+					      MIN_SHA_INTENSITY_STR " -> "
+					      MAX_SHA_INTENSITY_STR ")");
+		}
 		if (!intvar) {
 			wlogprint("Invalid input\n");
 			goto retry;
