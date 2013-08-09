@@ -1,3 +1,87 @@
+Version 3.3.2 - 9th August 2013
+
+- Recreate curses windows on windows when a device is hotplugged to allow window 
+resizing without crashing.
+- Update copyright notice.
+- Limit intensity range according to whether scrypt is in use or not.
+- Do not allow benchmark mode to be used with scrypt.
+- Add a --bflsc-overheat command which allows you to set the throttling 
+temperature for BFLSC devices or disable it.
+- Move bflsc defines to a header file.
+- avalon allow frequency to be set via the API
+- BTB voltage management via the API - and set default on startup
+- Avalon BTB allow partial work to be transferred
+- avalon_cts use correct buffer
+- miner.php format Best Share
+- remove unnecessary memcpy
+- using more concise description
+- using usb_ident
+- forgot a return
+- changes to Avalon driver for BitBurner boards
+- Revert "Sleep after sending icarus work to emulate working at 115200 baud."
+- api correct timeout stat display
+- usb timeouts - min/max also
+- log USB timeouts in API stats
+- usbutils report failed timeouts
+- usbutils ensure stats macros are using the macro arguments
+- Check for negative wait time in socket_full.
+- Fix extra argument passed to statline before.
+- Adjust socket wait timeout in recv_line according to how long we've already 
+waited to avoid a 60 second wait dropping to 1 second due to a blocked socket.
+- usbutils use a heap buffer for bulk read rather than stack
+- usbutils only one bulk transfer call per stat
+- set device_drv function noops when first add_cgpu
+- usbutils - in init only change the config if needed
+- bflsc nonce per work item stats
+- bflsc increase flush count to handle parallel work
+- force type checking on curses
+- logging - size check sprintf
+- usbutils - size check all sprintf
+- cgminer - size check all sprintf
+- size check get_datestamp/get_timestamp and remove unused cgpu->init
+- make all statline overflow safe
+- WU only needs +2 width
+- Check for a timeout in avalon_scanhash and post to the write sem if we receive 
+one.
+- Decay result count in avalon more slowly to not falsely detect idle periods as 
+low result return rates.
+- Count the number of miners idled in avalon to account more accurately for when 
+its result return rate is too low.
+- Fix potential dereference when starting avalon with all new work.
+- Convert the decay_time function into one that truly creates an exponentially 
+decaying average over opt_log_interval.
+- Only throttle avalon clockspeed in avalon_auto in non optimal temperature 
+settings if the fanspeed has reached maximum.
+- Reinstate more aggressive <2% HW error target for avalon-auto
+- Set avalon fan min and fan max to PWM values instead of percentage.
+- Provide an --avalon-freq command line to give a valid range of frequencies for 
+avalon in auto mode.
+- Set the avalon idle frequency to lowest if avalon auto is enabled and we have 
+an overheat condition.
+- Decrease avalon frequency in auto mode if we are unable to maintain the 
+temperature in the optimal range.
+- Don't count invalid nonces as hashrate for bflsc.
+- Use a more conservative upper limit of 1% for hardware errors with avalon auto 
+frequency.
+- Allow the avalon fanspeed range to be passed as parameter on the command line, 
+default to 20-100%
+- Just display A: and R: for difficulty accepted and rejected to preserve screen 
+real estate and decrease decimal places for WU.
+- correct device DR: and remove global U:
+- Update all screen A/R to instead use DA/DR and device U to WU
+- miner.php add ASC fields
+- GPU fan rpm display 9999 when it overflows
+- bflsc get volts stats needs its own GETVOLTS
+- Support all avalon frequencies on the command line.
+- Move to slightly more relaxed timeouts for avalon.
+- MMQ turn on cps delays
+- bflsc x-link header different to documentation
+- Reset the other auto counters in avalon when idling a device.
+- usbutils/icarus include more locking to usbdev access
+- Icarus turn on cps delays by default
+- usbutils cps correct time measurement
+
+
 Version 3.3.1 - 25th June 2013
 
 - Add an avalon-auto option which enables dynamic overclocking based on hardware
