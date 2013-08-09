@@ -652,7 +652,8 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 
 static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
-	int baud, miner_count, asic_count, timeout, frequency = 0;
+	int baud, uninitialised_var(miner_count), uninitialised_var(asic_count),
+	    uninitialised_var(timeout), frequency = 0;
 	int this_option_offset = ++option_offset;
 	struct avalon_info *info;
 	struct cgpu_info *avalon;

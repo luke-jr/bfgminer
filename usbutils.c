@@ -1801,7 +1801,7 @@ out_unlock:
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found_match)
 {
 	struct usb_find_devices *found_use = NULL;
-	int ret;
+	int uninitialised_var(ret);
 	int i;
 
 	for (i = 0; find_dev[i].drv != DRV_LAST; i++) {
