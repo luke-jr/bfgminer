@@ -1798,11 +1798,27 @@ out_unlock:
 	return bad;
 }
 
-bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
+bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found_match)
 {
+	struct usb_find_devices *found_use = NULL;
 	int ret;
+	int i;
 
-	ret = _usb_init(cgpu, dev, found);
+	for (i = 0; find_dev[i].drv != DRV_LAST; i++) {
+		if (find_dev[i].drv == found_match->drv &&
+		    find_dev[i].idVendor == found_match->idVendor &&
+		    find_dev[i].idProduct == found_match->idProduct) {
+			found_use = malloc(sizeof(*found_use));
+			if (unlikely(!found_use))
+				quit(1, "USB failed to malloc found_use");
+			memcpy(found_use, &(find_dev[i]), sizeof(*found_use));
+
+			ret = _usb_init(cgpu, dev, found_use);
+
+			if (ret != USB_INIT_IGNORE)
+				break;
+		}
+	}
 
 	if (ret == USB_INIT_FAIL)
 		applog(LOG_ERR, "%s detect (%d:%d) failed to initialise (incorrect device?)",
@@ -1971,6 +1987,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 					total_count++;
 					drv_count[drv->drv_id].count++;
 				}
+				free(found);
 			}
 		}
 	}
