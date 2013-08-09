@@ -302,7 +302,7 @@ AC_ARG_ENABLE([bf1],
 if test "x$bf1" = xyes; then
 	AC_DEFINE([USE_BF1], [1], [Defined to 1 if Bitfury BF1 support is wanted])
 fi
-AM_CONDITIONAL([HAS_BF1], [test x$bf11 = xyes])
+AM_CONDITIONAL([HAS_BF1], [test x$bf1 = xyes])
 
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],

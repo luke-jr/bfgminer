@@ -20,7 +20,7 @@ struct BF1Identity
 struct BF1State
 {
     uint8_t state;
-    uint8_t nonce_valid;
+    uint8_t switched;
     uint32_t nonce;
 } __attribute__((packed));
 
@@ -35,8 +35,11 @@ struct BF1Info
 	uint32_t baud;
 
 	struct BF1Identity id;
-
 	struct work *work;
+	struct work *prev_work;
+
+	char rx_buffer[1024];
+	uint32_t rx_len;
 };
 
 #endif /* DRIVER_S6LX75_H_ */
