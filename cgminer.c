@@ -2273,9 +2273,16 @@ static void check_winsizes(void)
 	}
 }
 
-static void switch_logsize(void)
+static void disable_curses_windows(void);
+static void enable_curses_windows(void);
+
+static void switch_logsize(bool newdevs)
 {
 	if (curses_active_locked()) {
+#ifdef WIN32
+		if (newdevs)
+			disable_curses_windows();
+#endif
 		if (opt_compact) {
 			logstart = devcursor + 1;
 			logcursor = logstart + 1;
@@ -2283,9 +2290,13 @@ static void switch_logsize(void)
 			logstart = devcursor + most_devices + 1;
 			logcursor = logstart + 1;
 		}
+#ifdef WIN32
+		if (newdevs)
+			enable_curses_windows();
+#endif
 		unlock_curses();
+		check_winsizes();
 	}
-	check_winsizes();
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -2303,7 +2314,7 @@ void _wlogprint(const char *str)
 	}
 }
 #else
-static void switch_logsize(void)
+static void switch_logsize(bool __maybe_unused newdevs)
 {
 }
 #endif
@@ -2885,18 +2896,23 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 }
 
 #ifdef HAVE_CURSES
+static void disable_curses_windows(void)
+{
+	leaveok(logwin, false);
+	leaveok(statuswin, false);
+	leaveok(mainwin, false);
+	nocbreak();
+	echo();
+	delwin(logwin);
+	delwin(statuswin);
+}
+
 static void disable_curses(void)
 {
 	if (curses_active_locked()) {
 		use_curses = false;
 		curses_active = false;
-		leaveok(logwin, false);
-		leaveok(statuswin, false);
-		leaveok(mainwin, false);
-		nocbreak();
-		echo();
-		delwin(logwin);
-		delwin(statuswin);
+		disable_curses_windows();
 		delwin(mainwin);
 		endwin();
 #ifdef WIN32
@@ -4442,7 +4458,7 @@ retry:
 		opt_compact = false;
 		want_per_device_stats = false;
 		wlogprint("Output mode reset to normal\n");
-		switch_logsize();
+		switch_logsize(false);
 		goto retry;
 	} else if (!strncasecmp(&input, "d", 1)) {
 		opt_debug ^= true;
@@ -4454,7 +4470,7 @@ retry:
 	} else if (!strncasecmp(&input, "m", 1)) {
 		opt_compact ^= true;
 		wlogprint("Compact mode %s\n", opt_compact ? "enabled" : "disabled");
-		switch_logsize();
+		switch_logsize(false);
 		goto retry;
 	} else if (!strncasecmp(&input, "p", 1)) {
 		want_per_device_stats ^= true;
@@ -7009,16 +7025,10 @@ static void fork_monitor()
 #endif // defined(unix)
 
 #ifdef HAVE_CURSES
-void enable_curses(void) {
+static void enable_curses_windows(void)
+{
 	int x,y;
 
-	lock_curses();
-	if (curses_active) {
-		unlock_curses();
-		return;
-	}
-
-	mainwin = initscr();
 	getmaxyx(mainwin, y, x);
 	statuswin = newwin(logstart, x, 0, 0);
 	leaveok(statuswin, true);
@@ -7028,6 +7038,16 @@ void enable_curses(void) {
 	leaveok(logwin, true);
 	cbreak();
 	noecho();
+}
+void enable_curses(void) {
+	lock_curses();
+	if (curses_active) {
+		unlock_curses();
+		return;
+	}
+
+	mainwin = initscr();
+	enable_curses_windows();
 	curses_active = true;
 	statusy = logstart;
 	unlock_curses();
@@ -7190,11 +7210,8 @@ struct _cgpu_devid_counter {
 
 static void adjust_mostdevs(void)
 {
-// device window resize crashes on windows - disable resize now
-#ifndef WIN32
 	if (total_devices - zombie_devs > most_devices)
 		most_devices = total_devices - zombie_devs;
-#endif
 }
 
 bool add_cgpu(struct cgpu_info *cgpu)
@@ -7309,7 +7326,7 @@ static void hotplug_process()
 	}
 
 	adjust_mostdevs();
-	switch_logsize();
+	switch_logsize(true);
 }
 
 static void *hotplug_thread(void __maybe_unused *userdata)
@@ -7634,12 +7651,7 @@ int main(int argc, char *argv[])
 		quit(1, "All devices disabled, cannot mine!");
 #endif
 
-// device window resize crashes on windows - disable resize now
-#ifdef WIN32
-	most_devices = total_devices + 1; // Allow space for 1 hotplug
-#else
 	most_devices = total_devices;
-#endif
 
 	load_temp_cutoffs();
 
