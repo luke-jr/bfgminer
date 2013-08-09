@@ -2276,7 +2276,7 @@ static void check_winsizes(void)
 static void disable_curses_windows(void);
 static void enable_curses_windows(void);
 
-static void switch_logsize(bool newdevs)
+static void switch_logsize(bool __maybe_unused newdevs)
 {
 	if (curses_active_locked()) {
 #ifdef WIN32
