@@ -78,17 +78,18 @@ If you specify the --socks-proxy option to cgminer, it will only be applied to a
 that don't specify their own proxy setting like above
 
 ---
-BUILDING CGMINER
+BUILDING CGMINER FOR YOURSELF
 
-Dependencies:
+DEPENDENCIES:
+Mandatory:
 	curl dev library 	http://curl.haxx.se/libcurl/
 	(libcurl4-openssl-dev)
 
-	curses dev library
-	(libncurses5-dev or libpdcurses on WIN32)
-
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool			http://www.gnu.org/software/libtool/
+Optional:
+	curses dev library
+	(libncurses5-dev or libpdcurses on WIN32)
 
 	jansson			http://www.digip.org/jansson/
 	(jansson is included in-tree and not necessary)
@@ -99,53 +100,56 @@ Dependencies:
 	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
 	(This sdk is mandatory for ATI GPU monitoring & clocking)
 
-	libudev headers
+	libudev dev library (libudev-dev)
 	(This is only required for ASIC+FPGA auto-detection and is linux only)
 
-	libusb headers
+	libusb dev library (libusb-dev)
 	(This is only required for ASIC+FPGA support)
+If building from git:
+	autoconf
+	automake
 
+Before compiling cgminer, if you are using any USB devices you may need to
+build libusb yourself if you have an older version of libusb-dev that has a bug.
+This usually shows up with a combination of USB1.1 devices (all Icarus) with
+USB3 ports/hubs. If you do not have this hardware, most versions of libusb will
+work fine.
 
-Before compiling cgminer, if you are using any USB devices you need to build libusb
-
-	Some versions of libsub have a timeout bug.
-	This shows up mostly with the ICA and AMU USB1.1 devices.
-     
 	To compile cgminer with a known working version of libusb
 	First install udev-dev via one of:
 		Ubuntu derivatives: apt-get install libudev-dev
 		Arch: it should be installed by default as part of systemd
 		Fedora: yum install libgudev1
 		Mingw: not required
-     
+
 	In the cgminer folder create a subfolder called libusb
 		mkdir libusb
 		cd libusb
 	Now, in that folder get and extract the known working libusb
 	 libusb-1.0.16-rc10.tar.bz2
-     
+
 	It is available here:
 	 http://sourceforge.net/projects/libusb/files/libusb-1.0/libusb-1.0.16-rc10/
-     
+
 	In linux and mingw you extract with:
 		tar -xvf libusb-1.0.16-rc10.tar.bz2
-     
+
 	Then to build it:
 		cd libusb-1.0.16-rc10
 		./configure
 		make
 		cd ../..
-     
+
 	Now when you configure cgminer as listed further below in the build
 	instructions, for all the USB devices you must add libusb as follows:
 		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.a -ludev" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-     
+
 	On Fedora18 you need -lrt also:
 		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.a -ludev -lrt" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-     
+
 	On Windows mingw:
 		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.dll.a" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-     
+
 	After compiling on windows you need to copy
 		./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.dll
 	into the current cgminer folder before running cgminer
@@ -170,7 +174,8 @@ Basic *nix build instructions:
 	CFLAGS="-O2 -Wall -march=native" ./configure <options>
 
 	No installation is necessary. You may run cgminer from the build
-	directory directly.
+	directory directly, but you may do make install if you wish to install
+	cgminer to a system location or location you specified.
 
 Native WIN32 build instructions: see windows-build.txt
 
@@ -240,6 +245,37 @@ See example.conf for an example configuration.
 --version|-V        Display version and exit
 
 
+USB device (ASIC and FPGA) options:
+
+--icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
+--icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
+--usb <arg>         USB device selection (See below)
+--usb-dump          (See FPGA-README)
+
+See FGPA-README or ASIC-README for more information regarding these.
+
+
+ASIC only options:
+
+--avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
+--avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
+--avalon-freq <arg> Set frequency range for avalon-auto, single value or range
+--avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
+--avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
+--avalon-temp <arg> Set avalon target temperature (default: 50)
+--bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
+--bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+
+See ASIC-README for more information regarding these.
+
+
+FPGA only options:
+
+--bfl-range         Use nonce range on bitforce devices if supported
+
+See FGPA-README for more information regarding this.
+
+
 GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
@@ -267,6 +303,7 @@ GPU only options:
 
 See GPU-README for more information regarding GPU mining.
 
+
 SCRYPT only options:
 
 --lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
@@ -275,22 +312,6 @@ SCRYPT only options:
 
 See SCRYPT-README for more information regarding litecoin mining.
 
-ASIC and FPGA mining boards (BFL ASIC, BitForce, Icarus, ModMiner, Ztex)
-only options:
-
---avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
---avalon-fan <arg> Set fanspeed percentage for avalon, single value or range (default: 20-100)
---avalon-freq <arg> Set frequency range for avalon-auto, single value or range
---avalon-cutoff <arg> Set avalon overheat cut off temperature (default: 60)
---avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
---avalon-temp <arg> Set avalon target temperature (default: 50)
---bfl-range         Use nonce range on bitforce devices if supported
---icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
---icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
---usb <arg>         USB device selection (See below)
---usb-dump          (See FPGA-README)
-
-See FGPA-README and ASIC-README for more information regarding these.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, ASICMINER usb block erupters, ModMiner FPGAs,
@@ -298,7 +319,7 @@ or Ztex FPGAs
 
 ---
 
-USB DEVICES
+SETTING UP USB DEVICES
 
 WINDOWS:
 

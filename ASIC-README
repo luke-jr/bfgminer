@@ -1,7 +1,11 @@
 SUPPORTED DEVICES
 
-Currently supported devices include the Avalon, the Butterfly Labs SC range
-of devices and the ASICMINER block erupters.
+Currently supported devices include the Avalon (including BitBurner), the
+Butterfly Labs SC range of devices and the ASICMINER block erupters. No COM
+ports on windows or TTY devices will be used by cgminer as it communicates
+directly with them via USB so it is normal for them to not exist or be
+disconnected when cgminer is running.
+
 
 The BFL devices should come up as one of the following:
 
@@ -82,6 +86,7 @@ ASIC SPECIFIC COMMANDS
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
+--bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
 
 
 AVALON DEVICES
@@ -104,6 +109,7 @@ Avalon commands:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
+--bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
 
 
 Avalon auto will enable dynamic overclocking gradually increasing and
@@ -179,6 +185,11 @@ This is the clock speed of the devices. Only specific values work, 256, 270,
 
 Note that setting a value with an asterisk next to it will be using your
 avalon outside its spec and you do so at your own risk.
+
+eg:
+--bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+
+Self evident.
 
 If you use the full curses based interface with Avalons you will get this
 information:
