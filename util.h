@@ -93,10 +93,15 @@ void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 void *str_text(char *ptr);
 void RenameThread(const char* name);
-void cgsem_init(cgsem_t *cgsem);
-void cgsem_post(cgsem_t *cgsem);
-void cgsem_wait(cgsem_t *cgsem);
-void cgsem_destroy(cgsem_t *cgsem);
+void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line);
+void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line);
+void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line);
+void _cgsem_destroy(cgsem_t *cgsem);
+
+#define cgsem_init(_sem) _cgsem_init(_sem, __FILE__, __func__, __LINE__)
+#define cgsem_post(_sem) _cgsem_post(_sem, __FILE__, __func__, __LINE__)
+#define cgsem_wait(_sem) _cgsem_wait(_sem, __FILE__, __func__, __LINE__)
+#define cgsem_destroy(_sem) _cgsem_destroy(_sem)
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
 static inline void align_len(size_t *len)

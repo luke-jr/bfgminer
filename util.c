@@ -1874,7 +1874,7 @@ void RenameThread(const char* name)
  * that support them and for apple which does not. We use a single byte across
  * a pipe to emulate semaphore behaviour there. */
 #ifdef __APPLE__
-void cgsem_init(cgsem_t *cgsem)
+void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	int flags, fd, i;
 
@@ -1888,55 +1888,56 @@ void cgsem_init(cgsem_t *cgsem)
 		flags = fcntl(fd, F_GETFD, 0);
 		flags |= FD_CLOEXEC;
 		if (fcntl(fd, F_SETFD, flags) == -1)
-			quit(1, "Failed to fcntl in cgsem_init");
+			quit(1, "Failed to fcntl in cgsem_init errno=%d (%s %s():%d)", errno, file, func, line);
 	}
 }
 
-void cgsem_post(cgsem_t *cgsem)
+void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	const char buf = 1;
 	int ret;
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to write in cgsem_post");
+		applog(LOG_WARNING, "Failed to write in cgsem_post errno=%d (%s %s():%d)", errno, file, func, line);
 }
 
-void cgsem_wait(cgsem_t *cgsem)
+void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	char buf;
 	int ret;
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to read in cgsem_wait");
+		applog(LOG_WARNING, "Failed to read in cgsem_wait errno=%d (%s %s():%d)", errno, file, func, line);
 }
 
-void cgsem_destroy(cgsem_t *cgsem)
+void _cgsem_destroy(cgsem_t *cgsem)
 {
 	close(cgsem->pipefd[1]);
 	close(cgsem->pipefd[0]);
 }
 #else
-void cgsem_init(cgsem_t *cgsem)
+void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
-	if (sem_init(cgsem, 0, 0))
-		quit(1, "Failed to sem_init in cgsem_init");
+	int ret;
+	if ((ret = sem_init(cgsem, 0, 0)))
+		quit(1, "Failed to sem_init in cgsem_init ret=%d errno=%d (%s %s():%d)", ret, errno, file, func, line);
 }
 
-void cgsem_post(cgsem_t *cgsem)
+void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_post(cgsem)))
-		quit(1, "Failed to sem_post in cgsem_post");
+		quit(1, "Failed to sem_post in cgsem_post errno=%d cgsem=0x%p (%s %s():%d)", errno, cgsem, file, func, line);
 }
 
-void cgsem_wait(cgsem_t *cgsem)
+void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_wait(cgsem)))
-		quit(1, "Failed to sem_wait in cgsem_wait");
+		quit(1, "Failed to sem_wait in cgsem_wait errno=%d cgsem=0x%p (%s %s():%d)", errno, cgsem, file, func, line);
 }
 
-void cgsem_destroy(cgsem_t *cgsem)
+void _cgsem_destroy(cgsem_t *cgsem)
 {
 	sem_destroy(cgsem);
 }
