@@ -709,9 +709,11 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	if (!add_cgpu(avalon))
 		goto unshin;
 
+	cgsem_init(&info->write_sem);
+
 	ret = avalon_reset(avalon, true);
 	if (ret && !configured)
-		goto unshin;
+		goto unshinsem;
 
 	update_usb_stats(avalon);
 
@@ -734,6 +736,10 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	}
 
 	return true;
+
+unshinsem:
+
+	cgsem_destroy(&info->write_sem);
 
 unshin:
 
@@ -1079,7 +1085,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init avalon qcond");
-	cgsem_init(&info->write_sem);
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
