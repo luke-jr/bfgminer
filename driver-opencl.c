@@ -550,7 +550,7 @@ char *set_intensity(char *arg)
 	else {
 		gpus[device].dynamic = false;
 		val = atoi(nextptr);
-		if (val < MIN_INTENSITY || val > MAX_INTENSITY)
+		if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
 			return "Invalid value passed to set intensity";
 		tt = &gpus[device].intensity;
 		*tt = val;
@@ -564,7 +564,7 @@ char *set_intensity(char *arg)
 		else {
 			gpus[device].dynamic = false;
 			val = atoi(nextptr);
-			if (val < MIN_INTENSITY || val > MAX_INTENSITY)
+			if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
 				return "Invalid value passed to set intensity";
 
 			tt = &gpus[device].intensity;
