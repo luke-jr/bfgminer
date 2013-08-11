@@ -564,7 +564,7 @@ char *get_proxy(char *url, struct pool *pool)
 			len = split - url;
 			pool->rpc_proxy = malloc(1 + len - plen);
 			if (!(pool->rpc_proxy))
-				quit(1, "Failed to malloc rpc_proxy");
+				quithere(1, "Failed to malloc rpc_proxy");
 
 			strcpy(pool->rpc_proxy, url + plen);
 			pool->rpc_proxytype = proxynames[i].proxytype;
@@ -590,7 +590,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 		slen += 4 - (slen % 4);
 	s = calloc(slen, 1);
 	if (unlikely(!s))
-		quit(1, "Failed to calloc in bin2hex");
+		quithere(1, "Failed to calloc");
 
 	for (i = 0; i < len; i++)
 		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
@@ -1090,7 +1090,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
-		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+		quithere(1, "Failed to realloc pool sockbuf");
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
@@ -1578,7 +1578,7 @@ static bool setup_stratum_socket(struct pool *pool)
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
 		if (!pool->sockbuf)
-			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+			quithere(1, "Failed to calloc pool sockbuf");
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
@@ -1830,7 +1830,7 @@ void *realloc_strcat(char *ptr, char *s)
 
 	ret = malloc(len);
 	if (unlikely(!ret))
-		quit(1, "Failed to malloc in realloc_strcat");
+		quithere(1, "Failed to malloc");
 
 	sprintf(ret, "%s%s", ptr, s);
 	free(ptr);
@@ -1849,14 +1849,14 @@ void *str_text(char *ptr)
 		ret = strdup("(null)");
 
 		if (unlikely(!ret))
-			quit(1, "Failed to malloc in text_str null");
+			quithere(1, "Failed to malloc null");
 	}
 
 	uptr = (unsigned char *)ptr;
 
 	ret = txt = malloc(strlen(ptr)*4+5); // Guaranteed >= needed
 	if (unlikely(!txt))
-		quit(1, "Failed to malloc in text_str txt");
+		quithere(1, "Failed to malloc txt");
 
 	do {
 		if (*uptr < ' ' || *uptr > '~') {
@@ -1895,7 +1895,7 @@ void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int l
 	int flags, fd, i;
 
 	if (pipe(cgsem->pipefd) == -1)
-		quit(1, "Failed pipe in cgsem_init");
+		quitfrom(1, file, func, line, "Failed pipe errno=%d", errno);
 
 	/* Make the pipes FD_CLOEXEC to allow them to close should we call
 	 * execv on restart. */
@@ -1904,7 +1904,7 @@ void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int l
 		flags = fcntl(fd, F_GETFD, 0);
 		flags |= FD_CLOEXEC;
 		if (fcntl(fd, F_SETFD, flags) == -1)
-			quit(1, "Failed to fcntl in cgsem_init errno=%d (%s %s():%d)", errno, file, func, line);
+			quitfrom(1, file, func, line, "Failed to fcntl errno=%d", errno);
 	}
 }
 
@@ -1915,7 +1915,7 @@ void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int l
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to write in cgsem_post errno=%d (%s %s():%d)", errno, file, func, line);
+		applog(LOG_WARNING, "Failed to write errno=%d" INFMTFFL, errno, file, func, line);
 }
 
 void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
@@ -1925,7 +1925,7 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to read in cgsem_wait errno=%d (%s %s():%d)", errno, file, func, line);
+		applog(LOG_WARNING, "Failed to read errno=%d" INFMTFFL, errno, file, func, line);
 }
 
 void _cgsem_destroy(cgsem_t *cgsem)
@@ -1938,19 +1938,19 @@ void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int l
 {
 	int ret;
 	if ((ret = sem_init(cgsem, 0, 0)))
-		quit(1, "Failed to sem_init in cgsem_init ret=%d errno=%d (%s %s():%d)", ret, errno, file, func, line);
+		quitfrom(1, file, func, line, "Failed to sem_init ret=%d errno=%d", ret, errno);
 }
 
 void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_post(cgsem)))
-		quit(1, "Failed to sem_post in cgsem_post errno=%d cgsem=0x%p (%s %s():%d)", errno, cgsem, file, func, line);
+		quitfrom(1, file, func, line, "Failed to sem_post errno=%d cgsem=0x%p", errno, cgsem);
 }
 
 void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_wait(cgsem)))
-		quit(1, "Failed to sem_wait in cgsem_wait errno=%d cgsem=0x%p (%s %s():%d)", errno, cgsem, file, func, line);
+		quitfrom(1, file, func, line, "Failed to sem_wait errno=%d cgsem=0x%p", errno, cgsem);
 }
 
 void _cgsem_destroy(cgsem_t *cgsem)

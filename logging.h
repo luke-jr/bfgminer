@@ -30,6 +30,8 @@ extern int opt_log_level;
 
 extern void _applog(int prio, const char *str);
 
+#define IN_FMT_FFL " in %s %s():%d"
+
 #define applog(prio, fmt, ...) do { \
 	if (opt_debug || prio != LOG_DEBUG) { \
 		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
@@ -44,6 +46,26 @@ extern void _applog(int prio, const char *str);
 	if (fmt) { \
 		char tmp42[LOGBUFSIZ]; \
 		snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+		_applog(LOG_ERR, tmp42); \
+	} \
+	_quit(status); \
+} while (0)
+
+#define quithere(status, fmt, ...) do { \
+	if (fmt) { \
+		char tmp42[LOGBUFSIZ]; \
+		snprintf(tmp42, sizeof(tmp42), fmt IN_FMT_FFL, \
+				##__VA_ARGS__, __FILE__, __func__, __LINE__); \
+		_applog(LOG_ERR, tmp42); \
+	} \
+	_quit(status); \
+} while (0)
+
+#define quitfrom(status, _file, _func, _line, fmt, ...) do { \
+	if (fmt) { \
+		char tmp42[LOGBUFSIZ]; \
+		snprintf(tmp42, sizeof(tmp42), fmt IN_FMT_FFL, \
+				##__VA_ARGS__, _file, _func, _line); \
 		_applog(LOG_ERR, tmp42); \
 	} \
 	_quit(status); \
