@@ -1718,6 +1718,11 @@ resend:
 	pool->sessionid = sessionid;
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
+	free(pool->nonce1bin);
+	pool->nonce1bin = calloc(pool->n1_len, 1);
+	if (unlikely(!pool->nonce1bin))
+		quit(1, "Failed to calloc pool->nonce1bin in initiate_stratum");
+	hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
 	pool->n2size = n2size;
 	cg_wunlock(&pool->data_lock);
 

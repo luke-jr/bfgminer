@@ -1154,6 +1154,7 @@ struct pool {
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
+	unsigned char *nonce1bin;
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
