@@ -1565,33 +1565,6 @@ void free_work(struct work *work)
 	free(work);
 }
 
-/* Generate a GBT coinbase from the existing GBT variables stored. Must be
- * entered under gbt_lock */
-static void __build_gbt_coinbase(struct pool *pool)
-{
-	unsigned char *coinbase;
-	int cbt_len, orig_len;
-	uint8_t *extra_len;
-	size_t cal_len;
-
-	cbt_len = strlen(pool->coinbasetxn) / 2;
-	pool->coinbase_len = cbt_len + 4;
-	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
-	cal_len = pool->coinbase_len + 1;
-	align_len(&cal_len);
-	coinbase = calloc(cal_len, 1);
-	hex2bin(coinbase, pool->coinbasetxn, 42);
-	extra_len = (uint8_t *)(coinbase + 41);
-	orig_len = *extra_len;
-	hex2bin(coinbase + 42, pool->coinbasetxn + 84, orig_len);
-	memcpy(coinbase + 42 + orig_len, &pool->nonce2, 4);
-	*extra_len += 4;
-	hex2bin(coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (orig_len * 2), cbt_len - orig_len - 42);
-	pool->nonce2++;
-	free(pool->gbt_coinbase);
-	pool->gbt_coinbase = coinbase;
-}
-
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
 
 /* Process transactions with GBT by storing the binary value of the first
@@ -1724,9 +1697,10 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
 		update_gbt(pool);
 
-	cg_ilock(&pool->gbt_lock);
-	__build_gbt_coinbase(pool);
-	cg_dlock(&pool->gbt_lock);
+	cg_wlock(&pool->gbt_lock);
+	memcpy(pool->gbt_coinbase + 42 + pool->orig_len, &pool->nonce2, 4);
+	pool->nonce2++;
+	cg_dwlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
 
 	memcpy(work->data, &pool->gbt_version, 4);
@@ -1784,6 +1758,9 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	bool submitold;
 	const char *bits;
 	const char *workid;
+	int cbt_len;
+	uint8_t *extra_len;
+	size_t cal_len;
 
 	previousblockhash = json_string_value(json_object_get(res_val, "previousblockhash"));
 	target = json_string_value(json_object_get(res_val, "target"));
@@ -1817,6 +1794,23 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	cg_wlock(&pool->gbt_lock);
 	free(pool->coinbasetxn);
 	pool->coinbasetxn = strdup(coinbasetxn);
+	cbt_len = strlen(pool->coinbasetxn) / 2;
+	pool->coinbase_len = cbt_len + 4;
+	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
+	cal_len = pool->coinbase_len + 1;
+	align_len(&cal_len);
+	free(pool->gbt_coinbase);
+	pool->gbt_coinbase = calloc(cal_len, 1);
+	if (unlikely(!pool->gbt_coinbase))
+		quit(1, "Failed to calloc pool gbt_coinbase in gbt_decode");
+	hex2bin(pool->gbt_coinbase, pool->coinbasetxn, 42);
+	extra_len = (uint8_t *)(pool->gbt_coinbase + 41);
+	pool->orig_len = *extra_len;
+	hex2bin(pool->gbt_coinbase + 42, pool->coinbasetxn + 84, pool->orig_len);
+	*extra_len += 4;
+	hex2bin(pool->gbt_coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (pool->orig_len * 2),
+		cbt_len - pool->orig_len - 42);
+
 	free(pool->longpollid);
 	pool->longpollid = strdup(longpollid);
 	free(pool->gbt_workid);
@@ -5597,24 +5591,23 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	size_t alloc_len;
 	int i;
 
-	/* Use intermediate lock to update the one pool variable */
-	cg_ilock(&pool->data_lock);
+	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
-	cg_dlock(&pool->data_lock);
+	cg_dwlock(&pool->data_lock);
 	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
 	if (unlikely(!coinbase))
 		quit(1, "Failed to calloc coinbase in gen_stratum_work");
-	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
-	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
+	memcpy(coinbase, pool->swork.cb1, pool->swork.cb1_len);
+	memcpy(coinbase + pool->swork.cb1_len, pool->nonce1bin, pool->n1_len);
 	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
+	memcpy(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.cb2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, pool->swork.cb_len);

@@ -754,17 +754,28 @@ static inline void rw_unlock(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_unlock(lock)))
 		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
-	sched_yield();
+}
+
+static inline void rd_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
+static inline void wr_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
 }
 
 static inline void rd_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void wr_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void mutex_init(pthread_mutex_t *lock)
@@ -818,6 +829,14 @@ static inline void cg_wlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	wr_lock(&lock->rwlock);
+}
+
+/* Downgrade write variant to a read lock */
+static inline void cg_dwlock(cglock_t *lock)
+{
+	wr_unlock_noyield(&lock->rwlock);
+	rd_lock(&lock->rwlock);
+	mutex_unlock_noyield(&lock->mutex);
 }
 
 /* Downgrade intermediate variant to a read lock */
@@ -958,11 +977,13 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MIN_INTENSITY_STR (opt_scrypt ? MIN_SCRYPT_INTENSITY_STR : MIN_SHA_INTENSITY_STR)
 #define MAX_INTENSITY (opt_scrypt ? MAX_SCRYPT_INTENSITY : MAX_SHA_INTENSITY)
 #define MAX_INTENSITY_STR (opt_scrypt ? MAX_SCRYPT_INTENSITY_STR : MAX_SHA_INTENSITY_STR)
+#define MAX_GPU_INTENSITY MAX_SCRYPT_INTENSITY
 #else
 #define MIN_INTENSITY MIN_SHA_INTENSITY
 #define MIN_INTENSITY_STR MIN_SHA_INTENSITY_STR
 #define MAX_INTENSITY MAX_SHA_INTENSITY
 #define MAX_INTENSITY_STR MAX_SHA_INTENSITY_STR
+#define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
 #endif
 
 extern bool hotplug_mode;
@@ -1066,6 +1087,8 @@ struct stratum_work {
 	char *nbit;
 	char *ntime;
 	bool clean;
+	unsigned char *cb1;
+	unsigned char *cb2;
 
 	size_t cb1_len;
 	size_t cb2_len;
@@ -1152,6 +1175,7 @@ struct pool {
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
+	unsigned char *nonce1bin;
 	size_t n1_len;
 	uint32_t nonce2;
 	int n2size;
@@ -1183,6 +1207,8 @@ struct pool {
 	unsigned char *txn_hashes;
 	int gbt_txns;
 	int coinbase_len;
+	int orig_len;
+
 	struct timeval tv_lastwork;
 };
 
