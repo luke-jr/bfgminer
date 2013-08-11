@@ -1724,9 +1724,9 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	if (now.tv_sec - pool->tv_lastwork.tv_sec > 60)
 		update_gbt(pool);
 
-	cg_ilock(&pool->gbt_lock);
+	cg_wlock(&pool->gbt_lock);
 	__build_gbt_coinbase(pool);
-	cg_dlock(&pool->gbt_lock);
+	cg_dwlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
 
 	memcpy(work->data, &pool->gbt_version, 4);
@@ -5597,15 +5597,14 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	size_t alloc_len;
 	int i;
 
-	/* Use intermediate lock to update the one pool variable */
-	cg_ilock(&pool->data_lock);
+	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
-	cg_dlock(&pool->data_lock);
+	cg_dwlock(&pool->data_lock);
 	alloc_len = pool->swork.cb_len;
 	align_len(&alloc_len);
 	coinbase = calloc(alloc_len, 1);
