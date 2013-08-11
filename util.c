@@ -1915,7 +1915,7 @@ void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int l
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to write errno=%d" INFMTFFL, errno, file, func, line);
+		applog(LOG_WARNING, "Failed to write errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
 void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
@@ -1925,7 +1925,7 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to read errno=%d" INFMTFFL, errno, file, func, line);
+		applog(LOG_WARNING, "Failed to read errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
 void _cgsem_destroy(cgsem_t *cgsem)
