@@ -25,40 +25,6 @@
 
 struct device_drv bf1_drv;
 
-struct bitfury_payload
-{
-	unsigned char midstate[32];
-	unsigned int junk[8];
-	unsigned m7;
-	unsigned ntime;
-	unsigned nbits;
-	unsigned nnonce;
-};
-
-static inline void flip80(void *dest_p, const void *src_p)
-{
-	uint32_t *dest = dest_p;
-	const uint32_t *src = src_p;
-	int i;
-
-	for (i = 0; i < 20; i++)
-		dest[i] = swab32(src[i]);
-}
-
-void work_to_payload(struct bitfury_payload *p, struct work *w) {
-	unsigned char flipped_data[80];
-
-	memset(p, 0, sizeof(struct bitfury_payload));
-	flip80(flipped_data, w->data);
-
-	memcpy(p->midstate, w->midstate, 32);
-	p->m7 = bswap_32(*(unsigned *)(flipped_data + 64));
-	p->ntime = bswap_32(*(unsigned *)(flipped_data + 68));
-	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
-	applog(LOG_INFO, "INFO nonc: %08x bitfury_scanHash MS0: %08x, ", p->nnonce, ((unsigned int *)p->midstate)[0]);
-	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
-}
-
 //------------------------------------------------------------------------------
 uint32_t bf1_decnonce(uint32_t in)
 {
@@ -257,18 +223,6 @@ static bool bf1_init(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_get_results(struct thr_info *thr, struct work *work)
-{
-	struct cgpu_info *board = thr->cgpu;
-	struct BF1Info *info = (struct BF1Info *)board->device_data;
-
-	info->rx_len = serial_read(board->device_fd, info->rx_buffer, sizeof(info->rx_buffer));
-	applog(LOG_INFO, "Length: %d", info->rx_len);
-
-	job_results_fetched(thr);
-}
-
-//------------------------------------------------------------------------------
 static bool duplicate(uint32_t *results, uint32_t size, uint32_t test_nonce)
 {
 	for(uint32_t i=0; i<size; i++)
@@ -334,14 +288,6 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 			submit_nonce(thr, work, nonce+0x400000);
 		}
 	}
-}
-
-//------------------------------------------------------------------------------
-static bool bf1_work_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t nonce)
-{
-	work->blk.nonce = 0xFFFFFFFFUL;
-
-	return true;
 }
 
 //------------------------------------------------------------------------------
@@ -443,6 +389,13 @@ static void bf1_shutdown(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
+static void bf1_identify(struct cgpu_info *cgpu)
+{
+	char buf[] = "L";
+	write(cgpu->device_fd, buf, sizeof(buf));
+}
+
+//------------------------------------------------------------------------------
 struct device_drv bf1_drv = {
 	.dname = "Bitfury BF1",
 	.name = "BF1",
@@ -451,14 +404,10 @@ struct device_drv bf1_drv = {
 	.drv_detect = bf1_detect,
 	.get_statline_before = bf1_statline_before,
 
+	.identify_device = bf1_identify,
+
 	.thread_init = bf1_init,
 	.thread_shutdown = bf1_shutdown,
-/*
-	.job_prepare = bf1_work_prepare,
-	.job_get_results = bf1_get_results,
-	.job_process_results = bf1_process_results,
-	.job_start = bf1_scanwork,
-*/
 
 	.poll = bf1_poll,
 
