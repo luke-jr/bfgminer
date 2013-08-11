@@ -1277,6 +1277,17 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* workpadding */	 96;
 	pool->swork.header_len = pool->swork.header_len * 2 + 1;
 	align_len(&pool->swork.header_len);
+
+	free(pool->swork.cb1);
+	free(pool->swork.cb2);
+	pool->swork.cb1 = calloc(pool->swork.cb1_len, 1);
+	if (unlikely(!pool->swork.cb1))
+		quit(1, "Failed to calloc swork cb1 in parse_notify");
+	hex2bin(pool->swork.cb1, pool->swork.coinbase1, pool->swork.cb1_len);
+	pool->swork.cb2 = calloc(pool->swork.cb2_len, 1);
+	if (unlikely(!pool->swork.cb2))
+		quit(1, "Failed to calloc swork cb2 in parse_notify");
+	hex2bin(pool->swork.cb2, pool->swork.coinbase2, pool->swork.cb2_len);
 	cg_wunlock(&pool->data_lock);
 
 	if (opt_protocol) {

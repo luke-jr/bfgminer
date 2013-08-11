@@ -5611,10 +5611,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	coinbase = calloc(alloc_len, 1);
 	if (unlikely(!coinbase))
 		quit(1, "Failed to calloc coinbase in gen_stratum_work");
-	hex2bin(coinbase, pool->swork.coinbase1, pool->swork.cb1_len);
+	memcpy(coinbase, pool->swork.cb1, pool->swork.cb1_len);
 	hex2bin(coinbase + pool->swork.cb1_len, pool->nonce1, pool->n1_len);
 	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
-	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.coinbase2, pool->swork.cb2_len);
+	memcpy(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.cb2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, pool->swork.cb_len);

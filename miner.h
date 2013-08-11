@@ -1066,6 +1066,8 @@ struct stratum_work {
 	char *nbit;
 	char *ntime;
 	bool clean;
+	unsigned char *cb1;
+	unsigned char *cb2;
 
 	size_t cb1_len;
 	size_t cb2_len;
