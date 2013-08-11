@@ -715,16 +715,24 @@ endian_flip128(void __maybe_unused *dest_p, const void __maybe_unused *src_p)
 
 extern void _quit(int status);
 
-static inline void mutex_lock(pthread_mutex_t *lock)
+#define mutex_lock(_lock) _mutex_lock(_lock, __FILE__, __func__, __LINE__) 
+#define mutex_unlock_noyield(_lock) _mutex_unlock_noyield(_lock, __FILE__, __func__, __LINE__) 
+#define wr_lock(_lock) _wr_lock(_lock, __FILE__, __func__, __LINE__) 
+#define rd_lock(_lock) _rd_lock(_lock, __FILE__, __func__, __LINE__) 
+#define rw_unlock(_lock) _rw_unlock(_lock, __FILE__, __func__, __LINE__) 
+#define mutex_init(_lock) _mutex_init(_lock, __FILE__, __func__, __LINE__) 
+#define rwlock_init(_lock) _rwlock_init(_lock, __FILE__, __func__, __LINE__) 
+
+static inline void _mutex_lock(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_mutex_lock(lock)))
-		quit(1, "WTF MUTEX ERROR ON LOCK!");
+		quitfrom(1, file, func, line, "WTF MUTEX ERROR ON LOCK! errno=%d", errno);
 }
 
-static inline void mutex_unlock_noyield(pthread_mutex_t *lock)
+static inline void _mutex_unlock_noyield(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
-		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+		quitfrom(1, file, func, line, "WTF MUTEX ERROR ON UNLOCK! errno=%d", errno);
 }
 
 static inline void mutex_unlock(pthread_mutex_t *lock)
@@ -738,22 +746,22 @@ static inline int mutex_trylock(pthread_mutex_t *lock)
 	return pthread_mutex_trylock(lock);
 }
 
-static inline void wr_lock(pthread_rwlock_t *lock)
+static inline void _wr_lock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_wrlock(lock)))
-		quit(1, "WTF WRLOCK ERROR ON LOCK!");
+		quitfrom(1, file, func, line, "WTF WRLOCK ERROR ON LOCK! errno=%d", errno);
 }
 
-static inline void rd_lock(pthread_rwlock_t *lock)
+static inline void _rd_lock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_rdlock(lock)))
-		quit(1, "WTF RDLOCK ERROR ON LOCK!");
+		quitfrom(1, file, func, line, "WTF RDLOCK ERROR ON LOCK! errno=%d", errno);
 }
 
-static inline void rw_unlock(pthread_rwlock_t *lock)
+static inline void _rw_unlock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_unlock(lock)))
-		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
+		quitfrom(1, file, func, line, "WTF RWLOCK ERROR ON UNLOCK! errno=%d", errno);
 }
 
 static inline void rd_unlock_noyield(pthread_rwlock_t *lock)
@@ -778,16 +786,16 @@ static inline void wr_unlock(pthread_rwlock_t *lock)
 	sched_yield();
 }
 
-static inline void mutex_init(pthread_mutex_t *lock)
+static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_mutex_init(lock, NULL)))
-		quit(1, "Failed to pthread_mutex_init");
+		quitfrom(1, file, func, line, "Failed to pthread_mutex_init errno=%d", errno);
 }
 
-static inline void rwlock_init(pthread_rwlock_t *lock)
+static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
-		quit(1, "Failed to pthread_rwlock_init");
+		quitfrom(1, file, func, line, "Failed to pthread_rwlock_init errno=%d", errno);
 }
 
 /* cgminer locks, a write biased variant of rwlocks */
