@@ -1207,6 +1207,8 @@ struct pool {
 	unsigned char *txn_hashes;
 	int gbt_txns;
 	int coinbase_len;
+	int orig_len;
+
 	struct timeval tv_lastwork;
 };
 
