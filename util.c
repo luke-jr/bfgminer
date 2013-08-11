@@ -1282,11 +1282,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	free(pool->swork.cb2);
 	pool->swork.cb1 = calloc(pool->swork.cb1_len, 1);
 	if (unlikely(!pool->swork.cb1))
-		quit(1, "Failed to calloc swork cb1 in parse_notify");
+		quithere(1, "Failed to calloc swork cb1");
 	hex2bin(pool->swork.cb1, pool->swork.coinbase1, pool->swork.cb1_len);
 	pool->swork.cb2 = calloc(pool->swork.cb2_len, 1);
 	if (unlikely(!pool->swork.cb2))
-		quit(1, "Failed to calloc swork cb2 in parse_notify");
+		quithere(1, "Failed to calloc swork cb2");
 	hex2bin(pool->swork.cb2, pool->swork.coinbase2, pool->swork.cb2_len);
 	cg_wunlock(&pool->data_lock);
 
@@ -1721,7 +1721,7 @@ resend:
 	free(pool->nonce1bin);
 	pool->nonce1bin = calloc(pool->n1_len, 1);
 	if (unlikely(!pool->nonce1bin))
-		quit(1, "Failed to calloc pool->nonce1bin in initiate_stratum");
+		quithere(1, "Failed to calloc pool->nonce1bin");
 	hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
 	pool->n2size = n2size;
 	cg_wunlock(&pool->data_lock);
