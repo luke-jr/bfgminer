@@ -1552,7 +1552,7 @@ void clean_work(struct work *work)
 	free(work->job_id);
 	free(work->nonce2);
 	free(work->ntime);
-	free(work->gbt_coinbase);
+	free(work->coinbase);
 	free(work->nonce1);
 	memset(work, 0, sizeof(struct work));
 }
@@ -1710,7 +1710,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 
 	memcpy(work->target, pool->gbt_target, 32);
 
-	work->gbt_coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
+	work->coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
 
 	/* For encoding the block data on submission */
 	work->gbt_txns = pool->gbt_txns + 1;
@@ -1729,7 +1729,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		char *header = bin2hex(work->data, 128);
 
 		applog(LOG_DEBUG, "Generated GBT header %s", header);
-		applog(LOG_DEBUG, "Work coinbase %s", work->gbt_coinbase);
+		applog(LOG_DEBUG, "Work coinbase %s", work->coinbase);
 		free(header);
 	}
 
@@ -2557,7 +2557,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 		}
 		gbt_block = realloc_strcat(gbt_block, varint);
 		free(varint);
-		gbt_block = realloc_strcat(gbt_block, work->gbt_coinbase);
+		gbt_block = realloc_strcat(gbt_block, work->coinbase);
 
 		s = strdup("{\"id\": 0, \"method\": \"submitblock\", \"params\": [\"");
 		s = realloc_strcat(s, gbt_block);
@@ -3188,8 +3188,8 @@ void __copy_work(struct work *work, struct work *base_work)
 		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
-	if (base_work->gbt_coinbase)
-		work->gbt_coinbase = strdup(base_work->gbt_coinbase);
+	if (base_work->coinbase)
+		work->coinbase = strdup(base_work->coinbase);
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations

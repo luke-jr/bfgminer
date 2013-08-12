@@ -1261,7 +1261,7 @@ struct work {
 	char		*nonce1;
 
 	bool		gbt;
-	char		*gbt_coinbase;
+	char		*coinbase;
 	int		gbt_txns;
 
 	unsigned int	work_block;
