@@ -5586,33 +5586,23 @@ void set_target(unsigned char *dest_target, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	unsigned char merkle_root[32], merkle_sha[64];
 	char *header, *merkle_hash;
 	uint32_t *data32, *swap32;
-	size_t alloc_len;
 	int i;
 
 	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
+	hex2bin(pool->coinbase + pool->nonce2_offset, work->nonce2, pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dwlock(&pool->data_lock);
-	alloc_len = pool->swork.cb_len;
-	align_len(&alloc_len);
-	coinbase = calloc(alloc_len, 1);
-	if (unlikely(!coinbase))
-		quit(1, "Failed to calloc coinbase in gen_stratum_work");
-	memcpy(coinbase, pool->swork.cb1, pool->swork.cb1_len);
-	memcpy(coinbase + pool->swork.cb1_len, pool->nonce1bin, pool->n1_len);
-	hex2bin(coinbase + pool->nonce2_offset, work->nonce2, pool->n2size);
-	memcpy(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.cb2, pool->swork.cb2_len);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, pool->swork.cb_len);
-	free(coinbase);
+	gen_hash(pool->coinbase, merkle_root, pool->swork.cb_len);
 	memcpy(merkle_sha, merkle_root, 32);
 	for (i = 0; i < pool->swork.merkles; i++) {
 		unsigned char merkle_bin[32];

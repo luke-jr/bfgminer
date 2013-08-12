@@ -1088,20 +1088,13 @@ enum pool_enable {
 struct stratum_work {
 	char *job_id;
 	char *prev_hash;
-	char *coinbase1;
-	char *coinbase2;
 	char **merkle;
 	char *bbversion;
 	char *nbit;
 	char *ntime;
 	bool clean;
-	unsigned char *cb1;
-	unsigned char *cb2;
 
-	size_t cb1_len;
-	size_t cb2_len;
 	size_t cb_len;
-
 	size_t header_len;
 	int merkles;
 	double diff;

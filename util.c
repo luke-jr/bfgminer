@@ -1200,6 +1200,8 @@ static char *json_array_string(json_t *val, unsigned int entry)
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	size_t cb1_len, cb2_len, alloc_len;
+	unsigned char *cb1, *cb2;
 	bool clean, ret = false;
 	int merkles, i;
 	json_t *arr;
@@ -1241,23 +1243,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
 	free(pool->swork.prev_hash);
-	free(pool->swork.coinbase1);
-	free(pool->swork.coinbase2);
 	free(pool->swork.bbversion);
 	free(pool->swork.nbit);
 	free(pool->swork.ntime);
 	pool->swork.job_id = job_id;
 	pool->swork.prev_hash = prev_hash;
-	pool->swork.coinbase1 = coinbase1;
-	pool->swork.cb1_len = strlen(coinbase1) / 2;
-	pool->swork.coinbase2 = coinbase2;
-	pool->swork.cb2_len = strlen(coinbase2) / 2;
+	cb1_len = strlen(coinbase1) / 2;
+	cb2_len = strlen(coinbase2) / 2;
 	pool->swork.bbversion = bbversion;
 	pool->swork.nbit = nbit;
 	pool->swork.ntime = ntime;
 	pool->swork.clean = clean;
-	pool->swork.cb_len = pool->swork.cb1_len + pool->n1_len + pool->n2size + pool->swork.cb2_len;
-	pool->nonce2_offset = pool->swork.cb1_len + pool->n1_len;
+	alloc_len = pool->swork.cb_len = cb1_len + pool->n1_len + pool->n2size + cb2_len;
+	pool->nonce2_offset = cb1_len + pool->n1_len;
 
 	for (i = 0; i < pool->swork.merkles; i++)
 		free(pool->swork.merkle[i]);
@@ -1279,16 +1277,22 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.header_len = pool->swork.header_len * 2 + 1;
 	align_len(&pool->swork.header_len);
 
-	free(pool->swork.cb1);
-	free(pool->swork.cb2);
-	pool->swork.cb1 = calloc(pool->swork.cb1_len, 1);
-	if (unlikely(!pool->swork.cb1))
-		quithere(1, "Failed to calloc swork cb1");
-	hex2bin(pool->swork.cb1, pool->swork.coinbase1, pool->swork.cb1_len);
-	pool->swork.cb2 = calloc(pool->swork.cb2_len, 1);
-	if (unlikely(!pool->swork.cb2))
-		quithere(1, "Failed to calloc swork cb2");
-	hex2bin(pool->swork.cb2, pool->swork.coinbase2, pool->swork.cb2_len);
+	cb1 = calloc(cb1_len, 1);
+	if (unlikely(!cb1))
+		quithere(1, "Failed to calloc cb1 in parse_notify");
+	hex2bin(cb1, coinbase1, cb1_len);
+	cb2 = calloc(cb2_len, 1);
+	if (unlikely(!cb2))
+		quithere(1, "Failed to calloc cb2 in parse_notify");
+	hex2bin(cb2, coinbase2, cb2_len);
+	free(pool->coinbase);
+	align_len(&alloc_len);
+	pool->coinbase = calloc(alloc_len, 1);
+	if (unlikely(!pool->coinbase))
+		quit(1, "Failed to calloc pool coinbase in parse_notify");
+	memcpy(pool->coinbase, cb1, cb1_len);
+	memcpy(pool->coinbase + cb1_len, pool->nonce1bin, pool->n1_len);
+	memcpy(pool->coinbase + cb1_len + pool->n1_len + pool->n2size, cb2, cb2_len);
 	cg_wunlock(&pool->data_lock);
 
 	if (opt_protocol) {
@@ -1303,6 +1307,10 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		applog(LOG_DEBUG, "ntime: %s", ntime);
 		applog(LOG_DEBUG, "clean: %s", clean ? "yes" : "no");
 	}
+	free(coinbase1);
+	free(coinbase2);
+	free(cb1);
+	free(cb2);
 
 	/* A notify message is the closest stratum gets to a getwork */
 	pool->getwork_requested++;
