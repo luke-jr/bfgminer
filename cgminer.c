@@ -1698,7 +1698,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		update_gbt(pool);
 
 	cg_wlock(&pool->gbt_lock);
-	memcpy(pool->gbt_coinbase + 42 + pool->orig_len, &pool->nonce2, 4);
+	memcpy(pool->gbt_coinbase + pool->nonce2_offset, &pool->nonce2, 4);
 	pool->nonce2++;
 	cg_dwlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
@@ -1758,7 +1758,7 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	bool submitold;
 	const char *bits;
 	const char *workid;
-	int cbt_len;
+	int cbt_len, orig_len;
 	uint8_t *extra_len;
 	size_t cal_len;
 
@@ -1805,11 +1805,12 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 		quit(1, "Failed to calloc pool gbt_coinbase in gbt_decode");
 	hex2bin(pool->gbt_coinbase, pool->coinbasetxn, 42);
 	extra_len = (uint8_t *)(pool->gbt_coinbase + 41);
-	pool->orig_len = *extra_len;
-	hex2bin(pool->gbt_coinbase + 42, pool->coinbasetxn + 84, pool->orig_len);
+	orig_len = *extra_len;
+	hex2bin(pool->gbt_coinbase + 42, pool->coinbasetxn + 84, orig_len);
 	*extra_len += 4;
-	hex2bin(pool->gbt_coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (pool->orig_len * 2),
-		cbt_len - pool->orig_len - 42);
+	hex2bin(pool->gbt_coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (orig_len * 2),
+		cbt_len - orig_len - 42);
+	pool->nonce2_offset = orig_len + 42;
 
 	free(pool->longpollid);
 	pool->longpollid = strdup(longpollid);
@@ -5606,7 +5607,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		quit(1, "Failed to calloc coinbase in gen_stratum_work");
 	memcpy(coinbase, pool->swork.cb1, pool->swork.cb1_len);
 	memcpy(coinbase + pool->swork.cb1_len, pool->nonce1bin, pool->n1_len);
-	hex2bin(coinbase + pool->swork.cb1_len + pool->n1_len, work->nonce2, pool->n2size);
+	hex2bin(coinbase + pool->nonce2_offset, work->nonce2, pool->n2size);
 	memcpy(coinbase + pool->swork.cb1_len + pool->n1_len + pool->n2size, pool->swork.cb2, pool->swork.cb2_len);
 
 	/* Generate merkle root */

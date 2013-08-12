@@ -1182,6 +1182,7 @@ struct pool {
 	char *sockbuf;
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
+	char *stratum_coinbase;
 	char *nonce1;
 	unsigned char *nonce1bin;
 	size_t n1_len;
@@ -1215,8 +1216,9 @@ struct pool {
 	unsigned char *txn_hashes;
 	int gbt_txns;
 	int coinbase_len;
-	int orig_len;
 
+	/* Shared by both stratum & GBT */
+	int nonce2_offset;
 	struct timeval tv_lastwork;
 };
 

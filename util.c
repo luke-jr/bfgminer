@@ -1257,6 +1257,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.ntime = ntime;
 	pool->swork.clean = clean;
 	pool->swork.cb_len = pool->swork.cb1_len + pool->n1_len + pool->n2size + pool->swork.cb2_len;
+	pool->nonce2_offset = pool->swork.cb1_len + pool->n1_len;
 
 	for (i = 0; i < pool->swork.merkles; i++)
 		free(pool->swork.merkle[i]);
