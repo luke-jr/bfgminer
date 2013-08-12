@@ -1720,7 +1720,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	total_getworks++;
 
 	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || timer_isset(&pool->swork.tv_transparency))
-		if (pool->stratum_init)
+		if (pool->probed)
 			stratum_probe_transparency(pool);
 
 	ret = true;
