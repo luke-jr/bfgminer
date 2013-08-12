@@ -1258,11 +1258,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->nonce2_offset = cb1_len + pool->n1_len;
 
 	for (i = 0; i < pool->swork.merkles; i++)
-		free(pool->swork.merkle[i]);
+		free(pool->swork.merkle_bin[i]);
 	if (merkles) {
-		pool->swork.merkle = realloc(pool->swork.merkle, sizeof(char *) * merkles + 1);
-		for (i = 0; i < merkles; i++)
-			pool->swork.merkle[i] = json_array_string(arr, i);
+		pool->swork.merkle_bin = realloc(pool->swork.merkle_bin,
+						 sizeof(char *) * merkles + 1);
+		for (i = 0; i < merkles; i++) {
+			char *merkle = json_array_string(arr, i);
+
+			pool->swork.merkle_bin[i] = malloc(32);
+			if (unlikely(!pool->swork.merkle_bin[i]))
+				quit(1, "Failed to malloc pool swork merkle_bin");
+			hex2bin(pool->swork.merkle_bin[i], merkle, 32);
+			free(merkle);
+		}
 	}
 	pool->swork.merkles = merkles;
 	if (clean)
@@ -1300,8 +1308,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
 		applog(LOG_DEBUG, "coinbase1: %s", coinbase1);
 		applog(LOG_DEBUG, "coinbase2: %s", coinbase2);
-		for (i = 0; i < merkles; i++)
-			applog(LOG_DEBUG, "merkle%d: %s", i, pool->swork.merkle[i]);
 		applog(LOG_DEBUG, "bbversion: %s", bbversion);
 		applog(LOG_DEBUG, "nbit: %s", nbit);
 		applog(LOG_DEBUG, "ntime: %s", ntime);

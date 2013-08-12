@@ -1088,7 +1088,7 @@ enum pool_enable {
 struct stratum_work {
 	char *job_id;
 	char *prev_hash;
-	char **merkle;
+	unsigned char **merkle_bin;
 	char *bbversion;
 	char *nbit;
 	char *ntime;
