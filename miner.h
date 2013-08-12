@@ -1212,6 +1212,8 @@ struct pool {
 	/* Shared by both stratum & GBT */
 	unsigned char *coinbase;
 	int nonce2_offset;
+	unsigned char header_bin[128];
+	int merkle_offset;
 
 	struct timeval tv_lastwork;
 };

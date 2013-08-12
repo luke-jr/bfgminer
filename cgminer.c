@@ -5588,7 +5588,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
 	uint32_t *data32, *swap32, nonce2;
-	char *header, *merkle_hash;
 	size_t nonce2_len;
 	int i;
 
@@ -5613,20 +5612,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
-	merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 
-	header = calloc(pool->swork.header_len, 1);
-	if (unlikely(!header))
-		quit(1, "Failed to calloc header in gen_stratum_work");
-	snprintf(header, pool->swork.header_len,
-		"%s%s%s%s%s%s%s",
-		pool->swork.bbversion,
-		pool->swork.prev_hash,
-		merkle_hash,
-		pool->swork.ntime,
-		pool->swork.nbit,
-		"00000000", /* nonce */
-		workpadding);
+	/* Copy the data template from header_bin */
+	memcpy(work->data, pool->header_bin, 128);
+	memcpy(work->data + pool->merkle_offset, merkle_root, 32);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -5646,18 +5635,19 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		quit(1, "Failed to calloc work nonce2 in gen_stratum_work");
 	__bin2hex(work->nonce2, (const unsigned char *)&nonce2, sizeof(uint32_t));
 
-	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
-	applog(LOG_DEBUG, "Generated stratum header %s", header);
-	applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
+	if (opt_debug) {
+		char *header, *merkle_hash;
 
-	free(merkle_hash);
+		header = bin2hex(work->data, 128);
+		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
+		applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
+		free(header);
+		free(merkle_hash);
+	}
 
-	/* Convert hex data to binary data for work */
-	if (unlikely(!hex2bin(work->data, header, 128)))
-		quit(1, "Failed to convert header to data in gen_stratum_work");
-	free(header);
 	calc_midstate(work);
-
 	set_target(work->target, work->sdiff);
 
 	local_work++;

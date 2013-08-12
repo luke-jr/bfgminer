@@ -1203,9 +1203,12 @@ static char *json_array_string(json_t *val, unsigned int entry)
 	return NULL;
 }
 
+static char *blank_merkel = "0000000000000000000000000000000000000000000000000000000000000000";
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
-	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit,
+	     *ntime, *header;
 	size_t cb1_len, cb2_len, alloc_len;
 	unsigned char *cb1, *cb2;
 	bool clean, ret = false;
@@ -1281,15 +1284,29 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
-	pool->swork.header_len = strlen(pool->swork.bbversion) +
-				 strlen(pool->swork.prev_hash) +
+	pool->merkle_offset = strlen(pool->swork.bbversion) +
+			      strlen(pool->swork.prev_hash);
+	pool->swork.header_len = pool->merkle_offset +
+	/* merkle_hash */	 32 +
 				 strlen(pool->swork.ntime) +
 				 strlen(pool->swork.nbit) +
-	/* merkle_hash */	 32 +
 	/* nonce */		 8 +
 	/* workpadding */	 96;
+	pool->merkle_offset /= 2;
 	pool->swork.header_len = pool->swork.header_len * 2 + 1;
 	align_len(&pool->swork.header_len);
+	header = alloca(pool->swork.header_len);
+	snprintf(header, pool->swork.header_len,
+		"%s%s%s%s%s%s%s",
+		pool->swork.bbversion,
+		pool->swork.prev_hash,
+		blank_merkel,
+		pool->swork.ntime,
+		pool->swork.nbit,
+		"00000000", /* nonce */
+		workpadding);
+	if (unlikely(!hex2bin(pool->header_bin, header, 128)))
+		quit(1, "Failed to convert header to header_bin in parse_notify");
 
 	cb1 = calloc(cb1_len, 1);
 	if (unlikely(!cb1))
