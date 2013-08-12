@@ -564,7 +564,7 @@ char *get_proxy(char *url, struct pool *pool)
 			len = split - url;
 			pool->rpc_proxy = malloc(1 + len - plen);
 			if (!(pool->rpc_proxy))
-				quit(1, "Failed to malloc rpc_proxy");
+				quithere(1, "Failed to malloc rpc_proxy");
 
 			strcpy(pool->rpc_proxy, url + plen);
 			pool->rpc_proxytype = proxynames[i].proxytype;
@@ -590,7 +590,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 		slen += 4 - (slen % 4);
 	s = calloc(slen, 1);
 	if (unlikely(!s))
-		quit(1, "Failed to calloc in bin2hex");
+		quithere(1, "Failed to calloc");
 
 	for (i = 0; i < len; i++)
 		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
@@ -1090,7 +1090,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %d", new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
-		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+		quithere(1, "Failed to realloc pool sockbuf");
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
@@ -1282,11 +1282,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	free(pool->swork.cb2);
 	pool->swork.cb1 = calloc(pool->swork.cb1_len, 1);
 	if (unlikely(!pool->swork.cb1))
-		quit(1, "Failed to calloc swork cb1 in parse_notify");
+		quithere(1, "Failed to calloc swork cb1");
 	hex2bin(pool->swork.cb1, pool->swork.coinbase1, pool->swork.cb1_len);
 	pool->swork.cb2 = calloc(pool->swork.cb2_len, 1);
 	if (unlikely(!pool->swork.cb2))
-		quit(1, "Failed to calloc swork cb2 in parse_notify");
+		quithere(1, "Failed to calloc swork cb2");
 	hex2bin(pool->swork.cb2, pool->swork.coinbase2, pool->swork.cb2_len);
 	cg_wunlock(&pool->data_lock);
 
@@ -1578,7 +1578,7 @@ static bool setup_stratum_socket(struct pool *pool)
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
 		if (!pool->sockbuf)
-			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+			quithere(1, "Failed to calloc pool sockbuf");
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
@@ -1721,7 +1721,7 @@ resend:
 	free(pool->nonce1bin);
 	pool->nonce1bin = calloc(pool->n1_len, 1);
 	if (unlikely(!pool->nonce1bin))
-		quit(1, "Failed to calloc pool->nonce1bin in initiate_stratum");
+		quithere(1, "Failed to calloc pool->nonce1bin");
 	hex2bin(pool->nonce1bin, pool->nonce1, pool->n1_len);
 	pool->n2size = n2size;
 	cg_wunlock(&pool->data_lock);
@@ -1830,7 +1830,7 @@ void *realloc_strcat(char *ptr, char *s)
 
 	ret = malloc(len);
 	if (unlikely(!ret))
-		quit(1, "Failed to malloc in realloc_strcat");
+		quithere(1, "Failed to malloc");
 
 	sprintf(ret, "%s%s", ptr, s);
 	free(ptr);
@@ -1849,14 +1849,14 @@ void *str_text(char *ptr)
 		ret = strdup("(null)");
 
 		if (unlikely(!ret))
-			quit(1, "Failed to malloc in text_str null");
+			quithere(1, "Failed to malloc null");
 	}
 
 	uptr = (unsigned char *)ptr;
 
 	ret = txt = malloc(strlen(ptr)*4+5); // Guaranteed >= needed
 	if (unlikely(!txt))
-		quit(1, "Failed to malloc in text_str txt");
+		quithere(1, "Failed to malloc txt");
 
 	do {
 		if (*uptr < ' ' || *uptr > '~') {
@@ -1890,12 +1890,12 @@ void RenameThread(const char* name)
  * that support them and for apple which does not. We use a single byte across
  * a pipe to emulate semaphore behaviour there. */
 #ifdef __APPLE__
-void cgsem_init(cgsem_t *cgsem)
+void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	int flags, fd, i;
 
 	if (pipe(cgsem->pipefd) == -1)
-		quit(1, "Failed pipe in cgsem_init");
+		quitfrom(1, file, func, line, "Failed pipe errno=%d", errno);
 
 	/* Make the pipes FD_CLOEXEC to allow them to close should we call
 	 * execv on restart. */
@@ -1904,55 +1904,56 @@ void cgsem_init(cgsem_t *cgsem)
 		flags = fcntl(fd, F_GETFD, 0);
 		flags |= FD_CLOEXEC;
 		if (fcntl(fd, F_SETFD, flags) == -1)
-			quit(1, "Failed to fcntl in cgsem_init");
+			quitfrom(1, file, func, line, "Failed to fcntl errno=%d", errno);
 	}
 }
 
-void cgsem_post(cgsem_t *cgsem)
+void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	const char buf = 1;
 	int ret;
 
 	ret = write(cgsem->pipefd[1], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to write in cgsem_post");
+		applog(LOG_WARNING, "Failed to write errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
-void cgsem_wait(cgsem_t *cgsem)
+void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	char buf;
 	int ret;
 
 	ret = read(cgsem->pipefd[0], &buf, 1);
 	if (unlikely(ret == 0))
-		applog(LOG_WARNING, "Failed to read in cgsem_wait");
+		applog(LOG_WARNING, "Failed to read errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
-void cgsem_destroy(cgsem_t *cgsem)
+void _cgsem_destroy(cgsem_t *cgsem)
 {
 	close(cgsem->pipefd[1]);
 	close(cgsem->pipefd[0]);
 }
 #else
-void cgsem_init(cgsem_t *cgsem)
+void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
-	if (sem_init(cgsem, 0, 0))
-		quit(1, "Failed to sem_init in cgsem_init");
+	int ret;
+	if ((ret = sem_init(cgsem, 0, 0)))
+		quitfrom(1, file, func, line, "Failed to sem_init ret=%d errno=%d", ret, errno);
 }
 
-void cgsem_post(cgsem_t *cgsem)
+void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_post(cgsem)))
-		quit(1, "Failed to sem_post in cgsem_post");
+		quitfrom(1, file, func, line, "Failed to sem_post errno=%d cgsem=0x%p", errno, cgsem);
 }
 
-void cgsem_wait(cgsem_t *cgsem)
+void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
 	if (unlikely(sem_wait(cgsem)))
-		quit(1, "Failed to sem_wait in cgsem_wait");
+		quitfrom(1, file, func, line, "Failed to sem_wait errno=%d cgsem=0x%p", errno, cgsem);
 }
 
-void cgsem_destroy(cgsem_t *cgsem)
+void _cgsem_destroy(cgsem_t *cgsem)
 {
 	sem_destroy(cgsem);
 }
