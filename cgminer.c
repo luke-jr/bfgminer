@@ -1625,7 +1625,7 @@ static unsigned char *__gbt_merkleroot(struct pool *pool)
 	if (unlikely(!merkle_hash))
 		quit(1, "Failed to calloc merkle_hash in __gbt_merkleroot");
 
-	gen_hash(pool->gbt_coinbase, merkle_hash, pool->coinbase_len);
+	gen_hash(pool->coinbase, merkle_hash, pool->coinbase_len);
 
 	if (pool->gbt_txns)
 		memcpy(merkle_hash + 32, pool->txn_hashes, pool->gbt_txns * 32);
@@ -1698,7 +1698,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 		update_gbt(pool);
 
 	cg_wlock(&pool->gbt_lock);
-	memcpy(pool->gbt_coinbase + pool->nonce2_offset, &pool->nonce2, 4);
+	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, 4);
 	pool->nonce2++;
 	cg_dwlock(&pool->gbt_lock);
 	merkleroot = __gbt_merkleroot(pool);
@@ -1710,7 +1710,7 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 
 	memcpy(work->target, pool->gbt_target, 32);
 
-	work->gbt_coinbase = bin2hex(pool->gbt_coinbase, pool->coinbase_len);
+	work->gbt_coinbase = bin2hex(pool->coinbase, pool->coinbase_len);
 
 	/* For encoding the block data on submission */
 	work->gbt_txns = pool->gbt_txns + 1;
@@ -1799,16 +1799,16 @@ static bool gbt_decode(struct pool *pool, json_t *res_val)
 	/* We add 4 bytes of extra data corresponding to nonce2 of stratum */
 	cal_len = pool->coinbase_len + 1;
 	align_len(&cal_len);
-	free(pool->gbt_coinbase);
-	pool->gbt_coinbase = calloc(cal_len, 1);
-	if (unlikely(!pool->gbt_coinbase))
-		quit(1, "Failed to calloc pool gbt_coinbase in gbt_decode");
-	hex2bin(pool->gbt_coinbase, pool->coinbasetxn, 42);
-	extra_len = (uint8_t *)(pool->gbt_coinbase + 41);
+	free(pool->coinbase);
+	pool->coinbase = calloc(cal_len, 1);
+	if (unlikely(!pool->coinbase))
+		quit(1, "Failed to calloc pool coinbase in gbt_decode");
+	hex2bin(pool->coinbase, pool->coinbasetxn, 42);
+	extra_len = (uint8_t *)(pool->coinbase + 41);
 	orig_len = *extra_len;
-	hex2bin(pool->gbt_coinbase + 42, pool->coinbasetxn + 84, orig_len);
+	hex2bin(pool->coinbase + 42, pool->coinbasetxn + 84, orig_len);
 	*extra_len += 4;
-	hex2bin(pool->gbt_coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (orig_len * 2),
+	hex2bin(pool->coinbase + 42 + *extra_len, pool->coinbasetxn + 84 + (orig_len * 2),
 		cbt_len - orig_len - 42);
 	pool->nonce2_offset = orig_len + 42;
 
