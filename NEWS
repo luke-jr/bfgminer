@@ -1,5 +1,50 @@
-Version 3.3.2 - 9th August 2013
+Version 3.3.3 - 13th August 2013
 
+-  Only perform the bin2hex on nonce2 data if it's required for stratum 
+submission, thereby removing the last conversion of that type from stratum work 
+generation.
+-  Create a work data template when receiving stratum notification, allowing a 
+simple memcpy of the merkle root avoiding more hex2bin conversions on each work 
+generation.
+-  Export the workpadding char in miner.h
+-  Avoid a potential overflow should a pool specify a large nonce2 length with 
+stratum.
+-  Avoid one more hex2bin in gen stratum work.
+-  Rename work gbt_coinbase to coinbase to be in line with pool variable name.
+-  Perform merkle bin hex2bin on stratum notify to avoid doing it on each work 
+generation.
+-  Reuse just the one pool coinbase variable in stratum, avoiding more string 
+functions and storage in gen_stratum_work on each work generation.
+-  Rename pool gbt_coinbase variable to coinbase to combine it with the stratum 
+coinbase data.
+-  Use a nonce2 offset variable for both gbt and stratum to consolidate 
+requirements on work generation.
+-  Merge pull request #474 from kanoi/master
+-  util.c update quit call for new functions
+-  use correct define for OSX in util.c
+-  miner.h inline semaphores increase information on failure
+-  util.c expand quit to show file/func/line
+-  Merge remote-tracking branch 'conman/master'
+-  Cache as much of the gbt coinbase as possible to avoid doing unnecessary 
+hex2bin conversion on every work generation with gbt.
+-  We should be using a cg_wlock initially in generating stratum and gbt work 
+before downgrading the lock.
+-  Add the ability to downgrade a write variant of the cglocks.
+-  Fix --scrypt being required before scrypt intensities on command line or not 
+working at all via config files.
+-  Cache the hex2bin of pool nonce1 in stratum, avoiding hex2bin on each work 
+generation.
+-  Cache the binary generation of coinbase1 and 2 on stratum, avoiding a hex2bin 
+of coinbase1 and 2 on each work generation.
+-  cgsem - increase information on failure
+-  avalon init write_sem before use
+
+
+-  3.3.2 - 9th August 2013
+
+-  Fix uninit variable warnings.
+-  usbutils - force check every combination
+-  Fix warning.
 - Recreate curses windows on windows when a device is hotplugged to allow window 
 resizing without crashing.
 - Update copyright notice.
