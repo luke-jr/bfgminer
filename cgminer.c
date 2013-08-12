@@ -1550,7 +1550,6 @@ static struct work *make_work(void)
 void clean_work(struct work *work)
 {
 	free(work->job_id);
-	free(work->nonce2);
 	free(work->ntime);
 	free(work->coinbase);
 	free(work->nonce1);
@@ -3184,8 +3183,6 @@ void __copy_work(struct work *work, struct work *base_work)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce1)
 		work->nonce1 = strdup(base_work->nonce1);
-	if (base_work->nonce2)
-		work->nonce2 = strdup(base_work->nonce2);
 	if (base_work->ntime)
 		work->ntime = strdup(base_work->ntime);
 	if (base_work->coinbase)
@@ -5154,9 +5151,9 @@ static void *stratum_sthread(void *userdata)
 	while (42) {
 		struct stratum_share *sshare;
 		uint32_t *hash32, nonce;
+		char *noncehex, *nonce2;
 		struct work *work;
 		bool submitted;
-		char *noncehex;
 		char s[1024];
 
 		if (unlikely(pool->removed))
@@ -5182,9 +5179,17 @@ static void *stratum_sthread(void *userdata)
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
 
+		/* nonce2 length can be bigger than uint32_t but we only use
+		 * the 4 bytes so avoid potential overflow if a pool has set a
+		 * large length by allocating the ram ourselves and using the
+		 * low level __bin2hex function. */
+		align_len(&work->nonce2_len);
+		nonce2 = alloca(work->nonce2_len);
+		__bin2hex(nonce2, (const unsigned char *)&work->nonce2, sizeof(uint32_t));
+
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, work->nonce2, work->ntime, noncehex, sshare->id);
+			pool->rpc_user, work->job_id, nonce2, work->ntime, noncehex, sshare->id);
 		free(noncehex);
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d",
@@ -5587,16 +5592,15 @@ void set_target(unsigned char *dest_target, double diff)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
-	uint32_t *data32, *swap32, nonce2;
-	size_t nonce2_len;
+	uint32_t *data32, *swap32;
 	int i;
 
 	cg_wlock(&pool->data_lock);
 
 	/* Update coinbase */
 	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, sizeof(uint32_t));
-	nonce2 = pool->nonce2++;
-	nonce2_len = pool->n2size;
+	work->nonce2 = pool->nonce2++;
+	work->nonce2_len = pool->n2size;
 
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dwlock(&pool->data_lock);
@@ -5627,14 +5631,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->ntime = strdup(pool->swork.ntime);
 	cg_runlock(&pool->data_lock);
 
-	/* nonce2 length can be bigger than uint32_t but we only use the 4
-	 * bytes so avoid potential overflow if a pool has set a large length */
-	align_len(&nonce2_len);
-	work->nonce2 = calloc(nonce2_len, 1);
-	if (unlikely(!work->nonce2))
-		quit(1, "Failed to calloc work nonce2 in gen_stratum_work");
-	__bin2hex(work->nonce2, (const unsigned char *)&nonce2, sizeof(uint32_t));
-
 	if (opt_debug) {
 		char *header, *merkle_hash;
 
@@ -5642,7 +5638,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 		applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %s ntime %s", work->job_id, work->nonce2, work->ntime);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %d ntime %s", work->job_id, work->nonce2, work->ntime);
 		free(header);
 		free(merkle_hash);
 	}

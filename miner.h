@@ -1258,7 +1258,8 @@ struct work {
 
 	bool		stratum;
 	char 		*job_id;
-	char		*nonce2;
+	uint32_t	nonce2;
+	size_t		nonce2_len;
 	char		*ntime;
 	double		sdiff;
 	char		*nonce1;
