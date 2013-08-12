@@ -5593,9 +5593,9 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	cg_wlock(&pool->data_lock);
 
-	/* Generate coinbase */
+	/* Update coinbase */
+	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, pool->n2size);
 	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
-	hex2bin(pool->coinbase + pool->nonce2_offset, work->nonce2, pool->n2size);
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
