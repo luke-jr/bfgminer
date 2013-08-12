@@ -1036,6 +1036,7 @@ extern char *current_fullhash;
 extern double current_diff;
 extern uint64_t best_diff;
 extern struct timeval block_timeval;
+extern char *workpadding;
 
 #ifdef HAVE_OPENCL
 typedef struct {
