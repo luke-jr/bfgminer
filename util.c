@@ -576,12 +576,19 @@ char *get_proxy(char *url, struct pool *pool)
 	return url;
 }
 
+void __bin2hex(char *s, const unsigned char *p, size_t len)
+{
+	int i;
+
+	for (i = 0; i < (int)len; i++)
+		sprintf(s + (i * 2), "%02x", (unsigned int)p[i]);
+}
+
 /* Returns a malloced array string of a binary value of arbitrary length. The
  * array is rounded up to a 4 byte size to appease architectures that need
  * aligned array  sizes */
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	unsigned int i;
 	ssize_t slen;
 	char *s;
 
@@ -592,8 +599,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 	if (unlikely(!s))
 		quithere(1, "Failed to calloc");
 
-	for (i = 0; i < len; i++)
-		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
+	__bin2hex(s, p, len);
 
 	return s;
 }

@@ -5587,16 +5587,17 @@ void set_target(unsigned char *dest_target, double diff)
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
 	unsigned char merkle_root[32], merkle_sha[64];
+	uint32_t *data32, *swap32, nonce2;
 	char *header, *merkle_hash;
-	uint32_t *data32, *swap32;
+	size_t nonce2_len;
 	int i;
 
 	cg_wlock(&pool->data_lock);
 
 	/* Update coinbase */
-	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, pool->n2size);
-	work->nonce2 = bin2hex((const unsigned char *)&pool->nonce2, pool->n2size);
-	pool->nonce2++;
+	memcpy(pool->coinbase + pool->nonce2_offset, &pool->nonce2, sizeof(uint32_t));
+	nonce2 = pool->nonce2++;
+	nonce2_len = pool->n2size;
 
 	/* Downgrade to a read lock to read off the pool variables */
 	cg_dwlock(&pool->data_lock);
@@ -5636,6 +5637,14 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->nonce1 = strdup(pool->nonce1);
 	work->ntime = strdup(pool->swork.ntime);
 	cg_runlock(&pool->data_lock);
+
+	/* nonce2 length can be bigger than uint32_t but we only use the 4
+	 * bytes so avoid potential overflow if a pool has set a large length */
+	align_len(&nonce2_len);
+	work->nonce2 = calloc(nonce2_len, 1);
+	if (unlikely(!work->nonce2))
+		quit(1, "Failed to calloc work nonce2 in gen_stratum_work");
+	__bin2hex(work->nonce2, (const unsigned char *)&nonce2, sizeof(uint32_t));
 
 	applog(LOG_DEBUG, "Generated stratum merkle %s", merkle_hash);
 	applog(LOG_DEBUG, "Generated stratum header %s", header);
