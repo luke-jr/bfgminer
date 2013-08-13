@@ -217,7 +217,7 @@ Options for both config file and command line:
 --socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
---temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
+--temp-cutoff <arg> Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-target <arg> Target temperature when automatically managing fan and clock speeds
 --text-only|-T      Disable ncurses formatted screen output

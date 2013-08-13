@@ -1692,8 +1692,8 @@ static struct opt_table opt_config_table[] = {
 			"Use system log for output messages (default: standard error)"),
 #endif
 	OPT_WITH_ARG("--temp-cutoff",
-		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
-		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
+		     set_temp_cutoff, NULL, &opt_cutofftemp,
+		     "Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list"),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
