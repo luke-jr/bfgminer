@@ -237,7 +237,6 @@ static inline bool avalon_cts(char c)
 static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 		       size_t bufsize, int timeout, int ep)
 {
-	struct avalon_info *info = avalon->device_data;
 	size_t total = 0, readsize = bufsize + 2;
 	char readbuf[AVALON_READBUF_SIZE];
 	int err, amount, ofs = 2, cp;
