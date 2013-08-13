@@ -2388,7 +2388,7 @@ retry:
 void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32
-#define WindowsErrorStr(e)  bfg_strerror(e, true)
+#define WindowsErrorStr(e)  bfg_strerror(e, BST_SOCKET)
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
