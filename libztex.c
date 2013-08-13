@@ -719,7 +719,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 			err = libztex_checkDevice(list[i]);
 			switch (err) {
 			case CHECK_ERROR:
-				applog(LOG_ERR, "Ztex: Can not check device: %s", libusb_error_name(err));
+				applog(LOG_ERR, "Ztex: Can not check device %ld", (long)i);
 				continue;
 			case CHECK_IS_NOT_ZTEX:
 				continue;
