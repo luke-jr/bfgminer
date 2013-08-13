@@ -228,6 +228,12 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_CPUNON 16
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
+#define MSG_ALRENAC 98
+#define MSG_ALRDISC 99
+#define MSG_CPUMRE 100
+#define MSG_CPUREN 101
+#define MSG_CPUDIS 102
+#define MSG_CPUREI 103
 #endif
 
 #define MSG_NUMGPU 20
@@ -422,6 +428,12 @@ struct CODES {
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
+ { SEVERITY_INFO,  MSG_ALRENAC,	PARAM_CPU,	"CPU %d already enabled" },
+ { SEVERITY_INFO,  MSG_ALRDISC,	PARAM_CPU,	"CPU %d already disabled" },
+ { SEVERITY_WARN,  MSG_CPUMRE,	PARAM_CPU,	"CPU %d must be restarted first" },
+ { SEVERITY_INFO,  MSG_CPUREN,	PARAM_CPU,	"CPU %d sent enable message" },
+ { SEVERITY_INFO,  MSG_CPUDIS,	PARAM_CPU,	"CPU %d set disable flag" },
+ { SEVERITY_INFO,  MSG_CPUREI,	PARAM_CPU,	"CPU %d restart attempted" },
 #endif
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMPGA,	PARAM_NONE,	"PGA count" },
@@ -2103,6 +2115,104 @@ static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		io_close(io_data);
 }
 
+#ifdef WANT_CPUMINE
+static void cpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	applog(LOG_DEBUG, "API: request to cpuenable cpuid %d %s",
+			id, cpus[id].proc_repr_ns);
+
+	if (cpus[id].deven != DEV_DISABLED) {
+		message(io_data, MSG_ALRENAC, id, NULL, isjson);
+		return;
+	}
+
+	if (cpus[id].status != LIFE_WELL)
+	{
+		message(io_data, MSG_CPUMRE, id, NULL, isjson);
+		return;
+	}
+	proc_enable(&cpus[id]);
+
+	message(io_data, MSG_CPUREN, id, NULL, isjson);
+}
+
+static void cpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	applog(LOG_DEBUG, "API: request to cpudisable cpuid %d %s",
+			id, cpus[id].proc_repr_ns);
+
+	if (cpus[id].deven == DEV_DISABLED) {
+		message(io_data, MSG_ALRDISC, id, NULL, isjson);
+		return;
+	}
+
+	cpus[id].deven = DEV_DISABLED;
+
+	message(io_data, MSG_CPUDIS, id, NULL, isjson);
+}
+
+static void cpurestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	reinit_device(&cpus[id]);
+
+	message(io_data, MSG_CPUREI, id, NULL, isjson);
+}
+#endif
+
 static void cpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
@@ -3125,6 +3235,9 @@ struct CMDS {
 	{ "pgaidentify",	pgaidentify,	true },
 #endif
 #ifdef WANT_CPUMINE
+	{ "cpuenable",		cpuenable,	true },
+	{ "cpudisable",		cpudisable,	true },
+	{ "cpurestart",		cpurestart,	true },
 	{ "cpu",		cpudev,		false },
 #endif
 	{ "gpucount",		gpucount,	false },
