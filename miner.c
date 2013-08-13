@@ -13,12 +13,10 @@
 #include "config.h"
 
 #ifdef HAVE_CURSES
+#ifdef USE_UNICODE
 #define PDC_WIDE
-#include <curses.h>
-
-#ifdef WACS_HLINE
-#define USE_UNICODE
 #endif
+#include <curses.h>
 #endif
 
 #include <ctype.h>
