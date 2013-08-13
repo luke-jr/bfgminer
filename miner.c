@@ -133,7 +133,6 @@ int opt_queue = 1;
 int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_bench_algo = -1;
-static const bool opt_time = true;
 unsigned long long global_hashrate;
 
 #ifdef HAVE_OPENCL
