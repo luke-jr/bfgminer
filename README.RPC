@@ -207,6 +207,18 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               The Msg includes the pool URL
                               N.B. all details for the pool will be lost
 
+ cpuenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+
+ cpudisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+
+ cpurestart|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the restart request
+
  gpuenable|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of the enable request
