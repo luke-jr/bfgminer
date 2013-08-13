@@ -464,16 +464,20 @@ if test "x$curses" = "xno"; then
 else
 	orig_libs="$LIBS"
 	if test "x${curses}" = "xyes"; then
-		prefer=''
 		preferl=''
 	else
-		prefer="${curses}"
 		preferl="${curses} ${curses}6 ${curses}5"
 	fi
+	for wideornot in w u ''; do
+		for ncursesver in '' 6 5; do
+			preferl="${preferl} ncurses${wideornot}${ncursesver}"
+		done
+		preferl="${preferl} pdcurses${wideornot}"
+	done
 	if test "x$cross_compiling" != "xyes"; then
 		AC_MSG_CHECKING([for best native curses library])
 		orig_cflags="$CFLAGS"
-		for curses_lib in ${preferl} ncurses{w,}{,6,5}; do
+		for curses_lib in ${preferl}; do
 			if ! ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
 				continue
 			fi
@@ -501,27 +505,46 @@ else
 		fi
 	fi
 	if test "x$curses" != "xyes"; then
-
-	AC_SEARCH_LIBS(addstr, ${prefer} ncursesw ncurses pdcurses, [
-		curses=yes
-		cursesmsg="FOUND: ${ac_cv_search_addstr}"
-		cursesmsg="${cursesmsg/-l/}"
-		if test "x${ac_cv_search_addstr}" != "xnone required"; then
-			NCURSES_LIBS="${ac_cv_search_addstr}"
-		fi
-	], [
-		if test "x$curses" = "xyes"; then
-			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
-		else
-			AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
-			curses=no
-			cursesmsg='NOT FOUND. TUI support DISABLED'
-		fi
-	])
-
+		for sym in addwstr addstr; do
+			AC_SEARCH_LIBS(${sym}, ${preferl}, [
+				curses=yes
+				eval "curseslib=\"\${ac_cv_search_${sym}}\""
+				cursesmsg="FOUND: ${curseslib}"
+				cursesmsg="${cursesmsg/-l/}"
+				if test "x${curseslib}" != "xnone required"; then
+					NCURSES_LIBS="${curseslib}"
+				fi
+				break
+			], [
+				test "x$sym" != "addstr" && continue
+				
+				if test "x$curses" = "xyes"; then
+					AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
+				else
+					AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
+					curses=no
+					cursesmsg='NOT FOUND. TUI support DISABLED'
+				fi
+			])
+		done
 	fi
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+		AC_MSG_CHECKING([whether curses library supports wide characters])
+		LIBS="$orig_libs $NCURSES_CPPFLAGS $NCURSES_LIBS"
+		AC_LINK_IFELSE([
+			AC_LANG_PROGRAM([
+				#define PDC_WIDE
+				#include <curses.h>
+			],[
+				addwstr(L"test");
+			])
+		],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE([USE_UNICODE],[1],[Defined to 1 if curses supports wide characters])
+		],[
+			AC_MSG_RESULT([no])
+		])
 	fi
 	LIBS="$orig_libs"
 fi
