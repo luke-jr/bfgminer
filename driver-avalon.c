@@ -249,12 +249,6 @@ static int avalon_read(struct cgpu_info *avalon, unsigned char *buf,
 	if (amount < 2)
 		goto out;
 
-	/* Use the fact that we're reading the status with the buffer to tell
-	 * the write thread it should send more work without needing to call
-	 * avalon_buffer_full directly. */
-	if (avalon_cts(readbuf[0]))
-		cgsem_post(&info->write_sem);
-
 	/* The first 2 of every 64 bytes are status on FTDIRL */
 	while (amount > 2) {
 		cp = amount - 2;
