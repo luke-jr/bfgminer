@@ -702,11 +702,9 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	if (!add_cgpu(avalon))
 		goto unshin;
 
-	cgsem_init(&info->write_sem);
-
 	ret = avalon_reset(avalon, true);
 	if (ret && !configured)
-		goto unshinsem;
+		goto unshin;
 
 	update_usb_stats(avalon);
 
@@ -729,10 +727,6 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	}
 
 	return true;
-
-unshinsem:
-
-	cgsem_destroy(&info->write_sem);
 
 unshin:
 
@@ -976,7 +970,7 @@ static void *avalon_send_tasks(void *userdata)
 		bool idled = false;
 
 		while (avalon_buffer_full(avalon))
-			cgsem_wait(&info->write_sem);
+			nmsleep(40);
 
 		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
 			mutex_lock(&info->lock);
@@ -1014,7 +1008,7 @@ static void *avalon_send_tasks(void *userdata)
 						break;
 					else {
 						while (avalon_buffer_full(avalon))
-							cgsem_wait(&info->write_sem);
+							nmsleep(40);
 					}
 			}
 
@@ -1100,8 +1094,6 @@ static void do_avalon_close(struct thr_info *thr)
 	avalon_running_reset(avalon, info);
 
 	info->no_matching_work = 0;
-
-	cgsem_destroy(&info->write_sem);
 }
 
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
@@ -1284,7 +1276,6 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	struct timeval now, then, tdiff;
 	int64_t hash_count, us_timeout;
 	struct timespec abstime;
-	int ret;
 
 	/* Half nonce range */
 	us_timeout = 0x80000000ll / info->asic_count / info->frequency;
@@ -1298,13 +1289,8 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	/* Wait until avalon_send_tasks signals us that it has completed
 	 * sending its work or a full nonce range timeout has occurred */
 	mutex_lock(&info->qlock);
-	ret = pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
+	pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
 	mutex_unlock(&info->qlock);
-
-	/* If we timed out, avalon_send_tasks may be stuck waiting on the
-	 * write_sem, so force it to check for avalon_buffer_full itself. */
-	if (ret)
-		cgsem_post(&info->write_sem);
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
