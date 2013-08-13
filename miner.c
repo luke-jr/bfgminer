@@ -105,10 +105,9 @@ struct _cbscript_t {
 static struct _cbscript_t opt_coinbase_script;
 static uint32_t template_nonce;
 #endif
-#if BLKMAKER_VERSION < 1
-const
-#endif
+#if BLKMAKER_VERSION > 0
 char *opt_coinbase_sig;
+#endif
 char *request_target_str;
 float request_pdiff = 1.0;
 double request_bdiff;
