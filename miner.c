@@ -104,10 +104,9 @@ struct _cbscript_t {
 static struct _cbscript_t opt_coinbase_script;
 static uint32_t template_nonce;
 #endif
-#if BLKMAKER_VERSION < 1
-const
-#endif
+#if BLKMAKER_VERSION > 0
 char *opt_coinbase_sig;
+#endif
 static bool want_stratum = true;
 bool have_longpoll;
 int opt_skip_checks;
