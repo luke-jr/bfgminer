@@ -24,6 +24,10 @@
 #include <dirent.h>
 #include <string.h>
 
+#ifdef HAVE_SYS_FILE_H
+#include <sys/file.h>
+#endif
+
 #ifdef HAVE_LIBUSB
 #include <libusb.h>
 #endif
@@ -825,6 +829,20 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 
 		return -1;
 	}
+	
+#if defined(LOCK_EX) && defined(LOCK_NB)
+	if (likely(!flock(fdDev, LOCK_EX | LOCK_NB)))
+		applog(LOG_DEBUG, "Acquired exclusive advisory lock on %s", devpath);
+	else
+	if (errno == EWOULDBLOCK)
+	{
+		applog(LOG_ERR, "%s is already in use by another process", devpath);
+		close(fdDev);
+		return -1;
+	}
+	else
+		applog(LOG_WARNING, "Failed to acquire exclusive lock on %s: %s (ignoring)", devpath, bfg_strerror(errno, BST_ERRNO));
+#endif
 
 	struct termios my_termios;
 

@@ -71,6 +71,7 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
+AC_CHECK_HEADERS([sys/file.h])
 
 AC_FUNC_ALLOCA
 
