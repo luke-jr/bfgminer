@@ -1576,10 +1576,11 @@ static struct opt_table opt_config_table[] = {
 	                "Don't attempt to use or save OpenCL kernel binaries"),
 #endif
 	OPT_WITHOUT_ARG("--no-unicode",
-	                opt_set_invbool, &use_unicode,
 #ifdef USE_UNICODE
+	                opt_set_invbool, &use_unicode,
 	                "Don't use Unicode characters in TUI"
 #else
+	                set_null, &use_unicode,
 	                opt_hidden
 #endif
 	),
