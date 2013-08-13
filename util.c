@@ -2119,6 +2119,8 @@ resend:
 		goto out;
 	}
 
+	recvd = true;
+	
 	if (!socket_full(pool, true)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
@@ -2127,8 +2129,6 @@ resend:
 	sret = recv_line(pool);
 	if (!sret)
 		goto out;
-
-	recvd = true;
 
 	val = JSON_LOADS(sret, &err);
 	free(sret);
