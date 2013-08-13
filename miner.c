@@ -4157,7 +4157,9 @@ static bool test_work_current(struct work *work)
 		work->pool->block_id = block_id;
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
+#if BLKMAKER_VERSION > 1
 		template_nonce = 0;
+#endif
 		set_curblock(hexstr, &work->data[4]);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
