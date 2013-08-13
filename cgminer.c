@@ -5149,9 +5149,9 @@ static void *stratum_sthread(void *userdata)
 		quit(1, "Failed to create stratum_q in stratum_sthread");
 
 	while (42) {
+		char *noncehex, *nonce2, *nonce2hex;
 		struct stratum_share *sshare;
 		uint32_t *hash32, nonce;
-		char *noncehex, *nonce2;
 		struct work *work;
 		bool submitted;
 		char s[1024];
@@ -5179,20 +5179,18 @@ static void *stratum_sthread(void *userdata)
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
 
-		/* nonce2 length can be bigger than uint32_t but we only use
-		 * the 4 bytes so avoid potential overflow if a pool has set a
-		 * large length by allocating the ram ourselves and using the
-		 * low level __bin2hex function. */
-		work->nonce2_len += 1; /* Null byte */
-		align_len(&work->nonce2_len);
 		nonce2 = alloca(work->nonce2_len);
 		memset(nonce2, 0, work->nonce2_len);
-		__bin2hex(nonce2, (const unsigned char *)&work->nonce2, sizeof(uint32_t));
+		memcpy(nonce2, &work->nonce2, sizeof(uint32_t));
+		nonce2hex = bin2hex((const unsigned char *)nonce2, work->nonce2_len);
+		if (unlikely(!nonce2hex))
+			quit(1, "Failed to bin2hex nonce2 in stratum_thread");
 
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
-			pool->rpc_user, work->job_id, nonce2, work->ntime, noncehex, sshare->id);
+			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, sshare->id);
 		free(noncehex);
+		free(nonce2hex);
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d",
 					(long unsigned int)htole32(hash32[6]), pool->pool_no);

@@ -70,7 +70,6 @@ enum dev_reason;
 struct cgpu_info;
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 void thr_info_cancel(struct thr_info *thr);
-void __bin2hex(char *s, const unsigned char *p, size_t len);
 void nmsleep(unsigned int msecs);
 void nusleep(unsigned int usecs);
 void cgtime(struct timeval *tv);
