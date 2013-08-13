@@ -2090,6 +2090,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
+	bool trysuggest = request_target_str;
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
@@ -2103,9 +2104,20 @@ resend:
 
 	sockd = true;
 
+	clear_sock(pool);
+	
+	if (trysuggest)
+	{
+		int sz = sprintf(s, "{\"id\": null, \"method\": \"mining.suggest_target\", \"params\": [\"%s\"]}", request_target_str);
+		if (!_stratum_send(pool, s, sz, true))
+		{
+			applog(LOG_DEBUG, "Pool %u: Failed to send suggest_target in initiate_stratum", pool->pool_no);
+			goto out;
+		}
+		recvd = true;
+	}
+	
 	if (noresume) {
-		/* Get rid of any crap lying around if we're resending */
-		clear_sock(pool);
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
@@ -2204,10 +2216,20 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		if (recvd && !noresume) {
-			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
-			noresume = true;
-			goto resend;
+		if (recvd)
+		{
+			if (trysuggest)
+			{
+				applog(LOG_DEBUG, "Pool %u: Failed to connect stratum with mining.suggest_target, retrying without", pool->pool_no);
+				trysuggest = false;
+				goto resend;
+			}
+			if (!noresume)
+			{
+				applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
+				noresume = true;
+				goto resend;
+			}
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
 		if (sockd)
