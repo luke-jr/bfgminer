@@ -8218,7 +8218,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					       dev_str);
 					device_recovered(cgpu);
 				}
-				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
+				dev_error_update(cgpu, REASON_DEV_THERMAL_CUTOFF);
 				continue;
 			}
 			else

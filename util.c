@@ -2096,11 +2096,16 @@ bool restart_stratum(struct pool *pool)
 	return true;
 }
 
-void dev_error(struct cgpu_info *dev, enum dev_reason reason)
+void dev_error_update(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
 	cgtime(&dev->tv_device_last_not_well);
 	dev->device_not_well_reason = reason;
+}
+
+void dev_error(struct cgpu_info *dev, enum dev_reason reason)
+{
+	dev_error_update(dev, reason);
 
 	switch (reason) {
 		case REASON_THREAD_FAIL_INIT:
