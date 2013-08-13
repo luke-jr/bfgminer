@@ -1324,8 +1324,8 @@ static struct opt_table opt_config_table[] = {
 #endif
 #if defined(HAVE_ADL) || defined(USE_BITFORCE) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-cutoff",
-		     set_temp_cutoff, opt_show_intval, &opt_cutofftemp,
-		     "Temperature where a device will be automatically disabled, one value or comma separated list"),
+		     set_temp_cutoff, NULL, &opt_cutofftemp,
+		     "Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list"),
 #endif
 #if defined(HAVE_ADL) || defined(USE_MODMINER)
 	OPT_WITH_ARG("--temp-hysteresis",
