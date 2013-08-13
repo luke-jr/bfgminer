@@ -5183,8 +5183,10 @@ static void *stratum_sthread(void *userdata)
 		 * the 4 bytes so avoid potential overflow if a pool has set a
 		 * large length by allocating the ram ourselves and using the
 		 * low level __bin2hex function. */
+		work->nonce2_len += 1; /* Null byte */
 		align_len(&work->nonce2_len);
 		nonce2 = alloca(work->nonce2_len);
+		memset(nonce2, 0, work->nonce2_len);
 		__bin2hex(nonce2, (const unsigned char *)&work->nonce2, sizeof(uint32_t));
 
 		snprintf(s, sizeof(s),
