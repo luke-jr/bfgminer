@@ -464,16 +464,20 @@ if test "x$curses" = "xno"; then
 else
 	orig_libs="$LIBS"
 	if test "x${curses}" = "xyes"; then
-		prefer=''
 		preferl=''
 	else
-		prefer="${curses}"
 		preferl="${curses} ${curses}6 ${curses}5"
 	fi
+	for wideornot in w u ''; do
+		for ncursesver in '' 6 5; do
+			preferl="${preferl} ncurses${wideornot}${ncursesver}"
+		done
+		preferl="${preferl} pdcurses${wideornot}"
+	done
 	if test "x$cross_compiling" != "xyes"; then
 		AC_MSG_CHECKING([for best native curses library])
 		orig_cflags="$CFLAGS"
-		for curses_lib in ${preferl} ncurses{w,}{,6,5}; do
+		for curses_lib in ${preferl}; do
 			if ! ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
 				continue
 			fi
@@ -502,7 +506,7 @@ else
 	fi
 	if test "x$curses" != "xyes"; then
 
-	AC_SEARCH_LIBS(addstr, ${prefer} ncursesw ncurses pdcurses, [
+	AC_SEARCH_LIBS(addstr, ${preferl}, [
 		curses=yes
 		cursesmsg="FOUND: ${ac_cv_search_addstr}"
 		cursesmsg="${cursesmsg/-l/}"
