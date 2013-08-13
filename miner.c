@@ -100,10 +100,9 @@ bool opt_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
-#if BLKMAKER_VERSION < 1
-const
-#endif
+#if BLKMAKER_VERSION > 0
 char *opt_coinbase_sig;
+#endif
 bool have_longpoll;
 bool want_per_device_stats;
 bool use_syslog;
