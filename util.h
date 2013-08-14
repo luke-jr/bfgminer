@@ -347,4 +347,7 @@ void maybe_strdup_if_null(const char **p, const char *s)
 }
 
 
+extern void run_cmd(const char *cmd);
+
+
 #endif /* __UTIL_H__ */

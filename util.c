@@ -2608,3 +2608,20 @@ void _bytes_alloc_failure(size_t sz)
 {
 	quit(1, "bytes_resize failed to allocate %lu bytes", (unsigned long)sz);
 }
+
+
+void *cmd_thread(void *cmdp)
+{
+	const char *cmd = cmdp;
+	applog(LOG_DEBUG, "Executing command: %s", cmd);
+	system(cmd);
+	return NULL;
+}
+
+void run_cmd(const char *cmd)
+{
+	if (!cmd)
+		return;
+	pthread_t pth;
+	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
+}
