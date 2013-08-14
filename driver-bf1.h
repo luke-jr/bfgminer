@@ -1,8 +1,14 @@
 /*
- * driver-s6lx75.h
+ * Copyright 2013 DI Andreas Auer
  *
- *  Created on: 09.06.2013
- *      Author: andreas
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ *
+ *  Created on: 09.10.2013
+ *      Author: DI Andreas Auer
+ *        Mail: aauer1@gmail.com
  */
 
 #ifndef DRIVER_BF1_H_
@@ -36,7 +42,7 @@ struct BF1Info
 
 	struct BF1Identity id;
 	struct work *work;
-	struct work *prev_work;
+	struct work *prev_work[2];
 
 	char rx_buffer[1024];
 	uint32_t rx_len;

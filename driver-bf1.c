@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Andreas Auer
+ * Copyright 2013 DI Andreas Auer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -8,7 +8,7 @@
  */
 
 /*
- * MiniMiner One with Avalon ASIC
+ * Bitfury BF1 USB miner with Bitfury ASIC
  */
 
 #include "config.h"
@@ -217,7 +217,8 @@ static bool bf1_init(struct thr_info *thr)
 	timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
 
 	info->work = 0;
-	info->prev_work = 0;
+	info->prev_work[0] = 0;
+	info->prev_work[1] = 0;
 
 	return true;
 }
@@ -249,6 +250,8 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 	uint32_t ntime = *((uint32_t *)&work->data[68]);
 	uint32_t nbits = *((uint32_t *)&work->data[72]);
 
+	int32_t nonces = (info->rx_len / 7) - 1;
+
 	num_results = 0;
 	for(int i=0; i<info->rx_len; i+=7)
 	{
@@ -266,28 +269,43 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce))
 		{
 			submit_nonce(thr, work, nonce);
+			nonces--;
+			continue;
 		}
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce-0x400000))
 		{
 			submit_nonce(thr, work, nonce-0x400000);
+			nonces--;
+			continue;
 		}
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce-0x800000))
 		{
 			submit_nonce(thr, work, nonce-0x800000);
+			nonces--;
+			continue;
 		}
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x2800000))
 		{
 			submit_nonce(thr, work, nonce+0x2800000);
+			nonces--;
+			continue;
 		}
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x2C00000))
 		{
 			submit_nonce(thr, work, nonce+0x2C00000);
+			nonces--;
+			continue;
 		}
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x400000))
 		{
 			submit_nonce(thr, work, nonce+0x400000);
+			nonces--;
+			continue;
 		}
 	}
+
+	for(int i=0; i<nonces; i++)
+		inc_hw_errors(thr);
 }
 
 //------------------------------------------------------------------------------
@@ -313,7 +331,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	memcpy(sendbuf + 33, info->work->data + 64, 12);
 	write(board->device_fd, sendbuf, sizeof(sendbuf));
 
-	applog(LOG_INFO, "Work Task sending");
+	applog(LOG_INFO, "Work Task sending: %d", info->work->id);
 	while(1)
 	{
 		uint8_t buffer[7];
@@ -332,16 +350,27 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	}
 	applog(LOG_INFO, "Work Task accepted");
 
-	if(info->prev_work)
+	applog(LOG_INFO, "Nonces sent back: %d", info->rx_len / 7);
+/*
+	if(info->prev_work[1])
 	{
-		bf1_process_results(thr, info->prev_work);
-		work_completed(board, info->prev_work);
-		info->prev_work = 0;
+		applog(LOG_INFO, "PREV[1]");
+		bf1_process_results(thr, info->prev_work[1]);
+		work_completed(board, info->prev_work[1]);
+		info->prev_work[1] = 0;
 	}
-	info->prev_work = info->work;
+*/
+	if(info->prev_work[0])
+	{
+		applog(LOG_INFO, "PREV[0]");
+		bf1_process_results(thr, info->prev_work[0]);
+	}
+	info->prev_work[1] = info->prev_work[0];
+	info->prev_work[0] = info->work;
 	info->work = 0;
 
-	hashes = 0xffffffff;
+	//hashes = 0xffffffff;
+	hashes = 0xBD000000;
 	applog(LOG_INFO, "WORK completed");
 
 	return hashes;
