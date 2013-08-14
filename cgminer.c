@@ -6060,6 +6060,19 @@ struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 	return ret;
 }
 
+struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *ret = NULL;
+
+	rd_lock(&cgpu->qlock);
+	work = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	if (work)
+		ret = copy_work(work);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
