@@ -754,8 +754,8 @@ static void avalon_init(struct cgpu_info *avalon)
 
 static struct work *avalon_valid_result(struct cgpu_info *avalon, struct avalon_result *ar)
 {
-	return find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
-					   (char *)ar->data, 64, 12);
+	return clone_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+					    (char *)ar->data, 64, 12);
 }
 
 static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *info,
@@ -798,6 +798,7 @@ static void avalon_parse_results(struct cgpu_info *avalon, struct avalon_info *i
 				info->auto_hw++;
 				mutex_unlock(&info->lock);
 			}
+			free_work(work);
 
 			if (gettemp)
 				avalon_update_temps(avalon, info, ar);
