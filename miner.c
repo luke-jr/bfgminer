@@ -6683,7 +6683,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 #ifdef HAVE_CURSES
 	if (curses_active_locked()) {
 		float temp = 0;
-		struct cgpu_info *proc;
+		struct cgpu_info *proc, *last_working_dev = NULL;
 		int i, working_devs = 0, working_procs = 0;
 		int divx;
 		bool bad = false;
@@ -6699,11 +6699,17 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			if (unlikely(proc->deven == DEV_DISABLED))
 				;  // Just need to block it off from both conditions
 			else
-			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED && proc->rolling > .1))
+			if (likely(proc->status == LIFE_WELL && proc->deven == DEV_ENABLED))
 			{
-				++working_procs;
-				if (proc->device == proc)
-					++working_devs;
+				if (proc->rolling > .1)
+				{
+					++working_procs;
+					if (proc->device != last_working_dev)
+					{
+						++working_devs;
+						last_working_dev = proc->device;
+					}
+				}
 			}
 			else
 				bad = true;
