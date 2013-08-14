@@ -1387,7 +1387,8 @@ enum api_data_type {
 	API_FREQ,
 	API_VOLTS,
 	API_HS,
-	API_DIFF
+	API_DIFF,
+	API_PERCENT
 };
 
 struct api_data {
