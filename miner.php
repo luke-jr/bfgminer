@@ -764,7 +764,11 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'DEVS.Temperature':
 		$ret = $value.'&deg;C';
 		if (!isset($alldata['GPU']))
+		{
+			if ($value == 0)
+				$ret = '&nbsp;';
 			break;
+		}
 	case 'GPU.GPU Clock':
 	case 'DEVS.GPU Clock':
 	case 'GPU.Memory Clock':
@@ -961,6 +965,23 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'POOL.Last Share Difficulty':
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
+		break;
+	case 'DEVS.Device Hardware%':
+	case 'DEVS.Device Rejected%':
+	case 'ASC.Device Hardware%':
+	case 'ASC.Device Rejected%':
+	case 'PGA.Device Hardware%':
+	case 'PGA.Device Rejected%':
+	case 'GPU.Device Hardware%':
+	case 'GPU.Device Rejected%':
+	case 'POOL.Pool Rejected%':
+	case 'POOL.Pool Stale%':
+	case 'SUMMARY.Device Hardware%':
+	case 'SUMMARY.Device Rejected%':
+	case 'SUMMARY.Pool Rejected%':
+	case 'SUMMARY.Pool Stale%':
+		if ($value != '')
+			$ret = number_format((float)$value, 2) . '%';
 		break;
 	case 'SUMMARY.Best Share':
 		if ($value != '')
