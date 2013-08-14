@@ -1,3 +1,17 @@
+Version 3.3.4 - 14th August 2013
+
+- API/miner.php add some % fields
+- Nonce2 stratum submission is not working with nonce2 lengths >4, revert the 
+buggy __bin2hex function and use bin2hex.
+- The write thread in avalon is only ever actually woken up by timeout so remove 
+the write semaphore and use a simple sleep poll.
+- Fix warning.
+- Interrupting reads on the avalon to start writes loses data so remove the 
+cgsem_post in the read code.
+- Add room for the null byte at the end of the nonce2 string on stratum share 
+submission and zero the allocated ram.
+
+
 Version 3.3.3 - 13th August 2013
 
 -  Only perform the bin2hex on nonce2 data if it's required for stratum 
