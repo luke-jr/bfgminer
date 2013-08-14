@@ -337,6 +337,8 @@ static int include_count;
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
 
+char *cmd_sick, *cmd_dead;
+
 #if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
 	static int forkpid;
@@ -1285,6 +1287,12 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
+	OPT_WITH_ARG("--cmd-sick",
+	             opt_set_charp, NULL, &cmd_sick,
+	             "Execute a command when a device is declared sick"),
+	OPT_WITH_ARG("--cmd-dead",
+	             opt_set_charp, NULL, &cmd_dead,
+	             "Execute a command when a device is declared dead"),
 #if BLKMAKER_VERSION > 1
 	OPT_WITH_ARG("--coinbase-addr",
 		     set_b58addr, NULL, &opt_coinbase_script,
@@ -8258,6 +8266,8 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
+				run_cmd(cmd_sick);
+				
 #ifdef HAVE_ADL
 				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
 					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
@@ -8274,6 +8284,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
+				run_cmd(cmd_dead);
 			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
