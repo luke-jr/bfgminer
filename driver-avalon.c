@@ -1233,7 +1233,7 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 		if (info->fan2 >= 0 && info->fan2 < lowfan)
 			lowfan = info->fan2;
 
-		tailsprintf(buf, bufsiz, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
+		tailsprintf(buf, bufsiz, "%2dC/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
 	}
 }
 
