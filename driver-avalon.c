@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
 #ifndef WIN32
@@ -332,11 +333,17 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	return 0;
 }
 
+static int avalon_calc_timeout(int frequency)
+{
+	return AVALON_TIMEOUT_FACTOR / frequency;
+}
+
 static bool get_options(int this_option_offset, int *baud, int *miner_count,
 			int *asic_count, int *timeout, int *frequency)
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4;
+	bool timeout_default;
 	size_t max;
 	int i, tmp;
 
@@ -419,18 +426,23 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 					colon2, AVALON_DEFAULT_ASIC_NUM);
 			}
 
+			timeout_default = false;
 			if (colon3 && *colon3) {
 				colon4 = strchr(colon3, ':');
 				if (colon4)
 					*(colon4++) = '\0';
 
-				tmp = atoi(colon3);
-				if (tmp > 0 && tmp <= 0xff)
-					*timeout = tmp;
+				if (tolower(*colon3) == 'd')
+					timeout_default = true;
 				else {
-					quit(1, "Invalid avalon-options for "
-						"timeout (%s) must be 1 ~ %d",
-						colon3, 0xff);
+					tmp = atoi(colon3);
+					if (tmp > 0 && tmp <= 0xff)
+						*timeout = tmp;
+					else {
+						quit(1, "Invalid avalon-options for "
+							"timeout (%s) must be 1 ~ %d",
+							colon3, 0xff);
+					}
 				}
 				if (colon4 && *colon4) {
 					tmp = atoi(colon4);
@@ -439,6 +451,8 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 						     AVALON_MIN_FREQUENCY, AVALON_MAX_FREQUENCY);
 					}
 					*frequency = tmp;
+					if (timeout_default)
+						*timeout = avalon_calc_timeout(*frequency);
 				}
 			}
 		}
@@ -645,8 +659,7 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 
 static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
-	int baud, uninitialised_var(miner_count), uninitialised_var(asic_count),
-	    uninitialised_var(timeout), frequency = 0;
+	int baud, miner_count, asic_count, timeout, frequency;
 	int this_option_offset = ++option_offset;
 	struct avalon_info *info;
 	struct cgpu_info *avalon;
@@ -654,6 +667,12 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	int ret;
 
 	avalon = usb_alloc_cgpu(&avalon_drv, AVALON_MINER_THREADS);
+
+	baud = AVALON_IO_SPEED;
+	miner_count = AVALON_DEFAULT_MINER_NUM;
+	asic_count = AVALON_DEFAULT_ASIC_NUM;
+	timeout = AVALON_DEFAULT_TIMEOUT;
+	frequency = AVALON_DEFAULT_FREQUENCY;
 
 	configured = get_options(this_option_offset, &baud, &miner_count,
 				 &asic_count, &timeout, &frequency);
@@ -910,7 +929,7 @@ static void avalon_rotate_array(struct cgpu_info *avalon)
 
 static void avalon_set_timeout(struct avalon_info *info)
 {
-	info->timeout = AVALON_TIMEOUT_FACTOR / info->frequency;
+	info->timeout = avalon_calc_timeout(info->frequency);
 }
 
 static void avalon_set_freq(struct cgpu_info *avalon, int frequency)
