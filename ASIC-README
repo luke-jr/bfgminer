@@ -169,6 +169,7 @@ to replace it. It should be changed according to the frequency (last setting).
 It is possible to set this a little lower if you are trying to tune for short
 block mining (eg p2pool) but much lower and the device will start creating
 duplicate shares.
+A value of 'd' means cgminer will calculate it for you based on the frequency
 
 Sample settings for valid different frequencies (last 2 values):
 34:375 *
