@@ -1016,6 +1016,15 @@ static void *avalon_send_tasks(void *userdata)
 			mutex_unlock(&info->lock);
 		}
 
+		if (usb_ident(avalon) == IDENT_BTB) {
+			// Give other threads the chance to acquire qlock
+			i = 0;
+			do {
+				nmsleep(40);
+			} while (!avalon->shutdown && i++ < 15
+				&& avalon->queued < avalon_get_work_count);
+		}
+
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
