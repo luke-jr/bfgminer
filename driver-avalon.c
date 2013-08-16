@@ -923,8 +923,12 @@ static void *avalon_get_results(void *userdata)
 
 static void avalon_rotate_array(struct cgpu_info *avalon)
 {
+	int array_size = AVALON_ARRAY_SIZE;
+
+	if (usb_ident(avalon) == IDENT_BTB)
+		array_size = BITBURNER_ARRAY_SIZE;
 	avalon->queued = 0;
-	if (++avalon->work_array >= AVALON_ARRAY_SIZE)
+	if (++avalon->work_array >= array_size)
 		avalon->work_array = 0;
 }
 
@@ -1090,10 +1094,13 @@ static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
+	int array_size = AVALON_ARRAY_SIZE;
 
+	if (usb_ident(avalon) == IDENT_BTB)
+		array_size = BITBURNER_ARRAY_SIZE;
 	free(avalon->works);
 	avalon->works = calloc(info->miner_count * sizeof(struct work *),
-			       AVALON_ARRAY_SIZE);
+			       array_size);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 
