@@ -567,7 +567,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		sprintf(buf, "Temp %d", dev);
 		root = api_add_temp(root, buf, &fTemp, true);
 	
-		double dClk = (double)klninfo->cfg[dev].hashclock / 2;
+		double dClk = (double)klninfo->cfg[dev].hashclock;
 		sprintf(buf, "Clock %d", dev);
 		root = api_add_freq(root, buf, &dClk, true);
 		
@@ -582,18 +582,18 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		root = api_add_int(root, buf, &iFan, true);
 		
 		if(klninfo->devinfo[dev].chipstats != NULL) {
-			char data[80];
+			char data[128];
 			int n;
 			sprintf(buf, "Nonces / Chip %d", dev);
 			for(n = 0; n < klninfo->status[dev].chipcount; n++)
-				sprintf(data+n*5, "%04d ", klninfo->devinfo[dev].chipstats[n]);
-			data[79] = 0;
+				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n]);
+			data[127] = 0;
 			root = api_add_string(root, buf, data, true);
 		
 			sprintf(buf, "Errors / Chip %d", dev);
 			for(n = 0; n < klninfo->status[dev].chipcount; n++)
-				sprintf(data+n*5, "%04d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
-			data[79] = 0;
+				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
+			data[127] = 0;
 			root = api_add_string(root, buf, data, true);
 		}
 	}
