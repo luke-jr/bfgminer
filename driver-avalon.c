@@ -872,8 +872,9 @@ static void *avalon_get_results(void *userdata)
 
 		/* As the usb read returns after just 1ms, sleep long enough
 		 * to leave the interface idle for writes to occur, but do not
-		 * sleep if we have been receiving data as more may be coming. */
-		if (ret < 1) {
+		 * sleep if we have been receiving data, and we do not yet have
+		 * a full result as more may be coming. */
+		if (ret < 1 || offset == 0) {
 			cgtime(&tv_end);
 			timersub(&tv_end, &tv_start, &tv_diff);
 			/* Assume it has not been > 1 second so ignore tv_sec */
