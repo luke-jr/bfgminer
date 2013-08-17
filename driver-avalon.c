@@ -1114,10 +1114,8 @@ static void *bitburner_send_tasks(void *userdata)
 		start_count = avalon->work_array * avalon_get_work_count;
 		end_count = start_count + avalon_get_work_count;
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
-			if (avalon_buffer_full(avalon)) {
-				while (avalon_buffer_full(avalon))
-					nmsleep(40);
-			}
+			while (avalon_buffer_full(avalon))
+				nmsleep(40);
 
 			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
 				avalon_init_task(&at, 0, 0, info->fan_pwm,
