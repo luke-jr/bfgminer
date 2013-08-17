@@ -942,6 +942,12 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 	buf[len] = '\0';  \
 } while(0)
 
+void _bitstream_not_found(const char *repr, const char *fn)
+{
+	applog(LOG_ERR, "ERROR: Unable to load '%s', required for %s to work!", fn, repr);
+	applog(LOG_ERR, "ERROR: Please read README.FPGA for instructions");
+}
+
 FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len)
 {
 	char buf[0x100];
@@ -952,10 +958,7 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	FILE *f = open_bitstream(dname, fwfile);
 	if (!f)
 	{
-		applog(LOG_ERR, "%s: Error opening bitstream file %s",
-		        repr, fwfile);
-		applog(LOG_ERR, "%s: Did you install the necessary bitstream package?",
-		       repr);
+		_bitstream_not_found(repr, fwfile);
 		return NULL;
 	}
 	if (1 != fread(buf, 2, 1, f))
@@ -1004,7 +1007,7 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	return f;
 }
 
-bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *fn)
+bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *repr, const char *fn)
 {
 	char buf[0x100];
 	size_t sz;
@@ -1062,7 +1065,7 @@ ihxerr:
 	return false;
 }
 
-bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *fileprefix)
+bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *repr, const char *fileprefix)
 {
 	FILE *F;
 	size_t fplen = strlen(fileprefix);
@@ -1092,12 +1095,12 @@ bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *fileprefix
 	}
 	
 	strcpy(&fnbuf[fplen], ".ihx");
-	if (load_bitstream_intelhex(rv, dname, fnbuf))
+	if (load_bitstream_intelhex(rv, dname, repr, fnbuf))
 		return true;
 	
 	// TODO: Xilinx
 	
-	applog(LOG_ERR, "Failed to load bitstream '%s'", fileprefix);
+	_bitstream_not_found(repr, fnbuf);
 	return false;
 }
 

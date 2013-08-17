@@ -218,7 +218,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	applog(LOG_ERR, "Mining firmware filename: %s", firmware);
 
 	bytes_init(&bsdata);
-	if (!load_bitstream_bytes(&bsdata, "ztex", firmware))
+	if (!load_bitstream_bytes(&bsdata, "ztex", "ZTX *", firmware))
 		goto done;
 
 	// in buf[] is still the identifier of the dummy firmware
@@ -429,7 +429,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	for (tries = 10; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%"PRIpreprv": failed to read bitstream '%s'", repr, firmware);
+			_bitstream_not_found(repr, firmware);
 			return -2;
 		}
 
