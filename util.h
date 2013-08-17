@@ -225,9 +225,23 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 }
 
 static inline
+void bytes_shift(bytes_t *b, size_t shift)
+{
+	b->sz -= shift;
+	memmove(bytes_buf(b), &bytes_buf(b)[shift], bytes_len(b));
+}
+
+static inline
 void bytes_reset(bytes_t *b)
 {
 	b->sz = 0;
+}
+
+static inline
+void bytes_nullterminate(bytes_t *b)
+{
+	bytes_append(b, "", 1);
+	--b->sz;
 }
 
 static inline
