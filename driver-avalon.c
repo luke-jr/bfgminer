@@ -1304,8 +1304,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	tdiff.tv_usec = us_timeout - (tdiff.tv_sec * 1000000);
 	cgtime(&now);
 	timeradd(&now, &tdiff, &then);
-	abstime.tv_sec = then.tv_sec;
-	abstime.tv_nsec = then.tv_usec * 1000;
+	timeval_to_spec(&abstime, &then);
 
 	/* Wait until avalon_send_tasks signals us that it has completed
 	 * sending its work or a full nonce range timeout has occurred */
