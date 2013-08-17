@@ -286,7 +286,7 @@ bool curses_active;
 
 static
 #if defined(HAVE_CURSES) && defined(USE_UNICODE)
-bool use_unicode = true;
+bool use_unicode;
 static
 bool have_unicode_degrees;
 #else
@@ -1712,6 +1712,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
 		     "Set GPU thread concurrency for scrypt mining, comma separated"),
+#endif
+#ifdef USE_UNICODE
+	OPT_WITHOUT_ARG("--unicode",
+	                opt_set_bool, &use_unicode,
+	                "Use Unicode characters in TUI"),
 #endif
 	OPT_WITH_ARG("--url|-o",
 		     set_url, NULL, NULL,
