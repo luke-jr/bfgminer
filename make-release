@@ -122,6 +122,7 @@ for build in "${builds[@]}"; do
 		windows-build.txt \
 		miner.php \
 		"$PKGDIR/"
+	mkdir "$PKGDIR/bitstreams"
 	make clean
 	cd "$PKGDIR/.."
 	zip -r "$OUTDIR/$PKGNAME.zip" "$PKGNAME"

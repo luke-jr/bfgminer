@@ -66,9 +66,6 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
-bitstreamsdir = $(pkgdatadir)/bitstreams
-dist_bitstreams_DATA =
-
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
@@ -199,15 +196,8 @@ if HAS_X6500
 bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
 endif
 
-if NEED_BITSTREAM_FPGAMINER
-dist_bitstreams_DATA += $(top_srcdir)/bitstreams/fpgaminer*.bit
-dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_fpgaminer
-endif
-
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
-dist_bitstreams_DATA += $(top_srcdir)/bitstreams/ztex_*.bi?
-dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_ztex
 endif
 
 bin_PROGRAMS += bfgminer-rpc

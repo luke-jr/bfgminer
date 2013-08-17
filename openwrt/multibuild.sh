@@ -20,6 +20,28 @@ vcfglist="$(
 	 perl -ple 's[.*/][]' |
 	 sort -n
 )"
+BITSTREAM_PKG_PATH='../../../../bitstreams/openwrt/'  # Relative to reporoot
+BITSTREAMS=(
+	fpgaminer_402-1
+	ztex-ufm1_15b1_121126-1
+	ztex-ufm1_15d4_121126-1
+	ztex-ufm1_15y1_121126-1
+)
+
+if [ -d "${reporoot}/${BITSTREAM_PKG_PATH}" ]; then
+(
+	for bs in ${BITSTREAMS}; do
+		if ! [ -r "${reporoot}/${BITSTREAM_PKG_PATH}/bitstream-${bs}_all.ipk" ]; then
+			echo "Cannot find ${bs} bitstream package" >&2
+			exit 1
+		fi
+	done
+)
+else
+	echo 'Cannot find bitstreams directory' >&2
+	exit 1
+fi
+
 plat1=''
 for cfn in $vcfglist; do
 	plat="$(perl -ple 's/^(\d+)\.config\.(\w+?)_\w+$/$2/ or $_=""' <<<"$cfn")"
@@ -31,6 +53,14 @@ for cfn in $vcfglist; do
 	make {tools,toolchain}/install package/bfgminer/{clean,compile}
 	mkdir "$reporoot/$plat" -pv
 	cp -v "bin/$plat/packages/"b{fgminer,itforce}*_${plat}.ipk "$reporoot/$plat/"
+	if [ -d "$reporoot/${BITSTREAM_PKG_PATH}" ]; then
+	(
+		cd "$reporoot/$plat"
+		for bs in ${BITSTREAMS}; do
+			ln -vfs "../${BITSTREAM_PKG_PATH}/bitstream-${bs}_all.ipk" .
+		done
+	)
+	fi
 	if test -n "$plat1"; then
 	(
 		cd "$reporoot/$plat"
