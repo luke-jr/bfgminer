@@ -1945,8 +1945,8 @@ void notifier_init(notifier_t pipefd)
 		.sin_port = 0,
 	};
 	{
-		char reuse = 1;
-		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+		static const int reuse = 1;
+		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
 	}
 	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr)) == SOCKET_ERROR)
 		quit(1, "Failed to bind listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
