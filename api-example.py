@@ -39,11 +39,16 @@ except socket.error, e:
     logging.error(e)
 
 
-data = None
-try:
-    data = s.recv(1024)
-except socket.error, e:
-    logging.error(e)
+data = ''
+while True:
+    try:
+        newdata = s.recv(1024)
+        if newdata:
+            data += newdata
+        else:
+            break
+    except socket.error, e:
+        break
 
 try:
     s.close()
