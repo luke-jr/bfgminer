@@ -1020,13 +1020,21 @@ static void *avalon_send_tasks(void *userdata)
 
 	while (likely(!avalon->shutdown)) {
 		int start_count, end_count, i, j, ret;
+		struct timespec ts_start, ts_end;
 		struct avalon_task at;
 		bool idled = false;
+		int64_t us_timeout;
 
 		while (avalon_buffer_full(avalon))
 			nmsleep(40);
 
 		avalon_adjust_freq(info, avalon);
+
+		/* A full nonce range */
+		us_timeout = 0x100000000ll / info->asic_count / info->frequency;
+		us_to_timespec(&ts_end, us_timeout);
+		clock_gettime(CLOCK_MONOTONIC, &ts_start);
+		timeraddspec(&ts_end, &ts_start);
 
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
@@ -1079,6 +1087,14 @@ static void *avalon_send_tasks(void *userdata)
 			applog(LOG_WARNING, "%s%i: Idled %d miners",
 			       avalon->drv->name, avalon->device_id, idled);
 		}
+
+		/* Sleep how long it would take to complete a full nonce range
+		 * at the current frequency using the clock_nanosleep function
+		 * timed from before we started loading new work so it will
+		 * fall short of the full duration. */
+		do {
+			ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
+		} while (ret == EINTR);
 	}
 	return NULL;
 }
