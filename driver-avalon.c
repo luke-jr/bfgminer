@@ -928,6 +928,13 @@ static void avalon_rotate_array(struct cgpu_info *avalon)
 		avalon->work_array = 0;
 }
 
+static void bitburner_rotate_array(struct cgpu_info *avalon)
+{
+	avalon->queued = 0;
+	if (++avalon->work_array >= BITBURNER_ARRAY_SIZE)
+		avalon->work_array = 0;
+}
+
 static void avalon_set_timeout(struct avalon_info *info)
 {
 	info->timeout = avalon_calc_timeout(info->frequency);
@@ -975,6 +982,32 @@ static void avalon_reset_auto(struct avalon_info *info)
 	info->auto_hw = 0;
 }
 
+static void avalon_adjust_freq(struct avalon_info *info, struct cgpu_info *avalon)
+{
+	if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
+		mutex_lock(&info->lock);
+		if (!info->optimal) {
+			if (info->fan_pwm >= opt_avalon_fan_max) {
+				applog(LOG_WARNING,
+				       "%s%i: Above optimal temperature, throttling",
+				       avalon->drv->name, avalon->device_id);
+				avalon_dec_freq(info);
+			}
+		} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
+			   info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
+				int total = info->auto_nonces + info->auto_hw;
+
+				/* Try to keep hw errors < 2% */
+				if (info->auto_hw * 100 < total)
+					avalon_inc_freq(info);
+				else if (info->auto_hw * 66 > total)
+					avalon_dec_freq(info);
+		}
+		avalon_reset_auto(info);
+		mutex_unlock(&info->lock);
+	}
+}
+
 static void *avalon_send_tasks(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
@@ -993,28 +1026,7 @@ static void *avalon_send_tasks(void *userdata)
 		while (avalon_buffer_full(avalon))
 			nmsleep(40);
 
-		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
-			mutex_lock(&info->lock);
-			if (!info->optimal) {
-				if (info->fan_pwm >= opt_avalon_fan_max) {
-					applog(LOG_WARNING,
-					       "%s%i: Above optimal temperature, throttling",
-					       avalon->drv->name, avalon->device_id);
-					avalon_dec_freq(info);
-				}
-			} else if (info->auto_nonces >= (AVALON_AUTO_CYCLE * 19 / 20) &&
-				   info->auto_nonces <= (AVALON_AUTO_CYCLE * 21 / 20)) {
-					int total = info->auto_nonces + info->auto_hw;
-
-					/* Try to keep hw errors < 2% */
-					if (info->auto_hw * 100 < total)
-						avalon_inc_freq(info);
-					else if (info->auto_hw * 66 > total)
-						avalon_dec_freq(info);
-			}
-			avalon_reset_auto(info);
-			mutex_unlock(&info->lock);
-		}
+		avalon_adjust_freq(info, avalon);
 
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
@@ -1024,13 +1036,7 @@ static void *avalon_send_tasks(void *userdata)
 				applog(LOG_INFO,
 				       "%s%i: Buffer full after only %d of %d work queued",
 					avalon->drv->name, avalon->device_id, j, avalon_get_work_count);
-
-					if (usb_ident(avalon) != IDENT_BTB)
-						break;
-					else {
-						while (avalon_buffer_full(avalon))
-							nmsleep(40);
-					}
+				break;
 			}
 
 			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
@@ -1077,14 +1083,99 @@ static void *avalon_send_tasks(void *userdata)
 	return NULL;
 }
 
+static void *bitburner_send_tasks(void *userdata)
+{
+	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
+	struct avalon_info *info = avalon->device_data;
+	const int avalon_get_work_count = info->miner_count;
+	char threadname[24];
+
+	snprintf(threadname, 24, "ava_send/%d", avalon->device_id);
+	RenameThread(threadname);
+
+	while (likely(!avalon->shutdown)) {
+		int start_count, end_count, i, j, ret;
+		struct avalon_task at;
+		bool idled = false;
+
+		while (avalon_buffer_full(avalon))
+			nmsleep(40);
+
+		avalon_adjust_freq(info, avalon);
+
+		/* Give other threads a chance to acquire qlock. */
+		i = 0;
+		do {
+			nmsleep(40);
+		} while (!avalon->shutdown && i++ < 15
+			&& avalon->queued < avalon_get_work_count);
+
+		mutex_lock(&info->qlock);
+		start_count = avalon->work_array * avalon_get_work_count;
+		end_count = start_count + avalon_get_work_count;
+		for (i = start_count, j = 0; i < end_count; i++, j++) {
+			while (avalon_buffer_full(avalon))
+				nmsleep(40);
+
+			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
+				avalon_init_task(&at, 0, 0, info->fan_pwm,
+						info->timeout, info->asic_count,
+						info->miner_count, 1, 0, info->frequency);
+				avalon_create_task(&at, avalon->works[i]);
+				info->auto_queued++;
+			} else {
+				int idle_freq = info->frequency;
+
+				if (!info->idle++)
+					idled = true;
+				if (unlikely(info->overheat && opt_avalon_auto))
+					idle_freq = AVALON_MIN_FREQUENCY;
+				avalon_init_task(&at, 0, 0, info->fan_pwm,
+						info->timeout, info->asic_count,
+						info->miner_count, 1, 1, idle_freq);
+				/* Reset the auto_queued count if we end up
+				 * idling any miners. */
+				avalon_reset_auto(info);
+			}
+
+			ret = avalon_send_task(&at, avalon);
+
+			if (unlikely(ret == AVA_SEND_ERROR)) {
+				applog(LOG_ERR, "%s%i: Comms error(buffer)",
+				       avalon->drv->name, avalon->device_id);
+				dev_error(avalon, REASON_DEV_COMMS_ERROR);
+				info->reset = true;
+				break;
+			}
+		}
+
+		bitburner_rotate_array(avalon);
+		pthread_cond_signal(&info->qcond);
+		mutex_unlock(&info->qlock);
+
+		if (unlikely(idled)) {
+			applog(LOG_WARNING, "%s%i: Idled %d miners",
+			       avalon->drv->name, avalon->device_id, idled);
+		}
+	}
+	return NULL;
+}
+
 static bool avalon_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
+	int array_size = AVALON_ARRAY_SIZE;
+	void *(*write_thread_fn)(void *) = avalon_send_tasks;
+
+	if (usb_ident(avalon) == IDENT_BTB) {
+		array_size = BITBURNER_ARRAY_SIZE;
+		write_thread_fn = bitburner_send_tasks;
+	}
 
 	free(avalon->works);
 	avalon->works = calloc(info->miner_count * sizeof(struct work *),
-			       AVALON_ARRAY_SIZE);
+			       array_size);
 	if (!avalon->works)
 		quit(1, "Failed to calloc avalon works in avalon_prepare");
 
@@ -1097,7 +1188,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
 
-	if (pthread_create(&info->write_thr, NULL, avalon_send_tasks, (void *)avalon))
+	if (pthread_create(&info->write_thr, NULL, write_thread_fn, (void *)avalon))
 		quit(1, "Failed to create avalon write_thr");
 
 	avalon_init(avalon);
