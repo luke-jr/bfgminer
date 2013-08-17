@@ -1300,8 +1300,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	/* Half nonce range */
 	us_timeout = 0x80000000ll / info->asic_count / info->frequency;
-	tdiff.tv_sec = us_timeout / 1000000;
-	tdiff.tv_usec = us_timeout - (tdiff.tv_sec * 1000000);
+	us_to_timeval(&tdiff, us_timeout);
 	cgtime(&now);
 	timeradd(&now, &tdiff, &then);
 	timeval_to_spec(&abstime, &then);
