@@ -758,6 +758,7 @@ FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, co
 #define _open_bitstream2(path, path3)  do {  \
 	_open_bitstream(path, NULL, path3);  \
 	_open_bitstream(path, "../share/" PACKAGE, path3);  \
+	_open_bitstream(path, "../" PACKAGE, path3);  \
 } while(0)
 
 #define _open_bitstream3(path)  do {  \
