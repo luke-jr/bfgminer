@@ -1004,6 +1004,64 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	return f;
 }
 
+bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *fn)
+{
+	char buf[0x100];
+	size_t sz;
+	uint8_t xsz, xrt;
+	uint16_t xaddr;
+	FILE *F = open_bitstream(dname, fn);
+	if (!F)
+		return false;
+	while (!feof(F))
+	{
+		if (unlikely(ferror(F)))
+		{
+			applog(LOG_ERR, "Error reading '%s'", fn);
+			goto ihxerr;
+		}
+		fgets(buf, sizeof(buf), F);
+		if (unlikely(buf[0] != ':'))
+			goto ihxerr;
+		if (unlikely(!(
+			hex2bin(&xsz, &buf[1], 1)
+		 && hex2bin((unsigned char*)&xaddr, &buf[3], 2)
+		 && hex2bin(&xrt, &buf[7], 1)
+		)))
+		{
+			applog(LOG_ERR, "Error parsing in '%s'", fn);
+			goto ihxerr;
+		}
+		switch (xrt)
+		{
+			case 0:  // data
+				break;
+			case 1:  // EOF
+				fclose(F);
+				return true;
+			default:
+				applog(LOG_ERR, "Unsupported record type in '%s'", fn);
+				goto ihxerr;
+		}
+		xaddr = be16toh(xaddr);
+		sz = bytes_len(rv);
+		bytes_resize(rv, xaddr + xsz);
+		if (sz < xaddr)
+			memset(&bytes_buf(rv)[sz], 0xff, xaddr - sz);
+		if (unlikely(!(hex2bin(&bytes_buf(rv)[xaddr], &buf[9], xsz))))
+		{
+			applog(LOG_ERR, "Error parsing data in '%s'", fn);
+			goto ihxerr;
+		}
+		// TODO: checksum
+	}
+	
+ihxerr:
+	fclose(F);
+	bytes_reset(rv);
+	return false;
+}
+
 bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *fileprefix)
 {
 	FILE *F;
@@ -1033,7 +1091,9 @@ bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *fileprefix
 			return true;
 	}
 	
-	// TODO: Intel HEX
+	strcpy(&fnbuf[fplen], ".ihx");
+	if (load_bitstream_intelhex(rv, dname, fnbuf))
+		return true;
 	
 	// TODO: Xilinx
 	
