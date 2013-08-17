@@ -914,6 +914,16 @@ void us_to_timespec(struct timespec *spec, int64_t us)
 	spec->tv_nsec = (us - (spec->tv_sec * 1000000)) * 1000;
 }
 
+void timeraddspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec += b->tv_sec;
+	a->tv_nsec += b->tv_nsec;
+	if (a->tv_nsec >+ 1000000000) {
+		a->tv_nsec -= 1000000000;
+		a->tv_sec++;
+	}
+}
+
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
