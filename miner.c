@@ -337,7 +337,7 @@ static int include_count;
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
 
-char *cmd_sick, *cmd_dead;
+char *cmd_idle, *cmd_sick, *cmd_dead;
 
 #if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
@@ -1287,6 +1287,9 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
+	OPT_WITH_ARG("--cmd-idle",
+	             opt_set_charp, NULL, &cmd_idle,
+	             "Execute a command when a device is allowed to be idle (rest or wait)"),
 	OPT_WITH_ARG("--cmd-sick",
 	             opt_set_charp, NULL, &cmd_sick,
 	             "Execute a command when a device is declared sick"),
@@ -7026,6 +7029,7 @@ static struct work *hash_pop(void)
 {
 	struct work *work = NULL, *tmp;
 	int hc;
+	struct timespec ts;
 
 retry:
 	mutex_lock(stgd_lock);
@@ -7042,7 +7046,12 @@ retry:
 				applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
 			staged_full = false;  // Let it fill up before triggering an underrun again
 		}
-		pthread_cond_wait(&getq->cond, stgd_lock);
+		ts = (struct timespec){ .tv_sec = opt_log_interval, };
+		if (ETIMEDOUT == pthread_cond_timedwait(&getq->cond, stgd_lock, &ts))
+		{
+			run_cmd(cmd_idle);
+			pthread_cond_wait(&getq->cond, stgd_lock);
+		}
 	}
 
 	hc = HASH_COUNT(staged_work);
@@ -8230,6 +8239,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				*denable = DEV_RECOVER;
 
 				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
+				run_cmd(cmd_idle);
 			}
 
 			if (thr->getwork) {
