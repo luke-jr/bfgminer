@@ -6231,10 +6231,10 @@ void clear_stratum_shares(struct pool *pool)
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
+		work = sshare->work;
 		if (sshare->work->pool == pool && work->thr_id < my_mining_threads) {
 			HASH_DEL(stratum_shares, sshare);
 			
-			work = sshare->work;
 			sharelog("disconnect", work);
 			
 			diff_cleared += sshare->work->work_difficulty;
