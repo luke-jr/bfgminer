@@ -20,6 +20,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <time.h>
 #ifndef WIN32
   #include <sys/select.h>
   #include <termios.h>
