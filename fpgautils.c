@@ -1004,6 +1004,43 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	return f;
 }
 
+bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *fileprefix)
+{
+	FILE *F;
+	size_t fplen = strlen(fileprefix);
+	char fnbuf[fplen + 4 + 1];
+	int e;
+	
+	bytes_reset(rv);
+	memcpy(fnbuf, fileprefix, fplen);
+	
+	strcpy(&fnbuf[fplen], ".bin");
+	F = open_bitstream(dname, fnbuf);
+	if (F)
+	{
+		char buf[0x100];
+		size_t sz;
+		while ( (sz = fread(buf, 1, sizeof(buf), F)) )
+			bytes_append(rv, buf, sz);
+		e = ferror(F);
+		fclose(F);
+		if (unlikely(e))
+		{
+			applog(LOG_ERR, "Error reading '%s'", fnbuf);
+			bytes_reset(rv);
+		}
+		else
+			return true;
+	}
+	
+	// TODO: Intel HEX
+	
+	// TODO: Xilinx
+	
+	applog(LOG_ERR, "Failed to load bitstream '%s'", fileprefix);
+	return false;
+}
+
 #ifndef WIN32
 
 int get_serial_cts(int fd)
