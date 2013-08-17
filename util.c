@@ -890,6 +890,18 @@ void copy_time(struct timeval *dest, const struct timeval *src)
 	memcpy(dest, src, sizeof(struct timeval));
 }
 
+void timespec_to_val(struct timeval *val, const struct timespec *spec)
+{
+	val->tv_sec = spec->tv_sec;
+	val->tv_usec = spec->tv_nsec / 1000;
+}
+
+void timeval_to_spec(struct timespec *spec, const struct timeval *val)
+{
+	spec->tv_sec = val->tv_sec;
+	spec->tv_nsec = val->tv_usec * 1000;
+}
+
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
