@@ -902,6 +902,12 @@ void timeval_to_spec(struct timespec *spec, const struct timeval *val)
 	spec->tv_nsec = val->tv_usec * 1000;
 }
 
+void us_to_timeval(struct timeval *val, int64_t us)
+{
+	val->tv_sec = us / 1000000;
+	val->tv_usec = us - (val->tv_sec * 1000000);
+}
+
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {

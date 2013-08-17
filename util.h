@@ -80,6 +80,7 @@ bool time_less(struct timeval *a, struct timeval *b);
 void copy_time(struct timeval *dest, const struct timeval *src);
 void timespec_to_val(struct timeval *val, const struct timespec *spec);
 void timeval_to_spec(struct timespec *spec, const struct timeval *val);
+void us_to_timeval(struct timeval *val, int64_t us);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
