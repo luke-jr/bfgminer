@@ -672,6 +672,11 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	return true;
 }
 
+void add_cgpu_live(void *p)
+{
+	add_cgpu(p);
+}
+
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;

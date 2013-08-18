@@ -32,6 +32,8 @@ extern void minerloop_queue(struct thr_info *);
 
 extern void *miner_thread(void *);
 
+extern void add_cgpu_live(void*);
+
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 

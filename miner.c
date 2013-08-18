@@ -9402,21 +9402,12 @@ void start_cgpu(struct cgpu_info *cgpu)
 		proc_enable(cgpu);
 }
 
-int scan_serial(const char *s)
+static
+void _scan_serial(void *p)
 {
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	struct string_elist *orig_scan_devices;
-	int devcount, i, mining_threads_new = 0;
-	unsigned int k;
+	const char *s = p;
 	struct string_elist *iter, *tmp;
-	struct cgpu_info *cgpu;
-	struct thr_info *thr;
-	void *p;
-	char *dummy = "\0";
-	
-	mutex_lock(&mutex);
-	orig_scan_devices = scan_devices;
-	devcount = total_devices;
+	struct string_elist *orig_scan_devices = scan_devices;
 	
 	if (s)
 	{
@@ -9427,6 +9418,31 @@ int scan_serial(const char *s)
 	}
 	
 	drv_detect_all();
+	
+	if (s)
+	{
+		DL_FOREACH_SAFE(scan_devices, iter, tmp)
+		{
+			string_elist_del(&scan_devices, iter);
+		}
+		scan_devices = orig_scan_devices;
+	}
+}
+
+int create_new_cgpus(void (*addfunc)(void*), void *arg)
+{
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	int devcount, i, mining_threads_new = 0;
+	unsigned int k;
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	void *p;
+	char *dummy = "\0";
+	
+	mutex_lock(&mutex);
+	devcount = total_devices;
+	
+	addfunc(arg);
 	
 	wr_lock(&devices_lock);
 	p = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + total_devices_new + 1));
@@ -9483,21 +9499,17 @@ int scan_serial(const char *s)
 #endif
 	
 out:
-	if (s)
-	{
-		DL_FOREACH_SAFE(scan_devices, iter, tmp)
-		{
-			string_elist_del(&scan_devices, iter);
-		}
-		scan_devices = orig_scan_devices;
-	}
-	
 	total_devices_new = 0;
 	
 	devcount = total_devices - devcount;
 	mutex_unlock(&mutex);
 	
 	return devcount;
+}
+
+int scan_serial(const char *s)
+{
+	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
 static void probe_pools(void)
