@@ -890,12 +890,18 @@ void cgsleep_ms(int ms)
 	struct timespec ts_start, ts_end;
 	int ret;
 
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
 	clock_gettime(CLOCK_MONOTONIC, &ts_start);
 	ms_to_timespec(&ts_end, ms);
 	timeraddspec(&ts_end, &ts_start);
 	do {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
 	} while (ret == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 void cgsleep_us(int64_t us)
@@ -903,12 +909,18 @@ void cgsleep_us(int64_t us)
 	struct timespec ts_start, ts_end;
 	int ret;
 
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
 	clock_gettime(CLOCK_MONOTONIC, &ts_start);
 	us_to_timespec(&ts_end, us);
 	timeraddspec(&ts_end, &ts_start);
 	do {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
 	} while (ret == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 /* Reentrant version of cgsleep functions allow start time to be set separately
@@ -916,6 +928,9 @@ void cgsleep_us(int64_t us)
  * counted in the sleep. */
 void cgsleep_prepare_r(struct timespec *ts_start)
 {
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
 }
 
@@ -929,6 +944,9 @@ void cgsleep_ms_r(struct timespec *ts_start, int ms)
 	do {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
 	} while (ret == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 void cgsleep_us_r(struct timespec *ts_start, int us)
@@ -941,31 +959,22 @@ void cgsleep_us_r(struct timespec *ts_start, int us)
 	do {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
 	} while (ret == EINTR);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 /* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
  * on SMP machines */
 void nmsleep(unsigned int msecs)
 {
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
 	cgsleep_ms((int)msecs);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
 }
 
 /* Same for usecs */
 void nusleep(unsigned int usecs)
 {
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
 	cgsleep_us((int64_t)usecs);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
 }
 
 /* Returns the microseconds difference between end and start times as a double */
