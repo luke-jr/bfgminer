@@ -945,10 +945,11 @@ static void nanosleep_abstime(struct timespec *ts_end)
 	gettimeofday(&now, NULL);
 	now_ns = timeval_to_ns(&now);
 	if (unlikely(now_ns >= end_ns))
-		return;
+		goto out;
 	diff_ns = end_ns - now_ns;
 	ns_to_timespec(&ts_diff, diff_ns);
 	nanosleep(&ts_diff, NULL);
+out:
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
