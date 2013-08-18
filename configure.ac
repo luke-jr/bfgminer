@@ -63,6 +63,7 @@ gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
+AC_PROG_CPP
 
 gl_INIT
 
@@ -354,7 +355,6 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			AC_CHECK_DECL([libusb_init],[
 				true
 			],[
-				AC_PROG_CPP
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
 				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed 's/^[^[:space:]]\+[[:space:]]\+\([^[:space:]]\+\)\/.*$/\1/;t;d'`
 				if test "x$libusb_include_path" != "x"; then
@@ -441,7 +441,6 @@ if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h
 	else
-		AC_PROG_CPP
 		AC_MSG_CHECKING([what baud rates your system supports])
 		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
 		if grep -q IOSPEED iospeeds_local.h; then
@@ -506,19 +505,30 @@ else
 		fi
 	fi
 	if test "x$curses" != "xyes"; then
-		for sym in addwstr addstr; do
+		sym=addstr
 			AC_SEARCH_LIBS(${sym}, ${preferl}, [
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
-				cursesmsg="FOUND: ${curseslib}"
-				cursesmsg="${cursesmsg/-l/}"
+				barelib="${curseslib/-l/}"
+				cursesmsg="FOUND: ${barelib}"
 				if test "x${curseslib}" != "xnone required"; then
 					NCURSES_LIBS="${curseslib}"
 				fi
+				
+				# Need to check for headers in subdirectories, to ensure we get wide stuff
+				AC_MSG_CHECKING([for curses header subdirectory])
+				barelib="${barelib/6/}"
+				barelib="${barelib/5/}"
+				cursesincl=`echo "#include <${barelib}/curses.h>" | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^.*:[[:space:]]\+\([^[:space:]]\+\)\/.*/\1/'`
+				if test "x$cursesincl" != "x"; then
+					NCURSES_CPPFLAGS="-I${cursesincl}"
+					AC_MSG_RESULT([$cursesincl])
+				else
+					AC_MSG_RESULT([none found])
+				fi
+				
 				break
 			], [
-				test "x$sym" != "addstr" && continue
-				
 				if test "x$curses" = "xyes"; then
 					AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
 				else
@@ -527,7 +537,6 @@ else
 					cursesmsg='NOT FOUND. TUI support DISABLED'
 				fi
 			])
-		done
 	fi
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
@@ -539,6 +548,7 @@ else
 				#include <curses.h>
 			],[
 				addwstr(L"test");
+				add_wch(WACS_VLINE);
 			])
 		],[
 			AC_MSG_RESULT([yes])
