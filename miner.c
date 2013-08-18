@@ -7820,22 +7820,23 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 	_submit_work_async(work);
 }
 
-void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
+void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
 	
-	if (work)
+	if (bad_nonce_p)
 		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
-		       cgpu->proc_repr, (unsigned long)be32toh(bad_nonce));
+		       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
 	
 	mutex_lock(&stats_lock);
 	hw_errors++;
 	++cgpu->hw_errors;
-	if (work)
+	if (bad_nonce_p)
 	{
 		++total_diff1;
 		++cgpu->diff1;
-		++work->pool->diff1;
+		if (work)
+			++work->pool->diff1;
 		++total_bad_nonces;
 		++cgpu->bad_nonces;
 	}
@@ -7843,6 +7844,11 @@ void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t
 
 	if (thr->cgpu->drv->hw_error)
 		thr->cgpu->drv->hw_error(thr);
+}
+
+void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
+{
+	inc_hw_errors2(thr, work, work ? &bad_nonce : NULL);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
