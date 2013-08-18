@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ BITSTREAMS=(
 
 if [ -d "${reporoot}/${BITSTREAM_PKG_PATH}" ]; then
 (
-	for bs in ${BITSTREAMS}; do
+	for bs in ${BITSTREAMS[@]}; do
 		if ! [ -r "${reporoot}/${BITSTREAM_PKG_PATH}/bitstream-${bs}_all.ipk" ]; then
 			echo "Cannot find ${bs} bitstream package" >&2
 			exit 1
@@ -56,19 +56,10 @@ for cfn in $vcfglist; do
 	if [ -d "$reporoot/${BITSTREAM_PKG_PATH}" ]; then
 	(
 		cd "$reporoot/$plat"
-		for bs in ${BITSTREAMS}; do
+		for bs in ${BITSTREAMS[@]}; do
 			ln -vfs "../${BITSTREAM_PKG_PATH}/bitstream-${bs}_all.ipk" .
 		done
 	)
-	fi
-	if test -n "$plat1"; then
-	(
-		cd "$reporoot/$plat"
-		ln -vfs "../$plat1/"bfgminer*_all.ipk .
-	)
-	else
-		plat1="$plat"
-		cp -v "bin/$plat/packages/"bfgminer*_all.ipk "$reporoot/$plat/"
 	fi
 	staging_dir/host/bin/ipkg-make-index "$reporoot/$plat/" > "$reporoot/$plat/Packages"
 	gzip -9 < "$reporoot/$plat/Packages" > "$reporoot/$plat/Packages.gz"
