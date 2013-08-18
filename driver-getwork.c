@@ -39,7 +39,6 @@ pthread_mutex_t getwork_clients_mutex;
 
 // TODO: X-Hashes-Done?
 // TODO: block getworks if disabled?
-// TODO: maybe reject known-stale shares?
 
 static
 void prune_worklog()
@@ -217,6 +216,9 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		{
 			if (!submit_nonce(thr, work, nonce))
 				rejreason = "H-not-zero";
+			else
+			if (stale_work(work, true))
+				rejreason = "stale";
 			else
 				rejreason = NULL;
 			
