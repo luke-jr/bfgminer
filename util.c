@@ -911,6 +911,38 @@ void cgsleep_us(int64_t us)
 	} while (ret == EINTR);
 }
 
+/* Reentrant version of cgsleep functions allow start time to be set separately
+ * from the beginning of the actual sleep, allowing scheduling delays to be
+ * counted in the sleep. */
+void cgsleep_prepare_r(struct timespec *ts_start)
+{
+	clock_gettime(CLOCK_MONOTONIC, ts_start);
+}
+
+void cgsleep_ms_r(struct timespec *ts_start, int ms)
+{
+	struct timespec ts_end;
+	int ret;
+
+	ms_to_timespec(&ts_end, ms);
+	timeraddspec(&ts_end, ts_start);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
+	} while (ret == EINTR);
+}
+
+void cgsleep_us_r(struct timespec *ts_start, int us)
+{
+	struct timespec ts_end;
+	int ret;
+
+	us_to_timespec(&ts_end, us);
+	timeraddspec(&ts_end, ts_start);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
+	} while (ret == EINTR);
+}
+
 /* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
  * on SMP machines */
 void nmsleep(unsigned int msecs)
