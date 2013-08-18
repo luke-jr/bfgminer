@@ -1401,6 +1401,8 @@ static void *bflsc_get_results(void *userdata)
 	}
 
 	while (sc_info->shutdown == false) {
+		struct timespec ts_start;
+
 		if (bflsc->usbinfo.nodev)
 			return NULL;
 
@@ -1425,6 +1427,7 @@ static void *bflsc_get_results(void *userdata)
 			goto utsura;
 
 		cgtime(&(sc_info->sc_devs[dev].last_check_result));
+		cgsleep_prepare_r(&ts_start);
 
 		readok = bflsc_qres(bflsc, buf, sizeof(buf), dev, &err, &amount, false);
 		if (err < 0 || (!readok && amount != BFLSC_QRES_LEN) || (readok && amount < 1)) {
@@ -1441,7 +1444,7 @@ static void *bflsc_get_results(void *userdata)
 		}
 
 utsura:
-		nmsleep(sc_info->results_sleep_time);
+		cgsleep_ms_r(&ts_start, sc_info->results_sleep_time);
 	}
 
 	return NULL;
