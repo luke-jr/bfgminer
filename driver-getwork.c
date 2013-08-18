@@ -38,7 +38,6 @@ static
 pthread_mutex_t getwork_clients_mutex;
 
 // TODO: X-Hashes-Done?
-// TODO: block getworks if disabled?
 
 static
 void prune_worklog()
@@ -237,6 +236,12 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
+		goto out;
+	}
+	
+	if (cgpu->deven == DEV_DISABLED)
+	{
+		ret = getwork_error(conn, -10, "Virtual device has been disabled", idstr, idstr_sz);
 		goto out;
 	}
 	
