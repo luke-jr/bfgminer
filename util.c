@@ -914,6 +914,12 @@ void us_to_timespec(struct timespec *spec, int64_t us)
 	spec->tv_nsec = (us - (spec->tv_sec * 1000000)) * 1000;
 }
 
+void ms_to_timespec(struct timespec *spec, int64_t ms)
+{
+	spec->tv_sec = ms / 1000;
+	spec->tv_nsec = (ms - (spec->tv_sec * 1000)) * 1000000;
+}
+
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
@@ -922,6 +928,19 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 		a->tv_nsec -= 1000000000;
 		a->tv_sec++;
 	}
+}
+
+void cgsleep_ms(int ms)
+{
+	struct timespec ts_start, ts_end;
+	int ret;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_start);
+	ms_to_timespec(&ts_end, ms);
+	timeraddspec(&ts_end, &ts_start);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
+	} while (ret == EINTR);
 }
 
 /* Returns the microseconds difference between end and start times as a double */
