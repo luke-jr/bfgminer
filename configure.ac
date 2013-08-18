@@ -256,7 +256,9 @@ AC_SUBST(JANSSON_LIBS)
 if test "x$opencl" = xyes; then
 	adl="yes"
 	
-AC_ARG_WITH([sensors],[Build with libsensors monitoring],[true],[with_sensors=auto])
+AC_ARG_WITH([sensors],
+	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
+	[true],[with_sensors=auto])
 if test "x$opencl" != xyes; then
 	with_sensors=no
 fi
