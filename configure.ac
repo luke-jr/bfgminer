@@ -327,13 +327,23 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
-httpsrv=no
-PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd],[
-	AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
-	httpsrv=yes
-],[
-	AC_MSG_WARN([libmicrohttpd not found; getwork proxy will be unavailable])
-])
+httpsrv=auto
+AC_ARG_WITH([libmicrohttpd],
+	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],
+	[httpsrv=$withval]
+)
+if test "x$httpsrv" != "xno"; then
+	PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd],[
+		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
+		httpsrv=yes
+	],[
+		if test "x$httpsrv" = "xyes"; then
+			AC_MSG_ERROR([Unable to find libmicrohttpd])
+		else
+			AC_MSG_WARN([libmicrohttpd not found; getwork proxy will be unavailable])
+		fi
+	])
+fi
 AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
 
 AC_ARG_ENABLE([modminer],
