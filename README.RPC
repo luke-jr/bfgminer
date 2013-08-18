@@ -432,6 +432,10 @@ API V1.25.3
 Modified API commands:
  'setconfig' - add 'http-port' number
 
+Removed output limitation:
+ All replies can now be longer than the previous limitation of 64k, and will
+  only be truncated on a 50ms timeout sending.
+
 ----------
 
 API V1.25.2
