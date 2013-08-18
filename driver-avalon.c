@@ -147,6 +147,7 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	int delay, ret, i, ep = C_AVALON_TASK;
 	struct avalon_info *info;
+	struct timespec ts_start;
 	uint32_t nonce_range;
 	size_t nr_len;
 
@@ -190,6 +191,7 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	info = avalon->device_data;
 	delay = nr_len * 10 * 1000000;
 	delay = delay / info->baud;
+	delay += 4000;
 
 	if (at->reset) {
 		ep = C_AVALON_RESET;
@@ -199,10 +201,10 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
 		hexdump(buf, nr_len);
 	}
+	cgsleep_prepare_r(&ts_start);
 	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
+	cgsleep_us_r(&ts_start, delay);
 
-	delay += 4000;
-	nusleep(delay);
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %dus", delay);
 
 	return ret;
