@@ -884,7 +884,7 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 }
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
- * resolution timer to avoid pool usleep accuracy and overruns. */
+ * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifdef CLOCK_MONOTONIC
 void cgsleep_prepare_r(struct timespec *ts_start)
 {
@@ -967,7 +967,7 @@ void cgsleep_ms_r(struct timespec *ts_start, int ms)
 	nanosleep_abstime(&ts_end);
 }
 
-void cgsleep_us_r(struct timespec *ts_start, int us)
+void cgsleep_us_r(struct timespec *ts_start, int64_t us)
 {
 	struct timespec ts_end;
 

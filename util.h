@@ -88,7 +88,7 @@ void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
 void cgsleep_prepare_r(struct timespec *ts_start);
 void cgsleep_ms_r(struct timespec *ts_start, int ms);
-void cgsleep_us_r(struct timespec *ts_start, int us);
+void cgsleep_us_r(struct timespec *ts_start, int64_t us);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
