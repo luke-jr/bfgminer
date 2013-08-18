@@ -85,6 +85,7 @@ void us_to_timespec(struct timespec *spec, int64_t us);
 void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
 void cgsleep_ms(int ms);
+void cgsleep_us(int64_t us);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
