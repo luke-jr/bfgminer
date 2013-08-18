@@ -6807,7 +6807,8 @@ void hashmeter2(struct thr_info *thr)
 	cgtime(&tv_now);
 	timersub(&tv_now, &thr->tv_lastupdate, &tv_elapsed);
 	/* Update the hashmeter at most 5 times per second */
-	if (tv_elapsed.tv_sec > 0 || tv_elapsed.tv_usec > 200) {
+	if ((thr->hashes_done && (tv_elapsed.tv_sec > 0 || tv_elapsed.tv_usec > 200000)) ||
+	    tv_elapsed.tv_sec >= opt_log_interval) {
 		hashmeter(thr->id, &tv_elapsed, thr->hashes_done);
 		thr->hashes_done = 0;
 		thr->tv_lastupdate = tv_now;
