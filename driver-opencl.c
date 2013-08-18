@@ -855,6 +855,8 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
 			if (fanspeed != -1 || fanpercent != -1) {
 				tailsprintf(logline, "F: ");
+				if (fanspeed > 9999)
+					fanspeed = 9999;
 				if (fanpercent != -1)
 				{
 					tailsprintf(logline, "%d%% ", fanpercent);
