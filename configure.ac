@@ -504,7 +504,7 @@ else
 		fi
 	fi
 	if test "x$curses" != "xyes"; then
-		for sym in addwstr addstr; do
+		sym=addstr
 			AC_SEARCH_LIBS(${sym}, ${preferl}, [
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
@@ -528,8 +528,6 @@ else
 				
 				break
 			], [
-				test "x$sym" != "addstr" && continue
-				
 				if test "x$curses" = "xyes"; then
 					AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
 				else
@@ -538,7 +536,6 @@ else
 					cursesmsg='NOT FOUND. TUI support DISABLED'
 				fi
 			])
-		done
 	fi
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
