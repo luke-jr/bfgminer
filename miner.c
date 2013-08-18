@@ -2291,24 +2291,15 @@ int dev_from_id(int thr_id)
 	return cgpu->device_id;
 }
 
-/* Make the change in the recent value adjust dynamically when the difference
- * is large, but damp it when the values are closer together. This allows the
- * value to change quickly, but not fluctuate too dramatically when it has
- * stabilised. */
-void decay_time(double *f, double fadd)
+/* Create an exponentially decaying average over the opt_log_interval */
+void decay_time(double *f, double fadd, double fsecs)
 {
-	double ratio = 0;
+	double ftotal, fprop;
 
-	if (likely(*f > 0)) {
-		ratio = fadd / *f;
-		if (ratio > 1)
-			ratio = 1 / ratio;
-	}
-
-	if (ratio > 0.63)
-		*f = (fadd * 0.58 + *f) / 1.58;
-	else
-		*f = (fadd + *f * 0.58) / 1.58;
+	fprop = 1.0 - 1 / (exp(fsecs / (double)opt_log_interval));
+	ftotal = 1.0 + fprop;
+	*f += (fadd * fprop);
+	*f /= ftotal;
 }
 
 static int __total_staged(void)
@@ -6640,12 +6631,12 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			thr_id, hashes_done, hashes_done / 1000 / secs);
 
 		/* Rolling average for each thread and each device */
-		decay_time(&thr->rolling, local_mhashes / secs);
+		decay_time(&thr->rolling, local_mhashes / secs, secs);
 		for (i = 0; i < threadobj; i++)
 			thread_rolling += cgpu->thr[i]->rolling;
 
 		mutex_lock(&hash_lock);
-		decay_time(&cgpu->rolling, thread_rolling);
+		decay_time(&cgpu->rolling, thread_rolling, secs);
 		cgpu->total_mhashes += local_mhashes;
 		mutex_unlock(&hash_lock);
 
@@ -6687,7 +6678,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	cgtime(&total_tv_end);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	decay_time(&rolling, local_mhashes_done / local_secs);
+	decay_time(&rolling, local_mhashes_done / local_secs, local_secs);
 	global_hashrate = roundl(rolling) * 1000000;
 
 	timersub(&total_tv_end, &total_tv_start, &total_diff);
