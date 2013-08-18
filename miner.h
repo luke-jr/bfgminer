@@ -855,6 +855,7 @@ extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern int httpsrv_port;
 extern char *opt_api_allow;
 extern char *opt_api_groups;
 extern char *opt_api_description;

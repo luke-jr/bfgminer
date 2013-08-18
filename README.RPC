@@ -427,6 +427,13 @@ api-example.py - a Python script to access the API
 Feature Changelog for external applications using the API:
 
 
+API V1.25.3
+
+Modified API commands:
+ 'setconfig' - add 'http-port' number
+
+----------
+
 API V1.25.2
 
 Modified API commands:
