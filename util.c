@@ -885,83 +885,111 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid pool usleep accuracy and overruns. */
-void cgsleep_ms(int ms)
+#ifdef CLOCK_MONOTONIC
+void cgsleep_prepare_r(struct timespec *ts_start)
 {
-	struct timespec ts_start, ts_end;
+	clock_gettime(CLOCK_MONOTONIC, ts_start);
+}
+
+static void nanosleep_abstime(struct timespec *ts_end)
+{
 	int ret;
+
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
+	} while (ret == EINTR);
+}
+#else
+void cgsleep_prepare_r(struct timespec *ts_start)
+{
+	struct timeval tv_start;
 
 #ifdef WIN32
 	timeBeginPeriod(1);
 #endif
-	clock_gettime(CLOCK_MONOTONIC, &ts_start);
-	ms_to_timespec(&ts_end, ms);
-	timeraddspec(&ts_end, &ts_start);
-	do {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
-	} while (ret == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
+	gettimeofday(&tv_start, NULL);
+	timeval_to_spec(ts_start, &tv_start);
 }
 
-void cgsleep_us(int64_t us)
+static uint64_t timespec_to_ns(struct timespec *ts)
 {
-	struct timespec ts_start, ts_end;
-	int ret;
+	uint64_t ret;
 
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	clock_gettime(CLOCK_MONOTONIC, &ts_start);
-	us_to_timespec(&ts_end, us);
-	timeraddspec(&ts_end, &ts_start);
-	do {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
-	} while (ret == EINTR);
+	ret = (uint64_t)ts->tv_sec * 1000000000;
+	ret += ts->tv_nsec;
+	return ret;
+}
+
+static uint64_t timeval_to_ns(struct timeval *tv)
+{
+	uint64_t ret;
+
+	ret = (uint64_t)tv->tv_sec * 1000000000;
+	ret += tv->tv_usec * 1000;
+	return ret;
+}
+
+static void ns_to_timespec(struct timespec *ts, uint64_t ns)
+{
+	ts->tv_sec = ns / 1000000000;
+	ts->tv_nsec = ns - ((uint64_t)ts->tv_sec * 1000000000ull);
+}
+
+static void nanosleep_abstime(struct timespec *ts_end)
+{
+	uint64_t now_ns, end_ns, diff_ns;
+	struct timespec ts_diff;
+	struct timeval now;
+
+	end_ns = timespec_to_ns(ts_end);
+	gettimeofday(&now, NULL);
+	now_ns = timeval_to_ns(&now);
+	if (unlikely(now_ns >= end_ns))
+		return;
+	diff_ns = end_ns - now_ns;
+	ns_to_timespec(&ts_diff, diff_ns);
+	nanosleep(&ts_diff, NULL);
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
 }
+#endif
 
 /* Reentrant version of cgsleep functions allow start time to be set separately
  * from the beginning of the actual sleep, allowing scheduling delays to be
  * counted in the sleep. */
-void cgsleep_prepare_r(struct timespec *ts_start)
-{
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	clock_gettime(CLOCK_MONOTONIC, ts_start);
-}
-
 void cgsleep_ms_r(struct timespec *ts_start, int ms)
 {
 	struct timespec ts_end;
-	int ret;
 
 	ms_to_timespec(&ts_end, ms);
 	timeraddspec(&ts_end, ts_start);
-	do {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
-	} while (ret == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
+	nanosleep_abstime(&ts_end);
 }
 
 void cgsleep_us_r(struct timespec *ts_start, int us)
 {
 	struct timespec ts_end;
-	int ret;
 
 	us_to_timespec(&ts_end, us);
 	timeraddspec(&ts_end, ts_start);
-	do {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
-	} while (ret == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
+	nanosleep_abstime(&ts_end);
+}
+
+void cgsleep_ms(int ms)
+{
+	struct timespec ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_ms_r(&ts_start, ms);
+}
+
+void cgsleep_us(int64_t us)
+{
+	struct timespec ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_us_r(&ts_start, us);
 }
 
 /* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
