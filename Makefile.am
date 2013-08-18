@@ -86,6 +86,13 @@ endif
 
 bfgminer_SOURCES	+= logging.c
 
+if USE_LIBMICROHTTPD
+bfgminer_SOURCES += httpsrv.c httpsrv.h driver-getwork.c
+bfgminer_LDADD += $(libmicrohttpd_LIBS)
+bfgminer_LDFLAGS += $(libmicrohttpd_LDFLAGS)
+bfgminer_CPPFLAGS += $(libmicrohttpd_CFLAGS)
+endif
+
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c

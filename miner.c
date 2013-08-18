@@ -158,6 +158,11 @@ static char detect_algo;
 bool opt_restart = true;
 static bool opt_nogpu;
 
+#ifdef USE_LIBMICROHTTPD
+#include "httpsrv.h"
+int httpsrv_port = -1;
+#endif
+
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
 static bool devices_enabled[MAX_DEVICES];
@@ -1435,6 +1440,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
+#ifdef USE_LIBMICROHTTPD
+	OPT_WITH_ARG("--http-port",
+	             opt_set_intval, opt_show_intval, &httpsrv_port,
+	             "Port number to listen on for HTTP getwork miners (-1 means disabled)"),
+#endif
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
@@ -3972,6 +3982,10 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Prompting submit_work thread to finish");
 	notifier_wake(submit_waiting_notifier);
 
+#ifdef USE_LIBMICROHTTPD
+	httpsrv_stop();
+#endif
+	
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &control_thr[watchpool_thr_id];
@@ -10064,6 +10078,11 @@ begin_bench:
 	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
+	
+#ifdef USE_LIBMICROHTTPD
+	if (httpsrv_port != -1)
+		httpsrv_start(httpsrv_port);
+#endif
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so

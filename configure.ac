@@ -327,6 +327,15 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
+httpsrv=no
+PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd],[
+	AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
+	httpsrv=yes
+],[
+	AC_MSG_WARN([libmicrohttpd not found; getwork proxy will be unavailable])
+])
+AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
+
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
