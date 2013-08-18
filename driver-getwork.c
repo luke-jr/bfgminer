@@ -38,7 +38,6 @@ static
 pthread_mutex_t getwork_clients_mutex;
 
 // TODO: X-Hashes-Done?
-// TODO: TUI manage username display
 // TODO: block getworks if disabled?
 // TODO: maybe reject known-stale shares?
 
@@ -163,17 +162,20 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	if (!client)
 	{
 		cgpu = malloc(sizeof(*cgpu));
+		client = malloc(sizeof(*client));
 		*cgpu = (struct cgpu_info){
 			.drv = &getwork_drv,
 			.threads = 0,
+			.device_data = client,
+			.device_path = user,
 		};
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
 		{
+			free(client);
 			free(cgpu);
 			ret = getwork_error(conn, -32603, "Failed creating new cgpu", idstr, idstr_sz);
 			goto out;
 		}
-		client = malloc(sizeof(*client));
 		*client = (struct getwork_client){
 			.username = user,
 			.cgpu = cgpu,
@@ -265,8 +267,19 @@ out:
 	return ret;
 }
 
+#ifdef HAVE_CURSES
+static
+void getwork_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct getwork_client *client = cgpu->device_data;
+	wlogprint("Username: %s\n", client->username);
+}
+#endif
+
 struct device_drv getwork_drv = {
 	.dname = "getwork",
 	.name = "SGW",
-// 	.get_api_stats = getwork_stats,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = getwork_wlogprint_status,
+#endif
 };
