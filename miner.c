@@ -9859,15 +9859,12 @@ int main(int argc, char *argv[])
 			register_device(devices[i]);
 	}
 
-#ifdef USE_USBUTILS
 	if (!total_devices) {
+		if (httpsrv_port == -1 && !opt_api_listen)
+			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
-		applog(LOG_WARNING, "Waiting for USB hotplug devices or press q to quit");
+		applog(LOG_WARNING, "Waiting for %s or press 'Q' to quit", (httpsrv_port == -1) ? "RPC commands" : "network devices");
 	}
-#else
-	if (!total_devices)
-		quit(1, "All devices disabled, cannot mine!");
-#endif
 
 	load_temp_config();
 
