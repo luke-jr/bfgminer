@@ -14,6 +14,7 @@
 #define __UTIL_H__
 
 #include <stdbool.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include <curl/curl.h>
@@ -73,6 +74,17 @@
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
 extern char *json_dumps_ANY(json_t *, size_t flags);
+
+static inline
+const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
+{
+	json = json_object_get(json, key);
+	if (!json)
+		return fail;
+	return json_string_value(json) ?: fail;
+}
+
+extern char *__json_array_string(json_t *, unsigned int entry);
 
 static inline
 bool isCspace(int c)
