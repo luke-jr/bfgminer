@@ -1013,7 +1013,7 @@ static void *avalon_send_tasks(void *userdata)
 
 	while (likely(!avalon->shutdown)) {
 		int start_count, end_count, i, j, ret;
-		struct timespec ts_start, ts_end;
+		struct timespec ts_start;
 		struct avalon_task at;
 		bool idled = false;
 		int64_t us_timeout;
@@ -1025,9 +1025,7 @@ static void *avalon_send_tasks(void *userdata)
 
 		/* A full nonce range */
 		us_timeout = 0x100000000ll / info->asic_count / info->frequency;
-		us_to_timespec(&ts_end, us_timeout);
-		clock_gettime(CLOCK_MONOTONIC, &ts_start);
-		timeraddspec(&ts_end, &ts_start);
+		cgsleep_prepare_r(&ts_start);
 
 		mutex_lock(&info->qlock);
 		start_count = avalon->work_array * avalon_get_work_count;
@@ -1085,9 +1083,7 @@ static void *avalon_send_tasks(void *userdata)
 		 * at the current frequency using the clock_nanosleep function
 		 * timed from before we started loading new work so it will
 		 * fall short of the full duration. */
-		do {
-			ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
-		} while (ret == EINTR);
+		cgsleep_us_r(&ts_start, us_timeout);
 	}
 	return NULL;
 }
