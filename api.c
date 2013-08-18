@@ -26,6 +26,9 @@
 #include <sys/types.h>
 
 #include "compat.h"
+#ifdef USE_LIBMICROHTTPD
+#include "httpsrv.h"
+#endif
 #include "miner.h"
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
@@ -3092,6 +3095,15 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		opt_scantime = value;
 	else if (strcasecmp(param, "expiry") == 0)
 		opt_expiry = value;
+#ifdef USE_LIBMICROHTTPD
+	else if (strcasecmp(param, "http-port") == 0)
+	{
+		httpsrv_stop();
+		httpsrv_port = value;
+		if (httpsrv_port != -1)
+			httpsrv_start(httpsrv_port);
+	}
+#endif
 	else {
 		message(io_data, MSG_UNKCON, 0, param, isjson);
 		return;

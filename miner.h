@@ -859,6 +859,7 @@ extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern int httpsrv_port;
 extern char *opt_api_allow;
 extern char *opt_api_groups;
 extern char *opt_api_description;
@@ -1280,6 +1281,7 @@ struct work {
 
 extern void get_datestamp(char *, time_t);
 #define get_now_datestamp(buf)  get_datestamp(buf, INVALID_TIMESTAMP)
+extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
@@ -1333,6 +1335,7 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
+extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
 
 enum api_data_type {

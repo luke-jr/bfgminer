@@ -1594,7 +1594,7 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 /* Extracts a string value from a json array with error checking. To be used
  * when the value of the string returned is only examined and not to be stored.
  * See json_array_string below */
-static char *__json_array_string(json_t *val, unsigned int entry)
+char *__json_array_string(json_t *val, unsigned int entry)
 {
 	json_t *arr_entry;
 

@@ -158,6 +158,11 @@ static char detect_algo;
 bool opt_restart = true;
 static bool opt_nogpu;
 
+#ifdef USE_LIBMICROHTTPD
+#include "httpsrv.h"
+int httpsrv_port = -1;
+#endif
+
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
 static bool devices_enabled[MAX_DEVICES];
@@ -1435,6 +1440,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
+#ifdef USE_LIBMICROHTTPD
+	OPT_WITH_ARG("--http-port",
+	             opt_set_intval, opt_show_intval, &httpsrv_port,
+	             "Port number to listen on for HTTP getwork miners (-1 means disabled)"),
+#endif
 #if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
 	OPT_WITHOUT_ARG("--enable-cpu|-C",
 			opt_set_bool, &opt_usecpu,
@@ -3972,6 +3982,10 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Prompting submit_work thread to finish");
 	notifier_wake(submit_waiting_notifier);
 
+#ifdef USE_LIBMICROHTTPD
+	httpsrv_stop();
+#endif
+	
 	applog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &control_thr[watchpool_thr_id];
@@ -7820,22 +7834,23 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 	_submit_work_async(work);
 }
 
-void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
+void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
 	
-	if (work)
+	if (bad_nonce_p)
 		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
-		       cgpu->proc_repr, (unsigned long)be32toh(bad_nonce));
+		       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
 	
 	mutex_lock(&stats_lock);
 	hw_errors++;
 	++cgpu->hw_errors;
-	if (work)
+	if (bad_nonce_p)
 	{
 		++total_diff1;
 		++cgpu->diff1;
-		++work->pool->diff1;
+		if (work)
+			++work->pool->diff1;
 		++total_bad_nonces;
 		++cgpu->bad_nonces;
 	}
@@ -7843,6 +7858,11 @@ void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t
 
 	if (thr->cgpu->drv->hw_error)
 		thr->cgpu->drv->hw_error(thr);
+}
+
+void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
+{
+	inc_hw_errors2(thr, work, work ? &bad_nonce : NULL);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -9402,21 +9422,12 @@ void start_cgpu(struct cgpu_info *cgpu)
 		proc_enable(cgpu);
 }
 
-int scan_serial(const char *s)
+static
+void _scan_serial(void *p)
 {
-	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-	struct string_elist *orig_scan_devices;
-	int devcount, i, mining_threads_new = 0;
-	unsigned int k;
+	const char *s = p;
 	struct string_elist *iter, *tmp;
-	struct cgpu_info *cgpu;
-	struct thr_info *thr;
-	void *p;
-	char *dummy = "\0";
-	
-	mutex_lock(&mutex);
-	orig_scan_devices = scan_devices;
-	devcount = total_devices;
+	struct string_elist *orig_scan_devices = scan_devices;
 	
 	if (s)
 	{
@@ -9427,6 +9438,31 @@ int scan_serial(const char *s)
 	}
 	
 	drv_detect_all();
+	
+	if (s)
+	{
+		DL_FOREACH_SAFE(scan_devices, iter, tmp)
+		{
+			string_elist_del(&scan_devices, iter);
+		}
+		scan_devices = orig_scan_devices;
+	}
+}
+
+int create_new_cgpus(void (*addfunc)(void*), void *arg)
+{
+	static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	int devcount, i, mining_threads_new = 0;
+	unsigned int k;
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	void *p;
+	char *dummy = "\0";
+	
+	mutex_lock(&mutex);
+	devcount = total_devices;
+	
+	addfunc(arg);
 	
 	wr_lock(&devices_lock);
 	p = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + total_devices_new + 1));
@@ -9483,21 +9519,17 @@ int scan_serial(const char *s)
 #endif
 	
 out:
-	if (s)
-	{
-		DL_FOREACH_SAFE(scan_devices, iter, tmp)
-		{
-			string_elist_del(&scan_devices, iter);
-		}
-		scan_devices = orig_scan_devices;
-	}
-	
 	total_devices_new = 0;
 	
 	devcount = total_devices - devcount;
 	mutex_unlock(&mutex);
 	
 	return devcount;
+}
+
+int scan_serial(const char *s)
+{
+	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
 static void probe_pools(void)
@@ -10046,6 +10078,11 @@ begin_bench:
 	thr = &control_thr[api_thr_id];
 	if (thr_info_create(thr, NULL, api_thread, thr))
 		quit(1, "API thread create failed");
+	
+#ifdef USE_LIBMICROHTTPD
+	if (httpsrv_port != -1)
+		httpsrv_start(httpsrv_port);
+#endif
 
 #ifdef HAVE_CURSES
 	/* Create curses input thread for keyboard input. Create this last so
