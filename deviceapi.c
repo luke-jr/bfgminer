@@ -48,6 +48,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 		} else {
 			applog(LOG_ERR, "%"PRIpreprv" failure, disabling!", cgpu->proc_repr);
 			cgpu->deven = DEV_RECOVER_ERR;
+			run_cmd(cmd_idle);
 			return false;
 		}
 	}
@@ -136,6 +137,7 @@ struct work *get_and_prepare_work(struct thr_info *thr)
 		free_work(work);
 		applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
 		proc->deven = DEV_RECOVER_ERR;
+		run_cmd(cmd_idle);
 		return NULL;
 	}
 	return work;
@@ -324,7 +326,10 @@ void job_start_abort(struct thr_info *mythr, bool failure)
 	struct cgpu_info *proc = mythr->cgpu;
 	
 	if (failure)
+	{
 		proc->deven = DEV_RECOVER_ERR;
+		run_cmd(cmd_idle);
+	}
 	mythr->work = NULL;
 	mythr->_job_transition_in_progress = false;
 }

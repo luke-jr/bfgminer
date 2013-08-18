@@ -854,6 +854,7 @@ extern bool have_longpoll;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
+extern char *cmd_idle, *cmd_sick, *cmd_dead;
 extern char *cgminer_path;
 extern bool opt_fail_only;
 extern bool opt_autofan;
