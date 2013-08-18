@@ -860,20 +860,19 @@ static void *avalon_get_results(void *userdata)
 {
 	struct cgpu_info *avalon = (struct cgpu_info *)userdata;
 	struct avalon_info *info = avalon->device_data;
-	int offset = 0, read_delay = 0, ret = 0;
 	const int rsize = AVALON_FTDI_READSIZE;
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
-	struct timeval tv_start, tv_end;
+	struct timespec ts_start;
+	int offset = 0, ret = 0;
 	char threadname[24];
 
 	snprintf(threadname, 24, "ava_recv/%d", avalon->device_id);
 	RenameThread(threadname);
+	cgsleep_prepare_r(&ts_start);
 
 	while (likely(!avalon->shutdown)) {
 		unsigned char buf[rsize];
-		struct timeval tv_diff;
-		int us_diff;
 
 		if (offset >= (int)AVALON_READ_SIZE)
 			avalon_parse_results(avalon, info, thr, readbuf, &offset);
@@ -894,17 +893,10 @@ static void *avalon_get_results(void *userdata)
 		 * to leave the interface idle for writes to occur, but do not
 		 * sleep if we have been receiving data, and we do not yet have
 		 * a full result as more may be coming. */
-		if (ret < 1 || offset == 0) {
-			cgtime(&tv_end);
-			timersub(&tv_end, &tv_start, &tv_diff);
-			/* Assume it has not been > 1 second so ignore tv_sec */
-			us_diff = tv_diff.tv_usec;
-			read_delay = AVALON_READ_TIMEOUT * 1000 - us_diff;
-			if (likely(read_delay >= 1000))
-				nusleep(read_delay);
-		}
+		if (ret < 1 || offset == 0)
+			cgsleep_ms_r(&ts_start, AVALON_READ_TIMEOUT);
 
-		cgtime(&tv_start);
+		cgsleep_prepare_r(&ts_start);
 		ret = avalon_read(avalon, buf, rsize, AVALON_READ_TIMEOUT,
 				  C_AVALON_READ);
 
