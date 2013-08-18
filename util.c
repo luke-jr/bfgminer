@@ -804,53 +804,6 @@ void thr_info_cancel(struct thr_info *thr)
 	cgsem_destroy(&thr->sem);
 }
 
-/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
- * on SMP machines */
-void nmsleep(unsigned int msecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(msecs, 1000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
-/* Same for usecs */
-void nusleep(unsigned int usecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(usecs, 1000000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
 /* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
  * with tz set to NULL, and windows' default resolution is only 15ms, this
  * gives us higher resolution times on windows. */
@@ -930,6 +883,8 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	}
 }
 
+/* These are cgminer specific sleep functions that use an absolute nanosecond
+ * resolution timer to avoid pool usleep accuracy and overruns. */
 void cgsleep_ms(int ms)
 {
 	struct timespec ts_start, ts_end;
@@ -941,6 +896,44 @@ void cgsleep_ms(int ms)
 	do {
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
 	} while (ret == EINTR);
+}
+
+void cgsleep_us(int64_t us)
+{
+	struct timespec ts_start, ts_end;
+	int ret;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts_start);
+	us_to_timespec(&ts_end, us);
+	timeraddspec(&ts_end, &ts_start);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts_end, NULL);
+	} while (ret == EINTR);
+}
+
+/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
+ * on SMP machines */
+void nmsleep(unsigned int msecs)
+{
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	cgsleep_ms((int)msecs);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
+}
+
+/* Same for usecs */
+void nusleep(unsigned int usecs)
+{
+#ifdef WIN32
+	timeBeginPeriod(1);
+#endif
+	cgsleep_us((int64_t)usecs);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 }
 
 /* Returns the microseconds difference between end and start times as a double */
