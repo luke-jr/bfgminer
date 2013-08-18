@@ -157,6 +157,14 @@ typedef struct bytes_t {
 	size_t allocsz;
 } bytes_t;
 
+#define BYTES_INIT ((bytes_t){.buf=NULL,})
+
+static inline
+void bytes_init(bytes_t *b)
+{
+	*b = BYTES_INIT;
+}
+
 // This can't be inline without ugly const/non-const issues
 #define bytes_buf(b)  ((b)->buf)
 
@@ -186,12 +194,17 @@ void bytes_resize(bytes_t *b, size_t newsz)
 }
 
 static inline
-void bytes_cat(bytes_t *b, const bytes_t *cat)
+void bytes_append(bytes_t *b, const void *add, size_t addsz)
 {
 	size_t origsz = bytes_len(b);
-	size_t addsz = bytes_len(cat);
 	bytes_resize(b, origsz + addsz);
-	memcpy(&bytes_buf(b)[origsz], bytes_buf(cat), addsz);
+	memcpy(&bytes_buf(b)[origsz], add, addsz);
+}
+
+static inline
+void bytes_cat(bytes_t *b, const bytes_t *cat)
+{
+	bytes_append(b, bytes_buf(cat), bytes_len(cat));
 }
 
 static inline
@@ -209,6 +222,12 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 		dst->allocsz = half;
 	dst->buf = malloc(dst->allocsz);
 	memcpy(dst->buf, src->buf, dst->sz);
+}
+
+static inline
+void bytes_reset(bytes_t *b)
+{
+	b->sz = 0;
 }
 
 static inline

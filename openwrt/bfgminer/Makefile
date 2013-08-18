@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=3.1.4
+PKG_VERSION:=9999
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
@@ -110,41 +110,6 @@ define Package/bitforce-firmware-flash/install
 endef
 
 ALL_$(PKG_NAME)_PACKAGES += bitforce-firmware-flash
-
-#### Bitstreams ####
-
-define Package/$(PKG_NAME)/BitstreamTemplate
-
-define Package/$(PKG_NAME)-bitstream-$(1)
-$(call Package/$(PKG_NAME)/Default)
-	TITLE:=$(2)
-	PKGARCH:=all
-endef
-
-define Package/$(PKG_NAME)-bitstream-$(1)/description
-$(2)
-endef
-
-define Package/$(PKG_NAME)-bitstream-$(1)/install
-	$(INSTALL_DIR) $$(1)/usr/share/$(PKG_NAME)/bitstreams
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/share/$(PKG_NAME)/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
-endef
-
-ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)-bitstream-$(1)
-
-endef
-
-define Package/$(PKG_NAME)/ZtexBitstreamTemplate
-$(call Package/$(PKG_NAME)/BitstreamTemplate,ztex-$(1),Ztex $(2) FPGA bitstream (for $(PKG_TITLE) w/ libusb support))
-endef
-
-$(eval $(call Package/$(PKG_NAME)/BitstreamTemplate,fpgaminer,ModMiner/X6500 FPGA bitstream (for $(PKG_TITLE))))
-$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15b1,1.15b))
-$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d1,1.15d))
-$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d3,1.15d))
-$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15d4,1.15d & 1.15x))
-$(eval $(call Package/$(PKG_NAME)/ZtexBitstreamTemplate,ufm1_15y1,1.15y))
-
 
 
 $(foreach bitstream,$(ALL_$(PKG_NAME)_PACKAGES),$(eval $(call BuildPackage,$(bitstream))))

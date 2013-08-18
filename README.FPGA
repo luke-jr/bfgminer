@@ -5,10 +5,12 @@ This README contains extended details about FPGA mining with BFGMiner
 ModMiner (MMQ)
 --------------
 
-The mining bitstream does not survive a power cycle, so BFGMiner will upload
-it, if it needs to, before it starts mining (approx 3min)
-
-The red LED also flashes while it is uploading the bitstream
+ModMiner does not have any persistent storage for bitstreams, so BFGMiner must
+upload it after power on. For this to work, you must first download the
+necessary bitstream file to BFGMiner's "bitstreams" directory, and give it the
+name "fpgaminer_x6500-overclocker-0402.bit". You can download this bitstream
+from FPGA Mining LLC's website:
+    http://www.fpgamining.com/documentation/firmware
 
 -
 
@@ -220,6 +222,7 @@ The delay doesn't affect the calculation of the correct hash time
 
 
 X6500
+-----
 
 Since X6500 FPGAs do not use serial ports for communication, the --scan-serial
 option instead works with product serial numbers. By default, any devices with
@@ -232,40 +235,57 @@ power connector slot. If yours is missing, devices seen by the system can be
 displayed by starting bfgminer in debug mode. To get a simple list of devices,
 with the debug output shown, you can use: bfgminer -D -d? -T
 
+X6500 does not have any persistent storage for bitstreams, so BFGMiner must
+upload it after power on. For this to work, you must first download the
+necessary bitstream file to BFGMiner's "bitstreams" directory, and give it the
+name "fpgaminer_x6500-overclocker-0402.bit". You can download this bitstream
+from FPGA Mining LLC's website:
+    http://www.fpgamining.com/documentation/firmware
+
+
 ZTEX FPGA Boards
----------------- 
+----------------
+
 http://www.ztex.de sells two boards suitable for mining: the 1.15x with 1 FPGA
 and the 1.15y with 4 FPGAs. ZTEX distributes their own mining software and
-drivers.  BFGMiner has full support for these boards.  To get started, you'll
-need to install the Java JDK version 6 or later.
+drivers. BFGMiner has full support for these boards, as long as they have at
+least the "dummy" mining bitstreams installed on them.
 
---- Windows ---
+If your boards do not have a mining bitstream yet, you must first, install
+ZTEX's BTCMiner (requires Java JDK version 6 or later) and install one.
+=== WINDOWS NOTE ===
 Upon first powering up and connecting the board via USB, windows will attempt
 and fail to find the appropriate drivers.  To load the initial firmware on the
 board, you'll need the EZ-USB FX2 SDK from here:
     http://www.ztex.de/downloads/#firmware_kit
 Extract the firmware kit and use the driver within libusb-win32/ztex.inf.
-Windows should now recognize the board and you're ready to program it.  Grab
-the latest miner jar from http://www.ztex.de/btcminer/#download and program the
-appropriate dummy firmware for your board.  The command should look something
-like (for a single FPGA board):
+Windows should now recognize the board and you're ready to program it.
+=== END OF WINDOWS ===
+Grab the latest miner jar from http://www.ztex.de/btcminer/#download and program
+the appropriate dummy firmware for your board.  The command should look
+something like (for a single FPGA board):
+    java -cp ZtexBTCMiner-120417.jar BTCMiner -m p -f **FILENAME** -s 01-02-01
+For ZTEX 1.15x boards, the dummy bitstream filename is ztex_ufm1_15d.ihx
+For ZTEX 1.15y boards, the dummy bitstream filename is ztex_ufm1_15y.ihx
 
-java -cp ZtexBTCMiner-120417.jar BTCMiner -m p -f ztex_ufm1_15d.ihx -s 01-02-01
-
-At this point, you're ready to mine with ZTEX's miner.  However, if you'd like
-to use BFGMiner, you'll have to swap the USB drivers.  The BFGMiner compatible
-WinUSB drivers for the board can be generated with this tool:
+=== WINDOWS NOTE ===
+To mine using BFGMiner, you'll have to swap the USB drivers. The BFGMiner-
+compatible WinUSB drivers for the board can be generated with this tool:
     http://sourceforge.net/projects/libwdi/files/zadig/
 Basic usage instructions for Zadig can be found here:
     https://github.com/pbatard/libwdi/wiki/Zadig
 Once Zadig generates and installs a WinUSB driver, ensure everything is working
 by running:
-
-bfgminer -D -d? -T
-
+    bfgminer -D -d? -T
 You should see something like this in the output:
-[2013-01-22 20:19:11] Found 1 ztex board
-[2013-01-22 20:19:11] ZTX 0: Found Ztex (ZTEX 0001-02-01-1)
+    [2013-01-22 20:19:11] Found 1 ztex board
+    [2013-01-22 20:19:11] ZTX 0: Found Ztex (ZTEX 0001-02-01-1)
+=== END OF WINDOWS ===
 
-Now you're ready to mine.  It's usually useful to mine with the -D -T options
-and watch for ZTEX related messages.
+If you have installed a dummy bitstream, you will now need to copy the main
+mining bitstream where BFGMiner can find it. This are usually the same as the
+dummy bitstream filename, but with a number added to the end. Extract the
+ZtexBTCMiner-120417.jar file using any unzip utility, and look for the proper
+*.ihx and *.bit files (the latter will be inside the 'fpga' directory of the
+jar). Copy them to BFGMiner's "bitstreams" directory, and you're ready to start
+mining.
