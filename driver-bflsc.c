@@ -816,7 +816,7 @@ reinit:
 	}
 
 	sc_info->scan_sleep_time = BAS_SCAN_TIME;
-	sc_info->results_sleep_time = BAS_RES_TIME;
+	sc_info->results_sleep_time = BFLSC_RES_TIME;
 	sc_info->default_ms_work = BAS_WORK_TIME;
 	latency = BAS_LATENCY;
 
@@ -827,7 +827,6 @@ reinit:
 	if (sc_info->sc_count > 1) {
 		newname = BFLSC_MINIRIG;
 		sc_info->scan_sleep_time = BAM_SCAN_TIME;
-		sc_info->results_sleep_time = BAM_RES_TIME;
 		sc_info->default_ms_work = BAM_WORK_TIME;
 		bflsc->usbdev->ident = IDENT_BAM;
 		latency = BAM_LATENCY;
@@ -835,14 +834,12 @@ reinit:
 		if (sc_info->sc_devs[0].engines < 34) { // 16 * 2 + 2
 			newname = BFLSC_JALAPENO;
 			sc_info->scan_sleep_time = BAJ_SCAN_TIME;
-			sc_info->results_sleep_time = BAJ_RES_TIME;
 			sc_info->default_ms_work = BAJ_WORK_TIME;
 			bflsc->usbdev->ident = IDENT_BAJ;
 			latency = BAJ_LATENCY;
 		} else if (sc_info->sc_devs[0].engines < 130)  { // 16 * 8 + 2
 			newname = BFLSC_LITTLESINGLE;
 			sc_info->scan_sleep_time = BAL_SCAN_TIME;
-			sc_info->results_sleep_time = BAL_RES_TIME;
 			sc_info->default_ms_work = BAL_WORK_TIME;
 			bflsc->usbdev->ident = IDENT_BAL;
 			latency = BAL_LATENCY;

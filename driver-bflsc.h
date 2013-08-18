@@ -314,13 +314,10 @@ struct SaveString {
 // SCAN_TIME - delay after sending work
 // RES_TIME - delay between checking for results
 #define BAM_SCAN_TIME 20
-#define BAM_RES_TIME 2
 #define BAS_SCAN_TIME 360
-#define BAS_RES_TIME 36
 #define BAL_SCAN_TIME 720
-#define BAL_RES_TIME 72
 #define BAJ_SCAN_TIME 1000
-#define BAJ_RES_TIME 100
+#define BFLSC_RES_TIME 100
 #define BFLSC_MAX_SLEEP 2000
 
 #define BAJ_LATENCY LATENCY_STD
