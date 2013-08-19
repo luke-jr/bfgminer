@@ -597,7 +597,7 @@ size_t io_flush(struct io_data *io_data, bool complete)
 		if (select(io_data->sock + 1, NULL, &wd, NULL, &tv) < 1)
 			break;
 		
-		n = send(io_data->sock, &bytes_buf(&io_data->data)[sent], tosend, 0);
+		n = send(io_data->sock, (void*)&bytes_buf(&io_data->data)[sent], tosend, 0);
 		if (SOCKETFAIL(n))
 		{
 			if (!sock_blocks())
