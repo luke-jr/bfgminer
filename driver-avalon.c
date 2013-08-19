@@ -660,6 +660,31 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 	}
 }
 
+static void bitburner_get_version(struct cgpu_info *avalon)
+{
+	struct avalon_info *info = avalon->device_data;
+	uint8_t buf[3];
+	int err;
+	int amount;
+
+	err = usb_transfer_read(avalon, FTDI_TYPE_IN, BITBURNER_REQUEST,
+			BITBURNER_VALUE, BITBURNER_INDEX_GET_VERSION,
+			(char *)buf, sizeof(buf), &amount,
+			C_GETVERSION);
+	if (unlikely(err != 0 || amount != sizeof(buf))) {
+		applog(LOG_DEBUG, "%s%i: GetVersion failed: err=%d, amt=%d assuming %d.%d.%d",
+			avalon->drv->name, avalon->device_id, err, amount,
+			BITBURNER_VERSION1, BITBURNER_VERSION2, BITBURNER_VERSION3);
+		info->version1 = BITBURNER_VERSION1;
+		info->version2 = BITBURNER_VERSION2;
+		info->version3 = BITBURNER_VERSION3;
+	} else {
+		info->version1 = buf[0];
+		info->version2 = buf[1];
+		info->version3 = buf[2];
+	}
+}
+
 static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, miner_count, asic_count, timeout, frequency;
@@ -746,6 +771,8 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 				BITBURNER_MAX_COREMV);
 		} else
 			bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
+
+		bitburner_get_version(avalon);
 	}
 
 	return true;
@@ -1454,6 +1481,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct avalon_info *info = cgpu->device_data;
+	char buf[64];
 	int i;
 
 	root = api_add_int(root, "baud", &(info->baud), false);
@@ -1480,6 +1508,10 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 		sprintf(mcw, "match_work_count%d", i + 1);
 		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
 	}
+
+	snprintf(buf, sizeof(buf), "%"PRIu8".%"PRIu8".%"PRIu8,
+			info->version1, info->version2, info->version3);
+	root = api_add_string(root, "version", buf, true);
 
 	return root;
 }
