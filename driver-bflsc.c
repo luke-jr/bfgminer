@@ -1401,7 +1401,7 @@ static void *bflsc_get_results(void *userdata)
 	}
 
 	while (sc_info->shutdown == false) {
-		struct timespec ts_start;
+		cgtimer_t ts_start;
 
 		if (bflsc->usbinfo.nodev)
 			return NULL;

@@ -147,7 +147,7 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
 	int delay, ret, i, ep = C_AVALON_TASK;
 	struct avalon_info *info;
-	struct timespec ts_start;
+	cgtimer_t ts_start;
 	uint32_t nonce_range;
 	size_t nr_len;
 
@@ -865,7 +865,7 @@ static void *avalon_get_results(void *userdata)
 	const int rsize = AVALON_FTDI_READSIZE;
 	char readbuf[AVALON_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
-	struct timespec ts_start;
+	cgtimer_t ts_start;
 	int offset = 0, ret = 0;
 	char threadname[24];
 
@@ -1015,7 +1015,7 @@ static void *avalon_send_tasks(void *userdata)
 
 	while (likely(!avalon->shutdown)) {
 		int start_count, end_count, i, j, ret;
-		struct timespec ts_start;
+		cgtimer_t ts_start;
 		struct avalon_task at;
 		bool idled = false;
 		int64_t us_timeout;

@@ -906,7 +906,7 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifndef WIN32
-void cgsleep_prepare_r(struct timespec *ts_start)
+void cgsleep_prepare_r(cgtimer_t *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
 }
@@ -919,6 +919,28 @@ static void nanosleep_abstime(struct timespec *ts_end)
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
 	} while (ret == EINTR);
 }
+
+/* Reentrant version of cgsleep functions allow start time to be set separately
+ * from the beginning of the actual sleep, allowing scheduling delays to be
+ * counted in the sleep. */
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	struct timespec ts_end;
+
+	ms_to_timespec(&ts_end, ms);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	struct timespec ts_end;
+
+	us_to_timespec(&ts_end, us);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+
 #else
 static void dtime_to_timespec(struct timespec *ts, DWORD dtime)
 {
@@ -928,65 +950,39 @@ static void dtime_to_timespec(struct timespec *ts, DWORD dtime)
 	ts->tv_nsec = tsdiv.rem * 1000000;
 }
 
-static DWORD timespec_to_dtime(const struct timespec *ts)
+void cgsleep_prepare_r(cgtimer_t *ts_start)
 {
-	DWORD ret;
-
-	ret = ts->tv_sec * 1000;
-	ret += ts->tv_nsec / 1000000;
-	return ret;
-}
-
-void cgsleep_prepare_r(struct timespec *ts_start)
-{
-	DWORD dtime;
-
 	timeBeginPeriod(1);
-	dtime = timeGetTime();
-	dtime_to_timespec(ts_start, dtime);
+	*ts_start = timeGetTime();
 }
 
-static void nanosleep_abstime(struct timespec *ts_end)
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
-	DWORD now_ms, end_ms, diff_ms;
+	DWORD dnow, dend, ddiff;
 	struct timespec ts_diff;
 
-	end_ms = timespec_to_dtime(ts_end);
-	now_ms = timeGetTime();
-	if (unlikely(now_ms >= end_ms))
+	dend = *ts_start + ms;
+	dnow = timeGetTime();
+	if (unlikely(dnow >= dend))
 		goto out;
-	diff_ms = end_ms - now_ms;
-	dtime_to_timespec(&ts_diff, diff_ms);
+	ddiff = dend - dnow;
+	dtime_to_timespec(&ts_diff, ddiff);
 	nanosleep(&ts_diff, NULL);
 out:
 	timeEndPeriod(1);
 }
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	int ms = us / 1000;
+
+	cgsleep_ms_r(ts_start, ms);
+}
 #endif
-
-/* Reentrant version of cgsleep functions allow start time to be set separately
- * from the beginning of the actual sleep, allowing scheduling delays to be
- * counted in the sleep. */
-void cgsleep_ms_r(struct timespec *ts_start, int ms)
-{
-	struct timespec ts_end;
-
-	ms_to_timespec(&ts_end, ms);
-	timeraddspec(&ts_end, ts_start);
-	nanosleep_abstime(&ts_end);
-}
-
-void cgsleep_us_r(struct timespec *ts_start, int64_t us)
-{
-	struct timespec ts_end;
-
-	us_to_timespec(&ts_end, us);
-	timeraddspec(&ts_end, ts_start);
-	nanosleep_abstime(&ts_end);
-}
 
 void cgsleep_ms(int ms)
 {
-	struct timespec ts_start;
+	cgtimer_t ts_start;
 
 	cgsleep_prepare_r(&ts_start);
 	cgsleep_ms_r(&ts_start, ms);
@@ -994,7 +990,7 @@ void cgsleep_ms(int ms)
 
 void cgsleep_us(int64_t us)
 {
-	struct timespec ts_start;
+	cgtimer_t ts_start;
 
 	cgsleep_prepare_r(&ts_start);
 	cgsleep_us_r(&ts_start, us);
