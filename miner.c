@@ -9772,6 +9772,8 @@ int main(int argc, char *argv[])
 	if (opt_benchmark) {
 		struct pool *pool;
 
+		if (opt_scrypt)
+			quit(1, "Cannot use benchmark mode with scrypt");
 		want_longpoll = false;
 		pool = add_pool();
 		pool->rpc_url = malloc(255);
