@@ -807,16 +807,30 @@ void thr_info_cancel(struct thr_info *thr)
 /* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
  * with tz set to NULL, and windows' default resolution is only 15ms, this
  * gives us higher resolution times on windows. */
+#ifndef WIN32
 void cgtime(struct timeval *tv)
 {
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
 	gettimeofday(tv, NULL);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
 }
+#else
+static void dtime_to_timeval(struct timeval *tv, DWORD dtime)
+{
+	ldiv_t tvdiv = ldiv(dtime, 1000);
+
+	tv->tv_sec = tvdiv.quot;
+	tv->tv_usec = tvdiv.rem * 1000;
+}
+
+void cgtime(struct timeval *tv)
+{
+	DWORD dtime;
+
+	//timeBeginPeriod(1);
+	dtime = timeGetTime();
+	//timeEndPeriod(1);
+	dtime_to_timeval(tv, dtime);
+}
+#endif
 
 void subtime(struct timeval *a, struct timeval *b)
 {
@@ -857,27 +871,33 @@ void timeval_to_spec(struct timespec *spec, const struct timeval *val)
 
 void us_to_timeval(struct timeval *val, int64_t us)
 {
-	val->tv_sec = us / 1000000;
-	val->tv_usec = us - (val->tv_sec * 1000000);
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem;
 }
 
 void us_to_timespec(struct timespec *spec, int64_t us)
 {
-	spec->tv_sec = us / 1000000;
-	spec->tv_nsec = (us - (spec->tv_sec * 1000000)) * 1000;
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.rem * 1000;
 }
 
 void ms_to_timespec(struct timespec *spec, int64_t ms)
 {
-	spec->tv_sec = ms / 1000;
-	spec->tv_nsec = (ms - (spec->tv_sec * 1000)) * 1000000;
+	lldiv_t tvdiv = lldiv(ms, 1000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.quot * 1000000;
 }
 
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
 	a->tv_nsec += b->tv_nsec;
-	if (a->tv_nsec >+ 1000000000) {
+	if (a->tv_nsec >= 1000000000) {
 		a->tv_nsec -= 1000000000;
 		a->tv_sec++;
 	}
@@ -885,7 +905,7 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
-#ifdef CLOCK_MONOTONIC
+#ifndef WIN32
 void cgsleep_prepare_r(struct timespec *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
@@ -900,59 +920,46 @@ static void nanosleep_abstime(struct timespec *ts_end)
 	} while (ret == EINTR);
 }
 #else
+static void dtime_to_timespec(struct timespec *ts, DWORD dtime)
+{
+	ldiv_t tsdiv = ldiv(dtime, 1000);
+
+	ts->tv_sec = tsdiv.quot;
+	ts->tv_nsec = tsdiv.rem * 1000000;
+}
+
+static DWORD timespec_to_dtime(const struct timespec *ts)
+{
+	DWORD ret;
+
+	ret = ts->tv_sec * 1000;
+	ret += ts->tv_nsec / 1000000;
+	return ret;
+}
+
 void cgsleep_prepare_r(struct timespec *ts_start)
 {
-	struct timeval tv_start;
+	DWORD dtime;
 
-#ifdef WIN32
 	timeBeginPeriod(1);
-#endif
-	gettimeofday(&tv_start, NULL);
-	timeval_to_spec(ts_start, &tv_start);
-}
-
-static uint64_t timespec_to_ns(struct timespec *ts)
-{
-	uint64_t ret;
-
-	ret = (uint64_t)ts->tv_sec * 1000000000;
-	ret += ts->tv_nsec;
-	return ret;
-}
-
-static uint64_t timeval_to_ns(struct timeval *tv)
-{
-	uint64_t ret;
-
-	ret = (uint64_t)tv->tv_sec * 1000000000;
-	ret += tv->tv_usec * 1000;
-	return ret;
-}
-
-static void ns_to_timespec(struct timespec *ts, uint64_t ns)
-{
-	ts->tv_sec = ns / 1000000000;
-	ts->tv_nsec = ns - ((uint64_t)ts->tv_sec * 1000000000ull);
+	dtime = timeGetTime();
+	dtime_to_timespec(ts_start, dtime);
 }
 
 static void nanosleep_abstime(struct timespec *ts_end)
 {
-	uint64_t now_ns, end_ns, diff_ns;
+	DWORD now_ms, end_ms, diff_ms;
 	struct timespec ts_diff;
-	struct timeval now;
 
-	end_ns = timespec_to_ns(ts_end);
-	gettimeofday(&now, NULL);
-	now_ns = timeval_to_ns(&now);
-	if (unlikely(now_ns >= end_ns))
+	end_ms = timespec_to_dtime(ts_end);
+	now_ms = timeGetTime();
+	if (unlikely(now_ms >= end_ms))
 		goto out;
-	diff_ns = end_ns - now_ns;
-	ns_to_timespec(&ts_diff, diff_ns);
+	diff_ms = end_ms - now_ms;
+	dtime_to_timespec(&ts_diff, diff_ms);
 	nanosleep(&ts_diff, NULL);
 out:
-#ifdef WIN32
 	timeEndPeriod(1);
-#endif
 }
 #endif
 
