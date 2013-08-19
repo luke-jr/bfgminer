@@ -69,7 +69,7 @@ void _applog(int prio, const char *str)
 			bfg_gettimeofday(&tv);
 			localtime_r(&tv.tv_sec, &tm);
 			
-			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
+			snprintf(datetime, sizeof(datetime), "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
 				tm.tm_year + 1900,
 				tm.tm_mon + 1,
 				tm.tm_mday,
@@ -79,7 +79,7 @@ void _applog(int prio, const char *str)
 				(long)tv.tv_usec);
 		}
 		else
-			get_now_datestamp(datetime);
+			get_now_datestamp(datetime, sizeof(datetime));
 
 		if (writetofile || writetocon)
 		{

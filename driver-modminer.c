@@ -276,8 +276,6 @@ modminer_device_prepare(struct cgpu_info *modminer)
 	modminer->device->device_fd = fd;
 	applog(LOG_INFO, "%s: Opened %s", modminer->dev_repr, modminer->device_path);
 
-	get_now_datestamp(modminer->init);
-
 	return true;
 }
 

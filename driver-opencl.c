@@ -890,7 +890,7 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		if (thr->cgpu != cgpu)
 			continue;
 		
-		get_datestamp(checkin, time(NULL) - timer_elapsed(&thr->last, NULL));
+		get_datestamp(checkin, sizeof(checkin), time(NULL) - timer_elapsed(&thr->last, NULL));
 		displayed_rolling = thr->rolling;
 		if (!mhash_base)
 			displayed_rolling *= 1000;
@@ -1318,7 +1318,7 @@ select_cgpu:
 		applog(LOG_WARNING, "Thread %d restarted", thr_id);
 	}
 
-	get_now_datestamp(sel_cgpu->init);
+	get_now_datestamp(sel_cgpu->init, sizeof(sel_cgpu->init));
 
 	proc_enable(cgpu);
 
@@ -1570,7 +1570,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		}
 	}
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
-	get_now_datestamp(cgpu->init);
+	get_now_datestamp(cgpu->init, sizeof(cgpu->init));
 
 	have_opencl = true;
 

@@ -342,8 +342,6 @@ static bool ztex_prepare(struct thr_info *thr)
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	get_now_datestamp(cgpu->init);
-	
 	{
 		char *fpganame = malloc(LIBZTEX_SNSTRING_LEN+3+1);
 		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);

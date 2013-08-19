@@ -1280,8 +1280,8 @@ struct work {
 	struct work *next;
 };
 
-extern void get_datestamp(char *, time_t);
-#define get_now_datestamp(buf)  get_datestamp(buf, INVALID_TIMESTAMP)
+extern void get_datestamp(char *, size_t, time_t);
+#define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)

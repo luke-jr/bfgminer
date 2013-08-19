@@ -657,7 +657,6 @@ static bool icarus_prepare(struct thr_info *thr)
 	icarus->device_fd = fd;
 
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
-	get_now_datestamp(icarus->init);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));

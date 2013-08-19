@@ -673,7 +673,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	else
 		__avalon_init(avalon);
 
-	get_now_datestamp(avalon->init);
 	avalon->status = LIFE_INIT2;
 	return true;
 }

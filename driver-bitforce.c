@@ -370,7 +370,6 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-	get_now_datestamp(bitforce->init);
 
 	return true;
 }

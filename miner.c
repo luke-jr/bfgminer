@@ -421,7 +421,7 @@ static bool should_run(void)
 	return within_range;
 }
 
-void get_datestamp(char *f, time_t tt)
+void get_datestamp(char *f, size_t fsiz, time_t tt)
 {
 	struct tm _tm;
 	struct tm *tm = &_tm;
@@ -430,7 +430,7 @@ void get_datestamp(char *f, time_t tt)
 		tt = time(NULL);
 
 	localtime_r(&tt, tm);
-	sprintf(f, "[%d-%02d-%02d %02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%d-%02d-%02d %02d:%02d:%02d]",
 		tm->tm_year + 1900,
 		tm->tm_mon + 1,
 		tm->tm_mday,
@@ -439,13 +439,14 @@ void get_datestamp(char *f, time_t tt)
 		tm->tm_sec);
 }
 
-void get_timestamp(char *f, time_t tt)
+static
+void get_timestamp(char *f, size_t fsiz, time_t tt)
 {
 	struct tm _tm;
 	struct tm *tm = &_tm;
 
 	localtime_r(&tt, tm);
-	sprintf(f, "[%02d:%02d:%02d]",
+	snprintf(f, fsiz, "[%02d:%02d:%02d]",
 		tm->tm_hour,
 		tm->tm_min,
 		tm->tm_sec);
@@ -5201,7 +5202,7 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	free(current_fullhash);
 	current_fullhash = malloc(65);
 	bin2hex(current_fullhash, hash_swap, 32);
-	get_timestamp(blocktime, block_time);
+	get_timestamp(blocktime, sizeof(blocktime), block_time);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
@@ -10016,7 +10017,7 @@ begin_bench:
 		localtime_r(&miner_start_ts, &schedstart.tm);
 	if (schedstop.tm.tm_sec)
 		localtime_r(&miner_start_ts, &schedstop .tm);
-	get_datestamp(datestamp, miner_start_ts);
+	get_datestamp(datestamp, sizeof(datestamp), miner_start_ts);
 
 	// Initialise processors and threads
 	k = 0;
