@@ -65,7 +65,6 @@ docs='
 	COPYING
 	NEWS
 	README
-	README.Debian
 	README.FPGA
 	README.RPC
 	README.scrypt
