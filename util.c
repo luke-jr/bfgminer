@@ -812,48 +812,17 @@ void cgtime(struct timeval *tv)
 {
 	gettimeofday(tv, NULL);
 }
-
-void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
-{
-	timeval_to_spec(cgt, tv);
-}
-
-void cgtimer_to_timeval(struct timeval *tv, const cgtimer_t *cgt)
-{
-	timespec_to_val(tv, cgt);
-}
 #else
-static void dtime_to_timeval(struct timeval *tv, DWORD dtime)
+static void __cgtime(struct timeval *tv)
 {
-	ldiv_t tvdiv = ldiv(dtime, 1000);
-
-	tv->tv_sec = tvdiv.quot;
-	tv->tv_usec = tvdiv.rem * 1000;
+	gettimeofday(tv, NULL);
 }
 
 void cgtime(struct timeval *tv)
 {
-	DWORD dtime;
-
-	//timeBeginPeriod(1);
-	dtime = timeGetTime();
-	//timeEndPeriod(1);
-	dtime_to_timeval(tv, dtime);
-}
-
-static void timeval_to_dtime(DWORD *dtime, const struct timeval *tv)
-{
-	*dtime = tv->tv_sec * 1000 + tv->tv_usec / 1000;
-}
-
-void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
-{
-	timeval_to_dtime(cgt, tv);
-}
-
-void cgtimer_to_timeval(struct timeval *tv, const cgtimer_t *cgt)
-{
-	dtime_to_timeval(tv, *cgt);
+	timeBeginPeriod(1);
+	__cgtime(tv);
+	timeEndPeriod(1);
 }
 #endif
 
@@ -967,31 +936,32 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 }
 
 #else
-static void dtime_to_timespec(struct timespec *ts, DWORD dtime)
-{
-	ldiv_t tsdiv = ldiv(dtime, 1000);
-
-	ts->tv_sec = tsdiv.quot;
-	ts->tv_nsec = tsdiv.rem * 1000000;
-}
-
 void cgsleep_prepare_r(cgtimer_t *ts_start)
 {
 	timeBeginPeriod(1);
-	*ts_start = timeGetTime();
+	__cgtime(ts_start);
+}
+
+static void ms_to_timeval(struct timeval *val, int ms)
+{
+	ldiv_t tvdiv = ldiv(ms, 1000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem * 1000;
 }
 
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
-	DWORD dnow, dend, ddiff;
+	struct timeval now, tv_end, tv_diff;
 	struct timespec ts_diff;
 
-	dend = *ts_start + ms;
-	dnow = timeGetTime();
-	if (unlikely(dnow >= dend))
+	ms_to_timeval(&tv_diff, ms);
+	timeradd(ts_start, &tv_diff, &tv_end);
+	__cgtime(&now);
+	if (unlikely(time_more(&now, &tv_end)))
 		goto out;
-	ddiff = dend - dnow;
-	dtime_to_timespec(&ts_diff, ddiff);
+	timersub(&tv_end, &now, &tv_diff);
+	timeval_to_spec(&ts_diff, &tv_diff);
 	nanosleep(&ts_diff, NULL);
 out:
 	timeEndPeriod(1);
