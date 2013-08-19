@@ -1400,6 +1400,7 @@ enum api_data_type {
 	API_HS,
 	API_DIFF,
 	API_JSON,
+	API_PERCENT
 };
 
 struct api_data {
