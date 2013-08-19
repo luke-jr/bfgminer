@@ -1852,7 +1852,7 @@ static char *parse_config(json_t *config, bool fileconf)
 					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
 					fileconf_load = -1;
 				} else {
-					sprintf(err_buf, "Parsing JSON option %s: %s",
+					snprintf(err_buf, sizeof(err_buf), "Parsing JSON option %s: %s",
 						p, err);
 					return err_buf;
 				}
@@ -1875,6 +1875,7 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_error_t err;
 	json_t *config;
 	char *json_error;
+	size_t siz;
 
 	if (!cnfbuf)
 		cnfbuf = strdup(arg);
@@ -1888,11 +1889,12 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	config = json_load_file(arg, &err);
 #endif
 	if (!json_is_object(config)) {
-		json_error = malloc(JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text));
+		siz = JSON_LOAD_ERROR_LEN + strlen(arg) + strlen(err.text);
+		json_error = malloc(siz);
 		if (!json_error)
 			quit(1, "Malloc failure in json error");
 
-		sprintf(json_error, JSON_LOAD_ERROR, arg, err.text);
+		snprintf(json_error, siz, JSON_LOAD_ERROR, arg, err.text);
 		return json_error;
 	}
 
@@ -2084,7 +2086,8 @@ void __update_block_title(const unsigned char *hash_swap)
 		free(current_hash);
 		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
 		bin2hex(tmp, &hash_swap[24], 8);
-		sprintf(current_hash, "...%s", tmp);
+		memset(current_hash, '.', 3);
+		memcpy(current_hash, tmp, 17);
 		known_blkheight_current = false;
 	} else if (likely(known_blkheight_current)) {
 		return;
@@ -2093,7 +2096,7 @@ void __update_block_title(const unsigned char *hash_swap)
 		// FIXME: The block number will overflow this sometime around AD 2025-2027
 		if (known_blkheight < 1000000) {
 			memmove(&current_hash[3], &current_hash[11], 8);
-			sprintf(&current_hash[11], " #%6u", known_blkheight);
+			snprintf(&current_hash[11], 20-11, " #%6u", known_blkheight);
 		}
 		known_blkheight_current = true;
 	}
@@ -2421,7 +2424,7 @@ double cgpu_utility(struct cgpu_info *cgpu)
 
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
-static void suffix_string(uint64_t val, char *buf, int sigdigits)
+static void suffix_string(uint64_t val, char *buf, size_t bufsiz, int sigdigits)
 {
 	const double  dkilo = 1000.0;
 	const uint64_t kilo = 1000ull;
@@ -2437,26 +2440,26 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 	if (val >= exa) {
 		val /= peta;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "E");
+		strcpy(suffix, "E");
 	} else if (val >= peta) {
 		val /= tera;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "P");
+		strcpy(suffix, "P");
 	} else if (val >= tera) {
 		val /= giga;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "T");
+		strcpy(suffix, "T");
 	} else if (val >= giga) {
 		val /= mega;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "G");
+		strcpy(suffix, "G");
 	} else if (val >= mega) {
 		val /= kilo;
 		dval = (double)val / dkilo;
-		sprintf(suffix, "M");
+		strcpy(suffix, "M");
 	} else if (val >= kilo) {
 		dval = (double)val / dkilo;
-		sprintf(suffix, "k");
+		strcpy(suffix, "k");
 	} else {
 		dval = val;
 		decimal = false;
@@ -2464,15 +2467,15 @@ static void suffix_string(uint64_t val, char *buf, int sigdigits)
 
 	if (!sigdigits) {
 		if (decimal)
-			sprintf(buf, "%.3g%s", dval, suffix);
+			snprintf(buf, bufsiz, "%.3g%s", dval, suffix);
 		else
-			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+			snprintf(buf, bufsiz, "%d%s", (unsigned int)dval, suffix);
 	} else {
 		/* Always show sigdigits + 1, padded on right with zeroes
 		 * followed by suffix */
 		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
 
-		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
+		snprintf(buf, bufsiz, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
 	}
 }
 
@@ -3251,11 +3254,11 @@ void share_result_msg(const struct work *work, const char *disp, const char *rea
 	
 	cgpu = get_thr_cgpu(work->thr_id);
 	
-	suffix_string(work->share_diff, shrdiffdisp, 0);
-	suffix_string(tgtdiff, tgtdiffdisp, 0);
+	suffix_string(work->share_diff, shrdiffdisp, sizeof(shrdiffdisp), 0);
+	suffix_string(tgtdiff, tgtdiffdisp, sizeof(tgtdiffdisp), 0);
 	
 	if (total_pools > 1)
-		sprintf(where, " pool %d", work->pool->pool_no);
+		snprintf(where, sizeof(where), " pool %d", work->pool->pool_no);
 	else
 		where[0] = '\0';
 	
@@ -3383,7 +3386,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 			strcpy(reason, "");
 			if (total_pools > 1)
-				sprintf(where, "pool %d", work->pool->pool_no);
+				snprintf(where, sizeof(where), "pool %d", work->pool->pool_no);
 			else
 				strcpy(where, "");
 
@@ -3532,8 +3535,8 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			memcpy(&tm_submit_reply, tm, sizeof(struct tm));
 
 			if (work->clone) {
-				sprintf(workclone, "C:%1.3f",
-					tdiff((struct timeval *)&(work->tv_cloned),
+				snprintf(workclone, sizeof(workclone), "C:%1.3f",
+						tdiff((struct timeval *)&(work->tv_cloned),
 						(struct timeval *)&(work->tv_getwork_reply)));
 			}
 			else
@@ -3542,7 +3545,8 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			if (work->work_difficulty < 1)
 				diffplaces = 6;
 
-			sprintf(worktime, " <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
+			snprintf(worktime, sizeof(worktime),
+				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
 				(unsigned long)swab32(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
 				work->getwork_mode, diffplaces, work->work_difficulty,
@@ -3692,7 +3696,7 @@ static void calc_diff(struct work *work, int known)
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
-	suffix_string((uint64_t)difficulty, work->pool->diff, 0);
+	suffix_string((uint64_t)difficulty, work->pool->diff, sizeof(work->pool->diff), 0);
 
 	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
@@ -4458,7 +4462,7 @@ static uint64_t share_diff(const struct work *work)
 	if (unlikely(ret > best_diff)) {
 		new_best = true;
 		best_diff = ret;
-		suffix_string(best_diff, best_share, 0);
+		suffix_string(best_diff, best_share, sizeof(best_share), 0);
 	}
 	if (unlikely(ret > work->pool->best_diff))
 		work->pool->best_diff = ret;
@@ -4796,7 +4800,7 @@ next_write_sws_del:
 			sshare_id =
 			sshare->id = swork_id++;
 			HASH_ADD_INT(stratum_shares, id, sshare);
-			sprintf(s, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
+			snprintf(s, 1024, "{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 				pool->rpc_user, work->job_id, nonce2hex, ntimehex, noncehex, sshare->id);
 			mutex_unlock(&sshare_lock);
 			
@@ -5248,7 +5252,7 @@ static void set_blockdiff(const struct work *work)
 	diff = target_diff(target);
 	diff64 = diff;
 
-	suffix_string(diff64, block_diff, 0);
+	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
 	format_unit(net_hashrate, true, "h/s", H2B_SHORT, diff * 7158278, -1);
 	if (unlikely(current_diff != diff))
 		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
@@ -5793,7 +5797,7 @@ void zero_bestshare(void)
 
 	best_diff = 0;
 	memset(best_share, 0, 8);
-	suffix_string(best_diff, best_share, 0);
+	suffix_string(best_diff, best_share, sizeof(best_share), 0);
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
@@ -6295,7 +6299,7 @@ retry:
 		char *str, filename[PATH_MAX], prompt[PATH_MAX + 50];
 
 		default_save_file(filename);
-		sprintf(prompt, "Config filename to write (Enter for default) [%s]", filename);
+		snprintf(prompt, sizeof(prompt), "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
 		if (strcmp(str, "-1")) {
 			struct stat statbuf;
@@ -6736,9 +6740,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		}
 		
 		if (working_devs == working_procs)
-			sprintf(statusline, "%s%d        ", bad ? "\2" : "", working_devs);
+			snprintf(statusline, sizeof(statusline), "%s%d        ", bad ? "\2" : "", working_devs);
 		else
-			sprintf(statusline, "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
+			snprintf(statusline, sizeof(statusline), "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
@@ -6769,7 +6773,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	memmove(&uHr[6], &uHr[5], strlen(&uHr[5]) + 1);
 	uHr[5] = ' ';
 	
-	sprintf(logstatusline, "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
+	snprintf(logstatusline, sizeof(logstatusline),
+	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
 		opt_log_interval,
 		cHr, aHr,
@@ -9007,13 +9012,16 @@ static void *test_pool_thread(void *arg)
  * active it returns false. */
 bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass)
 {
+	size_t siz;
+
 	pool->rpc_url = url;
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
-	pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+	siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
+	pool->rpc_userpass = malloc(siz);
 	if (!pool->rpc_userpass)
 		quit(1, "Failed to malloc userpass");
-	sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+	snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 
 	pool->testing = true;
 	pool->idle = true;
@@ -9640,7 +9648,7 @@ int main(int argc, char *argv[])
 
 	notifier_init(submit_waiting_notifier);
 
-	sprintf(packagename, "%s %s", PACKAGE, VERSION);
+	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
 #ifdef WANT_CPUMINE
 	init_max_name_len();
@@ -9881,6 +9889,7 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+		size_t siz;
 
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
@@ -9891,10 +9900,11 @@ int main(int argc, char *argv[])
 		if (!pool->rpc_userpass) {
 			if (!pool->rpc_user || !pool->rpc_pass)
 				quit(1, "No login credentials supplied for pool %u %s", i, pool->rpc_url);
-			pool->rpc_userpass = malloc(strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2);
+			siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
+			pool->rpc_userpass = malloc(siz);
 			if (!pool->rpc_userpass)
 				quit(1, "Failed to malloc userpass");
-			sprintf(pool->rpc_userpass, "%s:%s", pool->rpc_user, pool->rpc_pass);
+			snprintf(pool->rpc_userpass, siz, "%s:%s", pool->rpc_user, pool->rpc_pass);
 		}
 	}
 	/* Set the currentpool to pool with priority 0 */
