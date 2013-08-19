@@ -2095,7 +2095,7 @@ void __update_block_title(const unsigned char *hash_swap)
 		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
 		bin2hex(tmp, &hash_swap[24], 8);
 		memset(current_hash, '.', 3);
-		memcpy(current_hash, tmp, 17);
+		memcpy(&current_hash[3], tmp, 17);
 		known_blkheight_current = false;
 	} else if (likely(known_blkheight_current)) {
 		return;
