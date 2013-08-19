@@ -3,7 +3,9 @@ SUPPORTED DEVICES
 Currently supported ASIC devices include ASICMiner's Block Erupter USB miners,
 Avalon, and Butterfly Labs' SC range of devices.
 
+
 AVALON
+------
 
 Currently, Avalon boards are supported only by connecting them directly (or via
 a hub) to a regular PC running BFGMiner. It is also possible to install the
@@ -61,6 +63,16 @@ The values are:
 ambient temp / highest device temp  set fan % / lowest detected fan RPM.
 
 Use the API for more detailed information than this.
+
+
+BLOCK ERUPTER USB
+-----------------
+
+These will autodetect if supported by the device; otherwise, you need to use
+the '--scan-serial erupter:*' option to tell BFGMiner what device to probe. They
+communicate with the Icarus protocol, which has some additional options in
+README.FPGA
+
 
 ---
 
