@@ -1485,16 +1485,16 @@ static void bflsc_thread_enable(struct thr_info *thr)
 	bflsc_initialise(bflsc);
 }
 
-static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
-			    bool mandatory)
+static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, bool mandatory)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct FullNonceRangeJob data;
 	char buf[BFLSC_BUFSIZ+1];
+	bool sent, ret = false;
+	struct work *work;
 	int err, amount;
 	int len, try;
 	int stage;
-	bool sent;
 
 	// Device is gone
 	if (bflsc->usbinfo.nodev)
@@ -1506,8 +1506,6 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
 
 	// Initially code only deals with sending one work item
 	data.payloadSize = BFLSC_JOBSIZ;
-	memcpy(data.midState, work->midstate, MIDSTATE_BYTES);
-	memcpy(data.blockData, work->data + MERKLE_OFFSET, MERKLE_BYTES);
 	data.endOfBlock = BFLSC_EOB;
 
 	len = sizeof(struct FullNonceRangeJob);
@@ -1519,9 +1517,16 @@ static bool bflsc_send_work(struct cgpu_info *bflsc, int dev, struct work *work,
 		mutex_lock(&(bflsc->device_mutex));
 	else {
 		if (mutex_trylock(&bflsc->device_mutex))
-			return false;
+			return ret;
 	}
 
+	work = get_queued(bflsc);
+	if (unlikely(!work)) {
+		mutex_unlock(&bflsc->device_mutex);
+		return ret;
+	}
+	memcpy(data.midState, work->midstate, MIDSTATE_BYTES);
+	memcpy(data.blockData, work->data + MERKLE_OFFSET, MERKLE_BYTES);
 	try = 0;
 re_send:
 	err = send_recv_ds(bflsc, dev, &stage, &sent, &amount,
@@ -1534,7 +1539,7 @@ re_send:
 		case 1:
 			if (!sent) {
 				bflsc_applog(bflsc, dev, C_REQUESTQUEJOB, amount, err);
-				return false;
+				goto out;
 			} else {
 				// TODO: handle other errors ...
 
@@ -1544,13 +1549,13 @@ re_send:
 						goto re_send;
 
 				bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
-				return false;
+				goto out;
 			}
 			break;
 		case 2:
 			if (!sent) {
 				bflsc_applog(bflsc, dev, C_QUEJOB, amount, err);
-				return false;
+				goto out;
 			} else {
 				if (!isokerr(err, buf, amount)) {
 					// TODO: check for QUEUE FULL and set work_queued to sc_info->que_size
@@ -1563,7 +1568,7 @@ re_send:
 							goto re_send;
 
 					bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
-					return false;
+					goto out;
 				}
 			}
 			break;
@@ -1574,13 +1579,13 @@ re_send:
 	if (err < 0 || amount != BFLSC_QJOB_LEN) {
 		mutex_unlock(&(bflsc->device_mutex));
 		bflsc_applog(bflsc, dev, C_REQUESTQUEJOB, amount, err);
-		return false;
+		goto out;
 	}
 
 	if (!getok(bflsc, C_REQUESTQUEJOBSTATUS, &err, &amount)) {
 		mutex_unlock(&(bflsc->device_mutex));
 		bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
-		return false;
+		goto out;
 	}
 
 	len = sizeof(struct FullNonceRangeJob);
@@ -1589,7 +1594,7 @@ re_send:
 	if (err < 0 || amount != len) {
 		mutex_unlock(&(bflsc->device_mutex));
 		bflsc_applog(bflsc, dev, C_QUEJOB, amount, err);
-		return false;
+		goto out;
 	}
 
 	if (!getokerr(bflsc, C_QUEJOBSTATUS, &err, &amount, buf, sizeof(buf))) {
@@ -1603,7 +1608,7 @@ re_send:
 
 		mutex_unlock(&(bflsc->device_mutex));
 		bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
-		return false;
+		goto out;
 	}
 
 	mutex_unlock(&(bflsc->device_mutex));
@@ -1614,14 +1619,16 @@ re_send:
 	wr_unlock(&(sc_info->stat_lock));
 
 	work->subid = dev;
-
-	return true;
+	ret = true;
+out:
+	if (unlikely(!ret))
+		work_completed(bflsc, work);
+	return ret;
 }
 
 static bool bflsc_queue_full(struct cgpu_info *bflsc)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
-	struct work *work = NULL;
 	int i, dev, tried, que;
 	bool ret = false;
 	int tries = 0;
@@ -1673,19 +1680,12 @@ static bool bflsc_queue_full(struct cgpu_info *bflsc)
 			break;
 		}
 
-		if (!work)
-			work = get_queued(bflsc);
-		if (unlikely(!work))
+		if (bflsc_send_work(bflsc, dev, mandatory))
 			break;
-		if (bflsc_send_work(bflsc, dev, work, mandatory)) {
-			work = NULL;
-			break;
-		} else
+		else
 			tried = dev;
 	}
 
-	if (unlikely(work))
-		work_completed(bflsc, work);
 	return ret;
 }
 
