@@ -1761,7 +1761,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		/* Increase slowly but decrease quickly */
 		if (min_queued > sc_info->que_full_enough && old_sleep_time < BFLSC_MAX_SLEEP)
 			new_sleep_time = old_sleep_time * 21 / 20;
-		else if (min_queued < sc_info->que_watermark)
+		else if (min_queued < sc_info->que_low)
 			new_sleep_time = old_sleep_time * 2 / 3;
 
 		/* Do not sleep more than BFLSC_MAX_SLEEP so we can always
