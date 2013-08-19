@@ -2373,12 +2373,13 @@ int my_cancellable_getch(void)
 }
 #endif
 
-void tailsprintf(char *f, const char *fmt, ...)
+void tailsprintf(char *buf, size_t bufsz, const char *fmt, ...)
 {
 	va_list ap;
-
+	size_t presz = strlen(buf);
+	
 	va_start(ap, fmt);
-	vsprintf(f + strlen(f), fmt, ap);
+	vsnprintf(&buf[presz], bufsz - presz, fmt, ap);
 	va_end(ap);
 }
 
@@ -2611,7 +2612,7 @@ static void adj_width(int var, int *length);
 static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 
 static
-void format_statline(char *buf, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int badnonces, int allnonces)
+void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int badnonces, int allnonces)
 {
 	char rejpcbuf[6];
 	char bnbuf[6];
@@ -2621,7 +2622,7 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 	adj_width(stale, &swidth);
 	adj_width(hwerrs, &hwwidth);
 	
-	tailsprintf(buf, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
+	tailsprintf(buf, bufsz, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 	            cHr, aHr, uHr,
 	            awidth, accepted,
 	            rwidth, rejected,
@@ -2634,26 +2635,26 @@ void format_statline(char *buf, const char *cHr, const char *aHr, const char *uH
 #endif
 
 static inline
-void temperature_column_tail(char *buf, bool maybe_unicode, const float * const temp)
+void temperature_column(char *buf, size_t bufsz, bool maybe_unicode, const float * const temp)
 {
 	if (!(use_unicode && have_unicode_degrees))
 		maybe_unicode = false;
 	if (temp && *temp > 0.)
 		if (maybe_unicode)
-			sprintf(buf, "%4.1f\xb0""C", *temp);
+			snprintf(buf, bufsz, "%4.1f\xb0""C", *temp);
 		else
-			sprintf(buf, "%4.1fC", *temp);
+			snprintf(buf, bufsz, "%4.1fC", *temp);
 	else
 	{
 		if (temp)
-			strcpy(buf, "     ");
+			snprintf(buf, bufsz, "     ");
 		if (maybe_unicode)
-			strcat(buf, " ");
+			tailsprintf(buf, bufsz, " ");
 	}
-	strcat(buf, " | ");
+	tailsprintf(buf, bufsz, " | ");
 }
 
-void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
+void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs)
 {
 #ifndef HAVE_CURSES
 	assert(for_curses == false);
@@ -2716,33 +2717,38 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	if (for_curses)
 	{
 		if (opt_show_procs)
-			sprintf(buf, " %"PRIprepr": ", cgpu->proc_repr);
+			snprintf(buf, bufsz, " %"PRIprepr": ", cgpu->proc_repr);
 		else
-			sprintf(buf, " %s: ", cgpu->dev_repr);
+			snprintf(buf, bufsz, " %s: ", cgpu->dev_repr);
 	}
 	else
 #endif
-		sprintf(buf, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
+		snprintf(buf, bufsz, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
 	
 	if (unlikely(cgpu->status == LIFE_INIT))
 	{
-		tailsprintf(buf, "Initializing...");
+		tailsprintf(buf, bufsz, "Initializing...");
 		return;
 	}
 	
-	if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp && drv->override_statline_temp(buf, cgpu, opt_show_procs))
-		temperature_column_tail(&buf[strlen(buf)], for_curses, NULL);
-	else
 	{
-		float temp = cgpu->temp;
-		if (!opt_show_procs)
+		const size_t bufln = strlen(buf);
+		const size_t abufsz = (bufln >= bufsz) ? 0 : (bufsz - bufln);
+		
+		if (likely(cgpu->status != LIFE_DEAD2) && drv->override_statline_temp2 && drv->override_statline_temp2(buf, bufsz, cgpu, opt_show_procs))
+			temperature_column(&buf[bufln], abufsz, for_curses, NULL);
+		else
 		{
-			// Find the highest temperature of all processors
-			for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
-				if (proc->temp > temp)
-					temp = proc->temp;
+			float temp = cgpu->temp;
+			if (!opt_show_procs)
+			{
+				// Find the highest temperature of all processors
+				for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+					if (proc->temp > temp)
+						temp = proc->temp;
+			}
+			temperature_column(&buf[bufln], abufsz, for_curses, &temp);
 		}
-		temperature_column_tail(&buf[strlen(buf)], for_curses, &temp);
 	}
 	
 #ifdef HAVE_CURSES
@@ -2786,7 +2792,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 		if (unlikely(all_off))
 			cHrStatsI = 2;
 		
-		format_statline(buf,
+		format_statline(buf, bufsz,
 		                cHrStatsOpt[cHrStatsI],
 		                aHr, uHr,
 		                accepted, rejected, stale,
@@ -2797,7 +2803,7 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	else
 #endif
 	{
-		tailsprintf(buf, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
+		tailsprintf(buf, bufsz, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
@@ -2810,8 +2816,8 @@ void get_statline3(char *buf, struct cgpu_info *cgpu, bool for_curses, bool opt_
 	}
 }
 
-#define get_statline(buf, cgpu)               get_statline3(buf, cgpu, false, opt_show_procs)
-#define get_statline2(buf, cgpu, for_curses)  get_statline3(buf, cgpu, for_curses, opt_show_procs)
+#define get_statline(buf, bufsz, cgpu)               get_statline3(buf, bufsz, cgpu, false, opt_show_procs)
+#define get_statline2(buf, bufsz, cgpu, for_curses)  get_statline3(buf, bufsz, cgpu, for_curses, opt_show_procs)
 
 static void text_print_status(int thr_id)
 {
@@ -2820,7 +2826,7 @@ static void text_print_status(int thr_id)
 
 	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		printf("%s\n", logline);
 	}
 }
@@ -3036,7 +3042,7 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 	if (wmove(statuswin, ypos, 0) == ERR)
 		return;
 	
-	get_statline2(logline, cgpu, true);
+	get_statline2(logline, sizeof(logline), cgpu, true);
 	if (selecting_device && (opt_show_procs ? (selected_device == cgpu->cgminer_id) : (devices[selected_device]->device == cgpu)))
 		wattron(statuswin, A_REVERSE);
 	bfg_waddstr(statuswin, logline);
@@ -3557,7 +3563,7 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 
 		cgpu = get_thr_cgpu(thr_id);
 		
-		get_statline(logline, cgpu);
+		get_statline(logline, sizeof(logline), cgpu);
 		applog(LOG_INFO, "%s", logline);
 	}
 
@@ -6347,7 +6353,7 @@ refresh:
 	clear_logwin();
 	wlogprint("Select processor to manage using up/down arrow keys\n");
 	
-	get_statline3(logline, cgpu, true, true);
+	get_statline3(logline, sizeof(logline), cgpu, true, true);
 	wattron(logwin, A_BOLD);
 	wlogprint("%s", logline);
 	wattroff(logwin, A_BOLD);
@@ -6654,7 +6660,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 				*last_msg_tv = now;
 
-				get_statline(logline, cgpu);
+				get_statline(logline, sizeof(logline), cgpu);
 				if (!curses_active) {
 					printf("%s          \r", logline);
 					fflush(stdout);
@@ -6744,9 +6750,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 			++divx;
 		}
 		
-		temperature_column_tail(&statusline[divx], true, &temp);
+		temperature_column(&statusline[divx], sizeof(statusline)-divx, true, &temp);
 		
-		format_statline(statusline,
+		format_statline(statusline, sizeof(statusline),
 		                cHr, aHr,
 		                uHr,
 		                total_accepted,
@@ -8788,7 +8794,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 {
 	char logline[255];
 
-	get_statline(logline, cgpu);
+	get_statline(logline, sizeof(logline), cgpu);
 	applog(LOG_WARNING, "%s", logline);
 }
 

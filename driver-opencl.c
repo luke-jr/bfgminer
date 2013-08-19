@@ -846,7 +846,7 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 	char logline[255];
 	strcpy(logline, ""); // In case it has no data
 	
-	tailsprintf(logline, "I:%s%d  ", (cgpu->dynamic ? "d" : ""), cgpu->intensity);
+	tailsprintf(logline, sizeof(logline), "I:%s%d  ", (cgpu->dynamic ? "d" : ""), cgpu->intensity);
 #ifdef HAVE_ADL
 	if (cgpu->has_adl) {
 		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
@@ -854,29 +854,29 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 
 		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
 			if (fanspeed != -1 || fanpercent != -1) {
-				tailsprintf(logline, "F: ");
+				tailsprintf(logline, sizeof(logline), "F: ");
 				if (fanspeed > 9999)
 					fanspeed = 9999;
 				if (fanpercent != -1)
 				{
-					tailsprintf(logline, "%d%% ", fanpercent);
+					tailsprintf(logline, sizeof(logline), "%d%% ", fanpercent);
 					if (fanspeed != -1)
-						tailsprintf(logline, "(%d RPM) ", fanspeed);
+						tailsprintf(logline, sizeof(logline), "(%d RPM) ", fanspeed);
 				}
 				else
-					tailsprintf(logline, "%d RPM ", fanspeed);
-				tailsprintf(logline, " ");
+					tailsprintf(logline, sizeof(logline), "%d RPM ", fanspeed);
+				tailsprintf(logline, sizeof(logline), " ");
 			}
 			if (engineclock != -1)
-				tailsprintf(logline, "E: %d MHz  ", engineclock);
+				tailsprintf(logline, sizeof(logline), "E: %d MHz  ", engineclock);
 			if (memclock != -1)
-				tailsprintf(logline, "M: %d MHz  ", memclock);
+				tailsprintf(logline, sizeof(logline), "M: %d MHz  ", memclock);
 			if (vddc != -1)
-				tailsprintf(logline, "V: %.3fV  ", vddc);
+				tailsprintf(logline, sizeof(logline), "V: %.3fV  ", vddc);
 			if (activity != -1)
-				tailsprintf(logline, "A: %d%%  ", activity);
+				tailsprintf(logline, sizeof(logline), "A: %d%%  ", activity);
 			if (powertune != -1)
-				tailsprintf(logline, "P: %d%%", powertune);
+				tailsprintf(logline, sizeof(logline), "P: %d%%", powertune);
 		}
 	}
 #endif
@@ -894,25 +894,25 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 		displayed_rolling = thr->rolling;
 		if (!mhash_base)
 			displayed_rolling *= 1000;
-		sprintf(logline, "Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+		snprintf(logline, sizeof(logline), "Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
 		switch (cgpu->status) {
 			default:
 			case LIFE_WELL:
-				tailsprintf(logline, "ALIVE");
+				tailsprintf(logline, sizeof(logline), "ALIVE");
 				break;
 			case LIFE_SICK:
-				tailsprintf(logline, "SICK reported in %s", checkin);
+				tailsprintf(logline, sizeof(logline), "SICK reported in %s", checkin);
 				break;
 			case LIFE_DEAD:
-				tailsprintf(logline, "DEAD reported in %s", checkin);
+				tailsprintf(logline, sizeof(logline), "DEAD reported in %s", checkin);
 				break;
 			case LIFE_INIT:
 			case LIFE_NOSTART:
-				tailsprintf(logline, "Never started");
+				tailsprintf(logline, sizeof(logline), "Never started");
 				break;
 		}
 		if (thr->pause)
-			tailsprintf(logline, " paused");
+			tailsprintf(logline, sizeof(logline), " paused");
 		wlogprint("%s\n", logline);
 	}
 }
@@ -963,7 +963,7 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			char logline[256];
 			
 			clear_logwin();
-			get_statline3(logline, cgpu, true, true);
+			get_statline3(logline, sizeof(logline), cgpu, true, true);
 			wattron(logwin, A_BOLD);
 			wlogprint("%s", logline);
 			wattroff(logwin, A_BOLD);
@@ -1426,7 +1426,7 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 
 // FIXME: Legacy (called by TUI) for side effects
 static
-bool override_opencl_statline_temp(char *buf, struct cgpu_info *gpu, __maybe_unused bool per_processor)
+bool override_opencl_statline_temp(char *buf, size_t bufsz, struct cgpu_info *gpu, __maybe_unused bool per_processor)
 {
 #ifdef HAVE_SENSORS
 	struct opencl_device_data *data = gpu->device_data;
@@ -1759,7 +1759,7 @@ struct device_drv opencl_api = {
 	.name = "OCL",
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
-	.override_statline_temp = override_opencl_statline_temp,
+	.override_statline_temp2 = override_opencl_statline_temp,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = opencl_wlogprint_status,
 	.proc_tui_wlogprint_choices = opencl_tui_wlogprint_choices,

@@ -552,11 +552,11 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 }
 
 static
-bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500, __maybe_unused bool per_processor)
+bool get_x6500_upload_percent(char *buf, size_t bufsz, struct cgpu_info *x6500, __maybe_unused bool per_processor)
 {
 	unsigned char pdone = *((unsigned char*)x6500->device_data - 1);
 	if (pdone != 101) {
-		tailsprintf(buf, "%3d%% ", pdone);
+		tailsprintf(buf, bufsz, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
@@ -822,7 +822,7 @@ struct device_drv x6500_api = {
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_thread_init,
 	.get_stats = x6500_get_stats,
-	.override_statline_temp = get_x6500_upload_percent,
+	.override_statline_temp2 = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.set_device = x6500_set_device,
 #ifdef HAVE_CURSES
