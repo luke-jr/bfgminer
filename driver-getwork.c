@@ -248,7 +248,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	}
 	
 	{
-		const size_t replysz = 451 + idstr_sz;
+		const size_t replysz = 590 + idstr_sz;
 		
 		work = get_work(thr);
 		reply = malloc(replysz);
@@ -256,9 +256,9 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		bin2hex(&reply[108], work->data, 128);
 		memcpy(&reply[364], "\",\"midstate\":\"", 14);
 		bin2hex(&reply[378], work->midstate, 32);
-		memcpy(&reply[442], "\"},\"id\":", 8);
-		memcpy(&reply[450], idstr ?: "0", idstr_sz);
-		memcpy(&reply[450 + idstr_sz], "}", 1);
+		memcpy(&reply[442], "\",\"hash1\":\"00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000\"},\"id\":", 147);
+		memcpy(&reply[589], idstr ?: "0", idstr_sz);
+		memcpy(&reply[589 + idstr_sz], "}", 1);
 		
 		timer_set_now(&work->tv_work_start);
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
