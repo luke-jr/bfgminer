@@ -817,6 +817,11 @@ void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
 {
 	timeval_to_spec(cgt, tv);
 }
+
+void cgtimer_to_timeval(struct timeval *tv, const cgtimer_t *cgt)
+{
+	timespec_to_val(tv, cgt);
+}
 #else
 static void dtime_to_timeval(struct timeval *tv, DWORD dtime)
 {
@@ -844,6 +849,11 @@ static void timeval_to_dtime(DWORD *dtime, const struct timeval *tv)
 void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
 {
 	timeval_to_dtime(cgt, tv);
+}
+
+void cgtimer_to_timeval(struct timeval *tv, const cgtimer_t *cgt)
+{
+	dtime_to_timeval(tv, *cgt);
 }
 #endif
 
