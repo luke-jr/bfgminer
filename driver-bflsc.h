@@ -331,14 +331,14 @@ struct SaveString {
 #define BFLSC_QUE_SIZE_V1 20
 #define BFLSC_QUE_FULL_ENOUGH_V1 13
 #define BFLSC_QUE_WATERMARK_V1 6
-#define BFLSC_QUE_LOW_V1 2
+#define BFLSC_QUE_LOW_V1 3
 
 // TODO: use 5 batch jobs
 // TODO: base these numbers on the chip count?
 #define BFLSC_QUE_SIZE_V2 40
 #define BFLSC_QUE_FULL_ENOUGH_V2 36
 #define BFLSC_QUE_WATERMARK_V2 32
-#define BFLSC_QUE_LOW_V2 8
+#define BFLSC_QUE_LOW_V2 16
 
 #define BFLSC_TEMP_OVERHEAT 90
 // Must drop this far below cutoff before resuming work
