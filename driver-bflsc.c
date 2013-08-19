@@ -1424,12 +1424,8 @@ static void *bflsc_get_results(void *userdata)
 			return NULL;
 
 		cgsleep_prepare_r(&ts_start);
-		if (dev == -1) {
-			/* Sleep for only half a work period before checking
-			 * again. */
-			cgsleep_ms_r(&ts_start, sc_info->default_ms_work / 2);
-			continue;
-		}
+		if (dev == -1)
+			goto utsura;
 
 		cgtime(&(sc_info->sc_devs[dev].last_check_result));
 
@@ -1446,6 +1442,8 @@ static void *bflsc_get_results(void *userdata)
 
 			// TODO: if not getting results ... reinit?
 		}
+
+utsura:
 		cgsleep_ms_r(&ts_start, sc_info->results_sleep_time);
 	}
 
