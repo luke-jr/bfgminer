@@ -751,7 +751,7 @@ char *set_intensity(char *arg)
 	else {
 		gpus[device].dynamic = false;
 		val = atoi(nextptr);
-		if (val < MIN_INTENSITY || val > MAX_INTENSITY)
+		if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
 			return "Invalid value passed to set intensity";
 		tt = &gpus[device].intensity;
 		*tt = val;
@@ -765,7 +765,7 @@ char *set_intensity(char *arg)
 		else {
 			gpus[device].dynamic = false;
 			val = atoi(nextptr);
-			if (val < MIN_INTENSITY || val > MAX_INTENSITY)
+			if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
 				return "Invalid value passed to set intensity";
 
 			tt = &gpus[device].intensity;
@@ -937,7 +937,15 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			int intensity;
 			char *intvar;
 
-			intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
+			if (opt_scrypt) {
+				intvar = curses_input("Set GPU scan intensity (d or "
+						      MIN_SCRYPT_INTENSITY_STR " -> "
+						      MAX_SCRYPT_INTENSITY_STR ")");
+			} else {
+				intvar = curses_input("Set GPU scan intensity (d or "
+						      MIN_SHA_INTENSITY_STR " -> "
+						      MAX_SHA_INTENSITY_STR ")");
+			}
 			if (!intvar)
 				return "Invalid intensity\n";
 			if (!strncasecmp(intvar, "d", 1)) {

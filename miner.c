@@ -1508,10 +1508,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--lookup-gap",
 		     set_lookup_gap, NULL, NULL,
 		     "Set GPU lookup gap for scrypt mining, comma separated"),
-#endif
 	OPT_WITH_ARG("--intensity|-I",
 		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ", default: d to maintain desktop interactivity)"),
+		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
+		     " -> " MAX_SCRYPT_INTENSITY_STR
+		     ",default: d to maintain desktop interactivity)"),
+#else
+	OPT_WITH_ARG("--intensity|-I",
+		     set_intensity, NULL, NULL,
+		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
+		     " -> " MAX_SHA_INTENSITY_STR
+		     ",default: d to maintain desktop interactivity)"),
+#endif
 #endif
 #if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 	OPT_WITH_ARG("--kernel-path|-K",
