@@ -430,7 +430,11 @@ Feature Changelog for external applications using the API:
 API V1.25.3
 
 Modified API commands:
+ 'devs', 'pga', 'gpu' - add 'Device Hardware%' and 'Device Rejected%'
+ 'pools' - add 'Pool Rejected%' and 'Pool Stale%'
  'setconfig' - add 'http-port' number
+ 'summary' - add 'Device Hardware%', 'Device Rejected%', 'Pool Rejected%',
+                 'Pool Stale%'
 
 Removed output limitation:
  All replies can now be longer than the previous limitation of 64k, and will

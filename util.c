@@ -54,6 +54,8 @@
 #include "compat.h"
 #include "util.h"
 
+#define DEFAULT_SOCKWAIT 60
+
 bool successful_connect = false;
 struct timeval nettime;
 
@@ -1403,19 +1405,18 @@ bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force)
 	return (ret == SEND_OK);
 }
 
-static bool socket_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, int wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
 
+	if (unlikely(wait < 0))
+		wait = 0;
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
 	timeout.tv_usec = 0;
-	if (wait)
-		timeout.tv_sec = 60;
-	else
-		timeout.tv_sec = 1;
+	timeout.tv_sec = wait;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
@@ -1427,7 +1428,7 @@ bool sock_full(struct pool *pool)
 	if (strlen(pool->sockbuf))
 		return true;
 
-	return (socket_full(pool, false));
+	return (socket_full(pool, 0));
 }
 
 static void clear_sockbuf(struct pool *pool)
@@ -1467,7 +1468,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %lu", (unsigned long)new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
-		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+		quithere(1, "Failed to realloc pool sockbuf");
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
@@ -1476,14 +1477,15 @@ static void recalloc_sock(struct pool *pool, size_t len)
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	ssize_t len, buflen;
 	char *tok, *sret = NULL;
+	ssize_t len, buflen;
+	int waited = 0;
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		struct timeval rstart, now;
 
 		cgtime(&rstart);
-		if (!socket_full(pool, true)) {
+		if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
@@ -1500,11 +1502,13 @@ char *recv_line(struct pool *pool)
 				suspend_stratum(pool);
 				break;
 			}
+			cgtime(&now);
+			waited = tdiff(&now, &rstart);
 			if (n < 0) {
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
 				socket_recv_errno = SOCKERR;
-				if (!sock_blocks() || !socket_full(pool, true)) {
+				if (!sock_blocks() || !socket_full(pool, DEFAULT_SOCKWAIT - waited)) {
 					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %s", bfg_strerror(socket_recv_errno, BST_SOCKET));
 					suspend_stratum(pool);
 					break;
@@ -1514,8 +1518,7 @@ char *recv_line(struct pool *pool)
 				recalloc_sock(pool, slen);
 				strcat(pool->sockbuf, s);
 			}
-			cgtime(&now);
-		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
+		} while (waited < DEFAULT_SOCKWAIT && !strstr(pool->sockbuf, "\n"));
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1571,18 +1574,18 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 	size_t len;
 	
 	if (!tmp)
-		quit(1, "json_dumps_ANY failed to allocate json array");
+		quithere(1, "Failed to allocate json array");
 	if (json_array_append(tmp, json))
-		quit(1, "json_dumps_ANY failed to append temporary array");
+		quithere(1, "Failed to append temporary array");
 	s = json_dumps(tmp, flags);
 	if (!s)
 		return NULL;
 	for (i = 0; s[i] != '['; ++i)
 		if (unlikely(!(s[i] && isCspace(s[i]))))
-			quit(1, "json_dumps_ANY failed to find opening bracket in array dump");
+			quithere(1, "Failed to find opening bracket in array dump");
 	len = strlen(&s[++i]) - 1;
 	if (unlikely(s[i+len] != ']'))
-		quit(1, "json_dumps_ANY failed to find closing bracket in array dump");
+		quithere(1, "Failed to find closing bracket in array dump");
 	rv = malloc(len + 1);
 	memcpy(rv, &s[i], len);
 	rv[len] = '\0';
@@ -1977,7 +1980,7 @@ static bool setup_stratum_curl(struct pool *pool)
 		curl_easy_cleanup(pool->stratum_curl);
 	pool->stratum_curl = curl_easy_init();
 	if (unlikely(!pool->stratum_curl))
-		quit(1, "Failed to curl_easy_init in initiate_stratum");
+		quithere(1, "Failed to curl_easy_init");
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
 
@@ -1986,7 +1989,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
 		if (!pool->sockbuf)
-			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+			quithere(1, "Failed to calloc pool sockbuf");
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
@@ -2133,7 +2136,7 @@ resend:
 
 	recvd = true;
 	
-	if (!socket_full(pool, true)) {
+	if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
@@ -2309,7 +2312,7 @@ void *realloc_strcat(char *ptr, char *s)
 
 	ret = malloc(len);
 	if (unlikely(!ret))
-		quit(1, "Failed to malloc in realloc_strcat");
+		quithere(1, "Failed to malloc");
 
 	sprintf(ret, "%s%s", ptr, s);
 	free(ptr);
@@ -2396,16 +2399,16 @@ struct bfgtls_data *get_bfgtls()
 	
 	bfgtls = malloc(sizeof(*bfgtls));
 	if (!bfgtls)
-		quit(1, "malloc bfgtls failed");
+		quithere(1, "malloc bfgtls failed");
 	p = malloc(64);
 	if (!p)
-		quit(1, "malloc bfg_strerror_result failed");
+		quithere(1, "malloc bfg_strerror_result failed");
 	*bfgtls = (struct bfgtls_data){
 		.bfg_strerror_resultsz = 64,
 		.bfg_strerror_result = p,
 	};
 	if (pthread_setspecific(key_bfgtls, bfgtls))
-		quit(1, "pthread_setspecific failed");
+		quithere(1, "pthread_setspecific failed");
 	
 	return bfgtls;
 }
@@ -2413,7 +2416,7 @@ struct bfgtls_data *get_bfgtls()
 void bfg_init_threadlocal()
 {
 	if (pthread_key_create(&key_bfgtls, NULL))
-		quit(1, "pthread_key_create failed");
+		quithere(1, "pthread_key_create failed");
 }
 
 static
@@ -2426,7 +2429,7 @@ bool bfg_grow_buffer(char ** const bufp, size_t * const bufszp, size_t minimum)
 		*bufszp = 2;
 	*bufp = realloc(*bufp, *bufszp);
 	if (unlikely(!*bufp))
-		quit(1, "realloc failed in bfg_grow_buffer");
+		quithere(1, "realloc failed");
 	
 	return true;
 }
@@ -2533,10 +2536,12 @@ void notifier_init(notifier_t pipefd)
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
-		quit(1, "Failed to create listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to create listener socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	connecter = socket(AF_INET, SOCK_STREAM, 0);
 	if (connecter == INVALID_SOCKET)
-		quit(1, "Failed to create connect socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to create connect socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	struct sockaddr_in inaddr = {
 		.sin_family = AF_INET,
 		.sin_addr = {
@@ -2549,25 +2554,30 @@ void notifier_init(notifier_t pipefd)
 		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
 	}
 	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr)) == SOCKET_ERROR)
-		quit(1, "Failed to bind listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to bind listener socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	socklen_t inaddr_sz = sizeof(inaddr);
 	if (getsockname(listener, (struct sockaddr*)&inaddr, &inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to getsockname in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to getsockname"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	if (listen(listener, 1) == SOCKET_ERROR)
-		quit(1, "Failed to listen in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to listen"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	inaddr.sin_family = AF_INET;
 	inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	if (connect(connecter, (struct sockaddr*)&inaddr, inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to connect in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to connect"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	acceptor = accept(listener, NULL, NULL);
 	if (acceptor == INVALID_SOCKET)
-		quit(1, "Failed to accept in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to accept"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	closesocket(listener);
 	pipefd[0] = connecter;
 	pipefd[1] = acceptor;
 #else
 	if (pipe(pipefd))
-		quit(1, "Failed to create pipe in create_notifier");
+		quithere(1, "Failed to create pipe");
 #endif
 }
 

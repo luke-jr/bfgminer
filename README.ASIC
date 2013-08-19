@@ -78,6 +78,15 @@ with a unique username per blade. It will then show up as a SGW device and
 should work more or less like any other miner.
 
 
+BLOCK ERUPTER USB
+-----------------
+
+These will autodetect if supported by the device; otherwise, you need to use
+the '--scan-serial erupter:*' option to tell BFGMiner what device to probe. They
+communicate with the Icarus protocol, which has some additional options in
+README.FPGA
+
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare

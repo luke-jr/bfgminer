@@ -60,7 +60,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.25";
+static const char *APIVERSION = "1.25.3";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -450,7 +450,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
@@ -814,6 +814,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_FREQ:
 			case API_HS:
 			case API_DIFF:
+			case API_PERCENT:
 				api_data->data = (void *)malloc(sizeof(double));
 				*((double *)(api_data->data)) = *((double *)data);
 				break;
@@ -954,6 +955,11 @@ struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, b
 	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
 }
 
+struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_PERCENT, (void *)data, copy_data);
+}
+
 static struct api_data *print_data(struct api_data *root, char *buf, bool isjson, bool precom)
 {
 	struct api_data *tmp;
@@ -1050,6 +1056,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				escape = json_dumps((json_t *)(root->data), JSON_COMPACT);
 				strcpy(buf, escape);
 				free(escape);
+				break;
+			case API_PERCENT:
+				sprintf(buf, "%.4f", *((double *)(root->data)) * 100.0);
 				break;
 			default:
 				applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
@@ -1475,6 +1484,12 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
+	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
+			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+	root = api_add_percent(root, "Device Hardware%", &hwp, false);
+	double rejp = cgpu->diff1 ?
+			(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
+	root = api_add_percent(root, "Device Rejected%", &rejp, false);
 
 	if (cgpu->drv->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_status(cgpu));
@@ -1884,6 +1899,12 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 		if (pool->admin_msg)
 			root = api_add_escape(root, "Message", pool->admin_msg, true);
+		double rejp = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
+				(double)(pool->diff_rejected) / (double)(pool->diff_accepted + pool->diff_rejected + pool->diff_stale) : 0;
+		root = api_add_percent(root, "Pool Rejected%", &rejp, false);
+		double stalep = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
+				(double)(pool->diff_stale) / (double)(pool->diff_accepted + pool->diff_rejected + pool->diff_stale) : 0;
+		root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);
@@ -1940,6 +1961,18 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
 	root = api_add_uint64(root, "Best Share", &(best_diff), true);
+	double hwp = (hw_errors + total_diff1) ?
+			(double)(hw_errors) / (double)(hw_errors + total_diff1) : 0;
+	root = api_add_percent(root, "Device Hardware%", &hwp, false);
+	double rejp = total_diff1 ?
+			(double)(total_diff_rejected) / (double)(total_diff1) : 0;
+	root = api_add_percent(root, "Device Rejected%", &rejp, false);
+	double prejp = (total_diff_accepted + total_diff_rejected + total_diff_stale) ?
+			(double)(total_diff_rejected) / (double)(total_diff_accepted + total_diff_rejected + total_diff_stale) : 0;
+	root = api_add_percent(root, "Pool Rejected%", &prejp, false);
+	double stalep = (total_diff_accepted + total_diff_rejected + total_diff_stale) ?
+			(double)(total_diff_stale) / (double)(total_diff_accepted + total_diff_rejected + total_diff_stale) : 0;
+	root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
 	mutex_unlock(&hash_lock);
 

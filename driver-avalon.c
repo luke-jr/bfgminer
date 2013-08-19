@@ -667,13 +667,12 @@ static bool avalon_prepare(struct thr_info *thr)
 	avalon->works = calloc(info->miner_count * sizeof(struct work *),
 			       AVALON_ARRAY_SIZE);
 	if (!avalon->works)
-		quit(1, "Failed to calloc avalon works in avalon_prepare");
+		quithere(1, "Failed to calloc avalon works");
 	if (avalon->device_fd == -1)
 		avalon_init(avalon);
 	else
 		__avalon_init(avalon);
 
-	get_now_datestamp(avalon->init);
 	avalon->status = LIFE_INIT2;
 	return true;
 }
