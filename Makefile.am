@@ -174,6 +174,10 @@ if HAS_FPGA
 dist_doc_DATA += README.FPGA
 endif
 
+if HAS_ASIC
+dist_doc_DATA += README.ASIC
+endif
+
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 
@@ -192,7 +196,6 @@ endif
 
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
-dist_doc_DATA += README.ASIC
 endif
 
 if HAS_MODMINER
