@@ -1740,7 +1740,7 @@ static int64_t bflsc_scanwork(struct thr_info *thr)
 		}
 	}
 
-	waited = restart_wait(sc_info->scan_sleep_time);
+	waited = restart_wait(thr, sc_info->scan_sleep_time);
 	if (waited == ETIMEDOUT) {
 		unsigned int old_sleep_time, new_sleep_time = 0;
 		int min_queued = sc_info->que_size;

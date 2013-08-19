@@ -3590,7 +3590,7 @@ static void discard_stale(void)
  * work restart is required. Returns the value of pthread_cond_timedwait
  * which is zero if the condition was met or ETIMEDOUT if not.
  */
-int restart_wait(unsigned int mstime)
+int restart_wait(struct thr_info *thr, unsigned int mstime)
 {
 	struct timeval now, then, tdiff;
 	struct timespec abstime;
@@ -3604,7 +3604,10 @@ int restart_wait(unsigned int mstime)
 	abstime.tv_nsec = then.tv_usec * 1000;
 
 	mutex_lock(&restart_lock);
-	rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
+	if (thr->work_restart)
+		rc = ETIMEDOUT;
+	else
+		rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
 
 	return rc;

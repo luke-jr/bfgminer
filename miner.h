@@ -945,7 +945,7 @@ extern pthread_cond_t restart_cond;
 extern void thread_reportin(struct thr_info *thr);
 extern void clear_stratum_shares(struct pool *pool);
 extern void set_target(unsigned char *dest_target, double diff);
-extern int restart_wait(unsigned int mstime);
+extern int restart_wait(struct thr_info *thr, unsigned int mstime);
 
 extern void kill_work(void);
 

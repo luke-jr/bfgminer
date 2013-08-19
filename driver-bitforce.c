@@ -678,7 +678,7 @@ static int64_t bitforce_scanhash(struct thr_info *thr, struct work *work, int64_
 
 	send_ret = bitforce_send_work(thr, work);
 
-	if (!restart_wait(bitforce->sleep_ms))
+	if (!restart_wait(thr, bitforce->sleep_ms))
 		return 0;
 
 	bitforce->wait_ms = bitforce->sleep_ms;
