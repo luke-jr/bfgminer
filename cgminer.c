@@ -1522,12 +1522,12 @@ static void calc_midstate(struct work *work)
 {
 	unsigned char data[64];
 	uint32_t *data32 = (uint32_t *)data;
-	sha2_context ctx;
+	sha256_ctx ctx;
 
 	flip64(data32, work->data);
-	sha2_starts(&ctx);
-	sha2_update(&ctx, data, 64);
-	memcpy(work->midstate, ctx.state, 32);
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, 64);
+	memcpy(work->midstate, ctx.h, 32);
 	endian_flip32(work->midstate, work->midstate);
 }
 
@@ -3366,8 +3366,8 @@ static void regen_hash(struct work *work)
 	unsigned char hash1[32];
 
 	flip80(swap32, data32);
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, (unsigned char *)(work->hash));
+	sha256(swap, 80, hash1);
+	sha256(hash1, 32, (unsigned char *)(work->hash));
 }
 
 static void rebuild_hash(struct work *work)
@@ -5543,8 +5543,8 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
-	sha2(data, len, hash1);
-	sha2(hash1, 32, hash);
+	sha256(data, len, hash1);
+	sha256(hash1, 32, hash);
 }
 
 /* Diff 1 is a 256 bit unsigned integer of

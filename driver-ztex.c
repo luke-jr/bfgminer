@@ -162,8 +162,8 @@ static uint32_t ztex_checkNonce(struct work *work, uint32_t nonce)
 	for (i = 0; i < 76 / 4; i++)
 		swap32[i] = swab32(data32[i]);
 
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, hash2);
+	sha256(swap, 80, hash1);
+	sha256(hash1, 32, hash2);
 
 	return htonl(hash2_32[7]);
 }
