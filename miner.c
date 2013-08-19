@@ -2549,16 +2549,15 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	
 	return rv;
 }
-#define format_unit(buf, floatprec, measurement, fmt, rate, unitin)  \
-	(void)format_unit2(buf, SSIZE_MAX, floatprec, measurement, fmt, rate, unitin);
 
 static
-char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
+char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
 {
 	unsigned char unit = 0;
 	int i;
 	size_t delimsz;
 	char *buf = buflist[0];
+	size_t bufsz = bufszlist[0];
 	size_t itemwidth = (floatprec ? 5 : 3);
 	
 	if (!isarray)
@@ -2570,24 +2569,31 @@ char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement
 	--count;
 	for (i = 0; i < count; ++i)
 	{
-		format_unit(buf, floatprec, NULL, H2B_NOUNIT, numbers[i], unit);
+		format_unit2(buf, bufsz, floatprec, NULL, H2B_NOUNIT, numbers[i], unit);
 		if (isarray)
+		{
 			buf = buflist[i + 1];
+			bufsz = bufszlist[i + 1];
+		}
 		else
 		{
 			buf += itemwidth;
+			bufsz -= itemwidth;
+			if (delimsz > bufsz)
+				delimsz = bufsz;
 			memcpy(buf, delim, delimsz);
 			buf += delimsz;
+			bufsz -= delimsz;
 		}
 	}
 	
 	// Last entry has the unit
-	format_unit(buf, floatprec, measurement, fmt, numbers[count], unit);
+	format_unit2(buf, bufsz, floatprec, measurement, fmt, numbers[count], unit);
 	
 	return buflist[0];
 }
-#define multi_format_unit(buf, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
-#define multi_format_unit_array(buflist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
+#define multi_format_unit2(buf, bufsz, floatprec, measurement, fmt, delim, count, ...)  _multi_format_unit((char *[]){buf}, (size_t[]){bufsz}, floatprec, measurement, fmt, delim, count, (float[]){ __VA_ARGS__ }, false)
+#define multi_format_unit_array2(buflist, bufszlist, floatprec, measurement, fmt, count, ...)  (void)_multi_format_unit(buflist, bufszlist, floatprec, measurement, fmt, NULL, count, (float[]){ __VA_ARGS__ }, true)
 
 static
 int percentf3(char * const buf, size_t sz, double p, const double t)
@@ -2615,8 +2621,7 @@ int percentf3(char * const buf, size_t sz, double p, const double t)
 	
 	return rv;
 }
-#define percentf2(p, t, buf)  (percentf3(buf, SIZE_MAX, p, t), buf)
-#define percentf(p, t, buf)  percentf2(p, p + t, buf)
+#define percentf4(buf, bufsz, p, t)  percentf3(buf, bufsz, p, p + t)
 
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
@@ -2635,15 +2640,17 @@ void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, 
 	adj_width(rejected, &rwidth);
 	adj_width(stale, &swidth);
 	adj_width(hwerrs, &hwwidth);
+	percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
+	percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
 	
 	tailsprintf(buf, bufsz, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 	            cHr, aHr, uHr,
 	            awidth, accepted,
 	            rwidth, rejected,
 	            swidth, stale,
-	            percentf(wnotaccepted, waccepted, rejpcbuf),
+	            rejpcbuf,
 	            hwwidth, hwerrs,
-	            percentf2(badnonces, allnonces, bnbuf)
+	            bnbuf
 	);
 }
 #endif
@@ -2718,8 +2725,9 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			allnonces += slave->diff1;
 		}
 	
-	multi_format_unit_array(
+	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
+		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[hashrate_style]}),
 		true, "h/s", hashrate_style,
 		3,
 		1e6*rolling,
@@ -2817,15 +2825,17 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	else
 #endif
 	{
+		percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
+		percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
 		tailsprintf(buf, bufsz, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
 			accepted,
 			rejected,
 			stale,
-			percentf(wnotaccepted, waccepted, rejpcbuf),
+			rejpcbuf,
 			hwerrs,
-			percentf2(badnonces, allnonces, bnbuf)
+			bnbuf
 		);
 	}
 }
@@ -2976,7 +2986,8 @@ static void curses_print_status(void)
 		total_go + total_ro,
 		new_blocks,
 		total_submitting,
-		multi_format_unit(bwstr, false, "B/s", H2B_SHORT, "/", 2,
+		multi_format_unit2(bwstr, sizeof(bwstr),
+		                   false, "B/s", H2B_SHORT, "/", 2,
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
@@ -5263,7 +5274,8 @@ static void set_blockdiff(const struct work *work)
 	diff64 = diff;
 
 	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
-	format_unit(net_hashrate, true, "h/s", H2B_SHORT, diff * 7158278, -1);
+	format_unit2(net_hashrate, sizeof(net_hashrate),
+	             true, "h/s", H2B_SHORT, diff * 7158278, -1);
 	if (unlikely(current_diff != diff))
 		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
 	current_diff = diff;
@@ -5498,10 +5510,10 @@ static void display_pool_summary(struct pool *pool)
 		wlog(" Rejected difficulty shares: %1.f\n", pool->diff_rejected);
 		pool_secs = timer_elapsed(&pool->cgminer_stats.start_tv, NULL);
 		wlog(" Network transfer: %s  (%s)\n",
-		     multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+		     multi_format_unit2(xfer, sizeof(xfer), true, "B", H2B_SPACED, " / ", 2,
 		                       (float)pool->cgminer_pool_stats.net_bytes_received,
 		                       (float)pool->cgminer_pool_stats.net_bytes_sent),
-		     multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+		     multi_format_unit2(bw, sizeof(bw), true, "B/s", H2B_SPACED, " / ", 2,
 		                       (float)(pool->cgminer_pool_stats.net_bytes_received / pool_secs),
 		                       (float)(pool->cgminer_pool_stats.net_bytes_sent / pool_secs)));
 		uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
@@ -6706,8 +6718,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
-	multi_format_unit_array(
+	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
+		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_SPACED]}),
 		true, "h/s", H2B_SHORT,
 		3,
 		1e6*rolling,
@@ -6783,6 +6796,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	memmove(&uHr[6], &uHr[5], strlen(&uHr[5]) + 1);
 	uHr[5] = ' ';
 	
+	percentf4(rejpcbuf, sizeof(rejpcbuf), total_diff_rejected + total_diff_stale, total_diff_accepted);
+	percentf3(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
+	
 	snprintf(logstatusline, sizeof(logstatusline),
 	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",
@@ -6792,9 +6808,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_accepted,
 		total_rejected,
 		total_stale,
-		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
+		rejpcbuf,
 		hw_errors,
-		percentf2(total_bad_nonces, total_diff1, bnbuf)
+		bnbuf
 	);
 
 
@@ -8852,10 +8868,10 @@ void print_summary(void)
 	applog(LOG_WARNING, "Rejected difficulty shares: %1.f", total_diff_rejected);
 	applog(LOG_WARNING, "Hardware errors: %d", hw_errors);
 	applog(LOG_WARNING, "Network transfer: %s  (%s)",
-	       multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+	       multi_format_unit2(xfer, sizeof(xfer), true, "B", H2B_SPACED, " / ", 2,
 	                         (float)total_bytes_rcvd,
 	                         (float)total_bytes_sent),
-	       multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+	       multi_format_unit2(bw, sizeof(bw), true, "B/s", H2B_SPACED, " / ", 2,
 	                         (float)(total_bytes_rcvd / total_secs),
 	                         (float)(total_bytes_sent / total_secs)));
 	applog(LOG_WARNING, "Efficiency (accepted shares * difficulty / 2 KB): %.2f", efficiency);
@@ -8883,10 +8899,10 @@ void print_summary(void)
 			applog(LOG_WARNING, " Rejected difficulty shares: %1.f", pool->diff_rejected);
 			pool_secs = timer_elapsed(&pool->cgminer_stats.start_tv, NULL);
 			applog(LOG_WARNING, " Network transfer: %s  (%s)",
-			       multi_format_unit(xfer, true, "B", H2B_SPACED, " / ", 2,
+			       multi_format_unit2(xfer, sizeof(xfer), true, "B", H2B_SPACED, " / ", 2,
 			                         (float)pool->cgminer_pool_stats.net_bytes_received,
 			                         (float)pool->cgminer_pool_stats.net_bytes_sent),
-			       multi_format_unit(bw, true, "B/s", H2B_SPACED, " / ", 2,
+			       multi_format_unit2(bw, sizeof(bw), true, "B/s", H2B_SPACED, " / ", 2,
 			                         (float)(pool->cgminer_pool_stats.net_bytes_received / pool_secs),
 			                         (float)(pool->cgminer_pool_stats.net_bytes_sent / pool_secs)));
 			uint64_t pool_bytes_xfer = pool->cgminer_pool_stats.net_bytes_received + pool->cgminer_pool_stats.net_bytes_sent;
