@@ -7714,8 +7714,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	clean_work(work);
 
-	/* Use intermediate lock to update the one pool variable */
-	cg_ilock(&pool->data_lock);
+	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
 	bytes_resize(&work->nonce2, pool->n2size);
@@ -7735,7 +7734,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	pool->nonce2++;
 
 	/* Downgrade to a read lock to read off the pool variables */
-	cg_dlock(&pool->data_lock);
+	cg_dwlock(&pool->data_lock);
 
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, bytes_len(&pool->swork.coinbase));
