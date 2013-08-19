@@ -45,7 +45,7 @@
 	#ifndef in_addr_t
 	#define in_addr_t uint32_t
 	#endif
-	typedef DWORD cgtimer_t;
+	typedef struct timeval cgtimer_t;
 #endif
 
 #if JANSSON_MAJOR_VERSION >= 2
@@ -75,8 +75,6 @@ void thr_info_cancel(struct thr_info *thr);
 void nmsleep(unsigned int msecs);
 void nusleep(unsigned int usecs);
 void cgtime(struct timeval *tv);
-void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv);
-void cgtimer_to_timeval(struct timeval *tv, const cgtimer_t *cgt);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
 bool time_more(struct timeval *a, struct timeval *b);
