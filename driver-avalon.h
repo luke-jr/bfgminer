@@ -142,7 +142,15 @@ struct avalon_info {
 	bool reset;
 	bool overheat;
 	bool optimal;
+
+	uint8_t version1;
+	uint8_t version2;
+	uint8_t version3;
 };
+
+#define BITBURNER_VERSION1 1
+#define BITBURNER_VERSION2 0
+#define BITBURNER_VERSION3 0
 
 #define AVALON_WRITE_SIZE (sizeof(struct avalon_task))
 #define AVALON_READ_SIZE (sizeof(struct avalon_result))
