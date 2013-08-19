@@ -1423,11 +1423,11 @@ static void *bflsc_get_results(void *userdata)
 		if (bflsc->usbinfo.nodev)
 			return NULL;
 
+		cgsleep_prepare_r(&ts_start);
 		if (dev == -1)
 			goto utsura;
 
 		cgtime(&(sc_info->sc_devs[dev].last_check_result));
-		cgsleep_prepare_r(&ts_start);
 
 		readok = bflsc_qres(bflsc, buf, sizeof(buf), dev, &err, &amount, false);
 		if (err < 0 || (!readok && amount != BFLSC_QRES_LEN) || (readok && amount < 1)) {
