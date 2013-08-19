@@ -97,6 +97,7 @@ int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errm
 	char * const reply = malloc(replysz);
 	replysz = snprintf(reply, replysz, "{\"result\":null,\"error\":{\"code\":%d,\"message\":\"%s\"},\"id\":%s}", errcode, errmsg, idstr ?: "0");
 	struct MHD_Response * const resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
+	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
 	const int ret = MHD_queue_response(conn, 500, resp);
 	MHD_destroy_response(resp);
 	return ret;
@@ -232,6 +233,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		sprintf(reply, "{\"error\":null,\"result\":%s,\"id\":%s}",
 		        rejreason ? "false" : "true", idstr);
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
+		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
 		if (rejreason)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
 		ret = MHD_queue_response(conn, 200, resp);
@@ -262,6 +264,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
 		
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
+		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
 	}
