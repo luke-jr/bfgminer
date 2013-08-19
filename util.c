@@ -812,6 +812,11 @@ void cgtime(struct timeval *tv)
 {
 	gettimeofday(tv, NULL);
 }
+
+void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
+{
+	timeval_to_spec(cgt, tv);
+}
 #else
 static void dtime_to_timeval(struct timeval *tv, DWORD dtime)
 {
@@ -829,6 +834,16 @@ void cgtime(struct timeval *tv)
 	dtime = timeGetTime();
 	//timeEndPeriod(1);
 	dtime_to_timeval(tv, dtime);
+}
+
+static void timeval_to_dtime(DWORD *dtime, const struct timeval *tv)
+{
+	*dtime = tv->tv_sec * 1000 + tv->tv_usec / 1000;
+}
+
+void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv)
+{
+	timeval_to_dtime(cgt, tv);
 }
 #endif
 
