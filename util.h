@@ -75,6 +75,7 @@ void thr_info_cancel(struct thr_info *thr);
 void nmsleep(unsigned int msecs);
 void nusleep(unsigned int usecs);
 void cgtime(struct timeval *tv);
+void timeval_to_cgtimer(cgtimer_t *cgt, const struct timeval *tv);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
 bool time_more(struct timeval *a, struct timeval *b);
