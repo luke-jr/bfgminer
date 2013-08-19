@@ -763,17 +763,28 @@ static inline void rw_unlock(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_unlock(lock)))
 		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
-	sched_yield();
+}
+
+static inline void rd_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
+static inline void wr_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
 }
 
 static inline void rd_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void wr_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void mutex_init(pthread_mutex_t *lock)
@@ -827,6 +838,14 @@ static inline void cg_wlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	wr_lock(&lock->rwlock);
+}
+
+/* Downgrade write variant to a read lock */
+static inline void cg_dwlock(cglock_t *lock)
+{
+	wr_unlock_noyield(&lock->rwlock);
+	rd_lock(&lock->rwlock);
+	mutex_unlock_noyield(&lock->mutex);
 }
 
 /* Downgrade intermediate variant to a read lock */
