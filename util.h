@@ -20,6 +20,7 @@
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
 	}
+	typedef struct timespec cgtimer_t;
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -44,6 +45,7 @@
 	#ifndef in_addr_t
 	#define in_addr_t uint32_t
 	#endif
+	typedef DWORD cgtimer_t;
 #endif
 
 #if JANSSON_MAJOR_VERSION >= 2
@@ -86,9 +88,9 @@ void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
 void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
-void cgsleep_prepare_r(struct timespec *ts_start);
-void cgsleep_ms_r(struct timespec *ts_start, int ms);
-void cgsleep_us_r(struct timespec *ts_start, int64_t us);
+void cgsleep_prepare_r(cgtimer_t *ts_start);
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
