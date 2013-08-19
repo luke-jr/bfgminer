@@ -1387,7 +1387,6 @@ static void *bflsc_get_results(void *userdata)
 	struct cgpu_info *bflsc = (struct cgpu_info *)userdata;
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	struct timeval elapsed, now;
-	cgtimer_t ts_start;
 	float oldest, f;
 	char buf[BFLSC_BUFSIZ+1];
 	int err, amount;
@@ -1402,13 +1401,14 @@ static void *bflsc_get_results(void *userdata)
 	}
 
 	while (sc_info->shutdown == false) {
+		cgtimer_t ts_start;
+
 		if (bflsc->usbinfo.nodev)
 			return NULL;
 
 		dev = -1;
 		oldest = FLT_MAX;
-		cgsleep_prepare_r(&ts_start);
-		cgtimer_to_timeval(&now, &ts_start);
+		cgtime(&now);
 
 		// Find the first oldest ... that also needs checking
 		for (i = 0; i < sc_info->sc_count; i++) {
@@ -1420,12 +1420,10 @@ static void *bflsc_get_results(void *userdata)
 			}
 		}
 
-		if (bflsc->usbinfo.nodev) {
-			/* To clean up the setup timer */
-			cgsleep_ms_r(&ts_start, 0);
+		if (bflsc->usbinfo.nodev)
 			return NULL;
-		}
 
+		cgsleep_prepare_r(&ts_start);
 		if (dev == -1) {
 			/* Sleep for only half a work period before checking
 			 * again. */
@@ -1433,7 +1431,7 @@ static void *bflsc_get_results(void *userdata)
 			continue;
 		}
 
-		copy_time(&sc_info->sc_devs[dev].last_check_result, &now);
+		cgtime(&(sc_info->sc_devs[dev].last_check_result));
 
 		readok = bflsc_qres(bflsc, buf, sizeof(buf), dev, &err, &amount, false);
 		if (err < 0 || (!readok && amount != BFLSC_QRES_LEN) || (readok && amount < 1)) {
@@ -1441,13 +1439,10 @@ static void *bflsc_get_results(void *userdata)
 		} else {
 			que = process_results(bflsc, dev, buf, &nonces);
 			sc_info->not_first_work = true; // in case it failed processing it
-			if (que > 0 || nonces > 0) {
-				cgtime(&now);
-				if (que > 0)
-					copy_time(&sc_info->sc_devs[dev].last_dev_result, &now);
-				if (nonces > 0)
-					copy_time(&sc_info->sc_devs[dev].last_nonce_result, &now);
-			}
+			if (que > 0)
+				cgtime(&(sc_info->sc_devs[dev].last_dev_result));
+			if (nonces > 0)
+				cgtime(&(sc_info->sc_devs[dev].last_nonce_result));
 
 			// TODO: if not getting results ... reinit?
 		}
