@@ -2941,6 +2941,18 @@ void bfg_hline(WINDOW *win, int y)
 
 static int menu_attr = A_REVERSE;
 
+#define CURBUFSIZ 256
+#define cg_mvwprintw(win, y, x, fmt, ...) do { \
+	char tmp42[CURBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	mvwprintw(win, y, x, "%s", tmp42); \
+} while (0)
+#define cg_wprintw(win, fmt, ...) do { \
+	char tmp42[CURBUFSIZ]; \
+	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+	wprintw(win, "%s", tmp42); \
+} while (0)
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
@@ -2953,7 +2965,7 @@ static void curses_print_status(void)
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	wattron(statuswin, A_BOLD);
-	mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	timer_set_now(&now);
 	{
 		unsigned int days, hours;
@@ -2965,7 +2977,7 @@ static void curses_print_status(void)
 		d = div(d.rem, 3600);
 		hours = d.quot;
 		d = div(d.rem, 60);
-		wprintw(statuswin, " - [%3u day%c %02d:%02d:%02d]"
+		cg_wprintw(statuswin, " - [%3u day%c %02d:%02d:%02d]"
 			, days
 			, (days == 1) ? ' ' : 's'
 			, hours
@@ -2981,7 +2993,7 @@ static void curses_print_status(void)
 	utility = total_accepted / total_secs * 60;
 
 	char bwstr[12];
-	mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
 		__total_staged(),
 		total_go + total_ro,
 		new_blocks,
@@ -2995,17 +3007,17 @@ static void curses_print_status(void)
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s LP",
+		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s LP",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
-		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
+		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
 			pool->sockaddr_url, pool->diff, pool->rpc_user);
 	} else {
-		mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
+		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
+	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  current_hash, block_diff, net_hashrate, blocktime);
 	
 	logdiv = statusy - 1;
@@ -3028,7 +3040,7 @@ static void curses_print_status(void)
 #endif
 	
 	wattron(statuswin, menu_attr);
-	mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
+	cg_mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
 	wattroff(statuswin, menu_attr);
 }
 
