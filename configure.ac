@@ -256,7 +256,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			],[
 				AC_PROG_CPP
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed 's/^[^[:space:]]\+[[:space:]]\+\([^[:space:]]\+\)\/.*$/\1/;t;d'`
+				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^.*:[[:space:]]\+\([^[:space:]]\+\)\/.*/\1/'`
 				if test "x$libusb_include_path" != "x"; then
 					LIBUSB_LIBS="-l$usb_lib"
 					LIBUSB_CFLAGS="-I$libusb_include_path"
