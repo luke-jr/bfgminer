@@ -9860,6 +9860,9 @@ int main(int argc, char *argv[])
 	}
 
 	if (!total_devices) {
+#ifndef USE_LIBMICROHTTPD
+		const int httpsrv_port = -1;
+#endif
 		if (httpsrv_port == -1 && !opt_api_listen)
 			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
