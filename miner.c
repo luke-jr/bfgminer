@@ -4202,7 +4202,7 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 {
 	mutex_lock(&pool->pool_lock);
 	if (!ce || !ce->curl)
-		quit(1, "Attempted to add NULL in push_curl_entry");
+		quithere(1, "Attempted to add NULL");
 	LL_PREPEND(pool->curllist, ce);
 	cgtime(&ce->tv);
 	pthread_cond_broadcast(&pool->cr_cond);

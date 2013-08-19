@@ -696,9 +696,9 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	switch (data->proto)
 	{
 		case BFP_BQUEUE:
-			quit(1, "%"PRIpreprv": Impossible BFP_BQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+			quithere(1, "%"PRIpreprv": Impossible BFP_BQUEUE", bitforce->proc_repr);
 		case BFP_PQUEUE:
-			quit(1, "%"PRIpreprv": Impossible BFP_PQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+			quithere(1, "%"PRIpreprv": Impossible BFP_PQUEUE", bitforce->proc_repr);
 		case BFP_RANGE:
 		{
 			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);

@@ -1306,7 +1306,7 @@ select_cgpu:
 
 		thr->q = tq_new();
 		if (!thr->q)
-			quit(1, "Failed to tq_new in reinit_gpu");
+			quithere(1, "Failed to tq_new");
 
 		/* Lose this ram cause we may dereference in the dying thread! */
 		//free(clState);
