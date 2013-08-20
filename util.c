@@ -930,6 +930,17 @@ int cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timespec_to_ms(cgt);
 }
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;
+		res->tv_sec--;
+	}
+}
 #else
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -974,6 +985,11 @@ static int timeval_to_ms(struct timeval *tv)
 int cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timeval_to_ms(cgt);
+}
+
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	timersub(a, b, res);
 }
 #endif
 
