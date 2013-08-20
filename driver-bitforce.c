@@ -199,7 +199,7 @@ reinit:
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
 					bitforce->drv->dname, bitforce->device_path, amount, err);
 			}
-			nmsleep(init_sleep);
+			cgsleep_ms(init_sleep);
 			if ((init_sleep * 2) <= REINIT_TIME_MAX_MS)
 				init_sleep *= 2;
 			goto reinit;
@@ -333,7 +333,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	} else {
 		/* However, this stops anything else getting a reply
 		 * So best to delay any other access to the BFL */
-		nmsleep(4000);
+		cgsleep_ms(4000);
 	}
 
 	/* Once we've tried - don't do it until told to again */
@@ -462,7 +462,7 @@ re_send:
 
 	if (amount == 0 || !buf[0] || !strncasecmp(buf, "B", 1)) {
 		mutex_unlock(&bitforce->device_mutex);
-		nmsleep(WORK_CHECK_INTERVAL_MS);
+		cgsleep_ms(WORK_CHECK_INTERVAL_MS);
 		goto re_send;
 	} else if (unlikely(strncasecmp(buf, "OK", 2))) {
 		mutex_unlock(&bitforce->device_mutex);
@@ -574,7 +574,7 @@ static int64_t bitforce_get_result(struct thr_info *thr, struct work *work)
 
 		/* if BFL is throttling, no point checking so quickly */
 		delay_time_ms = (buf[0] ? BITFORCE_CHECK_INTERVAL_MS : 2 * WORK_CHECK_INTERVAL_MS);
-		nmsleep(delay_time_ms);
+		cgsleep_ms(delay_time_ms);
 		bitforce->wait_ms += delay_time_ms;
 	}
 
@@ -721,7 +721,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "%s%d: Delaying start by %dms",
 			bitforce->drv->name, bitforce->device_id, wait / 1000);
-	nmsleep(wait);
+	cgsleep_ms(wait);
 
 	return true;
 }

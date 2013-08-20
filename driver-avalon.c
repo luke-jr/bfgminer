@@ -223,7 +223,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 static void wait_avalon_ready(struct cgpu_info *avalon)
 {
 	while (avalon_buffer_full(avalon)) {
-		nmsleep(40);
+		cgsleep_ms(40);
 	}
 }
 
@@ -970,7 +970,7 @@ static void *avalon_send_tasks(void *userdata)
 		bool idled = false;
 
 		while (avalon_buffer_full(avalon))
-			nmsleep(40);
+			cgsleep_ms(40);
 
 		if (opt_avalon_auto && info->auto_queued >= AVALON_AUTO_CYCLE) {
 			mutex_lock(&info->lock);
@@ -1008,7 +1008,7 @@ static void *avalon_send_tasks(void *userdata)
 						break;
 					else {
 						while (avalon_buffer_full(avalon))
-							nmsleep(40);
+							cgsleep_ms(40);
 					}
 			}
 

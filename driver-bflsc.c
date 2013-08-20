@@ -734,7 +734,7 @@ reinit:
 				applog(LOG_WARNING, "%s detect (%s) 2nd init failed (%d:%d) - retrying",
 					bflsc->drv->dname, bflsc->device_path, amount, err);
 			}
-			nmsleep(init_sleep);
+			cgsleep_ms(init_sleep);
 			if ((init_sleep * 2) <= REINIT_TIME_MAX_MS)
 				init_sleep *= 2;
 			goto reinit;
@@ -783,7 +783,7 @@ reinit:
 		if (++tries > 2)
 			goto unshin;
 
-		nmsleep(40);
+		cgsleep_ms(40);
 	}
 
 	switch (sc_info->driver_version) {
@@ -1849,7 +1849,7 @@ static bool bflsc_get_stats(struct cgpu_info *bflsc)
 			return false;
 
 		if (i < (sc_info->sc_count - 1))
-			nmsleep(BFLSC_TEMP_SLEEPMS);
+			cgsleep_ms(BFLSC_TEMP_SLEEPMS);
 	}
 
 	bflsc_set_fanspeed(bflsc);

@@ -1262,7 +1262,7 @@ static bool cgminer_usb_lock_bd(struct device_drv *drv, uint8_t bus_number, uint
 
 	// TODO: add a timeout fail - restart the resource thread?
 	while (true) {
-		nmsleep(50);
+		cgsleep_ms(50);
 
 		mutex_lock(&cgusbres_lock);
 		if (res_reply_head) {
@@ -1961,7 +1961,7 @@ void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_devi
 	if (count == 0)
 		applog(LOG_DEBUG, "USB scan devices: found no devices");
 	else
-		nmsleep(166);
+		cgsleep_ms(166);
 
 	for (i = 0; i < count; i++) {
 		if (total_count >= total_limit) {
@@ -2429,7 +2429,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 					if (need > 0.0 && need < 1.0) {
 						cgpu->usbinfo.read_delay_count++;
 						cgpu->usbinfo.total_read_delay += need;
-						nmsleep((unsigned int)(need * 1000.0));
+						cgsleep_ms((unsigned int)(need * 1000.0));
 					}
 				}
 			}
@@ -2535,7 +2535,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				if (need > 0.0 && need < 1.0) {
 					cgpu->usbinfo.read_delay_count++;
 					cgpu->usbinfo.total_read_delay += need;
-					nmsleep((unsigned int)(need * 1000.0));
+					cgsleep_ms((unsigned int)(need * 1000.0));
 				}
 			}
 		}
@@ -2674,7 +2674,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 				if (need > 0.0 && need < 1.0) {
 					cgpu->usbinfo.write_delay_count++;
 					cgpu->usbinfo.total_write_delay += need;
-					nmsleep((unsigned int)(need * 1000.0));
+					cgsleep_ms((unsigned int)(need * 1000.0));
 				}
 			}
 			cgtime(&(usbdev->last_write_tv));
@@ -2770,7 +2770,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 			if (need > 0.0 && need < 1.0) {
 				cgpu->usbinfo.write_delay_count++;
 				cgpu->usbinfo.total_write_delay += need;
-				nmsleep((unsigned int)(need * 1000.0));
+				cgsleep_ms((unsigned int)(need * 1000.0));
 			}
 		}
 		cgtime(&(usbdev->last_write_tv));
@@ -2848,7 +2848,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 			if (need > 0.0 && need < 1.0) {
 				cgpu->usbinfo.read_delay_count++;
 				cgpu->usbinfo.total_read_delay += need;
-				nmsleep((unsigned int)(need * 1000.0));
+				cgsleep_ms((unsigned int)(need * 1000.0));
 			}
 		}
 	}
@@ -3119,7 +3119,7 @@ void usb_cleanup()
 
 	hotplug_time = 0;
 
-	nmsleep(10);
+	cgsleep_ms(10);
 
 	count = 0;
 	for (i = 0; i < total_devices; i++) {
@@ -3149,7 +3149,7 @@ void usb_cleanup()
 
 		cgtime(&start);
 		while (42) {
-			nmsleep(50);
+			cgsleep_ms(50);
 
 			mutex_lock(&cgusbres_lock);
 
@@ -3528,7 +3528,7 @@ fail:
 			}
 			if (opt.buf->sem_otime != 0)
 				break;
-			nmsleep(1);
+			cgsleep_ms(1);
 		}
 	}
 

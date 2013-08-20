@@ -1399,7 +1399,7 @@ updated:
 		clear_logwin();
 		return;
 	}
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	goto updated;
 }
 #endif
