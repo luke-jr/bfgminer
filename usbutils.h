@@ -13,6 +13,8 @@
 
 #include <libusb.h>
 
+#include "util.h"
+
 #define EPI(x) (LIBUSB_ENDPOINT_IN | (unsigned char)(x))
 #define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
 
@@ -186,7 +188,7 @@ struct cg_usb_device {
 	uint32_t bufsiz;
 	uint32_t bufamt;
 	uint16_t PrefPacketSize;
-	struct timeval last_write_tv;
+	cgtimer_t cgt_last_write;
 	size_t last_write_siz;
 };
 

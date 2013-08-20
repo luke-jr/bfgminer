@@ -2415,23 +2415,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			}
 			got = 0;
 
-			if (first && usbdev->usecps) {
-				if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
-					struct timeval now;
-					double need;
+			if (first && usbdev->usecps && usbdev->last_write_siz) {
+				double need = (double)(usbdev->last_write_siz) /
+					      (double)(usbdev->cps);
 
-					cgtime(&now);
-					need = (double)(usbdev->last_write_siz) /
-						(double)(usbdev->cps) -
-						tdiff(&now, &(usbdev->last_write_tv));
-
-					// Simple error condition check/avoidance '< 1.0'
-					if (need > 0.0 && need < 1.0) {
-						cgpu->usbinfo.read_delay_count++;
-						cgpu->usbinfo.total_read_delay += need;
-						cgsleep_ms((unsigned int)(need * 1000.0));
-					}
-				}
+				cgsleep_ms_r(&usbdev->cgt_last_write, need * 1000.0);
 			}
 			err = usb_bulk_transfer(usbdev->handle,
 						usbdev->found->eps[ep].ep,
@@ -2521,23 +2509,11 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				usbbufread = bufleft;
 		}
 		got = 0;
-		if (first && usbdev->usecps) {
-			if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
-				struct timeval now;
-				double need;
+		if (first && usbdev->usecps && usbdev->last_write_siz) {
+			double need = (double)(usbdev->last_write_siz) /
+				      (double)(usbdev->cps);
 
-				cgtime(&now);
-				need = (double)(usbdev->last_write_siz) /
-					(double)(usbdev->cps) -
-					tdiff(&now, &(usbdev->last_write_tv));
-
-				// Simple error condition check/avoidance '< 1.0'
-				if (need > 0.0 && need < 1.0) {
-					cgpu->usbinfo.read_delay_count++;
-					cgpu->usbinfo.total_read_delay += need;
-					cgsleep_ms((unsigned int)(need * 1000.0));
-				}
-			}
+			cgsleep_ms_r(&usbdev->cgt_last_write, need * 1000.0);
 		}
 		err = usb_bulk_transfer(usbdev->handle,
 					usbdev->found->eps[ep].ep, ptr,
@@ -2660,24 +2636,12 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 	cgtime(&read_start);
 	while (bufsiz > 0) {
 		sent = 0;
-		if (usbdev->usecps) {
-			if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
-				struct timeval now;
-				double need;
+		if (usbdev->usecps && usbdev->last_write_siz) {
+			double need = (double)(usbdev->last_write_siz) /
+				      (double)(usbdev->cps);
 
-				cgtime(&now);
-				need = (double)(usbdev->last_write_siz) /
-					(double)(usbdev->cps) -
-					tdiff(&now, &(usbdev->last_write_tv));
-
-				// Simple error condition check/avoidance '< 1.0'
-				if (need > 0.0 && need < 1.0) {
-					cgpu->usbinfo.write_delay_count++;
-					cgpu->usbinfo.total_write_delay += need;
-					cgsleep_ms((unsigned int)(need * 1000.0));
-				}
-			}
-			cgtime(&(usbdev->last_write_tv));
+			cgsleep_ms_r(&usbdev->cgt_last_write, need * 1000.0);
+			cgsleep_prepare_r(&usbdev->cgt_last_write);
 			usbdev->last_write_siz = bufsiz;
 		}
 		err = usb_bulk_transfer(usbdev->handle,
@@ -2756,24 +2720,12 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 
 	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
 
-	if (usbdev->usecps) {
-		if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
-			struct timeval now;
-			double need;
+	if (usbdev->usecps && usbdev->last_write_siz) {
+		double need = (double)(usbdev->last_write_siz) /
+			      (double)(usbdev->cps);
 
-			cgtime(&now);
-			need = (double)(usbdev->last_write_siz) /
-				(double)(usbdev->cps) -
-				tdiff(&now, &(usbdev->last_write_tv));
-
-			// Simple error condition check/avoidance '< 1.0'
-			if (need > 0.0 && need < 1.0) {
-				cgpu->usbinfo.write_delay_count++;
-				cgpu->usbinfo.total_write_delay += need;
-				cgsleep_ms((unsigned int)(need * 1000.0));
-			}
-		}
-		cgtime(&(usbdev->last_write_tv));
+		cgsleep_ms_r(&usbdev->cgt_last_write, need * 1000.0);
+		cgsleep_prepare_r(&usbdev->cgt_last_write);
 		usbdev->last_write_siz = siz;
 	}
 	STATS_TIMEVAL(&tv_start);
@@ -2834,23 +2786,11 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 
 	*amount = 0;
 
-	if (usbdev->usecps) {
-		if (usbdev->last_write_tv.tv_sec && usbdev->last_write_siz) {
-			struct timeval now;
-			double need;
+	if (usbdev->usecps && usbdev->last_write_siz) {
+		double need = (double)(usbdev->last_write_siz) /
+			      (double)(usbdev->cps);
 
-			cgtime(&now);
-			need = (double)(usbdev->last_write_siz) /
-				(double)(usbdev->cps) -
-				tdiff(&now, &(usbdev->last_write_tv));
-
-			// Simple error condition check/avoidance '< 1.0'
-			if (need > 0.0 && need < 1.0) {
-				cgpu->usbinfo.read_delay_count++;
-				cgpu->usbinfo.total_read_delay += need;
-				cgsleep_ms((unsigned int)(need * 1000.0));
-			}
-		}
+		cgsleep_ms_r(&usbdev->cgt_last_write, need * 1000.0);
 	}
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
