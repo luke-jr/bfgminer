@@ -921,6 +921,15 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	nanosleep_abstime(&ts_end);
 }
 
+static int timespec_to_ms(struct timespec *ts)
+{
+	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timespec_to_ms(cgt);
+}
 #else
 void cgtimer_time(cgtimer_t *ts_start)
 {
@@ -955,6 +964,16 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	int ms = us / 1000;
 
 	cgsleep_ms_r(ts_start, ms);
+}
+
+static int timeval_to_ms(struct timeval *tv)
+{
+	return tv->tv_sec * 1000 + tv->tv_usec / 1000;
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timeval_to_ms(cgt);
 }
 #endif
 
