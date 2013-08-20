@@ -37,6 +37,8 @@
 
 #ifndef WIN32
 #include <sys/resource.h>
+#else
+#include <windows.h>
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -6790,6 +6792,9 @@ static void clean_up(void)
 #endif
 
 	cgtime(&total_tv_end);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 #ifdef HAVE_CURSES
 	disable_curses();
 #endif
@@ -7449,6 +7454,8 @@ int main(int argc, char *argv[])
 	sigaction(SIGINT, &handler, &inthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
+#else
+	timeBeginPeriod(1);
 #endif
 	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);

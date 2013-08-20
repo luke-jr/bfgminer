@@ -807,24 +807,10 @@ void thr_info_cancel(struct thr_info *thr)
 /* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
  * with tz set to NULL, and windows' default resolution is only 15ms, this
  * gives us higher resolution times on windows. */
-#ifndef WIN32
 void cgtime(struct timeval *tv)
 {
 	gettimeofday(tv, NULL);
 }
-#else
-static void __cgtime(struct timeval *tv)
-{
-	gettimeofday(tv, NULL);
-}
-
-void cgtime(struct timeval *tv)
-{
-	timeBeginPeriod(1);
-	__cgtime(tv);
-	timeEndPeriod(1);
-}
-#endif
 
 void subtime(struct timeval *a, struct timeval *b)
 {
@@ -938,8 +924,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 #else
 void cgsleep_prepare_r(cgtimer_t *ts_start)
 {
-	timeBeginPeriod(1);
-	__cgtime(ts_start);
+	cgtime(ts_start);
 }
 
 static void ms_to_timeval(struct timeval *val, int ms)
@@ -957,14 +942,12 @@ void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 
 	ms_to_timeval(&tv_diff, ms);
 	timeradd(ts_start, &tv_diff, &tv_end);
-	__cgtime(&now);
+	cgtime(&now);
 	if (unlikely(time_more(&now, &tv_end)))
-		goto out;
+		return;
 	timersub(&tv_end, &now, &tv_diff);
 	timeval_to_spec(&ts_diff, &tv_diff);
 	nanosleep(&ts_diff, NULL);
-out:
-	timeEndPeriod(1);
 }
 
 void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
