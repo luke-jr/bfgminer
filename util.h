@@ -86,7 +86,8 @@ void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
 void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
-void cgsleep_prepare_r(cgtimer_t *ts_start);
+void cgtimer_time(cgtimer_t *ts_start);
+#define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
 void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
 double us_tdiff(struct timeval *end, struct timeval *start);

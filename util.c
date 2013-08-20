@@ -886,7 +886,7 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifndef WIN32
-void cgsleep_prepare_r(cgtimer_t *ts_start)
+void cgtimer_time(cgtimer_t *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
 }
@@ -922,7 +922,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 }
 
 #else
-void cgsleep_prepare_r(cgtimer_t *ts_start)
+void cgtimer_time(cgtimer_t *ts_start)
 {
 	cgtime(ts_start);
 }
