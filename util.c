@@ -991,19 +991,6 @@ void cgsleep_us(int64_t us)
 	cgsleep_us_r(&ts_start, us);
 }
 
-/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
- * on SMP machines */
-void nmsleep(unsigned int msecs)
-{
-	cgsleep_ms((int)msecs);
-}
-
-/* Same for usecs */
-void nusleep(unsigned int usecs)
-{
-	cgsleep_us((int64_t)usecs);
-}
-
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {

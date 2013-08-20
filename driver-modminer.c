@@ -553,7 +553,7 @@ static bool modminer_fpga_upload_bitstream(struct cgpu_info *modminer)
 		modminer->drv->name, modminer->device_id, devmsg);
 
 	// Give it a 2/3s delay after programming
-	nmsleep(666);
+	cgsleep_ms(666);
 
 	usb_set_dev_start(modminer);
 
@@ -1016,7 +1016,7 @@ tryagain:
 			break;
 
 		// 1/10th sec to lower CPU usage
-		nmsleep(100);
+		cgsleep_ms(100);
 		if (work_restart(thr))
 			break;
 	}
@@ -1065,7 +1065,7 @@ static int64_t modminer_scanhash(struct thr_info *thr, struct work *work, int64_
 					return 0;
 
 				// Give it 1s rest then check again
-				nmsleep(1000);
+				cgsleep_ms(1000);
 			}
 		}
 	}

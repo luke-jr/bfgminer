@@ -227,7 +227,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 static void wait_avalon_ready(struct cgpu_info *avalon)
 {
 	while (avalon_buffer_full(avalon)) {
-		nmsleep(40);
+		cgsleep_ms(40);
 	}
 }
 
@@ -1048,7 +1048,7 @@ static void *avalon_send_tasks(void *userdata)
 		int64_t us_timeout;
 
 		while (avalon_buffer_full(avalon))
-			nmsleep(40);
+			cgsleep_ms(40);
 
 		avalon_adjust_freq(info, avalon);
 
@@ -1133,14 +1133,14 @@ static void *bitburner_send_tasks(void *userdata)
 		bool idled = false;
 
 		while (avalon_buffer_full(avalon))
-			nmsleep(40);
+			cgsleep_ms(40);
 
 		avalon_adjust_freq(info, avalon);
 
 		/* Give other threads a chance to acquire qlock. */
 		i = 0;
 		do {
-			nmsleep(40);
+			cgsleep_ms(40);
 		} while (!avalon->shutdown && i++ < 15
 			&& avalon->queued < avalon_get_work_count);
 
@@ -1149,7 +1149,7 @@ static void *bitburner_send_tasks(void *userdata)
 		end_count = start_count + avalon_get_work_count;
 		for (i = start_count, j = 0; i < end_count; i++, j++) {
 			while (avalon_buffer_full(avalon))
-				nmsleep(40);
+				cgsleep_ms(40);
 
 			if (likely(j < avalon->queued && !info->overheat && avalon->works[i])) {
 				avalon_init_task(&at, 0, 0, info->fan_pwm,

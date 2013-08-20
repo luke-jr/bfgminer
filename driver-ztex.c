@@ -194,7 +194,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	if (i < 0) {
 		// Something wrong happened in send
 		applog(LOG_ERR, "%s: Failed to send hash data with err %d, retrying", ztex->repr, i);
-		nmsleep(500);
+		cgsleep_ms(500);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
@@ -233,7 +233,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 		int sleepcount = 0;
 		while (thr->work_restart == 0 && sleepcount < 25) {
-			nmsleep(10);
+			cgsleep_ms(10);
 			sleepcount += 1;
 		}
 
@@ -247,7 +247,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		if (i < 0) {
 			// Something wrong happened in read
 			applog(LOG_ERR, "%s: Failed to read hash data with err %d, retrying", ztex->repr, i);
-			nmsleep(500);
+			cgsleep_ms(500);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it
