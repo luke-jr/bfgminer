@@ -90,6 +90,7 @@ void cgtimer_time(cgtimer_t *ts_start);
 #define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
 void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
+int cgtimer_to_ms(cgtimer_t *cgt);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
