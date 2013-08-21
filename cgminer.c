@@ -1422,29 +1422,29 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\nBuilt with "
+#ifdef USE_AVALON
+		"avalon "
+#endif
 #ifdef USE_BFLSC
 		"bflsc "
-#endif
-#ifdef HAVE_OPENCL
-		"GPU "
 #endif
 #ifdef USE_BITFORCE
 		"bitforce "
 #endif
+#ifdef HAVE_OPENCL
+		"GPU "
+#endif
 #ifdef USE_ICARUS
 		"icarus "
-#endif
-#ifdef USE_AVALON
-		"avalon "
 #endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
-#ifdef USE_ZTEX
-		"ztex "
-#endif
 #ifdef USE_SCRYPT
 		"scrypt "
+#endif
+#ifdef USE_ZTEX
+		"ztex "
 #endif
 		"mining support.\n"
 		, packagename);
