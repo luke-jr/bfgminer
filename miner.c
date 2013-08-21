@@ -2617,10 +2617,10 @@ int percentf3(char * const buf, size_t sz, double p, const double t)
 	{
 
 	p /= t;
-	if (p < 0.01)
+	if (p < 0.00995)  // 0.01 but with tolerance for floating-point rounding, max ".99%"
 		_SNP(".%02.0f%%", p * 10000);  // ".01%"
 	else
-	if (p < 0.1)
+	if (p < 0.0995)  // 0.1 but with tolerance for floating-point rounding, max "9.9%"
 		_SNP("%.1f%%", p * 100);  // "9.1%"
 	else
 		_SNP("%3.0f%%", p * 100);  // " 99%"
