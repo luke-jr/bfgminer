@@ -145,6 +145,10 @@ char *opt_api_groups;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen;
+bool opt_api_mcast;
+char *opt_api_mcast_addr = API_MCAST_ADDR;
+char *opt_api_mcast_code = API_MCAST_CODE;
+int opt_api_mcast_port = 4028;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
@@ -890,6 +894,20 @@ static char *set_api_description(const char *arg)
 	return NULL;
 }
 
+static char *set_api_mcast_addr(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_mcast_addr);
+
+	return NULL;
+}
+
+static char *set_api_mcast_code(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_mcast_code);
+
+	return NULL;
+}
+
 #ifdef USE_ICARUS
 static char *set_icarus_options(const char *arg)
 {
@@ -943,6 +961,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
+	OPT_WITHOUT_ARG("--api-mcast",
+			opt_set_bool, &opt_api_mcast,
+			"Enable API Multicast listener, default: disabled"),
+	OPT_WITH_ARG("--api-mcast-addr",
+		     set_api_mcast_addr, NULL, NULL,
+		     "API Multicast listen address"),
+	OPT_WITH_ARG("--api-mcast-code",
+		     set_api_mcast_code, NULL, NULL,
+		     "Code expected in the API Multicast"),
+	OPT_WITH_ARG("--api-mcast-port",
+		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
+		     "Port number of miner API Multicast listener"),
 	OPT_WITHOUT_ARG("--api-network",
 			opt_set_bool, &opt_api_network,
 			"Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1"),
@@ -4177,6 +4207,10 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"remove-disabled\" : true");
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
+	if (strcmp(opt_api_mcast_addr, API_MCAST_ADDR) != 0)
+		fprintf(fcfg, ",\n\"api-mcast-addr\" : \"%s\"", json_escape(opt_api_mcast_addr));
+	if (strcmp(opt_api_mcast_code, API_MCAST_CODE) != 0)
+		fprintf(fcfg, ",\n\"api-mcast-code\" : \"%s\"", json_escape(opt_api_mcast_code));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
