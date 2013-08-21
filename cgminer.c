@@ -5484,7 +5484,7 @@ static struct work *hash_pop(void)
 	int hc;
 
 	mutex_lock(stgd_lock);
-	while (!getq->frozen && !HASH_COUNT(staged_work))
+	while (!HASH_COUNT(staged_work))
 		pthread_cond_wait(&getq->cond, stgd_lock);
 
 	hc = HASH_COUNT(staged_work);
