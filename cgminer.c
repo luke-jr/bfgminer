@@ -4665,7 +4665,7 @@ static void *api_thread(void *userdata)
 	return NULL;
 }
 
-void thread_reportin(struct thr_info *thr)
+static void thread_reportin(struct thr_info *thr)
 {
 	thr->getwork = false;
 	cgtime(&thr->last);
@@ -4675,7 +4675,7 @@ void thread_reportin(struct thr_info *thr)
 
 /* Tell the watchdog thread this thread is waiting on get work and should not
  * be restarted */
-static inline void thread_reportout(struct thr_info *thr)
+static void thread_reportout(struct thr_info *thr)
 {
 	thr->getwork = true;
 	cgtime(&thr->last);
