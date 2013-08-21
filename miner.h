@@ -1420,5 +1420,6 @@ extern struct api_data *api_add_freq(struct api_data *root, char *name, double *
 extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
 extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
 extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
+extern struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data);
 
 #endif /* __MINER_H__ */

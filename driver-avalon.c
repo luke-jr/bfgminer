@@ -1483,6 +1483,8 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	struct avalon_info *info = cgpu->device_data;
 	char buf[64];
 	int i;
+	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
+		     (double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->miner_count),false);
@@ -1499,8 +1501,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp3", &(info->temp2), false);
 	root = api_add_int(root, "temp_max", &(info->temp_max), false);
 
-	root = api_add_int(root, "core_voltage", &(info->core_voltage), false);
-
+	root = api_add_percent(root, "Device Hardware%", &hwp, false);
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
 	for (i = 0; i < info->miner_count; i++) {
 		char mcw[24];
@@ -1508,10 +1509,12 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 		sprintf(mcw, "match_work_count%d", i + 1);
 		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
 	}
-
-	snprintf(buf, sizeof(buf), "%"PRIu8".%"PRIu8".%"PRIu8,
-			info->version1, info->version2, info->version3);
-	root = api_add_string(root, "version", buf, true);
+	if (usb_ident(cgpu) == IDENT_BTB) {
+		root = api_add_int(root, "core_voltage", &(info->core_voltage), false);
+		snprintf(buf, sizeof(buf), "%"PRIu8".%"PRIu8".%"PRIu8,
+				info->version1, info->version2, info->version3);
+		root = api_add_string(root, "version", buf, true);
+	}
 
 	return root;
 }
