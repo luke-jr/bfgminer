@@ -148,6 +148,7 @@ bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
+static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
@@ -5484,8 +5485,28 @@ static struct work *hash_pop(void)
 	int hc;
 
 	mutex_lock(stgd_lock);
-	while (!HASH_COUNT(staged_work))
-		pthread_cond_wait(&getq->cond, stgd_lock);
+	while (!HASH_COUNT(staged_work)) {
+		if (!no_work) {
+			struct timespec then;
+			struct timeval now;
+			int rc;
+
+			cgtime(&now);
+			then.tv_sec = now.tv_sec + 5;
+			then.tv_nsec = now.tv_usec * 1000;
+			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
+			if (rc) {
+				applog(LOG_WARNING, "Waiting for work to be available from pools.");
+				no_work = true;
+			}
+		} else
+			pthread_cond_wait(&getq->cond, stgd_lock);
+	}
+
+	if (no_work) {
+		applog(LOG_WARNING, "Work available from pools, resuming.");
+		no_work = false;
+	}
 
 	hc = HASH_COUNT(staged_work);
 	/* Find clone work if possible, to allow masters to be reused */
