@@ -1501,7 +1501,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "temp3", &(info->temp2), false);
 	root = api_add_int(root, "temp_max", &(info->temp_max), false);
 
-	root = api_add_percent(root, "Device Hardware%", &hwp, false);
+	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
 	for (i = 0; i < info->miner_count; i++) {
 		char mcw[24];
