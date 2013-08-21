@@ -4665,6 +4665,10 @@ static void *api_thread(void *userdata)
 	return NULL;
 }
 
+/* Sole work devices are serialised wrt calling get_work so they report in on
+ * each pass through their scanhash function as well as in get_work whereas
+ * queued work devices work asynchronously so get them to report in and out
+ * only across get_work. */
 static void thread_reportin(struct thr_info *thr)
 {
 	thr->getwork = false;
@@ -5668,6 +5672,7 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct work *work = NULL;
 
+	thread_reportout(thr);
 	applog(LOG_DEBUG, "Popping work from get queue to get work");
 	while (!work) {
 		work = hash_pop();
@@ -5783,8 +5788,6 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	submit_work_async(work, &tv_work_found);
 out:
-	thread_reportin(thr);
-
 	return ret;
 }
 
@@ -6132,9 +6135,7 @@ void hash_queued_work(struct thr_info *mythr)
 
 		fill_queue(mythr, cgpu, drv, thr_id);
 
-		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);
-		thread_reportout(mythr);
 
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
@@ -6176,12 +6177,12 @@ void *miner_thread(void *userdata)
         snprintf(threadname, 24, "miner/%d", thr_id);
 	RenameThread(threadname);
 
+	thread_reportout(mythr);
 	if (!drv->thread_init(mythr)) {
 		dev_error(cgpu, REASON_THREAD_FAIL_INIT);
 		goto out;
 	}
 
-	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Waiting on sem in miner thread");
 	cgsem_wait(&mythr->sem);
 
