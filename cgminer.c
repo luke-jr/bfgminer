@@ -1864,7 +1864,7 @@ static bool getwork_decode(json_t *res_val, struct work *work)
 /* Returns whether the pool supports local work generation or not. */
 static bool pool_localgen(struct pool *pool)
 {
-	return (pool->has_gbt || pool->has_stratum);
+	return (pool->has_stratum || pool->has_gbt);
 }
 
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
