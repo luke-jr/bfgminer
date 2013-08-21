@@ -1,9 +1,103 @@
+Version 3.4.0 - 21st August 2013
+
+- Use stack data for HW error% in avalon stats.
+- Add avalon HW error% to stats and only show BTB variables if avalon is a BTB.
+- Check for cnx_needed on each loop through wait_lp_current.
+- Return positive for cnx_needed when no_work is true.
+- Stratum is used more often so test for it first.
+- Reorder support names alphabetically.
+- Only display the no pool work message once if there are multiple waiters in
+hash_pop
+- Provide a message and set a bool when no work is available from any pools and
+when it resumes again.
+- We don't want to continue into the hash_pop function if the getq is frozen.
+- Only report threads in and out in queued work devices across a get work since
+the rest happens asynchronously and the get work is what the device might be
+waiting on.
+- Thread reportin and out can be static non inline.
+- usbutils cps sleep_estimate is not an underestimate
+- usbutils add cps stats estimates
+- Provide cgtimer_sub helper functions.
+- Provide cgtimer_to_ms helper functions.
+- Rename cgsleep_prepare_r as cgtimer_time to get time in cgtimer_t format and
+call cgsleep_prepare_r as a macro for cgtimer_time
+- Use the reentrant cgsleep functions for usecps in usbutils.
+- TimeBeginPeriod and TimeEndPeriod do not add significant overhead when run the
+entire time for cgminer so avoid trying to maintain balanced numbers of them for
+specific time calls to simplify code.
+- Replace all references to the old n*sleep functions with the equivalent
+cgsleep_*s replacements.
+- timeGetTime uses huge resources on windows so revert to using timevals for its
+implementation of cgtimer_t
+- Quotient/remainder error in ms division.
+- Only grab a queued work item if we successfully grab the lock to submit work
+in bflsc_send_work
+- BTB get version from Firmware
+- Carve out the unused portions of sha2 implementation.
+- Import Aaron D. Gifford's fast sha256 implementation.
+- Increase the que_low watermarks on BFLSC for they are too low to keep the
+device busy on scanwork loops.
+- Provide cgtimer_to_timeval helper functions.
+- Provide a timeval_to_cgtime helper function to reuse values.
+- Check for thr->work_restart in restart_wait.
+- We should be using que_low to decrease scan sleep time in bflsc.
+- Prepare sleep time on bflsc if no dev needs work yet to avoid busy waiting.
+- Simplify cgsleep code for windows by using a typedef for cgtimer_t that
+resolves to clock resolution, using that internally.
+- On windows use the higher accuracy timegettime function to really get 1ms
+clock and timer accuracy.
+- Use the cgsleep reentrant function to sleep for bflsc between read results to
+account for time taken to perform reads.
+- Use 100ms delay between checking for results on all bflsc devices as the
+buffering of results mean checking more frequently just wastes CPU and causes
+more lock contention for only marginally better latencies.
+- Fix missed endtimeperiod in overrun timer on windows.
+- Make cgsleep_us_r take an int64_t for us.
+- Make the cgsleep functions build on windows.
+- Use the cgsleep reentrant function in avalon_send_task.
+- Use the reentrant cgsleep functions within the avalon_send_tasks function.
+- Set high resolution timing on windows within the cgsleep functions.
+- Use the reentrant cgsleep function to time sleeps on reading from avalon.
+- Provide reentrant versions of cgsleep functions to allow start time to be set
+separately from the beginning of the actual sleep, allowing scheduling delays to
+be counted in the sleep.
+- Make the nmsleep and nusleep functions use the new cgsleep functions
+internally till functions are migrated to the new cgsleep API.
+- Add a ms_to_timespec helper function, and create a cgsleep_ms function that
+uses absolute timers with clock_nanosleep to avoid overruns.
+- Add rt lib linkage to enable use of clock_nanosleep functions with older
+glibc.
+- Add necessary time header include to avalon driver.
+- Do a sleep of the full duration it would take to do all the work using
+clock_nanosleep in avalon_send_tasks to avoid sleep overruns before polling to
+see if it's ready.
+- Add a timeraddspec helper function.
+- Provide a us_to_timespec helper function.
+- Use the us_to_timeval helper function in the avalon driver.
+- Provide a us_to_timeval helper function.
+- Use timeval_to_spec helper in avalon driver.
+- Add helper functions to convert timespec to timeval and vice versa.
+- simplifying buffer full check
+- forking bitburner write thread function
+- making sure original Avalon is unaffected by BitBurner changes
+- changes to queueing strategy for BitBurner boards
+- Do not poll in avalon_get_results without sleeping if we have finished parsing
+a full result.
+- Add c to ambient temperature display for avalon driver.
+- BTB allow up to 1400mV as per firmware limits
+- avalon for timeout allow d='calculate it' and fix uninitialised
+- Use cloned work when finding avalon results since another thread can discard
+the work item while it's in use.
+- Provide a variant of find_work_bymidstate that returns a clone of the found
+work.
+
+
 Version 3.3.4 - 14th August 2013
 
 - API/miner.php add some % fields
 - Nonce2 stratum submission is not working with nonce2 lengths >4, revert the 
 buggy __bin2hex function and use bin2hex.
-- The write thread in avalon is only ever actually woken up by timeout so remove 
+- The write thread in avalon is only ever actually woken up by timeout so remove
 the write semaphore and use a simple sleep poll.
 - Fix warning.
 - Interrupting reads on the avalon to start writes loses data so remove the 
@@ -48,7 +142,7 @@ before downgrading the lock.
 working at all via config files.
 -  Cache the hex2bin of pool nonce1 in stratum, avoiding hex2bin on each work 
 generation.
--  Cache the binary generation of coinbase1 and 2 on stratum, avoiding a hex2bin 
+-  Cache the binary generation of coinbase1 and 2 on stratum, avoiding a hex2bin
 of coinbase1 and 2 on each work generation.
 -  cgsem - increase information on failure
 -  avalon init write_sem before use
@@ -59,7 +153,7 @@ of coinbase1 and 2 on each work generation.
 -  Fix uninit variable warnings.
 -  usbutils - force check every combination
 -  Fix warning.
-- Recreate curses windows on windows when a device is hotplugged to allow window 
+- Recreate curses windows on windows when a device is hotplugged to allow window
 resizing without crashing.
 - Update copyright notice.
 - Limit intensity range according to whether scrypt is in use or not.
@@ -100,11 +194,11 @@ waited to avoid a 60 second wait dropping to 1 second due to a blocked socket.
 - size check get_datestamp/get_timestamp and remove unused cgpu->init
 - make all statline overflow safe
 - WU only needs +2 width
-- Check for a timeout in avalon_scanhash and post to the write sem if we receive 
+- Check for a timeout in avalon_scanhash and post to the write sem if we receive
 one.
-- Decay result count in avalon more slowly to not falsely detect idle periods as 
+- Decay result count in avalon more slowly to not falsely detect idle periods as
 low result return rates.
-- Count the number of miners idled in avalon to account more accurately for when 
+- Count the number of miners idled in avalon to account more accurately for when
 its result return rate is too low.
 - Fix potential dereference when starting avalon with all new work.
 - Convert the decay_time function into one that truly creates an exponentially 
@@ -113,18 +207,18 @@ decaying average over opt_log_interval.
 settings if the fanspeed has reached maximum.
 - Reinstate more aggressive <2% HW error target for avalon-auto
 - Set avalon fan min and fan max to PWM values instead of percentage.
-- Provide an --avalon-freq command line to give a valid range of frequencies for 
+- Provide an --avalon-freq command line to give a valid range of frequencies for
 avalon in auto mode.
 - Set the avalon idle frequency to lowest if avalon auto is enabled and we have 
 an overheat condition.
 - Decrease avalon frequency in auto mode if we are unable to maintain the 
 temperature in the optimal range.
 - Don't count invalid nonces as hashrate for bflsc.
-- Use a more conservative upper limit of 1% for hardware errors with avalon auto 
+- Use a more conservative upper limit of 1% for hardware errors with avalon auto
 frequency.
-- Allow the avalon fanspeed range to be passed as parameter on the command line, 
+- Allow the avalon fanspeed range to be passed as parameter on the command line,
 default to 20-100%
-- Just display A: and R: for difficulty accepted and rejected to preserve screen 
+- Just display A: and R: for difficulty accepted and rejected to preserve screen
 real estate and decrease decimal places for WU.
 - correct device DR: and remove global U:
 - Update all screen A/R to instead use DA/DR and device U to WU
