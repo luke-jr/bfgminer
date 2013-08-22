@@ -1411,6 +1411,8 @@ struct device_drv opencl_api;
 
 static int opencl_autodetect()
 {
+	RUNONCE(0);
+	
 #ifndef WIN32
 	if (!getenv("DISPLAY")) {
 		applog(LOG_DEBUG, "DISPLAY not set, setting :0 just in case");
@@ -1485,8 +1487,6 @@ static int opencl_autodetect()
 
 static void opencl_detect()
 {
-	RUNONCE();
-	
 	// This wrapper ensures users can specify -S opencl:noauto to disable it
 	noserial_detect(&opencl_api, opencl_autodetect);
 }

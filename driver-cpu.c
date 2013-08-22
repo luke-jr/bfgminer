@@ -713,6 +713,8 @@ char *force_nthreads_int(const char *arg, int *i)
 #ifdef WANT_CPUMINE
 static int cpu_autodetect()
 {
+	RUNONCE(0);
+	
 	int i;
 
 	// Reckon number of cores in the box
@@ -771,8 +773,6 @@ static int cpu_autodetect()
 
 static void cpu_detect()
 {
-	RUNONCE();
-	
 	if ((opt_n_threads < 0 || !forced_n_threads)
 	 && ((total_devices || total_devices_new) && !opt_usecpu))
 		// If there are any other devices, only act if the user has explicitly enabled it
