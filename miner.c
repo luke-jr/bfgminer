@@ -7215,6 +7215,10 @@ static bool cnx_needed(struct pool *pool)
 
 	if (pool_unworkable(cp))
 		return true;
+	
+	/* We've run out of work, bring anything back to life. */
+	if (no_work)
+		return true;
 
 	return false;
 }
