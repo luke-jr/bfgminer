@@ -38,8 +38,6 @@ struct getwork_client *getwork_clients;
 static
 pthread_mutex_t getwork_clients_mutex;
 
-// TODO: X-Hashes-Done?
-
 static
 void prune_worklog()
 {
@@ -96,6 +94,7 @@ void getwork_prepare_resp(struct MHD_Response *resp)
 {
 	httpsrv_prepare_resp(resp);
 	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+	MHD_add_response_header(resp, "X-Mining-Extensions", "hashesdone");
 }
 
 static
@@ -131,6 +130,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	json_error_t jerr;
 	struct work *work;
 	char *reply;
+	const char *hashesdone = NULL;
 	int ret;
 	
 	if (unlikely(!_init))
@@ -211,12 +211,13 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	user = NULL;
 	thr = cgpu->thr[0];
 	
+	hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+	
 	if (submit)
 	{
 		unsigned char hdr[80];
 		const char *rejreason;
 		uint32_t nonce;
-		struct timeval tv_now, tv_delta;
 		
 		// NOTE: expecting hex2bin to fail since we only parse 80 of the 128
 		hex2bin(hdr, submit, 80);
@@ -237,10 +238,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			else
 				rejreason = NULL;
 			
-			timer_set_now(&tv_now);
-			timersub(&tv_now, &client->tv_hashes_done, &tv_delta);
-			client->tv_hashes_done = tv_now;
-			hashes_done(thr, 0x100000000, &tv_delta, NULL);
+			if (!hashesdone)
+				hashesdone = "0x100000000";
 		}
 		
 		reply = malloc(36 + idstr_sz);
@@ -290,6 +289,16 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	}
 	
 out:
+	if (hashesdone)
+	{
+		struct timeval tv_now, tv_delta;
+		long long lld = strtoll(hashesdone, NULL, 0);
+		timer_set_now(&tv_now);
+		timersub(&tv_now, &client->tv_hashes_done, &tv_delta);
+		client->tv_hashes_done = tv_now;
+		hashes_done(thr, lld, &tv_delta, NULL);
+	}
+	
 	free(user);
 	free(idstr);
 	if (json)
