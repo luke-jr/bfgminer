@@ -153,8 +153,8 @@ static bool ztex_checkNonce(struct cgpu_info *cgpu,
 
 	swap32yes(swap32, data32, 76 / 4);
 
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, hash2);
+	sha256(swap, 80, hash1);
+	sha256(hash1, 32, hash2);
 
 	if (be32toh(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		applog(LOG_DEBUG, "%"PRIpreprv": checkNonce failed for %08x", cgpu->proc_repr, hdata->nonce);
