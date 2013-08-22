@@ -45,6 +45,7 @@
 #include <sys/socket.h>
 #else
 #include <winsock2.h>
+#include <windows.h>
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -7281,7 +7282,7 @@ static void *stratum_thread(void *userdata)
 				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					nmsleep(30000);
+					cgsleep_ms(30000);
 				}
 			}
 		}
@@ -8419,7 +8420,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			nmsleep(60000);
+			cgsleep_ms(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -8496,7 +8497,7 @@ retry_pool:
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 lpfail:
-			nmsleep(30000);
+			cgsleep_ms(30000);
 		}
 
 		if (pool != cp) {
@@ -8647,7 +8648,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		nmsleep(30000);
+		cgsleep_ms(30000);
 			
 	}
 	return NULL;
@@ -9021,6 +9022,9 @@ void _bfg_clean_up(void)
 #endif
 
 	cgtime(&total_tv_end);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 #ifdef HAVE_CURSES
 	disable_curses();
 #endif
@@ -9767,6 +9771,8 @@ int main(int argc, char *argv[])
 	sigaction(SIGINT, &handler, &inthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
+#else
+	timeBeginPeriod(1);
 #endif
 	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);
@@ -10266,7 +10272,7 @@ retry:
 				struct pool *altpool = select_pool(true);
 
 				if (altpool == pool && pool->has_stratum)
-					nmsleep(5000);
+					cgsleep_ms(5000);
 				pool = altpool;
 				goto retry;
 			}
@@ -10328,7 +10334,7 @@ retry:
 			next_pool = select_pool(!opt_fail_only);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-				nmsleep(5000);
+				cgsleep_ms(5000);
 			} else {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, failover activated", pool->pool_no);
 				pool = next_pool;

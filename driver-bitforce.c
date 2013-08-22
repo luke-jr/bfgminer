@@ -426,7 +426,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (fdDev) {
 		BFclose(fdDev);
-		nmsleep(5000);
+		cgsleep_ms(5000);
 		*p_fdDev = 0;
 	}
 
@@ -449,7 +449,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		}
 
 		if (retries++)
-			nmsleep(10);
+			cgsleep_ms(10);
 	} while (strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
@@ -517,7 +517,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	/* However, this stops anything else getting a reply
 	 * So best to delay any other access to the BFL */
-	nmsleep(4000);
+	cgsleep_ms(4000);
 
 	mutex_unlock(mutexp);
 
@@ -1365,7 +1365,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
-	nmsleep(wait);
+	cgsleep_ms(wait);
 
 	if (sc)
 	{

@@ -3707,7 +3707,7 @@ void api(int api_thr_id)
 
 	/* This should be done before curl in needed
 	 * to ensure curl has already called WSAStartup() in windows */
-	nmsleep(opt_log_interval*1000);
+	cgsleep_ms(opt_log_interval*1000);
 
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
@@ -3753,7 +3753,7 @@ void api(int api_thr_id)
 				break;
 			else {
 				applog(LOG_WARNING, "API bind to port %d failed - trying again in 30sec", port);
-				nmsleep(30000);
+				cgsleep_ms(30000);
 			}
 		} else
 			bound = 1;

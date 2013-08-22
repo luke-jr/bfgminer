@@ -404,7 +404,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 
 	libusb_release_interface(ztex->hndl, settings[1]);
 
-	nmsleep(200);
+	cgsleep_ms(200);
 	applog(LOG_INFO, "%"PRIpreprv": HS FPGA configuration done", repr);
 	return 0;
 }
@@ -469,7 +469,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 		return -3;
 	}
 
-	nmsleep(200);
+	cgsleep_ms(200);
 	applog(LOG_INFO, "%"PRIpreprv": FPGA configuration done", repr);
 	return 0;
 }

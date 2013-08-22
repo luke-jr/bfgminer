@@ -255,7 +255,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	x6500_jtag_set(jp, 0x11);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
 	
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	
 	if (fread(buf, 32, 1, f) != 1)
 		bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);

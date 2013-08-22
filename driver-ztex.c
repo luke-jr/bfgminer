@@ -190,7 +190,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	if (i < 0) {
 		// Something wrong happened in send
 		applog(LOG_ERR, "%"PRIpreprv": Failed to send hash data with err %d, retrying", cgpu->proc_repr, i);
-		nmsleep(500);
+		cgsleep_ms(500);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
@@ -235,7 +235,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		if (i < 0) {
 			// Something wrong happened in read
 			applog(LOG_ERR, "%"PRIpreprv": Failed to read hash data with err %d, retrying", cgpu->proc_repr, i);
-			nmsleep(500);
+			cgsleep_ms(500);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it

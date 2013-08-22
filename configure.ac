@@ -83,6 +83,7 @@ DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MM_LIBS=""
 MATH_LIBS="-lm"
+RT_LIBS="-lrt"
 
 case $target in
   amd64-* | x86_64-*)
@@ -107,6 +108,7 @@ case $target in
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     MM_LIBS="-lwinmm"
+    RT_LIBS=""
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     AC_DEFINE([FD_SETSIZE], [4096], [Maximum sockets before fd_set overflows])
     ;;
@@ -953,6 +955,7 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
+AC_SUBST(RT_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(SSE2_CFLAGS)
 AC_SUBST(YASM_FMT)
