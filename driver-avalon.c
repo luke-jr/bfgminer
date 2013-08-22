@@ -308,7 +308,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	if (unlikely(!avalon->works))
 		return false;
 
-	work = find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+	work = clone_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
 					   (char *)ar->data, 64, 12);
 	if (!work)
 		return false;
@@ -317,6 +317,8 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	info->matching_work[work->subid]++;
 	*nonce = htole32(ar->nonce);
 	submit_nonce(thr, work, *nonce);
+	
+	free_work(work);
 
 	return true;
 }
