@@ -691,7 +691,7 @@ char *set_request_diff(const char *arg, float *p)
 #endif
 
 static
-char* add_serial_all(char*arg, char*p) {
+char *add_serial_all(const char *arg, const char *p) {
 	size_t pLen = p - arg;
 	char dev[pLen + PATH_MAX];
 	memcpy(dev, arg, pLen);
@@ -787,9 +787,9 @@ trydev:
 	return NULL;
 }
 
-static char *add_serial(char *arg)
+static char *add_serial(const char *arg)
 {
-	char *p = strchr(arg, ':');
+	const char *p = strchr(arg, ':');
 	if (p)
 		++p;
 	else
@@ -9496,7 +9496,7 @@ void _scan_serial(void *p)
 		// Make temporary scan_devices list
 		scan_devices = NULL;
 		string_elist_add("noauto", &scan_devices);
-		string_elist_add(s, &scan_devices);
+		add_serial(s);
 	}
 	
 	drv_detect_all();
