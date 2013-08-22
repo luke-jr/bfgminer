@@ -21,6 +21,11 @@ static struct MHD_Daemon *httpsrv;
 
 extern int handle_getwork(struct MHD_Connection *, bytes_t *);
 
+void httpsrv_prepare_resp(struct MHD_Response *resp)
+{
+	MHD_add_response_header(resp, MHD_HTTP_HEADER_SERVER, PACKAGE"/"VERSION" getwork server");
+}
+
 static
 int httpsrv_handle_req(struct MHD_Connection *conn, const char *url, const char *method, bytes_t *upbuf)
 {

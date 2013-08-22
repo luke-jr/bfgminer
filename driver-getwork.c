@@ -19,6 +19,7 @@
 #include <uthash.h>
 
 #include "deviceapi.h"
+#include "httpsrv.h"
 #include "miner.h"
 
 struct device_drv getwork_drv;
@@ -91,13 +92,27 @@ void getwork_first_client()
 }
 
 static
-int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
+void getwork_prepare_resp(struct MHD_Response *resp)
+{
+	httpsrv_prepare_resp(resp);
+	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+}
+
+static
+struct MHD_Response *getwork_gen_error(int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
 {
 	size_t replysz = 0x40 + strlen(errmsg) + idstr_sz;
 	char * const reply = malloc(replysz);
 	replysz = snprintf(reply, replysz, "{\"result\":null,\"error\":{\"code\":%d,\"message\":\"%s\"},\"id\":%s}", errcode, errmsg, idstr ?: "0");
 	struct MHD_Response * const resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+	getwork_prepare_resp(resp);
+	return resp;
+}
+
+static
+int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
+{
+	struct MHD_Response * const resp = getwork_gen_error(errcode, errmsg, idstr, idstr_sz);
 	const int ret = MHD_queue_response(conn, 500, resp);
 	MHD_destroy_response(resp);
 	return ret;
@@ -124,14 +139,6 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		getwork_init();
 	}
 	
-	user = MHD_basic_auth_get_username_password(conn, NULL);
-	if (!user)
-	{
-		static const char fail[] = "Please provide a username\n";
-		resp = MHD_create_response_from_buffer(sizeof(fail)-1, (char*)fail, MHD_RESPMEM_PERSISTENT);
-		return MHD_queue_basic_auth_fail_response(conn, PACKAGE, resp);
-	}
-	
 	if (bytes_len(upbuf))
 	{
 		bytes_nullterminate(upbuf);
@@ -154,6 +161,14 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		}
 		j2 = json_object_get(json, "params");
 		submit = j2 ? __json_array_string(j2, 0) : NULL;
+	}
+	
+	user = MHD_basic_auth_get_username_password(conn, NULL);
+	if (!user)
+	{
+		resp = getwork_gen_error(-4096, "Please provide a username", idstr, idstr_sz);
+		ret = MHD_queue_basic_auth_fail_response(conn, PACKAGE, resp);
+		goto out;
 	}
 	
 	mutex_lock(&getwork_clients_mutex);
@@ -233,7 +248,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		sprintf(reply, "{\"error\":null,\"result\":%s,\"id\":%s}",
 		        rejreason ? "false" : "true", idstr);
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+		getwork_prepare_resp(resp);
 		if (rejreason)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
 		ret = MHD_queue_response(conn, 200, resp);
@@ -264,7 +279,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
 		
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+		getwork_prepare_resp(resp);
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
 	}
