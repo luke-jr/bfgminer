@@ -325,7 +325,8 @@ struct bitforce_data {
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
 	float temp[2];
-	char *voltinfo;
+	long *volts;
+	int volts_count;
 };
 
 struct bitforce_proc_data {
@@ -580,40 +581,25 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (data->sc && likely(voltbuf[0]))
 	{
 		// Process voltage info
-		// "NNNxxx,NNNxxx,NNNxxx" -> "NNN.xxx / NNN.xxx / NNN.xxx"
-		size_t sz = strlen(voltbuf) * 4;
-		char *saveptr, *v, *outbuf = malloc(sz);
-		char *out = outbuf;
+		// "NNNxxx,NNNxxx,NNNxxx"
+		int n = 1;
+		for (char *p = voltbuf; p[0]; ++p)
+			if (p[0] == ',')
+				++n;
+		
+		long *out = malloc(sizeof(long) * n);
 		if (!out)
 			goto skipvolts;
+		
+		n = 0;
+		char *saveptr, *v;
 		for (v = strtok_r(voltbuf, ",", &saveptr); v; v = strtok_r(NULL, ",", &saveptr))
-		{
-			while (isCspace(v[0]))
-				++v;
-			sz = strlen(v);
-			while (isCspace(v[sz - 1]))
-				--sz;
-			if (sz < 4)
-			{
-				memcpy(out, "0.00? / ", 8);
-				memcpy(&out[5 - sz], v, sz);
-				out += 8;
-			}
-			else
-			{
-				memcpy(out, v, sz - 3);
-				out += sz - 3;
-				out[0] = '.';
-				memcpy(&out[1], &v[sz - 3], 3);
-				memcpy(&out[4], " / ", 3);
-				out += 7;
-			}
-		}
-		out[-3] = '\0';
-		assert(out[-2]=='/');
-		saveptr = data->voltinfo;
-		data->voltinfo = outbuf;
-		free(saveptr);
+			out[n++] = strtol(v, NULL, 10);
+		
+		data->volts_count = 0;
+		free(data->volts);
+		data->volts = out;
+		data->volts_count = n;
 	}
 	
 skipvolts:
@@ -1444,8 +1430,22 @@ void bitforce_wlogprint_status(struct cgpu_info *cgpu)
 	struct bitforce_data *data = cgpu->device_data;
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		wlogprint("Temperatures: %4.1fC %4.1fC\n", data->temp[0], data->temp[1]);
-	if (data->voltinfo)
-		wlogprint("Voltages: %s\n", data->voltinfo);
+	if (data->volts_count)
+	{
+		// -> "NNN.xxx / NNN.xxx / NNN.xxx"
+		size_t sz = (data->volts_count * 10) + 1;
+		char buf[sz];
+		char *s = buf;
+		int rv = 0;
+		for (int i = 0; i < data->volts_count; ++i)
+		{
+			long v = data->volts[i];
+			_SNP("%ld.%03d / ", v / 1000, (int)(v % 1000));
+		}
+		if (rv >= 3 && s[-2] == '/')
+			s[-3] = '\0';
+		wlogprint("Voltages: %s\n", buf);
+	}
 }
 #endif
 
