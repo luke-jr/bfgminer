@@ -1466,6 +1466,15 @@ static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 		root = api_add_temp(root, "Temperature0", &(data->temp[0]), false);
 		root = api_add_temp(root, "Temperature1", &(data->temp[1]), false);
 	}
+	
+	for (int i = 0; i < data->volts_count; ++i)
+	{
+		float voltage = data->volts[i];
+		char key[] = "VoltageNN";
+		snprintf(&key[7], 3, "%d", i);
+		voltage /= 1e3;
+		root = api_add_volts(root, key, &voltage, true);
+	}
 
 	return root;
 }
