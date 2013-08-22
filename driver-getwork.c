@@ -19,6 +19,7 @@
 #include <uthash.h>
 
 #include "deviceapi.h"
+#include "httpsrv.h"
 #include "miner.h"
 
 struct device_drv getwork_drv;
@@ -36,8 +37,6 @@ static
 struct getwork_client *getwork_clients;
 static
 pthread_mutex_t getwork_clients_mutex;
-
-// TODO: X-Hashes-Done?
 
 static
 void prune_worklog()
@@ -91,13 +90,28 @@ void getwork_first_client()
 }
 
 static
-int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
+void getwork_prepare_resp(struct MHD_Response *resp)
+{
+	httpsrv_prepare_resp(resp);
+	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+	MHD_add_response_header(resp, "X-Mining-Extensions", "hashesdone");
+}
+
+static
+struct MHD_Response *getwork_gen_error(int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
 {
 	size_t replysz = 0x40 + strlen(errmsg) + idstr_sz;
 	char * const reply = malloc(replysz);
 	replysz = snprintf(reply, replysz, "{\"result\":null,\"error\":{\"code\":%d,\"message\":\"%s\"},\"id\":%s}", errcode, errmsg, idstr ?: "0");
 	struct MHD_Response * const resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+	getwork_prepare_resp(resp);
+	return resp;
+}
+
+static
+int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
+{
+	struct MHD_Response * const resp = getwork_gen_error(errcode, errmsg, idstr, idstr_sz);
 	const int ret = MHD_queue_response(conn, 500, resp);
 	MHD_destroy_response(resp);
 	return ret;
@@ -116,20 +130,13 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	json_error_t jerr;
 	struct work *work;
 	char *reply;
+	const char *hashesdone = NULL;
 	int ret;
 	
 	if (unlikely(!_init))
 	{
 		_init = true;
 		getwork_init();
-	}
-	
-	user = MHD_basic_auth_get_username_password(conn, NULL);
-	if (!user)
-	{
-		static const char fail[] = "Please provide a username\n";
-		resp = MHD_create_response_from_buffer(sizeof(fail)-1, (char*)fail, MHD_RESPMEM_PERSISTENT);
-		return MHD_queue_basic_auth_fail_response(conn, PACKAGE, resp);
 	}
 	
 	if (bytes_len(upbuf))
@@ -154,6 +161,14 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		}
 		j2 = json_object_get(json, "params");
 		submit = j2 ? __json_array_string(j2, 0) : NULL;
+	}
+	
+	user = MHD_basic_auth_get_username_password(conn, NULL);
+	if (!user)
+	{
+		resp = getwork_gen_error(-4096, "Please provide a username", idstr, idstr_sz);
+		ret = MHD_queue_basic_auth_fail_response(conn, PACKAGE, resp);
+		goto out;
 	}
 	
 	mutex_lock(&getwork_clients_mutex);
@@ -196,12 +211,13 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	user = NULL;
 	thr = cgpu->thr[0];
 	
+	hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+	
 	if (submit)
 	{
 		unsigned char hdr[80];
 		const char *rejreason;
 		uint32_t nonce;
-		struct timeval tv_now, tv_delta;
 		
 		// NOTE: expecting hex2bin to fail since we only parse 80 of the 128
 		hex2bin(hdr, submit, 80);
@@ -222,10 +238,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			else
 				rejreason = NULL;
 			
-			timer_set_now(&tv_now);
-			timersub(&tv_now, &client->tv_hashes_done, &tv_delta);
-			client->tv_hashes_done = tv_now;
-			hashes_done(thr, 0x100000000, &tv_delta, NULL);
+			if (!hashesdone)
+				hashesdone = "0x100000000";
 		}
 		
 		reply = malloc(36 + idstr_sz);
@@ -233,7 +247,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		sprintf(reply, "{\"error\":null,\"result\":%s,\"id\":%s}",
 		        rejreason ? "false" : "true", idstr);
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+		getwork_prepare_resp(resp);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		if (rejreason)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
 		ret = MHD_queue_response(conn, 200, resp);
@@ -243,7 +258,10 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	
 	if (cgpu->deven == DEV_DISABLED)
 	{
-		ret = getwork_error(conn, -10, "Virtual device has been disabled", idstr, idstr_sz);
+		resp = getwork_gen_error(-10, "Virtual device has been disabled", idstr, idstr_sz);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
+		ret = MHD_queue_response(conn, 500, resp);
+		MHD_destroy_response(resp);
 		goto out;
 	}
 	
@@ -264,12 +282,23 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
 		
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+		getwork_prepare_resp(resp);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
 	}
 	
 out:
+	if (hashesdone)
+	{
+		struct timeval tv_now, tv_delta;
+		long long lld = strtoll(hashesdone, NULL, 0);
+		timer_set_now(&tv_now);
+		timersub(&tv_now, &client->tv_hashes_done, &tv_delta);
+		client->tv_hashes_done = tv_now;
+		hashes_done(thr, lld, &tv_delta, NULL);
+	}
+	
 	free(user);
 	free(idstr);
 	if (json)
