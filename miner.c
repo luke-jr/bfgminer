@@ -6382,6 +6382,20 @@ retry:
 
 int scan_serial(const char *);
 
+static
+void _managetui_msg(const char *repr, const char **msg)
+{
+	if (*msg)
+	{
+		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": %s", repr, *msg);
+		wattron(logwin, A_BOLD);
+		wlogprint("%s", *msg);
+		wattroff(logwin, A_BOLD);
+		*msg = NULL;
+	}
+	logwin_update();
+}
+
 void manage_device(void)
 {
 	char logline[256];
@@ -6394,6 +6408,22 @@ void manage_device(void)
 	immedok(logwin, true);
 	
 devchange:
+	if (unlikely(!total_devices))
+	{
+		clear_logwin();
+		wlogprint("(no devices)\n");
+		wlogprint("Press the plus key to add devices, or Enter when done\n");
+		_managetui_msg("(none)", &msg);
+		int input = getch();
+		switch (input)
+		{
+			case '+':  case '=':  // add new device
+				goto addnew;
+			default:
+				goto out;
+		}
+	}
+	
 	cgpu = devices[selected_device];
 	drv = cgpu->drv;
 	refresh_devstatus();
@@ -6436,15 +6466,7 @@ refresh:
 		drv->proc_tui_wlogprint_choices(cgpu);
 	wlogprint("\n");
 	wlogprint("Or press Enter when done or the plus key to add more devices\n");
-	if (msg)
-	{
-		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": %s", cgpu->proc_repr, msg);
-		wattron(logwin, A_BOLD);
-		wlogprint("%s", msg);
-		wattroff(logwin, A_BOLD);
-		msg = NULL;
-	}
-	logwin_update();
+	_managetui_msg(cgpu->proc_repr, &msg);
 	
 	while (true)
 	{
@@ -6507,6 +6529,7 @@ refresh:
 			}
 			case '+':  case '=':  // add new device
 			{
+addnew:
 				clear_logwin();
 				_wlogprint(
 					"Enter \"auto\", \"all\", or a serial port to probe for mining devices.\n"
@@ -9553,6 +9576,9 @@ int create_new_cgpus(void (*addfunc)(void*), void *arg)
 	devcount = total_devices;
 	
 	addfunc(arg);
+	
+	if (!total_devices_new)
+		goto out;
 	
 	wr_lock(&devices_lock);
 	p = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + total_devices_new + 1));
