@@ -440,6 +440,8 @@ Removed output limitation:
  All replies can now be longer than the previous limitation of 64k, and will
   only be truncated on a 50ms timeout sending.
 
+Basic support for cgminer-compatible multicast RPC detection added.
+
 ----------
 
 API V1.25.2
