@@ -804,14 +804,6 @@ void thr_info_cancel(struct thr_info *thr)
 	cgsem_destroy(&thr->sem);
 }
 
-/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
- * with tz set to NULL, and windows' default resolution is only 15ms, this
- * gives us higher resolution times on windows. */
-void cgtime(struct timeval *tv)
-{
-	gettimeofday(tv, NULL);
-}
-
 void subtime(struct timeval *a, struct timeval *b)
 {
 	timersub(a, b, b);
@@ -941,7 +933,33 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 		res->tv_sec--;
 	}
 }
+
+/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
+ * with tz set to NULL, and windows' default resolution is only 15ms, this
+ * gives us higher resolution times on windows. */
+void cgtime(struct timeval *tv)
+{
+	gettimeofday(tv, NULL);
+}
 #else
+/* Windows start time is since 1601 lol so convert it to unix epoch 1970. */
+#define EPOCHFILETIME (116444736000000000LL)
+void cgtime(struct timeval *tv)
+{
+	FILETIME ft;
+	LARGE_INTEGER li;
+	lldiv_t lidiv;
+
+	GetSystemTimeAsFileTime(&ft);
+	li.LowPart  = ft.dwLowDateTime;
+	li.HighPart = ft.dwHighDateTime;
+	li.QuadPart -= EPOCHFILETIME;
+	/* SystemTime is in decimicroseconds so divide by an unusual number */
+	lidiv = lldiv(li.QuadPart, 10000000);
+	tv->tv_sec = lidiv.quot;
+	tv->tv_usec = lidiv.rem / 10;
+}
+
 void cgtimer_time(cgtimer_t *ts_start)
 {
 	cgtime(ts_start);
