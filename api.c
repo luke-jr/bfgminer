@@ -126,6 +126,7 @@ char *WSAErrorMsg(void) {
 #endif
 
 static const char *UNAVAILABLE = " - API will not be available";
+static const char *MUNAVAILABLE = " - API multicast listener will not be available";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -134,7 +135,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.28";
+static const char *APIVERSION = "1.29";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
@@ -624,6 +625,8 @@ struct CODES {
 #endif
  { SEVERITY_FAIL, 0, 0, NULL }
 };
+
+static const char *localaddr = "127.0.0.1";
 
 static int my_thr_id = 0;
 static bool bye;
@@ -4259,13 +4262,207 @@ static void *restart_thread(__maybe_unused void *userdata)
 	return NULL;
 }
 
+static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *group)
+{
+	bool addrok = false;
+	int i;
+
+	*connectaddr = inet_ntoa(cli->sin_addr);
+
+	*group = NOPRIVGROUP;
+	if (opt_api_allow) {
+		int client_ip = htonl(cli->sin_addr.s_addr);
+		for (i = 0; i < ips; i++) {
+			if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
+				addrok = true;
+				*group = ipaccess[i].group;
+				break;
+			}
+		}
+	} else {
+		if (opt_api_network)
+			addrok = true;
+		else
+			addrok = (strcmp(*connectaddr, localaddr) == 0);
+	}
+
+	return addrok;
+}
+
+static void mcast()
+{
+	struct sockaddr_in listen;
+	struct ip_mreq grp;
+	struct sockaddr_in came_from;
+	time_t bindstart;
+	char *binderror;
+	SOCKETTYPE mcast_sock;
+	SOCKETTYPE reply_sock;
+	socklen_t came_from_siz;
+	char *connectaddr;
+	ssize_t rep;
+	int bound;
+	int count;
+	int reply_port;
+	bool addrok;
+	char group;
+
+	char expect[] = "cgminer-"; // first 8 bytes constant
+	char *expect_code;
+	size_t expect_code_len;
+	char buf[1024];
+	char reply[] = "cgm-" API_MCAST_CODE "-"; // constant
+	char replybuf[1024];
+
+	memset(&grp, 0, sizeof(grp));
+	grp.imr_multiaddr.s_addr = inet_addr(opt_api_mcast_addr);
+	if (grp.imr_multiaddr.s_addr == INADDR_NONE)
+		quit(1, "Invalid Multicast Address");
+	grp.imr_interface.s_addr = INADDR_ANY;
+
+	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+	int optval = 1;
+	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
+		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+		goto die;
+	}
+
+	memset(&listen, 0, sizeof(listen));
+	listen.sin_family = AF_INET;
+	listen.sin_addr.s_addr = INADDR_ANY;
+	listen.sin_port = htons(opt_api_mcast_port);
+
+	// try for more than 1 minute ... in case the old one hasn't completely gone yet
+	bound = 0;
+	bindstart = time(NULL);
+	while (bound == 0) {
+		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
+			binderror = SOCKERRMSG;
+			if ((time(NULL) - bindstart) > 61)
+				break;
+			else
+				cgsleep_ms(30000);
+		} else
+			bound = 1;
+	}
+
+	if (bound == 0) {
+		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_port, binderror, MUNAVAILABLE);
+		goto die;
+	}
+
+	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
+		applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+		goto die;
+	}
+
+	expect_code_len = sizeof(expect) + strlen(opt_api_mcast_code);
+	expect_code = malloc(expect_code_len+1);
+	if (!expect_code)
+		quit(1, "Failed to malloc mcast expect_code");
+	snprintf(expect_code, expect_code_len+1, "%s%s-", expect, opt_api_mcast_code);
+
+	count = 0;
+	while (80085) {
+		cgsleep_ms(1000);
+
+		count++;
+		came_from_siz = sizeof(came_from);
+		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf),
+						0, (struct sockaddr *)(&came_from), &came_from_siz))) {
+			applog(LOG_DEBUG, "API mcast failed count=%d (%s) (%d)",
+					count, SOCKERRMSG, (int)mcast_sock);
+			continue;
+		}
+
+		addrok = check_connect(&came_from, &connectaddr, &group);
+		applog(LOG_DEBUG, "API mcast from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
+		if (!addrok)
+			continue;
+
+		buf[rep] = '\0';
+		if (rep > 0 && buf[rep-1] == '\n')
+			buf[--rep] = '\0';
+
+		applog(LOG_DEBUG, "API mcast request rep=%d (%s) from %s:%d",
+					(int)rep, buf,
+					inet_ntoa(came_from.sin_addr),
+					ntohs(came_from.sin_port));
+
+		if ((size_t)rep > expect_code_len && memcmp(buf, expect_code, expect_code_len) == 0) {
+			reply_port = atoi(&buf[expect_code_len]);
+			if (reply_port < 1 || reply_port > 65535) {
+				applog(LOG_DEBUG, "API mcast request ignored - invalid port (%s)",
+							&buf[expect_code_len]);
+			} else {
+				applog(LOG_DEBUG, "API mcast request OK port %s=%d",
+							&buf[expect_code_len], reply_port);
+
+				came_from.sin_port = htons(reply_port);
+				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+				snprintf(replybuf, sizeof(replybuf),
+							"cgm-" API_MCAST_CODE "-%d",
+							opt_api_port);
+
+				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
+						0, (struct sockaddr *)(&came_from),
+						sizeof(came_from));
+				if (SOCKETFAIL(rep)) {
+					applog(LOG_DEBUG, "API mcast reply failed (%s) (%d)",
+								SOCKERRMSG, (int)reply_sock);
+				} else {
+					applog(LOG_DEBUG, "API mcast reply (%s) succeeded (%d) (%d)",
+								reply, (int)rep, (int)reply_sock);
+				}
+
+				CLOSESOCKET(reply_sock);
+			}
+		} else
+			applog(LOG_DEBUG, "API mcast request was no good");
+	}
+
+die:
+
+	CLOSESOCKET(mcast_sock);
+}
+
+static void *mcast_thread(void *userdata)
+{
+	struct thr_info *mythr = userdata;
+
+	pthread_detach(pthread_self());
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("api_mcast");
+
+	mcast();
+
+	PTH(mythr) = 0L;
+
+	return NULL;
+}
+
+void mcast_init()
+{
+	struct thr_info *thr;
+
+	thr = calloc(1, sizeof(*thr));
+	if (!thr)
+		quit(1, "Failed to calloc mcast thr");
+
+	if (thr_info_create(thr, NULL, mcast_thread, thr))
+		quit(1, "API mcast thread create failed");
+}
+
 void api(int api_thr_id)
 {
 	struct io_data *io_data;
 	struct thr_info bye_thr;
 	char buf[TMPBUFSIZ];
 	char param_buf[TMPBUFSIZ];
-	const char *localaddr = "127.0.0.1";
 	SOCKETTYPE c;
 	int n, bound;
 	char *connectaddr;
@@ -4389,6 +4586,9 @@ void api(int api_thr_id)
 			applog(LOG_WARNING, "API running in local read access mode on port %d (%d)", port, (int)*apisock);
 	}
 
+	if (opt_api_mcast)
+		mcast_init();
+
 	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(*apisock, (struct sockaddr *)(&cli), &clisiz))) {
@@ -4396,28 +4596,9 @@ void api(int api_thr_id)
 			goto die;
 		}
 
-		connectaddr = inet_ntoa(cli.sin_addr);
-
-		addrok = false;
-		group = NOPRIVGROUP;
-		if (opt_api_allow) {
-			int client_ip = htonl(cli.sin_addr.s_addr);
-			for (i = 0; i < ips; i++) {
-				if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
-					addrok = true;
-					group = ipaccess[i].group;
-					break;
-				}
-			}
-		} else {
-			if (opt_api_network)
-				addrok = true;
-			else
-				addrok = (strcmp(connectaddr, localaddr) == 0);
-		}
-
-		if (opt_debug)
-			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
+		addrok = check_connect(&cli, &connectaddr, &group);
+		applog(LOG_DEBUG, "API: connection from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], TMPBUFSIZ-1, 0);

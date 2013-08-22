@@ -867,6 +867,9 @@ static inline void cg_wunlock(cglock_t *lock)
 
 struct pool;
 
+#define API_MCAST_CODE "FTW"
+#define API_MCAST_ADDR "224.0.0.75"
+
 extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;
@@ -877,6 +880,10 @@ extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
 extern char *opt_api_allow;
+extern bool opt_api_mcast;
+extern char *opt_api_mcast_addr;
+extern char *opt_api_mcast_code;
+extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
