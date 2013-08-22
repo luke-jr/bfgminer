@@ -20,7 +20,6 @@
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
 	}
-	typedef struct timespec cgtimer_t;
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -45,7 +44,6 @@
 	#ifndef in_addr_t
 	#define in_addr_t uint32_t
 	#endif
-	typedef struct timeval cgtimer_t;
 #endif
 
 #if JANSSON_MAJOR_VERSION >= 2
@@ -65,6 +63,7 @@ typedef struct cgsem cgsem_t;
 #else
 typedef sem_t cgsem_t;
 #endif
+typedef struct timespec cgtimer_t;
 
 struct thr_info;
 struct pool;
