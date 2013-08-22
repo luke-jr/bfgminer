@@ -249,6 +249,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		        rejreason ? "false" : "true", idstr);
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
 		getwork_prepare_resp(resp);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		if (rejreason)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
 		ret = MHD_queue_response(conn, 200, resp);
@@ -258,7 +259,10 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	
 	if (cgpu->deven == DEV_DISABLED)
 	{
-		ret = getwork_error(conn, -10, "Virtual device has been disabled", idstr, idstr_sz);
+		resp = getwork_gen_error(-10, "Virtual device has been disabled", idstr, idstr_sz);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
+		ret = MHD_queue_response(conn, 500, resp);
+		MHD_destroy_response(resp);
 		goto out;
 	}
 	
@@ -280,6 +284,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
 		getwork_prepare_resp(resp);
+		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
 	}
