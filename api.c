@@ -3700,7 +3700,6 @@ static void mcast()
 	char *expect_code;
 	size_t expect_code_len;
 	char buf[1024];
-	char reply[] = "cgm-" API_MCAST_CODE "-"; // constant
 	char replybuf[1024];
 
 	memset(&grp, 0, sizeof(grp));
@@ -3793,7 +3792,8 @@ static void mcast()
 				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
-							"cgm-" API_MCAST_CODE "-%d",
+							"cgm-%s-%d",
+							opt_api_mcast_code,
 							opt_api_port);
 
 				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
@@ -3804,7 +3804,7 @@ static void mcast()
 								SOCKERRMSG, (int)reply_sock);
 				} else {
 					applog(LOG_DEBUG, "API mcast reply (%s) succeeded (%d) (%d)",
-								reply, (int)rep, (int)reply_sock);
+								replybuf, (int)rep, (int)reply_sock);
 				}
 
 				CLOSESOCKET(reply_sock);
