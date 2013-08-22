@@ -194,6 +194,10 @@ Options for both config file and command line:
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
+--api-mcast         Enable API Multicast listener, default: disabled
+--api-mcast-addr <arg> API Multicast listen address (default: "224.0.0.75")
+--api-mcast-code <arg> Code expected in the API Multicast (default: "FTW")
+--api-mcast-port <arg> Port number of miner API Multicast listener (default: 4028)
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
