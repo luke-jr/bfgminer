@@ -6380,6 +6380,8 @@ retry:
 	opt_loginput = false;
 }
 
+int scan_serial(const char *);
+
 void manage_device(void)
 {
 	char logline[256];
@@ -6433,7 +6435,7 @@ refresh:
 	if (drv->proc_tui_wlogprint_choices && likely(cgpu->status != LIFE_INIT))
 		drv->proc_tui_wlogprint_choices(cgpu);
 	wlogprint("\n");
-	wlogprint("Or press Enter when done\n");
+	wlogprint("Or press Enter when done or the plus key to add more devices\n");
 	if (msg)
 	{
 		applog(LOG_DEBUG, "ManageTUI: %"PRIpreprv": %s", cgpu->proc_repr, msg);
@@ -6501,6 +6503,32 @@ refresh:
 				do {
 					--selected_device;
 				} while (devices[selected_device]->device == mdev && selected_device > 0);
+				goto devchange;
+			}
+			case '+':  case '=':  // add new device
+			{
+				clear_logwin();
+				_wlogprint(
+					"Enter \"auto\", \"all\", or a serial port to probe for mining devices.\n"
+					"Prefix by a driver name and colon to only probe a specific driver.\n"
+					"For example: erupter:"
+#ifdef WIN32
+					"\\\\.\\COM40"
+#elif defined(__APPLE__)
+					"/dev/cu.SLAB_USBtoUART"
+#else
+					"/dev/ttyUSB39"
+#endif
+					"\n"
+				);
+				char *scanser = curses_input("Enter target");
+				if (scan_serial(scanser))
+				{
+					selected_device = total_devices - 1;
+					msg = "Device scan succeeded\n";
+				}
+				else
+					msg = "No new devices found\n";
 				goto devchange;
 			}
 			case 'Q': case 'q':
