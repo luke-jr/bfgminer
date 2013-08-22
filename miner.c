@@ -7610,7 +7610,7 @@ static struct work *hash_pop(void)
 
 retry:
 	mutex_lock(stgd_lock);
-	while (!getq->frozen && !HASH_COUNT(staged_work))
+	while (!HASH_COUNT(staged_work))
 	{
 		if (unlikely(staged_full))
 		{
