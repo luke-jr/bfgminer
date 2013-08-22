@@ -626,6 +626,8 @@ struct CODES {
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
+static const char *localaddr = "127.0.0.1";
+
 static int my_thr_id = 0;
 static bool bye;
 
@@ -4260,6 +4262,33 @@ static void *restart_thread(__maybe_unused void *userdata)
 	return NULL;
 }
 
+static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *group)
+{
+	bool addrok = false;
+	int i;
+
+	*connectaddr = inet_ntoa(cli->sin_addr);
+
+	*group = NOPRIVGROUP;
+	if (opt_api_allow) {
+		int client_ip = htonl(cli->sin_addr.s_addr);
+		for (i = 0; i < ips; i++) {
+			if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
+				addrok = true;
+				*group = ipaccess[i].group;
+				break;
+			}
+		}
+	} else {
+		if (opt_api_network)
+			addrok = true;
+		else
+			addrok = (strcmp(*connectaddr, localaddr) == 0);
+	}
+
+	return addrok;
+}
+
 static void mcast()
 {
 	struct sockaddr_in listen;
@@ -4270,10 +4299,13 @@ static void mcast()
 	SOCKETTYPE mcast_sock;
 	SOCKETTYPE reply_sock;
 	socklen_t came_from_siz;
+	char *connectaddr;
 	ssize_t rep;
 	int bound;
 	int count;
 	int reply_port;
+	bool addrok;
+	char group;
 
 	char expect[] = "cgminer-"; // first 8 bytes constant
 	char *expect_code;
@@ -4286,7 +4318,7 @@ static void mcast()
 	grp.imr_multiaddr.s_addr = inet_addr(opt_api_mcast_addr);
 	if (grp.imr_multiaddr.s_addr == INADDR_NONE)
 		quit(1, "Invalid Multicast Address");
-	grp.imr_interface.s_addr = inet_addr("192.168.7.70");
+	grp.imr_interface.s_addr = INADDR_ANY;
 
 	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -4343,6 +4375,13 @@ static void mcast()
 					count, SOCKERRMSG, (int)mcast_sock);
 			continue;
 		}
+
+		addrok = check_connect(&came_from, &connectaddr, &group);
+		applog(LOG_DEBUG, "API mcast from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
+		if (!addrok)
+			continue;
+
 		buf[rep] = '\0';
 		if (rep > 0 && buf[rep-1] == '\n')
 			buf[--rep] = '\0';
@@ -4424,7 +4463,6 @@ void api(int api_thr_id)
 	struct thr_info bye_thr;
 	char buf[TMPBUFSIZ];
 	char param_buf[TMPBUFSIZ];
-	const char *localaddr = "127.0.0.1";
 	SOCKETTYPE c;
 	int n, bound;
 	char *connectaddr;
@@ -4558,28 +4596,9 @@ void api(int api_thr_id)
 			goto die;
 		}
 
-		connectaddr = inet_ntoa(cli.sin_addr);
-
-		addrok = false;
-		group = NOPRIVGROUP;
-		if (opt_api_allow) {
-			int client_ip = htonl(cli.sin_addr.s_addr);
-			for (i = 0; i < ips; i++) {
-				if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
-					addrok = true;
-					group = ipaccess[i].group;
-					break;
-				}
-			}
-		} else {
-			if (opt_api_network)
-				addrok = true;
-			else
-				addrok = (strcmp(connectaddr, localaddr) == 0);
-		}
-
-		if (opt_debug)
-			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
+		addrok = check_connect(&cli, &connectaddr, &group);
+		applog(LOG_DEBUG, "API: connection from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], TMPBUFSIZ-1, 0);
