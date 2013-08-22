@@ -875,6 +875,11 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	}
 }
 
+static int timespec_to_ms(struct timespec *ts)
+{
+	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
+}
+
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifndef WIN32
@@ -911,11 +916,6 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	us_to_timespec(&ts_end, us);
 	timeraddspec(&ts_end, ts_start);
 	nanosleep_abstime(&ts_end);
-}
-
-static int timespec_to_ms(struct timespec *ts)
-{
-	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
 int cgtimer_to_ms(cgtimer_t *cgt)
@@ -971,52 +971,65 @@ void cgtime(struct timeval *tv)
 
 void cgtimer_time(cgtimer_t *ts_start)
 {
-	cgtime(ts_start);
+	lldiv_t lidiv;;
+
+	decius_time(&lidiv);
+	ts_start->tv_sec = lidiv.quot;
+	ts_start->tv_nsec = lidiv.quot * 100;
 }
 
-static void ms_to_timeval(struct timeval *val, int ms)
+/* Subtract b from a */
+static void timersubspec(struct timespec *a, const struct timespec *b)
 {
-	ldiv_t tvdiv = ldiv(ms, 1000);
+	a->tv_sec -= b->tv_sec;
+	a->tv_nsec -= b->tv_nsec;
+	if (a->tv_nsec < 0) {
+		a->tv_nsec += 1000000000;
+		a->tv_sec--;
+	}
+}
 
-	val->tv_sec = tvdiv.quot;
-	val->tv_usec = tvdiv.rem * 1000;
+static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
+{
+	struct timespec now;
+
+	timeraddspec(ts_diff, ts_start);
+	cgtimer_time(&now);
+	timersubspec(ts_diff, &now);
+	if (unlikely(ts_diff->tv_sec < 0))
+		return;
+	nanosleep(ts_diff, NULL);
 }
 
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
-	struct timeval now, tv_end, tv_diff;
 	struct timespec ts_diff;
 
-	ms_to_timeval(&tv_diff, ms);
-	timeradd(ts_start, &tv_diff, &tv_end);
-	cgtime(&now);
-	if (unlikely(time_more(&now, &tv_end)))
-		return;
-	timersub(&tv_end, &now, &tv_diff);
-	timeval_to_spec(&ts_diff, &tv_diff);
-	nanosleep(&ts_diff, NULL);
+	ms_to_timespec(&ts_diff, ms);
+	cgsleep_spec(&ts_diff, ts_start);
 }
 
 void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 {
-	int ms = us / 1000;
+	struct timespec ts_diff;
 
-	cgsleep_ms_r(ts_start, ms);
-}
-
-static int timeval_to_ms(struct timeval *tv)
-{
-	return tv->tv_sec * 1000 + tv->tv_usec / 1000;
+	us_to_timespec(&ts_diff, us);
+	cgsleep_spec(&ts_diff, ts_start);
 }
 
 int cgtimer_to_ms(cgtimer_t *cgt)
 {
-	return timeval_to_ms(cgt);
+	return timespec_to_ms(cgt);
 }
 
 void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 {
-	timersub(a, b, res);
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;;
+		res->tv_sec--;
+	}
 }
 #endif
 
