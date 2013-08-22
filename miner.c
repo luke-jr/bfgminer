@@ -203,6 +203,7 @@ bool opt_api_listen;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
+static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
@@ -7622,6 +7623,7 @@ retry:
 			else
 				applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
 			staged_full = false;  // Let it fill up before triggering an underrun again
+			no_work = true;
 		}
 		ts = (struct timespec){ .tv_sec = opt_log_interval, };
 		if (ETIMEDOUT == pthread_cond_timedwait(&getq->cond, stgd_lock, &ts))
@@ -7630,6 +7632,8 @@ retry:
 			pthread_cond_wait(&getq->cond, stgd_lock);
 		}
 	}
+	
+	no_work = false;
 
 	hc = HASH_COUNT(staged_work);
 	/* Find clone work if possible, to allow masters to be reused */
