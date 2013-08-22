@@ -308,7 +308,7 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	if (unlikely(!avalon->works))
 		return false;
 
-	work = find_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
+	work = clone_queued_work_bymidstate(avalon, (char *)ar->midstate, 32,
 					   (char *)ar->data, 64, 12);
 	if (!work)
 		return false;
@@ -317,6 +317,8 @@ static bool avalon_decode_nonce(struct thr_info *thr, struct avalon_result *ar,
 	info->matching_work[work->subid]++;
 	*nonce = htole32(ar->nonce);
 	submit_nonce(thr, work, *nonce);
+	
+	free_work(work);
 
 	return true;
 }
@@ -706,7 +708,7 @@ static void do_avalon_close(struct thr_info *thr)
 	struct avalon_info *info = avalon->device_data;
 
 	avalon_free_work(thr);
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	avalon_reset(avalon->device_fd, &ar);
 	avalon_idle(avalon);
 	avalon_close(avalon->device_fd);
@@ -853,7 +855,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			       avalon->device_id);
 			dev_error(avalon, REASON_DEV_COMMS_ERROR);
 			first_try = 0;
-			nmsleep(1000);
+			cgsleep_ms(1000);
 			avalon_init(avalon);
 			return 0;	/* This should never happen */
 		}
@@ -939,7 +941,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 			"AVA%i: FPGA controller messed up, %d wrong results",
 			avalon->device_id, result_wrong);
 		dev_error(avalon, REASON_DEV_COMMS_ERROR);
-		nmsleep(1000);
+		cgsleep_ms(1000);
 		avalon_init(avalon);
 		return 0;
 	}

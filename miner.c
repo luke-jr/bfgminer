@@ -45,6 +45,7 @@
 #include <sys/socket.h>
 #else
 #include <winsock2.h>
+#include <windows.h>
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -199,9 +200,14 @@ char *opt_api_groups;
 char *opt_api_description = PACKAGE_STRING;
 int opt_api_port = 4028;
 bool opt_api_listen;
+bool opt_api_mcast;
+char *opt_api_mcast_addr = API_MCAST_ADDR;
+char *opt_api_mcast_code = API_MCAST_CODE;
+int opt_api_mcast_port = 4028;
 bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
+static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
@@ -1360,6 +1366,18 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--api-listen",
 			opt_set_bool, &opt_api_listen,
 			"Enable API, default: disabled"),
+	OPT_WITHOUT_ARG("--api-mcast",
+			opt_set_bool, &opt_api_mcast,
+			"Enable API Multicast listener, default: disabled"),
+	OPT_WITH_ARG("--api-mcast-addr",
+		     opt_set_charp, opt_show_charp, &opt_api_mcast_addr,
+		     "API Multicast listen address"),
+	OPT_WITH_ARG("--api-mcast-code",
+		     opt_set_charp, opt_show_charp, &opt_api_mcast_code,
+		     "Code expected in the API Multicast"),
+	OPT_WITH_ARG("--api-mcast-port",
+		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
+		     "Port number of miner API Multicast listener"),
 	OPT_WITHOUT_ARG("--api-network",
 			opt_set_bool, &opt_api_network,
 			"Allow API (if enabled) to listen on/for any address, default: only 127.0.0.1"),
@@ -1946,32 +1964,32 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\nBuilt with "
-#ifdef HAVE_OPENCL
-		"GPU "
-#endif
-#ifdef WANT_CPUMINE
-		"CPU "
+#ifdef USE_AVALON
+		"avalon "
 #endif
 #ifdef USE_BITFORCE
 		"bitforce "
 #endif
+#ifdef WANT_CPUMINE
+		"CPU "
+#endif
+#ifdef HAVE_OPENCL
+		"GPU "
+#endif
 #ifdef USE_ICARUS
 		"icarus "
 #endif
-#ifdef USE_AVALON
-		"avalon "
-#endif
 #ifdef USE_MODMINER
 		"modminer "
+#endif
+#ifdef USE_SCRYPT
+		"scrypt "
 #endif
 #ifdef USE_X6500
 		"x6500 "
 #endif
 #ifdef USE_ZTEX
 		"ztex "
-#endif
-#ifdef USE_SCRYPT
-		"scrypt "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -2031,10 +2049,10 @@ static void calc_midstate(struct work *work)
 	} data;
 
 	swap32yes(&data.i[0], work->data, 16);
-	sha2_context ctx;
-	sha2_starts(&ctx);
-	sha2_update(&ctx, data.c, 64);
-	memcpy(work->midstate, ctx.state, sizeof(work->midstate));
+	sha256_ctx ctx;
+	sha256_init(&ctx);
+	sha256_update(&ctx, data.c, 64);
+	memcpy(work->midstate, ctx.h, sizeof(work->midstate));
 	swap32tole(work->midstate, work->midstate, 8);
 }
 
@@ -5820,6 +5838,10 @@ void write_config(FILE *fcfg)
 	
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
+	if (strcmp(opt_api_mcast_addr, API_MCAST_ADDR) != 0)
+		fprintf(fcfg, ",\n\"api-mcast-addr\" : \"%s\"", json_escape(opt_api_mcast_addr));
+	if (strcmp(opt_api_mcast_code, API_MCAST_CODE) != 0)
+		fprintf(fcfg, ",\n\"api-mcast-code\" : \"%s\"", json_escape(opt_api_mcast_code));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
@@ -7213,6 +7235,10 @@ static bool cnx_needed(struct pool *pool)
 
 	if (pool_unworkable(cp))
 		return true;
+	
+	/* We've run out of work, bring anything back to life. */
+	if (no_work)
+		return true;
 
 	return false;
 }
@@ -7281,7 +7307,7 @@ static void *stratum_thread(void *userdata)
 				while (!restart_stratum(pool)) {
 					if (pool->removed)
 						goto out;
-					nmsleep(30000);
+					cgsleep_ms(30000);
 				}
 			}
 		}
@@ -7609,7 +7635,7 @@ static struct work *hash_pop(void)
 
 retry:
 	mutex_lock(stgd_lock);
-	while (!getq->frozen && !HASH_COUNT(staged_work))
+	while (!HASH_COUNT(staged_work))
 	{
 		if (unlikely(staged_full))
 		{
@@ -7621,6 +7647,7 @@ retry:
 			else
 				applog(LOG_WARNING, "Staged work underrun; not automatically increasing above %d", opt_queue);
 			staged_full = false;  // Let it fill up before triggering an underrun again
+			no_work = true;
 		}
 		ts = (struct timespec){ .tv_sec = opt_log_interval, };
 		if (ETIMEDOUT == pthread_cond_timedwait(&getq->cond, stgd_lock, &ts))
@@ -7629,6 +7656,8 @@ retry:
 			pthread_cond_wait(&getq->cond, stgd_lock);
 		}
 	}
+	
+	no_work = false;
 
 	hc = HASH_COUNT(staged_work);
 	/* Find clone work if possible, to allow masters to be reused */
@@ -7703,8 +7732,8 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
 
-	sha2(data, len, hash1);
-	sha2(hash1, 32, hash);
+	sha256(data, len, hash1);
+	sha256(hash1, 32, hash);
 }
 
 /* Diff 1 is a 256 bit unsigned integer of
@@ -8184,6 +8213,19 @@ struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 	return ret;
 }
 
+struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work, *ret = NULL;
+
+	rd_lock(&cgpu->qlock);
+	work = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	if (work)
+		ret = copy_work(work);
+	rd_unlock(&cgpu->qlock);
+
+	return ret;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
@@ -8369,12 +8411,9 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	if (cnx_needed(pool))
-		return;
-
-	while (pool->enabled == POOL_DISABLED ||
+	while (!cnx_needed(pool) && (pool->enabled == POOL_DISABLED ||
 	       (pool != current_pool() && pool_strategy != POOL_LOADBALANCE &&
-	       pool_strategy != POOL_BALANCE)) {
+	       pool_strategy != POOL_BALANCE))) {
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
@@ -8419,7 +8458,7 @@ retry_pool:
 	if (!pool) {
 		applog(LOG_WARNING, "No suitable long-poll found for %s", cp->rpc_url);
 		while (!pool) {
-			nmsleep(60000);
+			cgsleep_ms(60000);
 			pool = select_longpoll_pool(cp);
 		}
 	}
@@ -8496,7 +8535,7 @@ retry_pool:
 			if (failures == 1)
 				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 lpfail:
-			nmsleep(30000);
+			cgsleep_ms(30000);
 		}
 
 		if (pool != cp) {
@@ -8647,7 +8686,7 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			switch_pools(NULL);
 		}
 
-		nmsleep(30000);
+		cgsleep_ms(30000);
 			
 	}
 	return NULL;
@@ -9021,6 +9060,9 @@ void _bfg_clean_up(void)
 #endif
 
 	cgtime(&total_tv_end);
+#ifdef WIN32
+	timeEndPeriod(1);
+#endif
 #ifdef HAVE_CURSES
 	disable_curses();
 #endif
@@ -9391,7 +9433,7 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 
 static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)
 {
-	sha2(buffer, length, digest);
+	sha256(buffer, length, digest);
 	return true;
 }
 
@@ -9767,6 +9809,8 @@ int main(int argc, char *argv[])
 	sigaction(SIGINT, &handler, &inthandler);
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
+#else
+	timeBeginPeriod(1);
 #endif
 	opt_kernel_path = alloca(PATH_MAX);
 	strcpy(opt_kernel_path, CGMINER_PREFIX);
@@ -10266,7 +10310,7 @@ retry:
 				struct pool *altpool = select_pool(true);
 
 				if (altpool == pool && pool->has_stratum)
-					nmsleep(5000);
+					cgsleep_ms(5000);
 				pool = altpool;
 				goto retry;
 			}
@@ -10328,7 +10372,7 @@ retry:
 			next_pool = select_pool(!opt_fail_only);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
-				nmsleep(5000);
+				cgsleep_ms(5000);
 			} else {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, failover activated", pool->pool_no);
 				pool = next_pool;

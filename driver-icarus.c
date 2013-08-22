@@ -844,7 +844,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	
 	// 3. Delay 3 more seconds
 	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
-	nmsleep(3000);
+	cgsleep_ms(3000);
 	
 	// Check for work restart in the meantime
 	if (thr->work_restart)

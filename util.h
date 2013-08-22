@@ -98,6 +98,8 @@ bool isCspace(int c)
 	}
 }
 
+typedef struct timespec cgtimer_t;
+
 struct thr_info;
 struct pool;
 enum dev_reason;
@@ -117,13 +119,25 @@ extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 void thr_info_freeze(struct thr_info *thr);
 void thr_info_cancel(struct thr_info *thr);
-void nmsleep(unsigned int msecs);
-void nusleep(unsigned int usecs);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
 bool time_more(struct timeval *a, struct timeval *b);
 bool time_less(struct timeval *a, struct timeval *b);
 void copy_time(struct timeval *dest, const struct timeval *src);
+void timespec_to_val(struct timeval *val, const struct timespec *spec);
+void timeval_to_spec(struct timespec *spec, const struct timeval *val);
+void us_to_timeval(struct timeval *val, int64_t us);
+void us_to_timespec(struct timespec *spec, int64_t us);
+void ms_to_timespec(struct timespec *spec, int64_t ms);
+void timeraddspec(struct timespec *a, const struct timespec *b);
+void cgsleep_ms(int ms);
+void cgsleep_us(int64_t us);
+void cgtimer_time(cgtimer_t *ts_start);
+#define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
+int cgtimer_to_ms(cgtimer_t *cgt);
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);

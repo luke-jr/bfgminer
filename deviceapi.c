@@ -99,7 +99,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	{
 		// This is a bug!
 		applog(LOG_ERR, "%"PRIpreprv": restart_wait called without a work_restart_notifier", thr->cgpu->proc_repr);
-		nmsleep(mstime);
+		cgsleep_ms(mstime);
 		return (thr->work_restart ? 0 : ETIMEDOUT);
 	}
 	
@@ -595,7 +595,7 @@ out: ;
 	while ( (proc = proc->next_proc) && !proc->threads);
 	mythr->getwork = 0;
 	mythr->has_pth = false;
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);

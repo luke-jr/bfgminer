@@ -1053,65 +1053,7 @@ void setup_pthread_cancel_workaround()
 
 #endif
 
-/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
- * on SMP machines */
-void nmsleep(unsigned int msecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(msecs, 1000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
-/* Same for usecs */
-void nusleep(unsigned int usecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(usecs, 1000000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
-static
-void _now_gettimeofday(struct timeval *tv)
-{
-#ifdef WIN32
-	// Windows' default resolution is only 15ms. This requests 1ms.
-	timeBeginPeriod(1);
-#endif
-	gettimeofday(tv, NULL);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
+static void _now_gettimeofday(struct timeval *);
 
 #ifdef HAVE_POOR_GETTIMEOFDAY
 static struct timeval tv_timeofday_offset;
@@ -1264,6 +1206,224 @@ bool time_less(struct timeval *a, struct timeval *b)
 void copy_time(struct timeval *dest, const struct timeval *src)
 {
 	memcpy(dest, src, sizeof(struct timeval));
+}
+
+void timespec_to_val(struct timeval *val, const struct timespec *spec)
+{
+	val->tv_sec = spec->tv_sec;
+	val->tv_usec = spec->tv_nsec / 1000;
+}
+
+void timeval_to_spec(struct timespec *spec, const struct timeval *val)
+{
+	spec->tv_sec = val->tv_sec;
+	spec->tv_nsec = val->tv_usec * 1000;
+}
+
+void us_to_timeval(struct timeval *val, int64_t us)
+{
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem;
+}
+
+void us_to_timespec(struct timespec *spec, int64_t us)
+{
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.rem * 1000;
+}
+
+void ms_to_timespec(struct timespec *spec, int64_t ms)
+{
+	lldiv_t tvdiv = lldiv(ms, 1000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.rem * 1000000;
+}
+
+void timeraddspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec += b->tv_sec;
+	a->tv_nsec += b->tv_nsec;
+	if (a->tv_nsec >= 1000000000) {
+		a->tv_nsec -= 1000000000;
+		a->tv_sec++;
+	}
+}
+
+static int timespec_to_ms(struct timespec *ts)
+{
+	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
+}
+
+/* These are cgminer specific sleep functions that use an absolute nanosecond
+ * resolution timer to avoid poor usleep accuracy and overruns. */
+#ifndef WIN32
+void cgtimer_time(cgtimer_t *ts_start)
+{
+	clock_gettime(CLOCK_MONOTONIC, ts_start);
+}
+
+static void nanosleep_abstime(struct timespec *ts_end)
+{
+	int ret;
+
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
+	} while (ret == EINTR);
+}
+
+/* Reentrant version of cgsleep functions allow start time to be set separately
+ * from the beginning of the actual sleep, allowing scheduling delays to be
+ * counted in the sleep. */
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	struct timespec ts_end;
+
+	ms_to_timespec(&ts_end, ms);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	struct timespec ts_end;
+
+	us_to_timespec(&ts_end, us);
+	timeraddspec(&ts_end, ts_start);
+	nanosleep_abstime(&ts_end);
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timespec_to_ms(cgt);
+}
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;
+		res->tv_sec--;
+	}
+}
+
+static
+void _now_gettimeofday(struct timeval *tv)
+{
+	gettimeofday(tv, NULL);
+}
+#else
+/* Windows start time is since 1601 lol so convert it to unix epoch 1970. */
+#define EPOCHFILETIME (116444736000000000LL)
+
+/* Return the system time as an lldiv_t in decimicroseconds. */
+static void decius_time(lldiv_t *lidiv)
+{
+	FILETIME ft;
+	LARGE_INTEGER li;
+
+	GetSystemTimeAsFileTime(&ft);
+	li.LowPart  = ft.dwLowDateTime;
+	li.HighPart = ft.dwHighDateTime;
+	li.QuadPart -= EPOCHFILETIME;
+
+	/* SystemTime is in decimicroseconds so divide by an unusual number */
+	*lidiv = lldiv(li.QuadPart, 10000000);
+}
+
+void _now_gettimeofday(struct timeval *tv)
+{
+	lldiv_t lidiv;
+
+	decius_time(&lidiv);
+	tv->tv_sec = lidiv.quot;
+	tv->tv_usec = lidiv.rem / 10;
+}
+
+void cgtimer_time(cgtimer_t *ts_start)
+{
+	lldiv_t lidiv;;
+
+	decius_time(&lidiv);
+	ts_start->tv_sec = lidiv.quot;
+	ts_start->tv_nsec = lidiv.quot * 100;
+}
+
+/* Subtract b from a */
+static void timersubspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec -= b->tv_sec;
+	a->tv_nsec -= b->tv_nsec;
+	if (a->tv_nsec < 0) {
+		a->tv_nsec += 1000000000;
+		a->tv_sec--;
+	}
+}
+
+static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
+{
+	struct timespec now;
+
+	timeraddspec(ts_diff, ts_start);
+	cgtimer_time(&now);
+	timersubspec(ts_diff, &now);
+	if (unlikely(ts_diff->tv_sec < 0))
+		return;
+	nanosleep(ts_diff, NULL);
+}
+
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	struct timespec ts_diff;
+
+	ms_to_timespec(&ts_diff, ms);
+	cgsleep_spec(&ts_diff, ts_start);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	struct timespec ts_diff;
+
+	us_to_timespec(&ts_diff, us);
+	cgsleep_spec(&ts_diff, ts_start);
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timespec_to_ms(cgt);
+}
+
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;;
+		res->tv_sec--;
+	}
+}
+#endif
+
+void cgsleep_ms(int ms)
+{
+	cgtimer_t ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_ms_r(&ts_start, ms);
+}
+
+void cgsleep_us(int64_t us)
+{
+	cgtimer_t ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_us_r(&ts_start, us);
 }
 
 /* Returns the microseconds difference between end and start times as a double */

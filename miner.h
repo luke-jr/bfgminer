@@ -873,6 +873,9 @@ static inline void cg_wunlock(cglock_t *lock)
 
 struct pool;
 
+#define API_MCAST_CODE "FTW"
+#define API_MCAST_ADDR "224.0.0.75"
+
 extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
@@ -889,6 +892,10 @@ extern bool opt_autoengine;
 extern bool use_curses;
 extern int httpsrv_port;
 extern char *opt_api_allow;
+extern bool opt_api_mcast;
+extern char *opt_api_mcast_addr;
+extern char *opt_api_mcast_code;
+extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
@@ -1336,6 +1343,7 @@ extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
