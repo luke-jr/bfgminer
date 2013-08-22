@@ -894,20 +894,6 @@ static char *set_api_description(const char *arg)
 	return NULL;
 }
 
-static char *set_api_mcast_addr(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_mcast_addr);
-
-	return NULL;
-}
-
-static char *set_api_mcast_code(const char *arg)
-{
-	opt_set_charp(arg, &opt_api_mcast_code);
-
-	return NULL;
-}
-
 #ifdef USE_ICARUS
 static char *set_icarus_options(const char *arg)
 {
@@ -965,10 +951,10 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_api_mcast,
 			"Enable API Multicast listener, default: disabled"),
 	OPT_WITH_ARG("--api-mcast-addr",
-		     set_api_mcast_addr, NULL, NULL,
+		     opt_set_charp, opt_show_charp, &opt_api_mcast_addr,
 		     "API Multicast listen address"),
 	OPT_WITH_ARG("--api-mcast-code",
-		     set_api_mcast_code, NULL, NULL,
+		     opt_set_charp, opt_show_charp, &opt_api_mcast_code,
 		     "Code expected in the API Multicast"),
 	OPT_WITH_ARG("--api-mcast-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
