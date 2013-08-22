@@ -43,13 +43,16 @@ void prune_worklog()
 {
 	struct getwork_client *client, *tmp;
 	struct work *work, *tmp2;
+	struct timeval tv_now;
+	
+	timer_set_now(&tv_now);
 	
 	mutex_lock(&getwork_clients_mutex);
 	HASH_ITER(hh, getwork_clients, client, tmp)
 	{
 		HASH_ITER(hh, client->work, work, tmp2)
 		{
-			if (!stale_work(work, true))
+			if (timer_elapsed(&work->tv_work_start, &tv_now) <= opt_expiry)
 				break;
 			HASH_DEL(client->work, work);
 			free_work(work);
