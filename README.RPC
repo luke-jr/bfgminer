@@ -32,6 +32,10 @@ Using the "--api-allow" option overrides the "--api-network" option if they
 are both specified
 With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
+If you start BFGMiner also with the "--api-mcast" option, it will listen for
+a multicast message and reply to it with a message containing it's API port
+number, but only if the IP address of the sender is allowed API access
+
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
 Valid groups are only the letters A-Z (except R & W are predefined) and are
@@ -908,6 +912,22 @@ to
 See --api-network or --api-allow for more access details
 and how to give write access
 
+You can however, also tell miner.php to find your mining rigs automatically
+on the local subnet
+
+Add the following to each BFGMiner:
+
+ --api-mcast
+
+or in your bfgminer.conf
+
+ "api-mcast" : true,
+
+And in miner.php set $mcast = true;
+
+This will ignore the value of $rigs and overwrite it with the list of zero or
+more rigs found on the network in the timout specified
+
 ---------
 
 Once you have a web server with PHP running
@@ -1137,6 +1157,54 @@ If you have more than one rig it will show a summary of all the rigs with
  buttons to show the details of each rig - the button contents will be 'Name'
  rather than rig number, if you specify 'Name'
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
+
+---------
+
+Default:
+ $mcast = false;
+
+Set $mcast to true to look for your rigs and ignore $rigs
+
+---------
+
+Default:
+ $mcastaddr = '224.0.0.75';
+
+API Multicast address all miners are listening on
+
+---------
+
+Default:
+ $mcastport = 4028;
+
+API Multicast UDP port all miners are listening on
+
+---------
+
+Default:
+ $mcastcode = 'FTW';
+
+The code all miners expect in the Multicast message sent
+The message sent is "cgm-code-listport"
+Don't use the '-' character if you change it
+
+---------
+
+Default:
+ $mcastlistport = 4027;
+
+UDP port number that is added to the broadcast message sent
+that specifies to the miners the port to reply on
+
+---------
+
+Default:
+ $mcasttimeout = 1.5;
+
+Set $mcasttimeout to the number of seconds (floating point)
+to wait for replies to the Multicast message
+N.B. the accuracy of the timing used to wait for the replies is
+~0.1s so there's no point making it more than one decimal place
 
 ---------
 
