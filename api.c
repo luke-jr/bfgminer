@@ -3800,10 +3800,10 @@ static void mcast()
 						0, (struct sockaddr *)(&came_from),
 						sizeof(came_from));
 				if (SOCKETFAIL(rep)) {
-					applog(LOG_DEBUG, "API mcast reply failed (%s) (%d)",
+					applog(LOG_DEBUG, "API mcast send reply failed (%s) (%d)",
 								SOCKERRMSG, (int)reply_sock);
 				} else {
-					applog(LOG_DEBUG, "API mcast reply (%s) succeeded (%d) (%d)",
+					applog(LOG_DEBUG, "API mcast send reply (%s) succeeded (%d) (%d)",
 								replybuf, (int)rep, (int)reply_sock);
 				}
 
