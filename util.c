@@ -1135,6 +1135,7 @@ void _now_clock_gettime(struct timeval *tv)
 	};
 }
 
+#ifdef HAVE_CLOCK_NANOSLEEP
 static
 void _cgsleep_us_r_monotonic(cgtimer_t *tv_start, int64_t us)
 {
@@ -1148,6 +1149,7 @@ void _cgsleep_us_r_monotonic(cgtimer_t *tv_start, int64_t us)
 		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
 	} while (ret == EINTR);
 }
+#endif
 
 static
 bool _bfg_try_clock_gettime(clockid_t clk)
@@ -1176,7 +1178,9 @@ void bfg_init_time()
 	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
 	{
 		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+#ifdef HAVE_CLOCK_NANOSLEEP
 		cgsleep_us_r = _cgsleep_us_r_monotonic;
+#endif
 	}
 	else
 #endif

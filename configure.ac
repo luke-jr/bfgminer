@@ -915,6 +915,7 @@ AC_TRY_COMPILE([
 	AC_MSG_RESULT([yes])
 	AC_DEFINE([HAVE_CLOCK_GETTIME_MONOTONIC], [1], [Defined to 1 if clock_gettime(CLOCK_MONOTONIC) is defined])
 	AC_SEARCH_LIBS([clock_gettime],[rt posix4])
+	AC_CHECK_FUNCS([clock_nanosleep])
 	AC_MSG_CHECKING([for clock_gettime(CLOCK_MONOTONIC_RAW)])
 	AC_TRY_COMPILE([
 		#define _GNU_SOURCE
