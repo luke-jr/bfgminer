@@ -93,6 +93,7 @@ struct icarus_state {
 	struct timeval tv_workstart;
 	struct timeval tv_workfinish;
 	struct work *last_work;
+	struct work *last2_work;
 	bool changework;
 	bool identify;
 	

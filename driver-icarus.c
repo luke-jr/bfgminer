@@ -811,6 +811,8 @@ struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonc
 	*nonce = be32toh(*nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
+	if (test_nonce(state->last2_work, *nonce, false))
+		return state->last2_work;
 	return NULL;
 }
 
@@ -874,8 +876,9 @@ no_job_start:
 static
 void icarus_transition_work(struct icarus_state *state, struct work *work)
 {
-	if (state->last_work)
-		free_work(state->last_work);
+	if (state->last2_work)
+		free_work(state->last2_work);
+	state->last2_work = state->last_work;
 	state->last_work = copy_work(work);
 }
 
