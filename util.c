@@ -1054,6 +1054,7 @@ void setup_pthread_cancel_workaround()
 #endif
 
 static void _now_gettimeofday(struct timeval *);
+static void _cgsleep_us_r_nanosleep(cgtimer_t *, int64_t);
 
 #ifdef HAVE_POOR_GETTIMEOFDAY
 static struct timeval tv_timeofday_offset;
@@ -1116,6 +1117,7 @@ void _now_is_not_set(__maybe_unused struct timeval *tv)
 }
 
 void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
+void (*cgsleep_us_r)(cgtimer_t *, int64_t) = _cgsleep_us_r_nanosleep;
 
 #ifdef HAVE_CLOCK_GETTIME_MONOTONIC
 static clockid_t bfg_timer_clk;
@@ -1131,6 +1133,20 @@ void _now_clock_gettime(struct timeval *tv)
 		.tv_sec = ts.tv_sec,
 		.tv_usec = ts.tv_nsec / 1000,
 	};
+}
+
+static
+void _cgsleep_us_r_monotonic(cgtimer_t *tv_start, int64_t us)
+{
+	struct timeval tv_end[1];
+	struct timespec ts_end[1];
+	int ret;
+	
+	timer_set_delay(tv_end, tv_start, us);
+	timeval_to_spec(ts_end, tv_end);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
+	} while (ret == EINTR);
 }
 
 static
@@ -1158,7 +1174,10 @@ void bfg_init_time()
 	else
 #endif
 	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
+	{
 		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+		cgsleep_us_r = _cgsleep_us_r_monotonic;
+	}
 	else
 #endif
 #ifdef WIN32
@@ -1255,40 +1274,6 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 }
 
 #ifndef WIN32
-static void nanosleep_abstime(struct timespec *ts_end)
-{
-	int ret;
-
-	do {
-		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
-	} while (ret == EINTR);
-}
-
-/* Reentrant version of cgsleep functions allow start time to be set separately
- * from the beginning of the actual sleep, allowing scheduling delays to be
- * counted in the sleep. */
-void cgsleep_ms_r(cgtimer_t *tv_start, int ms)
-{
-	struct timespec ts_start[1];
-	struct timespec ts_end;
-
-	timeval_to_spec(ts_start, tv_start);
-	ms_to_timespec(&ts_end, ms);
-	timeraddspec(&ts_end, ts_start);
-	nanosleep_abstime(&ts_end);
-}
-
-void cgsleep_us_r(cgtimer_t *tv_start, int64_t us)
-{
-	struct timespec ts_start[1];
-	struct timespec ts_end;
-
-	timeval_to_spec(ts_start, tv_start);
-	us_to_timespec(&ts_end, us);
-	timeraddspec(&ts_end, ts_start);
-	nanosleep_abstime(&ts_end);
-}
-
 static
 void _now_gettimeofday(struct timeval *tv)
 {
@@ -1321,50 +1306,30 @@ void _now_gettimeofday(struct timeval *tv)
 	tv->tv_sec = lidiv.quot;
 	tv->tv_usec = lidiv.rem / 10;
 }
-
-/* Subtract b from a */
-static void timersubspec(struct timespec *a, const struct timespec *b)
-{
-	a->tv_sec -= b->tv_sec;
-	a->tv_nsec -= b->tv_nsec;
-	if (a->tv_nsec < 0) {
-		a->tv_nsec += 1000000000;
-		a->tv_sec--;
-	}
-}
-
-static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
-{
-	struct timespec now;
-
-	timeraddspec(ts_diff, ts_start);
-	cgtimer_time(&now);
-	timersubspec(ts_diff, &now);
-	if (unlikely(ts_diff->tv_sec < 0))
-		return;
-	nanosleep(ts_diff, NULL);
-}
+#endif
 
 void cgsleep_ms_r(cgtimer_t *tv_start, int ms)
 {
-	struct timespec ts_start;
-	struct timespec ts_diff;
-
-	timeval_to_spec(&ts_start, tv_start);
-	ms_to_timespec(&ts_diff, ms);
-	cgsleep_spec(&ts_diff, ts_start);
+	cgsleep_us_r(tv_start, ((int64_t)ms) * 1000);
 }
 
-void cgsleep_us_r(cgtimer_t *tv_start, int64_t us)
+static
+void _cgsleep_us_r_nanosleep(cgtimer_t *tv_start, int64_t us)
 {
-	struct timespec ts_start;
-	struct timespec ts_diff;
-
-	timeval_to_spec(&ts_start, tv_start);
-	us_to_timespec(&ts_diff, us);
-	cgsleep_spec(&ts_diff, ts_start);
+	struct timeval tv_timer[1], tv[1];
+	struct timespec ts[1];
+	
+	timer_set_delay(tv_timer, tv_start, us);
+	while (true)
+	{
+		timer_set_now(tv);
+		if (!timercmp(tv_timer, tv, >))
+			return;
+		timersub(tv_timer, tv, tv);
+		timeval_to_spec(ts, tv);
+		nanosleep(ts, NULL);
+	}
 }
-#endif
 
 void cgsleep_ms(int ms)
 {
