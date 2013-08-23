@@ -83,7 +83,7 @@ DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MM_LIBS=""
 MATH_LIBS="-lm"
-RT_LIBS="-lrt"
+RT_LIBS=""
 
 case $target in
   amd64-* | x86_64-*)
@@ -108,7 +108,6 @@ case $target in
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     MM_LIBS="-lwinmm"
-    RT_LIBS=""
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     AC_DEFINE([FD_SETSIZE], [4096], [Maximum sockets before fd_set overflows])
     ;;
@@ -914,7 +913,13 @@ AC_TRY_COMPILE([
 ],[
 	AC_MSG_RESULT([yes])
 	AC_DEFINE([HAVE_CLOCK_GETTIME_MONOTONIC], [1], [Defined to 1 if clock_gettime(CLOCK_MONOTONIC) is defined])
-	AC_SEARCH_LIBS([clock_gettime],[rt posix4])
+	save_LIBS="${LIBS}"
+	AC_SEARCH_LIBS([clock_gettime],[rt posix4],[
+		if test "x${ac_cv_search_clock_gettime}" != "xnone required"; then
+			RT_LIBS="${ac_cv_search_clock_gettime}"
+		fi
+	])
+	LIBS="${save_LIBS}"
 	AC_CHECK_FUNCS([clock_nanosleep])
 	AC_MSG_CHECKING([for clock_gettime(CLOCK_MONOTONIC_RAW)])
 	AC_TRY_COMPILE([
