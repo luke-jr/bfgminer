@@ -1009,6 +1009,12 @@ On windows you must install the pl2303 or ftdi driver required for the device
 pl2303: http://prolificusa.com/pl-2303hx-drivers/
 ftdi: http://www.ftdichip.com/Drivers/VCP.htm
 
+Q: I ran cgminer, and now BFGMiner doesn't work!
+A: cgminer has its own non-standard implementations of the drivers for most USB
+devices, and disables the official drivers (on Windows, you did this manually
+using Zadig). Before you can use BFGMiner, you will need to restore the original
+driver. With Linux, usually rebooting or re-plugging the device is sufficient.
+
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them
 A: Make sure you have the required priviledges to access the /dev/ttyUSB*
