@@ -929,6 +929,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 		else
 		{
+keepwaiting:
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
 			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, info->read_count);
 			switch (ret) {
@@ -969,18 +970,25 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 
+	if (ret == ICA_GETS_OK)
+	{
+		nonce_work = icarus_process_worknonce(state, &nonce);
+		if (nonce_work == state->last2_work)
+		{
+			// nonce was for the last job; submit and keep processing the current one
+			submit_nonce(thr, nonce_work, nonce);
+			goto keepwaiting;
+		}
+	}
+	
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(ret == ICA_GETS_OK || ret == ICA_GETS_TIMEOUT)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
-		if (ret == ICA_GETS_OK)
-		{
-			nonce_work = icarus_process_worknonce(state, &nonce);
-			if (!nonce_work)
-				dclk_errorCount(&info->dclk, qsec);
-		}
+		if (ret == ICA_GETS_OK && !nonce_work)
+			dclk_errorCount(&info->dclk, qsec);
 	}
 
 	if (unlikely(state->identify))
@@ -1031,9 +1039,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	// Only ICA_GETS_OK gets here
-	
-	if (!info->dclk.freqM)
-		nonce_work = icarus_process_worknonce(state, &nonce);
 	
 	was_hw_error = (!nonce_work);
 	if (likely(!was_hw_error))
