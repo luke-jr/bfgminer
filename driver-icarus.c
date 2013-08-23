@@ -879,8 +879,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	unsigned char nonce_bin[ICARUS_READ_SIZE] = {0};
-	uint32_t nonce;
+	uint32_t nonce = 0;
 	int64_t hash_count;
 	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
@@ -918,7 +917,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		else
 		{
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
-			ret = icarus_gets(nonce_bin, fd, &state->tv_workfinish, thr, info->read_count);
+			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, info->read_count);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -952,7 +951,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 
-	memcpy(&nonce, nonce_bin, sizeof(nonce_bin));
 	nonce = be32toh(nonce);
 
 	// Handle dynamic clocking for "subclass" devices
