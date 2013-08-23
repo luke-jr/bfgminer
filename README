@@ -197,9 +197,9 @@ Options for both config file and command line:
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-mcast         Enable API Multicast listener, (default: disabled)
                     The listener will only run if the API is also enabled
---api-mcast-addr    API Multicast listen address, (default: 224.0.0.75)
---api-mcast-code    Code expected in the API Multicast message, don't use '-' (default: "FTW")
---api-mcast-port    API Multicast listen port, (default: 4028)
+--api-mcast-addr <arg> API Multicast listen address, (default: 224.0.0.75)
+--api-mcast-code <arg> Code expected in the API Multicast message, don't use '-' (default: "FTW")
+--api-mcast-port <arg> API Multicast listen port, (default: 4028)
 --api-port          Port number of miner API (default: 4028)
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
