@@ -944,8 +944,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timersub(&state->tv_workfinish, &tv_start, &elapsed);
 	}
 	else
-	if (fd == -1 && !icarus_reopen(icarus, state, &fd))
-		return -1;
+	{
+		if (fd == -1 && !icarus_reopen(icarus, state, &fd))
+			return -1;
+		
+		// First run; no nonce, no hashes done
+		ret = ICA_GETS_ERROR;
+	}
 
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
@@ -955,7 +960,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
-	if (info->dclk.freqM && likely(!was_first_run)) {
+	if (info->dclk.freqM && likely(ret == ICA_GETS_OK || ret == ICA_GETS_TIMEOUT)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
@@ -977,7 +982,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (was_first_run) {
+	if (ret == ICA_GETS_ERROR) {
 		state->firstrun = false;
 		icarus_transition_work(state, work);
 		hash_count = 0;
