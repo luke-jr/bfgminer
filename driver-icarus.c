@@ -806,6 +806,15 @@ static bool icarus_job_start(struct thr_info *thr)
 }
 
 static
+struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonce)
+{
+	*nonce = be32toh(*nonce);
+	if (test_nonce(state->last_work, *nonce, false))
+		return state->last_work;
+	return NULL;
+}
+
+static
 void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
 {
 	const struct cgpu_info * const icarus = thr->cgpu;
@@ -879,12 +888,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	uint32_t nonce = 0;
+	uint32_t nonce;
+	struct work *nonce_work;
 	int64_t hash_count;
 	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
-	int curr_hw_errors, i;
+	int i;
 	bool was_hw_error;
 	bool was_first_run;
 
@@ -956,16 +966,18 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	tcflush(fd, TCOFLUSH);
 #endif
 
-	nonce = be32toh(nonce);
-
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(ret == ICA_GETS_OK || ret == ICA_GETS_TIMEOUT)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
-		if (nonce && !test_nonce(state->last_work, nonce, false))
-			dclk_errorCount(&info->dclk, qsec);
+		if (ret == ICA_GETS_OK)
+		{
+			nonce_work = icarus_process_worknonce(state, &nonce);
+			if (!nonce_work)
+				dclk_errorCount(&info->dclk, qsec);
+		}
 	}
 
 	if (unlikely(state->identify))
@@ -1015,9 +1027,16 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		goto out;
 	}
 
-	curr_hw_errors = icarus->hw_errors;
-	submit_nonce(thr, state->last_work, nonce);
-	was_hw_error = (curr_hw_errors > icarus->hw_errors);
+	// Only ICA_GETS_OK gets here
+	
+	if (!info->dclk.freqM)
+		nonce_work = icarus_process_worknonce(state, &nonce);
+	
+	was_hw_error = (!nonce_work);
+	if (likely(!was_hw_error))
+		submit_nonce(thr, nonce_work, nonce);
+	else
+		inc_hw_errors(thr, state->last_work, nonce);
 	icarus_transition_work(state, work);
 
 	// Force a USB close/reopen on any hw error
