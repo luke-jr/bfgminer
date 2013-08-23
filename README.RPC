@@ -269,15 +269,15 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
                               This is only available if PGA mining is enabled
-                              and currently only BitForce Singles support this command
-                              On a BitForce Single it will flash the led on the front
-                              of the device for approximately 4s
-                              All other non-BFL PGA devices will return a warning
+                              On most supported devices, it will flash the led
+                              for approximately 4s
+                              All unsupported devices, it will return a warning
                               status message stating that they don't support it
-                              This adds a 4s delay to the BFL share being processed
-                              so you may get a message stating that processing took
-                              longer than 7000ms if the request was sent towards
-                              the end of the timing of any work being worked on
+                              For BFL, this adds a 4s delay to the share being
+                              processed so you may get a message stating that
+                              processing took longer than 7000ms if the request
+                              was sent towards the end of the timing of any work
+                              being worked on
                               e.g.: BFL0: took 8438ms - longer than 7000ms
                               You should ignore this
 
