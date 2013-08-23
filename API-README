@@ -32,6 +32,10 @@ Using the "--api-allow" option overides the "--api-network" option if they
 are both specified
 With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
+If you start cgminer also with the "--api-mcast" option, it will listen for
+a multicast message and reply to it with a message containing it's API port
+number, but only if the IP address of the sender is allowed API access
+
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
 Valid groups are only the letters A-Z (except R & W are predefined) and are
@@ -42,7 +46,8 @@ To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
 An IP address/subnet can only be a member of one group
 A sample API group would be:
- --api-groups P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
+ --api-groups
+        P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
 non-priviliged commands - the '*' means all non-priviledged commands
 Without the '*' the group would only have access to the pool commands
@@ -106,7 +111,7 @@ The STATUS section is:
 
 For API version 1.10 and later:
 
-The list of requests - a (*) means it requires privileged access - and replies are:
+The list of requests - a (*) means it requires privileged access - and replies:
 
  Request       Reply Section  Details
  -------       -------------  -------
@@ -122,7 +127,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
                               Log Interval=N, <- log interval (--log N)
-                              Device Code=GPU ICA , <- spaced list of compiled devices
+                              Device Code=GPU ICA , <- spaced list of compiled
+                                                       device drivers
                               OS=Linux/Apple/..., <- operating System
                               Failover-Only=true/false, <- failover-only setting
                               ScanTime=N, <- --scan-time setting
@@ -132,15 +138,15 @@ The list of requests - a (*) means it requires privileged access - and replies a
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
 
- pools         POOLS          The status of each pool
-                              e.g. Pool=0,URL=http://pool.com:6311,Status=Alive,...|
+ pools         POOLS          The status of each pool e.g.
+                              Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
  devs          DEVS           Each available GPU, PGA and ASC with their details
                               e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
-                              Last Share Time=NNN, <- standand long time in seconds
+                              Last Share Time=NNN, <- standand long time in sec
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
-                              Last Valid Work=NNN, <- standand long time in seconds
+                              Last Valid Work=NNN, <- standand long time in sec
                                of last work returned that wasn't an HW:
                               Will not report PGAs if PGA mining is disabled
                               Will not report ASCs if ASC mining is disabled
@@ -151,7 +157,8 @@ The list of requests - a (*) means it requires privileged access - and replies a
  pga|N         PGA            The details of a single PGA number N in the same
                               format and details as for DEVS
                               This is only available if PGA mining is enabled
-                              Use 'pgacount' or 'config' first to see if there are any
+                              Use 'pgacount' or 'config' first to see if there
+                              are any
 
  gpucount      GPUS           Count=N| <- the number of GPUs
 
@@ -206,19 +213,23 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  gpuintensity|N,I (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N intensity to I
+                              stating the results of setting GPU N intensity
+                              to I
 
  gpumem|N,V (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N memoryclock to V MHz
+                              stating the results of setting GPU N memoryclock
+                              to V MHz
 
  gpuengine|N,V (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N clock to V MHz
+                              stating the results of setting GPU N clock
+                              to V MHz
 
  gpufan|N,V (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N fan speed to V%
+                              stating the results of setting GPU N fan speed
+                              to V%
 
  gpuvddc|N,V (*)
                none           There is no reply section just the STATUS section
@@ -226,23 +237,25 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  save|filename (*)
                none           There is no reply section just the STATUS section
-                              stating success or failure saving the cgminer config
-                              to filename
+                              stating success or failure saving the cgminer
+                              config to filename
                               The filename is optional and will use the cgminer
                               default if not specified
 
  quit (*)      none           There is no status section but just a single "BYE"
                               reply before cgminer quits
 
- notify        NOTIFY         The last status and history count of each devices problem
-                              This lists all devices including those not supported
-                              by the 'devs' command
-                              e.g. NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
+ notify        NOTIFY         The last status and history count of each devices
+                              problem
+                              This lists all devices including those not
+                              supported by the 'devs' command e.g.
+                              NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
 
  privileged (*)
                none           There is no reply section just the STATUS section
-                              stating an error if you do not have privileged access
-                              to the API and success if you do have privilege
+                              stating an error if you do not have privileged
+                              access to the API and success if you do have
+                              privilege
                               The command doesn't change anything in cgminer
 
  pgaenable|N (*)
@@ -260,25 +273,28 @@ The list of requests - a (*) means it requires privileged access - and replies a
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
                               This is only available if PGA mining is enabled
-                              and currently only BFL singles support this command
+                              and currently only BFL singles support this
+                              command
                               On a BFL single it will flash the led on the front
                               of the device for appoximately 4s
-                              All other non BFL PGA devices will return a warning
-                              status message stating that they dont support it
-                              This adds a 4s delay to the BFL share being processed
-                              so you may get a message stating that procssing took
-                              longer than 7000ms if the request was sent towards
-                              the end of the timing of any work being worked on
+                              All other non BFL PGA devices will return a
+                              warning status message stating that they dont
+                              support it
+                              This adds a 4s delay to the BFL share being
+                              processed so you may get a message stating that
+                              procssing took longer than 7000ms if the request
+                              was sent towards the end of the timing of any work
+                              being worked on
                               e.g.: BFL0: took 8438ms - longer than 7000ms
                               You should ignore this
 
  devdetails    DEVDETAILS     Each device with a list of their static details
-                              This lists all devices including those not supported
-                              by the 'devs' command
+                              This lists all devices including those not
+                              supported by the 'devs' command
                               e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
 
- restart (*)   none           There is no status section but just a single "RESTART"
-                              reply before cgminer restarts
+ restart (*)   none           There is no status section but just a single
+                              "RESTART" reply before cgminer restarts
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
@@ -303,12 +319,13 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  debug|setting (*)
                DEBUG          Debug settings
-                              The optional commands for 'setting' are the same as
-                              the screen curses debug settings
+                              The optional commands for 'setting' are the same
+                              as the screen curses debug settings
                               You can only specify one setting
-                              Only the first character is checked (case insensitive):
-                              Silent, Quiet, Verbose, Debug, RPCProto, PerDevice,
-                              WorkTime, Normal
+                              Only the first character is checked - case
+                              insensitive:
+                              Silent, Quiet, Verbose, Debug, RPCProto,
+                              PerDevice, WorkTime, Normal
                               The output fields are (as above):
                               Silent=true/false,
                               Quiet=true/false,
@@ -330,34 +347,39 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  pgaset|N,opt[,val] (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting PGA N with opt[,val]
+                              stating the results of setting PGA N with
+                              opt[,val]
                               This is only available if PGA mining is enabled
 
-                              If the PGA does not support any set options, it will
-                              always return a WARN stating pgaset isn't supported
+                              If the PGA does not support any set options, it
+                              will always return a WARN stating pgaset isn't
+                              supported
 
                               If opt=help it will return an INFO status with a
                               help message about the options available
 
                               The current options are:
-                               MMQ opt=clock val=160 to 230 (and a multiple of 2)
+                               MMQ opt=clock val=160 to 230 (a multiple of 2)
 
  zero|Which,true/false (*)
                none           There is no reply section just the STATUS section
-                              stating that the zero, and optional summary, was done
-                              If Which='all', all normal cgminer and API statistics
-                              will be zeroed other than the numbers displayed by the
-                              usbstats and stats commands
+                              stating that the zero, and optional summary, was
+                              done
+                              If Which='all', all normal cgminer and API
+                              statistics will be zeroed other than the numbers
+                              displayed by the usbstats and stats commands
                               If Which='bestshare', only the 'Best Share' values
-                              are zeroed for each pool and the global 'Best Share'
-                              The true/false option determines if a full summary is
-                              shown on the cgminer display like is normally displayed
-                              on exit.
+                              are zeroed for each pool and the global
+                              'Best Share'
+                              The true/false option determines if a full summary
+                              is shown on the cgminer display like is normally
+                              displayed on exit.
 
  hotplug|N (*) none           There is no reply section just the STATUS section
                               stating that the hotplug setting succeeded
-                              If the code is not compiled with hotplug in it, the
-                              the warning reply will be 'Hotplug is not available'
+                              If the code is not compiled with hotplug in it,
+                              the the warning reply will be
+                               'Hotplug is not available'
                               If N=0 then hotplug will be disabled
                               If N>0 && <=9999, then hotplug will check for new
                               devices every N seconds
@@ -395,24 +417,27 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  ascset|N,opt[,val] (*)
                none           There is no reply section just the STATUS section
-                              stating the results of setting ASC N with opt[,val]
+                              stating the results of setting ASC N with
+                              opt[,val]
                               This is only available if ASC mining is enabled
 
-                              If the ASC does not support any set options, it will
-                              always return a WARN stating ascset isn't supported
+                              If the ASC does not support any set options, it
+                              will always return a WARN stating ascset isn't
+                              supported
 
                               If opt=help it will return an INFO status with a
                               help message about the options available
 
                               The current options are:
                                AVA+BTB opt=freq val=256 to 450 - chip frequency
-                               BTB opt=millivolts val=1000 to 1310 - core voltage
+                               BTB opt=millivolts val=1000 to 1310 - corevoltage
 
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window
 
 The 'poolpriority' command can be used to reset the priority order of multiple
-pools with a single command - 'switchpool' only sets a single pool to first priority
+pools with a single command - 'switchpool' only sets a single pool to first
+priority
 Each pool should be listed by id number in order of preference (first = most
 preferred)
 Any pools not listed will be prioritised after the ones that are listed, in the
@@ -460,6 +485,12 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.29 (cgminer v3.4.1)
+
+Muticast identification added to the API
+
+----------
 
 API V1.28 (cgminer v3.3.4)
 
@@ -574,8 +605,9 @@ Modified API commands:
  'pga|N' - add 'Diff1 Work', 'Difficulty Accepted',
               'Difficulty Rejected', 'Last Share Difficulty'
  'notify' - add '*Dev Throttle' (for BFL Singles)
- 'pools' - add 'Proxy Type', 'Proxy', 'Difficulty Accepted', 'Difficulty Rejected',
-               'Difficulty Stale', 'Last Share Difficulty'
+ 'pools' - add 'Proxy Type', 'Proxy', 'Difficulty Accepted',
+               'Difficulty Rejected', 'Difficulty Stale',
+               'Last Share Difficulty'
  'config' - add 'Queue', 'Expiry'
  'stats' - add 'Work Diff', 'Min Diff', 'Max Diff', 'Min Diff Count',
                'Max Diff Count' to the pool stats
@@ -906,6 +938,22 @@ to
 See --api-network or --api-allow for more access details
 and how to give write access
 
+You can however, also tell miner.php to find your cgminer rigs automatically
+on the local subnet
+
+Add the following to each cgminer:
+
+ --api-mcast
+
+or in your cgminer.conf
+
+ "api-mcast" : true,
+
+And in miner.php set $mcast = true;
+
+This will ignore the value of $rigs and overwrite it with the list of zero or
+more rigs found on the network in the timout specified
+
 ---------
 
 Once you have a web server with PHP running
@@ -991,7 +1039,8 @@ the last one
 
 So an example for 3 rigs would be:
 
- $rigs = array('192.168.0.100:4028:A', '192.168.0.102:4028:B', '192.168.0.110:4028:C');
+ $rigs = array('192.168.0.100:4028:A', '192.168.0.102:4028:B',
+               '192.168.0.110:4028:C');
 
 Of course each of the rigs listed would also have to have the API
 running and be set to allow the web server to access the API - as
@@ -1137,6 +1186,54 @@ If you have more than one rig it will show a summary of all the rigs
  the button contents will be 'Name' rather than rig number, if you
  specify 'Name'
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
+
+---------
+
+Default:
+ $mcast = false;
+
+Set $mcast to true to look for your rigs and ignore $rigs
+
+---------
+
+Default:
+ $mcastaddr = '224.0.0.75';
+
+API Multicast address all cgminers are listening on
+
+---------
+
+Default:
+ $mcastport = 4028;
+
+API Multicast UDP port all cgminers are listening on
+
+---------
+
+Default:
+ $mcastcode = 'FTW';
+
+The code all cgminers expect in the Multicast message sent
+The message sent is "cgm-code-listport"
+Don't use the '-' character if you change it
+
+---------
+
+Default:
+ $mcastlistport = 4027;
+
+UDP port number that is added to the broadcast message sent
+that specifies to the cgminers the port to reply on
+
+---------
+
+Default:
+ $mcasttimeout = 1.5;
+
+Set $mcasttimeout to the number of seconds (floating point)
+to wait for replies to the Multicast message
+N.B. the accuracy of the timing used to wait for the replies is
+~0.1s so there's no point making it more than one decimal place
 
 ---------
 
@@ -1318,11 +1415,14 @@ Looking at the Mobile example:
 			'DEVS.Temperature=Temp', 'DEVS.MHS av=MHS av',
 			'DEVS.Accepted=Accept', 'DEVS.Rejected=Rej',
 			'DEVS.Utility=Utility', 'NOTIFY.Last Not Well=Not Well'),
-  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej', 'Last Share Time'));
+  'POOL' => array('POOL', 'Status', 'Accepted', 'Rejected=Rej',
+                  'Last Share Time'));
 
  $mobilesum = array(
-  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected', 'Utility'),
-  'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected', 'DEVS.Utility'),
+  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted', 'Rejected',
+                     'Utility'),
+  'DEVS+NOTIFY' => array('DEVS.MHS av', 'DEVS.Accepted', 'DEVS.Rejected',
+                         'DEVS.Utility'),
   'POOL' => array('Accepted', 'Rejected'));
 
  $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
@@ -1409,8 +1509,10 @@ $poolsext = array(
                          'POOL.Stratum Active', 'POOL.Has GBT'),
         'calc' => array('POOL.Difficulty Accepted' => 'sum',
                         'POOL.Difficulty Rejected' => 'sum',
-                        'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
-                        'STATS.Times Recv' => 'sum', 'STATS.Bytes Recv' => 'sum'),
+                        'STATS.Times Sent' => 'sum',
+                        'STATS.Bytes Sent' => 'sum',
+                        'STATS.Times Recv' => 'sum',
+                        'STATS.Bytes Recv' => 'sum'),
         'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -1460,5 +1562,5 @@ The first 4 are as expected - the numerical sum, average, minimum or maximum
 'count' is the number of rows in the section specified in the calc e.g.
  ('DEVS.Name' => 'count') would be the number of DEVS selected in the 'where'
  of course any valid 'DEVS.Xyz' would give the same 'count' value
-'any' is effectively random: the field value in the first row of the grouped data
+'any' is effectively random: the field value in the 1st row of the grouped data
 An unrecognised 'function' uses 'any'
