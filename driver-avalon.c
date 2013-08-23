@@ -1370,7 +1370,14 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	int lowfan = 10000;
 
 	if (usb_ident(avalon) == IDENT_BTB) {
-		tailsprintf(buf, bufsiz, "%2d/%3dC %4dmV | ", info->temp0, info->temp2, info->core_voltage);
+		int temp = info->temp0;
+		if (info->temp2 > temp)
+			temp = info->temp2;
+		if (temp > 99)
+			temp = 99;
+		if (temp < 0)
+			temp = 0;
+		tailsprintf(buf, bufsiz, "%2dC %3d %4dmV | ", temp, info->frequency, info->core_voltage);
 	} else {
 		/* Find the lowest fan speed of the ASIC cooling fans. */
 		if (info->fan1 >= 0 && info->fan1 < lowfan)
