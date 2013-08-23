@@ -32,6 +32,10 @@ Using the "--api-allow" option overides the "--api-network" option if they
 are both specified
 With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
+If you start cgminer also with the "--api-mcast" option, it will listen for
+a multicast message and reply to it with a message containing it's API port
+number, but only if the IP address of the sender is allowed API access
+
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
 Valid groups are only the letters A-Z (except R & W are predefined) and are
@@ -460,6 +464,12 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.29 (cgminer v3.4.1)
+
+Muticast identification added to the API
+
+----------
 
 API V1.28 (cgminer v3.3.4)
 
@@ -906,6 +916,22 @@ to
 See --api-network or --api-allow for more access details
 and how to give write access
 
+You can however, also tell miner.php to find your cgminer rigs automatically
+on the local subnet
+
+Add the following to each cgminer:
+
+ --api-mcast
+
+or in your cgminer.conf
+
+ "api-mcast" : true,
+
+And in miner.php set $mcast = true;
+
+This will ignore the value of $rigs and overwrite it with the list of zero or
+more rigs found on the network in the timout specified
+
 ---------
 
 Once you have a web server with PHP running
@@ -1137,6 +1163,54 @@ If you have more than one rig it will show a summary of all the rigs
  the button contents will be 'Name' rather than rig number, if you
  specify 'Name'
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
+
+---------
+
+Default:
+ $mcast = false;
+
+Set $mcast to true to look for your rigs and ignore $rigs
+
+---------
+
+Default:
+ $mcastaddr = '224.0.0.75';
+
+API Multicast address all cgminers are listening on
+
+---------
+
+Default:
+ $mcastport = 4028;
+
+API Multicast UDP port all cgminers are listening on
+
+---------
+
+Default:
+ $mcastcode = 'FTW';
+
+The code all cgminers expect in the Multicast message sent
+The message sent is "cgm-code-listport"
+Don't use the '-' character if you change it
+
+---------
+
+Default:
+ $mcastlistport = 4027;
+
+UDP port number that is added to the broadcast message sent
+that specifies to the cgminers the port to reply on
+
+---------
+
+Default:
+ $mcasttimeout = 1.5;
+
+Set $mcasttimeout to the number of seconds (floating point)
+to wait for replies to the Multicast message
+N.B. the accuracy of the timing used to wait for the replies is
+~0.1s so there's no point making it more than one decimal place
 
 ---------
 
