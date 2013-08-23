@@ -388,7 +388,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               done
                               If Which='all', all normal BFGMiner and API
                               statistics will be zeroed other than the numbers
-                              displayed by the usbstats and stats commands
+                              displayed by the stats command
                               If Which='bestshare', only the 'Best Share' values
                               are zeroed for each pool and the global
                               'Best Share'
