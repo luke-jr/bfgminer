@@ -835,7 +835,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			if (ret == ICA_GETS_OK)
 			{
 				nonce = be32toh(nonce);
-				submit_nonce(thr, &state->last_work, nonce);
+				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
 	}
@@ -860,6 +860,14 @@ no_job_start:
 		state->firstrun = true;
 	
 	state->identify = false;
+}
+
+static
+void icarus_transition_work(struct icarus_state *state, struct work *work)
+{
+	if (state->last_work)
+		free_work(state->last_work);
+	state->last_work = copy_work(work);
 }
 
 static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
@@ -953,7 +961,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
-		if (nonce && !test_nonce(&state->last_work, nonce, false))
+		if (nonce && !test_nonce(state->last_work, nonce, false))
 			dclk_errorCount(&info->dclk, qsec);
 	}
 
@@ -973,7 +981,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	if (was_first_run) {
 		state->firstrun = false;
-		__copy_work(&state->last_work, work);
+		icarus_transition_work(state, work);
 		hash_count = 0;
 		goto out;
 	}
@@ -982,7 +990,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// aborted before becoming idle, get new work
 	if (ret == ICA_GETS_TIMEOUT || ret == ICA_GETS_RESTART) {
-		__copy_work(&state->last_work, work);
+		icarus_transition_work(state, work);
 		// ONLY up to just when it aborted
 		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
 		estimate_hashes = ((double)(elapsed.tv_sec)
@@ -1005,9 +1013,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	curr_hw_errors = icarus->hw_errors;
-	submit_nonce(thr, &state->last_work, nonce);
+	submit_nonce(thr, state->last_work, nonce);
 	was_hw_error = (curr_hw_errors > icarus->hw_errors);
-	__copy_work(&state->last_work, work);
+	icarus_transition_work(state, work);
 
 	// Force a USB close/reopen on any hw error
 	if (was_hw_error)
