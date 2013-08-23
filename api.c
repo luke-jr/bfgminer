@@ -607,22 +607,22 @@ size_t io_flush(struct io_data *io_data, bool complete)
 		if (SOCKETFAIL(n))
 		{
 			if (!sock_blocks())
-				applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
+				applog(LOG_WARNING, "API: send (%lu) failed: %s", (unsigned long)tosend, SOCKERRMSG);
 			break;
 		}
 		if (count <= 1)
 		{
 			if (n == tosend)
-				applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
+				applog(LOG_DEBUG, "API: sent all of %lu first go", (unsigned long)tosend);
 			else
-				applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
+				applog(LOG_DEBUG, "API: sent %ld of %lu first go", (long)n, (unsigned long)tosend);
 		}
 		else
 		{
 			if (n == tosend)
-				applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
+				applog(LOG_DEBUG, "API: sent all of remaining %lu (count=%d)", (unsigned long)tosend, count);
 			else
-				applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
+				applog(LOG_DEBUG, "API: sent %ld of remaining %lu (count=%d)", (long)n, (unsigned long)tosend, count);
 		}
 		sent += n;
 		tosend -= n;
