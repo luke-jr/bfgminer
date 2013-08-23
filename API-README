@@ -348,15 +348,17 @@ The list of requests - a (*) means it requires privileged access - and replies a
 
  zero|Which,true/false (*)
                none           There is no reply section just the STATUS section
-                              stating that the zero, and optional summary, was done
-                              If Which='all', all normal cgminer and API statistics
-                              will be zeroed other than the numbers displayed by the
-                              usbstats and stats commands
+                              stating that the zero, and optional summary, was
+                              done
+                              If Which='all', all normal BFGMiner and API
+                              statistics will be zeroed other than the numbers
+                              displayed by the usbstats and stats commands
                               If Which='bestshare', only the 'Best Share' values
-                              are zeroed for each pool and the global 'Best Share'
-                              The true/false option determines if a full summary is
-                              shown on the cgminer display like is normally displayed
-                              on exit.
+                              are zeroed for each pool and the global
+                              'Best Share'
+                              The true/false option determines if a full summary
+                              is shown on the BFGMiner display like is normally
+                              displayed on exit.
 
 When you enable, disable or restart a GPU or PGA, you will also get Thread
 messages in the BFGMiner status window.
