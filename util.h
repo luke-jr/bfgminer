@@ -98,7 +98,7 @@ bool isCspace(int c)
 	}
 }
 
-typedef struct timespec cgtimer_t;
+typedef struct timeval cgtimer_t;
 
 struct thr_info;
 struct pool;
@@ -132,12 +132,18 @@ void ms_to_timespec(struct timespec *spec, int64_t ms);
 void timeraddspec(struct timespec *a, const struct timespec *b);
 void cgsleep_ms(int ms);
 void cgsleep_us(int64_t us);
-void cgtimer_time(cgtimer_t *ts_start);
+#define cgtimer_time(ts_start) timer_set_now(ts_start)
 #define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
-void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
-int cgtimer_to_ms(cgtimer_t *cgt);
-void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res);
+void (*cgsleep_us_r)(cgtimer_t *ts_start, int64_t us);
+
+static inline
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return (cgt->tv_sec * 1000) + (cgt->tv_usec / 1000);
+}
+
+#define cgtimer_sub(a, b, res)  timersub(a, b, res)
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);
