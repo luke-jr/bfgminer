@@ -518,7 +518,7 @@ else
 				AC_MSG_CHECKING([for curses header subdirectory])
 				barelib="${barelib/6/}"
 				barelib="${barelib/5/}"
-				cursesincl=`echo "#include <${barelib}/curses.h>" | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^.*:[[:space:]]\+\([^[:space:]]\+\)\/.*/\1/'`
+				cursesincl=`echo "#include <${barelib}/curses.h>" | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^[^:]*:[[:space:]]*\([^[:space:]]*\)\/.*/\1/'`
 				if test "x$cursesincl" != "x"; then
 					NCURSES_CPPFLAGS="-I${cursesincl}"
 					AC_MSG_RESULT([$cursesincl])
