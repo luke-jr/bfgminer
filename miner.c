@@ -87,7 +87,6 @@
 
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
-#	define USE_FPGA_SERIAL
 #endif
 
 struct strategies strategies[] = {
@@ -685,7 +684,6 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
-#ifdef USE_FPGA_SERIAL
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
 #endif
@@ -801,7 +799,6 @@ static char *add_serial(const char *arg)
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }
-#endif
 
 bool get_intrange(const char *arg, int *val1, int *val2)
 {
@@ -1665,11 +1662,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
-#ifdef USE_FPGA_SERIAL
 	OPT_WITH_ARG("--scan-serial|-S",
 		     add_serial, NULL, NULL,
 		     "Serial port to probe for mining devices"),
-#endif
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
