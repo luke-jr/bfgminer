@@ -2604,6 +2604,10 @@ static char *prepare_rpc_req(struct work *work, enum pool_protocol proto, const 
 			if (!caps)
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
+#if BLKMAKER_VERSION > 1
+			if (opt_coinbase_script.sz)
+				caps |= GBT_CBVALUE;
+#endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
 			if (!req)
 				goto gbtfail;
