@@ -4311,7 +4311,6 @@ static void mcast()
 	char *expect_code;
 	size_t expect_code_len;
 	char buf[1024];
-	char reply[] = "cgm-" API_MCAST_CODE "-"; // constant
 	char replybuf[1024];
 
 	memset(&grp, 0, sizeof(grp));
