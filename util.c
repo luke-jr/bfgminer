@@ -891,9 +891,40 @@ void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
 	}
 }
 
+/* Subtract b from a */
+static void __maybe_unused timersubspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec -= b->tv_sec;
+	a->tv_nsec -= b->tv_nsec;
+	if (a->tv_nsec < 0) {
+		a->tv_nsec += 1000000000;
+		a->tv_sec--;
+	}
+}
+
+static void __maybe_unused cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
+{
+	struct timespec now;
+
+	timeraddspec(ts_diff, ts_start);
+	cgtimer_time(&now);
+	timersubspec(ts_diff, &now);
+	if (unlikely(ts_diff->tv_sec < 0))
+		return;
+	nanosleep(ts_diff, NULL);
+}
+
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifndef WIN32
+/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
+ * with tz set to NULL, and windows' default resolution is only 15ms, this
+ * gives us higher resolution times on windows. */
+void cgtime(struct timeval *tv)
+{
+	gettimeofday(tv, NULL);
+}
+
 void cgtimer_time(cgtimer_t *ts_start)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts_start);
@@ -933,14 +964,6 @@ int cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timespec_to_ms(cgt);
 }
-
-/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
- * with tz set to NULL, and windows' default resolution is only 15ms, this
- * gives us higher resolution times on windows. */
-void cgtime(struct timeval *tv)
-{
-	gettimeofday(tv, NULL);
-}
 #else
 /* Windows start time is since 1601 lol so convert it to unix epoch 1970. */
 #define EPOCHFILETIME (116444736000000000LL)
@@ -976,29 +999,6 @@ void cgtimer_time(cgtimer_t *ts_start)
 	decius_time(&lidiv);
 	ts_start->tv_sec = lidiv.quot;
 	ts_start->tv_nsec = lidiv.quot * 100;
-}
-
-/* Subtract b from a */
-static void timersubspec(struct timespec *a, const struct timespec *b)
-{
-	a->tv_sec -= b->tv_sec;
-	a->tv_nsec -= b->tv_nsec;
-	if (a->tv_nsec < 0) {
-		a->tv_nsec += 1000000000;
-		a->tv_sec--;
-	}
-}
-
-static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
-{
-	struct timespec now;
-
-	timeraddspec(ts_diff, ts_start);
-	cgtimer_time(&now);
-	timersubspec(ts_diff, &now);
-	if (unlikely(ts_diff->tv_sec < 0))
-		return;
-	nanosleep(ts_diff, NULL);
 }
 
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
