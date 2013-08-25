@@ -1016,6 +1016,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			if (!icarus_reopen(icarus, state, &fd))
 				state->firstrun = true;
 			else
+			if (unlikely(state->identify))
+			{
+				// Delay job start until later...
+			}
+			else
 			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
 			if (!icarus_job_start(thr))
 				state->firstrun = true;
