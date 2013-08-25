@@ -854,10 +854,13 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	}
 	
 	// 4. Start next job
-	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
-	if (!icarus_job_start(thr))
+	if (!state->firstrun)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+		if (!icarus_job_start(thr))
 no_job_start:
-		state->firstrun = true;
+			state->firstrun = true;
+	}
 	
 	state->identify = false;
 }
@@ -1014,6 +1017,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		if (info->quirk_reopen != 2) {
 			if (!icarus_reopen(icarus, state, &fd))
 				state->firstrun = true;
+			else
+			if (unlikely(state->identify))
+			{
+				// Delay job start until later...
+			}
 			else
 			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
 			if (!icarus_job_start(thr))
