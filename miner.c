@@ -2514,7 +2514,9 @@ void pick_unit(float hashrate, unsigned char *unit)
 	unsigned char i;
 	for (i = 0; i < *unit; ++i)
 		hashrate /= 1e3;
-	while (hashrate >= 1000)
+	
+	// 1000 but with tolerance for floating-point rounding, avoid showing "1000.0"
+	while (hashrate >= 999.95)
 	{
 		hashrate /= 1e3;
 		if (likely(_unitchar[*unit] != '?'))
@@ -2550,7 +2552,8 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	
 	if (floatprec)
 	{
-		if (hashrate >= 100 || unit < 2)
+		// 100 but with tolerance for floating-point rounding, max "99.99" then "100.0"
+		if (hashrate >= 99.995 || unit < 2)
 			prec = 1;
 		else
 			prec = 2;
