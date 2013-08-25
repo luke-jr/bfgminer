@@ -880,6 +880,17 @@ static int timespec_to_ms(struct timespec *ts)
 	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
 }
 
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;
+		res->tv_sec--;
+	}
+}
+
 /* These are cgminer specific sleep functions that use an absolute nanosecond
  * resolution timer to avoid poor usleep accuracy and overruns. */
 #ifndef WIN32
@@ -921,17 +932,6 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 int cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timespec_to_ms(cgt);
-}
-
-/* Subtracts b from a and stores it in res. */
-void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
-{
-	res->tv_sec = a->tv_sec - b->tv_sec;
-	res->tv_nsec = a->tv_nsec - b->tv_nsec;
-	if (res->tv_nsec < 0) {
-		res->tv_nsec += 1000000000;
-		res->tv_sec--;
-	}
 }
 
 /* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
@@ -1020,16 +1020,6 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 int cgtimer_to_ms(cgtimer_t *cgt)
 {
 	return timespec_to_ms(cgt);
-}
-
-void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
-{
-	res->tv_sec = a->tv_sec - b->tv_sec;
-	res->tv_nsec = a->tv_nsec - b->tv_nsec;
-	if (res->tv_nsec < 0) {
-		res->tv_nsec += 1000000000;;
-		res->tv_sec--;
-	}
 }
 #endif
 
