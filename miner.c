@@ -5871,6 +5871,8 @@ void zero_bestshare(void)
 void zero_stats(void)
 {
 	int i;
+	
+	applog(LOG_DEBUG, "Zeroing stats");
 
 	cgtime(&total_tv_start);
 	miner_started = total_tv_start;
