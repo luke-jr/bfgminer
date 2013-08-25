@@ -5818,12 +5818,6 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
-	mutex_lock(&stats_lock);
-	total_diff1 += work->device_diff;
-	thr->cgpu->diff1 += work->device_diff;
-	work->pool->diff1 += work->device_diff;
-	mutex_unlock(&stats_lock);
-
 	/* Do one last check before attempting to submit the work */
 	rebuild_hash(work);
 	flip32(hash2_32, work->hash);
@@ -5839,6 +5833,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	}
 
 	mutex_lock(&stats_lock);
+	total_diff1 += work->device_diff;
+	thr->cgpu->diff1 += work->device_diff;
+	work->pool->diff1 += work->device_diff;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
