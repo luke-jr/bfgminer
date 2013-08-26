@@ -336,6 +336,15 @@ const struct timeval *_bfg_nullisnow(const struct timeval *tvp, struct timeval *
 }
 
 static inline
+long timer_elapsed_us(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(_tvp_now, tvp_timer, &tv);
+	return ((long)tv.tv_sec * 1000000) + tv.tv_usec;
+}
+
+static inline
 int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
 {
 	struct timeval tv;

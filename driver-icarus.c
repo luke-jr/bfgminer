@@ -898,7 +898,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
 	int i;
-	bool was_hw_error;
+	bool was_hw_error = false;
 	bool was_first_run;
 
 	struct ICARUS_HISTORY *history0, *history;
@@ -929,9 +929,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 		else
 		{
+			read_count = info->read_count;
 keepwaiting:
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
-			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, info->read_count);
+			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, read_count);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -973,16 +974,27 @@ keepwaiting:
 	if (ret == ICA_GETS_OK)
 	{
 		nonce_work = icarus_process_worknonce(state, &nonce);
-		if (nonce_work == state->last2_work)
+		if (likely(nonce_work))
 		{
-			// nonce was for the last job; submit and keep processing the current one
-			submit_nonce(thr, nonce_work, nonce);
-			goto keepwaiting;
+			if (nonce_work == state->last2_work)
+			{
+				// nonce was for the last job; submit and keep processing the current one
+				submit_nonce(thr, nonce_work, nonce);
+				goto keepwaiting;
+			}
+			if (info->continue_search)
+			{
+				read_count = info->read_count - ((timer_elapsed_us(&state->tv_workstart, NULL) / (1000000 / TIME_FACTOR)) + 1);
+				if (read_count)
+				{
+					submit_nonce(thr, nonce_work, nonce);
+					goto keepwaiting;
+				}
+			}
 		}
-		was_hw_error = (!nonce_work);
+		else
+			was_hw_error = true;
 	}
-	else
-		was_hw_error = false;
 	
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too

@@ -83,6 +83,7 @@ struct ICARUS_INFO {
 	uint32_t nonce_mask;
 	bool quirk_reopen;
 	uint8_t user_set;
+	bool continue_search;
 
 	dclk_change_clock_func_t dclk_change_clock_func;
 	struct dclk_data dclk;
