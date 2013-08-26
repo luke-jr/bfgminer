@@ -29,6 +29,7 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 		.baud = ERUPTER_IO_SPEED,
 		.Hs = ERUPTER_HASH_TIME,
 		.timing_mode = MODE_DEFAULT,
+		.continue_search = true,
 	};
 
 	if (!icarus_detect_custom(devpath, drv, info)) {
