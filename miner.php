@@ -343,7 +343,8 @@ $error = null;
 #
 function getrigs()
 {
- global $rigs, $mcastaddr, $mcastport, $mcastcode, $mcasttimeout, $error;
+ global $rigs, $mcastaddr, $mcastport, $mcastcode;
+ global $mcastlistport, $mcasttimeout, $error;
 
  $listname = "0.0.0.0";
 
