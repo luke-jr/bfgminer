@@ -979,7 +979,10 @@ keepwaiting:
 			submit_nonce(thr, nonce_work, nonce);
 			goto keepwaiting;
 		}
+		was_hw_error = (!nonce_work);
 	}
+	else
+		was_hw_error = false;
 	
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
@@ -987,8 +990,14 @@ keepwaiting:
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
-		if (ret == ICA_GETS_OK && !nonce_work)
+		if (was_hw_error)
 			dclk_errorCount(&info->dclk, qsec);
+	}
+	
+	// Force a USB close/reopen on any hw error
+	if (was_hw_error && info->quirk_reopen != 2) {
+		if (!icarus_reopen(icarus, state, &fd))
+			state->firstrun = true;
 	}
 
 	if (unlikely(state->identify))
@@ -1040,22 +1049,11 @@ keepwaiting:
 
 	// Only ICA_GETS_OK gets here
 	
-	was_hw_error = (!nonce_work);
 	if (likely(!was_hw_error))
 		submit_nonce(thr, nonce_work, nonce);
 	else
 		inc_hw_errors(thr, state->last_work, nonce);
 	icarus_transition_work(state, work);
-
-	// Force a USB close/reopen on any hw error
-	if (was_hw_error)
-		if (info->quirk_reopen != 2) {
-			if (!icarus_reopen(icarus, state, &fd))
-				state->firstrun = true;
-			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
-			if (!icarus_job_start(thr))
-				state->firstrun = true;
-		}
 
 	hash_count = (nonce & info->nonce_mask);
 	hash_count++;
