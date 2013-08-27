@@ -227,13 +227,11 @@ unsigned decnonce(unsigned in)
 int rehash(unsigned char *midstate, unsigned m7,
 			unsigned ntime, unsigned nbits, unsigned nnonce) {
 	unsigned char in[16];
-	unsigned char hash1[32];
 	unsigned int *in32 = (unsigned int *)in;
-	unsigned char hex[65];
+	char hex[65];
 	unsigned int *mid32 = (unsigned int *)midstate;
 	unsigned out32[8];
 	unsigned char *out = (unsigned char *) out32;
-	int i;
 	sha256_ctx ctx;
 
 	memset( &ctx, 0, sizeof( sha256_ctx ) );
@@ -252,7 +250,6 @@ int rehash(unsigned char *midstate, unsigned m7,
 	sha256(out, 32, out);
 
 	if (out32[7] == 0) {
-		bin2hex(hex, midstate, 32);
 		bin2hex(hex, out, 32);
 		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
 		return 1;
@@ -274,12 +271,11 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
 }
 
-int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
+void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 	int chip;
 	static unsigned second_run;
 
 	for (chip = 0; chip < chip_n; chip++) {
-		unsigned char *hexstr;
 		struct bitfury_device *d = bf + chip;
 		unsigned *newbuf = d->newbuf;
 		unsigned *oldbuf = d->oldbuf;

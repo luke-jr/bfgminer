@@ -32,7 +32,6 @@
 struct device_drv bitfury_drv;
 
 // Forward declarations
-static void bitfury_disable(struct thr_info* thr);
 static bool bitfury_prepare(struct thr_info *thr);
 
 static void bitfury_detect(void)
@@ -53,12 +52,6 @@ static void bitfury_detect(void)
 	bitfury_info->threads = 1;
 	bitfury_info->chip_n = chip_n;
 	add_cgpu(bitfury_info);
-}
-
-
-static uint32_t bitfury_checkNonce(struct work *work, uint32_t nonce)
-{
-	applog(LOG_INFO, "INFO: bitfury_checkNonce");
 }
 
 
@@ -86,7 +79,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	for (chip = 0; chip < chip_n; chip++) {
 		if (devices[chip].job_switched) {
 			int i,j;
-			int *res = devices[chip].results;
+			unsigned int *res = devices[chip].results;
 			struct work *owork = devices[chip].owork;
 			i = devices[chip].results_n;
 			for (j = i - 1; j >= 0; j--) {
@@ -119,11 +112,6 @@ static bool bitfury_prepare(struct thr_info *thr)
 static void bitfury_shutdown(struct thr_info *thr)
 {
 	applog(LOG_INFO, "INFO bitfury_shutdown");
-}
-
-static void bitfury_disable(struct thr_info *thr)
-{
-	applog(LOG_INFO, "INFO bitfury_disable");
 }
 
 struct device_drv bitfury_drv = {
