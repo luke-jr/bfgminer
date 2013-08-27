@@ -1250,8 +1250,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		return;
 	}
 
-	work = find_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
-						blockdata, MERKLE_OFFSET, MERKLE_BYTES);
+	work = take_queued_work_bymidstate(bflsc, midstate, MIDSTATE_BYTES,
+					   blockdata, MERKLE_OFFSET, MERKLE_BYTES);
 	if (!work) {
 		if (sc_info->not_first_work) {
 			applog(LOG_INFO, "%s%i:%s failed to find nonce work - can't be processed - ignored",
@@ -1297,7 +1297,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 		sc_info->sc_devs[dev].work_queued -= 1;
 	wr_unlock(&(sc_info->stat_lock));
 
-	work_completed(bflsc, work);
+	free_work(work);
 }
 
 static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *nonces)
