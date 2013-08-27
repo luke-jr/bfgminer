@@ -486,6 +486,10 @@ struct cgpu_info {
 	pthread_mutex_t		device_mutex;
 	pthread_cond_t	device_cond;
 
+#ifdef USE_BITFURY
+	int chip_n;
+#endif
+
 	enum dev_enable deven;
 	int accepted;
 	int rejected;

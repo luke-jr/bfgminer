@@ -31,14 +31,14 @@
 
 #include <time.h>
 
+#define BITFURY_REFRESH_DELAY 100
+#define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
+
 // 0 .... 31 bit
 // 1000 0011 0101 0110 1001 1010 1100 0111
 
 // 1100 0001 0110 1010 0101 1001 1110 0011
 // C16A59E3
-
-unsigned results[16];
-unsigned results_num = 0;
 
 unsigned char enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
 unsigned char disconf[4] = { 0, 0, 0, 0 };
@@ -68,7 +68,7 @@ char outbuf[16];
 /* Thermal runaway in this case could produce nice flames of chippy fries */
 
 // Thermometer code from left to right - more ones ==> faster clock!
-unsigned char osc6[8] = { 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+unsigned char osc6[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00, 0x00 };
 
 /* Test vectors to calculate (using address-translated loads) */
 unsigned atrvec[] = {
@@ -130,18 +130,23 @@ void ms3_compute(unsigned *p)
 	p[15] = a; p[14] = b; p[13] = c; p[12] = d; p[11] = e; p[10] = f; p[9] = g; p[8] = h;
 }
 
-int libbitfury_detectChips(void) {
+int detect_chip(int chip_n) {
 	unsigned w[16];
 	int i;
+	unsigned newbuf[17], oldbuf[17];
+
+	memset(newbuf, 0, 17 * 4);
+	memset(oldbuf, 0, 17 * 4);
 
 	ms3_compute(&atrvec[0]);
 	ms3_compute(&atrvec[20]);
 	ms3_compute(&atrvec[40]);
 	spi_init();
 
-	spi_clear_buf();
 
+	spi_clear_buf();
 	spi_emit_break(); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
+	spi_emit_fasync(chip_n);
 	spi_emit_data(0x6000, (void*)osc6, 8); /* Program internal on-die slow oscillator frequency */
 	config_reg(7,0); config_reg(8,0); config_reg(9,0); config_reg(10,0); config_reg(11,0);
 	config_reg(6,1);
@@ -158,10 +163,38 @@ int libbitfury_detectChips(void) {
 	spi_emit_data(0x1900, (void*)&w[0],8*4); /* Prepare MS and W buffers! */
 
 	spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
-
 	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
 
-	return 1;
+	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
+		spi_clear_buf();
+		spi_emit_break();
+		spi_emit_fasync(chip_n);
+		spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
+		spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+		memcpy(newbuf, spi_getrxbuf() + 4 + chip_n, 17*4);
+		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF) {
+			return 0;
+		}
+		if (i && newbuf[16] != oldbuf[16])
+			return 1;
+		cgsleep_ms(BITFURY_REFRESH_DELAY);
+		memcpy(oldbuf, newbuf, 17 * 4);
+	}
+	return 0;
+}
+
+int libbitfury_detectChips(void) {
+	int n = 0;
+	int detected;
+	do {
+		detected = detect_chip(n);
+		if (detected) {
+			n++;
+		applog(LOG_WARNING, "BITFURY chip #%d detected", n);
+		} else {
+		}
+	} while (detected);
+	return n;
 }
 
 unsigned decnonce(unsigned in)
@@ -204,103 +237,98 @@ int rehash(unsigned char *midstate, unsigned m7,
 	ctx.len = 0;
 
 	nnonce = bswap_32(nnonce);
-	in32[0] = m7;
-	in32[1] = ntime;
-	in32[2] = nbits;
+	in32[0] = bswap_32(m7);
+	in32[1] = bswap_32(ntime);
+	in32[2] = bswap_32(nbits);
 	in32[3] = nnonce;
 
 	sha256_update(&ctx, in, 16);
 	sha256_final(&ctx, out);
 	sha256(out, 32, out);
+
 	if (out32[7] == 0) {
 		bin2hex(hex, midstate, 32);
 		bin2hex(hex, out, 32);
-		applog(LOG_INFO, "!!!!!!!!!!!! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
+		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
 		return 1;
 	}
 	return 0;
 }
 
-int libbitfury_sendHashData(unsigned char *midstate, unsigned m7,
-						 unsigned ntime, unsigned nbits,
-						 unsigned nnonce) {
-	int i;
+void work_to_payload(struct bitfury_payload *p, struct work *w) {
+	unsigned char flipped_data[80];
 
-	/* Communication routine with the chip! */
-	static unsigned oldbuf[17], newbuf[17];
-	unsigned char hash[32];
-	unsigned char mids[32];
-	unsigned int *mids32 = (unsigned int *) mids;
-	unsigned int *mid32 = (unsigned int *) midstate;
-	static unsigned char om[32]; // old midstate
-	static unsigned int *omid32 = (unsigned int *)om;
-	static unsigned om7;
-	static unsigned ontime;
-	static unsigned onbits;
-	int job;
+	memset(p, 0, sizeof(struct bitfury_payload));
+	swap32yes(flipped_data, w->data, 80 / 4);
 
-/*	mids32[0] = 0xf4f07c9f;
-	mids32[1] = 0x7ecd6e06;
-	mids32[2] = 0xfeef14a1;
-	mids32[3] = 0x84e244d6;
-	mids32[4] = 0x6f1dcc58;
-	mids32[5] = 0x0a97b253;
-	mids32[6] = 0x20d3de1f;
-	mids32[7] = 0xc907cd69;
-	hashMerkleRoot7 = bswap_32(0xaec2a48e);
-	ntime = bswap_32(0x2da02c4f);
-	nbits = bswap_32(0x3fd40c1a);
-	nnonce = bswap_32(0x50591118);
-	nnonce = 0;
-	memcpy(midstate, mids, 32); */
+	memcpy(p->midstate, w->midstate, 32);
+	p->m7 = bswap_32(*(unsigned *)(flipped_data + 64));
+	p->ntime = bswap_32(*(unsigned *)(flipped_data + 68));
+	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
+	applog(LOG_INFO, "INFO nonc: %08x bitfury_scanHash MS0: %08x, ", p->nnonce, ((unsigned int *)w->midstate)[0]);
+	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
+}
 
-	/* Programming next value */
-	for (i = 0; i < 8; i++) { atrvec[8+i] = 0; atrvec[i] = mid32[i]; }
-	atrvec[16] = bswap_32(m7);
-	atrvec[17] = bswap_32(ntime);
-	atrvec[18] = bswap_32(nbits); atrvec[19] = 0; //Nonce
-	ms3_compute(&atrvec[0]);
+int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
+	int chip;
+	static unsigned second_run;
 
-	results_num = 0;
-	while(newbuf[16] == oldbuf[16]) {
+	for (chip = 0; chip < chip_n; chip++) {
+		unsigned char *hexstr;
+		struct bitfury_device *d = bf + chip;
+		unsigned *newbuf = d->newbuf;
+		unsigned *oldbuf = d->oldbuf;
+		struct bitfury_payload *p = &(d->payload);
+		struct bitfury_payload *op = &(d->opayload);
+
+
+		/* Programming next value */
+		memcpy(atrvec, p, 20*4);
+		ms3_compute(atrvec);
+
 		spi_clear_buf(); spi_emit_break();
+		spi_emit_fasync(chip);
 		spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
 		spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
 
-		memcpy(newbuf, spi_getrxbuf()+4, 17*4);
+		memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
 
-		cgsleep_ms(100);
-	}
+		d->job_switched = newbuf[16] != oldbuf[16];
 
-	for (i = 0; i < 16; i++) {
-		if (oldbuf[i] != newbuf[i]) {
-			unsigned pn; //possible nonce
-			unsigned int s = 0; //TODO zero may be solution
-			pn = decnonce(newbuf[i]);
-			s |= rehash(om, om7, ontime, onbits, pn) ? pn : 0;
-			s |= rehash(om, om7, ontime, onbits, pn-0x400000) ? pn - 0x400000 : 0;
-			s |= rehash(om, om7, ontime, onbits, pn-0x800000) ? pn - 0x800000 : 0;
-			s |= rehash(om, om7, ontime, onbits, pn+0x2800000)? pn + 0x2800000 : 0;
-			s |= rehash(om, om7, ontime, onbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
-			s |= rehash(om, om7, ontime, onbits, pn+0x400000) ? pn + 0x400000 : 0;
-			if (s) {
-				results[results_num++] = bswap_32(s);
+		if (second_run && d->job_switched) {
+			int i;
+			int results_num = 0;
+			unsigned * results = d->results;
+			for (i = 0; i < 16; i++) {
+				if (oldbuf[i] != newbuf[i]) {
+					unsigned pn; //possible nonce
+					unsigned int s = 0; //TODO zero may be solution
+					pn = decnonce(newbuf[i]);
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x400000) ? pn - 0x400000 : 0;
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x800000) ? pn - 0x800000 : 0;
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
+					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x400000) ? pn + 0x400000 : 0;
+					if (s) {
+						results[results_num++] = bswap_32(s);
+					}
+				}
 			}
+			d->results_n = results_num;
+
+			memcpy(op, p, sizeof(struct bitfury_payload));
+			memcpy(oldbuf, newbuf, 17 * 4);
 		}
+
+		cgsleep_ms(BITFURY_REFRESH_DELAY);
 	}
+	second_run = 1;
 
-	om7 = m7;
-	ontime = ntime;
-	onbits = nbits;
-	memcpy(om, midstate, 32);
-
-	memcpy(oldbuf, newbuf, sizeof(oldbuf));
-
-	return 0;
+	return;
 }
 
 int libbitfury_readHashData(unsigned int *res) {
-	memcpy(res, results, 16*4);
-	return results_num;
+	return 0;
 }
 

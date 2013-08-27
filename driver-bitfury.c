@@ -33,13 +33,21 @@ static bool bitfury_prepare(struct thr_info *thr);
 
 static void bitfury_detect(void)
 {
+	int chip_n;
 	struct cgpu_info *bitfury_info;
 	applog(LOG_INFO, "INFO: bitfury_detect");
-	libbitfury_detectChips();
+	chip_n = libbitfury_detectChips();
+	if (!chip_n) {
+		applog(LOG_WARNING, "No Bitfury chips detected!");
+		return;
+	} else {
+		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
+	}
 
 	bitfury_info = calloc(1, sizeof(struct cgpu_info));
 	bitfury_info->drv = &bitfury_drv;
 	bitfury_info->threads = 1;
+	bitfury_info->chip_n = chip_n;
 	add_cgpu(bitfury_info);
 }
 
@@ -49,51 +57,49 @@ static uint32_t bitfury_checkNonce(struct work *work, uint32_t nonce)
 	applog(LOG_INFO, "INFO: bitfury_checkNonce");
 }
 
+
 static int64_t bitfury_scanHash(struct thr_info *thr)
 {
-	int i;
-	unsigned char sendbuf[44];
-	unsigned int res[16];
-	unsigned char flipped_data[81];
-	unsigned char work_hex[161];
-	unsigned char *mid_hex;
-	unsigned hashMerkleRoot7;
-	unsigned ntime, nbits, nnonce;
-	static struct work *owork; //old work
-	struct work *work;
-	int j;
+	static struct bitfury_device devices[100];
+	int chip_n;
+	int chip;
+	uint64_t hashes = 0;
 
-	work = get_queued(thr->cgpu);
-	if (work == NULL) {
-		return 0;
-	}
+	chip_n = thr->cgpu->chip_n;
 
-	flipped_data[80]= '\0';
-	swap32yes(flipped_data, work->data, 80 / 4);
-	bin2hex(work_hex, flipped_data, 80);
-
-	hashMerkleRoot7 = *(unsigned *)(flipped_data + 64);
-	ntime = *(unsigned *)(flipped_data + 68);
-	nbits = *(unsigned *)(flipped_data + 72);
-	nnonce = *(unsigned *)(flipped_data + 76);
-	applog(LOG_INFO, "INFO bitfury_scanHash MS0: %08x, ", ((unsigned int *)work->midstate)[0]);
-	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x, nnonce: %08x",
-		  hashMerkleRoot7, ntime, nbits, nnonce);
-
-	libbitfury_sendHashData(work->midstate, hashMerkleRoot7, ntime, nbits, nnonce);
-
-	i = libbitfury_readHashData(res);
-	for (j = i - 1; j >= 0; j--) {
-		if (owork) {
-			submit_nonce(thr, owork, bswap_32(res[j]));
+	for (chip = 0; chip < chip_n; chip++) {
+		if(!devices[chip].work) {
+			devices[chip].work = get_queued(thr->cgpu);
+			if (devices[chip].work == NULL) {
+				return 0;
+			}
+			work_to_payload(&(devices[chip].payload), devices[chip].work);
 		}
 	}
 
-	if (owork)
-		work_completed(thr->cgpu, owork);
+	libbitfury_sendHashData(devices, chip_n);
 
-	owork = work;
-	return 0xffffffffull * i;
+	for (chip = 0; chip < chip_n; chip++) {
+		if (devices[chip].job_switched) {
+			int i,j;
+			int *res = devices[chip].results;
+			struct work *owork = devices[chip].owork;
+			i = devices[chip].results_n;
+			for (j = i - 1; j >= 0; j--) {
+				if (owork) {
+					submit_nonce(thr, owork, bswap_32(res[j]));
+				}
+			}
+
+			if (owork)
+				work_completed(thr->cgpu, owork);
+
+			devices[chip].owork = devices[chip].work;
+			devices[chip].work = NULL;
+			hashes += 0xffffffffull * i;
+		}
+	}
+	return hashes;
 }
 
 static bool bitfury_prepare(struct thr_info *thr)

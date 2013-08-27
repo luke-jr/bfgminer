@@ -1,3 +1,7 @@
+/*
+ *  Copyright 2013 www.bitfury.org
+ */
+
 #include "spidevc.h"
 #include <sys/mman.h>
 #include <stdint.h>
@@ -88,7 +92,7 @@ int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz)
 	struct spi_ioc_transfer tr[16];
 
 	memset(&tr,0,sizeof(tr));
-	mode = 0; bits = 8; speed = 2000000;
+	mode = 0; bits = 8; speed = 200000;
 
 	spi_reset();
 	fd = open("/dev/spidev0.0", O_RDWR);
@@ -165,7 +169,13 @@ void spi_emit_buf(const char *str, unsigned sz)
 /* TODO: in production, emit just bit-sequences! Eliminate padding to byte! */
 void spi_emit_break(void) { spi_emit_buf("\x4", 1); }
 void spi_emit_fsync(void) { spi_emit_buf("\x6", 1); }
-void spi_emit_fasync(void) { spi_emit_buf("\x5", 1); }
+
+void spi_emit_fasync(int n) {
+	int i;
+	for (i = 0; i < n; i++) {
+		spi_emit_buf("\x5", 1);
+	}
+}
 
 void spi_emit_data(unsigned addr, const char *buf, unsigned len)
 {
