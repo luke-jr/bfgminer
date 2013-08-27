@@ -112,6 +112,10 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
+#ifdef USE_BITFURY
+  #include "libbitfury.h"
+#endif
+
 #ifdef HAVE_BYTESWAP_H
 #include <byteswap.h>
 #endif
@@ -453,6 +457,9 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
+/*#ifdef USE_BITFURY
+		struct libbitfury_device *device_bitfury;
+#endif */
 		int device_fd;
 #ifdef USE_X6500
 		struct ft232r_device_handle *device_ft232r;

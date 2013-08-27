@@ -210,6 +210,10 @@ if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 endif
 
+if HAS_BITFURY
+bfgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c
+endif
+
 bin_PROGRAMS += bfgminer-rpc
 bfgminer_rpc_SOURCES = api-example.c
 bfgminer_rpc_LDADD = @WS2_LIBS@

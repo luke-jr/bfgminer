@@ -430,6 +430,18 @@ fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
 
+bitfury="no"
+
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for Bitfury (default disabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
+
 if test "x$x6500$ztex" = "xnono"; then
 	libusb=no
 	LIBUSB_LIBS=''
@@ -1068,6 +1080,12 @@ if test "x$cpumining" = xyes; then
 	echo "  ASM.(for CPU mining).: $has_yasm"
 else
 	echo "  CPU Mining...........: Disabled"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  Bitfury.ASICs........: Enabled"
+else
+	echo "  Bitfury.ASICs........: Disabled"
 fi
 
 echo
