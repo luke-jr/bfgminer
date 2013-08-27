@@ -95,10 +95,12 @@ case $target in
     CFLAGS="$CFLAGS -faltivec"
     OPENCL_LIBS=""
     PTHREAD_FLAGS=""
+    RT_LIBS=""
     ;;
   *-*-darwin*)
     OPENCL_LIBS="-framework OpenCL"
     PTHREAD_FLAGS=""
+    RT_LIBS=""
 	;;
 esac
 
