@@ -17,6 +17,7 @@ struct bitfury_payload {
 
 struct bitfury_device {
 	struct spi_port *spi;
+	int chip;
 	unsigned char osc[8];
 	unsigned newbuf[17];
 	unsigned oldbuf[17];
@@ -30,6 +31,7 @@ struct bitfury_device {
 };
 
 int libbitfury_readHashData(unsigned int *res);
+extern void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results);
 void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 

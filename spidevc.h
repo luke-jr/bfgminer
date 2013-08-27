@@ -16,6 +16,10 @@ struct spi_port {
 	
 	char spibuf[SPIMAXSZ], spibuf_rx[SPIMAXSZ];
 	size_t spibufsz;
+	
+	struct cgpu_info *cgpu;
+	const char *repr;
+	int logprio;
 };
 
 extern struct spi_port *sys_spi;

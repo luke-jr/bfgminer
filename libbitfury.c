@@ -270,62 +270,68 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
 }
 
+void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
+{
+	struct spi_port *port = d->spi;
+	const int chip = d->chip;
+	unsigned *newbuf = d->newbuf;
+	unsigned *oldbuf = d->oldbuf;
+	struct bitfury_payload *p = &(d->payload);
+	struct bitfury_payload *op = &(d->opayload);
+	
+	/* Programming next value */
+	memcpy(atrvec, p, 20*4);
+	ms3_compute(atrvec);
+	
+	spi_clear_buf(port);
+	spi_emit_break(port);
+	spi_emit_fasync(port, chip);
+	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+	spi_txrx(port);
+	
+	memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
+	
+	d->job_switched = newbuf[16] != oldbuf[16];
+	
+	if (want_results && d->job_switched) {
+		int i;
+		int results_num = 0;
+		unsigned * results = d->results;
+		for (i = 0; i < 16; i++) {
+			if (oldbuf[i] != newbuf[i]) {
+				unsigned pn; //possible nonce
+				unsigned int s = 0; //TODO zero may be solution
+				pn = decnonce(newbuf[i]);
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x400000) ? pn - 0x400000 : 0;
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x800000) ? pn - 0x800000 : 0;
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
+				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x400000) ? pn + 0x400000 : 0;
+				if (s) {
+					results[results_num++] = bswap_32(s);
+				}
+			}
+		}
+		d->results_n = results_num;
+		
+		memcpy(op, p, sizeof(struct bitfury_payload));
+		memcpy(oldbuf, newbuf, 17 * 4);
+	}
+	
+	cgsleep_ms(BITFURY_REFRESH_DELAY);
+}
+
 void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
-	struct spi_port *port = bf->spi;
 	int chip;
-	static unsigned second_run;
+	static bool second_run = false;
 
 	for (chip = 0; chip < chip_n; chip++) {
 		struct bitfury_device *d = bf + chip;
-		unsigned *newbuf = d->newbuf;
-		unsigned *oldbuf = d->oldbuf;
-		struct bitfury_payload *p = &(d->payload);
-		struct bitfury_payload *op = &(d->opayload);
-
-
-		/* Programming next value */
-		memcpy(atrvec, p, 20*4);
-		ms3_compute(atrvec);
-
-		spi_clear_buf(port);
-		spi_emit_break(port);
-		spi_emit_fasync(port, chip);
-		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
-		spi_txrx(port);
-
-		memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
-
-		d->job_switched = newbuf[16] != oldbuf[16];
-
-		if (second_run && d->job_switched) {
-			int i;
-			int results_num = 0;
-			unsigned * results = d->results;
-			for (i = 0; i < 16; i++) {
-				if (oldbuf[i] != newbuf[i]) {
-					unsigned pn; //possible nonce
-					unsigned int s = 0; //TODO zero may be solution
-					pn = decnonce(newbuf[i]);
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x400000) ? pn - 0x400000 : 0;
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x800000) ? pn - 0x800000 : 0;
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
-					s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x400000) ? pn + 0x400000 : 0;
-					if (s) {
-						results[results_num++] = bswap_32(s);
-					}
-				}
-			}
-			d->results_n = results_num;
-
-			memcpy(op, p, sizeof(struct bitfury_payload));
-			memcpy(oldbuf, newbuf, 17 * 4);
-		}
-
-		cgsleep_ms(BITFURY_REFRESH_DELAY);
+		d->chip = chip;
+		libbitfury_sendHashData1(d, second_run);
 	}
-	second_run = 1;
+	second_run = true;
 
 	return;
 }
