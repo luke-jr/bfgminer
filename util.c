@@ -1017,7 +1017,7 @@ void cgtimer_time(cgtimer_t *ts_start)
 	ts_start->tv_sec = mts.tv_sec;
 	ts_start->tv_nsec = mts.tv_nsec;
 }
-#else /* __MACH__ - Everything not linux/macosx/win32 */
+#elif !defined(WIN32) /* __MACH__ - Everything not linux/macosx/win32 */
 void cgtimer_time(cgtimer_t *ts_start)
 {
 	struct timeval tv;
