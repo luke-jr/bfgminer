@@ -12,6 +12,7 @@
 
 #include "config.h"
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -27,6 +28,8 @@ enum {
 	LOG_DEBUG,
 };
 #endif
+
+#include "util.h"
 
 /* debug flags */
 extern bool opt_debug;
@@ -57,6 +60,16 @@ extern void _applog(int prio, const char *str);
 	applog(prio, __VA_ARGS__);  \
 	return rv;  \
 } while (0)
+
+#define appperror(prio, s)  do {  \
+	const char *_tmp43 = bfg_strerror(errno, BST_ERRNO);  \
+	if (s && s[0])  \
+		applog(prio, "%s: %s", s, _tmp43);  \
+	else  \
+		_applog(prio, _tmp43);  \
+} while (0)
+
+#define perror(s)  appperror(LOG_ERR, s)
 
 extern void _bfg_clean_up(void);
 

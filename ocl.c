@@ -35,6 +35,7 @@
 
 #include "deviceapi.h"
 #include "findnonce.h"
+#include "logging.h"
 #include "ocl.h"
 
 /* Platform API */

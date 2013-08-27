@@ -42,6 +42,8 @@
 #include <linux/i2c-dev.h>
 #include <sys/stat.h>
 
+#include "logging.h"
+
 static volatile unsigned *gpio;
 
 bool spi_init(void)
