@@ -57,10 +57,10 @@ static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 	return BFLSC_DRV2;
 }
 
-static void xlinkstr(char *xlink, int dev, struct bflsc_info *sc_info)
+static void xlinkstr(char *xlink, size_t siz, int dev, struct bflsc_info *sc_info)
 {
 	if (dev > 0)
-		sprintf(xlink, " x-%d", dev);
+		snprintf(xlink, siz, " x-%d", dev);
 	else {
 		if (sc_info->sc_count > 1)
 			strcpy(xlink, " master");
@@ -74,7 +74,7 @@ static void bflsc_applog(struct cgpu_info *bflsc, int dev, enum usb_cmds cmd, in
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char xlink[17];
 
-	xlinkstr(xlink, dev, sc_info);
+	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
 	usb_applog(bflsc, cmd, xlink, amount, err);
 }
@@ -1024,7 +1024,7 @@ static bool bflsc_get_temp(struct cgpu_info *bflsc, int dev)
 		return true;
 	}
 
-	xlinkstr(&(xlink[0]), dev, sc_info);
+	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
 	/* It is not very critical getting temp so don't get stuck if we
 	 * can't grab the mutex here */
@@ -1310,7 +1310,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 
 	*nonces = 0;
 
-	xlinkstr(&(xlink[0]), dev, sc_info);
+	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
 	tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (lines < 1) {
