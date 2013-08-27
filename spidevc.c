@@ -21,6 +21,8 @@
  */
 
 #include "spidevc.h"
+
+#include <stdbool.h>
 #include <sys/mman.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -42,14 +44,23 @@
 
 static volatile unsigned *gpio;
 
-void spi_init(void)
+bool spi_init(void)
 {
 	int fd;
 	fd = open("/dev/mem",O_RDWR|O_SYNC);
-	if (fd < 0) { perror("/dev/mem trouble"); exit(1); }
+	if (fd < 0)
+	{
+		perror("/dev/mem trouble");
+		return false;
+	}
 	gpio = mmap(0,4096,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0x20200000);
-	if (gpio == MAP_FAILED) { perror("gpio mmap trouble"); exit(1); }
+	if (gpio == MAP_FAILED)
+	{
+		perror("gpio mmap trouble");
+		return false;
+	}
 	close(fd);
+	return true;
 }
 
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
