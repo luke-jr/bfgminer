@@ -509,9 +509,10 @@ other software) per payout address, you must also specify data using the
 --coinbase-sig option to ensure each miner is working on unique work. Note
 that this data will be publicly seen if your miner finds a block using any
 GBT-enabled pool, even when not solo mining (such as failover). If your
-bitcoin node does not support longpolling (for example, bitcoind 0.7.x), you
+bitcoin node does not support longpolling (for example, bitcoind 0.8.x), you
 should consider setting up a failover pool to provide you with block
-notifications.
+notifications. Note that solo mining does not use shares, so BFGMiner's utility
+hashrate (third column) will swing widely and read zero until you find a block.
 
 Example solo mining usage:
 
