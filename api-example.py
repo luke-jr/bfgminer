@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Copyright 2013 Christian Berendt
+# Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
