@@ -26,6 +26,7 @@
 #include <sha2.h>
 #include "libbitfury.h"
 #include "util.h"
+#include "spidevc.h"
 
 #define GOLDEN_BACKLOG 5
 
@@ -39,7 +40,10 @@ static void bitfury_detect(void)
 	int chip_n;
 	struct cgpu_info *bitfury_info;
 	applog(LOG_INFO, "INFO: bitfury_detect");
-	chip_n = libbitfury_detectChips();
+	spi_init();
+	if (!sys_spi)
+		return;
+	chip_n = libbitfury_detectChips(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return;
@@ -65,6 +69,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	chip_n = thr->cgpu->chip_n;
 
 	for (chip = 0; chip < chip_n; chip++) {
+		devices[chip].spi = sys_spi;
 		if(!devices[chip].work) {
 			devices[chip].work = get_queued(thr->cgpu);
 			if (devices[chip].work == NULL) {

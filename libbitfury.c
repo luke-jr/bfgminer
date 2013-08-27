@@ -48,10 +48,10 @@ unsigned char enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
 unsigned char disconf[4] = { 0, 0, 0, 0 };
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
-void config_reg(int cfgreg, int ena)
+void config_reg(struct spi_port *port, int cfgreg, int ena)
 {
-	if (ena) spi_emit_data(0x7000+cfgreg*32, (void*)enaconf, 4);
-	else     spi_emit_data(0x7000+cfgreg*32, (void*)disconf, 4);
+	if (ena) spi_emit_data(port, 0x7000+cfgreg*32, (void*)enaconf, 4);
+	else     spi_emit_data(port, 0x7000+cfgreg*32, (void*)disconf, 4);
 }
 
 #define FIRST_BASE 61
@@ -134,7 +134,7 @@ void ms3_compute(unsigned *p)
 	p[15] = a; p[14] = b; p[13] = c; p[12] = d; p[11] = e; p[10] = f; p[9] = g; p[8] = h;
 }
 
-int detect_chip(int chip_n) {
+int detect_chip(struct spi_port *port, int chip_n) {
 	unsigned w[16];
 	int i;
 	unsigned newbuf[17], oldbuf[17];
@@ -145,38 +145,37 @@ int detect_chip(int chip_n) {
 	ms3_compute(&atrvec[0]);
 	ms3_compute(&atrvec[20]);
 	ms3_compute(&atrvec[40]);
-	if (!spi_init())
-		return 0;
 
-
-	spi_clear_buf();
-	spi_emit_break(); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
-	spi_emit_fasync(chip_n);
-	spi_emit_data(0x6000, (void*)osc6, 8); /* Program internal on-die slow oscillator frequency */
-	config_reg(7,0); config_reg(8,0); config_reg(9,0); config_reg(10,0); config_reg(11,0);
-	config_reg(6,1);
-	config_reg(4,1); /* Enable slow oscillator */
-	config_reg(1,0); config_reg(2,0); config_reg(3,0);
-	spi_emit_data(0x0100, (void*)counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
+	spi_clear_buf(port);
+	spi_emit_break(port); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
+	spi_emit_fasync(port, chip_n);
+	spi_emit_data(port, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
+	for (i = 7; i <= 11; ++i)
+		config_reg(port, i, 0);
+	config_reg(port, 6, 1);
+	config_reg(port, 4, 1); /* Enable slow oscillator */
+	for (i = 1; i <= 3; ++i)
+		config_reg(port, i, 0);
+	spi_emit_data(port, 0x0100, counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
 
 	/* Prepare internal buffers */
 	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
 	memset(&w, 0, sizeof(w)); w[3] = 0xffffffff; w[4] = 0x80000000; w[15] = 0x00000280;
-	spi_emit_data(0x1000, (void*)w, 16*4);
-	spi_emit_data(0x1400, (void*)w,  8*4);
+	spi_emit_data(port, 0x1000, w, 16*4);
+	spi_emit_data(port, 0x1400, w,  8*4);
 	memset(w, 0, sizeof(w)); w[0] = 0x80000000; w[7] = 0x100;
-	spi_emit_data(0x1900, (void*)&w[0],8*4); /* Prepare MS and W buffers! */
+	spi_emit_data(port, 0x1900, &w[0],8*4); /* Prepare MS and W buffers! */
 
-	spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
-	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+	spi_txrx(port);
 
 	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
-		spi_clear_buf();
-		spi_emit_break();
-		spi_emit_fasync(chip_n);
-		spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
-		spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
-		memcpy(newbuf, spi_getrxbuf() + 4 + chip_n, 17*4);
+		spi_clear_buf(port);
+		spi_emit_break(port);
+		spi_emit_fasync(port, chip_n);
+		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+		spi_txrx(port);
+		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
 		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF) {
 			return 0;
 		}
@@ -188,11 +187,11 @@ int detect_chip(int chip_n) {
 	return 0;
 }
 
-int libbitfury_detectChips(void) {
+int libbitfury_detectChips(struct spi_port *port) {
 	int n = 0;
 	int detected;
 	do {
-		detected = detect_chip(n);
+		detected = detect_chip(port, n);
 		if (detected) {
 			n++;
 		applog(LOG_WARNING, "BITFURY chip #%d detected", n);
@@ -272,6 +271,7 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 }
 
 void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
+	struct spi_port *port = bf->spi;
 	int chip;
 	static unsigned second_run;
 
@@ -287,12 +287,13 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 		memcpy(atrvec, p, 20*4);
 		ms3_compute(atrvec);
 
-		spi_clear_buf(); spi_emit_break();
-		spi_emit_fasync(chip);
-		spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
-		spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+		spi_clear_buf(port);
+		spi_emit_break(port);
+		spi_emit_fasync(port, chip);
+		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+		spi_txrx(port);
 
-		memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
+		memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 
 		d->job_switched = newbuf[16] != oldbuf[16];
 

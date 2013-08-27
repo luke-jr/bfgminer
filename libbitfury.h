@@ -2,8 +2,9 @@
 #define __LIBBITFURY_H__
 
 #include "miner.h"
+#include "spidevc.h"
 
-extern int libbitfury_detectChips(void);
+extern int libbitfury_detectChips(struct spi_port *);
 
 struct bitfury_payload {
 	unsigned char midstate[32];
@@ -15,6 +16,7 @@ struct bitfury_payload {
 };
 
 struct bitfury_device {
+	struct spi_port *spi;
 	unsigned char osc[8];
 	unsigned newbuf[17];
 	unsigned oldbuf[17];
