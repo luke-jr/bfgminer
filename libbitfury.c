@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -38,33 +39,25 @@
 #define BITFURY_REFRESH_DELAY 100
 #define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
 
-// 0 .... 31 bit
-// 1000 0011 0101 0110 1001 1010 1100 0111
-
-// 1100 0001 0110 1010 0101 1001 1110 0011
-// C16A59E3
-
-unsigned char enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
-unsigned char disconf[4] = { 0, 0, 0, 0 };
-
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
 void config_reg(struct spi_port *port, int cfgreg, int ena)
 {
-	if (ena) spi_emit_data(port, 0x7000+cfgreg*32, (void*)enaconf, 4);
-	else     spi_emit_data(port, 0x7000+cfgreg*32, (void*)disconf, 4);
+	static const uint8_t enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
+	static const uint8_t disconf[4] = { 0, 0, 0, 0 };
+	
+	if (ena) spi_emit_data(port, 0x7000+cfgreg*32, enaconf, 4);
+	else     spi_emit_data(port, 0x7000+cfgreg*32, disconf, 4);
 }
 
 #define FIRST_BASE 61
 #define SECOND_BASE 4
-char counters[16] = { 64, 64,
+const int8_t counters[16] = { 64, 64,
 	SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2, SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1,
 	(FIRST_BASE)%65,  (FIRST_BASE+1)%65,  (FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65, (FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65};
 
 //char counters[16] = { 64, 64,
 //	SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2, SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1,
 //	(FIRST_BASE)%65,  (FIRST_BASE+1)%65,  (FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65, (FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65};
-char *buf = "Hello, World!\x55\xaa";
-char outbuf[16];
 
 /* Oscillator setup variants (maybe more), values inside of chip ANDed to not allow by programming errors work it at higher speeds  */
 /* WARNING! no chip temperature control limits, etc. It may self-fry and make fried chips with great ease :-) So if trying to overclock */
@@ -72,31 +65,7 @@ char outbuf[16];
 /* Thermal runaway in this case could produce nice flames of chippy fries */
 
 // Thermometer code from left to right - more ones ==> faster clock!
-unsigned char osc6[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00, 0x00 };
-
-/* Test vectors to calculate (using address-translated loads) */
-unsigned atrvec[] = {
-0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
-0,0,0,0,0,0,0,0,
-0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-
-0x9c4dfdc0, 0xf055c9e1, 0xe60f079d, 0xeeada6da, 0xd459883d, 0xd8049a9d, 0xd49f9a96, 0x15972fed, /* MIDSTATE */
-0,0,0,0,0,0,0,0,
-0x048b2528, 0x7acb2d4f, 0x0b290c1a, 0xbe00084a, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-
-0x0317b3ea, 0x1d227d06, 0x3cca281e, 0xa6d0b9da, 0x1a359fe2, 0xa7287e27, 0x8b79c296, 0xc4d88274, /* MIDSTATE */
-0,0,0,0,0,0,0,0,
-0x328bcd4f, 0x75462d4f, 0x0b290c1a, 0x002c6dbc, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-
-0xac4e38b6, 0xba0e3b3b, 0x649ad6f8, 0xf72e4c02, 0x93be06fb, 0x366d1126, 0xf4aae554, 0x4ff19c5b, /* MIDSTATE */
-0,0,0,0,0,0,0,0,
-0x72698140, 0x3bd62b4f, 0x3fd40c1a, 0x801e43e9, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-
-0x9dbf91c9, 0x12e5066c, 0xf4184b87, 0x8060bc4d, 0x18f9c115, 0xf589d551, 0x0f7f18ae, 0x885aca59, /* MIDSTATE */
-0,0,0,0,0,0,0,0,
-0x6f3806c3, 0x41f82a4f, 0x3fd40c1a, 0x00334b39, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-
-};
+const uint8_t osc6[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00, 0x00 };
 
 #define rotrFixed(x,y) (((x) >> (y)) | ((x) << (32-(y))))
 #define s0(x) (rotrFixed(x,7)^rotrFixed(x,18)^(x>>3))
@@ -135,6 +104,28 @@ void ms3_compute(unsigned *p)
 }
 
 int detect_chip(struct spi_port *port, int chip_n) {
+	/* Test vectors to calculate (using address-translated loads) */
+	unsigned atrvec[] = {
+		0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+		
+		0x9c4dfdc0, 0xf055c9e1, 0xe60f079d, 0xeeada6da, 0xd459883d, 0xd8049a9d, 0xd49f9a96, 0x15972fed, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x048b2528, 0x7acb2d4f, 0x0b290c1a, 0xbe00084a, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+		
+		0x0317b3ea, 0x1d227d06, 0x3cca281e, 0xa6d0b9da, 0x1a359fe2, 0xa7287e27, 0x8b79c296, 0xc4d88274, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x328bcd4f, 0x75462d4f, 0x0b290c1a, 0x002c6dbc, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+		
+		0xac4e38b6, 0xba0e3b3b, 0x649ad6f8, 0xf72e4c02, 0x93be06fb, 0x366d1126, 0xf4aae554, 0x4ff19c5b, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x72698140, 0x3bd62b4f, 0x3fd40c1a, 0x801e43e9, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+		
+		0x9dbf91c9, 0x12e5066c, 0xf4184b87, 0x8060bc4d, 0x18f9c115, 0xf589d551, 0x0f7f18ae, 0x885aca59, /* MIDSTATE */
+		0,0,0,0,0,0,0,0,
+		0x6f3806c3, 0x41f82a4f, 0x3fd40c1a, 0x00334b39, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+	};
 	unsigned w[16];
 	int i;
 	unsigned newbuf[17], oldbuf[17];
@@ -278,6 +269,7 @@ void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
 	unsigned *oldbuf = d->oldbuf;
 	struct bitfury_payload *p = &(d->payload);
 	struct bitfury_payload *op = &(d->opayload);
+	unsigned atrvec[20];
 	
 	/* Programming next value */
 	memcpy(atrvec, p, 20*4);

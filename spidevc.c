@@ -206,9 +206,9 @@ bool sys_spi_txrx(struct spi_port *port)
 #endif
 
 static
-void spi_emit_buf_reverse(struct spi_port *port, void *p, size_t sz)
+void spi_emit_buf_reverse(struct spi_port *port, const void *p, size_t sz)
 {
-	unsigned char *str = p;
+	const unsigned char *str = p;
 	if (port->spibufsz + sz >= SPIMAXSZ)
 		return;
 	for (size_t i = 0; i < sz; ++i)
@@ -250,7 +250,7 @@ void spi_emit_fasync(struct spi_port *port, int n)
 	}
 }
 
-void spi_emit_data(struct spi_port *port, uint16_t addr, void *buf, size_t len)
+void spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_t len)
 {
 	unsigned char otmp[3];
 	if (len < 4 || len > 128) return; /* This cannot be programmed in single frame! */
