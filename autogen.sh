@@ -4,7 +4,12 @@ rm -rf "${bs_dir}"/autom4te.cache
 rm -f "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
 
 echo 'Running autoreconf -if...'
-autoreconf -if ${AC_FLAGS} "${bs_dir}" || exit 1
+aclocal --force -I m4
+libtoolize --install --copy --force
+autoconf --force
+autoheader --force
+automake --add-missing --copy --force-missing
+
 if test -z "$NOCONFIGURE" ; then
 	echo 'Configuring...'
 	"$bs_dir"/configure "$@"
