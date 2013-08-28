@@ -384,6 +384,7 @@ bool littlefury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unu
 {
 	struct bitfury_device * const bitfury = thr->cgpu->device_data;
 	work_to_payload(&bitfury->payload, thr->next_work);
+	payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 	return true;
 }
 

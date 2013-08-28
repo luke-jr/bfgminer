@@ -261,6 +261,13 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 	applog(LOG_INFO, "INFO merkle[7]: %08x, ntime: %08x, nbits: %08x", p->m7, p->ntime, p->nbits);
 }
 
+void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
+{
+	/* Programming next value */
+	memcpy(atrvec, p, 20*4);
+	ms3_compute(atrvec);
+}
+
 void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
 {
 	struct spi_port *port = d->spi;
@@ -269,16 +276,11 @@ void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
 	unsigned *oldbuf = d->oldbuf;
 	struct bitfury_payload *p = &(d->payload);
 	struct bitfury_payload *op = &(d->opayload);
-	unsigned atrvec[20];
-	
-	/* Programming next value */
-	memcpy(atrvec, p, 20*4);
-	ms3_compute(atrvec);
 	
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip);
-	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+	spi_emit_data(port, 0x3000, &d->atrvec[0], 19*4);
 	spi_txrx(port);
 	
 	memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
@@ -321,6 +323,7 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 	for (chip = 0; chip < chip_n; chip++) {
 		struct bitfury_device *d = bf + chip;
 		d->chip = chip;
+		payload_to_atrvec(d->atrvec, &d->payload);
 		libbitfury_sendHashData1(d, second_run);
 	}
 	second_run = true;
