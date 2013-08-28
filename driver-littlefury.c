@@ -88,6 +88,24 @@ uint16_t crc16(void *p, size_t sz)
 }
 
 static
+ssize_t keep_reading(int fd, void *buf, size_t count)
+{
+	ssize_t r, rv = 0;
+	
+	while (count)
+	{
+		r = read(fd, buf, count);
+		if (unlikely(r <= 0))
+			return rv ?: r;
+		rv += r;
+		count -= r;
+		buf += r;
+	}
+	
+	return rv;
+}
+
+static
 bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const buf, uint8_t * const bufsz, const uint8_t op, const void * const payload, const uint8_t payloadsz)
 {
 	uint16_t crc;
@@ -122,7 +140,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 	}
 	
 	{
-		r = read(fd, pkt, 4);
+		r = keep_reading(fd, pkt, 4);
 		if (4 != r || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
 		{
 			char hex[(r * 2) + 1];
@@ -132,7 +150,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 			return false;
 		}
 		sz = pkt[3] + 2;
-		r = read(fd, &pkt[4], sz);
+		r = keep_reading(fd, &pkt[4], sz);
 		if (sz != r)
 		{
 			char hex[(r * 2) + 1];
