@@ -82,6 +82,9 @@ case $target in
 esac
 
 case $target in
+  *-*-linux-gnu*)
+    have_linux=true
+    ;;
   *-*-mingw*)
     have_win32=true
     PTHREAD_FLAGS=""
@@ -308,7 +311,7 @@ else
 fi
 
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer$ztex != xnono])
-AM_CONDITIONAL([NEED_USBUTILS_C], [test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono])
+AM_CONDITIONAL([WANT_USBUTILS], [test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -316,6 +319,13 @@ AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
 if test "x$avalon$bitforce$modminer$bflsc$icarus" != xnonononono; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
+	LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
+	AC_CONFIG_SUBDIRS([compat/libusb-1.0])
+	if test "x$have_linux" = "xtrue"; then
+		PKG_CHECK_MODULES([UDEV], [libudev], LIBUSB_LIBS+=" -ludev", [AC_MSG_ERROR([Missing required libudev dev])])
+	fi
+else
+	LIBUSB_LIBS=""
 fi
 
 if test x$request_jansson = xtrue
@@ -337,18 +347,6 @@ if test "x$have_cgminer_sdk" = "xtrue"; then
 	PKG_CONFIG_PATH="$CGMINER_SDK/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
 fi
 
-if test "x$avalon$ztex$modminer$bitforce$bflsc$icarus" != xnononononono; then
-  case $target in
-    *-*-freebsd*)
-      LIBUSB_LIBS="-lusb"
-      LIBUSB_CFLAGS=""
-      AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])
-      ;;
-    *)
-      PKG_CHECK_MODULES(LIBUSB, libusb-1.0, [AC_DEFINE(HAVE_LIBUSB, 1, [Define if you have libusb-1.0])], [AC_MSG_ERROR([Could not find usb library - please install libusb-1.0])])
-      ;;
-  esac
-fi
 AC_SUBST(LIBUSB_LIBS)
 AC_SUBST(LIBUSB_CFLAGS)
 
@@ -525,7 +523,7 @@ fi
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
-echo "  CFLAGS...............: $CFLAGS $LIBUSB_CFLAGS"
+echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
 echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS"
 echo
