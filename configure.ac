@@ -525,7 +525,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
 echo "  CFLAGS...............: $CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS"
-echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS"
+echo "  LDADD................: $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $PTHREAD_LIBS $OPENCL_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $LIBUSB_LIBS $RT_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
