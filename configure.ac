@@ -310,14 +310,20 @@ else
 	])
 fi
 
+if test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono; then
+	want_usbutils=true
+else
+	want_usbutils=false
+fi
+
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer$ztex != xnono])
-AM_CONDITIONAL([WANT_USBUTILS], [test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono])
+AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
-if test "x$avalon$bitforce$modminer$bflsc$icarus" != xnonononono; then
+if test "x$want_usbutils" != xfalse; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 	LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
 	AC_CONFIG_SUBDIRS([compat/libusb-1.0])
