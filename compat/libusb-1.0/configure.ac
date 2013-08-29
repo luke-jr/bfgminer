@@ -226,7 +226,4 @@ AC_SUBST(LTLDFLAGS)
 AC_CONFIG_FILES([libusb-1.0.pc])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([libusb/Makefile])
-AC_CONFIG_FILES([examples/Makefile])
-AC_CONFIG_FILES([doc/Makefile])
-AC_CONFIG_FILES([doc/doxygen.cfg])
 AC_OUTPUT
