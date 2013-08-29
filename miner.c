@@ -142,6 +142,7 @@ int opt_expiry = 120;
 int opt_expiry_lp = 3600;
 int opt_bench_algo = -1;
 unsigned long long global_hashrate;
+static bool opt_unittest = false;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
@@ -1785,6 +1786,8 @@ static struct opt_table opt_config_table[] = {
 		     set_worksize, NULL, NULL,
 		     "Override detected optimal worksize - one value or comma separated list"),
 #endif
+	OPT_WITHOUT_ARG("--unittest",
+			opt_set_bool, &opt_unittest, opt_hidden),
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
@@ -2643,6 +2646,62 @@ int percentf3(char * const buf, size_t sz, double p, const double t)
 	return rv;
 }
 #define percentf4(buf, bufsz, p, t)  percentf3(buf, bufsz, p, p + t)
+
+static
+void test_decimal_width()
+{
+	// The pipe character at end of each line should perfectly line up
+	char printbuf[512];
+	char testbuf1[64];
+	char testbuf2[64];
+	char testbuf3[64];
+	char testbuf4[64];
+	double testn;
+	int width;
+	int saved;
+	
+	// Hotspots around 0.1 and 0.01
+	saved = -1;
+	for (testn = 0.09; testn <= 0.11; testn += 0.000001) {
+		percentf3(testbuf1, sizeof(testbuf1), testn,  1.0);
+		percentf3(testbuf2, sizeof(testbuf2), testn, 10.0);
+		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s |", testn, testbuf1, testbuf2);
+		if (unlikely((saved != -1) && (width != saved))) {
+			applog(LOG_ERR, "Test width mismatch in percentf3! %d not %d at %10g", width, saved, testn);
+			applog(LOG_ERR, "%s", printbuf);
+		}
+		saved = width;
+	}
+	
+	// Hotspot around 100 (but test this in several units because format_unit2 also has unit<2 check)
+	saved = -1;
+	for (testn = 99.0; testn <= 101.0; testn += 0.0001) {
+		format_unit2(testbuf1, sizeof(testbuf1), true, "x", H2B_SHORT, testn      , -1);
+		format_unit2(testbuf2, sizeof(testbuf2), true, "x", H2B_SHORT, testn * 1e3, -1);
+		format_unit2(testbuf3, sizeof(testbuf3), true, "x", H2B_SHORT, testn * 1e6, -1);
+		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s |", testn, testbuf1, testbuf2, testbuf3);
+		if (unlikely((saved != -1) && (width != saved))) {
+			applog(LOG_ERR, "Test width mismatch in format_unit2! %d not %d at %10g", width, saved, testn);
+			applog(LOG_ERR, "%s", printbuf);
+		}
+		saved = width;
+	}
+	
+	// Hotspot around unit transition boundary in pick_unit
+	saved = -1;
+	for (testn = 999.0; testn <= 1001.0; testn += 0.0001) {
+		format_unit2(testbuf1, sizeof(testbuf1), true, "x", H2B_SHORT, testn      , -1);
+		format_unit2(testbuf2, sizeof(testbuf2), true, "x", H2B_SHORT, testn * 1e3, -1);
+		format_unit2(testbuf3, sizeof(testbuf3), true, "x", H2B_SHORT, testn * 1e6, -1);
+		format_unit2(testbuf4, sizeof(testbuf4), true, "x", H2B_SHORT, testn * 1e9, -1);
+		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s %s |", testn, testbuf1, testbuf2, testbuf3, testbuf4);
+		if (unlikely((saved != -1) && (width != saved))) {
+			applog(LOG_ERR, "Test width mismatch in pick_unit! %d not %d at %10g", width, saved, testn);
+			applog(LOG_ERR, "%s", printbuf);
+		}
+		saved = width;
+	}
+}
 
 #ifdef HAVE_CURSES
 static void adj_width(int var, int *length);
@@ -9892,7 +9951,10 @@ int main(int argc, char *argv[])
 		successful_connect = true;
 	}
 	
-	test_intrange();
+	if (opt_unittest) {
+		test_intrange();
+		test_decimal_width();
+	}
 
 #ifdef HAVE_CURSES
 	if (opt_realquiet || opt_display_devs)
