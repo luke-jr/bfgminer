@@ -117,7 +117,7 @@ static inline int fsync (int fd)
  #include "ADL_SDK/adl_sdk.h"
 #endif
 
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
   #include <libusb.h>
 #endif
 

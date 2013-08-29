@@ -6862,7 +6862,7 @@ static void clean_up(void)
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
 #endif
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
         libusb_exit(NULL);
 #endif
 
@@ -7483,18 +7483,16 @@ int main(int argc, char *argv[])
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
 
-#ifdef HAVE_LIBUSB
+#ifdef USE_USBUTILS
 	int err = libusb_init(NULL);
 	if (err) {
 		fprintf(stderr, "libusb_init() failed err %d", err);
 		fflush(stderr);
 		quit(1, "libusb_init() failed");
 	}
-#ifdef USE_USBUTILS
 	mutex_init(&cgusb_lock);
 	mutex_init(&cgusbres_lock);
 	cglock_init(&cgusb_fd_lock);
-#endif
 #endif
 
 	mutex_init(&hash_lock);
