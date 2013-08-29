@@ -364,6 +364,8 @@ bool littlefury_do_io(struct thr_info *thr)
 	if (bitfury->job_switched && thr->next_work)
 	{
 		mt_job_transition(thr);
+		// TODO: Delay morework until right before it's needed
+		timer_set_now(&thr->tv_morework);
 		job_start_complete(thr);
 	}
 	if (thr->work && bitfury->results_n)
