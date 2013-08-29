@@ -109,7 +109,7 @@ int linux_udev_stop_event_monitor(void)
         return LIBUSB_SUCCESS;
 }
 
-static void *linux_udev_event_thread_main(void *arg)
+static void *linux_udev_event_thread_main(void __attribute__((unused)) *arg)
 {
 	struct pollfd fds = {.fd = udev_monitor_fd,
 			     .events = POLLIN};

@@ -1942,7 +1942,7 @@ static int handle_events(struct libusb_context *ctx, struct timeval *tv)
         /* fd[1] is always the hotplug pipe */
         if (libusb_has_capability(LIBUSB_CAP_HAS_HOTPLUG) && fds[1].revents) {
                 libusb_hotplug_message message;
-                int ret;
+                unsigned int ret;
 
                 /* read the message from the hotplug thread */
                 ret = read(ctx->hotplug_pipe[0], &message, sizeof (message));

@@ -805,6 +805,7 @@ int API_EXPORTED libusb_parse_bos_descriptor(const void *buf, int len,
 	struct libusb_bos_descriptor *bos_desc;
 	int i;
 
+	len = len;
 	bos_desc = calloc (1, sizeof (*bos_desc));
 	if (!bos_desc) {
 		return LIBUSB_ERROR_NO_MEM;

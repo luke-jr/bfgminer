@@ -664,7 +664,7 @@ static int seek_to_next_config(struct libusb_context *ctx, int fd,
 	if (r < 0) {
 		usbi_err(ctx, "read failed ret=%d errno=%d", r, errno);
 		return LIBUSB_ERROR_IO;
-	} else if (r < sizeof(tmp)) {
+	} else if (r < (ssize_t)sizeof(tmp)) {
 		usbi_err(ctx, "short descriptor read %d/%d", r, sizeof(tmp));
 		return LIBUSB_ERROR_IO;
 	}
@@ -733,7 +733,7 @@ static int sysfs_get_active_config_descriptor(struct libusb_device *dev,
 			usbi_err(DEVICE_CTX(dev), "read failed, ret=%d errno=%d",
 				fd, errno);
 			return LIBUSB_ERROR_IO;
-		} else if (r < sizeof(tmp)) {
+		} else if (r < (ssize_t)sizeof(tmp)) {
 			usbi_err(DEVICE_CTX(dev), "short read %d/%d", r, sizeof(tmp));
 			return LIBUSB_ERROR_IO;
 		}
@@ -763,7 +763,7 @@ static int sysfs_get_active_config_descriptor(struct libusb_device *dev,
 		} else if (r == 0) {
 			usbi_dbg("device is unconfigured");
 			r = LIBUSB_ERROR_NOT_FOUND;
-		} else if (r < len - sizeof(tmp)) {
+		} else if ((size_t)r < len - sizeof(tmp)) {
 			usbi_err(DEVICE_CTX(dev), "short read %d/%d", r, len);
 			r = LIBUSB_ERROR_IO;
 		}
@@ -779,6 +779,8 @@ int linux_get_device_address (struct libusb_context *ctx, int detached,
 			      uint8_t *busnum, uint8_t *devaddr,
 			      const char *dev_node, const char *sys_name)
 {
+	int retbus, retdev;
+
 	usbi_dbg("getting address for device: %s detached: %d",
 		 sys_name, detached);
         /* can't use sysfs to read the bus and device number if the
@@ -800,16 +802,16 @@ int linux_get_device_address (struct libusb_context *ctx, int detached,
 
 	usbi_dbg("scan %s", sys_name);
 
-        *busnum = __read_sysfs_attr(ctx, sys_name, "busnum");
-        if (0 > *busnum)
-                return *busnum;
+	*busnum = retbus = __read_sysfs_attr(ctx, sys_name, "busnum");
+	if (retbus < 0)
+		return retbus;
                 
-        *devaddr = __read_sysfs_attr(ctx, sys_name, "devnum");
-        if (0 > *devaddr)
-                return *devaddr;
+        *devaddr = retdev = __read_sysfs_attr(ctx, sys_name, "devnum");
+        if (retdev < 0)
+                return retdev;
 
 	usbi_dbg("bus=%d dev=%d", *busnum, *devaddr);
-	if (*busnum > 255 || *devaddr > 255)
+	if (retbus > 255 || retdev > 255)
 		return LIBUSB_ERROR_INVALID_PARAM;
 
         return LIBUSB_SUCCESS;
@@ -818,6 +820,7 @@ int linux_get_device_address (struct libusb_context *ctx, int detached,
 static int op_get_active_config_descriptor(struct libusb_device *dev,
 	unsigned char *buffer, size_t len, int *host_endian)
 {
+	*host_endian = *host_endian;
 	if (sysfs_has_descriptors) {
 		return sysfs_get_active_config_descriptor(dev, buffer, len);
 	} else {
@@ -853,7 +856,7 @@ static int get_config_descriptor(struct libusb_context *ctx, int fd,
 	if (r < 0) {
 		usbi_err(ctx, "read failed ret=%d errno=%d", r, errno);
 		return LIBUSB_ERROR_IO;
-	} else if (r < len) {
+	} else if ((size_t)r < len) {
 		usbi_err(ctx, "short output read %d/%d", r, len);
 		return LIBUSB_ERROR_IO;
 	}
@@ -868,6 +871,7 @@ static int op_get_config_descriptor(struct libusb_device *dev,
 	int fd;
 	int r;
 
+	*host_endian = *host_endian;
 	/* always read from usbfs: sysfs only has the active descriptor
 	 * this will involve waking the device up, but oh well! */
 
@@ -1161,7 +1165,7 @@ void linux_hotplug_disconnected(uint8_t busnum, uint8_t devaddr, const char *sys
 		if (NULL != dev) {
 			usbi_disconnect_device (dev);
 		} else {
-			usbi_err(ctx, "device not found for session %x", busnum << 8 | devaddr);
+			usbi_err(ctx, "device not found for session %x %s", busnum << 8 | devaddr, sys_name);
 		}
 	}
 }
