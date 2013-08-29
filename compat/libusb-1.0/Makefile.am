@@ -5,10 +5,6 @@ MAINTAINERCLEANFILES = ChangeLog
 EXTRA_DIST = TODO PORTING
 SUBDIRS = libusb
 
-if BUILD_EXAMPLES
-SUBDIRS += examples
-endif
-
 pkgconfigdir=$(libdir)/pkgconfig
 pkgconfig_DATA=libusb-1.0.pc
 
