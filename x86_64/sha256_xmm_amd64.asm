@@ -41,7 +41,7 @@ BITS 64
 %define SHA_ROUND_LOOP_UNROLL   16
 
 extern sha256_consts_m128i
-extern sha256_init
+extern sha256_init_sse2
 
 global sha256_sse2_64_new
 
@@ -314,7 +314,7 @@ sha256_sse2_64_new:
     movdqa    [hash1+7*16], rH
 
     mov       data, hash1
-    mov       init, qword sha256_init
+    mov       init, qword sha256_init_sse2
 
     SHA_256
 
