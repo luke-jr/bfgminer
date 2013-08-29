@@ -445,7 +445,7 @@ api-example.py - a Python script to access the API
 Feature Changelog for external applications using the API:
 
 
-API V1.25.3
+API V1.25.3 (BFGMiner v3.2.0)
 
 Modified API commands:
  'devs', 'pga', 'gpu' - add 'Device Hardware%' and 'Device Rejected%'
@@ -462,7 +462,7 @@ Basic support for cgminer-compatible multicast RPC detection added.
 
 ----------
 
-API V1.25.2
+API V1.25.2 (BFGMiner v3.1.4)
 
 Modified API commands:
  'pgaset' - added: XBS opt=clock val=2 to 250 (and a multiple of 2)

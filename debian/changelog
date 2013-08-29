@@ -1,3 +1,19 @@
+bfgminer (3.2.0-0precise1) precise; urgency=low
+
+  * modminer, x6500 & ztex: Completely removed bitstreams from BFGMiner distribution, and replaced with instructions on where to find them officially.
+  * New embedded getwork server to drive Block Erupter Blades and similar devices off BFGMiner. Instructions in README.ASIC.
+  * Fixed stratum pool-switch crash regressed in BFGMiner 3.1.0.
+  * Added stratum support for --request-diff by attempting to send a mining.suggest_target notification to pools when connecting.
+  * erupter & icarus: Various optimizations to catch racing nonces, and otherwise reduce hardware errors.
+  * Enable simple notifications for idle/sick/dead devices via --cmd-idle, --cmd-sick and --cmd-dead options that execute commands when the events occur.
+  * Support for probing/hotplugging new devices from the TUI ([M]anage, plus key).
+  * Simple multicast RPC detection.
+  * Imported Aaron D. Gifford's fast SHA256 implementation (used for share validation on CPU).
+  * Due to random font issues, Unicode is disabled by default. Use --unicode to enable it.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 29 Aug 2013 23:54:22 -0000
+
+
 bfgminer (3.1.4-0precise1) precise; urgency=low
 
   * Enable triggering "identify" (flash LED) function from Manage device TUI for devices that support it.

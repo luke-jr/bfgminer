@@ -1,3 +1,250 @@
+BFGMiner Version 3.2.0 - August 29, 2013
+- cpu: sse2_64: Rename sha256_init to sha256_init_sse2 to avoid conflict with
+new sha2.c
+- httpsrv: Some older versions of libmicrohttpd need stdint.h included first
+- make-release: Include libmicrohttpd-10.dll if it exists
+- Fixes column alignment in decimal fields. Workaround for printf rounding up
+when formatting decimals into limited width.
+- New hidden --unittest option. No longer runs unit tests at startup by default,
+for faster startup. Added unit test for width printing of decimal numbers.
+- Bugfix: configure: More fixing BSD sed syntax for curses header search
+- Bugfix: configure: More fixing BSD sed syntax for libusb header search
+- README: Update solo mining docs
+- erupter: Continue searching a job until the end, even if an earlier result is
+found
+- icarus: Do hwerror-triggered reopen before sending the next job the first
+time, to avoid having to resend it later
+- icarus: Avoid sending a new job if the nonce found was for one before the
+current job anyway
+- icarus: Double-buffer work to solve nonces found before work change takes
+effect
+- icarus: Abstract nonce processing
+- Bugfix: icarus: Avoid trying to submit 0 on comms error
+- icarus: Skip unnecessary nonce memcpy
+- icarus: Make state->last_work a pointer and store it on the heap
+- miner.php fix missing global
+- Bugfix: erupter: After identify, skip starting work if next scanhash is
+already decided to be a "first run" (eg, device errors)
+- Bugfix: erupter: Fix identify following hw error
+- Bugfix: icarus: Don't try to send work if device open failed
+- Debug log when zeroing stats
+- Upgrade libblkmaker to 0.3.2
+- Bugfix: GBT: Advertise coinbasevalue capability
+- Bugfix: Always compile add_serial now that it's somewhat generic
+- icarus: Avoid sending a new job if the nonce found was for one before the
+current job anyway
+- icarus: Double-buffer work to solve nonces found before work change takes
+effect
+- icarus: Abstract nonce processing
+- Bugfix: icarus: Avoid trying to submit 0 on comms error
+- icarus: Skip unnecessary nonce memcpy
+- icarus: Make state->last_work a pointer and store it on the heap
+- README.RPC: Remove usbstats mention
+- README: Add FAQ regarding cgminer messing up drivers
+- README.RPC: Fix miner name
+- README.RPC: Correct to mention other supported devices for pgaidentify
+- api.c fix mcast debug message bug
+- README.RPC: break all lines at most 80 characters
+- Update the API Multicast documentation
+- miner.php implement API Multicast handling to automatically find your local
+net miners
+- Bugfix: RPC: Fix log format types in io_flush
+- Set RT_LIBS correctly from autoconf detection
+- Explicitly check for clock_nanosleep and only use it when available
+- Further integrate cgsleep API into BFGMiner's timer system, so clock_nanosleep
+is only used on platforms with CLOCK_MONOTONIC
+- Convert cgtimer_t to struct timeval
+- Bugfix: Fix BSD sed syntax for curses header search
+- Bugfix: configure: Really fix BSD sed syntax for libusb header search
+- README.RPC: Mention multicast detection
+- README: Include --mcast-* options in usage
+- Use ccan's standard char* set/show functions for --api-mcast-{addr,code}
+- Bugfix: RPC: Use the same mcast code in reply, and log it correctly
+- API mcast only reply to remote IP's that are allowed access
+- Initial API Multicast response v0.1 to find cgminer APIs
+- Check for cnx_needed on each loop through wait_lp_current.
+- Return positive for cnx_needed when no_work is true.
+- Add no_work bool to set when we are in an underrun situation
+- Reorder support names alphabetically.
+- We don't want to continue into the hash_pop function if the getq is frozen.
+- Carve out the unused portions of sha2 implementation.
+- Import Aaron D. Gifford's fast sha256 implementation.
+- Use cloned work when finding avalon results since another thread can discard
+the work item while it's in use.
+- Provide a variant of find_work_bymidstate that returns a clone of the found
+work.
+- Use timespecs on windows as cgtimer_t to capitalise on the higher resolution
+clock changes.
+- Abstract out the conversion of system time to an lldiv_t in decimicroseconds.
+- Use our own gettimeofday implementation on windows for it to be consistent
+across ming builds and higher resolution.
+- Provide cgtimer_sub helper functions.
+- Provide cgtimer_to_ms helper functions.
+- Rename cgsleep_prepare_r as cgtimer_time to get time in cgtimer_t format and
+call cgsleep_prepare_r as a macro for cgtimer_time
+- TimeBeginPeriod and TimeEndPeriod do not add significant overhead when run the
+entire time for cgminer so avoid trying to maintain balanced numbers of them for
+specific time calls to simplify code.
+- Replace all references to the old n*sleep functions with the equivalent
+cgsleep_*s replacements.
+- timeGetTime uses huge resources on windows so revert to using timevals for its
+implementation of cgtimer_t
+- Quotient/remainder error in ms division.
+- Provide cgtimer_to_timeval helper functions.
+- Provide a timeval_to_cgtime helper function to reuse values.
+- Simplify cgsleep code for windows by using a typedef for cgtimer_t that
+resolves to clock resolution, using that internally.
+- On windows use the higher accuracy timegettime function to really get 1ms
+clock and timer accuracy.
+- Fix missed endtimeperiod in overrun timer on windows.
+- Make cgsleep_us_r take an int64_t for us.
+- Make the cgsleep functions build on windows.
+- Set high resolution timing on windows within the cgsleep functions.
+- Provide reentrant versions of cgsleep functions to allow start time to be set
+separately from the beginning of the actual sleep, allowing scheduling delays to
+be counted in the sleep.
+- Make the nmsleep and nusleep functions use the new cgsleep functions internally
+till functions are migrated to the new cgsleep API.
+- Add a ms_to_timespec helper function, and create a cgsleep_ms function that
+uses absolute timers with clock_nanosleep to avoid overruns.
+- Add rt lib linkage to enable use of clock_nanosleep functions with older
+glibc.
+- Add a timeraddspec helper function.
+- Provide a us_to_timespec helper function.
+- Provide a us_to_timeval helper function.
+- Add helper functions to convert timespec to timeval and vice versa.
+- Bugfix: SGW: Discard work from log only by expiry, so post-startup hardware
+errors are truly only hardware errors
+- bitforce: Make voltages available to RPC
+- bitforce: Save voltages as array of longs internally
+- Bugfix: Clear device bad nonces when zeroing stats
+- cpu & opencl: Defer RUNONCE to actual autodetection, so they can be added once
+after startup
+- Bugfix: Avoid crash activating [M]anage devices with no currently defined
+devices
+- TUI: Support for adding new devices using the plus key from [M]anage devices
+- Bugfix: Use add_serial function for scan_serial, so that "all" keyword works
+correctly
+- SGW: Add support for new X-Hashes-Done header to allow devices to more
+accurately report their work
+- SGW: Add X-Mining-Identifier header to inform devices what they are
+represented by in BFGMiner
+- SGW: Use JSON for 401 response; add Server HTTP header
+- AUTHORS: Add contributor Josh Lehan
+- Changed comparison constants to allow for floating-point rounding
+- Install README.ASIC for Block Erupter related drivers as well as Avalon
+- make-release: Windows users don't need README.Debian
+- README.OpenWrt: Import from BFGMiner downloads
+- Silence Windows warning about send data signedness
+- Fix block info
+- API/miner.php add some % fields
+- Don't yield on grabbing the read lock variant of cglocks.
+- util.c expand quit to show file/func/line
+- We should be using a cg_wlock initially in generating stratum work before
+downgrading the lock.
+- Add the ability to downgrade a write variant of the cglocks.
+- Yield after releasing a lock in case we are on a device with limited CPU
+resources.
+- Fix --scrypt being required before scrypt intensities on command line or not
+working at all via config files.
+- Limit intensity range according to whether scrypt is in use or not.
+- Do not allow benchmark mode to be used with scrypt.
+- miner.php format Best Share
+- README.ASIC block erupter USB brief
+- Check for negative wait time in socket_full.
+- Adjust socket wait timeout in recv_line according to how long we've already
+waited to avoid a 60 second wait dropping to 1 second due to a blocked socket.
+- force type checking on curses
+- logging - size check sprintf
+- Only use length-counted variants of format_unit and percentf
+- Implement snprintf-like versions of format_unit and percentf
+- miner - size check all sprintf
+- size check get_datestamp/get_timestamp and remove unused cgpu->init
+- make all statline overflow safe
+- Convert the decay_time function into one that truly creates an exponentially
+decaying average over opt_log_interval.
+- GPU fan rpm display 9999 when it overflows
+- Change mode on python file.
+- Only update hashmeter if we have done hashes or haven't updated longer than
+the log interval, fixing a us/ms error.
+- README.ASIC: Document usage with Block Erupter Blades
+- README: Add mention of libmicrohttpd to dependencies
+- SGW: Include hash1 in work
+- SGW: Include application/json Content-Type header
+- Fix build without libmicrohttpd
+- Allow startup to proceed with no devices, as long as RPC or HTTP are listening
+- SGW: Refuse to issue new work to disabled devices
+- SGW: Respond with stale rejection if share is known to be immediately stale
+- Expose HTTP getwork username in Manage TUI and devdetails RPC
+- Add --cmd-idle notification command for REST/WAIT conditions
+- bfgminer-rpc: Accept unlimited size replies
+- api-example.py: Accept unlimited size replies
+- RPC: Rewrite io_data to cleanly handle unlimited sized responses
+- Configure options to build --without-libmicrohttpd support
+- RPC: setconfig can now change http-port (enabling or disabling the http
+service included)
+- Embedded HTTP server to handle getwork-based mining devices
+- inc_hw_errors2 function can handle a bad nonce without a known work
+- Split up scan_serial function to enable internally adding ad-hoc cgpu
+- Helper functions bfg_json_obj_string and share __json_array_string
+- bytes_t: Add bytes_shift and bytes_nullterminate
+- Fix configure help for --without-sensors
+- README: Document --with-system-libblkmaker
+- Bugfix: Use BSD-friendly sed syntax for libusb header search
+- Bugfix: Handle bitstreams properly
+- Bugfix: Skip search for addwstr since it breaks --with-curses=preference
+- Bugfix: configure: Find correct curses include path without *-config
+- README.FPGA: Further clarify ZTEX setup
+- Display a friendly error directing to README.FPGA when bitstream cannot be
+loaded
+- Remove bitstreams from BFGMiner distribution entirely, and include pointers
+where to find them in README.FPGA
+- ztex: Use load_bitstream_bytes for .bin files
+- fpgautils: load_bitstream_bytes support for Intel HEX format (.ihx) files
+- Add missing 16-bit byteswap macros
+- fpgautils: load_bitstream_bytes function to load a bitstream into a bytes_t
+- bytes_t functions: bytes_init, bytes_append, bytes_reset
+- Look for bitstreams in /usr/share/bitstreams
+- Disable Unicode support by default (use --unicode to enable)
+- make-release: Skip stripping debug info from Windows EXEs, for now
+- Bugfix: Ensure work variable is assigned before checking its thr_id
+- Bugfix: notifier_init (Windows): setsockopt needs an int for SO_REUSEADDR
+- Bugfix: Avoid turning totals red just because a processor is idle
+- Enable notifications for sick/dead with --cmd-sick and --cmd-dead options that
+execute commands when the event occurs
+- RPC: Add cpu enable/disable/restart
+- windows-build: Update to use libpdcursesw.dll
+- Ensure socket error messages are used for socket errors on Windows
+- fpgautils: Attempt to use Linux advisory locks on serial devices
+- Bugfix: README: --temp-cutoff sets the maximum temperature before cutoff, not
+temperature that triggers cutoff
+- Bugfix: Avoid incrementing dev_thermal_cutoff_count when just updating
+timestamp on status
+- Detect curses support for wide characters during configure
+- configure: Check for more variants of curses library names
+- Bugfix: ztex: Avoid trying to format non-libusb error with libusb error name
+- Bugfix: Avoid trying to assign const use_unicode variable with --no-unicode
+option
+- Remove long-unused opt_time variable
+- RPC: Avoid exposing Coinbase-Sig when it isn't supported
+- Bugfix: Fix build with libblkmaker < 0.2
+- Attempt stratum mining.suggest_target before mining.subscribe, if
+--request-diff is used
+- Retry stratum if initiation fails for any reason after we have sent something
+(assuming there is more older variants we can try)
+- Bugfix: Restore delay for authorization on stratum mining.get_transactions
+- Bugfix: Fix TUI-only build
+- bitforce: Extend pgaset _cmd to variable-length commands
+- Bugfix: Use red for total processor count
+- bitforce: Undocumented _cmd1 pgaset for experimenting with firmware
+- Bugfix: curses: use_default_colors() when possible
+- Bugfix: Calculate scrolling range with new cursor lines
+- Bugfix: Ensure use_unicode and have_unicode_degrees constants are defined for
+curses-less builds
+- Bugfix: Replace block_timeval with (time_t) block_time
+- README: Update for --no-unicode option
+
+
 BFGMiner Version 3.1.4 - August 2, 2013
 - Windows: Rebuild pdcurses with UTF-8 and wide character support
 - Bugfix: Avoid using wide curses symbols/macros when USE_UNICODE is not defined
