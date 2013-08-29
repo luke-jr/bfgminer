@@ -57,6 +57,7 @@ dlls='
 	libcurl-4.dll
 	pthreadGC2.dll
 	libjansson-4.dll
+	libmicrohttpd-10.dll
 	libusb-1.0.dll
 	zlib1.dll
 '
@@ -82,11 +83,12 @@ for build in "${builds[@]}"; do
 	if test "x$DEBUG_RELEASE" = "x1"; then
 		CFLAGS="${CFLAGS} -g"
 	fi
-	libdir="/usr/$machine/usr/bin/$dll"
 	for dll in $dlls; do
 		libdir="/usr/$machine/usr/lib"
 		[ -e "$libdir/$dll" ] ||
 			libdir="/usr/$machine/usr/bin"
+		[ -e "$libdir/$dll" ] ||
+			continue
 		cp -v -L "$libdir/$dll" "$PKGDIR"
 		"$machine"-strip "$PKGDIR/$dll"
 	done
