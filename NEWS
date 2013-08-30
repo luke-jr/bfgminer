@@ -1,3 +1,72 @@
+Version 3.4.1 - 31st August 2013
+
+- Include string.h in bflsc driver.
+- Get rid of linear removal of spaces in bflsc text parsing and use strstr
+throughout instead.
+- Use reentrant strtok in tolines() function in bflsc to avoid racing on
+contextless calls.
+- Show how small a too small result in bflsc is.
+- Duplicate the buffer in process_results in bflsc since strtok modifies it
+making debugging output limited to one line.
+- Only process nonces in bflsc if the breakdown function succeeds.
+- Ignore zero count messages in bflsc instead of trying to parse them.
+- Return ok in tolines when it doesn't match inprocess message for bflsc.
+- Remove inprocess line instead of deleting all following responses in bflsc.
+- Change ok testing logic in breakdown() in bflsc and return if not ok at any
+stage.
+- Check the return value of tolines in bflsc driver.
+- Use strtok to parse lines in bflsc driver.
+- Add libusb-1.0 m4 directory and gitignore file.
+- Properly convert from ranlib to lt_init in configure.ac
+- Make autoconf always build for libusb.
+- More autoconf fixes.
+- Unconditionally build jansson statically from the cgminer source tree.
+- Only test for all usb devices once in configure.ac
+- Fix various libusb warnings and possible bugs on linux build.
+- Add make clean and maintainer-clean to autogen
+- Remove examples from libusb Makefile and generated autoconf files.
+- Fix libusb subdirectory builds.
+- Remove cached files from libusb autoconf on running autogen.sh
+- Remove unused HAVE_LISBUSB macro and use USE_USBUTILS everywhere.
+- Use direct auto* files to avoid failure of autoreconf
+- Remove unused and maintainer cleaned files
+- Show RT_LIBS in ./configure output.
+- First import of libusb-1.0
+- bflsc xlinkstr use snprintf
+- Fix win32 build.
+- Use take_queued_work_bymidstate in the bflsc driver to avoid the rare chance
+repeated results come back from the same work item.
+- Provide a funcion that looks up queued work by midstate and then removes it
+from the device hash database.
+- Fix no -rt library on darwin.
+- Update included jansson to v2.4
+- Fix OSX build.
+- Provide an osx fix for cgtimers and a fallback to timevals for all other
+platforms !linux !win32 !osx.
+- Move two more timer functions out of define macros to enable them to be used
+by future osx code.
+- cgtimer_sub is now the same since cgtimer_t should be the same on all
+platforms.
+- miner.php fix missing global
+- Only count submitted nonces as diff1shares if they're valid.
+- Substantially raise the maximum avalon frequency for water-cooled, over-volted
+designs.
+- Compile MCast.java with an old java
+- API Multicast sample MCast.java+MCast.class
+- BTB show C/MHz/mV for device
+- api.c remove unused reply string
+- api.c fix mcast debug message bug
+- miner.php implement API Multicast handling to automatically find your local
+net miners
+- API mcast only reply to remote IP's that are allowed access
+- Initial API Multicast response v0.1 to find cgminer APIs
+- Use timespecs on windows as cgtimer_t to capitalise on the higher resolution
+clock changes.
+- Abstract out the conversion of system time to an lldiv_t in decimicroseconds.
+- Use our own gettimeofday implementation on windows for it to be consistent
+across ming builds and higher resolution.
+
+
 Version 3.4.0 - 21st August 2013
 
 - Use stack data for HW error% in avalon stats.
