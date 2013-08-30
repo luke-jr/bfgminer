@@ -89,10 +89,7 @@ Mandatory:
 	libtool			http://www.gnu.org/software/libtool/
 Optional:
 	curses dev library
-	(libncurses5-dev or libpdcurses on WIN32)
-
-	jansson			http://www.digip.org/jansson/
-	(jansson is included in-tree and not necessary)
+	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
 	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
 	(This sdk is mandatory for GPU mining)
@@ -101,58 +98,11 @@ Optional:
 	(This sdk is mandatory for ATI GPU monitoring & clocking)
 
 	libudev dev library (libudev-dev)
-	(This is only required for ASIC+FPGA auto-detection and is linux only)
+	(This is only required for ASIC+FPGA support and is linux only)
 
-	libusb dev library (libusb-dev)
-	(This is only required for ASIC+FPGA support)
 If building from git:
 	autoconf
 	automake
-
-Before compiling cgminer, if you are using any USB devices you may need to
-build libusb yourself if you have an older version of libusb-dev that has a bug.
-This usually shows up with a combination of USB1.1 devices (all Icarus) with
-USB3 ports/hubs. If you do not have this hardware, most versions of libusb will
-work fine.
-
-	To compile cgminer with a known working version of libusb
-	First install udev-dev via one of:
-		Ubuntu derivatives: apt-get install libudev-dev
-		Arch: it should be installed by default as part of systemd
-		Fedora: yum install libgudev1
-		Mingw: not required
-
-	In the cgminer folder create a subfolder called libusb
-		mkdir libusb
-		cd libusb
-	Now, in that folder get and extract the known working libusb
-	 libusb-1.0.16-rc10.tar.bz2
-
-	It is available here:
-	 http://sourceforge.net/projects/libusb/files/libusb-1.0/libusb-1.0.16-rc10/
-
-	In linux and mingw you extract with:
-		tar -xvf libusb-1.0.16-rc10.tar.bz2
-
-	Then to build it:
-		cd libusb-1.0.16-rc10
-		./configure
-		make
-		cd ../..
-
-	Now when you configure cgminer as listed further below in the build
-	instructions, for all the USB devices you must add libusb as follows:
-		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.a -ludev" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-
-	On Fedora18 you need -lrt also:
-		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.a -ludev -lrt" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-
-	On Windows mingw:
-		LIBUSB_CFLAGS="-I./libusb/libusb-1.0.16-rc10/libusb" LIBUSB_LIBS="./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.dll.a" ./configure --enable-bflsc --enable-icarus --enable-bitforce --enable-modminer --enable-ztex --enable-avalon
-
-	After compiling on windows you need to copy
-		./libusb/libusb-1.0.16-rc10/libusb/.libs/libusb-1.0.dll
-	into the current cgminer folder before running cgminer
 
 
 CGMiner specific configuration options:
