@@ -108,10 +108,15 @@ static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, cha
 
 	ok = true;
 	while (tok) {
-		p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
-		if (unlikely(!p_items))
-			quit(1, "Failed to realloc p_items in tolines");
-		p_items[p_lines-1] = strdup(tok);
+		if (strncasecmp(tok, BFLSC_INPROCESS, BFLSC_INPROCESS_LEN)) {
+			p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
+			if (unlikely(!p_items))
+				quit(1, "Failed to realloc p_items in tolines");
+			p_items[p_lines-1] = strdup(tok);
+		} else {
+			applog(LOG_WARNING, "%s%i: in process response (%s) ignored",
+			       bflsc->drv->name, bflsc->device_id, tok);
+		}
 		tok = strtok(NULL, "\n");
 	}
 
@@ -1311,13 +1316,6 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
-	if (!strncasecmp(buf, BFLSC_INPROCESS, BFLSC_INPROCESS_LEN)) {
-		tmp = str_text(buf);
-		applog(LOG_WARNING, "%s%i:%s in process response (%s) ignored",
-		       bflsc->drv->name, bflsc->device_id, xlink, tmp);
-		free(tmp);
-		goto arigatou;
-	}
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (!res || lines < 1) {
 		tmp = str_text(buf);
