@@ -1298,22 +1298,24 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	free_work(work);
 }
 
-static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *nonces)
+static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *nonces)
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char **items, *firstname, **fields, *lf;
 	int que = 0, i, lines, count;
+	char *tmp, *tmp2, *buf;
 	char xlink[17];
-	char *tmp, *tmp2;
 	bool res;
 
 	*nonces = 0;
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
+	buf = strdup(pbuf);
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
+	free(buf);
 	if (!res || lines < 1) {
-		tmp = str_text(buf);
+		tmp = str_text(pbuf);
 		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
@@ -1321,7 +1323,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	}
 
 	if (lines < QUE_RES_LINES_MIN) {
-		tmp = str_text(buf);
+		tmp = str_text(pbuf);
 		applog(LOG_ERR, "%s%i:%s result too small (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
@@ -1330,7 +1332,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 
 	breakdown(ONECOLON, items[1], &count, &firstname, &fields, &lf);
 	if (count < 1) {
-		tmp = str_text(buf);
+		tmp = str_text(pbuf);
 		tmp2 = str_text(items[1]);
 		applog(LOG_ERR, "%s%i:%s empty result count (%s) in (%s) ignoring",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
@@ -1338,7 +1340,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		free(tmp);
 		goto arigatou;
 	} else if (count != 1) {
-		tmp = str_text(buf);
+		tmp = str_text(pbuf);
 		tmp2 = str_text(items[1]);
 		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) in (%s) will try anyway",
 					bflsc->drv->name, bflsc->device_id, xlink, count, tmp2, tmp);
@@ -1352,7 +1354,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		// 1+ In case the last line isn't 'OK' - try to process it
 		que = 1 + lines - QUE_RES_LINES_MIN;
 
-		tmp = str_text(buf);
+		tmp = str_text(pbuf);
 		tmp2 = str_text(items[0]);
 		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) will try %d (%s)",
 					bflsc->drv->name, bflsc->device_id, xlink, i, tmp2, que, tmp);
