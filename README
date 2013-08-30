@@ -107,7 +107,7 @@ Optional Dependencies:
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 	
 	getwork server for Block Erupter Blades:
-	  libmicrohttpd-dev  http://www.gnu.org/software/libmicrohttpd/
+	  libmicrohttpd-dev 0.9.5+  http://www.gnu.org/software/libmicrohttpd/
 
 	X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
