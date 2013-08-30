@@ -1213,12 +1213,6 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	bool res;
 	char *tmp;
 
-	if (!strncasecmp(data,BFLSC_INPROCESS, BFLSC_INPROCESS_LEN)) {
-		applog(LOG_INFO, "%s%i:%s In process message retrieved out of sync, ignoring",
-		       bflsc->drv->name, bflsc->device_id, xlink);
-		return;
-	}
-
 	if (count < sc_info->que_fld_min) {
 		tmp = str_text(data);
 		applog(LOG_INFO, "%s%i:%s work returned too small (%d,%s)",
