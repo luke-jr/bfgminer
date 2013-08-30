@@ -443,9 +443,6 @@ struct cgpu_info {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
 #endif
-/*#ifdef USE_BITFURY
-		struct libbitfury_device *device_bitfury;
-#endif */
 #ifdef USE_USBUTILS
 		struct cg_usb_device *usbdev;
 #endif
@@ -480,6 +477,7 @@ struct cgpu_info {
 #endif /* USE_BITFORCE || USE_BFLSC */
 #ifdef USE_BITFURY
 	int chip_n;
+	struct bitfury_device devices[200]; // TODO Move somewhere to appropriate place
 #endif
 	enum dev_enable deven;
 	int accepted;

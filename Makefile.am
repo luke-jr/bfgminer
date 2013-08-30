@@ -95,5 +95,5 @@ dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 if HAS_BITFURY
-cgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c
+cgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c tm_i2c.h tm_i2c.c
 endif
