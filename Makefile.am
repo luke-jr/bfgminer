@@ -1,11 +1,7 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-if WANT_JANSSON
 JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson
-else
-JANSSON_INCLUDES=
-endif
 
 if WANT_USBUTILS
 USBUTILS_INCLUDES = -I$(top_srcdir)/compat/libusb-1.0/libusb

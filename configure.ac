@@ -183,8 +183,6 @@ if test "x$has_winpthread" != xtrue; then
         PTHREAD_LIBS=-lpthread
 fi
 
-AC_CHECK_LIB(jansson, json_loads, request_jansson=false, request_jansson=true)
-
 AC_ARG_ENABLE([adl],
 	[AC_HELP_STRING([--disable-adl],[Override detection and disable building with adl])],
 	[adl=$enableval]
@@ -319,7 +317,6 @@ fi
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer$ztex != xnono])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
-AM_CONDITIONAL([WANT_JANSSON], [test x$request_jansson = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
@@ -334,12 +331,7 @@ else
 	LIBUSB_LIBS=""
 fi
 
-if test x$request_jansson = xtrue
-then
-	JANSSON_LIBS="compat/jansson/libjansson.a"
-else
-	JANSSON_LIBS=-ljansson
-fi
+JANSSON_LIBS="compat/jansson/libjansson.a"
 
 PKG_PROG_PKG_CONFIG()
 

@@ -1,9 +1,5 @@
 
-SUBDIRS	=
-
-if WANT_JANSSON
-SUBDIRS	+= jansson
-endif
+SUBDIRS	= jansson
 
 if WANT_USBUTILS
 SUBDIRS += libusb-1.0
