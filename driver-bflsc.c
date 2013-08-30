@@ -1302,7 +1302,7 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 {
 	struct bflsc_info *sc_info = (struct bflsc_info *)(bflsc->device_data);
 	char **items, *firstname, **fields, *lf;
-	int que, i, lines, count;
+	int que = 0, i, lines, count;
 	char xlink[17];
 	char *tmp, *tmp2;
 	bool res;
@@ -1311,13 +1311,19 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
+	if (!strncasecmp(buf, BFLSC_INPROCESS, BFLSC_INPROCESS_LEN)) {
+		tmp = str_text(buf);
+		applog(LOG_WARNING, "%s%i:%s in process response (%s) ignored",
+		       bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		free(tmp);
+		goto arigatou;
+	}
 	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
 	if (!res || lines < 1) {
 		tmp = str_text(buf);
 		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
-		que = 0;
 		goto arigatou;
 	}
 
@@ -1326,7 +1332,6 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 		applog(LOG_ERR, "%s%i:%s result too small (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
-		que = 0;
 		goto arigatou;
 	}
 

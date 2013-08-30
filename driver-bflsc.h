@@ -263,6 +263,8 @@ struct SaveString {
 #define BFLSC_ERRSIG_LEN (sizeof(BFLSC_ERRSIG)-1)
 #define BFLSC_OKQ "OK:QUEUED"
 #define BFLSC_OKQ_LEN (sizeof(BFLSC_OKQ)-1)
+#define BFLSC_INPROCESS "INPROCESS"
+#define BFLSC_INPROCESS_LEN (sizeof(BFLSC_INPROCESS)-1)
 // Followed by N=1..5
 #define BFLSC_OKQN "OK:QUEUED "
 #define BFLSC_OKQN_LEN (sizeof(BFLSC_OKQN)-1)
