@@ -38,16 +38,16 @@ static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 {
 	char *tmp;
 
-	if (strcmp(ver, "1.0.0") == 0)
+	if (strstr(ver, "1.0.0"))
 		return BFLSC_DRV1;
 
-	if (strncmp(ver, "1.0", 3) == 0 || strncmp(ver, "1.1", 3) == 0) {
+	if (strstr(ver, "1.0.") || strstr(ver, "1.1.")) {
 		applog(LOG_WARNING, "%s detect (%s) Warning assuming firmware '%s' is Ver1",
 			bflsc->drv->dname, bflsc->device_path, ver);
 		return BFLSC_DRV1;
 	}
 
-	if (strncmp(ver, "1.2", 3) == 0)
+	if (strstr(ver, "1.2."))
 		return BFLSC_DRV2;
 
 	tmp = str_text((char *)ver);
@@ -168,9 +168,6 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 			return ok;
 	}
 
-	while (*ptr == ' ')
-		ptr++;
-
 	while (ptr && *ptr) {
 		if (mode == ALLCOLON) {
 			colon = strchr(ptr, ':');
@@ -179,8 +176,6 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 			else
 				return ok;
 		}
-		while (*ptr == ' ')
-			ptr++;
 		comma = strchr(ptr, ',');
 		if (comma)
 			*(comma++) = '\0';
@@ -211,7 +206,7 @@ static bool isokerr(int err, char *buf, int amount)
 	if (err < 0 || amount < (int)BFLSC_OK_LEN)
 		return false;
 	else {
-		if (strncmp(buf, BFLSC_ANERR, BFLSC_ANERR_LEN) == 0)
+		if (strstr(buf, BFLSC_ANERR))
 			return false;
 		else
 			return true;
@@ -275,7 +270,7 @@ static int send_recv_ds(struct cgpu_info *bflsc, int dev, int *stage, bool *sent
 			return err;
 
 		// x-link timeout? - try again?
-		if (strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+		if (strstr(recv, BFLSC_XTIMEOUT))
 			continue;
 
 		if (!isokerr(err, recv, *amount))
@@ -300,7 +295,7 @@ static int send_recv_ds(struct cgpu_info *bflsc, int dev, int *stage, bool *sent
 			return err;
 
 		// x-link timeout? - try again?
-		if (strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+		if (strstr(recv, BFLSC_XTIMEOUT))
 			continue;
 
 		// SUCCESS - return it
@@ -365,7 +360,7 @@ static int send_recv_ss(struct cgpu_info *bflsc, int dev, bool *sent, int *amoun
 		// TODO: add a usb_read() option to spot the ERR: and convert end=OK<LF> to just <LF>
 		// x-link timeout? - try again?
 		if ((err == LIBUSB_SUCCESS || (read_ok == READ_OK && err == LIBUSB_ERROR_TIMEOUT)) &&
-			strncasecmp(recv, BFLSC_XTIMEOUT, BFLSC_XTIMEOUT_LEN) == 0)
+			strstr(recv, BFLSC_XTIMEOUT))
 				continue;
 
 		// SUCCESS or TIMEOUT - return it
@@ -627,11 +622,11 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			dev_error(bflsc, REASON_DEV_COMMS_ERROR);
 			goto mata;
 		}
-		if (strcmp(firstname, BFLSC_DI_FIRMWARE) == 0) {
+		if (strstr(firstname, BFLSC_DI_FIRMWARE)) {
 			sc_dev.firmware = strdup(fields[0]);
 			sc_info->driver_version = drv_ver(bflsc, sc_dev.firmware);
 		}
-		else if (strcmp(firstname, BFLSC_DI_ENGINES) == 0) {
+		else if (strstr(firstname, BFLSC_DI_ENGINES)) {
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
 				tmp = str_text(items[i]);
@@ -641,11 +636,11 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 				goto mata;
 			}
 		}
-		else if (strcmp(firstname, BFLSC_DI_XLINKMODE) == 0)
+		else if (strstr(firstname, BFLSC_DI_XLINKMODE))
 			sc_dev.xlink_mode = strdup(fields[0]);
-		else if (strcmp(firstname, BFLSC_DI_XLINKPRESENT) == 0)
+		else if (strstr(firstname, BFLSC_DI_XLINKPRESENT))
 			sc_dev.xlink_present = strdup(fields[0]);
-		else if (strcmp(firstname, BFLSC_DI_DEVICESINCHAIN) == 0) {
+		else if (strstr(firstname, BFLSC_DI_DEVICESINCHAIN)) {
 			sc_info->sc_count = atoi(fields[0]);
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
@@ -654,7 +649,7 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 				free(tmp);
 				goto mata;
 			}
-		else if (strcmp(firstname, BFLSC_DI_CHIPS) == 0)
+		else if (strstr(firstname, BFLSC_DI_CHIPS))
 			sc_dev.chips = strdup(fields[0]);
 		}
 		freebreakdown(&count, &firstname, &fields);
@@ -1547,7 +1542,7 @@ re_send:
 
 				// Try twice
 				if (try++ < 1 && amount > 1 &&
-					strncasecmp(buf, BFLSC_TIMEOUT, BFLSC_TIMEOUT_LEN) == 0)
+					strstr(buf, BFLSC_TIMEOUT))
 						goto re_send;
 
 				bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
@@ -1566,7 +1561,7 @@ re_send:
 
 					// Try twice
 					if (try++ < 1 && amount > 1 &&
-						strncasecmp(buf, BFLSC_TIMEOUT, BFLSC_TIMEOUT_LEN) == 0)
+						strstr(buf, BFLSC_TIMEOUT))
 							goto re_send;
 
 					bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
@@ -1605,7 +1600,7 @@ re_send:
 
 		// Try twice
 		if (try++ < 1 && amount > 1 &&
-			strncasecmp(buf, BFLSC_TIMEOUT, BFLSC_TIMEOUT_LEN) == 0)
+			strstr(buf, BFLSC_TIMEOUT))
 				goto re_send;
 
 		mutex_unlock(&(bflsc->device_mutex));
