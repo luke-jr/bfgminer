@@ -320,10 +320,10 @@ AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 
+AC_CONFIG_SUBDIRS([compat/libusb-1.0])
 if test "x$want_usbutils" != xfalse; then
 	AC_DEFINE([USE_USBUTILS], [1], [Defined to 1 if usbutils support required])
 	LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
-	AC_CONFIG_SUBDIRS([compat/libusb-1.0])
 	if test "x$have_linux" = "xtrue"; then
 		PKG_CHECK_MODULES([UDEV], [libudev], LIBUSB_LIBS+=" -ludev", [AC_MSG_ERROR([Missing required libudev dev])])
 	fi
@@ -428,7 +428,6 @@ AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
 	compat/jansson/Makefile
-	compat/libusb-1.0/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])
