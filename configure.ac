@@ -428,6 +428,7 @@ AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
 	compat/jansson/Makefile
+	compat/libusb-1.0/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])
