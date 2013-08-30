@@ -1337,10 +1337,11 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	if (count < 1) {
 		tmp = str_text(buf);
 		tmp2 = str_text(items[1]);
-		applog(LOG_ERR, "%s%i:%s empty result count (%s) in (%s) will try anyway",
+		applog(LOG_ERR, "%s%i:%s empty result count (%s) in (%s) ignoring",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
 		free(tmp2);
 		free(tmp);
+		goto arigatou;
 	} else if (count != 1) {
 		tmp = str_text(buf);
 		tmp2 = str_text(items[1]);
