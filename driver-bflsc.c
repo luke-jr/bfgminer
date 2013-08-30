@@ -84,8 +84,8 @@ static void bflsc_applog(struct cgpu_info *bflsc, int dev, enum usb_cmds cmd, in
 // error would be no data or missing LF at the end
 static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, char ***items, enum usb_cmds cmd)
 {
-	bool ok = true;
-	char *ptr;
+	bool ok = false;
+	char *tok;
 
 #define p_lines (*lines)
 #define p_items (*items)
@@ -96,25 +96,23 @@ static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, cha
 	if (!buf || !(*buf)) {
 		applog(LOG_DEBUG, "USB: %s%i: (%d) empty %s",
 			bflsc->drv->name, bflsc->device_id, dev, usb_cmdname(cmd));
-		return false;
+		return ok;
 	}
 
-	ptr = strdup(buf);
-	while (ptr && *ptr) {
+	tok = strtok(buf, "\n");
+	if (!tok) {
+		applog(LOG_DEBUG, "USB: %s%i: (%d) missing lf(s) in %s",
+		       bflsc->drv->name, bflsc->device_id, dev, usb_cmdname(cmd));
+		return ok;
+	}
+
+	ok = true;
+	while (tok) {
 		p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
 		if (unlikely(!p_items))
 			quit(1, "Failed to realloc p_items in tolines");
-		p_items[p_lines-1] = ptr;
-		ptr = strchr(ptr, '\n');
-		if (ptr)
-			*(ptr++) = '\0';
-		else {
-			if (ok) {
-				applog(LOG_DEBUG, "USB: %s%i: (%d) missing lf(s) in %s",
-					bflsc->drv->name, bflsc->device_id, dev, usb_cmdname(cmd));
-			}
-			ok = false;
-		}
+		p_items[p_lines-1] = strdup(tok);
+		tok = strtok(NULL, "\n");
 	}
 
 	return ok;
