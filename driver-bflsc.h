@@ -165,7 +165,7 @@ struct QueueJobStructure {
 	uint8_t endOfBlock;
 };
 
-#define QUE_RES_LINES_MIN 3
+#define QUE_RES_LINES_MIN 2
 #define QUE_MIDSTATE 0
 #define QUE_BLOCKDATA 1
 
