@@ -106,17 +106,12 @@ static bool tolines(struct cgpu_info *bflsc, int dev, char *buf, int *lines, cha
 		return ok;
 	}
 
+	ok = true;
 	while (tok) {
-		if (strncasecmp(tok, BFLSC_INPROCESS, BFLSC_INPROCESS_LEN)) {
-			ok = true;
-			p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
-			if (unlikely(!p_items))
-				quit(1, "Failed to realloc p_items in tolines");
-			p_items[p_lines-1] = strdup(tok);
-		} else {
-			applog(LOG_WARNING, "%s%i: in process response (%s) ignored",
-			       bflsc->drv->name, bflsc->device_id, tok);
-		}
+		p_items = realloc(p_items, ++p_lines * sizeof(*p_items));
+		if (unlikely(!p_items))
+			quit(1, "Failed to realloc p_items in tolines");
+		p_items[p_lines-1] = strdup(tok);
 		tok = strtok(NULL, "\n");
 	}
 
