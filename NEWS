@@ -1,3 +1,35 @@
+BFGMiner Version 3.0.7 - August 30, 2013
+
+- Fixes column alignment in decimal fields. Workaround for printf rounding up
+when formatting decimals into limited width.
+- Bugfix: configure: More fixing BSD sed syntax for libusb header search
+- README: Update solo mining docs
+- Bugfix: icarus: Don't try to send work if device open failed
+- Upgrade libblkmaker to 0.3.2
+- Bugfix: GBT: Advertise coinbasevalue capability
+- README.RPC: Remove usbstats mention
+- README: Add FAQ regarding cgminer messing up drivers
+- README.RPC: Fix miner name
+- README.RPC: Correct to mention other supported devices for pgaidentify
+- Bugfix: configure: Really fix BSD sed syntax for libusb header search
+- make-release: Windows users don't need README.Debian
+- README.OpenWrt: Import from BFGMiner downloads
+- Check for negative wait time in socket_full.
+- Adjust socket wait timeout in recv_line according to how long we've already
+waited to avoid a 60 second wait dropping to 1 second due to a blocked socket.
+- GPU fan rpm display 9999 when it overflows
+- Change mode on python file.
+- README: Document --with-system-libblkmaker
+- Bugfix: Use BSD-friendly sed syntax for libusb header search
+- make-release: Skip stripping debug info from Windows EXEs, for now
+- Bugfix: notifier_init (Windows): setsockopt needs an int for SO_REUSEADDR
+- Bugfix: README: --temp-cutoff sets the maximum temperature before cutoff, not
+temperature that triggers cutoff
+- Bugfix: ztex: Avoid trying to format non-libusb error with libusb error name
+- RPC: Avoid exposing Coinbase-Sig when it isn't supported
+- Bugfix: Fix build with libblkmaker < 0.2
+
+
 BFGMiner Version 3.0.6 - August 2, 2013
 
 - Windows: Rebuild pdcurses with UTF-8 and wide character support
