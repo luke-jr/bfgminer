@@ -1305,13 +1305,14 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	int que, i, lines, count;
 	char xlink[17];
 	char *tmp, *tmp2;
+	bool res;
 
 	*nonces = 0;
 
 	xlinkstr(xlink, sizeof(xlink), dev, sc_info);
 
-	tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
-	if (lines < 1) {
+	res = tolines(bflsc, dev, buf, &lines, &items, C_GETRESULTS);
+	if (!res || lines < 1) {
 		tmp = str_text(buf);
 		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
 					bflsc->drv->name, bflsc->device_id, xlink, tmp);
