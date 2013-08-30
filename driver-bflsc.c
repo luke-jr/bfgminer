@@ -1364,8 +1364,12 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *buf, int *non
 	freebreakdown(&count, &firstname, &fields);
 
 	for (i = 0; i < que; i++) {
-		breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
-		process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
+		res = breakdown(NOCOLON, items[i + QUE_RES_LINES_MIN - 1], &count, &firstname, &fields, &lf);
+		if (likely(res))
+			process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
+		else
+			applog(LOG_ERR, "%s%i:%s failed to process nonce %s",
+				bflsc->drv->name, bflsc->device_id, xlink, items[i]);
 		freebreakdown(&count, &firstname, &fields);
 		sc_info->not_first_work = true;
 	}
