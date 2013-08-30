@@ -142,7 +142,7 @@ enum breakmode {
 static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstname, char ***fields, char **lf)
 {
 	char *ptr, *colon, *comma;
-	bool ok;
+	bool ok = false;
 
 #define p_count (*count)
 #define p_firstname (*firstname)
@@ -155,7 +155,7 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 	p_lf = NULL;
 
 	if (!buf || !(*buf))
-		return false;
+		return ok;
 
 	ptr = p_firstname = strdup(buf);
 	p_lf = strchr(p_firstname, '\n');
@@ -165,20 +165,19 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 			ptr = colon;
 			*(ptr++) = '\0';
 		} else
-			ok = false;
+			return ok;
 	}
 
 	while (*ptr == ' ')
 		ptr++;
 
-	ok = true;
 	while (ptr && *ptr) {
 		if (mode == ALLCOLON) {
 			colon = strchr(ptr, ':');
 			if (colon)
 				ptr = colon + 1;
 			else
-				ok = false;
+				return ok;
 		}
 		while (*ptr == ' ')
 			ptr++;
@@ -192,6 +191,7 @@ static bool breakdown(enum breakmode mode, char *buf, int *count, char **firstna
 		ptr = comma;
 	}
 
+	ok = true;
 	return ok;
 }
 
