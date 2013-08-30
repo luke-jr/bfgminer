@@ -1324,8 +1324,8 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 
 	if (lines < QUE_RES_LINES_MIN) {
 		tmp = str_text(pbuf);
-		applog(LOG_ERR, "%s%i:%s result too small (%s) ignored",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		applog(LOG_ERR, "%s%i:%s result of %d too small (%s) ignored",
+					bflsc->drv->name, bflsc->device_id, xlink, lines, tmp);
 		free(tmp);
 		goto arigatou;
 	}
