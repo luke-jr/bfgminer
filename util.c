@@ -1606,17 +1606,17 @@ bool parse_method(struct pool *pool, char *s)
 	char *buf;
 
 	if (!s)
-		goto out;
+		return ret;
 
 	val = JSON_LOADS(s, &err);
 	if (!val) {
 		applog(LOG_INFO, "JSON decode failed(%d): %s", err.line, err.text);
-		goto out;
+		return ret;
 	}
 
 	method = json_object_get(val, "method");
 	if (!method)
-		goto out;
+		return ret;
 	err_val = json_object_get(val, "error");
 	params = json_object_get(val, "params");
 
@@ -1632,44 +1632,40 @@ bool parse_method(struct pool *pool, char *s)
 
 		free(ss);
 
-		goto out;
+		return ret;
 	}
 
 	buf = (char *)json_string_value(method);
 	if (!buf)
-		goto out;
+		return ret;
 
 	if (!strncasecmp(buf, "mining.notify", 13)) {
 		if (parse_notify(pool, params))
 			pool->stratum_notify = ret = true;
 		else
 			pool->stratum_notify = ret = false;
-		goto out;
+		return ret;
 	}
 
 	if (!strncasecmp(buf, "mining.set_difficulty", 21) && parse_diff(pool, params)) {
 		ret = true;
-		goto out;
+		return ret;
 	}
 
 	if (!strncasecmp(buf, "client.reconnect", 16) && parse_reconnect(pool, params)) {
 		ret = true;
-		goto out;
+		return ret;
 	}
 
 	if (!strncasecmp(buf, "client.get_version", 18) && send_version(pool, val)) {
 		ret = true;
-		goto out;
+		return ret;
 	}
 
 	if (!strncasecmp(buf, "client.show_message", 19) && show_message(pool, params)) {
 		ret = true;
-		goto out;
+		return ret;
 	}
-out:
-	if (val)
-		json_decref(val);
-
 	return ret;
 }
 
@@ -1684,13 +1680,13 @@ bool auth_stratum(struct pool *pool)
 		swork_id++, pool->rpc_user, pool->rpc_pass);
 
 	if (!stratum_send(pool, s, strlen(s)))
-		goto out;
+		return ret;
 
 	/* Parse all data in the queue and anything left should be auth */
 	while (42) {
 		sret = recv_line(pool);
 		if (!sret)
-			goto out;
+			return ret;
 		if (parse_method(pool, sret))
 			free(sret);
 		else
@@ -1712,17 +1708,13 @@ bool auth_stratum(struct pool *pool)
 		applog(LOG_WARNING, "pool %d JSON stratum auth failed: %s", pool->pool_no, ss);
 		free(ss);
 
-		goto out;
+		return ret;
 	}
 
 	ret = true;
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
-out:
-	if (val)
-		json_decref(val);
-
 	return ret;
 }
 
@@ -1935,9 +1927,6 @@ resend:
 
 	ret = true;
 out:
-	if (val)
-		json_decref(val);
-
 	if (ret) {
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
