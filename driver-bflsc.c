@@ -1585,46 +1585,6 @@ re_send:
 			break;
 	}
 
-/*
-	err = write_to_dev(bflsc, dev, BFLSC_QJOB, BFLSC_QJOB_LEN, &amount, C_REQUESTQUEJOB);
-	if (err < 0 || amount != BFLSC_QJOB_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_REQUESTQUEJOB, amount, err);
-		goto out;
-	}
-
-	if (!getok(bflsc, C_REQUESTQUEJOBSTATUS, &err, &amount)) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
-		goto out;
-	}
-
-	len = sizeof(struct FullNonceRangeJob);
-
-	err = write_to_dev(bflsc, dev, (char *)&data, len, &amount, C_QUEJOB);
-	if (err < 0 || amount != len) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_QUEJOB, amount, err);
-		goto out;
-	}
-
-	if (!getokerr(bflsc, C_QUEJOBSTATUS, &err, &amount, buf, sizeof(buf))) {
-		// TODO: check for QUEUE FULL and set work_queued to sc_info->que_size
-		//  and report a code bug LOG_ERR - coz it should never happen
-
-		// Try twice
-		if (try++ < 1 && amount > 1 &&
-			strstr(buf, BFLSC_TIMEOUT))
-				goto re_send;
-
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
-		goto out;
-	}
-
-	mutex_unlock(&(bflsc->device_mutex));
-*/
-
 	wr_lock(&(sc_info->stat_lock));
 	sc_info->sc_devs[dev].work_queued++;
 	wr_unlock(&(sc_info->stat_lock));
