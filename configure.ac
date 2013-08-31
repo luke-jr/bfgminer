@@ -1072,10 +1072,8 @@ fi
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CPPFLAGS.............:" $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS
-echo "  CFLAGS...............:" $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS
-echo "  LDFLAGS..............:" $LDFLAGS $PTHREAD_FLAGS $PTHREAD_LIBS
-echo "  LDADD................: $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS"
+echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
