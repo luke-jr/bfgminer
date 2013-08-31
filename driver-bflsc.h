@@ -47,7 +47,7 @@ enum driver_version {
 #define BFLSC_BUFSIZ (0x1000)
 
 // Should be big enough
-#define BFLSC_APPLOGSIZ (0x2000)
+#define BFLSC_APPLOGSIZ 8192
 
 #define BFLSC_INFO_TIMEOUT 999
 

@@ -1223,7 +1223,7 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	}
 
 	if (count > sc_info->que_fld_max) {
-		applogsiz(LOG_INFO, "%s%i:%s work returned too large (%d) processing %d anyway",
+		applog(LOG_INFO, "%s%i:%s work returned too large (%d) processing %d anyway",
 		       bflsc->drv->name, bflsc->device_id, xlink, count, sc_info->que_fld_max);
 		count = sc_info->que_fld_max;
 		inc_hw_errors(bflsc->thr[0]);
