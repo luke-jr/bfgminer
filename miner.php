@@ -412,11 +412,20 @@ function getrigs()
 	$got = @socket_recvfrom($rep_soc, $buf, 32, MSG_DONTWAIT, $ip, $p);
 	if ($got !== false && $got > 0)
 	{
-		$ans = explode('-', $buf);
-		if (count($ans) == 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
+		$ans = explode('-', $buf, 4);
+		if (count($ans) >= 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
 		{
 			$rp = intval($ans[2]);
-			$rigs[] = "$ip:$rp";
+
+			if (count($ans) > 3)
+				$mdes = str_replace("\0", '', $ans[3]);
+			else
+				$mdes = '';
+
+			if (strlen($mdes) > 0)
+				$rigs[] = "$ip:$rp:$mdes";
+			else
+				$rigs[] = "$ip:$rp";
 		}
 	}
 	if ((microtime(true) - $stt) >= $mcasttimeout)
@@ -424,7 +433,6 @@ function getrigs()
 
 	usleep(100000);
  }
-
  socket_close($rep_soc);
 }
 #

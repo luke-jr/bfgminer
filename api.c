@@ -4403,8 +4403,8 @@ static void mcast()
 				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
-							"cgm-" API_MCAST_CODE "-%d",
-							opt_api_port);
+							"cgm-" API_MCAST_CODE "-%d-%s",
+							opt_api_port, opt_api_mcast_des);
 
 				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
 						0, (struct sockaddr *)(&came_from),
