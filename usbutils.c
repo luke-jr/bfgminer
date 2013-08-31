@@ -2286,6 +2286,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
+	unsigned char *buf;
 
 	/* Limit length of transfer to the largest this descriptor supports
 	 * and leave the higher level functions to transfer more if needed. */
@@ -2295,6 +2296,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 		MaxPacketSize = cgpu->usbdev->found->wMaxPacketSize;
 	if (length > MaxPacketSize)
 		length = MaxPacketSize;
+	buf = alloca(MaxPacketSize);
+	if (endpoint == LIBUSB_ENDPOINT_OUT)
+		memcpy(buf, data, length);
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
@@ -2346,6 +2350,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 		if (err)
 			cgpu->usbinfo.clear_fail_count++;
 	}
+	if (endpoint == LIBUSB_ENDPOINT_OUT)
+		memcpy(data, buf, length);
 
 	return err;
 }
