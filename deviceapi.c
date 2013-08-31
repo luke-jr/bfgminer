@@ -84,6 +84,15 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	return true;
 }
 
+bool hashes_done2(struct thr_info *thr, int64_t hashes, uint32_t *max_nonce)
+{
+	struct timeval tv_now, tv_delta;
+	timer_set_now(&tv_now);
+	timersub(&tv_now, &thr->_tv_last_hashes_done_call, &tv_delta);
+	thr->_tv_last_hashes_done_call = tv_now;
+	return hashes_done(thr, hashes, &tv_delta, max_nonce);
+}
+
 /* A generic wait function for threads that poll that will wait a specified
  * time tdiff waiting on a work restart request. Returns zero if the condition
  * was met (work restart requested) or ETIMEDOUT if not.

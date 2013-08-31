@@ -619,6 +619,7 @@ struct thr_info {
 	uint64_t hashes_done;
 	struct timeval tv_hashes_done;
 	struct timeval tv_lastupdate;
+	struct timeval _tv_last_hashes_done_call;
 
 	bool	pause;
 	time_t	getwork;
