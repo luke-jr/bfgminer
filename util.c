@@ -1682,7 +1682,7 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 /* Extracts a string value from a json array with error checking. To be used
  * when the value of the string returned is only examined and not to be stored.
  * See json_array_string below */
-char *__json_array_string(json_t *val, unsigned int entry)
+const char *__json_array_string(json_t *val, unsigned int entry)
 {
 	json_t *arr_entry;
 
@@ -1696,13 +1696,13 @@ char *__json_array_string(json_t *val, unsigned int entry)
 	if (!json_is_string(arr_entry))
 		return NULL;
 
-	return (char *)json_string_value(arr_entry);
+	return json_string_value(arr_entry);
 }
 
 /* Creates a freshly malloced dup of __json_array_string */
 static char *json_array_string(json_t *val, unsigned int entry)
 {
-	char *buf = __json_array_string(val, entry);
+	const char *buf = __json_array_string(val, entry);
 
 	if (buf)
 		return strdup(buf);
@@ -1725,7 +1725,8 @@ void stratum_probe_transparency(struct pool *pool)
 
 static bool parse_notify(struct pool *pool, json_t *val)
 {
-	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	const char *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
+	char *job_id;
 	bool clean, ret = false;
 	int merkles, i;
 	size_t cb1_len, cb2_len;
@@ -1835,18 +1836,18 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
-	char *url, *port, address[256];
+	const char *url, *port;
+	char address[256];
 
-	memset(address, 0, 255);
-	url = (char *)json_string_value(json_array_get(val, 0));
+	url = __json_array_string(val, 0);
 	if (!url)
 		url = pool->sockaddr_url;
 
-	port = (char *)json_string_value(json_array_get(val, 1));
+	port = __json_array_string(val, 1);
 	if (!port)
 		port = pool->stratum_port;
 
-	sprintf(address, "%s:%s", url, port);
+	snprintf(address, sizeof(address), "%s:%s", url, port);
 
 	if (!extract_sockaddr(pool, address))
 		return false;
@@ -1912,7 +1913,7 @@ bool parse_method(struct pool *pool, char *s)
 	json_t *val = NULL, *method, *err_val, *params;
 	json_error_t err;
 	bool ret = false;
-	char *buf;
+	const char *buf;
 
 	if (!s)
 		goto out;
@@ -1944,7 +1945,7 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 
-	buf = (char *)json_string_value(method);
+	buf = json_string_value(method);
 	if (!buf)
 		goto out;
 
@@ -2144,7 +2145,7 @@ static char *get_sessionid(json_t *val)
 	arrsize = json_array_size(arr_val);
 	for (i = 0; i < arrsize; i++) {
 		json_t *arr = json_array_get(arr_val, i);
-		char *notify;
+		const char *notify;
 
 		if (!arr | !json_is_array(arr))
 			break;

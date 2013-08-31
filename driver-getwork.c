@@ -125,7 +125,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	static bool _init = false, b;
 	struct getwork_client *client;
 	struct MHD_Response *resp;
-	char *user, *idstr = NULL, *submit = NULL;
+	char *user, *idstr = NULL;
+	const char *submit = NULL;
 	size_t idstr_sz = 1;
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
