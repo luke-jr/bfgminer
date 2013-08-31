@@ -609,7 +609,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		return ok;
 
 	tmp = str_text(buf);
-	strcpy(sc_dev.getinfo, tmp);
+	strncpy(sc_dev.getinfo, tmp, sizeof(sc_dev.getinfo));
+	sc_dev.getinfo[sizeof(sc_dev.getinfo)-1] = '\0';
 	free(tmp);
 
 	for (i = 0; i < lines-2; i++) {
