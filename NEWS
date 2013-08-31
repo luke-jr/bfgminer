@@ -1,5 +1,6 @@
 Version 3.4.1 - 31st August 2013
 
+- API mcast add a description option with miner.php
 - Always use a maxpacketsize buffer in usb_bulk_transfer
 - bflsc ensure getinfo cannot overflow it's storage buffer
 - Don't decref json values in stratum parsing due to memory corruption.
