@@ -75,7 +75,7 @@ static void bitfury_detect(void)
 
 static int64_t bitfury_scanHash(struct thr_info *thr)
 {
-	static struct bitfury_device devices[100];
+	static struct bitfury_device devices[100], *bitfury;
 	int chip_n;
 	int chip;
 	uint64_t hashes = 0;
@@ -83,24 +83,25 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	chip_n = thr->cgpu->chip_n;
 
 	for (chip = 0; chip < chip_n; chip++) {
-		devices[chip].spi = sys_spi;
-		if(!devices[chip].work) {
-			devices[chip].work = get_queued(thr->cgpu);
-			if (devices[chip].work == NULL) {
+		bitfury = &devices[chip];
+		bitfury->spi = sys_spi;
+		if(!bitfury->work) {
+			bitfury->work = get_queued(thr->cgpu);
+			if (bitfury->work == NULL) {
 				return 0;
 			}
-			work_to_payload(&(devices[chip].payload), devices[chip].work);
+			work_to_payload(&bitfury->payload, bitfury->work);
 		}
 		
-		devices[chip].chip = chip;
-		payload_to_atrvec(devices[chip].atrvec, &devices[chip].payload);
-		libbitfury_sendHashData1(&devices[chip], true);
+		bitfury->chip = chip;
+		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+		libbitfury_sendHashData1(bitfury, true);
 		
-		if (devices[chip].job_switched) {
+		if (bitfury->job_switched) {
 			int i,j;
-			unsigned int *res = devices[chip].results;
-			struct work *owork = devices[chip].owork;
-			i = devices[chip].results_n;
+			unsigned int * const res = bitfury->results;
+			struct work * const owork = bitfury->owork;
+			i = bitfury->results_n;
 			for (j = i - 1; j >= 0; j--) {
 				if (owork) {
 					submit_nonce(thr, owork, bswap_32(res[j]));
@@ -110,8 +111,8 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			if (owork)
 				work_completed(thr->cgpu, owork);
 
-			devices[chip].owork = devices[chip].work;
-			devices[chip].work = NULL;
+			bitfury->owork = bitfury->work;
+			bitfury->work = NULL;
 			hashes += 0xffffffffull * i;
 		}
 	}
