@@ -183,11 +183,10 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
-#ifdef HAVE_LIBUSB
-bool have_libusb = true;
-#else
-const bool have_libusb;
+#ifndef HAVE_LIBUSB
+const
 #endif
+bool have_libusb;
 static bool opt_submit_stale = true;
 static int opt_shares;
 static int opt_submit_threads = 0x40;
@@ -9823,14 +9822,6 @@ int main(int argc, char *argv[])
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
 
-#ifdef HAVE_LIBUSB
-	int err = libusb_init(NULL);
-	if (err) {
-		applog(LOG_WARNING, "libusb_init() failed err %d", err);
-		have_libusb = false;
-	}
-#endif
-
 	mutex_init(&hash_lock);
 	mutex_init(&console_lock);
 	cglock_init(&control_lock);
@@ -9963,6 +9954,14 @@ int main(int argc, char *argv[])
 
 	if (use_curses)
 		enable_curses();
+#endif
+
+#ifdef HAVE_LIBUSB
+	int err = libusb_init(NULL);
+	if (err)
+		applog(LOG_WARNING, "libusb_init() failed err %d", err);
+	else
+		have_libusb = true;
 #endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
