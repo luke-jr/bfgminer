@@ -79,6 +79,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	int chip_n;
 	int chip;
 	uint64_t hashes = 0;
+	static bool second_run = false;
 
 	chip_n = thr->cgpu->chip_n;
 
@@ -91,11 +92,11 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			}
 			work_to_payload(&(devices[chip].payload), devices[chip].work);
 		}
-	}
-
-	libbitfury_sendHashData(devices, chip_n);
-
-	for (chip = 0; chip < chip_n; chip++) {
+		
+		devices[chip].chip = chip;
+		payload_to_atrvec(devices[chip].atrvec, &devices[chip].payload);
+		libbitfury_sendHashData1(&devices[chip], second_run);
+		
 		if (devices[chip].job_switched) {
 			int i,j;
 			unsigned int *res = devices[chip].results;
@@ -115,6 +116,9 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			hashes += 0xffffffffull * i;
 		}
 	}
+	
+	second_run = true;
+	
 	return hashes;
 }
 

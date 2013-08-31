@@ -316,21 +316,6 @@ void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
 	cgsleep_ms(BITFURY_REFRESH_DELAY);
 }
 
-void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
-	int chip;
-	static bool second_run = false;
-
-	for (chip = 0; chip < chip_n; chip++) {
-		struct bitfury_device *d = bf + chip;
-		d->chip = chip;
-		payload_to_atrvec(d->atrvec, &d->payload);
-		libbitfury_sendHashData1(d, second_run);
-	}
-	second_run = true;
-
-	return;
-}
-
 int libbitfury_readHashData(unsigned int *res) {
 	return 0;
 }
