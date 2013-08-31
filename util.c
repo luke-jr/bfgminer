@@ -1728,7 +1728,7 @@ out:
 
 static bool setup_stratum_socket(struct pool *pool)
 {
-	struct addrinfo *servinfo, *hints, *p;
+	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
 	int sockd;
 
 	mutex_lock(&pool->stratum_lock);
@@ -1742,6 +1742,8 @@ static bool setup_stratum_socket(struct pool *pool)
 	memset(hints, 0, sizeof(struct addrinfo));
 	hints->ai_family = AF_UNSPEC;
 	hints->ai_socktype = SOCK_STREAM;
+	servinfo = &servinfobase;
+	p = &pbase;
 	if (getaddrinfo(pool->sockaddr_url, pool->stratum_port, hints, &servinfo) != 0) {
 		if (!pool->probed) {
 			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
