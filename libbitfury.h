@@ -29,6 +29,7 @@ struct bitfury_device {
 	struct bitfury_payload opayload;
 	unsigned int results[16];
 	int results_n;
+	bool second_run;
 };
 
 int libbitfury_readHashData(unsigned int *res);

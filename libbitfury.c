@@ -287,6 +287,9 @@ void libbitfury_sendHashData1(struct bitfury_device *d, bool want_results)
 	
 	d->job_switched = newbuf[16] != oldbuf[16];
 	
+	if (unlikely(!d->second_run))
+		d->second_run = true;
+	else
 	if (want_results && d->job_switched) {
 		int i;
 		int results_num = 0;
