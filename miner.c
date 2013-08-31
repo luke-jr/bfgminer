@@ -568,7 +568,6 @@ struct pool *add_pool(void)
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 	
-	bfg_init_time();
 	cgtime(&pool->cgminer_stats.start_tv);
 
 	pool->rpc_proxy = NULL;
@@ -9936,7 +9935,6 @@ int main(int argc, char *argv[])
 #endif
 
 	raise_fd_limits();
-	bfg_init_time();
 	
 	if (opt_benchmark) {
 		struct pool *pool;
