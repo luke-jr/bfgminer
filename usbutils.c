@@ -2812,6 +2812,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
+	unsigned char tbuf[64];
 	int err, pstate;
 
 	DEVLOCK(cgpu, pstate);
@@ -2846,14 +2847,16 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 			cgpu->usbinfo.total_read_delay += sleep_estimate;
 		}
 	}
+	memset(tbuf, 0, 64);
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex,
-		(unsigned char *)buf, (uint16_t)bufsiz, timeout);
+		tbuf, (uint16_t)bufsiz, timeout);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0, timeout);
+	memcpy(buf, tbuf, bufsiz);
 
 	USBDEBUG("USB debug: @_usb_transfer_read(%s (nodev=%s)) amt/err=%d%s%s%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), err > 0 ? " = " : BLANK, err > 0 ? bin2hex((unsigned char *)buf, (size_t)err) : BLANK);
 
