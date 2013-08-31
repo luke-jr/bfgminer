@@ -404,15 +404,21 @@ int64_t littlefury_job_process_results(struct thr_info *thr, struct work *work, 
 	return 0x100000000;
 }
 
+extern int64_t bitfury_scanHash(struct thr_info *);
+
 struct device_drv littlefury_drv = {
 	.dname = "littlefury",
 	.name = "LFY",
 	.drv_detect = littlefury_detect,
-	.minerloop = minerloop_async,
 	
+	.minerloop = minerloop_async,
 	.thread_init = littlefury_thread_init,
 	.job_prepare = littlefury_job_prepare,
 	.job_start = littlefury_job_start,
 	.poll = littlefury_poll,
 	.job_process_results = littlefury_job_process_results,
+	
+	.minerloop = hash_queued_work,
+	.thread_init = littlefury_thread_init,
+	.scanwork = bitfury_scanHash,
 };
