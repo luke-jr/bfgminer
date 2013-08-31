@@ -1,5 +1,18 @@
 Version 3.4.1 - 31st August 2013
 
+- Always use a maxpacketsize buffer in usb_bulk_transfer
+- bflsc ensure getinfo cannot overflow it's storage buffer
+- Don't decref json values in stratum parsing due to memory corruption.
+- Use 64 bytes for all libusb control transfers.
+- Skip dissecting opt->names in parse_config if it doesn't exist.
+- Use an internal buffer in _usb_transfer_read in case the read is larger than
+the buffer passed to it.
+- ICA optional limit timing with short=N or long=N
+- Revert to old custom tolines function since strtok_r is not portable.
+- bflsc remove unused commented out code
+- logging - code mistake
+- logging - applogsiz() for large messages
+- Provide base structures for getaddrinfo.
 - Include string.h in bflsc driver.
 - Get rid of linear removal of spaces in bflsc text parsing and use strstr
 throughout instead.
