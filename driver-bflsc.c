@@ -617,7 +617,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			*lf = '\0';
 		if (!res || count != 1) {
 			tmp = str_text(items[i]);
-			applog(LOG_WARNING, "%s detect (%s) invalid details line: '%s' %d",
+			applogsiz(LOG_WARNING, BFLSC_APPLOGSIZ,
+					"%s detect (%s) invalid details line: '%s' %d",
 					bflsc->drv->dname, bflsc->device_path, tmp, count);
 			free(tmp);
 			dev_error(bflsc, REASON_DEV_COMMS_ERROR);
@@ -631,8 +632,9 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_dev.engines = atoi(fields[0]);
 			if (sc_dev.engines < 1) {
 				tmp = str_text(items[i]);
-				applog(LOG_WARNING, "%s detect (%s) invalid engine count: '%s'",
-					bflsc->drv->dname, bflsc->device_path, tmp);
+				applogsiz(LOG_WARNING, BFLSC_APPLOGSIZ,
+						"%s detect (%s) invalid engine count: '%s'",
+						bflsc->drv->dname, bflsc->device_path, tmp);
 				free(tmp);
 				goto mata;
 			}
@@ -645,8 +647,9 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 			sc_info->sc_count = atoi(fields[0]);
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
-				applog(LOG_WARNING, "%s detect (%s) invalid s-link count: '%s'",
-					bflsc->drv->dname, bflsc->device_path, tmp);
+				applogsiz(LOG_WARNING, BFLSC_APPLOGSIZ,
+						"%s detect (%s) invalid s-link count: '%s'",
+						bflsc->drv->dname, bflsc->device_path, tmp);
 				free(tmp);
 				goto mata;
 			}
@@ -1211,7 +1214,8 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 
 	if (count < sc_info->que_fld_min) {
 		tmp = str_text(data);
-		applog(LOG_INFO, "%s%i:%s work returned too small (%d,%s)",
+		applogsiz(LOG_INFO, BFLSC_APPLOGSIZ,
+				"%s%i:%s work returned too small (%d,%s)",
 				bflsc->drv->name, bflsc->device_id, xlink, count, tmp);
 		free(tmp);
 		inc_hw_errors(bflsc->thr[0]);
@@ -1228,8 +1232,10 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	num = atoi(fields[sc_info->que_noncecount]);
 	if (num != count - sc_info->que_fld_min) {
 		tmp = str_text(data);
-		applog(LOG_INFO, "%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
-		       bflsc->drv->name, bflsc->device_id, xlink, num, count - sc_info->que_fld_max, tmp);
+		applogsiz(LOG_INFO, BFLSC_APPLOGSIZ,
+				"%s%i:%s incorrect data count (%d) will use %d instead from (%s)",
+				bflsc->drv->name, bflsc->device_id, xlink, num,
+				count - sc_info->que_fld_max, tmp);
 		free(tmp);
 		inc_hw_errors(bflsc->thr[0]);
 	}
@@ -1260,8 +1266,9 @@ static void process_nonces(struct cgpu_info *bflsc, int dev, char *xlink, char *
 	for (i = sc_info->que_fld_min; i < count; i++) {
 		if (strlen(fields[i]) != 8) {
 			tmp = str_text(data);
-			applog(LOG_INFO, "%s%i:%s invalid nonce (%s) will try to process anyway",
-			       bflsc->drv->name, bflsc->device_id, xlink, tmp);
+			applogsiz(LOG_INFO, BFLSC_APPLOGSIZ,
+					"%s%i:%s invalid nonce (%s) will try to process anyway",
+					bflsc->drv->name, bflsc->device_id, xlink, tmp);
 			free(tmp);
 		}
 
@@ -1312,16 +1319,18 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 	free(buf);
 	if (!res || lines < 1) {
 		tmp = str_text(pbuf);
-		applog(LOG_ERR, "%s%i:%s empty result (%s) ignored",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp);
+		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+				"%s%i:%s empty result (%s) ignored",
+				bflsc->drv->name, bflsc->device_id, xlink, tmp);
 		free(tmp);
 		goto arigatou;
 	}
 
 	if (lines < QUE_RES_LINES_MIN) {
 		tmp = str_text(pbuf);
-		applog(LOG_ERR, "%s%i:%s result of %d too small (%s) ignored",
-					bflsc->drv->name, bflsc->device_id, xlink, lines, tmp);
+		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+				"%s%i:%s result of %d too small (%s) ignored",
+				bflsc->drv->name, bflsc->device_id, xlink, lines, tmp);
 		free(tmp);
 		goto arigatou;
 	}
@@ -1330,16 +1339,18 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 	if (count < 1) {
 		tmp = str_text(pbuf);
 		tmp2 = str_text(items[1]);
-		applog(LOG_ERR, "%s%i:%s empty result count (%s) in (%s) ignoring",
-					bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
+		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+				"%s%i:%s empty result count (%s) in (%s) ignoring",
+				bflsc->drv->name, bflsc->device_id, xlink, tmp2, tmp);
 		free(tmp2);
 		free(tmp);
 		goto arigatou;
 	} else if (count != 1) {
 		tmp = str_text(pbuf);
 		tmp2 = str_text(items[1]);
-		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) in (%s) will try anyway",
-					bflsc->drv->name, bflsc->device_id, xlink, count, tmp2, tmp);
+		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+				"%s%i:%s incorrect result count %d (%s) in (%s) will try anyway",
+				bflsc->drv->name, bflsc->device_id, xlink, count, tmp2, tmp);
 		free(tmp2);
 		free(tmp);
 	}
@@ -1352,8 +1363,9 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 
 		tmp = str_text(pbuf);
 		tmp2 = str_text(items[0]);
-		applog(LOG_ERR, "%s%i:%s incorrect result count %d (%s) will try %d (%s)",
-					bflsc->drv->name, bflsc->device_id, xlink, i, tmp2, que, tmp);
+		applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+				"%s%i:%s incorrect result count %d (%s) will try %d (%s)",
+				bflsc->drv->name, bflsc->device_id, xlink, i, tmp2, que, tmp);
 		free(tmp2);
 		free(tmp);
 
@@ -1366,8 +1378,9 @@ static int process_results(struct cgpu_info *bflsc, int dev, char *pbuf, int *no
 		if (likely(res))
 			process_nonces(bflsc, dev, &(xlink[0]), items[i], count, fields, nonces);
 		else
-			applog(LOG_ERR, "%s%i:%s failed to process nonce %s",
-				bflsc->drv->name, bflsc->device_id, xlink, items[i]);
+			applogsiz(LOG_ERR, BFLSC_APPLOGSIZ,
+					"%s%i:%s failed to process nonce %s",
+					bflsc->drv->name, bflsc->device_id, xlink, items[i]);
 		freebreakdown(&count, &firstname, &fields);
 		sc_info->not_first_work = true;
 	}
@@ -1571,46 +1584,6 @@ re_send:
 			}
 			break;
 	}
-
-/*
-	err = write_to_dev(bflsc, dev, BFLSC_QJOB, BFLSC_QJOB_LEN, &amount, C_REQUESTQUEJOB);
-	if (err < 0 || amount != BFLSC_QJOB_LEN) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_REQUESTQUEJOB, amount, err);
-		goto out;
-	}
-
-	if (!getok(bflsc, C_REQUESTQUEJOBSTATUS, &err, &amount)) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_REQUESTQUEJOBSTATUS, amount, err);
-		goto out;
-	}
-
-	len = sizeof(struct FullNonceRangeJob);
-
-	err = write_to_dev(bflsc, dev, (char *)&data, len, &amount, C_QUEJOB);
-	if (err < 0 || amount != len) {
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_QUEJOB, amount, err);
-		goto out;
-	}
-
-	if (!getokerr(bflsc, C_QUEJOBSTATUS, &err, &amount, buf, sizeof(buf))) {
-		// TODO: check for QUEUE FULL and set work_queued to sc_info->que_size
-		//  and report a code bug LOG_ERR - coz it should never happen
-
-		// Try twice
-		if (try++ < 1 && amount > 1 &&
-			strstr(buf, BFLSC_TIMEOUT))
-				goto re_send;
-
-		mutex_unlock(&(bflsc->device_mutex));
-		bflsc_applog(bflsc, dev, C_QUEJOBSTATUS, amount, err);
-		goto out;
-	}
-
-	mutex_unlock(&(bflsc->device_mutex));
-*/
 
 	wr_lock(&(sc_info->stat_lock));
 	sc_info->sc_devs[dev].work_queued++;

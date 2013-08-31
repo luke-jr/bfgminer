@@ -42,6 +42,16 @@ extern void _applog(int prio, const char *str);
 	} \
 } while (0)
 
+#define applogsiz(prio, _SIZ, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+		if (use_syslog || opt_log_output || prio <= opt_log_level) { \
+			char tmp42[_SIZ]; \
+			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			_applog(prio, tmp42); \
+		} \
+	} \
+} while (0)
+
 #define quit(status, fmt, ...) do { \
 	if (fmt) { \
 		char tmp42[LOGBUFSIZ]; \
