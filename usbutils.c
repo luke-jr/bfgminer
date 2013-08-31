@@ -2722,7 +2722,8 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
-	uint32_t *buf = NULL;
+	unsigned char buf[64];
+	uint32_t *buf32 = (uint32_t *)buf;
 	int err, i, bufsiz;
 
 	USBDEBUG("USB debug: _usb_transfer(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",siz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, siz, timeout, usb_cmdname(cmd));
@@ -2743,14 +2744,11 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 		bufsiz = siz - 1;
 		bufsiz >>= 2;
 		bufsiz++;
-		buf = malloc(bufsiz << 2);
-		if (unlikely(!buf))
-			quit(1, "Failed to malloc in _usb_transfer");
 		for (i = 0; i < bufsiz; i++)
-			buf[i] = htole32(data[i]);
+			buf32[i] = htole32(data[i]);
 	}
 
-	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex((unsigned char *)buf, (size_t)siz));
+	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex(buf, (size_t)siz));
 
 	if (usbdev->usecps) {
 		if (usbdev->last_write_siz) {
@@ -2775,7 +2773,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_control_transfer(usbdev->handle, request_type,
-		bRequest, wValue, wIndex, (unsigned char *)buf, (uint16_t)siz, timeout);
+		bRequest, wValue, wIndex, buf, (uint16_t)siz, timeout);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0, timeout);
@@ -2783,8 +2781,6 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	USBDEBUG("USB debug: @_usb_transfer(%s (nodev=%s)) err=%d%s", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err));
 
 	IOERR_CHECK(cgpu, err);
-
-	free(buf);
 
 	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
