@@ -61,7 +61,7 @@ int bitfury_autodetect()
 	bitfury_info = calloc(1, sizeof(struct cgpu_info));
 	bitfury_info->drv = &bitfury_drv;
 	bitfury_info->threads = 1;
-	bitfury_info->chip_n = chip_n;
+	bitfury_info->procs = chip_n;
 	add_cgpu(bitfury_info);
 	
 	return 1;
@@ -73,27 +73,43 @@ static void bitfury_detect(void)
 }
 
 
+static
+bool bitfury_init(struct thr_info *thr)
+{
+	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
+	int i = 0;
+	
+	for (proc = thr->cgpu; proc; proc = proc->next_proc)
+	{
+		bitfury = proc->device_data = malloc(sizeof(struct bitfury_device));
+		*bitfury = (struct bitfury_device){
+			.spi = sys_spi,
+			.chip = i++,
+		};
+	}
+	return true;
+}
+
 static int64_t bitfury_scanHash(struct thr_info *thr)
 {
-	static struct bitfury_device devices[100], *bitfury;
-	int chip_n;
-	int chip;
-	uint64_t hashes = 0;
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct cgpu_info *proc;
+	struct thr_info *pthr;
+	struct bitfury_device *bitfury;
 
-	chip_n = thr->cgpu->chip_n;
-
-	for (chip = 0; chip < chip_n; chip++) {
-		bitfury = &devices[chip];
-		bitfury->spi = sys_spi;
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		pthr = proc->thr[0];
+		bitfury = proc->device_data;
+		
 		if(!bitfury->work) {
 			bitfury->work = get_queued(thr->cgpu);
-			if (bitfury->work == NULL) {
+			if (bitfury->work == NULL)
 				return 0;
-			}
 			work_to_payload(&bitfury->payload, bitfury->work);
 		}
 		
-		bitfury->chip = chip;
 		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 		libbitfury_sendHashData1(bitfury, true);
 		
@@ -104,19 +120,19 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			i = bitfury->results_n;
 			for (j = i - 1; j >= 0; j--) {
 				if (owork) {
-					submit_nonce(thr, owork, bswap_32(res[j]));
+					submit_nonce(pthr, owork, bswap_32(res[j]));
 				}
 			}
 
 			if (owork)
-				work_completed(thr->cgpu, owork);
+				work_completed(cgpu, owork);
 
 			bitfury->owork = bitfury->work;
 			bitfury->work = NULL;
-			hashes += 0xffffffffull * i;
+			hashes_done2(pthr, 0x100000000, NULL);
 		}
 	}
-	return hashes;
+	return 0;
 }
 
 static bool bitfury_prepare(struct thr_info *thr)
@@ -139,6 +155,7 @@ struct device_drv bitfury_drv = {
 	.name = "BFY",
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
+	.thread_init = bitfury_init,
 	.scanwork = bitfury_scanHash,
 	.thread_shutdown = bitfury_shutdown,
 	.minerloop = hash_queued_work,
