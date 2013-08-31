@@ -1164,11 +1164,13 @@ void _now_queryperformancecounter(struct timeval *tv)
 }
 #endif
 
+static void bfg_init_time();
+
 static
 void _now_is_not_set(__maybe_unused struct timeval *tv)
 {
-	// Might be unclean to swap algorithms after getting a timer
-	quit(1, "timer_set_now called before bfg_init_time");
+	bfg_init_time();
+	timer_set_now(tv);
 }
 
 void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
@@ -1202,6 +1204,7 @@ bool _bfg_try_clock_gettime(clockid_t clk)
 }
 #endif
 
+static
 void bfg_init_time()
 {
 	if (timer_set_now != _now_is_not_set)

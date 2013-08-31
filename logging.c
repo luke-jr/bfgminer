@@ -75,7 +75,6 @@ void _applog(int prio, const char *str)
 			struct timeval tv;
 			struct tm tm;
 			
-			bfg_init_time();
 			bfg_gettimeofday(&tv);
 			localtime_r(&tv.tv_sec, &tm);
 			

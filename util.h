@@ -225,7 +225,6 @@ bool timer_isset(const struct timeval *tvp)
 }
 
 extern void (*timer_set_now)(struct timeval *);
-extern void bfg_init_time();
 #define cgtime(tvp)  timer_set_now(tvp)
 
 #define TIMEVAL_USECS(usecs)  (  \
