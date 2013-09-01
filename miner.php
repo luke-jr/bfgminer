@@ -1174,7 +1174,7 @@ function showdatetime()
 {
  global $dfmt;
 
- echo otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
+ otherrow('<td class=sta>Date: '.date($dfmt).'</td>');
 }
 #
 global $singlerigsum;
