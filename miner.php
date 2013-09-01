@@ -1,8 +1,8 @@
 <?php
 session_start();
 #
-global $title, $miner, $port, $readonly, $notify, $rigs;
-global $mcast, $mcastaddr, $mcastport, $mcastcode;
+global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
+global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
 global $mcastlistport, $mcasttimeout;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
@@ -10,7 +10,10 @@ global $checklastshare, $poolinputs, $hidefields;
 global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
+global $bad_font_family, $bad_font_size;
 global $colouroverride, $placebuttons, $userlist;
+#
+$doctype = "<!DOCTYPE html>\n";
 #
 # See API-README for more details of these variables and how
 # to configure miner.php
@@ -47,6 +50,9 @@ $rigs = array('127.0.0.1:4028');
 #
 # Set $mcast to true to look for your rigs and ignore $rigs
 $mcast = false;
+#
+# Set $mcastexpect to at least how many rigs you expect it to find
+$mcastexpect = 0;
 #
 # API Multicast address all cgminers are listening on
 $mcastaddr = '224.0.0.75';
@@ -176,8 +182,11 @@ $warnfont = '<font color=red><b>';
 $warnoff = '</b></font>';
 $dfmt = 'H:i:s j-M-Y \U\T\CP';
 #
-$miner_font_family = 'verdana,arial,sans';
+$miner_font_family = 'Verdana, Arial, sans-serif, sans';
 $miner_font_size = '13pt';
+#
+$bad_font_family = '"Times New Roman", Times, serif';
+$bad_font_size = '18pt';
 #
 # Edit this or redefine it in myminer.php to change the colour scheme
 # See $colourtable below for the list of names
@@ -198,7 +207,7 @@ if (file_exists('myminer.php'))
 # This is the system default that must always contain all necessary
 # colours so it must be a constant
 # You can override these values with $colouroverride
-# The only one missing is in $warnfont
+# The only one missing is $warnfont
 # - which you can override directly anyway
 global $colourtable;
 $colourtable = array(
@@ -210,6 +219,8 @@ $colourtable = array(
 	'td.h background'	=> '#c4ffff',
 	'td.err color'		=> 'black',
 	'td.err background'	=> '#ff3050',
+	'td.bad color'		=> 'black',
+	'td.bad background'	=> '#ff3050',
 	'td.warn color'		=> 'black',
 	'td.warn background'	=> '#ffb050',
 	'td.sta color'		=> 'green',
@@ -269,9 +280,10 @@ function getdom($domname)
  return getcss($domname, true);
 }
 #
-function htmlhead($checkapi, $rig, $pg = null, $noscript = false)
+function htmlhead($mcerr, $checkapi, $rig, $pg = null, $noscript = false)
 {
- global $title, $miner_font_family, $miner_font_size;
+ global $doctype, $title, $miner_font_family, $miner_font_size;
+ global $bad_font_family, $bad_font_size;
  global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
 
@@ -300,14 +312,16 @@ function htmlhead($checkapi, $rig, $pg = null, $noscript = false)
 		$readonly = true;
  }
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
+ $bad_font = "font-family:$bad_font_family; font-size:$bad_font_size;";
 
- echo "<html><head>$refreshmeta
+ echo "$doctype<html><head>$refreshmeta
 <title>$title</title>
 <style type='text/css'>
 td { $miner_font ".getcss('td')."}
 td.two { $miner_font ".getcss('td.two')."}
 td.h { $miner_font ".getcss('td.h')."}
 td.err { $miner_font ".getcss('td.err')."}
+td.bad { $bad_font ".getcss('td.bad')."}
 td.warn { $miner_font ".getcss('td.warn')."}
 td.sta { $miner_font ".getcss('td.sta')."}
 td.tot { $miner_font ".getcss('td.tot')."}
@@ -339,6 +353,14 @@ echo "</script>\n";
 <tr><td align=center valign=top>
 <table border=0 cellpadding=4 cellspacing=0 summary='Mine'>
 <?php
+ echo $mcerr;
+}
+#
+function minhead($mcerr = '')
+{
+ global $readonly;
+ $readonly = true;
+ htmlhead($mcerr, false, null, null, true);
 }
 #
 global $haderror, $error;
@@ -643,9 +665,14 @@ function newrow()
  echo '<tr>';
 }
 #
+function othrow($row)
+{
+ return "<tr>$row</tr>";
+}
+#
 function otherrow($row)
 {
- echo "<tr>$row</tr>";
+ echo othrow($row);
 }
 #
 function endrow()
@@ -1810,8 +1837,6 @@ function doOne($rig, $preprocess)
  global $haderror, $readonly, $notify, $rigs;
  global $placebuttons;
 
- htmlhead(true, $rig);
-
  if ($placebuttons == 'top' || $placebuttons == 'both')
 	pagebuttons($rig, null);
 
@@ -2451,6 +2476,8 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 				$results[$cmd][$num] = $process;
 		}
 	}
+	else
+		otherrow('<td class=bad>Bad "$rigs" array</td>');
  }
 
  $shownsomething = false;
@@ -2566,21 +2593,19 @@ function showcustompage($pagename)
  global $customsummarypages;
  global $placebuttons;
 
- htmlhead(false, null, $pagename);
-
  if ($placebuttons == 'top' || $placebuttons == 'both')
 	pagebuttons(null, $pagename);
 
  if (!isset($customsummarypages[$pagename]))
  {
-	otherrow("<td colspan=100>Unknown custom summary page '$pagename'</td>");
+	otherrow("<td colspan=100 class=bad>Unknown custom summary page '$pagename'</td>");
 	return;
  }
 
  $c = count($customsummarypages[$pagename]);
  if ($c < 2 || $c > 3)
  {
-	$rw = "<td colspan=100>Invalid custom summary page '$pagename' (";
+	$rw = "<td colspan=100 class=bad>Invalid custom summary page '$pagename' (";
 	$rw .= count($customsummarypages[$pagename]).')</td>';
 	otherrow($rw);
 	return;
@@ -2625,7 +2650,7 @@ function showcustompage($pagename)
 
  if (count($page) <= 1)
  {
-	otherrow("<td colspan=100>Invalid custom summary page '$pagename' no content </td>");
+	otherrow("<td colspan=100 class=bad>Invalid custom summary page '$pagename' no content </td>");
 	return;
  }
 
@@ -2639,7 +2664,7 @@ function onlylogin()
 {
  global $here;
 
- htmlhead(false, null, null, true);
+ htmlhead('', false, null, null, true);
 
 ?>
 <tr height=15%><td>&nbsp;</td></tr>
@@ -2739,6 +2764,7 @@ function checklogin()
 function display()
 {
  global $miner, $port;
+ global $mcast, $mcastexpect;
  global $readonly, $notify, $rigs;
  global $ignorerefresh, $autorefresh;
  global $allowcustompages, $customsummarypages;
@@ -2750,10 +2776,23 @@ function display()
  if ($pagesonly === 'login')
 	return;
 
+ $mcerr = '';
+
  if ($rigs == null or count($rigs) == 0)
  {
-	otherrow("<td>No rigs defined</td>");
+	if ($mcast === true)
+		$action = 'found';
+	else
+		$action = 'defined';
+
+	minhead();
+	otherrow("<td class=bad>No rigs $action</td>");
 	return;
+ }
+ else
+ {
+	if ($mcast === true && count($rigs) < $mcastexpect)
+		$mcerr = othrow('<td class=bad>Found '.count($rigs)." rigs but expected at least $mcastexpect</td>");
  }
 
  if ($ignorerefresh == false)
@@ -2811,7 +2850,8 @@ function display()
 
 	if ($pg !== null && $pg !== '')
 	{
-		showcustompage($pg);
+		htmlhead($mcerr, false, null, $pg);
+		showcustompage($pg, $mcerr);
 		return;
 	}
  }
@@ -2830,10 +2870,14 @@ function display()
 		$miner = $parts[0];
 		$port = $parts[1];
 
+		htmlhead($mcerr, true, 0);
 		doOne(0, $preprocess);
 	}
 	else
-		otherrow('<td>Invalid "$rigs" array</td>');
+	{
+		minhead($mcerr);
+		otherrow('<td class=bad>Invalid "$rigs" array</td>');
+	}
 
 	return;
  }
@@ -2846,15 +2890,19 @@ function display()
 		$miner = $parts[0];
 		$port = $parts[1];
 
+		htmlhead($mcerr, true, 0);
 		doOne($rig, $preprocess);
 	}
 	else
-		otherrow('<td>Invalid "$rigs" array</td>');
+	{
+		minhead($mcerr);
+		otherrow('<td class=bad>Invalid "$rigs" array</td>');
+	}
 
 	return;
  }
 
- htmlhead(false, null);
+ htmlhead($mcerr, false, null);
 
  if ($placebuttons == 'top' || $placebuttons == 'both')
 	pagebuttons(null, null);
@@ -2880,7 +2928,7 @@ function display()
 	pagebuttons(null, null);
 }
 #
-if (isset($mcast) && $mcast === true)
+if ($mcast === true)
  getrigs();
 display();
 #
