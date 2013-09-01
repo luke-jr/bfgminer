@@ -952,7 +952,9 @@ or in your cgminer.conf
 And in miner.php set $mcast = true;
 
 This will ignore the value of $rigs and overwrite it with the list of zero or
-more rigs found on the network in the timout specified
+more rigs found on the network in the timeout specified
+A rig will not reply if the API settings would mean it would also ignore an
+API request from the web server running miner.php
 
 ---------
 
@@ -1193,6 +1195,14 @@ Default:
  $mcast = false;
 
 Set $mcast to true to look for your rigs and ignore $rigs
+
+---------
+
+Default:
+ $mcastexpect = 0;
+
+The minimum number of rigs expected to be found when $mcast is true
+If fewer are found, an error will be included at the top of the page
 
 ---------
 
