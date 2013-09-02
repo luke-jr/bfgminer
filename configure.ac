@@ -430,7 +430,7 @@ fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
 
-bitfury=auto
+bitfury=yes
 AC_ARG_ENABLE([bitfury],
 	[AC_HELP_STRING([--disable-bitfury],[Compile support for Bitfury (default enabled)])],
 	[bitfury=$enableval]

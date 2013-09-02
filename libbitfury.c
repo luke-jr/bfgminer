@@ -403,7 +403,6 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 	struct timespec time;
 	int smart = 0;
 	int chip = d->fasync;
-	int slot = d->slot;
 
 	memcpy(atrvec, p, 20*4);
 	ms3_compute(atrvec);
