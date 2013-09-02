@@ -211,7 +211,7 @@ bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 endif
 
 if HAS_BITFURY
-bfgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c
+bfgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c tm_i2c.h tm_i2c.c
 endif
 
 bin_PROGRAMS += bfgminer-rpc
