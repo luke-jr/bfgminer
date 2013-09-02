@@ -26,6 +26,7 @@
 #include <sha2.h>
 #include "libbitfury.h"
 #include "util.h"
+#include "spidevc.h"
 
 #define GOLDEN_BACKLOG 5
 
@@ -46,7 +47,10 @@ static void bitfury_detect(void)
 	bitfury_info->threads = 1;
 
 	applog(LOG_INFO, "INFO: bitfury_detect");
-	chip_n = libbitfury_detectChips(bitfury_info->devices);
+	spi_init();
+	if (!sys_spi)
+		return;
+	chip_n = libbitfury_detectChips(sys_spi, bitfury_info->devices);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return;
@@ -81,12 +85,13 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			devices[i].osc6_bits = 54;
 		}
 		for (i = 0; i < chip_n; i++) {
-			send_reinit(devices[i].slot, devices[i].fasync, devices[i].osc6_bits);
+			send_reinit(devices[i].spi, devices[i].slot, devices[i].fasync, devices[i].osc6_bits);
 		}
 	}
 	first = 1;
 
 	for (chip = 0; chip < chip_n; chip++) {
+		devices[chip].spi = sys_spi;
 		devices[chip].job_switched = 0;
 		if(!devices[chip].work) {
 			devices[chip].work = get_queued(thr->cgpu);
@@ -162,9 +167,9 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 
 			if(short_out_t && ghash < 1.0) {
 				applog(LOG_WARNING, "Chip_id %d FREQ CHANGE\n", chip);
-				send_freq(devices[chip].slot, devices[chip].fasync, devices[chip].osc6_bits - 1);
+				send_freq(devices[chip].spi, devices[chip].slot, devices[chip].fasync, devices[chip].osc6_bits - 1);
 				cgsleep_ms(1);
-				send_freq(devices[chip].slot, devices[chip].fasync, devices[chip].osc6_bits);
+				send_freq(devices[chip].spi, devices[chip].slot, devices[chip].fasync, devices[chip].osc6_bits);
 			}
 			shares_total += shares_found;
 			shares_first += chip < 4 ? shares_found : 0;

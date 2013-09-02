@@ -2,6 +2,7 @@
 #define __LIBBITFURY_H__
 
 #include "miner.h"
+#include "spidevc.h"
 
 #define BITFURY_STAT_N 1024
 
@@ -15,6 +16,7 @@ struct bitfury_payload {
 };
 
 struct bitfury_device {
+	struct spi_port *spi;
 	unsigned char osc6_bits;
 	unsigned newbuf[17];
 	unsigned oldbuf[17];
@@ -53,9 +55,9 @@ int libbitfury_readHashData(unsigned int *res);
 void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 struct timespec t_diff(struct timespec start, struct timespec end);
-extern void send_reinit(int slot, int chip_n, int n);
-extern void send_freq(int slot, int chip_n, int bits);
-int libbitfury_detectChips(struct bitfury_device *devices);
+extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
+extern void send_freq(struct spi_port *, int slot, int chip_n, int bits);
+extern int libbitfury_detectChips(struct spi_port *, struct bitfury_device *devices);
 void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n);
 
 #endif /* __LIBBITFURY_H__ */

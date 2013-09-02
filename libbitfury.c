@@ -51,10 +51,10 @@ unsigned char disconf[4] = { 0, 0, 0, 0 };
 unsigned decnonce(unsigned in);
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
-void config_reg(int cfgreg, int ena)
+void config_reg(struct spi_port *port, int cfgreg, int ena)
 {
-	if (ena) spi_emit_data(0x7000+cfgreg*32, (void*)enaconf, 4);
-	else     spi_emit_data(0x7000+cfgreg*32, (void*)disconf, 4);
+	if (ena) spi_emit_data(port, 0x7000+cfgreg*32, (void*)enaconf, 4);
+	else     spi_emit_data(port, 0x7000+cfgreg*32, (void*)disconf, 4);
 }
 
 #define FIRST_BASE 61
@@ -171,15 +171,18 @@ void ms3_compute(unsigned *p)
 	p[15] = a; p[14] = b; p[13] = c; p[12] = d; p[11] = e; p[10] = f; p[9] = g; p[8] = h;
 }
 
-void send_conf() {
-	config_reg(7,0); config_reg(8,0); config_reg(9,0); config_reg(10,0); config_reg(11,0);
-	config_reg(6,0); /* disable OUTSLK */
-	config_reg(4,1); /* Enable slow oscillator */
-	config_reg(1,0); config_reg(2,0); config_reg(3,0);
-	spi_emit_data(0x0100, (void*)counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
+void send_conf(struct spi_port *port) {
+	int i;
+	for (i = 7; i <= 11; ++i)
+		config_reg(port, i, 0);
+	config_reg(port, 6, 0); /* disable OUTSLK */
+	config_reg(port, 4, 1); /* Enable slow oscillator */
+	for (i = 1; i <= 3; ++i)
+		config_reg(port, i, 0);
+	spi_emit_data(port, 0x0100, counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
 }
 
-void send_init() {
+void send_init(struct spi_port *port) {
 	/* Prepare internal buffers */
 	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
 	unsigned w[16];
@@ -191,53 +194,53 @@ void send_init() {
 
 	ms3_compute(&atrvec[0]);
 	memset(&w, 0, sizeof(w)); w[3] = 0xffffffff; w[4] = 0x80000000; w[15] = 0x00000280;
-	spi_emit_data(0x1000, (void*)w, 16*4);
-	spi_emit_data(0x1400, (void*)w,  8*4);
+	spi_emit_data(port, 0x1000, w, 16*4);
+	spi_emit_data(port, 0x1400, w,  8*4);
 	memset(w, 0, sizeof(w)); w[0] = 0x80000000; w[7] = 0x100;
-	spi_emit_data(0x1900, (void*)&w[0],8*4); /* Prepare MS and W buffers! */
-	spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
+	spi_emit_data(port, 0x1900, &w[0],8*4); /* Prepare MS and W buffers! */
+	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 }
 
-void set_freq(int bits) {
+void set_freq(struct spi_port *port, int bits) {
 	uint64_t freq;
 	unsigned char *osc6;
 
 	osc6 = (unsigned char *)&freq;
 	freq = (1ULL << bits) - 1ULL;
 
-	spi_emit_data(0x6000, (void*)osc6, 8); /* Program internal on-die slow oscillator frequency */
-	config_reg(4,1); /* Enable slow oscillator */
+	spi_emit_data(port, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
+	config_reg(port, 4, 1); /* Enable slow oscillator */
 }
 
-void send_reinit(int slot, int chip_n, int n) {
-	spi_clear_buf();
-	spi_emit_break();
-	spi_emit_fasync(chip_n);
-	set_freq(n);
-	send_conf();
-	send_init();
+void send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
+	spi_clear_buf(port);
+	spi_emit_break(port);
+	spi_emit_fasync(port, chip_n);
+	set_freq(port, n);
+	send_conf(port);
+	send_init(port);
 	tm_i2c_set_oe(slot);
-	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+	spi_txrx(port);
 	tm_i2c_clear_oe(slot);
 }
 
-void send_shutdown(int slot, int chip_n) {
-	spi_clear_buf();
-	spi_emit_break();
-	spi_emit_fasync(chip_n);
-	config_reg(4,0); /* Disable slow oscillator */
+void send_shutdown(struct spi_port *port, int slot, int chip_n) {
+	spi_clear_buf(port);
+	spi_emit_break(port);
+	spi_emit_fasync(port, chip_n);
+	config_reg(port, 4, 0); /* Disable slow oscillator */
 	tm_i2c_set_oe(slot);
-	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+	spi_txrx(port);
 	tm_i2c_clear_oe(slot);
 }
 
-void send_freq(int slot, int chip_n, int bits) {
-	spi_clear_buf();
-	spi_emit_break();
-	spi_emit_fasync(chip_n);
-	set_freq(bits);
+void send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
+	spi_clear_buf(port);
+	spi_emit_break(port);
+	spi_emit_fasync(port, chip_n);
+	set_freq(port, bits);
 	tm_i2c_set_oe(slot);
-	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+	spi_txrx(port);
 	tm_i2c_clear_oe(slot);
 }
 
@@ -259,7 +262,7 @@ int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	return 0;
 }
 
-int detect_chip(int chip_n) {
+int detect_chip(struct spi_port *port, int chip_n) {
 	int i;
 	unsigned newbuf[17], oldbuf[17];
 	unsigned ocounter;
@@ -272,28 +275,26 @@ int detect_chip(int chip_n) {
 	ms3_compute(&atrvec[0]);
 	ms3_compute(&atrvec[20]);
 	ms3_compute(&atrvec[40]);
-	if (!spi_init())
-		return 0;
 
 
-	spi_clear_buf();
-	spi_emit_break(); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
-	spi_emit_fasync(chip_n);
-	set_freq(52);  //54 - 3F, 53 - 1F
-	send_conf();
-	send_init();
-	spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+	spi_clear_buf(port);
+	spi_emit_break(port); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
+	spi_emit_fasync(port, chip_n);
+	set_freq(port, 52);  //54 - 3F, 53 - 1F
+	send_conf(port);
+	send_init(port);
+	spi_txrx(port);
 
 	ocounter = 0;
 	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
 		int counter;
 
-		spi_clear_buf();
-		spi_emit_break();
-		spi_emit_fasync(chip_n);
-		spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
-		spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
-		memcpy(newbuf, spi_getrxbuf() + 4 + chip_n, 17*4);
+		spi_clear_buf(port);
+		spi_emit_break(port);
+		spi_emit_fasync(port, chip_n);
+		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+		spi_txrx(port);
+		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
 
 		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
 		counter = get_counter(newbuf, oldbuf);
@@ -314,7 +315,7 @@ int detect_chip(int chip_n) {
 	return 0;
 }
 
-int libbitfury_detectChips(struct bitfury_device *devices) {
+int libbitfury_detectChips(struct spi_port *port, struct bitfury_device *devices) {
 	int n = 0;
 	int i;
 	static bool slot_on[32];
@@ -340,7 +341,7 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 			int chip_detected;
 			tm_i2c_set_oe(i);
 			do {
-				chip_detected = detect_chip(chip_n);
+				chip_detected = detect_chip(port, chip_n);
 				if (chip_detected) {
 					applog(LOG_WARNING, "BITFURY slot: %d, chip #%d detected", i, n);
 					devices[n].slot = i;
@@ -362,7 +363,7 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n) {
 	int i;
 	for (i = 0; i < chip_n; i++) {
-		send_shutdown(devices[i].slot, devices[i].fasync);
+		send_shutdown(devices[i].spi, devices[i].slot, devices[i].fasync);
 	}
 	tm_i2c_close();
 }
@@ -444,6 +445,7 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 }
 
 void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
+	struct spi_port *port = bf->spi;
 	int chip_id;
 	static unsigned second_run;
 
@@ -476,18 +478,19 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 			d->otimer1 = d->timer1;
 			d->timer1 = time;
 			/* Programming next value */
-			spi_clear_buf(); spi_emit_break();
-			spi_emit_fasync(chip);
-			spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
+			spi_clear_buf(port);
+			spi_emit_break(port);
+			spi_emit_fasync(port, chip);
+			spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 			if (smart) {
-				config_reg(3,0);
+				config_reg(port, 3, 0);
 			}
 			tm_i2c_set_oe(slot);
 			clock_gettime(CLOCK_REALTIME, &(time));
 			d_time = t_diff(time, d->predict1);
-			spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+			spi_txrx(port);
 			tm_i2c_clear_oe(slot);
-			memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
+			memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 
 			d->job_switched = newbuf[16] != oldbuf[16];
 
@@ -647,17 +650,17 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 			if(smart) {
 				d->otimer2 = d->timer2;
 				d->timer2 = time;
-				spi_clear_buf();
-				spi_emit_break();
-				spi_emit_fasync(chip);
-				spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
+				spi_clear_buf(port);
+				spi_emit_break(port);
+				spi_emit_fasync(port, chip);
+				spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 				if (smart) {
-					config_reg(3,1);
+					config_reg(port, 3, 1);
 				}
 				tm_i2c_set_oe(slot);
-				spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+				spi_txrx(port);
 				tm_i2c_clear_oe(slot);
-				memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
+				memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 				d->counter2 = get_counter(newbuf, oldbuf);
 
 				d->req2_done = 1;

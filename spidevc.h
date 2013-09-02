@@ -2,33 +2,67 @@
 #define SPIDEVC_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <unistd.h>
 
-/* Initialize SPI using this function */
-bool spi_init(void);
+#define SPIMAXSZ (256*1024)
 
-/* TX-RX single frame */
-int spi_txrx(const void *wrbuf, void *rdbuf, size_t bufsz);
+/* Initialize SPI using this function */
+void spi_init(void);
+
+struct spi_port {
+	/* TX-RX single frame */
+	bool (*txrx)(struct spi_port *port);
+	
+	char spibuf[SPIMAXSZ], spibuf_rx[SPIMAXSZ];
+	size_t spibufsz;
+};
+
+extern struct spi_port *sys_spi;
+
 
 /* SPI BUFFER OPS */
-void spi_clear_buf(void);
-unsigned char *spi_getrxbuf(void);
-unsigned char *spi_gettxbuf(void);
-unsigned spi_getbufsz(void);
+static inline
+void spi_clear_buf(struct spi_port *port)
+{
+	port->spibufsz = 0;
+}
 
-void spi_emit_buf_reverse(const char *str, unsigned sz); /* INTERNAL USE: EMIT REVERSED BYTE SEQUENCE DIRECTLY TO STREAM */
-void spi_emit_buf(void *str, unsigned sz); /* INTERNAL USE: EMIT BYTE SEQUENCE DIRECTLY TO STREAM */
+static inline
+void *spi_getrxbuf(struct spi_port *port)
+{
+	return port->spibuf_rx;
+}
 
-void spi_emit_break(void); /* BREAK CONNECTIONS AFTER RESET */
-void spi_emit_fsync(void); /* FEED-THROUGH TO NEXT CHIP SYNCHRONOUSLY (WITH FLIP-FLOP) */
-void spi_emit_fasync(int n); /* FEED-THROUGH TO NEXT CHIP ASYNCHRONOUSLY (WITHOUT FLIP-FLOP INTERMEDIATE) */
-void spi_emit_nop(int n);
+static inline
+void *spi_gettxbuf(struct spi_port *port)
+{
+	return port->spibuf;
+}
+
+static inline
+size_t spi_getbufsz(struct spi_port *port)
+{
+	return port->spibufsz;
+}
+
+
+extern void spi_emit_break(struct spi_port *port); /* BREAK CONNECTIONS AFTER RESET */
+extern void spi_emit_fsync(struct spi_port *port); /* FEED-THROUGH TO NEXT CHIP SYNCHRONOUSLY (WITH FLIP-FLOP) */
+extern void spi_emit_fasync(struct spi_port *port, int n); /* FEED-THROUGH TO NEXT CHIP ASYNCHRONOUSLY (WITHOUT FLIP-FLOP INTERMEDIATE) */
+extern void spi_emit_nop(struct spi_port *port, int n);
 
 /* TRANSMIT PROGRAMMING SEQUENCE (AND ALSO READ-BACK) */
 /* addr is the destination address in bits (16-bit - 0 to 0xFFFF valid ones)
    buf is buffer to be transmitted, it will go at position spi_getbufsz()+3
    len is length in _bytes_, should be 4 to 128 and be multiple of 4, as smallest
    transmission quantum is 32 bits */
-void spi_emit_data(unsigned addr, const char *buf, unsigned len);
+extern void spi_emit_data(struct spi_port *port, uint16_t addr, void *buf, size_t len);
+
+static inline
+bool spi_txrx(struct spi_port *port)
+{
+	return port->txrx(port);
+}
 
 #endif
