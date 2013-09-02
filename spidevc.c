@@ -100,11 +100,10 @@ void spi_reset(void)
 	SET_GPIO_ALT(9,0);
 }
 
-int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz)
+int spi_txrx(const void *wrbuf, void *rdbuf, size_t bufsz)
 {
 	int fd;
 	int mode, bits, speed, rv, i, j;
-	struct timespec tv;
 	struct spi_ioc_transfer tr[16];
 
 	memset(&tr,0,sizeof(tr));
@@ -176,9 +175,8 @@ void spi_emit_buf_reverse(const char *str, unsigned sz)
 	spibufsz += sz;
 }
 
-void spi_emit_buf(const char *str, unsigned sz)
+void spi_emit_buf(void *str, unsigned sz)
 {
-	unsigned i;
 	if (spibufsz + sz >= SPIMAXSZ) return;
 	memcpy(&spibuf[spibufsz], str, sz); spibufsz += sz;
 }
