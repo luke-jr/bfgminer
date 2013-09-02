@@ -22,8 +22,6 @@
 #define TM_MODE_AUTO    0
 #define TM_MODE_MANUAL  1
 
-static int tm_i2c_fd;
-
 typedef struct {
 	unsigned char cmd;
 	unsigned char data_lsb;

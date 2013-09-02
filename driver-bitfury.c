@@ -39,7 +39,6 @@ double shares_to_ghashes(int shares, int seconds);
 static void bitfury_detect(void)
 {
 	int chip_n;
-	int i;
 	struct cgpu_info *bitfury_info;
 
 	bitfury_info = calloc(1, sizeof(struct cgpu_info));
@@ -66,14 +65,12 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	int chip;
 	uint64_t hashes = 0;
 	struct timeval now;
-	unsigned char line[2048];
+	char line[2048];
 	int short_stat = 10;
 	static time_t short_out_t;
 	int long_stat = 1800;
 	static time_t long_out_t;
-	int long_long_stat = 60 * 30;
-	static time_t long_long_out_t;
-	static first = 0; //TODO Move to detect()
+	static int first = 0; //TODO Move to detect()
 	int i;
 
 	devices = thr->cgpu->devices;
@@ -150,9 +147,9 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 
 	if (now.tv_sec - short_out_t > short_stat) {
 		int shares_first = 0, shares_last = 0, shares_total = 0;
-		char stat_lines[32][256] = {0};
+		char stat_lines[32][256] = {{0}};
 		int len, k;
-		double gh[32][8] = {0};
+		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
 
 		for (chip = 0; chip < chip_n; chip++) {
@@ -174,7 +171,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			shares_last += chip > 3 ? shares_found : 0;
 		}
 		sprintf(line, "vvvvwww SHORT stat %ds: wwwvvvv", short_stat);
-		applog(LOG_WARNING, line);
+		applog(LOG_WARNING, "%s", line);
 		for(i = 0; i < 32; i++)
 			if(strlen(stat_lines[i])) {
 				len = strlen(stat_lines[i]);
@@ -187,16 +184,16 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 					ghsum += gh[i][k] + gh[i][k+4];
 				}
 				snprintf(stat_lines[i] + len, 256 - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
-				applog(LOG_WARNING, stat_lines[i]);
+				applog(LOG_WARNING, "%s", stat_lines[i]);
 			}
 		short_out_t = now.tv_sec;
 	}
 
 	if (now.tv_sec - long_out_t > long_stat) {
 		int shares_first = 0, shares_last = 0, shares_total = 0;
-		char stat_lines[32][256] = {0};
+		char stat_lines[32][256] = {{0}};
 		int len, k;
-		double gh[32][8] = {0};
+		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
 
 		for (chip = 0; chip < chip_n; chip++) {
@@ -212,7 +209,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			shares_last += chip > 3 ? shares_found : 0;
 		}
 		sprintf(line, "!!!_________ LONG stat %ds: ___________!!!", long_stat);
-		applog(LOG_WARNING, line);
+		applog(LOG_WARNING, "%s", line);
 		for(i = 0; i < 32; i++)
 			if(strlen(stat_lines[i])) {
 				len = strlen(stat_lines[i]);
@@ -225,7 +222,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 					ghsum += gh[i][k] + gh[i][k+4];
 				}
 				snprintf(stat_lines[i] + len, 256 - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
-				applog(LOG_WARNING, stat_lines[i]);
+				applog(LOG_WARNING, "%s", stat_lines[i]);
 			}
 		long_out_t = now.tv_sec;
 	}
@@ -261,7 +258,6 @@ static bool bitfury_prepare(struct thr_info *thr)
 static void bitfury_shutdown(struct thr_info *thr)
 {
 	int chip_n;
-	int i;
 
 	chip_n = thr->cgpu->chip_n;
 

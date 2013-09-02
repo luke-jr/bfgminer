@@ -1,8 +1,12 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
+
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include "tm_i2c.h"
+
+static int tm_i2c_fd;
 
 float tm_i2c_Data2Temp(unsigned int ans) {
 	float t = ans;

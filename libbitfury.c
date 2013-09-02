@@ -201,7 +201,6 @@ void send_init() {
 void set_freq(int bits) {
 	uint64_t freq;
 	unsigned char *osc6;
-	int i;
 
 	osc6 = (unsigned char *)&freq;
 	freq = (1ULL << bits) - 1ULL;
@@ -248,10 +247,9 @@ unsigned int c_diff(unsigned ocounter, unsigned counter) {
 
 int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	int j;
-	unsigned counter;
 	for(j = 0; j < 16; j++) {
 		if (newbuf[j] != oldbuf[j]) {
-			int counter = decnonce(newbuf[j]);
+			unsigned counter = decnonce(newbuf[j]);
 			if ((counter & 0xFFC00000) == 0xdf800000) {
 				counter -= 0xdf800000;
 				return counter;
@@ -266,7 +264,7 @@ int detect_chip(int chip_n) {
 	unsigned newbuf[17], oldbuf[17];
 	unsigned ocounter;
 	int odiff;
-	struct timespec t1, t2, td;
+	struct timespec t1;
 
 	memset(newbuf, 0, 17 * 4);
 	memset(oldbuf, 0, 17 * 4);
@@ -288,7 +286,6 @@ int detect_chip(int chip_n) {
 
 	ocounter = 0;
 	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
-		int j;
 		int counter;
 
 		spi_clear_buf();
@@ -302,16 +299,12 @@ int detect_chip(int chip_n) {
 		counter = get_counter(newbuf, oldbuf);
 		if (ocounter) {
 			unsigned int cdiff = c_diff(ocounter, counter);
-			unsigned per_ms;
 
-			td = t_diff(t2, t1);
-			per_ms = cdiff / (td.tv_nsec / 1000);
 			if (cdiff > 5000 && cdiff < 100000 && odiff > 5000 && odiff < 100000)
 				return 1;
 			odiff = cdiff;
 		}
 		ocounter = counter;
-		t2 = t1;
 		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF) {
 			return 0;
 		}
@@ -324,7 +317,7 @@ int detect_chip(int chip_n) {
 int libbitfury_detectChips(struct bitfury_device *devices) {
 	int n = 0;
 	int i;
-	static slot_on[32];
+	static bool slot_on[32];
 	struct timespec t1, t2;
 
 	if (tm_i2c_init() < 0) {
@@ -366,7 +359,7 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 	//return 1;
 }
 
-int libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n) {
+void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n) {
 	int i;
 	for (i = 0; i < chip_n; i++) {
 		send_shutdown(devices[i].slot, devices[i].fasync);
@@ -400,12 +393,13 @@ int rehash(unsigned char *midstate, unsigned m7,
 			unsigned ntime, unsigned nbits, unsigned nnonce) {
 	unsigned char in[16];
 	unsigned int *in32 = (unsigned int *)in;
-	char hex[65];
 	unsigned int *mid32 = (unsigned int *)midstate;
 	unsigned out32[8];
 	unsigned char *out = (unsigned char *) out32;
+#ifdef BITFURY_REHASH_DEBUG
 	static unsigned history[512];
 	static unsigned history_p;
+#endif
 	sha256_ctx ctx;
 
 
@@ -425,10 +419,13 @@ int rehash(unsigned char *midstate, unsigned m7,
 	sha256(out, 32, out);
 
 	if (out32[7] == 0) {
+#ifdef BITFURY_REHASH_DEBUG
+		char hex[65];
 		bin2hex(hex, out, 32);
-//		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
-//		history[history_p] = nnonce;
-//		history_p++; history_p &= 512 - 1;
+		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
+		history[history_p] = nnonce;
+		history_p++; history_p &= 512 - 1;
+#endif
 		return 1;
 	}
 	return 0;
@@ -460,7 +457,6 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 		struct timespec d_time;
 		struct timespec time;
 		int smart = 0;
-		int i;
 		int chip = d->fasync;
 		int slot = d->slot;
 
@@ -506,7 +502,6 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 				if (oldbuf[i] != newbuf[i] && op && o2p) {
 					unsigned pn; //possible nonce
 					unsigned int s = 0; //TODO zero may be solution
-					unsigned int old_f = 0;
 					if ((newbuf[i] & 0xFF) == 0xE0)
 						continue;
 					pn = decnonce(newbuf[i]);
