@@ -92,6 +92,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 {
 	uint16_t crc;
 	size_t sz;
+	ssize_t r;
 	uint8_t pkt[0x106];
 	bool b;
 	
@@ -112,22 +113,31 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 			bin2hex(hex, pkt, sz);
 			applog(LOG_DEBUG, "%s: DEVPROTO: SEND %s", repr, hex);
 		}
-		if (sz != write(fd, pkt, sz))
+		r = write(fd, pkt, sz);
+		if (sz != r)
 		{
-			applog(prio, "%s: Failed to write packet", repr);
+			applog(prio, "%s: Failed to write packet (%d bytes succeeded)", repr, (int)r);
 			return false;
 		}
 	}
 	
 	{
-		if (4 != read(fd, pkt, 4) || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
+		r = read(fd, pkt, 4);
+		if (4 != r || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
 		{
+			char hex[(r * 2) + 1];
+			bin2hex(hex, pkt, r);
+			applog(prio, "%s: DEVPROTO: RECV %s", repr, hex);
 			applog(prio, "%s: Failed to read correct packet header", repr);
 			return false;
 		}
 		sz = pkt[3] + 2;
-		if (sz != read(fd, &pkt[4], sz))
+		r = read(fd, &pkt[4], sz);
+		if (sz != r)
 		{
+			char hex[(r * 2) + 1];
+			bin2hex(hex, pkt, r);
+			applog(prio, "%s: DEVPROTO: RECV %s", repr, hex);
 			applog(prio, "%s: Failed to read packet payload (len=%d)", repr, (int)sz);
 			return false;
 		}
