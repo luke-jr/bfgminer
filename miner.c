@@ -60,6 +60,7 @@
 
 #include "compat.h"
 #include "deviceapi.h"
+#include "logging.h"
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
