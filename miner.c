@@ -9371,6 +9371,10 @@ extern struct device_drv icarus_drv;
 extern struct device_drv avalon_drv;
 #endif
 
+#ifdef USE_LITTLEFURY
+extern struct device_drv littlefury_drv;
+#endif
+
 #ifdef USE_MODMINER
 extern struct device_drv modminer_drv;
 #endif
@@ -9493,6 +9497,11 @@ void drv_detect_all()
 #ifdef USE_BITFURY
 	if (!opt_scrypt)
 		bitfury_drv.drv_detect();
+#endif
+
+#ifdef USE_LITTLEFURY
+	if (!opt_scrypt)
+		littlefury_drv.drv_detect();
 #endif
 
 	/* Detect avalon last since it will try to claim the device regardless
