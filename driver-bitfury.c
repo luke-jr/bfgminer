@@ -21,9 +21,13 @@
  * THE SOFTWARE.
  */
 
+#include "config.h"
+
 #include "miner.h"
 #include <unistd.h>
 #include <sha2.h>
+
+#include "fpgautils.h"
 #include "libbitfury.h"
 #include "util.h"
 #include "spidevc.h"
@@ -117,8 +121,11 @@ static bool bitfury_prepare(struct thr_info *thr);
 int calc_stat(time_t * stat_ts, time_t stat, struct timeval now);
 double shares_to_ghashes(int shares, int seconds);
 
-static void bitfury_detect(void)
+static
+int bitfury_autodetect()
 {
+	RUNONCE(0);
+	
 	int chip_n;
 	struct cgpu_info *bitfury_info;
 
@@ -129,17 +136,24 @@ static void bitfury_detect(void)
 	applog(LOG_INFO, "INFO: bitfury_detect");
 	spi_init();
 	if (!sys_spi)
-		return;
+		return 0;
 	chip_n = libbitfury_detectChips(bitfury_info->devices);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
-		return;
+		return 0;
 	} else {
 		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
 	}
 
 	bitfury_info->chip_n = chip_n;
 	add_cgpu(bitfury_info);
+	
+	return 1;
+}
+
+static void bitfury_detect(void)
+{
+	noserial_detect_manual(&bitfury_drv, bitfury_autodetect);
 }
 
 static int64_t bitfury_scanHash(struct thr_info *thr)
