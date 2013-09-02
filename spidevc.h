@@ -61,7 +61,7 @@ extern void spi_emit_nop(struct spi_port *port, int n);
    buf is buffer to be transmitted, it will go at position spi_getbufsz()+3
    len is length in _bytes_, should be 4 to 128 and be multiple of 4, as smallest
    transmission quantum is 32 bits */
-extern void spi_emit_data(struct spi_port *port, uint16_t addr, void *buf, size_t len);
+extern void spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_t len);
 
 static inline
 bool spi_txrx(struct spi_port *port)
