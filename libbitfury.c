@@ -274,7 +274,8 @@ int detect_chip(int chip_n) {
 	ms3_compute(&atrvec[0]);
 	ms3_compute(&atrvec[20]);
 	ms3_compute(&atrvec[40]);
-	spi_init();
+	if (!spi_init())
+		return 0;
 
 
 	spi_clear_buf();

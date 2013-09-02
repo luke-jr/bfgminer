@@ -1,8 +1,10 @@
 #ifndef SPIDEVC_H
 #define SPIDEVC_H
 
+#include <stdbool.h>
+
 /* Initialize SPI using this function */
-void spi_init(void);
+bool spi_init(void);
 
 /* TX-RX single frame */
 int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz);
