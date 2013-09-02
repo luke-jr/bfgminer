@@ -315,9 +315,16 @@ int detect_chip(struct spi_port *port, int chip_n) {
 	return 0;
 }
 
+int libbitfury_detectChips1(struct spi_port *port) {
+	int n;
+	for (n = 0; detect_chip(port, n); ++n)
+	{}
+	return n;
+}
+
 int libbitfury_detectChips(struct spi_port *port, struct bitfury_device *devices) {
 	int n = 0;
-	int i;
+	int i, j;
 	static bool slot_on[32];
 	struct timespec t1, t2;
 
@@ -337,20 +344,20 @@ int libbitfury_detectChips(struct spi_port *port, struct bitfury_device *devices
 
 	for (i = 0; i < 32; i++) {
 		if (slot_on[i]) {
-			int chip_n = 0;
-			int chip_detected;
+			int chip_n;
 			tm_i2c_set_oe(i);
-			do {
-				chip_detected = detect_chip(port, chip_n);
-				if (chip_detected) {
-					applog(LOG_WARNING, "BITFURY slot: %d, chip #%d detected", i, n);
-					devices[n].slot = i;
-					devices[n].fasync = chip_n;
-					n++;
-					chip_n++;
-				}
-			} while (chip_detected);
+			chip_n = libbitfury_detectChips1(port);
 			tm_i2c_clear_oe(i);
+			if (chip_n)
+			{
+				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
+				for (j = 0; j < chip_n; ++j)
+				{
+					devices[n].slot = i;
+					devices[n].fasync = j;
+					n++;
+				}
+			}
 		}
 	}
 
