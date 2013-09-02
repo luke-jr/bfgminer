@@ -48,7 +48,7 @@
 #define HAVE_LINUX_SPI
 
 #ifdef HAVE_LINUX_SPI
-static bool sys_spi_txrx(struct spi_port *port);
+bool sys_spi_txrx(struct spi_port *port);
 static volatile unsigned *gpio;
 #endif
 
@@ -123,7 +123,6 @@ void spi_reset(void)
 	return false;  \
 }while(0)
 
-static
 bool sys_spi_txrx(struct spi_port *port)
 {
 	const void *wrbuf = spi_gettxbuf(port);

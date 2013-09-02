@@ -57,9 +57,8 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 struct timespec t_diff(struct timespec start, struct timespec end);
 extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
+extern void send_shutdown(struct spi_port *, int slot, int chip_n);
 extern void send_freq(struct spi_port *, int slot, int chip_n, int bits);
 extern int libbitfury_detectChips1(struct spi_port *);
-extern int libbitfury_detectChips(struct spi_port *, struct bitfury_device *devices);
-void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n);
 
 #endif /* __LIBBITFURY_H__ */

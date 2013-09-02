@@ -28,7 +28,6 @@
 #include <string.h>
 
 #include "miner.h"
-#include "tm_i2c.h"
 #include "libbitfury.h"
 
 #include "spidevc.h"
@@ -219,9 +218,7 @@ void send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
 	set_freq(port, n);
 	send_conf(port);
 	send_init(port);
-	tm_i2c_set_oe(slot);
 	spi_txrx(port);
-	tm_i2c_clear_oe(slot);
 }
 
 void send_shutdown(struct spi_port *port, int slot, int chip_n) {
@@ -229,9 +226,7 @@ void send_shutdown(struct spi_port *port, int slot, int chip_n) {
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
 	config_reg(port, 4, 0); /* Disable slow oscillator */
-	tm_i2c_set_oe(slot);
 	spi_txrx(port);
-	tm_i2c_clear_oe(slot);
 }
 
 void send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
@@ -239,9 +234,7 @@ void send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
 	set_freq(port, bits);
-	tm_i2c_set_oe(slot);
 	spi_txrx(port);
-	tm_i2c_clear_oe(slot);
 }
 
 unsigned int c_diff(unsigned ocounter, unsigned counter) {
@@ -320,59 +313,6 @@ int libbitfury_detectChips1(struct spi_port *port) {
 	for (n = 0; detect_chip(port, n); ++n)
 	{}
 	return n;
-}
-
-int libbitfury_detectChips(struct spi_port *port, struct bitfury_device *devices) {
-	int n = 0;
-	int i, j;
-	static bool slot_on[32];
-	struct timespec t1, t2;
-
-	if (tm_i2c_init() < 0) {
-		printf("I2C init error\n");
-		return(1);
-	}
-
-
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
-	for (i = 0; i < 32; i++) {
-		int slot_detected = tm_i2c_detect(i) != -1;
-		slot_on[i] = slot_detected;
-		tm_i2c_clear_oe(i);
-		cgsleep_ms(1);
-	}
-
-	for (i = 0; i < 32; i++) {
-		if (slot_on[i]) {
-			int chip_n;
-			tm_i2c_set_oe(i);
-			chip_n = libbitfury_detectChips1(port);
-			tm_i2c_clear_oe(i);
-			if (chip_n)
-			{
-				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
-				for (j = 0; j < chip_n; ++j)
-				{
-					devices[n].slot = i;
-					devices[n].fasync = j;
-					n++;
-				}
-			}
-		}
-	}
-
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
-
-	return n; //!!!
-	//return 1;
-}
-
-void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n) {
-	int i;
-	for (i = 0; i < chip_n; i++) {
-		send_shutdown(devices[i].spi, devices[i].slot, devices[i].fasync);
-	}
-	tm_i2c_close();
 }
 
 unsigned decnonce(unsigned in)
@@ -488,11 +428,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 		if (smart) {
 			config_reg(port, 3, 0);
 		}
-		tm_i2c_set_oe(slot);
 		clock_gettime(CLOCK_REALTIME, &(time));
 		d_time = t_diff(time, d->predict1);
 		spi_txrx(port);
-		tm_i2c_clear_oe(slot);
 		memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 
 		d->job_switched = newbuf[16] != oldbuf[16];
@@ -660,9 +598,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 			if (smart) {
 				config_reg(port, 3, 1);
 			}
-			tm_i2c_set_oe(slot);
 			spi_txrx(port);
-			tm_i2c_clear_oe(slot);
 			memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 			d->counter2 = get_counter(newbuf, oldbuf);
 

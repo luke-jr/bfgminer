@@ -69,4 +69,6 @@ bool spi_txrx(struct spi_port *port)
 	return port->txrx(port);
 }
 
+extern bool sys_spi_txrx(struct spi_port *);
+
 #endif
