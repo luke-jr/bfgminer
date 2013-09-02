@@ -3,7 +3,7 @@ session_start();
 #
 global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
-global $mcastlistport, $mcasttimeout;
+global $mcastlistport, $mcasttimeout, $allowgen;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -69,6 +69,10 @@ $mcastlistport = 4027;
 # Set $mcasttimeout to the number of seconds (floating point)
 # to wait for replies to the Multicast message
 $mcasttimeout = 1.5;
+#
+# Set $allowgen to true to allow customsummarypages to use 'gen' 
+# false means ignore any 'gen' options
+$allowgen = false;
 #
 # Set $rigipsecurity to false to show the IP/Port of the rig
 # in the socket error messages and also show the full socket message
@@ -145,7 +149,7 @@ $poolspage = array(
 			'POOL.Has GBT=GBT', 'STATS.Times Sent=TSent',
 			'STATS.Bytes Sent=BSent', 'STATS.Net Bytes Sent=NSent',
 			'STATS.Times Recv=TRecv', 'STATS.Bytes Recv=BRecv',
-			'STATS.Net Bytes Recv=NRecv'));
+			'STATS.Net Bytes Recv=NRecv', 'GEN.AvShr=AvShr'));
 #
 $poolssum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
@@ -162,7 +166,9 @@ $poolsext = array(
 	'calc' => array('POOL.Difficulty Accepted' => 'sum', 'POOL.Difficulty Rejected' => 'sum',
 			'STATS.Times Sent' => 'sum', 'STATS.Bytes Sent' => 'sum',
 			'STATS.Net Bytes Sent' => 'sum', 'STATS.Times Recv' => 'sum',
-			'STATS.Bytes Recv' => 'sum', 'STATS.Net Bytes Recv' => 'sum'),
+			'STATS.Bytes Recv' => 'sum', 'STATS.Net Bytes Recv' => 'sum',
+			'POOL.Accepted' => 'sum'),
+	'gen' => array('AvShr' => 'round(POOL.Difficulty Accepted/max(POOL.Accepted,1)*100)/100'),
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -2349,8 +2355,55 @@ function processcompare($which, $ext, $section, $res)
  return $res;
 }
 #
-function processext($ext, $section, $res)
+function ss($a, $b)
 {
+ $la = strlen($a);
+ $lb = strlen($b);
+ if ($la != $lb)
+	return $la - $lb;
+ return strcmp($a, $b);
+}
+#
+function genfld($row, $calc)
+{
+ uksort($row, "ss");
+
+ foreach ($row as $name => $value)
+	if (strstr($calc, $name) !== FALSE)
+		$calc = str_replace($name, $value, $calc);
+
+ eval("\$val = $calc;");
+
+ return $val;
+}
+#
+function dogen($ext, $section, &$res, &$fields)
+{
+ $gen = $ext[$section]['gen'];
+
+ foreach ($gen as $fld => $calc)
+	$fields[] = "GEN.$fld";
+
+ foreach ($res as $rig => $result)
+	foreach ($result as $sec => $row)
+	{
+		$secname = preg_replace('/\d/', '', $sec);
+		if (secmatch($section, $secname))
+			foreach ($gen as $fld => $calc)
+			{
+				$name = "GEN.$fld";
+
+				$val = genfld($row, $calc);
+
+				$res[$rig][$sec][$name] = $val;
+			}
+	}
+}
+#
+function processext($ext, $section, $res, &$fields)
+{
+ global $allowgen;
+
  $res = processcompare('where', $ext, $section, $res);
 
  if (isset($ext[$section]['group']))
@@ -2417,6 +2470,10 @@ function processext($ext, $section, $res)
 		$res = array('' => $res2);
 	}
  }
+
+ // Generated fields (functions of other fields)
+ if ($allowgen === true && isset($ext[$section]['gen']))
+	dogen($ext, $section, $res, $fields);
 
  return processcompare('having', $ext, $section, $res);
 }
@@ -2514,7 +2571,8 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 
 		if (isset($results[$sectionmap[$section]]))
 		{
-			$rigresults = processext($ext, $section, $results[$sectionmap[$section]]);
+			$rigresults = processext($ext, $section, $results[$sectionmap[$section]], $fields);
+
 			$showfields = array();
 			$showhead = array();
 			foreach ($fields as $field)

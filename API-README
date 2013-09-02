@@ -1248,6 +1248,16 @@ N.B. the accuracy of the timing used to wait for the replies is
 ---------
 
 Default:
+ $allowgen = false;
+
+Set $allowgen to true to allow customsummarypages to use 'gen' 
+false means ignore any 'gen' options
+This is disabled by default due to the possible security risk
+of using it, see the end of this document for an explanation
+
+---------
+
+Default:
  $rigipsecurity = true;
 
 Set $rigipsecurity to false to show the IP/Port of the rig
@@ -1508,6 +1518,7 @@ The example given:
 With cgminer 2.10.2 and later, miner.php includes an extension to
 the custom pages that allows you to apply SQL style commands to
 the data: where, group, and having
+cgminer 3.4.2 also includes another option 'gen'
 
 As an example, miner.php includes a more complex custom page called 'Pools'
 this includes the extension:
@@ -1523,6 +1534,7 @@ $poolsext = array(
                         'STATS.Bytes Sent' => 'sum',
                         'STATS.Times Recv' => 'sum',
                         'STATS.Bytes Recv' => 'sum'),
+        'gen' => array('AvShr', 'POOL.Difficulty Accepted/max(POOL.Accepted,1)),
         'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -1574,3 +1586,21 @@ The first 4 are as expected - the numerical sum, average, minimum or maximum
  of course any valid 'DEVS.Xyz' would give the same 'count' value
 'any' is effectively random: the field value in the 1st row of the grouped data
 An unrecognised 'function' uses 'any'
+
+A 'gen' allows you to generate new fields from any php valid function of any
+of the other fields
+ e.g. 'gen' => array('AvShr', 'POOL.Difficulty Accepted/max(POOL.Accepted,1)),
+will generate a new field called GEN.AvShr that is the function shown, which
+in this case is the average difficulty of each share submitted
+
+THERE IS A SECURITY RISK WITH HOW GEN WORKS
+It simply replaces all the variables with their values and then requests PHP
+the execute the formula - thus if a field value returned from a cgminer API
+request contained PHP code, it could be executed by your web server
+Of course cgminer doesn't do this, but if you do not control the cgminer that
+returns the data in the API calls, someone could modify cgminer to return a
+PHP string in a field you use in 'gen'
+Thus use 'gen' at your own risk
+If someone feels the urge to write a mathematical interpreter in PHP to get
+around this risk, feel free to write one and submit it to the API author for
+consideration
