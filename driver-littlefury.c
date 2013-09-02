@@ -96,7 +96,10 @@ ssize_t keep_reading(int fd, void *buf, size_t count)
 	{
 		r = read(fd, buf, count);
 		if (unlikely(r <= 0))
+		{
+			applog(LOG_ERR, "Read of fd %d returned %d", fd, r);
 			return rv ?: r;
+		}
 		rv += r;
 		count -= r;
 		buf += r;
