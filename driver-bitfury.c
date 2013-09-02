@@ -272,7 +272,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 
 struct device_drv bitfury_drv = {
 	.dname = "bitfury",
-	.name = "BITFURY",
+	.name = "BFY",
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
 	.scanwork = bitfury_scanHash,
