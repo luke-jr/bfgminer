@@ -212,6 +212,10 @@ endif
 
 if HAS_BITFURY
 bfgminer_SOURCES += driver-bitfury.c libbitfury.c libbitfury.h spidevc.h spidevc.c tm_i2c.h tm_i2c.c
+
+if HAS_LITTLEFURY
+bfgminer_SOURCES += driver-littlefury.c
+endif
 endif
 
 bin_PROGRAMS += bfgminer-rpc
