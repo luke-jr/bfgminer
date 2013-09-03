@@ -51,6 +51,10 @@ struct bitfury_device {
 	unsigned slot;
 	unsigned fasync;
 	bool second_run;
+	
+	time_t short_out_t;
+	time_t long_out_t;
+	int first;
 };
 
 int libbitfury_readHashData(unsigned int *res);
