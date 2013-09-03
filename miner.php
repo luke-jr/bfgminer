@@ -3,7 +3,7 @@ session_start();
 #
 global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
-global $mcastlistport, $mcasttimeout, $allowgen;
+global $mcastlistport, $mcasttimeout, $mcastretries, $allowgen;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -69,6 +69,9 @@ $mcastlistport = 4027;
 # Set $mcasttimeout to the number of seconds (floating point)
 # to wait for replies to the Multicast message
 $mcasttimeout = 1.5;
+#
+# Set $mcastretries to the number of times to retry the multicast
+$mcastretries = 0;
 #
 # Set $allowgen to true to allow customsummarypages to use 'gen' 
 # false means ignore any 'gen' options
@@ -373,10 +376,10 @@ global $haderror, $error;
 $haderror = false;
 $error = null;
 #
-function getrigs()
+function mcastrigs()
 {
- global $rigs, $mcastaddr, $mcastport, $mcastcode;
- global $mcastlistport, $mcasttimeout, $error;
+ global $rigs, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
+ global $mcastlistport, $mcasttimeout, $mcastretries, $error;
 
  $listname = "0.0.0.0";
 
@@ -414,54 +417,76 @@ function getrigs()
 	return;
  }
 
- $mcast_soc = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
- if ($mcast_soc === false || $mcast_soc == null)
+ $retries = $mcastretries;
+ $doretry = ($retries > 0);
+ do
  {
-	$msg = "ERR: mcast send socket create(UDP) failed";
-	if ($rigipsecurity === false)
+	$mcast_soc = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+	if ($mcast_soc === false || $mcast_soc == null)
 	{
-		$error = socket_strerror(socket_last_error());
-		$error = "$msg '$error'\n";
-	}
-	else
-		$error = "$msg\n";
-
-	socket_close($rep_soc);
-	return;
- }
-
- $buf = "cgminer-$mcastcode-$mcastlistport";
- socket_sendto($mcast_soc, $buf, strlen($buf), 0, $mcastaddr, $mcastport);
- socket_close($mcast_soc);
-
- $stt = microtime(true);
- while (true)
- {
-	$got = @socket_recvfrom($rep_soc, $buf, 32, MSG_DONTWAIT, $ip, $p);
-	if ($got !== false && $got > 0)
-	{
-		$ans = explode('-', $buf, 4);
-		if (count($ans) >= 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
+		$msg = "ERR: mcast send socket create(UDP) failed";
+		if ($rigipsecurity === false)
 		{
-			$rp = intval($ans[2]);
-
-			if (count($ans) > 3)
-				$mdes = str_replace("\0", '', $ans[3]);
-			else
-				$mdes = '';
-
-			if (strlen($mdes) > 0)
-				$rigs[] = "$ip:$rp:$mdes";
-			else
-				$rigs[] = "$ip:$rp";
+			$error = socket_strerror(socket_last_error());
+			$error = "$msg '$error'\n";
 		}
-	}
-	if ((microtime(true) - $stt) >= $mcasttimeout)
-		break;
+		else
+			$error = "$msg\n";
 
-	usleep(100000);
- }
+		socket_close($rep_soc);
+		return;
+	}
+
+	$buf = "cgminer-$mcastcode-$mcastlistport";
+	socket_sendto($mcast_soc, $buf, strlen($buf), 0, $mcastaddr, $mcastport);
+	socket_close($mcast_soc);
+
+	$stt = microtime(true);
+	while (true)
+	{
+		$got = @socket_recvfrom($rep_soc, $buf, 32, MSG_DONTWAIT, $ip, $p);
+		if ($got !== false && $got > 0)
+		{
+			$ans = explode('-', $buf, 4);
+			if (count($ans) >= 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
+			{
+				$rp = intval($ans[2]);
+
+				if (count($ans) > 3)
+					$mdes = str_replace("\0", '', $ans[3]);
+				else
+					$mdes = '';
+
+				if (strlen($mdes) > 0)
+					$rig = "$ip:$rp:$mdes";
+				else
+					$rig = "$ip:$rp";
+
+				if (!in_array($rig, $rigs))
+					$rigs[] = $rig;
+			}
+		}
+		if ((microtime(true) - $stt) >= $mcasttimeout)
+			break;
+
+		usleep(100000);
+	}
+
+	if ($mcastexpect > 0 && count($rigs) >= $mcastexpect)
+		$doretry = false;
+
+ } while ($doretry && --$retries > 0);
+
  socket_close($rep_soc);
+}
+#
+function getrigs()
+{
+ global $rigs;
+
+ mcastrigs();
+
+ sort($rigs);
 }
 #
 function getsock($rig, $addr, $port)
