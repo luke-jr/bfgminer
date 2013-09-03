@@ -411,7 +411,7 @@ ST is STaged work items (ready to use).
 F  is network Failure occasions (server down or slow to provide work)
 NB is New Blocks detected on the network
 AS is Active Submissions (shares in the process of submitting)
-BW is BandWidth usage on the network
+BW is BandWidth usage on the network (received/sent)
 E  is Efficiency defined as number of shares accepted (multiplied by their
           difficulty) per 2 KB of bandwidth
 U  is Utility defined as the number of shares / minute
