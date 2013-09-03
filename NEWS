@@ -1,3 +1,14 @@
+Version 3.4.2 - 3rd September 2013
+
+- take_queued_work_bymidstate should use a write lock.
+- miner.php coding warning
+- miner.php disable 'gen' by default
+- miner.php allow formula generation of new fields
+- miner.php add doctype
+- miner.php remove incorrect echo
+- miner.php optional error if not enough mcast rigs are found
+
+
 Version 3.4.1 - 31st August 2013
 
 - API mcast add a description option with miner.php
