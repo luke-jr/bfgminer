@@ -376,7 +376,7 @@ global $haderror, $error;
 $haderror = false;
 $error = null;
 #
-function getrigs()
+function mcastrigs()
 {
  global $rigs, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
  global $mcastlistport, $mcasttimeout, $mcastretries, $error;
@@ -478,6 +478,15 @@ function getrigs()
  } while ($doretry && --$retries > 0);
 
  socket_close($rep_soc);
+}
+#
+function getrigs()
+{
+ global $rigs;
+
+ mcastrigs();
+
+ sort($rigs);
 }
 #
 function getsock($rig, $addr, $port)
