@@ -602,20 +602,6 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 	}
 }
 
-void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
-	int chip_id;
-	static bool second_run = false;
-
-	for (chip_id = 0; chip_id < chip_n; chip_id++) {
-		struct bitfury_device *d = bf + chip_id;
-		payload_to_atrvec(d->atrvec, &d->payload);
-		libbitfury_sendHashData1(chip_id, d, second_run);
-	}
-	second_run = true;
-
-	return;
-}
-
 int libbitfury_readHashData(unsigned int *res) {
 	return 0;
 }

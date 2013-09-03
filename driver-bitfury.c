@@ -169,6 +169,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	int long_stat = 1800;
 	static time_t long_out_t;
 	static int first = 0; //TODO Move to detect()
+	static bool second_run = false;
 	int i;
 
 	devices = thr->cgpu->devices;
@@ -194,9 +195,11 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			}
 			work_to_payload(&(devices[chip].payload), devices[chip].work);
 		}
+		
+		payload_to_atrvec(devices[chip].atrvec, &devices[chip].payload);
+		libbitfury_sendHashData1(chip, &devices[chip], second_run);
 	}
 
-	libbitfury_sendHashData(devices, chip_n);
 	cgsleep_ms(5);
 
 	cgtime(&now);
@@ -326,6 +329,8 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 		long_out_t = now.tv_sec;
 	}
 
+	second_run = true;
+	
 	return hashes;
 }
 
