@@ -50,10 +50,11 @@ struct bitfury_device {
 	double ns;
 	unsigned slot;
 	unsigned fasync;
+	bool second_run;
 };
 
 int libbitfury_readHashData(unsigned int *res);
-extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second_run);
+extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 extern void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
 struct timespec t_diff(struct timespec start, struct timespec end);

@@ -388,7 +388,7 @@ void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
 	ms3_compute(atrvec);
 }
 
-void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second_run)
+void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
 {
 	struct spi_port *port = d->spi;
 	unsigned *newbuf = d->newbuf;
@@ -403,7 +403,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 
 	clock_gettime(CLOCK_REALTIME, &(time));
 
-	if (!second_run) {
+	if (!d->second_run) {
 		d->predict2 = d->predict1 = time;
 		d->counter1 = d->counter2 = 0;
 		d->req2_done = 0;
@@ -600,6 +600,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 			d->req2_done = 1;
 		}
 	}
+	
+	d->second_run = true;
 }
 
 int libbitfury_readHashData(unsigned int *res) {

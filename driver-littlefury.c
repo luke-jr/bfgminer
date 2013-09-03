@@ -361,7 +361,7 @@ bool littlefury_do_io(struct thr_info *thr)
 	struct cgpu_info * const proc = thr->cgpu;
 	struct bitfury_device * const bitfury = proc->device_data;
 	bitfury->results_n = 0;
-	libbitfury_sendHashData1(proc->proc_id, bitfury, thr->work);
+	libbitfury_sendHashData1(proc->proc_id, bitfury);
 	if (bitfury->job_switched && thr->next_work)
 	{
 		mt_job_transition(thr);
