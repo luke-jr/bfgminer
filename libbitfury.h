@@ -73,6 +73,7 @@ struct bitfury_device {
 	double ns;
 	unsigned slot;
 	unsigned fasync;
+	unsigned strange_counter;
 };
 
 int libbitfury_readHashData(unsigned int *res);

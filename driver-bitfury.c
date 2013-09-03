@@ -163,6 +163,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 		int len, k;
 		double gh[32][8] = {0};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
+		unsigned strange_counter = 0;
 
 		for (chip = 0; chip < chip_n; chip++) {
 			int shares_found = calc_stat(devices[chip].stat_ts, short_stat, now);
@@ -181,8 +182,12 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			shares_total += shares_found;
 			shares_first += chip < 4 ? shares_found : 0;
 			shares_last += chip > 3 ? shares_found : 0;
+			strange_counter += devices[chip].strange_counter;
+			devices[chip].strange_counter = 0;
 		}
 		sprintf(line, "vvvvwww SHORT stat %ds: wwwvvvv", short_stat);
+		applog(LOG_WARNING, line);
+		sprintf(line, "stranges: %u", strange_counter);
 		applog(LOG_WARNING, line);
 		for(i = 0; i < 32; i++)
 			if(strlen(stat_lines[i])) {

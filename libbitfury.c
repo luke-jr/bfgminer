@@ -564,7 +564,8 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 						found++;
 					}
 					if (!found) {
-						printf("AAA Strange: %08x, chip_id: %d\n", pn, chip_id);
+						//printf("AAA Strange: %08x, chip_id: %d\n", pn, chip_id);
+						d->strange_counter++;
 					}
 				}
 			}
@@ -608,10 +609,10 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 				mhz = 1.0 / ns * 65.0 * 1000.0;
 
 				if (d->counter1 > 0 && d->counter1 < 0x001FFFFF) {
-					printf("AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+					//printf("//AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 				}
 				if (ns > 2000.0 || ns < 20) {
-					printf("AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+					//printf("AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 					ns = 200.0;
 				} else {
 					d->ns = ns;
