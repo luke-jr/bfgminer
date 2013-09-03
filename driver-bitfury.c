@@ -181,7 +181,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			bitfury->o2work = bitfury->owork;
 			bitfury->owork = bitfury->work;
 			bitfury->work = NULL;
-			hashes_done2(pthr, 0x100000000, NULL);
+			hashes_done2(pthr, 0xbd000000, NULL);
 		}
 	}
 
