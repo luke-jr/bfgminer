@@ -1248,6 +1248,28 @@ N.B. the accuracy of the timing used to wait for the replies is
 ---------
 
 Default:
+ $mcastretries = 0;
+
+Set $mcastretries to the number of times to retry the multicast
+
+If $mcastexpect is 0, this is simply the number of extra times
+that it will send the multicast request
+N.B. cgminer doesn't listen for multicast requests for 1000ms after
+each one it hears
+
+If $mcastexpect is > 0, it will stop looking for replies once it
+has found at least $mcastexpect rigs, but it only checks this rig
+limit each time it reaches the $mcasttimeout limit, thus it can find
+more than $mcastexpect rigs if more exist
+It will send the multicast message up to $mcastretries extra times or
+until it has found at least $mcastexpect rigs
+However, when using $mcastretries, it is possible for it to sometimes
+ignore some rigs on the network if $mcastexpect is less than the
+number of rigs on the network and some rigs are too slow to reply
+
+---------
+
+Default:
  $allowgen = false;
 
 Set $allowgen to true to allow customsummarypages to use 'gen' 
