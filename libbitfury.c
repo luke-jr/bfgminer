@@ -264,6 +264,17 @@ int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	return 0;
 }
 
+int get_diff(unsigned int *newbuf, unsigned int *oldbuf) {
+		int j;
+		unsigned counter = 0;
+		for(j = 0; j < 16; j++) {
+				if (newbuf[j] != oldbuf[j]) {
+						counter++;
+				}
+		}
+		return counter;
+}
+
 int detect_chip(int chip_n) {
 	int i;
 	unsigned newbuf[17], oldbuf[17];
@@ -455,6 +466,7 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 
 int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 	int chip_id;
+	int buf_diff;
 	static unsigned second_run;
 
 	for (chip_id = 0; chip_id < chip_n; chip_id++) {
@@ -487,19 +499,40 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 		if (d_time.tv_sec < 0 && (d->req2_done || !smart)) {
 			d->otimer1 = d->timer1;
 			d->timer1 = time;
+			d->ocounter1 = d->counter1;
 			/* Programming next value */
+			tm_i2c_set_oe(slot);
 			spi_clear_buf(); spi_emit_break();
 			spi_emit_fasync(chip);
 			spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
 			if (smart) {
 				config_reg(3,0);
 			}
-			tm_i2c_set_oe(slot);
 			clock_gettime(CLOCK_REALTIME, &(time));
 			d_time = t_diff(time, d->predict1);
 			spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
-			tm_i2c_clear_oe(slot);
 			memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
+			d->counter1 = get_counter(newbuf, oldbuf);
+			buf_diff = get_diff(newbuf, oldbuf);
+			if (buf_diff > 4 || (d->counter1 > 0 && d->counter1 < 0x00400000 / 2)) {
+				if (buf_diff > 4) {
+//					printf("AAA        chip_id: %d, buf_diff: %d, counter: %08x\n", chip_id, buf_diff, d->counter1);
+					memcpy(atrvec, p, 20*4);
+					ms3_compute(atrvec);
+					spi_clear_buf(); spi_emit_break();
+					spi_emit_fasync(chip);
+					spi_emit_data(0x3000, (void*)&atrvec[0], 19*4);
+					clock_gettime(CLOCK_REALTIME, &(time));
+					d_time = t_diff(time, d->predict1);
+					spi_txrx(spi_gettxbuf(), spi_getrxbuf(), spi_getbufsz());
+					memcpy(newbuf, spi_getrxbuf()+4 + chip, 17*4);
+					buf_diff = get_diff(newbuf, oldbuf);
+					d->counter1 = get_counter(newbuf, oldbuf);
+//					printf("AAA _222__ chip_id: %d, buf_diff: %d, counter: %08x\n", chip_id, buf_diff, d->counter1);
+				}
+			}
+
+			tm_i2c_clear_oe(slot);
 
 			d->job_switched = newbuf[16] != oldbuf[16];
 
@@ -576,7 +609,6 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 			} else {
 				d_time = t_diff(d->otimer1, d->timer1);
 			}
-			d->ocounter1 = d->counter1;
 			d->counter1 = get_counter(newbuf, oldbuf);
 			if (d->counter2 || !smart) {
 				int shift;
