@@ -10,6 +10,7 @@
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
+extern bool hashes_done2(struct thr_info *, int64_t hashes, uint32_t *max_nonce);
 extern void mt_disable_start(struct thr_info *);
 extern void mt_disable_finish(struct thr_info *);
 extern void mt_disable(struct thr_info *);  // blocks until reenabled

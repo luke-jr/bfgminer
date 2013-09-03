@@ -28,7 +28,6 @@ struct getwork_client {
 	char *username;
 	struct cgpu_info *cgpu;
 	struct work *work;
-	struct timeval tv_hashes_done;
 	
 	UT_hash_handle hh;
 };
@@ -293,14 +292,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	
 out:
 	if (hashesdone)
-	{
-		struct timeval tv_now, tv_delta;
-		long long lld = strtoll(hashesdone, NULL, 0);
-		timer_set_now(&tv_now);
-		timersub(&tv_now, &client->tv_hashes_done, &tv_delta);
-		client->tv_hashes_done = tv_now;
-		hashes_done(thr, lld, &tv_delta, NULL);
-	}
+		hashes_done2(thr, strtoll(hashesdone, NULL, 0), NULL);
 	
 	free(user);
 	free(idstr);
