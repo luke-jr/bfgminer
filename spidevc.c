@@ -56,14 +56,14 @@ void spi_init(void)
 #define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
-void spi_reset(void)
+int spi_reset(int a)
 {
 	int i,j;
-	int a = 1234, len = 2;
+	int len = 8;
 	INP_GPIO(10); OUT_GPIO(10);
 	INP_GPIO(11); OUT_GPIO(11);
 	GPIO_SET = 1 << 11; // Set SCK
-	for (i = 0; i < 16; i++) { // On standard settings this unoptimized code produces 1 Mhz freq.
+	for (i = 0; i < 32; i++) { // On standard settings this unoptimized code produces 1 Mhz freq.
 		GPIO_SET = 1 << 10;
 		for (j = 0; j < len; j++) {
 			a *= a;
@@ -81,6 +81,8 @@ void spi_reset(void)
 	SET_GPIO_ALT(11,0);
 	INP_GPIO(9);
 	SET_GPIO_ALT(9,0);
+
+	return a;
 }
 
 int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz)
@@ -93,7 +95,7 @@ int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz)
 	memset(&tr,0,sizeof(tr));
 	mode = 0; bits = 8; speed = 2000000;
 
-	spi_reset();
+	spi_reset(1234);
 	fd = open("/dev/spidev0.0", O_RDWR);
 	if (fd < 0) { perror("Unable to open SPI device"); exit(1); }
         if (ioctl(fd, SPI_IOC_WR_MODE, &mode) < 0) { perror("Unable to set WR MODE"); close(fd); return -1; }
@@ -131,7 +133,7 @@ int spi_txrx(const char *wrbuf, char *rdbuf, int bufsz)
         }
 
 	close(fd);
-	spi_reset();
+	spi_reset(4321);
 
 	return 0;
 }

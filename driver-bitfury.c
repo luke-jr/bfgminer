@@ -172,7 +172,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			gh[devices[chip].slot][chip & 0x07] = ghash;
 			snprintf(stat_lines[devices[chip].slot] + len, 256 - len, "%.1f-%3.0f ", ghash, devices[chip].mhz);
 
-			if(short_out_t && ghash < 1.0) {
+			if(short_out_t && ghash < 0.5) {
 				applog(LOG_WARNING, "Chip_id %d FREQ CHANGE\n", chip);
 				send_freq(devices[chip].slot, devices[chip].fasync, devices[chip].osc6_bits - 1);
 				nmsleep(1);

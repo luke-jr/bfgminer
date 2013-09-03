@@ -334,7 +334,9 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 		return(1);
 	}
 
-
+	for (i = 0; i < 32; i++) {
+		slot_on[i] = 0;
+	}
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
 	for (i = 0; i < 32; i++) {
 		int slot_detected = tm_i2c_detect(i) != -1;
@@ -596,7 +598,7 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 						cycles = 0x00400000 - d->ocounter1 + d->counter1; // + 0x003FFFFF;
 						ccase = 1;
 					} else {
-						cycles = d->counter1 - d->ocounter1;
+						cycles = d->counter1 > d->ocounter1 ? d->counter1 - d->ocounter1 : 0x00400000 - d->ocounter1 + d->counter1;
 						ccase = 2;
 					}
 				}
@@ -605,8 +607,9 @@ int libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 				ns = (double)period / (double)(cycles);
 				mhz = 1.0 / ns * 65.0 * 1000.0;
 
-				if (d->counter1 > 0 && d->counter1 < 0x001FFFFF)
+				if (d->counter1 > 0 && d->counter1 < 0x001FFFFF) {
 					printf("AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+				}
 				if (ns > 2000.0 || ns < 20) {
 					printf("AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 					ns = 200.0;
