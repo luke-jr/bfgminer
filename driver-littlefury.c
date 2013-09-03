@@ -156,6 +156,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 		r = keep_reading(fd, &pkt[4], sz);
 		if (sz != r)
 		{
+			r += 4;
 			char hex[(r * 2) + 1];
 			bin2hex(hex, pkt, r);
 			applog(prio, "%s: DEVPROTO: RECV %s", repr, hex);
@@ -175,7 +176,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 				return false;
 			}
 		}
-		memcpy(buf, &pkt[4], (*bufsz < pkt[3] ? pkt[3] : *bufsz));
+		memcpy(buf, &pkt[4], (*bufsz < pkt[3] ? *bufsz : pkt[3]));
 		*bufsz = pkt[3];
 	}
 	
