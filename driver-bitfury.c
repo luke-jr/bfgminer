@@ -49,7 +49,8 @@ bool metabank_spi_txrx(struct spi_port *port)
 }
 
 static
-int libbitfury_detectChips(struct bitfury_device *devices) {
+struct bitfury_device **metabank_detect_chips(int *out_count) {
+	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
 	int n = 0;
 	int i, j;
@@ -60,10 +61,12 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 
 	if (tm_i2c_init() < 0) {
 		printf("I2C init error\n");
-		return(1);
+		*out_count = 0;
+		return NULL;
 	}
 
 
+	devicelist = malloc(100 * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
@@ -90,9 +93,10 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
 				for (j = 0; j < chip_n; ++j)
 				{
-					devices[n].spi = port;
-					devices[n].slot = i;
-					devices[n].fasync = j;
+					devicelist[n] = bitfury = malloc(sizeof(*bitfury));
+					bitfury->spi = port;
+					bitfury->slot = i;
+					bitfury->fasync = j;
 					n++;
 				}
 			}
@@ -103,14 +107,16 @@ int libbitfury_detectChips(struct bitfury_device *devices) {
 
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
 
-	return n; //!!!
-	//return 1;
+	*out_count = n;
+	return devicelist;
 }
 
-void libbitfury_shutdownChips(struct bitfury_device *devices, int chip_n) {
-	int i;
-	for (i = 0; i < chip_n; i++) {
-		send_shutdown(devices[i].spi, devices[i].slot, devices[i].fasync);
+void libbitfury_shutdownChips(struct cgpu_info *proc) {
+	struct bitfury_device *bitfury;
+	for ( ; proc; proc = proc->next_proc)
+	{
+		bitfury = proc->device_data;
+		send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
 	}
 	tm_i2c_close();
 }
@@ -137,7 +143,7 @@ int bitfury_autodetect()
 	spi_init();
 	if (!sys_spi)
 		return 0;
-	chip_n = libbitfury_detectChips(bitfury_info->devices);
+	bitfury_info->device_data = metabank_detect_chips(&chip_n);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return 0;
@@ -145,7 +151,7 @@ int bitfury_autodetect()
 		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
 	}
 
-	bitfury_info->chip_n = chip_n;
+	bitfury_info->procs = chip_n;
 	add_cgpu(bitfury_info);
 	
 	return 1;
@@ -156,12 +162,27 @@ static void bitfury_detect(void)
 	noserial_detect_manual(&bitfury_drv, bitfury_autodetect);
 }
 
+
+static
+bool bitfury_init(struct thr_info *thr)
+{
+	struct bitfury_device **devicelist = thr->cgpu->device_data;
+	struct cgpu_info *proc;
+	
+	for (proc = thr->cgpu; proc; proc = proc->next_proc)
+		proc->device_data = devicelist[proc->proc_id];
+	
+	free(devicelist);
+	
+	return true;
+}
+
 static int64_t bitfury_scanHash(struct thr_info *thr)
 {
-	static struct bitfury_device *devices, *bitfury; // TODO Move somewhere to appropriate place
-	int chip_n;
-	int chip;
-	uint64_t hashes = 0;
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct cgpu_info *proc;
+	struct thr_info *pthr;
+	struct bitfury_device *bitfury;
 	struct timeval now;
 	char line[2048];
 	int short_stat = 10;
@@ -171,27 +192,26 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	static int first = 0; //TODO Move to detect()
 	int i;
 
-	devices = thr->cgpu->devices;
-	chip_n = thr->cgpu->chip_n;
-
 	if (!first) {
-		for (i = 0; i < chip_n; i++) {
-			bitfury = &devices[i];
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			bitfury = proc->device_data;
 			bitfury->osc6_bits = 54;
 			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		}
 	}
 	first = 1;
 
-	for (chip = 0; chip < chip_n; chip++) {
-		bitfury = &devices[chip];
-		bitfury->spi = sys_spi;
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		const int chip = proc->proc_id;
+		bitfury = proc->device_data;
+		
 		bitfury->job_switched = 0;
 		if(!bitfury->work) {
 			bitfury->work = get_queued(thr->cgpu);
-			if (bitfury->work == NULL) {
+			if (bitfury->work == NULL)
 				return 0;
-			}
 			work_to_payload(&bitfury->payload, bitfury->work);
 		}
 		
@@ -202,9 +222,11 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 	cgsleep_ms(5);
 
 	cgtime(&now);
-	chip = 0;
-	for (;chip < chip_n; chip++) {
-		bitfury = &devices[chip];
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		pthr = proc->thr[0];
+		bitfury = proc->device_data;
+		
 		if (bitfury->job_switched) {
 			int i,j;
 			unsigned int * const res = bitfury->results;
@@ -214,7 +236,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 			i = bitfury->results_n;
 			for (j = i - 1; j >= 0; j--) {
 				if (owork) {
-					submit_nonce(thr, owork, bswap_32(res[j]));
+					submit_nonce(pthr, owork, bswap_32(res[j]));
 					bitfury->stat_ts[bitfury->stat_counter++] =
 						now.tv_sec;
 					if (bitfury->stat_counter == BITFURY_STAT_N) {
@@ -223,27 +245,27 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 				}
 				if (o2work) {
 					// TEST
-					//submit_nonce(thr, owork, bswap_32(res[j]));
+					//submit_nonce(pthr, owork, bswap_32(res[j]));
 				}
 			}
 			bitfury->results_n = 0;
 			bitfury->job_switched = 0;
 			if (bitfury->old_nonce && o2work) {
-					submit_nonce(thr, o2work, bswap_32(bitfury->old_nonce));
+					submit_nonce(pthr, o2work, bswap_32(bitfury->old_nonce));
 					i++;
 			}
 			if (bitfury->future_nonce) {
-					submit_nonce(thr, work, bswap_32(bitfury->future_nonce));
+					submit_nonce(pthr, work, bswap_32(bitfury->future_nonce));
 					i++;
 			}
 
 			if (o2work)
-				work_completed(thr->cgpu, o2work);
+				work_completed(cgpu, o2work);
 
 			bitfury->o2work = bitfury->owork;
 			bitfury->owork = bitfury->work;
 			bitfury->work = NULL;
-			hashes += 0xffffffffull * i;
+			hashes_done2(pthr, 0x100000000, NULL);
 		}
 	}
 
@@ -254,8 +276,11 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
 
-		for (chip = 0; chip < chip_n; chip++) {
-			bitfury = &devices[chip];
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			const int chip = proc->proc_id;
+			bitfury = proc->device_data;
+			
 			int shares_found = calc_stat(bitfury->stat_ts, short_stat, now);
 			double ghash;
 			len = strlen(stat_lines[bitfury->slot]);
@@ -299,8 +324,11 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
 
-		for (chip = 0; chip < chip_n; chip++) {
-			bitfury = &devices[chip];
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			const int chip = proc->proc_id;
+			bitfury = proc->device_data;
+			
 			int shares_found = calc_stat(bitfury->stat_ts, long_stat, now);
 			double ghash;
 			len = strlen(stat_lines[bitfury->slot]);
@@ -331,7 +359,7 @@ static int64_t bitfury_scanHash(struct thr_info *thr)
 		long_out_t = now.tv_sec;
 	}
 
-	return hashes;
+	return 0;
 }
 
 double shares_to_ghashes(int shares, int seconds) {
@@ -361,12 +389,8 @@ static bool bitfury_prepare(struct thr_info *thr)
 
 static void bitfury_shutdown(struct thr_info *thr)
 {
-	int chip_n;
-
-	chip_n = thr->cgpu->chip_n;
-
 	applog(LOG_INFO, "INFO bitfury_shutdown");
-	libbitfury_shutdownChips(thr->cgpu->devices, chip_n);
+	libbitfury_shutdownChips(thr->cgpu);
 }
 
 struct device_drv bitfury_drv = {
@@ -374,6 +398,7 @@ struct device_drv bitfury_drv = {
 	.name = "BFY",
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
+	.thread_init = bitfury_init,
 	.scanwork = bitfury_scanHash,
 	.thread_shutdown = bitfury_shutdown,
 	.minerloop = hash_queued_work,
