@@ -4,6 +4,8 @@
 
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
+
+#include "logging.h"
 #include "tm_i2c.h"
 
 static int tm_i2c_fd;
@@ -37,7 +39,7 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 	struct i2c_rdwr_ioctl_data msg_rdwr;
 	unsigned int ret;
 
-	//printf("REQ from %02X cmd: %02X\n", addr, cmd);
+	//applog(LOG_DEBUG, "REQ from %02X cmd: %02X", addr, cmd);
 
 	tm->cmd = cmd;
 	tm->data_lsb = data & 0xFF;

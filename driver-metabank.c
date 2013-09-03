@@ -54,7 +54,7 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	struct cgpu_info dummy_cgpu;
 
 	if (tm_i2c_init() < 0) {
-		printf("I2C init error\n");
+		applog(LOG_DEBUG, "%s: I2C init error", metabank_drv.dname);
 		*out_count = 0;
 		return NULL;
 	}

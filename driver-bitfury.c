@@ -205,7 +205,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			snprintf(stat_lines[bitfury->slot] + len, 256 - len, "%.1f-%3.0f ", ghash, bitfury->mhz);
 
 			if(sds->short_out_t && ghash < 1.0) {
-				applog(LOG_WARNING, "Chip_id %d FREQ CHANGE\n", chip);
+				applog(LOG_WARNING, "Chip_id %d FREQ CHANGE", chip);
 				send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits - 1);
 				cgsleep_ms(1);
 				send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);

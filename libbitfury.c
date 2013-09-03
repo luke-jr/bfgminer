@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <string.h>
 
+#include "logging.h"
 #include "miner.h"
 #include "libbitfury.h"
 
@@ -87,10 +88,6 @@ static const unsigned SHA_K[64] = {
         0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
         0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
-
-void t_print(struct timespec d_time) {
-	printf(" %ds %.2fms\n", (int)d_time.tv_sec, (double)d_time.tv_nsec / 1000000.0);
-}
 
 
 
@@ -360,7 +357,8 @@ int rehash(unsigned char *midstate, unsigned m7,
 #ifdef BITFURY_REHASH_DEBUG
 		char hex[65];
 		bin2hex(hex, out, 32);
-		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
+		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x", mid32[0], m7, ntime, nbits, nnonce);
+		applog(LOG_INFO, " out: %s", hex);
 		history[history_p] = nnonce;
 		history_p++; history_p &= 512 - 1;
 #endif
@@ -488,7 +486,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
 					found++;
 				}
 				if (!found) {
-					printf("AAA Strange: %08x, chip_id: %d\n", pn, chip_id);
+					applog(LOG_WARNING, "AAA Strange: %08x, chip_id: %d", pn, chip_id);
 				}
 			}
 		}
@@ -532,9 +530,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
 			mhz = 1.0 / ns * 65.0 * 1000.0;
 
 			if (d->counter1 > 0 && d->counter1 < 0x001FFFFF)
-				printf("AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+				applog(LOG_DEBUG, "AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 			if (ns > 2000.0 || ns < 20) {
-				printf("AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f \n", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+				applog(LOG_DEBUG, "AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 				ns = 200.0;
 			} else {
 				d->ns = ns;
