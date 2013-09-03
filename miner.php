@@ -451,9 +451,12 @@ function getrigs()
 				$mdes = '';
 
 			if (strlen($mdes) > 0)
-				$rigs[] = "$ip:$rp:$mdes";
+				$rig = "$ip:$rp:$mdes";
 			else
-				$rigs[] = "$ip:$rp";
+				$rig = "$ip:$rp";
+
+			if (!in_array($rig, $rigs))
+				$rigs[] = $rig;
 		}
 	}
 	if ((microtime(true) - $stt) >= $mcasttimeout)
