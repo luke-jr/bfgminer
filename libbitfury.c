@@ -381,6 +381,13 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
 }
 
+void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
+{
+	/* Programming next value */
+	memcpy(atrvec, p, 20*4);
+	ms3_compute(atrvec);
+}
+
 void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second_run)
 {
 	struct spi_port *port = d->spi;
@@ -389,14 +396,10 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 	struct bitfury_payload *p = &(d->payload);
 	struct bitfury_payload *op = &(d->opayload);
 	struct bitfury_payload *o2p = &(d->o2payload);
-	unsigned atrvec[20];
 	struct timespec d_time;
 	struct timespec time;
 	int smart = 0;
 	int chip = d->fasync;
-
-	memcpy(atrvec, p, 20*4);
-	ms3_compute(atrvec);
 
 	clock_gettime(CLOCK_REALTIME, &(time));
 
@@ -414,7 +417,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 		spi_clear_buf(port);
 		spi_emit_break(port);
 		spi_emit_fasync(port, chip);
-		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+		spi_emit_data(port, 0x3000, &d->atrvec[0], 19*4);
 		if (smart) {
 			config_reg(port, 3, 0);
 		}
@@ -584,7 +587,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, bool second
 			spi_clear_buf(port);
 			spi_emit_break(port);
 			spi_emit_fasync(port, chip);
-			spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+			spi_emit_data(port, 0x3000, &d->atrvec[0], 19*4);
 			if (smart) {
 				config_reg(port, 3, 1);
 			}
@@ -605,6 +608,7 @@ void libbitfury_sendHashData(struct bitfury_device *bf, int chip_n) {
 
 	for (chip_id = 0; chip_id < chip_n; chip_id++) {
 		struct bitfury_device *d = bf + chip_id;
+		payload_to_atrvec(d->atrvec, &d->payload);
 		libbitfury_sendHashData1(chip_id, d, second_run);
 	}
 	second_run = true;
