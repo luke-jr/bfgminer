@@ -177,7 +177,7 @@ bool bitfury_init(struct thr_info *thr)
 	return true;
 }
 
-static int64_t bitfury_scanHash(struct thr_info *thr)
+int64_t bitfury_scanHash(struct thr_info *thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
 	struct bitfury_device * const sds = cgpu->device_data;
