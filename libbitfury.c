@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -302,6 +303,7 @@ int libbitfury_detectChips1(struct spi_port *port) {
 	return n;
 }
 
+// in  = 1f 1e 1d 1c 1b 1a 19 18 17 16 15 14 13 12 11 10  f  e  d  c  b  a  9  8  7  6  5  4  3  2  1  0
 unsigned decnonce(unsigned in)
 {
 	unsigned out;
@@ -319,13 +321,13 @@ unsigned decnonce(unsigned in)
 	/* Extraction */
 	if (in & 1) out |= (1 << 23);
 	if (in & 2) out |= (1 << 22);
+// out =  7  6  5  4  3  2  1  0  f  e 18 19 1a 1b 1c 1d 1e 1f 10 11 12 13 14 15 16 17  8  9  a  b  c  d
 
 	out -= 0x800004;
 	return out;
 }
 
-int rehash(unsigned char *midstate, unsigned m7,
-			unsigned ntime, unsigned nbits, unsigned nnonce) {
+int rehash(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t nnonce) {
 	unsigned char in[16];
 	unsigned int *in32 = (unsigned int *)in;
 	unsigned int *mid32 = (unsigned int *)midstate;
@@ -365,6 +367,24 @@ int rehash(unsigned char *midstate, unsigned m7,
 		return 1;
 	}
 	return 0;
+}
+
+static
+bool fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t *nonce_p) {
+	static const uint32_t offsets[] = {0, 0xffc00000, 0xff800000, 0x02800000, 0x02C00000, 0x00400000};
+	uint32_t nonce;
+	int i;
+	
+	for (i = 0; i < 6; ++i)
+	{
+		nonce = *nonce_p + offsets[i];
+		if (rehash(midstate, m7, ntime, nbits, nonce))
+		{
+			*nonce_p = nonce;
+			return true;
+		}
+	}
+	return false;
 }
 
 void work_to_payload(struct bitfury_payload *p, struct work *w) {
@@ -435,54 +455,33 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
 		d->future_nonce = 0;
 		for (i = 0; i < 16; i++) {
 			if (oldbuf[i] != newbuf[i] && op && o2p) {
-				unsigned pn; //possible nonce
-				unsigned int s = 0; //TODO zero may be solution
+				uint32_t pn;  // possible nonce
 				if ((newbuf[i] & 0xFF) == 0xE0)
 					continue;
 				pn = decnonce(newbuf[i]);
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn) ? pn : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x00400000) ? pn - 0x00400000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn-0x00800000) ? pn - 0x00800000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x02800000) ? pn + 0x02800000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x02C00000) ? pn + 0x02C00000 : 0;
-				s |= rehash(op->midstate, op->m7, op->ntime, op->nbits, pn+0x00400000) ? pn + 0x00400000 : 0;
-				if (s) {
+				if (fudge_nonce(op->midstate, op->m7, op->ntime, op->nbits, &pn))
+				{
 					int k;
 					int dup = 0;
 					for (k = 0; k < results_num; k++) {
-						if (results[k] == bswap_32(s)) {
+						if (results[k] == bswap_32(pn))
 							dup = 1;
-						}
 					}
 					if (!dup) {
-						results[results_num++] = bswap_32(s);
+						results[results_num++] = bswap_32(pn);
 						found++;
 					}
 				}
-
-				s = 0;
-				pn = decnonce(newbuf[i]);
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn) ? pn : 0;
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn-0x400000) ? pn - 0x400000 : 0;
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn-0x800000) ? pn - 0x800000 : 0;
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
-				s |= rehash(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, pn+0x400000) ? pn + 0x400000 : 0;
-				if (s) {
-					d->old_nonce = bswap_32(s);
+				else
+				if (fudge_nonce(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, &pn))
+				{
+					d->old_nonce = bswap_32(pn);
 					found++;
 				}
-
-				s = 0;
-				pn = decnonce(newbuf[i]);
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn) ? pn : 0;
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn-0x400000) ? pn - 0x400000 : 0;
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn-0x800000) ? pn - 0x800000 : 0;
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn+0x2800000)? pn + 0x2800000 : 0;
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn+0x2C00000)? pn + 0x2C00000 : 0;
-				s |= rehash(p->midstate, p->m7, p->ntime, p->nbits, pn+0x400000) ? pn + 0x400000 : 0;
-				if (s) {
-					d->future_nonce = bswap_32(s);
+				else
+				if (fudge_nonce(p->midstate, p->m7, p->ntime, p->nbits, &pn))
+				{
+					d->future_nonce = bswap_32(pn);
 					found++;
 				}
 				if (!found) {
