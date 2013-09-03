@@ -412,7 +412,10 @@ function getrigs()
 		if (count($ans) == 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
 		{
 			$rp = intval($ans[2]);
-			$rigs[] = "$ip:$rp";
+			$rig = "$ip:$rp";
+
+			if (!in_array($rig, $rigs))
+				$rigs[] = $rig;
 		}
 	}
 	if ((microtime(true) - $stt) >= $mcasttimeout)
