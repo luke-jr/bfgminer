@@ -121,6 +121,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		const int chip = proc->proc_id;
+		pthr = proc->thr[0];
 		bitfury = proc->device_data;
 		
 		bitfury->job_switched = 0;
@@ -132,7 +133,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		}
 		
 		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
-		libbitfury_sendHashData1(chip, bitfury);
+		libbitfury_sendHashData1(chip, bitfury, pthr);
 	}
 
 	cgsleep_ms(5);

@@ -406,7 +406,7 @@ void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
 	ms3_compute(atrvec);
 }
 
-void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
+void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_info *thr)
 {
 	struct spi_port *port = d->spi;
 	unsigned *newbuf = d->newbuf;
@@ -485,7 +485,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d)
 					found++;
 				}
 				if (!found) {
-					applog(LOG_WARNING, "AAA Strange: %08x, chip_id: %d", pn, chip_id);
+					inc_hw_errors2(thr, NULL, &pn);
 				}
 			}
 		}
