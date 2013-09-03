@@ -31,99 +31,11 @@
 #include "libbitfury.h"
 #include "util.h"
 #include "spidevc.h"
-#include "tm_i2c.h"
 
 #define GOLDEN_BACKLOG 5
 
 struct device_drv bitfury_drv;
 
-static
-bool metabank_spi_txrx(struct spi_port *port)
-{
-	struct cgpu_info * const proc = port->cgpu;
-	struct bitfury_device * const bitfury = proc->device_data;
-	tm_i2c_set_oe(bitfury->slot);
-	const bool rv = sys_spi_txrx(port);
-	tm_i2c_clear_oe(bitfury->slot);
-	return rv;
-}
-
-static
-struct bitfury_device **metabank_detect_chips(int *out_count) {
-	struct bitfury_device **devicelist, *bitfury;
-	struct spi_port *port;
-	int n = 0;
-	int i, j;
-	bool slot_on[32];
-	struct timespec t1, t2;
-	struct bitfury_device dummy_bitfury;
-	struct cgpu_info dummy_cgpu;
-
-	if (tm_i2c_init() < 0) {
-		printf("I2C init error\n");
-		*out_count = 0;
-		return NULL;
-	}
-
-
-	devicelist = malloc(100 * sizeof(*devicelist));
-	dummy_cgpu.device_data = &dummy_bitfury;
-	
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
-	for (i = 0; i < 32; i++) {
-		int slot_detected = tm_i2c_detect(i) != -1;
-		slot_on[i] = slot_detected;
-		tm_i2c_clear_oe(i);
-		cgsleep_ms(1);
-	}
-
-	for (i = 0; i < 32; i++) {
-		if (slot_on[i]) {
-			int chip_n;
-			
-			port = malloc(sizeof(*port));
-			*port = *sys_spi;
-			port->cgpu = &dummy_cgpu;
-			port->txrx = metabank_spi_txrx;
-			dummy_bitfury.slot = i;
-			
-			chip_n = libbitfury_detectChips1(port);
-			if (chip_n)
-			{
-				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
-				for (j = 0; j < chip_n; ++j)
-				{
-					devicelist[n] = bitfury = malloc(sizeof(*bitfury));
-					bitfury->spi = port;
-					bitfury->slot = i;
-					bitfury->fasync = j;
-					n++;
-				}
-			}
-			else
-				free(port);
-		}
-	}
-
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
-
-	*out_count = n;
-	return devicelist;
-}
-
-void libbitfury_shutdownChips(struct cgpu_info *proc) {
-	struct bitfury_device *bitfury;
-	for ( ; proc; proc = proc->next_proc)
-	{
-		bitfury = proc->device_data;
-		send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
-	}
-	tm_i2c_close();
-}
-
-
-// Forward declarations
-static bool bitfury_prepare(struct thr_info *thr);
 int calc_stat(time_t * stat_ts, time_t stat, struct timeval now);
 double shares_to_ghashes(int shares, int seconds);
 
@@ -143,7 +55,7 @@ int bitfury_autodetect()
 	spi_init();
 	if (!sys_spi)
 		return 0;
-	bitfury_info->device_data = metabank_detect_chips(&chip_n);
+	chip_n = libbitfury_detectChips1(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return 0;
@@ -166,13 +78,17 @@ static void bitfury_detect(void)
 static
 bool bitfury_init(struct thr_info *thr)
 {
-	struct bitfury_device **devicelist = thr->cgpu->device_data;
 	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
-		proc->device_data = devicelist[proc->proc_id];
-	
-	free(devicelist);
+	{
+		bitfury = proc->device_data = malloc(sizeof(struct bitfury_device));
+		*bitfury = (struct bitfury_device){
+			.spi = sys_spi,
+			.fasync = proc->proc_id,
+		};
+	}
 	
 	return true;
 }
@@ -377,7 +293,7 @@ int calc_stat(time_t * stat_ts, time_t stat, struct timeval now) {
 	return shares_found;
 }
 
-static bool bitfury_prepare(struct thr_info *thr)
+bool bitfury_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 
@@ -387,14 +303,20 @@ static bool bitfury_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void bitfury_shutdown(struct thr_info *thr)
-{
+void bitfury_shutdown(struct thr_info *thr) {
+	struct cgpu_info *cgpu = thr->cgpu, *proc;
+	struct bitfury_device *bitfury;
+	
 	applog(LOG_INFO, "INFO bitfury_shutdown");
-	libbitfury_shutdownChips(thr->cgpu);
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		bitfury = proc->device_data;
+		send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
+	}
 }
 
 struct device_drv bitfury_drv = {
-	.dname = "bitfury",
+	.dname = "bitfury_gpio",
 	.name = "BFY",
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
