@@ -411,6 +411,19 @@ int64_t littlefury_job_process_results(struct thr_info *thr, struct work *work, 
 }
 
 extern int64_t bitfury_scanHash(struct thr_info *);
+extern void bitfury_shutdown(struct thr_info *);
+
+static void littlefury_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	const int fd = cgpu->device->device_fd;
+	uint8_t buf[1];
+	uint16_t bufsz = 1;
+	
+	bitfury_shutdown(thr);
+	if (!(bitfury_do_packet(LOG_DEBUG, cgpu->dev_repr, fd, buf, &bufsz, LFOP_REGPWR, "\0", 1) && bufsz && !buf[0]))
+		applog(LOG_WARNING, "%s: Unable to power off chip(s)", cgpu->dev_repr);
+}
 
 struct device_drv littlefury_drv = {
 	.dname = "littlefury",
@@ -427,4 +440,5 @@ struct device_drv littlefury_drv = {
 	.minerloop = hash_queued_work,
 	.thread_init = littlefury_thread_init,
 	.scanwork = bitfury_scanHash,
+	.thread_shutdown = littlefury_shutdown,
 };
