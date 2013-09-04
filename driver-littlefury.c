@@ -109,23 +109,24 @@ ssize_t keep_reading(int fd, void *buf, size_t count)
 }
 
 static
-bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const buf, uint8_t * const bufsz, const uint8_t op, const void * const payload, const uint8_t payloadsz)
+bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const buf, uint16_t * const bufsz, const uint8_t op, const void * const payload, const uint16_t payloadsz)
 {
 	uint16_t crc;
 	size_t sz;
 	ssize_t r;
-	uint8_t pkt[0x106];
+	uint8_t pkt[0x407];
 	bool b;
 	
 	{
-		sz = 2 + 1 + 1 + payloadsz + 2;
+		sz = 2 + 1 + 2 + payloadsz + 2;
 		pkt[0] = 0xab;
 		pkt[1] = 0xcd;
 		pkt[2] = op;
-		pkt[3] = payloadsz;
+		pkt[3] = payloadsz >> 8;
+		pkt[4] = payloadsz & 0xff;
 		if (payloadsz)
-			memcpy(&pkt[4], payload, payloadsz);
-		crc = crc16(&pkt[2], 2 + (size_t)payloadsz);
+			memcpy(&pkt[5], payload, payloadsz);
+		crc = crc16(&pkt[2], 3 + (size_t)payloadsz);
 		pkt[sz - 2] = crc >> 8;
 		pkt[sz - 1] = crc & 0xff;
 		if (unlikely(opt_dev_protocol))
@@ -143,8 +144,8 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 	}
 	
 	{
-		r = keep_reading(fd, pkt, 4);
-		if (4 != r || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
+		r = keep_reading(fd, pkt, 5);
+		if (5 != r || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
 		{
 			char hex[(r * 2) + 1];
 			bin2hex(hex, pkt, r);
@@ -152,23 +153,23 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 			applog(prio, "%s: Failed to read correct packet header", repr);
 			return false;
 		}
-		sz = pkt[3] + 2;
-		r = keep_reading(fd, &pkt[4], sz);
+		sz = (((unsigned)pkt[3] << 8) | pkt[4]) + 2;
+		r = keep_reading(fd, &pkt[5], sz);
 		if (sz != r)
 		{
-			r += 4;
+			r += 5;
 			char hex[(r * 2) + 1];
 			bin2hex(hex, pkt, r);
 			applog(prio, "%s: DEVPROTO: RECV %s", repr, hex);
 			applog(prio, "%s: Failed to read packet payload (len=%d)", repr, (int)sz);
 			return false;
 		}
-		crc = (pkt[sz + 2] << 8) | pkt[sz + 3];
-		b = (crc != crc16(&pkt[2], sz));
+		crc = (pkt[sz + 3] << 8) | pkt[sz + 4];
+		b = (crc != crc16(&pkt[2], sz + 1));
 		if (unlikely(opt_dev_protocol || b))
 		{
-			char hex[((sz + 4) * 2) + 1];
-			bin2hex(hex, pkt, sz + 4);
+			char hex[((sz + 5) * 2) + 1];
+			bin2hex(hex, pkt, sz + 5);
 			applog(b ? prio : LOG_DEBUG, "%s: DEVPROTO: RECV %s", repr, hex);
 			if (b)
 			{
@@ -176,8 +177,9 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 				return false;
 			}
 		}
-		memcpy(buf, &pkt[4], (*bufsz < pkt[3] ? *bufsz : pkt[3]));
-		*bufsz = pkt[3];
+		sz -= 2;
+		memcpy(buf, &pkt[5], (*bufsz < sz ? *bufsz : sz));
+		*bufsz = sz;
 	}
 	
 	return true;
@@ -190,7 +192,7 @@ bool littlefury_txrx(struct spi_port *port)
 	const void *wrbuf = spi_gettxbuf(port);
 	void *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
-	uint8_t rbufsz, xfer;
+	uint16_t rbufsz, xfer;
 	const int logprio = port->logprio;
 	const char * const repr = port->repr;
 	const int fd = cgpu->device->device_fd;
@@ -201,7 +203,7 @@ bool littlefury_txrx(struct spi_port *port)
 	
 	while (bufsz)
 	{
-		xfer = (bufsz > 32) ? 32 : bufsz;
+		xfer = (bufsz > 1024) ? 1024 : bufsz;
 		rbufsz = xfer;
 		if (!bitfury_do_packet(logprio, repr, fd, rdbuf, &rbufsz, LFOP_SPI, wrbuf, xfer))
 			return false;
@@ -223,7 +225,8 @@ static
 bool littlefury_detect_one(const char *devpath)
 {
 	int fd, chips;
-	uint8_t buf[255], bufsz;
+	uint8_t buf[255];
+	uint16_t bufsz;
 	struct spi_port spi;
 	struct cgpu_info dummy;
 	char *devname;
@@ -319,7 +322,8 @@ bool littlefury_thread_init(struct thr_info *thr)
 	struct cgpu_info *proc;
 	struct spi_port *spi;
 	struct bitfury_device *bitfury;
-	uint8_t buf[1], bufsz = 1;
+	uint8_t buf[1];
+	uint16_t bufsz = 1;
 	int fd;
 	int i = 0;
 	
