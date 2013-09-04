@@ -1552,8 +1552,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		switch (err) {
 			case LIBUSB_ERROR_ACCESS:
 				applog(LOG_ERR,
-					"USB init open device failed, err %d, "
-					"you dont have priviledge to access %s",
+					"USB init, open device failed, err %d, "
+					"you don't have privilege to access %s",
 					err, devstr);
 				break;
 #ifdef WIN32
