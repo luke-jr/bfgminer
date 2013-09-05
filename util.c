@@ -1722,6 +1722,7 @@ bool auth_stratum(struct pool *pool)
 static bool setup_stratum_socket(struct pool *pool)
 {
 	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
+	char *sockaddr_url, *sockaddr_port;
 	int sockd;
 
 	mutex_lock(&pool->stratum_lock);
@@ -1737,14 +1738,21 @@ static bool setup_stratum_socket(struct pool *pool)
 	hints->ai_socktype = SOCK_STREAM;
 	servinfo = &servinfobase;
 	p = &pbase;
-	if (getaddrinfo(pool->sockaddr_url, pool->stratum_port, hints, &servinfo) != 0) {
+	if (pool->rpc_proxy) {
+		sockaddr_url = pool->sockaddr_proxy_url;
+		sockaddr_port = pool->sockaddr_proxy_port;
+	} else {
+		sockaddr_url = pool->sockaddr_url;
+		sockaddr_port = pool->stratum_port;
+	}
+	if (getaddrinfo(sockaddr_url, sockaddr_port, hints, &servinfo) != 0) {
 		if (!pool->probed) {
 			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
-			       pool->sockaddr_url, pool->stratum_port);
+			       sockaddr_url, sockaddr_port);
 			pool->probed = true;
 		} else {
 			applog(LOG_INFO, "Failed to getaddrinfo for %s:%s",
-			       pool->sockaddr_url, pool->stratum_port);
+			       sockaddr_url, sockaddr_port);
 		}
 		return false;
 	}
