@@ -337,14 +337,14 @@ AC_ARG_WITH([libmicrohttpd],
 	[httpsrv=$withval]
 )
 if test "x$httpsrv" != "xno"; then
-	PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd],[
+	PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd >= 0.9.5],[
 		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
 		httpsrv=yes
 	],[
 		if test "x$httpsrv" = "xyes"; then
-			AC_MSG_ERROR([Unable to find libmicrohttpd])
+			AC_MSG_ERROR([Unable to find libmicrohttpd 0.9.5+])
 		else
-			AC_MSG_WARN([libmicrohttpd not found; getwork proxy will be unavailable])
+			AC_MSG_WARN([libmicrohttpd 0.9.5+ not found; getwork proxy will be unavailable])
 		fi
 	])
 fi
