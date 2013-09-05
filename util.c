@@ -1719,6 +1719,70 @@ bool auth_stratum(struct pool *pool)
 	return ret;
 }
 
+static int recv_byte(int sockd)
+{
+	unsigned char c;
+
+	if (recv(sockd, &c, 1, 0) != -1)
+		return c;
+
+	return -1;
+}
+
+static bool http_negotiate(struct pool *pool, int sockd, bool http0)
+{
+	char buf[1024];
+	int i, len;
+
+	if (http0) {
+		snprintf(buf, 1024, "CONNECT %s:%s HTTP/1.0\r\n\r\n",
+			pool->sockaddr_url, pool->stratum_port);
+	} else {
+		snprintf(buf, 1024, "CONNECT %s:%s HTTP/1.1\r\nHost: %s:%s\r\n\r\n",
+			pool->sockaddr_url, pool->stratum_port, pool->sockaddr_url,
+			pool->stratum_port);
+	}
+	applog(LOG_DEBUG, "Sending proxy %s:%s - %s",
+		pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+	send(sockd, buf, strlen(buf), 0);
+	len = recv(sockd, buf, 12, 0);
+	if (len <= 0) {
+		applog(LOG_WARNING, "Couldn't read from proxy %s:%s after sending CONNECT",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+		return false;
+	}
+	buf[len] = '\0';
+	applog(LOG_DEBUG, "Received from proxy %s:%s - %s",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+	if (strcmp(buf, "HTTP/1.1 200") && strcmp(buf, "HTTP/1.0 200")) {
+		applog(LOG_WARNING, "HTTP Error from proxy %s:%s - %s",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+		return false;
+	}
+
+	/* Ignore unwanted headers till we get desired response */
+	for (i = 0; i < 4; i++) {
+		buf[i] = recv_byte(sockd);
+		if (buf[i] == -1) {
+			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+			return false;
+		}
+	}
+	while (strncmp(buf, "\r\n\r\n", 4)) {
+		for (i = 0; i < 3; i++)
+			buf[i] = buf[i + 1];
+		buf[3] = recv_byte(sockd);
+		if (buf[3] == -1) {
+			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static bool setup_stratum_socket(struct pool *pool)
 {
 	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
@@ -1779,6 +1843,24 @@ static bool setup_stratum_socket(struct pool *pool)
 		return false;
 	}
 	freeaddrinfo(servinfo);
+
+	if (pool->rpc_proxy) {
+		switch (pool->rpc_proxytype) {
+			case CURLPROXY_HTTP_1_0:
+				if (!http_negotiate(pool, sockd, true))
+					return false;
+				break;
+			case CURLPROXY_HTTP:
+				if (!http_negotiate(pool, sockd, false))
+					return false;
+				break;
+			default:
+				applog(LOG_WARNING, "Unsupported proxy type for %s:%s",
+				       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+				return false;
+				break;
+		}
+	}
 
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
