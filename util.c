@@ -567,6 +567,7 @@ char *get_proxy(char *url, struct pool *pool)
 				quithere(1, "Failed to malloc rpc_proxy");
 
 			strcpy(pool->rpc_proxy, url + plen);
+			extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
 			pool->rpc_proxytype = proxynames[i].proxytype;
 			url = split + 1;
 			break;
