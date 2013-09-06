@@ -567,6 +567,7 @@ char *get_proxy(char *url, struct pool *pool)
 				quithere(1, "Failed to malloc rpc_proxy");
 
 			strcpy(pool->rpc_proxy, url + plen);
+			extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
 			pool->rpc_proxytype = proxynames[i].proxytype;
 			url = split + 1;
 			break;
@@ -1072,13 +1073,13 @@ double tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }
 
-bool extract_sockaddr(struct pool *pool, char *url)
+bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 {
 	char *url_begin, *url_end, *ipv6_begin, *ipv6_end, *port_start = NULL;
 	char url_address[256], port[6];
 	int url_len, port_len = 0;
 
-	pool->sockaddr_url = url;
+	*sockaddr_url = url;
 	url_begin = strstr(url, "//");
 	if (!url_begin)
 		url_begin = url;
@@ -1111,8 +1112,8 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	else
 		strcpy(port, "80");
 
-	pool->stratum_port = strdup(port);
-	pool->sockaddr_url = strdup(url_address);
+	*sockaddr_port = strdup(port);
+	*sockaddr_url = strdup(url_address);
 
 	return true;
 }
@@ -1557,7 +1558,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	sprintf(address, "%s:%s", url, port);
 
-	if (!extract_sockaddr(pool, address))
+	if (!extract_sockaddr(address, &pool->sockaddr_url, &pool->stratum_port))
 		return false;
 
 	pool->stratum_url = pool->sockaddr_url;
@@ -1718,9 +1719,137 @@ bool auth_stratum(struct pool *pool)
 	return ret;
 }
 
+static int recv_byte(int sockd)
+{
+	unsigned char c;
+
+	if (recv(sockd, &c, 1, 0) != -1)
+		return c;
+
+	return -1;
+}
+
+static bool http_negotiate(struct pool *pool, int sockd, bool http0)
+{
+	char buf[1024];
+	int i, len;
+
+	if (http0) {
+		snprintf(buf, 1024, "CONNECT %s:%s HTTP/1.0\r\n\r\n",
+			pool->sockaddr_url, pool->stratum_port);
+	} else {
+		snprintf(buf, 1024, "CONNECT %s:%s HTTP/1.1\r\nHost: %s:%s\r\n\r\n",
+			pool->sockaddr_url, pool->stratum_port, pool->sockaddr_url,
+			pool->stratum_port);
+	}
+	applog(LOG_DEBUG, "Sending proxy %s:%s - %s",
+		pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+	send(sockd, buf, strlen(buf), 0);
+	len = recv(sockd, buf, 12, 0);
+	if (len <= 0) {
+		applog(LOG_WARNING, "Couldn't read from proxy %s:%s after sending CONNECT",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+		return false;
+	}
+	buf[len] = '\0';
+	applog(LOG_DEBUG, "Received from proxy %s:%s - %s",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+	if (strcmp(buf, "HTTP/1.1 200") && strcmp(buf, "HTTP/1.0 200")) {
+		applog(LOG_WARNING, "HTTP Error from proxy %s:%s - %s",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port, buf);
+		return false;
+	}
+
+	/* Ignore unwanted headers till we get desired response */
+	for (i = 0; i < 4; i++) {
+		buf[i] = recv_byte(sockd);
+		if (buf[i] == -1) {
+			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+			return false;
+		}
+	}
+	while (strncmp(buf, "\r\n\r\n", 4)) {
+		for (i = 0; i < 3; i++)
+			buf[i] = buf[i + 1];
+		buf[3] = recv_byte(sockd);
+		if (buf[3] == -1) {
+			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+			return false;
+		}
+	}
+
+	applog(LOG_DEBUG, "Success negotiating with %s:%s HTTP proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+	return true;
+}
+
+static bool socks5_negotiate(struct pool *pool, int sockd)
+{
+	unsigned char atyp, uclen;
+	unsigned short port;
+	char buf[515];
+	int i, len;
+
+	buf[0] = 0x05;
+	buf[1] = 0x01;
+	buf[2] = 0x00;
+	applog(LOG_DEBUG, "Attempting to negotiate with %s:%s SOCKS5 proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port );
+	send(sockd, buf, 3, 0);
+	if (recv_byte(sockd) != 0x05 || recv_byte(sockd) != buf[2]) {
+		applog(LOG_WARNING, "Bad response from %s:%s SOCKS5 server",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port );
+		return false;
+	}
+
+	buf[0] = 0x05;
+	buf[1] = 0x01;
+	buf[2] = 0x00;
+	buf[3] = 0x03;
+	len = (strlen(pool->sockaddr_url));
+	if (len > 255)
+		len = 255;
+	uclen = len;
+	buf[4] = (uclen & 0xff);
+	memcpy(buf + 5, pool->sockaddr_url, len);
+	port = atoi(pool->stratum_port);
+	buf[5 + len] = (port >> 8);
+	buf[6 + len] = (port & 0xff);
+	send(sockd, buf, (7 + len), 0);
+	if (recv_byte(sockd) != 0x05 || recv_byte(sockd) != 0x00) {
+		applog(LOG_WARNING, "Bad response from %s:%s SOCKS5 server",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port );
+		return false;
+	}
+
+	recv_byte(sockd);
+	atyp = recv_byte(sockd);
+	if (atyp == 0x01) {
+		for (i = 0; i < 4; i++)
+			recv_byte(sockd);
+	} else if (atyp == 0x03) {
+		len = recv_byte(sockd);
+		for (i = 0; i < len; i++)
+			recv_byte(sockd);
+	} else {
+		applog(LOG_WARNING, "Bad response from %s:%s SOCKS5 server",
+			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port );
+		return false;
+	}
+	for (i = 0; i < 2; i++)
+		recv_byte(sockd);
+
+	applog(LOG_DEBUG, "Success negotiating with %s:%s SOCKS5 proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+	return true;
+}
+
 static bool setup_stratum_socket(struct pool *pool)
 {
 	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
+	char *sockaddr_url, *sockaddr_port;
 	int sockd;
 
 	mutex_lock(&pool->stratum_lock);
@@ -1736,14 +1865,21 @@ static bool setup_stratum_socket(struct pool *pool)
 	hints->ai_socktype = SOCK_STREAM;
 	servinfo = &servinfobase;
 	p = &pbase;
-	if (getaddrinfo(pool->sockaddr_url, pool->stratum_port, hints, &servinfo) != 0) {
+	if (pool->rpc_proxy) {
+		sockaddr_url = pool->sockaddr_proxy_url;
+		sockaddr_port = pool->sockaddr_proxy_port;
+	} else {
+		sockaddr_url = pool->sockaddr_url;
+		sockaddr_port = pool->stratum_port;
+	}
+	if (getaddrinfo(sockaddr_url, sockaddr_port, hints, &servinfo) != 0) {
 		if (!pool->probed) {
 			applog(LOG_WARNING, "Failed to resolve (?wrong URL) %s:%s",
-			       pool->sockaddr_url, pool->stratum_port);
+			       sockaddr_url, sockaddr_port);
 			pool->probed = true;
 		} else {
 			applog(LOG_INFO, "Failed to getaddrinfo for %s:%s",
-			       pool->sockaddr_url, pool->stratum_port);
+			       sockaddr_url, sockaddr_port);
 		}
 		return false;
 	}
@@ -1770,6 +1906,29 @@ static bool setup_stratum_socket(struct pool *pool)
 		return false;
 	}
 	freeaddrinfo(servinfo);
+
+	if (pool->rpc_proxy) {
+		switch (pool->rpc_proxytype) {
+			case CURLPROXY_HTTP_1_0:
+				if (!http_negotiate(pool, sockd, true))
+					return false;
+				break;
+			case CURLPROXY_HTTP:
+				if (!http_negotiate(pool, sockd, false))
+					return false;
+				break;
+			case CURLPROXY_SOCKS5:
+			case CURLPROXY_SOCKS5_HOSTNAME:
+				if (!socks5_negotiate(pool, sockd))
+					return false;
+				break;
+			default:
+				applog(LOG_WARNING, "Unsupported proxy type for %s:%s",
+				       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+				return false;
+				break;
+		}
+	}
 
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);

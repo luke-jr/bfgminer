@@ -97,7 +97,7 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
-bool extract_sockaddr(struct pool *pool, char *url);
+bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port);
 bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
 bool restart_stratum(struct pool *pool);
