@@ -1107,9 +1107,14 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
-	if (port_len)
+	if (port_len) {
+		char *slash;
+
 		snprintf(port, 6, "%.*s", port_len, port_start);
-	else
+		slash = strchr(port, '/');
+		if (slash)
+			*slash = '\0';
+	} else
 		strcpy(port, "80");
 
 	*sockaddr_port = strdup(port);
