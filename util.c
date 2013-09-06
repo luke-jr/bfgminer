@@ -1780,6 +1780,8 @@ static bool http_negotiate(struct pool *pool, int sockd, bool http0)
 		}
 	}
 
+	applog(LOG_DEBUG, "Success negotiating with %s:%s HTTP proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
 	return true;
 }
 
@@ -1793,6 +1795,8 @@ static bool socks5_negotiate(struct pool *pool, int sockd)
 	buf[0] = 0x05;
 	buf[1] = 0x01;
 	buf[2] = 0x00;
+	applog(LOG_DEBUG, "Attempting to negotiate with %s:%s SOCKS5 proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port );
 	send(sockd, buf, 3, 0);
 	if (recv_byte(sockd) != 0x05 || recv_byte(sockd) != buf[2]) {
 		applog(LOG_WARNING, "Bad response from %s:%s SOCKS5 server",
@@ -1837,6 +1841,8 @@ static bool socks5_negotiate(struct pool *pool, int sockd)
 	for (i = 0; i < 2; i++)
 		recv_byte(sockd);
 
+	applog(LOG_DEBUG, "Success negotiating with %s:%s SOCKS5 proxy",
+	       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
 	return true;
 }
 
