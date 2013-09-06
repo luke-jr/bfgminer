@@ -347,7 +347,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, pool->rpc_proxytype);
 	} else if (opt_socks_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, opt_socks_proxy);
-		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
 	}
 	if (userpass) {
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
@@ -1870,6 +1870,12 @@ static bool setup_stratum_socket(struct pool *pool)
 	hints->ai_socktype = SOCK_STREAM;
 	servinfo = &servinfobase;
 	p = &pbase;
+	if (!pool->rpc_proxy && opt_socks_proxy) {
+		pool->rpc_proxy = opt_socks_proxy;
+		extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
+		pool->rpc_proxytype = CURLPROXY_SOCKS5;
+	}
+
 	if (pool->rpc_proxy) {
 		sockaddr_url = pool->sockaddr_proxy_url;
 		sockaddr_port = pool->sockaddr_proxy_port;
@@ -1905,8 +1911,8 @@ static bool setup_stratum_socket(struct pool *pool)
 		break;
 	}
 	if (p == NULL) {
-		applog(LOG_INFO, "Failed to find a stratum servinfo on %s:%s",
-		       pool->sockaddr_url, pool->stratum_port);
+		applog(LOG_NOTICE, "Failed to connect to stratum on %s:%s",
+		       sockaddr_url, sockaddr_port);
 		freeaddrinfo(servinfo);
 		return false;
 	}

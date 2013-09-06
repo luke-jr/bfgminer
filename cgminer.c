@@ -1249,7 +1249,7 @@ static struct opt_table opt_config_table[] = {
 		     "Quit after mining N shares (default: unlimited)"),
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
-		     "Set socks4 proxy (host:port)"),
+		     "Set socks proxy (host:port)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
 			opt_set_bool, &use_syslog,
