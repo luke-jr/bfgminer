@@ -1912,6 +1912,7 @@ static bool setup_stratum_socket(struct pool *pool)
 					return false;
 				break;
 			case CURLPROXY_SOCKS5:
+			case CURLPROXY_SOCKS5_HOSTNAME:
 				if (!socks5_negotiate(pool, sockd))
 					return false;
 				break;
