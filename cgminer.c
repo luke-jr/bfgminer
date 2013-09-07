@@ -5547,15 +5547,15 @@ static struct work *hash_pop(void)
 			int rc;
 
 			cgtime(&now);
-			then.tv_sec = now.tv_sec + 5;
+			then.tv_sec = now.tv_sec + 10;
 			then.tv_nsec = now.tv_usec * 1000;
 			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
 			/* Check again for !no_work as multiple threads may be
 			 * waiting on this condition and another may set the
 			 * bool separately. */
 			if (rc && !no_work) {
-				applog(LOG_WARNING, "Waiting for work to be available from pools.");
 				no_work = true;
+				applog(LOG_WARNING, "Waiting for work to be available from pools.");
 			}
 		} else
 			pthread_cond_wait(&getq->cond, stgd_lock);
