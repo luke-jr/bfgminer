@@ -1120,6 +1120,7 @@ struct pool {
 	int solved;
 	int diff1;
 	char diff[8];
+	int quota;
 
 	double diff_accepted;
 	double diff_rejected;
