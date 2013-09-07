@@ -800,11 +800,6 @@ every time cgminer looks for new hardware to hotplug it it can cause these
 sorts of problems. You can disable hotplug with:
 --hotplug 0
 
-Q: Can I use a proxy?
-A: Proxies only work with the getwork and GBT protocols using the --proxy
-command. If you wish to use a proxy with stratum, people have supported
-success with various 3rd party tools like proxifier.
-
 Q: What should my Work Utility (WU) be?
 A: Work utility is the product of hashrate * luck and only stabilises over a
 very long period of time. Assuming all your work is valid work, bitcoin mining
