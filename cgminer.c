@@ -2843,8 +2843,14 @@ static inline struct pool *select_pool(bool lagging)
 		if (pool->quota_used++ >= pool->quota) {
 			pool->quota_used = 0;
 			pool = NULL;
-		} else if (!pool_unworkable(pool))
-			break;
+		} else {
+			if (!pool_unworkable(pool))
+				break;
+			/* Failover-only flag for load-balance means distribute
+			 * unused quota to pool 0. */
+			if (opt_fail_only)
+				pools[0]->quota++;
+		}
 		pool = NULL;
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
