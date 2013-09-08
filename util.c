@@ -1927,7 +1927,7 @@ static bool socks4_negotiate(struct pool *pool, int sockd, bool socks4a)
 
 static bool setup_stratum_socket(struct pool *pool)
 {
-	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
+	struct addrinfo servinfobase, *servinfo, *hints, *p;
 	char *sockaddr_url, *sockaddr_port;
 	int sockd;
 
@@ -1943,7 +1943,7 @@ static bool setup_stratum_socket(struct pool *pool)
 	hints->ai_family = AF_UNSPEC;
 	hints->ai_socktype = SOCK_STREAM;
 	servinfo = &servinfobase;
-	p = &pbase;
+
 	if (!pool->rpc_proxy && opt_socks_proxy) {
 		pool->rpc_proxy = opt_socks_proxy;
 		extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
