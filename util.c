@@ -347,7 +347,7 @@ json_t *json_rpc_call(CURL *curl, const char *url,
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, pool->rpc_proxytype);
 	} else if (opt_socks_proxy) {
 		curl_easy_setopt(curl, CURLOPT_PROXY, opt_socks_proxy);
-		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
+		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
 	}
 	if (userpass) {
 		curl_easy_setopt(curl, CURLOPT_USERPWD, userpass);
@@ -1851,6 +1851,80 @@ static bool socks5_negotiate(struct pool *pool, int sockd)
 	return true;
 }
 
+static bool socks4_negotiate(struct pool *pool, int sockd, bool socks4a)
+{
+	unsigned short port;
+	in_addr_t inp;
+	char buf[515];
+	int i, len;
+
+	buf[0] = 0x04;
+	buf[1] = 0x01;
+	port = atoi(pool->stratum_port);
+	buf[2] = port >> 8;
+	buf[3] = port & 0xff;
+	sprintf(&buf[8], "CGMINER");
+
+	/* See if we've been given an IP address directly to avoid needing to
+	 * resolve it. */
+	inp = inet_network(pool->sockaddr_url);
+	if ((int)inp != -1)
+		socks4a = false;
+	else {
+		/* Try to extract the IP address ourselves first */
+		struct addrinfo servinfobase, *servinfo, hints;
+
+		servinfo = &servinfobase;
+		memset(&hints, 0, sizeof(struct addrinfo));
+		hints.ai_family = AF_INET; /* IPV4 only */
+		if (!getaddrinfo(pool->sockaddr_url, NULL, &hints, &servinfo)) {
+			struct sockaddr_in *saddr_in = (struct sockaddr_in *)servinfo->ai_addr;
+
+			inp = ntohl(saddr_in->sin_addr.s_addr);
+			socks4a = false;
+			freeaddrinfo(servinfo);
+		}
+	}
+
+	if (!socks4a) {
+		if ((int)inp == -1) {
+			applog(LOG_WARNING, "Invalid IP address specified for socks4 proxy: %s",
+			       pool->sockaddr_url);
+			return false;
+		}
+		buf[4] = (inp >> 24) & 0xFF;
+		buf[5] = (inp >> 16) & 0xFF;
+		buf[6] = (inp >>  8) & 0xFF;
+		buf[7] = (inp >>  0) & 0xFF;
+		send(sockd, buf, 16, 0);
+	} else {
+		/* This appears to not be working but hopefully most will be
+		 * able to resolve IP addresses themselves. */
+		buf[4] = 0;
+		buf[5] = 0;
+		buf[6] = 0;
+		buf[7] = 1;
+		len = strlen(pool->sockaddr_url);
+		if (len > 255)
+			len = 255;
+		memcpy(&buf[16], pool->sockaddr_url, len);
+		len += 16;
+		buf[len++] = '\0';
+		send(sockd, buf, len, 0);
+	}
+
+	if (recv_byte(sockd) != 0x00 || recv_byte(sockd) != 0x5a) {
+		applog(LOG_WARNING, "Bad response from %s:%s SOCKS4 server",
+		       pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
+		return false;
+	}
+
+	for (i = 0; i < 6; i++)
+		recv_byte(sockd);
+
+	return true;
+}
+
 static bool setup_stratum_socket(struct pool *pool)
 {
 	struct addrinfo servinfobase, *servinfo, *hints, pbase, *p;
@@ -1931,6 +2005,14 @@ static bool setup_stratum_socket(struct pool *pool)
 			case CURLPROXY_SOCKS5:
 			case CURLPROXY_SOCKS5_HOSTNAME:
 				if (!socks5_negotiate(pool, sockd))
+					return false;
+				break;
+			case CURLPROXY_SOCKS4:
+				if (!socks4_negotiate(pool, sockd, false))
+					return false;
+				break;
+			case CURLPROXY_SOCKS4A:
+				if (!socks4_negotiate(pool, sockd, true))
 					return false;
 				break;
 			default:
