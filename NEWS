@@ -1,3 +1,44 @@
+
+- Remove unused pbase variable.
+- Add support for socks4/4a proxies with stratum, and drop back to socks4
+support via the global --socks-proxy command to not break previous
+configurations.
+- Fix warning on mingw build.
+- Only show long-poll message in pool summary if it's not using stratum.
+- Increase the time for the waiting for work message to be given to be greater
+than that required for a pool swap in the scheduler which is set to 5s.
+- Change message in status when using a balanced pool strategy to notify if
+there's a stratum pool as well.
+- Use the --failover-only flag to have special meaning in combination with
+load-balance mode to distribute any unused quota back to pool 0 to maintain
+ratios amongst other pools.
+- Display quota and allow it to be modified via the pool menu.
+- Add API commands and modify output to support pool quota displaying and
+changing.
+- Change message in status when using a balanced pool strategy to notify if
+there's a stratum pool as well.
+- Add quota support to configuration files.
+- Rotate pools on all failures to set a pool in select_pool.
+- Use quotas for load-balance pool strategy.
+- Provide a mechanism for setting a pool quota to be used by load-balance.
+- Use the --socks-proxy option with stratum, changing it to defaulting to socks5
+and give appropriate message should it fail to connect.
+- Cope with trailing slashes in stratum urls.
+- Add more debugging messages when negotiating with proxies for stratum.
+- Test specifically for socks5h in socks support for stratum.
+- Add support for socks5 proxy with stratum
+- Provide support for negotiating a stratum connection via http proxies.
+- Connect to the proxy URL and port if specified for stratum sockets instead of
+the pool directly.
+- Extract any proxy url and port to be used by sockaddr if possible using
+extract_sockaddr.
+- Make extract_sockaddr set variables passed to it rather than pool struct
+members.
+- miner.php sort the mcast rigs so they are always in the same relative order
+- miner.php allow sending the muticast message multiple times
+- miner.php mcast ignore duplicate replies
+
+
 Version 3.4.2 - 3rd September 2013
 
 - take_queued_work_bymidstate should use a write lock.
