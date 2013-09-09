@@ -1867,7 +1867,8 @@ static bool socks4_negotiate(struct pool *pool, int sockd, bool socks4a)
 
 	/* See if we've been given an IP address directly to avoid needing to
 	 * resolve it. */
-	inp = inet_network(pool->sockaddr_url);
+	inp = inet_addr(pool->sockaddr_url);
+	inp = ntohl(inp);
 	if ((int)inp != -1)
 		socks4a = false;
 	else {
