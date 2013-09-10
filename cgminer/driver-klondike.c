@@ -141,9 +141,9 @@ static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, in
 	if (err < 0 || sent != 2+datalen) {
 		applog(LOG_ERR, "%s (%s) Cmd:%c Dev:%d, write failed (%d:%d)", klncgpu->drv->dname, klncgpu->device_path, Cmd, device, sent, err);
 	}
-	while(retries-- > 0 && klninfo->shutdown == false) {
+	while (retries-- > 0 && klninfo->shutdown == false) {
 		cgsleep_ms(REPLY_WAIT_TIME);
-		while(*(klninfo->replies + chkreply*REPLY_BUFSIZE) != Cmd || *(klninfo->replies + chkreply*REPLY_BUFSIZE + 2) != device) {
+		while (*(klninfo->replies + chkreply*REPLY_BUFSIZE) != Cmd || *(klninfo->replies + chkreply*REPLY_BUFSIZE + 2) != device) {
 			if (++chkreply == MAX_REPLY_COUNT)
 				chkreply = 0;
 			if (chkreply == klninfo->nextreply)
@@ -170,7 +170,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	
 	// loop thru devices and get status for each
 	wr_lock(&(klninfo->stat_lock));
-	for(dev = 0; dev <= slaves; dev++) {
+	for (dev = 0; dev <= slaves; dev++) {
 		char *reply = SendCmdGetReply(klncgpu, 'S', dev, 0, NULL);
 		if (reply != NULL)
 			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
@@ -261,7 +261,7 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 	
 	if (usb_init(klncgpu, dev, found)) {
 		int attempts = 0;		
-		while(attempts++ < 3) {
+		while (attempts++ < 3) {
 			char devpath[20], reply[REPLY_SIZE];
 			int sent, recd, err;
 			
@@ -481,8 +481,8 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 	struct work *work = NULL;
 	int dev, queued;
 	
-	for(queued = 0; queued < MAX_WORK_COUNT-1; queued++)
-		for(dev = 0; dev <= klninfo->status->slavecount; dev++)
+	for (queued = 0; queued < MAX_WORK_COUNT-1; queued++)
+		for (dev = 0; dev <= klninfo->status->slavecount; dev++)
 			if (klninfo->status[dev].workqc <= queued) {
 				if (!work)
 					work = get_queued(klncgpu);
@@ -510,7 +510,7 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 	restart_wait(thr, 200);
 	if (klninfo->status != NULL) {
 		rd_lock(&(klninfo->stat_lock));
-		for(dev = 0; dev <= klninfo->status->slavecount; dev++) {
+		for (dev = 0; dev <= klninfo->status->slavecount; dev++) {
 			uint64_t newhashdev = 0;
 			if (klninfo->devinfo[dev].lasthashcount > klninfo->status[dev].hashcount) // todo: chg this to check workid for wrapped instead
 				newhashdev += klninfo->status[dev].maxcount; // hash counter wrapped
@@ -584,13 +584,13 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 			char data[128];
 			int n;
 			sprintf(buf, "Nonces / Chip %d", dev);
-			for(n = 0; n < klninfo->status[dev].chipcount; n++)
+			for (n = 0; n < klninfo->status[dev].chipcount; n++)
 				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n]);
 			data[127] = 0;
 			root = api_add_string(root, buf, data, true);
 		
 			sprintf(buf, "Errors / Chip %d", dev);
-			for(n = 0; n < klninfo->status[dev].chipcount; n++)
+			for (n = 0; n < klninfo->status[dev].chipcount; n++)
 				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
 			data[127] = 0;
 			root = api_add_string(root, buf, data, true);
