@@ -38,13 +38,13 @@
 #define MERKLE_OFFSET 64
 #define MERKLE_BYTES 12
 
-#define REPLY_SIZE			15		// adequate for all types of replies
-#define REPLY_BUFSIZE 		16		// reply + 1 byte to mark used
-#define MAX_REPLY_COUNT		32		// more unhandled replies than this will result in data loss
+#define REPLY_SIZE		15	// adequate for all types of replies
+#define REPLY_BUFSIZE 		16	// reply + 1 byte to mark used
+#define MAX_REPLY_COUNT		32	// more unhandled replies than this will result in data loss
 #define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
-#define CMD_REPLY_RETRIES	8		// how many retries for cmds
-#define MAX_WORK_COUNT      4   	// for now, must be binary multiple and match firmware
-#define TACH_FACTOR			87890	// fan rpm divisor
+#define CMD_REPLY_RETRIES	8	// how many retries for cmds
+#define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
+#define TACH_FACTOR		87890	// fan rpm divisor
 
 struct device_drv klondike_drv;
 
@@ -70,16 +70,16 @@ typedef struct klondike_status {
 typedef struct _worktask {
 	uint16_t pad1;
 	uint8_t pad2;
-    uint8_t workid;
-    uint32_t midstate[8];
-    uint32_t merkle[3];
+	uint8_t workid;
+	uint32_t midstate[8];
+	uint32_t merkle[3];
 } WORKTASK;
 
 typedef struct _workresult {
 	uint16_t pad;
 	uint8_t device;
-    uint8_t workid;
-    uint32_t nonce;
+	uint8_t workid;
+	uint32_t nonce;
 } WORKRESULT;
 
 typedef struct kondike_cfg {
@@ -142,14 +142,14 @@ static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, in
 		applog(LOG_ERR, "%s (%s) Cmd:%c Dev:%d, write failed (%d:%d)", klncgpu->drv->dname, klncgpu->device_path, Cmd, device, sent, err);
 	}
 	while(retries-- > 0 && klninfo->shutdown == false) {
-		nmsleep(REPLY_WAIT_TIME);
+		cgsleep_ms(REPLY_WAIT_TIME);
 		while(*(klninfo->replies + chkreply*REPLY_BUFSIZE) != Cmd || *(klninfo->replies + chkreply*REPLY_BUFSIZE + 2) != device) {
-			if(++chkreply == MAX_REPLY_COUNT)
+			if (++chkreply == MAX_REPLY_COUNT)
 				chkreply = 0;
-			if(chkreply == klninfo->nextreply)
+			if (chkreply == klninfo->nextreply)
 				break;
 			}
-		if(chkreply == klninfo->nextreply)
+		if (chkreply == klninfo->nextreply)
 			continue;
 		*(klninfo->replies + chkreply*REPLY_BUFSIZE) = '!';  // mark to prevent re-use
 		return klninfo->replies + chkreply*REPLY_BUFSIZE + 1;
@@ -172,7 +172,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	wr_lock(&(klninfo->stat_lock));
 	for(dev = 0; dev <= slaves; dev++) {
 		char *reply = SendCmdGetReply(klncgpu, 'S', dev, 0, NULL);
-		if(reply != NULL)
+		if (reply != NULL)
 			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
 		}
 	wr_unlock(&(klninfo->stat_lock));
@@ -188,11 +188,11 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	int slaves, dev;
 	
 	char *reply = SendCmdGetReply(klncgpu, 'S', 0, 0, NULL);
-	if(reply == NULL)
+	if (reply == NULL)
 		return false;
 		
 	slaves = ((WORKSTATUS *)(reply+2))->slavecount;
-	if(klninfo->status == NULL) {
+	if (klninfo->status == NULL) {
 		applog(LOG_DEBUG, "Klondike initializing data");
 		
 		// alloc space for status, devinfo and cfg for master and slaves
@@ -211,17 +211,17 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	double temp1, temp2;
 	int size = 2;
 	
-	if(opt_klondike_options != NULL) {  // boundaries are checked by device, with valid values returned
-		sscanf(opt_klondike_options, "%hu,%lf,%lf,%hhu", &cfgset.hashclock, &temp1, &temp2, &cfgset.fantarget);
+	if (opt_klondike_options != NULL) {  // boundaries are checked by device, with valid values returned
+		sscanf(opt_klondike_options, "%hu:%lf:%lf:%hhu", &cfgset.hashclock, &temp1, &temp2, &cfgset.fantarget);
 		cfgset.temptarget = cvtCToKln(temp1);
 		cfgset.tempcritical = cvtCToKln(temp2);
 		cfgset.fantarget = (int)255*cfgset.fantarget/100;
 		size = sizeof(cfgset); 
 	}
 	
-	for(dev = 0; dev <= slaves; dev++) {
+	for (dev = 0; dev <= slaves; dev++) {
 		char *reply = SendCmdGetReply(klncgpu, 'C', dev, size, &cfgset);
-		if(reply != NULL) {
+		if (reply != NULL) {
 			klninfo->cfg[dev] = *(WORKCFG *)(reply+2);
 			applog(LOG_NOTICE, "Klondike config (%d: Clk: %d, T:%.0lf, C:%.0lf, F:%d)", 
 				dev, klninfo->cfg[dev].hashclock, 
@@ -231,7 +231,7 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 			}
 		}
 	klondike_get_stats(klncgpu);
-	for(dev = 0; dev <= slaves; dev++) {
+	for (dev = 0; dev <= slaves; dev++) {
 		klninfo->devinfo[dev].rangesize = ((uint64_t)1<<32) / klninfo->status[dev].chipcount;
 		klninfo->devinfo[dev].chipstats = calloc(klninfo->status[dev].chipcount*2 , sizeof(uint32_t));
 	}
@@ -270,19 +270,19 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 			if (err < 0 || sent != 2) {
 				applog(LOG_ERR, "%s (%s) detect write failed (%d:%d)", klncgpu->drv->dname, devpath, sent, err);
 			}
-			nmsleep(REPLY_WAIT_TIME*10);
+			cgsleep_ms(REPLY_WAIT_TIME*10);
 			err = usb_read(klncgpu, reply, REPLY_SIZE, &recd, C_GETRESULTS);
 			if (err < 0) {
 				applog(LOG_ERR, "%s (%s) detect read failed (%d:%d)", klncgpu->drv->dname, devpath, recd, err);
 			} else if (recd < 1) {
 				applog(LOG_ERR, "%s (%s) detect empty reply (%d)",	klncgpu->drv->dname, devpath, recd);
-			} else if(reply[0] == 'I' && reply[1] == 0) {
+			} else if (reply[0] == 'I' && reply[1] == 0) {
 
 				applog(LOG_DEBUG, "%s (%s) detect successful", klncgpu->drv->dname, devpath);
 				KlondikeID = *(IDENTITY *)(&reply[2]);
 				klncgpu->device_path = strdup(devpath);
 				update_usb_stats(klncgpu);
-				if(!add_cgpu(klncgpu))
+				if (!add_cgpu(klncgpu))
 					break;
 				applog(LOG_DEBUG, "Klondike cgpu added");
 				return true;
@@ -300,7 +300,7 @@ static void klondike_detect(void)
 	usb_detect(&klondike_drv, klondike_detect_one);
 }
 
-static void klondike_identify(struct cgpu_info *klncgpu)
+static void klondike_identify(__maybe_unused struct cgpu_info *klncgpu)
 {
 	//SendCmdGetReply(klncgpu, 'I', 0, 0, NULL);
 }
@@ -352,17 +352,17 @@ static void *klondike_get_replies(void *userdata)
 		replybuf[0] = 0;
 		
 		err = usb_read(klncgpu, replybuf+1, REPLY_SIZE, &recd, C_GETRESULTS);
-		if (recd == REPLY_SIZE) {
-			if(opt_log_level <= LOG_DEBUG) {
-				char *hexdata = bin2hex(replybuf+1, recd);
+		if (!err && recd == REPLY_SIZE) {
+			if (opt_log_level <= LOG_DEBUG) {
+				char *hexdata = bin2hex((unsigned char *)(replybuf+1), recd);
 				applog(LOG_DEBUG, "%s (%s) reply [%s:%s]", klncgpu->drv->dname, klncgpu->device_path, replybuf+1, hexdata);
 				free(hexdata);
 			}
-			if(++klninfo->nextreply == MAX_REPLY_COUNT)
+			if (++klninfo->nextreply == MAX_REPLY_COUNT)
 				klninfo->nextreply = 0;
 				
 			replybuf[0] = replybuf[1];
-			if(replybuf[0] == '=')
+			if (replybuf[0] == '=')
 				klondike_check_nonce(klncgpu, (WORKRESULT *)replybuf);
 		}
 	}
@@ -377,7 +377,7 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 	applog(LOG_DEBUG, "Klondike flushing work");
 	for (dev = 0; dev <= klninfo->status->slavecount; dev++) {
 		char *reply = SendCmdGetReply(klncgpu, 'A', dev, 0, NULL);
-		if(reply != NULL) {
+		if (reply != NULL) {
 			wr_lock(&(klninfo->stat_lock));
 			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
 			wr_unlock(&(klninfo->stat_lock));
@@ -389,7 +389,6 @@ static bool klondike_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *klncgpu = thr->cgpu;
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	struct timeval now;
 	
 	if (thr_info_create(&(klninfo->replies_thr), NULL, klondike_get_replies, (void *)klncgpu)) {
 		applog(LOG_ERR, "%s%i: thread create failed", klncgpu->drv->name, klncgpu->device_id);
@@ -398,7 +397,7 @@ static bool klondike_thread_prepare(struct thr_info *thr)
 	pthread_detach(klninfo->replies_thr.pth);
 	
 	// let the listening get started
-	nmsleep(100);
+	cgsleep_ms(100);
 	
 	return klondike_init(klncgpu);
 }
@@ -453,7 +452,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	data.workid = (uint8_t)(klninfo->devinfo[dev].nextworkid++ & 0xFF);
 	work->subid = dev*256 + data.workid;
 	
-	if(opt_log_level <= LOG_DEBUG) {
+	if (opt_log_level <= LOG_DEBUG) {
 				char *hexdata = bin2hex(&data.workid, sizeof(data)-3);
 				applog(LOG_DEBUG, "WORKDATA: %s", hexdata);
 				free(hexdata);
@@ -461,14 +460,14 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	
 	applog(LOG_DEBUG, "Klondike sending work (%d:%02x)", dev, data.workid);
 	char *reply = SendCmdGetReply(klncgpu, 'W', dev, sizeof(data)-3, &data.workid);
-	if(reply != NULL) {
+	if (reply != NULL) {
 		wr_lock(&(klninfo->stat_lock));
 		klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
 		wr_unlock(&(klninfo->stat_lock));
 		
 		// remove old work 
 		HASH_ITER(hh, klncgpu->queued_work, work, tmp) {
-		if (work->queued && (work->subid == (dev*256 + ((klninfo->devinfo[dev].nextworkid-2*MAX_WORK_COUNT) & 0xFF))))
+		if (work->queued && (work->subid == (int)(dev*256 + ((klninfo->devinfo[dev].nextworkid-2*MAX_WORK_COUNT) & 0xFF))))
 			work_completed(klncgpu, work);
 		}
 		return true;
@@ -508,12 +507,12 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 	if (klncgpu->usbinfo.nodev)
 		return -1;
 		
-	restart_wait(200);
+	restart_wait(thr, 200);
 	if (klninfo->status != NULL) {
 		rd_lock(&(klninfo->stat_lock));
 		for(dev = 0; dev <= klninfo->status->slavecount; dev++) {
 			uint64_t newhashdev = 0;
-			if(klninfo->devinfo[dev].lasthashcount > klninfo->status[dev].hashcount) // todo: chg this to check workid for wrapped instead
+			if (klninfo->devinfo[dev].lasthashcount > klninfo->status[dev].hashcount) // todo: chg this to check workid for wrapped instead
 				newhashdev += klninfo->status[dev].maxcount; // hash counter wrapped
 			newhashdev += klninfo->status[dev].hashcount - klninfo->devinfo[dev].lasthashcount;
 			klninfo->devinfo[dev].lasthashcount = klninfo->status[dev].hashcount;
@@ -528,14 +527,14 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 }
 
 
-static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
+static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	uint8_t temp = 0xFF;
 	uint16_t fan = 0;
 	int dev;
 	
-	if(klninfo->status == NULL)
+	if (klninfo->status == NULL)
 		return;
 
 	rd_lock(&(klninfo->stat_lock));
@@ -547,7 +546,7 @@ static void get_klondike_statline_before(char *buf, struct cgpu_info *klncgpu)
 	fan /= klninfo->status->slavecount+1;
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, "     %3.0fC %3d% | ", cvtKlnToC(temp), fan*100/255);
+	tailsprintf(buf, siz, "     %3.0fC %3d%% | ", cvtKlnToC(temp), fan*100/255);
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
@@ -557,7 +556,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 	char buf[32];
 	int dev;
 	
-	if(klninfo->status == NULL)
+	if (klninfo->status == NULL)
 		return NULL;
 	
 	rd_lock(&(klninfo->stat_lock));
@@ -573,15 +572,15 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		
 		unsigned int iFan = (unsigned int)100 * klninfo->cfg[dev].fantarget / 255;
 		sprintf(buf, "Fan Percent %d", dev);
-		root = api_add_int(root, buf, &iFan, true);
+		root = api_add_int(root, buf, (int *)(&iFan), true);
 
 		iFan = 0;
-		if(klninfo->status[dev].fanspeed > 0)
+		if (klninfo->status[dev].fanspeed > 0)
 			iFan = (unsigned int)TACH_FACTOR / klninfo->status[dev].fanspeed;
 		sprintf(buf, "Fan RPM %d", dev);
-		root = api_add_int(root, buf, &iFan, true);
+		root = api_add_int(root, buf, (int *)(&iFan), true);
 		
-		if(klninfo->devinfo[dev].chipstats != NULL) {
+		if (klninfo->devinfo[dev].chipstats != NULL) {
 			char data[128];
 			int n;
 			sprintf(buf, "Nonces / Chip %d", dev);
