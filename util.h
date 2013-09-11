@@ -173,6 +173,7 @@ typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
 extern void notifier_read(notifier_t);
+extern void notifier_init_invalid(notifier_t);
 extern void notifier_destroy(notifier_t);
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
