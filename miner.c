@@ -9863,10 +9863,14 @@ int main(int argc, char *argv[])
 #ifndef USE_LIBMICROHTTPD
 		const int httpsrv_port = -1;
 #endif
-		if (httpsrv_port == -1 && !opt_api_listen)
+		if (httpsrv_port == -1 && (!use_curses) && !opt_api_listen)
 			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
-		applog(LOG_WARNING, "Waiting for %s or press 'Q' to quit", (httpsrv_port == -1) ? "RPC commands" : "network devices");
+		if (use_curses)
+			applog(LOG_WARNING, "Waiting for devices; press 'M+' to add, or 'Q' to quit");
+		else
+			applog(LOG_WARNING, "Waiting for %s or press Ctrl-C to quit",
+		       (httpsrv_port == -1) ? "RPC commands" : "network devices");
 	}
 
 	load_temp_config();
