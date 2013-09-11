@@ -714,7 +714,12 @@ thing that needs to be done is to load the driver for them:
   Icarus:     sudo modprobe pl2303   vendor=0x067b product=0x0230
   Lancelot:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
   Cairnsmore: sudo modprobe ftdi_sio vendor=0x0403 product=0x8350
-On Windows, you must install the driver required for the device:
+On some systems you must manally install the driver required for the device.
+OpenWrt drivers (install with opkg):
+  FTDI:       kmod-usb-serial-ftdi
+  Erupter:    kmod-usb-serial-cp210x
+  Icarus:     kmod-usb-serial-pl2303
+Windows drivers:
   FTDI:       http://www.ftdichip.com/Drivers/VCP.htm
   Erupter:    http://www.silabs.com/products/mcu/pages/usbtouartbridgevcpdrivers.aspx
   Icarus:     http://prolificusa.com/pl-2303hx-drivers/
