@@ -7443,8 +7443,7 @@ int main(int argc, char *argv[])
 #ifndef WIN32
 	signal(SIGPIPE, SIG_IGN);
 #endif
-	opt_kernel_path = alloca(PATH_MAX);
-	strcpy(opt_kernel_path, CGMINER_PREFIX);
+	opt_kernel_path = CGMINER_PREFIX;
 	cgminer_path = alloca(PATH_MAX);
 	s = strdup(argv[0]);
 	strcpy(cgminer_path, dirname(s));
@@ -7547,7 +7546,10 @@ int main(int argc, char *argv[])
 		cnfbuf = NULL;
 	}
 
-	strcat(opt_kernel_path, "/");
+	i = strlen(opt_kernel_path) + 2;
+	char __kernel_path[i];
+	snprintf(__kernel_path, i, "%s/", opt_kernel_path);
+	opt_kernel_path = __kernel_path;
 
 	if (want_per_device_stats)
 		opt_log_output = true;
