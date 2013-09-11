@@ -52,6 +52,7 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	struct timespec t1, t2;
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
+	int max_devices = 100;
 
 	if (tm_i2c_init() < 0) {
 		applog(LOG_DEBUG, "%s: I2C init error", metabank_drv.dname);
@@ -60,7 +61,7 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	}
 
 
-	devicelist = malloc(100 * sizeof(*devicelist));
+	devicelist = malloc(max_devices * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
@@ -87,10 +88,17 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
 				for (j = 0; j < chip_n; ++j)
 				{
+					if (unlikely(n >= max_devices))
+					{
+						max_devices *= 2;
+						devicelist = realloc(devicelist, max_devices * sizeof(*devicelist));
+					}
 					devicelist[n] = bitfury = malloc(sizeof(*bitfury));
-					bitfury->spi = port;
-					bitfury->slot = i;
-					bitfury->fasync = j;
+					*bitfury = (struct bitfury_device){
+						.spi = port,
+						.slot = i,
+						.fasync = j,
+					};
 					n++;
 				}
 			}
@@ -147,9 +155,14 @@ bool metabank_init(struct thr_info *thr)
 {
 	struct bitfury_device **devicelist = thr->cgpu->device_data;
 	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
-		proc->device_data = devicelist[proc->proc_id];
+	{
+		bitfury = devicelist[proc->proc_id];
+		proc->device_data = bitfury;
+		bitfury->spi->cgpu = proc;
+	}
 	
 	free(devicelist);
 	

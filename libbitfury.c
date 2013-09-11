@@ -247,7 +247,7 @@ int detect_chip(struct spi_port *port, int chip_n) {
 	int i;
 	unsigned newbuf[17], oldbuf[17];
 	unsigned ocounter;
-	int odiff;
+	int odiff = 0;
 	struct timespec t1;
 
 	memset(newbuf, 0, 17 * 4);
