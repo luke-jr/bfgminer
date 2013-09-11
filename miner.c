@@ -9389,6 +9389,9 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 		cgpu->thr[j] = thr;
 	}
 	
+	if (!cgpu->device->threads)
+		notifier_init_invalid(cgpu->thr[0]->notifier);
+	else
 	if (!cgpu->threads)
 		memcpy(&cgpu->thr[0]->notifier, &cgpu->device->thr[0]->notifier, sizeof(cgpu->thr[0]->notifier));
 	else

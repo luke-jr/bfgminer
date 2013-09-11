@@ -2592,6 +2592,11 @@ void notifier_read(notifier_t fd)
 #endif
 }
 
+void notifier_init_invalid(notifier_t fd)
+{
+	fd[0] = fd[1] = INVSOCK;
+}
+
 void notifier_destroy(notifier_t fd)
 {
 #ifdef WIN32
