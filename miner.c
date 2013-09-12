@@ -4827,6 +4827,7 @@ void write_config(FILE *fcfg)
 		if (kpath[strlen(kpath)-1] == '/')
 			kpath[strlen(kpath)-1] = 0;
 		fprintf(fcfg, ",\n\"kernel-path\" : \"%s\"", json_escape(kpath));
+		free(kpath);
 	}
 	if (schedstart.enable)
 		fprintf(fcfg, ",\n\"sched-time\" : \"%d:%d\"", schedstart.tm.tm_hour, schedstart.tm.tm_min);
