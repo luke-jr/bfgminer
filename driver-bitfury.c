@@ -75,6 +75,69 @@ static void bitfury_detect(void)
 }
 
 
+void *bitfury_just_io(struct bitfury_device * const bitfury)
+{
+	struct spi_port * const spi = bitfury->spi;
+	const int chip = bitfury->fasync;
+	
+	spi_clear_buf(spi);
+	spi_emit_break(spi);
+	spi_emit_fasync(spi, chip);
+	spi_emit_data(spi, 0x3000, &bitfury->atrvec[0], 19 * 4);
+	spi_txrx(spi);
+	return spi_getrxbuf(spi) + 4 + chip;
+}
+
+bool bitfury_init_oldbuf(struct cgpu_info * const proc)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	uint32_t * const oldbuf = &bitfury->oldbuf[0];
+	uint32_t * const buf = &bitfury->newbuf[0];
+	const uint32_t *inp;
+	int i, differ, tried = 0;
+	
+	inp = bitfury_just_io(bitfury);
+tryagain:
+	if (tried > 3)
+	{
+		applog(LOG_ERR, "%"PRIpreprv": %s: Giving up after %d tries",
+		       proc->proc_repr, __func__, tried);
+		return false;
+	}
+	++tried;
+	memcpy(buf, inp, 0x10 * 4);
+	inp = bitfury_just_io(bitfury);
+	differ = -1;
+	for (i = 0; i < 0x10; ++i)
+	{
+		if (inp[i] != buf[i])
+		{
+			if (differ != -1)
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": %s: Second differ at %d; trying again",
+				       proc->proc_repr, __func__, i);
+				goto tryagain;
+			}
+			differ = i;
+			applog(LOG_DEBUG, "%"PRIpreprv": %s: Differ at %d",
+			       proc->proc_repr, __func__, i);
+		}
+	}
+	if (-1 == differ)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": %s: No differ found; trying again",
+		       proc->proc_repr, __func__);
+		goto tryagain;
+	}
+	
+	bitfury->active = differ;
+	memcpy(&oldbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
+	memcpy(&oldbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+	bitfury->oldjob = inp[0x10];
+	
+	return true;
+}
+
 static
 bool bitfury_init(struct thr_info *thr)
 {
@@ -88,6 +151,7 @@ bool bitfury_init(struct thr_info *thr)
 			.spi = sys_spi,
 			.fasync = proc->proc_id,
 		};
+		bitfury_init_oldbuf(proc);
 	}
 	
 	return true;
@@ -314,6 +378,142 @@ void bitfury_shutdown(struct thr_info *thr) {
 		bitfury = proc->device_data;
 		send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
 	}
+}
+
+bool bitfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	
+	if (opt_debug)
+	{
+		char hex[153];
+		bin2hex(hex, &work->data[0], 76);
+		applog(LOG_DEBUG, "%"PRIpreprv": Preparing work %s",
+		       proc->proc_repr, hex);
+	}
+	work_to_payload(&bitfury->payload, work);
+	payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+	
+	work->blk.nonce = 0xffffffff;
+	return true;
+}
+
+extern unsigned decnonce(unsigned);
+
+static
+bool fudge_nonce(struct work * const work, uint32_t *nonce_p) {
+	static const uint32_t offsets[] = {0, 0xffc00000, 0xff800000, 0x02800000, 0x02C00000, 0x00400000};
+	uint32_t nonce;
+	int i;
+	
+	if (unlikely(!work))
+		return false;
+	
+	for (i = 0; i < 6; ++i)
+	{
+		nonce = *nonce_p + offsets[i];
+		if (test_nonce(work, nonce, false))
+		{
+			*nonce_p = nonce;
+			return true;
+		}
+	}
+	return false;
+}
+
+void bitfury_do_io(struct thr_info *thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	const uint32_t *inp;
+	uint32_t * const newbuf = &bitfury->newbuf[0];
+	uint32_t * const oldbuf = &bitfury->oldbuf[0];
+	int n, i;
+	bool newjob;
+	uint32_t nonce;
+	
+	inp = bitfury_just_io(bitfury);
+	
+	if (opt_debug)
+	{
+		char hex[137];
+		bin2hex(hex, inp, 17 * 4);
+		applog(LOG_DEBUG, "%"PRIpreprv": Read %s (active=%d)",
+		       proc->proc_repr, hex, bitfury->active);
+	}
+	
+	// To avoid dealing with wrap-around entirely, just rotate array so previous active uint32_t is at index 0
+	memcpy(&newbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
+	memcpy(&newbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+	newjob = inp[0x10];
+	
+	if (bitfury->oldjob != newjob && thr->next_work)
+	{
+		mt_job_transition(thr);
+		// TODO: Delay morework until right before it's needed
+		timer_set_now(&thr->tv_morework);
+		job_start_complete(thr);
+	}
+	
+	for (n = 1; newbuf[n] != oldbuf[n]; ++n)
+	{
+		if (unlikely(n >= 0xf))
+		{
+			inc_hw_errors2(thr, NULL, NULL);
+			applog(LOG_DEBUG, "%"PRIpreprv": Mismatch of previous 2 nonces, ignoring response",
+			       proc->proc_repr);
+			goto out;
+		}
+	}
+	--n;
+	
+	if (n)
+	{
+		if (opt_debug)
+		{
+			char hex[(4 * 2 * n) + 1];
+			bin2hex(hex, newbuf, 4 * n);
+			applog(LOG_DEBUG, "%"PRIpreprv": Got %d results: %s",
+			       proc->proc_repr, n, hex);
+		}
+		for (i = 0; i < n; ++i)
+		{
+			nonce = decnonce(newbuf[i]);
+			if (fudge_nonce(thr->work, &nonce))
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": nonce %d = %08lx (work=%p)",
+				       proc->proc_repr, i, (unsigned long)nonce, thr->work);
+				submit_nonce(thr, thr->work, nonce);
+			}
+			else
+			if (fudge_nonce(thr->prev_work, &nonce))
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": nonce %d = %08lx (prev work=%p)",
+				       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
+				submit_nonce(thr, thr->prev_work, nonce);
+			}
+			else
+				inc_hw_errors(thr, thr->work, nonce);
+		}
+		bitfury->active = (bitfury->active + n) % 0x10;
+	}
+	
+	memcpy(&oldbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
+	memcpy(&oldbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+	bitfury->oldjob = newjob;
+	
+out:
+	timer_set_delay_from_now(&thr->tv_poll, 10000);
+}
+
+int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
+{
+	if (unlikely(stopping))
+		timer_unset(&thr->tv_poll);
+	
+	// Bitfury chips process only 768/1024 of the nonce range
+	return 0xbd000000;
 }
 
 struct device_drv bitfury_drv = {

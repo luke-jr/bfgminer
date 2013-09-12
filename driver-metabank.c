@@ -162,6 +162,7 @@ bool metabank_init(struct thr_info *thr)
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
+		bitfury_init_oldbuf(proc);
 	}
 	
 	free(devicelist);
@@ -178,14 +179,26 @@ static void metabank_shutdown(struct thr_info *thr)
 	tm_i2c_close();
 }
 
+extern bool bitfury_job_prepare(struct thr_info *, struct work *, uint64_t max_nonce);
+extern void bitfury_do_io(struct thr_info *);
+extern int64_t bitfury_job_process_results(struct thr_info *, struct work *, bool stopping);
+
 struct device_drv metabank_drv = {
 	.dname = "metabank",
 	.name = "MBF",
 	.drv_detect = metabank_detect,
+	.thread_init = metabank_init,
 	
+#if 0
 	.minerloop = hash_queued_work,
 	.thread_prepare = bitfury_prepare,
-	.thread_init = metabank_init,
 	.scanwork = bitfury_scanHash,
+#endif
+	.minerloop = minerloop_async,
+	.job_prepare = bitfury_job_prepare,
+	.job_start = bitfury_do_io,
+	.poll = bitfury_do_io,
+	.job_process_results = bitfury_job_process_results,
+	
 	.thread_shutdown = metabank_shutdown,
 };

@@ -20,6 +20,8 @@ struct bitfury_device {
 	unsigned char osc6_bits;
 	unsigned newbuf[17];
 	unsigned oldbuf[17];
+	bool oldjob;
+	int active;
 	struct work * work;
 	struct work * owork;
 	struct work * o2work;
