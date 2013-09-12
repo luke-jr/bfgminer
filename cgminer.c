@@ -5213,12 +5213,12 @@ static void *stratum_sthread(void *userdata)
 		quit(1, "Failed to create stratum_q in stratum_sthread");
 
 	while (42) {
-		char *noncehex, *nonce2, *nonce2hex;
 		struct stratum_share *sshare;
+		char *noncehex, *nonce2hex;
 		uint32_t *hash32, nonce;
+		char s[1024], nonce2[8];
 		struct work *work;
 		bool submitted;
-		char s[1024];
 
 		if (unlikely(pool->removed))
 			break;
@@ -5226,6 +5226,14 @@ static void *stratum_sthread(void *userdata)
 		work = tq_pop(pool->stratum_q, NULL);
 		if (unlikely(!work))
 			quit(1, "Stratum q returned empty work");
+
+		if (unlikely(work->nonce2_len > 8)) {
+			applog(LOG_ERR, "Pool %d asking for inappropriately long nonce2 length %d",
+			       pool->pool_no, (int)work->nonce2_len);
+			applog(LOG_ERR, "Not attempting to submit shares");
+			free_work(work);
+			continue;
+		}
 
 		sshare = calloc(sizeof(struct stratum_share), 1);
 		hash32 = (uint32_t *)work->hash;
@@ -5243,8 +5251,8 @@ static void *stratum_sthread(void *userdata)
 		sshare->id = swork_id++;
 		mutex_unlock(&sshare_lock);
 
-		nonce2 = alloca(work->nonce2_len);
-		memset(nonce2, 0, work->nonce2_len);
+		memset(nonce2, 0, 8);
+		/* We only use uint32_t sized nonce2 increments internally */
 		memcpy(nonce2, &work->nonce2, sizeof(uint32_t));
 		nonce2hex = bin2hex((const unsigned char *)nonce2, work->nonce2_len);
 		if (unlikely(!nonce2hex))
