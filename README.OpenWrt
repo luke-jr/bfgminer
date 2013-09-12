@@ -15,8 +15,11 @@ you open an issue for your router's platform, it may be possible to add
 support.
 
 If all went well updating your package list, you can now install BFGMiner and
-any bitstreams you might need:
+any drivers and/or bitstreams you might need:
 	opkg install bfgminer
+	opkg install kmod-usb-serial-ftdi
+	opkg install kmod-usb-serial-cp210x
+	opkg install kmod-usb-serial-pl2303
 	opkg find bitstream*
 	opkg install bitstream-ztex-ufm1_15y1
 	opkg install bitstream-ztex-ufm1_15b1
