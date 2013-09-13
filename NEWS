@@ -1,4 +1,16 @@
+Version 3.4.3 - 13th September 2013
 
+- Put corefoundation and iokit separate in ldflags for darwin.
+- Add rules for libusb Makefile.am building on osx
+- Add flags for building libusb statically on osx.
+- Find the greatest common denominator in quotas and use the smallest number of
+consecutive work items per pool in quota load balance mode to smooth hashrate
+across pools with large quotas. Give excess quota to priority pool 0 instead of
+pool 0.
+- Avoid dynamically adding stack memory for nonce2 in the stratum send thread
+and check the pool's nonce2_len will not cause an overflow.
+- Add subdir-objects to automake options.
+- Use inet_addr instead of inet_network to fix windows build.
 - Remove unused pbase variable.
 - Add support for socks4/4a proxies with stratum, and drop back to socks4
 support via the global --socks-proxy command to not break previous
