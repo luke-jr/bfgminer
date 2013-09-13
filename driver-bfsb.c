@@ -71,6 +71,7 @@ struct bitfury_device **bfsb_detect_chips(int *out_count) {
 			*port = *sys_spi;
 			port->cgpu = &dummy_cgpu;
 			port->txrx = bfsb_spi_txrx;
+			port->speed = 625000;
 			dummy_bitfury.slot = i;
 			
 			chip_n = libbitfury_detectChips1(port);
