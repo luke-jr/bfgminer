@@ -531,7 +531,7 @@ static void avalon_initialise(struct cgpu_info *avalon)
 	if (avalon->usbinfo.nodev)
 		return;
 
-	interface = avalon->usbdev->found->interface;
+	interface = usb_interface(avalon);
 	// Reset
 	err = usb_transfer(avalon, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
 				FTDI_VALUE_RESET, interface, C_RESET);

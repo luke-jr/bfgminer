@@ -452,7 +452,7 @@ static bool bflsc_qres(struct cgpu_info *bflsc, char *buf, size_t bufsiz, int de
 
 static void __bflsc_initialise(struct cgpu_info *bflsc)
 {
-	int err;
+	int err, interface;
 
 // TODO: does x-link bypass the other device FTDI? (I think it does)
 //	So no initialisation required except for the master device?
@@ -460,9 +460,10 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 	if (bflsc->usbinfo.nodev)
 		return;
 
+	interface = usb_interface(bflsc);
 	// Reset
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
-				FTDI_VALUE_RESET, bflsc->usbdev->found->interface, C_RESET);
+				FTDI_VALUE_RESET, interface, C_RESET);
 
 	applog(LOG_DEBUG, "%s%i: reset got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -477,7 +478,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set data control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_DATA,
-				FTDI_VALUE_DATA_BAS, bflsc->usbdev->found->interface, C_SETDATA);
+				FTDI_VALUE_DATA_BAS, interface, C_SETDATA);
 
 	applog(LOG_DEBUG, "%s%i: setdata got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -487,7 +488,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set the baud
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_BAUD, FTDI_VALUE_BAUD_BAS,
-				(FTDI_INDEX_BAUD_BAS & 0xff00) | bflsc->usbdev->found->interface,
+				(FTDI_INDEX_BAUD_BAS & 0xff00) | interface,
 				C_SETBAUD);
 
 	applog(LOG_DEBUG, "%s%i: setbaud got err %d",
@@ -498,7 +499,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set Flow Control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_FLOW,
-				FTDI_VALUE_FLOW, bflsc->usbdev->found->interface, C_SETFLOW);
+				FTDI_VALUE_FLOW, interface, C_SETFLOW);
 
 	applog(LOG_DEBUG, "%s%i: setflowctrl got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -508,7 +509,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Set Modem Control
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_MODEM,
-				FTDI_VALUE_MODEM, bflsc->usbdev->found->interface, C_SETMODEM);
+				FTDI_VALUE_MODEM, interface, C_SETMODEM);
 
 	applog(LOG_DEBUG, "%s%i: setmodemctrl got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -518,7 +519,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Clear any sent data
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
-				FTDI_VALUE_PURGE_TX, bflsc->usbdev->found->interface, C_PURGETX);
+				FTDI_VALUE_PURGE_TX, interface, C_PURGETX);
 
 	applog(LOG_DEBUG, "%s%i: purgetx got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
@@ -528,7 +529,7 @@ static void __bflsc_initialise(struct cgpu_info *bflsc)
 
 	// Clear any received data
 	err = usb_transfer(bflsc, FTDI_TYPE_OUT, FTDI_REQUEST_RESET,
-				FTDI_VALUE_PURGE_RX, bflsc->usbdev->found->interface, C_PURGERX);
+				FTDI_VALUE_PURGE_RX, interface, C_PURGERX);
 
 	applog(LOG_DEBUG, "%s%i: purgerx got err %d",
 		bflsc->drv->name, bflsc->device_id, err);
