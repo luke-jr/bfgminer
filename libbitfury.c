@@ -519,7 +519,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 					cycles = 0x00400000 - d->ocounter1 + d->counter1; // + 0x003FFFFF;
 					ccase = 1;
 				} else {
-					cycles = d->counter1 - d->ocounter1;
+					cycles = d->counter1 > d->ocounter1 ? d->counter1 - d->ocounter1 : 0x00400000 - d->ocounter1 + d->counter1;
 					ccase = 2;
 				}
 			}
@@ -528,8 +528,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			ns = (double)period / (double)(cycles);
 			mhz = 1.0 / ns * 65.0 * 1000.0;
 
-			if (d->counter1 > 0 && d->counter1 < 0x001FFFFF)
+			if (d->counter1 > 0 && d->counter1 < 0x001FFFFF) {
 				applog(LOG_DEBUG, "AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+			}
 			if (ns > 2000.0 || ns < 20) {
 				applog(LOG_DEBUG, "AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 				ns = 200.0;

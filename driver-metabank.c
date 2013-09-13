@@ -64,6 +64,9 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	devicelist = malloc(max_devices * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
+	for (i = 0; i < 32; i++) {
+		slot_on[i] = 0;
+	}
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
 	for (i = 0; i < 32; i++) {
 		int slot_detected = tm_i2c_detect(i) != -1;
