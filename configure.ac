@@ -331,7 +331,7 @@ if test "x$want_usbutils" != xfalse; then
 	fi
 	if test "x$have_darwin" = "xtrue"; then
 		LIBUSB_LIBS+=" -lobjc"
-		LDFLAGS+=" -framework CoreFoundation,IOKit"
+		LDFLAGS+=" -framework CoreFoundation -framework IOKit"
 	fi
 else
 	LIBUSB_LIBS=""
