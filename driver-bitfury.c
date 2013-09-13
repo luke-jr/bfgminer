@@ -192,6 +192,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		int len, k;
 		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
+		unsigned strange_counter = 0;
 
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
@@ -214,8 +215,12 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			shares_total += shares_found;
 			shares_first += chip < 4 ? shares_found : 0;
 			shares_last += chip > 3 ? shares_found : 0;
+			strange_counter += bitfury->strange_counter;
+			bitfury->strange_counter = 0;
 		}
 		sprintf(line, "vvvvwww SHORT stat %ds: wwwvvvv", short_stat);
+		applog(LOG_WARNING, "%s", line);
+		sprintf(line, "stranges: %u", strange_counter);
 		applog(LOG_WARNING, "%s", line);
 		for(i = 0; i < 32; i++)
 			if(strlen(stat_lines[i])) {

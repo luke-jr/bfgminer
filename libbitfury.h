@@ -50,6 +50,7 @@ struct bitfury_device {
 	double ns;
 	unsigned slot;
 	unsigned fasync;
+	unsigned strange_counter;
 	bool second_run;
 	
 	time_t short_out_t;
