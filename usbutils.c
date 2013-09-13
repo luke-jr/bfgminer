@@ -70,73 +70,130 @@
 
 #define USB_READ_MINPOLL 40
 
+#define USB_EPS(_intx, _epinfosx) { \
+		.interface = _intx, \
+		.epinfo_count = ARRAY_SIZE(_epinfosx), \
+		.epinfos = _epinfosx \
+	}
+
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
-static struct usb_endpoints bas_eps[] = {
+static struct usb_epinfo bas_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+
+static struct usb_intinfo bas_ints[] = {
+	USB_EPS(0, bas_epinfos)
 };
 #endif
 
 #ifdef USE_BITFORCE
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
-static struct usb_endpoints bfl_eps[] = {
+static struct usb_epinfo bfl_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+
+static struct usb_intinfo bfl_ints[] = {
+	USB_EPS(0, bfl_epinfos)
 };
 #endif
 
 #ifdef USE_MODMINER
-static struct usb_endpoints mmq_eps[] = {
+static struct usb_epinfo mmq_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0 }
+};
+
+static struct usb_intinfo mmq_ints[] = {
+	USB_EPS(1, mmq_epinfos)
 };
 #endif
 
 #ifdef USE_AVALON
-static struct usb_endpoints ava_eps[] = {
+static struct usb_epinfo ava_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+
+static struct usb_intinfo ava_ints[] = {
+	USB_EPS(0, ava_epinfos)
 };
 #endif
 
 #ifdef USE_ICARUS
-static struct usb_endpoints ica_eps[] = {
+static struct usb_epinfo ica_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
-static struct usb_endpoints amu_eps[] = {
+
+static struct usb_intinfo ica_ints[] = {
+	USB_EPS(0, ica_epinfos)
+};
+
+static struct usb_epinfo amu_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
 };
-static struct usb_endpoints llt_eps[] = {
+
+static struct usb_intinfo amu_ints[] = {
+	USB_EPS(0, amu_epinfos)
+};
+
+static struct usb_epinfo llt_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
-static struct usb_endpoints cmr1_eps[] = {
+
+static struct usb_intinfo llt_ints[] = {
+	USB_EPS(0, llt_epinfos)
+};
+
+static struct usb_epinfo cmr1_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
-/*
- Interface 1
+};
+
+static struct usb_intinfo cmr1_ints[] = {
+	USB_EPS(0, cmr1_epinfos)
+};
+
+static struct usb_epinfo cmr2_epinfos0[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+};
+static struct usb_epinfo cmr2_epinfos1[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 },
-
- Interface 2
+};
+static struct usb_epinfo cmr2_epinfos2[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0 },
-
- Interface 3
+};
+static struct usb_epinfo cmr2_epinfos3[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0 }
-*/
 };
-static struct usb_endpoints cmr2_eps[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+
+static struct usb_intinfo cmr2_ints[] = {
+	USB_EPS(0, cmr2_epinfos0),
+	USB_EPS(1, cmr2_epinfos1),
+	USB_EPS(2, cmr2_epinfos2),
+	USB_EPS(3, cmr2_epinfos3)
 };
 #endif
 
 #define IDVENDOR_FTDI 0x0403
+
+#define INTINFO(_ints) \
+		.which_intinfo = 0, \
+		.intinfo_count = ARRAY_SIZE(_ints), \
+		.intinfos = _ints
+
+#define USBEP(_usbdev, _epinfo) (_usbdev->found->intinfos[_usbdev->found->which_intinfo].epinfos[_epinfo].ep)
+#define FOUNDIF(_found) (_found->intinfos[_found->which_intinfo].interface)
+#define USBIF(_usbdev) FOUNDIF(_usbdev->found)
 
 // TODO: Add support for (at least) Isochronous endpoints
 static struct usb_find_devices find_dev[] = {
@@ -151,11 +208,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "BitFORCE SHA256 SC",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(bas_eps),
-		.eps = bas_eps },
+		INTINFO(bas_ints) },
 #endif
 #ifdef USE_BITFORCE
 	{
@@ -168,11 +223,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "BitFORCE SHA256",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = BITFORCE_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(bfl_eps),
-		.eps = bfl_eps },
+		INTINFO(bfl_ints) },
 #endif
 #ifdef USE_MODMINER
 	{
@@ -183,11 +236,9 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x0003,
 		.kernel = 0,
 		.config = 1,
-		.interface = 1,
 		.timeout = MODMINER_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		.epcount = ARRAY_SIZE(mmq_eps),
-		.eps = mmq_eps },
+		INTINFO(mmq_ints) },
 #endif
 #ifdef USE_AVALON
 	{
@@ -200,11 +251,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "BitBurner",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = AVALON_TIMEOUT_MS,
 		.latency = 10,
-		.epcount = ARRAY_SIZE(ava_eps),
-		.eps = ava_eps },
+		INTINFO(ava_ints) },
 	{
 		.drv = DRV_AVALON,
 		.name = "AVA",
@@ -213,11 +262,9 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6001,
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = AVALON_TIMEOUT_MS,
 		.latency = 10,
-		.epcount = ARRAY_SIZE(ava_eps),
-		.eps = ava_eps },
+		INTINFO(ava_ints) },
 #endif
 #ifdef USE_ICARUS
 	{
@@ -228,11 +275,9 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x2303,
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		.epcount = ARRAY_SIZE(ica_eps),
-		.eps = ica_eps },
+		INTINFO(ica_ints) },
 	{
 		.drv = DRV_ICARUS,
 		.name = "AMU",
@@ -241,11 +286,9 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0xea60,
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		.epcount = ARRAY_SIZE(amu_eps),
-		.eps = amu_eps },
+		INTINFO(amu_ints) },
 	{
 		.drv = DRV_ICARUS,
 		.name = "BLT",
@@ -255,11 +298,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "FT232R USB UART",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(llt_eps),
-		.eps = llt_eps },
+		INTINFO(llt_ints) },
 	// For any that don't match the above "BLT"
 	{
 		.drv = DRV_ICARUS,
@@ -269,11 +310,9 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6001,
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(llt_eps),
-		.eps = llt_eps },
+		INTINFO(llt_ints) },
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
@@ -283,11 +322,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "Cairnsmore1",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(cmr1_eps),
-		.eps = cmr1_eps },
+		INTINFO(cmr1_ints) },
 	{
 		.drv = DRV_ICARUS,
 		.name = "CMR",
@@ -297,11 +334,9 @@ static struct usb_find_devices find_dev[] = {
 		.iProduct = "Cairnsmore1",
 		.kernel = 0,
 		.config = 1,
-		.interface = 0,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
-		.epcount = ARRAY_SIZE(cmr2_eps),
-		.eps = cmr2_eps },
+		INTINFO(cmr2_ints) },
 #endif
 #ifdef USE_ZTEX
 // This is here so cgminer -n shows them
@@ -314,11 +349,11 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x0100,
 		.kernel = 0,
 		.config = 1,
-		.interface = 1,
 		.timeout = 100,
 		.latency = LATENCY_UNUSED,
-		.epcount = 0,
-		.eps = NULL },
+		.which_intinfo = 0,
+		.intinfo_count = 0,
+		.intinfos = NULL },
 #endif
 	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
 };
@@ -1361,7 +1396,7 @@ void usb_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
-	if (!libusb_release_interface(cgpu->usbdev->handle, cgpu->usbdev->found->interface)) {
+	if (!libusb_release_interface(cgpu->usbdev->handle, USBIF(cgpu->usbdev))) {
 		cg_wlock(&cgusb_fd_lock);
 		libusb_close(cgpu->usbdev->handle);
 		cg_wunlock(&cgusb_fd_lock);
@@ -1506,8 +1541,9 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	unsigned char strbuf[STRBUFLEN+1];
 	char devpath[32];
 	char devstr[STRBUFLEN+1];
-	int err, i, j, k, pstate;
+	int err, ifinfo, epinfo, alt, epnum, pstate;
 	int bad = USB_INIT_FAIL;
+	int claimed = -1;
 	int cfg;
 
 	DEVLOCK(cgpu, pstate);
@@ -1662,55 +1698,70 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto cldame;
 	}
 
-	if ((int)(config->bNumInterfaces) <= found->interface) {
-		applog(LOG_DEBUG, "USB init bNumInterfaces <= interface %s",
-		       devstr);
+	int imax = -1;
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++)
+		if (found->intinfos[ifinfo].interface > imax)
+			imax = found->intinfos[ifinfo].interface;
+
+	if ((int)(config->bNumInterfaces) <= imax) {
+		applog(LOG_DEBUG, "USB init bNumInterfaces %d <= interface max %d for %s",
+		       (int)(config->bNumInterfaces), imax, devstr);
 		goto cldame;
 	}
 
-	for (i = 0; i < found->epcount; i++)
-		found->eps[i].found = false;
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++)
+		for (epinfo = 0; epinfo < found->intinfos[ifinfo].epinfo_count; epinfo++)
+			found->intinfos[ifinfo].epinfos[epinfo].found = false;
 
-	for (i = 0; i < config->interface[found->interface].num_altsetting; i++) {
-		idesc = &(config->interface[found->interface].altsetting[i]);
-		for (j = 0; j < (int)(idesc->bNumEndpoints); j++) {
-			epdesc = &(idesc->endpoint[j]);
-			for (k = 0; k < found->epcount; k++) {
-				if (!found->eps[k].found) {
-					if (epdesc->bmAttributes == found->eps[k].att
-					&&  epdesc->wMaxPacketSize >= found->eps[k].size
-					&&  epdesc->bEndpointAddress == found->eps[k].ep) {
-						found->eps[k].found = true;
-						found->wMaxPacketSize = epdesc->wMaxPacketSize;
-						break;
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
+		int interface = found->intinfos[ifinfo].interface;
+		for (alt = 0; alt < config->interface[interface].num_altsetting; alt++) {
+			idesc = &(config->interface[interface].altsetting[alt]);
+			for (epnum = 0; epnum < (int)(idesc->bNumEndpoints); epnum++) {
+				struct usb_epinfo *epinfos = found->intinfos[ifinfo].epinfos;
+				epdesc = &(idesc->endpoint[epnum]);
+				for (epinfo = 0; epinfo < found->intinfos[ifinfo].epinfo_count; epinfo++) {
+					if (!epinfos[epinfo].found) {
+						if (epdesc->bmAttributes == epinfos[epinfo].att
+						&&  epdesc->wMaxPacketSize >= epinfos[epinfo].size
+						&&  epdesc->bEndpointAddress == epinfos[epinfo].ep) {
+							epinfos[epinfo].found = true;
+							// TODO: it's an ep (not device) attribute
+							found->wMaxPacketSize = epdesc->wMaxPacketSize;
+							break;
+						}
 					}
 				}
 			}
 		}
 	}
 
-	for (i = 0; i < found->epcount; i++) {
-		if (found->eps[i].found == false) {
-			applog(LOG_DEBUG, "USB init found == false %s",
-			       devstr);
-			goto cldame;
-		}
-	}
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++)
+		for (epinfo = 0; epinfo < found->intinfos[ifinfo].epinfo_count; epinfo++)
+			if (found->intinfos[ifinfo].epinfos[epinfo].found == false) {
+				applog(LOG_DEBUG, "USB init found (%d,%d) == false %s",
+				       ifinfo, epinfo, devstr);
+				goto cldame;
+			}
 
-	err = libusb_claim_interface(cgusb->handle, found->interface);
-	if (err) {
-		switch(err) {
-			case LIBUSB_ERROR_BUSY:
-				applog(LOG_WARNING,
-					"USB init, claim interface %d in use %s",
-					found->interface, devstr);
-				break;
-			default:
-				applog(LOG_DEBUG,
-					"USB init, claim interface %d failed, err %d %s",
-					found->interface, err, devstr);
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
+		int interface = found->intinfos[ifinfo].interface;
+		err = libusb_claim_interface(cgusb->handle, interface);
+		if (err) {
+			switch(err) {
+				case LIBUSB_ERROR_BUSY:
+					applog(LOG_WARNING,
+						"USB init, claim interface %d in use %s",
+						interface, devstr);
+					break;
+				default:
+					applog(LOG_DEBUG,
+						"USB init, claim interface %d failed, err %d %s",
+						interface, err, devstr);
+			}
+			goto reldame;
 		}
-		goto cldame;
+		claimed = ifinfo;
 	}
 
 	cfg = -1;
@@ -1777,7 +1828,8 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 reldame:
 
-	libusb_release_interface(cgusb->handle, found->interface);
+	for (ifinfo = claimed; ifinfo >= 0; ifinfo--)
+		libusb_release_interface(cgusb->handle, found->intinfos[ifinfo].interface);
 
 cldame:
 
@@ -2356,7 +2408,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
@@ -2384,7 +2436,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 	usbdev = cgpu->usbdev;
 	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
-	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),ep=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
+	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),epinfo=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), epinfo, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
 
 	if (bufsiz > USB_MAX_READ)
 		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, (int)bufsiz, USB_MAX_READ);
@@ -2438,7 +2490,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 				}
 			}
 			err = usb_bulk_transfer(usbdev->handle,
-						usbdev->found->eps[ep].ep,
+						USBEP(usbdev, epinfo),
 						ptr, usbbufread, &got, timeout,
 						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 			cgtime(&tv_finish);
@@ -2542,7 +2594,7 @@ int _usb_read(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pro
 			}
 		}
 		err = usb_bulk_transfer(usbdev->handle,
-					usbdev->found->eps[ep].ep, ptr,
+					USBEP(usbdev, epinfo), ptr,
 					usbbufread, &got, timeout,
 					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
@@ -2629,7 +2681,7 @@ out_unlock:
 	return err;
 }
 
-int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
+int _usb_write(struct cgpu_info *cgpu, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
 	struct timeval read_start, tv_finish;
@@ -2640,7 +2692,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 
 	DEVLOCK(cgpu, pstate);
 
-	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),ep=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), ep, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
+	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),epinfo=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), epinfo, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
 
 	*processed = 0;
 
@@ -2683,7 +2735,7 @@ int _usb_write(struct cgpu_info *cgpu, int ep, char *buf, size_t bufsiz, int *pr
 			usbdev->last_write_siz = bufsiz;
 		}
 		err = usb_bulk_transfer(usbdev->handle,
-					usbdev->found->eps[ep].ep,
+					USBEP(usbdev, epinfo),
 					(unsigned char *)buf, bufsiz, &sent,
 					timeout, cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
@@ -2921,7 +2973,7 @@ int usb_ftdi_set_latency(struct cgpu_info *cgpu)
 		if (!err)
 			err = __usb_transfer(cgpu, FTDI_TYPE_OUT, FTDI_REQUEST_LATENCY,
 						cgpu->usbdev->found->latency,
-						cgpu->usbdev->found->interface,
+						USBIF(cgpu->usbdev),
 						NULL, 0, DEVTIMEOUT, C_LATENCY);
 	}
 
@@ -3048,7 +3100,7 @@ int usb_interface(struct cgpu_info *cgpu)
 	DEVLOCK(cgpu, pstate);
 
 	if (cgpu->usbdev)
-		interface = cgpu->usbdev->found->interface;
+		interface = USBIF(cgpu->usbdev);
 
 	DEVUNLOCK(cgpu, pstate);
 

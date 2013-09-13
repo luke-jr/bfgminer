@@ -109,16 +109,22 @@
 // Use the device defined timeout
 #define DEVTIMEOUT 0
 
-// For endpoints defined in usb_find_devices.eps,
-// the first two must be the default IN and OUT
+// For endpoints defined in usb_find_devices.intinfos.epinfos,
+// the first two must be the default IN and OUT and both must always exist
 #define DEFAULT_EP_IN 0
 #define DEFAULT_EP_OUT 1
 
-struct usb_endpoints {
+struct usb_epinfo {
 	uint8_t att;
 	uint16_t size;
 	unsigned char ep;
 	bool found;
+};
+
+struct usb_intinfo {
+	int interface;
+	int epinfo_count;
+	struct usb_epinfo *epinfos;
 };
 
 enum sub_ident {
@@ -150,12 +156,12 @@ struct usb_find_devices {
 	char *iProduct;
 	int kernel;
 	int config;
-	int interface;
 	unsigned int timeout;
 	uint16_t wMaxPacketSize;
 	uint16_t latency;
-	int epcount;
-	struct usb_endpoints *eps;
+	int which_intinfo;
+	int intinfo_count;
+	struct usb_intinfo *intinfos;
 };
 
 /* Latency is set to 32ms to prevent a transfer ever being more than 512 bytes
