@@ -95,12 +95,14 @@ case $target in
     AC_DEFINE([_WIN32_WINNT], [0x0501], "WinNT version for XP+ support")
     ;;
   powerpc-*-darwin*)
+    have_darwin=true
     CFLAGS="$CFLAGS -faltivec"
     OPENCL_LIBS=""
     PTHREAD_FLAGS=""
     RT_LIBS=""
     ;;
   *-*-darwin*)
+    have_darwin=true
     OPENCL_LIBS="-framework OpenCL"
     PTHREAD_FLAGS=""
     RT_LIBS=""
@@ -326,6 +328,10 @@ if test "x$want_usbutils" != xfalse; then
 	LIBUSB_LIBS="compat/libusb-1.0/libusb/.libs/libusb-1.0.a"
 	if test "x$have_linux" = "xtrue"; then
 		PKG_CHECK_MODULES([UDEV], [libudev], LIBUSB_LIBS+=" -ludev", [AC_MSG_ERROR([Missing required libudev dev])])
+	fi
+	if test "x$have_darwin" = "xtrue"; then
+		LIBUSB_LIBS+=" -lobjc"
+		LDFLAGS+=" -framework CoreFoundation,IOKit"
 	fi
 else
 	LIBUSB_LIBS=""
