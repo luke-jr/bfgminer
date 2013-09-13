@@ -973,6 +973,7 @@ extern int enabled_pools;
 extern void get_intrange(char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern void adjust_quota_gcd(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
@@ -1121,6 +1122,7 @@ struct pool {
 	int diff1;
 	char diff[8];
 	int quota;
+	int quota_gcd;
 	int quota_used;
 
 	double diff_accepted;
