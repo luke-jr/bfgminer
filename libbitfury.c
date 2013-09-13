@@ -221,6 +221,17 @@ int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	return 0;
 }
 
+int get_diff(unsigned int *newbuf, unsigned int *oldbuf) {
+		int j;
+		unsigned counter = 0;
+		for(j = 0; j < 16; j++) {
+				if (newbuf[j] != oldbuf[j]) {
+						counter++;
+				}
+		}
+		return counter;
+}
+
 int detect_chip(struct spi_port *port, int chip_n) {
 	/* Test vectors to calculate (using address-translated loads) */
 	unsigned atrvec[] = {
@@ -418,6 +429,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 	struct timespec time;
 	int smart = 0;
 	int chip = d->fasync;
+	int buf_diff;
 
 	clock_gettime(CLOCK_REALTIME, &(time));
 
@@ -431,6 +443,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 	if (d_time.tv_sec < 0 && (d->req2_done || !smart)) {
 		d->otimer1 = d->timer1;
 		d->timer1 = time;
+		d->ocounter1 = d->counter1;
 		/* Programming next value */
 		spi_clear_buf(port);
 		spi_emit_break(port);
@@ -443,6 +456,25 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		d_time = t_diff(time, d->predict1);
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
+		d->counter1 = get_counter(newbuf, oldbuf);
+		buf_diff = get_diff(newbuf, oldbuf);
+		if (buf_diff > 4 || (d->counter1 > 0 && d->counter1 < 0x00400000 / 2)) {
+			if (buf_diff > 4) {
+//					applog(LOG_DEBUG, "AAA        chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+				payload_to_atrvec(&d->atrvec[0], p);
+				spi_clear_buf(port);
+				spi_emit_break(port);
+				spi_emit_fasync(port, chip);
+				spi_emit_data(port, 0x3000, &d->atrvec[0], 19*4);
+				clock_gettime(CLOCK_REALTIME, &(time));
+				d_time = t_diff(time, d->predict1);
+				spi_txrx(port);
+				memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
+				buf_diff = get_diff(newbuf, oldbuf);
+				d->counter1 = get_counter(newbuf, oldbuf);
+//					applog(LOG_DEBUG, "AAA _222__ chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+			}
+		}
 
 		d->job_switched = newbuf[16] != oldbuf[16];
 
@@ -497,7 +529,6 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		} else {
 			d_time = t_diff(d->otimer1, d->timer1);
 		}
-		d->ocounter1 = d->counter1;
 		d->counter1 = get_counter(newbuf, oldbuf);
 		if (d->counter2 || !smart) {
 			int shift;
