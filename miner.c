@@ -9390,6 +9390,7 @@ extern struct device_drv ztex_drv;
 #ifdef USE_BITFURY
 extern struct device_drv bitfury_drv;
 extern struct device_drv metabank_drv;
+extern struct device_drv bfsb_drv;
 #endif
 
 static int cgminer_id_count = 0;
@@ -9500,6 +9501,7 @@ void drv_detect_all()
 	{
 		bitfury_drv.drv_detect();
 		metabank_drv.drv_detect();
+		bfsb_drv.drv_detect();
 	}
 #endif
 
