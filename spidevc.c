@@ -135,7 +135,7 @@ bool sys_spi_txrx(struct spi_port *port)
 	struct spi_ioc_transfer tr[16];
 
 	memset(&tr,0,sizeof(tr));
-	mode = 0; bits = 8; speed = 2000000;
+	mode = 0; bits = 8; speed = 4000000;
 
 	spi_reset(1234);
 	fd = open("/dev/spidev0.0", O_RDWR);
