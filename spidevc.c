@@ -136,6 +136,8 @@ bool sys_spi_txrx(struct spi_port *port)
 
 	memset(&tr,0,sizeof(tr));
 	mode = 0; bits = 8; speed = 4000000;
+	if (port->speed)
+		speed = port->speed;
 
 	spi_reset(1234);
 	fd = open("/dev/spidev0.0", O_RDWR);
@@ -253,4 +255,26 @@ void spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_t
 	otmp[1] = (addr >> 8)&0xFF; otmp[2] = addr & 0xFF;
 	spi_emit_buf(port, otmp, 3);
 	spi_emit_buf_reverse(port, buf, len*4);
+}
+void spi_bfsb_select_bank(int bank)
+{
+	static int last_bank = -2;
+	if (bank == last_bank)
+		return;
+	const int banks[4]={18,23,24,25}; // GPIO connected to OE of level shifters
+	int i;
+	for(i=0;i<4;i++)
+	{
+		INP_GPIO(banks[i]);
+		OUT_GPIO(banks[i]);
+		if(i==bank)
+		{
+			GPIO_SET = 1 << banks[i]; // enable bank
+		} 
+		else
+		{
+			GPIO_CLR = 1 << banks[i];// disable bank
+		}
+	}
+	last_bank = bank;
 }
