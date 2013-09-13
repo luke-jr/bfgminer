@@ -26,7 +26,7 @@ lt_revision="0"
 lt_age="0"
 LTLDFLAGS="-version-info ${lt_current}:${lt_revision}:${lt_age}"
 
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 AM_MAINTAINER_MODE
 
 AC_CONFIG_SRCDIR([libusb/core.c])
