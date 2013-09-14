@@ -25,7 +25,23 @@
 #define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_OTHER)
 
-			
+/*
+ * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
+ *  DEVUNLOCK(cgpu, pstate) in called in the same function with the same pstate
+ *  given to DEVLOCK.
+ *  You must call DEVUNLOCK(cgpu, pstate) before exiting the function or it will leave
+ *  the thread Cancelability unrestored
+ */
+#define DEVLOCK(cgpu, _pth_state) do { \
+			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_pth_state); \
+			wr_lock(cgpu->usbinfo.devlock); \
+			} while (0)
+
+#define DEVUNLOCK(cgpu, _pth_state) do { \
+			wr_unlock(cgpu->usbinfo.devlock); \
+			pthread_setcancelstate(_pth_state, NULL); \
+			} while (0)
+
 #ifdef USE_BFLSC
 #define DRV_BFLSC 1
 #endif
@@ -1387,7 +1403,7 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 	return NULL;
 }
 
-void usb_uninit(struct cgpu_info *cgpu)
+void _usb_uninit(struct cgpu_info *cgpu)
 {
 	applog(LOG_DEBUG, "USB uninit %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1396,12 +1412,32 @@ void usb_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
-	if (!libusb_release_interface(cgpu->usbdev->handle, USBIF(cgpu->usbdev))) {
+	if (cgpu->usbdev->handle) {
+		int ifinfo = 0;
+		while (cgpu->usbdev->claimed > 0) {
+			libusb_release_interface(cgpu->usbdev->handle,
+						 cgpu->usbdev->found->intinfos[ifinfo].interface);
+			ifinfo++;
+			cgpu->usbdev->claimed--;
+		}
 		cg_wlock(&cgusb_fd_lock);
 		libusb_close(cgpu->usbdev->handle);
+		cgpu->usbdev->handle = NULL;
+		cgpu->usbdev->claimed = 0;
 		cg_wunlock(&cgusb_fd_lock);
 	}
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
+}
+
+void usb_uninit(struct cgpu_info *cgpu)
+{
+	int pstate;
+
+	DEVLOCK(cgpu, pstate);
+
+	_usb_uninit(cgpu);
+
+	DEVUNLOCK(cgpu, pstate);
 }
 
 /*
@@ -1445,7 +1481,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 		}
 	}
 
-	usb_uninit(cgpu);
+	_usb_uninit(cgpu);
 
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
@@ -1515,23 +1551,6 @@ struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devloc
 #define USB_INIT_OK 1
 #define USB_INIT_IGNORE 2
 
-/*
- * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
- *  DEVUNLOCK(cgpu, pstate) in called in the same function with the same pstate
- *  given to DEVLOCK.
- *  You must call DEVUNLOCK(cgpu, pstate) before exiting the function or it will leave
- *  the thread Cancelability unrestored
- */
-#define DEVLOCK(cgpu, _pth_state) do { \
-			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_pth_state); \
-			wr_lock(cgpu->usbinfo.devlock); \
-			} while (0)
-
-#define DEVUNLOCK(cgpu, _pth_state) do { \
-			wr_unlock(cgpu->usbinfo.devlock); \
-			pthread_setcancelstate(_pth_state, NULL); \
-			} while (0)
-
 static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cg_usb_device *cgusb = NULL;
@@ -1543,7 +1562,6 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	char devstr[STRBUFLEN+1];
 	int err, ifinfo, epinfo, alt, epnum, pstate;
 	int bad = USB_INIT_FAIL;
-	int claimed = -1;
 	int cfg;
 
 	DEVLOCK(cgpu, pstate);
@@ -1744,6 +1762,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 				goto cldame;
 			}
 
+	cgusb->claimed = 0;
 	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
 		int interface = found->intinfos[ifinfo].interface;
 		err = libusb_claim_interface(cgusb->handle, interface);
@@ -1761,7 +1780,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 			}
 			goto reldame;
 		}
-		claimed = ifinfo;
+		cgusb->claimed++;
 	}
 
 	cfg = -1;
@@ -1828,13 +1847,19 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 reldame:
 
-	for (ifinfo = claimed; ifinfo >= 0; ifinfo--)
+	ifinfo = 0;
+	while (cgusb->claimed > 0) {
 		libusb_release_interface(cgusb->handle, found->intinfos[ifinfo].interface);
+		ifinfo++;
+		cgusb->claimed--;
+	}
 
 cldame:
 
 	cg_wlock(&cgusb_fd_lock);
 	libusb_close(cgusb->handle);
+	cgusb->handle = NULL;
+	cgusb->claimed = 0;
 	cg_wunlock(&cgusb_fd_lock);
 
 dame:

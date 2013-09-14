@@ -178,6 +178,7 @@ enum usb_types {
 struct cg_usb_device {
 	struct usb_find_devices *found;
 	libusb_device_handle *handle;
+	int claimed;
 	pthread_mutex_t *mutex;
 	struct libusb_device_descriptor *descriptor;
 	enum usb_types usb_type;
