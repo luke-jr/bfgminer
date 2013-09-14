@@ -1768,7 +1768,7 @@ static bool http_negotiate(struct pool *pool, int sockd, bool http0)
 	/* Ignore unwanted headers till we get desired response */
 	for (i = 0; i < 4; i++) {
 		buf[i] = recv_byte(sockd);
-		if (buf[i] == -1) {
+		if (buf[i] == (char)-1) {
 			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
 			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
 			return false;
@@ -1778,7 +1778,7 @@ static bool http_negotiate(struct pool *pool, int sockd, bool http0)
 		for (i = 0; i < 3; i++)
 			buf[i] = buf[i + 1];
 		buf[3] = recv_byte(sockd);
-		if (buf[3] == -1) {
+		if (buf[3] == (char)-1) {
 			applog(LOG_WARNING, "Couldn't read HTTP byte from proxy %s:%s",
 			pool->sockaddr_proxy_url, pool->sockaddr_proxy_port);
 			return false;
