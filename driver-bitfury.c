@@ -94,6 +94,29 @@ bool bitfury_init(struct thr_info *thr)
 	return true;
 }
 
+static
+bool bitfury_queue_full(struct cgpu_info *cgpu)
+{
+	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		bitfury = proc->device_data;
+		
+		if (bitfury->work)
+			continue;
+		
+		bitfury->work = get_queued(cgpu);
+		if (!bitfury->work)
+			return false;
+		
+		work_to_payload(&bitfury->payload, bitfury->work);
+	}
+	
+	return true;
+}
+
 int64_t bitfury_scanHash(struct thr_info *thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
@@ -118,6 +141,9 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		}
 	}
 	sds->first = 1;
+	
+	if (!bitfury_queue_full(cgpu))
+		return 0;
 
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
@@ -126,13 +152,6 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		bitfury = proc->device_data;
 		
 		bitfury->job_switched = 0;
-		if(!bitfury->work) {
-			bitfury->work = get_queued(thr->cgpu);
-			if (bitfury->work == NULL)
-				return 0;
-			work_to_payload(&bitfury->payload, bitfury->work);
-		}
-		
 		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 		libbitfury_sendHashData1(chip, bitfury, pthr);
 	}
@@ -328,6 +347,7 @@ struct device_drv bitfury_drv = {
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
 	.thread_init = bitfury_init,
+	.queue_full = bitfury_queue_full,
 	.scanwork = bitfury_scanHash,
 	.thread_shutdown = bitfury_shutdown,
 	.minerloop = hash_queued_work,
