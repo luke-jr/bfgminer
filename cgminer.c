@@ -2872,12 +2872,15 @@ static inline struct pool *select_pool(bool lagging)
 
 	cp = current_pool();
 
-	if (pool_strategy == POOL_BALANCE)
-		return select_balanced(cp);
+	if (pool_strategy == POOL_BALANCE) {
+		pool = select_balanced(cp);
+		goto out;
+	}
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
 		pool = cp;
-	else
+		goto out;
+	} else
 		pool = NULL;
 
 	/* Try to find the first pool in the rotation that is usable */
@@ -2916,7 +2919,7 @@ static inline struct pool *select_pool(bool lagging)
 	/* If still nothing is usable, use the current pool */
 	if (!pool)
 		pool = cp;
-
+out:
 	applog(LOG_DEBUG, "Selecting pool %d for work", pool->pool_no);
 	return pool;
 }
