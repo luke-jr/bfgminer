@@ -811,7 +811,7 @@ struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonc
 	*nonce = be32toh(*nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
-	if (test_nonce(state->last2_work, *nonce, false))
+	if (likely(state->last2_work && test_nonce(state->last2_work, *nonce, false)))
 		return state->last2_work;
 	return NULL;
 }
