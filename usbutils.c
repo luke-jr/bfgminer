@@ -222,7 +222,6 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6014,
 		//.iManufacturer = "Butterfly Labs",
 		.iProduct = "BitFORCE SHA256 SC",
-		.kernel = 0,
 		.config = 1,
 		.timeout = BFLSC_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -237,7 +236,6 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6014,
 		.iManufacturer = "Butterfly Labs Inc.",
 		.iProduct = "BitFORCE SHA256",
-		.kernel = 0,
 		.config = 1,
 		.timeout = BITFORCE_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -250,7 +248,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_MMQ,
 		.idVendor = 0x1fc9,
 		.idProduct = 0x0003,
-		.kernel = 0,
 		.config = 1,
 		.timeout = MODMINER_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
@@ -265,7 +262,6 @@ static struct usb_find_devices find_dev[] = {
 		.idProduct = 0x6001,
 		.iManufacturer = "Burnin Electronics",
 		.iProduct = "BitBurner",
-		.kernel = 0,
 		.config = 1,
 		.timeout = AVALON_TIMEOUT_MS,
 		.latency = 10,
@@ -276,7 +272,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_AVA,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
-		.kernel = 0,
 		.config = 1,
 		.timeout = AVALON_TIMEOUT_MS,
 		.latency = 10,
@@ -289,7 +284,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_ICA,
 		.idVendor = 0x067b,
 		.idProduct = 0x2303,
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
@@ -300,7 +294,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_AMU,
 		.idVendor = 0x10c4,
 		.idProduct = 0xea60,
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
@@ -312,7 +305,6 @@ static struct usb_find_devices find_dev[] = {
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
 		.iProduct = "FT232R USB UART",
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -324,7 +316,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_LLT,
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6001,
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -336,7 +327,6 @@ static struct usb_find_devices find_dev[] = {
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x6014,
 		.iProduct = "Cairnsmore1",
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -348,7 +338,6 @@ static struct usb_find_devices find_dev[] = {
 		.idVendor = IDVENDOR_FTDI,
 		.idProduct = 0x8350,
 		.iProduct = "Cairnsmore1",
-		.kernel = 0,
 		.config = 1,
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
@@ -363,7 +352,6 @@ static struct usb_find_devices find_dev[] = {
 		.ident = IDENT_ZTX,
 		.idVendor = 0x221a,
 		.idProduct = 0x0100,
-		.kernel = 0,
 		.config = 1,
 		.timeout = 100,
 		.latency = LATENCY_UNUSED,
@@ -371,7 +359,7 @@ static struct usb_find_devices find_dev[] = {
 		.intinfo_count = 0,
 		.intinfos = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -1628,18 +1616,22 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	}
 
 #ifndef WIN32
-	if (libusb_kernel_driver_active(cgusb->handle, found->kernel) == 1) {
-		applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
-		err = libusb_detach_kernel_driver(cgusb->handle, found->kernel);
-		if (err == 0) {
-			applog(LOG_DEBUG,
-				"USB init, kernel detached successfully %s",
-				devstr);
-		} else {
-			applog(LOG_WARNING,
-				"USB init, kernel detach failed, err %d in use? %s",
-				err, devstr);
-			goto cldame;
+	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
+		int interface = found->intinfos[ifinfo].interface;
+
+		if (libusb_kernel_driver_active(cgusb->handle, interface) == 1) {
+			applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
+			err = libusb_detach_kernel_driver(cgusb->handle, interface);
+			if (err == 0) {
+				applog(LOG_DEBUG,
+					"USB init, kernel detached interface %d successfully %s",
+					interface, devstr);
+			} else {
+				applog(LOG_WARNING,
+					"USB init, kernel detach interface %d failed, err %d in use? %s",
+					interface, err, devstr);
+				goto cldame;
+			}
 		}
 	}
 #endif

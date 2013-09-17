@@ -154,7 +154,6 @@ struct usb_find_devices {
 	uint16_t idProduct;
 	char *iManufacturer;
 	char *iProduct;
-	int kernel;
 	int config;
 	unsigned int timeout;
 	uint16_t wMaxPacketSize;
