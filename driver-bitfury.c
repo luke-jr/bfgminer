@@ -456,17 +456,16 @@ void bitfury_do_io(struct thr_info *thr)
 		job_start_complete(thr);
 	}
 	
-	for (n = 1; newbuf[n] != oldbuf[n]; ++n)
+	for (n = 0; newbuf[n] == oldbuf[n]; ++n)
 	{
 		if (unlikely(n >= 0xf))
 		{
 			inc_hw_errors2(thr, NULL, NULL);
-			applog(LOG_DEBUG, "%"PRIpreprv": Mismatch of previous 2 nonces, ignoring response",
+			applog(LOG_DEBUG, "%"PRIpreprv": Full result match, ignoring response",
 			       proc->proc_repr);
 			goto out;
 		}
 	}
-	--n;
 	
 	if (n)
 	{
