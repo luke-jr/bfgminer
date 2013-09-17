@@ -327,6 +327,9 @@ struct bitforce_data {
 	float temp[2];
 	long *volts;
 	int volts_count;
+	
+	bool probed;
+	bool supports_fanspeed;
 };
 
 struct bitforce_proc_data {
@@ -574,7 +577,16 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		return false;
 
 	if (data->sc)
+	{
+		if (unlikely(!data->probed))
+		{
+			bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "Z9X");
+			if (strncasecmp(voltbuf, "ERR", 3))
+				data->supports_fanspeed = true;
+			data->probed = true;
+		}
 		bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "ZTX");
+	}
 	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
@@ -1382,7 +1394,7 @@ static
 void bitforce_tui_wlogprint_choices(struct cgpu_info *cgpu)
 {
 	struct bitforce_data *data = cgpu->device_data;
-	if (data->sc)
+	if (data->supports_fanspeed)
 		wlogprint("[F]an control ");
 }
 
@@ -1394,7 +1406,7 @@ const char *bitforce_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	int fd;
 	static char replybuf[0x100];
 	
-	if (!data->sc)
+	if (!data->supports_fanspeed)
 		return NULL;
 	switch (input)
 	{
@@ -1514,6 +1526,11 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 	
 	if (!strcasecmp(option, "fanmode"))
 	{
+		if (!data->supports_fanspeed)
+		{
+			sprintf(replybuf, "fanmode not supported");
+			return replybuf;
+		}
 		if (!setting || !*setting)
 		{
 			sprintf(replybuf, "missing fanmode setting");
