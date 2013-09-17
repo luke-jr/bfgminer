@@ -1356,12 +1356,12 @@ const char *bitforce_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			int fanspeed;
 			char *intvar;
 
-			intvar = curses_input("Set fan speed (range 0-4 for low to fast or 5 for auto)");
+			intvar = curses_input("Set fan speed (range 0-5 for low to fast or 9 for auto)");
 			if (!intvar)
 				return "Invalid fan speed\n";
 			fanspeed = atoi(intvar);
 			free(intvar);
-			if (fanspeed < 0 || fanspeed > 5)
+			if ((fanspeed < 0 || fanspeed > 5) && fanspeed != 9)
 				return "Invalid fan speed\n";
 			
 			char cmd[4] = "Z0X";
