@@ -355,6 +355,7 @@ void usb_set_cps(struct cgpu_info *cgpu, int cps);
 void usb_enable_cps(struct cgpu_info *cgpu);
 void usb_disable_cps(struct cgpu_info *cgpu);
 int usb_interface(struct cgpu_info *cgpu);
+bool usb_set_interface(struct cgpu_info *cgpu, int interface);
 enum sub_ident usb_ident(struct cgpu_info *cgpu);
 void usb_set_pps(struct cgpu_info *cgpu, uint16_t PrefPacketSize);
 void usb_set_dev_start(struct cgpu_info *cgpu);
