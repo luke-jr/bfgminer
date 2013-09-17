@@ -1520,7 +1520,7 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 	
 	if (!strcasecmp(option, "help"))
 	{
-		sprintf(replybuf, "fanmode: range 0-4 (low to fast) or 5 (auto)");
+		sprintf(replybuf, "fanmode: range 0-5 (low to fast) or 9 (auto)");
 		return replybuf;
 	}
 	
