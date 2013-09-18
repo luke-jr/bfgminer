@@ -57,10 +57,12 @@ dlls='
 	libcurl-4.dll
 	pthreadGC2.dll
 	libjansson-4.dll
-	libmicrohttpd-10.dll
-	libplibc-1.dll
 	libusb-1.0.dll
 	zlib1.dll
+'
+libmicrohttpd_dlls='
+	libmicrohttpd-10.dll
+	libplibc-1.dll
 '
 docs='
 	AUTHORS
@@ -84,15 +86,6 @@ for build in "${builds[@]}"; do
 	if test "x$DEBUG_RELEASE" = "x1"; then
 		CFLAGS="${CFLAGS} -g"
 	fi
-	for dll in $dlls; do
-		libdir="/usr/$machine/usr/lib"
-		[ -e "$libdir/$dll" ] ||
-			libdir="/usr/$machine/usr/bin"
-		[ -e "$libdir/$dll" ] ||
-			continue
-		cp -v -L "$libdir/$dll" "$PKGDIR"
-		"$machine"-strip "$PKGDIR/$dll"
-	done
 	for doc in $docs; do
 		sed 's/$/\r/' <"$doc" >"$PKGDIR/${doc}.txt"
 	done
@@ -125,6 +118,21 @@ for build in "${builds[@]}"; do
 		windows-build.txt \
 		miner.php \
 		"$PKGDIR/"
+	
+	mydlls="$dlls"
+	if "${machine}-objdump" -p bfgminer.exe | grep -q "DLL Name: libmicrohttpd"; then
+		mydlls="$mydlls $libmicrohttpd_dlls"
+	fi
+	for dll in $mydlls; do
+		libdir="/usr/$machine/usr/lib"
+		[ -e "$libdir/$dll" ] ||
+			libdir="/usr/$machine/usr/bin"
+		[ -e "$libdir/$dll" ] ||
+			continue
+		cp -v -L "$libdir/$dll" "$PKGDIR"
+		"$machine"-strip "$PKGDIR/$dll"
+	done
+	
 	make clean
 	cd "$PKGDIR/.."
 	zip -r "$OUTDIR/$PKGNAME.zip" "$PKGNAME"
