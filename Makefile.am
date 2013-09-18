@@ -60,12 +60,18 @@ if HAS_SCRYPT
 cgminer_SOURCES += scrypt.c scrypt.h
 endif
 
+# Extra utilities required
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
 
 if WANT_USBUTILS
 cgminer_SOURCES += usbutils.c usbutils.h
+endif
+
+# Device drivers
+if HAS_AVALON
+cgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if HAS_BFLSC
@@ -76,12 +82,12 @@ if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
 endif
 
-if HAS_ICARUS
-cgminer_SOURCES += driver-icarus.c
+if HAS_HASHFAST
+cgminer_SOURCES += driver-hashfast.c driver-hashfast.h
 endif
 
-if HAS_AVALON
-cgminer_SOURCES += driver-avalon.c driver-avalon.h
+if HAS_ICARUS
+cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_MODMINER
