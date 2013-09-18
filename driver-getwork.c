@@ -9,10 +9,17 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #include <stdint.h>
+
+#ifndef WIN32
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#endif
 
 #include <jansson.h>
 #include <microhttpd.h>
