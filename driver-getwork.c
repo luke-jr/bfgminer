@@ -9,10 +9,17 @@
 
 #include "config.h"
 
+#ifdef WIN32
+#include <winsock2.h>
+#endif
+
 #include <stdint.h>
+
+#ifndef WIN32
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#endif
 
 #include <jansson.h>
 #include <microhttpd.h>
@@ -87,9 +94,9 @@ void getwork_init()
 }
 
 static
-void getwork_first_client()
+void getwork_first_client(struct cgpu_info *cgpu)
 {
-	pthread_create(&prune_worklog_pth, NULL, prune_worklog_thread, getwork_clients);
+	pthread_create(&prune_worklog_pth, NULL, prune_worklog_thread, cgpu);
 }
 
 static
@@ -204,7 +211,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		mutex_unlock(&getwork_clients_mutex);
 		
 		if (!b)
-			getwork_first_client();
+			getwork_first_client(cgpu);
 	}
 	else
 	{

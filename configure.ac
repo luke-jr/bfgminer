@@ -1058,6 +1058,12 @@ else
 	echo "  ZTEX.FPGAs...........: Disabled"
 fi
 
+if test "x$httpsrv" = "xyes"; then
+	echo "  getwork.proxy.server.: Enabled"
+else
+	echo "  getwork.proxy.server.: Disabled"
+fi
+
 if test "x$bitforce$modminer" != xnono; then
 	echo "  libudev.detection....: $libudev"
 fi
