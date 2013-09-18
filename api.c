@@ -3871,13 +3871,13 @@ void api(int api_thr_id)
 
 	SOCKETTYPE *apisock;
 
-	apisock = malloc(sizeof(*apisock));
-	*apisock = INVSOCK;
-
 	if (!opt_api_listen) {
 		applog(LOG_DEBUG, "API not running%s", UNAVAILABLE);
 		return;
 	}
+
+	apisock = malloc(sizeof(*apisock));
+	*apisock = INVSOCK;
 
 	rpc_io_data =
 	io_data = sock_io_new();
