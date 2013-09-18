@@ -9,3 +9,4 @@
  */
 
 #include "config.h"
+#include "driver-hashfast.h"
