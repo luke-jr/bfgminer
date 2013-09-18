@@ -3035,7 +3035,7 @@ static int menu_attr = A_REVERSE;
 } while (0)
 
 /* Must be called with curses mutex lock held and curses_active */
-static void curses_print_status(void)
+static void curses_print_status(const int ts)
 {
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
@@ -3075,7 +3075,7 @@ static void curses_print_status(void)
 
 	char bwstr[12];
 	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
-		__total_staged(),
+		ts,
 		total_go + total_ro,
 		new_blocks,
 		total_submitting,
@@ -8805,9 +8805,10 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 #ifdef HAVE_CURSES
+		const int ts = total_staged();
 		if (curses_active_locked()) {
 			change_logwinsize();
-			curses_print_status();
+			curses_print_status(ts);
 			for (i = 0; i < total_devices; i++)
 				curses_print_devstatus(get_devices(i));
 			touchwin(statuswin);
