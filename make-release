@@ -58,6 +58,7 @@ dlls='
 	pthreadGC2.dll
 	libjansson-4.dll
 	libmicrohttpd-10.dll
+	libplibc-1.dll
 	libusb-1.0.dll
 	zlib1.dll
 '
