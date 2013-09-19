@@ -28,7 +28,7 @@
 #include "miner.h"
 #include "util.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -174,6 +174,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_BITFORCE
 			"BFL "
+#endif
+#ifdef USE_HASHFAST
+			"HFA "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
@@ -1223,6 +1226,10 @@ static int numascs()
 		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
 			count++;
 #endif
+#ifdef USE_HASHFAST
+		if (devices[i]->drv->drv_id == DRIVER_HASHFAST)
+			count++;
+#endif
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1241,6 +1248,10 @@ static int ascdevice(int ascid)
 #endif
 #ifdef USE_BFLSC
 		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
+			count++;
+#endif
+#ifdef USE_HASHFAST
+		if (devices[i]->drv->drv_id == DRIVER_HASHFAST)
 			count++;
 #endif
 		if (count == (ascid + 1))
