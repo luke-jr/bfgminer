@@ -62,10 +62,6 @@
 #include "driver-bflsc.h"
 #endif
 
-#ifdef USE_HASHFAST
-#include "driver-hashfast.h"
-#endif
-
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <fcntl.h>

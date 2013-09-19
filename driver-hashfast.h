@@ -15,6 +15,8 @@
 #include "miner.h"
 #include "elist.h"
 
+#define HASHFAST_MINER_THREADS      1
+
 // Some serial protocol definitions
 #define DEFAULT_BAUD_RATE	    115200
 
