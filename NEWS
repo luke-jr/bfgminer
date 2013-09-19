@@ -1,3 +1,40 @@
+BFGMiner Version 3.2.1 - September 19, 2013
+
+- Only show long-poll message in pool summary if it's not using stratum.
+- README.ASIC: Clarify syntax of --scan-serial usage for USB Erupters
+- Bugfix: RPC: Defer allocation of apisock until after we check for --api-listen
+- make-release: Only try to include libmicrohttpd if bfgminer.exe depends on it
+- Bugfix: make-release: Include libplibc-1.dll if available
+- SGW: For Windows builds, include winsock2.h instead of POSIX networking
+headers
+- configure: Display getwork proxy server support in summary
+- Bugfix: SGW: Pass actual cgpu_info to prune_worklog_thread instead of silently
+casting one from getwork_client
+- Bugfix: Get total_staged with lock for TS stat, before getting console lock
+- Bugfix: bitforce: Correct fanmode RPC help
+- bitforce: Hide fan control when disabled in firmware
+- Bugfix: bitforce: Correct fanspeed TUI setting
+- Bugfix: logging: Allow up to 4 KB for log lines
+- Bugfix: icarus: Ensure last2_work exists before trying to check nonces fit it
+- README.OpenWrt: Include serialusb drivers
+- README: Include OpenWrt serialusb driver package names
+- Bugfix: Initialise notifier (as invalid) for no-thread devices (SGW)
+- Bugfix: Free temporary kernel path copy when writing config file
+- Bugfix: Put kernel path on the (main) stack after initialisation from
+commandline/config, to avoid appending an argv or jansson string
+- Bugfix: Always allow startup with curses enabled (since the user can use
+Manage devices to add new ones, and display Ctrl-C for text-only quit help
+- Bugfix: Ignore/reject libmicrohttpd before 0.9.5, which introduced symbols we
+need
+- README: Elaborate on format of BW
+- Bugfix: Try to initialise libusb later, so any mutexes applog might need are
+initialised
+- Bugfix: Implicitly initialise timer_set_now when it is first called
+- util: Eliminate unsafe const-removing casts
+- configure: Cleanup CFLAGS/LDFLAGS display
+- Show RT_LIBS in ./configure output.
+
+
 BFGMiner Version 3.2.0 - August 29, 2013
 - cpu: sse2_64: Rename sha256_init to sha256_init_sse2 to avoid conflict with
 new sha2.c

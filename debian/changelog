@@ -1,3 +1,10 @@
+bfgminer (3.2.1-0precise1) precise; urgency=low
+
+  * Allow startup with no devices, even if RPC and HTTP server are disabled, so long as the user can add new ones via the curses TUI.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 19 Sep 2013 04:37:01 -0000
+
+
 bfgminer (3.2.0-0precise1) precise; urgency=low
 
   * modminer, x6500 & ztex: Completely removed bitstreams from BFGMiner distribution, and replaced with instructions on where to find them officially.
