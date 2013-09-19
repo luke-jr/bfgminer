@@ -50,6 +50,10 @@
 #define DRV_AVALON 6
 #endif
 
+#ifdef USE_HASHFAST
+#define DRV_HASHFAST 7
+#endif
+
 #define DRV_LAST -1
 
 #define USB_CONFIG 1
@@ -218,6 +222,13 @@ static struct usb_find_devices find_dev[] = {
 		.latency = 10,
 		.epcount = ARRAY_SIZE(ava_eps),
 		.eps = ava_eps },
+#endif
+#ifdef USE_HASHFAST
+	{
+		.drv = DRV_HASHFAST,
+		.name = "HFA",
+		.ident = IDENT_HFA,
+	},
 #endif
 #ifdef USE_ICARUS
 	{
