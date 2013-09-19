@@ -216,7 +216,10 @@ typedef struct hf_info_t {
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-extern hf_info_t **hashfast_info;
+hf_info_t **hashfast_info;
+
+void hf_init_crc8(void);
+void hf_init_crc32(void);
 
 #endif /* USE_HASHFAST */
 #endif	/* HASHFAST_H */

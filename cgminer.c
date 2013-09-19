@@ -54,6 +54,12 @@
 #include "bench_block.h"
 #include "scrypt.h"
 
+#if defined(unix) || defined(__APPLE__)
+	#include <errno.h>
+	#include <fcntl.h>
+	#include <sys/wait.h>
+#endif
+
 #ifdef USE_AVALON
 #include "driver-avalon.h"
 #endif
@@ -62,10 +68,8 @@
 #include "driver-bflsc.h"
 #endif
 
-#if defined(unix) || defined(__APPLE__)
-	#include <errno.h>
-	#include <fcntl.h>
-	#include <sys/wait.h>
+#ifdef USE_HASHFAST
+#include "driver-hashfast.h"
 #endif
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
@@ -7858,6 +7862,8 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_HASHFAST
+	hf_init_crc8();
+	hf_init_crc32();
 	hashfast_drv.drv_detect();
 #endif
 

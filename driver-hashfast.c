@@ -17,6 +17,82 @@
 
 #include "driver-hashfast.h"
 
+////////////////////////////////////////////////////////////////////////////////
+// Support for the CRC's used in header (CRC-8) and packet body (CRC-32)
+////////////////////////////////////////////////////////////////////////////////
+
+#define GP8  0x107   /* x^8 + x^2 + x + 1 */
+#define DI8  0x07
+
+static unsigned char crc8_table[256];	/* CRC-8 table */
+static uint32_t crc32_table[256];	/* CRC-32 table */
+
+void hf_init_crc8(void)
+{
+	int i,j;
+	unsigned char crc;
+
+	for (i = 0; i < 256; i++) {
+		crc = i;
+		for (j = 0; j < 8; j++)
+			crc = (crc << 1) ^ ((crc & 0x80) ? DI8 : 0);
+		crc8_table[i] = crc & 0xFF;
+	}
+}
+
+static unsigned char __maybe_unused hf_crc8(unsigned char *h)
+{
+	int i;
+	unsigned char crc;
+
+	h++;	// Preamble not included
+	for (i = 1, crc = 0xff; i < 7; i++)
+		crc = crc8_table[crc ^ *h++];
+
+	return crc;
+}
+
+#define DI32 0x04c11db7L
+
+void hf_init_crc32(void)
+{
+	uint32_t i, j;
+	uint32_t crc;
+
+	for (i = 0; i < 256; i++){
+		crc = i << 24;
+		for (j = 0; j < 8; j++) {
+			if (crc & 0x80000000L)
+				crc = (crc << 1) ^ DI32;
+			else
+				crc = (crc << 1);
+		}
+		crc32_table[i] = crc;
+	}
+}
+
+static uint32_t __maybe_unused hf_crc32(unsigned char *p, int len, int plug_in)
+{
+	uint32_t crc = 0xffffffffU, crc_sav;
+	uint32_t i;
+
+	while (len--) {
+		i = ((crc >> 24) ^ *p++) & 0xff;
+		crc = (crc << 8) ^ crc32_table[i];
+	}
+
+	crc_sav = crc;
+
+	applog(LOG_DEBUG, "hf_crc32: crc is 0x%08x", crc);
+
+	if (plug_in) {
+		for (i = 0; i < 4; i++, crc >>= 8)
+			*p++ = crc & 0xff;
+	}
+
+	return crc_sav;
+}
+
 static hf_info_t **hashfast_infos;
 struct device_drv hashfast_drv;
 
