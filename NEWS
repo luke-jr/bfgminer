@@ -1,3 +1,17 @@
+BFGMiner Version 3.0.8 - September 19, 2013
+
+- Only show long-poll message in pool summary if it's not using stratum.
+- Bugfix: bitforce: Correct fanmode RPC help
+- README.OpenWrt: Include serialusb drivers
+- Bugfix: Free temporary kernel path copy when writing config file
+- Bugfix: Put kernel path on the (main) stack after initialisation from
+commandline/config, to avoid appending an argv or jansson string
+- Bugfix: Try to initialise libusb later, so any mutexes applog might need are
+initialised
+- configure: Show libblkmaker_* in output
+- AUTHORS: Add contributor Josh Lehan
+
+
 BFGMiner Version 3.0.7 - August 30, 2013
 
 - Fixes column alignment in decimal fields. Workaround for printf rounding up
