@@ -563,6 +563,17 @@ static const char *C_FTDI_STATUS_S = "FTDIStatus";
 static const char *C_ENABLE_UART_S = "EnableUART";
 static const char *C_BB_SET_VOLTAGE_S = "SetCoreVoltage";
 static const char *C_BB_GET_VOLTAGE_S = "GetCoreVoltage";
+static const char *C_HF_RESET_S = "HFReset";
+static const char *C_HF_PLL_CONFIG_S = "HFPLLConfig";
+static const char *C_HF_ADDRESS_S = "HFAddress";
+static const char *C_HF_BAUD_S = "HFBaud";
+static const char *C_HF_HASH_S = "HFHash";
+static const char *C_HF_NONCE_S = "HFNonce";
+static const char *C_HF_ABORT_S = "HFAbort";
+static const char *C_HF_STATUS_S = "HFStatus";
+static const char *C_HF_CONFIG_S = "HFConfig";
+static const char *C_HF_STATISTICS_S = "HFStatistics";
+static const char *C_HF_CLOCKGATE_S = "HFClockGate";
 
 #ifdef EOL
 #undef EOL
@@ -1053,6 +1064,17 @@ static void cgusb_check_init()
 		usb_commands[C_ENABLE_UART] = C_ENABLE_UART_S;
 		usb_commands[C_BB_SET_VOLTAGE] = C_BB_SET_VOLTAGE_S;
 		usb_commands[C_BB_GET_VOLTAGE] = C_BB_GET_VOLTAGE_S;
+		usb_commands[C_HF_RESET] = C_HF_RESET_S;
+		usb_commands[C_HF_PLL_CONFIG] = C_HF_PLL_CONFIG_S;
+		usb_commands[C_HF_ADDRESS] = C_HF_ADDRESS_S;
+		usb_commands[C_HF_BAUD] = C_HF_BAUD_S;
+		usb_commands[C_HF_HASH] = C_HF_HASH_S;
+		usb_commands[C_HF_NONCE] = C_HF_NONCE_S;
+		usb_commands[C_HF_ABORT] = C_HF_ABORT_S;
+		usb_commands[C_HF_STATUS] = C_HF_STATUS_S;
+		usb_commands[C_HF_CONFIG] = C_HF_CONFIG_S;
+		usb_commands[C_HF_STATISTICS] = C_HF_STATISTICS_S;
+		usb_commands[C_HF_CLOCKGATE] = C_HF_CLOCKGATE_S;
 
 		stats_initialised = true;
 	}
