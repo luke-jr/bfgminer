@@ -62,6 +62,10 @@
 #include "driver-bflsc.h"
 #endif
 
+#ifdef USE_HASHFAST
+#include "driver-hashfast.h"
+#endif
+
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <fcntl.h>
@@ -1560,6 +1564,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef HAVE_OPENCL
 		"GPU "
+#endif
+#ifdef USE_HASHFAST
+		"hashfast "
 #endif
 #ifdef USE_ICARUS
 		"icarus "
@@ -7317,6 +7324,10 @@ extern struct device_drv bflsc_drv;
 extern struct device_drv bitforce_drv;
 #endif
 
+#ifdef USE_HASHFAST
+extern struct device_drv hashfast_drv;
+#endif
+
 #ifdef USE_ICARUS
 extern struct device_drv icarus_drv;
 #endif
@@ -7615,6 +7626,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			bitforce_drv.drv_detect();
 #endif
 
+#ifdef USE_HASHFAST
+			hashfast_drv.drv_detect();
+#endif
+
 #ifdef USE_MODMINER
 			modminer_drv.drv_detect();
 #endif
@@ -7833,37 +7848,37 @@ int main(int argc, char *argv[])
 	gpu_threads = 0;
 #endif
 
+	if (!opt_scrypt) {
 #ifdef USE_ICARUS
-	if (!opt_scrypt)
-		icarus_drv.drv_detect();
+	icarus_drv.drv_detect();
 #endif
 
 #ifdef USE_BFLSC
-	if (!opt_scrypt)
-		bflsc_drv.drv_detect();
+	bflsc_drv.drv_detect();
 #endif
 
 #ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
+	bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_HASHFAST
+	hashfast_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
+	modminer_drv.drv_detect();
 #endif
 
 #ifdef USE_ZTEX
-	if (!opt_scrypt)
 		ztex_drv.drv_detect();
 #endif
 
 	/* Detect avalon last since it will try to claim the device regardless
 	 * as detection is unreliable. */
 #ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
+	avalon_drv.drv_detect();
 #endif
+	}
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
