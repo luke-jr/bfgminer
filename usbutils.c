@@ -3311,27 +3311,6 @@ int usb_interface(struct cgpu_info *cgpu)
 	return interface;
 }
 
-bool usb_set_interface(struct cgpu_info *cgpu, int interface)
-{
-	bool succeed = false;
-	int pstate;
-
-	if (interface >= 0) {
-		DEVLOCK(cgpu, pstate);
-
-		if (cgpu->usbdev) {
-			if (interface < cgpu->usbdev->found->intinfo_count) {
-				USBIF(cgpu->usbdev) = interface;
-				succeed = true;
-			}
-		}
-
-		DEVUNLOCK(cgpu, pstate);
-	}
-
-	return succeed;
-}
-
 enum sub_ident usb_ident(struct cgpu_info *cgpu)
 {
 	enum sub_ident ident = IDENT_UNK;
