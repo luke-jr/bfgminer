@@ -177,7 +177,6 @@ enum usb_types {
 struct cg_usb_device {
 	struct usb_find_devices *found;
 	libusb_device_handle *handle;
-	int claimed;
 	pthread_mutex_t *mutex;
 	struct libusb_device_descriptor *descriptor;
 	enum usb_types usb_type;
@@ -336,6 +335,7 @@ struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
 struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devlock);
 #define usb_free_cgpu(cgpu) usb_free_cgpu_devlock(cgpu, true)
 void usb_uninit(struct cgpu_info *cgpu);
+struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig,  int intinfo);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);

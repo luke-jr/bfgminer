@@ -1379,7 +1379,8 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 	if (cgusb->prod_string && cgusb->prod_string != BLANK)
 		free(cgusb->prod_string);
 
-	free(cgusb->descriptor);
+	if (cgusb->descriptor)
+		free(cgusb->descriptor);
 
 	free(cgusb->found);
 
@@ -1391,7 +1392,7 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 	return NULL;
 }
 
-void _usb_uninit(struct cgpu_info *cgpu)
+static void _usb_uninit(struct cgpu_info *cgpu)
 {
 	applog(LOG_DEBUG, "USB uninit %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1400,18 +1401,12 @@ void _usb_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	if (!cgpu->usbdev)
 		return;
+
 	if (cgpu->usbdev->handle) {
-		int ifinfo = 0;
-		while (cgpu->usbdev->claimed > 0) {
-			libusb_release_interface(cgpu->usbdev->handle,
-						 cgpu->usbdev->found->intinfos[ifinfo].interface);
-			ifinfo++;
-			cgpu->usbdev->claimed--;
-		}
+		libusb_release_interface(cgpu->usbdev->handle, USBIF(cgpu->usbdev));
 		cg_wlock(&cgusb_fd_lock);
 		libusb_close(cgpu->usbdev->handle);
 		cgpu->usbdev->handle = NULL;
-		cgpu->usbdev->claimed = 0;
 		cg_wunlock(&cgusb_fd_lock);
 	}
 	cgpu->usbdev = free_cgusb(cgpu->usbdev);
@@ -1474,11 +1469,16 @@ static void release_cgpu(struct cgpu_info *cgpu)
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
-// Currently only used by MMQ
+// Used by MMQ - use the same usbdev thus locking is across all 4 related devices
+// since they must use the same USB handle since they use the same interface
 struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
 {
-	struct cgpu_info *copy = calloc(1, sizeof(*copy));
+	struct cgpu_info *copy;
+	int pstate;
 
+	DEVLOCK(orig, pstate);
+
+	copy = calloc(1, sizeof(*copy));
 	if (unlikely(!copy))
 		quit(1, "Failed to calloc cgpu for %s in usb_copy_cgpu", orig->drv->dname);
 
@@ -1494,6 +1494,70 @@ struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
 	copy->usbinfo.nodev = (copy->usbdev == NULL);
 
 	copy->usbinfo.devlock = orig->usbinfo.devlock;
+
+	DEVUNLOCK(orig, pstate);
+
+	return copy;
+}
+
+// Used by CMR - use a different usbdev - since they must use a different
+// USB handle due to using different interfaces (libusb requirement)
+static struct cgpu_info *usb_dup_cgpu(struct cgpu_info *orig, int intinfo)
+{
+	struct cgpu_info *copy;
+
+	copy = calloc(1, sizeof(*copy));
+	if (unlikely(!copy))
+		quit(1, "Failed to calloc cgpu for %s in usb_dup_cgpu", orig->drv->dname);
+
+	copy->name = orig->name;
+	copy->drv = copy_drv(orig->drv);
+	copy->deven = orig->deven;
+	copy->threads = orig->threads;
+
+	if (orig->usbdev) {
+		copy->usbdev = calloc(1, sizeof(*(copy->usbdev)));
+		if (unlikely(!copy->usbdev))
+			quit(1, "Failed to calloc usbdev for %s in usb_dup_cgpu", orig->drv->dname);
+
+		copy->usbdev->found = malloc(sizeof(*(copy->usbdev->found)));
+		if (unlikely(!copy->usbdev->found))
+			quit(1, "Failed to malloc found for %s in usb_dup_cgpu", orig->drv->dname);
+		memcpy(copy->usbdev->found, orig->usbdev->found, sizeof(*(copy->usbdev->found)));
+
+		copy->usbdev->found->which_intinfo = intinfo;
+
+		copy->usbdev->descriptor = NULL; // don't need it
+		copy->usbdev->usb_type = orig->usbdev->usb_type;
+		copy->usbdev->ident = orig->usbdev->ident;
+		copy->usbdev->usbver = orig->usbdev->usbver;
+		copy->usbdev->cps = orig->usbdev->cps;
+		copy->usbdev->usecps = orig->usbdev->usecps;
+		if (orig->usbdev->prod_string == BLANK)
+			copy->usbdev->prod_string = (char *)BLANK;
+		else
+			copy->usbdev->prod_string = strdup(orig->usbdev->prod_string);
+		if (orig->usbdev->manuf_string == BLANK)
+			copy->usbdev->manuf_string = (char *)BLANK;
+		else
+			copy->usbdev->manuf_string = strdup(orig->usbdev->manuf_string);
+		if (orig->usbdev->serial_string == BLANK)
+			copy->usbdev->serial_string = (char *)BLANK;
+		else
+			copy->usbdev->serial_string = strdup(orig->usbdev->serial_string);
+		copy->usbdev->fwVersion = orig->usbdev->fwVersion;
+		copy->usbdev->interfaceVersion = orig->usbdev->interfaceVersion;
+	}
+
+	memcpy(&(copy->usbinfo), &(orig->usbinfo), sizeof(copy->usbinfo));
+
+	copy->usbinfo.nodev = (copy->usbdev == NULL);
+
+	copy->usbinfo.devlock = calloc(1, sizeof(*(copy->usbinfo.devlock)));
+	if (unlikely(!copy->usbinfo.devlock))
+		quit(1, "Failed to calloc devlock for %s in usb_dup_cgpu", orig->drv->dname);
+
+	rwlock_init(copy->usbinfo.devlock);
 
 	return copy;
 }
@@ -1616,22 +1680,18 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	}
 
 #ifndef WIN32
-	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
-		int interface = found->intinfos[ifinfo].interface;
-
-		if (libusb_kernel_driver_active(cgusb->handle, interface) == 1) {
-			applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
-			err = libusb_detach_kernel_driver(cgusb->handle, interface);
-			if (err == 0) {
-				applog(LOG_DEBUG,
-					"USB init, kernel detached interface %d successfully %s",
-					interface, devstr);
-			} else {
-				applog(LOG_WARNING,
-					"USB init, kernel detach interface %d failed, err %d in use? %s",
-					interface, err, devstr);
-				goto cldame;
-			}
+	if (libusb_kernel_driver_active(cgusb->handle, FOUNDIF(found)) == 1) {
+		applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
+		err = libusb_detach_kernel_driver(cgusb->handle, FOUNDIF(found));
+		if (err == 0) {
+			applog(LOG_DEBUG,
+				"USB init, kernel detached interface %d successfully %s",
+				FOUNDIF(found), devstr);
+		} else {
+			applog(LOG_WARNING,
+				"USB init, kernel detach interface %d failed, err %d in use? %s",
+				FOUNDIF(found), err, devstr);
+			goto cldame;
 		}
 	}
 #endif
@@ -1754,25 +1814,20 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 				goto cldame;
 			}
 
-	cgusb->claimed = 0;
-	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
-		int interface = found->intinfos[ifinfo].interface;
-		err = libusb_claim_interface(cgusb->handle, interface);
-		if (err) {
-			switch(err) {
-				case LIBUSB_ERROR_BUSY:
-					applog(LOG_WARNING,
-						"USB init, claim interface %d in use %s",
-						interface, devstr);
-					break;
-				default:
-					applog(LOG_DEBUG,
-						"USB init, claim interface %d failed, err %d %s",
-						interface, err, devstr);
-			}
-			goto reldame;
+	err = libusb_claim_interface(cgusb->handle, FOUNDIF(found));
+	if (err) {
+		switch(err) {
+			case LIBUSB_ERROR_BUSY:
+				applog(LOG_WARNING,
+					"USB init, claim interface %d in use %s",
+					FOUNDIF(found), devstr);
+				break;
+			default:
+				applog(LOG_DEBUG,
+					"USB init, claim interface %d failed, err %d %s",
+					FOUNDIF(found), err, devstr);
 		}
-		cgusb->claimed++;
+		goto reldame;
 	}
 
 	cfg = -1;
@@ -1839,19 +1894,13 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 
 reldame:
 
-	ifinfo = 0;
-	while (cgusb->claimed > 0) {
-		libusb_release_interface(cgusb->handle, found->intinfos[ifinfo].interface);
-		ifinfo++;
-		cgusb->claimed--;
-	}
+	libusb_release_interface(cgusb->handle, FOUNDIF(found));
 
 cldame:
 
 	cg_wlock(&cgusb_fd_lock);
 	libusb_close(cgusb->handle);
 	cgusb->handle = NULL;
-	cgusb->claimed = 0;
 	cg_wunlock(&cgusb_fd_lock);
 
 dame:
@@ -1865,6 +1914,144 @@ out_unlock:
 	DEVUNLOCK(cgpu, pstate);
 
 	return bad;
+}
+
+// To get the extra interfaces on a multi interface device
+struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig, int intinfo)
+{
+	struct usb_find_devices *found;
+	struct libusb_device *dev;
+	struct cgpu_info *copy = NULL;
+	char msgstr[STRBUFLEN+1];
+	char devstr[STRBUFLEN+1];
+	char devpath[32];
+	int err, pstate;
+
+	DEVLOCK(orig, pstate);
+
+	snprintf(msgstr, sizeof(msgstr), "USB %s init_intinfo (%d:%d:ii%d)",
+			orig->drv->dname,
+			(int)(orig->usbinfo.bus_number),
+			(int)(orig->usbinfo.device_address),
+			orig->usbdev->found->which_intinfo);
+
+	if (orig->usbinfo.nodev) {
+		applog(LOG_ERR, "%s cgpu has nodev", msgstr);
+		goto Hitagi;
+	}
+
+	if (orig->usbdev->found->which_intinfo != 0) {
+		applog(LOG_ERR, "%s incorrect cgpu (must be ii0)", msgstr);
+		goto Hitagi;
+	}
+
+	if (orig->usbdev->found->intinfo_count < 2) {
+		applog(LOG_ERR, "%s cgpu only has 1 interface", msgstr);
+		goto Hitagi;
+	}
+
+	if (intinfo < 1 || intinfo >= orig->usbdev->found->intinfo_count) {
+		applog(LOG_ERR, "%s invalid intinfo (%d) must be > 0 && < %d",
+				msgstr, intinfo, orig->usbdev->found->intinfo_count);
+		goto Hitagi;
+	}
+
+	dev = libusb_get_device(orig->usbdev->handle);
+
+	copy = usb_dup_cgpu(orig, intinfo);
+	if (!copy)
+		goto Hitagi;
+
+	found = copy->usbdev->found;
+
+	snprintf(devpath, sizeof(devpath), "%d:%d:%d",
+		(int)(copy->usbinfo.bus_number),
+		(int)(copy->usbinfo.device_address),
+		intinfo);
+
+	copy->device_path = strdup(devpath);
+
+	snprintf(devstr, sizeof(devstr), "- %s device %s", found->name, devpath);
+
+	cg_wlock(&cgusb_fd_lock);
+	err = libusb_open(dev, &(copy->usbdev->handle));
+	cg_wunlock(&cgusb_fd_lock);
+	if (err) {
+		switch (err) {
+			case LIBUSB_ERROR_ACCESS:
+				applog(LOG_ERR,
+					"USB init_intinfo, open device failed, err %d, "
+					"you don't have privilege to access %s",
+					err, devstr);
+				break;
+#ifdef WIN32
+			// Windows specific message
+			case LIBUSB_ERROR_NOT_SUPPORTED:
+				applog(LOG_ERR,
+					"USB init_intinfo, open device failed, err %d, "
+					"you need to install a WinUSB driver for %s",
+					err, devstr);
+				break;
+#endif
+			default:
+				applog(LOG_DEBUG,
+					"USB init_intinfo, open failed, err %d %s",
+					err, devstr);
+		}
+		goto Hitagi;
+	}
+
+#ifndef WIN32
+	if (libusb_kernel_driver_active(copy->usbdev->handle, FOUNDIF(found)) == 1) {
+		applog(LOG_DEBUG, "USB init_intinfo, kernel attached ... %s", devstr);
+		err = libusb_detach_kernel_driver(copy->usbdev->handle, FOUNDIF(found));
+		if (err == 0) {
+			applog(LOG_DEBUG,
+				"USB init_intinfo, kernel detached interface %d successfully %s",
+				FOUNDIF(found), devstr);
+		} else {
+			applog(LOG_WARNING,
+				"USB init_intinfo, kernel detach interface %d failed, err %d in use? %s",
+				FOUNDIF(found), err, devstr);
+			goto HitagiClose;
+		}
+	}
+#endif
+
+	err = libusb_claim_interface(copy->usbdev->handle, FOUNDIF(found));
+	if (err) {
+		switch(err) {
+			case LIBUSB_ERROR_BUSY:
+				applog(LOG_WARNING,
+					"USB init_intinfo, claim interface %d in use %s",
+					FOUNDIF(found), devstr);
+				break;
+			default:
+				applog(LOG_DEBUG,
+					"USB init_intinfo, claim interface %d failed, err %d %s",
+					FOUNDIF(found), err, devstr);
+		}
+		goto HitagiClose;
+	}
+
+	goto Hitagi;
+
+HitagiClose:
+
+	cg_wlock(&cgusb_fd_lock);
+	libusb_close(copy->usbdev->handle);
+	copy->usbdev->handle = NULL;
+	cg_wunlock(&cgusb_fd_lock);
+
+	copy->usbdev = free_cgusb(copy->usbdev);
+
+	copy = usb_free_cgpu(copy);
+
+Hitagi:
+
+	DEVUNLOCK(orig, pstate);
+
+	return copy;
 }
 
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found_match)
