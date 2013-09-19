@@ -1431,7 +1431,7 @@ static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
-	int i;
+	int which_intinfo, i;
 
 	applog(LOG_DEBUG, "USB release %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1464,9 +1464,10 @@ static void release_cgpu(struct cgpu_info *cgpu)
 		}
 	}
 
+	which_intinfo = cgpu->usbdev->found->which_intinfo;
 	_usb_uninit(cgpu);
-
-	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
+	if (which_intinfo == 0)
+		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
 // Used by MMQ - use the same usbdev thus locking is across all 4 related devices
