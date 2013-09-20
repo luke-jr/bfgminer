@@ -448,6 +448,14 @@ void bitfury_do_io(struct thr_info *thr)
 	memcpy(&newbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
 	newjob = inp[0x10];
 	
+	if (newbuf[0xf] != oldbuf[0xf])
+	{
+		inc_hw_errors2(thr, NULL, NULL);
+		applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
+		       proc->proc_repr);
+		goto out;
+	}
+	
 	if (bitfury->oldjob != newjob && thr->next_work)
 	{
 		mt_job_transition(thr);
