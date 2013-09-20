@@ -13,7 +13,6 @@
 #include <stdbool.h>
 
 #include "usbutils.h"
-#include "fpgautils.h"
 
 #include "driver-hashfast.h"
 
@@ -95,6 +94,33 @@ static uint32_t __maybe_unused hf_crc32(unsigned char *p, int len, int plug_in)
 
 static hf_info_t **hashfast_infos;
 struct device_drv hashfast_drv;
+
+struct hf_cmd {
+	int cmd;
+	char *cmd_name;
+	enum usb_cmds usb_cmd;
+};
+
+static const struct hf_cmd hf_cmds[] = {
+	{OP_NULL, "OP_NULL", C_NULL},
+	{OP_ROOT, "OP_ROOT", C_NULL},
+	{OP_RESET, "OP_RESET", C_HF_RESET},
+	{OP_PLL_CONFIG, "OP_PLL_CONFIG", C_HF_PLL_CONFIG},
+	{OP_ADDRESS, "OP_ADDRESS", C_HF_ADDRESS},
+	{OP_READDRESS, "OP_READDRESS", C_NULL},
+	{OP_HIGHEST, "OP_HIGHEST", C_NULL},
+	{OP_BAUD, "OP_BAUD", C_HF_BAUD},
+	{OP_UNROOT, "OP_UNROOT", C_NULL},
+	{OP_HASH, "OP_HASH", C_HF_HASH},
+	{OP_NONCE, "OP_NONCE", C_HF_NONCE},
+	{OP_ABORT, "OP_ABORT", C_HF_ABORT},
+	{OP_STATUS, "OP_STATUS", C_HF_STATUS},
+	{OP_GPIO, "OP_GPIO", C_NULL},
+	{OP_CONFIG, "OP_CONFIG", C_HF_CONFIG},
+	{OP_STATISTICS, "OP_STATISTICS", C_HF_STATISTICS},
+	{OP_GROUP, "OP_GROUP", C_NULL},
+	{OP_CLOCKGATE, "OP_CLOCKGATE", C_HF_CLOCKGATE}
+};
 
 static int hashfast_reset(struct cgpu_info __maybe_unused *hashfast)
 {

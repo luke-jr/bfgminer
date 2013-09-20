@@ -24,6 +24,7 @@
 #define HF_BROADCAST_ADDRESS    (uint8_t) 0xff
 
 // Operation codes (Second header byte)
+#define OP_NULL		0
 #define OP_ROOT         1
 #define OP_RESET        2
 #define OP_PLL_CONFIG   3

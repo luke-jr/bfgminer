@@ -500,6 +500,7 @@ static int next_stat = USB_NOSTAT;
 
 static const char **usb_commands;
 
+static const char *C_NULL_S = "Null";
 static const char *C_REJECTED_S = "RejectedNoDevice";
 static const char *C_PING_S = "Ping";
 static const char *C_CLEAR_S = "Clear";
@@ -1001,6 +1002,7 @@ static void cgusb_check_init()
 		// use constants so the stat generation is very quick
 		// and the association between number and name can't
 		// be missalined easily
+		usb_commands[C_NULL] = C_NULL_S;
 		usb_commands[C_REJECTED] = C_REJECTED_S;
 		usb_commands[C_PING] = C_PING_S;
 		usb_commands[C_CLEAR] = C_CLEAR_S;

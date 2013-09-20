@@ -254,7 +254,8 @@ struct cg_usb_info {
 };
 
 enum usb_cmds {
-	C_REJECTED = 0,
+	C_NULL = 0,
+	C_REJECTED,
 	C_PING,
 	C_CLEAR,
 	C_REQUESTVERSION,
