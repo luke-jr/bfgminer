@@ -88,6 +88,18 @@ void *bitfury_just_io(struct bitfury_device * const bitfury)
 	return spi_getrxbuf(spi) + 4 + chip;
 }
 
+extern unsigned decnonce(unsigned);
+
+static
+void bitfury_debug_nonce_array(char *sp, const struct bitfury_device * const bitfury, const uint32_t * const newbuf, const int active)
+{
+	const int divide = 0x10 - active;
+	for (int i = 0; i < 0x10; ++i)
+		sp += sprintf(sp, "%c%08lx",
+		              (divide == i) ? ';' : ' ',
+		              (unsigned long)newbuf[i]);
+}
+
 bool bitfury_init_oldbuf(struct cgpu_info * const proc)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
@@ -131,9 +143,17 @@ tryagain:
 	}
 	
 	bitfury->active = differ;
-	memcpy(&oldbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
-	memcpy(&oldbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+	for (i = 0; i < 0x10; ++i)
+		oldbuf[i] = decnonce(inp[(bitfury->active + i) % 0x10]);
 	bitfury->oldjob = inp[0x10];
+	
+	if (opt_debug)
+	{
+		char s[((1 + 8) * 0x10) + 1];
+		bitfury_debug_nonce_array(s, bitfury, oldbuf, bitfury->active);
+		applog(LOG_DEBUG, "%"PRIpreprv": Init%s (job=%08lx)",
+		       proc->proc_repr, s, (unsigned long)inp[0x10]);
+	}
 	
 	return true;
 }
@@ -399,8 +419,6 @@ bool bitfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused
 	return true;
 }
 
-extern unsigned decnonce(unsigned);
-
 static
 bool fudge_nonce(struct work * const work, uint32_t *nonce_p) {
 	static const uint32_t offsets[] = {0, 0xffc00000, 0xff800000, 0x02800000, 0x02C00000, 0x00400000};
@@ -435,18 +453,18 @@ void bitfury_do_io(struct thr_info *thr)
 	
 	inp = bitfury_just_io(bitfury);
 	
+	// To avoid dealing with wrap-around entirely, we rotate array so previous active uint32_t is at index 0
+	for (i = 0; i < 0x10; ++i)
+		newbuf[i] = decnonce(inp[(bitfury->active + i) % 0x10]);
+	newjob = inp[0x10];
+	
 	if (opt_debug)
 	{
-		char hex[137];
-		bin2hex(hex, inp, 17 * 4);
-		applog(LOG_DEBUG, "%"PRIpreprv": Read %s (active=%d)",
-		       proc->proc_repr, hex, bitfury->active);
+		char s[((1 + 8) * 0x10) + 1];
+		bitfury_debug_nonce_array(s, bitfury, newbuf, bitfury->active);
+		applog(LOG_DEBUG, "%"PRIpreprv": Read%s (job=%08lx)",
+		       proc->proc_repr, s, (unsigned long)inp[0x10]);
 	}
-	
-	// To avoid dealing with wrap-around entirely, just rotate array so previous active uint32_t is at index 0
-	memcpy(&newbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
-	memcpy(&newbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
-	newjob = inp[0x10];
 	
 	if (newbuf[0xf] != oldbuf[0xf])
 	{
@@ -477,26 +495,19 @@ void bitfury_do_io(struct thr_info *thr)
 	
 	if (n)
 	{
-		if (opt_debug)
-		{
-			char hex[(4 * 2 * n) + 1];
-			bin2hex(hex, newbuf, 4 * n);
-			applog(LOG_DEBUG, "%"PRIpreprv": Got %d results: %s",
-			       proc->proc_repr, n, hex);
-		}
 		for (i = 0; i < n; ++i)
 		{
-			nonce = decnonce(newbuf[i]);
+			nonce = newbuf[i];
 			if (fudge_nonce(thr->work, &nonce))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": nonce %d = %08lx (work=%p)",
+				applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
 				       proc->proc_repr, i, (unsigned long)nonce, thr->work);
 				submit_nonce(thr, thr->work, nonce);
 			}
 			else
 			if (fudge_nonce(thr->prev_work, &nonce))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": nonce %d = %08lx (prev work=%p)",
+				applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (prev work=%p)",
 				       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
 				submit_nonce(thr, thr->prev_work, nonce);
 			}
@@ -506,8 +517,8 @@ void bitfury_do_io(struct thr_info *thr)
 		bitfury->active = (bitfury->active + n) % 0x10;
 	}
 	
-	memcpy(&oldbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
-	memcpy(&oldbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+	memcpy(&oldbuf[0], &newbuf[n], 4 * (0x10 - n));
+	memcpy(&oldbuf[0x10 - n], &newbuf[0], 4 * n);
 	bitfury->oldjob = newjob;
 	
 out:
