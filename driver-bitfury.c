@@ -104,14 +104,14 @@ bool bitfury_queue_full(struct cgpu_info *cgpu)
 	{
 		bitfury = proc->device_data;
 		
-		if (bitfury->work)
+		if (bitfury->bfwork.work)
 			continue;
 		
-		bitfury->work = get_queued(cgpu);
-		if (!bitfury->work)
+		bitfury->bfwork.work = get_queued(cgpu);
+		if (!bitfury->bfwork.work)
 			return false;
 		
-		work_to_payload(&bitfury->payload, bitfury->work);
+		work_to_payload(&bitfury->bfwork.payload, bitfury->bfwork.work);
 	}
 	
 	return true;
@@ -152,7 +152,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		bitfury = proc->device_data;
 		
 		bitfury->job_switched = 0;
-		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+		payload_to_atrvec(bitfury->atrvec, &bitfury->bfwork.payload);
 		libbitfury_sendHashData1(chip, bitfury, pthr);
 	}
 
@@ -165,43 +165,59 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		bitfury = proc->device_data;
 		
 		if (bitfury->job_switched) {
-			int i,j;
-			unsigned int * const res = bitfury->results;
-			struct work * const work = bitfury->work;
-			struct work * const owork = bitfury->owork;
-			struct work * const o2work = bitfury->o2work;
-			i = bitfury->results_n;
-			for (j = i - 1; j >= 0; j--) {
+			int j;
+			unsigned int * const res = bitfury->bfwork.results;
+			unsigned int * const ores = bitfury->obfwork.results;
+			unsigned int * const o2res = bitfury->o2bfwork.results;
+			struct work * const work = bitfury->bfwork.work;
+			struct work * const owork = bitfury->obfwork.work;
+			struct work * const o2work = bitfury->o2bfwork.work;
+			for (j=bitfury->obfwork.results_sent; j < bitfury->obfwork.results_n; j++) {
 				if (owork) {
-					submit_nonce(pthr, owork, bswap_32(res[j]));
+					submit_nonce(pthr, owork, bswap_32(ores[j]));
+					bitfury->obfwork.results_sent++;
 					bitfury->stat_ts[bitfury->stat_counter++] =
 						now.tv_sec;
 					if (bitfury->stat_counter == BITFURY_STAT_N) {
 						bitfury->stat_counter = 0;
 					}
 				}
+			}
+			
+			for (j=bitfury->o2bfwork.results_sent; j < bitfury->o2bfwork.results_n; j++) {
 				if (o2work) {
-					// TEST
-					//submit_nonce(pthr, owork, bswap_32(res[j]));
+					submit_nonce(pthr, o2work, bswap_32(o2res[j]));
+					bitfury->o2bfwork.results_sent++;
+					bitfury->stat_ts[bitfury->stat_counter++] =
+						now.tv_sec;
+					if (bitfury->stat_counter == BITFURY_STAT_N) {
+						bitfury->stat_counter = 0;
+					}
 				}
 			}
-			bitfury->results_n = 0;
-			bitfury->job_switched = 0;
-			if (bitfury->old_nonce && o2work) {
-					submit_nonce(pthr, o2work, bswap_32(bitfury->old_nonce));
-					i++;
+			for (j=bitfury->bfwork.results_sent; j < bitfury->bfwork.results_n; j++) {
+				if (work) {
+					submit_nonce(pthr, work, bswap_32(res[j]));
+					bitfury->bfwork.results_sent++;
+					bitfury->stat_ts[bitfury->stat_counter++] =
+						now.tv_sec;
+					if (bitfury->stat_counter == BITFURY_STAT_N) {
+						bitfury->stat_counter = 0;
+					}
+				}
 			}
-			if (bitfury->future_nonce) {
-					submit_nonce(pthr, work, bswap_32(bitfury->future_nonce));
-					i++;
-			}
-
 			if (o2work)
 				work_completed(cgpu, o2work);
 
-			bitfury->o2work = bitfury->owork;
-			bitfury->owork = bitfury->work;
-			bitfury->work = NULL;
+			bitfury->job_switched = 0;
+			
+			memcpy (&(bitfury->o2bfwork),&(bitfury->obfwork),sizeof(struct bitfury_work));
+			memcpy (&(bitfury->obfwork),&(bitfury->bfwork),sizeof(struct bitfury_work));
+			bitfury->bfwork.work = NULL;
+			bitfury->bfwork.results_n = 0;
+			bitfury->bfwork.results_sent = 0;
+			
+
 			hashes_done2(pthr, 0xbd000000, NULL);
 		}
 	}

@@ -422,9 +422,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 	struct spi_port *port = d->spi;
 	unsigned *newbuf = d->newbuf;
 	unsigned *oldbuf = d->oldbuf;
-	struct bitfury_payload *p = &(d->payload);
-	struct bitfury_payload *op = &(d->opayload);
-	struct bitfury_payload *o2p = &(d->o2payload);
+	struct bitfury_payload *p = &(d->bfwork.payload);
+	struct bitfury_payload *op = &(d->obfwork.payload);
+	struct bitfury_payload *o2p = &(d->o2bfwork.payload);
 	struct timespec d_time;
 	struct timespec time;
 	int smart = 0;
@@ -479,12 +479,11 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		d->job_switched = newbuf[16] != oldbuf[16];
 
 		int i;
-		int results_num = 0;
 		int found = 0;
-		unsigned * results = d->results;
+		unsigned * oresults = d->obfwork.results;
+		unsigned * o2results = d->o2bfwork.results;
+		unsigned * results = d->bfwork.results;
 
-		d->old_nonce = 0;
-		d->future_nonce = 0;
 		for (i = 0; i < 16; i++) {
 			if (oldbuf[i] != newbuf[i] && op && o2p) {
 				uint32_t pn;  // possible nonce
@@ -495,26 +494,42 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				{
 					int k;
 					int dup = 0;
-					for (k = 0; k < results_num; k++) {
-						if (results[k] == bswap_32(pn))
+					for (k = 0; k < d->obfwork.results_n; k++) {
+						if (oresults[k] == bswap_32(pn))
 							dup = 1;
 					}
 					if (!dup) {
-						results[results_num++] = bswap_32(pn);
+						oresults[d->obfwork.results_n++] = bswap_32(pn);
 						found++;
 					}
 				}
 				else
 				if (fudge_nonce(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, &pn))
 				{
-					d->old_nonce = bswap_32(pn);
-					found++;
+					int k;
+					int dup = 0;
+					for (k = 0; k < d->o2bfwork.results_n; k++) {
+						if (o2results[k] == bswap_32(pn))
+							dup = 1;
+					}
+					if (!dup) {
+						o2results[d->o2bfwork.results_n++] = bswap_32(pn);
+						found++;
+					}
 				}
 				else
 				if (fudge_nonce(p->midstate, p->m7, p->ntime, p->nbits, &pn))
 				{
-					d->future_nonce = bswap_32(pn);
-					found++;
+					int k;
+					int dup = 0;
+					for (k = 0; k < d->bfwork.results_n; k++) {
+						if (results[k] == bswap_32(pn))
+							dup = 1;
+					}
+					if (!dup) {
+						results[d->bfwork.results_n++] = bswap_32(pn);
+						found++;
+					}
 				}
 				if (!found) {
 					inc_hw_errors2(thr, NULL, &pn);
@@ -522,7 +537,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				}
 			}
 		}
-		d->results_n = results_num;
+
 
 		if (smart) {
 			d_time = t_diff(d->timer2, d->timer1);
@@ -602,8 +617,6 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		}
 
 		if (d->job_switched) {
-			memcpy(o2p, op, sizeof(struct bitfury_payload));
-			memcpy(op, p, sizeof(struct bitfury_payload));
 			memcpy(oldbuf, newbuf, 17 * 4);
 		}
 	}

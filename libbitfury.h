@@ -14,26 +14,25 @@ struct bitfury_payload {
 	unsigned nbits;
 	unsigned nnonce;
 };
-
+struct bitfury_work {
+	struct work * work;
+	int results_n;
+	int results_sent;
+	struct bitfury_payload payload;
+	unsigned int results[64];
+};
 struct bitfury_device {
 	struct spi_port *spi;
 	unsigned char osc6_bits;
 	unsigned newbuf[17];
 	unsigned oldbuf[17];
-	struct work * work;
-	struct work * owork;
-	struct work * o2work;
 	int job_switched;
+	struct bitfury_work bfwork;
+	struct bitfury_work obfwork;
+	struct bitfury_work o2bfwork;
 	uint32_t atrvec[20];
-	struct bitfury_payload payload;
-	struct bitfury_payload opayload;
-	struct bitfury_payload o2payload;
-	unsigned int results[16];
-	int results_n;
 	time_t stat_ts[BITFURY_STAT_N];
 	unsigned int stat_counter;
-	unsigned int future_nonce;
-	unsigned int old_nonce;
 	struct timespec timer1;
 	struct timespec timer2;
 	struct timespec otimer1;
