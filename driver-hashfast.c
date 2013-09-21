@@ -122,6 +122,41 @@ static const struct hf_cmd hf_cmds[] = {
 	{OP_CLOCKGATE, "OP_CLOCKGATE", C_HF_CLOCKGATE}
 };
 
+/* Send an arbitrary frame, consisting of an 8 byte header and an optional
+ * packet body. */
+
+static int __maybe_unused hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
+			       uint8_t chip, uint8_t core, uint16_t hdata,
+			       uint8_t *data, int len)
+{
+	int tx_length, ret, amount, id = hashfast->device_id;
+	uint8_t packet[256];
+	struct hf_header *p = (struct hf_header *)packet;
+
+	p->preamble = HF_PREAMBLE;
+	p->operation_code = opcode;
+	p->chip_address = chip;
+	p->core_address = core;
+	p->hdata = htole16(hdata);
+	p->data_length = len / 4;
+	p->crc8 = hf_crc8(packet);
+	tx_length = sizeof(struct hf_header);
+	if (len) {
+		memcpy(&packet[sizeof(struct hf_header)], data, len);
+		hf_crc32(&packet[sizeof(struct hf_header)], len, 1);
+		tx_length += len + 4;
+	}
+
+	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
+			hf_cmds[opcode].usb_cmd);
+	if (ret < 0 || amount != tx_length) {
+		applog(LOG_ERR, "HF%d: hashfast_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
+		       id, ret, amount, tx_length);
+		return 1;
+	}
+	return 0;
+}
+
 static int hashfast_reset(struct cgpu_info __maybe_unused *hashfast)
 {
 	return 0;
