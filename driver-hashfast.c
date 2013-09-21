@@ -317,8 +317,9 @@ static struct api_data *hashfast_api_stats(struct cgpu_info __maybe_unused *cgpu
 	return NULL;
 }
 
-static void hashfast_init(struct cgpu_info __maybe_unused *hashfast)
+static void hashfast_init(struct cgpu_info *hashfast)
 {
+	usb_buffer_enable(hashfast);
 }
 
 static void hashfast_shutdown(struct thr_info __maybe_unused *thr)
