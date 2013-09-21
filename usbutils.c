@@ -179,6 +179,7 @@ static struct usb_epinfo cmr2_epinfos0[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
 };
+#ifndef WIN32
 static struct usb_epinfo cmr2_epinfos1[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 },
@@ -191,12 +192,16 @@ static struct usb_epinfo cmr2_epinfos3[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0 }
 };
+#endif
 
 static struct usb_intinfo cmr2_ints[] = {
-	USB_EPS(0, cmr2_epinfos0),
+	USB_EPS(0, cmr2_epinfos0)
+#ifndef WIN32
+	,
 	USB_EPS(1, cmr2_epinfos1),
 	USB_EPS(2, cmr2_epinfos2),
 	USB_EPS(3, cmr2_epinfos3)
+#endif
 };
 #endif
 
@@ -1470,8 +1475,10 @@ static void release_cgpu(struct cgpu_info *cgpu)
 		cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
 }
 
-// Used by MMQ - use the same usbdev thus locking is across all 4 related devices
-// since they must use the same USB handle since they use the same interface
+/*
+ * Used by MMQ - use the same usbdev thus locking is across all 4 related devices
+ * since they must use the same USB handle since they use the same interface
+ */
 struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
 {
 	struct cgpu_info *copy;
@@ -1501,8 +1508,13 @@ struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
 	return copy;
 }
 
-// Used by CMR - use a different usbdev - since they must use a different
-// USB handle due to using different interfaces (libusb requirement)
+/*
+ * Used by CMR - use a different usbdev - since they must use a different
+ * USB handle due to using different interfaces (libusb requirement)
+ * N.B. multiple interfaces don't as yet work in windows libusb
+ * so the CMR defines above that use them are defined out in windows
+ * Nothing else uses multiple interfaces as at 20130922
+ */
 static struct cgpu_info *usb_dup_cgpu(struct cgpu_info *orig, int intinfo)
 {
 	struct cgpu_info *copy;
@@ -1622,9 +1634,16 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 	cgpu->usbinfo.bus_number = libusb_get_bus_number(dev);
 	cgpu->usbinfo.device_address = libusb_get_device_address(dev);
 
-	snprintf(devpath, sizeof(devpath), "%d:%d",
-		(int)(cgpu->usbinfo.bus_number),
-		(int)(cgpu->usbinfo.device_address));
+	if (found->intinfo_count > 1) {
+		snprintf(devpath, sizeof(devpath), "%d:%d-i%d",
+			(int)(cgpu->usbinfo.bus_number),
+			(int)(cgpu->usbinfo.device_address),
+			FOUNDIF(found));
+	} else {
+		snprintf(devpath, sizeof(devpath), "%d:%d",
+			(int)(cgpu->usbinfo.bus_number),
+			(int)(cgpu->usbinfo.device_address));
+	}
 
 	cgpu->device_path = strdup(devpath);
 
@@ -1930,7 +1949,7 @@ struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig, int intinfo)
 
 	DEVLOCK(orig, pstate);
 
-	snprintf(msgstr, sizeof(msgstr), "USB %s init_intinfo (%d:%d:ii%d)",
+	snprintf(msgstr, sizeof(msgstr), "USB %s init_intinfo (%d:%d-i%d)",
 			orig->drv->dname,
 			(int)(orig->usbinfo.bus_number),
 			(int)(orig->usbinfo.device_address),
@@ -1942,7 +1961,7 @@ struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig, int intinfo)
 	}
 
 	if (orig->usbdev->found->which_intinfo != 0) {
-		applog(LOG_ERR, "%s incorrect cgpu (must be ii0)", msgstr);
+		applog(LOG_ERR, "%s incorrect cgpu (must be i0)", msgstr);
 		goto Hitagi;
 	}
 
@@ -1965,10 +1984,10 @@ struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig, int intinfo)
 
 	found = copy->usbdev->found;
 
-	snprintf(devpath, sizeof(devpath), "%d:%d:%d",
+	snprintf(devpath, sizeof(devpath), "%d:%d-i%d",
 		(int)(copy->usbinfo.bus_number),
 		(int)(copy->usbinfo.device_address),
-		intinfo);
+		FOUNDIF(found));
 
 	copy->device_path = strdup(devpath);
 
