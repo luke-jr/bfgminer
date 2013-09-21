@@ -8,7 +8,17 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <jansson.h>
+#ifdef HAVE_LIBCURL
 #include <curl/curl.h>
+#else
+typedef char CURL;
+extern char *curly;
+#define curl_easy_init(curl) (curly)
+#define curl_easy_cleanup(curl) {}
+#define curl_global_cleanup() {}
+#define CURL_GLOBAL_ALL 0
+#define curl_global_init(X) (0)
+#endif
 #include <sched.h>
 
 #include "elist.h"
@@ -912,10 +922,12 @@ extern int swork_id;
 extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
+#ifdef HAVE_LIBCURL
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
-extern const char *proxytype(curl_proxytype proxytype);
+#endif
+extern const char *proxytype(proxytypes_t proxytype);
 extern char *get_proxy(char *url, struct pool *pool);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
@@ -1155,7 +1167,7 @@ struct pool {
 	char *rpc_url;
 	char *rpc_userpass;
 	char *rpc_user, *rpc_pass;
-	curl_proxytype rpc_proxytype;
+	proxytypes_t rpc_proxytype;
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;

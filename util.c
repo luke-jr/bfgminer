@@ -16,7 +16,9 @@
 #include <stdarg.h>
 #include <string.h>
 #include <jansson.h>
+#ifdef HAVE_LIBCURL
 #include <curl/curl.h>
+#endif
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
@@ -45,6 +47,44 @@
 #define DEFAULT_SOCKWAIT 60
 
 bool successful_connect = false;
+static void keep_sockalive(SOCKETTYPE fd)
+{
+	const int tcp_one = 1;
+#ifndef WIN32
+	const int tcp_keepidle = 45;
+	const int tcp_keepintvl = 30;
+	int flags = fcntl(fd, F_GETFL, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
+#else
+	u_long flags = 1;
+
+	ioctlsocket(fd, FIONBIO, &flags);
+#endif
+
+	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_one, sizeof(tcp_one));
+	if (!opt_delaynet)
+#ifndef __linux
+		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
+#else /* __linux */
+		setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
+	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one));
+	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
+	setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl));
+#endif /* __linux */
+
+#ifdef __APPLE_CC__
+	setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl));
+#endif /* __APPLE_CC__ */
+
+}
+
+struct tq_ent {
+	void			*data;
+	struct list_head	q_node;
+};
+
+#ifdef HAVE_LIBCURL
 struct timeval nettime;
 
 struct data_buffer {
@@ -65,11 +105,6 @@ struct header_info {
 	bool		hadrolltime;
 	bool		canroll;
 	bool		hadexpire;
-};
-
-struct tq_ent {
-	void			*data;
-	struct list_head	q_node;
 };
 
 static void databuf_free(struct data_buffer *db)
@@ -202,36 +237,19 @@ out:
 	return ptrlen;
 }
 
-static void keep_sockalive(SOCKETTYPE fd)
+static void last_nettime(struct timeval *last)
 {
-	const int tcp_one = 1;
-#ifndef WIN32
-	const int tcp_keepidle = 45;
-	const int tcp_keepintvl = 30;
-	int flags = fcntl(fd, F_GETFL, 0);
+	rd_lock(&netacc_lock);
+	last->tv_sec = nettime.tv_sec;
+	last->tv_usec = nettime.tv_usec;
+	rd_unlock(&netacc_lock);
+}
 
-	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
-#else
-	u_long flags = 1;
-
-	ioctlsocket(fd, FIONBIO, &flags);
-#endif
-
-	setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const void *)&tcp_one, sizeof(tcp_one));
-	if (!opt_delaynet)
-#ifndef __linux
-		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
-#else /* __linux */
-		setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one));
-	setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &tcp_one, sizeof(tcp_one));
-	setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &tcp_keepidle, sizeof(tcp_keepidle));
-	setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &tcp_keepintvl, sizeof(tcp_keepintvl));
-#endif /* __linux */
-
-#ifdef __APPLE_CC__
-	setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &tcp_keepintvl, sizeof(tcp_keepintvl));
-#endif /* __APPLE_CC__ */
-
+static void set_nettime(void)
+{
+	wr_lock(&netacc_lock);
+	cgtime(&nettime);
+	wr_unlock(&netacc_lock);
 }
 
 #if CURL_HAS_KEEPALIVE
@@ -254,21 +272,6 @@ static void keep_curlalive(CURL *curl)
 	keep_sockalive(sock);
 }
 #endif
-
-static void last_nettime(struct timeval *last)
-{
-	rd_lock(&netacc_lock);
-	last->tv_sec = nettime.tv_sec;
-	last->tv_usec = nettime.tv_usec;
-	rd_unlock(&netacc_lock);
-}
-
-static void set_nettime(void)
-{
-	wr_lock(&netacc_lock);
-	cgtime(&nettime);
-	wr_unlock(&netacc_lock);
-}
 
 static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 			 __maybe_unused char *data, size_t size, void *userdata)
@@ -513,29 +516,35 @@ err_out:
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return NULL;
 }
+#define PROXY_HTTP	CURLPROXY_HTTP
+#define PROXY_HTTP_1_0	CURLPROXY_HTTP_1_0
+#define PROXY_SOCKS4	CURLPROXY_SOCKS4
+#define PROXY_SOCKS5	CURLPROXY_SOCKS5
+#define PROXY_SOCKS4A	CURLPROXY_SOCKS4A
+#define PROXY_SOCKS5H	CURLPROXY_SOCKS5_HOSTNAME
+#else /* HAVE_LIBCURL */
+#define PROXY_HTTP	0
+#define PROXY_HTTP_1_0	1
+#define PROXY_SOCKS4	2
+#define PROXY_SOCKS5	3
+#define PROXY_SOCKS4A	4
+#define PROXY_SOCKS5H	5
+#endif /* HAVE_LIBCURL */
 
-#if (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 10) || (LIBCURL_VERSION_MAJOR > 7)
 static struct {
 	const char *name;
-	curl_proxytype proxytype;
+	proxytypes_t proxytype;
 } proxynames[] = {
-	{ "http:",	CURLPROXY_HTTP },
-#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR > 19) || (LIBCURL_VERSION_MINOR == 19 && LIBCURL_VERSION_PATCH >= 4)
-	{ "http0:",	CURLPROXY_HTTP_1_0 },
-#endif
-#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR > 15) || (LIBCURL_VERSION_MINOR == 15 && LIBCURL_VERSION_PATCH >= 2)
-	{ "socks4:",	CURLPROXY_SOCKS4 },
-#endif
-	{ "socks5:",	CURLPROXY_SOCKS5 },
-#if (LIBCURL_VERSION_MAJOR > 7) || (LIBCURL_VERSION_MINOR >= 18)
-	{ "socks4a:",	CURLPROXY_SOCKS4A },
-	{ "socks5h:",	CURLPROXY_SOCKS5_HOSTNAME },
-#endif
+	{ "http:",	PROXY_HTTP },
+	{ "http0:",	PROXY_HTTP_1_0 },
+	{ "socks4:",	PROXY_SOCKS4 },
+	{ "socks5:",	PROXY_SOCKS5 },
+	{ "socks4a:",	PROXY_SOCKS4A },
+	{ "socks5h:",	PROXY_SOCKS5H },
 	{ NULL,	0 }
 };
-#endif
 
-const char *proxytype(curl_proxytype proxytype)
+const char *proxytype(proxytypes_t proxytype)
 {
 	int i;
 
@@ -550,7 +559,6 @@ char *get_proxy(char *url, struct pool *pool)
 {
 	pool->rpc_proxy = NULL;
 
-#if (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR >= 10) || (LIBCURL_VERSION_MAJOR > 7)
 	char *split;
 	int plen, len, i;
 
@@ -573,7 +581,6 @@ char *get_proxy(char *url, struct pool *pool)
 			break;
 		}
 	}
-#endif
 	return url;
 }
 
@@ -1948,7 +1955,7 @@ static bool setup_stratum_socket(struct pool *pool)
 	if (!pool->rpc_proxy && opt_socks_proxy) {
 		pool->rpc_proxy = opt_socks_proxy;
 		extract_sockaddr(pool->rpc_proxy, &pool->sockaddr_proxy_url, &pool->sockaddr_proxy_port);
-		pool->rpc_proxytype = CURLPROXY_SOCKS5;
+		pool->rpc_proxytype = PROXY_SOCKS5;
 	}
 
 	if (pool->rpc_proxy) {
@@ -1995,24 +2002,24 @@ static bool setup_stratum_socket(struct pool *pool)
 
 	if (pool->rpc_proxy) {
 		switch (pool->rpc_proxytype) {
-			case CURLPROXY_HTTP_1_0:
+			case PROXY_HTTP_1_0:
 				if (!http_negotiate(pool, sockd, true))
 					return false;
 				break;
-			case CURLPROXY_HTTP:
+			case PROXY_HTTP:
 				if (!http_negotiate(pool, sockd, false))
 					return false;
 				break;
-			case CURLPROXY_SOCKS5:
-			case CURLPROXY_SOCKS5_HOSTNAME:
+			case PROXY_SOCKS5:
+			case PROXY_SOCKS5H:
 				if (!socks5_negotiate(pool, sockd))
 					return false;
 				break;
-			case CURLPROXY_SOCKS4:
+			case PROXY_SOCKS4:
 				if (!socks4_negotiate(pool, sockd, false))
 					return false;
 				break;
-			case CURLPROXY_SOCKS4A:
+			case PROXY_SOCKS4A:
 				if (!socks4_negotiate(pool, sockd, true))
 					return false;
 				break;
