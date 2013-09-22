@@ -1073,6 +1073,9 @@ static bool socket_full(struct pool *pool, int wait)
 	struct timeval timeout;
 	fd_set rd;
 
+	if (sock == INVSOCK)
+		return true;
+	
 	if (unlikely(wait < 0))
 		wait = 0;
 	FD_ZERO(&rd);
