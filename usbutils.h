@@ -109,16 +109,22 @@
 // Use the device defined timeout
 #define DEVTIMEOUT 0
 
-// For endpoints defined in usb_find_devices.eps,
-// the first two must be the default IN and OUT
+// For endpoints defined in usb_find_devices.intinfos.epinfos,
+// the first two must be the default IN and OUT and both must always exist
 #define DEFAULT_EP_IN 0
 #define DEFAULT_EP_OUT 1
 
-struct usb_endpoints {
+struct usb_epinfo {
 	uint8_t att;
 	uint16_t size;
 	unsigned char ep;
 	bool found;
+};
+
+struct usb_intinfo {
+	int interface;
+	int epinfo_count;
+	struct usb_epinfo *epinfos;
 };
 
 enum sub_ident {
@@ -148,14 +154,13 @@ struct usb_find_devices {
 	uint16_t idProduct;
 	char *iManufacturer;
 	char *iProduct;
-	int kernel;
 	int config;
-	int interface;
 	unsigned int timeout;
 	uint16_t wMaxPacketSize;
 	uint16_t latency;
-	int epcount;
-	struct usb_endpoints *eps;
+	int which_intinfo;
+	int intinfo_count;
+	struct usb_intinfo *intinfos;
 };
 
 /* Latency is set to 32ms to prevent a transfer ever being more than 512 bytes
@@ -330,6 +335,7 @@ struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
 struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devlock);
 #define usb_free_cgpu(cgpu) usb_free_cgpu_devlock(cgpu, true)
 void usb_uninit(struct cgpu_info *cgpu);
+struct cgpu_info *usb_init_intinfo(struct cgpu_info *orig,  int intinfo);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);

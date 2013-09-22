@@ -102,7 +102,9 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define LANCELOT_HASH_TIME 0.0000000025000
 #define ASICMINERUSB_HASH_TIME 0.0000000029761
 // TODO: What is it?
-#define CAIRNSMORE1_HASH_TIME 0.0000000026316
+#define CAIRNSMORE1_HASH_TIME 0.0000000027000
+// Per FPGA
+#define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
 
 // Icarus Rev3 doesn't send a completion message when it finishes
@@ -208,6 +210,8 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
+
+	bool initialised;
 };
 
 #define END_CONDITION 0x0000ffff
@@ -262,6 +266,7 @@ static void _transfer(struct cgpu_info *icarus, uint8_t request_type, uint8_t bR
 
 static void icarus_initialise(struct cgpu_info *icarus, int baud)
 {
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	uint16_t wValue, wIndex;
 	enum sub_ident ident;
 	int interface;
@@ -281,6 +286,9 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_CMR1:
 		case IDENT_CMR2:
 			usb_set_pps(icarus, BLT_PREF_PACKET);
+
+			if (ident == IDENT_CMR2) // Chip hack
+				interface++;
 
 			// Reset
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
@@ -403,6 +411,8 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
 				icarus->drv->name, icarus->cgminer_id, ident);
 	}
+
+	info->initialised = true;
 }
 
 static void rev(unsigned char *s, size_t l)
@@ -537,10 +547,11 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		case IDENT_AMU:
 			info->Hs = ASICMINERUSB_HASH_TIME;
 			break;
-		// TODO: ?
 		case IDENT_CMR1:
-		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE1_HASH_TIME;
+			break;
+		case IDENT_CMR2:
+			info->Hs = CAIRNSMORE2_HASH_TIME;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -701,12 +712,15 @@ static void get_options(int this_option_offset, struct cgpu_info *icarus, int *b
 			*work_division = 1;
 			*fpga_count = 1;
 			break;
-		// TODO: ?
 		case IDENT_CMR1:
-		case IDENT_CMR2:
 			*baud = ICARUS_IO_SPEED;
 			*work_division = 2;
 			*fpga_count = 2;
+			break;
+		case IDENT_CMR2:
+			*baud = ICARUS_IO_SPEED;
+			*work_division = 1;
+			*fpga_count = 1;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -795,6 +809,11 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 
+	info = (struct ICARUS_INFO *)calloc(1, sizeof(struct ICARUS_INFO));
+	if (unlikely(!info))
+		quit(1, "Failed to malloc ICARUS_INFO");
+	icarus->device_data = (void *)info;
+
 	tries = 2;
 	ok = false;
 	while (!ok && tries-- > 0) {
@@ -844,15 +863,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
 
-	info = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-	if (unlikely(!info))
-		quit(1, "Failed to malloc ICARUS_INFO");
-
-	icarus->device_data = (void *)info;
-
-	// Initialise everything to zero for a new device
-	memset(info, 0, sizeof(struct ICARUS_INFO));
-
 	info->baud = baud;
 	info->work_division = work_division;
 	info->fpga_count = fpga_count;
@@ -862,12 +872,47 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
 	set_timing_mode(this_option_offset, icarus);
+	
+	if (usb_ident(icarus) == IDENT_CMR2) {
+		int i;
+		for (i = 1; i < icarus->usbdev->found->intinfo_count; i++) {
+			struct cgpu_info *cgtmp;
+			struct ICARUS_INFO *intmp;
+
+			cgtmp = usb_init_intinfo(icarus, i);
+			if (!cgtmp) {
+				applog(LOG_ERR, "%s%d: Init failed initinfo %d",
+						icarus->drv->name, icarus->device_id, i);
+				continue;
+			}
+
+			cgtmp->usbinfo.usbstat = USB_NOSTAT;
+
+			if (!add_cgpu(cgtmp)) {
+				usb_uninit(cgtmp);
+				continue;
+			}
+
+			update_usb_stats(cgtmp);
+
+			intmp = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
+			if (unlikely(!intmp))
+				quit(1, "Failed2 to malloc ICARUS_INFO");
+
+			cgtmp->device_data = (void *)intmp;
+
+			// Initialise everything to match
+			memcpy(intmp, info, sizeof(struct ICARUS_INFO));
+		}
+	}
 
 	return true;
 
 unshin:
 
 	usb_uninit(icarus);
+	free(info);
+	icarus->device_data = NULL;
 
 shin:
 
@@ -916,6 +961,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Device is gone
 	if (icarus->usbinfo.nodev)
 		return -1;
+
+	if (!info->initialised)
+		icarus_initialise(icarus, info->baud);
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
