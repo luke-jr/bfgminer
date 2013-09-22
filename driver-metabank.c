@@ -162,6 +162,8 @@ bool metabank_init(struct thr_info *thr)
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_oldbuf(proc);
+		bitfury->osc6_bits = 54;
+		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	}
 	
 	free(devicelist);

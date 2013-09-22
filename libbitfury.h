@@ -56,7 +56,6 @@ struct bitfury_device {
 	
 	time_t short_out_t;
 	time_t long_out_t;
-	int first;
 };
 
 int libbitfury_readHashData(unsigned int *res);

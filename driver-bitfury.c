@@ -190,18 +190,6 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 	int long_stat = 1800;
 	int i;
 
-	if (!sds->first)
-	{
-		 // TODO: Move to init
-		for (proc = cgpu; proc; proc = proc->next_proc)
-		{
-			bitfury = proc->device_data;
-			bitfury->osc6_bits = 54;
-			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-		}
-	}
-	sds->first = 1;
-
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		const int chip = proc->proc_id;
