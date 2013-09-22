@@ -53,6 +53,7 @@
 #endif
 
 #ifdef HAVE_LIBCURL
+#include <curl/curl.h>
 typedef curl_proxytype proxytypes_t;
 #else
 typedef int proxytypes_t;
