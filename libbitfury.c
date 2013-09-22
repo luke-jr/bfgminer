@@ -460,7 +460,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		buf_diff = get_diff(newbuf, oldbuf);
 		if (buf_diff > 4 || (d->counter1 > 0 && d->counter1 < 0x00400000 / 2)) {
 			if (buf_diff > 4) {
-//					applog(LOG_DEBUG, "AAA        chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+#ifdef BITFURY_SENDHASHDATA_DEBUG
+				applog(LOG_DEBUG, "AAA        chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+#endif
 				payload_to_atrvec(&d->atrvec[0], p);
 				spi_clear_buf(port);
 				spi_emit_break(port);
@@ -472,7 +474,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 				buf_diff = get_diff(newbuf, oldbuf);
 				d->counter1 = get_counter(newbuf, oldbuf);
-//					applog(LOG_DEBUG, "AAA _222__ chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+#ifdef BITFURY_SENDHASHDATA_DEBUG
+				applog(LOG_DEBUG, "AAA _222__ chip_id: %d, buf_diff: %d, counter: %08x", chip_id, buf_diff, d->counter1);
+#endif
 			}
 		}
 
@@ -541,7 +545,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			long long unsigned delta;
 			struct timespec t_delta;
 			double mhz;
+#ifdef BITFURY_SENDHASHDATA_DEBUG
 			int ccase;
+#endif
 
 			shift = 800000;
 			if (smart) {
@@ -549,10 +555,14 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			} else {
 				if (d->counter1 > (0x00400000 - shift * 2) && d->ocounter1 > (0x00400000 - shift)) {
 					cycles = 0x00400000 - d->ocounter1 + d->counter1; // + 0x003FFFFF;
+#ifdef BITFURY_SENDHASHDATA_DEBUG
 					ccase = 1;
+#endif
 				} else {
 					cycles = d->counter1 > d->ocounter1 ? d->counter1 - d->ocounter1 : 0x00400000 - d->ocounter1 + d->counter1;
+#ifdef BITFURY_SENDHASHDATA_DEBUG
 					ccase = 2;
+#endif
 				}
 			}
 			req1_cycles = 0x003FFFFF - d->counter1;
@@ -560,11 +570,15 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			ns = (double)period / (double)(cycles);
 			mhz = 1.0 / ns * 65.0 * 1000.0;
 
+#ifdef BITFURY_SENDHASHDATA_DEBUG
 			if (d->counter1 > 0 && d->counter1 < 0x001FFFFF) {
-				//applog(LOG_DEBUG, "//AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+				applog(LOG_DEBUG, "//AAA chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
 			}
+#endif
 			if (ns > 2000.0 || ns < 20) {
-				//applog(LOG_DEBUG, "AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+#ifdef BITFURY_SENDHASHDATA_DEBUG
+				applog(LOG_DEBUG, "AAA %d!Stupid ns chip_id %2d: %llu ms, req1_cycles: %08u,  counter1: %08d, ocounter1: %08d, counter2: %08d, cycles: %08d, ns: %.2f, mhz: %.2f ", ccase, chip_id, period / 1000000ULL, req1_cycles, d->counter1, d->ocounter1, d->counter2, cycles, ns, mhz);
+#endif
 				ns = 200.0;
 			} else {
 				d->ns = ns;
