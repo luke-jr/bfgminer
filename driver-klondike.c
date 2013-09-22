@@ -107,6 +107,8 @@ struct klondike_info {
 	WORKCFG *cfg;
 	char *replies;
 	int nextreply;
+	int noncecount;
+	uint64_t hashcount;
 };
 
 IDENTITY KlondikeID;
@@ -316,6 +318,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, WORKRESULT *result)
 			
 			wr_lock(&(klninfo->stat_lock));
 			klninfo->devinfo[result->device].noncecount++;
+			klninfo->noncecount++;
 			wr_unlock(&(klninfo->stat_lock));
 			
 			result->nonce = le32toh(result->nonce - 0xC0);
@@ -515,7 +518,8 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 				newhashdev += klninfo->status[dev].maxcount; // hash counter wrapped
 			newhashdev += klninfo->status[dev].hashcount - klninfo->devinfo[dev].lasthashcount;
 			klninfo->devinfo[dev].lasthashcount = klninfo->status[dev].hashcount;
-			newhashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
+			klninfo->hashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
+			newhashcount += 0xffffffffull * (uint64_t)klninfo->noncecount;
 			
 			// todo: check stats for critical conditions
 		}
@@ -594,6 +598,9 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 			root = api_add_string(root, buf, data, true);
 		}
 	}
+
+	root = api_add_uint64(root, "Hash Count", &(klninfo->hashcount), true);
+
 	rd_unlock(&(klninfo->stat_lock));
 	
 	return root;
