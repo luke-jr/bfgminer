@@ -90,14 +90,14 @@ void spi_init(void)
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
-void spi_reset(void)
+int spi_reset(int a)
 {
 	int i,j;
-	int a = 1234, len = 2;
+	int len = 8;
 	INP_GPIO(10); OUT_GPIO(10);
 	INP_GPIO(11); OUT_GPIO(11);
 	GPIO_SET = 1 << 11; // Set SCK
-	for (i = 0; i < 16; i++) { // On standard settings this unoptimized code produces 1 Mhz freq.
+	for (i = 0; i < 32; i++) { // On standard settings this unoptimized code produces 1 Mhz freq.
 		GPIO_SET = 1 << 10;
 		for (j = 0; j < len; j++) {
 			a *= a;
@@ -115,6 +115,8 @@ void spi_reset(void)
 	SET_GPIO_ALT(11,0);
 	INP_GPIO(9);
 	SET_GPIO_ALT(9,0);
+
+	return a;
 }
 
 #define BAILOUT(s)  do{  \
@@ -133,9 +135,11 @@ bool sys_spi_txrx(struct spi_port *port)
 	struct spi_ioc_transfer tr[16];
 
 	memset(&tr,0,sizeof(tr));
-	mode = 0; bits = 8; speed = 2000000;
+	mode = 0; bits = 8; speed = 4000000;
+	if (port->speed)
+		speed = port->speed;
 
-	spi_reset();
+	spi_reset(1234);
 	fd = open("/dev/spidev0.0", O_RDWR);
 	if (fd < 0) {
 		perror("Unable to open SPI device");
@@ -183,7 +187,7 @@ bool sys_spi_txrx(struct spi_port *port)
         }
 
 	close(fd);
-	spi_reset();
+	spi_reset(4321);
 
 	return true;
 }
@@ -251,4 +255,26 @@ void spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_t
 	otmp[1] = (addr >> 8)&0xFF; otmp[2] = addr & 0xFF;
 	spi_emit_buf(port, otmp, 3);
 	spi_emit_buf_reverse(port, buf, len*4);
+}
+void spi_bfsb_select_bank(int bank)
+{
+	static int last_bank = -2;
+	if (bank == last_bank)
+		return;
+	const int banks[4]={18,23,24,25}; // GPIO connected to OE of level shifters
+	int i;
+	for(i=0;i<4;i++)
+	{
+		INP_GPIO(banks[i]);
+		OUT_GPIO(banks[i]);
+		if(i==bank)
+		{
+			GPIO_SET = 1 << banks[i]; // enable bank
+		} 
+		else
+		{
+			GPIO_CLR = 1 << banks[i];// disable bank
+		}
+	}
+	last_bank = bank;
 }

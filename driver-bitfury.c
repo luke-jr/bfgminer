@@ -33,6 +33,7 @@
 #include "spidevc.h"
 
 #define GOLDEN_BACKLOG 5
+#define LINE_LEN 2048
 
 struct device_drv bitfury_drv;
 
@@ -177,6 +178,29 @@ bool bitfury_init(struct thr_info *thr)
 	return true;
 }
 
+static
+bool bitfury_queue_full(struct cgpu_info *cgpu)
+{
+	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		bitfury = proc->device_data;
+		
+		if (bitfury->work)
+			continue;
+		
+		bitfury->work = get_queued(cgpu);
+		if (!bitfury->work)
+			return false;
+		
+		work_to_payload(&bitfury->payload, bitfury->work);
+	}
+	
+	return true;
+}
+
 int64_t bitfury_scanHash(struct thr_info *thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
@@ -185,11 +209,14 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 	struct thr_info *pthr;
 	struct bitfury_device *bitfury;
 	struct timeval now;
-	char line[2048];
+	char line[LINE_LEN];
 	int short_stat = 10;
 	int long_stat = 1800;
 	int i;
 
+	if (!bitfury_queue_full(cgpu))
+		return 0;
+	
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		const int chip = proc->proc_id;
@@ -197,13 +224,6 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 		bitfury = proc->device_data;
 		
 		bitfury->job_switched = 0;
-		if(!bitfury->work) {
-			bitfury->work = get_queued(thr->cgpu);
-			if (bitfury->work == NULL)
-				return 0;
-			work_to_payload(&bitfury->payload, bitfury->work);
-		}
-		
 		payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 		libbitfury_sendHashData1(chip, bitfury, pthr);
 	}
@@ -260,10 +280,11 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 
 	if (now.tv_sec - sds->short_out_t > short_stat) {
 		int shares_first = 0, shares_last = 0, shares_total = 0;
-		char stat_lines[32][256] = {{0}};
+		char stat_lines[32][LINE_LEN] = {{0}};
 		int len, k;
 		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
+		unsigned strange_counter = 0;
 
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
@@ -275,9 +296,9 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			len = strlen(stat_lines[bitfury->slot]);
 			ghash = shares_to_ghashes(shares_found, short_stat);
 			gh[bitfury->slot][chip & 0x07] = ghash;
-			snprintf(stat_lines[bitfury->slot] + len, 256 - len, "%.1f-%3.0f ", ghash, bitfury->mhz);
+			snprintf(stat_lines[bitfury->slot] + len, LINE_LEN - len, "%.1f-%3.0f ", ghash, bitfury->mhz);
 
-			if(sds->short_out_t && ghash < 1.0) {
+			if(sds->short_out_t && ghash < 0.5) {
 				applog(LOG_WARNING, "Chip_id %d FREQ CHANGE", chip);
 				send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits - 1);
 				cgsleep_ms(1);
@@ -286,8 +307,12 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			shares_total += shares_found;
 			shares_first += chip < 4 ? shares_found : 0;
 			shares_last += chip > 3 ? shares_found : 0;
+			strange_counter += bitfury->strange_counter;
+			bitfury->strange_counter = 0;
 		}
 		sprintf(line, "vvvvwww SHORT stat %ds: wwwvvvv", short_stat);
+		applog(LOG_WARNING, "%s", line);
+		sprintf(line, "stranges: %u", strange_counter);
 		applog(LOG_WARNING, "%s", line);
 		for(i = 0; i < 32; i++)
 			if(strlen(stat_lines[i])) {
@@ -300,7 +325,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 					gh2h += gh[i][k+4];
 					ghsum += gh[i][k] + gh[i][k+4];
 				}
-				snprintf(stat_lines[i] + len, 256 - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
+				snprintf(stat_lines[i] + len, LINE_LEN - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
 				applog(LOG_WARNING, "%s", stat_lines[i]);
 			}
 		sds->short_out_t = now.tv_sec;
@@ -308,7 +333,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 
 	if (now.tv_sec - sds->long_out_t > long_stat) {
 		int shares_first = 0, shares_last = 0, shares_total = 0;
-		char stat_lines[32][256] = {{0}};
+		char stat_lines[32][LINE_LEN] = {{0}};
 		int len, k;
 		double gh[32][8] = {{0}};
 		double ghsum = 0, gh1h = 0, gh2h = 0;
@@ -323,7 +348,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 			len = strlen(stat_lines[bitfury->slot]);
 			ghash = shares_to_ghashes(shares_found, long_stat);
 			gh[bitfury->slot][chip & 0x07] = ghash;
-			snprintf(stat_lines[bitfury->slot] + len, 256 - len, "%.1f-%3.0f ", ghash, bitfury->mhz);
+			snprintf(stat_lines[bitfury->slot] + len, LINE_LEN - len, "%.1f-%3.0f ", ghash, bitfury->mhz);
 
 			shares_total += shares_found;
 			shares_first += chip < 4 ? shares_found : 0;
@@ -342,7 +367,7 @@ int64_t bitfury_scanHash(struct thr_info *thr)
 					gh2h += gh[i][k+4];
 					ghsum += gh[i][k] + gh[i][k+4];
 				}
-				snprintf(stat_lines[i] + len, 256 - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
+				snprintf(stat_lines[i] + len, LINE_LEN - len, "- %2.1f + %2.1f = %2.1f slot %i ", gh1h, gh2h, ghsum, i);
 				applog(LOG_WARNING, "%s", stat_lines[i]);
 			}
 		sds->long_out_t = now.tv_sec;
@@ -523,6 +548,7 @@ struct device_drv bitfury_drv = {
 	.drv_detect = bitfury_detect,
 	.thread_prepare = bitfury_prepare,
 	.thread_init = bitfury_init,
+	.queue_full = bitfury_queue_full,
 	.scanwork = bitfury_scanHash,
 	.thread_shutdown = bitfury_shutdown,
 	.minerloop = hash_queued_work,

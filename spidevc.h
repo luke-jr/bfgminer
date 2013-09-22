@@ -20,6 +20,7 @@ struct spi_port {
 	struct cgpu_info *cgpu;
 	const char *repr;
 	int logprio;
+	int speed;
 };
 
 extern struct spi_port *sys_spi;
@@ -70,5 +71,7 @@ bool spi_txrx(struct spi_port *port)
 }
 
 extern bool sys_spi_txrx(struct spi_port *);
+
+void spi_bfsb_select_bank(int bank);
 
 #endif
