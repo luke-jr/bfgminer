@@ -27,6 +27,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <signal.h>
+#include <limits.h>
 
 #ifdef USE_USBUTILS
 #include <semaphore.h>
@@ -42,7 +43,11 @@
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
+#ifdef HAVE_LIBCURL
 #include <curl/curl.h>
+#else
+char *curly = ":D";
+#endif
 #include <libgen.h>
 #include <sha2.h>
 
@@ -1632,6 +1637,7 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_ENDTABLE
 };
 
+#ifdef HAVE_LIBCURL
 static bool jobj_binary(const json_t *obj, const char *key,
 			void *buf, size_t buflen, bool required)
 {
@@ -1654,6 +1660,7 @@ static bool jobj_binary(const json_t *obj, const char *key,
 
 	return true;
 }
+#endif
 
 static void calc_midstate(struct work *work)
 {
@@ -1702,7 +1709,10 @@ void free_work(struct work *work)
 }
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
+static void calc_diff(struct work *work, int known);
+char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
 
+#ifdef HAVE_LIBCURL
 /* Process transactions with GBT by storing the binary value of the first
  * transaction, and the hashes of the remaining transactions since these
  * remain constant with an altered coinbase when generating work. Must be
@@ -1783,7 +1793,6 @@ static unsigned char *__gbt_merkleroot(struct pool *pool)
 	return merkle_hash;
 }
 
-static void calc_diff(struct work *work, int known);
 static bool work_decode(struct pool *pool, struct work *work, json_t *val);
 
 static void update_gbt(struct pool *pool)
@@ -1821,8 +1830,6 @@ static void update_gbt(struct pool *pool)
 	}
 	curl_easy_cleanup(curl);
 }
-
-char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
 
 static void gen_gbt_work(struct pool *pool, struct work *work)
 {
@@ -2030,6 +2037,13 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 out:
 	return ret;
 }
+#else /* HAVE_LIBCURL */
+/* Always true with stratum */
+#define pool_localgen(pool) (true)
+#define json_rpc_call(curl, url, userpass, rpc_req, probe, longpoll, rolltime, pool, share) (NULL)
+#define work_decode(pool, work, val) (false)
+#define gen_gbt_work(pool, work) {}
+#endif /* HAVE_LIBCURL */
 
 int dev_from_id(int thr_id)
 {
@@ -2197,18 +2211,6 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	cgpu->drv->get_statline(buf, bufsiz, cgpu);
 }
 
-static void text_print_status(int thr_id)
-{
-	struct cgpu_info *cgpu;
-	char logline[256];
-
-	cgpu = get_thr_cgpu(thr_id);
-	if (cgpu) {
-		get_statline(logline, sizeof(logline), cgpu);
-		printf("%s\n", logline);
-	}
-}
-
 #ifdef HAVE_CURSES
 #define CURBUFSIZ 256
 #define cg_mvwprintw(win, y, x, fmt, ...) do { \
@@ -2347,12 +2349,6 @@ static void curses_print_devstatus(struct cgpu_info *cgpu, int count)
 	wclrtoeol(statuswin);
 }
 #endif
-
-static void print_status(int thr_id)
-{
-	if (!curses_active)
-		text_print_status(thr_id);
-}
 
 #ifdef HAVE_CURSES
 /* Check for window resize. Called with curses mutex locked */
@@ -2645,6 +2641,25 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
+#ifdef HAVE_LIBCURL
+static void text_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu;
+	char logline[256];
+
+	cgpu = get_thr_cgpu(thr_id);
+	if (cgpu) {
+		get_statline(logline, sizeof(logline), cgpu);
+		printf("%s\n", logline);
+	}
+}
+
+static void print_status(int thr_id)
+{
+	if (!curses_active)
+		text_print_status(thr_id);
+}
+
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -2828,6 +2843,62 @@ out:
 	free(hexstr);
 	return rc;
 }
+
+static bool get_upstream_work(struct work *work, CURL *curl)
+{
+	struct pool *pool = work->pool;
+	struct cgminer_pool_stats *pool_stats = &(pool->cgminer_pool_stats);
+	struct timeval tv_elapsed;
+	json_t *val = NULL;
+	bool rc = false;
+	char *url;
+
+	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, pool->rpc_req);
+
+	url = pool->rpc_url;
+
+	cgtime(&work->tv_getwork);
+
+	val = json_rpc_call(curl, url, pool->rpc_userpass, pool->rpc_req, false,
+			    false, &work->rolltime, pool, false);
+	pool_stats->getwork_attempts++;
+
+	if (likely(val)) {
+		rc = work_decode(pool, work, val);
+		if (unlikely(!rc))
+			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
+	} else
+		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
+
+	cgtime(&work->tv_getwork_reply);
+	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
+	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
+	pool_stats->getwork_wait_rolling /= 1.63;
+
+	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
+	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
+		pool_stats->getwork_wait_max.tv_sec = tv_elapsed.tv_sec;
+		pool_stats->getwork_wait_max.tv_usec = tv_elapsed.tv_usec;
+	}
+	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_min), <)) {
+		pool_stats->getwork_wait_min.tv_sec = tv_elapsed.tv_sec;
+		pool_stats->getwork_wait_min.tv_usec = tv_elapsed.tv_usec;
+	}
+	pool_stats->getwork_calls++;
+
+	work->pool = pool;
+	work->longpoll = false;
+	work->getwork_mode = GETWORK_MODE_POOL;
+	calc_diff(work, 0);
+	total_getworks++;
+	pool->getwork_requested++;
+
+	if (likely(val))
+		json_decref(val);
+
+	return rc;
+}
+#endif /* HAVE_LIBCURL */
 
 /* Specifies whether we can use this pool for work or not. */
 static bool pool_unworkable(struct pool *pool)
@@ -3017,61 +3088,6 @@ static void get_benchmark_work(struct work *work)
 	calc_diff(work, 0);
 }
 
-static bool get_upstream_work(struct work *work, CURL *curl)
-{
-	struct pool *pool = work->pool;
-	struct cgminer_pool_stats *pool_stats = &(pool->cgminer_pool_stats);
-	struct timeval tv_elapsed;
-	json_t *val = NULL;
-	bool rc = false;
-	char *url;
-
-	applog(LOG_DEBUG, "DBG: sending %s get RPC call: %s", pool->rpc_url, pool->rpc_req);
-
-	url = pool->rpc_url;
-
-	cgtime(&work->tv_getwork);
-
-	val = json_rpc_call(curl, url, pool->rpc_userpass, pool->rpc_req, false,
-			    false, &work->rolltime, pool, false);
-	pool_stats->getwork_attempts++;
-
-	if (likely(val)) {
-		rc = work_decode(pool, work, val);
-		if (unlikely(!rc))
-			applog(LOG_DEBUG, "Failed to decode work in get_upstream_work");
-	} else
-		applog(LOG_DEBUG, "Failed json_rpc_call in get_upstream_work");
-
-	cgtime(&work->tv_getwork_reply);
-	timersub(&(work->tv_getwork_reply), &(work->tv_getwork), &tv_elapsed);
-	pool_stats->getwork_wait_rolling += ((double)tv_elapsed.tv_sec + ((double)tv_elapsed.tv_usec / 1000000)) * 0.63;
-	pool_stats->getwork_wait_rolling /= 1.63;
-
-	timeradd(&tv_elapsed, &(pool_stats->getwork_wait), &(pool_stats->getwork_wait));
-	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_max), >)) {
-		pool_stats->getwork_wait_max.tv_sec = tv_elapsed.tv_sec;
-		pool_stats->getwork_wait_max.tv_usec = tv_elapsed.tv_usec;
-	}
-	if (timercmp(&tv_elapsed, &(pool_stats->getwork_wait_min), <)) {
-		pool_stats->getwork_wait_min.tv_sec = tv_elapsed.tv_sec;
-		pool_stats->getwork_wait_min.tv_usec = tv_elapsed.tv_usec;
-	}
-	pool_stats->getwork_calls++;
-
-	work->pool = pool;
-	work->longpoll = false;
-	work->getwork_mode = GETWORK_MODE_POOL;
-	calc_diff(work, 0);
-	total_getworks++;
-	pool->getwork_requested++;
-
-	if (likely(val))
-		json_decref(val);
-
-	return rc;
-}
-
 #ifdef HAVE_CURSES
 static void disable_curses_windows(void)
 {
@@ -3239,6 +3255,7 @@ static void sighandler(int __maybe_unused sig)
 	kill_work();
 }
 
+#ifdef HAVE_LIBCURL
 /* Called with pool_lock held. Recruit an extra curl if none are available for
  * this pool. */
 static void recruit_curl(struct pool *pool)
@@ -3320,7 +3337,7 @@ static inline bool should_roll(struct work *work)
 	cgtime(&now);
 	if (now.tv_sec - work->tv_staged.tv_sec > expiry)
 		return false;
-	
+
 	return true;
 }
 
@@ -3351,36 +3368,47 @@ static void roll_work(struct work *work)
 	work->id = total_work++;
 }
 
-/* Duplicates any dynamically allocated arrays within the work struct to
- * prevent a copied work struct from freeing ram belonging to another struct */
-void __copy_work(struct work *work, struct work *base_work)
+static void *submit_work_thread(void *userdata)
 {
-	int id = work->id;
+	struct work *work = (struct work *)userdata;
+	struct pool *pool = work->pool;
+	bool resubmit = false;
+	struct curl_ent *ce;
 
-	clean_work(work);
-	memcpy(work, base_work, sizeof(struct work));
-	/* Keep the unique new id assigned during make_work to prevent copied
-	 * work from having the same id. */
-	work->id = id;
-	if (base_work->job_id)
-		work->job_id = strdup(base_work->job_id);
-	if (base_work->nonce1)
-		work->nonce1 = strdup(base_work->nonce1);
-	if (base_work->ntime)
-		work->ntime = strdup(base_work->ntime);
-	if (base_work->coinbase)
-		work->coinbase = strdup(base_work->coinbase);
-}
+	pthread_detach(pthread_self());
 
-/* Generates a copy of an existing work struct, creating fresh heap allocations
- * for all dynamically allocated arrays within the struct */
-struct work *copy_work(struct work *base_work)
-{
-	struct work *work = make_work();
+	RenameThread("submit_work");
 
-	__copy_work(work, base_work);
+	applog(LOG_DEBUG, "Creating extra submit work thread");
 
-	return work;
+	ce = pop_curl_entry(pool);
+	/* submit solution to bitcoin via JSON-RPC */
+	while (!submit_upstream_work(work, ce->curl, resubmit)) {
+		if (opt_lowmem) {
+			applog(LOG_NOTICE, "Pool %d share being discarded to minimise memory cache", pool->pool_no);
+			break;
+		}
+		resubmit = true;
+		if (stale_work(work, true)) {
+			applog(LOG_NOTICE, "Pool %d share became stale while retrying submit, discarding", pool->pool_no);
+
+			mutex_lock(&stats_lock);
+			total_stale++;
+			pool->stale_shares++;
+			total_diff_stale += work->work_difficulty;
+			pool->diff_stale += work->work_difficulty;
+			mutex_unlock(&stats_lock);
+
+			free_work(work);
+			break;
+		}
+
+		/* pause, then restart work-request loop */
+		applog(LOG_INFO, "json_rpc_call failed on submit_work, retrying");
+	}
+	push_curl_entry(ce, pool);
+
+	return NULL;
 }
 
 static struct work *make_clone(struct work *work)
@@ -3427,6 +3455,81 @@ out_unlock:
 		stage_work(work_clone);
 	}
 	return cloned;
+}
+
+/* Clones work by rolling it if possible, and returning a clone instead of the
+ * original work item which gets staged again to possibly be rolled again in
+ * the future */
+static struct work *clone_work(struct work *work)
+{
+	int mrs = mining_threads + opt_queue - total_staged();
+	struct work *work_clone;
+	bool cloned;
+
+	if (mrs < 1)
+		return work;
+
+	cloned = false;
+	work_clone = make_clone(work);
+	while (mrs-- > 0 && can_roll(work) && should_roll(work)) {
+		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
+		stage_work(work_clone);
+		roll_work(work);
+		work_clone = make_clone(work);
+		/* Roll it again to prevent duplicates should this be used
+		 * directly later on */
+		roll_work(work);
+		cloned = true;
+	}
+
+	if (cloned) {
+		stage_work(work);
+		return work_clone;
+	}
+
+	free_work(work_clone);
+
+	return work;
+}
+
+#else /* HAVE_LIBCURL */
+static void *submit_work_thread(void __maybe_unused *userdata)
+{
+	pthread_detach(pthread_self());
+	return NULL;
+}
+#endif /* HAVE_LIBCURL */
+
+/* Duplicates any dynamically allocated arrays within the work struct to
+ * prevent a copied work struct from freeing ram belonging to another struct */
+void __copy_work(struct work *work, struct work *base_work)
+{
+	int id = work->id;
+
+	clean_work(work);
+	memcpy(work, base_work, sizeof(struct work));
+	/* Keep the unique new id assigned during make_work to prevent copied
+	 * work from having the same id. */
+	work->id = id;
+	if (base_work->job_id)
+		work->job_id = strdup(base_work->job_id);
+	if (base_work->nonce1)
+		work->nonce1 = strdup(base_work->nonce1);
+	if (base_work->ntime)
+		work->ntime = strdup(base_work->ntime);
+	if (base_work->coinbase)
+		work->coinbase = strdup(base_work->coinbase);
+}
+
+/* Generates a copy of an existing work struct, creating fresh heap allocations
+ * for all dynamically allocated arrays within the struct */
+struct work *copy_work(struct work *base_work)
+{
+	struct work *work = make_work();
+
+	__copy_work(work, base_work);
+
+	return work;
 }
 
 static void pool_died(struct pool *pool)
@@ -3571,49 +3674,6 @@ static void rebuild_hash(struct work *work)
 }
 
 static bool cnx_needed(struct pool *pool);
-
-static void *submit_work_thread(void *userdata)
-{
-	struct work *work = (struct work *)userdata;
-	struct pool *pool = work->pool;
-	bool resubmit = false;
-	struct curl_ent *ce;
-
-	pthread_detach(pthread_self());
-
-	RenameThread("submit_work");
-
-	applog(LOG_DEBUG, "Creating extra submit work thread");
-
-	ce = pop_curl_entry(pool);
-	/* submit solution to bitcoin via JSON-RPC */
-	while (!submit_upstream_work(work, ce->curl, resubmit)) {
-		if (opt_lowmem) {
-			applog(LOG_NOTICE, "Pool %d share being discarded to minimise memory cache", pool->pool_no);
-			break;
-		}
-		resubmit = true;
-		if (stale_work(work, true)) {
-			applog(LOG_NOTICE, "Pool %d share became stale while retrying submit, discarding", pool->pool_no);
-
-			mutex_lock(&stats_lock);
-			total_stale++;
-			pool->stale_shares++;
-			total_diff_stale += work->work_difficulty;
-			pool->diff_stale += work->work_difficulty;
-			mutex_unlock(&stats_lock);
-
-			free_work(work);
-			break;
-		}
-
-		/* pause, then restart work-request loop */
-		applog(LOG_INFO, "json_rpc_call failed on submit_work, retrying");
-	}
-	push_curl_entry(ce, pool);
-
-	return NULL;
-}
 
 /* Find the pool that currently has the highest priority */
 static struct pool *priority_pool(int choice)
@@ -5761,41 +5821,6 @@ static struct work *hash_pop(void)
 	return work;
 }
 
-/* Clones work by rolling it if possible, and returning a clone instead of the
- * original work item which gets staged again to possibly be rolled again in
- * the future */
-static struct work *clone_work(struct work *work)
-{
-	int mrs = mining_threads + opt_queue - total_staged();
-	struct work *work_clone;
-	bool cloned;
-
-	if (mrs < 1)
-		return work;
-
-	cloned = false;
-	work_clone = make_clone(work);
-	while (mrs-- > 0 && can_roll(work) && should_roll(work)) {
-		applog(LOG_DEBUG, "Pushing rolled converted work to stage thread");
-		stage_work(work_clone);
-		roll_work(work);
-		work_clone = make_clone(work);
-		/* Roll it again to prevent duplicates should this be used
-		 * directly later on */
-		roll_work(work);
-		cloned = true;
-	}
-
-	if (cloned) {
-		stage_work(work);
-		return work_clone;
-	}
-
-	free_work(work_clone);
-
-	return work;
-}
-
 static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 {
 	unsigned char hash1[32];
@@ -6468,6 +6493,7 @@ enum {
 	FAILURE_INTERVAL		= 30,
 };
 
+#ifdef HAVE_LIBCURL
 /* Stage another work item from the work returned in a longpoll */
 static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct timeval *tv_lp, struct timeval *tv_lp_reply)
 {
@@ -6538,6 +6564,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
 	}
 	return NULL;
 }
+#endif /* HAVE_LIBCURL */
 
 /* This will make the longpoll thread wait till it's the current pool, or it
  * has been flagged as rejecting, before attempting to open any connections.
@@ -6553,6 +6580,7 @@ static void wait_lpcurrent(struct pool *pool)
 	}
 }
 
+#ifdef HAVE_LIBCURL
 static void *longpoll_thread(void *userdata)
 {
 	struct pool *cp = (struct pool *)userdata;
@@ -6680,6 +6708,13 @@ out:
 
 	return NULL;
 }
+#else /* HAVE_LIBCURL */
+static void *longpoll_thread(void __maybe_unused *userdata)
+{
+	pthread_detach(pthread_self());
+	return NULL;
+}
+#endif /* HAVE_LIBCURL */
 
 void reinit_device(struct cgpu_info *cgpu)
 {
@@ -8160,7 +8195,6 @@ begin_bench:
 		int ts, max_staged = opt_queue;
 		struct pool *pool, *cp;
 		bool lagging = false;
-		struct curl_ent *ce;
 		struct work *work;
 
 		cp = current_pool();
@@ -8211,6 +8245,16 @@ retry:
 			continue;
 		}
 
+		if (opt_benchmark) {
+			get_benchmark_work(work);
+			applog(LOG_DEBUG, "Generated benchmark work");
+			stage_work(work);
+			continue;
+		}
+
+#ifdef HAVE_LIBCURL
+		struct curl_ent *ce;
+
 		if (pool->has_gbt) {
 			while (pool->idle) {
 				struct pool *altpool = select_pool(true);
@@ -8230,13 +8274,6 @@ retry:
 		if (clone_available()) {
 			applog(LOG_DEBUG, "Cloned getwork work");
 			free_work(work);
-			continue;
-		}
-
-		if (opt_benchmark) {
-			get_benchmark_work(work);
-			applog(LOG_DEBUG, "Generated benchmark work");
-			stage_work(work);
 			continue;
 		}
 
@@ -8262,6 +8299,7 @@ retry:
 		applog(LOG_DEBUG, "Generated getwork work");
 		stage_work(work);
 		push_curl_entry(ce, pool);
+#endif
 	}
 
 	return 0;

@@ -52,6 +52,12 @@
 #define JSON_LOADS(str, err_ptr) json_loads((str), (err_ptr))
 #endif
 
+#ifdef HAVE_LIBCURL
+typedef curl_proxytype proxytypes_t;
+#else
+typedef int proxytypes_t;
+#endif /* HAVE_LIBCURL */
+
 /* cgminer specific unnamed semaphore implementations to cope with osx not
  * implementing them. */
 #ifdef __APPLE__

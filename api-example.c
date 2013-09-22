@@ -8,7 +8,7 @@
  */
 
 /* Compile:
- *   gcc api-example.c -I compat/jansson -o cgminer-api
+ *   gcc api-example.c -Icompat/jansson -Icompat/libusb-1.0/libusb -o cgminer-api
  */
 
 #include "config.h"
@@ -32,7 +32,6 @@
 	#include <arpa/inet.h>
 	#include <netdb.h>
 
-	#define SOCKETTYPE int
 	#define SOCKETFAIL(a) ((a) < 0)
 	#define INVSOCK -1
 	#define CLOSESOCKET close
@@ -139,8 +138,6 @@
 	#define SHUT_RDWR SD_BOTH
 	#endif
 #endif
-
-#define RECVSIZE 65500
 
 static const char SEPARATOR = '|';
 static const char COMMA = ',';

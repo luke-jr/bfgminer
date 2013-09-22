@@ -365,14 +365,25 @@ fi
 AC_SUBST(LIBUSB_LIBS)
 AC_SUBST(LIBUSB_CFLAGS)
 
-if test "x$have_win32" != xtrue; then
-	PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], [AC_DEFINE([CURL_HAS_KEEPALIVE], [1], [Defined if version of curl supports keepalive.])],
-		[PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])])
+AC_ARG_ENABLE([libcurl],
+	[AC_HELP_STRING([--disable-libcurl],[Disable building with libcurl for getwork and GBT support])],
+	[libcurl=$enableval]
+	)
+
+if test "x$libcurl" != xno; then
+	if test "x$have_win32" != xtrue; then
+		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], [AC_DEFINE([CURL_HAS_KEEPALIVE], [1], [Defined if version of curl supports keepalive.])],
+			[PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])])
+	else
+		PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.25.0])])
+		AC_DEFINE([CURL_HAS_KEEPALIVE], [1])
+	fi
+	AC_DEFINE([HAVE_LIBCURL], [1], [Defined to 1 if libcurl support built in])
 else
-	PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.25.0], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.25.0])])
-	AC_DEFINE([CURL_HAS_KEEPALIVE], [1])
+	LIBCURL_LIBS=""
 fi
 AC_SUBST(LIBCURL_LIBS)
+
 
 #check execv signature
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
@@ -462,7 +473,14 @@ echo
 echo "Configuration Options Summary:"
 echo
 
+if test "x$libcurl" != xno; then
+	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
+else
+	echo "  libcurl(GBT+getwork).: Disabled"
+fi
+
 echo "  curses.TUI...........: $cursesmsg"
+
 
 if test "x$opencl" != xno; then
 	if test $found_opencl = 1; then

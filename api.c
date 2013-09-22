@@ -22,6 +22,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <limits.h>
 #include <sys/types.h>
 
 #include "compat.h"
