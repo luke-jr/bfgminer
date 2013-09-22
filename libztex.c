@@ -611,6 +611,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	unsigned char buf[64];
 
 	dclk_prepare(&newdev->dclk);
+	newdev->dclk.freqMinM = 0;
 	err = libusb_open(dev, &newdev->hndl);
 	if (err != LIBUSB_SUCCESS) {
 		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, libusb_error_name(err));

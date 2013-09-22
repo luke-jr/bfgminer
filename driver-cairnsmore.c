@@ -135,6 +135,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 		info->dclk_change_clock_func = cairnsmore_change_clock_func;
 
 		dclk_prepare(&info->dclk);
+		info->dclk.freqMinM = CAIRNSMORE1_MINIMUM_CLOCK / 2.5;
 		info->dclk.freqMaxM = CAIRNSMORE1_MAXIMUM_CLOCK / 2.5;
 		info->dclk.freqM =
 		info->dclk.freqMDefault = CAIRNSMORE1_DEFAULT_CLOCK / 2.5;

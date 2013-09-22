@@ -291,6 +291,7 @@ modminer_fpga_prepare(struct thr_info *thr)
 	struct modminer_fpga_state *state;
 	state = thr->cgpu_data = calloc(1, sizeof(struct modminer_fpga_state));
 	dclk_prepare(&state->dclk);
+	state->dclk.freqMinM = MODMINER_MIN_CLOCK / 2;
 	state->next_work_cmd[0] = MODMINER_SEND_WORK;
 	state->next_work_cmd[1] = thr->device_thread;  // FPGA id
 

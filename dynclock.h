@@ -12,6 +12,7 @@ struct thr_info;
 
 struct dclk_data {
 	uint8_t freqM;
+	uint8_t freqMinM;
 	uint8_t freqMaxM;
 	uint8_t freqMDefault;
 
