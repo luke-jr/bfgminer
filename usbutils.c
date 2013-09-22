@@ -2757,7 +2757,7 @@ int _usb_read(struct cgpu_info *cgpu, int epinfo, char *buf, size_t bufsiz, int 
 		// N.B. usbdev->buffer was emptied before the while() loop
 		if (usbdev->buffer && tot > (int)bufsiz) {
 			usbdev->bufamt = tot - bufsiz;
-			memcpy(usbdev->buffer, ptr + bufsiz, usbdev->bufamt);
+			memcpy(usbdev->buffer, usbbuf + bufsiz, usbdev->bufamt);
 			tot -= usbdev->bufamt;
 			usbbuf[tot] = '\0';
 			applog(LOG_ERR, "USB: %s%i read1 buffering %d extra bytes",
