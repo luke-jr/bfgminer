@@ -25,6 +25,7 @@
 #include "config.h"
 
 #include "deviceapi.h"
+#include "driver-bitfury.h"
 #include "libbitfury.h"
 #include "spidevc.h"
 #include "tm_i2c.h"
@@ -148,8 +149,6 @@ static void metabank_detect(void)
 	noserial_detect_manual(&metabank_drv, metabank_autodetect);
 }
 
-extern bool bitfury_prepare(struct thr_info *);
-
 static
 bool metabank_init(struct thr_info *thr)
 {
@@ -170,18 +169,11 @@ bool metabank_init(struct thr_info *thr)
 	return true;
 }
 
-extern int64_t bitfury_scanHash(struct thr_info *);
-extern void bitfury_shutdown(struct thr_info *);
-
 static void metabank_shutdown(struct thr_info *thr)
 {
 	bitfury_shutdown(thr);
 	tm_i2c_close();
 }
-
-extern bool bitfury_job_prepare(struct thr_info *, struct work *, uint64_t max_nonce);
-extern void bitfury_do_io(struct thr_info *);
-extern int64_t bitfury_job_process_results(struct thr_info *, struct work *, bool stopping);
 
 struct device_drv metabank_drv = {
 	.dname = "metabank",

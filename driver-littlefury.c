@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "deviceapi.h"
+#include "driver-bitfury.h"
 #include "fpgautils.h"
 #include "libbitfury.h"
 #include "logging.h"
@@ -409,9 +410,6 @@ int64_t littlefury_job_process_results(struct thr_info *thr, struct work *work, 
 		timer_unset(&thr->tv_poll);
 	return 0x100000000;
 }
-
-extern int64_t bitfury_scanHash(struct thr_info *);
-extern void bitfury_shutdown(struct thr_info *);
 
 static void littlefury_shutdown(struct thr_info *thr)
 {
