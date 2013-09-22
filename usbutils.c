@@ -531,71 +531,13 @@ static int next_stat = USB_NOSTAT;
 
 #endif // DO_USB_STATS
 
-static const char **usb_commands;
-
-static const char *C_REJECTED_S = "RejectedNoDevice";
-static const char *C_PING_S = "Ping";
-static const char *C_CLEAR_S = "Clear";
-static const char *C_REQUESTVERSION_S = "RequestVersion";
-static const char *C_GETVERSION_S = "GetVersion";
-static const char *C_REQUESTFPGACOUNT_S = "RequestFPGACount";
-static const char *C_GETFPGACOUNT_S = "GetFPGACount";
-static const char *C_STARTPROGRAM_S = "StartProgram";
-static const char *C_STARTPROGRAMSTATUS_S = "StartProgramStatus";
-static const char *C_PROGRAM_S = "Program";
-static const char *C_PROGRAMSTATUS_S = "ProgramStatus";
-static const char *C_PROGRAMSTATUS2_S = "ProgramStatus2";
-static const char *C_FINALPROGRAMSTATUS_S = "FinalProgramStatus";
-static const char *C_SETCLOCK_S = "SetClock";
-static const char *C_REPLYSETCLOCK_S = "ReplySetClock";
-static const char *C_REQUESTUSERCODE_S = "RequestUserCode";
-static const char *C_GETUSERCODE_S = "GetUserCode";
-static const char *C_REQUESTTEMPERATURE_S = "RequestTemperature";
-static const char *C_GETTEMPERATURE_S = "GetTemperature";
-static const char *C_SENDWORK_S = "SendWork";
-static const char *C_SENDWORKSTATUS_S = "SendWorkStatus";
-static const char *C_REQUESTWORKSTATUS_S = "RequestWorkStatus";
-static const char *C_GETWORKSTATUS_S = "GetWorkStatus";
-static const char *C_REQUESTIDENTIFY_S = "RequestIdentify";
-static const char *C_GETIDENTIFY_S = "GetIdentify";
-static const char *C_REQUESTFLASH_S = "RequestFlash";
-static const char *C_REQUESTSENDWORK_S = "RequestSendWork";
-static const char *C_REQUESTSENDWORKSTATUS_S = "RequestSendWorkStatus";
-static const char *C_RESET_S = "Reset";
-static const char *C_SETBAUD_S = "SetBaud";
-static const char *C_SETDATA_S = "SetDataCtrl";
-static const char *C_SETFLOW_S = "SetFlowCtrl";
-static const char *C_SETMODEM_S = "SetModemCtrl";
-static const char *C_PURGERX_S = "PurgeRx";
-static const char *C_PURGETX_S = "PurgeTx";
-static const char *C_FLASHREPLY_S = "FlashReply";
-static const char *C_REQUESTDETAILS_S = "RequestDetails";
-static const char *C_GETDETAILS_S = "GetDetails";
-static const char *C_REQUESTRESULTS_S = "RequestResults";
-static const char *C_GETRESULTS_S = "GetResults";
-static const char *C_REQUESTQUEJOB_S = "RequestQueJob";
-static const char *C_REQUESTQUEJOBSTATUS_S = "RequestQueJobStatus";
-static const char *C_QUEJOB_S = "QueJob";
-static const char *C_QUEJOBSTATUS_S = "QueJobStatus";
-static const char *C_QUEFLUSH_S = "QueFlush";
-static const char *C_QUEFLUSHREPLY_S = "QueFlushReply";
-static const char *C_REQUESTVOLTS_S = "RequestVolts";
-static const char *C_GETVOLTS_S = "GetVolts";
-static const char *C_SENDTESTWORK_S = "SendTestWork";
-static const char *C_LATENCY_S = "SetLatency";
-static const char *C_SETLINE_S = "SetLine";
-static const char *C_VENDOR_S = "Vendor";
-static const char *C_SETFAN_S = "SetFan";
-static const char *C_FANREPLY_S = "GetFan";
-static const char *C_AVALON_TASK_S = "AvalonTask";
-static const char *C_AVALON_READ_S = "AvalonRead";
-static const char *C_GET_AVALON_READY_S = "AvalonReady";
-static const char *C_AVALON_RESET_S = "AvalonReset";
-static const char *C_GET_AVALON_RESET_S = "GetAvalonReset";
-static const char *C_FTDI_STATUS_S = "FTDIStatus";
-static const char *C_ENABLE_UART_S = "EnableUART";
-static const char *C_BB_SET_VOLTAGE_S = "SetCoreVoltage";
-static const char *C_BB_GET_VOLTAGE_S = "GetCoreVoltage";
+/* Create usb_commands array from USB_PARSE_COMMANDS macro in usbutils.h */
+#define USB_ADD_COMMAND(X, Y) Y,
+char *usb_commands[] = {
+	USB_PARSE_COMMANDS
+	"Null"
+};
+#undef USB_ADD_COMMAND
 
 #ifdef EOL
 #undef EOL
@@ -1015,78 +957,6 @@ static void cgusb_check_init()
 			libusb_set_debug(NULL, opt_usbdump);
 			usb_all(opt_usbdump);
 		}
-
-		usb_commands = malloc(sizeof(*usb_commands) * C_MAX);
-		if (unlikely(!usb_commands))
-			quit(1, "USB failed to malloc usb_commands");
-
-		// use constants so the stat generation is very quick
-		// and the association between number and name can't
-		// be missalined easily
-		usb_commands[C_REJECTED] = C_REJECTED_S;
-		usb_commands[C_PING] = C_PING_S;
-		usb_commands[C_CLEAR] = C_CLEAR_S;
-		usb_commands[C_REQUESTVERSION] = C_REQUESTVERSION_S;
-		usb_commands[C_GETVERSION] = C_GETVERSION_S;
-		usb_commands[C_REQUESTFPGACOUNT] = C_REQUESTFPGACOUNT_S;
-		usb_commands[C_GETFPGACOUNT] = C_GETFPGACOUNT_S;
-		usb_commands[C_STARTPROGRAM] = C_STARTPROGRAM_S;
-		usb_commands[C_STARTPROGRAMSTATUS] = C_STARTPROGRAMSTATUS_S;
-		usb_commands[C_PROGRAM] = C_PROGRAM_S;
-		usb_commands[C_PROGRAMSTATUS] = C_PROGRAMSTATUS_S;
-		usb_commands[C_PROGRAMSTATUS2] = C_PROGRAMSTATUS2_S;
-		usb_commands[C_FINALPROGRAMSTATUS] = C_FINALPROGRAMSTATUS_S;
-		usb_commands[C_SETCLOCK] = C_SETCLOCK_S;
-		usb_commands[C_REPLYSETCLOCK] = C_REPLYSETCLOCK_S;
-		usb_commands[C_REQUESTUSERCODE] = C_REQUESTUSERCODE_S;
-		usb_commands[C_GETUSERCODE] = C_GETUSERCODE_S;
-		usb_commands[C_REQUESTTEMPERATURE] = C_REQUESTTEMPERATURE_S;
-		usb_commands[C_GETTEMPERATURE] = C_GETTEMPERATURE_S;
-		usb_commands[C_SENDWORK] = C_SENDWORK_S;
-		usb_commands[C_SENDWORKSTATUS] = C_SENDWORKSTATUS_S;
-		usb_commands[C_REQUESTWORKSTATUS] = C_REQUESTWORKSTATUS_S;
-		usb_commands[C_GETWORKSTATUS] = C_GETWORKSTATUS_S;
-		usb_commands[C_REQUESTIDENTIFY] = C_REQUESTIDENTIFY_S;
-		usb_commands[C_GETIDENTIFY] = C_GETIDENTIFY_S;
-		usb_commands[C_REQUESTFLASH] = C_REQUESTFLASH_S;
-		usb_commands[C_REQUESTSENDWORK] = C_REQUESTSENDWORK_S;
-		usb_commands[C_REQUESTSENDWORKSTATUS] = C_REQUESTSENDWORKSTATUS_S;
-		usb_commands[C_RESET] = C_RESET_S;
-		usb_commands[C_SETBAUD] = C_SETBAUD_S;
-		usb_commands[C_SETDATA] = C_SETDATA_S;
-		usb_commands[C_SETFLOW] = C_SETFLOW_S;
-		usb_commands[C_SETMODEM] = C_SETMODEM_S;
-		usb_commands[C_PURGERX] = C_PURGERX_S;
-		usb_commands[C_PURGETX] = C_PURGETX_S;
-		usb_commands[C_FLASHREPLY] = C_FLASHREPLY_S;
-		usb_commands[C_REQUESTDETAILS] = C_REQUESTDETAILS_S;
-		usb_commands[C_GETDETAILS] = C_GETDETAILS_S;
-		usb_commands[C_REQUESTRESULTS] = C_REQUESTRESULTS_S;
-		usb_commands[C_GETRESULTS] = C_GETRESULTS_S;
-		usb_commands[C_REQUESTQUEJOB] = C_REQUESTQUEJOB_S;
-		usb_commands[C_REQUESTQUEJOBSTATUS] = C_REQUESTQUEJOBSTATUS_S;
-		usb_commands[C_QUEJOB] = C_QUEJOB_S;
-		usb_commands[C_QUEJOBSTATUS] = C_QUEJOBSTATUS_S;
-		usb_commands[C_QUEFLUSH] = C_QUEFLUSH_S;
-		usb_commands[C_QUEFLUSHREPLY] = C_QUEFLUSHREPLY_S;
-		usb_commands[C_REQUESTVOLTS] = C_REQUESTVOLTS_S;
-		usb_commands[C_GETVOLTS] = C_GETVOLTS_S;
-		usb_commands[C_SENDTESTWORK] = C_SENDTESTWORK_S;
-		usb_commands[C_LATENCY] = C_LATENCY_S;
-		usb_commands[C_SETLINE] = C_SETLINE_S;
-		usb_commands[C_VENDOR] = C_VENDOR_S;
-		usb_commands[C_SETFAN] = C_SETFAN_S;
-		usb_commands[C_FANREPLY] = C_FANREPLY_S;
-		usb_commands[C_AVALON_TASK] = C_AVALON_TASK_S;
-		usb_commands[C_AVALON_READ] = C_AVALON_READ_S;
-		usb_commands[C_GET_AVALON_READY] = C_GET_AVALON_READY_S;
-		usb_commands[C_AVALON_RESET] = C_AVALON_RESET_S;
-		usb_commands[C_GET_AVALON_RESET] = C_GET_AVALON_RESET_S;
-		usb_commands[C_FTDI_STATUS] = C_FTDI_STATUS_S;
-		usb_commands[C_ENABLE_UART] = C_ENABLE_UART_S;
-		usb_commands[C_BB_SET_VOLTAGE] = C_BB_SET_VOLTAGE_S;
-		usb_commands[C_BB_GET_VOLTAGE] = C_BB_GET_VOLTAGE_S;
-
 		stats_initialised = true;
 	}
 
