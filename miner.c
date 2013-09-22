@@ -7352,14 +7352,17 @@ static void *stratum_thread(void *userdata)
 		int sel_ret;
 		fd_set rd;
 		char *s;
+		int sock;
 
 		if (unlikely(!pool->has_stratum))
 			break;
 
+		sock = pool->sock;
+		
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
 		 * pool */
-		if (!sock_full(pool) && !cnx_needed(pool)) {
+		if (sock == INVSOCK || (!sock_full(pool) && !cnx_needed(pool))) {
 			suspend_stratum(pool);
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
@@ -7376,14 +7379,14 @@ static void *stratum_thread(void *userdata)
 		}
 
 		FD_ZERO(&rd);
-		FD_SET(pool->sock, &rd);
+		FD_SET(sock, &rd);
 		timeout.tv_sec = 120;
 		timeout.tv_usec = 0;
 
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && (sel_ret = select(pool->sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
+		if (!sock_full(pool) && (sel_ret = select(sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
 			applog(LOG_DEBUG, "Stratum select failed on pool %d with value %d", pool->pool_no, sel_ret);
 			s = NULL;
 		} else
