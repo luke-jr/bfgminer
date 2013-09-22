@@ -125,6 +125,7 @@ struct avalon_info {
 	int matching_work[AVALON_DEFAULT_MINER_NUM];
 
 	int frequency;
+	uint32_t ctlr_ver;
 
 	struct thr_info *thr;
 	pthread_t read_thr;
