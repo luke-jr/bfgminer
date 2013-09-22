@@ -101,6 +101,7 @@ struct hf_cmd {
 	enum usb_cmds usb_cmd;
 };
 
+#define C_NULL C_MAX
 static const struct hf_cmd hf_cmds[] = {
 	{OP_NULL, "OP_NULL", C_NULL},
 	{OP_ROOT, "OP_ROOT", C_NULL},
