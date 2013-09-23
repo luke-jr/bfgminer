@@ -487,7 +487,7 @@ fi
 
 
 need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
+if test x$avalon$icarus$bitforce$modminer$x6500$ztex$littlefury != xnonononononono; then
 	need_fpgautils=yes
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
@@ -1093,6 +1093,12 @@ if test "x$bitforce$modminer" != xnono; then
 	echo "  libudev.detection....: $libudev"
 fi
 
+if test "x$bitfury" = xyes; then
+	echo "  Bitfury.ASICs........: Enabled"
+else
+	echo "  Bitfury.ASICs........: Disabled"
+fi
+
 echo
 if test "x$cpumining" = xyes; then
 	echo "  CPU Mining...........: Enabled"
@@ -1101,11 +1107,6 @@ else
 	echo "  CPU Mining...........: Disabled"
 fi
 
-if test "x$bitfury" = xyes; then
-	echo "  Bitfury.ASICs........: Enabled"
-else
-	echo "  Bitfury.ASICs........: Disabled"
-fi
 
 echo
 echo "Compilation............: make (or gmake)"
