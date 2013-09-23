@@ -487,7 +487,7 @@ fi
 
 
 need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
+if test x$avalon$icarus$bitforce$modminer$x6500$ztex$littlefury != xnonononononono; then
 	need_fpgautils=yes
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
