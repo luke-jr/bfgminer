@@ -14,6 +14,23 @@
 
 struct device_drv bitfury_drv;
 
+static void bitfury_open(struct cgpu_info *bitfury)
+{
+	/* Magic open sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BFO_OPEN);
+}
+
+static void bitfury_close(struct cgpu_info *bitfury)
+{
+	/* Magic close sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BFO_CLOSE);
+}
+
+static void bitfury_initialise(struct cgpu_info *bitfury)
+{
+	bitfury_open(bitfury);
+}
+
 static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
@@ -26,7 +43,11 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	}
 	applog(LOG_WARNING, "%s%d: Found at %s", bitfury->drv->name,
 	       bitfury->device_id, bitfury->device_path);
-	return true;
+
+	bitfury_initialise(bitfury);
+
+	bitfury_close(bitfury);
+	return false;
 }
 
 static void bitfury_detect(void)
@@ -69,6 +90,9 @@ static void bitfury_init(struct cgpu_info __maybe_unused *bitfury)
 
 static void bitfury_shutdown(struct thr_info __maybe_unused *thr)
 {
+	struct cgpu_info *bitfury = thr->cgpu;
+
+	bitfury_close(bitfury);
 }
 
 /* Currently hardcoded to BF1 devices */

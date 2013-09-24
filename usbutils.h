@@ -321,7 +321,9 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_FTDI_STATUS, "FTDIStatus") \
 	USB_ADD_COMMAND(C_ENABLE_UART, "EnableUART") \
 	USB_ADD_COMMAND(C_BB_SET_VOLTAGE, "SetCoreVoltage") \
-	USB_ADD_COMMAND(C_BB_GET_VOLTAGE, "GetCoreVoltage")
+	USB_ADD_COMMAND(C_BB_GET_VOLTAGE, "GetCoreVoltage") \
+	USB_ADD_COMMAND(C_BFO_OPEN, "BF1Open") \
+	USB_ADD_COMMAND(C_BFO_CLOSE, "BF1Close")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
 #define USB_ADD_COMMAND(X, Y) X,
