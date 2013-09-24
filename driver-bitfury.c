@@ -14,8 +14,24 @@
 
 struct device_drv bitfury_drv;
 
+static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+{
+	struct cgpu_info *bitfury;
+
+	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
+
+	if (!usb_init(bitfury, dev, found)) {
+		bitfury = usb_free_cgpu(bitfury);
+		return false;
+	}
+	applog(LOG_WARNING, "%s%d: Found at %s", bitfury->drv->name,
+	       bitfury->device_id, bitfury->device_path);
+	return true;
+}
+
 static void bitfury_detect(void)
 {
+	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
 static bool bitfury_prepare(struct thr_info __maybe_unused *thr)

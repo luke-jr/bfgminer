@@ -1563,6 +1563,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_BITFORCE
 		"bitforce "
 #endif
+#ifdef USE_BITFURY
+		"bitfury "
+#endif
 #ifdef HAVE_OPENCL
 		"GPU "
 #endif
@@ -7352,6 +7355,10 @@ extern struct device_drv bflsc_drv;
 extern struct device_drv bitforce_drv;
 #endif
 
+#ifdef USE_BITFURY
+extern struct device_drv bitfury_drv;
+#endif
+
 #ifdef USE_ICARUS
 extern struct device_drv icarus_drv;
 #endif
@@ -7650,6 +7657,10 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			bitforce_drv.drv_detect();
 #endif
 
+#ifdef USE_BITFURY
+			bitfury_drv.drv_detect();
+#endif
+
 #ifdef USE_MODMINER
 			modminer_drv.drv_detect();
 #endif
@@ -7881,6 +7892,11 @@ int main(int argc, char *argv[])
 #ifdef USE_BITFORCE
 	if (!opt_scrypt)
 		bitforce_drv.drv_detect();
+#endif
+
+#ifdef USE_BITFURY
+	if (!opt_scrypt)
+		bitfury_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER

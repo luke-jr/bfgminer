@@ -124,8 +124,8 @@ static struct usb_intinfo bfl_ints[] = {
 
 #ifdef USE_BITFURY
 static struct usb_epinfo bfu_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0 }
 };
 
 static struct usb_intinfo bfu_ints[] = {
@@ -405,6 +405,10 @@ extern struct device_drv bflsc_drv;
 
 #ifdef USE_BITFORCE
 extern struct device_drv bitforce_drv;
+#endif
+
+#ifdef USE_BITFURY
+extern struct device_drv bitfury_drv;
 #endif
 
 #ifdef USE_MODMINER
@@ -2092,6 +2096,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return usb_check_each(DRV_BITFORCE, drv, dev);
 #endif
 
+#ifdef USE_BITFURY
+	if (drv->drv_id == DRIVER_BITFURY)
+		return usb_check_each(DRV_BITFURY, drv, dev);
+#endif
+
 #ifdef USE_MODMINER
 	if (drv->drv_id == DRIVER_MODMINER)
 		return usb_check_each(DRV_MODMINER, drv, dev);
@@ -3304,6 +3313,7 @@ void usb_cleanup()
 		switch (cgpu->drv->drv_id) {
 			case DRIVER_BFLSC:
 			case DRIVER_BITFORCE:
+			case DRIVER_BITFURY:
 			case DRIVER_MODMINER:
 			case DRIVER_ICARUS:
 			case DRIVER_AVALON:
@@ -3440,6 +3450,12 @@ void usb_initialise()
 #ifdef USE_BITFORCE
 				if (!found && strcasecmp(ptr, bitforce_drv.name) == 0) {
 					drv_count[bitforce_drv.drv_id].limit = lim;
+					found = true;
+				}
+#endif
+#ifdef USE_BITFURY
+				if (!found && strcasecmp(ptr, bitfury_drv.name) == 0) {
+					drv_count[bitfury_drv.drv_id].limit = lim;
 					found = true;
 				}
 #endif
