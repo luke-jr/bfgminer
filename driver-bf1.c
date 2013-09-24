@@ -107,14 +107,15 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 
 	write(fd, "I", 1);
 	len = serial_read(fd, buf, sizeof(buf));
-	if(len != sizeof(buf))
+	if(len != 14)
 	{
 		serial_close(fd);
 		return false;
 	}
 
-	struct BF1Identity *id = (struct BF1Identity *)&buf[1];
-	info->id = *id;
+	info->id.version = buf[1];
+	memcpy(info->id.product, buf+2, 8);
+	memcpy(&info->id.serial, buf+10, 4);
 	applog(LOG_DEBUG, "%d, %s %08x", info->id.version, info->id.product, info->id.serial);
 
 	char buf_state[sizeof(struct BF1State)+1];
@@ -128,7 +129,7 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	}
 	serial_close(fd);
 
-	if(len != sizeof(buf_state))
+	if(len != 7)
 	{
 		applog(LOG_ERR, "Not responding to reset: %d", len);
 		return false;
@@ -255,15 +256,18 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 	num_results = 0;
 	for(int i=0; i<info->rx_len; i+=7)
 	{
-		struct BF1State *state = (struct BF1State *)(info->rx_buffer + i + 1);
+		struct BF1State state;
+		state.state = info->rx_buffer[i + 1];
+		state.switched = info->rx_buffer[i + 2];
+		memcpy(&state.nonce, info->rx_buffer + i + 3, 4);
 
-		if(duplicate(results, num_results, state->nonce))
+		if(duplicate(results, num_results, state.nonce))
 		{
 			continue;
 		}
 
-		uint32_t nonce = bf1_decnonce(state->nonce);
-		results[num_results++] = state->nonce;
+		uint32_t nonce = bf1_decnonce(state.nonce);
+		results[num_results++] = state.nonce;
 
 		//applog(LOG_INFO, "Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce))
@@ -418,10 +422,12 @@ static void bf1_shutdown(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_identify(struct cgpu_info *cgpu)
+static bool bf1_identify(struct cgpu_info *cgpu)
 {
 	char buf[] = "L";
 	write(cgpu->device_fd, buf, sizeof(buf));
+	
+	return true;
 }
 
 //------------------------------------------------------------------------------
