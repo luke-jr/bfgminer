@@ -76,6 +76,10 @@ if HAS_BITFORCE
 cgminer_SOURCES += driver-bitforce.c
 endif
 
+if HAS_BITFURY
+cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
+endif
+
 if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif
