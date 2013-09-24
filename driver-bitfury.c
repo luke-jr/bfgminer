@@ -36,6 +36,13 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
+static void bitfury_identify(struct cgpu_info *bitfury)
+{
+	int amount;
+
+	usb_write(bitfury, "L", 1, &amount, C_PING);
+}
+
 static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
@@ -91,6 +98,8 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	       bitfury->device_id, buf);
 	bitfury_empty_buffer(bitfury);
 
+	bitfury_identify(bitfury);
+	bitfury_empty_buffer(bitfury);
 	//return true;
 out_close:
 	bitfury_close(bitfury);
@@ -157,5 +166,6 @@ struct device_drv bitfury_drv = {
 	.get_api_stats = bitfury_api_stats,
 	.get_statline_before = get_bitfury_statline_before,
 	.reinit_device = bitfury_init,
-	.thread_shutdown = bitfury_shutdown
+	.thread_shutdown = bitfury_shutdown,
+	.identify_device = bitfury_identify
 };
