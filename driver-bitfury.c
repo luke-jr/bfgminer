@@ -14,18 +14,6 @@
 
 struct device_drv bitfury_drv;
 
-static void bitfury_open(struct cgpu_info *bitfury)
-{
-	/* Magic open sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BFO_OPEN);
-}
-
-static void bitfury_close(struct cgpu_info *bitfury)
-{
-	/* Magic close sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BFO_CLOSE);
-}
-
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 {
 	char buf[512];
@@ -34,6 +22,22 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	do {
 		usb_read(bitfury, buf, 512, &amount, C_PING);
 	} while (amount);
+}
+
+static void bitfury_open(struct cgpu_info *bitfury)
+{
+	/* Magic open sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BFO_OPEN);
+	bitfury_empty_buffer(bitfury);
+}
+
+static void bitfury_close(struct cgpu_info *bitfury)
+{
+	/* Magic close sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BFO_CLOSE);
+	bitfury_empty_buffer(bitfury);
+	usb_transfer(bitfury, 0x23, 0x08, 0x9053, 1, C_BFO_CLOSE);
+	bitfury_empty_buffer(bitfury);
 }
 
 static void bitfury_identify(struct cgpu_info *bitfury)
@@ -64,7 +68,6 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 		quit(1, "Failed to calloc info in bitfury_detect_one");
 	bitfury->device_data = info;
 
-	bitfury_empty_buffer(bitfury);
 	usb_buffer_enable(bitfury);
 
 	bitfury_open(bitfury);
