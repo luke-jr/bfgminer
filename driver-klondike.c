@@ -365,7 +365,7 @@ static void *klondike_get_replies(void *userdata)
 
 		err = usb_read(klncgpu, replybuf+1, REPLY_SIZE, &recd, C_GETRESULTS);
 		if (!err && recd == REPLY_SIZE) {
-			if (opt_log_level <= LOG_DEBUG) {
+			if (opt_log_level <= READ_DEBUG) {
 				char *hexdata = bin2hex((unsigned char *)(replybuf+1), recd);
 				applog(READ_DEBUG, "%s (%s) reply [%s:%s]", klncgpu->drv->dname, klncgpu->device_path, replybuf+1, hexdata);
 				free(hexdata);
