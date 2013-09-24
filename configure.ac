@@ -242,6 +242,17 @@ if test "x$bitforce" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
+bitfury="no"
+
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitForce support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
 icarus="no"
 
 AC_ARG_ENABLE([icarus],
@@ -310,7 +321,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$modminer$bflsc$icarus != xnonononono; then
+if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus != xnononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -482,14 +493,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$bitforce$avalon$icarus$ztex$modminer$bflsc" = xnononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc" = xnonononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$bitforce$icarus$avalon$ztex$modminer$bflsc" = xnononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc" = xnonononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -522,6 +533,12 @@ if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
 	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  BitFury.ASICs........: Enabled"
+else
+	echo "  BitFury.ASICs........: Disabled"
 fi
 
 if test "x$icarus" = xyes; then
