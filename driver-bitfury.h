@@ -12,4 +12,10 @@
 
 #include "usbutils.h"
 
+struct bitfury_info {
+	uint8_t version;
+	char product[8];
+	uint32_t serial;
+};
+
 #endif /* BITFURY_H */
