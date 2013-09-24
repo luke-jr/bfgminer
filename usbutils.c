@@ -66,6 +66,10 @@
 #define DRV_AVALON 6
 #endif
 
+#ifdef USE_BITFURY
+#define DRV_BITFURY 8
+#endif
+
 #define DRV_LAST -1
 
 #define USB_CONFIG 1
@@ -73,12 +77,14 @@
 #ifdef WIN32
 #define BFLSC_TIMEOUT_MS 999
 #define BITFORCE_TIMEOUT_MS 999
+#define BITFURY_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
+#define BITFURY_TIMEOUT_MS 200
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
@@ -113,6 +119,17 @@ static struct usb_epinfo bfl_epinfos[] = {
 
 static struct usb_intinfo bfl_ints[] = {
 	USB_EPS(0, bfl_epinfos)
+};
+#endif
+
+#ifdef USE_BITFURY
+static struct usb_epinfo bfu_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 }
+};
+
+static struct usb_intinfo bfu_ints[] = {
+	USB_EPS(1,  bfu_epinfos)
 };
 #endif
 
@@ -245,6 +262,21 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = BITFORCE_TIMEOUT_MS,
 		.latency = LATENCY_STD,
 		INTINFO(bfl_ints) },
+#endif
+#ifdef USE_BITFURY
+	{
+		.drv = DRV_BITFURY,
+		.name = "BFO",
+		.ident = IDENT_BFU,
+		.idVendor = 0x03eb,
+		.idProduct = 0x204b,
+		.config = 1,
+		.timeout = BITFURY_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		.iManufacturer = "BPMC",
+		.iProduct = "Bitfury BF1",
+		INTINFO(bfu_ints)
+	},
 #endif
 #ifdef USE_MODMINER
 	{

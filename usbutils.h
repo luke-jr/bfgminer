@@ -134,6 +134,7 @@ enum sub_ident {
 	IDENT_BAS,
 	IDENT_BAM,
 	IDENT_BFL,
+	IDENT_BFU,
 	IDENT_MMQ,
 	IDENT_AVA,
 	IDENT_BTB,
