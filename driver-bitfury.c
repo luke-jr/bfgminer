@@ -55,7 +55,7 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 	usb_write(bitfury, "I", 1, &amount, C_BF1_REQINFO);
 	usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
 	if (amount != 14) {
-		applog(LOG_INFO, "%s%d: Getinfo received %d bytes",
+		applog(LOG_INFO, "%s %d: Getinfo received %d bytes",
 		       bitfury->drv->name, bitfury->device_id, amount);
 		return false;
 	}
@@ -63,7 +63,7 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 	memcpy(&info->product, buf + 2, 8);
 	memcpy(&info->serial, buf + 10, 4);
 
-	applog(LOG_INFO, "%s%d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
+	applog(LOG_INFO, "%s %d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
 	       bitfury->device_id, info->version, info->product, info->serial);
 	bitfury_empty_buffer(bitfury);
 	return true;
@@ -78,11 +78,11 @@ static bool bitfury_reset(struct cgpu_info *bitfury)
 	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
 
 	if (amount != 7) {
-		applog(LOG_INFO, "%s%d: Getreset received %d bytes",
+		applog(LOG_INFO, "%s %d: Getreset received %d bytes",
 		       bitfury->drv->name, bitfury->device_id, amount);
 		return false;
 	}
-	applog(LOG_INFO, "%s%d: Getreset returned %s", bitfury->drv->name,
+	applog(LOG_INFO, "%s %d: Getreset returned %s", bitfury->drv->name,
 	       bitfury->device_id, buf);
 	bitfury_empty_buffer(bitfury);
 	return true;
@@ -99,7 +99,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 		bitfury = usb_free_cgpu(bitfury);
 		goto out;
 	}
-	applog(LOG_INFO, "%s%d: Found at %s", bitfury->drv->name,
+	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
 	       bitfury->device_id, bitfury->device_path);
 
 	info = calloc(sizeof(struct bitfury_info), 1);
@@ -127,7 +127,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 		goto out_close;
 
 	update_usb_stats(bitfury);
-	applog(LOG_INFO, "%s%d: Found at %s",
+	applog(LOG_INFO, "%s %d: Found at %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 	return true;
 out_close:
