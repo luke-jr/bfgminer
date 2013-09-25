@@ -404,8 +404,8 @@ static bool bf1_identify(struct cgpu_info *cgpu)
 
 //------------------------------------------------------------------------------
 struct device_drv bf1_drv = {
-	.dname = "Bitfury BF1",
-	.name = "BF1",
+	.dname = "bf1",
+	.name = "BFA",
 	.minerloop = hash_queued_work,
 
 	.drv_detect = bf1_detect,

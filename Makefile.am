@@ -189,7 +189,7 @@ endif
 endif
 
 if HAS_BF1
-bfgminer_SOURCES += driver-bf1.c
+bfgminer_SOURCES += driver-bf1.c driver-bf1.h
 endif
 
 if HAS_ICARUS
