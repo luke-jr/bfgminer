@@ -199,8 +199,9 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	if (unlikely(!info->prevwork2))
 		goto cascade;
 
-	/* Search for what work the nonce matches in order of likelihood. */
-	for (i = 0; i < info->tot; i += 7) {
+	/* Search for what work the nonce matches in order of likelihood. Last
+	 * entry is end of result marker. */
+	for (i = 0; i < info->tot - 7; i += 7) {
 		uint32_t nonce;
 
 		/* Ignore state & switched data in results for now. */
