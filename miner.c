@@ -1185,20 +1185,39 @@ char *_bfgopt_set_file(const char *arg, FILE **F, const char *mode, const char *
 {
 	char *r = "";
 	long int i = strtol(arg, &r, 10);
+	static char *err = NULL;
+	const size_t errbufsz = 0x100;
 
+	free(err);
+	err = NULL;
+	
 	if ((!*r) && i >= 0 && i <= INT_MAX) {
 		*F = fdopen((int)i, mode);
 		if (!*F)
-			applog(LOG_ERR, "Failed to open fd %d for %s", (int)i, purpose);
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Failed to open fd %d for %s",
+			         (int)i, purpose);
+			return err;
+		}
 	} else if (!strcmp(arg, "-")) {
 		*F = (mode[0] == 'a') ? stdout : stdin;
 		if (!*F)
-			applog(LOG_ERR, "Standard %sput missing for %s",
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Standard %sput missing for %s",
 			         (mode[0] == 'a') ? "out" : "in", purpose);
+			return err;
+		}
 	} else {
 		*F = fopen(arg, mode);
 		if (!*F)
-			applog(LOG_ERR, "Failed to open %s for %s", arg, purpose);
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Failed to open %s for %s",
+			         arg, purpose);
+			return err;
+		}
 	}
 
 	return NULL;
