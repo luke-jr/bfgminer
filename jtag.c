@@ -83,9 +83,9 @@ bool jtag_clock(struct jtag_port *jp, bool tms, bool tdi, bool *tdo)
 	if (tdo) {
 		*tdo = (rbuf[rbufsz-1] & jp->tdo);
 #ifdef DEBUG_JTAG_CLOCK
-	char *x = bin2hex(rbuf, rbufsz);
+		char x[(rbufsz * 2) + 1];
+		bin2hex(x, rbuf, rbufsz);
 	applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=%d (%u:%s)", jp, (unsigned)rbuf[rbufsz-1], (int)tms, (int)tdi, (int)(bool)(rbuf[rbufsz-1] & jp->tdo), (unsigned)rbufsz, x);
-	free(x);
 	} else {
 		applog(LOG_DEBUG, "%p %02x tms=%d tdi=%d tdo=?ignore", jp, (unsigned)buf[2], (int)tms, (int)tdi);
 #endif

@@ -26,6 +26,7 @@
 
 #include "compat.h"
 #include "deviceapi.h"
+#include "fpgautils.h"
 #include "logging.h"
 #include "miner.h"
 #include "util.h"
@@ -580,12 +581,21 @@ void *miner_thread(void *userdata)
 		minerloop_scanhash(mythr);
 	__thr_being_msg(LOG_NOTICE, mythr, "shutting down");
 
-out:
-	cgpu->deven = DEV_DISABLED;
+out: ;
+	struct cgpu_info *proc = cgpu;
+	do
+	{
+		proc->deven = DEV_DISABLED;
+		proc->status = LIFE_DEAD2;
+	}
+	while ( (proc = proc->next_proc) && !proc->threads);
+	mythr->getwork = 0;
+	mythr->has_pth = false;
+	nmsleep(1000);
+	
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
 
-	thread_reportin(mythr);
 	notifier_destroy(mythr->notifier);
 
 	return NULL;
@@ -608,10 +618,12 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
-	wr_lock(&devices_lock);
+	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
+	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
+	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
 	
-	devices = realloc(devices, sizeof(struct cgpu_info *) * (total_devices + lpcount + 1));
-	devices[total_devices++] = cgpu;
+	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
+	devices_new[total_devices_new++] = cgpu;
 	
 	if (lpcount > 1)
 	{
@@ -645,7 +657,7 @@ bool add_cgpu(struct cgpu_info *cgpu)
 				slave->proc_repr_ns[ns] += i;
 			}
 			slave->threads = tpp;
-			devices[total_devices++] = slave;
+			devices_new[total_devices_new++] = slave;
 			*nlp_p = slave;
 			nlp_p = &slave->next_proc;
 		}
@@ -653,12 +665,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		cgpu->proc_id = 0;
 		cgpu->threads -= (tpp * (lpcount - 1));
 	}
-	
-	wr_unlock(&devices_lock);
 
-	mutex_lock(&stats_lock);
 	cgpu->last_device_valid_work = time(NULL);
-	mutex_unlock(&stats_lock);
 	
 	return true;
 }

@@ -16,12 +16,17 @@
 #include <winsock2.h>
 #endif
 
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
+
+#ifdef HAVE_LIBUSB
+#include <libusb.h>
+#endif
 
 #include "miner.h"
 
@@ -100,7 +105,62 @@ bool search_needles(const char *haystack, va_list needles)
 
 #define SEARCH_NEEDLES(haystack)  search_needles(haystack, needles)
 
+static
+int _detectone_wrap(const detectone_func_t detectone, const char * const param, const char *fname)
+{
+	if (bfg_claim_serial(NULL, false, param))
+	{
+		applog(LOG_DEBUG, "%s: %s is already claimed, skipping probe", fname, param);
+		return 0;
+	}
+	return detectone(param);
+}
+#define detectone(param)  _detectone_wrap(detectone, param, __func__)
+
+struct detectone_meta_info_t detectone_meta_info;
+
+static
+void clear_detectone_meta_info(void)
+{
+	detectone_meta_info = (struct detectone_meta_info_t){
+		.manufacturer = NULL,
+	};
+}
+
 #ifdef HAVE_LIBUDEV
+static
+void _decode_udev_enc(char *o, const char *s)
+{
+	while(s[0])
+	{
+		if (s[0] == '\\' && s[1] == 'x' && s[2] && s[3])
+		{
+			hex2bin((void*)(o++), &s[2], 1);
+			s += 4;
+		}
+		else
+			(o++)[0] = (s++)[0];
+	}
+	o[0] = '\0';
+}
+
+static
+char *_decode_udev_enc_dup(const char *s)
+{
+	if (!s)
+		return NULL;
+	
+	char *o = malloc(strlen(s));
+	if (!o)
+	{
+		applog(LOG_ERR, "Failed to malloc in _decode_udev_enc_dup");
+		return NULL;
+	}
+	
+	_decode_udev_enc(o, s);
+	return o;
+}
+
 static
 int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 {
@@ -126,14 +186,24 @@ int _serial_autodetect_udev(detectone_func_t detectone, va_list needles)
 			continue;
 		}
 
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.manufacturer = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_VENDOR_ENC")),
+			.product = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_MODEL_ENC")),
+			.serial = _decode_udev_enc_dup(udev_device_get_property_value(device, "ID_SERIAL_SHORT")),
+		};
+		
 		const char *devpath = udev_device_get_devnode(device);
 		if (devpath && detectone(devpath))
 			++found;
 
+		free((void*)detectone_meta_info.manufacturer);
+		free((void*)detectone_meta_info.product);
+		free((void*)detectone_meta_info.serial);
 		udev_device_unref(device);
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
+	clear_detectone_meta_info();
 
 	return found;
 }
@@ -152,6 +222,9 @@ int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
 	char *devfile = devpath + sizeof(udevdir);
 	char found = 0;
 
+	// No way to split this out of the filename reliably
+	clear_detectone_meta_info();
+	
 	D = opendir(udevdir);
 	if (!D)
 		return 0;
@@ -175,15 +248,39 @@ int _serial_autodetect_devserial(detectone_func_t detectone, va_list needles)
 
 #ifndef WIN32
 static
+char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile, const char *append)
+{
+	FILE *F;
+	
+	strcpy(devfile, append);
+	F = fopen(devpath, "r");
+	if (F)
+	{
+		if (fgets(buf, bufsz, F))
+		{
+			size_t L = strlen(buf);
+			while (isspace(buf[--L]))
+				buf[L] = '\0';
+		}
+		else
+			buf[0] = '\0';
+		fclose(F);
+	}
+	else
+		buf[0] = '\0';
+	
+	return buf[0] ? buf : NULL;
+}
+
+static
 int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 {
 	DIR *D, *DS, *DT;
-	FILE *F;
 	struct dirent *de;
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char buf[0x100];
+	char ttybuf[0x10], manuf[0x40], prod[0x40], serial[0x40];
 	char *devfile, *upfile;
 	char found = 0;
 	size_t len, len2;
@@ -199,12 +296,11 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		upfile = &devpath[devrootlen + 1];
 		memcpy(upfile, de->d_name, len);
 		devfile = upfile + len;
-		strcpy(devfile, "/product");
-		F = fopen(devpath, "r");
-		if (!(F && fgets(buf, sizeof(buf), F)))
+		
+		if (!_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product"))
 			continue;
 		
-		if (!SEARCH_NEEDLES(buf))
+		if (!SEARCH_NEEDLES(prod))
 			continue;
 		
 		devfile[0] = '\0';
@@ -214,7 +310,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		devfile[0] = '/';
 		++devfile;
 		
-		memcpy(buf, "/dev/", 5);
+		memcpy(ttybuf, "/dev/", 5);
 		
 		while ( (de = readdir(DS)) )
 		{
@@ -235,8 +331,15 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 				if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
 					continue;
 				
-				strcpy(&buf[5], de->d_name);
-				if (detectone(buf))
+				
+				detectone_meta_info = (struct detectone_meta_info_t){
+					.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
+					.product = prod,
+					.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
+				};
+				
+				strcpy(&ttybuf[5], de->d_name);
+				if (detectone(ttybuf))
 					++found;
 			}
 			closedir(DT);
@@ -244,6 +347,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		closedir(DS);
 	}
 	closedir(D);
+	clear_detectone_meta_info();
 	
 	return found;
 }
@@ -259,6 +363,16 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 	}  \
 } while(0)
 
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+static
+char *_ftdi_get_string(char *buf, int i, DWORD flags)
+{
+	if (FT_OK != FT_ListDevices((PVOID)i, buf, FT_LIST_BY_INDEX | flags))
+		return NULL;
+	return buf[0] ? buf : NULL;
+}
+#endif
+
 static
 int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 {
@@ -266,6 +380,9 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	char *devpathnum = &devpath[7];
 	char **bufptrs;
 	char *buf;
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+	char manuf[64], serial[64];
+#endif
 	int found = 0;
 	DWORD i;
 
@@ -300,6 +417,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 		goto out;
 	}
 	
+	clear_detectone_meta_info();
 	for (i = numDevs; i > 0; ) {
 		--i;
 		bufptrs[i][64] = '\0';
@@ -317,6 +435,13 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 			continue;
 		
 		applog(LOG_ERR, "FT_GetComPortNumber(%p (%ld), %ld)", ftHandle, (long)i, (long)lComPortNumber);
+#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.product = bufptrs[i],
+			.serial = _ftdi_get_string(serial, i, FT_OPEN_BY_SERIAL_NUMBER),
+		};
+#endif
+		
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
 		if (detectone(devpath))
@@ -324,12 +449,15 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	}
 
 out:
+	clear_detectone_meta_info();
 	dlclose(dll);
 	return found;
 }
 #else
 #	define _serial_autodetect_ftdi(...)  (0)
 #endif
+
+#undef detectone
 
 int _serial_autodetect(detectone_func_t detectone, ...)
 {
@@ -347,19 +475,18 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api);
-
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
 	const char *dev, *colon;
-	bool inhibitauto = false;
+	bool inhibitauto = flags & 4;
 	char found = 0;
 	bool forceauto = flags & 1;
 	bool hasname;
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
+	clear_detectone_meta_info();
 	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
 		dev = iter->string;
 		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
@@ -404,11 +531,27 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	return found;
 }
 
+enum bfg_device_bus {
+	BDB_SERIAL,
+	BDB_USB,
+};
+
+// TODO: claim USB side of USB-Serial devices
+typedef
+struct my_dev_t {
+	enum bfg_device_bus bus;
+	union {
+		struct {
+			uint8_t usbbus;
+			uint8_t usbaddr;
+		};
 #ifndef WIN32
-typedef dev_t my_dev_t;
+		dev_t dev;
 #else
-typedef int my_dev_t;
+		int com;
 #endif
+	};
+} my_dev_t;
 
 struct _device_claim {
 	struct device_drv *drv;
@@ -416,43 +559,100 @@ struct _device_claim {
 	UT_hash_handle hh;
 };
 
-struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
+static
+struct device_drv *bfg_claim_any(struct device_drv * const api, const char * const verbose, const my_dev_t * const dev)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
-	my_dev_t dev;
+	
+	HASH_FIND(hh, claims, dev, sizeof(*dev), c);
+	if (c)
+	{
+		if (verbose)
+			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
+			       api->dname, verbose, c->drv->dname);
+		return c->drv;
+	}
+	
+	if (!api)
+		return NULL;
+	
+	c = malloc(sizeof(*c));
+	c->dev = *dev;
+	c->drv = api;
+	HASH_ADD(hh, claims, dev, sizeof(*dev), c);
+	return NULL;
+}
 
+struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
+{
+	my_dev_t dev;
+	
+	memset(&dev, 0, sizeof(dev));
+	dev.bus = BDB_SERIAL;
 #ifndef WIN32
 	{
 		struct stat my_stat;
 		if (stat(devpath, &my_stat))
 			return NULL;
-		dev = my_stat.st_rdev;
+		dev.dev = my_stat.st_rdev;
 	}
 #else
 	{
 		char *p = strstr(devpath, "COM"), *p2;
 		if (!p)
 			return NULL;
-		dev = strtol(&p[3], &p2, 10);
+		dev.com = strtol(&p[3], &p2, 10);
 		if (p2 == p)
 			return NULL;
 	}
 #endif
-
-	HASH_FIND(hh, claims, &dev, sizeof(dev), c);
-	if (c)
-		return c->drv;
-
-	if (!api)
-		return NULL;
-
-	c = malloc(sizeof(*c));
-	c->dev = dev;
-	c->drv = api;
-	HASH_ADD(hh, claims, dev, sizeof(dev), c);
-	return NULL;
+	
+	return bfg_claim_any(api, (verbose ? devpath : NULL), &dev);
 }
+
+struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
+{
+	my_dev_t dev;
+	char *desc = NULL;
+	
+	// We should be able to just initialize a const my_dev_t for this, but Xcode's clang is broken
+	// Affected: Apple LLVM version 4.2 (clang-425.0.28) (based on LLVM 3.2svn) AKA Xcode 4.6.3
+	// Works with const: GCC 4.6.3, LLVM 3.1
+	memset(&dev, 0, sizeof(dev));
+	dev.bus = BDB_USB;
+	dev.usbbus = usbbus;
+	dev.usbaddr = usbaddr;
+	
+	if (verbose)
+	{
+		desc = alloca(3 + 1 + 3 + 1);
+		sprintf(desc, "%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	}
+	
+	return bfg_claim_any(api, desc, &dev);
+}
+
+#ifdef HAVE_LIBUSB
+void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
+{
+	unsigned char buf[0x20];
+	libusb_device_handle *h;
+	struct libusb_device_descriptor desc;
+	
+	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
+		return;
+	if (libusb_get_device_descriptor(usb, &desc))
+		return;
+	
+	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
+		cgpu->dev_manufacturer = strdup((void *)buf);
+	if ((!cgpu->dev_product) && libusb_get_string_descriptor_ascii(h, desc.iProduct, buf, sizeof(buf)) >= 0)
+		cgpu->dev_product = strdup((void *)buf);
+	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
+		cgpu->dev_serial = strdup((void *)buf);
+}
+#endif
 
 // This code is purely for debugging but is very useful for that
 // It also took quite a bit of effort so I left it in
@@ -468,68 +668,12 @@ struct device_drv *serial_claim(const char *devpath, struct device_drv *api)
 int tiospeed(speed_t speed)
 {
 	switch (speed) {
-	case B0:
-		return 0;
-	case B50:
-		return 50;
-	case B75:
-		return 75;
-	case B110:
-		return 110;
-	case B134:
-		return 134;
-	case B150:
-		return 150;
-	case B200:
-		return 200;
-	case B300:
-		return 300;
-	case B600:
-		return 600;
-	case B1200:
-		return 1200;
-	case B1800:
-		return 1800;
-	case B2400:
-		return 2400;
-	case B4800:
-		return 4800;
-	case B9600:
-		return 9600;
-	case B19200:
-		return 19200;
-	case B38400:
-		return 38400;
-	case B57600:
-		return 57600;
-	case B115200:
-		return 115200;
-	case B230400:
-		return 230400;
-	case B460800:
-		return 460800;
-	case B500000:
-		return 500000;
-	case B576000:
-		return 576000;
-	case B921600:
-		return 921600;
-	case B1000000:
-		return 1000000;
-	case B1152000:
-		return 1152000;
-	case B1500000:
-		return 1500000;
-	case B2000000:
-		return 2000000;
-	case B2500000:
-		return 2500000;
-	case B3000000:
-		return 3000000;
-	case B3500000:
-		return 3500000;
-	case B4000000:
-		return 4000000;
+#define IOSPEED(baud)  \
+		case B ## baud:  \
+			return baud;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
 	default:
 		return -1;
 	}
@@ -619,8 +763,37 @@ void termios_debug(const char *devpath, struct termios *my_termios, const char *
 #endif
 			);
 }
-#endif
-#endif
+#endif  /* TERMIOS_DEBUG */
+
+speed_t tiospeed_t(int baud)
+{
+	switch (baud) {
+#define IOSPEED(baud)  \
+		case baud:  \
+			return B ## baud;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
+	default:
+		return B0;
+	}
+}
+
+#endif  /* WIN32 */
+
+bool valid_baud(int baud)
+{
+	switch (baud) {
+#define IOSPEED(baud)  \
+		case baud:  \
+			return true;  \
+// END
+#include "iospeeds.h"
+#undef IOSPEED
+		default:
+			return false;
+	}
+}
 
 /* NOTE: Linux only supports uint8_t (decisecond) timeouts; limiting it in
  *       this interface buys us warnings when bad constants are passed in.
@@ -680,7 +853,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		if (errno == EACCES)
 			applog(LOG_ERR, "Do not have user privileges required to open %s", devpath);
 		else
-			applog(LOG_DEBUG, "Open %s failed, errno:%d", devpath, errno);
+			applog(LOG_DEBUG, "Open %s failed: %s", devpath, bfg_strerror(errno, BST_ERRNO));
 
 		return -1;
 	}
@@ -693,30 +866,16 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	termios_debug(devpath, &my_termios, "before");
 #endif
 
-	switch (baud) {
-	case 0:
-		break;
-	case 19200:
-		cfsetispeed(&my_termios, B19200);
-		cfsetospeed(&my_termios, B19200);
-		break;
-	case 38400:
-		cfsetispeed(&my_termios, B38400);
-		cfsetospeed(&my_termios, B38400);
-		break;
-	case 57600:
-		cfsetispeed(&my_termios, B57600);
-		cfsetospeed(&my_termios, B57600);
-		break;
-	case 115200:
-		cfsetispeed(&my_termios, B115200);
-		cfsetospeed(&my_termios, B115200);
-		break;
-	// TODO: try some higher speeds with the Icarus and BFL to see
-	// if they support them and if setting them makes any difference
-	// N.B. B3000000 doesn't work on Icarus
-	default:
-		applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
+	if (baud)
+	{
+		speed_t speed = tiospeed_t(baud);
+		if (speed == B0)
+			applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
+		else
+		{
+			cfsetispeed(&my_termios, speed);
+			cfsetospeed(&my_termios, speed);
+		}
 	}
 
 	my_termios.c_cflag &= ~(CSIZE | PARENB);
@@ -820,7 +979,7 @@ FILE *open_bitstream(const char *dname, const char *filename)
 
 #define check_magic(L)  do {  \
 	if (1 != fread(buf, 1, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading firmware ('%c')",  \
+		bailout(LOG_ERR, "%s: Error reading bitstream ('%c')",  \
 		        repr, L);  \
 	if (buf[0] != L)  \
 		bailout(LOG_ERR, "%s: Firmware has wrong magic ('%c')",  \
@@ -829,14 +988,14 @@ FILE *open_bitstream(const char *dname, const char *filename)
 
 #define read_str(eng)  do {  \
 	if (1 != fread(buf, 2, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading firmware (" eng " len)",  \
+		bailout(LOG_ERR, "%s: Error reading bitstream (" eng " len)",  \
 		        repr);  \
 	len = (ubuf[0] << 8) | ubuf[1];  \
 	if (len >= sizeof(buf))  \
 		bailout(LOG_ERR, "%s: Firmware " eng " too long",  \
 		        repr);  \
 	if (1 != fread(buf, len, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading firmware (" eng ")",  \
+		bailout(LOG_ERR, "%s: Error reading bitstream (" eng ")",  \
 		        repr);  \
 	buf[len] = '\0';  \
 } while(0)
@@ -850,10 +1009,15 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 
 	FILE *f = open_bitstream(dname, fwfile);
 	if (!f)
-		bailout(LOG_ERR, "%s: Error opening firmware file %s",
+	{
+		applog(LOG_ERR, "%s: Error opening bitstream file %s",
 		        repr, fwfile);
+		applog(LOG_ERR, "%s: Did you install the necessary bitstream package?",
+		       repr);
+		return NULL;
+	}
 	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "%s: Error reading firmware (magic)",
+		bailout(LOG_ERR, "%s: Error reading bitstream (magic)",
 		        repr);
 	if (buf[0] || buf[1] != 9)
 		bailout(LOG_ERR, "%s: Firmware has wrong magic (9)",
@@ -872,7 +1036,7 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 		++p;
 	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
 	if (p[0] != '\0')
-		bailout(LOG_ERR, "%s: Bad usercode in firmware file",
+		bailout(LOG_ERR, "%s: Bad usercode in bitstream file",
 		        repr);
 	if (fwusercode == 0xffffffff)
 		bailout(LOG_ERR, "%s: Firmware doesn't support user code",
@@ -889,7 +1053,7 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	applog(LOG_DEBUG, "  Build time: %s", buf);
 	check_magic('e');
 	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "%s: Error reading firmware (data len)",
+		bailout(LOG_ERR, "%s: Error reading bitstream (data len)",
 		        repr);
 	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
 	applog(LOG_DEBUG, "  Bitstream size: %lu", len);

@@ -78,6 +78,10 @@ all pools that don't specify their own proxy setting like above
 ---
 BUILDING BFGMINER
 
+Everything you probably want, condensed:
+	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
+	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
+
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
 	automake             http://www.gnu.org/software/automake/
@@ -178,6 +182,7 @@ Options for both config file and command line:
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to efficiency based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
+--log-file|-L <arg> Append log file for output messages
 --log-microseconds  Include microseconds in log output
 --monitor|-m <arg>  Use custom pipe cmd for output messages
 --net-delay         Impose small delays in networking to not overload slow routers
@@ -230,7 +235,6 @@ GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---disable-gpu|-G    Disable GPU mining even if suitable devices exist
 --gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-engine <arg>  GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
@@ -249,6 +253,8 @@ GPU only options:
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
+
+GPU mining can be disabled by specifying the -S opencl:noauto option.
 
 See README.GPU for more information regarding GPU mining.
 
@@ -313,7 +319,6 @@ CPU only options (not included in binaries):
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines
         altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
 --cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
---enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
 
 
 ---
@@ -322,7 +327,18 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit
+
+M gives you something like:
+
+Select processor to manage using up/down arrow keys
+ BFL 0a: 78.0C |  3.64/ 3.70/ 2.91Gh/s | A:46 R:0+0(none) HW:  2/none
+  BitFORCE SHA256 SC from Butterfly Labs
+Serial: FTWN6T67
+
+[D]isable
+Or press Enter when done
+
 
 P gives you:
 
@@ -359,24 +375,6 @@ co[M]pact: off
 Q quits the application.
 
 
-G gives you something like:
-
-GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33+0( 42%)  HW:0]
-Temp: 67.0 C
-Fan Speed: 35% (2500 RPM)
-Engine Clock: 960 MHz
-Memory Clock: 480 MHz
-Vddc: 1.200 V
-Activity: 93%
-Powertune: 0%
-Last initialised: [2011-09-06 12:03:56]
-Thread 0: 62.4 Mh/s Enabled ALIVE
-Thread 1: 60.2 Mh/s Enabled ALIVE
-
-[E]nable [D]isable [R]estart GPU [C]hange settings
-Or press any other key to continue
-
-
 The running log shows output like this:
 
  [2013-02-13 00:26:30] Accepted 1758e8df BFL 0  pool 0 Diff 10/1
@@ -395,7 +393,7 @@ dedicated to this program,
 	https://bitcointalk.org/?topic=168174
 
 The output line shows the following:
- 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8+0(.01%) HW:0
+ 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8+0(.01%) HW:0/.81%
 
 Each column is as follows:
 5s:  A 5 second exponentially decaying average hash rate
@@ -404,20 +402,7 @@ u:   An all time average hash rate based on actual accepted shares
 A:   The number of Accepted shares
 R:   The number of Rejected shares, stale shares discarded (never submitted),
      and the percentage these are of total found.
-HW:  The number of HardWare errors
-
- GPU 1: 73.5C 2551RPM | 427.3/443.0/442.1Mh/s | A:8 R:0+0(none) HW:0 U:4.39/m
-
-Each column is as follows:
-Temperature (if supported)
-Fanspeed (if supported)
-A 5 second exponentially decaying average hash rate
-An all time average hash rate
-An all time average hash rate based on actual accepted shares
-The number of accepted shares
-The number of rejected shares (and percentage of total submitted)
-The number of hardware erorrs
-The utility defines as the number of shares / minute
+HW:  The number of HardWare errors, and percentage invalid of nonces returned
 
 The BFGMiner status line shows:
  ST: 1  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42  U:22.53/m  BS:2.71k
@@ -438,6 +423,18 @@ Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
 This shows a short stretch of the current block, the next block's height and
 difficulty (including the network hashrate that difficulty represents), and when
 the search for the new block started.
+
+Each device shows:
+ BFL 2: 74.0C | 51.97/58.90/57.17Gh/s | A:847 R:15+0(.54%) HW:496/.91%
+
+Column are as follows:
+Temperature (if supported)
+5 second exponentially decaying average hash rate
+An all time average hash rate
+An all time average hash rate based on actual accepted shares
+The number of accepted shares
+The number of rejected plus discarded shares (and percentage of total submitted)
+The number of hardware errors and percentage of nonces invalid
 
 
 ---
@@ -641,7 +638,9 @@ Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
 no longer under active development and will not be supported unless someone
 steps up to help maintain it. No binary builds supporting CPU mining will be
-released but CPU mining can be built into BFGMiner when it is compiled.
+released for Windows but CPU mining can be built into BFGMiner when it is
+compiled. For builds which do support CPU mining, it is still disabled by
+default, and must be enabled using the -S cpu:auto option.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one

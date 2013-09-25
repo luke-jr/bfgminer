@@ -35,6 +35,8 @@
 // keeping a ongoing average of recent data
 #define INFO_HISTORY 10
 
+extern struct device_drv icarus_drv;
+
 struct ICARUS_HISTORY {
 	struct timeval finish;
 	double sumXiTi;

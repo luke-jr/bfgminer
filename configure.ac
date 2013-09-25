@@ -14,7 +14,7 @@ dnl * any later version.  See COPYING for more details.
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
 m4_define([v_min], [1])
-m4_define([v_mic], [1])
+m4_define([v_mic], [2])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -55,7 +55,7 @@ AC_CANONICAL_BUILD
 AC_CANONICAL_HOST
 
 dnl Make sure anyone changing configure.ac/Makefile.am has a clue
-AM_MAINTAINER_MODE
+AM_MAINTAINER_MODE([enable])
 
 dnl Checks for programs
 AC_PROG_CC_C99
@@ -524,8 +524,20 @@ if test "x$with_system_libblkmaker" = "xyes"; then
 		AC_MSG_ERROR([Could not find system libblkmaker])
 	])
 else
+	save_LDFLAGS="$LDFLAGS"
+	LDFLAGS="$LDFLAGS -Wl,-zorigin"
+	origin_LDFLAGS=
+	AC_MSG_CHECKING([whether the linker recognizes the -zorigin option])
+	AC_TRY_LINK([],[],[
+		AC_MSG_RESULT([yes])
+		origin_LDFLAGS=',-zorigin'
+	],[
+		AC_MSG_RESULT([no])
+	])
+	LDFLAGS="$save_LDFLAGS"
+	
 	libblkmaker_CFLAGS='-Ilibblkmaker'
-	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,libblkmaker/.libs'
+	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs'"$origin_LDFLAGS"
 	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
 	AC_CONFIG_SUBDIRS([libblkmaker])
 fi

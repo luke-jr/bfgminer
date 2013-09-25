@@ -53,7 +53,7 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 {
 	uint8_t   in[16];
 	uint32_t *in32 = (uint32_t *)in;
-	char     *hex;
+	char      hex[65];
 	uint32_t *mid32 = (uint32_t *)midstate;
 	uint32_t  out32[8];
 	uint8_t  *out = (uint8_t *) out32;
@@ -76,7 +76,7 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 
 	if (out32[7] == 0)
 	{
-		hex = bin2hex(out, 32);
+		bin2hex(hex, out, 32);
 		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
 		return 1;
 	}
@@ -132,12 +132,8 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 		return false;
 	}
 
-	if(serial_claim(devpath, api))
-	{
-		const char *claimedby = serial_claim(devpath, api)->dname;
-		applog(LOG_DEBUG, "Bitfury BF1 device %s already claimed by other driver: %s", devpath, claimedby);
+	if (serial_claim_v(devpath, api))
 		return false;
-	}
 
 	/* We have a real MiniMiner ONE! */
 	struct cgpu_info *bf1;
@@ -303,10 +299,8 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 			nonces--;
 			continue;
 		}
+		inc_hw_errors(thr, work, nonce);
 	}
-
-	for(int i=0; i<nonces; i++)
-		inc_hw_errors(thr);
 }
 
 //------------------------------------------------------------------------------
@@ -392,22 +386,6 @@ static void bf1_poll(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_statline_before(char *buf, struct cgpu_info *cgpu)
-{
-	char before[] = "                    ";
-	if(cgpu->device_data)
-	{
-		struct BF1Info *info = (struct BF1Info *)cgpu->device_data;
-
-		int len = strlen(info->id.product);
-		memcpy(before, info->id.product, len);
-
-		sprintf(before + len + 1, "%08X", info->id.serial);
-	}
-	tailsprintf(buf, "%s | ", &before[0]);
-}
-
-//------------------------------------------------------------------------------
 static void bf1_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
@@ -431,7 +409,6 @@ struct device_drv bf1_drv = {
 	.minerloop = hash_queued_work,
 
 	.drv_detect = bf1_detect,
-	.get_statline_before = bf1_statline_before,
 
 	.identify_device = bf1_identify,
 

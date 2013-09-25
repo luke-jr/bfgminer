@@ -18,16 +18,13 @@
 
 #include <stdbool.h>
 
-// NOTE: Nested preprocessor checks since the latter isn't defined at all without the former
-#ifdef HAVE_LIBUSB
-#	if ! HAVE_DECL_LIBUSB_ERROR_NAME
-		static char my_libusb_error_name_buf[0x10];
-#		define libusb_error_name(x) (sprintf(my_libusb_error_name_buf, "%d", x), my_libusb_error_name_buf)
-#	endif
+#if !(defined(WIN32) || defined(unix))
+#define unix
 #endif
 
 #ifdef WIN32
 #include <errno.h>
+#include <fcntl.h>
 #include <time.h>
 #include <pthread.h>
 #include <sys/time.h>

@@ -1,6 +1,7 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 # Copyright 2012 Xiangfu
 # Copyright 2012-2013 Andrew Smith
+# Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -39,7 +40,7 @@ if len(sys.argv) < 2:
 	sys.exit("Aborting")
 
 # Open with a 10 second timeout - just to be sure
-ser = serial.Serial(sys.argv[1], 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE, 10, False, False, 5, False, None)
+ser = serial.Serial(sys.argv[1], 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE, 10, False, False, 5)
 
 if sys.argv[2] == "icarus":
 
@@ -48,32 +49,32 @@ if sys.argv[2] == "icarus":
 	block = "0000000120c8222d0497a7ab44a1a2c7bf39de941c9970b1dc7cdc400000079700000000e88aabe1f353238c668d8a4df9318e614c10c474f8cdf8bc5f6397b946c33d7c4e7242c31a098ea500000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000"
 	midstate = "33c5bf5751ec7f7e056443b5aee3800331432c83f404d9de38b94ecbf907b92d"
 
-	rdata2  = block.decode('hex')[95:63:-1]
-	rmid    = midstate.decode('hex')[::-1]
+	rdata2  = binascii.a2b_hex(block.encode('ascii'))[95:63:-1]
+	rmid    = binascii.a2b_hex(midstate.encode('ascii'))[::-1]
 	payload = rmid + rdata2
 
-	print("Push payload to icarus: " + binascii.hexlify(payload))
+	print("Push payload to icarus: " + binascii.hexlify(payload).decode('ascii'))
 	ser.write(payload)
 
 	b=ser.read(4)
-	print("Result:(should be: 063c5e01): " + binascii.hexlify(b))
+	print("Result:(should be: 063c5e01): " + binascii.hexlify(b).decode('ascii'))
 
 	# Just another test
 	payload2 = "ce92099c5a80bb81c52990d5c0924c625fd25a535640607d5a4bdf8174e2c8d500000000000000000000000080000000000000000b290c1a42313b4f21b5bcb8"
 	print("Push payload to icarus: " + payload2)
-	ser.write(payload2.decode('hex'))
+	ser.write(binascii.a2b_hex(payload2.encode('ascii')))
 
 	b=ser.read(4)
-	print("Result:(should be: 8e0b31c5): " + binascii.hexlify(b))
+	print("Result:(should be: 8e0b31c5): " + binascii.hexlify(b).decode('ascii'))
 else:
-	data = ""
+	data = b""
 	for arg in sys.argv[2::]:
 		if arg[0:2:] == '0x':
-			data += arg[2::].decode('hex')
+			data += binascii.a2b_hex(arg[2::].encode('ascii'))
 		else:
-			data += arg
+			data += arg.encode('latin-1')
 
-	print("Sending: 0x" + binascii.hexlify(data))
+	print("Sending: 0x" + binascii.hexlify(data).decode('ascii'))
 	ser.write(data)
 
 	# If you're expecting more than one linefeed terminated reply,
@@ -81,9 +82,8 @@ else:
 	# AND with no linefeed, this will wait the 10 seconds before returning
 	print("Waiting up to 10 seconds ...")
 	b=ser.readline()
-	print("Result: hex 0x" + binascii.hexlify(b))
+	print("Result: hex 0x" + binascii.hexlify(b).decode('ascii'))
 
-	# This could mess up the display - do it last
-	print("Result: asc '" + b + "'")
+	print("Result: asc %s" % (repr(b),))
 
 ser.close()

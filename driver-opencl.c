@@ -39,6 +39,7 @@
 #define OMIT_OPENCL_API
 
 #include "compat.h"
+#include "fpgautils.h"
 #include "miner.h"
 #include "driver-opencl.h"
 #include "findnonce.h"
@@ -834,217 +835,145 @@ struct device_drv opencl_api;
 #endif /* HAVE_OPENCL */
 
 #if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
-void manage_gpu(void)
+static
+void opencl_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct thr_info *thr;
-	int selected, gpu, i;
+	int i;
 	char checkin[40];
-	char input;
-
-	if (!opt_g_threads)
-		return;
-
-	opt_loginput = true;
-	immedok(logwin, true);
-	clear_logwin();
-retry:
-
-	for (gpu = 0; gpu < nDevs; gpu++) {
-		struct cgpu_info *cgpu = &gpus[gpu];
-		double displayed_rolling, displayed_total;
-		bool mhash_base = true;
-
-		displayed_rolling = cgpu->rolling;
-		displayed_total = cgpu->total_mhashes / cgpu_runtime(cgpu);
-		if (displayed_rolling < 1) {
-			displayed_rolling *= 1000;
-			displayed_total *= 1000;
-			mhash_base = false;
-		}
-
-		wlog("%"PRIpreprv": %.1f / %.1f %sh/s | A:%d  R:%d  HW:%d  U:%.2f/m  I:%d\n",
-			cgpu->proc_repr,
-			displayed_rolling, displayed_total, mhash_base ? "M" : "K",
-			cgpu->accepted, cgpu->rejected, cgpu->hw_errors,
-			cgpu->utility, cgpu->intensity);
+	double displayed_rolling;
+	bool mhash_base = !(cgpu->rolling < 1);
+	char logline[255];
+	strcpy(logline, ""); // In case it has no data
+	
+	tailsprintf(logline, "I:%s%d  ", (cgpu->dynamic ? "d" : ""), cgpu->intensity);
 #ifdef HAVE_ADL
-		if (gpus[gpu].has_adl) {
-			int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
-			float temp = 0, vddc = 0;
+	if (cgpu->has_adl) {
+		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
+		float temp = 0, vddc = 0;
 
-			if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
-				char logline[255];
-
-				strcpy(logline, ""); // In case it has no data
-				if (temp != -1)
-					sprintf(logline, "%.1f C  ", temp);
-				if (fanspeed != -1 || fanpercent != -1) {
-					tailsprintf(logline, "F: ");
-					if (fanpercent != -1)
-						tailsprintf(logline, "%d%% ", fanpercent);
+		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
+			if (fanspeed != -1 || fanpercent != -1) {
+				tailsprintf(logline, "F: ");
+				if (fanpercent != -1)
+				{
+					tailsprintf(logline, "%d%% ", fanpercent);
 					if (fanspeed != -1)
 						tailsprintf(logline, "(%d RPM) ", fanspeed);
-					tailsprintf(logline, " ");
 				}
-				if (engineclock != -1)
-					tailsprintf(logline, "E: %d MHz  ", engineclock);
-				if (memclock != -1)
-					tailsprintf(logline, "M: %d MHz  ", memclock);
-				if (vddc != -1)
-					tailsprintf(logline, "V: %.3fV  ", vddc);
-				if (activity != -1)
-					tailsprintf(logline, "A: %d%%  ", activity);
-				if (powertune != -1)
-					tailsprintf(logline, "P: %d%%", powertune);
-				tailsprintf(logline, "\n");
-				_wlog(logline);
+				else
+					tailsprintf(logline, "%d RPM ", fanspeed);
+				tailsprintf(logline, " ");
 			}
+			if (engineclock != -1)
+				tailsprintf(logline, "E: %d MHz  ", engineclock);
+			if (memclock != -1)
+				tailsprintf(logline, "M: %d MHz  ", memclock);
+			if (vddc != -1)
+				tailsprintf(logline, "V: %.3fV  ", vddc);
+			if (activity != -1)
+				tailsprintf(logline, "A: %d%%  ", activity);
+			if (powertune != -1)
+				tailsprintf(logline, "P: %d%%", powertune);
 		}
-#endif
-		wlog("Last initialised: %s\n", cgpu->init);
-		wlog("Intensity: ");
-		if (gpus[gpu].dynamic)
-			wlog("Dynamic (only one thread in use)\n");
-		else
-			wlog("%d\n", gpus[gpu].intensity);
-		for (i = 0; i < mining_threads; i++) {
-			thr = get_thread(i);
-			if (thr->cgpu != cgpu)
-				continue;
-			get_datestamp(checkin, &thr->last);
-			displayed_rolling = thr->rolling;
-			if (!mhash_base)
-				displayed_rolling *= 1000;
-			wlog("Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
-			switch (cgpu->status) {
-				default:
-				case LIFE_WELL:
-					wlog("ALIVE");
-					break;
-				case LIFE_SICK:
-					wlog("SICK reported in %s", checkin);
-					break;
-				case LIFE_DEAD:
-					wlog("DEAD reported in %s", checkin);
-					break;
-				case LIFE_INIT:
-				case LIFE_NOSTART:
-					wlog("Never started");
-					break;
-			}
-			if (thr->pause)
-				wlog(" paused");
-			wlog("\n");
-		}
-		wlog("\n");
 	}
-
-	wlogprint("[E]nable [D]isable [I]ntensity [R]estart GPU %s\n",adl_active ? "[C]hange settings" : "");
-
-	wlogprint("Or press any other key to continue\n");
-	logwin_update();
-	input = getch();
-
-	if (nDevs == 1)
-		selected = 0;
-	else
-		selected = -1;
-	if (!strncasecmp(&input, "e", 1)) {
-		struct cgpu_info *cgpu;
-
-		if (selected)
-			selected = curses_int("Select GPU to enable");
-		if (selected < 0 || selected >= nDevs) {
-			wlogprint("Invalid selection\n");
-			goto retry;
+#endif
+	
+	wlogprint("%s\n", logline);
+	
+	wlogprint("Last initialised: %s\n", cgpu->init);
+	
+	for (i = 0; i < mining_threads; i++) {
+		thr = get_thread(i);
+		if (thr->cgpu != cgpu)
+			continue;
+		
+		get_datestamp(checkin, &thr->last);
+		displayed_rolling = thr->rolling;
+		if (!mhash_base)
+			displayed_rolling *= 1000;
+		sprintf(logline, "Thread %d: %.1f %sh/s %s ", i, displayed_rolling, mhash_base ? "M" : "K" , cgpu->deven != DEV_DISABLED ? "Enabled" : "Disabled");
+		switch (cgpu->status) {
+			default:
+			case LIFE_WELL:
+				tailsprintf(logline, "ALIVE");
+				break;
+			case LIFE_SICK:
+				tailsprintf(logline, "SICK reported in %s", checkin);
+				break;
+			case LIFE_DEAD:
+				tailsprintf(logline, "DEAD reported in %s", checkin);
+				break;
+			case LIFE_INIT:
+			case LIFE_NOSTART:
+				tailsprintf(logline, "Never started");
+				break;
 		}
-		cgpu = &gpus[selected];
-		if (gpus[selected].deven != DEV_DISABLED) {
-			wlogprint("Device already enabled\n");
-			goto retry;
-		}
-		gpus[selected].deven = DEV_ENABLED;
-		if (cgpu->status != LIFE_WELL) {
-			wlogprint("Must restart device before enabling it");
-			goto retry;
-		}
-		proc_enable(cgpu);
-		goto retry;
-	} if (!strncasecmp(&input, "d", 1)) {
-		if (selected)
-			selected = curses_int("Select GPU to disable");
-		if (selected < 0 || selected >= nDevs) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		if (gpus[selected].deven == DEV_DISABLED) {
-			wlogprint("Device already disabled\n");
-			goto retry;
-		}
-		gpus[selected].deven = DEV_DISABLED;
-		goto retry;
-	} else if (!strncasecmp(&input, "i", 1)) {
-		int intensity;
-		char *intvar;
-
-		if (selected)
-			selected = curses_int("Select GPU to change intensity on");
-		if (selected < 0 || selected >= nDevs) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
-		if (!intvar) {
-			wlogprint("Invalid input\n");
-			goto retry;
-		}
-		if (!strncasecmp(intvar, "d", 1)) {
-			wlogprint("Dynamic mode enabled on gpu %d\n", selected);
-			gpus[selected].dynamic = true;
-			pause_dynamic_threads(selected);
-			free(intvar);
-			goto retry;
-		}
-		intensity = atoi(intvar);
-		free(intvar);
-		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		gpus[selected].dynamic = false;
-		gpus[selected].intensity = intensity;
-		wlogprint("Intensity on gpu %d set to %d\n", selected, intensity);
-		pause_dynamic_threads(selected);
-		goto retry;
-	} else if (!strncasecmp(&input, "r", 1)) {
-		if (selected)
-			selected = curses_int("Select GPU to attempt to restart");
-		if (selected < 0 || selected >= nDevs) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		wlogprint("Attempting to restart threads of GPU %d\n", selected);
-		reinit_device(&gpus[selected]);
-		goto retry;
-	} else if (adl_active && (!strncasecmp(&input, "c", 1))) {
-		if (selected)
-			selected = curses_int("Select GPU to change settings on");
-		if (selected < 0 || selected >= nDevs) {
-			wlogprint("Invalid selection\n");
-			goto retry;
-		}
-		change_gpusettings(selected);
-		goto retry;
-	} else
-		clear_logwin();
-
-	immedok(logwin, false);
-	opt_loginput = false;
+		if (thr->pause)
+			tailsprintf(logline, " paused");
+		wlogprint("%s\n", logline);
+	}
 }
-#else
-void manage_gpu(void)
+
+static
+void opencl_tui_wlogprint_choices(struct cgpu_info *cgpu)
 {
+	wlogprint("[I]ntensity [R]estart GPU ");
+#ifdef HAVE_ADL
+	if (cgpu->has_adl)
+		wlogprint("[C]hange settings ");
+#endif
 }
+
+static
+const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	switch (input)
+	{
+		case 'i': case 'I':
+		{
+			int intensity;
+			char *intvar;
+
+			intvar = curses_input("Set GPU scan intensity (d or " _MIN_INTENSITY_STR " -> " _MAX_INTENSITY_STR ")");
+			if (!intvar)
+				return "Invalid intensity\n";
+			if (!strncasecmp(intvar, "d", 1)) {
+				cgpu->dynamic = true;
+				pause_dynamic_threads(cgpu->device_id);
+				free(intvar);
+				return "Dynamic mode enabled\n";
+			}
+			intensity = atoi(intvar);
+			free(intvar);
+			if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY)
+				return "Invalid intensity (out of range)\n";
+			cgpu->dynamic = false;
+			cgpu->intensity = intensity;
+			pause_dynamic_threads(cgpu->device_id);
+			return "Intensity changed\n";
+		}
+		case 'r': case 'R':
+			reinit_device(cgpu);
+			return "Attempting to restart\n";
+		case 'c': case 'C':
+		{
+			char logline[256];
+			
+			clear_logwin();
+			get_statline3(logline, cgpu, true, true);
+			wattron(logwin, A_BOLD);
+			waddstr(logwin, logline);
+			wattroff(logwin, A_BOLD);
+			wlogprint("\n");
+			
+			change_gpusettings(cgpu->device_id);
+			return "";  // Force refresh
+		}
+	}
+	return NULL;
+}
+
 #endif
 
 
@@ -1408,7 +1337,7 @@ void *reinit_gpu(__maybe_unused void *userdata)
 #ifdef HAVE_OPENCL
 struct device_drv opencl_api;
 
-static void opencl_detect()
+static int opencl_autodetect()
 {
 #ifndef WIN32
 	if (!getenv("DISPLAY")) {
@@ -1419,7 +1348,7 @@ static void opencl_detect()
 
 	if (!load_opencl_symbols()) {
 		nDevs = 0;
-		return;
+		return 0;
 	}
 
 
@@ -1432,7 +1361,7 @@ static void opencl_detect()
 	}
 
 	if (!nDevs)
-		return;
+		return 0;
 
 	/* If opt_g_threads is not set, use default 1 thread on scrypt and
 	 * 2 for regular mining */
@@ -1478,6 +1407,16 @@ static void opencl_detect()
 
 	if (!opt_noadl)
 		init_adl(nDevs);
+	
+	return nDevs;
+}
+
+static void opencl_detect()
+{
+	RUNONCE();
+	
+	// This wrapper ensures users can specify -S opencl:noauto to disable it
+	noserial_detect(&opencl_api, opencl_autodetect);
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)
@@ -1485,7 +1424,9 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 	tq_push(control_thr[gpur_thr_id].q, gpu);
 }
 
-static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
+// FIXME: Legacy (called by TUI) for side effects
+static
+bool override_opencl_statline_temp(char *buf, struct cgpu_info *gpu, __maybe_unused bool per_processor)
 {
 #ifdef HAVE_SENSORS
 	struct opencl_device_data *data = gpu->device_data;
@@ -1506,33 +1447,18 @@ static void get_opencl_statline_before(char *buf, struct cgpu_info *gpu)
 				continue;
 			
 			gpu->temp = val;
-			tailsprintf(buf, "%5.1fC         | ", val);
-			return;
+			return false;
 		}
 	}
 #endif
 #ifdef HAVE_ADL
 	if (gpu->has_adl) {
 		int gpuid = gpu->device_id;
-		float gt = gpu_temp(gpuid);
-		int gf = gpu_fanspeed(gpuid);
-		int gp;
-
-		if (gt != -1)
-			tailsprintf(buf, "%5.1fC ", gt);
-		else
-			tailsprintf(buf, "       ");
-		if (gf != -1)
-			tailsprintf(buf, "%4dRPM ", gf);
-		else if ((gp = gpu_fanpercent(gpuid)) != -1)
-			tailsprintf(buf, "%3d%%    ", gp);
-		else
-			tailsprintf(buf, "        ");
-		tailsprintf(buf, "| ");
+		gpu_temp(gpuid);
+		gpu_fanspeed(gpuid);
 	}
-	else
 #endif
-		tailsprintf(buf, "               | ");
+	return false;
 }
 
 static struct api_data*
@@ -1835,7 +1761,12 @@ struct device_drv opencl_api = {
 	.name = "OCL",
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
-	.get_statline_before = get_opencl_statline_before,
+	.override_statline_temp = override_opencl_statline_temp,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = opencl_wlogprint_status,
+	.proc_tui_wlogprint_choices = opencl_tui_wlogprint_choices,
+	.proc_tui_handle_choice = opencl_tui_handle_choice,
+#endif
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,

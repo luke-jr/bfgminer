@@ -124,6 +124,9 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 
 static bool x6500_foundusb(libusb_device *dev, const char *product, const char *serial)
 {
+	if (bfg_claim_libusb(&x6500_api, true, dev))
+		return false;
+	
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
 	x6500->drv = &x6500_api;
@@ -135,6 +138,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
 	x6500->device_data = dev;
+	cgpu_copy_libusb_strings(x6500, dev);
 
 	return add_cgpu(x6500);
 }
@@ -224,7 +228,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 
 	applog(LOG_WARNING, "%s: Programming %s...",
 	       x6500->dev_repr, x6500->device_path);
-	x6500->status = LIFE_INIT;
+	x6500->status = LIFE_INIT2;
 	
 	// "Magic" jtag_port configured to access both FPGAs concurrently
 	struct jtag_port jpt = {
@@ -341,6 +345,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	notifier_init(thr->mutex_request);
 	pthread_cond_init(&x6500->device_cond, NULL);
 	
+	// This works because x6500_thread_init is only called for the first processor now that they're all using the same thread
 	for ( ; x6500; x6500 = x6500->next_proc)
 	{
 		thr = x6500->thr[0];
@@ -360,6 +365,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	jp->a = x6500->device_data;
 	x6500_jtag_set(jp, pinoffset);
 	thr->cgpu_data = fpga;
+	x6500->status = LIFE_INIT2;
 	
 	if (!jtag_reset(jp)) {
 		applog(LOG_ERR, "%s: JTAG reset failed",
@@ -389,7 +395,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
 			return false;
-	} else if (opt_force_dev_init && x6500->status == LIFE_INIT) {
+	} else if (opt_force_dev_init && x6500 == x6500->device) {
 		applog(LOG_DEBUG, "%"PRIprepr": FPGA is already programmed, but --force-dev-init is set",
 		       x6500->proc_repr);
 		if (!x6500_fpga_upload_bitstream(x6500, jp))
@@ -557,55 +563,14 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 }
 
 static
-bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500)
+bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500, __maybe_unused bool per_processor)
 {
-	char info[18] = "               | ";
-
 	unsigned char pdone = *((unsigned char*)x6500->device_data - 1);
 	if (pdone != 101) {
-		sprintf(&info[1], "%3d%%", pdone);
-		info[5] = ' ';
-		strcat(buf, info);
+		tailsprintf(buf, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
-}
-
-static
-void get_x6500_statline_before(char *buf, struct cgpu_info *x6500)
-{
-	if (get_x6500_upload_percent(buf, x6500))
-		return;
-
-	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga = x6500->thr[0]->cgpu_data;
-
-	if (fpga->temp) {
-		sprintf(&info[1], "%.1fC", fpga->temp);
-		info[strlen(info)] = ' ';
-		strcat(buf, info);
-		return;
-	}
-	strcat(buf, "               | ");
-}
-
-static
-void get_x6500_dev_statline_before(char *buf, struct cgpu_info *x6500)
-{
-	if (get_x6500_upload_percent(buf, x6500))
-		return;
-
-	char info[18] = "               | ";
-	struct x6500_fpga_data *fpga0 = x6500->thr[0]->cgpu_data;
-	struct x6500_fpga_data *fpga1 = x6500->next_proc->thr[0]->cgpu_data;
-
-	if (x6500->temp) {
-		sprintf(&info[1], "%.1fC/%.1fC", fpga0->temp, fpga1->temp);
-		info[strlen(info)] = ' ';
-		strcat(buf, info);
-		return;
-	}
-	strcat(buf, "               | ");
 }
 
 static struct api_data*
@@ -682,10 +647,10 @@ void x6500_job_start(struct thr_info *thr)
 	mt_job_transition(thr);
 	
 	if (opt_debug) {
-		char *xdata = bin2hex(thr->work->data, 80);
+		char xdata[161];
+		bin2hex(xdata, thr->work->data, 80);
 		applog(LOG_DEBUG, "%"PRIprepr": Started work: %s",
 		       x6500->proc_repr, xdata);
-		free(xdata);
 	}
 
 	uint32_t usecs = 0x80000000 / fpga->dclk.freqM;
@@ -745,11 +710,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 				       x6500->proc_repr,
 				       (unsigned long)nonce);
 			} else {
-				applog(LOG_DEBUG, "%"PRIprepr": Nonce with H not zero  : %08lx",
-				       x6500->proc_repr,
-				       (unsigned long)nonce);
-				++hw_errors;
-				++x6500->hw_errors;
+				inc_hw_errors(thr, work, nonce);
 
 				dclk_gotNonces(&fpga->dclk);
 				dclk_errorCount(&fpga->dclk, 1.);
@@ -786,11 +747,10 @@ struct device_drv x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
 	.drv_detect = x6500_detect,
-	.get_dev_statline_before = get_x6500_dev_statline_before,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_thread_init,
 	.get_stats = x6500_get_stats,
-	.get_statline_before = get_x6500_statline_before,
+	.override_statline_temp = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.poll = x6500_fpga_poll,
 	.minerloop = minerloop_async,

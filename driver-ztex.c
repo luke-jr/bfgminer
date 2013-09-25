@@ -61,6 +61,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 	ztex->device_ztex = dev;
 	ztex->procs = fpgacount;
 	ztex->threads = fpgacount;
+	ztex->dev_manufacturer = dev->dev_manufacturer;
+	ztex->dev_product = dev->dev_product;
+	ztex->dev_serial = (char*)&dev->snString[0];
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->dev_repr);
 	ztex->name = fpganame;
@@ -85,6 +88,8 @@ static int ztex_autodetect(void)
 
 	for (i = 0; i < cnt; i++) {
 		ztex_master = ztex_devices[i]->dev;
+		if (bfg_claim_usb(&ztex_drv, true, ztex_master->usbbus, ztex_master->usbaddress))
+			return false;
 		ztex_master->root = ztex_master;
 		fpgacount = libztex_numberOfFpgas(ztex_master);
 		ztex_master->handles = fpgacount;
@@ -266,8 +271,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				if (count > 2)
 					dclk_errorCount(&ztex->dclk, 1.0 / ztex->numNonces);
 
-				thr->cgpu->hw_errors++;
-				++hw_errors;
+				inc_hw_errors_only(thr);
 			}
 
 			for (j=0; j<=ztex->extraSolutions; j++) {
@@ -319,19 +323,6 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	return noncecnt;
 }
 
-static void ztex_statline_before(char *buf, struct cgpu_info *cgpu)
-{
-	char before[] = "               ";
-	if (cgpu->device_ztex) {
-		const char *snString = (char*)cgpu->device_ztex->snString;
-		size_t snStringLen = strlen(snString);
-		if (snStringLen > 14)
-			snStringLen = 14;
-		memcpy(before, snString, snStringLen);
-	}
-	tailsprintf(buf, "%s| ", &before[0]);
-}
-
 static struct api_data*
 get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 {
@@ -375,6 +366,7 @@ static bool ztex_prepare(struct thr_info *thr)
 	ztex_releaseFpga(ztex);
 	notifier_init(thr->work_restart_notifier);
 	applog(LOG_DEBUG, "%"PRIpreprv": prepare", cgpu->proc_repr);
+	cgpu->status = LIFE_INIT2;
 	return true;
 }
 
@@ -407,7 +399,6 @@ struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
 	.drv_detect = ztex_detect,
-	.get_statline_before = ztex_statline_before,
 	.get_api_extra_device_status = get_ztex_drv_extra_device_status,
 	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,

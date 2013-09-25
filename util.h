@@ -30,7 +30,8 @@
 	#define INVINETADDR -1
 	#define CLOSESOCKET close
 
-	#define SOCKERRMSG strerror(errno)
+	#define SOCKERR (errno)
+	#define SOCKERRMSG bfg_strerror(errno, BST_SOCKET)
 	static inline bool sock_blocks(void)
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
@@ -45,8 +46,8 @@
 	#define INVINETADDR INADDR_NONE
 	#define CLOSESOCKET closesocket
 
-	extern char *WSAErrorMsg(void);
-	#define SOCKERRMSG WSAErrorMsg()
+	#define SOCKERR (WSAGetLastError())
+	#define SOCKERRMSG bfg_strerror(WSAGetLastError(), BST_SOCKET)
 
 	static inline bool sock_blocks(void)
 	{
@@ -111,6 +112,13 @@ void *realloc_strcat(char *ptr, char *s);
 extern char *sanestr(char *o, char *s);
 void RenameThread(const char* name);
 
+enum bfg_strerror_type {
+	BST_ERRNO,
+	BST_SOCKET,
+	BST_LIBUSB,
+};
+extern const char *bfg_strerror(int, enum bfg_strerror_type);
+
 typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
@@ -122,6 +130,69 @@ static inline void align_len(size_t *len)
 {
 	if (*len % 4)
 		*len += 4 - (*len % 4);
+}
+
+
+typedef struct bytes_t {
+	uint8_t *buf;
+	size_t sz;
+	size_t allocsz;
+} bytes_t;
+
+// This can't be inline without ugly const/non-const issues
+#define bytes_buf(b)  ((b)->buf)
+
+static inline
+size_t bytes_len(const bytes_t *b)
+{
+	return b->sz;
+}
+
+extern void _bytes_alloc_failure(size_t);
+
+static inline
+void bytes_resize(bytes_t *b, size_t newsz)
+{
+	b->sz = newsz;
+	if (newsz <= b->allocsz)
+		return;
+	
+	if (!b->allocsz)
+		b->allocsz = 0x10;
+	do {
+		b->allocsz *= 2;
+	} while (newsz > b->allocsz);
+	b->buf = realloc(b->buf, b->allocsz);
+	if (!b->buf)
+		_bytes_alloc_failure(b->allocsz);
+}
+
+static inline
+void bytes_cat(bytes_t *b, const bytes_t *cat)
+{
+	size_t origsz = bytes_len(b);
+	size_t addsz = bytes_len(cat);
+	bytes_resize(b, origsz + addsz);
+	memcpy(&bytes_buf(b)[origsz], bytes_buf(cat), addsz);
+}
+
+static inline
+void bytes_cpy(bytes_t *dst, const bytes_t *src)
+{
+	dst->allocsz = src->allocsz;
+	dst->sz = src->sz;
+	size_t half;
+	while (dst->sz <= (half = dst->allocsz / 2))
+		dst->allocsz = half;
+	dst->buf = malloc(dst->allocsz);
+	memcpy(dst->buf, src->buf, dst->sz);
+}
+
+static inline
+void bytes_free(bytes_t *b)
+{
+	free(b->buf);
+	b->sz = b->allocsz = 0;
 }
 
 
@@ -178,6 +249,28 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 		timersub(tvp_timeout, tvp_now, tvp_timeout);
 	
 	return tvp_timeout;
+}
+
+
+#define RUNONCE(rv)  do {  \
+	static bool _runonce = false;  \
+	if (_runonce)  \
+		return rv;  \
+	_runonce = true;  \
+} while(0)
+
+
+static inline
+char *maybe_strdup(const char *s)
+{
+	return s ? strdup(s) : NULL;
+}
+
+static inline
+void maybe_strdup_if_null(const char **p, const char *s)
+{
+	if (!*p)
+		*p = maybe_strdup(s);
 }
 
 

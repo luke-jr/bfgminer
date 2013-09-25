@@ -63,12 +63,13 @@ void ft232r_scan()
 	struct ft232r_device_info *info;
 	int err;
 	unsigned char buf[0x100];
+	int skipped = 0;
 
 	ft232r_scan_free();
 
 	count = libusb_get_device_list(NULL, &list);
 	if (unlikely(count < 0)) {
-		applog(LOG_ERR, "ft232r_scan: Error getting USB device list: %s", libusb_error_name(count));
+		applog(LOG_ERR, "ft232r_scan: Error getting USB device list: %s", bfg_strerror(count, BST_LIBUSB));
 		ft232r_devinfo_list = calloc(1, sizeof(struct ft232r_device_info *));
 		return;
 	}
@@ -76,9 +77,15 @@ void ft232r_scan()
 	ft232r_devinfo_list = malloc(sizeof(struct ft232r_device_info *) * (count + 1));
 
 	for (i = 0; i < count; ++i) {
+		if (bfg_claim_libusb(NULL, false, list[i]))
+		{
+			++skipped;
+			continue;
+		}
+		
 		err = libusb_get_device_descriptor(list[i], &desc);
 		if (unlikely(err)) {
-			applog(LOG_ERR, "ft232r_scan: Error getting device descriptor: %s", libusb_error_name(err));
+			applog(LOG_ERR, "ft232r_scan: Error getting device descriptor: %s", bfg_strerror(err, BST_LIBUSB));
 			continue;
 		}
 		if (!(desc.idVendor == FT232R_IDVENDOR && desc.idProduct == FT232R_IDPRODUCT)) {
@@ -88,14 +95,14 @@ void ft232r_scan()
 
 		err = libusb_open(list[i], &handle);
 		if (unlikely(err)) {
-			applog(LOG_ERR, "ft232r_scan: Error opening device: %s", libusb_error_name(err));
+			applog(LOG_ERR, "ft232r_scan: Error opening device: %s", bfg_strerror(err, BST_LIBUSB));
 			continue;
 		}
 
 		n = libusb_get_string_descriptor_ascii(handle, desc.iProduct, buf, sizeof(buf)-1);
 		if (unlikely(n < 0)) {
 			libusb_close(handle);
-			applog(LOG_ERR, "ft232r_scan: Error getting iProduct string: %s", libusb_error_name(n));
+			applog(LOG_ERR, "ft232r_scan: Error getting iProduct string: %s", bfg_strerror(n, BST_LIBUSB));
 			continue;
 		}
 		buf[n] = '\0';
@@ -105,7 +112,7 @@ void ft232r_scan()
 		n = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, buf, sizeof(buf)-1);
 		libusb_close(handle);
 		if (unlikely(n < 0)) {
-			applog(LOG_ERR, "ft232r_scan: Error getting iSerialNumber string: %s", libusb_error_name(n));
+			applog(LOG_ERR, "ft232r_scan: Error getting iSerialNumber string: %s", bfg_strerror(n, BST_LIBUSB));
 			n = 0;
 		}
 		buf[n] = '\0';
@@ -118,6 +125,9 @@ void ft232r_scan()
 
 	ft232r_devinfo_list[found] = NULL;
 	libusb_free_device_list(list, 1);
+	
+	if (skipped)
+		applog(LOG_DEBUG, "%s: Skipping probe of %d claimed devices", __func__, skipped);
 }
 
 int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_t cb)

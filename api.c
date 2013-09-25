@@ -48,81 +48,6 @@
 // However lots of PGA's may mean more
 #define QUEUE	100
 
-#if defined WIN32
-static char WSAbuf[1024];
-
-struct WSAERRORS {
-	int id;
-	char *code;
-} WSAErrors[] = {
-	{ 0,			"No error" },
-	{ WSAEINTR,		"Interrupted system call" },
-	{ WSAEBADF,		"Bad file number" },
-	{ WSAEACCES,		"Permission denied" },
-	{ WSAEFAULT,		"Bad address" },
-	{ WSAEINVAL,		"Invalid argument" },
-	{ WSAEMFILE,		"Too many open sockets" },
-	{ WSAEWOULDBLOCK,	"Operation would block" },
-	{ WSAEINPROGRESS,	"Operation now in progress" },
-	{ WSAEALREADY,		"Operation already in progress" },
-	{ WSAENOTSOCK,		"Socket operation on non-socket" },
-	{ WSAEDESTADDRREQ,	"Destination address required" },
-	{ WSAEMSGSIZE,		"Message too long" },
-	{ WSAEPROTOTYPE,	"Protocol wrong type for socket" },
-	{ WSAENOPROTOOPT,	"Bad protocol option" },
-	{ WSAEPROTONOSUPPORT,	"Protocol not supported" },
-	{ WSAESOCKTNOSUPPORT,	"Socket type not supported" },
-	{ WSAEOPNOTSUPP,	"Operation not supported on socket" },
-	{ WSAEPFNOSUPPORT,	"Protocol family not supported" },
-	{ WSAEAFNOSUPPORT,	"Address family not supported" },
-	{ WSAEADDRINUSE,	"Address already in use" },
-	{ WSAEADDRNOTAVAIL,	"Can't assign requested address" },
-	{ WSAENETDOWN,		"Network is down" },
-	{ WSAENETUNREACH,	"Network is unreachable" },
-	{ WSAENETRESET,		"Net connection reset" },
-	{ WSAECONNABORTED,	"Software caused connection abort" },
-	{ WSAECONNRESET,	"Connection reset by peer" },
-	{ WSAENOBUFS,		"No buffer space available" },
-	{ WSAEISCONN,		"Socket is already connected" },
-	{ WSAENOTCONN,		"Socket is not connected" },
-	{ WSAESHUTDOWN,		"Can't send after socket shutdown" },
-	{ WSAETOOMANYREFS,	"Too many references, can't splice" },
-	{ WSAETIMEDOUT,		"Connection timed out" },
-	{ WSAECONNREFUSED,	"Connection refused" },
-	{ WSAELOOP,		"Too many levels of symbolic links" },
-	{ WSAENAMETOOLONG,	"File name too long" },
-	{ WSAEHOSTDOWN,		"Host is down" },
-	{ WSAEHOSTUNREACH,	"No route to host" },
-	{ WSAENOTEMPTY,		"Directory not empty" },
-	{ WSAEPROCLIM,		"Too many processes" },
-	{ WSAEUSERS,		"Too many users" },
-	{ WSAEDQUOT,		"Disc quota exceeded" },
-	{ WSAESTALE,		"Stale NFS file handle" },
-	{ WSAEREMOTE,		"Too many levels of remote in path" },
-	{ WSASYSNOTREADY,	"Network system is unavailable" },
-	{ WSAVERNOTSUPPORTED,	"Winsock version out of range" },
-	{ WSANOTINITIALISED,	"WSAStartup not yet called" },
-	{ WSAEDISCON,		"Graceful shutdown in progress" },
-	{ WSAHOST_NOT_FOUND,	"Host not found" },
-	{ WSANO_DATA,		"No host data of that type was found" },
-	{ -1,			"Unknown error code" }
-};
-
-char *WSAErrorMsg(void) {
-	int i;
-	int id = WSAGetLastError();
-
-	/* Assume none of them are actually -1 */
-	for (i = 0; WSAErrors[i].id != -1; i++)
-		if (WSAErrors[i].id == id)
-			break;
-
-	sprintf(WSAbuf, "Socket Error: (%d) %s", id, WSAErrors[i].code);
-
-	return &(WSAbuf[0]);
-}
-#endif
-
 static const char *UNAVAILABLE = " - API will not be available";
 
 static const char *BLANK = "";
@@ -398,6 +323,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERSUM 96
 #define MSG_ZERNOSUM 97
 
+#define MSG_DEVSCAN 0x100
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -407,6 +334,7 @@ enum code_severity {
 };
 
 enum code_parameters {
+	PARAM_COUNT,
 	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_CPU,
@@ -572,6 +500,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_ZERINV,	PARAM_STR,	"Invalid zero parameter '%s'" },
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
+ { SEVERITY_SUCC,  MSG_DEVSCAN, PARAM_COUNT,	"Added %d new device(s)" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1262,6 +1191,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			severity[1] = '\0';
 
 			switch(codes[i].params) {
+				case PARAM_COUNT:
 				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_CPU:
@@ -1464,6 +1394,7 @@ static const char *status2str(enum alive status)
 		case LIFE_NOSTART:
 			return NOSTART;
 		case LIFE_INIT:
+		case LIFE_INIT2:
 			return INIT;
 		case LIFE_WAIT:
 			return WAIT;
@@ -1660,6 +1591,31 @@ static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 		io_close(io_data);
 }
 #endif
+
+static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+	int n;
+	bool io_open = false;
+	
+	applog(LOG_DEBUG, "RPC: request to scan %s for devices",
+	       param);
+	
+	if (param && !param[0])
+		param = NULL;
+	
+	n = scan_serial(param);
+	
+	message(io_data, MSG_DEVSCAN, n, NULL, isjson);
+	
+	io_open = io_add(io_data, isjson ? COMSTR JSON_DEVS : _DEVS COMSTR);
+
+	n = total_devices - n;
+	for (int i = n; i < total_devices; ++i)
+		devdetail_an(io_data, get_devices(i), isjson, i > n);
+	
+	if (isjson && io_open)
+		io_close(io_data);
+}
 
 #ifdef HAVE_AN_FPGA
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -3150,6 +3106,7 @@ struct CMDS {
 } cmds[] = {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
+	{ "devscan",		devscan,	false },
 	{ "devs",		devstatus,	false },
 	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
@@ -3610,7 +3567,7 @@ void api(int api_thr_id)
 	SOCKETTYPE c;
 	int n, bound;
 	char *connectaddr;
-	char *binderror;
+	const char *binderror;
 	time_t bindstart;
 	short int port = opt_api_port;
 	struct sockaddr_in serv;

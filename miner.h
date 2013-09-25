@@ -215,6 +215,8 @@ enum alive {
 	LIFE_NOSTART,
 	LIFE_INIT,
 	LIFE_WAIT,
+	LIFE_INIT2,  // Still initializing, but safe to call functions
+	LIFE_DEAD2,  // Totally dead, NOT safe to call functions
 };
 
 
@@ -282,20 +284,18 @@ struct device_drv {
 	// DRV-global functions
 	void (*drv_detect)();
 
-	// Device-specific functions
-	void (*get_dev_statline_before)(char *, struct cgpu_info *);
-	void (*get_dev_statline_after)(char *, struct cgpu_info *);
-
 	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);
-	void (*get_statline_before)(char *, struct cgpu_info *);
-	void (*get_statline)(char *, struct cgpu_info *);
+	bool (*override_statline_temp)(char *buf, struct cgpu_info *, bool per_processor);
 	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info *);
 	struct api_data* (*get_api_extra_device_status)(struct cgpu_info *);
 	struct api_data *(*get_api_stats)(struct cgpu_info *);
 	bool (*get_stats)(struct cgpu_info *);
 	bool (*identify_device)(struct cgpu_info *);  // e.g. to flash a led
 	char *(*set_device)(struct cgpu_info *, char *option, char *setting, char *replybuf);
+	void (*proc_wlogprint_status)(struct cgpu_info *);
+	void (*proc_tui_wlogprint_choices)(struct cgpu_info *);
+	const char *(*proc_tui_handle_choice)(struct cgpu_info *, int input);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
@@ -441,6 +441,9 @@ struct cgpu_info {
 	
 	const char *device_path;
 	void *device_data;
+	const char *dev_manufacturer;
+	const char *dev_product;
+	const char *dev_serial;
 	union {
 #ifdef USE_ZTEX
 		struct libztex_device *device_ztex;
@@ -475,6 +478,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int stale;
+	int bad_nonces;
 	int hw_errors;
 	double rolling;
 	double total_mhashes;
@@ -875,7 +879,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
 extern bool our_curl_supports_proxy_uris();
-extern char *bin2hex(const unsigned char *p, size_t len);
+extern void bin2hex(char *out, const void *in, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
 typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
@@ -969,6 +973,8 @@ extern int mining_threads;
 extern struct cgpu_info *cpus;
 extern int total_devices;
 extern struct cgpu_info **devices;
+extern int total_devices_new;
+extern struct cgpu_info **devices_new;
 extern int total_pools;
 extern struct pool **pools;
 extern const char *algo_names[];
@@ -1051,21 +1057,18 @@ enum pool_protocol {
 
 struct stratum_work {
 	char *job_id;
-	char *prev_hash;
-	char *coinbase1;
-	char *coinbase2;
-	char **merkle;
-	char *bbversion;
-	char *nbit;
-	char *ntime;
 	bool clean;
-
-	size_t cb1_len;
-	size_t cb2_len;
-	size_t cb_len;
-
-	size_t header_len;
+	
+	bytes_t coinbase;
+	size_t nonce2_offset;
+	
 	int merkles;
+	bytes_t merkle_bin;
+	
+	uint8_t header1[36];
+	uint8_t diffbits[4];
+	uint8_t ntime[4];
+
 	double diff;
 
 	bool transparency_probed;
@@ -1159,6 +1162,10 @@ struct pool {
 	char *nonce1;
 	size_t n1_len;
 	uint32_t nonce2;
+	int nonce2sz;
+#ifdef WORDS_BIGENDIAN
+	int nonce2off;
+#endif
 	int n2size;
 	char *sessionid;
 	bool has_stratum;
@@ -1210,8 +1217,7 @@ struct work {
 
 	bool		stratum;
 	char 		*job_id;
-	char		*nonce2;
-	char		*ntime;
+	bytes_t		nonce2;
 	double		sdiff;
 	char		*nonce1;
 
@@ -1243,7 +1249,8 @@ struct work {
 };
 
 extern void get_datestamp(char *, struct timeval *);
-extern void inc_hw_errors(struct thr_info *thr);
+extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
+#define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
 	TNR_GOOD = 1,
 	TNR_HIGH = 0,
@@ -1259,6 +1266,7 @@ extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *mi
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
+extern void get_statline3(char *buf, struct cgpu_info *, bool for_curses, bool opt_show_procs);
 extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);
@@ -1294,6 +1302,7 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
+extern int scan_serial(const char *);
 
 enum api_data_type {
 	API_ESCAPE,

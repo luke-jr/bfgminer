@@ -668,61 +668,56 @@ char *absolute_uri(char *uri, const char *ref)
 	return abs;
 }
 
-/* Returns a malloced array string of a binary value of arbitrary length. The
- * array is rounded up to a 4 byte size to appease architectures that need
- * aligned array  sizes */
-char *bin2hex(const unsigned char *p, size_t len)
+static const char _hexchars[0x10] = "0123456789abcdef";
+
+void bin2hex(char *out, const void *in, size_t len)
 {
-	unsigned int i;
-	ssize_t slen;
-	char *s;
+	const unsigned char *p = in;
+	while (len--)
+	{
+		(out++)[0] = _hexchars[p[0] >> 4];
+		(out++)[0] = _hexchars[p[0] & 0xf];
+		++p;
+	}
+	out[0] = '\0';
+}
 
-	slen = len * 2 + 1;
-	if (slen % 4)
-		slen += 4 - (slen % 4);
-	s = calloc(slen, 1);
-	if (unlikely(!s))
-		quit(1, "Failed to calloc in bin2hex");
-
-	for (i = 0; i < len; i++)
-		sprintf(s + (i * 2), "%02x", (unsigned int) p[i]);
-
-	return s;
+static inline
+int _hex2bin_char(const char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return (c - 'a') + 10;
+	if (c >= 'A' && c <= 'F')
+		return (c - 'A') + 10;
+	return -1;
 }
 
 /* Does the reverse of bin2hex but does not allocate any ram */
 bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 {
-	bool ret = false;
-
-	while (*hexstr && len) {
-		char hex_byte[4];
-		unsigned int v;
-
-		if (unlikely(!hexstr[1])) {
-			applog(LOG_ERR, "hex2bin str truncated");
-			return ret;
+	int n, o;
+	
+	while (len--)
+	{
+		n = _hex2bin_char((hexstr++)[0]);
+		if (unlikely(n == -1))
+		{
+badchar:
+			if (!hexstr[-1])
+				applog(LOG_ERR, "hex2bin: str truncated");
+			else
+				applog(LOG_ERR, "hex2bin: invalid character 0x%02x", (int)hexstr[-1]);
+			return false;
 		}
-
-		memset(hex_byte, 0, 4);
-		hex_byte[0] = hexstr[0];
-		hex_byte[1] = hexstr[1];
-
-		if (unlikely(sscanf(hex_byte, "%x", &v) != 1)) {
-			applog(LOG_ERR, "hex2bin sscanf '%s' failed", hex_byte);
-			return ret;
-		}
-
-		*p = (unsigned char) v;
-
-		p++;
-		hexstr += 2;
-		len--;
+		o = _hex2bin_char((hexstr++)[0]);
+		if (unlikely(o == -1))
+			goto badchar;
+		(p++)[0] = (n << 4) | o;
 	}
-
-	if (likely(len == 0 && *hexstr == 0))
-		ret = true;
-	return ret;
+	
+	return likely(!hexstr[0]);
 }
 
 void hash_data(unsigned char *out_hash, const unsigned char *data)
@@ -779,24 +774,22 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 
 	if (opt_debug) {
 		unsigned char hash_swap[32], target_swap[32];
-		char *hash_str, *target_str;
+		char hash_str[65];
+		char target_str[65];
 
 		for (int i = 0; i < 32; ++i) {
 			hash_swap[i] = hash[31-i];
 			target_swap[i] = target[31-i];
 		}
 
-		hash_str = bin2hex(hash_swap, 32);
-		target_str = bin2hex(target_swap, 32);
+		bin2hex(hash_str, hash_swap, 32);
+		bin2hex(target_str, target_swap, 32);
 
 		applog(LOG_DEBUG, " Proof: %s\nTarget: %s\nTrgVal? %s",
 			hash_str,
 			target_str,
 			rc ? "YES (hash <= target)" :
 			     "no (false positive; hash > target)");
-
-		free(hash_str);
-		free(target_str);
 	}
 
 	return rc;
@@ -1383,9 +1376,9 @@ char *recv_line(struct pool *pool)
 			if (n < 0) {
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
-				socket_recv_errno = errno;
-				if (!sock_blocks() || !socket_full(pool, false)) {
-					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %d", socket_recv_errno);
+				socket_recv_errno = SOCKERR;
+				if (!sock_blocks() || !socket_full(pool, true)) {
+					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %s", bfg_strerror(socket_recv_errno, BST_SOCKET));
 					suspend_stratum(pool);
 					break;
 				}
@@ -1520,6 +1513,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	char *job_id, *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
 	bool clean, ret = false;
 	int merkles, i;
+	size_t cb1_len, cb2_len;
 	json_t *arr;
 
 	arr = json_array_get(val, 4);
@@ -1527,86 +1521,65 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 
 	merkles = json_array_size(arr);
+	for (i = 0; i < merkles; i++)
+		if (!json_is_string(json_array_get(arr, i)))
+			goto out;
 
-	job_id = json_array_string(val, 0);
-	prev_hash = json_array_string(val, 1);
-	coinbase1 = json_array_string(val, 2);
-	coinbase2 = json_array_string(val, 3);
-	bbversion = json_array_string(val, 5);
-	nbit = json_array_string(val, 6);
-	ntime = json_array_string(val, 7);
+	prev_hash = __json_array_string(val, 1);
+	coinbase1 = __json_array_string(val, 2);
+	coinbase2 = __json_array_string(val, 3);
+	bbversion = __json_array_string(val, 5);
+	nbit = __json_array_string(val, 6);
+	ntime = __json_array_string(val, 7);
 	clean = json_is_true(json_array_get(val, 8));
 
-	if (!job_id || !prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime) {
-		/* Annoying but we must not leak memory */
-		if (job_id)
-			free(job_id);
-		if (prev_hash)
-			free(prev_hash);
-		if (coinbase1)
-			free(coinbase1);
-		if (coinbase2)
-			free(coinbase2);
-		if (bbversion)
-			free(bbversion);
-		if (nbit)
-			free(nbit);
-		if (ntime)
-			free(ntime);
+	if (!prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime)
 		goto out;
-	}
+	
+	job_id = json_array_string(val, 0);
+	if (!job_id)
+		goto out;
 
 	cg_wlock(&pool->data_lock);
 	free(pool->swork.job_id);
-	free(pool->swork.prev_hash);
-	free(pool->swork.coinbase1);
-	free(pool->swork.coinbase2);
-	free(pool->swork.bbversion);
-	free(pool->swork.nbit);
-	free(pool->swork.ntime);
 	pool->swork.job_id = job_id;
-	pool->swork.prev_hash = prev_hash;
-	pool->swork.coinbase1 = coinbase1;
-	pool->swork.cb1_len = strlen(coinbase1) / 2;
-	pool->swork.coinbase2 = coinbase2;
-	pool->swork.cb2_len = strlen(coinbase2) / 2;
-	pool->swork.bbversion = bbversion;
-	pool->swork.nbit = nbit;
-	pool->swork.ntime = ntime;
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
-	pool->swork.cb_len = pool->swork.cb1_len + pool->n1_len + pool->n2size + pool->swork.cb2_len;
+	
+	hex2bin(&pool->swork.header1[0], bbversion,  4);
+	hex2bin(&pool->swork.header1[4], prev_hash, 32);
+	hex2bin(&pool->swork.ntime[0], ntime, 4);
+	hex2bin(&pool->swork.diffbits[0], nbit, 4);
+	
+	cb1_len = strlen(coinbase1) / 2;
+	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
+	cb2_len = strlen(coinbase2) / 2;
 
-	for (i = 0; i < pool->swork.merkles; i++)
-		free(pool->swork.merkle[i]);
-	if (merkles) {
-		pool->swork.merkle = realloc(pool->swork.merkle, sizeof(char *) * merkles + 1);
-		for (i = 0; i < merkles; i++)
-			pool->swork.merkle[i] = json_array_string(arr, i);
-	}
+	bytes_resize(&pool->swork.coinbase, pool->swork.nonce2_offset + pool->n2size + cb2_len);
+	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
+	hex2bin(coinbase, coinbase1, cb1_len);
+	hex2bin(&coinbase[cb1_len], pool->nonce1, pool->n1_len);
+	// NOTE: gap for nonce2, filled at work generation time
+	hex2bin(&coinbase[pool->swork.nonce2_offset + pool->n2size], coinbase2, cb2_len);
+	
+	bytes_resize(&pool->swork.merkle_bin, 32 * merkles);
+	for (i = 0; i < merkles; i++)
+		hex2bin(&bytes_buf(&pool->swork.merkle_bin)[i * 32], json_string_value(json_array_get(arr, i)), 32);
 	pool->swork.merkles = merkles;
 	if (clean)
 		pool->nonce2 = 0;
-	pool->swork.header_len = strlen(pool->swork.bbversion) +
-				 strlen(pool->swork.prev_hash) +
-				 strlen(pool->swork.ntime) +
-				 strlen(pool->swork.nbit) +
-	/* merkle_hash */	 32 +
-	/* nonce */		 8 +
-	/* workpadding */	 96;
-	pool->swork.header_len = pool->swork.header_len * 2 + 1;
-	align_len(&pool->swork.header_len);
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
 	       pool->pool_no, job_id);
-	if (opt_protocol) {
+	if (opt_debug && opt_protocol)
+	{
 		applog(LOG_DEBUG, "job_id: %s", job_id);
 		applog(LOG_DEBUG, "prev_hash: %s", prev_hash);
 		applog(LOG_DEBUG, "coinbase1: %s", coinbase1);
 		applog(LOG_DEBUG, "coinbase2: %s", coinbase2);
 		for (i = 0; i < merkles; i++)
-			applog(LOG_DEBUG, "merkle%d: %s", i, pool->swork.merkle[i]);
+			applog(LOG_DEBUG, "merkle%d: %s", i, json_string_value(json_array_get(arr, i)));
 		applog(LOG_DEBUG, "bbversion: %s", bbversion);
 		applog(LOG_DEBUG, "nbit: %s", nbit);
 		applog(LOG_DEBUG, "ntime: %s", ntime);
@@ -2075,6 +2048,10 @@ resend:
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
 	pool->n2size = n2size;
+	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
+#ifdef WORDS_BIGENDIAN
+	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
+#endif
 	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)
@@ -2239,26 +2216,160 @@ void RenameThread(const char* name)
 #endif
 }
 
+static pthread_key_t key_bfgtls;
+struct bfgtls_data {
+	char *bfg_strerror_result;
+	size_t bfg_strerror_resultsz;
 #ifdef WIN32
-static const char *WindowsErrorStr(DWORD dwMessageId)
-{
-	static LPSTR msg = NULL;
-	if (msg)
-		LocalFree(msg);
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, dwMessageId, 0, (LPSTR)&msg, 0, 0))
-		return msg;
-	static const char fmt[] = "Error #%ld";
-	signed long ldMsgId = dwMessageId;
-	int sz = snprintf((char*)&sz, 0, fmt, ldMsgId) + 1;
-	msg = (LPTSTR)LocalAlloc(LMEM_FIXED, sz);
-	sprintf((char*)msg, fmt, ldMsgId);
-	return msg;
-}
+	LPSTR bfg_strerror_socketresult;
 #endif
+};
+
+static
+struct bfgtls_data *get_bfgtls()
+{
+	struct bfgtls_data *bfgtls = pthread_getspecific(key_bfgtls);
+	if (bfgtls)
+		return bfgtls;
+	
+	void *p;
+	
+	bfgtls = malloc(sizeof(*bfgtls));
+	if (!bfgtls)
+		quit(1, "malloc bfgtls failed");
+	p = malloc(64);
+	if (!p)
+		quit(1, "malloc bfg_strerror_result failed");
+	*bfgtls = (struct bfgtls_data){
+		.bfg_strerror_resultsz = 64,
+		.bfg_strerror_result = p,
+	};
+	if (pthread_setspecific(key_bfgtls, bfgtls))
+		quit(1, "pthread_setspecific failed");
+	
+	return bfgtls;
+}
+
+void bfg_init_threadlocal()
+{
+	if (pthread_key_create(&key_bfgtls, NULL))
+		quit(1, "pthread_key_create failed");
+}
+
+static
+bool bfg_grow_buffer(char ** const bufp, size_t * const bufszp, size_t minimum)
+{
+	if (minimum <= *bufszp)
+		return false;
+	
+	while (minimum > *bufszp)
+		*bufszp = 2;
+	*bufp = realloc(*bufp, *bufszp);
+	if (unlikely(!*bufp))
+		quit(1, "realloc failed in bfg_grow_buffer");
+	
+	return true;
+}
+
+static
+const char *bfg_strcpy_growing_buffer(char ** const bufp, size_t * const bufszp, const char *src)
+{
+	if (!src)
+		return NULL;
+	
+	const size_t srcsz = strlen(src) + 1;
+	
+	bfg_grow_buffer(bufp, bufszp, srcsz);
+	memcpy(*bufp, src, srcsz);
+	
+	return *bufp;
+}
+
+// Guaranteed to always return some string (or quit)
+const char *bfg_strerror(int e, enum bfg_strerror_type type)
+{
+	static __maybe_unused pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	struct bfgtls_data *bfgtls = get_bfgtls();
+	size_t * const bufszp = &bfgtls->bfg_strerror_resultsz;
+	char ** const bufp = &bfgtls->bfg_strerror_result;
+	const char *have = NULL;
+	
+	switch (type) {
+		case BST_LIBUSB:
+// NOTE: Nested preprocessor checks since the latter isn't defined at all without the former
+#ifdef HAVE_LIBUSB
+#	if HAVE_DECL_LIBUSB_ERROR_NAME
+			// libusb makes no guarantees for thread-safety or persistence
+			mutex_lock(&mutex);
+			have = bfg_strcpy_growing_buffer(bufp, bufszp, libusb_error_name(e));
+			mutex_unlock(&mutex);
+#	endif
+#endif
+			break;
+		case BST_SOCKET:
+		{
+#ifdef WIN32
+			// Windows has a different namespace for socket errors
+			LPSTR *msg = &bfgtls->bfg_strerror_socketresult;
+			if (*msg)
+				LocalFree(*msg);
+			if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, e, 0, (LPSTR)msg, 0, 0))
+				return *msg;
+			*msg = NULL;
+			
+			break;
+#endif
+		}
+			// Fallthru on non-WIN32
+		case BST_ERRNO:
+		{
+#ifdef __STRERROR_S_WORKS
+			// FIXME: Not sure how to get this on MingW64
+retry:
+			if (likely(!strerror_s(*bufp, *bufszp, e)))
+			{
+				if (bfg_grow_buffer(bufp, bufszp, strlen(*bufp) + 2))
+					goto retry;
+				return *bufp;
+			}
+// TODO: XSI strerror_r
+// TODO: GNU strerror_r
+#else
+			mutex_lock(&mutex);
+			have = bfg_strcpy_growing_buffer(bufp, bufszp, strerror(e));
+			mutex_unlock(&mutex);
+#endif
+		}
+	}
+	
+	if (have)
+		return *bufp;
+	
+	// Failback: Stringify the number
+	static const char fmt[] = "%s error #%d", *typestr;
+	switch (type) {
+		case BST_ERRNO:
+			typestr = "System";
+			break;
+		case BST_SOCKET:
+			typestr = "Socket";
+			break;
+		case BST_LIBUSB:
+			typestr = "libusb";
+			break;
+		default:
+			typestr = "Unexpected";
+	}
+	int sz = snprintf((char*)bfgtls, 0, fmt, typestr, e) + 1;
+	bfg_grow_buffer(bufp, bufszp, sz);
+	sprintf(*bufp, fmt, typestr, e);
+	return *bufp;
+}
 
 void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32
+#define WindowsErrorStr(e)  bfg_strerror(e, true)
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
@@ -2331,4 +2442,9 @@ void notifier_destroy(notifier_t fd)
 	close(fd[1]);
 #endif
 	fd[0] = fd[1] = INVSOCK;
+}
+
+void _bytes_alloc_failure(size_t sz)
+{
+	quit(1, "bytes_resize failed to allocate %lu bytes", (unsigned long)sz);
 }

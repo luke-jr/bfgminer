@@ -123,6 +123,9 @@ modminer_detect_one(const char *devpath)
 	char*devname = strdup(buf);
 	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
 
+	if (serial_claim_v(devpath, &modminer_drv))
+		return false;
+	
 	if (1 != write(fd, MODMINER_FPGA_COUNT, 1))
 		bailout(LOG_DEBUG, "ModMiner detect: write failed on %s (get FPGA count)", devpath);
 	len = read(fd, buf, 1);
@@ -297,6 +300,8 @@ modminer_fpga_prepare(struct thr_info *thr)
 	dclk_prepare(&state->dclk);
 	state->next_work_cmd[0] = MODMINER_SEND_WORK;
 	state->next_work_cmd[1] = proc->proc_id;  // FPGA id
+	
+	proc->status = LIFE_INIT2;
 
 	return true;
 }
@@ -409,7 +414,7 @@ modminer_fpga_init(struct thr_info *thr)
 		applog(LOG_ERR, "%s: FPGA not programmed", modminer->proc_repr);
 		if (!modminer_fpga_upload_bitstream(modminer))
 			return false;
-	} else if (opt_force_dev_init && modminer->status == LIFE_INIT) {
+	} else if (opt_force_dev_init && !((struct modminer_fpga_state *)modminer->device->thr[0]->cgpu_data)->pdone) {
 		applog(LOG_DEBUG, "%s: FPGA is already programmed, but --force-dev-init is set",
 		       modminer->proc_repr);
 		if (!modminer_fpga_upload_bitstream(modminer))
@@ -451,71 +456,14 @@ modminer_fpga_init(struct thr_info *thr)
 }
 
 static
-bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer)
+bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer, __maybe_unused bool per_processor)
 {
-	char info[18] = "               | ";
-
 	char pdone = ((struct modminer_fpga_state*)(modminer->device->thr[0]->cgpu_data))->pdone;
 	if (pdone != 101) {
-		sprintf(&info[1], "%3d%%", pdone);
-		info[5] = ' ';
-		strcat(buf, info);
+		tailsprintf(buf, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
-}
-
-static
-void get_modminer_statline_before(char *buf, struct cgpu_info *modminer)
-{
-	if (get_modminer_upload_percent(buf, modminer))
-		return;
-
-	struct thr_info*thr = modminer->thr[0];
-	struct modminer_fpga_state *state = thr->cgpu_data;
-	float gt = state->temp;
-	
-	if (gt > 0)
-		tailsprintf(buf, "%5.1fC ", gt);
-	else
-		tailsprintf(buf, "       ");
-	tailsprintf(buf, "        | ");
-}
-
-static
-void get_modminer_dev_statline_before(char *buf, struct cgpu_info *modminer)
-{
-	if (get_modminer_upload_percent(buf, modminer))
-		return;
-
-	char info[18] = "               | ";
-	int tc = modminer->procs;
-	bool havetemp = false;
-	int i;
-
-	if (tc > 4)
-		tc = 4;
-
-	for (i = 0; i < tc; ++i, modminer = modminer->next_proc) {
-		struct thr_info*thr = modminer->thr[0];
-		struct modminer_fpga_state *state = thr->cgpu_data;
-		unsigned char temp = state->temp;
-
-		info[i*3+2] = '/';
-		if (temp) {
-			havetemp = true;
-			if (temp > 9)
-				info[i*3+0] = 0x30 + (temp / 10);
-			info[i*3+1] = 0x30 + (temp % 10);
-		}
-	}
-	if (havetemp) {
-		info[tc*3-1] = ' ';
-		info[tc*3] = 'C';
-		strcat(buf, info);
-	}
-	else
-		strcat(buf, "               | ");
 }
 
 static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info *thr)
@@ -650,10 +598,10 @@ fd_set fds;
 	status_read("start work");
 	mutex_unlock(mutexp);
 	if (opt_debug) {
-		char *xdata = bin2hex(state->running_work.data, 80);
+		char xdata[161];
+		bin2hex(xdata, state->running_work.data, 80);
 		applog(LOG_DEBUG, "%s: Started work: %s",
 		       modminer->proc_repr, xdata);
-		free(xdata);
 	}
 
 	return true;
@@ -712,11 +660,7 @@ modminer_process_results(struct thr_info*thr)
 				submit_nonce(thr, work, nonce);
 			}
 			else {
-				applog(LOG_DEBUG, "%s: Nonce with H not zero  : %02x%02x%02x%02x",
-				       modminer->proc_repr,
-				       NONCE_CHARS(nonce));
-				++hw_errors;
-				++modminer->hw_errors;
+				inc_hw_errors(thr, work, nonce);
 				++state->bad_share_counter;
 				++immediate_bad_nonces;
 			}
@@ -794,6 +738,8 @@ modminer_scanhash(struct thr_info*thr, struct work*work, int64_t __maybe_unused 
 static void
 modminer_fpga_shutdown(struct thr_info *thr)
 {
+	for (struct cgpu_info *proc = thr->cgpu->device; proc; proc = proc->next_proc)
+		proc->status = LIFE_DEAD2;
 	free(thr->cgpu_data);
 	thr->cgpu_data = NULL;
 }
@@ -848,8 +794,7 @@ struct device_drv modminer_drv = {
 	.dname = "modminer",
 	.name = "MMQ",
 	.drv_detect = modminer_detect,
-	.get_dev_statline_before = get_modminer_dev_statline_before,
-	.get_statline_before = get_modminer_statline_before,
+	.override_statline_temp = get_modminer_upload_percent,
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,

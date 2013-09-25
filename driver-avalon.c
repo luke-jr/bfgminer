@@ -233,7 +233,7 @@ static inline int avalon_gets(int fd, uint8_t *buf, int read_count,
 		ret = read(fd, buf, 1);
 		if (ret < 0)
 		{
-			applog(LOG_ERR, "Avalon: Error %d on read in avalon_gets", errno);
+			applog(LOG_ERR, "Avalon: Error on read in avalon_gets: %s", bfg_strerror(errno, BST_ERRNO));
 			return AVA_GETS_ERROR;
 		}
 
@@ -458,23 +458,8 @@ static void get_options(int this_option_offset, int *baud, int *miner_count,
 		*(colon++) = '\0';
 
 	tmp = atoi(buf);
-	switch (tmp) {
-	case 115200:
-		*baud = 115200;
-		break;
-	case 57600:
-		*baud = 57600;
-		break;
-	case 38400:
-		*baud = 38400;
-		break;
-	case 19200:
-		*baud = 19200;
-		break;
-	default:
-		quit(1, "Invalid avalon-options for baud (%s) "
-			"must be 115200, 57600, 38400 or 19200", buf);
-	}
+	if (!valid_baud(*baud = tmp))
+		quit(1, "Invalid avalon-options for baud (%s)", buf);
 
 	if (colon && *colon) {
 		colon2 = strchr(colon, ':');
@@ -571,6 +556,9 @@ static bool avalon_detect_one(const char *devpath)
 	int baud, miner_count, asic_count, timeout, frequency = 0;
 	struct cgpu_info *avalon;
 
+	if (serial_claim(devpath, &avalon_drv))
+		return false;
+	
 	int this_option_offset = ++option_offset;
 	get_options(this_option_offset, &baud, &miner_count, &asic_count,
 		    &timeout, &frequency);
@@ -688,6 +676,7 @@ static bool avalon_prepare(struct thr_info *thr)
 
 	cgtime(&now);
 	get_datestamp(avalon->init, &now);
+	avalon->status = LIFE_INIT2;
 	return true;
 }
 
@@ -777,20 +766,6 @@ static inline void adjust_fan(struct avalon_info *info)
 		info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM + (temp_new - 35) * 6.4;
 		info->temp_old = temp_new;
 	}
-}
-
-static void get_avalon_statline_before(char *buf, struct cgpu_info *avalon)
-{
-	struct avalon_info *info = avalon->device_data;
-	int lowfan = 10000;
-
-	/* Find the lowest fan speed of the ASIC cooling fans. */
-	if (info->fan1 >= 0 && info->fan1 < lowfan)
-		lowfan = info->fan1;
-	if (info->fan2 >= 0 && info->fan2 < lowfan)
-		lowfan = info->fan2;
-
-	tailsprintf(buf, "%2d/%3dC %04dR | ", info->temp0, info->temp2, lowfan);
 }
 
 /* We use a replacement algorithm to only remove references to work done from
@@ -976,6 +951,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	if (hash_count) {
 		record_temp_fan(info, &ar, &(avalon->temp));
+		avalon->temp = info->temp_max;
 		applog(LOG_INFO,
 		       "Avalon: Fan1: %d/m, Fan2: %d/m, Fan3: %d/m\t"
 		       "Temp1: %dC, Temp2: %dC, Temp3: %dC, TempMAX: %dC",
@@ -1043,7 +1019,6 @@ struct device_drv avalon_drv = {
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
 	.get_api_stats = avalon_api_stats,
-	.get_statline_before = get_avalon_statline_before,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,
 };

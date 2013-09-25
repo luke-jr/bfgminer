@@ -472,16 +472,8 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 
 		if (*buf) {
 			tmp = atoi(buf);
-			switch (tmp) {
-			case 115200:
-				*baud = 115200;
-				break;
-			case 57600:
-				*baud = 57600;
-				break;
-			default:
-				quit(1, "Invalid icarus-options for baud (%s) must be 115200 or 57600", buf);
-			}
+			if (!valid_baud(*baud = tmp))
+				quit(1, "Invalid icarus-options for baud (%s)", buf);
 		}
 
 		if (colon && *colon) {
@@ -555,7 +547,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	const char golden_nonce[] = "000187a2";
 
 	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
-	char *nonce_hex;
+	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
 	get_options(this_option_offset, info);
 
@@ -580,26 +572,21 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 
 	icarus_close(fd);
 
-	nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
+	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
 	if (strncmp(nonce_hex, golden_nonce, 8)) {
 		applog(LOG_DEBUG,
 			"Icarus Detect: "
 			"Test failed at %s: get %s, should: %s",
 			devpath, nonce_hex, golden_nonce);
-		free(nonce_hex);
 		return false;
 	}
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
 			devpath, nonce_hex);
-	free(nonce_hex);
 
-	if (serial_claim(devpath, api)) {
-		const char *claimedby = serial_claim(devpath, api)->dname;
-		applog(LOG_DEBUG, "Icarus device %s already claimed by other driver: %s", devpath, claimedby);
+	if (serial_claim_v(devpath, api))
 		return false;
-	}
 
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
@@ -633,6 +620,9 @@ static bool icarus_detect_one(const char *devpath)
 	if (unlikely(!info))
 		quit(1, "Failed to malloc ICARUS_INFO");
 
+	// TODO: try some higher speeds with the Icarus and BFL to see
+	// if they support them and if setting them makes any difference
+	// N.B. B3000000 doesn't work on Icarus
 	info->baud = ICARUS_IO_SPEED;
 	info->quirk_reopen = 1;
 	info->Hs = ICARUS_REV3_HASH_TIME;
@@ -685,6 +675,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	}
 #endif
 
+	icarus->status = LIFE_INIT2;
+	
 	return true;
 }
 
@@ -764,7 +756,6 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	struct icarus_state *state = thr->cgpu_data;
 	int fd = icarus->device_fd;
 	int ret;
-	char *ob_hex;
 
 	cgtime(&state->tv_workstart);
 
@@ -777,11 +768,11 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	}
 
 	if (opt_debug) {
-		ob_hex = bin2hex(ob_bin, 64);
+		char ob_hex[129];
+		bin2hex(ob_hex, ob_bin, 64);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
 			ob_hex);
-		free(ob_hex);
 	}
 
 	return true;
