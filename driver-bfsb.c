@@ -27,7 +27,7 @@
 #include "deviceapi.h"
 #include "libbitfury.h"
 #include "spidevc.h"
-
+#include "driver-bitfury.h"
 
 struct device_drv bfsb_drv;
 
@@ -140,8 +140,6 @@ static void bfsb_detect(void)
 	noserial_detect_manual(&bfsb_drv, bfsb_autodetect);
 }
 
-extern bool bitfury_prepare(struct thr_info *);
-
 static
 bool bfsb_init(struct thr_info *thr)
 {
@@ -154,6 +152,9 @@ bool bfsb_init(struct thr_info *thr)
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
+		bitfury_init_oldbuf(proc);
+		bitfury->osc6_bits = 54;
+		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	}
 	
 	free(devicelist);
@@ -161,7 +162,6 @@ bool bfsb_init(struct thr_info *thr)
 	return true;
 }
 
-extern int64_t bitfury_scanHash(struct thr_info *);
 extern void bitfury_shutdown(struct thr_info *);
 
 static void bfsb_shutdown(struct thr_info *thr)
@@ -171,13 +171,14 @@ static void bfsb_shutdown(struct thr_info *thr)
 }
 
 struct device_drv bfsb_drv = {
-	.dname = "bitfurystrikesback",
+	.dname = "bfsb",
 	.name = "BSB",
 	.drv_detect = bfsb_detect,
-	
-	.minerloop = hash_queued_work,
-	.thread_prepare = bitfury_prepare,
+	.minerloop = minerloop_async,
+	.job_prepare = bitfury_job_prepare,
 	.thread_init = bfsb_init,
-	.scanwork = bitfury_scanHash,
+	.poll = bitfury_do_io,
+	.job_start = bitfury_do_io,
+	.job_process_results = bitfury_job_process_results,
 	.thread_shutdown = bfsb_shutdown,
 };
