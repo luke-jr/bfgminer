@@ -1144,26 +1144,33 @@ char *set_log_file(char *arg)
 	return NULL;
 }
 
-static char* set_sharelog(char *arg)
+static
+char *_bfgopt_set_file(const char *arg, FILE **F, const char *mode, const char *purpose)
 {
 	char *r = "";
 	long int i = strtol(arg, &r, 10);
 
 	if ((!*r) && i >= 0 && i <= INT_MAX) {
-		sharelog_file = fdopen((int)i, "a");
-		if (!sharelog_file)
-			applog(LOG_ERR, "Failed to open fd %u for share log", (unsigned int)i);
+		*F = fdopen((int)i, mode);
+		if (!*F)
+			applog(LOG_ERR, "Failed to open fd %d for %s", (int)i, purpose);
 	} else if (!strcmp(arg, "-")) {
-		sharelog_file = stdout;
-		if (!sharelog_file)
-			applog(LOG_ERR, "Standard output missing for share log");
+		*F = (mode[0] == 'a') ? stdout : stdin;
+		if (!*F)
+			applog(LOG_ERR, "Standard %sput missing for %s",
+			         (mode[0] == 'a') ? "out" : "in", purpose);
 	} else {
-		sharelog_file = fopen(arg, "a");
-		if (!sharelog_file)
-			applog(LOG_ERR, "Failed to open %s for share log", arg);
+		*F = fopen(arg, mode);
+		if (!*F)
+			applog(LOG_ERR, "Failed to open %s for %s", arg, purpose);
 	}
 
 	return NULL;
+}
+
+static char *set_sharelog(char *arg)
+{
+	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
 }
 
 static char *temp_cutoff_str = "";
