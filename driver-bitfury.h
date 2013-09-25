@@ -17,7 +17,8 @@ struct bitfury_info {
 	uint8_t version;
 	char product[8];
 	uint32_t serial;
-	struct work *prevwork;
+	struct work *prevwork1;
+	struct work *prevwork2;
 	char readbuf[512];
 };
 

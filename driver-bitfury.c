@@ -131,34 +131,6 @@ static bool bitfury_fill(struct cgpu_info __maybe_unused *bitfury)
 	return true;
 }
 
-static bool rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
-{
-	uint8_t   in[16];
-	uint32_t *in32 = (uint32_t *)in;
-	uint32_t *mid32 = (uint32_t *)midstate;
-	uint32_t  out32[8];
-	uint8_t  *out = (uint8_t *) out32;
-	sha256_ctx ctx;
-
-	memset( &ctx, 0, sizeof(sha256_ctx));
-	memcpy(ctx.h, mid32, 8*4);
-	ctx.tot_len = 64;
-
-	nnonce = bswap_32(nnonce);
-	in32[0] = bswap_32(m7);
-	in32[1] = bswap_32(ntime);
-	in32[2] = bswap_32(nbits);
-	in32[3] = nnonce;
-
-	sha256_update(&ctx, in, 16);
-	sha256_final(&ctx, out);
-	sha256(out, 32, out);
-
-	if (out32[7] == 0)
-		return true;
-	return false;
-}
-
 static uint32_t decnonce(uint32_t in)
 {
 	uint32_t out;
@@ -199,21 +171,26 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 		submit_nonce(thr, work, nonceoff);
 		return true;
 	}
-	nonceoff = nonce + 0x2800000;
+#if 0
+	nonceoff = nonce + 0x2800000u;
 	if (test_nonce(work, nonceoff)) {
+		applog(LOG_ERR, "0x2800000");
 		submit_nonce(thr, work, nonceoff);
 		return true;
 	}
-	nonceoff = nonce + 0x2C800000;
+	nonceoff = nonce + 0x2C00000u;
 	if (test_nonce(work, nonceoff)) {
+		applog(LOG_ERR, "0x2C00000");
 		submit_nonce(thr, work, nonceoff);
 		return true;
 	}
-	nonceoff = nonce + 0x400000;
+	nonceoff = nonce + 0x400000u;
 	if (test_nonce(work, nonceoff)) {
+		applog(LOG_ERR, "0x400000");
 		submit_nonce(thr, work, nonceoff);
 		return true;
 	}
+#endif
 	return false;
 }
 
@@ -232,8 +209,9 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	usb_write(bitfury, sendbuf, 45, &amount, C_BFO_REQWORK);
 	usb_read(bitfury, buf, 7, &amount, C_BFO_GETWORK);
 
-	if (unlikely(!info->prevwork)) {
-		info->prevwork = copy_work(work);
+	if (unlikely(!info->prevwork1)) {
+		info->prevwork1 = copy_work(work);
+		info->prevwork2 = copy_work(work);
 		return 0;
 	}
 
@@ -250,16 +228,23 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		/* Ignore state & switched data in results for now. */
 		memcpy(&nonce, buf + i + 3, 4);
 		nonce = decnonce(nonce);
+		if (bitfury_checkresults(thr, info->prevwork1, nonce)) {
+			hashes += 0xffffffff;
+			continue;
+		}
 		if (bitfury_checkresults(thr, work, nonce)) {
 			hashes += 0xffffffff;
 			continue;
 		}
-		if (bitfury_checkresults(thr, info->prevwork, nonce))
+		if (bitfury_checkresults(thr, info->prevwork2, nonce)) {
 			hashes += 0xffffffff;
+			continue;
+		}
 	}
 
-	free_work(info->prevwork);
-	info->prevwork = copy_work(work);
+	free_work(info->prevwork2);
+	info->prevwork2 = info->prevwork1;
+	info->prevwork1 = copy_work(work);
 	work->blk.nonce = 0xffffffff;
 	return hashes;
 }
