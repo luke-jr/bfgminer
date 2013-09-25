@@ -68,5 +68,6 @@ extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
 extern void send_shutdown(struct spi_port *, int slot, int chip_n);
 extern void send_freq(struct spi_port *, int slot, int chip_n, int bits);
 extern int libbitfury_detectChips1(struct spi_port *);
+extern unsigned bitfury_decnonce(unsigned);
 
 #endif /* __LIBBITFURY_H__ */

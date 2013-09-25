@@ -16,6 +16,7 @@
 #include "fpgautils.h"
 #include "logging.h"
 
+#include "libbitfury.h"
 #include "deviceapi.h"
 #include "sha2.h"
 
@@ -24,29 +25,6 @@
 #include <stdio.h>
 
 struct device_drv bigpic_drv;
-
-//------------------------------------------------------------------------------
-uint32_t bigpic_decnonce(uint32_t in)
-{
-	uint32_t out;
-
-	/* First part load */
-	out = (in & 0xFF) << 24; in >>= 8;
-
-	/* Byte reversal */
-	in = (((in & 0xaaaaaaaa) >> 1) | ((in & 0x55555555) << 1));
-	in = (((in & 0xcccccccc) >> 2) | ((in & 0x33333333) << 2));
-	in = (((in & 0xf0f0f0f0) >> 4) | ((in & 0x0f0f0f0f) << 4));
-
-	out |= (in >> 2)&0x3FFFFF;
-
-	/* Extraction */
-	if (in & 1) out |= (1 << 23);
-	if (in & 2) out |= (1 << 22);
-
-	out -= 0x800004;
-	return out;
-}
 
 //------------------------------------------------------------------------------
 int bigpic_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
@@ -255,7 +233,7 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 			continue;
 		}
 
-		uint32_t nonce = bigpic_decnonce(state.nonce);
+		uint32_t nonce = bitfury_decnonce(state.nonce);
 		results[num_results++] = state.nonce;
 
 		//applog(LOG_DEBUG, "%"PRIpreprv": Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", board->proc_repr, info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);

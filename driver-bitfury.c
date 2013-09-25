@@ -89,8 +89,6 @@ void *bitfury_just_io(struct bitfury_device * const bitfury)
 	return spi_getrxbuf(spi) + 4 + chip;
 }
 
-extern unsigned decnonce(unsigned);
-
 static
 void bitfury_debug_nonce_array(const struct cgpu_info * const proc, const char *msg, const uint32_t * const inp)
 {
@@ -101,7 +99,7 @@ void bitfury_debug_nonce_array(const struct cgpu_info * const proc, const char *
 	for (int i = 0; i < 0x10; ++i)
 		sp += sprintf(sp, "%c%08lx",
 		              (active == i) ? '>' : ' ',
-		              (unsigned long)decnonce(inp[i]));
+		              (unsigned long)bitfury_decnonce(inp[i]));
 	applog(LOG_DEBUG, "%"PRIpreprv": %s%s (job=%08lx)",
 	       proc->proc_repr, msg, s, (unsigned long)inp[0x10]);
 }
@@ -505,7 +503,7 @@ void bitfury_do_io(struct thr_info *thr)
 	{
 		for (i = 0; i < n; ++i)
 		{
-			nonce = decnonce(newbuf[i]);
+			nonce = bitfury_decnonce(newbuf[i]);
 			if (fudge_nonce(thr->work, &nonce))
 			{
 				applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",

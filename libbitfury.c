@@ -41,7 +41,7 @@
 #define BITFURY_REFRESH_DELAY 100
 #define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
 
-unsigned decnonce(unsigned in);
+unsigned bitfury_decnonce(unsigned in);
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
 void config_reg(struct spi_port *port, int cfgreg, int ena)
@@ -211,7 +211,7 @@ int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	int j;
 	for(j = 0; j < 16; j++) {
 		if (newbuf[j] != oldbuf[j]) {
-			unsigned counter = decnonce(newbuf[j]);
+			unsigned counter = bitfury_decnonce(newbuf[j]);
 			if ((counter & 0xFFC00000) == 0xdf800000) {
 				counter -= 0xdf800000;
 				return counter;
@@ -315,7 +315,7 @@ int libbitfury_detectChips1(struct spi_port *port) {
 }
 
 // in  = 1f 1e 1d 1c 1b 1a 19 18 17 16 15 14 13 12 11 10  f  e  d  c  b  a  9  8  7  6  5  4  3  2  1  0
-unsigned decnonce(unsigned in)
+unsigned bitfury_decnonce(unsigned in)
 {
 	unsigned out;
 
@@ -494,7 +494,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				uint32_t pn;  // possible nonce
 				if ((newbuf[i] & 0xFF) == 0xE0)
 					continue;
-				pn = decnonce(newbuf[i]);
+				pn = bitfury_decnonce(newbuf[i]);
 				if (fudge_nonce(op->midstate, op->m7, op->ntime, op->nbits, &pn))
 				{
 					int k;
