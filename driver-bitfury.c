@@ -181,6 +181,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	 * look for the results to prev work. */
 	usb_read_timeout(bitfury, info->buf, 512, &amount, 600, C_BFO_GETRES);
 	info->tot += amount;
+	if (unlikely(thr->work_restart))
+		goto cascade;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
@@ -190,6 +192,9 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BFO_GETRES);
 		info->tot += amount;
 	};
+
+	if (unlikely(thr->work_restart))
+		goto cascade;
 
 	/* Send work */
 	usb_write(bitfury, buf, 45, &amount, C_BFO_REQWORK);
