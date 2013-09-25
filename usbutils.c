@@ -266,7 +266,7 @@ static struct usb_find_devices find_dev[] = {
 #ifdef USE_BITFURY
 	{
 		.drv = DRV_BITFURY,
-		.name = "BFO",
+		.name = "BF1",
 		.ident = IDENT_BFU,
 		.idVendor = 0x03eb,
 		.idProduct = 0x204b,

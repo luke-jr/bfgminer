@@ -20,13 +20,13 @@ struct device_drv bitfury_drv;
 static void bitfury_open(struct cgpu_info *bitfury)
 {
 	/* Magic open sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BFO_OPEN);
+	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
 }
 
 static void bitfury_close(struct cgpu_info *bitfury)
 {
 	/* Magic close sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BFO_CLOSE);
+	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_CLOSE);
 }
 
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
@@ -73,8 +73,8 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	bitfury_open(bitfury);
 
 	/* Send getinfo request */
-	usb_write(bitfury, "I", 1, &amount, C_BFO_REQINFO);
-	usb_read(bitfury, buf, 14, &amount, C_BFO_GETINFO);
+	usb_write(bitfury, "I", 1, &amount, C_BF1_REQINFO);
+	usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
 	if (amount != 14) {
 		applog(LOG_WARNING, "%s%d: Getinfo received %d bytes",
 		       bitfury->drv->name, bitfury->device_id, amount);
@@ -89,8 +89,8 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	bitfury_empty_buffer(bitfury);
 
 	/* Send reset request */
-	usb_write(bitfury, "R", 1, &amount, C_BFO_REQRESET);
-	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BFO_GETRESET);
+	usb_write(bitfury, "R", 1, &amount, C_BF1_REQRESET);
+	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
 
 	if (amount != 7) {
 		applog(LOG_WARNING, "%s%d: Getreset received %d bytes",
@@ -179,17 +179,17 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	/* New results may spill out from the latest work, making us drop out
 	 * too early so read whatever we get for the first half nonce and then
 	 * look for the results to prev work. */
-	usb_read_timeout(bitfury, info->buf, 512, &amount, 600, C_BFO_GETRES);
+	usb_read_timeout(bitfury, info->buf, 512, &amount, 600, C_BF1_GETRES);
 	info->tot += amount;
 	if (unlikely(thr->work_restart))
 		goto cascade;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
-	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, 1000, C_BFO_GETRES);
+	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, 1000, C_BF1_GETRES);
 	info->tot += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BFO_GETRES);
+		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
 		info->tot += amount;
 	};
 
@@ -197,9 +197,9 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		goto cascade;
 
 	/* Send work */
-	usb_write(bitfury, buf, 45, &amount, C_BFO_REQWORK);
+	usb_write(bitfury, buf, 45, &amount, C_BF1_REQWORK);
 	/* Get response acknowledging work */
-	usb_read(bitfury, buf, 7, &amount, C_BFO_GETWORK);
+	usb_read(bitfury, buf, 7, &amount, C_BF1_GETWORK);
 
 	/* Only happens on startup */
 	if (unlikely(!info->prevwork2))
@@ -256,7 +256,7 @@ static void bitfury_shutdown(struct thr_info __maybe_unused *thr)
 struct device_drv bitfury_drv = {
 	.drv_id = DRIVER_BITFURY,
 	.dname = "bitfury",
-	.name = "BFO",
+	.name = "BF1",
 	.drv_detect = bitfury_detect,
 	.scanhash = bitfury_scanhash,
 	.get_api_stats = bitfury_api_stats,
