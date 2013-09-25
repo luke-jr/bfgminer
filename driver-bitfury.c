@@ -121,16 +121,6 @@ static void bitfury_detect(void)
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }
 
-static bool bitfury_prepare(struct thr_info __maybe_unused *thr)
-{
-	return true;
-}
-
-static bool bitfury_fill(struct cgpu_info __maybe_unused *bitfury)
-{
-	return true;
-}
-
 static uint32_t decnonce(uint32_t in)
 {
 	uint32_t out;
@@ -171,26 +161,6 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 		submit_nonce(thr, work, nonceoff);
 		return true;
 	}
-#if 0
-	nonceoff = nonce + 0x2800000u;
-	if (test_nonce(work, nonceoff)) {
-		applog(LOG_ERR, "0x2800000");
-		submit_nonce(thr, work, nonceoff);
-		return true;
-	}
-	nonceoff = nonce + 0x2C00000u;
-	if (test_nonce(work, nonceoff)) {
-		applog(LOG_ERR, "0x2C00000");
-		submit_nonce(thr, work, nonceoff);
-		return true;
-	}
-	nonceoff = nonce + 0x400000u;
-	if (test_nonce(work, nonceoff)) {
-		applog(LOG_ERR, "0x400000");
-		submit_nonce(thr, work, nonceoff);
-		return true;
-	}
-#endif
 	return false;
 }
 
@@ -262,18 +232,9 @@ cascade:
 	return 0;
 }
 
-static void bitfury_flush_work(struct cgpu_info __maybe_unused *bitfury)
-{
-}
-
 static struct api_data *bitfury_api_stats(struct cgpu_info __maybe_unused *cgpu)
 {
 	return NULL;
-}
-
-static void get_bitfury_statline_before(char __maybe_unused *buf, size_t __maybe_unused bufsiz,
-					struct cgpu_info __maybe_unused *bitfury)
-{
 }
 
 static void bitfury_init(struct cgpu_info __maybe_unused *bitfury)
@@ -294,10 +255,7 @@ struct device_drv bitfury_drv = {
 	.name = "BFO",
 	.drv_detect = bitfury_detect,
 	.scanhash = bitfury_scanhash,
-	.flush_work = bitfury_flush_work,
 	.get_api_stats = bitfury_api_stats,
-	.thread_prepare = bitfury_prepare,
-	.get_statline_before = get_bitfury_statline_before,
 	.reinit_device = bitfury_init,
 	.thread_shutdown = bitfury_shutdown,
 	.identify_device = bitfury_identify
