@@ -229,18 +229,18 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	sendbuf[0] = 'W';
 	memcpy(sendbuf + 1, work->midstate, 32);
 	memcpy(sendbuf + 33, work->data + 64, 12);
-	usb_write(bitfury, sendbuf, 45, &amount, C_PING);
-	usb_read(bitfury, buf, 7, &amount, C_PING);
+	usb_write(bitfury, sendbuf, 45, &amount, C_BFO_REQWORK);
+	usb_read(bitfury, buf, 7, &amount, C_BFO_GETWORK);
 
 	if (unlikely(!info->prevwork)) {
 		info->prevwork = copy_work(work);
 		return 0;
 	}
 
-	usb_read_once_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_PING);
+	usb_read_once_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BFO_GETRES);
 	tot = amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, buf + tot, 512, &amount, 10, C_PING);
+		usb_read_once_timeout(bitfury, buf + tot, 512, &amount, 10, C_BFO_GETRES);
 		tot += amount;
 	}
 
