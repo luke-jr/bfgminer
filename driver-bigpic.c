@@ -27,42 +27,6 @@
 struct device_drv bigpic_drv;
 
 //------------------------------------------------------------------------------
-int bigpic_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
-{
-	uint8_t   in[16];
-	uint32_t *in32 = (uint32_t *)in;
-	char      hex[65];
-	uint32_t *mid32 = (uint32_t *)midstate;
-	uint32_t  out32[8];
-	uint8_t  *out = (uint8_t *) out32;
-	sha256_ctx ctx;
-
-	memset( &ctx, 0, sizeof(sha256_ctx));
-	memcpy(ctx.h, mid32, 8*4);
-	ctx.tot_len = 64;
-	ctx.len = 0;
-
-	nnonce = bswap_32(nnonce);
-	in32[0] = bswap_32(m7);
-	in32[1] = bswap_32(ntime);
-	in32[2] = bswap_32(nbits);
-	in32[3] = nnonce;
-
-	sha256_update(&ctx, in, 16);
-	sha256_final(&ctx, out);
-	sha256(out, 32, out);
-
-	if (out32[7] == 0)
-	{
-		bin2hex(hex, out, 32);
-		applog(LOG_DEBUG, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x", mid32[0], m7, ntime, nbits, nnonce);
-		applog(LOG_DEBUG, "                         out: %s", hex);
-		return 1;
-	}
-	return 0;
-}
-
-//------------------------------------------------------------------------------
 static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, struct bigpic_info *info)
 {
 	int fd = serial_open(devpath, info->baud, 1, true);
@@ -237,39 +201,9 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 		results[num_results++] = state.nonce;
 
 		//applog(LOG_DEBUG, "%"PRIpreprv": Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", board->proc_repr, info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce))
+		if (bitfury_fudge_nonce(work->midstate, m7, ntime, nbits, &nonce))
 		{
 			submit_nonce(thr, work, nonce);
-			nonces--;
-			continue;
-		}
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce-0x400000))
-		{
-			submit_nonce(thr, work, nonce-0x400000);
-			nonces--;
-			continue;
-		}
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce-0x800000))
-		{
-			submit_nonce(thr, work, nonce-0x800000);
-			nonces--;
-			continue;
-		}
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x2800000))
-		{
-			submit_nonce(thr, work, nonce+0x2800000);
-			nonces--;
-			continue;
-		}
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x2C00000))
-		{
-			submit_nonce(thr, work, nonce+0x2C00000);
-			nonces--;
-			continue;
-		}
-		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x400000))
-		{
-			submit_nonce(thr, work, nonce+0x400000);
 			nonces--;
 			continue;
 		}

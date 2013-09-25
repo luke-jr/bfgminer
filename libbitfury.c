@@ -380,8 +380,7 @@ int rehash(const void *midstate, const uint32_t m7, const uint32_t ntime, const 
 	return 0;
 }
 
-static
-bool fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t *nonce_p) {
+bool bitfury_fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t *nonce_p) {
 	static const uint32_t offsets[] = {0, 0xffc00000, 0xff800000, 0x02800000, 0x02C00000, 0x00400000};
 	uint32_t nonce;
 	int i;
@@ -495,7 +494,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				if ((newbuf[i] & 0xFF) == 0xE0)
 					continue;
 				pn = bitfury_decnonce(newbuf[i]);
-				if (fudge_nonce(op->midstate, op->m7, op->ntime, op->nbits, &pn))
+				if (bitfury_fudge_nonce(op->midstate, op->m7, op->ntime, op->nbits, &pn))
 				{
 					int k;
 					int dup = 0;
@@ -509,13 +508,13 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 					}
 				}
 				else
-				if (fudge_nonce(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, &pn))
+				if (bitfury_fudge_nonce(o2p->midstate, o2p->m7, o2p->ntime, o2p->nbits, &pn))
 				{
 					d->old_nonce = bswap_32(pn);
 					found++;
 				}
 				else
-				if (fudge_nonce(p->midstate, p->m7, p->ntime, p->nbits, &pn))
+				if (bitfury_fudge_nonce(p->midstate, p->m7, p->ntime, p->nbits, &pn))
 				{
 					d->future_nonce = bswap_32(pn);
 					found++;
