@@ -299,6 +299,17 @@ else
 	adl="no"
 fi
 
+################################################################################
+AC_ARG_ENABLE([bigpic],
+	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
+	[bigpic=$enableval],
+	[bigpic=yes]
+	)
+if test "x$bigpic" = xyes; then
+	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+fi
+AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
+
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
 	[bitforce=$enableval],
@@ -1053,6 +1064,12 @@ if test "x$avalon" = xyes; then
 	echo "  Avalon.ASICs.........: Enabled"
 else
 	echo "  Avalon.ASICs.........: Disabled"
+fi
+
+if test "x$bigpic" = xyes; then
+	echo "  BPM.USB.ASICs........: Enabled"
+else
+	echo "  BPM.USB.ASICs........: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then

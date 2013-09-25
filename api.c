@@ -33,7 +33,7 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 
-#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_AVALON) || defined(USE_BIGPIC) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 #define HAVE_AN_FPGA 1
 #endif
 
@@ -94,6 +94,9 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_BITFORCE
 			"BFL "
+#endif
+#ifdef USE_BIGPIC
+			"BPM "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
