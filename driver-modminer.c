@@ -276,8 +276,6 @@ modminer_device_prepare(struct cgpu_info *modminer)
 	modminer->device->device_fd = fd;
 	applog(LOG_INFO, "%s: Opened %s", modminer->dev_repr, modminer->device_path);
 
-	get_now_datestamp(modminer->init);
-
 	return true;
 }
 
@@ -454,11 +452,11 @@ modminer_fpga_init(struct thr_info *thr)
 }
 
 static
-bool get_modminer_upload_percent(char *buf, struct cgpu_info *modminer, __maybe_unused bool per_processor)
+bool get_modminer_upload_percent(char *buf, size_t bufsz, struct cgpu_info *modminer, __maybe_unused bool per_processor)
 {
 	char pdone = ((struct modminer_fpga_state*)(modminer->device->thr[0]->cgpu_data))->pdone;
 	if (pdone != 101) {
-		tailsprintf(buf, "%3d%% ", pdone);
+		tailsprintf(buf, bufsz, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
@@ -666,7 +664,7 @@ modminer_process_results(struct thr_info*thr)
 		}
 		if (work_restart(thr) || !--iter)
 			break;
-		nmsleep(1);
+		cgsleep_ms(1);
 		if (work_restart(thr))
 			break;
 		mutex_lock(mutexp);
@@ -843,7 +841,7 @@ struct device_drv modminer_drv = {
 	.dname = "modminer",
 	.name = "MMQ",
 	.drv_detect = modminer_detect,
-	.override_statline_temp = get_modminer_upload_percent,
+	.override_statline_temp2 = get_modminer_upload_percent,
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,

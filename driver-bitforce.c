@@ -116,14 +116,15 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 }
 
 static
-void bitforce_cmd1(int fd, int procid, void *buf, size_t bufsz, const char *cmd)
+void bitforce_cmd1b(int fd, int procid, void *buf, size_t bufsz, const char *cmd, size_t cmdsz)
 {
 	if (unlikely(opt_dev_protocol))
 		applog(LOG_DEBUG, "DEVPROTO: CMD1 (fd=%d xlink=%d): %s", fd, procid, cmd);
 	
-	bitforce_send(fd, procid, cmd, 3);
+	bitforce_send(fd, procid, cmd, cmdsz);
 	BFgets(buf, bufsz, fd);
 }
+#define bitforce_cmd1(fd, xlinkid, buf, bufsz, cmd)  bitforce_cmd1b(fd, xlinkid, buf, bufsz, cmd, 3)
 
 static
 void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
@@ -324,7 +325,8 @@ struct bitforce_data {
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
 	float temp[2];
-	char *voltinfo;
+	long *volts;
+	int volts_count;
 };
 
 struct bitforce_proc_data {
@@ -369,7 +371,6 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-	get_now_datestamp(bitforce->init);
 
 	return true;
 }
@@ -425,7 +426,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (fdDev) {
 		BFclose(fdDev);
-		nmsleep(5000);
+		cgsleep_ms(5000);
 		*p_fdDev = 0;
 	}
 
@@ -448,7 +449,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		}
 
 		if (retries++)
-			nmsleep(10);
+			cgsleep_ms(10);
 	} while (strstr(pdevbuf, "BUSY") && (retries * 10 < BITFORCE_TIMEOUT_MS));
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
@@ -516,7 +517,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 
 	/* However, this stops anything else getting a reply
 	 * So best to delay any other access to the BFL */
-	nmsleep(4000);
+	cgsleep_ms(4000);
 
 	mutex_unlock(mutexp);
 
@@ -580,40 +581,25 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (data->sc && likely(voltbuf[0]))
 	{
 		// Process voltage info
-		// "NNNxxx,NNNxxx,NNNxxx" -> "NNN.xxx / NNN.xxx / NNN.xxx"
-		size_t sz = strlen(voltbuf) * 4;
-		char *saveptr, *v, *outbuf = malloc(sz);
-		char *out = outbuf;
+		// "NNNxxx,NNNxxx,NNNxxx"
+		int n = 1;
+		for (char *p = voltbuf; p[0]; ++p)
+			if (p[0] == ',')
+				++n;
+		
+		long *out = malloc(sizeof(long) * n);
 		if (!out)
 			goto skipvolts;
+		
+		n = 0;
+		char *saveptr, *v;
 		for (v = strtok_r(voltbuf, ",", &saveptr); v; v = strtok_r(NULL, ",", &saveptr))
-		{
-			while (isCspace(v[0]))
-				++v;
-			sz = strlen(v);
-			while (isCspace(v[sz - 1]))
-				--sz;
-			if (sz < 4)
-			{
-				memcpy(out, "0.00? / ", 8);
-				memcpy(&out[5 - sz], v, sz);
-				out += 8;
-			}
-			else
-			{
-				memcpy(out, v, sz - 3);
-				out += sz - 3;
-				out[0] = '.';
-				memcpy(&out[1], &v[sz - 3], 3);
-				memcpy(&out[4], " / ", 3);
-				out += 7;
-			}
-		}
-		out[-3] = '\0';
-		assert(out[-2]=='/');
-		saveptr = data->voltinfo;
-		data->voltinfo = outbuf;
-		free(saveptr);
+			out[n++] = strtol(v, NULL, 10);
+		
+		data->volts_count = 0;
+		free(data->volts);
+		data->volts = out;
+		data->volts_count = n;
 	}
 	
 skipvolts:
@@ -696,9 +682,9 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	switch (data->proto)
 	{
 		case BFP_BQUEUE:
-			quit(1, "%"PRIpreprv": Impossible BFP_BQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+			quithere(1, "%"PRIpreprv": Impossible BFP_BQUEUE", bitforce->proc_repr);
 		case BFP_PQUEUE:
-			quit(1, "%"PRIpreprv": Impossible BFP_PQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+			quithere(1, "%"PRIpreprv": Impossible BFP_PQUEUE", bitforce->proc_repr);
 		case BFP_RANGE:
 		{
 			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
@@ -1379,7 +1365,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	 * so the devices aren't making calls all at the same time. */
 	wait = thr->id * MAX_START_DELAY_MS;
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
-	nmsleep(wait);
+	cgsleep_ms(wait);
 
 	if (sc)
 	{
@@ -1444,8 +1430,22 @@ void bitforce_wlogprint_status(struct cgpu_info *cgpu)
 	struct bitforce_data *data = cgpu->device_data;
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		wlogprint("Temperatures: %4.1fC %4.1fC\n", data->temp[0], data->temp[1]);
-	if (data->voltinfo)
-		wlogprint("Voltages: %s\n", data->voltinfo);
+	if (data->volts_count)
+	{
+		// -> "NNN.xxx / NNN.xxx / NNN.xxx"
+		size_t sz = (data->volts_count * 10) + 1;
+		char buf[sz];
+		char *s = buf;
+		int rv = 0;
+		for (int i = 0; i < data->volts_count; ++i)
+		{
+			long v = data->volts[i];
+			_SNP("%ld.%03d / ", v / 1000, (int)(v % 1000));
+		}
+		if (rv >= 3 && s[-2] == '/')
+			s[-3] = '\0';
+		wlogprint("Voltages: %s\n", buf);
+	}
 }
 #endif
 
@@ -1465,6 +1465,15 @@ static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 	{
 		root = api_add_temp(root, "Temperature0", &(data->temp[0]), false);
 		root = api_add_temp(root, "Temperature1", &(data->temp[1]), false);
+	}
+	
+	for (int i = 0; i < data->volts_count; ++i)
+	{
+		float voltage = data->volts[i];
+		char key[] = "VoltageNN";
+		snprintf(&key[7], 3, "%d", i);
+		voltage /= 1e3;
+		root = api_add_volts(root, key, &voltage, true);
 	}
 
 	return root;
@@ -1521,6 +1530,15 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 		mutex_lock(mutexp);
 		fd = proc->device->device_fd;
 		bitforce_cmd1(fd, data->xlink_id, replybuf, 256, cmd);
+		mutex_unlock(mutexp);
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "_cmd1"))
+	{
+		mutex_lock(mutexp);
+		fd = proc->device->device_fd;
+		bitforce_cmd1b(fd, data->xlink_id, replybuf, 8000, setting, strlen(setting));
 		mutex_unlock(mutexp);
 		return replybuf;
 	}

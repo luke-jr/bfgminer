@@ -43,7 +43,7 @@ bin_PROGRAMS	= bfgminer
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
-		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ \
+		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ @RT_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
@@ -66,9 +66,6 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
-bitstreamsdir = $(pkgdatadir)/bitstreams
-dist_bitstreams_DATA =
-
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
@@ -85,6 +82,13 @@ endif
 endif
 
 bfgminer_SOURCES	+= logging.c
+
+if USE_LIBMICROHTTPD
+bfgminer_SOURCES += httpsrv.c httpsrv.h driver-getwork.c
+bfgminer_LDADD += $(libmicrohttpd_LIBS)
+bfgminer_LDFLAGS += $(libmicrohttpd_LDFLAGS)
+bfgminer_CPPFLAGS += $(libmicrohttpd_CFLAGS)
+endif
 
 
 # GPU sources, TODO: make them selectable
@@ -170,6 +174,10 @@ if HAS_FPGA
 dist_doc_DATA += README.FPGA
 endif
 
+if HAS_ASIC
+dist_doc_DATA += README.ASIC
+endif
+
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 
@@ -192,7 +200,6 @@ endif
 
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
-dist_doc_DATA += README.ASIC
 endif
 
 if HAS_MODMINER
@@ -203,15 +210,8 @@ if HAS_X6500
 bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
 endif
 
-if NEED_BITSTREAM_FPGAMINER
-dist_bitstreams_DATA += $(top_srcdir)/bitstreams/fpgaminer*.bit
-dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_fpgaminer
-endif
-
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
-dist_bitstreams_DATA += $(top_srcdir)/bitstreams/ztex_*.bi?
-dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_ztex
 endif
 
 bin_PROGRAMS += bfgminer-rpc

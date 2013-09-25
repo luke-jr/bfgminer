@@ -24,6 +24,10 @@
 #include <dirent.h>
 #include <string.h>
 
+#ifdef HAVE_SYS_FILE_H
+#include <sys/file.h>
+#endif
+
 #ifdef HAVE_LIBUSB
 #include <libusb.h>
 #endif
@@ -825,6 +829,20 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 
 		return -1;
 	}
+	
+#if defined(LOCK_EX) && defined(LOCK_NB)
+	if (likely(!flock(fdDev, LOCK_EX | LOCK_NB)))
+		applog(LOG_DEBUG, "Acquired exclusive advisory lock on %s", devpath);
+	else
+	if (errno == EWOULDBLOCK)
+	{
+		applog(LOG_ERR, "%s is already in use by another process", devpath);
+		close(fdDev);
+		return -1;
+	}
+	else
+		applog(LOG_WARNING, "Failed to acquire exclusive lock on %s: %s (ignoring)", devpath, bfg_strerror(errno, BST_ERRNO));
+#endif
 
 	struct termios my_termios;
 
@@ -924,6 +942,12 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 	buf[len] = '\0';  \
 } while(0)
 
+void _bitstream_not_found(const char *repr, const char *fn)
+{
+	applog(LOG_ERR, "ERROR: Unable to load '%s', required for %s to work!", fn, repr);
+	applog(LOG_ERR, "ERROR: Please read README.FPGA for instructions");
+}
+
 FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len)
 {
 	char buf[0x100];
@@ -934,10 +958,7 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 	FILE *f = open_bitstream(dname, fwfile);
 	if (!f)
 	{
-		applog(LOG_ERR, "%s: Error opening bitstream file %s",
-		        repr, fwfile);
-		applog(LOG_ERR, "%s: Did you install the necessary bitstream package?",
-		       repr);
+		_bitstream_not_found(repr, fwfile);
 		return NULL;
 	}
 	if (1 != fread(buf, 2, 1, f))
@@ -984,6 +1005,103 @@ FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwf
 
 	*out_len = len;
 	return f;
+}
+
+bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *repr, const char *fn)
+{
+	char buf[0x100];
+	size_t sz;
+	uint8_t xsz, xrt;
+	uint16_t xaddr;
+	FILE *F = open_bitstream(dname, fn);
+	if (!F)
+		return false;
+	while (!feof(F))
+	{
+		if (unlikely(ferror(F)))
+		{
+			applog(LOG_ERR, "Error reading '%s'", fn);
+			goto ihxerr;
+		}
+		fgets(buf, sizeof(buf), F);
+		if (unlikely(buf[0] != ':'))
+			goto ihxerr;
+		if (unlikely(!(
+			hex2bin(&xsz, &buf[1], 1)
+		 && hex2bin((unsigned char*)&xaddr, &buf[3], 2)
+		 && hex2bin(&xrt, &buf[7], 1)
+		)))
+		{
+			applog(LOG_ERR, "Error parsing in '%s'", fn);
+			goto ihxerr;
+		}
+		switch (xrt)
+		{
+			case 0:  // data
+				break;
+			case 1:  // EOF
+				fclose(F);
+				return true;
+			default:
+				applog(LOG_ERR, "Unsupported record type in '%s'", fn);
+				goto ihxerr;
+		}
+		xaddr = be16toh(xaddr);
+		sz = bytes_len(rv);
+		bytes_resize(rv, xaddr + xsz);
+		if (sz < xaddr)
+			memset(&bytes_buf(rv)[sz], 0xff, xaddr - sz);
+		if (unlikely(!(hex2bin(&bytes_buf(rv)[xaddr], &buf[9], xsz))))
+		{
+			applog(LOG_ERR, "Error parsing data in '%s'", fn);
+			goto ihxerr;
+		}
+		// TODO: checksum
+	}
+	
+ihxerr:
+	fclose(F);
+	bytes_reset(rv);
+	return false;
+}
+
+bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *repr, const char *fileprefix)
+{
+	FILE *F;
+	size_t fplen = strlen(fileprefix);
+	char fnbuf[fplen + 4 + 1];
+	int e;
+	
+	bytes_reset(rv);
+	memcpy(fnbuf, fileprefix, fplen);
+	
+	strcpy(&fnbuf[fplen], ".bin");
+	F = open_bitstream(dname, fnbuf);
+	if (F)
+	{
+		char buf[0x100];
+		size_t sz;
+		while ( (sz = fread(buf, 1, sizeof(buf), F)) )
+			bytes_append(rv, buf, sz);
+		e = ferror(F);
+		fclose(F);
+		if (unlikely(e))
+		{
+			applog(LOG_ERR, "Error reading '%s'", fnbuf);
+			bytes_reset(rv);
+		}
+		else
+			return true;
+	}
+	
+	strcpy(&fnbuf[fplen], ".ihx");
+	if (load_bitstream_intelhex(rv, dname, repr, fnbuf))
+		return true;
+	
+	// TODO: Xilinx
+	
+	_bitstream_not_found(repr, fnbuf);
+	return false;
 }
 
 #ifndef WIN32

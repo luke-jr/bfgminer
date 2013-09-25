@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Copyright 2013 Christian Berendt
+# Copyright 2013 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -39,11 +40,16 @@ except socket.error, e:
     logging.error(e)
 
 
-data = None
-try:
-    data = s.recv(1024)
-except socket.error, e:
-    logging.error(e)
+data = ''
+while True:
+    try:
+        newdata = s.recv(1024)
+        if newdata:
+            data += newdata
+        else:
+            break
+    except socket.error, e:
+        break
 
 try:
     s.close()

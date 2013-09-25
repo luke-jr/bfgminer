@@ -153,8 +153,8 @@ static bool ztex_checkNonce(struct cgpu_info *cgpu,
 
 	swap32yes(swap32, data32, 76 / 4);
 
-	sha2(swap, 80, hash1);
-	sha2(hash1, 32, hash2);
+	sha256(swap, 80, hash1);
+	sha256(hash1, 32, hash2);
 
 	if (be32toh(hash2_32[7]) != ((hdata->hash7 + 0x5be0cd19) & 0xFFFFFFFF)) {
 		applog(LOG_DEBUG, "%"PRIpreprv": checkNonce failed for %08x", cgpu->proc_repr, hdata->nonce);
@@ -190,7 +190,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	if (i < 0) {
 		// Something wrong happened in send
 		applog(LOG_ERR, "%"PRIpreprv": Failed to send hash data with err %d, retrying", cgpu->proc_repr, i);
-		nmsleep(500);
+		cgsleep_ms(500);
 		i = libztex_sendHashData(ztex, sendbuf);
 		if (i < 0) {
 			// And there's nothing we can do about it
@@ -235,7 +235,7 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 		if (i < 0) {
 			// Something wrong happened in read
 			applog(LOG_ERR, "%"PRIpreprv": Failed to read hash data with err %d, retrying", cgpu->proc_repr, i);
-			nmsleep(500);
+			cgsleep_ms(500);
 			i = libztex_readHashData(ztex, &hdata[0]);
 			if (i < 0) {
 				// And there's nothing we can do about it
@@ -342,8 +342,6 @@ static bool ztex_prepare(struct thr_info *thr)
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	get_now_datestamp(cgpu->init);
-	
 	{
 		char *fpganame = malloc(LIBZTEX_SNSTRING_LEN+3+1);
 		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);

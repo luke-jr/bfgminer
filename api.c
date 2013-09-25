@@ -26,6 +26,9 @@
 #include <sys/types.h>
 
 #include "compat.h"
+#ifdef USE_LIBMICROHTTPD
+#include "httpsrv.h"
+#endif
 #include "miner.h"
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
@@ -49,6 +52,7 @@
 #define QUEUE	100
 
 static const char *UNAVAILABLE = " - API will not be available";
+static const char *MUNAVAILABLE = " - API multicast listener will not be available";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -57,7 +61,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.25";
+static const char *APIVERSION = "1.25.3";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -231,6 +235,12 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_CPUNON 16
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
+#define MSG_ALRENAC 98
+#define MSG_ALRDISC 99
+#define MSG_CPUMRE 100
+#define MSG_CPUREN 101
+#define MSG_CPUDIS 102
+#define MSG_CPUREI 103
 #endif
 
 #define MSG_NUMGPU 20
@@ -425,6 +435,12 @@ struct CODES {
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
+ { SEVERITY_INFO,  MSG_ALRENAC,	PARAM_CPU,	"CPU %d already enabled" },
+ { SEVERITY_INFO,  MSG_ALRDISC,	PARAM_CPU,	"CPU %d already disabled" },
+ { SEVERITY_WARN,  MSG_CPUMRE,	PARAM_CPU,	"CPU %d must be restarted first" },
+ { SEVERITY_INFO,  MSG_CPUREN,	PARAM_CPU,	"CPU %d sent enable message" },
+ { SEVERITY_INFO,  MSG_CPUDIS,	PARAM_CPU,	"CPU %d set disable flag" },
+ { SEVERITY_INFO,  MSG_CPUREI,	PARAM_CPU,	"CPU %d restart attempted" },
 #endif
  { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMPGA,	PARAM_NONE,	"PGA count" },
@@ -438,7 +454,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " _MIN_INTENSITY_STR " - " _MAX_INTENSITY_STR },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
@@ -504,6 +520,8 @@ struct CODES {
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
+static const char *localaddr = "127.0.0.1";
+
 static int my_thr_id = 0;
 static bool bye;
 
@@ -547,104 +565,89 @@ extern struct device_drv cpu_drv;
 #endif
 
 struct io_data {
-	size_t siz;
-	char *ptr;
-	char *cur;
-	bool sock;
-	bool full;
+	bytes_t data;
+	SOCKETTYPE sock;
+	
+	// Whether to add various things
 	bool close;
 };
-
-struct io_list {
-	struct io_data *io_data;
-	struct io_list *prev;
-	struct io_list *next;
-};
-
-static struct io_list *io_head = NULL;
-
-#define io_new(init) _io_new(init, false)
-#define sock_io_new() _io_new(SOCKBUFSIZ, true)
+static struct io_data *rpc_io_data;
 
 static void io_reinit(struct io_data *io_data)
 {
-	io_data->cur = io_data->ptr;
-	*(io_data->ptr) = '\0';
-	io_data->full = false;
+	bytes_reset(&io_data->data);
 	io_data->close = false;
 }
 
-static struct io_data *_io_new(size_t initial, bool socket_buf)
+static
+struct io_data *sock_io_new()
 {
-	struct io_data *io_data;
-	struct io_list *io_list;
-
-	io_data = malloc(sizeof(*io_data));
-	io_data->ptr = malloc(initial);
-	io_data->siz = initial;
-	io_data->sock = socket_buf;
+	struct io_data *io_data = malloc(sizeof(struct io_data));
+	bytes_init(&io_data->data);
+	io_data->sock = INVSOCK;
 	io_reinit(io_data);
-
-	io_list = malloc(sizeof(*io_list));
-
-	io_list->io_data = io_data;
-
-	if (io_head) {
-		io_list->next = io_head;
-		io_list->prev = io_head->prev;
-		io_list->next->prev = io_list;
-		io_list->prev->next = io_list;
-	} else {
-		io_list->prev = io_list;
-		io_list->next = io_list;
-		io_head = io_list;
-	}
-
 	return io_data;
+}
+
+static
+size_t io_flush(struct io_data *io_data, bool complete)
+{
+	size_t sent = 0, tosend = bytes_len(&io_data->data);
+	ssize_t n;
+	struct timeval timeout = {0, complete ? 50000: 0}, tv;
+	fd_set wd;
+	int count = 0;
+	
+	while (tosend)
+	{
+		FD_ZERO(&wd);
+		FD_SET(io_data->sock, &wd);
+		tv = timeout;
+		if (select(io_data->sock + 1, NULL, &wd, NULL, &tv) < 1)
+			break;
+		
+		n = send(io_data->sock, (void*)&bytes_buf(&io_data->data)[sent], tosend, 0);
+		if (SOCKETFAIL(n))
+		{
+			if (!sock_blocks())
+				applog(LOG_WARNING, "API: send (%lu) failed: %s", (unsigned long)tosend, SOCKERRMSG);
+			break;
+		}
+		if (count <= 1)
+		{
+			if (n == tosend)
+				applog(LOG_DEBUG, "API: sent all of %lu first go", (unsigned long)tosend);
+			else
+				applog(LOG_DEBUG, "API: sent %ld of %lu first go", (long)n, (unsigned long)tosend);
+		}
+		else
+		{
+			if (n == tosend)
+				applog(LOG_DEBUG, "API: sent all of remaining %lu (count=%d)", (unsigned long)tosend, count);
+			else
+				applog(LOG_DEBUG, "API: sent %ld of remaining %lu (count=%d)", (long)n, (unsigned long)tosend, count);
+		}
+		sent += n;
+		tosend -= n;
+	}
+	
+	bytes_shift(&io_data->data, sent);
+	
+	return sent;
 }
 
 static bool io_add(struct io_data *io_data, char *buf)
 {
-	size_t len, dif, tot;
-
-	if (io_data->full)
-		return false;
-
-	len = strlen(buf);
-	dif = io_data->cur - io_data->ptr;
-	tot = len + 1 + dif;
-
-	if (tot > io_data->siz) {
-		size_t new = io_data->siz * 2;
-
-		if (new < tot)
-			new = tot * 2;
-
-		if (io_data->sock) {
-			if (new > SOCKBUFSIZ) {
-				if (tot > SOCKBUFSIZ) {
-					io_data->full = true;
-					return false;
-				}
-
-				new = SOCKBUFSIZ;
-			}
-		}
-
-		io_data->ptr = realloc(io_data->ptr, new);
-		io_data->cur = io_data->ptr + dif;
-		io_data->siz = new;
-	}
-
-	memcpy(io_data->cur, buf, len + 1);
-	io_data->cur += len;
-
+	size_t len = strlen(buf);
+	if (bytes_len(&io_data->data) + len > SOCKBUFSIZ)
+		io_flush(io_data, false);
+	bytes_append(&io_data->data, buf, len);
 	return true;
 }
 
 static bool io_put(struct io_data *io_data, char *buf)
 {
-	io_reinit(io_data);
+	bytes_reset(&io_data->data);
 	return io_add(io_data, buf);
 }
 
@@ -655,21 +658,9 @@ static void io_close(struct io_data *io_data)
 
 static void io_free()
 {
-	struct io_list *io_list, *io_next;
-
-	if (io_head) {
-		io_list = io_head;
-		do {
-			io_next = io_list->next;
-
-			free(io_list->io_data);
-			free(io_list);
-
-			io_list = io_next;
-		} while (io_list != io_head);
-
-		io_head = NULL;
-	}
+	bytes_free(&rpc_io_data->data);
+	free(rpc_io_data);
+	rpc_io_data = NULL;
 }
 
 // This is only called when expected to be needed (rarely)
@@ -829,6 +820,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_FREQ:
 			case API_HS:
 			case API_DIFF:
+			case API_PERCENT:
 				api_data->data = (void *)malloc(sizeof(double));
 				*((double *)(api_data->data)) = *((double *)data);
 				break;
@@ -969,6 +961,11 @@ struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, b
 	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
 }
 
+struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_PERCENT, (void *)data, copy_data);
+}
+
 static struct api_data *print_data(struct api_data *root, char *buf, bool isjson, bool precom)
 {
 	struct api_data *tmp;
@@ -1065,6 +1062,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				escape = json_dumps((json_t *)(root->data), JSON_COMPACT);
 				strcpy(buf, escape);
 				free(escape);
+				break;
+			case API_PERCENT:
+				sprintf(buf, "%.4f", *((double *)(root->data)) * 100.0);
 				break;
 			default:
 				applog(LOG_ERR, "API: unknown2 data type %d ignored", root->type);
@@ -1368,7 +1368,9 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
 	root = api_add_int(root, "Queue", &opt_queue, false);
 	root = api_add_int(root, "Expiry", &opt_expiry, false);
+#if BLKMAKER_VERSION > 0
 	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
+#endif
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
@@ -1488,6 +1490,12 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
+	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
+			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+	root = api_add_percent(root, "Device Hardware%", &hwp, false);
+	double rejp = cgpu->diff1 ?
+			(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
+	root = api_add_percent(root, "Device Rejected%", &rejp, false);
 
 	if (cgpu->drv->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_status(cgpu));
@@ -1897,6 +1905,12 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
 		if (pool->admin_msg)
 			root = api_add_escape(root, "Message", pool->admin_msg, true);
+		double rejp = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
+				(double)(pool->diff_rejected) / (double)(pool->diff_accepted + pool->diff_rejected + pool->diff_stale) : 0;
+		root = api_add_percent(root, "Pool Rejected%", &rejp, false);
+		double stalep = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
+				(double)(pool->diff_stale) / (double)(pool->diff_accepted + pool->diff_rejected + pool->diff_stale) : 0;
+		root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
 		root = print_data(root, buf, isjson, isjson && (i > 0));
 		io_add(io_data, buf);
@@ -1953,6 +1967,18 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
 	root = api_add_uint64(root, "Best Share", &(best_diff), true);
+	double hwp = (hw_errors + total_diff1) ?
+			(double)(hw_errors) / (double)(hw_errors + total_diff1) : 0;
+	root = api_add_percent(root, "Device Hardware%", &hwp, false);
+	double rejp = total_diff1 ?
+			(double)(total_diff_rejected) / (double)(total_diff1) : 0;
+	root = api_add_percent(root, "Device Rejected%", &rejp, false);
+	double prejp = (total_diff_accepted + total_diff_rejected + total_diff_stale) ?
+			(double)(total_diff_rejected) / (double)(total_diff_accepted + total_diff_rejected + total_diff_stale) : 0;
+	root = api_add_percent(root, "Pool Rejected%", &prejp, false);
+	double stalep = (total_diff_accepted + total_diff_rejected + total_diff_stale) ?
+			(double)(total_diff_stale) / (double)(total_diff_accepted + total_diff_rejected + total_diff_stale) : 0;
+	root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
 	mutex_unlock(&hash_lock);
 
@@ -2103,6 +2129,104 @@ static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	if (isjson && io_open)
 		io_close(io_data);
 }
+
+#ifdef WANT_CPUMINE
+static void cpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	applog(LOG_DEBUG, "API: request to cpuenable cpuid %d %s",
+			id, cpus[id].proc_repr_ns);
+
+	if (cpus[id].deven != DEV_DISABLED) {
+		message(io_data, MSG_ALRENAC, id, NULL, isjson);
+		return;
+	}
+
+	if (cpus[id].status != LIFE_WELL)
+	{
+		message(io_data, MSG_CPUMRE, id, NULL, isjson);
+		return;
+	}
+	proc_enable(&cpus[id]);
+
+	message(io_data, MSG_CPUREN, id, NULL, isjson);
+}
+
+static void cpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	applog(LOG_DEBUG, "API: request to cpudisable cpuid %d %s",
+			id, cpus[id].proc_repr_ns);
+
+	if (cpus[id].deven == DEV_DISABLED) {
+		message(io_data, MSG_ALRDISC, id, NULL, isjson);
+		return;
+	}
+
+	cpus[id].deven = DEV_DISABLED;
+
+	message(io_data, MSG_CPUDIS, id, NULL, isjson);
+}
+
+static void cpurestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	int id;
+
+	if (opt_n_threads == 0) {
+		message(io_data, MSG_CPUNON, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return;
+	}
+
+	id = atoi(param);
+	if (id < 0 || id >= opt_n_threads) {
+		message(io_data, MSG_INVCPU, id, NULL, isjson);
+		return;
+	}
+
+	reinit_device(&cpus[id]);
+
+	message(io_data, MSG_CPUREI, id, NULL, isjson);
+}
+#endif
 
 static void cpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
@@ -2847,11 +2971,11 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 
 	cg_rlock(&ch_lock);
 	if (current_fullhash && *current_fullhash) {
-		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
+		root = api_add_time(root, "Current Block Time", &block_time, true);
 		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
 	} else {
-		struct timeval t = {0,0};
-		root = api_add_timeval(root, "Current Block Time", &t, true);
+		time_t t = 0;
+		root = api_add_time(root, "Current Block Time", &t, true);
 		root = api_add_const(root, "Current Block Hash", BLANK, false);
 	}
 	cg_runlock(&ch_lock);
@@ -2962,12 +3086,14 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 	*(comma++) = '\0';
 
+#if BLKMAKER_VERSION > 0
 	if (strcasecmp(param, "coinbase-sig") == 0) {
 		free(opt_coinbase_sig);
 		opt_coinbase_sig = strdup(comma);
 		message(io_data, MSG_SETCONFIG, 1, param, isjson);
 		return;
 	}
+#endif
 
 	value = atoi(comma);
 	if (value < 0 || value > 9999) {
@@ -2981,6 +3107,15 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		opt_scantime = value;
 	else if (strcasecmp(param, "expiry") == 0)
 		opt_expiry = value;
+#ifdef USE_LIBMICROHTTPD
+	else if (strcasecmp(param, "http-port") == 0)
+	{
+		httpsrv_stop();
+		httpsrv_port = value;
+		if (httpsrv_port != -1)
+			httpsrv_start(httpsrv_port);
+	}
+#endif
 	else {
 		message(io_data, MSG_UNKCON, 0, param, isjson);
 		return;
@@ -3124,6 +3259,9 @@ struct CMDS {
 	{ "pgaidentify",	pgaidentify,	true },
 #endif
 #ifdef WANT_CPUMINE
+	{ "cpuenable",		cpuenable,	true },
+	{ "cpudisable",		cpudisable,	true },
+	{ "cpurestart",		cpurestart,	true },
 	{ "cpu",		cpudev,		false },
 #endif
 	{ "gpucount",		gpucount,	false },
@@ -3203,64 +3341,23 @@ static void checkcommand(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 
 static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 {
-	char buf[SOCKBUFSIZ + sizeof(JSON_CLOSE) + sizeof(JSON_END)];
-	int count, res, tosend, len, n;
-
-	strcpy(buf, io_data->ptr);
-
 	if (io_data->close)
-		strcat(buf, JSON_CLOSE);
-
-	if (isjson) {
-		if (io_data->full)
-			strcat(buf, JSON_END_TRUNCATED);
-		else
-			strcat(buf, JSON_END);
-	}
-
-	len = strlen(buf);
-	tosend = len+1;
-
-	applog(LOG_DEBUG, "API: send reply: (%d) '%.10s%s'", tosend, buf, len > 10 ? "..." : BLANK);
-
-	count = 0;
-	while (count++ < 5 && tosend > 0) {
-		// allow 50ms per attempt
-		struct timeval timeout = {0, 50000};
-		fd_set wd;
-
-		FD_ZERO(&wd);
-		FD_SET(c, &wd);
-		if ((res = select(c + 1, NULL, &wd, NULL, &timeout)) < 1) {
-			applog(LOG_WARNING, "API: send select failed (%d)", res);
-			return;
-		}
-
-		n = send(c, buf, tosend, 0);
-
-		if (SOCKETFAIL(n)) {
-			if (sock_blocks())
-				continue;
-
-			applog(LOG_WARNING, "API: send (%d) failed: %s", tosend, SOCKERRMSG);
-
-			return;
-		} else {
-			if (count <= 1) {
-				if (n == tosend)
-					applog(LOG_DEBUG, "API: sent all of %d first go", tosend);
-				else
-					applog(LOG_DEBUG, "API: sent %d of %d first go", n, tosend);
-			} else {
-				if (n == tosend)
-					applog(LOG_DEBUG, "API: sent all of remaining %d (count=%d)", tosend, count);
-				else
-					applog(LOG_DEBUG, "API: sent %d of remaining %d (count=%d)", n, tosend, count);
-			}
-
-			tosend -= n;
-		}
-	}
+		io_add(io_data, JSON_CLOSE);
+	
+	if (isjson)
+		io_add(io_data, JSON_END);
+	
+	bytes_nullterminate(&io_data->data);
+	applog(LOG_DEBUG, "API: send reply: (%ld) '%.10s%s'",
+	       (long)bytes_len(&io_data->data),
+	       bytes_buf(&io_data->data),
+	       bytes_len(&io_data->data) > 10 ? "..." : BLANK);
+	
+	io_flush(io_data, true);
+	
+	if (bytes_len(&io_data->data))
+		applog(LOG_WARNING, "RPC: Timed out with %ld bytes left to send",
+		       (long)bytes_len(&io_data->data));
 }
 
 static void tidyup(__maybe_unused void *arg)
@@ -3557,13 +3654,203 @@ static void *restart_thread(__maybe_unused void *userdata)
 	return NULL;
 }
 
+static bool check_connect(struct sockaddr_in *cli, char **connectaddr, char *group)
+{
+	bool addrok = false;
+	int i;
+
+	*connectaddr = inet_ntoa(cli->sin_addr);
+
+	*group = NOPRIVGROUP;
+	if (opt_api_allow) {
+		int client_ip = htonl(cli->sin_addr.s_addr);
+		for (i = 0; i < ips; i++) {
+			if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
+				addrok = true;
+				*group = ipaccess[i].group;
+				break;
+			}
+		}
+	} else {
+		if (opt_api_network)
+			addrok = true;
+		else
+			addrok = (strcmp(*connectaddr, localaddr) == 0);
+	}
+
+	return addrok;
+}
+
+static void mcast()
+{
+	struct sockaddr_in listen;
+	struct ip_mreq grp;
+	struct sockaddr_in came_from;
+	time_t bindstart;
+	const char *binderror;
+	SOCKETTYPE mcast_sock;
+	SOCKETTYPE reply_sock;
+	socklen_t came_from_siz;
+	char *connectaddr;
+	ssize_t rep;
+	int bound;
+	int count;
+	int reply_port;
+	bool addrok;
+	char group;
+
+	char expect[] = "cgminer-"; // first 8 bytes constant
+	char *expect_code;
+	size_t expect_code_len;
+	char buf[1024];
+	char replybuf[1024];
+
+	memset(&grp, 0, sizeof(grp));
+	grp.imr_multiaddr.s_addr = inet_addr(opt_api_mcast_addr);
+	if (grp.imr_multiaddr.s_addr == INADDR_NONE)
+		quit(1, "Invalid Multicast Address");
+	grp.imr_interface.s_addr = INADDR_ANY;
+
+	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+	int optval = 1;
+	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
+		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+		goto die;
+	}
+
+	memset(&listen, 0, sizeof(listen));
+	listen.sin_family = AF_INET;
+	listen.sin_addr.s_addr = INADDR_ANY;
+	listen.sin_port = htons(opt_api_mcast_port);
+
+	// try for more than 1 minute ... in case the old one hasn't completely gone yet
+	bound = 0;
+	bindstart = time(NULL);
+	while (bound == 0) {
+		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
+			binderror = SOCKERRMSG;
+			if ((time(NULL) - bindstart) > 61)
+				break;
+			else
+				cgsleep_ms(30000);
+		} else
+			bound = 1;
+	}
+
+	if (bound == 0) {
+		applog(LOG_ERR, "API mcast bind to port %d failed (%s)%s", opt_api_port, binderror, MUNAVAILABLE);
+		goto die;
+	}
+
+	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
+		applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
+		goto die;
+	}
+
+	expect_code_len = sizeof(expect) + strlen(opt_api_mcast_code);
+	expect_code = malloc(expect_code_len+1);
+	if (!expect_code)
+		quit(1, "Failed to malloc mcast expect_code");
+	snprintf(expect_code, expect_code_len+1, "%s%s-", expect, opt_api_mcast_code);
+
+	count = 0;
+	while (80085) {
+		cgsleep_ms(1000);
+
+		count++;
+		came_from_siz = sizeof(came_from);
+		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf),
+						0, (struct sockaddr *)(&came_from), &came_from_siz))) {
+			applog(LOG_DEBUG, "API mcast failed count=%d (%s) (%d)",
+					count, SOCKERRMSG, (int)mcast_sock);
+			continue;
+		}
+
+		addrok = check_connect(&came_from, &connectaddr, &group);
+		applog(LOG_DEBUG, "API mcast from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
+		if (!addrok)
+			continue;
+
+		buf[rep] = '\0';
+		if (rep > 0 && buf[rep-1] == '\n')
+			buf[--rep] = '\0';
+
+		applog(LOG_DEBUG, "API mcast request rep=%d (%s) from %s:%d",
+					(int)rep, buf,
+					inet_ntoa(came_from.sin_addr),
+					ntohs(came_from.sin_port));
+
+		if ((size_t)rep > expect_code_len && memcmp(buf, expect_code, expect_code_len) == 0) {
+			reply_port = atoi(&buf[expect_code_len]);
+			if (reply_port < 1 || reply_port > 65535) {
+				applog(LOG_DEBUG, "API mcast request ignored - invalid port (%s)",
+							&buf[expect_code_len]);
+			} else {
+				applog(LOG_DEBUG, "API mcast request OK port %s=%d",
+							&buf[expect_code_len], reply_port);
+
+				came_from.sin_port = htons(reply_port);
+				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+				snprintf(replybuf, sizeof(replybuf),
+							"cgm-%s-%d",
+							opt_api_mcast_code,
+							opt_api_port);
+
+				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
+						0, (struct sockaddr *)(&came_from),
+						sizeof(came_from));
+				if (SOCKETFAIL(rep)) {
+					applog(LOG_DEBUG, "API mcast send reply failed (%s) (%d)",
+								SOCKERRMSG, (int)reply_sock);
+				} else {
+					applog(LOG_DEBUG, "API mcast send reply (%s) succeeded (%d) (%d)",
+								replybuf, (int)rep, (int)reply_sock);
+				}
+
+				CLOSESOCKET(reply_sock);
+			}
+		} else
+			applog(LOG_DEBUG, "API mcast request was no good");
+	}
+
+die:
+
+	CLOSESOCKET(mcast_sock);
+}
+
+static void *mcast_thread(void *userdata)
+{
+	pthread_detach(pthread_self());
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+	RenameThread("api_mcast");
+
+	mcast();
+
+	return NULL;
+}
+
+void mcast_init()
+{
+	struct thr_info *thr;
+
+	thr = calloc(1, sizeof(*thr));
+	if (!thr)
+		quit(1, "Failed to calloc mcast thr");
+
+	if (thr_info_create(thr, NULL, mcast_thread, thr))
+		quit(1, "API mcast thread create failed");
+}
+
 void api(int api_thr_id)
 {
 	struct io_data *io_data;
 	struct thr_info bye_thr;
 	char buf[TMPBUFSIZ];
 	char param_buf[TMPBUFSIZ];
-	const char *localaddr = "127.0.0.1";
 	SOCKETTYPE c;
 	int n, bound;
 	char *connectaddr;
@@ -3595,6 +3882,7 @@ void api(int api_thr_id)
 		return;
 	}
 
+	rpc_io_data =
 	io_data = sock_io_new();
 
 	mutex_init(&quit_restart_lock);
@@ -3615,7 +3903,7 @@ void api(int api_thr_id)
 
 	/* This should be done before curl in needed
 	 * to ensure curl has already called WSAStartup() in windows */
-	nmsleep(opt_log_interval*1000);
+	cgsleep_ms(opt_log_interval*1000);
 
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
@@ -3661,7 +3949,7 @@ void api(int api_thr_id)
 				break;
 			else {
 				applog(LOG_WARNING, "API bind to port %d failed - trying again in 30sec", port);
-				nmsleep(30000);
+				cgsleep_ms(30000);
 			}
 		} else
 			bound = 1;
@@ -3687,6 +3975,9 @@ void api(int api_thr_id)
 			applog(LOG_WARNING, "API running in local read access mode on port %d", port);
 	}
 
+	if (opt_api_mcast)
+		mcast_init();
+
 	while (!bye) {
 		clisiz = sizeof(cli);
 		if (SOCKETFAIL(c = accept(*apisock, (struct sockaddr *)(&cli), &clisiz))) {
@@ -3694,28 +3985,9 @@ void api(int api_thr_id)
 			goto die;
 		}
 
-		connectaddr = inet_ntoa(cli.sin_addr);
-
-		addrok = false;
-		group = NOPRIVGROUP;
-		if (opt_api_allow) {
-			int client_ip = htonl(cli.sin_addr.s_addr);
-			for (i = 0; i < ips; i++) {
-				if ((client_ip & ipaccess[i].mask) == ipaccess[i].ip) {
-					addrok = true;
-					group = ipaccess[i].group;
-					break;
-				}
-			}
-		} else {
-			if (opt_api_network)
-				addrok = true;
-			else
-				addrok = (strcmp(connectaddr, localaddr) == 0);
-		}
-
-		if (opt_debug)
-			applog(LOG_DEBUG, "API: connection from %s - %s", connectaddr, addrok ? "Accepted" : "Ignored");
+		addrok = check_connect(&cli, &connectaddr, &group);
+		applog(LOG_DEBUG, "API: connection from %s - %s",
+					connectaddr, addrok ? "Accepted" : "Ignored");
 
 		if (addrok) {
 			n = recv(c, &buf[0], TMPBUFSIZ-1, 0);
@@ -3735,6 +4007,7 @@ void api(int api_thr_id)
 				// the time of the request in now
 				when = time(NULL);
 				io_reinit(io_data);
+				io_data->sock = c;
 
 				did = false;
 

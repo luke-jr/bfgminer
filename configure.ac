@@ -63,6 +63,7 @@ gl_EARLY
 AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
+AC_PROG_CPP
 
 gl_INIT
 
@@ -71,6 +72,7 @@ AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
+AC_CHECK_HEADERS([sys/file.h])
 
 AC_FUNC_ALLOCA
 
@@ -81,6 +83,7 @@ DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MM_LIBS=""
 MATH_LIBS="-lm"
+RT_LIBS=""
 
 case $target in
   amd64-* | x86_64-*)
@@ -254,7 +257,9 @@ AC_SUBST(JANSSON_LIBS)
 if test "x$opencl" = xyes; then
 	adl="yes"
 	
-AC_ARG_WITH([sensors],[Build with libsensors monitoring],[true],[with_sensors=auto])
+AC_ARG_WITH([sensors],
+	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
+	[true],[with_sensors=auto])
 if test "x$opencl" != xyes; then
 	with_sensors=no
 fi
@@ -337,6 +342,25 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
+httpsrv=auto
+AC_ARG_WITH([libmicrohttpd],
+	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],
+	[httpsrv=$withval]
+)
+if test "x$httpsrv" != "xno"; then
+	PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd],[
+		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
+		httpsrv=yes
+	],[
+		if test "x$httpsrv" = "xyes"; then
+			AC_MSG_ERROR([Unable to find libmicrohttpd])
+		else
+			AC_MSG_WARN([libmicrohttpd not found; getwork proxy will be unavailable])
+		fi
+	])
+fi
+AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
+
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
@@ -364,9 +388,8 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			AC_CHECK_DECL([libusb_init],[
 				true
 			],[
-				AC_PROG_CPP
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed 's/^[^[:space:]]\+[[:space:]]\+\([^[:space:]]\+\)\/.*$/\1/;t;d'`
+				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^[^:]*:[[:space:]]*\([^[:space:]]*\)\/.*/\1/'`
 				if test "x$libusb_include_path" != "x"; then
 					LIBUSB_LIBS="-l$usb_lib"
 					LIBUSB_CFLAGS="-I$libusb_include_path"
@@ -451,7 +474,6 @@ if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h
 	else
-		AC_PROG_CPP
 		AC_MSG_CHECKING([what baud rates your system supports])
 		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
 		if grep -q IOSPEED iospeeds_local.h; then
@@ -475,16 +497,20 @@ if test "x$curses" = "xno"; then
 else
 	orig_libs="$LIBS"
 	if test "x${curses}" = "xyes"; then
-		prefer=''
 		preferl=''
 	else
-		prefer="${curses}"
 		preferl="${curses} ${curses}6 ${curses}5"
 	fi
+	for wideornot in w u ''; do
+		for ncursesver in '' 6 5; do
+			preferl="${preferl} ncurses${wideornot}${ncursesver}"
+		done
+		preferl="${preferl} pdcurses${wideornot}"
+	done
 	if test "x$cross_compiling" != "xyes"; then
 		AC_MSG_CHECKING([for best native curses library])
 		orig_cflags="$CFLAGS"
-		for curses_lib in ${preferl} ncurses{w,}{,6,5}; do
+		for curses_lib in ${preferl}; do
 			if ! ${curses_lib}-config --cflags >/dev/null 2>/dev/null; then
 				continue
 			fi
@@ -512,27 +538,57 @@ else
 		fi
 	fi
 	if test "x$curses" != "xyes"; then
-
-	AC_SEARCH_LIBS(addstr, ${prefer} ncursesw ncurses pdcurses, [
-		curses=yes
-		cursesmsg="FOUND: ${ac_cv_search_addstr}"
-		cursesmsg="${cursesmsg/-l/}"
-		if test "x${ac_cv_search_addstr}" != "xnone required"; then
-			NCURSES_LIBS="${ac_cv_search_addstr}"
-		fi
-	], [
-		if test "x$curses" = "xyes"; then
-			AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
-		else
-			AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
-			curses=no
-			cursesmsg='NOT FOUND. TUI support DISABLED'
-		fi
-	])
-
+		sym=addstr
+			AC_SEARCH_LIBS(${sym}, ${preferl}, [
+				curses=yes
+				eval "curseslib=\"\${ac_cv_search_${sym}}\""
+				barelib="${curseslib/-l/}"
+				cursesmsg="FOUND: ${barelib}"
+				if test "x${curseslib}" != "xnone required"; then
+					NCURSES_LIBS="${curseslib}"
+				fi
+				
+				# Need to check for headers in subdirectories, to ensure we get wide stuff
+				AC_MSG_CHECKING([for curses header subdirectory])
+				barelib="${barelib/6/}"
+				barelib="${barelib/5/}"
+				cursesincl=`echo "#include <${barelib}/curses.h>" | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed 's/^[^:]*:[[:space:]]*\([^[:space:]]*\)\/.*/\1/'`
+				if test "x$cursesincl" != "x"; then
+					NCURSES_CPPFLAGS="-I${cursesincl}"
+					AC_MSG_RESULT([$cursesincl])
+				else
+					AC_MSG_RESULT([none found])
+				fi
+				
+				break
+			], [
+				if test "x$curses" = "xyes"; then
+					AC_MSG_ERROR([Could not find curses library - please install libncurses-dev or pdcurses-dev (or configure --without-curses)])
+				else
+					AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
+					curses=no
+					cursesmsg='NOT FOUND. TUI support DISABLED'
+				fi
+			])
 	fi
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
+		AC_MSG_CHECKING([whether curses library supports wide characters])
+		LIBS="$orig_libs $NCURSES_CPPFLAGS $NCURSES_LIBS"
+		AC_LINK_IFELSE([
+			AC_LANG_PROGRAM([
+				#define PDC_WIDE
+				#include <curses.h>
+			],[
+				addwstr(L"test");
+				add_wch(WACS_VLINE);
+			])
+		],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE([USE_UNICODE],[1],[Defined to 1 if curses supports wide characters])
+		],[
+			AC_MSG_RESULT([no])
+		])
 	fi
 	LIBS="$orig_libs"
 fi
@@ -578,6 +634,7 @@ AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
+AM_CONDITIONAL([HAS_ASIC], [test x$avalon$icarus$httpsrv != xnonono])
 
 dnl Find YASM
 has_yasm=false
@@ -867,7 +924,14 @@ AC_TRY_COMPILE([
 ],[
 	AC_MSG_RESULT([yes])
 	AC_DEFINE([HAVE_CLOCK_GETTIME_MONOTONIC], [1], [Defined to 1 if clock_gettime(CLOCK_MONOTONIC) is defined])
-	AC_SEARCH_LIBS([clock_gettime],[rt posix4])
+	save_LIBS="${LIBS}"
+	AC_SEARCH_LIBS([clock_gettime],[rt posix4],[
+		if test "x${ac_cv_search_clock_gettime}" != "xnone required"; then
+			RT_LIBS="${ac_cv_search_clock_gettime}"
+		fi
+	])
+	LIBS="${save_LIBS}"
+	AC_CHECK_FUNCS([clock_nanosleep])
 	AC_MSG_CHECKING([for clock_gettime(CLOCK_MONOTONIC_RAW)])
 	AC_TRY_COMPILE([
 		#define _GNU_SOURCE
@@ -908,6 +972,7 @@ AC_SUBST(PDCURSES_LIBS)
 AC_SUBST(WS2_LIBS)
 AC_SUBST(MM_LIBS)
 AC_SUBST(MATH_LIBS)
+AC_SUBST(RT_LIBS)
 AC_SUBST(UDEV_LIBS)
 AC_SUBST(SSE2_CFLAGS)
 AC_SUBST(YASM_FMT)

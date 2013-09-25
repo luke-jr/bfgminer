@@ -1,5 +1,6 @@
 /*
  * Copyright 2011 Kano
+ * Copyright 2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,6 +10,7 @@
 
 #include "config.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -186,13 +188,15 @@ void display(char *buf)
 
 int callapi(char *command, char *host, short int port)
 {
-	char buf[RECVSIZE+1];
+	size_t bufsz = RECVSIZE;
+	char *buf = malloc(bufsz+1);
 	struct hostent *ip;
 	struct sockaddr_in serv;
 	SOCKETTYPE sock;
 	int ret = 0;
 	int n, p;
 
+	assert(buf);
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
@@ -221,8 +225,16 @@ int callapi(char *command, char *host, short int port)
 	else {
 		p = 0;
 		buf[0] = '\0';
-		while (p < RECVSIZE) {
-			n = recv(sock, &buf[p], RECVSIZE - p , 0);
+		while (true)
+		{
+			if (bufsz < RECVSIZE + p)
+			{
+				bufsz *= 2;
+				buf = realloc(buf, bufsz);
+				assert(buf);
+			}
+			
+			n = recv(sock, &buf[p], RECVSIZE, 0);
 
 			if (SOCKETFAIL(n)) {
 				printf("Recv failed: %s\n", SOCKERRMSG);

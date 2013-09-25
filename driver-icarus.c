@@ -657,7 +657,6 @@ static bool icarus_prepare(struct thr_info *thr)
 	icarus->device_fd = fd;
 
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
-	get_now_datestamp(icarus->init);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
@@ -807,6 +806,17 @@ static bool icarus_job_start(struct thr_info *thr)
 }
 
 static
+struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonce)
+{
+	*nonce = be32toh(*nonce);
+	if (test_nonce(state->last_work, *nonce, false))
+		return state->last_work;
+	if (test_nonce(state->last2_work, *nonce, false))
+		return state->last2_work;
+	return NULL;
+}
+
+static
 void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
 {
 	const struct cgpu_info * const icarus = thr->cgpu;
@@ -836,7 +846,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			if (ret == ICA_GETS_OK)
 			{
 				nonce = be32toh(nonce);
-				submit_nonce(thr, &state->last_work, nonce);
+				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
 	}
@@ -845,7 +855,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	
 	// 3. Delay 3 more seconds
 	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
-	nmsleep(3000);
+	cgsleep_ms(3000);
 	
 	// Check for work restart in the meantime
 	if (thr->work_restart)
@@ -855,12 +865,24 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	}
 	
 	// 4. Start next job
-	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
-	if (!icarus_job_start(thr))
+	if (!state->firstrun)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+		if (!icarus_job_start(thr))
 no_job_start:
-		state->firstrun = true;
+			state->firstrun = true;
+	}
 	
 	state->identify = false;
+}
+
+static
+void icarus_transition_work(struct icarus_state *state, struct work *work)
+{
+	if (state->last2_work)
+		free_work(state->last2_work);
+	state->last2_work = state->last_work;
+	state->last_work = copy_work(work);
 }
 
 static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
@@ -872,14 +894,14 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	unsigned char nonce_bin[ICARUS_READ_SIZE] = {0};
 	uint32_t nonce;
+	struct work *nonce_work;
 	int64_t hash_count;
 	struct timeval tv_start, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
-	int curr_hw_errors, i;
-	bool was_hw_error;
+	int i;
+	bool was_hw_error = false;
 	bool was_first_run;
 
 	struct ICARUS_HISTORY *history0, *history;
@@ -910,8 +932,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 		else
 		{
+			read_count = info->read_count;
+keepwaiting:
 			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
-			ret = icarus_gets(nonce_bin, fd, &state->tv_workfinish, thr, info->read_count);
+			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, read_count);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -938,24 +962,57 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timersub(&state->tv_workfinish, &tv_start, &elapsed);
 	}
 	else
-	if (fd == -1 && !icarus_reopen(icarus, state, &fd))
-		return -1;
+	{
+		if (fd == -1 && !icarus_reopen(icarus, state, &fd))
+			return -1;
+		
+		// First run; no nonce, no hashes done
+		ret = ICA_GETS_ERROR;
+	}
 
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
 #endif
 
-	memcpy(&nonce, nonce_bin, sizeof(nonce_bin));
-	nonce = be32toh(nonce);
-
+	if (ret == ICA_GETS_OK)
+	{
+		nonce_work = icarus_process_worknonce(state, &nonce);
+		if (likely(nonce_work))
+		{
+			if (nonce_work == state->last2_work)
+			{
+				// nonce was for the last job; submit and keep processing the current one
+				submit_nonce(thr, nonce_work, nonce);
+				goto keepwaiting;
+			}
+			if (info->continue_search)
+			{
+				read_count = info->read_count - ((timer_elapsed_us(&state->tv_workstart, NULL) / (1000000 / TIME_FACTOR)) + 1);
+				if (read_count)
+				{
+					submit_nonce(thr, nonce_work, nonce);
+					goto keepwaiting;
+				}
+			}
+		}
+		else
+			was_hw_error = true;
+	}
+	
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
-	if (info->dclk.freqM && likely(!was_first_run)) {
+	if (info->dclk.freqM && likely(ret == ICA_GETS_OK || ret == ICA_GETS_TIMEOUT)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
-		if (nonce && !test_nonce(&state->last_work, nonce, false))
+		if (was_hw_error)
 			dclk_errorCount(&info->dclk, qsec);
+	}
+	
+	// Force a USB close/reopen on any hw error
+	if (was_hw_error && info->quirk_reopen != 2) {
+		if (!icarus_reopen(icarus, state, &fd))
+			state->firstrun = true;
 	}
 
 	if (unlikely(state->identify))
@@ -972,9 +1029,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (was_first_run) {
+	if (ret == ICA_GETS_ERROR) {
 		state->firstrun = false;
-		__copy_work(&state->last_work, work);
+		icarus_transition_work(state, work);
 		hash_count = 0;
 		goto out;
 	}
@@ -983,7 +1040,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// aborted before becoming idle, get new work
 	if (ret == ICA_GETS_TIMEOUT || ret == ICA_GETS_RESTART) {
-		__copy_work(&state->last_work, work);
+		icarus_transition_work(state, work);
 		// ONLY up to just when it aborted
 		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
 		estimate_hashes = ((double)(elapsed.tv_sec)
@@ -1005,20 +1062,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		goto out;
 	}
 
-	curr_hw_errors = icarus->hw_errors;
-	submit_nonce(thr, &state->last_work, nonce);
-	was_hw_error = (curr_hw_errors > icarus->hw_errors);
-	__copy_work(&state->last_work, work);
-
-	// Force a USB close/reopen on any hw error
-	if (was_hw_error)
-		if (info->quirk_reopen != 2) {
-			if (!icarus_reopen(icarus, state, &fd))
-				state->firstrun = true;
-			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
-			if (!icarus_job_start(thr))
-				state->firstrun = true;
-		}
+	// Only ICA_GETS_OK gets here
+	
+	if (likely(!was_hw_error))
+		submit_nonce(thr, nonce_work, nonce);
+	else
+		inc_hw_errors(thr, state->last_work, nonce);
+	icarus_transition_work(state, work);
 
 	hash_count = (nonce & info->nonce_mask);
 	hash_count++;

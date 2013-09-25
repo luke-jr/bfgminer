@@ -14,6 +14,7 @@
 #define __UTIL_H__
 
 #include <stdbool.h>
+#include <string.h>
 #include <sys/time.h>
 
 #include <curl/curl.h>
@@ -75,6 +76,17 @@
 extern char *json_dumps_ANY(json_t *, size_t flags);
 
 static inline
+const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
+{
+	json = json_object_get(json, key);
+	if (!json)
+		return fail;
+	return json_string_value(json) ?: fail;
+}
+
+extern char *__json_array_string(json_t *, unsigned int entry);
+
+static inline
 bool isCspace(int c)
 {
 	switch (c)
@@ -85,6 +97,8 @@ bool isCspace(int c)
 			return false;
 	}
 }
+
+typedef struct timeval cgtimer_t;
 
 struct thr_info;
 struct pool;
@@ -105,13 +119,31 @@ extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 void thr_info_freeze(struct thr_info *thr);
 void thr_info_cancel(struct thr_info *thr);
-void nmsleep(unsigned int msecs);
-void nusleep(unsigned int usecs);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
 bool time_more(struct timeval *a, struct timeval *b);
 bool time_less(struct timeval *a, struct timeval *b);
 void copy_time(struct timeval *dest, const struct timeval *src);
+void timespec_to_val(struct timeval *val, const struct timespec *spec);
+void timeval_to_spec(struct timespec *spec, const struct timeval *val);
+void us_to_timeval(struct timeval *val, int64_t us);
+void us_to_timespec(struct timespec *spec, int64_t us);
+void ms_to_timespec(struct timespec *spec, int64_t ms);
+void timeraddspec(struct timespec *a, const struct timespec *b);
+void cgsleep_ms(int ms);
+void cgsleep_us(int64_t us);
+#define cgtimer_time(ts_start) timer_set_now(ts_start)
+#define cgsleep_prepare_r(ts_start) cgtimer_time(ts_start)
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms);
+void (*cgsleep_us_r)(cgtimer_t *ts_start, int64_t us);
+
+static inline
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return (cgt->tv_sec * 1000) + (cgt->tv_usec / 1000);
+}
+
+#define cgtimer_sub(a, b, res)  timersub(a, b, res)
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);
@@ -124,6 +156,7 @@ bool auth_stratum(struct pool *pool);
 bool initiate_stratum(struct pool *pool);
 bool restart_stratum(struct pool *pool);
 void suspend_stratum(struct pool *pool);
+extern void dev_error_update(struct cgpu_info *, enum dev_reason);
 void dev_error(struct cgpu_info *dev, enum dev_reason reason);
 void *realloc_strcat(char *ptr, char *s);
 extern char *sanestr(char *o, char *s);
@@ -156,6 +189,14 @@ typedef struct bytes_t {
 	size_t allocsz;
 } bytes_t;
 
+#define BYTES_INIT ((bytes_t){.buf=NULL,})
+
+static inline
+void bytes_init(bytes_t *b)
+{
+	*b = BYTES_INIT;
+}
+
 // This can't be inline without ugly const/non-const issues
 #define bytes_buf(b)  ((b)->buf)
 
@@ -185,12 +226,17 @@ void bytes_resize(bytes_t *b, size_t newsz)
 }
 
 static inline
-void bytes_cat(bytes_t *b, const bytes_t *cat)
+void bytes_append(bytes_t *b, const void *add, size_t addsz)
 {
 	size_t origsz = bytes_len(b);
-	size_t addsz = bytes_len(cat);
 	bytes_resize(b, origsz + addsz);
-	memcpy(&bytes_buf(b)[origsz], bytes_buf(cat), addsz);
+	memcpy(&bytes_buf(b)[origsz], add, addsz);
+}
+
+static inline
+void bytes_cat(bytes_t *b, const bytes_t *cat)
+{
+	bytes_append(b, bytes_buf(cat), bytes_len(cat));
 }
 
 static inline
@@ -208,6 +254,26 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 		dst->allocsz = half;
 	dst->buf = malloc(dst->allocsz);
 	memcpy(dst->buf, src->buf, dst->sz);
+}
+
+static inline
+void bytes_shift(bytes_t *b, size_t shift)
+{
+	b->sz -= shift;
+	memmove(bytes_buf(b), &bytes_buf(b)[shift], bytes_len(b));
+}
+
+static inline
+void bytes_reset(bytes_t *b)
+{
+	b->sz = 0;
+}
+
+static inline
+void bytes_nullterminate(bytes_t *b)
+{
+	bytes_append(b, "", 1);
+	--b->sz;
 }
 
 static inline
@@ -270,6 +336,15 @@ const struct timeval *_bfg_nullisnow(const struct timeval *tvp, struct timeval *
 }
 
 static inline
+long timer_elapsed_us(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(_tvp_now, tvp_timer, &tv);
+	return ((long)tv.tv_sec * 1000000) + tv.tv_usec;
+}
+
+static inline
 int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
 {
 	struct timeval tv;
@@ -324,6 +399,16 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }
 
 
+#define _SNP2(fn, ...)  do{  \
+        int __n42 = fn(s, sz, __VA_ARGS__);  \
+        s += __n42;  \
+        sz = (sz <= __n42) ? 0 : (sz - __n42);  \
+        rv += __n42;  \
+}while(0)
+
+#define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
+
+
 #define RUNONCE(rv)  do {  \
 	static bool _runonce = false;  \
 	if (_runonce)  \
@@ -344,6 +429,9 @@ void maybe_strdup_if_null(const char **p, const char *s)
 	if (!*p)
 		*p = maybe_strdup(s);
 }
+
+
+extern void run_cmd(const char *cmd);
 
 
 #endif /* __UTIL_H__ */

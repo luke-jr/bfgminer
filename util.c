@@ -54,6 +54,8 @@
 #include "compat.h"
 #include "util.h"
 
+#define DEFAULT_SOCKWAIT 60
+
 bool successful_connect = false;
 struct timeval nettime;
 
@@ -1051,65 +1053,8 @@ void setup_pthread_cancel_workaround()
 
 #endif
 
-/* Provide a ms based sleep that uses nanosleep to avoid poor usleep accuracy
- * on SMP machines */
-void nmsleep(unsigned int msecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(msecs, 1000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
-/* Same for usecs */
-void nusleep(unsigned int usecs)
-{
-	struct timespec twait, tleft;
-	int ret;
-	ldiv_t d;
-
-#ifdef WIN32
-	timeBeginPeriod(1);
-#endif
-	d = ldiv(usecs, 1000000);
-	tleft.tv_sec = d.quot;
-	tleft.tv_nsec = d.rem * 1000;
-	do {
-		twait.tv_sec = tleft.tv_sec;
-		twait.tv_nsec = tleft.tv_nsec;
-		ret = nanosleep(&twait, &tleft);
-	} while (ret == -1 && errno == EINTR);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
-
-static
-void _now_gettimeofday(struct timeval *tv)
-{
-#ifdef WIN32
-	// Windows' default resolution is only 15ms. This requests 1ms.
-	timeBeginPeriod(1);
-#endif
-	gettimeofday(tv, NULL);
-#ifdef WIN32
-	timeEndPeriod(1);
-#endif
-}
+static void _now_gettimeofday(struct timeval *);
+static void _cgsleep_us_r_nanosleep(cgtimer_t *, int64_t);
 
 #ifdef HAVE_POOR_GETTIMEOFDAY
 static struct timeval tv_timeofday_offset;
@@ -1172,6 +1117,7 @@ void _now_is_not_set(__maybe_unused struct timeval *tv)
 }
 
 void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
+void (*cgsleep_us_r)(cgtimer_t *, int64_t) = _cgsleep_us_r_nanosleep;
 
 #ifdef HAVE_CLOCK_GETTIME_MONOTONIC
 static clockid_t bfg_timer_clk;
@@ -1188,6 +1134,22 @@ void _now_clock_gettime(struct timeval *tv)
 		.tv_usec = ts.tv_nsec / 1000,
 	};
 }
+
+#ifdef HAVE_CLOCK_NANOSLEEP
+static
+void _cgsleep_us_r_monotonic(cgtimer_t *tv_start, int64_t us)
+{
+	struct timeval tv_end[1];
+	struct timespec ts_end[1];
+	int ret;
+	
+	timer_set_delay(tv_end, tv_start, us);
+	timeval_to_spec(ts_end, tv_end);
+	do {
+		ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, ts_end, NULL);
+	} while (ret == EINTR);
+}
+#endif
 
 static
 bool _bfg_try_clock_gettime(clockid_t clk)
@@ -1214,7 +1176,12 @@ void bfg_init_time()
 	else
 #endif
 	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
+	{
 		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+#ifdef HAVE_CLOCK_NANOSLEEP
+		cgsleep_us_r = _cgsleep_us_r_monotonic;
+#endif
+	}
 	else
 #endif
 #ifdef WIN32
@@ -1262,6 +1229,126 @@ bool time_less(struct timeval *a, struct timeval *b)
 void copy_time(struct timeval *dest, const struct timeval *src)
 {
 	memcpy(dest, src, sizeof(struct timeval));
+}
+
+void timespec_to_val(struct timeval *val, const struct timespec *spec)
+{
+	val->tv_sec = spec->tv_sec;
+	val->tv_usec = spec->tv_nsec / 1000;
+}
+
+void timeval_to_spec(struct timespec *spec, const struct timeval *val)
+{
+	spec->tv_sec = val->tv_sec;
+	spec->tv_nsec = val->tv_usec * 1000;
+}
+
+void us_to_timeval(struct timeval *val, int64_t us)
+{
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem;
+}
+
+void us_to_timespec(struct timespec *spec, int64_t us)
+{
+	lldiv_t tvdiv = lldiv(us, 1000000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.rem * 1000;
+}
+
+void ms_to_timespec(struct timespec *spec, int64_t ms)
+{
+	lldiv_t tvdiv = lldiv(ms, 1000);
+
+	spec->tv_sec = tvdiv.quot;
+	spec->tv_nsec = tvdiv.rem * 1000000;
+}
+
+void timeraddspec(struct timespec *a, const struct timespec *b)
+{
+	a->tv_sec += b->tv_sec;
+	a->tv_nsec += b->tv_nsec;
+	if (a->tv_nsec >= 1000000000) {
+		a->tv_nsec -= 1000000000;
+		a->tv_sec++;
+	}
+}
+
+#ifndef WIN32
+static
+void _now_gettimeofday(struct timeval *tv)
+{
+	gettimeofday(tv, NULL);
+}
+#else
+/* Windows start time is since 1601 lol so convert it to unix epoch 1970. */
+#define EPOCHFILETIME (116444736000000000LL)
+
+/* Return the system time as an lldiv_t in decimicroseconds. */
+static void decius_time(lldiv_t *lidiv)
+{
+	FILETIME ft;
+	LARGE_INTEGER li;
+
+	GetSystemTimeAsFileTime(&ft);
+	li.LowPart  = ft.dwLowDateTime;
+	li.HighPart = ft.dwHighDateTime;
+	li.QuadPart -= EPOCHFILETIME;
+
+	/* SystemTime is in decimicroseconds so divide by an unusual number */
+	*lidiv = lldiv(li.QuadPart, 10000000);
+}
+
+void _now_gettimeofday(struct timeval *tv)
+{
+	lldiv_t lidiv;
+
+	decius_time(&lidiv);
+	tv->tv_sec = lidiv.quot;
+	tv->tv_usec = lidiv.rem / 10;
+}
+#endif
+
+void cgsleep_ms_r(cgtimer_t *tv_start, int ms)
+{
+	cgsleep_us_r(tv_start, ((int64_t)ms) * 1000);
+}
+
+static
+void _cgsleep_us_r_nanosleep(cgtimer_t *tv_start, int64_t us)
+{
+	struct timeval tv_timer[1], tv[1];
+	struct timespec ts[1];
+	
+	timer_set_delay(tv_timer, tv_start, us);
+	while (true)
+	{
+		timer_set_now(tv);
+		if (!timercmp(tv_timer, tv, >))
+			return;
+		timersub(tv_timer, tv, tv);
+		timeval_to_spec(ts, tv);
+		nanosleep(ts, NULL);
+	}
+}
+
+void cgsleep_ms(int ms)
+{
+	cgtimer_t ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_ms_r(&ts_start, ms);
+}
+
+void cgsleep_us(int64_t us)
+{
+	cgtimer_t ts_start;
+
+	cgsleep_prepare_r(&ts_start);
+	cgsleep_us_r(&ts_start, us);
 }
 
 /* Returns the microseconds difference between end and start times as a double */
@@ -1403,19 +1490,18 @@ bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force)
 	return (ret == SEND_OK);
 }
 
-static bool socket_full(struct pool *pool, bool wait)
+static bool socket_full(struct pool *pool, int wait)
 {
 	SOCKETTYPE sock = pool->sock;
 	struct timeval timeout;
 	fd_set rd;
 
+	if (unlikely(wait < 0))
+		wait = 0;
 	FD_ZERO(&rd);
 	FD_SET(sock, &rd);
 	timeout.tv_usec = 0;
-	if (wait)
-		timeout.tv_sec = 60;
-	else
-		timeout.tv_sec = 1;
+	timeout.tv_sec = wait;
 	if (select(sock + 1, &rd, NULL, NULL, &timeout) > 0)
 		return true;
 	return false;
@@ -1427,7 +1513,7 @@ bool sock_full(struct pool *pool)
 	if (strlen(pool->sockbuf))
 		return true;
 
-	return (socket_full(pool, false));
+	return (socket_full(pool, 0));
 }
 
 static void clear_sockbuf(struct pool *pool)
@@ -1467,7 +1553,7 @@ static void recalloc_sock(struct pool *pool, size_t len)
 	// applog(LOG_DEBUG, "Recallocing pool sockbuf to %lu", (unsigned long)new);
 	pool->sockbuf = realloc(pool->sockbuf, new);
 	if (!pool->sockbuf)
-		quit(1, "Failed to realloc pool sockbuf in recalloc_sock");
+		quithere(1, "Failed to realloc pool sockbuf");
 	memset(pool->sockbuf + old, 0, new - old);
 	pool->sockbuf_size = new;
 }
@@ -1476,14 +1562,15 @@ static void recalloc_sock(struct pool *pool, size_t len)
  * from the socket and returns that as a malloced char */
 char *recv_line(struct pool *pool)
 {
-	ssize_t len, buflen;
 	char *tok, *sret = NULL;
+	ssize_t len, buflen;
+	int waited = 0;
 
 	if (!strstr(pool->sockbuf, "\n")) {
 		struct timeval rstart, now;
 
 		cgtime(&rstart);
-		if (!socket_full(pool, true)) {
+		if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 			applog(LOG_DEBUG, "Timed out waiting for data on socket_full");
 			goto out;
 		}
@@ -1500,11 +1587,13 @@ char *recv_line(struct pool *pool)
 				suspend_stratum(pool);
 				break;
 			}
+			cgtime(&now);
+			waited = tdiff(&now, &rstart);
 			if (n < 0) {
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
 				socket_recv_errno = SOCKERR;
-				if (!sock_blocks() || !socket_full(pool, true)) {
+				if (!sock_blocks() || !socket_full(pool, DEFAULT_SOCKWAIT - waited)) {
 					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %s", bfg_strerror(socket_recv_errno, BST_SOCKET));
 					suspend_stratum(pool);
 					break;
@@ -1514,8 +1603,7 @@ char *recv_line(struct pool *pool)
 				recalloc_sock(pool, slen);
 				strcat(pool->sockbuf, s);
 			}
-			cgtime(&now);
-		} while (tdiff(&now, &rstart) < 60 && !strstr(pool->sockbuf, "\n"));
+		} while (waited < DEFAULT_SOCKWAIT && !strstr(pool->sockbuf, "\n"));
 	}
 
 	buflen = strlen(pool->sockbuf);
@@ -1571,18 +1659,18 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 	size_t len;
 	
 	if (!tmp)
-		quit(1, "json_dumps_ANY failed to allocate json array");
+		quithere(1, "Failed to allocate json array");
 	if (json_array_append(tmp, json))
-		quit(1, "json_dumps_ANY failed to append temporary array");
+		quithere(1, "Failed to append temporary array");
 	s = json_dumps(tmp, flags);
 	if (!s)
 		return NULL;
 	for (i = 0; s[i] != '['; ++i)
 		if (unlikely(!(s[i] && isCspace(s[i]))))
-			quit(1, "json_dumps_ANY failed to find opening bracket in array dump");
+			quithere(1, "Failed to find opening bracket in array dump");
 	len = strlen(&s[++i]) - 1;
 	if (unlikely(s[i+len] != ']'))
-		quit(1, "json_dumps_ANY failed to find closing bracket in array dump");
+		quithere(1, "Failed to find closing bracket in array dump");
 	rv = malloc(len + 1);
 	memcpy(rv, &s[i], len);
 	rv[len] = '\0';
@@ -1594,7 +1682,7 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 /* Extracts a string value from a json array with error checking. To be used
  * when the value of the string returned is only examined and not to be stored.
  * See json_array_string below */
-static char *__json_array_string(json_t *val, unsigned int entry)
+char *__json_array_string(json_t *val, unsigned int entry)
 {
 	json_t *arr_entry;
 
@@ -1720,7 +1808,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	total_getworks++;
 
 	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || timer_isset(&pool->swork.tv_transparency))
-		if (pool->stratum_init)
+		if (pool->probed)
 			stratum_probe_transparency(pool);
 
 	ret = true;
@@ -1977,7 +2065,7 @@ static bool setup_stratum_curl(struct pool *pool)
 		curl_easy_cleanup(pool->stratum_curl);
 	pool->stratum_curl = curl_easy_init();
 	if (unlikely(!pool->stratum_curl))
-		quit(1, "Failed to curl_easy_init in initiate_stratum");
+		quithere(1, "Failed to curl_easy_init");
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
 
@@ -1986,7 +2074,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	if (!pool->sockbuf) {
 		pool->sockbuf = calloc(RBUFSIZE, 1);
 		if (!pool->sockbuf)
-			quit(1, "Failed to calloc pool sockbuf in initiate_stratum");
+			quithere(1, "Failed to calloc pool sockbuf");
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
@@ -2090,6 +2178,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
+	bool trysuggest = request_target_str;
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
@@ -2103,9 +2192,20 @@ resend:
 
 	sockd = true;
 
+	clear_sock(pool);
+	
+	if (trysuggest)
+	{
+		int sz = sprintf(s, "{\"id\": null, \"method\": \"mining.suggest_target\", \"params\": [\"%s\"]}", request_target_str);
+		if (!_stratum_send(pool, s, sz, true))
+		{
+			applog(LOG_DEBUG, "Pool %u: Failed to send suggest_target in initiate_stratum", pool->pool_no);
+			goto out;
+		}
+		recvd = true;
+	}
+	
 	if (noresume) {
-		/* Get rid of any crap lying around if we're resending */
-		clear_sock(pool);
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
@@ -2119,7 +2219,9 @@ resend:
 		goto out;
 	}
 
-	if (!socket_full(pool, true)) {
+	recvd = true;
+	
+	if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
 		applog(LOG_DEBUG, "Timed out waiting for response in initiate_stratum");
 		goto out;
 	}
@@ -2127,8 +2229,6 @@ resend:
 	sret = recv_line(pool);
 	if (!sret)
 		goto out;
-
-	recvd = true;
 
 	val = JSON_LOADS(sret, &err);
 	free(sret);
@@ -2204,10 +2304,20 @@ out:
 			       pool->pool_no, pool->nonce1, pool->n2size);
 		}
 	} else {
-		if (recvd && !noresume) {
-			applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
-			noresume = true;
-			goto resend;
+		if (recvd)
+		{
+			if (trysuggest)
+			{
+				applog(LOG_DEBUG, "Pool %u: Failed to connect stratum with mining.suggest_target, retrying without", pool->pool_no);
+				trysuggest = false;
+				goto resend;
+			}
+			if (!noresume)
+			{
+				applog(LOG_DEBUG, "Failed to resume stratum, trying afresh");
+				noresume = true;
+				goto resend;
+			}
 		}
 		applog(LOG_DEBUG, "Initiate stratum failed");
 		if (sockd)
@@ -2228,11 +2338,16 @@ bool restart_stratum(struct pool *pool)
 	return true;
 }
 
-void dev_error(struct cgpu_info *dev, enum dev_reason reason)
+void dev_error_update(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
 	cgtime(&dev->tv_device_last_not_well);
 	dev->device_not_well_reason = reason;
+}
+
+void dev_error(struct cgpu_info *dev, enum dev_reason reason)
+{
+	dev_error_update(dev, reason);
 
 	switch (reason) {
 		case REASON_THREAD_FAIL_INIT:
@@ -2282,7 +2397,7 @@ void *realloc_strcat(char *ptr, char *s)
 
 	ret = malloc(len);
 	if (unlikely(!ret))
-		quit(1, "Failed to malloc in realloc_strcat");
+		quithere(1, "Failed to malloc");
 
 	sprintf(ret, "%s%s", ptr, s);
 	free(ptr);
@@ -2369,16 +2484,16 @@ struct bfgtls_data *get_bfgtls()
 	
 	bfgtls = malloc(sizeof(*bfgtls));
 	if (!bfgtls)
-		quit(1, "malloc bfgtls failed");
+		quithere(1, "malloc bfgtls failed");
 	p = malloc(64);
 	if (!p)
-		quit(1, "malloc bfg_strerror_result failed");
+		quithere(1, "malloc bfg_strerror_result failed");
 	*bfgtls = (struct bfgtls_data){
 		.bfg_strerror_resultsz = 64,
 		.bfg_strerror_result = p,
 	};
 	if (pthread_setspecific(key_bfgtls, bfgtls))
-		quit(1, "pthread_setspecific failed");
+		quithere(1, "pthread_setspecific failed");
 	
 	return bfgtls;
 }
@@ -2386,7 +2501,7 @@ struct bfgtls_data *get_bfgtls()
 void bfg_init_threadlocal()
 {
 	if (pthread_key_create(&key_bfgtls, NULL))
-		quit(1, "pthread_key_create failed");
+		quithere(1, "pthread_key_create failed");
 }
 
 static
@@ -2399,7 +2514,7 @@ bool bfg_grow_buffer(char ** const bufp, size_t * const bufszp, size_t minimum)
 		*bufszp = 2;
 	*bufp = realloc(*bufp, *bufszp);
 	if (unlikely(!*bufp))
-		quit(1, "realloc failed in bfg_grow_buffer");
+		quithere(1, "realloc failed");
 	
 	return true;
 }
@@ -2502,14 +2617,16 @@ retry:
 void notifier_init(notifier_t pipefd)
 {
 #ifdef WIN32
-#define WindowsErrorStr(e)  bfg_strerror(e, true)
+#define WindowsErrorStr(e)  bfg_strerror(e, BST_SOCKET)
 	SOCKET listener, connecter, acceptor;
 	listener = socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
-		quit(1, "Failed to create listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to create listener socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	connecter = socket(AF_INET, SOCK_STREAM, 0);
 	if (connecter == INVALID_SOCKET)
-		quit(1, "Failed to create connect socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to create connect socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	struct sockaddr_in inaddr = {
 		.sin_family = AF_INET,
 		.sin_addr = {
@@ -2518,29 +2635,34 @@ void notifier_init(notifier_t pipefd)
 		.sin_port = 0,
 	};
 	{
-		char reuse = 1;
-		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+		static const int reuse = 1;
+		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
 	}
 	if (bind(listener, (struct sockaddr*)&inaddr, sizeof(inaddr)) == SOCKET_ERROR)
-		quit(1, "Failed to bind listener socket in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to bind listener socket"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	socklen_t inaddr_sz = sizeof(inaddr);
 	if (getsockname(listener, (struct sockaddr*)&inaddr, &inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to getsockname in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to getsockname"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	if (listen(listener, 1) == SOCKET_ERROR)
-		quit(1, "Failed to listen in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to listen"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	inaddr.sin_family = AF_INET;
 	inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	if (connect(connecter, (struct sockaddr*)&inaddr, inaddr_sz) == SOCKET_ERROR)
-		quit(1, "Failed to connect in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to connect"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	acceptor = accept(listener, NULL, NULL);
 	if (acceptor == INVALID_SOCKET)
-		quit(1, "Failed to accept in create_notifier: %s", WindowsErrorStr(WSAGetLastError()));
+		quit(1, "Failed to accept"IN_FMT_FFL": %s",
+		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
 	closesocket(listener);
 	pipefd[0] = connecter;
 	pipefd[1] = acceptor;
 #else
 	if (pipe(pipefd))
-		quit(1, "Failed to create pipe in create_notifier");
+		quithere(1, "Failed to create pipe");
 #endif
 }
 
@@ -2580,4 +2702,21 @@ void notifier_destroy(notifier_t fd)
 void _bytes_alloc_failure(size_t sz)
 {
 	quit(1, "bytes_resize failed to allocate %lu bytes", (unsigned long)sz);
+}
+
+
+void *cmd_thread(void *cmdp)
+{
+	const char *cmd = cmdp;
+	applog(LOG_DEBUG, "Executing command: %s", cmd);
+	system(cmd);
+	return NULL;
+}
+
+void run_cmd(const char *cmd)
+{
+	if (!cmd)
+		return;
+	pthread_t pth;
+	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
 }

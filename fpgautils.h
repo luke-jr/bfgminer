@@ -46,7 +46,10 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 #define serial_close(fd)  close(fd)
 
+extern void _bitstream_not_found(const char *repr, const char *fn);
 extern FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len);
+extern bool load_bitstream_intelhex(bytes_t *out, const char *dname, const char *repr, const char *fn);
+extern bool load_bitstream_bytes(bytes_t *out, const char *dname, const char *repr, const char *fileprefix);
 
 extern int get_serial_cts(int fd);
 extern bool valid_baud(int baud);

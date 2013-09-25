@@ -3,6 +3,8 @@ session_start();
 date_default_timezone_set(@date_default_timezone_get());
 #
 global $title, $miner, $port, $readonly, $notify, $rigs;
+global $mcast, $mcastaddr, $mcastport, $mcastcode;
+global $mcastlistport, $mcasttimeout;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -43,6 +45,25 @@ $poolinputs = false;
 # Set $rigs to an array of your BFGMiner rigs that are running
 #  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 $rigs = array('127.0.0.1:4028');
+#
+# Set $mcast to true to look for your rigs and ignore $rigs
+$mcast = false;
+#
+# API Multicast address all cgminers are listening on
+$mcastaddr = '224.0.0.75';
+#
+# API Multicast UDP port all cgminers are listening on
+$mcastport = 4028;
+#
+# The code all cgminers expect in the Multicast message sent
+$mcastcode = 'FTW';
+#
+# UDP port cgminers are to reply on (by request)
+$mcastlistport = 4027;
+#
+# Set $mcasttimeout to the number of seconds (floating point)
+# to wait for replies to the Multicast message
+$mcasttimeout = 1.5;
 #
 # Set $rigipsecurity to false to show the IP/Port of the rig
 # in the socket error messages and also show the full socket message
@@ -319,6 +340,89 @@ echo "</script>\n";
 global $haderror, $error;
 $haderror = false;
 $error = null;
+#
+function getrigs()
+{
+ global $rigs, $mcastaddr, $mcastport, $mcastcode;
+ global $mcastlistport, $mcasttimeout, $error;
+
+ $listname = "0.0.0.0";
+
+ $rigs = array();
+
+ $rep_soc = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+ if ($rep_soc === false || $rep_soc == null)
+ {
+	$msg = "ERR: mcast listen socket create(UDP) failed";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$error = "$msg '$error'\n";
+	}
+	else
+		$error = "$msg\n";
+
+	return;
+ }
+
+ $res = socket_bind($rep_soc, $listname, $mcastlistport);
+ if ($res === false)
+ {
+	$msg1 = "ERR: mcast listen socket bind(";
+	$msg2 = ") failed";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$error = "$msg1$listname,$mcastlistport$msg2 '$error'\n";
+	}
+	else
+		$error = "$msg1$msg2\n";
+
+	socket_close($rep_soc);
+	return;
+ }
+
+ $mcast_soc = socket_create(AF_INET, SOCK_DGRAM, SOL_UDP);
+ if ($mcast_soc === false || $mcast_soc == null)
+ {
+	$msg = "ERR: mcast send socket create(UDP) failed";
+	if ($rigipsecurity === false)
+	{
+		$error = socket_strerror(socket_last_error());
+		$error = "$msg '$error'\n";
+	}
+	else
+		$error = "$msg\n";
+
+	socket_close($rep_soc);
+	return;
+ }
+
+ $buf = "cgminer-$mcastcode-$mcastlistport";
+ socket_sendto($mcast_soc, $buf, strlen($buf), 0, $mcastaddr, $mcastport);
+ socket_close($mcast_soc);
+
+ $stt = microtime(true);
+ while (true)
+ {
+	$got = @socket_recvfrom($rep_soc, $buf, 32, MSG_DONTWAIT, $ip, $p);
+	if ($got !== false && $got > 0)
+	{
+		$ans = explode('-', $buf);
+		if (count($ans) == 3 && $ans[0] == 'cgm' && $ans[1] == 'FTW')
+		{
+			$rp = intval($ans[2]);
+			$rigs[] = "$ip:$rp";
+		}
+	}
+	if ((microtime(true) - $stt) >= $mcasttimeout)
+		break;
+
+	usleep(100000);
+ }
+
+ socket_close($rep_soc);
+}
 #
 function getsock($rig, $addr, $port)
 {
@@ -751,7 +855,11 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'DEVS.Temperature':
 		$ret = $value.'&deg;C';
 		if (!isset($alldata['GPU']))
+		{
+			if ($value == 0)
+				$ret = '&nbsp;';
 			break;
+		}
 	case 'GPU.GPU Clock':
 	case 'DEVS.GPU Clock':
 	case 'GPU.Memory Clock':
@@ -937,6 +1045,25 @@ function fmt($section, $name, $value, $when, $alldata)
 	case 'POOL.Last Share Difficulty':
 		if ($value != '')
 			$ret = number_format((float)$value, 2);
+		break;
+	case 'DEVS.Device Hardware%':
+	case 'DEVS.Device Rejected%':
+	case 'PGA.Device Hardware%':
+	case 'PGA.Device Rejected%':
+	case 'GPU.Device Hardware%':
+	case 'GPU.Device Rejected%':
+	case 'POOL.Pool Rejected%':
+	case 'POOL.Pool Stale%':
+	case 'SUMMARY.Device Hardware%':
+	case 'SUMMARY.Device Rejected%':
+	case 'SUMMARY.Pool Rejected%':
+	case 'SUMMARY.Pool Stale%':
+		if ($value != '')
+			$ret = number_format((float)$value, 2) . '%';
+		break;
+	case 'SUMMARY.Best Share':
+		if ($value != '')
+			$ret = number_format((float)$value);
 		break;
 	}
 
@@ -2765,6 +2892,8 @@ function display()
 	pagebuttons(null, null);
 }
 #
+if (isset($mcast) && $mcast === true)
+ getrigs();
 display();
 #
 ?>

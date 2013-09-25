@@ -81,6 +81,7 @@ BUILDING BFGMINER
 Everything you probably want, condensed:
 	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
 	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
+	libmicrohttpd-dev
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -104,6 +105,9 @@ Optional Dependencies:
 	Multiple ASIC/FPGA autodetection: any one of:
 	  sysfs              (builtin to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
+	
+	getwork server for Block Erupter Blades:
+	  libmicrohttpd-dev  http://www.gnu.org/software/libmicrohttpd/
 
 	X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
@@ -126,7 +130,12 @@ BFGMiner specific configuration options:
 	--disable-x6500         Compile support for X6500 (default enabled)
 	--disable-ztex          Compile support for ZTEX (default if libusb)
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
+	--with-system-libblkmaker  Use system libblkmaker rather than bundled one
+	                           (default disabled)
+	--without-sensors       Build with libsensors monitoring (default enabled)
 	--without-curses        Compile support for curses TUI (default enabled)
+	--without-libmicrohttpd Compile support for libmicrohttpd getwork server
+	                        (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
@@ -164,10 +173,17 @@ Options for both config file and command line:
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
+--api-mcast         Enable API Multicast listener, default: disabled
+--api-mcast-addr <arg> API Multicast listen address (default: "224.0.0.75")
+--api-mcast-code <arg> Code expected in the API Multicast message, don't use '-' (default: "FTW")
+--api-mcast-port <arg> API Multicast listen port (default: 4028)
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
+--cmd-idle <arg>    Execute a command when a device is allowed to be idle (rest or wait)
+--cmd-sick <arg>    Execute a command when a device is declared sick
+--cmd-dead <arg>    Execute a command when a device is declared dead
 --coinbase-addr <arg> Set coinbase payout address for solo mining
 --coinbase-sig <arg> Set coinbase signature when possible
 --compact           Use compact display without per device statistics
@@ -175,6 +191,7 @@ Options for both config file and command line:
 --debuglog          Enable debug logging
 --device|-d <arg>   Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all
 --disable-rejecting Automatically disable pools that continually reject shares
+--http-port <arg>   Port number to listen on for HTTP getwork miners (-1 means disabled) (default: -1)
 --expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active) (default: 120)
 --expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
@@ -193,6 +210,7 @@ Options for both config file and command line:
 --no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale
 --no-opencl-binaries Don't attempt to use or save OpenCL kernel binaries
+--no-unicode        Don't use Unicode characters in TUI
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
@@ -216,10 +234,11 @@ Options for both config file and command line:
 --socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
---temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
+--temp-cutoff <arg> Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --temp-target <arg> Target temperature when automatically managing fan and clock speeds
 --text-only|-T      Disable ncurses formatted screen output
+--unicode           Use Unicode characters in TUI
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
 --verbose           Log verbose output to stderr as well as status output
@@ -698,6 +717,12 @@ On Windows, you must install the driver required for the device:
   FTDI:       http://www.ftdichip.com/Drivers/VCP.htm
   Erupter:    http://www.silabs.com/products/mcu/pages/usbtouartbridgevcpdrivers.aspx
   Icarus:     http://prolificusa.com/pl-2303hx-drivers/
+
+Q: I ran cgminer, and now BFGMiner doesn't work!
+A: cgminer has its own non-standard implementations of the drivers for most USB
+devices, and disables the official drivers (on Windows, you did this manually
+using Zadig). Before you can use BFGMiner, you will need to restore the original
+driver. With Linux, usually rebooting or re-plugging the device is sufficient.
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them

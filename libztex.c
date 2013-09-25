@@ -119,13 +119,12 @@ static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable
 
 static enum check_result libztex_checkDevice(struct libusb_device *dev)
 {
-	FILE *fp = NULL;
 	libusb_device_handle *hndl = NULL;
 	struct libusb_device_descriptor desc;
 	int ret = CHECK_ERROR, err, cnt;
-	size_t got_bytes, length;
-	unsigned char buf[64], *fw_buf = NULL;
+	unsigned char buf[64];
 	unsigned int i;
+	bytes_t bsdata = BYTES_INIT;
 
 	err = libusb_get_device_descriptor(dev, &desc);
 	if (unlikely(err != 0)) {
@@ -199,15 +198,15 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	if (strcmp("USB-FPGA Module 1.15d (default)", productString) == 0 && productID2 == 13)
 	{
-		firmware = "ztex_ufm1_15d4.bin";
+		firmware = "ztex_ufm1_15d4";
 	}
 	else if (strcmp("USB-FPGA Module 1.15x (default)", productString) == 0 && productID2 == 13)
 	{
-		firmware = "ztex_ufm1_15d4.bin";
+		firmware = "ztex_ufm1_15d4";
 	}
 	else if (strcmp("USB-FPGA Module 1.15y (default)", productString) == 0 && productID2 == 15)
 	{
-		firmware = "ztex_ufm1_15y1.bin";
+		firmware = "ztex_ufm1_15y1";
 	}
 
 	if (firmware == NULL)
@@ -218,38 +217,13 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 
 	applog(LOG_ERR, "Mining firmware filename: %s", firmware);
 
-	fp = open_bitstream("ztex", firmware);
-	if (!fp) {
-		applog(LOG_ERR, "failed to open firmware file '%s'", firmware);
+	bytes_init(&bsdata);
+	if (!load_bitstream_bytes(&bsdata, "ztex", "ZTX *", firmware))
 		goto done;
-	}
-
-	if (0 != fseek(fp, 0, SEEK_END)) {
-		applog(LOG_ERR, "Ztex firmware fseek: %s", bfg_strerror(errno, BST_ERRNO));
-		goto done;
-	}
-
-	length = ftell(fp);
-	rewind(fp);
-	fw_buf = malloc(length);
-	if (!fw_buf) {
-		applog(LOG_ERR, "%s: Can not allocate memory: %s", __func__, bfg_strerror(errno, BST_ERRNO));
-		goto done;
-	}
-
-	got_bytes = fread(fw_buf, 1, length, fp);
-	fclose(fp);
-	fp = NULL;
-
-	if (got_bytes < length) {
-		applog(LOG_ERR, "%s: Incomplete firmware read: %"PRIu64"/%"PRIu64,
-		       __func__, (uint64_t)got_bytes, (uint64_t)length);
-		goto done;
-	}
 
 	// in buf[] is still the identifier of the dummy firmware
 	// use it to compare it with the new firmware
-	char *rv = memmem(fw_buf, got_bytes, buf, 8);
+	char *rv = memmem(bytes_buf(&bsdata), bytes_len(&bsdata), buf, 8);
 	if (rv == NULL)
 	{
 		applog(LOG_ERR, "%s: found firmware is not ZTEX", __func__);
@@ -266,10 +240,10 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	if (libztex_firmwareReset(hndl, true))
 		goto done;
 
-	for (i = 0; i < length; i+= 256) {
+	for (i = 0; i < bytes_len(&bsdata); i+= 256) {
 		// firmware wants data in small chunks like 256 bytes
-		int numbytes = (length - i) < 256 ? (length - i) : 256;
-		int k = libusb_control_transfer(hndl, 0x40, 0xA0, i, 0, fw_buf + i, numbytes, 1000);
+		int numbytes = (bytes_len(&bsdata) - i) < 256 ? (bytes_len(&bsdata) - i) : 256;
+		int k = libusb_control_transfer(hndl, 0x40, 0xA0, i, 0, bytes_buf(&bsdata) + i, numbytes, 1000);
 		if (k < numbytes)
 		{
 			applog(LOG_ERR, "Ztex device: Failed to write firmware at %d with: %s", i, bfg_strerror(k, BST_LIBUSB));
@@ -284,9 +258,7 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 	ret = CHECK_RESCAN;
 
 done:
-	free(fw_buf);
-	if (fp)
-		fclose(fp);
+	bytes_free(&bsdata);
 	if (hndl)
 		libusb_close(hndl);
 	return ret;
@@ -432,7 +404,7 @@ static int libztex_configureFpgaHS(struct libztex_device *ztex, const char* firm
 
 	libusb_release_interface(ztex->hndl, settings[1]);
 
-	nmsleep(200);
+	cgsleep_ms(200);
 	applog(LOG_INFO, "%"PRIpreprv": HS FPGA configuration done", repr);
 	return 0;
 }
@@ -457,7 +429,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 	for (tries = 10; tries > 0; tries--) {
 		fp = open_bitstream("ztex", firmware);
 		if (!fp) {
-			applog(LOG_ERR, "%"PRIpreprv": failed to read bitstream '%s'", repr, firmware);
+			_bitstream_not_found(repr, firmware);
 			return -2;
 		}
 
@@ -497,7 +469,7 @@ static int libztex_configureFpgaLS(struct libztex_device *ztex, const char* firm
 		return -3;
 	}
 
-	nmsleep(200);
+	cgsleep_ms(200);
 	applog(LOG_INFO, "%"PRIpreprv": FPGA configuration done", repr);
 	return 0;
 }
@@ -769,7 +741,7 @@ int libztex_scanDevices(struct libztex_dev_list*** devs_p)
 			err = libztex_checkDevice(list[i]);
 			switch (err) {
 			case CHECK_ERROR:
-				applog(LOG_ERR, "Ztex: Can not check device: %s", bfg_strerror(err, BST_LIBUSB));
+				applog(LOG_ERR, "Ztex: Can not check device %ld", (long)i);
 				continue;
 			case CHECK_IS_NOT_ZTEX:
 				continue;

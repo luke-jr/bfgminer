@@ -57,12 +57,12 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 	uint32_t *mid32 = (uint32_t *)midstate;
 	uint32_t  out32[8];
 	uint8_t  *out = (uint8_t *) out32;
-	sha2_context ctx;
+	sha256_ctx ctx;
 
-	memset( &ctx, 0, sizeof(sha2_context));
-	memcpy(ctx.state, mid32, 8*4);
-	ctx.total[0] = 64;
-	ctx.total[1] = 0;
+	memset( &ctx, 0, sizeof(sha256_ctx));
+	memcpy(ctx.h, mid32, 8*4);
+	ctx.tot_len = 64;
+	ctx.len = 0;
 
 	nnonce = bswap_32(nnonce);
 	in32[0] = bswap_32(m7);
@@ -70,9 +70,9 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 	in32[2] = bswap_32(nbits);
 	in32[3] = nnonce;
 
-	sha2_update(&ctx, in, 16);
-	sha2_finish(&ctx, out);
-	sha2(out, 32, out);
+	sha256_update(&ctx, in, 16);
+	sha256_final(&ctx, out);
+	sha256(out, 32, out);
 
 	if (out32[7] == 0)
 	{
@@ -122,7 +122,7 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	while(len == 0)
 	{
 		len = serial_read(fd, buf, sizeof(buf_state));
-		nmsleep(100);
+		cgsleep_ms(100);
 	}
 	serial_close(fd);
 

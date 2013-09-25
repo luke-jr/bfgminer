@@ -13,13 +13,15 @@ tag="$1"; shift
 sw="$1"; shift || true
 [ -n "$sw" ] || sw="$tag"
 
+test -n "$DEBUG_RELEASE" || DEBUG_RELEASE=1
+
 builds=(win32 win64)
 
 win32_machine='i686-pc-mingw32'
-win32_CFLAGS='-g -march=i686'
+win32_CFLAGS='-march=i686'
 
 win64_machine='x86_64-w64-mingw32'
-win64_CFLAGS='-g'
+win64_CFLAGS=''
 
 IDIR="$PWD"
 OUTDIR="$PWD"
@@ -64,7 +66,6 @@ docs='
 	NEWS
 	README
 	README.ASIC
-	README.Debian
 	README.FPGA
 	README.RPC
 	README.scrypt
@@ -77,6 +78,9 @@ for build in "${builds[@]}"; do
 	for v in machine CFLAGS; do
 		eval "${v}"="'$(eval echo "\${${build}_${v}}")'"
 	done
+	if test "x$DEBUG_RELEASE" = "x1"; then
+		CFLAGS="${CFLAGS} -g"
+	fi
 	libdir="/usr/$machine/usr/bin/$dll"
 	for dll in $dlls; do
 		libdir="/usr/$machine/usr/lib"
@@ -104,9 +108,11 @@ for build in "${builds[@]}"; do
 		--enable-scrypt \
 		--host="$machine"
 	make $MAKEOPTS
-	"$machine"-strip \
-		libblkmaker/.libs/*.dll \
-		*.exe
+	if test "x$DEBUG_RELEASE" != "x1"; then
+		"$machine"-strip \
+			libblkmaker/.libs/*.dll \
+			*.exe
+	fi
 	cp -v \
 		*.exe \
 		libblkmaker/.libs/*.dll \
@@ -115,6 +121,7 @@ for build in "${builds[@]}"; do
 		windows-build.txt \
 		miner.php \
 		"$PKGDIR/"
+	mkdir "$PKGDIR/bitstreams"
 	make clean
 	cd "$PKGDIR/.."
 	zip -r "$OUTDIR/$PKGNAME.zip" "$PKGNAME"

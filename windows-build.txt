@@ -267,7 +267,7 @@ may be different as well.
   libidn-11.dll	from \MinGW\bin
   libeay32.dll	from \MinGW\bin
   ssleay32.dll	from \MinGW\bin
-  libpdcurses.dll	from \MinGW\bin
+  libpdcursesw.dll	from \MinGW\bin
   pthreadGC2.dll	from \MinGW\bin
   libjansson-X.dll	from \MinGW\msys\1.0\local\bin
 

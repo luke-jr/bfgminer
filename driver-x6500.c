@@ -255,7 +255,7 @@ x6500_fpga_upload_bitstream(struct cgpu_info *x6500, struct jtag_port *jp1)
 	x6500_jtag_set(jp, 0x11);
 	jtag_write(jp, JTAG_REG_IR, "\xa0", 6);  // CFG_IN
 	
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	
 	if (fread(buf, 32, 1, f) != 1)
 		bailout2(LOG_ERR, "%s: File underrun programming %s (%lu bytes left)", x6500->dev_repr, x6500->device_path, len);
@@ -552,11 +552,11 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 }
 
 static
-bool get_x6500_upload_percent(char *buf, struct cgpu_info *x6500, __maybe_unused bool per_processor)
+bool get_x6500_upload_percent(char *buf, size_t bufsz, struct cgpu_info *x6500, __maybe_unused bool per_processor)
 {
 	unsigned char pdone = *((unsigned char*)x6500->device_data - 1);
 	if (pdone != 101) {
-		tailsprintf(buf, "%3d%% ", pdone);
+		tailsprintf(buf, bufsz, "%3d%% ", pdone);
 		return true;
 	}
 	return false;
@@ -822,7 +822,7 @@ struct device_drv x6500_api = {
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_thread_init,
 	.get_stats = x6500_get_stats,
-	.override_statline_temp = get_x6500_upload_percent,
+	.override_statline_temp2 = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
 	.set_device = x6500_set_device,
 #ifdef HAVE_CURSES

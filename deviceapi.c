@@ -48,6 +48,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 		} else {
 			applog(LOG_ERR, "%"PRIpreprv" failure, disabling!", cgpu->proc_repr);
 			cgpu->deven = DEV_RECOVER_ERR;
+			run_cmd(cmd_idle);
 			return false;
 		}
 	}
@@ -98,7 +99,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	{
 		// This is a bug!
 		applog(LOG_ERR, "%"PRIpreprv": restart_wait called without a work_restart_notifier", thr->cgpu->proc_repr);
-		nmsleep(mstime);
+		cgsleep_ms(mstime);
 		return (thr->work_restart ? 0 : ETIMEDOUT);
 	}
 	
@@ -136,6 +137,7 @@ struct work *get_and_prepare_work(struct thr_info *thr)
 		free_work(work);
 		applog(LOG_ERR, "%"PRIpreprv": Work prepare failed, disabling!", proc->proc_repr);
 		proc->deven = DEV_RECOVER_ERR;
+		run_cmd(cmd_idle);
 		return NULL;
 	}
 	return work;
@@ -324,7 +326,10 @@ void job_start_abort(struct thr_info *mythr, bool failure)
 	struct cgpu_info *proc = mythr->cgpu;
 	
 	if (failure)
+	{
 		proc->deven = DEV_RECOVER_ERR;
+		run_cmd(cmd_idle);
+	}
 	mythr->work = NULL;
 	mythr->_job_transition_in_progress = false;
 }
@@ -590,7 +595,7 @@ out: ;
 	while ( (proc = proc->next_proc) && !proc->threads);
 	mythr->getwork = 0;
 	mythr->has_pth = false;
-	nmsleep(1000);
+	cgsleep_ms(1000);
 	
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
@@ -670,6 +675,11 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	cgpu->last_device_valid_work = time(NULL);
 	
 	return true;
+}
+
+void add_cgpu_live(void *p)
+{
+	add_cgpu(p);
 }
 
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
@@ -758,6 +768,7 @@ FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, co
 #define _open_bitstream2(path, path3)  do {  \
 	_open_bitstream(path, NULL, path3);  \
 	_open_bitstream(path, "../share/" PACKAGE, path3);  \
+	_open_bitstream(path, "../" PACKAGE, path3);  \
 } while(0)
 
 #define _open_bitstream3(path)  do {  \

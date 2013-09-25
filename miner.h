@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <jansson.h>
 #include <curl/curl.h>
+#include <sched.h>
 
 #include <blkmaker.h>
 #include <blktemplate.h>
@@ -144,19 +145,23 @@ static inline int fsync (int fd)
 #  define htole16(x) (x)
 #  define htole32(x) (x)
 #  define htole64(x) (x)
+#  define htobe16(x) bswap_16(x)
 #  define htobe32(x) bswap_32(x)
 #  define htobe64(x) bswap_64(x)
 # else
 #  define htole16(x) bswap_16(x)
 #  define htole32(x) bswap_32(x)
 #  define htole64(x) bswap_64(x)
+#  define htobe16(x) (x)
 #  define htobe32(x) (x)
 #  define htobe64(x) (x)
 # endif
 #endif
 #ifndef be32toh
+# define le16toh(x) htole16(x)
 # define le32toh(x) htole32(x)
 # define le64toh(x) htole64(x)
+# define be16toh(x) htobe16(x)
 # define be32toh(x) htobe32(x)
 # define be64toh(x) htobe64(x)
 #endif
@@ -286,7 +291,7 @@ struct device_drv {
 
 	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);
-	bool (*override_statline_temp)(char *buf, struct cgpu_info *, bool per_processor);
+	bool (*override_statline_temp2)(char *buf, size_t bufsz, struct cgpu_info *, bool per_processor);
 	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info *);
 	struct api_data* (*get_api_extra_device_status)(struct cgpu_info *);
 	struct api_data *(*get_api_stats)(struct cgpu_info *);
@@ -730,10 +735,16 @@ static inline void mutex_lock(pthread_mutex_t *lock)
 		quit(1, "WTF MUTEX ERROR ON LOCK!");
 }
 
-static inline void mutex_unlock(pthread_mutex_t *lock)
+static inline void mutex_unlock_noyield(pthread_mutex_t *lock)
 {
 	if (unlikely(pthread_mutex_unlock(lock)))
 		quit(1, "WTF MUTEX ERROR ON UNLOCK!");
+}
+
+static inline void mutex_unlock(pthread_mutex_t *lock)
+{
+	mutex_unlock_noyield(lock);
+	sched_yield();
 }
 
 static inline int mutex_trylock(pthread_mutex_t *lock)
@@ -759,14 +770,26 @@ static inline void rw_unlock(pthread_rwlock_t *lock)
 		quit(1, "WTF RWLOCK ERROR ON UNLOCK!");
 }
 
+static inline void rd_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
+static inline void wr_unlock_noyield(pthread_rwlock_t *lock)
+{
+	rw_unlock(lock);
+}
+
 static inline void rd_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void wr_unlock(pthread_rwlock_t *lock)
 {
 	rw_unlock(lock);
+	sched_yield();
 }
 
 static inline void mutex_init(pthread_mutex_t *lock)
@@ -800,7 +823,7 @@ static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	rd_lock(&lock->rwlock);
-	mutex_unlock(&lock->mutex);
+	mutex_unlock_noyield(&lock->mutex);
 }
 
 /* Intermediate variant of cglock */
@@ -820,6 +843,14 @@ static inline void cg_wlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
 	wr_lock(&lock->rwlock);
+}
+
+/* Downgrade write variant to a read lock */
+static inline void cg_dwlock(cglock_t *lock)
+{
+	wr_unlock_noyield(&lock->rwlock);
+	rd_lock(&lock->rwlock);
+	mutex_unlock_noyield(&lock->mutex);
 }
 
 /* Downgrade intermediate variant to a read lock */
@@ -842,19 +873,29 @@ static inline void cg_wunlock(cglock_t *lock)
 
 struct pool;
 
+#define API_MCAST_CODE "FTW"
+#define API_MCAST_ADDR "224.0.0.75"
+
 extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
+extern char *request_target_str;
 extern bool have_longpoll;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
+extern char *cmd_idle, *cmd_sick, *cmd_dead;
 extern char *cgminer_path;
 extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern int httpsrv_port;
 extern char *opt_api_allow;
+extern bool opt_api_mcast;
+extern char *opt_api_mcast_addr;
+extern char *opt_api_mcast_code;
+extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
 extern int opt_api_port;
@@ -962,14 +1003,26 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
 
-#define MIN_INTENSITY -10
-#define _MIN_INTENSITY_STR "-10"
+#define MIN_SHA_INTENSITY -10
+#define MIN_SHA_INTENSITY_STR "-10"
+#define MAX_SHA_INTENSITY 14
+#define MAX_SHA_INTENSITY_STR "14"
+#define MIN_SCRYPT_INTENSITY 8
+#define MIN_SCRYPT_INTENSITY_STR "8"
+#define MAX_SCRYPT_INTENSITY 20
+#define MAX_SCRYPT_INTENSITY_STR "20"
 #ifdef USE_SCRYPT
-#define MAX_INTENSITY 20
-#define _MAX_INTENSITY_STR "20"
+#define MIN_INTENSITY (opt_scrypt ? MIN_SCRYPT_INTENSITY : MIN_SHA_INTENSITY)
+#define MIN_INTENSITY_STR (opt_scrypt ? MIN_SCRYPT_INTENSITY_STR : MIN_SHA_INTENSITY_STR)
+#define MAX_INTENSITY (opt_scrypt ? MAX_SCRYPT_INTENSITY : MAX_SHA_INTENSITY)
+#define MAX_INTENSITY_STR (opt_scrypt ? MAX_SCRYPT_INTENSITY_STR : MAX_SHA_INTENSITY_STR)
+#define MAX_GPU_INTENSITY MAX_SCRYPT_INTENSITY
 #else
-#define MAX_INTENSITY 14
-#define _MAX_INTENSITY_STR "14"
+#define MIN_INTENSITY MIN_SHA_INTENSITY
+#define MIN_INTENSITY_STR MIN_SHA_INTENSITY_STR
+#define MAX_INTENSITY MAX_SHA_INTENSITY
+#define MAX_INTENSITY_STR MAX_SHA_INTENSITY_STR
+#define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
 #endif
 
 extern struct string_elist *scan_devices;
@@ -1021,7 +1074,7 @@ extern unsigned long long global_hashrate;
 extern char *current_fullhash;
 extern double current_diff;
 extern uint64_t best_diff;
-extern struct timeval block_timeval;
+extern time_t block_time;
 
 #ifdef HAVE_OPENCL
 typedef struct {
@@ -1273,8 +1326,9 @@ struct work {
 	struct work *next;
 };
 
-extern void get_datestamp(char *, time_t);
-#define get_now_datestamp(buf)  get_datestamp(buf, INVALID_TIMESTAMP)
+extern void get_datestamp(char *, size_t, time_t);
+#define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
+extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
@@ -1289,11 +1343,12 @@ extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
-extern void get_statline3(char *buf, struct cgpu_info *, bool for_curses, bool opt_show_procs);
-extern void tailsprintf(char *f, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 2, 3);
+extern void get_statline3(char *buf, size_t bufsz, struct cgpu_info *, bool for_curses, bool opt_show_procs);
+extern void tailsprintf(char *buf, size_t bufsz, const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 3, 4);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);
 extern int curses_int(const char *query);
@@ -1328,6 +1383,7 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
+extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
 
 enum api_data_type {
@@ -1352,6 +1408,7 @@ enum api_data_type {
 	API_HS,
 	API_DIFF,
 	API_JSON,
+	API_PERCENT
 };
 
 struct api_data {
