@@ -543,6 +543,7 @@ struct cgpu_info {
 
 	time_t device_last_well;
 	time_t device_last_not_well;
+	struct timeval tv_device_last_not_well;
 	enum dev_reason device_not_well_reason;
 	float reinit_backoff;
 	int thread_fail_init_count;
@@ -904,6 +905,26 @@ extern cglock_t ch_lock;
 extern pthread_rwlock_t mining_thr_lock;
 extern pthread_rwlock_t devices_lock;
 
+
+extern bool _bfg_console_cancel_disabled;
+extern int _bfg_console_prev_cancelstate;
+
+static inline
+void bfg_console_lock(void)
+{
+	_bfg_console_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_bfg_console_prev_cancelstate);
+	mutex_lock(&console_lock);
+}
+
+static inline
+void bfg_console_unlock(void)
+{
+	mutex_unlock(&console_lock);
+	if (_bfg_console_cancel_disabled)
+		pthread_setcancelstate(_bfg_console_prev_cancelstate, &_bfg_console_prev_cancelstate);
+}
+
+
 extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
 extern void clear_stratum_shares(struct pool *pool);
@@ -932,7 +953,7 @@ extern void api(int thr_id);
 
 extern struct pool *current_pool(void);
 extern int enabled_pools;
-extern void get_intrange(char *arg, int *val1, int *val2);
+extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct pool *add_pool(void);
@@ -987,7 +1008,8 @@ extern unsigned int new_blocks;
 extern unsigned int found_blocks;
 extern int total_accepted, total_rejected, total_diff1;;
 extern int total_getworks, total_stale, total_discarded;
-extern uint64_t total_bytes_xfer;
+extern uint64_t total_bytes_rcvd, total_bytes_sent;
+#define total_bytes_xfer (total_bytes_rcvd + total_bytes_sent)
 extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
@@ -1067,12 +1089,13 @@ struct stratum_work {
 	
 	uint8_t header1[36];
 	uint8_t diffbits[4];
-	uint8_t ntime[4];
+	uint32_t ntime;
+	struct timeval tv_received;
 
 	double diff;
 
 	bool transparency_probed;
-	time_t transparency_time;
+	struct timeval tv_transparency;
 	bool opaque;
 };
 
@@ -1144,6 +1167,7 @@ struct pool {
 	struct submit_work_state *sws_waiting_on_curl;
 
 	time_t last_work_time;
+	struct timeval tv_last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
 	uint64_t best_diff;
@@ -1237,6 +1261,7 @@ struct work {
 	bool		do_foreign_submit;
 
 	struct timeval	tv_getwork;
+	time_t		ts_getwork;
 	struct timeval	tv_getwork_reply;
 	struct timeval	tv_cloned;
 	struct timeval	tv_work_start;
@@ -1248,7 +1273,8 @@ struct work {
 	struct work *next;
 };
 
-extern void get_datestamp(char *, struct timeval *);
+extern void get_datestamp(char *, time_t);
+#define get_now_datestamp(buf)  get_datestamp(buf, INVALID_TIMESTAMP)
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
@@ -1284,7 +1310,7 @@ extern void write_config(FILE *fcfg);
 extern void zero_bestshare(void);
 extern void zero_stats(void);
 extern void default_save_file(char *filename);
-extern bool log_curses_only(int prio, const char *datetime, const char *str);
+extern bool _log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);

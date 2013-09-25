@@ -26,7 +26,7 @@
 #define BISTREAM_USER_ID "\2\4$B"
 
 #define MODMINER_MAX_CLOCK 250
-#define MODMINER_DEF_CLOCK 210
+#define MODMINER_DEF_CLOCK 190
 #define MODMINER_MIN_CLOCK   2
 
 // Commands
@@ -64,7 +64,7 @@ struct modminer_fpga_state {
 	// Number of nonces did meet pdiff 1, ever
 	int good_share_counter;
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
 	unsigned char temp;
 
@@ -157,7 +157,7 @@ modminer_detect_one(const char *devpath)
 static int
 modminer_detect_auto()
 {
-	return serial_autodetect(modminer_detect_one, "BTCFPGA", "ModMiner");
+	return serial_autodetect(modminer_detect_one, "ModMiner");
 }
 
 static void
@@ -276,9 +276,7 @@ modminer_device_prepare(struct cgpu_info *modminer)
 	modminer->device->device_fd = fd;
 	applog(LOG_INFO, "%s: Opened %s", modminer->dev_repr, modminer->device_path);
 
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	get_datestamp(modminer->init, &now);
+	get_now_datestamp(modminer->init);
 
 	return true;
 }
@@ -486,9 +484,10 @@ static void modminer_get_temperature(struct cgpu_info *modminer, struct thr_info
 		state->temp = temperature;
 		if (temperature > modminer->targettemp + opt_hysteresis) {
 			{
-				time_t now = time(NULL);
-				if (state->last_cutoff_reduced != now) {
-					state->last_cutoff_reduced = now;
+				struct timeval now;
+				cgtime(&now);
+				if (timer_elapsed(&state->tv_last_cutoff_reduced, &now)) {
+					state->tv_last_cutoff_reduced = now;
 					int oldFreq = state->dclk.freqM;
 					if (modminer_reduce_clock(thr, false))
 						applog(LOG_NOTICE, "%s: Frequency %s from %u to %u MHz (temp: %d)",
@@ -593,7 +592,7 @@ fd_set fds;
 
 	if (46 != write(fd, state->next_work_cmd, 46))
 		bailout2(LOG_ERR, "%s: Error writing (start work)", modminer->proc_repr);
-	gettimeofday(&state->tv_workstart, NULL);
+	timer_set_now(&state->tv_workstart);
 	state->hashes = 0;
 	status_read("start work");
 	mutex_unlock(mutexp);
@@ -674,7 +673,7 @@ modminer_process_results(struct thr_info*thr)
 	}
 
 	struct timeval tv_workend, elapsed;
-	gettimeofday(&tv_workend, NULL);
+	timer_set_now(&tv_workend);
 	timersub(&tv_workend, &state->tv_workstart, &elapsed);
 
 	uint64_t hashes = (uint64_t)state->dclk.freqM * 2 * (((uint64_t)elapsed.tv_sec * 1000000) + elapsed.tv_usec);
@@ -744,6 +743,21 @@ modminer_fpga_shutdown(struct thr_info *thr)
 	thr->cgpu_data = NULL;
 }
 
+static
+bool modminer_user_set_clock(struct cgpu_info *cgpu, const int val)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct modminer_fpga_state * const state = thr->cgpu_data;
+	const int multiplier = val / 2;
+	const uint8_t oldFreqM = state->dclk.freqM;
+	const signed char delta = (multiplier - oldFreqM) * 2;
+	state->dclk.freqMDefault = multiplier;
+	const bool rv = modminer_change_clock(thr, true, delta);
+	if (likely(rv))
+		dclk_msg_freqchange(cgpu->proc_repr, oldFreqM * 2, state->dclk.freqM * 2, " on user request");
+	return rv;
+}
+
 static char *modminer_set_device(struct cgpu_info *modminer, char *option, char *setting, char *replybuf)
 {
 	int val;
@@ -755,8 +769,6 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	}
 
 	if (strcasecmp(option, "clock") == 0) {
-		int multiplier;
-
 		if (!setting || !*setting) {
 			sprintf(replybuf, "missing clock setting");
 			return replybuf;
@@ -769,19 +781,12 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 			return replybuf;
 		}
 
-		multiplier = val / 2;
-		struct thr_info *thr = modminer->thr[0];
-		struct modminer_fpga_state *state = thr->cgpu_data;
-		uint8_t oldFreqM = state->dclk.freqM;
-		signed char delta = (multiplier - oldFreqM) * 2;
-		state->dclk.freqMDefault = multiplier;
-		if (unlikely(!modminer_change_clock(thr, true, delta))) {
+		if (unlikely(!modminer_user_set_clock(modminer, val)))
+		{
 			sprintf(replybuf, "Set clock failed: %s",
 			        modminer->proc_repr);
 			return replybuf;
 		}
-
-		dclk_msg_freqchange(modminer->proc_repr, oldFreqM * 2, state->dclk.freqM * 2, " on user request");
 
 		return NULL;
 	}
@@ -789,6 +794,50 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
+
+#ifdef HAVE_CURSES
+static
+void modminer_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *modminer_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	static char buf[0x100];  // Static for replies
+	
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set clock speed (range %d-%d, multiple of 2)", MODMINER_MIN_CLOCK, MODMINER_MAX_CLOCK);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid clock speed\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < MODMINER_MIN_CLOCK || val > MODMINER_MAX_CLOCK || (val & 1) != 0)
+				return "Invalid clock speed\n";
+			
+			if (unlikely(!modminer_user_set_clock(cgpu, val)))
+				return "Set clock failed\n";
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void modminer_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct modminer_fpga_state *state = cgpu->thr[0]->cgpu_data;
+	wlogprint("Clock speed: %d\n", (int)(state->dclk.freqM * 2));
+}
+#endif
 
 struct device_drv modminer_drv = {
 	.dname = "modminer",
@@ -798,6 +847,11 @@ struct device_drv modminer_drv = {
 	.get_stats = modminer_get_stats,
 	.get_api_extra_device_status = get_modminer_drv_extra_device_status,
 	.set_device = modminer_set_device,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = modminer_wlogprint_status,
+	.proc_tui_wlogprint_choices = modminer_tui_wlogprint_choices,
+	.proc_tui_handle_choice = modminer_tui_handle_choice,
+#endif
 	.thread_prepare = modminer_fpga_prepare,
 	.thread_init = modminer_fpga_init,
 	.scanhash = modminer_scanhash,

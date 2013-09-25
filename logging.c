@@ -25,27 +25,15 @@ bool opt_log_microseconds;
 /* per default priorities higher than LOG_NOTICE are logged */
 int opt_log_level = LOG_NOTICE;
 
-static void my_log_curses(int prio, const char *datetime, const char *str)
+static void _my_log_curses(int prio, const char *datetime, const char *str)
 {
-	if (opt_quiet && prio != LOG_ERR)
-		return;
-
 #ifdef HAVE_CURSES
 	extern bool use_curses;
-	if (use_curses && log_curses_only(prio, datetime, str))
+	if (use_curses && _log_curses_only(prio, datetime, str))
 		;
 	else
 #endif
-	{
-		int cancelstate;
-		bool scs;
-		scs = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancelstate);
-		mutex_lock(&console_lock);
-		printf("%s%s%s", datetime, str, "                    \n");
-		mutex_unlock(&console_lock);
-		if (scs)
-			pthread_setcancelstate(cancelstate, &cancelstate);
-	}
+		printf(" %s %s%s", datetime, str, "                    \n");
 }
 
 /* high-level logging function, based on global opt_log_level */
@@ -63,45 +51,50 @@ void _applog(int prio, const char *str)
 	if (0) {}
 #endif
 	else {
-		bool writetocon = opt_debug_console || (opt_log_output && prio != LOG_DEBUG) || prio <= LOG_NOTICE;
+		bool writetocon =
+			(opt_debug_console || (opt_log_output && prio != LOG_DEBUG) || prio <= LOG_NOTICE)
+		 && !(opt_quiet && prio != LOG_ERR);
 		bool writetofile = !isatty(fileno((FILE *)stderr));
 		if (!(writetocon || writetofile))
 			return;
 
 		char datetime[64];
-		struct timeval tv = {0, 0};
-		struct tm _tm;
-		struct tm *tm = &_tm;
-
-		cgtime(&tv);
-
-		localtime_r(&tv.tv_sec, tm);
 
 		if (opt_log_microseconds)
-			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d.%06ld] ",
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec,
+		{
+			struct timeval tv;
+			struct tm tm;
+			
+			bfg_init_time();
+			bfg_gettimeofday(&tv);
+			localtime_r(&tv.tv_sec, &tm);
+			
+			sprintf(datetime, "[%d-%02d-%02d %02d:%02d:%02d.%06ld]",
+				tm.tm_year + 1900,
+				tm.tm_mon + 1,
+				tm.tm_mday,
+				tm.tm_hour,
+				tm.tm_min,
+				tm.tm_sec,
 				(long)tv.tv_usec);
-		else
-			sprintf(datetime, " [%d-%02d-%02d %02d:%02d:%02d] ",
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec);
-
-		/* Only output to stderr if it's not going to the screen as well */
-		if (writetofile) {
-			fprintf(stderr, "%s%s\n", datetime, str);	/* atomic write to stderr */
-			fflush(stderr);
 		}
+		else
+			get_now_datestamp(datetime);
 
-		if (writetocon)
-			my_log_curses(prio, datetime, str);
+		if (writetofile || writetocon)
+		{
+			bfg_console_lock();
+			
+			/* Only output to stderr if it's not going to the screen as well */
+			if (writetofile) {
+				fprintf(stderr, " %s %s\n", datetime, str);	/* atomic write to stderr */
+				fflush(stderr);
+			}
+
+			if (writetocon)
+				_my_log_curses(prio, datetime, str);
+			
+			bfg_console_unlock();
+		}
 	}
 }

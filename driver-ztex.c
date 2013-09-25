@@ -64,9 +64,9 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 	ztex->dev_manufacturer = dev->dev_manufacturer;
 	ztex->dev_product = dev->dev_product;
 	ztex->dev_serial = (char*)&dev->snString[0];
+	ztex->name = fpganame;
 	add_cgpu(ztex);
 	strcpy(ztex->device_ztex->repr, ztex->dev_repr);
-	ztex->name = fpganame;
 	applog(LOG_INFO, "%"PRIpreprv": Found Ztex (ZTEX %s)", ztex->dev_repr, fpganame);
 
 	return ztex;
@@ -339,15 +339,13 @@ get_ztex_drv_extra_device_status(struct cgpu_info *ztex)
 
 static bool ztex_prepare(struct thr_info *thr)
 {
-	struct timeval now;
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct libztex_device *ztex = cgpu->device_ztex;
 
-	cgtime(&now);
-	get_datestamp(cgpu->init, &now);
+	get_now_datestamp(cgpu->init);
 	
 	{
-		char fpganame[LIBZTEX_SNSTRING_LEN+3+1];
+		char *fpganame = malloc(LIBZTEX_SNSTRING_LEN+3+1);
 		sprintf(fpganame, "%s-%u", ztex->snString, cgpu->proc_id+1);
 		cgpu->name = fpganame;
 	}

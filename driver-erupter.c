@@ -7,6 +7,9 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
+#include "miner.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
 
@@ -37,12 +40,19 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 
 static bool erupter_emerald_detect_one(const char *devpath)
 {
+	// For detection via BEE:*
 	return _erupter_detect_one(devpath, &erupter_drv_emerald);
 }
 
 static bool erupter_detect_one(const char *devpath)
 {
-	return _erupter_detect_one(devpath, &erupter_drv);
+	struct device_drv *drv = &erupter_drv;
+	
+	// For autodetection
+	if (unlikely(detectone_meta_info.product && strstr(detectone_meta_info.product, "Emerald")))
+		drv = &erupter_drv_emerald;
+	
+	return _erupter_detect_one(devpath, drv);
 }
 
 static int erupter_emerald_detect_auto(void)
@@ -61,8 +71,16 @@ static void erupter_detect()
 {
 	erupter_drv_init();
 	// Actual serial detection is handled by Icarus driver
-	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
 	serial_detect_auto_byname(&erupter_drv, erupter_detect_one, erupter_detect_auto);
+	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
+}
+
+static bool erupter_identify(struct cgpu_info *erupter)
+{
+	struct thr_info *thr = erupter->thr[0];
+	struct icarus_state *state = thr->cgpu_data;
+	state->identify = true;
+	return true;
 }
 
 static void erupter_drv_init()
@@ -71,6 +89,7 @@ static void erupter_drv_init()
 	erupter_drv.dname = "erupter";
 	erupter_drv.name = "BES";
 	erupter_drv.drv_detect = erupter_detect;
+	erupter_drv.identify_device = erupter_identify;
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";

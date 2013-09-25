@@ -30,7 +30,7 @@
 #include <libgen.h>
 
 #include "compat.h"
-#include "fpgautils.h"
+#include "deviceapi.h"
 #include "miner.h"
 #include "bench_block.h"
 #include "util.h"
@@ -246,7 +246,7 @@ double bench_algo_stage3(
 
 	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
 
-	gettimeofday(&start, 0);
+	timer_set_now(&start);
 			{
 				sha256_func func = sha256_funcs[algo];
 				(*func)(
@@ -261,7 +261,7 @@ double bench_algo_stage3(
 					work.blk.nonce
 				);
 			}
-	gettimeofday(&end, 0);
+	timer_set_now(&end);
 
 	uint64_t usec_end = ((uint64_t)end.tv_sec)*1000*1000 + end.tv_usec;
 	uint64_t usec_start = ((uint64_t)start.tv_sec)*1000*1000 + start.tv_usec;

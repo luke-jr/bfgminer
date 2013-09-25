@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -48,6 +49,7 @@ enum bitforce_proto {
 	BFP_RANGE,
 	BFP_QUEUE,
 	BFP_BQUEUE,
+	BFP_PQUEUE,
 };
 
 static const char *protonames[] = {
@@ -55,6 +57,7 @@ static const char *protonames[] = {
 	"nonce range",
 	"work queue",
 	"bulk queue",
+	"parallel queue",
 };
 
 struct device_drv bitforce_drv;
@@ -321,6 +324,7 @@ struct bitforce_data {
 	unsigned sleep_ms_default;
 	struct timeval tv_hashmeter_start;
 	float temp[2];
+	char *voltinfo;
 };
 
 struct bitforce_proc_data {
@@ -356,7 +360,6 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	int fdDev = BFopen(bitforce->device_path);
-	struct timeval now;
 
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
@@ -366,8 +369,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-	cgtime(&now);
-	get_datestamp(bitforce->init, &now);
+	get_now_datestamp(bitforce->init);
 
 	return true;
 }
@@ -546,7 +548,8 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	struct bitforce_data *data = bitforce->device_data;
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
-	char pdevbuf[0x100];
+	char pdevbuf[0x40];
+	char voltbuf[0x40];
 	char *s;
 	struct cgpu_info *chip_cgpu;
 
@@ -569,9 +572,51 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(mutexp))
 		return false;
 
+	if (data->sc)
+		bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "ZTX");
 	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
+	if (data->sc && likely(voltbuf[0]))
+	{
+		// Process voltage info
+		// "NNNxxx,NNNxxx,NNNxxx" -> "NNN.xxx / NNN.xxx / NNN.xxx"
+		size_t sz = strlen(voltbuf) * 4;
+		char *saveptr, *v, *outbuf = malloc(sz);
+		char *out = outbuf;
+		if (!out)
+			goto skipvolts;
+		for (v = strtok_r(voltbuf, ",", &saveptr); v; v = strtok_r(NULL, ",", &saveptr))
+		{
+			while (isCspace(v[0]))
+				++v;
+			sz = strlen(v);
+			while (isCspace(v[sz - 1]))
+				--sz;
+			if (sz < 4)
+			{
+				memcpy(out, "0.00? / ", 8);
+				memcpy(&out[5 - sz], v, sz);
+				out += 8;
+			}
+			else
+			{
+				memcpy(out, v, sz - 3);
+				out += sz - 3;
+				out[0] = '.';
+				memcpy(&out[1], &v[sz - 3], 3);
+				memcpy(&out[4], " / ", 3);
+				out += 7;
+			}
+		}
+		out[-3] = '\0';
+		assert(out[-2]=='/');
+		saveptr = data->voltinfo;
+		data->voltinfo = outbuf;
+		free(saveptr);
+	}
+	
+skipvolts:
 	if (unlikely(!pdevbuf[0])) {
 		struct thr_info *thr = bitforce->thr[0];
 		applog(LOG_ERR, "%"PRIpreprv": Error: Get temp returned empty string/timed out", bitforce->proc_repr);
@@ -652,6 +697,8 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 	{
 		case BFP_BQUEUE:
 			quit(1, "%"PRIpreprv": Impossible BFP_BQUEUE in bitforce_job_prepare", bitforce->proc_repr);
+		case BFP_PQUEUE:
+			quit(1, "%"PRIpreprv": Impossible BFP_PQUEUE in bitforce_job_prepare", bitforce->proc_repr);
 		case BFP_RANGE:
 		{
 			uint32_t *ob_nonce = (uint32_t*)&(ob_dt[32]);
@@ -1232,6 +1279,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	bool sc = initdata->sc;
 	int xlink_id = 0, boardno = 0;
 	struct bitforce_proc_data *first_on_this_board;
+	char buf[100];
+	int fd = bitforce->device_fd;
 	
 	for ( ; bitforce; bitforce = bitforce->next_proc)
 	{
@@ -1269,7 +1318,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			
 			if (bitforce->drv == &bitforce_queue_api)
 			{
-				bitforce_change_mode(bitforce, BFP_BQUEUE);
+				bitforce_change_mode(bitforce, data->parallel_protocol ? BFP_PQUEUE : BFP_BQUEUE);
 				bitforce->sleep_ms = data->sleep_ms_default = 100;
 				timer_set_delay_from_now(&thr->tv_poll, 0);
 				data->queued_max = data->parallel * 2;
@@ -1280,6 +1329,9 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			}
 			else
 				bitforce_change_mode(bitforce, BFP_QUEUE);
+			
+			// Clear job queue to start fresh; ignore response
+			bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
 		}
 		else
 		{
@@ -1308,6 +1360,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			procdata->cgpu = bitforce;
 			bitforce->device_data = data;
 			bitforce->status = LIFE_INIT2;
+			bitforce->kname = first_on_this_board->cgpu->kname;
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		
@@ -1316,6 +1369,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		{}
 	}
 	
+	// NOTE: This doesn't restore the first processor, but it does get us the last one; this is sufficient for the delay debug and start of the next loop below
 	bitforce = thr->cgpu;
 
 	free(initdata->parallels);
@@ -1327,6 +1381,13 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	nmsleep(wait);
 
+	if (sc)
+	{
+		// Clear results queue last, to start fresh; ignore response
+		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
+			bitforce_zox(thr, "ZOX");
+	}
+	
 	return true;
 }
 
@@ -1383,6 +1444,8 @@ void bitforce_wlogprint_status(struct cgpu_info *cgpu)
 	struct bitforce_data *data = cgpu->device_data;
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 		wlogprint("Temperatures: %4.1fC %4.1fC\n", data->temp[0], data->temp[1]);
+	if (data->voltinfo)
+		wlogprint("Voltages: %s\n", data->voltinfo);
 }
 #endif
 
@@ -1396,7 +1459,7 @@ static struct api_data *bitforce_drv_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_uint(root, "Sleep Time", &(cgpu->sleep_ms), false);
-	if (data->proto != BFP_BQUEUE)
+	if (data->proto != BFP_BQUEUE && data->proto != BFP_PQUEUE)
 		root = api_add_uint(root, "Avg Wait", &(cgpu->avg_wait_d), false);
 	if (data->temp[0] > 0 && data->temp[1] > 0)
 	{

@@ -32,4 +32,25 @@ extern void minerloop_queue(struct thr_info *);
 
 extern void *miner_thread(void *);
 
+typedef bool(*detectone_func_t)(const char*);
+typedef int(*autoscan_func_t)();
+
+extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_func_t, int flags);
+#define serial_detect_fauto(api, detectone, autoscan)  \
+	_serial_detect(api, detectone, autoscan, 1)
+#define serial_detect_auto(api, detectone, autoscan)  \
+	_serial_detect(api, detectone, autoscan, 0)
+#define serial_detect_auto_byname(api, detectone, autoscan)  \
+	_serial_detect(api, detectone, autoscan, 2)
+#define serial_detect(api, detectone)  \
+	_serial_detect(api, detectone,     NULL, 0)
+#define serial_detect_byname(api, detectone)  \
+	_serial_detect(api, detectone,     NULL, 2)
+#define noserial_detect(api, autoscan)  \
+	_serial_detect(api, NULL     , autoscan, 0)
+#define noserial_detect_manual(api, autoscan)  \
+	_serial_detect(api, NULL     , autoscan, 4)
+
+extern FILE *open_bitstream(const char *dname, const char *filename);
+
 #endif

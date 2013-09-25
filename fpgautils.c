@@ -119,7 +119,6 @@ int _detectone_wrap(const detectone_func_t detectone, const char * const param, 
 
 struct detectone_meta_info_t detectone_meta_info;
 
-static
 void clear_detectone_meta_info(void)
 {
 	detectone_meta_info = (struct detectone_meta_info_t){
@@ -150,7 +149,7 @@ char *_decode_udev_enc_dup(const char *s)
 	if (!s)
 		return NULL;
 	
-	char *o = malloc(strlen(s));
+	char *o = malloc(strlen(s) + 1);
 	if (!o)
 	{
 		applog(LOG_ERR, "Failed to malloc in _decode_udev_enc_dup");
@@ -259,7 +258,7 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 		if (fgets(buf, bufsz, F))
 		{
 			size_t L = strlen(buf);
-			while (isspace(buf[--L]))
+			while (isCspace(buf[--L]))
 				buf[L] = '\0';
 		}
 		else
@@ -273,14 +272,58 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 }
 
 static
+void _sysfs_find_tty(detectone_func_t detectone, char *devpath, char *devfile, const char *prod, char *pfound)
+{
+	DIR *DT;
+	struct dirent *de;
+	char ttybuf[0x10] = "/dev/";
+	char manuf[0x40], serial[0x40];
+	char *mydevfile = strdup(devfile);
+	
+	DT = opendir(devpath);
+	if (!DT)
+		goto out;
+	
+	while ( (de = readdir(DT)) )
+	{
+		if (strncmp(de->d_name, "tty", 3))
+			continue;
+		if (!de->d_name[3])
+		{
+			// "tty" directory: recurse (needed for ttyACM)
+			sprintf(devfile, "%s/tty", mydevfile);
+			_sysfs_find_tty(detectone, devpath, devfile, prod, pfound);
+			continue;
+		}
+		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
+			continue;
+		
+		
+		detectone_meta_info = (struct detectone_meta_info_t){
+			.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
+			.product = prod,
+			.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
+		};
+		
+		strcpy(&ttybuf[5], de->d_name);
+		if (detectone(ttybuf))
+			++*pfound;
+	}
+	closedir(DT);
+	
+out:
+	free(mydevfile);
+}
+
+static
 int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 {
-	DIR *D, *DS, *DT;
+	DIR *D, *DS;
 	struct dirent *de;
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char ttybuf[0x10], manuf[0x40], prod[0x40], serial[0x40];
+	char prod[0x40];
 	char *devfile, *upfile;
 	char found = 0;
 	size_t len, len2;
@@ -310,8 +353,6 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 		devfile[0] = '/';
 		++devfile;
 		
-		memcpy(ttybuf, "/dev/", 5);
-		
 		while ( (de = readdir(DS)) )
 		{
 			if (strncmp(de->d_name, upfile, len))
@@ -320,29 +361,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 			len2 = strlen(de->d_name);
 			memcpy(devfile, de->d_name, len2 + 1);
 			
-			DT = opendir(devpath);
-			if (!DT)
-				continue;
-			
-			while ( (de = readdir(DT)) )
-			{
-				if (strncmp(de->d_name, "tty", 3))
-					continue;
-				if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
-					continue;
-				
-				
-				detectone_meta_info = (struct detectone_meta_info_t){
-					.manufacturer = _sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer"),
-					.product = prod,
-					.serial = _sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial"),
-				};
-				
-				strcpy(&ttybuf[5], de->d_name);
-				if (detectone(ttybuf))
-					++found;
-			}
-			closedir(DT);
+			_sysfs_find_tty(detectone, devpath, devfile, prod, &found);
 		}
 		closedir(DS);
 	}
@@ -475,62 +494,6 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
-{
-	struct string_elist *iter, *tmp;
-	const char *dev, *colon;
-	bool inhibitauto = flags & 4;
-	char found = 0;
-	bool forceauto = flags & 1;
-	bool hasname;
-	size_t namel = strlen(api->name);
-	size_t dnamel = strlen(api->dname);
-
-	clear_detectone_meta_info();
-	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
-		dev = iter->string;
-		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
-			size_t idlen = colon - dev;
-
-			// allow either name:device or dname:device
-			if ((idlen != namel || strncasecmp(dev, api->name, idlen))
-			&&  (idlen != dnamel || strncasecmp(dev, api->dname, idlen)))
-				continue;
-
-			dev = colon + 1;
-			hasname = true;
-		}
-		else
-			hasname = false;
-		if (!strcmp(dev, "auto"))
-			forceauto = true;
-		else if (!strcmp(dev, "noauto"))
-			inhibitauto = true;
-		else
-		if ((flags & 2) && !hasname)
-			continue;
-		else
-		if (!detectone)
-		{}  // do nothing
-		else
-		if (serial_claim(dev, NULL))
-		{
-			applog(LOG_DEBUG, "%s is already claimed... skipping probes", dev);
-			string_elist_del(&scan_devices, iter);
-		}
-		else if (detectone(dev)) {
-			string_elist_del(&scan_devices, iter);
-			inhibitauto = true;
-			++found;
-		}
-	}
-
-	if ((forceauto || !inhibitauto) && autoscan)
-		found += autoscan();
-
-	return found;
-}
-
 enum bfg_device_bus {
 	BDB_SERIAL,
 	BDB_USB,
@@ -643,7 +606,10 @@ void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
 	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
 		return;
 	if (libusb_get_device_descriptor(usb, &desc))
+	{
+		libusb_close(h);
 		return;
+	}
 	
 	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
 		cgpu->dev_manufacturer = strdup((void *)buf);
@@ -651,6 +617,8 @@ void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
 		cgpu->dev_product = strdup((void *)buf);
 	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
 		cgpu->dev_serial = strdup((void *)buf);
+	
+	libusb_close(h);
 }
 #endif
 
@@ -926,50 +894,6 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 		bufsiz -= len;
 	}
 	return tlen;
-}
-
-static FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, const char *filename)
-{
-	char fullpath[PATH_MAX];
-	strcpy(fullpath, path);
-	strcat(fullpath, "/");
-	if (subdir) {
-		strcat(fullpath, subdir);
-		strcat(fullpath, "/");
-	}
-	if (sub2) {
-		strcat(fullpath, sub2);
-		strcat(fullpath, "/");
-	}
-	strcat(fullpath, filename);
-	return fopen(fullpath, "rb");
-}
-#define _open_bitstream(path, subdir, sub2)  do {  \
-	f = _open_bitstream(path, subdir, sub2, filename);  \
-	if (f)  \
-		return f;  \
-} while(0)
-
-#define _open_bitstream2(path, path3)  do {  \
-	_open_bitstream(path, NULL, path3);  \
-	_open_bitstream(path, "../share/" PACKAGE, path3);  \
-} while(0)
-
-#define _open_bitstream3(path)  do {  \
-	_open_bitstream2(path, dname);  \
-	_open_bitstream2(path, "bitstreams");  \
-	_open_bitstream2(path, NULL);  \
-} while(0)
-
-FILE *open_bitstream(const char *dname, const char *filename)
-{
-	FILE *f;
-
-	_open_bitstream3(opt_kernel_path);
-	_open_bitstream3(cgminer_path);
-	_open_bitstream3(".");
-
-	return NULL;
 }
 
 #define bailout(...)  do {  \

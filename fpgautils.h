@@ -10,6 +10,8 @@
 #include <libusb.h>
 #endif
 
+#include "deviceapi.h"
+
 struct device_drv;
 struct cgpu_info;
 
@@ -21,25 +23,8 @@ struct detectone_meta_info_t {
 
 // NOTE: Should detectone become run multithreaded, this will become a threadsafe #define
 extern struct detectone_meta_info_t detectone_meta_info;
+extern void clear_detectone_meta_info(void);
 
-typedef bool(*detectone_func_t)(const char*);
-typedef int(*autoscan_func_t)();
-
-extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_func_t, int flags);
-#define serial_detect_fauto(api, detectone, autoscan)  \
-	_serial_detect(api, detectone, autoscan, 1)
-#define serial_detect_auto(api, detectone, autoscan)  \
-	_serial_detect(api, detectone, autoscan, 0)
-#define serial_detect_auto_byname(api, detectone, autoscan)  \
-	_serial_detect(api, detectone, autoscan, 2)
-#define serial_detect(api, detectone)  \
-	_serial_detect(api, detectone,     NULL, 0)
-#define serial_detect_byname(api, detectone)  \
-	_serial_detect(api, detectone,     NULL, 2)
-#define noserial_detect(api, autoscan)  \
-	_serial_detect(api, NULL     , autoscan, 0)
-#define noserial_detect_manual(api, autoscan)  \
-	_serial_detect(api, NULL     , autoscan, 4)
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
@@ -61,7 +46,6 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 #define serial_close(fd)  close(fd)
 
-extern FILE *open_bitstream(const char *dname, const char *filename);
 extern FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len);
 
 extern int get_serial_cts(int fd);

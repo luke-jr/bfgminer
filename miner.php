@@ -994,6 +994,7 @@ function showdatetime()
 global $singlerigsum;
 $singlerigsum = array(
  'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+                 'Temperature' => 2,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
 			'Stale' => 1, 'Get Failures' => 1, 'Remote Failures' => 1),
@@ -1151,7 +1152,12 @@ function details($cmd, $list, $rig)
 		||  (isset($dototal['*']) and substr($name, 0, 1) == '*'))
 		{
 			if (isset($total[$name]))
-				$total[$name] += $value;
+			{
+				if ($dototal[$name] == 2)
+					$total[$name] = max($total[$name], $value);
+				else
+					$total[$name] += $value;
+			}
 			else
 				$total[$name] = $value;
 		}

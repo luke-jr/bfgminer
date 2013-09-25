@@ -645,8 +645,6 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
 
-	struct timeval now;
-
 	icarus->device_fd = -1;
 
 	int fd = icarus_open2(icarus->device_path, info->baud, true);
@@ -659,8 +657,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	icarus->device_fd = fd;
 
 	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
-	cgtime(&now);
-	get_datestamp(icarus->init, &now);
+	get_now_datestamp(icarus->init);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
@@ -750,13 +747,44 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	return true;
 }
 
-static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
+static
+bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
+{
+	struct cgpu_info * const icarus = thr->cgpu;
+	struct icarus_state * const state = thr->cgpu_data;
+	uint8_t * const ob_bin = state->ob_bin;
+	
+	memcpy(ob_bin, work->midstate, 32);
+	memcpy(ob_bin + 52, work->data + 64, 12);
+	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
+	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
+		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
+		       icarus->proc_repr);
+		ob_bin[56] = 0;
+	}
+	rev(ob_bin, 32);
+	rev(ob_bin + 52, 12);
+	
+	return true;
+}
+
+static bool icarus_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO *info = icarus->device_data;
 	struct icarus_state *state = thr->cgpu_data;
+	const uint8_t * const ob_bin = state->ob_bin;
 	int fd = icarus->device_fd;
 	int ret;
 
+	// Handle dynamic clocking for "subclass" devices
+	// This needs to run before sending next job, since it hashes the command too
+	if (info->dclk.freqM && likely(!state->firstrun)) {
+		dclk_preUpdate(&info->dclk);
+		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
+	}
+	
 	cgtime(&state->tv_workstart);
 
 	ret = icarus_write(fd, ob_bin, 64);
@@ -778,6 +806,63 @@ static bool icarus_start_work(struct thr_info *thr, const unsigned char *ob_bin)
 	return true;
 }
 
+static
+void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
+{
+	const struct cgpu_info * const icarus = thr->cgpu;
+	const struct ICARUS_INFO * const info = icarus->device_data;
+	struct icarus_state * const state = thr->cgpu_data;
+	int fd = icarus->device_fd;
+	struct timeval tv_now;
+	double delapsed;
+	uint32_t nonce;
+	
+	// If identify is requested (block erupters):
+	// 1. Don't start the next job right away (above)
+	// 2. Wait for the current job to complete 100%
+	
+	if (!was_first_run)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
+		while (true)
+		{
+			cgtime(&tv_now);
+			delapsed = tdiff(&tv_now, &state->tv_workstart);
+			if (delapsed + 0.1 > info->fullnonce)
+				break;
+			
+			// Try to get more nonces (ignoring work restart)
+			ret = icarus_gets((void *)&nonce, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10);
+			if (ret == ICA_GETS_OK)
+			{
+				nonce = be32toh(nonce);
+				submit_nonce(thr, &state->last_work, nonce);
+			}
+		}
+	}
+	else
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
+	
+	// 3. Delay 3 more seconds
+	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
+	nmsleep(3000);
+	
+	// Check for work restart in the meantime
+	if (thr->work_restart)
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
+		goto no_job_start;
+	}
+	
+	// 4. Start next job
+	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+	if (!icarus_job_start(thr))
+no_job_start:
+		state->firstrun = true;
+	
+	state->identify = false;
+}
+
 static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
@@ -787,7 +872,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	unsigned char ob_bin[64] = {0}, nonce_bin[ICARUS_READ_SIZE] = {0};
+	unsigned char nonce_bin[ICARUS_READ_SIZE] = {0};
 	uint32_t nonce;
 	int64_t hash_count;
 	struct timeval tv_start, elapsed;
@@ -795,6 +880,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	double Ti, Xi;
 	int curr_hw_errors, i;
 	bool was_hw_error;
+	bool was_first_run;
 
 	struct ICARUS_HISTORY *history0, *history;
 	int count;
@@ -808,19 +894,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	icarus = thr->cgpu;
 	struct icarus_state *state = thr->cgpu_data;
+	was_first_run = state->firstrun;
 
-	// Prepare the next work immediately
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
-	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
-		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
-		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
-		       icarus->proc_repr);
-		ob_bin[56] = 0;
-	}
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
+	icarus_job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
@@ -874,17 +950,20 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
-	if (info->dclk.freqM && likely(!state->firstrun)) {
+	if (info->dclk.freqM && likely(!was_first_run)) {
 		int qsec = ((4 * elapsed.tv_sec) + (elapsed.tv_usec / 250000)) ?: 1;
 		for (int n = qsec; n; --n)
 			dclk_gotNonces(&info->dclk);
 		if (nonce && !test_nonce(&state->last_work, nonce, false))
 			dclk_errorCount(&info->dclk, qsec);
-		dclk_preUpdate(&info->dclk);
-		dclk_updateFreq(&info->dclk, info->dclk_change_clock_func, thr);
 	}
 
-	if (!icarus_start_work(thr, ob_bin))
+	if (unlikely(state->identify))
+	{
+		// Delay job start until later...
+	}
+	else
+	if (!icarus_job_start(thr))
 		/* This should never happen */
 		state->firstrun = true;
 
@@ -893,10 +972,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	work->blk.nonce = 0xffffffff;
 
-	if (state->firstrun) {
+	if (was_first_run) {
 		state->firstrun = false;
 		__copy_work(&state->last_work, work);
-		return 0;
+		hash_count = 0;
+		goto out;
 	}
 
 	// OK, done starting Icarus's next job... now process the last run's result!
@@ -921,7 +1001,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 					(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 		}
 
-		return estimate_hashes;
+		hash_count = estimate_hashes;
+		goto out;
 	}
 
 	curr_hw_errors = icarus->hw_errors;
@@ -935,7 +1016,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			if (!icarus_reopen(icarus, state, &fd))
 				state->firstrun = true;
 			// Some devices (Cairnsmore1, for example) abort hashing when reopened, so send the job again
-			if (!icarus_start_work(thr, ob_bin))
+			if (!icarus_job_start(thr))
 				state->firstrun = true;
 		}
 
@@ -1082,6 +1163,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
 	}
 
+out:
+	if (unlikely(state->identify))
+		handle_identify(thr, ret, was_first_run);
+	
 	return hash_count;
 }
 

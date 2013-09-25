@@ -117,7 +117,7 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 	if (db->idlemarker) {
 		const unsigned char *cptr = ptr;
 		for (size_t i = 0; i < len; ++i)
-			if (!(isspace(cptr[i]) || cptr[i] == '{')) {
+			if (!(isCspace(cptr[i]) || cptr[i] == '{')) {
 				*db->idlemarker = CURL_SOCKET_BAD;
 				db->idlemarker = NULL;
 				break;
@@ -182,14 +182,14 @@ static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 
 	rem = ptr + slen + 1;		/* trim value's leading whitespace */
 	remlen = ptrlen - slen - 1;
-	while ((remlen > 0) && (isspace(*rem))) {
+	while ((remlen > 0) && (isCspace(*rem))) {
 		remlen--;
 		rem++;
 	}
 
 	memcpy(val, rem, remlen);	/* store value, trim trailing ws */
 	val[remlen] = 0;
-	while ((*val) && (isspace(val[strlen(val) - 1])))
+	while ((*val) && (isCspace(val[strlen(val) - 1])))
 		val[strlen(val) - 1] = 0;
 
 	if (!*val)			/* skip blank value */
@@ -339,14 +339,14 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 		case CURLINFO_DATA_IN:
 		case CURLINFO_SSL_DATA_IN:
 			pool->cgminer_pool_stats.bytes_received += size;
-			total_bytes_xfer += size;
+			total_bytes_rcvd += size;
 			pool->cgminer_pool_stats.net_bytes_received += size;
 			break;
 		case CURLINFO_HEADER_OUT:
 		case CURLINFO_DATA_OUT:
 		case CURLINFO_SSL_DATA_OUT:
 			pool->cgminer_pool_stats.bytes_sent += size;
-			total_bytes_xfer += size;
+			total_bytes_sent += size;
 			pool->cgminer_pool_stats.net_bytes_sent += size;
 			break;
 		case CURLINFO_TEXT:
@@ -356,7 +356,7 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 			// data is not null-terminated, so we need to copy and terminate it for applog
 			char datacp[size + 1];
 			memcpy(datacp, data, size);
-			while (likely(size) && unlikely(isspace(datacp[size-1])))
+			while (likely(size) && unlikely(isCspace(datacp[size-1])))
 				--size;
 			if (unlikely(!size))
 				break;
@@ -1098,17 +1098,144 @@ void nusleep(unsigned int usecs)
 #endif
 }
 
-/* This is a cgminer gettimeofday wrapper. Since we always call gettimeofday
- * with tz set to NULL, and windows' default resolution is only 15ms, this
- * gives us higher resolution times on windows. */
-void cgtime(struct timeval *tv)
+static
+void _now_gettimeofday(struct timeval *tv)
 {
 #ifdef WIN32
+	// Windows' default resolution is only 15ms. This requests 1ms.
 	timeBeginPeriod(1);
 #endif
 	gettimeofday(tv, NULL);
 #ifdef WIN32
 	timeEndPeriod(1);
+#endif
+}
+
+#ifdef HAVE_POOR_GETTIMEOFDAY
+static struct timeval tv_timeofday_offset;
+static struct timeval _tv_timeofday_lastchecked;
+static pthread_mutex_t _tv_timeofday_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static
+void bfg_calibrate_timeofday(struct timeval *expected, char *buf)
+{
+	struct timeval actual, delta;
+	timeradd(expected, &tv_timeofday_offset, expected);
+	_now_gettimeofday(&actual);
+	if (expected->tv_sec >= actual.tv_sec - 1 && expected->tv_sec <= actual.tv_sec + 1)
+		// Within reason - no change necessary
+		return;
+	
+	timersub(&actual, expected, &delta);
+	timeradd(&tv_timeofday_offset, &delta, &tv_timeofday_offset);
+	sprintf(buf, "Recalibrating timeofday offset (delta %ld.%06lds)", (long)delta.tv_sec, (long)delta.tv_usec);
+	*expected = actual;
+}
+
+void bfg_gettimeofday(struct timeval *out)
+{
+	char buf[64] = "";
+	timer_set_now(out);
+	mutex_lock(&_tv_timeofday_mutex);
+	if (_tv_timeofday_lastchecked.tv_sec < out->tv_sec - 21)
+		bfg_calibrate_timeofday(out, buf);
+	else
+		timeradd(out, &tv_timeofday_offset, out);
+	mutex_unlock(&_tv_timeofday_mutex);
+	if (unlikely(buf[0]))
+		applog(LOG_WARNING, "%s", buf);
+}
+#endif
+
+#ifdef WIN32
+static LARGE_INTEGER _perffreq;
+
+static
+void _now_queryperformancecounter(struct timeval *tv)
+{
+	LARGE_INTEGER now;
+	if (unlikely(!QueryPerformanceCounter(&now)))
+		quit(1, "QueryPerformanceCounter failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = now.QuadPart / _perffreq.QuadPart,
+		.tv_usec = (now.QuadPart % _perffreq.QuadPart) * 1000000 / _perffreq.QuadPart,
+	};
+}
+#endif
+
+static
+void _now_is_not_set(__maybe_unused struct timeval *tv)
+{
+	// Might be unclean to swap algorithms after getting a timer
+	quit(1, "timer_set_now called before bfg_init_time");
+}
+
+void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
+
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+static clockid_t bfg_timer_clk;
+
+static
+void _now_clock_gettime(struct timeval *tv)
+{
+	struct timespec ts;
+	if (unlikely(clock_gettime(bfg_timer_clk, &ts)))
+		quit(1, "clock_gettime failed");
+	
+	*tv = (struct timeval){
+		.tv_sec = ts.tv_sec,
+		.tv_usec = ts.tv_nsec / 1000,
+	};
+}
+
+static
+bool _bfg_try_clock_gettime(clockid_t clk)
+{
+	struct timespec ts;
+	if (clock_gettime(clk, &ts))
+		return false;
+	
+	bfg_timer_clk = clk;
+	timer_set_now = _now_clock_gettime;
+	return true;
+}
+#endif
+
+void bfg_init_time()
+{
+	if (timer_set_now != _now_is_not_set)
+		return;
+	
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
+#ifdef HAVE_CLOCK_GETTIME_MONOTONIC_RAW
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC_RAW))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC_RAW)");
+	else
+#endif
+	if (_bfg_try_clock_gettime(CLOCK_MONOTONIC))
+		applog(LOG_DEBUG, "Timers: Using clock_gettime(CLOCK_MONOTONIC)");
+	else
+#endif
+#ifdef WIN32
+	if (QueryPerformanceFrequency(&_perffreq) && _perffreq.QuadPart)
+	{
+		timer_set_now = _now_queryperformancecounter;
+		applog(LOG_DEBUG, "Timers: Using QueryPerformanceCounter");
+	}
+	else
+#endif
+	{
+		timer_set_now = _now_gettimeofday;
+		applog(LOG_DEBUG, "Timers: Using gettimeofday");
+	}
+	
+#ifdef HAVE_POOR_GETTIMEOFDAY
+	char buf[64] = "";
+	struct timeval tv;
+	timer_set_now(&tv);
+	bfg_calibrate_timeofday(&tv, buf);
+	applog(LOG_DEBUG, "%s", buf);
 #endif
 }
 
@@ -1239,12 +1366,12 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.bytes_sent += ssent;
-	total_bytes_xfer += ssent;
+	total_bytes_sent += ssent;
 	pool->cgminer_pool_stats.net_bytes_sent += ssent;
 	return SEND_OK;
 }
 
-bool stratum_send(struct pool *pool, char *s, ssize_t len)
+bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force)
 {
 	enum send_ret ret = SEND_INACTIVE;
 
@@ -1252,7 +1379,7 @@ bool stratum_send(struct pool *pool, char *s, ssize_t len)
 		applog(LOG_DEBUG, "Pool %u: SEND: %s", pool->pool_no, s);
 
 	mutex_lock(&pool->stratum_lock);
-	if (pool->stratum_active)
+	if (pool->stratum_active || force)
 		ret = __stratum_send(pool, s, len);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1409,7 +1536,7 @@ char *recv_line(struct pool *pool)
 
 	pool->cgminer_pool_stats.times_received++;
 	pool->cgminer_pool_stats.bytes_received += len;
-	total_bytes_xfer += len;
+	total_bytes_rcvd += len;
 	pool->cgminer_pool_stats.net_bytes_received += len;
 
 out:
@@ -1451,7 +1578,7 @@ char *json_dumps_ANY(json_t *json, size_t flags)
 	if (!s)
 		return NULL;
 	for (i = 0; s[i] != '['; ++i)
-		if (unlikely(!(s[i] && isspace(s[i]))))
+		if (unlikely(!(s[i] && isCspace(s[i]))))
 			quit(1, "json_dumps_ANY failed to find opening bracket in array dump");
 	len = strlen(&s[++i]) - 1;
 	if (unlikely(s[i+len] != ']'))
@@ -1503,8 +1630,8 @@ void stratum_probe_transparency(struct pool *pool)
 	        pool->swork.job_id,
 	        pool->swork.job_id);
 	stratum_send(pool, s, sLen);
-	if ((!pool->swork.opaque) && pool->swork.transparency_time == (time_t)-1)
-		pool->swork.transparency_time = time(NULL);
+	if ((!pool->swork.opaque) && !timer_isset(&pool->swork.tv_transparency))
+		cgtime(&pool->swork.tv_transparency);
 	pool->swork.transparency_probed = true;
 }
 
@@ -1541,6 +1668,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 
 	cg_wlock(&pool->data_lock);
+	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
 	pool->submit_old = !clean;
@@ -1548,7 +1676,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	
 	hex2bin(&pool->swork.header1[0], bbversion,  4);
 	hex2bin(&pool->swork.header1[4], prev_hash, 32);
-	hex2bin(&pool->swork.ntime[0], ntime, 4);
+	hex2bin((void*)&pool->swork.ntime, ntime, 4);
+	pool->swork.ntime = be32toh(pool->swork.ntime);
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
 	
 	cb1_len = strlen(coinbase1) / 2;
@@ -1590,7 +1719,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 
-	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || pool->swork.transparency_time != (time_t)-1)
+	if ((merkles && (!pool->swork.transparency_probed || rand() <= RAND_MAX / (opt_skip_checks + 1))) || timer_isset(&pool->swork.tv_transparency))
 		if (pool->stratum_init)
 			stratum_probe_transparency(pool);
 
@@ -1836,10 +1965,11 @@ static bool setup_stratum_curl(struct pool *pool)
 	char curl_err_str[CURL_ERROR_SIZE];
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
+	bool ret = false;
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
-	pool->swork.transparency_time = (time_t)-1;
+	timer_unset(&pool->swork.tv_transparency);
 	pool->stratum_active = false;
 	pool->stratum_notify = false;
 	pool->swork.transparency_probed = false;
@@ -1850,7 +1980,6 @@ static bool setup_stratum_curl(struct pool *pool)
 		quit(1, "Failed to curl_easy_init in initiate_stratum");
 	if (pool->sockbuf)
 		pool->sockbuf[0] = '\0';
-	mutex_unlock(&pool->stratum_lock);
 
 	curl = pool->stratum_curl;
 
@@ -1893,23 +2022,26 @@ static bool setup_stratum_curl(struct pool *pool)
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+errout:
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
-		return false;
+		goto out;
 	}
 	if (pool->sock == INVSOCK)
 	{
-		pool->stratum_curl = NULL;
-		curl_easy_cleanup(curl);
 		applog(LOG_ERR, "Stratum connect succeeded, but technical problem extracting socket (pool %u)", pool->pool_no);
-		return false;
+		goto errout;
 	}
 	keep_sockalive(pool->sock);
 
 	pool->cgminer_pool_stats.times_sent++;
 	pool->cgminer_pool_stats.times_received++;
+	ret = true;
 
-	return true;
+out:
+	mutex_unlock(&pool->stratum_lock);
+	
+	return ret;
 }
 
 static char *get_sessionid(json_t *val)
@@ -1982,7 +2114,7 @@ resend:
 			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
 	}
 
-	if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
+	if (!_stratum_send(pool, s, strlen(s), true)) {
 		applog(LOG_DEBUG, "Failed to send s in initiate_stratum");
 		goto out;
 	}
@@ -2099,6 +2231,7 @@ bool restart_stratum(struct pool *pool)
 void dev_error(struct cgpu_info *dev, enum dev_reason reason)
 {
 	dev->device_last_not_well = time(NULL);
+	cgtime(&dev->tv_device_last_not_well);
 	dev->device_not_well_reason = reason;
 
 	switch (reason) {

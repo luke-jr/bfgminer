@@ -37,8 +37,7 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	const long cycle = opt_log_interval / 5 ? : 1;
 	
 	if (unlikely(hashes == -1)) {
-		time_t now = time(NULL);
-		if (difftime(now, cgpu->device_last_not_well) > 1.)
+		if (timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > 0)
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
 		
 		if (thr->scanhash_working && opt_restart) {
@@ -103,7 +102,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 		return (thr->work_restart ? 0 : ETIMEDOUT);
 	}
 	
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	timer_set_delay(&tv_timer, &tv_now, mstime * 1000);
 	while (true)
 	{
@@ -119,7 +118,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 				return 0;
 			notifier_read(thr->work_restart_notifier);
 		}
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 	}
 }
 
@@ -164,16 +163,16 @@ void minerloop_scanhash(struct thr_info *mythr)
 		work = get_and_prepare_work(mythr);
 		if (!work)
 			break;
-		gettimeofday(&(work->tv_work_start), NULL);
+		timer_set_now(&work->tv_work_start);
 		
 		do {
 			thread_reportin(mythr);
 			/* Only allow the mining thread to be cancelled when
 			* it is not in the driver code. */
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-			gettimeofday(&tv_start, NULL);
+			timer_set_now(&tv_start);
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
-			gettimeofday(&tv_end, NULL);
+			timer_set_now(&tv_end);
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_testcancel();
 			thread_reportin(mythr);
@@ -277,7 +276,7 @@ void job_results_fetched(struct thr_info *mythr)
 	{
 		struct timeval tv_now;
 		
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		
 		do_process_results(mythr, &tv_now, mythr->prev_work, true);
 	}
@@ -296,7 +295,7 @@ void mt_job_transition(struct thr_info *mythr)
 {
 	struct timeval tv_now;
 	
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	
 	if (mythr->starting_next_work)
 	{
@@ -315,7 +314,7 @@ void job_start_complete(struct thr_info *mythr)
 {
 	struct timeval tv_now;
 	
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	
 	do_process_results(mythr, &tv_now, mythr->prev_work, false);
 }
@@ -359,7 +358,7 @@ void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
 	int maxfd;
 	fd_set rfds;
 	
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	FD_ZERO(&rfds);
 	FD_SET(thr->notifier[0], &rfds);
 	maxfd = thr->notifier[0];
@@ -404,7 +403,7 @@ void minerloop_async(struct thr_info *mythr)
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
@@ -489,7 +488,7 @@ void minerloop_queue(struct thr_info *thr)
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
@@ -618,9 +617,11 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
+#ifdef HAVE_FPGAUTILS
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
 	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
 	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
+#endif
 	
 	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
 	devices_new[total_devices_new++] = cgpu;
@@ -669,4 +670,109 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	cgpu->last_device_valid_work = time(NULL);
 	
 	return true;
+}
+
+int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
+{
+	struct string_elist *iter, *tmp;
+	const char *dev, *colon;
+	bool inhibitauto = flags & 4;
+	char found = 0;
+	bool forceauto = flags & 1;
+	bool hasname;
+	size_t namel = strlen(api->name);
+	size_t dnamel = strlen(api->dname);
+
+#ifdef HAVE_FPGAUTILS
+	clear_detectone_meta_info();
+#endif
+	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
+		dev = iter->string;
+		if ((colon = strchr(dev, ':')) && colon[1] != '\0') {
+			size_t idlen = colon - dev;
+
+			// allow either name:device or dname:device
+			if ((idlen != namel || strncasecmp(dev, api->name, idlen))
+			&&  (idlen != dnamel || strncasecmp(dev, api->dname, idlen)))
+				continue;
+
+			dev = colon + 1;
+			hasname = true;
+		}
+		else
+			hasname = false;
+		if (!strcmp(dev, "auto"))
+			forceauto = true;
+		else if (!strcmp(dev, "noauto"))
+			inhibitauto = true;
+		else
+		if ((flags & 2) && !hasname)
+			continue;
+		else
+		if (!detectone)
+		{}  // do nothing
+#ifdef HAVE_FPGAUTILS
+		else
+		if (serial_claim(dev, NULL))
+		{
+			applog(LOG_DEBUG, "%s is already claimed... skipping probes", dev);
+			string_elist_del(&scan_devices, iter);
+		}
+#endif
+		else if (detectone(dev)) {
+			string_elist_del(&scan_devices, iter);
+			inhibitauto = true;
+			++found;
+		}
+	}
+
+	if ((forceauto || !inhibitauto) && autoscan)
+		found += autoscan();
+
+	return found;
+}
+
+static
+FILE *_open_bitstream(const char *path, const char *subdir, const char *sub2, const char *filename)
+{
+	char fullpath[PATH_MAX];
+	strcpy(fullpath, path);
+	strcat(fullpath, "/");
+	if (subdir) {
+		strcat(fullpath, subdir);
+		strcat(fullpath, "/");
+	}
+	if (sub2) {
+		strcat(fullpath, sub2);
+		strcat(fullpath, "/");
+	}
+	strcat(fullpath, filename);
+	return fopen(fullpath, "rb");
+}
+#define _open_bitstream(path, subdir, sub2)  do {  \
+	f = _open_bitstream(path, subdir, sub2, filename);  \
+	if (f)  \
+		return f;  \
+} while(0)
+
+#define _open_bitstream2(path, path3)  do {  \
+	_open_bitstream(path, NULL, path3);  \
+	_open_bitstream(path, "../share/" PACKAGE, path3);  \
+} while(0)
+
+#define _open_bitstream3(path)  do {  \
+	_open_bitstream2(path, dname);  \
+	_open_bitstream2(path, "bitstreams");  \
+	_open_bitstream2(path, NULL);  \
+} while(0)
+
+FILE *open_bitstream(const char *dname, const char *filename)
+{
+	FILE *f;
+
+	_open_bitstream3(opt_kernel_path);
+	_open_bitstream3(cgminer_path);
+	_open_bitstream3(".");
+
+	return NULL;
 }

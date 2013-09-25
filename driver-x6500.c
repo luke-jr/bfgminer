@@ -1,5 +1,6 @@
 /*
  * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -13,6 +14,7 @@
 #include <winsock2.h>
 #endif
 
+#include <limits.h>
 #include <math.h>
 #include <sys/time.h>
 
@@ -32,7 +34,7 @@
 // NOTE: X6500_BITSTREAM_USERID is bitflipped
 #define X6500_BITSTREAM_USERID "\x40\x20\x24\x42"
 #define X6500_MINIMUM_CLOCK    2
-#define X6500_DEFAULT_CLOCK  200
+#define X6500_DEFAULT_CLOCK  190
 #define X6500_MAXIMUM_CLOCK  250
 
 struct device_drv x6500_api;
@@ -200,10 +202,8 @@ struct x6500_fpga_data {
 	uint8_t freqMaxMaxM;
 
 	// Time the clock was last reduced due to temperature
-	time_t last_cutoff_reduced;
+	struct timeval tv_last_cutoff_reduced;
 
-	float temp;
-	
 	uint32_t prepwork_last_register;
 };
 
@@ -488,25 +488,27 @@ void x6500_get_temperature(struct cgpu_info *x6500)
 		if (!fpga) continue;
 
 		if (code[i] == 0xffff || !code[i]) {
-			fpga->temp = 0;
+			x6500->temp = 0;
 			continue;
 		}
 		if ((code[i] >> 15) & 1)
 			code[i] -= 0x10000;
-		fpga->temp = (float)(code[i] >> 2) * 0.03125f;
-		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",i,fpga->temp);
+		x6500->temp = (float)(code[i] >> 2) * 0.03125f;
+		applog(LOG_DEBUG,"x6500_get_temperature: fpga[%d]->temp=%.1fC",
+		       i, x6500->temp);
 
-		int temperature = round(fpga->temp);
+		int temperature = round(x6500->temp);
 		if (temperature > x6500->targettemp + opt_hysteresis) {
-			time_t now = time(NULL);
-			if (fpga->last_cutoff_reduced != now) {
-				fpga->last_cutoff_reduced = now;
+			struct timeval now;
+			cgtime(&now);
+			if (timer_elapsed(&fpga->tv_last_cutoff_reduced, &now)) {
+				fpga->tv_last_cutoff_reduced = now;
 				int oldFreq = fpga->dclk.freqM;
 				if (x6500_change_clock(thr, oldFreq - 1))
 					applog(LOG_NOTICE, "%"PRIprepr": Frequency dropped from %u to %u MHz (temp: %.1fC)",
 					       x6500->proc_repr,
 					       oldFreq * 2, fpga->dclk.freqM * 2,
-					       fpga->temp
+					       x6500->temp
 					);
 				fpga->dclk.freqMaxM = fpga->dclk.freqM;
 			}
@@ -534,7 +536,6 @@ bool x6500_all_idle(struct cgpu_info *any_proc)
 
 static bool x6500_get_stats(struct cgpu_info *x6500)
 {
-	float hottest = 0;
 	if (x6500_all_idle(x6500)) {
 		struct cgpu_info *cgpu = x6500->device;
 		// Getting temperature more efficiently while running
@@ -546,18 +547,6 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 		pthread_cond_signal(&cgpu->device_cond);
 		mutex_unlock(mutexp);
 	}
-
-	for (int i = x6500->threads; i--; ) {
-		struct thr_info *thr = x6500->thr[i];
-		struct x6500_fpga_data *fpga = thr->cgpu_data;
-		if (!fpga)
-			continue;
-		float temp = fpga->temp;
-		if (temp > hottest)
-			hottest = temp;
-	}
-
-	x6500->temp = hottest;
 
 	return true;
 }
@@ -581,8 +570,6 @@ get_x6500_api_extra_device_status(struct cgpu_info *x6500)
 	struct x6500_fpga_data *fpga = thr->cgpu_data;
 	double d;
 
-	if (fpga->temp)
-		root = api_add_temp(root, "Temperature", &fpga->temp, true);
 	d = (double)fpga->dclk.freqM * 2;
 	root = api_add_freq(root, "Frequency", &d, true);
 	d = (double)fpga->dclk.freqMaxM * 2;
@@ -637,7 +624,7 @@ void x6500_job_start(struct thr_info *thr)
 
 	ft232r_flush(jp->a->ftdi);
 
-	gettimeofday(&tv_now, NULL);
+	timer_set_now(&tv_now);
 	if (!thr->prev_work)
 		fpga->tv_hashstart = tv_now;
 	else
@@ -693,7 +680,7 @@ int64_t x6500_process_results(struct thr_info *thr, struct work *work)
 	bool bad;
 
 	while (1) {
-		gettimeofday(&tv_now, NULL);
+		timer_set_now(&tv_now);
 		nonce = x6500_get_register(jtag, 0xE);
 		if (nonce != 0xffffffff) {
 			bad = !(work && test_nonce(work, nonce, false));
@@ -743,6 +730,91 @@ void x6500_fpga_poll(struct thr_info *thr)
 		timer_set_delay_from_now(&thr->tv_poll, 10000);
 }
 
+static
+void x6500_user_set_clock(struct cgpu_info *cgpu, const int val)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	const int multiplier = val / 2;
+	fpga->dclk.freqMDefault = multiplier;
+}
+
+static
+char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
+{
+	int val;
+	
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
+		        X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+		return replybuf;
+	}
+	
+	if (strcasecmp(option, "clock") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+		
+		val = atoi(setting);
+		if (val < X6500_MINIMUM_CLOCK || val > X6500_MAXIMUM_CLOCK || (val & 1) != 0) {
+			sprintf(replybuf, "invalid clock: '%s' valid range %d-%d and a multiple of 2",
+			        setting, X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+			return replybuf;
+		}
+		
+		x6500_user_set_clock(cgpu, val);
+		
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
+#ifdef HAVE_CURSES
+static
+void x6500_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *x6500_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	static char buf[0x100];  // Static for replies
+	
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set clock speed (range %d-%d, multiple of 2)", X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid clock speed\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < X6500_MINIMUM_CLOCK || val > X6500_MAXIMUM_CLOCK || (val & 1) != 0)
+				return "Invalid clock speed\n";
+			
+			x6500_user_set_clock(cgpu, val);
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void x6500_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct x6500_fpga_data *fpga = cgpu->thr[0]->cgpu_data;
+	wlogprint("Clock speed: %d\n", (int)(fpga->dclk.freqM * 2));
+}
+#endif
+
 struct device_drv x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
@@ -752,6 +824,12 @@ struct device_drv x6500_api = {
 	.get_stats = x6500_get_stats,
 	.override_statline_temp = get_x6500_upload_percent,
 	.get_api_extra_device_status = get_x6500_api_extra_device_status,
+	.set_device = x6500_set_device,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = x6500_wlogprint_status,
+	.proc_tui_wlogprint_choices = x6500_tui_wlogprint_choices,
+	.proc_tui_handle_choice = x6500_tui_handle_choice,
+#endif
 	.poll = x6500_fpga_poll,
 	.minerloop = minerloop_async,
 	.job_prepare = x6500_job_prepare,

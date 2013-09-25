@@ -327,7 +327,7 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[M]anage devices [P]ool management [S]ettings [D]isplay options [Q]uit
+[M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit
 
 M gives you something like:
 
@@ -392,31 +392,6 @@ dedicated to this program,
 	https://bitcointalk.org/?topic=78192
 	https://bitcointalk.org/?topic=168174
 
-The output line shows the following:
- 5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729 R:8+0(.01%) HW:0/.81%
-
-Each column is as follows:
-5s:  A 5 second exponentially decaying average hash rate
-avg: An all time average hash rate
-u:   An all time average hash rate based on actual accepted shares
-A:   The number of Accepted shares
-R:   The number of Rejected shares, stale shares discarded (never submitted),
-     and the percentage these are of total found.
-HW:  The number of HardWare errors, and percentage invalid of nonces returned
-
-The BFGMiner status line shows:
- ST: 1  GF: 1  NB: 1  AS: 0  RF: 1  E: 2.42  U:22.53/m  BS:2.71k
-
-ST is STaged work items (ready to use).
-GF is Getwork Fail Occasions (server slow to provide work)
-NB is New Blocks detected on the network
-AS is Active Submissions (shares in the process of submitting)
-RF is Remote Fail occasions (server slow to accept work)
-E  is Efficiency defined as number of shares accepted (multiplied by their
-          difficulty) per 2 KB of bandwidth
-U  is Utility defined as the number of shares / minute
-BS is the all time Best Share difficulty you've found
-
 The block display shows:
 Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
 
@@ -424,17 +399,37 @@ This shows a short stretch of the current block, the next block's height and
 difficulty (including the network hashrate that difficulty represents), and when
 the search for the new block started.
 
+The BFGMiner status line shows:
+ ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  U:22.53/m  BS:2.71k
+
+ST is STaged work items (ready to use).
+F  is network Failure occasions (server down or slow to provide work)
+NB is New Blocks detected on the network
+AS is Active Submissions (shares in the process of submitting)
+BW is BandWidth usage on the network
+E  is Efficiency defined as number of shares accepted (multiplied by their
+          difficulty) per 2 KB of bandwidth
+U  is Utility defined as the number of shares / minute
+BS is the all time Best Share difficulty you've found
+
+The totals line shows the following:
+ 6/32   75.0C | 171.3/170.8/171.2Gh/s | A:729 R:8+0(.01%) HW:0/.81%
+
+Each column is as follows:
+  The number of devices and processors currently mining
+  Hottest temperature reported by any processor
+  5 second exponentially decaying average hash rate
+  An all time average hash rate
+  An all time average hash rate based on actual accepted shares
+  The number of Accepted shares
+  The number of Rejected shares and stale shares discarded (never submitted),
+      and the percentage these are of total found.
+  The number of HardWare errors, and percentage invalid of nonces returned
+
 Each device shows:
  BFL 2: 74.0C | 51.97/58.90/57.17Gh/s | A:847 R:15+0(.54%) HW:496/.91%
 
-Column are as follows:
-Temperature (if supported)
-5 second exponentially decaying average hash rate
-An all time average hash rate
-An all time average hash rate based on actual accepted shares
-The number of accepted shares
-The number of rejected plus discarded shares (and percentage of total submitted)
-The number of hardware errors and percentage of nonces invalid
+Columns are the same as in the totals line.
 
 
 ---
@@ -694,13 +689,15 @@ performance per unit power due to being dedicated to only one purpose.
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only
 thing that needs to be done is to load the driver for them:
-BFL: sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
-Icarus: sudo modprobe pl2303 vendor=0x067b product=0x230
-Lancelot: sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
-Cairnsmore: sudo modprobe ftdi_sio product=0x8350 vendor=0x0403
-On windows you must install the pl2303 or ftdi driver required for the device
-pl2303: http://prolificusa.com/pl-2303hx-drivers/
-ftdi: http://www.ftdichip.com/Drivers/VCP.htm
+  BitForce:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+  Erupter:    sudo modprobe cp210x   vendor=0x10c4 product=0xea60
+  Icarus:     sudo modprobe pl2303   vendor=0x067b product=0x0230
+  Lancelot:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
+  Cairnsmore: sudo modprobe ftdi_sio vendor=0x0403 product=0x8350
+On Windows, you must install the driver required for the device:
+  FTDI:       http://www.ftdichip.com/Drivers/VCP.htm
+  Erupter:    http://www.silabs.com/products/mcu/pages/usbtouartbridgevcpdrivers.aspx
+  Icarus:     http://prolificusa.com/pl-2303hx-drivers/
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them
@@ -716,6 +713,12 @@ Then logout and back in again
 
 Q: Can I mine scrypt with FPGAs or ASICs?
 A: No.
+
+Q: Why does BFGMiner show difficulty 0 when mining scrypt?
+A: BFGMiner consistently uses pdiff measurement for difficulty everywhere,
+rather than other measurements that may exist. For scrypt, pdiff 1 is very
+difficult, and higher get exponentially harder. It is unlikely you will want to
+use pdiff 1+ with scrypt until you have FPGAs and/or ASICs for it.
 
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed to reduce resources for mining pools at the

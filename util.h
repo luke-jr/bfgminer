@@ -13,10 +13,15 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
+#include <sys/time.h>
+
 #include <curl/curl.h>
 #include <jansson.h>
 
 #include "compat.h"
+
+#define INVALID_TIMESTAMP ((time_t)-1)
 
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
@@ -69,6 +74,18 @@
 #endif
 extern char *json_dumps_ANY(json_t *, size_t flags);
 
+static inline
+bool isCspace(int c)
+{
+	switch (c)
+	{
+		case ' ': case '\f': case '\n': case '\r': case '\t': case '\v':
+			return true;
+		default:
+			return false;
+	}
+}
+
 struct thr_info;
 struct pool;
 enum dev_reason;
@@ -90,7 +107,6 @@ void thr_info_freeze(struct thr_info *thr);
 void thr_info_cancel(struct thr_info *thr);
 void nmsleep(unsigned int msecs);
 void nusleep(unsigned int usecs);
-void cgtime(struct timeval *tv);
 void subtime(struct timeval *a, struct timeval *b);
 void addtime(struct timeval *a, struct timeval *b);
 bool time_more(struct timeval *a, struct timeval *b);
@@ -98,7 +114,8 @@ bool time_less(struct timeval *a, struct timeval *b);
 void copy_time(struct timeval *dest, const struct timeval *src);
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
-bool stratum_send(struct pool *pool, char *s, ssize_t len);
+bool _stratum_send(struct pool *pool, char *s, ssize_t len, bool force);
+#define stratum_send(pool, s, len)  _stratum_send(pool, s, len, false)
 bool sock_full(struct pool *pool);
 char *recv_line(struct pool *pool);
 bool parse_method(struct pool *pool, char *s);
@@ -209,6 +226,22 @@ void set_maxfd(int *p_maxfd, int fd)
 }
 
 
+static inline
+void timer_unset(struct timeval *tvp)
+{
+	tvp->tv_sec = -1;
+}
+
+static inline
+bool timer_isset(const struct timeval *tvp)
+{
+	return tvp->tv_sec != -1;
+}
+
+extern void (*timer_set_now)(struct timeval *);
+extern void bfg_init_time();
+#define cgtime(tvp)  timer_set_now(tvp)
+
 #define TIMEVAL_USECS(usecs)  (  \
 	(struct timeval){  \
 		.tv_sec = (usecs) / 1000000,  \
@@ -223,29 +256,63 @@ void set_maxfd(int *p_maxfd, int fd)
 
 #define timer_set_delay_from_now(tvp_timer, usecs)  do {  \
 	struct timeval tv_now;  \
-	gettimeofday(&tv_now, NULL);  \
+	timer_set_now(&tv_now);  \
 	timer_set_delay(tvp_timer, &tv_now, usecs);  \
 } while(0)
 
 static inline
-bool timer_passed(struct timeval *tvp_timer, struct timeval *tvp_now)
+const struct timeval *_bfg_nullisnow(const struct timeval *tvp, struct timeval *tvp_buf)
 {
-	return (tvp_timer->tv_sec != -1 && timercmp(tvp_timer, tvp_now, <));
+	if (tvp)
+		return tvp;
+	cgtime(tvp_buf);
+	return tvp_buf;
 }
+
+static inline
+int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(_tvp_now, tvp_timer, &tv);
+	return tv.tv_sec;
+}
+
+static inline
+bool timer_passed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	if (!timer_isset(tvp_timer))
+		return false;
+	
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	
+	return timercmp(tvp_timer, _tvp_now, <);
+}
+
+#if defined(WIN32) && !defined(HAVE_POOR_GETTIMEOFDAY)
+#define HAVE_POOR_GETTIMEOFDAY
+#endif
+
+#ifdef HAVE_POOR_GETTIMEOFDAY
+extern void bfg_gettimeofday(struct timeval *);
+#else
+#define bfg_gettimeofday(out)  gettimeofday(out, NULL)
+#endif
 
 static inline
 void reduce_timeout_to(struct timeval *tvp_timeout, struct timeval *tvp_time)
 {
-	if (tvp_time->tv_sec == -1)
+	if (!timer_isset(tvp_time))
 		return;
-	if (tvp_timeout->tv_sec == -1 /* no timeout */ || timercmp(tvp_time, tvp_timeout, <))
+	if ((!timer_isset(tvp_timeout)) || timercmp(tvp_time, tvp_timeout, <))
 		*tvp_timeout = *tvp_time;
 }
 
 static inline
 struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_now)
 {
-	if (tvp_timeout->tv_sec == -1)
+	if (!timer_isset(tvp_timeout))
 		return NULL;
 	
 	if (timercmp(tvp_timeout, tvp_now, <))

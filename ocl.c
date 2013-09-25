@@ -33,8 +33,8 @@
 
 #define OMIT_OPENCL_API
 
+#include "deviceapi.h"
 #include "findnonce.h"
-#include "fpgautils.h"
 #include "ocl.h"
 
 /* Platform API */
