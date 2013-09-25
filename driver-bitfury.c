@@ -17,18 +17,6 @@
 #define BF1WAIT 1600
 struct device_drv bitfury_drv;
 
-static void bitfury_open(struct cgpu_info *bitfury)
-{
-	/* Magic open sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
-}
-
-static void bitfury_close(struct cgpu_info *bitfury)
-{
-	/* Magic close sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_CLOSE);
-}
-
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 {
 	char buf[512];
@@ -39,6 +27,19 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
+static void bitfury_open(struct cgpu_info *bitfury)
+{
+	/* Magic open sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
+}
+
+static void bitfury_close(struct cgpu_info *bitfury)
+{
+	bitfury_empty_buffer(bitfury);
+	/* Magic close sequence */
+	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_CLOSE);
+}
+
 static void bitfury_identify(struct cgpu_info *bitfury)
 {
 	int amount;
@@ -46,12 +47,51 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 	usb_write(bitfury, "L", 1, &amount, C_PING);
 }
 
+static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
+{
+	char buf[512];
+	int amount;
+
+	usb_write(bitfury, "I", 1, &amount, C_BF1_REQINFO);
+	usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
+	if (amount != 14) {
+		applog(LOG_INFO, "%s%d: Getinfo received %d bytes",
+		       bitfury->drv->name, bitfury->device_id, amount);
+		return false;
+	}
+	info->version = buf[1];
+	memcpy(&info->product, buf + 2, 8);
+	memcpy(&info->serial, buf + 10, 4);
+
+	applog(LOG_INFO, "%s%d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
+	       bitfury->device_id, info->version, info->product, info->serial);
+	bitfury_empty_buffer(bitfury);
+	return true;
+}
+
+static bool bitfury_reset(struct cgpu_info *bitfury)
+{
+	char buf[512];
+	int amount;
+
+	usb_write(bitfury, "R", 1, &amount, C_BF1_REQRESET);
+	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
+
+	if (amount != 7) {
+		applog(LOG_INFO, "%s%d: Getreset received %d bytes",
+		       bitfury->drv->name, bitfury->device_id, amount);
+		return false;
+	}
+	applog(LOG_INFO, "%s%d: Getreset returned %s", bitfury->drv->name,
+	       bitfury->device_id, buf);
+	bitfury_empty_buffer(bitfury);
+	return true;
+}
+
 static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *bitfury;
 	struct bitfury_info *info;
-	char buf[512];
-	int amount;
 
 	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
 
@@ -73,39 +113,19 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	bitfury_open(bitfury);
 
 	/* Send getinfo request */
-	usb_write(bitfury, "I", 1, &amount, C_BF1_REQINFO);
-	usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
-	if (amount != 14) {
-		applog(LOG_WARNING, "%s%d: Getinfo received %d bytes",
-		       bitfury->drv->name, bitfury->device_id, amount);
+	if (!bitfury_getinfo(bitfury, info))
 		goto out_close;
-	}
-	info->version = buf[1];
-	memcpy(&info->product, buf + 2, 8);
-	memcpy(&info->serial, buf + 10, 4);
-
-	applog(LOG_INFO, "%s%d: Getinfo returned version %d, product %s serial %08x", bitfury->drv->name,
-	       bitfury->device_id, info->version, info->product, info->serial);
-	bitfury_empty_buffer(bitfury);
 
 	/* Send reset request */
-	usb_write(bitfury, "R", 1, &amount, C_BF1_REQRESET);
-	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
-
-	if (amount != 7) {
-		applog(LOG_WARNING, "%s%d: Getreset received %d bytes",
-		       bitfury->drv->name, bitfury->device_id, amount);
+	if (!bitfury_reset(bitfury))
 		goto out_close;
-	}
-	applog(LOG_INFO, "%s%d: Getreset returned %s", bitfury->drv->name,
-	       bitfury->device_id, buf);
-	bitfury_empty_buffer(bitfury);
 
 	bitfury_identify(bitfury);
 	bitfury_empty_buffer(bitfury);
 
 	if (!add_cgpu(bitfury))
 		goto out_close;
+
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s%d: Found at %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
@@ -241,11 +261,14 @@ static struct api_data *bitfury_api_stats(struct cgpu_info __maybe_unused *cgpu)
 	return NULL;
 }
 
-static void bitfury_init(struct cgpu_info __maybe_unused *bitfury)
+static void bitfury_init(struct cgpu_info  *bitfury)
 {
+	bitfury_close(bitfury);
+	bitfury_open(bitfury);
+	bitfury_reset(bitfury);
 }
 
-static void bitfury_shutdown(struct thr_info __maybe_unused *thr)
+static void bitfury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 
