@@ -35,9 +35,8 @@ struct bigpic_info
 	uint32_t baud;
 
 	struct bigpic_identity id;
-	struct work *work;
-	struct work *prev_work[2];
 
+	char tx_buffer[45];
 	char rx_buffer[1024];
 	uint32_t rx_len;
 };

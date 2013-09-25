@@ -148,9 +148,7 @@ static bool bigpic_init(struct thr_info *thr)
 	gettimeofday(&tv_now, NULL);
 	timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
 
-	info->work = 0;
-	info->prev_work[0] = 0;
-	info->prev_work[1] = 0;
+	info->tx_buffer[0] = 'W';
 
 	return true;
 }
@@ -211,29 +209,35 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 	}
 }
 
-//------------------------------------------------------------------------------
-static int64_t bigpic_scanwork(struct thr_info *thr)
+static
+bool bigpic_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *board = thr->cgpu;
 	struct bigpic_info *info = (struct bigpic_info *)board->device_data;
+	
+	memcpy(&info->tx_buffer[ 1], work->midstate, 32);
+	memcpy(&info->tx_buffer[33], &work->data[64], 12);
+	
+	work->blk.nonce = 0xffffffff;
+	return true;
+}
 
-	uint32_t hashes = 0;
-
-	if(!info->work)
+static
+void bigpic_job_start(struct thr_info *thr)
+{
+	struct cgpu_info *board = thr->cgpu;
+	struct bigpic_info *info = (struct bigpic_info *)board->device_data;
+	
+	if (opt_dev_protocol && opt_debug)
 	{
-		info->work = get_queued(board);
-		if(info->work == NULL)
-			return 0;
+		char hex[91];
+		bin2hex(hex, info->tx_buffer, 45);
+		applog(LOG_DEBUG, "%"PRIpreprv": SEND: %s",
+		       board->proc_repr, hex);
 	}
-
-	uint8_t sendbuf[45];
-	sendbuf[0] = 'W';
-	memcpy(sendbuf + 1, info->work->midstate, 32);
-	memcpy(sendbuf + 33, info->work->data + 64, 12);
-	write(board->device_fd, sendbuf, sizeof(sendbuf));
-
-	applog(LOG_DEBUG, "%"PRIpreprv": Work Task sending: %d",
-	       board->proc_repr, info->work->id);
+	
+	write(board->device_fd, info->tx_buffer, 45);
+	
 	while(1)
 	{
 		uint8_t buffer[7];
@@ -242,8 +246,9 @@ static int64_t bigpic_scanwork(struct thr_info *thr)
 		if(len > 0)
 			break;
 	}
-
+	
 	applog(LOG_DEBUG, "%"PRIpreprv": Work Task sent", board->proc_repr);
+	
 	while(1)
 	{
 		info->rx_len = serial_read(board->device_fd, info->rx_buffer, sizeof(info->rx_buffer));
@@ -254,45 +259,20 @@ static int64_t bigpic_scanwork(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Nonces sent back: %d",
 	       board->proc_repr, info->rx_len / 7);
-/*
-	if(info->prev_work[1])
-	{
-		applog(LOG_DEBUG, "%"PRIpreprv": PREV[1]", board->proc_repr);
-		bigpic_process_results(thr, info->prev_work[1]);
-		work_completed(board, info->prev_work[1]);
-		info->prev_work[1] = 0;
-	}
-*/
-	if(info->prev_work[0])
-	{
-		applog(LOG_DEBUG, "%"PRIpreprv": PREV[0]", board->proc_repr);
-		bigpic_process_results(thr, info->prev_work[0]);
-	}
-	info->prev_work[1] = info->prev_work[0];
-	info->prev_work[0] = info->work;
-	info->work = 0;
-
-	//hashes = 0xffffffff;
-	hashes = 0xBD000000;
-	applog(LOG_DEBUG, "%"PRIpreprv": WORK completed", board->proc_repr);
-
-	return hashes;
+	
+	mt_job_transition(thr);
+	// TODO: Delay morework until right before it's needed
+	timer_set_now(&thr->tv_morework);
+	job_start_complete(thr);
 }
 
-//------------------------------------------------------------------------------
-static void bigpic_poll(struct thr_info *thr)
+static
+int64_t bigpic_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
 {
-/*
-	struct cgpu_info *board = thr->cgpu;
-	uint8_t rx_buf[128];
-	int len = 0;
-	len = serial_read(board->device_fd, rx_buf, sizeof(rx_buf));
-
-	applog(LOG_DEBUG, "%"PRIpreprv": POLL: serial read: %d", board->proc_repr, len);
-*/
-	struct timeval tv_now;
-	gettimeofday(&tv_now, NULL);
-	timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
+	// FIXME: not sure how to handle stopping
+	bigpic_process_results(thr, work);
+	
+	return 0xBD000000;
 }
 
 //------------------------------------------------------------------------------
@@ -316,16 +296,17 @@ static bool bigpic_identify(struct cgpu_info *cgpu)
 struct device_drv bigpic_drv = {
 	.dname = "bigpic",
 	.name = "BPM",
-	.minerloop = hash_queued_work,
 
 	.drv_detect = bigpic_detect,
 
 	.identify_device = bigpic_identify,
 
 	.thread_init = bigpic_init,
+	
+	.minerloop = minerloop_async,
+	.job_prepare = bigpic_job_prepare,
+	.job_start = bigpic_job_start,
+	.job_process_results = bigpic_job_process_results,
+	
 	.thread_shutdown = bigpic_shutdown,
-
-	.poll = bigpic_poll,
-
-	.scanwork = bigpic_scanwork,
 };
