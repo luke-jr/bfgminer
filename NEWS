@@ -1,3 +1,53 @@
+BFGMiner Version 3.1.1 - June 22, 2013
+- stratum: Deliver exact socket-error within the debug error message
+- Don't install docs for (compile-time) disabled functionality
+- Bugfix: Handle make dependencies on subdirectory files properly
+- Bugfix: Use EXTRA_*_DEPENDENCIES for Cygwin workaround, to fix program make
+dependencies
+- Support new overclocking speeds for avalon: 325, 350 and 375
+- Bugfix: logging: Since we are inlining snprintf, stdio.h is needed
+- Bugfix: serial_autodetect_ftdi: Debuglog FTDI COM port mappings returned, fix
+type of FT_HANDLE
+- Bugfix: Allow starting non-libusb devices if libusb_init fails
+- Bugfix: Add missing newline to libusb_init failure message
+- Bugfix: opencl: Remove unnecessary casts from rot() macro, which created type
+issues
+- Bugfix: Remove unused variables
+- Suspend stratum connections when we know they've failed and don't try to recv
+data from them once the socket no longer exists.
+- applog/quit fix GPU errors created
+- logging remove extra added <LF>
+- remove varargs from logging/quit/in general as much as possible
+- compile unix code on Mac OS X fixes not finding the config file in $HOME
+- Create a pool_localgen bool function for testing when a pool can generate work
+locally.
+- Use mining start time for device MH/U calculations
+- Bugfix: Save start time for stats to correct "Elapsed" key on "stats" RPC
+request
+- modminer: tidy up free in device detect function
+- bitforce: RPC pgaset fanmode 9 for auto fan control
+- Bugfix: usbtest: Correct obvious typos
+- Initial import of usbtest.py script
+- Include microseconds in log output with new --log-microseconds option
+- bitforce: Workaround chip ids not necessarily being in order by choosing
+processor count based on expected chip ids rather than parallelization
+- serial_autodetect_ftdi: Debuglog FTDI COM port mappings returned
+- Bugfix: On stratum disconnect, clear stratum_active and stratum_notify
+atomically along with sock
+- Windows: Use backtrace.dll to print usable backtraces to stderr on crash
+- Bugfix: bitforce: parallelized: Properly handle parallelized protocol with
+only 1 chip
+- Bugfix: bitforce: XLINK: Increment boardno when moving on to the next board
+- bitforce: XLINK: Update to use actual length,xlinkid header order
+- Bugfix: bitforce: XLINK: Avoid trying to send 0 bytes after each write
+- Bugfix: opencl: Build fpgautils even if OpenCL is the only driver, now that it
+uses it for kernel-finding
+- Bugfix: Do not try to call get_stats or get_statline* if device is still
+initializing
+- Bugfix: opencl: Add missing include for fpgautils.h (needed for
+open_bitstream)
+
+
 BFGMiner Version 3.1.0 - June 13, 2013
 - Bugfix: openwrt: Expect fixed bitstream path for input
 - Improve Makefile organization and fix "make install"

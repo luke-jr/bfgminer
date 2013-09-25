@@ -34,6 +34,7 @@
 #define OMIT_OPENCL_API
 
 #include "findnonce.h"
+#include "fpgautils.h"
 #include "ocl.h"
 
 /* Platform API */

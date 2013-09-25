@@ -69,7 +69,7 @@
 #include "ft232r.h"
 #endif
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
 	#include <fcntl.h>
 	#include <sys/wait.h>
@@ -170,6 +170,11 @@ int num_processors;
 bool use_curses = true;
 #else
 bool use_curses;
+#endif
+#ifdef HAVE_LIBUSB
+bool have_libusb = true;
+#else
+const bool have_libusb;
 #endif
 static bool opt_submit_stale = true;
 static int opt_shares;
@@ -324,7 +329,7 @@ static int include_count;
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
 	static int forkpid;
 #endif // defined(unix)
@@ -408,13 +413,16 @@ void get_timestamp(char *f, struct timeval *tv)
 
 static void applog_and_exit(const char *fmt, ...) FORMAT_SYNTAX_CHECK(printf, 1, 2);
 
+static char exit_buf[512];
+
 static void applog_and_exit(const char *fmt, ...)
 {
 	va_list ap;
 
 	va_start(ap, fmt);
-	vapplog(LOG_ERR, fmt, ap);
+	vsnprintf(exit_buf, sizeof(exit_buf), fmt, ap);
 	va_end(ap);
+	_applog(LOG_ERR, exit_buf);
 	exit(1);
 }
 
@@ -513,6 +521,8 @@ struct pool *add_pool(void)
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
+	
+	cgtime(&pool->cgminer_stats.start_tv);
 
 	pool->rpc_proxy = NULL;
 
@@ -1371,7 +1381,10 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
-#if defined(unix)
+	OPT_WITHOUT_ARG("--log-microseconds",
+	                opt_set_bool, &opt_log_microseconds,
+	                "Include microseconds in log output"),
+#if defined(unix) || defined(__APPLE__)
 	OPT_WITH_ARG("--monitor|-m",
 		     opt_set_charp, NULL, &opt_stderr_cmd,
 		     "Use custom pipe cmd for output messages"),
@@ -2068,6 +2081,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	return ret;
 }
 
+/* Returns whether the pool supports local work generation or not. */
+static bool pool_localgen(struct pool *pool)
+{
+	return (pool->last_work_copy || pool->has_stratum);
+}
+
 int dev_from_id(int thr_id)
 {
 	struct cgpu_info *cgpu = get_thr_cgpu(thr_id);
@@ -2183,6 +2202,30 @@ void tailsprintf(char *f, const char *fmt, ...)
 	va_start(ap, fmt);
 	vsprintf(f + strlen(f), fmt, ap);
 	va_end(ap);
+}
+
+double stats_elapsed(struct cgminer_stats *stats)
+{
+	struct timeval now;
+	double elapsed;
+
+	if (stats->start_tv.tv_sec == 0)
+		elapsed = total_secs;
+	else {
+		cgtime(&now);
+		elapsed = tdiff(&now, &stats->start_tv);
+	}
+
+	if (elapsed < 1.0)
+		elapsed = 1.0;
+
+	return elapsed;
+}
+
+double cgpu_utility(struct cgpu_info *cgpu)
+{
+	double dev_runtime = cgpu_runtime(cgpu);
+	return cgpu->utility = cgpu->accepted / dev_runtime * 60;
 }
 
 /* Convert a uint64_t value into a truncated string for displaying with its
@@ -2354,12 +2397,14 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
 	char rejpcbuf[6];
+	double dev_runtime;
 	
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
 	
-	cgpu->utility = cgpu->accepted / total_secs * 60;
-	cgpu->utility_diff1 = cgpu->diff_accepted / total_secs * 60;
+	dev_runtime = cgpu_runtime(cgpu);
+	cgpu_utility(cgpu);
+	cgpu->utility_diff1 = cgpu->diff_accepted / dev_runtime * 60;
 	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
@@ -2374,8 +2419,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
 		{
-			slave->utility = slave->accepted / total_secs * 60;
-			slave->utility_diff1 = slave->diff_accepted / total_secs * 60;
+			slave->utility = slave->accepted / dev_runtime * 60;
+			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
 			rolling += slave->rolling;
 			mhashes += slave->total_mhashes;
@@ -2391,7 +2436,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	ti_hashrate_bufstr(
 		(char*[]){cHr, aHr, uHr},
 		1e6*rolling,
-		1e6*mhashes / total_secs,
+		1e6*mhashes / dev_runtime,
 		utility_to_hashrate(wutil),
 		hashrate_style);
 
@@ -2407,6 +2452,12 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	else
 #endif
 		sprintf(buf, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
+	
+	if (unlikely(cgpu->status == LIFE_INIT))
+	{
+		tailsprintf(buf, "Initializing...");
+		return;
+	}
 	
 	if (drv->get_dev_statline_before || drv->get_statline_before)
 	{
@@ -2697,31 +2748,23 @@ static void switch_logsize(void)
 }
 
 /* For mandatory printing when mutex is already locked */
-void wlog(const char *f, ...)
+void _wlog(const char *str)
 {
-	va_list ap;
-
-	va_start(ap, f);
-	vw_printw(logwin, f, ap);
-	va_end(ap);
+	wprintw(logwin, "%s", str);
 }
 
 /* Mandatory printing */
-void wlogprint(const char *f, ...)
+void _wlogprint(const char *str)
 {
-	va_list ap;
-
 	if (curses_active_locked()) {
-		va_start(ap, f);
-		vw_printw(logwin, f, ap);
-		va_end(ap);
+		wprintw(logwin, "%s", str);
 		unlock_curses();
 	}
 }
 #endif
 
 #ifdef HAVE_CURSES
-bool log_curses_only(int prio, const char *f, va_list ap)
+bool log_curses_only(int prio, const char *datetime, const char *str)
 {
 	bool high_prio;
 
@@ -2729,7 +2772,7 @@ bool log_curses_only(int prio, const char *f, va_list ap)
 
 	if (curses_active_locked()) {
 		if (!opt_loginput || high_prio) {
-			vw_printw(logwin, f, ap);
+			wprintw(logwin, "%s%s\n", datetime, str);
 			if (high_prio) {
 				touchwin(logwin);
 				wrefresh(logwin);
@@ -3558,8 +3601,6 @@ static void __kill_work(void)
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
-		pthread_t *pth = NULL;
-		
 		thr = get_thread(i);
 		if (!(thr && thr->cgpu->threads))
 			continue;
@@ -3604,7 +3645,7 @@ void app_restart(void)
 	__kill_work();
 	clean_up();
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
 		forkpid = 0;
@@ -4615,7 +4656,7 @@ void switch_pools(struct pool *selected)
 		pool->block_id = 0;
 		if (pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
 			applog(LOG_WARNING, "Switching to pool %d %s", pool->pool_no, pool->rpc_url);
-			if (pool->last_work_copy || pool->has_stratum || opt_fail_only)
+			if (pool_localgen(pool) || opt_fail_only)
 				clear_pool_work(last_pool);
 		}
 	}
@@ -5242,7 +5283,7 @@ void write_config(FILE *fcfg)
 		fputs(",\n\"round-robin\" : true", fcfg);
 	if (pool_strategy == POOL_ROTATE)
 		fprintf(fcfg, ",\n\"rotate\" : \"%d\"", opt_rotate_period);
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (opt_stderr_cmd && *opt_stderr_cmd)
 		fprintf(fcfg, ",\n\"monitor\" : \"%s\"", json_escape(opt_stderr_cmd));
 #endif // defined(unix)
@@ -5367,6 +5408,7 @@ void zero_stats(void)
 		pool->diff_rejected = 0;
 		pool->diff_stale = 0;
 		pool->last_share_diff = 0;
+		pool->cgminer_stats.start_tv = total_tv_start;
 		pool->cgminer_stats.getwork_calls = 0;
 		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		pool->cgminer_stats.getwork_wait_max.tv_sec = 0;
@@ -5416,6 +5458,7 @@ void zero_stats(void)
 		cgpu->dev_thermal_cutoff_count = 0;
 		cgpu->dev_comms_error_count = 0;
 		cgpu->dev_throttle_count = 0;
+		cgpu->cgminer_stats.start_tv = total_tv_start;
 		cgpu->cgminer_stats.getwork_calls = 0;
 		cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 		cgpu->cgminer_stats.getwork_wait_max.tv_sec = 0;
@@ -5735,7 +5778,7 @@ retry:
 
 void default_save_file(char *filename)
 {
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (getenv("HOME") && *getenv("HOME")) {
 	        strcpy(filename, getenv("HOME"));
 		strcat(filename, "/");
@@ -6358,7 +6401,7 @@ static bool cnx_needed(struct pool *pool)
 	cp = current_pool();
 	if (cp == pool)
 		return true;
-	if (!cp->has_stratum && (!opt_fail_only || !cp->hdr_path))
+	if (!pool_localgen(cp) && (!opt_fail_only || !cp->hdr_path))
 		return true;
 
 	/* Keep the connection open to allow any stray shares to be submitted
@@ -6468,7 +6511,10 @@ static void *stratum_thread(void *userdata)
 			pool->getfail_occasions++;
 			total_go++;
 
+			mutex_lock(&pool->stratum_lock);
+			pool->stratum_active = pool->stratum_notify = false;
 			pool->sock = INVSOCK;
+			mutex_unlock(&pool->stratum_lock);
 
 			/* If the socket to our stratum pool disconnects, all
 			 * submissions need to be discarded or resent. */
@@ -7897,7 +7943,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->drv->get_stats)
+			if (cgpu->drv->get_stats && likely(cgpu->status != LIFE_INIT))
 			  cgpu->drv->get_stats(cgpu);
 
 			gpu = cgpu->device_id;
@@ -8125,6 +8171,7 @@ static void clean_up(void)
 	clear_adl(nDevs);
 #endif
 #ifdef HAVE_LIBUSB
+	if (likely(have_libusb))
         libusb_exit(NULL);
 #endif
 
@@ -8141,30 +8188,20 @@ static void clean_up(void)
 	curl_global_cleanup();
 }
 
-void quit(int status, const char *format, ...)
+void _quit(int status)
 {
-	va_list ap;
-
 	clean_up();
-
-	if (format) {
-		va_start(ap, format);
-		vfprintf(stderr, format, ap);
-		va_end(ap);
-	}
-	fprintf(stderr, "\n");
-	fflush(stderr);
 
 	if (status) {
 		const char *ev = getenv("__BFGMINER_SEGFAULT_ERRQUIT");
 		if (unlikely(ev && ev[0] && ev[0] != '0')) {
-			const char **p = NULL;
+			int *p = NULL;
 			// NOTE debugger can bypass with: p = &p
-			*p = format;  // Segfault, hopefully dumping core
+			*p = status;  // Segfault, hopefully dumping core
 		}
 	}
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
 		kill(forkpid, SIGTERM);
 		forkpid = 0;
@@ -8303,7 +8340,7 @@ out:
 }
 #endif
 
-#if defined(unix)
+#if defined(unix) || defined(__APPLE__)
 static void fork_monitor()
 {
 	// Make a pipe: [readFD, writeFD]
@@ -8547,6 +8584,10 @@ int main(int argc, char *argv[])
 	int i, j;
 	char *s;
 
+#ifdef WIN32
+	LoadLibrary("backtrace.dll");
+#endif
+
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
 #ifndef HAVE_PTHREAD_CANCEL
@@ -8566,9 +8607,8 @@ int main(int argc, char *argv[])
 #ifdef HAVE_LIBUSB
 	int err = libusb_init(NULL);
 	if (err) {
-		fprintf(stderr, "libusb_init() failed err %d", err);
-		fflush(stderr);
-		quit(1, "libusb_init() failed");
+		applog(LOG_WARNING, "libusb_init() failed err %d", err);
+		have_libusb = false;
 	}
 #endif
 
@@ -8690,7 +8730,8 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef USE_X6500
-	ft232r_scan();
+	if (likely(have_libusb))
+		ft232r_scan();
 #endif
 
 #ifdef HAVE_CURSES
@@ -8801,12 +8842,12 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_X6500
-	if (!opt_scrypt)
+	if (likely(have_libusb) && !opt_scrypt)
 		x6500_api.drv_detect();
 #endif
 
 #ifdef USE_ZTEX
-	if (!opt_scrypt)
+	if (likely(have_libusb) && !opt_scrypt)
 		ztex_drv.drv_detect();
 #endif
 
@@ -8822,7 +8863,8 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef USE_X6500
-	ft232r_scan_free();
+	if (likely(have_libusb))
+		ft232r_scan_free();
 #endif
 
 	for (i = 0; i < total_devices; ++i)
@@ -8923,7 +8965,7 @@ int main(int argc, char *argv[])
 		openlog(PACKAGE, LOG_PID, LOG_USER);
 #endif
 
-	#if defined(unix)
+	#if defined(unix) || defined(__APPLE__)
 		if (opt_stderr_cmd)
 			fork_monitor();
 	#endif // defined(unix)
@@ -9172,13 +9214,13 @@ begin_bench:
 
 		/* If the primary pool is a getwork pool and cannot roll work,
 		 * try to stage one extra work per mining thread */
-		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !staged_rollable)
+		if (!pool_localgen(cp) && !staged_rollable)
 			max_staged += mining_threads;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
 
-		if (!cp->has_stratum && cp->proto != PLP_GETBLOCKTEMPLATE && !ts && !opt_fail_only)
+		if (!pool_localgen(cp) && !ts && !opt_fail_only)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */

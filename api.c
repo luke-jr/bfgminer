@@ -124,7 +124,6 @@ char *WSAErrorMsg(void) {
 #endif
 
 static const char *UNAVAILABLE = " - API will not be available";
-static const char *INVAPIGROUPS = "Invalid --api-groups parameter";
 
 static const char *BLANK = "";
 static const char *COMMA = ",";
@@ -1488,7 +1487,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	char buf[TMPBUFSIZ];
 	int n = 0, i;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu_utility(cgpu);
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -1522,7 +1521,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	char buf[TMPBUFSIZ];
 	int n = 0, i;
 
-	cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
+	cgpu_utility(cgpu);
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
@@ -1539,7 +1538,7 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_string(root, "Status", status2str(cgpu->status), false);
 	if (cgpu->temp)
 		root = api_add_temp(root, "Temperature", &cgpu->temp, false);
-	double mhs = cgpu->total_mhashes / total_secs;
+	double mhs = cgpu->total_mhashes / cgpu_runtime(cgpu);
 	root = api_add_mhs(root, "MHS av", &mhs, false);
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
@@ -2771,10 +2770,12 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
+	double elapsed;
 
 	root = api_add_int(root, "STATS", &i, false);
 	root = api_add_string(root, "ID", id, false);
-	root = api_add_elapsed(root, "Elapsed", &(total_secs), false);
+	elapsed = stats_elapsed(stats);
+	root = api_add_elapsed(root, "Elapsed", &elapsed, false);
 	root = api_add_uint32(root, "Calls", &(stats->getwork_calls), false);
 	root = api_add_timeval(root, "Wait", &(stats->getwork_wait), false);
 	root = api_add_timeval(root, "Max", &(stats->getwork_wait_max), false);
@@ -3362,30 +3363,21 @@ static void setup_groups()
 			colon = strchr(ptr, ':');
 			if (colon)
 				*colon = '\0';
-			applog(LOG_WARNING, "API invalid group name '%s'", ptr);
-			quit(1, "%s", INVAPIGROUPS);
+			quit(1, "API invalid group name '%s'", ptr);
 		}
 
 		group = GROUP(*ptr);
-		if (!VALIDGROUP(group)) {
-			applog(LOG_WARNING, "API invalid group name '%c'", *ptr);
-			quit(1, "%s", INVAPIGROUPS);
-		}
+		if (!VALIDGROUP(group))
+			quit(1, "API invalid group name '%c'", *ptr);
 
-		if (group == PRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'", PRIVGROUP);
-			quit(1, "%s", INVAPIGROUPS);
-		}
+		if (group == PRIVGROUP)
+			quit(1, "API group name can't be '%c'", PRIVGROUP);
 
-		if (group == NOPRIVGROUP) {
-			applog(LOG_WARNING, "API group name can't be '%c'", NOPRIVGROUP);
-			quit(1, "%s", INVAPIGROUPS);
-		}
+		if (group == NOPRIVGROUP)
+			quit(1, "API group name can't be '%c'", NOPRIVGROUP);
 
-		if (apigroups[GROUPOFFSET(group)].commands != NULL) {
-			applog(LOG_WARNING, "API duplicate group name '%c'", *ptr);
-			quit(1, "%s", INVAPIGROUPS);
-		}
+		if (apigroups[GROUPOFFSET(group)].commands != NULL)
+			quit(1, "API duplicate group name '%c'", *ptr);
 
 		ptr += 2;
 
@@ -3419,8 +3411,7 @@ static void setup_groups()
 						*cmd = '\0';
 					}
 				} else {
-					applog(LOG_WARNING, "API unknown command '%s' in group '%c'", ptr, group);
-					quit(1, "%s", INVAPIGROUPS);
+					quit(1, "API unknown command '%s' in group '%c'", ptr, group);
 				}
 			}
 

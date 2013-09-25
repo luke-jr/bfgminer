@@ -40,7 +40,10 @@ It is possible to set this a little lower if you are trying to tune for short
 block mining (eg p2pool) but much lower and the device will start creating
 duplicate shares.
 
-Sample settings for different frequencies (last 2 values):
+Sample settings for valid different frequencies (last 2 values):
+34:375
+36:350
+39:325
 43:300
 45:282
 47:270
@@ -48,7 +51,7 @@ Sample settings for different frequencies (last 2 values):
 
 Frequency:
 This is the clock speed of the devices. Only specific values work, 256, 270,
-282 (default) and 300.
+282 (default), 300, 325, 350 and 375.
 
 If you use the full curses based interface with Avalons you will get this
 information:

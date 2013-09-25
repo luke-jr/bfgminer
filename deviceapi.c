@@ -552,7 +552,6 @@ redo:
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
-	const int thr_id = mythr->id;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 
@@ -574,6 +573,7 @@ void *miner_thread(void *userdata)
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
 
+	cgtime(&cgpu->cgminer_stats.start_tv);
 	if (drv->minerloop)
 		drv->minerloop(mythr);
 	else

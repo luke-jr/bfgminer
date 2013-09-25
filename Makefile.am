@@ -18,11 +18,7 @@ EXTRA_DIST	= \
 dist_doc_DATA = \
 		  AUTHORS COPYING HACKING NEWS README \
 		  example.conf \
-		  README.ASIC \
-		  README.FPGA \
-		  README.GPU \
-		  README.RPC \
-		  README.scrypt
+		  README.RPC
 
 rpcexamplesdir = $(docdir)/rpc-examples
 dist_rpcexamples_DATA = \
@@ -31,6 +27,14 @@ dist_rpcexamples_DATA = \
                   api-example.py
 
 SUBDIRS		= lib ccan
+
+# Without a redirected rule, code depending on different lib/*.h files may try to build dependencies of that in parallel, which can fail
+lib/%: lib_directory
+	@test -e $@
+lib_directory:
+	$(MAKE) -C lib
+ccan/libccan.a:
+	$(MAKE) -C ccan $*
 
 INCLUDES	= -fno-strict-aliasing
 
@@ -60,16 +64,19 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 	deviceapi.c deviceapi.h \
 		   util.c util.h logging.h		\
 		   sha2.c sha2.h api.c
-bfgminer_DEPENDENCIES =
+EXTRA_bfgminer_DEPENDENCIES =
 
 bitstreamsdir = $(pkgdatadir)/bitstreams
 dist_bitstreams_DATA =
 
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
+EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
+libblkmaker_directory:
+	cd libblkmaker && $(MAKE)
 
 if HAVE_CYGWIN
-bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
+EXTRA_bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
 
 cyg%.dll: libblkmaker/.libs/cyg%.dll
 	cp -p $< $@
@@ -94,6 +101,8 @@ bfgminer_SOURCES += *.cl
 kernelsdir = $(pkgdatadir)/opencl
 dist_kernels_DATA = $(top_srcdir)/*.cl
 
+dist_doc_DATA += README.GPU
+
 if HAVE_SENSORS
 bfgminer_LDADD += $(sensors_LIBS)
 endif
@@ -103,6 +112,7 @@ endif
 
 if HAS_SCRYPT
 bfgminer_SOURCES += scrypt.c scrypt.h
+dist_doc_DATA += README.scrypt
 endif
 
 if HAS_CPUMINE
@@ -127,9 +137,13 @@ if HAS_YASM
 AM_CFLAGS	= -DHAS_YASM
 if HAVE_x86_64
 SUBDIRS		+= x86_64
+x86_64/libx8664.a:
+	$(MAKE) -C x86_64 $*
 bfgminer_LDADD	+= x86_64/libx8664.a
 else # HAVE_x86_64
 SUBDIRS		+= x86_32
+x86_32/libx8632.a:
+	$(MAKE) -C x86_32 $*
 bfgminer_LDADD	+= x86_32/libx8632.a
 
 if HAVE_SSE2
@@ -146,6 +160,10 @@ endif
 
 if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
+endif
+
+if HAS_FPGA
+dist_doc_DATA += README.FPGA
 endif
 
 if HAS_BITFORCE
@@ -169,6 +187,7 @@ endif
 
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
+dist_doc_DATA += README.ASIC
 endif
 
 if HAS_MODMINER

@@ -98,16 +98,17 @@ static ssize_t bitforce_send(int fd, int procid, const void *buf, ssize_t bufLen
 	ssize_t rv;
 	memcpy(&realbuf[3], buf, bufLen);
 	realbuf[0] = '@';
-	realbuf[1] = procid;
-	realbuf[2] = bufLen;
+	realbuf[1] = bufLen;
+	realbuf[2] = procid;
 	bufp = realbuf;
-	while (true)
+	do
 	{
 		rv = BFwrite(fd, bufp, bufLeft);
 		if (rv <= 0)
 			return rv;
 		bufLeft -= rv;
 	}
+	while (bufLeft > 0);
 	return bufLen;
 }
 
@@ -147,6 +148,18 @@ struct bitforce_init_data {
 	int *parallels;
 };
 
+static
+int bitforce_chips_to_plan_for(int parallel, int chipcount) {
+	if (parallel < 1)
+		return parallel;
+	if (chipcount > 15) return 32;
+	if (chipcount >  7) return 16;
+	if (chipcount >  3) return  8;
+	if (chipcount >  1) return  4;
+	if (chipcount     ) return  2;
+	                    return  1;
+}
+
 static bool bitforce_detect_one(const char *devpath)
 {
 	int fdDev = serial_open(devpath, 0, 10, true);
@@ -154,7 +167,8 @@ static bool bitforce_detect_one(const char *devpath)
 	char pdevbuf[0x100];
 	size_t pdevbuf_len;
 	char *s;
-	int procs = 1, parallel = 1;
+	int procs = 1, parallel = -1;
+	long maxchipno = 0;
 	struct bitforce_init_data *initdata;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
@@ -195,6 +209,9 @@ static bool bitforce_detect_one(const char *devpath)
 		
 		applog(LOG_DEBUG, "  %s", pdevbuf);
 		
+		if (!strncasecmp(pdevbuf, "PROCESSOR ", 10))
+			maxchipno = max(maxchipno, atoi(&pdevbuf[10]));
+		else
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
 		else
@@ -207,13 +224,16 @@ static bool bitforce_detect_one(const char *devpath)
 		if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 			parallel = atoi(&pdevbuf[27]);
 	}
+	parallel = bitforce_chips_to_plan_for(parallel, maxchipno);
 	initdata->parallels = malloc(sizeof(initdata->parallels[0]) * procs);
 	initdata->parallels[0] = parallel;
+	parallel = abs(parallel);
 	for (int proc = 1; proc < procs; ++proc)
 	{
 		applog(LOG_DEBUG, "Slave board %d:", proc);
-		initdata->parallels[proc] = 1;
-		bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
+		initdata->parallels[proc] = -1;
+		maxchipno = 0;
+		bitforce_cmd1(fdDev, proc, pdevbuf, sizeof(pdevbuf), "ZCX");
 		for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
 			BFgets(pdevbuf, sizeof(pdevbuf), fdDev);
 		for ( ;
@@ -227,17 +247,21 @@ static bool bitforce_detect_one(const char *devpath)
 			
 			applog(LOG_DEBUG, "  %s", pdevbuf);
 			
+			if (!strncasecmp(pdevbuf, "PROCESSOR ", 10))
+				maxchipno = max(maxchipno, atoi(&pdevbuf[10]));
+			else
 			if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 				initdata->parallels[proc] = atoi(&pdevbuf[27]);
 		}
-		parallel += initdata->parallels[proc];
+		initdata->parallels[proc] = bitforce_chips_to_plan_for(initdata->parallels[proc], maxchipno);
+		parallel += abs(initdata->parallels[proc]);
 	}
 	BFclose(fdDev);
 	
-	if (unlikely(procs < parallel && !initdata->sc))
+	if (unlikely((procs != 1 || parallel != 1) && !initdata->sc))
 	{
-		// Only bitforce_queue supports parallelization, so force SC mode and hope for the best
-		applog(LOG_WARNING, "Chip parallelization detected with non-SC device; this is not supported!");
+		// Only bitforce_queue supports parallelization and XLINK, so force SC mode and hope for the best
+		applog(LOG_WARNING, "SC features detected with non-SC device; this is not supported!");
 		initdata->sc = true;
 	}
 	
@@ -285,6 +309,7 @@ struct bitforce_data {
 	int queued;
 	int queued_max;
 	int parallel;
+	bool parallel_protocol;
 	bool already_have_results;
 	bool just_flushed;
 	int ready_to_queue;
@@ -1248,7 +1273,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.proto = BFP_RANGE,
 			.sc = sc,
 			.sleep_ms_default = BITFORCE_SLEEP_MS,
-			.parallel = initdata->parallels[boardno],
+			.parallel = abs(initdata->parallels[boardno]),
+			.parallel_protocol = (initdata->parallels[boardno] != -1),
 		};
 		thr->cgpu_data = procdata = malloc(sizeof(*procdata));
 		*procdata = (struct bitforce_proc_data){
@@ -1303,6 +1329,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		}
 		applog(LOG_DEBUG, "%s: Board %d: %"PRIpreprv"-%"PRIpreprv, bitforce->dev_repr, boardno, first_on_this_board->cgpu->proc_repr, bitforce->proc_repr);
 		
+		++boardno;
 		while (xlink_id < 31 && !(initdata->devmask & (1 << ++xlink_id)))
 		{}
 	}
@@ -1382,7 +1409,7 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 			sprintf(replybuf, "missing fanmode setting");
 			return replybuf;
 		}
-		if (setting[1] || setting[0] < '0' || setting[0] > '5')
+		if (setting[1] || ((setting[0] < '0' || setting[0] > '5') && setting[0] != '9'))
 		{
 			sprintf(replybuf, "invalid fanmode setting");
 			return replybuf;
@@ -1575,7 +1602,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 		
 		end = &buf[89];
 		chip_cgpu = bitforce;
-		if (data->parallel > 1)
+		if (data->parallel_protocol)
 		{
 			chipno = strtol(&end[1], &end, 16);
 			if (chipno >= data->parallel)

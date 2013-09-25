@@ -1,3 +1,40 @@
+bfgminer (3.1.1-0precise1) precise; urgency=low
+
+  * bitforce: Support for Little Single boards, and Jalapenos with 1.2 firmware.
+  * avalon: Support new overclocking speeds (325, 350 and 375).
+  * Fixed a bunch of bugs, including GPU mining and at least one stratum-related crash.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 22 Jun 2013 17:41:21 -0000
+
+bfgminer (3.1.0-1precise1) precise; urgency=low
+
+  * Properly added in new submodules to Debian packaging.
+  * Added missing fpgautils.h include.
+
+ -- graeme <graeme@sudo.ca>  Fri, 14 Jun 2013 09:52:55 -0700
+
+bfgminer (3.1.0-0precise1) precise; urgency=low
+
+  * BitForce: Support for new long-board job-per-chip protocol.
+  * Reformatted TUI summaries, including percentage of shares rejected or stale.
+  * Icarus-compatible devices: Autodetect work_division by default (eg, for Block Erupter USB ASICs).
+  * Avalon: Driver is now compiled in by default, including in official binaries
+  * Avalon: Will only configure with specific -S avalon:/dev/ttyUSBn option (note the driver name must be included), since there is no reliable probe for it.
+  * Avalon: Full data for 4-module devices in RPC.
+  * OpenCL: Support for reading temperature from free software radeon drivers via libsensors.
+  * Fixes for writing configuration files when --device and/or --remove-disabled are specified.
+  * Faster startup now when pools are slow, connecting to the first pool available!
+  * Adding a pool now from the menu will return quickly while it leaves probing it to the background.
+  * Scrypt: Fixed the failure to create high thread concurrencies.
+  * Scrypt: Intensities above 13 will not lead to garbage being generated on GCN (7xxx) hardware now.
+  * Scrypt: Decreased default GPU threads to 1. Intensities above 13 cannot handle more.
+  * Scrypt: Changed the default choice of thread concurrency if no options are passed as a hint, based on amount of available GPU RAM.
+  * Scrypt: Extensive updates to the SCRYPT-README file in line with changes to the code and new information.
+  * Scrypt: Slightly larger buffer which may lead to less hardware errors on very fast GPUs.
+  * CPU mining: Numerous improvements to portability.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 13 Jun 2013 20:05:29 -0000
+
 bfgminer (3.0.2-1precise1) precise; urgency=low
 
   * Added scrypt build option.

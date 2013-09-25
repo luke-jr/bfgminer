@@ -16,10 +16,10 @@ sw="$1"; shift || true
 builds=(win32 win64)
 
 win32_machine='i686-pc-mingw32'
-win32_CFLAGS='-march=i686'
+win32_CFLAGS='-g -march=i686'
 
 win64_machine='x86_64-w64-mingw32'
-win64_CFLAGS=''
+win64_CFLAGS='-g'
 
 IDIR="$PWD"
 OUTDIR="$PWD"
@@ -50,6 +50,7 @@ tar cjvpf "$OUTDIR/${sw}.tbz2" "$sw"
 SRCDIR="$TMPDIR/$sw"
 
 dlls='
+	backtrace.dll
 	pdcurses.dll
 	libcurl-4.dll
 	pthreadGC2.dll
@@ -74,7 +75,7 @@ for build in "${builds[@]}"; do
 	cd "$TMPDIR"
 	mkdir -vp "$PKGDIR"
 	for v in machine CFLAGS; do
-		eval "${v}"="$(eval echo "\${${build}_${v}}")"
+		eval "${v}"="'$(eval echo "\${${build}_${v}}")'"
 	done
 	libdir="/usr/$machine/usr/bin/$dll"
 	for dll in $dlls; do
