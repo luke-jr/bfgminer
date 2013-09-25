@@ -487,7 +487,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	thr_id = work->thr_id;
 	cgpu = get_thr_cgpu(thr_id);
 	pool = work->pool;
-	t = (unsigned long int)(work->tv_work_found.tv_sec);
+	t = work->ts_getwork + timer_elapsed(&work->tv_getwork, &work->tv_work_found);
 	bin2hex(target, work->target, sizeof(work->target));
 	bin2hex(hash, work->hash, sizeof(work->hash));
 	bin2hex(data, work->data, sizeof(work->data));
