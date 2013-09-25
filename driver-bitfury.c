@@ -199,9 +199,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
-	int64_t hashes = 0;
-	char buf[45];
 	int amount, i;
+	char buf[45];
 
 	buf[0] = 'W';
 	memcpy(buf + 1, work->midstate, 32);
@@ -238,15 +237,15 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		memcpy(&nonce, info->buf + i + 3, 4);
 		nonce = decnonce(nonce);
 		if (bitfury_checkresults(thr, info->prevwork1, nonce)) {
-			hashes += 0xffffffff;
+			info->nonces++;
 			continue;
 		}
 		if (bitfury_checkresults(thr, info->prevwork2, nonce)) {
-			hashes += 0xffffffff;
+			info->nonces++;
 			continue;
 		}
 		if (bitfury_checkresults(thr, work, nonce)) {
-			hashes += 0xffffffff;
+			info->nonces++;
 			continue;
 		}
 	}
@@ -256,7 +255,11 @@ cascade:
 	info->prevwork2 = info->prevwork1;
 	info->prevwork1 = copy_work(work);
 	work->blk.nonce = 0xffffffff;
-	return hashes;
+	if (info->nonces) {
+		info->nonces--;
+		return (int64_t)0xffffffff;
+	}
+	return 0;
 }
 
 static void bitfury_flush_work(struct cgpu_info __maybe_unused *bitfury)

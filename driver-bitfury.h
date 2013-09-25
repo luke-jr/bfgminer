@@ -21,6 +21,7 @@ struct bitfury_info {
 	struct work *prevwork2;
 	char buf[512];
 	int tot;
+	int nonces;
 };
 
 #endif /* BITFURY_H */
