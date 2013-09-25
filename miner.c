@@ -2785,7 +2785,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
 	int badnonces = cgpu->bad_nonces;
-	int allnonces = cgpu->diff1;
+	int goodnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2803,7 +2803,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
 			badnonces += slave->bad_nonces;
-			allnonces += slave->diff1;
+			goodnonces += slave->diff1;
 		}
 	
 	multi_format_unit_array2(
@@ -2901,13 +2901,13 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		                accepted, rejected, stale,
 		                wnotaccepted, waccepted,
 		                hwerrs,
-		                badnonces, allnonces);
+		                badnonces, badnonces + goodnonces);
 	}
 	else
 #endif
 	{
 		percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
-		percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
+		percentf4(bnbuf, sizeof(bnbuf), badnonces, goodnonces);
 		tailsprintf(buf, bufsz, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
@@ -6944,7 +6944,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		                total_rejected,
 		                total_stale,
 		                total_diff_rejected + total_diff_stale, total_diff_accepted,
-		                hw_errors, total_bad_nonces, total_diff1);
+		                hw_errors,
+		                total_bad_nonces, total_bad_nonces + total_diff1);
 		unlock_curses();
 	}
 #endif
@@ -6954,7 +6955,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	uHr[5] = ' ';
 	
 	percentf4(rejpcbuf, sizeof(rejpcbuf), total_diff_rejected + total_diff_stale, total_diff_accepted);
-	percentf3(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
+	percentf4(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
 	
 	snprintf(logstatusline, sizeof(logstatusline),
 	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
@@ -8052,10 +8053,6 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	++cgpu->hw_errors;
 	if (bad_nonce_p)
 	{
-		++total_diff1;
-		++cgpu->diff1;
-		if (work)
-			++work->pool->diff1;
 		++total_bad_nonces;
 		++cgpu->bad_nonces;
 	}
