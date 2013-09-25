@@ -13,6 +13,8 @@
 #include "driver-bitfury.h"
 #include "sha2.h"
 
+/* Wait longer 1/3 longer than it would take for a full nonce range */
+#define BF1WAIT 1600
 struct device_drv bitfury_drv;
 
 static void bitfury_open(struct cgpu_info *bitfury)
@@ -88,7 +90,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 
 	/* Send reset request */
 	usb_write(bitfury, "R", 1, &amount, C_BFO_REQRESET);
-	usb_read_timeout(bitfury, buf, 7, &amount, 1000, C_BFO_GETRESET);
+	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BFO_GETRESET);
 
 	if (amount != 7) {
 		applog(LOG_WARNING, "%s%d: Getreset received %d bytes",
@@ -235,7 +237,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		return 0;
 	}
 
-	usb_read_once_timeout(bitfury, buf, 7, &amount, 2000, C_PING);
+	usb_read_once_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_PING);
 	tot = amount;
 	while (amount) {
 		usb_read_once_timeout(bitfury, buf + tot, 512, &amount, 10, C_PING);
