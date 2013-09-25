@@ -8,7 +8,7 @@
  */
 
 /*
- * Bitfury BF1 USB miner with Bitfury ASIC
+ * Big Picture Mining USB miner with Bitfury ASIC
  */
 
 #include "config.h"
@@ -19,14 +19,14 @@
 #include "deviceapi.h"
 #include "sha2.h"
 
-#include "driver-bf1.h"
+#include "driver-bigpic.h"
 
 #include <stdio.h>
 
-struct device_drv bf1_drv;
+struct device_drv bigpic_drv;
 
 //------------------------------------------------------------------------------
-uint32_t bf1_decnonce(uint32_t in)
+uint32_t bigpic_decnonce(uint32_t in)
 {
 	uint32_t out;
 
@@ -49,7 +49,7 @@ uint32_t bf1_decnonce(uint32_t in)
 }
 
 //------------------------------------------------------------------------------
-int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
+int bigpic_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
 {
 	uint8_t   in[16];
 	uint32_t *in32 = (uint32_t *)in;
@@ -85,7 +85,7 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 }
 
 //------------------------------------------------------------------------------
-static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struct BF1Info *info)
+static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, struct bigpic_info *info)
 {
 	int fd = serial_open(devpath, info->baud, 1, true);
 
@@ -94,7 +94,7 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 		return false;
 	}
 
-	char buf[sizeof(struct BF1Identity)+1];
+	char buf[sizeof(struct bigpic_identity)+1];
 	int len;
 
 	write(fd, "I", 1);
@@ -109,11 +109,11 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	memcpy(info->id.product, buf+2, 8);
 	memcpy(&info->id.serial, buf+10, 4);
 	applog(LOG_DEBUG, "%s: %s: %d, %s %08x",
-	       bf1_drv.dname,
+	       bigpic_drv.dname,
 	       devpath,
 	       info->id.version, info->id.product, info->id.serial);
 
-	char buf_state[sizeof(struct BF1State)+1];
+	char buf_state[sizeof(struct bigpic_state)+1];
 	len = 0;
 	write(fd, "R", 1);
 
@@ -127,7 +127,7 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	if(len != 7)
 	{
 		applog(LOG_ERR, "%s: %s not responding to reset: %d",
-		       bf1_drv.dname,
+		       bigpic_drv.dname,
 		       devpath, len);
 		return false;
 	}
@@ -135,34 +135,34 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	if (serial_claim_v(devpath, api))
 		return false;
 
-	struct cgpu_info *bf1;
-	bf1 = calloc(1, sizeof(struct cgpu_info));
-	bf1->drv = api;
-	bf1->device_path = strdup(devpath);
-	bf1->device_fd = -1;
-	bf1->threads = 1;
-	add_cgpu(bf1);
+	struct cgpu_info *bigpic;
+	bigpic = calloc(1, sizeof(struct cgpu_info));
+	bigpic->drv = api;
+	bigpic->device_path = strdup(devpath);
+	bigpic->device_fd = -1;
+	bigpic->threads = 1;
+	add_cgpu(bigpic);
 
-	applog(LOG_INFO, "Found %"PRIpreprv" at %s", bf1->proc_repr, devpath);
+	applog(LOG_INFO, "Found %"PRIpreprv" at %s", bigpic->proc_repr, devpath);
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Init: baud=%d",
-		bf1->proc_repr, info->baud);
+		bigpic->proc_repr, info->baud);
 
-	bf1->device_data = info;
+	bigpic->device_data = info;
 
 	return true;
 }
 
 //------------------------------------------------------------------------------
-static bool bf1_detect_one(const char *devpath)
+static bool bigpic_detect_one(const char *devpath)
 {
-	struct BF1Info *info = calloc(1, sizeof(struct BF1Info));
+	struct bigpic_info *info = calloc(1, sizeof(struct bigpic_info));
 	if (unlikely(!info))
-		quit(1, "Failed to malloc bf1Info");
+		quit(1, "Failed to malloc bigpicInfo");
 
-	info->baud = BF1_BAUD;
+	info->baud = BPM_BAUD;
 
-	if (!bf1_detect_custom(devpath, &bf1_drv, info))
+	if (!bigpic_detect_custom(devpath, &bigpic_drv, info))
 	{
 		free(info);
 		return false;
@@ -171,36 +171,36 @@ static bool bf1_detect_one(const char *devpath)
 }
 
 //------------------------------------------------------------------------------
-static int bf1_detect_auto(void)
+static int bigpic_detect_auto(void)
 {
-	return serial_autodetect(bf1_detect_one, "Bitfury_BF1");
+	return serial_autodetect(bigpic_detect_one, "Bitfury_BF1");
 }
 
 //------------------------------------------------------------------------------
-static void bf1_detect()
+static void bigpic_detect()
 {
-	serial_detect_auto(&bf1_drv, bf1_detect_one, bf1_detect_auto);
+	serial_detect_auto(&bigpic_drv, bigpic_detect_one, bigpic_detect_auto);
 }
 
 //------------------------------------------------------------------------------
-static bool bf1_init(struct thr_info *thr)
+static bool bigpic_init(struct thr_info *thr)
 {
-	struct cgpu_info *bf1 = thr->cgpu;
-	struct BF1Info *info = (struct BF1Info *)bf1->device_data;
+	struct cgpu_info *bigpic = thr->cgpu;
+	struct bigpic_info *info = (struct bigpic_info *)bigpic->device_data;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": init", bf1->proc_repr);
+	applog(LOG_DEBUG, "%"PRIpreprv": init", bigpic->proc_repr);
 
-	int fd = serial_open(bf1->device_path, info->baud, 1, true);
+	int fd = serial_open(bigpic->device_path, info->baud, 1, true);
 	if (unlikely(-1 == fd))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s",
-		       bf1->proc_repr, bf1->device_path);
+		       bigpic->proc_repr, bigpic->device_path);
 		return false;
 	}
 
-	bf1->device_fd = fd;
+	bigpic->device_fd = fd;
 
-	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bf1->proc_repr, bf1->device_path);
+	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bigpic->proc_repr, bigpic->device_path);
 
 	struct timeval tv_now;
 	gettimeofday(&tv_now, NULL);
@@ -228,10 +228,10 @@ static bool duplicate(uint32_t *results, uint32_t size, uint32_t test_nonce)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_process_results(struct thr_info *thr, struct work *work)
+static void bigpic_process_results(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info *board = thr->cgpu;
-	struct BF1Info *info = (struct BF1Info *)board->device_data;
+	struct bigpic_info *info = (struct bigpic_info *)board->device_data;
 
 	uint32_t results[16*6];
 	uint32_t num_results;
@@ -245,7 +245,7 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 	num_results = 0;
 	for(int i=0; i<info->rx_len; i+=7)
 	{
-		struct BF1State state;
+		struct bigpic_state state;
 		state.state = info->rx_buffer[i + 1];
 		state.switched = info->rx_buffer[i + 2];
 		memcpy(&state.nonce, info->rx_buffer + i + 3, 4);
@@ -255,41 +255,41 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 			continue;
 		}
 
-		uint32_t nonce = bf1_decnonce(state.nonce);
+		uint32_t nonce = bigpic_decnonce(state.nonce);
 		results[num_results++] = state.nonce;
 
 		//applog(LOG_DEBUG, "%"PRIpreprv": Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", board->proc_repr, info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce))
 		{
 			submit_nonce(thr, work, nonce);
 			nonces--;
 			continue;
 		}
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce-0x400000))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce-0x400000))
 		{
 			submit_nonce(thr, work, nonce-0x400000);
 			nonces--;
 			continue;
 		}
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce-0x800000))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce-0x800000))
 		{
 			submit_nonce(thr, work, nonce-0x800000);
 			nonces--;
 			continue;
 		}
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x2800000))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x2800000))
 		{
 			submit_nonce(thr, work, nonce+0x2800000);
 			nonces--;
 			continue;
 		}
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x2C00000))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x2C00000))
 		{
 			submit_nonce(thr, work, nonce+0x2C00000);
 			nonces--;
 			continue;
 		}
-		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce+0x400000))
+		if(bigpic_rehash(work->midstate, m7, ntime, nbits, nonce+0x400000))
 		{
 			submit_nonce(thr, work, nonce+0x400000);
 			nonces--;
@@ -300,10 +300,10 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 }
 
 //------------------------------------------------------------------------------
-static int64_t bf1_scanwork(struct thr_info *thr)
+static int64_t bigpic_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *board = thr->cgpu;
-	struct BF1Info *info = (struct BF1Info *)board->device_data;
+	struct bigpic_info *info = (struct bigpic_info *)board->device_data;
 
 	uint32_t hashes = 0;
 
@@ -346,7 +346,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	if(info->prev_work[1])
 	{
 		applog(LOG_DEBUG, "%"PRIpreprv": PREV[1]", board->proc_repr);
-		bf1_process_results(thr, info->prev_work[1]);
+		bigpic_process_results(thr, info->prev_work[1]);
 		work_completed(board, info->prev_work[1]);
 		info->prev_work[1] = 0;
 	}
@@ -354,7 +354,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	if(info->prev_work[0])
 	{
 		applog(LOG_DEBUG, "%"PRIpreprv": PREV[0]", board->proc_repr);
-		bf1_process_results(thr, info->prev_work[0]);
+		bigpic_process_results(thr, info->prev_work[0]);
 	}
 	info->prev_work[1] = info->prev_work[0];
 	info->prev_work[0] = info->work;
@@ -368,7 +368,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_poll(struct thr_info *thr)
+static void bigpic_poll(struct thr_info *thr)
 {
 /*
 	struct cgpu_info *board = thr->cgpu;
@@ -384,7 +384,7 @@ static void bf1_poll(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf1_shutdown(struct thr_info *thr)
+static void bigpic_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 
@@ -392,7 +392,7 @@ static void bf1_shutdown(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static bool bf1_identify(struct cgpu_info *cgpu)
+static bool bigpic_identify(struct cgpu_info *cgpu)
 {
 	char buf[] = "L";
 	write(cgpu->device_fd, buf, sizeof(buf));
@@ -401,19 +401,19 @@ static bool bf1_identify(struct cgpu_info *cgpu)
 }
 
 //------------------------------------------------------------------------------
-struct device_drv bf1_drv = {
-	.dname = "bf1",
-	.name = "BFA",
+struct device_drv bigpic_drv = {
+	.dname = "bigpic",
+	.name = "BPM",
 	.minerloop = hash_queued_work,
 
-	.drv_detect = bf1_detect,
+	.drv_detect = bigpic_detect,
 
-	.identify_device = bf1_identify,
+	.identify_device = bigpic_identify,
 
-	.thread_init = bf1_init,
-	.thread_shutdown = bf1_shutdown,
+	.thread_init = bigpic_init,
+	.thread_shutdown = bigpic_shutdown,
 
-	.poll = bf1_poll,
+	.poll = bigpic_poll,
 
-	.scanwork = bf1_scanwork,
+	.scanwork = bigpic_scanwork,
 };

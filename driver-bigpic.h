@@ -11,36 +11,30 @@
  *        Mail: aauer1@gmail.com
  */
 
-#ifndef DRIVER_BF1_H_
-#define DRIVER_BF1_H_
+#ifndef BFG_DRIVER_BIGPIC_H
+#define BFG_DRIVER_BIGPIC_H
 
-#define BF1_BAUD	115200
+#define BPM_BAUD	115200
 
-struct BF1Identity
+struct bigpic_identity
 {
 	uint8_t version;
 	char    product[8];
 	uint32_t serial;
 } __attribute__((packed));
 
-struct BF1State
+struct bigpic_state
 {
     uint8_t state;
     uint8_t switched;
     uint32_t nonce;
 } __attribute__((packed));
 
-struct BF1HashData
-{
-	uint32_t golden_nonce;
-	uint32_t nonce;
-};
-
-struct BF1Info
+struct bigpic_info
 {
 	uint32_t baud;
 
-	struct BF1Identity id;
+	struct bigpic_identity id;
 	struct work *work;
 	struct work *prev_work[2];
 

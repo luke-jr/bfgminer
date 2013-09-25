@@ -188,8 +188,8 @@ bitforce_firmware_flash_SOURCES = bitforce-firmware-flash.c
 endif
 endif
 
-if HAS_BF1
-bfgminer_SOURCES += driver-bf1.c driver-bf1.h
+if HAS_BIGPIC
+bfgminer_SOURCES += driver-bigpic.c driver-bigpic.h
 endif
 
 if HAS_ICARUS

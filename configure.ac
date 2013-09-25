@@ -300,15 +300,15 @@ else
 fi
 
 ################################################################################
-AC_ARG_ENABLE([bf1],
-	[AC_HELP_STRING([--disable-bf1],[Compile support for Bitfury BF1 (default enabled)])],
-	[bf1=$enableval],
-	[bf1=yes]
+AC_ARG_ENABLE([bigpic],
+	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
+	[bigpic=$enableval],
+	[bigpic=yes]
 	)
-if test "x$bf1" = xyes; then
-	AC_DEFINE([USE_BF1], [1], [Defined to 1 if Bitfury BF1 support is wanted])
+if test "x$bigpic" = xyes; then
+	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
 fi
-AM_CONDITIONAL([HAS_BF1], [test x$bf1 = xyes])
+AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
@@ -1035,10 +1035,10 @@ else
 	echo "  Avalon.ASICs.........: Disabled"
 fi
 
-if test "x$bf1" = xyes; then
-	echo "  Bitfury BF1.ASICs....: Enabled"
+if test "x$bigpic" = xyes; then
+	echo "  BPM.USB.ASICs........: Enabled"
 else
-	echo "  Bitfury BF1.ASICs....: Disabled"
+	echo "  BPM.USB.ASICs........: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then

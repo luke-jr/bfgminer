@@ -9360,8 +9360,8 @@ struct device_drv cpu_drv = {
 extern struct device_drv bitforce_drv;
 #endif
 
-#ifdef USE_BF1
-extern struct device_drv bf1_drv;
+#ifdef USE_BIGPIC
+extern struct device_drv bigpic_drv;
 #endif
 
 #ifdef USE_ICARUS
@@ -9475,9 +9475,9 @@ void drv_detect_all()
 		bitforce_drv.drv_detect();
 #endif
 
-#ifdef USE_BF1
+#ifdef USE_BIGPIC
 	if (!opt_scrypt)
-		bf1_drv.drv_detect();
+		bigpic_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
