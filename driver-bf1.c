@@ -77,7 +77,8 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 	if (out32[7] == 0)
 	{
 		bin2hex(hex, out, 32);
-		applog(LOG_DEBUG, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
+		applog(LOG_DEBUG, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x", mid32[0], m7, ntime, nbits, nnonce);
+		applog(LOG_DEBUG, "                         out: %s", hex);
 		return 1;
 	}
 	return 0;
@@ -107,7 +108,10 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 	info->id.version = buf[1];
 	memcpy(info->id.product, buf+2, 8);
 	memcpy(&info->id.serial, buf+10, 4);
-	applog(LOG_DEBUG, "%d, %s %08x", info->id.version, info->id.product, info->id.serial);
+	applog(LOG_DEBUG, "%s: %s: %d, %s %08x",
+	       bf1_drv.dname,
+	       devpath,
+	       info->id.version, info->id.product, info->id.serial);
 
 	char buf_state[sizeof(struct BF1State)+1];
 	len = 0;
@@ -122,14 +126,15 @@ static bool bf1_detect_custom(const char *devpath, struct device_drv *api, struc
 
 	if(len != 7)
 	{
-		applog(LOG_ERR, "Not responding to reset: %d", len);
+		applog(LOG_ERR, "%s: %s not responding to reset: %d",
+		       bf1_drv.dname,
+		       devpath, len);
 		return false;
 	}
 
 	if (serial_claim_v(devpath, api))
 		return false;
 
-	/* We have a real MiniMiner ONE! */
 	struct cgpu_info *bf1;
 	bf1 = calloc(1, sizeof(struct cgpu_info));
 	bf1->drv = api;
@@ -155,7 +160,6 @@ static bool bf1_detect_one(const char *devpath)
 	if (unlikely(!info))
 		quit(1, "Failed to malloc bf1Info");
 
-	applog(LOG_DEBUG, "Detect Bitfury BF1 device: %s", devpath);
 	info->baud = BF1_BAUD;
 
 	if (!bf1_detect_custom(devpath, &bf1_drv, info))
@@ -169,36 +173,34 @@ static bool bf1_detect_one(const char *devpath)
 //------------------------------------------------------------------------------
 static int bf1_detect_auto(void)
 {
-	applog(LOG_DEBUG, "Autodetect Bitfury BF1 devices");
 	return serial_autodetect(bf1_detect_one, "Bitfury_BF1");
 }
 
 //------------------------------------------------------------------------------
 static void bf1_detect()
 {
-	applog(LOG_DEBUG, "Searching for Bitfury BF1 devices");
-	//serial_detect(&bf1_drv, bf1_detect_one);
 	serial_detect_auto(&bf1_drv, bf1_detect_one, bf1_detect_auto);
 }
 
 //------------------------------------------------------------------------------
 static bool bf1_init(struct thr_info *thr)
 {
-	applog(LOG_DEBUG, "Bitfury BF1 init");
-
 	struct cgpu_info *bf1 = thr->cgpu;
 	struct BF1Info *info = (struct BF1Info *)bf1->device_data;
+
+	applog(LOG_DEBUG, "%"PRIpreprv": init", bf1->proc_repr);
 
 	int fd = serial_open(bf1->device_path, info->baud, 1, true);
 	if (unlikely(-1 == fd))
 	{
-		applog(LOG_ERR, "Failed to open Bitfury BF1 on %s", bf1->device_path);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to open %s",
+		       bf1->proc_repr, bf1->device_path);
 		return false;
 	}
 
 	bf1->device_fd = fd;
 
-	applog(LOG_INFO, "Opened Bitfury BF1 on %s", bf1->device_path);
+	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bf1->proc_repr, bf1->device_path);
 
 	struct timeval tv_now;
 	gettimeofday(&tv_now, NULL);
@@ -256,7 +258,7 @@ static void bf1_process_results(struct thr_info *thr, struct work *work)
 		uint32_t nonce = bf1_decnonce(state.nonce);
 		results[num_results++] = state.nonce;
 
-		//applog(LOG_DEBUG, "Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
+		//applog(LOG_DEBUG, "%"PRIpreprv": Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", board->proc_repr, info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
 		if(bf1_rehash(work->midstate, m7, ntime, nbits, nonce))
 		{
 			submit_nonce(thr, work, nonce);
@@ -318,7 +320,8 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	memcpy(sendbuf + 33, info->work->data + 64, 12);
 	write(board->device_fd, sendbuf, sizeof(sendbuf));
 
-	applog(LOG_DEBUG, "Work Task sending: %d", info->work->id);
+	applog(LOG_DEBUG, "%"PRIpreprv": Work Task sending: %d",
+	       board->proc_repr, info->work->id);
 	while(1)
 	{
 		uint8_t buffer[7];
@@ -328,20 +331,21 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 			break;
 	}
 
-	applog(LOG_DEBUG, "Work Task sent");
+	applog(LOG_DEBUG, "%"PRIpreprv": Work Task sent", board->proc_repr);
 	while(1)
 	{
 		info->rx_len = serial_read(board->device_fd, info->rx_buffer, sizeof(info->rx_buffer));
 		if(info->rx_len > 0)
 			break;
 	}
-	applog(LOG_DEBUG, "Work Task accepted");
+	applog(LOG_DEBUG, "%"PRIpreprv": Work Task accepted", board->proc_repr);
 
-	applog(LOG_DEBUG, "Nonces sent back: %d", info->rx_len / 7);
+	applog(LOG_DEBUG, "%"PRIpreprv": Nonces sent back: %d",
+	       board->proc_repr, info->rx_len / 7);
 /*
 	if(info->prev_work[1])
 	{
-		applog(LOG_DEBUG, "PREV[1]");
+		applog(LOG_DEBUG, "%"PRIpreprv": PREV[1]", board->proc_repr);
 		bf1_process_results(thr, info->prev_work[1]);
 		work_completed(board, info->prev_work[1]);
 		info->prev_work[1] = 0;
@@ -349,7 +353,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 */
 	if(info->prev_work[0])
 	{
-		applog(LOG_DEBUG, "PREV[0]");
+		applog(LOG_DEBUG, "%"PRIpreprv": PREV[0]", board->proc_repr);
 		bf1_process_results(thr, info->prev_work[0]);
 	}
 	info->prev_work[1] = info->prev_work[0];
@@ -358,7 +362,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 
 	//hashes = 0xffffffff;
 	hashes = 0xBD000000;
-	applog(LOG_DEBUG, "WORK completed");
+	applog(LOG_DEBUG, "%"PRIpreprv": WORK completed", board->proc_repr);
 
 	return hashes;
 }
@@ -372,7 +376,7 @@ static void bf1_poll(struct thr_info *thr)
 	int len = 0;
 	len = serial_read(board->device_fd, rx_buf, sizeof(rx_buf));
 
-	applog(LOG_DEBUG, "POLL: serial read: %d", len);
+	applog(LOG_DEBUG, "%"PRIpreprv": POLL: serial read: %d", board->proc_repr, len);
 */
 	struct timeval tv_now;
 	gettimeofday(&tv_now, NULL);
