@@ -284,6 +284,7 @@ void job_results_fetched(struct thr_info *mythr)
 	if (mythr->_proceed_with_new_job)
 		do_job_start(mythr);
 	else
+	if (likely(mythr->prev_work))
 	{
 		struct timeval tv_now;
 		
@@ -324,6 +325,9 @@ void mt_job_transition(struct thr_info *mythr)
 void job_start_complete(struct thr_info *mythr)
 {
 	struct timeval tv_now;
+	
+	if (unlikely(!mythr->prev_work))
+		return;
 	
 	timer_set_now(&tv_now);
 	
