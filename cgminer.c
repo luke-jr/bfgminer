@@ -3844,7 +3844,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 
 	mutex_lock(&restart_lock);
 	if (thr->work_restart)
-		rc = ETIMEDOUT;
+		rc = 0;
 	else
 		rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
