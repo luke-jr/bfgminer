@@ -215,10 +215,6 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 			info->nonces++;
 			continue;
 		}
-		if (bitfury_checkresults(thr, work, nonce)) {
-			info->nonces++;
-			continue;
-		}
 	}
 
 	free_work(info->prevwork2);
