@@ -52,13 +52,11 @@ uint32_t bf1_decnonce(uint32_t in)
 int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nbits, unsigned nnonce)
 {
 	uint8_t   in[16];
-	uint8_t   hash1[32];
 	uint32_t *in32 = (uint32_t *)in;
-	uint8_t  *hex;
+	char     *hex;
 	uint32_t *mid32 = (uint32_t *)midstate;
 	uint32_t  out32[8];
 	uint8_t  *out = (uint8_t *) out32;
-	uint32_t  i;
 	sha2_context ctx;
 
 	memset( &ctx, 0, sizeof(sha2_context));
@@ -78,7 +76,6 @@ int bf1_rehash(unsigned char *midstate, unsigned m7, unsigned ntime, unsigned nb
 
 	if (out32[7] == 0)
 	{
-		hex = bin2hex(midstate, 32);
 		hex = bin2hex(out, 32);
 		applog(LOG_INFO, "! MS0: %08x, m7: %08x, ntime: %08x, nbits: %08x, nnonce: %08x\n\t\t\t out: %s\n", mid32[0], m7, ntime, nbits, nnonce, hex);
 		return 1;
@@ -318,9 +315,7 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 	struct cgpu_info *board = thr->cgpu;
 	struct BF1Info *info = (struct BF1Info *)board->device_data;
 
-	struct BF1HashData hash_data;
 	uint32_t hashes = 0;
-	uint32_t count = 0;
 
 	if(!info->work)
 	{
@@ -383,9 +378,8 @@ static int64_t bf1_scanwork(struct thr_info *thr)
 //------------------------------------------------------------------------------
 static void bf1_poll(struct thr_info *thr)
 {
-	struct cgpu_info *board = thr->cgpu;
-	struct BF1Info *info = (struct BF1Info *)board->device_data;
 /*
+	struct cgpu_info *board = thr->cgpu;
 	uint8_t rx_buf[128];
 	int len = 0;
 	len = serial_read(board->device_fd, rx_buf, sizeof(rx_buf));
