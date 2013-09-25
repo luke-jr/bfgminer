@@ -73,6 +73,7 @@ AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_FUNC_ALLOCA
 
@@ -452,6 +453,20 @@ fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
 
+bfsb=no
+AC_ARG_ENABLE([bfsb],
+	[AC_HELP_STRING([--disable-bfsb],[Compile support for BFSB (default disabled)])],
+	[bfsb=$enableval]
+	)
+if test "x$bfsb" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFSB])
+	fi
+	AC_DEFINE([USE_BFSB], [1], [Defined to 1 if BFSB support is wanted])
+fi
+AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
+
+
 littlefury=auto
 AC_ARG_ENABLE([littlefury],
 	[AC_HELP_STRING([--disable-littlefury],[Compile support for LittleFury (default enabled)])],
@@ -470,6 +485,20 @@ if test "x$littlefury" = "xyes"; then
 	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
 fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
+
+
+metabank=no
+AC_ARG_ENABLE([metabank],
+	[AC_HELP_STRING([--disable-metabank],[Compile support for Metabank (default disabled)])],
+	[metabank=$enableval]
+	)
+if test "x$metabank" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Metabank])
+	fi
+	AC_DEFINE([USE_METABANK], [1], [Defined to 1 if Metabank support is wanted])
+fi
+AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
 if test "x$x6500$ztex" = "xnono"; then

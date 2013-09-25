@@ -36,12 +36,12 @@ struct bitfury_device {
 	unsigned int stat_counter;
 	unsigned int future_nonce;
 	unsigned int old_nonce;
-	struct timespec timer1;
-	struct timespec timer2;
-	struct timespec otimer1;
-	struct timespec otimer2;
-	struct timespec predict1;
-	struct timespec predict2;
+	struct timeval timer1;
+	struct timeval timer2;
+	struct timeval otimer1;
+	struct timeval otimer2;
+	struct timeval predict1;
+	struct timeval predict2;
 	unsigned int counter1, counter2;
 	unsigned int ocounter1, ocounter2;
 	int rate; //per msec
@@ -63,7 +63,6 @@ int libbitfury_readHashData(unsigned int *res);
 extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *, struct thr_info *);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 extern void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
-struct timespec t_diff(struct timespec start, struct timespec end);
 extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
 extern void send_shutdown(struct spi_port *, int slot, int chip_n);
 extern void send_freq(struct spi_port *, int slot, int chip_n, int bits);

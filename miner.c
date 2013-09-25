@@ -9393,7 +9393,13 @@ extern struct device_drv ztex_drv;
 
 #ifdef USE_BITFURY
 extern struct device_drv bitfury_drv;
+#endif
+
+#ifdef USE_METABANK
 extern struct device_drv metabank_drv;
+#endif
+
+#ifdef USE_BFSB
 extern struct device_drv bfsb_drv;
 #endif
 
@@ -9509,8 +9515,12 @@ void drv_detect_all()
 	if (!opt_scrypt)
 	{
 		bitfury_drv.drv_detect();
+#ifdef USE_METABANK
 		metabank_drv.drv_detect();
+#endif
+#ifdef USE_BFSB
 		bfsb_drv.drv_detect();
+#endif
 	}
 #endif
 

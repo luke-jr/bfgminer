@@ -50,7 +50,6 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	int n = 0;
 	int i, j;
 	bool slot_on[32];
-	struct timespec t1, t2;
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
 	int max_devices = 100;
@@ -68,7 +67,6 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	for (i = 0; i < 32; i++) {
 		slot_on[i] = 0;
 	}
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
 	for (i = 0; i < 32; i++) {
 		int slot_detected = tm_i2c_detect(i) != -1;
 		slot_on[i] = slot_detected;
@@ -110,8 +108,6 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 				free(port);
 		}
 	}
-
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
 
 	*out_count = n;
 	return devicelist;

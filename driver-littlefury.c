@@ -98,7 +98,7 @@ ssize_t keep_reading(int fd, void *buf, size_t count)
 		r = read(fd, buf, count);
 		if (unlikely(r <= 0))
 		{
-			applog(LOG_ERR, "Read of fd %d returned %d", fd, r);
+			applog(LOG_ERR, "Read of fd %d returned %d", fd, (int)r);
 			return rv ?: r;
 		}
 		rv += r;
@@ -251,7 +251,9 @@ bool littlefury_detect_one(const char *devpath)
 		goto err;
 	}
 	
-	devname = strndup((char*)&buf[4], bufsz - 4);
+	devname = malloc(bufsz - 3);
+	memcpy(devname, (char*)&buf[4], bufsz - 4);
+	devname[bufsz - 4] = '\0';
 	applog(LOG_DEBUG, "%s: Identified %s %d.%d.%d (features %02x)",
 	       littlefury_drv.dname, devname, buf[0], buf[1], buf[2], buf[3]);
 	

@@ -92,35 +92,6 @@ static const unsigned SHA_K[64] = {
 
 
 
-struct  timespec t_add(struct  timespec  time1, struct  timespec  time2) {
-    struct  timespec  result ;
-
-    result.tv_sec = time1.tv_sec + time2.tv_sec ;
-    result.tv_nsec = time1.tv_nsec + time2.tv_nsec ;
-    if (result.tv_nsec >= 1000000000L) {
-        result.tv_sec++ ;  result.tv_nsec = result.tv_nsec - 1000000000L ;
-    }
-
-    return (result) ;
-}
-
-
-
-struct timespec t_diff(struct timespec start, struct timespec end)
-{
-	struct timespec temp;
-	if (end.tv_nsec < start.tv_nsec) {
-		temp.tv_sec = end.tv_sec-start.tv_sec-1;
-		temp.tv_nsec = 1000000000LU;
-		temp.tv_nsec -= start.tv_nsec;
-		temp.tv_nsec += end.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec-start.tv_sec;
-		temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-	}
-	return temp;
-}
-
 void ms3_compute(unsigned *p)
 {
 	unsigned a,b,c,d,e,f,g,h, ne, na,  i;
@@ -259,7 +230,6 @@ int detect_chip(struct spi_port *port, int chip_n) {
 	unsigned newbuf[17], oldbuf[17];
 	unsigned ocounter;
 	int odiff = 0;
-	struct timespec t1;
 
 	memset(newbuf, 0, 17 * 4);
 	memset(oldbuf, 0, 17 * 4);
@@ -288,7 +258,6 @@ int detect_chip(struct spi_port *port, int chip_n) {
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
 
-		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
 		counter = get_counter(newbuf, oldbuf);
 		if (ocounter) {
 			unsigned int cdiff = c_diff(ocounter, counter);
@@ -424,13 +393,13 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 	struct bitfury_payload *p = &(d->payload);
 	struct bitfury_payload *op = &(d->opayload);
 	struct bitfury_payload *o2p = &(d->o2payload);
-	struct timespec d_time;
-	struct timespec time;
+	struct timeval d_time;
+	struct timeval time;
 	int smart = 0;
 	int chip = d->fasync;
 	int buf_diff;
 
-	clock_gettime(CLOCK_REALTIME, &(time));
+	timer_set_now(&time);
 
 	if (!d->second_run) {
 		d->predict2 = d->predict1 = time;
@@ -438,7 +407,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		d->req2_done = 0;
 	};
 
-	d_time = t_diff(time, d->predict1);
+	timersub(&time, &d->predict1, &d_time);
 	if (d_time.tv_sec < 0 && (d->req2_done || !smart)) {
 		d->otimer1 = d->timer1;
 		d->timer1 = time;
@@ -451,8 +420,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		if (smart) {
 			config_reg(port, 3, 0);
 		}
-		clock_gettime(CLOCK_REALTIME, &(time));
-		d_time = t_diff(time, d->predict1);
+		timer_set_now(&time);
+		timersub(&time, &d->predict1, &d_time);
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 		d->counter1 = get_counter(newbuf, oldbuf);
@@ -467,8 +436,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				spi_emit_break(port);
 				spi_emit_fasync(port, chip);
 				spi_emit_data(port, 0x3000, &d->atrvec[0], 19*4);
-				clock_gettime(CLOCK_REALTIME, &(time));
-				d_time = t_diff(time, d->predict1);
+				timer_set_now(&time);
+				timersub(&time, &d->predict1, &d_time);
 				spi_txrx(port);
 				memcpy(newbuf, spi_getrxbuf(port)+4 + chip, 17*4);
 				buf_diff = get_diff(newbuf, oldbuf);
@@ -528,9 +497,9 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		d->results_n = results_num;
 
 		if (smart) {
-			d_time = t_diff(d->timer2, d->timer1);
+			timersub(&d->timer2, &d->timer1, &d_time);
 		} else {
-			d_time = t_diff(d->otimer1, d->timer1);
+			timersub(&d->otimer1, &d->timer1, &d_time);
 		}
 		d->counter1 = get_counter(newbuf, oldbuf);
 		if (d->counter2 || !smart) {
@@ -542,7 +511,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			unsigned full_cycles, half_cycles;
 			double full_delay, half_delay;
 			long long unsigned delta;
-			struct timespec t_delta;
+			struct timeval t_delta;
 			double mhz;
 #ifdef BITFURY_SENDHASHDATA_DEBUG
 			int ccase;
@@ -565,7 +534,7 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 				}
 			}
 			req1_cycles = 0x003FFFFF - d->counter1;
-			period = (long long unsigned int)d_time.tv_sec * 1000000000ULL + (long long unsigned int)d_time.tv_nsec;
+			period = timeval_to_us(&d_time) * 1000ULL;
 			ns = (double)period / (double)(cycles);
 			mhz = 1.0 / ns * 65.0 * 1000.0;
 
@@ -594,9 +563,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			half_delay = (double)half_cycles * ns * (1 +0.92);
 			full_delay = (double)full_cycles * ns;
 			delta = (long long unsigned)(full_delay + half_delay);
-			t_delta.tv_sec = delta / 1000000000ULL;
-			t_delta.tv_nsec = delta - t_delta.tv_sec * 1000000000ULL;
-			d->predict1 = t_add(time, t_delta);
+			t_delta = TIMEVAL_USECS(delta / 1000ULL);
+			timeradd(&time, &t_delta, &d->predict1);
 
 			if (smart) {
 				half_cycles = req1_cycles + shift;
@@ -608,9 +576,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			full_delay = (double)full_cycles * ns;
 			delta = (long long unsigned)(full_delay + half_delay);
 
-			t_delta.tv_sec = delta / 1000000000ULL;
-			t_delta.tv_nsec = delta - t_delta.tv_sec * 1000000000ULL;
-			d->predict2 = t_add(time, t_delta);
+			t_delta = TIMEVAL_USECS(delta / 1000ULL);
+			timeradd(&time, &t_delta, &d->predict2);
 			d->req2_done = 0; d->req1_done = 0;
 		}
 
@@ -621,8 +588,8 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 		}
 	}
 
-	clock_gettime(CLOCK_REALTIME, &(time));
-	d_time = t_diff(time, d->predict2);
+	timer_set_now(&time);
+	timersub(&time, &d->predict2, &d_time);
 	if (d_time.tv_sec < 0 && !d->req2_done) {
 		if(smart) {
 			d->otimer2 = d->timer2;

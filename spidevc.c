@@ -21,9 +21,14 @@
  * THE SOFTWARE.
  */
 
+#include "config.h"
+
+#ifdef HAVE_LINUX_SPI_SPIDEV_H
+#define HAVE_LINUX_SPI
+#endif
+
 #include "spidevc.h"
 
-#include <sys/mman.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -31,6 +36,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+
+#ifdef HAVE_LINUX_SPI
+#include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
@@ -42,10 +50,9 @@
 #include <linux/i2c.h>
 #include <linux/i2c-dev.h>
 #include <sys/stat.h>
+#endif
 
 #include "logging.h"
-
-#define HAVE_LINUX_SPI
 
 #ifdef HAVE_LINUX_SPI
 bool sys_spi_txrx(struct spi_port *port);
@@ -256,6 +263,8 @@ void spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_t
 	spi_emit_buf(port, otmp, 3);
 	spi_emit_buf_reverse(port, buf, len*4);
 }
+
+#ifdef HAVE_LINUX_SPI
 void spi_bfsb_select_bank(int bank)
 {
 	static int last_bank = -2;
@@ -278,3 +287,4 @@ void spi_bfsb_select_bank(int bank)
 	}
 	last_bank = bank;
 }
+#endif
