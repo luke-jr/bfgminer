@@ -211,6 +211,7 @@ Options for both config file and command line:
 --no-submit-stale   Don't submit shares if they are detected as stale
 --no-opencl-binaries Don't attempt to use or save OpenCL kernel binaries
 --no-unicode        Don't use Unicode characters in TUI
+--noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
 --pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool

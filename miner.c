@@ -504,6 +504,42 @@ struct cgpu_info *get_devices(int id)
 	return cgpu;
 }
 
+static pthread_mutex_t noncelog_lock = PTHREAD_MUTEX_INITIALIZER;
+static FILE *noncelog_file = NULL;
+
+static
+void noncelog(const struct work * const work)
+{
+	const int thr_id = work->thr_id;
+	const struct cgpu_info *proc = get_thr_cgpu(thr_id);
+	char buf[0x200], hash[65], data[161], midstate[65];
+	int rv;
+	size_t ret;
+	
+	bin2hex(hash, work->hash, 32);
+	bin2hex(data, work->data, 80);
+	bin2hex(midstate, work->midstate, 32);
+	
+	// timestamp,proc,hash,data,midstate
+	rv = snprintf(buf, sizeof(buf), "%lu,%s,%s,%s,%s\n",
+	              (unsigned long)time(NULL), proc->proc_repr_ns,
+	              hash, data, midstate);
+	
+	if (unlikely(rv < 1))
+	{
+		applog(LOG_ERR, "noncelog printf error");
+		return;
+	}
+	
+	mutex_lock(&noncelog_lock);
+	ret = fwrite(buf, rv, 1, noncelog_file);
+	fflush(noncelog_file);
+	mutex_unlock(&noncelog_lock);
+	
+	if (ret != 1)
+		applog(LOG_ERR, "noncelog fwrite error");
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char target[(sizeof(work->target) * 2) + 1];
@@ -1168,6 +1204,11 @@ char *_bfgopt_set_file(const char *arg, FILE **F, const char *mode, const char *
 	return NULL;
 }
 
+static char *set_noncelog(char *arg)
+{
+	return _bfgopt_set_file(arg, &noncelog_file, "a", "nonce log");
+}
+
 static char *set_sharelog(char *arg)
 {
 	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
@@ -1638,6 +1679,9 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden
 #endif
 	),
+	OPT_WITH_ARG("--noncelog",
+		     set_noncelog, NULL, NULL,
+		     "Create log of all nonces found"),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
@@ -8138,6 +8182,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	work->pool->diff1++;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
+	
+	if (noncelog_file)
+		noncelog(work);
 	
 	if (res == TNR_HIGH)
 	{
