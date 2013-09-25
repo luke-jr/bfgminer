@@ -179,7 +179,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	/* New results may spill out from the latest work, making us drop out
 	 * too early so read whatever we get for the first half nonce and then
 	 * look for the results to prev work. */
-	usb_read_timeout(bitfury, info->buf, 512, &info->tot, 600, C_BFO_GETRES);
+	usb_read_timeout(bitfury, info->buf, 512, &amount, 600, C_BFO_GETRES);
+	info->tot += amount;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
@@ -217,6 +218,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		}
 	}
 
+	info->tot = 0;
 	free_work(info->prevwork2);
 cascade:
 	info->prevwork2 = info->prevwork1;
