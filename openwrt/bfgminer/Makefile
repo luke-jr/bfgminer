@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=9999
+PKG_VERSION:=3.1.0
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
@@ -127,7 +127,7 @@ endef
 
 define Package/$(PKG_NAME)-bitstream-$(1)/install
 	$(INSTALL_DIR) $$(1)/usr/share/$(PKG_NAME)/bitstreams
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/share/$(PKG_NAME)/bitstreams/$(subst -,_,$(1))* $$(1)/usr/share/$(PKG_NAME)/bitstreams
 endef
 
 ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)-bitstream-$(1)

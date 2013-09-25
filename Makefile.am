@@ -10,12 +10,24 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-EXTRA_DIST	= example.conf m4/gnulib-cache.m4 linux-usb-bfgminer \
-		  api-example.php miner.php	\
-		  API.class API.java api-example.c windows-build.txt \
-		  bitstreams/* README.FPGA README.RPC README.scrypt \
+EXTRA_DIST	= \
+	m4/gnulib-cache.m4 \
+	linux-usb-bfgminer \
+	windows-build.txt
+
+dist_doc_DATA = \
+		  AUTHORS COPYING HACKING NEWS README \
+		  example.conf \
 		  README.ASIC \
+		  README.FPGA \
 		  README.GPU \
+		  README.RPC \
+		  README.scrypt
+
+rpcexamplesdir = $(docdir)/rpc-examples
+dist_rpcexamples_DATA = \
+		  api-example.php miner.php \
+		  api-example.c \
                   api-example.py
 
 SUBDIRS		= lib ccan
@@ -24,14 +36,14 @@ INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
-bin_SCRIPTS	= $(top_srcdir)/*.cl
-
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
+
+bfgminer_CPPFLAGS += -DCGMINER_PREFIX='"$(pkgdatadir)"'
 
 bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
@@ -50,6 +62,9 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 		   sha2.c sha2.h api.c
 bfgminer_DEPENDENCIES =
 
+bitstreamsdir = $(pkgdatadir)/bitstreams
+dist_bitstreams_DATA =
+
 if NEED_LIBBLKMAKER
 SUBDIRS           += libblkmaker
 
@@ -64,18 +79,27 @@ endif
 
 bfgminer_SOURCES	+= logging.c
 
+
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c
 bfgminer_SOURCES += driver-opencl.h driver-opencl.c
+
+if HAVE_OPENCL
 
 # the original GPU related sources, unchanged
 bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
 bfgminer_SOURCES += *.cl
 
+kernelsdir = $(pkgdatadir)/opencl
+dist_kernels_DATA = $(top_srcdir)/*.cl
+
 if HAVE_SENSORS
 bfgminer_LDADD += $(sensors_LIBS)
 endif
+
+endif
+
 
 if HAS_SCRYPT
 bfgminer_SOURCES += scrypt.c scrypt.h
@@ -149,20 +173,21 @@ endif
 
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
-bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif
 
 if HAS_X6500
 bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
-bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
+endif
+
+if NEED_BITSTREAM_FPGAMINER
+dist_bitstreams_DATA += $(top_srcdir)/bitstreams/fpgaminer*.bit
+dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_fpgaminer
 endif
 
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
-bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
+dist_bitstreams_DATA += $(top_srcdir)/bitstreams/ztex_*.bi?
+dist_doc_DATA += $(top_srcdir)/bitstreams/COPYING_ztex
 endif
 
 bin_PROGRAMS += bfgminer-rpc

@@ -34,11 +34,10 @@ git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
 cd "$TMPDIR"
 git submodule update --init
-git archive --prefix "$sw"/ --format tar "$tag" | tar xvp
-(
-	cd libblkmaker
-	git archive --prefix "libblkmaker/" --format tar HEAD | tar -C "../$sw" -xvp
-)
+{
+	git archive --prefix "$sw"/ --format tar "$tag"
+	git submodule --quiet foreach --recursive 'git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
+} | tar -xivp
 cd "$sw"
 NOSUBMODULES=1 \
 NOCONFIGURE=1 \
@@ -113,7 +112,6 @@ for build in "${builds[@]}"; do
 		*.cl \
 		example.conf \
 		windows-build.txt \
-		API.class \
 		miner.php \
 		"$PKGDIR/"
 	make clean

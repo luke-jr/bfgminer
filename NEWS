@@ -1,3 +1,532 @@
+BFGMiner Version 3.1.0 - June 13, 2013
+- Bugfix: openwrt: Expect fixed bitstream path for input
+- Improve Makefile organization and fix "make install"
+- icarus: Upgrade work division autodetection probe to be faster and also detect
+8 core
+- Calculate rejection percentage based on weighed shares, not absolute counts
+- Count weighed discarded (stale) shares per cgpu
+- Bugfix: Cleanly count discarded (stale) shares without overlapping
+devices/sshare locks within clear_stratum_shares
+- configure: Enable Avalon support by default now that it behaves reasonably
+- avalon: Since detection is not really implemented, only probe devices when the
+driver is specified to -S by name (eg, "avalon:/dev/ttyUSB0")
+- Bugfix: bitforce_queue: Never try to reinitialize a slave processor
+- Bugfix: bitforce_queue: Use work_list_del everywhere we remove from work_list
+to ensure work gets freed properly when done
+- Reduce HW error logging to debug level, so it doesn't clutter the TUI log by
+default
+- DevAPI: When a device has more than 26 processors, represent them as aa-zz
+- bitforce: bitforce: Fix TUI display of slave processors on parallelized boards
+- bitforce: Only display temperature in TUI for the first chip on parallelized
+boards
+- Bugfix: bitforce: Set temperature for all processors on the board
+- Bugfix: bitforce_queue: Initialize proc->device_data to board data for
+parallelized chip processors
+- Bugfix: bitforce_queue: Defer nonce count check until after thiswork has been
+identified (or handled as NULL)
+- avalon: avalon_clear_readbuf can simply wait for a single read timeout on
+Windows to avoid select
+- avalon: Simplify avalon_get_result by using avalon_gets
+- avalon: Go back to good old serial timeouts for gets, since select() is for
+sockets (only, on Windows)
+- Updated api.c to return the hashrate with 3 decimal places
+- Change hashrate display to never display 3 fractional digits, because it looks
+a bit ugly
+- bitforce: Credit hashrate to the correct chip on parallelized devices
+- Re-set work thr_id on share submissions, to ensure the result gets credited to
+the correct device in case of shared job queues (as in BitForce long boards)
+- bitforce: Turn parallelization into separate logical processors for more
+details on each, including working with XLink
+- bitforce_queue: Implement job sanity checks using new "ZqX" for devices using
+parallelization
+- bitforce_queue: Minimal support for parallelization
+- Add --device-protocol-dump option to debuglog low-level bitforce protocol
+details
+- When shutting down, set work restart flag (and trigger notifier) to help
+mining threads escape to their main minerloop (and check for shutdown)
+- Document and check for uthash version 1.9.2+
+- Bugfix: Don't report failure for graceful mining thread shutdown
+- Name devices in mining thread failures
+- Warn about killing mining threads
+- Bugfix: Wake up mining threads when asking them to shutdown
+- Disable pthread cancel within curses locking
+- Shorten the avalon statline to fit in the curses interface and show the lowest
+speed fan cooling the asic devices.
+- Change switch_compact function name to switch_logsize to be used for other
+changes.
+- Only adjust cursor positions with curses locked.
+- devs display - fix GPU duplicate bug
+- basic copyright statement in API.java
+- Change the --device parameter parsing and configuration to accept ranges and
+comma separated values.
+- Modify scrypt kernel message.
+- Check for pool_disabled in wait_lp_current
+- Check for pool enabled in cnx_needed.
+- Add README.ASIC to debian packaging and make-release
+- Document avalon options in ASIC-README
+- Create README.ASIC with basic summary of supported ASIC devices.
+- Do avalon driver detection last as it will try to claim any similar device and
+they are not reliably detected.
+- Set the fanspeed to the nominal chosen for GPUs.
+- Clamp initial GPU fanspeed to within user specified range.
+- Avalon fan factor is already multiplied into the info values.
+- Get rid of zeros which corrupt display.
+- Logic fail on minimum fanspeed reporting.
+- Provide a workaround for fan0 sensor not being used on avalon and pad fan RPM
+with zeros.
+- Add ambient temp and lowest fan RPM information to avalon statline.
+- Display max temperature and fanspeed data for avalon.
+- Set devices to disabled after they exit the hashing loops to prevent the
+watchdog thread from trying to act on them.
+- Scanhash functions perform driver shutdown so don't repeat it.
+- Change the opencl shutdown sequence.
+- Send the shutdown message to threads and do the thread shutdown functions
+before more forcefully sending pthread_cancel to threads.
+- Icarus report data direction with comms errors
+- Execute driver shutdown sequence during kill_work.
+- Provide an nusleep equivalent function to nmsleep.
+- Set avalon_info to device data void struct.
+- Make submit_nonce return a bool for whether it's a valid share or not.
+- Do a non-blocking read of anything in the avalon buffer after opening the
+device.
+- Assign the avalon info data to the device_data in cgpu_info.
+- Rename cgpu_data to use new device_data
+- miner.h remove unused device_file and add device_data
+- Must unlock curses as well in logwin_update.
+- icarus report usb write error information
+- Make mining threads report out during work submission.
+- submit_work_async is no longer used directly by driver code.
+- Create a logwin_update function which mandatorily updates the logwin and use
+it when input is expected to prevent display refresh delays.
+- All stratum calls to recv_line are serialised from the one place so there is
+no need to use locking around recv().
+- Only allow the mining thread to be cancelled when it is not within driver
+code, making for cleaner shutdown and allowing us to pthread_join the miner
+threads on kill_work().
+- Implement pthread_testcancel replacement for BIONIC
+- Attribute whatever stats we can get on untracked stratum shares based on
+current pool diff.
+- Downgrade OpenCL headers to 1.0, which work fine for our purposes and are more
+compatible
+- icarus: If work_division autodetect fails, just use the old default of 2
+- avalonhost-raminst script to help with installing to RAM on Avalon-host
+routers
+- Attempt to probe /dev/cu.usb* for fallback "-S all"
+- openwrt: Download uthash dependency
+- Bugfix: openwrt: Always build with libsensors support disabled
+- configure: Check for uthash headers
+- Bugfix: ztex: Only destroy libztex device after the last handle to it has been
+released
+- ztex: Remove libztex slave device interface, simply passing fpgaNum to
+selectFpga
+- Bugfix: cpu: Fix yasm and sse2 detection
+- cpu: Check for SSE2 support independently from yasm
+- Bugfix: cpu: Make sure to link libsse2cpuminer.a before x86_32/libx8632.a
+- Bugfix: cpu: Only build libsse2cpuminer iff yasm is available and targetting
+x86_32
+- Bugfix: Free work only after deleting it from list
+- Remove embedded uthash.h and utlist.h from Makefile
+- windows-build.txt: Update for system uthash
+- Remove embedded uthash (and add dependency on system uthash)
+- Replace elist.h with utlist.h
+- Bugfix: Fix build with CPU mining and *without* yasm
+- cpu: Be explicit about size of sha256_init address
+- cpu: Add --algo fastauto (new default) to detect a usable algorithm without
+taking over a minute
+- cpu: Default to --algo auto
+- cpu: Support all platform-applicable assembly algorithms, even if used CFLAGS
+don't support them
+- Ubuntu: Updated changelog, added scrypt support.
+- cpu: Set fixed symbol names for stuff shared with assembly
+- cpu: Create Mach-O asm binaries on Darwin-based systems
+- Bugfix: cpu: Use COFF yasm binfmt on Cygwin
+- Bugfix: cpu: Get correct nonce from data, where the CPU sub-drivers leave it
+- Remove redundant "Reject ratio" in exit-time summary
+- Apply "R+S(%)" formatting to long-form statistics
+- Group stale shares in with rejects (but still distinctly counted) and make the
+percentage be (reject+stale)/total
+- Include rejected shares as a percentage
+- Move Utility and Best Share to status line
+- Remove LW from status line, since it is basically useless
+- ztex: Clean up a lot of ugly casting
+- Bugfix: Correctly avoid SIGPIPE on Mac
+- Make set_work_target a function to set a specified char as target for use
+elsewhere.
+- Minor typo.
+- Support more shares to be returned for scrypt mining.
+- Set all stratum sockets to nonblocking to avoid trying to use MSG_DONTWAIT on
+windows.
+- Only use MSG_NOSIGNAL for !win32 since it doesn't exist on windows.
+- Use MSG_NOSIGNAL on stratum send()
+- Set TCP_NODELAY for !linux for raw sockets.
+- Use TCP_NODELAY with raw sockets if !opt_delaynet
+- Recheck select succeeds on EWOULDBLOCK for stratum.
+- Don't use TCP_NODELAY if opt_delaynet is enabled with stratum.
+- Fix warnings in avalon driver.
+- correct applog typing
+- Simplify the many lines passed as API data in the avalon driver now that the
+API does not need persistent storage for the name.
+- Duplicate the name string always in api_add_data_full to not need persistent
+storage for names passed to it.
+- Add extra matching work count data in API for Avalon with 4 modules.
+- Clean up summary slightly better on exit.
+- opencl: Disable using binary kernels on Apple by default
+- Use sock_blocks in api.c
+- Fix build and distdir.
+- compile on win32
+- Update README.scrypt with improved hashrates for 7970.
+- Use copy_time helper throughout miner.c
+- Provide wrappers for commonly used timer routines with API stats.
+- Use flip32 function instead of open coding it in gen_stratum_work.
+- Move util.c exports to util.h
+- Replace gettimeofday usage with cgtime
+- Adopt gettimeofday wrapper from cgminer (cgtime) that is always called with tz
+set to NULL and increases the resolution on windows.
+- Add high resolution to nmsleep wrapper on windows.
+- Bugfix: Export stats_lock for deviceapi
+- Set default ocl work size for scrypt to 256.
+- fliter out the wrong result from adjust fan code
+- Set last device valid work on adding device.
+- Make scrypt submission use the submit_nonce code, with nonces matching
+endianness.
+- Increment hardware error count from the one site.
+- compile avalon driver on win32 and win64
+- build out of source dir
+- Rename scrypt regenhash function for consistency.
+- Add Mac FAQ.
+- Further driver FAQs.
+- Check for work restart after disable in the hash queued work loop since it may
+be a long time before we re-enable a device.
+- Unconditionally test for many wrong results on avalon and reset to avoid
+passing a corrupt avalon result to temperature code.
+- Only reset an avalon device with no results when there are no results
+consecutively.
+- More FAQs.
+- Avoid applog in recalloc_sock.
+- Avoid applog under cg_wlock.
+- Put spacing around locking code for clarity.
+- Avoid applog under pool_lock.
+- Avoid more recursive locks.
+- Avoid applog while ch_lock is held.
+- Avoid recursive locks in fill_queue.
+- Variable is already initialised in global scope.
+- More GPU FAQs.
+- More README faqs.
+- Yet more README faqs.
+- Add more FAQs to README.
+- Wrap result wrong tests in avalon scanhash in unlikely() and only consider a
+hash count of zero wrong if a restart wasn't issued.
+- avalon: if result_wrong >= get_work_count jump out the read loop
+- Fix warning on 32bit.
+- fix the fan control on max temp2/3
+- for some reason network down. one simple bfgminer command:   "bfgminer -o
+127.0.0.1:8888 -O fa:ke --avalon-options 115200:32:10:50:256" can idle the
+avalon for safe power and protect chip
+- if hash_count == 0; reinit avalon, fix the 0MHS bug use the max value of temp1
+and temp2 for fan control
+- Reinstate the matching_work_count per subdevice on avalon based on the work
+subid.
+- Rationalise and simplify the share diff and block solve detection to a common
+site.
+- subid field for devices that do not yet support the distinct device/processor
+interface
+- Make the avalon array size a macro.
+- Use replacement of work items in the avalon buffer as needed instead of
+flushing them.
+- Reinstate wrong work count to reset avalon regardless and display number of
+wrong results.
+- select() on serial usb in avalon does not work properly with zero timeout.
+- Use no timeout on further reads in avalon_gets
+- Do sequential reads in avalon_get_reset to cope with partial reads.
+- Show read discrepancy in avalon_get_reset.
+- Reuse avalon_get_work_count variable.
+- Check for AVA_GETS_RESTART when deciding if avalon has messed up.
+- Make the detection of all wrong results on avalon much more conservative to
+avoid false positives on work restarts.
+- Show error codes on select and read fail in avalon.
+- If we get a restart message in avalon_gets still check if there's a receive
+message to parse first without a timeout before returning AVA_GETS_RESTART.
+- avalon_gets is always called from the one call site so inline it.
+- The read_count is unused by the avalon get result code and no longer required
+for avalon reset so simplify code removing it.
+- Use a separate avalon_get_reset function for resetting avalon instead of using
+avalon_get_result.
+- The current hash count returned by avalon scanhash is just an obfuscated
+utility counter so make it explicit.
+- Check for a restart before a timeout in message parsing code in avalon.
+- We should check for a restart message before checking for a timeout in avalon
+scanhash.
+- Store the subid for the work item in avalon.
+- Fix record_temp_fan function in avalon driver.
+- Remove inappropriate memset of struct avalon result which was corrupting fan
+values.
+- Only do_avalon_close once on multiple errors.
+- Reset the result_wrong count on block change in avalon scanhash to prevent
+false positives for all nonces failed.
+- Small timeouts on select() instead of instant timeout increase reliability of
+socket reads and writes.
+- Rotate the avalon work array and free work on AVA_SEND_BUFFER_EMPTY as well.
+- Only get extra work in fill_queue if we don't have any unqueued work in the
+list.
+- Don't get any work if our queue is already full in avalon_fill.
+- Free avalon->works in the event we call avalon_prepare on failure to
+initialise.
+- Fix warnings.
+- Create an array of 4 lots of work for avalon and cycle through them.
+- Remove unused per unit matching work count for avalon.
+- Rename the confusing avalon_info pointer.
+- Simplify avalon scanhash code using the new find_queued_work_bymidstate
+function.
+- Members of cgpu_info for avalon are not meant to be in the union.
+- Use correct struct device_drv for avalon_drv.
+- Check enough work is queued before queueing more in avalon_fill.
+- Actually put the work in the avalon queue.
+- Rename avalon_api to avalon_drv.
+- First draft of port of avalon driver to new cgminer queued infrastructure.
+- Minor README updates.
+- README.GPU: Properly warn about overclocking damage
+- Add example 7970 tuning for scrypt in readme.
+- Update driver recommendations.
+- Add extensive GPU FAQs for the flood of new Scrypt miners.
+- Bugfix: Expect bitstreams and kernels to be in the srcdir, not build dir
+- cpu: Prefer sse4_64 algorithm if supported
+- cpu: sse2_32: Force bare symbols for cross-asm/C symbols
+- Compile CPU mining for win32 and win64
+- configure: Check for pthread in -lwinpthread
+- Use has_pth flag instead of trying to mess with pthread internals
+- configure: Explicitly check for nanosleep
+- configure: Include "no" response in BFG_PTHREAD_FLAG_CHECK
+- miner.h missing extern
+- Update links and recommended SDKs.
+- Bugfix: README.GPU: Fix some typos
+- Update README to match changes to display.
+- Remove increasingly irrelevant discarded work from status lines.
+- Remove increasingly irrelevant GW value from status.
+- README.GPU: Correct terminology
+- Update README about intensity.
+- Bugfix: Restore always autodetecting stratum as non-scrypt
+- icarus: Replace default of 2 work_division/fpga_count with autodetection of 1,
+2, or 4
+- Update scrypt readme with newer information and to match changes in code.
+- Set default GPU threads to 1 for scrypt.
+- Connect backup stratum pools if the primary pool cannot deliver work.
+- Use a new algorithm for choosing a thread concurrency when none or no shader
+value is specified for scrypt.
+- Do not round up the bufsize to the maximum allocable with scrypt.
+- Remove the rounding-up of the scrypt padbuffer which was not effectual and
+counter-productive on devices with lots of ram, limiting thread concurrencies
+and intensities.
+- Make pool adding while running asynchronous, using the pool test thread
+functionality.
+- Only curl easy cleanup a stratum curl if it exists.
+- Add intermediate variants of cglocks that can be up or downgraded to read or
+write locks and use them for stratum work generation.
+- Move the stratum data to be protected under a new cg_lock data_lock.
+- Convert the ch_lock to cg_lock.
+- Convert the control_lock to a cg_lock.
+- Remove unused qd_lock.
+- Implement cg_lock write biased rwlocks.
+- Don't start testing any pools with the watchpool thread if any of the test
+threads are still active.
+- Set sockd to false should curl setup fail on stratum.
+- Reopen the socket whenever we're retrying stratum.
+- Set pool died on failed testing to allow idle flag and time to be set.
+- Remove unused pthread_t typedefs from struct pool.
+- Perform pool_resus on all pools that are found alive with the test pool
+threads.
+- Use pool_unworkable in select_balanced as well.
+- Differentiate pool_unusable from pool_unworkable.
+- Keep a connection open on higher priority stratum pools to fail back to them.
+- Set the wrong bool in pool_active
+- Only bypass unusable pools if they're not the selected ones.
+- Find the first usable pool in preference to the current pool in select_pool
+for work.
+- Add a pool_unusable function which checks if a pool is stratum but not active
+to use within switch_pools.
+- API no longer ignore send() status
+- API make the main socket non-static
+- Start the stratum thread only if we successfully init and authorise it,
+otherwise unset the init flag.
+- Make the initialisation of the stratum thread more robust allowing the
+watchpool thread safe access to it after the stratum thread is started.
+- Shorten the time before keepalive probes are sent out and how frequently
+they're sent with stratum curls.
+- Display select return value on select fail in stratum thread.
+- Clear the socket of anything in the receive buffer if we're going to retry
+connecting.
+- Perform pool resus on pools that were not set as the initial pool at startup.
+- Allow pools to be resuscitated on first startup by the watchpool thread.
+- Check all pools simultaneously at startup switching to the first alive one to
+speed up startup.
+- Close any sockets opened if we fail to initiate stratum but have opened the
+socket.
+- API use control_lock when switching pools
+- Clear last pool work on switching pools if the current pool supports local
+work generation or we are in failover only mode.
+- make rw locks: mining_thr_lock and devices_lock
+- work queues - remove new but unnecessary functions
+- functions for handling work queues
+- find_work() to find work in devices work queue
+- Add a get_queued function for devices to use to retrieve work items from the
+queued hashtable.
+- Add the choice of hash loop to the device driver, defaulting to hash_sole_work
+if none is specified.
+- Add a driver specific flush_work for queued devices that may have work items
+already queued to abort working on them on the device and discard them.
+- Flush queued work on a restart from the hash database and discard the work
+structs.
+- Create a central point for removal of work items completed by queued device
+drivers.
+- Create a fill_queue function that creates hashtables of as many work items as
+is required by the device driver till it flags the queue full.
+- Create the hash queued work variant for use with devices that are fast enough
+to require a queue.
+- Make sure to do full avalon_init if the device_fd is invalid.
+- Document extra zero byte in avalon_reset.
+- Microoptimise likely paths in avalon_gets.
+- Make sure to set timeout to 100ms instead of 1ms in avalon read loop for
+select.
+- Make sure to get time of first response in avalon read loop.
+- Use select for a reliable timeout in avalon read and don't read 1 byte at a
+time, optimising read loop.
+- We should break on the loop on a work restart in avalon, and only consider all
+errors if we actually have gotten some results.
+- Avalon init on comms error as well.
+- Reinit avalon device in case of FPGA controller mess up.
+- Increase reliability of avalon startup by only opening and resetting the
+device once, looking for the id sequence offset by one byte as well, and still
+ignoring if it's wrong, assuming it is an avalon.
+- Nest avalon_decode functions to avoid doing unnecessary lookups once we have
+found the nonce.
+- Use htole32 wrapper for nonce encoding in avalon.
+- Remove unused rev8 function from avalon driver.
+- Remove const qualifier from driver structs
+- rename device_api -> device_drv and all related api -> drv
+- rename get_proc_by_id() to get_devices()
+- Wrap access to devices array under a mutex
+- Provide wrappers for grabbing of thr value under the mining_thr_lock.
+- mutex all access to mining_thr
+- Split thr_info array into control_thr and mining_thr pointers so more mining
+threads can be added later
+- Update the hashmeter at most 5 times per second.
+- Speed up watchdog interval and therefore display updates to 2 seconds.
+- Add README.GPU to EXTRA_DIST.
+- Split out the GPU specific information from the README into a README.GPU file.
+- Update docs and reorder README to show executive summary near top.
+- Add more FAQs about crossfire.
+- Convert error getting device IDs in ocl code to info log level only since
+multiple platforms may be installed and the error is harmless there.
+- Unnecessary extra array in ocl code.
+- Cope with the highest opencl platform not having usable devices.
+- Update kernel file names signifying changes.
+- Use constants from the array of __constants throughout the diablo kernel.
+- Create a __constant array for use within diablo kernel.
+- Use global constant arrays for all other constants used in scrypt kernel.
+- Use global __constants for sha functions in scrypt kernel.
+- Use constants for endian swap macros.
+- Revise scrypt kernel copyright notice.
+- Separate out additions in scrypt kernel.
+- Reuse some Vals[] variables that can be assigned to constants earlier in the
+poclbm kernel, making for fewer ops.
+- Put all constants used in poclbm kernel into __const memory array to speed up
+concurrent reads on the wavefront.
+- opencl: Support for reading temperature from free software radeon drivers via
+libsensors
+
+
+BFGMiner Version 3.0.3 - June 13, 2013
+
+- make-release: Include all submodules, recursively
+- Remove API.java example (no copyright license)
+- Minimally fix "make install" to ignore bitstream sources
+- Add submodule for ZtexBTCMiner (aka ztex_ufm1_*)
+- Add submodule for X6000_ztex_comm4 (aka x6500-overclocker-0402)
+- ztex: Use standard file header/comment formatting, and update license to GPLv3
+- bitforce: Allow a longer timeout (1250ms) for ZCX (Device Information)
+commands
+- Bugfix: pdcurses doesn't like changing logwin size without clearing it also,
+so do that in display options
+- -S all: Start QueryDosDevices probe with 256-byte buffer
+- Use common code to ensure the prefix of -S *:all remains in all
+implementations of it (/dev glob was removing prefixes)
+- bitforce_queue: Ensure comma following nonce count is there, to error cleanly
+- bitforce: Report queue send failures, and count as hw errors
+- Bugfix: bitforce_queue: Don't try to send ready-to-queue work to device, when
+there is no ready-to-queue work
+- Bugfix: bitforce: Clear want_to_send_queue flag when flushing queue, since we
+can't send an empty queue
+- bitforce: Include new total queued count in flush debugging
+- Bugfix: bitforce_queue: Implement a minimum wait time of 10ms
+- README: Document serial device format for Mac OS X
+- Bugfix: cairnsmore1: Enable building with libudev autodetection even if only
+icarus drivers are enabled
+- Bugfix: sysfs autodetect: Continue searching even after finding one tty (fixes
+multiple ttys per device, such as some Cairnsmore1s)
+- Bugfix: ztex: Avoid destroying libztex device in case other processors are
+still in use (fixes crash when 1.15y becomes unavailable)
+- Update windows-build.txt
+- ccan: Add missing copyright comment headers
+- Remove obsolete mknsis.sh
+- Add missing copyright sections to files that may need them
+- Standard copyright format (including year) for adl_functions.h
+- Bugfix: When disabling device, ensure its prev_work (if any) gets freed
+properly
+- Check stratum socket exists and is writable before even considering whether
+the sessionid is the same or not
+- Bugfix: Check that the stratum_share struct for a failed submission is still
+in the submission hashtable before trying to delete it
+- README: Add missing documentation for CPU algorithms cryptopp_asm32, sse2_32,
+and altivec_4way
+- Bugfix: icarus: Check work restart before timeout
+- Bugfix: icarus: Debuglog the correct read timeout (and omit from work restart
+since there's no trivial way to get it)
+- README: Update links
+- Bugfix: cpu: Fix warning on Win64
+- Bugfix: avalon: Strict formatting
+- Bugfix: Cleanup trivial warnings
+- Bugfix: bitforce: Seek to end of nonce counter to find nonces, in case there
+are more than 9
+- Bugfix: Build hexdump.c into the project normally like everything else
+- Bugfix: Really fix device entries in saved config file
+- Update the write config to properly record device entries and remove disabled
+option.
+- avalon: Really fix applog formatting
+- va_copy is meant to be matched by a va_end in log_generic.
+- Further fix distdir for hexdump.c
+- Fulltest is true if value is <= target.
+- Fix warning with no curses built in.
+- Bugfix: configure: Check NEED_FPGAUTILS correctly
+- configure: Better grammar for --enable-cpumining help
+- Bugfix: Check for SSE 4.1 support before building sse4_64 asm CPU miner (uses
+MOVNTDQA instruction)
+- Bugfix: elist: Use uintptr_t for member offset
+- Bugfix: opencl/adl: Fix format string
+- Bugfix: opencl: Correct usage of formatted prints
+- Increase fd limits as much as possible at startup
+- Bugfix: bitforce: bulk queue: Cleanly retry for high temperature recovery
+- Fixed deps for raring, which has newer libudev1.
+- bitforce: debuglog actual result data
+- Bugfix: Missing 'else' can result in null pointer dereference in race
+- Minor grammo in avalon driver.
+- Make avalon temperature reading LOG_INFO level.
+- Fix the problem of seting up termio of ttyUSB0 for icarus. the CSIZE is the
+mask of CS2/4/8
+- bufsize is an unsigned integer, make it so for debug.
+- Bugfix: bitforce: Include get_api_stats in BQUEUE mode
+- Bugfix: Always compile support for commandline --temp-target and
+--temp-cutoff, and write them in the config for all devices
+- Bugfix: Ensure cURL timers get set correctly in submission thread
+- Bugfix: modminer: Remove unused parameter to sprintf
+- Bugfix: modminer: Use correct format for bytes left in bitstream upload
+message
+- Bugfix: Access strategy name string directly instead of accidentally
+- Add printf-format syntax checks to more functions that should use it
+- AUTHORS: Add more contributors
+- Support configure flag --with-system-libblkmaker to allow building without the
+bundled copy
+- Bugfix: Use HTTP/1.1 compatible product token for User-Agent header
+
+
 BFGMiner Version 3.0.2 - April 28, 2013
 
 - Receive failures in recv_line should unconditionally fail.

@@ -314,6 +314,7 @@ struct device_drv {
 
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
+	void (*thread_disable)(struct thr_info *);
 	void (*thread_enable)(struct thr_info *);
 
 	// Can be used per-thread or per-processor (only with minerloop async or queue!)
@@ -528,6 +529,7 @@ struct cgpu_info {
 	int diff1;
 	double diff_accepted;
 	double diff_rejected;
+	double diff_stale;
 	int last_share_pool;
 	time_t last_share_pool_time;
 	double last_share_diff;
@@ -834,6 +836,7 @@ static inline void cg_wunlock(cglock_t *lock)
 struct pool;
 
 extern bool opt_protocol;
+extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern bool have_longpoll;
 extern int opt_skip_checks;

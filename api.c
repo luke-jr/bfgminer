@@ -1108,7 +1108,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 			case API_UTILITY:
 			case API_FREQ:
 			case API_MHS:
-				sprintf(buf, "%.2f", *((double *)(root->data)));
+				sprintf(buf, "%.3f", *((double *)(root->data)));
 				break;
 			case API_VOLTS:
 				sprintf(buf, "%.3f", *((float *)(root->data)));

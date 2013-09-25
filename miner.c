@@ -95,6 +95,7 @@ struct strategies strategies[] = {
 static char packagename[256];
 
 bool opt_protocol;
+bool opt_dev_protocol;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
@@ -639,6 +640,11 @@ char *set_request_diff(const char *arg, float *p)
 
 static
 char* add_serial_all(char*arg, char*p) {
+	size_t pLen = p - arg;
+	char dev[pLen + PATH_MAX];
+	memcpy(dev, arg, pLen);
+	char *devp = &dev[pLen];
+
 #ifdef HAVE_LIBUDEV
 
 	struct udev *udev = udev_new();
@@ -658,11 +664,7 @@ char* add_serial_all(char*arg, char*p) {
 
 		const char *devpath = udev_device_get_devnode(device);
 		if (devpath) {
-			size_t pLen = p - arg;
-			size_t dLen = strlen(devpath) + 1;
-			char dev[dLen + pLen];
-			memcpy(dev, arg, pLen);
-			memcpy(&dev[pLen], devpath, dLen);
+			strcpy(devp, devpath);
 			applog(LOG_DEBUG, "scan-serial: libudev all-adding %s", dev);
 			string_elist_add(dev, &scan_devices);
 		}
@@ -671,11 +673,10 @@ char* add_serial_all(char*arg, char*p) {
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
-	return NULL;
 
 #elif defined(WIN32)
 
-	size_t bufLen = 0x10;  // temp!
+	size_t bufLen = 0x100;
 tryagain: ;
 	char buf[bufLen];
 	if (!QueryDosDevice(NULL, buf, bufLen)) {
@@ -686,11 +687,9 @@ tryagain: ;
 		}
 		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";
 	}
-	size_t tLen = p - arg;
-	char dev[12 + tLen];
-	memcpy(dev, arg, tLen);
-	memcpy(&dev[tLen], "\\\\.\\", 4);
-	char *devp = &dev[tLen + 4];
+	size_t tLen;
+	memcpy(devp, "\\\\.\\", 4);
+	devp = &devp[4];
 	for (char *t = buf; *t; t += tLen) {
 		tLen = strlen(t) + 1;
 		if (strncmp("COM", t, 3))
@@ -699,7 +698,6 @@ tryagain: ;
 		applog(LOG_DEBUG, "scan-serial: QueryDosDevice all-adding %s", dev);
 		string_elist_add(dev, &scan_devices);
 	}
-	return NULL;
 
 #else
 
@@ -707,7 +705,7 @@ tryagain: ;
 	struct dirent *de;
 	const char devdir[] = "/dev";
 	const size_t devdirlen = sizeof(devdir) - 1;
-	char devpath[sizeof(devdir) + NAME_MAX];
+	char *devpath = devp;
 	char *devfile = devpath + devdirlen + 1;
 	
 	D = opendir(devdir);
@@ -725,14 +723,16 @@ tryagain: ;
 		
 trydev:
 		strcpy(devfile, de->d_name);
-		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", devpath);
-		string_elist_add(devpath, &scan_devices);
+		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", dev);
+		string_elist_add(dev, &scan_devices);
 	}
 	closedir(D);
 	
 	return NULL;
 
 #endif
+
+	return NULL;
 }
 
 static char *add_serial(char *arg)
@@ -1261,6 +1261,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--debuglog",
 		     opt_set_bool, &opt_debug,
 		     "Enable debug logging"),
+	OPT_WITHOUT_ARG("--device-protocol-dump",
+			opt_set_bool, &opt_dev_protocol,
+			"Verbose dump of device protocol-level activities"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
@@ -2296,10 +2299,7 @@ hashrate_to_bufstr(char*buf, float hashrate, signed char unitin, enum h2bs_fmt f
 	if (hashrate >= 100 || unit < 2)
 		prec = 1;
 	else
-	if (hashrate >= 10)
 		prec = 2;
-	else
-		prec = 3;
 	ucp = (fmt == H2B_NOUNIT ? '\0' : buf[5]);
 	sprintf(buf, "%5.*f", prec, hashrate);
 	buf[5] = ucp;
@@ -2321,20 +2321,20 @@ ti_hashrate_bufstr(char**out, float current, float average, float sharebased, en
 }
 
 static const char *
-percentf(unsigned p, unsigned t, char *buf)
+percentf(double p, double t, char *buf)
 {
 	if (!p)
 		return "none";
 	if (!t)
 		return "100%";
-	p = p * 10000 / (p + t);
-	if (p < 100)
-		sprintf(buf, ".%02u%%", p);  // ".01%"
+	p /= p + t;
+	if (p < 0.01)
+		sprintf(buf, ".%02.0f%%", p * 10000);  // ".01%"
 	else
-	if (p < 1000)
-		sprintf(buf, "%u.%u%%", p / 100, (p % 100) / 10);  // "9.1%"
+	if (p < 0.1)
+		sprintf(buf, "%.1f%%", p * 100);  // "9.1%"
 	else
-		sprintf(buf, " %2u%%", p / 100);  // " 99%"
+		sprintf(buf, "%3.0f%%", p * 100);  // " 99%"
 	return buf;
 }
 
@@ -2367,6 +2367,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
 	int stale = cgpu->stale;
+	double waccepted = cgpu->diff_accepted;
+	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
 	
 	if (!opt_show_procs)
@@ -2381,6 +2383,8 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted += slave->accepted;
 			rejected += slave->rejected;
 			stale += slave->stale;
+			waccepted += slave->diff_accepted;
+			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
 		}
 	
@@ -2467,7 +2471,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 		            awidth, accepted,
 		            rwidth, rejected,
 		            swidth, stale,
-		            percentf(rejected + stale, accepted, rejpcbuf),
+		            percentf(wnotaccepted, waccepted, rejpcbuf),
 		            hwwidth, hwerrs
 		);
 	}
@@ -2480,7 +2484,7 @@ static void get_statline2(char *buf, struct cgpu_info *cgpu, bool for_curses)
 			accepted,
 			rejected,
 			stale,
-			percentf(rejected + stale, accepted, rejpcbuf),
+			percentf(wnotaccepted, waccepted, rejpcbuf),
 			hwerrs);
 	}
 	
@@ -3544,7 +3548,9 @@ static void __kill_work(void)
 			continue;
 
 		cgpu->shutdown = true;
+		thr->work_restart = true;
 		notifier_wake(thr->notifier);
+		notifier_wake(thr->work_restart_notifier);
 	}
 
 	sleep(1);
@@ -4037,6 +4043,7 @@ static void submit_discard_share2(const char *reason, struct work *work)
 	++cgpu->stale;
 	++(work->pool->stale_shares);
 	total_diff_stale += work->work_difficulty;
+	cgpu->diff_stale += work->work_difficulty;
 	work->pool->diff_stale += work->work_difficulty;
 	mutex_unlock(&stats_lock);
 }
@@ -5625,8 +5632,8 @@ static void display_options(void)
 
 	opt_loginput = true;
 	immedok(logwin, true);
-	clear_logwin();
 retry:
+	clear_logwin();
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nsu[M]mary detail level:%s\n"
@@ -6034,7 +6041,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		total_accepted,
 		total_rejected,
 		total_stale,
-		percentf(total_rejected + total_stale, total_accepted, rejpcbuf),
+		percentf(total_diff_rejected + total_diff_stale, total_diff_accepted, rejpcbuf),
 		hw_errors);
 
 
@@ -6215,23 +6222,33 @@ static void shutdown_stratum(struct pool *pool)
 
 void clear_stratum_shares(struct pool *pool)
 {
+	int my_mining_threads = mining_threads;  // Cached outside of locking
 	struct stratum_share *sshare, *tmpshare;
 	struct work *work;
 	struct cgpu_info *cgpu;
 	double diff_cleared = 0;
+	double thr_diff_cleared[my_mining_threads];
 	int cleared = 0;
+	int thr_cleared[my_mining_threads];
+	
+	// NOTE: This is per-thread rather than per-device to avoid getting devices lock in stratum_shares loop
+	for (int i = 0; i < my_mining_threads; ++i)
+	{
+		thr_diff_cleared[i] = 0;
+		thr_cleared[i] = 0;
+	}
 
 	mutex_lock(&sshare_lock);
 	HASH_ITER(hh, stratum_shares, sshare, tmpshare) {
-		if (sshare->work->pool == pool) {
+		if (sshare->work->pool == pool && work->thr_id < my_mining_threads) {
 			HASH_DEL(stratum_shares, sshare);
 			
 			work = sshare->work;
 			sharelog("disconnect", work);
 			
-			cgpu = get_thr_cgpu(work->thr_id);
-			++cgpu->stale;
 			diff_cleared += sshare->work->work_difficulty;
+			thr_diff_cleared[work->thr_id] += work->work_difficulty;
+			++thr_cleared[work->thr_id];
 			free_work(sshare->work);
 			free(sshare);
 			cleared++;
@@ -6246,6 +6263,13 @@ void clear_stratum_shares(struct pool *pool)
 		total_stale += cleared;
 		pool->diff_stale += diff_cleared;
 		total_diff_stale += diff_cleared;
+		for (int i = 0; i < my_mining_threads; ++i)
+			if (thr_cleared[i])
+			{
+				cgpu = get_thr_cgpu(i);
+				cgpu->diff_stale += thr_diff_cleared[i];
+				cgpu->stale += thr_cleared[i];
+			}
 		mutex_unlock(&stats_lock);
 
 		mutex_lock(&submitting_lock);
@@ -7119,6 +7143,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
+	work->thr_id = thr->id;
 
 	mutex_lock(&stats_lock);
 	total_diff1++;
@@ -7133,7 +7158,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	if (unlikely(res == TNR_BAD))
 		{
 			struct cgpu_info *cgpu = thr->cgpu;
-			applog(LOG_WARNING, "%"PRIpreprv": invalid nonce - HW error",
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
 			       cgpu->proc_repr);
 			inc_hw_errors(thr);
 			ret = false;
@@ -7183,6 +7208,12 @@ void __thr_being_msg(int prio, struct thr_info *thr, const char *being)
 
 void mt_disable_start(struct thr_info *mythr)
 {
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	
+	if (drv->thread_disable)
+		drv->thread_disable(mythr);
+	
 	hashmeter2(mythr);
 	if (mythr->prev_work)
 		free_work(mythr->prev_work);
