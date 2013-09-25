@@ -6016,6 +6016,23 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
+bool test_nonce(struct work *work, uint32_t nonce)
+{
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+	unsigned char hash2[32];
+	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t diff1targ;
+
+	*work_nonce = htole32(nonce);
+
+	/* Do one last check before attempting to submit the work */
+	rebuild_hash(work);
+	flip32(hash2_32, work->hash);
+
+	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
+	return (be32toh(hash2_32[7] <= diff1targ));
+}
+
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {

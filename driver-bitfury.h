@@ -10,12 +10,15 @@
 #ifndef BITFURY_H
 #define BITFURY_H
 
+#include "miner.h"
 #include "usbutils.h"
 
 struct bitfury_info {
 	uint8_t version;
 	char product[8];
 	uint32_t serial;
+	struct work *prevwork;
+	char readbuf[512];
 };
 
 #endif /* BITFURY_H */
