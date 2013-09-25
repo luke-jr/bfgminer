@@ -19,7 +19,8 @@ struct bitfury_info {
 	uint32_t serial;
 	struct work *prevwork1;
 	struct work *prevwork2;
-	char readbuf[512];
+	char buf[512];
+	int tot;
 };
 
 #endif /* BITFURY_H */

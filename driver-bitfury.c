@@ -199,40 +199,45 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
-	char sendbuf[45], buf[512];
 	int64_t hashes = 0;
-	int amount, i, tot;
+	char buf[45];
+	int amount, i;
 
-	sendbuf[0] = 'W';
-	memcpy(sendbuf + 1, work->midstate, 32);
-	memcpy(sendbuf + 33, work->data + 64, 12);
-	usb_write(bitfury, sendbuf, 45, &amount, C_BFO_REQWORK);
+	buf[0] = 'W';
+	memcpy(buf + 1, work->midstate, 32);
+	memcpy(buf + 33, work->data + 64, 12);
+
+	/* New results may spill out from the latest work, making us drop out
+	 * too early so read whatever we get for the first half nonce and then
+	 * look for the results to prev work. */
+	usb_read_timeout(bitfury, info->buf, 512, &info->tot, 600, C_BFO_GETRES);
+
+	/* Now look for the bulk of the previous work results, they will come
+	 * in a batch following the first data. */
+	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, 1000, C_BFO_GETRES);
+	info->tot += amount;
+	while (amount) {
+		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BFO_GETRES);
+		info->tot += amount;
+	};
+
+	/* Send work */
+	usb_write(bitfury, buf, 45, &amount, C_BFO_REQWORK);
+	/* Get response acknowledging work */
 	usb_read(bitfury, buf, 7, &amount, C_BFO_GETWORK);
 
-	if (unlikely(!info->prevwork1)) {
-		info->prevwork1 = copy_work(work);
-		info->prevwork2 = copy_work(work);
-		return 0;
-	}
+	/* Only happens on startup */
+	if (unlikely(!info->prevwork2))
+		goto cascade;
 
-	usb_read_once_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BFO_GETRES);
-	tot = amount;
-	while (amount) {
-		usb_read_once_timeout(bitfury, buf + tot, 512, &amount, 10, C_BFO_GETRES);
-		tot += amount;
-	}
-
-	for (i = 0; i < tot; i += 7) {
+	/* Search for what work the nonce matches in order of likelihood. */
+	for (i = 0; i < info->tot; i += 7) {
 		uint32_t nonce;
 
 		/* Ignore state & switched data in results for now. */
-		memcpy(&nonce, buf + i + 3, 4);
+		memcpy(&nonce, info->buf + i + 3, 4);
 		nonce = decnonce(nonce);
 		if (bitfury_checkresults(thr, info->prevwork1, nonce)) {
-			hashes += 0xffffffff;
-			continue;
-		}
-		if (bitfury_checkresults(thr, work, nonce)) {
 			hashes += 0xffffffff;
 			continue;
 		}
@@ -240,9 +245,14 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 			hashes += 0xffffffff;
 			continue;
 		}
+		if (bitfury_checkresults(thr, work, nonce)) {
+			hashes += 0xffffffff;
+			continue;
+		}
 	}
 
 	free_work(info->prevwork2);
+cascade:
 	info->prevwork2 = info->prevwork1;
 	info->prevwork1 = copy_work(work);
 	work->blk.nonce = 0xffffffff;
