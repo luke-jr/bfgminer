@@ -158,7 +158,7 @@ if NEED_FPGAUTILS
 bfgminer_SOURCES += fpgautils.c fpgautils.h
 if HAVE_WINDOWS
 else
-bfgminer_SOURCES += iospeeds.h
+bfgminer_SOURCES += iospeeds.h iospeeds_posix.h
 endif
 endif
 
