@@ -177,6 +177,8 @@ static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
 struct ICARUS_INFO {
+	int intinfo;
+
 	// time to calculate the golden_ob
 	uint64_t golden_hashes;
 	struct timeval golden_tv;
@@ -277,7 +279,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 	usb_set_cps(icarus, baud / 10);
 	usb_enable_cps(icarus);
 
-	interface = usb_interface(icarus);
+	interface = _usb_interface(icarus, info->intinfo);
 	ident = usb_ident(icarus);
 
 	switch (ident) {
@@ -286,9 +288,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_CMR1:
 		case IDENT_CMR2:
 			usb_set_pps(icarus, BLT_PREF_PACKET);
-
-			if (ident == IDENT_CMR2) // Chip hack
-				interface++;
 
 			// Reset
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
@@ -434,6 +433,7 @@ static void rev(unsigned char *s, size_t l)
 
 static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct timeval *tv_start, struct timeval *tv_finish, struct thr_info *thr, int read_time)
 {
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	struct timeval read_start, read_finish;
 	int err, amt;
 	int rc = 0;
@@ -446,7 +446,9 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 			return ICA_NONCE_ERROR;
 
 		cgtime(&read_start);
-		err = usb_read_timeout(icarus, (char *)buf, read_amount, &amt, ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
+		err = usb_read_ii_timeout(icarus, info->intinfo,
+					  (char *)buf, read_amount, &amt,
+					  ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
 		cgtime(&read_finish);
 		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
 			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
@@ -879,7 +881,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 			struct cgpu_info *cgtmp;
 			struct ICARUS_INFO *intmp;
 
-			cgtmp = usb_init_intinfo(icarus, i);
+			cgtmp = usb_copy_cgpu(icarus);
 			if (!cgtmp) {
 				applog(LOG_ERR, "%s%d: Init failed initinfo %d",
 						icarus->drv->name, icarus->device_id, i);
@@ -903,6 +905,8 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 			// Initialise everything to match
 			memcpy(intmp, info, sizeof(struct ICARUS_INFO));
+
+			intmp->intinfo = i;
 		}
 	}
 
@@ -976,7 +980,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// We only want results for the work we are about to send
 	usb_buffer_clear(icarus);
 
-	err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
+	err = usb_write_ii(icarus, info->intinfo, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
 	if (err < 0 || amount != sizeof(ob_bin)) {
 		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
 				icarus->drv->name, icarus->device_id, err, amount);
