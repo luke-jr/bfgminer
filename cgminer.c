@@ -3658,15 +3658,6 @@ static void rebuild_hash(struct work *work)
 		scrypt_regenhash(work);
 	else
 		regen_hash(work);
-
-	work->share_diff = share_diff(work);
-	if (unlikely(work->share_diff >= current_diff)) {
-		work->block = true;
-		work->pool->solved++;
-		found_blocks++;
-		work->mandatory = true;
-		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
-	}
 }
 
 static bool cnx_needed(struct pool *pool);
@@ -3844,7 +3835,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 
 	mutex_lock(&restart_lock);
 	if (thr->work_restart)
-		rc = ETIMEDOUT;
+		rc = 0;
 	else
 		rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
@@ -6016,17 +6007,12 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-/* Returns true if nonce for work was a valid share */
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+bool test_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	struct timeval tv_work_found;
-	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t *hash2_32 = (uint32_t *)work->hash2;
 	uint32_t diff1targ;
-	bool ret = true;
 
-	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
 	/* Do one last check before attempting to submit the work */
@@ -6034,14 +6020,16 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	flip32(hash2_32, work->hash);
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	if (be32toh(hash2_32[7]) > diff1targ) {
-		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
-		       thr->cgpu->drv->name, thr->cgpu->device_id);
+	return (be32toh(hash2_32[7]) <= diff1targ);
+}
 
-		inc_hw_errors(thr);
-		ret = false;
-		goto out;
-	}
+/* To be used once the work has been tested to be meet diff1 and has had its
+ * nonce adjusted. */
+void submit_tested_work(struct thr_info *thr, struct work *work)
+{
+	struct timeval tv_work_found;
+
+	work->share_diff = share_diff(work);
 
 	mutex_lock(&stats_lock);
 	total_diff1 += work->device_diff;
@@ -6050,13 +6038,30 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
-	if (!fulltest(hash2, work->target)) {
+	if (!fulltest(work->hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
-		goto out;
+		return;
 	}
 
+	cgtime(&tv_work_found);
 	submit_work_async(work, &tv_work_found);
-out:
+}
+
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
+	bool ret = true;
+
+	if (test_nonce(work, nonce))
+		submit_tested_work(thr, work);
+	else {
+		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
+		       thr->cgpu->drv->name, thr->cgpu->device_id);
+
+		inc_hw_errors(thr);
+		ret = false;
+	}
+
 	return ret;
 }
 

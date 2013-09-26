@@ -1263,6 +1263,7 @@ struct work {
 #endif
 	double		device_diff;
 	uint64_t	share_diff;
+	unsigned char	hash2[32];
 
 	int		rolls;
 
@@ -1356,6 +1357,8 @@ struct modminer_fpga_state {
 
 extern void get_datestamp(char *, size_t, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
+extern bool test_nonce(struct work *work, uint32_t nonce);
+extern void submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);

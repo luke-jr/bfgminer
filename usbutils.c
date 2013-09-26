@@ -84,7 +84,7 @@
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
-#define BITFURY_TIMEOUT_MS 200
+#define BITFURY_TIMEOUT_MS 100
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
@@ -266,7 +266,7 @@ static struct usb_find_devices find_dev[] = {
 #ifdef USE_BITFURY
 	{
 		.drv = DRV_BITFURY,
-		.name = "BFO",
+		.name = "BF1",
 		.ident = IDENT_BFU,
 		.idVendor = 0x03eb,
 		.idProduct = 0x204b,
@@ -2671,7 +2671,7 @@ int _usb_read(struct cgpu_info *cgpu, int epinfo, char *buf, size_t bufsiz, int 
 			memcpy(usbdev->buffer, usbbuf + bufsiz, usbdev->bufamt);
 			tot -= usbdev->bufamt;
 			usbbuf[tot] = '\0';
-			applog(LOG_ERR, "USB: %s%i read1 buffering %d extra bytes",
+			applog(LOG_INFO, "USB: %s%i read1 buffering %d extra bytes",
 					cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 		}
 
