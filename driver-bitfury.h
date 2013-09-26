@@ -23,6 +23,7 @@ struct bitfury_info {
 	char buf[512];
 	int tot;
 	int nonces;
+	struct timeval tv_start;
 };
 
 #endif /* BITFURY_H */

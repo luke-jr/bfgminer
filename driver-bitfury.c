@@ -189,8 +189,10 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
+	struct timeval tv_now;
 	int amount, i;
 	char buf[45];
+	int ms_diff;
 
 	buf[0] = 'W';
 	memcpy(buf + 1, work->midstate, 32);
@@ -199,14 +201,23 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	/* New results may spill out from the latest work, making us drop out
 	 * too early so read whatever we get for the first half nonce and then
 	 * look for the results to prev work. */
-	usb_read_timeout(bitfury, info->buf, 512, &amount, 600, C_BF1_GETRES);
-	info->tot += amount;
+	cgtime(&tv_now);
+	ms_diff = 600 - ms_tdiff(&tv_now, &info->tv_start);
+	if (ms_diff > 0) {
+		usb_read_timeout(bitfury, info->buf, 512, &amount, ms_diff, C_BF1_GETRES);
+		info->tot += amount;
+	}
+
 	if (unlikely(thr->work_restart))
 		goto cascade;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
-	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, 1000, C_BF1_GETRES);
+	cgtime(&tv_now);
+	ms_diff = BF1WAIT - ms_tdiff(&tv_now, &info->tv_start);
+	if (unlikely(ms_diff < 10))
+		ms_diff = 10;
+	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, ms_diff, C_BF1_GETRES);
 	info->tot += amount;
 	while (amount) {
 		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
@@ -218,6 +229,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Send work */
 	usb_write(bitfury, buf, 45, &amount, C_BF1_REQWORK);
+	cgtime(&info->tv_start);
 	/* Get response acknowledging work */
 	usb_read(bitfury, buf, 7, &amount, C_BF1_GETWORK);
 

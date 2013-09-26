@@ -98,6 +98,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us);
 int cgtimer_to_ms(cgtimer_t *cgt);
 void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res);
 double us_tdiff(struct timeval *end, struct timeval *start);
+int ms_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
 bool stratum_send(struct pool *pool, char *s, ssize_t len);
 bool sock_full(struct pool *pool);
