@@ -168,13 +168,11 @@ const uint32_t bf_offsets[] = {0, -0x400000, -0x800000};
 
 static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	uint32_t offset_nonce;
 	int i;
 
 	for (i = 0; i < BT_OFFSETS; i++) {
-		offset_nonce = nonce + bf_offsets[i];
-		if (test_nonce(work, offset_nonce)) {
-			submit_nonce(thr, work, offset_nonce);
+		if (test_nonce(work, nonce + bf_offsets[i])) {
+			submit_tested_work(thr, work);
 			return true;
 		}
 	}
