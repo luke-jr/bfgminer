@@ -23,7 +23,7 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	int amount;
 
 	do {
-		usb_read(bitfury, buf, 512, &amount, C_PING);
+		usb_read(bitfury, buf, 512, &amount, C_BF1_FLUSH);
 	} while (amount);
 }
 
@@ -48,7 +48,7 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 {
 	int amount;
 
-	usb_write(bitfury, "L", 1, &amount, C_PING);
+	usb_write(bitfury, "L", 1, &amount, C_BF1_IDENTIFY);
 }
 
 static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)

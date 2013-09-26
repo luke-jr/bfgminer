@@ -333,7 +333,9 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_BF1_GETRESET, "BF1GetReset") \
 	USB_ADD_COMMAND(C_BF1_REQWORK, "BF1RequestWork") \
 	USB_ADD_COMMAND(C_BF1_GETWORK, "BF1GetWork") \
-	USB_ADD_COMMAND(C_BF1_GETRES, "BF1GetResults")
+	USB_ADD_COMMAND(C_BF1_GETRES, "BF1GetResults") \
+	USB_ADD_COMMAND(C_BF1_FLUSH, "BF1Flush") \
+	USB_ADD_COMMAND(C_BF1_IDENTIFY, "BF1Identify")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
 #define USB_ADD_COMMAND(X, Y) X,
