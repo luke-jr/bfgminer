@@ -266,7 +266,7 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	version = info->version;
 	root = api_add_int(root, "Version", &version, true);
 	root = api_add_string(root, "Product", info->product, false);
-	sprintf(serial, "%0x", info->serial);
+	sprintf(serial, "%08x", info->serial);
 	root = api_add_string(root, "Serial", serial, true);
 
 	return root;
