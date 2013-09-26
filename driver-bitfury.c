@@ -222,32 +222,32 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	usb_read(bitfury, buf, 7, &amount, C_BF1_GETWORK);
 
 	/* Only happens on startup */
-	if (unlikely(!info->prevwork2))
+	if (unlikely(!info->prevwork[BF1ARRAY_SIZE]))
 		goto cascade;
 
 	/* Search for what work the nonce matches in order of likelihood. Last
 	 * entry is end of result marker. */
 	for (i = 0; i < info->tot - 7; i += 7) {
 		uint32_t nonce;
+		int j;
 
 		/* Ignore state & switched data in results for now. */
 		memcpy(&nonce, info->buf + i + 3, 4);
 		nonce = decnonce(nonce);
-		if (bitfury_checkresults(thr, info->prevwork1, nonce)) {
-			info->nonces++;
-			continue;
-		}
-		if (bitfury_checkresults(thr, info->prevwork2, nonce)) {
-			info->nonces++;
-			continue;
+		for (j = 0; j < BF1ARRAY_SIZE; j++) {
+			if (bitfury_checkresults(thr, info->prevwork[j], nonce)) {
+				info->nonces++;
+				break;
+			}
 		}
 	}
 
 	info->tot = 0;
-	free_work(info->prevwork2);
+	free_work(info->prevwork[BF1ARRAY_SIZE]);
 cascade:
-	info->prevwork2 = info->prevwork1;
-	info->prevwork1 = copy_work(work);
+	for (i = BF1ARRAY_SIZE; i > 0; i--)
+		info->prevwork[i] = info->prevwork[i - 1];
+	info->prevwork[0] = copy_work(work);
 	work->blk.nonce = 0xffffffff;
 	if (info->nonces) {
 		info->nonces--;
@@ -256,9 +256,20 @@ cascade:
 	return 0;
 }
 
-static struct api_data *bitfury_api_stats(struct cgpu_info __maybe_unused *cgpu)
+static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 {
-	return NULL;
+	struct bitfury_info *info = cgpu->device_data;
+	struct api_data *root = NULL;
+	char serial[16];
+	int version;
+
+	version = info->version;
+	root = api_add_int(root, "Version", &version, true);
+	root = api_add_string(root, "Product", info->product, false);
+	sprintf(serial, "%0x", info->serial);
+	root = api_add_string(root, "Serial", serial, true);
+
+	return root;
 }
 
 static void bitfury_init(struct cgpu_info  *bitfury)
