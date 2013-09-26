@@ -6023,22 +6023,11 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	return (be32toh(hash2_32[7]) <= diff1targ);
 }
 
-/* Returns true if nonce for work was a valid share */
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+/* To be used once the work has been tested to be meet diff1 and has had its
+ * nonce adjusted. */
+void submit_tested_work(struct thr_info *thr, struct work *work)
 {
 	struct timeval tv_work_found;
-	bool ret = true;
-
-	cgtime(&tv_work_found);
-
-	if (!test_nonce(work, nonce)) {
-		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
-		       thr->cgpu->drv->name, thr->cgpu->device_id);
-
-		inc_hw_errors(thr);
-		ret = false;
-		goto out;
-	}
 
 	work->share_diff = share_diff(work);
 
@@ -6051,11 +6040,28 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 
 	if (!fulltest(work->hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
-		goto out;
+		return;
 	}
 
+	cgtime(&tv_work_found);
 	submit_work_async(work, &tv_work_found);
-out:
+}
+
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
+	bool ret = true;
+
+	if (test_nonce(work, nonce))
+		submit_tested_work(thr, work);
+	else {
+		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
+		       thr->cgpu->drv->name, thr->cgpu->device_id);
+
+		inc_hw_errors(thr);
+		ret = false;
+	}
+
 	return ret;
 }
 
