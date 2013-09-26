@@ -1531,7 +1531,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 				info->version1, info->version2, info->version3);
 		root = api_add_string(root, "version", buf, true);
 	}
-	root = api_add_int(root, "Controller Version", &(info->ctlr_ver), false);
+	root = api_add_uint32(root, "Controller Version", &(info->ctlr_ver), false);
 
 	return root;
 }
