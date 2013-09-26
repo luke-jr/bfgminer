@@ -6010,8 +6010,7 @@ void inc_hw_errors(struct thr_info *thr)
 bool test_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t *hash2_32 = (uint32_t *)work->hash2;
 	uint32_t diff1targ;
 
 	*work_nonce = htole32(nonce);
@@ -6021,15 +6020,13 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	flip32(hash2_32, work->hash);
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	work->hash2_32_7 = be32toh(hash2_32[7]);
-	return (work->hash2_32_7 <= diff1targ);
+	return (be32toh(hash2_32[7]) <= diff1targ);
 }
 
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
 	struct timeval tv_work_found;
-	unsigned char hash2[32];
 	bool ret = true;
 
 	cgtime(&tv_work_found);
@@ -6052,7 +6049,7 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
-	if (!fulltest(hash2, work->target)) {
+	if (!fulltest(work->hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
 		goto out;
 	}
