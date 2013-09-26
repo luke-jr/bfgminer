@@ -613,8 +613,3 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 	
 	d->second_run = true;
 }
-
-int libbitfury_readHashData(unsigned int *res) {
-	return 0;
-}
-

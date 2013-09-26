@@ -59,7 +59,6 @@ struct bitfury_device {
 	time_t long_out_t;
 };
 
-int libbitfury_readHashData(unsigned int *res);
 extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *, struct thr_info *);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 extern void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
