@@ -163,23 +163,20 @@ static uint32_t decnonce(uint32_t in)
 	return out;
 }
 
+#define BT_OFFSETS 3
+const uint32_t bf_offsets[] = {0, -0x400000, -0x800000};
+
 static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	uint32_t nonceoff;
+	uint32_t offset_nonce;
+	int i;
 
-	if (test_nonce(work, nonce)) {
-		submit_nonce(thr, work, nonce);
-		return true;
-	}
-	nonceoff = nonce - 0x400000;
-	if (test_nonce(work, nonceoff)) {
-		submit_nonce(thr, work, nonceoff);
-		return true;
-	}
-	nonceoff = nonce - 0x800000;
-	if (test_nonce(work, nonceoff)) {
-		submit_nonce(thr, work, nonceoff);
-		return true;
+	for (i = 0; i < BT_OFFSETS; i++) {
+		offset_nonce = nonce + bf_offsets[i];
+		if (test_nonce(work, offset_nonce)) {
+			submit_nonce(thr, work, offset_nonce);
+			return true;
+		}
 	}
 	return false;
 }
