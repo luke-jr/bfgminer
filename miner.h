@@ -1263,6 +1263,7 @@ struct work {
 #endif
 	double		device_diff;
 	uint64_t	share_diff;
+	uint32_t	hash2_32_7;
 
 	int		rolls;
 

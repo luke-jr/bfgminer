@@ -6021,29 +6021,20 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	flip32(hash2_32, work->hash);
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	return (be32toh(hash2_32[7] <= diff1targ));
+	work->hash2_32_7 = be32toh(hash2_32[7]);
+	return (work->hash2_32_7 <= diff1targ);
 }
 
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	struct timeval tv_work_found;
 	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
-	uint32_t diff1targ;
 	bool ret = true;
 
 	cgtime(&tv_work_found);
-	*work_nonce = htole32(nonce);
-	work->share_diff = 0;
 
-	/* Do one last check before attempting to submit the work */
-	rebuild_hash(work);
-	flip32(hash2_32, work->hash);
-
-	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	if (be32toh(hash2_32[7]) > diff1targ) {
+	if (!test_nonce(work, nonce)) {
 		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
 		       thr->cgpu->drv->name, thr->cgpu->device_id);
 
