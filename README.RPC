@@ -155,9 +155,6 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               the same format as the --scan-serial command line
                               option
 
- devdetail     DEVS           Each available device with their fixed details
-                              e.g. GPU=0,Driver=opencl,Kernel=diablo,Model=...|
-
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
 
@@ -313,7 +310,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not
                               supported by the 'devs' command
-                              e.g. DEVDETAILS=0,Name=PGA,ID=0,ProcID=0,Driver=bitforce,...|
+                              e.g. DEVDETAILS=0,Name=BFL,ID=0,ProcID=0,Driver=bitforce,...|
 
  restart (*)   none           There is no status section but just a single
                               "RESTART" reply before BFGMiner restarts
@@ -444,6 +441,13 @@ api-example.py - a Python script to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V2.0
+
+Removed API commands:
+ 'devdetail' - Use newer 'devdetails' for same information.
+
+----------
 
 API V1.25.3 (BFGMiner v3.2.0)
 

@@ -1429,7 +1429,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	}
 	rd_unlock(&devices_lock);
 
-	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
+	root = api_add_int(root, "DEVDETAILS", &n, true);
 	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 	if (cgpu->kname)
@@ -1531,7 +1531,7 @@ static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom
 #endif
 
 static void
-devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), int msg, struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
 	int i;
@@ -1542,7 +1542,7 @@ devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), 
 	}
 
 
-	message(io_data, MSG_DEVS, 0, NULL, isjson);
+	message(io_data, msg, 0, NULL, isjson);
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_DEVS);
 
@@ -1556,12 +1556,12 @@ devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), 
 
 static void devdetail(struct io_data *io_data, SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	return devinfo_internal(devdetail_an, io_data, c, param, isjson, group);
+	return devinfo_internal(devdetail_an, MSG_DEVDETAILS, io_data, c, param, isjson, group);
 }
 
 static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	return devinfo_internal(devstatus_an, io_data, c, param, isjson, group);
+	return devinfo_internal(devstatus_an, MSG_DEVS, io_data, c, param, isjson, group);
 }
 
 #ifdef HAVE_OPENCL
@@ -2777,42 +2777,6 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 		io_close(io_data);
 }
 
-static void devdetails(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
-	bool io_open = false;
-	struct cgpu_info *cgpu;
-	int i;
-
-	if (total_devices == 0) {
-		message(io_data, MSG_NODEVS, 0, NULL, isjson);
-		return;
-	}
-
-	message(io_data, MSG_DEVDETAILS, 0, NULL, isjson);
-
-	if (isjson)
-		io_open = io_add(io_data, COMSTR JSON_DEVDETAILS);
-
-	for (i = 0; i < total_devices; i++) {
-		cgpu = get_devices(i);
-
-		root = api_add_int(root, "DEVDETAILS", &i, false);
-		root = api_add_device_identifier(root, cgpu);
-		root = api_add_string(root, "Driver", cgpu->drv->dname, false);
-		root = api_add_const(root, "Kernel", cgpu->kname ? : BLANK, false);
-		root = api_add_const(root, "Model", cgpu->name ? : BLANK, false);
-		root = api_add_const(root, "Device Path", cgpu->device_path ? : BLANK, false);
-
-		root = print_data(root, buf, isjson, isjson && (i > 0));
-		io_add(io_data, buf);
-	}
-
-	if (isjson && io_open)
-		io_close(io_data);
-}
-
 void dosave(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char filename[PATH_MAX];
@@ -3241,7 +3205,6 @@ struct CMDS {
 	{ "config",		minerconfig,	false },
 	{ "devscan",		devscan,	false },
 	{ "devs",		devstatus,	false },
-	{ "devdetail",	devdetail,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
 #ifdef HAVE_OPENCL
@@ -3282,7 +3245,7 @@ struct CMDS {
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
 	{ "notify",		notify,		false },
-	{ "devdetails",		devdetails,	false },
+	{ "devdetails",		devdetail,	false },
 	{ "restart",		dorestart,	true },
 	{ "stats",		minerstats,	false },
 	{ "check",		checkcommand,	false },
