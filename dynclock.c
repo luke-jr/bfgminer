@@ -17,6 +17,7 @@ void dclk_prepare(struct dclk_data *data)
 {
 	*data = (struct dclk_data){
 		.minGoodSamples = 150.,
+		.freqMinM = 1,
 	};
 }
 
@@ -52,9 +53,9 @@ bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changecloc
 	while (maxM < data->freqMaxM && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE && data->errorWeight[maxM] >= data->minGoodSamples)
 		maxM++;
 
-	bestM = 0;
+	bestM = data->freqMinM;
 	bestR = 0;
-	for (i = 0; i <= maxM; i++) {
+	for (i = bestM; i <= maxM; i++) {
 		r = (i + 1 + (i == data->freqM? DCLK_ERRORHYSTERESIS: 0)) * (1 - data->maxErrorRate[i]);
 		if (r > bestR) {
 			bestM = i;
