@@ -220,7 +220,6 @@ struct cg_usb_tmo {
 struct cg_usb_info {
 	uint8_t bus_number;
 	uint8_t device_address;
-	int which_intinfo;
 	int usbstat;
 	bool nodev;
 	int nodev_count;
