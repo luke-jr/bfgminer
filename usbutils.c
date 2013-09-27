@@ -2288,7 +2288,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 			STATS_TIMEVAL(&tv_start);
 			cg_rlock(&cgusb_fd_lock);
-			err = libusb_bulk_transfer(dev_handle, endpoint, data,
+			err = libusb_bulk_transfer(dev_handle, endpoint, buf,
 						   length, transferred, timeout);
 			errn = errno;
 			cg_runlock(&cgusb_fd_lock);
