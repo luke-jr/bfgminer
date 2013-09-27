@@ -529,6 +529,7 @@ static bool do_a_quit;
 static bool do_a_restart;
 
 static time_t when = 0;	// when the request occurred
+static bool per_proc;
 
 struct IP4ACCESS {
 	in_addr_t ip;
@@ -1110,6 +1111,8 @@ static int numpgas()
 		if (devices[i]->drv == &cpu_drv)
 			continue;
 #endif
+		if (devices[i]->device != devices[i] && !per_proc)
+			continue;
 		++count;
 	}
 	rd_unlock(&devices_lock);
@@ -1131,6 +1134,8 @@ static int pgadevice(int pgaid)
 		if (devices[i]->drv == &cpu_drv)
 			continue;
 #endif
+		if (devices[i]->device != devices[i] && !per_proc)
+			continue;
 		++count;
 		if (count == (pgaid + 1))
 			goto foundit;
@@ -1406,7 +1411,7 @@ static const char *status2str(enum alive status)
 }
 
 static
-struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu, bool per_proc)
+struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
 {
 	root = api_add_string(root, "Name", cgpu->drv->name, false);
 	root = api_add_int(root, "ID", &(cgpu->device_id), false);
@@ -1416,12 +1421,13 @@ struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_in
 }
 
 static
-int find_index_by_cgpu(struct cgpu_info *cgpu, bool per_proc)
+int find_index_by_cgpu(struct cgpu_info *cgpu)
 {
 	int n = 0, i;
 	
 	rd_lock(&devices_lock);
-	for (i = 0; i < total_devices; ++i) {
+	for (i = 0; i < total_devices; ++i)
+	{
 		if (devices[i] == cgpu)
 			break;
 		if (devices[i]->device != devices[i] && !per_proc)
@@ -1433,7 +1439,7 @@ int find_index_by_cgpu(struct cgpu_info *cgpu, bool per_proc)
 	return n;
 }
 
-static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom, bool per_proc)
+static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -1441,10 +1447,10 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	cgpu_utility(cgpu);
 
-	n = find_index_by_cgpu(cgpu, per_proc);
+	n = find_index_by_cgpu(cgpu);
 
 	root = api_add_int(root, "DEVDETAILS", &n, true);
-	root = api_add_device_identifier(root, cgpu, per_proc);
+	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 	if (cgpu->kname)
 		root = api_add_string(root, "Kernel", cgpu->kname, false);
@@ -1461,14 +1467,14 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 }
 
 static
-void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom, bool per_proc)
+void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
 {
 	struct cgpu_info *proc;
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	int n;
 
-	n = find_index_by_cgpu(cgpu, per_proc);
+	n = find_index_by_cgpu(cgpu);
 
 	bool enabled = false;
 	double total_mhashes = 0, rolling = 0, utility = 0;
@@ -1512,7 +1518,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	}
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
-	root = api_add_device_identifier(root, cgpu, per_proc);
+	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Enabled", bool2str(enabled), false);
 	root = api_add_string(root, "Status", status2str(status), false);
 	if (temp > 0)
@@ -1558,7 +1564,7 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 {
         if (gpu < 0 || gpu >= nDevs)
                 return;
-        devstatus_an(io_data, &gpus[gpu], isjson, precom, true);
+        devstatus_an(io_data, &gpus[gpu], isjson, precom);
 }
 #endif
 
@@ -1568,7 +1574,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
         int dev = pgadevice(pga);
         if (dev < 0) // Should never happen
                 return;
-        devstatus_an(io_data, get_devices(dev), isjson, precom, true);
+        devstatus_an(io_data, get_devices(dev), isjson, precom);
 }
 #endif
 
@@ -1577,12 +1583,12 @@ static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom
 {
         if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
                 return;
-        devstatus_an(io_data, &cpus[cpu], isjson, precom, true);
+        devstatus_an(io_data, &cpus[cpu], isjson, precom);
 }
 #endif
 
 static void
-devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool, bool), int msg, struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), int msg, struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
 	bool io_open = false;
@@ -1600,8 +1606,8 @@ devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool, b
 
 	for (i = 0; i < total_devices; ++i) {
 		cgpu = get_devices(i);
-		if ((!true) || cgpu->device == cgpu)
-			func(io_data, cgpu, isjson, isjson && i > 0, true);
+		if (per_proc || cgpu->device == cgpu)
+			func(io_data, cgpu, isjson, isjson && i > 0);
 	}
 
 	if (isjson && io_open)
@@ -1671,7 +1677,7 @@ static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	n = total_devices - n;
 	for (int i = n; i < total_devices; ++i)
-		devdetail_an(io_data, get_devices(i), isjson, i > n, true);
+		devdetail_an(io_data, get_devices(i), isjson, i > n);
 	
 	if (isjson && io_open)
 		io_close(io_data);
@@ -1713,9 +1719,10 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	struct cgpu_info *cgpu;
+	struct cgpu_info *cgpu, *proc;
 	int numpga = numpgas();
 	int id;
+	bool already;
 
 	if (numpga == 0) {
 		message(io_data, MSG_PGANON, 0, NULL, isjson);
@@ -1741,10 +1748,21 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 
 	cgpu = get_devices(dev);
 
-	applog(LOG_DEBUG, "API: request to pgaenable pgaid %d device %d %s",
-			id, dev, cgpu->proc_repr_ns);
+	applog(LOG_DEBUG, "API: request to pgaenable %s id %d device %d %s",
+			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
-	if (cgpu->deven != DEV_DISABLED) {
+	already = true;
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		if (proc->deven == DEV_DISABLED)
+		{
+			proc_enable(proc);
+			already = false;
+		}
+	}
+	
+	if (already)
+	{
 		message(io_data, MSG_PGALRENA, id, NULL, isjson);
 		return;
 	}
@@ -1756,16 +1774,15 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 #endif
 
-	proc_enable(cgpu);
-
 	message(io_data, MSG_PGAENA, id, NULL, isjson);
 }
 
 static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	struct cgpu_info *cgpu;
+	struct cgpu_info *cgpu, *proc;
 	int numpga = numpgas();
 	int id;
+	bool already;
 
 	if (numpga == 0) {
 		message(io_data, MSG_PGANON, 0, NULL, isjson);
@@ -1791,15 +1808,24 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 	cgpu = get_devices(dev);
 
-	applog(LOG_DEBUG, "API: request to pgadisable pgaid %d device %d %s",
-			id, dev, cgpu->proc_repr_ns);
+	applog(LOG_DEBUG, "API: request to pgadisable %s id %d device %d %s",
+			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
-	if (cgpu->deven == DEV_DISABLED) {
+	already = true;
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		if (proc->deven != DEV_DISABLED)
+		{
+			cgpu->deven = DEV_DISABLED;
+			already = false;
+		}
+	}
+	
+	if (already)
+	{
 		message(io_data, MSG_PGALRDIS, id, NULL, isjson);
 		return;
 	}
-
-	cgpu->deven = DEV_DISABLED;
 
 	message(io_data, MSG_PGADIS, id, NULL, isjson);
 }
@@ -2742,7 +2768,7 @@ void privileged(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_un
 	message(io_data, MSG_ACCOK, 0, NULL, isjson);
 }
 
-void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group, bool per_proc)
+void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *proc;
 	struct api_data *root = NULL;
@@ -2772,6 +2798,8 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 			dev_comms_error_count    += proc->dev_comms_error_count;
 			dev_throttle_count       += proc->dev_throttle_count;
 		}
+		if (per_proc)
+			break;
 	}
 	
 	if (last_not_well == 0)
@@ -2814,7 +2842,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for identifying new counters
 	root = api_add_int(root, "NOTIFY", &device, false);
-	root = api_add_device_identifier(root, cgpu, per_proc);
+	root = api_add_device_identifier(root, cgpu);
 	if (per_proc)
 		root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
 	root = api_add_time(root, "Last Not Well", &last_not_well, false);
@@ -2834,11 +2862,12 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	io_add(io_data, buf);
 }
 
-static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
+static
+void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, char group)
 {
 	struct cgpu_info *cgpu;
 	bool io_open = false;
-	int i;
+	int i, n = 0;
 
 	if (total_devices == 0) {
 		message(io_data, MSG_NODEVS, 0, NULL, isjson);
@@ -2852,7 +2881,8 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 
 	for (i = 0; i < total_devices; i++) {
 		cgpu = get_devices(i);
-		notifystatus(io_data, i, cgpu, isjson, group, true);
+		if (cgpu->device == cgpu || per_proc)
+			notifystatus(io_data, n++, cgpu, isjson, group);
 	}
 
 	if (isjson && io_open)
@@ -3287,6 +3317,7 @@ struct CMDS {
 	{ "config",		minerconfig,	false },
 	{ "devscan",		devscan,	false },
 	{ "devs",		devstatus,	false },
+	{ "procs",		devstatus,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
 #ifdef HAVE_OPENCL
@@ -3300,6 +3331,10 @@ struct CMDS {
 	{ "pgaenable",		pgaenable,	true },
 	{ "pgadisable",		pgadisable,	true },
 	{ "pgaidentify",	pgaidentify,	true },
+	{ "proc",		pgadev,		false },
+	{ "procenable",		pgaenable,	true },
+	{ "procdisable",		pgadisable,	true },
+	{ "procidentify",	pgaidentify,	true },
 #endif
 #ifdef WANT_CPUMINE
 	{ "cpuenable",		cpuenable,	true },
@@ -3309,6 +3344,7 @@ struct CMDS {
 #endif
 	{ "gpucount",		gpucount,	false },
 	{ "pgacount",		pgacount,	false },
+	{ "proccount",		pgacount,	false },
 	{ "cpucount",		cpucount,	false },
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
@@ -3327,7 +3363,9 @@ struct CMDS {
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
 	{ "notify",		notify,		false },
+	{ "procnotify",		notify,		false },
 	{ "devdetails",		devdetail,	false },
+	{ "procdetails",		devdetail,	false },
 	{ "restart",		dorestart,	true },
 	{ "stats",		minerstats,	false },
 	{ "check",		checkcommand,	false },
@@ -3337,6 +3375,7 @@ struct CMDS {
 	{ "setconfig",		setconfig,	true },
 #ifdef HAVE_AN_FPGA
 	{ "pgaset",		pgaset,		true },
+	{ "procset",		pgaset,		true },
 #endif
 	{ "zero",		dozero,		true },
 	{ NULL,			NULL,		false }
@@ -4116,7 +4155,10 @@ void api(int api_thr_id)
 						if (strcmp(cmd, cmds[i].name) == 0) {
 							sprintf(cmdbuf, "|%s|", cmd);
 							if (ISPRIVGROUP(group) || strstr(COMMANDS(group), cmdbuf))
+							{
+								per_proc = !strncmp(cmds[i].name, "proc", 4);
 								(cmds[i].func)(io_data, c, param, isjson, group);
+							}
 							else {
 								message(io_data, MSG_ACCDENY, 0, cmds[i].name, isjson);
 								applog(LOG_DEBUG, "API: access denied to '%s' for '%s' command", connectaddr, cmds[i].name);
