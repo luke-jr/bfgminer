@@ -40,9 +40,13 @@ static void bitfury_open(struct cgpu_info *bitfury)
 
 static void bitfury_close(struct cgpu_info *bitfury)
 {
+	char buf[8];
+	int amount;
+
 	bitfury_empty_buffer(bitfury);
 	/* Magic close sequence */
 	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_CLOSE);
+	usb_read_ii(bitfury, 0, buf, 8, &amount, C_BF1_IFLUSH);
 	bitfury_empty_buffer(bitfury);
 	usb_transfer(bitfury, 0x23, 0x08, 0x9053, 1, C_BF1_CLOSE);
 	bitfury_empty_buffer(bitfury);
