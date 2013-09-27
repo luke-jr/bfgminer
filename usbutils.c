@@ -2261,7 +2261,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
-	err = libusb_bulk_transfer(dev_handle, endpoint, data, length,
+	err = libusb_bulk_transfer(dev_handle, endpoint, buf, length,
 				   transferred, timeout);
 	errn = errno;
 	cg_runlock(&cgusb_fd_lock);
@@ -2309,7 +2309,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		if (err)
 			cgpu->usbinfo.clear_fail_count++;
 	}
-	if (endpoint == LIBUSB_ENDPOINT_OUT)
+	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, length);
 
 	return err;
