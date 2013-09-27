@@ -23,38 +23,30 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	int amount;
 
 	do {
-		usb_read_ii(bitfury, 1, buf, 512, &amount, C_BF1_FLUSH);
+		usb_read_ii_once(bitfury, 1, buf, 512, &amount, C_BF1_FLUSH);
 	} while (amount);
 }
 
 static void bitfury_empty_intbuf(struct cgpu_info *bitfury)
 {
-	char buf[8];
+	char buf[512];
 	int amount;
 
-	usb_read_ii(bitfury, 0, buf, 8, &amount, C_BF1_IFLUSH);
+	do {
+		usb_read_ii_once(bitfury, 0, buf, 512, &amount, C_BF1_IFLUSH);
+	} while (amount);
 }
 
-static bool bitfury_open(struct cgpu_info *bitfury)
+static void bitfury_open(struct cgpu_info *bitfury)
 {
-	int err;
-
 	bitfury_empty_intbuf(bitfury);
-	/* Magic open sequence */
-	err = usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
-	if (!err)
-		bitfury_empty_buffer(bitfury);
-	return !err;
+	bitfury_empty_buffer(bitfury);
 }
 
 static void bitfury_close(struct cgpu_info *bitfury)
 {
 	bitfury_empty_buffer(bitfury);
-	/* Magic close sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_CLOSE);
 	bitfury_empty_intbuf(bitfury);
-	bitfury_empty_buffer(bitfury);
-	usb_transfer(bitfury, 0x23, 0x08, 0x9053, 1, C_BF1_CLOSE);
 	bitfury_empty_buffer(bitfury);
 }
 
@@ -144,11 +136,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 
 	usb_buffer_enable(bitfury);
 
-	if (!bitfury_open(bitfury)) {
-		applog(LOG_INFO, "%s %d: Failed to open", bitfury->drv->name,
-		       bitfury->device_id);
-		goto out_close;
-	}
+	bitfury_open(bitfury);
 
 	/* Send getinfo request */
 	if (!bitfury_getinfo(bitfury, info))
