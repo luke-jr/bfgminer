@@ -140,9 +140,10 @@ static struct usb_epinfo bfu1_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 16, 0 }
 };
 
+/* Default to interface 1 */
 static struct usb_intinfo bfu_ints[] = {
-	USB_EPS(0,  bfu0_epinfos),
-	USB_EPS(1,  bfu1_epinfos)
+	USB_EPS(1,  bfu1_epinfos),
+	USB_EPS(0,  bfu0_epinfos)
 };
 #endif
 
