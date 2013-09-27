@@ -1484,8 +1484,8 @@ static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
 	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
 	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
-	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
-			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
+	double hwp = (cgpu->bad_nonces + cgpu->diff1) ?
+			(double)(cgpu->bad_nonces) / (double)(cgpu->bad_nonces + cgpu->diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);
 	double rejp = cgpu->diff1 ?
 			(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
@@ -1961,8 +1961,8 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
 	root = api_add_uint64(root, "Best Share", &(best_diff), true);
-	double hwp = (hw_errors + total_diff1) ?
-			(double)(hw_errors) / (double)(hw_errors + total_diff1) : 0;
+	double hwp = (total_bad_nonces + total_diff1) ?
+			(double)(total_bad_nonces) / (double)(total_bad_nonces + total_diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);
 	double rejp = total_diff1 ?
 			(double)(total_diff_rejected) / (double)(total_diff1) : 0;
