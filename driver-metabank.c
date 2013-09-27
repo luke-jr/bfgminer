@@ -194,19 +194,17 @@ static bool metabank_get_stats(struct cgpu_info *cgpu)
 static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	float t, vc0, vc1;
+	float vc0, vc1;
 	struct bitfury_device * const bitfury = cgpu->device_data;
 
 	root = api_add_uint(root, "Slot", &(bitfury->slot), false);
 	root = api_add_int(root, "Clock Bits", (int*)&bitfury->osc6_bits, false);
 
-	t = tm_i2c_gettemp(bitfury->slot) * 0.1;
 	vc0 = tm_i2c_getcore0(bitfury->slot);
 	vc1 = tm_i2c_getcore1(bitfury->slot);
 
-	root = api_add_temp(root, "Slot Temp", &t, true);
-	root = api_add_temp(root, "Slot VC0", &vc0, true);
-	root = api_add_temp(root, "Slot VC1", &vc1, true);
+	root = api_add_volts(root, "Slot VC0", &vc0, true);
+	root = api_add_volts(root, "Slot VC1", &vc1, true);
 
 	return root;
 }
