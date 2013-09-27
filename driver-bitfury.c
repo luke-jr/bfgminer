@@ -35,12 +35,16 @@ static void bitfury_empty_intbuf(struct cgpu_info *bitfury)
 	usb_read_ii(bitfury, 0, buf, 8, &amount, C_BF1_IFLUSH);
 }
 
-static void bitfury_open(struct cgpu_info *bitfury)
+static bool bitfury_open(struct cgpu_info *bitfury)
 {
+	int err;
+
 	bitfury_empty_intbuf(bitfury);
 	/* Magic open sequence */
-	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
-	bitfury_empty_buffer(bitfury);
+	err = usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
+	if (!err)
+		bitfury_empty_buffer(bitfury);
+	return !err;
 }
 
 static void bitfury_close(struct cgpu_info *bitfury)
@@ -109,10 +113,8 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 
 	bitfury = usb_alloc_cgpu(&bitfury_drv, 1);
 
-	if (!usb_init(bitfury, dev, found)) {
-		bitfury = usb_free_cgpu(bitfury);
+	if (!usb_init(bitfury, dev, found))
 		goto out;
-	}
 	applog(LOG_INFO, "%s %d: Found at %s", bitfury->drv->name,
 	       bitfury->device_id, bitfury->device_path);
 
@@ -123,7 +125,11 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 
 	usb_buffer_enable(bitfury);
 
-	bitfury_open(bitfury);
+	if (!bitfury_open(bitfury)) {
+		applog(LOG_INFO, "%s %d: Failed to open", bitfury->drv->name,
+		       bitfury->device_id);
+		goto out_close;
+	}
 
 	/* Send getinfo request */
 	if (!bitfury_getinfo(bitfury, info))
@@ -145,7 +151,9 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	return true;
 out_close:
 	bitfury_close(bitfury);
+	usb_uninit(bitfury);
 out:
+	bitfury = usb_free_cgpu(bitfury);
 	return false;
 }
 
