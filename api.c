@@ -1387,6 +1387,7 @@ static const char *status2str(enum alive status)
 		case LIFE_SICK:
 			return SICK;
 		case LIFE_DEAD:
+		case LIFE_DEAD2:
 			return DEAD;
 		case LIFE_NOSTART:
 			return NOSTART;
