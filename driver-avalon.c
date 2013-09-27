@@ -720,7 +720,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
 	avalon->usbdev->usb_type = USB_TYPE_STD;
-	avalon->usbdev->PrefPacketSize = AVALON_USB_PACKETSIZE;
+	usb_set_pps(avalon, AVALON_USB_PACKETSIZE);
 
 	/* We have a real Avalon! */
 	avalon_initialise(avalon);
