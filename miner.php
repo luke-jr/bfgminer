@@ -1280,7 +1280,7 @@ function details($cmd, $list, $rig)
 		{
 			if (isset($total[$name]))
 			{
-				if ($dototal[$name] == 2)
+				if (isset($dototal[$name]) && $dototal[$name] == 2)
 					$total[$name] = max($total[$name], $value);
 				else
 					$total[$name] += $value;
