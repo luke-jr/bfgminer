@@ -297,7 +297,7 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 				return;
 
 			// Latency
-			usb_ftdi_set_latency(icarus);
+			_usb_ftdi_set_latency(icarus, info->intinfo);
 
 			if (icarus->usbinfo.nodev)
 				return;
@@ -890,13 +890,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 			cgtmp->usbinfo.usbstat = USB_NOSTAT;
 
-			if (!add_cgpu(cgtmp)) {
-				usb_uninit(cgtmp);
-				continue;
-			}
-
-			update_usb_stats(cgtmp);
-
 			intmp = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
 			if (unlikely(!intmp))
 				quit(1, "Failed2 to malloc ICARUS_INFO");
@@ -907,6 +900,16 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 			memcpy(intmp, info, sizeof(struct ICARUS_INFO));
 
 			intmp->intinfo = i;
+
+			icarus_initialise(cgtmp, baud);
+
+			if (!add_cgpu(cgtmp)) {
+				usb_uninit(cgtmp);
+				free(intmp);
+				continue;
+			}
+
+			update_usb_stats(cgtmp);
 		}
 	}
 
