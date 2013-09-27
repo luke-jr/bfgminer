@@ -1398,39 +1398,53 @@ static const char *status2str(enum alive status)
 			return INIT;
 		case LIFE_WAIT:
 			return WAIT;
+		case LIFE_MIXED:
+			return "Mixed";
 		default:
 			return UNKNOWN;
 	}
 }
 
 static
-struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu)
+struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_info *cgpu, bool per_proc)
 {
 	root = api_add_string(root, "Name", cgpu->drv->name, false);
 	root = api_add_int(root, "ID", &(cgpu->device_id), false);
-	root = api_add_int(root, "ProcID", &(cgpu->proc_id), false);
+	if (per_proc)
+		root = api_add_int(root, "ProcID", &(cgpu->proc_id), false);
 	return root;
 }
 
-static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
+static
+int find_index_by_cgpu(struct cgpu_info *cgpu, bool per_proc)
 {
-	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
 	int n = 0, i;
-
-	cgpu_utility(cgpu);
-
+	
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; ++i) {
 		if (devices[i] == cgpu)
 			break;
+		if (devices[i]->device != devices[i] && !per_proc)
+			continue;
 		if (cgpu->devtype == devices[i]->devtype)
 			++n;
 	}
 	rd_unlock(&devices_lock);
+	return n;
+}
+
+static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom, bool per_proc)
+{
+	struct api_data *root = NULL;
+	char buf[TMPBUFSIZ];
+	int n;
+
+	cgpu_utility(cgpu);
+
+	n = find_index_by_cgpu(cgpu, per_proc);
 
 	root = api_add_int(root, "DEVDETAILS", &n, true);
-	root = api_add_device_identifier(root, cgpu);
+	root = api_add_device_identifier(root, cgpu, per_proc);
 	root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 	if (cgpu->kname)
 		root = api_add_string(root, "Kernel", cgpu->kname, false);
@@ -1446,56 +1460,93 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	io_add(io_data, buf);
 }
 
-static void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom)
+static
+void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, bool precom, bool per_proc)
 {
+	struct cgpu_info *proc;
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	int n = 0, i;
+	int n;
 
-	cgpu_utility(cgpu);
+	n = find_index_by_cgpu(cgpu, per_proc);
 
-	rd_lock(&devices_lock);
-	for (i = 0; i < total_devices; ++i) {
-		if (devices[i] == cgpu)
+	bool enabled = false;
+	double total_mhashes = 0, rolling = 0, utility = 0;
+	enum alive status = cgpu->status;
+	float temp = -1;
+	int accepted = 0, rejected = 0, hw_errors = 0;
+	int diff1 = 0, bad_nonces = 0;
+	double diff_accepted = 0, diff_rejected = 0;
+	int last_share_pool = -1;
+	time_t last_share_pool_time = -1, last_device_valid_work = -1;
+	double last_share_diff = -1;
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		cgpu_utility(proc);
+		if (proc->deven != DEV_DISABLED)
+			enabled = true;
+		total_mhashes += proc->total_mhashes;
+		rolling += proc->rolling;
+		utility += proc->utility;
+		accepted += proc->accepted;
+		rejected += proc->rejected;
+		hw_errors += proc->hw_errors;
+		diff1 += proc->diff1;
+		diff_accepted += proc->diff_accepted;
+		diff_rejected += proc->diff_rejected;
+		bad_nonces += proc->bad_nonces;
+		if (status != proc->status)
+			status = LIFE_MIXED;
+		if (proc->temp > temp)
+			temp = proc->temp;
+		if (proc->last_share_pool_time > last_share_pool_time)
+		{
+			last_share_pool_time = proc->last_share_pool_time;
+			last_share_pool = proc->last_share_pool;
+			last_share_diff = proc->last_share_diff;
+		}
+		if (proc->last_device_valid_work > last_device_valid_work)
+			last_device_valid_work = proc->last_device_valid_work;
+		if (per_proc)
 			break;
-		if (cgpu->devtype == devices[i]->devtype)
-			++n;
 	}
-	rd_unlock(&devices_lock);
 
 	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
-	root = api_add_device_identifier(root, cgpu);
-	root = api_add_string(root, "Enabled", bool2str(cgpu->deven != DEV_DISABLED), false);
-	root = api_add_string(root, "Status", status2str(cgpu->status), false);
-	if (cgpu->temp)
-		root = api_add_temp(root, "Temperature", &cgpu->temp, false);
-	double mhs = cgpu->total_mhashes / cgpu_runtime(cgpu);
+	root = api_add_device_identifier(root, cgpu, per_proc);
+	root = api_add_string(root, "Enabled", bool2str(enabled), false);
+	root = api_add_string(root, "Status", status2str(status), false);
+	if (temp > 0)
+		root = api_add_temp(root, "Temperature", &temp, false);
+	double mhs = total_mhashes / cgpu_runtime(cgpu);
 	root = api_add_mhs(root, "MHS av", &mhs, false);
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
-	root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-	root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
-	root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
-	root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
-	root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-	int last_share_pool = cgpu->last_share_pool_time > 0 ?
-				cgpu->last_share_pool : -1;
-	root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-	root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-	root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-	root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
-	root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
-	root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
-	root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
-	root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
-	double hwp = (cgpu->bad_nonces + cgpu->diff1) ?
-			(double)(cgpu->bad_nonces) / (double)(cgpu->bad_nonces + cgpu->diff1) : 0;
+	root = api_add_mhs(root, mhsname, &rolling, false);
+	root = api_add_int(root, "Accepted", &accepted, false);
+	root = api_add_int(root, "Rejected", &rejected, false);
+	root = api_add_int(root, "Hardware Errors", &hw_errors, false);
+	root = api_add_utility(root, "Utility", &utility, false);
+	if (last_share_pool != -1)
+	{
+		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
+		root = api_add_time(root, "Last Share Time", &last_share_pool_time, false);
+	}
+	root = api_add_mhtotal(root, "Total MH", &total_mhashes, false);
+	root = api_add_int(root, "Diff1 Work", &diff1, false);
+	root = api_add_diff(root, "Difficulty Accepted", &diff_accepted, false);
+	root = api_add_diff(root, "Difficulty Rejected", &diff_rejected, false);
+	if (last_share_diff > 0)
+		root = api_add_diff(root, "Last Share Difficulty", &last_share_diff, false);
+	if (last_device_valid_work != -1)
+		root = api_add_time(root, "Last Valid Work", &last_device_valid_work, false);
+	double hwp = (bad_nonces + diff1) ?
+			(double)(bad_nonces) / (double)(bad_nonces + diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);
-	double rejp = cgpu->diff1 ?
-			(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
+	double rejp = diff1 ?
+			(double)(diff_rejected) / (double)(diff1) : 0;
 	root = api_add_percent(root, "Device Rejected%", &rejp, false);
 
-	if (cgpu->drv->get_api_extra_device_status)
+	if (per_proc && cgpu->drv->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_status(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
@@ -1507,7 +1558,7 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 {
         if (gpu < 0 || gpu >= nDevs)
                 return;
-        devstatus_an(io_data, &gpus[gpu], isjson, precom);
+        devstatus_an(io_data, &gpus[gpu], isjson, precom, true);
 }
 #endif
 
@@ -1517,7 +1568,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
         int dev = pgadevice(pga);
         if (dev < 0) // Should never happen
                 return;
-        devstatus_an(io_data, get_devices(dev), isjson, precom);
+        devstatus_an(io_data, get_devices(dev), isjson, precom, true);
 }
 #endif
 
@@ -1526,13 +1577,14 @@ static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom
 {
         if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
                 return;
-        devstatus_an(io_data, &cpus[cpu], isjson, precom);
+        devstatus_an(io_data, &cpus[cpu], isjson, precom, true);
 }
 #endif
 
 static void
-devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), int msg, struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool, bool), int msg, struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
+	struct cgpu_info *cgpu;
 	bool io_open = false;
 	int i;
 
@@ -1547,7 +1599,9 @@ devinfo_internal(void (*func)(struct io_data *, struct cgpu_info*, bool, bool), 
 		io_open = io_add(io_data, COMSTR JSON_DEVS);
 
 	for (i = 0; i < total_devices; ++i) {
-		func(io_data, get_devices(i), isjson, isjson && i > 0);
+		cgpu = get_devices(i);
+		if ((!true) || cgpu->device == cgpu)
+			func(io_data, cgpu, isjson, isjson && i > 0, true);
 	}
 
 	if (isjson && io_open)
@@ -1617,7 +1671,7 @@ static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	n = total_devices - n;
 	for (int i = n; i < total_devices; ++i)
-		devdetail_an(io_data, get_devices(i), isjson, i > n);
+		devdetail_an(io_data, get_devices(i), isjson, i > n, true);
 	
 	if (isjson && io_open)
 		io_close(io_data);
@@ -2688,16 +2742,43 @@ void privileged(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_un
 	message(io_data, MSG_ACCOK, 0, NULL, isjson);
 }
 
-void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group)
+void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, bool isjson, __maybe_unused char group, bool per_proc)
 {
+	struct cgpu_info *proc;
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	char *reason;
+	
+	time_t last_not_well = 0;
+	enum dev_reason enum_reason;
+	int thread_fail_init_count = 0, thread_zero_hash_count = 0, thread_fail_queue_count = 0;
+	int dev_sick_idle_60_count = 0, dev_dead_idle_600_count = 0;
+	int dev_nostart_count = 0, dev_over_heat_count = 0, dev_thermal_cutoff_count = 0, dev_comms_error_count = 0, dev_throttle_count = 0;
 
-	if (cgpu->device_last_not_well == 0)
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		if (proc->device_last_not_well > last_not_well)
+		{
+			last_not_well = proc->device_last_not_well;
+			enum_reason = proc->device_not_well_reason;
+			thread_fail_init_count   += proc->thread_fail_init_count;
+			thread_zero_hash_count   += proc->thread_zero_hash_count;
+			thread_fail_queue_count  += proc->thread_fail_queue_count;
+			dev_sick_idle_60_count   += proc->dev_sick_idle_60_count;
+			dev_dead_idle_600_count  += proc->dev_dead_idle_600_count;
+			dev_nostart_count        += proc->dev_nostart_count;
+			dev_over_heat_count      += proc->dev_over_heat_count;
+			dev_thermal_cutoff_count += proc->dev_thermal_cutoff_count;
+			dev_comms_error_count    += proc->dev_comms_error_count;
+			dev_throttle_count       += proc->dev_throttle_count;
+		}
+	}
+	
+	if (last_not_well == 0)
 		reason = REASON_NONE;
 	else
-		switch(cgpu->device_not_well_reason) {
+		switch (enum_reason)
+		{
 			case REASON_THREAD_FAIL_INIT:
 				reason = REASON_THREAD_FAIL_INIT_STR;
 				break;
@@ -2733,20 +2814,21 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	// ALL counters (and only counters) must start the name with a '*'
 	// Simplifies future external support for identifying new counters
 	root = api_add_int(root, "NOTIFY", &device, false);
-	root = api_add_device_identifier(root, cgpu);
-	root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
-	root = api_add_time(root, "Last Not Well", &(cgpu->device_last_not_well), false);
+	root = api_add_device_identifier(root, cgpu, per_proc);
+	if (per_proc)
+		root = api_add_time(root, "Last Well", &(cgpu->device_last_well), false);
+	root = api_add_time(root, "Last Not Well", &last_not_well, false);
 	root = api_add_string(root, "Reason Not Well", reason, false);
-	root = api_add_int(root, "*Thread Fail Init", &(cgpu->thread_fail_init_count), false);
-	root = api_add_int(root, "*Thread Zero Hash", &(cgpu->thread_zero_hash_count), false);
-	root = api_add_int(root, "*Thread Fail Queue", &(cgpu->thread_fail_queue_count), false);
-	root = api_add_int(root, "*Dev Sick Idle 60s", &(cgpu->dev_sick_idle_60_count), false);
-	root = api_add_int(root, "*Dev Dead Idle 600s", &(cgpu->dev_dead_idle_600_count), false);
-	root = api_add_int(root, "*Dev Nostart", &(cgpu->dev_nostart_count), false);
-	root = api_add_int(root, "*Dev Over Heat", &(cgpu->dev_over_heat_count), false);
-	root = api_add_int(root, "*Dev Thermal Cutoff", &(cgpu->dev_thermal_cutoff_count), false);
-	root = api_add_int(root, "*Dev Comms Error", &(cgpu->dev_comms_error_count), false);
-	root = api_add_int(root, "*Dev Throttle", &(cgpu->dev_throttle_count), false);
+	root = api_add_int(root, "*Thread Fail Init", &thread_fail_init_count, false);
+	root = api_add_int(root, "*Thread Zero Hash", &thread_zero_hash_count, false);
+	root = api_add_int(root, "*Thread Fail Queue", &thread_fail_queue_count, false);
+	root = api_add_int(root, "*Dev Sick Idle 60s", &dev_sick_idle_60_count, false);
+	root = api_add_int(root, "*Dev Dead Idle 600s", &dev_dead_idle_600_count, false);
+	root = api_add_int(root, "*Dev Nostart", &dev_nostart_count, false);
+	root = api_add_int(root, "*Dev Over Heat", &dev_over_heat_count, false);
+	root = api_add_int(root, "*Dev Thermal Cutoff", &dev_thermal_cutoff_count, false);
+	root = api_add_int(root, "*Dev Comms Error", &dev_comms_error_count, false);
+	root = api_add_int(root, "*Dev Throttle", &dev_throttle_count, false);
 
 	root = print_data(root, buf, isjson, isjson && (device > 0));
 	io_add(io_data, buf);
@@ -2770,7 +2852,7 @@ static void notify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 
 	for (i = 0; i < total_devices; i++) {
 		cgpu = get_devices(i);
-		notifystatus(io_data, i, cgpu, isjson, group);
+		notifystatus(io_data, i, cgpu, isjson, group, true);
 	}
 
 	if (isjson && io_open)
