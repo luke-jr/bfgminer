@@ -176,6 +176,21 @@ static void metabank_shutdown(struct thr_info *thr)
 	tm_i2c_close();
 }
 
+static bool metabank_get_stats(struct cgpu_info *cgpu)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	float t;
+
+	t = tm_i2c_gettemp(bitfury->slot) * 0.1;
+
+	if (t < -27) //Sometimes tm_i2c_gettemp() returns strange result, ignoring it.
+		return false;
+
+	cgpu->temp = t;
+
+	return true;
+}
+
 static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -215,4 +230,5 @@ struct device_drv metabank_drv = {
 	
 	.thread_shutdown = metabank_shutdown,
 	.get_api_extra_device_status = metabank_api_extra_device_status,
+	.get_stats = metabank_get_stats,
 };
