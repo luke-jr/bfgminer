@@ -350,6 +350,8 @@ if test "x$httpsrv" != "xno"; then
 fi
 AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
 
+AM_CONDITIONAL([NEED_BFG_DRIVER_PROXY], [test x$httpsrv != xno])
+
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],

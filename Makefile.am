@@ -83,6 +83,10 @@ endif
 
 bfgminer_SOURCES	+= logging.c
 
+if NEED_BFG_DRIVER_PROXY
+bfgminer_SOURCES += driver-proxy.c driver-proxy.h
+endif
+
 if USE_LIBMICROHTTPD
 bfgminer_SOURCES += httpsrv.c httpsrv.h driver-getwork.c
 bfgminer_LDADD += $(libmicrohttpd_LIBS)

@@ -26,78 +26,9 @@
 #include <uthash.h>
 
 #include "deviceapi.h"
+#include "driver-proxy.h"
 #include "httpsrv.h"
 #include "miner.h"
-
-struct device_drv getwork_drv;
-
-struct getwork_client {
-	char *username;
-	struct cgpu_info *cgpu;
-	struct work *work;
-	struct timeval tv_hashes_done;
-	
-	UT_hash_handle hh;
-};
-
-static
-struct getwork_client *getwork_clients;
-static
-pthread_mutex_t getwork_clients_mutex;
-
-static
-void prune_worklog()
-{
-	struct getwork_client *client, *tmp;
-	struct work *work, *tmp2;
-	struct timeval tv_now;
-	
-	timer_set_now(&tv_now);
-	
-	mutex_lock(&getwork_clients_mutex);
-	HASH_ITER(hh, getwork_clients, client, tmp)
-	{
-		HASH_ITER(hh, client->work, work, tmp2)
-		{
-			if (timer_elapsed(&work->tv_work_start, &tv_now) <= opt_expiry)
-				break;
-			HASH_DEL(client->work, work);
-			free_work(work);
-		}
-	}
-	mutex_unlock(&getwork_clients_mutex);
-}
-
-static
-pthread_t prune_worklog_pth;
-
-static
-void *prune_worklog_thread(void *userdata)
-{
-	struct cgpu_info *cgpu = userdata;
-	
-	pthread_detach(pthread_self());
-	RenameThread("SGW_pruner");
-	
-	while (!cgpu->shutdown)
-	{
-		prune_worklog();
-		sleep(60);
-	}
-	return NULL;
-}
-
-static
-void getwork_init()
-{
-	mutex_init(&getwork_clients_mutex);
-}
-
-static
-void getwork_first_client(struct cgpu_info *cgpu)
-{
-	pthread_create(&prune_worklog_pth, NULL, prune_worklog_thread, cgpu);
-}
 
 static
 void getwork_prepare_resp(struct MHD_Response *resp)
@@ -129,8 +60,7 @@ int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errm
 
 int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 {
-	static bool _init = false, b;
-	struct getwork_client *client;
+	struct proxy_client *client;
 	struct MHD_Response *resp;
 	char *user, *idstr = NULL;
 	const char *submit = NULL;
@@ -143,12 +73,6 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	char *reply;
 	const char *hashesdone = NULL;
 	int ret;
-	
-	if (unlikely(!_init))
-	{
-		_init = true;
-		getwork_init();
-	}
 	
 	if (bytes_len(upbuf))
 	{
@@ -182,44 +106,14 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		goto out;
 	}
 	
-	mutex_lock(&getwork_clients_mutex);
-	HASH_FIND_STR(getwork_clients, user, client);
+	client = proxy_find_or_create_client(user);
+	free(user);
 	if (!client)
 	{
-		cgpu = malloc(sizeof(*cgpu));
-		client = malloc(sizeof(*client));
-		*cgpu = (struct cgpu_info){
-			.drv = &getwork_drv,
-			.threads = 0,
-			.device_data = client,
-			.device_path = user,
-		};
-		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
-		{
-			free(client);
-			free(cgpu);
-			ret = getwork_error(conn, -32603, "Failed creating new cgpu", idstr, idstr_sz);
-			goto out;
-		}
-		*client = (struct getwork_client){
-			.username = user,
-			.cgpu = cgpu,
-		};
-		
-		b = HASH_COUNT(getwork_clients);
-		HASH_ADD_KEYPTR(hh, getwork_clients, client->username, strlen(user), client);
-		mutex_unlock(&getwork_clients_mutex);
-		
-		if (!b)
-			getwork_first_client(cgpu);
+		ret = getwork_error(conn, -32603, "Failed creating new cgpu", idstr, idstr_sz);
+		goto out;
 	}
-	else
-	{
-		mutex_unlock(&getwork_clients_mutex);
-		free(user);
-		cgpu = client->cgpu;
-	}
-	user = NULL;
+	cgpu = client->cgpu;
 	thr = cgpu->thr[0];
 	
 	hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
@@ -310,26 +204,8 @@ out:
 		hashes_done(thr, lld, &tv_delta, NULL);
 	}
 	
-	free(user);
 	free(idstr);
 	if (json)
 		json_decref(json);
 	return ret;
 }
-
-#ifdef HAVE_CURSES
-static
-void getwork_wlogprint_status(struct cgpu_info *cgpu)
-{
-	struct getwork_client *client = cgpu->device_data;
-	wlogprint("Username: %s\n", client->username);
-}
-#endif
-
-struct device_drv getwork_drv = {
-	.dname = "getwork",
-	.name = "SGW",
-#ifdef HAVE_CURSES
-	.proc_wlogprint_status = getwork_wlogprint_status,
-#endif
-};
