@@ -2250,7 +2250,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 	if (length > MaxPacketSize)
 		length = MaxPacketSize;
 	buf = alloca(MaxPacketSize);
-	if (endpoint == LIBUSB_ENDPOINT_OUT)
+	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf, data, length);
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),endpoint=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), (int)endpoint, data, length, timeout, mode, usb_cmdname(cmd), seq);
