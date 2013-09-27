@@ -2343,7 +2343,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	usbdev = cgpu->usbdev;
 	ftdi = (usbdev->usb_type == USB_TYPE_FTDI);
 
-	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),intinfo=%d,epinfo=%d,buf=%p,bufsiz=%zu,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, buf, bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
+	USBDEBUG("USB debug: _usb_read(%s (nodev=%s),intinfo=%d,epinfo=%d,buf=%p,bufsiz=%d,proc=%p,timeout=%u,end=%s,cmd=%s,ftdi=%s,readonce=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, buf, (int)bufsiz, processed, timeout, end ? (char *)str_text((char *)end) : "NULL", usb_cmdname(cmd), bool_str(ftdi), bool_str(readonce));
 
 	if (bufsiz > USB_MAX_READ)
 		quit(1, "%s USB read request %d too large (max=%d)", cgpu->drv->name, (int)bufsiz, USB_MAX_READ);
@@ -2402,7 +2402,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			cgtime(&tv_finish);
 			ptr[got] = '\0';
 
-			USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
+			USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), (int)usbbufread);
 
 			IOERR_CHECK(cgpu, err);
 
@@ -2505,7 +2505,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
-		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%zu", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), usbbufread);
+		USBDEBUG("USB debug: @_usb_read(%s (nodev=%s)) first=%s err=%d%s got=%d ptr='%s' usbbufread=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), bool_str(first), err, isnodev(err), got, (char *)str_text((char *)ptr), (int)usbbufread);
 
 		IOERR_CHECK(cgpu, err);
 
@@ -2597,7 +2597,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 	DEVLOCK(cgpu, pstate);
 
-	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),intinfo=%d,epinfo=%d,buf='%s',bufsiz=%zu,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, (char *)str_text(buf), bufsiz, processed, timeout, usb_cmdname(cmd));
+	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),intinfo=%d,epinfo=%d,buf='%s',bufsiz=%d,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, (char *)str_text(buf), (int)bufsiz, processed, timeout, usb_cmdname(cmd));
 
 	*processed = 0;
 
