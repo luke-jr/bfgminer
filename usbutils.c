@@ -103,8 +103,8 @@
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo bas_ints[] = {
@@ -115,8 +115,8 @@ static struct usb_intinfo bas_ints[] = {
 #ifdef USE_BITFORCE
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bfl_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo bfl_ints[] = {
@@ -126,8 +126,8 @@ static struct usb_intinfo bfl_ints[] = {
 
 #ifdef USE_MODMINER
 static struct usb_epinfo mmq_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0, 0, 0 }
 };
 
 static struct usb_intinfo mmq_ints[] = {
@@ -137,8 +137,8 @@ static struct usb_intinfo mmq_ints[] = {
 
 #ifdef USE_AVALON
 static struct usb_epinfo ava_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo ava_ints[] = {
@@ -148,8 +148,8 @@ static struct usb_intinfo ava_ints[] = {
 
 #ifdef USE_ICARUS
 static struct usb_epinfo ica_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo ica_ints[] = {
@@ -157,8 +157,8 @@ static struct usb_intinfo ica_ints[] = {
 };
 
 static struct usb_epinfo amu_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
 };
 
 static struct usb_intinfo amu_ints[] = {
@@ -166,8 +166,8 @@ static struct usb_intinfo amu_ints[] = {
 };
 
 static struct usb_epinfo llt_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo llt_ints[] = {
@@ -175,8 +175,8 @@ static struct usb_intinfo llt_ints[] = {
 };
 
 static struct usb_epinfo cmr1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 
 static struct usb_intinfo cmr1_ints[] = {
@@ -184,20 +184,20 @@ static struct usb_intinfo cmr1_ints[] = {
 };
 
 static struct usb_epinfo cmr2_epinfos0[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
 };
 static struct usb_epinfo cmr2_epinfos1[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0, 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos2[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0, 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos3[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0, 0, 0 }
 };
 
 static struct usb_intinfo cmr2_ints[] = {
@@ -365,7 +365,7 @@ static struct usb_find_devices find_dev[] = {
 		.intinfo_count = 0,
 		.intinfos = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, 0, NULL }
+	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
 
 #ifdef USE_BFLSC
@@ -1623,8 +1623,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 						&&  epdesc->wMaxPacketSize >= epinfos[epinfo].size
 						&&  epdesc->bEndpointAddress == epinfos[epinfo].ep) {
 							epinfos[epinfo].found = true;
-							// TODO: it's an ep (not device) attribute
-							found->wMaxPacketSize = epdesc->wMaxPacketSize;
+							epinfos[epinfo].wMaxPacketSize = epdesc->wMaxPacketSize;
 							break;
 						}
 					}
@@ -2228,12 +2227,14 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 #define USB_RETRY_MAX 5
 
 static int
-usb_bulk_transfer(struct libusb_device_handle *dev_handle,
-		  unsigned char endpoint, unsigned char *data, int length,
+usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
+		  int epinfo, unsigned char *data, int length,
 		  int *transferred, unsigned int timeout,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
 		  enum usb_cmds cmd, __maybe_unused int seq)
 {
+	struct usb_epinfo *usb_epinfo;
+	unsigned char endpoint;
 	uint16_t MaxPacketSize;
 	int err, errn, tries = 0;
 #if DO_USB_STATS
@@ -2241,19 +2242,22 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle,
 #endif
 	unsigned char *buf;
 
+	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
+	endpoint = usb_epinfo->ep;
+
 	/* Limit length of transfer to the largest this descriptor supports
 	 * and leave the higher level functions to transfer more if needed. */
-	if (cgpu->usbdev->PrefPacketSize)
-		MaxPacketSize = cgpu->usbdev->PrefPacketSize;
+	if (usb_epinfo->PrefPacketSize)
+		MaxPacketSize = usb_epinfo->PrefPacketSize;
 	else
-		MaxPacketSize = cgpu->usbdev->found->wMaxPacketSize;
+		MaxPacketSize = usb_epinfo->wMaxPacketSize;
 	if (length > MaxPacketSize)
 		length = MaxPacketSize;
 	buf = alloca(MaxPacketSize);
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf, data, length);
 
-	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),endpoint=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), (int)endpoint, data, length, timeout, mode, usb_cmdname(cmd), seq);
+	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
@@ -2392,8 +2396,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 					cgpu->usbinfo.total_read_delay += sleep_estimate;
 				}
 			}
-			err = usb_bulk_transfer(usbdev->handle,
-						USBEP(usbdev, intinfo, epinfo),
+			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 						ptr, usbbufread, &got, timeout,
 						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 			cgtime(&tv_finish);
@@ -2496,9 +2499,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 				cgpu->usbinfo.total_read_delay += sleep_estimate;
 			}
 		}
-		err = usb_bulk_transfer(usbdev->handle,
-					USBEP(usbdev, intinfo, epinfo), ptr,
-					usbbufread, &got, timeout,
+		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
+					ptr, usbbufread, &got, timeout,
 					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
@@ -2637,10 +2639,9 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 			cgsleep_prepare_r(&usbdev->cgt_last_write);
 			usbdev->last_write_siz = bufsiz;
 		}
-		err = usb_bulk_transfer(usbdev->handle,
-					USBEP(usbdev, intinfo, epinfo),
-					(unsigned char *)buf, bufsiz, &sent,
-					timeout, cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
+		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
+					(unsigned char *)buf, bufsiz, &sent, timeout,
+					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
@@ -3027,14 +3028,36 @@ enum sub_ident usb_ident(struct cgpu_info *cgpu)
 	return ident;
 }
 
-void usb_set_pps(struct cgpu_info *cgpu, uint16_t PrefPacketSize)
+/*
+ * If you pass both intinfo and epinfo as <0 then it will set all
+ * endpoints to PrefPacketSize
+ * If intinfo >=0 but epinfo <0 then it will set all endpoints
+ * for the given one intinfo to PrefPacketSize
+ * If both are >=0 then it will set only the specified single
+ * endpoint (intinfo,epinfo) to PrefPacketSize
+ */
+void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize)
 {
+	struct usb_find_devices *found;
 	int pstate;
 
 	DEVLOCK(cgpu, pstate);
 
-	if (cgpu->usbdev)
-		cgpu->usbdev->PrefPacketSize = PrefPacketSize;
+	if (cgpu->usbdev) {
+		found = cgpu->usbdev->found;
+		if (intinfo >= 0 && epinfo >= 0)
+			found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
+		else {
+			if (intinfo >= 0) {
+				for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
+					found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
+			} else {
+				for (intinfo = 0; intinfo < found->intinfo_count ; intinfo++)
+					for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
+						found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
+			}
+		}
+	}
 
 	DEVUNLOCK(cgpu, pstate);
 }

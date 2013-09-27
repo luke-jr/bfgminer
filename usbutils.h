@@ -121,6 +121,8 @@ struct usb_epinfo {
 	uint8_t att;
 	uint16_t size;
 	unsigned char ep;
+	uint16_t wMaxPacketSize;
+	uint16_t PrefPacketSize;
 	bool found;
 };
 
@@ -160,7 +162,6 @@ struct usb_find_devices {
 	char *iProduct;
 	int config;
 	unsigned int timeout;
-	uint16_t wMaxPacketSize;
 	uint16_t latency;
 	int intinfo_count;
 	struct usb_intinfo *intinfos;
@@ -195,7 +196,6 @@ struct cg_usb_device {
 	char *buffer;
 	uint32_t bufsiz;
 	uint32_t bufamt;
-	uint16_t PrefPacketSize;
 	cgtimer_t cgt_last_write;
 	size_t last_write_siz;
 };
@@ -365,7 +365,8 @@ void usb_disable_cps(struct cgpu_info *cgpu);
 int _usb_interface(struct cgpu_info *cgpu, int intinfo);
 #define usb_interface(_cgpu) _usb_interface(_cgpu, DEFAULT_INTINFO)
 enum sub_ident usb_ident(struct cgpu_info *cgpu);
-void usb_set_pps(struct cgpu_info *cgpu, uint16_t PrefPacketSize);
+void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize);
+#define usb_set_pps(_cgpu, _pps) _usb_set_pps(_cgpu, -1, -1, _pps)
 void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
