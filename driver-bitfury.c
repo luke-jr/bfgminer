@@ -67,13 +67,23 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 
 static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
 {
-	char buf[512];
-	int amount;
+	int amount, err;
+	char buf[16];
 
-	usb_write_ii(bitfury, 1, "I", 1, &amount, C_BF1_REQINFO);
-	usb_read_ii(bitfury, 1, buf, 14, &amount, C_BF1_GETINFO);
+	err = usb_write_ii(bitfury, 1, "I", 1, &amount, C_BF1_REQINFO);
+	if (err) {
+		applog(LOG_INFO, "%s %d: Failed to write REQINFO",
+		       bitfury->drv->name, bitfury->device_id);
+		return false;
+	}
+	err = usb_read_ii(bitfury, 1, buf, 14, &amount, C_BF1_GETINFO);
+	if (err) {
+		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
+		       bitfury->drv->name, bitfury->device_id);
+		return false;
+	}
 	if (amount != 14) {
-		applog(LOG_INFO, "%s %d: Getinfo received %d bytes",
+		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of 14",
 		       bitfury->drv->name, bitfury->device_id, amount);
 		return false;
 	}
@@ -89,18 +99,27 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 
 static bool bitfury_reset(struct cgpu_info *bitfury)
 {
-	char buf[512];
-	int amount;
+	int amount, err;
+	char buf[16];
 
-	usb_write_ii(bitfury, 1, "R", 1, &amount, C_BF1_REQRESET);
-	usb_read_ii_timeout(bitfury, 1, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
-
+	err = usb_write_ii(bitfury, 1, "R", 1, &amount, C_BF1_REQRESET);
+	if (err) {
+		applog(LOG_INFO, "%s %d: Failed to write REQRESET",
+		       bitfury->drv->name, bitfury->device_id);
+		return false;
+	}
+	err = usb_read_ii_timeout(bitfury, 1, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
+	if (err) {
+		applog(LOG_INFO, "%s %d: Failed to read GETRESET",
+		       bitfury->drv->name, bitfury->device_id);
+		return false;
+	}
 	if (amount != 7) {
-		applog(LOG_INFO, "%s %d: Getreset received %d bytes",
+		applog(LOG_INFO, "%s %d: Getreset received %d bytes instead of 7",
 		       bitfury->drv->name, bitfury->device_id, amount);
 		return false;
 	}
-	applog(LOG_INFO, "%s %d: Getreset returned %s", bitfury->drv->name,
+	applog(LOG_DEBUG, "%s %d: Getreset returned %s", bitfury->drv->name,
 	       bitfury->device_id, buf);
 	bitfury_empty_buffer(bitfury);
 	return true;
