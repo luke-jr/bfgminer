@@ -16,6 +16,7 @@
 #define BF1ARRAY_SIZE 2
 
 struct bitfury_info {
+	struct cgpu_info *base_cgpu;
 	uint8_t version;
 	char product[8];
 	uint32_t serial;

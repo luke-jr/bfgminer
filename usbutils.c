@@ -131,13 +131,18 @@ static struct usb_intinfo bfl_ints[] = {
 #endif
 
 #ifdef USE_BITFURY
-static struct usb_epinfo bfu_epinfos[] = {
+static struct usb_epinfo bfu0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0 }
+};
+
+static struct usb_epinfo bfu1_epinfos[] = {
 	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0 },
 	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0 }
 };
 
 static struct usb_intinfo bfu_ints[] = {
-	USB_EPS(1,  bfu_epinfos)
+	USB_EPS(0,  bfu0_epinfos),
+	USB_EPS(1,  bfu1_epinfos)
 };
 #endif
 

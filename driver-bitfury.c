@@ -23,7 +23,7 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	int amount;
 
 	do {
-		usb_read(bitfury, buf, 512, &amount, C_BF1_FLUSH);
+		usb_read_ii(bitfury, 1, buf, 512, &amount, C_BF1_FLUSH);
 	} while (amount);
 }
 
@@ -48,7 +48,7 @@ static void bitfury_identify(struct cgpu_info *bitfury)
 {
 	int amount;
 
-	usb_write(bitfury, "L", 1, &amount, C_BF1_IDENTIFY);
+	usb_write_ii(bitfury, 1, "L", 1, &amount, C_BF1_IDENTIFY);
 }
 
 static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info)
@@ -56,8 +56,8 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 	char buf[512];
 	int amount;
 
-	usb_write(bitfury, "I", 1, &amount, C_BF1_REQINFO);
-	usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
+	usb_write_ii(bitfury, 1, "I", 1, &amount, C_BF1_REQINFO);
+	usb_read_ii(bitfury, 1, buf, 14, &amount, C_BF1_GETINFO);
 	if (amount != 14) {
 		applog(LOG_INFO, "%s %d: Getinfo received %d bytes",
 		       bitfury->drv->name, bitfury->device_id, amount);
@@ -78,8 +78,8 @@ static bool bitfury_reset(struct cgpu_info *bitfury)
 	char buf[512];
 	int amount;
 
-	usb_write(bitfury, "R", 1, &amount, C_BF1_REQRESET);
-	usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
+	usb_write_ii(bitfury, 1, "R", 1, &amount, C_BF1_REQRESET);
+	usb_read_ii_timeout(bitfury, 1, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
 
 	if (amount != 7) {
 		applog(LOG_INFO, "%s %d: Getreset received %d bytes",
@@ -202,7 +202,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	cgtime(&tv_now);
 	ms_diff = 600 - ms_tdiff(&tv_now, &info->tv_start);
 	if (ms_diff > 0) {
-		usb_read_timeout(bitfury, info->buf, 512, &amount, ms_diff, C_BF1_GETRES);
+		usb_read_ii_timeout(bitfury, 1, info->buf, 512, &amount, ms_diff, C_BF1_GETRES);
 		info->tot += amount;
 	}
 
@@ -215,10 +215,10 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	ms_diff = BF1WAIT - ms_tdiff(&tv_now, &info->tv_start);
 	if (unlikely(ms_diff < 10))
 		ms_diff = 10;
-	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, ms_diff, C_BF1_GETRES);
+	usb_read_ii_once_timeout(bitfury, 1, info->buf + info->tot, 7, &amount, ms_diff, C_BF1_GETRES);
 	info->tot += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
+		usb_read_ii_once_timeout(bitfury, 1, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
 		info->tot += amount;
 	};
 
@@ -226,10 +226,10 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 		goto cascade;
 
 	/* Send work */
-	usb_write(bitfury, buf, 45, &amount, C_BF1_REQWORK);
+	usb_write_ii(bitfury, 1, buf, 45, &amount, C_BF1_REQWORK);
 	cgtime(&info->tv_start);
 	/* Get response acknowledging work */
-	usb_read(bitfury, buf, 7, &amount, C_BF1_GETWORK);
+	usb_read_ii(bitfury, 1, buf, 7, &amount, C_BF1_GETWORK);
 
 	/* Only happens on startup */
 	if (unlikely(!info->prevwork[BF1ARRAY_SIZE]))
