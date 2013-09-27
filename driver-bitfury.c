@@ -29,6 +29,10 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 
 static void bitfury_open(struct cgpu_info *bitfury)
 {
+	char buf[8];
+	int amount;
+
+	usb_read_ii(bitfury, 0, buf, 8, &amount, C_BF1_IFLUSH);
 	/* Magic open sequence */
 	usb_transfer(bitfury, 0x21, 0x22, 0x0003, 0, C_BF1_OPEN);
 	bitfury_empty_buffer(bitfury);
