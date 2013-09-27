@@ -1932,13 +1932,24 @@ static void load_default_config(void)
 	cnfbuf = malloc(PATH_MAX);
 
 #if defined(unix)
-	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(cnfbuf, getenv("HOME"));
-		strcat(cnfbuf, "/");
-	} else
-		strcpy(cnfbuf, "");
+	uid_t uid, euid;
+	uid  = getuid();
+	euid = geteuid();
+
+	if (uid < 1 || uid < euid) {
+		strcpy(cnfbuf, "/etc/");
+	} else {
+		if (getenv("HOME") && *getenv("HOME")) {
+			strcpy(cnfbuf, getenv("HOME"));
+			strcat(cnfbuf, "/");
+		} else
+			strcpy(cnfbuf, "");
+	}
 	char *dirp = cnfbuf + strlen(cnfbuf);
-	strcpy(dirp, ".bfgminer/");
+	if (uid < 1 || uid < euid)
+		strcpy(dirp, "bfgminer/");
+	else
+		strcpy(dirp, ".bfgminer/");
 	strcat(dirp, def_conf);
 	if (access(cnfbuf, R_OK))
 		// No BFGMiner config, try Cgminer's...
