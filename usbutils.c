@@ -406,30 +406,6 @@ static struct usb_find_devices find_dev[] = {
 	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
 
-#ifdef USE_BFLSC
-extern struct device_drv bflsc_drv;
-#endif
-
-#ifdef USE_BITFORCE
-extern struct device_drv bitforce_drv;
-#endif
-
-#ifdef USE_BITFURY
-extern struct device_drv bitfury_drv;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_drv modminer_drv;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_drv icarus_drv;
-#endif
-
-#ifdef USE_AVALON
-extern struct device_drv avalon_drv;
-#endif
-
 #define STRBUFLEN 256
 static const char *BLANK = "";
 static const char *space = " ";
