@@ -94,6 +94,13 @@ bfgminer_LDFLAGS += $(libmicrohttpd_LDFLAGS)
 bfgminer_CPPFLAGS += $(libmicrohttpd_CFLAGS)
 endif
 
+if USE_LIBEVENT
+bfgminer_SOURCES  += driver-stratum.c
+bfgminer_LDADD    += $(libevent_LIBS)
+bfgminer_LDFLAGS  += $(libevent_LDFLAGS)
+bfgminer_CPPFLAGS += $(libevent_CFLAGS)
+endif
+
 
 # GPU sources, TODO: make them selectable
 # the GPU portion extracted from original main.c

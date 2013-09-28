@@ -7918,6 +7918,14 @@ void set_target(unsigned char *dest_target, double diff)
 	}
 }
 
+void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work * const src)
+{
+	*dst = *src;
+	dst->job_id = strdup(src->job_id);
+	bytes_cpy(&dst->coinbase, &src->coinbase);
+	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+}
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */
@@ -9890,6 +9898,7 @@ static void raise_fd_limits(void)
 }
 
 extern void bfg_init_threadlocal();
+extern void *stratumsrv_thread(void *);
 
 int main(int argc, char *argv[])
 {
@@ -10380,6 +10389,14 @@ begin_bench:
 		if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
 			quit(1, "submit_work thread create failed");
 	}
+	
+#ifdef USE_LIBEVENT
+	{
+		pthread_t pth;
+		if (unlikely(pthread_create(&pth, NULL, stratumsrv_thread, NULL)))
+			quit(1, "stratumsrv thread create failed");
+	}
+#endif
 
 	watchpool_thr_id = 2;
 	thr = &control_thr[watchpool_thr_id];
