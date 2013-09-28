@@ -7352,34 +7352,6 @@ void enable_curses(void) {
 }
 #endif
 
-#ifdef USE_BFLSC
-extern struct device_drv bflsc_drv;
-#endif
-
-#ifdef USE_BITFORCE
-extern struct device_drv bitforce_drv;
-#endif
-
-#ifdef USE_BITFURY
-extern struct device_drv bitfury_drv;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_drv icarus_drv;
-#endif
-
-#ifdef USE_AVALON
-extern struct device_drv avalon_drv;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_drv modminer_drv;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_drv ztex_drv;
-#endif
-
 static int cgminer_id_count = 0;
 
 /* Various noop functions for drivers that don't support or need their
