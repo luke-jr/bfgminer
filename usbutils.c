@@ -1851,35 +1851,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return NULL;
 	}
 
-#ifdef USE_BFLSC
-	if (drv->drv_id == DRIVER_bflsc)
-		return usb_check_each(DRIVER_bflsc, drv, dev);
-#endif
-
-#ifdef USE_BITFORCE
-	if (drv->drv_id == DRIVER_bitforce)
-		return usb_check_each(DRIVER_bitforce, drv, dev);
-#endif
-
-#ifdef USE_BITFURY
-	if (drv->drv_id == DRIVER_bitfury)
-		return usb_check_each(DRIVER_bitfury, drv, dev);
-#endif
-
-#ifdef USE_MODMINER
-	if (drv->drv_id == DRIVER_modminer)
-		return usb_check_each(DRIVER_modminer, drv, dev);
-#endif
-
-#ifdef USE_ICARUS
-	if (drv->drv_id == DRIVER_icarus)
-		return usb_check_each(DRIVER_icarus, drv, dev);
-#endif
-
-#ifdef USE_AVALON
-	if (drv->drv_id == DRIVER_avalon)
-		return usb_check_each(DRIVER_avalon, drv, dev);
-#endif
+#define DRIVER_ADD_COMMAND(X) \
+	if (drv->drv_id == DRIVER_##X) \
+		return usb_check_each(DRIVER_##X, drv, dev);
+	DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 
 	return NULL;
 }
