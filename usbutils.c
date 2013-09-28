@@ -1490,7 +1490,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		goto dame;
 	}
 
-#ifndef WIN32
+#ifdef LINUX
 	for (ifinfo = 0; ifinfo < found->intinfo_count; ifinfo++) {
 		if (libusb_kernel_driver_active(cgusb->handle, THISIF(found, ifinfo)) == 1) {
 			applog(LOG_DEBUG, "USB init, kernel attached ... %s", devstr);
