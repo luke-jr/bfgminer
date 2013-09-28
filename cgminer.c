@@ -7434,6 +7434,9 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void noop_null(void)
+{
+}
 #define noop_flush_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
@@ -7442,6 +7445,8 @@ void fill_device_drv(struct cgpu_info *cgpu)
 {
 	struct device_drv *drv = cgpu->drv;
 
+	if (!drv->drv_detect)
+		drv->drv_detect = &noop_null;
 	if (!drv->reinit_device)
 		drv->reinit_device = &noop_reinit_device;
 	if (!drv->get_statline_before)
