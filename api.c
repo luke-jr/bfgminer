@@ -1220,15 +1220,15 @@ static int numascs()
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_AVALON)
+		if (devices[i]->drv->drv_id == DRIVER_avalon)
 			count++;
 #endif
 #ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
+		if (devices[i]->drv->drv_id == DRIVER_bflsc)
 			count++;
 #endif
 #ifdef USE_BITFURY
-		if (devices[i]->drv->drv_id == DRIVER_BITFURY)
+		if (devices[i]->drv->drv_id == DRIVER_bitfury)
 			count++;
 #endif
 	}
@@ -1244,15 +1244,15 @@ static int ascdevice(int ascid)
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_AVALON)
+		if (devices[i]->drv->drv_id == DRIVER_avalon)
 			count++;
 #endif
 #ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
+		if (devices[i]->drv->drv_id == DRIVER_bflsc)
 			count++;
 #endif
 #ifdef USE_BITFURY
-		if (devices[i]->drv->drv_id == DRIVER_BITFURY)
+		if (devices[i]->drv->drv_id == DRIVER_bitfury)
 			count++;
 #endif
 		if (count == (ascid + 1))
@@ -1278,19 +1278,19 @@ static int numpgas()
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
+		if (devices[i]->drv->drv_id == DRIVER_bitforce)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
+		if (devices[i]->drv->drv_id == DRIVER_icarus)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
+		if (devices[i]->drv->drv_id == DRIVER_ztex)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
+		if (devices[i]->drv->drv_id == DRIVER_modminer)
 			count++;
 #endif
 	}
@@ -1306,19 +1306,19 @@ static int pgadevice(int pgaid)
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
 #ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
+		if (devices[i]->drv->drv_id == DRIVER_bitforce)
 			count++;
 #endif
 #ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
+		if (devices[i]->drv->drv_id == DRIVER_icarus)
 			count++;
 #endif
 #ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
+		if (devices[i]->drv->drv_id == DRIVER_ztex)
 			count++;
 #endif
 #ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
+		if (devices[i]->drv->drv_id == DRIVER_modminer)
 			count++;
 #endif
 		if (count == (pgaid + 1))
@@ -1770,11 +1770,11 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 			dev_runtime = 1.0;
 
 #ifdef USE_ZTEX
-		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
+		if (cgpu->drv->drv_id == DRIVER_ztex && cgpu->device_ztex)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-		if (cgpu->drv->drv_id == DRIVER_MODMINER)
+		if (cgpu->drv->drv_id == DRIVER_modminer)
 			frequency = cgpu->clock;
 #endif
 

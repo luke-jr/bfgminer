@@ -310,7 +310,7 @@ static void bitfury_shutdown(struct thr_info *thr)
 
 /* Currently hardcoded to BF1 devices */
 struct device_drv bitfury_drv = {
-	.drv_id = DRIVER_BITFURY,
+	.drv_id = DRIVER_bitfury,
 	.dname = "bitfury",
 	.name = "BF1",
 	.drv_detect = bitfury_detect,

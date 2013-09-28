@@ -1915,7 +1915,7 @@ else a whole lot of something like these ... etc
 }
 
 struct device_drv bflsc_drv = {
-	.drv_id = DRIVER_BFLSC,
+	.drv_id = DRIVER_bflsc,
 	.dname = "BitForceSC",
 	.name = BFLSC_SINGLE,
 	.drv_detect = bflsc_detect,

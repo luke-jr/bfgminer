@@ -1899,32 +1899,32 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 	}
 
 #ifdef USE_BFLSC
-	if (drv->drv_id == DRIVER_BFLSC)
+	if (drv->drv_id == DRIVER_bflsc)
 		return usb_check_each(DRV_BFLSC, drv, dev);
 #endif
 
 #ifdef USE_BITFORCE
-	if (drv->drv_id == DRIVER_BITFORCE)
+	if (drv->drv_id == DRIVER_bitforce)
 		return usb_check_each(DRV_BITFORCE, drv, dev);
 #endif
 
 #ifdef USE_BITFURY
-	if (drv->drv_id == DRIVER_BITFURY)
+	if (drv->drv_id == DRIVER_bitfury)
 		return usb_check_each(DRV_BITFURY, drv, dev);
 #endif
 
 #ifdef USE_MODMINER
-	if (drv->drv_id == DRIVER_MODMINER)
+	if (drv->drv_id == DRIVER_modminer)
 		return usb_check_each(DRV_MODMINER, drv, dev);
 #endif
 
 #ifdef USE_ICARUS
-	if (drv->drv_id == DRIVER_ICARUS)
+	if (drv->drv_id == DRIVER_icarus)
 		return usb_check_each(DRV_ICARUS, drv, dev);
 #endif
 
 #ifdef USE_AVALON
-	if (drv->drv_id == DRIVER_AVALON)
+	if (drv->drv_id == DRIVER_avalon)
 		return usb_check_each(DRV_AVALON, drv, dev);
 #endif
 
@@ -3151,12 +3151,12 @@ void usb_cleanup()
 	for (i = 0; i < total_devices; i++) {
 		cgpu = devices[i];
 		switch (cgpu->drv->drv_id) {
-			case DRIVER_BFLSC:
-			case DRIVER_BITFORCE:
-			case DRIVER_BITFURY:
-			case DRIVER_MODMINER:
-			case DRIVER_ICARUS:
-			case DRIVER_AVALON:
+			case DRIVER_bflsc:
+			case DRIVER_bitforce:
+			case DRIVER_bitfury:
+			case DRIVER_modminer:
+			case DRIVER_icarus:
+			case DRIVER_avalon:
 				wr_lock(cgpu->usbinfo.devlock);
 				release_cgpu(cgpu);
 				wr_unlock(cgpu->usbinfo.devlock);

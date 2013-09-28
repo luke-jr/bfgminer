@@ -753,7 +753,7 @@ retry:
 		for (i = 0; i < mining_threads; ++i) {
 			thr = get_thread(i);
 			cgpu = thr->cgpu;
-			if (cgpu->drv->drv_id != DRIVER_OPENCL)
+			if (cgpu->drv->drv_id != DRIVER_opencl)
 				continue;
 			if (dev_from_id(i) != selected)
 				continue;
@@ -1148,7 +1148,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1173,7 +1173,7 @@ select_cgpu:
 
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1210,7 +1210,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1575,7 +1575,7 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 }
 
 struct device_drv opencl_drv = {
-	.drv_id = DRIVER_OPENCL,
+	.drv_id = DRIVER_opencl,
 	.dname = "opencl",
 	.name = "GPU",
 	.drv_detect = opencl_detect,

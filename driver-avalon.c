@@ -1600,7 +1600,7 @@ static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *set
 }
 
 struct device_drv avalon_drv = {
-	.drv_id = DRIVER_AVALON,
+	.drv_id = DRIVER_avalon,
 	.dname = "avalon",
 	.name = "AVA",
 	.drv_detect = avalon_detect,

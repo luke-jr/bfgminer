@@ -7496,7 +7496,7 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 	}
 #ifdef HAVE_OPENCL
-	if (cgpu->drv->drv_id == DRIVER_OPENCL) {
+	if (cgpu->drv->drv_id == DRIVER_opencl) {
 		gpu_threads += cgpu->threads;
 	}
 #endif

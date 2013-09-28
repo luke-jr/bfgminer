@@ -230,17 +230,23 @@ static inline int fsync (int fd)
 #define MIN(x, y)	((x) > (y) ? (y) : (x))
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 
+#define DRIVER_PARSE_COMMANDS \
+	DRIVER_ADD_COMMAND(avalon) \
+	DRIVER_ADD_COMMAND(bflsc) \
+	DRIVER_ADD_COMMAND(bitforce) \
+	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(icarus) \
+	DRIVER_ADD_COMMAND(modminer) \
+	DRIVER_ADD_COMMAND(opencl) \
+	DRIVER_ADD_COMMAND(ztex)
+
+/* Create drv_driver enum from DRIVER_PARSE_COMMANDS macro */
+#define DRIVER_ADD_COMMAND(X) DRIVER_##X,
 enum drv_driver {
-	DRIVER_OPENCL = 0,
-	DRIVER_ICARUS,
-	DRIVER_BITFORCE,
-	DRIVER_BITFURY,
-	DRIVER_MODMINER,
-	DRIVER_ZTEX,
-	DRIVER_BFLSC,
-	DRIVER_AVALON,
+	DRIVER_PARSE_COMMANDS
 	DRIVER_MAX
 };
+#undef DRIVER_ADD_COMMAND
 
 enum alive {
 	LIFE_WELL,

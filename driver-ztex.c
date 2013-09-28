@@ -413,7 +413,7 @@ static void ztex_disable(struct thr_info *thr)
 }
 
 struct device_drv ztex_drv = {
-	.drv_id = DRIVER_ZTEX,
+	.drv_id = DRIVER_ztex,
 	.dname = "ztex",
 	.name = "ZTX",
 	.drv_detect = ztex_detect,
