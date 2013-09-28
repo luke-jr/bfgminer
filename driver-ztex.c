@@ -31,8 +31,6 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_drv ztex_drv;
-
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
 static bool ztex_prepare(struct thr_info *thr);

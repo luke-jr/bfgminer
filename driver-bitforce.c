@@ -77,8 +77,6 @@
 
 static const char *blank = "";
 
-struct device_drv bitforce_drv;
-
 static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 {
 	int err, interface;

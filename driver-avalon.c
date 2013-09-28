@@ -52,7 +52,6 @@ int opt_bitburner_core_voltage = BITBURNER_DEFAULT_CORE_VOLTAGE;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
-struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,

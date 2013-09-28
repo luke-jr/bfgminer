@@ -235,8 +235,6 @@ struct ICARUS_INFO {
 //
 static int option_offset = -1;
 
-struct device_drv icarus_drv;
-
 /*
 #define ICA_BUFSIZ (0x200)
 

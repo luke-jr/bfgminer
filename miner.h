@@ -249,7 +249,7 @@ enum drv_driver {
 #undef DRIVER_ADD_COMMAND
 
 /* Use DRIVER_PARSE_COMMANDS to generate extern device_drv prototypes */
-#define DRIVER_ADD_COMMAND(X) extern struct device_drv X##_drv;
+#define DRIVER_ADD_COMMAND(X) struct device_drv X##_drv;
 DRIVER_PARSE_COMMANDS;
 #undef DRIVER_ADD_COMMAND
 

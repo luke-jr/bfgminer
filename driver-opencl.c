@@ -56,10 +56,6 @@ extern void decay_time(double *f, double fadd);
 
 /**********************************************/
 
-#ifdef HAVE_OPENCL
-struct device_drv opencl_drv;
-#endif
-
 #ifdef HAVE_ADL
 extern float gpu_temp(int gpu);
 extern int gpu_fanspeed(int gpu);

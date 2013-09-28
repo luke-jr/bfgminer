@@ -15,7 +15,6 @@
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
-struct device_drv bitfury_drv;
 
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 {

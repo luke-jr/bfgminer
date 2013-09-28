@@ -33,8 +33,6 @@ int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
 
 static const char *blank = "";
 
-struct device_drv bflsc_drv;
-
 static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 {
 	char *tmp;
