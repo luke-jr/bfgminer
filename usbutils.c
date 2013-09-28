@@ -42,36 +42,6 @@
 			pthread_setcancelstate(_pth_state, NULL); \
 			} while (0)
 
-#ifdef USE_BFLSC
-#define DRV_BFLSC 1
-#endif
-
-#ifdef USE_BITFORCE
-#define DRV_BITFORCE 2
-#endif
-
-#ifdef USE_MODMINER
-#define DRV_MODMINER 3
-#endif
-
-#ifdef USE_ZTEX
-#define DRV_ZTEX 4
-#endif
-
-#ifdef USE_ICARUS
-#define DRV_ICARUS 5
-#endif
-
-#ifdef USE_AVALON
-#define DRV_AVALON 6
-#endif
-
-#ifdef USE_BITFURY
-#define DRV_BITFURY 8
-#endif
-
-#define DRV_LAST -1
-
 #define USB_CONFIG 1
 
 #ifdef WIN32
@@ -245,7 +215,7 @@ static struct usb_intinfo cmr2_ints[] = {
 static struct usb_find_devices find_dev[] = {
 #ifdef USE_BFLSC
 	{
-		.drv = DRV_BFLSC,
+		.drv = DRIVER_bflsc,
 		.name = "BAS",
 		.ident = IDENT_BAS,
 		.idVendor = IDVENDOR_FTDI,
@@ -259,7 +229,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_BITFORCE
 	{
-		.drv = DRV_BITFORCE,
+		.drv = DRIVER_bitforce,
 		.name = "BFL",
 		.ident = IDENT_BFL,
 		.idVendor = IDVENDOR_FTDI,
@@ -273,7 +243,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_BITFURY
 	{
-		.drv = DRV_BITFURY,
+		.drv = DRIVER_bitfury,
 		.name = "BF1",
 		.ident = IDENT_BFU,
 		.idVendor = 0x03eb,
@@ -288,7 +258,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_MODMINER
 	{
-		.drv = DRV_MODMINER,
+		.drv = DRIVER_modminer,
 		.name = "MMQ",
 		.ident = IDENT_MMQ,
 		.idVendor = 0x1fc9,
@@ -300,7 +270,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_AVALON
 	{
-		.drv = DRV_AVALON,
+		.drv = DRIVER_avalon,
 		.name = "BTB",
 		.ident = IDENT_BTB,
 		.idVendor = IDVENDOR_FTDI,
@@ -312,7 +282,7 @@ static struct usb_find_devices find_dev[] = {
 		.latency = 10,
 		INTINFO(ava_ints) },
 	{
-		.drv = DRV_AVALON,
+		.drv = DRIVER_avalon,
 		.name = "AVA",
 		.ident = IDENT_AVA,
 		.idVendor = IDVENDOR_FTDI,
@@ -324,7 +294,7 @@ static struct usb_find_devices find_dev[] = {
 #endif
 #ifdef USE_ICARUS
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "ICA",
 		.ident = IDENT_ICA,
 		.idVendor = 0x067b,
@@ -334,7 +304,7 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		INTINFO(ica_ints) },
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "AMU",
 		.ident = IDENT_AMU,
 		.idVendor = 0x10c4,
@@ -344,7 +314,7 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_UNUSED,
 		INTINFO(amu_ints) },
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "BLT",
 		.ident = IDENT_BLT,
 		.idVendor = IDVENDOR_FTDI,
@@ -356,7 +326,7 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(llt_ints) },
 	// For any that don't match the above "BLT"
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "LLT",
 		.ident = IDENT_LLT,
 		.idVendor = IDVENDOR_FTDI,
@@ -366,7 +336,7 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_STD,
 		INTINFO(llt_ints) },
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "CMR",
 		.ident = IDENT_CMR1,
 		.idVendor = IDVENDOR_FTDI,
@@ -377,7 +347,7 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_STD,
 		INTINFO(cmr1_ints) },
 	{
-		.drv = DRV_ICARUS,
+		.drv = DRIVER_icarus,
 		.name = "CMR",
 		.ident = IDENT_CMR2,
 		.idVendor = IDVENDOR_FTDI,
@@ -392,7 +362,7 @@ static struct usb_find_devices find_dev[] = {
 // This is here so cgminer -n shows them
 // the ztex driver (as at 201303) doesn't use usbutils
 	{
-		.drv = DRV_ZTEX,
+		.drv = DRIVER_ztex,
 		.name = "ZTX",
 		.ident = IDENT_ZTX,
 		.idVendor = 0x221a,
@@ -403,7 +373,7 @@ static struct usb_find_devices find_dev[] = {
 		.intinfo_count = 0,
 		.intinfos = NULL },
 #endif
-	{ DRV_LAST, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
+	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
 
 #define STRBUFLEN 256
@@ -787,7 +757,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 	if (!opt_usb_list_all) {
 		bool known = false;
 
-		for (i = 0; find_dev[i].drv != DRV_LAST; i++)
+		for (i = 0; find_dev[i].drv != DRIVER_MAX; i++)
 			if ((find_dev[i].idVendor == desc.idVendor) &&
 			    (find_dev[i].idProduct == desc.idProduct)) {
 				known = true;
@@ -1774,7 +1744,7 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 	int uninitialised_var(ret);
 	int i;
 
-	for (i = 0; find_dev[i].drv != DRV_LAST; i++) {
+	for (i = 0; find_dev[i].drv != DRIVER_MAX; i++) {
 		if (find_dev[i].drv == found_match->drv &&
 		    find_dev[i].idVendor == found_match->idVendor &&
 		    find_dev[i].idProduct == found_match->idProduct) {
@@ -1851,7 +1821,7 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 	struct usb_find_devices *found;
 	int i;
 
-	for (i = 0; find_dev[i].drv != DRV_LAST; i++)
+	for (i = 0; find_dev[i].drv != DRIVER_MAX; i++)
 		if (find_dev[i].drv == drvnum) {
 			if (usb_check_device(drv, dev, &(find_dev[i]))) {
 				found = malloc(sizeof(*found));
@@ -1876,32 +1846,32 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 
 #ifdef USE_BFLSC
 	if (drv->drv_id == DRIVER_bflsc)
-		return usb_check_each(DRV_BFLSC, drv, dev);
+		return usb_check_each(DRIVER_bflsc, drv, dev);
 #endif
 
 #ifdef USE_BITFORCE
 	if (drv->drv_id == DRIVER_bitforce)
-		return usb_check_each(DRV_BITFORCE, drv, dev);
+		return usb_check_each(DRIVER_bitforce, drv, dev);
 #endif
 
 #ifdef USE_BITFURY
 	if (drv->drv_id == DRIVER_bitfury)
-		return usb_check_each(DRV_BITFURY, drv, dev);
+		return usb_check_each(DRIVER_bitfury, drv, dev);
 #endif
 
 #ifdef USE_MODMINER
 	if (drv->drv_id == DRIVER_modminer)
-		return usb_check_each(DRV_MODMINER, drv, dev);
+		return usb_check_each(DRIVER_modminer, drv, dev);
 #endif
 
 #ifdef USE_ICARUS
 	if (drv->drv_id == DRIVER_icarus)
-		return usb_check_each(DRV_ICARUS, drv, dev);
+		return usb_check_each(DRIVER_icarus, drv, dev);
 #endif
 
 #ifdef USE_AVALON
 	if (drv->drv_id == DRIVER_avalon)
-		return usb_check_each(DRV_AVALON, drv, dev);
+		return usb_check_each(DRIVER_avalon, drv, dev);
 #endif
 
 	return NULL;
