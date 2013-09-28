@@ -7923,17 +7923,11 @@ void set_target(unsigned char *dest_target, double diff)
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-
 	clean_work(work);
-
+	
 	cg_wlock(&pool->data_lock);
-
-	/* Generate coinbase */
-	coinbase = bytes_buf(&pool->swork.coinbase);
+	pool->swork.data_lock_p = &pool->data_lock;
+	
 	bytes_resize(&work->nonce2, pool->n2size);
 #ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
@@ -7947,17 +7941,35 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	       &pool->nonce2,
 #endif
 	       pool->nonce2sz);
-	memcpy(&coinbase[pool->swork.nonce2_offset], bytes_buf(&work->nonce2), pool->n2size);
 	pool->nonce2++;
+	
+	work->pool = pool;
+	work->work_restart_id = work->pool->work_restart_id;
+	gen_stratum_work2(work, &pool->swork, pool->nonce1);
+	
+	cgtime(&work->tv_staged);
+}
 
-	/* Downgrade to a read lock to read off the pool variables */
-	cg_dwlock(&pool->data_lock);
+void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char *nonce1)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+
+	/* Generate coinbase */
+	coinbase = bytes_buf(&swork->coinbase);
+	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+
+	/* Downgrade to a read lock to read off the variables */
+	if (swork->data_lock_p)
+		cg_dwlock(swork->data_lock_p);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, bytes_len(&pool->swork.coinbase));
+	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
-	merkle_bin = bytes_buf(&pool->swork.merkle_bin);
-	for (i = 0; i < pool->swork.merkles; ++i, merkle_bin += 32) {
+	merkle_bin = bytes_buf(&swork->merkle_bin);
+	for (i = 0; i < swork->merkles; ++i, merkle_bin += 32) {
 		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
@@ -7966,21 +7978,22 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
 	
-	memcpy(&work->data[0], pool->swork.header1, 36);
+	memcpy(&work->data[0], swork->header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
-	*((uint32_t*)&work->data[68]) = htobe32(pool->swork.ntime + timer_elapsed(&pool->swork.tv_received, NULL));
-	memcpy(&work->data[72], pool->swork.diffbits, 4);
+	*((uint32_t*)&work->data[68]) = htobe32(swork->ntime + timer_elapsed(&swork->tv_received, NULL));
+	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
-	work->sdiff = pool->swork.diff;
+	work->sdiff = swork->diff;
 
 	/* Copy parameters required for share submission */
-	work->job_id = strdup(pool->swork.job_id);
-	work->nonce1 = strdup(pool->nonce1);
-	cg_runlock(&pool->data_lock);
+	work->job_id = strdup(swork->job_id);
+	work->nonce1 = strdup(nonce1);
+	if (swork->data_lock_p)
+		cg_runlock(swork->data_lock_p);
 
 	if (opt_debug)
 	{
@@ -7997,16 +8010,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	set_target(work->target, work->sdiff);
 
 	local_work++;
-	work->pool = pool;
 	work->stratum = true;
 	work->blk.nonce = 0;
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
-	work->work_restart_id = work->pool->work_restart_id;
 	calc_diff(work, 0);
-
-	cgtime(&work->tv_staged);
 }
 
 void request_work(struct thr_info *thr)

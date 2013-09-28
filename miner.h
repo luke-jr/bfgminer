@@ -1151,6 +1151,8 @@ struct stratum_work {
 	bool transparency_probed;
 	struct timeval tv_transparency;
 	bool opaque;
+	
+	cglock_t *data_lock_p;
 };
 
 #define RBUFSIZE 8192
@@ -1329,6 +1331,7 @@ struct work {
 
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
+extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
