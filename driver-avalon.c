@@ -799,7 +799,7 @@ shin:
 	return false;
 }
 
-static void avalon_detect(void)
+static void avalon_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&avalon_drv, avalon_detect_one);
 }

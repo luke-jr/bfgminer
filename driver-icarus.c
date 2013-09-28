@@ -926,7 +926,7 @@ shin:
 	return false;
 }
 
-static void icarus_detect()
+static void icarus_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&icarus_drv, icarus_detect_one);
 }

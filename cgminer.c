@@ -119,7 +119,7 @@ bool opt_scrypt;
 #endif
 #endif
 bool opt_restart = true;
-static bool opt_nogpu;
+bool opt_nogpu;
 
 struct list_head scan_devices;
 static bool devices_enabled[MAX_DEVICES];
@@ -7434,19 +7434,17 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 {
 }
 
-static void noop_null(void)
+static void noop_detect(bool __maybe_unused hotplug)
 {
 }
 #define noop_flush_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
 /* Fill missing driver drv functions with noops */
-void fill_device_drv(struct cgpu_info *cgpu)
+void fill_device_drv(struct device_drv *drv)
 {
-	struct device_drv *drv = cgpu->drv;
-
 	if (!drv->drv_detect)
-		drv->drv_detect = &noop_null;
+		drv->drv_detect = &noop_detect;
 	if (!drv->reinit_device)
 		drv->reinit_device = &noop_reinit_device;
 	if (!drv->get_statline_before)
@@ -7543,8 +7541,6 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	mutex_lock(&stats_lock);
 	cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
-
-	fill_device_drv(cgpu);
 
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
@@ -7655,29 +7651,11 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			new_devices = 0;
 			new_threads = 0;
 
-#ifdef USE_ICARUS
-			icarus_drv.drv_detect();
-#endif
-
-#ifdef USE_BFLSC
-			bflsc_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFORCE
-			bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFURY
-			bitfury_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-			modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_AVALON
-			avalon_drv.drv_detect();
-#endif
+			/* Use the DRIVER_PARSE_COMMANDS macro to detect all
+			 * devices */
+#define DRIVER_ADD_COMMAND(X) X##_drv.drv_detect(true);
+			DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 
 			if (new_devices)
 				hotplug_process();
@@ -7883,48 +7861,20 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_drv.drv_detect();
+	/* Use the DRIVER_PARSE_COMMANDS macro to fill all the device_drvs */
+#define DRIVER_ADD_COMMAND(X) fill_device_drv(&X##_drv);
+	DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
+
+	if (opt_scrypt)
+		opencl_drv.drv_detect(false);
+	else {
+	/* Use the DRIVER_PARSE_COMMANDS macro to detect all devices */
+#define DRIVER_ADD_COMMAND(X) X##_drv.drv_detect(false);
+		DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
+	}
 	gpu_threads = 0;
-#endif
-
-#ifdef USE_ICARUS
-	if (!opt_scrypt)
-		icarus_drv.drv_detect();
-#endif
-
-#ifdef USE_BFLSC
-	if (!opt_scrypt)
-		bflsc_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFURY
-	if (!opt_scrypt)
-		bitfury_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-	if (!opt_scrypt)
-		ztex_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");

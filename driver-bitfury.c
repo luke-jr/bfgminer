@@ -150,7 +150,7 @@ out:
 	return false;
 }
 
-static void bitfury_detect(void)
+static void bitfury_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&bitfury_drv, bitfury_detect_one);
 }

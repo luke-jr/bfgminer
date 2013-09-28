@@ -237,7 +237,7 @@ shin:
 		return false;
 }
 
-static void modminer_detect()
+static void modminer_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&modminer_drv, modminer_detect_one);
 }

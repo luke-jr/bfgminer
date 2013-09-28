@@ -581,7 +581,7 @@ char *set_intensity(char *arg)
 void print_ndevs(int *ndevs)
 {
 	opt_log_output = true;
-	opencl_drv.drv_detect();
+	opencl_drv.drv_detect(false);
 	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 }
@@ -1227,10 +1227,12 @@ void *reinit_gpu(__maybe_unused void *userdata)
 
 
 #ifdef HAVE_OPENCL
-static void opencl_detect()
+static void opencl_detect(bool hotplug)
 {
 	int i;
 
+	if (opt_nogpu || hotplug)
+		return;
 	nDevs = clDevicesNum();
 	if (nDevs < 0) {
 		applog(LOG_ERR, "clDevicesNum returned error, no GPUs usable");

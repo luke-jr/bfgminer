@@ -329,7 +329,7 @@ struct device_drv {
 	char *name;
 
 	// DRV-global functions
-	void (*drv_detect)();
+	void (*drv_detect)(bool);
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info *);
@@ -914,6 +914,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern bool opt_nogpu;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;

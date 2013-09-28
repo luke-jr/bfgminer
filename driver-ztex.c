@@ -52,7 +52,7 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
-static void ztex_detect(void)
+static void ztex_detect(bool __maybe_unused hotplug)
 {
 	int cnt;
 	int i,j;

@@ -288,7 +288,7 @@ shin:
 	return false;
 }
 
-static void bitforce_detect(void)
+static void bitforce_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&bitforce_drv, bitforce_detect_one);
 }

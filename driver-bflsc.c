@@ -893,7 +893,7 @@ shin:
 	return false;
 }
 
-static void bflsc_detect(void)
+static void bflsc_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&bflsc_drv, bflsc_detect_one);
 }
