@@ -7927,14 +7927,13 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	uint8_t *merkle_bin;
 	uint32_t *data32, *swap32;
 	int i;
-	
-	coinbase = bytes_buf(&pool->swork.coinbase);
 
 	clean_work(work);
 
 	cg_wlock(&pool->data_lock);
 
 	/* Generate coinbase */
+	coinbase = bytes_buf(&pool->swork.coinbase);
 	bytes_resize(&work->nonce2, pool->n2size);
 #ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
