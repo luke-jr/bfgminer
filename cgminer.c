@@ -7874,7 +7874,6 @@ int main(int argc, char *argv[])
 		DRIVER_PARSE_COMMANDS
 #undef DRIVER_ADD_COMMAND
 	}
-	gpu_threads = 0;
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
