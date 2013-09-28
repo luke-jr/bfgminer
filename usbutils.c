@@ -1505,7 +1505,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 					"USB init, kernel detach ifinfo %d interface %d failed,"
 					" err %d in use? %s",
 					ifinfo, THISIF(found, ifinfo), err, devstr);
-				goto cldame;
+				goto nokernel;
 			}
 		}
 	}
@@ -1719,7 +1719,11 @@ reldame:
 		libusb_release_interface(cgusb->handle, THISIF(found, ifinfo));
 
 cldame:
+#ifdef LINUX
+	libusb_attach_kernel_driver(cgusb->handle, THISIF(found, ifinfo));
 
+nokernel:
+#endif
 	cg_wlock(&cgusb_fd_lock);
 	libusb_close(cgusb->handle);
 	cgusb->handle = NULL;
