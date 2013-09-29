@@ -80,7 +80,7 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 }
 
 static
-void stratumsrv_update_notify_str(struct pool * const pool, bool clean)
+bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 {
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
@@ -90,7 +90,7 @@ void stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	struct stratumsrv_job *ssj;
 	ssize_t n2pad = n2size - _ssm_client_octets - _ssm_client_xnonce2sz;
 	if (n2pad < 0)
-	{}// FIXME
+		return false;
 	size_t coinb1in_lenx = swork->nonce2_offset * 2;
 	size_t n2padx = n2pad * 2;
 	size_t coinb1_lenx = coinb1in_lenx + n2padx;
@@ -148,6 +148,8 @@ void stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 			continue;
 		bufferevent_write(conn->bev, _ssm_notify, _ssm_notify_sz);
 	}
+	
+	return true;
 }
 
 static
@@ -188,6 +190,8 @@ void stratumsrv_boot_all_subscribed(const char * const msg)
 {
 	struct stratumsrv_conn *conn, *tmp_conn;
 	
+	_ssm_notify = NULL;
+	
 	// Boot all connections
 	LL_FOREACH_SAFE(_ssm_connections, conn, tmp_conn)
 	{
@@ -227,15 +231,18 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 	{
 		applog(LOG_WARNING, "SSM: Not using a stratum server upstream!");
 		if (clean)
-		{
-			_ssm_notify = NULL;
 			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
-		}
-		return;
+		goto out;
 	}
 	
-	stratumsrv_update_notify_str(pool, clean);
+	if (!stratumsrv_update_notify_str(pool, clean))
+	{
+		applog(LOG_WARNING, "SSM: Failed to subdivide upstream stratum notify!");
+		if (clean)
+			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
+	}
 	
+out: ;
 	struct timeval tv_scantime = {
 		.tv_sec = opt_scantime,
 	};
