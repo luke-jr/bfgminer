@@ -1851,35 +1851,11 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return NULL;
 	}
 
-#ifdef USE_BFLSC
-	if (drv->drv_id == DRIVER_bflsc)
-		return usb_check_each(DRIVER_bflsc, drv, dev);
-#endif
-
-#ifdef USE_BITFORCE
-	if (drv->drv_id == DRIVER_bitforce)
-		return usb_check_each(DRIVER_bitforce, drv, dev);
-#endif
-
-#ifdef USE_BITFURY
-	if (drv->drv_id == DRIVER_bitfury)
-		return usb_check_each(DRIVER_bitfury, drv, dev);
-#endif
-
-#ifdef USE_MODMINER
-	if (drv->drv_id == DRIVER_modminer)
-		return usb_check_each(DRIVER_modminer, drv, dev);
-#endif
-
-#ifdef USE_ICARUS
-	if (drv->drv_id == DRIVER_icarus)
-		return usb_check_each(DRIVER_icarus, drv, dev);
-#endif
-
-#ifdef USE_AVALON
-	if (drv->drv_id == DRIVER_avalon)
-		return usb_check_each(DRIVER_avalon, drv, dev);
-#endif
+#define DRIVER_ADD_COMMAND(X) \
+	if (drv->drv_id == DRIVER_##X) \
+		return usb_check_each(DRIVER_##X, drv, dev);
+	DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 
 	return NULL;
 }
@@ -3234,42 +3210,14 @@ void usb_initialise()
 					quit(1, "Invalid --usb DRV:limit - limit must be >= 0");
 
 				found = false;
-#ifdef USE_BFLSC
-				if (strcasecmp(ptr, bflsc_drv.name) == 0) {
-					drv_count[bflsc_drv.drv_id].limit = lim;
-					found = true;
+				/* Use the DRIVER_PARSE_COMMANDS macro to iterate
+				 * over all the drivers. */
+#define DRIVER_ADD_COMMAND(X)	if (strcasecmp(ptr, X##_drv.name) == 0) { \
+					drv_count[X##_drv.drv_id].limit = lim; \
+					found = true; \
 				}
-#endif
-#ifdef USE_BITFORCE
-				if (!found && strcasecmp(ptr, bitforce_drv.name) == 0) {
-					drv_count[bitforce_drv.drv_id].limit = lim;
-					found = true;
-				}
-#endif
-#ifdef USE_BITFURY
-				if (!found && strcasecmp(ptr, bitfury_drv.name) == 0) {
-					drv_count[bitfury_drv.drv_id].limit = lim;
-					found = true;
-				}
-#endif
-#ifdef USE_MODMINER
-				if (!found && strcasecmp(ptr, modminer_drv.name) == 0) {
-					drv_count[modminer_drv.drv_id].limit = lim;
-					found = true;
-				}
-#endif
-#ifdef USE_ICARUS
-				if (!found && strcasecmp(ptr, icarus_drv.name) == 0) {
-					drv_count[icarus_drv.drv_id].limit = lim;
-					found = true;
-				}
-#endif
-#ifdef USE_AVALON
-				if (!found && strcasecmp(ptr, avalon_drv.name) == 0) {
-					drv_count[avalon_drv.drv_id].limit = lim;
-					found = true;
-				}
-#endif
+				DRIVER_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 				if (!found)
 					quit(1, "Invalid --usb DRV:limit - unknown DRV='%s'", ptr);
 

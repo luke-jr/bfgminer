@@ -178,7 +178,7 @@ static uint32_t decnonce(uint32_t in)
 }
 
 #define BT_OFFSETS 3
-const uint32_t bf_offsets[] = {0, -0x400000, -0x800000};
+const uint32_t bf_offsets[] = {-0x800000, 0, -0x400000};
 
 static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
