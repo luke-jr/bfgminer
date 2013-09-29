@@ -82,6 +82,8 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 static
 bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 {
+	cg_rlock(&pool->data_lock);
+	
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
 	const int n2size = pool->n2size;
@@ -134,6 +136,9 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	};
 	timer_set_now(&ssj->tv_prepared);
 	stratum_work_cpy(&ssj->swork, swork);
+	
+	cg_runlock(&pool->data_lock);
+	
 	ssj->swork.data_lock_p = NULL;
 	HASH_ADD_KEYPTR(hh, _ssm_jobs, ssj->my_job_id, strlen(ssj->my_job_id), ssj);
 	_ssm_gen_dummy_work(&_ssm_cur_job_work, ssj, NULL, 0);
