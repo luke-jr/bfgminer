@@ -225,29 +225,6 @@ struct proxy_client *_stratumsrv_find_or_create_client(const char *user)
 }
 
 static
-void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
-{
-	char buf[90 + strlen(idstr) + (_ssm_client_octets * 2 * 2) + 0x10];
-	char xnonce1x[(_ssm_client_octets * 2) + 1];
-	int bufsz;
-	
-	if (!*xnonce1_p)
-	{
-		uint32_t xnonce1;
-		for (xnonce1 = MAX_CLIENTS; _ssm_xnonce1s[xnonce1]; --xnonce1)
-			if (!xnonce1)
-				; // TODO: Error
-		*xnonce1_p = htole32(xnonce1);
-	}
-	
-	bin2hex(xnonce1x, xnonce1_p, _ssm_client_octets);
-	bufsz = sprintf(buf, "{\"id\":%s,\"result\":[[[\"mining.set_difficulty\",\"x\"],[\"mining.notify\",\"%s\"]],\"%s\",%d],\"error\":null}\n", idstr, xnonce1x, xnonce1x, _ssm_client_xnonce2sz);
-	bufferevent_write(bev, buf, bufsz);
-	bufferevent_write(bev, "{\"params\":[0.9999847412109375],\"id\":null,\"method\":\"mining.set_difficulty\"}\n", 75);
-	bufferevent_write(bev, _ssm_notify, _ssm_notify_sz);
-}
-
-static
 void _stratumsrv_failure(struct bufferevent * const bev, const char * const idstr, const int e, const char * const emsg)
 {
 	if (!idstr)
@@ -273,6 +250,29 @@ void _stratumsrv_success(struct bufferevent * const bev, const char * const idst
 	
 	bufsz = sprintf(buf, "{\"result\":true,\"id\":%s,\"error\":null}\n", idstr);
 	bufferevent_write(bev, buf, bufsz);
+}
+
+static
+void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
+{
+	char buf[90 + strlen(idstr) + (_ssm_client_octets * 2 * 2) + 0x10];
+	char xnonce1x[(_ssm_client_octets * 2) + 1];
+	int bufsz;
+	
+	if (!*xnonce1_p)
+	{
+		uint32_t xnonce1;
+		for (xnonce1 = MAX_CLIENTS; _ssm_xnonce1s[xnonce1]; --xnonce1)
+			if (!xnonce1)
+				return_stratumsrv_failure(20, "Maximum clients already connected");
+		*xnonce1_p = htole32(xnonce1);
+	}
+	
+	bin2hex(xnonce1x, xnonce1_p, _ssm_client_octets);
+	bufsz = sprintf(buf, "{\"id\":%s,\"result\":[[[\"mining.set_difficulty\",\"x\"],[\"mining.notify\",\"%s\"]],\"%s\",%d],\"error\":null}\n", idstr, xnonce1x, xnonce1x, _ssm_client_xnonce2sz);
+	bufferevent_write(bev, buf, bufsz);
+	bufferevent_write(bev, "{\"params\":[0.9999847412109375],\"id\":null,\"method\":\"mining.set_difficulty\"}\n", 75);
+	bufferevent_write(bev, _ssm_notify, _ssm_notify_sz);
 }
 
 static
