@@ -1486,7 +1486,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
-#ifdef HAVE_CHOOT
+#ifdef HAVE_CHROOT
         OPT_WITH_ARG("--chroot-dir",
                      opt_set_charp, NULL, &chroot_dir,
                      "Chroot to a directory right after startup"),
