@@ -49,6 +49,7 @@ struct stratumsrv_conn {
 	struct bufferevent *bev;
 	uint32_t xnonce1_le;
 	struct timeval tv_hashes_done;
+	bool hashes_done_ext;
 	
 	struct stratumsrv_conn *next;
 };
@@ -422,6 +423,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	
 	clean_work(work);
 	
+	if (!conn->hashes_done_ext)
 	{
 		struct timeval tv_now, tv_delta;
 		timer_set_now(&tv_now);
@@ -429,6 +431,33 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 		conn->tv_hashes_done = tv_now;
 		hashes_done(thr, 0x100000000, &tv_delta, NULL);
 	}
+}
+
+static
+void stratumsrv_mining_hashes_done(struct bufferevent * const bev, json_t * const params, const char * const idstr, struct stratumsrv_conn * const conn)
+{
+	double f;
+	struct timeval tv_delta;
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	struct proxy_client * const client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
+	json_t *jduration = json_array_get(params, 1);
+	json_t *jhashcount = json_array_get(params, 2);
+	
+	if (!(json_is_number(jduration) && json_is_number(jhashcount)))
+		return_stratumsrv_failure(20, "mining.hashes_done(String username, Number duration-in-seconds, Number hashcount)");
+	
+	cgpu = client->cgpu;
+	thr = cgpu->thr[0];
+	
+	f = json_number_value(jduration);
+	tv_delta.tv_sec = f;
+	tv_delta.tv_usec = (f - tv_delta.tv_sec) * 1e6;
+	
+	f = json_number_value(jhashcount);
+	hashes_done(thr, f, &tv_delta, NULL);
+	
+	conn->hashes_done_ext = true;
 }
 
 static
@@ -468,6 +497,9 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	
 	if (!strcasecmp(method, "mining.submit"))
 		stratumsrv_mining_submit(bev, params, idstr, conn);
+	else
+	if (!strcasecmp(method, "mining.hashes_done"))
+		stratumsrv_mining_hashes_done(bev, params, idstr, conn);
 	else
 	if (!strcasecmp(method, "mining.authorize"))
 		stratumsrv_mining_authorize(bev, params, idstr, &conn->xnonce1_le);
