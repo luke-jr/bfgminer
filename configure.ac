@@ -364,14 +364,14 @@ AC_ARG_WITH([libevent],
 	[libevent=$withval]
 )
 if test "x$libevent" != "xno"; then
-	PKG_CHECK_MODULES([libevent],[libevent >= 2],[
+	PKG_CHECK_MODULES([libevent],[libevent >= 2.0.3],[
 		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
 		libevent=yes
 	],[
 		if test "x$libevent" = "xyes"; then
-			AC_MSG_ERROR([Unable to find libevent 2])
+			AC_MSG_ERROR([Unable to find libevent 2.0.3+])
 		else
-			AC_MSG_WARN([libevent 2 not found; stratum proxy will be unavailable])
+			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
 	])
 fi
