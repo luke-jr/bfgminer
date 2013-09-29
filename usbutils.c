@@ -521,12 +521,10 @@ static int next_stat = USB_NOSTAT;
 #endif // DO_USB_STATS
 
 /* Create usb_commands array from USB_PARSE_COMMANDS macro in usbutils.h */
-#define USB_ADD_COMMAND(X, Y) Y,
 char *usb_commands[] = {
-	USB_PARSE_COMMANDS
+	USB_PARSE_COMMANDS(JUMPTABLE)
 	"Null"
 };
-#undef USB_ADD_COMMAND
 
 #ifdef EOL
 #undef EOL

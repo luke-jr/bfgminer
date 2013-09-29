@@ -261,7 +261,10 @@ struct cg_usb_info {
 	struct cg_usb_tmo usb_tmo[USB_TMOS];
 };
 
-#define USB_PARSE_COMMANDS \
+#define ENUMERATION(a,b) a,
+#define JUMPTABLE(a,b) b,
+
+#define USB_PARSE_COMMANDS(USB_ADD_COMMAND) \
 	USB_ADD_COMMAND(C_REJECTED, "RejectedNoDevice") \
 	USB_ADD_COMMAND(C_PING, "Ping") \
 	USB_ADD_COMMAND(C_CLEAR, "Clear") \
@@ -339,12 +342,10 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_BF1_IDENTIFY, "BF1Identify")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
-#define USB_ADD_COMMAND(X, Y) X,
 enum usb_cmds {
-	USB_PARSE_COMMANDS
+	USB_PARSE_COMMANDS(ENUMERATION)
 	C_MAX
 };
-#undef USB_ADD_COMMAND
 
 struct device_drv;
 struct cgpu_info;
