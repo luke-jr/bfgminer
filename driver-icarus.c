@@ -74,6 +74,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 // USB ms timeout to wait - user specified timeouts are multiples of this
 #define ICARUS_WAIT_TIMEOUT 100
+#define ICARUS_CMR2_TIMEOUT 1
 
 // Defined in multiples of ICARUS_WAIT_TIMEOUT
 // Must of course be greater than ICARUS_READ_COUNT_TIMING/ICARUS_WAIT_TIMEOUT
@@ -185,6 +186,8 @@ struct ICARUS_INFO {
 
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
+
+	int timeout;
 
 	// seconds per Hash
 	double Hs;
@@ -434,7 +437,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	struct timeval read_start, read_finish;
 	int err, amt;
-	int rc = 0;
+	int rc = 0, delay;
 	int read_amount = ICARUS_READ_SIZE;
 	bool first = true;
 
@@ -446,7 +449,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		cgtime(&read_start);
 		err = usb_read_ii_timeout(icarus, info->intinfo,
 					  (char *)buf, read_amount, &amt,
-					  ICARUS_WAIT_TIMEOUT, C_GETRESULTS);
+					  info->timeout, C_GETRESULTS);
 		cgtime(&read_finish);
 		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
 			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
@@ -482,6 +485,21 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 			buf += amt;
 			read_amount -= amt;
 			first = false;
+		}
+
+		if (info->timeout < ICARUS_WAIT_TIMEOUT) {
+			delay = ICARUS_WAIT_TIMEOUT - rc;
+			if (delay > 0) {
+				cgsleep_ms(delay);
+
+				if (thr && thr->work_restart) {
+					if (opt_debug) {
+						applog(LOG_DEBUG,
+							"Icarus Read: Work restart at %d ms", rc);
+					}
+					return ICA_NONCE_RESTART;
+				}
+			}
 		}
 	}
 }
@@ -796,6 +814,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries;
+	enum sub_ident ident;
 	bool ok;
 
 	icarus = usb_alloc_cgpu(&icarus_drv, 1);
@@ -813,6 +832,23 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	if (unlikely(!info))
 		quit(1, "Failed to malloc ICARUS_INFO");
 	icarus->device_data = (void *)info;
+
+	ident = usb_ident(icarus);
+	switch (ident) {
+		case IDENT_ICA:
+		case IDENT_BLT:
+		case IDENT_LLT:
+		case IDENT_AMU:
+		case IDENT_CMR1:
+			info->timeout = ICARUS_WAIT_TIMEOUT;
+			break;
+		case IDENT_CMR2:
+			info->timeout = ICARUS_CMR2_TIMEOUT;
+			break;
+		default:
+			quit(1, "%s icarus_detect_one() invalid %s ident=%d",
+				icarus->drv->dname, icarus->drv->dname, ident);
+	}
 
 	tries = 2;
 	ok = false;
