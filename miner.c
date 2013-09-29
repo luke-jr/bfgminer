@@ -167,6 +167,9 @@ static bool opt_nogpu;
 #include "httpsrv.h"
 int httpsrv_port = -1;
 #endif
+#ifdef USE_LIBEVENT
+int stratumsrv_port = -1;
+#endif
 
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
@@ -512,6 +515,42 @@ struct cgpu_info *get_devices(int id)
 	return cgpu;
 }
 
+static pthread_mutex_t noncelog_lock = PTHREAD_MUTEX_INITIALIZER;
+static FILE *noncelog_file = NULL;
+
+static
+void noncelog(const struct work * const work)
+{
+	const int thr_id = work->thr_id;
+	const struct cgpu_info *proc = get_thr_cgpu(thr_id);
+	char buf[0x200], hash[65], data[161], midstate[65];
+	int rv;
+	size_t ret;
+	
+	bin2hex(hash, work->hash, 32);
+	bin2hex(data, work->data, 80);
+	bin2hex(midstate, work->midstate, 32);
+	
+	// timestamp,proc,hash,data,midstate
+	rv = snprintf(buf, sizeof(buf), "%lu,%s,%s,%s,%s\n",
+	              (unsigned long)time(NULL), proc->proc_repr_ns,
+	              hash, data, midstate);
+	
+	if (unlikely(rv < 1))
+	{
+		applog(LOG_ERR, "noncelog printf error");
+		return;
+	}
+	
+	mutex_lock(&noncelog_lock);
+	ret = fwrite(buf, rv, 1, noncelog_file);
+	fflush(noncelog_file);
+	mutex_unlock(&noncelog_lock);
+	
+	if (ret != 1)
+		applog(LOG_ERR, "noncelog fwrite error");
+}
+
 static void sharelog(const char*disposition, const struct work*work)
 {
 	char target[(sizeof(work->target) * 2) + 1];
@@ -530,7 +569,7 @@ static void sharelog(const char*disposition, const struct work*work)
 	thr_id = work->thr_id;
 	cgpu = get_thr_cgpu(thr_id);
 	pool = work->pool;
-	t = (unsigned long int)(work->tv_work_found.tv_sec);
+	t = work->ts_getwork + timer_elapsed(&work->tv_getwork, &work->tv_work_found);
 	bin2hex(target, work->target, sizeof(work->target));
 	bin2hex(hash, work->hash, sizeof(work->hash));
 	bin2hex(data, work->data, sizeof(work->data));
@@ -1152,26 +1191,57 @@ char *set_log_file(char *arg)
 	return NULL;
 }
 
-static char* set_sharelog(char *arg)
+static
+char *_bfgopt_set_file(const char *arg, FILE **F, const char *mode, const char *purpose)
 {
 	char *r = "";
 	long int i = strtol(arg, &r, 10);
+	static char *err = NULL;
+	const size_t errbufsz = 0x100;
 
+	free(err);
+	err = NULL;
+	
 	if ((!*r) && i >= 0 && i <= INT_MAX) {
-		sharelog_file = fdopen((int)i, "a");
-		if (!sharelog_file)
-			applog(LOG_ERR, "Failed to open fd %u for share log", (unsigned int)i);
+		*F = fdopen((int)i, mode);
+		if (!*F)
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Failed to open fd %d for %s",
+			         (int)i, purpose);
+			return err;
+		}
 	} else if (!strcmp(arg, "-")) {
-		sharelog_file = stdout;
-		if (!sharelog_file)
-			applog(LOG_ERR, "Standard output missing for share log");
+		*F = (mode[0] == 'a') ? stdout : stdin;
+		if (!*F)
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Standard %sput missing for %s",
+			         (mode[0] == 'a') ? "out" : "in", purpose);
+			return err;
+		}
 	} else {
-		sharelog_file = fopen(arg, "a");
-		if (!sharelog_file)
-			applog(LOG_ERR, "Failed to open %s for share log", arg);
+		*F = fopen(arg, mode);
+		if (!*F)
+		{
+			err = malloc(errbufsz);
+			snprintf(err, errbufsz, "Failed to open %s for %s",
+			         arg, purpose);
+			return err;
+		}
 	}
 
 	return NULL;
+}
+
+static char *set_noncelog(char *arg)
+{
+	return _bfgopt_set_file(arg, &noncelog_file, "a", "nonce log");
+}
+
+static char *set_sharelog(char *arg)
+{
+	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
 }
 
 static char *temp_cutoff_str = "";
@@ -1413,17 +1483,6 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden),
 #endif
 #ifdef CHROOT
-	OPT_WITH_ARG("--chroot-dir",
-		     opt_set_charp, NULL, &chroot_dir,
-		     "Chroot to a directory right after startup"),
-	OPT_WITH_ARG("--chroot-user",
-		     opt_set_charp, NULL, &chroot_user,
-		     "Username of an unprivileged user to run as"),
-#endif
-	OPT_WITH_ARG("--cmd-idle",
-	             opt_set_charp, NULL, &cmd_idle,
-	             "Execute a command when a device is allowed to be idle (rest or wait)"),
-#ifdef CHROOT
         OPT_WITH_ARG("--chroot-dir",
                      opt_set_charp, NULL, &chroot_dir,
                      "Chroot to a directory right after startup"),
@@ -1431,6 +1490,9 @@ static struct opt_table opt_config_table[] = {
                      opt_set_charp, NULL, &chroot_user,
                      "Username of an unprivileged user to run as"),
 #endif
+	OPT_WITH_ARG("--cmd-idle",
+	             opt_set_charp, NULL, &cmd_idle,
+	             "Execute a command when a device is allowed to be idle (rest or wait)"),
 	OPT_WITH_ARG("--cmd-sick",
 	             opt_set_charp, NULL, &cmd_sick,
 	             "Execute a command when a device is declared sick"),
@@ -1655,6 +1717,9 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden
 #endif
 	),
+	OPT_WITH_ARG("--noncelog",
+		     set_noncelog, NULL, NULL,
+		     "Create log of all nonces found"),
 	OPT_WITH_ARG("--pass|-p",
 		     set_pass, NULL, NULL,
 		     "Password for bitcoin JSON-RPC server"),
@@ -1746,6 +1811,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+#ifdef USE_LIBEVENT
+	OPT_WITH_ARG("--stratum-port",
+	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             "Port number to listen on for stratum miners (-1 means disabled)"),
+#endif
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 	                opt_hidden),
@@ -2809,7 +2879,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
 	int badnonces = cgpu->bad_nonces;
-	int allnonces = cgpu->diff1;
+	int goodnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
@@ -2827,7 +2897,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
 			badnonces += slave->bad_nonces;
-			allnonces += slave->diff1;
+			goodnonces += slave->diff1;
 		}
 	
 	multi_format_unit_array2(
@@ -2925,13 +2995,13 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		                accepted, rejected, stale,
 		                wnotaccepted, waccepted,
 		                hwerrs,
-		                badnonces, allnonces);
+		                badnonces, badnonces + goodnonces);
 	}
 	else
 #endif
 	{
 		percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
-		percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
+		percentf4(bnbuf, sizeof(bnbuf), badnonces, goodnonces);
 		tailsprintf(buf, bufsz, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
@@ -6968,7 +7038,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		                total_rejected,
 		                total_stale,
 		                total_diff_rejected + total_diff_stale, total_diff_accepted,
-		                hw_errors, total_bad_nonces, total_diff1);
+		                hw_errors,
+		                total_bad_nonces, total_bad_nonces + total_diff1);
 		unlock_curses();
 	}
 #endif
@@ -6978,7 +7049,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	uHr[5] = ' ';
 	
 	percentf4(rejpcbuf, sizeof(rejpcbuf), total_diff_rejected + total_diff_stale, total_diff_accepted);
-	percentf3(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
+	percentf4(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
 	
 	snprintf(logstatusline, sizeof(logstatusline),
 	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
@@ -7376,14 +7447,17 @@ static void *stratum_thread(void *userdata)
 		int sel_ret;
 		fd_set rd;
 		char *s;
+		int sock;
 
 		if (unlikely(!pool->has_stratum))
 			break;
 
+		sock = pool->sock;
+		
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
 		 * pool */
-		if (!sock_full(pool) && !cnx_needed(pool)) {
+		if (sock == INVSOCK || (!sock_full(pool) && !cnx_needed(pool))) {
 			suspend_stratum(pool);
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
@@ -7400,14 +7474,14 @@ static void *stratum_thread(void *userdata)
 		}
 
 		FD_ZERO(&rd);
-		FD_SET(pool->sock, &rd);
+		FD_SET(sock, &rd);
 		timeout.tv_sec = 120;
 		timeout.tv_usec = 0;
 
 		/* If we fail to receive any notify messages for 2 minutes we
 		 * assume the connection has been dropped and treat this pool
 		 * as dead */
-		if (!sock_full(pool) && (sel_ret = select(pool->sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
+		if (!sock_full(pool) && (sel_ret = select(sock + 1, &rd, NULL, NULL, &timeout)) < 1) {
 			applog(LOG_DEBUG, "Stratum select failed on pool %d with value %d", pool->pool_no, sel_ret);
 			s = NULL;
 		} else
@@ -7868,23 +7942,31 @@ void set_target(unsigned char *dest_target, double diff)
 	}
 }
 
+void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work * const src)
+{
+	*dst = *src;
+	dst->job_id = strdup(src->job_id);
+	bytes_cpy(&dst->coinbase, &src->coinbase);
+	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+}
+
+void stratum_work_clean(struct stratum_work * const swork)
+{
+	free(swork->job_id);
+	bytes_free(&swork->coinbase);
+	bytes_free(&swork->merkle_bin);
+}
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-	
-	coinbase = bytes_buf(&pool->swork.coinbase);
-
 	clean_work(work);
-
+	
 	cg_wlock(&pool->data_lock);
-
-	/* Generate coinbase */
+	pool->swork.data_lock_p = &pool->data_lock;
+	
 	bytes_resize(&work->nonce2, pool->n2size);
 #ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
@@ -7898,17 +7980,35 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	       &pool->nonce2,
 #endif
 	       pool->nonce2sz);
-	memcpy(&coinbase[pool->swork.nonce2_offset], bytes_buf(&work->nonce2), pool->n2size);
 	pool->nonce2++;
+	
+	work->pool = pool;
+	work->work_restart_id = work->pool->work_restart_id;
+	gen_stratum_work2(work, &pool->swork, pool->nonce1);
+	
+	cgtime(&work->tv_staged);
+}
 
-	/* Downgrade to a read lock to read off the pool variables */
-	cg_dwlock(&pool->data_lock);
+void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char *nonce1)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+
+	/* Generate coinbase */
+	coinbase = bytes_buf(&swork->coinbase);
+	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+
+	/* Downgrade to a read lock to read off the variables */
+	if (swork->data_lock_p)
+		cg_dwlock(swork->data_lock_p);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, bytes_len(&pool->swork.coinbase));
+	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
-	merkle_bin = bytes_buf(&pool->swork.merkle_bin);
-	for (i = 0; i < pool->swork.merkles; ++i, merkle_bin += 32) {
+	merkle_bin = bytes_buf(&swork->merkle_bin);
+	for (i = 0; i < swork->merkles; ++i, merkle_bin += 32) {
 		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
@@ -7917,21 +8017,22 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
 	
-	memcpy(&work->data[0], pool->swork.header1, 36);
+	memcpy(&work->data[0], swork->header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
-	*((uint32_t*)&work->data[68]) = htobe32(pool->swork.ntime + timer_elapsed(&pool->swork.tv_received, NULL));
-	memcpy(&work->data[72], pool->swork.diffbits, 4);
+	*((uint32_t*)&work->data[68]) = htobe32(swork->ntime + timer_elapsed(&swork->tv_received, NULL));
+	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
-	work->sdiff = pool->swork.diff;
+	work->sdiff = swork->diff;
 
 	/* Copy parameters required for share submission */
-	work->job_id = strdup(pool->swork.job_id);
-	work->nonce1 = strdup(pool->nonce1);
-	cg_runlock(&pool->data_lock);
+	work->job_id = strdup(swork->job_id);
+	work->nonce1 = strdup(nonce1);
+	if (swork->data_lock_p)
+		cg_runlock(swork->data_lock_p);
 
 	if (opt_debug)
 	{
@@ -7948,16 +8049,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	set_target(work->target, work->sdiff);
 
 	local_work++;
-	work->pool = pool;
 	work->stratum = true;
 	work->blk.nonce = 0;
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
-	work->work_restart_id = work->pool->work_restart_id;
 	calc_diff(work, 0);
-
-	cgtime(&work->tv_staged);
 }
 
 void request_work(struct thr_info *thr)
@@ -8073,10 +8170,6 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	++cgpu->hw_errors;
 	if (bad_nonce_p)
 	{
-		++total_diff1;
-		++cgpu->diff1;
-		if (work)
-			++work->pool->diff1;
 		++total_bad_nonces;
 		++cgpu->bad_nonces;
 	}
@@ -8155,6 +8248,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	work->pool->diff1++;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
+	
+	if (noncelog_file)
+		noncelog(work);
 	
 	if (res == TNR_HIGH)
 	{
@@ -9799,28 +9895,41 @@ static void raise_fd_limits(void)
 #ifdef HAVE_SETRLIMIT
 	struct rlimit fdlimit;
 	unsigned long old_soft_limit;
+	char frombuf[0x10] = "unlimited";
+	char hardbuf[0x10] = "unlimited";
 	
 	if (getrlimit(RLIMIT_NOFILE, &fdlimit))
 		applogr(, LOG_DEBUG, "setrlimit: Failed to getrlimit(RLIMIT_NOFILE)");
 	
-	if (fdlimit.rlim_cur == RLIM_INFINITY)
-		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit already infinite");
-	
-	if (fdlimit.rlim_cur == fdlimit.rlim_max)
-		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit already identical to hard limit (%lu)", (unsigned long)fdlimit.rlim_max);
-	
 	old_soft_limit = fdlimit.rlim_cur;
-	fdlimit.rlim_cur = fdlimit.rlim_max;
-	if (setrlimit(RLIMIT_NOFILE, &fdlimit))
-		applogr(, LOG_DEBUG, "setrlimit: Failed to increase soft fd limit from %lu to hard limit of %lu", old_soft_limit, (unsigned long)fdlimit.rlim_max);
 	
-	applog(LOG_DEBUG, "setrlimit: Increased soft fd limit from %lu to hard limit of %lu", old_soft_limit, (unsigned long)fdlimit.rlim_max);
+	if (fdlimit.rlim_max > FD_SETSIZE || fdlimit.rlim_max == RLIM_INFINITY)
+		fdlimit.rlim_cur = FD_SETSIZE;
+	else
+		fdlimit.rlim_cur = fdlimit.rlim_max;
+	
+	if (fdlimit.rlim_max != RLIM_INFINITY)
+		snprintf(hardbuf, sizeof(hardbuf), "%lu", (unsigned long)fdlimit.rlim_max);
+	if (old_soft_limit != RLIM_INFINITY)
+		snprintf(frombuf, sizeof(frombuf), "%lu", old_soft_limit);
+	
+	if (fdlimit.rlim_cur == old_soft_limit)
+		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit not being changed from %lu (FD_SETSIZE=%lu; hard limit=%s)",
+		        old_soft_limit, (unsigned long)FD_SETSIZE, hardbuf);
+	
+	if (setrlimit(RLIMIT_NOFILE, &fdlimit))
+		applogr(, LOG_DEBUG, "setrlimit: Failed to change soft fd limit from %s to %lu (FD_SETSIZE=%lu; hard limit=%s)",
+		        frombuf, (unsigned long)fdlimit.rlim_cur, (unsigned long)FD_SETSIZE, hardbuf);
+	
+	applog(LOG_DEBUG, "setrlimit: Changed soft fd limit from %s to %lu (FD_SETSIZE=%lu; hard limit=%s)",
+	       frombuf, (unsigned long)fdlimit.rlim_cur, (unsigned long)FD_SETSIZE, hardbuf);
 #else
 	applog(LOG_DEBUG, "setrlimit: Not supported by platform");
 #endif
 }
 
 extern void bfg_init_threadlocal();
+extern void stratumsrv_start();
 
 int main(int argc, char *argv[])
 {
@@ -9978,29 +10087,6 @@ int main(int argc, char *argv[])
 #endif
 
 	raise_fd_limits();
-
-#ifdef CHROOT
-	if (chroot_dir != NULL) {
-		struct passwd *user_info = NULL;
-		if (chroot_user != NULL) {
-			if ((user_info = getpwnam(chroot_user)) == NULL) {
-				quit(1, "Unable to find user information");
-			}
-		} else if (getuid() == 0) {
-			quit(1, "Running as root is not allowed");
-		}
-
-		if (chroot(chroot_dir) == 0) {
-			if (user_info != NULL) {
-				if (setgid((*user_info).pw_gid) == 0 && setuid((*user_info).pw_uid) != 0) {
-					quit(1, "Unable to setuid");
-				}
-			}
-		} else {
-			quit(1, "Unable to chroot");
-		}
-	}
-#endif
 	
 	if (opt_benchmark) {
 		struct pool *pool;
@@ -10154,17 +10240,22 @@ int main(int argc, char *argv[])
 	}
 
 	if (!total_devices) {
-#ifndef USE_LIBMICROHTTPD
-		const int httpsrv_port = -1;
+		const bool netdev_support =
+#ifdef USE_LIBMICROHTTPD
+			(httpsrv_port != -1) ||
 #endif
-		if (httpsrv_port == -1 && (!use_curses) && !opt_api_listen)
+#ifdef USE_LIBEVENT
+			(stratumsrv_port != -1) ||
+#endif
+			false;
+		if ((!netdev_support) && (!use_curses) && !opt_api_listen)
 			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
 		if (use_curses)
 			applog(LOG_WARNING, "Waiting for devices; press 'M+' to add, or 'Q' to quit");
 		else
 			applog(LOG_WARNING, "Waiting for %s or press Ctrl-C to quit",
-		       (httpsrv_port == -1) ? "RPC commands" : "network devices");
+		       netdev_support ? "network devices" : "RPC commands");
 	}
 
 	load_temp_config();
@@ -10392,6 +10483,11 @@ begin_bench:
 #ifdef USE_LIBMICROHTTPD
 	if (httpsrv_port != -1)
 		httpsrv_start(httpsrv_port);
+#endif
+
+#ifdef USE_LIBEVENT
+	if (stratumsrv_port != -1)
+		stratumsrv_start();
 #endif
 
 #ifdef HAVE_CURSES
