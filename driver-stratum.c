@@ -159,6 +159,44 @@ void _ssj_free(struct stratumsrv_job * const ssj)
 	free(ssj);
 }
 
+static void stratumsrv_client_close(struct stratumsrv_conn *);
+
+static
+void stratumsrv_conn_close_completion_cb(struct bufferevent *bev, void *p)
+{
+	struct evbuffer * const output = bufferevent_get_output(bev);
+	if (evbuffer_get_length(output))
+		// Still have more data to write...
+		return;
+	stratumsrv_client_close(p);
+}
+
+static void stratumsrv_event(struct bufferevent *, short, void *);
+
+static
+void stratumsrv_boot(struct stratumsrv_conn * const conn, const char * const msg)
+{
+	struct bufferevent * const bev = conn->bev;
+	char buf[58 + strlen(msg)];
+	int bufsz = sprintf(buf, "{\"params\":[\"%s\"],\"method\":\"client.show_message\",\"id\":null}\n", msg);
+	bufferevent_write(bev, buf, bufsz);
+	bufferevent_setcb(bev, NULL, stratumsrv_conn_close_completion_cb, stratumsrv_event, conn);
+}
+
+static
+void stratumsrv_boot_all_subscribed(const char * const msg)
+{
+	struct stratumsrv_conn *conn, *tmp_conn;
+	
+	// Boot all connections
+	LL_FOREACH_SAFE(_ssm_connections, conn, tmp_conn)
+	{
+		if (!conn->xnonce1_le)
+			continue;
+		stratumsrv_boot(conn, msg);
+	}
+}
+
 static
 void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused void *p)
 {
@@ -172,13 +210,6 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 		applog(LOG_DEBUG, "SSM: Update triggered by notifier");
 	}
 	
-	if (!pool->stratum_notify)
-	{
-		applog(LOG_WARNING, "SSM: Not using a stratum server upstream!");
-		// FIXME
-		return;
-	}
-	
 	clean = _ssm_cur_job_work.pool ? stale_work(&_ssm_cur_job_work, true) : true;
 	if (clean)
 	{
@@ -190,6 +221,17 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 			HASH_DEL(_ssm_jobs, ssj);
 			_ssj_free(ssj);
 		}
+	}
+	
+	if (!pool->stratum_notify)
+	{
+		applog(LOG_WARNING, "SSM: Not using a stratum server upstream!");
+		if (clean)
+		{
+			_ssm_notify = NULL;
+			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
+		}
+		return;
 	}
 	
 	stratumsrv_update_notify_str(pool, clean);
@@ -258,6 +300,9 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 	char buf[90 + strlen(idstr) + (_ssm_client_octets * 2 * 2) + 0x10];
 	char xnonce1x[(_ssm_client_octets * 2) + 1];
 	int bufsz;
+	
+	if (!_ssm_notify)
+		return_stratumsrv_failure(20, "No notify set (upstream not stratum?)");
 	
 	if (!*xnonce1_p)
 	{
