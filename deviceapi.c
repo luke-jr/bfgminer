@@ -708,6 +708,24 @@ void add_cgpu_live(void *p)
 	add_cgpu(p);
 }
 
+bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
+{
+	int old_total_devices = total_devices_new;
+	
+	if (!prev_cgpu)
+		return add_cgpu(cgpu);
+	
+	while (prev_cgpu->next_proc)
+		prev_cgpu = prev_cgpu->next_proc;
+	
+	if (!add_cgpu(cgpu))
+		return false;
+	
+	prev_cgpu->next_proc = devices_new[old_total_devices];
+	
+	return true;
+}
+
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;

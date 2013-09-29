@@ -48,7 +48,7 @@ int metabank_autodetect()
 {
 	RUNONCE(0);
 	
-	struct cgpu_info *cgpu = NULL, *proc1 = NULL;
+	struct cgpu_info *cgpu = NULL, *proc1 = NULL, *prev_cgpu = NULL;
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
 	int i, j;
@@ -111,11 +111,12 @@ int metabank_autodetect()
 					.procs = chip_n,
 					.device_data = devicelist,
 				};
-				add_cgpu(cgpu);
+				add_cgpu_slave(cgpu, prev_cgpu);
 				
 				proc_count += chip_n;
 				if (!proc1)
 					proc1 = cgpu;
+				prev_cgpu = cgpu;
 			}
 			else
 				free(port);
@@ -141,7 +142,7 @@ bool metabank_init(struct thr_info *thr)
 	struct bitfury_device *bitfury;
 	int devid;
 	
-	for (proc = get_devices(devid = thr->cgpu->cgminer_id); ; proc = next_proc)
+	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
 		devicelist = proc->device_data;
 		bitfury = devicelist[proc->proc_id];
@@ -151,16 +152,8 @@ bool metabank_init(struct thr_info *thr)
 		bitfury->osc6_bits = 54;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		
-		if (!proc->next_proc)
+		if (proc->proc_id == proc->procs - 1)
 			free(devicelist);
-		
-		if (++devid < total_devices
-		 && (next_proc = get_devices(devid))
-		 && next_proc->drv == &metabank_drv
-		 && !next_proc->threads)
-			proc->next_proc = next_proc;
-		else
-			break;
 	}
 	
 	return true;
