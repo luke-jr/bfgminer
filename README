@@ -81,7 +81,7 @@ BUILDING BFGMINER
 Everything you probably want, condensed:
 	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
 	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
-	libmicrohttpd-dev
+	libevent-dev libmicrohttpd-dev
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -108,6 +108,9 @@ Optional Dependencies:
 	
 	getwork server for Block Erupter Blades:
 	  libmicrohttpd-dev 0.9.5+  http://www.gnu.org/software/libmicrohttpd/
+	
+	Stratum proxy:
+	  libevent 2.0.3+    http://libevent.org/
 
 	X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
