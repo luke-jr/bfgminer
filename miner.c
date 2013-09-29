@@ -7926,6 +7926,13 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
 }
 
+void stratum_work_clean(struct stratum_work * const swork)
+{
+	free(swork->job_id);
+	bytes_free(&swork->coinbase);
+	bytes_free(&swork->merkle_bin);
+}
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */

@@ -1332,6 +1332,7 @@ struct work {
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
+extern void stratum_work_clean(struct stratum_work *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);

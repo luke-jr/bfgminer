@@ -151,6 +151,15 @@ void stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 }
 
 static
+void _ssj_free(struct stratumsrv_job * const ssj)
+{
+	free(ssj->my_job_id);
+	stratum_work_clean(&ssj->swork);
+	free(ssj->nonce1);
+	free(ssj);
+}
+
+static
 void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused void *p)
 {
 	struct pool *pool = current_pool();
@@ -179,8 +188,7 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 		HASH_ITER(hh, _ssm_jobs, ssj, tmp)
 		{
 			HASH_DEL(_ssm_jobs, ssj);
-			//FIXME: stratum_work_clean(ssj);
-			free(ssj);
+			_ssj_free(ssj);
 		}
 	}
 	
