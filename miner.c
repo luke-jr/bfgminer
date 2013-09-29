@@ -2855,7 +2855,6 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
-	double wutil = cgpu->utility_diff1;
 	int accepted = cgpu->accepted;
 	int rejected = cgpu->rejected;
 	int stale = cgpu->stale;
@@ -2873,7 +2872,6 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			
 			rolling += slave->rolling;
 			mhashes += slave->total_mhashes;
-			wutil += slave->utility_diff1;
 			accepted += slave->accepted;
 			rejected += slave->rejected;
 			stale += slave->stale;
@@ -2884,6 +2882,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			goodnonces += slave->diff1;
 		}
 	
+	double wtotal = (waccepted + wnotaccepted);
+	
 	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
 		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[hashrate_style]}),
@@ -2891,7 +2891,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		3,
 		1e6*rolling,
 		1e6*mhashes / dev_runtime,
-		utility_to_hashrate(wutil));
+		utility_to_hashrate(goodnonces * (wtotal ? (waccepted / wtotal) : 1) * 60 / dev_runtime));
 
 	// Processor representation
 #ifdef HAVE_CURSES
@@ -6953,6 +6953,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
+	double wtotal = (total_diff_accepted + total_diff_rejected + total_diff_stale);
+	
 	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
 		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_SPACED]}),
@@ -6960,7 +6962,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		3,
 		1e6*rolling,
 		1e6*total_mhashes_done / total_secs,
-		utility_to_hashrate(total_diff_accepted / (total_secs ?: 1) * 60));
+		utility_to_hashrate(total_diff1 * (wtotal ? (total_diff_accepted / wtotal) : 1) * 60 / total_secs));
 
 #ifdef HAVE_CURSES
 	if (curses_active_locked()) {

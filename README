@@ -441,7 +441,8 @@ Each column is as follows:
   Hottest temperature reported by any processor
   5 second exponentially decaying average hash rate
   An all time average hash rate
-  An all time average hash rate based on actual accepted shares
+  An all time average hash rate based on actual nonces found, adjusted for pool
+      reject and stale rate
   The number of Accepted shares
   The number of Rejected shares and stale shares discarded (never submitted),
       and the percentage these are of total found.
@@ -499,8 +500,9 @@ that this data will be publicly seen if your miner finds a block using any
 GBT-enabled pool, even when not solo mining (such as failover). If your
 bitcoin node does not support longpolling (for example, bitcoind 0.8.x), you
 should consider setting up a failover pool to provide you with block
-notifications. Note that solo mining does not use shares, so BFGMiner's utility
-hashrate (third column) will swing widely and read zero until you find a block.
+notifications. Note that solo mining does not use shares, so BFGMiner's adjusted
+hashrate (third column) may suddenly drop to zero if a block you submit is
+rejected; this does not indicate that it has stopped mining.
 
 Example solo mining usage:
 
