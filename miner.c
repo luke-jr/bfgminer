@@ -386,7 +386,7 @@ char *cmd_idle, *cmd_sick, *cmd_dead;
 char *chroot_dir;
 #endif
 
-#ifdef HAVE_PWD
+#ifdef HAVE_PWD_H
 char *opt_setuid;
 #endif
 
