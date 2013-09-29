@@ -69,6 +69,9 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 	char *user;
 	int b;
 	
+	if (!username)
+		return NULL;
+	
 	mutex_lock(&proxy_clients_mutex);
 	HASH_FIND_STR(proxy_clients, username, client);
 	if (!client)
