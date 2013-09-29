@@ -350,6 +350,27 @@ if test "x$httpsrv" != "xno"; then
 fi
 AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
 
+libevent=auto
+AC_ARG_WITH([libevent],
+	[AC_HELP_STRING([--without-libevent],[Compile support for libevent stratum server (default enabled)])],
+	[libevent=$withval]
+)
+if test "x$libevent" != "xno"; then
+	PKG_CHECK_MODULES([libevent],[libevent >= 2],[
+		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+		libevent=yes
+	],[
+		if test "x$libevent" = "xyes"; then
+			AC_MSG_ERROR([Unable to find libevent 2])
+		else
+			AC_MSG_WARN([libevent 2 not found; stratum proxy will be unavailable])
+		fi
+	])
+fi
+AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])
+
+AM_CONDITIONAL([NEED_BFG_DRIVER_PROXY], [test x$libevent$httpsrv != xnono])
+
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],

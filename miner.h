@@ -891,6 +891,7 @@ extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
 extern int httpsrv_port;
+extern int stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
@@ -1151,6 +1152,8 @@ struct stratum_work {
 	bool transparency_probed;
 	struct timeval tv_transparency;
 	bool opaque;
+	
+	cglock_t *data_lock_p;
 };
 
 #define RBUFSIZE 8192
@@ -1329,6 +1332,9 @@ struct work {
 
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
+extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
+extern void stratum_work_clean(struct stratum_work *);
+extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)

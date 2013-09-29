@@ -83,11 +83,22 @@ endif
 
 bfgminer_SOURCES	+= logging.c
 
+if NEED_BFG_DRIVER_PROXY
+bfgminer_SOURCES += driver-proxy.c driver-proxy.h
+endif
+
 if USE_LIBMICROHTTPD
 bfgminer_SOURCES += httpsrv.c httpsrv.h driver-getwork.c
 bfgminer_LDADD += $(libmicrohttpd_LIBS)
 bfgminer_LDFLAGS += $(libmicrohttpd_LDFLAGS)
 bfgminer_CPPFLAGS += $(libmicrohttpd_CFLAGS)
+endif
+
+if USE_LIBEVENT
+bfgminer_SOURCES  += driver-stratum.c
+bfgminer_LDADD    += $(libevent_LIBS)
+bfgminer_LDFLAGS  += $(libevent_LDFLAGS)
+bfgminer_CPPFLAGS += $(libevent_CFLAGS)
 endif
 
 

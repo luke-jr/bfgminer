@@ -1790,8 +1790,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	for (i = 0; i < merkles; i++)
 		hex2bin(&bytes_buf(&pool->swork.merkle_bin)[i * 32], json_string_value(json_array_get(arr, i)), 32);
 	pool->swork.merkles = merkles;
-	if (clean)
-		pool->nonce2 = 0;
+	pool->nonce2 = 0;
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",

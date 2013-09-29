@@ -3066,6 +3066,8 @@ static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		io_close(io_data);
 }
 
+extern void stratumsrv_change_port();
+
 static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *comma;
@@ -3112,6 +3114,13 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		httpsrv_port = value;
 		if (httpsrv_port != -1)
 			httpsrv_start(httpsrv_port);
+	}
+#endif
+#ifdef USE_LIBEVENT
+	else if (strcasecmp(param, "stratum-port") == 0)
+	{
+		stratumsrv_port = value;
+		stratumsrv_change_port();
 	}
 #endif
 	else {

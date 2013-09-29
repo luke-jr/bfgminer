@@ -233,6 +233,7 @@ Options for both config file and command line:
 --show-processors   Show per processor statistics in summary
 --skip-security-checks <arg> Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)
 --socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
+--stratum-port <arg> Port number to listen on for stratum miners (-1 means disabled) (default: -1)
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
 --temp-cutoff <arg> Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list

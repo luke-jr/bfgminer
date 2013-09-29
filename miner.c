@@ -163,6 +163,9 @@ static bool opt_nogpu;
 #include "httpsrv.h"
 int httpsrv_port = -1;
 #endif
+#ifdef USE_LIBEVENT
+int stratumsrv_port = -1;
+#endif
 
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
@@ -1792,6 +1795,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+#ifdef USE_LIBEVENT
+	OPT_WITH_ARG("--stratum-port",
+	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             "Port number to listen on for stratum miners (-1 means disabled)"),
+#endif
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 	                opt_hidden),
@@ -7918,23 +7926,31 @@ void set_target(unsigned char *dest_target, double diff)
 	}
 }
 
+void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work * const src)
+{
+	*dst = *src;
+	dst->job_id = strdup(src->job_id);
+	bytes_cpy(&dst->coinbase, &src->coinbase);
+	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+}
+
+void stratum_work_clean(struct stratum_work * const swork)
+{
+	free(swork->job_id);
+	bytes_free(&swork->coinbase);
+	bytes_free(&swork->merkle_bin);
+}
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */
 static void gen_stratum_work(struct pool *pool, struct work *work)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-	
-	coinbase = bytes_buf(&pool->swork.coinbase);
-
 	clean_work(work);
-
+	
 	cg_wlock(&pool->data_lock);
-
-	/* Generate coinbase */
+	pool->swork.data_lock_p = &pool->data_lock;
+	
 	bytes_resize(&work->nonce2, pool->n2size);
 #ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
@@ -7948,17 +7964,35 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	       &pool->nonce2,
 #endif
 	       pool->nonce2sz);
-	memcpy(&coinbase[pool->swork.nonce2_offset], bytes_buf(&work->nonce2), pool->n2size);
 	pool->nonce2++;
+	
+	work->pool = pool;
+	work->work_restart_id = work->pool->work_restart_id;
+	gen_stratum_work2(work, &pool->swork, pool->nonce1);
+	
+	cgtime(&work->tv_staged);
+}
 
-	/* Downgrade to a read lock to read off the pool variables */
-	cg_dwlock(&pool->data_lock);
+void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char *nonce1)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+
+	/* Generate coinbase */
+	coinbase = bytes_buf(&swork->coinbase);
+	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+
+	/* Downgrade to a read lock to read off the variables */
+	if (swork->data_lock_p)
+		cg_dwlock(swork->data_lock_p);
 
 	/* Generate merkle root */
-	gen_hash(coinbase, merkle_root, bytes_len(&pool->swork.coinbase));
+	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
-	merkle_bin = bytes_buf(&pool->swork.merkle_bin);
-	for (i = 0; i < pool->swork.merkles; ++i, merkle_bin += 32) {
+	merkle_bin = bytes_buf(&swork->merkle_bin);
+	for (i = 0; i < swork->merkles; ++i, merkle_bin += 32) {
 		memcpy(merkle_sha + 32, merkle_bin, 32);
 		gen_hash(merkle_sha, merkle_root, 64);
 		memcpy(merkle_sha, merkle_root, 32);
@@ -7967,21 +8001,22 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
 	
-	memcpy(&work->data[0], pool->swork.header1, 36);
+	memcpy(&work->data[0], swork->header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
-	*((uint32_t*)&work->data[68]) = htobe32(pool->swork.ntime + timer_elapsed(&pool->swork.tv_received, NULL));
-	memcpy(&work->data[72], pool->swork.diffbits, 4);
+	*((uint32_t*)&work->data[68]) = htobe32(swork->ntime + timer_elapsed(&swork->tv_received, NULL));
+	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
-	work->sdiff = pool->swork.diff;
+	work->sdiff = swork->diff;
 
 	/* Copy parameters required for share submission */
-	work->job_id = strdup(pool->swork.job_id);
-	work->nonce1 = strdup(pool->nonce1);
-	cg_runlock(&pool->data_lock);
+	work->job_id = strdup(swork->job_id);
+	work->nonce1 = strdup(nonce1);
+	if (swork->data_lock_p)
+		cg_runlock(swork->data_lock_p);
 
 	if (opt_debug)
 	{
@@ -7998,16 +8033,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	set_target(work->target, work->sdiff);
 
 	local_work++;
-	work->pool = pool;
 	work->stratum = true;
 	work->blk.nonce = 0;
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
-	work->work_restart_id = work->pool->work_restart_id;
 	calc_diff(work, 0);
-
-	cgtime(&work->tv_staged);
 }
 
 void request_work(struct thr_info *thr)
@@ -9882,6 +9913,7 @@ static void raise_fd_limits(void)
 }
 
 extern void bfg_init_threadlocal();
+extern void stratumsrv_start();
 
 int main(int argc, char *argv[])
 {
@@ -10169,17 +10201,22 @@ int main(int argc, char *argv[])
 	}
 
 	if (!total_devices) {
-#ifndef USE_LIBMICROHTTPD
-		const int httpsrv_port = -1;
+		const bool netdev_support =
+#ifdef USE_LIBMICROHTTPD
+			(httpsrv_port != -1) ||
 #endif
-		if (httpsrv_port == -1 && (!use_curses) && !opt_api_listen)
+#ifdef USE_LIBEVENT
+			(stratumsrv_port != -1) ||
+#endif
+			false;
+		if ((!netdev_support) && (!use_curses) && !opt_api_listen)
 			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
 		if (use_curses)
 			applog(LOG_WARNING, "Waiting for devices; press 'M+' to add, or 'Q' to quit");
 		else
 			applog(LOG_WARNING, "Waiting for %s or press Ctrl-C to quit",
-		       (httpsrv_port == -1) ? "RPC commands" : "network devices");
+		       netdev_support ? "network devices" : "RPC commands");
 	}
 
 	load_temp_config();
@@ -10407,6 +10444,11 @@ begin_bench:
 #ifdef USE_LIBMICROHTTPD
 	if (httpsrv_port != -1)
 		httpsrv_start(httpsrv_port);
+#endif
+
+#ifdef USE_LIBEVENT
+	if (stratumsrv_port != -1)
+		stratumsrv_start();
 #endif
 
 #ifdef HAVE_CURSES
