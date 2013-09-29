@@ -242,6 +242,9 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 static
 void _stratumsrv_failure(struct bufferevent * const bev, const char * const idstr, const int e, const char * const emsg)
 {
+	if (!idstr)
+		return;
+	
 	char buf[0x100];
 	size_t bufsz = snprintf(buf, sizeof(buf), "{\"error\":[%d,\"%s\",null],\"id\":%s,\"result\":null}\n", e, emsg, idstr);
 	bufferevent_write(bev, buf, bufsz);
@@ -254,6 +257,9 @@ void _stratumsrv_failure(struct bufferevent * const bev, const char * const idst
 static
 void _stratumsrv_success(struct bufferevent * const bev, const char * const idstr)
 {
+	if (!idstr)
+		return;
+	
 	size_t bufsz = 36 + strlen(idstr);
 	char buf[bufsz];
 	
@@ -357,7 +363,7 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	applog(LOG_DEBUG, "SSM: RECV: %s", ln);
 	
 	j2 = json_object_get(json, "id");
-	idstr = j2 ? json_dumps_ANY(j2, 0) : NULL;
+	idstr = (j2 && !json_is_null(j2)) ? json_dumps_ANY(j2, 0) : NULL;
 	
 	if (!strcasecmp(method, "mining.submit"))
 		stratumsrv_mining_submit(bev, params, idstr, &conn->xnonce1_le);
@@ -367,7 +373,8 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	else
 	if (!strcasecmp(method, "mining.subscribe"))
 		stratumsrv_mining_subscribe(bev, params, idstr, &conn->xnonce1_le);
-	// TODO: error on unknown methods
+	else
+		_stratumsrv_failure(bev, idstr, -3, "Method not supported");
 	
 	free(idstr);
 	return true;
