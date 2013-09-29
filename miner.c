@@ -2729,8 +2729,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	int allnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
-		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
+	{
+		struct cgpu_info *slave = cgpu;
+		for (int i = 1; i < cgpu->procs; ++i)
 		{
+			slave = slave->next_proc;
+			
 			slave->utility = slave->accepted / dev_runtime * 60;
 			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
@@ -2746,6 +2750,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			badnonces += slave->bad_nonces;
 			allnonces += slave->diff1;
 		}
+	}
 	
 	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
@@ -2787,7 +2792,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			if (!opt_show_procs)
 			{
 				// Find the highest temperature of all processors
-				for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+				struct cgpu_info *proc = cgpu;
+				for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
 					if (proc->temp > temp)
 						temp = proc->temp;
 			}
@@ -2801,7 +2807,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true;
-		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+		struct cgpu_info *proc = cgpu;
+		for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
 		{
 			switch (cHrStatsI) {
 				default:
@@ -9035,7 +9042,7 @@ void print_summary(void)
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
 
-		if ((!cgpu->proc_id) && cgpu->next_proc)
+		if ((!cgpu->proc_id) && cgpu->procs > 1)
 		{
 			// Device summary line
 			opt_show_procs = false;
