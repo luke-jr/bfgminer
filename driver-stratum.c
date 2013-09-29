@@ -166,6 +166,24 @@ void _ssj_free(struct stratumsrv_job * const ssj)
 	free(ssj);
 }
 
+static
+void stratumsrv_job_pruner()
+{
+	struct stratumsrv_job *ssj, *tmp_ssj;
+	struct timeval tv_now;
+	
+	timer_set_now(&tv_now);
+	
+	HASH_ITER(hh, _ssm_jobs, ssj, tmp_ssj)
+	{
+		if (timer_elapsed(&ssj->tv_prepared, &tv_now) <= opt_expiry)
+			break;
+		HASH_DEL(_ssm_jobs, ssj);
+		applog(LOG_DEBUG, "SSM: Pruning job_id %s", ssj->my_job_id);
+		_ssj_free(ssj);
+	}
+}
+
 static void stratumsrv_client_close(struct stratumsrv_conn *);
 
 static
@@ -231,6 +249,8 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 			_ssj_free(ssj);
 		}
 	}
+	else
+		stratumsrv_job_pruner();
 	
 	if (!pool->stratum_notify)
 	{
