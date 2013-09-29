@@ -48,21 +48,15 @@ int metabank_autodetect()
 {
 	RUNONCE(0);
 	
-	int chip_n;
-	struct cgpu_info *bitfury_info;
+	struct cgpu_info *cgpu = NULL, *proc1 = NULL;
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
-	int n = 0;
 	int i, j;
+	int proc_count = 0;
 	bool slot_on[32];
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
-	int max_devices = 100;
 	
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &metabank_drv;
-	bitfury_info->threads = 1;
-
 	applog(LOG_INFO, "INFO: bitfury_detect");
 	spi_init();
 	if (!sys_spi)
@@ -73,7 +67,6 @@ int metabank_autodetect()
 		return 0;
 	}
 	
-	devicelist = malloc(max_devices * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
 	for (i = 0; i < 32; i++) {
@@ -100,41 +93,39 @@ int metabank_autodetect()
 			if (chip_n)
 			{
 				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
+				
+				devicelist = malloc(sizeof(*devicelist) * chip_n);
 				for (j = 0; j < chip_n; ++j)
 				{
-					if (unlikely(n >= max_devices))
-					{
-						max_devices *= 2;
-						devicelist = realloc(devicelist, max_devices * sizeof(*devicelist));
-					}
-					devicelist[n] = bitfury = malloc(sizeof(*bitfury));
+					devicelist[j] = bitfury = malloc(sizeof(*bitfury));
 					*bitfury = (struct bitfury_device){
 						.spi = port,
 						.slot = i,
 						.fasync = j,
 					};
-					n++;
 				}
+				
+				cgpu = malloc(sizeof(*cgpu));
+				*cgpu = (struct cgpu_info){
+					.drv = &metabank_drv,
+					.procs = chip_n,
+					.device_data = devicelist,
+				};
+				add_cgpu(cgpu);
+				
+				proc_count += chip_n;
+				if (!proc1)
+					proc1 = cgpu;
 			}
 			else
 				free(port);
 		}
 	}
-
-	chip_n = n;
-	bitfury_info->device_data = devicelist;
 	
-	if (!chip_n) {
-		applog(LOG_WARNING, "No Bitfury chips detected!");
-		return 0;
-	} else {
-		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
-	}
-
-	bitfury_info->procs = chip_n;
-	add_cgpu(bitfury_info);
+	if (proc1)
+		proc1->threads = 1;
 	
-	return 1;
+	return proc_count;
 }
 
 static void metabank_detect(void)
@@ -145,21 +136,32 @@ static void metabank_detect(void)
 static
 bool metabank_init(struct thr_info *thr)
 {
-	struct bitfury_device **devicelist = thr->cgpu->device_data;
-	struct cgpu_info *proc;
+	struct bitfury_device **devicelist;
+	struct cgpu_info *proc, *next_proc;
 	struct bitfury_device *bitfury;
+	int devid;
 	
-	for (proc = thr->cgpu; proc; proc = proc->next_proc)
+	for (proc = get_devices(devid = thr->cgpu->cgminer_id); ; proc = next_proc)
 	{
+		devicelist = proc->device_data;
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_oldbuf(proc);
 		bitfury->osc6_bits = 54;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		
+		if (!proc->next_proc)
+			free(devicelist);
+		
+		if (++devid < total_devices
+		 && (next_proc = get_devices(devid))
+		 && next_proc->drv == &metabank_drv
+		 && !next_proc->threads)
+			proc->next_proc = next_proc;
+		else
+			break;
 	}
-	
-	free(devicelist);
 	
 	return true;
 }
