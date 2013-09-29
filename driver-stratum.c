@@ -1,10 +1,14 @@
 #include "config.h"
 
+#ifndef WIN32
+#include <arpa/inet.h>
+#else
+#include <winsock2.h>
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-
-#include <arpa/inet.h>
 
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
