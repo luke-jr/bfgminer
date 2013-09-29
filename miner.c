@@ -163,6 +163,9 @@ static bool opt_nogpu;
 #include "httpsrv.h"
 int httpsrv_port = -1;
 #endif
+#ifdef USE_LIBEVENT
+int stratumsrv_port = -1;
+#endif
 
 struct string_elist *scan_devices;
 bool opt_force_dev_init;
@@ -1792,6 +1795,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
 		     "Set socks4 proxy (host:port)"),
+#ifdef USE_LIBEVENT
+	OPT_WITH_ARG("--stratum-port",
+	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             "Port number to listen on for stratum miners (-1 means disabled)"),
+#endif
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 	                opt_hidden),
@@ -9905,7 +9913,7 @@ static void raise_fd_limits(void)
 }
 
 extern void bfg_init_threadlocal();
-extern void *stratumsrv_thread(void *);
+extern void stratumsrv_start();
 
 int main(int argc, char *argv[])
 {
@@ -10193,17 +10201,22 @@ int main(int argc, char *argv[])
 	}
 
 	if (!total_devices) {
-#ifndef USE_LIBMICROHTTPD
-		const int httpsrv_port = -1;
+		const bool netdev_support =
+#ifdef USE_LIBMICROHTTPD
+			(httpsrv_port != -1) ||
 #endif
-		if (httpsrv_port == -1 && (!use_curses) && !opt_api_listen)
+#ifdef USE_LIBEVENT
+			(stratumsrv_port != -1) ||
+#endif
+			false;
+		if ((!netdev_support) && (!use_curses) && !opt_api_listen)
 			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
 		if (use_curses)
 			applog(LOG_WARNING, "Waiting for devices; press 'M+' to add, or 'Q' to quit");
 		else
 			applog(LOG_WARNING, "Waiting for %s or press Ctrl-C to quit",
-		       (httpsrv_port == -1) ? "RPC commands" : "network devices");
+		       netdev_support ? "network devices" : "RPC commands");
 	}
 
 	load_temp_config();
@@ -10396,14 +10409,6 @@ begin_bench:
 		if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
 			quit(1, "submit_work thread create failed");
 	}
-	
-#ifdef USE_LIBEVENT
-	{
-		pthread_t pth;
-		if (unlikely(pthread_create(&pth, NULL, stratumsrv_thread, NULL)))
-			quit(1, "stratumsrv thread create failed");
-	}
-#endif
 
 	watchpool_thr_id = 2;
 	thr = &control_thr[watchpool_thr_id];
@@ -10439,6 +10444,11 @@ begin_bench:
 #ifdef USE_LIBMICROHTTPD
 	if (httpsrv_port != -1)
 		httpsrv_start(httpsrv_port);
+#endif
+
+#ifdef USE_LIBEVENT
+	if (stratumsrv_port != -1)
+		stratumsrv_start();
 #endif
 
 #ifdef HAVE_CURSES

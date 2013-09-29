@@ -45,6 +45,10 @@ static struct stratumsrv_job *_ssm_jobs;
 static struct work _ssm_cur_job_work;
 static uint64_t _ssm_jobid;
 
+static struct event_base *_smm_evbase;
+static bool _smm_running;
+static struct evconnlistener *_smm_listener;
+
 struct stratumsrv_conn {
 	struct bufferevent *bev;
 	uint32_t xnonce1_le;
@@ -570,6 +574,32 @@ void stratumlistener(struct evconnlistener *listener, evutil_socket_t sock, stru
 	bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
 
+void stratumsrv_start();
+
+void stratumsrv_change_port()
+{
+	struct event_base * const evbase = _smm_evbase;
+	
+	if (_smm_listener)
+		evconnlistener_free(_smm_listener);
+	
+	if (!_smm_running)
+	{
+		stratumsrv_start();
+		return;
+	}
+	
+	struct sockaddr_in sin = {
+		.sin_family = AF_INET,
+		.sin_addr.s_addr = INADDR_ANY,
+		.sin_port = htons(stratumsrv_port),
+	};
+	_smm_listener = evconnlistener_new_bind(evbase, stratumlistener, NULL, (
+		LEV_OPT_CLOSE_ON_FREE | LEV_OPT_CLOSE_ON_EXEC | LEV_OPT_REUSEABLE
+	), 0x10, (void*)&sin, sizeof(sin));
+}
+
+static
 void *stratumsrv_thread(__maybe_unused void *p)
 {
 	pthread_detach(pthread_self());
@@ -580,6 +610,7 @@ void *stratumsrv_thread(__maybe_unused void *p)
 	_ssm_client_xnonce2sz = 2;
 	
 	struct event_base *evbase = event_base_new();
+	_smm_evbase = evbase;
 	{
 		ev_notify = evtimer_new(evbase, _stratumsrv_update_notify, NULL);
 		_stratumsrv_update_notify(-1, 0, NULL);
@@ -589,17 +620,16 @@ void *stratumsrv_thread(__maybe_unused void *p)
 		struct event *ev_update_notifier = event_new(evbase, _ssm_update_notifier[0], EV_READ | EV_PERSIST, _stratumsrv_update_notify, NULL);
 		event_add(ev_update_notifier, NULL);
 	}
-	{
-		struct sockaddr_in sin = {
-			.sin_family = AF_INET,
-			.sin_addr.s_addr = INADDR_ANY,
-			.sin_port = htons(3334),
-		};
-		evconnlistener_new_bind(evbase, stratumlistener, NULL, (
-			LEV_OPT_CLOSE_ON_FREE | LEV_OPT_CLOSE_ON_EXEC | LEV_OPT_REUSEABLE
-		), 0x10, (void*)&sin, sizeof(sin));
-	}
+	stratumsrv_change_port();
 	event_base_dispatch(evbase);
 	
 	return NULL;
+}
+
+void stratumsrv_start()
+{
+	_smm_running = true;
+	pthread_t pth;
+	if (unlikely(pthread_create(&pth, NULL, stratumsrv_thread, NULL)))
+		quit(1, "stratumsrv thread create failed");
 }

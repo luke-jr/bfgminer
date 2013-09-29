@@ -891,6 +891,7 @@ extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
 extern int httpsrv_port;
+extern int stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
