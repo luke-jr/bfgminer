@@ -230,17 +230,38 @@ static inline int fsync (int fd)
 #define MIN(x, y)	((x) > (y) ? (y) : (x))
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 
+/* Put avalon last to make it the last device it tries to detect to prevent it
+ * trying to claim same chip but different devices. Adding a device here will
+ * update all macros in the code that use the *_PARSE_COMMANDS macros for each
+ * listed driver. */
+#define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	DRIVER_ADD_COMMAND(bitforce) \
+	DRIVER_ADD_COMMAND(icarus) \
+	DRIVER_ADD_COMMAND(modminer) \
+	DRIVER_ADD_COMMAND(ztex)
+
+#define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	DRIVER_ADD_COMMAND(bflsc) \
+	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(hashfast) \
+	DRIVER_ADD_COMMAND(avalon)
+
+#define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	DRIVER_ADD_COMMAND(opencl) \
+	FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND)
+
+#define DRIVER_ENUM(X) DRIVER_##X,
+#define DRIVER_PROTOTYPE(X) struct device_drv X##_drv;
+
+/* Create drv_driver enum from DRIVER_PARSE_COMMANDS macro */
 enum drv_driver {
-	DRIVER_OPENCL = 0,
-	DRIVER_ICARUS,
-	DRIVER_BITFORCE,
-	DRIVER_MODMINER,
-	DRIVER_ZTEX,
-	DRIVER_BFLSC,
-	DRIVER_AVALON,
-	DRIVER_HASHFAST,
+	DRIVER_PARSE_COMMANDS(DRIVER_ENUM)
 	DRIVER_MAX
 };
+
+/* Use DRIVER_PARSE_COMMANDS to generate extern device_drv prototypes */
+DRIVER_PARSE_COMMANDS(DRIVER_PROTOTYPE)
 
 enum alive {
 	LIFE_WELL,
@@ -318,7 +339,7 @@ struct device_drv {
 	char *name;
 
 	// DRV-global functions
-	void (*drv_detect)();
+	void (*drv_detect)(bool);
 
 	// Device-specific functions
 	void (*reinit_device)(struct cgpu_info *);
@@ -823,7 +844,7 @@ static inline void cglock_init(cglock_t *lock)
 	rwlock_init(&lock->rwlock);
 }
 
-/* Read lock variant of cglock */
+/* Read lock variant of cglock. Cannot be promoted. */
 static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -831,7 +852,8 @@ static inline void cg_rlock(cglock_t *lock)
 	mutex_unlock_noyield(&lock->mutex);
 }
 
-/* Intermediate variant of cglock */
+/* Intermediate variant of cglock - behaves as a read lock but can be promoted
+ * to a write lock or demoted to read lock. */
 static inline void cg_ilock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -858,6 +880,12 @@ static inline void cg_dwlock(cglock_t *lock)
 	mutex_unlock_noyield(&lock->mutex);
 }
 
+/* Demote a write variant to an intermediate variant */
+static inline void cg_dwilock(cglock_t *lock)
+{
+	wr_unlock(&lock->rwlock);
+}
+
 /* Downgrade intermediate variant to a read lock */
 static inline void cg_dlock(cglock_t *lock)
 {
@@ -872,7 +900,7 @@ static inline void cg_runlock(cglock_t *lock)
 
 static inline void cg_wunlock(cglock_t *lock)
 {
-	wr_unlock(&lock->rwlock);
+	wr_unlock_noyield(&lock->rwlock);
 	mutex_unlock(&lock->mutex);
 }
 
@@ -903,6 +931,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern bool opt_restart;
+extern bool opt_nogpu;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
@@ -1263,6 +1292,7 @@ struct work {
 #endif
 	double		device_diff;
 	uint64_t	share_diff;
+	unsigned char	hash2[32];
 
 	int		rolls;
 
@@ -1356,6 +1386,8 @@ struct modminer_fpga_state {
 
 extern void get_datestamp(char *, size_t, struct timeval *);
 extern void inc_hw_errors(struct thr_info *thr);
+extern bool test_nonce(struct work *work, uint32_t nonce);
+extern void submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);

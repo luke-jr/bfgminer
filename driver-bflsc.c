@@ -33,8 +33,6 @@ int opt_bflsc_overheat = BFLSC_TEMP_OVERHEAT;
 
 static const char *blank = "";
 
-struct device_drv bflsc_drv;
-
 static enum driver_version drv_ver(struct cgpu_info *bflsc, const char *ver)
 {
 	char *tmp;
@@ -895,7 +893,7 @@ shin:
 	return false;
 }
 
-static void bflsc_detect(void)
+static void bflsc_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&bflsc_drv, bflsc_detect_one);
 }
@@ -1915,7 +1913,7 @@ else a whole lot of something like these ... etc
 }
 
 struct device_drv bflsc_drv = {
-	.drv_id = DRIVER_BFLSC,
+	.drv_id = DRIVER_bflsc,
 	.dname = "BitForceSC",
 	.name = BFLSC_SINGLE,
 	.drv_detect = bflsc_detect,

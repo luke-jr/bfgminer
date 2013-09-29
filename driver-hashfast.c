@@ -285,7 +285,7 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 	}
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
-	hashfast->usbdev->PrefPacketSize = HASHFAST_USB_PACKETSIZE;
+	usb_set_pps(hashfast, HASHFAST_USB_PACKETSIZE);
 
 	hashfast_usb_initialise(hashfast);
 
@@ -293,8 +293,13 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 	return hashfast_detect_common(hashfast, baud);
 }
 
-static void hashfast_detect(void)
+static void hashfast_detect(bool hotplug)
 {
+	/* Set up the CRC tables only once. */
+	if (!hotplug) {
+		hf_init_crc8();
+		hf_init_crc32();
+	}
 	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
 }
 
@@ -328,7 +333,7 @@ static void hashfast_shutdown(struct thr_info __maybe_unused *thr)
 }
 
 struct device_drv hashfast_drv = {
-	.drv_id = DRIVER_HASHFAST,
+	.drv_id = DRIVER_hashfast,
 	.dname = "Hashfast",
 	.name = "HFA",
 	.drv_detect = hashfast_detect,

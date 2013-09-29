@@ -29,7 +29,7 @@
 #include "miner.h"
 #include "util.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY)
 #define HAVE_AN_ASIC 1
 #endif
 
@@ -167,8 +167,8 @@ static const char *SCRYPTSTR = "scrypt";
 static const char *SHA256STR = "sha256";
 
 static const char *DEVICECODE = ""
-#ifdef HAVE_OPENCL
-			"GPU "
+#ifdef USE_AVALON
+			"AVA "
 #endif
 #ifdef USE_BFLSC
 			"BAS "
@@ -176,20 +176,23 @@ static const char *DEVICECODE = ""
 #ifdef USE_BITFORCE
 			"BFL "
 #endif
+#ifdef USE_BITFURY
+			"BFU "
+#endif
+#ifdef HAVE_OPENCL
+			"GPU "
+#endif
 #ifdef USE_HASHFAST
 			"HFA "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
 #endif
-#ifdef USE_AVALON
-			"AVA "
+#ifdef USE_MODMINER
+			"MMQ "
 #endif
 #ifdef USE_ZTEX
 			"ZTX "
-#endif
-#ifdef USE_MODMINER
-			"MMQ "
 #endif
 			"";
 
@@ -1211,26 +1214,18 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 	return root;
 }
 
+#define DRIVER_COUNT_DRV(X) if (devices[i]->drv->drv_id == DRIVER_##X) \
+	count++;
+
 #ifdef HAVE_AN_ASIC
-static int numascs()
+static int numascs(void)
 {
 	int count = 0;
 	int i;
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_AVALON)
-			count++;
-#endif
-#ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
-			count++;
-#endif
-#ifdef USE_HASHFAST
-		if (devices[i]->drv->drv_id == DRIVER_HASHFAST)
-			count++;
-#endif
+		ASIC_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1243,18 +1238,7 @@ static int ascdevice(int ascid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_AVALON)
-			count++;
-#endif
-#ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_BFLSC)
-			count++;
-#endif
-#ifdef USE_HASHFAST
-		if (devices[i]->drv->drv_id == DRIVER_HASHFAST)
-			count++;
-#endif
+		ASIC_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 		if (count == (ascid + 1))
 			goto foundit;
 	}
@@ -1270,29 +1254,14 @@ foundit:
 #endif
 
 #ifdef HAVE_AN_FPGA
-static int numpgas()
+static int numpgas(void)
 {
 	int count = 0;
 	int i;
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
-			count++;
-#endif
-#ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
-			count++;
-#endif
-#ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
-			count++;
-#endif
+		FPGA_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1305,22 +1274,7 @@ static int pgadevice(int pgaid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_BITFORCE)
-			count++;
-#endif
-#ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_ICARUS)
-			count++;
-#endif
-#ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ZTEX)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_MODMINER)
-			count++;
-#endif
+		FPGA_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 		if (count == (pgaid + 1))
 			goto foundit;
 	}
@@ -1770,11 +1724,11 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 			dev_runtime = 1.0;
 
 #ifdef USE_ZTEX
-		if (cgpu->drv->drv_id == DRIVER_ZTEX && cgpu->device_ztex)
+		if (cgpu->drv->drv_id == DRIVER_ztex && cgpu->device_ztex)
 			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
 #endif
 #ifdef USE_MODMINER
-		if (cgpu->drv->drv_id == DRIVER_MODMINER)
+		if (cgpu->drv->drv_id == DRIVER_modminer)
 			frequency = cgpu->clock;
 #endif
 

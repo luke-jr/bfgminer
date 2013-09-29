@@ -87,8 +87,6 @@
 // Limit when reducing shares_to_good
 #define MODMINER_MIN_BACK 12
 
-struct device_drv modminer_drv;
-
 // 45 noops sent when detecting, in case the device was left in "start job" reading
 static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff";
 
@@ -239,7 +237,7 @@ shin:
 		return false;
 }
 
-static void modminer_detect()
+static void modminer_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&modminer_drv, modminer_detect_one);
 }
@@ -1132,7 +1130,7 @@ static char *modminer_set_device(struct cgpu_info *modminer, char *option, char 
 }
 
 struct device_drv modminer_drv = {
-	.drv_id = DRIVER_MODMINER,
+	.drv_id = DRIVER_modminer,
 	.dname = "ModMiner",
 	.name = "MMQ",
 	.drv_detect = modminer_detect,

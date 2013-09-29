@@ -1,3 +1,140 @@
+Version 3.5.0 - 29th September 2013
+
+- Add magic init sequence required on BF1 devices to get them mining on windows.
+- usbinfo.devlock is only ever write locked so convert it to a mutex
+- Icarus remove unneeded opt_debug tests due to applog being a macro
+- Icarus - CMR shouldn't wait the full timeout due to handle sharing
+- We should only yield once in cg_wunlock
+- Provide a function to downgrade a cglock from a write lock to an intermediate
+variant.
+- Deuglify use of _PARSE_COMMANDS macro expansions.
+- Deuglify use of usb parse commands macro in usbutils.
+- Use the driver add commands macros in api.c to avoid individually listing
+them.
+- Separate out asic fpga and opencl drivers in the driver parse commands macro
+for use individually as needed.
+- Use macro expansion in usb_find_devices to avoid explicitly listing them all.
+- Use macro expansion to iterate over all the drivers without explicitly writing
+them out in usbutils.c
+- Iterate over the bitfury offsets in order of decreasing likelihood.
+- Reattach the kernel driver on linux on usb_uninit.
+- Attach the kernel driver on failure to usb init on linux.
+- libusb kernel driver operations are only available on linux.
+- There is no need to get the external prototypes for drivers in cgminer.c any
+more.
+- Remove unnecessary gpu_threads initialisation.
+- Put avalon last in the sequence of adding drivers to prevent it trying to
+claim similar chip devices on startup.
+- Use macro expansion to iterate over all device drivers without needing to
+explicitly code in support in all places. Pass a hotplug bool to the detect()
+function to prevent opencl trying to hogplug GPUs.
+- Forward declare all device drivers in miner.h avoiding the need to export them
+everywhere else.
+- Add a noop function for driver detect when it's missing.
+- Reuse the DRIVER_ macros to avoid having yet another definition for DRV_
+- Use macro expansion to generate extern device_drv prototypes.
+- Create a macro list of drivers to enable easier addition of further drivers.
+- There is no point setting the BF1 preferred packet size to the maximum since
+it will do so automatically.
+- icarus ensure all cmr interfaces are initialised properly
+- usbutils - fix USBDEBUG warnings
+- Remove unnecessary steps in communicating with BF1 and just use USB interface
+1.
+- usbutils - usb_bulk_transfer fix the buf/data fix
+- usb_bulk_transfer - use the allocated buffer
+- Set preferred packet sizes per interface on BF1.
+- usbutils allow PrefPacketSize per endpoint
+- Remove magic control sequences on open/close on BF1 and just flush the read
+buffers.
+- Check return codes in getinfo and reset and fail as needed in BF1.
+- Check return code for bitfury_open and release resources properly on failed
+initialisation.
+- Abstract out flushing of interrupt reads in BF1 devices.
+- Perform interrupt read after close message on BF1 as per serial close.
+- Perform interrupt read flush as per serial open on BF1 devices.
+- Add information for 2nd USB interface on BF1 devices and choose interface 1
+for bulk transfers.
+- usbutils - bulk transfer copy test fix
+- usbutils - add USBDEBUG for usb_bulk_transfer
+- Add more read_ii variants to usbutils.
+- Name remainder of BFU usb commands used.
+- Use submit_tested_work in bitfury driver to avoid unnecessarily re-testing the
+work for validity.
+- Abstract out work submission once it's been tested, to be used by drivers that
+do their own internal validity testing.
+- Store the hash2 array in struct work for further reuse.
+- usbutils - which_intinfo not requried
+- Use the test_nonce function within submit_nonce and store the uint32
+corresponding to hash2 37 for further use.
+- usbutils - interfaces must all be on one handle - ep implies the interface
+- avalon stats use exact type
+- Only set share diff if we've confirmed it's a share first.
+- Update ASIC-README for bitfury devices.
+- Use an array of offsets when checking nonces in bitfury_checkresults
+- Limit the duration we wait for reads in BF1 based on time already elapsed to
+account for other delays such as work restart messages or out of work.
+- Minimise size of serial string we copy in BF1 stats to avoid overflow.
+- Implement basic API stats for BF1 and increase array of results to check for
+the rare straggling result.
+- Space debug output for bf1 to separate from numerals.
+- Abstract out the bitfury open close and reset functions and use them on
+reinit.
+- Rename BF1 devices BF1
+- Check for work restart, breaking out early after usb reads in BF1.
+- Do not lose the first sets of results from BF1.
+- There is no point checking for results from the next round of work on BF1.
+- Last result returned by BF1 is an end of results marker so ignore it.
+- restart_wait should return 0 if thr_restart is true.
+- Remove unused code by bitfury driver since current driver uses serialised
+scanhash.
+- Meter out return of estimated hashes in BF1 to smooth out visible hashrate.
+- Optimise inner scanhash loop for bf1.
+- Add yet another backup work for triple buffering of work in bf1 to account for
+extra late results returned and don't check nonce offsets which appear to never
+return.
+- Name the work request and result usb commands for BF1
+- Define a mandatory upper limit to waiting for reset and data on BF1 based on
+full nonce duration.
+- Decrease usb buffering to verbose logging.
+- Add in first draft for a serialised work model sending/receiving data for BF1
+devices.
+- Add complete close sequence to bf1 as it happens on serial.
+- Provide a bitfury identify function for bf1.
+- Reliably extract BF1 information at startup and reset the device.
+- Add commands for getting BF1 bitfury info
+- Add magic BF1 bitfury open and close control sequences.
+- Add BF1 detection code to bitfury driver.
+- Create basic placeholders for bitfury driver code.
+- Add bf1 device information to usbutils to enable device detection.
+- Add basic defines for building for bitfury devices.
+- Add redfury device to udev rules.
+- avalon: display the FPGA controller version on API
+- pool_active uninitialised_var rolltime
+- Use macro expansion to only need to define usb enums and commands in one
+place.
+- usbutils saving incorrect overflow buffer
+- ignore libusb.la and *.lo on linux
+- icarus support CMR with no extensions
+- usbtils - interfaces dont work yet in libusb windows so disable for that only
+- Provide a --disable-libcurl config option to build support for stratum mining
+only.
+- Fix the api-example.c compile under Linux
+- usbutils - only release the device once - for the first intinfo
+- usbutils set_interface is no longer valid
+- ubsutils interfaces much each have their own handle
+- usbutils kernel_detach should use the interface number
+- usbutils - allow the driver to change which_intinfo
+- Reset quotas on load balance for all pools at the same time to avoid running
+out during selection and unintentionally dropping to fallback.
+- Break out of select pool from a common point for appropriate debug messages
+and to avoid further tests.
+- usbutils correct/reverse CMR product numbers
+- usbutils specifically track handles and interfaces
+- change drivers to use usb_interface() - required for multi interface change
+- usbutils - allow a device to use multiple interfaces (and better var names)
+- Cast -1 to (char) to cope with different default char types on ARM.
+
+
 Version 3.4.3 - 13th September 2013
 
 - Put corefoundation and iokit separate in ldflags for darwin.

@@ -52,7 +52,6 @@ int opt_bitburner_core_voltage = BITBURNER_DEFAULT_CORE_VOLTAGE;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
-struct device_drv avalon_drv;
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
@@ -273,6 +272,7 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 	struct avalon_task at;
 	uint8_t *buf, *tmp;
 	struct timespec p;
+	struct avalon_info *info = avalon->device_data;
 
 	/* Send reset, then check for result */
 	avalon_init_task(&at, 1, 0,
@@ -329,9 +329,17 @@ static int avalon_reset(struct cgpu_info *avalon, bool initial)
 		       " (%d: %02x %02x %02x %02x)", avalon->drv->name, avalon->device_id,
 		       i, buf[0], buf[1], buf[2], buf[3]);
 		/* FIXME: return 1; */
-	} else
-		applog(LOG_WARNING, "%s%d: Reset succeeded",
-		       avalon->drv->name, avalon->device_id);
+	} else {
+		/* buf[44]: minor
+		 * buf[45]: day
+		 * buf[46]: year,month, d6: 201306
+		 */
+		info->ctlr_ver = ((buf[46] >> 4) + 2000) * 1000000 +
+			(buf[46] & 0x0f) * 10000 +
+			buf[45] * 100 +	buf[44];
+		applog(LOG_WARNING, "%s%d: Reset succeeded (Controller version: %d)",
+		       avalon->drv->name, avalon->device_id, info->ctlr_ver);
+	}
 
 	return 0;
 }
@@ -711,7 +719,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
 	avalon->usbdev->usb_type = USB_TYPE_STD;
-	avalon->usbdev->PrefPacketSize = AVALON_USB_PACKETSIZE;
+	usb_set_pps(avalon, AVALON_USB_PACKETSIZE);
 
 	/* We have a real Avalon! */
 	avalon_initialise(avalon);
@@ -791,7 +799,7 @@ shin:
 	return false;
 }
 
-static void avalon_detect(void)
+static void avalon_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&avalon_drv, avalon_detect_one);
 }
@@ -1522,6 +1530,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 				info->version1, info->version2, info->version3);
 		root = api_add_string(root, "version", buf, true);
 	}
+	root = api_add_uint32(root, "Controller Version", &(info->ctlr_ver), false);
 
 	return root;
 }
@@ -1590,7 +1599,7 @@ static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *set
 }
 
 struct device_drv avalon_drv = {
-	.drv_id = DRIVER_AVALON,
+	.drv_id = DRIVER_avalon,
 	.dname = "avalon",
 	.name = "AVA",
 	.drv_detect = avalon_detect,

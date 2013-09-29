@@ -31,8 +31,6 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_drv ztex_drv;
-
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);
 static bool ztex_prepare(struct thr_info *thr);
@@ -54,7 +52,7 @@ static void ztex_releaseFpga(struct libztex_device* ztex)
 	}
 }
 
-static void ztex_detect(void)
+static void ztex_detect(bool __maybe_unused hotplug)
 {
 	int cnt;
 	int i,j;
@@ -413,7 +411,7 @@ static void ztex_disable(struct thr_info *thr)
 }
 
 struct device_drv ztex_drv = {
-	.drv_id = DRIVER_ZTEX,
+	.drv_id = DRIVER_ztex,
 	.dname = "ztex",
 	.name = "ZTX",
 	.drv_detect = ztex_detect,

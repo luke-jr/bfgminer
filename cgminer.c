@@ -123,7 +123,7 @@ bool opt_scrypt;
 #endif
 #endif
 bool opt_restart = true;
-static bool opt_nogpu;
+bool opt_nogpu;
 
 struct list_head scan_devices;
 static bool devices_enabled[MAX_DEVICES];
@@ -1566,6 +1566,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_BITFORCE
 		"bitforce "
+#endif
+#ifdef USE_BITFURY
+		"bitfury "
 #endif
 #ifdef HAVE_OPENCL
 		"GPU "
@@ -3662,15 +3665,6 @@ static void rebuild_hash(struct work *work)
 		scrypt_regenhash(work);
 	else
 		regen_hash(work);
-
-	work->share_diff = share_diff(work);
-	if (unlikely(work->share_diff >= current_diff)) {
-		work->block = true;
-		work->pool->solved++;
-		found_blocks++;
-		work->mandatory = true;
-		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
-	}
 }
 
 static bool cnx_needed(struct pool *pool);
@@ -3848,7 +3842,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 
 	mutex_lock(&restart_lock);
 	if (thr->work_restart)
-		rc = ETIMEDOUT;
+		rc = 0;
 	else
 		rc = pthread_cond_timedwait(&restart_cond, &restart_lock, &abstime);
 	mutex_unlock(&restart_lock);
@@ -5578,7 +5572,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	bool ret = false;
 	json_t *val;
 	CURL *curl;
-	int rolltime;
+	int uninitialised_var(rolltime);
 
 	if (pool->has_gbt)
 		applog(LOG_DEBUG, "Retrieving block template from pool %s", pool->rpc_url);
@@ -6020,17 +6014,12 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-/* Returns true if nonce for work was a valid share */
-bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+bool test_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	struct timeval tv_work_found;
-	unsigned char hash2[32];
-	uint32_t *hash2_32 = (uint32_t *)hash2;
+	uint32_t *hash2_32 = (uint32_t *)work->hash2;
 	uint32_t diff1targ;
-	bool ret = true;
 
-	cgtime(&tv_work_found);
 	*work_nonce = htole32(nonce);
 
 	/* Do one last check before attempting to submit the work */
@@ -6038,14 +6027,16 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	flip32(hash2_32, work->hash);
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	if (be32toh(hash2_32[7]) > diff1targ) {
-		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
-		       thr->cgpu->drv->name, thr->cgpu->device_id);
+	return (be32toh(hash2_32[7]) <= diff1targ);
+}
 
-		inc_hw_errors(thr);
-		ret = false;
-		goto out;
-	}
+/* To be used once the work has been tested to be meet diff1 and has had its
+ * nonce adjusted. */
+void submit_tested_work(struct thr_info *thr, struct work *work)
+{
+	struct timeval tv_work_found;
+
+	work->share_diff = share_diff(work);
 
 	mutex_lock(&stats_lock);
 	total_diff1 += work->device_diff;
@@ -6054,13 +6045,30 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 
-	if (!fulltest(hash2, work->target)) {
+	if (!fulltest(work->hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
-		goto out;
+		return;
 	}
 
+	cgtime(&tv_work_found);
 	submit_work_async(work, &tv_work_found);
-out:
+}
+
+/* Returns true if nonce for work was a valid share */
+bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
+{
+	bool ret = true;
+
+	if (test_nonce(work, nonce))
+		submit_tested_work(thr, work);
+	else {
+		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
+		       thr->cgpu->drv->name, thr->cgpu->device_id);
+
+		inc_hw_errors(thr);
+		ret = false;
+	}
+
 	return ret;
 }
 
@@ -7351,34 +7359,6 @@ void enable_curses(void) {
 }
 #endif
 
-#ifdef USE_BFLSC
-extern struct device_drv bflsc_drv;
-#endif
-
-#ifdef USE_BITFORCE
-extern struct device_drv bitforce_drv;
-#endif
-
-#ifdef USE_HASHFAST
-extern struct device_drv hashfast_drv;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_drv icarus_drv;
-#endif
-
-#ifdef USE_AVALON
-extern struct device_drv avalon_drv;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_drv modminer_drv;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_drv ztex_drv;
-#endif
-
 static int cgminer_id_count = 0;
 
 /* Various noop functions for drivers that don't support or need their
@@ -7433,14 +7413,17 @@ static void noop_thread_enable(struct thr_info __maybe_unused *thr)
 {
 }
 
+static void noop_detect(bool __maybe_unused hotplug)
+{
+}
 #define noop_flush_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
 /* Fill missing driver drv functions with noops */
-void fill_device_drv(struct cgpu_info *cgpu)
+void fill_device_drv(struct device_drv *drv)
 {
-	struct device_drv *drv = cgpu->drv;
-
+	if (!drv->drv_detect)
+		drv->drv_detect = &noop_detect;
 	if (!drv->reinit_device)
 		drv->reinit_device = &noop_reinit_device;
 	if (!drv->get_statline_before)
@@ -7495,7 +7478,7 @@ void enable_device(struct cgpu_info *cgpu)
 #endif
 	}
 #ifdef HAVE_OPENCL
-	if (cgpu->drv->drv_id == DRIVER_OPENCL) {
+	if (cgpu->drv->drv_id == DRIVER_opencl) {
 		gpu_threads += cgpu->threads;
 	}
 #endif
@@ -7537,8 +7520,6 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	mutex_lock(&stats_lock);
 	cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
-
-	fill_device_drv(cgpu);
 
 	if (hotplug_mode)
 		devices[total_devices + new_devices++] = cgpu;
@@ -7630,6 +7611,8 @@ static void hotplug_process()
 	switch_logsize(true);
 }
 
+#define DRIVER_DRV_DETECT_HOTPLUG(X) X##_drv.drv_detect(true);
+
 static void *hotplug_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -7649,29 +7632,9 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 			new_devices = 0;
 			new_threads = 0;
 
-#ifdef USE_ICARUS
-			icarus_drv.drv_detect();
-#endif
-
-#ifdef USE_BFLSC
-			bflsc_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFORCE
-			bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_HASHFAST
-			hashfast_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-			modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_AVALON
-			avalon_drv.drv_detect();
-#endif
+			/* Use the DRIVER_PARSE_COMMANDS macro to detect all
+			 * devices */
+			DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_HOTPLUG)
 
 			if (new_devices)
 				hotplug_process();
@@ -7696,6 +7659,9 @@ static void probe_pools(void)
 		pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	}
 }
+
+#define DRIVER_FILL_DEVICE_DRV(X) fill_device_drv(&X##_drv);
+#define DRIVER_DRV_DETECT_ALL(X) X##_drv.drv_detect(false);
 
 int main(int argc, char *argv[])
 {
@@ -7877,44 +7843,14 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_drv.drv_detect();
-	gpu_threads = 0;
-#endif
+	/* Use the DRIVER_PARSE_COMMANDS macro to fill all the device_drvs */
+	DRIVER_PARSE_COMMANDS(DRIVER_FILL_DEVICE_DRV)
 
-	if (!opt_scrypt) {
-#ifdef USE_ICARUS
-	icarus_drv.drv_detect();
-#endif
-
-#ifdef USE_BFLSC
-	bflsc_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFORCE
-	bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_HASHFAST
-	hf_init_crc8();
-	hf_init_crc32();
-	hashfast_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-		ztex_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	avalon_drv.drv_detect();
-#endif
+	if (opt_scrypt)
+		opencl_drv.drv_detect(false);
+	else {
+	/* Use the DRIVER_PARSE_COMMANDS macro to detect all devices */
+		DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_ALL)
 	}
 
 	if (opt_display_devs) {

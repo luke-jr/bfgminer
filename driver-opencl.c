@@ -56,10 +56,6 @@ extern void decay_time(double *f, double fadd);
 
 /**********************************************/
 
-#ifdef HAVE_OPENCL
-struct device_drv opencl_drv;
-#endif
-
 #ifdef HAVE_ADL
 extern float gpu_temp(int gpu);
 extern int gpu_fanspeed(int gpu);
@@ -585,7 +581,7 @@ char *set_intensity(char *arg)
 void print_ndevs(int *ndevs)
 {
 	opt_log_output = true;
-	opencl_drv.drv_detect();
+	opencl_drv.drv_detect(false);
 	clear_adl(*ndevs);
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 }
@@ -753,7 +749,7 @@ retry:
 		for (i = 0; i < mining_threads; ++i) {
 			thr = get_thread(i);
 			cgpu = thr->cgpu;
-			if (cgpu->drv->drv_id != DRIVER_OPENCL)
+			if (cgpu->drv->drv_id != DRIVER_opencl)
 				continue;
 			if (dev_from_id(i) != selected)
 				continue;
@@ -1148,7 +1144,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1173,7 +1169,7 @@ select_cgpu:
 
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1210,7 +1206,7 @@ select_cgpu:
 	for (thr_id = 0; thr_id < mining_threads; ++thr_id) {
 		thr = get_thread(thr_id);
 		cgpu = thr->cgpu;
-		if (cgpu->drv->drv_id != DRIVER_OPENCL)
+		if (cgpu->drv->drv_id != DRIVER_opencl)
 			continue;
 		if (dev_from_id(thr_id) != gpu)
 			continue;
@@ -1231,10 +1227,12 @@ void *reinit_gpu(__maybe_unused void *userdata)
 
 
 #ifdef HAVE_OPENCL
-static void opencl_detect()
+static void opencl_detect(bool hotplug)
 {
 	int i;
 
+	if (opt_nogpu || hotplug)
+		return;
 	nDevs = clDevicesNum();
 	if (nDevs < 0) {
 		applog(LOG_ERR, "clDevicesNum returned error, no GPUs usable");
@@ -1575,7 +1573,7 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 }
 
 struct device_drv opencl_drv = {
-	.drv_id = DRIVER_OPENCL,
+	.drv_id = DRIVER_opencl,
 	.dname = "opencl",
 	.name = "GPU",
 	.drv_detect = opencl_detect,

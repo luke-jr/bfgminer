@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
-m4_define([v_min], [4])
-m4_define([v_mic], [3])
+m4_define([v_min], [5])
+m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -253,6 +253,17 @@ if test "x$bitforce" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
+bitfury="no"
+
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--enable-bitfury],[Compile support for BitFury ASICs (default disabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitForce support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
 hashfast="no"
 
 AC_ARG_ENABLE([hashfast],
@@ -321,7 +332,7 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$modminer$bflsc$icarus$hashfast != xnononononono; then
+if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast != xnonononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
@@ -493,14 +504,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$bitforce$avalon$icarus$ztex$modminer$bflsc$hashfast" = xnonononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast" = xnononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$bitforce$icarus$avalon$ztex$modminer$bflsc$hashfast" = xnonononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast" = xnononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -533,6 +544,12 @@ if test "x$bitforce" = xyes; then
 	echo "  BitForce.FPGAs.......: Enabled"
 else
 	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  BitFury.ASICs........: Enabled"
+else
+	echo "  BitFury.ASICs........: Disabled"
 fi
 
 if test "x$hashfast" = xyes; then

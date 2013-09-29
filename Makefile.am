@@ -86,6 +86,14 @@ if HAS_HASHFAST
 cgminer_SOURCES += driver-hashfast.c driver-hashfast.h
 endif
 
+if HAS_BITFURY
+cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
+endif
+
+if HAS_ICARUS
+cgminer_SOURCES += driver-icarus.c
+endif
+
 if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif

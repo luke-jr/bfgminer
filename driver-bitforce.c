@@ -77,8 +77,6 @@
 
 static const char *blank = "";
 
-struct device_drv bitforce_drv;
-
 static void bitforce_initialise(struct cgpu_info *bitforce, bool lock)
 {
 	int err, interface;
@@ -290,7 +288,7 @@ shin:
 	return false;
 }
 
-static void bitforce_detect(void)
+static void bitforce_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&bitforce_drv, bitforce_detect_one);
 }
@@ -742,7 +740,7 @@ static struct api_data *bitforce_api_stats(struct cgpu_info *cgpu)
 }
 
 struct device_drv bitforce_drv = {
-	.drv_id = DRIVER_BITFORCE,
+	.drv_id = DRIVER_bitforce,
 	.dname = "BitForce",
 	.name = "BFL",
 	.drv_detect = bitforce_detect,

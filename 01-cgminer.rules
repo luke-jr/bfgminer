@@ -18,3 +18,6 @@ ATTRS{idVendor}=="067b", ATTRS{idProduct}=="0230", SUBSYSTEMS=="usb", ACTION=="a
 
 # Ztex
 ATTRS{idVendor}=="221a", ATTRS{idProduct}=="0100", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+# BF1
+ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="204b", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
