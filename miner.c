@@ -40,7 +40,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 
-#ifdef CHROOT
+#ifdef HAVE_PWD_H
 #include <pwd.h>
 #endif
 
@@ -382,8 +382,12 @@ char *cmd_idle, *cmd_sick, *cmd_dead;
 	static int forkpid;
 #endif // defined(unix)
 
-#ifdef CHROOT
-char *chroot_dir, *chroot_user;
+#if defined(BFG_CHROOT) && defined(HAVE_CHROOT)
+char *chroot_dir;
+#endif
+
+#ifdef HAVE_PWD
+char *opt_setuid;
 #endif
 
 struct sigaction termhandler, inthandler;
@@ -1482,13 +1486,10 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
-#ifdef CHROOT
+#if defined(BFG_CHROOT) && defined(HAVE_CHOOT)
         OPT_WITH_ARG("--chroot-dir",
                      opt_set_charp, NULL, &chroot_dir,
                      "Chroot to a directory right after startup"),
-        OPT_WITH_ARG("--chroot-user",
-                     opt_set_charp, NULL, &chroot_user,
-                     "Username of an unprivileged user to run as"),
 #endif
 	OPT_WITH_ARG("--cmd-idle",
 	             opt_set_charp, NULL, &cmd_idle,
@@ -1792,6 +1793,11 @@ static struct opt_table opt_config_table[] = {
 		     set_shaders, NULL, NULL,
 		     "GPU shaders per card for tuning scrypt, comma separated"),
 #endif
+#endif
+#ifdef HAVE_PWD_H
+        OPT_WITH_ARG("--setuid",
+                     opt_set_charp, NULL, &opt_setuid,
+                     "Username of an unprivileged user to run as"),
 #endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
@@ -10063,29 +10069,35 @@ int main(int argc, char *argv[])
 	applog(LOG_DEBUG, "pthread_cancel workaround in use");
 #endif
 
-#ifdef CHROOT
-        if (chroot_dir != NULL) {
-                struct passwd *user_info = NULL;
-                if (chroot_user != NULL) {
-                        if ((user_info = getpwnam(chroot_user)) == NULL) {
-                                quit(1, "Unable to find user information");
-                        }
-                } else if (getuid() == 0) {
-                        quit(1, "Running as root is not allowed");
-                }
+#ifdef HAVE_PWD_H
+	struct passwd *user_info = NULL;
+	if (opt_setuid != NULL) {
+		if ((user_info = getpwnam(opt_setuid)) == NULL) {
+			quit(1, "Unable to find setuid user information");
+		}
+	}
+#endif
 
-                if (chroot(chroot_dir) == 0) {
-                        if (user_info != NULL) {
-                                if (setgid((*user_info).pw_gid) == 0 && setuid((*user_info).pw_uid) != 0) {
-                                        quit(1, "Unable to setuid");
-                                }
-                        }
-                } else {
+#if defined(BFG_CHROOT) && defined(HAVE_CHROOT)
+        if (chroot_dir != NULL) {
+#ifdef HAVE_PWD_H
+                if (user_info == NULL && getuid() == 0) {
+                        applog(LOG_WARNING, "Running as root inside chroot");
+                }
+#endif
+                if (chroot(chroot_dir) != 0) {
                        quit(1, "Unable to chroot");
                 }
         }
 #endif
 
+#ifdef HAVE_PWD_H
+		if (user_info != NULL) {
+			if (setgid((*user_info).pw_gid) == 0 && setuid((*user_info).pw_uid) != 0) {
+				quit(1, "Unable to setuid");
+			}
+		}
+#endif
 	raise_fd_limits();
 	
 	if (opt_benchmark) {
