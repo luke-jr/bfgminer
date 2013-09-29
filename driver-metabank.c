@@ -44,7 +44,12 @@ bool metabank_spi_txrx(struct spi_port *port)
 }
 
 static
-struct bitfury_device **metabank_detect_chips(int *out_count) {
+int metabank_autodetect()
+{
+	RUNONCE(0);
+	
+	int chip_n;
+	struct cgpu_info *bitfury_info;
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
 	int n = 0;
@@ -53,14 +58,21 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
 	int max_devices = 100;
+	
+	bitfury_info = calloc(1, sizeof(struct cgpu_info));
+	bitfury_info->drv = &metabank_drv;
+	bitfury_info->threads = 1;
 
+	applog(LOG_INFO, "INFO: bitfury_detect");
+	spi_init();
+	if (!sys_spi)
+		return 0;
+	
 	if (tm_i2c_init() < 0) {
 		applog(LOG_DEBUG, "%s: I2C init error", metabank_drv.dname);
-		*out_count = 0;
-		return NULL;
+		return 0;
 	}
-
-
+	
 	devicelist = malloc(max_devices * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
@@ -109,27 +121,9 @@ struct bitfury_device **metabank_detect_chips(int *out_count) {
 		}
 	}
 
-	*out_count = n;
-	return devicelist;
-}
-
-static
-int metabank_autodetect()
-{
-	RUNONCE(0);
+	chip_n = n;
+	bitfury_info->device_data = devicelist;
 	
-	int chip_n;
-	struct cgpu_info *bitfury_info;
-
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &metabank_drv;
-	bitfury_info->threads = 1;
-
-	applog(LOG_INFO, "INFO: bitfury_detect");
-	spi_init();
-	if (!sys_spi)
-		return 0;
-	bitfury_info->device_data = metabank_detect_chips(&chip_n);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return 0;
