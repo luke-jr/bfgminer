@@ -28,7 +28,16 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 
 static void bitfury_open(struct cgpu_info *bitfury)
 {
+	uint32_t buf[2];
+
 	bitfury_empty_buffer(bitfury);
+	/* Magic sequence to reset device only really needed for windows but
+	 * harmless on linux. */
+	buf[0] = 0x80250000;
+	buf[1] = 0x00000800;
+	usb_transfer(bitfury, 0, 9, 1, 0, C_BF1_RESET);
+	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_OPEN);
+	usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf, 7, C_BF1_INIT);
 }
 
 static void bitfury_close(struct cgpu_info *bitfury)
