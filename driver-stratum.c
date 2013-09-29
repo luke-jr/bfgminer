@@ -334,7 +334,12 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 	int bufsz;
 	
 	if (!_ssm_notify)
-		return_stratumsrv_failure(20, "No notify set (upstream not stratum?)");
+	{
+		evtimer_del(ev_notify);
+		_stratumsrv_update_notify(-1, 0, NULL);
+		if (!_ssm_notify)
+			return_stratumsrv_failure(20, "No notify set (upstream not stratum?)");
+	}
 	
 	if (!*xnonce1_p)
 	{
