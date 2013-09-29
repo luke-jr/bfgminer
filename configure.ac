@@ -74,6 +74,14 @@ AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
 
+AC_CHECK_HEADERS([sys/file.h])
+
+# Setuid
+AC_CHECK_HEADERS([pwd.h])
+
+# Check for chroot support
+AC_CHECK_FUNCS([chroot])
+
 AC_FUNC_ALLOCA
 
 have_cygwin=false
@@ -318,6 +326,17 @@ if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
+
+chroot = "yes"
+
+AC_ARG_ENABLE([chroot],
+	[AC_HELP_STRING([--disable-chroot],[Compile support for running inside a chroot jail (default enabled)])],
+	[chroot=$enableval],
+	[chroot=yes]
+	)
+if test "x$chroot" = xyes; then
+	AC_DEFINE([BFG_CHROOT], [1], [Defined to 1 if chroot jail support is wanted])
+fi
 
 avalon="no"
 
