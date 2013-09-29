@@ -7604,6 +7604,8 @@ static void hotplug_process()
 	switch_logsize(true);
 }
 
+#define DRIVER_DRV_DETECT_HOTPLUG(X) X##_drv.drv_detect(true);
+
 static void *hotplug_thread(void __maybe_unused *userdata)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -7625,9 +7627,7 @@ static void *hotplug_thread(void __maybe_unused *userdata)
 
 			/* Use the DRIVER_PARSE_COMMANDS macro to detect all
 			 * devices */
-#define DRIVER_ADD_COMMAND(X) X##_drv.drv_detect(true);
-			DRIVER_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+			DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_HOTPLUG)
 
 			if (new_devices)
 				hotplug_process();
@@ -7652,6 +7652,9 @@ static void probe_pools(void)
 		pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	}
 }
+
+#define DRIVER_FILL_DEVICE_DRV(X) fill_device_drv(&X##_drv);
+#define DRIVER_DRV_DETECT_ALL(X) X##_drv.drv_detect(false);
 
 int main(int argc, char *argv[])
 {
@@ -7834,17 +7837,13 @@ int main(int argc, char *argv[])
 #endif
 
 	/* Use the DRIVER_PARSE_COMMANDS macro to fill all the device_drvs */
-#define DRIVER_ADD_COMMAND(X) fill_device_drv(&X##_drv);
-	DRIVER_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+	DRIVER_PARSE_COMMANDS(DRIVER_FILL_DEVICE_DRV)
 
 	if (opt_scrypt)
 		opencl_drv.drv_detect(false);
 	else {
 	/* Use the DRIVER_PARSE_COMMANDS macro to detect all devices */
-#define DRIVER_ADD_COMMAND(X) X##_drv.drv_detect(false);
-		DRIVER_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+		DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_ALL)
 	}
 
 	if (opt_display_devs) {

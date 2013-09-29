@@ -1840,6 +1840,9 @@ static struct usb_find_devices *usb_check_each(int drvnum, struct device_drv *dr
 	return NULL;
 }
 
+#define DRIVER_USB_CHECK_EACH(X) 	if (drv->drv_id == DRIVER_##X) \
+		return usb_check_each(DRIVER_##X, drv, dev);
+
 static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv, __maybe_unused struct libusb_device *dev)
 {
 	if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
@@ -1849,11 +1852,7 @@ static struct usb_find_devices *usb_check(__maybe_unused struct device_drv *drv,
 		return NULL;
 	}
 
-#define DRIVER_ADD_COMMAND(X) \
-	if (drv->drv_id == DRIVER_##X) \
-		return usb_check_each(DRIVER_##X, drv, dev);
-	DRIVER_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+	DRIVER_PARSE_COMMANDS(DRIVER_USB_CHECK_EACH)
 
 	return NULL;
 }
@@ -3125,6 +3124,10 @@ void usb_cleanup()
 	cgsem_destroy(&usb_resource_sem);
 }
 
+#define DRIVER_COUNT_FOUND(X) if (strcasecmp(ptr, X##_drv.name) == 0) { \
+	drv_count[X##_drv.drv_id].limit = lim; \
+	found = true; \
+	}
 void usb_initialise()
 {
 	char *fre, *ptr, *comma, *colon;
@@ -3210,12 +3213,7 @@ void usb_initialise()
 				found = false;
 				/* Use the DRIVER_PARSE_COMMANDS macro to iterate
 				 * over all the drivers. */
-#define DRIVER_ADD_COMMAND(X)	if (strcasecmp(ptr, X##_drv.name) == 0) { \
-					drv_count[X##_drv.drv_id].limit = lim; \
-					found = true; \
-				}
-				DRIVER_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+				DRIVER_PARSE_COMMANDS(DRIVER_COUNT_FOUND)
 				if (!found)
 					quit(1, "Invalid --usb DRV:limit - unknown DRV='%s'", ptr);
 

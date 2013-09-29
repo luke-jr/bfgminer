@@ -234,34 +234,33 @@ static inline int fsync (int fd)
  * trying to claim same chip but different devices. Adding a device here will
  * update all macros in the code that use the *_PARSE_COMMANDS macros for each
  * listed driver. */
-#define FPGA_PARSE_COMMANDS \
+#define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bitforce) \
 	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(modminer) \
 	DRIVER_ADD_COMMAND(ztex)
 
-#define ASIC_PARSE_COMMANDS \
+#define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(avalon)
 
-#define DRIVER_PARSE_COMMANDS \
+#define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(opencl) \
-	FPGA_PARSE_COMMANDS \
-	ASIC_PARSE_COMMANDS
+	FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
+	ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND)
+
+#define DRIVER_ENUM(X) DRIVER_##X,
+#define DRIVER_PROTOTYPE(X) struct device_drv X##_drv;
 
 /* Create drv_driver enum from DRIVER_PARSE_COMMANDS macro */
-#define DRIVER_ADD_COMMAND(X) DRIVER_##X,
 enum drv_driver {
-	DRIVER_PARSE_COMMANDS
+	DRIVER_PARSE_COMMANDS(DRIVER_ENUM)
 	DRIVER_MAX
 };
-#undef DRIVER_ADD_COMMAND
 
 /* Use DRIVER_PARSE_COMMANDS to generate extern device_drv prototypes */
-#define DRIVER_ADD_COMMAND(X) struct device_drv X##_drv;
-DRIVER_PARSE_COMMANDS;
-#undef DRIVER_ADD_COMMAND
+DRIVER_PARSE_COMMANDS(DRIVER_PROTOTYPE)
 
 enum alive {
 	LIFE_WELL,

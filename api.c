@@ -1211,6 +1211,9 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 	return root;
 }
 
+#define DRIVER_COUNT_DRV(X) if (devices[i]->drv->drv_id == DRIVER_##X) \
+	count++;
+
 #ifdef HAVE_AN_ASIC
 static int numascs(void)
 {
@@ -1219,11 +1222,7 @@ static int numascs(void)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#define DRIVER_ADD_COMMAND(X) \
-		if (devices[i]->drv->drv_id == DRIVER_##X) \
-			count++;
-		ASIC_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+		ASIC_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1236,11 +1235,7 @@ static int ascdevice(int ascid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#define DRIVER_ADD_COMMAND(X) \
-		if (devices[i]->drv->drv_id == DRIVER_##X) \
-			count++;
-		ASIC_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+		ASIC_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 		if (count == (ascid + 1))
 			goto foundit;
 	}
@@ -1263,11 +1258,7 @@ static int numpgas(void)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#define DRIVER_ADD_COMMAND(X) \
-		if (devices[i]->drv->drv_id == DRIVER_##X) \
-			count++;
-		FPGA_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+		FPGA_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1280,11 +1271,7 @@ static int pgadevice(int pgaid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#define DRIVER_ADD_COMMAND(X) \
-		if (devices[i]->drv->drv_id == DRIVER_##X) \
-			count++;
-		FPGA_PARSE_COMMANDS
-#undef DRIVER_ADD_COMMAND
+		FPGA_PARSE_COMMANDS(DRIVER_COUNT_DRV)
 		if (count == (pgaid + 1))
 			goto foundit;
 	}
