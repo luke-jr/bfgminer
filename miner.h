@@ -231,16 +231,24 @@ static inline int fsync (int fd)
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
 
 /* Put avalon last to make it the last device it tries to detect to prevent it
- * trying to claim same chip but different devices. */
-#define DRIVER_PARSE_COMMANDS \
-	DRIVER_ADD_COMMAND(bflsc) \
+ * trying to claim same chip but different devices. Adding a device here will
+ * update all macros in the code that use the *_PARSE_COMMANDS macros for each
+ * listed driver. */
+#define FPGA_PARSE_COMMANDS \
 	DRIVER_ADD_COMMAND(bitforce) \
-	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(icarus) \
 	DRIVER_ADD_COMMAND(modminer) \
-	DRIVER_ADD_COMMAND(opencl) \
-	DRIVER_ADD_COMMAND(ztex) \
+	DRIVER_ADD_COMMAND(ztex)
+
+#define ASIC_PARSE_COMMANDS \
+	DRIVER_ADD_COMMAND(bflsc) \
+	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(avalon)
+
+#define DRIVER_PARSE_COMMANDS \
+	DRIVER_ADD_COMMAND(opencl) \
+	FPGA_PARSE_COMMANDS \
+	ASIC_PARSE_COMMANDS
 
 /* Create drv_driver enum from DRIVER_PARSE_COMMANDS macro */
 #define DRIVER_ADD_COMMAND(X) DRIVER_##X,
