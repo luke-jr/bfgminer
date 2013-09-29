@@ -283,6 +283,12 @@ cascade:
 		info->nonces--;
 		return (int64_t)0xffffffff;
 	}
+
+	if (unlikely(bitfury->usbinfo.nodev)) {
+		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
+		       bitfury->drv->name, bitfury->device_id);
+		return -1;
+	}
 	return 0;
 }
 
