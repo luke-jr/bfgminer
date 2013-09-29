@@ -474,10 +474,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		}
 
 		if (thr && thr->work_restart) {
-			if (opt_debug) {
-				applog(LOG_DEBUG,
-					"Icarus Read: Work restart at %d ms", rc);
-			}
+			applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
 			return ICA_NONCE_RESTART;
 		}
 
@@ -493,10 +490,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 				cgsleep_ms(delay);
 
 				if (thr && thr->work_restart) {
-					if (opt_debug) {
-						applog(LOG_DEBUG,
-							"Icarus Read: Work restart at %d ms", rc);
-					}
+					applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
 					return ICA_NONCE_RESTART;
 				}
 			}
@@ -1055,12 +1049,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
 
-		if (opt_debug) {
-			applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
-					icarus->drv->name, icarus->device_id,
-					(long unsigned int)estimate_hashes,
-					elapsed.tv_sec, elapsed.tv_usec);
-		}
+		applog(LOG_DEBUG, "%s%d: no nonce = 0x%08lX hashes (%ld.%06lds)",
+				icarus->drv->name, icarus->device_id,
+				(long unsigned int)estimate_hashes,
+				elapsed.tv_sec, elapsed.tv_usec);
 
 		return estimate_hashes;
 	}
@@ -1092,12 +1084,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (opt_debug || info->do_icarus_timing)
 		timersub(&tv_finish, &tv_start, &elapsed);
 
-	if (opt_debug) {
-		applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
-				icarus->drv->name, icarus->device_id,
-				nonce, (long unsigned int)hash_count,
-				elapsed.tv_sec, elapsed.tv_usec);
-	}
+	applog(LOG_DEBUG, "%s%d: nonce = 0x%08x = 0x%08lX hashes (%ld.%06lds)",
+			icarus->drv->name, icarus->device_id,
+			nonce, (long unsigned int)hash_count,
+			elapsed.tv_sec, elapsed.tv_usec);
 
 	// Ignore possible end condition values ... and hw errors
 	// TODO: set limitations on calculated values depending on the device
