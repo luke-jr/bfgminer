@@ -34,11 +34,11 @@
  */
 #define DEVLOCK(cgpu, _pth_state) do { \
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_pth_state); \
-			wr_lock(cgpu->usbinfo.devlock); \
+			mutex_lock(cgpu->usbinfo.devlock); \
 			} while (0)
 
 #define DEVUNLOCK(cgpu, _pth_state) do { \
-			wr_unlock(cgpu->usbinfo.devlock); \
+			mutex_unlock(cgpu->usbinfo.devlock); \
 			pthread_setcancelstate(_pth_state, NULL); \
 			} while (0)
 
@@ -1384,7 +1384,7 @@ struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads)
 	if (unlikely(!cgpu->usbinfo.devlock))
 		quit(1, "Failed to calloc devlock for %s in usb_alloc_cgpu", drv->dname);
 
-	rwlock_init(cgpu->usbinfo.devlock);
+	mutex_init(cgpu->usbinfo.devlock);
 
 	return cgpu;
 }
@@ -3083,9 +3083,9 @@ void usb_cleanup()
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
-				wr_lock(cgpu->usbinfo.devlock);
+				mutex_lock(cgpu->usbinfo.devlock);
 				release_cgpu(cgpu);
-				wr_unlock(cgpu->usbinfo.devlock);
+				mutex_unlock(cgpu->usbinfo.devlock);
 				count++;
 				break;
 			default:
