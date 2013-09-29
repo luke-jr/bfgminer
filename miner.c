@@ -8714,7 +8714,6 @@ void proc_enable(struct cgpu_info *cgpu)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_INTERVAL		2
 #define WATCHDOG_SICK_TIME		60
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
@@ -8804,6 +8803,16 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = get_devices(i);
+			if (!cgpu->disable_watchdog)
+				bfg_watchdog(cgpu, &now);
+		}
+	}
+
+	return NULL;
+}
+
+void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
+{
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
@@ -8830,7 +8839,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
-				continue;
+				return;
 			else
 			if (*denable == DEV_RECOVER_ERR) {
 				if (opt_restart && timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > cgpu->reinit_backoff) {
@@ -8840,7 +8849,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 						cgpu->reinit_backoff *= 2;
 					device_recovered(cgpu);
 				}
-				continue;
+				return;
 			}
 			else
 			if (*denable == DEV_RECOVER) {
@@ -8850,7 +8859,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					device_recovered(cgpu);
 				}
 				dev_error_update(cgpu, REASON_DEV_THERMAL_CUTOFF);
-				continue;
+				return;
 			}
 			else
 			if (cgpu->temp > cgpu->cutofftemp)
@@ -8864,7 +8873,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 
 			if (thr->getwork) {
-				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {
+				if (cgpu->status == LIFE_WELL && thr->getwork < tvp_now->tv_sec - opt_log_interval) {
 					int thrid;
 					bool cgpu_idle = true;
 					thr->rolling = 0;
@@ -8876,21 +8885,21 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 						cgpu->status = LIFE_WAIT;
 					}
 				}
-				continue;
+				return;
 			}
 			else if (cgpu->status == LIFE_WAIT)
 				cgpu->status = LIFE_WELL;
 
 #ifdef WANT_CPUMINE
 			if (!strcmp(cgpu->drv->dname, "cpu"))
-				continue;
+				return;
 #endif
-			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
+			if (cgpu->status != LIFE_WELL && (tvp_now->tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
 				if (likely(cgpu->status != LIFE_INIT && cgpu->status != LIFE_INIT2))
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
-			} else if (cgpu->status == LIFE_WELL && (now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
+			} else if (cgpu->status == LIFE_WELL && (tvp_now->tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
@@ -8909,14 +8918,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
-			} else if (cgpu->status == LIFE_SICK && (now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
+			} else if (cgpu->status == LIFE_SICK && (tvp_now->tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
 				run_cmd(cmd_dead);
-			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
+			} else if (tvp_now->tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
 				cgtime(&thr->sick);
@@ -8928,10 +8937,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (opt_restart)
 					reinit_device(cgpu);
 			}
-		}
-	}
-
-	return NULL;
 }
 
 static void log_print_status(struct cgpu_info *cgpu)

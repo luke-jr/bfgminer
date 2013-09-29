@@ -418,6 +418,12 @@ void minerloop_async(struct thr_info *mythr)
 	
 	if (mythr->work_restart_notifier[1] == -1)
 		notifier_init(mythr->work_restart_notifier);
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		mythr = proc->thr[0];
+		timer_set_now(&mythr->tv_watchdog);
+		proc->disable_watchdog = true;
+	}
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -468,8 +474,15 @@ defer_events:
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
 			
+			if (timer_passed(&mythr->tv_watchdog, &tv_now))
+			{
+				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
+				bfg_watchdog(proc, &tv_now);
+			}
+			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
 		do_notifier_select(thr, &tv_timeout);
