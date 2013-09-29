@@ -1212,25 +1212,18 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 }
 
 #ifdef HAVE_AN_ASIC
-static int numascs()
+static int numascs(void)
 {
 	int count = 0;
 	int i;
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_avalon)
+#define DRIVER_ADD_COMMAND(X) \
+		if (devices[i]->drv->drv_id == DRIVER_##X) \
 			count++;
-#endif
-#ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_bflsc)
-			count++;
-#endif
-#ifdef USE_BITFURY
-		if (devices[i]->drv->drv_id == DRIVER_bitfury)
-			count++;
-#endif
+		ASIC_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1243,18 +1236,11 @@ static int ascdevice(int ascid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_AVALON
-		if (devices[i]->drv->drv_id == DRIVER_avalon)
+#define DRIVER_ADD_COMMAND(X) \
+		if (devices[i]->drv->drv_id == DRIVER_##X) \
 			count++;
-#endif
-#ifdef USE_BFLSC
-		if (devices[i]->drv->drv_id == DRIVER_bflsc)
-			count++;
-#endif
-#ifdef USE_BITFURY
-		if (devices[i]->drv->drv_id == DRIVER_bitfury)
-			count++;
-#endif
+		ASIC_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 		if (count == (ascid + 1))
 			goto foundit;
 	}
@@ -1270,29 +1256,18 @@ foundit:
 #endif
 
 #ifdef HAVE_AN_FPGA
-static int numpgas()
+static int numpgas(void)
 {
 	int count = 0;
 	int i;
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_bitforce)
+#define DRIVER_ADD_COMMAND(X) \
+		if (devices[i]->drv->drv_id == DRIVER_##X) \
 			count++;
-#endif
-#ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_icarus)
-			count++;
-#endif
-#ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ztex)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_modminer)
-			count++;
-#endif
+		FPGA_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 	}
 	rd_unlock(&devices_lock);
 	return count;
@@ -1305,22 +1280,11 @@ static int pgadevice(int pgaid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef USE_BITFORCE
-		if (devices[i]->drv->drv_id == DRIVER_bitforce)
+#define DRIVER_ADD_COMMAND(X) \
+		if (devices[i]->drv->drv_id == DRIVER_##X) \
 			count++;
-#endif
-#ifdef USE_ICARUS
-		if (devices[i]->drv->drv_id == DRIVER_icarus)
-			count++;
-#endif
-#ifdef USE_ZTEX
-		if (devices[i]->drv->drv_id == DRIVER_ztex)
-			count++;
-#endif
-#ifdef USE_MODMINER
-		if (devices[i]->drv->drv_id == DRIVER_modminer)
-			count++;
-#endif
+		FPGA_PARSE_COMMANDS
+#undef DRIVER_ADD_COMMAND
 		if (count == (pgaid + 1))
 			goto foundit;
 	}
