@@ -48,6 +48,8 @@ static uint64_t _ssm_jobid;
 struct stratumsrv_conn {
 	struct bufferevent *bev;
 	uint32_t xnonce1_le;
+	struct timeval tv_hashes_done;
+	
 	struct stratumsrv_conn *next;
 };
 
@@ -369,8 +371,9 @@ void stratumsrv_mining_authorize(struct bufferevent *bev, json_t *params, const 
 }
 
 static
-void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
+void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const char *idstr, struct stratumsrv_conn * const conn)
 {
+	uint32_t * const xnonce1_p = &conn->xnonce1_le;
 	struct work _work, *work;
 	struct stratumsrv_job *ssj;
 	struct proxy_client *client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
@@ -418,6 +421,14 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 		_stratumsrv_success(bev, idstr);
 	
 	clean_work(work);
+	
+	{
+		struct timeval tv_now, tv_delta;
+		timer_set_now(&tv_now);
+		timersub(&tv_now, &conn->tv_hashes_done, &tv_delta);
+		conn->tv_hashes_done = tv_now;
+		hashes_done(thr, 0x100000000, &tv_delta, NULL);
+	}
 }
 
 static
@@ -456,7 +467,7 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	idstr = (j2 && !json_is_null(j2)) ? json_dumps_ANY(j2, 0) : NULL;
 	
 	if (!strcasecmp(method, "mining.submit"))
-		stratumsrv_mining_submit(bev, params, idstr, &conn->xnonce1_le);
+		stratumsrv_mining_submit(bev, params, idstr, conn);
 	else
 	if (!strcasecmp(method, "mining.authorize"))
 		stratumsrv_mining_authorize(bev, params, idstr, &conn->xnonce1_le);
