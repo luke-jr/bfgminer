@@ -382,7 +382,7 @@ char *cmd_idle, *cmd_sick, *cmd_dead;
 	static int forkpid;
 #endif // defined(unix)
 
-#if defined(BFG_CHROOT) && defined(HAVE_CHROOT)
+#ifdef HAVE_CHROOT
 char *chroot_dir;
 #endif
 
@@ -1486,7 +1486,7 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
-#if defined(BFG_CHROOT) && defined(HAVE_CHOOT)
+#ifdef HAVE_CHOOT
         OPT_WITH_ARG("--chroot-dir",
                      opt_set_charp, NULL, &chroot_dir,
                      "Chroot to a directory right after startup"),
@@ -10078,7 +10078,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-#if defined(BFG_CHROOT) && defined(HAVE_CHROOT)
+#ifdef HAVE_CHROOT
         if (chroot_dir != NULL) {
 #ifdef HAVE_PWD_H
                 if (user_info == NULL && getuid() == 0) {

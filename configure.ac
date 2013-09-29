@@ -327,17 +327,6 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
-chroot = "yes"
-
-AC_ARG_ENABLE([chroot],
-	[AC_HELP_STRING([--disable-chroot],[Compile support for running inside a chroot jail (default enabled)])],
-	[chroot=$enableval],
-	[chroot=yes]
-	)
-if test "x$chroot" = xyes; then
-	AC_DEFINE([BFG_CHROOT], [1], [Defined to 1 if chroot jail support is wanted])
-fi
-
 avalon="no"
 
 AC_ARG_ENABLE([avalon],
