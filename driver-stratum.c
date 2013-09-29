@@ -160,6 +160,7 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 	{
 		evtimer_del(ev_notify);
 		notifier_read(_ssm_update_notifier);
+		applog(LOG_DEBUG, "SSM: Update triggered by notifier");
 	}
 	
 	if (!pool->stratum_notify)
@@ -191,9 +192,28 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 	evtimer_add(ev_notify, &tv_scantime);
 }
 
-void stratumsrv_update_notify()
+static struct proxy_client *_stratumsrv_find_or_create_client(const char *);
+
+static
+struct proxy_client *(*stratumsrv_find_or_create_client)(const char *) = _stratumsrv_find_or_create_client;
+
+static
+struct proxy_client *_stratumsrv_find_or_create_client(const char *user)
 {
-	notifier_wake(_ssm_update_notifier);
+	struct proxy_client * const client = proxy_find_or_create_client(user);
+	struct cgpu_info *cgpu;
+	struct thr_info *thr;
+	
+	if (!client)
+		return NULL;
+	
+	cgpu = client->cgpu;
+	thr = cgpu->thr[0];
+	
+	memcpy(thr->work_restart_notifier, _ssm_update_notifier, sizeof(thr->work_restart_notifier));
+	stratumsrv_find_or_create_client = proxy_find_or_create_client;
+	
+	return client;
 }
 
 static
@@ -244,7 +264,7 @@ void _stratumsrv_success(struct bufferevent * const bev, const char * const idst
 static
 void stratumsrv_mining_authorize(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
 {
-	struct proxy_client * const client = proxy_find_or_create_client(__json_array_string(params, 0));
+	struct proxy_client * const client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
 	
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
@@ -257,7 +277,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 {
 	struct work _work, *work;
 	struct stratumsrv_job *ssj;
-	struct proxy_client *client = proxy_find_or_create_client(__json_array_string(params, 0));
+	struct proxy_client *client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	const char * const job_id = __json_array_string(params, 1);
@@ -354,6 +374,16 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 }
 
 static
+void stratumsrv_client_close(struct stratumsrv_conn * const conn)
+{
+	struct bufferevent * const bev = conn->bev;
+	
+	bufferevent_free(bev);
+	LL_DELETE(_ssm_connections, conn);
+	free(conn);
+}
+
+static
 void stratumsrv_read(struct bufferevent *bev, void *p)
 {
 	struct evbuffer *input = bufferevent_get_input(bev);
@@ -366,7 +396,7 @@ void stratumsrv_read(struct bufferevent *bev, void *p)
 		free(ln);
 		if (unlikely(!rv))
 		{
-			bufferevent_free(bev);
+			stratumsrv_client_close(p);
 			break;
 		}
 	}
@@ -381,7 +411,7 @@ void stratumsrv_event(struct bufferevent *bev, short events, void *p)
 			applog(LOG_ERR, "Error from bufferevent");
 		if (events & BEV_EVENT_EOF)
 			applog(LOG_DEBUG, "EOF from bufferevent");
-		bufferevent_free(bev);
+		stratumsrv_client_close(p);
 	}
 }
 
