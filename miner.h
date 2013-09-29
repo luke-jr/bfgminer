@@ -843,7 +843,7 @@ static inline void cglock_init(cglock_t *lock)
 	rwlock_init(&lock->rwlock);
 }
 
-/* Read lock variant of cglock */
+/* Read lock variant of cglock. Cannot be promoted. */
 static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -851,7 +851,8 @@ static inline void cg_rlock(cglock_t *lock)
 	mutex_unlock_noyield(&lock->mutex);
 }
 
-/* Intermediate variant of cglock */
+/* Intermediate variant of cglock - behaves as a read lock but can be promoted
+ * to a write lock or demoted to read lock. */
 static inline void cg_ilock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -876,6 +877,12 @@ static inline void cg_dwlock(cglock_t *lock)
 	wr_unlock_noyield(&lock->rwlock);
 	rd_lock(&lock->rwlock);
 	mutex_unlock_noyield(&lock->mutex);
+}
+
+/* Demote a write variant to an intermediate variant */
+static inline void cg_dwilock(cglock_t *lock)
+{
+	wr_unlock(&lock->rwlock);
 }
 
 /* Downgrade intermediate variant to a read lock */
