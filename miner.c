@@ -40,6 +40,10 @@
 #include <sys/types.h>
 #include <dirent.h>
 
+#ifdef CHROOT
+#include <pwd.h>
+#endif
+
 #ifndef WIN32
 #include <sys/resource.h>
 #include <sys/socket.h>
@@ -377,6 +381,10 @@ char *cmd_idle, *cmd_sick, *cmd_dead;
 	static char *opt_stderr_cmd = NULL;
 	static int forkpid;
 #endif // defined(unix)
+
+#ifdef CHROOT
+char *chroot_dir, *chroot_user;
+#endif
 
 struct sigaction termhandler, inthandler;
 
@@ -1477,6 +1485,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--cmd-idle",
 	             opt_set_charp, NULL, &cmd_idle,
 	             "Execute a command when a device is allowed to be idle (rest or wait)"),
+#ifdef CHROOT
+        OPT_WITH_ARG("--chroot-dir",
+                     opt_set_charp, NULL, &chroot_dir,
+                     "Chroot to a directory right after startup"),
+        OPT_WITH_ARG("--chroot-user",
+                     opt_set_charp, NULL, &chroot_user,
+                     "Username of an unprivileged user to run as"),
+#endif
 	OPT_WITH_ARG("--cmd-sick",
 	             opt_set_charp, NULL, &cmd_sick,
 	             "Execute a command when a device is declared sick"),
@@ -10045,6 +10061,29 @@ int main(int argc, char *argv[])
 #ifndef HAVE_PTHREAD_CANCEL
 	// Can't do this any earlier, or config isn't loaded
 	applog(LOG_DEBUG, "pthread_cancel workaround in use");
+#endif
+
+#ifdef CHROOT
+        if (chroot_dir != NULL) {
+                struct passwd *user_info = NULL;
+                if (chroot_user != NULL) {
+                        if ((user_info = getpwnam(chroot_user)) == NULL) {
+                                quit(1, "Unable to find user information");
+                        }
+                } else if (getuid() == 0) {
+                        quit(1, "Running as root is not allowed");
+                }
+
+                if (chroot(chroot_dir) == 0) {
+                        if (user_info != NULL) {
+                                if (setgid((*user_info).pw_gid) == 0 && setuid((*user_info).pw_uid) != 0) {
+                                        quit(1, "Unable to setuid");
+                                }
+                        }
+                } else {
+                       quit(1, "Unable to chroot");
+                }
+        }
 #endif
 
 	raise_fd_limits();
