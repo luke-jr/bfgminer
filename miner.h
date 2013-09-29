@@ -899,7 +899,7 @@ static inline void cg_runlock(cglock_t *lock)
 
 static inline void cg_wunlock(cglock_t *lock)
 {
-	wr_unlock(&lock->rwlock);
+	wr_unlock_noyield(&lock->rwlock);
 	mutex_unlock(&lock->mutex);
 }
 
