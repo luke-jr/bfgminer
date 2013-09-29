@@ -87,7 +87,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
 	const int n2size = pool->n2size;
-	char my_job_id[17];
+	char my_job_id[33];
 	int i;
 	struct stratumsrv_job *ssj;
 	ssize_t n2pad = n2size - _ssm_client_octets - _ssm_client_xnonce2sz;
@@ -98,7 +98,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	size_t coinb1_lenx = coinb1in_lenx + n2padx;
 	size_t coinb2_len = bytes_len(&swork->coinbase) - swork->nonce2_offset - n2size;
 	size_t coinb2_lenx = coinb2_len * 2;
-	sprintf(my_job_id, "%"PRIx64, _ssm_jobid++);
+	sprintf(my_job_id, "%"PRIx64"-%"PRIx64, (uint64_t)time(NULL), _ssm_jobid++);
 	size_t bufsz = 166 + strlen(my_job_id) + coinb1_lenx + coinb2_lenx + (swork->merkles * 67);
 	char * const buf = malloc(bufsz);
 	char *p = buf;
