@@ -32,6 +32,8 @@
  * SUCH DAMAGE.
  */
 
+#include "config.h"
+
 #include <string.h>
 
 #include "sha2.h"
