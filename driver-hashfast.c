@@ -93,7 +93,6 @@ static uint32_t __maybe_unused hf_crc32(unsigned char *p, int len, int plug_in)
 }
 
 static hf_info_t **hashfast_infos;
-struct device_drv hashfast_drv;
 
 struct hf_cmd {
 	int cmd;
