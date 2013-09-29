@@ -237,7 +237,7 @@ struct cg_usb_info {
 	 * that uses the lock - however, all usbutils code MUST use it
 	 * to avoid devices disappearing while in use by multiple threads
 	 */
-	pthread_rwlock_t *devlock;
+	pthread_mutex_t *devlock;
 
 	time_t last_pipe;
 	uint64_t pipe_count;
