@@ -77,6 +77,7 @@ AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_FUNC_ALLOCA
 
+need_fpgautils=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -308,6 +309,7 @@ AC_ARG_ENABLE([bigpic],
 	)
 if test "x$bigpic" = xyes; then
 	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
@@ -318,6 +320,7 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
@@ -328,6 +331,7 @@ AC_ARG_ENABLE([icarus],
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
@@ -340,6 +344,7 @@ AC_ARG_ENABLE([avalon],
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -369,6 +374,7 @@ AC_ARG_ENABLE([modminer],
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -419,6 +425,7 @@ elif test "x$x6500" = xauto; then
 fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -438,6 +445,7 @@ elif test "x$ztex" = xauto; then
 fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
@@ -483,6 +491,7 @@ else
 fi
 if test "x$littlefury" = "xyes"; then
 	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
@@ -526,9 +535,7 @@ if test "x$scrypt" = xyes; then
 fi
 
 
-need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$x6500$ztex$littlefury != xnonononononono; then
-	need_fpgautils=yes
+if test x$need_fpgautils = xyes; then
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
 	if $have_win32; then

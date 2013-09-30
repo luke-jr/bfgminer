@@ -27,7 +27,7 @@
 #include <unistd.h>
 #include <sha2.h>
 
-#include "fpgautils.h"
+#include "deviceapi.h"
 #include "libbitfury.h"
 #include "util.h"
 #include "spidevc.h"
