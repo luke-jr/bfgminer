@@ -784,7 +784,7 @@ static int op_get_active_config_descriptor(struct libusb_device *dev,
 	if (r < 0)
 		return r;
 
-	len = MIN(len, r);
+	len = MIN(len, (size_t)r);
 	memcpy(buffer, config_desc, len);
 	return len;
 }
@@ -814,7 +814,7 @@ static int op_get_config_descriptor(struct libusb_device *dev,
 		descriptors += r;
 	}
 
-	len = MIN(len, r);
+	len = MIN(len, (size_t)r);
 	memcpy(buffer, descriptors, len);
 	return len;
 }
@@ -1090,7 +1090,7 @@ void linux_hotplug_enumerate(uint8_t busnum, uint8_t devaddr, const char *sys_na
 	usbi_mutex_static_unlock(&active_contexts_lock);
 }
 
-void linux_device_disconnected(uint8_t busnum, uint8_t devaddr, const char *sys_name)
+void linux_device_disconnected(uint8_t busnum, uint8_t devaddr, const char __attribute__((unused)) *sys_name)
 {
 	struct libusb_context *ctx;
 	struct libusb_device *dev;
