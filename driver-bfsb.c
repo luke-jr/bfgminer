@@ -162,6 +162,27 @@ bool bfsb_init(struct thr_info *thr)
 	return true;
 }
 
+static
+void bfsb_disable(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Shutting down chip (disable)", proc->proc_repr);
+	send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
+}
+
+static
+void bfsb_enable(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Reinitialising chip (enable)", proc->proc_repr);
+	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_init_oldbuf(proc);
+}
+
 extern void bitfury_shutdown(struct thr_info *);
 
 static void bfsb_shutdown(struct thr_info *thr)
@@ -191,5 +212,7 @@ struct device_drv bfsb_drv = {
 	.job_start = bitfury_do_io,
 	.job_process_results = bitfury_job_process_results,
 	.get_api_extra_device_status = bfsb_api_device_status,
+	.thread_disable = bfsb_disable,
+	.thread_enable = bfsb_enable,
 	.thread_shutdown = bfsb_shutdown,
 };
