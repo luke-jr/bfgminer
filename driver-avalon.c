@@ -209,6 +209,52 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	return ret;
 }
 
+static int bitburner_send_task(const struct avalon_task *at, struct cgpu_info *avalon)
+
+{
+	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
+	int ret, ep = C_AVALON_TASK;
+	size_t nr_len;
+
+	if (at->nonce_elf)
+		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
+	else
+		nr_len = AVALON_WRITE_SIZE;
+
+	memset(buf, 0, nr_len);
+	memcpy(buf, at, AVALON_WRITE_SIZE);
+
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+	uint8_t tt = 0;
+
+	tt = (buf[0] & 0x0f) << 4;
+	tt |= ((buf[0] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[0] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[0] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[0] & 0x80) ? (1 << 0) : 0);
+	buf[0] = tt;
+
+	tt = (buf[4] & 0x0f) << 4;
+	tt |= ((buf[4] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[4] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[4] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[4] & 0x80) ? (1 << 0) : 0);
+	buf[4] = tt;
+#endif
+
+	if (at->reset) {
+		ep = C_AVALON_RESET;
+		nr_len = 1;
+	}
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
+		hexdump(buf, nr_len);
+	}
+	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
+
+	return ret;
+}
+
 static bool avalon_decode_nonce(struct thr_info *thr, struct cgpu_info *avalon,
 				struct avalon_info *info, struct avalon_result *ar,
 				struct work *work)
@@ -414,7 +460,7 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 
 		if (*colon) {
 			tmp = atoi(colon);
-			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
+			if (tmp > 0 && tmp <= AVALON_MAX_MINER_NUM) {
 				*miner_count = tmp;
 			} else {
 				quit(1, "Invalid avalon-options for "
@@ -1181,7 +1227,7 @@ static void *bitburner_send_tasks(void *userdata)
 				avalon_reset_auto(info);
 			}
 
-			ret = avalon_send_task(&at, avalon);
+			ret = bitburner_send_task(&at, avalon);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
 				applog(LOG_ERR, "%s%i: Comms error(buffer)",
