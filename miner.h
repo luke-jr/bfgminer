@@ -481,6 +481,12 @@ struct cgpu_info {
 #endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
+	int usb_bulk_writes;
+	int usb_bulk_reads;
+	int usb_wlock_total_wait;
+	int usb_rlock_total_wait;
+	int usb_wlock_max_wait;
+	int usb_rlock_max_wait;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;
