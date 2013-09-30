@@ -185,9 +185,10 @@ static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	float vc0, vc1;
 	struct bitfury_device * const bitfury = cgpu->device_data;
+	
+	root = bitfury_api_device_status(cgpu);
 
 	root = api_add_uint(root, "Slot", &(bitfury->slot), false);
-	root = api_add_int(root, "Clock Bits", (int*)&bitfury->osc6_bits, false);
 
 	vc0 = tm_i2c_getcore0(bitfury->slot);
 	vc1 = tm_i2c_getcore1(bitfury->slot);
