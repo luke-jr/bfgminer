@@ -28,6 +28,7 @@
 #include <sha2.h>
 
 #include "deviceapi.h"
+#include "dynclock.h"
 #include "libbitfury.h"
 #include "util.h"
 #include "spidevc.h"
@@ -76,6 +77,21 @@ static void bitfury_detect(void)
 }
 
 
+static
+bool bitfury_change_osc6_bits(struct thr_info *thr, int multiplier)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	uint8_t old_bits = bitfury->osc6_bits;
+	
+	bitfury->osc6_bits = multiplier;
+	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury->dclk.freqM = multiplier;
+	dclk_msg_freqchange(cgpu->proc_repr, old_bits, bitfury->osc6_bits, NULL);
+	
+	return true;
+}
+
 void *bitfury_just_io(struct bitfury_device * const bitfury)
 {
 	struct spi_port * const spi = bitfury->spi;
@@ -102,6 +118,17 @@ void bitfury_debug_nonce_array(const struct cgpu_info * const proc, const char *
 		              (unsigned long)bitfury_decnonce(inp[i]));
 	applog(LOG_DEBUG, "%"PRIpreprv": %s%s (job=%08lx)",
 	       proc->proc_repr, msg, s, (unsigned long)inp[0x10]);
+}
+
+void bitfury_init_dclk(struct cgpu_info * const proc, uint8_t def, uint8_t max)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	
+	dclk_prepare(&bitfury->dclk);
+	bitfury->dclk.freqMDefault = def;
+	bitfury->dclk.freqM = bitfury->dclk.freqMDefault;
+	bitfury_change_osc6_bits(proc->thr[0], bitfury->dclk.freqM);
+	bitfury->dclk.freqMaxM = max;
 }
 
 bool bitfury_init_oldbuf(struct cgpu_info * const proc)
@@ -518,8 +545,23 @@ void bitfury_do_io(struct thr_info *thr)
 				submit_nonce(thr, thr->prev_work, nonce);
 			}
 			else
+			{
 				inc_hw_errors(thr, thr->work, nonce);
+				++bitfury->dclk_hwe;
+			}
+			if (++bitfury->dclk_tot >= 0x10)
+			{
+				double errrate = (double)bitfury->dclk_hwe / (double)bitfury->dclk_tot;
+				applog(LOG_DEBUG, "%"PRIpreprv": DynClock: %d of %d results were bad",
+				       proc->proc_repr, bitfury->dclk_hwe, bitfury->dclk_tot);
+				dclk_gotNonces(&bitfury->dclk);
+				dclk_errorCount(&bitfury->dclk, errrate);
+				dclk_preUpdate(&bitfury->dclk);
+				dclk_updateFreq(&bitfury->dclk, bitfury_change_osc6_bits, thr);
+				bitfury->dclk_tot = bitfury->dclk_hwe = 0;
+			}
 		}
+		
 		bitfury->active = (bitfury->active + n) % 0x10;
 	}
 	

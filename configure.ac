@@ -462,6 +462,7 @@ AC_ARG_ENABLE([bitfury],
 	)
 if test "x$bitfury" = xyes; then
 	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+	need_dynclock=yes
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 

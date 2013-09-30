@@ -1,6 +1,7 @@
 #ifndef __LIBBITFURY_H__
 #define __LIBBITFURY_H__
 
+#include "dynclock.h"
 #include "miner.h"
 #include "spidevc.h"
 
@@ -57,6 +58,10 @@ struct bitfury_device {
 	
 	time_t short_out_t;
 	time_t long_out_t;
+	
+	struct dclk_data dclk;
+	int dclk_hwe;
+	int dclk_tot;
 };
 
 extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *, struct thr_info *);
