@@ -77,6 +77,7 @@ AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_FUNC_ALLOCA
 
+need_dynclock=no
 need_fpgautils=no
 have_cygwin=false
 have_win32=false
@@ -331,6 +332,7 @@ AC_ARG_ENABLE([icarus],
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+	need_dynclock=yes
 	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
@@ -374,6 +376,7 @@ AC_ARG_ENABLE([modminer],
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+	need_dynclock=yes
 	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
@@ -425,6 +428,7 @@ elif test "x$x6500" = xauto; then
 fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+	need_dynclock=yes
 	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
@@ -445,6 +449,7 @@ elif test "x$ztex" = xauto; then
 fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
+	need_dynclock=yes
 	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
@@ -692,7 +697,7 @@ AC_SUBST(libblkmaker_LIBS)
 
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
-AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
+AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
