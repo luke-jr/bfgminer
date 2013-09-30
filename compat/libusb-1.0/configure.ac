@@ -26,7 +26,7 @@ lt_revision="0"
 lt_age="1"
 LTLDFLAGS="-version-info ${lt_current}:${lt_revision}:${lt_age}"
 
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([foreign subdir-objects])
 AM_MAINTAINER_MODE
 
 AC_CONFIG_SRCDIR([libusb/core.c])
@@ -224,20 +224,6 @@ if test "x$have_syslog" != "xno"; then
 	AC_DEFINE([HAVE_SYSLOG_FUNC], 1, [syslog() function available])
 fi
 
-# Examples build
-AC_ARG_ENABLE([examples-build], [AS_HELP_STRING([--enable-examples-build],
-	[build example applications [default=no]])],
-	[build_examples=$enableval],
-	[build_examples='no'])
-AM_CONDITIONAL([BUILD_EXAMPLES], [test "x$build_examples" != "xno"])
-
-# Tests build
-AC_ARG_ENABLE([tests-build], [AS_HELP_STRING([--enable-tests-build],
-	[build test applications [default=no]])],
-	[build_tests=$enableval],
-	[build_tests='no'])
-AM_CONDITIONAL([BUILD_TESTS], [test "x$build_tests" != "xno"])
-
 # check for -fvisibility=hidden compiler support (GCC >= 3.4)
 saved_cflags="$CFLAGS"
 # -Werror required for cygwin
@@ -274,8 +260,4 @@ AC_SUBST(LTLDFLAGS)
 AC_CONFIG_FILES([libusb-1.0.pc])
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([libusb/Makefile])
-AC_CONFIG_FILES([examples/Makefile])
-AC_CONFIG_FILES([tests/Makefile])
-AC_CONFIG_FILES([doc/Makefile])
-AC_CONFIG_FILES([doc/doxygen.cfg])
 AC_OUTPUT
