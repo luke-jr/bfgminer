@@ -1,6 +1,6 @@
 /*
- * libusb example program to manipulate U.are.U 4000B fingerprint scanner.
- * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
+ * libusbx example program to manipulate U.are.U 4000B fingerprint scanner.
+ * Copyright © 2007 Daniel Drake <dsd@gentoo.org>
  *
  * Basic image capture program only, does not consider the powerup quirks or
  * the fact that image encryption may be enabled. Not expected to work
@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <libusb.h>
+#include "libusb.h"
 
 #define EP_INTR			(1 | LIBUSB_ENDPOINT_IN)
 #define EP_DATA			(2 | LIBUSB_ENDPOINT_IN)
@@ -193,7 +193,7 @@ static void LIBUSB_CALL cb_mode_changed(struct libusb_transfer *transfer)
 
 static int set_mode_async(unsigned char data)
 {
-	unsigned char *buf = malloc(LIBUSB_CONTROL_SETUP_SIZE + 1);
+	unsigned char *buf = (unsigned char*) malloc(LIBUSB_CONTROL_SETUP_SIZE + 1);
 	struct libusb_transfer *transfer;
 
 	if (!buf)
@@ -542,4 +542,3 @@ out:
 	libusb_exit(NULL);
 	return r >= 0 ? r : -r;
 }
-

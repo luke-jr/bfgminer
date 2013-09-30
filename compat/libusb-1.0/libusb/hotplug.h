@@ -1,8 +1,8 @@
-/* -*- Mode: C; indent-tabs-mode:nil ; c-basic-offset:8 -*- */
+/* -*- Mode: C; indent-tabs-mode:t ; c-basic-offset:8 -*- */
 /*
- * Hotplug support for libusb 1.0
- * Copyright (C) 2012      Nathan Hjelm <hjelmn@users.sourceforge.net>
- * Copyright (C) 2012      Peter Stuge <peter@stuge.se>
+ * Hotplug support for libusbx
+ * Copyright © 2012-2013 Nathan Hjelm <hjelmn@mac.com>
+ * Copyright © 2012-2013 Peter Stuge <peter@stuge.se>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,10 @@
 
 #if !defined(USBI_HOTPLUG_H)
 #define USBI_HOTPLUG_H
+
+#ifndef LIBUSBI_H
+#include "libusbi.h"
+#endif
 
 /** \ingroup hotplug
  * The hotplug callback structure. The user populates this structure with
@@ -41,7 +45,7 @@ struct libusb_hotplug_callback {
 	int dev_class;
 
 	/** Hotplug callback flags */
-        libusb_hotplug_flag flags;
+	libusb_hotplug_flag flags;
 
 	/** Event(s) that will trigger this callback */
 	libusb_hotplug_event events;
@@ -49,29 +53,30 @@ struct libusb_hotplug_callback {
 	/** Callback function to invoke for matching event/device */
 	libusb_hotplug_callback_fn cb;
 
-        /** Handle for this callback (used to match on deregister) */
-        libusb_hotplug_callback_handle handle;
+	/** Handle for this callback (used to match on deregister) */
+	libusb_hotplug_callback_handle handle;
 
 	/** User data that will be passed to the callback function */
 	void *user_data;
 
-        /** Callback is marked for deletion */
-        int needs_free;
+	/** Callback is marked for deletion */
+	int needs_free;
 
 	/** List this callback is registered in (ctx->hotplug_cbs) */
-        struct list_head list;
+	struct list_head list;
 };
 
 typedef struct libusb_hotplug_callback libusb_hotplug_callback;
 
 struct libusb_hotplug_message {
-        libusb_hotplug_event event;
-        struct libusb_device *device;
+	libusb_hotplug_event event;
+	struct libusb_device *device;
 };
 
 typedef struct libusb_hotplug_message libusb_hotplug_message;
 
 void usbi_hotplug_deregister_all(struct libusb_context *ctx);
-void usbi_hotplug_match(struct libusb_device *dev, libusb_hotplug_event event);
+void usbi_hotplug_match(struct libusb_context *ctx, struct libusb_device *dev,
+			libusb_hotplug_event event);
 
 #endif

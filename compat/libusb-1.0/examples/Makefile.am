@@ -1,6 +1,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/libusb
 LDADD = ../libusb/libusb-1.0.la
-noinst_PROGRAMS = listdevs hotplugtest testlibusb1
+
+noinst_PROGRAMS = listdevs xusb fxload hotplugtest
 
 if HAVE_SIGACTION
 noinst_PROGRAMS += dpfp
@@ -13,3 +14,6 @@ endif
 sam3u_benchmark_SOURCES = sam3u_benchmark.c
 noinst_PROGRAMS += sam3u_benchmark
 endif
+
+fxload_SOURCES = ezusb.c ezusb.h fxload.c
+fxload_CFLAGS = $(THREAD_CFLAGS) $(AM_CFLAGS)

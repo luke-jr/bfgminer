@@ -1,6 +1,6 @@
 /*
- * libusb example program to list devices on the bus
- * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
+ * libusbx example program to list devices on the bus
+ * Copyright © 2007 Daniel Drake <dsd@gentoo.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,14 +18,14 @@
  */
 
 #include <stdio.h>
-#include <sys/types.h>
 
-#include <libusb.h>
+#include "libusb.h"
 
 static void print_devs(libusb_device **devs)
 {
 	libusb_device *dev;
-	int i = 0;
+	int i = 0, j = 0;
+	uint8_t path[8]; 
 
 	while ((dev = devs[i++]) != NULL) {
 		struct libusb_device_descriptor desc;
@@ -35,9 +35,17 @@ static void print_devs(libusb_device **devs)
 			return;
 		}
 
-		printf("%04x:%04x (bus %d, device %d)\n",
+		printf("%04x:%04x (bus %d, device %d)",
 			desc.idVendor, desc.idProduct,
 			libusb_get_bus_number(dev), libusb_get_device_address(dev));
+
+		r = libusb_get_port_numbers(dev, path, sizeof(path));
+		if (r > 0) {
+			printf(" path: %d", path[0]);
+			for (j = 1; j < r; j++)
+				printf(".%d", path[j]);
+		}
+		printf("\n");
 	}
 }
 
@@ -61,4 +69,3 @@ int main(void)
 	libusb_exit(NULL);
 	return 0;
 }
-

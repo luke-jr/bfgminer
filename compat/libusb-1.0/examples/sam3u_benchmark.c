@@ -40,7 +40,7 @@ static struct libusb_device_handle *devh = NULL;
 static unsigned long num_bytes = 0, num_xfer = 0;
 static struct timeval tv_start;
 
-static void cb_xfr(struct libusb_transfer *xfr)
+static void LIBUSB_CALL cb_xfr(struct libusb_transfer *xfr)
 {
 	unsigned int i;
 

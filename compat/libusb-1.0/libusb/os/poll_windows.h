@@ -1,6 +1,7 @@
 /*
  * Windows compat: POSIX compatibility wrapper
- * Copyright (C) 2009-2010 Pete Batard <pbatard@gmail.com>
+ * Copyright © 2012-2013 RealVNC Ltd.
+ * Copyright © 2009-2010 Pete Batard <pete@akeo.ie>
  * With contributions from Michael Plante, Orin Eman et al.
  * Parts of poll implementation from libusb-win32, by Stephan Meyer et al.
  *
@@ -21,8 +22,6 @@
  */
 #pragma once
 
-#include <windows.h>
-
 #if defined(_MSC_VER)
 // disable /W4 MSVC warnings that are benign
 #pragma warning(disable:4127) // conditional expression is constant
@@ -33,12 +32,17 @@
 #define STATUS_REPARSE ((LONG)0x00000104L)
 #endif
 #define STATUS_COMPLETED_SYNCHRONOUSLY	STATUS_REPARSE
+#if defined(_WIN32_WCE)
+// WinCE doesn't have a HasOverlappedIoCompleted() macro, so attempt to emulate it
+#define HasOverlappedIoCompleted(lpOverlapped) (((DWORD)(lpOverlapped)->Internal) != STATUS_PENDING)
+#endif
 #define HasOverlappedIoCompletedSync(lpOverlapped)	(((DWORD)(lpOverlapped)->Internal) == STATUS_COMPLETED_SYNCHRONOUSLY)
 
 #define DUMMY_HANDLE ((HANDLE)(LONG_PTR)-2)
 
 enum windows_version {
 	WINDOWS_UNSUPPORTED,
+	WINDOWS_CE,
 	WINDOWS_XP,
 	WINDOWS_2003,	// also includes XP 64
 	WINDOWS_VISTA_AND_LATER,
@@ -68,10 +72,14 @@ enum rw_type {
 };
 
 // fd struct that can be used for polling on Windows
+typedef int cancel_transfer(struct usbi_transfer *itransfer);
+
 struct winfd {
 	int fd;							// what's exposed to libusb core
 	HANDLE handle;					// what we need to attach overlapped to the I/O op, so we can poll it
 	OVERLAPPED* overlapped;			// what will report our I/O status
+	struct usbi_transfer *itransfer;		// Associated transfer, or NULL if completed
+	cancel_transfer *cancel_fn;		// Function pointer to cancel transfer API
 	enum rw_type rw;				// I/O transfer direction: read *XOR* write (NOT BOTH)
 };
 extern const struct winfd INVALID_WINFD;
@@ -84,8 +92,9 @@ int usbi_close(int fd);
 
 void init_polling(void);
 void exit_polling(void);
-struct winfd usbi_create_fd(HANDLE handle, int access_mode);
-void usbi_free_fd(int fd);
+struct winfd usbi_create_fd(HANDLE handle, int access_mode, 
+	struct usbi_transfer *transfer, cancel_transfer *cancel_fn);
+void usbi_free_fd(struct winfd* winfd);
 struct winfd fd_to_winfd(int fd);
 struct winfd handle_to_winfd(HANDLE handle);
 struct winfd overlapped_to_winfd(OVERLAPPED* overlapped);
@@ -114,4 +123,3 @@ do {                                                    \
 	}                                                   \
 } while (0)
 #endif
-

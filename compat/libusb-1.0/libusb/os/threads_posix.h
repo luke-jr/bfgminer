@@ -1,7 +1,7 @@
 /*
- * libusb synchronization using POSIX Threads
+ * libusbx synchronization using POSIX Threads
  *
- * Copyright (C) 2010 Peter Stuge <peter@stuge.se>
+ * Copyright © 2010 Peter Stuge <peter@stuge.se>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -44,5 +44,7 @@
 #define usbi_cond_signal		pthread_cond_signal
 
 extern int usbi_mutex_init_recursive(pthread_mutex_t *mutex, pthread_mutexattr_t *attr);
+
+int usbi_get_tid(void);
 
 #endif /* LIBUSB_THREADS_POSIX_H */

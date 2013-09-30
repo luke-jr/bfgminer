@@ -1,8 +1,8 @@
+/* -*- Mode: C; indent-tabs-mode:t ; c-basic-offset:8 -*- */
 /*
- * USB descriptor handling functions for libusb
- * Copyright (C) 2007 Daniel Drake <dsd@gentoo.org>
- * Copyright (c) 2001 Johannes Erdfelt <johannes@erdfelt.com>
- * Copyright (c) 2012-2013 Nathan Hjelm <hjelmn@cs.unm.edu>
+ * USB descriptor handling functions for libusbx
+ * Copyright © 2007 Daniel Drake <dsd@gentoo.org>
+ * Copyright © 2001 Johannes Erdfelt <johannes@erdfelt.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,8 +23,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
-#include <assert.h>
 
 #include "libusbi.h"
 
@@ -68,10 +66,8 @@ int usbi_parse_descriptor(const unsigned char *source, const char *descriptor,
 				sp += 2;
 				dp += 2;
 				break;
-			/* 32-bit word, convert from little endian to CPU */
-			case 'd':
-			/* Align to word boundary */
-				dp += ((unsigned long)dp & 1);
+			case 'd':	/* 32-bit word, convert from little endian to CPU */
+				dp += ((uintptr_t)dp & 1);	/* Align to word boundary */
 
 				if (host_endian) {
 					memcpy(dp, sp, 4);
@@ -82,6 +78,11 @@ int usbi_parse_descriptor(const unsigned char *source, const char *descriptor,
 				}
 				sp += 4;
 				dp += 4;
+				break;
+			case 'u':	/* 16 byte UUID */
+				memcpy(dp, sp, 16);
+				sp += 16;
+				dp += 16;
 				break;
 		}
 	}
@@ -105,25 +106,31 @@ static int parse_endpoint(struct libusb_context *ctx,
 	int parsed = 0;
 	int len;
 
-	usbi_parse_descriptor(buffer, "bb", &header, 0);
-
-	/* Everything should be fine being passed into here, but we sanity */
-	/*  check JIC */
-	if (header.bLength > size) {
-		usbi_err(ctx, "ran out of descriptors parsing");
-		return -1;
+	if (size < DESC_HEADER_LENGTH) {
+		usbi_err(ctx, "short endpoint descriptor read %d/%d",
+			 size, DESC_HEADER_LENGTH);
+		return LIBUSB_ERROR_IO;
 	}
 
+	usbi_parse_descriptor(buffer, "bb", &header, 0);
 	if (header.bDescriptorType != LIBUSB_DT_ENDPOINT) {
 		usbi_err(ctx, "unexpected descriptor %x (expected %x)",
 			header.bDescriptorType, LIBUSB_DT_ENDPOINT);
 		return parsed;
 	}
-
+	if (header.bLength > size) {
+		usbi_warn(ctx, "short endpoint descriptor read %d/%d",
+			  size, header.bLength);
+		return parsed;
+	}
 	if (header.bLength >= ENDPOINT_AUDIO_DESC_LENGTH)
 		usbi_parse_descriptor(buffer, "bbbbwbbb", endpoint, host_endian);
 	else if (header.bLength >= ENDPOINT_DESC_LENGTH)
 		usbi_parse_descriptor(buffer, "bbbbwb", endpoint, host_endian);
+	else {
+		usbi_err(ctx, "invalid endpoint bLength (%d)", header.bLength);
+		return LIBUSB_ERROR_IO;
+	}
 
 	buffer += header.bLength;
 	size -= header.bLength;
@@ -134,17 +141,21 @@ static int parse_endpoint(struct libusb_context *ctx,
 	begin = buffer;
 	while (size >= DESC_HEADER_LENGTH) {
 		usbi_parse_descriptor(buffer, "bb", &header, 0);
-
-		if (header.bLength < 2) {
-			usbi_err(ctx, "invalid descriptor length %d", header.bLength);
-			return -1;
+		if (header.bLength < DESC_HEADER_LENGTH) {
+			usbi_err(ctx, "invalid extra ep desc len (%d)",
+				 header.bLength);
+			return LIBUSB_ERROR_IO;
+		} else if (header.bLength > size) {
+			usbi_warn(ctx, "short extra ep desc read %d/%d",
+				  size, header.bLength);
+			return parsed;
 		}
 
 		/* If we find another "proper" descriptor then we're done  */
 		if ((header.bDescriptorType == LIBUSB_DT_ENDPOINT) ||
-		    (header.bDescriptorType == LIBUSB_DT_INTERFACE) ||
-		    (header.bDescriptorType == LIBUSB_DT_CONFIG) ||
-		    (header.bDescriptorType == LIBUSB_DT_DEVICE))
+				(header.bDescriptorType == LIBUSB_DT_INTERFACE) ||
+				(header.bDescriptorType == LIBUSB_DT_CONFIG) ||
+				(header.bDescriptorType == LIBUSB_DT_DEVICE))
 			break;
 
 		usbi_dbg("skipping descriptor %x", header.bDescriptorType);
@@ -208,6 +219,7 @@ static int parse_interface(libusb_context *ctx,
 	int len;
 	int r;
 	int parsed = 0;
+	int interface_number = -1;
 	size_t tmp;
 	struct usb_descriptor_header header;
 	struct libusb_interface_descriptor *ifp;
@@ -218,7 +230,7 @@ static int parse_interface(libusb_context *ctx,
 	while (size >= INTERFACE_DESC_LENGTH) {
 		struct libusb_interface_descriptor *altsetting =
 			(struct libusb_interface_descriptor *) usb_interface->altsetting;
-		altsetting = realloc(altsetting,
+		altsetting = usbi_reallocf(altsetting,
 			sizeof(struct libusb_interface_descriptor) *
 			(usb_interface->num_altsetting + 1));
 		if (!altsetting) {
@@ -228,11 +240,36 @@ static int parse_interface(libusb_context *ctx,
 		usb_interface->altsetting = altsetting;
 
 		ifp = altsetting + usb_interface->num_altsetting;
-		usb_interface->num_altsetting++;
 		usbi_parse_descriptor(buffer, "bbbbbbbbb", ifp, 0);
+		if (ifp->bDescriptorType != LIBUSB_DT_INTERFACE) {
+			usbi_err(ctx, "unexpected descriptor %x (expected %x)",
+				 ifp->bDescriptorType, LIBUSB_DT_INTERFACE);
+			return parsed;
+		}
+		if (ifp->bLength < INTERFACE_DESC_LENGTH) {
+			usbi_err(ctx, "invalid interface bLength (%d)",
+				 ifp->bLength);
+			r = LIBUSB_ERROR_IO;
+			goto err;
+		}
+		if (ifp->bLength > size) {
+			usbi_warn(ctx, "short intf descriptor read %d/%d",
+				 size, ifp->bLength);
+			return parsed;
+		}
+		if (ifp->bNumEndpoints > USB_MAXENDPOINTS) {
+			usbi_err(ctx, "too many endpoints (%d)", ifp->bNumEndpoints);
+			r = LIBUSB_ERROR_IO;
+			goto err;
+		}
+
+		usb_interface->num_altsetting++;
 		ifp->extra = NULL;
 		ifp->extra_length = 0;
 		ifp->endpoint = NULL;
+
+		if (interface_number == -1)
+			interface_number = ifp->bInterfaceNumber;
 
 		/* Skip over the interface */
 		buffer += ifp->bLength;
@@ -244,20 +281,24 @@ static int parse_interface(libusb_context *ctx,
 		/* Skip over any interface, class or vendor descriptors */
 		while (size >= DESC_HEADER_LENGTH) {
 			usbi_parse_descriptor(buffer, "bb", &header, 0);
-			if (header.bLength < 2) {
-				usbi_err(ctx, "invalid descriptor of length %d",
-					header.bLength);
+			if (header.bLength < DESC_HEADER_LENGTH) {
+				usbi_err(ctx,
+					 "invalid extra intf desc len (%d)",
+					 header.bLength);
 				r = LIBUSB_ERROR_IO;
 				goto err;
+			} else if (header.bLength > size) {
+				usbi_warn(ctx,
+					  "short extra intf desc read %d/%d",
+					  size, header.bLength);
+				return parsed;
 			}
 
 			/* If we find another "proper" descriptor then we're done */
 			if ((header.bDescriptorType == LIBUSB_DT_INTERFACE) ||
-			    (header.bDescriptorType == LIBUSB_DT_ENDPOINT) ||
-			    (header.bDescriptorType == LIBUSB_DT_CONFIG) ||
-			    (header.bDescriptorType == LIBUSB_DT_DEVICE) ||
-			    (header.bDescriptorType ==
-			     LIBUSB_DT_SS_ENDPOINT_COMPANION))
+					(header.bDescriptorType == LIBUSB_DT_ENDPOINT) ||
+					(header.bDescriptorType == LIBUSB_DT_CONFIG) ||
+					(header.bDescriptorType == LIBUSB_DT_DEVICE))
 				break;
 
 			buffer += header.bLength;
@@ -278,21 +319,6 @@ static int parse_interface(libusb_context *ctx,
 			ifp->extra_length = len;
 		}
 
-		/* Did we hit an unexpected descriptor? */
-		if (size >= DESC_HEADER_LENGTH) {
-			usbi_parse_descriptor(buffer, "bb", &header, 0);
-			if ((header.bDescriptorType == LIBUSB_DT_CONFIG) ||
-			    (header.bDescriptorType == LIBUSB_DT_DEVICE)) {
-				return parsed;
-			}
-		}
-
-		if (ifp->bNumEndpoints > USB_MAXENDPOINTS) {
-			usbi_err(ctx, "too many endpoints (%d)", ifp->bNumEndpoints);
-			r = LIBUSB_ERROR_IO;
-			goto err;
-		}
-
 		if (ifp->bNumEndpoints > 0) {
 			struct libusb_endpoint_descriptor *endpoint;
 			tmp = ifp->bNumEndpoints * sizeof(struct libusb_endpoint_descriptor);
@@ -305,18 +331,14 @@ static int parse_interface(libusb_context *ctx,
 
 			memset(endpoint, 0, tmp);
 			for (i = 0; i < ifp->bNumEndpoints; i++) {
-				usbi_parse_descriptor(buffer, "bb", &header, 0);
-
-				if (header.bLength > size) {
-					usbi_err(ctx, "ran out of descriptors parsing");
-					r = LIBUSB_ERROR_IO;
-					goto err;
-				}
-
 				r = parse_endpoint(ctx, endpoint + i, buffer, size,
 					host_endian);
 				if (r < 0)
 					goto err;
+				if (r == 0) {
+					ifp->bNumEndpoints = (uint8_t)i;
+					break;;
+				}
 
 				buffer += r;
 				parsed += r;
@@ -328,7 +350,7 @@ static int parse_interface(libusb_context *ctx,
 		ifp = (struct libusb_interface_descriptor *) buffer;
 		if (size < LIBUSB_DT_INTERFACE_SIZE ||
 				ifp->bDescriptorType != LIBUSB_DT_INTERFACE ||
-				!ifp->bAlternateSetting)
+				ifp->bInterfaceNumber != interface_number)
 			return parsed;
 	}
 
@@ -353,18 +375,35 @@ static void clear_configuration(struct libusb_config_descriptor *config)
 
 static int parse_configuration(struct libusb_context *ctx,
 	struct libusb_config_descriptor *config, unsigned char *buffer,
-	int host_endian)
+	int size, int host_endian)
 {
 	int i;
 	int r;
-	int size;
 	size_t tmp;
 	struct usb_descriptor_header header;
 	struct libusb_interface *usb_interface;
 
-	usbi_parse_descriptor(buffer, "bbwbbbbb", config, host_endian);
-	size = config->wTotalLength;
+	if (size < LIBUSB_DT_CONFIG_SIZE) {
+		usbi_err(ctx, "short config descriptor read %d/%d",
+			 size, LIBUSB_DT_CONFIG_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
 
+	usbi_parse_descriptor(buffer, "bbwbbbbb", config, host_endian);
+	if (config->bDescriptorType != LIBUSB_DT_CONFIG) {
+		usbi_err(ctx, "unexpected descriptor %x (expected %x)",
+			 config->bDescriptorType, LIBUSB_DT_CONFIG);
+		return LIBUSB_ERROR_IO;
+	}
+	if (config->bLength < LIBUSB_DT_CONFIG_SIZE) {
+		usbi_err(ctx, "invalid config bLength (%d)", config->bLength);
+		return LIBUSB_ERROR_IO;
+	}
+	if (config->bLength > size) {
+		usbi_err(ctx, "short config descriptor read %d/%d",
+			 size, config->bLength);
+		return LIBUSB_ERROR_IO;
+	}
 	if (config->bNumInterfaces > USB_MAXINTERFACES) {
 		usbi_err(ctx, "too many interfaces (%d)", config->bNumInterfaces);
 		return LIBUSB_ERROR_IO;
@@ -393,21 +432,25 @@ static int parse_configuration(struct libusb_context *ctx,
 		while (size >= DESC_HEADER_LENGTH) {
 			usbi_parse_descriptor(buffer, "bb", &header, 0);
 
-			if ((header.bLength > size) ||
-					(header.bLength < DESC_HEADER_LENGTH)) {
-				usbi_err(ctx, "invalid descriptor length of %d",
-					header.bLength);
+			if (header.bLength < DESC_HEADER_LENGTH) {
+				usbi_err(ctx,
+					 "invalid extra config desc len (%d)",
+					 header.bLength);
 				r = LIBUSB_ERROR_IO;
 				goto err;
+			} else if (header.bLength > size) {
+				usbi_warn(ctx,
+					  "short extra config desc read %d/%d",
+					  size, header.bLength);
+				config->bNumInterfaces = (uint8_t)i;
+				return size;
 			}
 
 			/* If we find another "proper" descriptor then we're done */
 			if ((header.bDescriptorType == LIBUSB_DT_ENDPOINT) ||
-			    (header.bDescriptorType == LIBUSB_DT_INTERFACE) ||
-			    (header.bDescriptorType == LIBUSB_DT_CONFIG) ||
-			    (header.bDescriptorType == LIBUSB_DT_DEVICE) ||
-			    (header.bDescriptorType ==
-			     LIBUSB_DT_SS_ENDPOINT_COMPANION))
+					(header.bDescriptorType == LIBUSB_DT_INTERFACE) ||
+					(header.bDescriptorType == LIBUSB_DT_CONFIG) ||
+					(header.bDescriptorType == LIBUSB_DT_DEVICE))
 				break;
 
 			usbi_dbg("skipping descriptor 0x%x\n", header.bDescriptorType);
@@ -435,6 +478,10 @@ static int parse_configuration(struct libusb_context *ctx,
 		r = parse_interface(ctx, usb_interface + i, buffer, size, host_endian);
 		if (r < 0)
 			goto err;
+		if (r == 0) {
+			config->bNumInterfaces = (uint8_t)i;
+			break;
+		}
 
 		buffer += r;
 		size -= r;
@@ -447,9 +494,32 @@ err:
 	return r;
 }
 
+static int raw_desc_to_config(struct libusb_context *ctx,
+	unsigned char *buf, int size, int host_endian,
+	struct libusb_config_descriptor **config)
+{
+	struct libusb_config_descriptor *_config = malloc(sizeof(*_config));
+	int r;
+	
+	if (!_config)
+		return LIBUSB_ERROR_NO_MEM;
+
+	r = parse_configuration(ctx, _config, buf, size, host_endian);
+	if (r < 0) {
+		usbi_err(ctx, "parse_configuration failed with error %d", r);
+		free(_config);
+		return r;
+	} else if (r > 0) {
+		usbi_warn(ctx, "still %d bytes of descriptor data left", r);
+	}
+	
+	*config = _config;
+	return LIBUSB_SUCCESS;
+}
+
 int usbi_device_cache_descriptor(libusb_device *dev)
 {
-	int r, host_endian;
+	int r, host_endian = 0;
 
 	r = usbi_backend->get_device_descriptor(dev, (unsigned char *) &dev->device_descriptor,
 						&host_endian);
@@ -470,6 +540,9 @@ int usbi_device_cache_descriptor(libusb_device *dev)
  * Get the USB device descriptor for a given device.
  *
  * This is a non-blocking function; the device descriptor is cached in memory.
+ *
+ * Note since libusbx-1.0.16, \ref LIBUSBX_API_VERSION >= 0x01000102, this
+ * function always succeeds.
  *
  * \param dev the device
  * \param desc output location for the descriptor data
@@ -501,49 +574,33 @@ int API_EXPORTED libusb_get_device_descriptor(libusb_device *dev,
 int API_EXPORTED libusb_get_active_config_descriptor(libusb_device *dev,
 	struct libusb_config_descriptor **config)
 {
-	struct libusb_config_descriptor *_config = malloc(sizeof(*_config));
-	unsigned char tmp[8];
+	struct libusb_config_descriptor _config;
+	unsigned char tmp[LIBUSB_DT_CONFIG_SIZE];
 	unsigned char *buf = NULL;
 	int host_endian = 0;
 	int r;
 
-	usbi_dbg("");
-	if (!_config)
+	r = usbi_backend->get_active_config_descriptor(dev, tmp,
+		LIBUSB_DT_CONFIG_SIZE, &host_endian);
+	if (r < 0)
+		return r;
+	if (r < LIBUSB_DT_CONFIG_SIZE) {
+		usbi_err(dev->ctx, "short config descriptor read %d/%d",
+			 r, LIBUSB_DT_CONFIG_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	usbi_parse_descriptor(tmp, "bbw", &_config, host_endian);
+	buf = malloc(_config.wTotalLength);
+	if (!buf)
 		return LIBUSB_ERROR_NO_MEM;
 
-	r = usbi_backend->get_active_config_descriptor(dev, tmp, sizeof(tmp),
-		&host_endian);
-	if (r < 0)
-		goto err;
-
-	usbi_parse_descriptor(tmp, "bbw", _config, host_endian);
-	buf = malloc(_config->wTotalLength);
-	if (!buf) {
-		r = LIBUSB_ERROR_NO_MEM;
-		goto err;
-	}
-
 	r = usbi_backend->get_active_config_descriptor(dev, buf,
-		_config->wTotalLength, &host_endian);
-	if (r < 0)
-		goto err;
-
-	r = parse_configuration(dev->ctx, _config, buf, host_endian);
-	if (r < 0) {
-		usbi_err(dev->ctx, "parse_configuration failed with error %d", r);
-		goto err;
-	} else if (r > 0) {
-		usbi_warn(dev->ctx, "descriptor data still left");
-	}
+		_config.wTotalLength, &host_endian);
+	if (r >= 0)
+		r = raw_desc_to_config(dev->ctx, buf, r, host_endian, config);
 
 	free(buf);
-	*config = _config;
-	return 0;
-
-err:
-	free(_config);
-	if (buf)
-		free(buf);
 	return r;
 }
 
@@ -566,8 +623,8 @@ err:
 int API_EXPORTED libusb_get_config_descriptor(libusb_device *dev,
 	uint8_t config_index, struct libusb_config_descriptor **config)
 {
-	struct libusb_config_descriptor *_config;
-	unsigned char tmp[8];
+	struct libusb_config_descriptor _config;
+	unsigned char tmp[LIBUSB_DT_CONFIG_SIZE];
 	unsigned char *buf = NULL;
 	int host_endian = 0;
 	int r;
@@ -576,51 +633,34 @@ int API_EXPORTED libusb_get_config_descriptor(libusb_device *dev,
 	if (config_index >= dev->num_configurations)
 		return LIBUSB_ERROR_NOT_FOUND;
 
-	_config = malloc(sizeof(*_config));
-	if (!_config)
+	r = usbi_backend->get_config_descriptor(dev, config_index, tmp,
+		LIBUSB_DT_CONFIG_SIZE, &host_endian);
+	if (r < 0)
+		return r;
+	if (r < LIBUSB_DT_CONFIG_SIZE) {
+		usbi_err(dev->ctx, "short config descriptor read %d/%d",
+			 r, LIBUSB_DT_CONFIG_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	usbi_parse_descriptor(tmp, "bbw", &_config, host_endian);
+	buf = malloc(_config.wTotalLength);
+	if (!buf)
 		return LIBUSB_ERROR_NO_MEM;
 
-	r = usbi_backend->get_config_descriptor(dev, config_index, tmp,
-		sizeof(tmp), &host_endian);
-	if (r < 0)
-		goto err;
-
-	usbi_parse_descriptor(tmp, "bbw", _config, host_endian);
-	buf = malloc(_config->wTotalLength);
-	if (!buf) {
-		r = LIBUSB_ERROR_NO_MEM;
-		goto err;
-	}
-
-	host_endian = 0;
 	r = usbi_backend->get_config_descriptor(dev, config_index, buf,
-		_config->wTotalLength, &host_endian);
-	if (r < 0)
-		goto err;
-
-	r = parse_configuration(dev->ctx, _config, buf, host_endian);
-	if (r < 0) {
-		usbi_err(dev->ctx, "parse_configuration failed with error %d", r);
-		goto err;
-	} else if (r > 0) {
-		usbi_warn(dev->ctx, "descriptor data still left");
-	}
+		_config.wTotalLength, &host_endian);
+	if (r >= 0)
+		r = raw_desc_to_config(dev->ctx, buf, r, host_endian, config);
 
 	free(buf);
-	*config = _config;
-	return 0;
-
-err:
-	free(_config);
-	if (buf)
-		free(buf);
 	return r;
 }
 
 /* iterate through all configurations, returning the index of the configuration
  * matching a specific bConfigurationValue in the idx output parameter, or -1
  * if the config was not found.
- * returns 0 or a LIBUSB_ERROR code
+ * returns 0 on success or a LIBUSB_ERROR code
  */
 int usbi_get_config_index_by_value(struct libusb_device *dev,
 	uint8_t bConfigurationValue, int *idx)
@@ -633,8 +673,10 @@ int usbi_get_config_index_by_value(struct libusb_device *dev,
 		int host_endian;
 		int r = usbi_backend->get_config_descriptor(dev, i, tmp, sizeof(tmp),
 			&host_endian);
-		if (r < 0)
+		if (r < 0) {
+			*idx = -1;
 			return r;
+		}
 		if (tmp[5] == bConfigurationValue) {
 			*idx = i;
 			return 0;
@@ -665,8 +707,18 @@ int usbi_get_config_index_by_value(struct libusb_device *dev,
 int API_EXPORTED libusb_get_config_descriptor_by_value(libusb_device *dev,
 	uint8_t bConfigurationValue, struct libusb_config_descriptor **config)
 {
-	int idx;
-	int r = usbi_get_config_index_by_value(dev, bConfigurationValue, &idx);
+	int r, idx, host_endian;
+	unsigned char *buf = NULL;
+
+	if (usbi_backend->get_config_descriptor_by_value) {
+		r = usbi_backend->get_config_descriptor_by_value(dev,
+			bConfigurationValue, &buf, &host_endian);
+		if (r < 0)
+			return r;
+		return raw_desc_to_config(dev->ctx, buf, r, host_endian, config);
+	}
+
+	r = usbi_get_config_index_by_value(dev, bConfigurationValue, &idx);
 	if (r < 0)
 		return r;
 	else if (idx == -1)
@@ -691,6 +743,394 @@ void API_EXPORTED libusb_free_config_descriptor(
 
 	clear_configuration(config);
 	free(config);
+}
+
+/** \ingroup desc
+ * Get an endpoints superspeed endpoint companion descriptor (if any)
+ *
+ * \param ctx the context to operate on, or NULL for the default context
+ * \param endpoint endpoint descriptor from which to get the superspeed
+ * endpoint companion descriptor
+ * \param ep_comp output location for the superspeed endpoint companion
+ * descriptor. Only valid if 0 was returned. Must be freed with
+ * libusb_free_ss_endpoint_companion_descriptor() after use.
+ * \returns 0 on success
+ * \returns LIBUSB_ERROR_NOT_FOUND if the configuration does not exist
+ * \returns another LIBUSB_ERROR code on error
+ */
+int API_EXPORTED libusb_get_ss_endpoint_companion_descriptor(
+	struct libusb_context *ctx,
+	const struct libusb_endpoint_descriptor *endpoint,
+	struct libusb_ss_endpoint_companion_descriptor **ep_comp)
+{
+	struct usb_descriptor_header header;
+	int size = endpoint->extra_length;
+	const unsigned char *buffer = endpoint->extra;
+
+	*ep_comp = NULL;
+
+	while (size >= DESC_HEADER_LENGTH) {
+		usbi_parse_descriptor(buffer, "bb", &header, 0);
+		if (header.bLength < 2 || header.bLength > size) {
+			usbi_err(ctx, "invalid descriptor length %d",
+				 header.bLength);
+			return LIBUSB_ERROR_IO;
+		}
+		if (header.bDescriptorType != LIBUSB_DT_SS_ENDPOINT_COMPANION) {
+			buffer += header.bLength;
+			size -= header.bLength;
+			continue;
+		}
+		if (header.bLength < LIBUSB_DT_SS_ENDPOINT_COMPANION_SIZE) {
+			usbi_err(ctx, "invalid ss-ep-comp-desc length %d",
+				 header.bLength);
+			return LIBUSB_ERROR_IO;
+		}
+		*ep_comp = malloc(sizeof(**ep_comp));
+		if (*ep_comp == NULL)
+			return LIBUSB_ERROR_NO_MEM;
+		usbi_parse_descriptor(buffer, "bbbbw", *ep_comp, 0);
+		return LIBUSB_SUCCESS;
+	}
+	return LIBUSB_ERROR_NOT_FOUND;
+}
+
+/** \ingroup desc
+ * Free a superspeed endpoint companion descriptor obtained from
+ * libusb_get_ss_endpoint_companion_descriptor().
+ * It is safe to call this function with a NULL ep_comp parameter, in which
+ * case the function simply returns.
+ *
+ * \param ep_comp the superspeed endpoint companion descriptor to free
+ */
+void API_EXPORTED libusb_free_ss_endpoint_companion_descriptor(
+	struct libusb_ss_endpoint_companion_descriptor *ep_comp)
+{
+	free(ep_comp);
+}
+
+static int parse_bos(struct libusb_context *ctx,
+	struct libusb_bos_descriptor **bos,
+	unsigned char *buffer, int size, int host_endian)
+{
+	struct libusb_bos_descriptor bos_header, *_bos;
+	struct libusb_bos_dev_capability_descriptor dev_cap;
+	int i;
+
+	if (size < LIBUSB_DT_BOS_SIZE) {
+		usbi_err(ctx, "short bos descriptor read %d/%d",
+			 size, LIBUSB_DT_BOS_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	usbi_parse_descriptor(buffer, "bbwb", &bos_header, host_endian);
+	if (bos_header.bDescriptorType != LIBUSB_DT_BOS) {
+		usbi_err(ctx, "unexpected descriptor %x (expected %x)",
+			 bos_header.bDescriptorType, LIBUSB_DT_BOS);
+		return LIBUSB_ERROR_IO;
+	}
+	if (bos_header.bLength < LIBUSB_DT_BOS_SIZE) {
+		usbi_err(ctx, "invalid bos bLength (%d)", bos_header.bLength);
+		return LIBUSB_ERROR_IO;
+	}
+	if (bos_header.bLength > size) {
+		usbi_err(ctx, "short bos descriptor read %d/%d",
+			 size, bos_header.bLength);
+		return LIBUSB_ERROR_IO;
+	}
+
+	_bos = calloc (1,
+		sizeof(*_bos) + bos_header.bNumDeviceCaps * sizeof(void *));
+	if (!_bos)
+		return LIBUSB_ERROR_NO_MEM;
+
+	usbi_parse_descriptor(buffer, "bbwb", _bos, host_endian);
+	buffer += bos_header.bLength;
+	size -= bos_header.bLength;
+
+	/* Get the device capability descriptors */
+	for (i = 0; i < bos_header.bNumDeviceCaps; i++) {
+		if (size < LIBUSB_DT_DEVICE_CAPABILITY_SIZE) {
+			usbi_warn(ctx, "short dev-cap descriptor read %d/%d",
+				  size, LIBUSB_DT_DEVICE_CAPABILITY_SIZE);
+			break;
+		}
+		usbi_parse_descriptor(buffer, "bbb", &dev_cap, host_endian);
+		if (dev_cap.bDescriptorType != LIBUSB_DT_DEVICE_CAPABILITY) {
+			usbi_warn(ctx, "unexpected descriptor %x (expected %x)",
+				  dev_cap.bDescriptorType, LIBUSB_DT_DEVICE_CAPABILITY);
+			break;
+		}
+		if (dev_cap.bLength < LIBUSB_DT_DEVICE_CAPABILITY_SIZE) {
+			usbi_err(ctx, "invalid dev-cap bLength (%d)",
+				 dev_cap.bLength);
+			libusb_free_bos_descriptor(_bos);
+			return LIBUSB_ERROR_IO;
+		}
+		if (dev_cap.bLength > size) {
+			usbi_warn(ctx, "short dev-cap descriptor read %d/%d",
+				  size, dev_cap.bLength);
+			break;
+		}
+
+		_bos->dev_capability[i] = malloc(dev_cap.bLength);
+		if (!_bos->dev_capability[i]) {
+			libusb_free_bos_descriptor(_bos);
+			return LIBUSB_ERROR_NO_MEM;
+		}
+		memcpy(_bos->dev_capability[i], buffer, dev_cap.bLength);
+		buffer += dev_cap.bLength;
+		size -= dev_cap.bLength;
+	}
+	_bos->bNumDeviceCaps = (uint8_t)i;
+	*bos = _bos;
+
+	return LIBUSB_SUCCESS;
+}
+
+/** \ingroup desc
+ * Get a Binary Object Store (BOS) descriptor
+ * This is a BLOCKING function, which will send requests to the device.
+ *
+ * \param handle the handle of an open libusb device
+ * \param bos output location for the BOS descriptor. Only valid if 0 was returned.
+ * Must be freed with \ref libusb_free_bos_descriptor() after use.
+ * \returns 0 on success
+ * \returns LIBUSB_ERROR_NOT_FOUND if the device doesn't have a BOS descriptor
+ * \returns another LIBUSB_ERROR code on error
+ */
+int API_EXPORTED libusb_get_bos_descriptor(libusb_device_handle *handle,
+	struct libusb_bos_descriptor **bos)
+{
+	struct libusb_bos_descriptor _bos;
+	uint8_t bos_header[LIBUSB_DT_BOS_SIZE] = {0};
+	unsigned char *bos_data = NULL;
+	const int host_endian = 0;
+	int r;
+
+	/* Read the BOS. This generates 2 requests on the bus,
+	 * one for the header, and one for the full BOS */
+	r = libusb_get_descriptor(handle, LIBUSB_DT_BOS, 0, bos_header,
+				  LIBUSB_DT_BOS_SIZE);
+	if (r < 0) {
+		if (r != LIBUSB_ERROR_PIPE)
+			usbi_err(handle->dev->ctx, "failed to read BOS (%d)", r);
+		return r;
+	}
+	if (r < LIBUSB_DT_BOS_SIZE) {
+		usbi_err(handle->dev->ctx, "short BOS read %d/%d",
+			 r, LIBUSB_DT_BOS_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	usbi_parse_descriptor(bos_header, "bbwb", &_bos, host_endian);
+	usbi_dbg("found BOS descriptor: size %d bytes, %d capabilities",
+		 _bos.wTotalLength, _bos.bNumDeviceCaps);
+	bos_data = calloc(_bos.wTotalLength, 1);
+	if (bos_data == NULL)
+		return LIBUSB_ERROR_NO_MEM;
+
+	r = libusb_get_descriptor(handle, LIBUSB_DT_BOS, 0, bos_data,
+				  _bos.wTotalLength);
+	if (r >= 0)
+		r = parse_bos(handle->dev->ctx, bos, bos_data, r, host_endian);
+	else
+		usbi_err(handle->dev->ctx, "failed to read BOS (%d)", r);
+
+	free(bos_data);
+	return r;
+}
+
+/** \ingroup desc
+ * Free a BOS descriptor obtained from libusb_get_bos_descriptor().
+ * It is safe to call this function with a NULL bos parameter, in which
+ * case the function simply returns.
+ *
+ * \param bos the BOS descriptor to free
+ */
+void API_EXPORTED libusb_free_bos_descriptor(struct libusb_bos_descriptor *bos)
+{
+	int i;
+
+	if (!bos)
+		return;
+
+	for (i = 0; i < bos->bNumDeviceCaps; i++)
+		free(bos->dev_capability[i]);
+	free(bos);
+}
+
+/** \ingroup desc
+ * Get an USB 2.0 Extension descriptor
+ *
+ * \param ctx the context to operate on, or NULL for the default context
+ * \param dev_cap Device Capability descriptor with a bDevCapabilityType of
+ * \ref libusb_capability_type::LIBUSB_BT_USB_2_0_EXTENSION
+ * LIBUSB_BT_USB_2_0_EXTENSION
+ * \param usb_2_0_extension output location for the USB 2.0 Extension
+ * descriptor. Only valid if 0 was returned. Must be freed with
+ * libusb_free_usb_2_0_extension_descriptor() after use.
+ * \returns 0 on success
+ * \returns a LIBUSB_ERROR code on error
+ */
+int API_EXPORTED libusb_get_usb_2_0_extension_descriptor(
+	struct libusb_context *ctx,
+	struct libusb_bos_dev_capability_descriptor *dev_cap,
+	struct libusb_usb_2_0_extension_descriptor **usb_2_0_extension)
+{
+	struct libusb_usb_2_0_extension_descriptor *_usb_2_0_extension;
+	const int host_endian = 0;
+
+	if (dev_cap->bDevCapabilityType != LIBUSB_BT_USB_2_0_EXTENSION) {
+		usbi_err(ctx, "unexpected bDevCapabilityType %x (expected %x)",
+			 dev_cap->bDevCapabilityType,
+			 LIBUSB_BT_USB_2_0_EXTENSION);
+		return LIBUSB_ERROR_INVALID_PARAM;
+	}
+	if (dev_cap->bLength < LIBUSB_BT_USB_2_0_EXTENSION_SIZE) {
+		usbi_err(ctx, "short dev-cap descriptor read %d/%d",
+			 dev_cap->bLength, LIBUSB_BT_USB_2_0_EXTENSION_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	_usb_2_0_extension = malloc(sizeof(*_usb_2_0_extension));
+	if (!_usb_2_0_extension)
+		return LIBUSB_ERROR_NO_MEM;
+
+	usbi_parse_descriptor((unsigned char *)dev_cap, "bbbd",
+			      _usb_2_0_extension, host_endian);
+
+	*usb_2_0_extension = _usb_2_0_extension;
+	return LIBUSB_SUCCESS;
+}
+
+/** \ingroup desc
+ * Free a USB 2.0 Extension descriptor obtained from
+ * libusb_get_usb_2_0_extension_descriptor().
+ * It is safe to call this function with a NULL usb_2_0_extension parameter,
+ * in which case the function simply returns.
+ *
+ * \param usb_2_0_extension the USB 2.0 Extension descriptor to free
+ */
+void API_EXPORTED libusb_free_usb_2_0_extension_descriptor(
+	struct libusb_usb_2_0_extension_descriptor *usb_2_0_extension)
+{
+	free(usb_2_0_extension);
+}
+
+/** \ingroup desc
+ * Get a SuperSpeed USB Device Capability descriptor
+ *
+ * \param ctx the context to operate on, or NULL for the default context
+ * \param dev_cap Device Capability descriptor with a bDevCapabilityType of
+ * \ref libusb_capability_type::LIBUSB_BT_SS_USB_DEVICE_CAPABILITY
+ * LIBUSB_BT_SS_USB_DEVICE_CAPABILITY
+ * \param ss_usb_device_cap output location for the SuperSpeed USB Device
+ * Capability descriptor. Only valid if 0 was returned. Must be freed with
+ * libusb_free_ss_usb_device_capability_descriptor() after use.
+ * \returns 0 on success
+ * \returns a LIBUSB_ERROR code on error
+ */
+int API_EXPORTED libusb_get_ss_usb_device_capability_descriptor(
+	struct libusb_context *ctx,
+	struct libusb_bos_dev_capability_descriptor *dev_cap,
+	struct libusb_ss_usb_device_capability_descriptor **ss_usb_device_cap)
+{
+	struct libusb_ss_usb_device_capability_descriptor *_ss_usb_device_cap;
+	const int host_endian = 0;
+
+	if (dev_cap->bDevCapabilityType != LIBUSB_BT_SS_USB_DEVICE_CAPABILITY) {
+		usbi_err(ctx, "unexpected bDevCapabilityType %x (expected %x)",
+			 dev_cap->bDevCapabilityType,
+			 LIBUSB_BT_SS_USB_DEVICE_CAPABILITY);
+		return LIBUSB_ERROR_INVALID_PARAM;
+	}
+	if (dev_cap->bLength < LIBUSB_BT_SS_USB_DEVICE_CAPABILITY_SIZE) {
+		usbi_err(ctx, "short dev-cap descriptor read %d/%d",
+			 dev_cap->bLength, LIBUSB_BT_SS_USB_DEVICE_CAPABILITY_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	_ss_usb_device_cap = malloc(sizeof(*_ss_usb_device_cap));
+	if (!_ss_usb_device_cap)
+		return LIBUSB_ERROR_NO_MEM;
+
+	usbi_parse_descriptor((unsigned char *)dev_cap, "bbbbwbbw",
+			      _ss_usb_device_cap, host_endian);
+
+	*ss_usb_device_cap = _ss_usb_device_cap;
+	return LIBUSB_SUCCESS;
+}
+
+/** \ingroup desc
+ * Free a SuperSpeed USB Device Capability descriptor obtained from
+ * libusb_get_ss_usb_device_capability_descriptor().
+ * It is safe to call this function with a NULL ss_usb_device_cap
+ * parameter, in which case the function simply returns.
+ *
+ * \param ss_usb_device_cap the USB 2.0 Extension descriptor to free
+ */
+void API_EXPORTED libusb_free_ss_usb_device_capability_descriptor(
+	struct libusb_ss_usb_device_capability_descriptor *ss_usb_device_cap)
+{
+	free(ss_usb_device_cap);
+}
+
+/** \ingroup desc
+ * Get a Container ID descriptor
+ *
+ * \param ctx the context to operate on, or NULL for the default context
+ * \param dev_cap Device Capability descriptor with a bDevCapabilityType of
+ * \ref libusb_capability_type::LIBUSB_BT_CONTAINER_ID
+ * LIBUSB_BT_CONTAINER_ID
+ * \param container_id output location for the Container ID descriptor.
+ * Only valid if 0 was returned. Must be freed with
+ * libusb_free_container_id_descriptor() after use.
+ * \returns 0 on success
+ * \returns a LIBUSB_ERROR code on error
+ */
+int API_EXPORTED libusb_get_container_id_descriptor(struct libusb_context *ctx,
+	struct libusb_bos_dev_capability_descriptor *dev_cap,
+	struct libusb_container_id_descriptor **container_id)
+{
+	struct libusb_container_id_descriptor *_container_id;
+	const int host_endian = 0;
+
+	if (dev_cap->bDevCapabilityType != LIBUSB_BT_CONTAINER_ID) {
+		usbi_err(ctx, "unexpected bDevCapabilityType %x (expected %x)",
+			 dev_cap->bDevCapabilityType,
+			 LIBUSB_BT_CONTAINER_ID);
+		return LIBUSB_ERROR_INVALID_PARAM;
+	}
+	if (dev_cap->bLength < LIBUSB_BT_CONTAINER_ID_SIZE) {
+		usbi_err(ctx, "short dev-cap descriptor read %d/%d",
+			 dev_cap->bLength, LIBUSB_BT_CONTAINER_ID_SIZE);
+		return LIBUSB_ERROR_IO;
+	}
+
+	_container_id = malloc(sizeof(*_container_id));
+	if (!_container_id)
+		return LIBUSB_ERROR_NO_MEM;
+
+	usbi_parse_descriptor((unsigned char *)dev_cap, "bbbbu",
+			      _container_id, host_endian);
+
+	*container_id = _container_id;
+	return LIBUSB_SUCCESS;
+}
+
+/** \ingroup desc
+ * Free a Container ID descriptor obtained from
+ * libusb_get_container_id_descriptor().
+ * It is safe to call this function with a NULL container_id parameter,
+ * in which case the function simply returns.
+ *
+ * \param container_id the USB 2.0 Extension descriptor to free
+ */
+void API_EXPORTED libusb_free_container_id_descriptor(
+	struct libusb_container_id_descriptor *container_id)
+{
+	free(container_id);
 }
 
 /** \ingroup desc
@@ -748,7 +1188,7 @@ int API_EXPORTED libusb_get_string_descriptor_ascii(libusb_device_handle *dev,
 		if (di >= (length - 1))
 			break;
 
-		if (tbuf[si + 1]) /* high byte */
+		if ((tbuf[si] & 0x80) || (tbuf[si + 1])) /* non-ASCII */
 			data[di++] = '?';
 		else
 			data[di++] = tbuf[si];
@@ -756,117 +1196,4 @@ int API_EXPORTED libusb_get_string_descriptor_ascii(libusb_device_handle *dev,
 
 	data[di] = 0;
 	return di;
-}
-
-int API_EXPORTED libusb_parse_ss_endpoint_comp(const void *buf, int len,
-					       struct libusb_ss_endpoint_companion_descriptor **ep_comp)
-{
-	struct libusb_ss_endpoint_companion_descriptor *ep_comp_desc;
-	struct usb_descriptor_header header;
-
-	usbi_parse_descriptor(buf, "bb", &header, 0);
-
-	/* Everything should be fine being passed into here, but we sanity */
-	/*  check JIC */
-	if (header.bLength > len) {
-		usbi_err(NULL, "ran out of descriptors parsing");
-		return LIBUSB_ERROR_NO_MEM;
-	}
-
-	if (header.bDescriptorType != LIBUSB_DT_SS_ENDPOINT_COMPANION) {
-		usbi_err(NULL, "unexpected descriptor %x (expected %x)",
-			header.bDescriptorType, LIBUSB_DT_SS_ENDPOINT_COMPANION);
-		return LIBUSB_ERROR_INVALID_PARAM;
-	}
-
-	ep_comp_desc = calloc(1, sizeof (*ep_comp_desc));
-	if (!ep_comp_desc) {
-		return LIBUSB_ERROR_NO_MEM;
-	}
-
-	if (header.bLength >= LIBUSB_DT_SS_ENDPOINT_COMPANION_SIZE)
-		usbi_parse_descriptor(buf, "bbbbw", ep_comp_desc, 0);
-
-	*ep_comp = ep_comp_desc;
-
-	return LIBUSB_SUCCESS;
-}
-
-void API_EXPORTED libusb_free_ss_endpoint_comp(struct libusb_ss_endpoint_companion_descriptor *ep_comp)
-{
-	assert(ep_comp);
-	free(ep_comp);
-}
-
-int API_EXPORTED libusb_parse_bos_descriptor(const void *buf, int len,
-                                             struct libusb_bos_descriptor **bos)
-{
-	const unsigned char *buffer = (const unsigned char *) buf;
-	struct libusb_bos_descriptor *bos_desc;
-	int i;
-
-	len = len;
-	bos_desc = calloc (1, sizeof (*bos_desc));
-	if (!bos_desc) {
-		return LIBUSB_ERROR_NO_MEM;
-	}
-
-	usbi_parse_descriptor(buffer, "bbwb", bos_desc, 0);
-	buffer += LIBUSB_DT_BOS_SIZE;
-
-	/* Get the device capability descriptors */
-	for (i = 0; i < bos_desc->bNumDeviceCaps; ++i) {
-		if (buffer[2] == LIBUSB_USB_CAP_TYPE_EXT) {
-			if (!bos_desc->usb_2_0_ext_cap) {
-				bos_desc->usb_2_0_ext_cap =
-					(struct libusb_usb_2_0_device_capability_descriptor *)
-					malloc(sizeof(*bos_desc->usb_2_0_ext_cap));
-				usbi_parse_descriptor(buffer, "bbbd",
-						      bos_desc->usb_2_0_ext_cap, 0);
-			} else
-				usbi_warn(NULL,
-					  "usb_2_0_ext_cap was already allocated");
-
-			/* move to the next device capability descriptor */
-			buffer += LIBUSB_USB_2_0_EXTENSION_DEVICE_CAPABILITY_SIZE;
-		} else if (buffer[2] == LIBUSB_SS_USB_CAP_TYPE) {
-			if (!bos_desc->ss_usb_cap) {
-				bos_desc->ss_usb_cap =
-					(struct libusb_ss_usb_device_capability_descriptor *)
-					malloc(sizeof(*bos_desc->ss_usb_cap));
-				usbi_parse_descriptor(buffer, "bbbbwbbw",
-						      bos_desc->ss_usb_cap, 0);
-			} else
-				usbi_warn(NULL,
-					  "ss_usb_cap was already allocated");
-
-			/* move to the next device capability descriptor */
-			buffer += LIBUSB_SS_USB_DEVICE_CAPABILITY_SIZE;
-		} else {
-			usbi_info(NULL, "wireless/container_id capability "
-				  "descriptor");
-
-			/* move to the next device capability descriptor */
-			buffer += buffer[0];
-		}
-	}
-
-	*bos = bos_desc;
-
-	return LIBUSB_SUCCESS;
-}
-
-void API_EXPORTED libusb_free_bos_descriptor(struct libusb_bos_descriptor *bos)
-{
-	assert(bos);
-
-	if (bos->usb_2_0_ext_cap) {
-		free(bos->usb_2_0_ext_cap);
-	}
-
-	if (bos->ss_usb_cap) {
-		free(bos->ss_usb_cap);
-	}
-
-	free(bos);
 }

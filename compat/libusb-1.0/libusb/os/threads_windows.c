@@ -1,7 +1,7 @@
 /*
- * libusb synchronization on Microsoft Windows
+ * libusbx synchronization on Microsoft Windows
  *
- * Copyright (C) 2010 Michael Plante <michael.plante@gmail.com>
+ * Copyright © 2010 Michael Plante <michael.plante@gmail.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,9 +25,11 @@
 
 #include "libusbi.h"
 
+extern const uint64_t epoch_time;
 
 int usbi_mutex_init(usbi_mutex_t *mutex,
 					const usbi_mutexattr_t *attr) {
+	UNUSED(attr);
 	if(! mutex) return ((errno=EINVAL));
 	*mutex = CreateMutex(NULL, FALSE, NULL);
 	if(!*mutex) return ((errno=ENOMEM));
@@ -79,10 +81,9 @@ int usbi_mutex_static_unlock(usbi_mutex_static_t *mutex) {
 	return 0;
 }
 
-
-
 int usbi_cond_init(usbi_cond_t *cond,
 				   const usbi_condattr_t *attr) {
+	UNUSED(attr);
 	if(!cond)           return ((errno=EINVAL));
 	list_init(&cond->waiters    );
 	list_init(&cond->not_waiting);
@@ -90,16 +91,14 @@ int usbi_cond_init(usbi_cond_t *cond,
 }
 int usbi_cond_destroy(usbi_cond_t *cond) {
 	// This assumes no one is using this anymore.  The check MAY NOT BE safe.
-	struct usbi_cond_perthread *pos, *prev_pos = NULL;
+	struct usbi_cond_perthread *pos, *next_pos = NULL;
 	if(!cond) return ((errno=EINVAL));
 	if(!list_empty(&cond->waiters)) return ((errno=EBUSY )); // (!see above!)
-	list_for_each_entry(pos, &cond->not_waiting, list, struct usbi_cond_perthread) {
-		free(prev_pos);
+	list_for_each_entry_safe(pos, next_pos, &cond->not_waiting, list, struct usbi_cond_perthread) {
 		CloseHandle(pos->event);
 		list_del(&pos->list);
-		prev_pos = pos;
+		free(pos);
 	}
-	free(prev_pos);
 
 	return 0;
 }
@@ -129,7 +128,7 @@ int usbi_cond_signal(usbi_cond_t *cond) {
 	// The wait function will remove its respective item from the list.
 	return SetEvent(pos->event) ? 0 : ((errno=EINVAL));
 }
-static int __inline usbi_cond_intwait(usbi_cond_t *cond,
+__inline static int usbi_cond_intwait(usbi_cond_t *cond,
 									  usbi_mutex_t *mutex,
 									  DWORD timeout_ms) {
 	struct usbi_cond_perthread *pos;
@@ -182,9 +181,11 @@ int usbi_cond_timedwait(usbi_cond_t *cond,
 	struct timeval targ_time, cur_time, delta_time;
 	struct timespec cur_time_ns;
 	DWORD millis;
-	extern const uint64_t epoch_time;
 
-	GetSystemTimeAsFileTime(&filetime);
+	// GetSystemTimeAsFileTime() is not available on CE
+	SYSTEMTIME st;
+	GetSystemTime(&st);
+	SystemTimeToFileTime(&st, &filetime);
 	rtime.LowPart   = filetime.dwLowDateTime;
 	rtime.HighPart  = filetime.dwHighDateTime;
 	rtime.QuadPart -= epoch_time;
@@ -206,3 +207,6 @@ int usbi_cond_timedwait(usbi_cond_t *cond,
 	return usbi_cond_intwait(cond, mutex, millis);
 }
 
+int usbi_get_tid(void) {
+	return GetCurrentThreadId();
+}
