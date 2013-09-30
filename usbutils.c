@@ -2310,7 +2310,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		USB_REJECT(cgpu, MODE_BULK_READ);
 
 		err = LIBUSB_ERROR_NO_DEVICE;
-		goto out_unlock;
+		goto out_noerrmsg;
 	}
 
 	usbdev = cgpu->usbdev;
@@ -2554,6 +2554,11 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		release_cgpu(cgpu);
 
 out_unlock:
+	if (err && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_WARNING, "%s %i usb read error: %s", cgpu->drv->name, cgpu->device_id,
+		       libusb_error_name(err));
+	}
+out_noerrmsg:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2578,7 +2583,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		USB_REJECT(cgpu, MODE_BULK_WRITE);
 
 		err = LIBUSB_ERROR_NO_DEVICE;
-		goto out_unlock;
+		goto out_noerrmsg;
 	}
 
 	usbdev = cgpu->usbdev;
@@ -2645,7 +2650,11 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	if (NODEV(err))
 		release_cgpu(cgpu);
 
-out_unlock:
+	if (err && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_WARNING, "%s %i usb write error: %s", cgpu->drv->name, cgpu->device_id,
+		       libusb_error_name(err));
+	}
+out_noerrmsg:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
@@ -2720,6 +2729,10 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
 
+	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_WARNING, "%s %i usb transfer error: %s", cgpu->drv->name, cgpu->device_id,
+		       libusb_error_name(err));
+	}
 out_:
 	return err;
 }
@@ -2754,7 +2767,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		USB_REJECT(cgpu, MODE_CTRL_READ);
 
 		err = LIBUSB_ERROR_NO_DEVICE;
-		goto out_unlock;
+		goto out_noerrmsg;
 	}
 	usbdev = cgpu->usbdev;
 	if (timeout == DEVTIMEOUT)
@@ -2799,7 +2812,11 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	} else if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
 
-out_unlock:
+	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_WARNING, "%s %i usb transfer read error: %s", cgpu->drv->name, cgpu->device_id,
+		       libusb_error_name(err));
+	}
+out_noerrmsg:
 	DEVUNLOCK(cgpu, pstate);
 
 	return err;
