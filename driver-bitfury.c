@@ -541,7 +541,7 @@ void bitfury_do_io(struct thr_info *thr)
 				inc_hw_errors(thr, thr->work, nonce);
 				++bitfury->sample_hwe;
 			}
-			if (++bitfury->sample_tot >= 0x40)
+			if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
 			{
 				if (bitfury->sample_hwe >= 8)
 				{
