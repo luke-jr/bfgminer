@@ -118,6 +118,7 @@ tryagain:
 	{
 		applog(LOG_ERR, "%"PRIpreprv": %s: Giving up after %d tries",
 		       proc->proc_repr, __func__, tried);
+		bitfury->desync_counter = 99;
 		return false;
 	}
 	++tried;
@@ -150,6 +151,7 @@ tryagain:
 	memcpy(&oldbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
 	memcpy(&oldbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
 	bitfury->oldjob = inp[0x10];
+	bitfury->desync_counter = 0;
 	
 	if (opt_debug)
 		bitfury_debug_nonce_array(proc, "Init", inp);
@@ -462,6 +464,12 @@ void bitfury_do_io(struct thr_info *thr)
 	bool newjob;
 	uint32_t nonce;
 	
+	if (unlikely(bitfury->desync_counter == 99))
+	{
+		bitfury_init_oldbuf(proc);
+		goto out;
+	}
+	
 	inp = bitfury_just_io(bitfury);
 	
 	if (opt_debug)
@@ -538,7 +546,7 @@ void bitfury_do_io(struct thr_info *thr)
 					applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
 					       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
 					send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-					bitfury_init_oldbuf(proc);
+					bitfury->desync_counter = 99;
 				}
 				bitfury->sample_tot = bitfury->sample_hwe = 0;
 			}
