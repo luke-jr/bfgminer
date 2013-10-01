@@ -2242,9 +2242,11 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	if (ret) {
 		libusb_cancel_transfer(ut->transfer);
 		pthread_cond_wait(&ut->cond, &ut->mutex);
-	}
+		/* Fake the timed out message since it's effectively that */
+		ret = LIBUSB_TRANSFER_TIMED_OUT;
+	} else
+		ret = ut->transfer->status;
 	/* No need to sort out mutexes here since they won't be reused */
-	ret = ut->transfer->status;
 	*transferred = ut->transfer->actual_length;
 	libusb_free_transfer(ut->transfer);
 
