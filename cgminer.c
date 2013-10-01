@@ -7656,6 +7656,38 @@ static void probe_pools(void)
 #define DRIVER_FILL_DEVICE_DRV(X) fill_device_drv(&X##_drv);
 #define DRIVER_DRV_DETECT_ALL(X) X##_drv.drv_detect(false);
 
+#ifdef USE_USBUTILS
+static void *libusb_poll_thread(void __maybe_unused *arg)
+{
+	struct timeval tv = { 0, USB_ASYNC_POLL * 1000 };
+
+	RenameThread("usbpoll");
+
+	pthread_detach(pthread_self());
+	while (42)
+		libusb_handle_events_timeout(NULL, &tv);
+
+	return NULL;
+}
+
+static pthread_t usb_poll_thread;
+
+static void initialise_usb(void) {
+	int err = libusb_init(NULL);
+	if (err) {
+		fprintf(stderr, "libusb_init() failed err %d", err);
+		fflush(stderr);
+		quit(1, "libusb_init() failed");
+	}
+	mutex_init(&cgusb_lock);
+	mutex_init(&cgusbres_lock);
+	cglock_init(&cgusb_fd_lock);
+	pthread_create(&usb_poll_thread, NULL, libusb_poll_thread, NULL);
+}
+#else
+#define initialise_usb() {}
+#endif
+
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
@@ -7675,17 +7707,7 @@ int main(int argc, char *argv[])
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
 
-#ifdef USE_USBUTILS
-	int err = libusb_init(NULL);
-	if (err) {
-		fprintf(stderr, "libusb_init() failed err %d", err);
-		fflush(stderr);
-		quit(1, "libusb_init() failed");
-	}
-	mutex_init(&cgusb_lock);
-	mutex_init(&cgusbres_lock);
-	cglock_init(&cgusb_fd_lock);
-#endif
+	initialise_usb();
 
 	mutex_init(&hash_lock);
 	mutex_init(&console_lock);
