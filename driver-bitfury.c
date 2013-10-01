@@ -475,10 +475,19 @@ void bitfury_do_io(struct thr_info *thr)
 	if (newbuf[0xf] != oldbuf[0xf])
 	{
 		inc_hw_errors2(thr, NULL, NULL);
+		if (unlikely(++bitfury->desync_counter >= 4))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
+			       proc->proc_repr);
+			bitfury_init_oldbuf(proc);
+			goto out;
+		}
 		applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
 		       proc->proc_repr);
 		goto out;
 	}
+	else
+		bitfury->desync_counter = 0;
 	
 	if (bitfury->oldjob != newjob && thr->next_work)
 	{

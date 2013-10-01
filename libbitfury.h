@@ -54,6 +54,7 @@ struct bitfury_device {
 	unsigned fasync;
 	unsigned strange_counter;
 	bool second_run;
+	int desync_counter;
 	
 	time_t short_out_t;
 	time_t long_out_t;
