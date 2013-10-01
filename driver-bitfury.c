@@ -527,7 +527,21 @@ void bitfury_do_io(struct thr_info *thr)
 				submit_nonce(thr, thr->prev_work, nonce);
 			}
 			else
+			{
 				inc_hw_errors(thr, thr->work, nonce);
+				++bitfury->sample_hwe;
+			}
+			if (++bitfury->sample_tot >= 0x40)
+			{
+				if (bitfury->sample_hwe >= 8)
+				{
+					applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
+					       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
+					send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+					bitfury_init_oldbuf(proc);
+				}
+				bitfury->sample_tot = bitfury->sample_hwe = 0;
+			}
 		}
 		bitfury->active = (bitfury->active + n) % 0x10;
 	}
