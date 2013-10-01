@@ -510,8 +510,10 @@ void bitfury_do_io(struct thr_info *thr)
 		if (unlikely(n >= 0xf))
 		{
 			inc_hw_errors2(thr, NULL, NULL);
-			applog(LOG_DEBUG, "%"PRIpreprv": Full result match, ignoring response",
+			applog(LOG_DEBUG, "%"PRIpreprv": Full result match, reinitialising",
 			       proc->proc_repr);
+			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+			bitfury->desync_counter = 99;
 			goto out;
 		}
 	}
