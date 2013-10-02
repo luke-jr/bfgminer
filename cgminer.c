@@ -1594,6 +1594,9 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\nBuilt with "
+#ifdef USE_KNC
+		"KnC "
+#endif
 #ifdef USE_AVALON
 		"avalon "
 #endif

@@ -221,6 +221,17 @@ fi
 
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 
+knc="no"
+
+AC_ARG_ENABLE([knc],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
+	[knc=$enableval]
+	)
+if test "x$knc" = xyes; then
+	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
+
 bflsc="no"
 
 AC_ARG_ENABLE([bflsc],
@@ -515,14 +526,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike$knc" = xnononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike$knc" = xnononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -549,6 +560,12 @@ if test "x$bflsc" = xyes; then
 	echo "  BFL.ASICs............: Enabled"
 else
 	echo "  BFL.ASICs............: Disabled"
+fi
+
+if test "x$knc" = xyes; then
+	echo "  KnC.miners...........: Enabled"
+else
+	echo "  KnC.miners...........: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then

@@ -242,6 +242,7 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
+	DRIVER_ADD_COMMAND(knc) \
 	DRIVER_ADD_COMMAND(avalon) \
 	DRIVER_ADD_COMMAND(klondike)
 
@@ -496,6 +497,9 @@ struct cgpu_info {
 	bool polling;
 	bool flash_led;
 #endif /* USE_BITFORCE */
+#if defined(USE_KNC)
+	struct knc_state *knc_state;
+#endif
 #if defined(USE_BITFORCE) || defined(USE_BFLSC)
 	pthread_mutex_t device_mutex;
 #endif /* USE_BITFORCE || USE_BFLSC */
