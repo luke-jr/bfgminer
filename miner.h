@@ -243,7 +243,8 @@ static inline int fsync (int fd)
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
-	DRIVER_ADD_COMMAND(avalon)
+	DRIVER_ADD_COMMAND(avalon) \
+	DRIVER_ADD_COMMAND(klondike)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(opencl) \
@@ -942,6 +943,9 @@ extern char *opt_icarus_timing;
 extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
+#endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
 #endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
