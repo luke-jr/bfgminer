@@ -219,6 +219,18 @@ struct ICARUS_INFO {
 	bool initialised;
 };
 
+#define ICARUS_MIDSTATE_SIZE 32
+#define ICARUS_UNUSED_SIZE 20
+#define ICARUS_WORK_SIZE 12
+
+#define ICARUS_WORK_DATA_OFFSET 64
+
+struct ICARUS_WORK {
+	uint8_t midstate[ICARUS_MIDSTATE_SIZE];
+	uint8_t unused[ICARUS_UNUSED_SIZE];
+	uint8_t work[ICARUS_WORK_SIZE];
+};
+
 #define END_CONDITION 0x0000ffff
 
 // Looking for options in --icarus-timing and --icarus-options:
@@ -803,13 +815,17 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	const char golden_nonce[] = "000187a2";
 	const uint32_t golden_nonce_val = 0x000187a2;
-	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char nonce_bin[ICARUS_READ_SIZE];
+	struct ICARUS_WORK workdata;
 	char *nonce_hex;
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
 	int ret, err, amount, tries;
 	enum sub_ident ident;
 	bool ok;
+
+	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
+		quithere(1, "Data and golden_ob sizes don't match");
 
 	icarus = usb_alloc_cgpu(&icarus_drv, 1);
 
@@ -820,7 +836,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 
-	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
+	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));
 
 	info = (struct ICARUS_INFO *)calloc(1, sizeof(struct ICARUS_INFO));
 	if (unlikely(!info))
@@ -849,9 +865,9 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	while (!ok && tries-- > 0) {
 		icarus_initialise(icarus, baud);
 
-		err = usb_write(icarus, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDTESTWORK);
+		err = usb_write(icarus, (void *)(&workdata), sizeof(workdata), &amount, C_SENDTESTWORK);
 
-		if (err != LIBUSB_SUCCESS || amount != sizeof(ob_bin))
+		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
 			continue;
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
@@ -974,7 +990,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
 	int ret, err, amount;
-	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char nonce_bin[ICARUS_READ_SIZE];
+	struct ICARUS_WORK workdata;
 	char *ob_hex;
 	uint32_t nonce;
 	int64_t hash_count;
@@ -1002,17 +1019,17 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
-	memset(ob_bin, 0, sizeof(ob_bin));
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
+	memset((void *)(&workdata), 0, sizeof(workdata));
+	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
+	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
+	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
+	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
 
 	// We only want results for the work we are about to send
 	usb_buffer_clear(icarus);
 
-	err = usb_write_ii(icarus, info->intinfo, (char *)ob_bin, sizeof(ob_bin), &amount, C_SENDWORK);
-	if (err < 0 || amount != sizeof(ob_bin)) {
+	err = usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
+	if (err < 0 || amount != sizeof(workdata)) {
 		applog(LOG_ERR, "%s%i: Comms error (werr=%d amt=%d)",
 				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
@@ -1021,7 +1038,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	}
 
 	if (opt_debug) {
-		ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
+		ob_hex = bin2hex((void *)(&workdata), sizeof(workdata));
 		applog(LOG_DEBUG, "%s%d: sent %s",
 			icarus->drv->name, icarus->device_id, ob_hex);
 		free(ob_hex);
