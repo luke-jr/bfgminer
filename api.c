@@ -3149,6 +3149,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		}
 
 		root = api_add_string(root, "USB tmo", details, true);
+		root = api_add_int(root, "USB cancellations", &cgpu->usb_cancels, false);
 		root = api_add_int(root, "USB bulk reads", &cgpu->usb_bulk_reads, false);
 		val = cgpu->usb_rlock_total_wait / (cgpu->usb_bulk_reads ? : 1);
 		root = api_add_int(root, "USB avg rlock ms wait", &val, true);
