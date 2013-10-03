@@ -33,10 +33,17 @@
 #define AVALON_TEMP_HYSTERESIS 3
 #define AVALON_TEMP_OVERHEAT 60
 
+/* Avalon-based BitBurner. */
 #define BITBURNER_DEFAULT_CORE_VOLTAGE 1200 /* in millivolts */
 #define BITBURNER_MIN_COREMV 1000
 /* change here if you want to risk killing it :)  */
-#define BITBURNER_MAX_COREMV 1500
+#define BITBURNER_MAX_COREMV 1400
+
+/* BitFury-based BitBurner. */
+#define BITBURNER_FURY_DEFAULT_CORE_VOLTAGE 900 /* in millivolts */
+#define BITBURNER_FURY_MIN_COREMV 700
+/* change here if you want to risk killing it :)  */
+#define BITBURNER_FURY_MAX_COREMV 1100
 
 
 #define AVALON_DEFAULT_TIMEOUT 0x2D
@@ -180,6 +187,7 @@ extern int opt_avalon_freq_min;
 extern int opt_avalon_freq_max;
 extern bool opt_avalon_auto;
 extern int opt_bitburner_core_voltage;
+extern int opt_bitburner_fury_core_voltage;
 extern char *set_avalon_fan(char *arg);
 extern char *set_avalon_freq(char *arg);
 
