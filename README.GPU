@@ -1,32 +1,37 @@
 EXECUTIVE SUMMARY ON GPU USAGE (SEE ALSO README.scrypt FOR SCRYPT MINING):
 
+By default, BFGMiner will NOT mine on any GPUs unless it cannot find any
+dedicated mining devices. If you wish to use both dedicated mining devices, as
+well as your GPU to mine, you can explicitly enable it with the -S opencl:auto
+option.
+
 Single pool, regular desktop:
 
-bfgminer -o http://pool:port -u username -p password
+bfgminer -S opencl:auto -o http://pool:port -u username -p password
 
-By default if you have configured your system properly, BFGMiner will mine on
-ALL GPUs, but in "dynamic" mode which is designed to keep your system usable
-and sacrifice some mining performance.
+If you have configured your system properly, BFGMiner will mine on all GPUs in
+"dynamic" mode which is designed to keep your system usable and sacrifice some
+mining performance.
 
 Single pool, dedicated miner:
 
-bfgminer -o http://pool:port -u username -p password -I 9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9
 
 Single pool, first card regular desktop, 3 other dedicated cards:
 
-bfgminer -o http://pool:port -u username -p password -I d,9,9,9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password -I d,9,9,9
 
 Multiple pool, dedicated miner:
 
-bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
+bfgminer -S opencl:auto -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
 
 Add overclocking settings, GPU and fan control for all cards:
 
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -386,14 +391,14 @@ achieve much more than BFGMiner can do on Linux.
 Q: BFGMiner cannot see any of my GPUs even though I have configured them all to
 be enabled and installed OpenCL (+/- Xorg is running and the DISPLAY variable is
 exported on Linux)?
-A: Check the output of 'bfgminer -d?', it will list what OpenCL devices your
-installed SDK recognises. If it lists none, you have a problem with your version
-or installation of the SDK.
+A: Check the output of 'bfgminer -S opencl:auto -d?', it will list what OpenCL
+devices your installed SDK recognises. If it lists none, you have a problem with
+your version or installation of the SDK.
 
 Q: BFGMiner is mining on the wrong GPU, I want it on the AMD but it's mining on
 my on board GPU?
-A: Make sure the AMD OpenCL SDK is installed, check the output of 'bfgminer -d?'
-and use the appropriate parameter with --gpu-platform.
+A: Make sure the AMD OpenCL SDK is installed, check the output of 'bfgminer -S
+opencl:auto -d?' and use the appropriate parameter with --gpu-platform.
 
 Q: I'm getting much lower hashrates than I should be for my GPU?
 A: Look at your driver/SDK combination and disable power saving options for your
