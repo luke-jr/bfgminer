@@ -280,7 +280,8 @@ GPU only options:
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
 --worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
 
-GPU mining can be disabled by specifying the -S opencl:noauto option.
+GPU mining is disabled by default for SHA256d if you have any dedicated mining
+devices, but can be enabled explicitly specifying the -S opencl:auto option.
 
 See README.GPU for more information regarding GPU mining.
 

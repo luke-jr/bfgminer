@@ -9669,12 +9669,6 @@ void drv_detect_all()
 		ft232r_scan();
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
-	gpu_threads = 0;
-#endif
-
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 	{
@@ -9718,6 +9712,12 @@ void drv_detect_all()
 #ifdef USE_X6500
 	if (likely(have_libusb))
 		ft232r_scan_free();
+#endif
+
+#ifdef HAVE_OPENCL
+	if (!opt_nogpu)
+		opencl_api.drv_detect();
+	gpu_threads = 0;
 #endif
 }
 
