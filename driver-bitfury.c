@@ -80,13 +80,14 @@ void *bitfury_just_io(struct bitfury_device * const bitfury)
 {
 	struct spi_port * const spi = bitfury->spi;
 	const int chip = bitfury->fasync;
+	void *rv;
 	
 	spi_clear_buf(spi);
 	spi_emit_break(spi);
 	spi_emit_fasync(spi, chip);
-	spi_emit_data(spi, 0x3000, &bitfury->atrvec[0], 19 * 4);
+	rv = spi_emit_data(spi, 0x3000, &bitfury->atrvec[0], 19 * 4);
 	spi_txrx(spi);
-	return spi_getrxbuf(spi) + 4 + chip;
+	return rv;
 }
 
 static
