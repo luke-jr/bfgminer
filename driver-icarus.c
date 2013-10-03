@@ -108,6 +108,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
 
+#define CAIRNSMORE2_INTS 4
+
 // Icarus Rev3 doesn't send a completion message when it finishes
 // the full nonce range, so to avoid being idle we must abort the
 // work (by starting a new work item) shortly before it finishes
@@ -215,8 +217,6 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
-
-	bool initialised;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
@@ -423,8 +423,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
 				icarus->drv->name, icarus->cgminer_id, ident);
 	}
-
-	info->initialised = true;
 }
 
 static void rev(unsigned char *s, size_t l)
@@ -576,6 +574,8 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 			break;
 		case IDENT_CMR2:
 			info->Hs = CAIRNSMORE2_HASH_TIME;
+			if (info->fpga_count == 2)
+				info->Hs *= 2;
 			break;
 		default:
 			quit(1, "Icarus get_options() called with invalid %s ident=%d",
@@ -820,9 +820,11 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	char *nonce_hex;
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
-	int ret, err, amount, tries;
+	int ret, err, amount, tries, i;
 	enum sub_ident ident;
 	bool ok;
+	bool cmr2_ok[CAIRNSMORE2_INTS];
+	int cmr2_count;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
 		quithere(1, "Data and golden_ob sizes don't match");
@@ -853,19 +855,32 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_CMR2:
+			if (found->intinfo_count != CAIRNSMORE2_INTS) {
+				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
+						found->intinfo_count,
+						CAIRNSMORE2_INTS);
+			}
 			info->timeout = ICARUS_CMR2_TIMEOUT;
+			cmr2_count = 0;
+			for (i = 0; i < CAIRNSMORE2_INTS; i++)
+				cmr2_ok[i] = false;
 			break;
 		default:
 			quit(1, "%s icarus_detect_one() invalid %s ident=%d",
 				icarus->drv->dname, icarus->drv->dname, ident);
 	}
 
+// For CMR2 test each USB Interface
+
+cmr2_retry:
+
 	tries = 2;
 	ok = false;
 	while (!ok && tries-- > 0) {
 		icarus_initialise(icarus, baud);
 
-		err = usb_write(icarus, (void *)(&workdata), sizeof(workdata), &amount, C_SENDTESTWORK);
+		err = usb_write_ii(icarus, info->intinfo,
+				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 
 		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
 			continue;
@@ -879,7 +894,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 		if (strncmp(nonce_hex, golden_nonce, 8) == 0)
 			ok = true;
 		else {
-			if (tries < 0) {
+			if (tries < 0 && ident != IDENT_CMR2) {
 				applog(LOG_ERR,
 					"Icarus Detect: "
 					"Test failed at %s: get %s, should: %s",
@@ -889,13 +904,50 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 		free(nonce_hex);
 	}
 
-	if (!ok)
-		goto unshin;
+	if (!ok) {
+		if (ident != IDENT_CMR2)
+			goto unshin;
 
-	applog(LOG_DEBUG,
-		"Icarus Detect: "
-		"Test succeeded at %s: got %s",
-			icarus->device_path, golden_nonce);
+		if (info->intinfo < CAIRNSMORE2_INTS-1) {
+			info->intinfo++;
+			goto cmr2_retry;
+		}
+	} else {
+		if (ident == IDENT_CMR2) {
+			applog(LOG_DEBUG,
+				"Icarus Detect: "
+				"Test succeeded at %s i%d: got %s",
+					icarus->device_path, info->intinfo, golden_nonce);
+
+			cmr2_ok[info->intinfo] = true;
+			cmr2_count++;
+			if (info->intinfo < CAIRNSMORE2_INTS-1) {
+				info->intinfo++;
+				goto cmr2_retry;
+			}
+		}
+	}
+
+	if (ident == IDENT_CMR2) {
+		if (cmr2_count == 0) {
+			applog(LOG_ERR,
+				"Icarus Detect: Test failed at %s: for all %d CMR2 Interfaces",
+				icarus->device_path, CAIRNSMORE2_INTS);
+			goto unshin;
+		}
+
+		// set the interface to the first one that succeeded
+		for (i = 0; i < CAIRNSMORE2_INTS; i++)
+			if (cmr2_ok[i]) {
+				info->intinfo = i;
+				break;
+			}
+	} else {
+		applog(LOG_DEBUG,
+			"Icarus Detect: "
+			"Test succeeded at %s: got %s",
+				icarus->device_path, golden_nonce);
+	}
 
 	/* We have a real Icarus! */
 	if (!add_cgpu(icarus))
@@ -905,6 +957,15 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	applog(LOG_INFO, "%s%d: Found at %s",
 		icarus->drv->name, icarus->device_id, icarus->device_path);
+
+	if (ident == IDENT_CMR2) {
+		applog(LOG_INFO, "%s%d: with %d Interface%s",
+				icarus->drv->name, icarus->device_id,
+				cmr2_count, cmr2_count > 1 ? "s" : "");
+
+		if (cmr2_count < 3)
+			work_division = fpga_count = 2;
+	}
 
 	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
@@ -919,11 +980,14 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	set_timing_mode(this_option_offset, icarus);
 	
-	if (usb_ident(icarus) == IDENT_CMR2) {
+	if (ident == IDENT_CMR2) {
 		int i;
-		for (i = 1; i < icarus->usbdev->found->intinfo_count; i++) {
+		for (i = info->intinfo + 1; i < icarus->usbdev->found->intinfo_count; i++) {
 			struct cgpu_info *cgtmp;
 			struct ICARUS_INFO *intmp;
+
+			if (!cmr2_ok[i])
+				continue;
 
 			cgtmp = usb_copy_cgpu(icarus);
 			if (!cgtmp) {
@@ -1013,9 +1077,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Device is gone
 	if (icarus->usbinfo.nodev)
 		return -1;
-
-	if (!info->initialised)
-		icarus_initialise(icarus, info->baud);
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
