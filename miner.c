@@ -7177,10 +7177,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 	/* Generate coinbase */
 	bytes_resize(&work->nonce2, pool->n2size);
-#ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
 		memset(&bytes_buf(&work->nonce2)[pool->nonce2sz], 0, pool->n2size - pool->nonce2sz);
-#endif
 	memcpy(bytes_buf(&work->nonce2),
 #ifdef WORDS_BIGENDIAN
 	// NOTE: On big endian, the most significant bits are stored at the end, so skip the LSBs
