@@ -454,25 +454,80 @@ bool fudge_nonce(struct work * const work, uint32_t *nonce_p) {
 	return false;
 }
 
-void bitfury_do_io(struct thr_info *thr)
+void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 {
-	struct cgpu_info * const proc = thr->cgpu;
-	struct bitfury_device * const bitfury = proc->device_data;
+}
+
+void bitfury_do_io(struct thr_info * const master_thr)
+{
+	struct cgpu_info *proc;
+	struct thr_info *thr;
+	struct bitfury_device *bitfury;
 	const uint32_t *inp;
-	uint32_t * const newbuf = &bitfury->newbuf[0];
-	uint32_t * const oldbuf = &bitfury->oldbuf[0];
-	int n, i;
+	int n, i, j;
 	bool newjob;
 	uint32_t nonce;
+	int n_chips = 0, lastchip;
+	struct spi_port *spi = NULL;
+	bool should_be_running;
 	
+	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
+		++n_chips;
+	
+	struct cgpu_info *procs[n_chips];
+	void *rxbuf[n_chips];
+	
+	// NOTE: This code assumes:
+	// 1) that chips on the same SPI bus are grouped together
+	// 2) that chips are in sequential fasync order
+	n_chips = 0;
+	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
+	{
+		thr = proc->thr[0];
+		bitfury = proc->device_data;
+		
+		should_be_running = (proc->deven == DEV_ENABLED && !thr->pause);
+		
+		if (should_be_running)
+		{
+			if (spi != bitfury->spi)
+			{
+				if (spi)
+					spi_txrx(spi);
+				spi = bitfury->spi;
+				spi_clear_buf(spi);
+				spi_emit_break(spi);
+				lastchip = 0;
+			}
+			procs[n_chips] = proc;
+			spi_emit_fasync(spi, bitfury->fasync - lastchip);
+			lastchip = bitfury->fasync;
+			rxbuf[n_chips] = spi_emit_data(spi, 0x3000, &bitfury->atrvec[0], 19 * 4);
+			++n_chips;
+		}
+		else
+		if (thr->work /* is currently running */ && thr->busy_state != TBS_STARTING_JOB)
+			;//FIXME: shutdown chip
+	}
+	spi_txrx(spi);
+	
+	for (j = 0; j < n_chips; ++j)
+	{
+		proc = procs[j];
+		thr = proc->thr[0];
+		bitfury = proc->device_data;
+		uint32_t * const newbuf = &bitfury->newbuf[0];
+		uint32_t * const oldbuf = &bitfury->oldbuf[0];
+
 	if (unlikely(bitfury->desync_counter == 99))
 	{
+			// TODO: use current rxbuf
 		bitfury_init_oldbuf(proc);
 		goto out;
 	}
-	
-	inp = bitfury_just_io(bitfury);
-	
+
+		inp = rxbuf[j];
+
 	if (opt_debug)
 		bitfury_debug_nonce_array(proc, "Read", inp);
 	
@@ -489,7 +544,7 @@ void bitfury_do_io(struct thr_info *thr)
 			applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
 			       proc->proc_repr);
 			bitfury_init_oldbuf(proc);
-			goto out;
+			continue;
 		}
 		applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
 		       proc->proc_repr);
@@ -562,14 +617,14 @@ void bitfury_do_io(struct thr_info *thr)
 	bitfury->oldjob = newjob;
 	
 out:
-	timer_set_delay_from_now(&thr->tv_poll, 10000);
+		continue;
+	}
+	
+	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
 }
 
 int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
 {
-	if (unlikely(stopping))
-		timer_unset(&thr->tv_poll);
-	
 	// Bitfury chips process only 768/1024 of the nonce range
 	return 0xbd000000;
 }

@@ -158,6 +158,7 @@ bool bfsb_init(struct thr_info *thr)
 	}
 	
 	free(devicelist);
+	timer_set_now(&thr->tv_poll);
 	
 	return true;
 }
@@ -209,7 +210,7 @@ struct device_drv bfsb_drv = {
 	.job_prepare = bitfury_job_prepare,
 	.thread_init = bfsb_init,
 	.poll = bitfury_do_io,
-	.job_start = bitfury_do_io,
+	.job_start = bitfury_noop_job_start,
 	.job_process_results = bitfury_job_process_results,
 	.get_api_extra_device_status = bfsb_api_device_status,
 	.thread_disable = bfsb_disable,

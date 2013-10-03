@@ -156,6 +156,8 @@ bool metabank_init(struct thr_info *thr)
 			free(devicelist);
 	}
 	
+	timer_set_now(&thr->tv_poll);
+	
 	return true;
 }
 
@@ -212,7 +214,7 @@ struct device_drv metabank_drv = {
 #endif
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
-	.job_start = bitfury_do_io,
+	.job_start = bitfury_noop_job_start,
 	.poll = bitfury_do_io,
 	.job_process_results = bitfury_job_process_results,
 	
