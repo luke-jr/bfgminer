@@ -487,6 +487,7 @@ struct cgpu_info {
 	int usb_rlock_total_wait;
 	int usb_wlock_max_wait;
 	int usb_rlock_max_wait;
+	int usb_cancels;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;
