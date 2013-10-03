@@ -21,3 +21,6 @@ ATTRS{idVendor}=="221a", ATTRS{idProduct}=="0100", SUBSYSTEMS=="usb", ACTION=="a
 
 # BF1
 ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="204b", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+#Klondike
+ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="f60a", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
