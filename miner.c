@@ -7191,7 +7191,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "Will not attempt to auto-restart it.");
 				} else
 #endif
-				if (opt_restart) {
+				if (opt_restart && cgpu->drv->reinit_device) {
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
