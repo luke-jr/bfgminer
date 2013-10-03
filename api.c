@@ -29,7 +29,7 @@
 #include "miner.h"
 #include "util.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_BITFURY)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_BITFURY) || defined(USE_KLONDIKE)
 #define HAVE_AN_ASIC 1
 #endif
 
