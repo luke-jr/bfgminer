@@ -5956,6 +5956,13 @@ void write_config(FILE *fcfg)
 	}
 
 	/* Special case options */
+	if (request_target_str)
+	{
+		if (request_pdiff == (long)request_pdiff)
+			fprintf(fcfg, ",\n\"request-diff\" : %ld", (long)request_pdiff);
+		else
+			fprintf(fcfg, ",\n\"request-diff\" : %f", request_pdiff);
+	}
 	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
 	if (pool_strategy == POOL_BALANCE)
 		fputs(",\n\"balance\" : true", fcfg);
