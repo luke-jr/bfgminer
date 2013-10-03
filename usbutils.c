@@ -2228,6 +2228,7 @@ static void LIBUSB_CALL bulk_callback(struct libusb_transfer *transfer)
  * use our own timer to cancel the request if we go beyond the timeout. */
 static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int timeout)
 {
+	struct libusb_transfer *transfer= ut->transfer;
 	struct timespec ts_now, ts_end;
 	struct timeval tv_now;
 	int ret;
@@ -2239,15 +2240,22 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	timeraddspec(&ts_end, &ts_now);
 	ret = pthread_cond_timedwait(&ut->cond, &ut->mutex, &ts_end);
 	if (ret) {
-		libusb_cancel_transfer(ut->transfer);
+		/* Assume that if we timed out on the conditional then the
+		 * transfer has stalled for some reason and attempt to clear
+		 * a halt as a solution. Then cancel the transaction, treating
+		 * it the same as a timeout. */
+		libusb_clear_halt(transfer->dev_handle, transfer->endpoint);
+		libusb_cancel_transfer(transfer);
+
+		/* Now wait for the callback function to be invoked. */
 		pthread_cond_wait(&ut->cond, &ut->mutex);
 		/* Fake the timed out message since it's effectively that */
 		ret = LIBUSB_TRANSFER_TIMED_OUT;
 	} else
-		ret = ut->transfer->status;
+		ret = transfer->status;
 	/* No need to sort out mutexes here since they won't be reused */
-	*transferred = ut->transfer->actual_length;
-	libusb_free_transfer(ut->transfer);
+	*transferred = transfer->actual_length;
+	libusb_free_transfer(transfer);
 
 	return ret;
 }
