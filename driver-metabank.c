@@ -35,11 +35,19 @@ struct device_drv metabank_drv;
 static
 bool metabank_spi_txrx(struct spi_port *port)
 {
+	static int current_slot = -1;
 	struct cgpu_info * const proc = port->cgpu;
 	struct bitfury_device * const bitfury = proc->device_data;
-	tm_i2c_set_oe(bitfury->slot);
+	
+	if (current_slot != bitfury->slot)
+	{
+		if (current_slot != -1)
+			tm_i2c_clear_oe(current_slot);
+		tm_i2c_set_oe(bitfury->slot);
+		current_slot = bitfury->slot;
+	}
+	
 	const bool rv = sys_spi_txrx(port);
-	tm_i2c_clear_oe(bitfury->slot);
 	return rv;
 }
 
