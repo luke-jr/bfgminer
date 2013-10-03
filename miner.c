@@ -2087,6 +2087,28 @@ int my_cancellable_getch(void)
 
 	return rv;
 }
+
+#ifdef PDCURSES
+static
+int bfg_wresize(WINDOW *win, int lines, int columns)
+{
+	int rv = wresize(win, lines, columns);
+	int x, y;
+	getyx(win, y, x);
+	if (unlikely(y >= lines || x >= columns))
+	{
+		if (y >= lines)
+			y = lines - 1;
+		if (x >= columns)
+			x = columns - 1;
+		wmove(win, y, x);
+	}
+	return rv;
+}
+#else
+#	define bfg_wresize wresize
+#endif
+
 #endif
 
 void tailsprintf(char *f, const char *fmt, ...)
@@ -2571,14 +2593,14 @@ static inline void change_logwinsize(void)
 			statusy = logstart;
 		logcursor = statusy + 1;
 		mvwin(logwin, logcursor, 0);
-		wresize(statuswin, statusy, x);
+		bfg_wresize(statuswin, statusy, x);
 	}
 
 	y -= logcursor;
 	getmaxyx(logwin, logy, logx);
 	/* Detect screen size change */
 	if (x != logx || y != logy)
-		wresize(logwin, y, x);
+		bfg_wresize(logwin, y, x);
 }
 
 static void check_winsizes(void)
@@ -2595,10 +2617,10 @@ static void check_winsizes(void)
 		else
 			statusy = logstart;
 		logcursor = statusy + 1;
-		wresize(statuswin, statusy, x);
+		bfg_wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
-		wresize(logwin, y, x);
+		bfg_wresize(logwin, y, x);
 		mvwin(logwin, logcursor, 0);
 		unlock_curses();
 	}
