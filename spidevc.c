@@ -267,7 +267,7 @@ void *spi_emit_data(struct spi_port *port, uint16_t addr, const void *buf, size_
 	return spi_emit_buf_reverse(port, buf, len*4);
 }
 
-#ifdef HAVE_LINUX_SPI
+#ifdef USE_BFSB
 void spi_bfsb_select_bank(int bank)
 {
 	static int last_bank = -2;
