@@ -29,7 +29,6 @@
 #include "miner.h"
 #include "usbutils.h"
 
-#define KLN "KLN"
 #define K1 "K1"
 #define K16 "K16"
 #define K64 "K64"
@@ -295,7 +294,7 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 	return false;
 }
 
-static void klondike_detect(void)
+static void klondike_detect(bool __maybe_unused hotplug)
 {
 	usb_detect(&klondike_drv, klondike_detect_one);
 }
@@ -602,9 +601,9 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 }
 
 struct device_drv klondike_drv = {
-	.drv_id = DRIVER_KLONDIKE,
+	.drv_id = DRIVER_klondike,
 	.dname = "Klondike",
-	.name = KLN,
+	.name = "KLN",
 	.drv_detect = klondike_detect,
 	.get_api_stats = klondike_api_stats,
 	.get_statline_before = get_klondike_statline_before,
