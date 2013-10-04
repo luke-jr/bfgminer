@@ -1423,8 +1423,11 @@ static int opencl_autodetect()
 
 static void opencl_detect()
 {
-	// This wrapper ensures users can specify -S opencl:noauto to disable it
-	noserial_detect(&opencl_api, opencl_autodetect);
+	if (total_devices || total_devices_new)
+		// If there are any other devices, only act if the user has explicitly enabled OpenCL
+		noserial_detect_manual(&opencl_api, opencl_autodetect);
+	else
+		noserial_detect(&opencl_api, opencl_autodetect);
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)

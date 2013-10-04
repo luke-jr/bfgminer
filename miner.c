@@ -341,6 +341,7 @@ uint64_t best_diff = 0;
 static bool known_blkheight_current;
 static uint32_t known_blkheight;
 static uint32_t known_blkheight_blkid;
+static uint64_t block_subsidy;
 
 struct block {
 	char hash[40];
@@ -2233,6 +2234,7 @@ void have_block_height(uint32_t block_id, uint32_t blkheight)
 	cg_wlock(&ch_lock);
 	known_blkheight = blkheight;
 	known_blkheight_blkid = block_id;
+	block_subsidy = 5000000000LL >> (blkheight / 210000);
 	if (block_id == current_block_id)
 		__update_block_title(NULL);
 	cg_wunlock(&ch_lock);
@@ -2629,12 +2631,20 @@ utility_to_hashrate(double utility)
 	return utility * 0x4444444;
 }
 
-static const char*_unitchar = " kMGTPEZY?";
+static const char*_unitchar = "pn\xb5m kMGTPEZY?";
 
 static
 void pick_unit(float hashrate, unsigned char *unit)
 {
 	unsigned char i;
+	
+	if (hashrate == 0)
+	{
+		*unit = 2;
+		return;
+	}
+	
+	hashrate *= 1e12;
 	for (i = 0; i < *unit; ++i)
 		hashrate /= 1e3;
 	
@@ -2655,8 +2665,14 @@ enum h2bs_fmt {
 };
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
+enum bfu_floatprec {
+	FUP_INTEGER,
+	FUP_HASHES,
+	FUP_BTC,
+};
+
 static
-int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
+int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
 	char *s = buf;
 	unsigned char prec, i, unit;
@@ -2670,20 +2686,31 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	else
 		unit = unitin;
 	
+	hashrate *= 1e12;
+	
 	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
 	
-	if (floatprec)
+	switch (fprec)
 	{
+	case FUP_HASHES:
 		// 100 but with tolerance for floating-point rounding, max "99.99" then "100.0"
-		if (hashrate >= 99.995 || unit < 2)
+		if (hashrate >= 99.995 || unit < 6)
 			prec = 1;
 		else
 			prec = 2;
 		_SNP("%5.*f", prec, hashrate);
-	}
-	else
+		break;
+	case FUP_INTEGER:
 		_SNP("%3d", (int)hashrate);
+		break;
+	case FUP_BTC:
+		if (hashrate >= 99.995)
+			prec = 0;
+		else
+			prec = 2;
+		_SNP("%5.*f", prec, hashrate);
+	}
 	
 	switch (fmt) {
 	case H2B_SPACED:
@@ -2696,6 +2723,8 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	
 	return rv;
 }
+#define format_unit2(buf, sz, floatprec, measurement, fmt, n, unit)  \
+	format_unit3(buf, sz, floatprec ? FUP_HASHES : FUP_INTEGER, measurement, fmt, n, unit)
 
 static
 char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
@@ -3117,6 +3146,13 @@ def:
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
 #endif
+			case '\xb5':  // Mu (SI prefix micro-)
+#ifdef USE_UNICODE
+				if (use_unicode)
+					buf[0] = ((unsigned char *)p)[0];
+				else
+#endif
+					buf[0] = 'u';
 		}
 		PREP_ADDCH;
 #ifdef USE_UNICODE
@@ -3162,7 +3198,7 @@ static void curses_print_status(const int ts)
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
-	double utility;
+	double income;
 	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
@@ -3193,10 +3229,11 @@ static void curses_print_status(const int ts)
 	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 
-	utility = total_accepted / total_secs * 60;
+	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
 
-	char bwstr[12];
-	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	char bwstr[12], incomestr[13];
+	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
 		ts,
 		total_go + total_ro,
 		new_blocks,
@@ -3206,7 +3243,7 @@ static void curses_print_status(const int ts)
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
-		utility,
+		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
@@ -5956,6 +5993,13 @@ void write_config(FILE *fcfg)
 	}
 
 	/* Special case options */
+	if (request_target_str)
+	{
+		if (request_pdiff == (long)request_pdiff)
+			fprintf(fcfg, ",\n\"request-diff\" : %ld", (long)request_pdiff);
+		else
+			fprintf(fcfg, ",\n\"request-diff\" : %f", request_pdiff);
+	}
 	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
 	if (pool_strategy == POOL_BALANCE)
 		fputs(",\n\"balance\" : true", fcfg);
@@ -7998,10 +8042,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	pool->swork.data_lock_p = &pool->data_lock;
 	
 	bytes_resize(&work->nonce2, pool->n2size);
-#ifndef __OPTIMIZE__
 	if (pool->nonce2sz < pool->n2size)
 		memset(&bytes_buf(&work->nonce2)[pool->nonce2sz], 0, pool->n2size - pool->nonce2sz);
-#endif
 	memcpy(bytes_buf(&work->nonce2),
 #ifdef WORDS_BIGENDIAN
 	// NOTE: On big endian, the most significant bits are stored at the end, so skip the LSBs
@@ -9117,7 +9159,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "Will not attempt to auto-restart it.");
 				} else
 #endif
-				if (opt_restart) {
+				if (opt_restart && cgpu->drv->reinit_device) {
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
@@ -9664,12 +9706,6 @@ void drv_detect_all()
 		ft232r_scan();
 #endif
 
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
-	gpu_threads = 0;
-#endif
-
 #ifdef USE_ICARUS
 	if (!opt_scrypt)
 	{
@@ -9713,6 +9749,12 @@ void drv_detect_all()
 #ifdef USE_X6500
 	if (likely(have_libusb))
 		ft232r_scan_free();
+#endif
+
+#ifdef HAVE_OPENCL
+	if (!opt_nogpu)
+		opencl_api.drv_detect();
+	gpu_threads = 0;
 #endif
 }
 
