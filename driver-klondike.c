@@ -39,7 +39,7 @@
 
 #define REPLY_SIZE		15	// adequate for all types of replies
 #define REPLY_BUFSIZE 		16	// reply + 1 byte to mark used
-#define MAX_REPLY_COUNT		32	// more unhandled replies than this will result in data loss
+#define MAX_REPLY_COUNT		4096	// more unhandled replies than this will result in data loss
 #define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
 #define CMD_REPLY_RETRIES	8	// how many retries for cmds
 #define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
