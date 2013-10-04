@@ -383,21 +383,6 @@ static struct usb_find_devices find_dev[] = {
 		.latency = LATENCY_STD,
 		INTINFO(cmr2_ints) },
 #endif
-#ifdef USE_ZTEX
-// This is here so cgminer -n shows them
-// the ztex driver (as at 201303) doesn't use usbutils
-	{
-		.drv = DRIVER_ztex,
-		.name = "ZTX",
-		.ident = IDENT_ZTX,
-		.idVendor = 0x221a,
-		.idProduct = 0x0100,
-		.config = 1,
-		.timeout = 100,
-		.latency = LATENCY_UNUSED,
-		.intinfo_count = 0,
-		.intinfos = NULL },
-#endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
 
