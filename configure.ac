@@ -468,7 +468,7 @@ AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
 bfsb=no
 AC_ARG_ENABLE([bfsb],
-	[AC_HELP_STRING([--disable-bfsb],[Compile support for BFSB (default disabled)])],
+	[AC_HELP_STRING([--enable-bfsb],[Compile support for BFSB (default disabled)])],
 	[bfsb=$enableval]
 	)
 if test "x$bfsb" = "xyes"; then
@@ -503,7 +503,7 @@ AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
 metabank=no
 AC_ARG_ENABLE([metabank],
-	[AC_HELP_STRING([--disable-metabank],[Compile support for Metabank (default disabled)])],
+	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
 	[metabank=$enableval]
 	)
 if test "x$metabank" = "xyes"; then
