@@ -297,17 +297,6 @@ if test "x$modminer" = xyes; then
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
-ztex="no"
-
-AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--enable-ztex],[Compile support for Ztex (default disabled)])],
-	[ztex=$enableval]
-	)
-if test "x$ztex" = xyes; then
-	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
-fi
-AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
-
 curses="auto"
 
 AC_ARG_WITH([curses],
@@ -338,7 +327,7 @@ else
 	want_usbutils=false
 fi
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer$ztex != xnono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -504,14 +493,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$klondike" = xnononononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$klondike" = xnononononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$klondike" = xnonononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -570,12 +559,6 @@ else
 	echo "  ModMiner.FPGAs.......: Disabled"
 fi
 
-if test "x$ztex" = xyes; then
-	echo "  Ztex.FPGAs...........: Enabled"
-else
-	echo "  Ztex.FPGAs...........: Disabled"
-fi
-
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CPPFLAGS.............: $CPPFLAGS"
@@ -586,4 +569,3 @@ echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-
