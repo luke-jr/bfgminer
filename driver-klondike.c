@@ -120,6 +120,9 @@ static double cvtKlnToC(uint8_t temp)
 {
 	double Rt, stein, celsius;
 
+	if (temp == 0)
+		return 0.0;
+
 	Rt = 1000.0 * 255.0 / (double)temp - 1000.0;
 
 	stein = log(Rt / 2200.0) / 3987.0;
@@ -128,13 +131,39 @@ static double cvtKlnToC(uint8_t temp)
 
 	celsius = (1.0 / stein) - 273.15;
 
+	// For display of bad data
+	if (celsius < 0.0)
+		celsius = 0.0;
+	if (celsius > 200.0)
+		celsius = 200.0;
+
 	return celsius;
 }
 
 static int cvtCToKln(double deg)
 {
-	double R = exp((1/(deg+273.15)-1/(273.15+25))*3987)*2200;
-	return 256*R/(R+1000);
+	double Rt, stein, temp;
+
+	if (deg < 0.0)
+		deg = 0.0;
+
+	stein = 1.0 / (deg + 273.15);
+
+	stein -= 1.0 / (double)(25.0 + 273.15);
+
+	Rt = exp(stein * 3987.0) * 2200.0;
+
+	if (Rt == -1000.0)
+		Rt++;
+
+	temp = 1000.0 * 256.0 / (Rt + 1000.0);
+
+	if (temp > 255)
+		temp = 255;
+	if (temp < 0)
+		temp = 0;
+
+	return (int)temp;
 }
 
 static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, int datalen, void *data)
