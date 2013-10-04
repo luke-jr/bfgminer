@@ -249,7 +249,7 @@ AC_ARG_ENABLE([bitfury],
 	[bitfury=$enableval]
 	)
 if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitForce support is wanted])
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
