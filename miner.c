@@ -2544,6 +2544,7 @@ static const size_t h2bs_fmt_size[] = {6, 10, 11};
 enum bfu_floatprec {
 	FUP_INTEGER,
 	FUP_HASHES,
+	FUP_BTC,
 };
 
 static
@@ -2578,6 +2579,13 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 		break;
 	case FUP_INTEGER:
 		_SNP("%3d", (int)hashrate);
+		break;
+	case FUP_BTC:
+		if (hashrate >= 99.995)
+			prec = 0;
+		else
+			prec = 2;
+		_SNP("%5.*f", prec, hashrate);
 	}
 	
 	switch (fmt) {
