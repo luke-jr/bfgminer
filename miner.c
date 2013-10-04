@@ -2507,7 +2507,7 @@ utility_to_hashrate(double utility)
 	return utility * 0x4444444;
 }
 
-static const char*_unitchar = "\xb5m kMGTPEZY?";
+static const char*_unitchar = "pn\xb5m kMGTPEZY?";
 
 static
 void pick_unit(float hashrate, unsigned char *unit)
@@ -2520,7 +2520,7 @@ void pick_unit(float hashrate, unsigned char *unit)
 		return;
 	}
 	
-	hashrate *= 1e6;
+	hashrate *= 1e12;
 	for (i = 0; i < *unit; ++i)
 		hashrate /= 1e3;
 	
@@ -2561,7 +2561,7 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 	else
 		unit = unitin;
 	
-	hashrate *= 1e6;
+	hashrate *= 1e12;
 	
 	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
@@ -2570,7 +2570,7 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 	{
 	case FUP_HASHES:
 		// 100 but with tolerance for floating-point rounding, max "99.99" then "100.0"
-		if (hashrate >= 99.995 || unit < 4)
+		if (hashrate >= 99.995 || unit < 6)
 			prec = 1;
 		else
 			prec = 2;
