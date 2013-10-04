@@ -448,7 +448,10 @@ void libbitfury_sendHashData1(int chip_id, struct bitfury_device *d, struct thr_
 			}
 		}
 
-		d->job_switched = newbuf[16] != oldbuf[16];
+		  if ( !newbuf[16] || 0xffffffff == newbuf[16] ) // data from SPI can be wrong
+             		d->job_switched = ( newbuf[16] != oldbuf[16]  ); 
+        	else
+            		applog(LOG_WARNING, "Unexpected value in newbuf[16] == 0x%08x", newbuf[16]);
 
 		int i;
 		int results_num = 0;
