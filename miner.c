@@ -334,6 +334,7 @@ uint64_t best_diff = 0;
 static bool known_blkheight_current;
 static uint32_t known_blkheight;
 static uint32_t known_blkheight_blkid;
+static uint64_t block_subsidy;
 
 struct block {
 	char hash[40];
@@ -2133,6 +2134,7 @@ void have_block_height(uint32_t block_id, uint32_t blkheight)
 	cg_wlock(&ch_lock);
 	known_blkheight = blkheight;
 	known_blkheight_blkid = block_id;
+	block_subsidy = 5000000000LL >> (blkheight / 210000);
 	if (block_id == current_block_id)
 		__update_block_title(NULL);
 	cg_wunlock(&ch_lock);
@@ -3074,7 +3076,7 @@ static void curses_print_status(const int ts)
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
-	double utility;
+	double income;
 	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
@@ -3105,10 +3107,11 @@ static void curses_print_status(const int ts)
 	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 
-	utility = total_accepted / total_secs * 60;
+	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
 
-	char bwstr[12];
-	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  U:%.1f/m  BS:%s",
+	char bwstr[12], incomestr[13];
+	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
 		ts,
 		total_go + total_ro,
 		new_blocks,
@@ -3118,7 +3121,7 @@ static void curses_print_status(const int ts)
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
-		utility,
+		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
