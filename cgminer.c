@@ -6084,6 +6084,24 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 	return ret;
 }
 
+/* Allows drivers to submit work items where the driver has changed the ntime
+ * value by noffset. Must be only used with a work protocol that does not ntime
+ * roll itself intrinsically to generate work (eg stratum). */
+bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
+			  int noffset)
+{
+	unsigned char bin[4];
+	uint32_t h32, *be32 = (uint32_t *)bin;
+
+	hex2bin(bin, work->ntime, 4);
+	h32 = be32toh(*be32) + noffset;
+	*be32 = htobe32(h32);
+	free(work->ntime);
+	work->ntime = bin2hex(bin, 4);
+
+	return submit_nonce(thr, work, nonce);
+}
+
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
 	if (wdiff->tv_sec > opt_scantime ||
