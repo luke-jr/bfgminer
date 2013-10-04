@@ -427,7 +427,7 @@ difficulty (including the network hashrate that difficulty represents), and when
 the search for the new block started.
 
 The BFGMiner status line shows:
- ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  U:22.53/m  BS:2.71k
+ ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  I:12.99mBTC/hr  BS:2.71k
 
 ST is STaged work items (ready to use).
 F  is network Failure occasions (server down or slow to provide work)
@@ -436,7 +436,8 @@ AS is Active Submissions (shares in the process of submitting)
 BW is BandWidth usage on the network (received/sent)
 E  is Efficiency defined as number of shares accepted (multiplied by their
           difficulty) per 2 KB of bandwidth
-U  is Utility defined as the number of shares / minute
+I  is expected Income, calculated by actual shares submitted in 100% PPS value
+          (assumes Bitcoin, does not account for altcoin conversions!)
 BS is the all time Best Share difficulty you've found
 
 The totals line shows the following:
