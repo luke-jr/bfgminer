@@ -2541,8 +2541,13 @@ enum h2bs_fmt {
 };
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
+enum bfu_floatprec {
+	FUP_INTEGER,
+	FUP_HASHES,
+};
+
 static
-int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
+int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *measurement, enum h2bs_fmt fmt, float hashrate, signed char unitin)
 {
 	char *s = buf;
 	unsigned char prec, i, unit;
@@ -2561,17 +2566,19 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
 	
-	if (floatprec)
+	switch (fprec)
 	{
+	case FUP_HASHES:
 		// 100 but with tolerance for floating-point rounding, max "99.99" then "100.0"
 		if (hashrate >= 99.995 || unit < 4)
 			prec = 1;
 		else
 			prec = 2;
 		_SNP("%5.*f", prec, hashrate);
-	}
-	else
+		break;
+	case FUP_INTEGER:
 		_SNP("%3d", (int)hashrate);
+	}
 	
 	switch (fmt) {
 	case H2B_SPACED:
@@ -2584,6 +2591,8 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	
 	return rv;
 }
+#define format_unit2(buf, sz, floatprec, measurement, fmt, n, unit)  \
+	format_unit3(buf, sz, floatprec ? FUP_HASHES : FUP_INTEGER, measurement, fmt, n, unit)
 
 static
 char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
