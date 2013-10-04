@@ -2507,12 +2507,20 @@ utility_to_hashrate(double utility)
 	return utility * 0x4444444;
 }
 
-static const char*_unitchar = " kMGTPEZY?";
+static const char*_unitchar = "\xb5m kMGTPEZY?";
 
 static
 void pick_unit(float hashrate, unsigned char *unit)
 {
 	unsigned char i;
+	
+	if (hashrate == 0)
+	{
+		*unit = 2;
+		return;
+	}
+	
+	hashrate *= 1e6;
 	for (i = 0; i < *unit; ++i)
 		hashrate /= 1e3;
 	
@@ -2548,13 +2556,15 @@ int format_unit2(char *buf, size_t sz, bool floatprec, const char *measurement, 
 	else
 		unit = unitin;
 	
+	hashrate *= 1e6;
+	
 	for (i = 0; i < unit; ++i)
 		hashrate /= 1000;
 	
 	if (floatprec)
 	{
 		// 100 but with tolerance for floating-point rounding, max "99.99" then "100.0"
-		if (hashrate >= 99.995 || unit < 2)
+		if (hashrate >= 99.995 || unit < 4)
 			prec = 1;
 		else
 			prec = 2;
@@ -2995,6 +3005,13 @@ def:
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
 #endif
+			case '\xb5':  // Mu (SI prefix micro-)
+#ifdef USE_UNICODE
+				if (use_unicode)
+					buf[0] = ((unsigned char *)p)[0];
+				else
+#endif
+					buf[0] = 'u';
 		}
 		PREP_ADDCH;
 #ifdef USE_UNICODE
