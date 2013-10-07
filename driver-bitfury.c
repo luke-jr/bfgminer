@@ -536,101 +536,101 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		uint32_t * const oldbuf = &bitfury->oldbuf[0];
 		
 		inp = rxbuf[j];
-
-	if (unlikely(bitfury->desync_counter == 99))
-	{
+		
+		if (unlikely(bitfury->desync_counter == 99))
+		{
 			bitfury_init_oldbuf(proc, inp);
-		goto out;
-	}
-
-	if (opt_debug)
-		bitfury_debug_nonce_array(proc, "Read", inp);
-	
-	// To avoid dealing with wrap-around entirely, we rotate array so previous active uint32_t is at index 0
-	memcpy(&newbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
-	memcpy(&newbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
-	newjob = inp[0x10];
-	
-	if (newbuf[0xf] != oldbuf[0xf])
-	{
-		inc_hw_errors2(thr, NULL, NULL);
-		if (unlikely(++bitfury->desync_counter >= 4))
-		{
-			applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
-			       proc->proc_repr);
-				bitfury_init_oldbuf(proc, inp);
-			continue;
-		}
-		applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
-		       proc->proc_repr);
-		goto out;
-	}
-	else
-		bitfury->desync_counter = 0;
-	
-	if (bitfury->oldjob != newjob && thr->next_work)
-	{
-		mt_job_transition(thr);
-		// TODO: Delay morework until right before it's needed
-		timer_set_now(&thr->tv_morework);
-		job_start_complete(thr);
-	}
-	
-	for (n = 0; newbuf[n] == oldbuf[n]; ++n)
-	{
-		if (unlikely(n >= 0xf))
-		{
-			inc_hw_errors2(thr, NULL, NULL);
-			applog(LOG_DEBUG, "%"PRIpreprv": Full result match, reinitialising",
-			       proc->proc_repr);
-			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-			bitfury->desync_counter = 99;
 			goto out;
 		}
-	}
-	
-	if (n)
-	{
-		for (i = 0; i < n; ++i)
+		
+		if (opt_debug)
+			bitfury_debug_nonce_array(proc, "Read", inp);
+		
+		// To avoid dealing with wrap-around entirely, we rotate array so previous active uint32_t is at index 0
+		memcpy(&newbuf[0], &inp[bitfury->active], 4 * (0x10 - bitfury->active));
+		memcpy(&newbuf[0x10 - bitfury->active], &inp[0], 4 * bitfury->active);
+		newjob = inp[0x10];
+		
+		if (newbuf[0xf] != oldbuf[0xf])
 		{
-			nonce = bitfury_decnonce(newbuf[i]);
-			if (fudge_nonce(thr->work, &nonce))
+			inc_hw_errors2(thr, NULL, NULL);
+			if (unlikely(++bitfury->desync_counter >= 4))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
-				       proc->proc_repr, i, (unsigned long)nonce, thr->work);
-				submit_nonce(thr, thr->work, nonce);
+				applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
+				       proc->proc_repr);
+				bitfury_init_oldbuf(proc, inp);
+				continue;
 			}
-			else
-			if (fudge_nonce(thr->prev_work, &nonce))
+			applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
+			       proc->proc_repr);
+			goto out;
+		}
+		else
+			bitfury->desync_counter = 0;
+		
+		if (bitfury->oldjob != newjob && thr->next_work)
+		{
+			mt_job_transition(thr);
+			// TODO: Delay morework until right before it's needed
+			timer_set_now(&thr->tv_morework);
+			job_start_complete(thr);
+		}
+		
+		for (n = 0; newbuf[n] == oldbuf[n]; ++n)
+		{
+			if (unlikely(n >= 0xf))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (prev work=%p)",
-				       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
-				submit_nonce(thr, thr->prev_work, nonce);
-			}
-			else
-			{
-				inc_hw_errors(thr, thr->work, nonce);
-				++bitfury->sample_hwe;
-			}
-			if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
-			{
-				if (bitfury->sample_hwe >= 8)
-				{
-					applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
-					       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
-					send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-					bitfury->desync_counter = 99;
-				}
-				bitfury->sample_tot = bitfury->sample_hwe = 0;
+				inc_hw_errors2(thr, NULL, NULL);
+				applog(LOG_DEBUG, "%"PRIpreprv": Full result match, reinitialising",
+				       proc->proc_repr);
+				send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+				bitfury->desync_counter = 99;
+				goto out;
 			}
 		}
-		bitfury->active = (bitfury->active + n) % 0x10;
-	}
-	
-	memcpy(&oldbuf[0], &newbuf[n], 4 * (0x10 - n));
-	memcpy(&oldbuf[0x10 - n], &newbuf[0], 4 * n);
-	bitfury->oldjob = newjob;
-	
+		
+		if (n)
+		{
+			for (i = 0; i < n; ++i)
+			{
+				nonce = bitfury_decnonce(newbuf[i]);
+				if (fudge_nonce(thr->work, &nonce))
+				{
+					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
+					       proc->proc_repr, i, (unsigned long)nonce, thr->work);
+					submit_nonce(thr, thr->work, nonce);
+				}
+				else
+				if (fudge_nonce(thr->prev_work, &nonce))
+				{
+					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (prev work=%p)",
+					       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
+					submit_nonce(thr, thr->prev_work, nonce);
+				}
+				else
+				{
+					inc_hw_errors(thr, thr->work, nonce);
+					++bitfury->sample_hwe;
+				}
+				if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
+				{
+					if (bitfury->sample_hwe >= 8)
+					{
+						applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
+						       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
+						send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+						bitfury->desync_counter = 99;
+					}
+					bitfury->sample_tot = bitfury->sample_hwe = 0;
+				}
+			}
+			bitfury->active = (bitfury->active + n) % 0x10;
+		}
+		
+		memcpy(&oldbuf[0], &newbuf[n], 4 * (0x10 - n));
+		memcpy(&oldbuf[0x10 - n], &newbuf[0], 4 * n);
+		bitfury->oldjob = newjob;
+		
 out:
 		continue;
 	}
