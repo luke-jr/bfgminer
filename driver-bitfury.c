@@ -148,7 +148,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 		goto out_close;
 
 	update_usb_stats(bitfury);
-	applog(LOG_INFO, "%s %d: Found at %s",
+	applog(LOG_INFO, "%s %d: Successfully initialised %s",
 	       bitfury->drv->name, bitfury->device_id, bitfury->device_path);
 	return true;
 out_close:
