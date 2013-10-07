@@ -821,14 +821,6 @@ static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const 
 		quitfrom(1, file, func, line, "Failed to pthread_rwlock_init errno=%d", errno);
 }
 
-/* cgminer locks, a write biased variant of rwlocks */
-struct cglock {
-	pthread_mutex_t mutex;
-	pthread_rwlock_t rwlock;
-};
-
-typedef struct cglock cglock_t;
-
 static inline void cglock_init(cglock_t *lock)
 {
 	mutex_init(&lock->mutex);
