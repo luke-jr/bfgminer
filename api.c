@@ -3089,7 +3089,6 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 	if (cgpu) {
 #ifdef USE_USBUTILS
 		char details[256];
-		int val;
 
 		if (cgpu->usbinfo.pipe_count)
 			snprintf(details, sizeof(details),
@@ -3143,14 +3142,6 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 
 		root = api_add_string(root, "USB tmo", details, true);
 		root = api_add_int(root, "USB cancellations", &cgpu->usb_cancels, false);
-		root = api_add_int(root, "USB bulk reads", &cgpu->usb_bulk_reads, false);
-		val = cgpu->usb_rlock_total_wait / (cgpu->usb_bulk_reads ? : 1);
-		root = api_add_int(root, "USB avg rlock ms wait", &val, true);
-		root = api_add_int(root, "USB max rlock ms wait", &cgpu->usb_rlock_max_wait, false);
-		root = api_add_int(root, "USB bulk writes", &cgpu->usb_bulk_writes, false);
-		val = cgpu->usb_wlock_total_wait / (cgpu->usb_bulk_writes ? : 1);
-		root = api_add_int(root, "USB avg wlock ms wait", &val, true);
-		root = api_add_int(root, "USB max wlock ms wait", &cgpu->usb_wlock_max_wait, false);
 #endif
 	}
 

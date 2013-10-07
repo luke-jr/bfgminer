@@ -2364,18 +2364,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	size_t usbbufread;
-	int lock_wait;
 
-	/* Get statistics on how long reads wait on the devlock */
-	cgpu->usb_bulk_reads++;
-
-	cgtime(&read_start);
 	DEVRLOCK(cgpu, pstate);
-	cgtime(&tv_finish);
-	lock_wait = ms_tdiff(&tv_finish, &read_start);
-	cgpu->usb_rlock_total_wait += lock_wait;
-	if (lock_wait > cgpu->usb_rlock_max_wait)
-		cgpu->usb_rlock_max_wait = lock_wait;
 
 	if (cgpu->usbinfo.nodev) {
 		*buf = '\0';
@@ -2642,18 +2632,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	double max, done;
 	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
-	int lock_wait;
 
-	/* Get statistics on how long writes wait on the devlock */
-	cgpu->usb_bulk_writes++;
-
-	cgtime(&read_start);
 	DEVRLOCK(cgpu, pstate);
-	cgtime(&tv_finish);
-	lock_wait = ms_tdiff(&tv_finish, &read_start);
-	cgpu->usb_wlock_total_wait += lock_wait;
-	if (lock_wait > cgpu->usb_wlock_max_wait)
-		cgpu->usb_wlock_max_wait = lock_wait;
 
 	USBDEBUG("USB debug: _usb_write(%s (nodev=%s),intinfo=%d,epinfo=%d,buf='%s',bufsiz=%d,proc=%p,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, (char *)str_text(buf), (int)bufsiz, processed, timeout, usb_cmdname(cmd));
 
