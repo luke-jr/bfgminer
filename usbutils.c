@@ -20,7 +20,10 @@
 
 #define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_PIPE || \
-			(err) == LIBUSB_ERROR_OTHER)
+			(err) == LIBUSB_ERROR_OTHER || \
+			(err) == LIBUSB_TRANSFER_NO_DEVICE || \
+			(err) == LIBUSB_TRANSFER_STALL || \
+			(err) == LIBUSB_TRANSFER_ERROR)
 
 #define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_OTHER)
@@ -2264,10 +2267,10 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  enum usb_cmds cmd, __maybe_unused int seq)
 {
 	struct usb_epinfo *usb_epinfo;
+	int err, errn, retries = 0;
 	struct usb_transfer ut;
 	unsigned char endpoint;
 	uint16_t MaxPacketSize;
-	int err, errn;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
@@ -2294,6 +2297,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  bulk_callback, &ut, timeout);
 
+retry:
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(ut.transfer);
@@ -2305,12 +2309,13 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
 
-	if (err < 0)
+	if (err < 0) {
 		applog(LOG_DEBUG, "%s%i: %s (amt=%d err=%d ern=%d)",
 				cgpu->drv->name, cgpu->device_id,
 				usb_cmdname(cmd), *transferred, err, errn);
+	}
 
-	if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_TRANSFER_STALL) {
+	if ((err == LIBUSB_ERROR_PIPE || err == LIBUSB_TRANSFER_STALL) && ++retries < USB_RETRY_MAX) {
 		cgpu->usbinfo.last_pipe = time(NULL);
 		cgpu->usbinfo.pipe_count++;
 		applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
@@ -2321,6 +2326,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 		if (err)
 			cgpu->usbinfo.clear_fail_count++;
+		else
+			goto retry;
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, length);
