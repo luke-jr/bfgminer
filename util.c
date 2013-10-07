@@ -1081,8 +1081,9 @@ double us_tdiff(struct timeval *end, struct timeval *start)
 /* Returns the milliseconds difference between end and start times */
 int ms_tdiff(struct timeval *end, struct timeval *start)
 {
-	if (unlikely(end->tv_sec - start->tv_sec > 60))
-		return 60000;
+	/* Like us_tdiff, limit to 1 hour. */
+	if (unlikely(end->tv_sec - start->tv_sec > 3600))
+		return 3600000;
 	return (end->tv_sec - start->tv_sec) * 1000 + (end->tv_usec - start->tv_usec) / 1000;
 }
 
