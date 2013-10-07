@@ -58,6 +58,9 @@ char *curly = ":D";
 #include "driver-opencl.h"
 #include "bench_block.h"
 #include "scrypt.h"
+#ifdef USE_USBUTILS
+#include "usbutils.h"
+#endif
 
 #ifdef USE_AVALON
 #include "driver-avalon.h"
