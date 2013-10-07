@@ -23,6 +23,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include "miner.h"
 #include <unistd.h>
 #include <sha2.h>
@@ -632,7 +633,13 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		bitfury->oldjob = newjob;
 		
 out:
-		continue;
+		if (unlikely(bitfury->force_reinit))
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": Forcing reinitialisation",
+			       proc->proc_repr);
+			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+			bitfury->desync_counter = 99;
+		}
 	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
@@ -653,6 +660,64 @@ struct api_data *bitfury_api_device_status(const struct cgpu_info * const cgpu)
 	root = api_add_int(root, "Clock Bits", &clock_bits, true);
 	
 	return root;
+}
+
+static
+bool _bitfury_set_device_parse_setting(int * const rv, char * const setting, char * const replybuf, const int maxval)
+{
+	char *p;
+	long int nv;
+	
+	if (!setting || !*setting)
+	{
+		sprintf(replybuf, "missing setting");
+		return false;
+	}
+	nv = strtol(setting, &p, 0);
+	if ((p && p[0]) || nv > maxval || nv < 1)
+	{
+		sprintf(replybuf, "invalid setting");
+		return false;
+	}
+	*rv = nv;
+	return true;
+}
+
+char *bitfury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	int newval;
+	
+	if (!strcasecmp(option, "help"))
+	{
+		sprintf(replybuf, "baud: SPI baud rate");
+		sprintf(replybuf, "osc6_bits: range 1-55 (slow to fast)");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "baud"))
+	{
+		if (!_bitfury_set_device_parse_setting(&bitfury->spi->speed, setting, replybuf, INT_MAX))
+			return replybuf;
+		
+		sprintf(replybuf, "baud changed");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "osc6_bits"))
+	{
+		newval = bitfury->osc6_bits;
+		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, 55))
+			return replybuf;
+		
+		bitfury->osc6_bits = newval;
+		bitfury->force_reinit = true;
+		
+		return replybuf;
+	}
+	
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
 }
 
 struct device_drv bitfury_drv = {

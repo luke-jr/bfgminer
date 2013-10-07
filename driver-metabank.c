@@ -228,4 +228,5 @@ struct device_drv metabank_drv = {
 	.thread_shutdown = metabank_shutdown,
 	.get_api_extra_device_status = metabank_api_extra_device_status,
 	.get_stats = metabank_get_stats,
+	.set_device = bitfury_set_device,
 };

@@ -213,6 +213,7 @@ struct device_drv bfsb_drv = {
 	.job_start = bitfury_noop_job_start,
 	.job_process_results = bitfury_job_process_results,
 	.get_api_extra_device_status = bfsb_api_device_status,
+	.set_device = bitfury_set_device,
 	.thread_disable = bfsb_disable,
 	.thread_enable = bfsb_enable,
 	.thread_shutdown = bfsb_shutdown,
