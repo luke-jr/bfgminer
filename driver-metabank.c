@@ -146,9 +146,8 @@ static
 bool metabank_init(struct thr_info *thr)
 {
 	struct bitfury_device **devicelist;
-	struct cgpu_info *proc, *next_proc;
+	struct cgpu_info *proc;
 	struct bitfury_device *bitfury;
-	int devid;
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
