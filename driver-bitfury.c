@@ -475,6 +475,8 @@ void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 {
 }
 
+typedef uint32_t bitfury_inp_t[0x11];
+
 void bitfury_do_io(struct thr_info * const master_thr)
 {
 	struct cgpu_info *proc;
@@ -493,6 +495,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	
 	struct cgpu_info *procs[n_chips];
 	void *rxbuf[n_chips];
+	bitfury_inp_t rxbuf_copy[n_chips];
 	
 	// NOTE: This code assumes:
 	// 1) that chips on the same SPI bus are grouped together
@@ -527,6 +530,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			;//FIXME: shutdown chip
 	}
 	spi_txrx(spi);
+	
+	for (j = 0; j < n_chips; ++j)
+	{
+		memcpy(rxbuf_copy[j], rxbuf[j], 0x11 * 4);
+		rxbuf[j] = rxbuf_copy[j];
+	}
 	
 	for (j = 0; j < n_chips; ++j)
 	{
