@@ -3148,6 +3148,7 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 		}
 
 		root = api_add_string(root, "USB tmo", details, true);
+		root = api_add_int(root, "USB cancellations", &cgpu->usb_cancels, false);
 #endif
 	}
 
