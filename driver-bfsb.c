@@ -43,7 +43,23 @@ bool bfsb_spi_txrx(struct spi_port *port)
 }
 
 static
-struct bitfury_device **bfsb_detect_chips(int *out_count) {
+int bfsb_autodetect()
+{
+	RUNONCE(0);
+	
+	int chip_n;
+	struct cgpu_info *bitfury_info;
+
+	bitfury_info = calloc(1, sizeof(struct cgpu_info));
+	bitfury_info->drv = &bfsb_drv;
+	bitfury_info->threads = 1;
+
+	applog(LOG_INFO, "INFO: bitfury_detect");
+	spi_init();
+	if (!sys_spi)
+		return 0;
+	
+	
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
 	int n = 0;
@@ -101,27 +117,10 @@ struct bitfury_device **bfsb_detect_chips(int *out_count) {
 
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
 
-	*out_count = n;
-	return devicelist;
-}
-
-static
-int bfsb_autodetect()
-{
-	RUNONCE(0);
+	chip_n = n;
+	bitfury_info->device_data = devicelist;
 	
-	int chip_n;
-	struct cgpu_info *bitfury_info;
-
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &bfsb_drv;
-	bitfury_info->threads = 1;
-
-	applog(LOG_INFO, "INFO: bitfury_detect");
-	spi_init();
-	if (!sys_spi)
-		return 0;
-	bitfury_info->device_data = bfsb_detect_chips(&chip_n);
+	
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
 		return 0;
