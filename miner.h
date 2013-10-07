@@ -881,6 +881,14 @@ static inline void cg_runlock(cglock_t *lock)
 	rd_unlock(&lock->rwlock);
 }
 
+/* This drops the read lock and grabs a write lock. It does NOT protect data
+ * between the two locks! */
+static inline void cg_ruwlock(cglock_t *lock)
+{
+	rd_unlock_noyield(&lock->rwlock);
+	cg_wlock(lock);
+}
+
 static inline void cg_wunlock(cglock_t *lock)
 {
 	wr_unlock_noyield(&lock->rwlock);

@@ -1300,12 +1300,11 @@ static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
-	int i, pstate;
+	int i;
 
-	DEVWLOCK(cgpu, pstate);
 	// It has already been done
 	if (cgpu->usbinfo.nodev)
-		goto out_unlock;
+		return;
 
 	applog(LOG_DEBUG, "USB release %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1335,8 +1334,6 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 	_usb_uninit(cgpu);
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
-out_unlock:
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 /*
@@ -2602,10 +2599,14 @@ out_unlock:
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
+	if (NODEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
+		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
 	DEVRUNLOCK(cgpu, pstate);
 
-	if (NODEV(err))
-		release_cgpu(cgpu);
 
 	return err;
 }
@@ -2700,10 +2701,13 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NODEV(err))
+	if (NODEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
+	DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2790,10 +2794,13 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	err = __usb_transfer(cgpu, request_type, bRequest, wValue, wIndex, data, siz, timeout, cmd);
 
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NOCONTROLDEV(err))
+	if (NOCONTROLDEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
+	DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2863,10 +2870,13 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		       libusb_error_name(err));
 	}
 out_noerrmsg:
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NOCONTROLDEV(err))
+	if (NOCONTROLDEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
+	DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -3132,7 +3142,7 @@ void usb_set_dev_start(struct cgpu_info *cgpu)
 void usb_cleanup(void)
 {
 	struct cgpu_info *cgpu;
-	int count;
+	int count, pstate;
 	int i;
 
 	hotplug_time = 0;
@@ -3150,7 +3160,9 @@ void usb_cleanup(void)
 			case DRIVER_icarus:
 			case DRIVER_avalon:
 			case DRIVER_klondike:
+				DEVWLOCK(cgpu, pstate);
 				release_cgpu(cgpu);
+				DEVWUNLOCK(cgpu, pstate);
 				count++;
 				break;
 			default:
