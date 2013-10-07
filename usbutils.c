@@ -2614,6 +2614,8 @@ out_unlock:
 	if (err && err != LIBUSB_ERROR_TIMEOUT && err != LIBUSB_TRANSFER_TIMED_OUT) {
 		applog(LOG_WARNING, "%s %i usb read error: %s", cgpu->drv->name, cgpu->device_id,
 		       libusb_error_name(err));
+		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
+			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
 	DEVRUNLOCK(cgpu, pstate);
@@ -2710,6 +2712,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	if (err) {
 		applog(LOG_WARNING, "%s %i usb write error: %s", cgpu->drv->name, cgpu->device_id,
 		       libusb_error_name(err));
+		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
+			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
 	DEVRUNLOCK(cgpu, pstate);
