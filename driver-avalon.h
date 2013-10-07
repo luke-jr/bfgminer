@@ -130,7 +130,7 @@ struct avalon_info {
 	int core_voltage;
 
 	int no_matching_work;
-	int matching_work[AVALON_DEFAULT_MINER_NUM];
+	int matching_work[AVALON_MAX_MINER_NUM];
 
 	int frequency;
 	uint32_t ctlr_ver;

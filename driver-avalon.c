@@ -469,7 +469,7 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 			} else {
 				quit(1, "Invalid avalon-options for "
 					"miner_count (%s) must be 1 ~ %d",
-					colon, AVALON_DEFAULT_MINER_NUM);
+					colon, AVALON_MAX_MINER_NUM);
 			}
 		}
 
