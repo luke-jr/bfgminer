@@ -2333,7 +2333,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 				cgpu->drv->name, cgpu->device_id,
 				usb_cmdname(cmd), *transferred, err, errn);
 
-	if (err == LIBUSB_ERROR_PIPE) {
+	if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_TRANSFER_STALL) {
 		cgpu->usbinfo.last_pipe = time(NULL);
 		cgpu->usbinfo.pipe_count++;
 		applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
