@@ -50,6 +50,7 @@
 #define BITFURY_TIMEOUT_MS 999
 #define MODMINER_TIMEOUT_MS 999
 #define AVALON_TIMEOUT_MS 999
+#define KLONDIKE_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 #else
 #define BFLSC_TIMEOUT_MS 300
@@ -57,6 +58,7 @@
 #define BITFURY_TIMEOUT_MS 100
 #define MODMINER_TIMEOUT_MS 100
 #define AVALON_TIMEOUT_MS 200
+#define KLONDIKE_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
 #endif
 
@@ -136,6 +138,17 @@ static struct usb_epinfo ava_epinfos[] = {
 
 static struct usb_intinfo ava_ints[] = {
 	USB_EPS(0, ava_epinfos)
+};
+#endif
+
+#ifdef USE_KLONDIKE
+static struct usb_epinfo kln_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
+};
+
+static struct usb_intinfo kln_ints[] = {
+	USB_EPS(0, kln_epinfos)
 };
 #endif
 
@@ -292,6 +305,18 @@ static struct usb_find_devices find_dev[] = {
 		.latency = 10,
 		INTINFO(ava_ints) },
 #endif
+#ifdef USE_KLONDIKE
+	{
+		.drv = DRIVER_klondike,
+		.name = "KLN",
+		.ident = IDENT_KLN,
+		.idVendor = 0x04D8,
+		.idProduct = 0xF60A,
+		.config = 1,
+		.timeout = KLONDIKE_TIMEOUT_MS,
+		.latency = 10,
+		INTINFO(kln_ints) },
+#endif
 #ifdef USE_ICARUS
 	{
 		.drv = DRIVER_icarus,
@@ -357,21 +382,6 @@ static struct usb_find_devices find_dev[] = {
 		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_STD,
 		INTINFO(cmr2_ints) },
-#endif
-#ifdef USE_ZTEX
-// This is here so cgminer -n shows them
-// the ztex driver (as at 201303) doesn't use usbutils
-	{
-		.drv = DRIVER_ztex,
-		.name = "ZTX",
-		.ident = IDENT_ZTX,
-		.idVendor = 0x221a,
-		.idProduct = 0x0100,
-		.config = 1,
-		.timeout = 100,
-		.latency = LATENCY_UNUSED,
-		.intinfo_count = 0,
-		.intinfos = NULL },
 #endif
 	{ DRIVER_MAX, NULL, 0, 0, 0, NULL, NULL, 0, 0, 0, 0, NULL }
 };
@@ -3168,6 +3178,7 @@ void usb_cleanup()
 			case DRIVER_modminer:
 			case DRIVER_icarus:
 			case DRIVER_avalon:
+			case DRIVER_klondike:
 				mutex_lock(cgpu->usbinfo.devlock);
 				release_cgpu(cgpu);
 				mutex_unlock(cgpu->usbinfo.devlock);

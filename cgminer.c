@@ -75,8 +75,6 @@ char *curly = ":D";
 
 #if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
 #	define USE_FPGA
-#elif defined(USE_ZTEX)
-#	define USE_FPGA
 #endif
 
 struct strategies strategies[] = {
@@ -165,6 +163,9 @@ char *opt_icarus_timing = NULL;
 bool opt_worktime;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
+#endif
+#ifdef USE_KLONDIKE
+char *opt_klondike_options = NULL;
 #endif
 #ifdef USE_USBUTILS
 char *opt_usb_select = NULL;
@@ -1026,6 +1027,15 @@ static char *set_avalon_options(const char *arg)
 }
 #endif
 
+#ifdef USE_KLONDIKE
+static char *set_klondike_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_klondike_options);
+
+	return NULL;
+}
+#endif
+
 #ifdef USE_USBUTILS
 static char *set_usb_select(const char *arg)
 {
@@ -1231,6 +1241,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitburner-voltage",
 		     opt_set_intval, NULL, &opt_bitburner_core_voltage,
 		     "Set BitBurner core voltage, in millivolts"),
+#endif
+#ifdef USE_KLONDIKE
+	OPT_WITH_ARG("--klondike-options",
+		     set_klondike_options, NULL, NULL,
+		     "Set klondike options clock:temp1:temp2:fan"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -1572,14 +1587,14 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ICARUS
 		"icarus "
 #endif
+#ifdef USE_KLONDIKE
+		"klondike "
+#endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
 #ifdef USE_SCRYPT
 		"scrypt "
-#endif
-#ifdef USE_ZTEX
-		"ztex "
 #endif
 		"mining support.\n"
 		, packagename);
@@ -3496,9 +3511,23 @@ static void *submit_work_thread(void __maybe_unused *userdata)
 }
 #endif /* HAVE_LIBCURL */
 
+/* Return an adjusted ntime if we're submitting work that a device has
+ * internally offset the ntime. */
+static char *offset_ntime(const char *ntime, int noffset)
+{
+	unsigned char bin[4];
+	uint32_t h32, *be32 = (uint32_t *)bin;
+
+	hex2bin(bin, ntime, 4);
+	h32 = be32toh(*be32) + noffset;
+	*be32 = htobe32(h32);
+
+	return bin2hex(bin, 4);
+}
+
 /* Duplicates any dynamically allocated arrays within the work struct to
  * prevent a copied work struct from freeing ram belonging to another struct */
-void __copy_work(struct work *work, struct work *base_work)
+static void _copy_work(struct work *work, const struct work *base_work, int noffset)
 {
 	int id = work->id;
 
@@ -3511,8 +3540,12 @@ void __copy_work(struct work *work, struct work *base_work)
 		work->job_id = strdup(base_work->job_id);
 	if (base_work->nonce1)
 		work->nonce1 = strdup(base_work->nonce1);
-	if (base_work->ntime)
-		work->ntime = strdup(base_work->ntime);
+	if (base_work->ntime) {
+		if (noffset)
+			work->ntime = offset_ntime(base_work->ntime, noffset);
+		else
+			work->ntime = strdup(base_work->ntime);
+	}
 	if (base_work->coinbase)
 		work->coinbase = strdup(base_work->coinbase);
 }
@@ -3523,7 +3556,7 @@ struct work *copy_work(struct work *base_work)
 {
 	struct work *work = make_work();
 
-	__copy_work(work, base_work);
+	_copy_work(work, base_work, 0);
 
 	return work;
 }
@@ -4430,6 +4463,10 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
+#ifdef USE_KLONDIKE
+	if (opt_klondike_options)
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+#endif
 #ifdef USE_USBUTILS
 	if (opt_usb_select)
 		fprintf(fcfg, ",\n\"usb\" : \"%s\"", json_escape(opt_usb_select));
@@ -5953,14 +5990,13 @@ static struct work *get_work(struct thr_info *thr, const int thr_id)
 	return work;
 }
 
-static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+/* Submit a copy of the tested, statistic recorded work item asynchronously */
+static void submit_work_async(struct work *work)
 {
-	struct work *work = copy_work(work_in);
 	struct pool *pool = work->pool;
 	pthread_t submit_thread;
 
-	if (tv_work_found)
-		copy_time(&work->tv_work_found, tv_work_found);
+	cgtime(&work->tv_work_found);
 
 	if (stale_work(work, true)) {
 		if (opt_submit_stale)
@@ -5999,6 +6035,9 @@ static void submit_work_async(struct work *work_in, struct timeval *tv_work_foun
 
 void inc_hw_errors(struct thr_info *thr)
 {
+	applog(LOG_INFO, "%s%d: invalid nonce - HW error", thr->cgpu->drv->name,
+	       thr->cgpu->device_id);
+
 	mutex_lock(&stats_lock);
 	hw_errors++;
 	thr->cgpu->hw_errors++;
@@ -6023,12 +6062,8 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	return (be32toh(hash2_32[7]) <= diff1targ);
 }
 
-/* To be used once the work has been tested to be meet diff1 and has had its
- * nonce adjusted. */
-void submit_tested_work(struct thr_info *thr, struct work *work)
+static void update_work_stats(struct thr_info *thr, struct work *work)
 {
-	struct timeval tv_work_found;
-
 	work->share_diff = share_diff(work);
 
 	mutex_lock(&stats_lock);
@@ -6037,31 +6072,62 @@ void submit_tested_work(struct thr_info *thr, struct work *work)
 	work->pool->diff1 += work->device_diff;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
+}
+
+/* To be used once the work has been tested to be meet diff1 and has had its
+ * nonce adjusted. */
+void submit_tested_work(struct thr_info *thr, struct work *work)
+{
+	struct work *work_out;
+	update_work_stats(thr, work);
 
 	if (!fulltest(work->hash2, work->target)) {
 		applog(LOG_INFO, "Share below target");
 		return;
 	}
-
-	cgtime(&tv_work_found);
-	submit_work_async(work, &tv_work_found);
+	work_out = copy_work(work);
+	submit_work_async(work_out);
 }
 
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
-	bool ret = true;
-
 	if (test_nonce(work, nonce))
 		submit_tested_work(thr, work);
 	else {
-		applog(LOG_INFO, "%s%d: invalid nonce - HW error",
-		       thr->cgpu->drv->name, thr->cgpu->device_id);
-
 		inc_hw_errors(thr);
-		ret = false;
+		return false;
 	}
 
+	return true;
+}
+
+/* Allows drivers to submit work items where the driver has changed the ntime
+ * value by noffset. Must be only used with a work protocol that does not ntime
+ * roll itself intrinsically to generate work (eg stratum). We do not touch
+ * the original work struct, but the copy of it only. */
+bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t nonce,
+			  int noffset)
+{
+	struct work *work = make_work();
+	bool ret = false;
+
+	_copy_work(work, work_in, noffset);
+	if (!test_nonce(work, nonce)) {
+		inc_hw_errors(thr);
+		goto out;
+	}
+	ret = true;
+	update_work_stats(thr, work);
+	if (!fulltest(work->hash2, work->target)) {
+		applog(LOG_INFO, "Share below target");
+		goto  out;
+	}
+	submit_work_async(work);
+
+out:
+	if (!ret)
+		free_work(work);
 	return ret;
 }
 

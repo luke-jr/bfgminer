@@ -16,8 +16,14 @@ ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SUBSYSTEMS=="usb", ACTION=="a
 # Cairnsmore1
 ATTRS{idVendor}=="067b", ATTRS{idProduct}=="0230", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
+# Cairnsmore1-2
+ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8350", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
 # Ztex
 ATTRS{idVendor}=="221a", ATTRS{idProduct}=="0100", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
 
 # BF1
 ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="204b", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+
+#Klondike
+ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="f60a", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"

@@ -131,10 +131,6 @@ static inline int fsync (int fd)
   #include <libusb.h>
 #endif
 
-#ifdef USE_ZTEX
-  #include "libztex.h"
-#endif
-
 #ifdef USE_USBUTILS
   #include "usbutils.h"
 #endif
@@ -237,13 +233,13 @@ static inline int fsync (int fd)
 #define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bitforce) \
 	DRIVER_ADD_COMMAND(icarus) \
-	DRIVER_ADD_COMMAND(modminer) \
-	DRIVER_ADD_COMMAND(ztex)
+	DRIVER_ADD_COMMAND(modminer)
 
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
-	DRIVER_ADD_COMMAND(avalon)
+	DRIVER_ADD_COMMAND(avalon) \
+	DRIVER_ADD_COMMAND(klondike)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(opencl) \
@@ -465,14 +461,9 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	void *device_data;
-	union {
-#ifdef USE_ZTEX
-		struct libztex_device *device_ztex;
-#endif
 #ifdef USE_USBUTILS
-		struct cg_usb_device *usbdev;
+	struct cg_usb_device *usbdev;
 #endif
-	};
 #ifdef USE_AVALON
 	struct work **works;
 	int work_array;
@@ -944,6 +935,9 @@ extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
 #endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
+#endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
@@ -1395,6 +1389,8 @@ extern void inc_hw_errors(struct thr_info *thr);
 extern bool test_nonce(struct work *work, uint32_t nonce);
 extern void submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
+			  int noffset);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
@@ -1429,7 +1425,6 @@ extern void adl(void);
 extern void app_restart(void);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
-extern void __copy_work(struct work *work, struct work *base_work);
 extern struct work *copy_work(struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
