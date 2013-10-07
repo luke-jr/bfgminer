@@ -105,6 +105,7 @@ void bitfury_debug_nonce_array(const struct cgpu_info * const proc, const char *
 	       proc->proc_repr, msg, s, (unsigned long)inp[0x10]);
 }
 
+static
 bool bitfury_init_oldbuf(struct cgpu_info * const proc)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
@@ -160,6 +161,20 @@ tryagain:
 	return true;
 }
 
+bool bitfury_init_chip(struct cgpu_info * const proc)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct bitfury_payload payload = {
+		.midstate = "\xf9\x9a\xf0\xd5\x72\x34\x41\xdc\x9e\x10\xd1\x1f\xeb\xcd\xe3\xf5"
+		            "\x52\xf1\x14\x63\x06\x14\xd1\x12\x15\x25\x39\xd1\x7d\x77\x5a\xfd",
+		.m7    = 0xafbd0b42,
+		.ntime = 0xb6c24563,
+		.nbits = 0x6dfa4352,
+	};
+	payload_to_atrvec(bitfury->atrvec, &payload);
+	return bitfury_init_oldbuf(proc);
+}
+
 static
 bool bitfury_init(struct thr_info *thr)
 {
@@ -173,7 +188,7 @@ bool bitfury_init(struct thr_info *thr)
 			.spi = sys_spi,
 			.fasync = proc->proc_id,
 		};
-		bitfury_init_oldbuf(proc);
+		bitfury_init_chip(proc);
 	}
 	
 	return true;

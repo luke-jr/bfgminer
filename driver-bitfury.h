@@ -8,6 +8,7 @@
 
 extern bool bitfury_prepare(struct thr_info *);
 extern bool bitfury_init_oldbuf(struct cgpu_info *);
+extern bool bitfury_init_chip(struct cgpu_info *);
 
 extern int64_t bitfury_scanHash(struct thr_info *);
 

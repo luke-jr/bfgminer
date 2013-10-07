@@ -152,7 +152,7 @@ bool bfsb_init(struct thr_info *thr)
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
-		bitfury_init_oldbuf(proc);
+		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 54;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	}
@@ -181,7 +181,7 @@ void bfsb_enable(struct thr_info * const thr)
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Reinitialising chip (enable)", proc->proc_repr);
 	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-	bitfury_init_oldbuf(proc);
+	bitfury_init_chip(proc);
 }
 
 extern void bitfury_shutdown(struct thr_info *);
