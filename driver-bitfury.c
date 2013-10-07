@@ -76,6 +76,7 @@ static void bitfury_detect(void)
 }
 
 
+static
 void *bitfury_just_io(struct bitfury_device * const bitfury)
 {
 	struct spi_port * const spi = bitfury->spi;
@@ -106,15 +107,15 @@ void bitfury_debug_nonce_array(const struct cgpu_info * const proc, const char *
 }
 
 static
-bool bitfury_init_oldbuf(struct cgpu_info * const proc)
+bool bitfury_init_oldbuf(struct cgpu_info * const proc, const uint32_t *inp)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
 	uint32_t * const oldbuf = &bitfury->oldbuf[0];
 	uint32_t * const buf = &bitfury->newbuf[0];
-	const uint32_t *inp;
 	int i, differ, tried = 0;
 	
-	inp = bitfury_just_io(bitfury);
+	if (!inp)
+		inp = bitfury_just_io(bitfury);
 tryagain:
 	if (tried > 3)
 	{
@@ -172,7 +173,7 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 		.nbits = 0x6dfa4352,
 	};
 	payload_to_atrvec(bitfury->atrvec, &payload);
-	return bitfury_init_oldbuf(proc);
+	return bitfury_init_oldbuf(proc, NULL);
 }
 
 static
@@ -533,15 +534,14 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		bitfury = proc->device_data;
 		uint32_t * const newbuf = &bitfury->newbuf[0];
 		uint32_t * const oldbuf = &bitfury->oldbuf[0];
+		
+		inp = rxbuf[j];
 
 	if (unlikely(bitfury->desync_counter == 99))
 	{
-			// TODO: use current rxbuf
-		bitfury_init_oldbuf(proc);
+			bitfury_init_oldbuf(proc, inp);
 		goto out;
 	}
-
-		inp = rxbuf[j];
 
 	if (opt_debug)
 		bitfury_debug_nonce_array(proc, "Read", inp);
@@ -558,7 +558,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		{
 			applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
 			       proc->proc_repr);
-			bitfury_init_oldbuf(proc);
+				bitfury_init_oldbuf(proc, inp);
 			continue;
 		}
 		applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
