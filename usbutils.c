@@ -2125,6 +2125,7 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		case LIBUSB_SUCCESS:
 			item = CMD_CMD;
 			break;
+		case LIBUSB_TRANSFER_TIMED_OUT:
 		case LIBUSB_ERROR_TIMEOUT:
 			item = CMD_TIMEOUT;
 			break;
