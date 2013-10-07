@@ -1071,13 +1071,19 @@ void cgsleep_us(int64_t us)
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
-	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
+	/* Sanity check. We should only be using this for small differences so
+	 * limit the max to 60 seconds. */
+	if (unlikely(end->tv_sec - start->tv_sec > 60))
+		return 60000000;
+	return (end->tv_sec - start->tv_sec) * 1000000 + (end->tv_usec - start->tv_usec);
 }
 
 /* Returns the milliseconds difference between end and start times */
 int ms_tdiff(struct timeval *end, struct timeval *start)
 {
-	return end->tv_sec * 1000 + end->tv_usec / 1000 - start->tv_sec * 1000 - start->tv_usec / 1000;
+	if (unlikely(end->tv_sec - start->tv_sec > 60))
+		return 60000;
+	return (end->tv_sec - start->tv_sec) * 1000 + (end->tv_usec - start->tv_usec) / 1000;
 }
 
 /* Returns the seconds difference between end and start times as a double */
