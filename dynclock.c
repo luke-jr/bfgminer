@@ -16,6 +16,7 @@
 void dclk_prepare(struct dclk_data *data)
 {
 	*data = (struct dclk_data){
+		// after 275 sample periods
 		.minGoodSamples = 150.,
 		.freqMinM = 1,
 	};
@@ -48,28 +49,44 @@ bool dclk_updateFreq(struct dclk_data *data, dclk_change_clock_func_t changecloc
 			data->maxErrorRate[i + 1] = data->maxErrorRate[i] * (1.0 + 20.0 / i);
 
 	maxM = 0;
+	// Use max mulitplier up to the default as far as possible without hitting the max error rate
 	while (maxM < freqMDefault && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE)
 		maxM++;
+	// Use max mulitplier beyond the default if it's never hit the max error rate, and our current max has collected sufficient samples
 	while (maxM < data->freqMaxM && data->maxErrorRate[maxM + 1] < DCLK_MAXMAXERRORRATE && data->errorWeight[maxM] >= data->minGoodSamples)
 		maxM++;
 
+	// Find the multiplier that gives the best hashrate
 	bestM = data->freqMinM;
 	bestR = 0;
 	for (i = bestM; i <= maxM; i++) {
-		r = (i + 1 + (i == data->freqM? DCLK_ERRORHYSTERESIS: 0)) * (1 - data->maxErrorRate[i]);
+		// Hashrate is weighed on a linear scale
+		r = (i + 1);
+		
+		// The currently selected frequency gets a small "bonus" in comparison, as hysteresis
+		if (i == data->freqM)
+			r += DCLK_ERRORHYSTERESIS;
+		
+		// Adjust for measured error rate
+		r *= (1 - data->maxErrorRate[i]);
+		
+		// If it beats the current best, update best*
 		if (r > bestR) {
 			bestM = i;
 			bestR = r;
 		}
 	}
 
+	// Actually change the clock if the best multiplier is not currently selected
 	if (bestM != data->freqM) {
 		rv = changeclock(thr, bestM);
 	}
 
+	// Find the highest multiplier that we've taken a reasonable sampling of
 	maxM = freqMDefault;
 	while (maxM < data->freqMaxM && data->errorWeight[maxM + 1] > 100)
 		maxM++;
+	// If the new multiplier is some fraction of the highest we've used long enough to get a good sample, assume there is something wrong and instruct the driver to shut it off
 	if ((bestM < (1.0 - DCLK_OVERHEATTHRESHOLD) * maxM) && bestM < maxM - 1) {
 		applog(LOG_ERR, "%"PRIpreprv": frequency drop of %.1f%% detect. This may be caused by overheating. FPGA is shut down to prevent damage.",
 		       cgpu->proc_repr,
@@ -92,7 +109,11 @@ void dclk_errorCount(struct dclk_data *data, double portion)
 
 void dclk_preUpdate(struct dclk_data *data)
 {
-	data->errorRate[data->freqM] = data->errorCount[data->freqM] / data->errorWeight[data->freqM] * (data->errorWeight[data->freqM] < 100 ? data->errorWeight[data->freqM] * 0.01 : 1.0);
+	data->errorRate[data->freqM] = data->errorCount[data->freqM] / data->errorWeight[data->freqM];
+	// errorWeight 100 begins after sample period 137; before then, we minimize the effect of measured errorRate
+	if (data->errorWeight[data->freqM] < 100)
+		data->errorRate[data->freqM] /= 100;
+	
 	if (data->errorRate[data->freqM] > data->maxErrorRate[data->freqM])
 		data->maxErrorRate[data->freqM] = data->errorRate[data->freqM];
 }
