@@ -720,6 +720,7 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	 * all ourselves so set it to std usb type */
 	avalon->usbdev->usb_type = USB_TYPE_STD;
 	usb_set_pps(avalon, AVALON_USB_PACKETSIZE);
+	usb_buffer_enable(avalon);
 
 	/* We have a real Avalon! */
 	avalon_initialise(avalon);
