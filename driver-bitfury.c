@@ -709,8 +709,7 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	
 	if (!strcasecmp(option, "help"))
 	{
-		sprintf(replybuf, "baud: SPI baud rate");
-		sprintf(replybuf, "osc6_bits: range 1-55 (slow to fast)");
+		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-55 (slow to fast)");
 		return replybuf;
 	}
 	
@@ -719,8 +718,7 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 		if (!_bitfury_set_device_parse_setting(&bitfury->spi->speed, setting, replybuf, INT_MAX))
 			return replybuf;
 		
-		sprintf(replybuf, "baud changed");
-		return replybuf;
+		return NULL;
 	}
 	
 	if (!strcasecmp(option, "osc6_bits"))
@@ -732,7 +730,7 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 		bitfury->osc6_bits = newval;
 		bitfury->force_reinit = true;
 		
-		return replybuf;
+		return NULL;
 	}
 	
 	sprintf(replybuf, "Unknown option: %s", option);
