@@ -159,7 +159,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	bitfury_empty_buffer(bitfury);
 
 	if (!add_cgpu(bitfury))
-		goto out_close;
+		quit(1, "Failed to add_cgpu in bitfury_detect_one");
 
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
