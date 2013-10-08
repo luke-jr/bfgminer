@@ -5786,10 +5786,9 @@ out:
 
 static void pool_resus(struct pool *pool)
 {
-	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio()) {
-		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
-		switch_pools(NULL);
-	} else
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
+		applog(LOG_WARNING, "Pool %d %s alive, testing stability", pool->pool_no, pool->rpc_url);
+	else
 		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
@@ -6867,7 +6866,20 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
+
+			/* Only switch pools if the failback pool has been
+			 * alive for more than 5 minutes to prevent
+			 * intermittently failing pools from being used. */
+			if (!pool->idle && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio() &&
+			    now.tv_sec - pool->tv_idle.tv_sec > 300) {
+				applog(LOG_WARNING, "Pool %d %s stable for 5 mins",
+				       pool->pool_no, pool->rpc_url);
+				switch_pools(NULL);
+			}
 		}
+
+		if (current_pool()->idle)
+			switch_pools(NULL);
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
 			cgtime(&rotate_tv);
@@ -7232,6 +7244,7 @@ static void *test_pool_thread(void *arg)
 			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 
 		pool_resus(pool);
+		switch_pools(NULL);
 	} else
 		pool_died(pool);
 

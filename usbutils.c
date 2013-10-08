@@ -2345,6 +2345,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	size_t usbbufread;
+	int lock_wait;
 
 	DEVRLOCK(cgpu, pstate);
 
@@ -2619,6 +2620,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	double max, done;
 	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
+	int lock_wait;
 
 	DEVRLOCK(cgpu, pstate);
 
