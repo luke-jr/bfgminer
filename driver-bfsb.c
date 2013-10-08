@@ -47,13 +47,9 @@ int bfsb_autodetect()
 {
 	RUNONCE(0);
 	
-	int chip_n;
-	struct cgpu_info *bitfury_info;
-
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &bfsb_drv;
-	bitfury_info->threads = 1;
-
+	struct cgpu_info *cgpu = NULL, *proc1 = NULL, *prev_cgpu = NULL;
+	int proc_count = 0;
+	
 	applog(LOG_INFO, "INFO: bitfury_detect");
 	spi_init();
 	if (!sys_spi)
@@ -62,16 +58,12 @@ int bfsb_autodetect()
 	
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
-	int n = 0;
 	int i, j;
 	bool slot_on[32];
 	struct timespec t1, t2;
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
-	int max_devices = 100;
 
-
-	devicelist = malloc(max_devices * sizeof(*devicelist));
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
@@ -94,21 +86,30 @@ int bfsb_autodetect()
 			if (chip_n)
 			{
 				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", i, chip_n);
+				
+				devicelist = malloc(sizeof(*devicelist) * chip_n);
 				for (j = 0; j < chip_n; ++j)
 				{
-					if (unlikely(n >= max_devices))
-					{
-						max_devices *= 2;
-						devicelist = realloc(devicelist, max_devices * sizeof(*devicelist));
-					}
-					devicelist[n] = bitfury = malloc(sizeof(*bitfury));
+					devicelist[j] = bitfury = malloc(sizeof(*bitfury));
 					*bitfury = (struct bitfury_device){
 						.spi = port,
 						.slot = i,
 						.fasync = j,
 					};
-					n++;
 				}
+				
+				cgpu = malloc(sizeof(*cgpu));
+				*cgpu = (struct cgpu_info){
+					.drv = &bfsb_drv,
+					.procs = chip_n,
+					.device_data = devicelist,
+				};
+				add_cgpu_slave(cgpu, prev_cgpu);
+				
+				proc_count += chip_n;
+				if (!proc1)
+					proc1 = cgpu;
+				prev_cgpu = cgpu;
 			}
 			else
 				free(port);
@@ -116,22 +117,11 @@ int bfsb_autodetect()
 	}
 
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
-
-	chip_n = n;
-	bitfury_info->device_data = devicelist;
 	
+	if (proc1)
+		proc1->threads = 1;
 	
-	if (!chip_n) {
-		applog(LOG_WARNING, "No Bitfury chips detected!");
-		return 0;
-	} else {
-		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
-	}
-
-	bitfury_info->procs = chip_n;
-	add_cgpu(bitfury_info);
-	
-	return 1;
+	return proc_count;
 }
 
 static void bfsb_detect(void)
@@ -142,21 +132,24 @@ static void bfsb_detect(void)
 static
 bool bfsb_init(struct thr_info *thr)
 {
-	struct bitfury_device **devicelist = thr->cgpu->device_data;
+	struct bitfury_device **devicelist;
 	struct cgpu_info *proc;
 	struct bitfury_device *bitfury;
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
+		devicelist = proc->device_data;
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 54;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		
+		if (proc->proc_id == proc->procs - 1)
+			free(devicelist);
 	}
 	
-	free(devicelist);
 	timer_set_now(&thr->tv_poll);
 	
 	return true;
