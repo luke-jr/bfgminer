@@ -1433,9 +1433,9 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 {
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
-	int64_t hash_count, us_timeout, nonce_count;
 	const int miner_count = info->miner_count;
 	struct timeval now, then, tdiff;
+	int64_t hash_count, us_timeout;
 	struct timespec abstime;
 
 	/* Half nonce range */
@@ -1452,20 +1452,13 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	mutex_unlock(&info->qlock);
 
 	mutex_lock(&info->lock);
-	/* Smooths out hashrate shown by limiting number of nonces counted in
-	 * one lucky cycle, saving some for later less lucky cycles. */
-	if (info->nonces > miner_count)
-		nonce_count = miner_count;
-	else
-		nonce_count = info->nonces;
-	hash_count = 0xffffffffll * nonce_count;
+	hash_count = 0xffffffffull * (uint64_t)info->nonces;
 	avalon->results += info->nonces + info->idle;
 	if (avalon->results > miner_count)
 		avalon->results = miner_count;
 	if (!info->reset)
 		avalon->results--;
-	info->nonces -= nonce_count;
-	info->idle = 0;
+	info->nonces = info->idle = 0;
 	mutex_unlock(&info->lock);
 
 	/* Check for nothing but consecutive bad results or consistently less
