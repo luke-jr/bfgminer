@@ -118,6 +118,7 @@ int metabank_autodetect()
 					.drv = &metabank_drv,
 					.procs = chip_n,
 					.device_data = devicelist,
+					.cutofftemp = 50,
 				};
 				add_cgpu_slave(cgpu, prev_cgpu);
 				
