@@ -9229,6 +9229,9 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			}
 		}
 
+		if (current_pool()->idle)
+			switch_pools(NULL);
+
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
 			cgtime(&rotate_tv);
 			switch_pools(NULL);
