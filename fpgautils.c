@@ -1020,7 +1020,8 @@ bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *fn)
 			applog(LOG_ERR, "Error reading '%s'", fn);
 			goto ihxerr;
 		}
-		fgets(buf, sizeof(buf), F);
+		if (!fgets(buf, sizeof(buf), F))
+			goto ihxerr;
 		if (unlikely(buf[0] != ':'))
 			goto ihxerr;
 		if (unlikely(!(
