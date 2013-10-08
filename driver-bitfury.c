@@ -16,6 +16,7 @@
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
 #define BF1MSGSIZE 7
+#define BF1INFOSIZE 14
 
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 {
@@ -75,15 +76,15 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	err = usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
+	err = usb_read(bitfury, buf, BF1INFOSIZE, &amount, C_BF1_GETINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	if (amount != 14) {
-		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of 14",
-		       bitfury->drv->name, bitfury->device_id, amount);
+	if (amount != BF1INFOSIZE) {
+		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of %d",
+		       bitfury->drv->name, bitfury->device_id, amount, BF1INFOSIZE);
 		return false;
 	}
 	info->version = buf[1];
