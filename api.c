@@ -3089,7 +3089,6 @@ static int itemstats(struct io_data *io_data, int i, char *id, struct cgminer_st
 	if (cgpu) {
 #ifdef USE_USBUTILS
 		char details[256];
-		int val;
 
 		if (cgpu->usbinfo.pipe_count)
 			snprintf(details, sizeof(details),
