@@ -706,7 +706,7 @@ AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
-AM_CONDITIONAL([HAS_ASIC], [test x$avalon$icarus$httpsrv != xnonono])
+AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
 
 dnl Find YASM
 has_yasm=false
