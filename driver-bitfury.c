@@ -660,14 +660,23 @@ int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, boo
 	return 0xbd000000;
 }
 
-struct api_data *bitfury_api_device_status(const struct cgpu_info * const cgpu)
+struct api_data *bitfury_api_device_detail(struct cgpu_info * const cgpu)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct api_data *root = NULL;
+	
+	root = api_add_uint(root, "fasync", &bitfury->fasync, false);
+	
+	return root;
+}
+
+struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 {
 	struct bitfury_device * const bitfury = cgpu->device_data;
 	struct api_data *root = NULL;
 	int clock_bits = bitfury->osc6_bits;
 	
 	root = api_add_int(root, "Clock Bits", &clock_bits, true);
-	root = api_add_uint(root, "fasync", &bitfury->fasync, false);
 	
 	return root;
 }

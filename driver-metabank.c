@@ -189,6 +189,18 @@ static bool metabank_get_stats(struct cgpu_info *cgpu)
 	return true;
 }
 
+static struct api_data *metabank_api_extra_device_detail(struct cgpu_info *cgpu)
+{
+	struct api_data *root = NULL;
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	
+	root = bitfury_api_device_detail(cgpu);
+
+	root = api_add_uint(root, "Slot", &(bitfury->slot), false);
+
+	return root;
+}
+
 static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
@@ -196,8 +208,6 @@ static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 	struct bitfury_device * const bitfury = cgpu->device_data;
 	
 	root = bitfury_api_device_status(cgpu);
-
-	root = api_add_uint(root, "Slot", &(bitfury->slot), false);
 
 	vc0 = tm_i2c_getcore0(bitfury->slot);
 	vc1 = tm_i2c_getcore1(bitfury->slot);
@@ -226,6 +236,7 @@ struct device_drv metabank_drv = {
 	.job_process_results = bitfury_job_process_results,
 	
 	.thread_shutdown = metabank_shutdown,
+	.get_api_extra_device_detail = metabank_api_extra_device_detail,
 	.get_api_extra_device_status = metabank_api_extra_device_status,
 	.get_stats = metabank_get_stats,
 	.set_device = bitfury_set_device,

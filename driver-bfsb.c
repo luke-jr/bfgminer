@@ -184,10 +184,10 @@ static void bfsb_shutdown(struct thr_info *thr)
 	spi_bfsb_select_bank(-1);
 }
 
-static struct api_data *bfsb_api_device_status(struct cgpu_info *cgpu)
+static struct api_data *bfsb_api_device_detail(struct cgpu_info *cgpu)
 {
 	struct bitfury_device * const bitfury = cgpu->device_data;
-	struct api_data *root = bitfury_api_device_status(cgpu);
+	struct api_data *root = bitfury_api_device_detail(cgpu);
 	
 	root = api_add_uint(root, "Slot", &(bitfury->slot), false);
 	
@@ -204,7 +204,8 @@ struct device_drv bfsb_drv = {
 	.poll = bitfury_do_io,
 	.job_start = bitfury_noop_job_start,
 	.job_process_results = bitfury_job_process_results,
-	.get_api_extra_device_status = bfsb_api_device_status,
+	.get_api_extra_device_detail = bfsb_api_device_detail,
+	.get_api_extra_device_status = bitfury_api_device_status,
 	.set_device = bitfury_set_device,
 	.thread_disable = bfsb_disable,
 	.thread_enable = bfsb_enable,
