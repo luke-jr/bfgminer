@@ -2416,7 +2416,7 @@ char *_multi_format_unit(char **buflist, bool floatprec, const char *measurement
 {
 	unsigned char unit = 0;
 	int i;
-	size_t delimsz;
+	size_t delimsz = 0;
 	char *buf = buflist[0];
 	size_t itemwidth = (floatprec ? 5 : 3);
 	
