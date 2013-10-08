@@ -6251,7 +6251,8 @@ static void hash_sole_work(struct thr_info *mythr)
 				applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
 				dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-				mt_disable(mythr, thr_id, drv);
+				cgpu->shutdown = true;
+				break;
 			}
 
 			hashes_done += hashes;
