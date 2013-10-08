@@ -112,6 +112,10 @@ static inline int fsync (int fd)
   #include "libztex.h"
 #endif
 
+#ifdef USE_BITFURY
+  #include "libbitfury.h"
+#endif
+
 #ifdef HAVE_BYTESWAP_H
 #include <byteswap.h>
 #endif
@@ -568,6 +572,7 @@ struct cgpu_info {
 	struct work *queued_work;
 	unsigned int queued_count;
 
+	bool disable_watchdog;
 	bool shutdown;
 };
 
@@ -608,6 +613,7 @@ struct thr_info {
 	uint64_t hashes_done;
 	struct timeval tv_hashes_done;
 	struct timeval tv_lastupdate;
+	struct timeval _tv_last_hashes_done_call;
 
 	bool	pause;
 	time_t	getwork;
@@ -625,6 +631,7 @@ struct thr_info {
 	struct timeval tv_results_jobstart;
 	struct timeval tv_jobstart;
 	struct timeval tv_poll;
+	struct timeval tv_watchdog;
 	notifier_t notifier;
 	bool starting_next_work;
 	uint32_t _max_nonce;
@@ -726,6 +733,9 @@ static inline void swab256(void *dest_p, const void *src_p)
 }
 
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
+
+#define WATCHDOG_INTERVAL  2
+extern void bfg_watchdog(struct cgpu_info *, struct timeval *tvp_now);
 
 extern void _quit(int status);
 

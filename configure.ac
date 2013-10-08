@@ -73,6 +73,7 @@ AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_HEADERS([sys/file.h])
 
@@ -84,6 +85,8 @@ AC_CHECK_FUNCS([chroot])
 
 AC_FUNC_ALLOCA
 
+need_dynclock=no
+need_fpgautils=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -314,6 +317,7 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
@@ -324,6 +328,8 @@ AC_ARG_ENABLE([icarus],
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
@@ -336,6 +342,7 @@ AC_ARG_ENABLE([avalon],
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -386,6 +393,8 @@ AC_ARG_ENABLE([modminer],
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -436,6 +445,8 @@ elif test "x$x6500" = xauto; then
 fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -455,8 +466,91 @@ elif test "x$ztex" = xauto; then
 fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
+
+
+bitfury=yes
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--disable-bitfury],[Compile support for Bitfury (default enabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
+
+bfsb=no
+AC_ARG_ENABLE([bfsb],
+	[AC_HELP_STRING([--enable-bfsb],[Compile support for BFSB (default disabled)])],
+	[bfsb=$enableval]
+	)
+if test "x$bfsb" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFSB])
+	fi
+	AC_DEFINE([USE_BFSB], [1], [Defined to 1 if BFSB support is wanted])
+fi
+AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
+
+
+bigpic=auto
+AC_ARG_ENABLE([bigpic],
+	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
+	[bigpic=$enableval]
+	)
+if test "x$bigpic" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	bigpic=yes
+elif test "x$bigpic" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BigPic])
+else
+	bigpic=no
+fi
+if test "x$bigpic" = "xyes"; then
+	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
+
+
+littlefury=auto
+AC_ARG_ENABLE([littlefury],
+	[AC_HELP_STRING([--disable-littlefury],[Compile support for LittleFury (default enabled)])],
+	[littlefury=$enableval]
+	)
+if test "x$littlefury" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	littlefury=yes
+elif test "x$littlefury" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled LittleFury])
+else
+	littlefury=no
+fi
+if test "x$littlefury" = "xyes"; then
+	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
+
+
+metabank=no
+AC_ARG_ENABLE([metabank],
+	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
+	[metabank=$enableval]
+	)
+if test "x$metabank" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Metabank])
+	fi
+	AC_DEFINE([USE_METABANK], [1], [Defined to 1 if Metabank support is wanted])
+fi
+AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
 if test "x$x6500$ztex" = "xnono"; then
@@ -484,9 +578,7 @@ if test "x$scrypt" = xyes; then
 fi
 
 
-need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
-	need_fpgautils=yes
+if test x$need_fpgautils = xyes; then
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
 	if $have_win32; then
@@ -643,7 +735,7 @@ AC_SUBST(libblkmaker_LIBS)
 
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
-AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
+AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
@@ -652,7 +744,7 @@ AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
-AM_CONDITIONAL([HAS_ASIC], [test x$avalon$icarus$httpsrv != xnonono])
+AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
 
 dnl Find YASM
 has_yasm=false
@@ -747,7 +839,7 @@ if test "x$cpumining$have_x86_32" = "xyestrue"; then
 fi
 AM_CONDITIONAL([HAVE_SSE2], [test "x$have_sse2" = "xyes"])
 
-if test "x$bitforce$modminer$icarus" != "xnonono"; then
+if test "x$need_fpgautils" = "xyes"; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -1053,6 +1145,12 @@ else
 	echo "  Avalon.ASICs.........: Disabled"
 fi
 
+if test "x$bigpic" = xyes; then
+	echo "  BPM.USB.ASICs........: Enabled"
+else
+	echo "  BPM.USB.ASICs........: Disabled"
+fi
+
 if test "x$bitforce" = xyes; then
 	echo "  BitForce.devices.....: Enabled"
 else
@@ -1093,8 +1191,14 @@ else
 	echo "  getwork.proxy.server.: Disabled"
 fi
 
-if test "x$bitforce$modminer" != xnono; then
+if test "x$need_fpgautils" = xyes; then
 	echo "  libudev.detection....: $libudev"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  Bitfury.ASICs........: Enabled"
+else
+	echo "  Bitfury.ASICs........: Disabled"
 fi
 
 echo
@@ -1104,6 +1208,7 @@ if test "x$cpumining" = xyes; then
 else
 	echo "  CPU Mining...........: Disabled"
 fi
+
 
 echo
 echo "Compilation............: make (or gmake)"

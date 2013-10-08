@@ -127,6 +127,12 @@ BFGMiner specific configuration options:
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-opencl        Build without support for OpenCL (default enabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
+	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--enable-bfsb           Compile support for BFSB (default disabled)
+	--disable-bigpic        Compile support for Big Picture Mining USB (default
+	                        enabled)
+	--disable-littlefury    Compile support for LittleFury (default enabled)
+	--enable-metabank       Compile support for Metabank (default disabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)

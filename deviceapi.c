@@ -84,6 +84,15 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	return true;
 }
 
+bool hashes_done2(struct thr_info *thr, int64_t hashes, uint32_t *max_nonce)
+{
+	struct timeval tv_now, tv_delta;
+	timer_set_now(&tv_now);
+	timersub(&tv_now, &thr->_tv_last_hashes_done_call, &tv_delta);
+	thr->_tv_last_hashes_done_call = tv_now;
+	return hashes_done(thr, hashes, &tv_delta, max_nonce);
+}
+
 /* A generic wait function for threads that poll that will wait a specified
  * time tdiff waiting on a work restart request. Returns zero if the condition
  * was met (work restart requested) or ETIMEDOUT if not.
@@ -275,6 +284,7 @@ void job_results_fetched(struct thr_info *mythr)
 	if (mythr->_proceed_with_new_job)
 		do_job_start(mythr);
 	else
+	if (likely(mythr->prev_work))
 	{
 		struct timeval tv_now;
 		
@@ -315,6 +325,9 @@ void mt_job_transition(struct thr_info *mythr)
 void job_start_complete(struct thr_info *mythr)
 {
 	struct timeval tv_now;
+	
+	if (unlikely(!mythr->prev_work))
+		return;
 	
 	timer_set_now(&tv_now);
 	
@@ -405,6 +418,12 @@ void minerloop_async(struct thr_info *mythr)
 	
 	if (mythr->work_restart_notifier[1] == -1)
 		notifier_init(mythr->work_restart_notifier);
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		mythr = proc->thr[0];
+		timer_set_now(&mythr->tv_watchdog);
+		proc->disable_watchdog = true;
+	}
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -455,8 +474,15 @@ defer_events:
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
 			
+			if (timer_passed(&mythr->tv_watchdog, &tv_now))
+			{
+				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
+				bfg_watchdog(proc, &tv_now);
+			}
+			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
 		do_notifier_select(thr, &tv_timeout);
@@ -680,6 +706,24 @@ bool add_cgpu(struct cgpu_info *cgpu)
 void add_cgpu_live(void *p)
 {
 	add_cgpu(p);
+}
+
+bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
+{
+	int old_total_devices = total_devices_new;
+	
+	if (!prev_cgpu)
+		return add_cgpu(cgpu);
+	
+	while (prev_cgpu->next_proc)
+		prev_cgpu = prev_cgpu->next_proc;
+	
+	if (!add_cgpu(cgpu))
+		return false;
+	
+	prev_cgpu->next_proc = devices_new[old_total_devices];
+	
+	return true;
 }
 
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
