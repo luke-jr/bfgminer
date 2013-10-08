@@ -486,7 +486,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	int n, i, j;
 	bool newjob;
 	uint32_t nonce;
-	int n_chips = 0, lastchip;
+	int n_chips = 0, lastchip = 0;
 	struct spi_port *spi = NULL;
 	bool should_be_running;
 	

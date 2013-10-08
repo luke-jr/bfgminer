@@ -39,7 +39,12 @@ static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, st
 	char buf[sizeof(struct bigpic_identity)+1];
 	int len;
 
-	write(fd, "I", 1);
+	if (1 != write(fd, "I", 1))
+	{
+		applog(LOG_ERR, "%s: Failed writing id request to %s",
+		       bigpic_drv.dname, devpath);
+		return false;
+	}
 	len = serial_read(fd, buf, sizeof(buf));
 	if(len != 14)
 	{
@@ -57,7 +62,13 @@ static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, st
 
 	char buf_state[sizeof(struct bigpic_state)+1];
 	len = 0;
-	write(fd, "R", 1);
+	if (1 != write(fd, "R", 1))
+	{
+		applog(LOG_ERR, "%s: Failed writing reset request to %s",
+		       bigpic_drv.dname, devpath);
+		return false;
+	}
+
 
 	while(len == 0)
 	{
@@ -236,7 +247,13 @@ void bigpic_job_start(struct thr_info *thr)
 		       board->proc_repr, hex);
 	}
 	
-	write(board->device_fd, info->tx_buffer, 45);
+	if (45 != write(board->device_fd, info->tx_buffer, 45))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed writing work task", board->proc_repr);
+		dev_error(board, REASON_DEV_COMMS_ERROR);
+		job_start_abort(thr, true);
+		return;
+	}
 	
 	while(1)
 	{
@@ -287,7 +304,8 @@ static void bigpic_shutdown(struct thr_info *thr)
 static bool bigpic_identify(struct cgpu_info *cgpu)
 {
 	char buf[] = "L";
-	write(cgpu->device_fd, buf, sizeof(buf));
+	if (sizeof(buf) != write(cgpu->device_fd, buf, sizeof(buf)))
+		return false;
 	
 	return true;
 }
