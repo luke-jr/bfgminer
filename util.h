@@ -59,6 +59,8 @@
 	#endif
 #endif
 
+#define IGNORE_RETURN_VALUE(expr)  {if(expr);}(void)0
+
 #if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
 #else

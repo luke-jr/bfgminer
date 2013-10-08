@@ -1979,19 +1979,22 @@ void notifier_init(notifier_t pipefd)
 
 void notifier_wake(notifier_t fd)
 {
+	if (1 !=
 #ifdef WIN32
-	(void)send(fd[1], "\0", 1, 0);
+	send(fd[1], "\0", 1, 0)
 #else
-	(void)write(fd[1], "\0", 1);
+	write(fd[1], "\0", 1)
 #endif
+	)
+		applog(LOG_WARNING, "Error trying to wake notifier");
 }
 
 void notifier_read(notifier_t fd)
 {
 	char buf[0x10];
 #ifdef WIN32
-	(void)recv(fd[0], buf, sizeof(buf), 0);
+	IGNORE_RETURN_VALUE(recv(fd[0], buf, sizeof(buf), 0));
 #else
-	(void)read(fd[0], buf, sizeof(buf));
+	IGNORE_RETURN_VALUE(read(fd[0], buf, sizeof(buf)));
 #endif
 }
