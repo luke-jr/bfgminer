@@ -302,18 +302,6 @@ else
 	adl="no"
 fi
 
-################################################################################
-AC_ARG_ENABLE([bigpic],
-	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
-	[bigpic=$enableval],
-	[bigpic=yes]
-	)
-if test "x$bigpic" = xyes; then
-	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
-	need_fpgautils=yes
-fi
-AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
-
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
 	[bitforce=$enableval],
@@ -478,6 +466,27 @@ if test "x$bfsb" = "xyes"; then
 	AC_DEFINE([USE_BFSB], [1], [Defined to 1 if BFSB support is wanted])
 fi
 AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
+
+
+bigpic=auto
+AC_ARG_ENABLE([bigpic],
+	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
+	[bigpic=$enableval]
+	)
+if test "x$bigpic" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	bigpic=yes
+elif test "x$bigpic" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BigPic])
+else
+	bigpic=no
+fi
+if test "x$bigpic" = "xyes"; then
+	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
 
 littlefury=auto
