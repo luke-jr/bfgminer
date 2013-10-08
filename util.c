@@ -2454,7 +2454,9 @@ void *cmd_thread(void *cmdp)
 {
 	const char *cmd = cmdp;
 	applog(LOG_DEBUG, "Executing command: %s", cmd);
-	system(cmd);
+	int rc = system(cmd);
+	if (rc)
+		applog(LOG_WARNING, "Command returned %d exit code: %s", rc, cmd);
 	return NULL;
 }
 
