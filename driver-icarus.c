@@ -108,6 +108,8 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define CAIRNSMORE2_HASH_TIME 0.0000000066600
 #define NANOSEC 1000000000.0
 
+#define CAIRNSMORE2_INTS 4
+
 // Icarus Rev3 doesn't send a completion message when it finishes
 // the full nonce range, so to avoid being idle we must abort the
 // work (by starting a new work item) shortly before it finishes
@@ -178,6 +180,7 @@ static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
 struct ICARUS_INFO {
+	enum sub_ident ident;
 	int intinfo;
 
 	// time to calculate the golden_ob
@@ -216,17 +219,43 @@ struct ICARUS_INFO {
 	int fpga_count;
 	uint32_t nonce_mask;
 
-	bool initialised;
+	uint8_t cmr2_speed;
+	bool speed_next_work;
+	bool flash_next_work;
 };
 
 #define ICARUS_MIDSTATE_SIZE 32
-#define ICARUS_UNUSED_SIZE 20
+#define ICARUS_UNUSED_SIZE 16
 #define ICARUS_WORK_SIZE 12
 
 #define ICARUS_WORK_DATA_OFFSET 64
 
+#define ICARUS_CMR2_SPEED_FACTOR 2.5
+#define ICARUS_CMR2_SPEED_MIN_INT 100
+#define ICARUS_CMR2_SPEED_DEF_INT 180
+#define ICARUS_CMR2_SPEED_MAX_INT 220
+#define CMR2_INT_TO_SPEED(_speed) ((uint8_t)((float)_speed / ICARUS_CMR2_SPEED_FACTOR))
+#define ICARUS_CMR2_SPEED_MIN CMR2_INT_TO_SPEED(ICARUS_CMR2_SPEED_MIN_INT)
+#define ICARUS_CMR2_SPEED_DEF CMR2_INT_TO_SPEED(ICARUS_CMR2_SPEED_DEF_INT)
+#define ICARUS_CMR2_SPEED_MAX CMR2_INT_TO_SPEED(ICARUS_CMR2_SPEED_MAX_INT)
+#define ICARUS_CMR2_SPEED_INC 1
+#define ICARUS_CMR2_SPEED_DEC -1
+#define ICARUS_CMR2_SPEED_FAIL -10
+
+#define ICARUS_CMR2_PREFIX ((uint8_t)0xB7)
+#define ICARUS_CMR2_CMD_SPEED ((uint8_t)0)
+#define ICARUS_CMR2_CMD_FLASH ((uint8_t)1)
+#define ICARUS_CMR2_DATA_FLASH_OFF ((uint8_t)0)
+#define ICARUS_CMR2_DATA_FLASH_ON ((uint8_t)1)
+#define ICARUS_CMR2_CHECK ((uint8_t)0x6D)
+
 struct ICARUS_WORK {
 	uint8_t midstate[ICARUS_MIDSTATE_SIZE];
+	// These 4 bytes are for CMR2 bitstreams that handle MHz adjustment
+	uint8_t check;
+	uint8_t data;
+	uint8_t cmd;
+	uint8_t prefix;
 	uint8_t unused[ICARUS_UNUSED_SIZE];
 	uint8_t work[ICARUS_WORK_SIZE];
 };
@@ -423,8 +452,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 			quit(1, "icarus_intialise() called with invalid %s cgid %i ident=%d",
 				icarus->drv->name, icarus->cgminer_id, ident);
 	}
-
-	info->initialised = true;
 }
 
 static void rev(unsigned char *s, size_t l)
@@ -820,9 +847,10 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	char *nonce_hex;
 	int baud, uninitialised_var(work_division), uninitialised_var(fpga_count);
 	struct cgpu_info *icarus;
-	int ret, err, amount, tries;
-	enum sub_ident ident;
+	int ret, err, amount, tries, i;
 	bool ok;
+	bool cmr2_ok[CAIRNSMORE2_INTS];
+	int cmr2_count;
 
 	if ((sizeof(workdata) << 1) != (sizeof(golden_ob) - 1))
 		quithere(1, "Data and golden_ob sizes don't match");
@@ -843,8 +871,8 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 		quit(1, "Failed to malloc ICARUS_INFO");
 	icarus->device_data = (void *)info;
 
-	ident = usb_ident(icarus);
-	switch (ident) {
+	info->ident = usb_ident(icarus);
+	switch (info->ident) {
 		case IDENT_ICA:
 		case IDENT_BLT:
 		case IDENT_LLT:
@@ -853,19 +881,32 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 			info->timeout = ICARUS_WAIT_TIMEOUT;
 			break;
 		case IDENT_CMR2:
+			if (found->intinfo_count != CAIRNSMORE2_INTS) {
+				quithere(1, "CMR2 Interface count (%d) isn't expected: %d",
+						found->intinfo_count,
+						CAIRNSMORE2_INTS);
+			}
 			info->timeout = ICARUS_CMR2_TIMEOUT;
+			cmr2_count = 0;
+			for (i = 0; i < CAIRNSMORE2_INTS; i++)
+				cmr2_ok[i] = false;
 			break;
 		default:
 			quit(1, "%s icarus_detect_one() invalid %s ident=%d",
-				icarus->drv->dname, icarus->drv->dname, ident);
+				icarus->drv->dname, icarus->drv->dname, info->ident);
 	}
+
+// For CMR2 test each USB Interface
+
+cmr2_retry:
 
 	tries = 2;
 	ok = false;
 	while (!ok && tries-- > 0) {
 		icarus_initialise(icarus, baud);
 
-		err = usb_write(icarus, (void *)(&workdata), sizeof(workdata), &amount, C_SENDTESTWORK);
+		err = usb_write_ii(icarus, info->intinfo,
+				   (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
 
 		if (err != LIBUSB_SUCCESS || amount != sizeof(workdata))
 			continue;
@@ -879,7 +920,7 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 		if (strncmp(nonce_hex, golden_nonce, 8) == 0)
 			ok = true;
 		else {
-			if (tries < 0) {
+			if (tries < 0 && info->ident != IDENT_CMR2) {
 				applog(LOG_ERR,
 					"Icarus Detect: "
 					"Test failed at %s: get %s, should: %s",
@@ -889,13 +930,50 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 		free(nonce_hex);
 	}
 
-	if (!ok)
-		goto unshin;
+	if (!ok) {
+		if (info->ident != IDENT_CMR2)
+			goto unshin;
 
-	applog(LOG_DEBUG,
-		"Icarus Detect: "
-		"Test succeeded at %s: got %s",
-			icarus->device_path, golden_nonce);
+		if (info->intinfo < CAIRNSMORE2_INTS-1) {
+			info->intinfo++;
+			goto cmr2_retry;
+		}
+	} else {
+		if (info->ident == IDENT_CMR2) {
+			applog(LOG_DEBUG,
+				"Icarus Detect: "
+				"Test succeeded at %s i%d: got %s",
+					icarus->device_path, info->intinfo, golden_nonce);
+
+			cmr2_ok[info->intinfo] = true;
+			cmr2_count++;
+			if (info->intinfo < CAIRNSMORE2_INTS-1) {
+				info->intinfo++;
+				goto cmr2_retry;
+			}
+		}
+	}
+
+	if (info->ident == IDENT_CMR2) {
+		if (cmr2_count == 0) {
+			applog(LOG_ERR,
+				"Icarus Detect: Test failed at %s: for all %d CMR2 Interfaces",
+				icarus->device_path, CAIRNSMORE2_INTS);
+			goto unshin;
+		}
+
+		// set the interface to the first one that succeeded
+		for (i = 0; i < CAIRNSMORE2_INTS; i++)
+			if (cmr2_ok[i]) {
+				info->intinfo = i;
+				break;
+			}
+	} else {
+		applog(LOG_DEBUG,
+			"Icarus Detect: "
+			"Test succeeded at %s: got %s",
+				icarus->device_path, golden_nonce);
+	}
 
 	/* We have a real Icarus! */
 	if (!add_cgpu(icarus))
@@ -905,6 +983,18 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	applog(LOG_INFO, "%s%d: Found at %s",
 		icarus->drv->name, icarus->device_id, icarus->device_path);
+
+	if (info->ident == IDENT_CMR2) {
+		applog(LOG_INFO, "%s%d: with %d Interface%s",
+				icarus->drv->name, icarus->device_id,
+				cmr2_count, cmr2_count > 1 ? "s" : "");
+
+		// Assume 1 or 2 are running FPGA pairs
+		if (cmr2_count < 3) {
+			work_division = fpga_count = 2;
+			info->Hs /= 2;
+		}
+	}
 
 	applog(LOG_DEBUG, "%s%d: Init baud=%d work_division=%d fpga_count=%d",
 		icarus->drv->name, icarus->device_id, baud, work_division, fpga_count);
@@ -919,11 +1009,14 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	set_timing_mode(this_option_offset, icarus);
 	
-	if (usb_ident(icarus) == IDENT_CMR2) {
+	if (info->ident == IDENT_CMR2) {
 		int i;
-		for (i = 1; i < icarus->usbdev->found->intinfo_count; i++) {
+		for (i = info->intinfo + 1; i < icarus->usbdev->found->intinfo_count; i++) {
 			struct cgpu_info *cgtmp;
 			struct ICARUS_INFO *intmp;
+
+			if (!cmr2_ok[i])
+				continue;
 
 			cgtmp = usb_copy_cgpu(icarus);
 			if (!cgtmp) {
@@ -984,6 +1077,45 @@ static bool icarus_prepare(__maybe_unused struct thr_info *thr)
 	return true;
 }
 
+static void cmr2_command(struct cgpu_info *icarus, uint8_t cmd, uint8_t data)
+{
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+	struct ICARUS_WORK workdata;
+	int amount;
+
+	memset((void *)(&workdata), 0, sizeof(workdata));
+
+	workdata.prefix = ICARUS_CMR2_PREFIX;
+	workdata.cmd = cmd;
+	workdata.data = data;
+	workdata.check = workdata.data ^ workdata.cmd ^ workdata.prefix ^ ICARUS_CMR2_CHECK;
+
+	usb_write_ii(icarus, info->intinfo, (char *)(&workdata), sizeof(workdata), &amount, C_SENDWORK);
+}
+
+static void cmr2_commands(struct cgpu_info *icarus)
+{
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
+
+	if (info->speed_next_work) {
+		info->speed_next_work = false;
+		cmr2_command(icarus, ICARUS_CMR2_CMD_SPEED, info->cmr2_speed);
+		return;
+	}
+
+	if (info->flash_next_work) {
+		info->flash_next_work = false;
+		cmr2_command(icarus, ICARUS_CMR2_CMD_FLASH, ICARUS_CMR2_DATA_FLASH_ON);
+		cgsleep_ms(250);
+		cmr2_command(icarus, ICARUS_CMR2_CMD_FLASH, ICARUS_CMR2_DATA_FLASH_OFF);
+		cgsleep_ms(250);
+		cmr2_command(icarus, ICARUS_CMR2_CMD_FLASH, ICARUS_CMR2_DATA_FLASH_ON);
+		cgsleep_ms(250);
+		cmr2_command(icarus, ICARUS_CMR2_CMD_FLASH, ICARUS_CMR2_DATA_FLASH_OFF);
+		return;
+	}
+}
+
 static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
@@ -1014,9 +1146,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	if (icarus->usbinfo.nodev)
 		return -1;
 
-	if (!info->initialised)
-		icarus_initialise(icarus, info->baud);
-
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
 	memset((void *)(&workdata), 0, sizeof(workdata));
@@ -1024,6 +1153,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
 	rev((void *)(&(workdata.midstate)), ICARUS_MIDSTATE_SIZE);
 	rev((void *)(&(workdata.work)), ICARUS_WORK_SIZE);
+
+	if (info->speed_next_work || info->flash_next_work)
+		cmr2_commands(icarus);
 
 	// We only want results for the work we are about to send
 	usb_buffer_clear(icarus);
@@ -1245,9 +1377,69 @@ static struct api_data *icarus_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static void icarus_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
+{
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
+
+	if (info->ident == IDENT_CMR2 && info->cmr2_speed > 0)
+		tailsprintf(buf, bufsiz, "%5.1fMhz", (float)(info->cmr2_speed) * ICARUS_CMR2_SPEED_FACTOR);
+	else
+		tailsprintf(buf, bufsiz, "        ");
+
+	tailsprintf(buf, bufsiz, "        | ");
+}
+
 static void icarus_shutdown(__maybe_unused struct thr_info *thr)
 {
 	// TODO: ?
+}
+
+static void icarus_identify(struct cgpu_info *cgpu)
+{
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
+
+	if (info->ident == IDENT_CMR2)
+		info->flash_next_work = true;
+}
+
+static char *icarus_set(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
+{
+	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(cgpu->device_data);
+	int val;
+
+	if (info->ident != IDENT_CMR2) {
+		strcpy(replybuf, "no set options available");
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "help") == 0) {
+		sprintf(replybuf, "clock: range %d-%d",
+				  ICARUS_CMR2_SPEED_MIN_INT, ICARUS_CMR2_SPEED_MAX_INT);
+		return replybuf;
+	}
+
+	if (strcasecmp(option, "clock") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing clock setting");
+			return replybuf;
+		}
+
+		val = atoi(setting);
+		if (val < ICARUS_CMR2_SPEED_MIN_INT || val > ICARUS_CMR2_SPEED_MAX_INT) {
+			sprintf(replybuf, "invalid clock: '%s' valid range %d-%d",
+					  setting,
+					  ICARUS_CMR2_SPEED_MIN_INT,
+					  ICARUS_CMR2_SPEED_MAX_INT);
+		}
+
+		info->cmr2_speed = CMR2_INT_TO_SPEED(val);
+		info->speed_next_work = true;
+
+		return NULL;
+	}
+
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
 }
 
 struct device_drv icarus_drv = {
@@ -1256,6 +1448,9 @@ struct device_drv icarus_drv = {
 	.name = "ICA",
 	.drv_detect = icarus_detect,
 	.get_api_stats = icarus_api_stats,
+	.get_statline_before = icarus_statline_before,
+	.set_device = icarus_set,
+	.identify_device = icarus_identify,
 	.thread_prepare = icarus_prepare,
 	.scanhash = icarus_scanhash,
 	.thread_shutdown = icarus_shutdown,
