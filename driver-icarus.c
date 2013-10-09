@@ -754,7 +754,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	unsigned char ob_bin[64] = {0}, nonce_bin[ICARUS_READ_SIZE] = {0};
 	uint32_t nonce;
 	int64_t hash_count;
-	struct timeval tv_start, elapsed;
+	struct timeval tv_start = {.tv_sec=0}, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
 	int curr_hw_errors, i;
