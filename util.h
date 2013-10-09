@@ -68,6 +68,8 @@
 	#endif
 #endif
 
+#define IGNORE_RETURN_VALUE(expr)  {if(expr);}(void)0
+
 #if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
 #else
@@ -315,6 +317,12 @@ extern void (*timer_set_now)(struct timeval *);
 	}  \
 )
 
+static inline
+long timeval_to_us(const struct timeval *tvp)
+{
+	return ((long)tvp->tv_sec * 1000000) + tvp->tv_usec;
+}
+
 #define timer_set_delay(tvp_timer, tvp_now, usecs)  do {  \
 	struct timeval tv_add = TIMEVAL_USECS(usecs);  \
 	timeradd(&tv_add, tvp_now, tvp_timer);  \
@@ -341,7 +349,7 @@ long timer_elapsed_us(const struct timeval *tvp_timer, const struct timeval *tvp
 	struct timeval tv;
 	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
 	timersub(_tvp_now, tvp_timer, &tv);
-	return ((long)tv.tv_sec * 1000000) + tv.tv_usec;
+	return timeval_to_us(&tv);
 }
 
 static inline

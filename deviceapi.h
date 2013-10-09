@@ -10,6 +10,7 @@
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
+extern bool hashes_done2(struct thr_info *, int64_t hashes, uint32_t *max_nonce);
 extern void mt_disable_start(struct thr_info *);
 extern void mt_disable_finish(struct thr_info *);
 extern void mt_disable(struct thr_info *);  // blocks until reenabled
@@ -33,6 +34,7 @@ extern void minerloop_queue(struct thr_info *);
 extern void *miner_thread(void *);
 
 extern void add_cgpu_live(void*);
+extern bool add_cgpu_slave(struct cgpu_info *, struct cgpu_info *master);
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();

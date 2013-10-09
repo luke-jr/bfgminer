@@ -33,6 +33,7 @@
 #include "deviceapi.h"
 #include "miner.h"
 #include "bench_block.h"
+#include "logging.h"
 #include "util.h"
 #include "driver-cpu.h"
 

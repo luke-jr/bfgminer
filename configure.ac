@@ -73,6 +73,7 @@ AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_HEADERS([sys/file.h])
 
@@ -84,6 +85,12 @@ AC_CHECK_FUNCS([chroot])
 
 AC_FUNC_ALLOCA
 
+driverlist=
+algolist=SHA256d
+optlist=
+
+need_dynclock=no
+need_fpgautils=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -169,6 +176,7 @@ AC_CHECK_DECL([HASH_ITER],[
 ])
 
 
+driverlist="$driverlist cpu/cpumining"
 cpumining="no"
 
 AC_ARG_ENABLE([cpumining],
@@ -177,9 +185,12 @@ AC_ARG_ENABLE([cpumining],
 	)
 if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
+	driverlist="$driverlist cpu:asm/has_yasm"
+	driverlist="$driverlist cpu:sse2/have_sse2"
 fi
 AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
 
+driverlist="$driverlist opencl"
 opencl="yes"
 
 AC_ARG_ENABLE([opencl],
@@ -265,6 +276,7 @@ AC_SUBST(JANSSON_LIBS)
 if test "x$opencl" = xyes; then
 	adl="yes"
 	
+driverlist="$driverlist opencl:sensors/with_sensors"
 AC_ARG_WITH([sensors],
 	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
 	[true],[with_sensors=auto])
@@ -289,11 +301,15 @@ if test "x$with_sensors" != xno; then
 	],[
 		with_sensors=no
 		AC_MSG_RESULT([no])
+		if ! $have_win32; then
+			with_sensors_enableaction="install libsensors"
+		fi
 	])
 	LIBS="$save_LIBS"
 fi
 AC_SUBST(sensors_LIBS)
 
+driverlist="$driverlist opencl:adl/adl"
 AC_ARG_ENABLE([adl],
 	[AC_HELP_STRING([--disable-adl],[Build without ADL monitoring (default enabled)])],
 	[adl=$enableval]
@@ -307,6 +323,7 @@ else
 	adl="no"
 fi
 
+driverlist="$driverlist bitforce"
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
 	[bitforce=$enableval],
@@ -314,9 +331,11 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
+driverlist="$driverlist icarus cairnsmore/icarus erupter/icarus"
 AC_ARG_ENABLE([icarus],
 	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
 	[icarus=$enableval],
@@ -324,9 +343,12 @@ AC_ARG_ENABLE([icarus],
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+driverlist="$driverlist avalon"
 avalon="no"
 
 AC_ARG_ENABLE([avalon],
@@ -336,6 +358,7 @@ AC_ARG_ENABLE([avalon],
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -349,6 +372,9 @@ if test "x$httpsrv" != "xno"; then
 		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
 		httpsrv=yes
 	],[
+		httpsrv=no
+		httpsrv_enableaction="install libmicrohttpd 0.9.5+"
+		need_bfg_driver_proxy_enableaction="install libmicrohttpd 0.9.5+"
 		if test "x$httpsrv" = "xyes"; then
 			AC_MSG_ERROR([Unable to find libmicrohttpd 0.9.5+])
 		else
@@ -368,6 +394,13 @@ if test "x$libevent" != "xno"; then
 		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
 		libevent=yes
 	],[
+		libevent=no
+		libevent_enableaction="install libevent 2.0.3+"
+		if test -n "$need_bfg_driver_proxy_enableaction"; then
+			need_bfg_driver_proxy_enableaction="${need_bfg_driver_proxy_enableaction} (getwork) or libevent 2.0.3+ (stratum)"
+		else
+			need_bfg_driver_proxy_enableaction="install libevent 2.0.3+"
+		fi
 		if test "x$libevent" = "xyes"; then
 			AC_MSG_ERROR([Unable to find libevent 2.0.3+])
 		else
@@ -377,8 +410,16 @@ if test "x$libevent" != "xno"; then
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])
 
+driverlist="$driverlist proxy/need_bfg_driver_proxy"
+if test x$libevent$httpsrv = xnono; then
+	need_bfg_driver_proxy=no
+else
+	need_bfg_driver_proxy=yes
+	driverlist="$driverlist proxy:getwork/httpsrv proxy:stratum/libevent"
+fi
 AM_CONDITIONAL([NEED_BFG_DRIVER_PROXY], [test x$libevent$httpsrv != xnono])
 
+driverlist="$driverlist modminer"
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
@@ -386,6 +427,8 @@ AC_ARG_ENABLE([modminer],
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -420,6 +463,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 	fi
 ])
 
+driverlist="$driverlist x6500"
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
 	[x6500=$enableval],
@@ -431,14 +475,17 @@ elif test "x$x6500" = xauto; then
 	x6500="$libusb"
 	if test "x$libusb" = xno; then
 		AC_MSG_WARN([Could not find libusb, required for X6500 support])
-		x6500warn=yes
+		x6500_enableaction="install libusb 1.0+"
 	fi
 fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
+driverlist="$driverlist ztex"
 AC_ARG_ENABLE([ztex],
 	[AC_HELP_STRING([--disable-ztex],[Compile support for ZTEX (default if libusb)])],
 	[ztex=$enableval],
@@ -450,13 +497,101 @@ elif test "x$ztex" = xauto; then
 	ztex="$libusb"
 	if test "x$libusb" = xno; then
 		AC_MSG_WARN([Could not find libusb, required for ZTEX support])
-		ztexwarn=yes
+		ztex_enableaction="install libusb 1.0+"
 	fi
 fi
 if test "x$ztex" = xyes; then
 	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
+	need_dynclock=yes
+	need_fpgautils=yes
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
+
+
+driverlist="$driverlist bitfury_gpio/bitfury"
+bitfury=yes
+AC_ARG_ENABLE([bitfury],
+	[AC_HELP_STRING([--disable-bitfury],[Compile support for Bitfury (default enabled)])],
+	[bitfury=$enableval]
+	)
+if test "x$bitfury" = xyes; then
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+fi
+AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+
+
+driverlist="$driverlist bfsb"
+bfsb=no
+AC_ARG_ENABLE([bfsb],
+	[AC_HELP_STRING([--enable-bfsb],[Compile support for BFSB (default disabled)])],
+	[bfsb=$enableval]
+	)
+if test "x$bfsb" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFSB])
+	fi
+	AC_DEFINE([USE_BFSB], [1], [Defined to 1 if BFSB support is wanted])
+fi
+AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
+
+
+driverlist="$driverlist bigpic"
+bigpic=auto
+AC_ARG_ENABLE([bigpic],
+	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
+	[bigpic=$enableval]
+	)
+if test "x$bigpic" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	bigpic=yes
+elif test "x$bigpic" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BigPic])
+else
+	bigpic=no
+fi
+if test "x$bigpic" = "xyes"; then
+	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
+
+
+driverlist="$driverlist littlefury"
+littlefury=auto
+AC_ARG_ENABLE([littlefury],
+	[AC_HELP_STRING([--disable-littlefury],[Compile support for LittleFury (default enabled)])],
+	[littlefury=$enableval]
+	)
+if test "x$littlefury" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	littlefury=yes
+elif test "x$littlefury" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled LittleFury])
+else
+	littlefury=no
+fi
+if test "x$littlefury" = "xyes"; then
+	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
+
+
+driverlist="$driverlist metabank"
+metabank=no
+AC_ARG_ENABLE([metabank],
+	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
+	[metabank=$enableval]
+	)
+if test "x$metabank" = "xyes"; then
+	if test "x$bitfury" = "xno"; then
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Metabank])
+	fi
+	AC_DEFINE([USE_METABANK], [1], [Defined to 1 if Metabank support is wanted])
+fi
+AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
 if test "x$x6500$ztex" = "xnono"; then
@@ -473,6 +608,7 @@ if test "x$libusb" = xyes; then
 fi
 
 
+algolist="$algolist scrypt"
 scrypt="no"
 
 AC_ARG_ENABLE([scrypt],
@@ -484,9 +620,7 @@ if test "x$scrypt" = xyes; then
 fi
 
 
-need_fpgautils=no
-if test x$avalon$icarus$bitforce$modminer$x6500$ztex != xnononononono; then
-	need_fpgautils=yes
+if test x$need_fpgautils = xyes; then
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
 	
 	if $have_win32; then
@@ -511,8 +645,9 @@ AC_ARG_WITH([curses],
 	[curses=$withval]
 	)
 if test "x$curses" = "xno"; then
-	cursesmsg='User specified --without-curses. TUI support DISABLED'
+	optlist="$optlist curses"
 else
+	curses_enableaction="install a curses library"
 	orig_libs="$LIBS"
 	if test "x${curses}" = "xyes"; then
 		preferl=''
@@ -541,7 +676,7 @@ else
 				mvwprintw(w, 2, 2, "Testing %s", "o hai");
 			]])], [
 				curses=yes
-				cursesmsg="FOUND: ${curses_lib}"
+				optlist="$optlist ${curses_lib}/curses"
 				AC_MSG_RESULT([$curses_lib])
 				NCURSES_LIBS=`${curses_lib}-config --libs`
 				NCURSES_CPPFLAGS=`${curses_lib}-config --cflags`
@@ -561,7 +696,7 @@ else
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
 				barelib="${curseslib/-l/}"
-				cursesmsg="FOUND: ${barelib}"
+				optlist="$optlist ${barelib}/curses"
 				if test "x${curseslib}" != "xnone required"; then
 					NCURSES_LIBS="${curseslib}"
 				fi
@@ -585,7 +720,7 @@ else
 				else
 					AC_MSG_WARN([Could not find curses library - if you want a TUI, install libncurses-dev or pdcurses-dev])
 					curses=no
-					cursesmsg='NOT FOUND. TUI support DISABLED'
+					optlist="$optlist curses"
 				fi
 			])
 	fi
@@ -612,6 +747,7 @@ else
 fi
 
 
+maybe_ldconfig=
 AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[true],[with_system_libblkmaker=no])
 if test "x$with_system_libblkmaker" = "xyes"; then
 	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
@@ -624,6 +760,15 @@ else
 	libblkmaker_LDFLAGS=''
 	libblkmaker_LIBS='libblkmaker/.libs/libblkmaker_jansson-0.1.a libblkmaker/.libs/libblkmaker-0.1.a'
 	AC_CONFIG_SUBDIRS([libblkmaker])
+	_ROOTPATH=$PATH$PATH_SEPARATOR`echo $PATH | sed s/bin/sbin/g`
+	possible_ldconfigs="${target}-ldconfig"
+	if test "x$cross_compiling" != "xyes"; then
+		possible_ldconfigs="${possible_ldconfigs} ldconfig"
+	fi
+	AC_CHECK_PROGS([LDCONFIG],[${possible_ldconfigs}],[],[$_ROOTPATH])
+	if test "x$LDCONFIG" != "x"; then
+		maybe_ldconfig=" && $LDCONFIG"
+	fi
 fi
 AC_SUBST(libblkmaker_CFLAGS)
 AC_SUBST(libblkmaker_LDFLAGS)
@@ -631,7 +776,7 @@ AC_SUBST(libblkmaker_LIBS)
 
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
-AM_CONDITIONAL([NEED_DYNCLOCK], [test x$icarus$modminer$x6500$ztex != xnonono])
+AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
@@ -640,13 +785,14 @@ AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
-AM_CONDITIONAL([HAS_ASIC], [test x$avalon$icarus$httpsrv != xnonono])
+AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
 
 dnl Find YASM
 has_yasm=false
 if test "x$have_x86_32$have_x86_64" != "xfalsefalse"; then
 AC_PATH_PROG([YASM],[yasm],[false])
 if test "x$YASM" != "xfalse" ; then
+  has_yasm_enableaction="install yasm 1.0.1+"
   AC_MSG_CHECKING([if yasm version is greater than 1.0.1])
   yasmver=`"$YASM" --version | head -1 | cut -d\  -f2`
   yamajor=`echo $yasmver | cut -d. -f1`
@@ -735,7 +881,7 @@ if test "x$cpumining$have_x86_32" = "xyestrue"; then
 fi
 AM_CONDITIONAL([HAVE_SSE2], [test "x$have_sse2" = "xyes"])
 
-if test "x$bitforce$modminer$icarus" != "xnonono"; then
+if test "x$need_fpgautils" = "xyes"; then
 	AC_ARG_WITH([libudev], [AC_HELP_STRING([--without-libudev], [Autodetect FPGAs using libudev (default enabled)])],
 		[libudev=$withval],
 		[libudev=auto]
@@ -1004,101 +1150,47 @@ echo
 echo "Configuration Options Summary:"
 echo
 
-echo "  curses.TUI...........: $cursesmsg"
-if test "x$scrypt" != xno; then
-	echo "  scrypt...............: Enabled"
-else
-	echo "  scrypt...............: Disabled"
-fi
 
-echo
+m4_define([BFG_PRINT_LIST],[
+	eval _mylist="\$$2"
+	_yeslist=
+	_nolist=
+	_enableactions=
+	for _opt in $_mylist; do
+		IFS=/ read _opt _var <<EOF
+$_opt
+EOF
+		test -n "$_var" || _var="$_opt"
+		eval "_val=\"\$${_var}\""
+		if test "x$_val" = "xno" || test "x$_val" = "xfalse"; then
+			_nolist="$_nolist $_opt"
+			eval "_enableaction=\"\$${_var}_enableaction\""
+			if test -n "$_enableaction"; then
+				_enableactions="${_enableactions}~    To enable ${_opt}, ${_enableaction}"
+			fi
+		else
+			_yeslist="$_yeslist $_opt"
+		fi
+	done
+	_yeslist=`echo "$_yeslist" | tr ' ' '\n' | sort | tr '\n' ' '`
+	_nolist=`echo "$_nolist" | tr ' ' '\n' | sort | tr '\n' ' '`
+	echo "  Enabled..$1..:$_yeslist"
+	echo "  Disabled.$1..:$_nolist"
+	if test -n "$_enableactions"; then
+		echo "${_enableactions:1}" | tr '~' '\n'
+	fi
+])
+BFG_PRINT_LIST([Drivers...],[driverlist])
+BFG_PRINT_LIST([Algorithms],[algolist])
+BFG_PRINT_LIST([Options...],[optlist])
 
-if test "x$opencl" = xyes; then
-	echo "  OpenCL...............: Enabled"
-else
-	echo "  OpenCL...............: Disabled"
-fi
-
-if test "x$with_sensors" = xyes; then
-	echo "    sensors.monitoring.: Enabled"
-elif test "x$opencl" = xyes; then
-	echo "    sensors.monitoring.: Disabled"
-else
-	echo "    sensors.monitoring.: n/a"
-fi
-
-if test "x$adl" = xyes; then
-	echo "    ADL.monitoring.....: Enabled"
-elif test "x$opencl" = xyes; then
-	echo "    ADL.monitoring.....: Disabled"
-else
-	echo "    ADL.monitoring.....: n/a"
-fi
-
-if test "x$avalon" = xyes; then
-	echo "  Avalon.ASICs.........: Enabled"
-else
-	echo "  Avalon.ASICs.........: Disabled"
-fi
-
-if test "x$bitforce" = xyes; then
-	echo "  BitForce.devices.....: Enabled"
-else
-	echo "  BitForce.devices.....: Disabled"
-fi
-
-if test "x$icarus" = xyes; then
-	echo "  Icarus.FPGAs.........: Enabled"
-else
-	echo "  Icarus.FPGAs.........: Disabled"
-fi
-
-if test "x$modminer" = xyes; then
-	echo "  ModMiner.FPGAs.......: Enabled"
-else
-	echo "  ModMiner.FPGAs.......: Disabled"
-fi
-
-if test "x$x6500" = xyes; then
-	echo "  X6500.FPGAs..........: Enabled"
-elif test "x$ztexwarn" = xyes; then
-	echo "  X6500.FPGAs..........: Disabled (libusb not found)"
-else
-	echo "  X6500.FPGAs..........: Disabled"
-fi
-
-if test "x$ztex" = xyes; then
-	echo "  ZTEX.FPGAs...........: Enabled"
-elif test "x$ztexwarn" = xyes; then
-	echo "  ZTEX.FPGAs...........: Disabled (libusb not found)"
-else
-	echo "  ZTEX.FPGAs...........: Disabled"
-fi
-
-if test "x$httpsrv" = "xyes"; then
-	echo "  getwork.proxy.server.: Enabled"
-else
-	echo "  getwork.proxy.server.: Disabled"
-fi
-
-if test "x$bitforce$modminer" != xnono; then
-	echo "  libudev.detection....: $libudev"
-fi
-
-echo
-if test "x$cpumining" = xyes; then
-	echo "  CPU Mining...........: Enabled"
-	echo "  ASM.(for CPU mining).: $has_yasm"
-else
-	echo "  CPU Mining...........: Disabled"
-fi
 
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
-echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
+echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
 

@@ -12,6 +12,7 @@ global $ignorerefresh, $changerefresh, $autorefresh;
 global $allowcustompages, $customsummarypages;
 global $miner_font_family, $miner_font_size;
 global $colouroverride, $placebuttons, $userlist;
+global $per_proc;
 #
 # See README.RPC for more details of these variables and how
 # to configure miner.php
@@ -25,6 +26,9 @@ $readonly = false;
 #
 # Set $userlist to null to allow anyone access or read README.RPC
 $userlist = null;
+#
+# Set $per_proc to false to display only full device summaries
+$per_proc = true;
 #
 # Set $notify to false to NOT attempt to display the notify command
 # Set $notify to true to attempt to display the notify command
@@ -531,6 +535,13 @@ function api($rig, $cmd)
 {
  global $haderror, $error;
  global $miner, $port, $hidefields;
+ global $per_proc;
+
+ if ($per_proc)
+ {
+	$cmd = preg_replace('/^devs\b/', 'procs', $cmd);
+	$cmd = preg_replace('/^pga/', 'proc', $cmd);
+ }
 
  $socket = getsock($rig, $miner, $port);
  if ($socket != null)

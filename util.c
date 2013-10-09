@@ -503,7 +503,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, void *out_priv)
 {
 	struct json_rpc_call_state *state;
-	if (curl_easy_getinfo(curl, CURLINFO_PRIVATE, &state) != CURLE_OK) {
+	if (curl_easy_getinfo(curl, CURLINFO_PRIVATE, (void*)&state) != CURLE_OK) {
 		applog(LOG_ERR, "Failed to get private curl data");
 		if (out_priv)
 			*(void**)out_priv = NULL;
@@ -2676,20 +2676,23 @@ void notifier_wake(notifier_t fd)
 {
 	if (fd[1] == INVSOCK)
 		return;
+	if (1 !=
 #ifdef WIN32
-	(void)send(fd[1], "\0", 1, 0);
+	send(fd[1], "\0", 1, 0)
 #else
-	(void)write(fd[1], "\0", 1);
+	write(fd[1], "\0", 1)
 #endif
+	)
+		applog(LOG_WARNING, "Error trying to wake notifier");
 }
 
 void notifier_read(notifier_t fd)
 {
 	char buf[0x10];
 #ifdef WIN32
-	(void)recv(fd[0], buf, sizeof(buf), 0);
+	IGNORE_RETURN_VALUE(recv(fd[0], buf, sizeof(buf), 0));
 #else
-	(void)read(fd[0], buf, sizeof(buf));
+	IGNORE_RETURN_VALUE(read(fd[0], buf, sizeof(buf)));
 #endif
 }
 
@@ -2720,7 +2723,9 @@ void *cmd_thread(void *cmdp)
 {
 	const char *cmd = cmdp;
 	applog(LOG_DEBUG, "Executing command: %s", cmd);
-	system(cmd);
+	int rc = system(cmd);
+	if (rc)
+		applog(LOG_WARNING, "Command returned %d exit code: %s", rc, cmd);
 	return NULL;
 }
 

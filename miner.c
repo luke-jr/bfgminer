@@ -64,6 +64,7 @@
 
 #include "compat.h"
 #include "deviceapi.h"
+#include "logging.h"
 #include "miner.h"
 #include "findnonce.h"
 #include "adl.h"
@@ -1310,11 +1311,15 @@ static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char
 	else
 		target_off = -6;
 	
+	cgpu->cutofftemp_default = cgpu->cutofftemp;
+	
 	val = temp_strtok(temp_cutoff_str, cutoff_np);
 	if (val < 0 || val > 200)
 		quit(1, "Invalid value passed to set temp cutoff");
 	if (val)
 		cgpu->cutofftemp = val;
+	
+	cgpu->targettemp_default = cgpu->cutofftemp + target_off;
 	
 	val = temp_strtok(temp_target_str, target_np);
 	if (val < 0 || val > 200)
@@ -2731,7 +2736,7 @@ char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, cons
 {
 	unsigned char unit = 0;
 	int i;
-	size_t delimsz;
+	size_t delimsz = 0;
 	char *buf = buflist[0];
 	size_t bufsz = bufszlist[0];
 	size_t itemwidth = (floatprec ? 5 : 3);
@@ -2938,8 +2943,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	int goodnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
-		for (struct cgpu_info *slave = cgpu; (slave = slave->next_proc); )
+	{
+		struct cgpu_info *slave = cgpu;
+		for (int i = 1; i < cgpu->procs; ++i)
 		{
+			slave = slave->next_proc;
+			
 			slave->utility = slave->accepted / dev_runtime * 60;
 			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
@@ -2954,6 +2963,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			badnonces += slave->bad_nonces;
 			goodnonces += slave->diff1;
 		}
+	}
 	
 	double wtotal = (waccepted + wnotaccepted);
 	
@@ -2997,7 +3007,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			if (!opt_show_procs)
 			{
 				// Find the highest temperature of all processors
-				for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+				struct cgpu_info *proc = cgpu;
+				for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
 					if (proc->temp > temp)
 						temp = proc->temp;
 			}
@@ -3011,7 +3022,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true;
-		for (struct cgpu_info *proc = cgpu; proc; proc = proc->next_proc)
+		struct cgpu_info *proc = cgpu;
+		for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
 		{
 			switch (cHrStatsI) {
 				default:
@@ -4308,7 +4320,6 @@ static void __kill_work(void)
 		
 		applog(LOG_WARNING, "Killing %"PRIpreprv, thr->cgpu->proc_repr);
 		thr_info_cancel(thr);
-		pthread_join(thr->pth, NULL);
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
@@ -5858,6 +5869,57 @@ static char *json_escape(char *str)
 	return buf;
 }
 
+void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffset, size_t defoffset)
+{
+	int i, commas;
+	int *setp, allset;
+	uint8_t *defp;
+	
+	for (i = 0; ; ++i)
+	{
+		if (i == total_devices)
+			// All defaults
+			return;
+		setp = ((void*)devices[i]) + settingoffset;
+		defp = ((void*)devices[i]) + defoffset;
+		allset = *setp;
+		if (*setp != *defp)
+			break;
+	}
+	
+	fprintf(fcfg, ",\n\"%s\" : \"", configname);
+	
+	for (i = 1; ; ++i)
+	{
+		if (i == total_devices)
+		{
+			// All the same
+			fprintf(fcfg, "%d\"", allset);
+			return;
+		}
+		setp = ((void*)devices[i]) + settingoffset;
+		if (allset != *setp)
+			break;
+	}
+	
+	commas = 0;
+	for (i = 0; i < total_devices; ++i)
+	{
+		setp = ((void*)devices[i]) + settingoffset;
+		defp = ((void*)devices[i]) + defoffset;
+		if (*setp != *defp)
+		{
+			for ( ; commas; --commas)
+				fputs(",", fcfg);
+			fprintf(fcfg, "%d", *setp);
+		}
+		++commas;
+	}
+	fputs("\"", fcfg);
+}
+#define write_config_temps(fcfg, configname, settingname)  \
+	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
+
 void write_config(FILE *fcfg)
 {
 	int i;
@@ -5877,13 +5939,8 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-	fputs(",\n\"temp-cutoff\" : \"", fcfg);
-	for (i = 0; i < total_devices; ++i)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->cutofftemp);
-	fputs("\",\n\"temp-target\" : \"", fcfg);
-	for (i = 0; i < total_devices; ++i)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->targettemp);
-	fputs("\"", fcfg);
+	write_config_temps(fcfg, "temp-cutoff", cutofftemp);
+	write_config_temps(fcfg, "temp-target", targettemp);
 #ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */
@@ -8967,7 +9024,6 @@ void proc_enable(struct cgpu_info *cgpu)
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_INTERVAL		2
 #define WATCHDOG_SICK_TIME		60
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
@@ -9058,6 +9114,16 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = get_devices(i);
+			if (!cgpu->disable_watchdog)
+				bfg_watchdog(cgpu, &now);
+		}
+	}
+
+	return NULL;
+}
+
+void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
+{
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
@@ -9084,7 +9150,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
-				continue;
+				return;
 			else
 			if (*denable == DEV_RECOVER_ERR) {
 				if (opt_restart && timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > cgpu->reinit_backoff) {
@@ -9094,7 +9160,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 						cgpu->reinit_backoff *= 2;
 					device_recovered(cgpu);
 				}
-				continue;
+				return;
 			}
 			else
 			if (*denable == DEV_RECOVER) {
@@ -9104,7 +9170,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					device_recovered(cgpu);
 				}
 				dev_error_update(cgpu, REASON_DEV_THERMAL_CUTOFF);
-				continue;
+				return;
 			}
 			else
 			if (cgpu->temp > cgpu->cutofftemp)
@@ -9118,7 +9184,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 			}
 
 			if (thr->getwork) {
-				if (cgpu->status == LIFE_WELL && thr->getwork < now.tv_sec - opt_log_interval) {
+				if (cgpu->status == LIFE_WELL && thr->getwork < tvp_now->tv_sec - opt_log_interval) {
 					int thrid;
 					bool cgpu_idle = true;
 					thr->rolling = 0;
@@ -9130,21 +9196,21 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 						cgpu->status = LIFE_WAIT;
 					}
 				}
-				continue;
+				return;
 			}
 			else if (cgpu->status == LIFE_WAIT)
 				cgpu->status = LIFE_WELL;
 
 #ifdef WANT_CPUMINE
 			if (!strcmp(cgpu->drv->dname, "cpu"))
-				continue;
+				return;
 #endif
-			if (cgpu->status != LIFE_WELL && (now.tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
+			if (cgpu->status != LIFE_WELL && (tvp_now->tv_sec - thr->last.tv_sec < WATCHDOG_SICK_TIME)) {
 				if (likely(cgpu->status != LIFE_INIT && cgpu->status != LIFE_INIT2))
 				applog(LOG_ERR, "%s: Recovered, declaring WELL!", dev_str);
 				cgpu->status = LIFE_WELL;
 				cgpu->device_last_well = time(NULL);
-			} else if (cgpu->status == LIFE_WELL && (now.tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
+			} else if (cgpu->status == LIFE_WELL && (tvp_now->tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
 				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
@@ -9163,14 +9229,14 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
 				}
-			} else if (cgpu->status == LIFE_SICK && (now.tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
+			} else if (cgpu->status == LIFE_SICK && (tvp_now->tv_sec - thr->last.tv_sec > WATCHDOG_DEAD_TIME)) {
 				cgpu->status = LIFE_DEAD;
 				applog(LOG_ERR, "%s: Not responded for more than 10 minutes, declaring DEAD!", dev_str);
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_DEAD_IDLE_600);
 				run_cmd(cmd_dead);
-			} else if (now.tv_sec - thr->sick.tv_sec > 60 &&
+			} else if (tvp_now->tv_sec - thr->sick.tv_sec > 60 &&
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
 				cgtime(&thr->sick);
@@ -9182,10 +9248,6 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 				if (opt_restart)
 					reinit_device(cgpu);
 			}
-		}
-	}
-
-	return NULL;
 }
 
 static void log_print_status(struct cgpu_info *cgpu)
@@ -9284,7 +9346,7 @@ void print_summary(void)
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
 
-		if ((!cgpu->proc_id) && cgpu->next_proc)
+		if ((!cgpu->proc_id) && cgpu->procs > 1)
 		{
 			// Device summary line
 			opt_show_procs = false;
@@ -9615,6 +9677,10 @@ struct device_drv cpu_drv = {
 extern struct device_drv bitforce_drv;
 #endif
 
+#ifdef USE_BIGPIC
+extern struct device_drv bigpic_drv;
+#endif
+
 #ifdef USE_ICARUS
 extern struct device_drv cairnsmore_drv;
 extern struct device_drv erupter_drv;
@@ -9623,6 +9689,10 @@ extern struct device_drv icarus_drv;
 
 #ifdef USE_AVALON
 extern struct device_drv avalon_drv;
+#endif
+
+#ifdef USE_LITTLEFURY
+extern struct device_drv littlefury_drv;
 #endif
 
 #ifdef USE_MODMINER
@@ -9637,6 +9707,17 @@ extern struct device_drv x6500_api;
 extern struct device_drv ztex_drv;
 #endif
 
+#ifdef USE_BITFURY
+extern struct device_drv bitfury_drv;
+#endif
+
+#ifdef USE_METABANK
+extern struct device_drv metabank_drv;
+#endif
+
+#ifdef USE_BFSB
+extern struct device_drv bfsb_drv;
+#endif
 
 static int cgminer_id_count = 0;
 static int device_line_id_count;
@@ -9720,6 +9801,11 @@ void drv_detect_all()
 		bitforce_drv.drv_detect();
 #endif
 
+#ifdef USE_BIGPIC
+	if (!opt_scrypt)
+		bigpic_drv.drv_detect();
+#endif
+
 #ifdef USE_MODMINER
 	if (!opt_scrypt)
 		modminer_drv.drv_detect();
@@ -9733,6 +9819,24 @@ void drv_detect_all()
 #ifdef USE_ZTEX
 	if (likely(have_libusb) && !opt_scrypt)
 		ztex_drv.drv_detect();
+#endif
+
+#ifdef USE_BITFURY
+	if (!opt_scrypt)
+	{
+		bitfury_drv.drv_detect();
+#ifdef USE_METABANK
+		metabank_drv.drv_detect();
+#endif
+#ifdef USE_BFSB
+		bfsb_drv.drv_detect();
+#endif
+	}
+#endif
+
+#ifdef USE_LITTLEFURY
+	if (!opt_scrypt)
+		littlefury_drv.drv_detect();
 #endif
 
 	/* Detect avalon last since it will try to claim the device regardless

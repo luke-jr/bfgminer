@@ -281,6 +281,8 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->procs = parallel;
 	bitforce->threads = 1;
+	if (initdata->sc)
+		bitforce->cutofftemp = 85;
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
 		s[0] = '\0';

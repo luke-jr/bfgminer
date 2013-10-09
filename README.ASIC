@@ -1,7 +1,8 @@
 SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
-series (both USB and blades), and Butterfly Labs' SC range of devices.
+series (both USB and blades), a large variety of Bitfury-based miners, and
+Butterfly Labs' SC range of devices.
 
 
 AVALON
@@ -63,6 +64,37 @@ The values are:
 ambient temp / highest device temp  set fan % / lowest detected fan RPM.
 
 Use the API for more detailed information than this.
+
+
+BFSB, MEGABIGPOWER, AND METABANK BITFURY BOARDS
+-----------------------------------------------
+
+Both BFSB and MegaBigPower (V2 only at this time) boards are supported with the
+"bfsb" driver. Metabank boards are supported with the "metabank" driver. These
+drivers are not enabled by default, since they must be run on a Raspberry Pi in
+a specific hardware configuration with the boards. To enable them, you must
+build with --enable-bfsb or --enable-metabank. Do not try to use these drivers
+without the manufacturer-supported hardware configuration! Also note that these
+drivers do not properly support thermal shutdown at this time, and without
+sufficient cooling you may destroy your board or chips!
+
+To start BFGMiner, ensure your Raspberry Pi's SPI is enabled (you can run the
+raspi-config utility for this). For Metabank boards, you must also load the I2C
+drivers (do not try to modprobe both with a single command; it won't work):
+    modprobe i2c-bcm2708
+    modprobe i2c-dev
+Then you must run BFGMiner as root, with the proper driver selected.
+For example:
+    sudo bfgminer -S bfsb:auto
+
+
+BIG PICTURE MINING BITFURY USB
+------------------------------
+
+These miners are sensitive to unexpected data. Usually you can re-plug them to
+reset to a known-good initialisation state. To ensure they are properly detected
+and used with BFGMiner, you must specify -S bigpic:all (or equivalent) options
+prior to any other -S options (which might probe the device and confuse it).
 
 
 BLOCK ERUPTER BLADE

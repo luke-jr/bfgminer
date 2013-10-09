@@ -199,6 +199,10 @@ bitforce_firmware_flash_SOURCES = bitforce-firmware-flash.c
 endif
 endif
 
+if HAS_BIGPIC
+bfgminer_SOURCES += driver-bigpic.c driver-bigpic.h
+endif
+
 if HAS_ICARUS
 bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c
@@ -219,6 +223,22 @@ endif
 
 if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
+endif
+
+if HAS_BITFURY
+bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h spidevc.h spidevc.c
+
+if HAS_BFSB
+bfgminer_SOURCES += driver-bfsb.c
+endif
+
+if HAS_METABANK
+bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2c.c
+endif
+
+if HAS_LITTLEFURY
+bfgminer_SOURCES += driver-littlefury.c
+endif
 endif
 
 bin_PROGRAMS += bfgminer-rpc
