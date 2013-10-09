@@ -312,10 +312,14 @@ static
 bool use_unicode;
 static
 bool have_unicode_degrees;
+static
+wchar_t unicode_micro = 'u';
 #else
 const bool use_unicode;
 static
 const bool have_unicode_degrees;
+static
+const char unicode_micro = 'u';
 #endif
 
 #ifdef HAVE_CURSES
@@ -3160,12 +3164,7 @@ def:
 				break;
 #endif
 			case '\xb5':  // Mu (SI prefix micro-)
-#ifdef USE_UNICODE
-				if (use_unicode)
-					buf[0] = ((unsigned char *)p)[0];
-				else
-#endif
-					buf[0] = 'u';
+				buf[0] = unicode_micro;
 		}
 		PREP_ADDCH;
 #ifdef USE_UNICODE
@@ -9617,6 +9616,17 @@ static void fork_monitor()
 #endif // defined(unix)
 
 #ifdef HAVE_CURSES
+#ifdef USE_UNICODE
+static
+wchar_t select_unicode_char(const wchar_t *opt)
+{
+	for ( ; *opt; ++opt)
+		if (iswprint(*opt))
+			return *opt;
+	return '?';
+}
+#endif
+
 void enable_curses(void) {
 	int x;
 	__maybe_unused int y;
@@ -9633,6 +9643,7 @@ void enable_curses(void) {
 		setlocale(LC_CTYPE, "");
 		if (iswprint(0xb0))
 			have_unicode_degrees = true;
+		unicode_micro = select_unicode_char(L"\xb5\u03bcu");
 	}
 #endif
 	mainwin = initscr();
