@@ -142,6 +142,9 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	if (!info)
 		quit(1, "Failed to calloc info in bitfury_detect_one");
 	bitfury->device_data = info;
+	/* This does not artificially raise hashrate, it simply allows the
+	 * hashrate to adapt quickly on starting. */
+	info->total_nonces = 1;
 
 	usb_buffer_enable(bitfury);
 
@@ -223,6 +226,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
 	struct timeval tv_now;
+	double nonce_rate;
+	int64_t ret = 0;
 	int amount, i;
 	char buf[45];
 	int ms_diff;
@@ -295,23 +300,30 @@ cascade:
 		info->prevwork[i] = info->prevwork[i - 1];
 	info->prevwork[0] = copy_work(work);
 	work->blk.nonce = 0xffffffff;
-	if (info->nonces) {
-		info->nonces--;
-		return (int64_t)0xffffffff;
+
+	info->cycles++;
+	info->total_nonces += info->nonces;
+	info->saved_nonces += info->nonces;
+	info->nonces = 0;
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	if (info->saved_nonces >= nonce_rate) {
+		info->saved_nonces -= nonce_rate;
+		ret = (double)0xffffffff * nonce_rate;
 	}
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
 		       bitfury->drv->name, bitfury->device_id);
-		return -1;
+		ret = -1;
 	}
-	return 0;
+	return ret;
 }
 
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 {
 	struct bitfury_info *info = cgpu->device_data;
 	struct api_data *root = NULL;
+	double nonce_rate;
 	char serial[16];
 	int version;
 
@@ -320,6 +332,8 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	root = api_add_string(root, "Product", info->product, false);
 	sprintf(serial, "%08x", info->serial);
 	root = api_add_string(root, "Serial", serial, true);
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 
 	return root;
 }

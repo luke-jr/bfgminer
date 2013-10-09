@@ -24,6 +24,9 @@ struct bitfury_info {
 	char buf[512];
 	int tot;
 	int nonces;
+	int total_nonces;
+	double saved_nonces;
+	int cycles;
 	struct timeval tv_start;
 };
 
