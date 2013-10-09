@@ -226,6 +226,7 @@ enum alive {
 	LIFE_WAIT,
 	LIFE_INIT2,  // Still initializing, but safe to call functions
 	LIFE_DEAD2,  // Totally dead, NOT safe to call functions
+	LIFE_MIXED,  // Only valid in display variables, NOT on devices
 };
 
 

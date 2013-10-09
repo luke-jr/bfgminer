@@ -151,12 +151,12 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Will not report PGAs if PGA mining is disabled
                               Will not report CPUs if CPU mining is disabled
 
+ procs         DEVS           The details of each processor in the same format
+                              and details as for DEVS
+
  devscan|info  DEVS           Probes for a device specified by info, which is
                               the same format as the --scan-serial command line
                               option
-
- devdetail     DEVS           Each available device with their fixed details
-                              e.g. GPU=0,Driver=opencl,Kernel=diablo,Model=...|
 
  gpu|N         GPU            The details of a single GPU number N in the same
                               format and details as for DEVS
@@ -167,6 +167,9 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Use 'pgacount' or 'config' first to see if there
                               are any
 
+ proc|N        PGA            The details of a single processor number N in the
+                              same format and details as for DEVS
+
  cpu|N         CPU            The details of a single CPU number N in the same
                               format and details as for DEVS
                               This is only available if CPU mining is enabled
@@ -176,6 +179,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
  pgacount      PGAS           Count=N| <- the number of PGAs
                               Always returns 0 if PGA mining is disabled
+
+ proccount     PGAS           Count=N| <- the number of processors
 
  cpucount      CPUS           Count=N| <- the number of CPUs
                               Always returns 0 if CPU mining is disabled
@@ -295,9 +300,21 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               This is only available if PGA mining is enabled
 
  pgaidentify|N (*)
+               none           This is equivalent to PROCIDENTIFY on the first
+                              processor of any given device
+                              This is only available if PGA mining is enabled
+
+ procenable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the enable request
+
+ procdisable|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the disable request
+
+ procidentify|N (*)
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
-                              This is only available if PGA mining is enabled
                               On most supported devices, it will flash the led
                               for approximately 4s
                               All unsupported devices, it will return a warning
@@ -313,7 +330,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not
                               supported by the 'devs' command
-                              e.g. DEVDETAILS=0,Name=PGA,ID=0,ProcID=0,Driver=bitforce,...|
+                              e.g. DEVDETAILS=0,Name=BFL,ID=0,ProcID=0,Driver=bitforce,...|
 
  restart (*)   none           There is no status section but just a single
                               "RESTART" reply before BFGMiner restarts
@@ -366,13 +383,17 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               coinbase-sig (string)
 
  pgaset|N,opt[,val] (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting PGA N with
-                              opt[,val]
+               none           This is equivalent to PROCSET on the first
+                              processor of any given device
                               This is only available if PGA mining is enabled
 
-                              If the PGA does not support any set options, it
-                              will always return a WARN stating pgaset isn't
+ procset|N,opt[,val] (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of setting processor N with
+                              opt[,val]
+
+                              If the processor does not support any set options,
+                              it will always return a WARN stating pgaset isn't
                               supported
 
                               If opt=help it will return an INFO status with a
@@ -444,6 +465,31 @@ api-example.py - a Python script to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V2.0
+
+Removed API commands:
+ 'devdetail' - Use newer 'devdetails' for same information.
+
+Modified API commands:
+ 'devs' - display status of each full device only (not processors)
+ 'pga' - lookup and display device by device (not processor) number
+ 'pgacount' - count only full devices (not processors)
+ 'pgaenable' - enable all processors for a numbered full device
+ 'pgadisable' - disable all processors for a numbered full device
+ 'pgaidentify' - choose first processor of numbered full device
+ 'pgaset' - choose first processor of numbered full device
+
+Added API commands:
+ 'procs'
+ 'proc'
+ 'proccount'
+ 'procenable'
+ 'procdisable'
+ 'procidentify'
+ 'procset'
+
+----------
 
 API V1.25.3 (BFGMiner v3.2.0)
 
