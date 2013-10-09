@@ -648,6 +648,7 @@ out:
 			       proc->proc_repr);
 			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 			bitfury->desync_counter = 99;
+			bitfury->force_reinit = false;
 		}
 	}
 	
