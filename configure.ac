@@ -356,6 +356,7 @@ if test "x$httpsrv" != "xno"; then
 		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
 		httpsrv=yes
 	],[
+		httpsrv=no
 		if test "x$httpsrv" = "xyes"; then
 			AC_MSG_ERROR([Unable to find libmicrohttpd 0.9.5+])
 		else
@@ -375,6 +376,7 @@ if test "x$libevent" != "xno"; then
 		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
 		libevent=yes
 	],[
+		libevent=no
 		if test "x$libevent" = "xyes"; then
 			AC_MSG_ERROR([Unable to find libevent 2.0.3+])
 		else
