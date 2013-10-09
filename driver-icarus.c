@@ -285,6 +285,9 @@ static int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
+	if (unlikely(fd == -1))
+		return 1;
+	
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
 		return 1;
@@ -297,7 +300,10 @@ static int icarus_write(int fd, const void *buf, size_t bufLen)
 static void do_icarus_close(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
-	icarus_close(icarus->device_fd);
+	const int fd = icarus->device_fd;
+	if (fd == -1)
+		return;
+	icarus_close(fd);
 	icarus->device_fd = -1;
 }
 
@@ -735,7 +741,7 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	struct ICARUS_INFO *info = icarus->device_data;
 
 	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
-	icarus_close(icarus->device_fd);
+	do_icarus_close(icarus->thr[0]);
 	*fdp = icarus->device_fd = icarus_open(icarus->device_path, info->baud);
 	if (unlikely(-1 == *fdp)) {
 		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", icarus->proc_repr, icarus->device_path);
@@ -826,6 +832,9 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	struct timeval tv_now;
 	double delapsed;
 	uint32_t nonce;
+	
+	if (fd == -1)
+		return;
 	
 	// If identify is requested (block erupters):
 	// 1. Don't start the next job right away (above)
@@ -924,6 +933,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	fd = icarus->device_fd;
 	info = icarus->device_data;
 
+	if (unlikely(fd == -1) && !icarus_reopen(icarus, state, &fd))
+		return -1;
+	
 	if (!state->firstrun) {
 		if (state->changework)
 		{
