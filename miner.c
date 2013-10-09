@@ -1026,7 +1026,7 @@ char *set_log_file(char *arg)
 	{
 		fd = open(arg, O_WRONLY | O_APPEND | O_CREAT, S_IRUSR | S_IWUSR);
 		if (unlikely(fd == -1))
-			return "Failed to open %s for log-file";
+			return "Failed to open log-file";
 	}
 	
 	close(stderr_fd);
