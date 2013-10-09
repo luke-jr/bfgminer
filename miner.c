@@ -2641,6 +2641,7 @@ utility_to_hashrate(double utility)
 }
 
 static const char*_unitchar = "pn\xb5m kMGTPEZY?";
+static const int _unitbase = 4;
 
 static
 void pick_unit(float hashrate, unsigned char *unit)
@@ -2649,7 +2650,8 @@ void pick_unit(float hashrate, unsigned char *unit)
 	
 	if (hashrate == 0)
 	{
-		*unit = 2;
+		if (*unit < _unitbase)
+			*unit = _unitbase;
 		return;
 	}
 	
@@ -2739,6 +2741,7 @@ static
 char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, const char *measurement, enum h2bs_fmt fmt, const char *delim, int count, const float *numbers, bool isarray)
 {
 	unsigned char unit = 0;
+	bool allzero = true;
 	int i;
 	size_t delimsz = 0;
 	char *buf = buflist[0];
@@ -2749,7 +2752,14 @@ char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, cons
 		delimsz = strlen(delim);
 	
 	for (i = 0; i < count; ++i)
-		pick_unit(numbers[i], &unit);
+		if (numbers[i] != 0)
+		{
+			pick_unit(numbers[i], &unit);
+			allzero = false;
+		}
+	
+	if (allzero)
+		unit = _unitbase;
 	
 	--count;
 	for (i = 0; i < count; ++i)
