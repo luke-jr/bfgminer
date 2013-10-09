@@ -3140,7 +3140,7 @@ void usb_cleanup()
 	cgsem_destroy(&usb_resource_sem);
 }
 
-#define DRIVER_COUNT_FOUND(X) if (strcasecmp(ptr, X##_drv.name) == 0) { \
+#define DRIVER_COUNT_FOUND(X) if (X##_drv.name && strcasecmp(ptr, X##_drv.name) == 0) { \
 	drv_count[X##_drv.drv_id].limit = lim; \
 	found = true; \
 	}
