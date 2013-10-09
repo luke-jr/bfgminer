@@ -2602,7 +2602,7 @@ char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, cons
 {
 	unsigned char unit = 0;
 	int i;
-	size_t delimsz;
+	size_t delimsz = 0;
 	char *buf = buflist[0];
 	size_t bufsz = bufszlist[0];
 	size_t itemwidth = (floatprec ? 5 : 3);
