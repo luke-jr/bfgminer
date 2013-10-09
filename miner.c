@@ -3157,6 +3157,7 @@ def:
 				goto next;
 			case '\xb0':  // Degrees symbol
 				buf[0] = ((unsigned char *)p)[0];
+				break;
 #endif
 			case '\xb5':  // Mu (SI prefix micro-)
 #ifdef USE_UNICODE
