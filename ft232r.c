@@ -324,7 +324,7 @@ typedef ssize_t (*ft232r_rwfunc_t)(struct ft232r_device_handle *, void*, size_t)
 static ssize_t ft232r_rw_all(ft232r_rwfunc_t rwfunc, struct ft232r_device_handle *dev, void *data, size_t count)
 {
 	char *p = data;
-	ssize_t writ, total = 0;
+	ssize_t writ = 0, total = 0;
 
 	while (count && (writ = rwfunc(dev, p, count)) > 0) {
 		p += writ;
