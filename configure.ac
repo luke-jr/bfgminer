@@ -341,6 +341,7 @@ if test "x$httpsrv" != "xno"; then
 		AC_DEFINE([USE_LIBMICROHTTPD],[1],[Defined to 1 if libmicrohttpd support is wanted])
 		httpsrv=yes
 	],[
+		httpsrv=no
 		if test "x$httpsrv" = "xyes"; then
 			AC_MSG_ERROR([Unable to find libmicrohttpd 0.9.5+])
 		else
