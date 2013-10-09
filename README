@@ -115,7 +115,13 @@ Optional Dependencies:
 	X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
 
-	ATi/AMD video card GPU mining:
+	Video card GPU mining (free):
+	  llvm 3.3+          http://llvm.org/
+	  clang 3.3+         http://clang.llvm.org/
+	  libclc             http://libclc.llvm.org/
+	  Mesa 9.2.0+        http://www.mesa3d.org/
+	
+	ATi/AMD video card GPU mining (non-free):
 	  AMD APP SDK        http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
 
 	CPU mining optimized assembly algorithms:
