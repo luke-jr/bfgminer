@@ -747,6 +747,7 @@ else
 fi
 
 
+maybe_ldconfig=
 AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[true],[with_system_libblkmaker=no])
 if test "x$with_system_libblkmaker" = "xyes"; then
 	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
@@ -771,6 +772,15 @@ else
 	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs'"$origin_LDFLAGS"
 	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
 	AC_CONFIG_SUBDIRS([libblkmaker])
+	_ROOTPATH=$PATH$PATH_SEPARATOR`echo $PATH | sed s/bin/sbin/g`
+	possible_ldconfigs="${target}-ldconfig"
+	if test "x$cross_compiling" != "xyes"; then
+		possible_ldconfigs="${possible_ldconfigs} ldconfig"
+	fi
+	AC_CHECK_PROGS([LDCONFIG],[${possible_ldconfigs}],[],[$_ROOTPATH])
+	if test "x$LDCONFIG" != "x"; then
+		maybe_ldconfig=" && $LDCONFIG"
+	fi
 fi
 AC_SUBST(libblkmaker_CFLAGS)
 AC_SUBST(libblkmaker_LDFLAGS)
@@ -1192,7 +1202,7 @@ echo "Compilation............: make (or gmake)"
 echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
-echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
+echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
 
