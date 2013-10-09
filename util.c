@@ -1988,7 +1988,10 @@ resend:
 	ret = true;
 out:
 	if (val)
+	{
 		json_decref(val);
+		val = NULL;
+	}
 
 	if (ret) {
 		if (!pool->stratum_url)
