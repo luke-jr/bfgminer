@@ -490,7 +490,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, void *out_priv)
 {
 	struct json_rpc_call_state *state;
-	if (curl_easy_getinfo(curl, CURLINFO_PRIVATE, &state) != CURLE_OK) {
+	if (curl_easy_getinfo(curl, CURLINFO_PRIVATE, (void*)&state) != CURLE_OK) {
 		applog(LOG_ERR, "Failed to get private curl data");
 		if (out_priv)
 			*(void**)out_priv = NULL;
