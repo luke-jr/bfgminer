@@ -2776,7 +2776,7 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	char *reason;
 	
 	time_t last_not_well = 0;
-	enum dev_reason enum_reason;
+	enum dev_reason uninitialised_var(enum_reason);
 	int thread_fail_init_count = 0, thread_zero_hash_count = 0, thread_fail_queue_count = 0;
 	int dev_sick_idle_60_count = 0, dev_dead_idle_600_count = 0;
 	int dev_nostart_count = 0, dev_over_heat_count = 0, dev_thermal_cutoff_count = 0, dev_comms_error_count = 0, dev_throttle_count = 0;
