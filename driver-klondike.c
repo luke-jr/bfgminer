@@ -619,7 +619,9 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	uint8_t temp = 0xFF;
 	uint16_t fan = 0;
+	uint16_t clock = 0;
 	int dev;
+	char tmp[16];
 
 	if (klninfo->status == NULL)
 		return;
@@ -629,11 +631,17 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 		if (klninfo->status[dev].temp < temp)
 			temp = klninfo->status[dev].temp;
 		fan += klninfo->cfg[dev].fantarget;
+		clock += klninfo->cfg[dev].hashclock;
 	}
 	fan /= klninfo->status->slavecount+1;
+	clock /= klninfo->status->slavecount+1;
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, siz, "     %3.0fC %3d%% | ", cvtKlnToC(temp), fan*100/255);
+	snprintf(tmp, sizeof(tmp), "%2.0fC", cvtKlnToC(temp));
+	if (strlen(tmp) < 4)
+		strcat(tmp, " ");
+
+	tailsprintf(buf, siz, "%3dMHz %3d%% %s| ", (int)clock, fan*100/255, tmp);
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
