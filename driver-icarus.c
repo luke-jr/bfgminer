@@ -232,7 +232,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 			{
 				if (ret)
 					// work restart trigger
-					(void)read(thr->work_restart_fd, buf, read_amount);
+					IGNORE_RETURN_VALUE(read(thr->work_restart_fd, buf, read_amount));
 				ret = 0;
 			}
 		}

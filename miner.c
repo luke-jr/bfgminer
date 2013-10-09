@@ -4316,7 +4316,7 @@ static void restart_threads(void)
 		fd = thr->_work_restart_fd_w;
 		thr->work_restart = true;
 		if (fd != -1)
-			(void)write(fd, "\0", 1);
+			IGNORE_RETURN_VALUE(write(fd, "\0", 1));
 	}
 
 	mutex_lock(&restart_lock);
@@ -7254,7 +7254,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
-			struct thr_info *thr;
+			struct thr_info *thr = cgpu->thr[0];
 			for (int thrid = 0; thrid < cgpu->threads; ++thrid) {
 				thr = cgpu->thr[thrid];
 				if (!thr->q->frozen)
