@@ -1311,11 +1311,15 @@ static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char
 	else
 		target_off = -6;
 	
+	cgpu->cutofftemp_default = cgpu->cutofftemp;
+	
 	val = temp_strtok(temp_cutoff_str, cutoff_np);
 	if (val < 0 || val > 200)
 		quit(1, "Invalid value passed to set temp cutoff");
 	if (val)
 		cgpu->cutofftemp = val;
+	
+	cgpu->targettemp_default = cgpu->cutofftemp + target_off;
 	
 	val = temp_strtok(temp_target_str, target_np);
 	if (val < 0 || val > 200)
@@ -5865,6 +5869,57 @@ static char *json_escape(char *str)
 	return buf;
 }
 
+void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffset, size_t defoffset)
+{
+	int i, commas;
+	int *setp, allset;
+	uint8_t *defp;
+	
+	for (i = 0; ; ++i)
+	{
+		if (i == total_devices)
+			// All defaults
+			return;
+		setp = ((void*)devices[i]) + settingoffset;
+		defp = ((void*)devices[i]) + defoffset;
+		allset = *setp;
+		if (*setp != *defp)
+			break;
+	}
+	
+	fprintf(fcfg, ",\n\"%s\" : \"", configname);
+	
+	for (i = 1; ; ++i)
+	{
+		if (i == total_devices)
+		{
+			// All the same
+			fprintf(fcfg, "%d\"", allset);
+			return;
+		}
+		setp = ((void*)devices[i]) + settingoffset;
+		if (allset != *setp)
+			break;
+	}
+	
+	commas = 0;
+	for (i = 0; i < total_devices; ++i)
+	{
+		setp = ((void*)devices[i]) + settingoffset;
+		defp = ((void*)devices[i]) + defoffset;
+		if (*setp != *defp)
+		{
+			for ( ; commas; --commas)
+				fputs(",", fcfg);
+			fprintf(fcfg, "%d", *setp);
+		}
+		++commas;
+	}
+	fputs("\"", fcfg);
+}
+#define write_config_temps(fcfg, configname, settingname)  \
+	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
+
 void write_config(FILE *fcfg)
 {
 	int i;
@@ -5884,13 +5939,8 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-	fputs(",\n\"temp-cutoff\" : \"", fcfg);
-	for (i = 0; i < total_devices; ++i)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->cutofftemp);
-	fputs("\",\n\"temp-target\" : \"", fcfg);
-	for (i = 0; i < total_devices; ++i)
-		fprintf(fcfg, "%s%d", i > 0 ? "," : "", devices[i]->targettemp);
-	fputs("\"", fcfg);
+	write_config_temps(fcfg, "temp-cutoff", cutofftemp);
+	write_config_temps(fcfg, "temp-target", targettemp);
 #ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */

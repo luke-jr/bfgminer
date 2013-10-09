@@ -526,7 +526,9 @@ struct cgpu_info {
 
 	float temp;
 	int cutofftemp;
+	uint8_t cutofftemp_default;
 	int targettemp;
+	uint8_t targettemp_default;
 
 #ifdef HAVE_ADL
 	bool has_adl;
