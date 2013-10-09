@@ -747,7 +747,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 {
 	struct cgpu_info *icarus;
 	int fd;
-	int ret;
+	int uninitialised_var(ret);
 
 	struct ICARUS_INFO *info;
 

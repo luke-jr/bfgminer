@@ -1274,7 +1274,7 @@ char *recv_line(struct pool *pool)
 	if (!strstr(pool->sockbuf, "\n")) {
 		enum recv_ret ret = RECV_OK;
 		struct timeval rstart, now;
-		int socket_recv_errno;
+		int uninitialised_var(socket_recv_errno);
 
 		gettimeofday(&rstart, NULL);
 		if (!socket_full(pool, DEFAULT_SOCKWAIT)) {
