@@ -756,21 +756,9 @@ if test "x$with_system_libblkmaker" = "xyes"; then
 		AC_MSG_ERROR([Could not find system libblkmaker])
 	])
 else
-	save_LDFLAGS="$LDFLAGS"
-	LDFLAGS="$LDFLAGS -Wl,-zorigin"
-	origin_LDFLAGS=
-	AC_MSG_CHECKING([whether the linker recognizes the -zorigin option])
-	AC_TRY_LINK([],[],[
-		AC_MSG_RESULT([yes])
-		origin_LDFLAGS=',-zorigin'
-	],[
-		AC_MSG_RESULT([no])
-	])
-	LDFLAGS="$save_LDFLAGS"
-	
 	libblkmaker_CFLAGS='-Ilibblkmaker'
-	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs'"$origin_LDFLAGS"
-	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
+	libblkmaker_LDFLAGS=''
+	libblkmaker_LIBS='libblkmaker/.libs/libblkmaker_jansson-0.1.a libblkmaker/.libs/libblkmaker-0.1.a'
 	AC_CONFIG_SUBDIRS([libblkmaker])
 	_ROOTPATH=$PATH$PATH_SEPARATOR`echo $PATH | sed s/bin/sbin/g`
 	possible_ldconfigs="${target}-ldconfig"
