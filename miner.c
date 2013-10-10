@@ -3072,12 +3072,13 @@ static int menu_attr = A_REVERSE;
 #define cg_mvwprintw(win, y, x, fmt, ...) do { \
 	char tmp42[CURBUFSIZ]; \
 	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-	mvwprintw(win, y, x, "%s", tmp42); \
+	wmove(win, y, x);  \
+	bfg_waddstr(win, tmp42); \
 } while (0)
 #define cg_wprintw(win, fmt, ...) do { \
 	char tmp42[CURBUFSIZ]; \
 	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
-	wprintw(win, "%s", tmp42); \
+	bfg_waddstr(win, tmp42); \
 } while (0)
 
 /* Must be called with curses mutex lock held and curses_active */
