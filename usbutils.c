@@ -2227,7 +2227,6 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 	int ret;
 
 	cgtime(&tv_now);
-	timeout = timeout + USB_ASYNC_POLL;
 	ms_to_timespec(&ts_end, timeout);
 	timeval_to_spec(&ts_now, &tv_now);
 	timeraddspec(&ts_end, &ts_now);

@@ -15,10 +15,6 @@
 
 #include "util.h"
 
-/* Asynchronous transfers require libusb to be polled at regular intervals.
- * Set the number of milliseconds to poll for incomplete work. */
-#define USB_ASYNC_POLL 10
-
 #define EPI(x) (LIBUSB_ENDPOINT_IN | (unsigned char)(x))
 #define EPO(x) (LIBUSB_ENDPOINT_OUT | (unsigned char)(x))
 

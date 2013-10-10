@@ -175,6 +175,8 @@ char *opt_usb_select = NULL;
 int opt_usbdump = -1;
 bool opt_usb_list_all;
 cgsem_t usb_resource_sem;
+static pthread_t usb_poll_thread;
+static bool usb_polling;
 #endif
 
 char *opt_kernel_path;
@@ -3216,6 +3218,8 @@ static void __kill_work(void)
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
+		usb_polling = false;
+
 		applog(LOG_DEBUG, "Releasing all USB devices");
 		usb_cleanup();
 
@@ -7742,18 +7746,14 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv = { 0, USB_ASYNC_POLL * 1000 };
-
 	RenameThread("usbpoll");
 
 	pthread_detach(pthread_self());
-	while (42)
-		libusb_handle_events_timeout(NULL, &tv);
+	while (usb_polling)
+		libusb_handle_events(NULL);
 
 	return NULL;
 }
-
-static pthread_t usb_poll_thread;
 
 static void initialise_usb(void) {
 	int err = libusb_init(NULL);
@@ -7765,6 +7765,7 @@ static void initialise_usb(void) {
 	mutex_init(&cgusb_lock);
 	mutex_init(&cgusbres_lock);
 	cglock_init(&cgusb_fd_lock);
+	usb_polling = true;
 	pthread_create(&usb_poll_thread, NULL, libusb_poll_thread, NULL);
 }
 #else
