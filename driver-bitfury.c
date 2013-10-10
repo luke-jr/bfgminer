@@ -15,6 +15,8 @@
 
 /* Wait longer 1/3 longer than it would take for a full nonce range */
 #define BF1WAIT 1600
+#define BF1MSGSIZE 7
+#define BF1INFOSIZE 14
 
 static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 {
@@ -26,18 +28,29 @@ static void bitfury_empty_buffer(struct cgpu_info *bitfury)
 	} while (amount);
 }
 
-static void bitfury_open(struct cgpu_info *bitfury)
+static int bitfury_open(struct cgpu_info *bitfury)
 {
 	uint32_t buf[2];
+	int err;
 
 	bitfury_empty_buffer(bitfury);
 	/* Magic sequence to reset device only really needed for windows but
 	 * harmless on linux. */
 	buf[0] = 0x80250000;
 	buf[1] = 0x00000800;
-	usb_transfer(bitfury, 0, 9, 1, 0, C_BF1_RESET);
-	usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_OPEN);
-	usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf, 7, C_BF1_INIT);
+	err = usb_transfer(bitfury, 0, 9, 1, 0, C_BF1_RESET);
+	if (!err)
+		err = usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_OPEN);
+	if (!err) {
+		err = usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf,
+					BF1MSGSIZE, C_BF1_INIT);
+	}
+
+	if (err < 0) {
+		applog(LOG_INFO, "%s %d: Failed to open with error %s", bitfury->drv->name,
+		       bitfury->device_id, libusb_error_name(err));
+	}
+	return (err == BF1MSGSIZE);
 }
 
 static void bitfury_close(struct cgpu_info *bitfury)
@@ -63,15 +76,15 @@ static bool bitfury_getinfo(struct cgpu_info *bitfury, struct bitfury_info *info
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	err = usb_read(bitfury, buf, 14, &amount, C_BF1_GETINFO);
+	err = usb_read(bitfury, buf, BF1INFOSIZE, &amount, C_BF1_GETINFO);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETINFO",
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	if (amount != 14) {
-		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of 14",
-		       bitfury->drv->name, bitfury->device_id, amount);
+	if (amount != BF1INFOSIZE) {
+		applog(LOG_INFO, "%s %d: Getinfo received %d bytes instead of %d",
+		       bitfury->drv->name, bitfury->device_id, amount, BF1INFOSIZE);
 		return false;
 	}
 	info->version = buf[1];
@@ -95,15 +108,16 @@ static bool bitfury_reset(struct cgpu_info *bitfury)
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	err = usb_read_timeout(bitfury, buf, 7, &amount, BF1WAIT, C_BF1_GETRESET);
+	err = usb_read_timeout(bitfury, buf, BF1MSGSIZE, &amount, BF1WAIT,
+			       C_BF1_GETRESET);
 	if (err) {
 		applog(LOG_INFO, "%s %d: Failed to read GETRESET",
 		       bitfury->drv->name, bitfury->device_id);
 		return false;
 	}
-	if (amount != 7) {
-		applog(LOG_INFO, "%s %d: Getreset received %d bytes instead of 7",
-		       bitfury->drv->name, bitfury->device_id, amount);
+	if (amount != BF1MSGSIZE) {
+		applog(LOG_INFO, "%s %d: Getreset received %d bytes instead of %d",
+		       bitfury->drv->name, bitfury->device_id, amount, BF1MSGSIZE);
 		return false;
 	}
 	applog(LOG_DEBUG, "%s %d: Getreset returned %s", bitfury->drv->name,
@@ -128,10 +142,14 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	if (!info)
 		quit(1, "Failed to calloc info in bitfury_detect_one");
 	bitfury->device_data = info;
+	/* This does not artificially raise hashrate, it simply allows the
+	 * hashrate to adapt quickly on starting. */
+	info->total_nonces = 1;
 
 	usb_buffer_enable(bitfury);
 
-	bitfury_open(bitfury);
+	if (!bitfury_open(bitfury))
+		goto out_close;
 
 	/* Send getinfo request */
 	if (!bitfury_getinfo(bitfury, info))
@@ -145,7 +163,7 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	bitfury_empty_buffer(bitfury);
 
 	if (!add_cgpu(bitfury))
-		goto out_close;
+		quit(1, "Failed to add_cgpu in bitfury_detect_one");
 
 	update_usb_stats(bitfury);
 	applog(LOG_INFO, "%s %d: Successfully initialised %s",
@@ -208,6 +226,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
 	struct timeval tv_now;
+	double nonce_rate;
+	int64_t ret = 0;
 	int amount, i;
 	char buf[45];
 	int ms_diff;
@@ -235,7 +255,8 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	ms_diff = BF1WAIT - ms_tdiff(&tv_now, &info->tv_start);
 	if (unlikely(ms_diff < 10))
 		ms_diff = 10;
-	usb_read_once_timeout(bitfury, info->buf + info->tot, 7, &amount, ms_diff, C_BF1_GETRES);
+	usb_read_once_timeout(bitfury, info->buf + info->tot, BF1MSGSIZE,
+			      &amount, ms_diff, C_BF1_GETRES);
 	info->tot += amount;
 	while (amount) {
 		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
@@ -249,7 +270,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 	usb_write(bitfury, buf, 45, &amount, C_BF1_REQWORK);
 	cgtime(&info->tv_start);
 	/* Get response acknowledging work */
-	usb_read(bitfury, buf, 7, &amount, C_BF1_GETWORK);
+	usb_read(bitfury, buf, BF1MSGSIZE, &amount, C_BF1_GETWORK);
 
 	/* Only happens on startup */
 	if (unlikely(!info->prevwork[BF1ARRAY_SIZE]))
@@ -257,7 +278,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 
 	/* Search for what work the nonce matches in order of likelihood. Last
 	 * entry is end of result marker. */
-	for (i = 0; i < info->tot - 7; i += 7) {
+	for (i = 0; i < info->tot - BF1MSGSIZE; i += BF1MSGSIZE) {
 		uint32_t nonce;
 		int j;
 
@@ -279,23 +300,30 @@ cascade:
 		info->prevwork[i] = info->prevwork[i - 1];
 	info->prevwork[0] = copy_work(work);
 	work->blk.nonce = 0xffffffff;
-	if (info->nonces) {
-		info->nonces--;
-		return (int64_t)0xffffffff;
+
+	info->cycles++;
+	info->total_nonces += info->nonces;
+	info->saved_nonces += info->nonces;
+	info->nonces = 0;
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	if (info->saved_nonces >= nonce_rate) {
+		info->saved_nonces -= nonce_rate;
+		ret = (double)0xffffffff * nonce_rate;
 	}
 
 	if (unlikely(bitfury->usbinfo.nodev)) {
 		applog(LOG_WARNING, "%s %d: Device disappeared, disabling thread",
 		       bitfury->drv->name, bitfury->device_id);
-		return -1;
+		ret = -1;
 	}
-	return 0;
+	return ret;
 }
 
 static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 {
 	struct bitfury_info *info = cgpu->device_data;
 	struct api_data *root = NULL;
+	double nonce_rate;
 	char serial[16];
 	int version;
 
@@ -304,6 +332,8 @@ static struct api_data *bitfury_api_stats(struct cgpu_info *cgpu)
 	root = api_add_string(root, "Product", info->product, false);
 	sprintf(serial, "%08x", info->serial);
 	root = api_add_string(root, "Serial", serial, true);
+	nonce_rate = (double)info->total_nonces / (double)info->cycles;
+	root = api_add_double(root, "NonceRate", &nonce_rate, true);
 
 	return root;
 }

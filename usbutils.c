@@ -2598,11 +2598,9 @@ out_noerrmsg:
 	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
-
-	DEVRUNLOCK(cgpu, pstate);
-
+		DEVWUNLOCK(cgpu, pstate);
+	} else
+		DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2700,10 +2698,9 @@ out_noerrmsg:
 	if (NODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
-
-	DEVRUNLOCK(cgpu, pstate);
+		DEVWUNLOCK(cgpu, pstate);
+	} else
+		DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -3197,7 +3194,7 @@ void usb_cleanup(void)
 	cgsem_destroy(&usb_resource_sem);
 }
 
-#define DRIVER_COUNT_FOUND(X) if (strcasecmp(ptr, X##_drv.name) == 0) { \
+#define DRIVER_COUNT_FOUND(X) if (X##_drv.name && strcasecmp(ptr, X##_drv.name) == 0) { \
 	drv_count[X##_drv.drv_id].limit = lim; \
 	found = true; \
 	}
