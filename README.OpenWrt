@@ -4,7 +4,7 @@ a line that looks similar to this at the top:
 Note the platform following the OpenWrt version. In this example, it is ar71xx.
 
 Now add a new line immediately below it, similar to this:
-	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/testing/openwrt/12.09/ar71xx
+	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/3.2.x/openwrt/12.09/ar71xx
 Be sure you put the same platform at the end as your OpenWrt repository!
 
 Next, save the file and exit your editor. Tell opkg to reload its package lists

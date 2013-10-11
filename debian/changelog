@@ -1,3 +1,10 @@
+bfgminer (3.2.2-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 11 Oct 2013 21:30:02 -0000
+
+
 bfgminer (3.2.1-0precise1) precise; urgency=low
 
   * Allow startup with no devices, even if RPC and HTTP server are disabled, so long as the user can add new ones via the curses TUI.

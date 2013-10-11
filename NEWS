@@ -1,3 +1,43 @@
+BFGMiner Version 3.2.2 - October 11, 2013
+
+- RPC: Add missing SGW driver to Device Code
+- RPC: Always build pga* and proc* methods
+- Bugfix: icarus: Check for valid fd before all usage
+- Bugfix: Stratum initiate: Clear json var after freeing it, to avoid a
+potential double-free if retry fails before new JSON is parsed
+- Bugfix: Correct --log-file error message
+- SGW: Initialise user variable to NULL to avoid potential mis-free on error
+conditions
+- Bugfix: configure: Disable httpsrv if not available
+- README: Mention free GPU mining dependencies
+- json_rpc_call_completed: Silence incorrect type cast warning
+- icarus: Silence warning about (never really) uninitalised variable use in
+icarus_scanhash
+- fpgautils: Check for fgets error
+- Silence warning about (never really) uninitalised variable use in
+multi_format_unit
+- ft232r: Silence warning about (never really) uninitalised variable use
+- Silence unused result warnings for notifier_{read,wake}
+- Log a warning if --cmd-* returns a non-zero exit code
+- Stratum: Clear unused extranonce2 space
+- Don't even show 'Attempting to restart' for devices that don't support it
+- Workaround bug in PDCurses wresize
+- Bugfix: Include config.h in sha2.c first
+- Bugfix: Stratum: Dereference pool swork coinbase buffer inside data lock
+- Bugfix: miner.php: Check $dototal[$name] is set before comparing its value
+- Bugfix: RPC: Use bad_nonces in Hardware% instead of generic hw_errors
+- Bugfix: RPC: Handle LIFE_DEAD2 case
+- Bugfix: Correct timestamp in sharelog
+- Bugfix: Repurpose "diff1" numbers to refer to only good nonces
+- OpenWrt: Support for building with libmicrohttpd support
+- Remove autogen.sh from source distributions since it only works with git
+working trees
+- Bugfix: Target FD_SETSIZE for fd soft limit (to avoid buffer overflows),
+rather than raising it as high as possible
+- Bugfix: Stratum: Avoid FD_SETting INVSOCK
+- Bugfix: dynclock: Never try to clock below 1x
+
+
 BFGMiner Version 3.2.1 - September 19, 2013
 
 - Only show long-poll message in pool summary if it's not using stratum.
