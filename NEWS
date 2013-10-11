@@ -1,3 +1,23 @@
+BFGMiner Version 3.0.9 - October 11, 2013
+
+- Bugfix: icarus: Check for valid fd before all usage
+- Bugfix: Stratum initiate: Clear json var after freeing it, to avoid a
+potential double-free if retry fails before new JSON is parsed
+- Silence warnings about (never really) uninitalised variables
+- README: Mention free GPU mining dependencies
+- json_rpc_call_completed: Silence incorrect type cast warning
+- icarus: Silence warning about (never really) uninitalised variable use in
+icarus_scanhash
+- ft232r: Silence warning about (never really) uninitalised variable use
+- Silence unused result warnings for notifier_{read,wake}
+- Don't even show 'Attempting to restart' for devices that don't support it
+- Workaround bug in PDCurses wresize
+- Bugfix: Target FD_SETSIZE for fd soft limit (to avoid buffer overflows),
+rather than raising it as high as possible
+- Bugfix: Stratum: Avoid FD_SETting INVSOCK
+- Bugfix: dynclock: Never try to clock below 1x
+
+
 BFGMiner Version 3.0.8 - September 19, 2013
 
 - Only show long-poll message in pool summary if it's not using stratum.
