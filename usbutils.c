@@ -2233,10 +2233,9 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 	ret = pthread_cond_timedwait(&ut->cond, &ut->mutex, &ts_end);
 	if (ret) {
 		/* Assume that if we timed out on the conditional then the
-		 * transfer has stalled for some reason and attempt to clear
-		 * a halt as a solution. Then cancel the transaction, treating
-		 * it the same as a timeout. */
-		libusb_clear_halt(transfer->dev_handle, transfer->endpoint);
+		 * transfer has stalled for some reason. Cancel the transaction,
+		 * treating it the same as a timeout if we receive cancelled as
+		 * the status. */
 		libusb_cancel_transfer(transfer);
 		applog(LOG_DEBUG, "%s%i: libusb cancelling async bulk transfer",
 		       cgpu->drv->name, cgpu->device_id);
@@ -2244,10 +2243,11 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 
 		/* Now wait for the callback function to be invoked. */
 		pthread_cond_wait(&ut->cond, &ut->mutex);
-		/* Fake the timed out message since it's effectively that */
+	}
+
+	ret = transfer->status;
+	if (ret == LIBUSB_TRANSFER_CANCELLED)
 		ret = LIBUSB_TRANSFER_TIMED_OUT;
-	} else
-		ret = transfer->status;
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
 	libusb_free_transfer(transfer);
