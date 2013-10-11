@@ -1,5 +1,7 @@
 FPGA/ASIC mining and refactor: Luke Dashjr <luke-jr+bfgminer@utopios.org> 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
 GPU mining and refactor: Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Bitfury GPIO-based drivers: Bitfury and Anatoly Legkodymov <legko777@fastmail.fm>
+Big Picture Mining driver: Andreas Auer <aauer1@gmail.com>
 Avalon and Icarus drivers: Xiangfu <xiangfu@openmobilefree.net>
 ZTEX FPGA driver: Nelisky <nelisky.btc@gmail.com>
 Original CPU mining software: Jeff Garzik <jgarzik@pobox.com>
