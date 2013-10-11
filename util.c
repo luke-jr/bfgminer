@@ -2006,7 +2006,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		break;
 	}
 	if (p == NULL) {
-		applog(LOG_NOTICE, "Failed to connect to stratum on %s:%s",
+		applog(LOG_INFO, "Failed to connect to stratum on %s:%s",
 		       sockaddr_url, sockaddr_port);
 		freeaddrinfo(servinfo);
 		return false;
