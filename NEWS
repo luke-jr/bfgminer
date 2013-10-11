@@ -1,3 +1,96 @@
+
+- We are always dependent on libusb handling events so use the blocking
+libusb_handle_events in the polling thread and use a bool to know if we should
+continue polling.
+- Use fractional hashrate return values in bitfury_scanhash to minimise the
+number of times we return 0 based on hashrate so far to further damp out
+displayed hashrate.
+- Check for presence of driver name in DRIVER_COUNT_FOUND to prevent strcmp on a
+null pointer when a driver is not built in.
+- CMR allow sending flash and clock commands
+- Kill off threads that have failed using hash_sole_work instead of just
+disabling them.
+- Make the bf1 getinfo size a macro
+- Failing to add_cgpu in bitfury should be a terminal failure.
+- Check return values when attempting to open a BF1 device and set the msg size
+as a macro.
+- Display errors on failed usb read and write and consider sequential IO errors
+a permanent failure.
+- Use libusb's own error name function instead of hand coding the error names.
+- Limit ms_tdiff to 1 hour as a sanity check.
+- Enable the usb buffer in avalon driver.
+- Check for async transfer variants of error messages.
+- Remove unused variables.
+- Try switching pools if for some reason we end up with only idle pools and have
+ended up current_pool set to an idle one.
+- Check a pool is stable for >5 mins before switching back to it.
+- Minimise the time between dropping the read devlock and grabbing the write
+devlock to avoid tons of logging spam in the interim.
+- Check for libusb transfer stall error to be consistent with async IO errors
+returned for a halt condition.
+- Check for continuous IO errors on USB and consider the device inactive if more
+than retry max.
+- Make the devlock a cglock in usbutils and only grab the write lock for
+fundamental changes allowing us to send and receive transfers concurrently
+without lock contention.
+- Prevent overflows in us_tdiff and ms_tdiff.
+- Change second initialise message on bitfury verbose mode.
+- Submitting an ntime offset nonce needs to be done on a copy of the work
+instead of the original so abstract out shared components as much as possible,
+minimising strdups in copy_work and make submit_work_async work take copied
+work, cleaning up code in the process.
+- Provide a way for drivers to submit work that it has internally rolled the
+ntime value by returning the amount it has ntime rolled to be added.
+- Typo in configure.ac
+- Remove unmaintained broken ztex driver.
+- Icarus - use a data structure for I/O rather than magic numbers
+- delete old tracked ccan/opt/*.o files
+- klondike correct cvtKlnToC() temperature calculation
+- klondike - correct 1st reply debug based on define
+- klondike - debug dump structured replies
+- klondike - avoid division by zero if maxcount is unexpectedly zero
+- klondike store and report errorcount and noise
+- klondike - fix chipstats api stats buffer overrun with 16 chips
+- klondike add new nonecount only once
+- klondike - report mh/s based on nonces found + put old estimate into API stats
+- klondike use a memcpy
+- klondike fix bracket tabs indenting
+- api.c missing Klondike from ASIC list
+- Klondike update code to current git
+- Add 2nd CMR to 01-cgminer.rules
+- Add Klondike to 01-cgminer.rules
+- Klondike to main directory
+- Klondike consistent code spacing
+- Klondike update driver code to current git
+- update firmware for 16 chips, add dist files
+- beta final 0.3.0 release
+- updated firmware, IOC method
+- prevent nonces when not state W
+- added driver config option support
+- fixes for 300 MHz, fix K1 parts list
+- update driver, docs
+- update firmware & utils
+- updated cgminer driver for 3.3.1
+- update firmware and driver, create new cgminer fork
+- update klondike driver
+- add cgminer driver file as-is
+- Add API output displaying USB cancellations.
+- Store statistics on how often we have to cancel async bulk transfers and add a
+debug message whenever we do.
+- Treat any unexpected timeouts waiting for async transfers as though there may
+be a usb halt condition and attempt to clear the halt before cancelling the
+tranfer.
+- Remove zero packet flag on usb as it's unsupported outside linux and
+unnecessary.
+- Fake the libusb transfer timed out message if we force cancel it with our own
+async functions.
+- Use asynchronous transfers for all bulk transfers, allowing us to use our own
+timers and cancelling transfers that take too long.
+- Add libusb error warning message when significant error occurs.
+- Icarus CMR2 detect FPGA setup
+- Disable bitfury device thread on it disappearing.
+
+
 Version 3.5.0 - 29th September 2013
 
 - Add magic init sequence required on BF1 devices to get them mining on windows.
