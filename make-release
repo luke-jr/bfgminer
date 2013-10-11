@@ -46,7 +46,6 @@ NOCONFIGURE=1 \
 ./autogen.sh
 find . -name autom4te.cache |
  xargs rm -r
-rm autogen.sh
 cd ..
 zip -r "$OUTDIR/${sw}.zip" "$sw"
 tar cjvpf "$OUTDIR/${sw}.tbz2" "$sw"
