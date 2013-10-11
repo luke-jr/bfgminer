@@ -472,7 +472,6 @@ struct cgpu_info {
 #endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
-	int usb_cancels;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;
@@ -879,6 +878,14 @@ static inline void cg_dlock(cglock_t *lock)
 static inline void cg_runlock(cglock_t *lock)
 {
 	rd_unlock(&lock->rwlock);
+}
+
+/* This drops the read lock and grabs a write lock. It does NOT protect data
+ * between the two locks! */
+static inline void cg_ruwlock(cglock_t *lock)
+{
+	rd_unlock_noyield(&lock->rwlock);
+	cg_wlock(lock);
 }
 
 static inline void cg_wunlock(cglock_t *lock)

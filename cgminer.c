@@ -175,6 +175,8 @@ char *opt_usb_select = NULL;
 int opt_usbdump = -1;
 bool opt_usb_list_all;
 cgsem_t usb_resource_sem;
+static pthread_t usb_poll_thread;
+static bool usb_polling;
 #endif
 
 char *opt_kernel_path;
@@ -3216,6 +3218,8 @@ static void __kill_work(void)
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
+		usb_polling = false;
+
 		applog(LOG_DEBUG, "Releasing all USB devices");
 		usb_cleanup();
 
@@ -5786,10 +5790,9 @@ out:
 
 static void pool_resus(struct pool *pool)
 {
-	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio()) {
-		applog(LOG_WARNING, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
-		switch_pools(NULL);
-	} else
+	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
+		applog(LOG_WARNING, "Pool %d %s alive, testing stability", pool->pool_no, pool->rpc_url);
+	else
 		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
@@ -6255,7 +6258,8 @@ static void hash_sole_work(struct thr_info *mythr)
 				applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 				cgpu->deven = DEV_DISABLED;
 				dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-				mt_disable(mythr, thr_id, drv);
+				cgpu->shutdown = true;
+				break;
 			}
 
 			hashes_done += hashes;
@@ -6867,7 +6871,20 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
+
+			/* Only switch pools if the failback pool has been
+			 * alive for more than 5 minutes to prevent
+			 * intermittently failing pools from being used. */
+			if (!pool->idle && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio() &&
+			    now.tv_sec - pool->tv_idle.tv_sec > 300) {
+				applog(LOG_WARNING, "Pool %d %s stable for 5 mins",
+				       pool->pool_no, pool->rpc_url);
+				switch_pools(NULL);
+			}
 		}
+
+		if (current_pool()->idle)
+			switch_pools(NULL);
 
 		if (pool_strategy == POOL_ROTATE && now.tv_sec - rotate_tv.tv_sec > 60 * opt_rotate_period) {
 			cgtime(&rotate_tv);
@@ -7067,6 +7084,9 @@ static void log_print_status(struct cgpu_info *cgpu)
 	applog(LOG_WARNING, "%s", logline);
 }
 
+static void noop_get_statline(char __maybe_unused *buf, size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu);
+void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu);
+
 void print_summary(void)
 {
 	struct timeval diff;
@@ -7138,6 +7158,8 @@ void print_summary(void)
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
 
+		cgpu->drv->get_statline_before = &blank_get_statline_before;
+		cgpu->drv->get_statline = &noop_get_statline;
 		log_print_status(cgpu);
 	}
 
@@ -7232,6 +7254,7 @@ static void *test_pool_thread(void *arg)
 			applog(LOG_NOTICE, "Switching to pool %d %s - first alive pool", pool->pool_no, pool->rpc_url);
 
 		pool_resus(pool);
+		switch_pools(NULL);
 	} else
 		pool_died(pool);
 
@@ -7728,18 +7751,14 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv = { 0, USB_ASYNC_POLL * 1000 };
-
 	RenameThread("usbpoll");
 
 	pthread_detach(pthread_self());
-	while (42)
-		libusb_handle_events_timeout(NULL, &tv);
+	while (usb_polling)
+		libusb_handle_events(NULL);
 
 	return NULL;
 }
-
-static pthread_t usb_poll_thread;
 
 static void initialise_usb(void) {
 	int err = libusb_init(NULL);
@@ -7751,6 +7770,7 @@ static void initialise_usb(void) {
 	mutex_init(&cgusb_lock);
 	mutex_init(&cgusbres_lock);
 	cglock_init(&cgusb_fd_lock);
+	usb_polling = true;
 	pthread_create(&usb_poll_thread, NULL, libusb_poll_thread, NULL);
 }
 #else

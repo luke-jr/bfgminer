@@ -1300,12 +1300,11 @@ static void release_cgpu(struct cgpu_info *cgpu)
 {
 	struct cg_usb_device *cgusb = cgpu->usbdev;
 	struct cgpu_info *lookcgpu;
-	int i, pstate;
+	int i;
 
-	DEVWLOCK(cgpu, pstate);
 	// It has already been done
 	if (cgpu->usbinfo.nodev)
-		goto out_unlock;
+		return;
 
 	applog(LOG_DEBUG, "USB release %s%i",
 			cgpu->drv->name, cgpu->device_id);
@@ -1335,8 +1334,6 @@ static void release_cgpu(struct cgpu_info *cgpu)
 
 	_usb_uninit(cgpu);
 	cgminer_usb_unlock_bd(cgpu->drv, cgpu->usbinfo.bus_number, cgpu->usbinfo.device_address);
-out_unlock:
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 /*
@@ -2125,7 +2122,6 @@ static void stats(struct cgpu_info *cgpu, struct timeval *tv_start, struct timev
 		case LIBUSB_SUCCESS:
 			item = CMD_CMD;
 			break;
-		case LIBUSB_TRANSFER_TIMED_OUT:
 		case LIBUSB_ERROR_TIMEOUT:
 			item = CMD_TIMEOUT;
 			break;
@@ -2222,8 +2218,7 @@ static void LIBUSB_CALL bulk_callback(struct libusb_transfer *transfer)
 
 /* Wait for callback function to tell us it has finished the USB transfer, but
  * use our own timer to cancel the request if we go beyond the timeout. */
-static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *transferred,
-			 unsigned int timeout)
+static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int timeout)
 {
 	struct libusb_transfer *transfer= ut->transfer;
 	struct timespec ts_now, ts_end;
@@ -2231,28 +2226,21 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 	int ret;
 
 	cgtime(&tv_now);
-	timeout = timeout + USB_ASYNC_POLL;
 	ms_to_timespec(&ts_end, timeout);
 	timeval_to_spec(&ts_now, &tv_now);
 	timeraddspec(&ts_end, &ts_now);
 	ret = pthread_cond_timedwait(&ut->cond, &ut->mutex, &ts_end);
 	if (ret) {
-		/* Assume that if we timed out on the conditional then the
-		 * transfer has stalled for some reason and attempt to clear
-		 * a halt as a solution. Then cancel the transaction, treating
-		 * it the same as a timeout. */
-		libusb_clear_halt(transfer->dev_handle, transfer->endpoint);
+		/* We are emulating a timeout ourself here */
 		libusb_cancel_transfer(transfer);
-		applog(LOG_DEBUG, "%s%i: libusb cancelling async bulk transfer",
-		       cgpu->drv->name, cgpu->device_id);
-		cgpu->usb_cancels++;
 
 		/* Now wait for the callback function to be invoked. */
 		pthread_cond_wait(&ut->cond, &ut->mutex);
-		/* Fake the timed out message since it's effectively that */
+	}
+	ret = transfer->status;
+	if (ret == LIBUSB_TRANSFER_CANCELLED)
 		ret = LIBUSB_TRANSFER_TIMED_OUT;
-	} else
-		ret = transfer->status;
+
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
 	libusb_free_transfer(transfer);
@@ -2295,8 +2283,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	init_usb_transfer(&ut);
 	mutex_lock(&ut.mutex);
+	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  bulk_callback, &ut, timeout);
+				  bulk_callback, &ut, 0);
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
@@ -2304,7 +2293,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	cg_runlock(&cgusb_fd_lock);
 	errn = errno;
 	if (!err)
-		err = callback_wait(cgpu, &ut, transferred, timeout);
+		err = callback_wait(&ut, transferred, timeout);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
@@ -2315,16 +2304,20 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 				usb_cmdname(cmd), *transferred, err, errn);
 
 	if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_TRANSFER_STALL) {
-		cgpu->usbinfo.last_pipe = time(NULL);
-		cgpu->usbinfo.pipe_count++;
-		applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
-			cgpu->drv->name, cgpu->device_id);
-		err = libusb_clear_halt(dev_handle, endpoint);
-		applog(LOG_DEBUG, "%s%i: libusb pipe error%scleared",
-			cgpu->drv->name, cgpu->device_id, err ? " not " : " ");
+		int retries = 0;
 
-		if (err)
-			cgpu->usbinfo.clear_fail_count++;
+		do {
+			cgpu->usbinfo.last_pipe = time(NULL);
+			cgpu->usbinfo.pipe_count++;
+			applog(LOG_INFO, "%s%i: libusb pipe error, trying to clear",
+				cgpu->drv->name, cgpu->device_id);
+			err = libusb_clear_halt(dev_handle, endpoint);
+			applog(LOG_DEBUG, "%s%i: libusb pipe error%scleared",
+				cgpu->drv->name, cgpu->device_id, err ? " not " : " ");
+
+			if (err)
+				cgpu->usbinfo.clear_fail_count++;
+		} while (err && ++retries < USB_RETRY_MAX);
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, length);
@@ -2599,10 +2592,12 @@ out_unlock:
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NODEV(err))
+	if (NODEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		DEVWUNLOCK(cgpu, pstate);
+	} else
+		DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2697,10 +2692,12 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NODEV(err))
+	if (NODEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		DEVWUNLOCK(cgpu, pstate);
+	} else
+		DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2772,8 +2769,8 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	IOERR_CHECK(cgpu, err);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb transfer error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 	}
 out_:
 	return err;
@@ -2787,10 +2784,13 @@ int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest
 
 	err = __usb_transfer(cgpu, request_type, bRequest, wValue, wIndex, data, siz, timeout, cmd);
 
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NOCONTROLDEV(err))
+	if (NOCONTROLDEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
+	DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2856,14 +2856,17 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		err = 0;
 	}
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer read error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb transfer read error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 	}
 out_noerrmsg:
-	DEVRUNLOCK(cgpu, pstate);
-
-	if (NOCONTROLDEV(err))
+	if (NOCONTROLDEV(err)) {
+		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
+		cg_dwlock(&cgpu->usbinfo.devlock);
+	}
+
+	DEVRUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -3129,7 +3132,7 @@ void usb_set_dev_start(struct cgpu_info *cgpu)
 void usb_cleanup(void)
 {
 	struct cgpu_info *cgpu;
-	int count;
+	int count, pstate;
 	int i;
 
 	hotplug_time = 0;
@@ -3147,7 +3150,9 @@ void usb_cleanup(void)
 			case DRIVER_icarus:
 			case DRIVER_avalon:
 			case DRIVER_klondike:
+				DEVWLOCK(cgpu, pstate);
 				release_cgpu(cgpu);
+				DEVWUNLOCK(cgpu, pstate);
 				count++;
 				break;
 			default:
@@ -3186,7 +3191,7 @@ void usb_cleanup(void)
 	cgsem_destroy(&usb_resource_sem);
 }
 
-#define DRIVER_COUNT_FOUND(X) if (strcasecmp(ptr, X##_drv.name) == 0) { \
+#define DRIVER_COUNT_FOUND(X) if (X##_drv.name && strcasecmp(ptr, X##_drv.name) == 0) { \
 	drv_count[X##_drv.drv_id].limit = lim; \
 	found = true; \
 	}
