@@ -952,6 +952,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 #endif
 extern const char *proxytype(proxytypes_t proxytype);
 extern char *get_proxy(char *url, struct pool *pool);
+extern void __bin2hex(char *s, const unsigned char *p, size_t len);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
