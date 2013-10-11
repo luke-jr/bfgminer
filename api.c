@@ -93,14 +93,32 @@ static const char *DEVICECODE = ""
 #ifdef USE_BITFORCE
 			"BFL "
 #endif
+#ifdef USE_BITFURY
+			"BFY "
+#endif
 #ifdef USE_BIGPIC
 			"BPM "
+#endif
+#ifdef USE_BFSB
+			"BSB "
 #endif
 #ifdef USE_ICARUS
 			"ICA "
 #endif
+#ifdef USE_LITTLEFURY
+			"LFY "
+#endif
+#ifdef USE_METABANK
+			"MBF "
+#endif
 #ifdef USE_AVALON
 			"AVA "
+#endif
+#ifdef USE_LIBMICROHTTPD
+			"SGW "
+#endif
+#ifdef USE_LIBEVENT
+			"SSM "
 #endif
 #ifdef USE_X6500
 			"XBS "
