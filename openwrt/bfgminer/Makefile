@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=3.2.1
+PKG_VERSION:=9999
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
@@ -38,7 +38,7 @@ endef
 define Package/$(PKG_NAME)
 $(call Package/$(PKG_NAME)/Default)
 	TITLE:=$(PKG_TITLE) (Bitcoin miner)
-	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
+	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_libevent:libevent2 +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
 endef
 
 define Package/$(PKG_NAME)/description
@@ -48,6 +48,10 @@ endef
 define Package/$(PKG_NAME)/config
 config PACKAGE_$(PKG_NAME)_curses
 	bool "Build with curses TUI support"
+	depends on PACKAGE_$(PKG_NAME)
+	default y
+config PACKAGE_$(PKG_NAME)_libevent
+	bool "Build with stratum server support"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
 config PACKAGE_$(PKG_NAME)_libmicrohttpd
@@ -64,6 +68,12 @@ ifndef CONFIG_PACKAGE_$(PKG_NAME)_curses
 CONFIGURE_ARGS += --without-curses
 else
 CONFIGURE_ARGS += --with-curses=ncurses
+endif
+
+ifndef CONFIG_PACKAGE_$(PKG_NAME)_libevent
+CONFIGURE_ARGS += --without-libevent
+else
+CONFIGURE_ARGS += --with-libevent
 endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libmicrohttpd
