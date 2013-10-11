@@ -2771,8 +2771,8 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	IOERR_CHECK(cgpu, err);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb transfer error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 	}
 out_:
 	return err;
@@ -2858,8 +2858,8 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		err = 0;
 	}
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer read error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb transfer read error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 	}
 out_noerrmsg:
 	if (NOCONTROLDEV(err)) {
