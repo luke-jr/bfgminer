@@ -1489,7 +1489,8 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	int last_share_pool = -1;
 	time_t last_share_pool_time = -1, last_device_valid_work = -1;
 	double last_share_diff = -1;
-	for (proc = cgpu; proc; proc = proc->next_proc)
+	int procs = per_proc ? 1 : cgpu->procs, i;
+	for (i = 0, proc = cgpu; i < procs; ++i, proc = proc->next_proc)
 	{
 		cgpu_utility(proc);
 		if (proc->deven != DEV_DISABLED)
@@ -1755,7 +1756,8 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
 	already = true;
-	for (proc = cgpu; proc; proc = proc->next_proc)
+	int procs = per_proc ? 1 : cgpu->procs, i;
+	for (i = 0, proc = cgpu; i < procs; ++i, proc = proc->next_proc)
 	{
 		if (proc->deven == DEV_DISABLED)
 		{
@@ -1815,7 +1817,8 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
 	already = true;
-	for (proc = cgpu; proc; proc = proc->next_proc)
+	int procs = per_proc ? 1 : cgpu->procs, i;
+	for (i = 0, proc = cgpu; i < procs; ++i, proc = proc->next_proc)
 	{
 		if (proc->deven != DEV_DISABLED)
 		{
@@ -2784,7 +2787,8 @@ void notifystatus(struct io_data *io_data, int device, struct cgpu_info *cgpu, b
 	int dev_sick_idle_60_count = 0, dev_dead_idle_600_count = 0;
 	int dev_nostart_count = 0, dev_over_heat_count = 0, dev_thermal_cutoff_count = 0, dev_comms_error_count = 0, dev_throttle_count = 0;
 
-	for (proc = cgpu; proc; proc = proc->next_proc)
+	int procs = per_proc ? 1 : cgpu->procs, i;
+	for (i = 0, proc = cgpu; i < procs; ++i, proc = proc->next_proc)
 	{
 		if (proc->device_last_not_well > last_not_well)
 		{
