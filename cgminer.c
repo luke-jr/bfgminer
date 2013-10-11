@@ -7085,6 +7085,7 @@ static void log_print_status(struct cgpu_info *cgpu)
 }
 
 static void noop_get_statline(char __maybe_unused *buf, size_t __maybe_unused bufsiz, struct cgpu_info __maybe_unused *cgpu);
+void blank_get_statline_before(char *buf, size_t bufsiz, struct cgpu_info __maybe_unused *cgpu);
 
 void print_summary(void)
 {
@@ -7157,6 +7158,7 @@ void print_summary(void)
 	for (i = 0; i < total_devices; ++i) {
 		struct cgpu_info *cgpu = get_devices(i);
 
+		cgpu->drv->get_statline_before = &blank_get_statline_before;
 		cgpu->drv->get_statline = &noop_get_statline;
 		log_print_status(cgpu);
 	}
