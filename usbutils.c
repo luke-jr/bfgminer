@@ -2227,7 +2227,9 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 	int ret;
 
 	cgtime(&tv_now);
-	ms_to_timespec(&ts_end, timeout);
+	/* Add enough to the timeout to allow for a normal USB polling interval
+	 * of 1ms to pass. */
+	ms_to_timespec(&ts_end, timeout + 2);
 	timeval_to_spec(&ts_now, &tv_now);
 	timeraddspec(&ts_end, &ts_now);
 	ret = pthread_cond_timedwait(&ut->cond, &ut->mutex, &ts_end);
