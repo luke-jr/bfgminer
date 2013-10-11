@@ -5974,7 +5974,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
-static struct work *get_work(struct thr_info *thr, const int thr_id)
+struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct work *work = NULL;
 

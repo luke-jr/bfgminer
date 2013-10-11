@@ -220,17 +220,23 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 	return false;
 }
 
-static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
-				int64_t __maybe_unused max_nonce)
+static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
 	struct timeval tv_now;
+	struct work *work;
 	double nonce_rate;
 	int64_t ret = 0;
 	int amount, i;
 	char buf[45];
 	int ms_diff;
+
+	work = get_work(thr, thr->id);
+	if (unlikely(thr->work_restart)) {
+		free_work(work);
+		return 0;
+	}
 
 	buf[0] = 'W';
 	memcpy(buf + 1, work->midstate, 32);
@@ -298,8 +304,7 @@ static int64_t bitfury_scanhash(struct thr_info *thr, struct work *work,
 cascade:
 	for (i = BF1ARRAY_SIZE; i > 0; i--)
 		info->prevwork[i] = info->prevwork[i - 1];
-	info->prevwork[0] = copy_work(work);
-	work->blk.nonce = 0xffffffff;
+	info->prevwork[0] = work;
 
 	info->cycles++;
 	info->total_nonces += info->nonces;
@@ -358,7 +363,8 @@ struct device_drv bitfury_drv = {
 	.dname = "bitfury",
 	.name = "BF1",
 	.drv_detect = bitfury_detect,
-	.scanhash = bitfury_scanhash,
+	.hash_work = &hash_driver_work,
+	.scanwork = bitfury_scanwork,
 	.get_api_stats = bitfury_api_stats,
 	.reinit_device = bitfury_init,
 	.thread_shutdown = bitfury_shutdown,
