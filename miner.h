@@ -472,7 +472,6 @@ struct cgpu_info {
 #endif
 #ifdef USE_USBUTILS
 	struct cg_usb_info usbinfo;
-	int usb_cancels;
 #endif
 #ifdef USE_MODMINER
 	char fpgaid;

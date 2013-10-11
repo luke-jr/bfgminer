@@ -2218,8 +2218,7 @@ static void LIBUSB_CALL bulk_callback(struct libusb_transfer *transfer)
 
 /* Wait for callback function to tell us it has finished the USB transfer, but
  * use our own timer to cancel the request if we go beyond the timeout. */
-static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *transferred,
-			 unsigned int timeout)
+static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int timeout)
 {
 	struct libusb_transfer *transfer= ut->transfer;
 	struct timespec ts_now, ts_end;
@@ -2227,29 +2226,21 @@ static int callback_wait(struct cgpu_info *cgpu, struct usb_transfer *ut, int *t
 	int ret;
 
 	cgtime(&tv_now);
-	/* Add enough to the timeout to allow for a normal USB polling interval
-	 * of 1ms to pass. */
-	ms_to_timespec(&ts_end, timeout + 2);
+	ms_to_timespec(&ts_end, timeout);
 	timeval_to_spec(&ts_now, &tv_now);
 	timeraddspec(&ts_end, &ts_now);
 	ret = pthread_cond_timedwait(&ut->cond, &ut->mutex, &ts_end);
 	if (ret) {
-		/* Assume that if we timed out on the conditional then the
-		 * transfer has stalled for some reason. Cancel the transaction,
-		 * treating it the same as a timeout if we receive cancelled as
-		 * the status. */
+		/* We are emulating a timeout ourself here */
 		libusb_cancel_transfer(transfer);
-		applog(LOG_DEBUG, "%s%i: libusb cancelling async bulk transfer",
-		       cgpu->drv->name, cgpu->device_id);
-		cgpu->usb_cancels++;
 
 		/* Now wait for the callback function to be invoked. */
 		pthread_cond_wait(&ut->cond, &ut->mutex);
 	}
-
 	ret = transfer->status;
 	if (ret == LIBUSB_TRANSFER_CANCELLED)
 		ret = LIBUSB_TRANSFER_TIMED_OUT;
+
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
 	libusb_free_transfer(transfer);
@@ -2292,8 +2283,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	init_usb_transfer(&ut);
 	mutex_lock(&ut.mutex);
+	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  bulk_callback, &ut, timeout);
+				  bulk_callback, &ut, 0);
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
@@ -2301,7 +2293,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	cg_runlock(&cgusb_fd_lock);
 	errn = errno;
 	if (!err)
-		err = callback_wait(cgpu, &ut, transferred, timeout);
+		err = callback_wait(&ut, transferred, timeout);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
