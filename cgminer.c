@@ -6532,6 +6532,53 @@ void hash_queued_work(struct thr_info *mythr)
 	cgpu->deven = DEV_DISABLED;
 }
 
+/* This version of hash_work is for devices drivers that want to do their own
+ * work management entirely, usually by using get_work(). Note that get_work
+ * is a blocking function and will wait indefinitely if no work is available
+ * so this must be taken into consideration in the driver. */
+void hash_driver_work(struct thr_info *mythr)
+{
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (likely(!cgpu->shutdown)) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		hashes = drv->scanwork(mythr);
+
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr, thr_id, drv);
+		}
+
+		hashes_done += hashes;
+		cgtime(&tv_end);
+		timersub(&tv_end, &tv_start, &diff);
+		/* Update the hashmeter at most 5 times per second */
+		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
+		    diff.tv_sec >= opt_log_interval) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			copy_time(&tv_start, &tv_end);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr, thr_id, drv);
+
+		if (unlikely(mythr->work_restart))
+			drv->flush_work(cgpu);
+	}
+	cgpu->deven = DEV_DISABLED;
+}
+
 void *miner_thread(void *userdata)
 {
 	struct thr_info *mythr = userdata;
