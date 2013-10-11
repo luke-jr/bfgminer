@@ -191,8 +191,6 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 	uint32_t ntime = *((uint32_t *)&work->data[68]);
 	uint32_t nbits = *((uint32_t *)&work->data[72]);
 
-	int32_t nonces = (info->rx_len / 7) - 1;
-
 	num_results = 0;
 	for(int i=0; i<info->rx_len; i+=7)
 	{
@@ -202,21 +200,18 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 		memcpy(&state.nonce, info->rx_buffer + i + 3, 4);
 
 		if(duplicate(results, num_results, state.nonce))
-		{
 			continue;
-		}
 
 		uint32_t nonce = bitfury_decnonce(state.nonce);
 		results[num_results++] = state.nonce;
 
-		//applog(LOG_DEBUG, "%"PRIpreprv": Len: %d Cmd: %c State: %c Switched: %d Nonce: %08X", board->proc_repr, info->rx_len, info->rx_buffer[i], state->state, state->switched, nonce);
+		applog(LOG_DEBUG, "%"PRIpreprv": Len: %lu Cmd: %c State: %c Switched: %d Nonce: %08lx",
+		       board->proc_repr,
+		       (unsigned long)info->rx_len, info->rx_buffer[i], state.state, state.switched, (unsigned long)nonce);
 		if (bitfury_fudge_nonce(work->midstate, m7, ntime, nbits, &nonce))
-		{
 			submit_nonce(thr, work, nonce);
-			nonces--;
-			continue;
-		}
-		inc_hw_errors(thr, work, nonce);
+		else
+			inc_hw_errors(thr, work, nonce);
 	}
 }
 
