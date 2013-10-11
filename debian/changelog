@@ -1,3 +1,17 @@
+bfgminer (3.3.0-0precise1) precise; urgency=low
+
+  * New drivers for bitfury-based devices: BFSB/MegaBigPower(v2 only!) kits, Big Picture Mining USB (BF1, RedFury, BlueFury, etc), LittleFury, and Metabank. See README.ASIC for setup instructions.
+  * Support for proxy virtual devices has been extended to include the stratum protocol when the upstream pool selected is also stratum and supplies sufficient extranonce2 space. If the upstream pool does not meet this criteria, stratum clients will be disconnected and new ones will fail to subscribe. You can take advantage of this to failover to the getwork proxy. Support for upstream getwork pools is impossble, but GBT is planned.
+  * opencl: Driver is disabled by default if FPGAs or ASICs are detected. To enable, use -S opencl:auto
+  * Third hashrate displayed is now based on nonces found, adjusted for pool rejected/stale shares. It should still be approximately equivalent to your effective/earning hashrate, but with better accuracy.
+  * Utility on the TUI status line has been replaced with expected Income, measured as 100% PPS BTC per hour for easy comparison with electric costs.
+  * RPC: Methods shared with cgminer now only consider entire devices, to be more compatible. A set of new processor-detail methods have been added to get full information per-processor.
+  * RPC: Old devdetail method has been made compatible with cgminer devdetails and renamed.
+  * New options --chroot-dir and --setuid on POSIX systems (thanks Ricardo!).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 11 Oct 2013 20:32:15 -0000
+
+
 bfgminer (3.2.1-0precise1) precise; urgency=low
 
   * Allow startup with no devices, even if RPC and HTTP server are disabled, so long as the user can add new ones via the curses TUI.

@@ -466,7 +466,7 @@ api-example.py - a Python script to access the API
 Feature Changelog for external applications using the API:
 
 
-API V2.0
+API V2.0 (BFGMiner v3.3.0)
 
 Removed API commands:
  'devdetail' - Use newer 'devdetails' for same information.

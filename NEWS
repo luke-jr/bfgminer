@@ -1,3 +1,226 @@
+BFGMiner Version 3.3.0 - October 11, 2013
+
+- openwrt: Optional libevent support
+- RPC: Add missing drivers to Device Code
+- bigpic_process_results: Cleanup
+- RPC: Use procs count for device summaries, rather than iterating over linked
+list (which may span multiple devices)
+- Bugfix: Use bfg_waddstr for cg_[mv]wprintw so special characters get
+interpreted properly
+- Bugfix: bitfury: Clear force_reinit flag after reinit
+- Bugfix: Use base unit for zero, and only if all values are zero
+- RPC: Always build pga* and proc* methods
+- Bugfix: icarus: Check for valid fd before all usage
+- Bugfix: Stratum initiate: Clear json var after freeing it, to avoid a
+potential double-free if retry fails before new JSON is parsed
+- Bugfix: Correct --log-file error message
+- Cleanly fall back to other micro- prefix symbols if locale doesn't support the
+preferred one(s)
+- Bugfix: bfg_waddstr: Missing break after selecting degrees symbol
+- Silence warning about (never really) uninitalised variable use in notifystatus
+- RPC: Complete split between devs/pga* and proc* methods
+- RPC: Internal restructuring to support device-wide view
+- RPC: Remove devdetail method, and rework newer devdetails to use its code
+- configure: Advise running ldconfig when detected and probably necessary
+- configure: Simplify final information summary
+- Bugfix: configure: Disable httpsrv/libevent if not available
+- README: Mention free GPU mining dependencies
+- Write config: Avoid writing default temperature settings
+- bitforce: Set default cutoff temperature to 85C for SC-class devices
+- When shutting down, don't wait for mining threads any longer after the 1
+second sleep
+- bitfury: Silence warning about (never possible) uninitialised variable use
+- bigpic: Handle write failures
+- json_rpc_call_completed: Silence incorrect type cast warning
+- icarus: Silence warning about (never really) uninitalised variable use in
+icarus_scanhash
+- fpgautils: Check for fgets error
+- Silence warning about (never really) uninitalised variable use in
+multi_format_unit
+- ft232r: Silence warning about (never really) uninitalised variable use
+- Silence unused result warnings for notifier_{read,wake}
+- Log a warning if --cmd-* returns a non-zero exit code
+- configure: Update bigpic driver dependency on bitfury code
+- metabank: Initialise --temp-cutoff to 50C
+- README.ASIC: Document special care needed for some bitfury-based miners
+- Bugfix: bitfury: Correct results from RPC pgaset
+- bitfury: Move Slot and fasync RPC info to details instead of status
+- bitfury: Include chip fasync in RPC status
+- bfsb: Split up processors among a separate device per board
+- Bugfix: bitfury: Copy rxbufs to stack in case we need to do SPI communication
+in the meantime
+- bfsb: Merge bfsb_detect_chips into bfsb_autodetect (unchanged)
+- bfsb/metabank: Allow pgaset to change osc6_bits and SPI baud rate
+- bitfury: Fix code indentation
+- bitfury: bitfury_init_oldbuf: Optimise during runtime
+- metabank: Remove unused variables
+- bitfury: Send a work with lots of nonces to help cold-started bitfurys fill a
+static buffer
+- Bugfix: configure: Show --enable-bfsb/metabank in help, since they are
+disabled by default
+- metabank: Reduce i2c banking to only when necessary
+- bfsb: Only build spi_bfsb_select_bank if bfsb driver is being compiled
+- bitfury: Reorganize polling to hit chips sequentially, so SPI traffic can be
+minimised
+- bitfury: spi_emit_data: Return address read data will be located at after txrx
+- bitfury: After 8 bad nonces in a sample period, reinit immediately rather than
+waiting for the remaining up-to-0x38
+- bitfury: Reinitialise chips if their active nonce stops changing
+- bitfury: Recalibrate immediately when we know we need it
+- bitfury: Reset chips if more than 8 hw errors are found in a 0x40 result
+sample period
+- bitfury: If previous nonce mismatch persists, try recalibrating oldbuf
+- bfsb: Shutdown chip when disabling
+- bfsb: Expose Clock Bits and Slot to RPC
+- configure: Simplify dynclock necessity detection
+- configure: Tie libudev usage to fpgautils
+- configure: Simplify fpgautils necessity detection
+- DevAPI: add_cgpu_slave for more elegant multi-device threads
+- Use procs count for device summaries, rather than iterating over linked list
+(which may span multiple devices)
+- metabank: Split up processors among a separate device per board
+- metabank: Merge metabank_detect_chips into metabank_autodetect (unchanged)
+- Removed temperature output from metabank_api_extra_device_status().
+- Modified code to store temperature at cgpu->temp for metabank devices.
+- bitfury: Added get_api_extra_device_status for 'devs' request in metabank
+driver: Slot, Clock Bits, Temperature, Voltage.
+- minerloop_async: Run watchdog code within actual device thread
+- bitfury: Remove unused libbitfury_readHashData
+- Bugfix: DevAPI: Don't call job_process_results when there was no previous job
+- bigpic: Convert to async minerloop
+- bitfury: Port to Windows
+- bigpic: Use bitfury_fudge_nonce
+- Use common bitfury_decnonce for all bitfury-based devices
+- Rename bf1 driver to bigpic, as the same device has other brands too
+- bf1: Clean up log messages
+- bf1: Reduce loglevel of debug messages
+- Bugfix: bf1: Add missing header to Makefile.am, and fix .dname/.name
+- Bugfix: bf1: Fix warnings
+- BF1 driver modified to work under Windows -> packing of structs isn't working
+with Windows
+- Corrected hash rate estimation for BF1. Only 756 out of 1024 nonces are
+scanned.
+- Cleaning up the bf1 driver code
+- BF1 driver working
+- Bitfury BF1 source files added
+- bfsb: modified to use LukeJr:'s new code
+- configure: Reorder output
+- configure: Allow to build *fury drivers only
+- bitfury: Turn commented debug stuff into #ifdef BITFURY_SENDHASHDATA_DEBUG
+- bitfury: Implement queue_full to ensure all processors have a work ready
+before scanwork
+- bfsb: set api speed to 625khz
+- initial support for bitfurystrikesback boards
+- bitfury: LINE_LEN instead of 2048
+- bitfury: 4Mhz SPI by default
+- bitfury: double SPI polling
+- bitfury: +Strange Counter -printf Counter
+- bitfury: tuning of parameters; fixed cycles calculation
+- bitfury: Move clock increase from common code to metabank driver init
+- bitfury: Add driver-bitfury.h for shared function declarations
+- bitfury: Do debug logging of read data before rotation
+- bitfury: Decode nonce array sooner to make debugging easier
+- bitfury: Check that the previous nonce still matches, to detect response
+corruption
+- bitfury: Workaround corruption by looking for matches rather than changes
+- bitfury: Rewrite using async minerloop (currently only setup on metabank
+driver)
+- bitfury: Fix memory issues
+- littlefury: Turn off chips when exiting
+- littlefury: Adapt to 16-bit payload size (protocol change)
+- Bugfix: littlefury: Fix bitfury_do_packet
+- bitfury: Report bad nonces properly
+- bitfury: Unify common nonce fudging code
+- Bugfix: bitfury: Chips only scan 0xbd000000 nonces per work
+- bitfury: Fix logging to use applog
+- bitfury: Split driver into bitfury_gpio (bare GPIO) and metabank (i2c banked
+GPIO)
+- littlefury: Use bitfury driver scanwork
+- bitfury: Eliminate more static variables
+- bitfury: Treat each chip as its own processor
+- bitfury: Resolve devices[chip] only once per chip
+- bitfury: Move second_run logic back to libbitfury
+- bitfury: Loop over chips once during scanwork
+- bitfury: Abstract hashes_done2 which keeps track of time deltas per thr on its
+own
+- littlefury: Need to set tv_morework
+- bitfury: Abstract out payload_to_atrvec
+- littlefury: Log read return value when unexpected
+- bitfury: Eliminate non-const global variables
+- littlefury: Safeguard on job switching
+- Bugfix: littlefury: Keep reading until error, EOF, or buffer filled
+- littlefury: Log devproto of incomplete reads
+- Enable littlefury detection
+- Bugfix: configure: Enable bitfury by default properly
+- bitfury: Require explicit -S bitfury:auto to probe GPIO-based SPI
+- bitfury: Move i2c slot handling to metabank-specific driver code
+- littlefury: Initial driver for BitCentury's USB miner
+- bitfury: Split actual chip detection into simple function
+- Bugfix: bitfury: Fix driver "name" to be correct length
+- bitfury: Abstract SPI interface
+- Bugfix: bitfury: Fix more warnings
+- Bugfix: bitfury: Fix warnings
+- bitfury: Intercept and use applog for perror calls
+- Bugfix: bitfury: Handle SPI init failure cleanly
+- bitfury: major intermediate update
+- bitfury: added chip series detection; multiple chip mining
+- Bitfury ASIC initial support
+- DynClk: Improve commented documentation
+- Replace Utility with (expected) Income calculated by actual shares submitted
+in 100% PPS value
+- format_unit3: BTC formatting with 2 decimal place digits
+- format_unit3: Support for nano- and pico- sizes
+- format_unit3: Use an enum for float-precision parameter
+- format_unit2: Support milli- and micro- unit prefixes
+- opencl: Disable by default if other devices are found; to enable, use -S
+opencl:auto
+- write_config: Save request-diff option
+- Stratum: Clear unused extranonce2 space
+- Don't even show 'Attempting to restart' for devices that don't support it
+- Workaround bug in PDCurses wresize
+- Bugfix: Include config.h in sha2.c first
+- make-release: Include libevent-2-0-5.dll in Windows packages
+- README: Document dependency on libevent
+- README: Document new --chroot-dir and --setuid options
+- Bugfix: Use correct configure define for chroot
+- Remove --disable-chroot build option: always compile --chroot-dir if supported
+- Bugfix: Use correct configure define for pwd.h
+- Improvements on code
+- Update miner.c
+- Added basic chroot support, added option to configure.ac.
+- Updated miner.c
+- Added basic chroot support
+- Replace u-hashrate with nonce-based hashrate adjusted for rejects/stales
+- SSM: Windows port
+- SSM: Allow configuring stratum port via --stratum-port option and RPC
+setconfig
+- SSM: Implement mining.hashes_done extension
+- Proxy: Catch invalid usernames and error
+- SSM: Report hashes done based on share submissions
+- SSM: Include current time in job ids to avoid false hardware errors due to job
+id reuse
+- SSM: If no notify is currently set, try to set it before refusing a subscribe
+- SSM: Prune old jobs after expiry
+- SSM: Use pool data read lock when subdividing notify
+- SSM: Gracefully fail when upstream stratum notify cannot be subdivided
+- SSM: Gracefully fail when upstream pool is not stratum (by closing subscribed
+clients, and refusing to subscribe new ones)
+- SSM: Properly fail cleanly when maximum clients are connected
+- SSM: Clean up stratumsrv_job when pruning it
+- SSM: Avoid responding to notifications, and give an error for unknown methods
+- SSM: Propagate work updates to clients
+- Mostly functional stratum proxy driver
+- Stratum: Split actual work generation away from the current pool data
+- Bugfix: Stratum: Dereference pool swork coinbase buffer inside data lock
+- SGW: Split proxy code out from driver-getwork into driver-proxy
+- Bugfix: miner.php: Check $dototal[$name] is set before comparing its value
+- Bugfix: RPC: Use bad_nonces in Hardware% instead of generic hw_errors
+- Bugfix: RPC: Handle LIFE_DEAD2 case
+- Make failure to open sharelog or noncelog abort startup
+- Nonce logging option --noncelog to simply store every nonce and its info
+- Abstract --sharelog option parsing
+
+
 BFGMiner Version 3.2.1 - September 19, 2013
 
 - Only show long-poll message in pool summary if it's not using stratum.
