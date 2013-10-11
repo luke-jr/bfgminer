@@ -4006,15 +4006,15 @@ static void set_blockdiff(const struct work *work)
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char *hexstr;
+	char hexstr[20];
 
 	if (work->mandatory)
 		return ret;
 
 	/* Hack to work around dud work sneaking into test */
-	hexstr = bin2hex(work->data + 8, 18);
+	__bin2hex(hexstr, work->data + 8, 18);
 	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		goto out_free;
+		return ret;
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4049,7 +4049,7 @@ static bool test_work_current(struct work *work)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 		set_curblock(hexstr, work->data);
 		if (unlikely(new_blocks == 1))
-			goto out_free;
+			return ret;
 
 		work->work_block = ++work_block;
 
@@ -4072,8 +4072,6 @@ static bool test_work_current(struct work *work)
 		}
 	}
 	work->longpoll = false;
-out_free:
-	free(hexstr);
 	return ret;
 }
 
