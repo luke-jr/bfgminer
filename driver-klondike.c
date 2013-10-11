@@ -39,7 +39,7 @@
 
 #define REPLY_SIZE		15	// adequate for all types of replies
 #define REPLY_BUFSIZE 		16	// reply + 1 byte to mark used
-#define MAX_REPLY_COUNT		32	// more unhandled replies than this will result in data loss
+#define MAX_REPLY_COUNT		4096	// more unhandled replies than this will result in data loss
 #define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
 #define CMD_REPLY_RETRIES	8	// how many retries for cmds
 #define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
@@ -120,6 +120,9 @@ static double cvtKlnToC(uint8_t temp)
 {
 	double Rt, stein, celsius;
 
+	if (temp == 0)
+		return 0.0;
+
 	Rt = 1000.0 * 255.0 / (double)temp - 1000.0;
 
 	stein = log(Rt / 2200.0) / 3987.0;
@@ -128,13 +131,39 @@ static double cvtKlnToC(uint8_t temp)
 
 	celsius = (1.0 / stein) - 273.15;
 
+	// For display of bad data
+	if (celsius < 0.0)
+		celsius = 0.0;
+	if (celsius > 200.0)
+		celsius = 200.0;
+
 	return celsius;
 }
 
 static int cvtCToKln(double deg)
 {
-	double R = exp((1/(deg+273.15)-1/(273.15+25))*3987)*2200;
-	return 256*R/(R+1000);
+	double Rt, stein, temp;
+
+	if (deg < 0.0)
+		deg = 0.0;
+
+	stein = 1.0 / (deg + 273.15);
+
+	stein -= 1.0 / (double)(25.0 + 273.15);
+
+	Rt = exp(stein * 3987.0) * 2200.0;
+
+	if (Rt == -1000.0)
+		Rt++;
+
+	temp = 1000.0 * 256.0 / (Rt + 1000.0);
+
+	if (temp > 255)
+		temp = 255;
+	if (temp < 0)
+		temp = 0;
+
+	return (int)temp;
 }
 
 static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, int datalen, void *data)
@@ -619,7 +648,9 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	uint8_t temp = 0xFF;
 	uint16_t fan = 0;
+	uint16_t clock = 0;
 	int dev;
+	char tmp[16];
 
 	if (klninfo->status == NULL)
 		return;
@@ -629,11 +660,17 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 		if (klninfo->status[dev].temp < temp)
 			temp = klninfo->status[dev].temp;
 		fan += klninfo->cfg[dev].fantarget;
+		clock += klninfo->cfg[dev].hashclock;
 	}
 	fan /= klninfo->status->slavecount+1;
+	clock /= klninfo->status->slavecount+1;
 	rd_unlock(&(klninfo->stat_lock));
 
-	tailsprintf(buf, siz, "     %3.0fC %3d%% | ", cvtKlnToC(temp), fan*100/255);
+	snprintf(tmp, sizeof(tmp), "%2.0fC", cvtKlnToC(temp));
+	if (strlen(tmp) < 4)
+		strcat(tmp, " ");
+
+	tailsprintf(buf, siz, "%3dMHz %3d%% %s| ", (int)clock, fan*100/255, tmp);
 }
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)

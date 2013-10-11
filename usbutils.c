@@ -26,7 +26,9 @@
 			(err) == LIBUSB_TRANSFER_ERROR)
 
 #define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_OTHER)
+			(err) == LIBUSB_ERROR_OTHER || \
+			(err) == LIBUSB_TRANSFER_NO_DEVICE || \
+			(err) == LIBUSB_TRANSFER_ERROR)
 
 /*
  * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
@@ -2207,7 +2209,7 @@ static void init_usb_transfer(struct usb_transfer *ut)
 	ut->transfer->user_data = ut;
 }
 
-static void LIBUSB_CALL bulk_callback(struct libusb_transfer *transfer)
+static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 {
 	struct usb_transfer *ut = transfer->user_data;
 
@@ -2285,7 +2287,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	mutex_lock(&ut.mutex);
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  bulk_callback, &ut, 0);
+				  transfer_callback, &ut, 0);
 
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
@@ -2702,6 +2704,40 @@ out_noerrmsg:
 	return err;
 }
 
+/* As we do for bulk reads, emulate a sync function for control transfers using
+ * our own timeouts that takes the same parameters as libusb_control_transfer.
+ */
+static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequestType,
+				uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
+				unsigned char *buffer, uint16_t wLength, unsigned int timeout)
+{
+	struct usb_transfer ut;
+	int err, transferred;
+	unsigned char *buf;
+
+	buf = malloc(70);
+	if (unlikely(!buf))
+		quit(1, "Failed to malloc buf in usb_control_transfer");
+	init_usb_transfer(&ut);
+	mutex_lock(&ut.mutex);
+	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
+				  wIndex, wLength);
+	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
+				     &ut, 0);
+	err = libusb_submit_transfer(ut.transfer);
+	if (!err)
+		err = callback_wait(&ut, &transferred, timeout);
+	if (!err && transferred) {
+		unsigned char *ofbuf = libusb_control_transfer_get_data(ut.transfer);
+
+		memcpy(buffer, ofbuf, transferred);
+		return transferred;
+	}
+	if ((err) == LIBUSB_TRANSFER_CANCELLED)
+		err = LIBUSB_ERROR_TIMEOUT;
+	return err;
+}
+
 int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, __maybe_unused enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
@@ -2758,7 +2794,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	}
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
-	err = libusb_control_transfer(usbdev->handle, request_type,
+	err = usb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex, buf, (uint16_t)siz, timeout);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
@@ -2839,7 +2875,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	memset(tbuf, 0, 64);
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
-	err = libusb_control_transfer(usbdev->handle, request_type,
+	err = usb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex,
 		tbuf, (uint16_t)bufsiz, timeout);
 	cg_runlock(&cgusb_fd_lock);
