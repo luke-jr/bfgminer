@@ -2245,7 +2245,6 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
-	libusb_free_transfer(transfer);
 
 	return ret;
 }
@@ -2296,6 +2295,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
+	libusb_free_transfer(ut.transfer);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
@@ -2728,10 +2728,13 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 		unsigned char *ofbuf = libusb_control_transfer_get_data(ut.transfer);
 
 		memcpy(buffer, ofbuf, transferred);
-		return transferred;
+		err = transferred;
+		goto out;
 	}
 	if ((err) == LIBUSB_TRANSFER_CANCELLED)
 		err = LIBUSB_ERROR_TIMEOUT;
+out:
+	libusb_free_transfer(ut.transfer);
 	return err;
 }
 
