@@ -2812,21 +2812,22 @@ out_:
 	return err;
 }
 
+/* We use the write devlock for control transfers since some control transfers
+ * are rare but may be changing settings within the device causing problems
+ * if concurrent transfers are happening. Using the write lock serialises
+ * any transfers. */
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd)
 {
 	int pstate, err;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 
 	err = __usb_transfer(cgpu, request_type, bRequest, wValue, wIndex, data, siz, timeout, cmd);
 
-	if (NOCONTROLDEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
 
-	DEVRUNLOCK(cgpu, pstate);
+	DEVWUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2840,7 +2841,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	unsigned char tbuf[64];
 	int err, pstate;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 
 	USBDEBUG("USB debug: _usb_transfer_read(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",bufsiz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, bufsiz, timeout, usb_cmdname(cmd));
 
@@ -2896,13 +2897,10 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		       err, libusb_error_name(err));
 	}
 out_noerrmsg:
-	if (NOCONTROLDEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
 
-	DEVRUNLOCK(cgpu, pstate);
+	DEVWUNLOCK(cgpu, pstate);
 
 	return err;
 }
