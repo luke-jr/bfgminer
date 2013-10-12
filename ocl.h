@@ -27,6 +27,7 @@ typedef struct {
 #endif
 	bool hasBitAlign;
 	bool hasOpenCL11plus;
+	bool hasOpenCL12plus;
 	bool goffset;
 	cl_uint vwidth;
 	size_t max_work_size;
