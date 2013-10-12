@@ -1572,7 +1572,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 			(double)(diff_rejected) / (double)(diff1) : 0;
 	root = api_add_percent(root, "Device Rejected%", &rejp, false);
 
-	if (per_proc && cgpu->drv->get_api_extra_device_status)
+	if ((per_proc || cgpu->procs <= 1) && cgpu->drv->get_api_extra_device_status)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_status(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
