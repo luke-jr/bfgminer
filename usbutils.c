@@ -2712,12 +2712,9 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 				unsigned char *buffer, uint16_t wLength, unsigned int timeout)
 {
 	struct usb_transfer ut;
+	unsigned char buf[70];
 	int err, transferred;
-	unsigned char *buf;
 
-	buf = malloc(70);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc buf in usb_control_transfer");
 	init_usb_transfer(&ut);
 	mutex_lock(&ut.mutex);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
