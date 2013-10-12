@@ -5957,7 +5957,14 @@ void write_config(FILE *fcfg)
 		/* Write GPU device values */
 		fputs(",\n\"intensity\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
+		{
+			if (i > 0)
+				fputc(',', fcfg);
+			if (gpus[i].dynamic)
+				fputc('d', fcfg);
+			else
+				fprintf(fcfg, "%d", gpus[i].intensity);
+		}
 		fputs("\",\n\"vectors\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
 			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
