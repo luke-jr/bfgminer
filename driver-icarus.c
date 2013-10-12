@@ -1020,7 +1020,7 @@ keepwaiting:
 		// Delay job start until later...
 	}
 	else
-	if (unlikely(icarus->deven == DEV_DISABLED || !icarus_job_start(thr)))
+	if (unlikely(icarus->deven != DEV_ENABLED || !icarus_job_start(thr)))
 		state->firstrun = true;
 
 	if (info->quirk_reopen == 2 && !icarus_reopen(icarus, state, &fd))
