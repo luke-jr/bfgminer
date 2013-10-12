@@ -292,13 +292,14 @@ bool littlefury_detect_one(const char *devpath)
 	*cgpu = (struct cgpu_info){
 		.drv = &littlefury_drv,
 		.device_path = strdup(devpath),
-		.device_fd = -1,
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
 		.name = devname,
 		.cutofftemp = 85,
 	};
+	// NOTE: Xcode's clang has a bug where it cannot find fields inside anonymous unions (more details in fpgautils)
+	cgpu->device_fd = -1;
 	
 	return add_cgpu(cgpu);
 
