@@ -1020,8 +1020,7 @@ keepwaiting:
 		// Delay job start until later...
 	}
 	else
-	if (!icarus_job_start(thr))
-		/* This should never happen */
+	if (unlikely(icarus->deven == DEV_DISABLED || !icarus_job_start(thr)))
 		state->firstrun = true;
 
 	if (info->quirk_reopen == 2 && !icarus_reopen(icarus, state, &fd))
@@ -1263,5 +1262,6 @@ struct device_drv icarus_drv = {
 	.thread_prepare = icarus_prepare,
 	.thread_init = icarus_init,
 	.scanhash = icarus_scanhash,
+	.thread_disable = close_device_fd,
 	.thread_shutdown = icarus_shutdown,
 };
