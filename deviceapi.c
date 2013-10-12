@@ -574,6 +574,9 @@ void *miner_thread(void *userdata)
 		goto out;
 	}
 
+	if (cgpu->deven != DEV_ENABLED)
+		mt_disable_start(mythr);
+	
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
