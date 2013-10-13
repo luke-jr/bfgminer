@@ -397,6 +397,10 @@ static bool hashfast_prepare(struct thr_info*thr)
 		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
 	if (pthread_create(&info->write_thr, NULL, hf_write, (void *)hashfast))
 		quit(1, "Failed to pthread_create write thr in hashfast_prepare");
+
+	cgtime(&now);
+	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
+
 	return true;
 }
 
@@ -415,8 +419,13 @@ static void hashfast_init(struct cgpu_info *hashfast)
 	usb_buffer_enable(hashfast);
 }
 
-static void hashfast_shutdown(struct thr_info __maybe_unused *thr)
+static void hashfast_shutdown(struct thr_info *thr)
 {
+	struct cgpu_info *hashfast = thr->cgpu;
+	struct hashfast_info *info = hashfast->device_data;
+
+	pthread_join(info->read_thr, NULL);
+	pthread_join(info->write_thr, NULL);
 }
 
 struct device_drv hashfast_drv = {
