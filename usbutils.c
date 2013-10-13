@@ -2245,7 +2245,6 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
-	libusb_free_transfer(transfer);
 
 	return ret;
 }
@@ -2296,6 +2295,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
+	libusb_free_transfer(ut.transfer);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
@@ -2712,12 +2712,9 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 				unsigned char *buffer, uint16_t wLength, unsigned int timeout)
 {
 	struct usb_transfer ut;
+	unsigned char buf[70];
 	int err, transferred;
-	unsigned char *buf;
 
-	buf = malloc(70);
-	if (unlikely(!buf))
-		quit(1, "Failed to malloc buf in usb_control_transfer");
 	init_usb_transfer(&ut);
 	mutex_lock(&ut.mutex);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
@@ -2731,10 +2728,13 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 		unsigned char *ofbuf = libusb_control_transfer_get_data(ut.transfer);
 
 		memcpy(buffer, ofbuf, transferred);
-		return transferred;
+		err = transferred;
+		goto out;
 	}
 	if ((err) == LIBUSB_TRANSFER_CANCELLED)
 		err = LIBUSB_ERROR_TIMEOUT;
+out:
+	libusb_free_transfer(ut.transfer);
 	return err;
 }
 
@@ -2812,21 +2812,22 @@ out_:
 	return err;
 }
 
+/* We use the write devlock for control transfers since some control transfers
+ * are rare but may be changing settings within the device causing problems
+ * if concurrent transfers are happening. Using the write lock serialises
+ * any transfers. */
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd)
 {
 	int pstate, err;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 
 	err = __usb_transfer(cgpu, request_type, bRequest, wValue, wIndex, data, siz, timeout, cmd);
 
-	if (NOCONTROLDEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
 
-	DEVRUNLOCK(cgpu, pstate);
+	DEVWUNLOCK(cgpu, pstate);
 
 	return err;
 }
@@ -2840,7 +2841,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	unsigned char tbuf[64];
 	int err, pstate;
 
-	DEVRLOCK(cgpu, pstate);
+	DEVWLOCK(cgpu, pstate);
 
 	USBDEBUG("USB debug: _usb_transfer_read(%s (nodev=%s),type=%"PRIu8",req=%"PRIu8",value=%"PRIu16",index=%"PRIu16",bufsiz=%d,timeout=%u,cmd=%s)", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), request_type, bRequest, wValue, wIndex, bufsiz, timeout, usb_cmdname(cmd));
 
@@ -2896,13 +2897,10 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		       err, libusb_error_name(err));
 	}
 out_noerrmsg:
-	if (NOCONTROLDEV(err)) {
-		cg_ruwlock(&cgpu->usbinfo.devlock);
+	if (NOCONTROLDEV(err))
 		release_cgpu(cgpu);
-		cg_dwlock(&cgpu->usbinfo.devlock);
-	}
 
-	DEVRUNLOCK(cgpu, pstate);
+	DEVWUNLOCK(cgpu, pstate);
 
 	return err;
 }

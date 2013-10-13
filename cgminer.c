@@ -3218,8 +3218,6 @@ static void __kill_work(void)
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
-		usb_polling = false;
-
 		applog(LOG_DEBUG, "Releasing all USB devices");
 		usb_cleanup();
 
@@ -4006,15 +4004,15 @@ static void set_blockdiff(const struct work *work)
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char *hexstr;
+	char hexstr[20];
 
 	if (work->mandatory)
 		return ret;
 
 	/* Hack to work around dud work sneaking into test */
-	hexstr = bin2hex(work->data + 8, 18);
+	__bin2hex(hexstr, work->data + 8, 18);
 	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		goto out_free;
+		return ret;
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4049,7 +4047,7 @@ static bool test_work_current(struct work *work)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 		set_curblock(hexstr, work->data);
 		if (unlikely(new_blocks == 1))
-			goto out_free;
+			return ret;
 
 		work->work_block = ++work_block;
 
@@ -4072,8 +4070,6 @@ static bool test_work_current(struct work *work)
 		}
 	}
 	work->longpoll = false;
-out_free:
-	free(hexstr);
 	return ret;
 }
 
@@ -5467,8 +5463,8 @@ static void *stratum_sthread(void *userdata)
 		quit(1, "Failed to create stratum_q in stratum_sthread");
 
 	while (42) {
+		char noncehex[12], nonce2hex[20];
 		struct stratum_share *sshare;
-		char *noncehex, *nonce2hex;
 		uint32_t *hash32, nonce;
 		char s[1024], nonce2[8];
 		struct work *work;
@@ -5497,7 +5493,7 @@ static void *stratum_sthread(void *userdata)
 		/* This work item is freed in parse_stratum_response */
 		sshare->work = work;
 		nonce = *((uint32_t *)(work->data + 76));
-		noncehex = bin2hex((const unsigned char *)&nonce, 4);
+		__bin2hex(noncehex, (const unsigned char *)&nonce, 4);
 		memset(s, 0, 1024);
 
 		mutex_lock(&sshare_lock);
@@ -5508,15 +5504,11 @@ static void *stratum_sthread(void *userdata)
 		memset(nonce2, 0, 8);
 		/* We only use uint32_t sized nonce2 increments internally */
 		memcpy(nonce2, &work->nonce2, sizeof(uint32_t));
-		nonce2hex = bin2hex((const unsigned char *)nonce2, work->nonce2_len);
-		if (unlikely(!nonce2hex))
-			quit(1, "Failed to bin2hex nonce2 in stratum_thread");
+		__bin2hex(nonce2hex, (const unsigned char *)nonce2, work->nonce2_len);
 
 		snprintf(s, sizeof(s),
 			"{\"params\": [\"%s\", \"%s\", \"%s\", \"%s\", \"%s\"], \"id\": %d, \"method\": \"mining.submit\"}",
 			pool->rpc_user, work->job_id, nonce2hex, work->ntime, noncehex, sshare->id);
-		free(noncehex);
-		free(nonce2hex);
 
 		applog(LOG_INFO, "Submitting share %08lx to pool %d",
 					(long unsigned int)htole32(hash32[6]), pool->pool_no);
@@ -5974,7 +5966,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cgtime(&work->tv_staged);
 }
 
-static struct work *get_work(struct thr_info *thr, const int thr_id)
+struct work *get_work(struct thr_info *thr, const int thr_id)
 {
 	struct work *work = NULL;
 
@@ -6528,6 +6520,53 @@ void hash_queued_work(struct thr_info *mythr)
 			flush_queue(cgpu);
 			drv->flush_work(cgpu);
 		}
+	}
+	cgpu->deven = DEV_DISABLED;
+}
+
+/* This version of hash_work is for devices drivers that want to do their own
+ * work management entirely, usually by using get_work(). Note that get_work
+ * is a blocking function and will wait indefinitely if no work is available
+ * so this must be taken into consideration in the driver. */
+void hash_driver_work(struct thr_info *mythr)
+{
+	struct timeval tv_start = {0, 0}, tv_end;
+	struct cgpu_info *cgpu = mythr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+	const int thr_id = mythr->id;
+	int64_t hashes_done = 0;
+
+	while (likely(!cgpu->shutdown)) {
+		struct timeval diff;
+		int64_t hashes;
+
+		mythr->work_restart = false;
+
+		hashes = drv->scanwork(mythr);
+
+		if (unlikely(hashes == -1 )) {
+			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
+			cgpu->deven = DEV_DISABLED;
+			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
+			mt_disable(mythr, thr_id, drv);
+		}
+
+		hashes_done += hashes;
+		cgtime(&tv_end);
+		timersub(&tv_end, &tv_start, &diff);
+		/* Update the hashmeter at most 5 times per second */
+		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
+		    diff.tv_sec >= opt_log_interval) {
+			hashmeter(thr_id, &diff, hashes_done);
+			hashes_done = 0;
+			copy_time(&tv_start, &tv_end);
+		}
+
+		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(mythr, thr_id, drv);
+
+		if (unlikely(mythr->work_restart))
+			drv->flush_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -7180,6 +7219,8 @@ static void clean_up(void)
 	clear_adl(nDevs);
 #endif
 #ifdef USE_USBUTILS
+	usb_polling = false;
+	pthread_join(usb_poll_thread, NULL);
         libusb_exit(NULL);
 #endif
 
@@ -7751,11 +7792,12 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
+	struct timeval tv_end = {0, 200000};
+
 	RenameThread("usbpoll");
 
-	pthread_detach(pthread_self());
 	while (usb_polling)
-		libusb_handle_events(NULL);
+		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
 	return NULL;
 }

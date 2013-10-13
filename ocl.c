@@ -342,6 +342,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/* Check for OpenCL >= 1.0 support, needed for global offset parameter usage. */
 	char * devoclver = malloc(1024);
 	const char * ocl10 = "OpenCL 1.0";
+	const char * ocl11 = "OpenCL 1.1";
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_VERSION, 1024, (void *)devoclver, NULL);
 	if (status != CL_SUCCESS) {
@@ -349,8 +350,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		return NULL;
 	}
 	find = strstr(devoclver, ocl10);
-	if (!find)
+	if (!find) {
 		clState->hasOpenCL11plus = true;
+		find = strstr(devoclver, ocl11);
+		if (!find)
+			clState->hasOpenCL12plus = true;
+	}
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -618,19 +623,20 @@ build:
 	if (clState->hasBitAlign) {
 		strcat(CompilerOptions, " -D BITALIGN");
 		applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
-		if (strstr(name, "Cedar") ||
-		    strstr(name, "Redwood") ||
-		    strstr(name, "Juniper") ||
-		    strstr(name, "Cypress" ) ||
-		    strstr(name, "Hemlock" ) ||
-		    strstr(name, "Caicos" ) ||
-		    strstr(name, "Turks" ) ||
-		    strstr(name, "Barts" ) ||
-		    strstr(name, "Cayman" ) ||
-		    strstr(name, "Antilles" ) ||
-		    strstr(name, "Wrestler" ) ||
-		    strstr(name, "Zacate" ) ||
-		    strstr(name, "WinterPark" ))
+		if (!clState->hasOpenCL12plus &&
+		    (strstr(name, "Cedar") ||
+		     strstr(name, "Redwood") ||
+		     strstr(name, "Juniper") ||
+		     strstr(name, "Cypress" ) ||
+		     strstr(name, "Hemlock" ) ||
+		     strstr(name, "Caicos" ) ||
+		     strstr(name, "Turks" ) ||
+		     strstr(name, "Barts" ) ||
+		     strstr(name, "Cayman" ) ||
+		     strstr(name, "Antilles" ) ||
+		     strstr(name, "Wrestler" ) ||
+		     strstr(name, "Zacate" ) ||
+		     strstr(name, "WinterPark" )))
 			patchbfi = true;
 	} else
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
