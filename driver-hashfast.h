@@ -44,10 +44,16 @@ struct hashfast_info {
 	int core_bitmap_size;                       // in bytes
 	uint32_t *core_bitmap;                      // Core OK bitmap test results, run with PLL Bypassed
 
+	pthread_mutex_t lock;
 	struct work **works;
 	uint16_t device_sequence_head;              // The most recent sequence number the device dispatched
 	uint16_t device_sequence_tail;              // The most recently completed job in the device
 	uint16_t hash_sequence_tail;                // Follows device_sequence_tail around to free work
+
+	pthread_t read_thr;
+	pthread_t write_thr;
+	pthread_mutex_t write_mutex;
+	pthread_cond_t write_cond;
 };
 
 #endif /* USE_HASHFAST */

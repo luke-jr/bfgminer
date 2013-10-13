@@ -324,7 +324,7 @@ static bool hashfast_detect_common(struct cgpu_info *hashfast)
 	return true;
 }
 
-static void hashfast_usb_initialise(struct cgpu_info *hashfast)
+static void hashfast_initialise(struct cgpu_info *hashfast)
 {
 	if (hashfast->usbinfo.nodev)
 		return;
@@ -346,7 +346,7 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
 
-	hashfast_usb_initialise(hashfast);
+	hashfast_initialise(hashfast);
 
 	add_cgpu(hashfast);
 
@@ -361,8 +361,42 @@ static void hashfast_detect(bool hotplug)
 	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
 }
 
-static bool hashfast_prepare(struct thr_info __maybe_unused *thr)
+static void *hf_read(void *arg)
 {
+	struct cgpu_info *hashfast = (struct cgpu_info *)arg;
+	struct hashfast_info *info = hashfast->device_data;
+
+	while (likely(!hashfast->shutdown)) {
+
+	}
+	return NULL;
+}
+
+static void *hf_write(void *arg)
+{
+	struct cgpu_info *hashfast = (struct cgpu_info *)arg;
+	struct hashfast_info *info = hashfast->device_data;
+
+	while (likely(!hashfast->shutdown)) {
+
+	}
+	return NULL;
+}
+
+static bool hashfast_prepare(struct thr_info*thr)
+{
+	struct cgpu_info *hashfast = thr->cgpu;
+	struct hashfast_info *info = hashfast->device_data;
+	struct timeval now;
+
+	mutex_init(&info->lock);
+	mutex_init(&info->write_mutex);
+	if (pthread_cond_init(&info->write_cond, NULL))
+		quit(1, "Failed to pthread_cond_init in hashfast_prepare");
+	if (pthread_create(&info->read_thr, NULL, hf_read, (void *)hashfast))
+		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
+	if (pthread_create(&info->write_thr, NULL, hf_write, (void *)hashfast))
+		quit(1, "Failed to pthread_create write thr in hashfast_prepare");
 	return true;
 }
 
