@@ -303,12 +303,24 @@ static bool hashfast_detect_common(struct cgpu_info *hashfast)
 	ret = hashfast_reset(hashfast, info);
 	if (!ret) {
 		free(info);
+		hashfast->device_data = NULL;
 		return false;
 	}
+
+	// The per-die status array
+	info->die_status = calloc(info->asic_count, sizeof(struct hf_g1_die_data));
+	if (unlikely(!(info->die_status)))
+		quit(1, "Failed to calloc die_status");
+
+	// The per-die statistics array
+	info->die_statistics = calloc(info->asic_count, sizeof(struct hf_long_statistics));
+	if (unlikely(!(info->die_statistics)))
+		quit(1, "Failed to calloc die_statistics");
 
 	info->works = calloc(sizeof(struct work *), HF_NUM_SEQUENCE);
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hashfast_detect_common");
+
 	return true;
 }
 

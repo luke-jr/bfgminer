@@ -19,6 +19,17 @@
 #define HASHFAST_MINER_THREADS 1
 #define HF_NUM_SEQUENCE 256
 
+// Matching fields for hf_statistics, but large #'s for local accumulation, per-die
+struct hf_long_statistics {
+	uint64_t rx_header_crc;                     // Header CRC's
+	uint64_t rx_body_crc;                       // Data CRC's
+	uint64_t rx_header_timeouts;                // Header timeouts
+	uint64_t rx_body_timeouts;                  // Data timeouts
+	uint64_t core_nonce_fifo_full;              // Core nonce Q overrun events
+	uint64_t array_nonce_fifo_full;             // System nonce Q overrun events
+	uint64_t stats_overrun;                     // Overrun in statistics reporting
+} __attribute__((packed,aligned(4)));
+
 struct hashfast_info {
 	int asic_count;                             // # of chips in the chain
 	int core_count;                             // # of cores per chip
