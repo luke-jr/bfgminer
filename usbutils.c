@@ -2239,7 +2239,7 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	}
 	ret = transfer->status;
 	if (ret == LIBUSB_TRANSFER_CANCELLED)
-		ret = LIBUSB_TRANSFER_TIMED_OUT;
+		ret = LIBUSB_ERROR_TIMEOUT;
 
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
@@ -2585,7 +2585,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	memcpy((char *)buf, (const char *)usbbuf, (tot < (int)bufsiz) ? tot + 1 : (int)bufsiz);
 
 out_unlock:
-	if (err && err != LIBUSB_ERROR_TIMEOUT && err != LIBUSB_TRANSFER_TIMED_OUT) {
+	if (err && err != LIBUSB_ERROR_TIMEOUT) {
 		applog(LOG_WARNING, "%s %i usb read error: %s", cgpu->drv->name, cgpu->device_id,
 		       libusb_error_name(err));
 		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
