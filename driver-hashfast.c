@@ -328,8 +328,6 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 		quit(1, "Failed to usb_alloc_cgpu hashfast");
 
 	if (!usb_init(hashfast, dev, found)) {
-		free(hashfast->device_data);
-		hashfast->device_data = NULL;
 		hashfast = usb_free_cgpu(hashfast);
 		return false;
 	}
