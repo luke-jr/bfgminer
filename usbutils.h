@@ -359,7 +359,9 @@ struct cg_usb_info {
 	USB_ADD_COMMAND(C_HF_DIE_STATUS, "HFDieStatus") \
 	USB_ADD_COMMAND(C_HF_GWQ_STATUS, "HFGWQStatus") \
 	USB_ADD_COMMAND(C_HF_WORK_RESTART, "HFWorkRestart") \
-	USB_ADD_COMMAND(C_HF_GWQSTATS, "HFGWQStats")
+	USB_ADD_COMMAND(C_HF_GWQSTATS, "HFGWQStats") \
+	USB_ADD_COMMAND(C_HF_GETHEADER, "HFGetHeader") \
+	USB_ADD_COMMAND(C_HF_GETDATA, "HFGetData")
 
 /* Create usb_cmds enum from USB_PARSE_COMMANDS macro */
 enum usb_cmds {

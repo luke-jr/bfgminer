@@ -138,10 +138,41 @@ static bool hashfast_send_header(struct cgpu_info *hashfast, struct hf_header *h
 	len = sizeof(*h);
 	ret = usb_write(hashfast, (char *)h, len, &amount, hf_cmds[cmd].usb_cmd);
 	if (ret < 0 || amount != len) {
-		applog(LOG_WARNING, "HFA%d: send_header: USB Send error, ret %d amount %d vs. length %d",
-		       hashfast->device_id, ret, amount, len);
+		applog(LOG_WARNING, "HFA%d: send_header: %s USB Send error, ret %d amount %d vs. length %d",
+		       hashfast->device_id, hf_cmds[cmd].cmd_name, ret, amount, len);
 		return false;
 	}
+	return true;
+}
+
+static bool hashfast_get_header(struct cgpu_info *hashfast, struct hf_header *h,
+				uint8_t *computed_crc)
+{
+	int amount, ret, orig_len, len, ofs = 0, reads = 0;
+	char buf[512];
+	char *header;
+
+	/* Read for up to 200ms till we find the first occurrence of HF_PREAMBLE
+	 * though it should be the first byte unless we get woefully out of
+	 * sync. */
+	orig_len = len = sizeof(*h);
+	do {
+
+		if (++reads > 20)
+			return false;
+
+		ret = usb_read_timeout(hashfast, buf + ofs, len, &amount, 10, C_HF_GETHEADER);
+		if (unlikely(ret))
+			return false;
+		ofs += amount;
+		header = memchr(buf, HF_PREAMBLE, ofs);
+		if (header)
+			len -= ofs - (header - buf);
+	} while (len);
+
+	memcpy(h, header, orig_len);
+	*computed_crc = hf_crc8((uint8_t *)h);
+
 	return true;
 }
 
@@ -154,6 +185,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	uint8_t hcrc;
 	uint8_t addr;
 	uint16_t hdata;
+	int i;
 
 	info->hash_clock_rate = 550;                        // Hash clock rate in Mhz
 	// Assemble the USB_INIT request
@@ -168,6 +200,14 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 	if (!hashfast_send_header(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
+
+	// Check for the correct response.
+	// We extend the normal timeout - a complete device initialization, including
+	// bringing power supplies up from standby, etc., can take over a second.
+	for (i = 0; i < 30; i++) {
+		if (hashfast_get_header(hashfast, h, &hcrc))
+			break;
+	}
 
 	return true;
 }
