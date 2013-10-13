@@ -2248,9 +2248,7 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 {
 	struct usb_transfer *ut = transfer->user_data;
 
-	mutex_lock(&ut->mutex);
 	pthread_cond_signal(&ut->cond);
-	mutex_unlock(&ut->mutex);
 }
 
 /* Wait for callback function to tell us it has finished the USB transfer, but
@@ -2272,7 +2270,6 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 		libusb_cancel_transfer(transfer);
 
 		/* Now wait for the callback function to be invoked. */
-		mutex_lock(&ut->mutex);
 		pthread_cond_wait(&ut->cond, &ut->mutex);
 	}
 	ret = transfer->status;
