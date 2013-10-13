@@ -56,9 +56,11 @@ struct hf_cmd {
 	enum usb_cmds usb_cmd;
 };
 
+/* Entries in this array need to align with the actual op values specified
+ * in hf_protocol.h */
 #define C_NULL C_MAX
 static const struct hf_cmd hf_cmds[] = {
-	{OP_NULL, "OP_NULL", C_NULL},
+	{OP_NULL, "OP_NULL", C_NULL},				// 0
 	{OP_ROOT, "OP_ROOT", C_NULL},
 	{OP_RESET, "OP_RESET", C_HF_RESET},
 	{OP_PLL_CONFIG, "OP_PLL_CONFIG", C_HF_PLL_CONFIG},
@@ -66,7 +68,7 @@ static const struct hf_cmd hf_cmds[] = {
 	{OP_READDRESS, "OP_READDRESS", C_NULL},
 	{OP_HIGHEST, "OP_HIGHEST", C_NULL},
 	{OP_BAUD, "OP_BAUD", C_HF_BAUD},
-	{OP_UNROOT, "OP_UNROOT", C_NULL},
+	{OP_UNROOT, "OP_UNROOT", C_NULL},			// 8
 	{OP_HASH, "OP_HASH", C_HF_HASH},
 	{OP_NONCE, "OP_NONCE", C_HF_NONCE},
 	{OP_ABORT, "OP_ABORT", C_HF_ABORT},
@@ -74,9 +76,24 @@ static const struct hf_cmd hf_cmds[] = {
 	{OP_GPIO, "OP_GPIO", C_NULL},
 	{OP_CONFIG, "OP_CONFIG", C_HF_CONFIG},
 	{OP_STATISTICS, "OP_STATISTICS", C_HF_STATISTICS},
-	{OP_GROUP, "OP_GROUP", C_NULL},
-	{OP_CLOCKGATE, "OP_CLOCKGATE", C_HF_CLOCKGATE}
+	{OP_GROUP, "OP_GROUP", C_NULL},				// 16
+	{OP_CLOCKGATE, "OP_CLOCKGATE", C_HF_CLOCKGATE},
+
+	{OP_USB_INIT, "OP_USB_INIT", C_HF_USB_INIT},		// 18
+	{OP_GET_TRACE, "OP_GET_TRACE", C_NULL},
+	{OP_LOOPBACK_USB, "OP_LOOPBACK_USB", C_NULL},
+	{OP_LOOPBACK_UART, "OP_LOOPBACK_UART", C_NULL},
+	{OP_DFU, "OP_DFU", C_NULL},
+	{OP_USB_SHUTDOWN, "OP_USB_SHUTDOWN", C_NULL},
+	{OP_DIE_STATUS, "OP_DIE_STATUS", C_HF_DIE_STATUS},	// 24
+	{OP_GWQ_STATUS, "OP_GWQ_STATUS", C_HF_GWQ_STATUS},
+	{OP_WORK_RESTART, "OP_WORK_RESTART", C_HF_WORK_RESTART},
+	{OP_USB_STATS1, "OP_USB_STATS1", C_NULL},
+	{OP_USB_GWQSTATS, "OP_USB_GWQSTATS", C_HF_GWQSTATS}
 };
+
+#define HF_USB_CMD_OFFSET (128 - 18)
+#define HF_USB_CMD(X) (X - HF_USB_CMD_OFFSET)
 
 /* Send an arbitrary frame, consisting of an 8 byte header and an optional
  * packet body. */
@@ -113,13 +130,67 @@ static int __maybe_unused hashfast_send_frame(struct cgpu_info *hashfast, uint8_
 	return 0;
 }
 
-static int __maybe_unused hashfast_reset(struct cgpu_info __maybe_unused *hashfast)
+static bool hashfast_send_header(struct cgpu_info *hashfast, struct hf_header *h,
+				 int cmd)
 {
-	return 0;
+	int amount, ret, len;
+
+	len = sizeof(*h);
+	ret = usb_write(hashfast, (char *)h, len, &amount, hf_cmds[cmd].usb_cmd);
+	if (ret < 0 || amount != len) {
+		applog(LOG_WARNING, "HFA%d: send_header: USB Send error, ret %d amount %d vs. length %d",
+		       hashfast->device_id, ret, amount, len);
+		return false;
+	}
+	return true;
 }
 
-static bool hashfast_detect_common(struct cgpu_info __maybe_unused *hashfast)
+static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
+	struct hf_usb_init_header usb_init, *hu = &usb_init;
+	struct hf_usb_init_base *db;
+	uint8_t buf[1024];
+	struct hf_header *h = (struct hf_header *)buf;
+	uint8_t hcrc;
+	uint8_t addr;
+	uint16_t hdata;
+
+	info->hash_clock_rate = 550;                        // Hash clock rate in Mhz
+	// Assemble the USB_INIT request
+	memset(hu, 0, sizeof(*hu));
+	hu->preamble = HF_PREAMBLE;
+	hu->operation_code = OP_USB_INIT;
+	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;          // Protocol to use
+	hu->hash_clock = info->hash_clock_rate;             // Hash clock rate in Mhz
+	hu->crc8 = hf_crc8((uint8_t *)hu);
+	applog(LOG_WARNING, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
+	       hashfast->device_id);
+
+	if (!hashfast_send_header(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
+		return false;
+
+	return true;
+}
+
+static bool hashfast_detect_common(struct cgpu_info *hashfast)
+{
+	struct hashfast_info *info;
+	bool ret;
+
+	info = calloc(sizeof(struct hashfast_info), 1);
+	if (!info)
+		quit(1, "Failed to calloc hashfast_info in hashfast_detect_common");
+	hashfast->device_data = info;
+	/* hashfast_reset should fill in details for info */
+	ret = hashfast_reset(hashfast, info);
+	if (!ret) {
+		free(info);
+		return false;
+	}
+
+	info->works = calloc(sizeof(struct work *), HF_NUM_SEQUENCE);
+	if (!info->works)
+		quit(1, "Failed to calloc info works in hashfast_detect_common");
 	return true;
 }
 
@@ -136,7 +207,7 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 
 	hashfast = usb_alloc_cgpu(&hashfast_drv, HASHFAST_MINER_THREADS);
 	if (!hashfast)
-		return false;
+		quit(1, "Failed to usb_alloc_cgpu hashfast");
 
 	if (!usb_init(hashfast, dev, found)) {
 		free(hashfast->device_data);
@@ -150,6 +221,7 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 	hashfast_usb_initialise(hashfast);
 
 	add_cgpu(hashfast);
+
 	return hashfast_detect_common(hashfast);
 }
 
