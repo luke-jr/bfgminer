@@ -223,6 +223,22 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 		return false;
 	}
 
+	applog(LOG_DEBUG, "HFA %d: Good reply to OP_USB_INIT", hashfast->device_id);
+	applog(LOG_DEBUG, "HFA %d: OP_USB_INIT: %d die in chain, %d cores, device_type %d, refclk %d Mhz",
+	       hashfast->device_id, h->chip_address, h->core_address, h->hdata & 0xff, (h->hdata >> 8) & 0xff);
+
+	// Save device configuration
+	info->asic_count = h->chip_address;
+	info->core_count = h->core_address;
+	info->device_type = (uint8_t)h->hdata;
+	info->ref_frequency = (uint8_t)(h->hdata>>8);
+	info->hash_sequence = 0;
+	info->hash_sequence_tail = 0;
+	info->device_sequence_tail = 0;
+
+	// Size in bytes of the core bitmap in bytes
+	info->core_bitmap_size = (((info->asic_count * info->core_count) + 31) / 32) * 4;
+
 	return true;
 }
 

@@ -21,11 +21,16 @@
 
 struct hashfast_info {
 	int asic_count;                             // # of chips in the chain
+	int core_count;                             // # of cores per chip
+	int device_type;                            // What sort of device this is
+	int ref_frequency;                          // Reference clock rate
+	uint16_t hash_sequence;                     // The next hash sequence # to be sent
 	struct hf_g1_die_data *die_status;          // Array of per-die voltage, current, temperature sensor data
 	struct hf_long_statistics *die_statistics;  // Array of per-die error counters
 	int hash_clock_rate;                        // Hash clock rate to use, in Mhz
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
+	int core_bitmap_size;                       // in bytes
 
 	struct work **works;
 	uint16_t device_sequence_head;              // The most recent sequence number the device dispatched
