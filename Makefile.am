@@ -98,14 +98,12 @@ if HAS_ICARUS
 cgminer_SOURCES += driver-icarus.c
 endif
 
-if HAS_MODMINER
-cgminer_SOURCES += driver-modminer.c
-bitstreamsdir = $(bindir)/bitstreams
-dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
+if HAS_KLONDIKE
+cgminer_SOURCES += driver-klondike.c
 endif
 
-if HAS_ZTEX
-cgminer_SOURCES += driver-ztex.c libztex.c libztex.h
+if HAS_MODMINER
+cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams
 dist_bitstreams_DATA = $(top_srcdir)/bitstreams/*
 endif

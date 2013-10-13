@@ -584,6 +584,16 @@ char *get_proxy(char *url, struct pool *pool)
 	return url;
 }
 
+/* Adequate size s==len*2 + 1 must be alloced to use this variant */
+void __bin2hex(char *s, const unsigned char *p, size_t len)
+{
+	int i;
+
+	for (i = 0; i < (int)len; i++)
+		sprintf(s + (i * 2), "%02x", (unsigned int)p[i]);
+
+}
+
 /* Returns a malloced array string of a binary value of arbitrary length. The
  * array is rounded up to a 4 byte size to appease architectures that need
  * aligned array  sizes */
@@ -591,7 +601,6 @@ char *bin2hex(const unsigned char *p, size_t len)
 {
 	ssize_t slen;
 	char *s;
-	int i;
 
 	slen = len * 2 + 1;
 	if (slen % 4)
@@ -600,8 +609,7 @@ char *bin2hex(const unsigned char *p, size_t len)
 	if (unlikely(!s))
 		quithere(1, "Failed to calloc");
 
-	for (i = 0; i < (int)len; i++)
-		sprintf(s + (i * 2), "%02x", (unsigned int)p[i]);
+	__bin2hex(s, p, len);
 
 	return s;
 }
@@ -1071,13 +1079,20 @@ void cgsleep_us(int64_t us)
 /* Returns the microseconds difference between end and start times as a double */
 double us_tdiff(struct timeval *end, struct timeval *start)
 {
-	return end->tv_sec * 1000000 + end->tv_usec - start->tv_sec * 1000000 - start->tv_usec;
+	/* Sanity check. We should only be using this for small differences so
+	 * limit the max to 60 seconds. */
+	if (unlikely(end->tv_sec - start->tv_sec > 60))
+		return 60000000;
+	return (end->tv_sec - start->tv_sec) * 1000000 + (end->tv_usec - start->tv_usec);
 }
 
 /* Returns the milliseconds difference between end and start times */
 int ms_tdiff(struct timeval *end, struct timeval *start)
 {
-	return end->tv_sec * 1000 + end->tv_usec / 1000 - start->tv_sec * 1000 - start->tv_usec / 1000;
+	/* Like us_tdiff, limit to 1 hour. */
+	if (unlikely(end->tv_sec - start->tv_sec > 3600))
+		return 3600000;
+	return (end->tv_sec - start->tv_sec) * 1000 + (end->tv_usec - start->tv_usec) / 1000;
 }
 
 /* Returns the seconds difference between end and start times as a double */
@@ -1999,7 +2014,7 @@ static bool setup_stratum_socket(struct pool *pool)
 		break;
 	}
 	if (p == NULL) {
-		applog(LOG_NOTICE, "Failed to connect to stratum on %s:%s",
+		applog(LOG_INFO, "Failed to connect to stratum on %s:%s",
 		       sockaddr_url, sockaddr_port);
 		freeaddrinfo(servinfo);
 		return false;

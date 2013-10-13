@@ -145,6 +145,7 @@ enum sub_ident {
 	IDENT_AVA,
 	IDENT_BTB,
 	IDENT_HFA,
+	IDENT_KLN,
 	IDENT_ICA,
 	IDENT_AMU,
 	IDENT_BLT,
@@ -238,7 +239,7 @@ struct cg_usb_info {
 	 * that uses the lock - however, all usbutils code MUST use it
 	 * to avoid devices disappearing while in use by multiple threads
 	 */
-	pthread_mutex_t *devlock;
+	cglock_t devlock;
 
 	time_t last_pipe;
 	uint64_t pipe_count;
@@ -369,8 +370,7 @@ const char *usb_cmdname(enum usb_cmds cmd);
 void usb_applog(struct cgpu_info *bflsc, enum usb_cmds cmd, char *msg, int amount, int err);
 struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig);
 struct cgpu_info *usb_alloc_cgpu(struct device_drv *drv, int threads);
-struct cgpu_info *usb_free_cgpu_devlock(struct cgpu_info *cgpu, bool free_devlock);
-#define usb_free_cgpu(cgpu) usb_free_cgpu_devlock(cgpu, true)
+struct cgpu_info *usb_free_cgpu(struct cgpu_info *cgpu);
 void usb_uninit(struct cgpu_info *cgpu);
 bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find_devices *found);
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));

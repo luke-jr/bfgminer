@@ -1,5 +1,0 @@
-- verify setting cgpu.status=DEAD does in fact stop the thread
-- allow configuring bitstream directory
-- HS fpga config
-- allow configuring LIBZTEX_OVERHEATTHRESHOLD
-- hotplug support?

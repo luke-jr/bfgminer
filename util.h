@@ -59,6 +59,14 @@ typedef curl_proxytype proxytypes_t;
 typedef int proxytypes_t;
 #endif /* HAVE_LIBCURL */
 
+/* cgminer locks, a write biased variant of rwlocks */
+struct cglock {
+	pthread_mutex_t mutex;
+	pthread_rwlock_t rwlock;
+};
+
+typedef struct cglock cglock_t;
+
 /* cgminer specific unnamed semaphore implementations to cope with osx not
  * implementing them. */
 #ifdef __APPLE__

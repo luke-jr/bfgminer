@@ -131,10 +131,6 @@ static inline int fsync (int fd)
   #include <libusb.h>
 #endif
 
-#ifdef USE_ZTEX
-  #include "libztex.h"
-#endif
-
 #ifdef USE_USBUTILS
   #include "usbutils.h"
 #endif
@@ -237,13 +233,13 @@ static inline int fsync (int fd)
 #define FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bitforce) \
 	DRIVER_ADD_COMMAND(icarus) \
-	DRIVER_ADD_COMMAND(modminer) \
-	DRIVER_ADD_COMMAND(ztex)
+	DRIVER_ADD_COMMAND(modminer)
 
 #define ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	DRIVER_ADD_COMMAND(bflsc) \
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(hashfast) \
+	DRIVER_ADD_COMMAND(klondike) \
 	DRIVER_ADD_COMMAND(avalon)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
@@ -466,14 +462,9 @@ struct cgpu_info {
 	char *name;
 	char *device_path;
 	void *device_data;
-	union {
-#ifdef USE_ZTEX
-		struct libztex_device *device_ztex;
-#endif
 #ifdef USE_USBUTILS
-		struct cg_usb_device *usbdev;
+	struct cg_usb_device *usbdev;
 #endif
-	};
 #ifdef USE_AVALON
 	struct work **works;
 	int work_array;
@@ -830,14 +821,6 @@ static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const 
 		quitfrom(1, file, func, line, "Failed to pthread_rwlock_init errno=%d", errno);
 }
 
-/* cgminer locks, a write biased variant of rwlocks */
-struct cglock {
-	pthread_mutex_t mutex;
-	pthread_rwlock_t rwlock;
-};
-
-typedef struct cglock cglock_t;
-
 static inline void cglock_init(cglock_t *lock)
 {
 	mutex_init(&lock->mutex);
@@ -898,6 +881,14 @@ static inline void cg_runlock(cglock_t *lock)
 	rd_unlock(&lock->rwlock);
 }
 
+/* This drops the read lock and grabs a write lock. It does NOT protect data
+ * between the two locks! */
+static inline void cg_ruwlock(cglock_t *lock)
+{
+	rd_unlock_noyield(&lock->rwlock);
+	cg_wlock(lock);
+}
+
 static inline void cg_wunlock(cglock_t *lock)
 {
 	wr_unlock_noyield(&lock->rwlock);
@@ -938,6 +929,9 @@ extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
 #endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
+#endif
 #ifdef USE_USBUTILS
 extern char *opt_usb_select;
 extern int opt_usbdump;
@@ -959,6 +953,7 @@ extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 #endif
 extern const char *proxytype(proxytypes_t proxytype);
 extern char *get_proxy(char *url, struct pool *pool);
+extern void __bin2hex(char *s, const unsigned char *p, size_t len);
 extern char *bin2hex(const unsigned char *p, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
@@ -1389,12 +1384,16 @@ extern void inc_hw_errors(struct thr_info *thr);
 extern bool test_nonce(struct work *work, uint32_t nonce);
 extern void submit_tested_work(struct thr_info *thr, struct work *work);
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
+			  int noffset);
+extern struct work *get_work(struct thr_info *thr, const int thr_id);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void hash_driver_work(struct thr_info *mythr);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);
@@ -1423,7 +1422,6 @@ extern void adl(void);
 extern void app_restart(void);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
-extern void __copy_work(struct work *work, struct work *base_work);
 extern struct work *copy_work(struct work *base_work);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

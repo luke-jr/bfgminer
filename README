@@ -114,6 +114,7 @@ CGMiner specific configuration options:
 	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
 	--enable-ztex           Compile support for Ztex Board(default disabled)
 	--enable-avalon         Compile support for Avalon (default disabled)
+	--enable-klondike       Compile support for Klondike (default disabled)
 	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 
@@ -269,8 +270,8 @@ See SCRYPT-README for more information regarding litecoin mining.
 
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
-FPGAs, Icarus bitstream FPGAs, ASICMINER usb block erupters, ModMiner FPGAs,
-or Ztex FPGAs
+FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
+ModMiner FPGAs or Ztex FPGAs
 
 ---
 
@@ -314,11 +315,11 @@ just reboot.
 Advanced USB options:
 
 The --usb option can restrict how many Avalon, BFL ASIC, BitForce FPGAs,
-ModMiner FPGAs or Icarus bitstream FPGAs it finds:
+Klondike ASIC, ModMiner FPGAs or Icarus bitstream FPGAs it finds:
 
   --usb 1:2,1:3,1:4,1:*
 or
-  --usb BAS:1,BFL:1,MMQ:0,ICA:0
+  --usb BAS:1,BFL:1,MMQ:0,ICA:0,KLN:0
 or
   --usb :10
 
@@ -344,9 +345,10 @@ of details about each recognised USB device
 If you wish to see all USB devices, include the --usb-list-all option
 
 The second version
-  --usb BAS:1,BFL:1,MMQ:0,ICA:0
+  --usb BAS:1,BFL:1,MMQ:0,ICA:0,KLN:0
 allows you to specify how many devices to choose based on each device
-driver cgminer has - there are currently 4 USB drivers: BAS, BFL, MMQ & ICA
+driver cgminer has - there are currently 5 USB drivers: BAS, BFL, MMQ.
+ICA & KLN
 N.B. you can only specify which device driver to limit, not the type of
 each device, e.g. with BAS:n you can limit how many BFL ASIC devices will
 be checked, but you cannot limit the number of each type of BFL ASIC

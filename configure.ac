@@ -260,7 +260,7 @@ AC_ARG_ENABLE([bitfury],
 	[bitfury=$enableval]
 	)
 if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitForce support is wanted])
+	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if BitFury support is wanted])
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
@@ -286,6 +286,17 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+klondike="no"
+
+AC_ARG_ENABLE([klondike],
+	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
+	[klondike=$enableval]
+	)
+if test "x$klondike" = xyes; then
+	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+fi
+AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+
 modminer="no"
 
 AC_ARG_ENABLE([modminer],
@@ -296,17 +307,6 @@ if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
-
-ztex="no"
-
-AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--enable-ztex],[Compile support for Ztex (default disabled)])],
-	[ztex=$enableval]
-	)
-if test "x$ztex" = xyes; then
-	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if Ztex support is wanted])
-fi
-AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
 curses="auto"
 
@@ -332,13 +332,13 @@ else
 	])
 fi
 
-if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast != xnonononononono; then
+if test x$avalon$bitforce$bitfury$modminer$bflsc$icarus$hashfast$klondike != xnononononononono; then
 	want_usbutils=true
 else
 	want_usbutils=false
 fi
 
-AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer$ztex != xnono])
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
 AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
@@ -504,14 +504,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast" = xnononononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast$klondike" = xnonononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast" = xnononononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$ztex$modminer$bflsc$hashfast$klondike" = xnonononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -564,16 +564,16 @@ else
 	echo "  Icarus.ASICs/FPGAs...: Disabled"
 fi
 
+if test "x$klondike" = xyes; then
+	echo "  Klondike.ASICs.......: Enabled"
+else
+	echo "  Klondike.ASICs.......: Disabled"
+fi
+
 if test "x$modminer" = xyes; then
 	echo "  ModMiner.FPGAs.......: Enabled"
 else
 	echo "  ModMiner.FPGAs.......: Disabled"
-fi
-
-if test "x$ztex" = xyes; then
-	echo "  Ztex.FPGAs...........: Enabled"
-else
-	echo "  Ztex.FPGAs...........: Disabled"
 fi
 
 echo
@@ -586,4 +586,3 @@ echo
 echo "Installation...........: make install (as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-

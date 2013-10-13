@@ -277,13 +277,13 @@ The list of requests - a (*) means it requires privileged access - and replies:
                none           There is no reply section just the STATUS section
                               stating the results of the identify request
                               This is only available if PGA mining is enabled
-                              and currently only BFL singles support this
-                              command
+                              and currently only BFL singles and Cairnsmore1's
+                              with the appropriate firmware support this command
                               On a BFL single it will flash the led on the front
                               of the device for appoximately 4s
-                              All other non BFL PGA devices will return a
+                              All other non BFL,ICA PGA devices will return a
                               warning status message stating that they dont
-                              support it
+                              support it. Non-CMR ICAs will ignore the command.
                               This adds a 4s delay to the BFL share being
                               processed so you may get a message stating that
                               procssing took longer than 7000ms if the request
@@ -364,6 +364,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
                               The current options are:
                                MMQ opt=clock val=160 to 230 (a multiple of 2)
+                               CMR opt=clock val=100 to 220
 
  zero|Which,true/false (*)
                none           There is no reply section just the STATUS section
@@ -433,8 +434,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               help message about the options available
 
                               The current options are:
-                               AVA+BTB opt=freq val=256 to 450 - chip frequency
-                               BTB opt=millivolts val=1000 to 1310 - corevoltage
+                               AVA+BTB opt=freq val=256 to 1024 - chip frequency
+                               BTB opt=millivolts val=1000 to 1400 - corevoltage
 
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window

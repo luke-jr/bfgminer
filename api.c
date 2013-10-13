@@ -29,11 +29,11 @@
 #include "miner.h"
 #include "util.h"
 
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY)
+#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE)
 #define HAVE_AN_ASIC 1
 #endif
 
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_ZTEX) || defined(USE_MODMINER)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER)
 #define HAVE_AN_FPGA 1
 #endif
 
@@ -191,8 +191,8 @@ static const char *DEVICECODE = ""
 #ifdef USE_MODMINER
 			"MMQ "
 #endif
-#ifdef USE_ZTEX
-			"ZTX "
+#ifdef USE_MODMINER
+			"MMQ "
 #endif
 			"";
 
@@ -1723,10 +1723,6 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		if (dev_runtime < 1.0)
 			dev_runtime = 1.0;
 
-#ifdef USE_ZTEX
-		if (cgpu->drv->drv_id == DRIVER_ztex && cgpu->device_ztex)
-			frequency = cgpu->device_ztex->freqM1 * (cgpu->device_ztex->freqM + 1);
-#endif
 #ifdef USE_MODMINER
 		if (cgpu->drv->drv_id == DRIVER_modminer)
 			frequency = cgpu->clock;

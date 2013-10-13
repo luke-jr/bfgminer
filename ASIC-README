@@ -1,10 +1,11 @@
 SUPPORTED DEVICES
 
-Currently supported devices include the Avalon (including BitBurner), the
-Butterfly Labs SC range of devices, the ASICMINER block erupters and the BPMC
-BF1 (bitfury) USB devices. No COM ports on windows or TTY devices will be used
-by cgminer as it communicates directly with them via USB so it is normal for
-them to not exist or be disconnected when cgminer is running.
+Currently supported devices include the Avalon (including BitBurner and
+Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
+erupters and the BPMC BF1 (bitfury) USB devices. No COM ports on windows or
+TTY devices will be used by cgminer as it communicates directly with them
+via USB so it is normal for them to not exist or be disconnected when
+cgminer is running.
 
 
 The BFL devices should come up as one of the following:
@@ -19,6 +20,10 @@ BFL devices need the --enable-bflsc option when compiling cgminer yourself.
 Avalon will come up as AVA.
 
 Avalon devices need the --enable-avalon option when compiling cgminer.
+
+Klondike will come up as KLN.
+
+Klondike devices need the --enable-klondike option when compiling cgminer.
 
 ASICMINER block erupters will come up as AMU.
 
@@ -98,6 +103,7 @@ ASIC SPECIFIC COMMANDS
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
 --bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--klondike-options <arg> Set klondike options clock:temp1:temp2:fan
 
 
 AVALON DEVICES
