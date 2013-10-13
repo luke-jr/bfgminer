@@ -162,7 +162,7 @@ static bool hashfast_get_header(struct cgpu_info *hashfast, struct hf_header *h,
 			return false;
 
 		ret = usb_read_timeout(hashfast, buf + ofs, len, &amount, 10, C_HF_GETHEADER);
-		if (unlikely(ret))
+		if (unlikely(ret && ret != LIBUSB_ERROR_TIMEOUT))
 			return false;
 		ofs += amount;
 		header = memchr(buf, HF_PREAMBLE, ofs);
@@ -185,6 +185,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	uint8_t hcrc;
 	uint8_t addr;
 	uint16_t hdata;
+	bool ret;
 	int i;
 
 	info->hash_clock_rate = 550;                        // Hash clock rate in Mhz
@@ -205,9 +206,12 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 	for (i = 0; i < 30; i++) {
-		if (hashfast_get_header(hashfast, h, &hcrc))
+		ret = hashfast_get_header(hashfast, h, &hcrc);
+		if (ret)
 			break;
 	}
+	if (!ret)
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed!", hashfast->device_id);
 
 	return true;
 }
