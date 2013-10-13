@@ -67,6 +67,7 @@
 #define AVALON_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
+#define HASHFAST_TIMEOUT_MS 999
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
@@ -75,6 +76,7 @@
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
+#define HASHFAST_TIMEOUT_MS 200
 #endif
 
 #define USB_READ_MINPOLL 40
@@ -131,6 +133,25 @@ static struct usb_epinfo bfu1_epinfos[] = {
 static struct usb_intinfo bfu_ints[] = {
 	USB_EPS(1,  bfu1_epinfos),
 	USB_EPS(0,  bfu0_epinfos)
+};
+#endif
+
+#ifdef USE_HASHFAST
+#include "driver-hashfast.h"
+
+static struct usb_epinfo hfa0_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0, 0 }
+};
+
+static struct usb_epinfo hfa1_epinfos[] = {
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+};
+
+/* Default to interface 1 */
+static struct usb_intinfo hfa_ints[] = {
+	USB_EPS(1,  hfa1_epinfos),
+	USB_EPS(0,  hfa0_epinfos)
 };
 #endif
 
@@ -325,7 +346,14 @@ static struct usb_find_devices find_dev[] = {
 		.drv = DRIVER_hashfast,
 		.name = "HFA",
 		.ident = IDENT_HFA,
-	},
+		.idVendor = HF_USB_VENDOR_ID,
+		.idProduct = HF_USB_PRODUCT_ID_G1,
+		.iManufacturer = "HashFast LLC",
+		.iProduct = "M1 Module",
+		.config = 1,
+		.timeout = HASHFAST_TIMEOUT_MS,
+		.latency = LATENCY_UNUSED,
+		INTINFO(hfa_ints) },
 #endif
 #ifdef USE_KLONDIKE
 	{
@@ -3191,6 +3219,7 @@ void usb_cleanup(void)
 			case DRIVER_icarus:
 			case DRIVER_avalon:
 			case DRIVER_klondike:
+			case DRIVER_hashfast:
 				DEVWLOCK(cgpu, pstate);
 				release_cgpu(cgpu);
 				DEVWUNLOCK(cgpu, pstate);
