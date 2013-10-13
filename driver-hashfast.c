@@ -176,15 +176,28 @@ static bool hashfast_get_header(struct cgpu_info *hashfast, struct hf_header *h,
 	return true;
 }
 
+static bool hashfast_get_data(struct cgpu_info *hashfast, char *buf, int len4)
+{
+	int amount, ret, len = len4 * 4;
+
+	ret = usb_read(hashfast, buf, len, &amount, C_HF_GETDATA);
+	if (ret)
+		return false;
+	if (amount != len) {
+		applog(LOG_WARNING, "HFA %d: get_data: Strange amount returned %d vs. expected %d",
+		       hashfast->device_id, amount, len);
+		return false;
+	}
+	return true;
+}
+
 static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	struct hf_usb_init_header usb_init, *hu = &usb_init;
 	struct hf_usb_init_base *db;
-	uint8_t buf[1024];
+	char buf[1024];
 	struct hf_header *h = (struct hf_header *)buf;
 	uint8_t hcrc;
-	uint8_t addr;
-	uint16_t hdata;
 	bool ret;
 	int i;
 
@@ -220,6 +233,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	}
 	if (h->operation_code != OP_USB_INIT) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type", hashfast->device_id);
+		hashfast_get_data(hashfast, buf, h->data_length);
 		return false;
 	}
 
@@ -238,6 +252,40 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 	// Size in bytes of the core bitmap in bytes
 	info->core_bitmap_size = (((info->asic_count * info->core_count) + 31) / 32) * 4;
+
+	// Get the usb_init_base structure
+	if (!hashfast_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
+		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get usb_init_base data",
+		       hashfast->device_id);
+		return false;
+	}
+	db = &info->usb_init_base;
+	applog(LOG_INFO, "HFA %d:      firmware_rev:    %d.%d", hashfast->device_id,
+	       (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
+	applog(LOG_INFO, "HFA %d:      hardware_rev:    %d.%d", hashfast->device_id,
+	       (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
+	applog(LOG_INFO, "HFA %d:      serial number:   %d", hashfast->device_id,
+	       db->serial_number);
+	applog(LOG_INFO, "HFA %d:      hash clockrate:  %d Mhz", hashfast->device_id,
+	       db->hash_clockrate);
+	applog(LOG_INFO, "HFA %d:      inflight_target: %d", hashfast->device_id,
+	       db->inflight_target);
+
+	// Now a copy of the config data used
+	if (!hashfast_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
+		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get config_data",
+		       hashfast->device_id);
+		return false;
+	}
+
+	// Now the core bitmap
+	info->core_bitmap = malloc(info->core_bitmap_size);
+	if (!info->core_bitmap)
+		quit(1, "Failed to malloc info core bitmap in hashfast_reset");
+	if (!hashfast_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
+		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->device_id);
+		return false;
+	}
 
 	return true;
 }

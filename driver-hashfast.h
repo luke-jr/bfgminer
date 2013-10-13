@@ -31,6 +31,7 @@ struct hashfast_info {
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
 	int core_bitmap_size;                       // in bytes
+	uint32_t *core_bitmap;                      // Core OK bitmap test results, run with PLL Bypassed
 
 	struct work **works;
 	uint16_t device_sequence_head;              // The most recent sequence number the device dispatched
