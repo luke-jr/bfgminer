@@ -210,8 +210,18 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 		if (ret)
 			break;
 	}
-	if (!ret)
+	if (!ret) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed!", hashfast->device_id);
+		return false;
+	}
+	if (h->crc8 != hcrc) {
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! CRC mismatch", hashfast->device_id);
+		return false;
+	}
+	if (h->operation_code != OP_USB_INIT) {
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type", hashfast->device_id);
+		return false;
+	}
 
 	return true;
 }
