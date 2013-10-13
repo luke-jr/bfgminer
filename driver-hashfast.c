@@ -24,7 +24,6 @@
 #define DI8  0x07
 
 static unsigned char crc8_table[256];	/* CRC-8 table */
-static uint32_t crc32_table[256];	/* CRC-32 table */
 
 void hf_init_crc8(void)
 {
@@ -49,47 +48,6 @@ static unsigned char __maybe_unused hf_crc8(unsigned char *h)
 		crc = crc8_table[crc ^ *h++];
 
 	return crc;
-}
-
-#define DI32 0x04c11db7L
-
-void hf_init_crc32(void)
-{
-	uint32_t i, j;
-	uint32_t crc;
-
-	for (i = 0; i < 256; i++){
-		crc = i << 24;
-		for (j = 0; j < 8; j++) {
-			if (crc & 0x80000000L)
-				crc = (crc << 1) ^ DI32;
-			else
-				crc = (crc << 1);
-		}
-		crc32_table[i] = crc;
-	}
-}
-
-static uint32_t __maybe_unused hf_crc32(unsigned char *p, int len, int plug_in)
-{
-	uint32_t crc = 0xffffffffU, crc_sav;
-	uint32_t i;
-
-	while (len--) {
-		i = ((crc >> 24) ^ *p++) & 0xff;
-		crc = (crc << 8) ^ crc32_table[i];
-	}
-
-	crc_sav = crc;
-
-	applog(LOG_DEBUG, "hf_crc32: crc is 0x%08x", crc);
-
-	if (plug_in) {
-		for (i = 0; i < 4; i++, crc >>= 8)
-			*p++ = crc & 0xff;
-	}
-
-	return crc_sav;
 }
 
 static hf_info_t **hashfast_infos;
@@ -140,12 +98,12 @@ static int __maybe_unused hashfast_send_frame(struct cgpu_info *hashfast, uint8_
 	p->hdata = htole16(hdata);
 	p->data_length = len / 4;
 	p->crc8 = hf_crc8(packet);
-	tx_length = sizeof(struct hf_header);
-	if (len) {
+
+	if (len)
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
-		hf_crc32(&packet[sizeof(struct hf_header)], len, 1);
-		tx_length += len + 4;
-	}
+	tx_length = sizeof(struct hf_header) + len;
+
+	tx_length = sizeof(struct hf_header);
 
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hf_cmds[opcode].usb_cmd);
@@ -295,10 +253,8 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 static void hashfast_detect(bool hotplug)
 {
 	/* Set up the CRC tables only once. */
-	if (!hotplug) {
+	if (!hotplug)
 		hf_init_crc8();
-		hf_init_crc32();
-	}
 	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
 }
 
