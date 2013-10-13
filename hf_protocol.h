@@ -22,6 +22,7 @@
 #define HF_GWQ_ADDRESS          (uint8_t) 254
 
 // Serial protocol operation codes (Second header byte)
+#define OP_NULL         0
 #define OP_ROOT         1
 #define OP_RESET        2
 #define OP_PLL_CONFIG   3
