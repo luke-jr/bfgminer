@@ -363,7 +363,8 @@ static void hashfast_detect(bool hotplug)
 
 static void *hf_read(void *arg)
 {
-	struct cgpu_info *hashfast = (struct cgpu_info *)arg;
+	struct thr_info *thr = (struct thr_info *)arg;
+	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 
 	while (likely(!hashfast->shutdown)) {
@@ -374,7 +375,8 @@ static void *hf_read(void *arg)
 
 static void *hf_write(void *arg)
 {
-	struct cgpu_info *hashfast = (struct cgpu_info *)arg;
+	struct thr_info *thr = (struct thr_info *)arg;
+	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 
 	while (likely(!hashfast->shutdown)) {
@@ -383,7 +385,7 @@ static void *hf_write(void *arg)
 	return NULL;
 }
 
-static bool hashfast_prepare(struct thr_info*thr)
+static bool hashfast_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -393,9 +395,9 @@ static bool hashfast_prepare(struct thr_info*thr)
 	mutex_init(&info->write_mutex);
 	if (pthread_cond_init(&info->write_cond, NULL))
 		quit(1, "Failed to pthread_cond_init in hashfast_prepare");
-	if (pthread_create(&info->read_thr, NULL, hf_read, (void *)hashfast))
+	if (pthread_create(&info->read_thr, NULL, hf_read, (void *)thr))
 		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
-	if (pthread_create(&info->write_thr, NULL, hf_write, (void *)hashfast))
+	if (pthread_create(&info->write_thr, NULL, hf_write, (void *)thr))
 		quit(1, "Failed to pthread_create write thr in hashfast_prepare");
 
 	cgtime(&now);
