@@ -1,3 +1,9 @@
+Version 3.6.1 - 14th October 2013
+
+- Emulate the libusb_control_transfer sync setup in our async variant.
+- usbutils - make all libusb_error_name messages the same
+
+
 Version 3.6.0 - 14th October 2013
 
 - increasing max miners for avalon driver
