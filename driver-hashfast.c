@@ -368,20 +368,8 @@ static void *hf_read(void *arg)
 	struct hashfast_info *info = hashfast->device_data;
 
 	while (likely(!hashfast->shutdown)) {
-
 	}
-	return NULL;
-}
 
-static void *hf_write(void *arg)
-{
-	struct thr_info *thr = (struct thr_info *)arg;
-	struct cgpu_info *hashfast = thr->cgpu;
-	struct hashfast_info *info = hashfast->device_data;
-
-	while (likely(!hashfast->shutdown)) {
-
-	}
 	return NULL;
 }
 
@@ -392,13 +380,8 @@ static bool hashfast_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	mutex_init(&info->lock);
-	mutex_init(&info->write_mutex);
-	if (pthread_cond_init(&info->write_cond, NULL))
-		quit(1, "Failed to pthread_cond_init in hashfast_prepare");
 	if (pthread_create(&info->read_thr, NULL, hf_read, (void *)thr))
 		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
-	if (pthread_create(&info->write_thr, NULL, hf_write, (void *)thr))
-		quit(1, "Failed to pthread_create write thr in hashfast_prepare");
 
 	cgtime(&now);
 	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
@@ -427,7 +410,6 @@ static void hashfast_shutdown(struct thr_info *thr)
 	struct hashfast_info *info = hashfast->device_data;
 
 	pthread_join(info->read_thr, NULL);
-	pthread_join(info->write_thr, NULL);
 }
 
 struct device_drv hashfast_drv = {

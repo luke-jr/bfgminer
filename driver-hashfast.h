@@ -51,9 +51,6 @@ struct hashfast_info {
 	uint16_t hash_sequence_tail;                // Follows device_sequence_tail around to free work
 
 	pthread_t read_thr;
-	pthread_t write_thr;
-	pthread_mutex_t write_mutex;
-	pthread_cond_t write_cond;
 };
 
 #endif /* USE_HASHFAST */
