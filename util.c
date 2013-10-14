@@ -2472,7 +2472,7 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 	timeraddspec(&abs_timeout, &ts_now);
 	ret = sem_timedwait(cgsem, &abs_timeout);
 
-	if (unlikely(ret && ret != ETIMEDOUT))
+	if (unlikely(ret && !sock_timeout()))
 		quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
 	return ret;
 }

@@ -20,6 +20,10 @@
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
 	}
+	static inline bool sock_timeout(void)
+	{
+		return (errno == ETIMEDOUT);
+	}
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -36,6 +40,10 @@
 	static inline bool sock_blocks(void)
 	{
 		return (WSAGetLastError() == WSAEWOULDBLOCK);
+	}
+	static inline bool sock_timeout(void)
+	{
+		return (WSAGetLastError() == WSAETIMEDOUT);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
