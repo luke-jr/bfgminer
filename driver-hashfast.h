@@ -18,6 +18,7 @@
 
 #define HASHFAST_MINER_THREADS 1
 #define HF_NUM_SEQUENCE 256
+#define GWQ_SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(HF_NUM_SEQUENCE+(tx)-(rx)))
 
 // Matching fields for hf_statistics, but large #'s for local accumulation, per-die
 struct hf_long_statistics {
@@ -49,6 +50,7 @@ struct hashfast_info {
 	uint16_t device_sequence_head;              // The most recent sequence number the device dispatched
 	uint16_t device_sequence_tail;              // The most recently completed job in the device
 	uint16_t hash_sequence_tail;                // Follows device_sequence_tail around to free work
+	int64_t hash_count;
 
 	pthread_t read_thr;
 };

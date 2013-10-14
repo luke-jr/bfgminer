@@ -99,8 +99,7 @@ static const struct hf_cmd hf_cmds[] = {
  * packet body. */
 
 static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
-				uint8_t chip, uint8_t core, uint16_t hdata,
-				uint8_t *data, int len)
+				uint16_t hdata, uint8_t *data, int len)
 {
 	int tx_length, ret, amount, id = hashfast->device_id;
 	uint8_t packet[256];
@@ -108,8 +107,8 @@ static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
 
 	p->preamble = HF_PREAMBLE;
 	p->operation_code = opcode;
-	p->chip_address = chip;
-	p->core_address = core;
+	p->chip_address = HF_GWQ_ADDRESS;
+	p->core_address = 0;
 	p->hdata = htole16(hdata);
 	p->data_length = len / 4;
 	p->crc8 = hf_crc8(packet);
@@ -117,8 +116,6 @@ static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
 	if (len)
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
-
-	tx_length = sizeof(struct hf_header);
 
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hf_cmds[opcode].usb_cmd);
@@ -389,24 +386,103 @@ static bool hashfast_prepare(struct thr_info *thr)
 	return true;
 }
 
+/* Figure out how many jobs to send. */
+static int __hashfast_jobs(struct hashfast_info *info)
+{
+	return info->usb_init_base.inflight_target - GWQ_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
+}
+
+static int hashfast_jobs(struct hashfast_info *info)
+{
+	int ret;
+
+	mutex_lock(&info->lock);
+	ret = __hashfast_jobs(info);
+	mutex_unlock(&info->lock);
+
+	return ret;
+}
+
 static int64_t hashfast_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
-	bool ret;
+	int64_t hashes;
+	int jobs, ret;
 
 	if (unlikely(thr->work_restart)) {
-		ret = hashfast_send_frame(hashfast, OP_WORK_RESTART, HF_GWQ_ADDRESS, 0, 0, (uint8_t *)NULL, 0);
-		if (unlikely(!ret))
-			ret = hashfast_reset(hashfast, info);
+restart:
+		ret = hashfast_send_frame(hashfast, OP_WORK_RESTART, 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
-			applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
-			       hashfast->device_id);
-			return -1;
+			ret = hashfast_reset(hashfast, info);
+			if (unlikely(!ret)) {
+				applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
+				hashfast->device_id);
+				return -1;
+			}
 		}
 	}
 
-	return 0;
+	jobs = hashfast_jobs(info);
+
+	if (!jobs) {
+		ret = restart_wait(thr, 100);
+		if (unlikely(!ret))
+			goto restart;
+		jobs = hashfast_jobs(info);
+	}
+
+	while (jobs > 0) {
+		struct hf_hash_usb op_hash_data;
+		struct work *work;
+		uint64_t intdiff;
+		int i, sequence;
+		uint32_t *p;
+
+		/* This is a blocking function if there's no work */
+		work = get_work(thr, thr->id);
+
+		/* Assemble the data frame and send the OP_HASH packet */
+		memcpy(op_hash_data.midstate, work->midstate, sizeof(op_hash_data.midstate));
+		memcpy(op_hash_data.merkle_residual, work->data + 64, 4);
+		p = (uint32_t *)(work->data + 64 + 4);
+		op_hash_data.timestamp = *p++;
+		op_hash_data.bits = *p++;
+		op_hash_data.nonce_loops = 0;
+
+		/* Set the number of leading zeroes to look for based on diff.
+		 * Diff 1 = 32, Diff 2 = 33, Diff 4 = 34 etc. */
+		intdiff = (uint64_t)work->device_diff;
+		for (i = 31; intdiff; i++, intdiff >>= 1);
+		op_hash_data.search_difficulty = i;
+		if ((sequence = info->hash_sequence + 1) >= HF_NUM_SEQUENCE)
+			sequence = 0;
+		ret = hashfast_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
+		if (unlikely(!ret)) {
+			ret = hashfast_reset(hashfast, info);
+			if (unlikely(!ret)) {
+				applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
+				       hashfast->device_id);
+				return -1;
+			}
+		}
+
+		mutex_lock(&info->lock);
+		info->hash_sequence = sequence;
+		*(info->works + info->hash_sequence) = work;
+		jobs = __hashfast_jobs(info);
+		mutex_unlock(&info->lock);
+
+		applog(LOG_DEBUG, "HFA %d: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
+		       hashfast->device_id, info->hash_sequence, op_hash_data.search_difficulty, work->work_difficulty);
+	}
+
+	mutex_lock(&info->lock);
+	hashes = info->hash_count;
+	info->hash_count = 0;
+	mutex_unlock(&info->lock);
+
+	return hashes;
 }
 
 static struct api_data *hashfast_api_stats(struct cgpu_info __maybe_unused *cgpu)
