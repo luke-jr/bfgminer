@@ -120,7 +120,7 @@ static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hf_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
-		applog(LOG_ERR, "HF%d: hashfast_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
+		applog(LOG_ERR, "HFA %d: hashfast_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
 		       id, ret, amount, tx_length);
 		return false;
 	}
@@ -252,7 +252,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 	// Get the usb_init_base structure
 	if (!hashfast_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
-		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get usb_init_base data",
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get usb_init_base data",
 		       hashfast->device_id);
 		return false;
 	}
@@ -270,7 +270,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 
 	// Now a copy of the config data used
 	if (!hashfast_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
-		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get config_data",
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get config_data",
 		       hashfast->device_id);
 		return false;
 	}
@@ -280,7 +280,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	if (!info->core_bitmap)
 		quit(1, "Failed to malloc info core bitmap in hashfast_reset");
 	if (!hashfast_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
-		applog(LOG_WARNING, "HF%d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->device_id);
+		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->device_id);
 		return false;
 	}
 
