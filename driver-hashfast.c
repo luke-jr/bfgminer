@@ -98,9 +98,9 @@ static const struct hf_cmd hf_cmds[] = {
 /* Send an arbitrary frame, consisting of an 8 byte header and an optional
  * packet body. */
 
-static int __maybe_unused hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
-			       uint8_t chip, uint8_t core, uint16_t hdata,
-			       uint8_t *data, int len)
+static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
+				uint8_t chip, uint8_t core, uint16_t hdata,
+				uint8_t *data, int len)
 {
 	int tx_length, ret, amount, id = hashfast->device_id;
 	uint8_t packet[256];
@@ -122,12 +122,12 @@ static int __maybe_unused hashfast_send_frame(struct cgpu_info *hashfast, uint8_
 
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
 			hf_cmds[opcode].usb_cmd);
-	if (ret < 0 || amount != tx_length) {
+	if (unlikely(ret < 0 || amount != tx_length)) {
 		applog(LOG_ERR, "HF%d: hashfast_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
 		       id, ret, amount, tx_length);
-		return 1;
+		return false;
 	}
-	return 0;
+	return true;
 }
 
 static bool hashfast_send_header(struct cgpu_info *hashfast, struct hf_header *h,
@@ -389,8 +389,23 @@ static bool hashfast_prepare(struct thr_info *thr)
 	return true;
 }
 
-static int64_t hashfast_scanwork(struct thr_info __maybe_unused *thr)
+static int64_t hashfast_scanwork(struct thr_info *thr)
 {
+	struct cgpu_info *hashfast = thr->cgpu;
+	struct hashfast_info *info = hashfast->device_data;
+	bool ret;
+
+	if (unlikely(thr->work_restart)) {
+		ret = hashfast_send_frame(hashfast, OP_WORK_RESTART, HF_GWQ_ADDRESS, 0, 0, (uint8_t *)NULL, 0);
+		if (unlikely(!ret))
+			ret = hashfast_reset(hashfast, info);
+		if (unlikely(!ret)) {
+			applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
+			       hashfast->device_id);
+			return -1;
+		}
+	}
+
 	return 0;
 }
 
