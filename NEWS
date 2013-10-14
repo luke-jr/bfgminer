@@ -1,4 +1,66 @@
+Version 3.6.1 - 14th October 2013
 
+- Emulate the libusb_control_transfer sync setup in our async variant.
+- usbutils - make all libusb_error_name messages the same
+
+
+Version 3.6.0 - 14th October 2013
+
+- increasing max miners for avalon driver
+- using separate identifier for bitburner fury boards
+- changes to bitburner driver for bitburner fury boards
+- hexstr is too small in test_work_current
+- Windows uses errno for WSAETIMEDOUT
+- Convert the usb callback function to using cgsem_t timed waits to avoid race
+conditions with conditionals/mutexes.
+- Give correct return code in cgsem_mswait
+- Check for correct timeout error in cgsem_mswait
+- Fix util.h exports for cgsem_mswait
+- Implement a generic cgsem_mswait similar to sem_timedwait
+- Use the one LIBUSB_ERROR_TIMEOUT for cancelled transactions since this error
+is explicitly tested for in various drivers.
+- Do not use locking on usb callback function pthread signalling to prevent
+deadlock with libusb's own event lock.
+- Use a write lock when performing any USB control transfers to prevent
+concurrent transfers.
+- Free a libusb transfer after we have finished using it to avoid a dereference
+in usb_control_transfer
+- Do not perform bfi int patching for opencl1.2 or later.
+- Although async transfers are meant to use heap memory, we never return before
+the transfer function has completed so stack memory will suffice for control
+transfers, fixing a memory leak in the process.
+- klondike - correct/reverse min/max stats
+- api incorrect message name
+- klondike - use a link list queue rather than a circular buffer - and add
+timing stats
+- Use a timeout with usb handle events set to a nominal 200ms and wait for the
+polling thread to shut down before deinitialising libusb.
+- Use stack memory for hex used in stratum share submissions.
+- Use stack memory in test_work_current, avoiding a malloc/free cycle each time.
+- Provide a lower level __bin2hex function that does not allocate memory itself.
+- Convert the bitfury driver to use the hash_driver_work version of hash_work.
+- Add a hash_driver_work function to allow for drivers that wish to do their own
+work queueing and management.
+- Convert all usb control transfers to asynchronous communication with our own
+timeout management as well.
+- Klondike - increase circular read buffer size
+- Klondike - extra zero value and range checking in temp conversion
+- klondike - display MHz also
+- Make pthread conditional timeouts handle all bulk usb transfer timeouts
+performing libusb_cancel_transfer, disabling timeouts within libusb itself.
+- Avoid calling get_statline_before on exit to avoid trying to use it on drivers
+in an indeterminate state.
+- Avoid calling get_statline on exit.
+- Add a small amount to the usb timeout before cancelling to allow for a regular
+usb polling interval to pass.
+- Do not attempt to clear a usb halt before sending the cancel message since all
+transfers should normally be cancelled before attempting to clear a halt
+condition, and only change the return message to a timeout if it's consistent
+with a cancellation.
+- Retry up to USB_RETRY_MAX times to clear a halt condition before failing.
+- Show the error number as well as the description in erroring bulk transfers.
+- Drop logging level for failed to connect to stratum to verbose mode only since
+we hit it regularly.
 - We are always dependent on libusb handling events so use the blocking
 libusb_handle_events in the polling thread and use a bool to know if we should
 continue polling.

@@ -148,6 +148,7 @@ enum sub_ident {
 	IDENT_MMQ,
 	IDENT_AVA,
 	IDENT_BTB,
+	IDENT_BBF,
 	IDENT_KLN,
 	IDENT_ICA,
 	IDENT_AMU,

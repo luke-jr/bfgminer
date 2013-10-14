@@ -49,6 +49,7 @@ int opt_avalon_fan_max = AVALON_DEFAULT_FAN_MAX_PWM;
 int opt_avalon_freq_min = AVALON_MIN_FREQUENCY;
 int opt_avalon_freq_max = AVALON_MAX_FREQUENCY;
 int opt_bitburner_core_voltage = BITBURNER_DEFAULT_CORE_VOLTAGE;
+int opt_bitburner_fury_core_voltage = BITBURNER_FURY_DEFAULT_CORE_VOLTAGE;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
@@ -205,6 +206,55 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 	cgsleep_us_r(&ts_start, delay);
 
 	applog(LOG_DEBUG, "Avalon: Sent: Buffer delay: %dus", delay);
+
+	return ret;
+}
+
+static int bitburner_send_task(const struct avalon_task *at, struct cgpu_info *avalon)
+
+{
+	uint8_t buf[AVALON_WRITE_SIZE + 4 * AVALON_DEFAULT_ASIC_NUM];
+	int ret, ep = C_AVALON_TASK;
+	cgtimer_t ts_start;
+	size_t nr_len;
+
+	if (at->nonce_elf)
+		nr_len = AVALON_WRITE_SIZE + 4 * at->asic_num;
+	else
+		nr_len = AVALON_WRITE_SIZE;
+
+	memset(buf, 0, nr_len);
+	memcpy(buf, at, AVALON_WRITE_SIZE);
+
+#if defined(__BIG_ENDIAN__) || defined(MIPSEB)
+	uint8_t tt = 0;
+
+	tt = (buf[0] & 0x0f) << 4;
+	tt |= ((buf[0] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[0] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[0] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[0] & 0x80) ? (1 << 0) : 0);
+	buf[0] = tt;
+
+	tt = (buf[4] & 0x0f) << 4;
+	tt |= ((buf[4] & 0x10) ? (1 << 3) : 0);
+	tt |= ((buf[4] & 0x20) ? (1 << 2) : 0);
+	tt |= ((buf[4] & 0x40) ? (1 << 1) : 0);
+	tt |= ((buf[4] & 0x80) ? (1 << 0) : 0);
+	buf[4] = tt;
+#endif
+
+	if (at->reset) {
+		ep = C_AVALON_RESET;
+		nr_len = 1;
+	}
+	if (opt_debug) {
+		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
+		hexdump(buf, nr_len);
+	}
+	cgsleep_prepare_r(&ts_start);
+	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
+	cgsleep_us_r(&ts_start, 3000); // 3 ms = 333 tasks per second, or 1.4 TH/s
 
 	return ret;
 }
@@ -414,12 +464,12 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 
 		if (*colon) {
 			tmp = atoi(colon);
-			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
+			if (tmp > 0 && tmp <= AVALON_MAX_MINER_NUM) {
 				*miner_count = tmp;
 			} else {
 				quit(1, "Invalid avalon-options for "
 					"miner_count (%s) must be 1 ~ %d",
-					colon, AVALON_DEFAULT_MINER_NUM);
+					colon, AVALON_MAX_MINER_NUM);
 			}
 		}
 
@@ -620,12 +670,20 @@ static void avalon_initialise(struct cgpu_info *avalon)
 		avalon->drv->name, avalon->device_id, err);
 }
 
+static bool is_bitburner(struct cgpu_info *avalon)
+{
+	enum sub_ident ident;
+
+	ident = usb_ident(avalon);
+	return ident == IDENT_BTB || ident == IDENT_BBF;
+}
+
 static bool bitburner_set_core_voltage(struct cgpu_info *avalon, int core_voltage)
 {
 	uint8_t buf[2];
 	int err;
 
-	if (usb_ident(avalon) == IDENT_BTB) {
+	if (is_bitburner(avalon)) {
 		buf[0] = (uint8_t)core_voltage;
 		buf[1] = (uint8_t)(core_voltage >> 8);
 		err = usb_transfer_data(avalon, FTDI_TYPE_OUT, BITBURNER_REQUEST,
@@ -651,7 +709,7 @@ static int bitburner_get_core_voltage(struct cgpu_info *avalon)
 	int err;
 	int amount;
 
-	if (usb_ident(avalon) == IDENT_BTB) {
+	if (is_bitburner(avalon)) {
 		err = usb_transfer_read(avalon, FTDI_TYPE_IN, BITBURNER_REQUEST,
 				BITBURNER_VALUE, BITBURNER_INDEX_GET_VOLTAGE,
 				(char *)buf, sizeof(buf), &amount,
@@ -780,7 +838,18 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 				BITBURNER_MAX_COREMV);
 		} else
 			bitburner_set_core_voltage(avalon, opt_bitburner_core_voltage);
+	} else if (usb_ident(avalon) == IDENT_BBF) {
+		if (opt_bitburner_fury_core_voltage < BITBURNER_FURY_MIN_COREMV ||
+		    opt_bitburner_fury_core_voltage > BITBURNER_FURY_MAX_COREMV) {
+			quit(1, "Invalid bitburner-fury-voltage %d must be %dmv - %dmv",
+				opt_bitburner_fury_core_voltage,
+				BITBURNER_FURY_MIN_COREMV,
+				BITBURNER_FURY_MAX_COREMV);
+		} else
+			bitburner_set_core_voltage(avalon, opt_bitburner_fury_core_voltage);
+	}
 
+	if (is_bitburner(avalon)) {
 		bitburner_get_version(avalon);
 	}
 
@@ -1181,7 +1250,7 @@ static void *bitburner_send_tasks(void *userdata)
 				avalon_reset_auto(info);
 			}
 
-			ret = avalon_send_task(&at, avalon);
+			ret = bitburner_send_task(&at, avalon);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
 				applog(LOG_ERR, "%s%i: Comms error(buffer)",
@@ -1211,7 +1280,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	int array_size = AVALON_ARRAY_SIZE;
 	void *(*write_thread_fn)(void *) = avalon_send_tasks;
 
-	if (usb_ident(avalon) == IDENT_BTB) {
+	if (is_bitburner(avalon)) {
 		array_size = BITBURNER_ARRAY_SIZE;
 		write_thread_fn = bitburner_send_tasks;
 	}
@@ -1356,7 +1425,7 @@ static void avalon_update_temps(struct cgpu_info *avalon, struct avalon_info *in
 	info->temp_sum += avalon->temp;
 	applog(LOG_DEBUG, "Avalon: temp_index: %d, temp_count: %d, temp_old: %d",
 		info->temp_history_index, info->temp_history_count, info->temp_old);
-	if (usb_ident(avalon) == IDENT_BTB) {
+	if (is_bitburner(avalon)) {
 		info->core_voltage = bitburner_get_core_voltage(avalon);
 	}
 	if (info->temp_history_index == info->temp_history_count) {
@@ -1378,7 +1447,7 @@ static void get_avalon_statline_before(char *buf, size_t bufsiz, struct cgpu_inf
 	struct avalon_info *info = avalon->device_data;
 	int lowfan = 10000;
 
-	if (usb_ident(avalon) == IDENT_BTB) {
+	if (is_bitburner(avalon)) {
 		int temp = info->temp0;
 		if (info->temp2 > temp)
 			temp = info->temp2;
@@ -1464,7 +1533,7 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 
 	/* Check for nothing but consecutive bad results or consistently less
 	 * results than we should be getting and reset the FPGA if necessary */
-	if (usb_ident(avalon) != IDENT_BTB) {
+	if (!is_bitburner(avalon)) {
 		if (avalon->results < -miner_count && !info->reset) {
 			applog(LOG_ERR, "%s%d: Result return rate low, resetting!",
 				avalon->drv->name, avalon->device_id);
@@ -1525,7 +1594,7 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 		sprintf(mcw, "match_work_count%d", i + 1);
 		root = api_add_int(root, mcw, &(info->matching_work[i]), false);
 	}
-	if (usb_ident(cgpu) == IDENT_BTB) {
+	if (is_bitburner(cgpu)) {
 		root = api_add_int(root, "core_voltage", &(info->core_voltage), false);
 		snprintf(buf, sizeof(buf), "%"PRIu8".%"PRIu8".%"PRIu8,
 				info->version1, info->version2, info->version3);
@@ -1553,7 +1622,7 @@ static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *set
 	}
 
 	if (strcasecmp(option, "millivolts") == 0 || strcasecmp(option, "mv") == 0) {
-		if (usb_ident(avalon) != IDENT_BTB) {
+		if (!is_bitburner(avalon)) {
 			sprintf(replybuf, "%s cannot set millivolts", avalon->drv->name);
 			return replybuf;
 		}
