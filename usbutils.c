@@ -810,11 +810,11 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iManufacturer, man, STRBUFLEN);
 	if (err < 0)
-		snprintf((char *)man, sizeof(man), "** err(%d)%s", err, libusb_error_name(err));
+		snprintf((char *)man, sizeof(man), "** err:(%d) %s", err, libusb_error_name(err));
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iProduct, prod, STRBUFLEN);
 	if (err < 0)
-		snprintf((char *)prod, sizeof(prod), "** err(%d)%s", err, libusb_error_name(err));
+		snprintf((char *)prod, sizeof(prod), "** err:(%d) %s", err, libusb_error_name(err));
 
 	if (level == 0) {
 		libusb_close(handle);
@@ -890,7 +890,7 @@ static void usb_full(ssize_t *count, libusb_device *dev, char **buf, size_t *off
 
 	err = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, ser, STRBUFLEN);
 	if (err < 0)
-		snprintf((char *)ser, sizeof(ser), "** err(%d)%s", err, libusb_error_name(err));
+		snprintf((char *)ser, sizeof(ser), "** err:(%d) %s", err, libusb_error_name(err));
 
 	snprintf(tmp, sizeof(tmp), EOL "     dev %d: More Info:" EOL "\tManufacturer: '%s'" EOL
 			"\tProduct: '%s'" EOL "\tSerial '%s'",
@@ -910,7 +910,7 @@ void usb_all(int level)
 
 	count = libusb_get_device_list(NULL, &list);
 	if (count < 0) {
-		applog(LOG_ERR, "USB all: failed, err %d%s", (int)count, libusb_error_name((int)count));
+		applog(LOG_ERR, "USB all: failed, err:(%d) %s", (int)count, libusb_error_name((int)count));
 		return;
 	}
 
@@ -2589,8 +2589,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 
 out_unlock:
 	if (err && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb read error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb read err:(%d) %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
 			err = LIBUSB_ERROR_OTHER;
 	}
@@ -2689,8 +2689,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	*processed = tot;
 
 	if (err) {
-		applog(LOG_WARNING, "%s %i usb write error: %s", cgpu->drv->name, cgpu->device_id,
-		       libusb_error_name(err));
+		applog(LOG_WARNING, "%s %i usb write err:(%d) %s", cgpu->drv->name, cgpu->device_id,
+		       err, libusb_error_name(err));
 		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
 			err = LIBUSB_ERROR_OTHER;
 	}
@@ -2805,7 +2805,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	IOERR_CHECK(cgpu, err);
 
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		applog(LOG_WARNING, "%s %i usb transfer err:(%d) %s", cgpu->drv->name, cgpu->device_id,
 		       err, libusb_error_name(err));
 	}
 out_:
@@ -2893,7 +2893,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 		err = 0;
 	}
 	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb transfer read error(%d): %s", cgpu->drv->name, cgpu->device_id,
+		applog(LOG_WARNING, "%s %i usb transfer read err:(%d) %s", cgpu->drv->name, cgpu->device_id,
 		       err, libusb_error_name(err));
 	}
 out_noerrmsg:
