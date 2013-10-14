@@ -83,7 +83,7 @@ struct hf_hash_serial {
 	uint32_t nonce_loops;                   // How many nonces to search, or 0 for 2^32
 	uint16_t ntime_loops:12;                // How many times to roll timestamp, or 0
 	uint16_t spare1:4;
-	uint8_t  search_difficulty;             // Search difficulty to use, number of leading '0' bits required
+	uint8_t  search_difficulty;             // Search difficulty to use, # of '0' digits required
 	uint8_t  option;
 	uint32_t group:8;
 	uint32_t spare3:24;
@@ -100,9 +100,9 @@ struct hf_hash_usb {
 	uint32_t nonce_loops;                   // How many nonces to search, or 0 for 2^32
 	uint16_t ntime_loops:12;                // How many times to roll timestamp, or 0
 	uint16_t spare1:4;
-	uint8_t  search_difficulty;             // Search difficulty to use, number of leading '0' bits required
+	uint8_t  search_difficulty;             // Search difficulty to use, # of '0' digits required
 	uint8_t  group;                         // Non-zero for valid group
-} __attribute__((packed,aligned(4)));           // 64 bytes total, including CRC
+} __attribute__((packed,aligned(4)));
 
 // OP_NONCE data
 struct hf_candidate_nonce {
@@ -210,13 +210,15 @@ struct hf_usb_init_header {
 #define PROTOCOL_GLOBAL_WORK_QUEUE      1
 
 // Options (only if present) that may be appended to the above header
-// Each option involving a numerical value will only be in effect if bit 15 of the
-// uint16_t containing that value (15 bits max) is set. This allows the user to
-// select only those options desired for modification. Do not use this facility
-// unless you are an expert - loading inconsistent settings will not work.
+// Each option involving a numerical value will only be in effect if the value is non-zero
+// This allows the user to select only those options desired for modification. Do not
+// use this facility unless you are an expert - loading inconsistent settings will not work.
 struct hf_usb_init_options {
 	uint16_t group_ntime_roll;                  // Total ntime roll amount per group
 	uint16_t core_ntime_roll;                   // Total core ntime roll amount
+	uint8_t  low_operating_temp_limit;          // Lowest normal operating limit
+	uint8_t  high_operating_temp_limit;         // Highest normal operating limit
+	uint16_t spare;
 } __attribute__((packed,aligned(4)));
 
 // Base item returned from device for OP_USB_INIT
@@ -259,6 +261,8 @@ struct hf_gwq_data {
 	uint64_t hash_count;                        // Add this to host's cumulative hash count
 	uint16_t sequence_head;                     // The latest, internal, active sequence #
 	uint16_t sequence_tail;                     // The latest, internal, inactive sequence #
+	uint16_t shed_count;                        // # of cores have been shedded for thermal control
+	uint16_t spare;
 } __attribute__((packed,aligned(4)));
 
 
