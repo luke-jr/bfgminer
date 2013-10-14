@@ -2719,7 +2719,7 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 
 	init_usb_transfer(&ut);
 	if (!receive)
-		memcpy(buf, buffer, wLength);
+		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
 				  wIndex, wLength);
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
