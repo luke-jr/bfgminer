@@ -358,11 +358,15 @@ static void hashfast_detect(bool hotplug)
 	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
 }
 
-static void *hf_read(void *arg)
+static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
+	char threadname[24];
+
+	snprintf(threadname, 24, "hfa_read/%d", hashfast->device_id);
+	RenameThread(threadname);
 
 	while (likely(!hashfast->shutdown)) {
 	}
@@ -377,7 +381,7 @@ static bool hashfast_prepare(struct thr_info *thr)
 	struct timeval now;
 
 	mutex_init(&info->lock);
-	if (pthread_create(&info->read_thr, NULL, hf_read, (void *)thr))
+	if (pthread_create(&info->read_thr, NULL, hfa_read, (void *)thr))
 		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
 
 	cgtime(&now);
