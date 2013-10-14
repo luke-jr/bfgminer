@@ -1,3 +1,8 @@
+Version 3.6.0 - 14th October 2013
+
+- increasing max miners for avalon driver
+- using separate identifier for bitburner fury boards
+- changes to bitburner driver for bitburner fury boards
 - hexstr is too small in test_work_current
 - Windows uses errno for WSAETIMEDOUT
 - Convert the usb callback function to using cgsem_t timed waits to avoid race
