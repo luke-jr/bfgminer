@@ -311,6 +311,18 @@ static struct usb_find_devices find_dev[] = {
 		INTINFO(ava_ints) },
 	{
 		.drv = DRIVER_avalon,
+		.name = "BBF",
+		.ident = IDENT_BBF,
+		.idVendor = IDVENDOR_FTDI,
+		.idProduct = 0x6001,
+		.iManufacturer = "Burnin Electronics",
+		.iProduct = "BitBurner Fury",
+		.config = 1,
+		.timeout = AVALON_TIMEOUT_MS,
+		.latency = 10,
+		INTINFO(ava_ints) },
+	{
+		.drv = DRIVER_avalon,
 		.name = "AVA",
 		.ident = IDENT_AVA,
 		.idVendor = IDVENDOR_FTDI,
