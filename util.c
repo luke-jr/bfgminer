@@ -881,6 +881,14 @@ void ms_to_timespec(struct timespec *spec, int64_t ms)
 	spec->tv_nsec = tvdiv.rem * 1000000;
 }
 
+void ms_to_timeval(struct timeval *val, int64_t ms)
+{
+	lldiv_t tvdiv = lldiv(ms, 1000);
+
+	val->tv_sec = tvdiv.quot;
+	val->tv_usec = tvdiv.rem * 1000;
+}
+
 void timeraddspec(struct timespec *a, const struct timespec *b)
 {
 	a->tv_sec += b->tv_sec;
@@ -2407,6 +2415,31 @@ void _cgsem_destroy(cgsem_t *cgsem)
 	close(cgsem->pipefd[1]);
 	close(cgsem->pipefd[0]);
 }
+
+/* This is similar to sem_timedwait but takes a millisecond value */
+int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line)
+{
+	struct timeval timeout;
+	int ret, fd;
+	fd_set rd;
+	char buf;
+
+	fd = cgsem->pipefd[0];
+	FD_ZERO(&rd);
+	FD_SET(fd, &rd);
+	ms_to_timeval(&timeout, ms);
+	ret = select(fd + 1, &rd, NULL, NULL, &timeout);
+
+	if (ret > 0) {
+		ret = read(fd, &buf, 1);
+		return 0;
+	}
+	if (likely(!ret))
+		return ETIMEDOUT;
+	quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
+	/* We don't reach here */
+	return 0;
+}
 #else
 void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
 {
@@ -2425,6 +2458,26 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 {
 	if (unlikely(sem_wait(cgsem)))
 		quitfrom(1, file, func, line, "Failed to sem_wait errno=%d cgsem=0x%p", errno, cgsem);
+}
+
+int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line)
+{
+	struct timespec abs_timeout, ts_now;
+	struct timeval tv_now;
+	int ret;
+
+	cgtime(&tv_now);
+	timeval_to_spec(&ts_now, &tv_now);
+	ms_to_timespec(&abs_timeout, ms);
+	timeraddspec(&abs_timeout, &ts_now);
+	ret = sem_timedwait(cgsem, &abs_timeout);
+
+	if (ret) {
+		if (likely(sock_timeout()))
+			return ETIMEDOUT;
+		quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
+	}
+	return 0;
 }
 
 void _cgsem_destroy(cgsem_t *cgsem)

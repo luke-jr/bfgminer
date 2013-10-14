@@ -20,6 +20,10 @@
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
 	}
+	static inline bool sock_timeout(void)
+	{
+		return (errno == ETIMEDOUT);
+	}
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -36,6 +40,10 @@
 	static inline bool sock_blocks(void)
 	{
 		return (WSAGetLastError() == WSAEWOULDBLOCK);
+	}
+	static inline bool sock_timeout(void)
+	{
+		return (errno == WSAETIMEDOUT);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
@@ -125,11 +133,13 @@ void RenameThread(const char* name);
 void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line);
 void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int line);
 void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line);
+int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line);
 void _cgsem_destroy(cgsem_t *cgsem);
 
 #define cgsem_init(_sem) _cgsem_init(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_post(_sem) _cgsem_post(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_wait(_sem) _cgsem_wait(_sem, __FILE__, __func__, __LINE__)
+#define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
 #define cgsem_destroy(_sem) _cgsem_destroy(_sem)
 
 /* Align a size_t to 4 byte boundaries for fussy arches */
