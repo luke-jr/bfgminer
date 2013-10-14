@@ -696,18 +696,20 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 			klninfo->delay_count++;
 			klninfo->delay_total += us_diff;
 
-			us_diff = us_tdiff(&(kitem->tv_when), &(klninfo->tv_last_nonce_received));
-			if (klninfo->nonce_count == 0) {
-				klninfo->nonce_min = us_diff;
-				klninfo->nonce_max = us_diff;
-			} else {
-				if (klninfo->nonce_min > us_diff)
+			if (klninfo->nonce_count > 0) {
+				us_diff = us_tdiff(&(kitem->tv_when), &(klninfo->tv_last_nonce_received));
+				if (klninfo->nonce_count == 1) {
 					klninfo->nonce_min = us_diff;
-				if (klninfo->nonce_max < us_diff)
 					klninfo->nonce_max = us_diff;
+				} else {
+					if (klninfo->nonce_min > us_diff)
+						klninfo->nonce_min = us_diff;
+					if (klninfo->nonce_max < us_diff)
+						klninfo->nonce_max = us_diff;
+				}
+				klninfo->nonce_total += us_diff;
 			}
 			klninfo->nonce_count++;
-			klninfo->nonce_total += us_diff;
 
 			memcpy(&(klninfo->tv_last_nonce_received), &(kitem->tv_when),
 				sizeof(klninfo->tv_last_nonce_received));
