@@ -645,7 +645,8 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strstr(firstname, BFLSC_DI_XLINKPRESENT))
 			sc_dev.xlink_present = strdup(fields[0]);
 		else if (strstr(firstname, BFLSC_DI_DEVICESINCHAIN)) {
-			if (fields[0][0] == '0')
+			if (fields[0][0] == '0' ||
+			    (fields[0][0] == ' ' && fields[0][1] == '0'))
 				sc_info->sc_count = 1;
 			else
 				sc_info->sc_count = atoi(fields[0]);
