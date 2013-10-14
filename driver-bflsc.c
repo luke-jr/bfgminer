@@ -645,11 +645,14 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strstr(firstname, BFLSC_DI_XLINKPRESENT))
 			sc_dev.xlink_present = strdup(fields[0]);
 		else if (strstr(firstname, BFLSC_DI_DEVICESINCHAIN)) {
-			sc_info->sc_count = atoi(fields[0]);
+			if (fields[0][0] == '0')
+				sc_info->sc_count = 1;
+			else
+				sc_info->sc_count = atoi(fields[0]);
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
 				applogsiz(LOG_WARNING, BFLSC_APPLOGSIZ,
-						"%s detect (%s) invalid s-link count: '%s'",
+						"%s detect (%s) invalid x-link count: '%s'",
 						bflsc->drv->dname, bflsc->device_path, tmp);
 				free(tmp);
 				goto mata;
