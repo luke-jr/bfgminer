@@ -2710,13 +2710,16 @@ out_noerrmsg:
  */
 static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequestType,
 				uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
-				unsigned char *buffer, uint16_t wLength, unsigned int timeout)
+				unsigned char *buffer, uint16_t wLength, unsigned int timeout,
+				bool receive)
 {
 	struct usb_transfer ut;
 	unsigned char buf[70];
 	int err, transferred;
 
 	init_usb_transfer(&ut);
+	if (!receive)
+		memcpy(buf, buffer, wLength);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
 				  wIndex, wLength);
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
@@ -2725,9 +2728,11 @@ static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequ
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
 	if (!err && transferred) {
-		unsigned char *ofbuf = libusb_control_transfer_get_data(ut.transfer);
+		if (receive) {
+			unsigned char *ofbuf = libusb_control_transfer_get_data(ut.transfer);
 
-		memcpy(buffer, ofbuf, transferred);
+			memcpy(buffer, ofbuf, transferred);
+		}
 		err = transferred;
 		goto out;
 	}
@@ -2795,7 +2800,7 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = usb_control_transfer(usbdev->handle, request_type,
-		bRequest, wValue, wIndex, buf, (uint16_t)siz, timeout);
+		bRequest, wValue, wIndex, buf, (uint16_t)siz, timeout, false);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0, timeout);
@@ -2878,7 +2883,7 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	cg_rlock(&cgusb_fd_lock);
 	err = usb_control_transfer(usbdev->handle, request_type,
 		bRequest, wValue, wIndex,
-		tbuf, (uint16_t)bufsiz, timeout);
+		tbuf, (uint16_t)bufsiz, timeout, true);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0, timeout);
