@@ -43,7 +43,7 @@
 	}
 	static inline bool sock_timeout(void)
 	{
-		return (WSAGetLastError() == WSAETIMEDOUT);
+		return (errno == WSAETIMEDOUT);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
