@@ -507,6 +507,7 @@ struct device_drv hashfast_drv = {
 	.drv_id = DRIVER_hashfast,
 	.dname = "Hashfast",
 	.name = "HFA",
+	.max_diff = 256.0, // Limit max diff to get some nonces back regardless
 	.drv_detect = hashfast_detect,
 	.thread_prepare = hashfast_prepare,
 	.hash_work = &hash_driver_work,
