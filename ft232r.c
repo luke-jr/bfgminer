@@ -33,7 +33,9 @@
 static
 void ft232r_devinfo_free(struct lowlevel_device_info * const info)
 {
-	libusb_unref_device(info->lowl_data);
+	libusb_device * const dev = info->lowl_data;
+	if (dev)
+		libusb_unref_device(dev);
 }
 
 static
@@ -117,24 +119,6 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 	return devinfo_list;
 }
 
-static foundusb_func_t _wrapper_cb;
-static
-bool _wrapper(struct lowlevel_device_info *info)
-{
-	if (info->lowl != &lowl_ft232r)
-		return false;
-	return _wrapper_cb(info->lowl_data, info->product, info->serial);
-}
-
-int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_t cb)
-{
-	_wrapper_cb = cb;
-	if (serial)
-		return lowlevel_detect_serial(_wrapper, serial);
-	else
-		return lowlevel_detect(_wrapper, product_needle);
-}
-
 #define FTDI_REQTYPE  (LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE)
 #define FTDI_REQTYPE_IN   (FTDI_REQTYPE | LIBUSB_ENDPOINT_IN)
 #define FTDI_REQTYPE_OUT  (FTDI_REQTYPE | LIBUSB_ENDPOINT_OUT)
@@ -161,8 +145,14 @@ struct ft232r_device_handle {
 	uint16_t obufsz;
 };
 
-struct ft232r_device_handle *ft232r_open(libusb_device *dev)
+struct ft232r_device_handle *ft232r_open(struct lowlevel_device_info *info)
 {
+	libusb_device * const dev = info->lowl_data;
+	info->lowl_data = NULL;
+	
+	if (!dev)
+		return NULL;
+	
 	// FIXME: Cleanup on errors
 	libusb_device_handle *devh;
 	struct ft232r_device_handle *ftdi;
