@@ -243,6 +243,10 @@ endif
 if HAS_LITTLEFURY
 bfgminer_SOURCES += driver-littlefury.c
 endif
+
+if HAS_NANOFURY
+bfgminer_SOURCES += mcp2210.c
+endif
 endif
 
 bin_PROGRAMS += bfgminer-rpc

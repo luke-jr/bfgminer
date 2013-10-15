@@ -50,6 +50,11 @@ void lowlevel_scan()
 	devinfo_mid_list = lowl_ft232r.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
+	
+#ifdef USE_NANOFURY
+	devinfo_mid_list = lowl_mcp2210.devinfo_scan();
+	LL_CONCAT(devinfo_list, devinfo_mid_list);
+#endif
 }
 
 int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const char **product_needles)

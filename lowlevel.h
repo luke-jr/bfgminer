@@ -32,5 +32,8 @@ extern void lowlevel_devinfo_free(struct lowlevel_device_info *);
 #ifdef USE_X6500
 extern struct lowlevel_driver lowl_ft232r;
 #endif
+#ifdef USE_NANOFURY
+extern struct lowlevel_driver lowl_mcp2210;
+#endif
 
 #endif

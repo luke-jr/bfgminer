@@ -581,6 +581,29 @@ fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
 
+driverlist="$driverlist nanofury"
+nanofury=auto
+AC_ARG_ENABLE([nanofury],
+	[AC_HELP_STRING([--disable-nanofury],[Compile support for NanoFury (default enabled)])],
+	[nanofury=$enableval]
+	)
+if test "x$nanofury" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	nanofury=yes
+elif test "x$nanofury" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
+else
+	nanofury=no
+fi
+if test "x$nanofury" = "xyes"; then
+	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
+	need_fpgautils=yes
+	need_lowlevel=yes
+fi
+AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
+
+
 driverlist="$driverlist metabank"
 metabank=no
 AC_ARG_ENABLE([metabank],
