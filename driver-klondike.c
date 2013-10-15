@@ -464,7 +464,9 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 		kitem = SendCmdGetReply(klncgpu, &kline, 0);
 		if (kitem != NULL) {
 			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)(&(klninfo->status[dev])), (void *)kitem, sizeof(*kitem));
+			memcpy((void *)(&(klninfo->status[dev])),
+				(void *)kitem,
+				sizeof(klninfo->status[dev]));
 			wr_unlock(&(klninfo->stat_lock));
 			release_kitem(klncgpu, kitem);
 			kitem = NULL;
@@ -533,7 +535,7 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 		kline.cfg.dev = dev;
 		kitem = SendCmdGetReply(klncgpu, &kline, size);
 		if (kitem != NULL) {
-			memcpy((void *)&(klninfo->cfg[dev]), kitem, sizeof(*kitem));
+			memcpy((void *)&(klninfo->cfg[dev]), kitem, sizeof(klninfo->cfg[dev]));
 			applog(LOG_WARNING, "Klondike config (%d: Clk: %d, T:%.0lf, C:%.0lf, F:%d)",
 				dev, K_HASHCLOCK(klninfo->cfg[dev].kline.cfg.hashclock),
 				cvtKlnToC(klninfo->cfg[dev].kline.cfg.temptarget),
@@ -810,7 +812,9 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 		kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
 		if (kitem != NULL) {
 			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(*kitem));
+			memcpy((void *)&(klninfo->status[dev]),
+				kitem,
+				sizeof(klninfo->status[dev]));
 			wr_unlock(&(klninfo->stat_lock));
 			release_kitem(klncgpu, kitem);
 			kitem = NULL;
@@ -911,7 +915,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	KLIST *kitem = SendCmdGetReply(klncgpu, &kline, sizeof(kline.wt));
 	if (kitem != NULL) {
 		wr_lock(&(klninfo->stat_lock));
-		memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(*kitem));
+		memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(klninfo->status[dev]));
 		wr_unlock(&(klninfo->stat_lock));
 		release_kitem(klncgpu, kitem);
 		kitem = NULL;
