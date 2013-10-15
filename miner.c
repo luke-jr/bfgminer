@@ -77,8 +77,8 @@
 #include "driver-avalon.h"
 #endif
 
-#ifdef USE_X6500
-#include "ft232r.h"
+#ifdef HAVE_BFG_LOWLEVEL
+#include "lowlevel.h"
 #endif
 
 #if defined(unix) || defined(__APPLE__)
@@ -9812,9 +9812,8 @@ extern struct sigaction pcwm_orig_term_handler;
 static
 void drv_detect_all()
 {
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan();
+#ifdef HAVE_BFG_LOWLEVEL
+	lowlevel_scan();
 #endif
 
 #ifdef USE_ICARUS
@@ -9880,9 +9879,8 @@ void drv_detect_all()
 	cpu_drv.drv_detect();
 #endif
 
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan_free();
+#ifdef HAVE_BFG_LOWLEVEL
+	lowlevel_scan_free();
 #endif
 
 #ifdef HAVE_OPENCL

@@ -177,6 +177,10 @@ bfgminer_SOURCES += iospeeds.h iospeeds_posix.h
 endif
 endif
 
+if NEED_BFG_LOWLEVEL
+bfgminer_SOURCES += lowlevel.c lowlevel.h
+endif
+
 if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif

@@ -91,6 +91,7 @@ optlist=
 
 need_dynclock=no
 need_fpgautils=no
+need_lowlevel=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -482,6 +483,7 @@ if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
 	need_dynclock=yes
 	need_fpgautils=yes
+	need_lowlevel=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -637,6 +639,10 @@ if test x$need_fpgautils = xyes; then
 	fi
 fi
 
+if test x$need_lowlevel = xyes; then
+	AC_DEFINE([HAVE_BFG_LOWLEVEL], [1], [Defined to 1 if lowlevel drivers are being used])
+fi
+
 
 curses="auto"
 
@@ -790,6 +796,7 @@ AC_SUBST(libblkmaker_LIBS)
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])

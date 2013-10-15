@@ -25,8 +25,6 @@ struct ft232r_device_handle;
 
 typedef bool(*foundusb_func_t)(libusb_device *, const char *product, const char *serial);
 
-extern void ft232r_scan();
-extern void ft232r_scan_free();
 extern int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_t);
 extern struct ft232r_device_handle *ft232r_open(libusb_device *);
 extern void ft232r_close(struct ft232r_device_handle *);
