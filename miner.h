@@ -1329,6 +1329,8 @@ struct work {
 	int		subid;
 	// Allow devices to flag work for their own purposes
 	bool		devflag;
+	// Allow devices to timestamp work for their own purposes
+	struct timeval	tv_stamp;
 
 	struct timeval	tv_getwork;
 	struct timeval	tv_getwork_reply;
