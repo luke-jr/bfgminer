@@ -7795,7 +7795,7 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {0, 200000};
+	struct timeval tv_end = {1, 0};
 
 	RenameThread("usbpoll");
 
