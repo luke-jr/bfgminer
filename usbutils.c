@@ -2268,6 +2268,11 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 #endif
 	unsigned char buf[512];
 
+	/* Prevent any further transfers during shutdown to allow the polling
+	 * thread to be shut down after all existing transfers are complete */
+	if (unlikely(cgpu->shutdown))
+		return LIBUSB_SUCCESS;
+
 	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
 
@@ -2708,13 +2713,16 @@ out_noerrmsg:
 /* As we do for bulk reads, emulate a sync function for control transfers using
  * our own timeouts that takes the same parameters as libusb_control_transfer.
  */
-static int usb_control_transfer(libusb_device_handle *dev_handle, uint8_t bmRequestType,
+static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *dev_handle, uint8_t bmRequestType,
 				uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
 				unsigned char *buffer, uint16_t wLength, unsigned int timeout)
 {
 	struct usb_transfer ut;
 	unsigned char buf[70];
 	int err, transferred;
+
+	if (unlikely(cgpu->shutdown))
+		return LIBUSB_SUCCESS;
 
 	init_usb_transfer(&ut);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
@@ -2796,8 +2804,8 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 	}
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
-	err = usb_control_transfer(usbdev->handle, request_type,
-		bRequest, wValue, wIndex, buf, (uint16_t)siz, timeout);
+	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
+				   wValue, wIndex, buf, (uint16_t)siz, timeout);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0, timeout);
@@ -2878,9 +2886,8 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	memset(tbuf, 0, 64);
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
-	err = usb_control_transfer(usbdev->handle, request_type,
-		bRequest, wValue, wIndex,
-		tbuf, (uint16_t)bufsiz, timeout);
+	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
+				   wValue, wIndex, tbuf, (uint16_t)bufsiz, timeout);
 	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0, timeout);
