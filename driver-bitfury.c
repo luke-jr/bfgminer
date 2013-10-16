@@ -143,6 +143,8 @@ tryagain:
 			differ = i;
 			applog(LOG_DEBUG, "%"PRIpreprv": %s: Differ at %d",
 			       proc->proc_repr, __func__, i);
+			if (tried > 3)
+				break;
 		}
 	}
 	if (-1 == differ)
