@@ -29,6 +29,14 @@
 struct device_drv nanofury_drv;
 
 static
+void nanofury_device_off(struct mcp2210_device * const mcp)
+{
+	// Try to reset everything back to input
+	for (int i = 0; i < 9; ++i)
+		mcp2210_get_gpio_input(mcp, i);
+}
+
+static
 bool nanofury_checkport(struct mcp2210_device * const mcp)
 {
 	int i;
@@ -88,6 +96,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp)
 	return true;
 
 fail:
+	nanofury_device_off(mcp);
 	return false;
 }
 
@@ -119,6 +128,7 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info)
 		// TODO: mcp2210_close(mcp);
 		return false;
 	}
+	nanofury_device_off(mcp);
 	// TODO: mcp2210_close(mcp);
 	
 	// TODO: claim device
