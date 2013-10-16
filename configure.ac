@@ -348,7 +348,8 @@ else
 	LIBUSB_LIBS=""
 fi
 
-JANSSON_LIBS="compat/jansson/libjansson.a"
+AC_CONFIG_SUBDIRS([compat/jansson-2.5])
+JANSSON_LIBS="compat/jansson-2.5/src/.libs/libjansson.a"
 
 PKG_PROG_PKG_CONFIG()
 
@@ -455,7 +456,6 @@ AC_SUBST(ADL_CPPFLAGS)
 AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
-	compat/jansson/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])
