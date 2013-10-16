@@ -13,6 +13,8 @@
 #include <stdbool.h>
 
 #include "deviceapi.h"
+#include "driver-bitfury.h"
+#include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "mcp2210.h"
@@ -27,6 +29,62 @@
 #define NANOFURY_MAX_BYTES_PER_SPI_TRANSFER 60			// due to MCP2210 limitation
 
 struct device_drv nanofury_drv;
+
+// Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
+static
+bool nanofury_spi_reset(struct mcp2210_device * const mcp)
+{
+	int r;
+	char tx[1] = {0x81};  // will send this waveform: - _ _ _  _ _ _ -
+	char buf[1];
+	
+	// SCK_OVRRIDE
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_SCK_OVR, MGV_HIGH))
+		return false;
+	
+	for (r = 0; r < 16; ++r)
+		if (!mcp2210_spi_transfer(mcp, tx, buf, 1))
+			return false;
+	
+	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) == MGV_ERROR)
+		return false;
+	
+	return true;
+}
+
+static
+bool nanofury_spi_txrx(struct spi_port * const port)
+{
+	struct cgpu_info * const cgpu = port->cgpu;
+	struct thr_info * const thr = cgpu->thr[0];
+	struct mcp2210_device * const mcp = thr->cgpu_data;
+	const void *wrbuf = spi_gettxbuf(port);
+	void *rdbuf = spi_getrxbuf(port);
+	size_t bufsz = spi_getbufsz(port);
+	const uint8_t *ptrwrbuf = wrbuf;
+	uint8_t *ptrrdbuf = rdbuf;
+	
+	nanofury_spi_reset(mcp);
+	
+	// start by sending chunks of 60 bytes...
+	while (bufsz >= NANOFURY_MAX_BYTES_PER_SPI_TRANSFER)
+	{
+		if (!mcp2210_spi_transfer(mcp, ptrwrbuf, ptrrdbuf, NANOFURY_MAX_BYTES_PER_SPI_TRANSFER))
+			return false;
+		ptrrdbuf += NANOFURY_MAX_BYTES_PER_SPI_TRANSFER;
+		ptrwrbuf += NANOFURY_MAX_BYTES_PER_SPI_TRANSFER;
+		bufsz -= NANOFURY_MAX_BYTES_PER_SPI_TRANSFER;
+	}
+	
+	// send any remaining bytes...
+	if (bufsz > 0)
+	{
+		if (!mcp2210_spi_transfer(mcp, ptrwrbuf, ptrrdbuf, bufsz))
+			return false;
+	}
+	
+	return true;
+}
 
 static
 void nanofury_device_off(struct mcp2210_device * const mcp)
@@ -164,26 +222,75 @@ static void nanofury_detect()
 	serial_detect_auto(&nanofury_drv, nanofury_detect_one, nanofury_detect_auto);
 }
 
+static
+bool nanofury_init(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct lowlevel_device_info * const info = cgpu->device_data;
+	struct spi_port *port;
+	struct bitfury_device *bitfury;
+	struct mcp2210_device *mcp;
+	
+	mcp = mcp2210_open(info);
+	lowlevel_devinfo_free(info);
+	if (!mcp)
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed to open mcp2210 device", cgpu->proc_repr);
+		return false;
+	}
+	if (!nanofury_checkport(mcp))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": checkport failed", cgpu->proc_repr);
+		// TODO: mcp2210_close(mcp);
+		return false;
+	}
+	
+	port = malloc(sizeof(*port));
+	bitfury = malloc(sizeof(*bitfury));
+	
+	if (!(port && bitfury))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed to allocate spi_port and bitfury_device structures", cgpu->proc_repr);
+		free(port);
+		free(bitfury);
+		// TODO: mcp2210_close(mcp);
+		return false;
+	}
+	
+	thr->cgpu_data = mcp;
+	*port = (struct spi_port){
+		.txrx = nanofury_spi_txrx,
+		.cgpu = cgpu,
+		.repr = cgpu->proc_repr,
+		.logprio = LOG_ERR,
+	};
+	*bitfury = (struct bitfury_device){
+		.spi = port,
+	};
+	cgpu->device_data = bitfury;
+	bitfury->osc6_bits = 54;
+	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_init_chip(cgpu);
+	
+	timer_set_now(&thr->tv_poll);
+	
+	return true;
+}
+
 struct device_drv nanofury_drv = {
 	.dname = "nanofury",
 	.name = "NFY",
 	.drv_detect = nanofury_detect,
 	
-	// .thread_prepare = nanofury_prepare,
-	// .thread_init = nanofury_thread_init,
+	.thread_init = nanofury_init,
 	
-	// .minerloop = minerloop_async,
-	// .poll = nanofury_poll,
-	// .job_prepare = nanofury_job_prepare,
-	// .job_start = nanofury_job_start,
+	.minerloop = minerloop_async,
+	.job_prepare = bitfury_job_prepare,
+	.job_start = bitfury_noop_job_start,
+	.poll = bitfury_do_io,
+	.job_process_results = bitfury_job_process_results,
 	
-	// .get_stats = nanofury_get_stats,
-	// .get_api_extra_device_status = get_nanofury_api_extra_device_status,
-	// .set_device = nanofury_set_device,
-	
-#ifdef HAVE_CURSES
-	// .proc_wlogprint_status = nanofury_wlogprint_status,
-	// .proc_tui_wlogprint_choices = nanofury_tui_wlogprint_choices,
-	// .proc_tui_handle_choice = nanofury_tui_handle_choice,
-#endif
+	.get_api_extra_device_detail = bitfury_api_device_detail,
+	.get_api_extra_device_status = bitfury_api_device_status,
+	.set_device = bitfury_set_device,
 };
