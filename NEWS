@@ -1,3 +1,29 @@
+Version 3.6.2 - 17th October 2013
+
+- Remove unused components of jansson
+- Remove unused parts of libusb
+- Work around older libtoolize that fails without top ltmain.sh not being
+present during autogen
+- Fix open coded use of autoreconf in autogen
+- Update jansson to only build parts we require and suited to our build
+environment.
+- Initial import of jansson-2.5
+- Prevent further USB transfers from occurring once the shutdown signal has been
+sent to prevent transfers getting stuck and libusb failing to shut down.
+- Make the USB polling thread poll every second to potentially aid longer
+timeout transfers.
+- Set device_diff on work in get_work to not be missed with drivers that use
+get_work directly.
+- Convert icarus driver to hash_driver_work model.
+- bflsc - also allow ' 0' in DEVICES IN CHAIN
+- bflsc - allow a 0 in DEVICES IN CHAIN
+- Add needed EXTRA_DIST for libusbx.
+- Update libusbx configure.ac changes.
+- Revert libusb Makefile changes from going to libusbx.
+- Fix trivial libusbx warnings.
+- Convert libusb-1.0.16-rc10 to libusbx-1.0.17
+
+
 Version 3.6.1 - 14th October 2013
 
 - Emulate the libusb_control_transfer sync setup in our async variant.
