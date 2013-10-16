@@ -1,6 +1,8 @@
 AC_PREREQ([2.60])
 AC_INIT([jansson], [2.5], [petri@digip.org])
 
+AC_CONFIG_MACRO_DIR([m4])
+
 AM_INIT_AUTOMAKE([1.10 foreign])
 
 AC_CONFIG_SRCDIR([src/value.c])
@@ -46,12 +48,7 @@ AC_SUBST([json_have_localeconv])
 AC_CONFIG_FILES([
         jansson.pc
         Makefile
-        doc/Makefile
         src/Makefile
         src/jansson_config.h
-        test/Makefile
-        test/bin/Makefile
-        test/suites/Makefile
-        test/suites/api/Makefile
 ])
 AC_OUTPUT

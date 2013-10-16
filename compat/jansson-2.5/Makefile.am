@@ -1,5 +1,7 @@
+ACLOCAL_AMFLAGS = -I m4
+
 EXTRA_DIST = CHANGES LICENSE README.rst win32
-SUBDIRS = doc src test
+SUBDIRS = src
 
 # "make distcheck" builds the dvi target, so use it to check that the
 # documentation is built correctly.

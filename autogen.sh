@@ -1,7 +1,6 @@
 #!/bin/sh
 bs_dir="$(dirname $(readlink -f $0))"
-rm -rf "${bs_dir}"/autom4te.cache
-rm -f "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
+rm -rf "${bs_dir}"/autom4te.cache "${bs_dir}"/aclocal.m4 "${bs_dir}"/ltmain.sh
 
 libusb_dir="${bs_dir}"/compat/libusb-1.0/
 rm -rf "${libusb_dir}"/autom4te.cache "${libusb_dir}"/aclocal.m4 "${libusb_dir}"/ltmain.sh
