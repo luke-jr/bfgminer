@@ -245,7 +245,7 @@ bfgminer_SOURCES += driver-littlefury.c
 endif
 
 if HAS_NANOFURY
-bfgminer_SOURCES += mcp2210.c
+bfgminer_SOURCES += mcp2210.c mcp2210.h
 endif
 endif
 

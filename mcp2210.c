@@ -11,6 +11,7 @@
 
 #include <dlfcn.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -19,6 +20,9 @@
 
 #include "logging.h"
 #include "lowlevel.h"
+#include "miner.h"
+
+#include "mcp2210.h"
 
 #define MCP2210_IDVENDOR   0x04d8
 #define MCP2210_IDPRODUCT  0x00de
@@ -29,9 +33,10 @@
 #define HID_API_EXPORT /* */
 #endif
 struct hid_device_info HID_API_EXPORT *(*dlsym_hid_enumerate)(unsigned short, unsigned short);
-#define hid_enumerate dlsym_hid_enumerate
 void HID_API_EXPORT (*dlsym_hid_free_enumeration)(struct hid_device_info *);
-#define hid_free_enumeration dlsym_hid_free_enumeration
+hid_device * HID_API_EXPORT (*dlsym_hid_open_path)(const char *);
+int HID_API_EXPORT (*dlsym_hid_read)(hid_device *, unsigned char *, size_t);
+int HID_API_EXPORT (*dlsym_hid_write)(hid_device *, const unsigned char *, size_t);
 
 #define LOAD_SYM(sym)  do { \
 	if (!(dlsym_ ## sym = dlsym(dlh, #sym))) {  \
@@ -54,16 +59,19 @@ bool hidapi_try_lib(const char * const dlname)
 	}
 	
 	LOAD_SYM(hid_enumerate);
+	LOAD_SYM(hid_free_enumeration);
 	
-	hid_enum = hid_enumerate(0, 0);
+	hid_enum = dlsym_hid_enumerate(0, 0);
 	if (!hid_enum)
 	{
 		applog(LOG_DEBUG, "%s: Loaded %s, but no devices enumerated; trying other libraries", __func__, dlname);
 		goto fail;
 	}
+	dlsym_hid_free_enumeration(hid_enum);
 	
-	LOAD_SYM(hid_free_enumeration);
-	hid_free_enumeration(hid_enum);
+	LOAD_SYM(hid_open_path);
+	LOAD_SYM(hid_read);
+	LOAD_SYM(hid_write);
 	
 	applog(LOG_DEBUG, "%s: Successfully loaded %s", __func__, dlname);
 	
@@ -74,10 +82,16 @@ fail:
 	return false;
 }
 
+#define hid_enumerate dlsym_hid_enumerate
+#define hid_free_enumeration dlsym_hid_free_enumeration
+#define hid_open_path dlsym_hid_open_path
+#define hid_read dlsym_hid_read
+#define hid_write dlsym_hid_write
+
 static
 bool hidapi_load_library()
 {
-	if (dlsym_hid_free_enumeration)
+	if (dlsym_hid_write)
 		return true;
 	
 	const char **p;
@@ -161,6 +175,253 @@ struct lowlevel_device_info *mcp2210_devinfo_scan()
 	hid_free_enumeration(hid_enum);
 	
 	return devinfo_list;
+}
+
+struct mcp2210_device {
+	hid_device *hid;
+	
+	// http://ww1.microchip.com/downloads/en/DeviceDoc/22288A.pdf pg 34
+	uint8_t cfg_spi[0x11];
+	// http://ww1.microchip.com/downloads/en/DeviceDoc/22288A.pdf pg 40
+	uint8_t cfg_gpio[0xf];
+};
+
+static
+bool mcp2210_io(hid_device * const hid, uint8_t * const cmd, uint8_t * const buf)
+{
+	return likely(
+		64 == hid_write(hid, cmd, 64) &&
+		64 == hid_read(hid, buf, 64)
+	);
+}
+
+static
+bool mcp2210_get_configs(struct mcp2210_device * const h)
+{
+	hid_device * const hid = h->hid;
+	uint8_t cmd[0x40] = {0x41}, buf[0x40];
+	
+	if (!mcp2210_io(hid, cmd, buf))
+	{
+		applog(LOG_ERR, "%s: Failed to get current %s config", __func__, "SPI");
+		return false;
+	}
+	memcpy(h->cfg_spi, &buf[4], sizeof(h->cfg_spi));
+	
+	cmd[0] = 0x20;
+	if (!mcp2210_io(hid, cmd, buf))
+	{
+		applog(LOG_ERR, "%s: Failed to get current %s config", __func__, "GPIO");
+		return false;
+	}
+	memcpy(h->cfg_gpio, &buf[4], sizeof(h->cfg_gpio));
+	
+	return true;
+}
+
+struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *info)
+{
+	struct mcp2210_device *h;
+	char * const path = info->lowl_data;
+	hid_device * const hid = hid_open_path(path);
+	
+	if (unlikely(!hid))
+		return NULL;
+	
+	h = malloc(sizeof(*h));
+	h->hid = hid;
+	
+	if (!mcp2210_get_configs(h))
+		goto fail;
+	
+	return h;
+
+fail:
+	free(h);
+	return NULL;
+}
+
+static
+bool mcp2210_set_cfg_spi(struct mcp2210_device * const h)
+{
+	hid_device * const hid = h->hid;
+	uint8_t cmd[0x40] = {0x40}, buf[0x40];
+	memcpy(&cmd[4], h->cfg_spi, sizeof(h->cfg_spi));
+	if (!mcp2210_io(hid, cmd, buf))
+	{
+		applog(LOG_ERR, "%s: Failed to set current %s config", __func__, "SPI");
+		return false;
+	}
+	
+	if (buf[1] != 0)
+	{
+		applog(LOG_ERR, "%s: Error setting current %s config (%d)", __func__, "SPI", buf[1]);
+		return false;
+	}
+	
+	return true;
+}
+
+bool mcp2210_configure_spi(struct mcp2210_device * const h, const uint32_t bitrate, const uint16_t idlechipsel, const uint16_t activechipsel, const uint16_t chipseltodatadelay, const uint16_t lastbytetocsdelay, const uint16_t midbytedelay)
+{
+	uint8_t * const cfg = h->cfg_spi;
+	
+	cfg[0] = (bitrate >> 0x00) & 0xff;
+	cfg[1] = (bitrate >> 0x08) & 0xff;
+	cfg[2] = (bitrate >> 0x10) & 0xff;
+	cfg[3] = (bitrate >> 0x18) & 0xff;
+	
+	cfg[4] = (  idlechipsel >> 0) & 0xff;
+	cfg[5] = (  idlechipsel >> 8) & 0xff;
+	
+	cfg[6] = (activechipsel >> 0) & 0xff;
+	cfg[7] = (activechipsel >> 8) & 0xff;
+	
+	cfg[8] = (chipseltodatadelay >> 0) & 0xff;
+	cfg[9] = (chipseltodatadelay >> 8) & 0xff;
+	
+	cfg[0xa] = (lastbytetocsdelay >> 0) & 0xff;
+	cfg[0xb] = (lastbytetocsdelay >> 8) & 0xff;
+	
+	cfg[0xc] = (midbytedelay >> 0) & 0xff;
+	cfg[0xd] = (midbytedelay >> 8) & 0xff;
+	
+	return mcp2210_set_cfg_spi(h);
+}
+
+bool mcp2210_set_spimode(struct mcp2210_device * const h, const uint8_t spimode)
+{
+	uint8_t * const cfg = h->cfg_spi;
+	cfg[0x10] = spimode;
+	return mcp2210_set_cfg_spi(h);
+}
+
+bool mcp2210_spi_transfer(struct mcp2210_device * const h, const void * const tx, void * const rx, uint8_t sz)
+{
+	hid_device * const hid = h->hid;
+	uint8_t * const cfg = h->cfg_spi;
+	uint8_t cmd[0x40] = {0x42}, buf[0x40];
+	uint8_t *p = rx;
+	
+	if (unlikely(sz > 60))
+	{
+		applog(LOG_ERR, "%s: SPI transfer too long (%d bytes)", __func__, sz);
+		return false;
+	}
+	
+	cfg[0xe] = sz;
+	cfg[0xf] = 0;
+	if (!mcp2210_set_cfg_spi(h))
+		return false;
+	
+	cmd[1] = sz;
+	memcpy(&cmd[4], tx, sz);
+	if (unlikely(!mcp2210_io(hid, cmd, buf)))
+	{
+		applog(LOG_ERR, "%s: Failed to issue SPI transfer", __func__);
+		return false;
+	}
+	
+	while (true)
+	{
+		switch (buf[1])
+		{
+			case 0:     // accepted
+				cmd[1] = 0;
+				break;
+			case 0xf8:  // transfer in progress
+				applog(LOG_DEBUG, "%s: SPI transfer rejected temporarily (%d bytes remaining)", __func__, sz);
+				cgsleep_ms(20);
+				goto retry;
+			default:
+				applog(LOG_ERR, "%s: SPI transfer error (%d) (%d bytes remaining)", __func__, buf[1], sz);
+				return false;
+		}
+		if (buf[2] >= sz)
+		{
+			if (buf[2] > sz)
+				applog(LOG_WARNING, "%s: Received %d extra bytes in SPI transfer", __func__, sz - buf[2]);
+			memcpy(p, &buf[4], sz);
+			return true;
+		}
+		memcpy(p, &buf[4], buf[2]);
+		p += buf[2];
+		sz -= buf[2];
+retry:
+		if (unlikely(!mcp2210_io(hid, cmd, buf)))
+		{
+			applog(LOG_ERR, "%s: Failed to continue SPI transfer (%d bytes remaining)", __func__, sz);
+			return false;
+		}
+	}
+}
+
+static
+bool mcp2210_set_cfg_gpio(struct mcp2210_device * const h)
+{
+	hid_device * const hid = h->hid;
+	uint8_t cmd[0x40] = {0x21}, buf[0x40];
+	
+	// NOTE: NVRAM chip params access control is not set here
+	memcpy(&cmd[4], h->cfg_gpio, 0xe);
+	if (!mcp2210_io(hid, cmd, buf))
+	{
+		applog(LOG_ERR, "%s: Failed to set current %s config", __func__, "GPIO");
+		return false;
+	}
+	
+	if (buf[1] != 0)
+	{
+		applog(LOG_ERR, "%s: Error setting current %s config (%d)", __func__, "GPIO", buf[1]);
+		return false;
+	}
+	
+	return true;
+}
+
+static
+bool mcp2210_set_gpio_(struct mcp2210_device * const h, const int pin, const int byteoffset, const bool value)
+{
+	const int bit = 1 << (pin % 8);
+	const int byte = (pin / 8) + byteoffset;
+	
+	if (value)
+		h->cfg_gpio[byte] |= bit;
+	else
+		h->cfg_gpio[byte] &= ~bit;
+	
+	return mcp2210_set_cfg_gpio(h);
+}
+
+bool mcp2210_set_gpio_output(struct mcp2210_device * const h, const int pin, const enum mcp2210_gpio_value d)
+{
+	h->cfg_gpio[pin] = 0;
+	if (!mcp2210_set_gpio_(h, pin, 0xb, false))
+		return false;
+	return mcp2210_set_gpio_(h, pin, 0x9, d == MGV_HIGH);
+}
+
+enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, const int pin)
+{
+	hid_device * const hid = h->hid;
+	uint8_t cmd[0x40] = {0x31}, buf[0x40];
+	const int bit = 1 << (pin % 8);
+	const int byte = (pin / 8) + 4;
+	
+	h->cfg_gpio[pin] = 0;
+	if (!mcp2210_set_gpio_(h, pin, 0xb, true))
+		return MGV_ERROR;
+	
+	if (!mcp2210_io(hid, cmd, buf))
+	{
+		applog(LOG_ERR, "%s: Failed to get current GPIO input values", __func__);
+		return MGV_ERROR;
+	}
+	
+	if (buf[byte] & bit)
+		return MGV_HIGH;
+	else
+		return MGV_LOW;
 }
 
 struct lowlevel_driver lowl_mcp2210 = {
