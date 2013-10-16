@@ -91,7 +91,7 @@
 #include "scrypt.h"
 #endif
 
-#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
 
@@ -2087,6 +2087,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #endif
 #ifdef USE_MODMINER
 		"modminer "
+#endif
+#ifdef USE_NANOFURY
+		"nanofury "
 #endif
 #ifdef USE_SCRYPT
 		"scrypt "
@@ -9729,6 +9732,10 @@ extern struct device_drv littlefury_drv;
 extern struct device_drv modminer_drv;
 #endif
 
+#ifdef USE_NANOFURY
+extern struct device_drv nanofury_drv;
+#endif
+
 #ifdef USE_X6500
 extern struct device_drv x6500_api;
 #endif
@@ -9838,6 +9845,11 @@ void drv_detect_all()
 #ifdef USE_MODMINER
 	if (!opt_scrypt)
 		modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_NANOFURY
+	if (!opt_scrypt)
+		nanofury_drv.drv_detect();
 #endif
 
 #ifdef USE_X6500
