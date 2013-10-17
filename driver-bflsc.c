@@ -658,9 +658,10 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 				free(tmp);
 				goto mata;
 			}
+		}
 		else if (strstr(firstname, BFLSC_DI_CHIPS))
 			sc_dev.chips = strdup(fields[0]);
-		}
+
 		freebreakdown(&count, &firstname, &fields);
 	}
 
