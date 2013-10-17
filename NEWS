@@ -1,3 +1,13 @@
+Version 3.6.3 - 17th October 2013
+
+- API add 'MHS %ds' to 'summary'
+- Optional lock tracking and stats via the API
+- Speed up polling repeat again in usb poll thread and handle async after the
+message to disable polling is complete.
+- Revert to using timeouts on !linux since libusb leaks memory without them.
+- Revert to libusb instead of libusbx
+
+
 Version 3.6.2 - 17th October 2013
 
 - Remove unused components of jansson
