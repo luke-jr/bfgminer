@@ -2506,7 +2506,7 @@ void *completion_thread(void *arg)
 	return NULL;
 }
 
-bool _cg_completion_timeout(void *fn, void *fnarg, int timeout, const char *file, const char *func, const int line)
+bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
 {
 	struct cg_completion *cgc;
 	pthread_t pthread;
