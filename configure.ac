@@ -54,6 +54,8 @@ AC_PROG_RANLIB
 
 gl_INIT
 
+AC_SYS_LARGEFILE
+
 dnl Checks for header files.
 AC_HEADER_STDC
 AC_CHECK_HEADERS(syslog.h)
