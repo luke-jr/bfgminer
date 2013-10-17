@@ -6428,7 +6428,7 @@ struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate
 	return ret;
 }
 
-static void __work_completed(struct cgpu_info *cgpu, struct work *work)
+void __work_completed(struct cgpu_info *cgpu, struct work *work)
 {
 	if (work->queued)
 		cgpu->queued_count--;
