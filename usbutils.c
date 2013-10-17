@@ -2219,6 +2219,12 @@ static void init_usb_transfer(struct usb_transfer *ut)
 	ut->transfer->user_data = ut;
 }
 
+static void complete_usb_transfer(struct usb_transfer *ut)
+{
+	cgsem_destroy(&ut->cgsem);
+	libusb_free_transfer(ut->transfer);
+}
+
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 {
 	struct usb_transfer *ut = transfer->user_data;
@@ -2306,7 +2312,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
-	libusb_free_transfer(ut.transfer);
+	complete_usb_transfer(&ut);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
@@ -2754,7 +2760,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	if ((err) == LIBUSB_TRANSFER_CANCELLED)
 		err = LIBUSB_ERROR_TIMEOUT;
 out:
-	libusb_free_transfer(ut.transfer);
+	complete_usb_transfer(&ut);
 	return err;
 }
 
