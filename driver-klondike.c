@@ -44,6 +44,20 @@
 #define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
 #define TACH_FACTOR		87890	// fan rpm divisor
 
+/*
+ *  Work older than 5s will already be completed
+ *  FYI it must not be possible to complete 256 work
+ *  items this quickly on a single device -
+ *  thus limited to 219.9GH/s per device
+ */
+#define OLD_WORK_MS ((int)(5 * 1000))
+
+/*
+ * If the queue status hasn't been updated for this long
+ * then do it now
+ */
+#define LATE_UPDATE_MS ((int)(4 * 1000))
+
 struct device_drv klondike_drv;
 
 typedef struct klondike_header {
@@ -152,6 +166,11 @@ typedef struct klist {
 	bool working;
 } KLIST;
 
+typedef struct jobque {
+	int workqc;
+	struct timeval last_update;
+} JOBQUE;
+
 struct klondike_info {
 	bool shutdown;
 	pthread_rwlock_t stat_lock;
@@ -165,6 +184,7 @@ struct klondike_info {
 	KLIST *status;
 	DEVINFO *devinfo;
 	KLIST *cfg;
+	JOBQUE *jobque;
 	int noncecount;
 	uint64_t hashcount;
 	uint64_t errorcount;
@@ -183,6 +203,11 @@ struct klondike_info {
 	double nonce_total;
 	double nonce_min;
 	double nonce_max;
+
+	int wque_size;
+	int wque_cleared;
+
+	bool initialised;
 };
 
 static KLIST *new_klist_set(struct cgpu_info *klncgpu)
@@ -254,7 +279,7 @@ static KLIST *allocate_kitem(struct cgpu_info *klncgpu)
 	return kitem;
 }
 
-static void release_kitem(struct cgpu_info *klncgpu, KLIST *kitem)
+static KLIST *release_kitem(struct cgpu_info *klncgpu, KLIST *kitem)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 
@@ -279,6 +304,8 @@ static void release_kitem(struct cgpu_info *klncgpu, KLIST *kitem)
 	klninfo->used_count--;
 
 	cg_wunlock(&klninfo->klist_lock);
+
+	return NULL;
 }
 
 static double cvtKlnToC(uint8_t temp)
@@ -455,7 +482,9 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 
 	applog(LOG_DEBUG, "Klondike getting status");
 
+	rd_lock(&(klninfo->stat_lock));
 	slaves = klninfo->status[0].kline.ws.slavecount;
+	rd_unlock(&(klninfo->stat_lock));
 
 	// loop thru devices and get status for each
 	for (dev = 0; dev <= slaves; dev++) {
@@ -464,10 +493,11 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 		kitem = SendCmdGetReply(klncgpu, &kline, 0);
 		if (kitem != NULL) {
 			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)(&(klninfo->status[dev])), (void *)kitem, sizeof(*kitem));
+			memcpy((void *)(&(klninfo->status[dev])),
+				(void *)kitem,
+				sizeof(klninfo->status[dev]));
 			wr_unlock(&(klninfo->stat_lock));
-			release_kitem(klncgpu, kitem);
-			kitem = NULL;
+			kitem = release_kitem(klncgpu, kitem);
 		}
 	}
 
@@ -483,6 +513,8 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	KLINE kline;
 	int slaves, dev;
 
+	klninfo->initialised = false;
+
 	kline.hd.cmd = 'S';
 	kline.hd.dev = 0;
 	kitem = SendCmdGetReply(klncgpu, &kline, 0);
@@ -490,22 +522,26 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 		return false;
 
 	slaves = kitem->kline.ws.slavecount;
-	release_kitem(klncgpu, kitem);
-	kitem = NULL;
 	if (klninfo->status == NULL) {
 		applog(LOG_DEBUG, "Klondike initializing data");
 
-		// alloc space for status, devinfo and cfg for master and slaves
-		klninfo->status = calloc(slaves+1, sizeof(KLIST));
+		// alloc space for status, devinfo, cfg and jobque for master and slaves
+		klninfo->status = calloc(slaves+1, sizeof(*(klninfo->status)));
 		if (unlikely(!klninfo->status))
 			quit(1, "Failed to calloc status array in klondke_get_stats");
-		klninfo->devinfo = calloc(slaves+1, sizeof(DEVINFO));
+		klninfo->devinfo = calloc(slaves+1, sizeof(*(klninfo->devinfo)));
 		if (unlikely(!klninfo->devinfo))
 			quit(1, "Failed to calloc devinfo array in klondke_get_stats");
-		klninfo->cfg = calloc(slaves+1, sizeof(KLIST));
+		klninfo->cfg = calloc(slaves+1, sizeof(*(klninfo->cfg)));
 		if (unlikely(!klninfo->cfg))
 			quit(1, "Failed to calloc cfg array in klondke_get_stats");
+		klninfo->jobque = calloc(slaves+1, sizeof(*(klninfo->jobque)));
+		if (unlikely(!klninfo->jobque))
+			quit(1, "Failed to calloc jobque array in klondke_get_stats");
 	}
+
+	memcpy((void *)(&(klninfo->status[0])), (void *)kitem, sizeof(klninfo->status[0]));
+	kitem = release_kitem(klncgpu, kitem);
 
 	// zero init triggers read back only
 	memset(&(kline.cfg), 0, sizeof(kline.cfg));
@@ -533,17 +569,17 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 		kline.cfg.dev = dev;
 		kitem = SendCmdGetReply(klncgpu, &kline, size);
 		if (kitem != NULL) {
-			memcpy((void *)&(klninfo->cfg[dev]), kitem, sizeof(*kitem));
+			memcpy((void *)&(klninfo->cfg[dev]), kitem, sizeof(klninfo->cfg[dev]));
 			applog(LOG_WARNING, "Klondike config (%d: Clk: %d, T:%.0lf, C:%.0lf, F:%d)",
 				dev, K_HASHCLOCK(klninfo->cfg[dev].kline.cfg.hashclock),
 				cvtKlnToC(klninfo->cfg[dev].kline.cfg.temptarget),
 				cvtKlnToC(klninfo->cfg[dev].kline.cfg.tempcritical),
 				(int)100*klninfo->cfg[dev].kline.cfg.fantarget/256);
-			release_kitem(klncgpu, kitem);
-			kitem = NULL;
+			kitem = release_kitem(klncgpu, kitem);
 		}
 	}
 	klondike_get_stats(klncgpu);
+	klninfo->initialised = true;
 	for (dev = 0; dev <= slaves; dev++) {
 		klninfo->devinfo[dev].rangesize = ((uint64_t)1<<32) / klninfo->status[dev].kline.ws.chipcount;
 		klninfo->devinfo[dev].chipstats = calloc(klninfo->status[dev].kline.ws.chipcount*2 , sizeof(uint32_t));
@@ -559,17 +595,33 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	while (tries-- > 0) {
 		kitem = SendCmdGetReply(klncgpu, &kline, 1);
 		if (kitem) {
-			release_kitem(klncgpu, kitem);
-			kitem = NULL;
+			kitem = release_kitem(klncgpu, kitem);
 			ok = true;
 			break;
 		}
+		cgsleep_ms(50);
 	}
+	cgsleep_ms(50);
 
 	if (!ok)
 		applog(LOG_ERR, "%s%i: failed to enable", klncgpu->drv->name, klncgpu->device_id);
 
 	return ok;
+}
+
+static void control_init(struct cgpu_info *klncgpu)
+{
+	int err, interface;
+
+	if (klncgpu->usbinfo.nodev)
+		return;
+
+	interface = usb_interface(klncgpu);
+
+	err = usb_transfer(klncgpu, 0, 9, 1, interface, C_RESET);
+
+	applog(LOG_DEBUG, "%s%i: reset got err %d",
+			  klncgpu->drv->name, klncgpu->device_id, err);
 }
 
 static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
@@ -592,6 +644,8 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 		KLIST kitem;
 		int attempts = 0;
 
+		control_init(klncgpu);
+
 		while (attempts++ < 3) {
 			err = usb_write(klncgpu, "I", 2, &sent, C_REQUESTRESULTS);
 			if (err < 0 || sent != 2) {
@@ -613,10 +667,11 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 						klncgpu->device_path,
 						recd);
 			} else if (kitem.kline.hd.cmd == 'I' && kitem.kline.hd.dev == 0) {
-display_kline(klncgpu, &kitem.kline);
-				applog(LOG_DEBUG, "%s (%s) detect successful",
+				display_kline(klncgpu, &kitem.kline);
+				applog(LOG_DEBUG, "%s (%s) detect successful (%d attempt%s)",
 						  klncgpu->drv->dname,
-						  klncgpu->device_path);
+						  klncgpu->device_path,
+						  attempts, attempts == 1 ? "" : "s");
 				if (!add_cgpu(klncgpu))
 					break;
 				update_usb_stats(klncgpu);
@@ -652,7 +707,7 @@ static void klondike_identify(__maybe_unused struct cgpu_info *klncgpu)
 static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	struct work *work, *tmp;
+	struct work *work, *look, *tmp;
 	KLINE *kline = &(kitem->kline);
 	struct timeval tv_now;
 	double us_diff;
@@ -661,61 +716,70 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	applog(LOG_DEBUG, "Klondike FOUND NONCE (%02x:%08x)",
 			  kline->wr.workid, (unsigned int)nonce);
 
-	HASH_ITER(hh, klncgpu->queued_work, work, tmp) {
-		if (work->queued && (work->subid == (kline->wr.dev*256 + kline->wr.workid))) {
-
-			wr_lock(&(klninfo->stat_lock));
-			klninfo->devinfo[kline->wr.dev].noncecount++;
-			klninfo->noncecount++;
-			wr_unlock(&(klninfo->stat_lock));
-
-//			kline->wr.nonce = le32toh(kline->wr.nonce - 0xC0);
-			applog(LOG_DEBUG, "Klondike SUBMIT NONCE (%02x:%08x)",
-					  kline->wr.workid, (unsigned int)nonce);
-
-			cgtime(&tv_now);
-			bool ok = submit_nonce(klncgpu->thr[0], work, nonce);
-
-			applog(LOG_DEBUG, "Klondike chip stats %d, %08x, %d, %d",
-					  kline->wr.dev, (unsigned int)nonce,
-					  klninfo->devinfo[kline->wr.dev].rangesize,
-					  klninfo->status[kline->wr.dev].kline.ws.chipcount);
-
-			klninfo->devinfo[kline->wr.dev].chipstats[(nonce / klninfo->devinfo[kline->wr.dev].rangesize) + (ok ? 0 : klninfo->status[kline->wr.dev].kline.ws.chipcount)]++;
-
-			us_diff = us_tdiff(&tv_now, &(kitem->tv_when));
-			if (klninfo->delay_count == 0) {
-				klninfo->delay_min = us_diff;
-				klninfo->delay_max = us_diff;
-			} else {
-				if (klninfo->delay_min > us_diff)
-					klninfo->delay_min = us_diff;
-				if (klninfo->delay_max < us_diff)
-					klninfo->delay_max = us_diff;
-			}
-			klninfo->delay_count++;
-			klninfo->delay_total += us_diff;
-
-			if (klninfo->nonce_count > 0) {
-				us_diff = us_tdiff(&(kitem->tv_when), &(klninfo->tv_last_nonce_received));
-				if (klninfo->nonce_count == 1) {
-					klninfo->nonce_min = us_diff;
-					klninfo->nonce_max = us_diff;
-				} else {
-					if (klninfo->nonce_min > us_diff)
-						klninfo->nonce_min = us_diff;
-					if (klninfo->nonce_max < us_diff)
-						klninfo->nonce_max = us_diff;
-				}
-				klninfo->nonce_total += us_diff;
-			}
-			klninfo->nonce_count++;
-
-			memcpy(&(klninfo->tv_last_nonce_received), &(kitem->tv_when),
-				sizeof(klninfo->tv_last_nonce_received));
-
-			return;
+	work = NULL;
+	cgtime(&tv_now);
+	rd_lock(&(klncgpu->qlock));
+	HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
+		if (look->queued && ms_tdiff(&tv_now, &(look->tv_stamp)) < OLD_WORK_MS &&
+		    (look->subid == (kline->wr.dev*256 + kline->wr.workid))) {
+			work = look;
+			break;
 		}
+	}
+	rd_unlock(&(klncgpu->qlock));
+
+	if (work) {
+		wr_lock(&(klninfo->stat_lock));
+		klninfo->devinfo[kline->wr.dev].noncecount++;
+		klninfo->noncecount++;
+		wr_unlock(&(klninfo->stat_lock));
+
+//		kline->wr.nonce = le32toh(kline->wr.nonce - 0xC0);
+		applog(LOG_DEBUG, "Klondike SUBMIT NONCE (%02x:%08x)",
+				  kline->wr.workid, (unsigned int)nonce);
+
+		cgtime(&tv_now);
+		bool ok = submit_nonce(klncgpu->thr[0], work, nonce);
+
+		applog(LOG_DEBUG, "Klondike chip stats %d, %08x, %d, %d",
+				  kline->wr.dev, (unsigned int)nonce,
+				  klninfo->devinfo[kline->wr.dev].rangesize,
+				  klninfo->status[kline->wr.dev].kline.ws.chipcount);
+
+		klninfo->devinfo[kline->wr.dev].chipstats[(nonce / klninfo->devinfo[kline->wr.dev].rangesize) + (ok ? 0 : klninfo->status[kline->wr.dev].kline.ws.chipcount)]++;
+
+		us_diff = us_tdiff(&tv_now, &(kitem->tv_when));
+		if (klninfo->delay_count == 0) {
+			klninfo->delay_min = us_diff;
+			klninfo->delay_max = us_diff;
+		} else {
+			if (klninfo->delay_min > us_diff)
+				klninfo->delay_min = us_diff;
+			if (klninfo->delay_max < us_diff)
+				klninfo->delay_max = us_diff;
+		}
+		klninfo->delay_count++;
+		klninfo->delay_total += us_diff;
+
+		if (klninfo->nonce_count > 0) {
+			us_diff = us_tdiff(&(kitem->tv_when), &(klninfo->tv_last_nonce_received));
+			if (klninfo->nonce_count == 1) {
+				klninfo->nonce_min = us_diff;
+				klninfo->nonce_max = us_diff;
+			} else {
+				if (klninfo->nonce_min > us_diff)
+					klninfo->nonce_min = us_diff;
+				if (klninfo->nonce_max < us_diff)
+					klninfo->nonce_max = us_diff;
+			}
+			klninfo->nonce_total += us_diff;
+		}
+		klninfo->nonce_count++;
+
+		memcpy(&(klninfo->tv_last_nonce_received), &(kitem->tv_when),
+			sizeof(klninfo->tv_last_nonce_received));
+
+		return;
 	}
 
 	applog(LOG_ERR, "%s%i:%d unknown work (%02x:%08x) - ignored",
@@ -732,9 +796,9 @@ static void *klondike_get_replies(void *userdata)
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	KLIST *kitem = NULL;
 	char *hexdata;
-	int err, recd;
+	int err, recd, slaves;
 
-	applog(LOG_ERR, "Klondike listening for replies");
+	applog(LOG_DEBUG, "Klondike listening for replies");
 
 	while (klninfo->shutdown == false) {
 		if (klncgpu->usbinfo.nodev)
@@ -757,6 +821,22 @@ static void *klondike_get_replies(void *userdata)
 				free(hexdata);
 			}
 
+			// We can't check this until it's initialised
+			if (klninfo->initialised) {
+				rd_lock(&(klninfo->stat_lock));
+				slaves = klninfo->status[0].kline.ws.slavecount;
+				rd_unlock(&(klninfo->stat_lock));
+
+				if (kitem->kline.hd.dev > slaves) {
+					applog(LOG_ERR, "%s%i: reply [%c] has invalid dev=%d (max=%d) using 0",
+							klncgpu->drv->name, klncgpu->device_id,
+							(char)(kitem->kline.hd.cmd),
+							(int)(kitem->kline.hd.dev),
+							slaves);
+					kitem->kline.hd.dev = 0;
+				}
+			}
+
 			switch (kitem->kline.hd.cmd) {
 				case '=':
 					klondike_check_nonce(klncgpu, kitem);
@@ -765,6 +845,25 @@ static void *klondike_get_replies(void *userdata)
 				case 'S':
 				case 'W':
 				case 'A':
+					// We can't do/check this until it's initialised
+					if (klninfo->initialised) {
+						wr_lock(&(klninfo->stat_lock));
+						klninfo->jobque[kitem->kline.ws.dev].workqc =
+									(int)(kitem->kline.ws.workqc);
+						cgtime(&(klninfo->jobque[kitem->kline.ws.dev].last_update));
+						slaves = klninfo->status[0].kline.ws.slavecount;
+						wr_unlock(&(klninfo->stat_lock));
+
+						if (kitem->kline.ws.slavecount != slaves) {
+							applog(LOG_ERR, "%s%i: reply [%c] has a diff # of slaves=%d (curr=%d) dropping device to hotplug",
+									klncgpu->drv->name, klncgpu->device_id,
+									(char)(kitem->kline.ws.cmd),
+									(int)(kitem->kline.ws.slavecount),
+									slaves);
+							klninfo->shutdown = true;
+							break;
+						}
+					}
 				case 'E':
 					wr_lock(&(klninfo->stat_lock));
 					klninfo->errorcount += kitem->kline.ws.errorcount;
@@ -803,17 +902,20 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 	klninfo->block_seq++;
 
 	applog(LOG_DEBUG, "Klondike flushing work");
+	rd_lock(&(klninfo->stat_lock));
 	slaves = klninfo->status[0].kline.ws.slavecount;
+	rd_unlock(&(klninfo->stat_lock));
 	kline.hd.cmd = 'A';
 	for (dev = 0; dev <= slaves; dev++) {
 		kline.hd.dev = dev;
 		kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
 		if (kitem != NULL) {
 			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(*kitem));
+			memcpy((void *)&(klninfo->status[dev]),
+				kitem,
+				sizeof(klninfo->status[dev]));
 			wr_unlock(&(klninfo->stat_lock));
-			release_kitem(klncgpu, kitem);
-			kitem = NULL;
+			kitem = release_kitem(klncgpu, kitem);
 		}
 	}
 }
@@ -862,7 +964,7 @@ static void klondike_shutdown(struct thr_info *thr)
 		kline.hd.buf[0] = '0';
 		kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(1));
 		if (kitem)
-			release_kitem(klncgpu, kitem);
+			kitem = release_kitem(klncgpu, kitem);
 	}
 	klncgpu->shutdown = klninfo->shutdown = true;
 }
@@ -888,8 +990,10 @@ static void klondike_thread_enable(struct thr_info *thr)
 static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *work)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	struct work *tmp;
+	struct work *look, *tmp;
 	KLINE kline;
+	struct timeval tv_old;
+	int wque_size, wque_cleared;
 
 	if (klncgpu->usbinfo.nodev)
 		return false;
@@ -900,6 +1004,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	memcpy(kline.wt.merkle, work->data + MERKLE_OFFSET, MERKLE_BYTES);
 	kline.wt.workid = (uint8_t)(klninfo->devinfo[dev].nextworkid++ & 0xFF);
 	work->subid = dev*256 + kline.wt.workid;
+	cgtime(&work->tv_stamp);
 
 	if (opt_log_level <= LOG_DEBUG) {
 		char *hexdata = bin2hex((void *)&kline.wt, sizeof(kline.wt));
@@ -911,16 +1016,30 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	KLIST *kitem = SendCmdGetReply(klncgpu, &kline, sizeof(kline.wt));
 	if (kitem != NULL) {
 		wr_lock(&(klninfo->stat_lock));
-		memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(*kitem));
+		memcpy((void *)&(klninfo->status[dev]), kitem, sizeof(klninfo->status[dev]));
 		wr_unlock(&(klninfo->stat_lock));
-		release_kitem(klncgpu, kitem);
-		kitem = NULL;
+		kitem = release_kitem(klncgpu, kitem);
 
 		// remove old work
-		HASH_ITER(hh, klncgpu->queued_work, work, tmp) {
-		if (work->queued && (work->subid == (int)(dev*256 + ((klninfo->devinfo[dev].nextworkid-2*MAX_WORK_COUNT) & 0xFF))))
-			work_completed(klncgpu, work);
+		wque_size = 0;
+		wque_cleared = 0;
+		cgtime(&tv_old);
+		wr_lock(&klncgpu->qlock);
+		HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
+			if (look->queued) {
+				if (ms_tdiff(&tv_old, &(look->tv_stamp)) > OLD_WORK_MS) {
+					__work_completed(klncgpu, look);
+					free_work(look);
+				} else
+					wque_size++;
+			}
 		}
+		wr_unlock(&klncgpu->qlock);
+
+		wr_lock(&(klninfo->stat_lock));
+		klninfo->wque_size = wque_size;
+		klninfo->wque_cleared = wque_cleared;
+		wr_unlock(&(klninfo->stat_lock));
 		return true;
 	}
 	return false;
@@ -931,20 +1050,38 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	struct work *work = NULL;
 	int dev, queued, slaves;
+	struct timeval now;
 
+
+	cgtime(&now);
+	rd_lock(&(klninfo->stat_lock));
 	slaves = klninfo->status[0].kline.ws.slavecount;
+	for (dev = 0; dev <= slaves; dev++)
+		if (ms_tdiff(&now, &(klninfo->jobque[dev].last_update)) > LATE_UPDATE_MS) {
+			rd_unlock(&(klninfo->stat_lock));
+			applog(LOG_ERR, "%s%i: late update",
+						klncgpu->drv->name, klncgpu->device_id);
+			klondike_get_stats(klncgpu);
+			goto que;
+		}
+	rd_unlock(&(klninfo->stat_lock));
+
+que:
+
 	for (queued = 0; queued < MAX_WORK_COUNT-1; queued++)
-		for (dev = 0; dev <= slaves; dev++)
-			if (klninfo->status[dev].kline.ws.workqc <= queued) {
+		for (dev = 0; dev <= slaves; dev++) {
+			rd_lock(&(klninfo->stat_lock));
+			if (klninfo->jobque[dev].workqc <= queued) {
+				rd_unlock(&(klninfo->stat_lock));
 				if (!work)
 					work = get_queued(klncgpu);
 				if (unlikely(!work))
 					return false;
-				if (klondike_send_work(klncgpu, dev, work)) {
-					work = NULL;
-					break;
-				}
-			}
+				if (klondike_send_work(klncgpu, dev, work))
+					return false;
+			} else
+				rd_unlock(&(klninfo->stat_lock));
+		}
 
 	return true;
 }
@@ -1101,6 +1238,9 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 	else
 		avg = klninfo->nonce_total / klninfo->nonce_count;
 	root = api_add_diff(root, "KQue Nonce Avg", &avg, true);
+
+	root = api_add_int(root, "WQue Size", &(klninfo->wque_size), true);
+	root = api_add_int(root, "WQue Cleared", &(klninfo->wque_cleared), true);
 
 	rd_unlock(&(klninfo->stat_lock));
 
