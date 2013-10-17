@@ -2568,6 +2568,9 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
+	char mhsname[27];
+	sprintf(mhsname, "MHS %ds", opt_log_interval);
+	root = api_add_mhs(root, mhsname, &(total_rolling), false);
 	root = api_add_uint(root, "Found Blocks", &(found_blocks), true);
 	root = api_add_int(root, "Getworks", &(total_getworks), true);
 	root = api_add_int(root, "Accepted", &(total_accepted), true);
