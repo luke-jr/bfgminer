@@ -437,6 +437,12 @@ The list of requests - a (*) means it requires privileged access - and replies:
                                AVA+BTB opt=freq val=256 to 1024 - chip frequency
                                BTB opt=millivolts val=1000 to 1400 - corevoltage
 
+ lockstats     none           There is no reply section just the STATUS section
+                              stating the results of the request
+                              A warning reply means lock stats are not compiled
+                              into cgminer
+                              The API writes all the lock stats to stderr
+
 When you enable, disable or restart a GPU, PGA or ASC, you will also get
 Thread messages in the cgminer status window
 
@@ -490,6 +496,13 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.31 (cgminer v3.6.3)
+
+Added API command:
+ 'lockstats' - display cgminer dev lock stats if compiled in
+
+---------
 
 API V1.30 (cgminer v3.4.3)
 
