@@ -3149,51 +3149,15 @@ static void disable_curses(void)
 }
 #endif
 
-static void __kill_work(void)
+static void kill_timeout(struct thr_info *thr)
+{
+	cg_completion_timeout(&thr_info_cancel, thr, 1000);
+}
+
+static void kill_mining(void)
 {
 	struct thr_info *thr;
 	int i;
-
-	if (!successful_connect)
-		return;
-
-	applog(LOG_INFO, "Received kill message");
-
-#ifdef USE_USBUTILS
-	/* Best to get rid of it first so it doesn't
-	 * try to create any new devices */
-	if (!opt_scrypt) {
-		applog(LOG_DEBUG, "Killing off HotPlug thread");
-		thr = &control_thr[hotplug_thr_id];
-		thr_info_cancel(thr);
-	}
-#endif
-
-	applog(LOG_DEBUG, "Killing off watchpool thread");
-	/* Kill the watchpool thread */
-	thr = &control_thr[watchpool_thr_id];
-	thr_info_cancel(thr);
-
-	applog(LOG_DEBUG, "Killing off watchdog thread");
-	/* Kill the watchdog thread */
-	thr = &control_thr[watchdog_thr_id];
-	thr_info_cancel(thr);
-
-	applog(LOG_DEBUG, "Shutting down mining threads");
-	for (i = 0; i < mining_threads; i++) {
-		struct cgpu_info *cgpu;
-
-		thr = get_thread(i);
-		if (!thr)
-			continue;
-		cgpu = thr->cgpu;
-		if (!cgpu)
-			continue;
-
-		cgpu->shutdown = true;
-	}
-
-	sleep(1);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
@@ -3212,26 +3176,75 @@ static void __kill_work(void)
 			pthread_join(*pth, NULL);
 #endif
 	}
+}
+
+static void __kill_work(void)
+{
+	struct thr_info *thr;
+	int i;
+
+	if (!successful_connect)
+		return;
+
+	applog(LOG_INFO, "Received kill message");
+
+#ifdef USE_USBUTILS
+	/* Best to get rid of it first so it doesn't
+	 * try to create any new devices */
+	if (!opt_scrypt) {
+		applog(LOG_DEBUG, "Killing off HotPlug thread");
+		thr = &control_thr[hotplug_thr_id];
+		kill_timeout(thr);
+	}
+#endif
+
+	applog(LOG_DEBUG, "Killing off watchpool thread");
+	/* Kill the watchpool thread */
+	thr = &control_thr[watchpool_thr_id];
+	kill_timeout(thr);
+
+	applog(LOG_DEBUG, "Killing off watchdog thread");
+	/* Kill the watchdog thread */
+	thr = &control_thr[watchdog_thr_id];
+	kill_timeout(thr);
+
+	applog(LOG_DEBUG, "Shutting down mining threads");
+	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+
+		thr = get_thread(i);
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+
+		cgpu->shutdown = true;
+	}
+
+	sleep(1);
+
+	cg_completion_timeout(&kill_mining, NULL, 3000);
 
 	applog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
 	thr = &control_thr[stage_thr_id];
-	thr_info_cancel(thr);
+	kill_timeout(thr);
 
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
-	thr_info_cancel(thr);
+	kill_timeout(thr);
 
 #ifdef USE_USBUTILS
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
 		applog(LOG_DEBUG, "Releasing all USB devices");
-		usb_cleanup();
+		cg_completion_timeout(&usb_cleanup, NULL, 1000);
 
 		applog(LOG_DEBUG, "Killing off usbres thread");
 		thr = &control_thr[usbres_thr_id];
-		thr_info_cancel(thr);
+		kill_timeout(thr);
 	}
 #endif
 
