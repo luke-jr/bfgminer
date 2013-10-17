@@ -30,6 +30,7 @@
 #include <sha2.h>
 
 #include "deviceapi.h"
+#include "driver-bitfury.h"
 #include "libbitfury.h"
 #include "util.h"
 #include "spidevc.h"
@@ -713,7 +714,7 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	
 	if (!strcasecmp(option, "help"))
 	{
-		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-55 (slow to fast)");
+		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-%d (slow to fast)", BITFURY_MAX_OSC6_BITS);
 		return replybuf;
 	}
 	
@@ -728,7 +729,7 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	if (!strcasecmp(option, "osc6_bits"))
 	{
 		newval = bitfury->osc6_bits;
-		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, 55))
+		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, BITFURY_MAX_OSC6_BITS))
 			return replybuf;
 		
 		bitfury->osc6_bits = newval;
@@ -740,6 +741,49 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	sprintf(replybuf, "Unknown option: %s", option);
 	return replybuf;
 }
+
+#ifdef HAVE_CURSES
+void bitfury_tui_wlogprint_choices(struct cgpu_info *cgpu)
+{
+	wlogprint("[O]scillator bits ");
+}
+
+const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	char buf[0x100];
+	
+	switch (input)
+	{
+		case 'o': case 'O':
+		{
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set oscillator bits (range 1-%d; slow to fast)", BITFURY_MAX_OSC6_BITS);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid oscillator bits\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < 1 || val > BITFURY_MAX_OSC6_BITS)
+				return "Invalid oscillator bits\n";
+			
+			bitfury->osc6_bits = val;
+			bitfury->force_reinit = true;
+			
+			return "Oscillator bits changing\n";
+		}
+	}
+	return NULL;
+}
+
+void bitfury_wlogprint_status(struct cgpu_info *cgpu)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	wlogprint("Oscillator bits: %d\n", bitfury->osc6_bits);
+}
+#endif
 
 struct device_drv bitfury_drv = {
 	.dname = "bitfury_gpio",
