@@ -2485,3 +2485,44 @@ void _cgsem_destroy(cgsem_t *cgsem)
 	sem_destroy(cgsem);
 }
 #endif
+
+/* Provide a completion_timeout helper function for unreliable functions that
+ * may die due to driver issues etc that time out if the function fails and
+ * can then reliably return. */
+struct cg_completion {
+	cgsem_t cgsem;
+	void (*fn)(void *fnarg);
+	void *fnarg;
+};
+
+void *completion_thread(void *arg)
+{
+	struct cg_completion *cgc = (struct cg_completion *)arg;
+
+	pthread_detach(pthread_self());
+	cgc->fn(cgc->fnarg);
+	cgsem_post(&cgc->cgsem);
+
+	return NULL;
+}
+
+bool _cg_completion_timeout(void *fn, void *fnarg, int timeout, const char *file, const char *func, const int line)
+{
+	struct cg_completion *cgc;
+	pthread_t pthread;
+	bool ret;
+
+	cgc = malloc(sizeof(struct cg_completion));
+	if (unlikely(!cgc))
+		return false;
+	cgsem_init(&cgc->cgsem);
+	cgc->fn = fn;
+	cgc->fnarg = fnarg;
+
+	pthread_create(&pthread, NULL, completion_thread, (void *)cgc);
+
+	ret = cgsem_mswait(&cgc->cgsem, timeout);
+	if (ret)
+		free(cgc);
+	return ret;
+}
