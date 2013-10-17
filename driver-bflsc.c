@@ -818,6 +818,19 @@ reinit:
 			break;
 	}
 
+	// Set parallelization based on the getinfo() response if it is present
+	if (sc_info->sc_devs[0].chips && strlen(sc_info->sc_devs[0].chips)) {
+		if (strstr(sc_info->sc_devs[0].chips, BFLSC_DI_CHIPS_PARALLEL)) {
+			sc_info->que_noncecount = QUE_NONCECOUNT_V2;
+			sc_info->que_fld_min = QUE_FLD_MIN_V2;
+			sc_info->que_fld_max = QUE_FLD_MAX_V2;
+		} else {
+			sc_info->que_noncecount = QUE_NONCECOUNT_V1;
+			sc_info->que_fld_min = QUE_FLD_MIN_V1;
+			sc_info->que_fld_max = QUE_FLD_MAX_V1;
+		}
+	}
+
 	sc_info->scan_sleep_time = BAS_SCAN_TIME;
 	sc_info->results_sleep_time = BFLSC_RES_TIME;
 	sc_info->default_ms_work = BAS_WORK_TIME;
