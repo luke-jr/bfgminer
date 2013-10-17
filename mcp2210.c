@@ -391,26 +391,24 @@ bool mcp2210_set_cfg_gpio(struct mcp2210_device * const h)
 	return true;
 }
 
-static
-bool mcp2210_set_gpio_(struct mcp2210_device * const h, const int pin, const int byteoffset, const bool value)
-{
-	const int bit = 1 << (pin % 8);
-	const int byte = (pin / 8) + byteoffset;
-	
-	if (value)
-		h->cfg_gpio[byte] |= bit;
-	else
-		h->cfg_gpio[byte] &= ~bit;
-	
-	return mcp2210_set_cfg_gpio(h);
-}
-
 bool mcp2210_set_gpio_output(struct mcp2210_device * const h, const int pin, const enum mcp2210_gpio_value d)
 {
+	const int bit = 1 << (pin % 8);
+	const int byte = (pin / 8);
+	
+	// Set pin to GPIO mode
 	h->cfg_gpio[pin] = 0;
-	if (!mcp2210_set_gpio_(h, pin, 0xb, false))
-		return false;
-	return mcp2210_set_gpio_(h, pin, 0x9, d == MGV_HIGH);
+	
+	// Set GPIO to output mode
+	h->cfg_gpio[byte + 0xb] &= ~bit;
+	
+	// Set value for GPIO output
+	if (d == MGV_HIGH)
+		h->cfg_gpio[byte + 9] |= bit;
+	else
+		h->cfg_gpio[byte + 9] &= ~bit;
+	
+	return mcp2210_set_cfg_gpio(h);
 }
 
 enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, const int pin)
@@ -418,10 +416,15 @@ enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, 
 	hid_device * const hid = h->hid;
 	uint8_t cmd[0x40] = {0x31}, buf[0x40];
 	const int bit = 1 << (pin % 8);
-	const int byte = (pin / 8) + 4;
+	const int byte = (pin / 8);
 	
+	// Set pin to GPIO mode
 	h->cfg_gpio[pin] = 0;
-	if (!mcp2210_set_gpio_(h, pin, 0xb, true))
+	
+	// Set GPIO to input mode
+	h->cfg_gpio[byte + 0xb] |= bit;
+	
+	if (!mcp2210_set_cfg_gpio(h))
 		return MGV_ERROR;
 	
 	if (!mcp2210_io(hid, cmd, buf))
@@ -430,7 +433,7 @@ enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, 
 		return MGV_ERROR;
 	}
 	
-	if (buf[byte] & bit)
+	if (buf[byte + 4] & bit)
 		return MGV_HIGH;
 	else
 		return MGV_LOW;
