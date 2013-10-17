@@ -136,7 +136,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.30";
+static const char *APIVERSION = "1.31";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
@@ -425,6 +425,8 @@ static const char *JSON_PARAMETER = "parameter";
 
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
+#define MSG_LOCKOK 123
+#define MSG_LOCKDIS 124
 
 enum code_severity {
 	SEVERITY_ERR,
@@ -629,6 +631,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_ASCSETOK, PARAM_BOTH,	"ASC %d set OK" },
  { SEVERITY_ERR,   MSG_ASCSETERR, PARAM_BOTH,	"ASC %d set failed: %s" },
 #endif
+ { SEVERITY_SUCC,  MSG_LOCKOK,	PARAM_NONE,	"Lock stats created" },
+ { SEVERITY_WARN,  MSG_LOCKDIS,	PARAM_NONE,	"Lock stats not enabled" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -1424,6 +1428,399 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 	io_add(io_data, buf2);
 	if (isjson)
 		io_add(io_data, JSON_CLOSE);
+}
+
+#if LOCK_TRACKING
+
+#define LOCK_FMT_FFL " - called from %s %s():%d"
+
+#define LOCKMSG(fmt, ...)	fprintf(stderr, "APILOCK: " fmt "\n", ##__VA_ARGS__)
+#define LOCKMSGMORE(fmt, ...)	fprintf(stderr, "          " fmt "\n", ##__VA_ARGS__)
+#define LOCKMSGFFL(fmt, ...) fprintf(stderr, "APILOCK: " fmt LOCK_FMT_FFL "\n", ##__VA_ARGS__, file, func, linenum)
+#define LOCKMSGFLUSH() fflush(stderr)
+
+typedef struct lockstat {
+	uint64_t lock_id;
+	const char *file;
+	const char *func;
+	int linenum;
+	struct timeval tv;
+} LOCKSTAT;
+
+typedef struct lockline {
+	struct lockline *prev;
+	struct lockstat *stat;
+	struct lockline *next;
+} LOCKLINE;
+
+typedef struct lockinfo {
+	void *lock;
+	enum cglock_typ typ;
+	const char *file;
+	const char *func;
+	int linenum;
+	uint64_t gets;
+	uint64_t gots;
+	uint64_t tries;
+	uint64_t dids;
+	uint64_t didnts; // should be tries - dids
+	uint64_t unlocks;
+	LOCKSTAT lastgot;
+	LOCKLINE *lockgets;
+	LOCKLINE *locktries;
+} LOCKINFO;
+
+typedef struct locklist {
+	LOCKINFO *info;
+	struct locklist *next;
+} LOCKLIST;
+
+static uint64_t lock_id = 1;
+
+static LOCKLIST *lockhead;
+
+static void lockmsgnow()
+{
+	struct timeval now;
+	struct tm *tm;
+	time_t dt;
+
+	cgtime(&now);
+
+	dt = now.tv_sec;
+	tm = localtime(&dt);
+
+	LOCKMSG("%d-%02d-%02d %02d:%02d:%02d",
+		tm->tm_year + 1900,
+		tm->tm_mon + 1,
+		tm->tm_mday,
+		tm->tm_hour,
+		tm->tm_min,
+		tm->tm_sec);
+}
+
+static LOCKLIST *newlock(void *lock, enum cglock_typ typ, const char *file, const char *func, const int linenum)
+{
+	LOCKLIST *list;
+
+	list = calloc(1, sizeof(*list));
+	if (!list)
+		quithere(1, "OOM list");
+	list->info = calloc(1, sizeof(*(list->info)));
+	if (!list->info)
+		quithere(1, "OOM info");
+	list->next = lockhead;
+	lockhead = list;
+
+	list->info->lock = lock;
+	list->info->typ = typ;
+	list->info->file = file;
+	list->info->func = func;
+	list->info->linenum = linenum;
+
+	return list;
+}
+
+static LOCKINFO *findlock(void *lock, enum cglock_typ typ, const char *file, const char *func, const int linenum)
+{
+	LOCKLIST *look;
+
+	look = lockhead;
+	while (look) {
+		if (look->info->lock == lock)
+			break;
+		look = look->next;
+	}
+
+	if (!look)
+		look = newlock(lock, typ, file, func, linenum);
+
+	return look->info;
+}
+
+static void addgettry(LOCKINFO *info, uint64_t id, const char *file, const char *func, const int linenum, bool get)
+{
+	LOCKSTAT *stat;
+	LOCKLINE *line;
+
+	stat = calloc(1, sizeof(*stat));
+	if (!stat)
+		quithere(1, "OOM stat");
+	line = calloc(1, sizeof(*line));
+	if (!line)
+		quithere(1, "OOM line");
+
+	if (get)
+		info->gets++;
+	else
+		info->tries++;
+
+	stat->lock_id = id;
+	stat->file = file;
+	stat->func = func;
+	stat->linenum = linenum;
+	cgtime(&stat->tv);
+
+	line->stat = stat;
+
+	if (get) {
+		line->next = info->lockgets;
+		if (info->lockgets)
+			info->lockgets->prev = line;
+		info->lockgets = line;
+	} else {
+		line->next = info->locktries;
+		if (info->locktries)
+			info->locktries->prev = line;
+		info->locktries = line;
+	}
+}
+
+static void markgotdid(LOCKINFO *info, uint64_t id, const char *file, const char *func, const int linenum, bool got, int ret)
+{
+	LOCKLINE *line;
+
+	if (got)
+		info->gots++;
+	else {
+		if (ret == 0)
+			info->dids++;
+		else
+			info->didnts++;
+	}
+
+	if (got || ret == 0) {
+		info->lastgot.lock_id = id;
+		info->lastgot.file = file;
+		info->lastgot.func = func;
+		info->lastgot.linenum = linenum;
+		cgtime(&info->lastgot.tv);
+	}
+
+	if (got)
+		line = info->lockgets;
+	else
+		line = info->locktries;
+	while (line) {
+		if (line->stat->lock_id == id)
+			break;
+		line = line->next;
+	}
+
+	if (!line) {
+		lockmsgnow();
+		LOCKMSGFFL("ERROR attempt to mark a lock as '%s' that wasn't '%s' id=%"PRIu64,
+				got ? "got" : "did/didnt", got ? "get" : "try", id);
+	}
+
+	// Unlink it
+	if (line->prev)
+		line->prev->next = line->next;
+	if (line->next)
+		line->next->prev = line->prev;
+
+	if (got) {
+		if (info->lockgets == line)
+			info->lockgets = line->next;
+	} else {
+		if (info->locktries == line)
+			info->locktries = line->next;
+	}
+
+	free(line->stat);
+	free(line);
+}
+
+// Yes this uses locks also ... ;/
+static void locklock()
+{
+	if (unlikely(pthread_mutex_lock(&lockstat_lock)))
+		quithere(1, "WTF MUTEX ERROR ON LOCK! errno=%d", errno);
+}
+
+static void lockunlock()
+{
+	if (unlikely(pthread_mutex_unlock(&lockstat_lock)))
+		quithere(1, "WTF MUTEX ERROR ON UNLOCK! errno=%d", errno);
+}
+
+uint64_t api_getlock(void *lock, const char *file, const char *func, const int linenum)
+{
+	LOCKINFO *info;
+	uint64_t id;
+
+	locklock();
+
+	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
+	id = lock_id++;
+	addgettry(info, id, file, func, linenum, true);
+
+	lockunlock();
+
+	return id;
+}
+
+void api_gotlock(uint64_t id, void *lock, const char *file, const char *func, const int linenum)
+{
+	LOCKINFO *info;
+
+	locklock();
+
+	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
+	markgotdid(info, id, file, func, linenum, true, 0);
+
+	lockunlock();
+}
+
+uint64_t api_trylock(void *lock, const char *file, const char *func, const int linenum)
+{
+	LOCKINFO *info;
+	uint64_t id;
+
+	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
+	id = lock_id++;
+	addgettry(info, id, file, func, linenum, false);
+
+	return id;
+}
+
+void api_didlock(uint64_t id, int ret, void *lock, const char *file, const char *func, const int linenum)
+{
+	LOCKINFO *info;
+
+	locklock();
+
+	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
+	markgotdid(info, id, file, func, linenum, false, ret);
+
+	lockunlock();
+}
+
+void api_gunlock(void *lock, const char *file, const char *func, const int linenum)
+{
+	LOCKINFO *info;
+
+	locklock();
+
+	info = findlock(lock, CGLOCK_UNKNOWN, file, func, linenum);
+	info->unlocks++;
+
+	lockunlock();
+}
+
+void api_initlock(void *lock, enum cglock_typ typ, const char *file, const char *func, const int linenum)
+{
+	locklock();
+
+	findlock(lock, typ, file, func, linenum);
+
+	lockunlock();
+}
+
+void dsp_det(char *msg, LOCKSTAT *stat)
+{
+	struct tm *tm;
+	time_t dt;
+
+	dt = stat->tv.tv_sec;
+	tm = localtime(&dt);
+
+	LOCKMSGMORE("%s id=%"PRIu64" by %s %s():%d at %d-%02d-%02d %02d:%02d:%02d",
+			msg,
+			stat->lock_id,
+			stat->file,
+			stat->func,
+			stat->linenum,
+			tm->tm_year + 1900,
+			tm->tm_mon + 1,
+			tm->tm_mday,
+			tm->tm_hour,
+			tm->tm_min,
+			tm->tm_sec);
+}
+
+void dsp_lock(LOCKINFO *info)
+{
+	LOCKLINE *line;
+	char *status;
+
+	LOCKMSG("Lock %p created by %s %s():%d",
+		info->lock,
+		info->file,
+		info->func,
+		info->linenum);
+	LOCKMSGMORE("gets:%"PRIu64" gots:%"PRIu64" tries:%"PRIu64
+		    " dids:%"PRIu64" didnts:%"PRIu64" unlocks:%"PRIu64,
+			info->gets,
+			info->gots,
+			info->tries,
+			info->dids,
+			info->didnts,
+			info->unlocks);
+
+	if (info->gots > 0 || info->dids > 0) {
+		if (info->unlocks < info->gots + info->dids)
+			status = "Last got/did still HELD";
+		else
+			status = "Last got/did (idle)";
+
+		dsp_det(status, &(info->lastgot));
+	} else
+		LOCKMSGMORE("... unused ...");
+
+	if (info->lockgets) {
+		LOCKMSGMORE("BLOCKED gets (%"PRIu64")", info->gets - info->gots);
+		line = info->lockgets;
+		while (line) {
+			dsp_det("", line->stat);
+			line = line->next;
+		}
+	} else
+		LOCKMSGMORE("no blocked gets");
+
+	if (info->locktries) {
+		LOCKMSGMORE("BLOCKED tries (%"PRIu64")", info->tries - info->dids - info->didnts);
+		line = info->lockgets;
+		while (line) {
+			dsp_det("", line->stat);
+			line = line->next;
+		}
+	} else
+		LOCKMSGMORE("no blocked tries");
+}
+
+void show_locks()
+{
+	LOCKLIST *list;
+
+	locklock();
+
+	lockmsgnow();
+
+	list = lockhead;
+	if (!list)
+		LOCKMSG("no locks?!?\n");
+	else {
+		while (list) {
+			dsp_lock(list->info);
+			list = list->next;
+		}
+	}
+
+	LOCKMSGFLUSH();
+
+	lockunlock();
+}
+#endif
+
+static void lockstats(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
+{
+#if LOCK_TRACKING
+	show_locks();
+	message(io_data, MSG_LOCKOK, 0, NULL, isjson);
+#else
+	message(io_data, MSG_LOCKDIS, 0, NULL, isjson);
+#endif
 }
 
 static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
@@ -3872,6 +4269,7 @@ struct CMDS {
 	{ "ascset",		ascset,		true },
 #endif
 	{ "asccount",		asccount,	false },
+	{ "lockstats",		lockstats,	true },
 	{ NULL,			NULL,		false }
 };
 

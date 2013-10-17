@@ -208,6 +208,10 @@ static int new_devices;
 static int new_threads;
 int hotplug_time = 5;
 
+#if LOCK_TRACKING
+pthread_mutex_t lockstat_lock;
+#endif
+
 #ifdef USE_USBUTILS
 pthread_mutex_t cgusb_lock;
 pthread_mutex_t cgusbres_lock;
@@ -7835,6 +7839,12 @@ int main(int argc, char *argv[])
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
+
+#if LOCK_TRACKING
+	// Must be first
+	if (unlikely(pthread_mutex_init(&lockstat_lock, NULL)))
+		quithere(1, "Failed to pthread_mutex_init lockstat_lock errno=%d", errno);
+#endif
 
 	initial_args = malloc(sizeof(char *) * (argc + 1));
 	for  (i = 0; i < argc; i++)
