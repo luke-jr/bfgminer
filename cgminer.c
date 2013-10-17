@@ -7795,12 +7795,16 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {1, 0};
+	struct timeval tv_end = {0, 100000};
 
 	RenameThread("usbpoll");
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+	/* One longer poll on shut down to enable drivers to hopefully cleanly
+	 * shut down. */
+	tv_end.tv_sec = 1;
+	libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
 	return NULL;
 }
