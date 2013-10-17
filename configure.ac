@@ -590,7 +590,25 @@ AC_ARG_ENABLE([nanofury],
 if test "x$nanofury" = "xno"; then
 	true
 elif test "x$bitfury" = "xyes"; then
-	nanofury=yes
+	_found_hidapi=false
+	for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
+		PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
+			found_hidapi=true
+			break
+		],[
+			true
+		])
+	done
+	if test x$found_hidapi = xtrue; then
+		nanofury=yes
+	else
+		if test x$nanofury = xauto; then
+			nanofury=no
+			nanofury_enableaction="install hidapi"
+		else
+			AC_MSG_ERROR([Could not find hidapi, required for NanoFury support])
+		fi
+	fi
 elif test "x$nanofury" = "xyes"; then
 	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
 else
@@ -1229,7 +1247,7 @@ BFG_PRINT_LIST([Options...],[optlist])
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS"
+echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
 echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"

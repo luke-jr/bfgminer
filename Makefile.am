@@ -246,6 +246,7 @@ endif
 
 if HAS_NANOFURY
 bfgminer_SOURCES += driver-nanofury.c mcp2210.c mcp2210.h
+bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 endif
 
