@@ -1079,6 +1079,7 @@ extern enum sha256_algos opt_algo;
 extern struct strategies strategies[];
 extern enum pool_strategy pool_strategy;
 extern int opt_rotate_period;
+extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;

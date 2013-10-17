@@ -263,6 +263,7 @@ pthread_cond_t gws_cond;
 
 bool shutting_down;
 
+double total_rolling;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 static struct timeval miner_started;
@@ -6350,6 +6351,7 @@ void zero_stats(void)
 
 	cgtime(&total_tv_start);
 	miner_started = total_tv_start;
+	total_rolling = 0;
 	total_mhashes_done = 0;
 	total_getworks = 0;
 	total_accepted = 0;
@@ -7222,7 +7224,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double secs;
 	double local_secs;
 	static double local_mhashes_done = 0;
-	static double rolling = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
 	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
@@ -7297,8 +7298,8 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	cgtime(&total_tv_end);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	decay_time(&rolling, local_mhashes_done / local_secs, local_secs);
-	global_hashrate = roundl(rolling) * 1000000;
+	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
+	global_hashrate = roundl(total_rolling) * 1000000;
 
 	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +
@@ -7311,7 +7312,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_SPACED]}),
 		true, "h/s", H2B_SHORT,
 		3,
-		1e6*rolling,
+		1e6*total_rolling,
 		1e6*total_mhashes_done / total_secs,
 		utility_to_hashrate(total_diff1 * (wtotal ? (total_diff_accepted / wtotal) : 1) * 60 / total_secs));
 
