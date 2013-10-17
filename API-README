@@ -502,6 +502,9 @@ API V1.31 (cgminer v3.6.3)
 Added API command:
  'lockstats' - display cgminer dev lock stats if compiled in
 
+Modified API command:
+ 'summary' - add 'MHS %ds' (where %d is the log interval)
+
 ---------
 
 API V1.30 (cgminer v3.4.3)

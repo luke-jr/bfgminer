@@ -237,6 +237,7 @@ pthread_cond_t restart_cond;
 
 pthread_cond_t gws_cond;
 
+double total_rolling;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -4505,6 +4506,7 @@ void zero_stats(void)
 	int i;
 
 	cgtime(&total_tv_start);
+	total_rolling = 0;
 	total_mhashes_done = 0;
 	total_getworks = 0;
 	total_accepted = 0;
@@ -5003,7 +5005,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double secs;
 	double local_secs;
 	static double local_mhashes_done = 0;
-	static double rolling = 0;
 	double local_mhashes;
 	bool showlog = false;
 	char displayed_hashes[16], displayed_rolling[16];
@@ -5076,15 +5077,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	cgtime(&total_tv_end);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	decay_time(&rolling, local_mhashes_done / local_secs, local_secs);
-	global_hashrate = roundl(rolling) * 1000000;
+	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
+	global_hashrate = roundl(total_rolling) * 1000000;
 
 	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
 	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
-	dr64 = (double)rolling * 1000000ull;
+	dr64 = (double)total_rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
