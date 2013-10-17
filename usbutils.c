@@ -2274,13 +2274,13 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 #endif
 	unsigned char buf[512];
 
-	/* Prevent any further transfers during shutdown to allow the polling
-	 * thread to be shut down after all existing transfers are complete */
-	if (unlikely(cgpu->shutdown))
-		return LIBUSB_SUCCESS;
-
 	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
+
+	/* Avoid any async transfers during shutdown to allow the polling
+	 * thread to be shut down after all existing transfers are complete */
+	if (unlikely(cgpu->shutdown))
+		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
 
 	/* Limit length of transfer to the largest this descriptor supports
 	 * and leave the higher level functions to transfer more if needed. */
@@ -2733,7 +2733,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	int err, transferred;
 
 	if (unlikely(cgpu->shutdown))
-		return LIBUSB_SUCCESS;
+		return libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValue, wIndex, buffer, wLength, timeout);
 
 	init_usb_transfer(&ut);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
