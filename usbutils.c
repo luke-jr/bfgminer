@@ -2296,15 +2296,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
 	init_usb_transfer(&ut);
-#ifdef LINUX
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
-#else
-	/* All other OSes not so lucky */
-	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  transfer_callback, &ut, timeout);
-#endif
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(ut.transfer);
@@ -2740,13 +2734,8 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 				  wIndex, wLength);
 	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
-#ifdef LINUX
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-#else
-	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
-				     &ut, timeout);
-#endif
 	err = libusb_submit_transfer(ut.transfer);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
