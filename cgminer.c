@@ -6341,55 +6341,39 @@ static void hash_sole_work(struct thr_info *mythr)
 	cgpu->deven = DEV_DISABLED;
 }
 
-/* Create a hashtable of work items for devices with a queue. The device
- * driver must have a custom queue_full function or it will default to true
- * and put only one work item in the queue. Work items should not be removed
- * from this hashtable until they are no longer in use anywhere. Once a work
- * item is physically queued on the device itself, the work->queued flag
- * should be set under cgpu->qlock write lock to prevent it being dereferenced
- * while still in use. */
+/* Put a new unqueued work item in cgpu->unqueued_work under cgpu->qlock till
+ * the driver tells us it's full so that it may extract the work item using
+ * the get_queued() function which adds it to the hashtable on
+ * cgpu->queued_work. */
 static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
 {
 	do {
-		bool need_work;
-
-		rd_lock(&cgpu->qlock);
-		need_work = (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count);
-		rd_unlock(&cgpu->qlock);
-
-		if (need_work) {
-			struct work *work = get_work(mythr, thr_id);
-
-			wr_lock(&cgpu->qlock);
-			HASH_ADD_INT(cgpu->queued_work, id, work);
-			wr_unlock(&cgpu->qlock);
-		}
+		wr_lock(&cgpu->qlock);
+		if (!cgpu->unqueued_work)
+			cgpu->unqueued_work = get_work(mythr, thr_id);
+		wr_unlock(&cgpu->qlock);
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
 	} while (!drv->queue_full(cgpu));
 }
 
-/* This function is for retrieving one work item from the queued hashtable of
- * available work items that are not yet physically on a device (which is
- * flagged with the work->queued bool). Code using this function must be able
- * to handle NULL as a return which implies there is no work available. */
+/* This function is for retrieving one work item from the unqueued pointer and
+ * adding it to the hashtable of queued work. Code using this function must be
+ * able to handle NULL as a return which implies there is no work available. */
 struct work *get_queued(struct cgpu_info *cgpu)
 {
-	struct work *work, *tmp, *ret = NULL;
+	struct work *work = NULL;
 
 	wr_lock(&cgpu->qlock);
-	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
-		if (!work->queued) {
-			work->queued = true;
-			cgpu->queued_count++;
-			ret = work;
-			break;
-		}
+	if (cgpu->unqueued_work) {
+		work = cgpu->unqueued_work;
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		cgpu->unqueued_work = NULL;
 	}
 	wr_unlock(&cgpu->qlock);
 
-	return ret;
+	return work;
 }
 
 /* This function is for finding an already queued work item in the
@@ -6402,8 +6386,7 @@ struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t mid
 	struct work *work, *tmp, *ret = NULL;
 
 	HASH_ITER(hh, que, work, tmp) {
-		if (work->queued &&
-		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		if (memcmp(work->midstate, midstate, midstatelen) == 0 &&
 		    memcmp(work->data + offset, data, datalen) == 0) {
 			ret = work;
 			break;
@@ -6443,8 +6426,7 @@ struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate
 
 void __work_completed(struct cgpu_info *cgpu, struct work *work)
 {
-	if (work->queued)
-		cgpu->queued_count--;
+	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
 /* This function should be used by queued device drivers when they're sure
@@ -6475,23 +6457,17 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 
 static void flush_queue(struct cgpu_info *cgpu)
 {
-	struct work *work, *tmp;
-	int discarded = 0;
+	struct work *work = NULL;
 
 	wr_lock(&cgpu->qlock);
-	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
-		/* Can only discard the work items if they're not physically
-		 * queued on the device. */
-		if (!work->queued) {
-			HASH_DEL(cgpu->queued_work, work);
-			discard_work(work);
-			discarded++;
-		}
-	}
+	work = cgpu->unqueued_work;
+	cgpu->unqueued_work = NULL;
 	wr_unlock(&cgpu->qlock);
 
-	if (discarded)
-		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+	if (work) {
+		free_work(work);
+		applog(LOG_DEBUG, "Discarded queued work item");
+	}
 }
 
 /* This version of hash work is for devices that are fast enough to always

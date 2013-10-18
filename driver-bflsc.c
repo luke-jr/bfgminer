@@ -948,7 +948,7 @@ static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 	rd_lock(&bflsc->qlock);
 
 	HASH_ITER(hh, bflsc->queued_work, work, tmp) {
-		if (work->queued && work->subid == dev) {
+		if (work->subid == dev) {
 			// devflag is used to flag stale work
 			work->devflag = true;
 			did = true;

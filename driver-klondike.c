@@ -720,7 +720,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	cgtime(&tv_now);
 	rd_lock(&(klncgpu->qlock));
 	HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
-		if (look->queued && ms_tdiff(&tv_now, &(look->tv_stamp)) < OLD_WORK_MS &&
+		if (ms_tdiff(&tv_now, &(look->tv_stamp)) < OLD_WORK_MS &&
 		    (look->subid == (kline->wr.dev*256 + kline->wr.workid))) {
 			work = look;
 			break;
@@ -1026,13 +1026,11 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 		cgtime(&tv_old);
 		wr_lock(&klncgpu->qlock);
 		HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
-			if (look->queued) {
-				if (ms_tdiff(&tv_old, &(look->tv_stamp)) > OLD_WORK_MS) {
-					__work_completed(klncgpu, look);
-					free_work(look);
-				} else
-					wque_size++;
-			}
+			if (ms_tdiff(&tv_old, &(look->tv_stamp)) > OLD_WORK_MS) {
+				__work_completed(klncgpu, look);
+				free_work(look);
+			} else
+				wque_size++;
 		}
 		wr_unlock(&klncgpu->qlock);
 
