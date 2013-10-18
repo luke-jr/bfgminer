@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2012 Petri Lehtinen <petri@digip.org>
+ * Copyright (c) 2009-2013 Petri Lehtinen <petri@digip.org>
  * Copyright (c) 2011-2012 Basile Starynkevitch <basile@starynkevitch.net>
  *
  * Jansson is free software; you can redistribute it and/or modify it
@@ -35,12 +35,17 @@ void jsonp_free(void *ptr)
 char *jsonp_strdup(const char *str)
 {
     char *new_str;
+    size_t len;
 
-    new_str = jsonp_malloc(strlen(str) + 1);
+    len = strlen(str);
+    if(len == (size_t)-1)
+        return NULL;
+
+    new_str = jsonp_malloc(len + 1);
     if(!new_str)
         return NULL;
 
-    strcpy(new_str, str);
+    memcpy(new_str, str, len + 1);
     return new_str;
 }
 

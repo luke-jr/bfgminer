@@ -135,6 +135,7 @@ void _cgsem_post(cgsem_t *cgsem, const char *file, const char *func, const int l
 void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int line);
 int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, const int line);
 void _cgsem_destroy(cgsem_t *cgsem);
+bool cg_completion_timeout(void *fn, void *fnarg, int timeout);
 
 #define cgsem_init(_sem) _cgsem_init(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_post(_sem) _cgsem_post(_sem, __FILE__, __func__, __LINE__)

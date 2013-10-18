@@ -212,6 +212,10 @@ static int new_devices;
 static int new_threads;
 int hotplug_time = 5;
 
+#if LOCK_TRACKING
+pthread_mutex_t lockstat_lock;
+#endif
+
 #ifdef USE_USBUTILS
 pthread_mutex_t cgusb_lock;
 pthread_mutex_t cgusbres_lock;
@@ -237,6 +241,7 @@ pthread_cond_t restart_cond;
 
 pthread_cond_t gws_cond;
 
+double total_rolling;
 double total_mhashes_done;
 static struct timeval total_tv_start, total_tv_end;
 
@@ -1249,7 +1254,10 @@ static struct opt_table opt_config_table[] = {
 		     "Set avalon target temperature"),
 	OPT_WITH_ARG("--bitburner-voltage",
 		     opt_set_intval, NULL, &opt_bitburner_core_voltage,
-		     "Set BitBurner core voltage, in millivolts"),
+		     "Set BitBurner (Avalon) core voltage, in millivolts"),
+	OPT_WITH_ARG("--bitburner-fury-voltage",
+		     opt_set_intval, NULL, &opt_bitburner_fury_core_voltage,
+		     "Set BitBurner Fury core voltage, in millivolts"),
 #endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
@@ -3148,51 +3156,15 @@ static void disable_curses(void)
 }
 #endif
 
-static void __kill_work(void)
+static void kill_timeout(struct thr_info *thr)
+{
+	cg_completion_timeout(&thr_info_cancel, thr, 1000);
+}
+
+static void kill_mining(void)
 {
 	struct thr_info *thr;
 	int i;
-
-	if (!successful_connect)
-		return;
-
-	applog(LOG_INFO, "Received kill message");
-
-#ifdef USE_USBUTILS
-	/* Best to get rid of it first so it doesn't
-	 * try to create any new devices */
-	if (!opt_scrypt) {
-		applog(LOG_DEBUG, "Killing off HotPlug thread");
-		thr = &control_thr[hotplug_thr_id];
-		thr_info_cancel(thr);
-	}
-#endif
-
-	applog(LOG_DEBUG, "Killing off watchpool thread");
-	/* Kill the watchpool thread */
-	thr = &control_thr[watchpool_thr_id];
-	thr_info_cancel(thr);
-
-	applog(LOG_DEBUG, "Killing off watchdog thread");
-	/* Kill the watchdog thread */
-	thr = &control_thr[watchdog_thr_id];
-	thr_info_cancel(thr);
-
-	applog(LOG_DEBUG, "Shutting down mining threads");
-	for (i = 0; i < mining_threads; i++) {
-		struct cgpu_info *cgpu;
-
-		thr = get_thread(i);
-		if (!thr)
-			continue;
-		cgpu = thr->cgpu;
-		if (!cgpu)
-			continue;
-
-		cgpu->shutdown = true;
-	}
-
-	sleep(1);
 
 	applog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
@@ -3211,26 +3183,75 @@ static void __kill_work(void)
 			pthread_join(*pth, NULL);
 #endif
 	}
+}
+
+static void __kill_work(void)
+{
+	struct thr_info *thr;
+	int i;
+
+	if (!successful_connect)
+		return;
+
+	applog(LOG_INFO, "Received kill message");
+
+#ifdef USE_USBUTILS
+	/* Best to get rid of it first so it doesn't
+	 * try to create any new devices */
+	if (!opt_scrypt) {
+		applog(LOG_DEBUG, "Killing off HotPlug thread");
+		thr = &control_thr[hotplug_thr_id];
+		kill_timeout(thr);
+	}
+#endif
+
+	applog(LOG_DEBUG, "Killing off watchpool thread");
+	/* Kill the watchpool thread */
+	thr = &control_thr[watchpool_thr_id];
+	kill_timeout(thr);
+
+	applog(LOG_DEBUG, "Killing off watchdog thread");
+	/* Kill the watchdog thread */
+	thr = &control_thr[watchdog_thr_id];
+	kill_timeout(thr);
+
+	applog(LOG_DEBUG, "Shutting down mining threads");
+	for (i = 0; i < mining_threads; i++) {
+		struct cgpu_info *cgpu;
+
+		thr = get_thread(i);
+		if (!thr)
+			continue;
+		cgpu = thr->cgpu;
+		if (!cgpu)
+			continue;
+
+		cgpu->shutdown = true;
+	}
+
+	sleep(1);
+
+	cg_completion_timeout(&kill_mining, NULL, 3000);
 
 	applog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
 	thr = &control_thr[stage_thr_id];
-	thr_info_cancel(thr);
+	kill_timeout(thr);
 
 	applog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
-	thr_info_cancel(thr);
+	kill_timeout(thr);
 
 #ifdef USE_USBUTILS
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
 		applog(LOG_DEBUG, "Releasing all USB devices");
-		usb_cleanup();
+		cg_completion_timeout(&usb_cleanup, NULL, 1000);
 
 		applog(LOG_DEBUG, "Killing off usbres thread");
 		thr = &control_thr[usbres_thr_id];
-		thr_info_cancel(thr);
+		kill_timeout(thr);
 	}
 #endif
 
@@ -4505,6 +4526,7 @@ void zero_stats(void)
 	int i;
 
 	cgtime(&total_tv_start);
+	total_rolling = 0;
 	total_mhashes_done = 0;
 	total_getworks = 0;
 	total_accepted = 0;
@@ -5003,7 +5025,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	double secs;
 	double local_secs;
 	static double local_mhashes_done = 0;
-	static double rolling = 0;
 	double local_mhashes;
 	bool showlog = false;
 	char displayed_hashes[16], displayed_rolling[16];
@@ -5076,15 +5097,15 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	cgtime(&total_tv_end);
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
-	decay_time(&rolling, local_mhashes_done / local_secs, local_secs);
-	global_hashrate = roundl(rolling) * 1000000;
+	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
+	global_hashrate = roundl(total_rolling) * 1000000;
 
 	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +
 		((double)total_diff.tv_usec / 1000000.0);
 
 	dh64 = (double)total_mhashes_done / total_secs * 1000000ull;
-	dr64 = (double)rolling * 1000000ull;
+	dr64 = (double)total_rolling * 1000000ull;
 	suffix_string(dh64, displayed_hashes, sizeof(displayed_hashes), 4);
 	suffix_string(dr64, displayed_rolling, sizeof(displayed_rolling), 4);
 
@@ -5992,6 +6013,7 @@ struct work *get_work(struct thr_info *thr, const int thr_id)
 	work->thr_id = thr_id;
 	thread_reportin(thr);
 	work->mined = true;
+	work->device_diff = MIN(thr->cgpu->drv->max_diff, work->work_difficulty);
 	return work;
 }
 
@@ -6326,56 +6348,39 @@ static void hash_sole_work(struct thr_info *mythr)
 	cgpu->deven = DEV_DISABLED;
 }
 
-/* Create a hashtable of work items for devices with a queue. The device
- * driver must have a custom queue_full function or it will default to true
- * and put only one work item in the queue. Work items should not be removed
- * from this hashtable until they are no longer in use anywhere. Once a work
- * item is physically queued on the device itself, the work->queued flag
- * should be set under cgpu->qlock write lock to prevent it being dereferenced
- * while still in use. */
+/* Put a new unqueued work item in cgpu->unqueued_work under cgpu->qlock till
+ * the driver tells us it's full so that it may extract the work item using
+ * the get_queued() function which adds it to the hashtable on
+ * cgpu->queued_work. */
 static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct device_drv *drv, const int thr_id)
 {
 	do {
-		bool need_work;
-
-		rd_lock(&cgpu->qlock);
-		need_work = (HASH_COUNT(cgpu->queued_work) == cgpu->queued_count);
-		rd_unlock(&cgpu->qlock);
-
-		if (need_work) {
-			struct work *work = get_work(mythr, thr_id);
-
-			work->device_diff = MIN(drv->max_diff, work->work_difficulty);
-			wr_lock(&cgpu->qlock);
-			HASH_ADD_INT(cgpu->queued_work, id, work);
-			wr_unlock(&cgpu->qlock);
-		}
+		wr_lock(&cgpu->qlock);
+		if (!cgpu->unqueued_work)
+			cgpu->unqueued_work = get_work(mythr, thr_id);
+		wr_unlock(&cgpu->qlock);
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
 	} while (!drv->queue_full(cgpu));
 }
 
-/* This function is for retrieving one work item from the queued hashtable of
- * available work items that are not yet physically on a device (which is
- * flagged with the work->queued bool). Code using this function must be able
- * to handle NULL as a return which implies there is no work available. */
+/* This function is for retrieving one work item from the unqueued pointer and
+ * adding it to the hashtable of queued work. Code using this function must be
+ * able to handle NULL as a return which implies there is no work available. */
 struct work *get_queued(struct cgpu_info *cgpu)
 {
-	struct work *work, *tmp, *ret = NULL;
+	struct work *work = NULL;
 
 	wr_lock(&cgpu->qlock);
-	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
-		if (!work->queued) {
-			work->queued = true;
-			cgpu->queued_count++;
-			ret = work;
-			break;
-		}
+	if (cgpu->unqueued_work) {
+		work = cgpu->unqueued_work;
+		HASH_ADD_INT(cgpu->queued_work, id, work);
+		cgpu->unqueued_work = NULL;
 	}
 	wr_unlock(&cgpu->qlock);
 
-	return ret;
+	return work;
 }
 
 /* This function is for finding an already queued work item in the
@@ -6388,8 +6393,7 @@ struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t mid
 	struct work *work, *tmp, *ret = NULL;
 
 	HASH_ITER(hh, que, work, tmp) {
-		if (work->queued &&
-		    memcmp(work->midstate, midstate, midstatelen) == 0 &&
+		if (memcmp(work->midstate, midstate, midstatelen) == 0 &&
 		    memcmp(work->data + offset, data, datalen) == 0) {
 			ret = work;
 			break;
@@ -6427,10 +6431,9 @@ struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate
 	return ret;
 }
 
-static void __work_completed(struct cgpu_info *cgpu, struct work *work)
+void __work_completed(struct cgpu_info *cgpu, struct work *work)
 {
-	if (work->queued)
-		cgpu->queued_count--;
+	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
 /* This function should be used by queued device drivers when they're sure
@@ -6461,23 +6464,17 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 
 static void flush_queue(struct cgpu_info *cgpu)
 {
-	struct work *work, *tmp;
-	int discarded = 0;
+	struct work *work = NULL;
 
 	wr_lock(&cgpu->qlock);
-	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
-		/* Can only discard the work items if they're not physically
-		 * queued on the device. */
-		if (!work->queued) {
-			HASH_DEL(cgpu->queued_work, work);
-			discard_work(work);
-			discarded++;
-		}
-	}
+	work = cgpu->unqueued_work;
+	cgpu->unqueued_work = NULL;
 	wr_unlock(&cgpu->qlock);
 
-	if (discarded)
-		applog(LOG_DEBUG, "Discarded %d queued work items", discarded);
+	if (work) {
+		free_work(work);
+		applog(LOG_DEBUG, "Discarded queued work item");
+	}
 }
 
 /* This version of hash work is for devices that are fast enough to always
@@ -7799,12 +7796,16 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {0, 200000};
+	struct timeval tv_end = {0, 100000};
 
 	RenameThread("usbpoll");
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+	/* One longer poll on shut down to enable drivers to hopefully cleanly
+	 * shut down. */
+	tv_end.tv_sec = 1;
+	libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
 	return NULL;
 }
@@ -7839,6 +7840,12 @@ int main(int argc, char *argv[])
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
 		quit(1, "Failed to curl_global_init");
+
+#if LOCK_TRACKING
+	// Must be first
+	if (unlikely(pthread_mutex_init(&lockstat_lock, NULL)))
+		quithere(1, "Failed to pthread_mutex_init lockstat_lock errno=%d", errno);
+#endif
 
 	initial_args = malloc(sizeof(char *) * (argc + 1));
 	for  (i = 0; i < argc; i++)

@@ -645,18 +645,23 @@ static bool getinfo(struct cgpu_info *bflsc, int dev)
 		else if (strstr(firstname, BFLSC_DI_XLINKPRESENT))
 			sc_dev.xlink_present = strdup(fields[0]);
 		else if (strstr(firstname, BFLSC_DI_DEVICESINCHAIN)) {
-			sc_info->sc_count = atoi(fields[0]);
+			if (fields[0][0] == '0' ||
+			    (fields[0][0] == ' ' && fields[0][1] == '0'))
+				sc_info->sc_count = 1;
+			else
+				sc_info->sc_count = atoi(fields[0]);
 			if (sc_info->sc_count < 1 || sc_info->sc_count > 30) {
 				tmp = str_text(items[i]);
 				applogsiz(LOG_WARNING, BFLSC_APPLOGSIZ,
-						"%s detect (%s) invalid s-link count: '%s'",
+						"%s detect (%s) invalid x-link count: '%s'",
 						bflsc->drv->dname, bflsc->device_path, tmp);
 				free(tmp);
 				goto mata;
 			}
+		}
 		else if (strstr(firstname, BFLSC_DI_CHIPS))
 			sc_dev.chips = strdup(fields[0]);
-		}
+
 		freebreakdown(&count, &firstname, &fields);
 	}
 
@@ -813,6 +818,19 @@ reinit:
 			break;
 	}
 
+	// Set parallelization based on the getinfo() response if it is present
+	if (sc_info->sc_devs[0].chips && strlen(sc_info->sc_devs[0].chips)) {
+		if (strstr(sc_info->sc_devs[0].chips, BFLSC_DI_CHIPS_PARALLEL)) {
+			sc_info->que_noncecount = QUE_NONCECOUNT_V2;
+			sc_info->que_fld_min = QUE_FLD_MIN_V2;
+			sc_info->que_fld_max = QUE_FLD_MAX_V2;
+		} else {
+			sc_info->que_noncecount = QUE_NONCECOUNT_V1;
+			sc_info->que_fld_min = QUE_FLD_MIN_V1;
+			sc_info->que_fld_max = QUE_FLD_MAX_V1;
+		}
+	}
+
 	sc_info->scan_sleep_time = BAS_SCAN_TIME;
 	sc_info->results_sleep_time = BFLSC_RES_TIME;
 	sc_info->default_ms_work = BAS_WORK_TIME;
@@ -930,7 +948,7 @@ static void flush_one_dev(struct cgpu_info *bflsc, int dev)
 	rd_lock(&bflsc->qlock);
 
 	HASH_ITER(hh, bflsc->queued_work, work, tmp) {
-		if (work->queued && work->subid == dev) {
+		if (work->subid == dev) {
 			// devflag is used to flag stale work
 			work->devflag = true;
 			did = true;

@@ -1116,8 +1116,7 @@ static void cmr2_commands(struct cgpu_info *icarus)
 	}
 }
 
-static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
-				__maybe_unused int64_t max_nonce)
+static int64_t icarus_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
@@ -1126,12 +1125,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct ICARUS_WORK workdata;
 	char *ob_hex;
 	uint32_t nonce;
-	int64_t hash_count;
+	int64_t hash_count = 0;
 	struct timeval tv_start, tv_finish, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
 	double Ti, Xi;
 	int curr_hw_errors, i;
 	bool was_hw_error;
+	struct work *work;
 
 	struct ICARUS_HISTORY *history0, *history;
 	int count;
@@ -1148,6 +1148,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
+	work = get_work(thr, thr->id);
 	memset((void *)(&workdata), 0, sizeof(workdata));
 	memcpy(&(workdata.midstate), work->midstate, ICARUS_MIDSTATE_SIZE);
 	memcpy(&(workdata.work), work->data + ICARUS_WORK_DATA_OFFSET, ICARUS_WORK_SIZE);
@@ -1166,7 +1167,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				icarus->drv->name, icarus->device_id, err, amount);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		icarus_initialise(icarus, info->baud);
-		return 0;
+		goto out;
 	}
 
 	if (opt_debug) {
@@ -1180,7 +1181,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	ret = icarus_get_nonce(icarus, nonce_bin, &tv_start, &tv_finish, thr, info->read_time);
 	if (ret == ICA_NONCE_ERROR)
-		return 0;
+		goto out;
 
 	work->blk.nonce = 0xffffffff;
 
@@ -1203,7 +1204,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				(long unsigned int)estimate_hashes,
 				elapsed.tv_sec, elapsed.tv_usec);
 
-		return estimate_hashes;
+		hash_count = estimate_hashes;
+		goto out;
 	}
 
 	memcpy((char *)&nonce, nonce_bin, sizeof(nonce_bin));
@@ -1343,7 +1345,8 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		timersub(&tv_history_finish, &tv_history_start, &tv_history_finish);
 		timeradd(&tv_history_finish, &(info->history_time), &(info->history_time));
 	}
-
+out:
+	free_work(work);
 	return hash_count;
 }
 
@@ -1447,11 +1450,12 @@ struct device_drv icarus_drv = {
 	.dname = "Icarus",
 	.name = "ICA",
 	.drv_detect = icarus_detect,
+	.hash_work = &hash_driver_work,
 	.get_api_stats = icarus_api_stats,
 	.get_statline_before = icarus_statline_before,
 	.set_device = icarus_set,
 	.identify_device = icarus_identify,
 	.thread_prepare = icarus_prepare,
-	.scanhash = icarus_scanhash,
+	.scanwork = icarus_scanwork,
 	.thread_shutdown = icarus_shutdown,
 };

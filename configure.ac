@@ -1,8 +1,8 @@
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [3])
-m4_define([v_min], [5])
-m4_define([v_mic], [0])
+m4_define([v_min], [6])
+m4_define([v_mic], [3])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -359,7 +359,8 @@ else
 	LIBUSB_LIBS=""
 fi
 
-JANSSON_LIBS="compat/jansson/libjansson.a"
+AC_CONFIG_SUBDIRS([compat/jansson-2.5])
+JANSSON_LIBS="compat/jansson-2.5/src/.libs/libjansson.a"
 
 PKG_PROG_PKG_CONFIG()
 
@@ -466,7 +467,6 @@ AC_SUBST(ADL_CPPFLAGS)
 AC_CONFIG_FILES([
 	Makefile
 	compat/Makefile
-	compat/jansson/Makefile
 	ccan/Makefile
 	lib/Makefile
 	])

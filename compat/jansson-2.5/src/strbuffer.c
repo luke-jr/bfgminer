@@ -1,11 +1,14 @@
 /*
- * Copyright (c) 2009-2012 Petri Lehtinen <petri@digip.org>
+ * Copyright (c) 2009-2013 Petri Lehtinen <petri@digip.org>
  *
  * Jansson is free software; you can redistribute it and/or modify
  * it under the terms of the MIT license. See LICENSE for details.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include "jansson_private.h"
@@ -31,7 +34,9 @@ int strbuffer_init(strbuffer_t *strbuff)
 
 void strbuffer_close(strbuffer_t *strbuff)
 {
-    jsonp_free(strbuff->value);
+    if(strbuff->value)
+        jsonp_free(strbuff->value);
+
     strbuff->size = 0;
     strbuff->length = 0;
     strbuff->value = NULL;
@@ -51,7 +56,7 @@ const char *strbuffer_value(const strbuffer_t *strbuff)
 char *strbuffer_steal_value(strbuffer_t *strbuff)
 {
     char *result = strbuff->value;
-    strbuffer_init(strbuff);
+    strbuff->value = NULL;
     return result;
 }
 

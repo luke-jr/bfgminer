@@ -1,11 +1,14 @@
 /*
- * Copyright (c) 2009-2012 Petri Lehtinen <petri@digip.org>
+ * Copyright (c) 2009-2013 Petri Lehtinen <petri@digip.org>
  *
  * Jansson is free software; you can redistribute it and/or modify
  * it under the terms of the MIT license. See LICENSE for details.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,7 +41,7 @@ static int dump_to_file(const char *buffer, size_t size, void *data)
 }
 
 /* 32 spaces (the maximum indentation size) */
-static char whitespace[] = "                                ";
+static const char whitespace[] = "                                ";
 
 static int dump_indent(size_t flags, int depth, int space, json_dump_callback_t dump, void *data)
 {
@@ -171,6 +174,9 @@ static int object_key_compare_serials(const void *key1, const void *key2)
 static int do_dump(const json_t *json, size_t flags, int depth,
                    json_dump_callback_t dump, void *data)
 {
+    if(!json)
+        return -1;
+
     switch(json_typeof(json)) {
         case JSON_NULL:
             return dump("null", 4, data);
