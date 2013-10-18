@@ -24,6 +24,7 @@
 
 /* How many hardware errors in a row before disabling the core */
 #define HW_ERR_LIMIT		10
+#define DISA_ERR_LIMIT		3
 
 #define MAX_ACTIVE_WORKS	(192 * 2 * 6 * 2)
 
@@ -148,6 +149,8 @@ struct knc_state {
 	struct active_work active_fifo[KNC_ACTIVE_BUFFER_SIZE];
 
 	uint8_t hwerrs[MAX_ASICS * 256];
+	uint8_t disa_cnt[MAX_ASICS * 256];
+	uint32_t hwerr_work_id[MAX_ASICS * 256];
 	int read_d, write_d;
 #define KNC_DISA_CORES_SIZE	(MAX_ASICS * 256)
 	struct core_disa_data disa_cores_fifo[KNC_DISA_CORES_SIZE];
@@ -461,10 +464,15 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 					   rxbuf->responses[i].core;
 				if (submit_nonce(thr, work,
 						 rxbuf->responses[i].nonce)) {
-					if (cidx < sizeof(knc->hwerrs))
-						knc->hwerrs[cidx] = 0;
-				} else  {
 					if (cidx < sizeof(knc->hwerrs)) {
+						knc->hwerrs[cidx] = 0;
+						knc->disa_cnt[cidx] = 0;
+						knc->hwerr_work_id[cidx] = 0xFFFFFFFF;
+					}
+				} else  {
+					if ((cidx < sizeof(knc->hwerrs)) &&
+					    (knc->hwerr_work_id[cidx] != rxbuf->responses[i].work_id)) {
+						knc->hwerr_work_id[cidx] = rxbuf->responses[i].work_id;
 						if (++(knc->hwerrs[cidx]) >= HW_ERR_LIMIT) {
 						    struct core_disa_data *core;
 						    core = &knc->disa_cores_fifo[knc->write_d];
@@ -472,10 +480,15 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						    core->asic = rxbuf->responses[i].asic;
 						    core->core = rxbuf->responses[i].core;
 						    disable_core(core->asic, core->core);
-						    applog(LOG_WARNING,
+						    if (++(knc->disa_cnt[cidx]) >= DISA_ERR_LIMIT) {
+							    applog(LOG_WARNING,
+			"KnC: core %u-%u was disabled permanently", core->asic, core->core);
+						    } else {
+							    applog(LOG_WARNING,
 			"KnC: core %u-%u was disabled due to %u HW errors in a row",
-							   core->asic, core->core, HW_ERR_LIMIT);
-						    knc_disa_cores_fifo_inc_idx(&knc->write_d);
+								   core->asic, core->core, HW_ERR_LIMIT);
+							    knc_disa_cores_fifo_inc_idx(&knc->write_d);
+						    }
 						}
 					}
 				};
@@ -546,6 +559,7 @@ static bool knc_detect_one(struct spidev_context *ctx)
 	knc->read_d = 0;
 	knc->write_d = 1;
 	knc->salt = rand();
+	memset(knc->hwerr_work_id, 0xFF, sizeof(knc->hwerr_work_id));
 
 	_internal_knc_flush_fpga(knc);
 
