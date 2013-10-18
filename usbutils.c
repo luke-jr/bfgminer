@@ -933,7 +933,7 @@ void usb_all(int level)
 		for (i = 0; i < count; i++)
 			usb_full(&j, list[i], &buf, &off, &len, level);
 
-		_applog(LOG_WARNING, buf);
+		_applog(LOG_WARNING, buf, false);
 
 		free(buf);
 
