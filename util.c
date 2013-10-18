@@ -2410,7 +2410,7 @@ void _cgsem_wait(cgsem_t *cgsem, const char *file, const char *func, const int l
 		applog(LOG_WARNING, "Failed to read errno=%d" IN_FMT_FFL, errno, file, func, line);
 }
 
-void _cgsem_destroy(cgsem_t *cgsem)
+void cgsem_destroy(cgsem_t *cgsem)
 {
 	close(cgsem->pipefd[1]);
 	close(cgsem->pipefd[0]);
@@ -2480,7 +2480,7 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 	return 0;
 }
 
-void _cgsem_destroy(cgsem_t *cgsem)
+void cgsem_destroy(cgsem_t *cgsem)
 {
 	sem_destroy(cgsem);
 }
@@ -2499,7 +2499,7 @@ void *completion_thread(void *arg)
 {
 	struct cg_completion *cgc = (struct cg_completion *)arg;
 
-	pthread_detach(pthread_self());
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 	cgc->fn(cgc->fnarg);
 	cgsem_post(&cgc->cgsem);
 
@@ -2522,7 +2522,10 @@ bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
 	pthread_create(&pthread, NULL, completion_thread, (void *)cgc);
 
 	ret = cgsem_mswait(&cgc->cgsem, timeout);
-	if (!ret)
+	if (!ret) {
+		pthread_join(pthread, NULL);
 		free(cgc);
+	} else
+		pthread_cancel(pthread);
 	return !ret;
 }
