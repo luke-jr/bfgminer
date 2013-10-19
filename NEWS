@@ -1,3 +1,28 @@
+Version 3.6.4 - 18th October 2013
+
+- Fixing the memory leak for remaining semaphores means we can go back to using
+async transfers on other OSes with our own timeout management again.
+- Use the forcelog function on shutdown to cope with indeterminate console lock
+states due to killing of threads.
+- Add a forcelog variant of applog which invalidates any console lock to force
+output.
+- Send pthread_cancel to failed completion_timeout that has timed out.
+- Simplify queued hashtable by storing unqueued work separately in a single
+pointer.
+- bflsc use getinfo chip parallelization if it is present
+- bflsc - fix brackets so [Chips] isn't always null
+- Remove unused variables.
+- Use cgcompletion timeouts for the unreliable shutdown functions on kill_work.
+- Fix cgcompletion return code and free on successful completion.
+- Provide a cg_completion_timeout helper function for unreliable functions that
+takes arbitrary functions and parameters and reliably returns.
+- Perform sync transfers on shutdown to allow final transfers to complete.
+- Destroy cgsems used after transfers to not leave open files on osx.
+- klondike rewrite work control
+- allow __work_complete() access
+- miner.h allow devices to tv_stamp work
+
+
 Version 3.6.3 - 17th October 2013
 
 - API add 'MHS %ds' to 'summary'

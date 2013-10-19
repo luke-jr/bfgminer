@@ -968,7 +968,7 @@ void usb_all(int level)
 		for (i = 0; i < count; i++)
 			usb_full(&j, list[i], &buf, &off, &len, level);
 
-		_applog(LOG_WARNING, buf);
+		_applog(LOG_WARNING, buf, false);
 
 		free(buf);
 
@@ -2267,6 +2267,33 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 	cgsem_post(&ut->cgsem);
 }
 
+static int usb_transfer_toerr(int ret)
+{
+	switch (ret) {
+		default:
+		case LIBUSB_TRANSFER_COMPLETED:
+			ret = LIBUSB_SUCCESS;
+			break;
+		case LIBUSB_TRANSFER_ERROR:
+			ret = LIBUSB_ERROR_IO;
+			break;
+		case LIBUSB_TRANSFER_TIMED_OUT:
+		case LIBUSB_TRANSFER_CANCELLED:
+			ret = LIBUSB_ERROR_TIMEOUT;
+			break;
+		case LIBUSB_TRANSFER_STALL:
+			ret = LIBUSB_ERROR_PIPE;
+			break;
+		case LIBUSB_TRANSFER_NO_DEVICE:
+			ret = LIBUSB_ERROR_NO_DEVICE;
+			break;
+		case LIBUSB_TRANSFER_OVERFLOW:
+			ret = LIBUSB_ERROR_OVERFLOW;
+			break;
+	}
+	return ret;
+}
+
 /* Wait for callback function to tell us it has finished the USB transfer, but
  * use our own timer to cancel the request if we go beyond the timeout. */
 static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int timeout)
@@ -2283,8 +2310,7 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 		cgsem_wait(&ut->cgsem);
 	}
 	ret = transfer->status;
-	if (ret == LIBUSB_TRANSFER_CANCELLED || ret == LIBUSB_TRANSFER_TIMED_OUT)
-		ret = LIBUSB_ERROR_TIMEOUT;
+	ret = usb_transfer_toerr(ret);
 
 	/* No need to sort out mutexes here since they won't be reused */
 	*transferred = transfer->actual_length;
@@ -2331,15 +2357,9 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
 	init_usb_transfer(&ut);
-#ifdef LINUX
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
-#else
-	/* All other OSes not so lucky */
-	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  transfer_callback, &ut, timeout);
-#endif
 	STATS_TIMEVAL(&tv_start);
 	cg_rlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(ut.transfer);
@@ -2357,7 +2377,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 				cgpu->drv->name, cgpu->device_id,
 				usb_cmdname(cmd), *transferred, err, errn);
 
-	if (err == LIBUSB_ERROR_PIPE || err == LIBUSB_TRANSFER_STALL) {
+	if (err == LIBUSB_ERROR_PIPE) {
 		int retries = 0;
 
 		do {
@@ -2775,25 +2795,19 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 				  wIndex, wLength);
 	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
-#ifdef LINUX
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-#else
-	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
-				     &ut, timeout);
-#endif
 	err = libusb_submit_transfer(ut.transfer);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
-	if (err == LIBUSB_TRANSFER_COMPLETED && transferred) {
+	if (err == LIBUSB_SUCCESS && transferred) {
 		if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 			memcpy(buffer, libusb_control_transfer_get_data(ut.transfer),
 			       transferred);
 		err = transferred;
 		goto out;
 	}
-	if ((err) == LIBUSB_TRANSFER_CANCELLED)
-		err = LIBUSB_ERROR_TIMEOUT;
+	err = usb_transfer_toerr(err);
 out:
 	complete_usb_transfer(&ut);
 	return err;

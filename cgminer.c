@@ -427,7 +427,7 @@ static void applog_and_exit(const char *fmt, ...)
 	va_start(ap, fmt);
 	vsnprintf(exit_buf, sizeof(exit_buf), fmt, ap);
 	va_end(ap);
-	_applog(LOG_ERR, exit_buf);
+	_applog(LOG_ERR, exit_buf, true);
 	exit(1);
 }
 
@@ -3166,7 +3166,7 @@ static void kill_mining(void)
 	struct thr_info *thr;
 	int i;
 
-	applog(LOG_DEBUG, "Killing off mining threads");
+	forcelog(LOG_DEBUG, "Killing off mining threads");
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		pthread_t *pth = NULL;
@@ -3193,29 +3193,29 @@ static void __kill_work(void)
 	if (!successful_connect)
 		return;
 
-	applog(LOG_INFO, "Received kill message");
+	forcelog(LOG_INFO, "Received kill message");
 
 #ifdef USE_USBUTILS
 	/* Best to get rid of it first so it doesn't
 	 * try to create any new devices */
 	if (!opt_scrypt) {
-		applog(LOG_DEBUG, "Killing off HotPlug thread");
+		forcelog(LOG_DEBUG, "Killing off HotPlug thread");
 		thr = &control_thr[hotplug_thr_id];
 		kill_timeout(thr);
 	}
 #endif
 
-	applog(LOG_DEBUG, "Killing off watchpool thread");
+	forcelog(LOG_DEBUG, "Killing off watchpool thread");
 	/* Kill the watchpool thread */
 	thr = &control_thr[watchpool_thr_id];
 	kill_timeout(thr);
 
-	applog(LOG_DEBUG, "Killing off watchdog thread");
+	forcelog(LOG_DEBUG, "Killing off watchdog thread");
 	/* Kill the watchdog thread */
 	thr = &control_thr[watchdog_thr_id];
 	kill_timeout(thr);
 
-	applog(LOG_DEBUG, "Shutting down mining threads");
+	forcelog(LOG_DEBUG, "Shutting down mining threads");
 	for (i = 0; i < mining_threads; i++) {
 		struct cgpu_info *cgpu;
 
@@ -3233,12 +3233,12 @@ static void __kill_work(void)
 
 	cg_completion_timeout(&kill_mining, NULL, 3000);
 
-	applog(LOG_DEBUG, "Killing off stage thread");
+	forcelog(LOG_DEBUG, "Killing off stage thread");
 	/* Stop the others */
 	thr = &control_thr[stage_thr_id];
 	kill_timeout(thr);
 
-	applog(LOG_DEBUG, "Killing off API thread");
+	forcelog(LOG_DEBUG, "Killing off API thread");
 	thr = &control_thr[api_thr_id];
 	kill_timeout(thr);
 
@@ -3246,10 +3246,10 @@ static void __kill_work(void)
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
 	if (!opt_scrypt) {
-		applog(LOG_DEBUG, "Releasing all USB devices");
+		forcelog(LOG_DEBUG, "Releasing all USB devices");
 		cg_completion_timeout(&usb_cleanup, NULL, 1000);
 
-		applog(LOG_DEBUG, "Killing off usbres thread");
+		forcelog(LOG_DEBUG, "Killing off usbres thread");
 		thr = &control_thr[usbres_thr_id];
 		kill_timeout(thr);
 	}
