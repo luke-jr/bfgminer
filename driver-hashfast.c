@@ -267,6 +267,9 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	       db->hash_clockrate);
 	applog(LOG_INFO, "HFA %d:      inflight_target: %d", hashfast->device_id,
 	       db->inflight_target);
+	applog(LOG_INFO, "HFA %d:      sequence_modulus: %d", hashfast->device_id,
+	       db->sequence_modulus);
+	info->num_sequence = db->sequence_modulus;
 
 	// Now a copy of the config data used
 	if (!hashfast_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
@@ -314,7 +317,7 @@ static bool hashfast_detect_common(struct cgpu_info *hashfast)
 	if (unlikely(!(info->die_statistics)))
 		quit(1, "Failed to calloc die_statistics");
 
-	info->works = calloc(sizeof(struct work *), HF_NUM_SEQUENCE);
+	info->works = calloc(sizeof(struct work *), info->num_sequence);
 	if (!info->works)
 		quit(1, "Failed to calloc info works in hashfast_detect_common");
 
@@ -358,6 +361,62 @@ static void hashfast_detect(bool hotplug)
 	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
 }
 
+static bool hashfast_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
+{
+	uint8_t hcrc;
+	bool ret;
+
+	ret = hashfast_get_header(hashfast, h, &hcrc);
+	if (unlikely(!ret))
+		goto out;
+	if (unlikely(h->crc8 != hcrc)) {
+		applog(LOG_WARNING, "HFA %d: Bad CRC %d vs %d, attempting to process anyway",
+		       hashfast->device_id, h->crc8, hcrc);
+	}
+	if (h->data_length > 0)
+		ret = hashfast_get_data(hashfast, (char *)(h + 1), h->data_length);
+	if (unlikely(!ret)) {
+		applog(LOG_WARNING, "HFA %d: Failed to get data associated with header",
+		       hashfast->device_id);
+	}
+
+out:
+	return ret;
+}
+
+static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_info *info,
+				 struct hf_header *h)
+{
+	struct hf_gwq_data *g = (struct hf_gwq_data *)(h + 1);
+	struct work *work;
+
+	applog(LOG_DEBUG, "HFA %d: OP_GWQ_STATUS, device_head %4d tail %4d my tail %4d shed %3d inflight %4d",
+		hashfast->device_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
+		g->shed_count, SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
+
+	mutex_lock(&info->lock);
+	info->hash_count += g->hash_count;
+	info->device_sequence_head = g->sequence_head;
+	info->device_sequence_tail = g->sequence_tail;
+	info->shed_count = g->shed_count;
+	/* Free any work that is no longer required */
+	while (info->device_sequence_tail != info->hash_sequence_tail) {
+		if (++info->hash_sequence_tail >= info->num_sequence)
+			info->hash_sequence_tail = 0;
+		if (unlikely(!(work = info->works[info->hash_sequence_tail]))) {
+			applog(LOG_ERR, "HFA %d: Bad work sequence tail",
+			       hashfast->device_id);
+			hashfast->shutdown = true;
+			break;
+		}
+		applog(LOG_DEBUG, "HFA %d: Completing work on hash_sequence_tail %d",
+		       hashfast->device_id, info->hash_sequence_tail);
+		free_work(work);
+		info->works[info->hash_sequence_tail] = NULL;
+	}
+	mutex_unlock(&info->lock);
+}
+
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -369,6 +428,24 @@ static void *hfa_read(void *arg)
 	RenameThread(threadname);
 
 	while (likely(!hashfast->shutdown)) {
+		char buf[512];
+		struct hf_header *h = (struct hf_header *)buf;
+		bool ret = hashfast_get_packet(hashfast, h);
+
+		if (unlikely(!ret))
+			continue;
+
+		switch (h->operation_code) {
+			case OP_GWQ_STATUS:
+				hfa_parse_gwq_status(hashfast, info, h);
+				break;
+			case OP_DIE_STATUS:
+			case OP_NONCE:
+			case OP_STATISTICS:
+			case OP_USB_STATS1:
+			default:
+				break;
+		}
 	}
 
 	return NULL;
@@ -393,7 +470,7 @@ static bool hashfast_prepare(struct thr_info *thr)
 /* Figure out how many jobs to send. */
 static int __hashfast_jobs(struct hashfast_info *info)
 {
-	return info->usb_init_base.inflight_target - GWQ_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
+	return info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
 }
 
 static int hashfast_jobs(struct hashfast_info *info)
@@ -459,7 +536,7 @@ restart:
 		intdiff = (uint64_t)work->device_diff;
 		for (i = 31; intdiff; i++, intdiff >>= 1);
 		op_hash_data.search_difficulty = i;
-		if ((sequence = info->hash_sequence + 1) >= HF_NUM_SEQUENCE)
+		if ((sequence = info->hash_sequence + 1) >= info->num_sequence)
 			sequence = 0;
 		ret = hashfast_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
 		if (unlikely(!ret)) {
