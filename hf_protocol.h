@@ -131,7 +131,7 @@ struct hf_config_data {
 	uint8_t  rx_ignore_data_crc:1;              // Ignore rx data crc's (diagnostic)
 	uint8_t  stats_interval:7;                  // Minimum interval to report statistics (seconds)
 	uint8_t  stat_diagnostic:1;                 // Never set this
-	uint8_t  measure_interval;                  // Die temperature measurment interval (msec)
+	uint8_t  measure_interval;                  // Die temperature measurement interval (msec)
 
 	uint32_t one_usec:12;                       // How many LF clocks per usec.
 	uint32_t max_nonces_per_frame:4;            // Maximum # of nonces to combine in a single frame
@@ -228,8 +228,7 @@ struct hf_usb_init_base {
 	uint32_t serial_number;                     // Board serial number
 	uint8_t  operation_status;                  // Reply status for OP_USB_INIT (0 = success)
 	uint8_t  extra_status_1;                    // Extra reply status information, code specific
-	uint8_t  extra_status_2;                    //
-	uint8_t  extra_status_3;                    //
+	uint16_t sequence_modulus;                  // Sequence numbers are to be modulo this
 	uint16_t hash_clockrate;                    // Actual hash clock rate used (nearest Mhz)
 	uint16_t inflight_target;                   // Target inflight amount for GWQ protocol
 } __attribute__((packed,aligned(4)));
