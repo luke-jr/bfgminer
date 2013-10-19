@@ -53,6 +53,7 @@ int opt_bitburner_fury_core_voltage = BITBURNER_FURY_DEFAULT_CORE_VOLTAGE;
 bool opt_avalon_auto;
 
 static int option_offset = -1;
+static int bbf_option_offset = -1;
 
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
@@ -400,7 +401,7 @@ static int avalon_calc_timeout(int frequency)
 }
 
 static bool get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count, int *timeout, int *frequency)
+			int *asic_count, int *timeout, int *frequency, char *options)
 {
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2, *colon3, *colon4;
@@ -408,10 +409,10 @@ static bool get_options(int this_option_offset, int *baud, int *miner_count,
 	size_t max;
 	int i, tmp;
 
-	if (opt_avalon_options == NULL)
+	if (options == NULL)
 		buf[0] = '\0';
 	else {
-		ptr = opt_avalon_options;
+		ptr = options;
 		for (i = 0; i < this_option_offset; i++) {
 			comma = strchr(ptr, ',');
 			if (comma == NULL)
@@ -754,7 +755,7 @@ static void bitburner_get_version(struct cgpu_info *avalon)
 static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found)
 {
 	int baud, miner_count, asic_count, timeout, frequency;
-	int this_option_offset = ++option_offset;
+	int this_option_offset;
 	struct avalon_info *info;
 	struct cgpu_info *avalon;
 	bool configured;
@@ -768,11 +769,13 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 	timeout = AVALON_DEFAULT_TIMEOUT;
 	frequency = AVALON_DEFAULT_FREQUENCY;
 
-	configured = get_options(this_option_offset, &baud, &miner_count,
-				 &asic_count, &timeout, &frequency);
-
 	if (!usb_init(avalon, dev, found))
 		goto shin;
+
+	this_option_offset = usb_ident(avalon) == IDENT_BBF ? ++bbf_option_offset : ++option_offset;
+	configured = get_options(this_option_offset, &baud, &miner_count,
+				 &asic_count, &timeout, &frequency,
+				 (usb_ident(avalon) == IDENT_BBF && opt_bitburner_fury_options != NULL) ? opt_bitburner_fury_options : opt_avalon_options);
 
 	/* Even though this is an FTDI type chip, we want to do the parsing
 	 * all ourselves so set it to std usb type */
@@ -794,6 +797,18 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		info->asic_count = asic_count;
 		info->timeout = timeout;
 		info->frequency = frequency;
+	} else if (usb_ident(avalon) == IDENT_BTB) {
+		info->baud = AVALON_IO_SPEED;
+		info->miner_count = BITBURNER_XX_DEFAULT_MINER_NUM;
+		info->asic_count = BITBURNER_DEFAULT_ASIC_NUM;
+		info->timeout = AVALON_DEFAULT_TIMEOUT;
+		info->frequency = AVALON_DEFAULT_FREQUENCY;
+	} else if (usb_ident(avalon) == IDENT_BBF) {
+		info->baud = AVALON_IO_SPEED;
+		info->miner_count = BITBURNER_FURY_DEFAULT_MINER_NUM;
+		info->asic_count = BITBURNER_DEFAULT_ASIC_NUM;
+		info->timeout = BITBURNER_FURY_DEFAULT_TIMEOUT;
+		info->frequency = BITBURNER_FURY_DEFAULT_FREQUENCY;
 	} else {
 		info->baud = AVALON_IO_SPEED;
 		info->miner_count = AVALON_DEFAULT_MINER_NUM;
