@@ -447,6 +447,64 @@ static void update_die_status(struct cgpu_info *hashfast, struct hashfast_info *
 	}
 }
 
+static void search_for_extra_nonce(struct thr_info *thr, struct work *work,
+				   struct hf_candidate_nonce *n)
+{
+	uint32_t nonce = n->nonce;
+	int i;
+
+	/* No function to test with ntime offsets yet */
+	if (n->ntime)
+		return;
+	for (i = 0; i < 128; i++, nonce++) {
+		/* We could break out of this early if nonce wraps or if we
+		 * find one correct nonce since the chance of more is extremely
+		 * low but this function will be hit so infrequently we may as
+		 * well test the entire range with the least code. */
+		if (test_nonce(work, nonce))
+			submit_tested_work(thr, work);
+	}
+}
+
+static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
+			    struct hashfast_info *info, struct hf_header *h)
+{
+	struct hf_candidate_nonce *n = (struct hf_candidate_nonce *)(h + 1);
+	int i, num_nonces = h->data_length / U32SIZE(sizeof(struct hf_candidate_nonce));
+
+	applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d:, num_nonces %d hdata 0x%04x",
+	       hashfast->device_id, h->chip_address, num_nonces, h->hdata);
+	for (i = 0; i < num_nonces; i++, n++) {
+		struct work *work;
+
+		applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d: %2d: search %1d ntime %2d sequence %4d nonce 0x%08x",
+		       hashfast->device_id, h->chip_address, i, n->search, n->ntime, n->sequence, n->nonce);
+
+		// Find the job from the sequence number
+		mutex_lock(&info->lock);
+		work = info->works[n->sequence];
+		mutex_unlock(&info->lock);
+
+		if (unlikely(!work)) {
+			info->no_matching_work++;
+			applog(LOG_INFO, "HFA %d: No matching work!", hashfast->device_id);
+		} else {
+			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
+			       hashfast->device_id, n->sequence, n->nonce, n->ntime);
+			if ((n->nonce & 0xffff0000) == 0x42420000)		// XXX REMOVE THIS
+				break;						// XXX PHONEY EMULATOR NONCE
+			submit_noffset_nonce(thr, work, n->nonce, n->ntime);	// XXX Return value from submit_nonce is error if set
+			if (unlikely(n->search)) {
+				/* This tells us there is another share in the
+				 * next 128 nonces */
+				applog(LOG_DEBUG, "HFA %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
+				       hashfast->device_id);
+				search_for_extra_nonce(thr, work, n);
+			}
+		}
+	}
+}
+
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -473,6 +531,8 @@ static void *hfa_read(void *arg)
 				update_die_status(hashfast, info, h);
 				break;
 			case OP_NONCE:
+				hfa_parse_nonce(thr, hashfast, info, h);
+				break;
 			case OP_STATISTICS:
 			case OP_USB_STATS1:
 			default:
