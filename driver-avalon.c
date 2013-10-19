@@ -797,24 +797,25 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		info->asic_count = asic_count;
 		info->timeout = timeout;
 		info->frequency = frequency;
-	} else if (usb_ident(avalon) == IDENT_BTB) {
-		info->baud = AVALON_IO_SPEED;
-		info->miner_count = BITBURNER_XX_DEFAULT_MINER_NUM;
-		info->asic_count = BITBURNER_DEFAULT_ASIC_NUM;
-		info->timeout = AVALON_DEFAULT_TIMEOUT;
-		info->frequency = AVALON_DEFAULT_FREQUENCY;
-	} else if (usb_ident(avalon) == IDENT_BBF) {
-		info->baud = AVALON_IO_SPEED;
-		info->miner_count = BITBURNER_FURY_DEFAULT_MINER_NUM;
-		info->asic_count = BITBURNER_DEFAULT_ASIC_NUM;
-		info->timeout = BITBURNER_FURY_DEFAULT_TIMEOUT;
-		info->frequency = BITBURNER_FURY_DEFAULT_FREQUENCY;
 	} else {
 		info->baud = AVALON_IO_SPEED;
-		info->miner_count = AVALON_DEFAULT_MINER_NUM;
 		info->asic_count = AVALON_DEFAULT_ASIC_NUM;
-		info->timeout = AVALON_DEFAULT_TIMEOUT;
-		info->frequency = AVALON_DEFAULT_FREQUENCY;
+		switch (usb_ident(avalon)) {
+		case IDENT_BTB:
+			info->miner_count = BITBURNER_XX_DEFAULT_MINER_NUM;
+			info->timeout = AVALON_DEFAULT_TIMEOUT;
+			info->frequency = AVALON_DEFAULT_FREQUENCY;
+			break;
+		case IDENT_BBF:
+			info->miner_count = BITBURNER_FURY_DEFAULT_MINER_NUM;
+			info->timeout = BITBURNER_FURY_DEFAULT_TIMEOUT;
+			info->frequency = BITBURNER_FURY_DEFAULT_FREQUENCY;
+			break;
+		default:
+			info->miner_count = AVALON_DEFAULT_MINER_NUM;
+			info->timeout = AVALON_DEFAULT_TIMEOUT;
+			info->frequency = AVALON_DEFAULT_FREQUENCY;
+		}
 	}
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
