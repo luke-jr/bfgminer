@@ -417,6 +417,36 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	mutex_unlock(&info->lock);
 }
 
+static void update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
+			      struct hf_header *h)
+{
+	struct hf_g1_die_data *d = (struct hf_g1_die_data *)(h + 1), *ds;
+	int num_included = (h->data_length * 4) / sizeof(struct hf_g1_die_data);
+	int i, j;
+
+	float die_temperature;
+	float core_voltage[6];
+
+	if (info->device_type == HFD_G1) {
+		// Copy in the data. They're numbered sequentially from the starting point
+		ds = info->die_status + h->chip_address;
+		for (i = 0; i < num_included; i++)
+		memcpy(ds++, d++, sizeof(struct hf_g1_die_data));
+
+		for (i = 0, d = &info->die_status[h->chip_address]; i < num_included; i++, d++) {
+			die_temperature = GN_DIE_TEMPERATURE(d->die.die_temperature);
+			for (j = 0; j < 6; j++)
+				core_voltage[j] = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+
+			applog(LOG_DEBUG, "HF%d: die %2d: OP_DIE_STATUS Die temp %.2fC vdd's %.2f %.2f %.2f %.2f %.2f %.2f",
+			       hashfast->device_id, h->chip_address + i, die_temperature,
+			       core_voltage[0], core_voltage[1], core_voltage[2],
+			       core_voltage[3], core_voltage[4], core_voltage[5]);
+			// XXX Convert board phase currents, voltage, temperature
+		}
+	}
+}
+
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -440,6 +470,8 @@ static void *hfa_read(void *arg)
 				hfa_parse_gwq_status(hashfast, info, h);
 				break;
 			case OP_DIE_STATUS:
+				update_die_status(hashfast, info, h);
+				break;
 			case OP_NONCE:
 			case OP_STATISTICS:
 			case OP_USB_STATS1:
