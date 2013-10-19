@@ -493,6 +493,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	int n_chips = 0, lastchip = 0;
 	struct spi_port *spi = NULL;
 	bool should_be_running;
+	struct timeval tv_now;
+	unsigned int counter;
 	
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
 		++n_chips;
@@ -533,6 +535,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		if (thr->work /* is currently running */ && thr->busy_state != TBS_STARTING_JOB)
 			;//FIXME: shutdown chip
 	}
+	timer_set_now(&tv_now);
 	spi_txrx(spi);
 	
 	for (j = 0; j < n_chips; ++j)
@@ -601,6 +604,30 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				bitfury->desync_counter = 99;
 				goto out;
 			}
+		}
+		
+		counter = bitfury_decnonce(newbuf[n]);
+		if ((counter & 0xFFC00000) == 0xdf800000)
+		{
+			unsigned int cycles;
+			long long unsigned int period;
+			double ns;
+			struct timeval d_time;
+			static int skip;
+			
+			counter -= 0xdf800000;
+			if (!skip)
+			{
+				cycles = counter < bitfury->counter1 ? 0x00400000 - bitfury->counter1 + counter : counter - bitfury->counter1;
+				timersub(&(tv_now), &(bitfury->timer1), &d_time);
+				period = timeval_to_us(&d_time) * 1000ULL;
+				ns = (double)period / (double)(cycles);
+				bitfury->mhz = 1.0 / ns * 65.0 * 1000.0;
+			}
+			skip = (skip + 1) & 0x7;
+			
+			bitfury->counter1 = counter;
+			copy_time(&(bitfury->timer1), &tv_now);
 		}
 		
 		if (n)
@@ -682,6 +709,7 @@ struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 	int clock_bits = bitfury->osc6_bits;
 	
 	root = api_add_int(root, "Clock Bits", &clock_bits, true);
+	root = api_add_freq(root, "Frequency", &bitfury->mhz, false);
 	
 	return root;
 }
