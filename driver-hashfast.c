@@ -751,8 +751,8 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	struct hf_long_usb_stats1 *s1;
 	struct api_data *root = NULL;
 	struct hf_usb_init_base *db;
+	int varint, i;
 	char buf[64];
-	int varint;
 
 	root = api_add_int(root, "asic count", &info->asic_count, false);
 	root = api_add_int(root, "core count", &info->core_count, false);
@@ -785,6 +785,19 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "max tx buf", &varint, true);
 	varint = s1->max_rx_buffers;
 	root = api_add_int(root, "max rx buf", &varint, true);
+
+	for (i = 0; i < info->asic_count; i++) {
+		struct hf_long_statistics *l = info->die_statistics + i;
+
+		root = api_add_int(root, "Core", &i, true);
+		root = api_add_uint64(root, "rx header crc", &l->rx_header_crc, false);
+		root = api_add_uint64(root, "rx body crc", &l->rx_body_crc, false);
+		root = api_add_uint64(root, "rx header to", &l->rx_header_timeouts, false);
+		root = api_add_uint64(root, "rx body to", &l->rx_body_timeouts, false);
+		root = api_add_uint64(root, "cn fifo full", &l->core_nonce_fifo_full, false);
+		root = api_add_uint64(root, "an fifo full", &l->array_nonce_fifo_full, false);
+		root = api_add_uint64(root, "stats overrun", &l->stats_overrun, false);
+	}
 
 	return root;
 }
