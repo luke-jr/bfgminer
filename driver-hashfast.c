@@ -106,7 +106,7 @@ static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t 
 	struct hf_header *p = (struct hf_header *)packet;
 
 	p->preamble = HF_PREAMBLE;
-	p->operation_code = opcode;
+	p->operation_code = hfa_cmds[opcode].cmd;
 	p->chip_address = HF_GWQ_ADDRESS;
 	p->core_address = 0;
 	p->hdata = htole16(hdata);
