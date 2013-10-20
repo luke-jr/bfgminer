@@ -748,6 +748,7 @@ restart:
 static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 {
 	struct hashfast_info *info = cgpu->device_data;
+	struct hf_long_usb_stats1 *s1;
 	struct api_data *root = NULL;
 	struct hf_usb_init_base *db;
 	char buf[64];
@@ -766,6 +767,21 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "inflight target", &varint, true);
 	varint = db->sequence_modulus;
 	root = api_add_int(root, "sequence modules", &varint, true);
+
+	s1 = &info->stats1;
+	root = api_add_uint64(root, "rx preambles", &s1->usb_rx_preambles, false);
+	root = api_add_uint64(root, "rx rcv byte err", &s1->usb_rx_receive_byte_errors, false);
+	root = api_add_uint64(root, "rx bad hcrc", &s1->usb_rx_bad_hcrc, false);
+	root = api_add_uint64(root, "tx attempts", &s1->usb_tx_attempts, false);
+	root = api_add_uint64(root, "tx packets", &s1->usb_tx_packets, false);
+	root = api_add_uint64(root, "tx incompletes", &s1->usb_tx_incompletes, false);
+	root = api_add_uint64(root, "tx ep stalled", &s1->usb_tx_endpointstalled, false);
+	root = api_add_uint64(root, "tx disconnect", &s1->usb_tx_disconnected, false);
+	root = api_add_uint64(root, "tx suspend", &s1->usb_tx_suspended, false);
+	varint = s1->max_tx_buffers;
+	root = api_add_int(root, "max tx buf", &varint, true);
+	varint = s1->max_rx_buffers;
+	root = api_add_int(root, "max rx buf", &varint, true);
 
 	return root;
 }
