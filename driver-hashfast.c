@@ -745,9 +745,29 @@ restart:
 	return hashes;
 }
 
-static struct api_data *hfa_api_stats(struct cgpu_info __maybe_unused *cgpu)
+static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 {
-	return NULL;
+	struct hashfast_info *info = cgpu->device_data;
+	struct api_data *root = NULL;
+	struct hf_usb_init_base *db;
+	char buf[64];
+	int varint;
+
+	db = &info->usb_init_base;
+	sprintf(buf, "%d.%d", (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
+	root = api_add_string(root, "firmware rev", buf, true);
+	sprintf(buf, "%d.%d", (db->hardware_rev >> 8) & 0xff, db->hardware_rev & 0xff);
+	root = api_add_string(root, "hardware rev", buf, true);
+	varint = db->serial_number;
+	root = api_add_int(root, "serial number", &varint, true);
+	varint = db->hash_clockrate;
+	root = api_add_int(root, "hash clockrate", &varint, true);
+	varint = db->inflight_target;
+	root = api_add_int(root, "inflight target", &varint, true);
+	varint = db->sequence_modulus;
+	root = api_add_int(root, "sequence modules", &varint, true);
+
+	return root;
 }
 
 static void hfa_init(struct cgpu_info *hashfast)
