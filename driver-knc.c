@@ -28,67 +28,55 @@
 struct device_drv knc_drv;
 
 static
-bool _check_value(const char * const devpath, const int i, const int32_t r, const uint8_t reg, const int32_t expected)
-{
-	if (expected == r)
-		return true;
-	
-	if (r == -1)
-		applog(LOG_DEBUG, "%s: %s: Error when reading slave %d register 0x%2x: %s",
-		       knc_drv.dname, devpath, i, reg, bfg_strerror(errno, BST_ERRNO));
-	else
-		applog(LOG_DEBUG, "%s: %s: Slave %d register 0x%2x is 0x%x, not 0x%x as expected",
-		       knc_drv.dname, devpath, i, reg, r, expected);
-	
-	return false;
-}
-
-static
 bool knc_detect_one(const char *devpath)
 {
 	struct cgpu_info *cgpu;
-	const int first_slave = 16, last_slave = 23;
-	int procs;
 	int i;
-	int32_t r;
-	const int fd = open(devpath, O_RDWR);
+	const char * const i2cpath = "/dev/i2c-2";
+	const int fd = open(i2cpath, O_RDWR);
+	char *leftover = NULL;
+	const int i2cslave = strtol(devpath, &leftover, 0);
+	uint8_t buf[0x20];
+	
+	if (leftover && leftover[0])
+		return false;
 	
 	if (unlikely(fd == -1))
 	{
-		applog(LOG_DEBUG, "%s: Failed to open %s", knc_drv.dname, devpath);
+		applog(LOG_DEBUG, "%s: Failed to open %s", knc_drv.dname, i2cpath);
 		return false;
 	}
 	
-	for (i = first_slave; i <= last_slave; ++i)
+	if (ioctl(fd, I2C_SLAVE, i2cslave))
 	{
-		if (ioctl(fd, I2C_SLAVE, i))
-		{
-			applog(LOG_DEBUG, "%s: %s: Failed to select I2C_SLAVE %d",
-			       knc_drv.dname, devpath, i);
-			continue;
-		}
-		r = i2c_smbus_read_byte_data(fd, 0x98);
-		if (!_check_value(devpath, i, r, 0x98, 0x11))
-			continue;
-		r = i2c_smbus_read_word_data(fd, 0xd0);
-		if (!_check_value(devpath, i, r, 0xd0, 0x10))
-			continue;
-		
-		applog(LOG_DEBUG, "%s: %s: Found i2c slave %d",
-		       knc_drv.dname, devpath, i);
-		
-		procs += 6;
+		close(fd);
+		applog(LOG_DEBUG, "%s: Failed to select i2c slave 0x%x",
+		       knc_drv.dname, i2cslave);
+		return false;
 	}
 	
-	if (!procs)
+	i = i2c_smbus_read_i2c_block_data(fd, 0, 0x20, buf);
+	close(fd);
+	if (-1 == i)
+	{
+		applog(LOG_DEBUG, "%s: 0x%x: Failed to read i2c block data",
+		       knc_drv.dname, i2cslave);
 		return false;
+	}
+	for (i = 0; ; ++i)
+	{
+		if (buf[i] == 3)
+			break;
+		if (i == 0x1f)
+			return false;
+	}
 	
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &knc_drv,
 		.device_path = strdup(devpath),
 		.deven = DEV_ENABLED,
-		.procs = procs,
+		.procs = 192,
 		.threads = 1,
 	};
 	return add_cgpu(cgpu);
@@ -96,13 +84,13 @@ bool knc_detect_one(const char *devpath)
 
 static int knc_detect_auto(void)
 {
-	const int first_bus = 3, last_bus = 8;
-	char devpath[] = "/dev/i2c-N";
+	const int first = 0x20, last = 0x26;
+	char devpath[4];
 	int found = 0, i;
 	
-	for (i = first_bus; i <= last_bus; ++i)
+	for (i = first; i <= last; ++i)
 	{
-		devpath[9] = '0' + i;
+		sprintf(devpath, "%d", i);
 		if (knc_detect_one(devpath))
 			++found;
 	}
