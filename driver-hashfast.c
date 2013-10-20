@@ -520,6 +520,71 @@ static void hfa_update_die_statistics(struct hashfast_info *info, struct hf_head
 	l->stats_overrun += s->stats_overrun;
 }
 
+static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *info,
+			      struct hf_header *h)
+{
+	struct hf_long_usb_stats1 *s1 = &info->stats1;
+	struct hf_usb_stats1 *sd = (struct hf_usb_stats1 *)(h + 1);
+
+	s1->usb_rx_preambles += sd->usb_rx_preambles;
+	s1->usb_rx_receive_byte_errors += sd->usb_rx_receive_byte_errors;
+	s1->usb_rx_bad_hcrc += sd->usb_rx_bad_hcrc;
+
+	s1->usb_tx_attempts += sd->usb_tx_attempts;
+	s1->usb_tx_packets += sd->usb_tx_packets;
+	s1->usb_tx_timeouts += sd->usb_tx_timeouts;
+	s1->usb_tx_incompletes += sd->usb_tx_incompletes;
+	s1->usb_tx_endpointstalled += sd->usb_tx_endpointstalled;
+	s1->usb_tx_disconnected += sd->usb_tx_disconnected;
+	s1->usb_tx_suspended += sd->usb_tx_suspended;
+
+	s1->uart_tx_queue_dma += sd->uart_tx_queue_dma;
+	s1->uart_tx_interrupts += sd->uart_tx_interrupts;
+
+	s1->uart_rx_preamble_ints += sd->uart_rx_preamble_ints;
+	s1->uart_rx_missed_preamble_ints += sd->uart_rx_missed_preamble_ints;
+	s1->uart_rx_header_done += sd->uart_rx_header_done;
+	s1->uart_rx_data_done += sd->uart_rx_data_done;
+	s1->uart_rx_bad_hcrc += sd->uart_rx_bad_hcrc;
+	s1->uart_rx_bad_dma += sd->uart_rx_bad_dma;
+	s1->uart_rx_short_dma += sd->uart_rx_short_dma;
+	s1->uart_rx_buffers_full += sd->uart_rx_buffers_full;
+
+	if (sd->max_tx_buffers >  s1->max_tx_buffers)
+		s1->max_tx_buffers = sd->max_tx_buffers;
+	if (sd->max_rx_buffers >  s1->max_rx_buffers)
+		s1->max_rx_buffers = sd->max_rx_buffers;
+
+	applog(LOG_DEBUG, "HFA %d: OP_USB_STATS1:", hashfast->device_id);
+	applog(LOG_DEBUG, "      usb_rx_preambles:             %6d", sd->usb_rx_preambles);
+	applog(LOG_DEBUG, "      usb_rx_receive_byte_errors:   %6d", sd->usb_rx_receive_byte_errors);
+	applog(LOG_DEBUG, "      usb_rx_bad_hcrc:              %6d", sd->usb_rx_bad_hcrc);
+
+	applog(LOG_DEBUG, "      usb_tx_attempts:              %6d", sd->usb_tx_attempts);
+	applog(LOG_DEBUG, "      usb_tx_packets:               %6d", sd->usb_tx_packets);
+	applog(LOG_DEBUG, "      usb_tx_timeouts:              %6d", sd->usb_tx_timeouts);
+	applog(LOG_DEBUG, "      usb_tx_incompletes:           %6d", sd->usb_tx_incompletes);
+	applog(LOG_DEBUG, "      usb_tx_endpointstalled:       %6d", sd->usb_tx_endpointstalled);
+	applog(LOG_DEBUG, "      usb_tx_disconnected:          %6d", sd->usb_tx_disconnected);
+	applog(LOG_DEBUG, "      usb_tx_suspended:             %6d", sd->usb_tx_suspended);
+
+	applog(LOG_DEBUG, "      uart_tx_queue_dma:            %6d", sd->uart_tx_queue_dma);
+	applog(LOG_DEBUG, "      uart_tx_interrupts:           %6d", sd->uart_tx_interrupts);
+
+	applog(LOG_DEBUG, "      uart_rx_preamble_ints:        %6d", sd->uart_rx_preamble_ints);
+	applog(LOG_DEBUG, "      uart_rx_missed_preamble_ints: %6d", sd->uart_rx_missed_preamble_ints);
+	applog(LOG_DEBUG, "      uart_rx_header_done:          %6d", sd->uart_rx_header_done);
+	applog(LOG_DEBUG, "      uart_rx_data_done:            %6d", sd->uart_rx_data_done);
+	applog(LOG_DEBUG, "      uart_rx_bad_hcrc:             %6d", sd->uart_rx_bad_hcrc);
+	applog(LOG_DEBUG, "      uart_rx_bad_dma:              %6d", sd->uart_rx_bad_dma);
+	applog(LOG_DEBUG, "      uart_rx_short_dma:            %6d", sd->uart_rx_short_dma);
+	applog(LOG_DEBUG, "      uart_rx_buffers_full:         %6d", sd->uart_rx_buffers_full);
+
+	applog(LOG_DEBUG, "      max_tx_buffers:               %6d", sd->max_tx_buffers);
+	applog(LOG_DEBUG, "      max_rx_buffers:               %6d", sd->max_rx_buffers);
+
+    }
+
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -552,7 +617,11 @@ static void *hfa_read(void *arg)
 				hfa_update_die_statistics(info, h);
 				break;
 			case OP_USB_STATS1:
+				hfa_update_stats1(hashfast, info, h);
+				break;
 			default:
+				applog(LOG_WARNING, "HFA %d: Unhandled operation code %d",
+				       hashfast->device_id, h->operation_code);
 				break;
 		}
 	}

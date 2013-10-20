@@ -30,6 +30,40 @@ struct hf_long_statistics {
 	uint64_t stats_overrun;                     // Overrun in statistics reporting
 } __attribute__((packed,aligned(4)));
 
+// Matching fields for hf_usb_stats1, but large #'s for local accumulation, per device
+struct hf_long_usb_stats1 {
+	// USB incoming
+	uint64_t usb_rx_preambles;
+	uint64_t usb_rx_receive_byte_errors;
+	uint64_t usb_rx_bad_hcrc;
+
+	// USB outgoing
+	uint64_t usb_tx_attempts;
+	uint64_t usb_tx_packets;
+	uint64_t usb_tx_timeouts;
+	uint64_t usb_tx_incompletes;
+	uint64_t usb_tx_endpointstalled;
+	uint64_t usb_tx_disconnected;
+	uint64_t usb_tx_suspended;
+
+	// UART transmit
+	uint64_t uart_tx_queue_dma;
+	uint64_t uart_tx_interrupts;
+
+	// UART receive
+	uint64_t uart_rx_preamble_ints;
+	uint64_t uart_rx_missed_preamble_ints;
+	uint64_t uart_rx_header_done;
+	uint64_t uart_rx_data_done;
+	uint64_t uart_rx_bad_hcrc;
+	uint64_t uart_rx_bad_dma;
+	uint64_t uart_rx_short_dma;
+	uint64_t uart_rx_buffers_full;
+
+	uint8_t  max_tx_buffers;
+	uint8_t  max_rx_buffers;
+} __attribute__((packed,aligned(8)));
+
 struct hashfast_info {
 	int asic_count;                             // # of chips in the chain
 	int core_count;                             // # of cores per chip
@@ -39,6 +73,7 @@ struct hashfast_info {
 	uint16_t hash_sequence;                     // The next hash sequence # to be sent
 	struct hf_g1_die_data *die_status;          // Array of per-die voltage, current, temperature sensor data
 	struct hf_long_statistics *die_statistics;  // Array of per-die error counters
+	struct hf_long_usb_stats1 stats1;
 	int hash_clock_rate;                        // Hash clock rate to use, in Mhz
 	struct hf_usb_init_base usb_init_base;      // USB Base information from USB_INIT
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
