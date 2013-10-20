@@ -20,11 +20,15 @@
  * THE SOFTWARE.
  */
 
+#include "config.h"
+
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#ifdef NEED_LINUX_I2C_H
 #include <linux/i2c.h>
+#endif
 #include <linux/i2c-dev.h>
 
 #include "logging.h"
@@ -71,7 +75,7 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 	msg.addr = addr;
 	msg.flags = 0;
 	msg.len = 3;
-	msg.buf = buf;
+	msg.buf = (void*)tm;
 	msg_rdwr.msgs = &msg;
 	msg_rdwr.nmsgs = 1;
 	if ((i = ioctl(fd, I2C_RDWR, &msg_rdwr)) < 0) {
@@ -83,7 +87,7 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 	msg.addr = addr;
 	msg.flags = I2C_M_RD;
 	msg.len = 3;
-	msg.buf = buf;
+	msg.buf = (void*)tm;
 	msg_rdwr.msgs = &msg;
 	msg_rdwr.nmsgs = 1;
 	if ((i = ioctl(fd, I2C_RDWR, &msg_rdwr)) < 0) {

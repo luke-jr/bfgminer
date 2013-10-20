@@ -47,8 +47,6 @@
 #include <linux/spi/spidev.h>
 #include <time.h>
 #include <unistd.h>
-#include <linux/i2c.h>
-#include <linux/i2c-dev.h>
 #include <sys/stat.h>
 #endif
 

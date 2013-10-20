@@ -77,6 +77,24 @@ AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_HEADERS([sys/file.h])
 
+AC_CHECK_MEMBER([struct i2c_msg.buf],[
+	true
+],[
+	dnl Note the member is different here to avoid caching screwing things up
+	AC_CHECK_MEMBER([struct i2c_msg.len],[
+		AC_DEFINE([NEED_LINUX_I2C_H],[1],[Defined if linux/i2c.h is needed to supplement linux/i2c-dev.h])
+	],[
+		true
+	],[
+		AC_INCLUDES_DEFAULT
+		#include <linux/i2c.h>
+		#include <linux/i2c-dev.h>
+	])
+],[
+	AC_INCLUDES_DEFAULT
+	#include <linux/i2c-dev.h>
+])
+
 # Setuid
 AC_CHECK_HEADERS([pwd.h])
 
