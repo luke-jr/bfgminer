@@ -25,7 +25,7 @@
 
 static unsigned char crc8_table[256];	/* CRC-8 table */
 
-static void hf_init_crc8(void)
+static void hfa_init_crc8(void)
 {
 	int i,j;
 	unsigned char crc;
@@ -38,7 +38,7 @@ static void hf_init_crc8(void)
 	}
 }
 
-static unsigned char __maybe_unused hf_crc8(unsigned char *h)
+static unsigned char hfa_crc8(unsigned char *h)
 {
 	int i;
 	unsigned char crc;
@@ -50,7 +50,7 @@ static unsigned char __maybe_unused hf_crc8(unsigned char *h)
 	return crc;
 }
 
-struct hf_cmd {
+struct hfa_cmd {
 	int cmd;
 	char *cmd_name;
 	enum usb_cmds usb_cmd;
@@ -59,7 +59,7 @@ struct hf_cmd {
 /* Entries in this array need to align with the actual op values specified
  * in hf_protocol.h */
 #define C_NULL C_MAX
-static const struct hf_cmd hf_cmds[] = {
+static const struct hfa_cmd hfa_cmds[] = {
 	{OP_NULL, "OP_NULL", C_NULL},				// 0
 	{OP_ROOT, "OP_ROOT", C_NULL},
 	{OP_RESET, "OP_RESET", C_HF_RESET},
@@ -98,8 +98,8 @@ static const struct hf_cmd hf_cmds[] = {
 /* Send an arbitrary frame, consisting of an 8 byte header and an optional
  * packet body. */
 
-static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
-				uint16_t hdata, uint8_t *data, int len)
+static bool hfa_send_frame(struct cgpu_info *hashfast, uint8_t opcode, uint16_t hdata,
+			   uint8_t *data, int len)
 {
 	int tx_length, ret, amount, id = hashfast->device_id;
 	uint8_t packet[256];
@@ -111,39 +111,37 @@ static bool hashfast_send_frame(struct cgpu_info *hashfast, uint8_t opcode,
 	p->core_address = 0;
 	p->hdata = htole16(hdata);
 	p->data_length = len / 4;
-	p->crc8 = hf_crc8(packet);
+	p->crc8 = hfa_crc8(packet);
 
 	if (len)
 		memcpy(&packet[sizeof(struct hf_header)], data, len);
 	tx_length = sizeof(struct hf_header) + len;
 
 	ret = usb_write(hashfast, (char *)packet, tx_length, &amount,
-			hf_cmds[opcode].usb_cmd);
+			hfa_cmds[opcode].usb_cmd);
 	if (unlikely(ret < 0 || amount != tx_length)) {
-		applog(LOG_ERR, "HFA %d: hashfast_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
+		applog(LOG_ERR, "HFA %d: hfa_send_frame: USB Send error, ret %d amount %d vs. tx_length %d",
 		       id, ret, amount, tx_length);
 		return false;
 	}
 	return true;
 }
 
-static bool hashfast_send_header(struct cgpu_info *hashfast, struct hf_header *h,
-				 int cmd)
+static bool hfa_send_header(struct cgpu_info *hashfast, struct hf_header *h, int cmd)
 {
 	int amount, ret, len;
 
 	len = sizeof(*h);
-	ret = usb_write(hashfast, (char *)h, len, &amount, hf_cmds[cmd].usb_cmd);
+	ret = usb_write(hashfast, (char *)h, len, &amount, hfa_cmds[cmd].usb_cmd);
 	if (ret < 0 || amount != len) {
 		applog(LOG_WARNING, "HFA%d: send_header: %s USB Send error, ret %d amount %d vs. length %d",
-		       hashfast->device_id, hf_cmds[cmd].cmd_name, ret, amount, len);
+		       hashfast->device_id, hfa_cmds[cmd].cmd_name, ret, amount, len);
 		return false;
 	}
 	return true;
 }
 
-static bool hashfast_get_header(struct cgpu_info *hashfast, struct hf_header *h,
-				uint8_t *computed_crc)
+static bool hfa_get_header(struct cgpu_info *hashfast, struct hf_header *h, uint8_t *computed_crc)
 {
 	int amount, ret, orig_len, len, ofs = 0, reads = 0;
 	char buf[512];
@@ -168,12 +166,12 @@ static bool hashfast_get_header(struct cgpu_info *hashfast, struct hf_header *h,
 	} while (len);
 
 	memcpy(h, header, orig_len);
-	*computed_crc = hf_crc8((uint8_t *)h);
+	*computed_crc = hfa_crc8((uint8_t *)h);
 
 	return true;
 }
 
-static bool hashfast_get_data(struct cgpu_info *hashfast, char *buf, int len4)
+static bool hfa_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 {
 	int amount, ret, len = len4 * 4;
 
@@ -188,7 +186,7 @@ static bool hashfast_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 	return true;
 }
 
-static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
+static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
 	struct hf_usb_init_header usb_init, *hu = &usb_init;
 	struct hf_usb_init_base *db;
@@ -205,18 +203,18 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	hu->operation_code = OP_USB_INIT;
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;          // Protocol to use
 	hu->hash_clock = info->hash_clock_rate;             // Hash clock rate in Mhz
-	hu->crc8 = hf_crc8((uint8_t *)hu);
+	hu->crc8 = hfa_crc8((uint8_t *)hu);
 	applog(LOG_WARNING, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
 
-	if (!hashfast_send_header(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
+	if (!hfa_send_header(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
 	// Check for the correct response.
 	// We extend the normal timeout - a complete device initialization, including
 	// bringing power supplies up from standby, etc., can take over a second.
 	for (i = 0; i < 30; i++) {
-		ret = hashfast_get_header(hashfast, h, &hcrc);
+		ret = hfa_get_header(hashfast, h, &hcrc);
 		if (ret)
 			break;
 	}
@@ -230,7 +228,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	}
 	if (h->operation_code != OP_USB_INIT) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type", hashfast->device_id);
-		hashfast_get_data(hashfast, buf, h->data_length);
+		hfa_get_data(hashfast, buf, h->data_length);
 		return false;
 	}
 
@@ -251,7 +249,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	info->core_bitmap_size = (((info->asic_count * info->core_count) + 31) / 32) * 4;
 
 	// Get the usb_init_base structure
-	if (!hashfast_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
+	if (!hfa_get_data(hashfast, (char *)&info->usb_init_base, U32SIZE(info->usb_init_base))) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get usb_init_base data",
 		       hashfast->device_id);
 		return false;
@@ -272,7 +270,7 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	info->num_sequence = db->sequence_modulus;
 
 	// Now a copy of the config data used
-	if (!hashfast_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
+	if (!hfa_get_data(hashfast, (char *)&info->config_data, U32SIZE(info->config_data))) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get config_data",
 		       hashfast->device_id);
 		return false;
@@ -281,8 +279,8 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	// Now the core bitmap
 	info->core_bitmap = malloc(info->core_bitmap_size);
 	if (!info->core_bitmap)
-		quit(1, "Failed to malloc info core bitmap in hashfast_reset");
-	if (!hashfast_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
+		quit(1, "Failed to malloc info core bitmap in hfa_reset");
+	if (!hfa_get_data(hashfast, (char *)info->core_bitmap, info->core_bitmap_size / 4)) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Failure to get core_bitmap", hashfast->device_id);
 		return false;
 	}
@@ -290,17 +288,17 @@ static bool hashfast_reset(struct cgpu_info *hashfast, struct hashfast_info *inf
 	return true;
 }
 
-static bool hashfast_detect_common(struct cgpu_info *hashfast)
+static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
 	bool ret;
 
 	info = calloc(sizeof(struct hashfast_info), 1);
 	if (!info)
-		quit(1, "Failed to calloc hashfast_info in hashfast_detect_common");
+		quit(1, "Failed to calloc hashfast_info in hfa_detect_common");
 	hashfast->device_data = info;
 	/* hashfast_reset should fill in details for info */
-	ret = hashfast_reset(hashfast, info);
+	ret = hfa_reset(hashfast, info);
 	if (!ret) {
 		free(info);
 		hashfast->device_data = NULL;
@@ -319,19 +317,19 @@ static bool hashfast_detect_common(struct cgpu_info *hashfast)
 
 	info->works = calloc(sizeof(struct work *), info->num_sequence);
 	if (!info->works)
-		quit(1, "Failed to calloc info works in hashfast_detect_common");
+		quit(1, "Failed to calloc info works in hfa_detect_common");
 
 	return true;
 }
 
-static void hashfast_initialise(struct cgpu_info *hashfast)
+static void hfa_initialise(struct cgpu_info *hashfast)
 {
 	if (hashfast->usbinfo.nodev)
 		return;
 	// FIXME Do necessary initialising here
 }
 
-static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices *found)
+static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *found)
 {
 	struct cgpu_info *hashfast;
 
@@ -346,27 +344,27 @@ static bool hashfast_detect_one_usb(libusb_device *dev, struct usb_find_devices 
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
 
-	hashfast_initialise(hashfast);
+	hfa_initialise(hashfast);
 
 	add_cgpu(hashfast);
 
-	return hashfast_detect_common(hashfast);
+	return hfa_detect_common(hashfast);
 }
 
-static void hashfast_detect(bool hotplug)
+static void hfa_detect(bool hotplug)
 {
 	/* Set up the CRC tables only once. */
 	if (!hotplug)
-		hf_init_crc8();
-	usb_detect(&hashfast_drv, hashfast_detect_one_usb);
+		hfa_init_crc8();
+	usb_detect(&hashfast_drv, hfa_detect_one_usb);
 }
 
-static bool hashfast_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
+static bool hfa_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
 {
 	uint8_t hcrc;
 	bool ret;
 
-	ret = hashfast_get_header(hashfast, h, &hcrc);
+	ret = hfa_get_header(hashfast, h, &hcrc);
 	if (unlikely(!ret))
 		goto out;
 	if (unlikely(h->crc8 != hcrc)) {
@@ -374,7 +372,7 @@ static bool hashfast_get_packet(struct cgpu_info *hashfast, struct hf_header *h)
 		       hashfast->device_id, h->crc8, hcrc);
 	}
 	if (h->data_length > 0)
-		ret = hashfast_get_data(hashfast, (char *)(h + 1), h->data_length);
+		ret = hfa_get_data(hashfast, (char *)(h + 1), h->data_length);
 	if (unlikely(!ret)) {
 		applog(LOG_WARNING, "HFA %d: Failed to get data associated with header",
 		       hashfast->device_id);
@@ -417,7 +415,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 	mutex_unlock(&info->lock);
 }
 
-static void update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
+static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
 			      struct hf_header *h)
 {
 	struct hf_g1_die_data *d = (struct hf_g1_die_data *)(h + 1), *ds;
@@ -518,7 +516,7 @@ static void *hfa_read(void *arg)
 	while (likely(!hashfast->shutdown)) {
 		char buf[512];
 		struct hf_header *h = (struct hf_header *)buf;
-		bool ret = hashfast_get_packet(hashfast, h);
+		bool ret = hfa_get_packet(hashfast, h);
 
 		if (unlikely(!ret))
 			continue;
@@ -528,7 +526,7 @@ static void *hfa_read(void *arg)
 				hfa_parse_gwq_status(hashfast, info, h);
 				break;
 			case OP_DIE_STATUS:
-				update_die_status(hashfast, info, h);
+				hfa_update_die_status(hashfast, info, h);
 				break;
 			case OP_NONCE:
 				hfa_parse_nonce(thr, hashfast, info, h);
@@ -543,7 +541,7 @@ static void *hfa_read(void *arg)
 	return NULL;
 }
 
-static bool hashfast_prepare(struct thr_info *thr)
+static bool hfa_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -551,7 +549,7 @@ static bool hashfast_prepare(struct thr_info *thr)
 
 	mutex_init(&info->lock);
 	if (pthread_create(&info->read_thr, NULL, hfa_read, (void *)thr))
-		quit(1, "Failed to pthread_create read thr in hashfast_prepare");
+		quit(1, "Failed to pthread_create read thr in hfa_prepare");
 
 	cgtime(&now);
 	get_datestamp(hashfast->init, sizeof(hashfast->init), &now);
@@ -560,23 +558,23 @@ static bool hashfast_prepare(struct thr_info *thr)
 }
 
 /* Figure out how many jobs to send. */
-static int __hashfast_jobs(struct hashfast_info *info)
+static int __hfa_jobs(struct hashfast_info *info)
 {
 	return info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
 }
 
-static int hashfast_jobs(struct hashfast_info *info)
+static int hfa_jobs(struct hashfast_info *info)
 {
 	int ret;
 
 	mutex_lock(&info->lock);
-	ret = __hashfast_jobs(info);
+	ret = __hfa_jobs(info);
 	mutex_unlock(&info->lock);
 
 	return ret;
 }
 
-static int64_t hashfast_scanwork(struct thr_info *thr)
+static int64_t hfa_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -585,9 +583,9 @@ static int64_t hashfast_scanwork(struct thr_info *thr)
 
 	if (unlikely(thr->work_restart)) {
 restart:
-		ret = hashfast_send_frame(hashfast, OP_WORK_RESTART, 0, (uint8_t *)NULL, 0);
+		ret = hfa_send_frame(hashfast, OP_WORK_RESTART, 0, (uint8_t *)NULL, 0);
 		if (unlikely(!ret)) {
-			ret = hashfast_reset(hashfast, info);
+			ret = hfa_reset(hashfast, info);
 			if (unlikely(!ret)) {
 				applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
 				hashfast->device_id);
@@ -596,13 +594,13 @@ restart:
 		}
 	}
 
-	jobs = hashfast_jobs(info);
+	jobs = hfa_jobs(info);
 
 	if (!jobs) {
 		ret = restart_wait(thr, 100);
 		if (unlikely(!ret))
 			goto restart;
-		jobs = hashfast_jobs(info);
+		jobs = hfa_jobs(info);
 	}
 
 	while (jobs > 0) {
@@ -630,9 +628,9 @@ restart:
 		op_hash_data.search_difficulty = i;
 		if ((sequence = info->hash_sequence + 1) >= info->num_sequence)
 			sequence = 0;
-		ret = hashfast_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
+		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
 		if (unlikely(!ret)) {
-			ret = hashfast_reset(hashfast, info);
+			ret = hfa_reset(hashfast, info);
 			if (unlikely(!ret)) {
 				applog(LOG_ERR, "HFA %d: Failed to reset after write failure, disabling",
 				       hashfast->device_id);
@@ -643,7 +641,7 @@ restart:
 		mutex_lock(&info->lock);
 		info->hash_sequence = sequence;
 		*(info->works + info->hash_sequence) = work;
-		jobs = __hashfast_jobs(info);
+		jobs = __hfa_jobs(info);
 		mutex_unlock(&info->lock);
 
 		applog(LOG_DEBUG, "HFA %d: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
@@ -658,17 +656,17 @@ restart:
 	return hashes;
 }
 
-static struct api_data *hashfast_api_stats(struct cgpu_info __maybe_unused *cgpu)
+static struct api_data *hfa_api_stats(struct cgpu_info __maybe_unused *cgpu)
 {
 	return NULL;
 }
 
-static void hashfast_init(struct cgpu_info *hashfast)
+static void hfa_init(struct cgpu_info *hashfast)
 {
 	usb_buffer_enable(hashfast);
 }
 
-static void hashfast_shutdown(struct thr_info *thr)
+static void hfa_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
@@ -681,11 +679,11 @@ struct device_drv hashfast_drv = {
 	.dname = "Hashfast",
 	.name = "HFA",
 	.max_diff = 256.0, // Limit max diff to get some nonces back regardless
-	.drv_detect = hashfast_detect,
-	.thread_prepare = hashfast_prepare,
+	.drv_detect = hfa_detect,
+	.thread_prepare = hfa_prepare,
 	.hash_work = &hash_driver_work,
-	.scanwork = hashfast_scanwork,
-	.get_api_stats = hashfast_api_stats,
-	.reinit_device = hashfast_init,
-	.thread_shutdown = hashfast_shutdown,
+	.scanwork = hfa_scanwork,
+	.get_api_stats = hfa_api_stats,
+	.reinit_device = hfa_init,
+	.thread_shutdown = hfa_shutdown,
 };
