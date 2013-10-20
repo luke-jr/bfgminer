@@ -755,12 +755,28 @@ static void hfa_init(struct cgpu_info *hashfast)
 	usb_buffer_enable(hashfast);
 }
 
+static void hfa_free_all_work(struct hashfast_info *info)
+{
+	while (info->device_sequence_tail != info->hash_sequence_head) {
+		struct work *work;
+
+		if (++info->hash_sequence_tail >= info->num_sequence)
+			info->hash_sequence_tail = 0;
+		if (unlikely(!(work = info->works[info->hash_sequence_tail])))
+			break;
+		free_work(work);
+		info->works[info->hash_sequence_tail] = NULL;
+	}
+}
+
 static void hfa_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 
+	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
 	pthread_join(info->read_thr, NULL);
+	hfa_free_all_work(info);
 }
 
 struct device_drv hashfast_drv = {
