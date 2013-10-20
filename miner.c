@@ -2085,6 +2085,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ICARUS
 		"icarus "
 #endif
+#ifdef USE_KNC
+		"knc "
+#endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
@@ -9721,6 +9724,10 @@ extern struct device_drv icarus_drv;
 extern struct device_drv avalon_drv;
 #endif
 
+#ifdef USE_KNC
+extern struct device_drv knc_drv;
+#endif
+
 #ifdef USE_LITTLEFURY
 extern struct device_drv littlefury_drv;
 #endif
@@ -9834,6 +9841,11 @@ void drv_detect_all()
 #ifdef USE_BIGPIC
 	if (!opt_scrypt)
 		bigpic_drv.drv_detect();
+#endif
+
+#ifdef USE_KNC
+	if (!opt_scrypt)
+		knc_drv.drv_detect();
 #endif
 
 #ifdef USE_MODMINER
