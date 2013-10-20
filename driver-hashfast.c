@@ -537,7 +537,8 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 	s1->usb_tx_endpointstalled += sd->usb_tx_endpointstalled;
 	s1->usb_tx_disconnected += sd->usb_tx_disconnected;
 	s1->usb_tx_suspended += sd->usb_tx_suspended;
-
+#if 0
+	/* We don't care about UART stats so they're not in our struct */
 	s1->uart_tx_queue_dma += sd->uart_tx_queue_dma;
 	s1->uart_tx_interrupts += sd->uart_tx_interrupts;
 
@@ -549,7 +550,7 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 	s1->uart_rx_bad_dma += sd->uart_rx_bad_dma;
 	s1->uart_rx_short_dma += sd->uart_rx_short_dma;
 	s1->uart_rx_buffers_full += sd->uart_rx_buffers_full;
-
+#endif
 	if (sd->max_tx_buffers >  s1->max_tx_buffers)
 		s1->max_tx_buffers = sd->max_tx_buffers;
 	if (sd->max_rx_buffers >  s1->max_rx_buffers)
@@ -567,7 +568,7 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 	applog(LOG_DEBUG, "      usb_tx_endpointstalled:       %6d", sd->usb_tx_endpointstalled);
 	applog(LOG_DEBUG, "      usb_tx_disconnected:          %6d", sd->usb_tx_disconnected);
 	applog(LOG_DEBUG, "      usb_tx_suspended:             %6d", sd->usb_tx_suspended);
-
+#if 0
 	applog(LOG_DEBUG, "      uart_tx_queue_dma:            %6d", sd->uart_tx_queue_dma);
 	applog(LOG_DEBUG, "      uart_tx_interrupts:           %6d", sd->uart_tx_interrupts);
 
@@ -579,7 +580,7 @@ static void hfa_update_stats1(struct cgpu_info *hashfast, struct hashfast_info *
 	applog(LOG_DEBUG, "      uart_rx_bad_dma:              %6d", sd->uart_rx_bad_dma);
 	applog(LOG_DEBUG, "      uart_rx_short_dma:            %6d", sd->uart_rx_short_dma);
 	applog(LOG_DEBUG, "      uart_rx_buffers_full:         %6d", sd->uart_rx_buffers_full);
-
+#endif
 	applog(LOG_DEBUG, "      max_tx_buffers:               %6d", sd->max_tx_buffers);
 	applog(LOG_DEBUG, "      max_rx_buffers:               %6d", sd->max_rx_buffers);
 

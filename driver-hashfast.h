@@ -19,18 +19,18 @@
 #define HASHFAST_MINER_THREADS 1
 #define HF_SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(info->num_sequence+(tx)-(rx)))
 
-// Matching fields for hf_statistics, but large #'s for local accumulation, per-die
+// Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
-	uint64_t rx_header_crc;                     // Header CRC's
-	uint64_t rx_body_crc;                       // Data CRC's
+	uint64_t rx_header_crc;                     // Header CRCs
+	uint64_t rx_body_crc;                       // Data CRCs
 	uint64_t rx_header_timeouts;                // Header timeouts
 	uint64_t rx_body_timeouts;                  // Data timeouts
 	uint64_t core_nonce_fifo_full;              // Core nonce Q overrun events
 	uint64_t array_nonce_fifo_full;             // System nonce Q overrun events
 	uint64_t stats_overrun;                     // Overrun in statistics reporting
-} __attribute__((packed,aligned(4)));
+};
 
-// Matching fields for hf_usb_stats1, but large #'s for local accumulation, per device
+// Matching fields for hf_usb_stats1, but large #s for local accumulation, per device
 struct hf_long_usb_stats1 {
 	// USB incoming
 	uint64_t usb_rx_preambles;
@@ -45,7 +45,8 @@ struct hf_long_usb_stats1 {
 	uint64_t usb_tx_endpointstalled;
 	uint64_t usb_tx_disconnected;
 	uint64_t usb_tx_suspended;
-
+#if 0
+	/* We don't care about UART stats */
 	// UART transmit
 	uint64_t uart_tx_queue_dma;
 	uint64_t uart_tx_interrupts;
@@ -59,10 +60,11 @@ struct hf_long_usb_stats1 {
 	uint64_t uart_rx_bad_dma;
 	uint64_t uart_rx_short_dma;
 	uint64_t uart_rx_buffers_full;
+#endif
 
 	uint8_t  max_tx_buffers;
 	uint8_t  max_rx_buffers;
-} __attribute__((packed,aligned(8)));
+};
 
 struct hashfast_info {
 	int asic_count;                             // # of chips in the chain
