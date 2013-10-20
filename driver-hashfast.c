@@ -416,7 +416,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 }
 
 static void hfa_update_die_status(struct cgpu_info *hashfast, struct hashfast_info *info,
-			      struct hf_header *h)
+				  struct hf_header *h)
 {
 	struct hf_g1_die_data *d = (struct hf_g1_die_data *)(h + 1), *ds;
 	int num_included = (h->data_length * 4) / sizeof(struct hf_g1_die_data);
@@ -503,6 +503,23 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	}
 }
 
+static void hfa_update_die_statistics(struct hashfast_info *info, struct hf_header *h)
+{
+	struct hf_statistics *s = (struct hf_statistics *)(h + 1);
+	struct hf_long_statistics *l;
+
+	// Accumulate the data
+	l = info->die_statistics + h->chip_address;
+
+	l->rx_header_crc += s->rx_header_crc;
+	l->rx_body_crc += s->rx_body_crc;
+	l->rx_header_timeouts += s->rx_header_timeouts;
+	l->rx_body_timeouts += s->rx_body_timeouts;
+	l->core_nonce_fifo_full += s->core_nonce_fifo_full;
+	l->array_nonce_fifo_full += s->array_nonce_fifo_full;
+	l->stats_overrun += s->stats_overrun;
+}
+
 static void *hfa_read(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
@@ -532,6 +549,8 @@ static void *hfa_read(void *arg)
 				hfa_parse_nonce(thr, hashfast, info, h);
 				break;
 			case OP_STATISTICS:
+				hfa_update_die_statistics(info, h);
+				break;
 			case OP_USB_STATS1:
 			default:
 				break;
