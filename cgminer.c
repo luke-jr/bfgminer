@@ -3574,9 +3574,16 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 	if (base_work->nonce1)
 		work->nonce1 = strdup(base_work->nonce1);
 	if (base_work->ntime) {
-		if (noffset)
+		/* If we are passed an noffset the binary work->data ntime and
+		 * the work->ntime hex string need to be adjusted. */
+		if (noffset) {
+			uint32_t *work_ntime = (uint32_t *)(work->data + 68);
+			uint32_t ntime = be32toh(*work_ntime);
+
+			ntime += noffset;
+			*work_ntime = htobe32(ntime);
 			work->ntime = offset_ntime(base_work->ntime, noffset);
-		else
+		} else
 			work->ntime = strdup(base_work->ntime);
 	}
 	if (base_work->coinbase)
