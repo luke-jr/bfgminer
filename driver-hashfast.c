@@ -754,6 +754,9 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	char buf[64];
 	int varint;
 
+	root = api_add_int(root, "asic count", &info->asic_count, false);
+	root = api_add_int(root, "core count", &info->core_count, false);
+
 	db = &info->usb_init_base;
 	sprintf(buf, "%d.%d", (db->firmware_rev >> 8) & 0xff, db->firmware_rev & 0xff);
 	root = api_add_string(root, "firmware rev", buf, true);
