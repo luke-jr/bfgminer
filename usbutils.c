@@ -2526,8 +2526,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			memcpy(usbdev->buffer, usbbuf + bufsiz, usbdev->bufamt);
 			tot -= usbdev->bufamt;
 			usbbuf[tot] = '\0';
-			applog(LOG_INFO, "USB: %s%i read1 buffering %d extra bytes",
-					cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+			applog(LOG_DEBUG, "USB: %s%i read1 buffering %d extra bytes",
+			       cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 		}
 
 		*processed = tot;
@@ -2650,8 +2650,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			tot -= usbdev->bufamt;
 			memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
 			usbbuf[tot] = '\0';
-			applog(LOG_ERR, "USB: %s%i read2 buffering %d extra bytes",
-					cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+			applog(LOG_DEBUG, "USB: %s%i read2 buffering %d extra bytes",
+			       cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 		}
 	}
 
