@@ -187,6 +187,19 @@ bool knc_spi_txrx(struct spi_port * const spi)
 }
 
 static
+void knc_clean_flush(struct spi_port * const spi)
+{
+	const uint8_t flushcmd = KNC_REQ_FLUSH_QUEUE << 4;
+	const size_t spi_req_sz = 0x1000;
+	
+	spi_clear_buf(spi);
+	spi_emit_buf(spi, &flushcmd, 1);
+	spi_emit_nop(spi, spi_req_sz - spi_getbufsz(spi));
+	applog(LOG_DEBUG, "%s: Issuing flush command to clear out device queues", knc_drv.dname);
+	spi_txrx(spi);
+}
+
+static
 bool knc_init(struct thr_info * const thr)
 {
 	const int max_cores = 192;
@@ -268,6 +281,8 @@ nomorecores: ;
 	
 	if (!knc_spi_open(cgpu->dev_repr, spi))
 		return false;
+	
+	knc_clean_flush(spi);
 	
 	timer_set_now(&thr->tv_poll);
 	
