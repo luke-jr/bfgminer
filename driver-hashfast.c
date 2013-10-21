@@ -51,7 +51,7 @@ static unsigned char hfa_crc8(unsigned char *h)
 }
 
 struct hfa_cmd {
-	int cmd;
+	uint8_t cmd;
 	char *cmd_name;
 	enum usb_cmds usb_cmd;
 };
