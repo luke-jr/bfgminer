@@ -859,6 +859,10 @@ static void hfa_shutdown(struct thr_info *thr)
 	hfa_free_all_work(info);
 	hfa_clear_readbuf(hashfast);
 	usb_buffer_disable(hashfast);
+	free(info->works);
+	free(info->die_statistics);
+	free(info->die_status);
+	free(info);
 }
 
 struct device_drv hashfast_drv = {
