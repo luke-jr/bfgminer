@@ -173,7 +173,7 @@ modminer_detect()
 static bool
 modminer_reopen(struct cgpu_info*modminer)
 {
-	close(modminer->device->device_fd);
+	serial_close(modminer->device->device_fd);
 	int fd = serial_open(modminer->device_path, 0, 10, true);
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to reopen %s", modminer->dev_repr, modminer->device_path);
