@@ -204,7 +204,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;          // Protocol to use
 	hu->hash_clock = info->hash_clock_rate;             // Hash clock rate in Mhz
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
-	applog(LOG_WARNING, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
+	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
 
 	if (!hfa_send_header(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
