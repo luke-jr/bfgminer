@@ -123,7 +123,7 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 	BFgets(buf, bufsz, fd);
 }
 
-#define BFclose(fd) close(fd)
+#define BFclose(fd) serial_close(fd)
 
 struct bitforce_init_data {
 	bool sc;
