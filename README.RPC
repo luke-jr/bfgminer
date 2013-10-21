@@ -476,7 +476,8 @@ Added API command:
  'poolquota' - Set pool quota for load-balance strategy.
 
 Modified API command:
- 'devs', 'procs' - add 'Elapsed', 'Stale', 'Work Utility', 'Difficulty Stale'
+ 'devs', 'gpu', 'pga', 'procs' and 'asc' - add 'Device Elapsed', 'Stale',
+                                             'Work Utility', 'Difficulty Stale'
  'pools' - add 'Quota'
  'summary' - add 'Diff1 Work', 'MHS %ds' (where %d is the log interval)
 
@@ -1075,8 +1076,8 @@ It will be superseded by myminer.php
 
 ---------
 
-The example.php above also shows how to define more that one rig to
-be shown my miner.php
+The example myminer.php above also shows how to define more that one rig
+to be shown my miner.php
 
 Each rig string is 2 or 3 values separated by colons ':'
 They are simply an IP address or host name, followed by the
@@ -1662,7 +1663,7 @@ in this case is the average difficulty of each share submitted
 
 THERE IS A SECURITY RISK WITH HOW GEN WORKS
 It simply replaces all the variables with their values and then requests PHP
-the execute the formula - thus if a field value returned from a BFGMiner API
+to execute the formula - thus if a field value returned from a BFGMiner API
 request contained PHP code, it could be executed by your web server
 Of course BFGMiner doesn't do this, but if you do not control the BFGMiner that
 returns the data in the API calls, someone could modify BFGMiner to return a
