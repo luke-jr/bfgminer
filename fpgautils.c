@@ -898,6 +898,14 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 #endif
 }
 
+int serial_close(const int fd)
+{
+#if defined(LOCK_EX) && defined(LOCK_NB) && defined(LOCK_UN)
+	flock(fd, LOCK_UN);
+#endif
+	return close(fd);
+}
+
 ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 {
 	ssize_t len, tlen = 0;
