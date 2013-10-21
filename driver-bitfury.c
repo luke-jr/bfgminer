@@ -38,12 +38,12 @@ static int bitfury_open(struct cgpu_info *bitfury)
 	 * harmless on linux. */
 	buf[0] = 0x80250000;
 	buf[1] = 0x00000800;
-	err = usb_transfer(bitfury, 0, 9, 1, 0, C_BF1_RESET);
+	err = usb_transfer(bitfury, 0, 9, 1, 0, C_ATMEL_RESET);
 	if (!err)
-		err = usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_BF1_OPEN);
+		err = usb_transfer(bitfury, 0x21, 0x22, 0, 0, C_ATMEL_OPEN);
 	if (!err) {
 		err = usb_transfer_data(bitfury, 0x21, 0x20, 0x0000, 0, buf,
-					BF1MSGSIZE, C_BF1_INIT);
+					BF1MSGSIZE, C_ATMEL_INIT);
 	}
 
 	if (err < 0) {

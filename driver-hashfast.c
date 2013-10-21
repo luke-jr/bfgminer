@@ -312,7 +312,6 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info)
 		quit(1, "Failed to calloc hashfast_info in hfa_detect_common");
 	hashfast->device_data = info;
-	hfa_clear_readbuf(hashfast);
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
 	if (!ret) {
@@ -340,12 +339,35 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	return true;
 }
 
-static void hfa_initialise(struct cgpu_info *hashfast)
+static bool hfa_initialise(struct cgpu_info *hashfast)
 {
+	int err;
+
 	if (hashfast->usbinfo.nodev)
-		return;
+		return false;
+
 	usb_buffer_enable(hashfast);
-	// FIXME Do necessary initialising here
+	hfa_clear_readbuf(hashfast);
+
+	err = usb_transfer(hashfast, 0, 9, 1, 0, C_ATMEL_RESET);
+	if (!err)
+		err = usb_transfer(hashfast, 0x21, 0x22, 0, 0, C_ATMEL_OPEN);
+	if (!err) {
+		uint32_t buf[2];
+
+		/* Magic sequence to reset device only really needed for windows
+		 * but harmless on linux. */
+		buf[0] = 0x80250000;
+		buf[1] = 0x00000800;
+		err = usb_transfer_data(hashfast, 0x21, 0x20, 0x0000, 0, buf,
+					7, C_ATMEL_INIT);
+	}
+	if (err < 0) {
+		applog(LOG_INFO, "HFA %d: Failed to open with error %s",
+		       hashfast->device_id, libusb_error_name(err));
+	}
+	/* Must have transmitted init sequence sized buffer */
+	return (err == 7);
 }
 
 static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *found)
@@ -363,7 +385,10 @@ static bool hfa_detect_one_usb(libusb_device *dev, struct usb_find_devices *foun
 
 	hashfast->usbdev->usb_type = USB_TYPE_STD;
 
-	hfa_initialise(hashfast);
+	if (!hfa_initialise(hashfast)) {
+		hashfast = usb_free_cgpu(hashfast);
+		return false;
+	}
 
 	add_cgpu(hashfast);
 
