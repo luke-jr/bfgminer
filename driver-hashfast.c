@@ -835,6 +835,34 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static void hfa_statline_before(char *buf, size_t bufsiz, struct cgpu_info *hashfast)
+{
+	struct hashfast_info *info = hashfast->device_data;
+	double max_temp, max_volt;
+	struct hf_g1_die_data *d;
+	int i;
+
+	max_temp = max_volt = 0.0;
+
+	for (i = 0; i < info->asic_count; i++) {
+		double temp;
+		int j;
+
+		d = &info->die_status[i];
+		temp = GN_DIE_TEMPERATURE(d->die.die_temperature);
+		if (temp > max_temp)
+			max_temp = temp;
+		for (j = 0; j < 6; j++) {
+			double volt = GN_CORE_VOLTAGE(d->die.core_voltage[j]);
+
+			if (volt > max_volt)
+				max_volt = volt;
+		}
+	}
+
+	tailsprintf(buf, bufsiz, " max%3.0fC %3.2fV | ", max_temp, max_volt);
+}
+
 static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
 {
 }
@@ -879,6 +907,7 @@ struct device_drv hashfast_drv = {
 	.hash_work = &hash_driver_work,
 	.scanwork = hfa_scanwork,
 	.get_api_stats = hfa_api_stats,
+	.get_statline_before = hfa_statline_before,
 	.reinit_device = hfa_init,
 	.thread_shutdown = hfa_shutdown,
 };
