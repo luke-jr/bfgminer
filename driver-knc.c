@@ -55,6 +55,7 @@ struct knc_device {
 	int i2c;
 	struct spi_port *spi;
 	
+	bool need_flush;
 	struct work *workqueue;
 	int workqueue_size;
 	int workqueue_max;
@@ -335,6 +336,9 @@ bool knc_queue_append(struct thr_info * const thr, struct work * const work)
 	return true;
 }
 
+#define HASH_LAST_ADDED(head, out)  \
+	(out = (ELMT_FROM_HH((head)->hh.tbl, (head)->hh.tbl->tail)))
+
 static
 void knc_queue_flush(struct thr_info * const thr)
 {
@@ -350,6 +354,13 @@ void knc_queue_flush(struct thr_info * const thr)
 		knc_remove_local_queue(knc, work);
 	}
 	thr->queue_full = false;
+	
+	HASH_LAST_ADDED(knc->devicework, work);
+	if (stale_work(work, true))
+	{
+		knc->need_flush = true;
+		timer_set_now(&thr->tv_poll);
+	}
 }
 
 static inline
@@ -389,6 +400,12 @@ void knc_poll(struct thr_info * const thr)
 	knc_prune_local_queue(thr);
 	
 	spi_clear_buf(spi);
+	if (knc->need_flush)
+	{
+		applog(LOG_NOTICE, "%s: Abandoning stale searches to restart", knc_drv.dname);
+		buf[0] = KNC_REQ_FLUSH_QUEUE << 4;
+		spi_emit_buf(spi, buf, sizeof(buf));
+	}
 	DL_FOREACH(knc->workqueue, work)
 	{
 		buf[0] = KNC_REQ_SUBMIT_WORK << 4;
@@ -415,24 +432,6 @@ void knc_poll(struct thr_info * const thr)
 	workaccept = get_u16be(&rxbuf[6]);
 	applog(LOG_DEBUG, "%s: %lu/%d jobs accepted to queue (max=%d)",
 	       knc_drv.dname, (unsigned long)workaccept, works_sent, knc->workqueue_max);
-	if (workaccept)
-	{
-		if (workaccept >= knc->workqueue_max)
-		{
-			knc->workqueue_max = workaccept;
-			delay_usecs = 0;
-		}
-		DL_FOREACH_SAFE(knc->workqueue, work, tmp)
-		{
-			--knc->workqueue_size;
-			DL_DELETE(knc->workqueue, work);
-			work->device_id = knc->next_id++ & 0x7fff;
-			HASH_ADD_INT(knc->devicework, device_id, work);
-			if (!--workaccept)
-				break;
-		}
-		thr->queue_full = (knc->workqueue_size >= knc->workqueue_max);
-	}
 	
 	while (true)
 	{
@@ -498,6 +497,36 @@ void knc_poll(struct thr_info * const thr)
 				hashes_done2(mythr, 0x100000000, NULL);
 				break;
 		}
+	}
+	
+	if (knc->need_flush)
+	{
+		knc->need_flush = false;
+		HASH_ITER(hh, knc->devicework, work, tmp)
+		{
+			HASH_DEL(knc->devicework, work);
+			free_work(work);
+		}
+		delay_usecs = 0;
+	}
+	
+	if (workaccept)
+	{
+		if (workaccept >= knc->workqueue_max)
+		{
+			knc->workqueue_max = workaccept;
+			delay_usecs = 0;
+		}
+		DL_FOREACH_SAFE(knc->workqueue, work, tmp)
+		{
+			--knc->workqueue_size;
+			DL_DELETE(knc->workqueue, work);
+			work->device_id = knc->next_id++ & 0x7fff;
+			HASH_ADD_INT(knc->devicework, device_id, work);
+			if (!--workaccept)
+				break;
+		}
+		thr->queue_full = (knc->workqueue_size >= knc->workqueue_max);
 	}
 	
 	timer_set_delay_from_now(&thr->tv_poll, delay_usecs);
