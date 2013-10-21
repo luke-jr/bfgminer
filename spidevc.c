@@ -218,8 +218,7 @@ void *spi_emit_buf_reverse(struct spi_port *port, const void *p, size_t sz)
 	return rv;
 }
 
-static
-void spi_emit_buf(struct spi_port *port, void *str, size_t sz)
+void spi_emit_buf(struct spi_port * const port, const void * const str, const size_t sz)
 {
 	if (port->spibufsz + sz >= SPIMAXSZ)
 		return;

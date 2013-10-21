@@ -20,7 +20,12 @@ struct spi_port {
 	struct cgpu_info *cgpu;
 	const char *repr;
 	int logprio;
-	int speed;
+	
+	int fd;
+	uint32_t speed;
+	uint16_t delay;
+	uint8_t mode;
+	uint8_t bits;
 };
 
 extern struct spi_port *sys_spi;
@@ -51,6 +56,7 @@ size_t spi_getbufsz(struct spi_port *port)
 	return port->spibufsz;
 }
 
+extern void spi_emit_buf(struct spi_port *, const void *, size_t);
 
 extern void spi_emit_break(struct spi_port *port); /* BREAK CONNECTIONS AFTER RESET */
 extern void spi_emit_fsync(struct spi_port *port); /* FEED-THROUGH TO NEXT CHIP SYNCHRONOUSLY (WITH FLIP-FLOP) */
