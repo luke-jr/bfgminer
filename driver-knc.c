@@ -462,6 +462,7 @@ void knc_poll(struct thr_info * const thr)
 			if (KNC_REPLY_NONCE_FOUND == rtype)
 			{
 				nonce = get_u32be(&rxbuf[4]);
+				nonce = le32toh(nonce);
 				inc_hw_errors2(mythr, NULL, &nonce);
 			}
 			else
