@@ -666,17 +666,16 @@ static bool hfa_prepare(struct thr_info *thr)
 }
 
 /* Figure out how many jobs to send. */
-static int __hfa_jobs(struct hashfast_info *info)
-{
-	return info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
-}
-
 static int hfa_jobs(struct hashfast_info *info)
 {
 	int ret;
 
 	mutex_lock(&info->lock);
-	ret = __hfa_jobs(info);
+	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
+	/* Place an upper limit on how many jobs to queue to prevent sending
+	 * more  work than the device can use after a period of outage. */
+	if (ret > info->usb_init_base.inflight_target)
+		ret = info->usb_init_base.inflight_target;
 	mutex_unlock(&info->lock);
 
 	return ret;
@@ -711,7 +710,7 @@ restart:
 		jobs = hfa_jobs(info);
 	}
 
-	while (jobs > 0) {
+	while (jobs-- > 0) {
 		struct hf_hash_usb op_hash_data;
 		struct work *work;
 		uint64_t intdiff;
@@ -748,8 +747,7 @@ restart:
 
 		mutex_lock(&info->lock);
 		info->hash_sequence = sequence;
-		*(info->works + info->hash_sequence) = work;
-		jobs = __hfa_jobs(info);
+		info->works[info->hash_sequence] = work;
 		mutex_unlock(&info->lock);
 
 		applog(LOG_DEBUG, "HFA %d: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
