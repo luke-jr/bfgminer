@@ -288,6 +288,21 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	return true;
 }
 
+static void hfa_send_shutdown(struct cgpu_info *hashfast)
+{
+	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
+}
+
+static void hfa_clear_readbuf(struct cgpu_info *hashfast)
+{
+	int amount, ret;
+	char buf[512];
+
+	do {
+		ret = usb_read(hashfast, buf, 512, &amount, C_HF_CLEAR_READ);
+	} while (!ret || amount);
+}
+
 static bool hfa_detect_common(struct cgpu_info *hashfast)
 {
 	struct hashfast_info *info;
@@ -297,9 +312,12 @@ static bool hfa_detect_common(struct cgpu_info *hashfast)
 	if (!info)
 		quit(1, "Failed to calloc hashfast_info in hfa_detect_common");
 	hashfast->device_data = info;
+	hfa_clear_readbuf(hashfast);
 	/* hashfast_reset should fill in details for info */
 	ret = hfa_reset(hashfast, info);
 	if (!ret) {
+		hfa_send_shutdown(hashfast);
+		hfa_clear_readbuf(hashfast);
 		free(info);
 		hashfast->device_data = NULL;
 		return false;
@@ -326,6 +344,7 @@ static void hfa_initialise(struct cgpu_info *hashfast)
 {
 	if (hashfast->usbinfo.nodev)
 		return;
+	usb_buffer_enable(hashfast);
 	// FIXME Do necessary initialising here
 }
 
@@ -812,9 +831,8 @@ static struct api_data *hfa_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static void hfa_init(struct cgpu_info *hashfast)
+static void hfa_init(struct cgpu_info __maybe_unused *hashfast)
 {
-	usb_buffer_enable(hashfast);
 }
 
 static void hfa_free_all_work(struct hashfast_info *info)
@@ -836,9 +854,11 @@ static void hfa_shutdown(struct thr_info *thr)
 	struct cgpu_info *hashfast = thr->cgpu;
 	struct hashfast_info *info = hashfast->device_data;
 
-	hfa_send_frame(hashfast, HF_USB_CMD(OP_USB_SHUTDOWN), 0, NULL, 0);
+	hfa_send_shutdown(hashfast);
 	pthread_join(info->read_thr, NULL);
 	hfa_free_all_work(info);
+	hfa_clear_readbuf(hashfast);
+	usb_buffer_disable(hashfast);
 }
 
 struct device_drv hashfast_drv = {
