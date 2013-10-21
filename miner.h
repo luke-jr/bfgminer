@@ -1317,6 +1317,7 @@ struct work {
 
 	unsigned char	work_restart_id;
 	int		id;
+	int		device_id;
 	UT_hash_handle hh;
 	
 	double		work_difficulty;

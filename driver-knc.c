@@ -58,6 +58,7 @@ struct knc_device {
 	struct work *workqueue;
 	int workqueue_size;
 	int workqueue_max;
+	int next_id;
 	
 	struct work *devicework;
 };
@@ -365,6 +366,7 @@ void knc_poll(struct thr_info * const thr)
 	uint8_t buf[0x30], *rxbuf;
 	int works_sent = 0, asicno, i;
 	uint16_t workaccept;
+	int workid = knc->next_id;
 	uint32_t nonce, coreno;
 	size_t spi_req_sz = 0x1000;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
@@ -376,8 +378,8 @@ void knc_poll(struct thr_info * const thr)
 	{
 		buf[0] = KNC_REQ_SUBMIT_WORK << 4;
 		buf[1] = 0;
-		buf[2] = work->id >> 8;
-		buf[3] = work->id & 0xff;
+		buf[2] = (workid >> 8) & 0x7f;
+		buf[3] = workid & 0xff;
 		
 		for (i = 0; i < 0x20; ++i)
 			buf[4 + i] = work->midstate[0x1f - i];
@@ -387,6 +389,7 @@ void knc_poll(struct thr_info * const thr)
 		spi_emit_buf(spi, buf, sizeof(buf));
 		
 		++works_sent;
+		++workid;
 	}
 	spi_emit_nop(spi, spi_req_sz - spi_getbufsz(spi));
 	spi_txrx(spi);
@@ -408,7 +411,8 @@ void knc_poll(struct thr_info * const thr)
 		{
 			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
-			HASH_ADD_INT(knc->devicework, id, work);
+			work->device_id = knc->next_id++ & 0x7fff;
+			HASH_ADD_INT(knc->devicework, device_id, work);
 			if (!--workaccept)
 				break;
 		}
