@@ -688,6 +688,12 @@ static int64_t hfa_scanwork(struct thr_info *thr)
 	int64_t hashes;
 	int jobs, ret;
 
+	if (unlikely(hashfast->usbinfo.nodev)) {
+		applog(LOG_WARNING, "HFA %d: device disappeared, disabling",
+		       hashfast->device_id);
+		return -1;
+	}
+
 	if (unlikely(thr->work_restart)) {
 restart:
 		ret = hfa_send_frame(hashfast, HF_USB_CMD(OP_WORK_RESTART), 0, (uint8_t *)NULL, 0);
