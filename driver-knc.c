@@ -62,6 +62,10 @@ struct knc_device {
 	struct work *devicework;
 };
 
+struct knc_core {
+	int asicno;
+};
+
 static
 bool knc_detect_one(const char *devpath)
 {
@@ -185,8 +189,10 @@ static
 bool knc_init(struct thr_info * const thr)
 {
 	const int max_cores = 192;
+	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_device *knc;
+	struct knc_core *knccore;
 	struct spi_port *spi;
 	const int i2c = open(i2cpath, O_RDWR);
 	int i2cslave, i, j;
@@ -220,8 +226,19 @@ bool knc_init(struct thr_info * const thr)
 			i2c_smbus_read_i2c_block_data(i2c, i, 0x20, buf);
 			for (j = 0; j < 0x20; ++j)
 			{
+				mythr = proc->thr[0];
+				mythr->cgpu_data = knccore = malloc(sizeof(*knccore));
+				*knccore = (struct knc_core){
+					.asicno = i2cslave - 0x20,
+				};
+				if (proc != cgpu)
+				{
+					mythr->queue_full = true;
+					proc->device_data = NULL;
+				}
 				if (buf[j] != 3)
 					proc->deven = DEV_DISABLED;
+				
 				proc = proc->next_proc;
 				if ((!proc) || proc->device == proc)
 					goto nomorecores;
@@ -309,6 +326,9 @@ void knc_queue_flush(struct thr_info * const thr)
 	struct knc_device * const knc = cgpu->device_data;
 	struct work *work, *tmp;
 	
+	if (!knc)
+		return;
+	
 	DL_FOREACH_SAFE(knc->workqueue, work, tmp)
 	{
 		knc_remove_local_queue(knc, work);
@@ -324,7 +344,7 @@ uint16_t get_u16be(const void * const p)
 }
 
 static inline
-uint16_t get_u32be(const void * const p)
+uint32_t get_u32be(const void * const p)
 {
 	const uint8_t * const b = p;
 	return (((uint32_t)b[0]) << 0x18)
@@ -340,6 +360,7 @@ void knc_poll(struct thr_info * const thr)
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_device * const knc = cgpu->device_data;
 	struct spi_port * const spi = knc->spi;
+	struct knc_core *knccore;
 	struct work *work, *tmp;
 	uint8_t buf[0x30], *rxbuf;
 	int works_sent = 0, asicno, i;
@@ -358,8 +379,10 @@ void knc_poll(struct thr_info * const thr)
 		buf[2] = work->id >> 8;
 		buf[3] = work->id & 0xff;
 		
-		memcpy(&buf[4], work->midstate, 0x20);
-		memcpy(&buf[0x24], &work->data[64], 0xc);
+		for (i = 0; i < 0x20; ++i)
+			buf[4 + i] = work->midstate[0x1f - i];
+		for (i = 0; i < 0xc; ++i)
+			buf[0x24 + i] = work->data[0x4b - i];
 		
 		spi_emit_buf(spi, buf, sizeof(buf));
 		
@@ -383,6 +406,7 @@ void knc_poll(struct thr_info * const thr)
 		}
 		DL_FOREACH_SAFE(knc->workqueue, work, tmp)
 		{
+			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
 			HASH_ADD_INT(knc->devicework, id, work);
 			if (!--workaccept)
@@ -411,11 +435,14 @@ void knc_poll(struct thr_info * const thr)
 		asicno = (rxbuf[0] & 0x38) >> 3;
 		coreno = get_u32be(&rxbuf[8]);
 		proc = cgpu;
-		for (i = 0; i < asicno; )
+		while (true)
 		{
-			proc = proc->next_proc;
-			if (proc == proc->device)
-				++i;
+			knccore = proc->thr[0]->cgpu_data;
+			if (knccore->asicno == asicno)
+				break;
+			do {
+				proc = proc->next_proc;
+			} while(proc != proc->device);
 		}
 		for (i = 0; i < coreno; ++i)
 			proc = proc->next_proc;
@@ -428,6 +455,13 @@ void knc_poll(struct thr_info * const thr)
 			const char * const msgtype = (rtype == KNC_REPLY_NONCE_FOUND) ? "nonce found" : "work done";
 			applog(LOG_WARNING, "%"PRIpreprv": Got %s message about unknown work 0x%04x",
 			       proc->proc_repr, msgtype, i);
+			if (KNC_REPLY_NONCE_FOUND == rtype)
+			{
+				nonce = get_u32be(&rxbuf[4]);
+				inc_hw_errors2(mythr, NULL, &nonce);
+			}
+			else
+				inc_hw_errors2(mythr, NULL, NULL);
 			continue;
 		}
 		
@@ -435,6 +469,7 @@ void knc_poll(struct thr_info * const thr)
 		{
 			case KNC_REPLY_NONCE_FOUND:
 				nonce = get_u32be(&rxbuf[4]);
+				nonce = le32toh(nonce);
 				submit_nonce(mythr, work, nonce);
 				break;
 			case KNC_REPLY_WORK_DONE:

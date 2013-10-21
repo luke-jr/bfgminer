@@ -247,7 +247,7 @@ void spi_emit_fasync(struct spi_port *port, int n)
 
 void spi_emit_nop(struct spi_port *port, int n) {
 	int i;
-	for (i = 0; i < n; n++) {
+	for (i = 0; i < n; ++i) {
 		spi_emit_buf(port, "\x0", 1);
 	}
 }
