@@ -69,6 +69,7 @@ struct knc_device {
 
 struct knc_core {
 	int asicno;
+	int coreno;
 };
 
 static
@@ -250,6 +251,7 @@ bool knc_init(struct thr_info * const thr)
 				mythr->cgpu_data = knccore = malloc(sizeof(*knccore));
 				*knccore = (struct knc_core){
 					.asicno = i2cslave - 0x20,
+					.coreno = i + j,
 				};
 				if (proc != cgpu)
 					mythr->queue_full = true;
@@ -536,6 +538,37 @@ void knc_poll(struct thr_info * const thr)
 }
 
 static
+bool _knc_core_setstatus(struct thr_info * const thr, uint8_t val)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct knc_device * const knc = proc->device_data;
+	struct knc_core * const knccore = thr->cgpu_data;
+	const int i2c = knc->i2c;
+	const int i2cslave = 0x20 + knccore->asicno;
+	
+	if (ioctl(i2c, I2C_SLAVE, i2cslave))
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": %s: Failed to select i2c slave 0x%x",
+		       proc->proc_repr, __func__, i2cslave);
+		return false;
+	}
+	
+	return (-1 != i2c_smbus_write_byte_data(i2c, knccore->coreno, val));
+}
+
+static
+void knc_core_disable(struct thr_info * const thr)
+{
+	_knc_core_setstatus(thr, 0);
+}
+
+static
+void knc_core_enable(struct thr_info * const thr)
+{
+	_knc_core_setstatus(thr, 1);
+}
+
+static
 bool knc_get_stats(struct cgpu_info * const cgpu)
 {
 	if (cgpu->device != cgpu)
@@ -589,6 +622,8 @@ struct device_drv knc_drv = {
 	.drv_detect = knc_detect,
 	
 	.thread_init = knc_init,
+	.thread_disable = knc_core_disable,
+	.thread_enable  = knc_core_enable,
 	
 	.minerloop = minerloop_queue,
 	.queue_append = knc_queue_append,
