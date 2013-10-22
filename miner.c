@@ -1725,8 +1725,8 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--submit-stale",
 			opt_set_bool, &opt_submit_stale,
 	                opt_hidden),
-	OPT_WITHOUT_ARG("--submit-threads",
-	                opt_set_intval, &opt_submit_threads,
+	OPT_WITH_ARG("--submit-threads",
+	                opt_set_intval, opt_show_intval, &opt_submit_threads,
 	                "Minimum number of concurrent share submissions (default: 64)"),
 #ifdef HAVE_SYSLOG_H
 	OPT_WITHOUT_ARG("--syslog",
