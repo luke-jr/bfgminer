@@ -39,6 +39,8 @@
 
 static const char * const i2cpath = "/dev/i2c-2";
 
+#define KNC_I2C_TEMPLATE "/dev/i2c-%d"
+
 enum knc_request_cmd {
 	KNC_REQ_SUBMIT_WORK = 2,
 	KNC_REQ_FLUSH_QUEUE = 3,
@@ -532,6 +534,54 @@ void knc_poll(struct thr_info * const thr)
 	timer_set_delay_from_now(&thr->tv_poll, delay_usecs);
 }
 
+static
+bool knc_get_stats(struct cgpu_info * const cgpu)
+{
+	if (cgpu->device != cgpu)
+		return true;
+	
+	struct knc_core * const knccore = cgpu->thr[0]->cgpu_data;
+	struct cgpu_info *proc;
+	const int i2cdev = knccore->asicno + 3;
+	const int i2cslave = 0x48;
+	int i2c;
+	int32_t rawtemp;
+	float temp;
+	bool rv = false;
+	
+	char i2cpath[sizeof(KNC_I2C_TEMPLATE)];
+	sprintf(i2cpath, KNC_I2C_TEMPLATE, i2cdev);
+	i2c = open(i2cpath, O_RDWR);
+	if (i2c == -1)
+	{
+		applog(LOG_DEBUG, "%s: %s: Failed to open %s",
+		       cgpu->dev_repr, __func__, i2cpath);
+		return false;
+	}
+	
+	if (ioctl(i2c, I2C_SLAVE, i2cslave))
+	{
+		applog(LOG_DEBUG, "%s: %s: Failed to select i2c slave 0x%x",
+		       cgpu->dev_repr, __func__, i2cslave);
+		goto out;
+	}
+	
+	rawtemp = i2c_smbus_read_word_data(i2c, 0);
+	if (rawtemp == -1)
+		goto out;
+	temp = ((float)(rawtemp & 0xff));
+	if (rawtemp & 0x100)
+		temp += 0.5;
+	
+	for (proc = cgpu; proc && proc->device == cgpu; proc = proc->next_proc)
+		proc->temp = temp;
+	
+	rv = true;
+out:
+	close(i2c);
+	return rv;
+}
+
 struct device_drv knc_drv = {
 	.dname = "knc",
 	.name = "KNC",
@@ -543,4 +593,6 @@ struct device_drv knc_drv = {
 	.queue_append = knc_queue_append,
 	.queue_flush = knc_queue_flush,
 	.poll = knc_poll,
+	
+	.get_stats = knc_get_stats,
 };
