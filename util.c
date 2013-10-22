@@ -982,7 +982,7 @@ void cgtimer_time(cgtimer_t *ts_start)
 
 	decius_time(&lidiv);
 	ts_start->tv_sec = lidiv.quot;
-	ts_start->tv_nsec = lidiv.quot * 100;
+	ts_start->tv_nsec = lidiv.rem * 100;
 }
 #else /* WIN32 */
 void cgtime(struct timeval *tv)
