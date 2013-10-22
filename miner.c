@@ -1981,6 +1981,9 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_SCRYPT
 		"scrypt "
 #endif
+#ifdef USE_LIBMICROHTTPD
+		"SGW "
+#endif
 #ifdef USE_X6500
 		"x6500 "
 #endif
