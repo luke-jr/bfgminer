@@ -598,7 +598,7 @@ out: ;
 	while ( (proc = proc->next_proc) && !proc->threads);
 	mythr->getwork = 0;
 	mythr->has_pth = false;
-	cgsleep_ms(1000);
+	cgsleep_ms(1);
 	
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
