@@ -1552,7 +1552,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	if (temp > 0)
 		root = api_add_temp(root, "Temperature", &temp, false);
 	
-	root = api_add_elapsed(root, "Elapsed", &runtime, false);
+	root = api_add_elapsed(root, "Device Elapsed", &runtime, false);
 	double mhs = total_mhashes / runtime;
 	root = api_add_mhs(root, "MHS av", &mhs, false);
 	char mhsname[27];
