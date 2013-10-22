@@ -136,7 +136,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.31";
+static const char *APIVERSION = "1.32";
 static const char *DEAD = "Dead";
 #if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
@@ -1998,6 +1998,7 @@ static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom
 		double rejp = cgpu->diff1 ?
 				(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
 		root = api_add_percent(root, "Device Rejected%", &rejp, false);
+		root = api_add_elapsed(root, "Device Elapsed", &(total_secs), true); // GPUs don't hotplug
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -2077,6 +2078,7 @@ static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom
 		double rejp = cgpu->diff1 ?
 				(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
 		root = api_add_percent(root, "Device Rejected%", &rejp, false);
+		root = api_add_elapsed(root, "Device Elapsed", &(dev_runtime), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
@@ -2163,6 +2165,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 		double rejp = cgpu->diff1 ?
 				(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
 		root = api_add_percent(root, "Device Rejected%", &rejp, false);
+		root = api_add_elapsed(root, "Device Elapsed", &(dev_runtime), false);
 
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
