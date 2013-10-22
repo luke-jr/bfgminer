@@ -406,6 +406,22 @@ void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
 		notifier_read(thr->work_restart_notifier);
 }
 
+static
+void _minerloop_setup(struct thr_info *mythr)
+{
+	struct cgpu_info * const cgpu = mythr->cgpu, *proc;
+	
+	if (mythr->work_restart_notifier[1] == -1)
+		notifier_init(mythr->work_restart_notifier);
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		mythr = proc->thr[0];
+		timer_set_now(&mythr->tv_watchdog);
+		proc->disable_watchdog = true;
+	}
+}
+
 void minerloop_async(struct thr_info *mythr)
 {
 	struct thr_info *thr = mythr;
@@ -416,14 +432,7 @@ void minerloop_async(struct thr_info *mythr)
 	struct cgpu_info *proc;
 	bool is_running, should_be_running;
 	
-	if (mythr->work_restart_notifier[1] == -1)
-		notifier_init(mythr->work_restart_notifier);
-	for (proc = cgpu; proc; proc = proc->next_proc)
-	{
-		mythr = proc->thr[0];
-		timer_set_now(&mythr->tv_watchdog);
-		proc->disable_watchdog = true;
-	}
+	_minerloop_setup(mythr);
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -514,8 +523,7 @@ void minerloop_queue(struct thr_info *thr)
 	bool should_be_running;
 	struct work *work;
 	
-	if (thr->work_restart_notifier[1] == -1)
-		notifier_init(thr->work_restart_notifier);
+	_minerloop_setup(thr);
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -569,11 +577,18 @@ redo:
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
 			
+			if (timer_passed(&mythr->tv_watchdog, &tv_now))
+			{
+				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
+				bfg_watchdog(proc, &tv_now);
+			}
+			
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 			if (should_be_running && !mythr->queue_full)
 				goto redo;
 			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
 		do_notifier_select(thr, &tv_timeout);
