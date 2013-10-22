@@ -168,6 +168,9 @@ void minerloop_scanhash(struct thr_info *mythr)
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 #endif
 	
+	if (cgpu->deven != DEV_ENABLED)
+		mt_disable(mythr);
+	
 	while (likely(!cgpu->shutdown)) {
 		mythr->work_restart = false;
 		request_work(mythr);
@@ -284,13 +287,16 @@ void job_results_fetched(struct thr_info *mythr)
 	if (mythr->_proceed_with_new_job)
 		do_job_start(mythr);
 	else
-	if (likely(mythr->prev_work))
 	{
-		struct timeval tv_now;
-		
-		timer_set_now(&tv_now);
-		
-		do_process_results(mythr, &tv_now, mythr->prev_work, true);
+		if (likely(mythr->prev_work))
+		{
+			struct timeval tv_now;
+			
+			timer_set_now(&tv_now);
+			
+			do_process_results(mythr, &tv_now, mythr->prev_work, true);
+		}
+		mt_disable_start(mythr);
 	}
 }
 
@@ -460,15 +466,20 @@ void minerloop_async(struct thr_info *mythr)
 			}
 			else  // ! should_be_running
 			{
-				if (unlikely(is_running && !mythr->_job_transition_in_progress))
+				if (unlikely((is_running || !thr->_mt_disable_called) && !mythr->_job_transition_in_progress))
 				{
 disabled: ;
-					mythr->tv_morework.tv_sec = -1;
-					if (mythr->busy_state != TBS_GETTING_RESULTS)
-						do_get_results(mythr, false);
-					else
-						// Avoid starting job when pending result fetch completes
-						mythr->_proceed_with_new_job = false;
+					timer_unset(&mythr->tv_morework);
+					if (is_running)
+					{
+						if (mythr->busy_state != TBS_GETTING_RESULTS)
+							do_get_results(mythr, false);
+						else
+							// Avoid starting job when pending result fetch completes
+							mythr->_proceed_with_new_job = false;
+					}
+					else  // !thr->_mt_disable_called
+						mt_disable_start(mythr);
 				}
 			}
 			
@@ -536,11 +547,8 @@ void minerloop_queue(struct thr_info *thr)
 redo:
 			if (should_be_running)
 			{
-				if (unlikely(!mythr->_last_sbr_state))
-				{
+				if (unlikely(mythr->_mt_disable_called))
 					mt_disable_finish(mythr);
-					mythr->_last_sbr_state = should_be_running;
-				}
 				
 				if (unlikely(mythr->work_restart))
 				{
@@ -568,10 +576,10 @@ redo:
 				}
 			}
 			else
-			if (unlikely(mythr->_last_sbr_state))
+			if (unlikely(!mythr->_mt_disable_called))
 			{
-				mythr->_last_sbr_state = should_be_running;
 				do_queue_flush(mythr);
+				mt_disable_start(mythr);
 			}
 			
 			if (timer_passed(&mythr->tv_poll, &tv_now))
@@ -615,13 +623,10 @@ void *miner_thread(void *userdata)
 		goto out;
 	}
 
-	if (cgpu->deven != DEV_ENABLED)
-		mt_disable_start(mythr);
-	
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
-
+	
 	cgtime(&cgpu->cgminer_stats.start_tv);
 	if (drv->minerloop)
 		drv->minerloop(mythr);

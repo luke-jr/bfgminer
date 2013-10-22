@@ -8439,6 +8439,7 @@ void __thr_being_msg(int prio, struct thr_info *thr, const char *being)
 		applog(prio, "%"PRIpreprv" %s", proc->proc_repr, being);
 }
 
+// Called by asynchronous minerloops, when they find their processor should be disabled
 void mt_disable_start(struct thr_info *mythr)
 {
 	struct cgpu_info *cgpu = mythr->cgpu;
@@ -8456,6 +8457,7 @@ void mt_disable_start(struct thr_info *mythr)
 	__thr_being_msg(LOG_WARNING, mythr, "being disabled");
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
+	mythr->_mt_disable_called = true;
 }
 
 /* Create a hashtable of work items for devices with a queue. The device
@@ -8606,6 +8608,9 @@ void hash_queued_work(struct thr_info *mythr)
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 
+	if (unlikely(cgpu->deven != DEV_ENABLED))
+		mt_disable(mythr);
+	
 	while (likely(!cgpu->shutdown)) {
 		struct timeval diff;
 		int64_t hashes;
@@ -8644,6 +8649,7 @@ void hash_queued_work(struct thr_info *mythr)
 	// cgpu->deven = DEV_DISABLED; set in miner_thread
 }
 
+// Called by minerloop, when it is re-enabling a processor
 void mt_disable_finish(struct thr_info *mythr)
 {
 	struct device_drv *drv = mythr->cgpu->drv;
@@ -8652,15 +8658,19 @@ void mt_disable_finish(struct thr_info *mythr)
 	__thr_being_msg(LOG_WARNING, mythr, "being re-enabled");
 	if (drv->thread_enable)
 		drv->thread_enable(mythr);
+	mythr->_mt_disable_called = false;
 }
 
+// Called by synchronous minerloops, when they find their processor should be disabled
+// Calls mt_disable_start, waits until it's re-enabled, then calls mt_disable_finish
 void mt_disable(struct thr_info *mythr)
 {
+	const struct cgpu_info * const cgpu = mythr->cgpu;
 	mt_disable_start(mythr);
 	applog(LOG_DEBUG, "Waiting for wakeup notification in miner thread");
 	do {
 		notifier_read(mythr->notifier);
-	} while (mythr->pause);
+	} while (mythr->pause || cgpu->deven != DEV_ENABLED);
 	mt_disable_finish(mythr);
 }
 
@@ -9935,7 +9945,6 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 		thr->mutex_request[1] = INVSOCK;
 		thr->_job_transition_in_progress = true;
 		timerclear(&thr->tv_morework);
-		thr->_last_sbr_state = true;
 
 		thr->scanhash_working = true;
 		thr->hashes_done = 0;
@@ -9978,6 +9987,8 @@ void start_cgpu(struct cgpu_info *cgpu)
 
 		if (unlikely(thr_info_create(thr, NULL, miner_thread, thr)))
 			quit(1, "thread %d create failed", thr->id);
+		
+		notifier_wake(thr->notifier);
 	}
 	if (cgpu->deven == DEV_ENABLED)
 		proc_enable(cgpu);
