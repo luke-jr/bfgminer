@@ -2416,7 +2416,7 @@ function ss($a, $b)
  $la = strlen($a);
  $lb = strlen($b);
  if ($la != $lb)
-	return $la - $lb;
+	return $lb - $la;
  return strcmp($a, $b);
 }
 #
