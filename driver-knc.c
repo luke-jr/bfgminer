@@ -56,6 +56,7 @@ struct device_drv knc_drv;
 struct knc_device {
 	int i2c;
 	struct spi_port *spi;
+	struct cgpu_info *cgpu;
 	
 	bool need_flush;
 	struct work *workqueue;
@@ -221,6 +222,8 @@ bool knc_init(struct thr_info * const thr)
 		return false;
 	}
 	
+	knc = malloc(sizeof(*knc));
+	
 	for (proc = cgpu; proc; )
 	{
 		if (proc->device != proc)
@@ -249,10 +252,8 @@ bool knc_init(struct thr_info * const thr)
 					.asicno = i2cslave - 0x20,
 				};
 				if (proc != cgpu)
-				{
 					mythr->queue_full = true;
-					proc->device_data = NULL;
-				}
+				proc->device_data = knc;
 				if (buf[j] != 3)
 					proc->deven = DEV_DISABLED;
 				
@@ -264,11 +265,11 @@ bool knc_init(struct thr_info * const thr)
 nomorecores: ;
 	}
 	
-	cgpu->device_data = knc = malloc(sizeof(*knc));
 	spi = malloc(sizeof(*spi));
 	*knc = (struct knc_device){
 		.i2c = i2c,
 		.spi = spi,
+		.cgpu = cgpu,
 		.workqueue_max = 1,
 	};
 	*spi = (struct spi_port){
@@ -348,7 +349,7 @@ void knc_queue_flush(struct thr_info * const thr)
 	struct knc_device * const knc = cgpu->device_data;
 	struct work *work, *tmp;
 	
-	if (!knc)
+	if (knc->cgpu != cgpu)
 		return;
 	
 	DL_FOREACH_SAFE(knc->workqueue, work, tmp)
