@@ -9995,6 +9995,7 @@ int main(int argc, char *argv[])
 	if (opt_realquiet || opt_display_devs)
 		use_curses = false;
 
+	setlocale(LC_ALL, "C");
 	if (use_curses)
 		enable_curses();
 #endif
