@@ -1168,7 +1168,6 @@ AC_CONFIG_FILES([
 	ccan/Makefile
 	lib/Makefile
 	])
-AC_OUTPUT
 
 
 echo
@@ -1206,6 +1205,7 @@ EOF
 	done
 	_yeslist=`echo "$_yeslist" | tr ' ' '\n' | sort | tr '\n' ' '`
 	_nolist=`echo "$_nolist" | tr ' ' '\n' | sort | tr '\n' ' '`
+	AC_DEFINE_UNQUOTED(AS_TR_CPP([BFG_$2]),["$_yeslist"],[List of drivers being built])
 	echo "  Enabled..$1..:$_yeslist"
 	echo "  Disabled.$1..:$_nolist"
 	if test -n "$_enableactions"; then
@@ -1226,3 +1226,4 @@ echo "Installation...........: make install$maybe_ldconfig #(as root if needed, 
 echo "  prefix...............: $prefix"
 echo
 
+AC_OUTPUT

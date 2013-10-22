@@ -2069,57 +2069,10 @@ extern const char *opt_argv0;
 
 static char *opt_verusage_and_exit(const char *extra)
 {
-	printf("%s\nBuilt with "
-#ifdef USE_AVALON
-		"avalon "
-#endif
-#ifdef USE_BFSB
-		"bfsb "
-#endif
-#ifdef USE_BIGPIC
-		"bigpic "
-#endif
-#ifdef USE_BITFORCE
-		"bitforce "
-#endif
-#ifdef USE_BITFURY
-		"bitfury "
-#endif
-#ifdef WANT_CPUMINE
-		"CPU "
-#endif
-#ifdef HAVE_OPENCL
-		"GPU "
-#endif
-#ifdef USE_ICARUS
-		"icarus "
-#endif
-#ifdef USE_LITTLEFURY
-		"littlefury "
-#endif
-#ifdef USE_METABANK
-		"metabank "
-#endif
-#ifdef USE_MODMINER
-		"modminer "
-#endif
-#ifdef USE_SCRYPT
-		"scrypt "
-#endif
-#ifdef USE_LIBMICROHTTPD
-		"SGW "
-#endif
-#ifdef USE_LIBEVENT
-		"SSM "
-#endif
-#ifdef USE_X6500
-		"x6500 "
-#endif
-#ifdef USE_ZTEX
-		"ztex "
-#endif
-		"mining support.\n"
-		, packagename);
+	puts(packagename);
+	printf("  Drivers:%s\n", BFG_DRIVERLIST);
+	printf("  Algoritms:%s\n", BFG_ALGOLIST);
+	printf("  Options:%s\n", BFG_OPTLIST);
 	printf("%s", opt_usage(opt_argv0, extra));
 	fflush(stdout);
 	exit(0);
