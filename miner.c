@@ -5401,6 +5401,7 @@ void zero_stats(void)
 		cgpu->diff1 = 0;
 		cgpu->diff_accepted = 0;
 		cgpu->diff_rejected = 0;
+		cgpu->diff_stale = 0;
 		cgpu->last_share_diff = 0;
 		cgpu->thread_fail_init_count = 0;
 		cgpu->thread_zero_hash_count = 0;
