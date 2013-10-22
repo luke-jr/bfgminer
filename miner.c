@@ -2073,8 +2073,17 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_AVALON
 		"avalon "
 #endif
+#ifdef USE_BFSB
+		"bfsb "
+#endif
+#ifdef USE_BIGPIC
+		"bigpic "
+#endif
 #ifdef USE_BITFORCE
 		"bitforce "
+#endif
+#ifdef USE_BITFURY
+		"bitfury "
 #endif
 #ifdef WANT_CPUMINE
 		"CPU "
@@ -2085,11 +2094,23 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_ICARUS
 		"icarus "
 #endif
+#ifdef USE_LITTLEFURY
+		"littlefury "
+#endif
+#ifdef USE_METABANK
+		"metabank "
+#endif
 #ifdef USE_MODMINER
 		"modminer "
 #endif
 #ifdef USE_SCRYPT
 		"scrypt "
+#endif
+#ifdef USE_LIBMICROHTTPD
+		"SGW "
+#endif
+#ifdef USE_LIBEVENT
+		"SSM "
 #endif
 #ifdef USE_X6500
 		"x6500 "
