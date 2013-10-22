@@ -339,7 +339,7 @@ bool knc_queue_append(struct thr_info * const thr, struct work * const work)
 }
 
 #define HASH_LAST_ADDED(head, out)  \
-	(out = (ELMT_FROM_HH((head)->hh.tbl, (head)->hh.tbl->tail)))
+	(out = (head) ? (ELMT_FROM_HH((head)->hh.tbl, (head)->hh.tbl->tail)) : NULL)
 
 static
 void knc_queue_flush(struct thr_info * const thr)
@@ -358,7 +358,7 @@ void knc_queue_flush(struct thr_info * const thr)
 	thr->queue_full = false;
 	
 	HASH_LAST_ADDED(knc->devicework, work);
-	if (stale_work(work, true))
+	if (work && stale_work(work, true))
 	{
 		knc->need_flush = true;
 		timer_set_now(&thr->tv_poll);
