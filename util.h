@@ -85,7 +85,11 @@ typedef struct cgsem cgsem_t;
 #else
 typedef sem_t cgsem_t;
 #endif
+#ifdef WIN32
+typedef LARGE_INTEGER cgtimer_t;
+#else
 typedef struct timespec cgtimer_t;
+#endif
 
 struct thr_info;
 struct pool;
