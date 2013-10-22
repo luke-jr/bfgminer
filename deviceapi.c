@@ -574,6 +574,9 @@ void *miner_thread(void *userdata)
 		goto out;
 	}
 
+	if (cgpu->deven != DEV_ENABLED)
+		mt_disable_start(mythr);
+	
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
@@ -786,4 +789,21 @@ FILE *open_bitstream(const char *dname, const char *filename)
 	_open_bitstream3(".");
 
 	return NULL;
+}
+
+void close_device_fd(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	const int fd = proc->device_fd;
+	
+	if (fd == -1)
+		return;
+	
+	if (close(fd))
+		applog(LOG_WARNING, "%"PRIpreprv": Error closing device fd", proc->proc_repr);
+	else
+	{
+		proc->device_fd = -1;
+		applog(LOG_DEBUG, "%"PRIpreprv": Closed device fd", proc->proc_repr);
+	}
 }

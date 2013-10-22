@@ -55,4 +55,6 @@ extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_fun
 
 extern FILE *open_bitstream(const char *dname, const char *filename);
 
+extern void close_device_fd(struct thr_info *);
+
 #endif
