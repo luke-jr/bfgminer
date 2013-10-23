@@ -268,7 +268,7 @@ bool nanofury_init(struct thr_info * const thr)
 		.spi = port,
 	};
 	cgpu->device_data = bitfury;
-	bitfury->osc6_bits = 50;
+	bitfury->osc6_bits = opt_nanofury_osc6 || 50;
 	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	bitfury_init_chip(cgpu);
 	
