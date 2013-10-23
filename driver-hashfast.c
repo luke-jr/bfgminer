@@ -12,6 +12,7 @@
 
 #include <stdbool.h>
 
+#include "miner.h"
 #include "usbutils.h"
 
 #include "driver-hashfast.h"
