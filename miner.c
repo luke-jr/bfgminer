@@ -10310,14 +10310,16 @@ int main(int argc, char *argv[])
                 if (chroot(chroot_dir) != 0) {
                        quit(1, "Unable to chroot");
                 }
+		chdir("/");
         }
 #endif
 
 #ifdef HAVE_PWD_H
 		if (user_info != NULL) {
-			if (setgid((*user_info).pw_gid) == 0 && setuid((*user_info).pw_uid) != 0) {
+			if (setgid((*user_info).pw_gid) != 0)
+				quit(1, "Unable to setgid");
+			if (setuid((*user_info).pw_uid) != 0)
 				quit(1, "Unable to setuid");
-			}
 		}
 #endif
 	raise_fd_limits();
