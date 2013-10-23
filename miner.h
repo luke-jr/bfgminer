@@ -899,6 +899,11 @@ static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const 
 	INITLOCK(lock, CGLOCK_RW, file, func, line);
 }
 
+static inline void rwlock_destroy(pthread_rwlock_t *lock)
+{
+	pthread_rwlock_destroy(lock);
+}
+
 static inline void _cglock_init(cglock_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_init(&lock->mutex, file, func, line);
