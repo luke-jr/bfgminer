@@ -886,6 +886,13 @@ static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const ch
 	INITLOCK(lock, CGLOCK_MUTEX, file, func, line);
 }
 
+static inline void mutex_destroy(pthread_mutex_t *lock)
+{
+	/* Ignore return code. This only invalidates the mutex on linux but
+	 * releases resources on windows. */
+	pthread_mutex_destroy(lock);
+}
+
 static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
@@ -893,10 +900,21 @@ static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const 
 	INITLOCK(lock, CGLOCK_RW, file, func, line);
 }
 
+static inline void rwlock_destroy(pthread_rwlock_t *lock)
+{
+	pthread_rwlock_destroy(lock);
+}
+
 static inline void _cglock_init(cglock_t *lock, const char *file, const char *func, const int line)
 {
 	_mutex_init(&lock->mutex, file, func, line);
 	_rwlock_init(&lock->rwlock, file, func, line);
+}
+
+static inline void cglock_destroy(cglock_t *lock)
+{
+	rwlock_destroy(&lock->rwlock);
+	mutex_destroy(&lock->mutex);
 }
 
 /* Read lock variant of cglock. Cannot be promoted. */

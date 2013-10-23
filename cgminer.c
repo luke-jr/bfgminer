@@ -4975,8 +4975,10 @@ static void *input_thread(void __maybe_unused *userdata)
 			display_pools();
 		else if (!strncasecmp(&input, "s", 1))
 			set_options();
+#if HAVE_OPENCL
 		else if (have_opencl && !strncasecmp(&input, "g", 1))
 			manage_gpu();
+#endif
 		if (opt_realquiet) {
 			disable_curses();
 			break;

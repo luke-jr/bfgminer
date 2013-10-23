@@ -22,8 +22,6 @@ INCLUDES	= $(PTHREAD_FLAGS) -fno-strict-aliasing $(JANSSON_INCLUDES) $(USBUTILS_
 
 bin_PROGRAMS	= cgminer
 
-bin_SCRIPTS	= $(top_srcdir)/*.cl
-
 cgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 cgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @OPENCL_LIBS@ @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
@@ -47,11 +45,10 @@ cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 
 cgminer_SOURCES	+= logging.c
 
-# GPU sources, TODO: make them selectable
-# the GPU portion extracted from original main.c
-cgminer_SOURCES += driver-opencl.h driver-opencl.c
+if HAS_OPENCL
+bin_SCRIPTS	= $(top_srcdir)/*.cl
 
-# the original GPU related sources, unchanged
+cgminer_SOURCES += driver-opencl.h driver-opencl.c
 cgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 cgminer_SOURCES += adl.c adl.h adl_functions.h
 cgminer_SOURCES += *.cl
@@ -60,7 +57,8 @@ if HAS_SCRYPT
 cgminer_SOURCES += scrypt.c scrypt.h
 endif
 
-# Extra utilities required
+endif
+
 if NEED_FPGAUTILS
 cgminer_SOURCES += fpgautils.c fpgautils.h
 endif
