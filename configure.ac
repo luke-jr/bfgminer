@@ -135,10 +135,10 @@ if test -n "$CGMINER_SDK"; then
 	LDFLAGS="-L$CGMINER_SDK/lib/$target $LDFLAGS"
 fi
 
-opencl="yes"
+opencl="no"
 
 AC_ARG_ENABLE([opencl],
-	[AC_HELP_STRING([--disable-opencl],[Override detection and disable building with opencl])],
+	[AC_HELP_STRING([--enable-opencl],[Enable support for GPU mining with opencl])],
 	[opencl=$enableval]
 	)
 if test "x$opencl" != xno; then
