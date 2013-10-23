@@ -910,6 +910,12 @@ static inline void _cglock_init(cglock_t *lock, const char *file, const char *fu
 	_rwlock_init(&lock->rwlock, file, func, line);
 }
 
+static inline void cglock_destroy(cglock_t *lock)
+{
+	rwlock_destroy(&lock->rwlock);
+	mutex_destroy(&lock->mutex);
+}
+
 /* Read lock variant of cglock. Cannot be promoted. */
 static inline void _cg_rlock(cglock_t *lock, const char *file, const char *func, const int line)
 {
