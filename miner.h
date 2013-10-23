@@ -485,6 +485,7 @@ struct cgpu_info {
 	pthread_cond_t	device_cond;
 
 	enum dev_enable deven;
+	bool already_set_defaults;
 	int accepted;
 	int rejected;
 	int stale;
@@ -997,6 +998,8 @@ extern void mt_enable(struct thr_info *thr);
 extern void proc_enable(struct cgpu_info *);
 extern void reinit_device(struct cgpu_info *cgpu);
 
+extern void cgpu_set_defaults(struct cgpu_info *);
+
 #ifdef HAVE_ADL
 extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
 extern int set_fanspeed(int gpu, int iFanSpeed);
@@ -1374,6 +1377,7 @@ extern void _wlog(const char *str);
 extern void _wlogprint(const char *str);
 extern int curses_int(const char *query);
 extern char *curses_input(const char *query);
+extern bool drv_ready(struct cgpu_info *);
 extern double stats_elapsed(struct cgminer_stats *);
 #define cgpu_runtime(cgpu)  stats_elapsed(&((cgpu)->cgminer_stats))
 extern double cgpu_utility(struct cgpu_info *);

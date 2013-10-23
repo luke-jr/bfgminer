@@ -273,7 +273,7 @@ bool nanofury_init(struct thr_info * const thr)
 	bitfury_init_chip(cgpu);
 	
 	timer_set_now(&thr->tv_poll);
-	
+	cgpu->status = LIFE_INIT2;
 	return true;
 }
 
