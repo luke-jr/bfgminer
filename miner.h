@@ -885,6 +885,13 @@ static inline void _mutex_init(pthread_mutex_t *lock, const char *file, const ch
 	INITLOCK(lock, CGLOCK_MUTEX, file, func, line);
 }
 
+static inline void mutex_destroy(pthread_mutex_t *lock)
+{
+	/* Ignore return code. This only invalidates the mutex on linux but
+	 * releases resources on windows. */
+	pthread_mutex_destroy(lock);
+}
+
 static inline void _rwlock_init(pthread_rwlock_t *lock, const char *file, const char *func, const int line)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
