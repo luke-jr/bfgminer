@@ -2660,7 +2660,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 
 out_unlock:
 	if (err && err != LIBUSB_ERROR_TIMEOUT) {
-		applog(LOG_WARNING, "%s %i usb read err:(%d) %s", cgpu->drv->name, cgpu->device_id,
+		applog(LOG_WARNING, "%s %i %s usb read err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
 		       err, libusb_error_name(err));
 		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
 			err = LIBUSB_ERROR_OTHER;
@@ -2760,7 +2760,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	*processed = tot;
 
 	if (err) {
-		applog(LOG_WARNING, "%s %i usb write err:(%d) %s", cgpu->drv->name, cgpu->device_id,
+		applog(LOG_WARNING, "%s %i %s usb write err:(%d) %s", cgpu->drv->name, cgpu->device_id, usb_cmdname(cmd),
 		       err, libusb_error_name(err));
 		if (cgpu->usbinfo.continuous_ioerr_count > USB_RETRY_MAX)
 			err = LIBUSB_ERROR_OTHER;

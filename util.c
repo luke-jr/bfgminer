@@ -899,20 +899,9 @@ void timeraddspec(struct timespec *a, const struct timespec *b)
 	}
 }
 
-static int timespec_to_ms(struct timespec *ts)
+static int __maybe_unused timespec_to_ms(struct timespec *ts)
 {
 	return ts->tv_sec * 1000 + ts->tv_nsec / 1000000;
-}
-
-/* Subtracts b from a and stores it in res. */
-void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
-{
-	res->tv_sec = a->tv_sec - b->tv_sec;
-	res->tv_nsec = a->tv_nsec - b->tv_nsec;
-	if (res->tv_nsec < 0) {
-		res->tv_nsec += 1000000000;
-		res->tv_sec--;
-	}
 }
 
 /* Subtract b from a */
@@ -924,23 +913,6 @@ static void __maybe_unused timersubspec(struct timespec *a, const struct timespe
 		a->tv_nsec += 1000000000;
 		a->tv_sec--;
 	}
-}
-
-static void __maybe_unused cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
-{
-	struct timespec now;
-
-	timeraddspec(ts_diff, ts_start);
-	cgtimer_time(&now);
-	timersubspec(ts_diff, &now);
-	if (unlikely(ts_diff->tv_sec < 0))
-		return;
-	nanosleep(ts_diff, NULL);
-}
-
-int cgtimer_to_ms(cgtimer_t *cgt)
-{
-	return timespec_to_ms(cgt);
 }
 
 /* These are cgminer specific sleep functions that use an absolute nanosecond
@@ -976,18 +948,26 @@ void cgtime(struct timeval *tv)
 	tv->tv_usec = lidiv.rem / 10;
 }
 
-void cgtimer_time(cgtimer_t *ts_start)
-{
-	lldiv_t lidiv;;
-
-	decius_time(&lidiv);
-	ts_start->tv_sec = lidiv.quot;
-	ts_start->tv_nsec = lidiv.quot * 100;
-}
 #else /* WIN32 */
 void cgtime(struct timeval *tv)
 {
 	gettimeofday(tv, NULL);
+}
+
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return timespec_to_ms(cgt);
+}
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->tv_sec = a->tv_sec - b->tv_sec;
+	res->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (res->tv_nsec < 0) {
+		res->tv_nsec += 1000000000;
+		res->tv_sec--;
+	}
 }
 #endif /* WIN32 */
 
@@ -1051,6 +1031,84 @@ void cgtimer_time(cgtimer_t *ts_start)
 	ts_start->tv_nsec = tv->tv_usec * 1000;
 }
 #endif /* __MACH__ */
+
+#ifdef WIN32
+/* For windows we use the SystemTime stored as a LARGE_INTEGER as the cgtimer_t
+ * typedef, allowing us to have sub-microsecond resolution for times, do simple
+ * arithmetic for timer calculations, and use windows' own hTimers to get
+ * accurate absolute timeouts. */
+int cgtimer_to_ms(cgtimer_t *cgt)
+{
+	return (int)(cgt->QuadPart / 10000LL);
+}
+
+/* Subtracts b from a and stores it in res. */
+void cgtimer_sub(cgtimer_t *a, cgtimer_t *b, cgtimer_t *res)
+{
+	res->QuadPart = a->QuadPart - b->QuadPart;
+}
+
+/* Note that cgtimer time is NOT offset by the unix epoch since we use absolute
+ * timeouts with hTimers. */
+void cgtimer_time(cgtimer_t *ts_start)
+{
+	FILETIME ft;
+
+	GetSystemTimeAsFileTime(&ft);
+	ts_start->LowPart = ft.dwLowDateTime;
+	ts_start->HighPart = ft.dwHighDateTime;
+}
+
+static void liSleep(LARGE_INTEGER *li, int timeout)
+{
+	HANDLE hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
+	DWORD ret;
+
+	if (unlikely(!hTimer))
+		quit(1, "Failed to create hTimer in liSleep");
+	ret = SetWaitableTimer(hTimer, li, 0, NULL, NULL, 0);
+	if (unlikely(!ret))
+		quit(1, "Failed to SetWaitableTimer in liSleep");
+	/* We still use a timeout as a sanity check in case the system time
+	 * is changed while we're running */
+	ret = WaitForSingleObject(hTimer, timeout);
+	if (unlikely(ret != WAIT_OBJECT_0 && ret != WAIT_TIMEOUT))
+		quit(1, "Failed to WaitForSingleObject in liSleep");
+	CloseHandle(hTimer);
+}
+
+void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
+{
+	LARGE_INTEGER li;
+
+	li.QuadPart = ts_start->QuadPart + (int64_t)ms * 10000LL;
+	liSleep(&li, ms);
+}
+
+void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
+{
+	LARGE_INTEGER li;
+	int ms;
+
+	li.QuadPart = ts_start->QuadPart + us * 10LL;
+	ms = us / 1000;
+	if (!ms)
+		ms = 1;
+	liSleep(&li, ms);
+}
+#else /* WIN32 */
+static void cgsleep_spec(struct timespec *ts_diff, const struct timespec *ts_start)
+{
+	struct timespec now;
+
+	timeraddspec(ts_diff, ts_start);
+	cgtimer_time(&now);
+	timersubspec(ts_diff, &now);
+	if (unlikely(ts_diff->tv_sec < 0))
+		return;
+	nanosleep(ts_diff, NULL);
+}
+
 void cgsleep_ms_r(cgtimer_t *ts_start, int ms)
 {
 	struct timespec ts_diff;
@@ -1066,6 +1124,7 @@ void cgsleep_us_r(cgtimer_t *ts_start, int64_t us)
 	us_to_timespec(&ts_diff, us);
 	cgsleep_spec(&ts_diff, ts_start);
 }
+#endif /* WIN32 */
 #endif /* CLOCK_MONOTONIC */
 
 void cgsleep_ms(int ms)
