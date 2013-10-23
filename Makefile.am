@@ -45,7 +45,7 @@ cgminer_SOURCES	+= elist.h miner.h compat.h bench_block.h	\
 
 cgminer_SOURCES	+= logging.c
 
-if HAVE_OPENCL
+if HAS_OPENCL
 bin_SCRIPTS	= $(top_srcdir)/*.cl
 
 cgminer_SOURCES += driver-opencl.h driver-opencl.c

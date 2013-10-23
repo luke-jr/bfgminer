@@ -171,6 +171,7 @@ else
 	OPENCL_FLAGS=""
 	OPENCL_LIBS=""
 fi
+AM_CONDITIONAL([HAS_OPENCL], [test x$opencl = xyes])
 
 has_winpthread=false
 if test "x$have_win32" = xtrue; then
