@@ -322,6 +322,10 @@ static
 const char unicode_micro = 'u';
 #endif
 
+#ifdef USE_NANOFURY
+int opt_nanofury_osc6;
+#endif
+
 #ifdef HAVE_CURSES
 bool selecting_device;
 unsigned selected_device;
@@ -684,6 +688,11 @@ char *set_int_range(const char *arg, int *i, int min, int max)
 		return "Value out of range";
 
 	return NULL;
+}
+
+static char *set_int_45_to_55(const char *arg, int*i)
+{
+	return set_int_range(arg,i,45,55);
 }
 
 static char *set_int_0_to_9999(const char *arg, int *i)
@@ -1728,6 +1737,10 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden
 #endif
 	),
+#ifdef USE_NANOFURY
+	OPT_WITH_ARG("--nanofury-osc6",
+		set_int_45_to_55, opt_show_intval, &opt_nanofury_osc6,"Set the osc6 bits for detected nanofury devices. (Valid range: 45-55)"),
+#endif
 	OPT_WITH_ARG("--noncelog",
 		     set_noncelog, NULL, NULL,
 		     "Create log of all nonces found"),

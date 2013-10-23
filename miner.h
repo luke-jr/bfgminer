@@ -921,6 +921,10 @@ extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
 extern bool opt_worktime;
+#ifdef USE_NANOFURY
+extern int opt_nanofury_osc6;
+#endif
+
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
 #endif
