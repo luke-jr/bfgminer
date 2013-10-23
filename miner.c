@@ -8733,7 +8733,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			 * from startup are still doing their first attempt. */
 			if (unlikely(pool->testing)) {
 				pthread_join(pool->test_thread, NULL);
-				pool->testing = false;
 			}
 
 			/* Test pool is idle once every minute */
@@ -9207,6 +9206,7 @@ static void *test_pool_thread(void *arg)
 	} else
 		pool_died(pool);
 
+	pool->testing = false;
 	return NULL;
 }
 
@@ -9233,7 +9233,6 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 	pthread_create(&pool->test_thread, NULL, test_pool_thread, (void *)pool);
 	if (!live) {
 		pthread_join(pool->test_thread, NULL);
-		pool->testing = false;
 		return pools_active;
 	}
 	return true;
@@ -10194,14 +10193,18 @@ int main(int argc, char *argv[])
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
-		int slept = 0;
+		bool still_testing;
+		int i;
 
 		/* Look for at least one active pool before starting */
 		probe_pools();
 		do {
 			sleep(1);
-			slept++;
-		} while (!pools_active && slept < 60);
+			still_testing = false;
+			for (int i = 0; i < total_pools; ++i)
+				if (pools[i]->testing)
+					still_testing = true;
+		} while (still_testing);
 
 		if (!pools_active) {
 			applog(LOG_ERR, "No servers were found that could be used to get work from.");
