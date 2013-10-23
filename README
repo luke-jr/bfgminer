@@ -81,7 +81,7 @@ BUILDING BFGMINER
 Everything you probably want, condensed:
 	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
 	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
-	libevent-dev libmicrohttpd-dev
+	libevent-dev libmicrohttpd-dev hidapi
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -105,6 +105,9 @@ Optional Dependencies:
 	Multiple ASIC/FPGA autodetection: any one of:
 	  sysfs              (builtin to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
+	
+	NanoFury USB sticks:
+	  hidapi             https://github.com/signal11/hidapi
 	
 	getwork server for Block Erupter Blades:
 	  libmicrohttpd-dev 0.9.5+  http://www.gnu.org/software/libmicrohttpd/
