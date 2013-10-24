@@ -1366,7 +1366,7 @@ double tdiff(struct timeval *end, struct timeval *start)
 	return end->tv_sec - start->tv_sec + (end->tv_usec - start->tv_usec) / 1000000.0;
 }
 
-bool extract_sockaddr(struct pool *pool, char *url)
+bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 {
 	char *url_begin, *url_end, *ipv6_begin, *ipv6_end, *port_start = NULL;
 	char url_address[256], port[6];
@@ -1404,10 +1404,10 @@ bool extract_sockaddr(struct pool *pool, char *url)
 	else
 		strcpy(port, "80");
 
-	free(pool->stratum_port);
-	pool->stratum_port = strdup(port);
-	free(pool->sockaddr_url);
-	pool->sockaddr_url = strdup(url_address);
+	free(*sockaddr_port);
+	*sockaddr_port = strdup(port);
+	free(*sockaddr_url);
+	*sockaddr_url = strdup(url_address);
 
 	return true;
 }
@@ -1854,7 +1854,7 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 
 	snprintf(address, sizeof(address), "%s:%s", url, port);
 
-	if (!extract_sockaddr(pool, address))
+	if (!extract_sockaddr(address, &pool->sockaddr_url, &pool->stratum_port))
 		return false;
 
 	pool->stratum_url = pool->sockaddr_url;
