@@ -10088,7 +10088,8 @@ int main(int argc, char *argv[])
                 if (chroot(chroot_dir) != 0) {
                        quit(1, "Unable to chroot");
                 }
-		chdir("/");
+		if (chdir("/"))
+			quit(1, "Unable to chdir to chroot");
         }
 #endif
 
