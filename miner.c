@@ -8617,11 +8617,11 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 {
 	struct work *work;
 
-	rd_lock(&cgpu->qlock);
+	wr_lock(&cgpu->qlock);
 	work = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
 	if (work)
 		__work_completed(cgpu, work);
-	rd_unlock(&cgpu->qlock);
+	wr_unlock(&cgpu->qlock);
 
 	return work;
 }
