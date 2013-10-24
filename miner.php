@@ -2,7 +2,7 @@
 session_start();
 date_default_timezone_set(@date_default_timezone_get());
 #
-global $title, $miner, $port, $readonly, $notify, $rigs;
+global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
 global $mcastlistport, $mcasttimeout;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
@@ -14,6 +14,8 @@ global $miner_font_family, $miner_font_size;
 global $bad_font_family, $bad_font_size;
 global $colouroverride, $placebuttons, $userlist;
 global $per_proc;
+#
+$doctype = "<!DOCTYPE html>\n";
 #
 # See README.RPC for more details of these variables and how
 # to configure miner.php
@@ -280,7 +282,7 @@ function getdom($domname)
 #
 function htmlhead($mcerr, $checkapi, $rig, $pg = null, $noscript = false)
 {
- global $title, $miner_font_family, $miner_font_size;
+ global $doctype, $title, $miner_font_family, $miner_font_size;
  global $bad_font_family, $bad_font_size;
  global $error, $readonly, $poolinputs, $here;
  global $ignorerefresh, $autorefresh;
@@ -312,7 +314,7 @@ function htmlhead($mcerr, $checkapi, $rig, $pg = null, $noscript = false)
  $miner_font = "font-family:$miner_font_family; font-size:$miner_font_size;";
  $bad_font = "font-family:$bad_font_family; font-size:$bad_font_size;";
 
- echo "<html><head>$refreshmeta
+ echo "$doctype<html><head>$refreshmeta
 <title>$title</title>
 <style type='text/css'>
 td { $miner_font ".getcss('td')."}
