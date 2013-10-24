@@ -77,8 +77,8 @@
 #include "driver-avalon.h"
 #endif
 
-#ifdef USE_X6500
-#include "ft232r.h"
+#ifdef HAVE_BFG_LOWLEVEL
+#include "lowlevel.h"
 #endif
 
 #if defined(unix) || defined(__APPLE__)
@@ -91,7 +91,7 @@
 #include "scrypt.h"
 #endif
 
-#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
 
@@ -174,6 +174,7 @@ int stratumsrv_port = -1;
 #endif
 
 struct string_elist *scan_devices;
+static struct string_elist *opt_set_device_list;
 bool opt_force_dev_init;
 static bool devices_enabled[MAX_DEVICES];
 static int opt_devs_enabled;
@@ -494,6 +495,83 @@ static void applog_and_exit(const char *fmt, ...)
 	va_end(ap);
 	_applog(LOG_ERR, exit_buf);
 	exit(1);
+}
+
+static
+bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
+{
+	// all - matches anything
+	// d0 - matches all processors of device 0
+	// d0a - matches first processor of device 0
+	// 0 - matches processor 0
+	// ___ - matches all processors on all devices using driver/name ___
+	// ___0 - matches all processors of 0th device using driver/name ___
+	// ___0a - matches first processor of 0th device using driver/name ___
+	if (!strcasecmp(pattern, "all"))
+		return true;
+	
+	const char *p = pattern, *p2;
+	size_t L;
+	int n, i, c = -1;
+	struct cgpu_info *device;
+	
+	while (p[0] && !isdigit(p[0]))
+		++p;
+	
+	L = p - pattern;
+	while (L && isspace(pattern[L-1]))
+		--L;
+	n = strtol(p, (void*)&p2, 0);
+	if (L == 0)
+	{
+		if (!p[0])
+			return true;
+		if (p2 && p2[0])
+			goto invsyntax;
+		if (n >= total_devices)
+			return false;
+		return (cgpu == devices[n]);
+	}
+	
+	if (L > 1 || tolower(pattern[0]) != 'd' || !p[0])
+	{
+		const struct device_drv * const drv = cgpu->drv;
+		if ((L == 3 && !strncasecmp(pattern, drv->name, 3)) ||
+			(L == strlen(drv->dname) && !strncasecmp(pattern, drv->dname, L)))
+			{}  // Matched name or dname
+		else
+			return false;
+		if (p[0] && n != cgpu->device_id)
+			return false;
+		if (p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+			return false;
+		return true;
+	}
+	
+	// d#
+	
+	c = -1;
+	for (i = 0; ; ++i)
+	{
+		if (i == total_devices)
+			return false;
+		if (devices[i]->device != devices[i])
+			continue;
+		if (++c == n)
+			break;
+	}
+	for (device = devices[i]; device; device = device->next_proc)
+	{
+		if (p2 && p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+			continue;
+		if (device == cgpu)
+			return true;
+	}
+	return false;
+
+invsyntax:
+	applog(LOG_WARNING, "%s: Invalid syntax: %s", __func__, pattern);
+	return false;
 }
 
 static pthread_mutex_t sharelog_lock;
@@ -905,6 +983,13 @@ static char *add_serial(const char *arg)
 	}
 
 	string_elist_add(arg, &scan_devices);
+	return NULL;
+}
+
+static
+char *opt_string_elist_add(const char *arg, struct string_elist **elist)
+{
+	string_elist_add(arg, elist);
 	return NULL;
 }
 
@@ -1893,11 +1978,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--scrypt",
 			opt_set_bool, &opt_scrypt,
 			"Use the scrypt algorithm for mining (non-bitcoin)"),
-#ifdef HAVE_OPENCL
+#endif
+	OPT_WITH_ARG("--set-device",
+			opt_string_elist_add, NULL, &opt_set_device_list,
+			"Set default parameters on devices; eg, NFY:osc6_bits=50"),
+#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,
 		     "GPU shaders per card for tuning scrypt, comma separated"),
-#endif
 #endif
 #ifdef HAVE_PWD_H
         OPT_WITH_ARG("--setuid",
@@ -9211,6 +9299,73 @@ void proc_enable(struct cgpu_info *cgpu)
 
 #define device_recovered(cgpu)  proc_enable(cgpu)
 
+void cgpu_set_defaults(struct cgpu_info * const cgpu)
+{
+	const struct device_drv * const drv = cgpu->drv;
+	struct string_elist *setstr_elist;
+	const char *p, *p2;
+	char replybuf[0x2000];
+	size_t L;
+	DL_FOREACH(opt_set_device_list, setstr_elist)
+	{
+		const char * const setstr = setstr_elist->string;
+		p = strchr(setstr, ':');
+		if (!p)
+			continue;
+		{
+			L = p - setstr;
+			char pattern[L + 1];
+			if (L)
+				memcpy(pattern, setstr, L);
+			pattern[L] = '\0';
+			if (!cgpu_match(pattern, cgpu))
+				continue;
+		}
+		
+		applog(LOG_DEBUG, "%"PRIpreprv": %s: Matched with set default: %s",
+		       cgpu->proc_repr, __func__, setstr);
+		
+		if (!drv->set_device)
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
+			       cgpu->proc_repr, setstr);
+			continue;
+		}
+		
+		++p;
+		p2 = strchr(p, '=');
+		if (!p2)
+		{
+			L = strlen(p);
+			p2 = "";
+		}
+		else
+		{
+			L = p2 - p;
+			++p2;
+		}
+		char opt[L + 1];
+		if (L)
+			memcpy(opt, p, L);
+		opt[L] = '\0';
+		
+		L = strlen(p2);
+		char setval[L + 1];
+		if (L)
+			memcpy(setval, p2, L);
+		setval[L] = '\0';
+		
+		p = drv->set_device(cgpu, opt, setval, replybuf);
+		if (p)
+			applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
+			       cgpu->proc_repr, setstr, p);
+		else
+			applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s",
+			       cgpu->proc_repr, setstr);
+	}
+	cgpu->already_set_defaults = true;
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
@@ -9319,8 +9474,13 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			char *dev_str = cgpu->proc_repr;
 			int gpu;
 
-			if (cgpu->drv->get_stats && likely(drv_ready(cgpu)))
-			  cgpu->drv->get_stats(cgpu);
+			if (likely(drv_ready(cgpu)))
+			{
+				if (unlikely(!cgpu->already_set_defaults))
+					cgpu_set_defaults(cgpu);
+				if (cgpu->drv->get_stats)
+					cgpu->drv->get_stats(cgpu);
+			}
 
 			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
@@ -9905,6 +10065,10 @@ extern struct device_drv littlefury_drv;
 extern struct device_drv modminer_drv;
 #endif
 
+#ifdef USE_NANOFURY
+extern struct device_drv nanofury_drv;
+#endif
+
 #ifdef USE_X6500
 extern struct device_drv x6500_api;
 #endif
@@ -9988,9 +10152,8 @@ extern struct sigaction pcwm_orig_term_handler;
 static
 void drv_detect_all()
 {
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan();
+#ifdef HAVE_BFG_LOWLEVEL
+	lowlevel_scan();
 #endif
 
 #ifdef USE_ICARUS
@@ -10020,6 +10183,11 @@ void drv_detect_all()
 #ifdef USE_MODMINER
 	if (!opt_scrypt)
 		modminer_drv.drv_detect();
+#endif
+
+#ifdef USE_NANOFURY
+	if (!opt_scrypt)
+		nanofury_drv.drv_detect();
 #endif
 
 #ifdef USE_X6500
@@ -10061,9 +10229,8 @@ void drv_detect_all()
 	cpu_drv.drv_detect();
 #endif
 
-#ifdef USE_X6500
-	if (likely(have_libusb))
-		ft232r_scan_free();
+#ifdef HAVE_BFG_LOWLEVEL
+	lowlevel_scan_free();
 #endif
 
 #ifdef HAVE_OPENCL

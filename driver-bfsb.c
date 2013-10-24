@@ -210,4 +210,10 @@ struct device_drv bfsb_drv = {
 	.thread_disable = bfsb_disable,
 	.thread_enable = bfsb_enable,
 	.thread_shutdown = bfsb_shutdown,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bitfury_wlogprint_status,
+	.proc_tui_wlogprint_choices = bitfury_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bitfury_tui_handle_choice,
+#endif
 };

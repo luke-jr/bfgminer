@@ -111,6 +111,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_METABANK
 			"MBF "
 #endif
+#ifdef USE_NANOFURY
+			"NFY "
+#endif
 #ifdef USE_AVALON
 			"AVA "
 #endif

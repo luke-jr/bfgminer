@@ -177,6 +177,10 @@ bfgminer_SOURCES += iospeeds.h iospeeds_posix.h
 endif
 endif
 
+if NEED_BFG_LOWLEVEL
+bfgminer_SOURCES += lowlevel.c lowlevel.h
+endif
+
 if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif
@@ -242,6 +246,11 @@ endif
 
 if HAS_LITTLEFURY
 bfgminer_SOURCES += driver-littlefury.c
+endif
+
+if HAS_NANOFURY
+bfgminer_SOURCES += driver-nanofury.c mcp2210.c mcp2210.h
+bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 endif
 

@@ -15,6 +15,8 @@
 
 #include <libusb.h>
 
+#include "lowlevel.h"
+
 enum ft232r_reset_purge {
 	FTDI_PURGE_RX   = 1,
 	FTDI_PURGE_TX   = 2,
@@ -23,12 +25,7 @@ enum ft232r_reset_purge {
 
 struct ft232r_device_handle;
 
-typedef bool(*foundusb_func_t)(libusb_device *, const char *product, const char *serial);
-
-extern void ft232r_scan();
-extern void ft232r_scan_free();
-extern int ft232r_detect(const char *product_needle, const char *serial, foundusb_func_t);
-extern struct ft232r_device_handle *ft232r_open(libusb_device *);
+extern struct ft232r_device_handle *ft232r_open(struct lowlevel_device_info *);
 extern void ft232r_close(struct ft232r_device_handle *);
 extern bool ft232r_purge_buffers(struct ft232r_device_handle *, enum ft232r_reset_purge);
 extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint8_t mode);

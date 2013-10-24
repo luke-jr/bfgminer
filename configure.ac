@@ -111,6 +111,7 @@ optlist=
 
 need_dynclock=no
 need_fpgautils=no
+need_lowlevel=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -527,6 +528,7 @@ if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
 	need_dynclock=yes
 	need_fpgautils=yes
+	need_lowlevel=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -624,6 +626,47 @@ fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
 
+driverlist="$driverlist nanofury"
+nanofury=auto
+AC_ARG_ENABLE([nanofury],
+	[AC_HELP_STRING([--disable-nanofury],[Compile support for NanoFury (default enabled)])],
+	[nanofury=$enableval]
+	)
+if test "x$nanofury" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	_found_hidapi=false
+	for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
+		PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
+			found_hidapi=true
+			break
+		],[
+			true
+		])
+	done
+	if test x$found_hidapi = xtrue; then
+		nanofury=yes
+	else
+		if test x$nanofury = xauto; then
+			nanofury=no
+			nanofury_enableaction="install hidapi"
+		else
+			AC_MSG_ERROR([Could not find hidapi, required for NanoFury support])
+		fi
+	fi
+elif test "x$nanofury" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
+else
+	nanofury=no
+fi
+if test "x$nanofury" = "xyes"; then
+	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
+	need_fpgautils=yes
+	need_lowlevel=yes
+fi
+AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
+
+
 driverlist="$driverlist metabank"
 metabank=no
 AC_ARG_ENABLE([metabank],
@@ -680,6 +723,10 @@ if test x$need_fpgautils = xyes; then
 			echo '#include <iospeeds_posix.h>' >iospeeds_local.h
 		fi
 	fi
+fi
+
+if test x$need_lowlevel = xyes; then
+	AC_DEFINE([HAVE_BFG_LOWLEVEL], [1], [Defined to 1 if lowlevel drivers are being used])
 fi
 
 
@@ -835,6 +882,7 @@ AC_SUBST(libblkmaker_LIBS)
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
@@ -1244,7 +1292,7 @@ BFG_PRINT_LIST([Options...],[optlist])
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS"
+echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
 echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
 echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"

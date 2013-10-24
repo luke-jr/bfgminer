@@ -28,6 +28,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "ft232r.h"
+#include "lowlevel.h"
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
 #define X6500_BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"
@@ -124,8 +125,18 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 	return bits2int(buf, 32);
 }
 
-static bool x6500_foundusb(libusb_device *dev, const char *product, const char *serial)
+static bool x6500_foundlowl(struct lowlevel_device_info * const info)
 {
+	const char * const product = info->product;
+	const char * const serial = info->serial;
+	if (info->lowl != &lowl_ft232r)
+	{
+		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
+		       __func__, product, serial);
+		return false;
+	}
+	
+	libusb_device * const dev = info->lowl_data;
 	if (bfg_claim_libusb(&x6500_api, true, dev))
 		return false;
 	
@@ -139,7 +150,7 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 	x6500->procs = 2;
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
-	x6500->device_data = dev;
+	x6500->device_data = info;
 	cgpu_copy_libusb_strings(x6500, dev);
 
 	return add_cgpu(x6500);
@@ -147,12 +158,12 @@ static bool x6500_foundusb(libusb_device *dev, const char *product, const char *
 
 static bool x6500_detect_one(const char *serial)
 {
-	return ft232r_detect(X6500_USB_PRODUCT, serial, x6500_foundusb);
+	return lowlevel_detect_serial(x6500_foundlowl, serial);
 }
 
 static int x6500_detect_auto()
 {
-	return ft232r_detect(X6500_USB_PRODUCT, NULL, x6500_foundusb);
+	return lowlevel_detect(x6500_foundlowl, X6500_USB_PRODUCT);
 }
 
 static void x6500_detect()
@@ -168,6 +179,7 @@ static bool x6500_prepare(struct thr_info *thr)
 		return true;
 	
 	struct ft232r_device_handle *ftdi = ft232r_open(x6500->device_data);
+	lowlevel_devinfo_free(x6500->device_data);
 	x6500->device_ft232r = NULL;
 	if (!ftdi)
 		return false;
