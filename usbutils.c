@@ -93,6 +93,10 @@
 		.epinfos = _epinfosy \
 	}
 
+/* Keep a global counter of how many async transfers are in place to avoid
+ * shutting down the usb polling thread while they exist. */
+int cgusb_transfers;
+
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bas_epinfos[] = {
@@ -2223,6 +2227,10 @@ static void complete_usb_transfer(struct usb_transfer *ut)
 {
 	cgsem_destroy(&ut->cgsem);
 	libusb_free_transfer(ut->transfer);
+
+	cg_wlock(&cgusb_fd_lock);
+	cgusb_transfers--;
+	cg_wunlock(&cgusb_fd_lock);
 }
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
@@ -2289,6 +2297,7 @@ static int usb_submit_transfer(struct libusb_transfer *transfer)
 
 	cg_wlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(transfer);
+	cgusb_transfers++;
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
