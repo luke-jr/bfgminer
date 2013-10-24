@@ -678,6 +678,19 @@ out:
 	return rv;
 }
 
+static
+struct api_data *knc_api_extra_device_status(struct cgpu_info * const cgpu)
+{
+	struct api_data *root = NULL;
+	struct thr_info * const thr = cgpu->thr[0];
+	struct knc_core * const knccore = thr->cgpu_data;
+	
+	root = api_add_volts(root, "Voltage", &knccore->volt, false);
+	root = api_add_volts(root, "DCDC Current", &knccore->current, false);
+	
+	return root;
+}
+
 struct device_drv knc_drv = {
 	.dname = "knc",
 	.name = "KNC",
@@ -693,4 +706,5 @@ struct device_drv knc_drv = {
 	.poll = knc_poll,
 	
 	.get_stats = knc_get_stats,
+	.get_api_extra_device_status = knc_api_extra_device_status,
 };
