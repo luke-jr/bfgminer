@@ -6440,7 +6440,8 @@ updated:
 					default:
 						wlogprint("Alive");
 				}
-			wlogprint(" Pool %d: %s  User:%s\n",
+			wlogprint(" Quota %d Pool %d: %s  User:%s\n",
+				pool->quota,
 				pool->pool_no,
 				pool->rpc_url, pool->rpc_user);
 			wattroff(logwin, A_BOLD | A_DIM);
@@ -6454,7 +6455,7 @@ retry:
 	if (pool_strategy == POOL_ROTATE)
 		wlogprint("Set to rotate every %d minutes\n", opt_rotate_period);
 	wlogprint("[F]ailover only %s\n", opt_fail_only ? "enabled" : "disabled");
-	wlogprint("[A]dd pool [R]emove pool [D]isable pool [E]nable pool [P]rioritize pool\n");
+	wlogprint("Pool [A]dd [R]emove [D]isable [E]nable [P]rioritize [Q]uota change\n");
 	wlogprint("[C]hange management strategy [S]witch pool [I]nformation\n");
 	wlogprint("Or press any other key to continue\n");
 	logwin_update();
@@ -6548,6 +6549,20 @@ retry:
 		pool = pools[selected];
 		display_pool_summary(pool);
 		goto retry;
+	} else if (!strncasecmp(&input, "q", 1)) {
+		selected = curses_int("Select pool number");
+		if (selected < 0 || selected >= total_pools) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
+		pool = pools[selected];
+		selected = curses_int("Set quota");
+		if (selected < 0) {
+			wlogprint("Invalid negative quota\n");
+			goto retry;
+		}
+		pool->quota = selected;
+		goto updated;
 	} else if (!strncasecmp(&input, "f", 1)) {
 		opt_fail_only ^= true;
 		goto updated;
