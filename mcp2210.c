@@ -204,7 +204,7 @@ static
 bool mcp2210_io(hid_device * const hid, uint8_t * const cmd, uint8_t * const buf)
 {
 	return likely(
-		64 == hid_write(hid, cmd, 64) &&
+		0x41 == hid_write(hid, cmd, 0x41) &&
 		64 == hid_read(hid, buf, 64)
 	);
 }
@@ -213,7 +213,7 @@ static
 bool mcp2210_get_configs(struct mcp2210_device * const h)
 {
 	hid_device * const hid = h->hid;
-	uint8_t cmd[0x40] = {0x41}, buf[0x40];
+	uint8_t cmd[0x41] = {0,0x41}, buf[0x40];
 	
 	if (!mcp2210_io(hid, cmd, buf))
 	{
@@ -222,7 +222,7 @@ bool mcp2210_get_configs(struct mcp2210_device * const h)
 	}
 	memcpy(h->cfg_spi, &buf[4], sizeof(h->cfg_spi));
 	
-	cmd[0] = 0x20;
+	cmd[1] = 0x20;
 	if (!mcp2210_io(hid, cmd, buf))
 	{
 		applog(LOG_ERR, "%s: Failed to get current %s config", __func__, "GPIO");
@@ -259,8 +259,8 @@ static
 bool mcp2210_set_cfg_spi(struct mcp2210_device * const h)
 {
 	hid_device * const hid = h->hid;
-	uint8_t cmd[0x40] = {0x40}, buf[0x40];
-	memcpy(&cmd[4], h->cfg_spi, sizeof(h->cfg_spi));
+	uint8_t cmd[0x41] = {0,0x40}, buf[0x40];
+	memcpy(&cmd[5], h->cfg_spi, sizeof(h->cfg_spi));
 	if (!mcp2210_io(hid, cmd, buf))
 	{
 		applog(LOG_ERR, "%s: Failed to set current %s config", __func__, "SPI");
@@ -314,7 +314,7 @@ bool mcp2210_spi_transfer(struct mcp2210_device * const h, const void * const tx
 {
 	hid_device * const hid = h->hid;
 	uint8_t * const cfg = h->cfg_spi;
-	uint8_t cmd[0x40] = {0x42}, buf[0x40];
+	uint8_t cmd[0x41] = {0,0x42}, buf[0x40];
 	uint8_t *p = rx;
 	
 	if (unlikely(sz > 60))
@@ -328,8 +328,8 @@ bool mcp2210_spi_transfer(struct mcp2210_device * const h, const void * const tx
 	if (!mcp2210_set_cfg_spi(h))
 		return false;
 	
-	cmd[1] = sz;
-	memcpy(&cmd[4], tx, sz);
+	cmd[2] = sz;
+	memcpy(&cmd[5], tx, sz);
 	if (unlikely(!mcp2210_io(hid, cmd, buf)))
 	{
 		applog(LOG_ERR, "%s: Failed to issue SPI transfer", __func__);
@@ -341,7 +341,7 @@ bool mcp2210_spi_transfer(struct mcp2210_device * const h, const void * const tx
 		switch (buf[1])
 		{
 			case 0:     // accepted
-				cmd[1] = 0;
+				cmd[2] = 0;
 				break;
 			case 0xf8:  // transfer in progress
 				applog(LOG_DEBUG, "%s: SPI transfer rejected temporarily (%d bytes remaining)", __func__, sz);
@@ -374,10 +374,10 @@ static
 bool mcp2210_set_cfg_gpio(struct mcp2210_device * const h)
 {
 	hid_device * const hid = h->hid;
-	uint8_t cmd[0x40] = {0x21}, buf[0x40];
+	uint8_t cmd[0x41] = {0,0x21}, buf[0x40];
 	
 	// NOTE: NVRAM chip params access control is not set here
-	memcpy(&cmd[4], h->cfg_gpio, 0xe);
+	memcpy(&cmd[5], h->cfg_gpio, 0xe);
 	if (!mcp2210_io(hid, cmd, buf))
 	{
 		applog(LOG_ERR, "%s: Failed to set current %s config", __func__, "GPIO");
@@ -416,7 +416,7 @@ bool mcp2210_set_gpio_output(struct mcp2210_device * const h, const int pin, con
 enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, const int pin)
 {
 	hid_device * const hid = h->hid;
-	uint8_t cmd[0x40] = {0x31}, buf[0x40];
+	uint8_t cmd[0x41] = {0,0x31}, buf[0x40];
 	const int bit = 1 << (pin % 8);
 	const int byte = (pin / 8);
 	
