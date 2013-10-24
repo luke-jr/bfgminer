@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <math.h>
 
 #ifdef HAVE_LINUX_I2C_DEV_USER_H
 #include <linux/i2c-dev-user.h>
@@ -569,6 +570,20 @@ void knc_core_enable(struct thr_info * const thr)
 }
 
 static
+float knc_dcdc_decode_5_11(uint16_t raw)
+{
+	if (raw == 0)
+		return 0.0;
+	
+	int dcdc_vin_exp = (raw & 0xf800) >> 11;
+	float dcdc_vin_man = raw & 0x07ff;
+	if (dcdc_vin_exp >= 16)
+		dcdc_vin_exp = -32 + dcdc_vin_exp;
+	float dcdc_vin = dcdc_vin_man * exp2(dcdc_vin_exp);
+	return dcdc_vin;
+}
+
+static
 bool knc_get_stats(struct cgpu_info * const cgpu)
 {
 	if (cgpu->device != cgpu)
@@ -577,9 +592,11 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	struct knc_core * const knccore = cgpu->thr[0]->cgpu_data;
 	struct cgpu_info *proc;
 	const int i2cdev = knccore->asicno + 3;
-	const int i2cslave = 0x48;
+	const int i2cslave_temp = 0x48;
+	const int i2cslave_dcdc[] = {0x10, 0x12, 0x14, 0x17};
+	int die;
 	int i2c;
-	int32_t rawtemp;
+	int32_t rawtemp, rawvolt, rawcurrent;
 	float temp;
 	bool rv = false;
 	
@@ -593,10 +610,10 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 		return false;
 	}
 	
-	if (ioctl(i2c, I2C_SLAVE, i2cslave))
+	if (ioctl(i2c, I2C_SLAVE, i2cslave_temp))
 	{
 		applog(LOG_DEBUG, "%s: %s: Failed to select i2c slave 0x%x",
-		       cgpu->dev_repr, __func__, i2cslave);
+		       cgpu->dev_repr, __func__, i2cslave_temp);
 		goto out;
 	}
 	
@@ -606,6 +623,39 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	temp = ((float)(rawtemp & 0xff));
 	if (rawtemp & 0x8000)
 		temp += 0.5;
+	
+	/* DCDC i2c slaves are on 0x10 + [0-7]
+	   8 DCDC boards have all populated
+	   4 DCDC boards only have 0,2,4,7 populated
+	   Only 0,2,4,7 are used
+	   Each DCDC powers one die in the chip, each die has 48 cores
+	   
+	   Datasheet at http://www.lineagepower.com/oem/pdf/MDT040A0X.pdf
+	*/
+
+	for (die = 0; die < 4; die++)
+	{
+		if (ioctl(i2c, I2C_SLAVE, i2cslave_dcdc[die]))
+		{
+			applog(LOG_DEBUG, "%s: %s: Failed to select i2c slave 0x%x",
+			       cgpu->dev_repr, __func__, i2cslave_dcdc[die]);
+			goto out;
+		}
+		
+		rawvolt = i2c_smbus_read_word_data(i2c, 0x8b);  // VOUT
+		if (rawvolt == -1)
+			goto out;
+		
+		rawcurrent = i2c_smbus_read_word_data(i2c, 0x8c);  // IOUT
+		if (rawcurrent == -1)
+			goto out;
+		
+		float volt    = (float)rawvolt * exp2(-10);
+		float current = (float)knc_dcdc_decode_5_11(rawcurrent);
+		
+		applog(LOG_DEBUG, "%s: die %d %6.3fV %5.2fA",
+		       cgpu->dev_repr, die, volt, current);
+	}
 	
 	for (proc = cgpu; proc && proc->device == cgpu; proc = proc->next_proc)
 		proc->temp = temp;
