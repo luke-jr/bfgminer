@@ -117,6 +117,8 @@
 #define DEFAULT_EP_IN 0
 #define DEFAULT_EP_OUT 1
 
+int cgusb_transfers;
+
 struct usb_epinfo {
 	uint8_t att;
 	uint16_t size;

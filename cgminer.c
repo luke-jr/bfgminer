@@ -7798,16 +7798,23 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {0, 100000};
+	struct timeval tv_end = {1, 0};
+	bool inprogress = false;
 
 	RenameThread("usbpoll");
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
-	/* One longer poll on shut down to enable drivers to hopefully cleanly
-	 * shut down. */
-	tv_end.tv_sec = 1;
-	libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+
+	/* Keep event handling going until there are no async transfers in
+	 * flight. */
+	do {
+		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+
+		cg_rlock(&cgusb_fd_lock);
+		inprogress = !!cgusb_transfers;
+		cg_runlock(&cgusb_fd_lock);
+	} while (inprogress);
 
 	return NULL;
 }
