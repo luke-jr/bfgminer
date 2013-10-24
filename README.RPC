@@ -476,8 +476,9 @@ Added API command:
  'poolquota' - Set pool quota for load-balance strategy.
 
 Modified API command:
+ 'devs', 'procs' - add 'Elapsed', 'Stale', 'Work Utility', 'Difficulty Stale'
  'pools' - add 'Quota'
- 'summary' - add 'MHS %ds' (where %d is the log interval)
+ 'summary' - add 'Diff1 Work', 'MHS %ds' (where %d is the log interval)
 
 ---------
 
