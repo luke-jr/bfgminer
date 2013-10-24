@@ -2388,8 +2388,8 @@ function processcompare($which, $ext, $section, $res)
 #
 function ss($a, $b)
 {
- $la = strlen(a);
- $lb = strlen(b);
+ $la = strlen($a);
+ $lb = strlen($b);
  if ($la != $lb)
 	return $la - $lb;
  return strcmp($a, $b);
