@@ -4046,15 +4046,15 @@ static inline struct pool *select_pool(bool lagging)
 	cp = current_pool();
 
 retry:
-	if (pool_strategy == POOL_BALANCE)
-	{
+	if (pool_strategy == POOL_BALANCE) {
 		pool = select_balanced(cp);
-		goto have_pool;
+		goto out;
 	}
 
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only))
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
 		pool = cp;
-	else
+		goto out;
+	} else
 		pool = NULL;
 
 	/* Try to find the first pool in the rotation that is usable */
@@ -4094,7 +4094,7 @@ retry:
 	if (!pool)
 		pool = cp;
 
-have_pool:
+out:
 	if (cp != pool)
 	{
 		if (!pool_active(pool, false))
