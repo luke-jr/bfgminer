@@ -1365,6 +1365,7 @@ extern struct work *__find_work_bymidstate(struct work *que, char *midstate, siz
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
+extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void get_statline3(char *buf, size_t bufsz, struct cgpu_info *, bool for_curses, bool opt_show_procs);

@@ -8578,17 +8578,36 @@ struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate
 	return ret;
 }
 
+static void __work_completed(struct cgpu_info *cgpu, struct work *work)
+{
+	if (work->queued)
+		cgpu->queued_count--;
+	HASH_DEL(cgpu->queued_work, work);
+}
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
 {
 	wr_lock(&cgpu->qlock);
-	if (work->queued)
-		cgpu->queued_count--;
-	HASH_DEL(cgpu->queued_work, work);
+	__work_completed(cgpu, work);
 	wr_unlock(&cgpu->qlock);
 
 	free_work(work);
+}
+
+/* Combines find_queued_work_bymidstate and work_completed in one function
+ * withOUT destroying the work so the driver must free it. */
+struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen)
+{
+	struct work *work;
+
+	rd_lock(&cgpu->qlock);
+	work = __find_work_bymidstate(cgpu->queued_work, midstate, midstatelen, data, offset, datalen);
+	if (work)
+		__work_completed(cgpu, work);
+	rd_unlock(&cgpu->qlock);
+
+	return work;
 }
 
 static void flush_queue(struct cgpu_info *cgpu)
