@@ -604,7 +604,7 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	if (rawtemp == -1)
 		goto out;
 	temp = ((float)(rawtemp & 0xff));
-	if (rawtemp & 0x100)
+	if (rawtemp & 0x8000)
 		temp += 0.5;
 	
 	for (proc = cgpu; proc && proc->device == cgpu; proc = proc->next_proc)
