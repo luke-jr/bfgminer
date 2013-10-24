@@ -2324,7 +2324,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  int epinfo, unsigned char *data, int length,
 		  int *transferred, unsigned int timeout,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
-		  enum usb_cmds cmd, __maybe_unused int seq)
+		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
@@ -2357,7 +2357,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
-	init_usb_transfer(&ut, false);
+	init_usb_transfer(&ut, cancellable);
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
@@ -2398,7 +2398,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
@@ -2481,7 +2481,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			}
 			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 						ptr, usbbufread, &got, timeout,
-						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
+						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
+						cancellable);
 			cgtime(&tv_finish);
 			ptr[got] = '\0';
 
@@ -2581,7 +2582,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					ptr, usbbufread, &got, timeout,
-					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
+					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
+					cancellable);
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -2730,7 +2732,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					(unsigned char *)buf, bufsiz, &sent, timeout,
-					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
+					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1,
+					false);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
