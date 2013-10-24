@@ -269,10 +269,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		if (thr && thr->work_restart) {
 			if (epollfd != -1)
 				close(epollfd);
-			if (opt_debug) {
-				applog(LOG_DEBUG,
-					"Icarus Read: Interrupted by work restart");
-			}
+			applog(LOG_DEBUG, "Icarus Read: Interrupted by work restart");
 			return ICA_GETS_RESTART;
 		}
 
@@ -280,11 +277,8 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		if (rc >= read_count) {
 			if (epollfd != -1)
 				close(epollfd);
-			if (opt_debug) {
-				applog(LOG_DEBUG,
-					"Icarus Read: No data in %.2f seconds",
-					(float)rc * epoll_timeout / 1000.);
-			}
+			applog(LOG_DEBUG, "Icarus Read: No data in %.2f seconds",
+			       (float)rc * epoll_timeout / 1000.);
 			return ICA_GETS_TIMEOUT;
 		}
 	}
@@ -1101,12 +1095,10 @@ keepwaiting:
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
 
-		if (opt_debug) {
-			applog(LOG_DEBUG, "%"PRIpreprv" no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
-					icarus->proc_repr,
-					(uint64_t)estimate_hashes,
-					(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
-		}
+		applog(LOG_DEBUG, "%"PRIpreprv" no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
+		       icarus->proc_repr,
+		       (uint64_t)estimate_hashes,
+		       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 
 		hash_count = estimate_hashes;
 		goto out;
@@ -1124,13 +1116,11 @@ keepwaiting:
 	hash_count++;
 	hash_count *= info->fpga_count;
 
-	if (opt_debug) {
-		applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
-				icarus->proc_repr,
-				nonce,
-				(uint64_t)hash_count,
-				(int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
-	}
+	applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
+	       icarus->proc_repr,
+	       nonce,
+	       (uint64_t)hash_count,
+	       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 
 	if (info->do_default_detection && elapsed.tv_sec >= DEFAULT_DETECT_THRESHOLD) {
 		int MHs = (double)hash_count / ((double)elapsed.tv_sec * 1e6 + (double)elapsed.tv_usec);
