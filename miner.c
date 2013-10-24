@@ -4020,13 +4020,11 @@ retry:
 		if (pool->quota_used++ >= pool->quota) {
 			pool->quota_used = 0;
 			pool = NULL;
-			if (++rotating_pool >= total_pools)
-				rotating_pool = 0;
-			continue;
-		}
-		if (!pool_unworkable(pool))
+		} else if (!pool_unworkable(pool))
 			break;
 		pool = NULL;
+		if (++rotating_pool >= total_pools)
+			rotating_pool = 0;
 	}
 
 	/* If there are no alive pools with quota, choose according to
