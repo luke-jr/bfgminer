@@ -547,6 +547,9 @@ the work and pool1 will get 90%. Quotas can be changed on the fly with RPC,
 and do not act retrospectively. Setting a quota to zero will effectively
 disable that pool unless all other pools are disabled or dead. In that
 scenario, load-balance falls back to regular failover priority-based strategy.
+While a pool is dead, it loses its quota and no attempt is made to catch up
+when it comes back to life.
+
 To specify quotas on the command line, pools should be specified with a
 semicolon separated --quota(or -U) entry instead of --url. Pools specified with
 --url are given a nominal quota value of 1 and entries can be mixed.
