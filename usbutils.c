@@ -2313,7 +2313,8 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 		ut->cancellable = true;
 		INIT_LIST_HEAD(&ut->ct.list);
 		list_add(&ct_list, &ut->ct.list);
-	}
+	} else
+		ut->cancellable = false;;
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
