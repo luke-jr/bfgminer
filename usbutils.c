@@ -96,6 +96,8 @@
 /* Keep a global counter of how many async transfers are in place to avoid
  * shutting down the usb polling thread while they exist. */
 int cgusb_transfers;
+
+/* Linked list of all cancellable transfers. */
 static struct list_head ct_list;
 
 #ifdef USE_BFLSC
@@ -2327,7 +2329,7 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 	if (cancellable) {
 		ut->cancellable = true;
 		INIT_LIST_HEAD(&ut->list);
-		list_add(&ct_list, &ut->list);
+		list_add(&ut->list, &ct_list);
 	} else
 		ut->cancellable = false;
 	cg_wunlock(&cgusb_fd_lock);
