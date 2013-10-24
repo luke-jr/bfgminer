@@ -911,7 +911,9 @@ extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+#ifdef HAVE_LIBUSB
 extern bool have_libusb;
+#endif
 extern int httpsrv_port;
 extern int stratumsrv_port;
 extern char *opt_api_allow;
