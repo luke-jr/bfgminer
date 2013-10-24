@@ -628,6 +628,7 @@ struct pool *add_pool(void)
 	cgtime(&pool->cgminer_stats.start_tv);
 
 	pool->rpc_proxy = NULL;
+	pool->quota = 1;
 
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
@@ -1025,17 +1026,18 @@ bool detect_stratum(struct pool *pool, char *url)
 	return false;
 }
 
-static char *set_url(char *arg)
+static struct pool *add_url(void)
 {
-	struct pool *pool;
-
 	total_urls++;
 	if (total_urls > total_pools)
 		add_pool();
-	pool = pools[total_urls - 1];
+	return pools[total_urls - 1];
+}
 
+static void setup_url(struct pool *pool, char *arg)
+{
 	if (detect_stratum(pool, arg))
-		return NULL;
+		return;
 
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
@@ -1049,6 +1051,39 @@ static char *set_url(char *arg)
 		strncat(httpinput, arg, 248);
 		pool->rpc_url = httpinput;
 	}
+}
+
+static char *set_url(char *arg)
+{
+	struct pool *pool = add_url();
+
+	setup_url(pool, arg);
+	return NULL;
+}
+
+static char *set_quota(char *arg)
+{
+	char *semicolon = strchr(arg, ';'), *url;
+	int len, qlen, quota;
+	struct pool *pool;
+
+	if (!semicolon)
+		return "No semicolon separated quota;URL pair found";
+	len = strlen(arg);
+	*semicolon = '\0';
+	qlen = strlen(arg);
+	if (!qlen)
+		return "No parameter for quota found";
+	len -= qlen + 1;
+	if (len < 1)
+		return "No parameter for URL found";
+	quota = atoi(arg);
+	if (quota < 0)
+		return "Invalid negative parameter for quota set";
+	url = arg + qlen + 1;
+	pool = add_url();
+	setup_url(pool, url);
+	pool->quota = quota;
 
 	return NULL;
 }
@@ -1769,6 +1804,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--quiet-work-updates|--quiet-work-update",
 			opt_set_bool, &opt_quiet_work_updates,
 			opt_hidden),
+	OPT_WITH_ARG("--quota|-U",
+		     set_quota, NULL, NULL,
+		     "quota;URL combination for server with load-balance strategy quotas"),
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
