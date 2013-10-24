@@ -1837,7 +1837,7 @@ static struct opt_table opt_config_table[] = {
 			"Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)"),
 	OPT_WITH_ARG("--socks-proxy",
 		     opt_set_charp, NULL, &opt_socks_proxy,
-		     "Set socks4 proxy (host:port)"),
+		     "Set socks proxy (host:port)"),
 #ifdef USE_LIBEVENT
 	OPT_WITH_ARG("--stratum-port",
 	             opt_set_intval, opt_show_intval, &stratumsrv_port,
