@@ -3344,7 +3344,7 @@ static void curses_print_status(const int ts)
 		best_share);
 	wclrtoeol(statuswin);
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s LP",
+		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s block change notify",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
 		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
@@ -7829,6 +7829,8 @@ out:
 
 static void init_stratum_thread(struct pool *pool)
 {
+	have_longpoll = true;
+
 	if (unlikely(pthread_create(&pool->stratum_thread, NULL, stratum_thread, (void *)pool)))
 		quit(1, "Failed to create stratum thread");
 }
