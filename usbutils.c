@@ -2222,18 +2222,13 @@ struct usb_transfer {
 	struct cancellable_transfer ct;
 };
 
-static void init_usb_transfer(struct usb_transfer *ut, bool cancellable)
+static void init_usb_transfer(struct usb_transfer *ut)
 {
 	cgsem_init(&ut->cgsem);
 	ut->transfer = libusb_alloc_transfer(0);
 	if (unlikely(!ut->transfer))
 		quit(1, "Failed to libusb_alloc_transfer");
 	ut->transfer->user_data = ut;
-	if (cancellable) {
-		ut->cancellable = true;
-		INIT_LIST_HEAD(&ut->ct.list);
-		list_add(&ct_list, &ut->ct.list);
-	}
 }
 
 static void complete_usb_transfer(struct usb_transfer *ut)
@@ -2243,10 +2238,9 @@ static void complete_usb_transfer(struct usb_transfer *ut)
 
 	cg_wlock(&cgusb_fd_lock);
 	cgusb_transfers--;
-	cg_wunlock(&cgusb_fd_lock);
-
 	if (ut->cancellable)
 		list_del(&ut->ct.list);
+	cg_wunlock(&cgusb_fd_lock);
 }
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
@@ -2307,13 +2301,19 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	return ret;
 }
 
-static int usb_submit_transfer(struct libusb_transfer *transfer)
+static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *transfer,
+			       bool cancellable)
 {
 	int err;
 
 	cg_wlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(transfer);
 	cgusb_transfers++;
+	if (cancellable) {
+		ut->cancellable = true;
+		INIT_LIST_HEAD(&ut->ct.list);
+		list_add(&ct_list, &ut->ct.list);
+	}
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
@@ -2357,12 +2357,12 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
-	init_usb_transfer(&ut, cancellable);
+	init_usb_transfer(&ut);
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
 	STATS_TIMEVAL(&tv_start);
-	err = usb_submit_transfer(ut.transfer);
+	err = usb_submit_transfer(&ut, ut.transfer, cancellable);
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
@@ -2792,14 +2792,14 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	if (unlikely(cgpu->shutdown))
 		return libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValue, wIndex, buffer, wLength, timeout);
 
-	init_usb_transfer(&ut, false);
+	init_usb_transfer(&ut);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
 				  wIndex, wLength);
 	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-	err = usb_submit_transfer(ut.transfer);
+	err = usb_submit_transfer(&ut, ut.transfer, false);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
 	if (err == LIBUSB_SUCCESS && transferred) {
