@@ -691,6 +691,18 @@ struct api_data *knc_api_extra_device_status(struct cgpu_info * const cgpu)
 	return root;
 }
 
+#ifdef HAVE_CURSES
+static
+void knc_wlogprint_status(struct cgpu_info * const cgpu)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct knc_core * const knccore = thr->cgpu_data;
+	
+	wlogprint("Voltage: %.3f  DCDC Current: %.3f\n",
+	          knccore->volt, knccore->current);
+}
+#endif
+
 struct device_drv knc_drv = {
 	.dname = "knc",
 	.name = "KNC",
@@ -707,4 +719,7 @@ struct device_drv knc_drv = {
 	
 	.get_stats = knc_get_stats,
 	.get_api_extra_device_status = knc_api_extra_device_status,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = knc_wlogprint_status,
+#endif
 };
