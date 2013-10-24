@@ -162,8 +162,8 @@ an early CM1 Icarus copy bitstream)
 
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
            default[=N]   Use the default Icarus hash time (2.6316ns)
-           short         Calculate the hash time and stop adjusting it at ~315 difficulty 1 shares (~1hr)
-           long          Re-calculate the hash time continuously
+           short=[N]     Calculate the hash time and stop adjusting it at ~315 difficulty 1 shares (~1hr)
+           long=[N]      Re-calculate the hash time continuously
            value[=N]     Specify the hash time in nanoseconds (e.g. 2.6316) and abort time (e.g. 2.6316=80)
 
 If you define fewer comma separated values than Icarus devices, the last values
@@ -188,6 +188,11 @@ Any CPU delays while calculating the hash time will affect the result
 ~315 difficulty 1 shares
 'long' mode requires it to always be stable to ensure accuracy, however, over
 time it continually corrects itself
+The optional additional =N for 'short' or 'long' specifies the limit to set the
+timeout to in deciseconds; thus if the timing code calculation is higher while
+running, it will instead use the limit
+This can be set to the appropriate value to ensure the device never goes idle
+even if the calculation is negatively affected by system performance
 
 When in 'short' or 'long' mode, it will report the hash time value each time it
 is re-calculated

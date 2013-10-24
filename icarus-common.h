@@ -60,6 +60,8 @@ struct ICARUS_INFO {
 	// seconds per Hash
 	double Hs;
 	int read_count;
+	// ds limit for (short=/long=) read_count
+	int read_count_limit;
 
 	enum timing_mode timing_mode;
 	bool do_icarus_timing;

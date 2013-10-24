@@ -79,6 +79,13 @@ ASSERT1(sizeof(uint32_t) == 4);
 
 #define ICARUS_READ_TIME(baud) ((double)ICARUS_READ_SIZE * (double)8.0 / (double)(baud))
 
+// Defined in deciseconds
+// There's no need to have this bigger, since the overhead/latency of extra work
+// is pretty small once you get beyond a 10s nonce range time and 10s also
+// means that nothing slower than 429MH/s can go idle so most icarus devices
+// will always mine without idling
+#define ICARUS_READ_COUNT_LIMIT_MAX 100
+
 // In timing mode: Default starting value until an estimate can be obtained
 // 5 seconds allows for up to a ~840MH/s device
 #define ICARUS_READ_COUNT_TIMING	(5 * TIME_FACTOR)
@@ -134,7 +141,9 @@ static struct timeval history_sec = { HISTORY_SEC, 0 };
 
 static const char *MODE_DEFAULT_STR = "default";
 static const char *MODE_SHORT_STR = "short";
+static const char *MODE_SHORT_STREQ = "short=";
 static const char *MODE_LONG_STR = "long";
+static const char *MODE_LONG_STREQ = "long=";
 static const char *MODE_VALUE_STR = "value";
 static const char *MODE_UNKNOWN_STR = "unknown";
 
@@ -356,18 +365,46 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	}
 
 	info->read_count = 0;
+	info->read_count_limit = 0; // 0 = no limit
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
+		// short
 		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
+	} else if (strncasecmp(buf, MODE_SHORT_STREQ, strlen(MODE_SHORT_STREQ)) == 0) {
+		// short=limit
+		info->read_count = ICARUS_READ_COUNT_TIMING;
+
+		info->timing_mode = MODE_SHORT;
+		info->do_icarus_timing = true;
+
+		info->read_count_limit = atoi(&buf[strlen(MODE_SHORT_STREQ)]);
+		if (info->read_count_limit < 0)
+			info->read_count_limit = 0;
+		if (info->read_count_limit > ICARUS_READ_COUNT_LIMIT_MAX)
+			info->read_count_limit = ICARUS_READ_COUNT_LIMIT_MAX;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
+		// long
 		info->read_count = ICARUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
+	} else if (strncasecmp(buf, MODE_LONG_STREQ, strlen(MODE_LONG_STREQ)) == 0) {
+		// long=limit
+		info->read_count = ICARUS_READ_COUNT_TIMING;
+
+		info->timing_mode = MODE_LONG;
+		info->do_icarus_timing = true;
+
+		info->read_count_limit = atoi(&buf[strlen(MODE_LONG_STREQ)]);
+		if (info->read_count_limit < 0)
+			info->read_count_limit = 0;
+		if (info->read_count_limit > ICARUS_READ_COUNT_LIMIT_MAX)
+			info->read_count_limit = ICARUS_READ_COUNT_LIMIT_MAX;
 	} else if ((Hs = atof(buf)) != 0) {
+		// ns[=read_count]
 		info->Hs = Hs / NANOSEC;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
@@ -407,9 +444,10 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d Hs=%e",
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d limit=%dms Hs=%e",
 		icarus->proc_repr,
-		timing_mode_str(info->timing_mode), info->read_count, info->Hs);
+		timing_mode_str(info->timing_mode),
+		info->read_count, info->read_count_limit, info->Hs);
 }
 
 static uint32_t mask(int work_division)
@@ -917,6 +955,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int count;
 	double Hs, W, fullnonce;
 	int read_count;
+	bool limited;
 	int64_t estimate_hashes;
 	uint32_t values;
 	int64_t hash_count_range;
@@ -1124,7 +1163,9 @@ keepwaiting:
 		}
 	}
 
-	// ignore possible end condition values ... and hw errors
+	// Ignore possible end condition values ... and hw errors
+	// TODO: set limitations on calculated values depending on the device
+	// to avoid crap values caused by CPU/Task Switching/Swapping/etc
 	if (info->do_icarus_timing
 	&&  !was_hw_error
 	&&  ((nonce & info->nonce_mask) > END_CONDITION)
@@ -1197,6 +1238,11 @@ keepwaiting:
 
 			fullnonce = W + Hs * (((double)0xffffffff) + 1);
 			read_count = (int)(fullnonce * TIME_FACTOR) - 1;
+			if (info->read_count_limit > 0 && read_count > info->read_count_limit) {
+				read_count = info->read_count_limit;
+				limited = true;
+			} else
+				limited = false;
 
 			info->Hs = Hs;
 			info->read_count = read_count;
@@ -1212,10 +1258,11 @@ keepwaiting:
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: read_count=%d fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->proc_repr, read_count, fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_count=%d fullnonce=%.3fs",
+//			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: read_count=%d%s fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->proc_repr, read_count, limited ? " (limited)" : "", fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
+			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_count=%d%s fullnonce=%.3fs",
 					icarus->proc_repr,
-					Hs, W, read_count, fullnonce);
+					Hs, W, read_count,
+					limited ? " (limited)" : "", fullnonce);
 		}
 		info->history_count++;
 		cgtime(&tv_history_finish);
@@ -1241,6 +1288,7 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
 	root = api_add_int(root, "read_count", &(info->read_count), false);
+	root = api_add_int(root, "read_count_limit", &(info->read_count_limit), false);
 	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
 	root = api_add_int(root, "count", &(info->count), false);
 	root = api_add_hs(root, "Hs", &(info->Hs), false);
