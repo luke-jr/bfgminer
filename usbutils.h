@@ -440,6 +440,9 @@ void *usb_resource_thread(void *userdata);
 #define usb_read_ii_timeout(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
 	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
+#define usb_read_ii_timeout_cancellable(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
+	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true)
+
 #define usb_read_ep_timeout(cgpu, ep, buf, bufsiz, read, timeout, cmd) \
 	_usb_read(cgpu, DEFAULT_INTINFO, ep, buf, bufsiz, read, timeout, NULL, cmd, false, false)
 
