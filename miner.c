@@ -4041,6 +4041,7 @@ static inline struct pool *select_pool(bool lagging)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
+	bool avail = false;
 	int tested, i;
 
 	cp = current_pool();
@@ -4057,14 +4058,28 @@ retry:
 	} else
 		pool = NULL;
 
+	for (i = 0; i < total_pools; i++) {
+		struct pool *tp = pools[i];
+
+		if (tp->quota_used < tp->quota_gcd) {
+			avail = true;
+			break;
+		}
+	}
+
+	/* There are no pools with quota, so reset them. */
+	if (!avail) {
+		for (i = 0; i < total_pools; i++)
+			pools[i]->quota_used = 0;
+		if (++rotating_pool >= total_pools)
+			rotating_pool = 0;
+	}
+
 	/* Try to find the first pool in the rotation that is usable */
 	tested = 0;
 	while (!pool && tested++ < total_pools) {
 		pool = pools[rotating_pool];
-		if (pool->quota_used++ >= pool->quota_gcd) {
-			pool->quota_used = 0;
-			pool = NULL;
-		} else {
+		if (pool->quota_used++ < pool->quota_gcd) {
 			if (!pool_unworkable(pool))
 				break;
 			/* Failover-only flag for load-balance means distribute
