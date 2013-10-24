@@ -98,11 +98,6 @@
 int cgusb_transfers;
 static struct list_head ct_list;
 
-struct cancellable_transfer {
-	cgsem_t *cgsem;
-	struct list_head list;
-};
-
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bas_epinfos[] = {
@@ -2219,7 +2214,7 @@ struct usb_transfer {
 	cgsem_t cgsem;
 	struct libusb_transfer *transfer;
 	bool cancellable;
-	struct cancellable_transfer ct;
+	struct list_head list;
 };
 
 static void init_usb_transfer(struct usb_transfer *ut)
@@ -2239,7 +2234,7 @@ static void complete_usb_transfer(struct usb_transfer *ut)
 	cg_wlock(&cgusb_fd_lock);
 	cgusb_transfers--;
 	if (ut->cancellable)
-		list_del(&ut->ct.list);
+		list_del(&ut->list);
 	cg_wunlock(&cgusb_fd_lock);
 }
 
@@ -2311,8 +2306,8 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 	cgusb_transfers++;
 	if (cancellable) {
 		ut->cancellable = true;
-		INIT_LIST_HEAD(&ut->ct.list);
-		list_add(&ct_list, &ut->ct.list);
+		INIT_LIST_HEAD(&ut->list);
+		list_add(&ct_list, &ut->list);
 	} else
 		ut->cancellable = false;
 	cg_wunlock(&cgusb_fd_lock);
