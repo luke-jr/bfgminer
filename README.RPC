@@ -1280,6 +1280,16 @@ N.B. the accuracy of the timing used to wait for the replies is
 ---------
 
 Default:
+ $allowgen = false;
+
+Set $allowgen to true to allow customsummarypages to use 'gen' 
+false means ignore any 'gen' options
+This is disabled by default due to the possible security risk
+of using it, see the end of this document for an explanation
+
+---------
+
+Default:
  $rigipsecurity = true;
 
 Set $rigipsecurity to false to show the IP/Port of the rig in the socket error

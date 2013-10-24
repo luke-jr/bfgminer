@@ -4,7 +4,7 @@ date_default_timezone_set(@date_default_timezone_get());
 #
 global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
-global $mcastlistport, $mcasttimeout;
+global $mcastlistport, $mcasttimeout, $allowgen;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
 global $socksndtimeoutsec, $sockrcvtimeoutsec;
 global $checklastshare, $poolinputs, $hidefields;
@@ -74,6 +74,10 @@ $mcastlistport = 4027;
 # Set $mcasttimeout to the number of seconds (floating point)
 # to wait for replies to the Multicast message
 $mcasttimeout = 1.5;
+#
+# Set $allowgen to true to allow customsummarypages to use 'gen' 
+# false means ignore any 'gen' options
+$allowgen = false;
 #
 # Set $rigipsecurity to false to show the IP/Port of the rig
 # in the socket error messages and also show the full socket message
@@ -147,7 +151,7 @@ $poolspage = array(
  'POOL+STATS' => array('STATS.ID=ID', 'POOL.URL=URL',
 			'POOL.Has Stratum=Stratum', 'POOL.Stratum Active=StrAct',
 			'STATS.Net Bytes Sent=NSent',
-			'STATS.Net Bytes Recv=NRecv'));
+			'STATS.Net Bytes Recv=NRecv', 'GEN.AvShr=AvShr'));
 #
 $poolssum = array(
  'SUMMARY' => array('MHS av', 'Found Blocks', 'Accepted',
@@ -162,7 +166,9 @@ $poolsext = array(
 	'group' => array('POOL.URL', 'POOL.Has Stratum', 'POOL.Stratum Active'),
 	'calc' => array(
 			'STATS.Net Bytes Sent' => 'sum',
-			'STATS.Net Bytes Recv' => 'sum'),
+			'STATS.Net Bytes Recv' => 'sum',
+			'POOL.Accepted' => 'sum'),
+	'gen' => array('AvShr' => 'round(POOL.Difficulty Accepted/max(POOL.Accepted,1)*100)/100'),
 	'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
@@ -2427,6 +2433,8 @@ function dogen($ext, $section, &$res, &$fields)
 #
 function processext($ext, $section, $res, &$fields)
 {
+ global $allowgen;
+
  $res = processcompare('where', $ext, $section, $res);
 
  if (isset($ext[$section]['group']))
@@ -2495,7 +2503,7 @@ function processext($ext, $section, $res, &$fields)
  }
 
  // Generated fields (functions of other fields)
- if (isset($ext[$section]['gen']))
+ if ($allowgen === true && isset($ext[$section]['gen']))
 	dogen($ext, $section, $res, $fields);
 
  return processcompare('having', $ext, $section, $res);
