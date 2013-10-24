@@ -183,11 +183,11 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info)
 	{
 		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but failed to detect nanofury",
 		       __func__, product, serial);
-		// TODO: mcp2210_close(mcp);
+		mcp2210_close(mcp);
 		return false;
 	}
 	nanofury_device_off(mcp);
-	// TODO: mcp2210_close(mcp);
+	mcp2210_close(mcp);
 	
 	// TODO: claim device
 	
@@ -241,7 +241,7 @@ bool nanofury_init(struct thr_info * const thr)
 	if (!nanofury_checkport(mcp))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": checkport failed", cgpu->proc_repr);
-		// TODO: mcp2210_close(mcp);
+		mcp2210_close(mcp);
 		return false;
 	}
 	
@@ -253,7 +253,7 @@ bool nanofury_init(struct thr_info * const thr)
 		applog(LOG_ERR, "%"PRIpreprv": Failed to allocate spi_port and bitfury_device structures", cgpu->proc_repr);
 		free(port);
 		free(bitfury);
-		// TODO: mcp2210_close(mcp);
+		mcp2210_close(mcp);
 		return false;
 	}
 	

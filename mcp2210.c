@@ -47,6 +47,7 @@ typedef HMODULE dlh_t;
 struct hid_device_info HID_API_EXPORT *(*dlsym_hid_enumerate)(unsigned short, unsigned short);
 void HID_API_EXPORT (*dlsym_hid_free_enumeration)(struct hid_device_info *);
 hid_device * HID_API_EXPORT (*dlsym_hid_open_path)(const char *);
+void HID_API_EXPORT (*dlsym_hid_close)(hid_device *);
 int HID_API_EXPORT (*dlsym_hid_read)(hid_device *, unsigned char *, size_t);
 int HID_API_EXPORT (*dlsym_hid_write)(hid_device *, const unsigned char *, size_t);
 
@@ -82,6 +83,7 @@ bool hidapi_try_lib(const char * const dlname)
 	dlsym_hid_free_enumeration(hid_enum);
 	
 	LOAD_SYM(hid_open_path);
+	LOAD_SYM(hid_close);
 	LOAD_SYM(hid_read);
 	LOAD_SYM(hid_write);
 	
@@ -97,6 +99,7 @@ fail:
 #define hid_enumerate dlsym_hid_enumerate
 #define hid_free_enumeration dlsym_hid_free_enumeration
 #define hid_open_path dlsym_hid_open_path
+#define hid_close dlsym_hid_close
 #define hid_read dlsym_hid_read
 #define hid_write dlsym_hid_write
 
@@ -253,6 +256,12 @@ struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *info)
 fail:
 	free(h);
 	return NULL;
+}
+
+void mcp2210_close(struct mcp2210_device * const h)
+{
+	hid_close(h->hid);
+	free(h);
 }
 
 static

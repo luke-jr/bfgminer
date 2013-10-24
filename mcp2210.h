@@ -17,6 +17,7 @@ enum mcp2210_gpio_value {
 struct mcp2210_device;
 
 extern struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *);
+extern void mcp2210_close(struct mcp2210_device *);
 
 extern bool mcp2210_configure_spi(struct mcp2210_device *, uint32_t bitrate, uint16_t idlechipsel, uint16_t activechipsel, uint16_t chipseltodatadelay, uint16_t lastbytetocsdelay, uint16_t midbytedelay);
 extern bool mcp2210_set_spimode(struct mcp2210_device *, uint8_t spimode);
