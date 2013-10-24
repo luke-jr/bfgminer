@@ -3271,14 +3271,14 @@ const
 #endif
 char **initial_args;
 
-static void clean_up(void);
+static void clean_up(bool restarting);
 
 void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
 
 	__kill_work();
-	clean_up();
+	clean_up(true);
 
 #if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
@@ -7226,7 +7226,7 @@ void print_summary(void)
 	fflush(stdout);
 }
 
-static void clean_up(void)
+static void clean_up(bool restarting)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
@@ -7241,18 +7241,22 @@ static void clean_up(void)
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
+	if (!restarting) {
+		/* Attempting to disable curses or print a summary during a
+		 * restart can lead to a deadlock. */
 #ifdef HAVE_CURSES
-	disable_curses();
+		disable_curses();
 #endif
-	if (!opt_realquiet && successful_connect)
-		print_summary();
+		if (!opt_realquiet && successful_connect)
+			print_summary();
+	}
 
 	curl_global_cleanup();
 }
 
 void _quit(int status)
 {
-	clean_up();
+	clean_up(false);
 
 #if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
@@ -7805,16 +7809,23 @@ static void probe_pools(void)
 #ifdef USE_USBUTILS
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
-	struct timeval tv_end = {0, 100000};
+	struct timeval tv_end = {1, 0};
+	bool inprogress = false;
 
 	RenameThread("usbpoll");
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
-	/* One longer poll on shut down to enable drivers to hopefully cleanly
-	 * shut down. */
-	tv_end.tv_sec = 1;
-	libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+
+	/* Keep event handling going until there are no async transfers in
+	 * flight. */
+	do {
+		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+
+		cg_rlock(&cgusb_fd_lock);
+		inprogress = !!cgusb_transfers;
+		cg_runlock(&cgusb_fd_lock);
+	} while (inprogress);
 
 	return NULL;
 }
