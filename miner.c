@@ -191,10 +191,9 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
-#ifndef HAVE_LIBUSB
-const
-#endif
+#ifdef HAVE_LIBUSB
 bool have_libusb;
+#endif
 static bool opt_submit_stale = true;
 static int opt_shares;
 static int opt_submit_threads = 0x40;
