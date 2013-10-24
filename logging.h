@@ -57,6 +57,14 @@ extern void _applog(int prio, const char *str);
 	} \
 } while (0)
 
+#define applogsiz(prio, _SIZ, fmt, ...) do { \
+	if (opt_debug || prio != LOG_DEBUG) { \
+			char tmp42[_SIZ]; \
+			snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
+			_applog(prio, tmp42); \
+	} \
+} while (0)
+
 #define applogr(rv, prio, ...)  do {  \
 	applog(prio, __VA_ARGS__);  \
 	return rv;  \
