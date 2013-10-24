@@ -210,6 +210,7 @@ bool opt_api_listen;
 bool opt_api_mcast;
 char *opt_api_mcast_addr = API_MCAST_ADDR;
 char *opt_api_mcast_code = API_MCAST_CODE;
+char *opt_api_mcast_des = "";
 int opt_api_mcast_port = 4028;
 bool opt_api_network;
 bool opt_delaynet;
@@ -1378,6 +1379,13 @@ static char *set_api_description(const char *arg)
 	return NULL;
 }
 
+static char *set_api_mcast_des(const char *arg)
+{
+	opt_set_charp(arg, &opt_api_mcast_des);
+
+	return NULL;
+}
+
 #ifdef USE_ICARUS
 static char *set_icarus_options(const char *arg)
 {
@@ -1463,6 +1471,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--api-mcast-code",
 		     opt_set_charp, opt_show_charp, &opt_api_mcast_code,
 		     "Code expected in the API Multicast message, don't use '-'"),
+	OPT_WITH_ARG("--api-mcast-des",
+		     set_api_mcast_des, NULL, NULL,
+		     "Description appended to the API Multicast reply, default: ''"),
 	OPT_WITH_ARG("--api-mcast-port",
 		     set_int_1_to_65535, opt_show_intval, &opt_api_mcast_port,
 		     "API Multicast listen port"),
@@ -6168,6 +6179,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-mcast-addr\" : \"%s\"", json_escape(opt_api_mcast_addr));
 	if (strcmp(opt_api_mcast_code, API_MCAST_CODE) != 0)
 		fprintf(fcfg, ",\n\"api-mcast-code\" : \"%s\"", json_escape(opt_api_mcast_code));
+	if (*opt_api_mcast_des)
+		fprintf(fcfg, ",\n\"api-mcast-des\" : \"%s\"", json_escape(opt_api_mcast_des));
 	if (strcmp(opt_api_description, PACKAGE_STRING) != 0)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)

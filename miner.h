@@ -909,6 +909,7 @@ extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
 extern char *opt_api_mcast_code;
+extern char *opt_api_mcast_des;
 extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
