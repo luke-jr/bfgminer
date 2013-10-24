@@ -96,6 +96,12 @@
 /* Keep a global counter of how many async transfers are in place to avoid
  * shutting down the usb polling thread while they exist. */
 int cgusb_transfers;
+static struct list_head ct_list;
+
+struct cancellable_transfer {
+	cgsem_t *cgsem;
+	struct list_head list;
+};
 
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
@@ -2212,15 +2218,22 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 struct usb_transfer {
 	cgsem_t cgsem;
 	struct libusb_transfer *transfer;
+	bool cancellable;
+	struct cancellable_transfer ct;
 };
 
-static void init_usb_transfer(struct usb_transfer *ut)
+static void init_usb_transfer(struct usb_transfer *ut, bool cancellable)
 {
 	cgsem_init(&ut->cgsem);
 	ut->transfer = libusb_alloc_transfer(0);
 	if (unlikely(!ut->transfer))
 		quit(1, "Failed to libusb_alloc_transfer");
 	ut->transfer->user_data = ut;
+	if (cancellable) {
+		ut->cancellable = true;
+		INIT_LIST_HEAD(&ut->ct.list);
+		list_add(&ct_list, &ut->ct.list);
+	}
 }
 
 static void complete_usb_transfer(struct usb_transfer *ut)
@@ -2231,6 +2244,9 @@ static void complete_usb_transfer(struct usb_transfer *ut)
 	cg_wlock(&cgusb_fd_lock);
 	cgusb_transfers--;
 	cg_wunlock(&cgusb_fd_lock);
+
+	if (ut->cancellable)
+		list_del(&ut->ct.list);
 }
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
@@ -2341,7 +2357,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
-	init_usb_transfer(&ut);
+	init_usb_transfer(&ut, false);
 	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
@@ -2773,7 +2789,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 	if (unlikely(cgpu->shutdown))
 		return libusb_control_transfer(dev_handle, bmRequestType, bRequest, wValue, wIndex, buffer, wLength, timeout);
 
-	init_usb_transfer(&ut);
+	init_usb_transfer(&ut, false);
 	libusb_fill_control_setup(buf, bmRequestType, bRequest, wValue,
 				  wIndex, wLength);
 	if ((bmRequestType & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
@@ -3284,11 +3300,13 @@ void usb_cleanup(void)
 	drv_count[X##_drv.drv_id].limit = lim; \
 	found = true; \
 	}
-void usb_initialise()
+void usb_initialise(void)
 {
 	char *fre, *ptr, *comma, *colon;
 	int bus, dev, lim, i;
 	bool found;
+
+	INIT_LIST_HEAD(&ct_list);
 
 	for (i = 0; i < DRIVER_MAX; i++) {
 		drv_count[i].count = 0;
