@@ -6033,14 +6033,23 @@ void write_config(FILE *fcfg)
 	/* Write pool values */
 	fputs("{\n\"pools\" : [", fcfg);
 	for(i = 0; i < total_pools; i++) {
-		fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "", json_escape(pools[i]->rpc_url));
-		if (pools[i]->rpc_proxy)
-			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pools[i]->rpc_proxy));
-		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pools[i]->rpc_user));
-		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pools[i]->rpc_pass));
-		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pools[i]->prio);
-		if (pools[i]->force_rollntime)
-			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pools[i]->force_rollntime);
+		struct pool *pool = pools[i];
+
+		if (pool->quota != 1) {
+			fprintf(fcfg, "%s\n\t{\n\t\t\"quota\" : \"%d;%s\",", i > 0 ? "," : "",
+				pool->quota,
+				json_escape(pool->rpc_url));
+		} else {
+			fprintf(fcfg, "%s\n\t{\n\t\t\"url\" : \"%s\",", i > 0 ? "," : "",
+				json_escape(pool->rpc_url));
+		}
+		if (pool->rpc_proxy)
+			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pool->rpc_proxy));
+		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pool->rpc_user));
+		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pool->rpc_pass));
+		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pool->prio);
+		if (pool->force_rollntime)
+			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pool->force_rollntime);
 		fprintf(fcfg, "\n\t}");
 	}
 	fputs("\n]\n", fcfg);
