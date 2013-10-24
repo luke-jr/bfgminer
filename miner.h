@@ -627,6 +627,7 @@ struct thr_info {
 	struct work *work;
 	struct work *next_work;
 	enum thr_busy_state busy_state;
+	bool _mt_disable_called;
 	struct timeval tv_morework;
 	struct work *results_work;
 	bool _job_transition_in_progress;
@@ -643,7 +644,6 @@ struct thr_info {
 	// Used by minerloop_queue
 	struct work *work_list;
 	bool queue_full;
-	bool _last_sbr_state;
 
 	bool	work_restart;
 	notifier_t work_restart_notifier;
@@ -1330,6 +1330,7 @@ struct work {
 
 	unsigned char	work_restart_id;
 	int		id;
+	int		device_id;
 	UT_hash_handle hh;
 	
 	double		work_difficulty;

@@ -2055,7 +2055,9 @@ static void bitforce_queue_thread_deven(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->device_data;
 	struct thr_info *thisthr;
 	
-	for (thisbf = bitforce; thisbf && thisbf->device_data == data; thisbf = thisbf->next_proc)
+	for (thisbf = bitforce->device; thisbf && thisbf->device_data != data; thisbf = thisbf->next_proc)
+	{}
+	for ( ; thisbf && thisbf->device_data == data; thisbf = thisbf->next_proc)
 	{
 		thisthr = bitforce->thr[0];
 		

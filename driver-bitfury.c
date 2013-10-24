@@ -684,7 +684,7 @@ struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 }
 
 static
-bool _bitfury_set_device_parse_setting(int * const rv, char * const setting, char * const replybuf, const int maxval)
+bool _bitfury_set_device_parse_setting(uint32_t * const rv, char * const setting, char * const replybuf, const int maxval)
 {
 	char *p;
 	long int nv;
@@ -707,7 +707,7 @@ bool _bitfury_set_device_parse_setting(int * const rv, char * const setting, cha
 char *bitfury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
-	int newval;
+	uint32_t newval;
 	
 	if (!strcasecmp(option, "help"))
 	{

@@ -382,6 +382,31 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
+driverlist="$driverlist knc"
+AC_ARG_ENABLE([knc],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],
+	[knc=$enableval],
+	[knc=no]
+	)
+if test "x$knc" = xyes; then
+	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
+	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools (NOT linux headers) is required for knc driver])
+	],[
+		#include <stddef.h>
+		#ifdef HAVE_LINUX_I2C_DEV_USER_H
+		#include <linux/i2c-dev-user.h>
+		#else
+		#ifdef NEED_LINUX_I2C_H
+		#include <linux/i2c.h>
+		#endif
+		#include <linux/i2c-dev.h>
+		#endif
+	])
+	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC support is wanted])
+fi
+AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
+
 httpsrv=auto
 AC_ARG_WITH([libmicrohttpd],
 	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],

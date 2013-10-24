@@ -168,6 +168,9 @@ void minerloop_scanhash(struct thr_info *mythr)
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 #endif
 	
+	if (cgpu->deven != DEV_ENABLED)
+		mt_disable(mythr);
+	
 	while (likely(!cgpu->shutdown)) {
 		mythr->work_restart = false;
 		request_work(mythr);
@@ -284,13 +287,16 @@ void job_results_fetched(struct thr_info *mythr)
 	if (mythr->_proceed_with_new_job)
 		do_job_start(mythr);
 	else
-	if (likely(mythr->prev_work))
 	{
-		struct timeval tv_now;
-		
-		timer_set_now(&tv_now);
-		
-		do_process_results(mythr, &tv_now, mythr->prev_work, true);
+		if (likely(mythr->prev_work))
+		{
+			struct timeval tv_now;
+			
+			timer_set_now(&tv_now);
+			
+			do_process_results(mythr, &tv_now, mythr->prev_work, true);
+		}
+		mt_disable_start(mythr);
 	}
 }
 
@@ -406,6 +412,22 @@ void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
 		notifier_read(thr->work_restart_notifier);
 }
 
+static
+void _minerloop_setup(struct thr_info *mythr)
+{
+	struct cgpu_info * const cgpu = mythr->cgpu, *proc;
+	
+	if (mythr->work_restart_notifier[1] == -1)
+		notifier_init(mythr->work_restart_notifier);
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		mythr = proc->thr[0];
+		timer_set_now(&mythr->tv_watchdog);
+		proc->disable_watchdog = true;
+	}
+}
+
 void minerloop_async(struct thr_info *mythr)
 {
 	struct thr_info *thr = mythr;
@@ -416,14 +438,7 @@ void minerloop_async(struct thr_info *mythr)
 	struct cgpu_info *proc;
 	bool is_running, should_be_running;
 	
-	if (mythr->work_restart_notifier[1] == -1)
-		notifier_init(mythr->work_restart_notifier);
-	for (proc = cgpu; proc; proc = proc->next_proc)
-	{
-		mythr = proc->thr[0];
-		timer_set_now(&mythr->tv_watchdog);
-		proc->disable_watchdog = true;
-	}
+	_minerloop_setup(mythr);
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -451,15 +466,20 @@ void minerloop_async(struct thr_info *mythr)
 			}
 			else  // ! should_be_running
 			{
-				if (unlikely(is_running && !mythr->_job_transition_in_progress))
+				if (unlikely((is_running || !thr->_mt_disable_called) && !mythr->_job_transition_in_progress))
 				{
 disabled: ;
-					mythr->tv_morework.tv_sec = -1;
-					if (mythr->busy_state != TBS_GETTING_RESULTS)
-						do_get_results(mythr, false);
-					else
-						// Avoid starting job when pending result fetch completes
-						mythr->_proceed_with_new_job = false;
+					timer_unset(&mythr->tv_morework);
+					if (is_running)
+					{
+						if (mythr->busy_state != TBS_GETTING_RESULTS)
+							do_get_results(mythr, false);
+						else
+							// Avoid starting job when pending result fetch completes
+							mythr->_proceed_with_new_job = false;
+					}
+					else  // !thr->_mt_disable_called
+						mt_disable_start(mythr);
 				}
 			}
 			
@@ -514,8 +534,7 @@ void minerloop_queue(struct thr_info *thr)
 	bool should_be_running;
 	struct work *work;
 	
-	if (thr->work_restart_notifier[1] == -1)
-		notifier_init(thr->work_restart_notifier);
+	_minerloop_setup(thr);
 	
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
@@ -528,11 +547,8 @@ void minerloop_queue(struct thr_info *thr)
 redo:
 			if (should_be_running)
 			{
-				if (unlikely(!mythr->_last_sbr_state))
-				{
+				if (unlikely(mythr->_mt_disable_called))
 					mt_disable_finish(mythr);
-					mythr->_last_sbr_state = should_be_running;
-				}
 				
 				if (unlikely(mythr->work_restart))
 				{
@@ -560,20 +576,27 @@ redo:
 				}
 			}
 			else
-			if (unlikely(mythr->_last_sbr_state))
+			if (unlikely(!mythr->_mt_disable_called))
 			{
-				mythr->_last_sbr_state = should_be_running;
 				do_queue_flush(mythr);
+				mt_disable_start(mythr);
 			}
 			
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
+			
+			if (timer_passed(&mythr->tv_watchdog, &tv_now))
+			{
+				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
+				bfg_watchdog(proc, &tv_now);
+			}
 			
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 			if (should_be_running && !mythr->queue_full)
 				goto redo;
 			
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
+			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
 		do_notifier_select(thr, &tv_timeout);
@@ -600,13 +623,10 @@ void *miner_thread(void *userdata)
 		goto out;
 	}
 
-	if (cgpu->deven != DEV_ENABLED)
-		mt_disable_start(mythr);
-	
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
-
+	
 	cgtime(&cgpu->cgminer_stats.start_tv);
 	if (drv->minerloop)
 		drv->minerloop(mythr);

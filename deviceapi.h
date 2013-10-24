@@ -39,6 +39,12 @@ extern bool add_cgpu_slave(struct cgpu_info *, struct cgpu_info *master);
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 
+enum generic_detect_flags {
+	GDF_FORCE_AUTO = 1,
+	GDF_REQUIRE_DNAME = 2,
+	GDF_DEFAULT_NOAUTO = 4,
+};
+
 extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_func_t, int flags);
 #define serial_detect_fauto(api, detectone, autoscan)  \
 	_serial_detect(api, detectone, autoscan, 1)
@@ -54,6 +60,7 @@ extern int _serial_detect(struct device_drv *api, detectone_func_t, autoscan_fun
 	_serial_detect(api, NULL     , autoscan, 0)
 #define noserial_detect_manual(api, autoscan)  \
 	_serial_detect(api, NULL     , autoscan, 4)
+#define generic_detect(drv, detectone, autoscan, flags)  _serial_detect(drv, detectone, autoscan, flags)
 
 extern FILE *open_bitstream(const char *dname, const char *filename);
 
