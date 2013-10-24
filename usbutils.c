@@ -2217,6 +2217,10 @@ struct usb_transfer {
 	struct list_head list;
 };
 
+/* Cancellable transfers should only be labelled as such if it is safe for them
+ * to effectively mimic timing out early. This flag is usually used to signify
+ * a read is waiting on a non-critical response that takes a long time and the
+ * driver wishes it be aborted if work restart message has been sent. */
 void cancel_usb_transfers(void)
 {
 	struct usb_transfer *ut;

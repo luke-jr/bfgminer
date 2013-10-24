@@ -3931,6 +3931,9 @@ static void restart_threads(void)
 	mutex_unlock(&restart_lock);
 
 #ifdef USE_USBUTILS
+	/* Cancels any cancellable usb transfers. Flagged as such it means they
+	 * are usualy waiting on a read result and it's safe to abort the read
+	 * early. */
 	cancel_usb_transfers();
 #endif
 }
@@ -7813,6 +7816,9 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+
+	/* Cancel any cancellable usb transfers */
+	cancel_usb_transfers();
 
 	/* Keep event handling going until there are no async transfers in
 	 * flight. */
