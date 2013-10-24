@@ -2380,7 +2380,52 @@ function processcompare($which, $ext, $section, $res)
  return $res;
 }
 #
-function processext($ext, $section, $res)
+function ss($a, $b)
+{
+ $la = strlen(a);
+ $lb = strlen(b);
+ if ($la != $lb)
+	return $la - $lb;
+ return strcmp($a, $b);
+}
+#
+function genfld($row, $calc)
+{
+ uksort($row, "ss");
+
+ foreach ($row as $name => $value)
+	if (strstr($calc, $name) !== FALSE)
+		$calc = str_replace($name, $value, $calc);
+
+ eval("\$val = $calc;");
+
+ return $val;
+}
+#
+function dogen($ext, $section, &$res, &$fields)
+{
+ $gen = $ext[$section]['gen'];
+
+ foreach ($gen as $fld => $calc)
+	$fields[] = "GEN.$fld";
+
+ foreach ($res as $rig => $result)
+	foreach ($result as $sec => $row)
+	{
+		$secname = preg_replace('/\d/', '', $sec);
+		if (secmatch($section, $secname))
+			foreach ($gen as $fld => $calc)
+			{
+				$name = "GEN.$fld";
+
+				$val = genfld($row, $calc);
+
+				$res[$rig][$sec][$name] = $val;
+			}
+	}
+}
+#
+function processext($ext, $section, $res, &$fields)
 {
  $res = processcompare('where', $ext, $section, $res);
 
@@ -2448,6 +2493,10 @@ function processext($ext, $section, $res)
 		$res = array('' => $res2);
 	}
  }
+
+ // Generated fields (functions of other fields)
+ if (isset($ext[$section]['gen']))
+	dogen($ext, $section, $res, $fields);
 
  return processcompare('having', $ext, $section, $res);
 }
@@ -2545,7 +2594,8 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
 
 		if (isset($results[$sectionmap[$section]]))
 		{
-			$rigresults = processext($ext, $section, $results[$sectionmap[$section]]);
+			$rigresults = processext($ext, $section, $results[$sectionmap[$section]], $fields);
+
 			$showfields = array();
 			$showhead = array();
 			foreach ($fields as $field)
