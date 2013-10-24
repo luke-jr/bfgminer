@@ -3929,6 +3929,10 @@ static void restart_threads(void)
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
 	mutex_unlock(&restart_lock);
+
+#ifdef USE_USBUTILS
+	cancel_usb_transfers();
+#endif
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)

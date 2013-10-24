@@ -2217,6 +2217,22 @@ struct usb_transfer {
 	struct list_head list;
 };
 
+void cancel_usb_transfers(void)
+{
+	struct usb_transfer *ut;
+	int cancellations = 0;
+
+	cg_rlock(&cgusb_fd_lock);
+	list_for_each_entry(ut, &ct_list, list) {
+		libusb_cancel_transfer(ut->transfer);
+		cancellations++;
+	}
+	cg_runlock(&cgusb_fd_lock);
+
+	if (cancellations)
+		applog(LOG_DEBUG, "Cancelled %d USB transfers", cancellations);
+}
+
 static void init_usb_transfer(struct usb_transfer *ut)
 {
 	cgsem_init(&ut->cgsem);
