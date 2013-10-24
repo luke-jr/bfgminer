@@ -213,7 +213,7 @@ Options for both config file and command line:
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --force-dev-init    Always initialize devices when possible (such as bitstream uploads to some FPGAs)
 --kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
---load-balance      Change multipool strategy from failover to efficiency based balance
+--load-balance      Change multipool strategy from failover to quota based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --log-file|-L <arg> Append log file for output messages
 --log-microseconds  Include microseconds in log output
@@ -249,7 +249,7 @@ Options for both config file and command line:
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --show-processors   Show per processor statistics in summary
 --skip-security-checks <arg> Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)
---socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
+--socks-proxy <arg> Set socks proxy (host:port) for all pools without a proxy specified
 --stratum-port <arg> Port number to listen on for stratum miners (-1 means disabled) (default: -1)
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
@@ -496,9 +496,19 @@ This strategy moves at user-defined intervals from one active pool to the next,
 skipping pools that are idle.
 
 LOAD BALANCE:
-This strategy sends work to all the pools to maintain optimum load. The most
-efficient pools will tend to get a lot more shares. If any pool falls idle, the
-rest will tend to take up the slack keeping the miner busy.
+This strategy sends work to all the pools on a quota basis. By default, all
+pools are allocated equal quotas unless specified with --quota. This
+apportioning of work is based on work handed out, not shares returned so is
+independent of difficulty targets or rejected shares. While a pool is disabled
+or dead, its quota is dropped until it is re-enabled. Quotas are forward
+looking, so if the quota is changed on the fly, it only affects future work.
+If all pools are set to zero quota or all pools with quota are dead, it will
+fall back to a failover mode. See quota below for more information.
+
+The failover-only flag has special meaning in combination with load-balance
+mode and it will distribute quota back to priority pool 0 from any pools that
+are unable to provide work for any reason so as to maintain quota ratios
+between the rest of the pools.
 
 BALANCE:
 This strategy monitors the amount of difficulty 1 shares solved for each pool
@@ -528,6 +538,46 @@ Example solo mining usage:
 bfgminer -o http://localhost:8332 -u username -p password \
     --coinbase-addr 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
     --coinbase-sig "rig1: This is Joe's block!"
+
+
+---
+QUOTAS
+
+The load-balance multipool strategy works off a quota based scheduler. The
+quotas handed out by default are equal, but the user is allowed to specify any
+arbitrary ratio of quotas. For example, if all the quota values add up to 100,
+each quota value will be a percentage, but if 2 pools are specified and pool0
+is given a quota of 1 and pool1 is given a quota of 9, pool0 will get 10% of
+the work and pool1 will get 90%. Quotas can be changed on the fly with RPC,
+and do not act retrospectively. Setting a quota to zero will effectively
+disable that pool unless all other pools are disabled or dead. In that
+scenario, load-balance falls back to regular failover priority-based strategy.
+While a pool is dead, it loses its quota and no attempt is made to catch up
+when it comes back to life.
+
+To specify quotas on the command line, pools should be specified with a
+semicolon separated --quota(or -U) entry instead of --url. Pools specified with
+--url are given a nominal quota value of 1 and entries can be mixed.
+
+For example:
+--url poola:porta -u usernamea -p passa --quota "2;poolb:portb" -u usernameb -p passb
+Will give poola 1/3 of the work and poolb 2/3 of the work.
+
+Writing configuration files with quotas is likewise supported. To use the above
+quotas in a configuration file they would be specified thus:
+
+"pools" : [
+        {
+                "url" : "poola:porta",
+                "user" : "usernamea",
+                "pass" : "passa"
+        },
+        {
+                "quota" : "2;poolb:portb",
+                "user" : "usernameb",
+                "pass" : "passb"
+        }
+]
 
 
 ---

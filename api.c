@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2013 Andrew Smith
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
  * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -59,7 +59,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.25.3";
+static const char *APIVERSION = "2.1";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -351,6 +351,9 @@ static const char *JSON_PARAMETER = "parameter";
 
 #define MSG_DEVSCAN 0x100
 
+#define MSG_INVNEG 121
+#define MSG_SETQUOTA 122
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -519,6 +522,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
+ { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
+ { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
 #ifdef HAVE_AN_FPGA
@@ -1495,13 +1500,14 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 
 	n = find_index_by_cgpu(cgpu);
 
+	double runtime = cgpu_runtime(cgpu);
 	bool enabled = false;
 	double total_mhashes = 0, rolling = 0, utility = 0;
 	enum alive status = cgpu->status;
 	float temp = -1;
-	int accepted = 0, rejected = 0, hw_errors = 0;
+	int accepted = 0, rejected = 0, stale = 0, hw_errors = 0;
 	int diff1 = 0, bad_nonces = 0;
-	double diff_accepted = 0, diff_rejected = 0;
+	double diff_accepted = 0, diff_rejected = 0, diff_stale = 0;
 	int last_share_pool = -1;
 	time_t last_share_pool_time = -1, last_device_valid_work = -1;
 	double last_share_diff = -1;
@@ -1516,10 +1522,12 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		utility += proc->utility;
 		accepted += proc->accepted;
 		rejected += proc->rejected;
+		stale += proc->stale;
 		hw_errors += proc->hw_errors;
 		diff1 += proc->diff1;
 		diff_accepted += proc->diff_accepted;
 		diff_rejected += proc->diff_rejected;
+		diff_stale += proc->diff_stale;
 		bad_nonces += proc->bad_nonces;
 		if (status != proc->status)
 			status = LIFE_MIXED;
@@ -1543,7 +1551,9 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	root = api_add_string(root, "Status", status2str(status), false);
 	if (temp > 0)
 		root = api_add_temp(root, "Temperature", &temp, false);
-	double mhs = total_mhashes / cgpu_runtime(cgpu);
+	
+	root = api_add_elapsed(root, "Device Elapsed", &runtime, false);
+	double mhs = total_mhashes / runtime;
 	root = api_add_mhs(root, "MHS av", &mhs, false);
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
@@ -1552,15 +1562,19 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	root = api_add_int(root, "Rejected", &rejected, false);
 	root = api_add_int(root, "Hardware Errors", &hw_errors, false);
 	root = api_add_utility(root, "Utility", &utility, false);
+	root = api_add_int(root, "Stale", &stale, false);
 	if (last_share_pool != -1)
 	{
 		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
 		root = api_add_time(root, "Last Share Time", &last_share_pool_time, false);
 	}
 	root = api_add_mhtotal(root, "Total MH", &total_mhashes, false);
+	double work_utility = diff1 / runtime;
 	root = api_add_int(root, "Diff1 Work", &diff1, false);
+	root = api_add_utility(root, "Work Utility", &work_utility, false);
 	root = api_add_diff(root, "Difficulty Accepted", &diff_accepted, false);
 	root = api_add_diff(root, "Difficulty Rejected", &diff_rejected, false);
+	root = api_add_diff(root, "Difficulty Stale", &diff_stale, false);
 	if (last_share_diff > 0)
 		root = api_add_diff(root, "Last Share Difficulty", &last_share_diff, false);
 	if (last_device_valid_work != -1)
@@ -1976,6 +1990,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_escape(root, "URL", pool->rpc_url, false);
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_int(root, "Priority", &(pool->prio), false);
+		root = api_add_int(root, "Quota", &pool->quota, false);
 		root = api_add_string(root, "Long Poll", lp, false);
 		root = api_add_uint(root, "Getworks", &(pool->getwork_requested), false);
 		root = api_add_int(root, "Accepted", &(pool->accepted), false);
@@ -2049,6 +2064,9 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
+	char mhsname[27];
+	sprintf(mhsname, "MHS %ds", opt_log_interval);
+	root = api_add_mhs(root, mhsname, &(total_rolling), false);
 	root = api_add_uint(root, "Found Blocks", &(found_blocks), true);
 	root = api_add_int(root, "Getworks", &(total_getworks), true);
 	root = api_add_int(root, "Accepted", &(total_accepted), true);
@@ -2062,6 +2080,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_uint(root, "Remote Failures", &(total_ro), true);
 	root = api_add_uint(root, "Network Blocks", &(new_blocks), true);
 	root = api_add_mhtotal(root, "Total MH", &(total_mhashes_done), true);
+	root = api_add_int(root, "Diff1 Work", &total_diff1, true);
 	root = api_add_utility(root, "Work Utility", &(work_utility), false);
 	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), true);
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
@@ -2521,6 +2540,48 @@ static void poolpriority(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 			message(io_data, MSG_POOLPRIO, 0, NULL, isjson);
 			return;
 	}
+}
+
+static void poolquota(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct pool *pool;
+	int quota, id;
+	char *comma;
+
+	if (total_pools == 0) {
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
+		return;
+	}
+
+	comma = strchr(param, ',');
+	if (!comma) {
+		message(io_data, MSG_CONVAL, 0, param, isjson);
+		return;
+	}
+
+	*(comma++) = '\0';
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		message(io_data, MSG_INVPID, id, NULL, isjson);
+		return;
+	}
+	pool = pools[id];
+
+	quota = atoi(comma);
+	if (quota < 0) {
+		message(io_data, MSG_INVNEG, quota, pool->rpc_url, isjson);
+		return;
+	}
+
+	pool->quota = quota;
+	adjust_quota_gcd();
+	message(io_data, MSG_SETQUOTA, quota, pool->rpc_url, isjson);
 }
 
 static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -3381,6 +3442,7 @@ struct CMDS {
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
 	{ "poolpriority",	poolpriority,	true },
+	{ "poolquota",		poolquota,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
@@ -3909,9 +3971,9 @@ static void mcast()
 				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
-							"cgm-%s-%d",
+							"cgm-%s-%d-%s",
 							opt_api_mcast_code,
-							opt_api_port);
+							opt_api_port, opt_api_mcast_des);
 
 				rep = sendto(reply_sock, replybuf, strlen(replybuf)+1,
 						0, (struct sockaddr *)(&came_from),

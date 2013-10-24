@@ -831,7 +831,7 @@ static inline void cglock_init(cglock_t *lock)
 	rwlock_init(&lock->rwlock);
 }
 
-/* Read lock variant of cglock */
+/* Read lock variant of cglock. Cannot be promoted. */
 static inline void cg_rlock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -839,7 +839,8 @@ static inline void cg_rlock(cglock_t *lock)
 	mutex_unlock_noyield(&lock->mutex);
 }
 
-/* Intermediate variant of cglock */
+/* Intermediate variant of cglock - behaves as a read lock but can be promoted
+ * to a write lock or demoted to read lock. */
 static inline void cg_ilock(cglock_t *lock)
 {
 	mutex_lock(&lock->mutex);
@@ -866,6 +867,12 @@ static inline void cg_dwlock(cglock_t *lock)
 	mutex_unlock_noyield(&lock->mutex);
 }
 
+/* Demote a write variant to an intermediate variant */
+static inline void cg_dwilock(cglock_t *lock)
+{
+	wr_unlock(&lock->rwlock);
+}
+
 /* Downgrade intermediate variant to a read lock */
 static inline void cg_dlock(cglock_t *lock)
 {
@@ -880,7 +887,7 @@ static inline void cg_runlock(cglock_t *lock)
 
 static inline void cg_wunlock(cglock_t *lock)
 {
-	wr_unlock(&lock->rwlock);
+	wr_unlock_noyield(&lock->rwlock);
 	mutex_unlock(&lock->mutex);
 }
 
@@ -909,6 +916,7 @@ extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
 extern char *opt_api_mcast_code;
+extern char *opt_api_mcast_des;
 extern int opt_api_mcast_port;
 extern char *opt_api_groups;
 extern char *opt_api_description;
@@ -1011,6 +1019,7 @@ extern int enabled_pools;
 extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern void adjust_quota_gcd(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
@@ -1070,6 +1079,7 @@ extern enum sha256_algos opt_algo;
 extern struct strategies strategies[];
 extern enum pool_strategy pool_strategy;
 extern int opt_rotate_period;
+extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
@@ -1181,6 +1191,9 @@ struct pool {
 	int solved;
 	int diff1;
 	char diff[8];
+	int quota;
+	int quota_gcd;
+	int quota_used;
 
 	double diff_accepted;
 	double diff_rejected;
@@ -1365,6 +1378,7 @@ extern struct work *__find_work_bymidstate(struct work *que, char *midstate, siz
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
+extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void get_statline3(char *buf, size_t bufsz, struct cgpu_info *, bool for_curses, bool opt_show_procs);
