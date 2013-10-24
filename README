@@ -505,6 +505,11 @@ looking, so if the quota is changed on the fly, it only affects future work.
 If all pools are set to zero quota or all pools with quota are dead, it will
 fall back to a failover mode. See quota below for more information.
 
+The failover-only flag has special meaning in combination with load-balance
+mode and it will distribute quota back to pool 0 from any pools that are
+unable to provide work for any reason so as to maintain quota ratios between
+the rest of the pools.
+
 BALANCE:
 This strategy monitors the amount of difficulty 1 shares solved for each pool
 and uses it to try to end up doing the same amount of work for all pools.
