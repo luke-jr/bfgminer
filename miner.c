@@ -1084,6 +1084,7 @@ static char *set_quota(char *arg)
 	pool = add_url();
 	setup_url(pool, url);
 	pool->quota = quota;
+	applog(LOG_INFO, "Setting pool %d to quota %d", pool->pool_no, pool->quota);
 
 	return NULL;
 }
@@ -1703,7 +1704,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
-		     "Change multipool strategy from failover to efficiency based balance"),
+		     "Change multipool strategy from failover to quota based balance"),
 	OPT_WITH_ARG("--log|-l",
 		     set_int_0_to_9999, opt_show_intval, &opt_log_interval,
 		     "Interval in seconds between log output"),
@@ -3987,13 +3988,16 @@ static struct pool *select_balanced(struct pool *cp)
 
 static bool pool_active(struct pool *, bool pinging);
 static void pool_died(struct pool *);
+static struct pool *priority_pool(int choice);
+static bool pool_unusable(struct pool *pool);
 
-/* Select any active pool in a rotating fashion when loadbalance is chosen */
+/* Select any active pool in a rotating fashion when loadbalance is chosen if
+ * it has any quota left. */
 static inline struct pool *select_pool(bool lagging)
 {
 	static int rotating_pool = 0;
 	struct pool *pool, *cp;
-	int tested;
+	int tested, i;
 
 	cp = current_pool();
 
@@ -4012,13 +4016,32 @@ retry:
 	/* Try to find the first pool in the rotation that is usable */
 	tested = 0;
 	while (!pool && tested++ < total_pools) {
-		if (++rotating_pool >= total_pools)
-			rotating_pool = 0;
 		pool = pools[rotating_pool];
+		if (pool->quota_used++ >= pool->quota) {
+			pool->quota_used = 0;
+			pool = NULL;
+			if (++rotating_pool >= total_pools)
+				rotating_pool = 0;
+			continue;
+		}
 		if (!pool_unworkable(pool))
 			break;
 		pool = NULL;
 	}
+
+	/* If there are no alive pools with quota, choose according to
+	 * priority. */
+	if (!pool) {
+		for (i = 0; i < total_pools; i++) {
+			struct pool *tp = priority_pool(i);
+
+			if (!pool_unusable(tp)) {
+				pool = tp;
+				break;
+			}
+		}
+	}
+
 	/* If still nothing is usable, use the current pool */
 	if (!pool)
 		pool = cp;
@@ -4033,6 +4056,7 @@ have_pool:
 		}
 		pool_tclear(pool, &pool->idle);
 	}
+	applog(LOG_DEBUG, "Selecting pool %d for work", pool->pool_no);
 	return pool;
 }
 
@@ -5402,7 +5426,7 @@ void switch_pools(struct pool *selected)
 	}
 
 	switch (pool_strategy) {
-		/* Both of these set to the master pool */
+		/* All of these set to the master pool */
 		case POOL_BALANCE:
 		case POOL_FAILOVER:
 		case POOL_LOADBALANCE:
