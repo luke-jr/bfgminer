@@ -199,7 +199,9 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info)
 		.threads = 1,
 		// TODO: .name
 		// TODO: .device_path
-		// TODO: .dev_manufacturer/.dev_product/.dev_serial
+		// TODO: .dev_manufacturer
+		.dev_product = strdup(product),
+		.dev_serial = strdup(serial),
 		.deven = DEV_ENABLED,
 		// TODO: .cutofftemp
 	};
