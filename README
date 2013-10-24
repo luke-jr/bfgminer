@@ -544,7 +544,7 @@ bfgminer -o http://localhost:8332 -u username -p password \
 QUOTAS
 
 The load-balance multipool strategy works off a quota based scheduler. The
-quotas handed out by default are equal, but the user is allowed so specify any
+quotas handed out by default are equal, but the user is allowed to specify any
 arbitrary ratio of quotas. For example, if all the quota values add up to 100,
 each quota value will be a percentage, but if 2 pools are specified and pool0
 is given a quota of 1 and pool1 is given a quota of 9, pool0 will get 10% of
