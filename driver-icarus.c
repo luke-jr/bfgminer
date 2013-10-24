@@ -497,7 +497,7 @@ static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct
 		return ICA_NONCE_OK;
 
 	rc = SECTOMS(tdiff(tv_finish, tv_start));
-	if (thr->work_restart) {
+	if (thr && thr->work_restart) {
 		applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
 		return ICA_NONCE_RESTART;
 	}
