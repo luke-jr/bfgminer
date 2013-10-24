@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2013 Andrew Smith
- * Copyright 2011-2012 Con Kolivas
+ * Copyright 2011-2013 Con Kolivas
  * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -59,7 +59,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "1.25.3";
+static const char *APIVERSION = "2.1";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -351,6 +351,9 @@ static const char *JSON_PARAMETER = "parameter";
 
 #define MSG_DEVSCAN 0x100
 
+#define MSG_INVNEG 121
+#define MSG_SETQUOTA 122
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -519,6 +522,8 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_SETCONFIG,PARAM_SET,	"Set config '%s' to %d" },
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
+ { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
+ { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
 #ifdef HAVE_AN_FPGA
@@ -1976,6 +1981,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_escape(root, "URL", pool->rpc_url, false);
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_int(root, "Priority", &(pool->prio), false);
+		root = api_add_int(root, "Quota", &pool->quota, false);
 		root = api_add_string(root, "Long Poll", lp, false);
 		root = api_add_uint(root, "Getworks", &(pool->getwork_requested), false);
 		root = api_add_int(root, "Accepted", &(pool->accepted), false);
@@ -2521,6 +2527,47 @@ static void poolpriority(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 			message(io_data, MSG_POOLPRIO, 0, NULL, isjson);
 			return;
 	}
+}
+
+static void poolquota(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct pool *pool;
+	int quota, id;
+	char *comma;
+
+	if (total_pools == 0) {
+		message(io_data, MSG_NOPOOL, 0, NULL, isjson);
+		return;
+	}
+
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISPID, 0, NULL, isjson);
+		return;
+	}
+
+	comma = strchr(param, ',');
+	if (!comma) {
+		message(io_data, MSG_CONVAL, 0, param, isjson);
+		return;
+	}
+
+	*(comma++) = '\0';
+
+	id = atoi(param);
+	if (id < 0 || id >= total_pools) {
+		message(io_data, MSG_INVPID, id, NULL, isjson);
+		return;
+	}
+	pool = pools[id];
+
+	quota = atoi(comma);
+	if (quota < 0) {
+		message(io_data, MSG_INVNEG, quota, pool->rpc_url, isjson);
+		return;
+	}
+
+	pool->quota = quota;
+	message(io_data, MSG_SETQUOTA, quota, pool->rpc_url, isjson);
 }
 
 static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -3381,6 +3428,7 @@ struct CMDS {
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
 	{ "poolpriority",	poolpriority,	true },
+	{ "poolquota",		poolquota,	true },
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
