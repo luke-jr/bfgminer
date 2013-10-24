@@ -394,6 +394,9 @@ void *usb_resource_thread(void *userdata);
 #define usb_read(cgpu, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
+#define usb_read_cancellable(cgpu, buf, bufsiz, read, cmd) \
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, true)
+
 #define usb_read_ii(cgpu, intinfo, buf, bufsiz, read, cmd) \
 	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, DEVTIMEOUT, NULL, cmd, false, false)
 
@@ -426,6 +429,9 @@ void *usb_resource_thread(void *userdata);
 
 #define usb_read_timeout(cgpu, buf, bufsiz, read, timeout, cmd) \
 	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
+
+#define usb_read_timeout_cancellable(cgpu, buf, bufsiz, read, timeout, cmd) \
+	_usb_read(cgpu, DEFAULT_INTINFO, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, true)
 
 #define usb_read_ii_timeout(cgpu, intinfo, buf, bufsiz, read, timeout, cmd) \
 	_usb_read(cgpu, intinfo, DEFAULT_EP_IN, buf, bufsiz, read, timeout, NULL, cmd, false, false)
