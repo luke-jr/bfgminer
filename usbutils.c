@@ -2283,6 +2283,17 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	return ret;
 }
 
+static int usb_submit_transfer(struct libusb_transfer *transfer)
+{
+	int err;
+
+	cg_wlock(&cgusb_fd_lock);
+	err = libusb_submit_transfer(transfer);
+	cg_wunlock(&cgusb_fd_lock);
+
+	return err;
+}
+
 static int
 usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  int epinfo, unsigned char *data, int length,
@@ -2326,9 +2337,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
 	STATS_TIMEVAL(&tv_start);
-	cg_rlock(&cgusb_fd_lock);
-	err = libusb_submit_transfer(ut.transfer);
-	cg_runlock(&cgusb_fd_lock);
+	err = usb_submit_transfer(ut.transfer);
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
@@ -2762,7 +2771,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-	err = libusb_submit_transfer(ut.transfer);
+	err = usb_submit_transfer(ut.transfer);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
 	if (err == LIBUSB_SUCCESS && transferred) {
@@ -2833,10 +2842,8 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 		usbdev->last_write_siz = siz;
 	}
 	STATS_TIMEVAL(&tv_start);
-	cg_rlock(&cgusb_fd_lock);
 	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
 				   wValue, wIndex, buf, (uint16_t)siz, timeout);
-	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_WRITE, cmd, SEQ0, timeout);
 
