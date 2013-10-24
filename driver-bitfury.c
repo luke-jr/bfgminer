@@ -698,7 +698,7 @@ bool _bitfury_set_device_parse_setting(uint32_t * const rv, char * const setting
 		return false;
 	}
 	nv = strtol(setting, &p, 0);
-	if ((p && p[0]) || nv > maxval || nv < 1)
+	if (nv > maxval || nv < 1)
 	{
 		sprintf(replybuf, "invalid setting");
 		return false;
