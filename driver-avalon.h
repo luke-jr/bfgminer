@@ -55,9 +55,8 @@
 #define AVALON_MAX_MINER_NUM 0x100
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
-/* Default values for *_MINER_NUM are for a full stack of 8 boards, but they
-   will work acceptably for smaller stacks, too */
-#define BITBURNER_XX_DEFAULT_MINER_NUM 16
+/* Default number of miners for Bitburner Fury is for a stack of 8 boards,
+   but it will work acceptably for smaller stacks, too */
 #define BITBURNER_FURY_DEFAULT_MINER_NUM 128
 #define BITBURNER_FURY_DEFAULT_FREQUENCY 256
 #define BITBURNER_FURY_DEFAULT_TIMEOUT 50

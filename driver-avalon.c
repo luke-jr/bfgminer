@@ -801,11 +801,6 @@ static bool avalon_detect_one(libusb_device *dev, struct usb_find_devices *found
 		info->baud = AVALON_IO_SPEED;
 		info->asic_count = AVALON_DEFAULT_ASIC_NUM;
 		switch (usb_ident(avalon)) {
-		case IDENT_BTB:
-			info->miner_count = BITBURNER_XX_DEFAULT_MINER_NUM;
-			info->timeout = AVALON_DEFAULT_TIMEOUT;
-			info->frequency = AVALON_DEFAULT_FREQUENCY;
-			break;
 		case IDENT_BBF:
 			info->miner_count = BITBURNER_FURY_DEFAULT_MINER_NUM;
 			info->timeout = BITBURNER_FURY_DEFAULT_TIMEOUT;
