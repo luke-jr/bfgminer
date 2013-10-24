@@ -140,13 +140,15 @@ void mcp2210_devinfo_free(struct lowlevel_device_info * const info)
 static
 char *wcs2str_dup(wchar_t *ws)
 {
-	char tmp, *rv;
-	int clen;
+	char *rv;
+	int clen, i;
 	
-	clen = snprintf(&tmp, 1, "%ls", ws);
+	clen = wcslen(ws);
 	++clen;
 	rv = malloc(clen);
-	snprintf(rv, clen, "%ls", ws);
+	for (i = 0; i < clen; ++i)
+		rv[i] = ws[i];
+	
 	return rv;
 }
 
