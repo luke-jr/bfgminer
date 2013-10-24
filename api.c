@@ -2567,6 +2567,7 @@ static void poolquota(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 	}
 
 	pool->quota = quota;
+	adjust_quota_gcd();
 	message(io_data, MSG_SETQUOTA, quota, pool->rpc_url, isjson);
 }
 

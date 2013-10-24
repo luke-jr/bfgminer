@@ -148,6 +148,7 @@ int opt_expiry_lp = 3600;
 int opt_bench_algo = -1;
 unsigned long long global_hashrate;
 static bool opt_unittest = false;
+unsigned long global_quota_gcd = 1;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
@@ -605,6 +606,47 @@ static void sharelog(const char*disposition, const struct work*work)
 
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
+/* Adjust all the pools' quota to the greatest common denominator after a pool
+ * has been added or the quotas changed. */
+void adjust_quota_gcd(void)
+{
+	unsigned long gcd, lowest_quota = ~0UL, quota;
+	struct pool *pool;
+	int i;
+
+	for (i = 0; i < total_pools; i++) {
+		pool = pools[i];
+		quota = pool->quota;
+		if (!quota)
+			continue;
+		if (quota < lowest_quota)
+			lowest_quota = quota;
+	}
+
+	if (likely(lowest_quota < ~0UL)) {
+		gcd = lowest_quota;
+		for (i = 0; i < total_pools; i++) {
+			pool = pools[i];
+			quota = pool->quota;
+			if (!quota)
+				continue;
+			while (quota % gcd)
+				gcd--;
+		}
+	} else
+		gcd = 1;
+
+	for (i = 0; i < total_pools; i++) {
+		pool = pools[i];
+		pool->quota_used *= global_quota_gcd;
+		pool->quota_used /= gcd;
+		pool->quota_gcd = pool->quota / gcd;
+	}
+
+	global_quota_gcd = gcd;
+	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
+}
+
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -629,6 +671,7 @@ struct pool *add_pool(void)
 
 	pool->rpc_proxy = NULL;
 	pool->quota = 1;
+	adjust_quota_gcd();
 
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
@@ -1085,6 +1128,7 @@ static char *set_quota(char *arg)
 	setup_url(pool, url);
 	pool->quota = quota;
 	applog(LOG_INFO, "Setting pool %d to quota %d", pool->pool_no, pool->quota);
+	adjust_quota_gcd();
 
 	return NULL;
 }
@@ -4017,16 +4061,16 @@ retry:
 	tested = 0;
 	while (!pool && tested++ < total_pools) {
 		pool = pools[rotating_pool];
-		if (pool->quota_used++ >= pool->quota) {
+		if (pool->quota_used++ >= pool->quota_gcd) {
 			pool->quota_used = 0;
 			pool = NULL;
 		} else {
 			if (!pool_unworkable(pool))
 				break;
 			/* Failover-only flag for load-balance means distribute
-			 * unused quota to pool 0. */
+			 * unused quota to priority pool 0. */
 			if (opt_fail_only)
-				pools[0]->quota++;
+				priority_pool(0)->quota_used--;
 		}
 		pool = NULL;
 		if (++rotating_pool >= total_pools)
@@ -6568,6 +6612,7 @@ retry:
 			goto retry;
 		}
 		pool->quota = selected;
+		adjust_quota_gcd();
 		goto updated;
 	} else if (!strncasecmp(&input, "f", 1)) {
 		opt_fail_only ^= true;
