@@ -488,10 +488,8 @@ typedef uint32_t bitfury_inp_t[0x11];
 int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 	int freq;
 	int random;
-	int chip_id;
 	struct freq_stat *c;
 	
-	chip_id = proc->device_id * 8 + proc->proc_id;
 	c = &bitfury->chip_stat;
 	
 	if (c->best_done) {
@@ -511,7 +509,8 @@ int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 			c->best_done = 1;
 			c->best_osc = freq;
 			stat_done++;
-			applog(LOG_DEBUG, "AAA chip_id: %d. best_done = %d !!!!!!!!! best_osc = %d", chip_id, stat_done, freq);
+			applog(LOG_DEBUG, "%"PRIpreprv": best_done = %d !!!!!!!!! best_osc = %d",
+			       proc->proc_repr, stat_done, freq);
 		}
 	}
 	bitfury->osc6_bits = freq;
@@ -685,13 +684,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		{
 			timersub(&tv_now, &tv_stat, &tv_diff);
 			if (time_less(&tv_period, &tv_diff)) {
-				int chip_id;
 				double mh_diff, s_diff;
 				struct freq_stat *c;
 				
-				chip_id = proc->device_id * 8 + proc->proc_id;
 				c = &bitfury->chip_stat;
-				applog(LOG_DEBUG, "AAA stat chip_id: %d total_secs: %f, omh: %f, os: %f",  chip_id, total_secs, c->omh, c->os);
+				applog(LOG_DEBUG, "%"PRIpreprv": total_secs: %f, omh: %f, os: %f",
+				       proc->proc_repr, total_secs, c->omh, c->os);
 				// Copy current statistics
 				mh_diff = bitfury->counter2 - c->omh;
 				s_diff = total_secs - c->os;
@@ -703,8 +701,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				c->omh = bitfury->counter2;
 				c->os = total_secs;
 				if (stat_done != n_chips)
-					applog(LOG_DEBUG, "AAA Chip_id: %3d: %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs",
-						chip_id,
+					applog(LOG_DEBUG, "%"PRIpreprv": %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs",
+						proc->proc_repr,
 						c->mh_52 / c->s_52, c->s_52,
 						c->mh_53 / c->s_53, c->s_53,
 						c->mh_54 / c->s_54, c->s_54,
@@ -720,7 +718,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 						applog(LOG_DEBUG, "AAA zero_stats() !");
 					}
 				} else {
-					applog(LOG_DEBUG, "AAA Stable freq chip: %d, osc6_bits: %d", chip_id, bitfury->osc6_bits);
+					applog(LOG_DEBUG, "%"PRIpreprv": Stable freq, osc6_bits: %d",
+					       proc->proc_repr, bitfury->osc6_bits);
 				}
 			}
 		}
