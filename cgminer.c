@@ -1911,6 +1911,8 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_GBT;
 	work->work_block = work_block;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, 0);
 	cgtime(&work->tv_staged);
 }
@@ -6013,6 +6015,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, work->sdiff);
 
 	cgtime(&work->tv_staged);

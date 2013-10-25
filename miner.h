@@ -1389,6 +1389,7 @@ struct work {
 	unsigned char	hash2[32];
 
 	int		rolls;
+	int		drv_rolllimit; /* How much the driver can roll ntime */
 
 	dev_blk_ctx	blk;
 
