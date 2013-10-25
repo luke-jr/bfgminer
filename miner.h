@@ -363,7 +363,10 @@ struct device_drv {
 	 * the main loop that it should not add any further work to the table.
 	 */
 	bool (*queue_full)(struct cgpu_info *);
+	/* Tell the driver of a block change */
 	void (*flush_work)(struct cgpu_info *);
+	/* Tell the driver of an updated work template for eg. stratum */
+	void (*update_work)(struct cgpu_info *);
 
 	void (*hw_error)(struct thr_info *);
 	void (*thread_shutdown)(struct thr_info *);
@@ -611,6 +614,7 @@ struct thr_info {
 	double	rolling;
 
 	bool	work_restart;
+	bool	work_update;
 };
 
 struct string_elist {
@@ -989,6 +993,7 @@ struct pool;
 #define API_MCAST_CODE "FTW"
 #define API_MCAST_ADDR "224.0.0.75"
 
+extern bool opt_work_update;
 extern bool opt_protocol;
 extern bool have_longpoll;
 extern char *opt_kernel_path;

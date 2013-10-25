@@ -90,6 +90,7 @@ struct strategies strategies[] = {
 
 static char packagename[256];
 
+bool opt_work_update;
 bool opt_protocol;
 static bool opt_benchmark;
 bool have_longpoll;
@@ -1842,6 +1843,8 @@ static void update_gbt(struct pool *pool)
 			applog(LOG_DEBUG, "Successfully retrieved and updated GBT from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			cgtime(&pool->tv_idle);
+			if (pool == current_pool())
+				opt_work_update = true;
 		} else {
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher GBT from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -3936,6 +3939,18 @@ static void restart_threads(void)
 	 * early. */
 	cancel_usb_transfers();
 #endif
+}
+
+static void signal_work_update(void)
+{
+	int i;
+
+	applog(LOG_INFO, "Work update message received");
+
+	rd_lock(&mining_thr_lock);
+	for (i = 0; i < mining_threads; i++)
+		mining_thr[i]->work_update = true;
+	rd_unlock(&mining_thr_lock);
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)
@@ -6502,7 +6517,7 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = false;
+		mythr->work_restart = mythr->work_update = false;
 
 		fill_queue(mythr, cgpu, drv, thr_id);
 
@@ -6532,7 +6547,8 @@ void hash_queued_work(struct thr_info *mythr)
 		if (unlikely(mythr->work_restart)) {
 			flush_queue(cgpu);
 			drv->flush_work(cgpu);
-		}
+		} else if (mythr->work_update)
+			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -6553,7 +6569,7 @@ void hash_driver_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = false;
+		mythr->work_restart = mythr->work_update = false;
 
 		hashes = drv->scanwork(mythr);
 
@@ -6580,6 +6596,8 @@ void hash_driver_work(struct thr_info *mythr)
 
 		if (unlikely(mythr->work_restart))
 			drv->flush_work(cgpu);
+		else if (mythr->work_update)
+			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -7560,6 +7578,7 @@ static void noop_detect(bool __maybe_unused hotplug)
 {
 }
 #define noop_flush_work noop_reinit_device
+#define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
 /* Fill missing driver drv functions with noops */
@@ -7593,6 +7612,8 @@ void fill_device_drv(struct device_drv *drv)
 		drv->hash_work = &hash_sole_work;
 	if (!drv->flush_work)
 		drv->flush_work = &noop_flush_work;
+	if (!drv->update_work)
+		drv->update_work = &noop_update_work;
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
 	if (!drv->max_diff)
@@ -8316,6 +8337,9 @@ begin_bench:
 		bool lagging = false;
 		struct work *work;
 
+		if (opt_work_update)
+			signal_work_update();
+		opt_work_update = false;
 		cp = current_pool();
 
 		/* If the primary pool is a getwork pool and cannot roll work,
