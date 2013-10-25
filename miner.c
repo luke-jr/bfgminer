@@ -573,6 +573,25 @@ invsyntax:
 	return false;
 }
 
+static
+int cgpu_search(const char * const pattern, const int first)
+{
+	int i;
+	struct cgpu_info *cgpu;
+	
+#define CHECK_CGPU_SEARCH  do{      \
+	cgpu = get_devices(i);          \
+	if (cgpu_match(pattern, cgpu))  \
+		return i;                   \
+}while(0)
+	for (i = first; i < total_devices; ++i)
+		CHECK_CGPU_SEARCH;
+	for (i = 0; i < first; ++i)
+		CHECK_CGPU_SEARCH;
+#undef CHECK_CGPU_SEARCH
+	return -1;
+}
+
 static pthread_mutex_t sharelog_lock;
 static FILE *sharelog_file = NULL;
 
@@ -6969,7 +6988,7 @@ devchange:
 	{
 		clear_logwin();
 		wlogprint("(no devices)\n");
-		wlogprint("Press the plus key to add devices, or Enter when done\n");
+		wlogprint("[Plus] Add device(s)  [Enter] Close device manager\n");
 		_managetui_msg("(none)", &msg);
 		int input = getch();
 		switch (input)
@@ -7022,7 +7041,7 @@ refresh:
 	if (drv->proc_tui_wlogprint_choices && likely(cgpu->status != LIFE_INIT))
 		drv->proc_tui_wlogprint_choices(cgpu);
 	wlogprint("\n");
-	wlogprint("Or press Enter when done or the plus key to add more devices\n");
+	wlogprint("[Slash] Find processor  [Plus] Add device(s)  [Enter] Close device manager\n");
 	_managetui_msg(cgpu->proc_repr, &msg);
 	
 	while (true)
@@ -7082,6 +7101,27 @@ refresh:
 				do {
 					--selected_device;
 				} while (devices[selected_device]->device == mdev && selected_device > 0);
+				goto devchange;
+			}
+			case '/':  case '?':  // find device
+			{
+				static char *pattern = NULL;
+				char *newpattern = curses_input("Enter pattern");
+				if (strcmp(newpattern, "-1"))
+				{
+					free(pattern);
+					pattern = newpattern;
+				}
+				else
+				if (!pattern)
+					pattern = calloc(1, 1);
+				int match = cgpu_search(pattern, selected_device + 1);
+				if (match == -1)
+				{
+					msg = "Couldn't find device\n";
+					goto refresh;
+				}
+				selected_device = match;
 				goto devchange;
 			}
 			case '+':  case '=':  // add new device
