@@ -479,7 +479,45 @@ void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 {
 }
 
+#define HOP_DONE 600
+
+unsigned int stat_done;
+
 typedef uint32_t bitfury_inp_t[0x11];
+
+int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
+	int freq;
+	int random;
+	int chip_id;
+	struct freq_stat *c;
+	
+	chip_id = proc->device_id * 8 + proc->proc_id;
+	c = &(bitfury->chip_stat[chip_id]);
+	
+	if (c->best_done) {
+		freq = c->best_osc;
+	} else {
+		random = (int)(bitfury->mhz * 1000.0) & 1;
+		freq = (bitfury->osc6_bits == 56) ? 52 : bitfury->osc6_bits + random;
+		if (c->s_52 > HOP_DONE && c->s_53 > HOP_DONE && c->s_54 > HOP_DONE &&
+			c->s_55 > HOP_DONE && c->s_56 > HOP_DONE) {
+			double mh_max = 0.0;
+			
+			if (mh_max < c->mh_52 / c->s_52) { mh_max = c->mh_52 / c->s_52; freq = 52; }
+			if (mh_max < c->mh_53 / c->s_53) { mh_max = c->mh_53 / c->s_53; freq = 53; }
+			if (mh_max < c->mh_54 / c->s_54) { mh_max = c->mh_54 / c->s_54; freq = 54; }
+			if (mh_max < c->mh_55 / c->s_55) { mh_max = c->mh_55 / c->s_55; freq = 55; }
+			if (mh_max < c->mh_56 / c->s_56) { mh_max = c->mh_56 / c->s_56; freq = 56; }
+			c->best_done = 1;
+			c->best_osc = freq;
+			stat_done++;
+			applog(LOG_DEBUG, "AAA chip_id: %d. best_done = %d !!!!!!!!! best_osc = %d", chip_id, stat_done, freq);
+		}
+	}
+	bitfury->osc6_bits = freq;
+	send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	return 0;
+}
 
 void bitfury_do_io(struct thr_info * const master_thr)
 {
@@ -495,7 +533,14 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	bool should_be_running;
 	struct timeval tv_now;
 	uint32_t counter;
+	struct timeval tv_stat;
+	struct timeval tv_diff;
+	struct timeval tv_period;
 	
+	unsigned int skip_stat;
+	
+	tv_period.tv_sec = 60;
+	tv_period.tv_usec = 0;
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
 		++n_chips;
 	
@@ -511,6 +556,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	{
 		thr = proc->thr[0];
 		bitfury = proc->device_data;
+		tv_stat = bitfury->tv_stat;
+		skip_stat = bitfury->skip_stat;
 		
 		should_be_running = (proc->deven == DEV_ENABLED && !thr->pause);
 		
@@ -630,8 +677,59 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			}
 		}
 		
+		if (tv_stat.tv_sec == 0 && tv_stat.tv_usec == 0) {
+			copy_time(&tv_stat, &tv_now);
+		}
+		
+		if (!skip_stat)
+		{
+			timersub(&tv_now, &tv_stat, &tv_diff);
+			if (time_less(&tv_period, &tv_diff)) {
+				int chip_id;
+				double mh_diff, s_diff;
+				struct freq_stat *c;
+				
+				chip_id = proc->device_id * 8 + proc->proc_id;
+				c = &(bitfury->chip_stat[chip_id]);
+				applog(LOG_DEBUG, "AAA stat chip_id: %d total_secs: %f, omh: %f, os: %f",  chip_id, total_secs, c->omh, c->os);
+				// Copy current statistics
+				mh_diff = bitfury->counter2 - c->omh;
+				s_diff = total_secs - c->os;
+				if (bitfury->osc6_bits == 52) { c->mh_52 += mh_diff; c->s_52 += s_diff;}
+				if (bitfury->osc6_bits == 53) { c->mh_53 += mh_diff; c->s_53 += s_diff;}
+				if (bitfury->osc6_bits == 54) { c->mh_54 += mh_diff; c->s_54 += s_diff;}
+				if (bitfury->osc6_bits == 55) { c->mh_55 += mh_diff; c->s_55 += s_diff;}
+				if (bitfury->osc6_bits == 56) { c->mh_56 += mh_diff; c->s_56 += s_diff;}
+				c->omh = bitfury->counter2;
+				c->os = total_secs;
+				if (stat_done != n_chips)
+					applog(LOG_DEBUG, "AAA Chip_id: %3d: %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs",
+						chip_id,
+						c->mh_52 / c->s_52, c->s_52,
+						c->mh_53 / c->s_53, c->s_53,
+						c->mh_54 / c->s_54, c->s_54,
+						c->mh_55 / c->s_55, c->s_55,
+						c->mh_56 / c->s_56, c->s_56
+					);
+				
+				// Change freq;
+				if (stat_done != n_chips) {
+					select_freq(bitfury, proc);
+					if (stat_done == n_chips) {
+						zero_stats();
+						applog(LOG_DEBUG, "AAA zero_stats() !");
+					}
+				} else {
+					applog(LOG_DEBUG, "AAA Stable freq chip: %d, osc6_bits: %d", chip_id, bitfury->osc6_bits);
+				}
+			}
+		}
+		
 		if (n)
 		{
+			if(proc->device_id == 0 && proc->proc_id == 6) {
+				applog(LOG_DEBUG, "AAA proc->total_mhashes: %f, total_secs: %f", proc->total_mhashes, total_secs);
+			}
 			for (i = 0; i < n; ++i)
 			{
 				nonce = bitfury_decnonce(newbuf[i]);
@@ -640,6 +738,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
 					       proc->proc_repr, i, (unsigned long)nonce, thr->work);
 					submit_nonce(thr, thr->work, nonce);
+					bitfury->counter2 += 1;
 				}
 				else
 				if (fudge_nonce(thr->prev_work, &nonce))
@@ -647,11 +746,13 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (prev work=%p)",
 					       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
 					submit_nonce(thr, thr->prev_work, nonce);
+					bitfury->counter2 += 1;
 				}
 				else
 				{
 					inc_hw_errors(thr, thr->work, nonce);
 					++bitfury->sample_hwe;
+					bitfury->strange_counter += 1;
 				}
 				if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
 				{
@@ -681,6 +782,10 @@ out:
 			bitfury->desync_counter = 99;
 			bitfury->force_reinit = false;
 		}
+	}
+	skip_stat = (skip_stat + 1) & 0x0;
+	if (time_less(&tv_period, &tv_diff)) {
+		copy_time(&tv_stat, &tv_now);
 	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);

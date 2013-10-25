@@ -15,6 +15,23 @@ struct bitfury_payload {
 	unsigned nnonce;
 };
 
+struct freq_stat {
+	double mh_52;
+	double s_52;
+	double mh_53;
+	double s_53;
+	double mh_54;
+	double s_54;
+	double mh_55;
+	double s_55;
+	double mh_56;
+	double s_56;
+	double omh;
+	double os;
+	int best_osc;
+	int best_done;
+};
+
 struct bitfury_device {
 	struct spi_port *spi;
 	unsigned char osc6_bits;
@@ -30,6 +47,7 @@ struct bitfury_device {
 	struct bitfury_payload payload;
 	struct bitfury_payload opayload;
 	struct bitfury_payload o2payload;
+	struct freq_stat chip_stat[120];
 	unsigned int results[16];
 	int results_n;
 	time_t stat_ts[BITFURY_STAT_N];
@@ -42,8 +60,10 @@ struct bitfury_device {
 	struct timeval otimer2;
 	struct timeval predict1;
 	struct timeval predict2;
+	struct timeval tv_stat;
 	unsigned int counter1, counter2;
 	unsigned int ocounter1, ocounter2;
+	unsigned int skip_stat;
 	int rate; //per msec
 	int osc_slow;
 	int osc_fast;
