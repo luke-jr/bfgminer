@@ -257,8 +257,6 @@ bool knc_init(struct thr_info * const thr)
 					.asicno = i2cslave - 0x20,
 					.coreno = i + j,
 				};
-				if (proc != cgpu)
-					mythr->queue_full = true;
 				proc->device_data = knc;
 				if (buf[j] != 3)
 					proc->deven = DEV_DISABLED;
@@ -300,6 +298,19 @@ nomorecores: ;
 }
 
 static
+void knc_set_queue_full(struct knc_device * const knc)
+{
+	const bool full = (knc->workqueue_size >= knc->workqueue_max);
+	struct cgpu_info *proc;
+	
+	for (proc = knc->cgpu; proc; proc = proc->next_proc)
+	{
+		struct thr_info * const thr = proc->thr[0];
+		thr->queue_full = full;
+	}
+}
+
+static
 void knc_remove_local_queue(struct knc_device * const knc, struct work * const work)
 {
 	DL_DELETE(knc->workqueue, work);
@@ -319,7 +330,7 @@ void knc_prune_local_queue(struct thr_info *thr)
 		if (stale_work(work, false))
 			knc_remove_local_queue(knc, work);
 	}
-	thr->queue_full = (knc->workqueue_size >= knc->workqueue_max);
+	knc_set_queue_full(knc);
 }
 
 static
@@ -338,7 +349,7 @@ bool knc_queue_append(struct thr_info * const thr, struct work * const work)
 	DL_APPEND(knc->workqueue, work);
 	++knc->workqueue_size;
 	
-	thr->queue_full = (knc->workqueue_size >= knc->workqueue_max);
+	knc_set_queue_full(knc);
 	if (thr->queue_full)
 		knc_prune_local_queue(thr);
 	
@@ -362,7 +373,7 @@ void knc_queue_flush(struct thr_info * const thr)
 	{
 		knc_remove_local_queue(knc, work);
 	}
-	thr->queue_full = false;
+	knc_set_queue_full(knc);
 	
 	HASH_LAST_ADDED(knc->devicework, work);
 	if (work && stale_work(work, true))
@@ -535,7 +546,7 @@ void knc_poll(struct thr_info * const thr)
 			if (!--workaccept)
 				break;
 		}
-		thr->queue_full = (knc->workqueue_size >= knc->workqueue_max);
+		knc_set_queue_full(knc);
 	}
 	
 	timer_set_delay_from_now(&thr->tv_poll, delay_usecs);
