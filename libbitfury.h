@@ -16,16 +16,10 @@ struct bitfury_payload {
 };
 
 struct freq_stat {
-	double mh_52;
-	double s_52;
-	double mh_53;
-	double s_53;
-	double mh_54;
-	double s_54;
-	double mh_55;
-	double s_55;
-	double mh_56;
-	double s_56;
+	double *mh;
+	double *s;
+	int osc6_min;
+	int osc6_max;
 	double omh;
 	double os;
 	int best_osc;
