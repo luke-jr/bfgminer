@@ -7842,8 +7842,9 @@ static void *libusb_poll_thread(void __maybe_unused *arg)
 
 	/* Keep event handling going until there are no async transfers in
 	 * flight. */
-	while (async_usb_transfers())
+	do {
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
+	} while (async_usb_transfers());
 
 	return NULL;
 }
