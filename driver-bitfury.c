@@ -747,9 +747,6 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		
 		if (n)
 		{
-			if(proc->device_id == 0 && proc->proc_id == 6) {
-				applog(LOG_DEBUG, "AAA proc->total_mhashes: %f, total_secs: %f", proc->total_mhashes, total_secs);
-			}
 			for (i = 0; i < n; ++i)
 			{
 				nonce = bitfury_decnonce(newbuf[i]);
