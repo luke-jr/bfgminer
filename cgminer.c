@@ -6626,8 +6626,6 @@ void *miner_thread(void *userdata)
 out:
 	drv->thread_shutdown(mythr);
 
-	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
-
 	return NULL;
 }
 
