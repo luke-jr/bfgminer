@@ -6,7 +6,7 @@
 
 #include "miner.h"
 
-#define BITFURY_MAX_OSC6_BITS  55
+#define BITFURY_MAX_OSC6_BITS  60
 
 extern bool bitfury_prepare(struct thr_info *);
 extern bool bitfury_init_chip(struct cgpu_info *);
