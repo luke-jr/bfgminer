@@ -95,9 +95,10 @@
 		.epinfos = _epinfosy \
 	}
 
-/* Keep a global counter of how many async transfers are in place to avoid
- * shutting down the usb polling thread while they exist. */
-int cgusb_transfers;
+/* Linked list of all async transfers in progress. Protected by cgusb_fd_lock.
+ * This allows us to not stop the usb polling thread till all are complete, and
+ * to find cancellable transfers. */
+static struct list_head ut_list;
 
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
@@ -2247,7 +2248,43 @@ static char *find_end(unsigned char *buf, unsigned char *ptr, int ptrlen, int to
 struct usb_transfer {
 	cgsem_t cgsem;
 	struct libusb_transfer *transfer;
+	bool cancellable;
+	struct list_head list;
 };
+
+bool async_usb_transfers(void)
+{
+	bool ret;
+
+	cg_rlock(&cgusb_fd_lock);
+	ret = !list_empty(&ut_list);
+	cg_runlock(&cgusb_fd_lock);
+
+	return ret;
+}
+
+/* Cancellable transfers should only be labelled as such if it is safe for them
+ * to effectively mimic timing out early. This flag is usually used to signify
+ * a read is waiting on a non-critical response that takes a long time and the
+ * driver wishes it be aborted if work restart message has been sent. */
+void cancel_usb_transfers(void)
+{
+	struct usb_transfer *ut;
+	int cancellations = 0;
+
+	cg_wlock(&cgusb_fd_lock);
+	list_for_each_entry(ut, &ut_list, list) {
+		if (ut->cancellable) {
+			ut->cancellable = false;
+			libusb_cancel_transfer(ut->transfer);
+			cancellations++;
+		}
+	}
+	cg_wunlock(&cgusb_fd_lock);
+
+	if (cancellations)
+		applog(LOG_DEBUG, "Cancelled %d USB transfers", cancellations);
+}
 
 static void init_usb_transfer(struct usb_transfer *ut)
 {
@@ -2256,22 +2293,24 @@ static void init_usb_transfer(struct usb_transfer *ut)
 	if (unlikely(!ut->transfer))
 		quit(1, "Failed to libusb_alloc_transfer");
 	ut->transfer->user_data = ut;
+	ut->cancellable = false;
 }
 
 static void complete_usb_transfer(struct usb_transfer *ut)
 {
+	cg_wlock(&cgusb_fd_lock);
+	list_del(&ut->list);
+	cg_wunlock(&cgusb_fd_lock);
+
 	cgsem_destroy(&ut->cgsem);
 	libusb_free_transfer(ut->transfer);
-
-	cg_wlock(&cgusb_fd_lock);
-	cgusb_transfers--;
-	cg_wunlock(&cgusb_fd_lock);
 }
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 {
 	struct usb_transfer *ut = transfer->user_data;
 
+	ut->cancellable = false;
 	cgsem_post(&ut->cgsem);
 }
 
@@ -2326,13 +2365,18 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int
 	return ret;
 }
 
-static int usb_submit_transfer(struct libusb_transfer *transfer)
+static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *transfer,
+			       bool cancellable)
 {
 	int err;
 
+	INIT_LIST_HEAD(&ut->list);
+
 	cg_wlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(transfer);
-	cgusb_transfers++;
+	if (likely(!err))
+		ut->cancellable = cancellable;
+	list_add(&ut->list, &ut_list);
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
@@ -2343,7 +2387,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  int epinfo, unsigned char *data, int length,
 		  int *transferred, unsigned int timeout,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
-		  enum usb_cmds cmd, __maybe_unused int seq)
+		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
@@ -2381,7 +2425,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, 0);
 	STATS_TIMEVAL(&tv_start);
-	err = usb_submit_transfer(ut.transfer);
+	err = usb_submit_transfer(&ut, ut.transfer, cancellable);
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, timeout);
@@ -2417,7 +2461,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce)
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
@@ -2500,7 +2544,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			}
 			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 						ptr, usbbufread, &got, timeout,
-						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
+						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
+						cancellable);
 			cgtime(&tv_finish);
 			ptr[got] = '\0';
 
@@ -2600,7 +2645,8 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					ptr, usbbufread, &got, timeout,
-					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1);
+					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
+					cancellable);
 		cgtime(&tv_finish);
 		ptr[got] = '\0';
 
@@ -2749,7 +2795,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					(unsigned char *)buf, bufsiz, &sent, timeout,
-					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1);
+					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1,
+					false);
 		cgtime(&tv_finish);
 
 		USBDEBUG("USB debug: @_usb_write(%s (nodev=%s)) err=%d%s sent=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), err, isnodev(err), sent);
@@ -2815,7 +2862,7 @@ static int usb_control_transfer(struct cgpu_info *cgpu, libusb_device_handle *de
 		memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, buffer, wLength);
 	libusb_fill_control_transfer(ut.transfer, dev_handle, buf, transfer_callback,
 				     &ut, 0);
-	err = usb_submit_transfer(ut.transfer);
+	err = usb_submit_transfer(&ut, ut.transfer, false);
 	if (!err)
 		err = callback_wait(&ut, &transferred, timeout);
 	if (err == LIBUSB_SUCCESS && transferred) {
@@ -3320,11 +3367,13 @@ void usb_cleanup(void)
 	drv_count[X##_drv.drv_id].limit = lim; \
 	found = true; \
 	}
-void usb_initialise()
+void usb_initialise(void)
 {
 	char *fre, *ptr, *comma, *colon;
 	int bus, dev, lim, i;
 	bool found;
+
+	INIT_LIST_HEAD(&ut_list);
 
 	for (i = 0; i < DRIVER_MAX; i++) {
 		drv_count[i].count = 0;

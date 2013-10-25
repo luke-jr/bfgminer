@@ -1610,6 +1610,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->getwork_requested++;
 	total_getworks++;
 	ret = true;
+	if (pool == current_pool())
+		opt_work_update = true;
 out:
 	return ret;
 }

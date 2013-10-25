@@ -471,70 +471,42 @@ static void rev(unsigned char *s, size_t l)
 #define ICA_NONCE_RESTART 1
 #define ICA_NONCE_TIMEOUT 2
 
-static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct timeval *tv_start, struct timeval *tv_finish, struct thr_info *thr, int read_time)
+static int icarus_get_nonce(struct cgpu_info *icarus, unsigned char *buf, struct timeval *tv_start,
+			    struct timeval *tv_finish, struct thr_info *thr, int read_time)
 {
 	struct ICARUS_INFO *info = (struct ICARUS_INFO *)(icarus->device_data);
-	struct timeval read_start, read_finish;
-	int err, amt;
-	int rc = 0, delay;
-	int read_amount = ICARUS_READ_SIZE;
-	bool first = true;
+	int err, amt, rc;
+
+	if (icarus->usbinfo.nodev)
+		return ICA_NONCE_ERROR;
 
 	cgtime(tv_start);
-	while (true) {
-		if (icarus->usbinfo.nodev)
-			return ICA_NONCE_ERROR;
+	err = usb_read_ii_timeout_cancellable(icarus, info->intinfo, (char *)buf,
+					      ICARUS_READ_SIZE, &amt, read_time,
+					      C_GETRESULTS);
+	cgtime(tv_finish);
 
-		cgtime(&read_start);
-		err = usb_read_ii_timeout(icarus, info->intinfo,
-					  (char *)buf, read_amount, &amt,
-					  info->timeout, C_GETRESULTS);
-		cgtime(&read_finish);
-		if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)",
-					icarus->drv->name, icarus->device_id, err, amt);
-			dev_error(icarus, REASON_DEV_COMMS_ERROR);
-			return ICA_NONCE_ERROR;
-		}
-
-		if (first)
-			copy_time(tv_finish, &read_finish);
-
-		if (amt >= read_amount)
-			return ICA_NONCE_OK;
-
-		rc = SECTOMS(tdiff(&read_finish, tv_start));
-		if (rc >= read_time) {
-			if (amt > 0)
-				applog(LOG_DEBUG, "Icarus Read: Timeout reading for %d ms", rc);
-			else
-				applog(LOG_DEBUG, "Icarus Read: No data for %d ms", rc);
-			return ICA_NONCE_TIMEOUT;
-		}
-
-		if (thr && thr->work_restart) {
-			applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
-			return ICA_NONCE_RESTART;
-		}
-
-		if (amt > 0) {
-			buf += amt;
-			read_amount -= amt;
-			first = false;
-		}
-
-		if (info->timeout < ICARUS_WAIT_TIMEOUT) {
-			delay = ICARUS_WAIT_TIMEOUT - rc;
-			if (delay > 0) {
-				cgsleep_ms(delay);
-
-				if (thr && thr->work_restart) {
-					applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
-					return ICA_NONCE_RESTART;
-				}
-			}
-		}
+	if (err < 0 && err != LIBUSB_ERROR_TIMEOUT) {
+		applog(LOG_ERR, "%s%i: Comms error (rerr=%d amt=%d)", icarus->drv->name,
+		       icarus->device_id, err, amt);
+		dev_error(icarus, REASON_DEV_COMMS_ERROR);
+		return ICA_NONCE_ERROR;
 	}
+
+	if (amt >= ICARUS_READ_SIZE)
+		return ICA_NONCE_OK;
+
+	rc = SECTOMS(tdiff(tv_finish, tv_start));
+	if (thr && thr->work_restart) {
+		applog(LOG_DEBUG, "Icarus Read: Work restart at %d ms", rc);
+		return ICA_NONCE_RESTART;
+	}
+
+	if (amt > 0)
+		applog(LOG_DEBUG, "Icarus Read: Timeout reading for %d ms", rc);
+	else
+		applog(LOG_DEBUG, "Icarus Read: No data for %d ms", rc);
+	return ICA_NONCE_TIMEOUT;
 }
 
 static const char *timing_mode_str(enum timing_mode timing_mode)

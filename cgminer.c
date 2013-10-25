@@ -94,6 +94,7 @@ struct strategies strategies[] = {
 
 static char packagename[256];
 
+bool opt_work_update;
 bool opt_protocol;
 static bool opt_benchmark;
 bool have_longpoll;
@@ -1849,6 +1850,8 @@ static void update_gbt(struct pool *pool)
 			applog(LOG_DEBUG, "Successfully retrieved and updated GBT from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
 			cgtime(&pool->tv_idle);
+			if (pool == current_pool())
+				opt_work_update = true;
 		} else {
 			applog(LOG_DEBUG, "Successfully retrieved but FAILED to decipher GBT from pool %u %s",
 			       pool->pool_no, pool->rpc_url);
@@ -1915,6 +1918,8 @@ static void gen_gbt_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_GBT;
 	work->work_block = work_block;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, 0);
 	cgtime(&work->tv_staged);
 }
@@ -3936,6 +3941,25 @@ static void restart_threads(void)
 	mutex_lock(&restart_lock);
 	pthread_cond_broadcast(&restart_cond);
 	mutex_unlock(&restart_lock);
+
+#ifdef USE_USBUTILS
+	/* Cancels any cancellable usb transfers. Flagged as such it means they
+	 * are usualy waiting on a read result and it's safe to abort the read
+	 * early. */
+	cancel_usb_transfers();
+#endif
+}
+
+static void signal_work_update(void)
+{
+	int i;
+
+	applog(LOG_INFO, "Work update message received");
+
+	rd_lock(&mining_thr_lock);
+	for (i = 0; i < mining_threads; i++)
+		mining_thr[i]->work_update = true;
+	rd_unlock(&mining_thr_lock);
 }
 
 static void set_curblock(char *hexstr, unsigned char *hash)
@@ -5998,6 +6022,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
 	work->work_block = work_block;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, work->sdiff);
 
 	cgtime(&work->tv_staged);
@@ -6502,7 +6528,7 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = false;
+		mythr->work_restart = mythr->work_update = false;
 
 		fill_queue(mythr, cgpu, drv, thr_id);
 
@@ -6532,7 +6558,8 @@ void hash_queued_work(struct thr_info *mythr)
 		if (unlikely(mythr->work_restart)) {
 			flush_queue(cgpu);
 			drv->flush_work(cgpu);
-		}
+		} else if (mythr->work_update)
+			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -6553,7 +6580,7 @@ void hash_driver_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-		mythr->work_restart = false;
+		mythr->work_restart = mythr->work_update = false;
 
 		hashes = drv->scanwork(mythr);
 
@@ -6580,6 +6607,8 @@ void hash_driver_work(struct thr_info *mythr)
 
 		if (unlikely(mythr->work_restart))
 			drv->flush_work(cgpu);
+		else if (mythr->work_update)
+			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
 }
@@ -6607,8 +6636,6 @@ void *miner_thread(void *userdata)
 	drv->hash_work(mythr);
 out:
 	drv->thread_shutdown(mythr);
-
-	applog(LOG_ERR, "Thread %d failure, exiting", thr_id);
 
 	return NULL;
 }
@@ -7560,6 +7587,7 @@ static void noop_detect(bool __maybe_unused hotplug)
 {
 }
 #define noop_flush_work noop_reinit_device
+#define noop_update_work noop_reinit_device
 #define noop_queue_full noop_get_stats
 
 /* Fill missing driver drv functions with noops */
@@ -7593,6 +7621,8 @@ void fill_device_drv(struct device_drv *drv)
 		drv->hash_work = &hash_sole_work;
 	if (!drv->flush_work)
 		drv->flush_work = &noop_flush_work;
+	if (!drv->update_work)
+		drv->update_work = &noop_update_work;
 	if (!drv->queue_full)
 		drv->queue_full = &noop_queue_full;
 	if (!drv->max_diff)
@@ -7810,22 +7840,20 @@ static void probe_pools(void)
 static void *libusb_poll_thread(void __maybe_unused *arg)
 {
 	struct timeval tv_end = {1, 0};
-	bool inprogress = false;
 
 	RenameThread("usbpoll");
 
 	while (usb_polling)
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
 
+	/* Cancel any cancellable usb transfers */
+	cancel_usb_transfers();
+
 	/* Keep event handling going until there are no async transfers in
 	 * flight. */
 	do {
 		libusb_handle_events_timeout_completed(NULL, &tv_end, NULL);
-
-		cg_rlock(&cgusb_fd_lock);
-		inprogress = !!cgusb_transfers;
-		cg_runlock(&cgusb_fd_lock);
-	} while (inprogress);
+	} while (async_usb_transfers());
 
 	return NULL;
 }
@@ -8313,6 +8341,9 @@ begin_bench:
 		bool lagging = false;
 		struct work *work;
 
+		if (opt_work_update)
+			signal_work_update();
+		opt_work_update = false;
 		cp = current_pool();
 
 		/* If the primary pool is a getwork pool and cannot roll work,
