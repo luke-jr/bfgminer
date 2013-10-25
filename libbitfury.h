@@ -63,7 +63,6 @@ struct bitfury_device {
 	struct timeval tv_stat;
 	unsigned int counter1, counter2;
 	unsigned int ocounter1, ocounter2;
-	unsigned int skip_stat;
 	int rate; //per msec
 	int osc_slow;
 	int osc_fast;

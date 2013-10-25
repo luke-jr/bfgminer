@@ -533,8 +533,6 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	struct timeval tv_diff;
 	struct timeval tv_period;
 	
-	unsigned int skip_stat;
-	
 	tv_period.tv_sec = 60;
 	tv_period.tv_usec = 0;
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
@@ -553,7 +551,6 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		thr = proc->thr[0];
 		bitfury = proc->device_data;
 		tv_stat = bitfury->tv_stat;
-		skip_stat = bitfury->skip_stat;
 		
 		should_be_running = (proc->deven == DEV_ENABLED && !thr->pause);
 		
@@ -677,7 +674,6 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			copy_time(&tv_stat, &tv_now);
 		}
 		
-		if (!skip_stat)
 		{
 			timersub(&tv_now, &tv_stat, &tv_diff);
 			if (time_less(&tv_period, &tv_diff)) {
@@ -775,7 +771,6 @@ out:
 			bitfury->force_reinit = false;
 		}
 	}
-	skip_stat = (skip_stat + 1) & 0x0;
 	if (time_less(&tv_period, &tv_diff)) {
 		copy_time(&tv_stat, &tv_now);
 	}
