@@ -157,7 +157,7 @@ bool metabank_init(struct thr_info *thr)
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
-		bitfury->osc6_bits = 54;
+		bitfury->osc6_bits = 53;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		
 		if (proc->proc_id == proc->procs - 1)
