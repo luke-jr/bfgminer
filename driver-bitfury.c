@@ -680,7 +680,7 @@ out:
 		}
 	}
 	
-	timer_set_delay_from_now(&master_thr->tv_poll, 200000);
+	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
 }
 
 int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
