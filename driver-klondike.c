@@ -968,10 +968,9 @@ static void *klondike_get_replies(void *userdata)
 
 			// We can't check this until it's initialised
 			if (klninfo->initialised) {
-				wr_lock(&(klninfo->stat_lock));
+				rd_lock(&(klninfo->stat_lock));
 				slaves = klninfo->status[0].kline.ws.slavecount;
-				klninfo->jobque[dev].late_update_sequential = 0;
-				wr_unlock(&(klninfo->stat_lock));
+				rd_unlock(&(klninfo->stat_lock));
 
 				if (kitem->kline.hd.dev > slaves) {
 					applog(LOG_ERR, "%s%i: reply [%c] has invalid dev=%d (max=%d) using 0",
@@ -979,7 +978,13 @@ static void *klondike_get_replies(void *userdata)
 							(char)(kitem->kline.hd.cmd),
 							(int)(kitem->kline.hd.dev),
 							slaves);
+					/* TODO: this is rather problematic if there are slaves
+					 * however without slaves - it should always be zero */
 					kitem->kline.hd.dev = 0;
+				} else {
+					wr_lock(&(klninfo->stat_lock));
+					klninfo->jobque[kitem->kline.hd.dev].late_update_sequential = 0;
+					wr_unlock(&(klninfo->stat_lock));
 				}
 			}
 
