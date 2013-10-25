@@ -481,8 +481,6 @@ void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 
 #define HOP_DONE 600
 
-unsigned int stat_done;
-
 typedef uint32_t bitfury_inp_t[0x11];
 
 int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
@@ -508,9 +506,8 @@ int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 			if (mh_max < c->mh_56 / c->s_56) { mh_max = c->mh_56 / c->s_56; freq = 56; }
 			c->best_done = 1;
 			c->best_osc = freq;
-			stat_done++;
-			applog(LOG_DEBUG, "%"PRIpreprv": best_done = %d !!!!!!!!! best_osc = %d",
-			       proc->proc_repr, stat_done, freq);
+			applog(LOG_DEBUG, "%"PRIpreprv": best_osc = %d",
+			       proc->proc_repr, freq);
 		}
 	}
 	bitfury->osc6_bits = freq;
@@ -700,7 +697,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				if (bitfury->osc6_bits == 56) { c->mh_56 += mh_diff; c->s_56 += s_diff;}
 				c->omh = bitfury->counter2;
 				c->os = total_secs;
-				if (stat_done != n_chips)
+				if (!c->best_done)
 					applog(LOG_DEBUG, "%"PRIpreprv": %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs %.3f/%3.0fs",
 						proc->proc_repr,
 						c->mh_52 / c->s_52, c->s_52,
@@ -711,12 +708,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					);
 				
 				// Change freq;
-				if (stat_done != n_chips) {
+				if (!c->best_done) {
 					select_freq(bitfury, proc);
-					if (stat_done == n_chips) {
-						zero_stats();
-						applog(LOG_DEBUG, "AAA zero_stats() !");
-					}
 				} else {
 					applog(LOG_DEBUG, "%"PRIpreprv": Stable freq, osc6_bits: %d",
 					       proc->proc_repr, bitfury->osc6_bits);
