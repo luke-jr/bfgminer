@@ -492,7 +492,7 @@ int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 	struct freq_stat *c;
 	
 	chip_id = proc->device_id * 8 + proc->proc_id;
-	c = &(bitfury->chip_stat[chip_id]);
+	c = &bitfury->chip_stat;
 	
 	if (c->best_done) {
 		freq = c->best_osc;
@@ -690,7 +690,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				struct freq_stat *c;
 				
 				chip_id = proc->device_id * 8 + proc->proc_id;
-				c = &(bitfury->chip_stat[chip_id]);
+				c = &bitfury->chip_stat;
 				applog(LOG_DEBUG, "AAA stat chip_id: %d total_secs: %f, omh: %f, os: %f",  chip_id, total_secs, c->omh, c->os);
 				// Copy current statistics
 				mh_diff = bitfury->counter2 - c->omh;

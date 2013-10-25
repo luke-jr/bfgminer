@@ -47,7 +47,7 @@ struct bitfury_device {
 	struct bitfury_payload payload;
 	struct bitfury_payload opayload;
 	struct bitfury_payload o2payload;
-	struct freq_stat chip_stat[120];
+	struct freq_stat chip_stat;
 	unsigned int results[16];
 	int results_n;
 	time_t stat_ts[BITFURY_STAT_N];
