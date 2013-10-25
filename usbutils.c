@@ -93,12 +93,10 @@
 		.epinfos = _epinfosy \
 	}
 
-/* Keep a global counter of how many async transfers are in place to avoid
- * shutting down the usb polling thread while they exist. */
-int cgusb_transfers;
-
-/* Linked list of all cancellable transfers. */
-static struct list_head ct_list;
+/* Linked list of all async transfers in progress. Protected by cgusb_fd_lock.
+ * This allows us to not stop the usb polling thread till all are complete, and
+ * to find cancellable transfers. */
+static struct list_head ut_list;
 
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
@@ -2219,6 +2217,17 @@ struct usb_transfer {
 	struct list_head list;
 };
 
+bool async_usb_transfers(void)
+{
+	bool ret;
+
+	cg_rlock(&cgusb_fd_lock);
+	ret = !list_empty(&ut_list);
+	cg_runlock(&cgusb_fd_lock);
+
+	return ret;
+}
+
 /* Cancellable transfers should only be labelled as such if it is safe for them
  * to effectively mimic timing out early. This flag is usually used to signify
  * a read is waiting on a non-critical response that takes a long time and the
@@ -2228,12 +2237,15 @@ void cancel_usb_transfers(void)
 	struct usb_transfer *ut;
 	int cancellations = 0;
 
-	cg_rlock(&cgusb_fd_lock);
-	list_for_each_entry(ut, &ct_list, list) {
-		libusb_cancel_transfer(ut->transfer);
-		cancellations++;
+	cg_wlock(&cgusb_fd_lock);
+	list_for_each_entry(ut, &ut_list, list) {
+		if (ut->cancellable) {
+			ut->cancellable = false;
+			libusb_cancel_transfer(ut->transfer);
+			cancellations++;
+		}
 	}
-	cg_runlock(&cgusb_fd_lock);
+	cg_wunlock(&cgusb_fd_lock);
 
 	if (cancellations)
 		applog(LOG_DEBUG, "Cancelled %d USB transfers", cancellations);
@@ -2250,20 +2262,19 @@ static void init_usb_transfer(struct usb_transfer *ut)
 
 static void complete_usb_transfer(struct usb_transfer *ut)
 {
+	cg_wlock(&cgusb_fd_lock);
+	list_del(&ut->list);
+	cg_wunlock(&cgusb_fd_lock);
+
 	cgsem_destroy(&ut->cgsem);
 	libusb_free_transfer(ut->transfer);
-
-	cg_wlock(&cgusb_fd_lock);
-	cgusb_transfers--;
-	if (ut->cancellable)
-		list_del(&ut->list);
-	cg_wunlock(&cgusb_fd_lock);
 }
 
 static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 {
 	struct usb_transfer *ut = transfer->user_data;
 
+	ut->cancellable = false;
 	cgsem_post(&ut->cgsem);
 }
 
@@ -2323,15 +2334,12 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 {
 	int err;
 
+	INIT_LIST_HEAD(&ut->list);
+	ut->cancellable = cancellable;
+
 	cg_wlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(transfer);
-	cgusb_transfers++;
-	if (cancellable) {
-		ut->cancellable = true;
-		INIT_LIST_HEAD(&ut->list);
-		list_add(&ut->list, &ct_list);
-	} else
-		ut->cancellable = false;
+	list_add(&ut->list, &ut_list);
 	cg_wunlock(&cgusb_fd_lock);
 
 	return err;
@@ -3327,7 +3335,7 @@ void usb_initialise(void)
 	int bus, dev, lim, i;
 	bool found;
 
-	INIT_LIST_HEAD(&ct_list);
+	INIT_LIST_HEAD(&ut_list);
 
 	for (i = 0; i < DRIVER_MAX; i++) {
 		drv_count[i].count = 0;
