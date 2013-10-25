@@ -4494,6 +4494,7 @@ static void disable_curses(void)
 
 static void __kill_work(void)
 {
+	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	int i;
 
@@ -4523,8 +4524,6 @@ static void __kill_work(void)
 
 	applog(LOG_DEBUG, "Shutting down mining threads");
 	for (i = 0; i < mining_threads; i++) {
-		struct cgpu_info *cgpu;
-
 		thr = get_thread(i);
 		if (!thr)
 			continue;
@@ -4546,11 +4545,15 @@ static void __kill_work(void)
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = get_thread(i);
-		if (!(thr && thr->cgpu->threads))
+		if (!thr)
 			continue;
-		
-		applog(LOG_WARNING, "Killing %"PRIpreprv, thr->cgpu->proc_repr);
-		thr_info_cancel(thr);
+		cgpu = thr->cgpu;
+		if (cgpu->threads)
+		{
+			applog(LOG_WARNING, "Killing %"PRIpreprv, thr->cgpu->proc_repr);
+			thr_info_cancel(thr);
+		}
+		cgpu->status = LIFE_DEAD2;
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
