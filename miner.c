@@ -3463,6 +3463,7 @@ static void disable_curses(void)
 
 static void __kill_work(void)
 {
+	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	int i;
 
@@ -3501,8 +3502,10 @@ static void __kill_work(void)
 	/* Kill the mining threads*/
 	for (i = 0; i < mining_threads; i++) {
 		thr = &thr_info[i];
-		if (thr->cgpu->threads)
+		cgpu = thr->cgpu;
+		if (cgpu->threads)
 			thr_info_cancel(thr);
+		cgpu->status = LIFE_DEAD2;
 	}
 
 	applog(LOG_DEBUG, "Killing off stage thread");
