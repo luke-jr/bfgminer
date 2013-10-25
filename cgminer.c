@@ -3583,6 +3583,12 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 			work->ntime = offset_ntime(base_work->ntime, noffset);
 		} else
 			work->ntime = strdup(base_work->ntime);
+	} else if (noffset) {
+		uint32_t *work_ntime = (uint32_t *)(work->data + 68);
+		uint32_t ntime = be32toh(*work_ntime);
+
+		ntime += noffset;
+		*work_ntime = htobe32(ntime);
 	}
 	if (base_work->coinbase)
 		work->coinbase = strdup(base_work->coinbase);
