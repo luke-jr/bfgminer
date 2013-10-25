@@ -2258,6 +2258,7 @@ static void init_usb_transfer(struct usb_transfer *ut)
 	if (unlikely(!ut->transfer))
 		quit(1, "Failed to libusb_alloc_transfer");
 	ut->transfer->user_data = ut;
+	ut->cancellable = false;
 }
 
 static void complete_usb_transfer(struct usb_transfer *ut)
@@ -2335,10 +2336,11 @@ static int usb_submit_transfer(struct usb_transfer *ut, struct libusb_transfer *
 	int err;
 
 	INIT_LIST_HEAD(&ut->list);
-	ut->cancellable = cancellable;
 
 	cg_wlock(&cgusb_fd_lock);
 	err = libusb_submit_transfer(transfer);
+	if (likely(!err))
+		ut->cancellable = cancellable;
 	list_add(&ut->list, &ut_list);
 	cg_wunlock(&cgusb_fd_lock);
 
