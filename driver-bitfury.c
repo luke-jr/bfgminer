@@ -706,7 +706,7 @@ struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 	int clock_bits = bitfury->osc6_bits;
 	
 	root = api_add_int(root, "Clock Bits", &clock_bits, true);
-	root = api_add_double(root, "Mhz", &bitfury->mhz, false);
+	root = api_add_freq(root, "Frequency", &bitfury->mhz, false);
 	
 	return root;
 }
