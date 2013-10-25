@@ -494,7 +494,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	struct spi_port *spi = NULL;
 	bool should_be_running;
 	struct timeval tv_now;
-	unsigned int counter;
+	uint32_t counter;
 	
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
 		++n_chips;
@@ -609,25 +609,25 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		counter = bitfury_decnonce(newbuf[n]);
 		if ((counter & 0xFFC00000) == 0xdf800000)
 		{
-			unsigned int cycles;
-			long long unsigned int period;
-			double ns;
-			struct timeval d_time;
-			static int skip;
+			counter &= 0x003fffff;
+			int32_t cycles = counter - bitfury->counter1;
+			if (cycles < 0)
+				cycles += 0x00400000;
 			
-			counter -= 0xdf800000;
-			if (!skip)
+			if (cycles & 0x00200000)
 			{
-				cycles = counter < bitfury->counter1 ? 0x00400000 - bitfury->counter1 + counter : counter - bitfury->counter1;
+				long long unsigned int period;
+				double ns;
+				struct timeval d_time;
+				
 				timersub(&(tv_now), &(bitfury->timer1), &d_time);
 				period = timeval_to_us(&d_time) * 1000ULL;
 				ns = (double)period / (double)(cycles);
 				bitfury->mhz = 1.0 / ns * 65.0 * 1000.0;
+				
+				bitfury->counter1 = counter;
+				copy_time(&(bitfury->timer1), &tv_now);
 			}
-			skip = (skip + 1) & 0x7;
-			
-			bitfury->counter1 = counter;
-			copy_time(&(bitfury->timer1), &tv_now);
 		}
 		
 		if (n)
