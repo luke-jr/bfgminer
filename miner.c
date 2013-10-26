@@ -9365,7 +9365,7 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 		const char * const setstr = setstr_elist->string;
 		p = strchr(setstr, ':');
 		if (!p)
-			continue;
+			p = setstr;
 		{
 			L = p - setstr;
 			char pattern[L + 1];
@@ -9386,7 +9386,8 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 			continue;
 		}
 		
-		++p;
+		if (p[0] == ':')
+			++p;
 		p2 = strchr(p, '=');
 		if (!p2)
 		{
