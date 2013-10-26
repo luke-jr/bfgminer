@@ -106,17 +106,21 @@ If building from git:
 
 
 CGMiner specific configuration options:
-	--disable-opencl        Override detection and disable building with opencl
-	--disable-adl           Override detection and disable building with adl
-	--enable-bflsc          Compile support for BFL ASICs (default disabled)
-	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
-	--enable-icarus         Compile support for Icarus bitstream FPGAs(default disabled)
-	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-	--enable-ztex           Compile support for Ztex Board(default disabled)
-	--enable-avalon         Compile support for Avalon (default disabled)
-	--enable-klondike       Compile support for Klondike (default disabled)
-	--enable-scrypt         Compile support for scrypt litecoin mining (default disabled)
-	--without-curses        Compile support for curses TUI (default enabled)
+  --enable-opencl         Enable support for GPU mining with opencl
+  --disable-adl           Override detection and disable building with adl
+  --enable-scrypt         Compile support for scrypt litecoin mining (default
+                          disabled)
+  --enable-bflsc          Compile support for BFL ASICs (default disabled)
+  --enable-bitforce       Compile support for BitForce FPGAs (default
+                          disabled)
+  --enable-bitfury        Compile support for BitFury ASICs (default disabled)
+  --enable-icarus         Compile support for Icarus (default disabled)
+  --enable-avalon         Compile support for Avalon (default disabled)
+  --enable-klondike       Compile support for Klondike (default disabled)
+  --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
+  --without-curses        Compile support for curses TUI (default enabled)
+  --with-system-libusb    Compile against dynamic system libusb (default use
+                          included static libusb)
 
 Basic *nix build instructions:
 	To actually build:
@@ -220,7 +224,9 @@ ASIC only options:
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
---bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+--bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 
 See ASIC-README for more information regarding these.
 

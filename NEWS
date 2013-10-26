@@ -1,3 +1,69 @@
+Version 3.6.5 - 26th October 2013
+
+- klondike - fix uninitialised dev bug
+- Adjust the binary ntime data in submit_noffset_nonce even when there is no hex
+ntime string for eg. gbt.
+- Put an entry into the work struct telling drivers how much they can roll the
+ntime themselves.
+- Only set libusb cancellable status if the transfer succeeds.
+- Remove the applog on miner threads dying to prevent deadlocks on exit.
+- Do one extra guaranteed libusb event handling before testing if there are any
+pending async usb transfers.
+- Use a linked list for all usb transfers instead of just cancellable ones.
+- Provide a mechanism for informing drivers of updated work templates for
+stratum and gbt mining.
+- Add cancellable transfers correctly to the ct_list
+- Check for presence of thr in icarus get nonce for startup nonce testing to
+work.
+- Use cancellable usb transfers in the icarus driver to avoid having to loop and
+poll when waiting for a response and to speed up work restart response time.
+- Add a usb_read_ii_timeout_cancellable wrapper
+- Add usb transfer cancellation on shutdown and documentation regarding where
+cancellable transfers are suitable.
+- Use cancellable transfers on bitfury device.
+- Cancel cancellable usb transfers on work restart messages.
+- Don't bother having a separate cancellable transfer struct for usb transfers,
+simply include the list in the usb_transfer struct.
+- Add wrappers for usb_read_cancellable and usb_read_timeout_cancellable
+- Specifically set the cancellable state for it to not be uninitialised in the
+usb transfer struct.
+- Alter the usb cancellable list only under cgusb_fd_lock write lock.
+- Pass the cancellable option to _usb_read options to decide on whether to add
+usb transfers to the list of cancellable transfers.
+- Create a linked list of potentially cancellable usb transfers.
+- Don't attempt to disable curses or print a summary during an app restart to
+prevent deadlocks.
+- Keep the libusb event handle polling thread active until there are no async
+usb transfers in progress.
+- Keep a global counter of how many async usb transfers are in place.
+- Perform libusb_submit_transfer under the write variant of cgusb_fd_lock
+- klondike - error condition handling
+- Avoid entering static libusb directory if --with-system-libusb is enabled.
+- Minor opencl build corrections.
+- Enable dynamic linking against system libusb --with-system-libusb
+- Modify Makefile to only include opencl related code when configured in.
+- Convert opencl to need to be explicitly enabled during build with
+--enable-opencl
+- Implement a cglock_destroy function.
+- Implement a rwlock_destroy function.
+- Implement a mutex_destroy function.
+- Add usb command name to critical libusb error reporting.
+- Use windows' own higher resolution time and handlers allowing us to have
+higher precision absolute timeouts.
+- Fix lldiv error in windows cgminer_t calculation.
+- miner.php correct sort gen field names largest to smallest
+- api ... the code related to device elapsed
+- api add device elapsed since hotplug devices Elapsed is less than cgminer
+Elapsed
+- Drop usb buffering message to debug logging level.
+- Do the ntime binary modification to the work struct when submitting an ntime
+offset nonce within submit_noffset_nonce
+- Code cleanup and improved documentation
+- Improvements to support for BitBurner boards
+- Convert libusb transfer errors to regular libusb error messages to allow for
+accurate message reporting.
+
+
 Version 3.6.4 - 18th October 2013
 
 - Fixing the memory leak for remaining semaphores means we can go back to using

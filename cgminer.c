@@ -171,6 +171,7 @@ char *opt_icarus_timing = NULL;
 bool opt_worktime;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
+char *opt_bitburner_fury_options = NULL;
 #endif
 #ifdef USE_KLONDIKE
 char *opt_klondike_options = NULL;
@@ -1040,6 +1041,13 @@ static char *set_avalon_options(const char *arg)
 
 	return NULL;
 }
+
+static char *set_bitburner_fury_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_bitburner_fury_options);
+
+	return NULL;
+}
 #endif
 
 #ifdef USE_KLONDIKE
@@ -1259,6 +1267,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--bitburner-fury-voltage",
 		     opt_set_intval, NULL, &opt_bitburner_fury_core_voltage,
 		     "Set BitBurner Fury core voltage, in millivolts"),
+	OPT_WITH_ARG("--bitburner-fury-options",
+		     set_bitburner_fury_options, NULL, NULL,
+		     "Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq"),
 #endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",

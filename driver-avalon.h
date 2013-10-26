@@ -55,6 +55,12 @@
 #define AVALON_MAX_MINER_NUM 0x100
 #define AVALON_DEFAULT_ASIC_NUM 0xA
 
+/* Default number of miners for Bitburner Fury is for a stack of 8 boards,
+   but it will work acceptably for smaller stacks, too */
+#define BITBURNER_FURY_DEFAULT_MINER_NUM 128
+#define BITBURNER_FURY_DEFAULT_FREQUENCY 256
+#define BITBURNER_FURY_DEFAULT_TIMEOUT 50
+
 #define AVALON_AUTO_CYCLE 1024
 
 #define AVALON_FTDI_READSIZE 510
