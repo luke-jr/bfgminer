@@ -540,6 +540,8 @@ int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 			       proc->proc_repr, freq);
 		}
 	}
+	applog(LOG_DEBUG, "%"PRIpreprv": Changing osc6_bits to %d",
+	       proc->proc_repr, freq);
 	bitfury->osc6_bits = freq;
 	send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	return 0;
@@ -713,11 +715,11 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				double mh_diff, s_diff;
 				const int osc = bitfury->osc6_bits;
 				
-				applog(LOG_DEBUG, "%"PRIpreprv": total_secs: %f, omh: %f, os: %f",
-				       proc->proc_repr, total_secs, c->omh, c->os);
 				// Copy current statistics
 				mh_diff = bitfury->counter2 - c->omh;
 				s_diff = total_secs - c->os;
+				applog(LOG_DEBUG, "%"PRIpreprv": %.0f completed in %f seconds",
+				       proc->proc_repr, mh_diff, s_diff);
 				if (osc >= c->osc6_min && osc <= c->osc6_max)
 				{
 					c->mh[osc] += mh_diff;
