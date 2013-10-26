@@ -295,10 +295,10 @@ bool knc_init(struct thr_info * const thr)
 					case KNC_I2CSTATUS_ENABLED:
 						break;
 					default:  // permanently disabled
-						timer_unset(&knccore->enable_at);  // never enable
-						// fallthru
-					case KNC_I2CSTATUS_DISABLED:
 						proc->deven = DEV_DISABLED;
+						break;
+					case KNC_I2CSTATUS_DISABLED:
+						proc->deven = DEV_RECOVER_DRV;
 						break;
 				}
 				
@@ -623,6 +623,8 @@ void knc_core_disable(struct thr_info * const thr)
 static
 void knc_core_enable(struct thr_info * const thr)
 {
+	struct knc_core * const knccore = thr->cgpu_data;
+	timer_set_now(&knccore->enable_at);
 	_knc_core_setstatus(thr, 1);
 }
 
@@ -666,7 +668,7 @@ void knc_hw_error(struct thr_info * const thr)
 		}
 		else
 			knccore->hwerr_disable_time  = KNC_HWERR_DISABLE_SECS;
-		proc->deven = DEV_DISABLED;
+		proc->deven = DEV_RECOVER_DRV;
 		applog(LOG_WARNING, "%"PRIpreprv": Disabled. %d hwerr in %.3f / %.3f . disabled %d s",
 		       proc->proc_repr, knccore->hwerr_in_row,
 		       enable_dt, first_err_dt, knccore->hwerr_disable_time);
@@ -763,7 +765,7 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 		knccore->current = current;
 		
 		// NOTE: We need to check _mt_disable_called because otherwise enabling won't assert it to i2c (it's false when getting stats for eg proc 0 before proc 1+ haven't initialised completely yet)
-		if (proc->deven == DEV_DISABLED && timer_passed(&knccore->enable_at, &tv_now) && thr->_mt_disable_called)
+		if (proc->deven == DEV_RECOVER_DRV && timer_passed(&knccore->enable_at, &tv_now) && thr->_mt_disable_called)
 		{
 			knccore->hwerr_in_row = 0;
 			proc_enable(proc);
