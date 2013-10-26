@@ -1,3 +1,27 @@
+BFGMiner Version 3.2.3 - October 26, 2013
+
+- Bugfix: Set status to LIFE_DEAD2 when killing threads at shut off, to avoid
+calling driver code
+- miner.php mcast ignore duplicate replies
+- Bugfix: Add SGW driver to --help list
+- Bugfix: Zero stats: cgpu->diff_stale
+- fpgautils: serial_close: Explicitly release advisory lock before closing, in
+case fd has been inherited by a process forked by system()
+- Use serial_close to pair with every serial_open
+- Workaround bug in Plibc by resetting locale to "C" at startup
+- Bugfix: DevAPI: Reduce race-collision delay to 1ms so thread_shutdown actually
+gets called before threads are killed forcefully
+- Bugfix: configure: Use AC_SYS_LARGEFILE to ensure nonce/share log files can
+safely grow bigger than 2 GB
+- Bugfix: Correct argument type for --submit-threads option
+- Bugfix: write_config: Make intensity list writing more readable, and avoid
+extraneous argument in dynamic intensity case
+- DevAPI: Trigger mt_disable_start after init, if a device is disabled before
+minerloop starts
+- icarus: Skip sending new work if entering DEV_RECOVER* modes
+- icarus: When disabling, close device fd and stop sending new work
+
+
 BFGMiner Version 3.2.2 - October 11, 2013
 
 - RPC: Add missing SGW driver to Device Code
