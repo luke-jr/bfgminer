@@ -1,3 +1,8 @@
+Version 3.6.6 - 26th October 2013
+
+- Remove inappropriate extra locking in _usb_transfer_read
+
+
 Version 3.6.5 - 26th October 2013
 
 - klondike - fix uninitialised dev bug
