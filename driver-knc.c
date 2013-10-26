@@ -38,6 +38,25 @@
 #define KNC_SPI_MODE  (SPI_CPHA | SPI_CPOL | SPI_CS_HIGH)
 #define KNC_SPI_BITS  8
 
+
+/*
+ The core disable/enable strategy is as follows:
+
+ If a core gets 10 HW errors in a row without doing any proper work
+ it is disabled for 10 seconds.
+
+ When a core gets 10 HW errors the next time it checks when it was enabled
+ the last time and compare that to when it started to get errors.
+ If those times are close (50%) the disabled time is doubled,
+ if not it is just disabled for 10s again.
+
+ */
+
+#define KNC_MAX_HWERR_IN_ROW    10
+#define KNC_HWERR_DISABLE_SECS (10)
+#define KNC_MAX_DISABLE_SECS   (15 * 60)
+
+
 static const char * const i2cpath = "/dev/i2c-2";
 
 #define KNC_I2C_TEMPLATE "/dev/i2c-%d"
@@ -50,6 +69,11 @@ enum knc_request_cmd {
 enum knc_reply_type {
 	KNC_REPLY_NONCE_FOUND = 1,
 	KNC_REPLY_WORK_DONE   = 2,
+};
+
+enum knc_i2c_core_status {
+	KNC_I2CSTATUS_DISABLED = 2,
+	KNC_I2CSTATUS_ENABLED  = 3,
 };
 
 struct device_drv knc_drv;
@@ -74,6 +98,11 @@ struct knc_core {
 	
 	float volt;
 	float current;
+	
+	int hwerr_in_row;
+	int hwerr_disable_time;
+	struct timeval enable_at;
+	struct timeval first_hwerr;
 };
 
 static
@@ -256,10 +285,22 @@ bool knc_init(struct thr_info * const thr)
 				*knccore = (struct knc_core){
 					.asicno = i2cslave - 0x20,
 					.coreno = i + j,
+					.hwerr_in_row = 0,
+					.hwerr_disable_time = KNC_HWERR_DISABLE_SECS,
 				};
+				timer_set_now(&knccore->enable_at);
 				proc->device_data = knc;
-				if (buf[j] != 3)
-					proc->deven = DEV_DISABLED;
+				switch (buf[j])
+				{
+					case KNC_I2CSTATUS_ENABLED:
+						break;
+					default:  // permanently disabled
+						proc->deven = DEV_DISABLED;
+						break;
+					case KNC_I2CSTATUS_DISABLED:
+						proc->deven = DEV_RECOVER_DRV;
+						break;
+				}
 				
 				proc = proc->next_proc;
 				if ((!proc) || proc->device == proc)
@@ -485,6 +526,7 @@ void knc_poll(struct thr_info * const thr)
 		for (i = 0; i < coreno; ++i)
 			proc = proc->next_proc;
 		mythr = proc->thr[0];
+		knccore = mythr->cgpu_data;
 		
 		i = get_u16be(&rxbuf[2]);
 		HASH_FIND_INT(knc->devicework, &i, work);
@@ -509,7 +551,8 @@ void knc_poll(struct thr_info * const thr)
 			case KNC_REPLY_NONCE_FOUND:
 				nonce = get_u32be(&rxbuf[4]);
 				nonce = le32toh(nonce);
-				submit_nonce(mythr, work, nonce);
+				if (submit_nonce(mythr, work, nonce))
+					knccore->hwerr_in_row = 0;
 				break;
 			case KNC_REPLY_WORK_DONE:
 				HASH_DEL(knc->devicework, work);
@@ -580,6 +623,8 @@ void knc_core_disable(struct thr_info * const thr)
 static
 void knc_core_enable(struct thr_info * const thr)
 {
+	struct knc_core * const knccore = thr->cgpu_data;
+	timer_set_now(&knccore->enable_at);
 	_knc_core_setstatus(thr, 1);
 }
 
@@ -598,6 +643,41 @@ float knc_dcdc_decode_5_11(uint16_t raw)
 }
 
 static
+void knc_hw_error(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct knc_core * const knccore = thr->cgpu_data;
+	
+	if(knccore->hwerr_in_row == 0)
+		timer_set_now(&knccore->first_hwerr);
+	++knccore->hwerr_in_row;
+	
+	if (knccore->hwerr_in_row >= KNC_MAX_HWERR_IN_ROW && proc->deven == DEV_ENABLED)
+	{
+		struct timeval now;
+		timer_set_now(&now);
+		float first_err_dt  = tdiff(&now, &knccore->first_hwerr);
+		float enable_dt     = tdiff(&now, &knccore->enable_at);
+		
+		if(first_err_dt * 1.5 > enable_dt)
+		{
+			// didn't really do much good
+			knccore->hwerr_disable_time *= 2;
+			if (knccore->hwerr_disable_time > KNC_MAX_DISABLE_SECS)
+				knccore->hwerr_disable_time = KNC_MAX_DISABLE_SECS;
+		}
+		else
+			knccore->hwerr_disable_time  = KNC_HWERR_DISABLE_SECS;
+		proc->deven = DEV_RECOVER_DRV;
+		applog(LOG_WARNING, "%"PRIpreprv": Disabled. %d hwerr in %.3f / %.3f . disabled %d s",
+		       proc->proc_repr, knccore->hwerr_in_row,
+		       enable_dt, first_err_dt, knccore->hwerr_disable_time);
+		
+		timer_set_delay_from_now(&knccore->enable_at, knccore->hwerr_disable_time * 1000000);
+	}
+}
+
+static
 bool knc_get_stats(struct cgpu_info * const cgpu)
 {
 	if (cgpu->device != cgpu)
@@ -613,6 +693,7 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	int i2c;
 	int32_t rawtemp, rawvolt, rawcurrent;
 	float temp, volt, current;
+	struct timeval tv_now;
 	bool rv = false;
 	
 	char i2cpath[sizeof(KNC_I2C_TEMPLATE)];
@@ -648,6 +729,7 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	   Datasheet at http://www.lineagepower.com/oem/pdf/MDT040A0X.pdf
 	*/
 
+	timer_set_now(&tv_now);
 	for (proc = cgpu, i = 0; proc && proc->device == cgpu; proc = proc->next_proc, ++i)
 	{
 		thr = proc->thr[0];
@@ -681,6 +763,13 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 		proc->temp = temp;
 		knccore->volt = volt;
 		knccore->current = current;
+		
+		// NOTE: We need to check _mt_disable_called because otherwise enabling won't assert it to i2c (it's false when getting stats for eg proc 0 before proc 1+ haven't initialised completely yet)
+		if (proc->deven == DEV_RECOVER_DRV && timer_passed(&knccore->enable_at, &tv_now) && thr->_mt_disable_called)
+		{
+			knccore->hwerr_in_row = 0;
+			proc_enable(proc);
+		}
 	}
 	
 	rv = true;
@@ -727,6 +816,7 @@ struct device_drv knc_drv = {
 	.queue_append = knc_queue_append,
 	.queue_flush = knc_queue_flush,
 	.poll = knc_poll,
+	.hw_error = knc_hw_error,
 	
 	.get_stats = knc_get_stats,
 	.get_api_extra_device_status = knc_api_extra_device_status,

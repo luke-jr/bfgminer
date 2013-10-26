@@ -3212,8 +3212,9 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	if (for_curses)
 	{
 		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
+		const char *cHrStats;
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
-		bool all_dead = true, all_off = true;
+		bool all_dead = true, all_off = true, all_rdrv = true;
 		struct cgpu_info *proc = cgpu;
 		for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
 		{
@@ -3234,8 +3235,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 						all_off = false;
 					}
 					else
-					if (likely(proc->deven != DEV_DISABLED))
-						all_off = false;
+					{
+						if (likely(proc->deven == DEV_ENABLED))
+							all_off = false;
+						if (proc->deven != DEV_RECOVER_DRV)
+							all_rdrv = false;
+					}
 				case 1:
 					break;
 			}
@@ -3249,9 +3254,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		else
 		if (unlikely(all_off))
 			cHrStatsI = 2;
+		cHrStats = cHrStatsOpt[cHrStatsI];
+		if (cHrStatsI == 2 && all_rdrv)
+			cHrStats = " RST ";
 		
 		format_statline(buf, bufsz,
-		                cHrStatsOpt[cHrStatsI],
+		                cHrStats,
 		                aHr, uHr,
 		                accepted, rejected, stale,
 		                wnotaccepted, waccepted,
