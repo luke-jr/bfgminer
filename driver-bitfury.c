@@ -873,12 +873,14 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	
 	if (!strcasecmp(option, "osc6_bits"))
 	{
+		struct freq_stat * const c = &bitfury->chip_stat;
 		newval = bitfury->osc6_bits;
 		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, BITFURY_MAX_OSC6_BITS))
 			return replybuf;
 		
 		bitfury->osc6_bits = newval;
 		bitfury->force_reinit = true;
+		c->osc6_max = 0;
 		
 		return NULL;
 	}
@@ -902,6 +904,7 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	{
 		case 'o': case 'O':
 		{
+			struct freq_stat * const c = &bitfury->chip_stat;
 			int val;
 			char *intvar;
 			
@@ -916,6 +919,7 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			
 			bitfury->osc6_bits = val;
 			bitfury->force_reinit = true;
+			c->osc6_max = 0;
 			
 			return "Oscillator bits changing\n";
 		}
