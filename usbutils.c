@@ -3013,10 +3013,8 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 	}
 	memset(tbuf, 0, 64);
 	STATS_TIMEVAL(&tv_start);
-	cg_rlock(&cgusb_fd_lock);
 	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
 				   wValue, wIndex, tbuf, (uint16_t)bufsiz, timeout);
-	cg_runlock(&cgusb_fd_lock);
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, MODE_CTRL_READ, cmd, SEQ0, timeout);
 	memcpy(buf, tbuf, bufsiz);
