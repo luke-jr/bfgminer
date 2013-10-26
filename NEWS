@@ -1,3 +1,15 @@
+BFGMiner Version 3.0.10 - October 26, 2013
+
+- Bugfix: Set status to LIFE_DEAD2 when killing threads at shut off, to avoid
+calling driver code
+- Use serial_close to pair with every serial_open
+- Bugfix: configure: Use AC_SYS_LARGEFILE to ensure nonce/share log files can
+safely grow bigger than 2 GB
+- Bugfix: Correct argument type for --submit-threads option
+- Bugfix: write_config: Make intensity list writing more readable, and avoid
+extraneous argument in dynamic intensity case
+
+
 BFGMiner Version 3.0.9 - October 11, 2013
 
 - Bugfix: icarus: Check for valid fd before all usage
