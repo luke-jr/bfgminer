@@ -762,7 +762,8 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 		knccore->volt = volt;
 		knccore->current = current;
 		
-		if (proc->deven == DEV_DISABLED && timer_passed(&knccore->enable_at, &tv_now))
+		// NOTE: We need to check _mt_disable_called because otherwise enabling won't assert it to i2c (it's false when getting stats for eg proc 0 before proc 1+ haven't initialised completely yet)
+		if (proc->deven == DEV_DISABLED && timer_passed(&knccore->enable_at, &tv_now) && thr->_mt_disable_called)
 		{
 			knccore->hwerr_in_row = 0;
 			proc_enable(proc);
