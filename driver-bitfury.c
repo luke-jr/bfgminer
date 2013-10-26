@@ -178,7 +178,6 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 		.nbits = 0x6dfa4352,
 	};
 	payload_to_atrvec(bitfury->atrvec, &payload);
-	bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
 	return bitfury_init_oldbuf(proc, NULL);
 }
 

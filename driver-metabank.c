@@ -159,6 +159,7 @@ bool metabank_init(struct thr_info *thr)
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 53;
 		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
 		
 		if (proc->proc_id == proc->procs - 1)
 			free(devicelist);
