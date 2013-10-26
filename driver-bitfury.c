@@ -562,11 +562,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	struct timeval tv_now;
 	uint32_t counter;
 	struct timeval *tvp_stat;
-	struct timeval tv_diff;
-	struct timeval tv_period;
 	
-	tv_period.tv_sec = 60;
-	tv_period.tv_usec = 0;
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
 		++n_chips;
 	
@@ -709,8 +705,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		
 		if (c->osc6_max)
 		{
-			timersub(&tv_now, tvp_stat, &tv_diff);
-			if (time_less(&tv_period, &tv_diff)) {
+			if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+			{
 				double mh_diff, s_diff;
 				const int osc = bitfury->osc6_bits;
 				
@@ -800,9 +796,8 @@ out:
 			bitfury->desync_counter = 99;
 			bitfury->force_reinit = false;
 		}
-		if (time_less(&tv_period, &tv_diff)) {
+		if (timer_elapsed(tvp_stat, &tv_now) >= 60)
 			copy_time(tvp_stat, &tv_now);
-		}
 	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
