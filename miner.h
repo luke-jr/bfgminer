@@ -343,9 +343,9 @@ struct device_drv {
 
 enum dev_enable {
 	DEV_ENABLED,
-	DEV_DISABLED,
-	DEV_RECOVER,
-	DEV_RECOVER_ERR,
+	DEV_DISABLED,     // Disabled by user
+	DEV_RECOVER,      // Disabled by temperature cutoff in watchdog
+	DEV_RECOVER_ERR,  // Disabled by communications error
 };
 
 enum cl_kernels {
