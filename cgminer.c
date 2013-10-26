@@ -4023,51 +4023,20 @@ static int block_sort(struct block *blocka, struct block *blockb)
 	return blocka->block_no - blockb->block_no;
 }
 
+/* Decode the current block difficulty which is in packed form */
 static void set_blockdiff(const struct work *work)
 {
-	uint64_t *data64, d64, diff64;
-	double previous_diff;
-	uint32_t diffhash[8];
-	uint32_t difficulty;
-	uint32_t diffbytes;
-	uint32_t diffvalue;
-	char rhash[32];
-	int diffshift;
+	uint8_t pow = work->data[72];
+	int powdiff = (8 * (0x1d - 3)) - (8 * (pow - 3));
+	uint32_t diff32 = swab32(*((uint32_t *)(work->data + 72))) & 0x00FFFFFF;
+	double numerator = 0xFFFFULL << powdiff;
+	double ddiff = numerator / (double)diff32;
 
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
-
-	diffbytes = ((difficulty >> 24) & 0xff) - 3;
-	diffvalue = difficulty & 0x00ffffff;
-
-	diffshift = (diffbytes % 4) * 8;
-	if (diffshift == 0) {
-		diffshift = 32;
-		diffbytes--;
-	}
-
-	memset(diffhash, 0, 32);
-	diffbytes >>= 2;
-	if (unlikely(diffbytes > 6))
-		return;
-	diffhash[diffbytes + 1] = diffvalue >> (32 - diffshift);
-	diffhash[diffbytes] = diffvalue << diffshift;
-
-	swab256(rhash, diffhash);
-
-	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = bswap_64(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-
-	previous_diff = current_diff;
-	diff64 = diffone / d64;
-	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
-	current_diff = (double)diffone / (double)d64;
-	if (unlikely(current_diff != previous_diff))
+	if (unlikely(current_diff != ddiff)) {
+		suffix_string(ddiff, block_diff, sizeof(block_diff), 0);
+		current_diff = ddiff;
 		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
+	}
 }
 
 static bool test_work_current(struct work *work)
