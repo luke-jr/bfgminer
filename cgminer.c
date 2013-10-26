@@ -6092,6 +6092,14 @@ static void update_work_stats(struct thr_info *thr, struct work *work)
 {
 	work->share_diff = share_diff(work);
 
+	if (unlikely(work->share_diff >= current_diff)) {
+		work->block = true;
+		work->pool->solved++;
+		found_blocks++;
+		work->mandatory = true;
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
+	}
+
 	mutex_lock(&stats_lock);
 	total_diff1 += work->device_diff;
 	thr->cgpu->diff1 += work->device_diff;
