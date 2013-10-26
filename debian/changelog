@@ -1,3 +1,16 @@
+bfgminer (3.4.0-0precise1) precise; urgency=low
+
+  * New drivers for KnC miners and NanoFury USB miners.
+  * Per-chip dynamic osc6_bits detection for BFSB, MegaBigPower, and Metabank bitfury boards.
+  * Ability to set default options for various devices using --set-device commandline option; for example, if you have all your NanoFury miners in a USB 3 hub (with 900 mA power available), you can increase the oscillator speed with: --set-device NFY:osc6_bits=53 (or "set-device":["NFY:osc6_bits=53"] in a config file).
+  * Con Kolivas's completely rewritten load-balance strategy with per pool quota support. See the updated README to see how it works.
+  * If we switch away from a pool in failover mode, we will now only switch back to it if it's up for at least 5 minutes to avoid reconnecting to pools that are only intermittently up - good for DDoS situations which we've seen a lot of lately. (by Con Kolivas)
+  * Updated miner.php from Kano.
+  * Proxy settings now default to SOCKS5 instead of SOCKS4. Prefix your proxy IP with "socks4://" if you need to use the older protocol.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Oct 2013 19:53:59 -0000
+
+
 bfgminer (3.3.0-0precise1) precise; urgency=low
 
   * New drivers for bitfury-based devices: BFSB/MegaBigPower(v2 only!) kits, Big Picture Mining USB (BF1, RedFury, BlueFury, etc), LittleFury, and Metabank. See README.ASIC for setup instructions.

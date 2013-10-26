@@ -1,3 +1,180 @@
+BFGMiner Version 3.4.0 - October 26, 2013
+
+- Bugfix: knc: Use separate DEV_RECOVER_DRV deven when doing automatic core
+disable/re-enable, so user-initiated disables are left alone
+- Document existing enum dev_enable usage
+- Bugfix: knc: Only try to re-enable cores after we've actually asserted them as
+disabled, otherwise we won't actually assert the enable either
+- knc: Automatically disable and re-enable problematic cores
+- AUTHORS: Add Dmitry Sorokin
+- bitfury: Disable dynamic osc6_bits when manually setting a specific value
+- bitfury_do_io: Make use of timer_elapsed
+- bitfury: Only use dynamic osc6_bits with boards that support it explicitly
+(BFSB and Metabank for now)
+- bitfury: More debugging info for dynamic osc6_bits
+- Bugfix: bitfury: Fix tv_stat to persist
+- bitfury: Remove useless debugging
+- bitfury: Simplify dynamic osc6_bits logic such that the range is defined in
+one place
+- bitfury: Remove unused skip_stat
+- Bugfix: bitfury: Stick to tracking best_done per-chip, and never call
+zero_stats (which is for users, not drivers)
+- Bugfix: bitfury: Use proc_repr rather than incorrectly calculated chip_id
+- Bugfix: bitfury: struct bitfury_device is already chip-specific
+- bitfury: dynamic osc_6 bits
+- bitfury: Improve frequency calculation - fixes occasional miscalculations as
+well as makes it safer with multiple devices
+- bitfury: Added frequency calculation
+- tm_i2c: Corrected copyright
+- Allow --set-device opt=val without a device specification to attempt setting
+it on every device
+- Bugfix: knc: Maintain queue_full for all cores, so they continue to queue work
+even if the first is disabled
+- bitfury: Allow setting osc6_bits up to 60
+- Bugfix: Set status to LIFE_DEAD2 when killing threads at shut off, to avoid
+calling driver code
+- Skip "testing stability" message at startup
+- Try switching pools if for some reason we end up with only idle pools and have
+ended up current_pool set to an idle one.
+- Check a pool is stable for >5 mins before switching back to it.
+- ManageTUI: Slash key performs processor selection by search
+- nanofury: Populate dev_product and dev_serial
+- mcp2210: Implement mcp2210_close
+- Bugfix: mcp2210: hid_write needs a report id, especially on Windows
+- mcp2210: Workaround some Windows snprintf not handling wide strings correctly
+by simply copying character-per-character (only works for ASCII data)
+- Bugfix: chroot: Check that chdir succeeds
+- AUTHORS: Add pontus
+- knc: Expose Voltage and DCDC Current to TUI Manage device
+- knc: Expose Voltage and DCDC Current to RPC status
+- knc: Store volt/current on knccore
+- knc: Read voltage/current from DCDCs
+- Bugfix: knc: Fix temperature readout of half-celcius
+- Bugfix: Only define have_libusb if building with libusb support
+- littlefury: Remove unused code
+- bitfury: RPC procset: Ignore extra data (like newline) after numbers
+- Add --set-device option to allow setting default procset commands
+- README: Document hidapi dependency for NanoFury sticks
+- AUTHORS: Include Vladimir Strinski for NanoFury code
+- mcp2210: Set GPIO output mode atomically with their output values
+- nanofury: Power off device when shutting down
+- make-release: Include libhidapi-0.dll
+- mcp2210: Port to Windows
+- configure: Find hidapi.h for mcp2210 using pkg-config
+- bitfury: Provide read/write access to osc6_bits from the Manage TUI
+- nanofury: Reduce oscillator bits to 50 to stay within USB specs
+- bitfury: If multiple integers differ after 4 tries, just go with the first so
+we can start mining
+- nanofury: Implement actual mining code
+- nanofury: Turn off device after checkport
+- nanofury: New driver; detect device
+- mcp2210: Implement protocol required for NanoFury USB sticks
+- mcp2210: Skeleton low-level driver for MCP2210 USB to SPI Master bridge
+- ft232r: Use lowlevel interface for ft232r_open
+- Abstract ft232r scan+probe interface into new generic lowlevel driver
+interface
+- configure: Error if knc driver is requested, but linux/i2c-dev.h is missing or
+not from i2c-tools
+- knc: Attempt to express core enable/disable to controller
+- knc: Put knc_device on every processor device_data
+- Refactor device disable/enable logic so that drv.thread_{disable,enable}
+actually get called
+- Bugfix: knc: Check that device actually has work queued, before trying to find
+the most recent one
+- knc: Read temperature sensors
+- DevAPI: minerloop_queue: Run watchdog in device thread
+- knc: Pass queue flush to device when its most recent job produces stale shares
+- knc: Issue flush command at init
+- Bugfix: knc: Perform le32toh on unknown-work nonces
+- knc: Use independent device_id for works to enforce 15-bit size
+- Bugfix: spi_emit_nop: Correct counter logic
+- knc: Implement mining
+- knc: Use FPGA i2c to identify present ASICs
+- knc: Basic detection of boards on expected i2c buses
+- DevAPI: generic_detect: Just use an enum for flags
+- Use list of drivers/algos/options generated by configure in --help info
+- miner.php correct sort gen field names largest to smallest
+- api ... the code related to device elapsed
+- api add device elapsed since hotplug devices Elapsed is less than cgminer Elapsed
+- RPC: Include more info in per-device/processor status
+- API add 'MHS %ds' to 'summary'
+- Icarus remove unneeded opt_debug tests due to applog being a macro
+- We should only yield once in cg_wunlock
+- Provide a function to downgrade a cglock from a write lock to an intermediate
+variant.
+- Reset quotas on load balance for all pools at the same time to avoid running
+out during selection and unintentionally dropping to fallback.
+- Break out of select pool from a common point for appropriate debug messages
+and to avoid further tests.
+- Find the greatest common denominator in quotas and use the smallest number of
+consecutive work items per pool in quota load balance mode to smooth hashrate
+across pools with large quotas. Give excess quota to priority pool 0 instead of
+pool 0.
+- Add subdir-objects to automake options.
+- Use the --failover-only flag to have special meaning in combination with
+load-balance mode to distribute any unused quota back to pool 0 to maintain
+ratios amongst other pools.
+- Display quota and allow it to be modified via the pool menu.
+- More README about quotas.
+- Document quotas and new load-balance strategy.
+- Add API commands and modify output to support pool quota displaying and
+changing.
+- Change message in status when using a balanced pool strategy to notify if
+there's a stratum pool as well.
+- Add quota support to configuration files.
+- Rotate pools on all failures to set a pool in select_pool.
+- Use quotas for load-balance pool strategy.
+- Provide a mechanism for setting a pool quota to be used by load-balance.
+- Change --socks-proxy option to default to SOCKS5
+- Cope with trailing slashes in stratum urls.
+- Make extract_sockaddr set variables passed to it rather than pool struct
+members.
+- miner.php sort the mcast rigs so they are always in the same relative order
+- miner.php allow sending the muticast message multiple times
+- miner.php mcast ignore duplicate replies
+- miner.php coding warning
+- miner.php disable 'gen' by default
+- miner.php allow formula generation of new fields
+- miner.php add doctype
+- miner.php remove incorrect echo
+- miner.php optional error if not enough mcast rigs are found
+- take_queued_work_bymidstate should use a write lock.
+- API mcast add a description option with miner.php
+- Skip dissecting opt->names in parse_config if it doesn't exist.
+- ICA optional limit timing with short=N or long=N
+- logging - applogsiz() for large messages
+- Provide a funcion that looks up queued work by midstate and then removes it
+from the device hash database.
+- Wait until all pools are done testing before giving up, regardless of how long
+they take to fail
+- AUTHORS: Add Ricardo Iván Vieitez Parra and Paul Wouters
+- Bugfix: Check that setgid succeeds
+- When using --chroot, chdir to the new root
+- Bugfix: Add missing drivers to --help list
+- Bugfix: Zero stats: cgpu->diff_stale
+- fpgautils: serial_close: Explicitly release advisory lock before closing, in
+case fd has been inherited by a process forked by system()
+- Use serial_close to pair with every serial_open
+- Workaround bug in Plibc by resetting locale to "C" at startup
+- Bugfix: bitfury: Check for necessity of linux/i2c.h so build succeeds with
+i2c-tools's userspace linux/i2c-dev.h
+- bitforce: Workaround bugs in current firmware for the Chili
+- Bugfix: DevAPI: Reduce race-collision delay to 1ms so thread_shutdown actually
+gets called before threads are killed forcefully
+- Bugfix: configure: Use AC_SYS_LARGEFILE to ensure nonce/share log files can
+safely grow bigger than 2 GB
+- Bugfix: Correct argument type for --submit-threads option
+- littlefury: Workaround Xcode bug initialising fields in anonymous unions
+- Bugfix: write_config: Make intensity list writing more readable, and avoid
+extraneous argument in dynamic intensity case
+- DevAPI: Trigger mt_disable_start after init, if a device is disabled before
+minerloop starts
+- icarus: Skip sending new work if entering DEV_RECOVER* modes
+- icarus: When disabling, close device fd and stop sending new work
+- RPC: Use get_api_extra_device_status for full-device status, for devices with
+only a single processor
+
+
 BFGMiner Version 3.3.0 - October 11, 2013
 
 - openwrt: Optional libevent support
