@@ -102,11 +102,13 @@ ASIC SPECIFIC COMMANDS
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
---bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+--bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 --klondike-options <arg> Set klondike options clock:temp1:temp2:fan
 
 
-AVALON DEVICES
+AVALON AND BITBURNER DEVICES
 
 Currently all known Avalon devices come with their own operating system and
 a preinstalled version of cgminer as part of the flash firmware, based on the
@@ -118,6 +120,9 @@ command, and adjust its fan control-temperature relationship with avalon-temp.
 By default the avalon will also cut off when its temperature reaches 60
 degrees.
 
+All current BitBurner devices (BitBurner X, BitBurner XX and BitBurner Fury)
+emulate Avalon devices, whether or not they use Avalon chips.
+
 Avalon commands:
 
 --avalon-auto       Adjust avalon overclock frequency dynamically for best hashrate
@@ -126,7 +131,9 @@ Avalon commands:
 --avalon-freq <arg> Set frequency range for avalon-auto, single value or range
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
---bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+--bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 
 
 Avalon auto will enable dynamic overclocking gradually increasing and
@@ -177,8 +184,15 @@ Miners:
 Most Avalons are 3 module devices, which come to 24 miners. 4 module devices
 would use 32 here.
 
+For BitBurner X and BitBurner XX devices you should use twice the number of
+boards in the stack.  e.g. for a two-board stack you would use 4.  For
+BitBurner Fury devices you should use the total number of BitFury chips in the
+stack (i.e. 16 times the number of boards).  e.g. for a two-board stack you
+would use 32.
+
 Asic count:
-Virtually all have 10, so don't change this.
+Virtually all have 10, so don't change this.  BitBurner devices use 10 here
+even if the boards have some other number of ASICs.
 
 Timeout:
 This is how long the device will work on a work item before accepting new work
@@ -198,16 +212,61 @@ Sample settings for valid different frequencies (last 2 values):
 50:256
 
 Frequency:
-This is the clock speed of the devices. Only specific values work, 256, 270,
-282 (default), 300, 325, 350 and 375.
+This is the clock speed of the devices. For Avalon devices, only specific
+values work, 256, 270, 282 (default), 300, 325, 350 and 375.  For BitBurner
+devices, other values can be used.
 
 Note that setting a value with an asterisk next to it will be using your
 avalon outside its spec and you do so at your own risk.
 
-eg:
---bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+The default frequency for BitBurner X and BitBurner XX boards is 282.  The
+default frequency for BitBurner Fury boards is 256.  Overclocking is
+possible - please consult the product documentation and/or manufacturer for
+information on safe values.  Values outside this range are used at your own
+risk.  Underclocking is also possible, at least with the X and XX boards.
 
-Self evident.
+eg:
+--bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+
+This option takes the same format as --avalon-options.  When specified, it
+will be used for BitBurner Fury boards in preference to the values specified
+in --avalon-options.  (If not specified, BitBurner Fury boards will be
+controlled by the values used in --avalon options.)  See --avalon-options for
+a detailed description of the fields.
+
+This option is particularly useful when using a mixture of different BitBurner
+devices as BitBurner Fury devices generally require significantly different
+clock frequencies from Avalon-based devices.  This option is only available
+for boards with recent firmware that are recognized by cgminer as BBF.
+
+eg:
+--bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
+
+Sets the core voltage for the BitBurner Fury boards.  The default value is
+900.  Overvolting is possible - please consult the product documentation
+and/or manufaturer about the safe range of values.  Values outside this range
+are used at your own risk.
+
+This option is only available for boards with recent firmware that are
+recognized by cgminer as BBF.  For boards recognized as BTB, see
+--bitburner-voltage
+
+eg:
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
+
+Sets the core voltage for the Avalon-based BitBurner X and BitBurner XX
+boards.  The default value is 1200.  Overvolting and undervolting is
+possible - please consult the product documentation and/or the manufacturer
+for information about the safe range.  Values outside this range are used at
+your own risk.
+
+Older BitBurner Fury firmware emulates a BitBurner XX board and is identified
+by cgminer as BTB.  On these devices, --bitburner-voltage is used to control
+the voltage of the BitBurner Fury board.  The actual core voltage will be
+300mV less than the requested voltage, so to run a BitBurner Fury board at
+950mV use --bitburner-voltage 1250.  The default value of 1200 therefore
+corresponds to the default core voltage of 900mV.
+
 
 If you use the full curses based interface with Avalons you will get this
 information:

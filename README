@@ -220,7 +220,9 @@ ASIC only options:
 --avalon-options <arg> Set avalon options baud:miners:asic:timeout:freq
 --avalon-temp <arg> Set avalon target temperature (default: 50)
 --bflsc-overheat <arg> Set overheat temperature where BFLSC devices throttle, 0 to disable (default: 90)
---bitburner-voltage <arg> Set BitBurner core voltage, in millivolts
+--bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
+--bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
+--bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
 
 See ASIC-README for more information regarding these.
 
