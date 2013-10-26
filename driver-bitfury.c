@@ -479,13 +479,79 @@ void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 {
 }
 
+// freq_stat->{mh,s} are allocated such that [osc6_min] is the first valid index and [0] falls outside the allocation
+
+void bitfury_init_freq_stat(struct freq_stat * const c, const int osc6_min, const int osc6_max)
+{
+	const int osc6_values = (osc6_max + 1 - osc6_min);
+	void * const p = malloc(osc6_values * (sizeof(*c->mh) + sizeof(*c->s)));
+	c->mh = p - (sizeof(*c->mh) * osc6_min);
+	c->s = p + (sizeof(*c->mh) * osc6_values) - (sizeof(*c->s) * osc6_min);
+	c->osc6_min = osc6_min;
+	c->osc6_max = osc6_max;
+}
+
+void bitfury_clean_freq_stat(struct freq_stat * const c)
+{
+	free(&c->mh[c->osc6_min]);
+}
+
+#define HOP_DONE 600
+
 typedef uint32_t bitfury_inp_t[0x11];
+
+int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
+	int freq;
+	int random;
+	int i;
+	bool all_done;
+	struct freq_stat *c;
+	
+	c = &bitfury->chip_stat;
+	
+	if (c->best_done) {
+		freq = c->best_osc;
+	} else {
+		random = (int)(bitfury->mhz * 1000.0) & 1;
+		freq = (bitfury->osc6_bits == c->osc6_max) ? c->osc6_min : bitfury->osc6_bits + random;
+		all_done = true;
+		for (i = c->osc6_min; i <= c->osc6_max; ++i)
+			if (c->s[i] <= HOP_DONE)
+			{
+				all_done = false;
+				break;
+			}
+		if (all_done)
+		{
+			double mh_max = 0.0;
+			
+			for (i = c->osc6_min; i <= c->osc6_max; ++i)
+			{
+				const double mh_actual = c->mh[i] / c->s[i];
+				if (mh_max >= mh_actual)
+					continue;
+				mh_max = mh_actual;
+				freq = i;
+			}
+			c->best_done = 1;
+			c->best_osc = freq;
+			applog(LOG_DEBUG, "%"PRIpreprv": best_osc = %d",
+			       proc->proc_repr, freq);
+		}
+	}
+	applog(LOG_DEBUG, "%"PRIpreprv": Changing osc6_bits to %d",
+	       proc->proc_repr, freq);
+	bitfury->osc6_bits = freq;
+	send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	return 0;
+}
 
 void bitfury_do_io(struct thr_info * const master_thr)
 {
 	struct cgpu_info *proc;
 	struct thr_info *thr;
 	struct bitfury_device *bitfury;
+	struct freq_stat *c;
 	const uint32_t *inp;
 	int n, i, j;
 	bool newjob;
@@ -493,6 +559,9 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	int n_chips = 0, lastchip = 0;
 	struct spi_port *spi = NULL;
 	bool should_be_running;
+	struct timeval tv_now;
+	uint32_t counter;
+	struct timeval *tvp_stat;
 	
 	for (proc = master_thr->cgpu; proc; proc = proc->next_proc)
 		++n_chips;
@@ -533,6 +602,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		if (thr->work /* is currently running */ && thr->busy_state != TBS_STARTING_JOB)
 			;//FIXME: shutdown chip
 	}
+	timer_set_now(&tv_now);
 	spi_txrx(spi);
 	
 	for (j = 0; j < n_chips; ++j)
@@ -546,6 +616,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		proc = procs[j];
 		thr = proc->thr[0];
 		bitfury = proc->device_data;
+		tvp_stat = &bitfury->tv_stat;
+		c = &bitfury->chip_stat;
 		uint32_t * const newbuf = &bitfury->newbuf[0];
 		uint32_t * const oldbuf = &bitfury->oldbuf[0];
 		
@@ -603,6 +675,73 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			}
 		}
 		
+		counter = bitfury_decnonce(newbuf[n]);
+		if ((counter & 0xFFC00000) == 0xdf800000)
+		{
+			counter &= 0x003fffff;
+			int32_t cycles = counter - bitfury->counter1;
+			if (cycles < 0)
+				cycles += 0x00400000;
+			
+			if (cycles & 0x00200000)
+			{
+				long long unsigned int period;
+				double ns;
+				struct timeval d_time;
+				
+				timersub(&(tv_now), &(bitfury->timer1), &d_time);
+				period = timeval_to_us(&d_time) * 1000ULL;
+				ns = (double)period / (double)(cycles);
+				bitfury->mhz = 1.0 / ns * 65.0 * 1000.0;
+				
+				bitfury->counter1 = counter;
+				copy_time(&(bitfury->timer1), &tv_now);
+			}
+		}
+		
+		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
+			copy_time(tvp_stat, &tv_now);
+		}
+		
+		if (c->osc6_max)
+		{
+			if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+			{
+				double mh_diff, s_diff;
+				const int osc = bitfury->osc6_bits;
+				
+				// Copy current statistics
+				mh_diff = bitfury->counter2 - c->omh;
+				s_diff = total_secs - c->os;
+				applog(LOG_DEBUG, "%"PRIpreprv": %.0f completed in %f seconds",
+				       proc->proc_repr, mh_diff, s_diff);
+				if (osc >= c->osc6_min && osc <= c->osc6_max)
+				{
+					c->mh[osc] += mh_diff;
+					c->s[osc] += s_diff;
+				}
+				c->omh = bitfury->counter2;
+				c->os = total_secs;
+				if (opt_debug && !c->best_done)
+				{
+					char logbuf[0x100];
+					for (i = c->osc6_min; i <= c->osc6_max; ++i)
+						tailsprintf(logbuf, sizeof(logbuf), " %d=%.3f/%3.0fs",
+						            i, c->mh[i] / c->s[i], c->s[i]);
+					applog(LOG_DEBUG, "%"PRIpreprv":%s",
+					       proc->proc_repr, logbuf);
+				}
+				
+				// Change freq;
+				if (!c->best_done) {
+					select_freq(bitfury, proc);
+				} else {
+					applog(LOG_DEBUG, "%"PRIpreprv": Stable freq, osc6_bits: %d",
+					       proc->proc_repr, bitfury->osc6_bits);
+				}
+			}
+		}
+		
 		if (n)
 		{
 			for (i = 0; i < n; ++i)
@@ -613,6 +752,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
 					       proc->proc_repr, i, (unsigned long)nonce, thr->work);
 					submit_nonce(thr, thr->work, nonce);
+					bitfury->counter2 += 1;
 				}
 				else
 				if (fudge_nonce(thr->prev_work, &nonce))
@@ -620,11 +760,13 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (prev work=%p)",
 					       proc->proc_repr, i, (unsigned long)nonce, thr->prev_work);
 					submit_nonce(thr, thr->prev_work, nonce);
+					bitfury->counter2 += 1;
 				}
 				else
 				{
 					inc_hw_errors(thr, thr->work, nonce);
 					++bitfury->sample_hwe;
+					bitfury->strange_counter += 1;
 				}
 				if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
 				{
@@ -654,6 +796,8 @@ out:
 			bitfury->desync_counter = 99;
 			bitfury->force_reinit = false;
 		}
+		if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+			copy_time(tvp_stat, &tv_now);
 	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
@@ -682,6 +826,7 @@ struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 	int clock_bits = bitfury->osc6_bits;
 	
 	root = api_add_int(root, "Clock Bits", &clock_bits, true);
+	root = api_add_freq(root, "Frequency", &bitfury->mhz, false);
 	
 	return root;
 }
@@ -728,12 +873,14 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 	
 	if (!strcasecmp(option, "osc6_bits"))
 	{
+		struct freq_stat * const c = &bitfury->chip_stat;
 		newval = bitfury->osc6_bits;
 		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, BITFURY_MAX_OSC6_BITS))
 			return replybuf;
 		
 		bitfury->osc6_bits = newval;
 		bitfury->force_reinit = true;
+		c->osc6_max = 0;
 		
 		return NULL;
 	}
@@ -757,6 +904,7 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	{
 		case 'o': case 'O':
 		{
+			struct freq_stat * const c = &bitfury->chip_stat;
 			int val;
 			char *intvar;
 			
@@ -771,6 +919,7 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			
 			bitfury->osc6_bits = val;
 			bitfury->force_reinit = true;
+			c->osc6_max = 0;
 			
 			return "Oscillator bits changing\n";
 		}
