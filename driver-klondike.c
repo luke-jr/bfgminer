@@ -63,9 +63,6 @@ static const char *msg_reply = "Reply";
 #define KLN_KILLWORK_TEMP	53.5
 #define KLN_COOLED_DOWN		45.5
 
-// If 5 late updates in a row, try to reset the device
-#define KLN_LATE_UPDATE_LIMIT	5
-
 /*
  *  Work older than 5s will already be completed
  *  FYI it must not be possible to complete 256 work
@@ -75,10 +72,27 @@ static const char *msg_reply = "Reply";
 #define OLD_WORK_MS ((int)(5 * 1000))
 
 /*
+ * How many incorrect slave counts to ignore in a row
+ * 2 means it allows random grabage returned twice
+ * Until slaves are implemented, this should never occur
+ * so allowing 2 in a row should ignore random errros
+ */
+#define KLN_ISS_IGNORE 2
+
+/*
  * If the queue status hasn't been updated for this long then do it now
  * 5GH/s = 859ms per full nonce range
  */
 #define LATE_UPDATE_MS ((int)(2.5 * 1000))
+
+// If 5 late updates in a row, try to reset the device
+#define LATE_UPDATE_LIMIT	5
+
+// If the reset fails sleep for 1s
+#define LATE_UPDATE_SLEEP_MS 1000
+
+// However give up after 8s
+#define LATE_UPDATE_NODEV_MS ((int)(8.0 * 1000))
 
 struct device_drv klondike_drv;
 
@@ -215,6 +229,7 @@ struct klondike_info {
 	uint64_t hashcount;
 	uint64_t errorcount;
 	uint64_t noisecount;
+	int incorrect_slave_sequential;
 
 	// us Delay from USB reply to being processed
 	double delay_count;
@@ -946,8 +961,8 @@ static void *klondike_get_replies(void *userdata)
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	KLIST *kitem = NULL;
 	char *hexdata;
-	int err, recd, slaves, dev;
-	bool overheat;
+	int err, recd, slaves, dev, isc;
+	bool overheat, sent;
 
 	applog(LOG_DEBUG, "%s%i: listening for replies",
 			  klncgpu->drv->name, klncgpu->device_id);
@@ -1018,16 +1033,27 @@ static void *klondike_get_replies(void *userdata)
 						cgtime(&(klninfo->jobque[dev].last_update));
 						slaves = klninfo->status[0].kline.ws.slavecount;
 						overheat = klninfo->jobque[dev].overheat;
+						if (dev == 0) {
+							if (kitem->kline.ws.slavecount != slaves)
+								isc = ++klninfo->incorrect_slave_sequential;
+							else
+								isc = klninfo->incorrect_slave_sequential = 0;
+						}
 						wr_unlock(&(klninfo->stat_lock));
 
-						if (kitem->kline.ws.slavecount != slaves) {
-							applog(LOG_ERR, "%s%i:%d reply [%c] has a diff # of slaves=%d"
-									" (curr=%d) dropping device to hotplug",
-									klncgpu->drv->name, klncgpu->device_id,
-									dev, (char)(kitem->kline.ws.cmd),
+						if (isc) {
+							applog(LOG_ERR, "%s%i:%d reply [%c] has a diff"
+									" # of slaves=%d (curr=%d)%s",
+									klncgpu->drv->name,
+									klncgpu->device_id,
+									dev,
+									(char)(kitem->kline.ws.cmd),
 									(int)(kitem->kline.ws.slavecount),
-									slaves);
-							klncgpu->shutdown = true;
+									slaves,
+									isc <= KLN_ISS_IGNORE ? "" :
+									 " disabling device");
+							if (isc > KLN_ISS_IGNORE)
+								usb_nodev(klncgpu);
 							break;
 						}
 
@@ -1047,15 +1073,16 @@ static void *klondike_get_replies(void *userdata)
 								zero_kline(&kline);
 								kline.hd.cmd = KLN_CMD_ABORT;
 								kline.hd.dev = dev;
-								if (!SendCmd(klncgpu, &kline, KSENDHD(0))) {
-									applog(LOG_ERR, "%s%i:%d failed to abort work"
-											" - dropping device to hotplug",
+								sent = SendCmd(klncgpu, &kline, KSENDHD(0));
+								kln_disable(klncgpu, dev, false);
+								if (!sent) {
+									applog(LOG_ERR, "%s%i:%d overheat failed to"
+											" abort work - disabling device",
 											klncgpu->drv->name,
 											klncgpu->device_id,
 											dev);
-									klncgpu->shutdown = true;
+									usb_nodev(klncgpu);
 								}
-								kln_disable(klncgpu, dev, false);
 							}
 						}
 					}
@@ -1242,9 +1269,12 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	struct work *work = NULL;
-	int dev, queued, slaves, seq;
+	int dev, queued, slaves, seq, howlong;
 	struct timeval now;
 	bool nowork;
+
+	if (klncgpu->shutdown == true)
+		return true;
 
 	cgtime(&now);
 	rd_lock(&(klninfo->stat_lock));
@@ -1254,7 +1284,7 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 			klninfo->jobque[dev].late_update_count++;
 			seq = ++klninfo->jobque[dev].late_update_sequential;
 			rd_unlock(&(klninfo->stat_lock));
-			if (seq < KLN_LATE_UPDATE_LIMIT) {
+			if (seq < LATE_UPDATE_LIMIT) {
 				applog(LOG_ERR, "%s%i:%d late update",
 						klncgpu->drv->name, klncgpu->device_id, dev);
 				klondike_get_stats(klncgpu);
@@ -1262,17 +1292,22 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 			} else {
 				applog(LOG_ERR, "%s%i:%d late update (%d) reached - attempting reset",
 						klncgpu->drv->name, klncgpu->device_id,
-						dev, KLN_LATE_UPDATE_LIMIT);
+						dev, LATE_UPDATE_LIMIT);
 				control_init(klncgpu);
 				kln_enable(klncgpu);
 				klondike_get_stats(klncgpu);
 				rd_lock(&(klninfo->stat_lock));
-				if (ms_tdiff(&now, &(klninfo->jobque[dev].last_update)) > LATE_UPDATE_MS) {
+				howlong = ms_tdiff(&now, &(klninfo->jobque[dev].last_update));
+				if (howlong > LATE_UPDATE_MS) {
 					rd_unlock(&(klninfo->stat_lock));
-					applog(LOG_ERR, "%s%i:%d reset failed - dropping device",
-							klncgpu->drv->name, klncgpu->device_id, dev);
-					klncgpu->shutdown = true;
-					return false;
+					if (howlong > LATE_UPDATE_NODEV_MS) {
+						applog(LOG_ERR, "%s%i:%d reset failed - dropping device",
+								klncgpu->drv->name, klncgpu->device_id, dev);
+						usb_nodev(klncgpu);
+					} else
+						cgsleep_ms(LATE_UPDATE_SLEEP_MS);
+
+					return true;
 				}
 				break;
 			}
@@ -1360,10 +1395,7 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 		rd_unlock(&(klninfo->stat_lock));
 	}
 
-	if (klncgpu->shutdown)
-		return -1;
-	else
-		return newhashcount;
+	return newhashcount;
 }
 
 
