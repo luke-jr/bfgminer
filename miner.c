@@ -48,10 +48,16 @@
 #ifndef WIN32
 #include <sys/resource.h>
 #include <sys/socket.h>
+#if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
+#include <libudev.h>
+#include <sys/epoll.h>
+#define HAVE_BFG_HOTPLUG
+#endif
 #else
 #include <winsock2.h>
 #include <windows.h>
 #include <dbt.h>
+#define HAVE_BFG_HOTPLUG
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -173,7 +179,7 @@ int httpsrv_port = -1;
 int stratumsrv_port = -1;
 #endif
 
-#ifdef WIN32
+#ifdef HAVE_BFG_HOTPLUG
 bool opt_hotplug = 1;
 #else
 const bool opt_hotplug;
@@ -2101,7 +2107,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_invbool, &want_getwork,
 			"Disable getwork support"),
 	OPT_WITHOUT_ARG("--no-hotplug",
-#ifdef WIN32
+#ifdef HAVE_BFG_HOTPLUG
 	                opt_set_invbool, &opt_hotplug,
 	                "Disable hotplug detection"
 #else
@@ -11016,7 +11022,54 @@ int scan_serial(const char *s)
 	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
-#ifdef WIN32
+#if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
+
+static
+void *hotplug_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	RenameThread("hotplug");
+	
+	struct udev * const udev = udev_new();
+	if (unlikely(!udev))
+		applogfailr(NULL, LOG_ERR, "udev_new");
+	struct udev_monitor * const mon = udev_monitor_new_from_netlink(udev, "udev");
+	if (unlikely(!mon))
+		applogfailr(NULL, LOG_ERR, "udev_monitor_new_from_netlink");
+	if (unlikely(udev_monitor_enable_receiving(mon)))
+		applogfailr(NULL, LOG_ERR, "udev_monitor_enable_receiving");
+	const int epfd = epoll_create(1);
+	if (unlikely(epfd == -1))
+		applogfailr(NULL, LOG_ERR, "epoll_create");
+	{
+		const int fd = udev_monitor_get_fd(mon);
+		struct epoll_event ev = {
+			.events = EPOLLIN | EPOLLPRI,
+			.data.fd = fd,
+		};
+		if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev))
+			applogfailr(NULL, LOG_ERR, "epoll_ctl");
+	}
+	
+	struct epoll_event ev;
+	while (epoll_wait(epfd, &ev, 1, -1) != -1)
+	{
+		struct udev_device * const device = udev_monitor_receive_device(mon);
+		if (!device)
+			continue;
+		const char * const action = udev_device_get_action(device);
+		applog(LOG_DEBUG, "%s: Received %s event", __func__, action);
+		if (strcmp(action, "add"))
+			continue;
+		
+		scan_serial(NULL);
+	}
+	
+	applogfailr(NULL, LOG_ERR, "epoll_wait");
+}
+
+#elif defined(WIN32)
+
 LRESULT CALLBACK hotplug_win_callback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	if (msg == WM_DEVICECHANGE && wParam == DBT_DEVNODES_CHANGED)
@@ -11052,6 +11105,9 @@ void *hotplug_thread(__maybe_unused void *p)
 	return NULL;
 }
 
+#endif
+
+#ifdef HAVE_BFG_HOTPLUG
 static
 void hotplug_start()
 {
@@ -11679,7 +11735,7 @@ begin_bench:
 		stratumsrv_start();
 #endif
 
-#ifdef WIN32
+#ifdef HAVE_BFG_HOTPLUG
 	if (opt_hotplug && !opt_scrypt)
 		hotplug_start();
 #endif
