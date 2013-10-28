@@ -1356,6 +1356,20 @@ static void release_cgpu(struct cgpu_info *cgpu)
 }
 
 /*
+ * Force a NODEV on a device so it goes back to hotplug
+ */
+void usb_nodev(struct cgpu_info *cgpu)
+{
+	int pstate;
+
+	DEVWLOCK(cgpu, pstate);
+
+	release_cgpu(cgpu);
+
+	DEVWUNLOCK(cgpu, pstate);
+}
+
+/*
  * Use the same usbdev thus locking is across all related devices
  */
 struct cgpu_info *usb_copy_cgpu(struct cgpu_info *orig)
