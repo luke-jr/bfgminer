@@ -80,6 +80,29 @@ extern void _applog(int prio, const char *str);
 
 #define perror(s)  appperror(LOG_ERR, s)
 
+#define applogfailinfo(prio, failed, fmt, ...)  do {  \
+	applog(prio, "Failed to %s"IN_FMT_FFL": "fmt,  \
+	       failed,  \
+	       __FILE__, __func__, __LINE__,  \
+	       __VA_ARGS__);  \
+} while (0)
+
+#define applogfailinfor(rv, prio, failed, fmt, ...)  do {  \
+	applogfailinfo(prio, failed, fmt, __VA_ARGS__);  \
+	return rv;  \
+} while (0)
+
+#define applogfail(prio, failed)  do {  \
+	applog(prio, "Failed to %s"IN_FMT_FFL,  \
+	       failed,  \
+	       __FILE__, __func__, __LINE__);  \
+} while (0)
+
+#define applogfailr(rv, prio, failed)  do {  \
+	applogfail(prio, failed);  \
+	return rv;  \
+} while (0)
+
 extern void _bfg_clean_up(void);
 
 #define quit(status, fmt, ...) do { \
