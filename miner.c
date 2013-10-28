@@ -51,6 +51,7 @@
 #else
 #include <winsock2.h>
 #include <windows.h>
+#include <dbt.h>
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -172,6 +173,11 @@ int httpsrv_port = -1;
 int stratumsrv_port = -1;
 #endif
 
+#ifdef WIN32
+bool opt_hotplug = 1;
+#else
+const bool opt_hotplug;
+#endif
 struct string_elist *scan_devices;
 static struct string_elist *opt_set_device_list;
 bool opt_force_dev_init;
@@ -2094,6 +2100,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-getwork",
 			opt_set_invbool, &want_getwork,
 			"Disable getwork support"),
+	OPT_WITHOUT_ARG("--no-hotplug",
+#ifdef WIN32
+	                opt_set_invbool, &opt_hotplug,
+	                "Disable hotplug detection"
+#else
+	                set_null, &opt_hotplug,
+	                opt_hidden
+#endif
+	),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -11001,6 +11016,51 @@ int scan_serial(const char *s)
 	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
+#ifdef WIN32
+LRESULT CALLBACK hotplug_win_callback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (msg == WM_DEVICECHANGE && wParam == DBT_DEVNODES_CHANGED)
+	{
+		applog(LOG_DEBUG, "%s: Received DBT_DEVNODES_CHANGED event", __func__);
+		scan_serial(NULL);
+	}
+	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static
+void *hotplug_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	
+	WNDCLASS DummyWinCls = {
+		.lpszClassName = "BFGDummyWinCls",
+		.lpfnWndProc = hotplug_win_callback,
+	};
+	ATOM a = RegisterClass(&DummyWinCls);
+	if (unlikely(!a))
+		applogfailinfor(NULL, LOG_ERR, "RegisterClass", "%d", (int)GetLastError());
+	HWND hwnd = CreateWindow((void*)(intptr_t)a, NULL, WS_OVERLAPPED, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
+	if (unlikely(!hwnd))
+		applogfailinfor(NULL, LOG_ERR, "CreateWindow", "%d", (int)GetLastError());
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	quit(0, "WM_QUIT received");
+	return NULL;
+}
+
+static
+void hotplug_start()
+{
+	pthread_t pth;
+	if (unlikely(pthread_create(&pth, NULL, hotplug_thread, NULL)))
+		applog(LOG_ERR, "Failed to start hotplug thread");
+}
+#endif
+
 static void probe_pools(void)
 {
 	int i;
@@ -11617,6 +11677,11 @@ begin_bench:
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
 		stratumsrv_start();
+#endif
+
+#ifdef WIN32
+	if (opt_hotplug && !opt_scrypt)
+		hotplug_start();
 #endif
 
 #ifdef HAVE_CURSES
