@@ -497,9 +497,6 @@ struct cgpu_info {
 	bool polling;
 	bool flash_led;
 #endif /* USE_BITFORCE */
-#if defined(USE_KNC)
-	struct knc_state *knc_state;
-#endif
 #if defined(USE_BITFORCE) || defined(USE_BFLSC)
 	pthread_mutex_t device_mutex;
 #endif /* USE_BITFORCE || USE_BFLSC */

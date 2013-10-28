@@ -365,7 +365,7 @@ static void knc_work_from_queue_to_spi(struct knc_state *knc,
 static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu,
 				    struct spi_rx_t *rxbuf, int __maybe_unused num)
 {
-	struct knc_state *knc = cgpu->knc_state;
+	struct knc_state *knc = cgpu->device_data;
 	struct work *work;
 	int64_t us;
 	int submitted, successful, i, num_sent;
@@ -568,7 +568,7 @@ static bool knc_detect_one(struct spidev_context *ctx)
 	cgpu->name = "KnCminer";
 	cgpu->threads = 1;	// .. perhaps our number of devices?
 
-	cgpu->knc_state = knc;
+	cgpu->device_data = knc;
 	add_cgpu(cgpu);
 
 	return true;
@@ -612,7 +612,7 @@ void knc_detect(bool __maybe_unused hotplug)
 static int64_t knc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
-	struct knc_state *knc = cgpu->knc_state;
+	struct knc_state *knc = cgpu->device_data;
 	int len, num;
 	int next_read_q;
 
@@ -646,7 +646,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 static bool knc_queue_full(struct cgpu_info *cgpu)
 {
-	struct knc_state *knc = cgpu->knc_state;
+	struct knc_state *knc = cgpu->device_data;
 	struct work *work;
 	int queue_full = true;
 
@@ -666,7 +666,7 @@ static bool knc_queue_full(struct cgpu_info *cgpu)
 
 static void knc_flush_work(struct cgpu_info *cgpu)
 {
-	struct knc_state *knc = cgpu->knc_state;
+	struct knc_state *knc = cgpu->device_data;
 	struct work *work;
 	int len;
 	int next_read_q, next_read_a;
