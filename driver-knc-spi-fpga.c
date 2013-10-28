@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
 #include <linux/spi/spidev.h>
@@ -168,7 +169,7 @@ static inline bool knc_active_fifo_full(struct knc_state *knc)
 
 static inline void knc_queued_fifo_inc_idx(int *idx)
 {
-	if (unlikely(*idx >= (KNC_QUEUED_BUFFER_SIZE - 1)))
+	if (unlikely(*idx >= ((int)KNC_QUEUED_BUFFER_SIZE - 1)))
 		*idx = 0;
 	else
 		++(*idx);
@@ -248,7 +249,7 @@ static struct spidev_context * spi_new(int idx)
 
 l_ioctl_error:
 	applog(LOG_ERR, "KnC spi: ioctl error on SPI device %s: %m", dev_fname);
-l_close_free_exit_error:
+// l_close_free_exit_error:
 	close(ctx->fd);
 l_free_exit_error:
 	free(ctx);
@@ -362,12 +363,12 @@ static void knc_work_from_queue_to_spi(struct knc_state *knc,
 }
 
 static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu,
-				    struct spi_rx_t *rxbuf, int num)
+				    struct spi_rx_t *rxbuf, int __maybe_unused num)
 {
 	struct knc_state *knc = cgpu->knc_state;
 	struct work *work;
 	int64_t us;
-	int works, submitted, completed, i, num_sent;
+	int submitted, completed, i, num_sent;
 	int next_read_q, next_read_a;
 	struct timeval now;
 
@@ -411,7 +412,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 	/* check for completed works and calculated nonces */
 	gettimeofday(&now, NULL);
 	completed = 0;
-	for (i = 0; i < MAX_RESPONSES_IN_BATCH; ++i)
+	for (i = 0; i < (int)MAX_RESPONSES_IN_BATCH; ++i)
 	{
 		if ( (rxbuf->responses[i].type != RESPONSE_TYPE_NONCE_FOUND) &&
 		     (rxbuf->responses[i].type != RESPONSE_TYPE_WORK_DONE)
@@ -464,13 +465,13 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 					   rxbuf->responses[i].core;
 				if (submit_nonce(thr, work,
 						 rxbuf->responses[i].nonce)) {
-					if (cidx < sizeof(knc->hwerrs)) {
+					if (cidx < (int)sizeof(knc->hwerrs)) {
 						knc->hwerrs[cidx] = 0;
 						knc->disa_cnt[cidx] = 0;
 						knc->hwerr_work_id[cidx] = 0xFFFFFFFF;
 					}
 				} else  {
-					if ((cidx < sizeof(knc->hwerrs)) &&
+					if ((cidx < (int)sizeof(knc->hwerrs)) &&
 					    (knc->hwerr_work_id[cidx] != rxbuf->responses[i].work_id)) {
 						knc->hwerr_work_id[cidx] = rxbuf->responses[i].work_id;
 						if (++(knc->hwerrs[cidx]) >= HW_ERR_LIMIT) {
