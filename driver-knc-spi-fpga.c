@@ -155,6 +155,8 @@ struct knc_state {
 	int read_d, write_d;
 #define KNC_DISA_CORES_SIZE	(MAX_ASICS * 256)
 	struct core_disa_data disa_cores_fifo[KNC_DISA_CORES_SIZE];
+
+	pthread_mutex_t lock;
 };
 
 static inline bool knc_queued_fifo_full(struct knc_state *knc)
@@ -560,6 +562,8 @@ static bool knc_detect_one(struct spidev_context *ctx)
 	knc->read_d = 0;
 	knc->write_d = 1;
 	knc->salt = rand();
+	mutex_init(&knc->lock);
+
 	memset(knc->hwerr_work_id, 0xFF, sizeof(knc->hwerr_work_id));
 
 	_internal_knc_flush_fpga(knc);
@@ -613,8 +617,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
-	int len, num;
-	int next_read_q;
+	int len, num, next_read_q;
+	int64_t ret;
 
 	applog(LOG_DEBUG, "KnC running scanwork");
 
@@ -623,6 +627,8 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	/* Prepare tx buffer */
 	memset(spi_txbuf, 0, sizeof(spi_txbuf));
 	num = 0;
+
+	mutex_lock(&knc->lock);
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
 	while (next_read_q != knc->write_q) {
@@ -635,31 +641,43 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	len = spi_transfer(knc->ctx, (uint8_t *)spi_txbuf,
 			   (uint8_t *)&spi_rxbuf, sizeof(spi_txbuf));
-	if (len != sizeof(spi_rxbuf))
-		return -1;
+	if (len != sizeof(spi_rxbuf)) {
+		ret = -1;
+		goto out_unlock;
+	}
 	len /= sizeof(struct spi_response);
 
 	applog(LOG_DEBUG, "KnC spi: %d works in request", num);
 
-	return knc_process_response(thr, cgpu, &spi_rxbuf, len);
+	ret = knc_process_response(thr, cgpu, &spi_rxbuf, len);
+out_unlock:
+	mutex_unlock(&knc->lock);
+
+	return ret;
 }
 
 static bool knc_queue_full(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
 	struct work *work;
-	int queue_full = true;
+	int queue_full = false;
 
 	applog(LOG_DEBUG, "KnC running queue full");
-	while (!knc_queued_fifo_full(knc)) {
-		work = get_queued(cgpu);
-		if (!work) {
-			queue_full = false;
-			break;
-		}
-		knc->queued_fifo[knc->write_q].work = work;
-		knc_queued_fifo_inc_idx(&(knc->write_q));
+
+	mutex_lock(&knc->lock);
+	if (knc_queued_fifo_full(knc)) {
+		queue_full = true;
+		goto out_unlock;
 	}
+	work = get_queued(cgpu);
+	if (!work)
+		goto out_unlock;
+	knc->queued_fifo[knc->write_q].work = work;
+	knc_queued_fifo_inc_idx(&(knc->write_q));
+	if (knc_queued_fifo_full(knc))
+		queue_full = true;
+out_unlock:
+	mutex_unlock(&knc->lock);
 
 	return queue_full;
 }
@@ -673,6 +691,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 
 	applog(LOG_ERR, "KnC running flushwork");
 
+	mutex_lock(&knc->lock);
 	/* Drain queued works */
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
@@ -698,6 +717,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	len = _internal_knc_flush_fpga(knc);
 	if (len > 0)
 		knc_process_response(NULL, cgpu, &spi_rxbuf, len);
+	mutex_unlock(&knc->lock);
 }
 
 struct device_drv knc_drv = {
