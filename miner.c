@@ -11022,6 +11022,15 @@ int scan_serial(const char *s)
 	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
+#ifdef HAVE_BFG_HOTPLUG
+static
+void hotplug_trigger()
+{
+	applog(LOG_DEBUG, "%s: Triggering rescan", __func__);
+	scan_serial(NULL);
+}
+#endif
+
 #if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
 
 static
@@ -11062,7 +11071,7 @@ void *hotplug_thread(__maybe_unused void *p)
 		if (strcmp(action, "add"))
 			continue;
 		
-		scan_serial(NULL);
+		hotplug_trigger();
 	}
 	
 	applogfailr(NULL, LOG_ERR, "epoll_wait");
@@ -11075,7 +11084,7 @@ LRESULT CALLBACK hotplug_win_callback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 	if (msg == WM_DEVICECHANGE && wParam == DBT_DEVNODES_CHANGED)
 	{
 		applog(LOG_DEBUG, "%s: Received DBT_DEVNODES_CHANGED event", __func__);
-		scan_serial(NULL);
+		hotplug_trigger();
 	}
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
