@@ -59,8 +59,10 @@ __stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
 __stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
 __stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
 __stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
+const uint32_t FT_OPEN_BY_SERIAL_NUMBER =     1;
 const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
 const uint32_t FT_LIST_ALL         = 0x20000000;
+const uint32_t FT_LIST_BY_INDEX    = 0x40000000;
 const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
 enum {
 	FT_OK,
@@ -386,7 +388,6 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 	}  \
 } while(0)
 
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 static
 char *_ftdi_get_string(char *buf, int i, DWORD flags)
 {
@@ -394,7 +395,6 @@ char *_ftdi_get_string(char *buf, int i, DWORD flags)
 		return NULL;
 	return buf[0] ? buf : NULL;
 }
-#endif
 
 static
 int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
@@ -403,9 +403,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	char *devpathnum = &devpath[7];
 	char **bufptrs;
 	char *buf;
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
-	char manuf[64], serial[64];
-#endif
+	char serial[64];
 	int found = 0;
 	DWORD i;
 
@@ -458,12 +456,10 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 			continue;
 		
 		applog(LOG_ERR, "FT_GetComPortNumber(%p (%ld), %ld)", ftHandle, (long)i, (long)lComPortNumber);
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 		detectone_meta_info = (struct detectone_meta_info_t){
 			.product = bufptrs[i],
 			.serial = _ftdi_get_string(serial, i, FT_OPEN_BY_SERIAL_NUMBER),
 		};
-#endif
 		
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
