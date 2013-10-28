@@ -1079,9 +1079,13 @@ void cgtimer_time(cgtimer_t *ts_start)
 
 static void liSleep(LARGE_INTEGER *li, int timeout)
 {
-	HANDLE hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
+	HANDLE hTimer;
 	DWORD ret;
 
+	if (unlikely(timeout <= 0))
+		return;
+
+	hTimer = CreateWaitableTimer(NULL, TRUE, NULL);
 	if (unlikely(!hTimer))
 		quit(1, "Failed to create hTimer in liSleep");
 	ret = SetWaitableTimer(hTimer, li, 0, NULL, NULL, 0);
