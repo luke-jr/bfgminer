@@ -361,7 +361,6 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 	}  \
 } while(0)
 
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 static
 char *_ftdi_get_string(char *buf, int i, DWORD flags)
 {
@@ -369,7 +368,6 @@ char *_ftdi_get_string(char *buf, int i, DWORD flags)
 		return NULL;
 	return buf[0] ? buf : NULL;
 }
-#endif
 
 static
 int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
@@ -378,9 +376,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	char *devpathnum = &devpath[7];
 	char **bufptrs;
 	char *buf;
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 	char serial[64];
-#endif
 	int found = 0;
 	DWORD i;
 
@@ -433,12 +429,10 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 			continue;
 		
 		applog(LOG_ERR, "FT_GetComPortNumber(%p (%ld), %ld)", ftHandle, (long)i, (long)lComPortNumber);
-#ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 		detectone_meta_info = (struct detectone_meta_info_t){
 			.product = bufptrs[i],
 			.serial = _ftdi_get_string(serial, i, FT_OPEN_BY_SERIAL_NUMBER),
 		};
-#endif
 		
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
