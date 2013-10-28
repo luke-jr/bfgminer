@@ -363,7 +363,7 @@ static void knc_work_from_queue_to_spi(struct knc_state *knc,
 }
 
 static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu,
-				    struct spi_rx_t *rxbuf, int __maybe_unused num)
+				    struct spi_rx_t *rxbuf)
 {
 	struct knc_state *knc = cgpu->knc_state;
 	struct work *work;
@@ -606,6 +606,17 @@ void knc_detect(bool __maybe_unused hotplug)
 	}
 }
 
+static int64_t knc_process_responses(struct thr_info *thr, struct cgpu_info *cgpu,
+				     struct spi_rx_t *rxbuf, int num)
+{
+	int64_t ret = 0;
+	int i;
+
+	for (i = 0; i < num; i++)
+		ret += knc_process_response(thr, cgpu, &rxbuf[i]);
+	return ret;
+}
+
 /* return value is number of nonces that have been checked since
  * previous call
  */
@@ -641,7 +652,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "KnC spi: %d works in request", num);
 
-	return knc_process_response(thr, cgpu, &spi_rxbuf, len);
+	return knc_process_responses(thr, cgpu, &spi_rxbuf, len);
 }
 
 static bool knc_queue_full(struct cgpu_info *cgpu)
@@ -697,7 +708,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 
 	len = _internal_knc_flush_fpga(knc);
 	if (len > 0)
-		knc_process_response(NULL, cgpu, &spi_rxbuf, len);
+		knc_process_responses(NULL, cgpu, &spi_rxbuf, len);
 }
 
 struct device_drv knc_drv = {
