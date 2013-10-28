@@ -156,9 +156,14 @@ static bool bigpic_init(struct thr_info *thr)
 
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bigpic->proc_repr, bigpic->device_path);
 
-	struct timeval tv_now;
-	gettimeofday(&tv_now, NULL);
-	timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
+
+	//Copy and pasted error. BF1 does not support polling (currently 28/10/13)
+	//Caused segfaults on MAC OSX, but curiously not on Windows or linux/generic
+	//Left as reminder
+	// 
+	//struct timeval tv_now;
+	//gettimeofday(&tv_now, NULL);
+	//timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
 
 	info->tx_buffer[0] = 'W';
 
