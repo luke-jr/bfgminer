@@ -156,10 +156,6 @@ static bool bigpic_init(struct thr_info *thr)
 
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", bigpic->proc_repr, bigpic->device_path);
 
-	struct timeval tv_now;
-	gettimeofday(&tv_now, NULL);
-	timer_set_delay(&thr->tv_poll, &tv_now, 1000000);
-
 	info->tx_buffer[0] = 'W';
 
 	return true;
