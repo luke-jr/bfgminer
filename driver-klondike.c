@@ -1027,6 +1027,7 @@ static void *klondike_get_replies(void *userdata)
 				case KLN_CMD_ABORT:
 					// We can't do/check this until it's initialised
 					if (klninfo->initialised) {
+						isc = 0;
 						dev = kitem->kline.ws.dev;
 						wr_lock(&(klninfo->stat_lock));
 						klninfo->jobque[dev].workqc = (int)(kitem->kline.ws.workqc);
