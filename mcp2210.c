@@ -143,6 +143,9 @@ void mcp2210_devinfo_free(struct lowlevel_device_info * const info)
 static
 char *wcs2str_dup(wchar_t *ws)
 {
+	if (!ws)
+		return NULL;
+	
 	char *rv;
 	int clen, i;
 	
