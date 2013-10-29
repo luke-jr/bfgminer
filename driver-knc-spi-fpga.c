@@ -115,9 +115,9 @@ struct spi_rx_t {
 	uint32_t rsvd_3;
 	struct spi_response responses[MAX_RESPONSES_IN_BATCH];
 };
+
 static struct spi_rx_t spi_rxbuf;
 
-struct device_drv knc_drv;
 struct active_work {
 	struct work *work;
 	uint32_t work_id;
@@ -194,12 +194,12 @@ static inline void knc_disa_cores_fifo_inc_idx(int *idx)
 }
 
 /* Find SPI device with index idx, init it */
-static struct spidev_context * spi_new(int idx)
+static struct spidev_context *spi_new(int idx)
 {
 	struct spidev_context *ctx;
 	char dev_fname[PATH_MAX];
 
-	if(NULL == (ctx = malloc(sizeof(struct spidev_context)))) {
+	if (NULL == (ctx = malloc(sizeof(struct spidev_context)))) {
 		applog(LOG_ERR, "KnC spi: Out of memory");
 		goto l_exit_error;
 	}
@@ -251,7 +251,6 @@ static struct spidev_context * spi_new(int idx)
 
 l_ioctl_error:
 	applog(LOG_ERR, "KnC spi: ioctl error on SPI device %s: %m", dev_fname);
-// l_close_free_exit_error:
 	close(ctx->fd);
 l_free_exit_error:
 	free(ctx);
@@ -263,6 +262,7 @@ static void spi_free(struct spidev_context *ctx)
 {
 	if (NULL == ctx)
 		return;
+
 	close(ctx->fd);
 	free(ctx);
 }
@@ -270,8 +270,8 @@ static void spi_free(struct spidev_context *ctx)
 static int spi_transfer(struct spidev_context *ctx, uint8_t *txbuf,
 			uint8_t *rxbuf, int len)
 {
-	int ret;
 	struct spi_ioc_transfer xfr;
+	int ret;
 
 	memset(rxbuf, 0xff, len);
 
@@ -286,9 +286,8 @@ static int spi_transfer(struct spidev_context *ctx, uint8_t *txbuf,
 	xfr.cs_change = 0;
 	xfr.pad = 0;
 
-	if (1 > (ret = ioctl(ctx->fd, SPI_IOC_MESSAGE(1), &xfr))) {
+	if (1 > (ret = ioctl(ctx->fd, SPI_IOC_MESSAGE(1), &xfr)))
 		applog(LOG_ERR, "KnC spi xfer: ioctl error on SPI device: %m");
-	}
 
 	return ret;
 }
@@ -296,6 +295,7 @@ static int spi_transfer(struct spidev_context *ctx, uint8_t *txbuf,
 static void disable_core(uint8_t asic, uint8_t core)
 {
 	char str[256];
+
 	snprintf(str, sizeof(str), "i2cset -y 2 0x2%hhu %hhu 0", asic, core);
 	if (0 != WEXITSTATUS(system(str)))
 		applog(LOG_ERR, "KnC: system call failed");
@@ -304,6 +304,7 @@ static void disable_core(uint8_t asic, uint8_t core)
 static void enable_core(uint8_t asic, uint8_t core)
 {
 	char str[256];
+
 	snprintf(str, sizeof(str), "i2cset -y 2 0x2%hhu %hhu 1", asic, core);
 	if (0 != WEXITSTATUS(system(str)))
 		applog(LOG_ERR, "KnC: system call failed");
@@ -312,27 +313,30 @@ static void enable_core(uint8_t asic, uint8_t core)
 static int64_t timediff(const struct timeval *a, const struct timeval *b)
 {
 	struct timeval diff;
+
 	timersub(a, b, &diff);
+
 	return diff.tv_sec * 1000000 + diff.tv_usec;
 }
 
 static void knc_check_disabled_cores(struct knc_state *knc)
 {
-	int next_read_d;
+	struct core_disa_data *core;
+	int next_read_d, cidx;
 	struct timeval now;
 	int64_t us;
-	struct core_disa_data *core;
-	int cidx;
 
 	next_read_d = knc->read_d;
 	knc_disa_cores_fifo_inc_idx(&next_read_d);
 	if (next_read_d == knc->write_d)
 		return; /* queue empty */
+
 	core = &knc->disa_cores_fifo[next_read_d];
 	gettimeofday(&now, NULL);
 	us = timediff(&now, &core->disa_begin);
 	if ((us >= 0) && (us < CORE_DISA_PERIOD_US))
 		return; /* latest disabled core still not expired */
+
 	cidx = core->asic * 256 + core->core;
 	enable_core(core->asic, core->core);
 	knc->hwerrs[cidx] = 0;
@@ -356,29 +360,29 @@ static void knc_work_from_queue_to_spi(struct knc_state *knc,
 	++(knc->next_work_id);
 	buf_to = spi_req->midstate;
 	buf_from = (uint32_t *)q_work->work->midstate;
+
 	for (i = 0; i < WORK_MIDSTATE_WORDS; ++i)
 		buf_to[i] = le32toh(buf_from[8 - i - 1]);
 	buf_to = spi_req->data;
 	buf_from = (uint32_t *)&(q_work->work->data[16 * 4]);
+
 	for (i = 0; i < WORK_DATA_WORDS; ++i)
 		buf_to[i] = le32toh(buf_from[3 - i - 1]);
 }
 
 static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu,
-				    struct spi_rx_t *rxbuf, int __maybe_unused num)
+				    struct spi_rx_t *rxbuf)
 {
 	struct knc_state *knc = cgpu->device_data;
-	struct work *work;
-	int64_t us;
 	int submitted, successful, i, num_sent;
 	int next_read_q, next_read_a;
 	struct timeval now;
+	struct work *work;
+	int64_t us;
 
-	if (knc->write_q > knc->read_q)
-		num_sent = knc->write_q - knc->read_q - 1;
-	else
-		num_sent =
-			knc->write_q + KNC_QUEUED_BUFFER_SIZE - knc->read_q - 1;
+	num_sent = knc->write_q - knc->read_q - 1;
+	if (knc->write_q <= knc->read_q)
+		num_sent += KNC_QUEUED_BUFFER_SIZE;
 
 	/* Actually process SPI response */
 	if (rxbuf->works_accepted) {
@@ -392,11 +396,13 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 	/* move works_accepted number of items from queued_fifo to active_fifo */
 	gettimeofday(&now, NULL);
 	submitted = 0;
+
 	for (i = 0; i < rxbuf->works_accepted; ++i) {
 		next_read_q = knc->read_q;
 		knc_queued_fifo_inc_idx(&next_read_q);
 		if ((next_read_q == knc->write_q) || knc_active_fifo_full(knc))
 			break;
+
 		memcpy(&knc->active_fifo[knc->write_a],
 		       &knc->queued_fifo[next_read_q],
 		       sizeof(struct active_work));
@@ -406,20 +412,21 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 		knc_active_fifo_inc_idx(&knc->write_a);
 		++submitted;
 	}
-	if (submitted != rxbuf->works_accepted)
+	if (submitted != rxbuf->works_accepted) {
 		applog(LOG_ERR,
 		       "KnC: accepted by FPGA %u works, but only %d submitted",
 		       rxbuf->works_accepted, submitted);
+	}
 
 	/* check for completed works and calculated nonces */
 	gettimeofday(&now, NULL);
 	successful = 0;
-	for (i = 0; i < (int)MAX_RESPONSES_IN_BATCH; ++i)
-	{
-		if ( (rxbuf->responses[i].type != RESPONSE_TYPE_NONCE_FOUND) &&
-		     (rxbuf->responses[i].type != RESPONSE_TYPE_WORK_DONE)
-		   )
+
+	for (i = 0; i < (int)MAX_RESPONSES_IN_BATCH; ++i) {
+		if ((rxbuf->responses[i].type != RESPONSE_TYPE_NONCE_FOUND) &&
+		    (rxbuf->responses[i].type != RESPONSE_TYPE_WORK_DONE))
 			continue;
+
 		applog(LOG_DEBUG, "KnC spi: raw response %08X %08X",
 		       ((uint32_t *)&rxbuf->responses[i])[0],
 		       ((uint32_t *)&rxbuf->responses[i])[1]);
@@ -431,6 +438,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 		/* Find active work with matching ID */
 		next_read_a = knc->read_a;
 		knc_active_fifo_inc_idx(&next_read_a);
+
 		while (next_read_a != knc->write_a) {
 			if (knc->active_fifo[next_read_a].work_id ==
 			    rxbuf->responses[i].work_id)
@@ -446,10 +454,11 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 				work = knc->active_fifo[next_read_a].work;
 				knc_active_fifo_inc_idx(&knc->read_a);
 				work_completed(cgpu, work);
-				if (next_read_a != knc->read_a)
+				if (next_read_a != knc->read_a) {
 					memcpy(&(knc->active_fifo[next_read_a]),
 					       &(knc->active_fifo[knc->read_a]),
 					       sizeof(struct active_work));
+				}
 				knc->active_fifo[knc->read_a].work = NULL;
 			}
 
@@ -457,6 +466,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 		}
 		if (next_read_a == knc->write_a)
 			continue;
+
 		applog(LOG_DEBUG, "KnC spi: response work %u found",
 		       rxbuf->responses[i].work_id);
 		work = knc->active_fifo[next_read_a].work;
@@ -465,6 +475,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 			if (NULL != thr) {
 				int cidx = rxbuf->responses[i].asic * 256 +
 					   rxbuf->responses[i].core;
+
 				if (submit_nonce(thr, work,
 						 rxbuf->responses[i].nonce)) {
 					if (cidx < (int)sizeof(knc->hwerrs)) {
@@ -479,6 +490,7 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 						knc->hwerr_work_id[cidx] = rxbuf->responses[i].work_id;
 						if (++(knc->hwerrs[cidx]) >= HW_ERR_LIMIT) {
 						    struct core_disa_data *core;
+
 						    core = &knc->disa_cores_fifo[knc->write_d];
 						    core->disa_begin = now;
 						    core->asic = rxbuf->responses[i].asic;
@@ -503,10 +515,11 @@ static int64_t knc_process_response(struct thr_info *thr, struct cgpu_info *cgpu
 		/* Work completed */
 		knc_active_fifo_inc_idx(&knc->read_a);
 		work_completed(cgpu, work);
-		if (next_read_a != knc->read_a)
+		if (next_read_a != knc->read_a) {
 			memcpy(&(knc->active_fifo[next_read_a]),
 			       &(knc->active_fifo[knc->read_a]),
 			       sizeof(struct active_work));
+		}
 		knc->active_fifo[knc->read_a].work = NULL;
 	}
 
@@ -524,6 +537,7 @@ static int _internal_knc_flush_fpga(struct knc_state *knc)
 			   (uint8_t *)&spi_rxbuf, sizeof(struct spi_request));
 	if (len != sizeof(struct spi_request))
 		return -1;
+
 	len /= sizeof(struct spi_response);
 
 	return len;
@@ -532,8 +546,9 @@ static int _internal_knc_flush_fpga(struct knc_state *knc)
 static bool knc_detect_one(struct spidev_context *ctx)
 {
 	/* Scan device for ASICs */
-	int chip_id;
-	int devices = 0;
+	int chip_id, devices = 0;
+	struct cgpu_info *cgpu;
+	struct knc_state *knc;
 
 	for (chip_id = 0; chip_id < MAX_ASICS; ++chip_id) {
 		/* TODO: perform the ASIC test/detection */
@@ -544,10 +559,11 @@ static bool knc_detect_one(struct spidev_context *ctx)
 		applog(LOG_INFO, "SPI detected, but not KnCminer ASICs");
 		return false;
 	}
+
 	applog(LOG_INFO, "Found a KnC miner with %d ASICs", devices);
 
-	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
-	struct knc_state *knc = calloc(1, sizeof(*knc));
+	cgpu = calloc(1, sizeof(*cgpu));
+	knc = calloc(1, sizeof(*knc));
 	if (!cgpu || !knc) {
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");
 		return false;
@@ -581,16 +597,17 @@ static bool knc_detect_one(struct spidev_context *ctx)
 // http://www.concentric.net/~Ttwang/tech/inthash.htm
 static unsigned long mix(unsigned long a, unsigned long b, unsigned long c)
 {
-    a=a-b;  a=a-c;  a=a^(c >> 13);
-    b=b-c;  b=b-a;  b=b^(a << 8);
-    c=c-a;  c=c-b;  c=c^(b >> 13);
-    a=a-b;  a=a-c;  a=a^(c >> 12);
-    b=b-c;  b=b-a;  b=b^(a << 16);
-    c=c-a;  c=c-b;  c=c^(b >> 5);
-    a=a-b;  a=a-c;  a=a^(c >> 3);
-    b=b-c;  b=b-a;  b=b^(a << 10);
-    c=c-a;  c=c-b;  c=c^(b >> 15);
-    return c;
+	a = a - b;  a = a - c;  a = a ^ (c >> 13);
+	b = b - c;  b = b - a;  b = b ^ (a << 8);
+	c = c - a;  c = c - b;  c = c ^ (b >> 13);
+	a = a - b;  a = a - c;  a = a ^ (c >> 12);
+	b = b - c;  b = b - a;  b = b ^ (a << 16);
+	c = c - a;  c = c - b;  c = c ^ (b >> 5);
+	a = a - b;  a = a - c;  a = a ^ (c >> 3);
+	b = b - c;  b = b - a;  b = b ^ (a << 10);
+	c = c - a;  c = c - b;  c = c ^ (b >> 15);
+
+	return c;
 }
 
 /* Probe devices and register with add_cgpu */
@@ -603,6 +620,7 @@ void knc_detect(bool __maybe_unused hotplug)
 	/* Loop through all possible SPI interfaces */
 	for (idx = 0; idx < MAX_SPIS; ++idx) {
 		struct spidev_context *ctx = spi_new(idx + 1);
+
 		if (ctx != NULL) {
 			if (!knc_detect_one(ctx))
 				spi_free(ctx);
@@ -631,6 +649,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	mutex_lock(&knc->lock);
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
+
 	while (next_read_q != knc->write_q) {
 		knc_work_from_queue_to_spi(knc, &knc->queued_fifo[next_read_q],
 					   &spi_txbuf[num]);
@@ -645,11 +664,10 @@ static int64_t knc_scanwork(struct thr_info *thr)
 		ret = -1;
 		goto out_unlock;
 	}
-	len /= sizeof(struct spi_response);
 
 	applog(LOG_DEBUG, "KnC spi: %d works in request", num);
 
-	ret = knc_process_response(thr, cgpu, &spi_rxbuf, len);
+	ret = knc_process_response(thr, cgpu, &spi_rxbuf);
 out_unlock:
 	mutex_unlock(&knc->lock);
 
@@ -659,8 +677,8 @@ out_unlock:
 static bool knc_queue_full(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
-	struct work *work;
 	int queue_full = false;
+	struct work *work;
 
 	applog(LOG_DEBUG, "KnC running queue full");
 
@@ -685,9 +703,8 @@ out_unlock:
 static void knc_flush_work(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
+	int len, next_read_q, next_read_a;
 	struct work *work;
-	int len;
-	int next_read_q, next_read_a;
 
 	applog(LOG_ERR, "KnC running flushwork");
 
@@ -695,6 +712,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	/* Drain queued works */
 	next_read_q = knc->read_q;
 	knc_queued_fifo_inc_idx(&next_read_q);
+
 	while (next_read_q != knc->write_q) {
 		work = knc->queued_fifo[next_read_q].work;
 		work_completed(cgpu, work);
@@ -706,6 +724,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 	/* Drain active works */
 	next_read_a = knc->read_a;
 	knc_active_fifo_inc_idx(&next_read_a);
+
 	while (next_read_a != knc->write_a) {
 		work = knc->active_fifo[next_read_a].work;
 		work_completed(cgpu, work);
@@ -716,7 +735,7 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 
 	len = _internal_knc_flush_fpga(knc);
 	if (len > 0)
-		knc_process_response(NULL, cgpu, &spi_rxbuf, len);
+		knc_process_response(NULL, cgpu, &spi_rxbuf);
 	mutex_unlock(&knc->lock);
 }
 
