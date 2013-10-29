@@ -59,8 +59,10 @@ __stdcall FT_STATUS (*FT_ListDevices)(PVOID pArg1, PVOID pArg2, DWORD Flags);
 __stdcall FT_STATUS (*FT_Open)(int idx, FT_HANDLE*);
 __stdcall FT_STATUS (*FT_GetComPortNumber)(FT_HANDLE, LPLONG lplComPortNumber);
 __stdcall FT_STATUS (*FT_Close)(FT_HANDLE);
+const uint32_t FT_OPEN_BY_SERIAL_NUMBER =     1;
 const uint32_t FT_OPEN_BY_DESCRIPTION =       2;
 const uint32_t FT_LIST_ALL         = 0x20000000;
+const uint32_t FT_LIST_BY_INDEX    = 0x40000000;
 const uint32_t FT_LIST_NUMBER_ONLY = 0x80000000;
 enum {
 	FT_OK,
@@ -404,7 +406,7 @@ int _serial_autodetect_ftdi(detectone_func_t detectone, va_list needles)
 	char **bufptrs;
 	char *buf;
 #ifdef UNTESTED_FTDI_DETECTONE_META_INFO
-	char manuf[64], serial[64];
+	char serial[64];
 #endif
 	int found = 0;
 	DWORD i;
