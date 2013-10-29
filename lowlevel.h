@@ -13,6 +13,7 @@ struct lowlevel_driver {
 };
 
 struct lowlevel_device_info {
+	char *manufacturer;
 	char *product;
 	char *serial;
 	char *path;

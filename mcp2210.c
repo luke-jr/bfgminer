@@ -177,6 +177,7 @@ struct lowlevel_device_info *mcp2210_devinfo_scan()
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_mcp2210,
 			.path = strdup(hid_item->path),
+			.manufacturer = wcs2str_dup(hid_item->manufacturer_string),
 			.product = wcs2str_dup(hid_item->product_string),
 			.serial  = wcs2str_dup(hid_item->serial_number),
 		};
