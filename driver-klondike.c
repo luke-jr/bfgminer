@@ -1017,7 +1017,7 @@ static void *klondike_get_replies(void *userdata)
 							if (klninfo->jobque[dev].flushed == false)
 								idle = true;
 							slaves = klninfo->status[0].kline.ws.slavecount;
-							rd_lock(&(klninfo->stat_lock));
+							rd_unlock(&(klninfo->stat_lock));
 							if (idle)
 								applog(LOG_WARNING, "%s%i:%d went idle before work was sent",
 										    klncgpu->drv->name,
@@ -1026,7 +1026,7 @@ static void *klondike_get_replies(void *userdata)
 						}
 						wr_lock(&(klninfo->stat_lock));
 						klninfo->jobque[dev].flushed = false;
-						wr_lock(&(klninfo->stat_lock));
+						wr_unlock(&(klninfo->stat_lock));
 					}
 				case KLN_CMD_STATUS:
 				case KLN_CMD_ABORT:
