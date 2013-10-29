@@ -611,6 +611,7 @@ elif test "x$bitfury" = "xyes"; then
 	fi
 elif test "x$nanofury" = "xyes"; then
 	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
+	need_fpgautils=yes
 else
 	nanofury=no
 fi

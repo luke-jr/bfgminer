@@ -30,6 +30,7 @@ typedef HMODULE dlh_t;
 #include <hidapi.h>
 #include <utlist.h>
 
+#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "miner.h"
@@ -205,6 +206,12 @@ struct mcp2210_device {
 	// http://ww1.microchip.com/downloads/en/DeviceDoc/22288A.pdf pg 40
 	uint8_t cfg_gpio[0xf];
 };
+
+struct device_drv *bfg_claim_mcp2210(struct device_drv * const api, const bool verbose, const struct lowlevel_device_info * const info)
+{
+	const char * const path = info->lowl_data;
+	return bfg_claim_hid(api, verbose, path);
+}
 
 static
 bool mcp2210_io(hid_device * const hid, uint8_t * const cmd, uint8_t * const buf)

@@ -28,11 +28,14 @@ extern void clear_detectone_meta_info(void);
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
+extern struct device_drv *bfg_claim_any(struct device_drv *, const char *verbose, const char *devpath);
+extern struct device_drv *bfg_claim_any2(struct device_drv *, const char *verbose, const char *llname, const char *path);
 extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool verbose, const char * const devpath);
 #define serial_claim(devpath, drv)    bfg_claim_serial(drv, false, devpath)
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
 extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
 #define bfg_claim_libusb(api, verbose, dev)  bfg_claim_usb(api, verbose, libusb_get_bus_number(dev), libusb_get_device_address(dev))
+#define bfg_claim_hid(api, verbose, path)  bfg_claim_any2(api, (verbose)?"":NULL, "hid", path)
 
 #ifdef HAVE_LIBUSB
 extern void cgpu_copy_libusb_strings(struct cgpu_info *, libusb_device *);

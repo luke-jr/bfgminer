@@ -505,7 +505,6 @@ struct _device_claim {
 	UT_hash_handle hh;
 };
 
-static
 struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verbose, const char * const devpath)
 {
 	static struct _device_claim *claims = NULL;
@@ -541,6 +540,17 @@ struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verb
 	c->drv = api;
 	HASH_ADD_KEYPTR(hh, claims, c->devpath, strlen(devpath), c);
 	return NULL;
+}
+
+struct device_drv *bfg_claim_any2(struct device_drv * const api, const char * const verbose, const char * const llname, const char * const path)
+{
+	const size_t llnamesz = strlen(llname);
+	const size_t pathsz = strlen(path);
+	char devpath[llnamesz + 1 + pathsz + 1];
+	memcpy(devpath, llname, llnamesz);
+	devpath[llnamesz] = ':';
+	memcpy(&devpath[llnamesz+1], path, pathsz + 1);
+	return bfg_claim_any(api, verbose, devpath);
 }
 
 struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
