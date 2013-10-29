@@ -208,6 +208,7 @@ typedef struct jobque {
 	int workqc;
 	struct timeval last_update;
 	bool overheat;
+	bool flushed;
 	int late_update_count;
 	int late_update_sequential;
 } JOBQUE;
@@ -315,7 +316,7 @@ static KLIST *allocate_kitem(struct cgpu_info *klncgpu)
 	cg_wunlock(&klninfo->klist_lock);
 
 	if (ran_out > 0)
-		applog(LOG_ERR, "%s", errbuf);
+		applog(LOG_WARNING, "%s", errbuf);
 
 	return kitem;
 }
@@ -985,7 +986,9 @@ static void *klondike_get_replies(void *userdata)
 		}
 		if (!err && recd == REPLY_SIZE) {
 			cgtime(&(kitem->tv_when));
+			rd_lock(&(klninfo->stat_lock));
 			kitem->block_seq = klninfo->block_seq;
+			rd_unlock(&(klninfo->stat_lock));
 			if (opt_log_level <= READ_DEBUG) {
 				hexdata = bin2hex((unsigned char *)&(kitem->kline.hd.dev), recd-1);
 				applog(READ_DEBUG, "%s%i:%d reply [%c:%s]",
@@ -1022,8 +1025,27 @@ static void *klondike_get_replies(void *userdata)
 					klondike_check_nonce(klncgpu, kitem);
 					display_kline(klncgpu, &kitem->kline, msg_reply);
 					break;
-				case KLN_CMD_STATUS:
 				case KLN_CMD_WORK:
+					// We can't do/check this until it's initialised
+					if (klninfo->initialised) {
+						if (kitem->kline.ws.workqc == 0) {
+							bool idle = false;
+							rd_lock(&(klninfo->stat_lock));
+							if (klninfo->jobque[dev].flushed == false)
+								idle = true;
+							slaves = klninfo->status[0].kline.ws.slavecount;
+							rd_lock(&(klninfo->stat_lock));
+							if (idle)
+								applog(LOG_WARNING, "%s%i:%d went idle before work was sent",
+										    klncgpu->drv->name,
+										    klncgpu->device_id,
+										    dev);
+						}
+						wr_lock(&(klninfo->stat_lock));
+						klninfo->jobque[dev].flushed = false;
+						wr_lock(&(klninfo->stat_lock));
+					}
+				case KLN_CMD_STATUS:
 				case KLN_CMD_ABORT:
 					// We can't do/check this until it's initialised
 					if (klninfo->initialised) {
@@ -1067,9 +1089,10 @@ static void *klondike_get_replies(void *userdata)
 								klninfo->jobque[dev].overheat = true;
 								wr_unlock(&(klninfo->stat_lock));
 
-								applog(LOG_ERR, "%s%i:%d Critical overheat (%.0fC)",
-										klncgpu->drv->name, klncgpu->device_id,
-										dev, temp);
+								applog(LOG_WARNING, "%s%i:%d Critical overheat (%.0fC)",
+										    klncgpu->drv->name,
+										    klncgpu->device_id,
+										    dev, temp);
 
 								zero_kline(&kline);
 								kline.hd.cmd = KLN_CMD_ABORT;
@@ -1122,13 +1145,13 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 	KLINE kline;
 	int slaves, dev;
 
+	wr_lock(&(klninfo->stat_lock));
 	klninfo->block_seq++;
+	slaves = klninfo->status[0].kline.ws.slavecount;
+	wr_unlock(&(klninfo->stat_lock));
 
 	applog(LOG_DEBUG, "%s%i: flushing work",
 			  klncgpu->drv->name, klncgpu->device_id);
-	rd_lock(&(klninfo->stat_lock));
-	slaves = klninfo->status[0].kline.ws.slavecount;
-	rd_unlock(&(klninfo->stat_lock));
 	zero_kline(&kline);
 	kline.hd.cmd = KLN_CMD_ABORT;
 	for (dev = 0; dev <= slaves; dev++) {
@@ -1139,6 +1162,7 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 			memcpy((void *)&(klninfo->status[dev]),
 				kitem,
 				sizeof(klninfo->status[dev]));
+			klninfo->jobque[dev].flushed = true;
 			wr_unlock(&(klninfo->stat_lock));
 			kitem = release_kitem(klncgpu, kitem);
 		}
@@ -1286,14 +1310,14 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 			seq = ++klninfo->jobque[dev].late_update_sequential;
 			rd_unlock(&(klninfo->stat_lock));
 			if (seq < LATE_UPDATE_LIMIT) {
-				applog(LOG_ERR, "%s%i:%d late update",
+				applog(LOG_DEBUG, "%s%i:%d late update",
 						klncgpu->drv->name, klncgpu->device_id, dev);
 				klondike_get_stats(klncgpu);
 				goto que;
 			} else {
-				applog(LOG_ERR, "%s%i:%d late update (%d) reached - attempting reset",
-						klncgpu->drv->name, klncgpu->device_id,
-						dev, LATE_UPDATE_LIMIT);
+				applog(LOG_WARNING, "%s%i:%d late update (%d) reached - attempting reset",
+						    klncgpu->drv->name, klncgpu->device_id,
+						    dev, LATE_UPDATE_LIMIT);
 				control_init(klncgpu);
 				kln_enable(klncgpu);
 				klondike_get_stats(klncgpu);
@@ -1333,9 +1357,9 @@ tryagain:
 				if (temp <= KLN_COOLED_DOWN) {
 					klninfo->jobque[dev].overheat = false;
 					rd_unlock(&(klninfo->stat_lock));
-					applog(LOG_ERR, "%s%i:%d Overheat recovered (%.0fC)",
-							klncgpu->drv->name, klncgpu->device_id,
-							dev, temp);
+					applog(LOG_WARNING, "%s%i:%d Overheat recovered (%.0fC)",
+							    klncgpu->drv->name, klncgpu->device_id,
+							    dev, temp);
 					kln_enable(klncgpu);
 					goto tryagain;
 				} else {
