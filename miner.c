@@ -11122,22 +11122,11 @@ int main(int argc, char *argv[])
 		register_device(devices[i]);
 
 	if (!total_devices) {
-		const bool netdev_support =
-#ifdef USE_LIBMICROHTTPD
-			(httpsrv_port != -1) ||
-#endif
-#ifdef USE_LIBEVENT
-			(stratumsrv_port != -1) ||
-#endif
-			false;
-		if ((!netdev_support) && (!use_curses) && !opt_api_listen)
-			quit(1, "All devices disabled, cannot mine!");
 		applog(LOG_WARNING, "No devices detected!");
 		if (use_curses)
 			applog(LOG_WARNING, "Waiting for devices; press 'M+' to add, or 'Q' to quit");
 		else
-			applog(LOG_WARNING, "Waiting for %s or press Ctrl-C to quit",
-		       netdev_support ? "network devices" : "RPC commands");
+			applog(LOG_WARNING, "Waiting for devices");
 	}
 
 	load_temp_config();
