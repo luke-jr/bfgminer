@@ -105,7 +105,7 @@ ASIC SPECIFIC COMMANDS
 --bitburner-fury-options <arg> Override avalon-options for BitBurner Fury boards baud:miners:asic:timeout:freq
 --bitburner-fury-voltage <arg> Set BitBurner Fury core voltage, in millivolts
 --bitburner-voltage <arg> Set BitBurner (Avalon) core voltage, in millivolts
---klondike-options <arg> Set klondike options clock:temp1:temp2:fan
+--klondike-options <arg> Set klondike options clock:temptarget
 
 
 AVALON AND BITBURNER DEVICES

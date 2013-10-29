@@ -1270,7 +1270,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
-		     "Set klondike options clock:temp1:temp2:fan"),
+		     "Set klondike options clock:temptarget"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
