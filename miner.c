@@ -11061,8 +11061,16 @@ void *hotplug_thread(__maybe_unused void *p)
 	}
 	
 	struct epoll_event ev;
-	while (epoll_wait(epfd, &ev, 1, -1) != -1)
+	int rv;
+	while (true)
 	{
+		rv = epoll_wait(epfd, &ev, 1, -1);
+		if (rv == -1)
+		{
+			if (errno == EAGAIN || errno == EINTR)
+				continue;
+			break;
+		}
 		struct udev_device * const device = udev_monitor_receive_device(mon);
 		if (!device)
 			continue;
