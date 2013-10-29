@@ -181,6 +181,8 @@ int stratumsrv_port = -1;
 
 #ifdef HAVE_BFG_HOTPLUG
 bool opt_hotplug = 1;
+const
+int hotplug_delay_ms = 100;
 #else
 const bool opt_hotplug;
 #endif
@@ -11062,14 +11064,21 @@ void *hotplug_thread(__maybe_unused void *p)
 	
 	struct epoll_event ev;
 	int rv;
+	bool pending = false;
 	while (true)
 	{
-		rv = epoll_wait(epfd, &ev, 1, -1);
+		rv = epoll_wait(epfd, &ev, 1, pending ? hotplug_delay_ms : -1);
 		if (rv == -1)
 		{
 			if (errno == EAGAIN || errno == EINTR)
 				continue;
 			break;
+		}
+		if (!rv)
+		{
+			hotplug_trigger();
+			pending = false;
+			continue;
 		}
 		struct udev_device * const device = udev_monitor_receive_device(mon);
 		if (!device)
@@ -11079,7 +11088,7 @@ void *hotplug_thread(__maybe_unused void *p)
 		if (strcmp(action, "add"))
 			continue;
 		
-		hotplug_trigger();
+		pending = true;
 	}
 	
 	applogfailr(NULL, LOG_ERR, "epoll_wait");
@@ -11087,12 +11096,21 @@ void *hotplug_thread(__maybe_unused void *p)
 
 #elif defined(WIN32)
 
+static UINT_PTR _hotplug_wintimer_id;
+
+VOID CALLBACK hotplug_win_timer(HWND hwnd, UINT msg, UINT_PTR idEvent, DWORD dwTime)
+{
+	KillTimer(NULL, _hotplug_wintimer_id);
+	_hotplug_wintimer_id = 0;
+	hotplug_trigger();
+}
+
 LRESULT CALLBACK hotplug_win_callback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	if (msg == WM_DEVICECHANGE && wParam == DBT_DEVNODES_CHANGED)
 	{
 		applog(LOG_DEBUG, "%s: Received DBT_DEVNODES_CHANGED event", __func__);
-		hotplug_trigger();
+		_hotplug_wintimer_id = SetTimer(NULL, _hotplug_wintimer_id, hotplug_delay_ms, hotplug_win_timer);
 	}
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
