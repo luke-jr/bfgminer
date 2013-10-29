@@ -20,9 +20,12 @@ static struct lowlevel_device_info *devinfo_list;
 
 void lowlevel_devinfo_free(struct lowlevel_device_info * const info)
 {
-	info->lowl->devinfo_free(info);
+	if (info->lowl->devinfo_free)
+		info->lowl->devinfo_free(info);
+	free(info->manufacturer);
 	free(info->product);
 	free(info->serial);
+	free(info->path);
 	free(info);
 }
 

@@ -114,7 +114,7 @@ bool search_needles(const char *haystack, va_list needles)
 static
 int _detectone_wrap(const detectone_func_t detectone, const char * const param, const char *fname)
 {
-	if (bfg_claim_serial(NULL, false, param))
+	if (bfg_claim_serial(NULL, true, param))
 	{
 		applog(LOG_DEBUG, "%s: %s is already claimed, skipping probe", fname, param);
 		return 0;
@@ -494,46 +494,37 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	return rv;
 }
 
-enum bfg_device_bus {
-	BDB_SERIAL,
-	BDB_USB,
-};
-
-// TODO: claim USB side of USB-Serial devices
-typedef
-struct my_dev_t {
-	enum bfg_device_bus bus;
-	union {
-		struct {
-			uint8_t usbbus;
-			uint8_t usbaddr;
-		};
-#ifndef WIN32
-		dev_t dev;
-#else
-		int com;
-#endif
-	};
-} my_dev_t;
 
 struct _device_claim {
 	struct device_drv *drv;
-	my_dev_t dev;
+	char *devpath;
 	UT_hash_handle hh;
 };
 
-static
-struct device_drv *bfg_claim_any(struct device_drv * const api, const char * const verbose, const my_dev_t * const dev)
+struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verbose, const char * const devpath)
 {
 	static struct _device_claim *claims = NULL;
 	struct _device_claim *c;
 	
-	HASH_FIND(hh, claims, dev, sizeof(*dev), c);
+	HASH_FIND_STR(claims, devpath, c);
 	if (c)
 	{
-		if (verbose)
-			applog(LOG_DEBUG, "%s device %s already claimed by other driver: %s",
-			       api->dname, verbose, c->drv->dname);
+		if (verbose && opt_debug)
+		{
+			char logbuf[LOGBUFSIZ];
+			logbuf[0] = '\0';
+			if (api)
+				tailsprintf(logbuf, sizeof(logbuf), "%s device ", api->dname);
+			if (verbose[0])
+				tailsprintf(logbuf, sizeof(logbuf), "%s (%s)", verbose, devpath);
+			else
+				tailsprintf(logbuf, sizeof(logbuf), "%s", devpath);
+			tailsprintf(logbuf, sizeof(logbuf), " already claimed by ");
+			if (api)
+				tailsprintf(logbuf, sizeof(logbuf), "other ");
+			tailsprintf(logbuf, sizeof(logbuf), "driver: %s", c->drv->dname);
+			_applog(LOG_DEBUG, logbuf);
+		}
 		return c->drv;
 	}
 	
@@ -541,59 +532,55 @@ struct device_drv *bfg_claim_any(struct device_drv * const api, const char * con
 		return NULL;
 	
 	c = malloc(sizeof(*c));
-	c->dev = *dev;
+	c->devpath = strdup(devpath);
 	c->drv = api;
-	HASH_ADD(hh, claims, dev, sizeof(*dev), c);
+	HASH_ADD_KEYPTR(hh, claims, c->devpath, strlen(devpath), c);
 	return NULL;
+}
+
+struct device_drv *bfg_claim_any2(struct device_drv * const api, const char * const verbose, const char * const llname, const char * const path)
+{
+	const size_t llnamesz = strlen(llname);
+	const size_t pathsz = strlen(path);
+	char devpath[llnamesz + 1 + pathsz + 1];
+	memcpy(devpath, llname, llnamesz);
+	devpath[llnamesz] = ':';
+	memcpy(&devpath[llnamesz+1], path, pathsz + 1);
+	return bfg_claim_any(api, verbose, devpath);
 }
 
 struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
 {
-	my_dev_t dev;
-	
-	memset(&dev, 0, sizeof(dev));
-	dev.bus = BDB_SERIAL;
 #ifndef WIN32
+	char devs[6 + (sizeof(dev_t) * 2) + 1];
 	{
 		struct stat my_stat;
 		if (stat(devpath, &my_stat))
 			return NULL;
-		dev.dev = my_stat.st_rdev;
+		memcpy(devs, "dev_t:", 6);
+		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
 	}
 #else
-	{
 		char *p = strstr(devpath, "COM"), *p2;
 		if (!p)
 			return NULL;
-		dev.com = strtol(&p[3], &p2, 10);
+		const int com = strtol(&p[3], &p2, 10);
 		if (p2 == p)
 			return NULL;
-	}
+	char dummy;
+	const int sz = snprintf(&dummy, 1, "%d", com);
+	char devs[4 + sz + 1];
+	sprintf(devs, "com:%d", com);
 #endif
 	
-	return bfg_claim_any(api, (verbose ? devpath : NULL), &dev);
+	return bfg_claim_any(api, (verbose ? devpath : NULL), devs);
 }
 
 struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
 {
-	my_dev_t dev;
-	char *desc = NULL;
-	
-	// We should be able to just initialize a const my_dev_t for this, but Xcode's clang is broken
-	// Affected: Apple LLVM version 4.2 (clang-425.0.28) (based on LLVM 3.2svn) AKA Xcode 4.6.3
-	// Works with const: GCC 4.6.3, LLVM 3.1
-	memset(&dev, 0, sizeof(dev));
-	dev.bus = BDB_USB;
-	dev.usbbus = usbbus;
-	dev.usbaddr = usbaddr;
-	
-	if (verbose)
-	{
-		desc = alloca(3 + 1 + 3 + 1);
-		sprintf(desc, "%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
-	}
-	
-	return bfg_claim_any(api, desc, &dev);
+	char devpath[12];
+	sprintf(devpath, "usb:%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	return bfg_claim_any(api, verbose ? "" : NULL, devpath);
 }
 
 #ifdef HAVE_LIBUSB

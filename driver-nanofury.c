@@ -14,6 +14,7 @@
 
 #include "deviceapi.h"
 #include "driver-bitfury.h"
+#include "fpgautils.h"
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
@@ -189,7 +190,8 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info)
 	nanofury_device_off(mcp);
 	mcp2210_close(mcp);
 	
-	// TODO: claim device
+	if (bfg_claim_hid(&nanofury_drv, true, info->path))
+		return false;
 	
 	struct cgpu_info *cgpu;
 	cgpu = malloc(sizeof(*cgpu));
@@ -198,8 +200,8 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info)
 		.device_data = info,
 		.threads = 1,
 		// TODO: .name
-		// TODO: .device_path
-		// TODO: .dev_manufacturer
+		.device_path = strdup(info->path),
+		.dev_manufacturer = strdup(info->manufacturer),
 		.dev_product = strdup(product),
 		.dev_serial = strdup(serial),
 		.deven = DEV_ENABLED,
