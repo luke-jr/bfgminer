@@ -143,6 +143,12 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 		goto done;
 	}
 
+	if (libusb_claim_interface(hndl, 0) == LIBUSB_ERROR_BUSY)
+	{
+		applog(LOG_DEBUG, "Ztex check device: Interface already busy, skipping");
+		goto done;
+	}
+	
 	cnt = libusb_control_transfer(hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
 	if (unlikely(cnt < 0)) {
 		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
@@ -260,7 +266,10 @@ static enum check_result libztex_checkDevice(struct libusb_device *dev)
 done:
 	bytes_free(&bsdata);
 	if (hndl)
+	{
+		libusb_release_interface(hndl, 0);
 		libusb_close(hndl);
+	}
 	return ret;
 }
 
@@ -484,6 +493,9 @@ int libztex_configureFpga(struct libztex_device *ztex, const char *repr)
 	rv = libztex_configureFpgaHS(ztex, buf, true, 2, repr);
 	if (rv != 0)
 		rv = libztex_configureFpgaLS(ztex, buf, true, 2, repr);
+	if (!rv)
+		if (libusb_claim_interface(ztex->hndl, 0) == LIBUSB_ERROR_BUSY)
+			rv = -5;
 	return rv;
 }
 
@@ -705,6 +717,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 void libztex_destroy_device(struct libztex_device* ztex)
 {
 	if (ztex->hndl != NULL) {
+		libusb_release_interface(ztex->hndl, 0);
 		libusb_close(ztex->hndl);
 		ztex->hndl = NULL;
 	}
