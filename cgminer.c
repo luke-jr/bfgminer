@@ -1274,7 +1274,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
-		     "Set klondike options clock:temp1:temp2:fan"),
+		     "Set klondike options clock:temptarget"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -4030,51 +4030,20 @@ static int block_sort(struct block *blocka, struct block *blockb)
 	return blocka->block_no - blockb->block_no;
 }
 
+/* Decode the current block difficulty which is in packed form */
 static void set_blockdiff(const struct work *work)
 {
-	uint64_t *data64, d64, diff64;
-	double previous_diff;
-	uint32_t diffhash[8];
-	uint32_t difficulty;
-	uint32_t diffbytes;
-	uint32_t diffvalue;
-	char rhash[32];
-	int diffshift;
+	uint8_t pow = work->data[72];
+	int powdiff = (8 * (0x1d - 3)) - (8 * (pow - 3));
+	uint32_t diff32 = swab32(*((uint32_t *)(work->data + 72))) & 0x00FFFFFF;
+	double numerator = 0xFFFFULL << powdiff;
+	double ddiff = numerator / (double)diff32;
 
-	difficulty = swab32(*((uint32_t *)(work->data + 72)));
-
-	diffbytes = ((difficulty >> 24) & 0xff) - 3;
-	diffvalue = difficulty & 0x00ffffff;
-
-	diffshift = (diffbytes % 4) * 8;
-	if (diffshift == 0) {
-		diffshift = 32;
-		diffbytes--;
-	}
-
-	memset(diffhash, 0, 32);
-	diffbytes >>= 2;
-	if (unlikely(diffbytes > 6))
-		return;
-	diffhash[diffbytes + 1] = diffvalue >> (32 - diffshift);
-	diffhash[diffbytes] = diffvalue << diffshift;
-
-	swab256(rhash, diffhash);
-
-	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = bswap_64(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-
-	previous_diff = current_diff;
-	diff64 = diffone / d64;
-	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
-	current_diff = (double)diffone / (double)d64;
-	if (unlikely(current_diff != previous_diff))
+	if (unlikely(current_diff != ddiff)) {
+		suffix_string(ddiff, block_diff, sizeof(block_diff), 0);
+		current_diff = ddiff;
 		applog(LOG_NOTICE, "Network diff set to %s", block_diff);
+	}
 }
 
 static bool test_work_current(struct work *work)
@@ -5929,38 +5898,23 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha256(hash1, 32, hash);
 }
 
-/* Diff 1 is a 256 bit unsigned integer of
- * 0x00000000ffff0000000000000000000000000000000000000000000000000000
- * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
- * cover a huge range of difficulty targets, though not all 256 bits' worth */
 void set_target(unsigned char *dest_target, double diff)
 {
-	unsigned char target[32];
+	unsigned char target[32], rtarget[32];
 	uint64_t *data64, h64;
 	double d64;
 
-	d64 = diffone;
+	if (opt_scrypt)
+		d64 = 0xFFFF00000000ull;
+	else
+		d64 = 0xFFFF0000ull;
 	d64 /= diff;
 	h64 = d64;
 
-	memset(target, 0, 32);
-	if (h64) {
-		unsigned char rtarget[32];
-
-		memset(rtarget, 0, 32);
-		if (opt_scrypt)
-			data64 = (uint64_t *)(rtarget + 2);
-		else
-			data64 = (uint64_t *)(rtarget + 4);
-		*data64 = htobe64(h64);
-		swab256(target, rtarget);
-	} else {
-		/* Support for the classic all FFs just-below-1 diff */
-		if (opt_scrypt)
-			memset(target, 0xff, 30);
-		else
-			memset(target, 0xff, 28);
-	}
+	memset(rtarget, 0xFF, 32);
+	data64 = (uint64_t *)rtarget;
+	*data64 = htobe64(h64);
+	swab256(target, rtarget);
 
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
@@ -6144,6 +6098,14 @@ bool test_nonce(struct work *work, uint32_t nonce)
 static void update_work_stats(struct thr_info *thr, struct work *work)
 {
 	work->share_diff = share_diff(work);
+
+	if (unlikely(work->share_diff >= current_diff)) {
+		work->block = true;
+		work->pool->solved++;
+		found_blocks++;
+		work->mandatory = true;
+		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
+	}
 
 	mutex_lock(&stats_lock);
 	total_diff1 += work->device_diff;
