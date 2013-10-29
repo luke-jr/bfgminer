@@ -30,7 +30,6 @@ typedef HMODULE dlh_t;
 #include <hidapi.h>
 #include <utlist.h>
 
-#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "miner.h"
@@ -136,12 +135,6 @@ bool hidapi_load_library()
 }
 
 static
-void mcp2210_devinfo_free(struct lowlevel_device_info * const info)
-{
-	free(info->lowl_data);
-}
-
-static
 char *wcs2str_dup(wchar_t *ws)
 {
 	if (!ws)
@@ -183,7 +176,7 @@ struct lowlevel_device_info *mcp2210_devinfo_scan()
 		info = malloc(sizeof(struct lowlevel_device_info));
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_mcp2210,
-			.lowl_data = strdup(hid_item->path),
+			.path = strdup(hid_item->path),
 			.product = wcs2str_dup(hid_item->product_string),
 			.serial  = wcs2str_dup(hid_item->serial_number),
 		};
@@ -206,12 +199,6 @@ struct mcp2210_device {
 	// http://ww1.microchip.com/downloads/en/DeviceDoc/22288A.pdf pg 40
 	uint8_t cfg_gpio[0xf];
 };
-
-struct device_drv *bfg_claim_mcp2210(struct device_drv * const api, const bool verbose, const struct lowlevel_device_info * const info)
-{
-	const char * const path = info->lowl_data;
-	return bfg_claim_hid(api, verbose, path);
-}
 
 static
 bool mcp2210_io(hid_device * const hid, uint8_t * const cmd, uint8_t * const buf)
@@ -249,7 +236,7 @@ bool mcp2210_get_configs(struct mcp2210_device * const h)
 struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *info)
 {
 	struct mcp2210_device *h;
-	char * const path = info->lowl_data;
+	char * const path = info->path;
 	hid_device * const hid = hid_open_path(path);
 	
 	if (unlikely(!hid))
@@ -462,5 +449,4 @@ enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, 
 
 struct lowlevel_driver lowl_mcp2210 = {
 	.devinfo_scan = mcp2210_devinfo_scan,
-	.devinfo_free = mcp2210_devinfo_free,
 };
