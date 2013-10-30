@@ -242,7 +242,7 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	info->core_count = h->core_address;
 	info->device_type = (uint8_t)h->hdata;
 	info->ref_frequency = (uint8_t)(h->hdata>>8);
-	info->hash_sequence = 0;
+	info->hash_sequence_head = 0;
 	info->hash_sequence_tail = 0;
 	info->device_sequence_tail = 0;
 
@@ -435,7 +435,7 @@ static void hfa_parse_gwq_status(struct cgpu_info *hashfast, struct hashfast_inf
 
 	applog(LOG_DEBUG, "HFA %d: OP_GWQ_STATUS, device_head %4d tail %4d my tail %4d shed %3d inflight %4d",
 		hashfast->device_id, g->sequence_head, g->sequence_tail, info->hash_sequence_tail,
-		g->shed_count, SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
+		g->shed_count, HF_SEQUENCE_DISTANCE(info->hash_sequence_head,g->sequence_tail));
 
 	mutex_lock(&info->lock);
 	info->hash_count += g->hash_count;
@@ -697,7 +697,7 @@ static int hfa_jobs(struct hashfast_info *info)
 	int ret;
 
 	mutex_lock(&info->lock);
-	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence, info->device_sequence_tail);
+	ret = info->usb_init_base.inflight_target - HF_SEQUENCE_DISTANCE(info->hash_sequence_head, info->device_sequence_tail);
 	/* Place an upper limit on how many jobs to queue to prevent sending
 	 * more  work than the device can use after a period of outage. */
 	if (ret > info->usb_init_base.inflight_target)
@@ -765,7 +765,7 @@ restart:
 		intdiff = (uint64_t)work->device_diff;
 		for (i = 31; intdiff; i++, intdiff >>= 1);
 		op_hash_data.search_difficulty = i;
-		if ((sequence = info->hash_sequence + 1) >= info->num_sequence)
+		if ((sequence = info->hash_sequence_head + 1) >= info->num_sequence)
 			sequence = 0;
 		ret = hfa_send_frame(hashfast, OP_HASH, sequence, (uint8_t *)&op_hash_data, sizeof(op_hash_data));
 		if (unlikely(!ret)) {
@@ -778,12 +778,12 @@ restart:
 		}
 
 		mutex_lock(&info->lock);
-		info->hash_sequence = sequence;
-		info->works[info->hash_sequence] = work;
+		info->hash_sequence_head = sequence;
+		info->works[info->hash_sequence_head] = work;
 		mutex_unlock(&info->lock);
 
 		applog(LOG_DEBUG, "HFA %d: OP_HASH sequence %d search_difficulty %d work_difficulty %g",
-		       hashfast->device_id, info->hash_sequence, op_hash_data.search_difficulty, work->work_difficulty);
+		       hashfast->device_id, info->hash_sequence_head, op_hash_data.search_difficulty, work->work_difficulty);
 	}
 
 	mutex_lock(&info->lock);
