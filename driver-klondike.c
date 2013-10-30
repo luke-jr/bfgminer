@@ -821,6 +821,7 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 					break;
 				update_usb_stats(klncgpu);
 				applog(LOG_DEBUG, "Klondike cgpu added");
+				rwlock_init(&klninfo->stat_lock);
 				cglock_init(&klninfo->klist_lock);
 				return true;
 			}
