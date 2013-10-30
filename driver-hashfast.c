@@ -497,7 +497,7 @@ static void search_for_extra_nonce(struct thr_info *thr, struct work *work,
 	int i;
 
 	/* No function to test with ntime offsets yet */
-	if (n->ntime)
+	if (n->ntime & HF_NTIME_MASK)
 		return;
 	for (i = 0; i < 128; i++, nonce++) {
 		/* We could break out of this early if nonce wraps or if we
@@ -520,8 +520,8 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 	for (i = 0; i < num_nonces; i++, n++) {
 		struct work *work;
 
-		applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d: %2d: search %1d ntime %2d sequence %4d nonce 0x%08x",
-		       hashfast->device_id, h->chip_address, i, n->search, n->ntime, n->sequence, n->nonce);
+		applog(LOG_DEBUG, "HFA %d: OP_NONCE: %2d: %2d: ntime %2d sequence %4d nonce 0x%08x",
+		       hashfast->device_id, h->chip_address, i, n->ntime & HF_NTIME_MASK, n->sequence, n->nonce);
 
 		// Find the job from the sequence number
 		mutex_lock(&info->lock);
@@ -533,11 +533,11 @@ static void hfa_parse_nonce(struct thr_info *thr, struct cgpu_info *hashfast,
 			applog(LOG_INFO, "HFA %d: No matching work!", hashfast->device_id);
 		} else {
 			applog(LOG_DEBUG, "HFA %d: OP_NONCE: sequence %d: submitting nonce 0x%08x ntime %d",
-			       hashfast->device_id, n->sequence, n->nonce, n->ntime);
+			       hashfast->device_id, n->sequence, n->nonce, n->ntime & HF_NTIME_MASK);
 			if ((n->nonce & 0xffff0000) == 0x42420000)		// XXX REMOVE THIS
 				break;						// XXX PHONEY EMULATOR NONCE
-			submit_noffset_nonce(thr, work, n->nonce, n->ntime);	// XXX Return value from submit_nonce is error if set
-			if (unlikely(n->search)) {
+			submit_noffset_nonce(thr, work, n->nonce, n->ntime & HF_NTIME_MASK);	// XXX Return value from submit_nonce is error if set
+			if (unlikely(n->ntime & HF_NONCE_SEARCH)) {
 				/* This tells us there is another share in the
 				 * next 128 nonces */
 				applog(LOG_DEBUG, "HFA %d: OP_NONCE: SEARCH PROXIMITY EVENT FOUND",
