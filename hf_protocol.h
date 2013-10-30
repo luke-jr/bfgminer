@@ -46,7 +46,7 @@
 #define GN_DIE_TEMPERATURE(a)           ((((float)(a)*240)/4096.0)-61.5)
 
 // The sequence distance between a sent and received sequence number.
-#define SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(info->num_sequence+(tx)-(rx)))
+#define HF_SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(info->num_sequence+(tx)-(rx)))
 
 // Values the protocol field in the above structure may take
 #define PROTOCOL_USB_MAPPED_SERIAL      0
