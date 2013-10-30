@@ -17,7 +17,6 @@
 #include "hf_protocol.h"
 
 #define HASHFAST_MINER_THREADS 1
-#define HF_SEQUENCE_DISTANCE(tx,rx)        ((tx)>=(rx)?((tx)-(rx)):(info->num_sequence+(tx)-(rx)))
 
 // Matching fields for hf_statistics, but large #s for local accumulation, per-die
 struct hf_long_statistics {
@@ -72,7 +71,6 @@ struct hashfast_info {
 	int device_type;                            // What sort of device this is
 	int num_sequence;                           // A power of 2. What the sequence number range is.
 	int ref_frequency;                          // Reference clock rate
-	uint16_t hash_sequence;                     // The next hash sequence # to be sent
 	struct hf_g1_die_data *die_status;          // Array of per-die voltage, current, temperature sensor data
 	struct hf_long_statistics *die_statistics;  // Array of per-die error counters
 	struct hf_long_usb_stats1 stats1;
