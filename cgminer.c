@@ -6082,17 +6082,23 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-bool test_nonce(struct work *work, uint32_t nonce)
+/* Fills in the work nonce and builds the output data in work->hash2 */
+static void rebuild_hash2(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	uint32_t *hash2_32 = (uint32_t *)work->hash2;
-	uint32_t diff1targ;
 
 	*work_nonce = htole32(nonce);
 
-	/* Do one last check before attempting to submit the work */
 	rebuild_hash(work);
-	flip32(hash2_32, work->hash);
+	flip32(work->hash2, work->hash);
+}
+
+bool test_nonce(struct work *work, uint32_t nonce)
+{
+	uint32_t *hash2_32 = (uint32_t *)work->hash2;
+	uint32_t diff1targ;
+
+	rebuild_hash2(work, nonce);
 
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
 	return (be32toh(hash2_32[7]) <= diff1targ);
