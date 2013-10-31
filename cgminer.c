@@ -2803,7 +2803,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	err = json_object_get(val, "error");
 
 	if (!QUIET) {
-		int intdiff = floor(work->work_difficulty);
+		int intdiff = round(work->work_difficulty);
 		char diffdisp[16], *outhash;
 		unsigned char rhash[32];
 
