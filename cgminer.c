@@ -6104,6 +6104,18 @@ bool test_nonce(struct work *work, uint32_t nonce)
 	return (be32toh(hash2_32[7]) <= diff1targ);
 }
 
+bool test_nonce_diff(struct work *work, uint32_t nonce, double diff)
+{
+	uint32_t hash2_be[8];
+	uint64_t *hashbe64 = (uint64_t *)hash2_be, hash64, diff64;
+
+	diff64 = (double)0x00000000ffff0000ULL / diff;
+	rebuild_hash2(work, nonce);
+	swap256(hash2_be, work->hash2);
+	hash64 = be64toh(*hashbe64);
+	return hash64 <= diff64;
+}
+
 static void update_work_stats(struct thr_info *thr, struct work *work)
 {
 	work->share_diff = share_diff(work);
