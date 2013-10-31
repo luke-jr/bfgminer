@@ -1,10 +1,10 @@
 
 ACLOCAL_AMFLAGS = -I m4
 
-JANSSON_INCLUDES= -I$(top_srcdir)/compat/jansson-2.5/src
+JANSSON_INCLUDES= -I$(top_builddir)/compat/jansson-2.5/src -I$(top_srcdir)/compat/jansson-2.5/src
 
 if WANT_USBUTILS
-USBUTILS_INCLUDES = -I$(top_srcdir)/compat/libusb-1.0/libusb
+USBUTILS_INCLUDES = -I$(top_builddir)/compat/libusb-1.0/libusb -I$(top_srcdir)/compat/libusb-1.0/libusb
 else
 USBUTILS_INCLUDES =
 endif
@@ -72,6 +72,10 @@ if HAS_AVALON
 cgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
+if HAS_KNC
+cgminer_SOURCES += driver-knc-spi-fpga.c
+endif
+
 if HAS_BFLSC
 cgminer_SOURCES += driver-bflsc.c driver-bflsc.h
 endif
@@ -86,10 +90,6 @@ endif
 
 if HAS_BITFURY
 cgminer_SOURCES += driver-bitfury.c driver-bitfury.h
-endif
-
-if HAS_ICARUS
-cgminer_SOURCES += driver-icarus.c
 endif
 
 if HAS_ICARUS

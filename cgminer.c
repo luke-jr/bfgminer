@@ -1598,6 +1598,9 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	printf("%s\nBuilt with "
+#ifdef USE_KNC
+		"KnC "
+#endif
 #ifdef USE_AVALON
 		"avalon "
 #endif
@@ -5117,7 +5120,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
-	global_hashrate = roundl(total_rolling) * 1000000;
+	global_hashrate = llround(total_rolling) * 1000000;
 
 	timersub(&total_tv_end, &total_tv_start, &total_diff);
 	total_secs = (double)total_diff.tv_sec +

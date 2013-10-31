@@ -223,8 +223,12 @@ static inline int fsync (int fd)
 #define semtimedop(SEM, SOPS, VAL, TIMEOUT) semop(SEM, SOPS, VAL)
 #endif
 
+#ifndef MIN
 #define MIN(x, y)	((x) > (y) ? (y) : (x))
+#endif
+#ifndef MAX
 #define MAX(x, y)	((x) > (y) ? (x) : (y))
+#endif
 
 /* Put avalon last to make it the last device it tries to detect to prevent it
  * trying to claim same chip but different devices. Adding a device here will
@@ -240,6 +244,7 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(bitfury) \
 	DRIVER_ADD_COMMAND(hashfast) \
 	DRIVER_ADD_COMMAND(klondike) \
+	DRIVER_ADD_COMMAND(knc) \
 	DRIVER_ADD_COMMAND(avalon)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
