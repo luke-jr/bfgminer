@@ -2045,6 +2045,40 @@ static bool socks4_negotiate(struct pool *pool, int sockd, bool socks4a)
 	return true;
 }
 
+static void noblock_socket(SOCKETTYPE fd)
+{
+#ifndef WIN32
+	int flags = fcntl(fd, F_GETFL, 0);
+
+	fcntl(fd, F_SETFL, O_NONBLOCK | flags);
+#else
+	u_long flags = 1;
+
+	ioctlsocket(fd, FIONBIO, &flags);
+#endif
+}
+
+static void block_socket(SOCKETTYPE fd)
+{
+#ifndef WIN32
+	int flags = fcntl(fd, F_GETFL, 0);
+
+	fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+#else
+	u_long flags = 0;
+
+	ioctlsocket(fd, FIONBIO, &flags);
+#endif
+}
+
+static bool sock_connecting(void)
+{
+#ifndef WIN32
+	return errno == EINPROGRESS;
+#else
+	return WSAGetLastError() == WSAEWOULDBLOCK;
+#endif
+}
 static bool setup_stratum_socket(struct pool *pool)
 {
 	struct addrinfo servinfobase, *servinfo, *hints, *p;
@@ -2096,11 +2130,41 @@ static bool setup_stratum_socket(struct pool *pool)
 			continue;
 		}
 
+		/* Iterate non blocking over entries returned by getaddrinfo
+		 * to cope with round robin DNS entries, finding the first one
+		 * we can connect to quickly. */
+		noblock_socket(sockd);
 		if (connect(sockd, p->ai_addr, p->ai_addrlen) == -1) {
+			struct timeval tv_timeout = {1, 0};
+			int selret;
+			fd_set rw;
+
+			if (!sock_connecting()) {
+				CLOSESOCKET(sockd);
+				applog(LOG_DEBUG, "Failed sock connect");
+				continue;
+			}
+			FD_ZERO(&rw);
+			FD_SET(sockd, &rw);
+			selret = select(sockd + 1, NULL, &rw, NULL, &tv_timeout);
+			if  (selret > 0 && FD_ISSET(sockd, &rw)) {
+				socklen_t len;
+				int err, n;
+
+				len = sizeof(err);
+				n = getsockopt(sockd, SOL_SOCKET, SO_ERROR, (void *)&err, &len);
+				if (!n && !err) {
+					applog(LOG_DEBUG, "Succeeded delayed connect");
+					block_socket(sockd);
+					break;
+				}
+			}
 			CLOSESOCKET(sockd);
-			applog(LOG_DEBUG, "Failed connect");
+			applog(LOG_DEBUG, "Select timeout/failed connect");
 			continue;
 		}
+		applog(LOG_WARNING, "Succeeded immediate connect");
+		block_socket(sockd);
 
 		break;
 	}
