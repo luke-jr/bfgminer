@@ -5161,7 +5161,7 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 	int intdiff;
 
 	hash32 = (uint32_t *)(work->hash);
-	intdiff = floor(work->work_difficulty);
+	intdiff = round(work->work_difficulty);
 	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
 	snprintf(hashshow, sizeof(hashshow),
 		"%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
