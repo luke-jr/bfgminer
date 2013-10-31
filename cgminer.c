@@ -6126,7 +6126,7 @@ void submit_tested_work(struct thr_info *thr, struct work *work)
 	update_work_stats(thr, work);
 
 	if (!fulltest(work->hash2, work->target)) {
-		applog(LOG_INFO, "Share below target");
+		applog(LOG_INFO, "Share above target");
 		return;
 	}
 	work_out = copy_work(work);
