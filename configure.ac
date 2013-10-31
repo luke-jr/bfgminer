@@ -574,9 +574,9 @@ else
 fi
 
 if test "x$knc" = xyes; then
-	echo "  KnC.miners...........: Enabled"
+	echo "  KnC.ASICs............: Enabled"
 else
-	echo "  KnC.miners...........: Disabled"
+	echo "  KnC.ASICs............: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then
