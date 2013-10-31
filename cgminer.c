@@ -6184,7 +6184,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 	ret = true;
 	update_work_stats(thr, work);
 	if (!fulltest(work->hash2, work->target)) {
-		applog(LOG_INFO, "Share below target");
+		applog(LOG_INFO, "Share above target");
 		goto  out;
 	}
 	submit_work_async(work);
