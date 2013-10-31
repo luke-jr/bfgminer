@@ -3943,9 +3943,12 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	return rc;
 }
 	
+static void flush_queue(struct cgpu_info *cgpu);
+
 static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
+	struct cgpu_info *cgpu;
 	int i;
 
 	/* Artificially set the lagging flag to avoid pool not providing work
@@ -3956,8 +3959,12 @@ static void restart_threads(void)
 	discard_stale();
 
 	rd_lock(&mining_thr_lock);
-	for (i = 0; i < mining_threads; i++)
+	for (i = 0; i < mining_threads; i++) {
+		cgpu = mining_thr[i]->cgpu;
 		mining_thr[i]->work_restart = true;
+		flush_queue(cgpu);
+		cgpu->drv->flush_work(cgpu);
+	}
 	rd_unlock(&mining_thr_lock);
 
 	mutex_lock(&restart_lock);
@@ -6557,10 +6564,7 @@ void hash_queued_work(struct thr_info *mythr)
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
 
-		if (unlikely(mythr->work_restart)) {
-			flush_queue(cgpu);
-			drv->flush_work(cgpu);
-		} else if (mythr->work_update)
+		if (mythr->work_update)
 			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
@@ -6607,9 +6611,7 @@ void hash_driver_work(struct thr_info *mythr)
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(mythr, thr_id, drv);
 
-		if (unlikely(mythr->work_restart))
-			drv->flush_work(cgpu);
-		else if (mythr->work_update)
+		if (mythr->work_update)
 			drv->update_work(cgpu);
 	}
 	cgpu->deven = DEV_DISABLED;
