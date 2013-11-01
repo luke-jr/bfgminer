@@ -5912,23 +5912,52 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha256(hash1, 32, hash);
 }
 
+/* truediffone == 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+ * Generate a 256 bit binary LE target by cutting up diff into 64 bit sized
+ * portions. */
+static double truediffone = 26959535291011309493156476344723991336010898738574164086137773096960.0;
+static double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
+static double bits128 = 340282366920938463463374607431768211456.0;
+static double bits64 = 18446744073709551616.0;
+
 void set_target(unsigned char *dest_target, double diff)
 {
-	unsigned char target[32], rtarget[32];
+	unsigned char target[32];
 	uint64_t *data64, h64;
-	double d64;
+	double d64, dcut64;
 
+	d64 = truediffone;
 	if (opt_scrypt)
-		d64 = 0xFFFF00000000ull;
-	else
-		d64 = 0xFFFF0000ull;
+		d64 *= (double)65536;
 	d64 /= diff;
-	h64 = d64;
 
-	memset(rtarget, 0xFF, 32);
-	data64 = (uint64_t *)rtarget;
-	*data64 = htobe64(h64);
-	swab256(target, rtarget);
+	dcut64 = d64 / bits192;
+	h64 = dcut64;
+	data64 = (uint64_t *)(target + 24);
+	*data64 = htole64(h64);
+	dcut64 = h64;
+	dcut64 *= bits192;
+	d64 -= dcut64;
+
+	dcut64 = d64 / bits128;
+	h64 = dcut64;
+	data64 = (uint64_t *)(target + 16);
+	*data64 = htole64(h64);
+	dcut64 = h64;
+	dcut64 *= bits128;
+	d64 -= dcut64;
+
+	dcut64 = d64 / bits64;
+	h64 = dcut64;
+	data64 = (uint64_t *)(target + 8);
+	*data64 = htole64(h64);
+	dcut64 = h64;
+	dcut64 *= bits64;
+	d64 -= dcut64;
+
+	h64 = d64;
+	data64 = (uint64_t *)(target);
+	*data64 = htole64(h64);
 
 	if (opt_debug) {
 		char *htarget = bin2hex(target, 32);
