@@ -168,6 +168,7 @@ enum bfg_strerror_type {
 	BST_ERRNO,
 	BST_SOCKET,
 	BST_LIBUSB,
+	BST_SYSTEM,
 };
 extern const char *bfg_strerror(int, enum bfg_strerror_type);
 

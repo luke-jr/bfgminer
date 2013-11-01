@@ -2569,9 +2569,10 @@ const char *bfg_strerror(int e, enum bfg_strerror_type type)
 #endif
 			break;
 		case BST_SOCKET:
+		case BST_SYSTEM:
 		{
 #ifdef WIN32
-			// Windows has a different namespace for socket errors
+			// Windows has a different namespace for system and socket errors
 			LPSTR *msg = &bfgtls->bfg_strerror_socketresult;
 			if (*msg)
 				LocalFree(*msg);
