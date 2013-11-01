@@ -1755,7 +1755,7 @@ void free_work(struct work *work)
 }
 
 static void gen_hash(unsigned char *data, unsigned char *hash, int len);
-static void calc_diff(struct work *work, int known);
+static void calc_diff(struct work *work, double known);
 char *workpadding = "000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000";
 
 #ifdef HAVE_LIBCURL
@@ -3067,40 +3067,46 @@ out:
 	return pool;
 }
 
-static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
-static const uint64_t diffone = 0xFFFF000000000000ull;
+/* truediffone == 0x00000000FFFF0000000000000000000000000000000000000000000000000000
+ * Generate a 256 bit binary LE target by cutting up diff into 64 bit sized
+ * portions or vice versa. */
+static const double truediffone = 26959535291011309493156476344723991336010898738574164086137773096960.0;
+static const double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
+static const double bits128 = 340282366920938463463374607431768211456.0;
+static const double bits64 = 18446744073709551616.0;
 
 /*
- * Calculate the work share difficulty
+ * Calculate the work->work_difficulty based on the work->target
  */
-static void calc_diff(struct work *work, int known)
+static void calc_diff(struct work *work, double known)
 {
 	struct cgminer_pool_stats *pool_stats = &(work->pool->cgminer_pool_stats);
 	double difficulty;
 	int intdiff;
 
-	if (opt_scrypt) {
-		uint64_t *data64, d64;
-		char rtarget[32];
-
-		swab256(rtarget, work->target);
-		data64 = (uint64_t *)(rtarget + 2);
-		d64 = be64toh(*data64);
-		if (unlikely(!d64))
-			d64 = 1;
-		work->work_difficulty = diffone / d64;
-	} else if (!known) {
-		double targ = 0;
-		int i;
-
-		for (i = 31; i >= 0; i--) {
-			targ *= 256;
-			targ += work->target[i];
-		}
-
-		work->work_difficulty = DIFFEXACTONE / (targ ? : DIFFEXACTONE);
-	} else
+	if (known)
 		work->work_difficulty = known;
+	else {
+		double d64, dcut64;
+		uint64_t *data64;
+
+		d64 = truediffone;
+		if (opt_scrypt)
+			d64 *= (double)65536;
+
+		data64 = (uint64_t *)(work->target + 24);
+		dcut64 = le64toh(*data64);
+
+		data64 = (uint64_t *)(work->target + 16);
+		dcut64 += le64toh(*data64) * bits64;
+
+		data64 = (uint64_t *)(work->target + 8);
+		dcut64 += le64toh(*data64) * bits128;
+
+		data64 = (uint64_t *)(work->target);
+		dcut64 += le64toh(*data64) * bits192;
+		work->work_difficulty = d64 / dcut64;
+	}
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
@@ -3709,6 +3715,8 @@ static bool stale_work(struct work *work, bool share)
 
 	return false;
 }
+
+static const uint64_t diffone = 0xFFFF000000000000ull;
 
 static uint64_t share_diff(const struct work *work)
 {
@@ -5911,14 +5919,6 @@ static void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha256(data, len, hash1);
 	sha256(hash1, 32, hash);
 }
-
-/* truediffone == 0x00000000FFFF0000000000000000000000000000000000000000000000000000
- * Generate a 256 bit binary LE target by cutting up diff into 64 bit sized
- * portions. */
-static double truediffone = 26959535291011309493156476344723991336010898738574164086137773096960.0;
-static double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
-static double bits128 = 340282366920938463463374607431768211456.0;
-static double bits64 = 18446744073709551616.0;
 
 void set_target(unsigned char *dest_target, double diff)
 {
