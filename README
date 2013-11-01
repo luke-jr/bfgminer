@@ -141,6 +141,7 @@ BFGMiner specific configuration options:
 	--enable-metabank       Compile support for Metabank (default disabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
+	--enable-knc            Compile support for KnC (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-x6500         Compile support for X6500 (default enabled)
 	--disable-ztex          Compile support for ZTEX (default if libusb)
