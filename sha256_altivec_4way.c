@@ -10,10 +10,13 @@
 //
 
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_ALTIVEC_4WAY
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 

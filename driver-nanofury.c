@@ -11,6 +11,7 @@
 #include "config.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "deviceapi.h"
 #include "driver-bitfury.h"

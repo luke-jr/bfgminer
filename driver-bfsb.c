@@ -24,6 +24,8 @@
 
 #include "config.h"
 
+#include <stdbool.h>
+
 #include "deviceapi.h"
 #include "libbitfury.h"
 #include "spidevc.h"

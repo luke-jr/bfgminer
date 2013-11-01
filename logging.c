@@ -11,6 +11,7 @@
 
 #include "config.h"
 
+#include <stdbool.h>
 #include <unistd.h>
 
 #include "compat.h"

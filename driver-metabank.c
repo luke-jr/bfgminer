@@ -24,6 +24,8 @@
 
 #include "config.h"
 
+#include <stdbool.h>
+
 #include "deviceapi.h"
 #include "driver-bitfury.h"
 #include "libbitfury.h"

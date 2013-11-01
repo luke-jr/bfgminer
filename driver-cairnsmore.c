@@ -7,6 +7,11 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "compat.h"
 #include "dynclock.h"
 #include "fpgautils.h"

@@ -1,6 +1,8 @@
 #ifndef __DEVICE_GPU_H__
 #define __DEVICE_GPU_H__
 
+#include <stdbool.h>
+
 #include "miner.h"
 
 

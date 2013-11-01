@@ -2,6 +2,7 @@
 #define BFG_MCP2210_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 enum mcp2210_gpio_direction {
 	MGD_OUTPUT,

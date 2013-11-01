@@ -19,6 +19,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
+
 #include "logging.h"
 
 #define hex_print(p) applog(LOG_DEBUG, "%s", p)

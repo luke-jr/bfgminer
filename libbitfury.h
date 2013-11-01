@@ -1,6 +1,9 @@
 #ifndef __LIBBITFURY_H__
 #define __LIBBITFURY_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "miner.h"
 #include "spidevc.h"
 

@@ -27,6 +27,8 @@
 #include <limits.h>
 #include "miner.h"
 #include <unistd.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <sha2.h>
 
 #include "deviceapi.h"

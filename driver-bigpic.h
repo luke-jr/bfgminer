@@ -1,6 +1,8 @@
 #ifndef BFG_DRIVER_BIGPIC_H
 #define BFG_DRIVER_BIGPIC_H
 
+#include <stdint.h>
+
 #define BPM_BAUD	115200
 
 struct bigpic_identity

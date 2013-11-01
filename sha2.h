@@ -33,6 +33,9 @@
  */
 
 #include "config.h"
+
+#include <stdint.h>
+
 #include "miner.h"
 
 #ifndef SHA2_H

@@ -16,6 +16,8 @@
 
 #include <limits.h>
 #include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <sys/time.h>
 
 #include <libusb.h>

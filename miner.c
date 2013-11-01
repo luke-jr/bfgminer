@@ -16,6 +16,7 @@
 #ifdef USE_UNICODE
 #define PDC_WIDE
 #endif
+// Must be before stdbool, since pdcurses typedefs bool :/
 #include <curses.h>
 #endif
 

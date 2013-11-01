@@ -13,6 +13,10 @@
  */
 
 #include "config.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "miner.h"
 #include "fpgautils.h"
 #include "logging.h"

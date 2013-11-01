@@ -5,10 +5,13 @@
 
 // tcatm's 4-way 128-bit SSE2 SHA-256
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_SSE2_4WAY
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 
