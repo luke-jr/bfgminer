@@ -12,6 +12,7 @@
 #include "config.h"
 #ifdef HAVE_OPENCL
 
+#include <stdint.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <pthread.h>

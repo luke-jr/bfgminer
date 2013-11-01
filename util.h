@@ -14,6 +14,7 @@
 #define __UTIL_H__
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/time.h>
 

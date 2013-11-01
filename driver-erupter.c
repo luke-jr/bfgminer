@@ -9,6 +9,8 @@
 
 #include "config.h"
 
+#include <stdbool.h>
+
 #include "miner.h"
 #include "fpgautils.h"
 #include "icarus-common.h"

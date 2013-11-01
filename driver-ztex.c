@@ -16,6 +16,9 @@
 
 #include "config.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "miner.h"
 #include <unistd.h>
 #include <sha2.h>

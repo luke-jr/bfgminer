@@ -1,6 +1,9 @@
 #ifndef __LIBZTEX_H__
 #define __LIBZTEX_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include <libusb.h>
 
 #include "dynclock.h"
