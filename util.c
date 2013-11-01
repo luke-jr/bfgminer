@@ -722,6 +722,20 @@ badchar:
 	return likely(!hexstr[0]);
 }
 
+void ucs2tochar(char * const out, const uint16_t * const in, const size_t sz)
+{
+	for (int i = 0; i < sz; ++i)
+		out[i] = in[i];
+}
+
+char *ucs2tochar_dup(uint16_t * const in, const size_t sz)
+{
+	char *out = malloc(sz + 1);
+	ucs2tochar(out, in, sz);
+	out[sz] = '\0';
+	return out;
+}
+
 void hash_data(unsigned char *out_hash, const unsigned char *data)
 {
 	unsigned char blkheader[80];

@@ -112,6 +112,9 @@ extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime
 
 extern char *absolute_uri(char *uri, const char *ref);  // ref must be a root URI
 
+extern void ucs2tochar(char *out, const uint16_t *in, size_t sz);
+extern char *ucs2tochar_dup(uint16_t *in, size_t sz);
+
 extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
 extern void hash_data(unsigned char *out_hash, const unsigned char *data);
 extern void real_block_target(unsigned char *target, const unsigned char *data);
