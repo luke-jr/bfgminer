@@ -5926,6 +5926,12 @@ void set_target(unsigned char *dest_target, double diff)
 	uint64_t *data64, h64;
 	double d64, dcut64;
 
+	if (unlikely(diff == 0.0)) {
+		/* This shouldn't happen but best we check to prevent a crash */
+		applog(LOG_ERR, "Diff zero passed to set_target");
+		diff = 1.0;
+	}
+
 	d64 = truediffone;
 	if (opt_scrypt)
 		d64 *= (double)65536;
