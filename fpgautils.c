@@ -46,10 +46,13 @@
 #endif
 #else  /* WIN32 */
 #include <windows.h>
-#include <setupapi.h>
 
-#include <ddk/usbioctl.h>
-#include <ddk/usbiodef.h>
+#ifdef HAVE_WIN_DDKUSB
+#include <setupapi.h>
+#include <usbioctl.h>
+#include <usbiodef.h>
+#endif
+
 #include <io.h>
 
 #include <utlist.h>
@@ -80,6 +83,8 @@ enum {
 
 #include "logging.h"
 #include "miner.h"
+#include "util.h"
+
 #include "fpgautils.h"
 
 #define SEARCH_NEEDLES_BEGIN()  {  \
@@ -384,7 +389,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 #	define _serial_autodetect_sysfs(...)  (0)
 #endif
 
-#ifdef WIN32
+#ifdef HAVE_WIN_DDKUSB
 
 static const GUID WIN_GUID_DEVINTERFACE_USB_HOST_CONTROLLER = { 0x3ABF6F2D, 0x71C4, 0x462A, {0x8A, 0x92, 0x1E, 0x68, 0x61, 0xE6, 0xAF, 0x27} };
 
@@ -413,7 +418,7 @@ char *windows_usb_get_port_path(HANDLE hubh, const int portno)
 	if (!(DeviceIoControl(hubh, IOCTL_USB_GET_NODE_CONNECTION_NAME, path, bufsz, path, bufsz, &rsz, NULL) && rsz >= sizeof(*path)))
 		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return ucs2to8bit_dup(path->NodeName, path->ActualLength);
+	return ucs2tochar_dup(path->NodeName, path->ActualLength);
 }
 
 static
@@ -446,7 +451,7 @@ char *windows_usb_get_string(HANDLE hubh, const int portno, const uint8_t descid
 	if (descsz < 2 || desc->bDescriptorType != USB_STRING_DESCRIPTOR_TYPE || desc->bLength > descsz - sizeof(USB_DESCRIPTOR_REQUEST) || desc->bLength % 2)
 		applogfailr(NULL, LOG_ERR, "sanity check");
 	
-	return ucs2to8bit_dup(desc->bString, desc->bLength);
+	return ucs2tochar_dup(desc->bString, desc->bLength);
 }
 
 static void _serial_autodetect_windows__hub(detectone_func_t, va_list, int *, const char *);
@@ -577,7 +582,7 @@ char *windows_usb_get_root_hub_path(HANDLE hcntlrh)
 	if (!(DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, NULL, 0, hubpath, bufsz, &rsz, NULL) && rsz >= sizeof(*hubpath)))
 		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return ucs2to8bit_dup(hubpath->RootHubName, hubpath->ActualLength);
+	return ucs2tochar_dup(hubpath->RootHubName, hubpath->ActualLength);
 }
 
 static
@@ -621,7 +626,10 @@ int _serial_autodetect_windows(detectone_func_t detectone, va_list needles)
 	return found;
 }
 
+#endif
 
+
+#ifdef WIN32
 #define LOAD_SYM(sym)  do { \
 	if (!(sym = dlsym(dll, #sym))) {  \
 		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI autodetect");  \
@@ -729,10 +737,10 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 		_serial_autodetect_udev     (detectone, needles) ?:
 		_serial_autodetect_sysfs    (detectone, needles) ?:
 		_serial_autodetect_devserial(detectone, needles) ?:
-#ifdef WIN32
+#ifdef HAVE_WIN_DDKUSB
 		_serial_autodetect_windows  (detectone, needles) ?:
-		_serial_autodetect_ftdi     (detectone, needles) ?:
 #endif
+		_serial_autodetect_ftdi     (detectone, needles) ?:
 		0);
 	va_end(needles);
 	return rv;

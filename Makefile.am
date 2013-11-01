@@ -42,7 +42,6 @@ bin_PROGRAMS	= bfgminer
 
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
-		  @AUTOSCAN_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ @RT_LIBS@ \
 		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
@@ -53,6 +52,9 @@ bfgminer_CPPFLAGS += -DCGMINER_PREFIX='"$(pkgdatadir)"'
 bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
+
+bfgminer_CPPFLAGS += $(AUTOSCAN_CPPFLAGS)
+bfgminer_LDADD += $(AUTOSCAN_LIBS)
 
 bfgminer_LDADD += $(libblkmaker_LIBS)
 bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
