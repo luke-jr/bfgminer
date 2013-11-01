@@ -115,6 +115,8 @@ need_lowlevel=no
 have_cygwin=false
 have_win32=false
 have_macho=false
+AUTOSCAN_CPPFLAGS=""
+AUTOSCAN_LIBS=""
 DLOPEN_FLAGS="-ldl"
 WS2_LIBS=""
 MM_LIBS=""
@@ -714,6 +716,30 @@ if test x$need_fpgautils = xyes; then
 	
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h
+		
+		found_ddkusb=false
+		AC_CHECK_HEADER([usbiodef.h],[
+			found_ddkusb=true
+		],[
+			AC_CHECK_HEADER([ddk/usbiodef.h],[
+				found_ddkusb=true
+				AUTOSCAN_CPPFLAGS="-I"`echo '#include <ddk/usbiodef.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed -e 's/^.*[[:space:]:]\(\/[^[:space:]]*\)usbiodef\.h[[:space:]].*$/\1/' -e t -e d`
+			],[
+				true
+			],[
+				#include <windows.h>
+				#include <ddk/usbioctl.h>
+				AC_INCLUDES_DEFAULT
+			])
+		],[
+			#include <windows.h>
+			#include <usbioctl.h>
+			AC_INCLUDES_DEFAULT
+		])
+		if $found_ddkusb; then
+			AUTOSCAN_LIBS="-lsetupapi"
+			AC_DEFINE([HAVE_WIN_DDKUSB],[1],[Defined to 1 if Windows DDK USB headers are being used])
+		fi
 	else
 		AC_MSG_CHECKING([what baud rates your system supports])
 		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
@@ -890,6 +916,7 @@ AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
+AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
 AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
 
@@ -1221,6 +1248,8 @@ AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo130302"], [Filename for diablo ker
 AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt130511"], [Filename for scrypt kernel])
 
 
+AC_SUBST(AUTOSCAN_CPPFLAGS)
+AC_SUBST(AUTOSCAN_LIBS)
 AC_SUBST(PTHREAD_FLAGS)
 AC_SUBST(DLOPEN_FLAGS)
 AC_SUBST(PTHREAD_LIBS)
@@ -1293,8 +1322,8 @@ BFG_PRINT_LIST([Options...],[optlist])
 
 echo
 echo "Compilation............: make (or gmake)"
-echo "  CFLAGS...............: $CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
+echo "  CFLAGS...............: $CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
+echo "  LDFLAGS..............: $LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
 echo
 echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"

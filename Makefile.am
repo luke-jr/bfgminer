@@ -53,6 +53,9 @@ bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 
+bfgminer_CPPFLAGS += $(AUTOSCAN_CPPFLAGS)
+bfgminer_LDADD += $(AUTOSCAN_LIBS)
+
 bfgminer_LDADD += $(libblkmaker_LIBS)
 bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
 bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
