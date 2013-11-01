@@ -37,6 +37,8 @@
 
 #include <limits.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/types.h>

@@ -10,6 +10,9 @@
 
 #include "config.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "dynclock.h"
 #include "miner.h"
 

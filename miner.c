@@ -13,6 +13,7 @@
 #include "config.h"
 
 #ifdef HAVE_CURSES
+// Must be before stdbool, since pdcurses typedefs bool :/
 #include <curses.h>
 #endif
 

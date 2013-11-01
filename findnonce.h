@@ -1,5 +1,8 @@
 #ifndef __FINDNONCE_H__
 #define __FINDNONCE_H__
+
+#include <stdint.h>
+
 #include "miner.h"
 #include "config.h"
 

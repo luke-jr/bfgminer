@@ -13,6 +13,10 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <sys/time.h>
+
 #include <curl/curl.h>
 #include <jansson.h>
 

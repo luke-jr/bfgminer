@@ -9,8 +9,11 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

@@ -12,6 +12,8 @@
 #ifdef HAVE_OPENCL
 
 #include <signal.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

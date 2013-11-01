@@ -29,6 +29,10 @@
  *  http://csrc.nist.gov/publications/fips/fips180-2/fips180-2.pdf
  */
 
+#include "config.h"
+
+#include <stdint.h>
+
 #include "sha2.h"
 
 #include <string.h>

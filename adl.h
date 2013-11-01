@@ -1,6 +1,9 @@
 #ifndef __ADL_H__
 #define __ADL_H__
 #ifdef HAVE_ADL
+
+#include <stdbool.h>
+
 bool adl_active;
 bool opt_reorder;
 const int opt_targettemp;

@@ -1,6 +1,9 @@
 #ifndef SCRYPT_H
 #define SCRYPT_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "miner.h"
 
 #ifdef USE_SCRYPT

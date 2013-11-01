@@ -10,10 +10,13 @@
  *
  */
 
+#include "config.h"
+
 #include "driver-cpu.h"
 
 #ifdef WANT_X8664_SSE2
 
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 

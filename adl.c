@@ -17,8 +17,11 @@
 #include <math.h>
 
 #ifdef HAVE_CURSES
+// Must be before stdbool, since pdcurses typedefs bool :/
 #include <curses.h>
 #endif
+
+#include <stdbool.h>
 
 #include "miner.h"
 #include "ADL/adl_sdk.h"
