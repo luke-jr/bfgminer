@@ -1422,7 +1422,8 @@ extern void adl(void);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
-extern struct work *copy_work(const struct work *base_work);
+extern struct work *copy_work_noffset(const struct work *base_work, int noffset);
+#define copy_work(work_in) copy_work_noffset(work_in, 0)
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

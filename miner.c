@@ -5320,12 +5320,14 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations
- * for all dynamically allocated arrays within the struct */
-struct work *copy_work(const struct work *base_work)
+ * for all dynamically allocated arrays within the struct. noffset is used for
+ * when a driver has internally rolled the ntime, noffset is a relative value.
+ * The macro copy_work() calls this function with an noffset of 0. */
+struct work *copy_work_noffset(const struct work *base_work, int noffset)
 {
 	struct work *work = make_work();
 
-	_copy_work(work, base_work, 0);
+	_copy_work(work, base_work, noffset);
 
 	return work;
 }
