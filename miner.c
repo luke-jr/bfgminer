@@ -2133,7 +2133,7 @@ void have_block_height(uint32_t block_id, uint32_t blkheight)
 {
 	if (known_blkheight == blkheight)
 		return;
-	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, be32toh(block_id), blkheight);
+	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, (uint32_t)be32toh(block_id), blkheight);
 	cg_wlock(&ch_lock);
 	known_blkheight = blkheight;
 	known_blkheight_blkid = block_id;
