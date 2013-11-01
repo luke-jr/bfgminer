@@ -46,6 +46,10 @@
 #endif
 #else  /* WIN32 */
 #include <windows.h>
+#include <setupapi.h>
+
+#include <ddk/usbioctl.h>
+#include <ddk/usbiodef.h>
 #include <io.h>
 
 #include <utlist.h>
@@ -381,6 +385,243 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 #endif
 
 #ifdef WIN32
+
+static const GUID WIN_GUID_DEVINTERFACE_USB_HOST_CONTROLLER = { 0x3ABF6F2D, 0x71C4, 0x462A, {0x8A, 0x92, 0x1E, 0x68, 0x61, 0xE6, 0xAF, 0x27} };
+
+static
+char *windows_usb_get_port_path(HANDLE hubh, const int portno)
+{
+	size_t namesz;
+	ULONG rsz;
+	
+	{
+		USB_NODE_CONNECTION_NAME pathinfo = {
+			.ConnectionIndex = portno,
+		};
+		if (!(DeviceIoControl(hubh, IOCTL_USB_GET_NODE_CONNECTION_NAME, &pathinfo, sizeof(pathinfo), &pathinfo, sizeof(pathinfo), &rsz, NULL) && rsz >= sizeof(pathinfo)))
+			applogfailinfor(NULL, LOG_ERR, "ioctl (1)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+		namesz = pathinfo.ActualLength;
+	}
+	
+	const size_t bufsz = sizeof(USB_NODE_CONNECTION_NAME) + namesz;
+	uint8_t buf[bufsz];
+	USB_NODE_CONNECTION_NAME *path = (USB_NODE_CONNECTION_NAME *)buf;
+	*path = (USB_NODE_CONNECTION_NAME){
+		.ConnectionIndex = portno,
+	};
+	
+	if (!(DeviceIoControl(hubh, IOCTL_USB_GET_NODE_CONNECTION_NAME, path, bufsz, path, bufsz, &rsz, NULL) && rsz >= sizeof(*path)))
+		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	return ucs2to8bit_dup(path->NodeName, path->ActualLength);
+}
+
+static
+char *windows_usb_get_string(HANDLE hubh, const int portno, const uint8_t descid)
+{
+	if (!descid)
+		return NULL;
+	
+	const size_t descsz_max = sizeof(USB_STRING_DESCRIPTOR) + MAXIMUM_USB_STRING_LENGTH;
+	const size_t reqsz = sizeof(USB_DESCRIPTOR_REQUEST) + descsz_max;
+	uint8_t buf[reqsz];
+	
+	USB_DESCRIPTOR_REQUEST * const req = (USB_DESCRIPTOR_REQUEST *)buf;
+	USB_STRING_DESCRIPTOR * const desc = (USB_STRING_DESCRIPTOR *)&req[1];
+	*req = (USB_DESCRIPTOR_REQUEST){
+		.ConnectionIndex = portno,
+		.SetupPacket = {
+			.wValue = (USB_STRING_DESCRIPTOR_TYPE << 8) | descid,
+			.wIndex = 0,
+			.wLength = descsz_max,
+		},
+	};
+	// Need to explicitly zero the output memory
+	memset(desc, '\0', descsz_max);
+	
+	ULONG descsz;
+	if (!DeviceIoControl(hubh, IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION, req, reqsz, req, reqsz, &descsz, NULL))
+		applogfailinfor(NULL, LOG_DEBUG, "ioctl", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	if (descsz < 2 || desc->bDescriptorType != USB_STRING_DESCRIPTOR_TYPE || desc->bLength > descsz - sizeof(USB_DESCRIPTOR_REQUEST) || desc->bLength % 2)
+		applogfailr(NULL, LOG_ERR, "sanity check");
+	
+	return ucs2to8bit_dup(desc->bString, desc->bLength);
+}
+
+static void _serial_autodetect_windows__hub(detectone_func_t, va_list, int *, const char *);
+
+static
+void _serial_autodetect_windows__hubport(detectone_func_t detectone, va_list needles, int * const foundp, HANDLE hubh, const int portno)
+{
+	const size_t conninfosz = sizeof(USB_NODE_CONNECTION_INFORMATION) + (sizeof(USB_PIPE_INFO) * 30);
+	uint8_t buf[conninfosz];
+	USB_NODE_CONNECTION_INFORMATION * const conninfo = (USB_NODE_CONNECTION_INFORMATION *)buf;
+	
+	conninfo->ConnectionIndex = portno;
+	
+	ULONG respsz;
+	if (!DeviceIoControl(hubh, IOCTL_USB_GET_NODE_CONNECTION_INFORMATION, conninfo, conninfosz, conninfo, conninfosz, &respsz, NULL))
+		applogfailinfor(, LOG_ERR, "ioctl", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	if (conninfo->ConnectionStatus != DeviceConnected)
+		return;
+	
+	if (conninfo->DeviceIsHub)
+	{
+		const char * const hubpath = windows_usb_get_port_path(hubh, portno);
+		if (hubpath)
+			_serial_autodetect_windows__hub(detectone, needles, foundp, hubpath);
+		return;
+	}
+	
+	const USB_DEVICE_DESCRIPTOR * const devdesc = &conninfo->DeviceDescriptor;
+	char * const product = windows_usb_get_string(hubh, portno, devdesc->iProduct);
+	if (!product)
+		return;
+	char *serial = NULL;
+	if (!search_needles(product, needles))
+	{
+out:
+		free(product);
+		free(serial);
+		return;
+	}
+	
+	serial = windows_usb_get_string(hubh, portno, devdesc->iSerialNumber);
+	if (!serial)
+		goto out;
+	const size_t slen = strlen(serial);
+	char subkey[52 + slen + 18 + 1];
+	sprintf(subkey, "SYSTEM\\CurrentControlSet\\Enum\\USB\\VID_%04x&PID_%04x\\%s\\Device Parameters",
+	        (unsigned)devdesc->idVendor, (unsigned)devdesc->idProduct, serial);
+	HKEY hkey;
+	int e;
+	if (ERROR_SUCCESS != (e = RegOpenKey(HKEY_LOCAL_MACHINE, subkey, &hkey)))
+	{
+		applogfailinfo(LOG_ERR, "open Device Parameters registry key", "%s", bfg_strerror(e, BST_SYSTEM));
+		goto out;
+	}
+	char devpath[0x10] = "\\\\.\\";
+	DWORD type, sz = sizeof(devpath) - 4;
+	if (ERROR_SUCCESS != (e = RegQueryValueExA(hkey, "PortName", NULL, &type, (LPBYTE)&devpath[4], &sz)))
+	{
+		applogfailinfo(LOG_ERR, "get PortName registry key value", "%s", bfg_strerror(e, BST_SYSTEM));
+		RegCloseKey(hkey);
+		goto out;
+	}
+	RegCloseKey(hkey);
+	if (type != REG_SZ)
+	{
+		applogfailinfor(, LOG_ERR, "get expected type for PortName registry key value", "%ld", (long)type);
+		goto out;
+	}
+	
+	char * const manuf = windows_usb_get_string(hubh, portno, devdesc->iManufacturer);
+	
+	detectone_meta_info = (struct detectone_meta_info_t){
+		.manufacturer = manuf,
+		.product = product,
+		.serial = serial,
+	};
+	
+	if (detectone(devpath))
+		++*foundp;
+	
+	free(manuf);
+	goto out;
+}
+
+static
+void _serial_autodetect_windows__hub(detectone_func_t detectone, va_list needles, int * const foundp, const char * const hubpath)
+{
+	HANDLE hubh;
+	USB_NODE_INFORMATION nodeinfo;
+	
+	{
+		char deviceName[4 + strlen(hubpath) + 1];
+		sprintf(deviceName, "\\\\.\\%s", hubpath);
+		hubh = CreateFile(deviceName, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+		if (hubh == INVALID_HANDLE_VALUE)
+			applogr(, LOG_ERR, "Error opening USB hub device %s for autodetect: %s", deviceName, bfg_strerror(GetLastError(), BST_SYSTEM));
+	}
+	
+	ULONG nBytes;
+	if (!DeviceIoControl(hubh, IOCTL_USB_GET_NODE_INFORMATION, &nodeinfo, sizeof(nodeinfo), &nodeinfo, sizeof(nodeinfo), &nBytes, NULL))
+		applogfailinfor(, LOG_ERR, "ioctl", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	const int portcount = nodeinfo.u.HubInformation.HubDescriptor.bNumberOfPorts;
+	for (int i = 1; i <= portcount; ++i)
+		_serial_autodetect_windows__hubport(detectone, needles, foundp, hubh, i);
+	
+	CloseHandle(hubh);
+}
+
+static
+char *windows_usb_get_root_hub_path(HANDLE hcntlrh)
+{
+	size_t namesz;
+	ULONG rsz;
+	
+	{
+		USB_ROOT_HUB_NAME pathinfo;
+		if (!(DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, 0, 0, &pathinfo, sizeof(pathinfo), &rsz, NULL) && rsz >= sizeof(pathinfo)))
+			applogfailinfor(NULL, LOG_ERR, "ioctl (1)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+		namesz = pathinfo.ActualLength;
+	}
+	
+	const size_t bufsz = sizeof(USB_ROOT_HUB_NAME) + namesz;
+	uint8_t buf[bufsz];
+	USB_ROOT_HUB_NAME *hubpath = (USB_ROOT_HUB_NAME *)buf;
+	
+	if (!(DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, NULL, 0, hubpath, bufsz, &rsz, NULL) && rsz >= sizeof(*hubpath)))
+		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	return ucs2to8bit_dup(hubpath->RootHubName, hubpath->ActualLength);
+}
+
+static
+void _serial_autodetect_windows__hcntlr(detectone_func_t detectone, va_list needles, int * const foundp, HDEVINFO *devinfo, const int i)
+{
+	SP_DEVICE_INTERFACE_DATA devifacedata = {
+		.cbSize = sizeof(devifacedata),
+	};
+	if (!SetupDiEnumDeviceInterfaces(*devinfo, 0, (LPGUID)&WIN_GUID_DEVINTERFACE_USB_HOST_CONTROLLER, i, &devifacedata))
+		applogfailinfor(, LOG_ERR, "SetupDiEnumDeviceInterfaces", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	DWORD detailsz;
+	if (!(!SetupDiGetDeviceInterfaceDetail(*devinfo, &devifacedata, NULL, 0, &detailsz, NULL) && GetLastError() == ERROR_INSUFFICIENT_BUFFER))
+		applogfailinfor(, LOG_ERR, "SetupDiEnumDeviceInterfaceDetail (1)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	PSP_DEVICE_INTERFACE_DETAIL_DATA detail = alloca(detailsz);
+	detail->cbSize = sizeof(*detail);
+	if (!SetupDiGetDeviceInterfaceDetail(*devinfo, &devifacedata, detail, detailsz, &detailsz, NULL))
+		applogfailinfor(, LOG_ERR, "SetupDiEnumDeviceInterfaceDetail (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	HANDLE hcntlrh = CreateFile(detail->DevicePath, GENERIC_WRITE, FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+	if (hcntlrh == INVALID_HANDLE_VALUE)
+		applogfailinfor(, LOG_DEBUG, "open USB host controller device", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	char * const hubpath = windows_usb_get_root_hub_path(hcntlrh);
+	CloseHandle(hcntlrh);
+	_serial_autodetect_windows__hub(detectone, needles, foundp, hubpath);
+	free(hubpath);
+}
+
+static
+int _serial_autodetect_windows(detectone_func_t detectone, va_list needles)
+{
+	int found = 0;
+	HDEVINFO devinfo;
+	devinfo = SetupDiGetClassDevs(&WIN_GUID_DEVINTERFACE_USB_HOST_CONTROLLER, NULL, NULL, (DIGCF_PRESENT | DIGCF_DEVICEINTERFACE));
+	SP_DEVINFO_DATA devinfodata = {
+		.cbSize = sizeof(devinfodata),
+	};
+	
+	for (int i = 0; SetupDiEnumDeviceInfo(devinfo, i, &devinfodata); ++i)
+		_serial_autodetect_windows__hcntlr(detectone, needles, &found, &devinfo, i);
+	SetupDiDestroyDeviceInfoList(devinfo);
+	
+	return found;
+}
+
+
 #define LOAD_SYM(sym)  do { \
 	if (!(sym = dlsym(dll, #sym))) {  \
 		applog(LOG_DEBUG, "Failed to load " #sym ", not using FTDI autodetect");  \
@@ -488,7 +729,10 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 		_serial_autodetect_udev     (detectone, needles) ?:
 		_serial_autodetect_sysfs    (detectone, needles) ?:
 		_serial_autodetect_devserial(detectone, needles) ?:
+#ifdef WIN32
+		_serial_autodetect_windows  (detectone, needles) ?:
 		_serial_autodetect_ftdi     (detectone, needles) ?:
+#endif
 		0);
 	va_end(needles);
 	return rv;
