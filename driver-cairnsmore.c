@@ -102,7 +102,7 @@ bool cairnsmore_supports_dynclock(int fd)
 			// Hashed the command, so it's not supported
 			return false;
 		default:
-			applog(LOG_WARNING, "Unexpected nonce from dynclock probe: %08x", be32toh(nonce));
+			applog(LOG_WARNING, "Unexpected nonce from dynclock probe: %08x", (uint32_t)be32toh(nonce));
 			return false;
 		case 0:
 			return true;
