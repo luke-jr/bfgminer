@@ -13,6 +13,7 @@
 #include <winsock2.h>
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifndef WIN32
