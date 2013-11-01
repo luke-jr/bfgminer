@@ -533,6 +533,7 @@ out:
 	if (detectone(devpath))
 		++*foundp;
 	
+	clear_detectone_meta_info();
 	free(manuf);
 	goto out;
 }
