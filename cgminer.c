@@ -2727,8 +2727,8 @@ static void show_hash(struct work *work, char *hashshow)
 	h32 = be32toh(*hash32);
 	intdiff = round(work->work_difficulty);
 	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
-	snprintf(hashshow, sizeof(hashshow), "%08lx Diff %s/%d%s", h32, diffdisp,
-		 intdiff, work->block? " BLOCK!" : "");
+	snprintf(hashshow, 64, "%08lx Diff %s/%d%s", h32, diffdisp, intdiff,
+		 work->block? " BLOCK!" : "");
 }
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
