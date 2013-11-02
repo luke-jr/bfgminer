@@ -2710,6 +2710,27 @@ static void print_status(int thr_id)
 		text_print_status(thr_id);
 }
 
+static void show_hash(struct work *work, char *hashshow)
+{
+	unsigned char rhash[32];
+	char diffdisp[16];
+	unsigned long h32;
+	uint32_t *hash32;
+	int intdiff, ofs;
+
+	swab256(rhash, work->hash);
+	for (ofs = 0; ofs <= 28; ofs ++) {
+		if (rhash[ofs])
+			break;
+	}
+	hash32 = (uint32_t *)(rhash + ofs);
+	h32 = be32toh(*hash32);
+	intdiff = round(work->work_difficulty);
+	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
+	snprintf(hashshow, sizeof(hashshow), "%08lx Diff %s/%d%s", h32, diffdisp,
+		 intdiff, work->block? " BLOCK!" : "");
+}
+
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 {
 	char *hexstr = NULL;
@@ -2803,20 +2824,7 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 	err = json_object_get(val, "error");
 
 	if (!QUIET) {
-		int intdiff = round(work->work_difficulty);
-		char diffdisp[16], *outhash;
-		unsigned char rhash[32];
-
-		swab256(rhash, work->hash);
-		if (opt_scrypt)
-			outhash = bin2hex(rhash + 2, 4);
-		else
-			outhash = bin2hex(rhash + 4, 4);
-		suffix_string(work->share_diff, diffdisp, sizeof(diffdisp), 0);
-		snprintf(hashshow, sizeof(hashshow), "%s Diff %s/%d%s",
-				outhash, diffdisp, intdiff,
-				work->block? " BLOCK!" : "");
-		free(outhash);
+		show_hash(work, hashshow);
 
 		if (opt_worktime) {
 			char workclone[20];
@@ -5183,16 +5191,8 @@ static void stratum_share_result(json_t *val, json_t *res_val, json_t *err_val,
 {
 	struct work *work = sshare->work;
 	char hashshow[64];
-	uint32_t *hash32;
-	char diffdisp[16];
-	int intdiff;
 
-	hash32 = (uint32_t *)(work->hash);
-	intdiff = round(work->work_difficulty);
-	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
-	snprintf(hashshow, sizeof(hashshow),
-		"%08lx Diff %s/%d%s", (unsigned long)htole32(hash32[6]), diffdisp, intdiff,
-		work->block? " BLOCK!" : "");
+	show_hash(work, hashshow);
 	share_result(val, res_val, err_val, work, hashshow, false, "");
 }
 
