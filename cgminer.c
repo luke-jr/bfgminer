@@ -3114,6 +3114,8 @@ static void calc_diff(struct work *work, double known)
 		if (opt_scrypt)
 			d64 *= (double)65536;
 		dcut64 = le256todouble(work->target);
+		if (unlikely(!dcut64))
+			dcut64 = 1;
 		work->work_difficulty = d64 / dcut64;
 	}
 	difficulty = work->work_difficulty;
