@@ -361,7 +361,7 @@ void littlefury_disable(struct thr_info * const thr)
 	struct bitfury_device * const bitfury = proc->device_data;
 	struct cgpu_info * const dev = proc->device;
 	
-	send_shutdown(bitfury->spi, 0, bitfury->fasync);
+	bitfury_send_shutdown(bitfury->spi, 0, bitfury->fasync);
 	
 	// If all chips disabled, kill power and close device
 	bool any_running = false;
@@ -438,7 +438,7 @@ void littlefury_poll(struct thr_info * const master_thr)
 		for (proc = dev; proc; proc = proc->next_proc)
 		{
 			struct bitfury_device * const bitfury = proc->device_data;
-			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+			bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 			bitfury_init_chip(proc);
 		}
 	}

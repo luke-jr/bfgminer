@@ -160,7 +160,7 @@ bool metabank_init(struct thr_info *thr)
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 53;
-		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
 		
 		if (proc->proc_id == proc->procs - 1)
@@ -228,11 +228,6 @@ struct device_drv metabank_drv = {
 	.drv_detect = metabank_detect,
 	.thread_init = metabank_init,
 	
-#if 0
-	.minerloop = hash_queued_work,
-	.thread_prepare = bitfury_prepare,
-	.scanwork = bitfury_scanHash,
-#endif
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
 	.job_start = bitfury_noop_job_start,

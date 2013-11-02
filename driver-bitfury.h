@@ -13,8 +13,6 @@ extern bool bitfury_init_chip(struct cgpu_info *);
 extern void bitfury_init_freq_stat(struct freq_stat *, int osc6_min, int osc6_max);
 extern void bitfury_clean_freq_stat(struct freq_stat *);
 
-extern int64_t bitfury_scanHash(struct thr_info *);
-
 extern bool bitfury_job_prepare(struct thr_info *, struct work *, uint64_t max_nonce);
 extern void bitfury_noop_job_start(struct thr_info *);
 extern void bitfury_do_io(struct thr_info *);

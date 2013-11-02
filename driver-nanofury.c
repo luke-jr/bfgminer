@@ -274,7 +274,7 @@ bool nanofury_init(struct thr_info * const thr)
 	};
 	cgpu->device_data = bitfury;
 	bitfury->osc6_bits = 50;
-	send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	bitfury_init_chip(cgpu);
 	
 	timer_set_now(&thr->tv_poll);
