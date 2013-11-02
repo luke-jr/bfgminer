@@ -276,11 +276,9 @@ const
 #endif
 bool curses_active;
 
-static char current_block[40];
-
 /* Protected by ch_lock */
-static char *current_hash;
-char *current_fullhash;
+char current_hash[68];
+static char prev_block[12];
 
 static char datestamp[40];
 static char blocktime[32];
@@ -291,7 +289,7 @@ static char block_diff[8];
 uint64_t best_diff = 0;
 
 struct block {
-	char hash[40];
+	char hash[68];
 	UT_hash_handle hh;
 	int block_no;
 };
@@ -2302,7 +2300,7 @@ static void curses_print_status(void)
 	}
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 5, 0, " Block: %s...  Diff:%s  Started: %s  Best share: %s   ",
-		  current_hash, block_diff, blocktime, best_share);
+		     prev_block, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
 	cg_mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
@@ -4017,23 +4015,22 @@ static void signal_work_update(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static void set_curblock(char *hexstr, unsigned char *hash)
+static void set_curblock(char *hexstr)
 {
-	unsigned char hash_swap[32];
-	unsigned char block_hash_swap[32];
-
-	strcpy(current_block, hexstr);
-	swap256(hash_swap, hash);
-	swap256(block_hash_swap, hash + 4);
+	int ofs;
 
 	cg_wlock(&ch_lock);
 	cgtime(&block_timeval);
-	free(current_hash);
-	current_hash = bin2hex(hash_swap + 2, 8);
-	free(current_fullhash);
-	current_fullhash = bin2hex(block_hash_swap, 32);
+	strcpy(current_hash, hexstr);
 	get_timestamp(blocktime, sizeof(blocktime), &block_timeval);
 	cg_wunlock(&ch_lock);
+
+	for (ofs = 0; ofs <= 56; ofs++) {
+		if (memcmp(&current_hash[ofs], "0", 1))
+			break;
+	}
+	strncpy(prev_block, &current_hash[ofs], 8);
+	prev_block[8] = '\0';
 
 	applog(LOG_INFO, "New block: %s... diff %s", current_hash, block_diff);
 }
@@ -4086,16 +4083,15 @@ static void set_blockdiff(const struct work *work)
 
 static bool test_work_current(struct work *work)
 {
+	unsigned char bedata[32];
+	char hexstr[68];
 	bool ret = true;
-	char hexstr[40];
 
 	if (work->mandatory)
 		return ret;
 
-	/* Hack to work around dud work sneaking into test */
-	__bin2hex(hexstr, work->data + 8, 18);
-	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		return ret;
+	swap256(bedata, work->data + 4);
+	__bin2hex(hexstr, bedata, 32);
 
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
@@ -4128,7 +4124,7 @@ static bool test_work_current(struct work *work)
 
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
-		set_curblock(hexstr, work->data);
+		set_curblock(hexstr);
 		if (unlikely(new_blocks == 1))
 			return ret;
 
@@ -8004,7 +8000,7 @@ int main(int argc, char *argv[])
 	for (i = 0; i < 36; i++)
 		strcat(block->hash, "0");
 	HASH_ADD_STR(blocks, hash, block);
-	strcpy(current_block, block->hash);
+	strcpy(current_hash, block->hash);
 
 	INIT_LIST_HEAD(&scan_devices);
 

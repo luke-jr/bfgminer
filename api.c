@@ -3665,14 +3665,8 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		root = api_add_const(root, "Hash Method", SHA256STR, false);
 
 	cg_rlock(&ch_lock);
-	if (current_fullhash && *current_fullhash) {
-		root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
-		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
-	} else {
-		struct timeval t = {0,0};
-		root = api_add_timeval(root, "Current Block Time", &t, true);
-		root = api_add_const(root, "Current Block Hash", BLANK, false);
-	}
+	root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
+	root = api_add_string(root, "Current Block Hash", current_hash, true);
 	cg_runlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
