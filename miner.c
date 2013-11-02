@@ -5794,7 +5794,7 @@ static void set_blockdiff(const struct work *work)
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char hexstr[37];
+	char hexstr[65];
 
 	if (work->mandatory)
 		return ret;
