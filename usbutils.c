@@ -2403,6 +2403,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
 		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
+	int bulk_timeout, callback_timeout = timeout;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
@@ -2412,7 +2413,15 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	struct timeval tv_start, tv_finish;
 #endif
 	unsigned char buf[512];
-	int cgto = cgpu->usbdev->found->timeout;
+#ifdef WIN32
+	/* On windows the callback_timeout is a safety mechanism only. */
+	bulk_timeout = timeout;
+	callback_timeout += timeout + cgpu->usbdev->found->timeout;
+#else
+	/* We give the transfer no timeout since we manage timeouts ourself on
+	 * non windows. */
+	bulk_timeout = 0;
+#endif
 
 	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
@@ -2436,14 +2445,13 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
 	init_usb_transfer(&ut);
-	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  transfer_callback, &ut, timeout);
+				  transfer_callback, &ut, bulk_timeout);
 	STATS_TIMEVAL(&tv_start);
 	err = usb_submit_transfer(&ut, ut.transfer, cancellable);
 	errn = errno;
 	if (!err)
-		err = callback_wait(&ut, transferred, timeout + cgto);
+		err = callback_wait(&ut, transferred, callback_timeout);
 	complete_usb_transfer(&ut);
 
 	STATS_TIMEVAL(&tv_finish);
