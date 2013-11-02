@@ -197,7 +197,11 @@ bool bitfury_init(struct thr_info *thr)
 			.fasync = proc->proc_id,
 		};
 		bitfury_init_chip(proc);
+		bitfury->osc6_bits = 50;
+		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	}
+	
+	timer_set_now(&thr->tv_poll);
 	
 	return true;
 }
@@ -413,16 +417,6 @@ int calc_stat(time_t * stat_ts, time_t stat, struct timeval now) {
 		}
 	}
 	return shares_found;
-}
-
-bool bitfury_prepare(struct thr_info *thr)
-{
-	struct cgpu_info *cgpu = thr->cgpu;
-
-	get_now_datestamp(cgpu->init, sizeof(cgpu->init));
-
-	applog(LOG_INFO, "INFO bitfury_prepare");
-	return true;
 }
 
 void bitfury_shutdown(struct thr_info *thr) {
@@ -940,11 +934,24 @@ struct device_drv bitfury_drv = {
 	.dname = "bitfury_gpio",
 	.name = "BFY",
 	.drv_detect = bitfury_detect,
-	.thread_prepare = bitfury_prepare,
+	
 	.thread_init = bitfury_init,
-	.queue_full = bitfury_queue_full,
-	.scanwork = bitfury_scanHash,
 	.thread_shutdown = bitfury_shutdown,
-	.minerloop = hash_queued_work,
+	
+	.minerloop = minerloop_async,
+	.job_prepare = bitfury_job_prepare,
+	.job_start = bitfury_noop_job_start,
+	.poll = bitfury_do_io,
+	.job_process_results = bitfury_job_process_results,
+	
+	.get_api_extra_device_detail = bitfury_api_device_detail,
+	.get_api_extra_device_status = bitfury_api_device_status,
+	.set_device = bitfury_set_device,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bitfury_wlogprint_status,
+	.proc_tui_wlogprint_choices = bitfury_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bitfury_tui_handle_choice,
+#endif
 };
 
