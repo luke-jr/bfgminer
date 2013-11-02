@@ -228,11 +228,6 @@ struct device_drv metabank_drv = {
 	.drv_detect = metabank_detect,
 	.thread_init = metabank_init,
 	
-#if 0
-	.minerloop = hash_queued_work,
-	.thread_prepare = bitfury_prepare,
-	.scanwork = bitfury_scanHash,
-#endif
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
 	.job_start = bitfury_noop_job_start,

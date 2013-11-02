@@ -7,6 +7,8 @@
 #include "miner.h"
 #include "spidevc.h"
 
+struct work;
+
 #define BITFURY_STAT_N 1024
 
 struct bitfury_payload {
@@ -36,50 +38,22 @@ struct bitfury_device {
 	unsigned oldbuf[17];
 	bool oldjob;
 	int active;
-	struct work * work;
-	struct work * owork;
-	struct work * o2work;
-	int job_switched;
 	uint32_t atrvec[20];
 	struct bitfury_payload payload;
-	struct bitfury_payload opayload;
-	struct bitfury_payload o2payload;
 	struct freq_stat chip_stat;
-	unsigned int results[16];
-	int results_n;
-	time_t stat_ts[BITFURY_STAT_N];
-	unsigned int stat_counter;
-	unsigned int future_nonce;
-	unsigned int old_nonce;
 	struct timeval timer1;
-	struct timeval timer2;
-	struct timeval otimer1;
-	struct timeval otimer2;
-	struct timeval predict1;
-	struct timeval predict2;
 	struct timeval tv_stat;
 	unsigned int counter1, counter2;
-	unsigned int ocounter1, ocounter2;
-	int rate; //per msec
-	int osc_slow;
-	int osc_fast;
-	int req1_done, req2_done;
 	double mhz;
-	double ns;
 	unsigned slot;
 	unsigned fasync;
 	unsigned strange_counter;
-	bool second_run;
 	bool force_reinit;
 	int desync_counter;
 	int sample_hwe;
 	int sample_tot;
-	
-	time_t short_out_t;
-	time_t long_out_t;
 };
 
-extern void libbitfury_sendHashData1(int chip_id, struct bitfury_device *, struct thr_info *);
 void work_to_payload(struct bitfury_payload *p, struct work *w);
 extern void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
 extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
