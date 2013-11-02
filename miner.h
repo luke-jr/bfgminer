@@ -1326,6 +1326,9 @@ struct pool {
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
 
+	/* The last block this particular pool knows about */
+	char prev_block[32];
+
 	/* Stratum variables */
 	char *stratum_url;
 	char *stratum_port;

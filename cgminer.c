@@ -279,6 +279,7 @@ bool curses_active;
 /* Protected by ch_lock */
 char current_hash[68];
 static char prev_block[12];
+static char current_block[32];
 
 static char datestamp[40];
 static char blocktime[32];
@@ -2272,6 +2273,11 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	wprintw(win, "%s", tmp42); \
 } while (0)
 
+static bool shared_strategy(void)
+{
+	return (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE);
+}
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
 {
@@ -2287,7 +2293,7 @@ static void curses_print_status(void)
 		total_staged(), total_stale, new_blocks,
 		local_work, total_go, total_ro);
 	wclrtoeol(statuswin);
-	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
+	if (shared_strategy() && total_pools > 1) {
 		cg_mvwprintw(statuswin, 4, 0, " Connected to multiple pools with%s block change notify",
 			have_longpoll ? "": "out");
 	} else if (pool->has_stratum) {
@@ -4015,13 +4021,14 @@ static void signal_work_update(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static void set_curblock(char *hexstr)
+static void set_curblock(char *hexstr, unsigned char *bedata)
 {
 	int ofs;
 
 	cg_wlock(&ch_lock);
 	cgtime(&block_timeval);
 	strcpy(current_hash, hexstr);
+	memcpy(current_block, bedata, 32);
 	get_timestamp(blocktime, sizeof(blocktime), &block_timeval);
 	cg_wunlock(&ch_lock);
 
@@ -4083,6 +4090,7 @@ static void set_blockdiff(const struct work *work)
 
 static bool test_work_current(struct work *work)
 {
+	struct pool *pool = work->pool;
 	unsigned char bedata[32];
 	char hexstr[68];
 	bool ret = true;
@@ -4098,7 +4106,6 @@ static bool test_work_current(struct work *work)
 	if (!block_exists(hexstr)) {
 		struct block *s = calloc(sizeof(struct block), 1);
 		int deleted_block = 0;
-		ret = false;
 
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
@@ -4124,31 +4131,71 @@ static bool test_work_current(struct work *work)
 
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
-		set_curblock(hexstr);
-		if (unlikely(new_blocks == 1))
-			return ret;
+		set_curblock(hexstr, bedata);
+		/* Copy the information to this pool's prev_block since it
+		 * knows the new block exists. */
+		memcpy(pool->prev_block, bedata, 32);
+		if (unlikely(new_blocks == 1)) {
+			ret = false;
+			goto out;
+		}
 
 		work->work_block = ++work_block;
 
-		if (!work->stratum) {
-			if (work->longpoll) {
+		if (work->longpoll) {
+			if (work->stratum) {
+				applog(LOG_NOTICE, "Stratum from pool %d detected new block",
+				       pool->pool_no);
+			} else {
 				applog(LOG_NOTICE, "%sLONGPOLL from pool %d detected new block",
 				       work->gbt ? "GBT " : "", work->pool->pool_no);
-			} else if (have_longpoll)
-				applog(LOG_NOTICE, "New block detected on network before longpoll");
-			else
-				applog(LOG_NOTICE, "New block detected on network");
-		}
+			}
+		} else if (have_longpoll)
+			applog(LOG_NOTICE, "New block detected on network before longpoll");
+		else
+			applog(LOG_NOTICE, "New block detected on network");
 		restart_threads();
-	} else if (work->longpoll) {
-		work->work_block = ++work_block;
-		if (work->pool == current_pool()) {
-			applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
-			       work->gbt ? "GBT " : "", work->pool->pool_no);
-			restart_threads();
+	} else {
+		if (memcmp(pool->prev_block, bedata, 32)) {
+			/* Work doesn't match what this pool has stored as
+			 * prev_block. Let's see if the work is from an old
+			 * block or the pool is just learning about a new
+			 * block. */
+			if (memcmp(bedata, current_block, 32)) {
+				/* Doesn't match current block. It's stale */
+				applog(LOG_DEBUG, "Stale data from pool %d", pool->pool_no);
+				ret = false;
+			} else {
+				/* Work is from new block and pool is up now
+				 * current. */
+				applog(LOG_INFO, "Pool %d now up to date", pool->pool_no);
+				memcpy(pool->prev_block, bedata, 32);
+			}
+		}
+#if 0
+		/* This isn't ideal, this pool is still on an old block but
+		 * accepting shares from it. To maintain fair work distribution
+		 * we work on it anyway. */
+		if (memcmp(bedata, current_block, 32))
+			applog(LOG_DEBUG, "Pool %d still on old block", pool->pool_no);
+#endif
+		if (work->longpoll) {
+			work->work_block = ++work_block;
+			if (shared_strategy() || work->pool == current_pool()) {
+				if (work->stratum) {
+					applog(LOG_NOTICE, "Stratum from pool %d requested work restart",
+					       pool->pool_no);
+				} else {
+					applog(LOG_NOTICE, "%sLONGPOLL from pool %d requested work restart",
+					       work->gbt ? "GBT " : "", work->pool->pool_no);
+				}
+				restart_threads();
+			}
 		}
 	}
+out:
 	work->longpoll = false;
+
 	return ret;
 }
 
@@ -5501,15 +5548,10 @@ static void *stratum_rthread(void *userdata)
 			 * block database */
 			pool->swork.clean = false;
 			gen_stratum_work(pool, work);
-			if (test_work_current(work)) {
-				/* Only accept a work restart if this stratum
-				 * connection is from the current pool */
-				if (pool == current_pool()) {
-					restart_threads();
-					applog(LOG_NOTICE, "Stratum from pool %d requested work restart", pool->pool_no);
-				}
-			} else
-				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
+			work->longpoll = true;
+			/* Return value doesn't matter. We're just informing
+			 * that we may need to restart. */
+			test_work_current(work);
 			free_work(work);
 		}
 	}
