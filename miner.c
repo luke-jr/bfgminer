@@ -92,7 +92,7 @@
 #include "scrypt.h"
 #endif
 
-#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_BFGDUMMY) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
 
@@ -10119,6 +10119,10 @@ extern struct device_drv icarus_drv;
 extern struct device_drv avalon_drv;
 #endif
 
+#ifdef USE_BFGDUMMY
+extern struct device_drv dummy_drv;
+#endif
+
 #ifdef USE_KNC
 extern struct device_drv knc_drv;
 #endif
@@ -10239,6 +10243,11 @@ void drv_detect_all()
 #ifdef USE_BIGPIC
 	if (!opt_scrypt)
 		bigpic_drv.drv_detect();
+#endif
+
+#ifdef USE_BFGDUMMY
+	if (!opt_scrypt)
+		dummy_drv.drv_detect();
 #endif
 
 #ifdef USE_KNC

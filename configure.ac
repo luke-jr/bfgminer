@@ -385,6 +385,19 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
+driverlist="$driverlist dummydrv"
+dummydrv=no
+AC_ARG_ENABLE([dummydrv],
+	[AC_HELP_STRING([--disable-dummydrv],[Compile support for Dummy Driver (default enabled)])],
+	[dummydrv=$enableval],
+	[dummydrv=yes]
+	)
+if test "x$dummydrv" = xyes; then
+	AC_DEFINE([USE_BFGDUMMY], [1], [Defined to 1 if Dummy Driver support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([USE_BFGDUMMY], [test x$dummydrv = xyes])
+
 driverlist="$driverlist knc"
 AC_ARG_ENABLE([knc],
 	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],

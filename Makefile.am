@@ -257,6 +257,10 @@ bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 endif
 
+if USE_BFGDUMMY
+bfgminer_SOURCES += driver-dummy.c
+endif
+
 bin_PROGRAMS += bfgminer-rpc
 bfgminer_rpc_SOURCES = api-example.c
 bfgminer_rpc_LDADD = @WS2_LIBS@

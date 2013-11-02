@@ -117,6 +117,9 @@ static const char *DEVICECODE = ""
 #ifdef USE_AVALON
 			"AVA "
 #endif
+#ifdef USE_BFGDUMMY
+			"EMP "
+#endif
 #ifdef USE_LIBMICROHTTPD
 			"SGW "
 #endif
