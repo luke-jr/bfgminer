@@ -2586,7 +2586,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			if (unlikely(done >= max))
 				break;
 			timeout = initial_timeout - (done * 1000);
-			if (!timeout)
+			if (timeout <= 0)
 				break;
 		}
 
@@ -2674,7 +2674,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (unlikely(done >= max))
 			break;
 		timeout = initial_timeout - (done * 1000);
-		if (!timeout)
+		if (timeout <= 0)
 			break;
 	}
 
@@ -2795,7 +2795,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		if (unlikely(done >= max))
 			break;
 		timeout = initial_timeout - (done * 1000);
-		if (!timeout)
+		if (timeout <= 0)
 			break;
 	}
 
