@@ -2484,7 +2484,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
@@ -2731,7 +2731,7 @@ out_noerrmsg:
 	return err;
 }
 
-int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
+int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
 	struct timeval read_start, tv_finish;
