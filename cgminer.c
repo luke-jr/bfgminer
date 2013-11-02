@@ -3909,8 +3909,10 @@ void switch_pools(struct pool *selected)
 void discard_work(struct work *work)
 {
 	if (!work->clone && !work->rolls && !work->mined) {
-		if (work->pool)
+		if (work->pool) {
 			work->pool->discarded_work++;
+			work->pool->works--;
+		}
 		total_discarded++;
 		applog(LOG_DEBUG, "Discarded work");
 	} else
@@ -4312,6 +4314,7 @@ static void display_pool_summary(struct pool *pool)
 		if (!pool_localgen(pool))
 			wlog(" Efficiency (accepted / queued): %.0f%%\n", efficiency);
 
+		wlog(" Items worked on: %d\n", pool->works);
 		wlog(" Discarded work due to new blocks: %d\n", pool->discarded_work);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
 		wlog(" Unable to get work from server occasions: %d\n", pool->getfail_occasions);
@@ -7315,6 +7318,7 @@ void print_summary(void)
 			if (pool->accepted || pool->rejected)
 				applog(LOG_WARNING, " Reject ratio: %.1f%%", (double)(pool->rejected * 100) / (double)(pool->accepted + pool->rejected));
 
+			applog(LOG_WARNING, " Items worked on: %d", pool->works);
 			applog(LOG_WARNING, " Stale submissions discarded due to new blocks: %d", pool->stale_shares);
 			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
