@@ -3075,6 +3075,27 @@ static const double bits192 = 62771017353866807638357894232076664161023554444640
 static const double bits128 = 340282366920938463463374607431768211456.0;
 static const double bits64 = 18446744073709551616.0;
 
+/* Converts a little endian 256 bit value to a double */
+static double le256todouble(const void *target)
+{
+	uint64_t *data64;
+	double dcut64;
+
+	data64 = (uint64_t *)(target + 24);
+	dcut64 = le64toh(*data64) * bits192;
+
+	data64 = (uint64_t *)(target + 16);
+	dcut64 += le64toh(*data64) * bits128;
+
+	data64 = (uint64_t *)(target + 8);
+	dcut64 += le64toh(*data64) * bits64;
+
+	data64 = (uint64_t *)(target);
+	dcut64 += le64toh(*data64);
+
+	return dcut64;
+}
+
 /*
  * Calculate the work->work_difficulty based on the work->target
  */
@@ -3088,23 +3109,11 @@ static void calc_diff(struct work *work, double known)
 		work->work_difficulty = known;
 	else {
 		double d64, dcut64;
-		uint64_t *data64;
 
 		d64 = truediffone;
 		if (opt_scrypt)
 			d64 *= (double)65536;
-
-		data64 = (uint64_t *)(work->target + 24);
-		dcut64 = le64toh(*data64);
-
-		data64 = (uint64_t *)(work->target + 16);
-		dcut64 += le64toh(*data64) * bits64;
-
-		data64 = (uint64_t *)(work->target + 8);
-		dcut64 += le64toh(*data64) * bits128;
-
-		data64 = (uint64_t *)(work->target);
-		dcut64 += le64toh(*data64) * bits192;
+		dcut64 = le256todouble(work->target);
 		work->work_difficulty = d64 / dcut64;
 	}
 	difficulty = work->work_difficulty;
@@ -3716,23 +3725,20 @@ static bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-static const uint64_t diffone = 0xFFFF000000000000ull;
-
 static uint64_t share_diff(const struct work *work)
 {
-	uint64_t *data64, d64, ret;
 	bool new_best = false;
-	char rhash[32];
+	double d64, s64;
+	uint64_t ret;
 
-	swab256(rhash, work->hash);
+	d64 = truediffone;
 	if (opt_scrypt)
-		data64 = (uint64_t *)(rhash + 2);
-	else
-		data64 = (uint64_t *)(rhash + 4);
-	d64 = be64toh(*data64);
-	if (unlikely(!d64))
-		d64 = 1;
-	ret = diffone / d64;
+		d64 *= (double)65536;
+	s64 = le256todouble(work->hash);
+	if (unlikely(!s64))
+		s64 = 0;
+
+	ret = round(d64 / s64);
 
 	cg_wlock(&control_lock);
 	if (unlikely(ret > best_diff)) {
