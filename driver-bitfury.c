@@ -173,7 +173,7 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 		.ntime = 0xb6c24563,
 		.nbits = 0x6dfa4352,
 	};
-	payload_to_atrvec(bitfury->atrvec, &payload);
+	bitfury_payload_to_atrvec(bitfury->atrvec, &payload);
 	return bitfury_init_oldbuf(proc, NULL);
 }
 
@@ -192,7 +192,7 @@ bool bitfury_init(struct thr_info *thr)
 		};
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 50;
-		send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	}
 	
 	timer_set_now(&thr->tv_poll);
@@ -208,7 +208,7 @@ void bitfury_shutdown(struct thr_info *thr) {
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		bitfury = proc->device_data;
-		send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
+		bitfury_send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
 	}
 }
 
@@ -224,8 +224,8 @@ bool bitfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused
 		applog(LOG_DEBUG, "%"PRIpreprv": Preparing work %s",
 		       proc->proc_repr, hex);
 	}
-	work_to_payload(&bitfury->payload, work);
-	payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+	work_to_bitfury_payload(&bitfury->payload, work);
+	bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 	
 	work->blk.nonce = 0xffffffff;
 	return true;
@@ -277,7 +277,8 @@ void bitfury_clean_freq_stat(struct freq_stat * const c)
 
 typedef uint32_t bitfury_inp_t[0x11];
 
-int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
+static
+int bitfury_select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 	int freq;
 	int random;
 	int i;
@@ -319,7 +320,7 @@ int select_freq(struct bitfury_device *bitfury, struct cgpu_info *proc) {
 	applog(LOG_DEBUG, "%"PRIpreprv": Changing osc6_bits to %d",
 	       proc->proc_repr, freq);
 	bitfury->osc6_bits = freq;
-	send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	return 0;
 }
 
@@ -446,7 +447,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				inc_hw_errors2(thr, NULL, NULL);
 				applog(LOG_DEBUG, "%"PRIpreprv": Full result match, reinitialising",
 				       proc->proc_repr);
-				send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+				bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 				bitfury->desync_counter = 99;
 				goto out;
 			}
@@ -511,7 +512,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				
 				// Change freq;
 				if (!c->best_done) {
-					select_freq(bitfury, proc);
+					bitfury_select_freq(bitfury, proc);
 				} else {
 					applog(LOG_DEBUG, "%"PRIpreprv": Stable freq, osc6_bits: %d",
 					       proc->proc_repr, bitfury->osc6_bits);
@@ -551,7 +552,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					{
 						applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
 						       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
-						send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+						bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 						bitfury->desync_counter = 99;
 					}
 					bitfury->sample_tot = bitfury->sample_hwe = 0;
@@ -569,7 +570,7 @@ out:
 		{
 			applog(LOG_DEBUG, "%"PRIpreprv": Forcing reinitialisation",
 			       proc->proc_repr);
-			send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+			bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 			bitfury->desync_counter = 99;
 			bitfury->force_reinit = false;
 		}

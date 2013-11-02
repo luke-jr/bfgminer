@@ -54,11 +54,11 @@ struct bitfury_device {
 	int sample_tot;
 };
 
-void work_to_payload(struct bitfury_payload *p, struct work *w);
-extern void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
-extern void send_reinit(struct spi_port *, int slot, int chip_n, int n);
-extern void send_shutdown(struct spi_port *, int slot, int chip_n);
-extern void send_freq(struct spi_port *, int slot, int chip_n, int bits);
+extern void work_to_bitfury_payload(struct bitfury_payload *, struct work *);
+extern void bitfury_payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *);
+extern void bitfury_send_reinit(struct spi_port *, int slot, int chip_n, int n);
+extern void bitfury_send_shutdown(struct spi_port *, int slot, int chip_n);
+extern void bitfury_send_freq(struct spi_port *, int slot, int chip_n, int bits);
 extern int libbitfury_detectChips1(struct spi_port *);
 extern unsigned bitfury_decnonce(unsigned);
 extern bool bitfury_fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t *nonce_p);

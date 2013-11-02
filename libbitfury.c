@@ -45,7 +45,8 @@
 unsigned bitfury_decnonce(unsigned in);
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
-void config_reg(struct spi_port *port, int cfgreg, int ena)
+static
+void bitfury_config_reg(struct spi_port *port, int cfgreg, int ena)
 {
 	static const uint8_t enaconf[4] = { 0xc1, 0x6a, 0x59, 0xe3 };
 	static const uint8_t disconf[4] = { 0, 0, 0, 0 };
@@ -56,7 +57,8 @@ void config_reg(struct spi_port *port, int cfgreg, int ena)
 
 #define FIRST_BASE 61
 #define SECOND_BASE 4
-const int8_t counters[16] = { 64, 64,
+static
+const int8_t bitfury_counters[16] = { 64, 64,
 	SECOND_BASE, SECOND_BASE+4, SECOND_BASE+2, SECOND_BASE+2+16, SECOND_BASE, SECOND_BASE+1,
 	(FIRST_BASE)%65,  (FIRST_BASE+1)%65,  (FIRST_BASE+3)%65, (FIRST_BASE+3+16)%65, (FIRST_BASE+4)%65, (FIRST_BASE+4+4)%65, (FIRST_BASE+3+3)%65, (FIRST_BASE+3+1+3)%65};
 
@@ -89,7 +91,8 @@ static const unsigned SHA_K[64] = {
 
 
 
-void ms3_compute(unsigned *p)
+static
+void libbitfury_ms3_compute(unsigned *p)
 {
 	unsigned a,b,c,d,e,f,g,h, ne, na,  i;
 
@@ -105,18 +108,20 @@ void ms3_compute(unsigned *p)
 	p[15] = a; p[14] = b; p[13] = c; p[12] = d; p[11] = e; p[10] = f; p[9] = g; p[8] = h;
 }
 
-void send_conf(struct spi_port *port) {
+static
+void bitfury_send_conf(struct spi_port *port) {
 	int i;
 	for (i = 7; i <= 11; ++i)
-		config_reg(port, i, 0);
-	config_reg(port, 6, 0); /* disable OUTSLK */
-	config_reg(port, 4, 1); /* Enable slow oscillator */
+		bitfury_config_reg(port, i, 0);
+	bitfury_config_reg(port, 6, 0); /* disable OUTSLK */
+	bitfury_config_reg(port, 4, 1); /* Enable slow oscillator */
 	for (i = 1; i <= 3; ++i)
-		config_reg(port, i, 0);
-	spi_emit_data(port, 0x0100, counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
+		bitfury_config_reg(port, i, 0);
+	spi_emit_data(port, 0x0100, bitfury_counters, 16); /* Program counters correctly for rounds processing, here baby should start consuming power */
 }
 
-void send_init(struct spi_port *port) {
+static
+void bitfury_send_init(struct spi_port *port) {
 	/* Prepare internal buffers */
 	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
 	unsigned w[16];
@@ -126,7 +131,7 @@ void send_init(struct spi_port *port) {
 		0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
 	};
 
-	ms3_compute(&atrvec[0]);
+	libbitfury_ms3_compute(&atrvec[0]);
 	memset(&w, 0, sizeof(w)); w[3] = 0xffffffff; w[4] = 0x80000000; w[15] = 0x00000280;
 	spi_emit_data(port, 0x1000, w, 16*4);
 	spi_emit_data(port, 0x1400, w,  8*4);
@@ -135,47 +140,50 @@ void send_init(struct spi_port *port) {
 	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 }
 
-void set_freq(struct spi_port *port, int bits) {
+static
+void bitfury_set_freq(struct spi_port *port, int bits) {
 	uint64_t freq;
 	const uint8_t *
 	osc6 = (unsigned char *)&freq;
 	freq = (1ULL << bits) - 1ULL;
 
 	spi_emit_data(port, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
-	config_reg(port, 4, 1); /* Enable slow oscillator */
+	bitfury_config_reg(port, 4, 1); /* Enable slow oscillator */
 }
 
-void send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
+void bitfury_send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
-	set_freq(port, n);
-	send_conf(port);
-	send_init(port);
+	bitfury_set_freq(port, n);
+	bitfury_send_conf(port);
+	bitfury_send_init(port);
 	spi_txrx(port);
 }
 
-void send_shutdown(struct spi_port *port, int slot, int chip_n) {
+void bitfury_send_shutdown(struct spi_port *port, int slot, int chip_n) {
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
-	config_reg(port, 4, 0); /* Disable slow oscillator */
+	bitfury_config_reg(port, 4, 0); /* Disable slow oscillator */
 	spi_txrx(port);
 }
 
-void send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
+void bitfury_send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
-	set_freq(port, bits);
+	bitfury_set_freq(port, bits);
 	spi_txrx(port);
 }
 
-unsigned int c_diff(unsigned ocounter, unsigned counter) {
+static
+unsigned int libbitfury_c_diff(unsigned ocounter, unsigned counter) {
 	return counter >  ocounter ? counter - ocounter : (0x003FFFFF - ocounter) + counter;
 }
 
-int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
+static
+int libbitfury_get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	int j;
 	for(j = 0; j < 16; j++) {
 		if (newbuf[j] != oldbuf[j]) {
@@ -189,7 +197,8 @@ int get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 	return 0;
 }
 
-int detect_chip(struct spi_port *port, int chip_n) {
+static
+int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 	/* Test vectors to calculate (using address-translated loads) */
 	unsigned atrvec[] = {
 		0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
@@ -220,17 +229,17 @@ int detect_chip(struct spi_port *port, int chip_n) {
 	memset(newbuf, 0, 17 * 4);
 	memset(oldbuf, 0, 17 * 4);
 
-	ms3_compute(&atrvec[0]);
-	ms3_compute(&atrvec[20]);
-	ms3_compute(&atrvec[40]);
+	libbitfury_ms3_compute(&atrvec[0]);
+	libbitfury_ms3_compute(&atrvec[20]);
+	libbitfury_ms3_compute(&atrvec[40]);
 
 
 	spi_clear_buf(port);
 	spi_emit_break(port); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
 	spi_emit_fasync(port, chip_n);
-	set_freq(port, 52);  //54 - 3F, 53 - 1F
-	send_conf(port);
-	send_init(port);
+	bitfury_set_freq(port, 52);  //54 - 3F, 53 - 1F
+	bitfury_send_conf(port);
+	bitfury_send_init(port);
 	spi_txrx(port);
 
 	ocounter = 0;
@@ -244,9 +253,9 @@ int detect_chip(struct spi_port *port, int chip_n) {
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
 
-		counter = get_counter(newbuf, oldbuf);
+		counter = libbitfury_get_counter(newbuf, oldbuf);
 		if (ocounter) {
-			unsigned int cdiff = c_diff(ocounter, counter);
+			unsigned int cdiff = libbitfury_c_diff(ocounter, counter);
 
 			if (cdiff > 5000 && cdiff < 100000 && odiff > 5000 && odiff < 100000)
 				return 1;
@@ -264,7 +273,7 @@ int detect_chip(struct spi_port *port, int chip_n) {
 
 int libbitfury_detectChips1(struct spi_port *port) {
 	int n;
-	for (n = 0; detect_chip(port, n); ++n)
+	for (n = 0; libbitfury_detect_chip(port, n); ++n)
 	{}
 	return n;
 }
@@ -293,7 +302,8 @@ unsigned bitfury_decnonce(unsigned in)
 	return out;
 }
 
-int rehash(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t nnonce) {
+static
+int libbitfury_rehash(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t nnonce) {
 	unsigned char in[16];
 	unsigned int *in32 = (unsigned int *)in;
 	unsigned int *mid32 = (unsigned int *)midstate;
@@ -343,7 +353,7 @@ bool bitfury_fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t
 	for (i = 0; i < 6; ++i)
 	{
 		nonce = *nonce_p + offsets[i];
-		if (rehash(midstate, m7, ntime, nbits, nonce))
+		if (libbitfury_rehash(midstate, m7, ntime, nbits, nonce))
 		{
 			*nonce_p = nonce;
 			return true;
@@ -352,7 +362,7 @@ bool bitfury_fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t
 	return false;
 }
 
-void work_to_payload(struct bitfury_payload *p, struct work *w) {
+void work_to_bitfury_payload(struct bitfury_payload *p, struct work *w) {
 	unsigned char flipped_data[80];
 
 	memset(p, 0, sizeof(struct bitfury_payload));
@@ -364,9 +374,9 @@ void work_to_payload(struct bitfury_payload *p, struct work *w) {
 	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
 }
 
-void payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
+void bitfury_payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)
 {
 	/* Programming next value */
 	memcpy(atrvec, p, 20*4);
-	ms3_compute(atrvec);
+	libbitfury_ms3_compute(atrvec);
 }
