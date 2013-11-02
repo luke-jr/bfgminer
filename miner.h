@@ -1393,7 +1393,6 @@ struct work {
 #endif
 	double		device_diff;
 	uint64_t	share_diff;
-	unsigned char	hash2[32];
 
 	int		rolls;
 	int		drv_rolllimit; /* How much the driver can roll ntime */

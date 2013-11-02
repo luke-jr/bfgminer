@@ -6128,38 +6128,38 @@ void inc_hw_errors(struct thr_info *thr)
 	thr->cgpu->drv->hw_error(thr);
 }
 
-/* Fills in the work nonce and builds the output data in work->hash2 */
-static void rebuild_hash2(struct work *work, uint32_t nonce)
+/* Fills in the work nonce and builds the output data in work->hash */
+static void rebuild_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 
 	*work_nonce = htole32(nonce);
 
 	rebuild_hash(work);
-	flip32(work->hash2, work->hash);
 }
 
+/* For testing a nonce against diff 1 */
 bool test_nonce(struct work *work, uint32_t nonce)
 {
-	uint32_t *hash2_32 = (uint32_t *)work->hash2;
+	uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
 	uint32_t diff1targ;
 
-	rebuild_hash2(work, nonce);
-
+	rebuild_nonce(work, nonce);
 	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-	return (be32toh(hash2_32[7]) <= diff1targ);
+
+	return (le32toh(*hash_32) <= diff1targ);
 }
 
+/* For testing a nonce against an arbitrary diff */
 bool test_nonce_diff(struct work *work, uint32_t nonce, double diff)
 {
-	uint32_t hash2_be[8];
-	uint64_t *hashbe64 = (uint64_t *)hash2_be, hash64, diff64;
+	uint64_t *hash64 = (uint64_t *)(work->hash + 24), diff64;
 
-	diff64 = (double)0x00000000ffff0000ULL / diff;
-	rebuild_hash2(work, nonce);
-	swap256(hash2_be, work->hash2);
-	hash64 = be64toh(*hashbe64);
-	return hash64 <= diff64;
+	rebuild_nonce(work, nonce);
+	diff64 = opt_scrypt ? 0x0000ffff00000000ULL : 0x00000000ffff0000ULL;
+	diff64 /= diff;
+
+	return (le64toh(*hash64) <= diff64);
 }
 
 static void update_work_stats(struct thr_info *thr, struct work *work)
@@ -6189,7 +6189,7 @@ void submit_tested_work(struct thr_info *thr, struct work *work)
 	struct work *work_out;
 	update_work_stats(thr, work);
 
-	if (!fulltest(work->hash2, work->target)) {
+	if (!fulltest(work->hash, work->target)) {
 		applog(LOG_INFO, "Share above target");
 		return;
 	}
@@ -6227,7 +6227,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 	}
 	ret = true;
 	update_work_stats(thr, work);
-	if (!fulltest(work->hash2, work->target)) {
+	if (!fulltest(work->hash, work->target)) {
 		applog(LOG_INFO, "Share above target");
 		goto  out;
 	}

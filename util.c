@@ -669,21 +669,14 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
 
 bool fulltest(const unsigned char *hash, const unsigned char *target)
 {
-	unsigned char hash_swap[32], target_swap[32];
-	uint32_t *hash32 = (uint32_t *) hash_swap;
-	uint32_t *target32 = (uint32_t *) target_swap;
-	char *hash_str, *target_str;
+	uint32_t *hash32 = (uint32_t *)hash;
+	uint32_t *target32 = (uint32_t *)target;
 	bool rc = true;
 	int i;
 
-	swap256(hash_swap, hash);
-	swap256(target_swap, target);
-
-	for (i = 0; i < 32/4; i++) {
-		uint32_t h32tmp = htobe32(hash32[i]);
-		uint32_t t32tmp = htole32(target32[i]);
-
-		target32[i] = swab32(target32[i]);	/* for printing */
+	for (i = 28 / 4; i >= 0; i--) {
+		uint32_t h32tmp = le32toh(hash32[i]);
+		uint32_t t32tmp = le32toh(target32[i]);
 
 		if (h32tmp > t32tmp) {
 			rc = false;
@@ -696,6 +689,11 @@ bool fulltest(const unsigned char *hash, const unsigned char *target)
 	}
 
 	if (opt_debug) {
+		unsigned char hash_swap[32], target_swap[32];
+		char *hash_str, *target_str;
+
+		swab256(hash_swap, hash);
+		swab256(target_swap, target);
 		hash_str = bin2hex(hash_swap, 32);
 		target_str = bin2hex(target_swap, 32);
 
