@@ -2341,6 +2341,9 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 
 static int usb_transfer_toerr(int ret)
 {
+	if (ret <= 0)
+		return ret;
+
 	switch (ret) {
 		default:
 		case LIBUSB_TRANSFER_COMPLETED:
@@ -2456,15 +2459,18 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	errn = errno;
 	if (!err)
 		err = callback_wait(&ut, transferred, callback_timeout);
+	else
+		err = usb_transfer_toerr(err);
 	complete_usb_transfer(&ut);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
 
-	if (err < 0)
+	if (err < 0) {
 		applog(LOG_DEBUG, "%s%i: %s (amt=%d err=%d ern=%d)",
 				cgpu->drv->name, cgpu->device_id,
 				usb_cmdname(cmd), *transferred, err, errn);
+	}
 
 	if (err == LIBUSB_ERROR_PIPE) {
 		int retries = 0;
