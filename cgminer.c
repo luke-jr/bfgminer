@@ -3181,9 +3181,22 @@ static void disable_curses_windows(void)
 	delwin(statuswin);
 }
 
+/* Force locking of curses console_lock on shutdown since a dead thread might
+ * have grabbed the lock. */
+static bool curses_active_forcelocked(void)
+{
+	bool ret;
+
+	mutex_trylock(&console_lock);
+	ret = curses_active;
+	if (!ret)
+		unlock_curses();
+	return ret;
+}
+
 static void disable_curses(void)
 {
-	if (curses_active_locked()) {
+	if (curses_active_forcelocked()) {
 		use_curses = false;
 		curses_active = false;
 		disable_curses_windows();
@@ -7359,15 +7372,11 @@ static void clean_up(bool restarting)
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
-	if (!restarting) {
-		/* Attempting to disable curses or print a summary during a
-		 * restart can lead to a deadlock. */
 #ifdef HAVE_CURSES
-		disable_curses();
+	disable_curses();
 #endif
-		if (!opt_realquiet && successful_connect)
-			print_summary();
-	}
+	if (!restarting && !opt_realquiet && successful_connect)
+		print_summary();
 
 	curl_global_cleanup();
 }
