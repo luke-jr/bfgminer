@@ -5915,26 +5915,21 @@ static struct work *hash_pop(void)
 
 	mutex_lock(stgd_lock);
 	while (!HASH_COUNT(staged_work)) {
-		if (!no_work) {
-			struct timespec then;
-			struct timeval now;
-			int rc;
+		struct timespec then;
+		struct timeval now;
+		int rc;
 
-			cgtime(&now);
-			then.tv_sec = now.tv_sec + 10;
-			then.tv_nsec = now.tv_usec * 1000;
-			pthread_cond_signal(&gws_cond);
-			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
-			/* Check again for !no_work as multiple threads may be
-			 * waiting on this condition and another may set the
-			 * bool separately. */
-			if (rc && !no_work) {
-				no_work = true;
-				applog(LOG_WARNING, "Waiting for work to be available from pools.");
-			}
-		} else {
-			pthread_cond_signal(&gws_cond);
-			pthread_cond_wait(&getq->cond, stgd_lock);
+		cgtime(&now);
+		then.tv_sec = now.tv_sec + 10;
+		then.tv_nsec = now.tv_usec * 1000;
+		pthread_cond_signal(&gws_cond);
+		rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
+		/* Check again for !no_work as multiple threads may be
+			* waiting on this condition and another may set the
+			* bool separately. */
+		if (rc && !no_work) {
+			no_work = true;
+			applog(LOG_WARNING, "Waiting for work to be available from pools.");
 		}
 	}
 
