@@ -1066,7 +1066,6 @@ extern bool opt_quiet;
 extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
-extern int gpu_threads;
 #ifdef USE_SCRYPT
 extern bool opt_scrypt;
 #else

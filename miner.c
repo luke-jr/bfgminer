@@ -155,7 +155,6 @@ unsigned long global_quota_gcd = 1;
 int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = -1;
-int gpu_threads;
 #endif
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
@@ -10172,11 +10171,6 @@ void register_device(struct cgpu_info *cgpu)
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
 #endif
-#ifdef HAVE_OPENCL
-	if (cgpu->drv == &opencl_api) {
-		gpu_threads += cgpu->threads;
-	}
-#endif
 
 	rwlock_init(&cgpu->qlock);
 	cgpu->queued_work = NULL;
@@ -10302,7 +10296,6 @@ void drv_detect_all()
 #ifdef HAVE_OPENCL
 	if (!opt_nogpu)
 		opencl_api.drv_detect();
-	gpu_threads = 0;
 #endif
 }
 
@@ -11063,7 +11056,6 @@ begin_bench:
 	}
 
 #ifdef HAVE_OPENCL
-	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 	for (i = 0; i < nDevs; i++)
 		pause_dynamic_threads(i);
 #endif

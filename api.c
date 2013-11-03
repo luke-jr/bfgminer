@@ -2115,7 +2115,7 @@ static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 {
 	int id;
 
-	if (gpu_threads == 0) {
+	if (!nDevs) {
 		message(io_data, MSG_GPUNON, 0, NULL, isjson);
 		return;
 	}
