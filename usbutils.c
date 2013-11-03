@@ -466,6 +466,15 @@ static const char *nodatareturned = "no data returned ";
 			cgpu->usbinfo.continuous_ioerr_count = 0; \
 		}
 
+/* Timeout errors on writes are unusual and should be treated as IO errors. */
+#define WRITEIOERR_CHECK(cgpu, err) \
+		if (err == LIBUSB_ERROR_IO || err == LIBUSB_ERROR_TIMEOUT) { \
+			cgpu->usbinfo.ioerr_count++; \
+			cgpu->usbinfo.continuous_ioerr_count++; \
+		} else { \
+			cgpu->usbinfo.continuous_ioerr_count = 0; \
+		}
+
 #if 0 // enable USBDEBUG - only during development testing
  static const char *debug_true_str = "true";
  static const char *debug_false_str = "false";
