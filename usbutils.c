@@ -2500,7 +2500,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	char *search;
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
-	size_t usbbufread;
+	const size_t usbbufread = 512; /* Always read full size */
 
 	DEVRLOCK(cgpu, pstate);
 
@@ -2542,10 +2542,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
-			if (ftdi)
-				usbbufread = bufleft + 2;
-			else
-				usbbufread = bufleft;
 			got = 0;
 
 			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
@@ -2623,10 +2619,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
-		if (ftdi)
-			usbbufread = bufleft + 2;
-		else
-			usbbufread = bufleft;
 		got = 0;
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					ptr, usbbufread, &got, timeout,
