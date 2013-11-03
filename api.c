@@ -26,6 +26,7 @@
 #include <sys/types.h>
 
 #include "compat.h"
+#include "deviceapi.h"
 #ifdef USE_LIBMICROHTTPD
 #include "httpsrv.h"
 #endif
@@ -85,57 +86,6 @@ static const char *FALSESTR = "false";
 static const char *SCRYPTSTR = "scrypt";
 #endif
 static const char *SHA256STR = "sha256";
-
-static const char *DEVICECODE = ""
-#ifdef HAVE_OPENCL
-			"GPU "
-#endif
-#ifdef USE_BITFORCE
-			"BFL "
-#endif
-#ifdef USE_BITFURY
-			"BFY "
-#endif
-#ifdef USE_BIGPIC
-			"BPM "
-#endif
-#ifdef USE_BFSB
-			"BSB "
-#endif
-#ifdef USE_ICARUS
-			"ICA "
-#endif
-#ifdef USE_LITTLEFURY
-			"LFY "
-#endif
-#ifdef USE_METABANK
-			"MBF "
-#endif
-#ifdef USE_NANOFURY
-			"NFY "
-#endif
-#ifdef USE_AVALON
-			"AVA "
-#endif
-#ifdef USE_LIBMICROHTTPD
-			"SGW "
-#endif
-#ifdef USE_LIBEVENT
-			"SSM "
-#endif
-#ifdef USE_X6500
-			"XBS "
-#endif
-#ifdef USE_ZTEX
-			"ZTX "
-#endif
-#ifdef USE_MODMINER
-			"MMQ "
-#endif
-#ifdef WANT_CPUMINE
-			"CPU "
-#endif
-			"";
 
 static const char *OSINFO =
 #if defined(__linux)
@@ -1350,6 +1300,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	bool io_open;
+	struct driver_registration *reg, *regtmp;
 	int gpucount = 0;
 	int pgacount = 0;
 	int cpucount = 0;
@@ -1391,7 +1342,23 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_string(root, "ADL in use", adlinuse, false);
 	root = api_add_const(root, "Strategy", strategies[pool_strategy].s, false);
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
-	root = api_add_const(root, "Device Code", DEVICECODE, false);
+	
+	strcpy(buf, ""
+#ifdef USE_LIBMICROHTTPD
+			" SGW"
+#endif
+#ifdef USE_LIBEVENT
+			" SSM"
+#endif
+	);
+
+	BFG_FOREACH_DRIVER_BY_DNAME(reg, regtmp)
+	{
+		const struct device_drv * const drv = reg->drv;
+		tailsprintf(buf, sizeof(buf), " %s", drv->name);
+	}
+	root = api_add_const(root, "Device Code", &buf[1], true);
+	
 	root = api_add_const(root, "OS", OSINFO, false);
 	root = api_add_bool(root, "Failover-Only", &opt_fail_only, false);
 	root = api_add_int(root, "ScanTime", &opt_scantime, false);
