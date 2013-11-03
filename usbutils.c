@@ -2418,7 +2418,6 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
-	uint16_t MaxPacketSize;
 	int err, errn;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
@@ -2442,14 +2441,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	if (unlikely(cgpu->shutdown))
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
 
-	/* Limit length of transfer to the largest this descriptor supports
-	 * and leave the higher level functions to transfer more if needed. */
-	if (usb_epinfo->PrefPacketSize)
-		MaxPacketSize = usb_epinfo->PrefPacketSize;
-	else
-		MaxPacketSize = usb_epinfo->wMaxPacketSize;
-	if (length > MaxPacketSize)
-		length = MaxPacketSize;
+	if (length > usb_epinfo->wMaxPacketSize)
+		length = usb_epinfo->wMaxPacketSize;
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf, data, length);
 
