@@ -103,8 +103,8 @@ static struct list_head ut_list;
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo bas_ints[] = {
@@ -115,8 +115,8 @@ static struct usb_intinfo bas_ints[] = {
 #ifdef USE_BITFORCE
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bfl_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo bfl_ints[] = {
@@ -126,12 +126,12 @@ static struct usb_intinfo bfl_ints[] = {
 
 #ifdef USE_BITFURY
 static struct usb_epinfo bfu0_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0, 0 }
 };
 
 static struct usb_epinfo bfu1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 0 }
 };
 
 /* Default to interface 1 */
@@ -145,12 +145,12 @@ static struct usb_intinfo bfu_ints[] = {
 #include "driver-hashfast.h"
 
 static struct usb_epinfo hfa0_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0 }
 };
 
 static struct usb_epinfo hfa1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 /* Default to interface 1 */
@@ -162,8 +162,8 @@ static struct usb_intinfo hfa_ints[] = {
 
 #ifdef USE_MODMINER
 static struct usb_epinfo mmq_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0, 0 }
 };
 
 static struct usb_intinfo mmq_ints[] = {
@@ -173,8 +173,8 @@ static struct usb_intinfo mmq_ints[] = {
 
 #ifdef USE_AVALON
 static struct usb_epinfo ava_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo ava_ints[] = {
@@ -184,8 +184,8 @@ static struct usb_intinfo ava_ints[] = {
 
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
 };
 
 static struct usb_intinfo kln_ints[] = {
@@ -195,8 +195,8 @@ static struct usb_intinfo kln_ints[] = {
 
 #ifdef USE_ICARUS
 static struct usb_epinfo ica_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo ica_ints[] = {
@@ -204,8 +204,8 @@ static struct usb_intinfo ica_ints[] = {
 };
 
 static struct usb_epinfo amu_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
 };
 
 static struct usb_intinfo amu_ints[] = {
@@ -213,8 +213,8 @@ static struct usb_intinfo amu_ints[] = {
 };
 
 static struct usb_epinfo llt_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo llt_ints[] = {
@@ -222,8 +222,8 @@ static struct usb_intinfo llt_ints[] = {
 };
 
 static struct usb_epinfo cmr1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo cmr1_ints[] = {
@@ -231,20 +231,20 @@ static struct usb_intinfo cmr1_ints[] = {
 };
 
 static struct usb_epinfo cmr2_epinfos0[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 static struct usb_epinfo cmr2_epinfos1[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos2[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos3[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0, 0 }
 };
 
 static struct usb_intinfo cmr2_ints[] = {
@@ -3169,40 +3169,6 @@ enum sub_ident usb_ident(struct cgpu_info *cgpu)
 	DEVRUNLOCK(cgpu, pstate);
 
 	return ident;
-}
-
-/*
- * If you pass both intinfo and epinfo as <0 then it will set all
- * endpoints to PrefPacketSize
- * If intinfo >=0 but epinfo <0 then it will set all endpoints
- * for the given one intinfo to PrefPacketSize
- * If both are >=0 then it will set only the specified single
- * endpoint (intinfo,epinfo) to PrefPacketSize
- */
-void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize)
-{
-	struct usb_find_devices *found;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev) {
-		found = cgpu->usbdev->found;
-		if (intinfo >= 0 && epinfo >= 0)
-			found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-		else {
-			if (intinfo >= 0) {
-				for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
-					found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-			} else {
-				for (intinfo = 0; intinfo < found->intinfo_count ; intinfo++)
-					for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
-						found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-			}
-		}
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 // Need to set all devices with matching usbdev

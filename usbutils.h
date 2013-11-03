@@ -122,7 +122,6 @@ struct usb_epinfo {
 	uint16_t size;
 	unsigned char ep;
 	uint16_t wMaxPacketSize;
-	uint16_t PrefPacketSize;
 	bool found;
 };
 
@@ -405,8 +404,6 @@ void usb_disable_cps(struct cgpu_info *cgpu);
 int _usb_interface(struct cgpu_info *cgpu, int intinfo);
 #define usb_interface(_cgpu) _usb_interface(_cgpu, DEFAULT_INTINFO)
 enum sub_ident usb_ident(struct cgpu_info *cgpu);
-void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize);
-#define usb_set_pps(_cgpu, _pps) _usb_set_pps(_cgpu, -1, -1, _pps)
 void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();
