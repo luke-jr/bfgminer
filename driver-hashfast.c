@@ -347,7 +347,6 @@ static bool hfa_initialise(struct cgpu_info *hashfast)
 	if (hashfast->usbinfo.nodev)
 		return false;
 
-	usb_buffer_enable(hashfast);
 	hfa_clear_readbuf(hashfast);
 
 	err = usb_transfer(hashfast, 0, 9, 1, 0, C_ATMEL_RESET);
@@ -916,7 +915,6 @@ static void hfa_shutdown(struct thr_info *thr)
 	pthread_join(info->read_thr, NULL);
 	hfa_free_all_work(info);
 	hfa_clear_readbuf(hashfast);
-	usb_buffer_disable(hashfast);
 	free(info->works);
 	free(info->die_statistics);
 	free(info->die_status);

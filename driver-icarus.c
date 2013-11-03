@@ -822,8 +822,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 	if (!usb_init(icarus, dev, found))
 		goto shin;
 
-	usb_buffer_enable(icarus);
-
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 
 	hex2bin((void *)(&workdata), golden_ob, sizeof(workdata));

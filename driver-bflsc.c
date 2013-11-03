@@ -888,8 +888,6 @@ reinit:
 	mutex_init(&bflsc->device_mutex);
 	rwlock_init(&sc_info->stat_lock);
 
-	usb_buffer_enable(bflsc);
-
 	return true;
 
 unshin:

@@ -1309,9 +1309,6 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 
 	free(cgusb->found);
 
-	if (cgusb->buffer)
-		free(cgusb->buffer);
-
 	free(cgusb);
 
 	return NULL;
@@ -2503,6 +2500,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	double max, done;
 	int bufleft, err, got, tot, pstate;
 	bool first = true;
+	bool dobuffer;
 	char *search;
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
@@ -2531,17 +2529,12 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		timeout = usbdev->found->timeout;
 
 	if (end == NULL) {
-		if (usbdev->buffer && usbdev->bufamt) {
-			tot = usbdev->bufamt;
-			bufleft = bufsiz - tot;
+		tot = usbdev->bufamt;
+		bufleft = bufsiz - tot;
+		if (tot)
 			memcpy(usbbuf, usbdev->buffer, tot);
-			ptr = usbbuf + tot;
-			usbdev->bufamt = 0;
-		} else {
-			tot = 0;
-			bufleft = bufsiz;
-			ptr = usbbuf;
-		}
+		ptr = usbbuf + tot;
+		usbdev->bufamt = 0;
 
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
@@ -2592,7 +2585,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		}
 
 		// N.B. usbdev->buffer was emptied before the while() loop
-		if (usbdev->buffer && tot > (int)bufsiz) {
+		if (tot > (int)bufsiz) {
 			usbdev->bufamt = tot - bufsiz;
 			memcpy(usbdev->buffer, usbbuf + bufsiz, usbdev->bufamt);
 			tot -= usbdev->bufamt;
@@ -2607,23 +2600,19 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		goto out_unlock;
 	}
 
-	if (usbdev->buffer && usbdev->bufamt) {
-		tot = usbdev->bufamt;
-		bufleft = bufsiz - tot;
+	tot = usbdev->bufamt;
+	bufleft = bufsiz - tot;
+	if (tot)
 		memcpy(usbbuf, usbdev->buffer, tot);
-		ptr = usbbuf + tot;
-		usbdev->bufamt = 0;
-	} else {
-		tot = 0;
-		bufleft = bufsiz;
-		ptr = usbbuf;
-	}
+	ptr = usbbuf + tot;
+	usbdev->bufamt = 0;
 
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
+
 	while (bufleft > 0) {
 		got = 0;
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
@@ -2670,36 +2659,34 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			break;
 	}
 
-	if (usbdev->buffer) {
-		bool dobuffer = false;
+	dobuffer = false;
 
-		if ((search = find_end(usbbuf, usbbuf, tot, tot, (char *)end, endlen, true))) {
-			// end finishes after bufsiz
-			if ((search + endlen - (char *)usbbuf) > (int)bufsiz) {
-				usbdev->bufamt = tot - bufsiz;
-				dobuffer = true;
-			} else {
-				// extra data after end
-				if (*(search + endlen)) {
-					usbdev->bufamt = tot - (search + endlen - (char *)usbbuf);
-					dobuffer = true;
-				}
-			}
+	if ((search = find_end(usbbuf, usbbuf, tot, tot, (char *)end, endlen, true))) {
+		// end finishes after bufsiz
+		if ((search + endlen - (char *)usbbuf) > (int)bufsiz) {
+			usbdev->bufamt = tot - bufsiz;
+			dobuffer = true;
 		} else {
-			// no end, but still bigger than bufsiz
-			if (tot > (int)bufsiz) {
-				usbdev->bufamt = tot - bufsiz;
+			// extra data after end
+			if (*(search + endlen)) {
+				usbdev->bufamt = tot - (search + endlen - (char *)usbbuf);
 				dobuffer = true;
 			}
 		}
-
-		if (dobuffer) {
-			tot -= usbdev->bufamt;
-			memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
-			usbbuf[tot] = '\0';
-			applog(LOG_DEBUG, "USB: %s%i read2 buffering %d extra bytes",
-			       cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+	} else {
+		// no end, but still bigger than bufsiz
+		if (tot > (int)bufsiz) {
+			usbdev->bufamt = tot - bufsiz;
+			dobuffer = true;
 		}
+	}
+
+	if (dobuffer) {
+		tot -= usbdev->bufamt;
+		memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
+		usbbuf[tot] = '\0';
+		applog(LOG_DEBUG, "USB: %s%i read2 buffering %d extra bytes",
+			cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 	}
 
 	*processed = tot;
@@ -3029,44 +3016,6 @@ int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo)
 				usb_cmdname(C_LATENCY), err);
 
 	return err;
-}
-
-void usb_buffer_enable(struct cgpu_info *cgpu)
-{
-	struct cg_usb_device *cgusb;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	cgusb = cgpu->usbdev;
-	if (cgusb && !cgusb->buffer) {
-		cgusb->bufamt = 0;
-		cgusb->buffer = malloc(USB_MAX_READ+1);
-		if (!cgusb->buffer)
-			quit(1, "Failed to malloc buffer for USB %s%i",
-				cgpu->drv->name, cgpu->device_id);
-		cgusb->bufsiz = USB_MAX_READ;
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_buffer_disable(struct cgpu_info *cgpu)
-{
-	struct cg_usb_device *cgusb;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	cgusb = cgpu->usbdev;
-	if (cgusb && cgusb->buffer) {
-		cgusb->bufamt = 0;
-		cgusb->bufsiz = 0;
-		free(cgusb->buffer);
-		cgusb->buffer = NULL;
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 void usb_buffer_clear(struct cgpu_info *cgpu)

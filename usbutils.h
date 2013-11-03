@@ -181,6 +181,8 @@ enum usb_types {
 	USB_TYPE_FTDI
 };
 
+#define USB_MAX_READ 8192
+
 struct cg_usb_device {
 	struct usb_find_devices *found;
 	libusb_device_handle *handle;
@@ -196,7 +198,7 @@ struct cg_usb_device {
 	char *serial_string;
 	unsigned char fwVersion;	// ??
 	unsigned char interfaceVersion;	// ??
-	char *buffer;
+	char buffer[USB_MAX_READ];
 	uint32_t bufsiz;
 	uint32_t bufamt;
 	cgtimer_t cgt_last_write;
@@ -204,8 +206,6 @@ struct cg_usb_device {
 };
 
 #define USB_NOSTAT 0
-
-#define USB_MAX_READ 8192
 
 #define USB_TMO_0 50
 #define USB_TMO_1 100
@@ -394,8 +394,6 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 int usb_ftdi_cts(struct cgpu_info *cgpu);
 int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo);
 #define usb_ftdi_set_latency(_cgpu) _usb_ftdi_set_latency(_cgpu, DEFAULT_INTINFO)
-void usb_buffer_enable(struct cgpu_info *cgpu);
-void usb_buffer_disable(struct cgpu_info *cgpu);
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
 void usb_set_cps(struct cgpu_info *cgpu, int cps);
