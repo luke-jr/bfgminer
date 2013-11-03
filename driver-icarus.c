@@ -55,10 +55,6 @@
 // The size of a successful nonce read
 #define ICARUS_READ_SIZE 4
 
-#define AMU_PREF_PACKET 256
-#define BLT_PREF_PACKET 512
-#define ICA_PREF_PACKET 256
-
 // Ensure the sizes are correct for the Serial read
 #if (ICARUS_READ_SIZE != 4)
 #error ICARUS_READ_SIZE must be 4
@@ -329,8 +325,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 		case IDENT_LLT:
 		case IDENT_CMR1:
 		case IDENT_CMR2:
-			usb_set_pps(icarus, BLT_PREF_PACKET);
-
 			// Reset
 			transfer(icarus, FTDI_TYPE_OUT, FTDI_REQUEST_RESET, FTDI_VALUE_RESET,
 				 interface, C_RESET);
@@ -404,8 +398,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 				 interface, C_PURGERX);
 			break;
 		case IDENT_ICA:
-			usb_set_pps(icarus, ICA_PREF_PACKET);
-
 			// Set Data Control
 			transfer(icarus, PL2303_CTRL_OUT, PL2303_REQUEST_CTRL, PL2303_VALUE_CTRL,
 				 interface, C_SETDATA);
@@ -426,8 +418,6 @@ static void icarus_initialise(struct cgpu_info *icarus, int baud)
 				 interface, C_VENDOR);
 			break;
 		case IDENT_AMU:
-			usb_set_pps(icarus, AMU_PREF_PACKET);
-
 			// Enable the UART
 			transfer(icarus, CP210X_TYPE_OUT, CP210X_REQUEST_IFC_ENABLE,
 				 CP210X_VALUE_UART_ENABLE,
@@ -831,8 +821,6 @@ static bool icarus_detect_one(struct libusb_device *dev, struct usb_find_devices
 
 	if (!usb_init(icarus, dev, found))
 		goto shin;
-
-	usb_buffer_enable(icarus);
 
 	get_options(this_option_offset, icarus, &baud, &work_division, &fpga_count);
 

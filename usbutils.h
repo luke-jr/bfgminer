@@ -122,7 +122,6 @@ struct usb_epinfo {
 	uint16_t size;
 	unsigned char ep;
 	uint16_t wMaxPacketSize;
-	uint16_t PrefPacketSize;
 	bool found;
 };
 
@@ -182,6 +181,8 @@ enum usb_types {
 	USB_TYPE_FTDI
 };
 
+#define USB_MAX_READ 8192
+
 struct cg_usb_device {
 	struct usb_find_devices *found;
 	libusb_device_handle *handle;
@@ -197,7 +198,7 @@ struct cg_usb_device {
 	char *serial_string;
 	unsigned char fwVersion;	// ??
 	unsigned char interfaceVersion;	// ??
-	char *buffer;
+	char buffer[USB_MAX_READ];
 	uint32_t bufsiz;
 	uint32_t bufamt;
 	cgtimer_t cgt_last_write;
@@ -205,8 +206,6 @@ struct cg_usb_device {
 };
 
 #define USB_NOSTAT 0
-
-#define USB_MAX_READ 8192
 
 #define USB_TMO_0 50
 #define USB_TMO_1 100
@@ -388,15 +387,13 @@ bool usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct usb_find
 void usb_detect(struct device_drv *drv, bool (*device_detect)(struct libusb_device *, struct usb_find_devices *));
 struct api_data *api_usb_stats(int *count);
 void update_usb_stats(struct cgpu_info *cgpu);
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable);
-int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds);
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable);
+int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds);
 int _usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint32_t *data, int siz, unsigned int timeout, enum usb_cmds cmd);
 int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *buf, int bufsiz, int *amount, unsigned int timeout, enum usb_cmds cmd);
 int usb_ftdi_cts(struct cgpu_info *cgpu);
 int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo);
 #define usb_ftdi_set_latency(_cgpu) _usb_ftdi_set_latency(_cgpu, DEFAULT_INTINFO)
-void usb_buffer_enable(struct cgpu_info *cgpu);
-void usb_buffer_disable(struct cgpu_info *cgpu);
 void usb_buffer_clear(struct cgpu_info *cgpu);
 uint32_t usb_buffer_size(struct cgpu_info *cgpu);
 void usb_set_cps(struct cgpu_info *cgpu, int cps);
@@ -405,8 +402,6 @@ void usb_disable_cps(struct cgpu_info *cgpu);
 int _usb_interface(struct cgpu_info *cgpu, int intinfo);
 #define usb_interface(_cgpu) _usb_interface(_cgpu, DEFAULT_INTINFO)
 enum sub_ident usb_ident(struct cgpu_info *cgpu);
-void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize);
-#define usb_set_pps(_cgpu, _pps) _usb_set_pps(_cgpu, -1, -1, _pps)
 void usb_set_dev_start(struct cgpu_info *cgpu);
 void usb_cleanup();
 void usb_initialise();

@@ -103,8 +103,8 @@ static struct list_head ut_list;
 #ifdef USE_BFLSC
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bas_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo bas_ints[] = {
@@ -115,8 +115,8 @@ static struct usb_intinfo bas_ints[] = {
 #ifdef USE_BITFORCE
 // N.B. transfer size is 512 with USB2.0, but only 64 with USB1.1
 static struct usb_epinfo bfl_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo bfl_ints[] = {
@@ -126,12 +126,12 @@ static struct usb_intinfo bfl_ints[] = {
 
 #ifdef USE_BITFURY
 static struct usb_epinfo bfu0_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(2), 0, 0 }
 };
 
 static struct usb_epinfo bfu1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	16,	EPO(4), 0, 0 }
 };
 
 /* Default to interface 1 */
@@ -145,12 +145,12 @@ static struct usb_intinfo bfu_ints[] = {
 #include "driver-hashfast.h"
 
 static struct usb_epinfo hfa0_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_INTERRUPT,	8,	EPI(3), 0, 0 }
 };
 
 static struct usb_epinfo hfa1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 /* Default to interface 1 */
@@ -162,8 +162,8 @@ static struct usb_intinfo hfa_ints[] = {
 
 #ifdef USE_MODMINER
 static struct usb_epinfo mmq_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(3), 0, 0 }
 };
 
 static struct usb_intinfo mmq_ints[] = {
@@ -173,8 +173,8 @@ static struct usb_intinfo mmq_ints[] = {
 
 #ifdef USE_AVALON
 static struct usb_epinfo ava_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo ava_ints[] = {
@@ -184,8 +184,8 @@ static struct usb_intinfo ava_ints[] = {
 
 #ifdef USE_KLONDIKE
 static struct usb_epinfo kln_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
 };
 
 static struct usb_intinfo kln_ints[] = {
@@ -195,8 +195,8 @@ static struct usb_intinfo kln_ints[] = {
 
 #ifdef USE_ICARUS
 static struct usb_epinfo ica_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo ica_ints[] = {
@@ -204,8 +204,8 @@ static struct usb_intinfo ica_ints[] = {
 };
 
 static struct usb_epinfo amu_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(1), 0, 0 }
 };
 
 static struct usb_intinfo amu_ints[] = {
@@ -213,8 +213,8 @@ static struct usb_intinfo amu_ints[] = {
 };
 
 static struct usb_epinfo llt_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo llt_ints[] = {
@@ -222,8 +222,8 @@ static struct usb_intinfo llt_ints[] = {
 };
 
 static struct usb_epinfo cmr1_epinfos[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 
 static struct usb_intinfo cmr1_ints[] = {
@@ -231,20 +231,20 @@ static struct usb_intinfo cmr1_ints[] = {
 };
 
 static struct usb_epinfo cmr2_epinfos0[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(1), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(2), 0, 0 }
 };
 static struct usb_epinfo cmr2_epinfos1[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(3), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(4), 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos2[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0, 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(5), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(6), 0, 0 },
 };
 static struct usb_epinfo cmr2_epinfos3[] = {
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0, 0, 0 },
-	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0, 0, 0 }
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPI(7), 0, 0 },
+	{ LIBUSB_TRANSFER_TYPE_BULK,	64,	EPO(8), 0, 0 }
 };
 
 static struct usb_intinfo cmr2_ints[] = {
@@ -460,6 +460,15 @@ static const char *nodatareturned = "no data returned ";
 
 #define IOERR_CHECK(cgpu, err) \
 		if (err == LIBUSB_ERROR_IO) { \
+			cgpu->usbinfo.ioerr_count++; \
+			cgpu->usbinfo.continuous_ioerr_count++; \
+		} else { \
+			cgpu->usbinfo.continuous_ioerr_count = 0; \
+		}
+
+/* Timeout errors on writes are unusual and should be treated as IO errors. */
+#define WRITEIOERR_CHECK(cgpu, err) \
+		if (err == LIBUSB_ERROR_IO || err == LIBUSB_ERROR_TIMEOUT) { \
 			cgpu->usbinfo.ioerr_count++; \
 			cgpu->usbinfo.continuous_ioerr_count++; \
 		} else { \
@@ -1299,9 +1308,6 @@ static struct cg_usb_device *free_cgusb(struct cg_usb_device *cgusb)
 		free(cgusb->descriptor);
 
 	free(cgusb->found);
-
-	if (cgusb->buffer)
-		free(cgusb->buffer);
 
 	free(cgusb);
 
@@ -2332,6 +2338,9 @@ static void LIBUSB_CALL transfer_callback(struct libusb_transfer *transfer)
 
 static int usb_transfer_toerr(int ret)
 {
+	if (ret <= 0)
+		return ret;
+
 	switch (ret) {
 		default:
 		case LIBUSB_TRANSFER_COMPLETED:
@@ -2405,15 +2414,24 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		  struct cgpu_info *cgpu, __maybe_unused int mode,
 		  enum usb_cmds cmd, __maybe_unused int seq, bool cancellable)
 {
+	int bulk_timeout, callback_timeout = timeout;
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
-	uint16_t MaxPacketSize;
 	int err, errn;
 #if DO_USB_STATS
 	struct timeval tv_start, tv_finish;
 #endif
 	unsigned char buf[512];
+#ifdef WIN32
+	/* On windows the callback_timeout is a safety mechanism only. */
+	bulk_timeout = timeout;
+	callback_timeout += timeout + cgpu->usbdev->found->timeout;
+#else
+	/* We give the transfer no timeout since we manage timeouts ourself on
+	 * non windows. */
+	bulk_timeout = 0;
+#endif
 
 	usb_epinfo = &(cgpu->usbdev->found->intinfos[intinfo].epinfos[epinfo]);
 	endpoint = usb_epinfo->ep;
@@ -2423,37 +2441,33 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	if (unlikely(cgpu->shutdown))
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
 
-	/* Limit length of transfer to the largest this descriptor supports
-	 * and leave the higher level functions to transfer more if needed. */
-	if (usb_epinfo->PrefPacketSize)
-		MaxPacketSize = usb_epinfo->PrefPacketSize;
-	else
-		MaxPacketSize = usb_epinfo->wMaxPacketSize;
-	if (length > MaxPacketSize)
-		length = MaxPacketSize;
+	if (length > usb_epinfo->wMaxPacketSize)
+		length = usb_epinfo->wMaxPacketSize;
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT)
 		memcpy(buf, data, length);
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
 	init_usb_transfer(&ut);
-	/* We give the transfer no timeout since we manage timeouts ourself */
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
-				  transfer_callback, &ut, 0);
+				  transfer_callback, &ut, bulk_timeout);
 	STATS_TIMEVAL(&tv_start);
 	err = usb_submit_transfer(&ut, ut.transfer, cancellable);
 	errn = errno;
 	if (!err)
-		err = callback_wait(&ut, transferred, timeout);
+		err = callback_wait(&ut, transferred, callback_timeout);
+	else
+		err = usb_transfer_toerr(err);
 	complete_usb_transfer(&ut);
 
 	STATS_TIMEVAL(&tv_finish);
 	USB_STATS(cgpu, &tv_start, &tv_finish, err, mode, cmd, seq, timeout);
 
-	if (err < 0)
+	if (err < 0) {
 		applog(LOG_DEBUG, "%s%i: %s (amt=%d err=%d ern=%d)",
 				cgpu->drv->name, cgpu->device_id,
 				usb_cmdname(cmd), *transferred, err, errn);
+	}
 
 	if (err == LIBUSB_ERROR_PIPE) {
 		int retries = 0;
@@ -2472,12 +2486,12 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		} while (err && ++retries < USB_RETRY_MAX);
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
-		memcpy(data, buf, length);
+		memcpy(data, buf, *transferred);
 
 	return err;
 }
 
-int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
+int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, const char *end, enum usb_cmds cmd, bool readonce, bool cancellable)
 {
 	struct cg_usb_device *usbdev;
 	bool ftdi;
@@ -2486,10 +2500,11 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	double max, done;
 	int bufleft, err, got, tot, pstate;
 	bool first = true;
+	bool dobuffer;
 	char *search;
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
-	size_t usbbufread;
+	const size_t usbbufread = 512; /* Always read full size */
 
 	DEVRLOCK(cgpu, pstate);
 
@@ -2514,50 +2529,20 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		timeout = usbdev->found->timeout;
 
 	if (end == NULL) {
-		if (usbdev->buffer && usbdev->bufamt) {
-			tot = usbdev->bufamt;
-			bufleft = bufsiz - tot;
+		tot = usbdev->bufamt;
+		bufleft = bufsiz - tot;
+		if (tot)
 			memcpy(usbbuf, usbdev->buffer, tot);
-			ptr = usbbuf + tot;
-			usbdev->bufamt = 0;
-		} else {
-			tot = 0;
-			bufleft = bufsiz;
-			ptr = usbbuf;
-		}
+		ptr = usbbuf + tot;
+		usbdev->bufamt = 0;
 
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
-			// TODO: use (USB_MAX_READ - tot) always?
-			if (usbdev->buffer)
-				usbbufread = USB_MAX_READ - tot;
-			else {
-				if (ftdi)
-					usbbufread = bufleft + 2;
-				else
-					usbbufread = bufleft;
-			}
 			got = 0;
 
-			if (first && usbdev->usecps && usbdev->last_write_siz) {
-				cgtimer_t now, already_done;
-				double sleep_estimate;
-				double write_time = (double)(usbdev->last_write_siz) /
-						    (double)(usbdev->cps) * 1000;
-
-				cgtimer_time(&now);
-				cgtimer_sub(&now, &usbdev->cgt_last_write, &already_done);
-				sleep_estimate = write_time - cgtimer_to_ms(&already_done);
-
-				if (sleep_estimate > 0.0) {
-					cgsleep_ms_r(&usbdev->cgt_last_write, write_time);
-					cgpu->usbinfo.read_delay_count++;
-					cgpu->usbinfo.total_read_delay += sleep_estimate;
-				}
-			}
 			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 						ptr, usbbufread, &got, timeout,
 						cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
@@ -2595,12 +2580,12 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			if (unlikely(done >= max))
 				break;
 			timeout = initial_timeout - (done * 1000);
-			if (!timeout)
+			if (timeout <= 0)
 				break;
 		}
 
 		// N.B. usbdev->buffer was emptied before the while() loop
-		if (usbdev->buffer && tot > (int)bufsiz) {
+		if (tot > (int)bufsiz) {
 			usbdev->bufamt = tot - bufsiz;
 			memcpy(usbdev->buffer, usbbuf + bufsiz, usbdev->bufamt);
 			tot -= usbdev->bufamt;
@@ -2615,50 +2600,21 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		goto out_unlock;
 	}
 
-	if (usbdev->buffer && usbdev->bufamt) {
-		tot = usbdev->bufamt;
-		bufleft = bufsiz - tot;
+	tot = usbdev->bufamt;
+	bufleft = bufsiz - tot;
+	if (tot)
 		memcpy(usbbuf, usbdev->buffer, tot);
-		ptr = usbbuf + tot;
-		usbdev->bufamt = 0;
-	} else {
-		tot = 0;
-		bufleft = bufsiz;
-		ptr = usbbuf;
-	}
+	ptr = usbbuf + tot;
+	usbdev->bufamt = 0;
 
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
+
 	while (bufleft > 0) {
-		// TODO: use (USB_MAX_READ - tot) always?
-		if (usbdev->buffer)
-			usbbufread = USB_MAX_READ - tot;
-		else {
-			if (ftdi)
-				usbbufread = bufleft + 2;
-			else
-				usbbufread = bufleft;
-		}
 		got = 0;
-		if (first && usbdev->usecps && usbdev->last_write_siz) {
-			cgtimer_t now, already_done;
-			double sleep_estimate;
-			double write_time = (double)(usbdev->last_write_siz) /
-					    (double)(usbdev->cps) * 1000;
-
-			cgtimer_time(&now);
-			cgtimer_sub(&now, &usbdev->cgt_last_write, &already_done);
-			sleep_estimate = write_time - cgtimer_to_ms(&already_done);
-
-			if (sleep_estimate > 0.0) {
-				cgsleep_ms_r(&usbdev->cgt_last_write, write_time);
-				cgpu->usbinfo.read_delay_count++;
-				cgpu->usbinfo.total_read_delay += sleep_estimate;
-			}
-		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					ptr, usbbufread, &got, timeout,
 					cgpu, MODE_BULK_READ, cmd, first ? SEQ0 : SEQ1,
@@ -2699,40 +2655,38 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		if (unlikely(done >= max))
 			break;
 		timeout = initial_timeout - (done * 1000);
-		if (!timeout)
+		if (timeout <= 0)
 			break;
 	}
 
-	if (usbdev->buffer) {
-		bool dobuffer = false;
+	dobuffer = false;
 
-		if ((search = find_end(usbbuf, usbbuf, tot, tot, (char *)end, endlen, true))) {
-			// end finishes after bufsiz
-			if ((search + endlen - (char *)usbbuf) > (int)bufsiz) {
-				usbdev->bufamt = tot - bufsiz;
-				dobuffer = true;
-			} else {
-				// extra data after end
-				if (*(search + endlen)) {
-					usbdev->bufamt = tot - (search + endlen - (char *)usbbuf);
-					dobuffer = true;
-				}
-			}
+	if ((search = find_end(usbbuf, usbbuf, tot, tot, (char *)end, endlen, true))) {
+		// end finishes after bufsiz
+		if ((search + endlen - (char *)usbbuf) > (int)bufsiz) {
+			usbdev->bufamt = tot - bufsiz;
+			dobuffer = true;
 		} else {
-			// no end, but still bigger than bufsiz
-			if (tot > (int)bufsiz) {
-				usbdev->bufamt = tot - bufsiz;
+			// extra data after end
+			if (*(search + endlen)) {
+				usbdev->bufamt = tot - (search + endlen - (char *)usbbuf);
 				dobuffer = true;
 			}
 		}
-
-		if (dobuffer) {
-			tot -= usbdev->bufamt;
-			memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
-			usbbuf[tot] = '\0';
-			applog(LOG_DEBUG, "USB: %s%i read2 buffering %d extra bytes",
-			       cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
+	} else {
+		// no end, but still bigger than bufsiz
+		if (tot > (int)bufsiz) {
+			usbdev->bufamt = tot - bufsiz;
+			dobuffer = true;
 		}
+	}
+
+	if (dobuffer) {
+		tot -= usbdev->bufamt;
+		memcpy(usbdev->buffer, usbbuf + tot, usbdev->bufamt);
+		usbbuf[tot] = '\0';
+		applog(LOG_DEBUG, "USB: %s%i read2 buffering %d extra bytes",
+			cgpu->drv->name, cgpu->device_id, usbdev->bufamt);
 	}
 
 	*processed = tot;
@@ -2756,7 +2710,7 @@ out_noerrmsg:
 	return err;
 }
 
-int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, unsigned int timeout, enum usb_cmds cmd)
+int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
 	struct timeval read_start, tv_finish;
@@ -2788,29 +2742,15 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufsiz > 0) {
-		sent = 0;
+		int tosend = bufsiz;
+
 		if (usbdev->usecps) {
-			if (usbdev->last_write_siz) {
-				cgtimer_t now, already_done;
-				double sleep_estimate;
-				double write_time = (double)(usbdev->last_write_siz) /
-						    (double)(usbdev->cps) * 1000;
-
-				cgtimer_time(&now);
-				cgtimer_sub(&now, &usbdev->cgt_last_write, &already_done);
-				sleep_estimate = write_time - cgtimer_to_ms(&already_done);
-
-				if (sleep_estimate > 0.0) {
-					cgsleep_ms_r(&usbdev->cgt_last_write, write_time);
-					cgpu->usbinfo.write_delay_count++;
-					cgpu->usbinfo.total_write_delay += sleep_estimate;
-				}
-			}
-			cgsleep_prepare_r(&usbdev->cgt_last_write);
-			usbdev->last_write_siz = bufsiz;
+			int cpms = usbdev->cps / 1000 ? : 1;
+			if (tosend > cpms)
+				tosend = cpms;
 		}
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
-					(unsigned char *)buf, bufsiz, &sent, timeout,
+					(unsigned char *)buf, tosend, &sent, timeout,
 					cgpu, MODE_BULK_WRITE, cmd, first ? SEQ0 : SEQ1,
 					false);
 		cgtime(&tv_finish);
@@ -2834,7 +2774,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 		if (unlikely(done >= max))
 			break;
 		timeout = initial_timeout - (done * 1000);
-		if (!timeout)
+		if (timeout <= 0)
 			break;
 	}
 
@@ -2928,26 +2868,6 @@ int __usb_transfer(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bReques
 
 	USBDEBUG("USB debug: @_usb_transfer() buf=%s", bin2hex(buf, (size_t)siz));
 
-	if (usbdev->usecps) {
-		if (usbdev->last_write_siz) {
-			cgtimer_t now, already_done;
-			double sleep_estimate;
-			double write_time = (double)(usbdev->last_write_siz) /
-					    (double)(usbdev->cps) * 1000;
-
-			cgtimer_time(&now);
-			cgtimer_sub(&now, &usbdev->cgt_last_write, &already_done);
-			sleep_estimate = write_time - cgtimer_to_ms(&already_done);
-
-			if (sleep_estimate > 0.0) {
-				cgsleep_ms_r(&usbdev->cgt_last_write, write_time);
-				cgpu->usbinfo.write_delay_count++;
-				cgpu->usbinfo.total_write_delay += sleep_estimate;
-			}
-		}
-		cgsleep_prepare_r(&usbdev->cgt_last_write);
-		usbdev->last_write_siz = siz;
-	}
 	STATS_TIMEVAL(&tv_start);
 	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
 				   wValue, wIndex, buf, (uint16_t)siz, timeout);
@@ -3011,22 +2931,6 @@ int _usb_transfer_read(struct cgpu_info *cgpu, uint8_t request_type, uint8_t bRe
 
 	*amount = 0;
 
-	if (usbdev->usecps && usbdev->last_write_siz) {
-		cgtimer_t now, already_done;
-		double sleep_estimate;
-		double write_time = (double)(usbdev->last_write_siz) /
-				    (double)(usbdev->cps) * 1000;
-
-		cgtimer_time(&now);
-		cgtimer_sub(&now, &usbdev->cgt_last_write, &already_done);
-		sleep_estimate = write_time - cgtimer_to_ms(&already_done);
-
-		if (sleep_estimate > 0.0) {
-			cgsleep_ms_r(&usbdev->cgt_last_write, write_time);
-			cgpu->usbinfo.read_delay_count++;
-			cgpu->usbinfo.total_read_delay += sleep_estimate;
-		}
-	}
 	memset(tbuf, 0, 64);
 	STATS_TIMEVAL(&tv_start);
 	err = usb_control_transfer(cgpu, usbdev->handle, request_type, bRequest,
@@ -3112,44 +3016,6 @@ int _usb_ftdi_set_latency(struct cgpu_info *cgpu, int intinfo)
 				usb_cmdname(C_LATENCY), err);
 
 	return err;
-}
-
-void usb_buffer_enable(struct cgpu_info *cgpu)
-{
-	struct cg_usb_device *cgusb;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	cgusb = cgpu->usbdev;
-	if (cgusb && !cgusb->buffer) {
-		cgusb->bufamt = 0;
-		cgusb->buffer = malloc(USB_MAX_READ+1);
-		if (!cgusb->buffer)
-			quit(1, "Failed to malloc buffer for USB %s%i",
-				cgpu->drv->name, cgpu->device_id);
-		cgusb->bufsiz = USB_MAX_READ;
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
-}
-
-void usb_buffer_disable(struct cgpu_info *cgpu)
-{
-	struct cg_usb_device *cgusb;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	cgusb = cgpu->usbdev;
-	if (cgusb && cgusb->buffer) {
-		cgusb->bufamt = 0;
-		cgusb->bufsiz = 0;
-		free(cgusb->buffer);
-		cgusb->buffer = NULL;
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 void usb_buffer_clear(struct cgpu_info *cgpu)
@@ -3250,40 +3116,6 @@ enum sub_ident usb_ident(struct cgpu_info *cgpu)
 	DEVRUNLOCK(cgpu, pstate);
 
 	return ident;
-}
-
-/*
- * If you pass both intinfo and epinfo as <0 then it will set all
- * endpoints to PrefPacketSize
- * If intinfo >=0 but epinfo <0 then it will set all endpoints
- * for the given one intinfo to PrefPacketSize
- * If both are >=0 then it will set only the specified single
- * endpoint (intinfo,epinfo) to PrefPacketSize
- */
-void _usb_set_pps(struct cgpu_info *cgpu, int intinfo, int epinfo, uint16_t PrefPacketSize)
-{
-	struct usb_find_devices *found;
-	int pstate;
-
-	DEVWLOCK(cgpu, pstate);
-
-	if (cgpu->usbdev) {
-		found = cgpu->usbdev->found;
-		if (intinfo >= 0 && epinfo >= 0)
-			found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-		else {
-			if (intinfo >= 0) {
-				for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
-					found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-			} else {
-				for (intinfo = 0; intinfo < found->intinfo_count ; intinfo++)
-					for (epinfo = 0; epinfo < found->intinfos[intinfo].epinfo_count; epinfo++)
-						found->intinfos[intinfo].epinfos[epinfo].PrefPacketSize = PrefPacketSize;
-			}
-		}
-	}
-
-	DEVWUNLOCK(cgpu, pstate);
 }
 
 // Need to set all devices with matching usbdev

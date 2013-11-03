@@ -146,8 +146,6 @@ static bool bitfury_detect_one(struct libusb_device *dev, struct usb_find_device
 	 * hashrate to adapt quickly on starting. */
 	info->total_nonces = 1;
 
-	usb_buffer_enable(bitfury);
-
 	if (!bitfury_open(bitfury))
 		goto out_close;
 
