@@ -2542,15 +2542,10 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
-			// TODO: use (USB_MAX_READ - tot) always?
-			if (usbdev->buffer)
-				usbbufread = USB_MAX_READ - tot;
-			else {
-				if (ftdi)
-					usbbufread = bufleft + 2;
-				else
-					usbbufread = bufleft;
-			}
+			if (ftdi)
+				usbbufread = bufleft + 2;
+			else
+				usbbufread = bufleft;
 			got = 0;
 
 			err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
@@ -2628,15 +2623,10 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 	while (bufleft > 0) {
-		// TODO: use (USB_MAX_READ - tot) always?
-		if (usbdev->buffer)
-			usbbufread = USB_MAX_READ - tot;
-		else {
-			if (ftdi)
-				usbbufread = bufleft + 2;
-			else
-				usbbufread = bufleft;
-		}
+		if (ftdi)
+			usbbufread = bufleft + 2;
+		else
+			usbbufread = bufleft;
 		got = 0;
 		err = usb_bulk_transfer(usbdev->handle, intinfo, epinfo,
 					ptr, usbbufread, &got, timeout,
