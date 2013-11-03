@@ -31,6 +31,17 @@
 #include "miner.h"
 #include "util.h"
 
+void _bfg_register_driver(const struct device_drv * const drv)
+{
+	static struct driver_registration *initlist;
+	struct driver_registration *ndr = malloc(sizeof(*ndr));
+	*ndr = (struct driver_registration){
+		.drv = drv,
+	};
+	LL_PREPEND(initlist, ndr);
+}
+
+
 bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce)
 {
 	struct cgpu_info *cgpu = thr->cgpu;

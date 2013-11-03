@@ -7,8 +7,20 @@
 
 #include "miner.h"
 
+struct driver_registration;
+struct driver_registration {
+	const struct device_drv *drv;
+	
+	struct driver_registration *next;
+};
+
+extern void _bfg_register_driver(const struct device_drv *);
 #define BFG_REGISTER_DRIVER(drv)                \
 	struct device_drv drv;                      \
+	__attribute__((constructor))                \
+	static void __bfg_register_drv_ ## drv() {  \
+		_bfg_register_driver(&drv);             \
+	}                                           \
 // END BFG_REGISTER_DRIVER
 
 extern void request_work(struct thr_info *);
