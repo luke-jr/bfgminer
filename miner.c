@@ -163,7 +163,6 @@ bool opt_scrypt;
 static char detect_algo;
 #endif
 bool opt_restart = true;
-static bool opt_nogpu;
 
 #ifdef USE_LIBMICROHTTPD
 #include "httpsrv.h"
@@ -1004,6 +1003,12 @@ static char *add_serial(const char *arg)
 	return NULL;
 }
 
+static char *compat_disable_gpu(__maybe_unused void *arg)
+{
+	string_elist_add("opencl:noauto", &scan_devices);
+	return NULL;
+}
+
 static
 char *opt_string_elist_add(const char *arg, struct string_elist **elist)
 {
@@ -1744,7 +1749,7 @@ static struct opt_table opt_config_table[] = {
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
-			opt_set_bool, &opt_nogpu,
+			compat_disable_gpu, NULL,
 			opt_hidden
 	),
 	OPT_WITHOUT_ARG("--disable-rejecting",
@@ -10294,8 +10299,7 @@ void drv_detect_all()
 #endif
 
 #ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
+	opencl_api.drv_detect();
 #endif
 }
 
