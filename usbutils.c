@@ -305,7 +305,7 @@ static struct usb_find_devices find_dev[] = {
 		.config = 1,
 		.timeout = BITFURY_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
-		.iManufacturer = "BPMC",
+		//.iManufacturer = "BPMC",
 		.iProduct = "Bitfury BF1",
 		INTINFO(bfu_ints)
 	},
