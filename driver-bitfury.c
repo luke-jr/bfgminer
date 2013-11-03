@@ -37,7 +37,7 @@
 #include "util.h"
 #include "spidevc.h"
 
-struct device_drv bitfury_drv;
+BFG_REGISTER_DRIVER(bitfury_drv)
 
 static
 int bitfury_autodetect()

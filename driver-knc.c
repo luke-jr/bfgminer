@@ -76,7 +76,7 @@ enum knc_i2c_core_status {
 	KNC_I2CSTATUS_ENABLED  = 3,
 };
 
-struct device_drv knc_drv;
+BFG_REGISTER_DRIVER(knc_drv)
 
 struct knc_device {
 	int i2c;

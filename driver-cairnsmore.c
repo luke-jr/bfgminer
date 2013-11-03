@@ -27,7 +27,7 @@
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
 #define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
-struct device_drv cairnsmore_drv;
+BFG_REGISTER_DRIVER(cairnsmore_drv)
 
 static void cairnsmore_drv_init();
 

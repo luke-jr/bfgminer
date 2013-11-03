@@ -61,8 +61,8 @@ static const char *protonames[] = {
 	"parallel queue",
 };
 
-struct device_drv bitforce_drv;
-struct device_drv bitforce_queue_api;
+BFG_REGISTER_DRIVER(bitforce_drv)
+BFG_REGISTER_DRIVER(bitforce_queue_api)
 
 // Code must deal with a timeout
 #define BFopen(devpath)  serial_open(devpath, 0, 250, true)

@@ -40,7 +40,7 @@
 #define X6500_DEFAULT_CLOCK  190
 #define X6500_MAXIMUM_CLOCK  250
 
-struct device_drv x6500_api;
+BFG_REGISTER_DRIVER(x6500_api)
 
 #define fromlebytes(ca, j)  (ca[j] | (((uint16_t)ca[j+1])<<8) | (((uint32_t)ca[j+2])<<16) | (((uint32_t)ca[j+3])<<24))
 

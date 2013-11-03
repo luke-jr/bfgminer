@@ -29,7 +29,7 @@
 
 #include <stdio.h>
 
-struct device_drv bigpic_drv;
+BFG_REGISTER_DRIVER(bigpic_drv)
 
 //------------------------------------------------------------------------------
 static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, struct bigpic_info *info)

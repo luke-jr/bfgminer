@@ -31,7 +31,7 @@
 
 #define GOLDEN_BACKLOG 5
 
-struct device_drv ztex_drv;
+BFG_REGISTER_DRIVER(ztex_drv)
 
 // Forward declarations
 static void ztex_disable(struct thr_info* thr);

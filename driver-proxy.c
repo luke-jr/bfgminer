@@ -18,7 +18,7 @@
 #include "miner.h"
 #include "util.h"
 
-struct device_drv proxy_drv;
+BFG_REGISTER_DRIVER(proxy_drv)
 
 static
 struct proxy_client *proxy_clients;

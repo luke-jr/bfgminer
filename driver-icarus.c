@@ -169,7 +169,7 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 //
 static int option_offset = -1;
 
-struct device_drv icarus_drv;
+BFG_REGISTER_DRIVER(icarus_drv)
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 

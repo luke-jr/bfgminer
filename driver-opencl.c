@@ -787,7 +787,7 @@ char *set_intensity(char *arg)
 
 
 #ifdef HAVE_OPENCL
-struct device_drv opencl_api;
+BFG_REGISTER_DRIVER(opencl_drv)
 
 char *print_ndevs_and_exit(int *ndevs)
 {

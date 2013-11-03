@@ -18,8 +18,8 @@
 #define ERUPTER_IO_SPEED 115200
 #define ERUPTER_HASH_TIME 0.0000000029761
 
-extern struct device_drv erupter_drv;
-extern struct device_drv erupter_drv_emerald;
+BFG_REGISTER_DRIVER(erupter_drv)
+BFG_REGISTER_DRIVER(erupter_drv_emerald)
 
 static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 {
