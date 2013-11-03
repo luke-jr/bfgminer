@@ -10993,6 +10993,8 @@ int main(int argc, char *argv[])
 		probe_pools();
 		do {
 			sleep(1);
+			if (pools_active)
+				break;
 			still_testing = false;
 			for (int i = 0; i < total_pools; ++i)
 				if (pools[i]->testing)
