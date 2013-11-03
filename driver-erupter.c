@@ -90,6 +90,7 @@ static void erupter_drv_init()
 	erupter_drv.name = "BES";
 	erupter_drv.drv_detect = erupter_detect;
 	erupter_drv.identify_device = erupter_identify;
+	++erupter_drv.probe_priority;
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";

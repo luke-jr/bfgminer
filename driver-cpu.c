@@ -879,6 +879,7 @@ CPUSearch:
 struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
+	.supported_algos = POW_SHA256D | POW_SCRYPT,
 	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,

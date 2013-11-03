@@ -208,6 +208,7 @@ static void cairnsmore_drv_init()
 	cairnsmore_drv.thread_init = cairnsmore_init;
 	cairnsmore_drv.identify_device = cairnsmore_identify;
 	cairnsmore_drv.get_api_extra_device_status = cairnsmore_drv_extra_device_status;
+	++cairnsmore_drv.probe_priority;
 }
 
 struct device_drv cairnsmore_drv = {

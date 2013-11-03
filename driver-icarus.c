@@ -1309,6 +1309,7 @@ static void icarus_shutdown(struct thr_info *thr)
 struct device_drv icarus_drv = {
 	.dname = "icarus",
 	.name = "ICA",
+	.probe_priority = -120,
 	.drv_detect = icarus_detect,
 	.get_api_stats = icarus_drv_stats,
 	.thread_prepare = icarus_prepare,

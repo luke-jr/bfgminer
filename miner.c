@@ -10105,60 +10105,6 @@ struct device_drv cpu_drv = {
 };
 #endif
 
-#ifdef USE_BITFORCE
-extern struct device_drv bitforce_drv;
-#endif
-
-#ifdef USE_BIGPIC
-extern struct device_drv bigpic_drv;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_drv cairnsmore_drv;
-extern struct device_drv erupter_drv;
-extern struct device_drv icarus_drv;
-#endif
-
-#ifdef USE_AVALON
-extern struct device_drv avalon_drv;
-#endif
-
-#ifdef USE_KNC
-extern struct device_drv knc_drv;
-#endif
-
-#ifdef USE_LITTLEFURY
-extern struct device_drv littlefury_drv;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_drv modminer_drv;
-#endif
-
-#ifdef USE_NANOFURY
-extern struct device_drv nanofury_drv;
-#endif
-
-#ifdef USE_X6500
-extern struct device_drv x6500_api;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_drv ztex_drv;
-#endif
-
-#ifdef USE_BITFURY
-extern struct device_drv bitfury_drv;
-#endif
-
-#ifdef USE_METABANK
-extern struct device_drv metabank_drv;
-#endif
-
-#ifdef USE_BFSB
-extern struct device_drv bfsb_drv;
-#endif
-
 static int cgminer_id_count = 0;
 static int device_line_id_count;
 
@@ -10220,86 +10166,21 @@ void drv_detect_all()
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan();
 #endif
-
-#ifdef USE_ICARUS
-	if (!opt_scrypt)
+	
+	struct driver_registration *reg, *tmp;
+	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
+	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
 	{
-		cairnsmore_drv.drv_detect();
-		erupter_drv.drv_detect();
-		icarus_drv.drv_detect();
+		const struct device_drv * const drv = reg->drv;
+		const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
+		if (0 == (algos & algomatch) || !drv->drv_detect)
+			continue;
+		
+		drv->drv_detect();
 	}
-#endif
-
-#ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_BIGPIC
-	if (!opt_scrypt)
-		bigpic_drv.drv_detect();
-#endif
-
-#ifdef USE_KNC
-	if (!opt_scrypt)
-		knc_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_NANOFURY
-	if (!opt_scrypt)
-		nanofury_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (!opt_scrypt)
-		x6500_api.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-	if (!opt_scrypt)
-		ztex_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFURY
-	if (!opt_scrypt)
-	{
-		bitfury_drv.drv_detect();
-#ifdef USE_METABANK
-		metabank_drv.drv_detect();
-#endif
-#ifdef USE_BFSB
-		bfsb_drv.drv_detect();
-#endif
-	}
-#endif
-
-#ifdef USE_LITTLEFURY
-	if (!opt_scrypt)
-		littlefury_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpu_drv.drv_detect();
-#endif
 
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan_free();
-#endif
-
-#ifdef HAVE_OPENCL
-	opencl_api.drv_detect();
 #endif
 }
 

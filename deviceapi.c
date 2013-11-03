@@ -67,10 +67,17 @@ int sort_drv_by_dname(struct driver_registration * const a, struct driver_regist
 	return strcmp(a->drv->dname, b->drv->dname);
 };
 
+static
+int sort_drv_by_priority(struct driver_registration * const a, struct driver_registration * const b)
+{
+	return a->drv->probe_priority - b->drv->probe_priority;
+};
+
 void bfg_devapi_init()
 {
 	_bfg_register_driver(NULL);
 	HASH_SRT(hh , _bfg_drvreg1, sort_drv_by_dname   );
+	HASH_SRT(hh2, _bfg_drvreg2, sort_drv_by_priority);
 }
 
 
