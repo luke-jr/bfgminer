@@ -10256,12 +10256,12 @@ void drv_detect_all()
 #endif
 
 #ifdef USE_X6500
-	if (likely(have_libusb) && !opt_scrypt)
+	if (!opt_scrypt)
 		x6500_api.drv_detect();
 #endif
 
 #ifdef USE_ZTEX
-	if (likely(have_libusb) && !opt_scrypt)
+	if (!opt_scrypt)
 		ztex_drv.drv_detect();
 #endif
 

@@ -112,6 +112,9 @@ static int ztex_autodetect(void)
 
 static void ztex_detect()
 {
+	if (!have_libusb)
+		return;
+	
 	// This wrapper ensures users can specify -S ztex:noauto to disable it
 	noserial_detect(&ztex_drv, ztex_autodetect);
 }
