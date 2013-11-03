@@ -2483,7 +2483,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		} while (err && ++retries < USB_RETRY_MAX);
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
-		memcpy(data, buf, length);
+		memcpy(data, buf, *transferred);
 
 	return err;
 }
