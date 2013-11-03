@@ -29,8 +29,6 @@
 
 BFG_REGISTER_DRIVER(cairnsmore_drv)
 
-static void cairnsmore_drv_init();
-
 static bool cairnsmore_detect_one(const char *devpath)
 {
 	struct ICARUS_INFO *info = calloc(1, sizeof(struct ICARUS_INFO));
@@ -59,7 +57,6 @@ static int cairnsmore_detect_auto(void)
 
 static void cairnsmore_detect()
 {
-	cairnsmore_drv_init();
 	// Actual serial detection is handled by Icarus driver
 	serial_detect_auto_byname(&cairnsmore_drv, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
@@ -214,6 +211,5 @@ static void cairnsmore_drv_init()
 }
 
 struct device_drv cairnsmore_drv = {
-	// Needed to get to cairnsmore_drv_init at all
-	.drv_detect = cairnsmore_detect,
+	.drv_init = cairnsmore_drv_init,
 };

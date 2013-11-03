@@ -68,11 +68,8 @@ static int erupter_detect_auto(void)
 	return serial_autodetect(erupter_detect_one, "Block", "Erupter");
 }
 
-static void erupter_drv_init();
-
 static void erupter_detect()
 {
-	erupter_drv_init();
 	// Actual serial detection is handled by Icarus driver
 	serial_detect_auto_byname(&erupter_drv, erupter_detect_one, erupter_detect_auto);
 	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
@@ -99,8 +96,9 @@ static void erupter_drv_init()
 }
 
 struct device_drv erupter_drv = {
-	// Needed to get to erupter_drv_init at all
-	.drv_detect = erupter_detect,
+	.drv_init = erupter_drv_init,
 };
 
-struct device_drv erupter_drv_emerald;
+struct device_drv erupter_drv_emerald = {
+	.drv_init = erupter_drv_init,
+};

@@ -10826,6 +10826,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+	bfg_devapi_init();
 	drv_detect_all();
 	total_devices = total_devices_new;
 	devices = devices_new;

@@ -11,8 +11,14 @@ struct driver_registration;
 struct driver_registration {
 	const struct device_drv *drv;
 	
-	struct driver_registration *next;
+	UT_hash_handle hh;   // hash & order by dname
+	UT_hash_handle hh2;  // hash by name, order by priority
+	struct driver_registration *next;  // DO NOT USE
 };
+
+extern struct driver_registration *_bfg_drvreg1;
+extern struct driver_registration *_bfg_drvreg2;
+extern void bfg_devapi_init();
 
 extern void _bfg_register_driver(const struct device_drv *);
 #define BFG_REGISTER_DRIVER(drv)                \

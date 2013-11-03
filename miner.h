@@ -292,6 +292,7 @@ struct device_drv {
 	const char *name;
 
 	// DRV-global functions
+	void (*drv_init)();
 	void (*drv_detect)();
 
 	// Processor-specific functions

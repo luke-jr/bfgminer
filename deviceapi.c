@@ -31,14 +31,46 @@
 #include "miner.h"
 #include "util.h"
 
-void _bfg_register_driver(const struct device_drv * const drv)
+struct driver_registration *_bfg_drvreg1;
+struct driver_registration *_bfg_drvreg2;
+
+void _bfg_register_driver(const struct device_drv *drv)
 {
 	static struct driver_registration *initlist;
-	struct driver_registration *ndr = malloc(sizeof(*ndr));
+	struct driver_registration *ndr;
+	
+	if (!drv)
+	{
+		// Move initlist to hashtables
+		LL_FOREACH(initlist, ndr)
+		{
+			drv = ndr->drv;
+			if (drv->drv_init)
+				drv->drv_init();
+			HASH_ADD_KEYPTR(hh , _bfg_drvreg1, drv->dname, strlen(drv->dname), ndr);
+			HASH_ADD_KEYPTR(hh2, _bfg_drvreg2, drv->name , strlen(drv->name ), ndr);
+		}
+		initlist = NULL;
+		return;
+	}
+	
+	ndr = malloc(sizeof(*ndr));
 	*ndr = (struct driver_registration){
 		.drv = drv,
 	};
 	LL_PREPEND(initlist, ndr);
+}
+
+static
+int sort_drv_by_dname(struct driver_registration * const a, struct driver_registration * const b)
+{
+	return strcmp(a->drv->dname, b->drv->dname);
+};
+
+void bfg_devapi_init()
+{
+	_bfg_register_driver(NULL);
+	HASH_SRT(hh , _bfg_drvreg1, sort_drv_by_dname   );
 }
 
 
