@@ -1587,6 +1587,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		if (strcmp((char *)man, found->iManufacturer)) {
 			applog(LOG_DEBUG, "USB init, iManufacturer mismatch %s",
 			       devstr);
+			applog(LOG_DEBUG, "Found %s vs %s", man, found->iManufacturer);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
@@ -1607,6 +1608,7 @@ static int _usb_init(struct cgpu_info *cgpu, struct libusb_device *dev, struct u
 		if (strcmp((char *)prod, found->iProduct)) {
 			applog(LOG_DEBUG, "USB init, iProduct mismatch %s",
 			       devstr);
+			applog(LOG_DEBUG, "Found %s vs %s", prod, found->iProduct);
 			bad = USB_INIT_IGNORE;
 			goto cldame;
 		}
