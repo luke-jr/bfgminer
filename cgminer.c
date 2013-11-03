@@ -5923,6 +5923,7 @@ static struct work *hash_pop(void)
 			cgtime(&now);
 			then.tv_sec = now.tv_sec + 10;
 			then.tv_nsec = now.tv_usec * 1000;
+			pthread_cond_signal(&gws_cond);
 			rc = pthread_cond_timedwait(&getq->cond, stgd_lock, &then);
 			/* Check again for !no_work as multiple threads may be
 			 * waiting on this condition and another may set the
@@ -5931,8 +5932,10 @@ static struct work *hash_pop(void)
 				no_work = true;
 				applog(LOG_WARNING, "Waiting for work to be available from pools.");
 			}
-		} else
+		} else {
+			pthread_cond_signal(&gws_cond);
 			pthread_cond_wait(&getq->cond, stgd_lock);
+		}
 	}
 
 	if (no_work) {
