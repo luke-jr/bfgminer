@@ -1,3 +1,112 @@
+Version 3.7.0 - 4th November 2013
+
+- Use WRITEIOERR macro check for all usb writes.
+- Always use a usb read buffer instead of having to explicitly enable it.
+- Force unlocking of the console lock on restart to avoid corrupting the console
+state when we finally quit.
+- Never wait indefinitely for a pthread conditional in the hash_pop loop in case
+the work scheduler misses the last wakeup.
+- Make hash_pop signal the work scheduler each time it waits on the conditional
+that it should look for more work.
+- Discriminate between libusb transfer errors and regular libusb errors and make
+sure to capture them all.
+- Always read a full sized transfer for bulk reads.
+- Deprecate preferred packet size functions in usbutils since they're unhelpful.
+- Copy known transferred amount back to buffer for usb reads instead of
+requested length.
+- Treat timeout errors on usb writes as IO errors.
+- Ignore iManufacturer from bitfury devices to support bluefury as well as
+redfury.
+- Add more debugging info for when usb details don't match.
+- Look for timeout overruns in usb read/write.
+- Use an int for usb_read/write to identify overruns.
+- Use the callback timeout as a safety mechanism only on windows.
+- Instead of using complicated sleeps to emulate characters per second on usb
+writes, submit only as many characters as can be transferred per usb poll of
+1ms, and use timeouts in bulk transfers, cancelling transfers only as a
+failsafe.
+- Remove discarded work from quota used.
+- Display works completed in summary and API data.
+- Store how many work items are worked on per pool.
+- Make each pool store its on reference for what the most current block is and
+fine tune management of block change in shared pool failover strategies using
+the information.
+- Rationalise use of current_hash to a single hex string the length of the
+previous block and display only the first non zero hex chars of the block in the
+status window.
+- Update uthash to latest.
+- show_hash doesn't know the size of the string so hard code the max size.
+- Remove as many initial zeroes as exist on share display, abstracting out a
+hash show function to use across different submission mechanisms.
+- Add missing endian swap functions for 64bits.
+- Sanity check for absurd target setting and divide by zero.
+- Abstract out conversion of a 256 bit endian number to a double, correcting
+errors and use it for determining any magnitude share diff.
+- Avoid the extra generation of a byte flipped hash2 in struct work and directly
+use the LE work hash.
+- Add a sanity check to avoid divide by zero crashes in set_target
+- Calculate diff from target accurately for all 256 bits.
+- Set a true 256bit binary target based on any diff value in set_target()
+- Provide a copy_work_noffset function for copying a work struct but changing
+its ntime.
+- Make calls to flush queue and flush work asynchronous wrt to the main work
+loops.
+- Share is also above target for submit noffset nonce.
+- Use round for displaying current pool diff.
+- Use round for stratum share diff display instead of floor.
+- Use round instead of floor for displayed pool difficulty.
+- Allow arbitrary diffs to be tested against nonces via a test_nonce_diff
+function.
+- Abstract out the rebuilding of hash2 in work.
+- Share is above, not below target, when it doesn't meet it.
+- Add the ability to add uint8 and uint16 entities to api data.
+- Use a non blocking connect with a 1 second select timeout when initiating
+stratum to allow us to iterate over all IPs returned by getaddrinfo in round
+robin DNS pools.
+- Minor style changes to output.
+- Revert two different hash_sequence(_head)'s to one variable, use
+HF_SEQUENCE_DISTANCE in both places
+- Remove duplicate HF_SEQUENCE_DISTANCE() macro, and duplicate hash_sequence
+from info structure
+- Change SEQUENCE_DISTANCE() macro to HF_SEQUENCE_DISTANCE()
+- Structure changes for OP_NONCE, add big endian header
+- klondike - initialise stat_lock
+- klondike - better to unlock locks than to lock them twice :)
+- Add copyright notice to knc driver.
+- Trivial style changes to knc driver.
+- Improve performance of work generation by optimizing hex2bin and bin2hex
+- klondike - change options to clock and temptarget only
+- klondike - fix another uninit dev warning
+- klondike - downgrade 'late update' but add an idle detect - and correct error
+levels
+- klondike - fix isc uninit warning
+- Use a mutex to protect data in the knc structure, to prevent loading more work
+during a flush, and unlock and return to main between calls to get_queued_work.
+- Use the existing device_data for knc state data.
+- Only count successful nonces as hashrate in the knc driver.
+- Fix trivial warnings in knc driver.
+- Add KNC to api
+- klondike - drop the device for hotplug if it's unresponsive
+- usbutils - usb_nodev() allow a driver to drop a device
+- klondike - single 'shutdown' and ensure it happens
+- klondike remove SCNu8 - unsupported on windows
+- Correctly calculate sleep_estimate in usbutils that may have been preventing
+usecps from working.
+- Use a sanity check on timeout on windows.
+- Better HW error count; disable permanently those cores which fail often
+- KnC driver: knc-spi-fpga ASIC driver
+- Fixup jansson & libusb include paths when using separate build directory
+- 'llround' is more suitable here than 'roundl'
+- Silence warning if MAX/MIN is already defined
+- Remove prebuild ccan/opt dependencies
+- Reinstate block solve testing.
+- Dramatically simplify the calculation of blockdiff.
+- Simplify the set_target function, allowing it to work properly for fractional
+diffs.
+- Merge hashfast driver
+- Merge KnC driver
+
+
 Version 3.6.6 - 26th October 2013
 
 - Remove inappropriate extra locking in _usb_transfer_read
