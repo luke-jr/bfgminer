@@ -91,6 +91,7 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 		info = malloc(sizeof(struct lowlevel_device_info));
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_ft232r,
+			.devid = bfg_make_devid_libusb(list[i]),
 			.lowl_data = libusb_ref_device(list[i]),
 		};
 		

@@ -14,6 +14,7 @@
 
 #include <utlist.h>
 
+#include "logging.h"
 #include "lowlevel.h"
 
 static struct lowlevel_device_info *devinfo_list;
@@ -26,6 +27,7 @@ void lowlevel_devinfo_free(struct lowlevel_device_info * const info)
 	free(info->product);
 	free(info->serial);
 	free(info->path);
+	free(info->devid);
 	free(info);
 }
 
@@ -58,6 +60,15 @@ void lowlevel_scan()
 	devinfo_mid_list = lowl_mcp2210.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
+	
+	LL_FOREACH(devinfo_list, devinfo_mid_list)
+	{
+		applog(LOG_DEBUG, "%s: Found %s (path=%s, manuf=%s, prod=%s, serial=%s)",
+		       __func__,
+		       devinfo_mid_list->devid,
+		       devinfo_mid_list->path,
+		       devinfo_mid_list->manufacturer, devinfo_mid_list->product, devinfo_mid_list->serial);
+	}
 }
 
 int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const char **product_needles)

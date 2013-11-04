@@ -33,7 +33,9 @@ extern struct device_drv *bfg_claim_any2(struct device_drv *, const char *verbos
 extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool verbose, const char * const devpath);
 #define serial_claim(devpath, drv)    bfg_claim_serial(drv, false, devpath)
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
+extern char *bfg_make_devid_usb(uint8_t usbbus, uint8_t usbaddr);
 extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
+#define bfg_make_devid_libusb(dev)  bfg_make_devid_usb(libusb_get_bus_number(dev), libusb_get_device_address(dev))
 #define bfg_claim_libusb(api, verbose, dev)  bfg_claim_usb(api, verbose, libusb_get_bus_number(dev), libusb_get_device_address(dev))
 #define bfg_claim_hid(api, verbose, path)  bfg_claim_any2(api, (verbose)?"":NULL, "hid", path)
 

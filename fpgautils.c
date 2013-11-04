@@ -830,11 +830,19 @@ struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool ve
 	return bfg_claim_any(api, (verbose ? devpath : NULL), devs);
 }
 
+char *bfg_make_devid_usb(const uint8_t usbbus, const uint8_t usbaddr)
+{
+	char * const devpath = malloc(12);
+	sprintf(devpath, "usb:%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	return devpath;
+}
+
 struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
 {
-	char devpath[12];
-	sprintf(devpath, "usb:%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
-	return bfg_claim_any(api, verbose ? "" : NULL, devpath);
+	char * const devpath = bfg_make_devid_usb(usbbus, usbaddr);
+	struct device_drv * const rv = bfg_claim_any(api, verbose ? "" : NULL, devpath);
+	free(devpath);
+	return rv;
 }
 
 #ifdef HAVE_LIBUSB

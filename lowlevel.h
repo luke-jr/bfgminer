@@ -17,6 +17,7 @@ struct lowlevel_device_info {
 	char *product;
 	char *serial;
 	char *path;
+	char *devid;
 	
 	struct lowlevel_driver *lowl;
 	void *lowl_data;
