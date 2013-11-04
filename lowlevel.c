@@ -64,7 +64,9 @@ int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const cha
 	
 	LL_FOREACH_SAFE(devinfo_list, info, tmp)
 	{
-		if (serial && strcmp(serial, info->serial))
+		if (serial && ((!info->serial) || strcmp(serial, info->serial)))
+			continue;
+		if (product_needles[0] && !info->product)
 			continue;
 		for (i = 0; product_needles[i]; ++i)
 			if (!strstr(info->product, product_needles[i]))
