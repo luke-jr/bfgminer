@@ -376,6 +376,7 @@ bool ft232r_get_cbus_bits(struct ft232r_device_handle *dev, bool *out_sio0, bool
 }
 
 struct lowlevel_driver lowl_ft232r = {
+	.dname = "ft232r",
 	.devinfo_scan = ft232r_devinfo_scan,
 	.devinfo_free = ft232r_devinfo_free,
 };

@@ -10,6 +10,7 @@ struct lowlevel_device_info;
 typedef bool (*lowl_found_devinfo_func_t)(struct lowlevel_device_info *, void *);
 
 struct lowlevel_driver {
+	const char *dname;
 	struct lowlevel_device_info *(*devinfo_scan)();
 	void (*devinfo_free)(struct lowlevel_device_info *);
 };

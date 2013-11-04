@@ -1393,5 +1393,6 @@ int get_serial_cts(const int fd)
 #endif // ! WIN32
 
 struct lowlevel_driver lowl_vcom = {
+	.dname = "vcom",
 	.devinfo_scan = vcom_devinfo_scan,
 };

@@ -452,5 +452,6 @@ enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, 
 }
 
 struct lowlevel_driver lowl_mcp2210 = {
+	.dname = "mcp2210",
 	.devinfo_scan = mcp2210_devinfo_scan,
 };

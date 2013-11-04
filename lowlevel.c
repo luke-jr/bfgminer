@@ -68,8 +68,9 @@ void lowlevel_scan()
 	
 	LL_FOREACH(devinfo_list, devinfo_mid_list)
 	{
-		applog(LOG_DEBUG, "%s: Found %s (path=%s, manuf=%s, prod=%s, serial=%s)",
+		applog(LOG_DEBUG, "%s: Found %s device at %s (path=%s, manuf=%s, prod=%s, serial=%s)",
 		       __func__,
+		       devinfo_mid_list->lowl->dname,
 		       devinfo_mid_list->devid,
 		       devinfo_mid_list->path,
 		       devinfo_mid_list->manufacturer, devinfo_mid_list->product, devinfo_mid_list->serial);
