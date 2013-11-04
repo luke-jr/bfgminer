@@ -6226,9 +6226,14 @@ bool test_nonce_diff(struct work *work, uint32_t nonce, double diff)
 
 static void update_work_stats(struct thr_info *thr, struct work *work)
 {
+	double test_diff = current_diff;
+
 	work->share_diff = share_diff(work);
 
-	if (unlikely(work->share_diff >= current_diff)) {
+	if (opt_scrypt)
+		test_diff *= 65536;
+
+	if (unlikely(work->share_diff >= test_diff)) {
 		work->block = true;
 		work->pool->solved++;
 		found_blocks++;
