@@ -2260,6 +2260,11 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	cgpu->drv->get_statline(buf, bufsiz, cgpu);
 }
 
+static bool shared_strategy(void)
+{
+	return (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE);
+}
+
 #ifdef HAVE_CURSES
 #define CURBUFSIZ 256
 #define cg_mvwprintw(win, y, x, fmt, ...) do { \
@@ -2272,11 +2277,6 @@ static void get_statline(char *buf, size_t bufsiz, struct cgpu_info *cgpu)
 	snprintf(tmp42, sizeof(tmp42), fmt, ##__VA_ARGS__); \
 	wprintw(win, "%s", tmp42); \
 } while (0)
-
-static bool shared_strategy(void)
-{
-	return (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE);
-}
 
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(void)
