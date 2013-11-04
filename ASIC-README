@@ -2,11 +2,12 @@ SUPPORTED DEVICES
 
 Currently supported devices include the Avalon (including BitBurner and
 Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
-erupters and the BPMC BF1 (bitfury) USB devices. No COM ports on windows or
-TTY devices will be used by cgminer as it communicates directly with them
-via USB so it is normal for them to not exist or be disconnected when
-cgminer is running.
+erupters, the BF1 (bitfury) USB (red and blue) devices, KnCminer Mercury,
+Saturn and Jupiter devices, and upcoming Hashfast devices.
 
+No COM ports on windows or TTY devices will be used by cgminer as it
+communicates directly with them via USB so it is normal for them to not exist or
+be disconnected when cgminer is running.
 
 The BFL devices should come up as one of the following:
 

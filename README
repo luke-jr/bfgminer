@@ -110,12 +110,14 @@ CGMiner specific configuration options:
   --disable-adl           Override detection and disable building with adl
   --enable-scrypt         Compile support for scrypt litecoin mining (default
                           disabled)
+  --enable-avalon         Compile support for Avalon (default disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
   --enable-bitforce       Compile support for BitForce FPGAs (default
                           disabled)
   --enable-bitfury        Compile support for BitFury ASICs (default disabled)
+  --enable-hashfast       Compile support for Hashfast (default disabled)
   --enable-icarus         Compile support for Icarus (default disabled)
-  --enable-avalon         Compile support for Avalon (default disabled)
+  --enable-knc            Compile support for KnC miners (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
@@ -278,7 +280,7 @@ See SCRYPT-README for more information regarding litecoin mining.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
-ModMiner FPGAs or Ztex FPGAs
+KnC ASICs, Hashfast ASICs and ModMiner FPGAs.
 
 ---
 
@@ -762,7 +764,7 @@ working in the logs?
 A: http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, cgminer supports 4 FPGAs: BitForce, Icarus, ModMiner, and Ztex.
+A: At the moment, cgminer supports 3 FPGAs: BitForce, Icarus and ModMiner.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
