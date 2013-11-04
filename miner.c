@@ -887,58 +887,23 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
-#ifdef HAVE_LIBUDEV
-#include <libudev.h>
-#endif
+extern struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info **, const char *);
 
-static
-char *add_serial_all(const char *arg, const char *p) {
-	size_t pLen = p - arg;
-	char dev[pLen + PATH_MAX];
-	memcpy(dev, arg, pLen);
-	char *devp = &dev[pLen];
-
-#ifdef HAVE_LIBUDEV
-
-	struct udev *udev = udev_new();
-	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
-	struct udev_list_entry *list_entry;
-
-	udev_enumerate_add_match_subsystem(enumerate, "tty");
-	udev_enumerate_add_match_property(enumerate, "ID_SERIAL", "*");
-	udev_enumerate_scan_devices(enumerate);
-	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
-		struct udev_device *device = udev_device_new_from_syspath(
-			udev_enumerate_get_udev(enumerate),
-			udev_list_entry_get_name(list_entry)
-		);
-		if (!device)
-			continue;
-
-		const char *devpath = udev_device_get_devnode(device);
-		if (devpath) {
-			strcpy(devp, devpath);
-			applog(LOG_DEBUG, "scan-serial: libudev all-adding %s", dev);
-			string_elist_add(dev, &scan_devices);
-		}
-
-		udev_device_unref(device);
-	}
-	udev_enumerate_unref(enumerate);
-	udev_unref(udev);
-
-#elif defined(WIN32)
-
+#ifdef WIN32
+void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info ** const devinfo_list)
+{
+	char dev[PATH_MAX];
+	char *devp = dev;
 	size_t bufLen = 0x100;
 tryagain: ;
 	char buf[bufLen];
 	if (!QueryDosDevice(NULL, buf, bufLen)) {
 		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 			bufLen *= 2;
-			applog(LOG_DEBUG, "scan-serial: QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
+			applog(LOG_DEBUG, "QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
 			goto tryagain;
 		}
-		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";
+		applog(LOG_WARNING, "Error occurred trying to enumerate COM ports with QueryDosDevice");
 	}
 	size_t tLen;
 	memcpy(devp, "\\\\.\\", 4);
@@ -948,12 +913,14 @@ tryagain: ;
 		if (strncmp("COM", t, 3))
 			continue;
 		memcpy(devp, t, tLen);
-		applog(LOG_DEBUG, "scan-serial: QueryDosDevice all-adding %s", dev);
-		string_elist_add(dev, &scan_devices);
+		_vcom_devinfo_findorcreate(devinfo_list, dev);
 	}
-
+}
 #else
-
+void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info ** const devinfo_list)
+{
+	char dev[PATH_MAX];
+	char *devp = dev;
 	DIR *D;
 	struct dirent *de;
 	const char devdir[] = "/dev";
@@ -963,7 +930,7 @@ tryagain: ;
 	
 	D = opendir(devdir);
 	if (!D)
-		return "scan-serial 'all' is not supported on this platform";
+		applogr(, LOG_DEBUG, "No /dev directory to look for VCOM devices in");
 	memcpy(devpath, devdir, devdirlen);
 	devpath[devdirlen] = '/';
 	while ( (de = readdir(D)) ) {
@@ -976,29 +943,14 @@ tryagain: ;
 		
 trydev:
 		strcpy(devfile, de->d_name);
-		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", dev);
-		string_elist_add(dev, &scan_devices);
+		_vcom_devinfo_findorcreate(devinfo_list, dev);
 	}
 	closedir(D);
-	
-	return NULL;
-
-#endif
-
-	return NULL;
 }
+#endif
 
 static char *add_serial(const char *arg)
 {
-	const char *p = strchr(arg, ':');
-	if (p)
-		++p;
-	else
-		p = arg;
-	if (!strcasecmp(p, "all")) {
-		return add_serial_all(arg, p);
-	}
-
 	string_elist_add(arg, &scan_devices);
 	return NULL;
 }

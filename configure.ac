@@ -713,6 +713,7 @@ fi
 
 if test x$need_fpgautils = xyes; then
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
+	need_lowlevel=yes
 	
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h

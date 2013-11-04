@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include <uthash.h>
+
 struct lowlevel_device_info;
 
 typedef bool (*lowl_found_devinfo_func_t)(struct lowlevel_device_info *);
@@ -23,6 +25,7 @@ struct lowlevel_device_info {
 	void *lowl_data;
 	
 	struct lowlevel_device_info *next;
+	UT_hash_handle hh;
 };
 
 extern void lowlevel_scan();
@@ -37,6 +40,9 @@ extern struct lowlevel_driver lowl_ft232r;
 #endif
 #ifdef USE_NANOFURY
 extern struct lowlevel_driver lowl_mcp2210;
+#endif
+#ifdef HAVE_FPGAUTILS
+extern struct lowlevel_driver lowl_vcom;
 #endif
 
 #endif

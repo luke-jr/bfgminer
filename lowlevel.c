@@ -61,6 +61,11 @@ void lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
+#ifdef HAVE_FPGAUTILS
+	devinfo_mid_list = lowl_vcom.devinfo_scan();
+	LL_CONCAT(devinfo_list, devinfo_mid_list);
+#endif
+	
 	LL_FOREACH(devinfo_list, devinfo_mid_list)
 	{
 		applog(LOG_DEBUG, "%s: Found %s (path=%s, manuf=%s, prod=%s, serial=%s)",
