@@ -180,6 +180,10 @@ bfgminer_SOURCES += iospeeds.h iospeeds_posix.h
 endif
 endif
 
+if HAVE_LIBUSB
+bfgminer_SOURCES += lowl-usb.c
+endif
+
 if NEED_BFG_LOWLEVEL
 bfgminer_SOURCES += lowlevel.c lowlevel.h
 endif

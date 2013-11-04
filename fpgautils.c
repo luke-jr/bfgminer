@@ -657,7 +657,8 @@ bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, vo
 	}
 	if (devinfo->lowl != &lowl_vcom)
 	{
-		applog(LOG_WARNING, "Non-VCOM %s (%s) matched", devinfo->path, devinfo->devid);
+		if (devinfo->lowl != &lowl_usb)
+			applog(LOG_WARNING, "Non-VCOM %s (%s) matched", devinfo->path, devinfo->devid);
 		return false;
 	}
 	detectone_meta_info = (struct detectone_meta_info_t){
