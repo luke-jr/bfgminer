@@ -798,6 +798,7 @@ extern void api_initlock(void *lock, enum cglock_typ typ, const char *file, cons
 #define mutex_unlock(_lock) _mutex_unlock(_lock, __FILE__, __func__, __LINE__)
 #define mutex_trylock(_lock) _mutex_trylock(_lock, __FILE__, __func__, __LINE__)
 #define wr_lock(_lock) _wr_lock(_lock, __FILE__, __func__, __LINE__)
+#define wr_trylock(_lock) _wr_trylock(_lock, __FILE__, __func__, __LINE__)
 #define rd_lock(_lock) _rd_lock(_lock, __FILE__, __func__, __LINE__)
 #define rw_unlock(_lock) _rw_unlock(_lock, __FILE__, __func__, __LINE__)
 #define rd_unlock_noyield(_lock) _rd_unlock_noyield(_lock, __FILE__, __func__, __LINE__)
@@ -853,6 +854,14 @@ static inline void _wr_lock(pthread_rwlock_t *lock, const char *file, const char
 	if (unlikely(pthread_rwlock_wrlock(lock)))
 		quitfrom(1, file, func, line, "WTF WRLOCK ERROR ON LOCK! errno=%d", errno);
 	GOTLOCK(lock, file, func, line);
+}
+
+static inline int _wr_trylock(pthread_rwlock_t *lock, __maybe_unused const char *file, __maybe_unused const char *func, __maybe_unused const int line)
+{
+	TRYLOCK(lock, file, func, line);
+	int ret = pthread_rwlock_trywrlock(lock);
+	DIDLOCK(ret, lock, file, func, line);
+	return ret;
 }
 
 static inline void _rd_lock(pthread_rwlock_t *lock, const char *file, const char *func, const int line)

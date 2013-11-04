@@ -67,7 +67,6 @@
 #define AVALON_TIMEOUT_MS 999
 #define KLONDIKE_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
-#define AMU_TIMEOUT_MS 1999
 #define HASHFAST_TIMEOUT_MS 999
 #else
 #define BFLSC_TIMEOUT_MS 300
@@ -77,7 +76,6 @@
 #define AVALON_TIMEOUT_MS 200
 #define KLONDIKE_TIMEOUT_MS 200
 #define ICARUS_TIMEOUT_MS 200
-#define AMU_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 200
 #endif
 
@@ -404,7 +402,7 @@ static struct usb_find_devices find_dev[] = {
 		.idVendor = 0x10c4,
 		.idProduct = 0xea60,
 		.config = 1,
-		.timeout = AMU_TIMEOUT_MS,
+		.timeout = ICARUS_TIMEOUT_MS,
 		.latency = LATENCY_UNUSED,
 		INTINFO(amu_ints) },
 	{
