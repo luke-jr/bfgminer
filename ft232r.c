@@ -31,6 +31,25 @@
 #define FT232R_IDPRODUCT  0x6001
 
 static
+char *ft232r_libusb_dup_string(libusb_device_handle * const handle, const uint8_t idx, const char * const idxname)
+{
+	if (!idx)
+		return NULL;
+	unsigned char buf[0x100];
+	const int n = libusb_get_string_descriptor_ascii(handle, idx, buf, sizeof(buf)-1);
+	if (unlikely(n < 0)) {
+		applog(LOG_ERR, "ft232r_scan: Error getting USB string %d (%s): %s",
+		       idx, idxname, bfg_strerror(n, BST_LIBUSB));
+		return NULL;
+	}
+	if (n == 0)
+		return NULL;
+	buf[n] = '\0';
+	return strdup((void*)buf);
+}
+
+
+static
 void ft232r_devinfo_free(struct lowlevel_device_info * const info)
 {
 	libusb_device * const dev = info->lowl_data;
@@ -42,13 +61,12 @@ static
 struct lowlevel_device_info *ft232r_devinfo_scan()
 {
 	struct lowlevel_device_info *devinfo_list = NULL;
-	ssize_t count, n, i;
+	ssize_t count, i;
 	libusb_device **list;
 	struct libusb_device_descriptor desc;
 	libusb_device_handle *handle;
 	struct lowlevel_device_info *info;
 	int err;
-	unsigned char buf[0x100];
 	int skipped = 0;
 
 	if (unlikely(!have_libusb))
@@ -77,35 +95,23 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 			continue;
 		}
 
-		err = libusb_open(list[i], &handle);
-		if (unlikely(err)) {
-			applog(LOG_ERR, "ft232r_scan: Error opening device: %s", bfg_strerror(err, BST_LIBUSB));
-			continue;
-		}
-
-		n = libusb_get_string_descriptor_ascii(handle, desc.iProduct, buf, sizeof(buf)-1);
-		if (unlikely(n < 0)) {
-			libusb_close(handle);
-			applog(LOG_ERR, "ft232r_scan: Error getting iProduct string: %s", bfg_strerror(n, BST_LIBUSB));
-			continue;
-		}
-		buf[n] = '\0';
 		info = malloc(sizeof(struct lowlevel_device_info));
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_ft232r,
+			.lowl_data = libusb_ref_device(list[i]),
 		};
-		info->product = strdup((char*)buf);
-
-		n = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, buf, sizeof(buf)-1);
-		libusb_close(handle);
-		if (unlikely(n < 0)) {
-			applog(LOG_ERR, "ft232r_scan: Error getting iSerialNumber string: %s", bfg_strerror(n, BST_LIBUSB));
-			n = 0;
-		}
-		buf[n] = '\0';
-		info->serial = strdup((char*)buf);
-		info->lowl_data = libusb_ref_device(list[i]);
 		
+		err = libusb_open(list[i], &handle);
+		if (unlikely(err))
+			applog(LOG_ERR, "ft232r_scan: Error opening device: %s", bfg_strerror(err, BST_LIBUSB));
+		else
+		{
+			info->manufacturer = ft232r_libusb_dup_string(handle, desc.iManufacturer, "iManufacturer");
+			info->product = ft232r_libusb_dup_string(handle, desc.iProduct, "iProduct");
+			info->serial = ft232r_libusb_dup_string(handle, desc.iSerialNumber, "iSerialNumber");
+			libusb_close(handle);
+		}
+
 		LL_PREPEND(devinfo_list, info);
 
 		applog(LOG_DEBUG, "ft232r_scan: Found \"%s\" serial \"%s\"", info->product, info->serial);
