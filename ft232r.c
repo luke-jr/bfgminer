@@ -67,7 +67,6 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 	libusb_device_handle *handle;
 	struct lowlevel_device_info *info;
 	int err;
-	int skipped = 0;
 
 	if (unlikely(!have_libusb))
 		return NULL;
@@ -79,12 +78,6 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 	}
 
 	for (i = 0; i < count; ++i) {
-		if (bfg_claim_libusb(NULL, false, list[i]))
-		{
-			++skipped;
-			continue;
-		}
-		
 		err = libusb_get_device_descriptor(list[i], &desc);
 		if (unlikely(err)) {
 			applog(LOG_ERR, "ft232r_scan: Error getting device descriptor: %s", bfg_strerror(err, BST_LIBUSB));
@@ -118,9 +111,6 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 	}
 
 	libusb_free_device_list(list, 1);
-	
-	if (skipped)
-		applog(LOG_DEBUG, "%s: Skipping probe of %d claimed devices", __func__, skipped);
 	
 	return devinfo_list;
 }
