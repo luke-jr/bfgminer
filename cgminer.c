@@ -6614,7 +6614,13 @@ static void flush_queue(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 
-	wr_lock(&cgpu->qlock);
+	if (unlikely(!cgpu))
+		return;
+
+	/* Use only a trylock in case we get into a deadlock with a queueing
+	 * function holding the read lock when we're called. */
+	if (wr_trylock(&cgpu->qlock))
+		return;
 	work = cgpu->unqueued_work;
 	cgpu->unqueued_work = NULL;
 	wr_unlock(&cgpu->qlock);
