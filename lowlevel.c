@@ -76,7 +76,7 @@ void lowlevel_scan()
 	}
 }
 
-int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const char **product_needles)
+int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const char **product_needles, void *userp)
 {
 	struct lowlevel_device_info *info, *tmp;
 	int found = 0, i;
@@ -88,7 +88,7 @@ int _lowlevel_detect(lowl_found_devinfo_func_t cb, const char *serial, const cha
 		for (i = 0; product_needles[i]; ++i)
 			if (!strstr(info->product, product_needles[i]))
 				goto next;
-		if (!cb(info))
+		if (!cb(info, userp))
 			continue;
 		LL_DELETE(devinfo_list, info);
 		++found;

@@ -161,7 +161,7 @@ fail:
 }
 
 static
-bool nanofury_foundlowl(struct lowlevel_device_info * const info)
+bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;

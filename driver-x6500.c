@@ -127,7 +127,7 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 	return bits2int(buf, 32);
 }
 
-static bool x6500_foundlowl(struct lowlevel_device_info * const info)
+static bool x6500_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;

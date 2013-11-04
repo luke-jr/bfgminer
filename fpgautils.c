@@ -647,10 +647,9 @@ extern void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info **);
 extern void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info **);
 #endif
 
-static detectone_func_t _serial_autodetect_current_detectone;
-
-bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo)
+bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, void *userp)
 {
+	detectone_func_t detectone = userp;
 	if (bfg_claim_any(NULL, devinfo->path, devinfo->devid))
 	{
 		applog(LOG_DEBUG, "%s (%s) is already claimed, skipping probe", devinfo->path, devinfo->devid);
@@ -666,7 +665,7 @@ bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo)
 		.product = devinfo->product,
 		.serial = devinfo->serial,
 	};
-	const bool rv = _serial_autodetect_current_detectone(devinfo->path);
+	const bool rv = detectone(devinfo->path);
 	clear_detectone_meta_info();
 	return rv;
 }
@@ -677,14 +676,12 @@ int _serial_autodetect(detectone_func_t detectone, ...)
 	char *needles_array[0x10];
 	int needlecount = 0;
 	
-	_serial_autodetect_current_detectone = detectone;
-	
 	va_start(needles, detectone);
 	while ( (needles_array[needlecount++] = va_arg(needles, void *)) )
 	{}
 	va_end(needles);
 	
-	return _lowlevel_detect(_serial_autodetect_found_cb, NULL, (const char **)needles_array);
+	return _lowlevel_detect(_serial_autodetect_found_cb, NULL, (const char **)needles_array, detectone);
 }
 
 static
