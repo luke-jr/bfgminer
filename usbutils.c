@@ -2365,17 +2365,12 @@ static int usb_transfer_toerr(int ret)
 }
 
 /* Wait for callback function to tell us it has finished the USB transfer, but
- * use our own timer to cancel the request if we go beyond the allocated
- * timeout on linux. Windows' cancel transfer breaks so we use libusb's own
- * timeouts and simply wait. */
-static int callback_wait(struct usb_transfer *ut, int *transferred, __maybe_unused unsigned int timeout)
+ * use our own timer to cancel the request if we go beyond the timeout. */
+static int callback_wait(struct usb_transfer *ut, int *transferred, unsigned int timeout)
 {
 	struct libusb_transfer *transfer= ut->transfer;
 	int ret;
 
-#ifdef WIN32
-	cgsem_wait(&ut->cgsem);
-#else
 	ret = cgsem_mswait(&ut->cgsem, timeout);
 	if (ret == ETIMEDOUT) {
 		/* We are emulating a timeout ourself here */
@@ -2384,7 +2379,6 @@ static int callback_wait(struct usb_transfer *ut, int *transferred, __maybe_unus
 		/* Now wait for the callback function to be invoked. */
 		cgsem_wait(&ut->cgsem);
 	}
-#endif
 	ret = transfer->status;
 	ret = usb_transfer_toerr(ret);
 
