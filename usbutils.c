@@ -2503,7 +2503,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	bool ftdi;
 	struct timeval read_start, tv_finish;
 	unsigned int initial_timeout;
-	double max, done;
 	int bufleft, err, got, tot, pstate;
 	bool first = true;
 	bool dobuffer;
@@ -2511,6 +2510,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	int endlen;
 	unsigned char *ptr, *usbbuf = cgpu->usbinfo.bulkbuf;
 	const size_t usbbufread = 512; /* Always read full size */
+	double done;
 
 	DEVRLOCK(cgpu, pstate);
 
@@ -2544,7 +2544,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 
 		err = LIBUSB_SUCCESS;
 		initial_timeout = timeout;
-		max = ((double)timeout) / 1000.0;
 		cgtime(&read_start);
 		while (bufleft > 0) {
 			got = 0;
@@ -2582,9 +2581,7 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 			first = false;
 
 			done = tdiff(&tv_finish, &read_start);
-			// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
-			if (unlikely(done >= max))
-				break;
+			// N.B. this is: return last err with whatever size has already been read
 			timeout = initial_timeout - (done * 1000);
 			if (timeout <= 0)
 				break;
@@ -2616,7 +2613,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 	endlen = strlen(end);
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
-	max = ((double)timeout) / 1000.0;
 	cgtime(&read_start);
 
 	while (bufleft > 0) {
@@ -2658,8 +2654,6 @@ int _usb_read(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t
 
 		done = tdiff(&tv_finish, &read_start);
 		// N.B. this is: return LIBUSB_SUCCESS with whatever size has already been read
-		if (unlikely(done >= max))
-			break;
 		timeout = initial_timeout - (done * 1000);
 		if (timeout <= 0)
 			break;
@@ -2719,11 +2713,11 @@ out_noerrmsg:
 int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_t bufsiz, int *processed, int timeout, enum usb_cmds cmd)
 {
 	struct cg_usb_device *usbdev;
-	struct timeval read_start, tv_finish;
+	struct timeval write_start, tv_finish;
 	unsigned int initial_timeout;
-	double max, done;
 	__maybe_unused bool first = true;
 	int err, sent, tot, pstate;
+	double done;
 
 	DEVRLOCK(cgpu, pstate);
 
@@ -2745,8 +2739,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 	tot = 0;
 	err = LIBUSB_SUCCESS;
 	initial_timeout = timeout;
-	max = ((double)timeout) / 1000.0;
-	cgtime(&read_start);
+	cgtime(&write_start);
 	while (bufsiz > 0) {
 		int tosend = bufsiz;
 
@@ -2775,10 +2768,8 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 
 		first = false;
 
-		done = tdiff(&tv_finish, &read_start);
-		// N.B. this is: return LIBUSB_SUCCESS with whatever size was written
-		if (unlikely(done >= max))
-			break;
+		done = tdiff(&tv_finish, &write_start);
+		// N.B. this is: return last err with whatever size was written
 		timeout = initial_timeout - (done * 1000);
 		if (timeout <= 0)
 			break;
