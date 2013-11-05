@@ -10112,9 +10112,14 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+bool bfg_need_detect_rescan;
+
 static
 void drv_detect_all()
 {
+rescan:
+	bfg_need_detect_rescan = false;
+	
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan();
 #endif
@@ -10134,6 +10139,12 @@ void drv_detect_all()
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan_free();
 #endif
+	
+	if (bfg_need_detect_rescan)
+	{
+		applog(LOG_DEBUG, "Device rescan requested");
+		goto rescan;
+	}
 }
 
 static

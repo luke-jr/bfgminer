@@ -34,6 +34,8 @@ extern void _bfg_register_driver(const struct device_drv *);
 	}                                           \
 // END BFG_REGISTER_DRIVER
 
+extern bool bfg_need_detect_rescan;
+
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);
