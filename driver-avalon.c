@@ -1187,8 +1187,9 @@ static void *avalon_send_tasks(void *userdata)
 		}
 
 		avalon_rotate_array(avalon);
-		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
+
+		cgsem_post(&info->qsem);
 
 		if (unlikely(idled)) {
 			applog(LOG_WARNING, "%s%i: Idled %d miners",
@@ -1271,8 +1272,9 @@ static void *bitburner_send_tasks(void *userdata)
 		}
 
 		bitburner_rotate_array(avalon);
-		pthread_cond_signal(&info->qcond);
 		mutex_unlock(&info->qlock);
+
+		cgsem_post(&info->qsem);
 
 		if (unlikely(idled)) {
 			applog(LOG_WARNING, "%s%i: Idled %d miners",
@@ -1303,8 +1305,7 @@ static bool avalon_prepare(struct thr_info *thr)
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
-	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
-		quit(1, "Failed to pthread_cond_init avalon qcond");
+	cgsem_init(&info->qsem);
 
 	if (pthread_create(&info->read_thr, NULL, avalon_get_results, (void *)avalon))
 		quit(1, "Failed to create avalon read_thr");
@@ -1513,22 +1514,15 @@ static int64_t avalon_scanhash(struct thr_info *thr)
 	struct cgpu_info *avalon = thr->cgpu;
 	struct avalon_info *info = avalon->device_data;
 	const int miner_count = info->miner_count;
-	struct timeval now, then, tdiff;
-	int64_t hash_count, us_timeout;
-	struct timespec abstime;
+	int64_t hash_count, ms_timeout;
 
 	/* Half nonce range */
-	us_timeout = 0x80000000ll / info->asic_count / info->frequency;
-	us_to_timeval(&tdiff, us_timeout);
-	cgtime(&now);
-	timeradd(&now, &tdiff, &then);
-	timeval_to_spec(&abstime, &then);
+	ms_timeout = 0x80000000ll / info->asic_count / info->frequency / 1000;
 
 	/* Wait until avalon_send_tasks signals us that it has completed
-	 * sending its work or a full nonce range timeout has occurred */
-	mutex_lock(&info->qlock);
-	pthread_cond_timedwait(&info->qcond, &info->qlock, &abstime);
-	mutex_unlock(&info->qlock);
+	 * sending its work or a full nonce range timeout has occurred. We use
+	 * cgsems to never miss a wakeup. */
+	cgsem_mswait(&info->qsem, ms_timeout);
 
 	mutex_lock(&info->lock);
 	hash_count = 0xffffffffull * (uint64_t)info->nonces;
@@ -1567,8 +1561,10 @@ static void avalon_flush_work(struct cgpu_info *avalon)
 	mutex_lock(&info->qlock);
 	/* Will overwrite any work queued */
 	avalon->queued = 0;
-	pthread_cond_signal(&info->qcond);
 	mutex_unlock(&info->qlock);
+
+	/* Signal main loop we need more work */
+	cgsem_post(&info->qsem);
 }
 
 static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
