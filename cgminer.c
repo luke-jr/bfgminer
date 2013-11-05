@@ -8011,8 +8011,6 @@ int main(int argc, char *argv[])
 		initial_args[i] = strdup(argv[i]);
 	initial_args[argc] = NULL;
 
-	initialise_usb();
-
 	mutex_init(&hash_lock);
 	mutex_init(&console_lock);
 	cglock_init(&control_lock);
@@ -8035,6 +8033,8 @@ int main(int argc, char *argv[])
 
 	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
+
+	initialise_usb();
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
