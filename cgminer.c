@@ -435,12 +435,17 @@ static void applog_and_exit(const char *fmt, ...)
 static pthread_mutex_t sharelog_lock;
 static FILE *sharelog_file = NULL;
 
+static struct thr_info *__get_thread(int thr_id)
+{
+	return mining_thr[thr_id];
+}
+
 struct thr_info *get_thread(int thr_id)
 {
 	struct thr_info *thr;
 
 	rd_lock(&mining_thr_lock);
-	thr = mining_thr[thr_id];
+	thr = __get_thread(thr_id);
 	rd_unlock(&mining_thr_lock);
 
 	return thr;
@@ -7848,7 +7853,7 @@ struct device_drv *copy_drv(struct device_drv *drv)
 }
 
 #ifdef USE_USBUTILS
-static void hotplug_process()
+static void hotplug_process(void)
 {
 	struct thr_info *thr;
 	int i, j;
@@ -7866,7 +7871,6 @@ static void hotplug_process()
 
 	wr_lock(&mining_thr_lock);
 	mining_thr = realloc(mining_thr, sizeof(thr) * (mining_threads + new_threads + 1));
-	wr_unlock(&mining_thr_lock);
 
 	if (!mining_thr)
 		quit(1, "Failed to hotplug realloc mining_thr");
@@ -7885,7 +7889,7 @@ static void hotplug_process()
 		cgtime(&(cgpu->dev_start_tv));
 
 		for (j = 0; j < cgpu->threads; ++j) {
-			thr = get_thread(mining_threads);
+			thr = __get_thread(mining_threads);
 			thr->id = mining_threads;
 			thr->cgpu = cgpu;
 			thr->device_thread = j;
@@ -7910,6 +7914,7 @@ static void hotplug_process()
 		total_devices++;
 		applog(LOG_WARNING, "Hotplug: %s added %s %i", cgpu->drv->dname, cgpu->drv->name, cgpu->device_id);
 	}
+	wr_unlock(&mining_thr_lock);
 
 	adjust_mostdevs();
 	switch_logsize(true);
