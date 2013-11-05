@@ -1318,18 +1318,6 @@ static bool avalon_prepare(struct thr_info *thr)
 	return true;
 }
 
-static void do_avalon_close(struct thr_info *thr)
-{
-	struct cgpu_info *avalon = thr->cgpu;
-	struct avalon_info *info = avalon->device_data;
-
-	pthread_join(info->read_thr, NULL);
-	pthread_join(info->write_thr, NULL);
-	avalon_running_reset(avalon, info);
-
-	info->no_matching_work = 0;
-}
-
 static inline void record_temp_fan(struct avalon_info *info, struct avalon_result *ar, float *temp_avg)
 {
 	info->fan0 = ar->fan0 * AVALON_FAN_FACTOR;
@@ -1612,7 +1600,20 @@ static struct api_data *avalon_api_stats(struct cgpu_info *cgpu)
 
 static void avalon_shutdown(struct thr_info *thr)
 {
-	do_avalon_close(thr);
+	struct cgpu_info *avalon = thr->cgpu;
+	struct avalon_info *info = avalon->device_data;
+
+	pthread_join(info->read_thr, NULL);
+	pthread_join(info->write_thr, NULL);
+	avalon_running_reset(avalon, info);
+	cgsem_destroy(&info->qsem);
+	mutex_destroy(&info->qlock);
+	mutex_destroy(&info->lock);
+	free(avalon->works);
+	avalon->works = NULL;
+	free(avalon->device_data);
+	avalon->device_data = NULL;
+	thr->cgpu = usb_free_cgpu(avalon);
 }
 
 static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *setting, char *replybuf)
