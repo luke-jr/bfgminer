@@ -22,6 +22,9 @@
 			(err) == LIBUSB_ERROR_PIPE || \
 			(err) == LIBUSB_ERROR_OTHER)
 
+/* Timeout errors on writes are basically unrecoverable */
+#define WRITENODEV(err) ((err) == LIBUSB_ERROR_TIMEOUT || NODEV(err))
+
 #define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_OTHER)
 
@@ -2779,7 +2782,7 @@ int _usb_write(struct cgpu_info *cgpu, int intinfo, int epinfo, char *buf, size_
 			err = LIBUSB_ERROR_OTHER;
 	}
 out_noerrmsg:
-	if (NODEV(err)) {
+	if (WRITENODEV(err)) {
 		cg_ruwlock(&cgpu->usbinfo.devlock);
 		release_cgpu(cgpu);
 		DEVWUNLOCK(cgpu, pstate);
