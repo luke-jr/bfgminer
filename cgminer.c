@@ -2700,25 +2700,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	}
 }
 
-#ifdef HAVE_LIBCURL
-static void text_print_status(int thr_id)
-{
-	struct cgpu_info *cgpu;
-	char logline[256];
-
-	cgpu = get_thr_cgpu(thr_id);
-	if (cgpu) {
-		get_statline(logline, sizeof(logline), cgpu);
-		printf("%s\n", logline);
-	}
-}
-
-static void print_status(int thr_id)
-{
-	if (!curses_active)
-		text_print_status(thr_id);
-}
-
 static void show_hash(struct work *work, char *hashshow)
 {
 	unsigned char rhash[32];
@@ -2738,6 +2719,25 @@ static void show_hash(struct work *work, char *hashshow)
 	suffix_string(work->share_diff, diffdisp, sizeof (diffdisp), 0);
 	snprintf(hashshow, 64, "%08lx Diff %s/%d%s", h32, diffdisp, intdiff,
 		 work->block? " BLOCK!" : "");
+}
+
+#ifdef HAVE_LIBCURL
+static void text_print_status(int thr_id)
+{
+	struct cgpu_info *cgpu;
+	char logline[256];
+
+	cgpu = get_thr_cgpu(thr_id);
+	if (cgpu) {
+		get_statline(logline, sizeof(logline), cgpu);
+		printf("%s\n", logline);
+	}
+}
+
+static void print_status(int thr_id)
+{
+	if (!curses_active)
+		text_print_status(thr_id);
 }
 
 static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
