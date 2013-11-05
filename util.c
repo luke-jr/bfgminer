@@ -2579,14 +2579,11 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 		ret = read(fd, &buf, 1);
 		return 0;
 	}
-
-	/* Harmless to time out regardless here since we may be waiting on sems
-	 * during shutdown. */
-	if (unlikely(ret)) {
-		applog(LOG_WARNING, "Failed to sem_timedwait %s %s %d errno=%d cgsem=0x%p",
-		       file, func, line, errno, cgsem);
-	}
-	return ETIMEDOUT;
+	if (likely(!ret))
+		return ETIMEDOUT;
+	quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
+	/* We don't reach here */
+	return 0;
 }
 #else
 void _cgsem_init(cgsem_t *cgsem, const char *file, const char *func, const int line)
@@ -2620,13 +2617,12 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 	timeraddspec(&abs_timeout, &ts_now);
 	ret = sem_timedwait(cgsem, &abs_timeout);
 
-	/* Harmless to time out regardless here since we may be waiting on sems
-	 * during shutdown. */
-	if (unlikely(ret && !sock_timeout())) {
-		applog(LOG_WARNING, "Failed to sem_timedwait %s %s %d errno=%d cgsem=0x%p",
-		file, func, line, errno, cgsem);
+	if (ret) {
+		if (likely(sock_timeout()))
+			return ETIMEDOUT;
+		quitfrom(1, file, func, line, "Failed to sem_timedwait errno=%d cgsem=0x%p", errno, cgsem);
 	}
-	return ETIMEDOUT;
+	return 0;
 }
 
 void cgsem_destroy(cgsem_t *cgsem)
