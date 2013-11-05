@@ -4007,6 +4007,8 @@ static void restart_threads(void)
 	rd_lock(&mining_thr_lock);
 	for (i = 0; i < mining_threads; i++) {
 		cgpu = mining_thr[i]->cgpu;
+		if (unlikely(!cgpu))
+			continue;
 		mining_thr[i]->work_restart = true;
 		flush_queue(cgpu);
 		cgpu->drv->flush_work(cgpu);
