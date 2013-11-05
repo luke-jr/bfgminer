@@ -67,9 +67,18 @@ struct libztex_hash_data {
 	uint32_t hash7;
 };
 
+enum ztex_check_result
+{
+	CHECK_ERROR,
+	CHECK_IS_NOT_ZTEX,
+	CHECK_OK,
+	CHECK_RESCAN,
+};
+
 extern int libztex_scanDevices (struct libztex_dev_list ***devs);
 extern void libztex_freeDevList (struct libztex_dev_list **devs);
-extern int libztex_prepare_device (struct libusb_device *dev, struct libztex_device** ztex);
+extern enum ztex_check_result libztex_checkDevice(struct libusb_device *);
+extern struct libztex_device *libztex_prepare_device2(struct libusb_device *);
 extern void libztex_destroy_device (struct libztex_device* ztex);
 extern int libztex_configureFpga (struct libztex_device *dev, const char *repr);
 extern int libztex_setFreq (struct libztex_device *ztex, uint16_t freq, const char *repr);

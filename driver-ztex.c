@@ -27,6 +27,7 @@
 #include "dynclock.h"
 #include "fpgautils.h"
 #include "libztex.h"
+#include "lowlevel.h"
 #include "util.h"
 
 #define GOLDEN_BACKLOG 5
@@ -75,48 +76,68 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 	return ztex;
 }
 
-static int ztex_autodetect(void)
+static
+bool ztex_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
-	int cnt;
-	int i;
+	const char * const product = info->product;
+	const char * const serial = info->serial;
+	if (info->lowl != &lowl_usb)
+	{
+		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
+		       __func__, product, serial);
+		return false;
+	}
+	
+	libusb_device * const usbdev = info->lowl_data;
+	
+	const enum ztex_check_result err = libztex_checkDevice(usbdev);
+	switch (err)
+	{
+		case CHECK_ERROR:
+			applogr(false, LOG_ERR, "%s: Can not check device %s", ztex_drv.dname, info->devid);
+		case CHECK_IS_NOT_ZTEX:
+			return false;
+		case CHECK_OK:
+			break;
+		case CHECK_RESCAN:
+			bfg_need_detect_rescan = true;
+			return false;
+	}
+	
 	int fpgacount;
-	int totaldevs = 0;
-	struct libztex_dev_list **ztex_devices;
 	struct libztex_device *ztex_master;
 	struct cgpu_info *ztex;
+	
+	ztex_master = libztex_prepare_device2(usbdev);
+	if (!ztex_master)
+		applogr(false, LOG_ERR, "%s: libztex_prepare_device2 failed on %s", ztex_drv.dname, info->devid);
+	
+	if (bfg_claim_usb(&ztex_drv, true, ztex_master->usbbus, ztex_master->usbaddress))
+		return false;
+	ztex_master->root = ztex_master;
+	fpgacount = libztex_numberOfFpgas(ztex_master);
+	ztex_master->handles = fpgacount;
+	ztex = ztex_setup(ztex_master, fpgacount);
 
-	cnt = libztex_scanDevices(&ztex_devices);
-	if (cnt > 0)
-		applog(LOG_INFO, "Found %d ztex board%s", cnt, cnt > 1 ? "s" : "");
+	if (fpgacount > 1)
+		pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
+	
+	return true;
+}
 
-	for (i = 0; i < cnt; i++) {
-		ztex_master = ztex_devices[i]->dev;
-		if (bfg_claim_usb(&ztex_drv, true, ztex_master->usbbus, ztex_master->usbaddress))
-			return false;
-		ztex_master->root = ztex_master;
-		fpgacount = libztex_numberOfFpgas(ztex_master);
-		ztex_master->handles = fpgacount;
-		ztex = ztex_setup(ztex_master, fpgacount);
+static bool ztex_detect_one(const char *serial)
+{
+	return lowlevel_detect_serial(ztex_foundlowl, serial);
+}
 
-		totaldevs += fpgacount;
-
-		if (fpgacount > 1)
-			pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
-	}
-
-	if (cnt > 0)
-		libztex_freeDevList(ztex_devices);
-
-	return totaldevs;
+static int ztex_autodetect()
+{
+	return lowlevel_detect(ztex_foundlowl, "btcminer for ZTEX");
 }
 
 static void ztex_detect()
 {
-	if (!have_libusb)
-		return;
-	
-	// This wrapper ensures users can specify -S ztex:noauto to disable it
-	noserial_detect(&ztex_drv, ztex_autodetect);
+	generic_detect(&ztex_drv, ztex_detect_one, ztex_autodetect, 0);
 }
 
 static bool ztex_change_clock_func(struct thr_info *thr, int bestM)
