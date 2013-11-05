@@ -112,6 +112,7 @@ optlist=
 need_dynclock=no
 need_fpgautils=no
 need_lowlevel=no
+need_lowl_hid=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -658,7 +659,6 @@ elif test "x$bitfury" = "xyes"; then
 	fi
 elif test "x$nanofury" = "xyes"; then
 	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
-	need_fpgautils=yes
 else
 	nanofury=no
 fi
@@ -666,6 +666,7 @@ if test "x$nanofury" = "xyes"; then
 	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
 	need_fpgautils=yes
 	need_lowlevel=yes
+	need_lowl_hid=yes
 fi
 AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
 
@@ -751,6 +752,11 @@ if test x$need_fpgautils = xyes; then
 			echo '#include <iospeeds_posix.h>' >iospeeds_local.h
 		fi
 	fi
+fi
+
+if test x$need_lowl_hid = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_HID], [1], [Defined to 1 if lowlevel hid drivers are being used])
+	need_lowlevel=yes
 fi
 
 if test x$need_lowlevel = xyes; then
@@ -910,6 +916,7 @@ AC_SUBST(libblkmaker_LIBS)
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
