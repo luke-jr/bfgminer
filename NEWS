@@ -1,7 +1,5 @@
-Version 3.7.1 - 5th November 2013
+Version 3.7.2 - 5th November 2013
 
-- Return ETIMEDOUT regardless if we fail in cgsem_mswait since we may be waiting
-on it on shutdown and the return response is harmless.
 - Clean up completely on avalon shutdown.
 - Use cgsem timed waits in avalon driver to not miss any queued wake ups to
 account for async messages coming during a flush work.
