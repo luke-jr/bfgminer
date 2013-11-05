@@ -66,6 +66,10 @@
 #define KLONDIKE_TIMEOUT_MS 999
 #define ICARUS_TIMEOUT_MS 999
 #define HASHFAST_TIMEOUT_MS 999
+
+/* The safety timeout we use, cancelling async transfers on windows that fail
+ * to timeout on their own. */
+#define WIN_CALLBACK_EXTRA 40
 #else
 #define BFLSC_TIMEOUT_MS 300
 #define BITFORCE_TIMEOUT_MS 200
@@ -76,8 +80,6 @@
 #define ICARUS_TIMEOUT_MS 200
 #define HASHFAST_TIMEOUT_MS 200
 #endif
-
-#define USB_READ_MINPOLL 40
 
 #define USB_EPS(_intx, _epinfosx) { \
 		.interface = _intx, \
@@ -2424,7 +2426,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 #ifdef WIN32
 	/* On windows the callback_timeout is a safety mechanism only. */
 	bulk_timeout = timeout;
-	callback_timeout += timeout + cgpu->usbdev->found->timeout;
+	callback_timeout += WIN_CALLBACK_EXTRA;
 #else
 	/* We give the transfer no timeout since we manage timeouts ourself on
 	 * non windows. */
