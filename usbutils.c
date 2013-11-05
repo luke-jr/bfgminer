@@ -20,15 +20,10 @@
 
 #define NODEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
 			(err) == LIBUSB_ERROR_PIPE || \
-			(err) == LIBUSB_ERROR_OTHER || \
-			(err) == LIBUSB_TRANSFER_NO_DEVICE || \
-			(err) == LIBUSB_TRANSFER_STALL || \
-			(err) == LIBUSB_TRANSFER_ERROR)
+			(err) == LIBUSB_ERROR_OTHER)
 
 #define NOCONTROLDEV(err) ((err) == LIBUSB_ERROR_NO_DEVICE || \
-			(err) == LIBUSB_ERROR_OTHER || \
-			(err) == LIBUSB_TRANSFER_NO_DEVICE || \
-			(err) == LIBUSB_TRANSFER_ERROR)
+			(err) == LIBUSB_ERROR_OTHER)
 
 /*
  * WARNING - these assume DEVLOCK(cgpu, pstate) is called first and
