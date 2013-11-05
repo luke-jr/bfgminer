@@ -201,8 +201,6 @@ struct cg_usb_device {
 	char buffer[USB_MAX_READ];
 	uint32_t bufsiz;
 	uint32_t bufamt;
-	cgtimer_t cgt_last_write;
-	size_t last_write_siz;
 };
 
 #define USB_NOSTAT 0
