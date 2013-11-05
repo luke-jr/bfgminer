@@ -42,6 +42,8 @@
 	#include <fcntl.h>
 #endif
 
+BFG_REGISTER_DRIVER(cpu_drv)
+
 #if defined(__linux) && defined(CPU_ZERO)  /* Linux specific policy and affinity management */
 #include <sched.h>
 static inline void drop_policy(void)
@@ -877,6 +879,7 @@ CPUSearch:
 struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
+	.supported_algos = POW_SHA256D | POW_SCRYPT,
 	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,

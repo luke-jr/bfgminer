@@ -98,14 +98,6 @@ static int libztex_get_string_descriptor_ascii(libusb_device_handle *dev, uint8_
 	return LIBUSB_SUCCESS;
 }
 
-enum check_result
-{
-	CHECK_ERROR,
-	CHECK_IS_NOT_ZTEX,
-	CHECK_OK,
-	CHECK_RESCAN,
-};
-
 static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable)
 {
 	uint8_t reset = enable ? 1 : 0;
@@ -119,7 +111,7 @@ static bool libztex_firmwareReset(struct libusb_device_handle *hndl, bool enable
 	return 0;
 }
 
-static enum check_result libztex_checkDevice(struct libusb_device *dev)
+enum ztex_check_result libztex_checkDevice(struct libusb_device *dev)
 {
 	libusb_device_handle *hndl = NULL;
 	struct libusb_device_descriptor desc;
@@ -589,53 +581,56 @@ int libztex_suspend(struct libztex_device *ztex)
 	}
 }
 
-int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** ztex)
+struct libztex_device *libztex_prepare_device2(struct libusb_device * const dev)
 {
-	struct libztex_device *newdev = *ztex;
+	struct libztex_device *newdev;
 	int i, cnt, err;
 	unsigned char buf[64];
 
+	newdev = malloc(sizeof(*newdev));
+	if (!newdev)
+		applogr(NULL, LOG_ERR, "%s: Failed to malloc libztex_device", __func__);
+	
+	newdev->bitFileName = NULL;
+	newdev->numberOfFpgas = -1;
+	
 	dclk_prepare(&newdev->dclk);
 	newdev->dclk.freqMinM = 0;
 	err = libusb_open(dev, &newdev->hndl);
 	if (err != LIBUSB_SUCCESS) {
 		applog(LOG_ERR, "%s: Can not open ZTEX device: %s", __func__, bfg_strerror(err, BST_LIBUSB));
-		return CHECK_ERROR;
+		return NULL;
 	}
 
 	err = libusb_get_device_descriptor(dev, &newdev->descriptor);
 	if (unlikely(err != 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to open read descriptor with error %d", err);
-		return CHECK_ERROR;
+		applogr(NULL, LOG_ERR, "%s: Failed to open read descriptor: %s", __func__, bfg_strerror(err, BST_LIBUSB));
 	}
 
 	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iSerialNumber, newdev->snString, sizeof(newdev->snString));
 	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to read device snString with err %d", cnt);
-		return cnt;
+		applogr(NULL, LOG_ERR, "%s: Failed to read device snString: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 	}
 	
 	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iProduct, buf, sizeof(buf));
 	if (unlikely(cnt < 0))
-		applog(LOG_WARNING, "Ztex check device: Failed to read device product with err %d", cnt);
+		applog(LOG_WARNING, "%s: Failed to read device product: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 	else
 		newdev->dev_product = buf[0] ? strdup((void*)buf) : NULL;
 	
 	cnt = libztex_get_string_descriptor_ascii(newdev->hndl, newdev->descriptor.iManufacturer, buf, sizeof(buf));
 	if (unlikely(cnt < 0))
-		applog(LOG_WARNING, "Ztex check device: Failed to read device manufacturer with err %d", cnt);
+		applog(LOG_WARNING, "%s: Failed to read device manufacturer: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 	else
 		newdev->dev_manufacturer = buf[0] ? strdup((void*)buf) : NULL;
 
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x22, 0, 0, buf, 40, 500);
 	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
-		return cnt;
+		applogr(NULL, LOG_ERR, "%s: Failed to read ztex descriptor: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 	}
 
 	if (buf[0] != 40 || buf[1] != 1 || buf[2] != 'Z' || buf[3] != 'T' || buf[4] != 'E' || buf[5] != 'X') {
-		applog(LOG_ERR, "Ztex check device: Error reading ztex descriptor");
-		return 2;
+		applogr(NULL, LOG_ERR, "%s: Unexpected data reading ztex descriptor", __func__);
 	}
 
 	newdev->productId[0] = buf[6];
@@ -665,16 +660,15 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 
 	cnt = libusb_control_transfer(newdev->hndl, 0xc0, 0x82, 0, 0, buf, 64, 500);
 	if (unlikely(cnt < 0)) {
-		applog(LOG_ERR, "Ztex check device: Failed to read ztex descriptor with err %d", cnt);
-		return cnt;
+		applogr(NULL, LOG_ERR, "%s: Failed to read ztex descriptor: %s", __func__, bfg_strerror(cnt, BST_LIBUSB));
 	}
 
 	if (unlikely(buf[0] != 5)) {
 		if (unlikely(buf[0] != 2 && buf[0] != 4)) {
-			applog(LOG_ERR, "Invalid BTCMiner descriptor version. Firmware must be updated (%d).", buf[0]);
-			return 3;
+			applogr(NULL, LOG_ERR, "%s: Invalid BTCMiner descriptor version (%d). Firmware must be updated.", __func__, buf[0]);
+			return NULL;
 		}
-		applog(LOG_WARNING, "Firmware out of date (%d).", buf[0]);
+		applog(LOG_WARNING, "%s: Firmware out of date (%d).", __func__, buf[0]);
 	}
 
 	i = buf[0] > 4? 11: (buf[0] > 2? 10: 8);
@@ -682,8 +676,7 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	while (cnt < 64 && buf[cnt] != 0)
 		cnt++;
 	if (cnt < i + 1) {
-		applog(LOG_ERR, "Invalid bitstream file name .");
-		return 4;
+		applogr(NULL, LOG_ERR, "%s: Invalid bitstream file name.", __func__);
 	}
 
 	newdev->bitFileName = malloc(sizeof(char) * (cnt + 1));
@@ -700,20 +693,21 @@ int libztex_prepare_device(struct libusb_device *dev, struct libztex_device** zt
 	newdev->hashesPerClock = buf[0] > 2? (((buf[8] & 255) | ((buf[9] & 255) << 8)) + 1) / 128.0: 1.0;
 	newdev->extraSolutions = buf[0] > 4? buf[10]: 0;
 
-	applog(LOG_DEBUG, "PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
+	applog(LOG_DEBUG, "%s: PID: %d numNonces: %d offsNonces: %d freqM1: %f freqMaxM: %d freqM: %d suspendSupported: %s hashesPerClock: %f extraSolutions: %d",
+	       __func__,
 	                 buf[0], newdev->numNonces, newdev->offsNonces, newdev->freqM1, newdev->dclk.freqMaxM, newdev->dclk.freqM, newdev->suspendSupported ? "T": "F",
 	                 newdev->hashesPerClock, newdev->extraSolutions);
 
 	if (buf[0] < 4) {
 		if (strncmp(newdev->bitFileName, "ztex_ufm1_15b", 13) != 0)
 			newdev->hashesPerClock = 0.5;
-		applog(LOG_WARNING, "HASHES_PER_CLOCK not defined, assuming %0.2f", newdev->hashesPerClock);
+		applog(LOG_WARNING, "%s: HASHES_PER_CLOCK not defined, assuming %0.2f", __func__, newdev->hashesPerClock);
 	}
 
 	newdev->usbbus = libusb_get_bus_number(dev);
 	newdev->usbaddress = libusb_get_device_address(dev);
 	sprintf(newdev->repr, "ZTEX %s-1", newdev->snString);
-	return 0;
+	return newdev;
 }
 
 void libztex_destroy_device(struct libztex_device* ztex)
@@ -728,118 +722,6 @@ void libztex_destroy_device(struct libztex_device* ztex)
 		ztex->bitFileName = NULL;
 	}
 	free(ztex);
-}
-
-int libztex_scanDevices(struct libztex_dev_list*** devs_p)
-{
-	int usbdevices[LIBZTEX_MAX_DESCRIPTORS];
-	struct libztex_dev_list **devs = NULL;
-	struct libztex_device *ztex = NULL;
-	int found, max_found = 0, pos = 0, err, rescan, ret = 0;
-	libusb_device **list = NULL;
-	ssize_t cnt, i;
-	int skipped = 0;
-
-	do {
-		cnt = libusb_get_device_list(NULL, &list);
-		if (unlikely(cnt < 0)) {
-			applog(LOG_ERR, "Ztex scan devices: Failed to list usb devices with err %"PRId64, (int64_t)cnt);
-			goto done;
-		}
-
-		for (found = rescan = i = 0; i < cnt; i++) {
-			if (bfg_claim_libusb(NULL, false, list[i]))
-			{
-				++skipped;
-				continue;
-			}
-			
-			err = libztex_checkDevice(list[i]);
-			switch (err) {
-			case CHECK_ERROR:
-				applog(LOG_ERR, "Ztex: Can not check device %ld", (long)i);
-				continue;
-			case CHECK_IS_NOT_ZTEX:
-				continue;
-			case CHECK_OK:
-				// Got one!
-				usbdevices[found++] = i;
-				break;
-			case CHECK_RESCAN:
-				rescan = 1;
-				found++;
-				break;
-			}
-		}
-
-		if (found < max_found)
-			rescan = 1;
-		else if (found > max_found)
-			max_found = found;
-
-		if (rescan)
-			libusb_free_device_list(list, 1);
-	} while (rescan);
-
-	if (0 == found)
-		goto done;
-
-	devs = malloc(sizeof(struct libztex_dev_list *) * found);
-	if (devs == NULL) {
-		applog(LOG_ERR, "Ztex scan devices: Failed to allocate memory");
-		goto done;
-	}
-
-	for (i = 0; i < found; i++) {
-		if (!ztex) {
-			ztex = malloc(sizeof(*ztex));
-			if (!ztex) {
-				applog(LOG_ERR, "%s: Can not allocate memory for device struct: %s", __func__, bfg_strerror(errno, BST_ERRNO));
-				goto done;
-			}
-		}
-
-		ztex->bitFileName = NULL;
-		ztex->numberOfFpgas = -1;
-
-		err = libztex_prepare_device(list[usbdevices[i]], &ztex);
-		if (unlikely(err != 0)) {
-			applog(LOG_ERR, "prepare device: %d", err);
-			libztex_destroy_device(ztex);
-			ztex = NULL;
-			continue;
-		}
-
-		devs[pos] = malloc(sizeof(struct libztex_dev_list));
-		if (NULL == devs[pos]) {
-			applog(LOG_ERR, "%s: Can not allocate memory for device: %s", __func__, bfg_strerror(errno, BST_ERRNO));
-			libztex_destroy_device(ztex);
-			ztex = NULL;
-			continue;
-		}
-
-		devs[pos]->dev = ztex;
-		ztex = NULL;
-		devs[pos]->next = NULL;
-		if (pos > 0)
-			devs[pos - 1]->next = devs[pos];
-		pos++;
-	}
-
-	ret = pos;
-
-done:
-	if (ret > 0)
-		*devs_p = devs;
-	else if (devs)
-		free(devs);
-	if (list)
-		libusb_free_device_list(list, 1);
-	
-	if (skipped)
-		applog(LOG_DEBUG, "%s: Skipping probe of %d claimed devices", __func__, skipped);
-	
-	return ret;
 }
 
 int libztex_sendHashData(struct libztex_device *ztex, unsigned char *sendbuf)

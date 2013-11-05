@@ -27,9 +27,7 @@
 #define CAIRNSMORE1_DEFAULT_CLOCK  200
 #define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
-struct device_drv cairnsmore_drv;
-
-static void cairnsmore_drv_init();
+BFG_REGISTER_DRIVER(cairnsmore_drv)
 
 static bool cairnsmore_detect_one(const char *devpath)
 {
@@ -59,7 +57,6 @@ static int cairnsmore_detect_auto(void)
 
 static void cairnsmore_detect()
 {
-	cairnsmore_drv_init();
 	// Actual serial detection is handled by Icarus driver
 	serial_detect_auto_byname(&cairnsmore_drv, cairnsmore_detect_one, cairnsmore_detect_auto);
 }
@@ -211,9 +208,9 @@ static void cairnsmore_drv_init()
 	cairnsmore_drv.thread_init = cairnsmore_init;
 	cairnsmore_drv.identify_device = cairnsmore_identify;
 	cairnsmore_drv.get_api_extra_device_status = cairnsmore_drv_extra_device_status;
+	++cairnsmore_drv.probe_priority;
 }
 
 struct device_drv cairnsmore_drv = {
-	// Needed to get to cairnsmore_drv_init at all
-	.drv_detect = cairnsmore_detect,
+	.drv_init = cairnsmore_drv_init,
 };

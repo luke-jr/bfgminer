@@ -174,9 +174,12 @@ struct lowlevel_device_info *mcp2210_devinfo_scan()
 	LL_FOREACH(hid_enum, hid_item)
 	{
 		info = malloc(sizeof(struct lowlevel_device_info));
+		char * const devid = malloc(4 + strlen(hid_item->path) + 1);
+		sprintf(devid, "hid:%s", hid_item->path);
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_mcp2210,
 			.path = strdup(hid_item->path),
+			.devid = devid,
 			.manufacturer = wcs2str_dup(hid_item->manufacturer_string),
 			.product = wcs2str_dup(hid_item->product_string),
 			.serial  = wcs2str_dup(hid_item->serial_number),
@@ -449,5 +452,6 @@ enum mcp2210_gpio_value mcp2210_get_gpio_input(struct mcp2210_device * const h, 
 }
 
 struct lowlevel_driver lowl_mcp2210 = {
+	.dname = "mcp2210",
 	.devinfo_scan = mcp2210_devinfo_scan,
 };

@@ -32,7 +32,7 @@
 #include "spidevc.h"
 #include "tm_i2c.h"
 
-struct device_drv metabank_drv;
+BFG_REGISTER_DRIVER(metabank_drv)
 
 static
 bool metabank_spi_txrx(struct spi_port *port)

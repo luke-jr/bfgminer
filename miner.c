@@ -155,7 +155,6 @@ unsigned long global_quota_gcd = 1;
 int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = -1;
-int gpu_threads;
 #endif
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
@@ -164,7 +163,6 @@ bool opt_scrypt;
 static char detect_algo;
 #endif
 bool opt_restart = true;
-static bool opt_nogpu;
 
 #ifdef USE_LIBMICROHTTPD
 #include "httpsrv.h"
@@ -889,58 +887,23 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
-#ifdef HAVE_LIBUDEV
-#include <libudev.h>
-#endif
+extern struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info **, const char *);
 
-static
-char *add_serial_all(const char *arg, const char *p) {
-	size_t pLen = p - arg;
-	char dev[pLen + PATH_MAX];
-	memcpy(dev, arg, pLen);
-	char *devp = &dev[pLen];
-
-#ifdef HAVE_LIBUDEV
-
-	struct udev *udev = udev_new();
-	struct udev_enumerate *enumerate = udev_enumerate_new(udev);
-	struct udev_list_entry *list_entry;
-
-	udev_enumerate_add_match_subsystem(enumerate, "tty");
-	udev_enumerate_add_match_property(enumerate, "ID_SERIAL", "*");
-	udev_enumerate_scan_devices(enumerate);
-	udev_list_entry_foreach(list_entry, udev_enumerate_get_list_entry(enumerate)) {
-		struct udev_device *device = udev_device_new_from_syspath(
-			udev_enumerate_get_udev(enumerate),
-			udev_list_entry_get_name(list_entry)
-		);
-		if (!device)
-			continue;
-
-		const char *devpath = udev_device_get_devnode(device);
-		if (devpath) {
-			strcpy(devp, devpath);
-			applog(LOG_DEBUG, "scan-serial: libudev all-adding %s", dev);
-			string_elist_add(dev, &scan_devices);
-		}
-
-		udev_device_unref(device);
-	}
-	udev_enumerate_unref(enumerate);
-	udev_unref(udev);
-
-#elif defined(WIN32)
-
+#ifdef WIN32
+void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info ** const devinfo_list)
+{
+	char dev[PATH_MAX];
+	char *devp = dev;
 	size_t bufLen = 0x100;
 tryagain: ;
 	char buf[bufLen];
 	if (!QueryDosDevice(NULL, buf, bufLen)) {
 		if (GetLastError() == ERROR_INSUFFICIENT_BUFFER) {
 			bufLen *= 2;
-			applog(LOG_DEBUG, "scan-serial: QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
+			applog(LOG_DEBUG, "QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
 			goto tryagain;
 		}
-		return "scan-serial: Error occurred trying to enumerate COM ports with QueryDosDevice";
+		applog(LOG_WARNING, "Error occurred trying to enumerate COM ports with QueryDosDevice");
 	}
 	size_t tLen;
 	memcpy(devp, "\\\\.\\", 4);
@@ -950,12 +913,14 @@ tryagain: ;
 		if (strncmp("COM", t, 3))
 			continue;
 		memcpy(devp, t, tLen);
-		applog(LOG_DEBUG, "scan-serial: QueryDosDevice all-adding %s", dev);
-		string_elist_add(dev, &scan_devices);
+		_vcom_devinfo_findorcreate(devinfo_list, dev);
 	}
-
+}
 #else
-
+void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info ** const devinfo_list)
+{
+	char dev[PATH_MAX];
+	char *devp = dev;
 	DIR *D;
 	struct dirent *de;
 	const char devdir[] = "/dev";
@@ -965,7 +930,7 @@ tryagain: ;
 	
 	D = opendir(devdir);
 	if (!D)
-		return "scan-serial 'all' is not supported on this platform";
+		applogr(, LOG_DEBUG, "No /dev directory to look for VCOM devices in");
 	memcpy(devpath, devdir, devdirlen);
 	devpath[devdirlen] = '/';
 	while ( (de = readdir(D)) ) {
@@ -978,30 +943,21 @@ tryagain: ;
 		
 trydev:
 		strcpy(devfile, de->d_name);
-		applog(LOG_DEBUG, "scan-serial: /dev glob all-adding %s", dev);
-		string_elist_add(dev, &scan_devices);
+		_vcom_devinfo_findorcreate(devinfo_list, dev);
 	}
 	closedir(D);
-	
-	return NULL;
-
-#endif
-
-	return NULL;
 }
+#endif
 
 static char *add_serial(const char *arg)
 {
-	const char *p = strchr(arg, ':');
-	if (p)
-		++p;
-	else
-		p = arg;
-	if (!strcasecmp(p, "all")) {
-		return add_serial_all(arg, p);
-	}
-
 	string_elist_add(arg, &scan_devices);
+	return NULL;
+}
+
+static char *compat_disable_gpu(__maybe_unused void *arg)
+{
+	string_elist_add("opencl:noauto", &scan_devices);
 	return NULL;
 }
 
@@ -1745,7 +1701,7 @@ static struct opt_table opt_config_table[] = {
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
 	OPT_WITHOUT_ARG("--disable-gpu|-G",
-			opt_set_bool, &opt_nogpu,
+			compat_disable_gpu, NULL,
 			opt_hidden
 	),
 	OPT_WITHOUT_ARG("--disable-rejecting",
@@ -10101,60 +10057,6 @@ struct device_drv cpu_drv = {
 };
 #endif
 
-#ifdef USE_BITFORCE
-extern struct device_drv bitforce_drv;
-#endif
-
-#ifdef USE_BIGPIC
-extern struct device_drv bigpic_drv;
-#endif
-
-#ifdef USE_ICARUS
-extern struct device_drv cairnsmore_drv;
-extern struct device_drv erupter_drv;
-extern struct device_drv icarus_drv;
-#endif
-
-#ifdef USE_AVALON
-extern struct device_drv avalon_drv;
-#endif
-
-#ifdef USE_KNC
-extern struct device_drv knc_drv;
-#endif
-
-#ifdef USE_LITTLEFURY
-extern struct device_drv littlefury_drv;
-#endif
-
-#ifdef USE_MODMINER
-extern struct device_drv modminer_drv;
-#endif
-
-#ifdef USE_NANOFURY
-extern struct device_drv nanofury_drv;
-#endif
-
-#ifdef USE_X6500
-extern struct device_drv x6500_api;
-#endif
-
-#ifdef USE_ZTEX
-extern struct device_drv ztex_drv;
-#endif
-
-#ifdef USE_BITFURY
-extern struct device_drv bitfury_drv;
-#endif
-
-#ifdef USE_METABANK
-extern struct device_drv metabank_drv;
-#endif
-
-#ifdef USE_BFSB
-extern struct device_drv bfsb_drv;
-#endif
-
 static int cgminer_id_count = 0;
 static int device_line_id_count;
 
@@ -10171,11 +10073,6 @@ void register_device(struct cgpu_info *cgpu)
 	mining_threads += cgpu->threads ?: 1;
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
-#endif
-#ifdef HAVE_OPENCL
-	if (cgpu->drv == &opencl_api) {
-		gpu_threads += cgpu->threads;
-	}
 #endif
 
 	rwlock_init(&cgpu->qlock);
@@ -10215,95 +10112,39 @@ extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
 #endif
 
+bool bfg_need_detect_rescan;
+
 static
 void drv_detect_all()
 {
+rescan:
+	bfg_need_detect_rescan = false;
+	
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan();
 #endif
-
-#ifdef USE_ICARUS
-	if (!opt_scrypt)
+	
+	struct driver_registration *reg, *tmp;
+	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
+	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
 	{
-		cairnsmore_drv.drv_detect();
-		erupter_drv.drv_detect();
-		icarus_drv.drv_detect();
+		const struct device_drv * const drv = reg->drv;
+		const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
+		if (0 == (algos & algomatch) || !drv->drv_detect)
+			continue;
+		
+		drv->drv_detect();
 	}
-#endif
-
-#ifdef USE_BITFORCE
-	if (!opt_scrypt)
-		bitforce_drv.drv_detect();
-#endif
-
-#ifdef USE_BIGPIC
-	if (!opt_scrypt)
-		bigpic_drv.drv_detect();
-#endif
-
-#ifdef USE_KNC
-	if (!opt_scrypt)
-		knc_drv.drv_detect();
-#endif
-
-#ifdef USE_MODMINER
-	if (!opt_scrypt)
-		modminer_drv.drv_detect();
-#endif
-
-#ifdef USE_NANOFURY
-	if (!opt_scrypt)
-		nanofury_drv.drv_detect();
-#endif
-
-#ifdef USE_X6500
-	if (likely(have_libusb) && !opt_scrypt)
-		x6500_api.drv_detect();
-#endif
-
-#ifdef USE_ZTEX
-	if (likely(have_libusb) && !opt_scrypt)
-		ztex_drv.drv_detect();
-#endif
-
-#ifdef USE_BITFURY
-	if (!opt_scrypt)
-	{
-		bitfury_drv.drv_detect();
-#ifdef USE_METABANK
-		metabank_drv.drv_detect();
-#endif
-#ifdef USE_BFSB
-		bfsb_drv.drv_detect();
-#endif
-	}
-#endif
-
-#ifdef USE_LITTLEFURY
-	if (!opt_scrypt)
-		littlefury_drv.drv_detect();
-#endif
-
-	/* Detect avalon last since it will try to claim the device regardless
-	 * as detection is unreliable. */
-#ifdef USE_AVALON
-	if (!opt_scrypt)
-		avalon_drv.drv_detect();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpu_drv.drv_detect();
-#endif
 
 #ifdef HAVE_BFG_LOWLEVEL
 	lowlevel_scan_free();
 #endif
-
-#ifdef HAVE_OPENCL
-	if (!opt_nogpu)
-		opencl_api.drv_detect();
-	gpu_threads = 0;
-#endif
+	
+	if (bfg_need_detect_rescan)
+	{
+		applog(LOG_DEBUG, "Device rescan requested");
+		goto rescan;
+	}
 }
 
 static
@@ -10829,6 +10670,7 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+	bfg_devapi_init();
 	drv_detect_all();
 	total_devices = total_devices_new;
 	devices = devices_new;
@@ -11065,7 +10907,6 @@ begin_bench:
 	}
 
 #ifdef HAVE_OPENCL
-	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
 	for (i = 0; i < nDevs; i++)
 		pause_dynamic_threads(i);
 #endif

@@ -713,6 +713,7 @@ fi
 
 if test x$need_fpgautils = xyes; then
 	AC_DEFINE([HAVE_FPGAUTILS], [1], [Defined to 1 if fpgautils is being used])
+	need_lowlevel=yes
 	
 	if $have_win32; then
 		echo '#include <iospeeds.h>' >iospeeds_local.h
@@ -914,6 +915,7 @@ AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
+AM_CONDITIONAL([HAVE_LIBUSB], [test x$libusb = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])

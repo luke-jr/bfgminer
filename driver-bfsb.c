@@ -31,7 +31,7 @@
 #include "spidevc.h"
 #include "driver-bitfury.h"
 
-struct device_drv bfsb_drv;
+BFG_REGISTER_DRIVER(bfsb_drv)
 
 static
 bool bfsb_spi_txrx(struct spi_port *port)

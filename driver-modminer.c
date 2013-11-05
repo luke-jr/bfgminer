@@ -48,7 +48,7 @@
 
 #define FPGAID_ALL 4
 
-struct device_drv modminer_drv;
+BFG_REGISTER_DRIVER(modminer_drv)
 
 struct modminer_fpga_state {
 	bool work_running;

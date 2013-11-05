@@ -7,6 +7,35 @@
 
 #include "miner.h"
 
+struct driver_registration;
+struct driver_registration {
+	const struct device_drv *drv;
+	
+	UT_hash_handle hh;   // hash & order by dname
+	UT_hash_handle hh2;  // hash by name, order by priority
+	struct driver_registration *next;  // DO NOT USE
+};
+
+extern struct driver_registration *_bfg_drvreg1;
+extern struct driver_registration *_bfg_drvreg2;
+extern void bfg_devapi_init();
+
+#define BFG_FOREACH_DRIVER_BY_DNAME(reg, tmp)  \
+	HASH_ITER(hh , _bfg_drvreg1, reg, tmp)
+#define BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)  \
+	HASH_ITER(hh2, _bfg_drvreg2, reg, tmp)
+
+extern void _bfg_register_driver(const struct device_drv *);
+#define BFG_REGISTER_DRIVER(drv)                \
+	struct device_drv drv;                      \
+	__attribute__((constructor))                \
+	static void __bfg_register_drv_ ## drv() {  \
+		_bfg_register_driver(&drv);             \
+	}                                           \
+// END BFG_REGISTER_DRIVER
+
+extern bool bfg_need_detect_rescan;
+
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);

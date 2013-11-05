@@ -40,7 +40,7 @@
 #define X6500_DEFAULT_CLOCK  190
 #define X6500_MAXIMUM_CLOCK  250
 
-struct device_drv x6500_api;
+BFG_REGISTER_DRIVER(x6500_api)
 
 #define fromlebytes(ca, j)  (ca[j] | (((uint16_t)ca[j+1])<<8) | (((uint32_t)ca[j+2])<<16) | (((uint32_t)ca[j+3])<<24))
 
@@ -127,14 +127,15 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 	return bits2int(buf, 32);
 }
 
-static bool x6500_foundlowl(struct lowlevel_device_info * const info)
+static bool x6500_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;
 	if (info->lowl != &lowl_ft232r)
 	{
-		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
-		       __func__, product, serial);
+		if (info->lowl != &lowl_usb)
+			applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
+			       __func__, product, serial);
 		return false;
 	}
 	

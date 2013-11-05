@@ -169,7 +169,7 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 //
 static int option_offset = -1;
 
-struct device_drv icarus_drv;
+BFG_REGISTER_DRIVER(icarus_drv)
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 
@@ -1309,6 +1309,7 @@ static void icarus_shutdown(struct thr_info *thr)
 struct device_drv icarus_drv = {
 	.dname = "icarus",
 	.name = "ICA",
+	.probe_priority = -120,
 	.drv_detect = icarus_detect,
 	.get_api_stats = icarus_drv_stats,
 	.thread_prepare = icarus_prepare,

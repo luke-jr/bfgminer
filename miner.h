@@ -283,6 +283,12 @@ struct gpu_adl {
 };
 #endif
 
+enum pow_algorithm {
+	POW_SHA256D = 1,
+	POW_SCRYPT  = 2,
+};
+typedef uint8_t supported_algos_t;
+
 struct api_data;
 struct thr_info;
 struct work;
@@ -290,8 +296,11 @@ struct work;
 struct device_drv {
 	const char *dname;
 	const char *name;
+	int8_t probe_priority;
+	supported_algos_t supported_algos;
 
 	// DRV-global functions
+	void (*drv_init)();
 	void (*drv_detect)();
 
 	// Processor-specific functions
@@ -1066,7 +1075,6 @@ extern bool opt_quiet;
 extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
-extern int gpu_threads;
 #ifdef USE_SCRYPT
 extern bool opt_scrypt;
 #else

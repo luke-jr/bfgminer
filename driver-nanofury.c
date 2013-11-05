@@ -30,7 +30,7 @@
 
 #define NANOFURY_MAX_BYTES_PER_SPI_TRANSFER 60			// due to MCP2210 limitation
 
-struct device_drv nanofury_drv;
+BFG_REGISTER_DRIVER(nanofury_drv)
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
@@ -161,7 +161,7 @@ fail:
 }
 
 static
-bool nanofury_foundlowl(struct lowlevel_device_info * const info)
+bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;
