@@ -699,6 +699,20 @@ if test "x$libusb" = xyes; then
 fi
 
 
+driverlist="$driverlist technobit"
+technobit="no"
+AC_ARG_ENABLE([technobit],
+	[AC_HELP_STRING([--disable-technobit],[Compile support for TechnoBit (default enabled)])],
+	[technobit=$enableval],
+	[technobit=yes]
+	)
+if test "x$technobit" = xyes; then
+	AC_DEFINE([USE_TECHNOBIT], [1], [Defined to 1 if TechnoBit support is wanted])
+	need_fpgautils=yes
+fi
+AM_CONDITIONAL([USE_TECHNOBIT], [test x$technobit = xyes])
+
+
 algolist="$algolist scrypt"
 scrypt="no"
 
