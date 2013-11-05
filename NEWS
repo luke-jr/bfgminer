@@ -1,3 +1,32 @@
+Version 3.7.1 - 5th November 2013
+
+- Return ETIMEDOUT regardless if we fail in cgsem_mswait since we may be waiting
+on it on shutdown and the return response is harmless.
+- Clean up completely on avalon shutdown.
+- Use cgsem timed waits in avalon driver to not miss any queued wake ups to
+account for async messages coming during a flush work.
+- Statline before is too long on icarus that doesn't have monitoring.
+- Different windows+usb combinations respond with varying levels of reliability
+wrt timeouts so use a nominal extra 40ms before cancelling transfers that fail
+to time out on their own.
+- Do all hotplug_process under the write mining_thr_lock
+- Fix for opt_worktime on big endian machines.
+- Correct set_blockdiff for big endian machines.
+- Make sure cgpu exists in the restart threads loop in cases of hotplug etc.
+- Treat usb write timeout errors as unrecoverable.
+- Transfer errors are filtered out in usbutils now so no need to look for them
+in NODEV checks.
+- Remove now unused entries from struct cg_usb_device
+- Do not double up with checking for end of timeout measurements in usb
+read/write.
+- Do get_work in fill_queue without holding other locks.
+- Initialise usb after all the locks and conditionals are initialised.
+- Use only a trylock in flush queue to prevent deadlocks.
+- Add a wr_trylock wrapper for pthread rw lock write trylock.
+- Scale diff for scrypt when testing for block solves.
+- Fix for non curses build.
+
+
 Version 3.7.0 - 4th November 2013
 
 - Use WRITEIOERR macro check for all usb writes.
