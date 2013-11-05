@@ -1613,7 +1613,6 @@ static void avalon_shutdown(struct thr_info *thr)
 	avalon->works = NULL;
 	free(avalon->device_data);
 	avalon->device_data = NULL;
-	thr->cgpu = usb_free_cgpu(avalon);
 }
 
 static char *avalon_set_device(struct cgpu_info *avalon, char *option, char *setting, char *replybuf)
