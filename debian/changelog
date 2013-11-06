@@ -1,3 +1,13 @@
+bfgminer (3.5.0-0precise1) precise; urgency=low
+
+  * hashbuster: New driver for HasbBuster nano ASIC miners.
+  * littlefury: Updated driver to use latest bitfury code.
+  * Autodetection support for Windows extended to all VCOM-based devices (instead of just FTDI, libusb, and hidapi); this includes at least ModMiner, Big Picture Mining (BF1, RedFury, BlueFury), and USB Block Erupters.
+  * Reworked autodetection to scan system devices once and share results with all drivers.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 06 Nov 2013 05:52:28 -0000
+
+
 bfgminer (3.4.0-0precise1) precise; urgency=low
 
   * New drivers for KnC miners and NanoFury USB miners.

@@ -1,3 +1,79 @@
+BFGMiner Version 3.5.0 - November 6, 2013
+
+- bigpic: Probe sooner than most drivers, but still after icarus/erupter
+- cpu/opencl: Fix probe priorities to be last
+- Bugfix: RPC: Correct per-device Work Utility to be per-minute instead of
+per-second
+- Bugfix: Fix Windows VCOM enumeration to work with new lowlevel code
+- Bugfix: nanofury: Use maybe_strdup in case strings may be missing
+- Bugfix: bitfury: Fix processor disable/enable for all bitfury-based devices
+- hashbuster: Get temperature when available
+- Bugfix: hashbuster: Use maybe_strdup where there might not be a string
+- hid: Treat null-length strings as missing entirely
+- hashbuster: Enable dynamic osc6_bits
+- hashbuster: New driver
+- Split a hid lowlevel out of mcp2210
+- ztex: Convert to use lowlevel usb enumerator
+- A quick flag to allow drivers to convey the desire to rescan devices (from
+lowlevel up)
+- Lowlevel USB enumerator for libusb
+- dname for lowlevel drivers
+- Bugfix: lowlevel: Avoid null pointer dereference on devices that are missing
+USB strings
+- lowlevel: Add a userpointer to lowl_found_devinfo_func_t and use it for
+serial_autodetect
+- Rework VCOM autodetection to go through lowlevel interface, avoiding repeat
+USB string fetching
+- lowlevel: Keep track of the claimed devid and debuglog every found device
+- ft232r: devinfo_scan: Don't skip claimed USB devices
+- ft232r: Be more tolerant of USB open failure or missing strings
+- RPC: Build most of CONFIG "Device Code" by iterating over registered driver
+list
+- drv_detect_all: Use priority-sorted list of registered drivers
+- Build hash tables to find drivers by dname or name
+- Build a linked list of registered drivers
+- BFG_REGISTER_DRIVER macro to commonly pre-define device_drv structures
+- Move have_libusb checks out of drv_detect_all
+- Replace opt_nogpu with simple function that adds opencl:noauto to scan-serial
+list
+- opencl: Remove ancient gpu_threads variable, not really needed anymore
+- Bugfix: Stop waiting for pool testing as soon as one is active
+- bitfury: Clean up by making private functions static, and naming public ones
+with [lib]bitfury_ prefix
+- bitfury: Remove old (unused) driver code
+- bitfury_gpio: Convert to using current bitfury driver code
+- Bugfix: littlefury: Upgrade to use current bitfury driver (old one didn't work
+with littlefury anymore anyway)
+- Bugfix: test_work_current: Make hexstr buffer large enough for blkhashstr
+later on (issuing old work msg)
+- README: Document --enable-knc configure option
+- README: Document --disable-nanofury configure option
+- Windows autodetect: clear detectone meta info
+- Check for Windows DDK headers, and where they are (and build without them if
+unavailable)
+- Windows SetupAPI-based detection for USB VCOM devices (tested with CP210x and
+CDC)
+- ucs2tochar{,_dup} functions to convert USB string descriptors to char* format
+- bfg_strerror: Support for Windows system errors
+- Introduce applogfail* macros
+- Bugfix: scrypt: Add missing include stdbool.h
+- Bugfix: Explicitly cast uses of be32toh to uint32_t
+- Bugfix: Add missing includes of config.h, stdbool.h, and stdint.h
+- lowlevel: Convey device manufacturer up to nanofury cgpus
+- nanofury: Store device HID path for RPC
+- lowlevel: Promote path to a normal element for devices to simplify things a
+bit
+- nanofury: Claim mcp2210/hid devices
+- mcp2210: Implement claim on HID paths
+- fpgautils: Use string identifiers for internal hardware claims
+- ztex: Keep interface claimed as a lock
+- Bugfix: mcp2210: Check for NULL hid device strings before trying to convert
+them to ASCII
+- FTDI autodetect: Enable populating USB product and serial number
+- Bugfix: FTDI autodetect: Add missing parameter values and remove unused buffer
+- Bugfix: bigpic: Don't active poll event without a poll function
+
+
 BFGMiner Version 3.4.0 - October 26, 2013
 
 - Bugfix: knc: Use separate DEV_RECOVER_DRV deven when doing automatic core
