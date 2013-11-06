@@ -259,6 +259,7 @@ bool hashbuster_init(struct thr_info * const thr)
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 53;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
 	}
 	
 	timer_set_now(&thr->tv_poll);
