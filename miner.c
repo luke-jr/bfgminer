@@ -889,6 +889,7 @@ char *set_request_diff(const char *arg, float *p)
 
 extern struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info **, const char *);
 
+#ifdef FPGAUTILS_H
 #ifdef WIN32
 void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info ** const devinfo_list)
 {
@@ -947,6 +948,7 @@ trydev:
 	}
 	closedir(D);
 }
+#endif
 #endif
 
 static char *add_serial(const char *arg)

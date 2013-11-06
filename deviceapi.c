@@ -28,6 +28,7 @@
 #include "deviceapi.h"
 #include "fpgautils.h"
 #include "logging.h"
+#include "lowlevel.h"
 #include "miner.h"
 #include "util.h"
 
@@ -802,6 +803,18 @@ bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
 	return true;
 }
 
+#ifdef HAVE_FPGAUTILS
+bool _serial_detect_all(struct lowlevel_device_info * const info, void * const userp)
+{
+	detectone_func_t detectone = userp;
+	
+	if (serial_claim(info->path, NULL))
+		applogr(false, LOG_DEBUG, "%s is already claimed... skipping probes", info->path);
+	
+	return detectone(info->path);
+}
+#endif
+
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
@@ -810,6 +823,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	char found = 0;
 	bool forceauto = flags & 1;
 	bool hasname;
+	bool doall = false;
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
@@ -841,6 +855,9 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 		else
 		if (!detectone)
 		{}  // do nothing
+		else
+		if (!strcmp(dev, "all"))
+			doall = true;
 #ifdef HAVE_FPGAUTILS
 		else
 		if (serial_claim(dev, NULL))
@@ -851,12 +868,16 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 #endif
 		else if (detectone(dev)) {
 			string_elist_del(&scan_devices, iter);
-			inhibitauto = true;
 			++found;
 		}
 	}
 
-	if ((forceauto || !inhibitauto) && autoscan)
+#ifdef HAVE_FPGAUTILS
+	if (doall && detectone)
+		found += lowlevel_detect_id(_serial_detect_all, detectone, &lowl_vcom, 0, 0);
+#endif
+	
+	if ((forceauto || !(inhibitauto || found)) && autoscan)
 		found += autoscan();
 
 	return found;
