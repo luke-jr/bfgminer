@@ -52,6 +52,9 @@ extern struct lowlevel_driver lowl_mcp2210;
 #endif
 #ifdef HAVE_LIBUSB
 extern struct lowlevel_driver lowl_usb;
+#else
+// Dummy definition for the various "don't warn if just a lower-level interface" checks
+static struct lowlevel_driver lowl_usb;
 #endif
 #ifdef HAVE_FPGAUTILS
 extern struct lowlevel_driver lowl_vcom;
