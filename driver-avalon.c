@@ -197,6 +197,8 @@ static int avalon_send_task(const struct avalon_task *at, struct cgpu_info *aval
 		hexdump(buf, nr_len);
 	}
 	ret = avalon_write(avalon, (char *)buf, nr_len, ep);
+	/* Avalon needs a rest between submissions :P */
+	cgsleep_ms(4);
 
 	return ret;
 }
