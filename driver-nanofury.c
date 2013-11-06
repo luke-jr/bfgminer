@@ -21,6 +21,7 @@
 #include "lowlevel.h"
 #include "mcp2210.h"
 #include "miner.h"
+#include "util.h"
 
 #define NANOFURY_USB_PRODUCT "NanoFury"
 
@@ -203,9 +204,9 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 		.threads = 1,
 		// TODO: .name
 		.device_path = strdup(info->path),
-		.dev_manufacturer = strdup(info->manufacturer),
-		.dev_product = strdup(product),
-		.dev_serial = strdup(serial),
+		.dev_manufacturer = maybe_strdup(info->manufacturer),
+		.dev_product = maybe_strdup(product),
+		.dev_serial = maybe_strdup(serial),
 		.deven = DEV_ENABLED,
 		// TODO: .cutofftemp
 	};
