@@ -267,6 +267,27 @@ bool hashbuster_init(struct thr_info * const thr)
 	return true;
 }
 
+static
+bool hashbuster_get_stats(struct cgpu_info * const cgpu)
+{
+	struct cgpu_info *proc;
+	if (cgpu != cgpu->device)
+		return true;
+	
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	hid_device * const h = spi->userp;
+	uint8_t buf[0x40] = {'\x04'};
+	if (!hashbuster_io(h, buf, buf))
+		return false;
+	if (buf[1])
+	{
+		for (proc = cgpu; proc; proc = proc->next_proc)
+			proc->temp = buf[1];
+	}
+	return true;
+}
+
 struct device_drv hashbuster_drv = {
 	.dname = "hashbuster",
 	.name = "HBR",
@@ -279,6 +300,8 @@ struct device_drv hashbuster_drv = {
 	.job_start = bitfury_noop_job_start,
 	.poll = bitfury_do_io,
 	.job_process_results = bitfury_job_process_results,
+	
+	.get_stats = hashbuster_get_stats,
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
