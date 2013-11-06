@@ -294,6 +294,9 @@ struct device_drv hashbuster_drv = {
 	.drv_detect = hashbuster_detect,
 	
 	.thread_init = hashbuster_init,
+	.thread_disable = bitfury_disable,
+	.thread_enable = bitfury_enable,
+	.thread_shutdown = bitfury_shutdown,
 	
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,

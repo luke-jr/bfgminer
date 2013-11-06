@@ -200,6 +200,30 @@ bool bitfury_init(struct thr_info *thr)
 	return true;
 }
 
+void bitfury_disable(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Shutting down chip (disable)", proc->proc_repr);
+	bitfury_send_shutdown(bitfury->spi, bitfury->slot, bitfury->fasync);
+}
+
+void bitfury_enable(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct cgpu_info * const dev = proc->device;
+	struct thr_info * const master_thr = dev->thr[0];
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Reinitialising chip (enable)", proc->proc_repr);
+	bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_init_chip(proc);
+	
+	if (!timer_isset(&master_thr->tv_poll))
+		timer_set_now(&master_thr->tv_poll);
+}
+
 void bitfury_shutdown(struct thr_info *thr) {
 	struct cgpu_info *cgpu = thr->cgpu, *proc;
 	struct bitfury_device *bitfury;
@@ -359,7 +383,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		
 		should_be_running = (proc->deven == DEV_ENABLED && !thr->pause);
 		
-		if (should_be_running)
+		if (should_be_running || thr->_job_transition_in_progress)
 		{
 			if (spi != bitfury->spi)
 			{
@@ -379,6 +403,11 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		else
 		if (thr->work /* is currently running */ && thr->busy_state != TBS_STARTING_JOB)
 			;//FIXME: shutdown chip
+	}
+	if (!spi)
+	{
+		timer_unset(&master_thr->tv_poll);
+		return;
 	}
 	timer_set_now(&tv_now);
 	spi_txrx(spi);
@@ -718,6 +747,8 @@ struct device_drv bitfury_drv = {
 	.drv_detect = bitfury_detect,
 	
 	.thread_init = bitfury_init,
+	.thread_disable = bitfury_disable,
+	.thread_enable = bitfury_enable,
 	.thread_shutdown = bitfury_shutdown,
 	
 	.minerloop = minerloop_async,

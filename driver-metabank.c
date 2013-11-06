@@ -226,7 +226,10 @@ struct device_drv metabank_drv = {
 	.dname = "metabank",
 	.name = "MBF",
 	.drv_detect = metabank_detect,
+	
 	.thread_init = metabank_init,
+	.thread_enable = bitfury_enable,
+	.thread_disable = bitfury_disable,
 	
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,

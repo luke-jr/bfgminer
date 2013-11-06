@@ -358,10 +358,9 @@ static
 void littlefury_disable(struct thr_info * const thr)
 {
 	struct cgpu_info *proc = thr->cgpu;
-	struct bitfury_device * const bitfury = proc->device_data;
 	struct cgpu_info * const dev = proc->device;
 	
-	bitfury_send_shutdown(bitfury->spi, 0, bitfury->fasync);
+	bitfury_disable(thr);
 	
 	// If all chips disabled, kill power and close device
 	bool any_running = false;
@@ -379,7 +378,19 @@ void littlefury_disable(struct thr_info * const thr)
 			applog(LOG_WARNING, "%s: Unable to power off chip(s)", dev->dev_repr);
 		serial_close(dev->device_fd);
 		dev->device_fd = -1;
+		timer_unset(&dev->thr[0]->tv_poll);
 	}
+}
+
+static
+void littlefury_enable(struct thr_info * const thr)
+{
+	struct cgpu_info *proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
+	struct thr_info * const master_thr = dev->thr[0];
+	
+	if (!timer_isset(&master_thr->tv_poll))
+		timer_set_now(&master_thr->tv_poll);
 }
 
 static void littlefury_shutdown(struct thr_info *thr)
@@ -437,6 +448,8 @@ void littlefury_poll(struct thr_info * const master_thr)
 		
 		for (proc = dev; proc; proc = proc->next_proc)
 		{
+			if (proc->deven != DEV_ENABLED || proc->thr[0]->pause)
+				continue;
 			struct bitfury_device * const bitfury = proc->device_data;
 			bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 			bitfury_init_chip(proc);
@@ -459,6 +472,7 @@ struct device_drv littlefury_drv = {
 	
 	.thread_init = littlefury_thread_init,
 	.thread_disable = littlefury_disable,
+	.thread_enable = littlefury_enable,
 	.reinit_device = littlefury_reinit,
 	.thread_shutdown = littlefury_shutdown,
 	

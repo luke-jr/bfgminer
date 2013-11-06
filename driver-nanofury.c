@@ -284,6 +284,24 @@ bool nanofury_init(struct thr_info * const thr)
 }
 
 static
+void nanofury_disable(struct thr_info * const thr)
+{
+	struct mcp2210_device * const mcp = thr->cgpu_data;
+	
+	bitfury_disable(thr);
+	nanofury_device_off(mcp);
+}
+
+static
+void nanofury_enable(struct thr_info * const thr)
+{
+	struct mcp2210_device * const mcp = thr->cgpu_data;
+	
+	nanofury_checkport(mcp);
+	bitfury_enable(thr);
+}
+
+static
 void nanofury_shutdown(struct thr_info * const thr)
 {
 	struct mcp2210_device * const mcp = thr->cgpu_data;
@@ -297,6 +315,8 @@ struct device_drv nanofury_drv = {
 	.drv_detect = nanofury_detect,
 	
 	.thread_init = nanofury_init,
+	.thread_disable = nanofury_disable,
+	.thread_enable = nanofury_enable,
 	.thread_shutdown = nanofury_shutdown,
 	
 	.minerloop = minerloop_async,

@@ -24,6 +24,8 @@ extern void bitfury_tui_wlogprint_choices(struct cgpu_info *);
 extern const char *bitfury_tui_handle_choice(struct cgpu_info *, int input);
 extern void bitfury_wlogprint_status(struct cgpu_info *);
 
+extern void bitfury_disable(struct thr_info *);
+extern void bitfury_enable(struct thr_info *);
 extern void bitfury_shutdown(struct thr_info *);
 
 #endif
