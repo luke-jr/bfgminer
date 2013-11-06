@@ -74,6 +74,11 @@ void lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
+#ifdef NEED_BFG_LOWL_HID
+	devinfo_mid_list = lowl_hid.devinfo_scan();
+	LL_CONCAT(devinfo_list, devinfo_mid_list);
+#endif
+	
 #ifdef USE_NANOFURY
 	devinfo_mid_list = lowl_mcp2210.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);

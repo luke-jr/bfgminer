@@ -112,6 +112,7 @@ optlist=
 need_dynclock=no
 need_fpgautils=no
 need_lowlevel=no
+need_lowl_hid=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -628,6 +629,17 @@ fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
 
+found_hidapi=false
+for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
+	PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
+		found_hidapi=true
+		break
+	],[
+		true
+	])
+done
+
+
 driverlist="$driverlist nanofury"
 nanofury=auto
 AC_ARG_ENABLE([nanofury],
@@ -637,15 +649,6 @@ AC_ARG_ENABLE([nanofury],
 if test "x$nanofury" = "xno"; then
 	true
 elif test "x$bitfury" = "xyes"; then
-	_found_hidapi=false
-	for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
-		PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
-			found_hidapi=true
-			break
-		],[
-			true
-		])
-	done
 	if test x$found_hidapi = xtrue; then
 		nanofury=yes
 	else
@@ -658,7 +661,6 @@ elif test "x$bitfury" = "xyes"; then
 	fi
 elif test "x$nanofury" = "xyes"; then
 	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
-	need_fpgautils=yes
 else
 	nanofury=no
 fi
@@ -666,8 +668,42 @@ if test "x$nanofury" = "xyes"; then
 	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
 	need_fpgautils=yes
 	need_lowlevel=yes
+	need_lowl_hid=yes
 fi
 AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
+
+
+driverlist="$driverlist hashbuster"
+hashbuster=auto
+AC_ARG_ENABLE([hashbuster],
+	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster (default enabled)])],
+	[hashbuster=$enableval]
+	)
+if test "x$hashbuster" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	if test x$found_hidapi = xtrue; then
+		hashbuster=yes
+	else
+		if test x$hashbuster = xauto; then
+			hashbuster=no
+			hashbuster_enableaction="install hidapi"
+		else
+			AC_MSG_ERROR([Could not find hidapi, required for HashBuster support])
+		fi
+	fi
+elif test "x$hashbuster" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled HashBuster])
+else
+	hashbuster=no
+fi
+if test "x$hashbuster" = "xyes"; then
+	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster support is wanted])
+	need_fpgautils=yes
+	need_lowlevel=yes
+	need_lowl_hid=yes
+fi
+AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
 
 driverlist="$driverlist metabank"
@@ -751,6 +787,11 @@ if test x$need_fpgautils = xyes; then
 			echo '#include <iospeeds_posix.h>' >iospeeds_local.h
 		fi
 	fi
+fi
+
+if test x$need_lowl_hid = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_HID], [1], [Defined to 1 if lowlevel hid drivers are being used])
+	need_lowlevel=yes
 fi
 
 if test x$need_lowlevel = xyes; then
@@ -910,6 +951,7 @@ AC_SUBST(libblkmaker_LIBS)
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_FPGAUTILS], [test x$need_fpgautils = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])

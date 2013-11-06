@@ -169,8 +169,9 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 	
 	if (info->lowl != &lowl_mcp2210)
 	{
-		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not mcp2210!",
-		       __func__, product, serial);
+		if (info->lowl != &lowl_hid && info->lowl != &lowl_usb)
+			applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not mcp2210!",
+			       __func__, product, serial);
 		return false;
 	}
 	

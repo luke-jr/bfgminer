@@ -27,11 +27,11 @@ typedef HMODULE dlh_t;
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <hidapi.h>
 #include <utlist.h>
 
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-hid.h"
 #include "miner.h"
 
 #include "mcp2210.h"
@@ -39,158 +39,28 @@ typedef HMODULE dlh_t;
 #define MCP2210_IDVENDOR   0x04d8
 #define MCP2210_IDPRODUCT  0x00de
 
-#ifdef WIN32
-#define HID_API_EXPORT __declspec(dllexport)
-#else
-#define HID_API_EXPORT /* */
-#endif
-struct hid_device_info HID_API_EXPORT *(*dlsym_hid_enumerate)(unsigned short, unsigned short);
-void HID_API_EXPORT (*dlsym_hid_free_enumeration)(struct hid_device_info *);
-hid_device * HID_API_EXPORT (*dlsym_hid_open_path)(const char *);
-void HID_API_EXPORT (*dlsym_hid_close)(hid_device *);
-int HID_API_EXPORT (*dlsym_hid_read)(hid_device *, unsigned char *, size_t);
-int HID_API_EXPORT (*dlsym_hid_write)(hid_device *, const unsigned char *, size_t);
-
-#define LOAD_SYM(sym)  do { \
-	if (!(dlsym_ ## sym = dlsym(dlh, #sym))) {  \
-		applog(LOG_DEBUG, "%s: Failed to load %s in %s", __func__, #sym, dlname);  \
-		goto fail;  \
-	}  \
-} while(0)
-
 static
-bool hidapi_try_lib(const char * const dlname)
+bool _mcp2210_devinfo_scan_cb(struct lowlevel_device_info * const usbinfo, void * const userp)
 {
-	struct hid_device_info *hid_enum;
-	dlh_t dlh;
+	struct lowlevel_device_info **devinfo_list_p = userp, *info;
 	
-	dlh = dlopen(dlname, RTLD_NOW);
-	if (!dlh)
-	{
-		applog(LOG_DEBUG, "%s: Couldn't load %s: %s", __func__, dlname, dlerror());
-		return false;
-	}
-	
-	LOAD_SYM(hid_enumerate);
-	LOAD_SYM(hid_free_enumeration);
-	
-	hid_enum = dlsym_hid_enumerate(0, 0);
-	if (!hid_enum)
-	{
-		applog(LOG_DEBUG, "%s: Loaded %s, but no devices enumerated; trying other libraries", __func__, dlname);
-		goto fail;
-	}
-	dlsym_hid_free_enumeration(hid_enum);
-	
-	LOAD_SYM(hid_open_path);
-	LOAD_SYM(hid_close);
-	LOAD_SYM(hid_read);
-	LOAD_SYM(hid_write);
-	
-	applog(LOG_DEBUG, "%s: Successfully loaded %s", __func__, dlname);
-	
-	return true;
-
-fail:
-	dlclose(dlh);
-	return false;
-}
-
-#define hid_enumerate dlsym_hid_enumerate
-#define hid_free_enumeration dlsym_hid_free_enumeration
-#define hid_open_path dlsym_hid_open_path
-#define hid_close dlsym_hid_close
-#define hid_read dlsym_hid_read
-#define hid_write dlsym_hid_write
-
-static
-bool hidapi_load_library()
-{
-	if (dlsym_hid_write)
-		return true;
-	
-	const char **p;
-	char dlname[23] = "libhidapi";
-	const char *dltry[] = {
-		"",
-		"-0",
-		"-hidraw",
-		"-libusb",
-		NULL
+	info = malloc(sizeof(*info));
+	*info = (struct lowlevel_device_info){
+		.lowl = &lowl_mcp2210,
 	};
-	for (p = &dltry[0]; *p; ++p)
-	{
-		sprintf(&dlname[9], "%s.%s", *p,
-#ifdef WIN32
-		        "dll"
-#else
-		        "so"
-#endif
-		);
-		if (hidapi_try_lib(dlname))
-			return true;
-	}
+	lowlevel_devinfo_semicpy(info, usbinfo);
+	LL_PREPEND(*devinfo_list_p, info);
 	
+	// Never *consume* the lowl_usb entry - especially since this is during the scan!
 	return false;
-}
-
-static
-char *wcs2str_dup(wchar_t *ws)
-{
-	if (!ws)
-		return NULL;
-	
-	char *rv;
-	int clen, i;
-	
-	clen = wcslen(ws);
-	++clen;
-	rv = malloc(clen);
-	for (i = 0; i < clen; ++i)
-		rv[i] = ws[i];
-	
-	return rv;
 }
 
 static
 struct lowlevel_device_info *mcp2210_devinfo_scan()
 {
-	if (!hidapi_load_library())
-	{
-		applog(LOG_DEBUG, "%s: Failed to load any hidapi library", __func__);
-		return NULL;
-	}
+	struct lowlevel_device_info *devinfo_list = NULL;
 	
-	struct hid_device_info *hid_enum, *hid_item;
-	struct lowlevel_device_info *info, *devinfo_list = NULL;
-	
-	hid_enum = hid_enumerate(MCP2210_IDVENDOR, MCP2210_IDPRODUCT);
-	if (!hid_enum)
-	{
-		applog(LOG_DEBUG, "%s: No MCP2210 devices found", __func__);
-		return NULL;
-	}
-	
-	LL_FOREACH(hid_enum, hid_item)
-	{
-		info = malloc(sizeof(struct lowlevel_device_info));
-		char * const devid = malloc(4 + strlen(hid_item->path) + 1);
-		sprintf(devid, "hid:%s", hid_item->path);
-		*info = (struct lowlevel_device_info){
-			.lowl = &lowl_mcp2210,
-			.path = strdup(hid_item->path),
-			.devid = devid,
-			.manufacturer = wcs2str_dup(hid_item->manufacturer_string),
-			.product = wcs2str_dup(hid_item->product_string),
-			.serial  = wcs2str_dup(hid_item->serial_number),
-		};
-		LL_PREPEND(devinfo_list, info);
-
-		applog(LOG_DEBUG, "%s: Found \"%s\" serial \"%s\"",
-		       __func__, info->product, info->serial);
-	}
-	
-	hid_free_enumeration(hid_enum);
+	lowlevel_detect_id(_mcp2210_devinfo_scan_cb, &devinfo_list, &lowl_hid, MCP2210_IDVENDOR, MCP2210_IDPRODUCT);
 	
 	return devinfo_list;
 }

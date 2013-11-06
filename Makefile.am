@@ -257,8 +257,17 @@ endif
 
 if HAS_NANOFURY
 bfgminer_SOURCES += driver-nanofury.c mcp2210.c mcp2210.h
-bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
+
+if USE_HASHBUSTER
+bfgminer_SOURCES += driver-hashbuster.c
+endif
+
+endif
+
+if NEED_BFG_LOWL_HID
+bfgminer_SOURCES += lowl-hid.c lowl-hid.h
+bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 
 bin_PROGRAMS += bfgminer-rpc
