@@ -17,6 +17,7 @@ struct spi_port {
 	char spibuf[SPIMAXSZ], spibuf_rx[SPIMAXSZ];
 	size_t spibufsz;
 	
+	void *userp;
 	struct cgpu_info *cgpu;
 	const char *repr;
 	int logprio;

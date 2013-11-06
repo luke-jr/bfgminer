@@ -1,0 +1,291 @@
+/*
+ * Copyright 2013 Luke Dashjr
+ * Copyright 2013 Vladimir Strinski
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
+
+#include "config.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "deviceapi.h"
+#include "driver-bitfury.h"
+#include "fpgautils.h"
+#include "libbitfury.h"
+#include "logging.h"
+#include "lowlevel.h"
+#include "lowl-hid.h"
+#include "miner.h"
+
+#define HASHBUSTER_USB_PRODUCT "HashBuster"
+
+#define HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER 62
+
+BFG_REGISTER_DRIVER(hashbuster_drv)
+
+static
+bool hashbuster_io(hid_device * const h, void * const buf, const void * const cmd)
+{
+	const uint8_t cmdbyte = *((uint8_t *)cmd);
+	char x[0x81];
+	if (unlikely(opt_dev_protocol))
+	{
+		bin2hex(x, cmd, 0x40);
+		applog(LOG_DEBUG, "%s(%p): SEND: %s", __func__, h, x);
+	}
+	const bool rv = likely(
+		0x40 == hid_write(h, cmd, 0x40) &&
+		0x40 == hid_read (h, buf, 0x40) &&
+		((uint8_t *)buf)[0] == cmdbyte
+	);
+	if (unlikely(opt_dev_protocol))
+	{
+		bin2hex(x, buf, 0x40);
+		applog(LOG_DEBUG, "%s(%p): RECV: %s", __func__, h, x);
+	}
+	return rv;
+}
+
+static
+bool hashbuster_spi_config(hid_device * const h, const uint8_t mode, const uint8_t miso, const uint32_t freq)
+{
+	uint8_t buf[0x40] = {'\x01', '\x01', mode, miso};
+	switch (freq)
+	{
+		case 100000:
+			buf[4] = '\0';
+			break;
+		case 750000:
+			buf[4] = '\x01';
+			break;
+		case 3000000:
+			buf[4] = '\x02';
+			break;
+		case 12000000:
+			buf[4] = '\x03';
+			break;
+		default:
+			return false;
+	}
+	if (!hashbuster_io(h, buf, buf))
+		return false;
+	return (buf[1] == '\x0f');
+}
+
+static
+bool hashbuster_spi_disable(hid_device * const h)
+{
+	uint8_t buf[0x40] = {'\x01'};
+	if (!hashbuster_io(h, buf, buf))
+		return false;
+	return (buf[1] == '\x0f');
+}
+
+static
+bool hashbuster_spi_reset(hid_device * const h, uint8_t chips)
+{
+	uint8_t buf[0x40] = {'\x02', chips};
+	if (!hashbuster_io(h, buf, buf))
+		return false;
+	return (buf[1] == '\xff');
+}
+
+static
+bool hashbuster_spi_transfer(hid_device * const h, void * const buf, const void * const data, size_t datasz)
+{
+	if (datasz > HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER)
+		return false;
+	uint8_t cbuf[0x40] = {'\x03', datasz};
+	memcpy(&cbuf[2], data, datasz);
+	if (!hashbuster_io(h, cbuf, cbuf))
+		return false;
+	if (cbuf[1] != datasz)
+		return false;
+	memcpy(buf, &cbuf[2], datasz);
+	return true;
+}
+
+static
+bool hashbuster_spi_txrx(struct spi_port * const port)
+{
+	hid_device * const h = port->userp;
+	const uint8_t *wrbuf = spi_gettxbuf(port);
+	uint8_t *rdbuf = spi_getrxbuf(port);
+	size_t bufsz = spi_getbufsz(port);
+	
+	hashbuster_spi_disable(h);
+	hashbuster_spi_reset(h, 0x10);
+	
+	hashbuster_spi_config(h, port->mode, 0, port->speed);
+	
+	while (bufsz >= HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER)
+	{
+		if (!hashbuster_spi_transfer(h, rdbuf, wrbuf, HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER))
+			return false;
+		rdbuf += HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER;
+		wrbuf += HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER;
+		bufsz -= HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER;
+	}
+	
+	if (bufsz > 0)
+	{
+		if (!hashbuster_spi_transfer(h, rdbuf, wrbuf, bufsz))
+			return false;
+	}
+	
+	return true;
+}
+
+static
+bool hashbuster_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
+{
+	const char * const product = info->product;
+	const char * const serial = info->serial;
+	char * const path = info->path;
+	hid_device *h;
+	uint8_t buf[0x40] = {'\xfe'};
+	
+	if (info->lowl != &lowl_hid)
+		applogr(false, LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not hid!",
+		       __func__, product, serial);
+	
+	if (info->vid != 0xFA04 || info->pid != 0x0011)
+		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
+	
+	h = hid_open_path(path);
+	if (!h)
+		applogr(false, LOG_WARNING, "%s: Failed to open HID path %s",
+		       __func__, path);
+	
+	if ((!hashbuster_io(h, buf, buf)) || buf[1] != 0x07)
+		applogr(false, LOG_DEBUG, "%s: Identify sequence didn't match on %s",
+		        __func__, path);
+	
+	struct spi_port spi = {
+		.txrx = hashbuster_spi_txrx,
+		.userp = h,
+		.repr = hashbuster_drv.dname,
+		.logprio = LOG_DEBUG,
+		.speed = 100000,
+		.mode = 0,
+	};
+	const int chip_n = libbitfury_detectChips1(&spi);
+	
+	hid_close(h);
+	
+	if (bfg_claim_hid(&hashbuster_drv, true, info->path))
+		return false;
+	
+	struct cgpu_info *cgpu;
+	cgpu = malloc(sizeof(*cgpu));
+	*cgpu = (struct cgpu_info){
+		.drv = &hashbuster_drv,
+		.device_data = info,
+		.threads = 1,
+		.procs = chip_n,
+		.device_path = strdup(info->path),
+		.dev_manufacturer = strdup(info->manufacturer),
+		.dev_product = strdup(product),
+		.dev_serial = strdup(serial),
+		.deven = DEV_ENABLED,
+	};
+
+	return add_cgpu(cgpu);
+}
+
+static bool hashbuster_detect_one(const char *serial)
+{
+	return lowlevel_detect_serial(hashbuster_foundlowl, serial);
+}
+
+static int hashbuster_detect_auto()
+{
+	return lowlevel_detect(hashbuster_foundlowl, HASHBUSTER_USB_PRODUCT);
+}
+
+static void hashbuster_detect()
+{
+	serial_detect_auto(&hashbuster_drv, hashbuster_detect_one, hashbuster_detect_auto);
+}
+
+static
+bool hashbuster_init(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu, *proc;
+	struct bitfury_device *bitfury;
+	struct spi_port *port;
+	hid_device *h;
+	
+	h = hid_open_path(cgpu->device_path);
+	lowlevel_devinfo_free(cgpu->device_data);
+	
+	if (!h)
+		applogr(false, LOG_ERR, "%s: Failed to open hid device", cgpu->dev_repr);
+	
+	port = malloc(sizeof(*port));
+	if (!port)
+		applogr(false, LOG_ERR, "%s: Failed to allocate spi_port", cgpu->dev_repr);
+	*port = (struct spi_port){
+		.txrx = hashbuster_spi_txrx,
+		.userp = h,
+		.cgpu = cgpu,
+		.repr = cgpu->dev_repr,
+		.logprio = LOG_ERR,
+		.speed = 100000,
+		.mode = 0,
+	};
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
+		bitfury = malloc(sizeof(*bitfury));
+		
+		if (!bitfury)
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Failed to allocate bitfury_device",
+			       cgpu->proc_repr);
+			proc->status = LIFE_DEAD2;
+			continue;
+		}
+		
+		*bitfury = (struct bitfury_device){
+			.spi = port,
+		};
+		proc->device_data = bitfury;
+		bitfury_init_chip(proc);
+		bitfury->osc6_bits = 53;
+		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	}
+	
+	timer_set_now(&thr->tv_poll);
+	cgpu->status = LIFE_INIT2;
+	return true;
+}
+
+struct device_drv hashbuster_drv = {
+	.dname = "hashbuster",
+	.name = "HBR",
+	.drv_detect = hashbuster_detect,
+	
+	.thread_init = hashbuster_init,
+	
+	.minerloop = minerloop_async,
+	.job_prepare = bitfury_job_prepare,
+	.job_start = bitfury_noop_job_start,
+	.poll = bitfury_do_io,
+	.job_process_results = bitfury_job_process_results,
+	
+	.get_api_extra_device_detail = bitfury_api_device_detail,
+	.get_api_extra_device_status = bitfury_api_device_status,
+	.set_device = bitfury_set_device,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bitfury_wlogprint_status,
+	.proc_tui_wlogprint_choices = bitfury_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bitfury_tui_handle_choice,
+#endif
+};

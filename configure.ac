@@ -629,6 +629,17 @@ fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
 
+found_hidapi=false
+for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
+	PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
+		found_hidapi=true
+		break
+	],[
+		true
+	])
+done
+
+
 driverlist="$driverlist nanofury"
 nanofury=auto
 AC_ARG_ENABLE([nanofury],
@@ -638,15 +649,6 @@ AC_ARG_ENABLE([nanofury],
 if test "x$nanofury" = "xno"; then
 	true
 elif test "x$bitfury" = "xyes"; then
-	_found_hidapi=false
-	for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
-		PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
-			found_hidapi=true
-			break
-		],[
-			true
-		])
-	done
 	if test x$found_hidapi = xtrue; then
 		nanofury=yes
 	else
@@ -669,6 +671,39 @@ if test "x$nanofury" = "xyes"; then
 	need_lowl_hid=yes
 fi
 AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
+
+
+driverlist="$driverlist hashbuster"
+hashbuster=auto
+AC_ARG_ENABLE([hashbuster],
+	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster (default enabled)])],
+	[hashbuster=$enableval]
+	)
+if test "x$hashbuster" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	if test x$found_hidapi = xtrue; then
+		hashbuster=yes
+	else
+		if test x$hashbuster = xauto; then
+			hashbuster=no
+			hashbuster_enableaction="install hidapi"
+		else
+			AC_MSG_ERROR([Could not find hidapi, required for HashBuster support])
+		fi
+	fi
+elif test "x$hashbuster" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled HashBuster])
+else
+	hashbuster=no
+fi
+if test "x$hashbuster" = "xyes"; then
+	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster support is wanted])
+	need_fpgautils=yes
+	need_lowlevel=yes
+	need_lowl_hid=yes
+fi
+AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
 
 driverlist="$driverlist metabank"
