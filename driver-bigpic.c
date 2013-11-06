@@ -173,7 +173,7 @@ static bool bigpic_detect_one(const char *devpath)
 //------------------------------------------------------------------------------
 static int bigpic_detect_auto(void)
 {
-	return serial_autodetect(bigpic_detect_one, "Bitfury_BF1");
+	return serial_autodetect(bigpic_detect_one, "Bitfury", "BF1");
 }
 
 //------------------------------------------------------------------------------
