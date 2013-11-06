@@ -310,6 +310,7 @@ static bool bigpic_identify(struct cgpu_info *cgpu)
 struct device_drv bigpic_drv = {
 	.dname = "bigpic",
 	.name = "BPM",
+	.probe_priority = -110,
 
 	.drv_detect = bigpic_detect,
 

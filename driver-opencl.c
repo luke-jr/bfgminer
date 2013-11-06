@@ -1769,6 +1769,7 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
+	.probe_priority = 110,
 	.supported_algos = POW_SHA256D | POW_SCRYPT,
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
