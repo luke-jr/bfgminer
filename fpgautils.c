@@ -398,7 +398,7 @@ char *windows_usb_get_string(HANDLE hubh, const int portno, const uint8_t descid
 	return ucs2tochar_dup(desc->bString, desc->bLength);
 }
 
-static void _vcom_devinfo_scan_windows__hub(detectone_func_t, va_list, int *, const char *);
+static void _vcom_devinfo_scan_windows__hub(struct lowlevel_device_info **, const char *);
 
 static
 void _vcom_devinfo_scan_windows__hubport(struct lowlevel_device_info ** const devinfo_list, HANDLE hubh, const int portno)
@@ -460,7 +460,7 @@ out:
 	}
 	
 	devinfo = _vcom_devinfo_findorcreate(devinfo_list, devpath);
-	BFGINIT(devinfo->manufacturer, windows_usb_get_string(hubh, portno, devdesc->iManufacturer))
+	BFGINIT(devinfo->manufacturer, windows_usb_get_string(hubh, portno, devdesc->iManufacturer));
 	BFGINIT(devinfo->product, windows_usb_get_string(hubh, portno, devdesc->iProduct));
 	if (devinfo->serial)
 		free(serial);
@@ -589,7 +589,7 @@ void _vcom_devinfo_scan_ftdi(struct lowlevel_device_info ** const devinfo_list)
 	HMODULE dll = LoadLibrary("FTD2XX.DLL");
 	if (!dll) {
 		applog(LOG_DEBUG, "FTD2XX.DLL failed to load, not using FTDI autodetect");
-		return 0;
+		return;
 	}
 	LOAD_SYM(FT_ListDevices);
 	LOAD_SYM(FT_Open);
