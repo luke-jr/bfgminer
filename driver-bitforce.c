@@ -186,6 +186,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZGX");
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
+		BFclose(fdDev);
 		return 0;
 	}
 
