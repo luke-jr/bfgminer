@@ -1,3 +1,14 @@
+BFGMiner Version 3.2.4 - November 6, 2013
+
+- Bugfix: test_work_current: Make hexstr buffer large enough for blkhashstr
+later on (issuing old work msg)
+- Bugfix: SGW: Add missing include stdbool.h
+- Bugfix: scrypt: Add missing include stdbool.h
+- Bugfix: Explicitly cast uses of be32toh to uint32_t
+- Bugfix: Add missing includes of config.h, stdbool.h, and stdint.h
+- Bugfix: FTDI autodetect: Add missing parameter values and remove unused buffer
+
+
 BFGMiner Version 3.2.3 - October 26, 2013
 
 - Bugfix: Set status to LIFE_DEAD2 when killing threads at shut off, to avoid
