@@ -1539,7 +1539,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		root = api_add_time(root, "Last Share Time", &last_share_pool_time, false);
 	}
 	root = api_add_mhtotal(root, "Total MH", &total_mhashes, false);
-	double work_utility = diff1 / runtime;
+	double work_utility = diff1 / runtime * 60;
 	root = api_add_int(root, "Diff1 Work", &diff1, false);
 	root = api_add_utility(root, "Work Utility", &work_utility, false);
 	root = api_add_diff(root, "Difficulty Accepted", &diff_accepted, false);
