@@ -123,7 +123,7 @@ bool hidapi_load_library()
 static
 char *wcs2str_dup(wchar_t *ws)
 {
-	if (!ws)
+	if (!(ws && ws[0]))
 		return NULL;
 	
 	char *rv;
