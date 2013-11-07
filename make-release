@@ -58,6 +58,7 @@ docs='
 	README
 	README.Debian
 	README.FPGA
+	README.GPU
 	README.RPC
 	README.scrypt
 '
