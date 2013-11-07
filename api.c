@@ -3378,7 +3378,7 @@ struct CMDS {
 } cmds[] = {
 	{ "version",		apiversion,	false },
 	{ "config",		minerconfig,	false },
-	{ "devscan",		devscan,	false },
+	{ "devscan",		devscan,	true },
 	{ "devs",		devstatus,	false },
 	{ "procs",		devstatus,	false },
 	{ "pools",		poolstatus,	false },
