@@ -1146,11 +1146,11 @@ static void *avalon_send_tasks(void *userdata)
 			ret = avalon_send_task(&at, avalon);
 
 			if (unlikely(ret == AVA_SEND_ERROR)) {
+				/* Send errors are fatal */
 				applog(LOG_ERR, "%s%i: Comms error(buffer)",
 				       avalon->drv->name, avalon->device_id);
 				dev_error(avalon, REASON_DEV_COMMS_ERROR);
-				info->reset = true;
-				break;
+				goto out;
 			}
 		}
 
@@ -1170,6 +1170,7 @@ static void *avalon_send_tasks(void *userdata)
 		 * fall short of the full duration. */
 		cgsleep_us_r(&ts_start, us_timeout);
 	}
+out:
 	return NULL;
 }
 
