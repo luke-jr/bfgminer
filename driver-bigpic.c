@@ -186,6 +186,7 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 
 	uint32_t results[16*6];
 	uint32_t num_results;
+	int hwe = 0;
 
 	uint32_t m7    = *((uint32_t *)&work->data[64]);
 	uint32_t ntime = *((uint32_t *)&work->data[68]);
@@ -211,6 +212,7 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 		if (bitfury_fudge_nonce(work->midstate, m7, ntime, nbits, &nonce))
 			submit_nonce(thr, work, nonce);
 		else
+		if (info->rx_buffer[i + 3] != '\xe0' || hwe++)
 			inc_hw_errors(thr, work, nonce);
 	}
 }
