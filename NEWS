@@ -1,3 +1,10 @@
+BFGMiner Version 3.2.5 - November 7, 2013
+
+- Bugfix: make-release: Add README.GPU document
+- Bugfix: RPC: devscan shouldn't be available to read-only access
+- Bugfix: bitforce detect: Close device after ZGX failure
+
+
 BFGMiner Version 3.2.4 - November 6, 2013
 
 - Bugfix: test_work_current: Make hexstr buffer large enough for blkhashstr
