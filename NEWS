@@ -1,3 +1,19 @@
+BFGMiner Version 3.5.1 - November 7, 2013
+
+- Bugfix: make-release: Add README.GPU document
+- Demote USB string fetch failure to LOG_DEBUG since it is rather common
+- Bugfix: RPC: devscan shouldn't be available to read-only access
+- Bugfix: bigpic: Ignore the bitfury chip's counter as best we can
+- Bugfix: bigpic: Accept other delimiters in Bitfury BF1 product string in
+autodetection
+- Bugfix: Fix VCOM/fpgautils build check
+- Bugfix: Only include VCOM code when VCOM/fpgautils support is being built
+- Bugfix: Reimplement scan-serial "all" keyword
+- Bugfix: bitforce detect: Close device after ZGX failure
+- Bugfix: Define lowl_usb even if libusb support is omitted, since VCOM and HID
+drivers check against it for warnings
+
+
 BFGMiner Version 3.5.0 - November 6, 2013
 
 - bigpic: Probe sooner than most drivers, but still after icarus/erupter
