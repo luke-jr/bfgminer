@@ -295,6 +295,8 @@ static int avalon_read(struct cgpu_info *avalon, char *buf, size_t bufsize, int 
 	err = usb_read_once(avalon, buf, bufsize, &amount, ep);
 	applog(LOG_DEBUG, "%s%i: Get avalon read got err %d",
 	       avalon->drv->name, avalon->device_id, err);
+	if (unlikely(err && err != LIBUSB_ERROR_TIMEOUT))
+		amount = -1;
 	return amount;
 }
 
@@ -983,6 +985,9 @@ static void *avalon_get_results(void *userdata)
 		}
 
 		ret = avalon_read(avalon, buf, rsize, C_AVALON_READ);
+
+		if (unlikely(ret < 0))
+			break;
 
 		if (ret < 1)
 			continue;
