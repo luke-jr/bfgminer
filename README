@@ -104,6 +104,9 @@ If building from git:
 	autoconf
 	automake
 
+If building on Red Hat:
+        sudo yum install autoconf automake autoreconf libtool openssl-compat-bitcoin-devel.x86_64 \
+                         curl libcurl libcurl-devel openssh
 
 CGMiner specific configuration options:
   --enable-opencl         Enable support for GPU mining with opencl
