@@ -30,7 +30,8 @@ char *lowl_libusb_dup_string(libusb_device_handle * const handle, const uint8_t 
 	unsigned char buf[0x100];
 	const int n = libusb_get_string_descriptor_ascii(handle, idx, buf, sizeof(buf)-1);
 	if (unlikely(n < 0)) {
-		applog(LOG_ERR, "%s: Error getting USB string %d (%s): %s",
+		// This could be LOG_ERR, but it's annoyingly common :/
+		applog(LOG_DEBUG, "%s: Error getting USB string %d (%s): %s",
 		       fname, idx, idxname, bfg_strerror(n, BST_LIBUSB));
 		return NULL;
 	}
