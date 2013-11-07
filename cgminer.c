@@ -6682,7 +6682,7 @@ void hash_queued_work(struct thr_info *mythr)
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-			mt_disable(mythr, thr_id, drv);
+			break;
 		}
 
 		hashes_done += hashes;
@@ -6729,7 +6729,7 @@ void hash_driver_work(struct thr_info *mythr)
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-			mt_disable(mythr, thr_id, drv);
+			break;
 		}
 
 		hashes_done += hashes;
