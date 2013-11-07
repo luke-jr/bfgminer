@@ -6497,6 +6497,13 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 	} while (!drv->queue_full(cgpu));
 }
 
+/* Add a work item to a cgpu's queued hashlist */
+void __add_queued(struct cgpu_info *cgpu, struct work *work)
+{
+	cgpu->queued_count++;
+	HASH_ADD_INT(cgpu->queued_work, id, work);
+}
+
 /* This function is for retrieving one work item from the unqueued pointer and
  * adding it to the hashtable of queued work. Code using this function must be
  * able to handle NULL as a return which implies there is no work available. */
@@ -6507,11 +6514,27 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	wr_lock(&cgpu->qlock);
 	if (cgpu->unqueued_work) {
 		work = cgpu->unqueued_work;
-		HASH_ADD_INT(cgpu->queued_work, id, work);
+		__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
 	wr_unlock(&cgpu->qlock);
 
+	return work;
+}
+
+void add_queued(struct cgpu_info *cgpu, struct work *work)
+{
+	wr_lock(&cgpu->qlock);
+	__add_queued(cgpu, work);
+	wr_unlock(&cgpu->qlock);
+}
+
+/* Get fresh work and add it to cgpu's queued hashlist */
+struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id)
+{
+	struct work *work = get_work(thr, thr_id);
+
+	add_queued(cgpu, work);
 	return work;
 }
 
