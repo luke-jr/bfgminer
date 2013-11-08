@@ -1520,10 +1520,9 @@ static void avalon_flush_work(struct cgpu_info *avalon)
 {
 	struct avalon_info *info = avalon->device_data;
 
-	mutex_lock(&info->qlock);
-	/* Will overwrite any work queued */
+	/* Will overwrite any work queued. Do this unlocked since it's just
+	 * changing a single non-critical value and prevents deadlocks */
 	avalon->queued = 0;
-	mutex_unlock(&info->qlock);
 
 	/* Signal main loop we need more work */
 	cgsem_post(&info->qsem);
