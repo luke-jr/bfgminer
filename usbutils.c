@@ -2418,7 +2418,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	struct usb_epinfo *usb_epinfo;
 	struct usb_transfer ut;
 	unsigned char endpoint;
-	int err, errn, dummy;
+	int err, errn;
 	/* End of transfer and zero length packet required */
 	bool eot = false, zlp = false;
 #if DO_USB_STATS
@@ -2426,6 +2426,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 #endif
 	unsigned char buf[512];
 #ifdef WIN32
+	int dummy;
+
 	/* On windows the callback_timeout is a safety mechanism only. */
 	bulk_timeout = timeout;
 	callback_timeout += WIN_CALLBACK_EXTRA;
@@ -2448,6 +2450,8 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	if (unlikely(cgpu->shutdown))
 		return libusb_bulk_transfer(dev_handle, endpoint, data, length, transferred, timeout);
 
+	init_usb_transfer(&ut);
+
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_OUT) {
 		memcpy(buf, data, length);
 		/* If this is the last packet in a transfer and is the length
@@ -2455,11 +2459,14 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		 * packet to let the device know it's the end of the message.*/
 		if (eot)
 			zlp = true;
+#ifndef WIN32
+		/* Windows doesn't support this flag so we emulate it below */
+		ut.transfer->flags |= LIBUSB_TRANSFER_ADD_ZERO_PACKET;
+#endif
 	}
 
 	USBDEBUG("USB debug: @usb_bulk_transfer(%s (nodev=%s),intinfo=%d,epinfo=%d,data=%p,length=%d,timeout=%u,mode=%d,cmd=%s,seq=%d) endpoint=%d", cgpu->drv->name, bool_str(cgpu->usbinfo.nodev), intinfo, epinfo, data, length, timeout, mode, usb_cmdname(cmd), seq, (int)endpoint);
 
-	init_usb_transfer(&ut);
 	libusb_fill_bulk_transfer(ut.transfer, dev_handle, endpoint, buf, length,
 				  transfer_callback, &ut, bulk_timeout);
 	STATS_TIMEVAL(&tv_start);
@@ -2498,8 +2505,12 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 	}
 	if ((endpoint & LIBUSB_ENDPOINT_DIR_MASK) == LIBUSB_ENDPOINT_IN)
 		memcpy(data, buf, *transferred);
-	else if (zlp) /* Send a zero length packet */
+	else if (zlp) {
+#ifdef WIN32
+		/* Send a zero length packet */
 		libusb_bulk_transfer(dev_handle, endpoint, NULL, 0, &dummy, 100);
+#endif
+	}
 
 	return err;
 }
