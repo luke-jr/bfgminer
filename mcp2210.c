@@ -250,6 +250,17 @@ retry:
 	}
 }
 
+bool mcp2210_spi_cancel(struct mcp2210_device * const h)
+{
+	hid_device * const hid = h->hid;
+	uint8_t cmd[0x41] = {0,0x11}, buf[0x40];
+	
+	if (!mcp2210_io(hid, cmd, buf))
+		return false;
+	
+	return (buf[1] == 0);
+}
+
 static
 bool mcp2210_set_cfg_gpio(struct mcp2210_device * const h)
 {
