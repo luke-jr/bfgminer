@@ -222,6 +222,9 @@ bool opt_worktime;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
 #endif
+#ifdef USE_KLONDIKE
+char *opt_klondike_options = NULL;
+#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1554,6 +1557,15 @@ static char *set_avalon_options(const char *arg)
 }
 #endif
 
+#ifdef USE_KLONDIKE
+static char *set_klondike_options(const char *arg)
+{
+	opt_set_charp(arg, &opt_klondike_options);
+
+	return NULL;
+}
+#endif
+
 __maybe_unused
 static char *set_null(const char __maybe_unused *arg)
 {
@@ -1808,6 +1820,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--avalon-options",
 		     set_avalon_options, NULL, NULL,
 		     opt_hidden),
+#endif
+#ifdef USE_KLONDIKE
+	OPT_WITH_ARG("--klondike-options",
+		     set_klondike_options, NULL, NULL,
+		     "Set klondike options clock:temp1:temp2:fan"),
 #endif
 	OPT_WITHOUT_ARG("--load-balance",
 		     set_loadbalance, &pool_strategy,
@@ -6353,6 +6370,10 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
+#ifdef USE_KLONDIKE
+	if (opt_klondike_options)
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+#endif
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();

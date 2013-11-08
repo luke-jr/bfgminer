@@ -945,6 +945,9 @@ extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
 #endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
+#endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
 #endif

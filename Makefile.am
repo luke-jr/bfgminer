@@ -228,6 +228,10 @@ if USE_KNC
 bfgminer_SOURCES += driver-knc.c
 endif
 
+if HAS_KLONDIKE
+cgminer_SOURCES += driver-klondike.c
+endif
+
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
 endif
