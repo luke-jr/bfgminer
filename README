@@ -132,6 +132,7 @@ Basic *nix build instructions:
 
 	./autogen.sh	# only needed if building from git repo
 	CFLAGS="-O2 -Wall -march=native" ./configure <options>
+	make
 
 	No installation is necessary. You may run cgminer from the build
 	directory directly, but you may do make install if you wish to install
