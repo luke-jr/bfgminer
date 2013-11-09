@@ -26,8 +26,9 @@
 #endif
 
 #include "compat.h"
+#include "deviceapi.h"
+#include "lowlevel.h"
 #include "miner.h"
-#include "usbutils.h"
 
 #define K1 "K1"
 #define K16 "K16"
@@ -45,7 +46,7 @@
 #define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
 #define TACH_FACTOR		87890	// fan rpm divisor
 
-struct device_drv klondike_drv;
+BFG_REGISTER_DRIVER(klondike_drv)
 
 typedef struct klondike_id {
 	uint8_t version;
@@ -107,9 +108,72 @@ struct klondike_info {
 	WORKCFG *cfg;
 	char *replies;
 	int nextreply;
+	
+	pthread_mutex_t devlock;
+	struct libusb_device_handle *usbdev_handle;
+	
+	// TODO:
+	bool usbinfo_nodev;
 };
 
 IDENTITY KlondikeID;
+
+static
+int usb_init(struct cgpu_info * const klncgpu, struct libusb_device * const dev)
+{
+	struct klondike_info * const klninfo = klncgpu->device_data;
+	int e;
+	if (libusb_open(dev, &klninfo->usbdev_handle) != LIBUSB_SUCCESS)
+		return 0;
+	if (LIBUSB_SUCCESS != (e = libusb_set_configuration(klninfo->usbdev_handle, 1)))
+	{
+		applog(LOG_DEBUG, "%s: Failed to set configuration 1: %s",
+		       klondike_drv.dname, bfg_strerror(e, BST_LIBUSB));
+fail:
+		libusb_close(klninfo->usbdev_handle);
+		return 0;
+	}
+	if (LIBUSB_SUCCESS != (e = libusb_claim_interface(klninfo->usbdev_handle, 0)))
+	{
+		applog(LOG_DEBUG, "%s: Failed to claim interface 0: %s",
+		       klondike_drv.dname, bfg_strerror(e, BST_LIBUSB));
+		goto fail;
+	}
+	return 1;
+}
+
+static
+int _usb_rw(struct cgpu_info * const klncgpu, void * const buf, const size_t bufsiz, int * const processed, int ep)
+{
+	struct klondike_info * const klninfo = klncgpu->device_data;
+	const unsigned int timeout = 999;
+	unsigned char *cbuf = buf;
+	int err, sent;
+	
+	*processed = 0;
+	
+	while (*processed < bufsiz)
+	{
+		mutex_lock(&klninfo->devlock);
+		err = libusb_bulk_transfer(klninfo->usbdev_handle, ep, cbuf, bufsiz, &sent, timeout);
+		mutex_unlock(&klninfo->devlock);
+		if (unlikely(err))
+			return err;
+		*processed += sent;
+	}
+	
+	return LIBUSB_SUCCESS;
+}
+#define usb_read( klncgpu, buf, bufsiz, processed) _usb_rw(klncgpu, buf, bufsiz, processed, 1 | LIBUSB_ENDPOINT_IN)
+#define usb_write(klncgpu, buf, bufsiz, processed) _usb_rw(klncgpu, buf, bufsiz, processed, 1 | LIBUSB_ENDPOINT_OUT)
+
+static
+void usb_uninit(struct cgpu_info * const klncgpu)
+{
+	struct klondike_info * const klninfo = klncgpu->device_data;
+	libusb_release_interface(klninfo->usbdev_handle, 0);
+	libusb_close(klninfo->usbdev_handle);
+}
 
 static double cvtKlnToC(uint8_t temp)
 {
@@ -130,13 +194,13 @@ static char *SendCmdGetReply(struct cgpu_info *klncgpu, char Cmd, int device, in
 	int chkreply = klninfo->nextreply;
 	int sent, err;
 	
-	if (klncgpu->usbinfo.nodev)
+	if (klninfo->usbinfo_nodev)
 		return NULL;
 
 	outbuf[0] = Cmd;
 	outbuf[1] = device;
 	memcpy(outbuf+2, data, datalen);
-	err = usb_write(klncgpu, outbuf, 2+datalen, &sent, C_REQUESTRESULTS);
+	err = usb_write(klncgpu, outbuf, 2+datalen, &sent);
 	if (err < 0 || sent != 2+datalen) {
 		applog(LOG_ERR, "%s (%s) Cmd:%c Dev:%d, write failed (%d:%d)", klncgpu->drv->dname, klncgpu->device_path, Cmd, device, sent, err);
 	}
@@ -161,7 +225,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	int slaves, dev;
 
-	if (klncgpu->usbinfo.nodev || klninfo->status == NULL)
+	if (klninfo->usbinfo_nodev || klninfo->status == NULL)
 		return false;
 
 	applog(LOG_DEBUG, "Klondike getting status");
@@ -240,37 +304,54 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	return true;
 }
 
-static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static
+bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void * const userp)
 {
-	struct cgpu_info *klncgpu = usb_alloc_cgpu(&klondike_drv, 1);
+	if (unlikely(info->lowl != &lowl_usb))
+	{
+		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
+		       __func__, info->product, info->serial);
+		return false;
+	}
+	struct libusb_device * const dev = info->lowl_data;
+	
+// static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+	struct cgpu_info * const klncgpu = malloc(sizeof(*klncgpu));
 	struct klondike_info *klninfo = NULL;
 
 	if (unlikely(!klncgpu))
 		quit(1, "Failed to calloc klncgpu in klondike_detect_one");
+	
+	*klncgpu = (struct cgpu_info){
+		.drv = &klondike_drv,
+		.deven = DEV_ENABLED,
+		.threads = 1,
+	};
 		
 	klninfo = calloc(1, sizeof(*klninfo));
 	if (unlikely(!klninfo))
 		quit(1, "Failed to calloc klninfo in klondke_detect_one");
 	klncgpu->device_data = (FILE *)klninfo;
+	mutex_init(&klninfo->devlock);
 	
 	klninfo->replies = calloc(MAX_REPLY_COUNT, REPLY_BUFSIZE);
 	if (unlikely(!klninfo->replies))
 		quit(1, "Failed to calloc replies buffer in klondke_detect_one");
 	klninfo->nextreply = 0;
 	
-	if (usb_init(klncgpu, dev, found)) {
+	if (usb_init(klncgpu, dev)) {
 		int attempts = 0;		
 		while (attempts++ < 3) {
-			char devpath[20], reply[REPLY_SIZE];
+			char reply[REPLY_SIZE];
+			const char * const devpath = info->devid;
 			int sent, recd, err;
 			
-			sprintf(devpath, "%d:%d", (int)(klncgpu->usbinfo.bus_number), (int)(klncgpu->usbinfo.device_address));
-			err = usb_write(klncgpu, "I", 2, &sent, C_REQUESTRESULTS);
+			err = usb_write(klncgpu, "I", 2, &sent);
 			if (err < 0 || sent != 2) {
 				applog(LOG_ERR, "%s (%s) detect write failed (%d:%d)", klncgpu->drv->dname, devpath, sent, err);
 			}
 			cgsleep_ms(REPLY_WAIT_TIME*10);
-			err = usb_read(klncgpu, reply, REPLY_SIZE, &recd, C_GETRESULTS);
+			err = usb_read(klncgpu, reply, REPLY_SIZE, &recd);
 			if (err < 0) {
 				applog(LOG_ERR, "%s (%s) detect read failed (%d:%d)", klncgpu->drv->dname, devpath, recd, err);
 			} else if (recd < 1) {
@@ -280,7 +361,6 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 				applog(LOG_DEBUG, "%s (%s) detect successful", klncgpu->drv->dname, devpath);
 				KlondikeID = *(IDENTITY *)(&reply[2]);
 				klncgpu->device_path = strdup(devpath);
-				update_usb_stats(klncgpu);
 				if (!add_cgpu(klncgpu))
 					break;
 				applog(LOG_DEBUG, "Klondike cgpu added");
@@ -294,14 +374,29 @@ static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devic
 	return false;
 }
 
-static void klondike_detect(bool __maybe_unused hotplug)
+static
+bool klondike_detect_one(const char *serial)
 {
-	usb_detect(&klondike_drv, klondike_detect_one);
+	return lowlevel_detect_serial(klondike_foundlowl, serial);
 }
 
-static void klondike_identify(__maybe_unused struct cgpu_info *klncgpu)
+static
+int klondike_autodetect()
+{
+	return lowlevel_detect(klondike_foundlowl, "K16");
+}
+
+static
+void klondike_detect()
+{
+	generic_detect(&klondike_drv, klondike_detect_one, klondike_autodetect, 0);
+}
+
+static
+bool klondike_identify(__maybe_unused struct cgpu_info * const klncgpu)
 {
 	//SendCmdGetReply(klncgpu, 'I', 0, 0, NULL);
+	return false;
 }
 
 static void klondike_check_nonce(struct cgpu_info *klncgpu, WORKRESULT *result)
@@ -344,18 +439,18 @@ static void *klondike_get_replies(void *userdata)
 	applog(LOG_DEBUG, "Klondike listening for replies");	
 	
 	while (klninfo->shutdown == false) {
-		if (klncgpu->usbinfo.nodev)
+		if (klninfo->usbinfo_nodev)
 			return NULL;
 		
 		replybuf = klninfo->replies + klninfo->nextreply * REPLY_BUFSIZE;
 		replybuf[0] = 0;
 		
-		err = usb_read(klncgpu, replybuf+1, REPLY_SIZE, &recd, C_GETRESULTS);
+		err = usb_read(klncgpu, replybuf+1, REPLY_SIZE, &recd);
 		if (!err && recd == REPLY_SIZE) {
 			if (opt_log_level <= LOG_DEBUG) {
-				char *hexdata = bin2hex((unsigned char *)(replybuf+1), recd);
+				char hexdata[(recd * 2) + 1];
+				bin2hex(hexdata, &replybuf[1], recd);
 				applog(LOG_DEBUG, "%s (%s) reply [%s:%s]", klncgpu->drv->dname, klncgpu->device_path, replybuf+1, hexdata);
-				free(hexdata);
 			}
 			if (++klninfo->nextreply == MAX_REPLY_COUNT)
 				klninfo->nextreply = 0;
@@ -404,8 +499,11 @@ static bool klondike_thread_prepare(struct thr_info *thr)
 static bool klondike_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *klncgpu = thr->cgpu;
+	struct klondike_info * const klninfo = klncgpu->device_data;
+	
+	notifier_init(thr->work_restart_notifier);
 
-	if (klncgpu->usbinfo.nodev)
+	if (klninfo->usbinfo_nodev)
 		return false;
 
 	klondike_flush_work(klncgpu);
@@ -429,8 +527,9 @@ static void klondike_shutdown(struct thr_info *thr)
 static void klondike_thread_enable(struct thr_info *thr)
 {
 	struct cgpu_info *klncgpu = thr->cgpu;
+	struct klondike_info * const klninfo = klncgpu->device_data;
 
-	if (klncgpu->usbinfo.nodev)
+	if (klninfo->usbinfo_nodev)
 		return;
 		
 	//SendCmdGetReply(klncgpu, 'E', 0, 1, "0");
@@ -443,7 +542,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	struct work *tmp;
 	WORKTASK data;
 	
-	if (klncgpu->usbinfo.nodev)
+	if (klninfo->usbinfo_nodev)
 		return false;
 			
 	memcpy(data.midstate, work->midstate, MIDSTATE_BYTES);
@@ -452,9 +551,10 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 	work->subid = dev*256 + data.workid;
 	
 	if (opt_log_level <= LOG_DEBUG) {
-				char *hexdata = bin2hex(&data.workid, sizeof(data)-3);
+				const size_t sz = sizeof(data) - 3;
+				char hexdata[(sz * 2) + 1];
+				bin2hex(hexdata, &data.workid, sz);
 				applog(LOG_DEBUG, "WORKDATA: %s", hexdata);
-				free(hexdata);
 			}
 	
 	applog(LOG_DEBUG, "Klondike sending work (%d:%02x)", dev, data.workid);
@@ -503,7 +603,7 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 	int64_t newhashcount = 0;
 	int dev;
 	
-	if (klncgpu->usbinfo.nodev)
+	if (klninfo->usbinfo_nodev)
 		return -1;
 		
 	restart_wait(thr, 200);
@@ -601,17 +701,16 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 }
 
 struct device_drv klondike_drv = {
-	.drv_id = DRIVER_klondike,
 	.dname = "Klondike",
 	.name = "KLN",
 	.drv_detect = klondike_detect,
 	.get_api_stats = klondike_api_stats,
-	.get_statline_before = get_klondike_statline_before,
+// 	.get_statline_before = get_klondike_statline_before,
 	.get_stats = klondike_get_stats,
 	.identify_device = klondike_identify,
 	.thread_prepare = klondike_thread_prepare,
 	.thread_init = klondike_thread_init,
-	.hash_work = hash_queued_work,
+	.minerloop = hash_queued_work,
 	.scanwork = klondike_scanwork,
 	.queue_full = klondike_queue_full,
 	.flush_work = klondike_flush_work,

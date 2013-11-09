@@ -387,6 +387,7 @@ fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
 
+driverlist="$driverlist klondike"
 klondike="no"
 
 AC_ARG_ENABLE([klondike],
