@@ -1029,7 +1029,7 @@ tryagain:
 	if (hashes > 0xffffffff)
 		hashes = 0xffffffff;
 
-	work->blk.nonce = 0xffffffff;
+	work->nonce = 0xffffffff;
 
 	return hashes;
 }

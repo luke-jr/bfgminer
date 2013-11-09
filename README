@@ -1,6 +1,4 @@
-This is a multi-threaded multi-pool GPU, FPGA and ASIC miner with ATI GPU
-monitoring, (over)clocking and fanspeed support for bitcoin and derivative
-coins. Do not use on multiple block chains at the same time!
+This is a multi-threaded multi-pool FPGA and ASIC miner for bitcoin.
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
@@ -27,8 +25,7 @@ irc://irc.freenode.net/cgminer
 
 License: GPLv3.  See COPYING for details.
 
-SEE ALSO API-README, ASIC-README, FGPA-README, GPU-README AND SCRYPT-README FOR
-MORE INFORMATION ON EACH.
+SEE ALSO API-README, ASIC-README and FGPA-README FOR MORE INFORMATION ON EACH.
 
 ---
 
@@ -91,12 +88,6 @@ Optional:
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
-	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
-	(This sdk is mandatory for GPU mining)
-
-	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is mandatory for ATI GPU monitoring & clocking)
-
 	libudev dev library (libudev-dev)
 	(This is only required for ASIC+FPGA support and is linux only)
 
@@ -109,10 +100,6 @@ If building on Red Hat:
                          curl libcurl libcurl-devel openssh
 
 CGMiner specific configuration options:
-  --enable-opencl         Enable support for GPU mining with opencl
-  --disable-adl           Override detection and disable building with adl
-  --enable-scrypt         Compile support for scrypt litecoin mining (default
-                          disabled)
   --enable-avalon         Compile support for Avalon (default disabled)
   --enable-bflsc          Compile support for BFL ASICs (default disabled)
   --enable-bitforce       Compile support for BitForce FPGAs (default
@@ -161,8 +148,6 @@ Options for both config file and command line:
 --api-mcast-code <arg> Code expected in the API Multicast message, don't use '-' (default: "FTW")
 --api-mcast-port <arg> API Multicast listen port, (default: 4028)
 --api-port          Port number of miner API (default: 4028)
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run cgminer in benchmark mode - produces no shares
 --compact           Use compact display without per device statistics
@@ -173,7 +158,7 @@ Options for both config file and command line:
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --fix-protocol      Do not redirect to a different getwork protocol (eg. stratum)
 --hotplug <arg>     Set hotplug check time to <arg> seconds (0=never default: 5) - only with libusb
---kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
+--kernel-path|-K <arg> Specify a path to where bitstream files are (default: "/usr/local/bin")
 --load-balance      Change multipool strategy from failover to quota based balance
 --log|-l <arg>      Interval in seconds between log output (default: 5)
 --lowmem            Minimise caching of shares for low memory applications
@@ -192,7 +177,6 @@ Options for both config file and command line:
 --scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
---scrypt            Use the scrypt algorithm for mining (litecoin only)
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining N shares (default: unlimited)
 --socks-proxy <arg> Set socks4 proxy (host:port) for all pools without a proxy specified
@@ -244,43 +228,6 @@ FPGA only options:
 See FGPA-README for more information regarding this.
 
 
-GPU only options:
-
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---disable-gpu|-G    Disable GPU mining even if suitable devices exist
---gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
---gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
---gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
---gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
---gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
---gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
---gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
---gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
---gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
---gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
---intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
---kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
---ndevs|-n          Enumerate number of detected GPUs and exit
---no-restart        Do not attempt to restart GPUs that hang
---temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
---temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
---temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
---vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
---worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
-
-See GPU-README for more information regarding GPU mining.
-
-
-SCRYPT only options:
-
---lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
---shaders <arg>     GPU shaders per card for tuning scrypt, comma separated
---thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
-
-See SCRYPT-README for more information regarding litecoin mining.
-
-
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
 KnC ASICs, Hashfast ASICs and ModMiner FPGAs.
@@ -298,7 +245,7 @@ drivers for you and then once you plug in your device you can choose the
 "list all devices" from the "option" menu and you should be able to see the
 device as something like: "BitFORCE SHA256 SC". Choose the install or replace
 driver option and select WinUSB. You can either google for zadig or download
-it from the cgminer directoy in the DOWNLOADS link above.
+it from the cgminer directory in the DOWNLOADS link above.
 
 LINUX:
 
@@ -387,7 +334,7 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+[P]ool management [S]ettings [D]isplay options [Q]uit
 
 P gives you:
 
@@ -422,33 +369,15 @@ co[M]pact: off
 Q quits the application.
 
 
-G gives you something like:
-
-GPU 0: [124.2 / 191.3 Mh/s] [A:77  R:33  HW:0  U:1.73/m  WU 1.73/m]
-Temp: 67.0 C
-Fan Speed: 35% (2500 RPM)
-Engine Clock: 960 MHz
-Memory Clock: 480 Mhz
-Vddc: 1.200 V
-Activity: 93%
-Powertune: 0%
-Last initialised: [2011-09-06 12:03:56]
-Thread 0: 62.4 Mh/s Enabled ALIVE
-Thread 1: 60.2 Mh/s Enabled ALIVE
-
-[E]nable [D]isable [R]estart GPU [C]hange settings
-Or press any other key to continue
-
-
 The running log shows output like this:
 
- [2012-10-12 18:02:20] Accepted f0c05469 Diff 1/1 GPU 0 pool 1
- [2012-10-12 18:02:22] Accepted 218ac982 Diff 7/1 GPU 1 pool 1
- [2012-10-12 18:02:23] Accepted d8300795 Diff 1/1 GPU 3 pool 1
- [2012-10-12 18:02:24] Accepted 122c1ff1 Diff 14/1 GPU 1 pool 1
+ [2013-11-09 11:04:41] Accepted 01b3bde7 Diff 150/128 AVA 1 pool 0
+ [2013-11-09 11:04:49] Accepted 015df995 Diff 187/128 AVA 1 pool 0
+ [2013-11-09 11:04:50] Accepted 01163b68 Diff 236/128 AVA 1 pool 0
+ [2013-11-09 11:04:53] Accepted 9f745840 Diff 411/128 BAS 1 pool 0
 
-The 8 byte hex value are the 2nd 8 bytes of the share being submitted to the
-pool. The 2 diff values are the actual difficulty target that share reached
+The 8 byte hex value are the 1st nonzero bytes of the share being submitted to
+the pool. The 2 diff values are the actual difficulty target that share reached
 followed by the difficulty target the pool is currently asking for.
 
 ---
@@ -468,7 +397,7 @@ HW:  The number of HardWare errors
 WU:  The Work Utility defined as the number of diff1 shares work / minute
      (accepted or rejected).
 
- GPU 1: 73.5C 2551RPM | 427.3/443.0Mh/s | A:8 R:0 HW:0 WU:4.39/m
+ BAS 1:  max 67C 3.27V | 62.29G/62.19Gh/s | A:140813 R:256 HW:2860 WU: 852.0/m
 
 Each column is as follows:
 Temperature (if supported)
@@ -650,7 +579,7 @@ For RPC API details see the API-README file
 
 FAQ
 
-Q: Can I mine on servers from different networks (eg smartcoin and bitcoin) at
+Q: Can I mine on servers from different networks (eg xxxcoin and bitcoin) at
 the same time?
 A: No, cgminer keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
@@ -701,15 +630,10 @@ A: Virtually always, the DEFAULT parameters give the best results. Most user
 defined settings lead to worse performance. The ONLY thing most users should
 need to set is the Intensity for GPUs.
 
-Q: What happened to CPU mining?
-A: Being increasingly irrelevant for most users, and a maintenance issue, it is
-no longer under active development and will not be supported. No binary builds
-supporting CPU mining will be released. Virtually all remaining users of CPU
-mining are as back ends for illegal botnets. The main reason cgminer is being
-inappopriately tagged as a virus by antivirus software is due to the trojans
-packaging a CPU mining capable version of it. There is no longer ANY CPU mining
-code in cgminer. If you are mining bitcoin with CPU today, you are spending
-1000x more in electricity costs than you are earning in bitcoin.
+Q: What happened to CPU and GPU mining?
+A: Their efficiency makes them irrelevant in the bitcoin mining world today
+and the author has no interest in supporting alternative coins that are better
+mined by these devices.
 
 Q: GUI version?
 A: No. The RPC interface makes it possible for someone else to write one
@@ -717,8 +641,7 @@ though.
 
 Q: I'm having an issue. What debugging information should I provide?
 A: Start cgminer with your regular commands and add -D -T --verbose and provide
-the full startup output and a summary of your hardware, operating system, ATI
-driver version and ATI stream version.
+the full startup output and a summary of your hardware and operating system.
 
 Q: Why don't you provide win64 builds?
 A: Win32 builds work everywhere and there is precisely zero advantage to a
@@ -730,36 +653,13 @@ their various features. Linux offers much better long term stability and
 remote monitoring and security, while windows offers you overclocking tools
 that can achieve much more than cgminer can do on linux.
 
-Q: Can I mine with cgminer on a MAC?
-A: cgminer will compile on OSX, but the performance of GPU mining is
-compromised due to the opencl implementation on OSX, there is no temperature
-or fanspeed monitoring, and the cooling design of most MACs, despite having
-powerful GPUs, will usually not cope with constant usage leading to a high
-risk of thermal damage. It is highly recommended not to mine on a MAC unless
-it is to a USB device.
-
-Q: I'm trying to mine litecoin but cgminer shows MH values instead of kH and
-submits no shares?
-A: Add the --scrypt parameter.
-
-Q: I switch users on windows and my mining stops working?
-A: That's correct, it does. It's a permissions issue that there is no known
-fix for due to monitoring of GPU fanspeeds and temperatures. If you disable
-the monitoring with --no-adl it should switch okay.
-
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
 
 Q: How do I tune for p2pool?
-A: p2pool has very rapid expiration of work and new blocks, it is suggested you
-decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
-with -g 1. It is also recommended to use --failover-only since the work is
-effectively like a different block chain. If mining with a minirig, it is worth
-adding the --bfl-range option.
-
-Q: Are OpenCL kernels from other mining software useable in cgminer?
-A: No, the APIs are slightly different between the different software and they
-will not work.
+A: It is also recommended to use --failover-only since the work is effectively
+like a different block chain, and not enabling --no-submit-stale. If mining with
+a BFL (fpga) minirig, it is worth adding the --bfl-range option.
 
 Q: I run PHP on windows to access the API with the example miner.php. Why does
 it fail when php is installed properly but I only get errors about Sockets not
@@ -801,10 +701,6 @@ done to find them. If you are mining at 8 difficulty, then you would expect on
 average to find one 8 difficulty share, per 8 single difficulty shares found.
 However, the number is actually random and converges over time, it is an average,
 not an exact value, thus you may find more or less than the expected average.
-
-Q: Can I make a donation in litecoin?
-A: Yes, see SCRYPT-README for the address, but the author prefers bitcoin if
-possible.
 
 Q: My keyboard input momentarily pauses or repeats keys every so often on
 windows while mining?

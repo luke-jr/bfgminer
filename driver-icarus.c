@@ -1143,8 +1143,6 @@ static int64_t icarus_scanwork(struct thr_info *thr)
 	if (ret == ICA_NONCE_ERROR)
 		goto out;
 
-	work->blk.nonce = 0xffffffff;
-
 	// aborted before becoming idle, get new work
 	if (ret == ICA_NONCE_TIMEOUT || ret == ICA_NONCE_RESTART) {
 		timersub(&tv_finish, &tv_start, &elapsed);

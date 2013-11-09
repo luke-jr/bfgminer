@@ -53,11 +53,7 @@ char *curly = ":D";
 
 #include "compat.h"
 #include "miner.h"
-#include "findnonce.h"
-#include "adl.h"
-#include "driver-opencl.h"
 #include "bench_block.h"
-#include "scrypt.h"
 #ifdef USE_USBUTILS
 #include "usbutils.h"
 #endif
@@ -113,16 +109,8 @@ static const bool opt_time = true;
 unsigned long long global_hashrate;
 unsigned long global_quota_gcd = 1;
 
-#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
+#if defined(USE_USBUTILS)
 int nDevs;
-#endif
-#ifdef HAVE_OPENCL
-int opt_dynamic_interval = 7;
-int opt_g_threads = -1;
-int gpu_threads;
-#ifdef USE_SCRYPT
-bool opt_scrypt;
-#endif
 #endif
 bool opt_restart = true;
 bool opt_nogpu;
@@ -136,7 +124,6 @@ int total_devices;
 int zombie_devs;
 static int most_devices;
 struct cgpu_info **devices;
-bool have_opencl;
 int mining_threads;
 int num_processors;
 #ifdef HAVE_CURSES
@@ -1146,14 +1133,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
-	OPT_WITHOUT_ARG("--disable-gpu|-G",
-			opt_set_bool, &opt_nogpu,
-#ifdef HAVE_OPENCL
-			"Disable GPU mining even if suitable devices exist"
-#else
-			opt_hidden
-#endif
-	),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
@@ -1166,59 +1145,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--fix-protocol",
 			opt_set_bool, &opt_fix_protocol,
 			"Do not redirect to a different getwork protocol (eg. stratum)"),
-#ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--gpu-dyninterval",
-		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
-		     "Set the refresh interval in ms for GPUs using dynamic intensity"),
-	OPT_WITH_ARG("--gpu-platform",
-		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
-		     "Select OpenCL platform ID to use for GPU mining"),
-	OPT_WITH_ARG("--gpu-threads|-g",
-		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
-		     "Number of threads per GPU (1 - 10)"),
-#ifdef HAVE_ADL
-	OPT_WITH_ARG("--gpu-engine",
-		     set_gpu_engine, NULL, NULL,
-		     "GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
-	OPT_WITH_ARG("--gpu-fan",
-		     set_gpu_fan, NULL, NULL,
-		     "GPU fan percentage range - one value, range and/or comma separated list (e.g. 0-85,85,65)"),
-	OPT_WITH_ARG("--gpu-map",
-		     set_gpu_map, NULL, NULL,
-		     "Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)"),
-	OPT_WITH_ARG("--gpu-memclock",
-		     set_gpu_memclock, NULL, NULL,
-		     "Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card"),
-	OPT_WITH_ARG("--gpu-memdiff",
-		     set_gpu_memdiff, NULL, NULL,
-		     "Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode"),
-	OPT_WITH_ARG("--gpu-powertune",
-		     set_gpu_powertune, NULL, NULL,
-		     "Set the GPU powertune percentage - one value for all or separate by commas for per card"),
-	OPT_WITHOUT_ARG("--gpu-reorder",
-			opt_set_bool, &opt_reorder,
-			"Attempt to reorder GPU devices according to PCI Bus ID"),
-	OPT_WITH_ARG("--gpu-vddc",
-		     set_gpu_vddc, NULL, NULL,
-		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
-#endif
-#ifdef USE_SCRYPT
-	OPT_WITH_ARG("--lookup-gap",
-		     set_lookup_gap, NULL, NULL,
-		     "Set GPU lookup gap for scrypt mining, comma separated"),
-	OPT_WITH_ARG("--intensity|-I",
-		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
-		     " -> " MAX_SCRYPT_INTENSITY_STR
-		     ",default: d to maintain desktop interactivity)"),
-#else
-	OPT_WITH_ARG("--intensity|-I",
-		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
-		     " -> " MAX_SHA_INTENSITY_STR
-		     ",default: d to maintain desktop interactivity)"),
-#endif
-#endif
 	OPT_WITH_ARG("--hotplug",
 		     set_int_0_to_9999, NULL, &hotplug_time,
 #ifdef USE_USBUTILS
@@ -1227,15 +1153,10 @@ static struct opt_table opt_config_table[] = {
 		     opt_hidden
 #endif
 		    ),
-#if defined(HAVE_OPENCL) || defined(HAVE_MODMINER)
+#if defined(HAVE_MODMINER)
 	OPT_WITH_ARG("--kernel-path|-K",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
-	             "Specify a path to where bitstream and kernel files are"),
-#endif
-#ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--kernel|-k",
-		     set_kernel, NULL, NULL,
-		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+	             "Specify a path to where bitstream files are"),
 #endif
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-options",
@@ -1307,14 +1228,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-pool-disable",
 			opt_set_invbool, &opt_disable_pool,
 			opt_hidden),
-	OPT_WITHOUT_ARG("--no-restart",
-			opt_set_invbool, &opt_restart,
-#ifdef HAVE_OPENCL
-			"Do not attempt to restart GPUs that hang"
-#else
-			opt_hidden
-#endif
-	),
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
@@ -1368,14 +1281,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--sched-stop",
 		     set_schedtime, NULL, &schedstop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
-#ifdef USE_SCRYPT
-	OPT_WITHOUT_ARG("--scrypt",
-			opt_set_bool, &opt_scrypt,
-			"Use the scrypt algorithm for mining (litecoin only)"),
-	OPT_WITH_ARG("--shaders",
-		     set_shaders, NULL, NULL,
-		     "GPU shaders per card for tuning scrypt, comma separated"),
-#endif
 	OPT_WITH_ARG("--sharelog",
 		     set_sharelog, NULL, NULL,
 		     "Append share log to file"),
@@ -1436,19 +1341,9 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_usb_list_all,
 			opt_hidden),
 #endif
-#ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--vectors|-v",
-		     set_vector, NULL, NULL,
-		     "Override detected optimal vector (1, 2 or 4) - one value or comma separated list"),
-#endif
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
 			"Log verbose output to stderr as well as status output"),
-#ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--worksize|-w",
-		     set_worksize, NULL, NULL,
-		     "Override detected optimal worksize - one value or comma separated list"),
-#endif
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
@@ -1613,9 +1508,6 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_BITFURY
 		"bitfury "
 #endif
-#ifdef HAVE_OPENCL
-		"GPU "
-#endif
 #ifdef USE_HASHFAST
 		"hashfast "
 #endif
@@ -1631,9 +1523,6 @@ static char *opt_verusage_and_exit(const char *extra)
 #ifdef USE_MODMINER
 		"modminer "
 #endif
-#ifdef USE_SCRYPT
-		"scrypt "
-#endif
 		"mining support.\n"
 		, packagename);
 	printf("%s", opt_usage(opt_argv0, extra));
@@ -1641,16 +1530,11 @@ static char *opt_verusage_and_exit(const char *extra)
 	exit(0);
 }
 
-#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
+#if defined(USE_USBUTILS)
 char *display_devs(int *ndevs)
 {
 	*ndevs = 0;
-#ifdef HAVE_OPENCL
-	print_ndevs(ndevs);
-#endif
-#ifdef USE_USBUTILS
 	usb_all(0);
-#endif
 	exit(*ndevs);
 }
 #endif
@@ -1668,17 +1552,10 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
-#if defined(HAVE_OPENCL) || defined(USE_USBUTILS)
+#if defined(USE_USBUTILS)
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			display_devs, &nDevs,
-			"Display "
-#ifdef HAVE_OPENCL
-			"number of detected GPUs, OpenCL platform information, "
-#endif
-#ifdef USE_USBUTILS
-			"all USB devices, "
-#endif
-			"and exit"),
+			"Display all USB devices and exit"),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
 			opt_version_and_exit, packagename,
@@ -2143,9 +2020,6 @@ static int devcursor, logstart, logcursor;
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
 #endif
-#ifdef HAVE_OPENCL
-struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
-#endif
 
 #ifdef HAVE_CURSES
 static inline void unlock_curses(void)
@@ -2313,8 +2187,7 @@ static void curses_print_status(void)
 		     prev_block, block_diff, blocktime, best_share);
 	mvwhline(statuswin, 6, 0, '-', 80);
 	mvwhline(statuswin, statusy - 1, 0, '-', 80);
-	cg_mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management %s[S]ettings [D]isplay options [Q]uit",
-		have_opencl ? "[G]PU management " : "");
+	cg_mvwprintw(statuswin, devcursor - 1, 1, "[P]ool management [S]ettings [D]isplay options [Q]uit");
 }
 
 static void adj_width(int var, int *length)
@@ -2868,8 +2741,8 @@ static bool submit_upstream_work(struct work *work, CURL *curl, bool resubmit)
 
 			snprintf(worktime, sizeof(worktime),
 				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
+				(unsigned long)be32toh(*(uint32_t *)&(work->data[28])),
+				(unsigned long)be32toh(*(uint32_t *)&(work->data[24])),
 				work->getwork_mode, diffplaces, work->work_difficulty,
 				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
@@ -3127,8 +3000,6 @@ static void calc_diff(struct work *work, double known)
 		double d64, dcut64;
 
 		d64 = truediffone;
-		if (opt_scrypt)
-			d64 *= (double)65536;
 		dcut64 = le256todouble(work->target);
 		if (unlikely(!dcut64))
 			dcut64 = 1;
@@ -3265,11 +3136,9 @@ static void __kill_work(void)
 #ifdef USE_USBUTILS
 	/* Best to get rid of it first so it doesn't
 	 * try to create any new devices */
-	if (!opt_scrypt) {
-		forcelog(LOG_DEBUG, "Killing off HotPlug thread");
-		thr = &control_thr[hotplug_thr_id];
-		kill_timeout(thr);
-	}
+	forcelog(LOG_DEBUG, "Killing off HotPlug thread");
+	thr = &control_thr[hotplug_thr_id];
+	kill_timeout(thr);
 #endif
 
 	forcelog(LOG_DEBUG, "Killing off watchpool thread");
@@ -3308,14 +3177,12 @@ static void __kill_work(void)
 #ifdef USE_USBUTILS
 	/* Release USB resources in case it's a restart
 	 * and not a QUIT */
-	if (!opt_scrypt) {
-		forcelog(LOG_DEBUG, "Releasing all USB devices");
-		cg_completion_timeout(&usb_cleanup, NULL, 1000);
+	forcelog(LOG_DEBUG, "Releasing all USB devices");
+	cg_completion_timeout(&usb_cleanup, NULL, 1000);
 
-		forcelog(LOG_DEBUG, "Killing off usbres thread");
-		thr = &control_thr[usbres_thr_id];
-		kill_timeout(thr);
-	}
+	forcelog(LOG_DEBUG, "Killing off usbres thread");
+	thr = &control_thr[usbres_thr_id];
+	kill_timeout(thr);
 #endif
 
 }
@@ -3467,7 +3334,7 @@ static void roll_work(struct work *work)
 	*work_ntime = htobe32(ntime);
 	local_work++;
 	work->rolls++;
-	work->blk.nonce = 0;
+	work->nonce = 0;
 	applog(LOG_DEBUG, "Successfully rolled work");
 
 	/* This is now a different work item so it needs a different ID for the
@@ -3759,8 +3626,6 @@ static uint64_t share_diff(const struct work *work)
 	uint64_t ret;
 
 	d64 = truediffone;
-	if (opt_scrypt)
-		d64 *= (double)65536;
 	s64 = le256todouble(work->hash);
 	if (unlikely(!s64))
 		s64 = 0;
@@ -3793,14 +3658,6 @@ static void regen_hash(struct work *work)
 	flip80(swap32, data32);
 	sha256(swap, 80, hash1);
 	sha256(hash1, 32, (unsigned char *)(work->hash));
-}
-
-static void rebuild_hash(struct work *work)
-{
-	if (opt_scrypt)
-		scrypt_regenhash(work);
-	else
-		regen_hash(work);
 }
 
 static bool cnx_needed(struct pool *pool);
@@ -4404,94 +4261,6 @@ void write_config(FILE *fcfg)
 		}
 	fputs("\n]\n", fcfg);
 
-#ifdef HAVE_OPENCL
-	if (nDevs) {
-		/* Write GPU device values */
-		fputs(",\n\"intensity\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, gpus[i].dynamic ? "%sd" : "%s%d", i > 0 ? "," : "", gpus[i].intensity);
-		fputs("\",\n\"vectors\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				gpus[i].vwidth);
-		fputs("\",\n\"worksize\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].work_size);
-		fputs("\",\n\"kernel\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++) {
-			fprintf(fcfg, "%s", i > 0 ? "," : "");
-			switch (gpus[i].kernel) {
-				case KL_NONE: // Shouldn't happen
-					break;
-				case KL_POCLBM:
-					fprintf(fcfg, "poclbm");
-					break;
-				case KL_PHATK:
-					fprintf(fcfg, "phatk");
-					break;
-				case KL_DIAKGCN:
-					fprintf(fcfg, "diakgcn");
-					break;
-				case KL_DIABLO:
-					fprintf(fcfg, "diablo");
-					break;
-				case KL_SCRYPT:
-					fprintf(fcfg, "scrypt");
-					break;
-			}
-		}
-#ifdef USE_SCRYPT
-		fputs("\",\n\"lookup-gap\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].opt_lg);
-		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].opt_tc);
-		fputs("\",\n\"shaders\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].shaders);
-#endif
-#ifdef HAVE_ADL
-		fputs("\",\n\"gpu-engine\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_engine, gpus[i].gpu_engine);
-		fputs("\",\n\"gpu-fan\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_fan, gpus[i].gpu_fan);
-		fputs("\",\n\"gpu-memclock\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
-		fputs("\",\n\"gpu-memdiff\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memdiff);
-		fputs("\",\n\"gpu-powertune\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
-		fputs("\",\n\"gpu-vddc\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
-		fputs("\",\n\"temp-cutoff\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].cutofftemp);
-		fputs("\",\n\"temp-overheat\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
-		fputs("\",\n\"temp-target\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.targettemp);
-#endif
-		fputs("\"", fcfg);
-	}
-#endif
-#ifdef HAVE_ADL
-	if (opt_reorder)
-		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
-#endif
-
 	/* Simple bool and int options */
 	struct opt_table *opt;
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
@@ -5050,10 +4819,6 @@ static void *input_thread(void __maybe_unused *userdata)
 			display_pools();
 		else if (!strncasecmp(&input, "s", 1))
 			set_options();
-#if HAVE_OPENCL
-		else if (have_opencl && !strncasecmp(&input, "g", 1))
-			manage_gpu();
-#endif
 		if (opt_realquiet) {
 			disable_curses();
 			break;
@@ -5961,8 +5726,6 @@ void set_target(unsigned char *dest_target, double diff)
 	}
 
 	d64 = truediffone;
-	if (opt_scrypt)
-		d64 *= (double)65536;
 	d64 /= diff;
 
 	dcut64 = d64 / bits192;
@@ -6065,7 +5828,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	local_work++;
 	work->pool = pool;
 	work->stratum = true;
-	work->blk.nonce = 0;
+	work->nonce = 0;
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
@@ -6163,19 +5926,16 @@ static void rebuild_nonce(struct work *work, uint32_t nonce)
 
 	*work_nonce = htole32(nonce);
 
-	rebuild_hash(work);
+	regen_hash(work);
 }
 
 /* For testing a nonce against diff 1 */
 bool test_nonce(struct work *work, uint32_t nonce)
 {
 	uint32_t *hash_32 = (uint32_t *)(work->hash + 28);
-	uint32_t diff1targ;
 
 	rebuild_nonce(work, nonce);
-	diff1targ = opt_scrypt ? 0x0000ffffUL : 0;
-
-	return (le32toh(*hash_32) <= diff1targ);
+	return (*hash_32 == 0);
 }
 
 /* For testing a nonce against an arbitrary diff */
@@ -6184,7 +5944,7 @@ bool test_nonce_diff(struct work *work, uint32_t nonce, double diff)
 	uint64_t *hash64 = (uint64_t *)(work->hash + 24), diff64;
 
 	rebuild_nonce(work, nonce);
-	diff64 = opt_scrypt ? 0x0000ffff00000000ULL : 0x00000000ffff0000ULL;
+	diff64 = 0x00000000ffff0000ULL;
 	diff64 /= diff;
 
 	return (le64toh(*hash64) <= diff64);
@@ -6195,9 +5955,6 @@ static void update_work_stats(struct thr_info *thr, struct work *work)
 	double test_diff = current_diff;
 
 	work->share_diff = share_diff(work);
-
-	if (opt_scrypt)
-		test_diff *= 65536;
 
 	if (unlikely(work->share_diff >= test_diff)) {
 		work->block = true;
@@ -6274,9 +6031,7 @@ out:
 
 static inline bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
-	if (wdiff->tv_sec > opt_scantime ||
-	    work->blk.nonce >= MAXTHREADS - hashes ||
-	    hashes >= 0xfffffffe ||
+	if (wdiff->tv_sec > opt_scantime || hashes >= 0xfffffffe ||
 	    stale_work(work, false))
 		return true;
 	return false;
@@ -6324,7 +6079,7 @@ static void hash_sole_work(struct thr_info *mythr)
 		cgpu->new_work = true;
 
 		cgtime(&tv_workstart);
-		work->blk.nonce = 0;
+		work->nonce = 0;
 		cgpu->max_hashes = 0;
 		if (!drv->prepare_work(mythr, work)) {
 			applog(LOG_ERR, "work prepare failed, exiting "
@@ -6332,25 +6087,6 @@ static void hash_sole_work(struct thr_info *mythr)
 			break;
 		}
 		work->device_diff = MIN(drv->working_diff, work->work_difficulty);
-#ifdef USE_SCRYPT
-		/* Dynamically adjust the working diff even if the target
-		 * diff is very high to ensure we can still validate scrypt is
-		 * returning shares. */
-		if (opt_scrypt) {
-			double wu;
-
-			wu = total_diff1 / total_secs * 60;
-			if (wu > 30 && drv->working_diff < drv->max_diff &&
-			    drv->working_diff < work->work_difficulty) {
-				drv->working_diff++;
-				applog(LOG_DEBUG, "Driver %s working diff changed to %.0f",
-					drv->dname, drv->working_diff);
-				work->device_diff = MIN(drv->working_diff, work->work_difficulty);
-			} else if (drv->working_diff > work->work_difficulty)
-				drv->working_diff = work->work_difficulty;
-			set_target(work->device_target, work->device_diff);
-		}
-#endif
 
 		do {
 			cgtime(&tv_start);
@@ -6380,7 +6116,7 @@ static void hash_sole_work(struct thr_info *mythr)
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 
 			thread_reportin(mythr);
-			hashes = drv->scanhash(mythr, work, work->blk.nonce + max_nonce);
+			hashes = drv->scanhash(mythr, work, work->nonce + max_nonce);
 			thread_reportout(mythr);
 
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
@@ -7362,9 +7098,6 @@ void print_summary(void)
 
 static void clean_up(bool restarting)
 {
-#ifdef HAVE_OPENCL
-	clear_adl(nDevs);
-#endif
 #ifdef USE_USBUTILS
 	usb_polling = false;
 	pthread_join(usb_poll_thread, NULL);
@@ -7753,11 +7486,6 @@ void enable_device(struct cgpu_info *cgpu)
 		adj_width(mining_threads, &dev_width);
 #endif
 	}
-#ifdef HAVE_OPENCL
-	if (cgpu->drv->drv_id == DRIVER_opencl) {
-		gpu_threads += cgpu->threads;
-	}
-#endif
 	rwlock_init(&cgpu->qlock);
 	cgpu->queued_work = NULL;
 }
@@ -8062,12 +7790,6 @@ int main(int argc, char *argv[])
 
 	INIT_LIST_HEAD(&scan_devices);
 
-#ifdef HAVE_OPENCL
-	memset(gpus, 0, sizeof(gpus));
-	for (i = 0; i < MAX_GPUDEVICES; i++)
-		gpus[i].dynamic = true;
-#endif
-
 	/* parse command line */
 	opt_register_table(opt_config_table,
 			   "Options for both config file and command line");
@@ -8084,8 +7806,6 @@ int main(int argc, char *argv[])
 	if (opt_benchmark) {
 		struct pool *pool;
 
-		if (opt_scrypt)
-			quit(1, "Cannot use benchmark mode with scrypt");
 		pool = add_pool();
 		pool->rpc_url = malloc(255);
 		strcpy(pool->rpc_url, "Benchmark");
@@ -8129,9 +7849,8 @@ int main(int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
-	/* Use a shorter scantime for scrypt */
 	if (opt_scantime < 0)
-		opt_scantime = opt_scrypt ? 30 : 60;
+		opt_scantime = 60;
 
 	total_control_threads = 8;
 	control_thr = calloc(total_control_threads, sizeof(*thr));
@@ -8144,25 +7863,19 @@ int main(int argc, char *argv[])
 	usb_initialise();
 
 	// before device detection
-	if (!opt_scrypt) {
-		cgsem_init(&usb_resource_sem);
-		usbres_thr_id = 1;
-		thr = &control_thr[usbres_thr_id];
-		if (thr_info_create(thr, NULL, usb_resource_thread, thr))
-			quit(1, "usb resource thread create failed");
-		pthread_detach(thr->pth);
-	}
+	cgsem_init(&usb_resource_sem);
+	usbres_thr_id = 1;
+	thr = &control_thr[usbres_thr_id];
+	if (thr_info_create(thr, NULL, usb_resource_thread, thr))
+		quit(1, "usb resource thread create failed");
+	pthread_detach(thr->pth);
 #endif
 
 	/* Use the DRIVER_PARSE_COMMANDS macro to fill all the device_drvs */
 	DRIVER_PARSE_COMMANDS(DRIVER_FILL_DEVICE_DRV)
 
-	if (opt_scrypt)
-		opencl_drv.drv_detect(false);
-	else {
 	/* Use the DRIVER_PARSE_COMMANDS macro to detect all devices */
-		DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_ALL)
-	}
+	DRIVER_PARSE_COMMANDS(DRIVER_DRV_DETECT_ALL)
 
 	if (opt_display_devs) {
 		applog(LOG_ERR, "Devices detected:");
@@ -8362,12 +8075,6 @@ begin_bench:
 		}
 	}
 
-#ifdef HAVE_OPENCL
-	applog(LOG_INFO, "%d gpu miner threads started", gpu_threads);
-	for (i = 0; i < nDevs; i++)
-		pause_dynamic_threads(i);
-#endif
-
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 
@@ -8385,17 +8092,6 @@ begin_bench:
 		quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
-#ifdef HAVE_OPENCL
-	/* Create reinit gpu thread */
-	gpur_thr_id = 4;
-	thr = &control_thr[gpur_thr_id];
-	thr->q = tq_new();
-	if (!thr->q)
-		quit(1, "tq_new failed for gpur_thr_id");
-	if (thr_info_create(thr, NULL, reinit_gpu, thr))
-		quit(1, "reinit_gpu thread create failed");
-#endif	
-
 	/* Create API socket thread */
 	api_thr_id = 5;
 	thr = &control_thr[api_thr_id];
@@ -8403,13 +8099,11 @@ begin_bench:
 		quit(1, "API thread create failed");
 
 #ifdef USE_USBUTILS
-	if (!opt_scrypt) {
-		hotplug_thr_id = 6;
-		thr = &control_thr[hotplug_thr_id];
-		if (thr_info_create(thr, NULL, hotplug_thread, thr))
-			quit(1, "hotplug thread create failed");
-		pthread_detach(thr->pth);
-	}
+	hotplug_thr_id = 6;
+	thr = &control_thr[hotplug_thr_id];
+	if (thr_info_create(thr, NULL, hotplug_thread, thr))
+		quit(1, "hotplug thread create failed");
+	pthread_detach(thr->pth);
 #endif
 
 #ifdef HAVE_CURSES

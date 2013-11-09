@@ -35,14 +35,6 @@ extern char *curly;
 #include <semaphore.h>
 #endif
 
-#ifdef HAVE_OPENCL
-#ifdef __APPLE_CC__
-#include <OpenCL/opencl.h>
-#else
-#include <CL/cl.h>
-#endif
-#endif /* HAVE_OPENCL */
-
 #ifdef STDC_HEADERS
 # include <stdlib.h>
 # include <stddef.h>
@@ -252,7 +244,6 @@ static inline int fsync (int fd)
 	DRIVER_ADD_COMMAND(avalon)
 
 #define DRIVER_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
-	DRIVER_ADD_COMMAND(opencl) \
 	FPGA_PARSE_COMMANDS(DRIVER_ADD_COMMAND) \
 	ASIC_PARSE_COMMANDS(DRIVER_ADD_COMMAND)
 
@@ -522,45 +513,12 @@ struct cgpu_info {
 	int64_t max_hashes;
 
 	const char *kname;
-#ifdef HAVE_OPENCL
-	bool mapped;
-	int virtual_gpu;
-	int virtual_adl;
-	int intensity;
-	bool dynamic;
-
-	cl_uint vwidth;
-	size_t work_size;
-	enum cl_kernels kernel;
-	cl_ulong max_alloc;
-
-#ifdef USE_SCRYPT
-	int opt_lg, lookup_gap;
-	size_t opt_tc, thread_concurrency;
-	size_t shaders;
-#endif
-	struct timeval tv_gpustart;
-	int intervals;
-#endif
 
 	bool new_work;
 
 	float temp;
 	int cutofftemp;
 
-#ifdef HAVE_ADL
-	bool has_adl;
-	struct gpu_adl adl;
-
-	int gpu_engine;
-	int min_engine;
-	int gpu_fan;
-	int min_fan;
-	int gpu_memclock;
-	int gpu_memdiff;
-	int gpu_powertune;
-	float gpu_vddc;
-#endif
 	int diff1;
 	double diff_accepted;
 	double diff_rejected;
@@ -1202,40 +1160,6 @@ extern uint64_t best_diff;
 extern struct timeval block_timeval;
 extern char *workpadding;
 
-#ifdef HAVE_OPENCL
-typedef struct {
-	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
-	cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
-	cl_uint cty_a; cl_uint cty_b; cl_uint cty_c; cl_uint cty_d;
-	cl_uint cty_e; cl_uint cty_f; cl_uint cty_g; cl_uint cty_h;
-	cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
-	cl_uint fW0; cl_uint fW1; cl_uint fW2; cl_uint fW3; cl_uint fW15;
-	cl_uint fW01r; cl_uint fcty_e; cl_uint fcty_e2;
-	cl_uint W16; cl_uint W17; cl_uint W2;
-	cl_uint PreVal4; cl_uint T1;
-	cl_uint C1addK5; cl_uint D1A; cl_uint W2A; cl_uint W17_2;
-	cl_uint PreVal4addT1; cl_uint T1substate0;
-	cl_uint PreVal4_2;
-	cl_uint PreVal0;
-	cl_uint PreW18;
-	cl_uint PreW19;
-	cl_uint PreW31;
-	cl_uint PreW32;
-
-	/* For diakgcn */
-	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
-	cl_uint zeroA, zeroB;
-	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
-#ifdef USE_SCRYPT
-	struct work *work;
-#endif
-} dev_blk_ctx;
-#else
-typedef struct {
-	uint32_t nonce;
-} dev_blk_ctx;
-#endif
-
 struct curl_ent {
 	CURL *curl;
 	struct list_head node;
@@ -1413,8 +1337,7 @@ struct work {
 
 	int		rolls;
 	int		drv_rolllimit; /* How much the driver can roll ntime */
-
-	dev_blk_ctx	blk;
+	uint32_t	nonce; /* For devices that hash sole work */
 
 	struct thr_info	*thr;
 	int		thr_id;
