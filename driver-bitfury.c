@@ -210,7 +210,9 @@ static bool bitfury_checkresults(struct thr_info *thr, struct work *work, uint32
 	int i;
 
 	for (i = 0; i < BT_OFFSETS; i++) {
-		if (test_nonce(work, nonce + bf_offsets[i])) {
+		uint32_t noffset = nonce + bf_offsets[i];
+
+		if (test_nonce(work, noffset)) {
 			submit_tested_work(thr, work);
 			return true;
 		}
@@ -222,18 +224,18 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
+	struct work *work, *tmp;
+	int amount, i, aged = 0;
 	struct timeval tv_now;
-	struct work *work;
 	double nonce_rate;
 	int64_t ret = 0;
-	int amount, i;
 	char buf[45];
 	int ms_diff;
 
-	work = get_work(thr, thr->id);
+	work = get_queue_work(thr, bitfury, thr->id);
 	if (unlikely(thr->work_restart)) {
-		free_work(work);
-		return 0;
+		work_completed(bitfury, work);
+		goto out;
 	}
 
 	buf[0] = 'W';
@@ -251,7 +253,7 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	}
 
 	if (unlikely(thr->work_restart))
-		goto cascade;
+		goto out;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
@@ -268,41 +270,60 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	};
 
 	if (unlikely(thr->work_restart))
-		goto cascade;
+		goto out;
 
 	/* Send work */
+	cgtime(&work->tv_work_start);
 	usb_write(bitfury, buf, 45, &amount, C_BF1_REQWORK);
 	cgtime(&info->tv_start);
+
 	/* Get response acknowledging work */
 	usb_read(bitfury, buf, BF1MSGSIZE, &amount, C_BF1_GETWORK);
-
-	/* Only happens on startup */
-	if (unlikely(!info->prevwork[BF1ARRAY_SIZE]))
-		goto cascade;
 
 	/* Search for what work the nonce matches in order of likelihood. Last
 	 * entry is end of result marker. */
 	for (i = 0; i < info->tot - BF1MSGSIZE; i += BF1MSGSIZE) {
+		bool found = false;
 		uint32_t nonce;
-		int j;
 
 		/* Ignore state & switched data in results for now. */
 		memcpy(&nonce, info->buf + i + 3, 4);
 		nonce = decnonce(nonce);
-		for (j = 0; j < BF1ARRAY_SIZE; j++) {
-			if (bitfury_checkresults(thr, info->prevwork[j], nonce)) {
+
+		rd_lock(&bitfury->qlock);
+		HASH_ITER(hh, bitfury->queued_work, work, tmp) {
+			if (bitfury_checkresults(thr, work, nonce)) {
 				info->nonces++;
+				found = true;
 				break;
 			}
 		}
+		rd_unlock(&bitfury->qlock);
+
+		if (!found)
+			inc_hw_errors(thr);
 	}
 
 	info->tot = 0;
-	free_work(info->prevwork[BF1ARRAY_SIZE]);
-cascade:
-	for (i = BF1ARRAY_SIZE; i > 0; i--)
-		info->prevwork[i] = info->prevwork[i - 1];
-	info->prevwork[0] = work;
+out:
+	cgtime(&tv_now);
+
+	/* This iterates over the hashlist finding work started more than 6
+	 * seconds ago which equates to leaving 5 past work items in the array
+	 * to look for results. */
+	wr_lock(&bitfury->qlock);
+	HASH_ITER(hh, bitfury->queued_work, work, tmp) {
+		if (tdiff(&tv_now, &work->tv_work_start) > 6.0) {
+			__work_completed(bitfury, work);
+			aged++;
+		}
+	}
+	wr_unlock(&bitfury->qlock);
+
+	if (aged) {
+		applog(LOG_DEBUG, "%s %d: Aged %d work items", bitfury->drv->name,
+		       bitfury->device_id, aged);
+	}
 
 	info->cycles++;
 	info->total_nonces += info->nonces;
