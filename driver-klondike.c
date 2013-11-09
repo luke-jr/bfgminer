@@ -1432,7 +1432,8 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	}
 	rd_unlock(&(klninfo->stat_lock));
 	fan /= slaves + 1;
-	fan *= 100/255;
+	//fan *= 100/255; // <-- You can't do this because int 100 / int 255 == 0
+        fan = 100 * fan / 255;
 	if (fan > 99) // short on screen space
 		fan = 99;
 	clock /= slaves + 1;
