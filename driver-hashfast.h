@@ -79,8 +79,8 @@ struct hashfast_info {
 	struct hf_config_data config_data;          // Configuration data used from USB_INIT
 	int core_bitmap_size;                       // in bytes
 	uint32_t *core_bitmap;                      // Core OK bitmap test results, run with PLL Bypassed
-        int group_ntime_roll;                       // Total ntime roll amount per group
-        int core_ntime_roll;                        // Total core ntime roll amount
+	int group_ntime_roll;                       // Total ntime roll amount per group
+	int core_ntime_roll;                        // Total core ntime roll amount
 
 	pthread_mutex_t lock;
 	struct work **works;

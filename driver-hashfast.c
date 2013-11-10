@@ -135,7 +135,7 @@ static bool hfa_send_packet(struct cgpu_info *hashfast, struct hf_header *h, int
 {
 	int amount, ret, len;
 
-	len = sizeof(*h) + h->data_length*4;
+	len = sizeof(*h) + h->data_length * 4;
 	ret = usb_write(hashfast, (char *)h, len, &amount, hfa_cmds[cmd].usb_cmd);
 	if (ret < 0 || amount != len) {
 		applog(LOG_WARNING, "HFA%d: send_packet: %s USB Send error, ret %d amount %d vs. length %d",
@@ -191,16 +191,15 @@ static bool hfa_get_data(struct cgpu_info *hashfast, char *buf, int len4)
 }
 
 static const char *hf_usb_init_errors[] = {
-        "Success",
-        "Reset timeout",
-        "Address cycle timeout",
-        "Clockgate operation timeout",
-        "Configuration operation timeout",
-        "Excessive core failures",
-        "All cores failed diagnostics",
-        "Too many groups configured - increase ntime roll amount"
-        };
-
+	"Success",
+	"Reset timeout",
+	"Address cycle timeout",
+	"Clockgate operation timeout",
+	"Configuration operation timeout",
+	"Excessive core failures",
+	"All cores failed diagnostics",
+	"Too many groups configured - increase ntime roll amount"
+};
 
 static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 {
@@ -214,27 +213,27 @@ static bool hfa_reset(struct cgpu_info *hashfast, struct hashfast_info *info)
 	int i;
 
         // XXX Following items need to be defaults with command-line overrides
-	info->hash_clock_rate = 550;                        // Hash clock rate in Mhz
-        info->group_ntime_roll = 1;
-        info->core_ntime_roll = 1;
+	info->hash_clock_rate = 550;	// Hash clock rate in Mhz
+	info->group_ntime_roll = 1;
+	info->core_ntime_roll = 1;
 
 	// Assemble the USB_INIT request
 	memset(hu, 0, sizeof(*hu));
 	hu->preamble = HF_PREAMBLE;
 	hu->operation_code = OP_USB_INIT;
-	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;          // Protocol to use
-	hu->hash_clock = info->hash_clock_rate;             // Hash clock rate in Mhz
-        if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
-                ho = (struct hf_usb_init_options *)(hu+1);
-                memset(ho, 0, sizeof(*ho));
-                ho->group_ntime_roll = info->group_ntime_roll;
-                ho->core_ntime_roll = info->core_ntime_roll;
-                hu->data_length = sizeof(*ho)/4;
-        }
+	hu->protocol = PROTOCOL_GLOBAL_WORK_QUEUE;	// Protocol to use
+	hu->hash_clock = info->hash_clock_rate;		// Hash clock rate in Mhz
+	if (info->group_ntime_roll > 1 && info->core_ntime_roll) {
+		ho = (struct hf_usb_init_options *)(hu + 1);
+		memset(ho, 0, sizeof(*ho));
+		ho->group_ntime_roll = info->group_ntime_roll;
+		ho->core_ntime_roll = info->core_ntime_roll;
+		hu->data_length = sizeof(*ho) / 4;
+	}
 	hu->crc8 = hfa_crc8((uint8_t *)hu);
 	applog(LOG_INFO, "HFA%d: Sending OP_USB_INIT with GWQ protocol specified",
 	       hashfast->device_id);
-        
+
 	if (!hfa_send_packet(hashfast, (struct hf_header *)hu, HF_USB_CMD(OP_USB_INIT)))
 		return false;
 
@@ -256,8 +255,8 @@ tryagain:
 		return false;
 	}
 	if (h->operation_code != OP_USB_INIT) {
-                // This can happen if valid packet(s) were in transit *before* the OP_USB_INIT arrived
-                // at the device, so we just toss the packets and keep looking for the response.
+		// This can happen if valid packet(s) were in transit *before* the OP_USB_INIT arrived
+		// at the device, so we just toss the packets and keep looking for the response.
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT: Tossing packet, valid but unexpected type %d",
                         hashfast->device_id, h->operation_code);
 		hfa_get_data(hashfast, buf, h->data_length);
@@ -272,7 +271,7 @@ tryagain:
 	info->asic_count = h->chip_address;
 	info->core_count = h->core_address;
 	info->device_type = (uint8_t)h->hdata;
-	info->ref_frequency = (uint8_t)(h->hdata>>8);
+	info->ref_frequency = (uint8_t)(h->hdata >> 8);
 	info->hash_sequence_head = 0;
 	info->hash_sequence_tail = 0;
 	info->device_sequence_tail = 0;
@@ -317,14 +316,14 @@ tryagain:
 		return false;
 	}
 
-        // See if the initialization suceeded
-        if (db->operation_status) {
+	// See if the initialization suceeded
+	if (db->operation_status) {
 		applog(LOG_WARNING, "HFA %d: OP_USB_INIT failed! Operation status %d (%s)",
-                        hashfast->device_id, db->operation_status,
-                        (db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
-                            hf_usb_init_errors[db->operation_status] : "Unknown error code");
+			hashfast->device_id, db->operation_status,
+			(db->operation_status < sizeof(hf_usb_init_errors)/sizeof(hf_usb_init_errors[0])) ?
+			hf_usb_init_errors[db->operation_status] : "Unknown error code");
 		return false;
-        }
+	}
 
 	return true;
 }
