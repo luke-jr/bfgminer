@@ -637,7 +637,8 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 				newhashdev += klninfo->status[dev].maxcount; // hash counter wrapped
 			newhashdev += klninfo->status[dev].hashcount - klninfo->devinfo[dev].lasthashcount;
 			klninfo->devinfo[dev].lasthashcount = klninfo->status[dev].hashcount;
-			klninfo->hashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
+			if (klninfo->status[dev].maxcount != 0)
+				klninfo->hashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
 
 			// todo: check stats for critical conditions
 		}
