@@ -684,18 +684,24 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 		root = api_add_int(root, buf, (int *)(&iFan), true);
 		
 		if (klninfo->devinfo[dev].chipstats != NULL) {
-			char data[128];
+			char data[2048];
+			char one[32];
 			int n;
+
 			sprintf(buf, "Nonces / Chip %d", dev);
-			for (n = 0; n < klninfo->status[dev].chipcount; n++)
-				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n]);
-			data[127] = 0;
+			data[0] = '\0';
+			for (n = 0; n < klninfo->status[dev].chipcount; n++) {
+				snprintf(one, sizeof(one), "%07d ", klninfo->devinfo[dev].chipstats[n]);
+				strcat(data, one);
+			}
 			root = api_add_string(root, buf, data, true);
 		
 			sprintf(buf, "Errors / Chip %d", dev);
-			for (n = 0; n < klninfo->status[dev].chipcount; n++)
-				sprintf(data+n*8, "%07d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
-			data[127] = 0;
+			data[0] = '\0';
+			for (n = 0; n < klninfo->status[dev].chipcount; n++) {
+				snprintf(one, sizeof(one), "%07d ", klninfo->devinfo[dev].chipstats[n + klninfo->status[dev].chipcount]);
+				strcat(data, one);
+			}
 			root = api_add_string(root, buf, data, true);
 		}
 	}
