@@ -84,6 +84,10 @@ if HAS_KLONDIKE
 cgminer_SOURCES += driver-klondike.c
 endif
 
+if HAS_BAB
+cgminer_SOURCES += driver-bab.c
+endif
+
 if HAS_MODMINER
 cgminer_SOURCES += driver-modminer.c
 bitstreamsdir = $(bindir)/bitstreams

@@ -3,7 +3,8 @@ SUPPORTED DEVICES
 Currently supported devices include the Avalon (including BitBurner and
 Klondike), the Butterfly Labs SC range of devices, the ASICMINER block
 erupters, the BF1 (bitfury) USB (red and blue) devices, KnCminer Mercury,
-Saturn and Jupiter devices, and upcoming Hashfast devices.
+Saturn and Jupiter devices, BlackArrow Bitfury devices and upcoming
+Hashfast devices.
 
 No COM ports on windows or TTY devices will be used by cgminer as it
 communicates directly with them via USB so it is normal for them to not exist or
@@ -32,6 +33,14 @@ ASICMINER devices need the --enable-icarus option when compiling cgminer.
 Also note that the AMU is managed by the Icarus driver which is detailed
 in the FPGA-README. Configuring them uses the same mechanism as outlined
 below for getting started with butterfly labs ASICs.
+
+
+BlackArrow Bitfury devices
+
+BlackArrow Bitfury devices need the --enable-bab option when compiling cgminer.
+
+The current BlackArrow Bitfury devices are similar to the Bitfury GPIO mining
+boards and come up as BaB. There are no options available for them.
 
 
 BITFURY devices
