@@ -185,7 +185,6 @@ struct klondike_info {
 	double nonce_min;
 	double nonce_max;
 	
-	pthread_mutex_t devlock;
 	struct libusb_device_handle *usbdev_handle;
 	
 	// TODO:
@@ -324,9 +323,7 @@ int _usb_rw(struct cgpu_info * const klncgpu, void * const buf, const size_t buf
 	
 	while (*processed < bufsiz)
 	{
-		mutex_lock(&klninfo->devlock);
 		err = libusb_bulk_transfer(klninfo->usbdev_handle, ep, cbuf, bufsiz, &sent, timeout);
-		mutex_unlock(&klninfo->devlock);
 		if (unlikely(err))
 			return err;
 		*processed += sent;
@@ -665,7 +662,6 @@ bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 	if (unlikely(!klninfo))
 		quit(1, "Failed to calloc klninfo in klondke_detect_one");
 	klncgpu->device_data = (void *)klninfo;
-	mutex_init(&klninfo->devlock);
 
 	klninfo->free = new_klist_set(klncgpu);
 
