@@ -2484,7 +2484,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				       hashshow, cgpu->drv->name, cgpu->device_id, resubmit ? "(resubmit)" : "", worktime);
 		}
 		sharelog("accept", work);
-		if (opt_shares && total_accepted >= opt_shares) {
+		if (opt_shares && total_diff_accepted >= opt_shares) {
 			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
 			kill_work();
 			return;
@@ -7112,9 +7112,9 @@ void print_summary(void)
 	}
 
 	if (opt_shares) {
-		applog(LOG_WARNING, "Mined %d accepted shares of %d requested\n", total_accepted, opt_shares);
-		if (opt_shares > total_accepted)
-			applog(LOG_WARNING, "WARNING - Mined only %d shares of %d requested.", total_accepted, opt_shares);
+		applog(LOG_WARNING, "Mined %.0f accepted shares of %d requested\n", total_diff_accepted, opt_shares);
+		if (opt_shares > total_diff_accepted)
+			applog(LOG_WARNING, "WARNING - Mined only %.0f shares of %d requested.", total_diff_accepted, opt_shares);
 	}
 	applog(LOG_WARNING, " ");
 
