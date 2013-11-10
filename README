@@ -121,6 +121,7 @@ CGMiner specific configuration options:
   --enable-hashfast       Compile support for Hashfast (default disabled)
   --enable-icarus         Compile support for Icarus (default disabled)
   --enable-knc            Compile support for KnC miners (default disabled)
+  --enable-bab            Compile support for BlackArrow Bitfury (default disabled)
   --enable-klondike       Compile support for Klondike (default disabled)
   --enable-modminer       Compile support for ModMiner FPGAs(default disabled)
   --without-curses        Compile support for curses TUI (default enabled)
