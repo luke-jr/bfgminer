@@ -89,7 +89,7 @@ Optional:
 	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
 	libudev dev library (libudev-dev)
-	(This is only required for ASIC+FPGA support and is linux only)
+	(This is only required for USB device support and is linux only)
 
 If building from git:
 	autoconf
@@ -232,7 +232,7 @@ See FGPA-README for more information regarding this.
 
 Cgminer should automatically find all of your Avalon ASIC, BFL ASIC, BitForce
 FPGAs, Icarus bitstream FPGAs, Klondike ASIC, ASICMINER usb block erupters,
-KnC ASICs, Hashfast ASICs and ModMiner FPGAs.
+KnC ASICs, BaB ASICs, Hashfast ASICs and ModMiner FPGAs.
 
 ---
 
@@ -675,9 +675,8 @@ mining. Since the acronym needs to be only 3 characters, the "Field-" part has
 been skipped.
 
 Q: What is an ASIC?
-A: Cgminer currently supports 2 ASICs: Avalon and BitForce SC devices. They
-are Application Specify Integrated Circuit devices and provide the highest
-performance per unit power due to being dedicated to only one purpose.
+A: They are Application Specify Integrated Circuit devices and provide the
+highest performance per unit power due to being dedicated to only one purpose.
 
 Q: Can I mine scrypt with FPGAs or ASICs?
 A: No.
