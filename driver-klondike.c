@@ -83,7 +83,7 @@ typedef struct _workresult {
 	uint32_t nonce;
 } WORKRESULT;
 
-typedef struct kondike_cfg {
+typedef struct klondike_cfg {
 	uint16_t hashclock;
 	uint8_t temptarget;
 	uint8_t tempcritical;
@@ -434,12 +434,18 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, WORKRESULT *result)
 	//inc_hw_errors(klncgpu->thr[0]);
 }
 
+// Change this to LOG_WARNING if you wish to always see the replies
+#define READ_DEBUG LOG_DEBUG
+
 // thread to keep looking for replies
 static void *klondike_get_replies(void *userdata)
 {
 	struct cgpu_info *klncgpu = (struct cgpu_info *)userdata;
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	struct klondike_status *ks;
+	struct _workresult *wr;
+	struct klondike_cfg *kc;
+	struct klondike_id *ki;
 	char *replybuf;
 	int err, recd;
 
@@ -457,7 +463,7 @@ static void *klondike_get_replies(void *userdata)
 			if (opt_log_level <= LOG_DEBUG) {
 				char hexdata[(recd * 2) + 1];
 				bin2hex(hexdata, &replybuf[1], recd);
-				applog(LOG_DEBUG, "%s (%s) reply [%s:%s]", klncgpu->drv->dname, klncgpu->device_path, replybuf+1, hexdata);
+				applog(READ_DEBUG, "%s (%s) reply [%s:%s]", klncgpu->drv->dname, klncgpu->device_path, replybuf+1, hexdata);
 			}
 			if (++klninfo->nextreply == MAX_REPLY_COUNT)
 				klninfo->nextreply = 0;
@@ -465,7 +471,16 @@ static void *klondike_get_replies(void *userdata)
 			replybuf[0] = replybuf[1];
 			switch (replybuf[0]) {
 				case '=':
+					wr = (struct _workresult *)(replybuf+1);
 					klondike_check_nonce(klncgpu, (WORKRESULT *)replybuf);
+					applog(READ_DEBUG,
+						"%s (%s) reply: work [%c] device=%d workid=%d"
+						" nonce=0x%08x",
+						klncgpu->drv->dname, klncgpu->device_path,
+						*(replybuf+1),
+						(int)(wr->device),
+						(int)(wr->workid),
+						(unsigned int)(wr->nonce));
 					break;
 				case 'S':
 				case 'W':
@@ -476,6 +491,45 @@ static void *klondike_get_replies(void *userdata)
 					klninfo->errorcount += ks->errorcount;
 					klninfo->noisecount += ks->noise;
 					wr_unlock(&(klninfo->stat_lock));
+					applog(READ_DEBUG,
+						"%s (%s) reply: status [%c] chips=%d slaves=%d"
+						" workcq=%d workid=%d temp=%d fan=%d errors=%d"
+						" hashes=%d max=%d noise=%d",
+						klncgpu->drv->dname, klncgpu->device_path,
+						*(replybuf+1),
+						(int)(ks->chipcount),
+						(int)(ks->slavecount),
+						(int)(ks->workqc),
+						(int)(ks->workid),
+						(int)(ks->temp),
+						(int)(ks->fanspeed),
+						(int)(ks->errorcount),
+						(int)(ks->hashcount),
+						(int)(ks->maxcount),
+						(int)(ks->noise));
+					break;
+				case 'C':
+					kc = (struct klondike_cfg *)(replybuf+2);
+					applog(READ_DEBUG,
+						"%s (%s) reply: config [%c] clock=%d temptarget=%d"
+						" tempcrit=%d fan=%d",
+						klncgpu->drv->dname, klncgpu->device_path,
+						*(replybuf+1),
+						(int)(kc->hashclock),
+						(int)(kc->temptarget),
+						(int)(kc->tempcritical),
+						(int)(kc->fantarget));
+					break;
+				case 'I':
+					ki = (struct klondike_id *)(replybuf+2);
+					applog(READ_DEBUG,
+						"%s (%s) reply: info [%c] version=0x%02x prod=%.7s"
+						" serial=0x%08x",
+						klncgpu->drv->dname, klncgpu->device_path,
+						*(replybuf+1),
+						(int)(ki->version),
+						ki->product,
+						(unsigned int)(ki->serial));
 					break;
 				default:
 					break;
