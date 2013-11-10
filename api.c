@@ -138,19 +138,13 @@ static const char GPUSEP = ',';
 
 static const char *APIVERSION = "1.32";
 static const char *DEAD = "Dead";
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
 static const char *INIT = "Initialising";
-#endif
 static const char *DISABLED = "Disabled";
 static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
-#define _DYNAMIC "D"
-#ifdef HAVE_OPENCL
-static const char *DYNAMIC = _DYNAMIC;
-#endif
 
 static __maybe_unused const char *NONE = "None";
 
@@ -161,9 +155,6 @@ static const char *NULLSTR = "(null)";
 static const char *TRUESTR = "true";
 static const char *FALSESTR = "false";
 
-#ifdef USE_SCRYPT
-static const char *SCRYPTSTR = "scrypt";
-#endif
 static const char *SHA256STR = "sha256";
 
 static const char *DEVICECODE = ""
@@ -178,9 +169,6 @@ static const char *DEVICECODE = ""
 #endif
 #ifdef USE_BITFURY
 			"BFU "
-#endif
-#ifdef HAVE_OPENCL
-			"GPU "
 #endif
 #ifdef USE_HASHFAST
 			"HFA "
@@ -478,36 +466,22 @@ struct CODES {
 	const enum code_parameters params;
 	const char *description;
 } codes[] = {
-#ifdef HAVE_OPENCL
- { SEVERITY_ERR,   MSG_INVGPU,	PARAM_GPUMAX,	"Invalid GPU id %d - range is 0 - %d" },
- { SEVERITY_INFO,  MSG_ALRENA,	PARAM_GPU,	"GPU %d already enabled" },
- { SEVERITY_INFO,  MSG_ALRDIS,	PARAM_GPU,	"GPU %d already disabled" },
- { SEVERITY_WARN,  MSG_GPUMRE,	PARAM_GPU,	"GPU %d must be restarted first" },
- { SEVERITY_INFO,  MSG_GPUREN,	PARAM_GPU,	"GPU %d sent enable message" },
-#endif
  { SEVERITY_ERR,   MSG_GPUNON,	PARAM_NONE,	"No GPUs" },
  { SEVERITY_SUCC,  MSG_POOL,	PARAM_PMAX,	"%d Pool(s)" },
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
 
  { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,
-#ifdef HAVE_OPENCL
-		 	 	 	 	"%d GPU(s)"
-#endif
-#if defined(HAVE_AN_ASIC) && defined(HAVE_OPENCL)
+#if defined(HAVE_AN_ASIC)
 						" - "
 #endif
 #ifdef HAVE_AN_ASIC
 						"%d ASC(s)"
 #endif
-#if defined(HAVE_AN_FPGA) && (defined(HAVE_OPENCL) || defined(HAVE_AN_ASIC))
 						" - "
-#endif
 #ifdef HAVE_AN_FPGA
 						"%d PGA(s)"
 #endif
-#if (defined(HAVE_OPENCL) || defined(HAVE_AN_ASIC) || defined(HAVE_AN_FPGA))
 						" - "
-#endif
  },
 
  { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
@@ -520,15 +494,8 @@ struct CODES {
  },
 
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
-#ifdef HAVE_OPENCL
- { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
- { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
-#endif
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
-#ifdef HAVE_OPENCL
- { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
-#endif
 #ifdef HAVE_AN_FPGA
  { SEVERITY_ERR,   MSG_PGANON,	PARAM_NONE,	"No PGAs" },
  { SEVERITY_SUCC,  MSG_PGADEV,	PARAM_PGA,	"PGA%d" },
@@ -548,22 +515,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISPID,	PARAM_NONE,	"Missing pool id parameter" },
  { SEVERITY_ERR,   MSG_INVPID,	PARAM_POOLMAX,	"Invalid pool id %d - range is 0 - %d" },
  { SEVERITY_SUCC,  MSG_SWITCHP,	PARAM_POOL,	"Switching to pool %d:'%s'" },
- { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
- { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
- { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
- { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"CGMiner config" },
-#ifdef HAVE_OPENCL
- { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
- { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
- { SEVERITY_ERR,   MSG_GPUEERR,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported failure" },
- { SEVERITY_SUCC,  MSG_GPUENG,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported success" },
- { SEVERITY_ERR,   MSG_GPUVERR,	PARAM_BOTH,	"Setting GPU %d vddc to (%s) reported failure" },
- { SEVERITY_SUCC,  MSG_GPUVDDC,	PARAM_BOTH,	"Setting GPU %d vddc to (%s) reported success" },
- { SEVERITY_ERR,   MSG_GPUFERR,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported failure" },
- { SEVERITY_SUCC,  MSG_GPUFAN,	PARAM_BOTH,	"Setting GPU %d fan to (%s) reported success" },
-#endif
  { SEVERITY_ERR,   MSG_MISFN,	PARAM_NONE,	"Missing save filename parameter" },
  { SEVERITY_ERR,   MSG_BADFN,	PARAM_STR,	"Can't open or create save file '%s'" },
  { SEVERITY_SUCC,  MSG_SAVED,	PARAM_STR,	"Configuration saved to file '%s'" },
@@ -1377,11 +1329,6 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 				case PARAM_POOL:
 					sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
 					break;
-#ifdef HAVE_OPENCL
-				case PARAM_GPUMAX:
-					sprintf(buf, codes[i].description, paramid, nDevs - 1);
-					break;
-#endif
 #ifdef HAVE_AN_FPGA
 				case PARAM_PGAMAX:
 					pga = numpgas();
@@ -1409,9 +1356,6 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 #endif
 
 					sprintf(buf, codes[i].description
-#ifdef HAVE_OPENCL
-						, nDevs
-#endif
 #ifdef HAVE_AN_ASIC
 						, asc
 #endif
@@ -1884,27 +1828,8 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	bool io_open;
-	int gpucount = 0;
 	int asccount = 0;
 	int pgacount = 0;
-	char *adlinuse = (char *)NO;
-#ifdef HAVE_ADL
-	const char *adl = YES;
-	int i;
-
-	for (i = 0; i < nDevs; i++) {
-		if (gpus[i].has_adl) {
-			adlinuse = (char *)YES;
-			break;
-		}
-	}
-#else
-	const char *adl = NO;
-#endif
-
-#ifdef HAVE_OPENCL
-	gpucount = nDevs;
-#endif
 
 #ifdef HAVE_AN_ASIC
 	asccount = numascs();
@@ -1917,12 +1842,9 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	message(io_data, MSG_MINECONFIG, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECONFIG : _MINECONFIG COMSTR);
 
-	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "ASC Count", &asccount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
 	root = api_add_int(root, "Pool Count", &total_pools, false);
-	root = api_add_const(root, "ADL", (char *)adl, false);
-	root = api_add_string(root, "ADL in use", adlinuse, false);
 	root = api_add_const(root, "Strategy", strategies[pool_strategy].s, false);
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	root = api_add_const(root, "Device Code", DEVICECODE, false);
@@ -1946,7 +1868,6 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 		io_close(io_data);
 }
 
-#if defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA) || defined(HAVE_AN_ASIC)
 static const char *status2str(enum alive status)
 {
 	switch (status) {
@@ -1964,85 +1885,6 @@ static const char *status2str(enum alive status)
 			return UNKNOWN;
 	}
 }
-#endif
-
-#ifdef HAVE_OPENCL
-static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom)
-{
-	struct api_data *root = NULL;
-	char intensity[20];
-	char buf[TMPBUFSIZ];
-	char *enabled;
-	char *status;
-	float gt, gv;
-	int ga, gf, gp, gc, gm, pt;
-
-	if (gpu >= 0 && gpu < nDevs) {
-		struct cgpu_info *cgpu = &gpus[gpu];
-
-		cgpu->utility = cgpu->accepted / ( total_secs ? total_secs : 1 ) * 60;
-
-#ifdef HAVE_ADL
-		if (!gpu_stats(gpu, &gt, &gc, &gm, &gv, &ga, &gf, &gp, &pt))
-#endif
-			gt = gv = gm = gc = ga = gf = gp = pt = 0;
-
-		if (cgpu->deven != DEV_DISABLED)
-			enabled = (char *)YES;
-		else
-			enabled = (char *)NO;
-
-		status = (char *)status2str(cgpu->status);
-
-		if (cgpu->dynamic)
-			strcpy(intensity, DYNAMIC);
-		else
-			sprintf(intensity, "%d", cgpu->intensity);
-
-		root = api_add_int(root, "GPU", &gpu, false);
-		root = api_add_string(root, "Enabled", enabled, false);
-		root = api_add_string(root, "Status", status, false);
-		root = api_add_temp(root, "Temperature", &gt, false);
-		root = api_add_int(root, "Fan Speed", &gf, false);
-		root = api_add_int(root, "Fan Percent", &gp, false);
-		root = api_add_int(root, "GPU Clock", &gc, false);
-		root = api_add_int(root, "Memory Clock", &gm, false);
-		root = api_add_volts(root, "GPU Voltage", &gv, false);
-		root = api_add_int(root, "GPU Activity", &ga, false);
-		root = api_add_int(root, "Powertune", &pt, false);
-		double mhs = cgpu->total_mhashes / total_secs;
-		root = api_add_mhs(root, "MHS av", &mhs, false);
-		char mhsname[27];
-		sprintf(mhsname, "MHS %ds", opt_log_interval);
-		root = api_add_mhs(root, mhsname, &(cgpu->rolling), false);
-		root = api_add_int(root, "Accepted", &(cgpu->accepted), false);
-		root = api_add_int(root, "Rejected", &(cgpu->rejected), false);
-		root = api_add_int(root, "Hardware Errors", &(cgpu->hw_errors), false);
-		root = api_add_utility(root, "Utility", &(cgpu->utility), false);
-		root = api_add_string(root, "Intensity", intensity, false);
-		int last_share_pool = cgpu->last_share_pool_time > 0 ?
-					cgpu->last_share_pool : -1;
-		root = api_add_int(root, "Last Share Pool", &last_share_pool, false);
-		root = api_add_time(root, "Last Share Time", &(cgpu->last_share_pool_time), false);
-		root = api_add_mhtotal(root, "Total MH", &(cgpu->total_mhashes), false);
-		root = api_add_int(root, "Diff1 Work", &(cgpu->diff1), false);
-		root = api_add_diff(root, "Difficulty Accepted", &(cgpu->diff_accepted), false);
-		root = api_add_diff(root, "Difficulty Rejected", &(cgpu->diff_rejected), false);
-		root = api_add_diff(root, "Last Share Difficulty", &(cgpu->last_share_diff), false);
-		root = api_add_time(root, "Last Valid Work", &(cgpu->last_device_valid_work), false);
-		double hwp = (cgpu->hw_errors + cgpu->diff1) ?
-				(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
-		root = api_add_percent(root, "Device Hardware%", &hwp, false);
-		double rejp = cgpu->diff1 ?
-				(double)(cgpu->diff_rejected) / (double)(cgpu->diff1) : 0;
-		root = api_add_percent(root, "Device Rejected%", &rejp, false);
-		root = api_add_elapsed(root, "Device Elapsed", &(total_secs), true); // GPUs don't hotplug
-
-		root = print_data(root, buf, isjson, precom);
-		io_add(io_data, buf);
-	}
-}
-#endif
 
 #ifdef HAVE_AN_ASIC
 static void ascstatus(struct io_data *io_data, int asc, bool isjson, bool precom)
@@ -2220,10 +2062,6 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	int numpga = 0;
 	int i;
 
-#ifdef HAVE_OPENCL
-	numgpu = nDevs;
-#endif
-
 #ifdef HAVE_AN_ASIC
 	numasc = numascs();
 #endif
@@ -2242,13 +2080,6 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	if (isjson)
 		io_open = io_add(io_data, COMSTR JSON_DEVS);
 
-#ifdef HAVE_OPENCL
-	for (i = 0; i < nDevs; i++) {
-		gpustatus(io_data, i, isjson, isjson && devcount > 0);
-
-		devcount++;
-	}
-#endif
 #ifdef HAVE_AN_ASIC
 	if (numasc > 0) {
 		for (i = 0; i < numasc; i++) {
@@ -2272,40 +2103,6 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	if (isjson && io_open)
 		io_close(io_data);
 }
-
-#ifdef HAVE_OPENCL
-static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	bool io_open = false;
-	int id;
-
-	if (nDevs == 0) {
-		message(io_data, MSG_GPUNON, 0, NULL, isjson);
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= nDevs) {
-		message(io_data, MSG_INVGPU, id, NULL, isjson);
-		return;
-	}
-
-	message(io_data, MSG_GPUDEV, id, NULL, isjson);
-
-	if (isjson)
-		io_open = io_add(io_data, COMSTR JSON_GPU);
-
-	gpustatus(io_data, id, isjson, false);
-
-	if (isjson && io_open)
-		io_close(io_data);
-}
-#endif
 
 #ifdef HAVE_AN_FPGA
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -2652,124 +2449,12 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 		io_close(io_data);
 }
 
-#ifdef HAVE_OPENCL
-static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	struct thr_info *thr;
-	int gpu;
-	int id;
-	int i;
-
-	if (gpu_threads == 0) {
-		message(io_data, MSG_GPUNON, 0, NULL, isjson);
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= nDevs) {
-		message(io_data, MSG_INVGPU, id, NULL, isjson);
-		return;
-	}
-
-	applog(LOG_DEBUG, "API: request to gpuenable gpuid %d %s%u",
-			id, gpus[id].drv->name, gpus[id].device_id);
-
-	if (gpus[id].deven != DEV_DISABLED) {
-		message(io_data, MSG_ALRENA, id, NULL, isjson);
-		return;
-	}
-
-	for (i = 0; i < gpu_threads; i++) {
-		thr = get_thread(i);
-		gpu = thr->cgpu->device_id;
-		if (gpu == id) {
-			if (thr->cgpu->status != LIFE_WELL) {
-				message(io_data, MSG_GPUMRE, id, NULL, isjson);
-				return;
-			}
-			gpus[id].deven = DEV_ENABLED;
-			applog(LOG_DEBUG, "API Pushing sem post to thread %d", thr->id);
-			cgsem_post(&thr->sem);
-		}
-	}
-
-	message(io_data, MSG_GPUREN, id, NULL, isjson);
-}
-
-static void gpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	int id;
-
-	if (nDevs == 0) {
-		message(io_data, MSG_GPUNON, 0, NULL, isjson);
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= nDevs) {
-		message(io_data, MSG_INVGPU, id, NULL, isjson);
-		return;
-	}
-
-	applog(LOG_DEBUG, "API: request to gpudisable gpuid %d %s%u",
-			id, gpus[id].drv->name, gpus[id].device_id);
-
-	if (gpus[id].deven == DEV_DISABLED) {
-		message(io_data, MSG_ALRDIS, id, NULL, isjson);
-		return;
-	}
-
-	gpus[id].deven = DEV_DISABLED;
-
-	message(io_data, MSG_GPUDIS, id, NULL, isjson);
-}
-
-static void gpurestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	int id;
-
-	if (nDevs == 0) {
-		message(io_data, MSG_GPUNON, 0, NULL, isjson);
-		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= nDevs) {
-		message(io_data, MSG_INVGPU, id, NULL, isjson);
-		return;
-	}
-
-	reinit_device(&gpus[id]);
-
-	message(io_data, MSG_GPUREI, id, NULL, isjson);
-}
-#endif
-
 static void gpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	bool io_open;
 	int numgpu = 0;
-
-#ifdef HAVE_OPENCL
-	numgpu = nDevs;
-#endif
 
 	message(io_data, MSG_NUMGPU, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_GPUS : _GPUS COMSTR);
@@ -3153,156 +2838,6 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	rpc_url = NULL;
 }
 
-#ifdef HAVE_OPENCL
-static bool splitgpuvalue(struct io_data *io_data, char *param, int *gpu, char **value, bool isjson)
-{
-	int id;
-	char *gpusep;
-
-	if (nDevs == 0) {
-		message(io_data, MSG_GPUNON, 0, NULL, isjson);
-		return false;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return false;
-	}
-
-	gpusep = strchr(param, GPUSEP);
-	if (gpusep == NULL) {
-		message(io_data, MSG_MISVAL, 0, NULL, isjson);
-		return false;
-	}
-
-	*(gpusep++) = '\0';
-
-	id = atoi(param);
-	if (id < 0 || id >= nDevs) {
-		message(io_data, MSG_INVGPU, id, NULL, isjson);
-		return false;
-	}
-
-	*gpu = id;
-	*value = gpusep;
-
-	return true;
-}
-
-static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
-{
-	int id;
-	char *value;
-	int intensity;
-	char intensitystr[7];
-
-	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
-		return;
-
-	if (!strncasecmp(value, DYNAMIC, 1)) {
-		gpus[id].dynamic = true;
-		strcpy(intensitystr, DYNAMIC);
-	}
-	else {
-		intensity = atoi(value);
-		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-			message(io_data, MSG_INVINT, 0, value, isjson);
-			return;
-		}
-
-		gpus[id].dynamic = false;
-		gpus[id].intensity = intensity;
-		sprintf(intensitystr, "%d", intensity);
-	}
-
-	message(io_data, MSG_GPUINT, id, intensitystr, isjson);
-}
-
-static void gpumem(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-#ifdef HAVE_ADL
-	int id;
-	char *value;
-	int clock;
-
-	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
-		return;
-
-	clock = atoi(value);
-
-	if (set_memoryclock(id, clock))
-		message(io_data, MSG_GPUMERR, id, value, isjson);
-	else
-		message(io_data, MSG_GPUMEM, id, value, isjson);
-#else
-	message(io_data, MSG_NOADL, 0, NULL, isjson);
-#endif
-}
-
-static void gpuengine(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-#ifdef HAVE_ADL
-	int id;
-	char *value;
-	int clock;
-
-	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
-		return;
-
-	clock = atoi(value);
-
-	if (set_engineclock(id, clock))
-		message(io_data, MSG_GPUEERR, id, value, isjson);
-	else
-		message(io_data, MSG_GPUENG, id, value, isjson);
-#else
-	message(io_data, MSG_NOADL, 0, NULL, isjson);
-#endif
-}
-
-static void gpufan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-#ifdef HAVE_ADL
-	int id;
-	char *value;
-	int fan;
-
-	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
-		return;
-
-	fan = atoi(value);
-
-	if (set_fanspeed(id, fan))
-		message(io_data, MSG_GPUFERR, id, value, isjson);
-	else
-		message(io_data, MSG_GPUFAN, id, value, isjson);
-#else
-	message(io_data, MSG_NOADL, 0, NULL, isjson);
-#endif
-}
-
-static void gpuvddc(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-#ifdef HAVE_ADL
-	int id;
-	char *value;
-	float vddc;
-
-	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
-		return;
-
-	vddc = atof(value);
-
-	if (set_vddc(id, vddc))
-		message(io_data, MSG_GPUVERR, id, value, isjson);
-	else
-		message(io_data, MSG_GPUVDDC, id, value, isjson);
-#else
-	message(io_data, MSG_NOADL, 0, NULL, isjson);
-#endif
-}
-#endif
-
 void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	if (isjson)
@@ -3661,12 +3196,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECOIN : _MINECOIN COMSTR);
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-	else
-#endif
-		root = api_add_const(root, "Hash Method", SHA256STR, false);
+	root = api_add_const(root, "Hash Method", SHA256STR, false);
 
 	cg_rlock(&ch_lock);
 	root = api_add_timeval(root, "Current Block Time", &block_timeval, true);
@@ -4254,12 +3784,6 @@ struct CMDS {
 	{ "devs",		devstatus,	false },
 	{ "pools",		poolstatus,	false },
 	{ "summary",		summary,	false },
-#ifdef HAVE_OPENCL
-	{ "gpuenable",		gpuenable,	true },
-	{ "gpudisable",		gpudisable,	true },
-	{ "gpurestart",		gpurestart,	true },
-	{ "gpu",		gpudev,		false },
-#endif
 #ifdef HAVE_AN_FPGA
 	{ "pga",		pgadev,		false },
 	{ "pgaenable",		pgaenable,	true },
@@ -4275,13 +3799,6 @@ struct CMDS {
 	{ "enablepool",		enablepool,	true },
 	{ "disablepool",	disablepool,	true },
 	{ "removepool",		removepool,	true },
-#ifdef HAVE_OPENCL
-	{ "gpuintensity",	gpuintensity,	true },
-	{ "gpumem",		gpumem,		true },
-	{ "gpuengine",		gpuengine,	true },
-	{ "gpufan",		gpufan,		true },
-	{ "gpuvddc",		gpuvddc,	true },
-#endif
 	{ "save",		dosave,		true },
 	{ "quit",		doquit,		true },
 	{ "privileged",		privileged,	true },
