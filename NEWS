@@ -1,3 +1,9 @@
+Version 3.8.1 - 11th November 2013
+
+- Revert "Send a zero length packet at the end of every usb transfer on windows
+in case libusb internally has batched them into one maxpacket sized."
+
+
 Version 3.8.0 - 10th November 2013
 
 - api update version to 2.0 and remove GPU form API-README
