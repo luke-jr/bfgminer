@@ -236,7 +236,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	for (dev = 0; dev <= slaves; dev++) {
 		char *reply = SendCmdGetReply(klncgpu, 'S', dev, 0, NULL);
 		if (reply != NULL)
-			klninfo->status[dev] = *(WORKSTATUS *)(reply+2);
+			memcpy((void *)(&(klninfo->status[dev])), reply+2, sizeof(klninfo->status[dev]));
 	}
 	wr_unlock(&(klninfo->stat_lock));
 	
