@@ -65,11 +65,11 @@ response, otherwise it replies with text formatted as described further below.
 The JSON request format required is '{"command":"CMD","parameter":"PARAM"}'
 (though of course parameter is not required for all requests)
 where "CMD" is from the "Request" column below and "PARAM" would be e.g.
-the ASC/GPU number if required.
+the ASC/PGA number if required.
 
-An example request in both formats to set GPU 0 fan to 80%:
-  gpufan|0,80
-  {"command":"gpufan","parameter":"0,80"}
+An example request in both formats to disable Hotplug:
+  hotplug|0
+  {"command":"hotplug","parameter":"0"}
 
 The format of each reply (unless stated otherwise) is a STATUS section
 followed by an optional detail section
@@ -119,15 +119,12 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               API=API| version
 
  config        CONFIG         Some miner configuration information:
-                              GPU Count=N, <- the number of GPUs
                               ASC Count=N, <- the number of ASCs
                               PGA Count=N, <- the number of PGAs
                               Pool Count=N, <- the number of Pools
-                              ADL=X, <- Y or N if ADL is compiled in the code
-                              ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
                               Log Interval=N, <- log interval (--log N)
-                              Device Code=GPU ICA , <- spaced list of compiled
+                              Device Code=ICA , <- spaced list of compiled
                                                        device drivers
                               OS=Linux/Apple/..., <- operating System
                               Failover-Only=true/false, <- failover-only setting
@@ -141,8 +138,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
  pools         POOLS          The status of each pool e.g.
                               Pool=0,URL=http://pool.com:6311,Status=Alive,...|
 
- devs          DEVS           Each available GPU, PGA and ASC with their details
-                              e.g. GPU=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
+ devs          DEVS           Each available PGA and ASC with their details
+                              e.g. ASC=0,Accepted=NN,MHS av=NNN,...,Intensity=D|
                               Last Share Time=NNN, <- standand long time in sec
                                (or 0 if none) of last accepted share
                               Last Share Pool=N, <- pool number (or -1 if none)
@@ -151,16 +148,11 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Will not report PGAs if PGA mining is disabled
                               Will not report ASCs if ASC mining is disabled
 
- gpu|N         GPU            The details of a single GPU number N in the same
-                              format and details as for DEVS
-
  pga|N         PGA            The details of a single PGA number N in the same
                               format and details as for DEVS
                               This is only available if PGA mining is enabled
                               Use 'pgacount' or 'config' first to see if there
                               are any
-
- gpucount      GPUS           Count=N| <- the number of GPUs
 
  pgacount      PGAS           Count=N| <- the number of PGAs
                               Always returns 0 if PGA mining is disabled
@@ -203,42 +195,6 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               The Msg includes the pool URL
                               N.B. all details for the pool will be lost
 
- gpuenable|N (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of the enable request
-
- gpudisable|N (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of the disable request
-
- gpurestart|N (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of the restart request
-
- gpuintensity|N,I (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N intensity
-                              to I
-
- gpumem|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N memoryclock
-                              to V MHz
-
- gpuengine|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N clock
-                              to V MHz
-
- gpufan|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N fan speed
-                              to V%
-
- gpuvddc|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N vddc to V
-
  save|filename (*)
                none           There is no reply section just the STATUS section
                               stating success or failure saving the cgminer
@@ -253,7 +209,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               problem
                               This lists all devices including those not
                               supported by the 'devs' command e.g.
-                              NOTIFY=0,Name=GPU,ID=0,Last Well=1332432290,...|
+                              NOTIFY=0,Name=ASC,ID=0,Last Well=1332432290,...|
 
  privileged (*)
                none           There is no reply section just the STATUS section
@@ -295,7 +251,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
  devdetails    DEVDETAILS     Each device with a list of their static details
                               This lists all devices including those not
                               supported by the 'devs' command
-                              e.g. DEVDETAILS=0,Name=GPU,ID=0,Driver=opencl,...|
+                              e.g. DEVDETAILS=0,Name=ASC,ID=0,Driver=yuu,...|
 
  restart (*)   none           There is no status section but just a single
                               "RESTART" reply before cgminer restarts
@@ -443,7 +399,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               into cgminer
                               The API writes all the lock stats to stderr
 
-When you enable, disable or restart a GPU, PGA or ASC, you will also get
+When you enable, disable or restart a PGA or ASC, you will also get
 Thread messages in the cgminer status window
 
 The 'poolpriority' command can be used to reset the priority order of multiple
@@ -496,6 +452,12 @@ miner.php - an example web page to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V2.0 (cgminer v3.8.0)
+
+Removed all GPU related commands and information from the replies
+
+---------
 
 API V1.32 (cgminer v3.6.5)
 
