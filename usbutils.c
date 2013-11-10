@@ -2442,7 +2442,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 
 	if (length > usb_epinfo->wMaxPacketSize)
 		length = usb_epinfo->wMaxPacketSize;
-	else
+	else if (length == usb_epinfo->wMaxPacketSize)
 		eot = true;
 
 	/* Avoid any async transfers during shutdown to allow the polling
@@ -2456,9 +2456,7 @@ usb_bulk_transfer(struct libusb_device_handle *dev_handle, int intinfo,
 		memcpy(buf, data, length);
 		/* If this is the last packet in a transfer and is the length
 		 * of the wMaxPacketSize then we need to send a zero length
-		 * packet to let the device know it's the end of the message.
-		 * Since libusb may batch transfers together, we send a zlp at
-		 * the end of every transfer on windows just in case. */
+		 * packet to let the device know it's the end of the message.*/
 		if (eot)
 			zlp = true;
 #ifndef WIN32
