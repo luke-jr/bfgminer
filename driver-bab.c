@@ -2,12 +2,8 @@
  * Copyright 2013 Andrew Smith
  * Copyright 2013 bitfury
  *
- * Details for BitFury GPIO development of this driver are from
- * the chainminer code: https://github.com/bfsb/chainminer
- * (coz there seems to be no good documentation of it anywhere ...)
- * Thanks to the developer of chainminer for providing the source
- * to base the first version of the gpio/spi code in this BitFury chip
- * driver :)
+ * BitFury GPIO code based on chainminer code:
+ *	https://github.com/bfsb/chainminer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,8 +17,7 @@
 #include "sha2.h"
 
 /*
- * This code has been tested on RPi running Raspbian
- * with a BlackArrow BitFury V1 16 chip GPIO board
+ * Tested on RPi running Raspbian with BlackArrow BitFury V1 16 chip GPIO board
  */
 
 #ifndef LINUX
@@ -128,12 +123,14 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
 //maximum number of chips on alternative bank
 // #define BANKCHIPS 64
 
-//maximum chip speed available for auto tuner
-//speed/nrate/hrate/watt
-//   53/   97/  100/  84
-//   54/   98/  107/  88
-//   55/   99/  115/  93
-//   56/  101/  125/  99
+/*
+ * maximum chip speed available for auto tuner
+ * speed/nrate/hrate/watt
+ *    53/   97/  100/  84
+ *    54/   98/  107/  88
+ *    55/   99/  115/  93
+ *    56/  101/  125/  99
+ */
 #define BAB_MAXSPEED 57
 #define BAB_DEFSPEED 54
 #define BAB_MINSPEED 52
@@ -198,13 +195,15 @@ static const uint32_t bab_test_data[BAB_TEST_DATA] = {
 #define BAB_OSC_ADDR 0x6000
 #define BAB_REG_ADDR 0x7000
 
-// valid: 0x01 0x03 0x07 0x0F 0x1F 0x3F 0x7F 0xFF
-//max { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00 }
-//max { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00 }
-//avg { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x00 }
-//slo { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00 }
-//min { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-// good: 0x1F (97) 0x3F (104) 0x7F (109) 0xFF (104)
+/*
+ * valid: 0x01 0x03 0x07 0x0F 0x1F 0x3F 0x7F 0xFF
+ * max { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00 }
+ * max { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00 }
+ * avg { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x00 }
+ * slo { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F, 0x00 }
+ * min { 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+ * good: 0x1F (97) 0x3F (104) 0x7F (109) 0xFF (104)
+ */
 
 #define BAB_OSC 8
 static const uint8_t bab_osc_bits[BAB_OSC] =
@@ -1410,7 +1409,6 @@ static bool oknonce(struct thr_info *thr, struct cgpu_info *babcgpu, int chip, u
 
 	nonce = decnonce(nonce);
 
-
 	/*
 	 * We can grab the head of the chip work queue and then
 	 * release the lock and follow it to the end
@@ -1671,7 +1669,7 @@ static void bab_shutdown(struct thr_info *thr)
 			  babcgpu->drv->name, babcgpu->device_id);
 
 	for (i = 0; i < babinfo->chips; i++)
-//		bab_shutdown(babcgpu, babinfo, i);
+// TODO:	bab_shutdown(babcgpu, babinfo, i);
 		;
 
 	babcgpu->shutdown = true;
