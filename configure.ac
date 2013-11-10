@@ -137,16 +137,16 @@ if test "x$avalon" = xyes; then
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
-knc="no"
+bab="no"
 
-AC_ARG_ENABLE([knc],
-	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
-	[knc=$enableval]
+AC_ARG_ENABLE([bab],
+	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[bab=$enableval]
 	)
-if test "x$knc" = xyes; then
-	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+if test "x$bab" = xyes; then
+	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
 fi
-AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
+AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
 
 bflsc="no"
 
@@ -192,17 +192,6 @@ if test "x$hashfast" = xyes; then
 fi
 AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
 
-bab="no"
-
-AC_ARG_ENABLE([bab],
-	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
-	[bab=$enableval]
-	)
-if test "x$bab" = xyes; then
-	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
-fi
-AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
-
 icarus="no"
 
 AC_ARG_ENABLE([icarus],
@@ -224,6 +213,17 @@ if test "x$klondike" = xyes; then
 	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
 fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+
+knc="no"
+
+AC_ARG_ENABLE([knc],
+	[AC_HELP_STRING([--enable-knc],[Compile support for KnC miners (default disabled)])],
+	[knc=$enableval]
+	)
+if test "x$knc" = xyes; then
+	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC miner support is wanted])
+fi
+AM_CONDITIONAL([HAS_KNC], [test x$knc = xyes])
 
 modminer="no"
 
@@ -447,16 +447,16 @@ else
 	echo "  Avalon.ASICs.........: Disabled"
 fi
 
+if test "x$bab" = xyes; then
+	echo "  BlackArrow.ASICs.....: Enabled"
+else
+	echo "  BlackArrow.ASICs.....: Disabled"
+fi
+
 if test "x$bflsc" = xyes; then
 	echo "  BFL.ASICs............: Enabled"
 else
 	echo "  BFL.ASICs............: Disabled"
-fi
-
-if test "x$knc" = xyes; then
-	echo "  KnC.ASICs............: Enabled"
-else
-	echo "  KnC.ASICs............: Disabled"
 fi
 
 if test "x$bitforce" = xyes; then
@@ -477,12 +477,6 @@ else
 	echo "  Hashfast.ASICs.......: Disabled"
 fi
 
-if test "x$bab" = xyes; then
-	echo "  BlackArrow.ASICs.....: Enabled"
-else
-	echo "  BlackArrow.ASICs.....: Disabled"
-fi
-
 if test "x$icarus" = xyes; then
 	echo "  Icarus.ASICs/FPGAs...: Enabled"
 else
@@ -495,10 +489,20 @@ else
 	echo "  Klondike.ASICs.......: Disabled"
 fi
 
+if test "x$knc" = xyes; then
+	echo "  KnC.ASICs............: Enabled"
+else
+	echo "  KnC.ASICs............: Disabled"
+fi
+
 if test "x$modminer" = xyes; then
 	echo "  ModMiner.FPGAs.......: Enabled"
 else
 	echo "  ModMiner.FPGAs.......: Disabled"
+fi
+
+if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer" = xnononononononononono; then
+	AC_MSG_ERROR([No mining configured in])
 fi
 
 echo
