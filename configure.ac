@@ -287,6 +287,17 @@ if test "x$hashfast" = xyes; then
 fi
 AM_CONDITIONAL([HAS_HASHFAST], [test x$hashfast = xyes])
 
+bab="no"
+
+AC_ARG_ENABLE([bab],
+	[AC_HELP_STRING([--enable-bab],[Compile support for BlackArrow Bitfury (default disabled)])],
+	[bab=$enableval]
+	)
+if test "x$bab" = xyes; then
+	AC_DEFINE([USE_BAB], [1], [Defined to 1 if BlackArrow Bitfury support is wanted])
+fi
+AM_CONDITIONAL([HAS_BAB], [test x$bab = xyes])
+
 icarus="no"
 
 AC_ARG_ENABLE([icarus],
@@ -537,14 +548,14 @@ if test "x$opencl" != xno; then
 
 	else
 		echo "  OpenCL...............: NOT FOUND. GPU mining support DISABLED"
-		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc" = xnonononononononono; then
+		if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc$bab" = xnononononononononono; then
 			AC_MSG_ERROR([No mining configured in])
 		fi
 		echo "  scrypt...............: Disabled (needs OpenCL)"
 	fi
 else
 	echo "  OpenCL...............: Detection overrided. GPU mining support DISABLED"
-	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc" = xnonononononononono; then
+	if test "x$avalon$bitforce$bitfury$icarus$modminer$bflsc$hashfast$klondike$knc$bab" = xnononononononononono; then
 		AC_MSG_ERROR([No mining configured in])
 	fi
 	echo "  scrypt...............: Disabled (needs OpenCL)"
@@ -595,6 +606,12 @@ if test "x$hashfast" = xyes; then
 	echo "  Hashfast.ASICs.......: Enabled"
 else
 	echo "  Hashfast.ASICs.......: Disabled"
+fi
+
+if test "x$bab" = xyes; then
+	echo "  BlackArrow.ASICs.....: Enabled"
+else
+	echo "  BlackArrow.ASICs.....: Disabled"
 fi
 
 if test "x$icarus" = xyes; then
