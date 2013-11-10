@@ -182,7 +182,17 @@ void usb_uninit(struct cgpu_info * const klncgpu)
 
 static double cvtKlnToC(uint8_t temp)
 {
-	return (double)1/((double)1/(25+273.15) + log((double)temp*1000/(256-temp)/2200)/3987) - 273.15;
+	double Rt, stein, celsius;
+
+	Rt = 1000.0 * 255.0 / (double)temp - 1000.0;
+
+	stein = log(Rt / 2200.0) / 3987.0;
+
+	stein += 1.0 / (double)(25.0 + 273.15);
+
+	celsius = (1.0 / stein) - 273.15;
+
+	return celsius;
 }
 
 static int cvtCToKln(double deg)
