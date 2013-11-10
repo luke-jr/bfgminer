@@ -31,15 +31,6 @@ SEE ALSO API-README, ASIC-README and FGPA-README FOR MORE INFORMATION ON EACH.
 
 EXECUTIVE SUMMARY ON USAGE:
 
-After saving configuration from the menu, you do not need to give cgminer any
-arguments and it will load your configuration.
-
-Any configuration file may also contain a single
-	"include" : "filename"
-to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
-
-
 Single pool:
 
 cgminer -o http://pool:port -u username -p password
@@ -48,11 +39,11 @@ Multiple pools:
 
 cgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
 
-Single pool with a standard http proxy, regular desktop:
+Single pool with a standard http proxy:
 
 cgminer -o "http:proxy:port|http://pool:port" -u username -p password
 
-Single pool with a socks5 proxy, regular desktop:
+Single pool with a socks5 proxy:
 
 cgminer -o "socks5:proxy:port|http://pool:port" -u username -p password
 
@@ -74,17 +65,28 @@ not be available. All are available since CURL version 7.19.4
 If you specify the --socks-proxy option to cgminer, it will only be applied to all pools
 that don't specify their own proxy setting like above
 
+
+After saving configuration from the menu, you do not need to give cgminer any
+arguments and it will load your configuration.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
+
+
 ---
 BUILDING CGMINER FOR YOURSELF
 
 DEPENDENCIES:
 Mandatory:
-	curl dev library 	http://curl.haxx.se/libcurl/
-	(libcurl4-openssl-dev)
-
 	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
 	libtool			http://www.gnu.org/software/libtool/
 Optional:
+	curl dev library 	http://curl.haxx.se/libcurl/
+	(libcurl4-openssl-dev - Must tell configure --disable-libcurl otherwise
+	it will attempt to compile it in)
+
 	curses dev library
 	(libncurses5-dev or libpdcurses on WIN32 for text user interface)
 
@@ -132,7 +134,8 @@ Native WIN32 build instructions: see windows-build.txt
 
 Usage instructions:  Run "cgminer --help" to see options:
 
-Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
+Usage: cgminer [-DdElmpPQqUsTouOchnV]
+
 Options for both config file and command line:
 --api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
@@ -608,7 +611,7 @@ Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
 A: Cgminer checks for conditions where the primary pool is lagging and will
 pass some work to the backup servers under those conditions. The reason for
-doing this is to try its absolute best to keep the GPUs working on something
+doing this is to try its absolute best to keep the devices working on something
 useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
 
@@ -629,8 +632,7 @@ any further.
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
-defined settings lead to worse performance. The ONLY thing most users should
-need to set is the Intensity for GPUs.
+defined settings lead to worse performance.
 
 Q: What happened to CPU and GPU mining?
 A: Their efficiency makes them irrelevant in the bitcoin mining world today
@@ -650,13 +652,13 @@ A: Win32 builds work everywhere and there is precisely zero advantage to a
 64 bit build on windows.
 
 Q: Is it faster to mine on windows or linux?
-A: It makes no difference. It comes down to choice of operating system for
-their various features. Linux offers much better long term stability and
-remote monitoring and security, while windows offers you overclocking tools
-that can achieve much more than cgminer can do on linux.
+A: It makes no difference in terms of performance. It comes down to choice of
+operating system for their various features and your comfort level. However
+linux is the primary development platform and is virtually guaranteed to be
+more stable.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option.
+A; Try the --net-delay option if you are on a getwork or GBT server.
 
 Q: How do I tune for p2pool?
 A: It is also recommended to use --failover-only since the work is effectively
