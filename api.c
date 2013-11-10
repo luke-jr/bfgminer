@@ -131,7 +131,7 @@ static const char *COMMA = ",";
 static const char SEPARATOR = '|';
 #define SEPSTR "|"
 
-static const char *APIVERSION = "1.32";
+static const char *APIVERSION = "2.0";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
