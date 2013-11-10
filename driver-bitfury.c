@@ -224,13 +224,12 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *bitfury = thr->cgpu;
 	struct bitfury_info *info = bitfury->device_data;
+	int amount, i, aged = 0, total = 0, ms_diff;
 	struct work *work, *tmp;
-	int amount, i, aged = 0;
 	struct timeval tv_now;
 	double nonce_rate;
 	int64_t ret = 0;
 	char buf[45];
-	int ms_diff;
 
 	work = get_queue_work(thr, bitfury, thr->id);
 	if (unlikely(thr->work_restart)) {
@@ -248,27 +247,28 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	cgtime(&tv_now);
 	ms_diff = 600 - ms_tdiff(&tv_now, &info->tv_start);
 	if (ms_diff > 0) {
-		usb_read_timeout_cancellable(bitfury, info->buf, 512, &amount, ms_diff, C_BF1_GETRES);
-		info->tot += amount;
+		usb_read_timeout_cancellable(bitfury, info->buf, 512, &amount, ms_diff,
+					     C_BF1_GETRES);
+		total += amount;
 	}
-
-	if (unlikely(thr->work_restart))
-		goto out;
 
 	/* Now look for the bulk of the previous work results, they will come
 	 * in a batch following the first data. */
 	cgtime(&tv_now);
 	ms_diff = BF1WAIT - ms_tdiff(&tv_now, &info->tv_start);
-	if (unlikely(ms_diff < 10))
+	/* If a work restart was sent, just empty the buffer. */
+	if (unlikely(ms_diff < 10 || thr->work_restart))
 		ms_diff = 10;
-	usb_read_once_timeout_cancellable(bitfury, info->buf + info->tot, BF1MSGSIZE,
+	usb_read_once_timeout_cancellable(bitfury, info->buf + total, BF1MSGSIZE,
 					  &amount, ms_diff, C_BF1_GETRES);
-	info->tot += amount;
+	total += amount;
 	while (amount) {
-		usb_read_once_timeout(bitfury, info->buf + info->tot, 512, &amount, 10, C_BF1_GETRES);
-		info->tot += amount;
+		usb_read_once_timeout(bitfury, info->buf + total, 512, &amount, 10,
+				      C_BF1_GETRES);
+		total += amount;
 	};
 
+	/* Don't send whatever work we've stored if we got a restart */
 	if (unlikely(thr->work_restart))
 		goto out;
 
@@ -280,9 +280,10 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 	/* Get response acknowledging work */
 	usb_read(bitfury, buf, BF1MSGSIZE, &amount, C_BF1_GETWORK);
 
+out:
 	/* Search for what work the nonce matches in order of likelihood. Last
 	 * entry is end of result marker. */
-	for (i = 0; i < info->tot - BF1MSGSIZE; i += BF1MSGSIZE) {
+	for (i = 0; i < total - BF1MSGSIZE; i += BF1MSGSIZE) {
 		bool found = false;
 		uint32_t nonce;
 
@@ -304,8 +305,6 @@ static int64_t bitfury_scanwork(struct thr_info *thr)
 			inc_hw_errors(thr);
 	}
 
-	info->tot = 0;
-out:
 	cgtime(&tv_now);
 
 	/* This iterates over the hashlist finding work started more than 6
