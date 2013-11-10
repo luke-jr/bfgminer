@@ -6,10 +6,6 @@
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
- *
- * Note: the code always includes GPU support even if there are no GPUs
- *	this simplifies handling multiple other device code being included
- *	depending on compile options
  */
 #define _MEMORY_DEBUG_MASTER 1
 
@@ -134,7 +130,6 @@ static const char *COMMA = ",";
 #define COMSTR ","
 static const char SEPARATOR = '|';
 #define SEPSTR "|"
-static const char GPUSEP = ',';
 
 static const char *APIVERSION = "1.32";
 static const char *DEAD = "Dead";
@@ -215,7 +210,6 @@ static const char *OSINFO =
 #define _STATUS		"STATUS"
 #define _VERSION	"VERSION"
 #define _MINECONFIG	"CONFIG"
-#define _GPU		"GPU"
 
 #ifdef HAVE_AN_FPGA
 #define _PGA		"PGA"
@@ -225,7 +219,6 @@ static const char *OSINFO =
 #define _ASC		"ASC"
 #endif
 
-#define _GPUS		"GPUS"
 #define _PGAS		"PGAS"
 #define _ASCS		"ASCS"
 #define _NOTIFY		"NOTIFY"
@@ -256,7 +249,6 @@ static const char ISJSON = '{';
 #define JSON_STATUS	JSON1 _STATUS JSON2
 #define JSON_VERSION	JSON1 _VERSION JSON2
 #define JSON_MINECONFIG	JSON1 _MINECONFIG JSON2
-#define JSON_GPU	JSON1 _GPU JSON2
 
 #ifdef HAVE_AN_FPGA
 #define JSON_PGA	JSON1 _PGA JSON2
@@ -266,7 +258,6 @@ static const char ISJSON = '{';
 #define JSON_ASC	JSON1 _ASC JSON2
 #endif
 
-#define JSON_GPUS	JSON1 _GPUS JSON2
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_ASCS	JSON1 _ASCS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
@@ -286,24 +277,13 @@ static const char ISJSON = '{';
 static const char *JSON_COMMAND = "command";
 static const char *JSON_PARAMETER = "parameter";
 
-#define MSG_INVGPU 1
-#define MSG_ALRENA 2
-#define MSG_ALRDIS 3
-#define MSG_GPUMRE 4
-#define MSG_GPUREN 5
-#define MSG_GPUNON 6
 #define MSG_POOL 7
 #define MSG_NOPOOL 8
 #define MSG_DEVS 9
 #define MSG_NODEVS 10
 #define MSG_SUMM 11
-#define MSG_GPUDIS 12
-#define MSG_GPUREI 13
 #define MSG_INVCMD 14
 #define MSG_MISID 15
-#define MSG_GPUDEV 17
-
-#define MSG_NUMGPU 20
 
 #define MSG_VERSION 22
 #define MSG_INVJSON 23
@@ -313,18 +293,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_SWITCHP 27
 #define MSG_MISVAL 28
 #define MSG_NOADL 29
-#define MSG_NOGPUADL 30
 #define MSG_INVINT 31
-#define MSG_GPUINT 32
 #define MSG_MINECONFIG 33
-#define MSG_GPUMERR 34
-#define MSG_GPUMEM 35
-#define MSG_GPUEERR 36
-#define MSG_GPUENG 37
-#define MSG_GPUVERR 38
-#define MSG_GPUVDDC 39
-#define MSG_GPUFERR 40
-#define MSG_GPUFAN 41
 #define MSG_MISFN 42
 #define MSG_BADFN 43
 #define MSG_SAVED 44
@@ -437,11 +407,9 @@ enum code_severity {
 };
 
 enum code_parameters {
-	PARAM_GPU,
 	PARAM_PGA,
 	PARAM_ASC,
 	PARAM_PID,
-	PARAM_GPUMAX,
 	PARAM_PGAMAX,
 	PARAM_ASCMAX,
 	PARAM_PMAX,
@@ -466,30 +434,30 @@ struct CODES {
 	const enum code_parameters params;
 	const char *description;
 } codes[] = {
- { SEVERITY_ERR,   MSG_GPUNON,	PARAM_NONE,	"No GPUs" },
  { SEVERITY_SUCC,  MSG_POOL,	PARAM_PMAX,	"%d Pool(s)" },
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
 
  { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,
-#if defined(HAVE_AN_ASIC)
-						" - "
-#endif
 #ifdef HAVE_AN_ASIC
 						"%d ASC(s)"
 #endif
+#if defined(HAVE_AN_ASIC) && defined(HAVE_AN_FPGA)
 						" - "
+#endif
 #ifdef HAVE_AN_FPGA
 						"%d PGA(s)"
 #endif
-						" - "
  },
 
- { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
+ { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No "
 #ifdef HAVE_AN_ASIC
-						"/ASCs"
+						"ASCs"
+#endif
+#if defined(HAVE_AN_ASIC) && defined(HAVE_AN_FPGA)
+						"/"
 #endif
 #ifdef HAVE_AN_FPGA
-						"/PGAs"
+						"PGAs"
 #endif
  },
 
@@ -506,7 +474,6 @@ struct CODES {
  { SEVERITY_INFO,  MSG_PGADIS,	PARAM_PGA,	"PGA %d set disable flag" },
  { SEVERITY_ERR,   MSG_PGAUNW,	PARAM_PGA,	"PGA %d is not flagged WELL, cannot enable" },
 #endif
- { SEVERITY_SUCC,  MSG_NUMGPU,	PARAM_NONE,	"GPU count" },
  { SEVERITY_SUCC,  MSG_NUMPGA,	PARAM_NONE,	"PGA count" },
  { SEVERITY_SUCC,  MSG_NUMASC,	PARAM_NONE,	"ASC count" },
  { SEVERITY_SUCC,  MSG_VERSION,	PARAM_NONE,	"CGMiner versions" },
@@ -1319,7 +1286,6 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 			severity[1] = '\0';
 
 			switch(codes[i].params) {
-				case PARAM_GPU:
 				case PARAM_PGA:
 				case PARAM_ASC:
 				case PARAM_PID:
@@ -2057,7 +2023,6 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 {
 	bool io_open = false;
 	int devcount = 0;
-	int numgpu = 0;
 	int numasc = 0;
 	int numpga = 0;
 	int i;
@@ -2070,7 +2035,7 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	numpga = numpgas();
 #endif
 
-	if (numgpu == 0 && numpga == 0 && numasc == 0) {
+	if (numpga == 0 && numasc == 0) {
 		message(io_data, MSG_NODEVS, 0, NULL, isjson);
 		return;
 	}
@@ -2442,24 +2407,6 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_percent(root, "Pool Stale%", &stalep, false);
 
 	mutex_unlock(&hash_lock);
-
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
-	if (isjson && io_open)
-		io_close(io_data);
-}
-
-static void gpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
-{
-	struct api_data *root = NULL;
-	char buf[TMPBUFSIZ];
-	bool io_open;
-	int numgpu = 0;
-
-	message(io_data, MSG_NUMGPU, 0, NULL, isjson);
-	io_open = io_add(io_data, isjson ? COMSTR JSON_GPUS : _GPUS COMSTR);
-
-	root = api_add_int(root, "Count", &numgpu, false);
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
@@ -3790,7 +3737,6 @@ struct CMDS {
 	{ "pgadisable",		pgadisable,	true },
 	{ "pgaidentify",	pgaidentify,	true },
 #endif
-	{ "gpucount",		gpucount,	false },
 	{ "pgacount",		pgacount,	false },
 	{ "switchpool",		switchpool,	true },
 	{ "addpool",		addpool,	true },
