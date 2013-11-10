@@ -619,10 +619,11 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 			newhashdev += klninfo->status[dev].hashcount - klninfo->devinfo[dev].lasthashcount;
 			klninfo->devinfo[dev].lasthashcount = klninfo->status[dev].hashcount;
 			klninfo->hashcount += (newhashdev << 32) / klninfo->status[dev].maxcount;
-			newhashcount += 0xffffffffull * (uint64_t)klninfo->noncecount;
 			
 			// todo: check stats for critical conditions
 		}
+		newhashcount += 0xffffffffull * (uint64_t)klninfo->noncecount;
+		klninfo->noncecount = 0;
 		rd_unlock(&(klninfo->stat_lock));
 	}
 	return newhashcount;
