@@ -1,3 +1,57 @@
+Version 3.8.0 - 10th November 2013
+
+- api update version to 2.0 and remove GPU form API-README
+-Remove now unused scrypt files.
+- api.c remove all GPU/gpu references and correct code as required
+- Rudimentary removal of GPU OpenCL and Scrypt features from api.c
+- Reorder configure alphabetically for devices to compile and fail if no support
+is selected to be compiled in.
+- BaB update/format some comments
+- BlackArrowBitfury early GPIO V1 driver
+- Fine tune the reading of results in bitfury driver to not lose any across work
+restarts or corrupt due to store results not parsed during restart.
+- Send a zero length packet at the end of every usb transfer on windows in case
+libusb internally has batched them into one maxpacket sized.
+- Framework for ntime rolling, keep looking for OP_USB_INIT replies when other
+packets received
+- Configure source for a new BaB driver
+- sha2 allow external access to some macros and the K array
+- Fixed a math issue when reporting fan speed on the status line.
+- Use the main hashlist to store work done in the bitfury driver and remove work
+from the list by time, thereby fixing the duplicates at startup. Count hardware
+errors for when no match occurs.
+- Add a get and queue helper work function.
+- Remove GPU mining code.
+- Use libusb's own zero length packet support unless we have to emulate it on
+windows since only libusb knows for sure if it's needed.
+- Unlock the avalon qlock while sending tasks to not hold the lock for an
+extended period.
+- Sleep in avalon send task on return to the function to allow other code to
+work during the sleep period.
+- Send zero length packets when terminating a usb write aligned to
+maxpacketsize.
+- Do the driver flush in avalon code lockless since it can lead to deadlocks.
+- Reset the work_restart bool after the scanwork loop in case the driver flushes
+work synchronously.
+- Only check for the stratum clean message if we have had a valid message.
+- Get rid of the stage thread since all work can be asynchronously added now via
+hash_push anyway.
+- Remove the now incorrect faq entry regarding scrypt difficulty.
+- Check for fatal read errors and break out of the read loop in avalon.
+- Send errors are basically fatal in avalon driver so break out of the send
+tasks loop.
+- Make the avalon driver return -1 for hash count when usb fails, allowing the
+main loop code to send it the shutdown flag.
+- Break out of the hash work loops when a failure is detected instead of
+dropping into mt disable.
+- Use usbutils' own ftdi parser for avalon and the ftdir's own latency for
+managing timeouts since we can wait on reads with completely asynchronous
+reads+writes.
+- Use usbutils' own cps function for slowing rate of usb writes on avalon.
+- Fix build for no libcurl
+- Check length before submitting sync transfers
+
+
 Version 3.7.2 - 5th November 2013
 
 - Clean up completely on avalon shutdown.
