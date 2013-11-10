@@ -782,9 +782,9 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 				klninfo->delay_min = us_diff;
 				klninfo->delay_max = us_diff;
 			} else {
-				if (klninfo->delay_min < us_diff)
+				if (klninfo->delay_min > us_diff)
 					klninfo->delay_min = us_diff;
-				if (klninfo->delay_max > us_diff)
+				if (klninfo->delay_max < us_diff)
 					klninfo->delay_max = us_diff;
 			}
 			klninfo->delay_count++;
@@ -795,9 +795,9 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 				klninfo->nonce_min = us_diff;
 				klninfo->nonce_max = us_diff;
 			} else {
-				if (klninfo->nonce_min < us_diff)
+				if (klninfo->nonce_min > us_diff)
 					klninfo->nonce_min = us_diff;
-				if (klninfo->nonce_max > us_diff)
+				if (klninfo->nonce_max < us_diff)
 					klninfo->nonce_max = us_diff;
 			}
 			klninfo->nonce_count++;
