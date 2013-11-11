@@ -4566,14 +4566,14 @@ const
 #endif
 char **initial_args;
 
-void _bfg_clean_up(void);
+void _bfg_clean_up(bool);
 
 void app_restart(void)
 {
 	applog(LOG_WARNING, "Attempting to restart %s", packagename);
 
 	__kill_work();
-	_bfg_clean_up();
+	_bfg_clean_up(true);
 
 #if defined(unix) || defined(__APPLE__)
 	if (forkpid > 0) {
@@ -9736,7 +9736,7 @@ void print_summary(void)
 	fflush(stdout);
 }
 
-void _bfg_clean_up(void)
+void _bfg_clean_up(bool restarting)
 {
 #ifdef HAVE_OPENCL
 	clear_adl(nDevs);
@@ -9750,11 +9750,15 @@ void _bfg_clean_up(void)
 #ifdef WIN32
 	timeEndPeriod(1);
 #endif
+	if (!restarting) {
+		/* Attempting to disable curses or print a summary during a
+		 * restart can lead to a deadlock. */
 #ifdef HAVE_CURSES
-	disable_curses();
+		disable_curses();
 #endif
-	if (!opt_realquiet && successful_connect)
-		print_summary();
+		if (!opt_realquiet && successful_connect)
+			print_summary();
+	}
 
 	if (opt_n_threads)
 		free(cpus);
