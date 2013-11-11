@@ -5603,6 +5603,7 @@ static void discard_work(struct work *work)
 	if (!work->clone && !work->rolls && !work->mined) {
 		if (work->pool) {
 			work->pool->discarded_work++;
+			work->pool->quota_used--;
 			work->pool->works--;
 		}
 		total_discarded++;
