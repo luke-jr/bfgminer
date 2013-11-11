@@ -3735,6 +3735,7 @@ void maybe_local_submit(const struct work *work)
 			if (likely(!(p && strstr(&p[1], "allblocks"))))
 				continue;
 			
+			applog(LOG_DEBUG, "Attempting submission of full block to pool %d", pools[i]->pool_no);
 			work_cp = copy_work(work);
 			work_cp->pool = pools[i];
 			work_cp->do_foreign_submit = true;
@@ -4800,6 +4801,7 @@ static bool clone_available(void)
 		if (can_roll(work) && should_roll(work)) {
 			roll_work(work);
 			work_clone = make_clone(work);
+			applog(LOG_DEBUG, "%s: Rolling work %d to %d", __func__, work->id, work_clone->id);
 			roll_work(work);
 			cloned = true;
 			break;
@@ -5916,7 +5918,8 @@ static void *stage_thread(void *userdata)
 
 		test_work_current(work);
 
-		applog(LOG_DEBUG, "Pushing work to getwork queue (queued=%c)", work->queued?'Y':'N');
+		applog(LOG_DEBUG, "Pushing work %d to getwork queue (queued=%c)",
+		       work->id, work->queued?'Y':'N');
 
 		if (unlikely(!hash_push(work))) {
 			applog(LOG_WARNING, "Failed to hash_push in stage_thread");
@@ -5930,7 +5933,8 @@ static void *stage_thread(void *userdata)
 
 static void stage_work(struct work *work)
 {
-	applog(LOG_DEBUG, "Pushing work from pool %d to hash queue", work->pool->pool_no);
+	applog(LOG_DEBUG, "Pushing work %d from pool %d to hash queue",
+	       work->id, work->pool->pool_no);
 	work->work_restart_id = work->pool->work_restart_id;
 	work->pool->last_work_time = time(NULL);
 	cgtime(&work->pool->tv_last_work_time);
@@ -8484,7 +8488,8 @@ struct work *get_work(struct thr_info *thr)
 			wake_gws();
 		}
 	}
-	applog(LOG_DEBUG, "%"PRIpreprv": Got work from get queue to get work for thread %d", cgpu->proc_repr, thr_id);
+	applog(LOG_DEBUG, "%"PRIpreprv": Got work %d from get queue to get work for thread %d",
+	       cgpu->proc_repr, work->id, thr_id);
 
 	work->thr_id = thr_id;
 	thread_reportin(thr);
