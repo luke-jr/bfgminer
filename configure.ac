@@ -1142,21 +1142,6 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([static int __attribute__((warn_unused_result)
 			  AC_DEFINE([HAVE_WARN_UNUSED_RESULT], [1],
                                     [Define if __attribute__((warn_unused_result))]))
 
-AC_MSG_CHECKING([for roundl function])
-save_LIBS="${LIBS}"
-LIBS="$LIBS -lm"
-AC_LINK_IFELSE([AC_LANG_PROGRAM([[
-	#include <math.h>
-]], [[
-	return (roundl(*(long double *)0xdeadbeef) == 1.0);
-]])], [
-	AC_MSG_RESULT([yes])
-], [
-	AC_MSG_RESULT([no])
-	AC_DEFINE([NEED_ROUNDL], [1], [Defined to 1 if C99 roundl is missing])
-])
-LIBS="${save_LIBS}"
-
 
 # byteswap functions
 AH_TEMPLATE([HAVE_BYTESWAP_H], [Define to use byteswap macros from byteswap.h])
