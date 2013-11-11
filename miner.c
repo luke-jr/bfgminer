@@ -8226,9 +8226,11 @@ retry:
 			no_work = true;
 		}
 		ts = (struct timespec){ .tv_sec = opt_log_interval, };
+		pthread_cond_signal(&gws_cond);
 		if (ETIMEDOUT == pthread_cond_timedwait(&getq->cond, stgd_lock, &ts))
 		{
 			run_cmd(cmd_idle);
+			pthread_cond_signal(&gws_cond);
 			pthread_cond_wait(&getq->cond, stgd_lock);
 		}
 	}
