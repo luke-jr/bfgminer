@@ -106,7 +106,7 @@ Optional Dependencies:
 	  sysfs              (builtin to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 	
-	NanoFury USB sticks:
+	HashBuster & NanoFury USB devices:
 	  hidapi             https://github.com/signal11/hidapi
 	
 	getwork server for Block Erupter Blades:
