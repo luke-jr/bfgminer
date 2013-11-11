@@ -8733,10 +8733,28 @@ static void fill_queue(struct thr_info *mythr, struct cgpu_info *cgpu, struct de
 {
 	thread_reportout(mythr);
 	do {
-		wr_lock(&cgpu->qlock);
-		if (!cgpu->unqueued_work)
-			cgpu->unqueued_work = get_work(mythr);
-		wr_unlock(&cgpu->qlock);
+		bool need_work;
+
+		/* Do this lockless just to know if we need more unqueued work. */
+		need_work = (!cgpu->unqueued_work);
+
+		/* get_work is a blocking function so do it outside of lock
+		 * to prevent deadlocks with other locks. */
+		if (need_work) {
+			struct work *work = get_work(mythr);
+
+			wr_lock(&cgpu->qlock);
+			/* Check we haven't grabbed work somehow between
+			 * checking and picking up the lock. */
+			if (likely(!cgpu->unqueued_work))
+				cgpu->unqueued_work = work;
+			else
+				need_work = false;
+			wr_unlock(&cgpu->qlock);
+
+			if (unlikely(!need_work))
+				discard_work(work);
+		}
 		/* The queue_full function should be used by the driver to
 		 * actually place work items on the physical device if it
 		 * does have a queue. */
