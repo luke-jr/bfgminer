@@ -121,6 +121,12 @@ ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
 
 
+KLONDIKE
+--------
+
+--klondike-options <arg> Set klondike options clock:temptarget
+
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare

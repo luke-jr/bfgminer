@@ -779,32 +779,14 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 
 	// boundaries are checked by device, with valid values returned
 	if (opt_klondike_options != NULL) {
-		int hashclock, fantarget;
-		double temp1, temp2;
+		int hashclock;
+		double temptarget;
 
-		sscanf(opt_klondike_options, "%d:%lf:%lf:%d",
-						&hashclock,
-						&temp1, &temp2,
-						&fantarget);
+		sscanf(opt_klondike_options, "%d:%lf", &hashclock, &temptarget);
 		SET_HASHCLOCK(kline.cfg.hashclock, hashclock);
-		kline.cfg.temptarget = cvtCToKln(temp1);
-		kline.cfg.tempcritical = cvtCToKln(temp2);
-		if (fantarget < 0) {
-			applog(LOG_WARNING,
-				"%s%i: %s options invalid fantarget < 0 using 0",
-				klncgpu->drv->name,
-				klncgpu->device_id,
-				klncgpu->drv->dname);
-			fantarget = 0;
-		} else if (fantarget > 100) {
-			applog(LOG_WARNING,
-				"%s%i: %s options invalid fantarget > 100 using 100",
-				klncgpu->drv->name,
-				klncgpu->device_id,
-				klncgpu->drv->dname);
-			fantarget = 100;
-		}
-		kline.cfg.fantarget = (int)(255 * fantarget / 100);
+		kline.cfg.temptarget = cvtCToKln(temptarget);
+		kline.cfg.tempcritical = 0; // hard code for old firmware
+		kline.cfg.fantarget = 0xff; // hard code for old firmware
 		size = sizeof(kline.cfg) - 2;
 	}
 
