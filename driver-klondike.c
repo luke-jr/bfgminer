@@ -1129,6 +1129,7 @@ static void *klondike_get_replies(void *userdata)
 				case KLN_CMD_WORK:
 					// We can't do/check this until it's initialised
 					if (klninfo->initialised) {
+						dev = kitem->kline.ws.dev;
 						if (kitem->kline.ws.workqc == 0) {
 							bool idle = false;
 							rd_lock(&(klninfo->stat_lock));
