@@ -195,7 +195,10 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 
 	if (serial_claim_v(devpath, &bitforce_drv))
+	{
+		BFclose(fdDev);
 		return false;
+	}
 	
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
 	initdata = malloc(sizeof(*initdata));
