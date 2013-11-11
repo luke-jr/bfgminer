@@ -657,6 +657,7 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	KLIST *kitem;
 	KLINE kline;
 	int slaves, dev;
+	uint8_t temp = 0xFF;
 
 	if (klninfo->usbinfo_nodev || klninfo->status == NULL)
 		return false;
@@ -685,7 +686,10 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 			applog(LOG_ERR, "%s%i:%d failed to update stats",
 					klncgpu->drv->name, klncgpu->device_id, dev);
 		}
+		if (klninfo->status[dev].kline.ws.temp < temp)
+			temp = klninfo->status[dev].kline.ws.temp;
 	}
+	klncgpu->temp = cvtKlnToC(temp);
 	return true;
 }
 
@@ -858,6 +862,7 @@ bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 		.drv = &klondike_drv,
 		.deven = DEV_ENABLED,
 		.threads = 1,
+		.cutofftemp = (int)KLN_KILLWORK_TEMP,
 	};
 
 	klninfo = calloc(1, sizeof(*klninfo));
@@ -1513,14 +1518,14 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 }
 
 
-static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info *klncgpu)
+#ifdef HAVE_CURSES
+static
+void klondike_wlogprint_status(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	uint8_t temp = 0xFF;
 	uint16_t fan = 0;
 	uint16_t clock = 0;
 	int dev, slaves;
-	char tmp[16];
 
 	if (klninfo->status == NULL) {
 		return;
@@ -1529,27 +1534,19 @@ static void get_klondike_statline_before(char *buf, size_t siz, struct cgpu_info
 	rd_lock(&(klninfo->stat_lock));
 	slaves = klninfo->status[0].kline.ws.slavecount;
 	for (dev = 0; dev <= slaves; dev++) {
-		if (klninfo->status[dev].kline.ws.temp < temp)
-			temp = klninfo->status[dev].kline.ws.temp;
 		fan += klninfo->cfg[dev].kline.cfg.fantarget;
 		clock += (uint16_t)K_HASHCLOCK(klninfo->cfg[dev].kline.cfg.hashclock);
 	}
 	rd_unlock(&(klninfo->stat_lock));
 	fan /= slaves + 1;
-	//fan *= 100/255; // <-- You can't do this because int 100 / int 255 == 0
         fan = 100 * fan / 255;
-	if (fan > 99) // short on screen space
-		fan = 99;
 	clock /= slaves + 1;
-	if (clock > 999) // error - so truncate it
-		clock = 999;
-
-	snprintf(tmp, sizeof(tmp), "%2.0fC", cvtKlnToC(temp));
-	if (strlen(tmp) < 4)
-		strcat(tmp, " ");
-
-	tailsprintf(buf, siz, "%3dMHz %2d%% %s| ", (int)clock, fan, tmp);
+	if (clock && clock <= 999)
+		wlogprint("Frequency: %d MHz\n", (int)clock);
+	if (fan && fan <= 100)
+		wlogprint("Fan speed: %d%%\n", fan);
 }
+#endif
 
 static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 {
@@ -1647,7 +1644,6 @@ struct device_drv klondike_drv = {
 	.name = "KLN",
 	.drv_detect = klondike_detect,
 	.get_api_stats = klondike_api_stats,
-// 	.get_statline_before = get_klondike_statline_before,
 	.get_stats = klondike_get_stats,
 	.identify_device = klondike_identify,
 	.thread_prepare = klondike_thread_prepare,
@@ -1657,5 +1653,9 @@ struct device_drv klondike_drv = {
 	.queue_full = klondike_queue_full,
 	.flush_work = klondike_flush_work,
 	.thread_shutdown = klondike_shutdown,
-	.thread_enable = klondike_thread_enable
+	.thread_enable = klondike_thread_enable,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = klondike_wlogprint_status,
+#endif
 };
