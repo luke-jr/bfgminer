@@ -1410,7 +1410,10 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
+extern void add_queued(struct cgpu_info *cgpu, struct work *work);
+extern struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
