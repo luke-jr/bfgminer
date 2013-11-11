@@ -908,6 +908,7 @@ bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 				if (!add_cgpu(klncgpu))
 					break;
 				applog(LOG_DEBUG, "Klondike cgpu added");
+				rwlock_init(&klninfo->stat_lock);
 				cglock_init(&klninfo->klist_lock);
 				return true;
 			}
