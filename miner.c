@@ -5601,8 +5601,10 @@ void switch_pools(struct pool *selected)
 static void discard_work(struct work *work)
 {
 	if (!work->clone && !work->rolls && !work->mined) {
-		if (work->pool)
+		if (work->pool) {
 			work->pool->discarded_work++;
+			work->pool->works--;
+		}
 		total_discarded++;
 		applog(LOG_DEBUG, "Discarded work");
 	} else
@@ -5952,6 +5954,7 @@ static void stage_work(struct work *work)
 	work->pool->last_work_time = time(NULL);
 	cgtime(&work->pool->tv_last_work_time);
 	test_work_current(work);
+	work->pool->works++;
 	hash_push(work);
 }
 
@@ -6006,6 +6009,7 @@ static void display_pool_summary(struct pool *pool)
 		efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 		wlog(" Efficiency (accepted * difficulty / 2 KB): %.2f\n", efficiency);
 
+		wlog(" Items worked on: %d\n", pool->works);
 		wlog(" Stale submissions discarded due to new blocks: %d\n", pool->stale_shares);
 		wlog(" Unable to get work from server occasions: %d\n", pool->getfail_occasions);
 		wlog(" Submitting work remotely delay occasions: %d\n\n", pool->remotefail_occasions);
@@ -9706,6 +9710,7 @@ void print_summary(void)
 			efficiency = pool_bytes_xfer ? pool->diff_accepted * 2048. / pool_bytes_xfer : 0.0;
 			applog(LOG_WARNING, " Efficiency (accepted * difficulty / 2 KB): %.2f", efficiency);
 
+			applog(LOG_WARNING, " Items worked on: %d", pool->works);
 			applog(LOG_WARNING, " Unable to get work from server occasions: %d", pool->getfail_occasions);
 			applog(LOG_WARNING, " Submitting work remotely delay occasions: %d\n", pool->remotefail_occasions);
 		}

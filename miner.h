@@ -1227,6 +1227,7 @@ struct pool {
 	int quota;
 	int quota_gcd;
 	int quota_used;
+	int works;
 
 	double diff_accepted;
 	double diff_rejected;
