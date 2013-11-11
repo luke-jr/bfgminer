@@ -823,6 +823,13 @@ static inline void mutex_init(pthread_mutex_t *lock)
 		quit(1, "Failed to pthread_mutex_init");
 }
 
+static inline void mutex_destroy(pthread_mutex_t *lock)
+{
+	/* Ignore return code. This only invalidates the mutex on linux but
+	 * releases resources on windows. */
+	pthread_mutex_destroy(lock);
+}
+
 static inline void rwlock_init(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
@@ -837,10 +844,21 @@ struct cglock {
 
 typedef struct cglock cglock_t;
 
+static inline void rwlock_destroy(pthread_rwlock_t *lock)
+{
+	pthread_rwlock_destroy(lock);
+}
+
 static inline void cglock_init(cglock_t *lock)
 {
 	mutex_init(&lock->mutex);
 	rwlock_init(&lock->rwlock);
+}
+
+static inline void cglock_destroy(cglock_t *lock)
+{
+	rwlock_destroy(&lock->rwlock);
+	mutex_destroy(&lock->mutex);
 }
 
 /* Read lock variant of cglock. Cannot be promoted. */
