@@ -3296,7 +3296,9 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 	if (isjson)
 		io_add(io_data, JSON_END);
 	
-	bytes_nullterminate(&io_data->data);
+	// Null-terminate reply, including sending the \0 on the socket
+	bytes_append(&io_data->data, "", 1);
+	
 	applog(LOG_DEBUG, "API: send reply: (%ld) '%.10s%s'",
 	       (long)bytes_len(&io_data->data),
 	       bytes_buf(&io_data->data),
