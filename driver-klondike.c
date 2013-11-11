@@ -200,7 +200,6 @@ typedef struct jobque {
 } JOBQUE;
 
 struct klondike_info {
-	bool shutdown;
 	pthread_rwlock_t stat_lock;
 	struct thr_info replies_thr;
 	cglock_t klist_lock;
@@ -603,7 +602,7 @@ static KLIST *GetReply(struct cgpu_info *klncgpu, uint8_t cmd, uint8_t dev)
 	KLIST *kitem;
 	int retries = CMD_REPLY_RETRIES;
 
-	while (retries-- > 0 && klninfo->shutdown == false) {
+	while (retries-- > 0 && klncgpu->shutdown == false) {
 		cgsleep_ms(REPLY_WAIT_TIME);
 		cg_rlock(&klninfo->klist_lock);
 		kitem = klninfo->used;
@@ -1048,7 +1047,7 @@ static void *klondike_get_replies(void *userdata)
 	applog(LOG_DEBUG, "%s%i: listening for replies",
 			  klncgpu->drv->name, klncgpu->device_id);
 
-	while (klninfo->shutdown == false) {
+	while (klncgpu->shutdown == false) {
 		if (klninfo->usbinfo_nodev)
 			return NULL;
 
@@ -1123,7 +1122,7 @@ static void *klondike_get_replies(void *userdata)
 									dev, (char)(kitem->kline.ws.cmd),
 									(int)(kitem->kline.ws.slavecount),
 									slaves);
-							klninfo->shutdown = true;
+							klncgpu->shutdown = true;
 							break;
 						}
 
@@ -1149,7 +1148,7 @@ static void *klondike_get_replies(void *userdata)
 											klncgpu->drv->name,
 											klncgpu->device_id,
 											dev);
-									klninfo->shutdown = true;
+									klncgpu->shutdown = true;
 								}
 								kln_disable(klncgpu, dev, false);
 							}
@@ -1255,7 +1254,7 @@ static void klondike_shutdown(struct thr_info *thr)
 
 	kln_disable(klncgpu, klninfo->status[0].kline.ws.slavecount, true);
 
-	klncgpu->shutdown = klninfo->shutdown = true;
+	klncgpu->shutdown = true;
 }
 
 static void klondike_thread_enable(struct thr_info *thr)
@@ -1371,7 +1370,7 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 					rd_unlock(&(klninfo->stat_lock));
 					applog(LOG_ERR, "%s%i:%d reset failed - dropping device",
 							klncgpu->drv->name, klncgpu->device_id, dev);
-					klninfo->shutdown = true;
+					klncgpu->shutdown = true;
 					return false;
 				}
 				break;
@@ -1459,7 +1458,11 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 		klninfo->noncecount = 0;
 		rd_unlock(&(klninfo->stat_lock));
 	}
-	return newhashcount;
+
+	if (klncgpu->shutdown)
+		return -1;
+	else
+		return newhashcount;
 }
 
 
