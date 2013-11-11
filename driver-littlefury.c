@@ -304,6 +304,8 @@ bool littlefury_detect_one(const char *devpath)
 	return add_cgpu(cgpu);
 
 err:
+	if (fd != -1)
+		serial_close(fd);
 	return false;
 }
 
