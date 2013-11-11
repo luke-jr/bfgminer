@@ -61,6 +61,7 @@ static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, st
 	info->id.version = buf[1];
 	memcpy(info->id.product, buf+2, 8);
 	memcpy(&info->id.serial, buf+10, 4);
+	info->id.serial = le32toh(info->id.serial);
 	applog(LOG_DEBUG, "%s: %s: %d, %s %08x",
 	       bigpic_drv.dname,
 	       devpath,
@@ -206,6 +207,7 @@ static void bigpic_process_results(struct thr_info *thr, struct work *work)
 		if(duplicate(results, num_results, state.nonce))
 			continue;
 
+		state.nonce = le32toh(state.nonce);
 		uint32_t nonce = bitfury_decnonce(state.nonce);
 		results[num_results++] = state.nonce;
 
