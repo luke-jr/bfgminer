@@ -175,6 +175,7 @@ static bool bitforce_detect_one(const char *devpath)
 	int procs = 1, parallel = -1;
 	long maxchipno = 0;
 	struct bitforce_init_data *initdata;
+	char *manuf = NULL;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 
@@ -235,6 +236,17 @@ static bool bitforce_detect_one(const char *devpath)
 		else
 		if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 			parallel = atoi(&pdevbuf[27]);
+		else
+		if (!strncasecmp(pdevbuf, "MANUFACTURER:", 13))
+		{
+			manuf = &pdevbuf[13];
+			while (manuf[0] && isspace(manuf[0]))
+				++manuf;
+			if (manuf[0])
+				manuf = strdup(manuf);
+			else
+				manuf = NULL;
+		}
 	}
 	parallel = bitforce_chips_to_plan_for(parallel, maxchipno);
 	initdata->parallels = malloc(sizeof(initdata->parallels[0]) * procs);
@@ -283,6 +295,8 @@ static bool bitforce_detect_one(const char *devpath)
 	if (initdata->sc)
 		bitforce->drv = &bitforce_queue_api;
 	bitforce->device_path = strdup(devpath);
+	if (manuf)
+		bitforce->dev_manufacturer = manuf;
 	bitforce->deven = DEV_ENABLED;
 	bitforce->procs = parallel;
 	bitforce->threads = 1;
