@@ -215,10 +215,10 @@ fi
 AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
 
 driverlist="$driverlist opencl"
-opencl="yes"
+opencl="no"
 
 AC_ARG_ENABLE([opencl],
-	[AC_HELP_STRING([--disable-opencl],[Build without support for OpenCL (default enabled)])],
+	[AC_HELP_STRING([--enable-opencl],[Compile support for OpenCL (default disabled)])],
 	[opencl=$enableval]
 	)
 if test "x$opencl" = xyes; then
