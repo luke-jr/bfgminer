@@ -584,6 +584,7 @@ struct cgpu_info {
 
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
+	struct work *unqueued_work;
 	unsigned int queued_count;
 
 	bool disable_watchdog;
@@ -1338,7 +1339,6 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
-	bool		queued;
 
 	bool		stratum;
 	char 		*job_id;
