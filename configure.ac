@@ -223,8 +223,6 @@ AC_ARG_ENABLE([opencl],
 	)
 if test "x$opencl" = xyes; then
 	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
-else
-	DLOPEN_FLAGS=""
 fi
 AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
 
@@ -787,6 +785,10 @@ if test x$need_fpgautils = xyes; then
 			echo '#include <iospeeds_posix.h>' >iospeeds_local.h
 		fi
 	fi
+fi
+
+if test "x$opencl$need_lowl_hid" = xnono; then
+	DLOPEN_FLAGS=""
 fi
 
 if test x$need_lowl_hid = xyes; then
