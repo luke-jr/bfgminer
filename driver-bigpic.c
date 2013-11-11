@@ -48,6 +48,7 @@ static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, st
 	{
 		applog(LOG_ERR, "%s: Failed writing id request to %s",
 		       bigpic_drv.dname, devpath);
+		serial_close(fd);
 		return false;
 	}
 	len = serial_read(fd, buf, sizeof(buf));
@@ -71,11 +72,12 @@ static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, st
 	{
 		applog(LOG_ERR, "%s: Failed writing reset request to %s",
 		       bigpic_drv.dname, devpath);
+		serial_close(fd);
 		return false;
 	}
 
-
-	while(len == 0)
+	int limit = 50;
+	while (len == 0 && --limit)
 	{
 		len = serial_read(fd, buf, sizeof(buf_state));
 		cgsleep_ms(100);
