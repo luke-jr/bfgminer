@@ -944,20 +944,6 @@ void klondike_detect()
 	generic_detect(&klondike_drv, klondike_detect_one, klondike_autodetect, 0);
 }
 
-static
-bool klondike_identify(__maybe_unused struct cgpu_info * const klncgpu)
-{
-/*
-	KLINE kline;
-
-	zero_kline(&kline);
-	kline.hd.cmd = KLN_CMD_IDENT;
-	kline.hd.dev = 0;
-	SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
-*/
-	return false;
-}
-
 static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
@@ -1645,7 +1631,6 @@ struct device_drv klondike_drv = {
 	.drv_detect = klondike_detect,
 	.get_api_stats = klondike_api_stats,
 	.get_stats = klondike_get_stats,
-	.identify_device = klondike_identify,
 	.thread_prepare = klondike_thread_prepare,
 	.thread_init = klondike_thread_init,
 	.minerloop = hash_queued_work,
