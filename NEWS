@@ -1,3 +1,98 @@
+BFGMiner Version 3.6.0 - November 12, 2013
+
+- RPC: Bump to 2.2 for Works in POOLS
+- Bugfix: klondike: Don't try to free off the stack
+- configure: Update klondike checks for libusb
+- klondike: Autodetect by VID/PID/Manufacturer, rather than too-short "K16"
+Product search
+- Remove accidentally added ASIC-README
+- klondike: Remove noop identify function
+- klondike: Replace deprecated statline with temperature and ManageTUI stuff
+- --shares should be scaled to diff1 not absolute number of shares
+- More README updates.
+- Minor README updates.
+- sha2 allow external access to some macros and the K array
+- klondike: Fixed a math issue when reporting fan speed on the status line.
+- Add a get and queue helper work function.
+- Reset the work_restart bool after the scanwork loop in case the driver flushes
+work synchronously.
+- Get rid of the stage thread since all work can be asynchronously added now via
+hash_push anyway.
+- Fix for opt_worktime on big endian machines.
+- Do get_work in fill_queue without holding other locks.
+- Make hash_pop signal the work scheduler each time it waits on the conditional
+that it should look for more work.
+- Remove discarded work from quota used.
+- Display works completed in summary and API data.
+- Store how many work items are worked on per pool.
+- Add the ability to add uint8 and uint16 entities to api data.
+- klondike - initialise stat_lock
+- klondike - better to unlock locks than to lock them twice :)
+- Remove roundl check and define
+- 'llround' is more suitable here than 'roundl'
+- klondike - change options to clock and temptarget only
+- klondike - fix another uninit dev warning
+- klondike - downgrade 'late update' but add an idle detect - and correct error
+levels
+- klondike - fix isc uninit warning
+- klondike - drop the device for hotplug if it's unresponsive
+- klondike - single 'shutdown' and ensure it happens
+- klondike remove SCNu8 - unsupported on windows
+- klondike - fix uninitialised dev bug
+- Don't attempt to disable curses or print a summary during an app restart to
+prevent deadlocks.
+- klondike - error condition handling
+- Modify Makefile to only include opencl related code when configured in.
+- Convert opencl to need to be explicitly enabled during build with
+--enable-opencl
+- Implement a cglock_destroy function.
+- Implement a rwlock_destroy function.
+- Implement a mutex_destroy function.
+- Simplify queued hashtable by storing unqueued work separately in a single
+pointer.
+- Add cgminer compatibility macro for ms_tdiff
+- klondike rewrite work control
+- allow __work_complete() access
+- miner.h allow devices to tv_stamp work
+- klondike - can only calculate the nonce difference on or after the 2nd nonce
+- klondike - correct/reverse min/max stats
+- klondike: Remove unnecessary devlock
+- klondike - use a link list queue rather than a circular buffer - and add
+timing stats
+- Klondike - increase circular read buffer size
+- Klondike - extra zero value and range checking in temp conversion
+- klondike - display MHz also
+- klondike correct cvtKlnToC() temperature calculation
+- klondike - correct 1st reply debug based on define
+- klondike - debug dump structured replies
+- klondike - avoid division by zero if maxcount is unexpectedly zero
+- klondike store and report errorcount and noise
+- klondike - fix chipstats api stats buffer overrun with 16 chips
+- klondike add new nonecount only once
+- klondike - report mh/s based on nonces found + put old estimate into API stats
+- klondike use a memcpy
+- klondike fix bracket tabs indenting
+- klondike: Update code to current git
+- Klondike update code to current git
+- Add Klondike to README
+- Add Klondike to README.ASIC
+- Klondike to main directory
+- Klondike consistent code spacing
+- Klondike update driver code to current git
+- klondike: update firmware for 16 chips, add dist files
+- klondike: beta final 0.3.0 release
+- klondike: updated firmware, IOC method
+- klondike: prevent nonces when not state W
+- klondike: added driver config option support
+- klondike: fixes for 300 MHz, fix K1 parts list
+- klondike: update driver, docs
+- klondike: update firmware & utils
+- klondike: updated cgminer driver for 3.3.1
+- klondike: update firmware and driver, create new cgminer fork
+- update klondike driver
+- klondike: add cgminer driver file as-is
+
+
 BFGMiner Version 3.5.2 - November 12, 2013
 
 - README.scrypt: Update to reflect current status of code (unmaintained); remove

@@ -1,3 +1,11 @@
+bfgminer (3.6.0-0precise1) precise; urgency=low
+
+  * klondike: New driver, just imported from cgminer mostly as-is for now.
+  * opencl: Support will remain, but it is not compiled by default. Use --enable-opencl to build it.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 12 Nov 2013 07:55:01 -0000
+
+
 bfgminer (3.5.2-0precise1) precise; urgency=low
 
   * Bug fixes only.
