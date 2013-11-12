@@ -103,10 +103,10 @@ extern void _applog(int prio, const char *str);
 	return rv;  \
 } while (0)
 
-extern void _bfg_clean_up(void);
+extern void _bfg_clean_up(bool);
 
 #define quit(status, fmt, ...) do { \
-	_bfg_clean_up();  \
+	_bfg_clean_up(false);  \
 	if (fmt) { \
 		fprintf(stderr, fmt, ##__VA_ARGS__);  \
 	} \

@@ -105,13 +105,8 @@ bfgminer_CPPFLAGS += $(libevent_CFLAGS)
 endif
 
 
-# GPU sources, TODO: make them selectable
-# the GPU portion extracted from original main.c
-bfgminer_SOURCES += driver-opencl.h driver-opencl.c
-
 if HAVE_OPENCL
-
-# the original GPU related sources, unchanged
+bfgminer_SOURCES += driver-opencl.h driver-opencl.c
 bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
 bfgminer_SOURCES += *.cl
@@ -226,6 +221,10 @@ endif
 
 if USE_KNC
 bfgminer_SOURCES += driver-knc.c
+endif
+
+if HAS_KLONDIKE
+bfgminer_SOURCES += driver-klondike.c
 endif
 
 if HAS_MODMINER

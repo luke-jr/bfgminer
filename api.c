@@ -60,7 +60,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "2.1";
+static const char *APIVERSION = "2.2";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -771,6 +771,16 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 				api_data->data = (void *)malloc(strlen((char *)data) + 1);
 				strcpy((char*)(api_data->data), (char *)data);
 				break;
+			case API_UINT8:
+				/* Most OSs won't really alloc less than 4 */
+				api_data->data = malloc(4);
+				*(uint8_t *)api_data->data = *(uint8_t *)data;
+				break;
+			case API_UINT16:
+				/* Most OSs won't really alloc less than 4 */
+				api_data->data = malloc(4);
+				*(uint16_t *)api_data->data = *(uint16_t *)data;
+				break;
 			case API_INT:
 				api_data->data = (void *)malloc(sizeof(int));
 				*((int *)(api_data->data)) = *((int *)data);
@@ -844,6 +854,16 @@ struct api_data *api_add_string(struct api_data *root, char *name, const char *d
 struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data)
 {
 	return api_add_data_full(root, name, API_CONST, (void *)data, copy_data);
+}
+
+struct api_data *api_add_uint8(struct api_data *root, char *name, uint8_t *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_UINT8, (void *)data, copy_data);
+}
+
+struct api_data *api_add_uint16(struct api_data *root, char *name, uint16_t *data, bool copy_data)
+{
+	return api_add_data_full(root, name, API_UINT16, (void *)data, copy_data);
 }
 
 struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data)
@@ -983,6 +1003,12 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%s%s%s", quote, escape, quote);
 				if (escape != original)
 					free(escape);
+				break;
+			case API_UINT8:
+				sprintf(buf, "%u", *(uint8_t *)root->data);
+				break;
+			case API_UINT16:
+				sprintf(buf, "%u", *(uint16_t *)root->data);
 				break;
 			case API_INT:
 				sprintf(buf, "%d", *((int *)(root->data)));
@@ -1965,6 +1991,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_uint(root, "Getworks", &(pool->getwork_requested), false);
 		root = api_add_int(root, "Accepted", &(pool->accepted), false);
 		root = api_add_int(root, "Rejected", &(pool->rejected), false);
+		root = api_add_int(root, "Works", &pool->works, false);
 		root = api_add_uint(root, "Discarded", &(pool->discarded_work), false);
 		root = api_add_uint(root, "Stale", &(pool->stale_shares), false);
 		root = api_add_uint(root, "Get Failures", &(pool->getfail_occasions), false);

@@ -362,6 +362,8 @@ long timer_elapsed_us(const struct timeval *tvp_timer, const struct timeval *tvp
 	return timeval_to_us(&tv);
 }
 
+#define ms_tdiff(end, start)  (timer_elapsed_us(start, end) / 1000)
+
 static inline
 int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now)
 {

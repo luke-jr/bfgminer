@@ -38,15 +38,6 @@ MORE INFORMATION ON EACH.
 
 EXECUTIVE SUMMARY ON USAGE:
 
-After saving configuration from the menu, you do not need to give BFGMiner any
-arguments and it will load your configuration.
-
-Any configuration file may also contain a single
-	"include" : "filename"
-to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
-
-
 Single pool:
 
 bfgminer -o http://pool:port -u username -p password
@@ -55,11 +46,11 @@ Multiple pools:
 
 bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
 
-Single pool with a standard http proxy, regular desktop:
+Single pool with a standard http proxy:
 
 bfgminer -o http://pool:port -x http://proxy:port -u username -p password
 
-Single pool with a socks5 proxy, regular desktop:
+Single pool with a socks5 proxy:
 
 bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
 
@@ -74,6 +65,16 @@ Proxy support requires cURL version 7.21.7 or newer.
 
 If you specify the --socks-proxy option to BFGMiner, it will only be applied to
 all pools that don't specify their own proxy setting like above
+
+
+After saving configuration from the menu, you do not need to give BFGMiner any
+arguments and it will load your configuration.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files in the output.
+
 
 ---
 BUILDING BFGMINER
@@ -115,7 +116,7 @@ Optional Dependencies:
 	Stratum proxy:
 	  libevent 2.0.3+    http://libevent.org/
 
-	X6500 and ZTEX FPGA boards:
+	Klondike, X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
 
 	Video card GPU mining (free):
@@ -145,6 +146,7 @@ BFGMiner specific configuration options:
 	--enable-metabank       Compile support for Metabank (default disabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
+	--enable-klondike       Compile support for Klondike (default disabled)
 	--enable-knc            Compile support for KnC (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-x6500         Compile support for X6500 (default enabled)
@@ -182,7 +184,8 @@ path like this (if you are in the bfgminer directory already): ./bfgminer
 
 Usage instructions:  Run "bfgminer --help" to see options:
 
-Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
+Usage: bfgminer [-DdElmpPQqUsTouOchnV]
+
 Options for both config file and command line:
 --api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
@@ -698,7 +701,7 @@ Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
 A: BFGMiner checks for conditions where the primary pool is lagging and will
 pass some work to the backup servers under those conditions. The reason for
-doing this is to try its absolute best to keep the GPUs working on something
+doing this is to try its absolute best to keep the devices working on something
 useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
 
@@ -725,8 +728,7 @@ other factors.
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
-defined settings lead to worse performance. The ONLY thing most users should
-need to set is the Intensity for GPUs.
+defined settings lead to worse performance.
 
 Q: What happened to CPU mining?
 A: Being increasingly irrelevant for most users, and a maintenance issue, it is
@@ -754,7 +756,7 @@ of thermal damage. It is highly recommended not to mine on a Mac unless it is to
 a USB device.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option.
+A; Try the --net-delay option if you are on a getwork or GBT server.
 
 Q: How do I tune for P2Pool?
 A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
@@ -781,9 +783,8 @@ been skipped. "PGA" is also used for devices built with Application-Specific
 Integrated Circuits (ASICs).
 
 Q: What is an ASIC?
-A: BFGMiner currently supports 2 ASICs: Avalon and BitForce SC devices. They are
-Application Specify Integrated Circuit devices and provide the highest
-performance per unit power due to being dedicated to only one purpose.
+A: They are Application Specify Integrated Circuit devices and provide the
+highest performance per unit power due to being dedicated to only one purpose.
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
 A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only

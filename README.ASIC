@@ -1,8 +1,8 @@
 SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
-series (both USB and blades), a large variety of Bitfury-based miners, and
-Butterfly Labs' SC range of devices.
+series (both USB and blades), a large variety of Bitfury-based miners, Butterfly
+Labs' SC range of devices, and Klondike modules.
 
 
 AVALON
@@ -119,6 +119,12 @@ probe; if you know you have no other serial devices, or only ones that can
 tolerate garbage, you can use '--scan-serial erupter:all' to probe all serial
 ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
+
+
+KLONDIKE
+--------
+
+--klondike-options <arg> Set klondike options clock:temptarget
 
 
 ---

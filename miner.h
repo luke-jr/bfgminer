@@ -213,10 +213,6 @@ static inline int fsync (int fd)
 #	endif
 #endif
 
-#ifdef NEED_ROUNDL
-#define roundl(x)   (long double)((long long)((x==0)?0.0:((x)+(((x)>0)?0.5:-0.5))))
-#endif
-
 enum alive {
 	LIFE_WELL,
 	LIFE_SICK,
@@ -584,6 +580,7 @@ struct cgpu_info {
 
 	pthread_rwlock_t qlock;
 	struct work *queued_work;
+	struct work *unqueued_work;
 	unsigned int queued_count;
 
 	bool disable_watchdog;
@@ -822,6 +819,13 @@ static inline void mutex_init(pthread_mutex_t *lock)
 		quit(1, "Failed to pthread_mutex_init");
 }
 
+static inline void mutex_destroy(pthread_mutex_t *lock)
+{
+	/* Ignore return code. This only invalidates the mutex on linux but
+	 * releases resources on windows. */
+	pthread_mutex_destroy(lock);
+}
+
 static inline void rwlock_init(pthread_rwlock_t *lock)
 {
 	if (unlikely(pthread_rwlock_init(lock, NULL)))
@@ -836,10 +840,21 @@ struct cglock {
 
 typedef struct cglock cglock_t;
 
+static inline void rwlock_destroy(pthread_rwlock_t *lock)
+{
+	pthread_rwlock_destroy(lock);
+}
+
 static inline void cglock_init(cglock_t *lock)
 {
 	mutex_init(&lock->mutex);
 	rwlock_init(&lock->rwlock);
+}
+
+static inline void cglock_destroy(cglock_t *lock)
+{
+	rwlock_destroy(&lock->rwlock);
+	mutex_destroy(&lock->mutex);
 }
 
 /* Read lock variant of cglock. Cannot be promoted. */
@@ -944,6 +959,9 @@ extern char *opt_icarus_timing;
 extern bool opt_worktime;
 #ifdef USE_AVALON
 extern char *opt_avalon_options;
+#endif
+#ifdef USE_KLONDIKE
+extern char *opt_klondike_options;
 #endif
 #ifdef USE_BITFORCE
 extern bool opt_bfl_noncerange;
@@ -1209,6 +1227,7 @@ struct pool {
 	int quota;
 	int quota_gcd;
 	int quota_used;
+	int works;
 
 	double diff_accepted;
 	double diff_rejected;
@@ -1335,7 +1354,6 @@ struct work {
 	bool		stale;
 	bool		mandatory;
 	bool		block;
-	bool		queued;
 
 	bool		stratum;
 	char 		*job_id;
@@ -1353,6 +1371,9 @@ struct work {
 	// Allow devices to identify work if multiple sub-devices
 	// DEPRECATED: New code should be using multiple processors instead
 	unsigned char	subid;
+	
+	// Allow devices to timestamp work for their own purposes
+	struct timeval	tv_stamp;
 
 	blktemplate_t	*tmpl;
 	int		*tmpl_refcount;
@@ -1389,10 +1410,14 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
+extern void add_queued(struct cgpu_info *cgpu, struct work *work);
+extern struct work *get_queue_work(struct thr_info *thr, struct cgpu_info *cgpu, int thr_id);
 extern struct work *__find_work_bymidstate(struct work *que, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
@@ -1441,6 +1466,8 @@ enum api_data_type {
 	API_ESCAPE,
 	API_STRING,
 	API_CONST,
+	API_UINT8,
+	API_UINT16,
 	API_INT,
 	API_UINT,
 	API_UINT32,
@@ -1474,6 +1501,8 @@ struct api_data {
 extern struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data);
 extern struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data);
 extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_uint8(struct api_data *root, char *name, uint8_t *data, bool copy_data);
+extern struct api_data *api_add_uint16(struct api_data *root, char *name, uint16_t *data, bool copy_data);
 extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
 extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);
 extern struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data);
