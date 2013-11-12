@@ -1,8 +1,6 @@
-If you wish to donate to the author of scrypt support, Con Kolivas, please send
-your donations to:
-
-Bitcoin : 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-Litecoin: Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
+If you wish to donate to the author of scrypt support, Con Kolivas, for his past
+work (he no longer maintains this), please send your donations to
+15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
 ---
 
@@ -139,12 +137,3 @@ see that it increases hashrate AND utility WITHOUT increasing your HW errors.
 Suggested values for 7970 for example:
 export GPU_MAX_ALLOC_PERCENT=100
 --thread-concurrency 8192 -g 4 --gpu-engine 1135 --gpu-memclock 1375
-
-
----
-
-If you wish to donate to the author of scrypt support, Con Kolivas, please send
-your donations to:
-
-Bitcoin : 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-Litecoin: Lc8TWMiKM7gRUrG8VB8pPNP1Yvt1SGZnoH
