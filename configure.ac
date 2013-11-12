@@ -387,19 +387,6 @@ fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
 
-driverlist="$driverlist klondike"
-klondike="no"
-
-AC_ARG_ENABLE([klondike],
-	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
-	[klondike=$enableval]
-	)
-if test "x$klondike" = xyes; then
-	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
-fi
-AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
-
-
 driverlist="$driverlist knc"
 AC_ARG_ENABLE([knc],
 	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],
@@ -525,6 +512,28 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			],[#include <libusb.h>])
 	fi
 ])
+
+driverlist="$driverlist klondike"
+AC_ARG_ENABLE([klondike],
+	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
+	[klondike=$enableval],
+	[klondike=auto]
+	)
+if test "x$klondike$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for Klondike support])
+elif test "x$klondike" = xauto; then
+	klondike="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for Klondike support])
+		klondike_enableaction="install libusb 1.0+"
+	fi
+fi
+if test "x$klondike" = xyes; then
+	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+	need_lowlevel=yes
+fi
+AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+
 
 driverlist="$driverlist x6500"
 AC_ARG_ENABLE([x6500],
@@ -735,7 +744,7 @@ fi
 AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
-if test "x$x6500$ztex" = "xnono"; then
+if test "x$klondike$x6500$ztex" = "xnonono"; then
 	libusb=no
 	LIBUSB_LIBS=''
 	LIBUSB_CFLAGS=''
