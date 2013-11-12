@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <strings.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -933,9 +934,17 @@ bool klondike_detect_one(const char *serial)
 }
 
 static
+bool klondike_foundlowl_checkmanuf(struct lowlevel_device_info * const info, void * const userp)
+{
+	if (info->manufacturer && strstr(info->manufacturer, "Klondike"))
+		return klondike_foundlowl(info, userp);
+	return false;
+}
+
+static
 int klondike_autodetect()
 {
-	return lowlevel_detect(klondike_foundlowl, "K16");
+	return lowlevel_detect_id(klondike_foundlowl_checkmanuf, NULL, &lowl_usb, 0x04d8, 0xf60a);
 }
 
 static
