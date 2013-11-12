@@ -1,3 +1,22 @@
+BFGMiner Version 3.5.2 - November 12, 2013
+
+- README.scrypt: Update to reflect current status of code (unmaintained); remove
+Con's litecoin donation address (leaving his bitcoin one) since it is unknown if
+he still accepts donations with litecoin
+- Bugfix: minerloop_async: Check the correct _mt_disable_called flag
+- bitforce: Allow ZCX response to override Manufacturer string
+- Bugfix: RPC: Restore null termination on responses
+- Bugfix: configure: We need DLOPEN_FLAGS for lowlevel hid too
+- Add additional debug information to help track work through BFGMiner
+- README: Update hidapi dependency for HashBuster
+- Bugfix: bigpic: Convert device serial and nonces to host endian
+- Bugfix: modminer: Ensure devices that fail probe are closed properly
+- Bugfix: bitforce: Ensure devices that fail probe are closed properly
+- Bugfix: littlefury: Ensure devices that fail probe are closed properly
+- Bugfix: bigpic: Ensure devices that fail probe are closed properly
+- nanofury: Attempt to be more resilient to problems
+
+
 BFGMiner Version 3.5.1 - November 7, 2013
 
 - Bugfix: make-release: Add README.GPU document
