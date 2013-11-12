@@ -1,3 +1,13 @@
+BFGMiner Version 3.2.6 - November 12, 2013
+
+- README.scrypt: Update to reflect current status of code (unmaintained); remove
+Con's litecoin donation address (leaving his bitcoin one) since it is unknown if
+he still accepts donations with litecoin
+- Bugfix: RPC: Restore null termination on responses
+- Bugfix: modminer: Ensure devices that fail probe are closed properly
+- Bugfix: bitforce: Ensure devices that fail probe are closed properly
+
+
 BFGMiner Version 3.2.5 - November 7, 2013
 
 - Bugfix: make-release: Add README.GPU document
