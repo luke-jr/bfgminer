@@ -537,7 +537,6 @@ static void display_kline(struct cgpu_info *klncgpu, KLINE *kline, const char *m
 				klncgpu->drv->name, klncgpu->device_id,
 				(int)(kline->hd.dev), msg, kline->hd.cmd,
 				hexdata);
-			free(hexdata);
 			break;
 		}
 	}
