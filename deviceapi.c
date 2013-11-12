@@ -517,7 +517,7 @@ void minerloop_async(struct thr_info *mythr)
 			}
 			else  // ! should_be_running
 			{
-				if (unlikely((is_running || !thr->_mt_disable_called) && !mythr->_job_transition_in_progress))
+				if (unlikely((is_running || !mythr->_mt_disable_called) && !mythr->_job_transition_in_progress))
 				{
 disabled: ;
 					timer_unset(&mythr->tv_morework);
@@ -529,7 +529,7 @@ disabled: ;
 							// Avoid starting job when pending result fetch completes
 							mythr->_proceed_with_new_job = false;
 					}
-					else  // !thr->_mt_disable_called
+					else  // !mythr->_mt_disable_called
 						mt_disable_start(mythr);
 				}
 			}
