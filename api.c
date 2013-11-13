@@ -732,6 +732,7 @@ static void io_free()
 		do {
 			io_next = io_list->next;
 
+			free(io_list->io_data->ptr);
 			free(io_list->io_data);
 			free(io_list);
 
