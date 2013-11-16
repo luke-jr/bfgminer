@@ -52,6 +52,9 @@
 
 #include <utlist.h>
 
+#ifdef HAVE_FPGAUTILS
+#include "fpgautils.h"
+#endif
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
@@ -2501,6 +2504,9 @@ struct bfgtls_data {
 #ifdef WIN32
 	LPSTR bfg_strerror_socketresult;
 #endif
+#ifdef HAVE_FPGAUTILS
+	struct detectone_meta_info_t __detectone_meta_info;
+#endif
 };
 
 static
@@ -2527,6 +2533,13 @@ struct bfgtls_data *get_bfgtls()
 	
 	return bfgtls;
 }
+
+#ifdef HAVE_FPGAUTILS
+struct detectone_meta_info_t *_detectone_meta_info()
+{
+	return &get_bfgtls()->__detectone_meta_info;
+}
+#endif
 
 void bfg_init_threadlocal()
 {
