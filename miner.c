@@ -10297,7 +10297,7 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
+const struct device_drv *_probe_device_find_drv(const char * const dname, const size_t dnamelen)
 {
 	struct driver_registration *dreg;
 	
@@ -10309,7 +10309,13 @@ bool _probe_device_internal(struct lowlevel_device_info * const info, const char
 			return false;
 	}
 	
-	const struct device_drv * const drv = dreg->drv;
+	return dreg->drv;
+}
+
+static
+bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
+{
+	const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
 	if (!drv->lowl_probe)
 		return false;
 	return drv->lowl_probe(info);
@@ -10352,10 +10358,26 @@ void *probe_device_thread(void *p)
 	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 	{
 		const struct device_drv * const drv = dreg->drv;
+		
+		// Check for "noauto" flag
+		DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
+		{
+			const char * const dname = sd_iter->string;
+			const char *colon = strchr(dname, ':');
+			if (!colon)
+				colon = &dname[-1];
+			if (strcasecmp("noauto", &colon[1]))
+				continue;
+			const ssize_t dnamelen = (colon - dname);
+			if (dnamelen == -1 || _probe_device_find_drv(dname, dnamelen) == drv)
+				goto noauto;
+		}
+		
 		if (!(drv->lowl_match && drv->lowl_match(info)))
 			continue;
 		if (drv->lowl_probe(info))
 			return NULL;
+noauto: ;
 	}
 	
 	// probe driver(s) with 'all' enabled
