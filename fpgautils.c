@@ -647,6 +647,20 @@ extern void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info **);
 extern void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info **);
 #endif
 
+bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, detectone_func_t detectone)
+{
+	if (info->lowl != &lowl_vcom)
+		return false;
+	detectone_meta_info = (struct detectone_meta_info_t){
+		.manufacturer = info->manufacturer,
+		.product = info->product,
+		.serial = info->serial,
+	};
+	const bool rv = detectone(info->path);
+	clear_detectone_meta_info();
+	return rv;
+}
+
 bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, void *userp)
 {
 	detectone_func_t detectone = userp;

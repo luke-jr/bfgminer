@@ -25,6 +25,8 @@ extern struct detectone_meta_info_t *_detectone_meta_info();
 #define detectone_meta_info (*_detectone_meta_info())
 extern void clear_detectone_meta_info(void);
 
+extern bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info *, detectone_func_t);
+
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
