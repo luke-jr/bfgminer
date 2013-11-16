@@ -32,6 +32,7 @@ struct lowlevel_device_info {
 	struct lowlevel_device_info *next;
 	UT_hash_handle hh;
 	pthread_t probe_pth;
+	int ref;
 };
 
 extern struct lowlevel_device_info *lowlevel_scan();
@@ -46,6 +47,8 @@ extern int _lowlevel_detect(lowl_found_devinfo_func_t, const char *serial, const
 #define lowlevel_detect_serial(func, serial)  _lowlevel_detect(func, serial, (const char *[]){NULL}, NULL)
 extern int lowlevel_detect_id(lowl_found_devinfo_func_t, void *, const struct lowlevel_driver *, int32_t vid, int32_t pid);
 extern void lowlevel_scan_free();
+
+extern struct lowlevel_device_info *lowlevel_ref(const struct lowlevel_device_info *);
 extern void lowlevel_devinfo_semicpy(struct lowlevel_device_info *dst, const struct lowlevel_device_info *src);
 extern void lowlevel_devinfo_free(struct lowlevel_device_info *);
 

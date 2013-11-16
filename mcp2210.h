@@ -17,7 +17,7 @@ enum mcp2210_gpio_value {
 
 struct mcp2210_device;
 
-extern struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *);
+extern struct mcp2210_device *mcp2210_open(const struct lowlevel_device_info *);
 extern void mcp2210_close(struct mcp2210_device *);
 
 extern bool mcp2210_spi_cancel(struct mcp2210_device *);

@@ -34,6 +34,8 @@ void lowlevel_devinfo_semicpy(struct lowlevel_device_info * const dst, const str
 
 void lowlevel_devinfo_free(struct lowlevel_device_info * const info)
 {
+	if (info->ref--)
+		return;
 	if (info->lowl->devinfo_free)
 		info->lowl->devinfo_free(info);
 	free(info->manufacturer);
@@ -42,6 +44,13 @@ void lowlevel_devinfo_free(struct lowlevel_device_info * const info)
 	free(info->path);
 	free(info->devid);
 	free(info);
+}
+
+struct lowlevel_device_info *lowlevel_ref(const struct lowlevel_device_info * const cinfo)
+{
+	struct lowlevel_device_info * const info = (void*)cinfo;
+	++info->ref;
+	return info;
 }
 
 void lowlevel_scan_free()
