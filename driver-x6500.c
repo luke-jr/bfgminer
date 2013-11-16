@@ -127,7 +127,14 @@ uint32_t x6500_get_register(struct jtag_port *jp, uint8_t addr)
 	return bits2int(buf, 32);
 }
 
-static bool x6500_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
+static
+bool x6500_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_ft232r, X6500_USB_PRODUCT);
+}
+
+static
+bool x6500_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;
@@ -153,25 +160,10 @@ static bool x6500_foundlowl(struct lowlevel_device_info * const info, __maybe_un
 	x6500->procs = 2;
 	x6500->name = strdup(product);
 	x6500->cutofftemp = 85;
-	x6500->device_data = info;
+	x6500->device_data = lowlevel_ref(info);
 	cgpu_copy_libusb_strings(x6500, dev);
 
 	return add_cgpu(x6500);
-}
-
-static bool x6500_detect_one(const char *serial)
-{
-	return lowlevel_detect_serial(x6500_foundlowl, serial);
-}
-
-static int x6500_detect_auto()
-{
-	return lowlevel_detect(x6500_foundlowl, X6500_USB_PRODUCT);
-}
-
-static void x6500_detect()
-{
-	serial_detect_auto(&x6500_api, x6500_detect_one, x6500_detect_auto);
 }
 
 static bool x6500_prepare(struct thr_info *thr)
@@ -834,7 +826,8 @@ void x6500_wlogprint_status(struct cgpu_info *cgpu)
 struct device_drv x6500_api = {
 	.dname = "x6500",
 	.name = "XBS",
-	.drv_detect = x6500_detect,
+	.lowl_match = x6500_lowl_match,
+	.lowl_probe = x6500_lowl_probe,
 	.thread_prepare = x6500_prepare,
 	.thread_init = x6500_thread_init,
 	.get_stats = x6500_get_stats,
