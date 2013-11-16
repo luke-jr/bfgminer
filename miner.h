@@ -288,6 +288,7 @@ typedef uint8_t supported_algos_t;
 struct api_data;
 struct thr_info;
 struct work;
+struct lowlevel_device_info;
 
 struct device_drv {
 	const char *dname;
@@ -298,6 +299,8 @@ struct device_drv {
 	// DRV-global functions
 	void (*drv_init)();
 	void (*drv_detect)();
+	bool (*lowl_match)(const struct lowlevel_device_info *);
+	bool (*lowl_probe)(const struct lowlevel_device_info *);
 
 	// Processor-specific functions
 	void (*reinit_device)(struct cgpu_info *);

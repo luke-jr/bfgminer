@@ -14,6 +14,7 @@
 #include "miner.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
+#include "lowlevel.h"
 
 #define ERUPTER_IO_SPEED 115200
 #define ERUPTER_HASH_TIME 0.0000000029761
@@ -41,10 +42,28 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 	return true;
 }
 
+static
+bool erupter_emerald_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Block", "Erupter", "Emerald");
+}
+
 static bool erupter_emerald_detect_one(const char *devpath)
 {
 	// For detection via BEE:*
 	return _erupter_detect_one(devpath, &erupter_drv_emerald);
+}
+
+static
+bool erupter_emerald_lowl_probe(const struct lowlevel_device_info * const info)
+{
+	return vcom_lowl_probe_wrapper(info, erupter_emerald_detect_one);
+}
+
+static
+bool erupter_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Block", "Erupter");
 }
 
 static bool erupter_detect_one(const char *devpath)
@@ -58,21 +77,10 @@ static bool erupter_detect_one(const char *devpath)
 	return _erupter_detect_one(devpath, drv);
 }
 
-static int erupter_emerald_detect_auto(void)
+static
+bool erupter_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	return serial_autodetect(erupter_emerald_detect_one, "Block", "Erupter", "Emerald");
-}
-
-static int erupter_detect_auto(void)
-{
-	return serial_autodetect(erupter_detect_one, "Block", "Erupter");
-}
-
-static void erupter_detect()
-{
-	// Actual serial detection is handled by Icarus driver
-	serial_detect_auto_byname(&erupter_drv, erupter_detect_one, erupter_detect_auto);
-	serial_detect_auto_byname(&erupter_drv_emerald, erupter_emerald_detect_one, erupter_emerald_detect_auto);
+	return vcom_lowl_probe_wrapper(info, erupter_detect_one);
 }
 
 static bool erupter_identify(struct cgpu_info *erupter)
@@ -88,12 +96,15 @@ static void erupter_drv_init()
 	erupter_drv = icarus_drv;
 	erupter_drv.dname = "erupter";
 	erupter_drv.name = "BES";
-	erupter_drv.drv_detect = erupter_detect;
+	erupter_drv.lowl_match = erupter_lowl_match;
+	erupter_drv.lowl_probe = erupter_lowl_probe;
 	erupter_drv.identify_device = erupter_identify;
 	++erupter_drv.probe_priority;
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";
+	erupter_drv.lowl_match = erupter_emerald_lowl_match;
+	erupter_drv.lowl_probe = erupter_emerald_lowl_probe;
 }
 
 struct device_drv erupter_drv = {

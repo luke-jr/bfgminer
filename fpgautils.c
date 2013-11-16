@@ -100,7 +100,7 @@ void clear_detectone_meta_info(void)
 	};
 }
 
-static char *_vcom_unique_id(const char *);
+#define _vcom_unique_id(devpath)  devpath_to_devid(devpath)
 
 struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info ** const devinfo_list, const char * const devpath)
 {
@@ -647,6 +647,20 @@ extern void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info **);
 extern void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info **);
 #endif
 
+bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, detectone_func_t detectone)
+{
+	if (info->lowl != &lowl_vcom)
+		return false;
+	detectone_meta_info = (struct detectone_meta_info_t){
+		.manufacturer = info->manufacturer,
+		.product = info->product,
+		.serial = info->serial,
+	};
+	const bool rv = detectone(info->path);
+	clear_detectone_meta_info();
+	return rv;
+}
+
 bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, void *userp)
 {
 	detectone_func_t detectone = userp;
@@ -781,8 +795,7 @@ struct device_drv *bfg_claim_any2(struct device_drv * const api, const char * co
 	return bfg_claim_any(api, verbose, devpath);
 }
 
-static
-char *_vcom_unique_id(const char * const devpath)
+char *devpath_to_devid(const char * const devpath)
 {
 #ifndef WIN32
 	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);

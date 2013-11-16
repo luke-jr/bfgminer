@@ -173,7 +173,13 @@ fail:
 }
 
 static
-bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
+bool nanofury_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_mcp2210, NANOFURY_USB_PRODUCT);
+}
+
+static
+bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;
@@ -211,7 +217,7 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &nanofury_drv,
-		.device_data = info,
+		.device_data = lowlevel_ref(info),
 		.threads = 1,
 		// TODO: .name
 		.device_path = strdup(info->path),
@@ -223,21 +229,6 @@ bool nanofury_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 	};
 
 	return add_cgpu(cgpu);
-}
-
-static bool nanofury_detect_one(const char *serial)
-{
-	return lowlevel_detect_serial(nanofury_foundlowl, serial);
-}
-
-static int nanofury_detect_auto()
-{
-	return lowlevel_detect(nanofury_foundlowl, NANOFURY_USB_PRODUCT);
-}
-
-static void nanofury_detect()
-{
-	serial_detect_auto(&nanofury_drv, nanofury_detect_one, nanofury_detect_auto);
 }
 
 static
@@ -335,7 +326,8 @@ void nanofury_shutdown(struct thr_info * const thr)
 struct device_drv nanofury_drv = {
 	.dname = "nanofury",
 	.name = "NFY",
-	.drv_detect = nanofury_detect,
+	.lowl_match = nanofury_lowl_match,
+	.lowl_probe = nanofury_lowl_probe,
 	
 	.thread_init = nanofury_init,
 	.thread_disable = nanofury_disable,

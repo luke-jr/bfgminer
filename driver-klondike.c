@@ -840,7 +840,15 @@ static void control_init(struct cgpu_info *klncgpu)
 }
 
 static
-bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void * const userp)
+bool klondike_lowl_match(const struct lowlevel_device_info * const info)
+{
+	if (!lowlevel_match_id(info, &lowl_usb, 0x04d8, 0xf60a))
+		return false;
+	return (info->manufacturer && strstr(info->manufacturer, "Klondike"));
+}
+
+static
+bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	if (unlikely(info->lowl != &lowl_usb))
 	{
@@ -924,32 +932,6 @@ bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 	free(klninfo);
 	free(klncgpu);
 	return false;
-}
-
-static
-bool klondike_detect_one(const char *serial)
-{
-	return lowlevel_detect_serial(klondike_foundlowl, serial);
-}
-
-static
-bool klondike_foundlowl_checkmanuf(struct lowlevel_device_info * const info, void * const userp)
-{
-	if (info->manufacturer && strstr(info->manufacturer, "Klondike"))
-		return klondike_foundlowl(info, userp);
-	return false;
-}
-
-static
-int klondike_autodetect()
-{
-	return lowlevel_detect_id(klondike_foundlowl_checkmanuf, NULL, &lowl_usb, 0x04d8, 0xf60a);
-}
-
-static
-void klondike_detect()
-{
-	generic_detect(&klondike_drv, klondike_detect_one, klondike_autodetect, 0);
 }
 
 static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
@@ -1636,7 +1618,8 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 struct device_drv klondike_drv = {
 	.dname = "Klondike",
 	.name = "KLN",
-	.drv_detect = klondike_detect,
+	.lowl_match = klondike_lowl_match,
+	.lowl_probe = klondike_lowl_probe,
 	.get_api_stats = klondike_api_stats,
 	.get_stats = klondike_get_stats,
 	.thread_prepare = klondike_thread_prepare,

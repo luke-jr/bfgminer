@@ -708,7 +708,10 @@ out: ;
 	return NULL;
 }
 
-bool add_cgpu(struct cgpu_info *cgpu)
+static pthread_mutex_t _add_cgpu_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static
+bool _add_cgpu(struct cgpu_info *cgpu)
 {
 	int lpcount;
 	
@@ -780,6 +783,14 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	return true;
 }
 
+bool add_cgpu(struct cgpu_info *cgpu)
+{
+	mutex_lock(&_add_cgpu_mutex);
+	const bool rv = _add_cgpu(cgpu);
+	mutex_unlock(&_add_cgpu_mutex);
+	return rv;
+}
+
 void add_cgpu_live(void *p)
 {
 	add_cgpu(p);
@@ -787,18 +798,23 @@ void add_cgpu_live(void *p)
 
 bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
 {
-	int old_total_devices = total_devices_new;
-	
 	if (!prev_cgpu)
 		return add_cgpu(cgpu);
 	
 	while (prev_cgpu->next_proc)
 		prev_cgpu = prev_cgpu->next_proc;
 	
-	if (!add_cgpu(cgpu))
-		return false;
+	mutex_lock(&_add_cgpu_mutex);
 	
+	int old_total_devices = total_devices_new;
+	if (!_add_cgpu(cgpu))
+	{
+		mutex_unlock(&_add_cgpu_mutex);
+		return false;
+	}
 	prev_cgpu->next_proc = devices_new[old_total_devices];
+	
+	mutex_unlock(&_add_cgpu_mutex);
 	
 	return true;
 }

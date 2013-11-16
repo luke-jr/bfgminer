@@ -107,7 +107,7 @@ bool mcp2210_get_configs(struct mcp2210_device * const h)
 	return true;
 }
 
-struct mcp2210_device *mcp2210_open(struct lowlevel_device_info *info)
+struct mcp2210_device *mcp2210_open(const struct lowlevel_device_info * const info)
 {
 	struct mcp2210_device *h;
 	char * const path = info->path;

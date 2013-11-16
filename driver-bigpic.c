@@ -22,6 +22,7 @@
 #include "logging.h"
 
 #include "libbitfury.h"
+#include "lowlevel.h"
 #include "deviceapi.h"
 #include "sha2.h"
 
@@ -30,6 +31,12 @@
 #include <stdio.h>
 
 BFG_REGISTER_DRIVER(bigpic_drv)
+
+static
+bool bigpic_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Bitfury", "BF1");
+}
 
 //------------------------------------------------------------------------------
 static bool bigpic_detect_custom(const char *devpath, struct device_drv *api, struct bigpic_info *info)
@@ -131,16 +138,10 @@ static bool bigpic_detect_one(const char *devpath)
 	return true;
 }
 
-//------------------------------------------------------------------------------
-static int bigpic_detect_auto(void)
+static
+bool bigpic_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	return serial_autodetect(bigpic_detect_one, "Bitfury", "BF1");
-}
-
-//------------------------------------------------------------------------------
-static void bigpic_detect()
-{
-	serial_detect_auto(&bigpic_drv, bigpic_detect_one, bigpic_detect_auto);
+	return vcom_lowl_probe_wrapper(info, bigpic_detect_one);
 }
 
 //------------------------------------------------------------------------------
@@ -318,7 +319,8 @@ struct device_drv bigpic_drv = {
 	.name = "BPM",
 	.probe_priority = -110,
 
-	.drv_detect = bigpic_detect,
+	.lowl_match = bigpic_lowl_match,
+	.lowl_probe = bigpic_lowl_probe,
 
 	.identify_device = bigpic_identify,
 

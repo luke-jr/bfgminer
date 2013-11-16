@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include <uthash.h>
 
@@ -30,14 +31,24 @@ struct lowlevel_device_info {
 	
 	struct lowlevel_device_info *next;
 	UT_hash_handle hh;
+	pthread_t probe_pth;
+	int ref;
 };
 
-extern void lowlevel_scan();
+extern struct lowlevel_device_info *lowlevel_scan();
+extern bool _lowlevel_match_product(const struct lowlevel_device_info *, const char **);
+#define lowlevel_match_product(info, ...)  \
+	_lowlevel_match_product(info, (const char *[]){__VA_ARGS__, NULL})
+#define lowlevel_match_lowlproduct(info, matchlowl, ...)  \
+	(matchlowl == info->lowl && _lowlevel_match_product(info, (const char *[]){__VA_ARGS__, NULL}))
+extern bool lowlevel_match_id(const struct lowlevel_device_info *, const struct lowlevel_driver *, int32_t vid, int32_t pid);
 extern int _lowlevel_detect(lowl_found_devinfo_func_t, const char *serial, const char **product_needles, void *);
 #define lowlevel_detect(func, ...)  _lowlevel_detect(func, NULL, (const char *[]){__VA_ARGS__, NULL}, NULL)
 #define lowlevel_detect_serial(func, serial)  _lowlevel_detect(func, serial, (const char *[]){NULL}, NULL)
 extern int lowlevel_detect_id(lowl_found_devinfo_func_t, void *, const struct lowlevel_driver *, int32_t vid, int32_t pid);
 extern void lowlevel_scan_free();
+
+extern struct lowlevel_device_info *lowlevel_ref(const struct lowlevel_device_info *);
 extern void lowlevel_devinfo_semicpy(struct lowlevel_device_info *dst, const struct lowlevel_device_info *src);
 extern void lowlevel_devinfo_free(struct lowlevel_device_info *);
 

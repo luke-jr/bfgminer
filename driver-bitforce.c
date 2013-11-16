@@ -24,6 +24,7 @@
 #include "deviceapi.h"
 #include "miner.h"
 #include "fpgautils.h"
+#include "lowlevel.h"
 #include "util.h"
 
 #define BITFORCE_SLEEP_MS 500
@@ -163,6 +164,12 @@ int bitforce_chips_to_plan_for(int parallel, int chipcount) {
 	if (chipcount >  1) return  4;
 	if (chipcount     ) return  2;
 	                    return  1;
+}
+
+static
+bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "BitFORCE", "SHA256");
 }
 
 static bool bitforce_detect_one(const char *devpath)
@@ -314,14 +321,10 @@ static bool bitforce_detect_one(const char *devpath)
 	return add_cgpu(bitforce);
 }
 
-static int bitforce_detect_auto(void)
+static
+bool bitforce_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	return serial_autodetect(bitforce_detect_one, "BitFORCE", "SHA256");
-}
-
-static void bitforce_detect(void)
-{
-	serial_detect_auto(&bitforce_drv, bitforce_detect_one, bitforce_detect_auto);
+	return vcom_lowl_probe_wrapper(info, bitforce_detect_one);
 }
 
 struct bitforce_data {
@@ -1589,7 +1592,8 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 struct device_drv bitforce_drv = {
 	.dname = "bitforce",
 	.name = "BFL",
-	.drv_detect = bitforce_detect,
+	.lowl_match = bitforce_lowl_match,
+	.lowl_probe = bitforce_lowl_probe,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitforce_wlogprint_status,
 	.proc_tui_wlogprint_choices = bitforce_tui_wlogprint_choices,

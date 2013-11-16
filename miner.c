@@ -68,6 +68,7 @@
 #include "logging.h"
 #include "miner.h"
 #include "findnonce.h"
+#include "fpgautils.h"
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
@@ -10129,6 +10130,7 @@ extern struct sigaction pcwm_orig_term_handler;
 #endif
 
 bool bfg_need_detect_rescan;
+extern void probe_device(struct lowlevel_device_info *);
 
 static
 void drv_detect_all()
@@ -10137,7 +10139,12 @@ rescan:
 	bfg_need_detect_rescan = false;
 	
 #ifdef HAVE_BFG_LOWLEVEL
-	lowlevel_scan();
+	struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
+	
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		probe_device(info);
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		pthread_join(info->probe_pth, NULL);
 #endif
 	
 	struct driver_registration *reg, *tmp;
@@ -10268,6 +10275,115 @@ void _scan_serial(void *p)
 		}
 		scan_devices = orig_scan_devices;
 	}
+}
+
+static
+bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
+{
+	struct driver_registration *dreg;
+	
+	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
+	if (!dreg)
+	{
+		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
+		if (!dreg)
+			return false;
+	}
+	
+	const struct device_drv * const drv = dreg->drv;
+	if (!drv->lowl_probe)
+		return false;
+	return drv->lowl_probe(info);
+}
+
+static
+void *probe_device_thread(void *p)
+{
+	struct lowlevel_device_info * const info = p;
+	
+	{
+		char threadname[5 + strlen(info->devid) + 1];
+		sprintf(threadname, "probe%s", info->devid);
+		RenameThread(threadname);
+	}
+	
+	// If already in use, ignore
+	if (bfg_claim_any(NULL, NULL, info->devid))
+		applogr(NULL, LOG_DEBUG, "%s: \"%s\" already in use",
+		        __func__, info->product);
+	
+	// if lowlevel device matches specific user assignment, probe requested driver(s)
+	struct string_elist *sd_iter, *sd_tmp;
+	struct driver_registration *dreg, *dreg_tmp;
+	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
+	{
+		const char * const dname = sd_iter->string;
+		const char * const colon = strchr(dname, ':');
+		if (!colon)
+			continue;
+		const char * const ser = &colon[1];
+		if (!(true
+			|| (info->serial && !strcasecmp(ser, info->serial))
+			|| (info->path   && !strcasecmp(ser, info->path  ))
+		))
+		{
+			char *devid = devpath_to_devid(ser);
+			if (!devid)
+				continue;
+			const bool different = strcmp(info->devid, devid);
+			free(devid);
+			if (different)
+				continue;
+		}
+		const size_t dnamelen = (colon - dname);
+		if (_probe_device_internal(info, dname, dnamelen))
+			return NULL;
+	}
+	
+	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
+	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+	{
+		const struct device_drv * const drv = dreg->drv;
+		if (!(drv->lowl_match && drv->lowl_match(info)))
+			continue;
+		if (drv->lowl_probe(info))
+			return NULL;
+	}
+	
+	// probe driver(s) with 'all' enabled
+	bool allall = false;
+	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
+	{
+		const char * const dname = sd_iter->string;
+		const char * const colon = strchr(dname, ':');
+		if (!colon)
+		{
+			if (!strcasecmp(dname, "all"))
+				allall = true;
+			continue;
+		}
+		if (strcasecmp(&colon[1], "all"))
+			continue;
+		const size_t dnamelen = (colon - dname);
+		if (_probe_device_internal(info, dname, dnamelen))
+			return NULL;
+	}
+	if (allall)
+	{
+		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+		{
+			const struct device_drv * const drv = dreg->drv;
+			if (drv->lowl_probe(info))
+				return NULL;
+		}
+	}
+	
+	return NULL;
+}
+
+void probe_device(struct lowlevel_device_info * const info)
+{
+	pthread_create(&info->probe_pth, NULL, probe_device_thread, info);
 }
 
 int create_new_cgpus(void (*addfunc)(void*), void *arg)

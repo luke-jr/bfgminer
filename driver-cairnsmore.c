@@ -16,6 +16,7 @@
 #include "dynclock.h"
 #include "fpgautils.h"
 #include "icarus-common.h"
+#include "lowlevel.h"
 #include "miner.h"
 
 #define CAIRNSMORE1_IO_SPEED 115200
@@ -28,6 +29,12 @@
 #define CAIRNSMORE1_MAXIMUM_CLOCK  210
 
 BFG_REGISTER_DRIVER(cairnsmore_drv)
+
+static
+bool cairnsmore_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Cairnsmore1");
+}
 
 static bool cairnsmore_detect_one(const char *devpath)
 {
@@ -50,15 +57,10 @@ static bool cairnsmore_detect_one(const char *devpath)
 	return true;
 }
 
-static int cairnsmore_detect_auto(void)
+static
+bool cairnsmore_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	return serial_autodetect(cairnsmore_detect_one, "Cairnsmore1");
-}
-
-static void cairnsmore_detect()
-{
-	// Actual serial detection is handled by Icarus driver
-	serial_detect_auto_byname(&cairnsmore_drv, cairnsmore_detect_one, cairnsmore_detect_auto);
+	return vcom_lowl_probe_wrapper(info, cairnsmore_detect_one);
 }
 
 static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
@@ -204,7 +206,8 @@ static void cairnsmore_drv_init()
 	cairnsmore_drv = icarus_drv;
 	cairnsmore_drv.dname = "cairnsmore";
 	cairnsmore_drv.name = "ECM";
-	cairnsmore_drv.drv_detect = cairnsmore_detect;
+	cairnsmore_drv.lowl_match = cairnsmore_lowl_match;
+	cairnsmore_drv.lowl_probe = cairnsmore_lowl_probe;
 	cairnsmore_drv.thread_init = cairnsmore_init;
 	cairnsmore_drv.identify_device = cairnsmore_identify;
 	cairnsmore_drv.get_api_extra_device_status = cairnsmore_drv_extra_device_status;
