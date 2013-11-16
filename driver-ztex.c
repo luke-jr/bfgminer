@@ -77,7 +77,13 @@ static struct cgpu_info *ztex_setup(struct libztex_device *dev, int fpgacount)
 }
 
 static
-bool ztex_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
+bool ztex_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_usb, "btcminer for ZTEX");
+}
+
+static
+bool ztex_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	const char * const product = info->product;
 	const char * const serial = info->serial;
@@ -123,21 +129,6 @@ bool ztex_foundlowl(struct lowlevel_device_info * const info, __maybe_unused voi
 		pthread_mutex_init(&ztex->device_ztex->mutex, NULL);
 	
 	return true;
-}
-
-static bool ztex_detect_one(const char *serial)
-{
-	return lowlevel_detect_serial(ztex_foundlowl, serial);
-}
-
-static int ztex_autodetect()
-{
-	return lowlevel_detect(ztex_foundlowl, "btcminer for ZTEX");
-}
-
-static void ztex_detect()
-{
-	generic_detect(&ztex_drv, ztex_detect_one, ztex_autodetect, 0);
 }
 
 static bool ztex_change_clock_func(struct thr_info *thr, int bestM)
@@ -421,7 +412,8 @@ static void ztex_disable(struct thr_info *thr)
 struct device_drv ztex_drv = {
 	.dname = "ztex",
 	.name = "ZTX",
-	.drv_detect = ztex_detect,
+	.lowl_match = ztex_lowl_match,
+	.lowl_probe = ztex_lowl_probe,
 	.get_api_extra_device_status = get_ztex_drv_extra_device_status,
 	.thread_init = ztex_prepare,
 	.scanhash = ztex_scanhash,
