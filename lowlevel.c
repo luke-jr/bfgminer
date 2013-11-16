@@ -58,7 +58,7 @@ void lowlevel_scan_free()
 	}
 }
 
-void lowlevel_scan()
+struct lowlevel_device_info *lowlevel_scan()
 {
 	struct lowlevel_device_info *devinfo_mid_list;
 	
@@ -99,6 +99,8 @@ void lowlevel_scan()
 		       (unsigned)devinfo_mid_list->vid, (unsigned)devinfo_mid_list->pid,
 		       devinfo_mid_list->manufacturer, devinfo_mid_list->product, devinfo_mid_list->serial);
 	}
+	
+	return devinfo_list;
 }
 
 #define DETECT_BEGIN  \

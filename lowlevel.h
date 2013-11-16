@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <pthread.h>
 
 #include <uthash.h>
 
@@ -30,9 +31,10 @@ struct lowlevel_device_info {
 	
 	struct lowlevel_device_info *next;
 	UT_hash_handle hh;
+	pthread_t probe_pth;
 };
 
-extern void lowlevel_scan();
+extern struct lowlevel_device_info *lowlevel_scan();
 extern int _lowlevel_detect(lowl_found_devinfo_func_t, const char *serial, const char **product_needles, void *);
 #define lowlevel_detect(func, ...)  _lowlevel_detect(func, NULL, (const char *[]){__VA_ARGS__, NULL}, NULL)
 #define lowlevel_detect_serial(func, serial)  _lowlevel_detect(func, serial, (const char *[]){NULL}, NULL)

@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+#include <uthash.h>
+
 #include "miner.h"
 
 struct driver_registration;
@@ -20,6 +22,10 @@ extern struct driver_registration *_bfg_drvreg1;
 extern struct driver_registration *_bfg_drvreg2;
 extern void bfg_devapi_init();
 
+#define BFG_FIND_DRV_BY_DNAME(reg, name, namelen)  \
+	HASH_FIND(hh , _bfg_drvreg1, name, namelen, reg)
+#define BFG_FIND_DRV_BY_NAME(reg, name, namelen)  \
+	HASH_FIND(hh2, _bfg_drvreg2, name, namelen, reg)
 #define BFG_FOREACH_DRIVER_BY_DNAME(reg, tmp)  \
 	HASH_ITER(hh , _bfg_drvreg1, reg, tmp)
 #define BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)  \
