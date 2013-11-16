@@ -10278,6 +10278,25 @@ void _scan_serial(void *p)
 }
 
 static
+bool _probe_device_match(const struct lowlevel_device_info * const info, const char * const ser)
+{
+	if (!(true
+		|| (info->serial && !strcasecmp(ser, info->serial))
+		|| (info->path   && !strcasecmp(ser, info->path  ))
+	))
+	{
+		char *devid = devpath_to_devid(ser);
+		if (!devid)
+			return false;
+		const bool different = strcmp(info->devid, devid);
+		free(devid);
+		if (different)
+			return false;
+	}
+	return true;
+}
+
+static
 bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
 {
 	struct driver_registration *dreg;
@@ -10322,19 +10341,8 @@ void *probe_device_thread(void *p)
 		if (!colon)
 			continue;
 		const char * const ser = &colon[1];
-		if (!(true
-			|| (info->serial && !strcasecmp(ser, info->serial))
-			|| (info->path   && !strcasecmp(ser, info->path  ))
-		))
-		{
-			char *devid = devpath_to_devid(ser);
-			if (!devid)
-				continue;
-			const bool different = strcmp(info->devid, devid);
-			free(devid);
-			if (different)
-				continue;
-		}
+		if (!_probe_device_match(info, ser))
+			continue;
 		const size_t dnamelen = (colon - dname);
 		if (_probe_device_internal(info, dname, dnamelen))
 			return NULL;
@@ -10358,7 +10366,7 @@ void *probe_device_thread(void *p)
 		const char * const colon = strchr(dname, ':');
 		if (!colon)
 		{
-			if (!strcasecmp(dname, "all"))
+			if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
 				allall = true;
 			continue;
 		}
