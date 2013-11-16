@@ -40,6 +40,7 @@
 #include "fpgautils.h"
 #include "driver-avalon.h"
 #include "logging.h"
+#include "lowlevel.h"
 #include "util.h"
 
 BFG_REGISTER_DRIVER(avalon_drv)
@@ -629,9 +630,10 @@ static bool avalon_detect_one(const char *devpath)
 	return true;
 }
 
-static inline void avalon_detect()
+static
+bool avalon_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	serial_detect_byname(&avalon_drv, avalon_detect_one);
+	return vcom_lowl_probe_wrapper(info, avalon_detect_one);
 }
 
 static void __avalon_init(struct cgpu_info *avalon)
@@ -1015,7 +1017,7 @@ static void avalon_shutdown(struct thr_info *thr)
 struct device_drv avalon_drv = {
 	.dname = "avalon",
 	.name = "AVA",
-	.drv_detect = avalon_detect,
+	.lowl_probe = avalon_lowl_probe,
 	.thread_prepare = avalon_prepare,
 	.minerloop = hash_queued_work,
 	.queue_full = avalon_fill,
