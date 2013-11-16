@@ -35,6 +35,12 @@ struct lowlevel_device_info {
 };
 
 extern struct lowlevel_device_info *lowlevel_scan();
+extern bool _lowlevel_match_product(const struct lowlevel_device_info *, const char **);
+#define lowlevel_match_product(info, ...)  \
+	_lowlevel_match_product(info, (const char *[]){__VA_ARGS__, NULL})
+#define lowlevel_match_lowlproduct(info, matchlowl, ...)  \
+	(matchlowl == info->lowl && _lowlevel_match_product(info, (const char *[]){__VA_ARGS__, NULL}))
+extern bool lowlevel_match_id(const struct lowlevel_device_info *, const struct lowlevel_driver *, int32_t vid, int32_t pid);
 extern int _lowlevel_detect(lowl_found_devinfo_func_t, const char *serial, const char **product_needles, void *);
 #define lowlevel_detect(func, ...)  _lowlevel_detect(func, NULL, (const char *[]){__VA_ARGS__, NULL}, NULL)
 #define lowlevel_detect_serial(func, serial)  _lowlevel_detect(func, serial, (const char *[]){NULL}, NULL)
