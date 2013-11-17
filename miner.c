@@ -10891,10 +10891,26 @@ int main(int argc, char *argv[])
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
+			char buf[0x100];
+			if (cgpu->device != cgpu)
+				continue;
 			if (cgpu->name)
-				applog(LOG_ERR, " %2d. %"PRIprepr": %s (driver: %s)", i, cgpu->proc_repr, cgpu->name, cgpu->drv->dname);
+				snprintf(buf, sizeof(buf), " %s", cgpu->name);
 			else
-				applog(LOG_ERR, " %2d. %"PRIprepr" (driver: %s)", i, cgpu->proc_repr, cgpu->drv->dname);
+			if (cgpu->dev_manufacturer)
+				snprintf(buf, sizeof(buf), " %s by %s", (cgpu->dev_product ?: "Device"), cgpu->dev_manufacturer);
+			else
+			if (cgpu->dev_product)
+				snprintf(buf, sizeof(buf), " %s", cgpu->dev_product);
+			else
+				strcpy(buf, " Device");
+			tailsprintf(buf, sizeof(buf), " (driver=%s; procs=%d", cgpu->drv->dname, cgpu->procs);
+			if (cgpu->dev_serial)
+				tailsprintf(buf, sizeof(buf), "; serial=%s", cgpu->dev_serial);
+			if (cgpu->device_path)
+				tailsprintf(buf, sizeof(buf), "; path=%s", cgpu->device_path);
+			tailsprintf(buf, sizeof(buf), ")");
+			_applog(LOG_NOTICE, buf);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
