@@ -506,6 +506,9 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	// ___ - matches all processors on all devices using driver/name ___
 	// ___0 - matches all processors of 0th device using driver/name ___
 	// ___0a - matches first processor of 0th device using driver/name ___
+	// @* - matches device with serial or path *
+	// @*@a - matches first processor of device with serial or path *
+	// ___@* - matches device with serial or path * using driver/name ___
 	if (!strcasecmp(pattern, "all"))
 		return true;
 	
@@ -514,14 +517,34 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	int n, i, c = -1;
 	struct cgpu_info *device;
 	
-	while (p[0] && !isdigit(p[0]))
+	while (p[0] && p[0] != '@' && !isdigit(p[0]))
 		++p;
 	
 	L = p - pattern;
 	while (L && isspace(pattern[L-1]))
 		--L;
-	n = strtol(p, (void*)&p2, 0);
-	if (L == 0)
+	if (p[0] == '@')
+	{
+		// Serial/path
+		const char * const ser = &p[1];
+		for (p = ser; p[0] != '@' && p[0] != '\0'; ++p)
+		{}
+		p2 = (p[0] == '@') ? &p[1] : p;
+		const size_t serlen = (p - ser);
+		p = "";
+		const char * const devpath = cgpu->device_path ?: "";
+		const char * const devser = cgpu->dev_serial ?: "";
+		if ((!strncmp(devpath, ser, serlen)) && devpath[serlen] == '\0')
+		{}  // Match
+		else
+		if ((!strncmp(devser, ser, serlen)) && devser[serlen] == '\0')
+		{}  // Match
+		else
+			return false;
+	}
+	else
+		n = strtol(p, (void*)&p2, 0);
+	if (p == pattern)
 	{
 		if (!p[0])
 			return true;
@@ -536,6 +559,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	{
 		const struct device_drv * const drv = cgpu->drv;
 		if ((L == 3 && !strncasecmp(pattern, drv->name, 3)) ||
+			(!L) ||
 			(L == strlen(drv->dname) && !strncasecmp(pattern, drv->dname, L)))
 			{}  // Matched name or dname
 		else
@@ -611,6 +635,25 @@ void test_cgpu_match()
 	TEST_CGPU_MATCH("TST0a")
 	TEST_CGPU_NOMATCH("TST0b")
 	TEST_CGPU_NOMATCH("TST0aa")
+	TEST_CGPU_MATCH("@")
+	TEST_CGPU_NOMATCH("@abc")
+	TEST_CGPU_MATCH("@@a")
+	TEST_CGPU_NOMATCH("@@b")
+	TEST_CGPU_MATCH("TST@")
+	TEST_CGPU_NOMATCH("TST@abc")
+	TEST_CGPU_MATCH("TST@@a")
+	TEST_CGPU_NOMATCH("TST@@b")
+	cgpu.device_path = "/dev/test";
+	cgpu.dev_serial = "testy";
+	TEST_CGPU_MATCH("TST@/dev/test")
+	TEST_CGPU_MATCH("TST@testy")
+	TEST_CGPU_NOMATCH("TST@")
+	TEST_CGPU_NOMATCH("TST@/dev/test5@a")
+	TEST_CGPU_NOMATCH("TST@testy3@a")
+	TEST_CGPU_MATCH("TST@/dev/test@a")
+	TEST_CGPU_MATCH("TST@testy@a")
+	TEST_CGPU_NOMATCH("TST@/dev/test@b")
+	TEST_CGPU_NOMATCH("TST@testy@b")
 }
 
 static
