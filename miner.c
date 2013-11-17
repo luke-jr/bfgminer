@@ -176,8 +176,7 @@ int stratumsrv_port = -1;
 struct string_elist *scan_devices;
 static struct string_elist *opt_set_device_list;
 bool opt_force_dev_init;
-static bool devices_enabled[MAX_DEVICES];
-static int opt_devs_enabled;
+static struct string_elist *opt_devices_enabled_list;
 static bool opt_display_devs;
 int total_devices;
 struct cgpu_info **devices;
@@ -1050,9 +1049,6 @@ void test_intrange()
 
 static char *set_devices(char *arg)
 {
-	int i, val1 = 0, val2 = 0;
-	char *nextptr;
-
 	if (*arg) {
 		if (*arg == '?') {
 			opt_display_devs = true;
@@ -1061,34 +1057,8 @@ static char *set_devices(char *arg)
 	} else
 		return "Invalid device parameters";
 
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set devices";
-	if (!get_intrange(nextptr, &val1, &val2))
-		return "Invalid device number";
-	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-	    val1 > val2) {
-		return "Invalid value passed to set devices";
-	}
-
-	for (i = val1; i <= val2; i++) {
-		devices_enabled[i] = true;
-		opt_devs_enabled++;
-	}
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		if (!get_intrange(nextptr, &val1, &val2))
-			return "Invalid device number";
-		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-		val1 > val2) {
-			return "Invalid value passed to set devices";
-		}
-
-		for (i = val1; i <= val2; i++) {
-			devices_enabled[i] = true;
-			opt_devs_enabled++;
-		}
-	}
+	for (const char *item = strtok(arg, ","); item; item = strtok(NULL, ","))
+		string_elist_add(item, &opt_devices_enabled_list);
 
 	return NULL;
 }
@@ -10167,6 +10137,21 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
 	cgpu->thr[threadobj] = NULL;
 	cgpu->status = LIFE_INIT;
+	
+	if (opt_devices_enabled_list)
+	{
+		struct string_elist *enablestr_elist;
+		cgpu->deven = DEV_DISABLED;
+		DL_FOREACH(opt_devices_enabled_list, enablestr_elist)
+		{
+			const char * const enablestr = enablestr_elist->string;
+			if (cgpu_match(enablestr, cgpu))
+			{
+				cgpu->deven = DEV_ENABLED;
+				break;
+			}
+		}
+	}
 
 	cgpu->max_hashes = 0;
 
@@ -10831,22 +10816,8 @@ int main(int argc, char *argv[])
 	}
 
 	mining_threads = 0;
-	if (opt_devs_enabled) {
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				if (i >= total_devices)
-					quit (1, "Command line options set a device that doesn't exist");
-				register_device(devices[i]);
-			} else if (i < total_devices) {
-				register_device(devices[i]);
-				devices[i]->deven = DEV_DISABLED;
-			}
-		}
-		total_devices = cgminer_id_count;
-	} else {
-		for (i = 0; i < total_devices; ++i)
-			register_device(devices[i]);
-	}
+	for (i = 0; i < total_devices; ++i)
+		register_device(devices[i]);
 
 	if (!total_devices) {
 		const bool netdev_support =
