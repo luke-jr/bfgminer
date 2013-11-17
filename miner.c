@@ -179,7 +179,6 @@ bool opt_force_dev_init;
 static bool devices_enabled[MAX_DEVICES];
 static int opt_devs_enabled;
 static bool opt_display_devs;
-static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
 int total_devices_new;
@@ -1935,9 +1934,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
-	OPT_WITHOUT_ARG("--remove-disabled",
-		     opt_set_bool, &opt_removedisabled,
-	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--request-diff",
 	             set_request_diff, opt_show_floatval, &request_pdiff,
 	             "Request a specific difficulty from pools"),
@@ -6284,10 +6280,7 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	// We can only remove devices or disable them by default, but not both...
-	if (!(opt_removedisabled && opt_devs_enabled))
 	{
-		// Don't need to remove any, so we can set defaults here
 		for (i = 0; i < total_devices; ++i)
 			if (devices[i]->deven == DEV_DISABLED)
 			{
@@ -6304,20 +6297,6 @@ void write_config(FILE *fcfg)
 				
 				break;
 			}
-	}
-	else
-	if (opt_devs_enabled) {
-		// Mark original device params and remove-disabled
-		fprintf(fcfg, ",\n\"device\" : [");
-		bool first = true;
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
-				first = false;
-			}
-		}
-		fprintf(fcfg, "\n]");
-		fprintf(fcfg, ",\n\"remove-disabled\" : true");
 	}
 	
 	if (opt_api_allow)
@@ -10859,12 +10838,7 @@ int main(int argc, char *argv[])
 					quit (1, "Command line options set a device that doesn't exist");
 				register_device(devices[i]);
 			} else if (i < total_devices) {
-				if (opt_removedisabled) {
-					if (devices[i]->drv == &cpu_drv)
-						--opt_n_threads;
-				} else {
-					register_device(devices[i]);
-				}
+				register_device(devices[i]);
 				devices[i]->deven = DEV_DISABLED;
 			}
 		}
