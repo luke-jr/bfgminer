@@ -573,6 +573,46 @@ invsyntax:
 	return false;
 }
 
+#define TEST_CGPU_MATCH(pattern)  \
+	if (!cgpu_match(pattern, &cgpu))  \
+		applog(LOG_ERR, "%s: Pattern \"%s\" should have matched!", __func__, pattern);  \
+// END TEST_CGPU_MATCH
+#define TEST_CGPU_NOMATCH(pattern)  \
+	if (cgpu_match(pattern, &cgpu))  \
+		applog(LOG_ERR, "%s: Pattern \"%s\" should NOT have matched!", __func__, pattern);  \
+// END TEST_CGPU_MATCH
+static __maybe_unused
+void test_cgpu_match()
+{
+	struct device_drv drv = {
+		.dname = "test",
+		.name = "TST",
+	};
+	struct cgpu_info cgpu = {
+		.drv = &drv,
+		.device = &cgpu,
+		.proc_repr = "TST 0a",
+	};
+	struct cgpu_info *devices_list[1] = {&cgpu,};
+	devices = devices_list;
+	total_devices = 1;
+	TEST_CGPU_MATCH("all")
+	TEST_CGPU_MATCH("d0")
+	TEST_CGPU_NOMATCH("d1")
+	TEST_CGPU_MATCH("0")
+	TEST_CGPU_NOMATCH("1")
+	TEST_CGPU_MATCH("TST")
+	TEST_CGPU_NOMATCH("TSF")
+	TEST_CGPU_NOMATCH("TS")
+	TEST_CGPU_NOMATCH("TSTF")
+	TEST_CGPU_MATCH("TST0")
+	TEST_CGPU_MATCH("TST 0")
+	TEST_CGPU_NOMATCH("TST1")
+	TEST_CGPU_MATCH("TST0a")
+	TEST_CGPU_NOMATCH("TST0b")
+	TEST_CGPU_NOMATCH("TST0aa")
+}
+
 static
 int cgpu_search(const char * const pattern, const int first)
 {
@@ -10702,6 +10742,7 @@ int main(int argc, char *argv[])
 	}
 	
 	if (opt_unittest) {
+		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
 	}
