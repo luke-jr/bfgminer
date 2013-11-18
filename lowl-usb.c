@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -106,6 +107,27 @@ struct lowlevel_device_info *usb_devinfo_scan()
 	libusb_free_device_list(list, 1);
 	
 	return devinfo_list;
+}
+
+bool lowl_usb_attach_kernel_driver(const struct lowlevel_device_info * const info)
+{
+	libusb_device * const dev = info->lowl_data;
+	libusb_device_handle *devh;
+	bool rv = false;
+	
+	if (libusb_open(dev, &devh))
+		return false;
+	
+	if (libusb_kernel_driver_active(devh, 0) == 0)
+		if (!libusb_attach_kernel_driver(devh, 0))
+		{
+			applog(LOG_DEBUG, "Reattaching kernel driver for %s", info->devid);
+			rv = true;
+		}
+	
+	libusb_close(devh);
+	
+	return rv;
 }
 
 struct libusb_device_handle *lowl_usb_open(struct lowlevel_device_info * const info)

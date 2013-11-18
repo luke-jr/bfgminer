@@ -169,7 +169,7 @@ int bitforce_chips_to_plan_for(int parallel, int chipcount) {
 static
 bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "BitFORCE", "SHA256");
+	return lowlevel_match_product(info, "BitFORCE", "SHA256");
 }
 
 static bool bitforce_detect_one(const char *devpath)

@@ -647,10 +647,19 @@ extern void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info **);
 extern void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info **);
 #endif
 
+extern bool lowl_usb_attach_kernel_driver(const struct lowlevel_device_info *);
+
 bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, detectone_func_t detectone)
 {
 	if (info->lowl != &lowl_vcom)
+	{
+		if (info->lowl == &lowl_usb)
+		{
+			if (lowl_usb_attach_kernel_driver(info))
+				bfg_need_detect_rescan = true;
+		}
 		return false;
+	}
 	detectone_meta_info = (struct detectone_meta_info_t){
 		.manufacturer = info->manufacturer,
 		.product = info->product,
@@ -671,7 +680,12 @@ bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, vo
 	}
 	if (devinfo->lowl != &lowl_vcom)
 	{
-		if (devinfo->lowl != &lowl_usb)
+		if (devinfo->lowl == &lowl_usb)
+		{
+			if (lowl_usb_attach_kernel_driver(devinfo))
+				bfg_need_detect_rescan = true;
+		}
+		else
 			applog(LOG_WARNING, "Non-VCOM %s (%s) matched", devinfo->path, devinfo->devid);
 		return false;
 	}
