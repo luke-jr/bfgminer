@@ -1157,8 +1157,7 @@ static char *set_devices(char *arg)
 	} else
 		return "Invalid device parameters";
 
-	for (const char *item = strtok(arg, ","); item; item = strtok(NULL, ","))
-		string_elist_add(item, &opt_devices_enabled_list);
+	string_elist_add(arg, &opt_devices_enabled_list);
 
 	return NULL;
 }
@@ -1782,7 +1781,7 @@ static struct opt_table opt_config_table[] = {
 			"Verbose dump of device protocol-level activities"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
-	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
+	             "Enable only devices matching pattern (default: all)"),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
