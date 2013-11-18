@@ -10350,7 +10350,7 @@ void _scan_serial(void *p)
 static
 bool _probe_device_match(const struct lowlevel_device_info * const info, const char * const ser)
 {
-	if (!(true
+	if (!(false
 		|| (info->serial && !strcasecmp(ser, info->serial))
 		|| (info->path   && !strcasecmp(ser, info->path  ))
 	))
