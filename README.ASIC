@@ -128,17 +128,50 @@ KLONDIKE
 --klondike-options <arg> Set klondike options clock:temptarget
 
 
-KnCminer
+KNCMINER
 --------
 
-The KnC driver is closed source there is currently no alternative available.
-BFGMiner can be integrated into your miners host, a BeagleBoneBlack, running the
-Angstrom linux distribution, by compiling in the usual way with the --enable-knc
-configuration option or following the steps here; http://codepad.org/QKSeO5zh
-BFGMiner has also been incorporated into an unofficial firmware by uski01 called
-Bertmod here;
-	http://forum.kncminer.com/forum/main-category/main-forum/13938-bertmod-0-3-unofficial-firmware-mod-feedback-thread
+The KnC miner uses a BeagleBoneBlack(BBB) as the host, this is pluged into a
+cape that holds the FPGA and connections for 4-6 ASICS depending on the cape
+version. The BBB runs the Angstrom linux distribution, the following is a step
+by step install for BFGMiner on this distro;
 
+-----------------Start------------
+cat >/etc/opkg/feeds.conf <<\EOF
+src/gz noarch http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/all/
+src/gz base http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/cortexa8hf-vfp-neon/base/
+src/gz beaglebone http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/cortexa8hf-vfp-neon/machine/beaglebone/
+EOF
+
+opkg update
+opkg install angstrom-feed-configs
+rm /etc/opkg/feeds.conf
+opkg update
+
+opkg install update-alternatives
+opkg install automake autoconf make gcc cpp binutils git less pkgconfig-dev ncurses-dev libtool nano bash i2c-tools-dev
+while ! opkg install libcurl-dev; do true; done
+ln -s aclocal-1.12 /usr/share/aclocal
+
+curl http://www.digip.org/jansson/releases/jansson-2.0.1.tar.bz2 | tar -xjvp
+cd jansson-2.0.1
+./configure --prefix=/usr CC=arm-angstrom-linux-gnueabi-gcc --disable-static NM=arm-angstrom-linux-gnueabi-nm
+make install && ldconfig
+cd ..
+
+git clone git://github.com/luke-jr/bfgminer
+cd bfgminer
+./autogen.sh
+git clone git://github.com/troydhanson/uthash
+./configure --host=arm-angstrom-linux-gnueabi --enable-knc CFLAGS="-I$PWD/uthash/src -O0 -ggdb"
+make AR=arm-angstrom-linux-gnueabi-ar
+
+/etc/init.d/cgminer.sh stop
+./bfgminer -S knc:auto -c /config/cgminer.conf
+
+---------------END-------------
+
+BFGMiner has also been incorporated into an unofficial firmware by uski01 called Bertmod this can be found on the kncminer forum.
 
 ---
 
