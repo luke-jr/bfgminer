@@ -806,9 +806,9 @@ Windows drivers:
 
 Q: I ran cgminer, and now BFGMiner doesn't work!
 A: cgminer has its own non-standard implementations of the drivers for most USB
-devices, and disables the official drivers (on Windows, you did this manually
-using Zadig). Before you can use BFGMiner, you will need to restore the original
-driver. With Linux, usually rebooting or re-plugging the device is sufficient.
+devices, and requires you to replace the official drivers with WinUSB on Windows
+(usually using Zadig). Before you can use BFGMiner, you will need to restore the
+original driver.
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them
