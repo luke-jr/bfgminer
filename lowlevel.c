@@ -59,11 +59,16 @@ void lowlevel_scan_free()
 		return;
 	
 	struct lowlevel_device_info *info, *tmp;
+	struct lowlevel_device_info *info2, *tmp2;
 	
 	LL_FOREACH_SAFE(devinfo_list, info, tmp)
 	{
 		LL_DELETE(devinfo_list, info);
-		lowlevel_devinfo_free(info);
+		LL_FOREACH_SAFE2(info, info2, tmp2, same_devid_next)
+		{
+			LL_DELETE(info, info2);
+			lowlevel_devinfo_free(info2);
+		}
 	}
 }
 
@@ -98,8 +103,19 @@ struct lowlevel_device_info *lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
+	struct lowlevel_device_info *devinfo_same_prev_ht = NULL, *devinfo_same_list;
 	LL_FOREACH(devinfo_list, devinfo_mid_list)
 	{
+		// Check for devid overlapping, and build a secondary linked list for them, only including the devid in the main list once (high level to low level)
+		HASH_FIND_STR(devinfo_same_prev_ht, devinfo_mid_list->devid, devinfo_same_list);
+		if (devinfo_same_list)
+		{
+			HASH_DEL(devinfo_same_prev_ht, devinfo_same_list);
+			LL_DELETE(devinfo_list, devinfo_same_list);
+		}
+		LL_PREPEND2(devinfo_same_list, devinfo_mid_list, same_devid_next);
+		HASH_ADD_KEYPTR(hh, devinfo_same_prev_ht, devinfo_mid_list->devid, strlen(devinfo_mid_list->devid), devinfo_same_list);
+		
 		applog(LOG_DEBUG, "%s: Found %s device at %s (path=%s, vid=%04x, pid=%04x, manuf=%s, prod=%s, serial=%s)",
 		       __func__,
 		       devinfo_mid_list->lowl->dname,

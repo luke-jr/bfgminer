@@ -10384,11 +10384,12 @@ bool _probe_device_internal(struct lowlevel_device_info * const info, const char
 static
 void *probe_device_thread(void *p)
 {
-	struct lowlevel_device_info * const info = p;
+	struct lowlevel_device_info * const infolist = p;
+	struct lowlevel_device_info *info = infolist;
 	
 	{
 		char threadname[5 + strlen(info->devid) + 1];
-		sprintf(threadname, "probe%s", info->devid);
+		sprintf(threadname, "probe_%s", info->devid);
 		RenameThread(threadname);
 	}
 	
@@ -10407,11 +10408,14 @@ void *probe_device_thread(void *p)
 		if (!colon)
 			continue;
 		const char * const ser = &colon[1];
-		if (!_probe_device_match(info, ser))
-			continue;
-		const size_t dnamelen = (colon - dname);
-		if (_probe_device_internal(info, dname, dnamelen))
-			return NULL;
+		LL_FOREACH2(infolist, info, same_devid_next)
+		{
+			if (!_probe_device_match(info, ser))
+				continue;
+			const size_t dnamelen = (colon - dname);
+			if (_probe_device_internal(info, dname, dnamelen))
+				return NULL;
+		}
 	}
 	
 	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
@@ -10438,41 +10442,48 @@ void *probe_device_thread(void *p)
 				break;
 		}
 		
-		if (doauto)
+		if (doauto && drv->lowl_match)
 		{
-			if (!(drv->lowl_match && drv->lowl_match(info)))
-				continue;
-			if (drv->lowl_probe(info))
-				return NULL;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if (!drv->lowl_match(info))
+					continue;
+				if (drv->lowl_probe(info))
+					return NULL;
+			}
 		}
 	}
 	
 	// probe driver(s) with 'all' enabled
-	bool allall = false;
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
 		const char * const colon = strchr(dname, ':');
 		if (!colon)
 		{
-			if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
-				allall = true;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
+				{
+					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+					{
+						const struct device_drv * const drv = dreg->drv;
+						if (!drv->lowl_probe)
+							continue;
+						if (drv->lowl_probe(info))
+							return NULL;
+					}
+					break;
+				}
+			}
 			continue;
 		}
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
-		if (_probe_device_internal(info, dname, dnamelen))
-			return NULL;
-	}
-	if (allall)
-	{
-		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+		LL_FOREACH2(infolist, info, same_devid_next)
 		{
-			const struct device_drv * const drv = dreg->drv;
-			if (!drv->lowl_probe)
-				continue;
-			if (drv->lowl_probe(info))
+			if (_probe_device_internal(info, dname, dnamelen))
 				return NULL;
 		}
 	}

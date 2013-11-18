@@ -30,6 +30,7 @@ struct lowlevel_device_info {
 	void *lowl_data;
 	
 	struct lowlevel_device_info *next;
+	struct lowlevel_device_info *same_devid_next;
 	UT_hash_handle hh;
 	pthread_t probe_pth;
 	int ref;
