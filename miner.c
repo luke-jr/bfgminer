@@ -6088,7 +6088,8 @@ static void json_escape_free()
 	}
 }
 
-static char *json_escape(char *str)
+static
+char *json_escape(const char *str)
 {
 	struct JE *jeptr;
 	char *buf, *ptr;
@@ -6164,6 +6165,24 @@ void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffse
 }
 #define write_config_temps(fcfg, configname, settingname)  \
 	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
+
+static
+void _write_config_string_elist(FILE *fcfg, const char *configname, struct string_elist * const elist)
+{
+	if (!elist)
+		return;
+	
+	static struct string_elist *entry;
+	fprintf(fcfg, ",\n\"%s\" : [", configname);
+	bool first = true;
+	DL_FOREACH(elist, entry)
+	{
+		const char * const s = entry->string;
+		fprintf(fcfg, "%s\n\t\"%s\"", first ? "" : ",", json_escape(s));
+		first = false;
+	}
+	fprintf(fcfg, "\n]");
+}
 
 void write_config(FILE *fcfg)
 {
@@ -6345,24 +6364,7 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	{
-		for (i = 0; i < total_devices; ++i)
-			if (devices[i]->deven == DEV_DISABLED)
-			{
-				// At least one device is in fact disabled, so include device params
-				fprintf(fcfg, ",\n\"device\" : [");
-				bool first = true;
-				for (i = 0; i < total_devices; ++i)
-					if (devices[i]->deven != DEV_DISABLED)
-					{
-						fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
-						first = false;
-					}
-				fprintf(fcfg, "\n]");
-				
-				break;
-			}
-	}
+	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
