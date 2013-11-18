@@ -10473,6 +10473,8 @@ noauto: ;
 		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 		{
 			const struct device_drv * const drv = dreg->drv;
+			if (!drv->lowl_probe)
+				continue;
 			if (drv->lowl_probe(info))
 				return NULL;
 		}
