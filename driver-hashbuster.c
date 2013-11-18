@@ -184,7 +184,7 @@ bool hashbuster_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	hid_close(h);
 	
-	if (bfg_claim_hid(&hashbuster_drv, true, info->path))
+	if (lowlevel_claim(&hashbuster_drv, true, info))
 		return false;
 	
 	struct cgpu_info *cgpu;

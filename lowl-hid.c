@@ -22,6 +22,7 @@ typedef void *dlh_t;
 typedef HMODULE dlh_t;
 #endif
 
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -30,6 +31,7 @@ typedef HMODULE dlh_t;
 #include <hidapi.h>
 #include <utlist.h>
 
+#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "miner.h"
@@ -47,6 +49,8 @@ int HID_API_EXPORT (*dlsym_hid_write)(hid_device *, const unsigned char *, size_
 		goto fail;  \
 	}  \
 } while(0)
+
+static bool hidapi_libusb;
 
 static
 bool hidapi_try_lib(const char * const dlname)
@@ -76,6 +80,9 @@ bool hidapi_try_lib(const char * const dlname)
 	LOAD_SYM(hid_close);
 	LOAD_SYM(hid_read);
 	LOAD_SYM(hid_write);
+	
+	if (strstr(dlname, "libusb"))
+		hidapi_libusb = true;
 	
 	applog(LOG_DEBUG, "%s: Successfully loaded %s", __func__, dlname);
 	
@@ -160,8 +167,31 @@ struct lowlevel_device_info *hid_devinfo_scan()
 	LL_FOREACH(hid_enum, hid_item)
 	{
 		info = malloc(sizeof(struct lowlevel_device_info));
-		char * const devid = malloc(4 + strlen(hid_item->path) + 1);
-		sprintf(devid, "hid:%s", hid_item->path);
+		char *devid;
+		const char * const hidpath = hid_item->path;
+		if (hidapi_libusb
+		  && strlen(hidpath) == 12
+		  && hidpath[0] == '0'
+		  && hidpath[1] == '0'
+		  && isxdigit(hidpath[2])
+		  && isxdigit(hidpath[3])
+		  && hidpath[4] == ':'
+		  && hidpath[5] == '0'
+		  && hidpath[6] == '0'
+		  && isxdigit(hidpath[7])
+		  && isxdigit(hidpath[8])
+		  && hidpath[9] == ':')
+		{
+			unsigned char usbbus, usbaddr;
+			hex2bin(&usbbus , &hidpath[2], 1);
+			hex2bin(&usbaddr, &hidpath[7], 1);
+			devid = bfg_make_devid_usb(usbbus, usbaddr);
+		}
+		else
+		{
+			devid = malloc(4 + strlen(hid_item->path) + 1);
+			sprintf(devid, "hid:%s", hid_item->path);
+		}
 		*info = (struct lowlevel_device_info){
 			.lowl = &lowl_hid,
 			.path = strdup(hid_item->path),
