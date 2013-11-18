@@ -10430,24 +10430,31 @@ void *probe_device_thread(void *p)
 		const struct device_drv * const drv = dreg->drv;
 		
 		// Check for "noauto" flag
+		// NOTE: driver-specific configuration overrides general
+		bool doauto = true;
 		DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 		{
 			const char * const dname = sd_iter->string;
 			const char *colon = strchr(dname, ':');
 			if (!colon)
 				colon = &dname[-1];
-			if (strcasecmp("noauto", &colon[1]))
+			if (strcasecmp("noauto", &colon[1]) && strcasecmp("auto", &colon[1]))
 				continue;
 			const ssize_t dnamelen = (colon - dname);
-			if (dnamelen == -1 || _probe_device_find_drv(dname, dnamelen) == drv)
-				goto noauto;
+			if (dnamelen >= 0 && _probe_device_find_drv(dname, dnamelen) != drv)
+				continue;
+			doauto = (tolower(colon[1]) == 'a');
+			if (dnamelen != -1)
+				break;
 		}
 		
-		if (!(drv->lowl_match && drv->lowl_match(info)))
-			continue;
-		if (drv->lowl_probe(info))
-			return NULL;
-noauto: ;
+		if (doauto)
+		{
+			if (!(drv->lowl_match && drv->lowl_match(info)))
+				continue;
+			if (drv->lowl_probe(info))
+				return NULL;
+		}
 	}
 	
 	// probe driver(s) with 'all' enabled
