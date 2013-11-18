@@ -1831,7 +1831,7 @@ static struct opt_table opt_config_table[] = {
 #endif // defined(unix)
 	OPT_WITHOUT_ARG("--net-delay",
 			opt_set_bool, &opt_delaynet,
-			"Impose small delays in networking to not overload slow routers"),
+			"Impose small delays in networking to avoid overloading slow routers"),
 	OPT_WITHOUT_ARG("--no-adl",
 			opt_set_bool, &opt_noadl,
 #ifdef HAVE_ADL
