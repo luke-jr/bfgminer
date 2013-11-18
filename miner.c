@@ -1064,12 +1064,6 @@ static char *add_serial(const char *arg)
 	return NULL;
 }
 
-static char *compat_disable_gpu(__maybe_unused void *arg)
-{
-	string_elist_add("opencl:noauto", &scan_devices);
-	return NULL;
-}
-
 static
 char *opt_string_elist_add(const char *arg, struct string_elist **elist)
 {
@@ -1789,10 +1783,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
 	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
-	OPT_WITHOUT_ARG("--disable-gpu|-G",
-			compat_disable_gpu, NULL,
-			opt_hidden
-	),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),

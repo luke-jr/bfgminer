@@ -776,12 +776,7 @@ static int cpu_autodetect()
 
 static void cpu_detect()
 {
-	if ((opt_n_threads < 0 || !forced_n_threads)
-	 && ((total_devices || total_devices_new) && !opt_usecpu))
-		// If there are any other devices, only act if the user has explicitly enabled it
-		noserial_detect_manual(&cpu_drv, cpu_autodetect);
-	else
-		noserial_detect(&cpu_drv, cpu_autodetect);
+	noserial_detect_manual(&cpu_drv, cpu_autodetect);
 }
 
 static pthread_mutex_t cpualgo_lock;
