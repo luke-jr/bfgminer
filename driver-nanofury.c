@@ -210,7 +210,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	nanofury_device_off(mcp);
 	mcp2210_close(mcp);
 	
-	if (bfg_claim_hid(&nanofury_drv, true, info->path))
+	if (lowlevel_claim(&nanofury_drv, true, info))
 		return false;
 	
 	struct cgpu_info *cgpu;
