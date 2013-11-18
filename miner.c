@@ -176,10 +176,8 @@ int stratumsrv_port = -1;
 struct string_elist *scan_devices;
 static struct string_elist *opt_set_device_list;
 bool opt_force_dev_init;
-static bool devices_enabled[MAX_DEVICES];
-static int opt_devs_enabled;
+static struct string_elist *opt_devices_enabled_list;
 static bool opt_display_devs;
-static bool opt_removedisabled;
 int total_devices;
 struct cgpu_info **devices;
 int total_devices_new;
@@ -508,6 +506,9 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	// ___ - matches all processors on all devices using driver/name ___
 	// ___0 - matches all processors of 0th device using driver/name ___
 	// ___0a - matches first processor of 0th device using driver/name ___
+	// @* - matches device with serial or path *
+	// @*@a - matches first processor of device with serial or path *
+	// ___@* - matches device with serial or path * using driver/name ___
 	if (!strcasecmp(pattern, "all"))
 		return true;
 	
@@ -516,14 +517,34 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	int n, i, c = -1;
 	struct cgpu_info *device;
 	
-	while (p[0] && !isdigit(p[0]))
+	while (p[0] && p[0] != '@' && !isdigit(p[0]))
 		++p;
 	
 	L = p - pattern;
 	while (L && isspace(pattern[L-1]))
 		--L;
-	n = strtol(p, (void*)&p2, 0);
-	if (L == 0)
+	if (p[0] == '@')
+	{
+		// Serial/path
+		const char * const ser = &p[1];
+		for (p = ser; p[0] != '@' && p[0] != '\0'; ++p)
+		{}
+		p2 = (p[0] == '@') ? &p[1] : p;
+		const size_t serlen = (p - ser);
+		p = "";
+		const char * const devpath = cgpu->device_path ?: "";
+		const char * const devser = cgpu->dev_serial ?: "";
+		if ((!strncmp(devpath, ser, serlen)) && devpath[serlen] == '\0')
+		{}  // Match
+		else
+		if ((!strncmp(devser, ser, serlen)) && devser[serlen] == '\0')
+		{}  // Match
+		else
+			return false;
+	}
+	else
+		n = strtol(p, (void*)&p2, 0);
+	if (p == pattern)
 	{
 		if (!p[0])
 			return true;
@@ -538,6 +559,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	{
 		const struct device_drv * const drv = cgpu->drv;
 		if ((L == 3 && !strncasecmp(pattern, drv->name, 3)) ||
+			(!L) ||
 			(L == strlen(drv->dname) && !strncasecmp(pattern, drv->dname, L)))
 			{}  // Matched name or dname
 		else
@@ -573,6 +595,65 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 invsyntax:
 	applog(LOG_WARNING, "%s: Invalid syntax: %s", __func__, pattern);
 	return false;
+}
+
+#define TEST_CGPU_MATCH(pattern)  \
+	if (!cgpu_match(pattern, &cgpu))  \
+		applog(LOG_ERR, "%s: Pattern \"%s\" should have matched!", __func__, pattern);  \
+// END TEST_CGPU_MATCH
+#define TEST_CGPU_NOMATCH(pattern)  \
+	if (cgpu_match(pattern, &cgpu))  \
+		applog(LOG_ERR, "%s: Pattern \"%s\" should NOT have matched!", __func__, pattern);  \
+// END TEST_CGPU_MATCH
+static __maybe_unused
+void test_cgpu_match()
+{
+	struct device_drv drv = {
+		.dname = "test",
+		.name = "TST",
+	};
+	struct cgpu_info cgpu = {
+		.drv = &drv,
+		.device = &cgpu,
+		.proc_repr = "TST 0a",
+	};
+	struct cgpu_info *devices_list[1] = {&cgpu,};
+	devices = devices_list;
+	total_devices = 1;
+	TEST_CGPU_MATCH("all")
+	TEST_CGPU_MATCH("d0")
+	TEST_CGPU_NOMATCH("d1")
+	TEST_CGPU_MATCH("0")
+	TEST_CGPU_NOMATCH("1")
+	TEST_CGPU_MATCH("TST")
+	TEST_CGPU_NOMATCH("TSF")
+	TEST_CGPU_NOMATCH("TS")
+	TEST_CGPU_NOMATCH("TSTF")
+	TEST_CGPU_MATCH("TST0")
+	TEST_CGPU_MATCH("TST 0")
+	TEST_CGPU_NOMATCH("TST1")
+	TEST_CGPU_MATCH("TST0a")
+	TEST_CGPU_NOMATCH("TST0b")
+	TEST_CGPU_NOMATCH("TST0aa")
+	TEST_CGPU_MATCH("@")
+	TEST_CGPU_NOMATCH("@abc")
+	TEST_CGPU_MATCH("@@a")
+	TEST_CGPU_NOMATCH("@@b")
+	TEST_CGPU_MATCH("TST@")
+	TEST_CGPU_NOMATCH("TST@abc")
+	TEST_CGPU_MATCH("TST@@a")
+	TEST_CGPU_NOMATCH("TST@@b")
+	cgpu.device_path = "/dev/test";
+	cgpu.dev_serial = "testy";
+	TEST_CGPU_MATCH("TST@/dev/test")
+	TEST_CGPU_MATCH("TST@testy")
+	TEST_CGPU_NOMATCH("TST@")
+	TEST_CGPU_NOMATCH("TST@/dev/test5@a")
+	TEST_CGPU_NOMATCH("TST@testy3@a")
+	TEST_CGPU_MATCH("TST@/dev/test@a")
+	TEST_CGPU_MATCH("TST@testy@a")
+	TEST_CGPU_NOMATCH("TST@/dev/test@b")
+	TEST_CGPU_NOMATCH("TST@testy@b")
 }
 
 static
@@ -1051,9 +1132,6 @@ void test_intrange()
 
 static char *set_devices(char *arg)
 {
-	int i, val1 = 0, val2 = 0;
-	char *nextptr;
-
 	if (*arg) {
 		if (*arg == '?') {
 			opt_display_devs = true;
@@ -1062,34 +1140,8 @@ static char *set_devices(char *arg)
 	} else
 		return "Invalid device parameters";
 
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set devices";
-	if (!get_intrange(nextptr, &val1, &val2))
-		return "Invalid device number";
-	if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-	    val1 > val2) {
-		return "Invalid value passed to set devices";
-	}
-
-	for (i = val1; i <= val2; i++) {
-		devices_enabled[i] = true;
-		opt_devs_enabled++;
-	}
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		if (!get_intrange(nextptr, &val1, &val2))
-			return "Invalid device number";
-		if (val1 < 0 || val1 > MAX_DEVICES || val2 < 0 || val2 > MAX_DEVICES ||
-		val1 > val2) {
-			return "Invalid value passed to set devices";
-		}
-
-		for (i = val1; i <= val2; i++) {
-			devices_enabled[i] = true;
-			opt_devs_enabled++;
-		}
-	}
+	for (const char *item = strtok(arg, ","); item; item = strtok(NULL, ","))
+		string_elist_add(item, &opt_devices_enabled_list);
 
 	return NULL;
 }
@@ -1935,9 +1987,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--real-quiet",
 			opt_set_bool, &opt_realquiet,
 			"Disable all output"),
-	OPT_WITHOUT_ARG("--remove-disabled",
-		     opt_set_bool, &opt_removedisabled,
-	         "Remove disabled devices entirely, as if they didn't exist"),
 	OPT_WITH_ARG("--request-diff",
 	             set_request_diff, opt_show_floatval, &request_pdiff,
 	             "Request a specific difficulty from pools"),
@@ -6284,10 +6333,7 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	// We can only remove devices or disable them by default, but not both...
-	if (!(opt_removedisabled && opt_devs_enabled))
 	{
-		// Don't need to remove any, so we can set defaults here
 		for (i = 0; i < total_devices; ++i)
 			if (devices[i]->deven == DEV_DISABLED)
 			{
@@ -6304,20 +6350,6 @@ void write_config(FILE *fcfg)
 				
 				break;
 			}
-	}
-	else
-	if (opt_devs_enabled) {
-		// Mark original device params and remove-disabled
-		fprintf(fcfg, ",\n\"device\" : [");
-		bool first = true;
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
-				first = false;
-			}
-		}
-		fprintf(fcfg, "\n]");
-		fprintf(fcfg, ",\n\"remove-disabled\" : true");
 	}
 	
 	if (opt_api_allow)
@@ -10188,6 +10220,21 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	cgpu->thr = calloc(threadobj + 1, sizeof(*cgpu->thr));
 	cgpu->thr[threadobj] = NULL;
 	cgpu->status = LIFE_INIT;
+	
+	if (opt_devices_enabled_list)
+	{
+		struct string_elist *enablestr_elist;
+		cgpu->deven = DEV_DISABLED;
+		DL_FOREACH(opt_devices_enabled_list, enablestr_elist)
+		{
+			const char * const enablestr = enablestr_elist->string;
+			if (cgpu_match(enablestr, cgpu))
+			{
+				cgpu->deven = DEV_ENABLED;
+				break;
+			}
+		}
+	}
 
 	cgpu->max_hashes = 0;
 
@@ -10738,6 +10785,7 @@ int main(int argc, char *argv[])
 	}
 	
 	if (opt_unittest) {
+		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
 	}
@@ -10843,36 +10891,33 @@ int main(int argc, char *argv[])
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
+			char buf[0x100];
+			if (cgpu->device != cgpu)
+				continue;
 			if (cgpu->name)
-				applog(LOG_ERR, " %2d. %"PRIprepr": %s (driver: %s)", i, cgpu->proc_repr, cgpu->name, cgpu->drv->dname);
+				snprintf(buf, sizeof(buf), " %s", cgpu->name);
 			else
-				applog(LOG_ERR, " %2d. %"PRIprepr" (driver: %s)", i, cgpu->proc_repr, cgpu->drv->dname);
+			if (cgpu->dev_manufacturer)
+				snprintf(buf, sizeof(buf), " %s by %s", (cgpu->dev_product ?: "Device"), cgpu->dev_manufacturer);
+			else
+			if (cgpu->dev_product)
+				snprintf(buf, sizeof(buf), " %s", cgpu->dev_product);
+			else
+				strcpy(buf, " Device");
+			tailsprintf(buf, sizeof(buf), " (driver=%s; procs=%d", cgpu->drv->dname, cgpu->procs);
+			if (cgpu->dev_serial)
+				tailsprintf(buf, sizeof(buf), "; serial=%s", cgpu->dev_serial);
+			if (cgpu->device_path)
+				tailsprintf(buf, sizeof(buf), "; path=%s", cgpu->device_path);
+			tailsprintf(buf, sizeof(buf), ")");
+			_applog(LOG_NOTICE, buf);
 		}
 		quit(0, "%d devices listed", total_devices);
 	}
 
 	mining_threads = 0;
-	if (opt_devs_enabled) {
-		for (i = 0; i < MAX_DEVICES; i++) {
-			if (devices_enabled[i]) {
-				if (i >= total_devices)
-					quit (1, "Command line options set a device that doesn't exist");
-				register_device(devices[i]);
-			} else if (i < total_devices) {
-				if (opt_removedisabled) {
-					if (devices[i]->drv == &cpu_drv)
-						--opt_n_threads;
-				} else {
-					register_device(devices[i]);
-				}
-				devices[i]->deven = DEV_DISABLED;
-			}
-		}
-		total_devices = cgminer_id_count;
-	} else {
-		for (i = 0; i < total_devices; ++i)
-			register_device(devices[i]);
-	}
+	for (i = 0; i < total_devices; ++i)
+		register_device(devices[i]);
 
 	if (!total_devices) {
 		const bool netdev_support =
