@@ -497,6 +497,23 @@ static void applog_and_exit(const char *fmt, ...)
 }
 
 static
+bool devpaths_match(const char * const ap, const char * const bp)
+{
+	char * const a = devpath_to_devid(ap);
+	if (!a)
+		return false;
+	char * const b = devpath_to_devid(bp);
+	bool rv = false;
+	if (b)
+	{
+		rv = !strcmp(a, b);
+		free(b);
+	}
+	free(a);
+	return rv;
+}
+
+static
 bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 {
 	// all - matches anything
@@ -540,7 +557,13 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		if ((!strncmp(devser, ser, serlen)) && devser[serlen] == '\0')
 		{}  // Match
 		else
-			return false;
+		{
+			char devpath2[serlen + 1];
+			memcpy(devpath2, ser, serlen);
+			devpath2[serlen] = '\0';
+			if (!devpaths_match(devpath, ser))
+				return false;
+		}
 	}
 	else
 		n = strtol(p, (void*)&p2, 0);
