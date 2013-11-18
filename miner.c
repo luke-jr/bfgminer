@@ -6364,7 +6364,9 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
+	_write_config_string_elist(fcfg, "scan-serial", scan_devices);
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
+	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
 	
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
