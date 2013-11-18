@@ -325,14 +325,10 @@ On Ubuntu: sudo usermod <username> -a -G dialout
 Note that on GNU/Linux systems, you will usually need to login again before
 group changes take effect.
 
-By default, BFGMiner will scan for autodetected devices unless at least one -S
-is specified for that driver. If you specify -S and still want BFGMiner to scan,
-you must also use "-S auto". If you want to prevent BFGMiner from scanning
-without specifying a device, you can use "-S noauto". Note that presently,
-autodetection only works on Linux, and might only detect one device depending
-on the version of udev being used. If you want to scan all serial ports, you
-can use "-S all"; note that this may write data to non-mining devices which may
-then behave in unexpected ways!
+By default, BFGMiner will scan for autodetected devices. If you want to prevent
+BFGMiner from doing this, you can use "-S noauto". If you want to probe all
+serial ports, you can use "-S all"; note that this may write data to non-mining
+devices which may then behave in unexpected ways!
 
 On Linux, <arg> is usually of the format /dev/ttyUSBn
 On Mac OS X, <arg> is usually of the format /dev/cu.usb*
