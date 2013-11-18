@@ -15,27 +15,27 @@ from FPGA Mining LLC's website:
 -
 
 If the MMQ doesn't respond to BFGMiner at all, or the red LED isn't flashing
-then you will need to reset the MMQ
+then you will need to reset the MMQ.
 
-The red LED should always be flashing when it is mining or ready to mine
+The red LED should always be flashing when it is mining or ready to mine.
 
 To reset the MMQ, you are best to press the left "RESET" button on the
-backplane, then unplug and replug the USB cable
+backplane, then unplug and replug the USB cable.
 
 If your MMQ doesn't have a button on the "RESET" pad, you need to join the two
 left pads of the "RESET" pad with conductive wire to reset it. Cutting a small
-(metal) paper-clip in half works well for this
+(metal) paper-clip in half works well for this.
 
-Then unplug the USB cable, wait for 5 seconds, then plug it back in
+Then unplug the USB cable, wait for 5 seconds, then plug it back in.
 
-After you press reset, the red LED near the USB port should blink continuously
+After you press reset, the red LED near the USB port should blink continuously.
 
 If it still wont work, power off, wait for 5 seconds, then power on the MMQ
-This of course means it will upload the bitstream again when you start BFGMiner
+This of course means it will upload the bitstream again when you start BFGMiner.
 
 -
 
-Device 0 is on the power end of the board
+Device 0 is on the power end of the board.
 
 -
 
@@ -45,25 +45,25 @@ Read here for official details of changing the firmware:
 
 The basics of changing the firmware are:
  You need two short pieces of conductive wire if your MMQ doesn't have buttons
- on the "RESET" and "ISP" pads on the backplane board
- Cutting a small (metal) paper-clip in half works well for this
+ on the "RESET" and "ISP" pads on the backplane board.
+ Cutting a small (metal) paper-clip in half works well for this.
 
- Join the 2 left pads of the "RESET" pad with wire and the led will dim
+ Join the 2 left pads of the "RESET" pad with wire and the led will dim.
  Without disconnecting the "RESET", join the 2 left pads of the "ISP" pad with
- a wire and it will stay dim
- Release "RESET" then release "ISP" and is should still be dim
+ a wire and it will stay dim.
+ Release "RESET" then release "ISP" and is should still be dim.
  Unplug the USB and when you plug it back in it will show up as a mass storage
- device
+ device.
   Linux: (as one single line):
    mcopy -i /dev/disk/by-id/usb-NXP_LPC134X_IFLASH_ISP000000000-0:0
       modminer091012.bin ::/firmware.bin
   Windows: delete the MSD device file firmware.bin and copy in the new one
    rename the new file and put it under the same name 'firmware.bin'
  Disconnect the USB correctly (so writes are flushed first)
- Join and then disconnect "RESET" and then plug the USB back in and it's done
+ Join and then disconnect "RESET" and then plug the USB back in and it's done.
 
 Best to update to one of the latest 2 listed below if you don't already
-have one of them in your MMQ
+have one of them in your MMQ.
 
 The current latest different firmware are:
 
@@ -74,27 +74,27 @@ The current latest different firmware are:
   http://btcfpga.com/files/firmware/modminer091012.bin
 
 The code is currently tested on the modminer091012.bin firmware.
-This comment will be updated when others have been tested
+This comment will be updated when others have been tested.
 
 -
 
 On many Linux distributions there is an app called modem-manager that may cause
-problems when it is enabled, due to opening the MMQ device and writing to it
+problems when it is enabled, due to opening the MMQ device and writing to it.
 
 The problem will typically present itself by the flashing led on the backplane
 going out (no longer flashing) and it takes a power cycle to re-enable the MMQ
-firmware - which then can lead to the problem happening again
+firmware - which then can lead to the problem reoccurring.
 
 You can either disable/uninstall modem-manager if you don't need it or:
 a (hack) solution to this is to blacklist the MMQ USB device in
 /lib/udev/rules.d/77-mm-usb-device-blacklist.rules
 
-Adding 2 lines like this (just above APC) should help
+Adding 2 lines like this (just above APC) should help.
 # MMQ
 ATTRS{idVendor}=="1fc9", ATTRS{idProduct}=="0003", ENV{ID_MM_DEVICE_IGNORE}="1"
 
 The change will be lost and need to be re-done, next time you update the
-modem-manager software
+modem-manager software.
 
 
 BitForce (BFL)
@@ -121,7 +121,7 @@ To flash your BFL, specify the BFL port and the flash file e.g.:
  sudo ./bitforce-firmware-flash /dev/ttyUSB0 alphaminer_832.bfl
 It takes a bit under 3 minutes to flash a BFL and shows a progress % counter
 Once it completes, you may also need to wait about 15 seconds, then power the
-BFL off and on again
+BFL off and on again.
 
 If you get an error at the end of the BFL flash process stating:
  "Error reading response from ZBX"
@@ -153,12 +153,12 @@ There are two hidden options in BFGMiner when Icarus support is compiled in:
                                (enabled by default)
 
 If you define fewer comma separated values than Icarus devices, the last values
-will be used for all extra devices
+will be used for all extra devices.
 
 An example would be: --icarus-options 57600:2:1:-r
 This would mean: use 57600 baud, the FPGA board divides the work in half however
 only 1 FPGA actually runs on the board, and don't reopen the device (e.g. like
-an early CM1 Icarus copy bitstream)
+an early CM1 Icarus copy bitstream).
 
 --icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
            default[=N]   Use the default Icarus hash time (2.6316ns)
@@ -167,63 +167,62 @@ an early CM1 Icarus copy bitstream)
            value[=N]     Specify the hash time in nanoseconds (e.g. 2.6316) and abort time (e.g. 2.6316=80)
 
 If you define fewer comma separated values than Icarus devices, the last values
-will be used for all extra devices
+will be used for all extra devices.
 
 Icarus timing is required for devices that do not exactly match a default
-Icarus Rev3 in processing speed
+Icarus Rev3 in processing speed.
 If you have an Icarus Rev3 you should not normally need to use --icarus-timing
-since the default values will maximise the Mh/s and display it correctly
+since the default values will maximise the Mh/s and display it correctly.
 
 Icarus timing is used to determine the number of hashes that have been checked
-when it aborts a nonce range (including on a longpoll)
+when it aborts a nonce range (including on a longpoll).
 It is also used to determine the elapsed time when it should abort a nonce
 range to avoid letting the Icarus go idle, but also to safely maximise that
-time
+time.
 
 'short' or 'long' mode should only be used on a computer that has enough CPU
 available to run BFGMiner without any CPU delays (an active desktop or swapping
-computer would not be stable enough)
+computer would not be stable enough).
 Any CPU delays while calculating the hash time will affect the result
 'short' mode only requires the computer to be stable until it has completed
-~315 difficulty 1 shares
-'long' mode requires it to always be stable to ensure accuracy, however, over
-time it continually corrects itself
+~315 difficulty 1 shares, 'long' mode requires it to always be stable to ensure
+accuracy, however, over time it continually corrects itself.
 The optional additional =N for 'short' or 'long' specifies the limit to set the
 timeout to in deciseconds; thus if the timing code calculation is higher while
-running, it will instead use the limit
+running, it will instead use the limit.
 This can be set to the appropriate value to ensure the device never goes idle
-even if the calculation is negatively affected by system performance
+even if the calculation is negatively affected by system performance.
 
 When in 'short' or 'long' mode, it will report the hash time value each time it
-is re-calculated
+is re-calculated.
 In 'short' or 'long' mode, the scan abort time starts at 5 seconds and uses the
 default 2.6316ns scan hash time, for the first 5 nonces or one minute
-(whichever is longer)
+(whichever is longer).
 
 In 'default' or 'value' mode the 'constants' are calculated once at the start,
-based on the default value or the value specified
+based on the default value or the value specified.
 The optional additional =N specifies to set the default abort at N 1/10ths of a
 second, not the calculated value, which is 112 for 2.6316ns
 
 To determine the hash time value for a non Icarus Rev3 device or an Icarus Rev3
 with a different bitstream to the default one, use 'long' mode and give it at
 least a few hundred shares, or use 'short' mode and take note of the final hash
-time value (Hs) calculated
+time value (Hs) calculated.
 You can also use the RPC API 'stats' command to see the current hash time (Hs)
-at any time
+at any time.
 
 The Icarus code currently only works with an FPGA device that supports the same
 commands as Icarus Rev3 requires and also is less than ~840Mh/s and greater
-than 2Mh/s
+than 2Mh/s.
 If an FPGA device does hash faster than ~840Mh/s it should work correctly if
-you supply the correct hash time nanoseconds value
+you supply the correct hash time nanoseconds value.
 
 The timing code itself will affect the Icarus performance since it increases
-the delay after work is completed or aborted until it starts again
+the delay after work is completed or aborted until it starts again.
 The increase is, however, extremely small and the actual increase is reported
-with the RPC API 'stats' command (a very slow CPU will make it more noticeable)
-Using the 'short' mode will remove this delay after 'short' mode completes
-The delay doesn't affect the calculation of the correct hash time
+with the RPC API 'stats' command (a very slow CPU will make it more noticeable).
+Using the 'short' mode will remove this delay after 'short' mode completes.
+The delay doesn't affect the calculation of the correct hash time.
 
 
 X6500
@@ -258,6 +257,7 @@ least the "dummy" mining bitstreams installed on them.
 
 If your boards do not have a mining bitstream yet, you must first, install
 ZTEX's BTCMiner (requires Java JDK version 6 or later) and install one.
+
 === WINDOWS NOTE ===
 Upon first powering up and connecting the board via USB, windows will attempt
 and fail to find the appropriate drivers.  To load the initial firmware on the
@@ -266,6 +266,7 @@ board, you'll need the EZ-USB FX2 SDK from here:
 Extract the firmware kit and use the driver within libusb-win32/ztex.inf.
 Windows should now recognize the board and you're ready to program it.
 === END OF WINDOWS ===
+
 Grab the latest miner jar from http://www.ztex.de/btcminer/#download and program
 the appropriate dummy firmware for your board.  The command should look
 something like (for a single FPGA board):

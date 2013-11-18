@@ -1,5 +1,5 @@
 If you wish to donate to the author of scrypt support, Con Kolivas, for his past
-work (he no longer maintains this), please send your donations to
+work (he no longer maintains this), please send your donations to:
 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
 
 ---
@@ -62,7 +62,7 @@ below to determine how many shaders your GPU has, and note that there are some
 variants of these cards, and Nvidia shaders are much much lower and virtually
 pointless trying to mine on. If this is not set, BFGMiner will query the
 device for how much memory it supports and will try to set a value based on
-that.
+that instead.
 SUMMARY: This will get you started but fine tuning for optimal performance is
 required.
 
@@ -179,7 +179,7 @@ Delete any .bin files so you're starting from scratch and see what bins get
 generated.
 
 First try without any thread concurrency or even shaders, as BFGMiner will try to
-find an optimal value
+find an optimal value:
 bfgminer -I 13
 
 If that starts mining, see what bin was generated, it is likely the largest
@@ -187,7 +187,7 @@ meaningful TC you can set.
 Starting it on mine I get:
 scrypt130302Tahitiglg2tc22392w64l8.bin
 
-See tc22392 that's telling you what thread concurrency it was. It should start
+Note that tc22392 tells you what thread concurrency it was. It should start
 without TC parameters, but you never know. So if it doesn't, start with
 --thread-concurrency 8192 and add 2048 to it at a time till you find the highest
 value it will start successfully at.
