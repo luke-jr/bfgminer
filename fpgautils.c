@@ -750,6 +750,7 @@ struct lowlevel_device_info *vcom_devinfo_scan()
 	{
 		LL_PREPEND(devinfo_list, devinfo);
 	}
+	HASH_CLEAR(hh, devinfo_hash);
 	
 	return devinfo_list;
 }
