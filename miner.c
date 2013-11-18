@@ -1064,12 +1064,6 @@ static char *add_serial(const char *arg)
 	return NULL;
 }
 
-static char *compat_disable_gpu(__maybe_unused void *arg)
-{
-	string_elist_add("opencl:noauto", &scan_devices);
-	return NULL;
-}
-
 static
 char *opt_string_elist_add(const char *arg, struct string_elist **elist)
 {
@@ -1163,8 +1157,7 @@ static char *set_devices(char *arg)
 	} else
 		return "Invalid device parameters";
 
-	for (const char *item = strtok(arg, ","); item; item = strtok(NULL, ","))
-		string_elist_add(item, &opt_devices_enabled_list);
+	string_elist_add(arg, &opt_devices_enabled_list);
 
 	return NULL;
 }
@@ -1788,11 +1781,7 @@ static struct opt_table opt_config_table[] = {
 			"Verbose dump of device protocol-level activities"),
 	OPT_WITH_ARG("--device|-d",
 		     set_devices, NULL, NULL,
-	             "Select device to use, one value, range and/or comma separated (e.g. 0-2,4) default: all"),
-	OPT_WITHOUT_ARG("--disable-gpu|-G",
-			compat_disable_gpu, NULL,
-			opt_hidden
-	),
+	             "Enable only devices matching pattern (default: all)"),
 	OPT_WITHOUT_ARG("--disable-rejecting",
 			opt_set_bool, &opt_disable_pool,
 			"Automatically disable pools that continually reject shares"),
@@ -6099,7 +6088,8 @@ static void json_escape_free()
 	}
 }
 
-static char *json_escape(char *str)
+static
+char *json_escape(const char *str)
 {
 	struct JE *jeptr;
 	char *buf, *ptr;
@@ -6175,6 +6165,24 @@ void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffse
 }
 #define write_config_temps(fcfg, configname, settingname)  \
 	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
+
+static
+void _write_config_string_elist(FILE *fcfg, const char *configname, struct string_elist * const elist)
+{
+	if (!elist)
+		return;
+	
+	static struct string_elist *entry;
+	fprintf(fcfg, ",\n\"%s\" : [", configname);
+	bool first = true;
+	DL_FOREACH(elist, entry)
+	{
+		const char * const s = entry->string;
+		fprintf(fcfg, "%s\n\t\"%s\"", first ? "" : ",", json_escape(s));
+		first = false;
+	}
+	fprintf(fcfg, "\n]");
+}
 
 void write_config(FILE *fcfg)
 {
@@ -6356,24 +6364,9 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	{
-		for (i = 0; i < total_devices; ++i)
-			if (devices[i]->deven == DEV_DISABLED)
-			{
-				// At least one device is in fact disabled, so include device params
-				fprintf(fcfg, ",\n\"device\" : [");
-				bool first = true;
-				for (i = 0; i < total_devices; ++i)
-					if (devices[i]->deven != DEV_DISABLED)
-					{
-						fprintf(fcfg, "%s\n\t%d", first ? "" : ",", i);
-						first = false;
-					}
-				fprintf(fcfg, "\n]");
-				
-				break;
-			}
-	}
+	_write_config_string_elist(fcfg, "scan-serial", scan_devices);
+	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
+	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
 	
 	if (opt_api_allow)
 		fprintf(fcfg, ",\n\"api-allow\" : \"%s\"", json_escape(opt_api_allow));
@@ -10394,11 +10387,12 @@ bool _probe_device_internal(struct lowlevel_device_info * const info, const char
 static
 void *probe_device_thread(void *p)
 {
-	struct lowlevel_device_info * const info = p;
+	struct lowlevel_device_info * const infolist = p;
+	struct lowlevel_device_info *info = infolist;
 	
 	{
 		char threadname[5 + strlen(info->devid) + 1];
-		sprintf(threadname, "probe%s", info->devid);
+		sprintf(threadname, "probe_%s", info->devid);
 		RenameThread(threadname);
 	}
 	
@@ -10417,11 +10411,14 @@ void *probe_device_thread(void *p)
 		if (!colon)
 			continue;
 		const char * const ser = &colon[1];
-		if (!_probe_device_match(info, ser))
-			continue;
-		const size_t dnamelen = (colon - dname);
-		if (_probe_device_internal(info, dname, dnamelen))
-			return NULL;
+		LL_FOREACH2(infolist, info, same_devid_next)
+		{
+			if (!_probe_device_match(info, ser))
+				continue;
+			const size_t dnamelen = (colon - dname);
+			if (_probe_device_internal(info, dname, dnamelen))
+				return NULL;
+		}
 	}
 	
 	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
@@ -10448,41 +10445,48 @@ void *probe_device_thread(void *p)
 				break;
 		}
 		
-		if (doauto)
+		if (doauto && drv->lowl_match)
 		{
-			if (!(drv->lowl_match && drv->lowl_match(info)))
-				continue;
-			if (drv->lowl_probe(info))
-				return NULL;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if (!drv->lowl_match(info))
+					continue;
+				if (drv->lowl_probe(info))
+					return NULL;
+			}
 		}
 	}
 	
 	// probe driver(s) with 'all' enabled
-	bool allall = false;
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
 		const char * const colon = strchr(dname, ':');
 		if (!colon)
 		{
-			if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
-				allall = true;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
+				{
+					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+					{
+						const struct device_drv * const drv = dreg->drv;
+						if (!drv->lowl_probe)
+							continue;
+						if (drv->lowl_probe(info))
+							return NULL;
+					}
+					break;
+				}
+			}
 			continue;
 		}
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
-		if (_probe_device_internal(info, dname, dnamelen))
-			return NULL;
-	}
-	if (allall)
-	{
-		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+		LL_FOREACH2(infolist, info, same_devid_next)
 		{
-			const struct device_drv * const drv = dreg->drv;
-			if (!drv->lowl_probe)
-				continue;
-			if (drv->lowl_probe(info))
+			if (_probe_device_internal(info, dname, dnamelen))
 				return NULL;
 		}
 	}

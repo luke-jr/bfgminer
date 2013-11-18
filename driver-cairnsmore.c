@@ -33,7 +33,7 @@ BFG_REGISTER_DRIVER(cairnsmore_drv)
 static
 bool cairnsmore_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Cairnsmore1");
+	return lowlevel_match_product(info, "Cairnsmore1");
 }
 
 static bool cairnsmore_detect_one(const char *devpath)

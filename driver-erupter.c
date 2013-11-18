@@ -45,7 +45,7 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 static
 bool erupter_emerald_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Block", "Erupter", "Emerald");
+	return lowlevel_match_product(info, "Block", "Erupter", "Emerald");
 }
 
 static bool erupter_emerald_detect_one(const char *devpath)

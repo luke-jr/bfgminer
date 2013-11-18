@@ -35,7 +35,7 @@ BFG_REGISTER_DRIVER(bigpic_drv)
 static
 bool bigpic_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Bitfury", "BF1");
+	return lowlevel_match_product(info, "Bitfury", "BF1");
 }
 
 //------------------------------------------------------------------------------

@@ -104,7 +104,7 @@ static const char NOOP[] = MODMINER_PING "\xff\xff\xff\xff\xff\xff\xff\xff\xff\x
 static
 bool modminer_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "ModMiner");
+	return lowlevel_match_product(info, "ModMiner");
 }
 
 static bool

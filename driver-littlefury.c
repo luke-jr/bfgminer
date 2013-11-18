@@ -226,7 +226,7 @@ bool littlefury_txrx(struct spi_port *port)
 static
 bool littlefury_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return lowlevel_match_lowlproduct(info, &lowl_vcom, "LittleFury");
+	return lowlevel_match_product(info, "LittleFury");
 }
 
 static
