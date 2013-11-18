@@ -25,7 +25,7 @@ router used by the Avalon. eg:
 The values are baud : miners : asic count : timeout : frequency.
 
 Baud:
-The device is pretty much hard coded to emulate 115200 baud so you shouldn't
+The device is essentially hard coded to emulate 115200 baud so you shouldn't
 change this.
 
 Miners:
@@ -36,8 +36,9 @@ Asic count:
 Virtually all have 10, so don't change this.
 
 Timeout:
-This is how long the device will work on a work item before accepting new work
-to replace it. It should be changed according to the frequency (last setting).
+This defines how long the device will work on a work item before accepting new
+work to replace it. It should be changed according to the frequency (last
+setting).
 It is possible to set this a little lower if you are trying to tune for short
 block mining (eg p2pool) but much lower and the device will start creating
 duplicate shares.
@@ -62,7 +63,7 @@ AVA 0: 22/ 46C  60%/2400R
 The values are:
 ambient temp / highest device temp  set fan % / lowest detected fan RPM.
 
-Use the API for more detailed information than this.
+Check the API for more detailed information.
 
 
 BLOCK ERUPTER BLADE

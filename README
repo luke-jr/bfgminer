@@ -39,12 +39,12 @@ MORE INFORMATION ON EACH.
 EXECUTIVE SUMMARY ON USAGE:
 
 After saving configuration from the menu, you do not need to give BFGMiner any
-arguments and it will load your configuration.
+arguments, it will load your configuration instead.
 
 Any configuration file may also contain a single
 	"include" : "filename"
 to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
+Writing the configuration will save all settings from all files to the output
 
 
 Single pool:
@@ -103,7 +103,7 @@ Optional Dependencies:
 	  libpdcurses        http://pdcurses.sourceforge.net/ (Linux/Mac/Windows)
 
 	Multiple ASIC/FPGA autodetection: any one of:
-	  sysfs              (builtin to most Linux kernels, just mount on /sys)
+	  sysfs              (built-in to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 	
 	getwork server for Block Erupter Blades:
@@ -208,7 +208,7 @@ Options for both config file and command line:
 --log-file|-L <arg> Append log file for output messages
 --log-microseconds  Include microseconds in log output
 --monitor|-m <arg>  Use custom pipe cmd for output messages
---net-delay         Impose small delays in networking to not overload slow routers
+--net-delay         Impose small delays in networking to avoid overloading slow routers
 --no-gbt            Disable getblocktemplate support
 --no-getwork        Disable getwork support
 --no-longpoll       Disable X-Long-Polling support
@@ -400,7 +400,7 @@ co[M]pact: off
 Q quits the application.
 
 
-The running log shows output like this:
+The running log shows output similar to that below:
 
  [2013-02-13 00:26:30] Accepted 1758e8df BFL 0  pool 0 Diff 10/1
  [2013-02-13 00:26:32] Accepted 1d9a2199 MMQ 0a pool 0 Diff 8/1
@@ -486,7 +486,8 @@ rest will tend to take up the slack keeping the miner busy.
 
 BALANCE:
 This strategy monitors the amount of difficulty 1 shares solved for each pool
-and uses it to try to end up doing the same amount of work for all pools.
+and uses it as a basis for trying to doing the same amount of work for each
+pool.
 
 
 ---
@@ -586,9 +587,9 @@ FAQ
 
 Q: Why can't BFGMiner find lib<something> even after I installed it from source
 code?
-A: On UNIX-like operating systems, you often need to run some command to reload
-its library caches such as "ldconfig" or similar. A couple of systems (such as
-Fedora) ship with /usr/local/lib missing from their library search path. In
+A: On UNIX-like operating systems, you often need to run one or more commands to
+reload library caches, such as "ldconfig" or similar. A couple of systems (such
+as Fedora) ship with /usr/local/lib missing from their library search path. In
 this case, you can usually add it like this:
     echo /usr/local/lib >/etc/ld.so.conf.d/local.conf
 Please note that if your libraries installed into lib64 instead of lib, you
@@ -606,7 +607,7 @@ make it invalidate the work from each other.
 
 Q: Can I configure BFGMiner to mine with different login credentials or pools
 for each separate device?
-A: No.
+A: No such feature has been implemented to support this.
 
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
@@ -630,17 +631,18 @@ useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
 
 Q: Is this a virus?
-A: BFGMiner is being packaged with other trojan scripts and some antivirus
-software is falsely accusing bfgminer.exe as being the actual virus, rather
-than whatever it is being packaged with. If you installed BFGMiner yourself,
-then you do not have a virus on your computer. Complain to your antivirus
-software company. They seem to be flagging even source code now from BFGMiner
-as viruses, even though text source files can't do anything by themself.
+A: As BFGMiner is being packaged with other trojan scripts, some antivirus
+software is falsely accusing bfgminer.exe as being the actual virus, rather than
+whatever it is being packaged with. If you installed BFGMiner yourself from a
+reputable source then you do not have a virus on your computer. Complain to your
+antivirus software company. They seem to be flagging even source code from
+BFGMiner as malicious now, even though text source files can't do anything by
+themselves.
 
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another
 output mode?
-A: Everyone will always have their own view of what's important to monitor.
+A: Everyone will always have their own view of what is important to monitor.
 The defaults are very sane and I have very little interest in changing this
 any further.
 
@@ -648,7 +650,7 @@ Q: Why is my efficiency above/below 1.00?
 A: Efficiency simply means how many shares you return for the amount of
 bandwidth used. It does not correlate with efficient use of your hardware, and
 is a measure of a combination of hardware speed, block luck, pool design and
-other factors.
+many other factors.
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
@@ -663,22 +665,22 @@ released for Windows but CPU mining can be built into BFGMiner when it is
 compiled. For builds which do support CPU mining, it is still disabled by
 default, and must be enabled using the -S cpu:auto option.
 
-Q: GUI version?
-A: No. The RPC interface makes it possible for someone else to write one
-though.
+Q: Will there ever be a GUI version?
+A: No, however the RPC interface makes it possible for someone else to write one
+if they choose.
 
 Q: I'm having an issue. What debugging information should I provide?
 A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
-the full startup output and a summary of your hardware, operating system, ATI
-driver version and ATI stream version.
+the full startup output and a summary of your hardware, operating system, and if
+applicable, ATI driver version and ATI stream version.
 
 Q: Can I mine with BFGMiner on a Mac?
 A: BFGMiner will compile on OS X, but the performance of GPU mining is
 compromised due to the OpenCL implementation on OS X, there is no temperature or
-fanspeed monitoring, and the cooling design of most Macs, despite having
+fanspeed monitoring and the cooling design of most Macs, despite having
 powerful GPUs, will usually not cope with constant usage leading to a high risk
-of thermal damage. It is highly recommended not to mine on a Mac unless it is to
-a USB device.
+of thermal damage. It is highly recommended not to mine on a Mac unless it is
+with an external USB device.
 
 Q: My network gets slower and slower and then dies for a minute?
 A; Try the --net-delay option.
@@ -697,7 +699,7 @@ will not work.
 Q: I run PHP on windows to access the API with the example miner.php. Why does
 it fail when php is installed properly but I only get errors about Sockets not
 working in the logs?
-A: http://us.php.net/manual/en/sockets.installation.php
+A: Please check http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
 A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
@@ -737,19 +739,20 @@ using Zadig). Before you can use BFGMiner, you will need to restore the original
 driver. With Linux, usually rebooting or re-plugging the device is sufficient.
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
-BFGMiner can't mine on them
-A: Make sure you have the required priviledges to access the /dev/ttyUSB*
+BFGMiner can't mine on them?
+A: Make sure you have the required privileges to access the /dev/ttyUSB*
 devices:
  sudo ls -las /dev/ttyUSB*
 will give output like:
  0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
-This means your account must have the group 'dialout' or root priviledges
+This means your account must have the group 'dialout' or root privileges
 To permanently give your account the 'dialout' group:
  sudo usermod -G dialout -a `whoami`
 Then logout and back in again
 
 Q: Can I mine scrypt with FPGAs or ASICs?
-A: No.
+A: Currently no. Bitcoin ASICs are only useful for SHA256d systems and FPGAs
+generally aren't designed to handle scrypt efficiently.
 
 Q: Why does BFGMiner show difficulty 0 when mining scrypt?
 A: BFGMiner consistently uses pdiff measurement for difficulty everywhere,
@@ -776,8 +779,9 @@ A: As an example, if you look at 'Difficulty Accepted' in the RPC API, the numbe
 of difficulty shares accepted does not usually exactly equal the amount of work
 done to find them. If you are mining at 8 difficulty, then you would expect on
 average to find one 8 difficulty share, per 8 single difficulty shares found.
-However, the number is actually random and converges over time, it is an average,
-not an exact value, thus you may find more or less than the expected average.
+However, the number is actually random and converges over time as it is an
+average, not an exact value, thus you may find more or less than the expected
+average.
 
 ---
 
