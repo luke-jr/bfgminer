@@ -10466,7 +10466,7 @@ void *probe_device_thread(void *p)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
-				if ((!strcasecmp(dname, "all")) || _probe_device_match(info, dname))
+				if ((info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) || _probe_device_match(info, dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
