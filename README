@@ -95,7 +95,7 @@ Dependencies:
 
 	libjansson-dev 2.0+  http://www.digip.org/jansson/
 	
-	uthash-dev 1.9.2+    http://troydhanson.github.io/uthash/
+	uthash-dev 1.9.4+    http://troydhanson.github.io/uthash/
 
 Optional Dependencies:
 	Text-User-Interface (TUI): curses dev library; any one of:
