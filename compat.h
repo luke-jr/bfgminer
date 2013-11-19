@@ -22,6 +22,24 @@
 #define unix
 #endif
 
+#if defined(LL_FOREACH) && !defined(LL_FOREACH2)
+
+// Missing from uthash before 1.9.7
+
+#define LL_FOREACH2(head,el,next)                                                              \
+    for(el=head;el;el=(el)->next)
+
+#define LL_FOREACH_SAFE2(head,el,tmp,next)                                                     \
+  for((el)=(head);(el) && (tmp = (el)->next, 1); (el) = tmp)
+
+#define LL_PREPEND2(head,add,next)                                                             \
+do {                                                                                           \
+  (add)->next = head;                                                                          \
+  head = add;                                                                                  \
+} while (0)
+
+#endif
+
 #ifdef WIN32
 #include <errno.h>
 #include <fcntl.h>
