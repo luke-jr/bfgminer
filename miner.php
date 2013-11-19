@@ -2941,7 +2941,7 @@ function display()
 
  if ($allowcustompages === true)
  {
-	$pg = trim(getparam('pg', true));
+	$pg = urlencode(trim(getparam('pg', true)));
 	if ($pagesonly === true)
 	{
 		if ($pg !== null && $pg !== '')
