@@ -762,7 +762,7 @@ been skipped. "PGA" is also used for devices built with Application-Specific
 Integrated Circuits (ASICs).
 
 Q: What is an ASIC?
-A: They are Application Specify Integrated Circuit devices and provide the
+A: They are Application Specific Integrated Circuit devices and provide the
 highest performance per unit power due to being dedicated to only one purpose.
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
@@ -787,8 +787,9 @@ Q: I ran cgminer, and now BFGMiner doesn't work!
 A: cgminer has its own non-standard implementations of the drivers for most USB
 devices, and requires you to replace the official drivers with WinUSB on Windows
 (usually using Zadig). Before you can use BFGMiner, you will need to restore the
-original driver. Removing the device from Device Manager and re-plugging it will
-usually trigger driver re-installation to the default drivers.
+original driver. Uninstalling the device (and WinUSB driver) from Device Manager
+and re-plugging it will usually trigger driver re-installation to the default
+drivers.
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them?
