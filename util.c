@@ -727,16 +727,33 @@ badchar:
 	return likely(!hexstr[0]);
 }
 
-void ucs2tochar(char * const out, const uint16_t * const in, const size_t sz)
+size_t ucs2_to_utf8(char * const out, const uint16_t * const in, const size_t sz)
 {
+	uint8_t *p = (void*)out;
 	for (int i = 0; i < sz; ++i)
-		out[i] = in[i];
+	{
+		const uint16_t c = in[i];
+		if (c < 0x80)
+			p++[0] = c;
+		else
+		{
+			if (c < 0x800)
+				p++[0] = 0xc0 | (c >> 6);
+			else
+			{
+				p++[0] = 0xe0 | (c >> 12);
+				p++[0] = 0x80 | ((c >> 6) & 0x3f);
+			}
+			p++[0] = 0x80 | (c & 0x3f);
+		}
+	}
+	return p - (uint8_t*)(void*)out;
 }
 
-char *ucs2tochar_dup(uint16_t * const in, const size_t sz)
+char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 {
-	char *out = malloc(sz + 1);
-	ucs2tochar(out, in, sz);
+	char * const out = malloc((sz * 4) + 1);
+	sz = ucs2_to_utf8(out, in, sz);
 	out[sz] = '\0';
 	return out;
 }

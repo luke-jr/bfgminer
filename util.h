@@ -113,8 +113,8 @@ extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime
 
 extern char *absolute_uri(char *uri, const char *ref);  // ref must be a root URI
 
-extern void ucs2tochar(char *out, const uint16_t *in, size_t sz);
-extern char *ucs2tochar_dup(uint16_t *in, size_t sz);
+extern size_t ucs2_to_utf8(char *out, const uint16_t *in, size_t sz);
+extern char *ucs2_to_utf8_dup(uint16_t *in, size_t sz);
 
 #define BFGINIT(var, val)  do{  \
 	if (!(var))       \
