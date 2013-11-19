@@ -15,6 +15,7 @@
 
 #include <utlist.h>
 
+#include "compat.h"
 #include "logging.h"
 #include "lowlevel.h"
 
