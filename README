@@ -349,22 +349,7 @@ must download the proper bitstream from the vendor's website and copy it to the
 
 See README.ASIC and README.FPGA for more information regarding these.
 
-CPU only options (not included in binaries):
-
---algo|-a <arg>     Specify sha256 implementation for CPU mining:
-        fastauto*       Quick benchmark at startup to pick a working algorithm
-        auto            Benchmark at startup and pick fastest algorithm
-        c               Linux kernel sha256, implemented in C
-        4way            tcatm's 4-way SSE2 implementation
-        via             VIA padlock implementation
-        cryptopp        Crypto++ C/C++ implementation
-        cryptopp_asm32  Crypto++ 32-bit assembler implementation
-        sse2_32         SSE2 32 bit implementation for i386 machines
-        sse2_64         SSE2 64 bit implementation for x86_64 machines
-        sse4_64         SSE4.1 64 bit implementation for x86_64 machines
-        altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
---cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
-
+See README.CPU for information regarding CPU mining.
 
 ---
 
@@ -730,12 +715,7 @@ A: Virtually always, the DEFAULT parameters give the best results. Most user
 defined settings lead to worse performance.
 
 Q: What happened to CPU mining?
-A: Being increasingly irrelevant for most users, and a maintenance issue, it is
-no longer under active development and will not be supported unless someone
-steps up to help maintain it. No binary builds supporting CPU mining will be
-released for Windows but CPU mining can be built into BFGMiner when it is
-compiled. For builds which do support CPU mining, it is still disabled by
-default, and must be enabled using the -S cpu:auto option.
+A: See README.CPU for more information.
 
 Q: Will there ever be a GUI version?
 A: No, however the RPC interface makes it possible for someone else to write one
@@ -782,7 +762,7 @@ been skipped. "PGA" is also used for devices built with Application-Specific
 Integrated Circuits (ASICs).
 
 Q: What is an ASIC?
-A: They are Application Specify Integrated Circuit devices and provide the
+A: They are Application Specific Integrated Circuit devices and provide the
 highest performance per unit power due to being dedicated to only one purpose.
 
 Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
@@ -807,8 +787,8 @@ Q: I ran cgminer, and now BFGMiner doesn't work!
 A: cgminer has its own non-standard implementations of the drivers for most USB
 devices, and requires you to replace the official drivers with WinUSB on Windows
 (usually using Zadig). Before you can use BFGMiner, you will need to restore the
-original driver. Removing the device from Device Manager and re-plugging it will
-usually trigger driver re-installation to the default drivers.
+original driver. Uninstalling the device (and WinUSB driver) from Device Manager
+and re-plugging it will usually trigger driver re-installation to the default drivers.
 
 Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
 BFGMiner can't mine on them?
