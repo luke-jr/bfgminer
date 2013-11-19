@@ -163,15 +163,15 @@ m4_define([BFG_PREPROC_IFELSE],
 
 
 AC_CHECK_DECL([HASH_ITER],[
-	AC_CHECK_DECL([DL_FOREACH_SAFE],[
+	AC_CHECK_DECL([DL_CONCAT],[
 		true
 	],[
-		AC_MSG_ERROR([Could not find DL_FOREACH_SAFE - install uthash-dev 1.9.2+])
+		AC_MSG_ERROR([Could not find DL_FOREACH_SAFE - install uthash-dev 1.9.4+])
 	],[
 		#include <utlist.h>
 	])
 ],[
-	AC_MSG_ERROR([Could not find HASH_ITER - please install uthash-dev 1.9.2+])
+	AC_MSG_ERROR([Could not find HASH_ITER - please install uthash-dev 1.9.4+])
 ],[
 	#include <uthash.h>
 ])
