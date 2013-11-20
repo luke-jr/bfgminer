@@ -247,7 +247,7 @@ scrypt only options:
 See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 
-ASIC/FPGA mining boards (BitForce, Icarus, ModMiner, X6500, ZTEX) only options:
+ASIC/FPGA mining device options:
 
 --scan-serial|-S <arg> Serial port to probe for mining devices
 
