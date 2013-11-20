@@ -5606,6 +5606,8 @@ int curses_int(const char *query)
 	char *cvar;
 
 	cvar = curses_input(query);
+	if (unlikely(!cvar))
+		return -1;
 	ret = atoi(cvar);
 	free(cvar);
 	return ret;
@@ -6245,6 +6247,11 @@ retry:
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
 			char *prilist = curses_input("Enter new pool priority (comma separated list)");
+			if (!prilist)
+			{
+				wlogprint("Not changing priorities\n");
+				goto retry;
+			}
 			int res = prioritize_pools(prilist, &i);
 			free(prilist);
 			switch (res) {
@@ -6469,7 +6476,7 @@ retry:
 		default_save_file(filename);
 		snprintf(prompt, sizeof(prompt), "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
-		if (strcmp(str, "-1")) {
+		if (str) {
 			struct stat statbuf;
 
 			strcpy(filename, str);
@@ -6481,8 +6488,6 @@ retry:
 					goto retry;
 			}
 		}
-		else
-			free(str);
 		fcfg = fopen(filename, "w");
 		if (!fcfg) {
 			wlogprint("Cannot open or create file\n");
@@ -9210,7 +9215,10 @@ char *curses_input(const char *query)
 	wlogprint("%s:\n", query);
 	wgetnstr(logwin, input, 255);
 	if (!strlen(input))
-		strcpy(input, "-1");
+	{
+		free(input);
+		input = NULL;
+	}
 	leaveok(logwin, true);
 	noecho();
 	return input;
