@@ -9357,6 +9357,30 @@ void __work_completed(struct cgpu_info *cgpu, struct work *work)
 	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
+
+/* This iterates over a queued hashlist finding work started more than secs
+ * seconds ago and discards the work as completed. The driver must set the
+ * work->tv_work_start value appropriately. Returns the number of items aged. */
+int age_queued_work(struct cgpu_info *cgpu, double secs)
+{
+	struct work *work, *tmp;
+	struct timeval tv_now;
+	int aged = 0;
+
+	cgtime(&tv_now);
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (tdiff(&tv_now, &work->tv_work_start) > secs) {
+			__work_completed(cgpu, work);
+			aged++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return aged;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
