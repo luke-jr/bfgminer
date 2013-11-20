@@ -922,6 +922,8 @@ static float curses_float(const char *query)
 	char *cvar;
 
 	cvar = curses_input(query);
+	if (unlikely(!cvar))
+		return -1;
 	ret = atof(cvar);
 	free(cvar);
 	return ret;
