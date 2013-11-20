@@ -324,7 +324,7 @@ or using the short name: "ica:/dev/ttyUSB0" or "bfl:\\.\COM5"
 
 Some FPGAs do not have non-volatile storage for their bitstreams and must be
 programmed every power cycle, including first use. To use these devices, you
-must download the BFGMiner source archive (bfgminer-x.y.z.zip) and copy the
+must download the proper bitstream from the vendor's website and copy it to the
 "bitstreams" directory into your BFGMiner application directory.
 
 See README.ASIC and README.FPGA for more information regarding these.
