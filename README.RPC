@@ -13,16 +13,17 @@ network attached computer.
 
 You can only access the commands that reply with data in this mode.
 By default, you cannot access any privileged command that affects the miner -
-you will receive an access denied status message see --api-allow below.
+you will receive an access denied status message instead. See --api-allow below
+for more details.
 
 You can specify IP addresses/prefixes that are only allowed to access the API
-with the "--api-allow" option e.g. --api-allow W:192.168.0.1,10.0.0/24
-will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else
+with the "--api-allow" option, e.g. --api-allow W:192.168.0.1,10.0.0/24
+will allow 192.168.0.1 or any address matching 10.0.0.*, but nothing else.
 IP addresses are automatically padded with extra '.0's as needed
-Without a /prefix is the same as specifying /32
+Without a /prefix is the same as specifying /32.
 0/0 means all IP addresses.
 The 'W:' on the front gives that address/subnet privileged access to commands
-that modify BFGMiner (thus all API commands)
+that modify BFGMiner (thus all API commands).
 Without it those commands return an access denied status.
 See --api-groups below to define other groups like W:
 Privileged access is checked in the order the IP addresses were supplied to
@@ -34,28 +35,28 @@ With "--api-allow", 127.0.0.1 is not by default given access unless specified
 
 If you start BFGMiner also with the "--api-mcast" option, it will listen for
 a multicast message and reply to it with a message containing it's API port
-number, but only if the IP address of the sender is allowed API access
+number, but only if the IP address of the sender is allowed API access.
 
 More groups (like the privileged group W:) can be defined using the
 --api-groups command
 Valid groups are only the letters A-Z (except R & W are predefined) and are
-not case sensitive
-The R: group is the same as not privileged access
-The W: group is (as stated) privileged access (thus all API commands)
+not case sensitive.
+The R: group is the same as not privileged access.
+The W: group is (as stated) privileged access (thus all API commands).
 To give an IP address/subnet access to a group you use the group letter
 in front of the IP address instead of W: e.g. P:192.168.0/32
-An IP address/subnet can only be a member of one group
+An IP address/subnet can only be a member of one group.
 A sample API group would be:
  --api-groups
         P:switchpool:enablepool:addpool:disablepool:removepool:poolpriority:*
 This would create a group 'P' that can do all current pool commands and all
-non-privileged commands - the '*' means all non-privileged commands
-Without the '*' the group would only have access to the pool commands
+non-privileged commands - the '*' means all non-privileged commands.
+Without the '*' the group would only have access to the pool commands.
 Defining multiple groups example:
  --api-groups Q:quit:restart:*,S:save
 This would define 2 groups:
- Q: that can 'quit' and 'restart' as well as all non-privileged commands
- S: that can only 'save' and no other commands
+ Q: that can 'quit' and 'restart' as well as all non-privileged commands.
+ S: that can only 'save' and no other commands.
 
 The RPC API request can be either simple text or JSON.
 
@@ -72,16 +73,16 @@ An example request in both formats to set GPU 0 fan to 80%:
   {"command":"gpufan","parameter":"0,80"}
 
 The format of each reply (unless stated otherwise) is a STATUS section
-followed by an optional detail section
+followed by an optional detail section.
 
 From API version 1.7 onwards, reply strings in JSON and Text have the
-necessary escaping as required to avoid ambiguity - they didn't before 1.7
-For JSON the 2 characters '"' and '\' are escaped with a '\' before them
-For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+necessary escaping as required to avoid ambiguity - they didn't before 1.7.
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them.
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way.
 
 Only user entered information will contain characters that require being
 escaped, such as Pool URL, User and Password or the Config save filename,
-when they are returned in messages or as their values by the API
+when they are returned in messages or as their values by the API.
 
 For API version 1.4 and later:
 
@@ -97,13 +98,13 @@ The STATUS section is:
    F - Fatal (code bug)
 
   When=NNN
-   Standard long time of request in seconds
+   Standard long time of request in seconds.
 
   Code=N
-   Each unique reply has a unique Code (See api.c - #define MSG_NNNNNN)
+   Each unique reply has a unique Code (See api.c - #define MSG_NNNNNN).
 
   Msg=string
-   Message matching the Code value N
+   Message matching the Code value N.
 
   Description=string
    This defaults to the BFGMiner version but is the value of --api-description
@@ -433,37 +434,37 @@ affects the miner's preference for mining, it may switch immediately.
 
 When you switch to a different pool to the current one (including by priority
 change), you will get a 'Switching to URL' message in the BFGMiner status
-windows
+windows.
 
 Obviously, the JSON format is simply just the names as given before the '='
-with the values after the '='
+with the values after the '='.
 
 If you enable BFGMiner debug (--debug or using RPC), you will also get messages
-showing some details of the requests received and the replies
+showing some details of the requests received and the replies.
 
 There are included 5 program examples for accessing the API:
 
-api-example.php - a PHP script to access the API
+api-example.php - a PHP script to access the API.
   usage: php api-example.php command
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
- If you specify a command it will send that request instead
+ If you specify a command it will send that request instead.
  You must modify the line "$socket = getsock('127.0.0.1', 4028);" at the
- beginning of "function request($cmd)" to change where it looks for BFGMiner
+ beginning of "function request($cmd)" to change where it looks for BFGMiner.
 
-api-example.c - a 'C' program to access the API (with source code)
+api-example.c - a 'C' program to access the API (with source code).
   usage: api-example [command [ip/host [port]]]
  again, as above, missing or blank parameters are replaced as if you entered:
   api-example summary 127.0.0.1 4028
 
-miner.php - an example web page to access the API
- This includes buttons and inputs to attempt access to the privileged commands
+miner.php - an example web page to access the API.
+ This includes buttons and inputs to attempt access to the privileged commands.
  See the end of this README.RPC for details of how to tune the display
- and also to use the option to display a multi-rig summary
+ and also to use the option to display a multi-rig summary.
 
-api-example.py - a Python script to access the API
+api-example.py - a Python script to access the API.
   usage: python api-example.py [--host HOST] [--port PORT] [command] [parameter]
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
- If you specify a command it will send that request instead
+ If you specify a command it will send that request instead.
 
 ----------
 
@@ -596,7 +597,7 @@ Enforced output limitation:
  all extra records beyond the output limit of the API (~64k) are ignored and
   chopped off at the record boundary before the limit is reached however, JSON
   brackets will be correctly closed and the JSON id will be set to 0 (instead
-  of 1) if any data was truncated
+  of 1) if any data was truncated.
 
 Modified API commands:
  'stats' - add 'Times Sent', 'Bytes Sent', 'Times Recv', 'Bytes Recv'
@@ -612,7 +613,7 @@ Modified API commands:
 
 API V1.20b (BFGMiner v2.9.1)
 
-Support for the X6500 FPGA was added
+Support for the X6500 FPGA was added.
 
 ----------
 
@@ -750,7 +751,7 @@ Added API commands:
 N.B. the 'stats' command can change at any time so any specific content
 present should not be relied upon.
 The data content is mainly used for debugging purposes or hidden options
-in BFGMiner and can change as development work requires
+in BFGMiner and can change as development work requires.
 
 Modified API commands:
  'pools' added "Last Share Time"
@@ -772,7 +773,7 @@ API V1.8 (BFGMiner v2.3.5)
 Added API commands:
  'devdetails'
 
-Support for the ZTEX FPGA was added
+Support for the ZTEX FPGA was added.
 
 ----------
 
@@ -792,9 +793,9 @@ Modified API commands:
  'pools' added "User"
 
 From API version 1.7 onwards, reply strings in JSON and Text have the
-necessary escaping as required to avoid ambiguity
-For JSON the 2 characters '"' and '\' are escaped with a '\' before them
-For Text the 4 characters '|' ',' '=' and '\' are escaped the same way
+necessary escaping as required to avoid ambiguity.
+For JSON the 2 characters '"' and '\' are escaped with a '\' before them.
+For Text the 4 characters '|' ',' '=' and '\' are escaped the same way.
 
 ----------
 
@@ -807,11 +808,11 @@ Added API commands:
  'pgacount'
 
 Modified API commands:
- 'devs' now includes Icarus and BitForce FPGA devices
- 'notify' added "*" to the front of the name of all numeric error fields
- 'config' correct "Log Interval" to use numeric (not text) type for JSON
+ 'devs' now includes Icarus and BitForce FPGA devices.
+ 'notify' added "*" to the front of the name of all numeric error fields.
+ 'config' correct "Log Interval" to use numeric (not text) type for JSON.
 
-Support for Icarus and BitForce FPGAs was added
+Support for Icarus and BitForce FPGAs was added.
 
 ----------
 
@@ -827,7 +828,7 @@ Added API commands:
 Modified API commands:
  'config' added "Device Code" and "OS"
 
-Added "When" to the STATUS reply section of all commands
+Added "When" to the STATUS reply section of all commands.
 
 ----------
 
@@ -854,7 +855,7 @@ Modified API commands:
 
 Starting with API V1.2, any attempt to access a command that requires
 privileged security, from an IP address that does not have privileged
-security, will return an "Access denied" Error Status
+security, will return an "Access denied" Error Status.
 
 ----------
 
@@ -862,13 +863,13 @@ API V1.1 (cgminer v2.2.4)
 
 There were no changes to the API commands in cgminer v2.2.4,
 however support was added to cgminer for IP address restrictions
-with the --api-allow option
+with the --api-allow option.
 
 ----------
 
 API V1.1 (cgminer v2.2.2)
 
-Prior to V1.1, devs/gpu incorrectly reported GPU0 Intensity for all GPUs
+Prior to V1.1, devs/gpu incorrectly reported GPU0 Intensity for all GPUs.
 
 Modified API commands:
  'devs'/'gpu' added "Last Share Pool" and "Last Share Time" for each device
@@ -877,7 +878,7 @@ Modified API commands:
 
 API V1.0 (cgminer v2.2.0)
 
-Remove default CPU support
+Remove default CPU support.
 
 Added API commands:
  'config'
@@ -917,10 +918,10 @@ miner.php
 =========
 
 miner.php is a PHP based interface to the BFGMiner RPC API
-(referred to simply as the API below)
+(referred to simply as the API below).
 
 It can show rig details, summaries and input fields to allow you to change
-BFGMiner
+BFGMiner.
 You can also create custom summary pages with it
 
 It has two levels to the security:
@@ -931,7 +932,7 @@ It has two levels to the security:
 
 ---------
 
-To use miner.php requires a web server with PHP
+To use miner.php requires a web server with PHP.
 
 Basics: On Xubuntu 11.04, to install Apache and PHP, the commands are:
  sudo apt-get install apache2
@@ -955,37 +956,37 @@ The basic BFGMiner option to enable the API is:
 
  --api-listen
 
-or in your bfgminer.conf
+or in your bfgminer.conf:
 
  "api-listen" : true,
 
-(without the ',' on the end if it is the last item)
+(without the ',' on the end if it is the last item.)
 
 If the web server is running on the BFGMiner computer, the above
 is the only change required to give miner.php basic access to
-the BFGMiner API
+the BFGMiner API.
 
 -
 
 If the web server runs on a different computer to BFGMiner,
 you will also need to tell BFGMiner to allow the web server
-to access BFGMiner's API and tell miner.php where BFGMiner is
+to access BFGMiner's API and tell miner.php where BFGMiner is.
 
 Assuming a.b.c.d is the IP address of the web server, you
 would add the following to BFGMiner:
 
  --api-listen --api-allow a.b.c.d
 
-or in your bfgminer.conf
+or in your bfgminer.conf:
 
  "api-listen" : true,
  "api-allow" : "a.b.c.d",
 
-to tell BFGMiner to give the web server read access to the API
+to tell BFGMiner to give the web server read access to the API.
 
 You also need to tell miner.php where BFGMiner is.
 Assuming BFGMiner is at IP address e.f.g.h, then you would
-edit miner.php and change the line
+edit miner.php and change the line:
 
  $rigs = array('127.0.0.1:4028');
 
@@ -994,40 +995,40 @@ to
  $rigs = array('e.f.g.h:4028');
 
 See --api-network or --api-allow for more access details
-and how to give write access
+and how to give write access.
 
 You can however, also tell miner.php to find your mining rigs automatically
-on the local subnet
+on the local subnet.
 
 Add the following to each BFGMiner:
 
  --api-mcast
 
-or in your bfgminer.conf
+or in your bfgminer.conf:
 
  "api-mcast" : true,
 
 And in miner.php set $mcast = true;
 
 This will ignore the value of $rigs and overwrite it with the list of zero or
-more rigs found on the network in the timeout specified
+more rigs found on the network in the timeout specified.
 A rig will not reply if the API settings would mean it would also ignore an
 API request from the web server running miner.php
 
 ---------
 
-Once you have a web server with PHP running
+Once you have a web server with PHP running:
 
  copy your miner.php to the main web folder
 
-On Xubuntu 11.04
+On Xubuntu 11.04:
  /var/www/
 
-On Fedora 17
+On Fedora 17:
  /var/www/html/
 
-On Windows
- see your windows Web/PHP documentation
+On Windows:
+ Please check your windows Web/PHP documentation.
 
 Assuming the IP address of the web server is a.b.c.d
 Then in your web browser go to:
@@ -1040,18 +1041,18 @@ Done :)
 
 The rest of this documentation deals with the more complex
 functions of miner.php, using myminer.php, creating custom
-summaries and displaying multiple BFGMiner rigs
+summaries and displaying multiple BFGMiner rigs.
 
 ---------
 
 If you create a file called myminer.php in the same web folder
-where you put miner.php, miner.php will load it when it runs
+where you put miner.php, miner.php will load it when it runs.
 
 This is useful, to put any changes you need to make to miner.php
-instead of changing miner.php
+instead of changing miner.php.
 Thus if you update/get a new miner.php, you won't lose the changes
 you have made if you put all your changes in myminer.php
-(and don't change miner.php at all)
+(and haven't changed miner.php at all)
 
 A simple example myminer.php that defines 2 rigs
 (that I will keep referring to further below) is:
@@ -1072,30 +1073,30 @@ However, this is only valid for variables in miner.php before the
 Every variable in miner.php above those 2 lines, can be changed by
 simply defining them in your myminer.php
 
-So although miner.php originally contains the line
+So although miner.php originally contains the line:
 
  $rigs = array('127.0.0.1:4028');
 
 if you created the example myminer.php given above, it would actually
-change the value of $rigs that is used when miner.php is running
+change the value of $rigs that is used when miner.php is running.
 i.e. you don't have to remove or comment out the $rigs line in miner.php
 It will be superseded by myminer.php
 
 ---------
 
 The example myminer.php above also shows how to define more that one rig
-to be shown my miner.php
+to be shown my miner.php:
 
 Each rig string is 2 or 3 values separated by colons ':'
-They are simply an IP address or host name, followed by the
-port number (usually 4028) and an optional Name string
+They are simply an IP address or hostname, followed by the
+port number (usually 4028) and an optional Name string.
 
 miner.php displays rig buttons that will show the details of a single
 rig when you click on it - the button shows either the rig number,
-or the 'Name' string if you provide it
+or the 'Name' string if you provide it.
 
 PHP arrays contain each string separated by a comma, but no comma after
-the last one
+the last one.
 
 So an example for 3 rigs would be:
 
@@ -1104,22 +1105,22 @@ So an example for 3 rigs would be:
 
 Of course each of the rigs listed would also have to have the API
 running and be set to allow the web server to access the API - as
-explained before
+covered earlier in this document.
 
 ---------
 
-So basically, any variable explained below can be put in myminer.php
-if you wanted to set it to something different from its default value
-and did not want to change miner.php itself every time you updated it
+So basically, any variable explained below can be put in myminer.php if you want
+to set it to something different to its default value and did not want to change
+miner.php itself every time you update it.
 
-Below is each variable that can be changed and an explanation of each
+Below is a list of the variables that can be changed and an explanation of each.
 
 ---------
 
 Default:
  $dfmt = 'H:i:s j-M-Y \U\T\CP';
 
-Define the date format used to print full length dates
+Define the date format used to print full length dates.
 If you get the string 'UTCP' on the end of your dates shown, that
 means you are using an older version of PHP and you can instead use:
  $dfmt = 'H:i:s j-M-Y \U\T\CO';
@@ -1132,7 +1133,7 @@ The PHP documentation on the date format is here:
 Default:
  $title = 'Mine';
 
-Web page title
+Web page title.
 If you know PHP you can of course use code to define it e.g.
  $title = 'My Rig at: '.date($dfmt);
 
@@ -1144,17 +1145,17 @@ Which would set the web page title to something like:
 Default:
  $readonly = false;
 
-Set $readonly to true to force miner.php to be readonly
+Set $readonly to true to force miner.php to be readonly.
 This means it won't allow you to change BFGMiner even if the RPC API
-options allow it to
+options allow it to.
 
 If you set $readonly to false then it will check BFGMiner 'privileged'
-and will show input fields and buttons on the single rig page
+and will show input fields and buttons on the single rig page,
 allowing you to change devices, pools and even quit or restart
-BFGMiner
+BFGMiner.
 
 However, if the 'privileged' test fails, the code will set $readonly to
-true
+true.
 
 ---------
 
@@ -1162,31 +1163,31 @@ Default:
  $userlist = null;
 
 Define password checking and default access null means there is no password
-checking
+checking.
 
-$userlist is an array of 3 arrays e.g.
+$userlist is an array of 3 arrays, e.g.
 $userlist = array('sys' => array('boss' => 'bpass'),
                   'usr' => array('user' => 'upass', 'pleb' => 'ppass'),
                   'def' => array('Pools'));
 
-'sys' is an array of system users and passwords (full access)
-'usr' is an array of user level users and passwords (readonly access)
-'def' is an array of custompages that anyone not logged in can view
+'sys' is an array of system users and passwords (full access).
+'usr' is an array of user level users and passwords (readonly access).
+'def' is an array of custompages that anyone not logged in can view.
 
-Any of the 3 can be null, meaning there are none of that item
+Any of the 3 can be null, meaning there are none of that item.
 
-All validated 'usr' users are given $readonly = true; access
-All validated 'sys' users are given the $readonly access you defined
+All validated 'usr' users are given $readonly = true; access.
+All validated 'sys' users are given the $readonly access you defined.
 
 If 'def' has one or more values, and allowcustompages is true, then anyone
 without a password can see the list of custompage buttons given in 'def' and
 will see the first one when they go to the web page, with a login button at the
-top right
+top right.
 
 From the login page, if you login with no username or password, it will show
-the first 'def' custompage (if there are any)
+the first 'def' custompage (if there are any).
 
-If you are logged in, it will show a logout button at the top right
+If you are logged in, it will show a logout button at the top right.
 
 ---------
 
@@ -1196,9 +1197,9 @@ Default:
 Set $notify to false to NOT attempt to display the notify command table of data
 
 Set $notify to true to attempt to display the notify command on the single rig
-page
+page.
 If your older version of BFGMiner returns an 'Invalid command' because it
-doesn't have notify - it just shows the error status table
+doesn't have notify - it just shows the error status table.
 
 ---------
 
@@ -1206,22 +1207,23 @@ Default:
  $checklastshare = true;
 
 Set $checklastshare to true to do the following checks:
-If a device's last share is 12x expected ago then display as an error
-If a device's last share is 8x expected ago then display as a warning
+If a device's last share is 12x expected ago then display as an error.
+If a device's last share is 8x expected ago then display as a warning.
 If either of the above is true, also display the whole line highlighted
-This assumes shares are 1 difficulty shares
+This assumes shares are 1 difficulty shares.
 
-Set $checklastshare to false to not do the above checks
+Set $checklastshare to false to not do the above checks.
 
-'expected' is calculated from the device Mh/s value
+'expected' is calculated from the device Mh/s value.
 So for example, a device that hashes at 380Mh/s should (on average) find a
-share every 11.3s
+share every 11.3s.
 If the last share was found more than 11.3 x 12 seconds (135.6s) ago, it is
-considered an error and highlighted
+considered an error and highlighted.
 If the last share was found more than 11.3 x 8 seconds (90.4s) ago, it is
-considered a warning and highlighted
+considered a warning and highlighted.
 
-The default highlighting is very subtle
+The default highlighting is very subtle, so change it if you want it to be more
+obvious.
 
 ---------
 
@@ -1229,8 +1231,8 @@ Default:
  $poolinputs = false;
 
 Set $poolinputs to true to show the input fields for adding a pool and changing
-the pool priorities on a single rig page
-However, if $readonly is true, it will not display them
+the pool priorities on a single rig page.
+However, if $readonly is true, it will not display them.
 
 ---------
 
@@ -1238,11 +1240,11 @@ Default:
  $rigs = array('127.0.0.1:4028');
 
 Set $rigs to an array of your BFGMiner rigs that are running format: 'IP:Port'
- or 'Host:Port' or 'Host:Port:Name'
-If you only have one rig, it will just show the detail of that rig
+ or 'Host:Port' or 'Host:Port:Name'.
+If you only have one rig, it will just show the detail of that rig.
 If you have more than one rig it will show a summary of all the rigs with
  buttons to show the details of each rig - the button contents will be 'Name'
- rather than rig number, if you specify 'Name'
+ rather than rig number, if you specify 'Name'.
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 
 ---------
@@ -1250,38 +1252,38 @@ e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 Default:
  $mcast = false;
 
-Set $mcast to true to look for your rigs and ignore $rigs
+Set $mcast to true to look for your rigs and ignore $rigs.
 
 ---------
 
 Default:
  $mcastexpect = 0;
 
-The minimum number of rigs expected to be found when $mcast is true
-If fewer are found, an error will be included at the top of the page
+The minimum number of rigs expected to be found when $mcast is true.
+If fewer are found, an error will be included at the top of the page.
 
 ---------
 
 Default:
  $mcastaddr = '224.0.0.75';
 
-API Multicast address all miners are listening on
+API Multicast address all miners are listening on.
 
 ---------
 
 Default:
  $mcastport = 4028;
 
-API Multicast UDP port all miners are listening on
+API Multicast UDP port all miners are listening on.
 
 ---------
 
 Default:
  $mcastcode = 'FTW';
 
-The code all miners expect in the Multicast message sent
-The message sent is "cgm-code-listport"
-Don't use the '-' character if you change it
+The code all miners expect in the Multicast message sent.
+The message sent is "cgm-code-listport".
+Don't use the '-' character if you change it.
 
 ---------
 
@@ -1289,7 +1291,7 @@ Default:
  $mcastlistport = 4027;
 
 UDP port number that is added to the broadcast message sent
-that specifies to the miners the port to reply on
+that specifies to the miners the port to reply on.
 
 ---------
 
@@ -1297,41 +1299,41 @@ Default:
  $mcasttimeout = 1.5;
 
 Set $mcasttimeout to the number of seconds (floating point)
-to wait for replies to the Multicast message
+to wait for replies to the Multicast message.
 N.B. the accuracy of the timing used to wait for the replies is
-~0.1s so there's no point making it more than one decimal place
+~0.1s so there's no point making it more than one decimal place.
 
 ---------
 
 Default:
  $mcastretries = 0;
 
-Set $mcastretries to the number of times to retry the multicast
+Set $mcastretries to the number of times to retry the multicast.
 
 If $mcastexpect is 0, this is simply the number of extra times
-that it will send the multicast request
+that it will send the multicast request.
 N.B. BFGMiner doesn't listen for multicast requests for 1000ms after
-each one it hears
+each one it hears.
 
 If $mcastexpect is > 0, it will stop looking for replies once it
 has found at least $mcastexpect rigs, but it only checks this rig
 limit each time it reaches the $mcasttimeout limit, thus it can find
-more than $mcastexpect rigs if more exist
+more than $mcastexpect rigs if more exist.
 It will send the multicast message up to $mcastretries extra times or
-until it has found at least $mcastexpect rigs
-However, when using $mcastretries, it is possible for it to sometimes
+until it has found at least $mcastexpect rigs.
+When using $mcastretries, it is however possible for it to sometimes
 ignore some rigs on the network if $mcastexpect is less than the
-number of rigs on the network and some rigs are too slow to reply
+number of rigs on the network and some rigs are too slow to reply.
 
 ---------
 
 Default:
  $allowgen = false;
 
-Set $allowgen to true to allow customsummarypages to use 'gen' 
-false means ignore any 'gen' options
+Set $allowgen to true to allow customsummarypages to use 'gen',
+false means ignore any 'gen' options.
 This is disabled by default due to the possible security risk
-of using it, see the end of this document for an explanation
+of using it, please see the end of this document for an explanation.
 
 ---------
 
@@ -1339,7 +1341,7 @@ Default:
  $rigipsecurity = true;
 
 Set $rigipsecurity to false to show the IP/Port of the rig in the socket error
- messages and also show the full socket message
+ messages and also show the full socket message.
 
 ---------
 
@@ -1347,17 +1349,17 @@ Default:
  $rigtotals = true;
  $forcerigtotals = false;
 
-Set $rigtotals to true to display totals on the single rig page 'false' means
- no totals (and ignores $forcerigtotals)
+Set $rigtotals to true to display totals on the single rig page, 'false' means
+ no totals (and ignores $forcerigtotals).
 
-If $rigtotals is true, all data is also right aligned
-With false, it's as before, left aligned
+If $rigtotals is true, all data is also right aligned.
+With false, it's as before, left aligned.
 
 This option is just here to allow people to set it to false if they prefer the
- old non-total display when viewing a single rig
+ old non-total display when viewing a single rig.
 
 Also, if there is only one line shown in any section, then no total will be
- shown (to save screen space)
+ shown (to save screen space).
 You can force it to always show rig totals on the single rig page, even if
  there is only one line, by setting $forcerigtotals = true;
 
@@ -1367,32 +1369,32 @@ Default:
  $socksndtimeoutsec = 10;
  $sockrcvtimeoutsec = 40;
 
-The numbers are integer seconds
+The numbers are integer seconds.
 
-The defaults should be OK for most cases
+The defaults should be OK for most cases.
 However, the longer SND is, the longer you have to wait while PHP hangs if the
-target BFGMiner isn't running or listening
+target BFGMiner isn't running or listening.
 
 RCV should only ever be relevant if BFGMiner has hung but the API thread is
-still running, RCV would normally be >= SND
+still running, RCV would normally be >= SND.
 
 Feel free to increase SND if your network is very slow or decrease RCV if that
-happens often to you
+happens often to you.
 
 Also, on some windows PHP, apparently the $usec is ignored (so usec can't be
-specified)
+specified).
 
 ---------
 
 Default:
  $hidefields = array();
 
-List of fields NOT to be displayed
+List of fields NOT to be displayed.
 You can use this to hide data you don't want to see or don't want shown on a
-public web page
+public web page.
 The list of sections are:
  SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS
-See the web page for the list of field names (the table headers)
+See the web page for the list of field names (the table headers).
 It is an array of 'SECTION.Field Name' => 1
 
 This example would hide the slightly more sensitive pool information:
@@ -1409,21 +1411,21 @@ Default:
  $changerefresh = true;
  $autorefresh = 0;
 
-Auto-refresh of the page (in seconds) - integers only
+Auto-refresh of the page (in seconds) - integers only.
 
-$ignorerefresh = true/false always ignore refresh parameters
-$changerefresh = true/false show buttons to change the value
-$autorefresh = default value, 0 means don't auto-refresh
+$ignorerefresh = true/false always ignore refresh parameters.
+$changerefresh = true/false show buttons to change the value.
+$autorefresh = default value, 0 means don't auto-refresh.
 
 ---------
 
 Default:
  $placebuttons = 'top';
 
-Where to place the Refresh, Summary, Custom Pages, Quit, etc. buttons
+Where to place the Refresh, Summary, Custom Pages, Quit, etc. buttons.
 
 Valid values are: 'top' 'bot' 'both'
- anything else means don't show them - case sensitive
+ Anything else means don't show them. (case sensitive)
 
 ---------
 
@@ -1431,18 +1433,18 @@ Default:
  $miner_font_family = 'verdana,arial,sans';
  $miner_font_size = '13pt';
 
-Change these to set the font and font size used on the web page
+Change these to set the font and font size used on the web page.
 
 ---------
 
 Default:
  $colouroverride = array();
 
-Use this to change the web page colour scheme
+Use this to change the web page colour scheme.
 
-See $colourtable in miner.php for the list of possible names to change
+See $colourtable in miner.php for the list of possible names to change.
 
-Simply put in $colouroverride, just the colours you wish to change
+Simply put in $colouroverride, just the colours you wish to change.
 
 e.g. to change the colour of the header font and background
 you could do the following:
@@ -1458,47 +1460,47 @@ Default:
  $allowcustompages = true;
 
 Should we allow custom pages?
-(or just completely ignore them and don't display the buttons)
+(or just completely ignore them and don't display the buttons.)
 
 ---------
 
-OK this part is more complex: Custom Summary Pages
+OK this part is more complex: Custom Summary Pages.
 
 A custom summary page in an array of 'section' => array('FieldA','FieldB'...)
 
 The section defines what data you want in the summary table and the Fields
-define what data you want shown from that section
+define what data you want shown from that section.
 
 Standard sections are:
  SUMMARY, POOL, PGA, GPU, NOTIFY, CONFIG, DEVDETAILS, DEVS, STATS, COIN
 
-Fields are the names as shown on the headers on the normal pages
+Fields are the names as shown on the headers on the normal pages.
 
 Fields can be 'name=new name' to display 'name' with a different heading
-'new name'
+'new name'.
 
 There are also now joined sections:
  SUMMARY+POOL, SUMMARY+DEVS, SUMMARY+CONFIG, DEVS+NOTIFY, DEVS+DEVDETAILS
  SUMMARY+COIN
 
 These sections are an SQL join of the two sections and the fields in them
-are named section.field where section. is the section the field comes from
-See the example further down
+are named section.field where 'section.' is the section the field comes from
+See the example further down.
 
 Also note:
-- empty tables are not shown
-- empty columns (e.g. an unknown field) are not shown
-- missing field data shows as blank
+- empty tables are not shown.
+- empty columns (e.g. an unknown field) are not shown.
+- missing field data shows as blank.
 - the field name '*' matches all fields except in joined sections
-  (useful for STATS and COIN)
+  (useful for STATS and COIN).
 
 There are 2 hard coded sections:
- DATE - displays a date table like at the start of 'Summary'
- RIGS - displays a rig table like at the start of 'Summary'
+ DATE - displays a date table like at the start of 'Summary'.
+ RIGS - displays a rig table like at the start of 'Summary'.
 
 Each custom summary requires a second array, that can be empty, listing fields
-to be totalled for each section
-If there is no matching total data, no total will show
+to be totalled for each section.
+If there is no matching total data, no total will show.
 
 ---------
 
@@ -1526,33 +1528,33 @@ Looking at the Mobile example:
 
  $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum));
 
-This will show 5 tables (according to $mobilepage)
+This will show 5 tables (according to $mobilepage).
 Each table will have the chosen details for all the rigs specified in $rigs
 
  DATE
-	A single box with the web server's current date and time
+	A single box with the web server's current date and time.
 
  RIGS
-	A table of the rigs: description, time, versions etc
+	A table of the rigs: description, time, versions etc.
 
  SUMMARY
 
 	This will use the API 'summary' command and show the selected fields:
 		Elapsed, MHS av, Found Blocks, Accepted, Rejected and Utility
 	However, 'Rejected=Rej' means that the header displayed for the 'Rejected'
-	field will be 'Rej', instead of 'Rejected' (to save space)
-	Same for 'Found Blocks=Blks' - to save space
+	field will be 'Rej', instead of 'Rejected' (to save space).
+	Same for 'Found Blocks=Blks' - to save space.
 
  DEVS+NOTIFY
 
 	This will list each of the devices on each rig and display the list of
-	fields as shown
+	fields as shown.
 	It will also include the 'Last Not Well' field from the 'notify' command
-	so you know when the device was last not well
+	so you know when the device was last not well.
 
 	You will notice that you need to rename each field e.g. 'DEVS.Name=Name'
 	since each field name in the join between DEVS and NOTIFY is actually
-	section.fieldname, not just fieldname
+	section.fieldname, not just fieldname.
 
 	The join code automatically adds 2 fields to each GPU device: 'Name', 'ID',
 	and 'ProcID'. They don't exist in the API 'devs' output but we can correctly
@@ -1564,10 +1566,10 @@ Each table will have the chosen details for all the rigs specified in $rigs
 
 	This will use the API 'pools' command and show the selected fields:
 		POOL, Status, Accepted, Rejected, Last Share Time
-	Again, I renamed the 'Rejected' field using 'Rejected=Rej', to save space
+	Again, I renamed the 'Rejected' field using 'Rejected=Rej', to save space.
 
-$mobilesum lists the sections and fields that should have a total
-You can't define them for 'DATE' or 'RIGS' since they are hard coded tables
+$mobilesum lists the sections and fields that should have a total.
+You can't define them for 'DATE' or 'RIGS' since they are hard coded tables.
 The example given:
 
  SUMMARY
@@ -1575,32 +1577,32 @@ The example given:
 		MHS av, Found Blocks, Accepted, Rejected, Utility
 
 	Firstly note that you use the original name i.e. for 'Rejected=Rej'
-	you use 'Rejected', not 'Rej' and not 'Rejected=Rej'
+	you use 'Rejected', not 'Rej' and not 'Rejected=Rej'.
 
-	Secondly note that it simply adds up the fields
+	Secondly note that it simply adds up the fields.
 	If you ask for a total of a string field you will get the numerical
-	sum of the string data
+	sum of the string data.
 
  DEVS+NOTIFY
 
 	Simply note in this join example that you must use the original field
-	names which are section.fieldname, not just fieldname
+	names which are section.fieldname, not just fieldname.
 
  POOL
 	Show a total at the bottom of the columns for:
 		Accepted and Rejected
 
-	Again remember to use the original field name 'Rejected'
+	Again remember to use the original field name 'Rejected'.
 
 ---------
 
 With BFGMiner 2.10.1 and later, miner.php includes an extension to the custom
 pages that allows you to apply SQL style commands to the data: where, group,
 and having
-BFGMiner 3.4.0 also includes another option 'gen'
+BFGMiner 3.4.0 also includes another option 'gen'.
 
 As an example, miner.php includes a more complex custom page called 'Pools'
-this includes the extension:
+which includes the extension:
 
 $poolsext = array(
  'POOL+STATS' => array(
@@ -1613,69 +1615,69 @@ $poolsext = array(
         'having' => array(array('STATS.Bytes Recv', '>', 0)))
 );
 
-This allows you to group records together from one or more rigs
+This allows you to group records together from one or more rigs.
 In the example, you'll get each Pool (with the same URL+Stratum info) listed
-once for all rigs and a sum of each of the fields listed in 'calc'
+once for all rigs and a sum of each of the fields listed in 'calc'.
 
 
-'where' and 'having' are an array of fields and restrictions to apply
+'where' and 'having' are an array of fields and restrictions to apply.
 
 In the above example, it will only display the rows where it contains the
-'STATS.Bytes Recv' field with a value greater than zero
-If the row doesn't have the field, it will always be included
-All restrictions must be true in order for the row to be included
-Any restiction that is invalid or unknown is true
-An empty array, or null, means there are no restrictions
+'STATS.Bytes Recv' field with a value greater than zero.
+If the row doesn't have the field, it will always be included.
+All restrictions must be true in order for the row to be included.
+Any restiction that is invalid or unknown is true.
+An empty array, or null, means there are no restrictions.
 
 A restriction is formatted as: array('Field', 'restriction', 'value')
 Field is the simple field name as normally displayed, or SECTION.Field if it is
-a joined section (as in this case 'POOL+STATS')
+a joined section (as in this case 'POOL+STATS').
 The list of restrictions are:
 'set' - true if the row contains the 'Field' ('value' is not required or used)
-'=', '<', '<=', '>', '>' - a numerical comparison
-'eq', 'lt', 'le', 'gt', 'ge' - a case insensitive string comparison
+'=', '<', '<=', '>', '>' - a numerical comparison.
+'eq', 'lt', 'le', 'gt', 'ge' - a case insensitive string comparison.
 
 You can have multiple restrictions on a 'Field' - but all must be true to
-include the row containing the 'Field'
+include the row containing the 'Field'.
 e.g. a number range between 0 and 10 would be:
 array('STATS.Bytes Recv', '>', 0), array('STATS.Bytes Recv', '<', 10)
 
 The difference between 'where' and 'having' is that 'where' is applied to the
 data before grouping it and 'having' is applied to the data after grouping it
-- otherwise they work the same
+- otherwise they work the same.
 
 
 'group' lists the fields to group over and 'calc' lists the function to apply
-to other fields that are not part of 'group'
+to other fields that are not part of 'group'.
 
-You can only see fields listed in 'group' and 'calc'
+You can only see fields listed in 'group' and 'calc'.
 
 A 'calc' is formatted as: 'Field' => 'function'
 The current list of operations available for 'calc' are:
 'sum', 'avg', 'min', 'max', 'lo', 'hi', 'count', 'any'
-The first 4 are as expected - the numerical sum, average, minimum or maximum
-'lo' is the first string of the list, sorted ignoring case
-'hi' is the last string of the list, sorted ignoring case
+The first 4 are as expected - the numerical sum, average, minimum or maximum.
+'lo' is the first string of the list, sorted ignoring case.
+'hi' is the last string of the list, sorted ignoring case.
 'count' is the number of rows in the section specified in the calc e.g.
  ('DEVS.Name' => 'count') would be the number of DEVS selected in the 'where'
- of course any valid 'DEVS.Xyz' would give the same 'count' value
-'any' is effectively random: the field value in the 1st row of the grouped data
-An unrecognised 'function' uses 'any'
+ of course any valid 'DEVS.Xyz' would give the same 'count' value.
+'any' is effectively random: the field value in the 1st row of the grouped data.
+An unrecognised 'function' uses 'any'.
 
 A 'gen' allows you to generate new fields from any php valid function of any
-of the other fields
+of the other fields.
  e.g. 'gen' => array('AvShr', 'POOL.Difficulty Accepted/max(POOL.Accepted,1)),
 will generate a new field called GEN.AvShr that is the function shown, which
-in this case is the average difficulty of each share submitted
+in this case is the average difficulty of each share submitted.
 
-THERE IS A SECURITY RISK WITH HOW GEN WORKS
+THERE IS A SECURITY RISK WITH HOW GEN WORKS!
 It simply replaces all the variables with their values and then requests PHP
 to execute the formula - thus if a field value returned from a BFGMiner API
-request contained PHP code, it could be executed by your web server
+request contained PHP code, it could be executed by your web server.
 Of course BFGMiner doesn't do this, but if you do not control the BFGMiner that
 returns the data in the API calls, someone could modify BFGMiner to return a
-PHP string in a field you use in 'gen'
-Thus use 'gen' at your own risk
+PHP string in a field you use in 'gen'.
+Thus use 'gen' at your own risk.
 If someone feels the urge to write a mathematical interpreter in PHP to get
 around this risk, feel free to write one and submit it to the API author for
-consideration
+consideration.
