@@ -239,6 +239,10 @@ if HAS_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 endif
 
+if USE_BIFURY
+bfgminer_SOURCES += driver-bifury.c
+endif
+
 if HAS_BITFURY
 bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h spidevc.h spidevc.c
 

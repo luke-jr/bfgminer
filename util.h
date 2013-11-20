@@ -219,6 +219,17 @@ size_t bytes_len(const bytes_t *b)
 	return b->sz;
 }
 
+static inline
+ssize_t bytes_find(const bytes_t * const b, const uint8_t needle)
+{
+	const size_t blen = bytes_len(b);
+	const uint8_t * const buf = bytes_buf(b);
+	for (int i = 0; i < blen; ++i)
+		if (buf[i] == needle)
+			return i;
+	return -1;
+}
+
 extern void _bytes_alloc_failure(size_t);
 
 static inline
