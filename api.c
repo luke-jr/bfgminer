@@ -3520,6 +3520,7 @@ static void tidyup(__maybe_unused void *arg)
 		shutdown(*apisock, SHUT_RDWR);
 		CLOSESOCKET(*apisock);
 		*apisock = INVSOCK;
+		free(apisock);
 	}
 
 	if (ipaccess != NULL) {
