@@ -485,7 +485,7 @@ void bitfury_noop_job_start(struct thr_info __maybe_unused * const thr)
 void bitfury_init_freq_stat(struct freq_stat * const c, const int osc6_min, const int osc6_max)
 {
 	const int osc6_values = (osc6_max + 1 - osc6_min);
-	void * const p = malloc(osc6_values * (sizeof(*c->mh) + sizeof(*c->s)));
+	void * const p = calloc(osc6_values, (sizeof(*c->mh) + sizeof(*c->s)));
 	c->mh = p - (sizeof(*c->mh) * osc6_min);
 	c->s = p + (sizeof(*c->mh) * osc6_values) - (sizeof(*c->s) * osc6_min);
 	c->osc6_min = osc6_min;
@@ -728,6 +728,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				if (opt_debug && !c->best_done)
 				{
 					char logbuf[0x100];
+					logbuf[0] = '\0';
 					for (i = c->osc6_min; i <= c->osc6_max; ++i)
 						tailsprintf(logbuf, sizeof(logbuf), " %d=%.3f/%3.0fs",
 						            i, c->mh[i] / c->s[i], c->s[i]);
