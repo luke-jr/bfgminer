@@ -3394,6 +3394,9 @@ void bfg_waddstr(WINDOW *win, const char *s)
 				wadd_wch(win, (w == 0x2500) ? WACS_HLINE : WACS_BTEE);
 				break;
 #endif
+			case 0x2022:
+				if (w > WCHAR_MAX || !iswprint(w))
+					w = '*';
 			default:
 #ifdef USE_UNICODE
 				if (w > WCHAR_MAX || !(iswprint(w) || w == '\n'))
