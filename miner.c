@@ -6372,7 +6372,7 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
 #ifdef USE_KLONDIKE
 	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
 #endif
 	fputs("\n}\n", fcfg);
 
