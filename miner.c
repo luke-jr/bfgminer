@@ -3396,12 +3396,15 @@ void bfg_waddstr(WINDOW *win, const char *s)
 #endif
 			default:
 #ifdef USE_UNICODE
-				if (w > WCHAR_MAX)
-#if REPLACEMENT_CHAR > WCHAR_MAX
-					w = '?';
-#else
-					w = REPLACEMENT_CHAR;
+				if (w > WCHAR_MAX || !(iswprint(w) || w == '\n'))
+				{
+#if REPLACEMENT_CHAR <= WCHAR_MAX
+					if (iswprint(REPLACEMENT_CHAR))
+						w = REPLACEMENT_CHAR;
+					else
 #endif
+						w = '?';
+				}
 				{
 					wchar_t wc = w;
 					waddnwstr(win, &wc, 1);
