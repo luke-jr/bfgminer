@@ -2017,9 +2017,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
-	OPT_WITH_ARG("--scan-serial|-S",
+	OPT_WITH_ARG("--scan|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for mining devices"),
+		     "Configure how to scan for mining devices"),
+	OPT_WITH_ARG("--scan-device|--scan-serial|--devscan",
+		     add_serial, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
@@ -6369,7 +6372,7 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	_write_config_string_elist(fcfg, "scan-serial", scan_devices);
+	_write_config_string_elist(fcfg, "scan", scan_devices);
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
 	
