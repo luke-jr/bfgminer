@@ -10369,7 +10369,7 @@ const struct device_drv *_probe_device_find_drv(const char * const dname, const 
 	{
 		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
 		if (!dreg)
-			return false;
+			return NULL;
 	}
 	
 	return dreg->drv;
@@ -10379,7 +10379,7 @@ static
 bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
 {
 	const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-	if (!drv->lowl_probe)
+	if (!(drv && drv->lowl_probe))
 		return false;
 	return drv->lowl_probe(info);
 }
