@@ -129,6 +129,7 @@ dist_doc_DATA += README.scrypt
 endif
 
 if HAS_CPUMINE
+dist_doc_DATA += README.CPU
 bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
