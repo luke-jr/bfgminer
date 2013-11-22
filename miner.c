@@ -10955,6 +10955,7 @@ int main(int argc, char *argv[])
 	devices_new = NULL;
 
 	if (opt_display_devs) {
+		int devcount = 0;
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
@@ -10978,8 +10979,9 @@ int main(int argc, char *argv[])
 				tailsprintf(buf, sizeof(buf), "; path=%s", cgpu->device_path);
 			tailsprintf(buf, sizeof(buf), ")");
 			_applog(LOG_NOTICE, buf);
+			++devcount;
 		}
-		quit(0, "%d devices listed", total_devices);
+		quit(0, "%d devices listed", devcount);
 	}
 
 	mining_threads = 0;
