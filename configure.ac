@@ -964,7 +964,7 @@ AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
-AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
+AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$bitforce$icarus$hashbuster$httpsrv$littlefury$metabank$nanofury != xnononononononononono])
 
 dnl Find YASM
 has_yasm=false
