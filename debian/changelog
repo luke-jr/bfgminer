@@ -1,3 +1,9 @@
+bfgminer (3.6.0-1precise1) precise; urgency=medium
+
+  * Explicitly added OpenCL to Debian build rules.
+
+ -- graeme <graeme@sudo.ca>  Thu, 21 Nov 2013 10:19:10 -0800
+
 bfgminer (3.6.0-0precise1) precise; urgency=low
 
   * klondike: New driver, just imported from cgminer mostly as-is for now.

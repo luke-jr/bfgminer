@@ -5,7 +5,7 @@
 
 override_dh_auto_configure:
 	NOSUBMODULES=1 ./autogen.sh
-	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining --enable-scrypt
+	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining --enable-scrypt --enable-opencl
 
 override_dh_auto_install:
 	$(MAKE) DESTDIR=$(CURDIR)/debian/bfgminer install
