@@ -60,7 +60,7 @@ static const char SEPARATOR = '|';
 #define SEPSTR "|"
 static const char GPUSEP = ',';
 
-static const char *APIVERSION = "2.2";
+static const char *APIVERSION = "2.3";
 static const char *DEAD = "Dead";
 static const char *SICK = "Sick";
 static const char *NOSTART = "NoStart";
@@ -1471,13 +1471,24 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 
 	root = api_add_int(root, "DEVDETAILS", &n, true);
 	root = api_add_device_identifier(root, cgpu);
+	if (!per_proc)
+		root = api_add_int(root, "Processors", &cgpu->procs, false);
 	root = api_add_string(root, "Driver", cgpu->drv->dname, false);
 	if (cgpu->kname)
 		root = api_add_string(root, "Kernel", cgpu->kname, false);
 	if (cgpu->name)
 		root = api_add_string(root, "Model", cgpu->name, false);
+	if (cgpu->dev_manufacturer)
+		root = api_add_string(root, "Manufacturer", cgpu->dev_manufacturer, false);
+	if (cgpu->dev_product)
+		root = api_add_string(root, "Product", cgpu->dev_product, false);
+	if (cgpu->dev_serial)
+		root = api_add_string(root, "Serial", cgpu->dev_serial, false);
 	if (cgpu->device_path)
 		root = api_add_string(root, "Device Path", cgpu->device_path, false);
+	
+	root = api_add_int(root, "Target Temperature", &cgpu->targettemp, false);
+	root = api_add_int(root, "Cutoff Temperature", &cgpu->cutofftemp, false);
 
 	if (cgpu->drv->get_api_extra_device_detail)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_detail(cgpu));

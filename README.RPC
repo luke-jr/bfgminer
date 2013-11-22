@@ -471,6 +471,16 @@ api-example.py - a Python script to access the API.
 Feature Changelog for external applications using the API:
 
 
+API V2.3
+
+Modified API command:
+ 'devdetails' - Add 'Processors', 'Manufacturer', 'Product', 'Serial',
+                    'Target Temperature', 'Cutoff Temperature'
+ 'procdetails' - Add 'Manufacturer', 'Product', 'Serial', 'Target Temperature',
+                     'Cutoff Temperature'
+
+---------
+
 API V2.2 (BFGMiner v3.6.0)
 
 Modified API command:
