@@ -109,6 +109,8 @@ driverlist=
 algolist=SHA256d
 optlist=
 
+has_fpga=no
+has_asic=no
 need_binloader=no
 need_dynclock=no
 need_lowl_vcom=no
@@ -356,6 +358,8 @@ AC_ARG_ENABLE([bitforce],
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 	need_lowl_vcom=yes
+	has_fpga=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
@@ -369,6 +373,8 @@ if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
 	need_dynclock=yes
 	need_lowl_vcom=yes
+	has_fpga=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
@@ -383,6 +389,7 @@ AC_ARG_ENABLE([avalon],
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
 	need_lowl_vcom=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -480,6 +487,7 @@ if test "x$modminer" = xyes; then
 	need_dynclock=yes
 	need_lowl_vcom=yes
 	need_binloader=yes
+	has_fpga=yes
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -532,6 +540,7 @@ fi
 if test "x$klondike" = xyes; then
 	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
 	need_lowl_usb=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 
@@ -556,6 +565,7 @@ if test "x$x6500" = xyes; then
 	need_dynclock=yes
 	need_lowl_usb=yes
 	need_binloader=yes
+	has_fpga=yes
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -579,6 +589,7 @@ if test "x$ztex" = xyes; then
 	need_dynclock=yes
 	need_lowl_usb=yes
 	need_binloader=yes
+	has_fpga=yes
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
@@ -628,6 +639,7 @@ fi
 if test "x$bigpic" = "xyes"; then
 	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
 	need_lowl_vcom=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
@@ -650,6 +662,7 @@ fi
 if test "x$littlefury" = "xyes"; then
 	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
 	need_lowl_vcom=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
@@ -692,6 +705,7 @@ fi
 if test "x$nanofury" = "xyes"; then
 	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
 	need_lowl_hid=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
 
@@ -723,6 +737,7 @@ fi
 if test "x$hashbuster" = "xyes"; then
 	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster support is wanted])
 	need_lowl_hid=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
@@ -1000,8 +1015,8 @@ AM_CONDITIONAL([HAVE_LIBUSB], [test x$libusb = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
-AM_CONDITIONAL([HAS_FPGA], [test x$bitforce$icarus$modminer$x6500$ztex != xnonononono])
-AM_CONDITIONAL([HAS_ASIC], [test x$avalon$bfsb$bigpic$icarus$httpsrv$metabank != xnononononono])
+AM_CONDITIONAL([HAS_FPGA], [test x$has_fpga != xno])
+AM_CONDITIONAL([HAS_ASIC], [test x$has_asic != xno])
 
 dnl Find YASM
 has_yasm=false
