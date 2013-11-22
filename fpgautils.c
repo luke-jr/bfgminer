@@ -1052,7 +1052,9 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		return -1;
 	}
 
-	// thanks to af_newbie for pointers about this
+	if (baud)
+	{
+
 	COMMCONFIG comCfg = {0};
 	comCfg.dwSize = sizeof(COMMCONFIG);
 	comCfg.wVersion = 1;
@@ -1064,6 +1066,8 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	comCfg.dcb.ByteSize = 8;
 
 	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
+
+	}
 
 	// Code must specify a valid timeout value (0 means don't timeout)
 	const DWORD ctoms = ((DWORD)timeout * 100);
