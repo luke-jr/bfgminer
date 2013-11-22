@@ -22,15 +22,16 @@
 
 #include <libusb.h>
 
+#include "binloader.h"
 #include "compat.h"
 #include "deviceapi.h"
 #include "dynclock.h"
 #include "jtag.h"
 #include "logging.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "ft232r.h"
 #include "lowlevel.h"
+#include "lowl-usb.h"
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"
 #define X6500_BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"

@@ -25,9 +25,9 @@
 
 #include "deviceapi.h"
 #include "dynclock.h"
-#include "fpgautils.h"
 #include "libztex.h"
 #include "lowlevel.h"
+#include "lowl-usb.h"
 #include "util.h"
 
 #define GOLDEN_BACKLOG 5

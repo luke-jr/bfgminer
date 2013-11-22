@@ -1,14 +1,10 @@
-#ifndef FPGAUTILS_H
-#define FPGAUTILS_H
+#ifndef BFG_LOWL_VCOM_H
+#define BFG_LOWL_VCOM_H
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
-
-#ifdef HAVE_LIBUSB
-#include <libusb.h>
-#endif
 
 #include "deviceapi.h"
 
@@ -25,25 +21,14 @@ extern struct detectone_meta_info_t *_detectone_meta_info();
 #define detectone_meta_info (*_detectone_meta_info())
 extern void clear_detectone_meta_info(void);
 
-extern char *devpath_to_devid(const char *);
 extern bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info *, detectone_func_t);
 
 extern int _serial_autodetect(detectone_func_t, ...);
 #define serial_autodetect(...)  _serial_autodetect(__VA_ARGS__, NULL)
 
-extern struct device_drv *bfg_claim_any(struct device_drv *, const char *verbose, const char *devpath);
-extern struct device_drv *bfg_claim_any2(struct device_drv *, const char *verbose, const char *llname, const char *path);
 extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool verbose, const char * const devpath);
 #define serial_claim(devpath, drv)    bfg_claim_serial(drv, false, devpath)
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
-extern char *bfg_make_devid_usb(uint8_t usbbus, uint8_t usbaddr);
-extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
-#define bfg_make_devid_libusb(dev)  bfg_make_devid_usb(libusb_get_bus_number(dev), libusb_get_device_address(dev))
-#define bfg_claim_libusb(api, verbose, dev)  bfg_claim_usb(api, verbose, libusb_get_bus_number(dev), libusb_get_device_address(dev))
-
-#ifdef HAVE_LIBUSB
-extern void cgpu_copy_libusb_strings(struct cgpu_info *, libusb_device *);
-#endif
 
 extern int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool purge);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
@@ -52,11 +37,6 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 #define serial_read_line(fd, buf, bufsiz, eol)  \
 	_serial_read(fd, buf, bufsiz, &eol)
 extern int serial_close(int fd);
-
-extern void _bitstream_not_found(const char *repr, const char *fn);
-extern FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len);
-extern bool load_bitstream_intelhex(bytes_t *out, const char *dname, const char *repr, const char *fn);
-extern bool load_bitstream_bytes(bytes_t *out, const char *dname, const char *repr, const char *fileprefix);
 
 extern int get_serial_cts(int fd);
 extern bool valid_baud(int baud);

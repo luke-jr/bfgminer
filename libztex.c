@@ -31,10 +31,11 @@
 #include <unistd.h>
 #include <string.h>
 
+#include "binloader.h"
 #include "compat.h"
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "libztex.h"
 #include "util.h"
 

@@ -36,6 +36,8 @@ struct lowlevel_device_info {
 	int ref;
 };
 
+extern char *bfg_make_devid_usb(uint8_t usbbus, uint8_t usbaddr);
+
 extern struct lowlevel_device_info *lowlevel_scan();
 extern bool _lowlevel_match_product(const struct lowlevel_device_info *, const char **);
 #define lowlevel_match_product(info, ...)  \
@@ -70,8 +72,11 @@ extern struct lowlevel_driver lowl_usb;
 // Dummy definition for the various "don't warn if just a lower-level interface" checks
 static struct lowlevel_driver lowl_usb;
 #endif
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 extern struct lowlevel_driver lowl_vcom;
 #endif
+
+extern struct device_drv *bfg_claim_any(struct device_drv *, const char *verbose, const char *devpath);
+extern struct device_drv *bfg_claim_any2(struct device_drv *, const char *verbose, const char *llname, const char *path);
 
 #endif
