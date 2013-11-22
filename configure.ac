@@ -524,7 +524,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 
 driverlist="$driverlist klondike"
 AC_ARG_ENABLE([klondike],
-	[AC_HELP_STRING([--enable-klondike],[Compile support for Klondike (default disabled)])],
+	[AC_HELP_STRING([--disable-klondike],[Compile support for Klondike (default enabled)])],
 	[klondike=$enableval],
 	[klondike=auto]
 	)
