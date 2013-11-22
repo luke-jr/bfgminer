@@ -17,9 +17,9 @@
 
 #include <libusb.h>
 
-#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-usb.h"
 #include "miner.h"
 #include "util.h"
 
@@ -145,6 +145,40 @@ struct libusb_device_handle *lowl_usb_open(struct lowlevel_device_info * const i
 	}
 	return devh;
 }
+
+struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
+{
+	char * const devpath = bfg_make_devid_usb(usbbus, usbaddr);
+	struct device_drv * const rv = bfg_claim_any(api, verbose ? "" : NULL, devpath);
+	free(devpath);
+	return rv;
+}
+
+#ifdef HAVE_LIBUSB
+void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
+{
+	unsigned char buf[0x20];
+	libusb_device_handle *h;
+	struct libusb_device_descriptor desc;
+	
+	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
+		return;
+	if (libusb_get_device_descriptor(usb, &desc))
+	{
+		libusb_close(h);
+		return;
+	}
+	
+	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
+		cgpu->dev_manufacturer = strdup((void *)buf);
+	if ((!cgpu->dev_product) && libusb_get_string_descriptor_ascii(h, desc.iProduct, buf, sizeof(buf)) >= 0)
+		cgpu->dev_product = strdup((void *)buf);
+	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
+		cgpu->dev_serial = strdup((void *)buf);
+	
+	libusb_close(h);
+}
+#endif
 
 void lowl_usb_close(struct libusb_device_handle * const devh)
 {

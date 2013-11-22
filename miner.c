@@ -68,7 +68,6 @@
 #include "logging.h"
 #include "miner.h"
 #include "findnonce.h"
-#include "fpgautils.h"
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
@@ -494,6 +493,32 @@ static void applog_and_exit(const char *fmt, ...)
 	va_end(ap);
 	_applog(LOG_ERR, exit_buf);
 	exit(1);
+}
+
+char *devpath_to_devid(const char * const devpath)
+{
+#ifndef WIN32
+	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
+	{
+		struct stat my_stat;
+		if (stat(devpath, &my_stat))
+			return NULL;
+		memcpy(devs, "dev_t:", 6);
+		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
+	}
+#else
+		char *p = strstr(devpath, "COM"), *p2;
+		if (!p)
+			return NULL;
+		const int com = strtol(&p[3], &p2, 10);
+		if (p2 == p)
+			return NULL;
+	char dummy;
+	const int sz = snprintf(&dummy, 1, "%d", com);
+	char *devs = malloc(4 + sz + 1);
+	sprintf(devs, "com:%d", com);
+#endif
+	return devs;
 }
 
 static
@@ -994,9 +1019,9 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
+#ifdef NEED_BFG_LOWL_VCOM
 extern struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info **, const char *);
 
-#ifdef HAVE_FPGAUTILS
 #ifdef WIN32
 void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info ** const devinfo_list)
 {
@@ -10354,6 +10379,7 @@ void _scan_serial(void *p)
 	}
 }
 
+#ifdef HAVE_BFG_LOWLEVEL
 static
 bool _probe_device_match(const struct lowlevel_device_info * const info, const char * const ser)
 {
@@ -10480,7 +10506,11 @@ void *probe_device_thread(void *p)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
-				if ((info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) || _probe_device_match(info, dname))
+				if (
+#ifdef NEED_BFG_LOWL_VCOM
+					(info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) ||
+#endif
+					_probe_device_match(info, dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
@@ -10512,6 +10542,7 @@ void probe_device(struct lowlevel_device_info * const info)
 {
 	pthread_create(&info->probe_pth, NULL, probe_device_thread, info);
 }
+#endif
 
 int create_new_cgpus(void (*addfunc)(void*), void *arg)
 {

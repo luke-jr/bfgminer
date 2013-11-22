@@ -52,8 +52,8 @@
 
 #include <utlist.h>
 
-#ifdef HAVE_FPGAUTILS
-#include "fpgautils.h"
+#ifdef NEED_BFG_LOWL_VCOM
+#include "lowl-vcom.h"
 #endif
 #include "miner.h"
 #include "compat.h"
@@ -2506,7 +2506,7 @@ struct bfgtls_data {
 #ifdef WIN32
 	LPSTR bfg_strerror_socketresult;
 #endif
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 	struct detectone_meta_info_t __detectone_meta_info;
 #endif
 };
@@ -2536,7 +2536,7 @@ struct bfgtls_data *get_bfgtls()
 	return bfgtls;
 }
 
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 struct detectone_meta_info_t *_detectone_meta_info()
 {
 	return &get_bfgtls()->__detectone_meta_info;

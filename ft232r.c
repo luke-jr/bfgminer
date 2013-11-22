@@ -21,7 +21,6 @@
 #include <libusb.h>
 
 #include "compat.h"
-#include "fpgautils.h"
 #include "ft232r.h"
 #include "logging.h"
 #include "lowlevel.h"

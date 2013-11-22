@@ -64,7 +64,7 @@
 #include "compat.h"
 #include "dynclock.h"
 #include "icarus-common.h"
-#include "fpgautils.h"
+#include "lowl-vcom.h"
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
 #define ICARUS_IO_SPEED 115200

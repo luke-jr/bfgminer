@@ -16,10 +16,10 @@
 
 #include "deviceapi.h"
 #include "driver-bitfury.h"
-#include "fpgautils.h"
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "miner.h"
 #include "spidevc.h"
 #include "util.h"

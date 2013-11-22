@@ -37,10 +37,10 @@
 
 #include "deviceapi.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "driver-avalon.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 BFG_REGISTER_DRIVER(avalon_drv)

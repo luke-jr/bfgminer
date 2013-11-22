@@ -18,8 +18,18 @@
 #include "compat.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "miner.h"
 
 static struct lowlevel_device_info *devinfo_list;
+
+#if defined(HAVE_LIBUSB) || defined(NEED_BFG_LOWL_HID)
+char *bfg_make_devid_usb(const uint8_t usbbus, const uint8_t usbaddr)
+{
+	char * const devpath = malloc(12);
+	sprintf(devpath, "usb:%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
+	return devpath;
+}
+#endif
 
 void lowlevel_devinfo_semicpy(struct lowlevel_device_info * const dst, const struct lowlevel_device_info * const src)
 {
@@ -99,7 +109,7 @@ struct lowlevel_device_info *lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 	devinfo_mid_list = lowl_vcom.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
@@ -183,4 +193,59 @@ int lowlevel_detect_id(const lowl_found_devinfo_func_t cb, void * const userp, c
 		if (!lowlevel_match_id(info, lowl, vid, pid))
 			continue;
 	DETECT_END
+}
+
+
+struct _device_claim {
+	struct device_drv *drv;
+	char *devpath;
+	UT_hash_handle hh;
+};
+
+struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verbose, const char * const devpath)
+{
+	static struct _device_claim *claims = NULL;
+	struct _device_claim *c;
+	
+	HASH_FIND_STR(claims, devpath, c);
+	if (c)
+	{
+		if (verbose && opt_debug)
+		{
+			char logbuf[LOGBUFSIZ];
+			logbuf[0] = '\0';
+			if (api)
+				tailsprintf(logbuf, sizeof(logbuf), "%s device ", api->dname);
+			if (verbose[0])
+				tailsprintf(logbuf, sizeof(logbuf), "%s (%s)", verbose, devpath);
+			else
+				tailsprintf(logbuf, sizeof(logbuf), "%s", devpath);
+			tailsprintf(logbuf, sizeof(logbuf), " already claimed by ");
+			if (api)
+				tailsprintf(logbuf, sizeof(logbuf), "other ");
+			tailsprintf(logbuf, sizeof(logbuf), "driver: %s", c->drv->dname);
+			_applog(LOG_DEBUG, logbuf);
+		}
+		return c->drv;
+	}
+	
+	if (!api)
+		return NULL;
+	
+	c = malloc(sizeof(*c));
+	c->devpath = strdup(devpath);
+	c->drv = api;
+	HASH_ADD_KEYPTR(hh, claims, c->devpath, strlen(devpath), c);
+	return NULL;
+}
+
+struct device_drv *bfg_claim_any2(struct device_drv * const api, const char * const verbose, const char * const llname, const char * const path)
+{
+	const size_t llnamesz = strlen(llname);
+	const size_t pathsz = strlen(path);
+	char devpath[llnamesz + 1 + pathsz + 1];
+	memcpy(devpath, llname, llnamesz);
+	devpath[llnamesz] = ':';
+	memcpy(&devpath[llnamesz+1], path, pathsz + 1);
+	return bfg_claim_any(api, verbose, devpath);
 }

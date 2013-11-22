@@ -12,9 +12,9 @@
 #include <stdbool.h>
 
 #include "miner.h"
-#include "fpgautils.h"
 #include "icarus-common.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 
 #define ERUPTER_IO_SPEED 115200
 #define ERUPTER_HASH_TIME 0.0000000029761

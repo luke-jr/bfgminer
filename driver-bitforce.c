@@ -23,8 +23,8 @@
 #include "compat.h"
 #include "deviceapi.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 #define BITFORCE_SLEEP_MS 500

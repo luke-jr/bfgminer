@@ -31,7 +31,6 @@ typedef HMODULE dlh_t;
 #include <hidapi.h>
 #include <utlist.h>
 
-#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "miner.h"
