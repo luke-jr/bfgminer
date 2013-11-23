@@ -264,11 +264,23 @@ void bifury_queue_flush(struct thr_info * const thr)
 }
 
 static
+const struct cgpu_info *device_proc_by_id(const struct cgpu_info * const dev, int procid)
+{
+	const struct cgpu_info *proc = dev;
+	for (int i = 0; i < procid; ++i)
+	{
+		proc = proc->next_proc;
+		if (unlikely(!proc))
+			return NULL;
+	}
+	return proc;
+}
+
+static
 void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 {
 	struct thr_info * const master_thr = dev->thr[0];
 	struct bifury_state * const state = dev->device_data;
-	struct cgpu_info *proc;
 	struct thr_info *thr;
 	struct work *work;
 	char *p;
@@ -281,10 +293,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		strtoll(&p[1], &p, 0x10);  // Ignore timestamp for now
 		const int chip = atoi(&p[1]);
 		nonce = le32toh(nonce);
-		
-		proc = dev;
-		for (int i = 0; i < chip; ++i)
-			proc = proc->next_proc ?: proc;
+		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
 		thr = proc->thr[0];
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
@@ -299,6 +308,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 	else
 	if (!strncmp(cmd, "temp ", 5))
 	{
+		struct cgpu_info *proc;
 		const int decicelsius = atoi(&cmd[5]);
 		if (decicelsius)
 		{
@@ -308,10 +318,14 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		}
 	}
 	else
-	if (!strncmp(cmd, "jobs ", 5))
+	if (!strncmp(cmd, "job ", 4))
 	{
-		// jobs <n> ...
-		// TODO
+		// job <jobid> <chip>
+		const uint32_t jobid = strtoll(&cmd[4], &p, 0x10);
+		const int chip = atoi(&p[1]);
+		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		thr = proc->thr[0];
+		hashes_done2(thr, 0xbd000000, NULL);
 	}
 	else
 	if (!strncmp(cmd, "needwork ", 9))
