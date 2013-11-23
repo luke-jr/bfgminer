@@ -27,7 +27,7 @@
 
 BFG_REGISTER_DRIVER(bifury_drv)
 
-const char * const bifury_init_cmds = "flush\ntarget ffffffff\nmaxroll 0\n";
+const char bifury_init_cmds[] = "flush\ntarget ffffffff\nmaxroll 0\n";
 
 static
 ssize_t bifury_write(const struct cgpu_info * const dev, const void * const buf, const size_t count)
