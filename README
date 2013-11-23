@@ -337,9 +337,9 @@ On Windows, <arg> is usually of the format \\.\COMn
 
 The official supplied binaries are compiled with support for all ASICs/FPGAs.
 To force the code to only attempt detection with a specific driver,
-prepend the argument with the driver name followed by a colon.
-For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
-or using the short name: "ica:/dev/ttyUSB0" or "bfl:\\.\COM5"
+prepend the argument with the driver name followed by an "at" symbol.
+For example, "icarus@/dev/ttyUSB0" or "bitforce@\\.\COM5"
+or using the short name: "ica@/dev/ttyUSB0" or "bfl@\\.\COM5"
 
 Some FPGAs do not have non-volatile storage for their bitstreams and must be
 programmed every power cycle, including first use. To use these devices, you
