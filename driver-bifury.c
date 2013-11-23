@@ -71,6 +71,7 @@ struct bifury_state {
 	bytes_t buf;
 	uint32_t last_work_id;
 	int needwork;
+	bool has_needwork;
 };
 
 static
@@ -326,6 +327,8 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 			applog(LOG_DEBUG, "%s: Dummy submit ignored", dev->dev_repr);
 		else
 			inc_hw_errors2(thr, NULL, &nonce);
+		if (!state->has_needwork)
+			bifury_set_queue_full(dev, state->needwork + 2);
 	}
 	else
 	if (!strncmp(cmd, "temp ", 5))
@@ -360,6 +363,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 	if (!strncmp(cmd, "needwork ", 9))
 	{
 		const int needwork = atoi(&cmd[9]);
+		state->has_needwork = true;
 		bifury_set_queue_full(dev, needwork);
 		applog(LOG_DEBUG, "%s: needwork=%d", dev->dev_repr, state->needwork);
 	}
@@ -394,7 +398,7 @@ void bifury_poll(struct thr_info * const master_thr)
 			return;
 		}
 		
-		bifury_set_queue_full(dev, dev->procs);
+		bifury_set_queue_full(dev, dev->procs * 2);
 	}
 	
 	while ( (cmd = bifury_readln(fd, &state->buf)) )
