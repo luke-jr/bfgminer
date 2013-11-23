@@ -41,6 +41,30 @@ ssize_t bifury_write(const struct cgpu_info * const dev, const void * const buf,
 	return write(fd, buf, count);
 }
 
+static
+void *bifury_readln(int fd, bytes_t *leftover)
+{
+	uint8_t buf[0x40];
+	ssize_t r;
+	
+parse:
+	if ( (r = bytes_find(leftover, '\n')) >= 0)
+	{
+		uint8_t *ret = malloc(r+1);
+		if (r)
+			memcpy(ret, bytes_buf(leftover), r);
+		ret[r] = '\0';
+		bytes_shift(leftover, r + 1);
+		return ret;
+	}
+	if ( (r = read(fd, buf, sizeof(buf))) > 0)
+	{
+		bytes_append(leftover, buf, r);
+		goto parse;
+	}
+	return NULL;
+}
+
 struct bifury_state {
 	bytes_t buf;
 	uint32_t last_work_id;
@@ -287,8 +311,7 @@ void bifury_poll(struct thr_info * const master_thr)
 	struct cgpu_info * const dev = master_thr->cgpu;
 	struct bifury_state * const state = dev->device_data;
 	int fd = dev->device_fd;
-	char buf[0x100];
-	ssize_t r;
+	char *cmd;
 	
 	if (unlikely(fd == -1))
 	{
@@ -314,18 +337,12 @@ void bifury_poll(struct thr_info * const master_thr)
 		bifury_set_queue_full(dev, dev->procs);
 	}
 	
-	while ( (r = read(fd, buf, sizeof(buf))) > 0)
+	while ( (cmd = bifury_readln(fd, &state->buf)) )
 	{
-		bytes_append(&state->buf, buf, r);
-		while ( (r = bytes_find(&state->buf, '\n')) >= 0)
-		{
-			char * const cmd = (void*)bytes_buf(&state->buf);
-			cmd[r] = '\0';
-			if (opt_dev_protocol)
-				applog(LOG_DEBUG, "%s: DEVPROTO: RECV %s", dev->dev_repr, cmd);
-			bifury_handle_cmd(dev, cmd);
-			bytes_shift(&state->buf, r + 1);
-		}
+		if (opt_dev_protocol)
+			applog(LOG_DEBUG, "%s: DEVPROTO: RECV %s", dev->dev_repr, cmd);
+		bifury_handle_cmd(dev, cmd);
+		free(cmd);
 	}
 }
 
