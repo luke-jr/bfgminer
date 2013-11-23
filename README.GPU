@@ -50,7 +50,8 @@ SETUP FOR GPU SUPPORT:
 
 To setup GPU mining support:
 
-Install AMD APP sdk, ideal version (see FAQ!) - put it into a system location.
+Install the AMD APP sdk, ideal version (see FAQ!) - put it into a system
+location.
 Download the correct version for either 32 bit or 64 bit from here:
 	http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
 
@@ -170,8 +171,8 @@ while not reaching overheat temperatures. As a lower clock speed limit, the
 auto-gpu mode checks the GPU card's "normal" clock speed and will not go below
 this unless you have manually set a lower speed in the range. Also, unless a
 higher clock speed was specified at startup, it will not raise the clockspeed.
-If the temperature climbs, fanspeed is adjusted and optimised before GPU engin
-e clockspeed is adjusted. If fan speed control is not available or already
+If the temperature climbs, fanspeed is adjusted and optimised before GPU engine
+clockspeed is adjusted. If fan speed control is not available or already
 optimal, then GPU clock speed is only decreased if it goes over the target
 temperature by the hysteresis amount, which is set to 3 by default and can be
 changed with:
@@ -313,10 +314,10 @@ A: Yes, pass a list separated by commas such as -I d,4,9,9
 
 Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
-CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
-windows can minimise it to 100% (instead of more than one core). Driver version
-11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
-later drivers may have an apparent return of high CPU usage. Try
+CPU core unnecessarily, so downgrade to 11.6. Binding BFGMiner to one CPU core
+on windows can minimise it to 100% (instead of more than one core). Driver
+version 11.11 on linux and 11.12 on windows appear to have fixed this issue.
+Note that later drivers may have an apparent return of high CPU usage. Try
 'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner. You can also
 set this variable in windows via a batch file or on the command line before
 starting BFGMiner with 'setx GPU_USE_SYNC_OBJECTS 1'
@@ -340,7 +341,7 @@ The starting fan speed is set to 50% in auto-fan mode as a safety precaution.
 
 Q: I upgraded BFGMiner version and my hashrate suddenly dropped!
 A: No, you upgraded your SDK version unwittingly between upgrades of BFGMiner
-and that caused your hashrate to drop. See the next question.
+and that caused your hashrate to drop. Please see the next question.
 
 Q: I upgraded my ATI driver/SDK/BFGMiner and my hashrate suddenly dropped!
 A: The hashrate performance in BFGMiner is tied to the version of the ATI SDK
@@ -380,7 +381,8 @@ uninstalling files so you may have to use third party tools like driversweeper
 to remove old versions. The other common reason for this is windows antivirus
 software is disabling one of the DLLs from working. If BFGMiner starts with the
 -T option but never starts without it, this is a sure fire sign you have this
-problem and will have to disable your antivirus or make exceptions.
+problem and will have to disable your antivirus or set up some exceptions in it
+if possible.
 
 Q: Is it faster to mine on Windows or Linux?
 A: It makes no difference. It comes down to choice of operating system for their
@@ -410,8 +412,8 @@ A: If you can install both drivers successfully (easier on windows) then yes,
 using the --gpu-platform option.
 
 Q: Can I mine with Nvidia or Intel GPUs?
-A: Yes, but their hashrate is very poor and likely you'll be using much more
-energy than you'll be earning in coins.
+A: Yes, but the hashrate on these is very poor and it is likely you'll be using
+much more energy than you'll be earning in coins.
 
 Q: Can I mine on both Nvidia and AMD GPUs at the same time?
 A: No, you must run one instance of BFGMiner with the --gpu-platform option for
@@ -422,11 +424,11 @@ A: With Nvidia you can, but with AMD you cannot.
 
 Q: I'm trying to mine a scrypt cryptocurrency but BFGMiner shows MH values
 instead of kH and submits no shares?
-A: Add the --scrypt parameter.
+A: Add the --scrypt parameter to your BFGMiner startup command.
 
 Q: I can't get anywhere near enough hashrate for scrypt compared to other
 people?
-A: You may not have enough system RAM as this is also required.
+A: You may not have enough system RAM, as this is also required.
 
 Q: My scrypt hashrate is high but the pool reports only a tiny proportion of my
 hashrate?
@@ -464,20 +466,20 @@ further but BFGMiner does not have access to these means.
 Q: I have multiple GPUs and although many devices show up, it appears to be
 working only on one GPU splitting it up.
 A: Your driver setup is failing to properly use the accessory GPUs. Your driver
-may be configured wrong or you have a driver version that needs a dummy plug on
-all the GPUs that aren't connected to a monitor.
+may be misconfigured or you have a driver version that needs a dummy plug on all
+the GPUs that aren't connected to a monitor.
 
 Q: I have some random GPU performance related problem not addressed above.
 A: Seriously, it's the driver and/or SDK. Uninstall them and start again,
-noting there is no clean way to uninstall them so you have to use extra tools
-or do it manually.
+also noting there is no clean way to uninstall them so you will likely have to
+use extra tools or do it manually.
 
 Q: Do I need to recompile after updating my driver/SDK?
 A: No. The software is unchanged regardless of which driver/SDK/ADL version you
 are running.
 
 Q: I do not want BFGMiner to modify my engine/clock/fanspeed?
-A: BFGMiner only modifies values if you tell it to via some parameters.
+A: BFGMiner only modifies values if you tell it to via the parameters.
 Otherwise it will just monitor the values.
 
 Q: Should I use crossfire/SLI?

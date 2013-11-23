@@ -1211,26 +1211,28 @@ static void klondike_flush_work(struct cgpu_info *klncgpu)
 	KLINE kline;
 	int slaves, dev;
 
-	wr_lock(&(klninfo->stat_lock));
-	klninfo->block_seq++;
-	slaves = klninfo->status[0].kline.ws.slavecount;
-	wr_unlock(&(klninfo->stat_lock));
+	if (klninfo->initialised) {
+		wr_lock(&(klninfo->stat_lock));
+		klninfo->block_seq++;
+		slaves = klninfo->status[0].kline.ws.slavecount;
+		wr_unlock(&(klninfo->stat_lock));
 
-	applog(LOG_DEBUG, "%s%i: flushing work",
-			  klncgpu->drv->name, klncgpu->device_id);
-	zero_kline(&kline);
-	kline.hd.cmd = KLN_CMD_ABORT;
-	for (dev = 0; dev <= slaves; dev++) {
-		kline.hd.dev = dev;
-		kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
-		if (kitem != NULL) {
-			wr_lock(&(klninfo->stat_lock));
-			memcpy((void *)&(klninfo->status[dev]),
-				kitem,
-				sizeof(klninfo->status[dev]));
-			klninfo->jobque[dev].flushed = true;
-			wr_unlock(&(klninfo->stat_lock));
-			kitem = release_kitem(klncgpu, kitem);
+		applog(LOG_DEBUG, "%s%i: flushing work",
+				  klncgpu->drv->name, klncgpu->device_id);
+		zero_kline(&kline);
+		kline.hd.cmd = KLN_CMD_ABORT;
+		for (dev = 0; dev <= slaves; dev++) {
+			kline.hd.dev = dev;
+			kitem = SendCmdGetReply(klncgpu, &kline, KSENDHD(0));
+			if (kitem != NULL) {
+				wr_lock(&(klninfo->stat_lock));
+				memcpy((void *)&(klninfo->status[dev]),
+					kitem,
+					sizeof(klninfo->status[dev]));
+				klninfo->jobque[dev].flushed = true;
+				wr_unlock(&(klninfo->stat_lock));
+				kitem = release_kitem(klncgpu, kitem);
+			}
 		}
 	}
 }

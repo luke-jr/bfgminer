@@ -129,6 +129,7 @@ dist_doc_DATA += README.scrypt
 endif
 
 if HAS_CPUMINE
+dist_doc_DATA += README.CPU
 bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
@@ -167,8 +168,8 @@ endif # HAVE_x86_64
 endif # HAS_YASM
 endif # HAS_CPUMINE
 
-if NEED_FPGAUTILS
-bfgminer_SOURCES += fpgautils.c fpgautils.h
+if NEED_BFG_LOWL_VCOM
+bfgminer_SOURCES += lowl-vcom.c lowl-vcom.h
 if HAVE_WINDOWS
 else
 bfgminer_SOURCES += iospeeds.h iospeeds_posix.h
@@ -176,7 +177,11 @@ endif
 endif
 
 if HAVE_LIBUSB
-bfgminer_SOURCES += lowl-usb.c
+bfgminer_SOURCES += lowl-usb.c lowl-usb.h
+endif
+
+if NEED_BFG_BINLOADER
+bfgminer_SOURCES += binloader.c binloader.h
 endif
 
 if NEED_BFG_LOWLEVEL

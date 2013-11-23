@@ -77,10 +77,20 @@ struct mcp2210_device {
 static
 bool mcp2210_io(hid_device * const hid, uint8_t * const cmd, uint8_t * const buf)
 {
-	return likely(
+	char hexcmd[(0x41 * 2) + 1];
+	if (opt_dev_protocol)
+		bin2hex(hexcmd, cmd, 0x41);
+	const bool rv = likely(
 		0x41 == hid_write(hid, cmd, 0x41) &&
 		64 == hid_read(hid, buf, 64)
 	);
+	if (opt_dev_protocol)
+	{
+		char hexbuf[(0x40 * 2) + 1];
+		bin2hex(hexbuf, buf, 0x40);
+		applog(LOG_DEBUG, "mcp2210_io(%p, %s, %s)", hid, hexcmd, hexbuf);
+	}
+	return rv;
 }
 
 static

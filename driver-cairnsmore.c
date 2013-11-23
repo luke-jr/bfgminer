@@ -14,9 +14,9 @@
 
 #include "compat.h"
 #include "dynclock.h"
-#include "fpgautils.h"
 #include "icarus-common.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "miner.h"
 
 #define CAIRNSMORE1_IO_SPEED 115200

@@ -23,8 +23,8 @@
 #include "compat.h"
 #include "deviceapi.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 #define BITFORCE_SLEEP_MS 500
@@ -2106,6 +2106,9 @@ static void bitforce_queue_thread_enable(struct thr_info *thr)
 struct device_drv bitforce_queue_api = {
 	.dname = "bitforce_queue",
 	.name = "BFL",
+	.lowl_probe_by_name_only = true,
+	.lowl_match = bitforce_lowl_match,
+	.lowl_probe = bitforce_lowl_probe,
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_reinit,
 #ifdef HAVE_CURSES

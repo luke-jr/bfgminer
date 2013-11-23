@@ -17,12 +17,13 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#include "binloader.h"
 #include "compat.h"
 #include "dynclock.h"
 #include "logging.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 #define BITSTREAM_FILENAME "fpgaminer_x6500-overclocker-0402.bit"

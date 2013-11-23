@@ -68,7 +68,6 @@
 #include "logging.h"
 #include "miner.h"
 #include "findnonce.h"
-#include "fpgautils.h"
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
@@ -498,6 +497,34 @@ static void applog_and_exit(const char *fmt, ...)
 	va_end(ap);
 	_applog(LOG_ERR, exit_buf);
 	exit(1);
+}
+
+char *devpath_to_devid(const char *devpath)
+{
+#ifndef WIN32
+	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
+	{
+		struct stat my_stat;
+		if (stat(devpath, &my_stat))
+			return NULL;
+		memcpy(devs, "dev_t:", 6);
+		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
+	}
+#else
+	if (!strncmp(devpath, "\\\\.\\", 4))
+		devpath += 4;
+	if (strncasecmp(devpath, "COM", 3) || !devpath[3])
+		return NULL;
+	devpath += 3;
+	char *p;
+	const int com = strtol(devpath, &p, 10);
+	if (p[0])
+		return NULL;
+	const int sz = (p - devpath);
+	char *devs = malloc(4 + sz + 1);
+	sprintf(devs, "com:%s", devpath);
+#endif
+	return devs;
 }
 
 static
@@ -998,9 +1025,9 @@ char *set_request_diff(const char *arg, float *p)
 	return NULL;
 }
 
+#ifdef NEED_BFG_LOWL_VCOM
 extern struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_info **, const char *);
 
-#ifdef HAVE_FPGAUTILS
 #ifdef WIN32
 void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info ** const devinfo_list)
 {
@@ -1916,7 +1943,7 @@ static struct opt_table opt_config_table[] = {
 #endif // defined(unix)
 	OPT_WITHOUT_ARG("--net-delay",
 			opt_set_bool, &opt_delaynet,
-			"Impose small delays in networking to not overload slow routers"),
+			"Impose small delays in networking to avoid overloading slow routers"),
 	OPT_WITHOUT_ARG("--no-adl",
 			opt_set_bool, &opt_noadl,
 #ifdef HAVE_ADL
@@ -1976,6 +2003,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
+	OPT_WITH_ARG("--userpass|-O",  // duplicate to ensure config loads it before pool-priority
+	             set_userpass, NULL, NULL,
+	             opt_hidden),
 	OPT_WITH_ARG("--pool-priority",
 			 set_pool_priority, NULL, NULL,
 			 "Priority for just the previous-defined pool"),
@@ -2018,9 +2048,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--round-robin",
 		     set_rr, &pool_strategy,
 		     "Change multipool strategy from failover to round robin on failure"),
-	OPT_WITH_ARG("--scan-serial|-S",
+	OPT_WITH_ARG("--scan|-S",
 		     add_serial, NULL, NULL,
-		     "Serial port to probe for mining devices"),
+		     "Configure how to scan for mining devices"),
+	OPT_WITH_ARG("--scan-device|--scan-serial|--devscan",
+		     add_serial, NULL, NULL,
+		     opt_hidden),
 	OPT_WITH_ARG("--scan-time|-s",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
@@ -2535,8 +2568,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
+				const char full[] = PACKAGE " " VERSION;
 				if (!cbappend) {
-					const char full[] = PACKAGE " " VERSION;
 					if ((size_t)ae >= sizeof(full) - 1)
 						cbappend = full;
 					else if ((size_t)ae >= sizeof(PACKAGE) - 1)
@@ -6010,6 +6043,8 @@ int curses_int(const char *query)
 	char *cvar;
 
 	cvar = curses_input(query);
+	if (unlikely(!cvar))
+		return -1;
 	ret = atoi(cvar);
 	free(cvar);
 	return ret;
@@ -6386,7 +6421,7 @@ void write_config(FILE *fcfg)
 	if (opt_socks_proxy && *opt_socks_proxy)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
-	_write_config_string_elist(fcfg, "scan-serial", scan_devices);
+	_write_config_string_elist(fcfg, "scan", scan_devices);
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
 	
@@ -6408,7 +6443,7 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
 #ifdef USE_KLONDIKE
 	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_icarus_options));
+		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
 #endif
 	fputs("\n}\n", fcfg);
 
@@ -6722,6 +6757,11 @@ retry:
 		goto updated;
         } else if (!strncasecmp(&input, "p", 1)) {
 			char *prilist = curses_input("Enter new pool priority (comma separated list)");
+			if (!prilist)
+			{
+				wlogprint("Not changing priorities\n");
+				goto retry;
+			}
 			int res = prioritize_pools(prilist, &i);
 			free(prilist);
 			switch (res) {
@@ -6946,7 +6986,7 @@ retry:
 		default_save_file(filename);
 		snprintf(prompt, sizeof(prompt), "Config filename to write (Enter for default) [%s]", filename);
 		str = curses_input(prompt);
-		if (strcmp(str, "-1")) {
+		if (str) {
 			struct stat statbuf;
 
 			strcpy(filename, str);
@@ -6958,8 +6998,6 @@ retry:
 					goto retry;
 			}
 		}
-		else
-			free(str);
 		fcfg = fopen(filename, "w");
 		if (!fcfg) {
 			wlogprint("Cannot open or create file\n");
@@ -7134,7 +7172,7 @@ refresh:
 			{
 				static char *pattern = NULL;
 				char *newpattern = curses_input("Enter pattern");
-				if (strcmp(newpattern, "-1"))
+				if (newpattern)
 				{
 					free(pattern);
 					pattern = newpattern;
@@ -9909,7 +9947,10 @@ char *curses_input(const char *query)
 	wlogprint("%s:\n", query);
 	wgetnstr(logwin, input, 255);
 	if (!strlen(input))
-		strcpy(input, "-1");
+	{
+		free(input);
+		input = NULL;
+	}
 	leaveok(logwin, true);
 	noecho();
 	return input;
@@ -9997,7 +10038,7 @@ static bool input_pool(bool live)
 
 	pass = curses_input("Password");
 	if (!pass)
-		goto out;
+		pass = calloc(1, 1);
 
 	pool = add_pool();
 
@@ -10387,6 +10428,7 @@ void _scan_serial(void *p)
 	}
 }
 
+#ifdef HAVE_BFG_LOWLEVEL
 static
 bool _probe_device_match(const struct lowlevel_device_info * const info, const char * const ser)
 {
@@ -10407,16 +10449,22 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const dname, const size_t dnamelen)
+const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
 {
 	struct driver_registration *dreg;
+	char dname[dnamelen];
+	int i;
 	
+	for (i = 0; i < dnamelen; ++i)
+		dname[i] = tolower(_dname[i]);
 	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
 	if (!dreg)
 	{
+		for (i = 0; i < dnamelen; ++i)
+			dname[i] = toupper(_dname[i]);
 		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
 		if (!dreg)
-			return false;
+			return NULL;
 	}
 	
 	return dreg->drv;
@@ -10426,7 +10474,7 @@ static
 bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
 {
 	const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-	if (!drv->lowl_probe)
+	if (!(drv && drv->lowl_probe))
 		return false;
 	return drv->lowl_probe(info);
 }
@@ -10454,8 +10502,8 @@ void *probe_device_thread(void *p)
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
-		const char * const colon = strchr(dname, ':');
-		if (!colon)
+		const char * const colon = strpbrk(dname, ":@");
+		if (!(colon && colon != dname))
 			continue;
 		const char * const ser = &colon[1];
 		LL_FOREACH2(infolist, info, same_devid_next)
@@ -10479,6 +10527,7 @@ void *probe_device_thread(void *p)
 		DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 		{
 			const char * const dname = sd_iter->string;
+			// NOTE: Only checking flags here, NOT path/serial, so @ is unacceptable
 			const char *colon = strchr(dname, ':');
 			if (!colon)
 				colon = &dname[-1];
@@ -10508,16 +10557,23 @@ void *probe_device_thread(void *p)
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
+		// NOTE: Only checking flags here, NOT path/serial, so @ is unacceptable
 		const char * const colon = strchr(dname, ':');
 		if (!colon)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
-				if ((info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) || _probe_device_match(info, dname))
+				if (
+#ifdef NEED_BFG_LOWL_VCOM
+					(info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) ||
+#endif
+					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
 						const struct device_drv * const drv = dreg->drv;
+						if (drv->lowl_probe_by_name_only)
+							continue;
 						if (!drv->lowl_probe)
 							continue;
 						if (drv->lowl_probe(info))
@@ -10545,6 +10601,7 @@ void probe_device(struct lowlevel_device_info * const info)
 {
 	pthread_create(&info->probe_pth, NULL, probe_device_thread, info);
 }
+#endif
 
 int create_new_cgpus(void (*addfunc)(void*), void *arg)
 {
@@ -10972,6 +11029,7 @@ int main(int argc, char *argv[])
 	devices_new = NULL;
 
 	if (opt_display_devs) {
+		int devcount = 0;
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
@@ -10995,8 +11053,9 @@ int main(int argc, char *argv[])
 				tailsprintf(buf, sizeof(buf), "; path=%s", cgpu->device_path);
 			tailsprintf(buf, sizeof(buf), ")");
 			_applog(LOG_NOTICE, buf);
+			++devcount;
 		}
-		quit(0, "%d devices listed", total_devices);
+		quit(0, "%d devices listed", devcount);
 	}
 
 	mining_threads = 0;

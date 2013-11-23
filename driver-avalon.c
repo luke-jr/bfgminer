@@ -37,10 +37,10 @@
 
 #include "deviceapi.h"
 #include "miner.h"
-#include "fpgautils.h"
 #include "driver-avalon.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 BFG_REGISTER_DRIVER(avalon_drv)
@@ -1017,6 +1017,7 @@ static void avalon_shutdown(struct thr_info *thr)
 struct device_drv avalon_drv = {
 	.dname = "avalon",
 	.name = "AVA",
+	.lowl_probe_by_name_only = true,
 	.lowl_probe = avalon_lowl_probe,
 	.thread_prepare = avalon_prepare,
 	.minerloop = hash_queued_work,

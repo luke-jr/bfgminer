@@ -1,11 +1,12 @@
 Open up /etc/opkg.conf (on your router) in your favourite editor. You will see
-a line that looks similar to this at the top:
+a line that looks similar to this at the top (depending on your device):
 	src/gz attitude_adjustment http://downloads.openwrt.org/attitude_adjustment/12.09/ar71xx/generic/packages
 Note the platform following the OpenWrt version. In this example, it is ar71xx.
 
 Now add a new line immediately below it, similar to this:
-	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/testing/openwrt/12.09/ar71xx
+	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/latest/openwrt/12.09/ar71xx
 Be sure you put the same platform at the end as your OpenWrt repository!
+Also note that you can change "latest" to "stable" or "testing" to get better-tested versions.
 
 Next, save the file and exit your editor. Tell opkg to reload its package lists
 by running the command:

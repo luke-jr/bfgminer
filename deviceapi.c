@@ -26,9 +26,11 @@
 
 #include "compat.h"
 #include "deviceapi.h"
-#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
+#ifdef NEED_BFG_LOWL_VCOM
+#include "lowl-vcom.h"
+#endif
 #include "miner.h"
 #include "util.h"
 
@@ -728,7 +730,7 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 	strcpy(cgpu->proc_repr, cgpu->dev_repr);
 	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
 	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
 	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
@@ -819,7 +821,7 @@ bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
 	return true;
 }
 
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 bool _serial_detect_all(struct lowlevel_device_info * const info, void * const userp)
 {
 	detectone_func_t detectone = userp;
@@ -843,7 +845,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 	clear_detectone_meta_info();
 #endif
 	DL_FOREACH_SAFE(scan_devices, iter, tmp) {
@@ -874,7 +876,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 		else
 		if (!strcmp(dev, "all"))
 			doall = true;
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 		else
 		if (serial_claim(dev, NULL))
 		{
@@ -888,7 +890,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 		}
 	}
 
-#ifdef HAVE_FPGAUTILS
+#ifdef NEED_BFG_LOWL_VCOM
 	if (doall && detectone)
 		found += lowlevel_detect_id(_serial_detect_all, detectone, &lowl_vcom, 0, 0);
 #endif

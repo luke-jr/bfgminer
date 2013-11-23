@@ -18,11 +18,11 @@
 #include <stdint.h>
 
 #include "miner.h"
-#include "fpgautils.h"
 #include "logging.h"
 
 #include "libbitfury.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "deviceapi.h"
 #include "sha2.h"
 

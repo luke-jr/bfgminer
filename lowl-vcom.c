@@ -87,7 +87,7 @@ enum {
 #include "miner.h"
 #include "util.h"
 
-#include "fpgautils.h"
+#include "lowl-vcom.h"
 
 struct lowlevel_driver lowl_vcom;
 
@@ -219,15 +219,16 @@ void _vcom_devinfo_scan_devserial(struct lowlevel_device_info ** const devinfo_l
 
 #ifndef WIN32
 static
-char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile, const char *append)
+char *_sysfs_do_read(const char *devpath, char *devfile, const char *append)
 {
+	char buf[0x40];
 	FILE *F;
 	
 	strcpy(devfile, append);
 	F = fopen(devpath, "r");
 	if (F)
 	{
-		if (fgets(buf, bufsz, F))
+		if (fgets(buf, sizeof(buf), F))
 		{
 			size_t L = strlen(buf);
 			while (isCspace(buf[--L]))
@@ -240,17 +241,16 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 	else
 		buf[0] = '\0';
 	
-	return buf[0] ? buf : NULL;
+	return buf[0] ? strdup(buf) : NULL;
 }
 
 static
-void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowlevel_device_info ** const devinfo_list)
+void _sysfs_find_tty(char *devpath, char *devfile, struct lowlevel_device_info ** const devinfo_list)
 {
 	struct lowlevel_device_info *devinfo;
 	DIR *DT;
 	struct dirent *de;
 	char ttybuf[0x10] = "/dev/";
-	char manuf[0x40], serial[0x40];
 	char *mydevfile = strdup(devfile);
 	
 	DT = opendir(devpath);
@@ -265,7 +265,7 @@ void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowl
 		{
 			// "tty" directory: recurse (needed for ttyACM)
 			sprintf(devfile, "%s/tty", mydevfile);
-			_sysfs_find_tty(devpath, devfile, prod, devinfo_list);
+			_sysfs_find_tty(devpath, devfile, devinfo_list);
 			continue;
 		}
 		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
@@ -273,9 +273,9 @@ void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowl
 		
 		strcpy(&ttybuf[5], de->d_name);
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, ttybuf);
-		BFGINIT(devinfo->manufacturer, maybe_strdup(_sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer")));
-		BFGINIT(devinfo->product, maybe_strdup(prod));
-		BFGINIT(devinfo->serial, maybe_strdup(_sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial")));
+		BFGINIT(devinfo->manufacturer, _sysfs_do_read(devpath, devfile, "/manufacturer"));
+		BFGINIT(devinfo->product, _sysfs_do_read(devpath, devfile, "/product"));
+		BFGINIT(devinfo->serial, _sysfs_do_read(devpath, devfile, "/serial"));
 	}
 	closedir(DT);
 	
@@ -291,7 +291,6 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char prod[0x40];
 	char *devfile, *upfile;
 	size_t len, len2;
 	
@@ -306,9 +305,6 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 		upfile = &devpath[devrootlen + 1];
 		memcpy(upfile, de->d_name, len);
 		devfile = upfile + len;
-		
-		if (!_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product"))
-			prod[0] = '\0';
 		
 		devfile[0] = '\0';
 		DS = opendir(devpath);
@@ -325,7 +321,7 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 			len2 = strlen(de->d_name);
 			memcpy(devfile, de->d_name, len2 + 1);
 			
-			_sysfs_find_tty(devpath, devfile, prod[0] ? prod : NULL, devinfo_list);
+			_sysfs_find_tty(devpath, devfile, devinfo_list);
 		}
 		closedir(DS);
 	}
@@ -653,11 +649,13 @@ bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, det
 {
 	if (info->lowl != &lowl_vcom)
 	{
+#ifdef HAVE_LIBUSB
 		if (info->lowl == &lowl_usb)
 		{
 			if (lowl_usb_attach_kernel_driver(info))
 				bfg_need_detect_rescan = true;
 		}
+#endif
 		return false;
 	}
 	detectone_meta_info = (struct detectone_meta_info_t){
@@ -680,12 +678,14 @@ bool _serial_autodetect_found_cb(struct lowlevel_device_info * const devinfo, vo
 	}
 	if (devinfo->lowl != &lowl_vcom)
 	{
+#ifdef HAVE_LIBUSB
 		if (devinfo->lowl == &lowl_usb)
 		{
 			if (lowl_usb_attach_kernel_driver(devinfo))
 				bfg_need_detect_rescan = true;
 		}
 		else
+#endif
 			applog(LOG_WARNING, "Non-VCOM %s (%s) matched", devinfo->path, devinfo->devid);
 		return false;
 	}
@@ -756,86 +756,6 @@ struct lowlevel_device_info *vcom_devinfo_scan()
 }
 
 
-struct _device_claim {
-	struct device_drv *drv;
-	char *devpath;
-	UT_hash_handle hh;
-};
-
-struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verbose, const char * const devpath)
-{
-	static struct _device_claim *claims = NULL;
-	struct _device_claim *c;
-	
-	HASH_FIND_STR(claims, devpath, c);
-	if (c)
-	{
-		if (verbose && opt_debug)
-		{
-			char logbuf[LOGBUFSIZ];
-			logbuf[0] = '\0';
-			if (api)
-				tailsprintf(logbuf, sizeof(logbuf), "%s device ", api->dname);
-			if (verbose[0])
-				tailsprintf(logbuf, sizeof(logbuf), "%s (%s)", verbose, devpath);
-			else
-				tailsprintf(logbuf, sizeof(logbuf), "%s", devpath);
-			tailsprintf(logbuf, sizeof(logbuf), " already claimed by ");
-			if (api)
-				tailsprintf(logbuf, sizeof(logbuf), "other ");
-			tailsprintf(logbuf, sizeof(logbuf), "driver: %s", c->drv->dname);
-			_applog(LOG_DEBUG, logbuf);
-		}
-		return c->drv;
-	}
-	
-	if (!api)
-		return NULL;
-	
-	c = malloc(sizeof(*c));
-	c->devpath = strdup(devpath);
-	c->drv = api;
-	HASH_ADD_KEYPTR(hh, claims, c->devpath, strlen(devpath), c);
-	return NULL;
-}
-
-struct device_drv *bfg_claim_any2(struct device_drv * const api, const char * const verbose, const char * const llname, const char * const path)
-{
-	const size_t llnamesz = strlen(llname);
-	const size_t pathsz = strlen(path);
-	char devpath[llnamesz + 1 + pathsz + 1];
-	memcpy(devpath, llname, llnamesz);
-	devpath[llnamesz] = ':';
-	memcpy(&devpath[llnamesz+1], path, pathsz + 1);
-	return bfg_claim_any(api, verbose, devpath);
-}
-
-char *devpath_to_devid(const char * const devpath)
-{
-#ifndef WIN32
-	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
-	{
-		struct stat my_stat;
-		if (stat(devpath, &my_stat))
-			return NULL;
-		memcpy(devs, "dev_t:", 6);
-		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
-	}
-#else
-		char *p = strstr(devpath, "COM"), *p2;
-		if (!p)
-			return NULL;
-		const int com = strtol(&p[3], &p2, 10);
-		if (p2 == p)
-			return NULL;
-	char dummy;
-	const int sz = snprintf(&dummy, 1, "%d", com);
-	char *devs = malloc(4 + sz + 1);
-	sprintf(devs, "com:%d", com);
-#endif
-	return devs;
-}
-
 struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool verbose, const char * const devpath)
 {
 	char * const devs = _vcom_unique_id(devpath);
@@ -845,47 +765,6 @@ struct device_drv *bfg_claim_serial(struct device_drv * const api, const bool ve
 	free(devs);
 	return rv;
 }
-
-char *bfg_make_devid_usb(const uint8_t usbbus, const uint8_t usbaddr)
-{
-	char * const devpath = malloc(12);
-	sprintf(devpath, "usb:%03u:%03u", (unsigned)usbbus, (unsigned)usbaddr);
-	return devpath;
-}
-
-struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
-{
-	char * const devpath = bfg_make_devid_usb(usbbus, usbaddr);
-	struct device_drv * const rv = bfg_claim_any(api, verbose ? "" : NULL, devpath);
-	free(devpath);
-	return rv;
-}
-
-#ifdef HAVE_LIBUSB
-void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
-{
-	unsigned char buf[0x20];
-	libusb_device_handle *h;
-	struct libusb_device_descriptor desc;
-	
-	if (LIBUSB_SUCCESS != libusb_open(usb, &h))
-		return;
-	if (libusb_get_device_descriptor(usb, &desc))
-	{
-		libusb_close(h);
-		return;
-	}
-	
-	if ((!cgpu->dev_manufacturer) && libusb_get_string_descriptor_ascii(h, desc.iManufacturer, buf, sizeof(buf)) >= 0)
-		cgpu->dev_manufacturer = strdup((void *)buf);
-	if ((!cgpu->dev_product) && libusb_get_string_descriptor_ascii(h, desc.iProduct, buf, sizeof(buf)) >= 0)
-		cgpu->dev_product = strdup((void *)buf);
-	if ((!cgpu->dev_serial) && libusb_get_string_descriptor_ascii(h, desc.iSerialNumber, buf, sizeof(buf)) >= 0)
-		cgpu->dev_serial = strdup((void *)buf);
-	
-	libusb_close(h);
-}
-#endif
 
 // This code is purely for debugging but is very useful for that
 // It also took quite a bit of effort so I left it in
@@ -1185,197 +1064,6 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 		bufsiz -= len;
 	}
 	return tlen;
-}
-
-#define bailout(...)  do {  \
-	applog(__VA_ARGS__);  \
-	return NULL;  \
-} while(0)
-
-#define check_magic(L)  do {  \
-	if (1 != fread(buf, 1, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading bitstream ('%c')",  \
-		        repr, L);  \
-	if (buf[0] != L)  \
-		bailout(LOG_ERR, "%s: Firmware has wrong magic ('%c')",  \
-		        repr, L);  \
-} while(0)
-
-#define read_str(eng)  do {  \
-	if (1 != fread(buf, 2, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading bitstream (" eng " len)",  \
-		        repr);  \
-	len = (ubuf[0] << 8) | ubuf[1];  \
-	if (len >= sizeof(buf))  \
-		bailout(LOG_ERR, "%s: Firmware " eng " too long",  \
-		        repr);  \
-	if (1 != fread(buf, len, 1, f))  \
-		bailout(LOG_ERR, "%s: Error reading bitstream (" eng ")",  \
-		        repr);  \
-	buf[len] = '\0';  \
-} while(0)
-
-void _bitstream_not_found(const char *repr, const char *fn)
-{
-	applog(LOG_ERR, "ERROR: Unable to load '%s', required for %s to work!", fn, repr);
-	applog(LOG_ERR, "ERROR: Please read README.FPGA for instructions");
-}
-
-FILE *open_xilinx_bitstream(const char *dname, const char *repr, const char *fwfile, unsigned long *out_len)
-{
-	char buf[0x100];
-	unsigned char *ubuf = (unsigned char*)buf;
-	unsigned long len;
-	char *p;
-
-	FILE *f = open_bitstream(dname, fwfile);
-	if (!f)
-	{
-		_bitstream_not_found(repr, fwfile);
-		return NULL;
-	}
-	if (1 != fread(buf, 2, 1, f))
-		bailout(LOG_ERR, "%s: Error reading bitstream (magic)",
-		        repr);
-	if (buf[0] || buf[1] != 9)
-		bailout(LOG_ERR, "%s: Firmware has wrong magic (9)",
-		        repr);
-	if (-1 == fseek(f, 11, SEEK_CUR))
-		bailout(LOG_ERR, "%s: Firmware seek failed",
-		        repr);
-	check_magic('a');
-	read_str("design name");
-	applog(LOG_DEBUG, "%s: Firmware file %s info:",
-	       repr, fwfile);
-	applog(LOG_DEBUG, "  Design name: %s", buf);
-	p = strrchr(buf, ';') ?: buf;
-	p = strrchr(buf, '=') ?: p;
-	if (p[0] == '=')
-		++p;
-	unsigned long fwusercode = (unsigned long)strtoll(p, &p, 16);
-	if (p[0] != '\0')
-		bailout(LOG_ERR, "%s: Bad usercode in bitstream file",
-		        repr);
-	if (fwusercode == 0xffffffff)
-		bailout(LOG_ERR, "%s: Firmware doesn't support user code",
-		        repr);
-	applog(LOG_DEBUG, "  Version: %u, build %u", (unsigned)((fwusercode >> 8) & 0xff), (unsigned)(fwusercode & 0xff));
-	check_magic('b');
-	read_str("part number");
-	applog(LOG_DEBUG, "  Part number: %s", buf);
-	check_magic('c');
-	read_str("build date");
-	applog(LOG_DEBUG, "  Build date: %s", buf);
-	check_magic('d');
-	read_str("build time");
-	applog(LOG_DEBUG, "  Build time: %s", buf);
-	check_magic('e');
-	if (1 != fread(buf, 4, 1, f))
-		bailout(LOG_ERR, "%s: Error reading bitstream (data len)",
-		        repr);
-	len = ((unsigned long)ubuf[0] << 24) | ((unsigned long)ubuf[1] << 16) | (ubuf[2] << 8) | ubuf[3];
-	applog(LOG_DEBUG, "  Bitstream size: %lu", len);
-
-	*out_len = len;
-	return f;
-}
-
-bool load_bitstream_intelhex(bytes_t *rv, const char *dname, const char *repr, const char *fn)
-{
-	char buf[0x100];
-	size_t sz;
-	uint8_t xsz, xrt;
-	uint16_t xaddr;
-	FILE *F = open_bitstream(dname, fn);
-	if (!F)
-		return false;
-	while (!feof(F))
-	{
-		if (unlikely(ferror(F)))
-		{
-			applog(LOG_ERR, "Error reading '%s'", fn);
-			goto ihxerr;
-		}
-		if (!fgets(buf, sizeof(buf), F))
-			goto ihxerr;
-		if (unlikely(buf[0] != ':'))
-			goto ihxerr;
-		if (unlikely(!(
-			hex2bin(&xsz, &buf[1], 1)
-		 && hex2bin((unsigned char*)&xaddr, &buf[3], 2)
-		 && hex2bin(&xrt, &buf[7], 1)
-		)))
-		{
-			applog(LOG_ERR, "Error parsing in '%s'", fn);
-			goto ihxerr;
-		}
-		switch (xrt)
-		{
-			case 0:  // data
-				break;
-			case 1:  // EOF
-				fclose(F);
-				return true;
-			default:
-				applog(LOG_ERR, "Unsupported record type in '%s'", fn);
-				goto ihxerr;
-		}
-		xaddr = be16toh(xaddr);
-		sz = bytes_len(rv);
-		bytes_resize(rv, xaddr + xsz);
-		if (sz < xaddr)
-			memset(&bytes_buf(rv)[sz], 0xff, xaddr - sz);
-		if (unlikely(!(hex2bin(&bytes_buf(rv)[xaddr], &buf[9], xsz))))
-		{
-			applog(LOG_ERR, "Error parsing data in '%s'", fn);
-			goto ihxerr;
-		}
-		// TODO: checksum
-	}
-	
-ihxerr:
-	fclose(F);
-	bytes_reset(rv);
-	return false;
-}
-
-bool load_bitstream_bytes(bytes_t *rv, const char *dname, const char *repr, const char *fileprefix)
-{
-	FILE *F;
-	size_t fplen = strlen(fileprefix);
-	char fnbuf[fplen + 4 + 1];
-	int e;
-	
-	bytes_reset(rv);
-	memcpy(fnbuf, fileprefix, fplen);
-	
-	strcpy(&fnbuf[fplen], ".bin");
-	F = open_bitstream(dname, fnbuf);
-	if (F)
-	{
-		char buf[0x100];
-		size_t sz;
-		while ( (sz = fread(buf, 1, sizeof(buf), F)) )
-			bytes_append(rv, buf, sz);
-		e = ferror(F);
-		fclose(F);
-		if (unlikely(e))
-		{
-			applog(LOG_ERR, "Error reading '%s'", fnbuf);
-			bytes_reset(rv);
-		}
-		else
-			return true;
-	}
-	
-	strcpy(&fnbuf[fplen], ".ihx");
-	if (load_bitstream_intelhex(rv, dname, repr, fnbuf))
-		return true;
-	
-	// TODO: Xilinx
-	
-	_bitstream_not_found(repr, fnbuf);
-	return false;
 }
 
 #ifndef WIN32

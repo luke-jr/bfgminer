@@ -15,7 +15,6 @@
 
 #include "deviceapi.h"
 #include "driver-bitfury.h"
-#include "fpgautils.h"
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
