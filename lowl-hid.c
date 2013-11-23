@@ -50,6 +50,7 @@ int HID_API_EXPORT (*dlsym_hid_write)(hid_device *, const unsigned char *, size_
 } while(0)
 
 static bool hidapi_libusb;
+static struct hid_device_info *_probe_hid_enum;
 
 static
 bool hidapi_try_lib(const char * const dlname)
@@ -73,7 +74,7 @@ bool hidapi_try_lib(const char * const dlname)
 		applog(LOG_DEBUG, "%s: Loaded %s, but no devices enumerated; trying other libraries", __func__, dlname);
 		goto fail;
 	}
-	dlsym_hid_free_enumeration(hid_enum);
+	_probe_hid_enum = hid_enum;
 	
 	LOAD_SYM(hid_open_path);
 	LOAD_SYM(hid_close);
@@ -156,7 +157,13 @@ struct lowlevel_device_info *hid_devinfo_scan()
 	struct hid_device_info *hid_enum, *hid_item;
 	struct lowlevel_device_info *info, *devinfo_list = NULL;
 	
-	hid_enum = hid_enumerate(0, 0);
+	if (_probe_hid_enum)
+	{
+		hid_enum = _probe_hid_enum;
+		_probe_hid_enum = NULL;
+	}
+	else
+		hid_enum = hid_enumerate(0, 0);
 	if (!hid_enum)
 	{
 		applog(LOG_DEBUG, "%s: No HID devices found", __func__);
