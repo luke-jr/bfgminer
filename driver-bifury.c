@@ -345,8 +345,9 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 	else
 	if (!strncmp(cmd, "job ", 4))
 	{
-		// job <jobid> <chip>
+		// job <jobid> <timestamp> <chip>
 		const uint32_t jobid = strtoll(&cmd[4], &p, 0x10);
+		strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
 		thr = proc->thr[0];
