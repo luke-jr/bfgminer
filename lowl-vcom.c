@@ -219,15 +219,16 @@ void _vcom_devinfo_scan_devserial(struct lowlevel_device_info ** const devinfo_l
 
 #ifndef WIN32
 static
-char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile, const char *append)
+char *_sysfs_do_read(const char *devpath, char *devfile, const char *append)
 {
+	char buf[0x40];
 	FILE *F;
 	
 	strcpy(devfile, append);
 	F = fopen(devpath, "r");
 	if (F)
 	{
-		if (fgets(buf, bufsz, F))
+		if (fgets(buf, sizeof(buf), F))
 		{
 			size_t L = strlen(buf);
 			while (isCspace(buf[--L]))
@@ -240,7 +241,7 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 	else
 		buf[0] = '\0';
 	
-	return buf[0] ? buf : NULL;
+	return buf[0] ? strdup(buf) : NULL;
 }
 
 static
@@ -250,7 +251,6 @@ void _sysfs_find_tty(char *devpath, char *devfile, struct lowlevel_device_info *
 	DIR *DT;
 	struct dirent *de;
 	char ttybuf[0x10] = "/dev/";
-	char manuf[0x40], prod[0x40], serial[0x40];
 	char *mydevfile = strdup(devfile);
 	
 	DT = opendir(devpath);
@@ -273,9 +273,9 @@ void _sysfs_find_tty(char *devpath, char *devfile, struct lowlevel_device_info *
 		
 		strcpy(&ttybuf[5], de->d_name);
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, ttybuf);
-		BFGINIT(devinfo->manufacturer, maybe_strdup(_sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer")));
-		BFGINIT(devinfo->product, maybe_strdup(_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product")));
-		BFGINIT(devinfo->serial, maybe_strdup(_sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial")));
+		BFGINIT(devinfo->manufacturer, _sysfs_do_read(devpath, devfile, "/manufacturer"));
+		BFGINIT(devinfo->product, _sysfs_do_read(devpath, devfile, "/product"));
+		BFGINIT(devinfo->serial, _sysfs_do_read(devpath, devfile, "/serial"));
 	}
 	closedir(DT);
 	
