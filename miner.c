@@ -10388,13 +10388,19 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const dname, const size_t dnamelen)
+const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
 {
 	struct driver_registration *dreg;
+	char dname[dnamelen];
+	int i;
 	
+	for (i = 0; i < dnamelen; ++i)
+		dname[i] = tolower(_dname[i]);
 	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
 	if (!dreg)
 	{
+		for (i = 0; i < dnamelen; ++i)
+			dname[i] = toupper(_dname[i]);
 		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
 		if (!dreg)
 			return NULL;
