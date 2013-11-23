@@ -513,7 +513,7 @@ char *devpath_to_devid(const char *devpath)
 		return NULL;
 	devpath += 3;
 	char *p;
-	const int com = strtol(devpath, &p, 10);
+	strtol(devpath, &p, 10);
 	if (p[0])
 		return NULL;
 	const int sz = (p - devpath);
@@ -576,6 +576,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		p2 = (p[0] == '@') ? &p[1] : p;
 		const size_t serlen = (p - ser);
 		p = "";
+		n = 0;
 		const char * const devpath = cgpu->device_path ?: "";
 		const char * const devser = cgpu->dev_serial ?: "";
 		if ((!strncmp(devpath, ser, serlen)) && devpath[serlen] == '\0')

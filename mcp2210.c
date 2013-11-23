@@ -9,19 +9,6 @@
 
 #include "config.h"
 
-#ifndef WIN32
-#include <dlfcn.h>
-typedef void *dlh_t;
-#else
-#include <winsock2.h>
-#include <windows.h>
-#define dlopen(lib, flags) LoadLibrary(lib)
-#define dlsym(h, sym)  ((void*)GetProcAddress(h, sym))
-#define dlerror()  "unknown"
-#define dlclose(h)  FreeLibrary(h)
-typedef HMODULE dlh_t;
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
