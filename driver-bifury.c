@@ -326,6 +326,13 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
 		thr = proc->thr[0];
 		hashes_done2(thr, 0xbd000000, NULL);
+		
+		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
+		if (work)
+		{
+			HASH_DEL(master_thr->work_list, work);
+			free_work(work);
+		}
 	}
 	else
 	if (!strncmp(cmd, "needwork ", 9))
