@@ -2212,8 +2212,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
+				const char full[] = PACKAGE " " VERSION;
 				if (!cbappend) {
-					const char full[] = PACKAGE " " VERSION;
 					if ((size_t)ae >= sizeof(full) - 1)
 						cbappend = full;
 					else if ((size_t)ae >= sizeof(PACKAGE) - 1)
