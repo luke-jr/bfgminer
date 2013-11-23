@@ -1017,7 +1017,7 @@ static void avalon_shutdown(struct thr_info *thr)
 struct device_drv avalon_drv = {
 	.dname = "avalon",
 	.name = "AVA",
-	.no_allall = true,
+	.lowl_probe_by_name_only = true,
 	.lowl_probe = avalon_lowl_probe,
 	.thread_prepare = avalon_prepare,
 	.minerloop = hash_queued_work,
