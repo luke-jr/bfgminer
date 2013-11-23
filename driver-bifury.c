@@ -25,6 +25,8 @@
 #include "miner.h"
 #include "util.h"
 
+#define BIFURY_MAX_QUEUED 0x10
+
 BFG_REGISTER_DRIVER(bifury_drv)
 
 const char bifury_init_cmds[] = "flush\ntarget ffffffff\nmaxroll 0\n";
@@ -227,7 +229,7 @@ void bifury_common_error(struct cgpu_info * const dev, const enum dev_reason rea
 }
 
 static
-bool bifury_queue_append(struct thr_info * const thr, struct work * const work)
+bool bifury_queue_append(struct thr_info * const thr, struct work *work)
 {
 	const struct cgpu_info * const dev = thr->cgpu->device;
 	struct bifury_state * const state = dev->device_data;
@@ -247,6 +249,20 @@ bool bifury_queue_append(struct thr_info * const thr, struct work * const work)
 		return false;
 	}
 	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
+	int prunequeue = HASH_COUNT(master_thr->work_list) - BIFURY_MAX_QUEUED;
+	if (prunequeue > 0)
+	{
+		struct work *tmp;
+		applog(LOG_DEBUG, "%s: Pruning %d old work item%s",
+		       dev->dev_repr, prunequeue, prunequeue == 1 ? "" : "s");
+		HASH_ITER(hh, master_thr->work_list, work, tmp)
+		{
+			HASH_DEL(master_thr->work_list, work);
+			free_work(work);
+			if (--prunequeue < 1)
+				break;
+		}
+	}
 	bifury_set_queue_full(dev, state->needwork - 1);
 	return true;
 }
