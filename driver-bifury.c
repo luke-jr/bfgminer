@@ -29,6 +29,18 @@ BFG_REGISTER_DRIVER(bifury_drv)
 
 const char * const bifury_init_cmds = "flush\ntarget ffffffff\nmaxroll 0\n";
 
+static
+ssize_t bifury_write(const struct cgpu_info * const dev, const void * const buf, const size_t count)
+{
+	const int fd = dev->device_fd;
+	if (opt_dev_protocol)
+	{
+		const size_t psz = (((const char*)buf)[count-1] == '\n') ? (count - 1) : count;
+		applog(LOG_DEBUG, "%s: DEVPROTO: SEND %.*s", dev->dev_repr, psz, (const char*)buf);
+	}
+	return write(fd, buf, count);
+}
+
 struct bifury_state {
 	bytes_t buf;
 	uint32_t last_work_id;
@@ -182,16 +194,13 @@ bool bifury_queue_append(struct thr_info * const thr, struct work * const work)
 		return false;
 	
 	struct thr_info * const master_thr = dev->thr[0];
-	const int fd = dev->device_fd;
 	char buf[5 + 0x98 + 1 + 8 + 1];
 	memcpy(buf, "work ", 5);
 	bin2hex(&buf[5], work->data, 0x4c);
 	work->device_id = ++state->last_work_id;
 	sprintf(&buf[5 + 0x98], " %08x", work->device_id);
-	if (opt_dev_protocol)
-		applog(LOG_DEBUG, "%s: DEVPROTO: SEND %s", dev->dev_repr, buf);
 	buf[5 + 0x98 + 1 + 8] = '\n';
-	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
+	if (sizeof(buf) != bifury_write(dev, buf, sizeof(buf)))
 	{
 		applog(LOG_ERR, "%s: Failed to send work", dev->dev_repr);
 		return false;
@@ -209,11 +218,7 @@ void bifury_queue_flush(struct thr_info * const thr)
 		return;
 	const int fd = dev->device_fd;
 	if (fd != -1)
-	{
-		if (opt_dev_protocol)
-			applog(LOG_DEBUG, "%s: DEVPROTO: SEND %s", dev->dev_repr, "flush");
-		write(fd, "flush\n", 6);
-	}
+		bifury_write(dev, "flush\n", 6);
 	bifury_set_queue_full(dev, dev->procs);
 }
 
@@ -296,16 +301,16 @@ void bifury_poll(struct thr_info * const master_thr)
 			return;
 		}
 		
-		if (opt_dev_protocol)
-			applog(LOG_DEBUG, "%s: DEVPROTO: SENDCFG", dev->dev_repr);
-		if (sizeof(bifury_init_cmds)-1 != write(fd, bifury_init_cmds, sizeof(bifury_init_cmds)-1))
+		dev->device_fd = fd;
+		if (sizeof(bifury_init_cmds)-1 != bifury_write(dev, bifury_init_cmds, sizeof(bifury_init_cmds)-1))
 		{
 			applog(LOG_ERR, "%s: Failed to send configuration", dev->dev_repr);
 			bifury_common_error(dev, REASON_THREAD_FAIL_INIT);
+			serial_close(fd);
+			dev->device_fd = -1;
 			return;
 		}
 		
-		dev->device_fd = fd;
 		bifury_set_queue_full(dev, dev->procs);
 	}
 	
