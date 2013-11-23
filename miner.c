@@ -10494,17 +10494,16 @@ void *probe_device_thread(void *p)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
-				bool allall = false;
 				if (
 #ifdef NEED_BFG_LOWL_VCOM
-					(info->lowl == &lowl_vcom && (allall = !strcasecmp(dname, "all"))) ||
+					(info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) ||
 #endif
 					_probe_device_match(info, dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
 						const struct device_drv * const drv = dreg->drv;
-						if (allall && drv->no_allall)
+						if (drv->lowl_probe_by_name_only)
 							continue;
 						if (!drv->lowl_probe)
 							continue;

@@ -2106,7 +2106,7 @@ static void bitforce_queue_thread_enable(struct thr_info *thr)
 struct device_drv bitforce_queue_api = {
 	.dname = "bitforce_queue",
 	.name = "BFL",
-	.no_allall = true,
+	.lowl_probe_by_name_only = true,
 	.lowl_match = bitforce_lowl_match,
 	.lowl_probe = bitforce_lowl_probe,
 	.minerloop = minerloop_queue,

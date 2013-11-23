@@ -294,7 +294,7 @@ struct device_drv {
 	const char *dname;
 	const char *name;
 	int8_t probe_priority;
-	bool no_allall;  // Never probe this driver for -S all (without driver name specification)
+	bool lowl_probe_by_name_only;
 	supported_algos_t supported_algos;
 
 	// DRV-global functions
