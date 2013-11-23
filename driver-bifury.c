@@ -72,6 +72,8 @@ struct bifury_state {
 	uint32_t last_work_id;
 	int needwork;
 	bool has_needwork;
+	uint8_t *osc6_bits;
+	bool send_clock;
 };
 
 static
@@ -204,7 +206,10 @@ bool bifury_thread_init(struct thr_info *master_thr)
 		return false;
 	*state = (struct bifury_state){
 		.buf = BYTES_INIT,
+		.osc6_bits = malloc(sizeof(*state->osc6_bits) * dev->procs),
 	};
+	for (int i = 0; i < dev->procs; ++i)
+		state->osc6_bits[i] = 54;
 	for (proc = dev; proc; proc = proc->next_proc)
 	{
 		proc->device_data = state;
@@ -400,6 +405,23 @@ void bifury_poll(struct thr_info * const master_thr)
 		}
 		
 		bifury_set_queue_full(dev, dev->procs * 2);
+		state->send_clock = true;
+	}
+	
+	if (state->send_clock)
+	{
+		size_t clockbufsz = 5 + (3 * dev->procs) + 1 + 1;
+		char clockbuf[clockbufsz];
+		strcpy(clockbuf, "clock");
+		for (int i = 0; i < dev->procs; ++i)
+			tailsprintf(clockbuf, clockbufsz, " %d", state->osc6_bits[i]);
+		tailsprintf(clockbuf, clockbufsz, "\n");
+		--clockbufsz;
+		if (clockbufsz != bifury_write(dev, clockbuf, clockbufsz))
+			applog(LOG_ERR, "%s: Failed to send clock assignments",
+			       dev->dev_repr);
+		else
+			state->send_clock = false;
 	}
 	
 	while ( (cmd = bifury_readln(fd, &state->buf)) )
@@ -410,6 +432,87 @@ void bifury_poll(struct thr_info * const master_thr)
 		free(cmd);
 	}
 }
+
+static
+struct api_data *bifury_api_device_status(struct cgpu_info * const proc)
+{
+	struct bifury_state * const state = proc->device_data;
+	struct api_data *root = NULL;
+	int osc6_bits = state->osc6_bits[proc->proc_id];
+	
+	root = api_add_int(root, "Clock Bits", &osc6_bits, true);
+	
+	return root;
+}
+
+char *bifury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+{
+	struct bifury_state * const state = proc->device_data;
+	
+	if (!strcasecmp(option, "help"))
+	{
+		sprintf(replybuf, "osc6_bits: range 33-63 (slow to fast)");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "osc6_bits"))
+	{
+		if (!setting || !*setting)
+		{
+			sprintf(replybuf, "missing setting");
+			return replybuf;
+		}
+		const uint8_t val = atoi(setting);
+		if (val < 33 || val > 63)
+		{
+			sprintf(replybuf, "invalid setting");
+			return replybuf;
+		}
+		
+		state->osc6_bits[proc->proc_id] = val;
+		state->send_clock = true;
+		
+		return NULL;
+	}
+	
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
+#ifdef HAVE_CURSES
+void bifury_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[O]scillator bits ");
+}
+
+const char *bifury_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	struct bifury_state * const state = proc->device_data;
+	
+	switch (input)
+	{
+		case 'o': case 'O':
+		{
+			const int val = curses_int("Set oscillator bits (range 33-63; slow to fast)");
+			if (val < 33 || val > 63)
+				return "Invalid oscillator bits\n";
+			
+			state->osc6_bits[proc->proc_id] = val;
+			state->send_clock = true;
+			
+			return "Oscillator bits changing\n";
+		}
+	}
+	return NULL;
+}
+
+void bifury_wlogprint_status(struct cgpu_info * const proc)
+{
+	const struct bifury_state * const state = proc->device_data;
+	const int osc6_bits = state->osc6_bits[proc->proc_id];
+	wlogprint("Oscillator bits: %d\n", osc6_bits);
+}
+#endif
 
 struct device_drv bifury_drv = {
 	.dname = "bifury",
@@ -424,4 +527,13 @@ struct device_drv bifury_drv = {
 	.queue_append = bifury_queue_append,
 	.queue_flush = bifury_queue_flush,
 	.poll = bifury_poll,
+	
+	.get_api_extra_device_status = bifury_api_device_status,
+	.set_device = bifury_set_device,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = bifury_wlogprint_status,
+	.proc_tui_wlogprint_choices = bifury_tui_wlogprint_choices,
+	.proc_tui_handle_choice = bifury_tui_handle_choice,
+#endif
 };
