@@ -10402,13 +10402,19 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const dname, const size_t dnamelen)
+const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
 {
 	struct driver_registration *dreg;
+	char dname[dnamelen];
+	int i;
 	
+	for (i = 0; i < dnamelen; ++i)
+		dname[i] = tolower(_dname[i]);
 	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
 	if (!dreg)
 	{
+		for (i = 0; i < dnamelen; ++i)
+			dname[i] = toupper(_dname[i]);
 		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
 		if (!dreg)
 			return NULL;
@@ -10449,8 +10455,8 @@ void *probe_device_thread(void *p)
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
-		const char * const colon = strchr(dname, ':');
-		if (!colon)
+		const char * const colon = strpbrk(dname, ":@");
+		if (!(colon && colon != dname))
 			continue;
 		const char * const ser = &colon[1];
 		LL_FOREACH2(infolist, info, same_devid_next)
@@ -10474,6 +10480,7 @@ void *probe_device_thread(void *p)
 		DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 		{
 			const char * const dname = sd_iter->string;
+			// NOTE: Only checking flags here, NOT path/serial, so @ is unacceptable
 			const char *colon = strchr(dname, ':');
 			if (!colon)
 				colon = &dname[-1];
@@ -10503,6 +10510,7 @@ void *probe_device_thread(void *p)
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
+		// NOTE: Only checking flags here, NOT path/serial, so @ is unacceptable
 		const char * const colon = strchr(dname, ':');
 		if (!colon)
 		{
@@ -10512,7 +10520,7 @@ void *probe_device_thread(void *p)
 #ifdef NEED_BFG_LOWL_VCOM
 					(info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) ||
 #endif
-					_probe_device_match(info, dname))
+					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
