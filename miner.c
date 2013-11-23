@@ -495,7 +495,7 @@ static void applog_and_exit(const char *fmt, ...)
 	exit(1);
 }
 
-char *devpath_to_devid(const char * const devpath)
+char *devpath_to_devid(const char *devpath)
 {
 #ifndef WIN32
 	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
@@ -507,16 +507,18 @@ char *devpath_to_devid(const char * const devpath)
 		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
 	}
 #else
-		char *p = strstr(devpath, "COM"), *p2;
-		if (!p)
-			return NULL;
-		const int com = strtol(&p[3], &p2, 10);
-		if (p2 == p)
-			return NULL;
-	char dummy;
-	const int sz = snprintf(&dummy, 1, "%d", com);
+	if (!strncmp(devpath, "\\\\.\\", 4))
+		devpath += 4;
+	if (strncasecmp(devpath, "COM", 3) || !devpath[3])
+		return NULL;
+	devpath += 3;
+	char *p;
+	const int com = strtol(devpath, &p, 10);
+	if (p[0])
+		return NULL;
+	const int sz = (p - devpath);
 	char *devs = malloc(4 + sz + 1);
-	sprintf(devs, "com:%d", com);
+	sprintf(devs, "com:%s", devpath);
 #endif
 	return devs;
 }
