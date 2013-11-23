@@ -1503,8 +1503,8 @@ static bool work_decode(const json_t *val, struct work *work)
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
+				const char full[] = PACKAGE " " VERSION;
 				if (!cbappend) {
-					const char full[] = PACKAGE " " VERSION;
 					// NOTE: Intentially including a trailing \0 on long forms so extranonce doesn't confuse things
 					if ((size_t)ae >= sizeof(full))
 						cbappend = full;
