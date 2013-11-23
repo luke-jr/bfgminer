@@ -166,6 +166,8 @@ bool bifury_detect_one(const char * const devpath)
 
 parseerr:
 	applog(LOG_DEBUG, "%s: Error parsing version response", bifury_drv.dname);
+	return false;
+
 err:
 	bytes_free(&reply);
 	serial_close(fd);
