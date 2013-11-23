@@ -495,7 +495,7 @@ static void applog_and_exit(const char *fmt, ...)
 	exit(1);
 }
 
-char *devpath_to_devid(const char * const devpath)
+char *devpath_to_devid(const char *devpath)
 {
 #ifndef WIN32
 	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
@@ -507,16 +507,18 @@ char *devpath_to_devid(const char * const devpath)
 		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
 	}
 #else
-		char *p = strstr(devpath, "COM"), *p2;
-		if (!p)
-			return NULL;
-		const int com = strtol(&p[3], &p2, 10);
-		if (p2 == p)
-			return NULL;
-	char dummy;
-	const int sz = snprintf(&dummy, 1, "%d", com);
+	if (!strncmp(devpath, "\\\\.\\", 4))
+		devpath += 4;
+	if (strncasecmp(devpath, "COM", 3) || !devpath[3])
+		return NULL;
+	devpath += 3;
+	char *p;
+	const int com = strtol(devpath, &p, 10);
+	if (p[0])
+		return NULL;
+	const int sz = (p - devpath);
 	char *devs = malloc(4 + sz + 1);
-	sprintf(devs, "com:%d", com);
+	sprintf(devs, "com:%s", devpath);
 #endif
 	return devs;
 }
@@ -10506,15 +10508,18 @@ void *probe_device_thread(void *p)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
+				bool allall = false;
 				if (
 #ifdef NEED_BFG_LOWL_VCOM
-					(info->lowl == &lowl_vcom && !strcasecmp(dname, "all")) ||
+					(info->lowl == &lowl_vcom && (allall = !strcasecmp(dname, "all"))) ||
 #endif
 					_probe_device_match(info, dname))
 				{
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
 						const struct device_drv * const drv = dreg->drv;
+						if (allall && drv->no_allall)
+							continue;
 						if (!drv->lowl_probe)
 							continue;
 						if (drv->lowl_probe(info))
@@ -10969,6 +10974,7 @@ int main(int argc, char *argv[])
 	devices_new = NULL;
 
 	if (opt_display_devs) {
+		int devcount = 0;
 		applog(LOG_ERR, "Devices detected:");
 		for (i = 0; i < total_devices; ++i) {
 			struct cgpu_info *cgpu = devices[i];
@@ -10992,8 +10998,9 @@ int main(int argc, char *argv[])
 				tailsprintf(buf, sizeof(buf), "; path=%s", cgpu->device_path);
 			tailsprintf(buf, sizeof(buf), ")");
 			_applog(LOG_NOTICE, buf);
+			++devcount;
 		}
-		quit(0, "%d devices listed", total_devices);
+		quit(0, "%d devices listed", devcount);
 	}
 
 	mining_threads = 0;
