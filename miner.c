@@ -4819,7 +4819,7 @@ static void roll_work(struct work *work)
 
 /* Duplicates any dynamically allocated arrays within the work struct to
  * prevent a copied work struct from freeing ram belonging to another struct */
-void __copy_work(struct work *work, const struct work *base_work)
+static void _copy_work(struct work *work, const struct work *base_work, int noffset)
 {
 	int id = work->id;
 
@@ -4840,6 +4840,15 @@ void __copy_work(struct work *work, const struct work *base_work)
 		++*work->tmpl_refcount;
 		mutex_unlock(&pool->pool_lock);
 	}
+	
+	if (noffset)
+	{
+		uint32_t *work_ntime = (uint32_t *)(work->data + 68);
+		uint32_t ntime = be32toh(*work_ntime);
+
+		ntime += noffset;
+		*work_ntime = htobe32(ntime);
+	}
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations
@@ -4848,9 +4857,14 @@ struct work *copy_work(const struct work *base_work)
 {
 	struct work *work = make_work();
 
-	__copy_work(work, base_work);
+	_copy_work(work, base_work, 0);
 
 	return work;
+}
+
+void __copy_work(struct work *work, const struct work *base_work)
+{
+	_copy_work(work, base_work, 0);
 }
 
 static struct work *make_clone(struct work *work)
@@ -8496,6 +8510,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, 0);
 }
 
@@ -8590,10 +8606,9 @@ void _submit_work_async(struct work *work)
 	notifier_wake(submit_waiting_notifier);
 }
 
-static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+/* Submit a copy of the tested, statistic recorded work item asynchronously */
+static void submit_work_async2(struct work *work, struct timeval *tv_work_found)
 {
-	struct work *work = copy_work(work_in);
-
 	if (tv_work_found)
 		copy_time(&work->tv_work_found, tv_work_found);
 	
@@ -8662,8 +8677,20 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	return submit_noffset_nonce(thr, work, nonce, 0);
+}
+
+/* Allows drivers to submit work items where the driver has changed the ntime
+ * value by noffset. Must be only used with a work protocol that does not ntime
+ * roll itself intrinsically to generate work (eg stratum). We do not touch
+ * the original work struct, but the copy of it only. */
+bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t nonce,
+			  int noffset)
+{
+	struct work *work = make_work();
+	_copy_work(work, work_in, noffset);
+	
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
 	bool ret = true;
@@ -8704,9 +8731,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			goto out;
 	}
 	
-	submit_work_async(work, &tv_work_found);
+	submit_work_async2(work, &tv_work_found);
+	work = NULL;  // Taken by submit_work_async2
 out:
-	*work_nonce = bak_nonce;
+	if (work)
+		free_work(work);
 	thread_reportin(thr);
 
 	return ret;
