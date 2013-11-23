@@ -309,7 +309,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		// submit <nonce> <jobid> <timestamp> <chip>
 		uint32_t nonce = strtoll(&cmd[7], &p, 0x10);
 		const uint32_t jobid = strtoll(&p[1], &p, 0x10);
-		strtoll(&p[1], &p, 0x10);  // Ignore timestamp for now
+		const uint32_t ntime = strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		nonce = le32toh(nonce);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
@@ -317,7 +317,10 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
 		if (work)
-			submit_nonce(thr, work, nonce);
+		{
+			const uint32_t work_ntime = be32toh(*(uint32_t*)&work->data[68]);
+			submit_noffset_nonce(thr, work, nonce, ntime - work_ntime);
+		}
 		else
 		if (!jobid)
 			applog(LOG_DEBUG, "%s: Dummy submit ignored", dev->dev_repr);
