@@ -67,8 +67,8 @@ If you specify the --socks-proxy option to BFGMiner, it will only be applied to
 all pools that don't specify their own proxy setting like above
 
 
-After saving configuration from the menu, you do not need to give BFGMiner any
-arguments, it will load your configuration instead.
+After saving configuration from the menu ([S],[W]) you do not need to give
+BFGMiner any arguments, it will load your configuration instead.
 
 Any configuration file may also contain a single
 	"include" : "filename"
@@ -180,6 +180,8 @@ Native WIN32 build instructions: see windows-build.txt
 If you build BFGMiner from source, it is recommended that you run it from the
 build directory. On *nix, you will usually need to prepend your command with a
 path like this (if you are in the bfgminer directory already): ./bfgminer
+To install system wide run 'sudo make install' or 'make install' as root. You
+can then run from any terminal.
 
 ---
 
@@ -669,7 +671,7 @@ A: No such feature has been implemented to support this.
 
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
-the command line or via the menu after startup and choose settings->write
+the command line or via the menu after startup and choose [S]ettings->[W]rite
 config file and the file will be loaded one each startup.
 
 Q: The build fails with gcc is unable to build a binary.
