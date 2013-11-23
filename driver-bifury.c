@@ -111,12 +111,15 @@ bool bifury_detect_one(const char * const devpath)
 	while (true)
 	{
 		p = bifury_readln(fd, &reply);
-		if (opt_dev_protocol)
-			applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: RECV %s",
-			       bifury_drv.dname, fd, p);
-		if (!strncmp("version ", p, 8))
-			break;
-		free(p);
+		if (p)
+		{
+			if (opt_dev_protocol)
+				applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: RECV %s",
+				       bifury_drv.dname, fd, p);
+			if (!strncmp("version ", p, 8))
+				break;
+			free(p);
+		}
 		if (timer_passed(&tv_timeout, NULL))
 		{
 			applog(LOG_DEBUG, "%s: Timed out waiting for response to version request",
