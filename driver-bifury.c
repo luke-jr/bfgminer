@@ -19,9 +19,9 @@
 #include <uthash.h>
 
 #include "deviceapi.h"
-#include "fpgautils.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-vcom.h"
 #include "miner.h"
 #include "util.h"
 

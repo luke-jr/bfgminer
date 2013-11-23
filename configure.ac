@@ -602,7 +602,8 @@ AC_ARG_ENABLE([bifury],
 	)
 if test "x$bifury" = "xyes"; then
 	AC_DEFINE([USE_BIFURY], [1], [Defined to 1 if Bi*Fury support is wanted])
-	need_fpgautils=yes
+	need_lowl_vcom=yes
+	has_asic=yes
 fi
 AM_CONDITIONAL([USE_BIFURY], [test x$bifury = xyes])
 
