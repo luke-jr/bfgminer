@@ -9304,7 +9304,7 @@ static bool input_pool(bool live)
 
 	pass = curses_input("Password");
 	if (!pass)
-		goto out;
+		pass = calloc(1, 1);
 
 	pool = add_pool();
 
