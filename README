@@ -554,22 +554,22 @@ semicolon separated --quota(or -U) entry instead of --url. Pools specified with
 --url are given a nominal quota value of 1 and entries can be mixed.
 
 For example:
---url poola:porta -u usernamea -p passa --quota "2;poolb:portb" -u usernameb -p passb
-Will give poola 1/3 of the work and poolb 2/3 of the work.
+--url poolA:portA -u usernameA -p passA --quota "2;poolB:portB" -u usernameB -p passB
+Will give poolA 1/3 of the work and poolB 2/3 of the work.
 
 Writing configuration files with quotas is likewise supported. To use the above
 quotas in a configuration file they would be specified thus:
 
 "pools" : [
         {
-                "url" : "poola:porta",
-                "user" : "usernamea",
-                "pass" : "passa"
+                "url" : "poolA:portA",
+                "user" : "usernameA",
+                "pass" : "passA"
         },
         {
-                "quota" : "2;poolb:portb",
-                "user" : "usernameb",
-                "pass" : "passb"
+                "quota" : "2;poolB:portB",
+                "user" : "usernameB",
+                "pass" : "passB"
         }
 ]
 
