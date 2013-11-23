@@ -81,8 +81,10 @@ static
 bool bifury_detect_one(const char * const devpath)
 {
 	char buf[0x40], *p, *q;
+	bytes_t reply = BYTES_INIT;
 	int major, minor, hwrev, chips;
 	struct cgpu_info *cgpu;
+	struct timeval tv_timeout;
 	const int fd = serial_open(devpath, 0, 10, true);
 	applog(LOG_DEBUG, "%s: %s %s",
 	       bifury_drv.dname,
@@ -95,22 +97,36 @@ bool bifury_detect_one(const char * const devpath)
 	while (read(fd, buf, sizeof(buf)) == sizeof(buf))
 	{}
 	
+	if (opt_dev_protocol)
+		applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: SEND %s", bifury_drv.dname, fd, "version");
 	if (8 != write(fd, "version\n", 8))
 	{
 		applog(LOG_DEBUG, "%s: Error sending version request", bifury_drv.dname);
 		goto err;
 	}
 	
-	if (read(fd, buf, sizeof(buf)) < 1 || strncmp("version ", buf, 8))
+	timer_set_delay_from_now(&tv_timeout, 1000000);
+	while (true)
 	{
-		applog(LOG_DEBUG, "%s: Wrong response to version request: %s",
-		       bifury_drv.dname, buf);
-		goto err;
+		p = bifury_readln(fd, &reply);
+		if (opt_dev_protocol)
+			applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: RECV %s",
+			       bifury_drv.dname, fd, p);
+		if (!strncmp("version ", p, 8))
+			break;
+		free(p);
+		if (timer_passed(&tv_timeout, NULL))
+		{
+			applog(LOG_DEBUG, "%s: Timed out waiting for response to version request",
+			       bifury_drv.dname);
+			goto err;
+		}
 	}
 	
+	bytes_free(&reply);
 	serial_close(fd);
 	
-	major = strtol(&buf[8], &p, 10);
+	major = strtol(&p[8], &p, 10);
 	if (p == &buf[8] || p[0] != '.')
 		goto parseerr;
 	minor = strtol(&p[1], &q, 10);
@@ -143,6 +159,7 @@ bool bifury_detect_one(const char * const devpath)
 parseerr:
 	applog(LOG_DEBUG, "%s: Error parsing version response", bifury_drv.dname);
 err:
+	bytes_free(&reply);
 	serial_close(fd);
 	return false;
 }
