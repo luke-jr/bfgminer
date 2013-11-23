@@ -244,13 +244,13 @@ char *_sysfs_do_read(char *buf, size_t bufsz, const char *devpath, char *devfile
 }
 
 static
-void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowlevel_device_info ** const devinfo_list)
+void _sysfs_find_tty(char *devpath, char *devfile, struct lowlevel_device_info ** const devinfo_list)
 {
 	struct lowlevel_device_info *devinfo;
 	DIR *DT;
 	struct dirent *de;
 	char ttybuf[0x10] = "/dev/";
-	char manuf[0x40], serial[0x40];
+	char manuf[0x40], prod[0x40], serial[0x40];
 	char *mydevfile = strdup(devfile);
 	
 	DT = opendir(devpath);
@@ -265,7 +265,7 @@ void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowl
 		{
 			// "tty" directory: recurse (needed for ttyACM)
 			sprintf(devfile, "%s/tty", mydevfile);
-			_sysfs_find_tty(devpath, devfile, prod, devinfo_list);
+			_sysfs_find_tty(devpath, devfile, devinfo_list);
 			continue;
 		}
 		if (strncmp(&de->d_name[3], "USB", 3) && strncmp(&de->d_name[3], "ACM", 3))
@@ -274,7 +274,7 @@ void _sysfs_find_tty(char *devpath, char *devfile, const char *prod, struct lowl
 		strcpy(&ttybuf[5], de->d_name);
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, ttybuf);
 		BFGINIT(devinfo->manufacturer, maybe_strdup(_sysfs_do_read(manuf, sizeof(manuf), devpath, devfile, "/manufacturer")));
-		BFGINIT(devinfo->product, maybe_strdup(prod));
+		BFGINIT(devinfo->product, maybe_strdup(_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product")));
 		BFGINIT(devinfo->serial, maybe_strdup(_sysfs_do_read(serial, sizeof(serial), devpath, devfile, "/serial")));
 	}
 	closedir(DT);
@@ -291,7 +291,6 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 	const char devroot[] = "/sys/bus/usb/devices";
 	const size_t devrootlen = sizeof(devroot) - 1;
 	char devpath[sizeof(devroot) + (NAME_MAX * 3)];
-	char prod[0x40];
 	char *devfile, *upfile;
 	size_t len, len2;
 	
@@ -306,9 +305,6 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 		upfile = &devpath[devrootlen + 1];
 		memcpy(upfile, de->d_name, len);
 		devfile = upfile + len;
-		
-		if (!_sysfs_do_read(prod, sizeof(prod), devpath, devfile, "/product"))
-			prod[0] = '\0';
 		
 		devfile[0] = '\0';
 		DS = opendir(devpath);
@@ -325,7 +321,7 @@ void _vcom_devinfo_scan_sysfs(struct lowlevel_device_info ** const devinfo_list)
 			len2 = strlen(de->d_name);
 			memcpy(devfile, de->d_name, len2 + 1);
 			
-			_sysfs_find_tty(devpath, devfile, prod[0] ? prod : NULL, devinfo_list);
+			_sysfs_find_tty(devpath, devfile, devinfo_list);
 		}
 		closedir(DS);
 	}
