@@ -11,10 +11,6 @@
 
 #include "config.h"
 
-#ifdef WIN32
-#include <winsock2.h>
-#endif
-
 #ifdef HAVE_CURSES
 // Must be before stdbool, since pdcurses typedefs bool :/
 #include <curses.h>

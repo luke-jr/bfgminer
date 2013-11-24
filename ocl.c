@@ -19,14 +19,6 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#ifdef WIN32
-	#include <winsock2.h>
-#else
-	#include <sys/socket.h>
-	#include <netinet/in.h>
-	#include <netdb.h>
-#endif
-
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>

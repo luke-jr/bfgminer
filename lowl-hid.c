@@ -13,7 +13,6 @@
 #include <dlfcn.h>
 typedef void *dlh_t;
 #else
-#include <winsock2.h>
 #include <windows.h>
 #define dlopen(lib, flags) LoadLibrary(lib)
 #define dlsym(h, sym)  ((void*)GetProcAddress(h, sym))

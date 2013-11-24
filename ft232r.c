@@ -9,10 +9,6 @@
 
 #include "config.h"
 
-#ifdef WIN32
-#include <winsock2.h>
-#endif
-
 #include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>

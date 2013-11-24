@@ -12,10 +12,6 @@
 
 #include "config.h"
 
-#ifdef WIN32
-#include <winsock2.h>
-#endif
-
 #include <stdbool.h>
 
 #if !(defined(WIN32) || defined(unix))
