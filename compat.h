@@ -112,7 +112,7 @@ static inline int nanosleep(const struct timespec *req, struct timespec *rem)
 }
 #endif
 
-#ifdef WIN32
+#ifndef HAVE_SLEEP
 static inline int sleep(unsigned int secs)
 {
 	struct timespec req, rem;
@@ -122,7 +122,9 @@ static inline int sleep(unsigned int secs)
 		return 0;
 	return rem.tv_sec + (rem.tv_nsec ? 1 : 0);
 }
+#endif
 
+#ifdef WIN32
 enum {
 	PRIO_PROCESS		= 0,
 };
