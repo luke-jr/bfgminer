@@ -494,7 +494,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 	done
 	if test "x$libusb" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
-				true
+				LIBUSB_LIBS="-l$usb_lib"
 			],[
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
 				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed -e 's/^.*[[:space:]:]\(\/[^[:space:]]*\)libusb\.h[[:space:]].*$/\1/' -e t -e d`
