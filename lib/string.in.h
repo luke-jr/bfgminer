@@ -640,6 +640,7 @@ _GL_WARN_ON_USE (strcasestr, "strcasestr does work correctly on character "
            characters are ASCII characters < 0x30.
 
    See also strsep().  */
+#if (!defined(strtok_r)) || @REPLACE_STRTOK_R@
 #if @GNULIB_STRTOK_R@
 # if @REPLACE_STRTOK_R@
 #  if !(defined __cplusplus && defined GNULIB_NAMESPACE)
@@ -679,6 +680,7 @@ _GL_WARN_ON_USE (strtok_r, "strtok_r cannot work correctly on character "
 _GL_WARN_ON_USE (strtok_r, "strtok_r is unportable - "
                  "use gnulib module strtok_r for portability");
 # endif
+#endif
 #endif
 
 
