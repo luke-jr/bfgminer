@@ -109,6 +109,8 @@ AC_CHECK_HEADERS([pwd.h])
 # Check for chroot support
 AC_CHECK_FUNCS([chroot])
 
+AC_CHECK_FUNCS([sleep])
+
 AC_FUNC_ALLOCA
 
 driverlist=
