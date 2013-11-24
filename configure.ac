@@ -851,7 +851,7 @@ if test x$need_lowl_usb = xyes; then
 	need_lowlevel=yes
 fi
 
-if test x$need_fpgautils = xyes; then
+if test x$need_lowl_vcom = xyes; then
 	need_lowlevel=yes
 fi
 
