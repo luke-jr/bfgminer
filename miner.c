@@ -545,8 +545,10 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 {
 	// all - matches anything
 	// d0 - matches all processors of device 0
+	// d0-3 - matches all processors of device 0, 1, 2, or 3
 	// d0a - matches first processor of device 0
 	// 0 - matches processor 0
+	// 0-4 - matches processors 0, 1, 2, 3, or 4
 	// ___ - matches all processors on all devices using driver/name ___
 	// ___0 - matches all processors of 0th device using driver/name ___
 	// ___0a - matches first processor of 0th device using driver/name ___
@@ -559,9 +561,10 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	const char *p = pattern, *p2;
 	size_t L;
 	int n, i, c = -1;
+	int n2;
 	struct cgpu_info *device;
 	
-	while (p[0] && p[0] != '@' && !isdigit(p[0]))
+	while (p[0] && p[0] != '@' && p[0] != '-' && !isdigit(p[0]))
 		++p;
 	
 	L = p - pattern;
@@ -594,16 +597,39 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		}
 	}
 	else
-		n = strtol(p, (void*)&p2, 0);
-	if (p == pattern)
 	{
-		if (!p[0])
-			return true;
-		if (p2 && p2[0])
-			goto invsyntax;
-		if (n >= total_devices)
+		if (isdigit(p[0]))
+			n = strtol(p, (void*)&p2, 0);
+		else
+		{
+			n = 0;
+			p2 = p;
+		}
+		if (p2[0] == '-')
+		{
+			++p2;
+			if (p2[0] && isdigit(p2[0]))
+				n2 = strtol(p2, (void*)&p2, 0);
+			else
+				n2 = INT_MAX;
+		}
+		else
+			n2 = n;
+		if (p == pattern)
+		{
+			if (!p[0])
+				return true;
+			if (p2 && p2[0])
+				goto invsyntax;
+			for (i = n; i <= n2; ++i)
+			{
+				if (i >= total_devices)
+					break;
+				if (cgpu == devices[i])
+					return true;
+			}
 			return false;
-		return (cgpu == devices[n]);
+		}
 	}
 	
 	if (L > 1 || tolower(pattern[0]) != 'd' || !p[0])
@@ -615,7 +641,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 			{}  // Matched name or dname
 		else
 			return false;
-		if (p[0] && n != cgpu->device_id)
+		if (p[0] && (cgpu->device_id < n || cgpu->device_id > n2))
 			return false;
 		if (p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
 			return false;
@@ -631,15 +657,19 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 			return false;
 		if (devices[i]->device != devices[i])
 			continue;
-		if (++c == n)
-			break;
-	}
-	for (device = devices[i]; device; device = device->next_proc)
-	{
-		if (p2 && p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+		++c;
+		if (c < n)
 			continue;
-		if (device == cgpu)
-			return true;
+		if (c > n2)
+			break;
+		
+		for (device = devices[i]; device; device = device->next_proc)
+		{
+			if (p2 && p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+				continue;
+			if (device == cgpu)
+				return true;
+		}
 	}
 	return false;
 
@@ -685,19 +715,36 @@ void test_cgpu_match()
 	TEST_CGPU_MATCH("all")
 	TEST_CGPU_MATCH("d1")
 	TEST_CGPU_NOMATCH("d2")
+	TEST_CGPU_MATCH("d0-5")
+	TEST_CGPU_NOMATCH("d0-0")
+	TEST_CGPU_NOMATCH("d2-5")
+	TEST_CGPU_MATCH("d-1")
+	TEST_CGPU_MATCH("d1-")
+	TEST_CGPU_NOMATCH("d-0")
+	TEST_CGPU_NOMATCH("d2-")
 	TEST_CGPU_MATCH("2")
 	TEST_CGPU_NOMATCH("3")
+	TEST_CGPU_MATCH("1-2")
+	TEST_CGPU_MATCH("2-3")
+	TEST_CGPU_NOMATCH("1-1")
+	TEST_CGPU_NOMATCH("3-4")
 	TEST_CGPU_MATCH("TST")
 	TEST_CGPU_NOMATCH("TSF")
 	TEST_CGPU_NOMATCH("TS")
 	TEST_CGPU_NOMATCH("TSTF")
 	TEST_CGPU_MATCH("TST1")
+	TEST_CGPU_MATCH("TST0-1")
 	TEST_CGPU_MATCH("TST 1")
+	TEST_CGPU_MATCH("TST 1-2")
 	TEST_CGPU_NOMATCH("TST2")
+	TEST_CGPU_NOMATCH("TST2-3")
+	TEST_CGPU_NOMATCH("TST0-0")
 	TEST_CGPU_MATCH("TST1b")
 	TEST_CGPU_NOMATCH("TST1c")
 	TEST_CGPU_NOMATCH("TST1ab")
 	TEST_CGPU_NOMATCH("TST1bb")
+	TEST_CGPU_MATCH("TST0-1b")
+	TEST_CGPU_NOMATCH("TST0-1c")
 	TEST_CGPU_MATCH("@")
 	TEST_CGPU_NOMATCH("@abc")
 	TEST_CGPU_MATCH("@@b")
