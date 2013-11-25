@@ -1397,24 +1397,21 @@ AC_CONFIG_FILES([
 AC_OUTPUT
 
 
-echo
-echo
+wordfilter ()
+{
+  echo "$1" | sed 's/ \+/ /g;s/^ *//;s/ *$//'
+}
+
 echo
 echo "------------------------------------------------------------------------"
-echo "$PACKAGE $VERSION"
+echo "$PACKAGE $VERSION configuration options summary"
 echo "------------------------------------------------------------------------"
 echo
-echo
-echo "Configuration Options Summary:"
+echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
+echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
+echo "  Installation.prefix..: $prefix"
 echo
 echo "${driverlist_print}" | tr '~' '\n'
 echo "${algolist_print}" | tr '~' '\n'
 echo "${optlist_print}" | tr '~' '\n'
-echo
-echo "Compilation............: make (or gmake)"
-echo "  CFLAGS...............: $CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
-echo "  LDFLAGS..............: $LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"
-echo
-echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"
-echo "  prefix...............: $prefix"
 echo
