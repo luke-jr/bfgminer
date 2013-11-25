@@ -202,16 +202,29 @@ bool bifury_set_queue_full(const struct cgpu_info * const dev, int needwork)
 void bifury_send_clock(const struct cgpu_info * const dev)
 {
 	struct bifury_state * const state = dev->device_data;
+	const struct cgpu_info *proc;
 	size_t clockbufsz = 5 + (3 * dev->procs) + 1 + 1;
 	char clockbuf[clockbufsz];
 	strcpy(clockbuf, "clock");
-	for (int i = 0; i < dev->procs; ++i)
-		tailsprintf(clockbuf, clockbufsz, " %d", state->osc6_bits[i]);
+	proc = dev;
+	for (int i = 0; i < dev->procs; ++i, (proc = proc->next_proc))
+	{
+		const struct thr_info * const thr = proc->thr[0];
+		int clk;
+		if (proc->deven == DEV_ENABLED && !thr->pause)
+			clk = state->osc6_bits[i];
+		else
+			clk = 0;
+		tailsprintf(clockbuf, clockbufsz, " %d", clk);
+	}
 	tailsprintf(clockbuf, clockbufsz, "\n");
 	--clockbufsz;
 	if (clockbufsz != bifury_write(dev, clockbuf, clockbufsz))
+	{
+		state->send_clock = true;
 		applog(LOG_ERR, "%s: Failed to send clock assignments",
 		       dev->dev_repr);
+	}
 	else
 		state->send_clock = false;
 }
@@ -243,6 +256,14 @@ static
 void bifury_reinit(struct cgpu_info * const proc)
 {
 	timer_set_now(&proc->thr[0]->tv_poll);
+}
+
+void bifury_trigger_send_clock(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bifury_state * const state = proc->device_data;
+	
+	state->send_clock = true;
 }
 
 static
@@ -528,6 +549,8 @@ struct device_drv bifury_drv = {
 	
 	.thread_init = bifury_thread_init,
 	.reinit_device = bifury_reinit,
+	.thread_disable = bifury_trigger_send_clock,
+	.thread_enable = bifury_trigger_send_clock,
 	
 	.minerloop = minerloop_queue,
 	.queue_append = bifury_queue_append,
