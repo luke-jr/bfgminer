@@ -157,7 +157,7 @@ bool bifury_detect_one(const char * const devpath)
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
-//		.cutofftemp = TODO,
+		.cutofftemp = 75,
 	};
 	// NOTE: Xcode's clang has a bug where it cannot find fields inside anonymous unions (more details in fpgautils)
 	cgpu->device_fd = -1;
