@@ -199,6 +199,23 @@ bool bifury_set_queue_full(const struct cgpu_info * const dev, int needwork)
 	return full;
 }
 
+void bifury_send_clock(const struct cgpu_info * const dev)
+{
+	struct bifury_state * const state = dev->device_data;
+	size_t clockbufsz = 5 + (3 * dev->procs) + 1 + 1;
+	char clockbuf[clockbufsz];
+	strcpy(clockbuf, "clock");
+	for (int i = 0; i < dev->procs; ++i)
+		tailsprintf(clockbuf, clockbufsz, " %d", state->osc6_bits[i]);
+	tailsprintf(clockbuf, clockbufsz, "\n");
+	--clockbufsz;
+	if (clockbufsz != bifury_write(dev, clockbuf, clockbufsz))
+		applog(LOG_ERR, "%s: Failed to send clock assignments",
+		       dev->dev_repr);
+	else
+		state->send_clock = false;
+}
+
 static
 bool bifury_thread_init(struct thr_info *master_thr)
 {
@@ -411,20 +428,7 @@ void bifury_poll(struct thr_info * const master_thr)
 	}
 	
 	if (state->send_clock)
-	{
-		size_t clockbufsz = 5 + (3 * dev->procs) + 1 + 1;
-		char clockbuf[clockbufsz];
-		strcpy(clockbuf, "clock");
-		for (int i = 0; i < dev->procs; ++i)
-			tailsprintf(clockbuf, clockbufsz, " %d", state->osc6_bits[i]);
-		tailsprintf(clockbuf, clockbufsz, "\n");
-		--clockbufsz;
-		if (clockbufsz != bifury_write(dev, clockbuf, clockbufsz))
-			applog(LOG_ERR, "%s: Failed to send clock assignments",
-			       dev->dev_repr);
-		else
-			state->send_clock = false;
-	}
+		bifury_send_clock(dev);
 	
 	while ( (cmd = bifury_readln(fd, &state->buf)) )
 	{
