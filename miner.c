@@ -666,45 +666,57 @@ void test_cgpu_match()
 	struct cgpu_info cgpu = {
 		.drv = &drv,
 		.device = &cgpu,
+		.device_id = 1,
+		.proc_repr = "TST 1b",
+	}, cgpu0a = {
+		.drv = &drv,
+		.device = &cgpu0a,
+		.device_id = 0,
 		.proc_repr = "TST 0a",
+	}, cgpu1a = {
+		.drv = &drv,
+		.device = &cgpu0a,
+		.device_id = 1,
+		.proc_repr = "TST 1a",
 	};
-	struct cgpu_info *devices_list[1] = {&cgpu,};
+	struct cgpu_info *devices_list[3] = {&cgpu0a, &cgpu1a, &cgpu,};
 	devices = devices_list;
-	total_devices = 1;
+	total_devices = 3;
 	TEST_CGPU_MATCH("all")
-	TEST_CGPU_MATCH("d0")
-	TEST_CGPU_NOMATCH("d1")
-	TEST_CGPU_MATCH("0")
-	TEST_CGPU_NOMATCH("1")
+	TEST_CGPU_MATCH("d1")
+	TEST_CGPU_NOMATCH("d2")
+	TEST_CGPU_MATCH("2")
+	TEST_CGPU_NOMATCH("3")
 	TEST_CGPU_MATCH("TST")
 	TEST_CGPU_NOMATCH("TSF")
 	TEST_CGPU_NOMATCH("TS")
 	TEST_CGPU_NOMATCH("TSTF")
-	TEST_CGPU_MATCH("TST0")
-	TEST_CGPU_MATCH("TST 0")
-	TEST_CGPU_NOMATCH("TST1")
-	TEST_CGPU_MATCH("TST0a")
-	TEST_CGPU_NOMATCH("TST0b")
-	TEST_CGPU_NOMATCH("TST0aa")
+	TEST_CGPU_MATCH("TST1")
+	TEST_CGPU_MATCH("TST 1")
+	TEST_CGPU_NOMATCH("TST2")
+	TEST_CGPU_MATCH("TST1b")
+	TEST_CGPU_NOMATCH("TST1c")
+	TEST_CGPU_NOMATCH("TST1ab")
+	TEST_CGPU_NOMATCH("TST1bb")
 	TEST_CGPU_MATCH("@")
 	TEST_CGPU_NOMATCH("@abc")
-	TEST_CGPU_MATCH("@@a")
-	TEST_CGPU_NOMATCH("@@b")
+	TEST_CGPU_MATCH("@@b")
+	TEST_CGPU_NOMATCH("@@c")
 	TEST_CGPU_MATCH("TST@")
 	TEST_CGPU_NOMATCH("TST@abc")
-	TEST_CGPU_MATCH("TST@@a")
-	TEST_CGPU_NOMATCH("TST@@b")
+	TEST_CGPU_MATCH("TST@@b")
+	TEST_CGPU_NOMATCH("TST@@c")
 	cgpu.device_path = "/dev/test";
 	cgpu.dev_serial = "testy";
 	TEST_CGPU_MATCH("TST@/dev/test")
 	TEST_CGPU_MATCH("TST@testy")
 	TEST_CGPU_NOMATCH("TST@")
-	TEST_CGPU_NOMATCH("TST@/dev/test5@a")
-	TEST_CGPU_NOMATCH("TST@testy3@a")
-	TEST_CGPU_MATCH("TST@/dev/test@a")
-	TEST_CGPU_MATCH("TST@testy@a")
-	TEST_CGPU_NOMATCH("TST@/dev/test@b")
-	TEST_CGPU_NOMATCH("TST@testy@b")
+	TEST_CGPU_NOMATCH("TST@/dev/test5@b")
+	TEST_CGPU_NOMATCH("TST@testy3@b")
+	TEST_CGPU_MATCH("TST@/dev/test@b")
+	TEST_CGPU_MATCH("TST@testy@b")
+	TEST_CGPU_NOMATCH("TST@/dev/test@c")
+	TEST_CGPU_NOMATCH("TST@testy@c")
 }
 
 static
