@@ -9,7 +9,7 @@
  */
 
 /*
- * Big Picture Mining USB miner with Bitfury ASIC
+ * Twin Bitfury USB miner with two Bitfury ASIC
  */
 
 #include "config.h"
