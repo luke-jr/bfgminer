@@ -1339,43 +1339,6 @@ AC_DEFINE_UNQUOTED([DIABLO_KERNNAME], ["diablo130302"], [Filename for diablo ker
 AC_DEFINE_UNQUOTED([SCRYPT_KERNNAME], ["scrypt130511"], [Filename for scrypt kernel])
 
 
-AC_SUBST(AUTOSCAN_CPPFLAGS)
-AC_SUBST(AUTOSCAN_LIBS)
-AC_SUBST(PTHREAD_FLAGS)
-AC_SUBST(DLOPEN_FLAGS)
-AC_SUBST(PTHREAD_LIBS)
-AC_SUBST(NCURSES_CPPFLAGS)
-AC_SUBST(NCURSES_LIBS)
-AC_SUBST(PDCURSES_LIBS)
-AC_SUBST(WS2_LIBS)
-AC_SUBST(MM_LIBS)
-AC_SUBST(MATH_LIBS)
-AC_SUBST(RT_LIBS)
-AC_SUBST(UDEV_LIBS)
-AC_SUBST(SSE2_CFLAGS)
-AC_SUBST(YASM_FMT)
-
-AC_CONFIG_FILES([
-	Makefile
-	x86_64/Makefile
-	x86_32/Makefile
-	ccan/Makefile
-	lib/Makefile
-	])
-
-
-echo
-echo
-echo
-echo "------------------------------------------------------------------------"
-echo "$PACKAGE $VERSION"
-echo "------------------------------------------------------------------------"
-echo
-echo
-echo "Configuration Options Summary:"
-echo
-
-
 m4_define([BFG_PRINT_LIST],[
 	eval _mylist="\$$2"
 	_yeslist=
@@ -1400,17 +1363,53 @@ EOF
 	_yeslist=`echo "$_yeslist" | tr ' ' '\n' | sort | tr '\n' ' '`
 	_nolist=`echo "$_nolist" | tr ' ' '\n' | sort | tr '\n' ' '`
 	AC_DEFINE_UNQUOTED(AS_TR_CPP([BFG_$2]),["$_yeslist"],[List of drivers being built])
-	echo "  Enabled..$1..:$_yeslist"
-	echo "  Disabled.$1..:$_nolist"
-	if test -n "$_enableactions"; then
-		echo "${_enableactions:1}" | tr '~' '\n'
-	fi
+	$2_print="  Enabled..$1..:${_yeslist}~  Disabled.$1..:${_nolist}${_enableactions}"
 ])
 BFG_PRINT_LIST([Drivers...],[driverlist])
 BFG_PRINT_LIST([Algorithms],[algolist])
 BFG_PRINT_LIST([Options...],[optlist])
 
 
+AC_SUBST(AUTOSCAN_CPPFLAGS)
+AC_SUBST(AUTOSCAN_LIBS)
+AC_SUBST(PTHREAD_FLAGS)
+AC_SUBST(DLOPEN_FLAGS)
+AC_SUBST(PTHREAD_LIBS)
+AC_SUBST(NCURSES_CPPFLAGS)
+AC_SUBST(NCURSES_LIBS)
+AC_SUBST(PDCURSES_LIBS)
+AC_SUBST(WS2_LIBS)
+AC_SUBST(MM_LIBS)
+AC_SUBST(MATH_LIBS)
+AC_SUBST(RT_LIBS)
+AC_SUBST(UDEV_LIBS)
+AC_SUBST(SSE2_CFLAGS)
+AC_SUBST(YASM_FMT)
+
+AC_CONFIG_FILES([
+	Makefile
+	x86_64/Makefile
+	x86_32/Makefile
+	ccan/Makefile
+	lib/Makefile
+	])
+
+AC_OUTPUT
+
+
+echo
+echo
+echo
+echo "------------------------------------------------------------------------"
+echo "$PACKAGE $VERSION"
+echo "------------------------------------------------------------------------"
+echo
+echo
+echo "Configuration Options Summary:"
+echo
+echo "${driverlist_print}" | tr '~' '\n'
+echo "${algolist_print}" | tr '~' '\n'
+echo "${optlist_print}" | tr '~' '\n'
 echo
 echo "Compilation............: make (or gmake)"
 echo "  CFLAGS...............: $CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"
@@ -1419,5 +1418,3 @@ echo
 echo "Installation...........: make install$maybe_ldconfig #(as root if needed, with 'su' or 'sudo')"
 echo "  prefix...............: $prefix"
 echo
-
-AC_OUTPUT
