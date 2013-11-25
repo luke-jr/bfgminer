@@ -541,6 +541,25 @@ bool devpaths_match(const char * const ap, const char * const bp)
 }
 
 static
+int proc_letter_to_number(const char *s, const char ** const rem)
+{
+	int n = 0, c;
+	for ( ; s[0]; ++s)
+	{
+		if (unlikely(n > INT_MAX / 26))
+			break;
+		c = tolower(s[0]) - 'a';
+		if (unlikely(c < 0 || c > 25))
+			break;
+		if (unlikely(INT_MAX - c < n))
+			break;
+		n = (n * 26) + c;
+	}
+	*rem = s;
+	return n;
+}
+
+static
 bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 {
 	// all - matches anything
@@ -562,6 +581,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	size_t L;
 	int n, i, c = -1;
 	int n2;
+	int proc_first = -1, proc_last;
 	struct cgpu_info *device;
 	
 	while (p[0] && p[0] != '@' && p[0] != '-' && !isdigit(p[0]))
@@ -632,6 +652,23 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		}
 	}
 	
+	if (p2[0])
+	{
+		proc_first = proc_letter_to_number(&p2[0], &p2);
+		if (p2[0] == '-')
+		{
+			++p2;
+			if (p2[0])
+				proc_last = proc_letter_to_number(p2, &p2);
+			else
+				proc_last = INT_MAX;
+		}
+		else
+			proc_last = proc_first;
+		if (p2[0])
+			goto invsyntax;
+	}
+	
 	if (L > 1 || tolower(pattern[0]) != 'd' || !p[0])
 	{
 		const struct device_drv * const drv = cgpu->drv;
@@ -643,7 +680,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 			return false;
 		if (p[0] && (cgpu->device_id < n || cgpu->device_id > n2))
 			return false;
-		if (p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+		if (proc_first != -1 && (cgpu->proc_id < proc_first || cgpu->proc_id > proc_last))
 			return false;
 		return true;
 	}
@@ -665,7 +702,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		
 		for (device = devices[i]; device; device = device->next_proc)
 		{
-			if (p2 && p2[0] && strcasecmp(p2, &cgpu->proc_repr[5]))
+			if (proc_first != -1 && (device->proc_id < proc_first || device->proc_id > proc_last))
 				continue;
 			if (device == cgpu)
 				return true;
@@ -697,16 +734,19 @@ void test_cgpu_match()
 		.drv = &drv,
 		.device = &cgpu,
 		.device_id = 1,
+		.proc_id = 1,
 		.proc_repr = "TST 1b",
 	}, cgpu0a = {
 		.drv = &drv,
 		.device = &cgpu0a,
 		.device_id = 0,
+		.proc_id = 0,
 		.proc_repr = "TST 0a",
 	}, cgpu1a = {
 		.drv = &drv,
 		.device = &cgpu0a,
 		.device_id = 1,
+		.proc_id = 0,
 		.proc_repr = "TST 1a",
 	};
 	struct cgpu_info *devices_list[3] = {&cgpu0a, &cgpu1a, &cgpu,};
@@ -741,10 +781,14 @@ void test_cgpu_match()
 	TEST_CGPU_NOMATCH("TST0-0")
 	TEST_CGPU_MATCH("TST1b")
 	TEST_CGPU_NOMATCH("TST1c")
-	TEST_CGPU_NOMATCH("TST1ab")
 	TEST_CGPU_NOMATCH("TST1bb")
 	TEST_CGPU_MATCH("TST0-1b")
 	TEST_CGPU_NOMATCH("TST0-1c")
+	TEST_CGPU_MATCH("TST1a-d")
+	TEST_CGPU_NOMATCH("TST1a-a")
+	TEST_CGPU_NOMATCH("TST1-a")
+	TEST_CGPU_NOMATCH("TST1c-z")
+	TEST_CGPU_NOMATCH("TST1c-")
 	TEST_CGPU_MATCH("@")
 	TEST_CGPU_NOMATCH("@abc")
 	TEST_CGPU_MATCH("@@b")
@@ -753,6 +797,9 @@ void test_cgpu_match()
 	TEST_CGPU_NOMATCH("TST@abc")
 	TEST_CGPU_MATCH("TST@@b")
 	TEST_CGPU_NOMATCH("TST@@c")
+	TEST_CGPU_MATCH("TST@@b-f")
+	TEST_CGPU_NOMATCH("TST@@c-f")
+	TEST_CGPU_NOMATCH("TST@@-a")
 	cgpu.device_path = "/dev/test";
 	cgpu.dev_serial = "testy";
 	TEST_CGPU_MATCH("TST@/dev/test")
