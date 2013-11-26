@@ -651,27 +651,27 @@ if test "x$bigpic" = "xyes"; then
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
-driverlist="$driverlist bf2"
-bf2=auto
-AC_ARG_ENABLE([bf2],
-    [AC_HELP_STRING([--disable-bf2],[Compile support for BF2 USB miner (default enabled)])],
-    [bf2=$enableval]
+driverlist="$driverlist twinfury"
+twinfury=auto
+AC_ARG_ENABLE([twinfury],
+    [AC_HELP_STRING([--disable-twinfury],[Compile support for Twinfury USB miner (default enabled)])],
+    [twinfury=$enableval]
     )
-if test "x$bf2" = "xno"; then
+if test "x$twinfury" = "xno"; then
     true
 elif test "x$bitfury" = "xyes"; then
-    bf2=yes
-elif test "x$bf2" = "xyes"; then
-    AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BF2])
+    twinfury=yes
+elif test "x$twinfury" = "xyes"; then
+    AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Twinfury])
 else
     bf2=no
 fi
-if test "x$bf2" = "xyes"; then
-    AC_DEFINE([USE_BF2], [1], [Defined to 1 if BF2 USB miner support is wanted])
+if test "x$twinfury" = "xyes"; then
+    AC_DEFINE([USE_TWINFURY], [1], [Defined to 1 if Twinfury USB miner support is wanted])
     need_lowl_vcom=yes
     has_asic=yes
 fi
-AM_CONDITIONAL([HAS_BF2], [test x$bf2 = xyes])
+AM_CONDITIONAL([HAS_TWINFURY], [test x$twinfury = xyes])
 
 driverlist="$driverlist littlefury"
 littlefury=auto

@@ -23,16 +23,16 @@
 #include "deviceapi.h"
 #include "sha2.h"
 
-#include "driver-bf2.h"
+#include "driver-twinfury.h"
 
 #include <stdio.h>
 #include <pthread.h>
 #include <termios.h>
 
-BFG_REGISTER_DRIVER(bf2_drv)
+BFG_REGISTER_DRIVER(twinfury_drv)
 
 //------------------------------------------------------------------------------
-static bool bf2_detect_custom(const char *devpath, struct device_drv *api, struct bf2_info *info)
+static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, struct twinfury_info *info)
 {
 	int fd = serial_open(devpath, info->baud, 1, true);
 
@@ -48,7 +48,7 @@ static bool bf2_detect_custom(const char *devpath, struct device_drv *api, struc
 	if (1 != write(fd, "I", 1))
 	{
 		applog(LOG_ERR, "%s: Failed writing id request to %s",
-		       bf2_drv.dname, devpath);
+		       twinfury_drv.dname, devpath);
 		return false;
 	}
 	len = serial_read(fd, buf, sizeof(buf));
@@ -60,30 +60,19 @@ static bool bf2_detect_custom(const char *devpath, struct device_drv *api, struc
 
 	info->id.version = buf[1];
 	memcpy(info->id.product, buf+2, 8);
-	memcpy(&info->id.serial, buf+10, 4);
-	applog(LOG_DEBUG, "%s: %s: %d, %s %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-	       bf2_drv.dname,
+  bin2hex(info->id.serial, buf+10, 11);
+	applog(LOG_DEBUG, "%s: %s: %d, %s %s",
+	       twinfury_drv.dname,
 	       devpath,
 	       info->id.version, info->id.product,
-	       info->id.serial[0],
-	       info->id.serial[1],
-	       info->id.serial[2],
-	       info->id.serial[3],
-	       info->id.serial[4],
-	       info->id.serial[5],
-	       info->id.serial[6],
-	       info->id.serial[7],
-	       info->id.serial[8],
-	       info->id.serial[9],
-	       info->id.serial[10]
-	                       );
+	       info->id.serial);
 
-	char buf_state[sizeof(struct bf2_state)+1];
+	char buf_state[sizeof(struct twinfury_state)+1];
 	len = 0;
 	if (1 != write(fd, "R", 1))
 	{
 		applog(LOG_ERR, "%s: Failed writing reset request to %s",
-		       bf2_drv.dname, devpath);
+		       twinfury_drv.dname, devpath);
 		return false;
 	}
 
@@ -98,7 +87,7 @@ static bool bf2_detect_custom(const char *devpath, struct device_drv *api, struc
 	if(len != 8)
 	{
 		applog(LOG_ERR, "%s: %s not responding to reset: %d",
-		       bf2_drv.dname,
+		       twinfury_drv.dname,
 		       devpath, len);
 		return false;
 	}
@@ -126,15 +115,15 @@ static bool bf2_detect_custom(const char *devpath, struct device_drv *api, struc
 }
 
 //------------------------------------------------------------------------------
-static bool bf2_detect_one(const char *devpath)
+static bool twinfury_detect_one(const char *devpath)
 {
-	struct bf2_info *info = calloc(1, sizeof(struct bf2_info));
+	struct twinfury_info *info = calloc(1, sizeof(struct twinfury_info));
 	if (unlikely(!info))
 		quit(1, "Failed to malloc bigpicInfo");
 
 	info->baud = BPM_BAUD;
 
-	if (!bf2_detect_custom(devpath, &bf2_drv, info))
+	if (!twinfury_detect_custom(devpath, &twinfury_drv, info))
 	{
 		free(info);
 		return false;
@@ -143,22 +132,22 @@ static bool bf2_detect_one(const char *devpath)
 }
 
 //------------------------------------------------------------------------------
-static int bf2_detect_auto(void)
+static int twinfury_detect_auto(void)
 {
-	return serial_autodetect(bf2_detect_one, "Bitfury", "BF2");
+	return serial_autodetect(twinfury_detect_one, "Twinfury");
 }
 
 //------------------------------------------------------------------------------
-static void bf2_detect()
+static void twinfury_detect()
 {
-	serial_detect_auto(&bf2_drv, bf2_detect_one, bf2_detect_auto);
+	serial_detect_auto(&twinfury_drv, twinfury_detect_one, twinfury_detect_auto);
 }
 
 //------------------------------------------------------------------------------
-static bool bf2_init(struct thr_info *thr)
+static bool twinfury_init(struct thr_info *thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
-	struct bf2_info *info = (struct bf2_info *)cgpu->device_data;
+	struct twinfury_info *info = (struct twinfury_info *)cgpu->device_data;
 	struct cgpu_info *proc;
 	int i=0;
 
@@ -166,7 +155,7 @@ static bool bf2_init(struct thr_info *thr)
 
 	for(i=1, proc = cgpu->next_proc; proc; proc = proc->next_proc, i++)
 	{
-		struct bf2_info *data = calloc(1, sizeof(struct bf2_info));
+		struct twinfury_info *data = calloc(1, sizeof(struct twinfury_info));
 		proc->device_data = data;
 		data->tx_buffer[0] = 'W';
 		data->tx_buffer[1] = i;
@@ -195,9 +184,9 @@ static bool bf2_init(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static bool bf2_process_results(struct cgpu_info * const proc)
+static bool twinfury_process_results(struct cgpu_info * const proc)
 {
-	struct bf2_info *device = proc->device_data;
+	struct twinfury_info *device = proc->device_data;
 	uint8_t *rx_buffer = device->rx_buffer;
 	uint32_t rx_len = device->rx_len;
 
@@ -220,7 +209,7 @@ static bool bf2_process_results(struct cgpu_info * const proc)
 	int j=0;
 	for(j=0; j<rx_len; j+= 8)
 	{
-		struct bf2_state state;
+		struct twinfury_state state;
 		state.chip = rx_buffer[j + 1];
 		state.state = rx_buffer[j + 2];
 		state.switched = rx_buffer[j + 3];
@@ -242,7 +231,7 @@ static bool bf2_process_results(struct cgpu_info * const proc)
 }
 
 //------------------------------------------------------------------------------
-static bool bf2_send_command(int fd, uint8_t *tx, uint16_t tx_size)
+static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
 {
 	if(tx_size != write(fd, tx, tx_size))
 	{
@@ -254,7 +243,7 @@ static bool bf2_send_command(int fd, uint8_t *tx, uint16_t tx_size)
 }
 
 //------------------------------------------------------------------------------
-static uint16_t bf2_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
+static uint16_t twinfury_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
 {
 	uint16_t rx_len;
 	int timeout = 20;
@@ -277,7 +266,7 @@ static uint16_t bf2_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
 }
 
 //------------------------------------------------------------------------------
-int64_t bf2_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
+int64_t twinfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
 {
 	// Bitfury chips process only 768/1024 of the nonce range
 	return 0xbd000000;
@@ -285,10 +274,10 @@ int64_t bf2_job_process_results(struct thr_info *thr, struct work *work, bool st
 
 //------------------------------------------------------------------------------
 static
-bool bf2_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
+bool twinfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
 	struct cgpu_info *board = thr->cgpu;
-	struct bf2_info *info = (struct bf2_info *)board->device_data;
+	struct twinfury_info *info = (struct twinfury_info *)board->device_data;
 
 	memcpy(&info->tx_buffer[ 2], work->midstate, 32);
 	memcpy(&info->tx_buffer[34], &work->data[64], 12);
@@ -299,7 +288,7 @@ bool bf2_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uin
 
 //------------------------------------------------------------------------------
 static
-void bf2_poll(struct thr_info *thr)
+void twinfury_poll(struct thr_info *thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
 	struct cgpu_info *proc;
@@ -315,7 +304,7 @@ void bf2_poll(struct thr_info *thr)
 
 	for(proc = thr->cgpu; proc; proc = proc->next_proc, n_chips++)
 	{
-		struct bf2_info *info = (struct bf2_info *)proc->device_data;
+		struct twinfury_info *info = (struct twinfury_info *)proc->device_data;
 		buffer[1] = n_chips;
 
 		if(2 != write(dev->device_fd, buffer, 2))
@@ -340,7 +329,7 @@ void bf2_poll(struct thr_info *thr)
 			applog(LOG_ERR, "%"PRIpreprv": Query timeout", proc->proc_repr);
 		}
 
-		if(bf2_process_results(proc) == true)
+		if(twinfury_process_results(proc) == true)
 		{
 			struct thr_info *proc_thr = proc->thr[0];
 			mt_job_transition(proc_thr);
@@ -351,9 +340,9 @@ void bf2_poll(struct thr_info *thr)
 	}
 
 	buffer[0] = 'T';
-	if(bf2_send_command(dev->device_fd, buffer, 1))
+	if(twinfury_send_command(dev->device_fd, buffer, 1))
 	{
-		if(8 == bf2_wait_response(dev->device_fd, response, 8))
+		if(8 == twinfury_wait_response(dev->device_fd, response, 8))
 		{
 			if(response[0] == buffer[0])
 			{
@@ -379,10 +368,10 @@ void bf2_poll(struct thr_info *thr)
 
 //------------------------------------------------------------------------------
 static
-void bf2_job_start(struct thr_info *thr)
+void twinfury_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *board = thr->cgpu;
-	struct bf2_info *info = (struct bf2_info *)board->device_data;
+	struct twinfury_info *info = (struct twinfury_info *)board->device_data;
 	int timeout = 50;
 	int device_fd = thr->cgpu->device->device_fd;
 
@@ -422,7 +411,7 @@ void bf2_job_start(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static void bf2_shutdown(struct thr_info *thr)
+static void twinfury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 
@@ -432,7 +421,7 @@ static void bf2_shutdown(struct thr_info *thr)
 }
 
 //------------------------------------------------------------------------------
-static bool bf2_identify(struct cgpu_info *cgpu)
+static bool twinfury_identify(struct cgpu_info *cgpu)
 {
 	char buf[] = "L";
 
@@ -445,23 +434,23 @@ static bool bf2_identify(struct cgpu_info *cgpu)
 }
 
 //------------------------------------------------------------------------------
-struct device_drv bf2_drv = {
-	.dname = "Twin Bitfury",
+struct device_drv twinfury_drv = {
+	.dname = "Twinfury",
 	.name = "TBF",
 
-	.drv_detect = bf2_detect,
+	.drv_detect = twinfury_detect,
 
-	.identify_device = bf2_identify,
+	.identify_device = twinfury_identify,
 
-	.thread_init = bf2_init,
+	.thread_init = twinfury_init,
 
 	.minerloop = minerloop_async,
 
-	.job_prepare = bf2_job_prepare,
-	.job_start = bf2_job_start,
-	.poll = bf2_poll,
-	.job_process_results = bf2_job_process_results,
+	.job_prepare = twinfury_job_prepare,
+	.job_start = twinfury_job_start,
+	.poll = twinfury_poll,
+	.job_process_results = twinfury_job_process_results,
 
-	.thread_shutdown = bf2_shutdown,
+	.thread_shutdown = twinfury_shutdown,
 
 };
