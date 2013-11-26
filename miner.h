@@ -488,7 +488,7 @@ struct cgpu_info {
 	uint32_t nonces;
 	bool polling;
 #endif
-#if defined(USE_BITFORCE) || defined(USE_ICARUS)
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_TWINFURY)
 	bool flash_led;
 #endif
 	pthread_mutex_t		device_mutex;

@@ -651,6 +651,27 @@ if test "x$bigpic" = "xyes"; then
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
+driverlist="$driverlist twinfury"
+twinfury=auto
+AC_ARG_ENABLE([twinfury],
+    [AC_HELP_STRING([--disable-twinfury],[Compile support for Twinfury USB miner (default enabled)])],
+    [twinfury=$enableval]
+    )
+if test "x$twinfury" = "xno"; then
+    true
+elif test "x$bitfury" = "xyes"; then
+    twinfury=yes
+elif test "x$twinfury" = "xyes"; then
+    AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Twinfury])
+else
+    twinfury=no
+fi
+if test "x$twinfury" = "xyes"; then
+    AC_DEFINE([USE_TWINFURY], [1], [Defined to 1 if Twinfury USB miner support is wanted])
+    need_lowl_vcom=yes
+    has_asic=yes
+fi
+AM_CONDITIONAL([HAS_TWINFURY], [test x$twinfury = xyes])
 
 driverlist="$driverlist littlefury"
 littlefury=auto

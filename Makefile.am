@@ -214,6 +214,10 @@ if HAS_BIGPIC
 bfgminer_SOURCES += driver-bigpic.c driver-bigpic.h
 endif
 
+if HAS_TWINFURY
+bfgminer_SOURCES += driver-twinfury.c driver-twinfury.h
+endif
+
 if HAS_ICARUS
 bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c
