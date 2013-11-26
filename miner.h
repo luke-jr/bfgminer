@@ -1404,6 +1404,7 @@ extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work
 extern void stratum_work_clean(struct stratum_work *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
+#define UNKNOWN_NONCE ((uint32_t*)inc_hw_errors2)
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {

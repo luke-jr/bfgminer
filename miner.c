@@ -8658,8 +8658,14 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	struct cgpu_info * const cgpu = thr->cgpu;
 	
 	if (bad_nonce_p)
-		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
-		       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
+	{
+		if (bad_nonce_p == UNKNOWN_NONCE)
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
+			       cgpu->proc_repr);
+		else
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
+			       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
+	}
 	
 	mutex_lock(&stats_lock);
 	hw_errors++;
