@@ -25,6 +25,8 @@
 
 #include "driver-twinfury.h"
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <pthread.h>
 
@@ -33,7 +35,8 @@ BFG_REGISTER_DRIVER(twinfury_drv)
 static const uint8_t PREAMBLE[] = { 0xDE, 0xAD, 0xBE, 0xEF };
 
 //------------------------------------------------------------------------------
-static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
+static
+bool twinfury_send_command(const int fd, const void * const tx, const uint16_t tx_size)
 {
 	if(4 != write(fd, PREAMBLE, 4))
 	{
@@ -49,7 +52,8 @@ static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
 }
 
 //------------------------------------------------------------------------------
-static int16_t twinfury_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
+static
+int16_t twinfury_wait_response(const int fd, const void * const rx, const uint16_t rx_size)
 {
 	int16_t rx_len;
 	int timeout = 20;
@@ -305,11 +309,9 @@ void twinfury_poll(struct thr_info *thr)
 	struct cgpu_info *proc;
 
 	uint8_t n_chips = 0;
-	uint8_t timeout = 10;
 	uint8_t buffer[2] = { 'Q', 0 };
 
 	uint8_t response[8];
-	uint8_t i=0;
 
 	if(dev->flash_led)
 	{
@@ -383,7 +385,6 @@ void twinfury_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *board = thr->cgpu;
 	struct twinfury_info *info = (struct twinfury_info *)board->device_data;
-	int timeout = 50;
 	int device_fd = thr->cgpu->device->device_fd;
 
 	uint8_t buffer[8];
