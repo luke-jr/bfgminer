@@ -31,6 +31,48 @@
 
 BFG_REGISTER_DRIVER(twinfury_drv)
 
+static const uint8_t PREAMBLE[] = { 0xDE, 0xAD, 0xBE, 0xEF };
+
+//------------------------------------------------------------------------------
+static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
+{
+	if(4 != write(fd, PREAMBLE, 4))
+	{
+		return false;
+	}
+
+	if(tx_size != write(fd, tx, tx_size))
+	{
+		return false;
+	}
+	tcflush(fd, TCIOFLUSH);
+
+	return true;
+}
+
+//------------------------------------------------------------------------------
+static int16_t twinfury_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
+{
+	int16_t rx_len;
+	int timeout = 20;
+
+	while(timeout > 0)
+	{
+		rx_len = serial_read(fd, rx, rx_size);
+		if(rx_len > 0)
+			break;
+
+		timeout--;
+	}
+
+	if(unlikely(timeout == 0))
+	{
+		return -1;
+	}
+
+	return rx_len;
+}
+
 //------------------------------------------------------------------------------
 static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, struct twinfury_info *info)
 {
@@ -42,25 +84,28 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	}
 
 	char buf[1024];
-	int len;
+	int16_t len;
 
+	applog(LOG_DEBUG, "%s: Probing for Twinfury device %s", twinfury_drv.dname, devpath);
 	serial_read(fd, buf, sizeof(buf));
-	if (1 != write(fd, "I", 1))
+	if (!twinfury_send_command(fd, "I", 1))
 	{
 		applog(LOG_ERR, "%s: Failed writing id request to %s",
 		       twinfury_drv.dname, devpath);
+		serial_close(fd);
 		return false;
 	}
-	len = serial_read(fd, buf, sizeof(buf));
-	if(len != 21)
+	len = twinfury_wait_response(fd, buf, sizeof(buf));
+	if(len != 29)
 	{
+		applog(LOG_ERR, "%s: Not a valid response from device (%d)", twinfury_drv.dname, len);
 		serial_close(fd);
 		return false;
 	}
 
 	info->id.version = buf[1];
-	memcpy(info->id.product, buf+2, 8);
-	bin2hex(info->id.serial, buf+10, 11);
+	memcpy(info->id.product, buf+2, 16);
+	bin2hex(info->id.serial, buf+18, 11);
 	applog(LOG_DEBUG, "%s: %s: %d, %s %s",
 	       twinfury_drv.dname,
 	       devpath,
@@ -68,14 +113,14 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	       info->id.serial);
 
 	char buf_state[sizeof(struct twinfury_state)+1];
-	len = 0;
-	if (1 != write(fd, "R", 1))
+	if (!twinfury_send_command(fd, "R", 1))
 	{
 		applog(LOG_ERR, "%s: Failed writing reset request to %s",
 		       twinfury_drv.dname, devpath);
+		serial_close(fd);
 		return false;
 	}
-
+	len = 0;
 	while(len == 0)
 	{
 		len = serial_read(fd, buf, sizeof(buf_state));
@@ -131,15 +176,15 @@ static bool twinfury_detect_one(const char *devpath)
 }
 
 //------------------------------------------------------------------------------
-static int twinfury_detect_auto(void)
+static bool twinfury_lowl_match(const struct lowlevel_device_info * const info)
 {
-	return serial_autodetect(twinfury_detect_one, "Twinfury");
+	return lowlevel_match_product(info, "Twinfury");
 }
 
 //------------------------------------------------------------------------------
-static void twinfury_detect()
+static bool twinfury_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	serial_detect_auto(&twinfury_drv, twinfury_detect_one, twinfury_detect_auto);
+	return vcom_lowl_probe_wrapper(info, twinfury_detect_one);
 }
 
 //------------------------------------------------------------------------------
@@ -186,11 +231,11 @@ static bool twinfury_process_results(struct cgpu_info * const proc)
 {
 	struct twinfury_info *device = proc->device_data;
 	uint8_t *rx_buffer = device->rx_buffer;
-	uint32_t rx_len = device->rx_len;
+	int16_t rx_len = device->rx_len;
 
 	struct work *work = proc->thr[0]->work;
 
-	if(rx_len == 0)
+	if(rx_len == 0 || rx_len == -1)
 	{
 		return false;
 	}
@@ -202,7 +247,6 @@ static bool twinfury_process_results(struct cgpu_info * const proc)
 
 	if(!work)
 	{
-		applog(LOG_ERR, "%"PRIpreprv": Work not available at the moment", proc->proc_repr);
 		return true;
 	}
 
@@ -232,41 +276,6 @@ static bool twinfury_process_results(struct cgpu_info * const proc)
 		}
 	}
 	return true;
-}
-
-//------------------------------------------------------------------------------
-static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
-{
-	if(tx_size != write(fd, tx, tx_size))
-	{
-		return false;
-	}
-	tcflush(fd, TCIOFLUSH);
-
-	return true;
-}
-
-//------------------------------------------------------------------------------
-static uint16_t twinfury_wait_response(int fd, uint8_t *rx, uint16_t rx_size)
-{
-	uint16_t rx_len;
-	int timeout = 20;
-
-	while(timeout > 0)
-	{
-		rx_len = serial_read(fd, rx, rx_size);
-		if(rx_len > 0)
-			break;
-
-		timeout--;
-	}
-
-	if(unlikely(timeout == 0))
-	{
-		return 0;
-	}
-
-	return rx_len;
 }
 
 //------------------------------------------------------------------------------
@@ -309,7 +318,7 @@ void twinfury_poll(struct thr_info *thr)
 		char buf[] = "L";
 
 		dev->flash_led = 0;
-		if(1 != write(dev->device_fd, buf, 1))
+		if(!twinfury_send_command(dev->device_fd, buf, 1))
 			applog(LOG_ERR, "%"PRIpreprv": Failed writing flash LED", proc->proc_repr);
 
 		if(1 != twinfury_wait_response(dev->device_fd, buf, 1))
@@ -321,24 +330,15 @@ void twinfury_poll(struct thr_info *thr)
 		struct twinfury_info *info = (struct twinfury_info *)proc->device_data;
 		buffer[1] = n_chips;
 
-		if(2 != write(dev->device_fd, buffer, 2))
+		if(!twinfury_send_command(dev->device_fd, buffer, 2))
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Failed writing work task", proc->proc_repr);
 			dev_error(dev, REASON_DEV_COMMS_ERROR);
 			return;
 		}
 
-		timeout = 20;
-		while(timeout > 0)
-		{
-			info->rx_len = serial_read(dev->device_fd, info->rx_buffer, sizeof(info->rx_buffer));
-			if(info->rx_len > 0)
-				break;
-
-			timeout--;
-		}
-
-		if(unlikely(timeout == 0))
+		info->rx_len = twinfury_wait_response(dev->device_fd, info->rx_buffer, sizeof(info->rx_buffer));
+		if(unlikely(info->rx_len == -1))
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Query timeout", proc->proc_repr);
 		}
@@ -388,6 +388,10 @@ void twinfury_job_start(struct thr_info *thr)
 	int timeout = 50;
 	int device_fd = thr->cgpu->device->device_fd;
 
+	uint8_t buffer[8];
+	int16_t len;
+
+
 	if (opt_dev_protocol && opt_debug)
 	{
 		char hex[93];
@@ -396,7 +400,7 @@ void twinfury_job_start(struct thr_info *thr)
 		       board->proc_repr, hex);
 	}
 
-	if (46 != write(device_fd, info->tx_buffer, 46))
+	if(!twinfury_send_command(device_fd, info->tx_buffer, 46))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Failed writing work task", board->proc_repr);
 		dev_error(board, REASON_DEV_COMMS_ERROR);
@@ -404,20 +408,10 @@ void twinfury_job_start(struct thr_info *thr)
 		return;
 	}
 
-	while(timeout > 0)
+	len = twinfury_wait_response(device_fd, buffer, 8);
+	if(unlikely(len == -1))
 	{
-		uint8_t buffer[8];
-		int len;
-		len = serial_read(device_fd, buffer, 8);
-		if(len > 0)
-			break;
-
-		timeout--;
-	}
-
-	if(unlikely(timeout == 0))
-	{
-		applog(LOG_ERR, "%"PRIpreprv": Timeout.", board->proc_repr);
+		applog(LOG_ERR, "%"PRIpreprv": Work send timeout.", board->proc_repr);
 	}
 }
 
@@ -441,8 +435,10 @@ static bool twinfury_identify(struct cgpu_info *cgpu)
 struct device_drv twinfury_drv = {
 	.dname = "Twinfury",
 	.name = "TBF",
+	.probe_priority = -111,
 
-	.drv_detect = twinfury_detect,
+	.lowl_match = twinfury_lowl_match,
+	.lowl_probe = twinfury_lowl_probe,
 
 	.identify_device = twinfury_identify,
 

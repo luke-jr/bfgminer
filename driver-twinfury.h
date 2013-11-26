@@ -8,7 +8,7 @@
 struct twinfury_identity
 {
 	uint8_t version;
-	char    product[8];
+	char    product[16];
 	uint8_t serial[23];
 } __attribute__((packed));
 
@@ -31,7 +31,7 @@ struct twinfury_info
 
 	char tx_buffer[46];
 	char rx_buffer[1024];
-	uint32_t rx_len;
+	int16_t rx_len;
 };
 
 #endif
