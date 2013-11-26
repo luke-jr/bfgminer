@@ -27,7 +27,6 @@
 
 #include <stdio.h>
 #include <pthread.h>
-#include <termios.h>
 
 BFG_REGISTER_DRIVER(twinfury_drv)
 
@@ -45,7 +44,6 @@ static bool twinfury_send_command(int fd, uint8_t *tx, uint16_t tx_size)
 	{
 		return false;
 	}
-	tcflush(fd, TCIOFLUSH);
 
 	return true;
 }
