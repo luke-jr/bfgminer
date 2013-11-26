@@ -585,7 +585,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	size_t L;
 	int n, i, c = -1;
 	int n2;
-	int proc_first = -1, proc_last;
+	int proc_first = -1, proc_last = -1;
 	struct cgpu_info *device;
 	
 	while (p[0] && p[0] != '@' && p[0] != '-' && !isdigit(p[0]))
@@ -603,7 +603,7 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 		p2 = (p[0] == '@') ? &p[1] : p;
 		const size_t serlen = (p - ser);
 		p = "";
-		n = 0;
+		n = n2 = 0;
 		const char * const devpath = cgpu->device_path ?: "";
 		const char * const devser = cgpu->dev_serial ?: "";
 		if ((!strncmp(devpath, ser, serlen)) && devpath[serlen] == '\0')
