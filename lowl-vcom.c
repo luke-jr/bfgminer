@@ -354,7 +354,7 @@ char *windows_usb_get_port_path(HANDLE hubh, const int portno)
 	if (!(DeviceIoControl(hubh, IOCTL_USB_GET_NODE_CONNECTION_NAME, path, bufsz, path, bufsz, &rsz, NULL) && rsz >= sizeof(*path)))
 		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return ucs2tochar_dup(path->NodeName, path->ActualLength);
+	return ucs2_to_utf8_dup(path->NodeName, path->ActualLength);
 }
 
 static
@@ -387,7 +387,7 @@ char *windows_usb_get_string(HANDLE hubh, const int portno, const uint8_t descid
 	if (descsz < 2 || desc->bDescriptorType != USB_STRING_DESCRIPTOR_TYPE || desc->bLength > descsz - sizeof(USB_DESCRIPTOR_REQUEST) || desc->bLength % 2)
 		applogfailr(NULL, LOG_ERR, "sanity check");
 	
-	return ucs2tochar_dup(desc->bString, desc->bLength);
+	return ucs2_to_utf8_dup(desc->bString, desc->bLength);
 }
 
 static void _vcom_devinfo_scan_windows__hub(struct lowlevel_device_info **, const char *);
@@ -505,7 +505,7 @@ char *windows_usb_get_root_hub_path(HANDLE hcntlrh)
 	if (!(DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, NULL, 0, hubpath, bufsz, &rsz, NULL) && rsz >= sizeof(*hubpath)))
 		applogfailinfor(NULL, LOG_ERR, "ioctl (2)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return ucs2tochar_dup(hubpath->RootHubName, hubpath->ActualLength);
+	return ucs2_to_utf8_dup(hubpath->RootHubName, hubpath->ActualLength);
 }
 
 static
@@ -927,7 +927,9 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		return -1;
 	}
 
-	// thanks to af_newbie for pointers about this
+	if (baud)
+	{
+
 	COMMCONFIG comCfg = {0};
 	comCfg.dwSize = sizeof(COMMCONFIG);
 	comCfg.wVersion = 1;
@@ -939,6 +941,8 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	comCfg.dcb.ByteSize = 8;
 
 	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
+
+	}
 
 	// Code must specify a valid timeout value (0 means don't timeout)
 	const DWORD ctoms = ((DWORD)timeout * 100);

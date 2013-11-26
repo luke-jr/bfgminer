@@ -325,6 +325,10 @@ const char unicode_micro = 'u';
 #endif
 
 #ifdef HAVE_CURSES
+#define U8_BAD_START "\xef\x80\x81"
+#define U8_BAD_END   "\xef\x80\x80"
+#define AS_BAD(x) U8_BAD_START x U8_BAD_END
+
 bool selecting_device;
 unsigned selected_device;
 #endif
@@ -3268,7 +3272,7 @@ void temperature_column(char *buf, size_t bufsz, bool maybe_unicode, const float
 		maybe_unicode = false;
 	if (temp && *temp > 0.)
 		if (maybe_unicode)
-			snprintf(buf, bufsz, "%4.1f\xb0""C", *temp);
+			snprintf(buf, bufsz, "%4.1f"U8_DEGREE"C", *temp);
 		else
 			snprintf(buf, bufsz, "%4.1fC", *temp);
 	else
@@ -3388,7 +3392,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 #ifdef HAVE_CURSES
 	if (for_curses)
 	{
-		const char *cHrStatsOpt[] = {"\2DEAD \1", "\2SICK \1", "OFF  ", "\2REST \1", " \2ERR \1", "\2WAIT \1", cHr};
+		const char *cHrStatsOpt[] = {AS_BAD("DEAD "), AS_BAD("SICK "), "OFF  ", AS_BAD("REST "), AS_BAD(" ERR "), AS_BAD("WAIT "), cHr};
 		const char *cHrStats;
 		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
 		bool all_dead = true, all_off = true, all_rdrv = true;
@@ -3483,73 +3487,77 @@ static
 void bfg_waddstr(WINDOW *win, const char *s)
 {
 	const char *p = s;
-#ifdef USE_UNICODE
-	wchar_t buf[2] = {0, 0};
-#else
-	char buf[1];
-#endif
+	int32_t w;
+	int wlen;
+	unsigned char stop_ascii = (use_unicode ? '|' : 0x80);
 	
-#define PREP_ADDCH  do {  \
-	if (p != s)  \
-		waddnstr(win, s, p - s);  \
-	s = ++p;  \
-}while(0)
 	while (true)
 	{
-next:
-		switch(p[0])
+		while (likely(p[0] >= 0x20 && p[0] < stop_ascii))
 		{
+			// Printable ASCII
+			++p;
+		}
+		if (p != s)
+			waddnstr(win, s, p - s);
+		w = utf8_decode(p, &wlen);
+		if (unlikely(p[0] == '\xb5'))  // HACK for Mu (SI prefix micro-)
+		{
+			w = unicode_micro;
+			wlen = 1;
+		}
+		s = p += wlen;
+		switch(w)
+		{
+			// NOTE: U+F000-U+F7FF are reserved for font hacks
 			case '\0':
-				goto done;
-			default:
-def:
-				++p;
-				goto next;
-			case '\1':
-				PREP_ADDCH;
+				return;
+			case 0xf000:  // "bad" off
 				wattroff(win, attr_bad);
-				goto next;
-			case '\2':
-				PREP_ADDCH;
+				break;
+			case 0xf001:  // "bad" on
 				wattron(win, attr_bad);
-				goto next;
+				break;
 #ifdef USE_UNICODE
 			case '|':
-				if (!use_unicode)
-					goto def;
-				PREP_ADDCH;
 				wadd_wch(win, WACS_VLINE);
-				goto next;
+				break;
 #endif
-			case '\xc1':
-			case '\xc4':
+			case 0x2500:  // BOX DRAWINGS LIGHT HORIZONTAL
+			case 0x2534:  // BOX DRAWINGS LIGHT UP AND HORIZONTAL
 				if (!use_unicode)
 				{
-					buf[0] = '-';
+					waddch(win, '-');
 					break;
 				}
 #ifdef USE_UNICODE
-				PREP_ADDCH;
-				wadd_wch(win, (p[-1] == '\xc4') ? WACS_HLINE : WACS_BTEE);
-				goto next;
-			case '\xb0':  // Degrees symbol
-				buf[0] = ((unsigned char *)p)[0];
+				wadd_wch(win, (w == 0x2500) ? WACS_HLINE : WACS_BTEE);
 				break;
 #endif
-			case '\xb5':  // Mu (SI prefix micro-)
-				buf[0] = unicode_micro;
-		}
-		PREP_ADDCH;
+			case 0x2022:
+				if (w > WCHAR_MAX || !iswprint(w))
+					w = '*';
+			default:
 #ifdef USE_UNICODE
-		waddwstr(win, buf);
-#else
-		waddch(win, buf[0]);
+				if (w > WCHAR_MAX || !(iswprint(w) || w == '\n'))
+				{
+#if REPLACEMENT_CHAR <= WCHAR_MAX
+					if (iswprint(REPLACEMENT_CHAR))
+						w = REPLACEMENT_CHAR;
+					else
 #endif
+						w = '?';
+				}
+				{
+					wchar_t wc = w;
+					waddnwstr(win, &wc, 1);
+				}
+#else
+				// TODO: Maybe try using sprintf with %ls?
+				waddch(win, '?');
+#endif
+		}
 	}
-done:
-	PREP_ADDCH;
-	return;
-#undef PREP_ADDCH
 }
 
 static inline
@@ -4951,7 +4959,7 @@ static void roll_work(struct work *work)
 
 /* Duplicates any dynamically allocated arrays within the work struct to
  * prevent a copied work struct from freeing ram belonging to another struct */
-void __copy_work(struct work *work, const struct work *base_work)
+static void _copy_work(struct work *work, const struct work *base_work, int noffset)
 {
 	int id = work->id;
 
@@ -4972,6 +4980,15 @@ void __copy_work(struct work *work, const struct work *base_work)
 		++*work->tmpl_refcount;
 		mutex_unlock(&pool->pool_lock);
 	}
+	
+	if (noffset)
+	{
+		uint32_t *work_ntime = (uint32_t *)(work->data + 68);
+		uint32_t ntime = be32toh(*work_ntime);
+
+		ntime += noffset;
+		*work_ntime = htobe32(ntime);
+	}
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations
@@ -4980,9 +4997,14 @@ struct work *copy_work(const struct work *base_work)
 {
 	struct work *work = make_work();
 
-	__copy_work(work, base_work);
+	_copy_work(work, base_work, 0);
 
 	return work;
+}
+
+void __copy_work(struct work *work, const struct work *base_work)
+{
+	_copy_work(work, base_work, 0);
 }
 
 static struct work *make_clone(struct work *work)
@@ -7340,7 +7362,17 @@ void show_help(void)
 		"ST: work in queue              | F: network fails  | NB: new blocks detected\n"
 		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
 		"E: # shares * diff per 2kB bw  | U: shares/minute  | BS: best share ever found\n"
-		"\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc1\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\xc4\n"
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_BTEE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_BTEE  U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE U8_HLINE
+		"\n"
 		"devices/processors hashing (only for totals line), hottest temperature\n"
 	);
 	wlogprint(
@@ -7582,9 +7614,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		}
 		
 		if (working_devs == working_procs)
-			snprintf(statusline, sizeof(statusline), "%s%d        ", bad ? "\2" : "", working_devs);
+			snprintf(statusline, sizeof(statusline), "%s%d        ", bad ? U8_BAD_START : "", working_devs);
 		else
-			snprintf(statusline, sizeof(statusline), "%s%d/%d     ", bad ? "\2" : "", working_devs, working_procs);
+			snprintf(statusline, sizeof(statusline), "%s%d/%d     ", bad ? U8_BAD_START : "", working_devs, working_procs);
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
@@ -7592,9 +7624,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		
 		if (bad)
 		{
-			++divx;
-			statusline[divx] = '\1';
-			++divx;
+			divx += sizeof(U8_BAD_START)-1;
+			strcpy(&statusline[divx], U8_BAD_END);
+			divx += sizeof(U8_BAD_END)-1;
 		}
 		
 		temperature_column(&statusline[divx], sizeof(statusline)-divx, true, &temp);
@@ -8623,6 +8655,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	work->drv_rolllimit = 60;
 	calc_diff(work, 0);
 }
 
@@ -8717,10 +8751,9 @@ void _submit_work_async(struct work *work)
 	notifier_wake(submit_waiting_notifier);
 }
 
-static void submit_work_async(struct work *work_in, struct timeval *tv_work_found)
+/* Submit a copy of the tested, statistic recorded work item asynchronously */
+static void submit_work_async2(struct work *work, struct timeval *tv_work_found)
 {
-	struct work *work = copy_work(work_in);
-
 	if (tv_work_found)
 		copy_time(&work->tv_work_found, tv_work_found);
 	
@@ -8732,8 +8765,14 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	struct cgpu_info * const cgpu = thr->cgpu;
 	
 	if (bad_nonce_p)
-		applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
-		       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
+	{
+		if (bad_nonce_p == UNKNOWN_NONCE)
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce - HW error",
+			       cgpu->proc_repr);
+		else
+			applog(LOG_DEBUG, "%"PRIpreprv": invalid nonce (%08lx) - HW error",
+			       cgpu->proc_repr, (unsigned long)be32toh(*bad_nonce_p));
+	}
 	
 	mutex_lock(&stats_lock);
 	hw_errors++;
@@ -8789,8 +8828,20 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 /* Returns true if nonce for work was a valid share */
 bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 {
+	return submit_noffset_nonce(thr, work, nonce, 0);
+}
+
+/* Allows drivers to submit work items where the driver has changed the ntime
+ * value by noffset. Must be only used with a work protocol that does not ntime
+ * roll itself intrinsically to generate work (eg stratum). We do not touch
+ * the original work struct, but the copy of it only. */
+bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t nonce,
+			  int noffset)
+{
+	struct work *work = make_work();
+	_copy_work(work, work_in, noffset);
+	
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	uint32_t bak_nonce = *work_nonce;
 	struct timeval tv_work_found;
 	enum test_nonce2_result res;
 	bool ret = true;
@@ -8831,9 +8882,11 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 			goto out;
 	}
 	
-	submit_work_async(work, &tv_work_found);
+	submit_work_async2(work, &tv_work_found);
+	work = NULL;  // Taken by submit_work_async2
 out:
-	*work_nonce = bak_nonce;
+	if (work)
+		free_work(work);
 	thread_reportin(thr);
 
 	return ret;
@@ -10988,6 +11041,7 @@ int main(int argc, char *argv[])
 		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
+		utf8_test();
 	}
 
 #ifdef HAVE_CURSES

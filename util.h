@@ -113,8 +113,8 @@ extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime
 
 extern char *absolute_uri(char *uri, const char *ref);  // ref must be a root URI
 
-extern void ucs2tochar(char *out, const uint16_t *in, size_t sz);
-extern char *ucs2tochar_dup(uint16_t *in, size_t sz);
+extern size_t ucs2_to_utf8(char *out, const uint16_t *in, size_t sz);
+extern char *ucs2_to_utf8_dup(uint16_t *in, size_t sz);
 
 #define BFGINIT(var, val)  do{  \
 	if (!(var))       \
@@ -217,6 +217,17 @@ static inline
 size_t bytes_len(const bytes_t *b)
 {
 	return b->sz;
+}
+
+static inline
+ssize_t bytes_find(const bytes_t * const b, const uint8_t needle)
+{
+	const size_t blen = bytes_len(b);
+	const uint8_t * const buf = bytes_buf(b);
+	for (int i = 0; i < blen; ++i)
+		if (buf[i] == needle)
+			return i;
+	return -1;
 }
 
 extern void _bytes_alloc_failure(size_t);
@@ -427,6 +438,15 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 }while(0)
 
 #define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
+
+
+#define REPLACEMENT_CHAR (0xFFFD)
+#define U8_DEGREE "\xc2\xb0"
+#define U8_HLINE  "\xe2\x94\x80"
+#define U8_BTEE   "\xe2\x94\xb4"
+extern int32_t utf8_decode(const void *, int *out_len);
+extern void utf8_test();
+
 
 
 #define RUNONCE(rv)  do {  \

@@ -1342,6 +1342,7 @@ struct work {
 	uint64_t	share_diff;
 
 	int		rolls;
+	int		drv_rolllimit; /* How much the driver can roll ntime */
 
 	dev_blk_ctx	blk;
 
@@ -1403,6 +1404,7 @@ extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work
 extern void stratum_work_clean(struct stratum_work *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
+#define UNKNOWN_NONCE ((uint32_t*)inc_hw_errors2)
 extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
@@ -1414,6 +1416,8 @@ extern enum test_nonce2_result _test_nonce2(struct work *, uint32_t nonce, bool 
 #define test_nonce(work, nonce, checktarget)  (_test_nonce2(work, nonce, checktarget) == TNR_GOOD)
 #define test_nonce2(work, nonce)  (_test_nonce2(work, nonce, true))
 extern bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce);
+extern bool submit_noffset_nonce(struct thr_info *thr, struct work *work, uint32_t nonce,
+			  int noffset);
 extern void __add_queued(struct cgpu_info *cgpu, struct work *work);
 extern struct work *get_queued(struct cgpu_info *cgpu);
 extern void add_queued(struct cgpu_info *cgpu, struct work *work);

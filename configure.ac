@@ -602,6 +602,20 @@ fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
 
+driverlist="$driverlist bifury"
+AC_ARG_ENABLE([bifury],
+	[AC_HELP_STRING([--disable-bifury],[Compile support for Bi*Fury (default enabled)])],
+	[bifury=$enableval],
+	[bifury=yes]
+	)
+if test "x$bifury" = "xyes"; then
+	AC_DEFINE([USE_BIFURY], [1], [Defined to 1 if Bi*Fury support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_BIFURY], [test x$bifury = xyes])
+
+
 driverlist="$driverlist bitfury_gpio/bitfury"
 bitfury=yes
 AC_ARG_ENABLE([bitfury],

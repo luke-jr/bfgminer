@@ -90,6 +90,27 @@ For example:
     sudo bfgminer -S bfsb:auto
 
 
+BI*FURY
+-------
+
+Bi*Fury should just work; you may need to use -S bifury:<path>
+
+On Windows, you will need to install the standard USB CDC driver for it.
+TODO
+
+If you want to upgrade the firmware, unplug your device. You will need to
+temporarily short a circuit. With the USB connector pointing forward, and the
+heatsink down, look to the forward-right; you will see two tiny lights, a set of
+2 terminals, and a set of 3 terminals. The ones you need to short are the set of
+2. With them shorted, plug the device back into your computer. It will then
+pretend to be a mass storage disk drive. If you use Windows, you can play along
+and just overwrite the firmware.bin file. If you use Linux, you must use mcopy:
+    mcopy -i /dev/disk/by-id/usb-NXP_LPC1XXX_IFLASH_ISP-0:0 firmware.bin \
+        ::/firmware.bin
+After this is complete, unplug the device again and un-short the 2 terminals.
+This completes the upgrade and you can now plug it back in and start mining.
+
+
 BIG PICTURE MINING BITFURY USB
 ------------------------------
 
