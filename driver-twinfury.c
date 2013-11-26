@@ -306,28 +306,38 @@ static
 void twinfury_poll(struct thr_info *thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
-	struct cgpu_info *proc;
 
 	uint8_t n_chips = 0;
 	uint8_t buffer[2] = { 'Q', 0 };
 
 	uint8_t response[8];
+	bool flashed = false;
 
-	if(dev->flash_led)
-	{
-		char buf[] = "L";
-
-		dev->flash_led = 0;
-		if(!twinfury_send_command(dev->device_fd, buf, 1))
-			applog(LOG_ERR, "%"PRIpreprv": Failed writing flash LED", proc->proc_repr);
-
-		if(1 != twinfury_wait_response(dev->device_fd, buf, 1))
-			applog(LOG_ERR, "%"PRIpreprv": Waiting for response timed out (Flash LED)", proc->proc_repr);
-	}
-
-	for(proc = thr->cgpu; proc; proc = proc->next_proc, n_chips++)
+	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc, ++n_chips)
 	{
 		struct twinfury_info *info = (struct twinfury_info *)proc->device_data;
+		
+		if (proc->flash_led)
+		{
+			if (flashed)
+				proc->flash_led = 0;
+			else
+			{
+				char buf[] = "L";
+				
+				if(!twinfury_send_command(dev->device_fd, buf, 1))
+					applog(LOG_ERR, "%s: Failed writing flash LED", dev->dev_repr);
+				else
+				if(1 != twinfury_wait_response(dev->device_fd, buf, 1))
+					applog(LOG_ERR, "%s: Waiting for response timed out (Flash LED)", dev->dev_repr);
+				else
+				{
+					flashed = true;
+					proc->flash_led = 0;
+				}
+			}
+		}
+		
 		buffer[1] = n_chips;
 
 		if(!twinfury_send_command(dev->device_fd, buffer, 2))
