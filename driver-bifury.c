@@ -406,6 +406,14 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		}
 	}
 	else
+	if (!strncmp(cmd, "hwerror ", 8))
+	{
+		const int chip = atoi(&cmd[8]);
+		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		thr = proc->thr[0];
+		inc_hw_errors2(thr, NULL, UNKNOWN_NONCE);
+	}
+	else
 	if (!strncmp(cmd, "needwork ", 9))
 	{
 		const int needwork = atoi(&cmd[9]);
