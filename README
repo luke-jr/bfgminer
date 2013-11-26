@@ -299,7 +299,6 @@ GPU only options:
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
 --intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
 --kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
---ndevs|-n          Enumerate number of detected GPUs and exit
 --no-adl            Disable the ATI display library used for monitoring and setting GPU parameters
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
 --vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list

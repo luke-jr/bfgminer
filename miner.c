@@ -2471,7 +2471,7 @@ static struct opt_table opt_cmdline_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
-			"Display number of detected GPUs, OpenCL platform information, and exit"),
+			opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
 			opt_version_and_exit, packagename,
