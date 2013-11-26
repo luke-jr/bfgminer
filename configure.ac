@@ -664,7 +664,7 @@ elif test "x$bitfury" = "xyes"; then
 elif test "x$twinfury" = "xyes"; then
     AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Twinfury])
 else
-    bf2=no
+    twinfury=no
 fi
 if test "x$twinfury" = "xyes"; then
     AC_DEFINE([USE_TWINFURY], [1], [Defined to 1 if Twinfury USB miner support is wanted])

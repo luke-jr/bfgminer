@@ -60,7 +60,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 
 	info->id.version = buf[1];
 	memcpy(info->id.product, buf+2, 8);
-  bin2hex(info->id.serial, buf+10, 11);
+	bin2hex(info->id.serial, buf+10, 11);
 	applog(LOG_DEBUG, "%s: %s: %d, %s %s",
 	       twinfury_drv.dname,
 	       devpath,
@@ -75,7 +75,6 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 		       twinfury_drv.dname, devpath);
 		return false;
 	}
-
 
 	while(len == 0)
 	{
@@ -170,13 +169,12 @@ static bool twinfury_init(struct thr_info *thr)
 	}
 
 	cgpu->device_fd = fd;
+	cgpu->dev_serial = info->id.serial;
 
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", cgpu->proc_repr, cgpu->device_path);
 
 	info->tx_buffer[0] = 'W';
 	info->tx_buffer[1] = 0x00;
-
-	mutex_init(&cgpu->device_mutex);
 
 	timer_set_now(&thr->tv_poll);
 
@@ -192,6 +190,11 @@ static bool twinfury_process_results(struct cgpu_info * const proc)
 
 	struct work *work = proc->thr[0]->work;
 
+	if(rx_len == 0)
+	{
+		return false;
+	}
+
 	if(rx_buffer[3] == 0)
 	{
 		return false;
@@ -199,6 +202,7 @@ static bool twinfury_process_results(struct cgpu_info * const proc)
 
 	if(!work)
 	{
+		applog(LOG_ERR, "%"PRIpreprv": Work not available at the moment", proc->proc_repr);
 		return true;
 	}
 
@@ -300,7 +304,17 @@ void twinfury_poll(struct thr_info *thr)
 	uint8_t response[8];
 	uint8_t i=0;
 
-	mutex_lock(&dev->device_mutex);
+	if(dev->flash_led)
+	{
+		char buf[] = "L";
+
+		dev->flash_led = 0;
+		if(1 != write(dev->device_fd, buf, 1))
+			applog(LOG_ERR, "%"PRIpreprv": Failed writing flash LED", proc->proc_repr);
+
+		if(1 != twinfury_wait_response(dev->device_fd, buf, 1))
+			applog(LOG_ERR, "%"PRIpreprv": Waiting for response timed out (Flash LED)", proc->proc_repr);
+	}
 
 	for(proc = thr->cgpu; proc; proc = proc->next_proc, n_chips++)
 	{
@@ -362,7 +376,6 @@ void twinfury_poll(struct thr_info *thr)
 		}
 	}
 
-	mutex_unlock(&dev->device_mutex);
 	timer_set_delay_from_now(&thr->tv_poll, 250000);
 }
 
@@ -383,7 +396,6 @@ void twinfury_job_start(struct thr_info *thr)
 		       board->proc_repr, hex);
 	}
 
-	mutex_lock(&board->device_mutex);
 	if (46 != write(device_fd, info->tx_buffer, 46))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": Failed writing work task", board->proc_repr);
@@ -402,7 +414,6 @@ void twinfury_job_start(struct thr_info *thr)
 
 		timeout--;
 	}
-	mutex_unlock(&board->device_mutex);
 
 	if(unlikely(timeout == 0))
 	{
@@ -415,21 +426,14 @@ static void twinfury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 
-	mutex_lock(&cgpu->device_mutex);
 	serial_close(cgpu->device_fd);
-	mutex_unlock(&cgpu->device_mutex);
 }
 
 //------------------------------------------------------------------------------
 static bool twinfury_identify(struct cgpu_info *cgpu)
 {
-	char buf[] = "L";
+	cgpu->flash_led = 1;
 
-	mutex_lock(&cgpu->device_mutex);
-	if (1 != write(cgpu->device_fd, buf, 1))
-		return false;
-	mutex_unlock(&cgpu->device_mutex);
-	
 	return true;
 }
 
@@ -452,5 +456,4 @@ struct device_drv twinfury_drv = {
 	.job_process_results = twinfury_job_process_results,
 
 	.thread_shutdown = twinfury_shutdown,
-
 };
