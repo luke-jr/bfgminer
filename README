@@ -716,9 +716,9 @@ defined settings lead to worse performance.
 Q: What happened to CPU mining?
 A: See README.CPU for more information.
 
-Q: Will there ever be a GUI version?
-A: No, however the RPC interface makes it possible for someone else to write one
-if they choose.
+Q: Is there a GUI version?
+A: Yes, Nate Woolls maintains a GUI interface for BFGMiner called MultiMiner,
+available at http://multiminerapp.com
 
 Q: I'm having an issue. What debugging information should I provide?
 A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
