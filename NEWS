@@ -1,3 +1,180 @@
+BFGMiner Version 3.7.0 - November 27, 2013
+
+- FTDI scan: Use intptr_t to avoid warning about different size type cast
+- Bugfix: proxy: Add missing unistd.h include
+- Bugfix: bifury: Precision specifications should be int, not size_t
+- Bugfix: klondike: Include config.h first
+- Bugfix: binloader: Include config.h first
+- README.ASIC: Include support URI for bi*fury driver and firmware
+- Added MultiMiner as an example of a GUI application that wraps bfgminer using
+the RPC interface
+- Silence non-issue warnings
+- bifury: Add support for hwerror message
+- inc_hw_errors2: Support reporting hw errors without a known nonce
+- bifury: Initialise cutofftemp to 75 C
+- bifury: Turn chips off and on when disabled and enabled
+- bifury: Split out bifury_send_clock
+- Bugfix: bifury: Avoid double-free and double-close on version parse errors
+during probe
+- bifury: Add support for clock command
+- bifury: Update for "job" protocol change
+- bifury: Update to current git
+- bifury: Workaround bugs in older firmware by flooding device with work until
+it proves it has needwork
+- bifury: Attempt to submit shares even if maxroll limit is ignored
+- Clone cgminer's submit_noffset_nonce interface
+- Bugfix: bifury: Check that there is a line before comparing it to "version "
+- bifury: Prune jobs older than 16 queued, to eventually clean up discarded work
+(from flushes)
+- Replace ucs2tochar* with ucs2_to_utf8* to handle Unicode
+- README.ASIC: Document Bi*Fury firmware upgrade
+- bifury: Free work when we know it's complete
+- bifury: Implement hashrate reporting using "job" messages
+- bifury: Tolerate other data before version reply
+- bifury: Abstract line parsing into bifury_readln function
+- Bugfix: bifury: Use a char array, rather than pointer to char array, for
+bifury_init_cmds
+- bifury: Unify SEND devprotodump logging code
+- fpgautils: Skip SetCommConfig on Windows if baud is not to be set
+- Check for U+2022 and replace it with "*" is unprintable
+- Use replacement character for non-printable Unicode
+- Use UTF-8 for Unicode
+- Implement a utf8_decode function to produce wchar_t needed by curses
+- bifury: New driver
+- Bugfix: twinfury: Handle flash request for both chips, and avoid using proc
+uninitialised
+- Bugfix: twinfury: Fix various technicalities
+- Bugfix: twinfury: Remove incorrect tcflush
+- Twinfury communication protocol changed to be more robust. A preamble is sent
+before the actual command.
+- LED flashing changed: - setting a flag and flash the LED during the poll
+cycle - mutex removed
+- Renamed bf2 driver -> twinfury driver bin2hex utility used to convert the
+serial number
+- BF2 driver comment edited
+- BF2 - Twin Bitfury USB miner driver added
+- Deprecate --ndevs|-n (redundant with -d? and GPU-only)
+- Never abort startup just because we have no devices (there may be cases this
+is pointless, but at least it's consistent)
+- cgpu_match: Accept ranges for letter processor specification
+- cgpu_match: Accept ranges for numeric elements
+- test_cgpu_match: Test with more than one device/processor
+- configure: Condense configuration options summary a bit
+- configure: Put configuration options summary back after everything completes
+- Workaround bug in MinGW-w64: Check for strtok_r to be defined at compile-time,
+and don't override it unless we really want to override
+- Bugfix: configure: Use new need_lowl_vcom instead of need_fpgautils
+- configure: Explicitly check for sleep
+- Bugfix: Set LIBUSB_LIBS for non-pkgconf non-header-subdir libusb installations
+- Move unused winsock2.h includes to the end of config.h
+- Use lround instead of llround, since it has better compatibility with older
+MingW and Cygwin versions
+- lowl-hid: Save and use hid_enumerate results from library test
+- Silence Windows build warnings
+- mcp2210: Remove cruft leftover from HID code (moved out)
+- lowl-vcom: sysfs scan: Simplify maybe_strdup into _sysfs_do_read
+- lowl-vcom: sysfs scan: Don't bother getting product string until we confirm it
+is in fact a tty device
+- input_pool: Accept a null password
+- Bugfix: Move const data into the scope it needs to be in
+- Bugfix: Restore case insensitivity to --scan driver names
+- Accept "@" separator for serial/path in --scan to match --device and
+--set-device better
+- README: Uppercase the sequence letter when talking about multiple pools
+- README: Mention "make install" and clarify saving settings
+- Bugfix: avalon: Don't "probe" with -S <path/serial>
+- bitforce: Add lowl_* to bitforce_queue so it can be specified by name as a
+driver
+- Bugfix: devpath_to_devid: Be strict about COM port specifications on Windows
+- Bugfix: avalon: Don't "probe" with -S all
+- Bugfix: Only count devices in -d?
+- RPC: {dev,proc}details: Add 'Processors', 'Manufacturer', 'Product',
+'Serial', 'Target Temperature', 'Cutoff Temperature'
+- debian: Need to explicitly add opencl support to build.
+- Correctly document klondike as being enabled by default
+- Simplify logic for README.ASIC and README.FPGA install
+- Split fpgautils into lowl-vcom and binloader, and fix internal build
+dependencies
+- Add README.CPU to "make install" distribution when built with CPU mining
+support
+- line 2913 added urlencode
+- Bugfix: RPC: Release apisock on error in tidyup
+- klondike - dont try to flush if not initialised
+- Rename --scan-serial to --scan
+- Bugfix: Handle invalid driver names cleanly
+- Workaround libcurl bug to properly support HTTP proxies for stratum
+- Bugfix: Write klondike options for klondike-options (not icarus options)
+- README.OpenWrt: Change example repository to "latest", and document
+alternatives
+- mcp2210: Add support for --device-protocol-dump
+- Bugfix: Initialise dynamic osc6_bits variables
+- README: Fixed a few typos here and there and improved wording (Thanks
+miningpenguin!)
+- README: Moved CPU sections to README.CPU and elaborated more on it
+- README*: Grammatical cleanups
+- README.ASIC: More KnCMiner
+- README.ASIC: Add section about KnCMiner
+- Bugfix: opencl: Dynamic mode should disable threads for this device, not just
+N after the first
+- Bugfix: Make curses_input return NULL on a blank line, as most callers expect
+- Duplicate (hidden) --userpass option before --pool-priority so it can be used
+in config files
+- Only probe VCOM devices on bare "all" scan-serial request
+- Provide backports of uthash LL_{PREPEND,FOREACH{,_SAFE}}2 (only added in
+1.9.7, not yet in major distros)
+- Upgrade required uthash version to 1.9.4 for LL_CONCAT
+- README: Update documentation for scan-serial
+- README: Bitstreams no longer included with BFGMiner source
+- README: Remove incomplete and unnecessary list of ASIC/FPGA devices
+- write_config: Add scan-serial and set-device
+- write_config: Update to make JSON Array of named parameters
+- Remove support for comma-separated values in --device, and update
+documentation
+- lowlevel: Collapse multiple lowlevel drivers on the same devid to a secondary
+linked list, and only spawn one thread to probe all lowlevels on a given devid
+- Bugfix: vcom_devinfo_scan: Clean up hashtable when done
+- README: Update cgminer driver FAQ with Windows-specific answer, now that we
+have a workaround for *nix
+- cpu/opencl: Always disable by default; removes deprecated -G option entirely
+- vcom_lowl_probe_wrapper: Attempt to reattach detached USB devices
+- Bugfix: erupter: Prioritise Emerald after Sapphire
+- Bugfix: Allow "drv:auto" to override general "noauto"
+- Bugfix: _probe_device_match: Fix inverted logic
+- Bugfix: Don't try to call lowl_probe for drivers that don't support that
+interface
+- lowl-hid: Use usb devids for libusb-based hidapi devices
+- Replace bfg_claim_hid with lowlevel_claim
+- lowlevel: Generic claim interface for lowlevel info
+- cgpu_match: Compare dev_t under paths
+- Rework -d? output to display more useful information now that device ordering
+is non-deterministic
+- cgpu_match: Add support for matching by serial number or path
+- Unit tests for cgpu_match
+- Rework --device option to accept a pattern and JSON Array in config; removes
+support for processor ranges
+- Remove --remove-disabled option, as it conflicts with hotplug, per-processor
+stuff, etc already
+- Bugfix: Reimplement "noauto" flag
+- Bugfix: Restore "-S foo" without driver name functionality
+- Bugfix: scan-serial: Compare dev_t as well
+- littlefury: Convert to lowl_probe
+- hashbuster: Convert to lowl_probe
+- avalon: Convert to lowl_probe
+- cairnsmore/erupter/icarus: Convert to lowl_probe
+- bigpic: Convert to lowl_probe
+- ztex: Convert to lowl_probe
+- x6500: Convert to lowl_probe
+- nanofury: Convert to lowl_probe
+- modminer: Convert to lowl_probe
+- klondike: Convert to lowl_probe
+- bitforce: Convert to lowl_probe
+- fpgautils: Wrapper to easily adapt an old detectone to new lowl_probe
+- lowlevel: Add match variants of detect functions
+- DevAPI: add_cgpu: Use mutex to ensure thread safety
+- Make detectone_meta_info thread-local
+- New threaded device probe framework
+
+
 BFGMiner Version 3.6.0 - November 12, 2013
 
 - RPC: Bump to 2.2 for Works in POOLS

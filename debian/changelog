@@ -1,3 +1,15 @@
+bfgminer (3.7.0-0precise1) precise; urgency=low
+
+  * Support for new Bi*fury and Twinfury mining devices.
+  * Device probing has been rewritten to scan all devices in parallel (much faster). As a result, the order of devices found is no longer deterministic (consistent) at all.
+  * Parallel device probing makes --device's former syntax unusable, so it has been modified to use the same pattern matching as --set-device. Note that things like --scan-serial ztex:all are now valid, but probably much more dangerous than with VCOM drivers; a bare driverless "all" only affects VCOM drivers for this reason.
+  * Pattern matching for --set-device (and now --device) supports identifying specific devices by serial number or path. To use this, insert either of these between @ symbols where you would have previously put an index. So for example, --device 'BFL@FTWOTOP4' (bitforce device with serial FTWOTOP4) or  --set-device '@/dev/ttyUSB0@a:osc6_bits=52' (first processor of device on /dev/ttyUSB0).
+  * BFGMiner-written config files now include the scan-serial and set-device settings.
+  * cpu and opencl drivers have been disabled by default in all cases. Use -S cpu:auto or -S opencl:auto if you need them.
+  * Automatically workaround cgminer driver breakage on Linux.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 27 Nov 2013 13:46:42 -0000
+
 bfgminer (3.6.0-1precise1) precise; urgency=medium
 
   * Explicitly added OpenCL to Debian build rules.
