@@ -96,7 +96,7 @@ BI*FURY
 Bi*Fury should just work; you may need to use -S bifury:<path>
 
 On Windows, you will need to install the standard USB CDC driver for it.
-TODO
+    http://store.bitcoin.org.pl/support
 
 If you want to upgrade the firmware, unplug your device. You will need to
 temporarily short a circuit. With the USB connector pointing forward, and the
