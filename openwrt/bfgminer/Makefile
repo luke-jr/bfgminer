@@ -42,7 +42,7 @@ $(call Package/$(PKG_NAME)/Default)
 endef
 
 define Package/$(PKG_NAME)/description
-Modular Bitcoin CPU/GPU/FPGA miner in C
+Modular Bitcoin ASIC/FPGA/GPU/CPU miner in C
 endef
 
 define Package/$(PKG_NAME)/config
