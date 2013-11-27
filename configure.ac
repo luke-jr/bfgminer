@@ -503,6 +503,12 @@ PKG_PROG_PKG_CONFIG()
 
 libusb=no
 libusb_include_path=""
+AC_ARG_WITH([libusb],
+	[AC_HELP_STRING([--without-libusb],[Compile using libusb (default enabled)])],
+	[want_libusb=$withval],
+	[want_libusb=yes]
+	)
+if test "x$want_libusb" = "xyes"; then
 PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 	libusb=yes
 ],[
@@ -529,6 +535,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			],[#include <libusb.h>])
 	fi
 ])
+fi
 
 driverlist="$driverlist klondike"
 AC_ARG_ENABLE([klondike],
@@ -536,7 +543,9 @@ AC_ARG_ENABLE([klondike],
 	[klondike=$enableval],
 	[klondike=auto]
 	)
-if test "x$klondike$libusb" = xyesno; then
+if test "x$klondike$want_libusb" = xyesno; then
+	AC_MSG_ERROR([You disabled libusb, required for Klondike support])
+elif test "x$klondike$libusb" = xyesno; then
 	AC_MSG_ERROR([Could not find libusb, required for Klondike support])
 elif test "x$klondike" = xauto; then
 	klondike="$libusb"
@@ -559,7 +568,9 @@ AC_ARG_ENABLE([x6500],
 	[x6500=$enableval],
 	[x6500=auto]
 	)
-if test "x$x6500$libusb" = xyesno; then
+if test "x$x6500$want_libusb" = xyesno; then
+	AC_MSG_ERROR([You disabled libusb, required for X6500 support])
+elif test "x$x6500$libusb" = xyesno; then
 	AC_MSG_ERROR([Could not find libusb, required for X6500 support])
 elif test "x$x6500" = xauto; then
 	x6500="$libusb"
@@ -583,7 +594,9 @@ AC_ARG_ENABLE([ztex],
 	[ztex=$enableval],
 	[ztex=auto]
 	)
-if test "x$ztex$libusb" = xyesno; then
+if test "x$ztex$want_libusb" = xyesno; then
+	AC_MSG_ERROR([You disabled libusb, required for ZTEX support])
+elif test "x$ztex$libusb" = xyesno; then
 	AC_MSG_ERROR([Could not find libusb, required for ZTEX support])
 elif test "x$ztex" = xauto; then
 	ztex="$libusb"
