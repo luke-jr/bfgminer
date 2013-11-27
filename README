@@ -160,6 +160,7 @@ BFGMiner specific configuration options:
 	                        (default enabled)
 	--without-libevent      Compile support for libevent stratum server (default
 	                        enabled)
+	--without-libusb        Compile using libusb (default enabled)
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
