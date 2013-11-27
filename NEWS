@@ -1,3 +1,33 @@
+BFGMiner Version 3.5.3 - November 27, 2013
+
+- FTDI scan: Use intptr_t to avoid warning about different size type cast
+- Bugfix: proxy: Add missing unistd.h include
+- configure: Explicitly check for sleep
+- Bugfix: Set LIBUSB_LIBS for non-pkgconf non-header-subdir libusb installations
+- input_pool: Accept a null password
+- Bugfix: Move const data into the scope it needs to be in
+- Bugfix: Install README.ASIC if *any* ASIC driver is compiled
+- line 2913 added urlencode
+- Bugfix: RPC: Release apisock on error in tidyup
+- Workaround libcurl bug to properly support HTTP proxies for stratum
+- README.OpenWrt: Change example repository to "latest", and document
+alternatives
+- Bugfix: Initialise dynamic osc6_bits variables
+- README: Fixed a few typos here and there and improved wording (Thanks
+miningpenguin!)
+- README*: Grammatical cleanups
+- Bugfix: opencl: Dynamic mode should disable threads for this device, not just
+N after the first
+- Bugfix: Make curses_input return NULL on a blank line, as most callers expect
+- Duplicate (hidden) --userpass option before --pool-priority so it can be used
+in config files
+- Upgrade required uthash version to 1.9.4 for LL_CONCAT
+- README: Update to reflect state of autodetection in 3.5
+- README: Bitstreams no longer included with BFGMiner source
+- README: Remove incomplete and unnecessary list of ASIC/FPGA devices
+- Bugfix: erupter: Prioritise Emerald after Sapphire
+
+
 BFGMiner Version 3.5.2 - November 12, 2013
 
 - README.scrypt: Update to reflect current status of code (unmaintained); remove
