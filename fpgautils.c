@@ -391,7 +391,7 @@ int _serial_autodetect_sysfs(detectone_func_t detectone, va_list needles)
 
 #ifdef UNTESTED_FTDI_DETECTONE_META_INFO
 static
-char *_ftdi_get_string(char *buf, int i, DWORD flags)
+char *_ftdi_get_string(char *buf, intptr_t i, DWORD flags)
 {
 	if (FT_OK != FT_ListDevices((PVOID)i, buf, FT_LIST_BY_INDEX | flags))
 		return NULL;
