@@ -1,3 +1,5 @@
+#include <unistd.h>
+
 #include <pthread.h>
 
 #include <uthash.h>
