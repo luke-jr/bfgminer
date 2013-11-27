@@ -1,3 +1,27 @@
+BFGMiner Version 3.2.7 - November 27, 2013
+
+- FTDI scan: Use intptr_t to avoid warning about different size type cast
+- Bugfix: Set LIBUSB_LIBS for non-pkgconf non-header-subdir libusb installations
+- input_pool: Accept a null password
+- Bugfix: Move const data into the scope it needs to be in
+- Bugfix: Install README.ASIC if *any* ASIC driver is compiled
+- line 2913 added urlencode
+- Bugfix: RPC: Release apisock on error in tidyup
+- Workaround libcurl bug to properly support HTTP proxies for stratum
+- README.OpenWrt: Change example repository to "latest", and document
+alternatives
+- README: Fixed a few typos here and there and improved wording (Thanks
+miningpenguin!)
+- README*: Grammatical cleanups
+- Bugfix: opencl: Dynamic mode should disable threads for this device, not just
+N after the first
+- Bugfix: Make curses_input return NULL on a blank line, as most callers expect
+- Duplicate (hidden) --userpass option before --pool-priority so it can be used
+in config files
+- README: Bitstreams no longer included with BFGMiner source
+- README: Remove incomplete and unnecessary list of ASIC/FPGA devices
+
+
 BFGMiner Version 3.2.6 - November 12, 2013
 
 - README.scrypt: Update to reflect current status of code (unmaintained); remove
