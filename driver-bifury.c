@@ -37,7 +37,7 @@ ssize_t bifury_write(const struct cgpu_info * const dev, const void * const buf,
 	const int fd = dev->device_fd;
 	if (opt_dev_protocol)
 	{
-		const size_t psz = (((const char*)buf)[count-1] == '\n') ? (count - 1) : count;
+		const int psz = (((const char*)buf)[count-1] == '\n') ? (count - 1) : count;
 		applog(LOG_DEBUG, "%s: DEVPROTO: SEND %.*s", dev->dev_repr, psz, (const char*)buf);
 	}
 	return write(fd, buf, count);
