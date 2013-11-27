@@ -566,7 +566,7 @@ void _vcom_devinfo_scan_windows(struct lowlevel_device_info ** const devinfo_lis
 } while(0)
 
 static
-char *_ftdi_get_string(char *buf, int i, DWORD flags)
+char *_ftdi_get_string(char *buf, intptr_t i, DWORD flags)
 {
 	if (FT_OK != FT_ListDevices((PVOID)i, buf, FT_LIST_BY_INDEX | flags))
 		return NULL;
