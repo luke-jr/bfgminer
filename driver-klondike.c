@@ -9,6 +9,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include <float.h>
 #include <limits.h>
 #include <pthread.h>
@@ -19,8 +21,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <math.h>
-
-#include "config.h"
 
 #ifdef WIN32
 #include <windows.h>
