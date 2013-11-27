@@ -3493,7 +3493,7 @@ void bfg_waddstr(WINDOW *win, const char *s)
 	
 	while (true)
 	{
-		while (likely(p[0] >= 0x20 && p[0] < stop_ascii))
+		while (likely(p[0] == '\n' || (p[0] >= 0x20 && p[0] < stop_ascii)))
 		{
 			// Printable ASCII
 			++p;
