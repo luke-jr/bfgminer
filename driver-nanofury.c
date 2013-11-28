@@ -319,7 +319,8 @@ void nanofury_shutdown(struct thr_info * const thr)
 {
 	struct mcp2210_device * const mcp = thr->cgpu_data;
 	
-	nanofury_device_off(mcp);
+	if (mcp)
+		nanofury_device_off(mcp);
 }
 
 struct device_drv nanofury_drv = {
