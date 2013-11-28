@@ -536,6 +536,8 @@ void _vcom_devinfo_scan_windows__hcntlr(struct lowlevel_device_info ** const dev
 		applogfailinfor(, LOG_DEBUG, "open USB host controller device", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
 	char * const hubpath = windows_usb_get_root_hub_path(hcntlrh);
 	CloseHandle(hcntlrh);
+	if (unlikely(!hubpath))
+		return;
 	_vcom_devinfo_scan_windows__hub(devinfo_list, hubpath);
 	free(hubpath);
 }
