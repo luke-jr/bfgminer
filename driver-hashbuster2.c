@@ -20,7 +20,7 @@
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
-#include "lowl-hid.h"
+#include "lowl-usb.h"
 #include "miner.h"
 
 #define HASHBUSTER_USB_PRODUCT "HashBuster"
@@ -154,9 +154,6 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	if (info->vid != 0xFA04 || info->pid != 0x000D)
 		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
 	
-	libusb_init(NULL);
-	libusb_set_debug(NULL,3);
-	
 	libusb_device *dev = info->lowl_data;
 	libusb_open(dev, &h);
 	libusb_set_configuration(h, 1);
@@ -201,10 +198,21 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	port->mode = 0;
 	
 	chip_n = libbitfury_detectChips1(port);
-	if (chip_n)
+	if (unlikely(!chip_n))
 	{
-		applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", 0, chip_n);
-		
+		applog(LOG_WARNING, "%s: No chips found on %s", __func__, serial);
+fail:
+		free(port);
+		free(serial);
+		libusb_release_interface(h, 0);
+		libusb_close(h);
+		return false;
+	}
+	
+	if (bfg_claim_libusb(&hashbuster2_drv, true, dev))
+		goto fail;
+	
+	{
 		devicelist = malloc(sizeof(*devicelist) * chip_n);
 		for (j = 0; j < chip_n; ++j)
 		{
