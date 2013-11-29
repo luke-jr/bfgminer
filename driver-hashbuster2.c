@@ -154,9 +154,6 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	if (info->vid != 0xFA04 || info->pid != 0x000D)
 		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
 	
-	libusb_init(NULL);
-	libusb_set_debug(NULL,3);
-	
 	libusb_device *dev = info->lowl_data;
 	libusb_open(dev, &h);
 	libusb_set_configuration(h, 1);
