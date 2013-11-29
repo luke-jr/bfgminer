@@ -275,6 +275,10 @@ if USE_HASHBUSTER
 bfgminer_SOURCES += driver-hashbuster.c
 endif
 
+if USE_HASHBUSTER2
+bfgminer_SOURCES += driver-hashbuster2.c
+endif
+
 endif
 
 if NEED_BFG_LOWL_HID

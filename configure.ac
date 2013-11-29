@@ -769,7 +769,7 @@ AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
 driverlist="$driverlist hashbuster"
 hashbuster=auto
 AC_ARG_ENABLE([hashbuster],
-	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster (default enabled)])],
+	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster Nano (default enabled)])],
 	[hashbuster=$enableval]
 	)
 if test "x$hashbuster" = "xno"; then
@@ -782,20 +782,45 @@ elif test "x$bitfury" = "xyes"; then
 			hashbuster=no
 			hashbuster_enableaction="install hidapi"
 		else
-			AC_MSG_ERROR([Could not find hidapi, required for HashBuster support])
+			AC_MSG_ERROR([Could not find hidapi, required for HashBuster Nano support])
 		fi
 	fi
 elif test "x$hashbuster" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled HashBuster])
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled HashBuster Nano])
 else
 	hashbuster=no
 fi
 if test "x$hashbuster" = "xyes"; then
-	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster support is wanted])
+	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster Nano support is wanted])
 	need_lowl_hid=yes
 	has_asic=yes
 fi
 AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
+
+
+driverlist="$driverlist hashbuster2"
+AC_ARG_ENABLE([hashbuster2],
+	[AC_HELP_STRING([--disable-hashbuster2],[Compile support for HashBuster Micro (default if libusb)])],
+	[hashbuster2=$enableval],
+	[hashbuster2=auto]
+	)
+if test "x$hashbuster2$want_libusb" = xyesno; then
+	AC_MSG_ERROR([You disabled libusb, required for HashBuster Micro support])
+elif test "x$hashbuster2$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for HashBuster Micro support])
+elif test "x$hashbuster2" = xauto; then
+	hashbuster2="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for HashBuster Micro support])
+		hashbuster2_enableaction="install libusb 1.0+"
+	fi
+fi
+if test "x$hashbuster2" = xyes; then
+	AC_DEFINE([USE_HASHBUSTER2], [1], [Defined to 1 if HashBuster Micro support is wanted])
+	need_lowl_usb=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_HASHBUSTER2], [test x$hashbuster2 = xyes])
 
 
 driverlist="$driverlist metabank"
