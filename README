@@ -108,7 +108,7 @@ Optional Dependencies:
 	  sysfs              (built-in to most Linux kernels, just mount on /sys)
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 	
-	HashBuster & NanoFury USB devices:
+	HashBuster Nano & NanoFury USB devices:
 	  hidapi             https://github.com/signal11/hidapi
 	
 	getwork server for Block Erupter Blades:
@@ -117,7 +117,7 @@ Optional Dependencies:
 	Stratum proxy:
 	  libevent 2.0.3+    http://libevent.org/
 
-	Klondike, X6500 and ZTEX FPGA boards:
+	HashBuster Micro, Klondike, X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
 
 	Video card GPU mining (free):
@@ -144,6 +144,10 @@ BFGMiner specific configuration options:
 	                        enabled)
 	--disable-littlefury    Compile support for LittleFury (default enabled)
 	--disable-nanofury      Compile support for NanoFury (default enabled)
+	--disable-hashbuster    Compile support for HashBuster Nano (default
+	                        enabled)
+	--disable-hashbuster2   Compile support for HashBuster Micro (default if
+	                        libusb)
 	--enable-metabank       Compile support for Metabank (default disabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)

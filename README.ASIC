@@ -2,8 +2,8 @@ SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
-Butterfly Labs' SC range of devices, Klondike modules, and KnCminer's Mercury,
-Jupiter and Saturn.
+Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
+KnCminer's Mercury, Jupiter and Saturn.
 
 
 AVALON
