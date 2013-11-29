@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "deviceapi.h"
 #include "driver-bitfury.h"
@@ -143,7 +144,7 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	int j;
 	struct cgpu_info dummy_cgpu;
 	const char * const product = info->product;
-	const char * const serial = info->serial;
+	char *serial = info->serial;
 	libusb_device_handle *h;
 	
 	if (info->lowl != &lowl_usb)
@@ -175,6 +176,20 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 		OUTPacket[2] = 0x01;
 		hashbuster2_io(h, INPacket, OUTPacket);
 	}
+	
+	OUTPacket[0] = '\x20';
+	hashbuster2_io(h, INPacket, OUTPacket);
+	if (!memcmp(INPacket, "\x20\0", 2))
+	{
+		// 64-bit LE serial number
+		uint64_t sernum = 0;
+		for (j = 2; j < 10; ++j)
+			sernum = (sernum << 8) | INPacket[j];
+		serial = malloc((8 * 2) + 1);
+		sprintf(serial, "%08"PRIx64, sernum);
+	}
+	else
+		serial = maybe_strdup(info->serial);
 	
 	int chip_n;
 	
@@ -212,7 +227,7 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 			.threads = 1,
 			.dev_manufacturer = maybe_strdup(info->manufacturer),
 			.dev_product = maybe_strdup(product),
-			.dev_serial = maybe_strdup(serial),
+			.dev_serial = serial,
 			.deven = DEV_ENABLED,
 		};
 	}
