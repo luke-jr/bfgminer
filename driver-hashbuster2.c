@@ -159,8 +159,6 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	libusb_device *dev = info->lowl_data;
 	libusb_open(dev, &h);
-	if (libusb_kernel_driver_active(h, 0))
-		libusb_detach_kernel_driver(h, 0);
 	libusb_set_configuration(h, 1);
 	libusb_claim_interface(h, 0);
 	
