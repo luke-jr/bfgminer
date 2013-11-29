@@ -2512,9 +2512,21 @@ struct bfgtls_data *get_bfgtls()
 	return bfgtls;
 }
 
+static
+void bfgtls_free(void * const p)
+{
+	struct bfgtls_data * const bfgtls = p;
+	free(bfgtls->bfg_strerror_result);
+#ifdef WIN32
+	if (bfgtls->bfg_strerror_socketresult)
+		LocalFree(bfgtls->bfg_strerror_socketresult);
+#endif
+	free(bfgtls);
+}
+
 void bfg_init_threadlocal()
 {
-	if (pthread_key_create(&key_bfgtls, NULL))
+	if (pthread_key_create(&key_bfgtls, bfgtls_free))
 		quithere(1, "pthread_key_create failed");
 }
 
