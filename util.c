@@ -2653,6 +2653,18 @@ struct bfgtls_data *get_bfgtls()
 	return bfgtls;
 }
 
+static
+void bfgtls_free(void * const p)
+{
+	struct bfgtls_data * const bfgtls = p;
+	free(bfgtls->bfg_strerror_result);
+#ifdef WIN32
+	if (bfgtls->bfg_strerror_socketresult)
+		LocalFree(bfgtls->bfg_strerror_socketresult);
+#endif
+	free(bfgtls);
+}
+
 #ifdef NEED_BFG_LOWL_VCOM
 struct detectone_meta_info_t *_detectone_meta_info()
 {
@@ -2662,7 +2674,7 @@ struct detectone_meta_info_t *_detectone_meta_info()
 
 void bfg_init_threadlocal()
 {
-	if (pthread_key_create(&key_bfgtls, NULL))
+	if (pthread_key_create(&key_bfgtls, bfgtls_free))
 		quithere(1, "pthread_key_create failed");
 }
 
