@@ -135,6 +135,7 @@ struct lowlevel_device_info *lowlevel_scan()
 		       (unsigned)devinfo_mid_list->vid, (unsigned)devinfo_mid_list->pid,
 		       devinfo_mid_list->manufacturer, devinfo_mid_list->product, devinfo_mid_list->serial);
 	}
+	HASH_CLEAR(hh, devinfo_same_prev_ht);
 	
 	return devinfo_list;
 }
