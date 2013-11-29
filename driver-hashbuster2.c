@@ -199,7 +199,14 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	chip_n = libbitfury_detectChips1(port);
 	if (unlikely(!chip_n))
+	{
+		applog(LOG_WARNING, "%s: No chips found on %s", __func__, serial);
+		free(port);
+		free(serial);
+		libusb_release_interface(h, 0);
+		libusb_close(h);
 		return false;
+	}
 	
 	{
 		devicelist = malloc(sizeof(*devicelist) * chip_n);
