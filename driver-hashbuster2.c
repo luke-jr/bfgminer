@@ -165,21 +165,15 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	unsigned char OUTPacket[64];
 	unsigned char INPacket[64];
-	signed int result;
 	OUTPacket[0] = 0xFE;
-	libusb_bulk_transfer(h, 0x01, OUTPacket, 64, &result, 0);
-	libusb_bulk_transfer(h, 0x81,  INPacket, 64, &result, 0);
+	hashbuster2_io(h, INPacket, OUTPacket);
 	if (INPacket[1] == 0x18)
 	{
-		do
-		{
-			// Turn on miner PSU
-			OUTPacket[0] = 0x10;
-			OUTPacket[1] = 0x00;
-			OUTPacket[2] = 0x01;
-			libusb_bulk_transfer(h, 0x01, OUTPacket, 64, &result, 0);
-			libusb_bulk_transfer(h, 0x81,  INPacket, 64, &result, 0);
-		} while (INPacket[0] == 0xFF);
+		// Turn on miner PSU
+		OUTPacket[0] = 0x10;
+		OUTPacket[1] = 0x00;
+		OUTPacket[2] = 0x01;
+		hashbuster2_io(h, INPacket, OUTPacket);
 	}
 	
 	int chip_n;
