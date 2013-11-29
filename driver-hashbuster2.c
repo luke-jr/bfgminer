@@ -20,6 +20,7 @@
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-usb.h"
 #include "miner.h"
 
 #define HASHBUSTER_USB_PRODUCT "HashBuster"
@@ -200,12 +201,16 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	if (unlikely(!chip_n))
 	{
 		applog(LOG_WARNING, "%s: No chips found on %s", __func__, serial);
+fail:
 		free(port);
 		free(serial);
 		libusb_release_interface(h, 0);
 		libusb_close(h);
 		return false;
 	}
+	
+	if (bfg_claim_libusb(&hashbuster2_drv, true, dev))
+		goto fail;
 	
 	{
 		devicelist = malloc(sizeof(*devicelist) * chip_n);
