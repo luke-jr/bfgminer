@@ -1519,8 +1519,7 @@ void klondike_wlogprint_status(struct cgpu_info *klncgpu)
 	fan /= slaves + 1;
         fan = 100 * fan / 255;
 	clock /= slaves + 1;
-	if (clock && clock <= 999)
-		wlogprint("Frequency: %d MHz\n", (int)clock);
+	wlogprint("Frequency: %d MHz\n", (int)clock);
 	if (fan && fan <= 100)
 		wlogprint("Fan speed: %d%%\n", fan);
 }
