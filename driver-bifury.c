@@ -85,7 +85,7 @@ bool bifury_lowl_match(const struct lowlevel_device_info * const info)
 static
 bool bifury_detect_one(const char * const devpath)
 {
-	char buf[0x40], *p, *q;
+	char buf[0x40], *p, *q, *s;
 	bytes_t reply = BYTES_INIT;
 	int major, minor, hwrev, chips;
 	struct cgpu_info *cgpu;
@@ -134,6 +134,7 @@ bool bifury_detect_one(const char * const devpath)
 	bytes_free(&reply);
 	serial_close(fd);
 	
+	s = p;
 	major = strtol(&p[8], &p, 10);
 	if (p == &buf[8] || p[0] != '.')
 		goto parseerr;
@@ -146,6 +147,7 @@ bool bifury_detect_one(const char * const devpath)
 	chips = strtol(&p[7], &q, 10);
 	if (p == q || chips < 1)
 		goto parseerr;
+	free(s);
 	
 	applog(LOG_DEBUG, "%s: Found firmware %d.%d on hardware rev %d with %d chips",
 	       bifury_drv.dname, major, minor, hwrev, chips);
@@ -166,6 +168,7 @@ bool bifury_detect_one(const char * const devpath)
 
 parseerr:
 	applog(LOG_DEBUG, "%s: Error parsing version response", bifury_drv.dname);
+	free(s);
 	return false;
 
 err:
