@@ -31,7 +31,6 @@ BFG_REGISTER_DRIVER(hashbuster2_drv)
 static
 bool hashbuster2_io(libusb_device_handle * const h, unsigned char *buf, unsigned char *cmd)
 {
-	const uint8_t cmdbyte = *((uint8_t *)cmd);
 	int result;
 	char x[0x81];
 	
@@ -138,19 +137,14 @@ bool hashbuster2_lowl_match(const struct lowlevel_device_info * const info)
 static
 bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	struct cgpu_info *cgpu = NULL, *proc1 = NULL, *prev_cgpu = NULL;
+	struct cgpu_info *cgpu = NULL;
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
-	int i, j;
-	int proc_count = 0;
-	struct bitfury_device dummy_bitfury;
+	int j;
 	struct cgpu_info dummy_cgpu;
 	const char * const product = info->product;
 	const char * const serial = info->serial;
-	char * const path = info->path;
-	hid_device *h_lost;
 	libusb_device_handle *h;
-	uint8_t buf[0x40] = {'\xfe'};
 	
 	if (info->lowl != &lowl_usb)
 		applogr(false, LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb_generic!",
@@ -189,46 +183,45 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	}
 	
 	int chip_n;
-			
-			port = malloc(sizeof(*port));
-			port->cgpu = &dummy_cgpu;
-			port->txrx = hashbuster2_spi_txrx;
-			port->userp=h;
-			port->repr = hashbuster2_drv.dname;
-			port->logprio = LOG_DEBUG;
-			port->speed = 100000;
-			port->mode = 0;
-			dummy_bitfury.slot = 0;
-			
-			chip_n = libbitfury_detectChips1(port);
-			if (chip_n)
-			{
-				applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", 0, chip_n);
-				
-				devicelist = malloc(sizeof(*devicelist) * chip_n);
-				for (j = 0; j < chip_n; ++j)
-				{
-					devicelist[j] = bitfury = malloc(sizeof(*bitfury));
-					*bitfury = (struct bitfury_device){
-						.spi = port,
-						.slot = 0,
-						.fasync = j,
-					};
-				}
-				
-				cgpu = malloc(sizeof(*cgpu));
-				*cgpu = (struct cgpu_info){
-					.drv = &hashbuster2_drv,
-					.procs = chip_n,
-					.device_data = devicelist,
-					.cutofftemp = 200,
-					.threads = 1,
-					.dev_manufacturer = maybe_strdup(info->manufacturer),
-					.dev_product = maybe_strdup(product),
-					.dev_serial = maybe_strdup(serial),
-					.deven = DEV_ENABLED,
-				};
-			}
+	
+	port = malloc(sizeof(*port));
+	port->cgpu = &dummy_cgpu;
+	port->txrx = hashbuster2_spi_txrx;
+	port->userp=h;
+	port->repr = hashbuster2_drv.dname;
+	port->logprio = LOG_DEBUG;
+	port->speed = 100000;
+	port->mode = 0;
+	
+	chip_n = libbitfury_detectChips1(port);
+	if (chip_n)
+	{
+		applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", 0, chip_n);
+		
+		devicelist = malloc(sizeof(*devicelist) * chip_n);
+		for (j = 0; j < chip_n; ++j)
+		{
+			devicelist[j] = bitfury = malloc(sizeof(*bitfury));
+			*bitfury = (struct bitfury_device){
+				.spi = port,
+				.slot = 0,
+				.fasync = j,
+			};
+		}
+		
+		cgpu = malloc(sizeof(*cgpu));
+		*cgpu = (struct cgpu_info){
+			.drv = &hashbuster2_drv,
+			.procs = chip_n,
+			.device_data = devicelist,
+			.cutofftemp = 200,
+			.threads = 1,
+			.dev_manufacturer = maybe_strdup(info->manufacturer),
+			.dev_product = maybe_strdup(product),
+			.dev_serial = maybe_strdup(serial),
+			.deven = DEV_ENABLED,
+		};
+	}
 	
 	return add_cgpu(cgpu);
 }
@@ -237,12 +230,9 @@ static
 bool hashbuster2_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
-	struct spi_port *port;
 	
 	struct bitfury_device **devicelist;
 	struct bitfury_device *bitfury;
-	
-	libusb_device_handle *h;
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
