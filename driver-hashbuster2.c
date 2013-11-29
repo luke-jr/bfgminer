@@ -201,10 +201,10 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	port->mode = 0;
 	
 	chip_n = libbitfury_detectChips1(port);
-	if (chip_n)
+	if (unlikely(!chip_n))
+		return false;
+	
 	{
-		applog(LOG_WARNING, "BITFURY slot %d: %d chips detected", 0, chip_n);
-		
 		devicelist = malloc(sizeof(*devicelist) * chip_n);
 		for (j = 0; j < chip_n; ++j)
 		{
