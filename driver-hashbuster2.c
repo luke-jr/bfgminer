@@ -20,7 +20,6 @@
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
-#include "lowl-hid.h"
 #include "miner.h"
 
 #define HASHBUSTER_USB_PRODUCT "HashBuster"
