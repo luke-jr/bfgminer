@@ -233,6 +233,7 @@ struct klondike_info {
 	uint64_t errorcount;
 	uint64_t noisecount;
 	int incorrect_slave_sequential;
+	int16_t nonce_offset;
 
 	// us Delay from USB reply to being processed
 	double delay_count;
@@ -473,6 +474,7 @@ static int cvtCToKln(double deg)
 
 static void display_kline(struct cgpu_info *klncgpu, KLINE *kline, const char *msg)
 {
+	const struct klondike_info * const klninfo = klncgpu->device_data;
 	switch (kline->hd.cmd) {
 		case KLN_CMD_NONCE:
 			applog(READ_DEBUG,
@@ -482,7 +484,7 @@ static void display_kline(struct cgpu_info *klncgpu, KLINE *kline, const char *m
 				(int)(kline->wr.dev), msg, kline->wr.cmd,
 				(int)(kline->wr.dev),
 				(int)(kline->wr.workid),
-				(unsigned int)K_NONCE(kline->wr.nonce) - 0xC0);
+				(unsigned int)K_NONCE(kline->wr.nonce) + klninfo->nonce_offset);
 			break;
 		case KLN_CMD_STATUS:
 		case KLN_CMD_WORK:
@@ -941,7 +943,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	KLINE *kline = &(kitem->kline);
 	struct timeval tv_now;
 	double us_diff;
-	uint32_t nonce = K_NONCE(kline->wr.nonce) - 0xC0;
+	uint32_t nonce = K_NONCE(kline->wr.nonce) + klninfo->nonce_offset;
 
 	applog(LOG_DEBUG, "%s%i:%d FOUND NONCE (%02x:%08x)",
 			  klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
@@ -960,6 +962,38 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	rd_unlock(&(klncgpu->qlock));
 
 	if (work) {
+		if (unlikely(!klninfo->nonce_offset))
+		{
+			bool test_c0  = test_nonce(work, nonce -  0xc0, false);
+			bool test_180 = test_nonce(work, nonce - 0x180, false);
+			if (test_c0)
+			{
+				if (unlikely(test_180))
+				{
+					applog(LOG_DEBUG, "%s: Matched both c0 and 180 offsets (%02x:%08lx)",
+					       klncgpu->dev_repr, kline->wr.workid, (unsigned long)nonce);
+					submit_nonce(klncgpu->thr[0], work, nonce - 0x180);
+					nonce -= 0xc0;
+				}
+				else
+				{
+					applog(LOG_DEBUG, "%s: Matched c0 offset (%02x:%08lx)",
+					       klncgpu->dev_repr, kline->wr.workid, (unsigned long)nonce);
+					nonce += (klninfo->nonce_offset = -0xc0);
+				}
+			}
+			else
+			if (test_180)
+			{
+				applog(LOG_DEBUG, "%s: Matched 180 offset (%02x:%08lx)",
+				       klncgpu->dev_repr, kline->wr.workid, (unsigned long)nonce);
+				nonce += (klninfo->nonce_offset = -0x180);
+			}
+			else
+				applog(LOG_DEBUG, "%s: Matched neither c0 nor 180 offset (%02x:%08lx)",
+				       klncgpu->dev_repr, kline->wr.workid, (unsigned long)nonce);
+		}
+		
 		wr_lock(&(klninfo->stat_lock));
 		klninfo->devinfo[kline->wr.dev].noncecount++;
 		klninfo->noncecount++;
