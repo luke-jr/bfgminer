@@ -29,6 +29,7 @@
 #include "compat.h"
 #include "deviceapi.h"
 #include "lowlevel.h"
+#include "lowl-usb.h"
 #include "miner.h"
 
 #define K1 "K1"
@@ -849,6 +850,8 @@ bool klondike_foundlowl(struct lowlevel_device_info * const info, __maybe_unused
 		return false;
 	}
 	struct libusb_device * const dev = info->lowl_data;
+	if (bfg_claim_libusb(&klondike_drv, true, dev))
+		return false;
 	
 // static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 	struct cgpu_info * const klncgpu = malloc(sizeof(*klncgpu));
