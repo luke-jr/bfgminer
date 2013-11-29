@@ -502,14 +502,12 @@ static void applog_and_exit(const char *fmt, ...)
 char *devpath_to_devid(const char *devpath)
 {
 #ifndef WIN32
+	struct stat my_stat;
+	if (stat(devpath, &my_stat))
+		return NULL;
 	char *devs = malloc(6 + (sizeof(dev_t) * 2) + 1);
-	{
-		struct stat my_stat;
-		if (stat(devpath, &my_stat))
-			return NULL;
-		memcpy(devs, "dev_t:", 6);
-		bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
-	}
+	memcpy(devs, "dev_t:", 6);
+	bin2hex(&devs[6], &my_stat.st_rdev, sizeof(dev_t));
 #else
 	if (!strncmp(devpath, "\\\\.\\", 4))
 		devpath += 4;
