@@ -2588,7 +2588,13 @@ const char *bfg_strerror(int e, enum bfg_strerror_type type)
 			if (*msg)
 				LocalFree(*msg);
 			if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, e, 0, (LPSTR)msg, 0, 0))
+			{
+				LPSTR msgp = *msg;
+				size_t n = strlen(msgp);
+				while (isCspace(msgp[--n]))
+					msgp[n] = '\0';
 				return *msg;
+			}
 			*msg = NULL;
 			
 			break;
