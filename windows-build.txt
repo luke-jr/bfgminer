@@ -1,50 +1,161 @@
-######################################################################################
-#                                                                                    #
-#          Native WIN32 setup and build instructions (on mingw32/Windows):           #
-#                                                                                    #
-######################################################################################
+*******************
+** Install MinGW **
+*******************
 
-**************************************************************************************
-* Introduction                                                                       *
-**************************************************************************************
-The following instructions have been tested on both Windows 7 and Windows XP.
-Most of what is described below (copying files, downloading files, etc.) can be done
-directly in the MinGW MSYS shell; these instructions do not do so because package
-versions and links change over time. The best way is to use your browser, go to the
-links directly, and see for yourself which versions you want to install.
-Winrar was used to do the extracting of archive files in the making of this guide.
+1.  Go to https://sourceforge.net/downloads/mingw
+2.  Download and execute mingw-get-setup.exe
+3.  Complete the installation wizard leaving default values
 
-**************************************************************************************
-* A tip that might help you along the way                                            *
-**************************************************************************************
-Enable "QuickEdit Mode" in your Command Prompt Window or MinGW Command Prompt
-Window (No need to go into the context menu to choose edit-mark/copy/paste):
-Right-click on the title bar and click Properties. Under the Options tab, check
-the box for "QuickEdit Mode". Alternately, if you want this change to be
-permanent on all of your Command Prompt Windows; you can click Defaults instead
-of Properties as described above. Now you can drag and select text you want to
-copy, right-click to copy the text to the clipboard and right-click once again to
-paste it at the desired location. You could for example, copy some text from this
-document to the clipboard and right click in your Command Prompt Window to paste
-what you copied.
+*********************
+** Configure MinGW **
+*********************
 
-**************************************************************************************
-* Install mingw32                                                                    *
-**************************************************************************************
-Go to this url ==> http://www.mingw.org/wiki/Getting_Started
-Click the link that says "Download and run the latest mingw-get-inst version."
-Download and run the latest file. Install MinGW in the default directory.
-(I downloaded the one labeled "mingw-get-inst-20120426" - note that this could
-be a different version later.)
-Make sure to check the option for "Download latest repository catalogs".
-I just selected all the check boxes (excluding "Fortran Compiler") so that everything
-was installed.
+1.  Launch the MinGW Installation Manager
+2.  Select Basic Setup on the left
+3.  Mark the following packages for installation: mingw-developer-toolkit, mingw32-base, mingw-gcc-g++, and msys-base
+4.  Select All Packages on the left
+5.  Mark the following packages for installation: mingw32-pthreads-w32 (dev), mingw32-libpdcurses (dev), mingw32-pdcurses (bin), msys-libopenssl (dev)
+6.  Click Installation > Apply Changes
+7.  Click Apply
+8.  Wait...
+9.  Click Close
+10. Close MinGW Installation Manager
 
-**************************************************************************************
-* Create mstcpip.h                                                                   *
-**************************************************************************************
-Open notepad and copy the following into it. Save it as "\MinGW\include\mstcpip.h".
-Make sure it does not have the ".txt" extension (If it does then rename it).
+************************
+** MinGW Post-Install **
+************************
+
+1.  Check your Start menu for “MinGW Shell”
+2.  If the shortcut exists, continue to the next section, otherwise:
+3.  Navigate to C:\MinGW\msys\1.0\postinstall
+4.  Run pi.bat & answer the questions
+5.  Navigate to C:\MinGW\msys\1.0
+6.  Right-click msys.bat and click Copy 
+7.  Click the Start button
+8.  Right-click All Programs and click Open
+9.  Right-click on the opened folder and click “Paste shortcut”
+10. Right-click the new shortcut and click Properties
+11. On the General tab, rename the shortcut to “MinGW Shell”
+12. On the Shortcut tab, change Start in to C:\MinGW\msys\1.0\bin
+13. Click OK
+
+******************************************
+** Install YASM (optional - CPU mining) **
+******************************************
+
+1.  Visit http://yasm.tortall.net/Download.html
+2.  Download the Win32 or Win64 .exe, depending on your version of Windows
+3.  Rename the downloaded executable to yasm.exe
+4.  Copy the executable to C:\MinGW\bin
+
+********************
+** Install uthash **
+********************
+
+1.  Visit http://troydhanson.github.io/uthash/
+2.  Download the uthash-master.zip file
+3.  Extract the contents of the uthash-master/src folder into C:\MinGW\include
+
+******************************
+** Install GTK+ for Windows **
+******************************
+
+1.  Visit http://sourceforge.net/projects/gtk-win/
+2.  Download and execute the gtk2-runtime installer
+3.  Complete the installation wizard leaving default values
+4.  Copy libglib-2.0-0.dll from C:\Program Files\GTK2-Runtime\bin to C:\MinGW\bin
+
+************************
+** Install pkg-config **
+************************
+
+1.  Visit http://www.gtk.org/download/win32.php
+2.  Search for a version of pkg-config that includes both the Tool and Dev downloads
+3.  Click and download both the Tool link and the Dev link
+4.  Open the pkg-config zip file and extract the bin folder to C:\MinGW
+5.  Open the pkg-config-dev zip file and extract the share folder to C:\MinGW
+
+*********************
+** Install libcurl **
+*********************
+
+1.  Visit http://curl.haxx.se/download.html#Win32
+2.  Look for the Win32 - Generic heading
+3.  Download the link that indicates both *libcurl* (not just binary) and *SSL*
+4.  Open the zip file and extract the lib, include, and bin folders to C:\MinGW
+5.  Edit C:\MinGW\lib\pkgconfig\libcurl.pc
+6.  Change "-lcurl" to "-lcurl -lcurldll"
+
+************************
+** Install libjansson **
+************************
+
+1.  Visit http://www.digip.org/jansson/releases/
+2.  Download the latest .tar.gz file (not doc.tar.gz)
+3.  Open the .tar.gz file and extract the jansson folder to C:\MinGW\msys\1.0\home\USER (where USER is your user name)
+4.  Click Start and launch MinGW Shell
+5.  Type the following (replace X.X with actual version):
+
+	cd ~/jansson-X.X
+	./configure --prefix=/MinGW
+	make
+	make check
+	make install
+
+********************
+** Install libusb **
+********************
+
+1.  Visit http://git.libusb.org/?p=libusb.git;a=snapshot;h=master;sf=zip
+2.  Download and open the resulting zip file
+3.  Extract the libusb-master folder to C:\MinGW\msys\1.0\home\USER
+4.  Return to the MinGW Shell
+5.  Type the following (replace XYZ with actual identifier):
+
+	cd ~/libusb-master-XYZ
+	./autogen.sh --disable-debug-log --prefix=/MinGW
+	make
+	make install 
+
+******************************************************
+** Install libmicrohttpd (optional - Stratum Proxy) **
+******************************************************
+
+1.  Visit http://ftp.gnu.org/gnu/libmicrohttpd/
+2.  Download the latest w32.zip file
+3.  Open the zip file and extract the share, lib, include, and bin folders to C:\MinGW
+
+*****************
+** Install Git **
+*****************
+
+1.  Visit http://git-scm.com/downloads
+2.  Click the Download for Windows
+3.  Run the resulting installer once downloaded
+4.  Complete the installation wizard leaving default values
+
+****************************
+** Configure Git in MinGW **
+****************************
+
+1.  Navigate to C:\MinGW\msys\1.0\home\USER
+2.  Create a new text file with Notepad called profile.txt with the contents:
+
+PATH=$PATH:/c/Program\ Files/Git/bin
+
+3.  Return to the MinGW Shell
+4.  Type the following:
+
+	mv ~/profile.txt ~/.profile
+
+5.  Restart the MinGW Shell
+
+******************
+** OS Header(s) **
+******************
+
+1.  Navigate to C:\MinGW\include
+2.  Use Notepad to create a new file called mstcpip.h (not .txt) with the contents:
 
 struct tcp_keepalive
 {
@@ -63,222 +174,60 @@ struct tcp_keepalive
 
 #endif
 
-**************************************************************************************
-* Run the MSYS shell for the first time to create your user directory                *
-**************************************************************************************
-(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
-This will create your user directory for you.
+**********************
+** Compile bfgminer **
+**********************
 
-**************************************************************************************
-* OPTIONAL - Install YASM (only for if you intend to enable CPU mining)              *
-**************************************************************************************
-Open a browser to http://yasm.tortall.net/Download.html
-Download the Win32 or Win64 exe as appropriate
-Copy to c:\mingw\bin and rename to yasm.exe
+1.  Return to the MinGW Shell
+2.  Type the following:
 
-**************************************************************************************
-* Install libpdcurses                                                                *
-**************************************************************************************
-Type the lines below to install libpdcurses.
-mingw-get install mingw32-libpdcurses
-mingw-get install mingw32-pdcurses
-Ctrl-D or typing "logout" and pressing the enter key should get you out of the
-window.
+	cd ~/
+	git clone git://github.com/luke-jr/bfgminer.git
+	cd bfgminer/
+	./autogen.sh
+	./configure
+	make
 
-**************************************************************************************
-* Install UTHash/UTList                                                              *
-**************************************************************************************
-Go to the website http://troydhanson.github.io/uthash/
-Download uthash-master.zip and unzip anywhere
-Go to the directory uthash-master/src
-Copy all the files to c:/mingw/include
+* Note: see the README for bfgminer ./configure options
 
-**************************************************************************************
-* Install GTK-WIN, required for Pkg-config in the next step                          *
-**************************************************************************************
-Go to this url ==> http://sourceforge.net/projects/gtk-win/
-Download the file.
-After you have downloaded the file Double click/run it and this will install GTK+
-I chose all the selection boxes when I installed.
-Copy libglib-2.0-0.dll and intl.dll from \Program Files (x86)\gtk2-runtime\bin to
-\MinGW\bin
-Note: If you are on a 32 bit version of windows "Program Files (x86)" will be
-"Program Files".
+**********************
+** Package Binaries **
+**********************
 
-**************************************************************************************
-* Install pkg-config                                                                 *
-**************************************************************************************
-Go to this url ==> http://www.gtk.org/download/win32.php
-Scroll down to where it shows pkg-cfg.
-Download the file from the tool link. Extract "pkg-config.exe" from bin and place in
-your  \MinGW\bin directory.
-Download the file from the "Dev" link. Extract "pkg.m4" from share\aclocal and place
-in your \MingW\share\aclocal directory.
+Create a new folder anywhere and copy the following items there:
 
-**************************************************************************************
-* Install libcurl                                                                    *
-**************************************************************************************
-Go to this url ==> http://curl.haxx.se/download.html#Win32
-At the section where it says "Win32 - Generic", Click on the link that indicates
-Win32 2000.XP 7.27.0 libcurl SSL and download it.
-The one I downloaded may not be current for you. Choose the latest.
-Extract the files that are in the zip (bin, include, and lib) to their respective
-locations in MinGW (\MinGW\bin, \MinGW\include, and \MinGW\lib).
-Edit the file \MinGW\lib\pkgconfig\libcurl.pc and change "-lcurl" to
-"-lcurl -lcurldll".
-Ref. http://old.nabble.com/gcc-working-with-libcurl-td20506927.html
+C:\MinGW\msys\1.0\home\USER\bfgminer
 
-**************************************************************************************
-* Install libjansson                                                                 *
-**************************************************************************************
-Go to this url ==> http://www.digip.org/jansson/releases/
-Download the latest tar with library sources.
-Copy the jansson-X.X folder into your \MinGW\msys\1.0\home\
-Run the MinGW MSYS shell
-(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
-Enter jansson-X.X dir, and type
-      ./configure --prefix=/MinGW
-      make
-      make check
-      make install
+	bfgminer.exe
+	bfgminer-rpc.exe
+	*.cl
+	COPYING
+	LICENSE 
+	README*
 
-(Source: http://www.digip.org/jansson/doc/dev/gettingstarted.html)
-(Source: https://groups.google.com/forum/#!msg/jansson-users/CTPFBeZ0ZWQ/W3uuOuWZegkJ)
+C:\MinGW\msys\1.0\home\USER\bfgminer\libblkmaker\.libs  
 
-**************************************************************************************
-* Optional - Install libusb if you need auto USB device detection                    *
-* Required for Ztex and X6500                                                        *
-**************************************************************************************
-Go to this url ==> http://git.libusb.org/?p=libusb.git;a=snapshot;h=master;sf=zip
-save the file to your local storage. Open the file and copy the libusb* folder to
-\MinGW\msys\1.0\home\(your user directory/folder).
-Or if you do not want to download the file directly and would like to use git then
-Type the following from the MSYS shell in your home folder.
-git clone git://git.libusb.org/libusb.git
+	libblkmaker-0.1-0.dll
+	libblkmaker_jansson-0.1-0.dll
 
-Run the MinGW MSYS shell
-(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
-Change the working directory to your libusb project folder.
-Example: cd libusb-something [Enter Key] if you are unsure then type "ls -la"
-Another way is to type "cd libusb" and then press the tab key; It will auto fill.
-Type the lines below one at a time. Look for problems after each one before going on
-to the next.
+C:\MinGW\bin
 
-./autogen.sh --disable-debug-log --prefix=/MinGW
-make
-make install
+	libcurl.dll
+	libjansson-4.dll
+	libmicrohttpd-10.dll
+	libpdcursesw.dll
+	pthreadGC2.dll
+	libusb-1.0.dll
+	libidn-11.dll
+	libeay32.dll
+	ssleay32.dll
+	libgcc_s_dw2-1.dll
+	libgnutls-28.dll
+	libgcrypt-11.dll
+	libplibc-1.dll
+	libgmp.dll
+	libintl-8.dll
+	libgpg-error-0.dll
+	libiconv-2.dll
+	libevent-2-0-5.dll
 
-You may now exit the MSYS shell.
-Ctrl-D or typing "logout" and pressing the enter key should get you out of the
-window.
-
-You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory.
-You will find "libusb-1.0.dll" in the \MinGW\bin directory/folder.
-
-Use this method if libusb does not work for you on Ztex. Once someone lets us know
-Libusb works instead of libusbx then we will remove the section below this line.
-Run the MSYS shell and change into the libusb folder as above.
-Type ==> make uninstall
-Go to this url ==> http://libusbx.org/
-Click on the "Downloads" tab.
-Click on "releases".
-Click on the latest version. I downloaded 1.0.14; yours may be newer.
-Do not download from the link that says "Looking for the latest version?".
-Click on "Windows"
-Click on the file and download it. I downloaded libusbx-1.0.12-win.7z.
-Extract the the following from the file and place in where directed.
-Copy libusb.h from include\libusbx-1.0 to \MinGW\include\libusb-1.0\libusb.h
-Copy contents of MinGW32\static \MinGW\lib
-Copy contents of MinGW32\dll to \MinGW\lib
-
-NOTE: You will have to copy "libusb-1.0.dll" to your working BFGMiner binary directory.
-
-**************************************************************************************
-* REQUIRED - Install Git into MinGW/MSYS                                             *
-**************************************************************************************
-Go to this url ==> http://code.google.com/p/msysgit/downloads/list?q=full+installer+official+git
-Download and install the latest full installer
-In Windows Explorer, go to c:\MinGW\msys\1.0\home\<username>
-Create a text file named profile.txt with one of the following lines (leave off the win??> part)
-
-win86> PATH=$PATH:/c/Program\ Files/Git/bin
-win64> PATH=$PATH:/c/Program\ Files\ \(x86\)/Git/bin
-
-Save the file, open a MSYS Shell, and enter the following commands
-
-mv profile.txt .profile
-
-then close ALL MSYS Shell windows currently open
-
-Open a new MSYS Shell and enter the following commands
-
-  git clone git://github.com/luke-jr/bfgminer.git
-
-If you just want to update the source after you have already cloned, type:
-
-  cd bfgminer
-  git fetch
-
-Now you can get the latest source directly from github.
-
-**************************************************************************************
-* Build bfgminer.exe                                                                 *
-**************************************************************************************
-Run the MinGW MSYS shell
-(Start Icon/keyboard key ==> All Programs ==> MinGW ==> MinGW Shell).
-Change the working directory to your BFGMiner project folder.
-Example: cd bfgminer-2.7.1 [Enter Key] if you are unsure then type "ls -la"
-Another way is to type "cd bfg" and then press the tab key; It will auto fill.
-Type the lines below one at a time. Look for problems after each one before going on
-to the next.
-
-      ./autogen.sh
-      CFLAGS="-O2 -msse2" ./configure (additional config options, see below)
-      make
-      strip bfgminer.exe  <== only do this if you are not compiling for debugging
-
-**************************************************************************************
-* Some ./configure options                                                           *
-**************************************************************************************
---enable-cpumining      Build with cpu mining support(default disabled)
---disable-opencl        Build without support for OpenCL (default enabled)
---disable-adl           Build without ADL monitoring (default enabled)
---disable-bitforce      Compile support for BitForce (default enabled)
---disable-icarus        Compile support for Icarus (default enabled)
---disable-modminer      Compile support for ModMiner (default enabled)
---disable-x6500         Compile support for X6500 (default enabled)
---disable-ztex          Compile support for Ztex (default if libusb)
---enable-scrypt         Compile support for scrypt mining (default disabled)
---without-curses        Compile support for curses TUI (default enabled)
---without-libudev       Autodetect FPGAs using libudev (default enabled)
-
-**************************************************************************************
-* Copy files to a build directory/folder                                             *
-**************************************************************************************
-Make a directory and copy the following files into it. This will be your BFGMiner
-Folder that you use for mining. Remember the .cl filenames could change on later
-releases. If you installed a different version of libcurl then some of those dll's
-may be different as well.
-
-  bfgminer.exe	from \MinGW\msys\1.0\home\(username)\bfgminer
-  *.cl			from \MinGW\msys\1.0\home\(username)\bfgminer
-  README		from \MinGW\msys\1.0\home\(username)\bfgminer
-  libcurl.dll	from \MinGW\bin
-  libidn-11.dll	from \MinGW\bin
-  libeay32.dll	from \MinGW\bin
-  ssleay32.dll	from \MinGW\bin
-  libpdcursesw.dll	from \MinGW\bin
-  pthreadGC2.dll	from \MinGW\bin
-  libjansson-X.dll	from \MinGW\msys\1.0\local\bin
-
-  libblkmaker_jansson-0.1-0.dll 
-	from \MinGW\msys\1.0\home\(username)\bfgminer\libblkmaker\.libs
-	
-  libblkmaker-0.1-0.dll 
-	from \MinGW\msys\1.0\home\(username)\bfgminer\libblkmaker\.libs
-
-######################################################################################
-#                                                                                    #
-#       Native WIN32 setup and build instructions (on mingw32/Windows) complete      #
-#                                                                                    #
-######################################################################################
