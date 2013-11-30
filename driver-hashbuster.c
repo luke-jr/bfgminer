@@ -156,11 +156,11 @@ bool hashbuster_lowl_probe(const struct lowlevel_device_info * const info)
 	uint8_t buf[0x40] = {'\xfe'};
 	
 	if (info->lowl != &lowl_hid)
-		applogr(false, LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not hid!",
+		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not hid!",
 		       __func__, product, serial);
 	
 	if (info->vid != 0xFA04 || info->pid != 0x0011)
-		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
+		applogr(false, LOG_DEBUG, "%s: Wrong VID/PID", __func__);
 	
 	h = hid_open_path(path);
 	if (!h)

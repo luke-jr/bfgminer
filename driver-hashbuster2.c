@@ -148,11 +148,11 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	libusb_device_handle *h;
 	
 	if (info->lowl != &lowl_usb)
-		applogr(false, LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb_generic!",
+		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb_generic!",
 		       __func__, product, serial);
 	
 	if (info->vid != 0xFA04 || info->pid != 0x000D)
-		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
+		applogr(false, LOG_DEBUG, "%s: Wrong VID/PID", __func__);
 	
 	libusb_device *dev = info->lowl_data;
 	libusb_open(dev, &h);

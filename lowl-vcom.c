@@ -440,7 +440,7 @@ out:
 	DWORD type, sz = sizeof(devpath) - 4;
 	if (ERROR_SUCCESS != (e = RegQueryValueExA(hkey, "PortName", NULL, &type, (LPBYTE)&devpath[4], &sz)))
 	{
-		applogfailinfo(LOG_ERR, "get PortName registry key value", "%s", bfg_strerror(e, BST_SYSTEM));
+		applogfailinfo(LOG_DEBUG, "get PortName registry key value", "%s", bfg_strerror(e, BST_SYSTEM));
 		RegCloseKey(hkey);
 		goto out;
 	}
@@ -493,8 +493,10 @@ char *windows_usb_get_root_hub_path(HANDLE hcntlrh)
 	
 	{
 		USB_ROOT_HUB_NAME pathinfo;
-		if (!(DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, 0, 0, &pathinfo, sizeof(pathinfo), &rsz, NULL) && rsz >= sizeof(pathinfo)))
+		if (!DeviceIoControl(hcntlrh, IOCTL_USB_GET_ROOT_HUB_NAME, 0, 0, &pathinfo, sizeof(pathinfo), &rsz, NULL))
 			applogfailinfor(NULL, LOG_ERR, "ioctl (1)", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+		if (rsz < sizeof(pathinfo))
+			applogfailinfor(NULL, LOG_ERR, "ioctl (1)", "Size too small (%d < %d)", (int)rsz, (int)sizeof(pathinfo));
 		namesz = pathinfo.ActualLength;
 	}
 	

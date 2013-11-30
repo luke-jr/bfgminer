@@ -91,8 +91,8 @@ struct lowlevel_device_info *usb_devinfo_scan()
 		
 		err = libusb_open(list[i], &handle);
 		if (unlikely(err))
-			applog(LOG_ERR, "%s: Error opening device: %s",
-			       __func__, bfg_strerror(err, BST_LIBUSB));
+			applog(LOG_DEBUG, "%s: Error opening device %s: %s",
+			       __func__, info->devid, bfg_strerror(err, BST_LIBUSB));
 		else
 		{
 			info->manufacturer = lowl_libusb_dup_string(handle, desc.iManufacturer, "iManufacturer", __func__);

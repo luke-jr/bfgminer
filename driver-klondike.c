@@ -855,7 +855,7 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	if (unlikely(info->lowl != &lowl_usb))
 	{
-		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
+		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
 		       __func__, info->product, info->serial);
 		return false;
 	}

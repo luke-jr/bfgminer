@@ -92,7 +92,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	serial_read(fd, buf, sizeof(buf));
 	if (!twinfury_send_command(fd, "I", 1))
 	{
-		applog(LOG_ERR, "%s: Failed writing id request to %s",
+		applog(LOG_DEBUG, "%s: Failed writing id request to %s",
 		       twinfury_drv.dname, devpath);
 		serial_close(fd);
 		return false;
@@ -100,7 +100,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	len = twinfury_wait_response(fd, buf, sizeof(buf));
 	if(len != 29)
 	{
-		applog(LOG_ERR, "%s: Not a valid response from device (%d)", twinfury_drv.dname, len);
+		applog(LOG_DEBUG, "%s: Not a valid response from device (%d)", twinfury_drv.dname, len);
 		serial_close(fd);
 		return false;
 	}
@@ -117,7 +117,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	char buf_state[sizeof(struct twinfury_state)+1];
 	if (!twinfury_send_command(fd, "R", 1))
 	{
-		applog(LOG_ERR, "%s: Failed writing reset request to %s",
+		applog(LOG_DEBUG, "%s: Failed writing reset request to %s",
 		       twinfury_drv.dname, devpath);
 		serial_close(fd);
 		return false;
@@ -132,7 +132,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 
 	if(len != 8)
 	{
-		applog(LOG_ERR, "%s: %s not responding to reset: %d",
+		applog(LOG_DEBUG, "%s: %s not responding to reset: %d",
 		       twinfury_drv.dname,
 		       devpath, len);
 		return false;

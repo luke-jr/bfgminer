@@ -138,7 +138,7 @@ bool x6500_lowl_probe(const struct lowlevel_device_info * const info)
 	if (info->lowl != &lowl_ft232r)
 	{
 		if (info->lowl != &lowl_usb)
-			applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
+			applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
 			       __func__, product, serial);
 		return false;
 	}
