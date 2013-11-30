@@ -89,7 +89,7 @@ uint16_t crc16(void *p, size_t sz)
 }
 
 static
-ssize_t keep_reading(int fd, void *buf, size_t count)
+ssize_t keep_reading(int prio, int fd, void *buf, size_t count)
 {
 	ssize_t r, rv = 0;
 	
@@ -98,7 +98,7 @@ ssize_t keep_reading(int fd, void *buf, size_t count)
 		r = read(fd, buf, count);
 		if (unlikely(r <= 0))
 		{
-			applog(LOG_ERR, "Read of fd %d returned %d", fd, (int)r);
+			applog(prio, "Read of fd %d returned %d", fd, (int)r);
 			return rv ?: r;
 		}
 		rv += r;
@@ -145,7 +145,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 	}
 	
 	{
-		r = keep_reading(fd, pkt, 5);
+		r = keep_reading(prio, fd, pkt, 5);
 		if (5 != r || pkt[0] != 0xab || pkt[1] != 0xcd || pkt[2] != op)
 		{
 			char hex[(r * 2) + 1];
@@ -155,7 +155,7 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 			return false;
 		}
 		sz = (((unsigned)pkt[3] << 8) | pkt[4]) + 2;
-		r = keep_reading(fd, &pkt[5], sz);
+		r = keep_reading(prio, fd, &pkt[5], sz);
 		if (sz != r)
 		{
 			r += 5;
