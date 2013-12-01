@@ -43,8 +43,10 @@ bool hashbuster2_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsi
 	
 	do // Workaround for PIC USB buffer corruption. We should repeat last packet if receive FF
 	{
-		usb_write(h, cmd, 64);
-		usb_read (h, buf, 64);
+		do
+		{
+			usb_write(h, cmd, 64);
+		} while (usb_read(h, buf, 64) != 64);
 	} while(buf[0]==0xFF);
 	
 	if (unlikely(opt_dev_protocol))
@@ -158,6 +160,7 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	libusb_set_configuration(h, 1);
 	libusb_claim_interface(h, 0);
 	struct lowl_usb_endpoint * const ep = usb_open_ep_pair(h, 0x81, 64, 0x01, 64);
+	usb_ep_set_timeouts_ms(ep, 100, 0);
 	
 	unsigned char OUTPacket[64];
 	unsigned char INPacket[64];
