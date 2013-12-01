@@ -523,7 +523,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 				LIBUSB_LIBS="-l$usb_lib"
 			],[
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed -e 's/^.*[[:space:]:]\(\/[^[:space:]]*\)libusb\.h[[:space:]].*$/\1/' -e t -e d`
+				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)libusb\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
 				if test "x$libusb_include_path" != "x"; then
 					LIBUSB_LIBS="-l$usb_lib"
 					LIBUSB_CFLAGS="-I$libusb_include_path"
@@ -882,7 +882,7 @@ if test x$need_lowl_vcom = xyes; then
 		],[
 			AC_CHECK_HEADER([ddk/usbiodef.h],[
 				found_ddkusb=true
-				AUTOSCAN_CPPFLAGS="-I"`echo '#include <ddk/usbiodef.h>' | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed -e 's/^.*[[:space:]:]\(\/[^[:space:]]*\)usbiodef\.h[[:space:]].*$/\1/' -e t -e d`
+				AUTOSCAN_CPPFLAGS="-I"`echo '#include <ddk/usbiodef.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)usbiodef\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
 			],[
 				true
 			],[
@@ -1000,7 +1000,7 @@ else
 				AC_MSG_CHECKING([for curses header subdirectory])
 				barelib="${barelib/6/}"
 				barelib="${barelib/5/}"
-				cursesincl=`echo "#include <${barelib}/curses.h>" | ${CPP} -M - 2>/dev/null | tr -d '\\n\\r\\\\' | sed -e 's/^.*[[:space:]:]\(\/[^[:space:]]*\)curses\.h[[:space:]].*$/\1/' -e t -e d`
+				cursesincl=`echo '#include <'"${barelib}"'/curses.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)curses\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
 				if test "x$cursesincl" != "x"; then
 					NCURSES_CPPFLAGS="-I${cursesincl}"
 					AC_MSG_RESULT([$cursesincl])
