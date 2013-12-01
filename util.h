@@ -233,9 +233,8 @@ ssize_t bytes_find(const bytes_t * const b, const uint8_t needle)
 extern void _bytes_alloc_failure(size_t);
 
 static inline
-void bytes_resize(bytes_t *b, size_t newsz)
+void bytes_extend_buf(bytes_t * const b, const size_t newsz)
 {
-	b->sz = newsz;
 	if (newsz <= b->allocsz)
 		return;
 	
@@ -250,11 +249,33 @@ void bytes_resize(bytes_t *b, size_t newsz)
 }
 
 static inline
-void bytes_append(bytes_t *b, const void *add, size_t addsz)
+void bytes_resize(bytes_t * const b, const size_t newsz)
+{
+	bytes_extend_buf(b, newsz);;
+	b->sz = newsz;
+}
+
+static inline
+void *bytes_preappend(bytes_t * const b, const size_t addsz)
+{
+	size_t origsz = bytes_len(b);
+	bytes_extend_buf(b, origsz + addsz);
+	return &bytes_buf(b)[origsz];
+}
+
+static inline
+void bytes_postappend(bytes_t * const b, const size_t addsz)
 {
 	size_t origsz = bytes_len(b);
 	bytes_resize(b, origsz + addsz);
-	memcpy(&bytes_buf(b)[origsz], add, addsz);
+}
+
+static inline
+void bytes_append(bytes_t * const b, const void * const add, const size_t addsz)
+{
+	void * const appendbuf = bytes_preappend(b, addsz);
+	memcpy(appendbuf, add, addsz);
+	bytes_postappend(b, addsz);
 }
 
 static inline
@@ -283,6 +304,11 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 static inline
 void bytes_shift(bytes_t *b, size_t shift)
 {
+	if (shift >= b->sz)
+	{
+		b->sz = 0;
+		return;
+	}
 	b->sz -= shift;
 	memmove(bytes_buf(b), &bytes_buf(b)[shift], bytes_len(b));
 }
