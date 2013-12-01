@@ -30,9 +30,8 @@
 BFG_REGISTER_DRIVER(hashbuster2_drv)
 
 static
-bool hashbuster2_io(libusb_device_handle * const h, unsigned char *buf, unsigned char *cmd)
+bool hashbuster2_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsigned char *cmd)
 {
-	int result;
 	char x[0x81];
 	
 	bool rv = true;
@@ -44,8 +43,8 @@ bool hashbuster2_io(libusb_device_handle * const h, unsigned char *buf, unsigned
 	
 	do // Workaround for PIC USB buffer corruption. We should repeat last packet if receive FF
 	{
-		libusb_bulk_transfer(h, 0x01, cmd, 64, &result, 0);
-		libusb_bulk_transfer(h, 0x81, buf, 64, &result, 0);
+		usb_write(h, cmd, 64);
+		usb_read (h, buf, 64);
 	} while(buf[0]==0xFF);
 	
 	if (unlikely(opt_dev_protocol))
@@ -57,7 +56,7 @@ bool hashbuster2_io(libusb_device_handle * const h, unsigned char *buf, unsigned
 }
 
 static
-bool hashbuster2_spi_config(libusb_device_handle * const h, const uint8_t mode, const uint8_t miso, const uint32_t freq)
+bool hashbuster2_spi_config(struct lowl_usb_endpoint * const h, const uint8_t mode, const uint8_t miso, const uint32_t freq)
 {
 	uint8_t buf[0x40] = {'\x01', '\x01'};
 	if (!hashbuster2_io(h, buf, buf))
@@ -66,7 +65,7 @@ bool hashbuster2_spi_config(libusb_device_handle * const h, const uint8_t mode, 
 }
 
 static
-bool hashbuster2_spi_disable(libusb_device_handle * const h)
+bool hashbuster2_spi_disable(struct lowl_usb_endpoint * const h)
 {
 	uint8_t buf[0x40] = {'\x01', '\x00'};
 	if (!hashbuster2_io(h, buf, buf))
@@ -75,7 +74,7 @@ bool hashbuster2_spi_disable(libusb_device_handle * const h)
 }
 
 static
-bool hashbuster2_spi_reset(libusb_device_handle * const h, uint8_t chips)
+bool hashbuster2_spi_reset(struct lowl_usb_endpoint * const h, uint8_t chips)
 {
 	uint8_t buf[0x40] = {'\x02', '\x00', chips};
 	if (!hashbuster2_io(h, buf, buf))
@@ -84,7 +83,7 @@ bool hashbuster2_spi_reset(libusb_device_handle * const h, uint8_t chips)
 }
 
 static
-bool hashbuster2_spi_transfer(libusb_device_handle * const h, void * const buf, const void * const data, size_t datasz)
+bool hashbuster2_spi_transfer(struct lowl_usb_endpoint * const h, void * const buf, const void * const data, size_t datasz)
 {
 	if (datasz > HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER)
 		return false;
@@ -101,7 +100,7 @@ bool hashbuster2_spi_transfer(libusb_device_handle * const h, void * const buf, 
 static
 bool hashbuster2_spi_txrx(struct spi_port * const port)
 {
-	libusb_device_handle * const h = port->userp;
+	struct lowl_usb_endpoint * const h = port->userp;
 	const uint8_t *wrbuf = spi_gettxbuf(port);
 	uint8_t *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
@@ -158,22 +157,23 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	libusb_open(dev, &h);
 	libusb_set_configuration(h, 1);
 	libusb_claim_interface(h, 0);
+	struct lowl_usb_endpoint * const ep = usb_open_ep_pair(h, 0x81, 64, 0x01, 64);
 	
 	unsigned char OUTPacket[64];
 	unsigned char INPacket[64];
 	OUTPacket[0] = 0xFE;
-	hashbuster2_io(h, INPacket, OUTPacket);
+	hashbuster2_io(ep, INPacket, OUTPacket);
 	if (INPacket[1] == 0x18)
 	{
 		// Turn on miner PSU
 		OUTPacket[0] = 0x10;
 		OUTPacket[1] = 0x00;
 		OUTPacket[2] = 0x01;
-		hashbuster2_io(h, INPacket, OUTPacket);
+		hashbuster2_io(ep, INPacket, OUTPacket);
 	}
 	
 	OUTPacket[0] = '\x20';
-	hashbuster2_io(h, INPacket, OUTPacket);
+	hashbuster2_io(ep, INPacket, OUTPacket);
 	if (!memcmp(INPacket, "\x20\0", 2))
 	{
 		// 64-bit LE serial number
@@ -191,7 +191,7 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	port = malloc(sizeof(*port));
 	port->cgpu = &dummy_cgpu;
 	port->txrx = hashbuster2_spi_txrx;
-	port->userp=h;
+	port->userp = ep;
 	port->repr = hashbuster2_drv.dname;
 	port->logprio = LOG_DEBUG;
 	port->speed = 100000;
@@ -202,6 +202,7 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	{
 		applog(LOG_WARNING, "%s: No chips found on %s", __func__, serial);
 fail:
+		usb_close_ep(ep);
 		free(port);
 		free(serial);
 		libusb_release_interface(h, 0);
@@ -278,7 +279,7 @@ bool hashbuster2_get_stats(struct cgpu_info * const cgpu)
 	
 	struct bitfury_device * const bitfury = cgpu->device_data;
 	struct spi_port * const spi = bitfury->spi;
-	libusb_device_handle * const h = spi->userp;
+	struct lowl_usb_endpoint * const h = spi->userp;
 	uint8_t buf[0x40] = {'\x04'};
 	if (!hashbuster2_io(h, buf, buf))
 		return false;
