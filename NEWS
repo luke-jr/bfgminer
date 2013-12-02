@@ -1,3 +1,20 @@
+BFGMiner Version 3.5.4 - December 2, 2013
+
+- New / updated instructions for building bfgminer on Windows
+- configure: Adjust header-path discovery to work sanely with spaces and
+backslashes in paths
+- Bugfix: configure: More fixing BSD sed syntax for curses header search
+- bfg_strerror: Trim C whitespace off the right of FormatMessage output, since
+Windows can add \r\n
+- Demote commonish errors to debug loglevel
+- bfgtls: Implement destructor to free memory when threads exit
+- README: Document --disable-hashbuster configure option
+- Bugfix: nanofury: Check if mcp2210_device exists before trying to power it off
+- Bugfix: lowl-vcom: Check for error getting root hub path
+- openwrt: Update package description
+- Bugfix: README: Document --without-libevent
+
+
 BFGMiner Version 3.5.3 - November 27, 2013
 
 - FTDI scan: Use intptr_t to avoid warning about different size type cast
