@@ -180,6 +180,141 @@ void cgpu_copy_libusb_strings(struct cgpu_info *cgpu, libusb_device *usb)
 }
 #endif
 
+struct lowl_usb_endpoint {
+	struct libusb_device_handle *devh;
+	
+	unsigned char endpoint_r;
+	int packetsz_r;
+	bytes_t _buf_r;
+	unsigned timeout_ms_r;
+	
+	unsigned char endpoint_w;
+	int packetsz_w;
+	unsigned timeout_ms_w;
+};
+
+struct lowl_usb_endpoint *usb_open_ep(struct libusb_device_handle * const devh, const uint8_t epid, const int pktsz)
+{
+	struct lowl_usb_endpoint * const ep = malloc(sizeof(*ep));
+	ep->devh = devh;
+	if (epid & 0x80)
+	{
+		// Read endpoint
+		ep->endpoint_r = epid;
+		ep->packetsz_r = pktsz;
+		bytes_init(&ep->_buf_r);
+	}
+	else
+	{
+		// Write endpoint
+		ep->endpoint_w = epid;
+		ep->packetsz_w = epid;
+		ep->packetsz_r = -1;
+	}
+	return ep;
+};
+
+struct lowl_usb_endpoint *usb_open_ep_pair(struct libusb_device_handle * const devh, const uint8_t epid_r, const int pktsz_r, const uint8_t epid_w, const int pktsz_w)
+{
+	struct lowl_usb_endpoint * const ep = malloc(sizeof(*ep));
+	*ep = (struct lowl_usb_endpoint){
+		.devh = devh,
+		.endpoint_r = epid_r,
+		.packetsz_r = pktsz_r,
+		._buf_r = BYTES_INIT,
+		.endpoint_w = epid_w,
+		.packetsz_w = pktsz_w,
+	};
+	return ep;
+}
+
+void usb_ep_set_timeouts_ms(struct lowl_usb_endpoint * const ep, const unsigned timeout_ms_r, const unsigned timeout_ms_w)
+{
+	ep->timeout_ms_r = timeout_ms_r;
+	ep->timeout_ms_w = timeout_ms_w;
+}
+
+ssize_t usb_read(struct lowl_usb_endpoint * const ep, void * const data, size_t datasz)
+{
+	unsigned timeout;
+	size_t xfer;
+	if ( (xfer = bytes_len(&ep->_buf_r)) < datasz)
+	{
+		bytes_extend_buf(&ep->_buf_r, datasz + ep->packetsz_r - 1);
+		unsigned char *p = &bytes_buf(&ep->_buf_r)[xfer];
+		int pxfer;
+		int rem = datasz - xfer, rsz;
+		timeout = xfer ? 0 : ep->timeout_ms_r;
+		while (rem > 0)
+		{
+			rsz = (rem / ep->packetsz_r) * ep->packetsz_r;
+			if (rsz < rem)
+				rsz += ep->packetsz_r;
+			switch (libusb_bulk_transfer(ep->devh, ep->endpoint_r, p, rsz, &pxfer, timeout))
+			{
+				case 0:
+				case LIBUSB_ERROR_TIMEOUT:
+					if (!pxfer)
+						// Behaviour is like tcsetattr-style timeout
+						return 0;
+					p += pxfer;
+					rem -= pxfer;
+					// NOTE: Need to maintain _buf_r length so data is saved in case of error
+					xfer += pxfer;
+					bytes_resize(&ep->_buf_r, xfer);
+					break;
+				case LIBUSB_ERROR_PIPE:
+				case LIBUSB_ERROR_NO_DEVICE:
+					errno = EPIPE;
+					return -1;
+				default:
+					errno = EIO;
+					return -1;
+			}
+			timeout = 0;
+		}
+	}
+	memcpy(data, bytes_buf(&ep->_buf_r), datasz);
+	bytes_shift(&ep->_buf_r, datasz);
+	return datasz;
+}
+
+ssize_t usb_write(struct lowl_usb_endpoint * const ep, const void * const data, size_t datasz)
+{
+	unsigned timeout = ep->timeout_ms_w;
+	unsigned char *p = (void*)data;
+	size_t rem = datasz;
+	int pxfer;
+	while (rem > 0)
+	{
+		switch (libusb_bulk_transfer(ep->devh, ep->endpoint_w, p, rem, &pxfer, timeout))
+		{
+			case 0:
+			case LIBUSB_ERROR_TIMEOUT:
+				p += pxfer;
+				rem -= pxfer;
+				break;
+			case LIBUSB_ERROR_PIPE:
+			case LIBUSB_ERROR_NO_DEVICE:
+				errno = EPIPE;
+				return (datasz - rem) ?: -1;
+			default:
+				errno = EIO;
+				return (datasz - rem) ?: -1;
+		}
+		timeout = 0;
+	}
+	errno = 0;
+	return datasz;
+}
+
+void usb_close_ep(struct lowl_usb_endpoint * const ep)
+{
+	if (ep->packetsz_r != -1)
+		bytes_free(&ep->_buf_r);
+	free(ep);
+}
+
 void lowl_usb_close(struct libusb_device_handle * const devh)
 {
 	libusb_close(devh);
