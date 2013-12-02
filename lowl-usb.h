@@ -1,6 +1,9 @@
 #ifndef BFG_LOWL_USB_H
 #define BFG_LOWL_USB_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include <libusb.h>
 
 extern struct device_drv *bfg_claim_usb(struct device_drv * const, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr);
