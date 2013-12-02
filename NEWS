@@ -1,3 +1,50 @@
+BFGMiner Version 3.8.0 - December 1, 2013
+
+- Bugfix: lowl-usb.h: Add missing includes for stdbool/stdint
+- hashbuster2: Retry writing request if no response received in 100ms
+- lowl-usb: usb_ep_set_timeouts_ms function that behaves similar to termios
+VTIME (timeout before begin of read/write)
+- hashbuster2: Use new lowl_usb_endpoint for i/o
+- lowl-usb: Add tools for more reliable read/write using bulk transfers
+- Add bytes_extend_buf, bytes_preappend, bytes_postappend for reading direct to
+a bytes_t
+- New / updated instructions for building bfgminer on Windows
+- configure: Adjust header-path discovery to work sanely with spaces and
+backslashes in paths
+- Bugfix: configure: More fixing BSD sed syntax for curses header search
+- bitfury: Reinitialise chips if their frequency drops over 50%
+- bfg_strerror: Trim C whitespace off the right of FormatMessage output, since
+Windows can add \r\n
+- Demote commonish errors to debug loglevel
+- klondike: Add support for Avalon2-based designs
+- klondike: Remove unnecessary limit of 999 on clock speed displayed in Manage
+Device
+- Bugfix: hashbuster2: Claim USB device internally
+- Bugfix: hashbuster2: Do not try to use lowl-hid.h
+- Bugfix: hashbuster2: Close device and free memory allocated, when no chips are
+found
+- Bugfix: hashbuster2: Remove libusb init and debug level setting
+- Bugfix: hashbuster2: Avoid add_cgpu when no chips found
+- Bugfix: klondike: Claim USB device internally
+- Bugfix: devpath_to_devid: Check stat for error before allocating memory
+- Bugfix: lowlevel: Free hash table data when done with it
+- Bugfix: bifury: Free memory used by version reply
+- bfgtls: Implement destructor to free memory when threads exit
+- hashbuster2: Remove unnecessary libusb_detach_kernel_driver
+- hashbuster2: Read unique serial number from device
+- hashbuster2: Use hashbuster2_io for probe
+- hashbuster2: Clean up warnings about unused variables
+- README: Document --enable-opencl configure option
+- README: Update for HashBuster Micro
+- hashbuster2: Integrate into BFGMiner as a separate driver
+- hashbuster2: Import driver for new protocol
+- Bugfix: nanofury: Check if mcp2210_device exists before trying to power it off
+- Bugfix: lowl-vcom: Check for error getting root hub path
+- openwrt: Update package description
+- configure: Add --without-libusb option to explicitly disable using it
+- Bugfix: Pass newlines as ASCII (fixes lack of them in non-unicode builds)
+
+
 BFGMiner Version 3.7.0 - November 27, 2013
 
 - FTDI scan: Use intptr_t to avoid warning about different size type cast

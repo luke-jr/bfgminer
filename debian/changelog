@@ -1,3 +1,10 @@
+bfgminer (3.8.0-0precise1) precise; urgency=low
+
+  * New driver for HashBuster Micro boards.
+  * klondike: Add support for boards built with 55nm Avalon2 chips.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 02 Dec 2013 01:35:48 -0000
+
 bfgminer (3.7.0-0precise1) precise; urgency=low
 
   * Support for new Bi*fury and Twinfury mining devices.
