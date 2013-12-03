@@ -26,6 +26,22 @@
 
 // Missing from uthash before 1.9.7
 
+#define LL_DELETE2(head,del,next)                                                              \
+do {                                                                                           \
+  LDECLTYPE(head) _tmp;                                                                        \
+  if ((head) == (del)) {                                                                       \
+    (head)=(head)->next;                                                                       \
+  } else {                                                                                     \
+    _tmp = head;                                                                               \
+    while (_tmp->next && (_tmp->next != (del))) {                                              \
+      _tmp = _tmp->next;                                                                       \
+    }                                                                                          \
+    if (_tmp->next) {                                                                          \
+      _tmp->next = ((del)->next);                                                              \
+    }                                                                                          \
+  }                                                                                            \
+} while (0)
+
 #define LL_FOREACH2(head,el,next)                                                              \
     for(el=head;el;el=(el)->next)
 
