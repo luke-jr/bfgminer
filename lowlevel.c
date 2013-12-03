@@ -77,7 +77,7 @@ void lowlevel_scan_free()
 		LL_DELETE(devinfo_list, info);
 		LL_FOREACH_SAFE2(info, info2, tmp2, same_devid_next)
 		{
-			LL_DELETE(info, info2);
+			LL_DELETE2(info, info2, same_devid_next);
 			lowlevel_devinfo_free(info2);
 		}
 	}
