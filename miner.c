@@ -3536,7 +3536,6 @@ void bfg_waddstr(WINDOW *win, const char *s)
 				if (w > WCHAR_MAX || !iswprint(w))
 					w = '*';
 			default:
-#ifdef USE_UNICODE
 				if (w > WCHAR_MAX || !(iswprint(w) || w == '\n'))
 				{
 #if REPLACEMENT_CHAR <= WCHAR_MAX
@@ -3547,13 +3546,15 @@ void bfg_waddstr(WINDOW *win, const char *s)
 						w = '?';
 				}
 				{
-					wchar_t wc = w;
-					waddnwstr(win, &wc, 1);
-				}
+#ifdef USE_UNICODE
+					wchar_t wbuf[0x10];
+					int wbuflen = sizeof(wbuf) / sizeof(*wbuf);
+					wbuflen = swprintf(wbuf, wbuflen, L"%lc", (wint_t)w);
+					waddnwstr(win, wbuf, wbuflen);
 #else
-				// TODO: Maybe try using sprintf with %ls?
-				waddch(win, '?');
+					wprintw(win, "%lc", (wint_t)w);
 #endif
+				}
 		}
 	}
 }
