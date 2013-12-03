@@ -7739,9 +7739,16 @@ bool parse_stratum_response(struct pool *pool, char *s)
 
 	if (!json_is_integer(id_val)) {
 		if (json_is_string(id_val)
-		 && !strncmp(json_string_value(id_val), "txlist", 6)
-		 && !strcmp(json_string_value(id_val) + 6, pool->swork.job_id)
-		 && json_is_array(res_val)) {
+		 && !strncmp(json_string_value(id_val), "txlist", 6))
+		{
+			const bool is_array = json_is_array(res_val);
+			applog(LOG_DEBUG, "Received %s for pool %u job %s",
+			       is_array ? "transaction list" : "no-transaction-list response",
+			       pool->pool_no, &json_string_value(id_val)[6]);
+			if (strcmp(json_string_value(id_val) + 6, pool->swork.job_id) || !is_array)
+				// We only care about a transaction list for the current job id
+				goto fishy;
+			
 			// Check that the transactions actually hash to the merkle links
 			{
 				unsigned maxtx = 1 << pool->swork.merkles;
