@@ -3481,6 +3481,10 @@ static void text_print_status(int thr_id)
 #ifdef HAVE_CURSES
 static int attr_bad = A_BOLD;
 
+#ifdef WIN32
+#define swprintf snwprintf
+#endif
+
 static
 void bfg_waddstr(WINDOW *win, const char *s)
 {
