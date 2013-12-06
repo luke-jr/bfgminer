@@ -3618,12 +3618,26 @@ static void curses_print_status(const int ts)
 		);
 	}
 	wattroff(statuswin, A_BOLD);
-	wmove(statuswin, 5, 1);
-	bfg_waddstr(statuswin, statusline);
+	
+	wattron(statuswin, menu_attr);
+	cg_mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
+	wattroff(statuswin, menu_attr);
+
+	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
+		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s block change notify",
+			have_longpoll ? "": "out");
+	} else if (pool->has_stratum) {
+		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
+			pool->sockaddr_url, pool->diff, pool->rpc_user);
+	} else {
+		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
+			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
+	}
 	wclrtoeol(statuswin);
-
+	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
+		  current_hash, block_diff, net_hashrate, blocktime);
+	
 	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
-
 	char bwstr[12], incomestr[13];
 	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
 	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
@@ -3639,19 +3653,10 @@ static void curses_print_status(const int ts)
 		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
-	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s block change notify",
-			have_longpoll ? "": "out");
-	} else if (pool->has_stratum) {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
-			pool->sockaddr_url, pool->diff, pool->rpc_user);
-	} else {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
-			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
-	}
+	
+	mvwaddstr(statuswin, 5, 0, " ");
+	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  current_hash, block_diff, net_hashrate, blocktime);
 	
 	logdiv = statusy - 1;
 	bfg_hline(statuswin, 6);
@@ -3671,10 +3676,6 @@ static void curses_print_status(const int ts)
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 	}
 #endif
-	
-	wattron(statuswin, menu_attr);
-	cg_mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
-	wattroff(statuswin, menu_attr);
 }
 
 static void adj_width(int var, int *length)
