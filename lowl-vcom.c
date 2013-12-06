@@ -643,6 +643,23 @@ extern void _vcom_devinfo_scan_querydosdevice(struct lowlevel_device_info **);
 extern void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info **);
 #endif
 
+void _vcom_devinfo_scan_user(struct lowlevel_device_info ** const devinfo_list)
+{
+	struct string_elist *sd_iter, *sd_tmp;
+	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
+	{
+		const char * const dname = sd_iter->string;
+		const char * const colon = strpbrk(dname, ":@");
+		const char *dev;
+		if (!(colon && colon != dname))
+			dev = dname;
+		else
+			dev = &colon[1];
+		if (!access(dev, F_OK))
+			_vcom_devinfo_findorcreate(devinfo_list, dev);
+	}
+}
+
 extern bool lowl_usb_attach_kernel_driver(const struct lowlevel_device_info *);
 
 bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, detectone_func_t detectone)
@@ -744,6 +761,7 @@ struct lowlevel_device_info *vcom_devinfo_scan()
 #else
 	_vcom_devinfo_scan_lsdev(&devinfo_hash);
 #endif
+	_vcom_devinfo_scan_user(&devinfo_hash);
 	
 	// Convert hash to simple list
 	HASH_ITER(hh, devinfo_hash, devinfo, tmp)
