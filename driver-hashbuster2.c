@@ -156,9 +156,15 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 		applogr(false, LOG_WARNING, "%s: Wrong VID/PID", __func__);
 	
 	libusb_device *dev = info->lowl_data;
-	libusb_open(dev, &h);
-	libusb_set_configuration(h, 1);
-	libusb_claim_interface(h, 0);
+	if ( (j = libusb_open(dev, &h)) )
+		applogr(false, LOG_ERR, "%s: Failed to open device with serial \"%s\": %s",
+		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
+	if ( (j = libusb_set_configuration(h, 1)) )
+		applogr(false, LOG_ERR, "%s: Failed to set configuration 1 on serial \"%s\": %s",
+		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
+	if ( (j = libusb_claim_interface(h, 0)) )
+		applogr(false, LOG_ERR, "%s: Failed to claim interface 0 on serial \"%s\": %s",
+		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
 	struct lowl_usb_endpoint * const ep = usb_open_ep_pair(h, 0x81, 64, 0x01, 64);
 	usb_ep_set_timeouts_ms(ep, 100, 0);
 	
