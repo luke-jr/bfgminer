@@ -501,6 +501,7 @@ AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
 PKG_PROG_PKG_CONFIG()
 
+optlist="$optlist libusb"
 libusb=no
 libusb_include_path=""
 AC_ARG_WITH([libusb],
