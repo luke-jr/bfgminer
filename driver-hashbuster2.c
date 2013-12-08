@@ -185,12 +185,12 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	hashbuster2_io(ep, INPacket, OUTPacket);
 	if (!memcmp(INPacket, "\x20\0", 2))
 	{
-		// 64-bit LE serial number
+		// 64-bit BE serial number
 		uint64_t sernum = 0;
-		for (j = 2; j < 10; ++j)
-			sernum = (sernum << 8) | INPacket[j];
+		for (j = 0; j < 8; ++j)
+			sernum |= (uint64_t)INPacket[j + 2] << (j * 8);
 		serial = malloc((8 * 2) + 1);
-		sprintf(serial, "%08"PRIx64, sernum);
+		sprintf(serial, "%08"PRIX64, sernum);
 	}
 	else
 		serial = maybe_strdup(info->serial);
