@@ -149,22 +149,22 @@ bool hashbusterusb_lowl_probe(const struct lowlevel_device_info * const info)
 	libusb_device_handle *h;
 	
 	if (info->lowl != &lowl_usb)
-		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb_generic!",
-		       __func__, product, serial);
+		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" %s, but lowlevel driver is not usb_generic!",
+		       __func__, product, info->devid);
 	
 	if (info->vid != 0xFA04 || info->pid != 0x000D)
 		applogr(false, LOG_DEBUG, "%s: Wrong VID/PID", __func__);
 	
 	libusb_device *dev = info->lowl_data;
 	if ( (j = libusb_open(dev, &h)) )
-		applogr(false, LOG_ERR, "%s: Failed to open device with serial \"%s\": %s",
-		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
+		applogr(false, LOG_ERR, "%s: Failed to open %s: %s",
+		        __func__, info->devid, bfg_strerror(j, BST_LIBUSB));
 	if ( (j = libusb_set_configuration(h, 1)) )
-		applogr(false, LOG_ERR, "%s: Failed to set configuration 1 on serial \"%s\": %s",
-		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
+		applogr(false, LOG_ERR, "%s: Failed to set configuration 1 on %s: %s",
+		        __func__, info->devid, bfg_strerror(j, BST_LIBUSB));
 	if ( (j = libusb_claim_interface(h, 0)) )
-		applogr(false, LOG_ERR, "%s: Failed to claim interface 0 on serial \"%s\": %s",
-		        __func__, serial, bfg_strerror(j, BST_LIBUSB));
+		applogr(false, LOG_ERR, "%s: Failed to claim interface 0 on %s: %s",
+		        __func__, info->devid, bfg_strerror(j, BST_LIBUSB));
 	struct lowl_usb_endpoint * const ep = usb_open_ep_pair(h, 0x81, 64, 0x01, 64);
 	usb_ep_set_timeouts_ms(ep, 100, 0);
 	
@@ -213,7 +213,8 @@ bool hashbusterusb_lowl_probe(const struct lowlevel_device_info * const info)
 
 	if (unlikely(!chip_n))
 	{
-		applog(LOG_WARNING, "%s: No chips found on %s", __func__, serial);
+		applog(LOG_WARNING, "%s: No chips found on %s (serial \"%s\")",
+		       __func__, info->devid, serial);
 fail:
 		usb_close_ep(ep);
 		free(port);
