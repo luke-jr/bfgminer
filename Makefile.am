@@ -275,8 +275,8 @@ if USE_HASHBUSTER
 bfgminer_SOURCES += driver-hashbuster.c
 endif
 
-if USE_HASHBUSTER2
-bfgminer_SOURCES += driver-hashbuster2.c
+if USE_HASHBUSTERUSB
+bfgminer_SOURCES += driver-hashbusterusb.c
 endif
 
 endif

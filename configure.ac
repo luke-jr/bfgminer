@@ -799,29 +799,29 @@ fi
 AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
 
-driverlist="$driverlist hashbuster2"
-AC_ARG_ENABLE([hashbuster2],
-	[AC_HELP_STRING([--disable-hashbuster2],[Compile support for HashBuster Micro (default if libusb)])],
-	[hashbuster2=$enableval],
-	[hashbuster2=auto]
+driverlist="$driverlist hashbusterusb"
+AC_ARG_ENABLE([hashbusterusb],
+	[AC_HELP_STRING([--disable-hashbusterusb],[Compile support for HashBuster Micro (default if libusb)])],
+	[hashbusterusb=$enableval],
+	[hashbusterusb=auto]
 	)
-if test "x$hashbuster2$want_libusb" = xyesno; then
+if test "x$hashbusterusb$want_libusb" = xyesno; then
 	AC_MSG_ERROR([You disabled libusb, required for HashBuster Micro support])
-elif test "x$hashbuster2$libusb" = xyesno; then
+elif test "x$hashbusterusb$libusb" = xyesno; then
 	AC_MSG_ERROR([Could not find libusb, required for HashBuster Micro support])
-elif test "x$hashbuster2" = xauto; then
-	hashbuster2="$libusb"
+elif test "x$hashbusterusb" = xauto; then
+	hashbusterusb="$libusb"
 	if test "x$libusb" = xno; then
 		AC_MSG_WARN([Could not find libusb, required for HashBuster Micro support])
-		hashbuster2_enableaction="install libusb 1.0+"
+		hashbusterusb_enableaction="install libusb 1.0+"
 	fi
 fi
-if test "x$hashbuster2" = xyes; then
-	AC_DEFINE([USE_HASHBUSTER2], [1], [Defined to 1 if HashBuster Micro support is wanted])
+if test "x$hashbusterusb" = xyes; then
+	AC_DEFINE([USE_HASHBUSTERUSB], [1], [Defined to 1 if HashBuster Micro support is wanted])
 	need_lowl_usb=yes
 	has_asic=yes
 fi
-AM_CONDITIONAL([USE_HASHBUSTER2], [test x$hashbuster2 = xyes])
+AM_CONDITIONAL([USE_HASHBUSTERUSB], [test x$hashbusterusb = xyes])
 
 
 driverlist="$driverlist metabank"

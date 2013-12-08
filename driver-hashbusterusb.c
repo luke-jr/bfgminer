@@ -27,10 +27,10 @@
 
 #define HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER 61
 
-BFG_REGISTER_DRIVER(hashbuster2_drv)
+BFG_REGISTER_DRIVER(hashbusterusb_drv)
 
 static
-bool hashbuster2_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsigned char *cmd)
+bool hashbusterusb_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsigned char *cmd)
 {
 	char x[0x81];
 	
@@ -58,40 +58,40 @@ bool hashbuster2_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsi
 }
 
 static
-bool hashbuster2_spi_config(struct lowl_usb_endpoint * const h, const uint8_t mode, const uint8_t miso, const uint32_t freq)
+bool hashbusterusb_spi_config(struct lowl_usb_endpoint * const h, const uint8_t mode, const uint8_t miso, const uint32_t freq)
 {
 	uint8_t buf[0x40] = {'\x01', '\x01'};
-	if (!hashbuster2_io(h, buf, buf))
+	if (!hashbusterusb_io(h, buf, buf))
 		return false;
 	return (buf[1] == '\x00');
 }
 
 static
-bool hashbuster2_spi_disable(struct lowl_usb_endpoint * const h)
+bool hashbusterusb_spi_disable(struct lowl_usb_endpoint * const h)
 {
 	uint8_t buf[0x40] = {'\x01', '\x00'};
-	if (!hashbuster2_io(h, buf, buf))
+	if (!hashbusterusb_io(h, buf, buf))
 		return false;
 	return (buf[1] == '\x00');
 }
 
 static
-bool hashbuster2_spi_reset(struct lowl_usb_endpoint * const h, uint8_t chips)
+bool hashbusterusb_spi_reset(struct lowl_usb_endpoint * const h, uint8_t chips)
 {
 	uint8_t buf[0x40] = {'\x02', '\x00', chips};
-	if (!hashbuster2_io(h, buf, buf))
+	if (!hashbusterusb_io(h, buf, buf))
 		return false;
 	return (buf[1] == '\x00');
 }
 
 static
-bool hashbuster2_spi_transfer(struct lowl_usb_endpoint * const h, void * const buf, const void * const data, size_t datasz)
+bool hashbusterusb_spi_transfer(struct lowl_usb_endpoint * const h, void * const buf, const void * const data, size_t datasz)
 {
 	if (datasz > HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER)
 		return false;
 	uint8_t cbuf[0x40] = {'\x03', '\x00', datasz};
 	memcpy(&cbuf[3], data, datasz);
-	if (!hashbuster2_io(h, cbuf, cbuf))
+	if (!hashbusterusb_io(h, cbuf, cbuf))
 		return false;
 	if (cbuf[2] != datasz)
 		return false;
@@ -100,21 +100,21 @@ bool hashbuster2_spi_transfer(struct lowl_usb_endpoint * const h, void * const b
 }
 
 static
-bool hashbuster2_spi_txrx(struct spi_port * const port)
+bool hashbusterusb_spi_txrx(struct spi_port * const port)
 {
 	struct lowl_usb_endpoint * const h = port->userp;
 	const uint8_t *wrbuf = spi_gettxbuf(port);
 	uint8_t *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
 	
-	hashbuster2_spi_disable(h);
-	hashbuster2_spi_reset(h, 0x10);
+	hashbusterusb_spi_disable(h);
+	hashbusterusb_spi_reset(h, 0x10);
 	
-	hashbuster2_spi_config(h, port->mode, 0, port->speed);
+	hashbusterusb_spi_config(h, port->mode, 0, port->speed);
 	
 	while (bufsz >= HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER)
 	{
-		if (!hashbuster2_spi_transfer(h, rdbuf, wrbuf, HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER))
+		if (!hashbusterusb_spi_transfer(h, rdbuf, wrbuf, HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER))
 			return false;
 		rdbuf += HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER;
 		wrbuf += HASHBUSTER_MAX_BYTES_PER_SPI_TRANSFER;
@@ -123,7 +123,7 @@ bool hashbuster2_spi_txrx(struct spi_port * const port)
 	
 	if (bufsz > 0)
 	{
-		if (!hashbuster2_spi_transfer(h, rdbuf, wrbuf, bufsz))
+		if (!hashbusterusb_spi_transfer(h, rdbuf, wrbuf, bufsz))
 			return false;
 	}
 	
@@ -131,13 +131,13 @@ bool hashbuster2_spi_txrx(struct spi_port * const port)
 }
 
 static
-bool hashbuster2_lowl_match(const struct lowlevel_device_info * const info)
+bool hashbusterusb_lowl_match(const struct lowlevel_device_info * const info)
 {
 	return lowlevel_match_id(info, &lowl_usb, 0xFA04, 0x000D);
 }
 
 static
-bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
+bool hashbusterusb_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	struct cgpu_info *cgpu = NULL;
 	struct bitfury_device **devicelist, *bitfury;
@@ -171,18 +171,18 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	unsigned char OUTPacket[64];
 	unsigned char INPacket[64];
 	OUTPacket[0] = 0xFE;
-	hashbuster2_io(ep, INPacket, OUTPacket);
+	hashbusterusb_io(ep, INPacket, OUTPacket);
 	if (INPacket[1] == 0x18)
 	{
 		// Turn on miner PSU
 		OUTPacket[0] = 0x10;
 		OUTPacket[1] = 0x00;
 		OUTPacket[2] = 0x01;
-		hashbuster2_io(ep, INPacket, OUTPacket);
+		hashbusterusb_io(ep, INPacket, OUTPacket);
 	}
 	
 	OUTPacket[0] = '\x20';
-	hashbuster2_io(ep, INPacket, OUTPacket);
+	hashbusterusb_io(ep, INPacket, OUTPacket);
 	if (!memcmp(INPacket, "\x20\0", 2))
 	{
 		// 64-bit BE serial number
@@ -199,9 +199,9 @@ bool hashbuster2_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	port = malloc(sizeof(*port));
 	port->cgpu = &dummy_cgpu;
-	port->txrx = hashbuster2_spi_txrx;
+	port->txrx = hashbusterusb_spi_txrx;
 	port->userp = ep;
-	port->repr = hashbuster2_drv.dname;
+	port->repr = hashbusterusb_drv.dname;
 	port->logprio = LOG_DEBUG;
 	port->speed = 100000;
 	port->mode = 0;
@@ -223,7 +223,7 @@ fail:
 		return false;
 	}
 	
-	if (bfg_claim_libusb(&hashbuster2_drv, true, dev))
+	if (bfg_claim_libusb(&hashbusterusb_drv, true, dev))
 		goto fail;
 	
 	{
@@ -240,7 +240,7 @@ fail:
 		
 		cgpu = malloc(sizeof(*cgpu));
 		*cgpu = (struct cgpu_info){
-			.drv = &hashbuster2_drv,
+			.drv = &hashbusterusb_drv,
 			.procs = chip_n,
 			.device_data = devicelist,
 			.cutofftemp = 200,
@@ -256,7 +256,7 @@ fail:
 }
 
 static
-bool hashbuster2_init(struct thr_info * const thr)
+bool hashbusterusb_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	
@@ -284,7 +284,7 @@ bool hashbuster2_init(struct thr_info * const thr)
 }
 
 static
-bool hashbuster2_get_stats(struct cgpu_info * const cgpu)
+bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 {
 	struct cgpu_info *proc;
 	if (cgpu != cgpu->device)
@@ -294,7 +294,7 @@ bool hashbuster2_get_stats(struct cgpu_info * const cgpu)
 	struct spi_port * const spi = bitfury->spi;
 	struct lowl_usb_endpoint * const h = spi->userp;
 	uint8_t buf[0x40] = {'\x04'};
-	if (!hashbuster2_io(h, buf, buf))
+	if (!hashbusterusb_io(h, buf, buf))
 		return false;
 	if (buf[1])
 	{
@@ -304,13 +304,13 @@ bool hashbuster2_get_stats(struct cgpu_info * const cgpu)
 	return true;
 }
 
-struct device_drv hashbuster2_drv = {
-	.dname = "hashbuster2",
+struct device_drv hashbusterusb_drv = {
+	.dname = "hashbusterusb",
 	.name = "HBR",
-	.lowl_match = hashbuster2_lowl_match,
-	.lowl_probe = hashbuster2_lowl_probe,
+	.lowl_match = hashbusterusb_lowl_match,
+	.lowl_probe = hashbusterusb_lowl_probe,
 	
-	.thread_init = hashbuster2_init,
+	.thread_init = hashbusterusb_init,
 	.thread_disable = bitfury_disable,
 	.thread_enable = bitfury_enable,
 	.thread_shutdown = bitfury_shutdown,
@@ -321,7 +321,7 @@ struct device_drv hashbuster2_drv = {
 	.poll = bitfury_do_io,
 	.job_process_results = bitfury_job_process_results,
 	
-	.get_stats = hashbuster2_get_stats,
+	.get_stats = hashbusterusb_get_stats,
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
