@@ -245,6 +245,7 @@ fail:
 			.device_data = devicelist,
 			.cutofftemp = 200,
 			.threads = 1,
+			.device_path = strdup(info->devid),
 			.dev_manufacturer = maybe_strdup(info->manufacturer),
 			.dev_product = maybe_strdup(product),
 			.dev_serial = serial,
