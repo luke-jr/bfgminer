@@ -9137,6 +9137,10 @@ void _bfg_clean_up(void)
 		free(cpus);
 
 	curl_global_cleanup();
+	
+#ifdef WIN32
+	WSACleanup();
+#endif
 }
 
 void _quit(int status)
@@ -9818,6 +9822,15 @@ int main(int argc, char *argv[])
 	setup_pthread_cancel_workaround();
 #endif
 
+#ifdef WIN32
+	{
+		WSADATA wsa;
+		i = WSAStartup(MAKEWORD(2, 2), &wsa);
+		if (i)
+			quit(1, "Failed to initialise Winsock: %s", bfg_strerror(i, BST_SOCKET));
+	}
+#endif
+	
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
