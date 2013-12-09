@@ -1,3 +1,15 @@
+BFGMiner Version 3.5.5 - December 9, 2013
+
+- bfgminer-rpc: Catch error when server host fails to resolve to an IP
+- RPC: Remove unnecessary delay from RPC server startup
+- Call WSAStartup for our own needs independently of libcurl etc
+- Bugfix: lowl-usb: Include winsock2.h to make sure it is before windows.h
+- Bugfix: Draw statuswin in line order to ensure overflow is cutoff properly
+- Fixed one byte stack overflow in mcast recvfrom.
+- Specifically handle mining.get_transactions failures so they get logged at the
+lower debug loglevel
+
+
 BFGMiner Version 3.5.4 - December 2, 2013
 
 - New / updated instructions for building bfgminer on Windows
