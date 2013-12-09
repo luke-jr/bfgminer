@@ -200,6 +200,11 @@ int callapi(char *command, char *host, short int port)
 	SOCKETINIT;
 
 	ip = gethostbyname(host);
+	if (!ip)
+	{
+		printf("Failed to resolve host %s\n", host);
+		return 1;
+	}
 
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock == INVSOCK) {
