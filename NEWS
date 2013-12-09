@@ -1,3 +1,22 @@
+BFGMiner Version 3.2.8 - December 9, 2013
+
+- bfgminer-rpc: Catch error when server host fails to resolve to an IP
+- RPC: Remove unnecessary delay from RPC server startup
+- Call WSAStartup for our own needs independently of libcurl etc
+- Bugfix: Draw statuswin in line order to ensure overflow is cutoff properly
+- Fixed one byte stack overflow in mcast recvfrom.
+- Specifically handle mining.get_transactions failures so they get logged at the
+lower debug loglevel
+- New / updated instructions for building bfgminer on Windows
+- configure: Adjust header-path discovery to work sanely with spaces and
+backslashes in paths
+- Bugfix: configure: More fixing BSD sed syntax for curses header search
+- bfg_strerror: Trim C whitespace off the right of FormatMessage output, since
+Windows can add \r\n
+- bfgtls: Implement destructor to free memory when threads exit
+- openwrt: Update package description
+
+
 BFGMiner Version 3.2.7 - November 27, 2013
 
 - FTDI scan: Use intptr_t to avoid warning about different size type cast
