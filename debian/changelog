@@ -1,3 +1,9 @@
+bfgminer (3.8.1-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 09 Dec 2013 03:19:55 -0000
+
 bfgminer (3.8.0-0precise1) precise; urgency=low
 
   * New driver for HashBuster Micro boards.

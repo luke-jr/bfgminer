@@ -1,3 +1,27 @@
+BFGMiner Version 3.8.1 - December 9, 2013
+
+- bfgminer-rpc: Catch error when server host fails to resolve to an IP
+- RPC: Remove unnecessary delay from RPC server startup
+- Call WSAStartup for our own needs independently of libcurl etc
+- hashbusterusb: Give more meaningful errors before serial number is known
+- hashbusterusb: Populate device_path with USB devid
+- Rename hashbuster2 to hashbusterusb (only a-z allowed in driver names)
+- Include libusb in options list, since it is no longer tied to specific drivers
+- Make hashbuster serial number output match formatting on physical board
+- Fix for hashbuster first init after power up
+- Workaround Microsoft's non-standard swprintf
+- vcom: Fabricate vcom devinfo for any existing paths specified to --scan, in
+case enumeration fails
+- Bugfix: hashbuster2: Check for errors setting up libusb handle
+- Bugfix: Draw statuswin in line order to ensure overflow is cutoff properly
+- Fixed one byte stack overflow in mcast recvfrom.
+- Bugfix: Let libc do any translation for %lc before adding wide characters to
+curses
+- Specifically handle mining.get_transactions failures so they get logged at the
+lower debug loglevel
+- Bugfix: lowlevel: Use LL_DELETE2 when cleaning up secondary list
+
+
 BFGMiner Version 3.8.0 - December 1, 2013
 
 - Bugfix: lowl-usb.h: Add missing includes for stdbool/stdint
