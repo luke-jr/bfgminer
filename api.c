@@ -3903,10 +3903,6 @@ void api(int api_thr_id)
 		}
 	}
 
-	/* This should be done before curl in needed
-	 * to ensure curl has already called WSAStartup() in windows */
-	cgsleep_ms(opt_log_interval*1000);
-
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
