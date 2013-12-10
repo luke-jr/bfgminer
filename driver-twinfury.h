@@ -32,6 +32,9 @@ struct twinfury_info
 	uint8_t tx_buffer[46];
 	uint8_t rx_buffer[1024];
 	int16_t rx_len;
+
+	uint32_t voltage;
+	bool send_voltage;
 };
 
 #endif
