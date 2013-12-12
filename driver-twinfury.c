@@ -114,6 +114,33 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	       info->id.version, info->id.product,
 	       info->id.serial);
 
+	if(info->id.version == 2)
+	{
+		char buf[8] = "V\x00\x00";
+		if(twinfury_send_command(fd, buf, 3))
+		{
+			if(8 == twinfury_wait_response(fd, buf, 8))
+			{
+				info->voltage  =  (buf[4] & 0xFF);
+				info->voltage |=  (buf[5] << 8);
+
+				applog(LOG_DEBUG, "Voltage: %d", info->voltage);
+				if(info->voltage < 800 || info->voltage > 950)
+				{
+					info->voltage = 0;
+				}
+			}
+			else
+			{
+				applog(LOG_DEBUG, "FAILED TO GET VOLTAGE");
+			}
+		}
+		else
+		{
+			applog(LOG_DEBUG, "FAILED TO SEND VOLTAGE REQUEST");
+		}
+	}
+
 	char buf_state[sizeof(struct twinfury_state)+1];
 	if (!twinfury_send_command(fd, "R", 1))
 	{
@@ -328,8 +355,8 @@ void twinfury_poll(struct thr_info *thr)
 		}
 		else
 		{
-			info->voltage  =  buf[4];
-			info->voltage |= (buf[5] << 8);
+			info->voltage  =  (buf[4] & 0xFF);
+			info->voltage |=  (buf[5] << 8);
 		}
 		info->send_voltage = false;
 	}
@@ -464,25 +491,32 @@ static bool twinfury_identify(struct cgpu_info *cgpu)
 #ifdef HAVE_CURSES
 void twinfury_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
-	wlogprint("[V]oltage ");
+	struct twinfury_info * const state = proc->device->device_data;
+	if(state->id.version > 1)
+	{
+		wlogprint("[V]oltage ");
+	}
 }
 
 const char *twinfury_tui_handle_choice(struct cgpu_info * const proc, const int input)
 {
 	struct twinfury_info * const state = proc->device->device_data;
 
-	switch (input)
+	if(state->id.version > 1)
 	{
-		case 'v': case 'V':
+		switch (input)
 		{
-			const int val = curses_int("Set supply voltage (range 800mV-950mV; slow to fast)");
-			if (val < 800 || val > 950)
-				return "Invalid supply voltage value\n";
+			case 'v': case 'V':
+			{
+				const int val = curses_int("Set supply voltage (range 800mV-950mV; slow to fast)");
+				if (val < 800 || val > 950)
+					return "Invalid supply voltage value\n";
 
-			state->voltage = val;
-			state->send_voltage = true;
+				state->voltage = val;
+				state->send_voltage = true;
 
-			return "Supply voltage changing\n";
+				return "Supply voltage changing\n";
+			}
 		}
 	}
 	return NULL;
@@ -491,8 +525,11 @@ const char *twinfury_tui_handle_choice(struct cgpu_info * const proc, const int 
 void twinfury_wlogprint_status(struct cgpu_info * const proc)
 {
 	const struct twinfury_info * const state = proc->device->device_data;
-	const uint32_t voltage = state->voltage;
-	wlogprint("Supply voltage: %dmV\n", state->voltage);
+	if(state->id.version > 1)
+	{
+		const uint32_t voltage = state->voltage;
+		wlogprint("Supply voltage: %dmV\n", state->voltage);
+	}
 }
 #endif
 
