@@ -124,7 +124,7 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 				info->voltage  =  (buf[4] & 0xFF);
 				info->voltage |=  (buf[5] << 8);
 
-				applog(LOG_DEBUG, "Voltage: %d", info->voltage);
+				applog(LOG_DEBUG, "%s: Voltage: %dmV", twinfury_drv.dname, info->voltage);
 				if(info->voltage < 800 || info->voltage > 950)
 				{
 					info->voltage = 0;
@@ -132,12 +132,13 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 			}
 			else
 			{
-				applog(LOG_DEBUG, "FAILED TO GET VOLTAGE");
+				applog(LOG_ERR, "%s: Failed to get voltage.", twinfury_drv.dname);
+				info->voltage = 0;
 			}
 		}
 		else
 		{
-			applog(LOG_DEBUG, "FAILED TO SEND VOLTAGE REQUEST");
+			applog(LOG_ERR, "%s: Failed to send voltage request", twinfury_drv.dname);
 		}
 	}
 
