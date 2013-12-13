@@ -223,6 +223,34 @@ static bool twinfury_init(struct thr_info *thr)
 	info->tx_buffer[0] = 'W';
 	info->tx_buffer[1] = 0x00;
 
+	if(info->id.version == 2)
+	{
+		char buf[8] = "V\x00\x00";
+		if(twinfury_send_command(fd, buf, 3))
+		{
+			if(8 == twinfury_wait_response(fd, buf, 8))
+			{
+				info->voltage  =  (buf[4] & 0xFF);
+				info->voltage |=  (buf[5] << 8);
+
+				applog(LOG_DEBUG, "%"PRIpreprv": Voltage: %dmV", cgpu->dev_repr, info->voltage);
+				if(info->voltage < 800 || info->voltage > 950)
+				{
+					info->voltage = 0;
+				}
+			}
+			else
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Failed to get voltage.", cgpu->dev_repr);
+				info->voltage = 0;
+			}
+		}
+		else
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Failed to send voltage request", cgpu->dev_repr);
+		}
+	}
+
 	timer_set_now(&thr->tv_poll);
 
 	return true;
@@ -306,12 +334,33 @@ static
 void twinfury_poll(struct thr_info *thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
+	struct twinfury_info *info = dev->device_data;
 
 	uint8_t n_chips = 0;
 	uint8_t buffer[2] = { 'Q', 0 };
 
 	uint8_t response[8];
 	bool flashed = false;
+
+	if(info->send_voltage)
+	{
+		char buf[8] = "V";
+		buf[1] = info->voltage & 0xFF;
+		buf[2] = (info->voltage >> 8) & 0xFF;
+		if(!twinfury_send_command(dev->device_fd, buf, 3))
+			applog(LOG_ERR, "%s: Failed supply voltage", dev->dev_repr);
+		else
+		if(8 != twinfury_wait_response(dev->device_fd, buf, 8))
+		{
+			applog(LOG_ERR, "%s: Waiting for response timed out (Supply voltage)", dev->dev_repr);
+		}
+		else
+		{
+			info->voltage  =  (buf[4] & 0xFF);
+			info->voltage |=  (buf[5] << 8);
+		}
+		info->send_voltage = false;
+	}
 
 	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc, ++n_chips)
 	{
@@ -440,6 +489,51 @@ static bool twinfury_identify(struct cgpu_info *cgpu)
 	return true;
 }
 
+#ifdef HAVE_CURSES
+void twinfury_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	struct twinfury_info * const state = proc->device->device_data;
+	if(state->id.version > 1)
+	{
+		wlogprint("[V]oltage ");
+	}
+}
+
+const char *twinfury_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	struct twinfury_info * const state = proc->device->device_data;
+
+	if(state->id.version > 1)
+	{
+		switch (input)
+		{
+			case 'v': case 'V':
+			{
+				const int val = curses_int("Set supply voltage (range 800mV-950mV; slow to fast)");
+				if (val < 800 || val > 950)
+					return "Invalid supply voltage value\n";
+
+				state->voltage = val;
+				state->send_voltage = true;
+
+				return "Supply voltage changing\n";
+			}
+		}
+	}
+	return NULL;
+}
+
+void twinfury_wlogprint_status(struct cgpu_info * const proc)
+{
+	const struct twinfury_info * const state = proc->device->device_data;
+	if(state->id.version > 1)
+	{
+		const uint32_t voltage = state->voltage;
+		wlogprint("Supply voltage: %dmV\n", state->voltage);
+	}
+}
+#endif
+
 //------------------------------------------------------------------------------
 struct device_drv twinfury_drv = {
 	.dname = "Twinfury",
@@ -461,4 +555,11 @@ struct device_drv twinfury_drv = {
 	.job_process_results = twinfury_job_process_results,
 
 	.thread_shutdown = twinfury_shutdown,
+
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = twinfury_wlogprint_status,
+	.proc_tui_wlogprint_choices = twinfury_tui_wlogprint_choices,
+	.proc_tui_handle_choice = twinfury_tui_handle_choice,
+#endif
+
 };
