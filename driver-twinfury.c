@@ -114,34 +114,6 @@ static bool twinfury_detect_custom(const char *devpath, struct device_drv *api, 
 	       info->id.version, info->id.product,
 	       info->id.serial);
 
-	if(info->id.version == 2)
-	{
-		char buf[8] = "V\x00\x00";
-		if(twinfury_send_command(fd, buf, 3))
-		{
-			if(8 == twinfury_wait_response(fd, buf, 8))
-			{
-				info->voltage  =  (buf[4] & 0xFF);
-				info->voltage |=  (buf[5] << 8);
-
-				applog(LOG_DEBUG, "%s: Voltage: %dmV", twinfury_drv.dname, info->voltage);
-				if(info->voltage < 800 || info->voltage > 950)
-				{
-					info->voltage = 0;
-				}
-			}
-			else
-			{
-				applog(LOG_ERR, "%s: Failed to get voltage.", twinfury_drv.dname);
-				info->voltage = 0;
-			}
-		}
-		else
-		{
-			applog(LOG_ERR, "%s: Failed to send voltage request", twinfury_drv.dname);
-		}
-	}
-
 	char buf_state[sizeof(struct twinfury_state)+1];
 	if (!twinfury_send_command(fd, "R", 1))
 	{
@@ -250,6 +222,34 @@ static bool twinfury_init(struct thr_info *thr)
 
 	info->tx_buffer[0] = 'W';
 	info->tx_buffer[1] = 0x00;
+
+	if(info->id.version == 2)
+	{
+		char buf[8] = "V\x00\x00";
+		if(twinfury_send_command(fd, buf, 3))
+		{
+			if(8 == twinfury_wait_response(fd, buf, 8))
+			{
+				info->voltage  =  (buf[4] & 0xFF);
+				info->voltage |=  (buf[5] << 8);
+
+				applog(LOG_DEBUG, "%"PRIpreprv": Voltage: %dmV", cgpu->dev_repr, info->voltage);
+				if(info->voltage < 800 || info->voltage > 950)
+				{
+					info->voltage = 0;
+				}
+			}
+			else
+			{
+				applog(LOG_ERR, "%"PRIpreprv": Failed to get voltage.", cgpu->dev_repr);
+				info->voltage = 0;
+			}
+		}
+		else
+		{
+			applog(LOG_ERR, "%"PRIpreprv": Failed to send voltage request", cgpu->dev_repr);
+		}
+	}
 
 	timer_set_now(&thr->tv_poll);
 
