@@ -327,7 +327,6 @@ void hashbusterusb_shutdown(struct thr_info *thr)
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
-	struct hashbusterusb_info * const state = proc->device->device_data;
 	wlogprint("[V]oltage ");
 	wlogprint("[O]scillator bits ");
 	//wlogprint("[F]an speed ");  // To be implemented
@@ -338,12 +337,9 @@ void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 
 const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const int input)
 {
-	struct hashbusterusb_info * const state = proc->device->device_data;
 	struct bitfury_device * const bitfury = proc->device->device_data;
 	struct spi_port * const spi = bitfury->spi;
 	struct lowl_usb_endpoint * const h = spi->userp;
-	
-	char buf[0x100];
 	
 	unsigned char OUTPacket[64];
 	unsigned char INPacket[64];
@@ -440,7 +436,6 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 
 void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
 {
-	struct hashbusterusb_info * const state = proc->device->device_data;
 	struct bitfury_device * const bitfury = proc->device->device_data;
 	struct spi_port * const spi = bitfury->spi;
 	struct lowl_usb_endpoint * const h = spi->userp;
