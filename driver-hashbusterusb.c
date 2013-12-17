@@ -354,6 +354,17 @@ void hashbusterusb_shutdown(struct thr_info *thr)
 	hashbusterusb_io(h, INPacket, OUTPacket);
 }
 
+static
+void hashbusterusb_set_colour(struct cgpu_info * const cgpu, const uint8_t red, const uint8_t green, const uint8_t blue)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	uint8_t buf[0x40] = {'\x30', 0, red, green, blue};
+	hashbusterusb_io(h, buf, buf);
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -381,22 +392,12 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 			const int val = curses_int("1 for on, 0 for off");
 			if (val == 1)
 			{
-				OUTPacket[0] = 0x30;
-				OUTPacket[1] = 0x00;
-				OUTPacket[2] = 0xFF;  // Red LED
-				OUTPacket[3] = 0x00;
-				OUTPacket[4] = 0xFF;  // Blue LED
-				hashbusterusb_io(h, INPacket, OUTPacket);
+				hashbusterusb_set_colour(proc, 0xff, 0, 0xff);
 				return "Identification on\n";
 			}
 			else
 			{
-				OUTPacket[0] = 0x30;
-				OUTPacket[1] = 0x01;
-				OUTPacket[2] = 0x00;
-				OUTPacket[3] = 0x7E;  // Green LED (50%)
-				OUTPacket[4] = 0x00;
-				hashbusterusb_io(h, INPacket, OUTPacket);
+				hashbusterusb_set_colour(proc, 0, 0x7e, 0);
 				return "Identification off\n";
 			}
 		}
