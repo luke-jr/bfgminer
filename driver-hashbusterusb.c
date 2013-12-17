@@ -275,6 +275,7 @@ bool hashbusterusb_init(struct thr_info * const thr)
 	*state = (struct hashbusterusb_state){
 		.voltage = 0,
 	};
+	cgpu_setup_control_requests(cgpu);
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
@@ -477,7 +478,11 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 			if (val < 600 || val > 1100)
 				return "Invalid PSU voltage value\n";
 			
-			if (!hashbusterusb_set_voltage(proc, val))
+			cgpu_request_control(proc->device);
+			const bool rv = hashbusterusb_set_voltage(proc, val);
+			cgpu_release_control(proc->device);
+			
+			if (!rv)
 				return "Voltage change error\n";
 			
 			return "Voltage change successful\n";
@@ -490,7 +495,9 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 			if (!input)
 				input = calloc(1, 1);
 			
+			cgpu_request_control(proc->device);
 			const bool rv = hashbusterusb_vrm_unlock(proc, input);
+			cgpu_release_control(proc->device);
 			free(input);
 			
 			if (!rv)
@@ -504,7 +511,9 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		
 		case 'l': case 'L':
 		{
+			cgpu_request_control(proc->device);
 			hashbusterusb_vrm_lock(proc);
+			cgpu_release_control(proc->device);
 			return "VRM lock\n";
 		}
 	}
