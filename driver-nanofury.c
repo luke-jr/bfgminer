@@ -32,6 +32,10 @@
 
 BFG_REGISTER_DRIVER(nanofury_drv)
 
+struct nanofury_state {
+	struct mcp2210_device *mcp;
+};
+
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
 bool nanofury_spi_reset(struct mcp2210_device * const mcp)
@@ -61,7 +65,8 @@ bool nanofury_spi_txrx(struct spi_port * const port)
 {
 	struct cgpu_info * const cgpu = port->cgpu;
 	struct thr_info * const thr = cgpu->thr[0];
-	struct mcp2210_device * const mcp = thr->cgpu_data;
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
 	const void *wrbuf = spi_gettxbuf(port);
 	void *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
@@ -238,6 +243,7 @@ bool nanofury_init(struct thr_info * const thr)
 	struct spi_port *port;
 	struct bitfury_device *bitfury;
 	struct mcp2210_device *mcp;
+	struct nanofury_state *state;
 	
 	mcp = mcp2210_open(info);
 	lowlevel_devinfo_free(info);
@@ -255,17 +261,18 @@ bool nanofury_init(struct thr_info * const thr)
 	
 	port = malloc(sizeof(*port));
 	bitfury = malloc(sizeof(*bitfury));
+	state = malloc(sizeof(*state));
 	
-	if (!(port && bitfury))
+	if (!(port && bitfury && state))
 	{
-		applog(LOG_ERR, "%"PRIpreprv": Failed to allocate spi_port and bitfury_device structures", cgpu->proc_repr);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to allocate structures", cgpu->proc_repr);
 		free(port);
 		free(bitfury);
+		free(state);
 		mcp2210_close(mcp);
 		return false;
 	}
 	
-	thr->cgpu_data = mcp;
 	*port = (struct spi_port){
 		.txrx = nanofury_spi_txrx,
 		.cgpu = cgpu,
@@ -275,7 +282,11 @@ bool nanofury_init(struct thr_info * const thr)
 	*bitfury = (struct bitfury_device){
 		.spi = port,
 	};
+	*state = (struct nanofury_state){
+		.mcp = mcp,
+	};
 	cgpu->device_data = bitfury;
+	thr->cgpu_data = state;
 	bitfury->osc6_bits = 50;
 	bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 	bitfury_init_chip(cgpu);
@@ -288,7 +299,8 @@ bool nanofury_init(struct thr_info * const thr)
 static
 void nanofury_disable(struct thr_info * const thr)
 {
-	struct mcp2210_device * const mcp = thr->cgpu_data;
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
 	
 	bitfury_disable(thr);
 	nanofury_device_off(mcp);
@@ -297,7 +309,8 @@ void nanofury_disable(struct thr_info * const thr)
 static
 void nanofury_enable(struct thr_info * const thr)
 {
-	struct mcp2210_device * const mcp = thr->cgpu_data;
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
 	
 	nanofury_checkport(mcp);
 	bitfury_enable(thr);
@@ -307,7 +320,8 @@ static
 void nanofury_reinit(struct cgpu_info * const cgpu)
 {
 	struct thr_info * const thr = cgpu->thr[0];
-	struct mcp2210_device * const mcp = thr->cgpu_data;
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
 	
 	nanofury_device_off(mcp);
 	cgsleep_ms(1);
@@ -317,7 +331,8 @@ void nanofury_reinit(struct cgpu_info * const cgpu)
 static
 void nanofury_shutdown(struct thr_info * const thr)
 {
-	struct mcp2210_device * const mcp = thr->cgpu_data;
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
 	
 	if (mcp)
 		nanofury_device_off(mcp);
