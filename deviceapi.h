@@ -66,6 +66,11 @@ extern void minerloop_async(struct thr_info *);
 
 extern void minerloop_queue(struct thr_info *);
 
+// Establishes a simple way for external threads to directly communicate with device
+extern void cgpu_setup_control_requests(struct cgpu_info *);
+extern void cgpu_request_control(struct cgpu_info *);
+extern void cgpu_release_control(struct cgpu_info *);
+
 extern void *miner_thread(void *);
 
 extern void add_cgpu_live(void*);
