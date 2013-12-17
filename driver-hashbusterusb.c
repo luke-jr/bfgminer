@@ -445,6 +445,18 @@ void hashbusterusb_vrm_lock(struct cgpu_info * const proc)
 	hashbusterusb_io(h, buf, buf);
 }
 
+static
+struct api_data *hashbusterusb_api_extra_device_stats(struct cgpu_info * const cgpu)
+{
+	struct hashbusterusb_state * const state = cgpu->thr[0]->cgpu_data;
+	struct api_data *root = bitfury_api_device_status(cgpu);
+	
+	float volts = state->voltage;
+	root = api_add_volts(root, "Voltage", &volts, true);
+	
+	return root;
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -529,7 +541,7 @@ struct device_drv hashbusterusb_drv = {
 	.get_stats = hashbusterusb_get_stats,
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
-	.get_api_extra_device_status = bitfury_api_device_status,
+	.get_api_extra_device_status = hashbusterusb_api_extra_device_stats,
 	.set_device = bitfury_set_device,
 	.identify_device = hashbusterusb_identify,
 	
