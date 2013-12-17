@@ -458,6 +458,52 @@ struct api_data *hashbusterusb_api_extra_device_stats(struct cgpu_info * const c
 	return root;
 }
 
+static
+char *hashbusterusb_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+{
+	if (!strcasecmp(option, "help"))
+	{
+		bitfury_set_device(proc, option, setting, replybuf);
+		tailsprintf(replybuf, 1024, "\nvrmlock: Lock the VRM voltage to safe range\nvrmunlock: Allow setting potentially unsafe voltages (requires unlock code)\nvoltage: Set voltage (in mV)");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "vrmlock"))
+	{
+		cgpu_request_control(proc->device);
+		hashbusterusb_vrm_lock(proc);
+		cgpu_release_control(proc->device);
+		return NULL;
+	}
+	
+	if (!strcasecmp(option, "vrmunlock"))
+	{
+		cgpu_request_control(proc->device);
+		const bool rv = hashbusterusb_vrm_unlock(proc, setting);
+		cgpu_release_control(proc->device);
+		if (!rv)
+			return "Unlock error";
+		return NULL;
+	}
+	
+	if (!strcasecmp(option, "voltage"))
+	{
+		const int val = atoi(setting);
+		if (val < 600 || val > 1100)
+			return "Invalid PSU voltage value";
+		
+		cgpu_request_control(proc->device);
+		const bool rv = hashbusterusb_set_voltage(proc, val);
+		cgpu_release_control(proc->device);
+		
+		if (!rv)
+			return "Voltage change error";
+		return NULL;
+	}
+	
+	return bitfury_set_device(proc, option, setting, replybuf);
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -551,7 +597,7 @@ struct device_drv hashbusterusb_drv = {
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = hashbusterusb_api_extra_device_stats,
-	.set_device = bitfury_set_device,
+	.set_device = hashbusterusb_set_device,
 	.identify_device = hashbusterusb_identify,
 	
 #ifdef HAVE_CURSES
