@@ -475,6 +475,9 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		{
 			char *input = curses_input("VRM unlock code");
 			
+			if (!input)
+				input = calloc(1, 1);
+			
 			const bool rv = hashbusterusb_vrm_unlock(proc, input);
 			free(input);
 			
