@@ -435,6 +435,16 @@ bool hashbusterusb_vrm_unlock(struct cgpu_info * const proc, const char * const 
 	return memcmp(buf, "\x12\0", 2);
 }
 
+static
+void hashbusterusb_vrm_lock(struct cgpu_info * const proc)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x14};
+	hashbusterusb_io(h, buf, buf);
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -447,13 +457,6 @@ void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 
 const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const int input)
 {
-	struct bitfury_device * const bitfury = proc->device->device_data;
-	struct spi_port * const spi = bitfury->spi;
-	struct lowl_usb_endpoint * const h = spi->userp;
-	
-	unsigned char OUTPacket[64];
-	unsigned char INPacket[64];
-	
 	switch (input)
 	{
 		case 'v': case 'V':
@@ -486,9 +489,7 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		
 		case 'l': case 'L':
 		{
-			OUTPacket[0] = 0x14;
-			hashbusterusb_io(h, INPacket, OUTPacket);
-			
+			hashbusterusb_vrm_lock(proc);
 			return "VRM lock\n";
 		}
 	}
