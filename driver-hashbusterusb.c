@@ -425,26 +425,7 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		}
 		
 		case 'o': case 'O':
-		{
-			struct freq_stat * const c = &bitfury->chip_stat;
-			int val;
-			char *intvar;
-			
-			sprintf(buf, "Set oscillator bits (range 1-%d; slow to fast)", BITFURY_MAX_OSC6_BITS);
-			intvar = curses_input(buf);
-			if (!intvar)
-				return "Invalid oscillator bits\n";
-			val = atoi(intvar);
-			free(intvar);
-			if (val < 1 || val > BITFURY_MAX_OSC6_BITS)
-				return "Invalid oscillator bits\n";
-			
-			bitfury->osc6_bits = val;
-			bitfury->force_reinit = true;
-			c->osc6_max = 0;
-			
-			return "Oscillator bits changing\n";
-		}
+			return bitfury_tui_handle_choice(proc, input);
 		
 		case 'l': case 'L':
 		{
