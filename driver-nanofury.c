@@ -34,6 +34,8 @@ BFG_REGISTER_DRIVER(nanofury_drv)
 
 struct nanofury_state {
 	struct mcp2210_device *mcp;
+	struct timeval identify_started;
+	bool identify_requested;
 };
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
@@ -329,6 +331,38 @@ void nanofury_reinit(struct cgpu_info * const cgpu)
 }
 
 static
+void nanofury_poll(struct thr_info * const thr)
+{
+	struct nanofury_state * const state = thr->cgpu_data;
+	struct mcp2210_device * const mcp = state->mcp;
+	
+	if (state->identify_requested)
+	{
+		if (!timer_isset(&state->identify_started))
+			// LED is normally on while mining, so turn it off for identify
+			mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_LOW);
+		timer_set_delay_from_now(&state->identify_started, 5000000);
+		state->identify_requested = false;
+	}
+	
+	bitfury_do_io(thr);
+	
+	if (timer_passed(&state->identify_started, NULL))
+	{
+		mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_HIGH);
+		timer_unset(&state->identify_started);
+	}
+}
+
+static
+bool nanofury_identify(struct cgpu_info * const cgpu)
+{
+	struct nanofury_state * const state = cgpu->thr[0]->cgpu_data;
+	state->identify_requested = true;
+	return true;
+}
+
+static
 void nanofury_shutdown(struct thr_info * const thr)
 {
 	struct nanofury_state * const state = thr->cgpu_data;
@@ -353,12 +387,13 @@ struct device_drv nanofury_drv = {
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
 	.job_start = bitfury_noop_job_start,
-	.poll = bitfury_do_io,
+	.poll = nanofury_poll,
 	.job_process_results = bitfury_job_process_results,
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
 	.set_device = bitfury_set_device,
+	.identify_device = nanofury_identify,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitfury_wlogprint_status,
