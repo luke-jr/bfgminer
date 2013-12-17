@@ -416,6 +416,25 @@ bool hashbusterusb_set_voltage(struct cgpu_info * const proc, const uint16_t nv)
 	return !memcmp(buf, "\x11\0", 2);
 }
 
+static
+bool hashbusterusb_vrm_unlock(struct cgpu_info * const proc, const char * const code)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x12};
+	size_t size;
+	
+	size = strlen(code) >> 1;
+	if (size > 63)
+		size = 63;
+	
+	hex2bin(&buf[1], code, size);
+	
+	hashbusterusb_io(h, buf, buf);
+	return memcmp(buf, "\x12\0", 2);
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -452,28 +471,12 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		case 'u': case 'U':
 		{
 			char *input = curses_input("VRM unlock code");
-			OUTPacket[0] = 0x12;
-			char *end;
-			char buff[3];
-			int i, size;
 			
-			size = strlen(input) >> 1;
-			if (size > 63)
-				size = 63;
-			
-			for (i = 0; i < size; ++i)
-			{
-				strncpy(buff, input + (i * 2), 2);
-				buff[2] = '\0';
-				OUTPacket[i+1] = (unsigned char)strtol(buff, &end, 16);
-			}
+			const bool rv = hashbusterusb_vrm_unlock(proc, input);
 			free(input);
 			
-			hashbusterusb_io(h, INPacket, OUTPacket);
-			if (memcmp(INPacket, "\x12\0", 2))
-			{
+			if (!rv)
 				return "Unlock error\n";
-			}
 			
 			return "Unlocking PSU\n";
 		}
