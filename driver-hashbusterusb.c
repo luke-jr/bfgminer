@@ -453,6 +453,7 @@ struct api_data *hashbusterusb_api_extra_device_stats(struct cgpu_info * const c
 	struct api_data *root = bitfury_api_device_status(cgpu);
 	
 	float volts = state->voltage;
+	volts /= 1000.;
 	root = api_add_volts(root, "Voltage", &volts, true);
 	
 	return root;
@@ -464,7 +465,7 @@ char *hashbusterusb_set_device(struct cgpu_info * const proc, char * const optio
 	if (!strcasecmp(option, "help"))
 	{
 		bitfury_set_device(proc, option, setting, replybuf);
-		tailsprintf(replybuf, 1024, "\nvrmlock: Lock the VRM voltage to safe range\nvrmunlock: Allow setting potentially unsafe voltages (requires unlock code)\nvoltage: Set voltage (in mV)");
+		tailsprintf(replybuf, 1024, "\nvrmlock: Lock the VRM voltage to safe range\nvrmunlock: Allow setting potentially unsafe voltages (requires unlock code)\nvoltage: Set voltage");
 		return replybuf;
 	}
 	
@@ -488,7 +489,7 @@ char *hashbusterusb_set_device(struct cgpu_info * const proc, char * const optio
 	
 	if (!strcasecmp(option, "voltage"))
 	{
-		const int val = atoi(setting);
+		const int val = atof(setting) * 1000;
 		if (val < 600 || val > 1100)
 			return "Invalid PSU voltage value";
 		
