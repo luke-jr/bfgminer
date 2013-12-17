@@ -437,7 +437,7 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 			OUTPacket[2] = (unsigned char)val & 0xFF;
 			
 			hashbusterusb_io(h, INPacket, OUTPacket);
-			if (!memcmp(INPacket, "\x00\0", 2))
+			if (memcmp(INPacket, "\x11\0", 2))
 			{
 				return "Voltage change error\n";
 			}
