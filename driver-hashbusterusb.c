@@ -404,6 +404,18 @@ bool hashbusterusb_identify(struct cgpu_info * const proc)
 	return true;
 }
 
+static
+bool hashbusterusb_set_voltage(struct cgpu_info * const proc, const uint16_t nv)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x11, 0, (nv & 0xff), (nv >> 8)};
+	
+	hashbusterusb_io(h, buf, buf);
+	return !memcmp(buf, "\x11\0", 2);
+}
+
 #ifdef HAVE_CURSES
 void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -431,16 +443,8 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 			if (val < 600 || val > 1100)
 				return "Invalid PSU voltage value\n";
 			
-			OUTPacket[0] = 0x11;
-			OUTPacket[1] = 0x00;
-			OUTPacket[3] = (unsigned char)(val >> 8) & 0xFF;
-			OUTPacket[2] = (unsigned char)val & 0xFF;
-			
-			hashbusterusb_io(h, INPacket, OUTPacket);
-			if (memcmp(INPacket, "\x11\0", 2))
-			{
+			if (!hashbusterusb_set_voltage(proc, val))
 				return "Voltage change error\n";
-			}
 			
 			return "Voltage change successful\n";
 		}
