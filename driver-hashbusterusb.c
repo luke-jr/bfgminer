@@ -324,6 +324,164 @@ void hashbusterusb_shutdown(struct thr_info *thr)
 	hashbusterusb_io(h, INPacket, OUTPacket);
 }
 
+#ifdef HAVE_CURSES
+void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	struct hashbusterusb_info * const state = proc->device->device_data;
+	wlogprint("[V]oltage ");
+	wlogprint("[O]scillator bits ");
+	//wlogprint("[F]an speed ");  // To be implemented
+	wlogprint("[I]dentification ");
+	wlogprint("[U]nlock VRM ");
+	wlogprint("[L]ock VRM ");
+}
+
+const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	struct hashbusterusb_info * const state = proc->device->device_data;
+	struct bitfury_device * const bitfury = proc->device->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	char buf[0x100];
+	
+	unsigned char OUTPacket[64];
+	unsigned char INPacket[64];
+	
+	switch (input)
+	{
+		case 'i': case 'I':
+		{
+			const int val = curses_int("1 for on, 0 for off");
+			if (val == 1)
+			{
+				OUTPacket[0] = 0x30;
+				OUTPacket[1] = 0x00;
+				OUTPacket[2] = 0xFF;  // Red LED
+				OUTPacket[3] = 0x00;
+				OUTPacket[4] = 0xFF;  // Blue LED
+				hashbusterusb_io(h, INPacket, OUTPacket);
+				return "Identification on\n";
+			}
+			else
+			{
+				OUTPacket[0] = 0x30;
+				OUTPacket[1] = 0x01;
+				OUTPacket[2] = 0x00;
+				OUTPacket[3] = 0x7E;  // Green LED (50%)
+				OUTPacket[4] = 0x00;
+				hashbusterusb_io(h, INPacket, OUTPacket);
+				return "Identification off\n";
+			}
+		}
+		
+		case 'v': case 'V':
+		{
+			const int val = curses_int("Set PSU voltage (range 600mV-1100mV. VRM unlock is required for over 870mV)");
+			if (val < 600 || val > 1100)
+				return "Invalid PSU voltage value\n";
+			
+			OUTPacket[0] = 0x11;
+			OUTPacket[1] = 0x00;
+			OUTPacket[3] = (unsigned char)(val >> 8) & 0xFF;
+			OUTPacket[2] = (unsigned char)val & 0xFF;
+			
+			hashbusterusb_io(h, INPacket, OUTPacket);
+			if (!memcmp(INPacket, "\x00\0", 2))
+			{
+				return "Voltage change error\n";
+			}
+			
+			return "Voltage change successful\n";
+		}
+		
+		case 'u': case 'U':
+		{
+			char *input = curses_input("VRM unlock code");
+			OUTPacket[0] = 0x12;
+			char *end;
+			char buff[3];
+			int i, size;
+			
+			size = strlen(input) >> 1;
+			if (size > 63)
+				size = 63;
+			
+			for (i = 0; i < size; ++i)
+			{
+				strncpy(buff, input + (i * 2), 2);
+				buff[2] = '\0';
+				OUTPacket[i+1] = (unsigned char)strtol(buff, &end, 16);
+			}
+			free(input);
+			
+			hashbusterusb_io(h, INPacket, OUTPacket);
+			if (memcmp(INPacket, "\x12\0", 2))
+			{
+				return "Unlock error\n";
+			}
+			
+			return "Unlocking PSU\n";
+		}
+		
+		case 'o': case 'O':
+		{
+			struct freq_stat * const c = &bitfury->chip_stat;
+			int val;
+			char *intvar;
+			
+			sprintf(buf, "Set oscillator bits (range 1-%d; slow to fast)", BITFURY_MAX_OSC6_BITS);
+			intvar = curses_input(buf);
+			if (!intvar)
+				return "Invalid oscillator bits\n";
+			val = atoi(intvar);
+			free(intvar);
+			if (val < 1 || val > BITFURY_MAX_OSC6_BITS)
+				return "Invalid oscillator bits\n";
+			
+			bitfury->osc6_bits = val;
+			bitfury->force_reinit = true;
+			c->osc6_max = 0;
+			
+			return "Oscillator bits changing\n";
+		}
+		
+		case 'l': case 'L':
+		{
+			const int val = curses_int("VRM lock)");
+			OUTPacket[0] = 0x14;
+			hashbusterusb_io(h, INPacket, OUTPacket);
+			
+			return "VRM lock\n";
+		}
+	}
+	return NULL;
+}
+
+void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct hashbusterusb_info * const state = proc->device->device_data;
+	struct bitfury_device * const bitfury = proc->device->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	unsigned char OUTPacket[64];
+	unsigned char INPacket[64];
+	uint32_t voltage = 0;
+	
+	OUTPacket[0] = 0x15;
+	hashbusterusb_io(h, INPacket, OUTPacket);
+	if (!memcmp(INPacket, "\x15\0", 2))
+	{
+		voltage |= INPacket[3] << 8;
+		voltage |= INPacket[2];
+	}
+	
+	wlogprint("PSU voltage: %dmV\n", voltage);
+	wlogprint("Oscillator bits: %d\n", bitfury->osc6_bits);
+}
+#endif
+
 struct device_drv hashbusterusb_drv = {
 	.dname = "hashbusterusb",
 	.name = "HBR",
@@ -348,8 +506,8 @@ struct device_drv hashbusterusb_drv = {
 	.set_device = bitfury_set_device,
 	
 #ifdef HAVE_CURSES
-	.proc_wlogprint_status = bitfury_wlogprint_status,
-	.proc_tui_wlogprint_choices = bitfury_tui_wlogprint_choices,
-	.proc_tui_handle_choice = bitfury_tui_handle_choice,
+	.proc_wlogprint_status = hashbusterusb_wlogprint_status,
+	.proc_tui_wlogprint_choices = hashbusterusb_tui_wlogprint_choices,
+	.proc_tui_handle_choice = hashbusterusb_tui_handle_choice,
 #endif
 };
