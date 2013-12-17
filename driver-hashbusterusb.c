@@ -449,6 +449,8 @@ void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
 	unsigned char INPacket[64];
 	uint32_t voltage = 0;
 	
+	bitfury_wlogprint_status(proc);
+	
 	OUTPacket[0] = 0x15;
 	hashbusterusb_io(h, INPacket, OUTPacket);
 	if (!memcmp(INPacket, "\x15\0", 2))
@@ -458,7 +460,6 @@ void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
 	}
 	
 	wlogprint("PSU voltage: %dmV\n", voltage);
-	wlogprint("Oscillator bits: %d\n", bitfury->osc6_bits);
 }
 #endif
 
