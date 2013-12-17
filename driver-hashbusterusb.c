@@ -29,6 +29,10 @@
 
 BFG_REGISTER_DRIVER(hashbusterusb_drv)
 
+struct hashbusterusb_state {
+	uint16_t voltage;
+};
+
 static
 bool hashbusterusb_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsigned char *cmd)
 {
@@ -264,12 +268,18 @@ bool hashbusterusb_init(struct thr_info * const thr)
 	
 	struct bitfury_device **devicelist;
 	struct bitfury_device *bitfury;
+	struct hashbusterusb_state * const state = malloc(sizeof(*state));
+	
+	*state = (struct hashbusterusb_state){
+		.voltage = 0,
+	};
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
 		devicelist = proc->device_data;
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
+		proc->thr[0]->cgpu_data = state;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 53;
@@ -288,6 +298,7 @@ bool hashbusterusb_init(struct thr_info * const thr)
 static
 bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 {
+	bool rv = false;
 	struct cgpu_info *proc;
 	if (cgpu != cgpu->device)
 		return true;
@@ -296,14 +307,33 @@ bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 	struct spi_port * const spi = bitfury->spi;
 	struct lowl_usb_endpoint * const h = spi->userp;
 	uint8_t buf[0x40] = {'\x04'};
-	if (!hashbusterusb_io(h, buf, buf))
-		return false;
-	if (buf[1])
+	
+	if (hashbusterusb_io(h, buf, buf))
 	{
-		for (proc = cgpu; proc; proc = proc->next_proc)
-			proc->temp = buf[1];
+		if (buf[1])
+		{
+			rv = true;
+			for (proc = cgpu; proc; proc = proc->next_proc)
+				proc->temp = buf[1];
+		}
 	}
-	return true;
+	
+	buf[0] = '\x15';
+	if (hashbusterusb_io(h, buf, buf))
+	{
+		if (!memcmp(buf, "\x15\0", 2))
+		{
+			rv = true;
+			const uint16_t voltage = (buf[3] << 8) | buf[2];
+			for (proc = cgpu; proc; proc = proc->next_proc)
+			{
+				struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
+				state->voltage = voltage;
+			}
+		}
+	}
+	
+	return rv;
 }
 
 static
@@ -436,25 +466,11 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 
 void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
 {
-	struct bitfury_device * const bitfury = proc->device->device_data;
-	struct spi_port * const spi = bitfury->spi;
-	struct lowl_usb_endpoint * const h = spi->userp;
-	
-	unsigned char OUTPacket[64];
-	unsigned char INPacket[64];
-	uint32_t voltage = 0;
+	struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
 	
 	bitfury_wlogprint_status(proc);
 	
-	OUTPacket[0] = 0x15;
-	hashbusterusb_io(h, INPacket, OUTPacket);
-	if (!memcmp(INPacket, "\x15\0", 2))
-	{
-		voltage |= INPacket[3] << 8;
-		voltage |= INPacket[2];
-	}
-	
-	wlogprint("PSU voltage: %dmV\n", voltage);
+	wlogprint("PSU voltage: %umV\n", (unsigned)state->voltage);
 }
 #endif
 
