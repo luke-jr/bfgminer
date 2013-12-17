@@ -306,6 +306,24 @@ bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 	return true;
 }
 
+static
+void hashbusterusb_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	// Shutdown PSU
+	unsigned char OUTPacket[64];
+	unsigned char INPacket[64];
+	OUTPacket[0] = 0x10;
+	OUTPacket[1] = 0x00;
+	OUTPacket[2] = 0x00;
+	hashbusterusb_io(h, INPacket, OUTPacket);
+}
+
 struct device_drv hashbusterusb_drv = {
 	.dname = "hashbusterusb",
 	.name = "HBR",
@@ -315,7 +333,7 @@ struct device_drv hashbusterusb_drv = {
 	.thread_init = hashbusterusb_init,
 	.thread_disable = bitfury_disable,
 	.thread_enable = bitfury_enable,
-	.thread_shutdown = bitfury_shutdown,
+	.thread_shutdown = hashbusterusb_shutdown,
 	
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
