@@ -465,6 +465,26 @@ void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
 		notifier_read(thr->work_restart_notifier);
 }
 
+void cgpu_setup_control_requests(struct cgpu_info * const cgpu)
+{
+	mutex_init(&cgpu->device_mutex);
+	notifier_init(cgpu->thr[0]->mutex_request);
+	pthread_cond_init(&cgpu->device_cond, NULL);
+}
+
+void cgpu_request_control(struct cgpu_info * const cgpu)
+{
+	mutex_lock(&cgpu->device_mutex);
+	notifier_wake(cgpu->thr[0]->mutex_request);
+	pthread_cond_wait(&cgpu->device_cond, &cgpu->device_mutex);
+}
+
+void cgpu_release_control(struct cgpu_info * const cgpu)
+{
+	pthread_cond_signal(&cgpu->device_cond);
+	mutex_unlock(&cgpu->device_mutex);
+}
+
 static
 void _minerloop_setup(struct thr_info *mythr)
 {

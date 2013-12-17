@@ -150,7 +150,6 @@ bool x6500_lowl_probe(const struct lowlevel_device_info * const info)
 	struct cgpu_info *x6500;
 	x6500 = calloc(1, sizeof(*x6500));
 	x6500->drv = &x6500_api;
-	mutex_init(&x6500->device_mutex);
 	x6500->device_path = strdup(serial);
 	x6500->deven = DEV_ENABLED;
 	x6500->threads = 1;
@@ -345,9 +344,7 @@ static bool x6500_thread_init(struct thr_info *thr)
 	struct cgpu_info *x6500 = thr->cgpu;
 	struct ft232r_device_handle *ftdi = x6500->device_ft232r;
 
-	// Setup mutex request based on notifier and pthread cond
-	notifier_init(thr->mutex_request);
-	pthread_cond_init(&x6500->device_cond, NULL);
+	cgpu_setup_control_requests(x6500);
 	
 	// This works because x6500_thread_init is only called for the first processor now that they're all using the same thread
 	for ( ; x6500; x6500 = x6500->next_proc)
@@ -544,13 +541,9 @@ static bool x6500_get_stats(struct cgpu_info *x6500)
 	if (x6500_all_idle(x6500)) {
 		struct cgpu_info *cgpu = x6500->device;
 		// Getting temperature more efficiently while running
-		pthread_mutex_t *mutexp = &cgpu->device_mutex;
-		mutex_lock(mutexp);
-		notifier_wake(cgpu->thr[0]->mutex_request);
-		pthread_cond_wait(&cgpu->device_cond, mutexp);
+		cgpu_request_control(cgpu);
 		x6500_get_temperature(x6500);
-		pthread_cond_signal(&cgpu->device_cond);
-		mutex_unlock(mutexp);
+		cgpu_release_control(cgpu);
 	}
 
 	return true;

@@ -29,6 +29,12 @@
 
 BFG_REGISTER_DRIVER(hashbusterusb_drv)
 
+struct hashbusterusb_state {
+	uint16_t voltage;
+	struct timeval identify_started;
+	bool identify_requested;
+};
+
 static
 bool hashbusterusb_io(struct lowl_usb_endpoint * const h, unsigned char *buf, unsigned char *cmd)
 {
@@ -264,12 +270,19 @@ bool hashbusterusb_init(struct thr_info * const thr)
 	
 	struct bitfury_device **devicelist;
 	struct bitfury_device *bitfury;
+	struct hashbusterusb_state * const state = malloc(sizeof(*state));
+	
+	*state = (struct hashbusterusb_state){
+		.voltage = 0,
+	};
+	cgpu_setup_control_requests(cgpu);
 	
 	for (proc = thr->cgpu; proc; proc = proc->next_proc)
 	{
 		devicelist = proc->device_data;
 		bitfury = devicelist[proc->proc_id];
 		proc->device_data = bitfury;
+		proc->thr[0]->cgpu_data = state;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
 		bitfury->osc6_bits = 53;
@@ -285,9 +298,35 @@ bool hashbusterusb_init(struct thr_info * const thr)
 	return true;
 }
 
+static void hashbusterusb_set_colour(struct cgpu_info *, uint8_t, uint8_t, uint8_t);
+
+static
+void hashbusterusb_poll(struct thr_info * const master_thr)
+{
+	struct hashbusterusb_state * const state = master_thr->cgpu_data;
+	struct cgpu_info * const cgpu = master_thr->cgpu;
+	
+	if (state->identify_requested)
+	{
+		if (!timer_isset(&state->identify_started))
+			hashbusterusb_set_colour(cgpu, 0xff, 0, 0xff);
+		timer_set_delay_from_now(&state->identify_started, 5000000);
+		state->identify_requested = false;
+	}
+	
+	bitfury_do_io(master_thr);
+	
+	if (timer_passed(&state->identify_started, NULL))
+	{
+		hashbusterusb_set_colour(cgpu, 0, 0x7e, 0);
+		timer_unset(&state->identify_started);
+	}
+}
+
 static
 bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 {
+	bool rv = false;
 	struct cgpu_info *proc;
 	if (cgpu != cgpu->device)
 		return true;
@@ -296,15 +335,247 @@ bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 	struct spi_port * const spi = bitfury->spi;
 	struct lowl_usb_endpoint * const h = spi->userp;
 	uint8_t buf[0x40] = {'\x04'};
-	if (!hashbusterusb_io(h, buf, buf))
-		return false;
-	if (buf[1])
+	
+	if (hashbusterusb_io(h, buf, buf))
 	{
-		for (proc = cgpu; proc; proc = proc->next_proc)
-			proc->temp = buf[1];
+		if (buf[1])
+		{
+			rv = true;
+			for (proc = cgpu; proc; proc = proc->next_proc)
+				proc->temp = buf[1];
+		}
 	}
+	
+	buf[0] = '\x15';
+	if (hashbusterusb_io(h, buf, buf))
+	{
+		if (!memcmp(buf, "\x15\0", 2))
+		{
+			rv = true;
+			const uint16_t voltage = (buf[3] << 8) | buf[2];
+			for (proc = cgpu; proc; proc = proc->next_proc)
+			{
+				struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
+				state->voltage = voltage;
+			}
+		}
+	}
+	
+	return rv;
+}
+
+static
+void hashbusterusb_shutdown(struct thr_info *thr)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	// Shutdown PSU
+	unsigned char OUTPacket[64];
+	unsigned char INPacket[64];
+	OUTPacket[0] = 0x10;
+	OUTPacket[1] = 0x00;
+	OUTPacket[2] = 0x00;
+	hashbusterusb_io(h, INPacket, OUTPacket);
+}
+
+static
+void hashbusterusb_set_colour(struct cgpu_info * const cgpu, const uint8_t red, const uint8_t green, const uint8_t blue)
+{
+	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	
+	uint8_t buf[0x40] = {'\x30', 0, red, green, blue};
+	hashbusterusb_io(h, buf, buf);
+	applog(LOG_DEBUG, "%s: Set LED colour to r=0x%x g=0x%x b=0x%x",
+	       cgpu->dev_repr, (unsigned)red, (unsigned)green, (unsigned)blue);
+}
+
+static
+bool hashbusterusb_identify(struct cgpu_info * const proc)
+{
+	struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
+	
+	state->identify_requested = true;
+	
 	return true;
 }
+
+static
+bool hashbusterusb_set_voltage(struct cgpu_info * const proc, const uint16_t nv)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x11, 0, (nv & 0xff), (nv >> 8)};
+	
+	hashbusterusb_io(h, buf, buf);
+	return !memcmp(buf, "\x11\0", 2);
+}
+
+static
+bool hashbusterusb_vrm_unlock(struct cgpu_info * const proc, const char * const code)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x12};
+	size_t size;
+	
+	size = strlen(code) >> 1;
+	if (size > 63)
+		size = 63;
+	
+	hex2bin(&buf[1], code, size);
+	
+	hashbusterusb_io(h, buf, buf);
+	return memcmp(buf, "\x12\0", 2);
+}
+
+static
+void hashbusterusb_vrm_lock(struct cgpu_info * const proc)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	struct spi_port * const spi = bitfury->spi;
+	struct lowl_usb_endpoint * const h = spi->userp;
+	unsigned char buf[0x40] = {0x14};
+	hashbusterusb_io(h, buf, buf);
+}
+
+static
+struct api_data *hashbusterusb_api_extra_device_stats(struct cgpu_info * const cgpu)
+{
+	struct hashbusterusb_state * const state = cgpu->thr[0]->cgpu_data;
+	struct api_data *root = bitfury_api_device_status(cgpu);
+	
+	float volts = state->voltage;
+	volts /= 1000.;
+	root = api_add_volts(root, "Voltage", &volts, true);
+	
+	return root;
+}
+
+static
+char *hashbusterusb_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+{
+	if (!strcasecmp(option, "help"))
+	{
+		bitfury_set_device(proc, option, setting, replybuf);
+		tailsprintf(replybuf, 1024, "\nvrmlock: Lock the VRM voltage to safe range\nvrmunlock: Allow setting potentially unsafe voltages (requires unlock code)\nvoltage: Set voltage");
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "vrmlock"))
+	{
+		cgpu_request_control(proc->device);
+		hashbusterusb_vrm_lock(proc);
+		cgpu_release_control(proc->device);
+		return NULL;
+	}
+	
+	if (!strcasecmp(option, "vrmunlock"))
+	{
+		cgpu_request_control(proc->device);
+		const bool rv = hashbusterusb_vrm_unlock(proc, setting);
+		cgpu_release_control(proc->device);
+		if (!rv)
+			return "Unlock error";
+		return NULL;
+	}
+	
+	if (!strcasecmp(option, "voltage"))
+	{
+		const int val = atof(setting) * 1000;
+		if (val < 600 || val > 1100)
+			return "Invalid PSU voltage value";
+		
+		cgpu_request_control(proc->device);
+		const bool rv = hashbusterusb_set_voltage(proc, val);
+		cgpu_release_control(proc->device);
+		
+		if (!rv)
+			return "Voltage change error";
+		return NULL;
+	}
+	
+	return bitfury_set_device(proc, option, setting, replybuf);
+}
+
+#ifdef HAVE_CURSES
+void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[V]oltage ");
+	wlogprint("[O]scillator bits ");
+	//wlogprint("[F]an speed ");  // To be implemented
+	wlogprint("[U]nlock VRM ");
+	wlogprint("[L]ock VRM ");
+}
+
+const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'v': case 'V':
+		{
+			const int val = curses_int("Set PSU voltage (range 600mV-1100mV. VRM unlock is required for over 870mV)");
+			if (val < 600 || val > 1100)
+				return "Invalid PSU voltage value\n";
+			
+			cgpu_request_control(proc->device);
+			const bool rv = hashbusterusb_set_voltage(proc, val);
+			cgpu_release_control(proc->device);
+			
+			if (!rv)
+				return "Voltage change error\n";
+			
+			return "Voltage change successful\n";
+		}
+		
+		case 'u': case 'U':
+		{
+			char *input = curses_input("VRM unlock code");
+			
+			if (!input)
+				input = calloc(1, 1);
+			
+			cgpu_request_control(proc->device);
+			const bool rv = hashbusterusb_vrm_unlock(proc, input);
+			cgpu_release_control(proc->device);
+			free(input);
+			
+			if (!rv)
+				return "Unlock error\n";
+			
+			return "Unlocking PSU\n";
+		}
+		
+		case 'o': case 'O':
+			return bitfury_tui_handle_choice(proc, input);
+		
+		case 'l': case 'L':
+		{
+			cgpu_request_control(proc->device);
+			hashbusterusb_vrm_lock(proc);
+			cgpu_release_control(proc->device);
+			return "VRM lock\n";
+		}
+	}
+	return NULL;
+}
+
+void hashbusterusb_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
+	
+	bitfury_wlogprint_status(proc);
+	
+	wlogprint("PSU voltage: %umV\n", (unsigned)state->voltage);
+}
+#endif
 
 struct device_drv hashbusterusb_drv = {
 	.dname = "hashbusterusb",
@@ -315,23 +586,24 @@ struct device_drv hashbusterusb_drv = {
 	.thread_init = hashbusterusb_init,
 	.thread_disable = bitfury_disable,
 	.thread_enable = bitfury_enable,
-	.thread_shutdown = bitfury_shutdown,
+	.thread_shutdown = hashbusterusb_shutdown,
 	
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
 	.job_start = bitfury_noop_job_start,
-	.poll = bitfury_do_io,
+	.poll = hashbusterusb_poll,
 	.job_process_results = bitfury_job_process_results,
 	
 	.get_stats = hashbusterusb_get_stats,
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
-	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
+	.get_api_extra_device_status = hashbusterusb_api_extra_device_stats,
+	.set_device = hashbusterusb_set_device,
+	.identify_device = hashbusterusb_identify,
 	
 #ifdef HAVE_CURSES
-	.proc_wlogprint_status = bitfury_wlogprint_status,
-	.proc_tui_wlogprint_choices = bitfury_tui_wlogprint_choices,
-	.proc_tui_handle_choice = bitfury_tui_handle_choice,
+	.proc_wlogprint_status = hashbusterusb_wlogprint_status,
+	.proc_tui_wlogprint_choices = hashbusterusb_tui_wlogprint_choices,
+	.proc_tui_handle_choice = hashbusterusb_tui_handle_choice,
 #endif
 };
