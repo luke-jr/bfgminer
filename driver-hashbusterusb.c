@@ -31,6 +31,8 @@ BFG_REGISTER_DRIVER(hashbusterusb_drv)
 
 struct hashbusterusb_state {
 	uint16_t voltage;
+	struct timeval identify_started;
+	bool identify_requested;
 };
 
 static
@@ -295,6 +297,31 @@ bool hashbusterusb_init(struct thr_info * const thr)
 	return true;
 }
 
+static void hashbusterusb_set_colour(struct cgpu_info *, uint8_t, uint8_t, uint8_t);
+
+static
+void hashbusterusb_poll(struct thr_info * const master_thr)
+{
+	struct hashbusterusb_state * const state = master_thr->cgpu_data;
+	struct cgpu_info * const cgpu = master_thr->cgpu;
+	
+	if (state->identify_requested)
+	{
+		if (!timer_isset(&state->identify_started))
+			hashbusterusb_set_colour(cgpu, 0xff, 0, 0xff);
+		timer_set_delay_from_now(&state->identify_started, 5000000);
+		state->identify_requested = false;
+	}
+	
+	bitfury_do_io(master_thr);
+	
+	if (timer_passed(&state->identify_started, NULL))
+	{
+		hashbusterusb_set_colour(cgpu, 0, 0x7e, 0);
+		timer_unset(&state->identify_started);
+	}
+}
+
 static
 bool hashbusterusb_get_stats(struct cgpu_info * const cgpu)
 {
@@ -363,6 +390,18 @@ void hashbusterusb_set_colour(struct cgpu_info * const cgpu, const uint8_t red, 
 	
 	uint8_t buf[0x40] = {'\x30', 0, red, green, blue};
 	hashbusterusb_io(h, buf, buf);
+	applog(LOG_DEBUG, "%s: Set LED colour to r=0x%x g=0x%x b=0x%x",
+	       cgpu->dev_repr, (unsigned)red, (unsigned)green, (unsigned)blue);
+}
+
+static
+bool hashbusterusb_identify(struct cgpu_info * const proc)
+{
+	struct hashbusterusb_state * const state = proc->thr[0]->cgpu_data;
+	
+	state->identify_requested = true;
+	
+	return true;
 }
 
 #ifdef HAVE_CURSES
@@ -371,7 +410,6 @@ void hashbusterusb_tui_wlogprint_choices(struct cgpu_info * const proc)
 	wlogprint("[V]oltage ");
 	wlogprint("[O]scillator bits ");
 	//wlogprint("[F]an speed ");  // To be implemented
-	wlogprint("[I]dentification ");
 	wlogprint("[U]nlock VRM ");
 	wlogprint("[L]ock VRM ");
 }
@@ -387,21 +425,6 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 	
 	switch (input)
 	{
-		case 'i': case 'I':
-		{
-			const int val = curses_int("1 for on, 0 for off");
-			if (val == 1)
-			{
-				hashbusterusb_set_colour(proc, 0xff, 0, 0xff);
-				return "Identification on\n";
-			}
-			else
-			{
-				hashbusterusb_set_colour(proc, 0, 0x7e, 0);
-				return "Identification off\n";
-			}
-		}
-		
 		case 'v': case 'V':
 		{
 			const int val = curses_int("Set PSU voltage (range 600mV-1100mV. VRM unlock is required for over 870mV)");
@@ -489,7 +512,7 @@ struct device_drv hashbusterusb_drv = {
 	.minerloop = minerloop_async,
 	.job_prepare = bitfury_job_prepare,
 	.job_start = bitfury_noop_job_start,
-	.poll = bitfury_do_io,
+	.poll = hashbusterusb_poll,
 	.job_process_results = bitfury_job_process_results,
 	
 	.get_stats = hashbusterusb_get_stats,
@@ -497,6 +520,7 @@ struct device_drv hashbusterusb_drv = {
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
 	.set_device = bitfury_set_device,
+	.identify_device = hashbusterusb_identify,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = hashbusterusb_wlogprint_status,
