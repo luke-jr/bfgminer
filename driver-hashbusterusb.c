@@ -429,7 +429,6 @@ const char *hashbusterusb_tui_handle_choice(struct cgpu_info * const proc, const
 		
 		case 'l': case 'L':
 		{
-			const int val = curses_int("VRM lock)");
 			OUTPacket[0] = 0x14;
 			hashbusterusb_io(h, INPacket, OUTPacket);
 			
