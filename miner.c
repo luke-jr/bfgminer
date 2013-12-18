@@ -3602,7 +3602,7 @@ void _wlog(const char *str)
 		char *s;
 		
 		newline = true;
-		s = alloca(end);
+		s = alloca(end + 1);
 		memcpy(s, str, end);
 		s[end] = '\0';
 		str = s;
