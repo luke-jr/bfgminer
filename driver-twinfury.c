@@ -526,10 +526,7 @@ void twinfury_wlogprint_status(struct cgpu_info * const proc)
 {
 	const struct twinfury_info * const state = proc->device->device_data;
 	if(state->id.version > 1)
-	{
-		const uint32_t voltage = state->voltage;
 		wlogprint("Supply voltage: %dmV\n", state->voltage);
-	}
 }
 #endif
 
