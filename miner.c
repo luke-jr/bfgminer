@@ -904,7 +904,7 @@ tryagain: ;
 			applog(LOG_DEBUG, "QueryDosDevice returned insufficent buffer error; enlarging to %lx", (unsigned long)bufLen);
 			goto tryagain;
 		}
-		applog(LOG_WARNING, "Error occurred trying to enumerate COM ports with QueryDosDevice");
+		applogr(, LOG_WARNING, "Error occurred trying to enumerate COM ports with QueryDosDevice");
 	}
 	size_t tLen;
 	memcpy(devp, "\\\\.\\", 4);
