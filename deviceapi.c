@@ -474,13 +474,19 @@ void cgpu_setup_control_requests(struct cgpu_info * const cgpu)
 
 void cgpu_request_control(struct cgpu_info * const cgpu)
 {
+	struct thr_info * const thr = cgpu->thr[0];
+	if (pthread_equal(pthread_self(), thr->pth))
+		return;
 	mutex_lock(&cgpu->device_mutex);
-	notifier_wake(cgpu->thr[0]->mutex_request);
+	notifier_wake(thr->mutex_request);
 	pthread_cond_wait(&cgpu->device_cond, &cgpu->device_mutex);
 }
 
 void cgpu_release_control(struct cgpu_info * const cgpu)
 {
+	struct thr_info * const thr = cgpu->thr[0];
+	if (pthread_equal(pthread_self(), thr->pth))
+		return;
 	pthread_cond_signal(&cgpu->device_cond);
 	mutex_unlock(&cgpu->device_mutex);
 }
