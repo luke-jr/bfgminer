@@ -54,6 +54,7 @@ struct bitfury_device {
 	int desync_counter;
 	int sample_hwe;
 	int sample_tot;
+	double volt;
 };
 
 extern void work_to_bitfury_payload(struct bitfury_payload *, struct work *);

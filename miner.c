@@ -3250,7 +3250,7 @@ void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, 
 	adj_width(hwerrs, &hwwidth);
 	percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
 	percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
-	
+
 	tailsprintf(buf, bufsz, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 	            cHr, aHr, uHr,
 	            awidth, accepted,
@@ -3461,10 +3461,100 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			bnbuf
 		);
 	}
+//#ifndef HAS_METABANK
 }
 
-#define get_statline(buf, bufsz, cgpu)               get_statline3(buf, bufsz, cgpu, false, opt_show_procs)
-#define get_statline2(buf, bufsz, cgpu, for_curses)  get_statline3(buf, bufsz, cgpu, for_curses, opt_show_procs)
+void get_statline4(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs) {
+#ifndef HAVE_CURSES
+	assert(for_curses == false);
+#endif
+	struct device_drv *drv = cgpu->drv;
+	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
+//	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	char rejpcbuf[6];
+	char bnbuf[6];
+	double dev_runtime;
+	int count, i;
+	
+	//struct bitfury_device **devicelist;
+	struct cgpu_info *proc;
+	struct bitfury_device *bitfury;
+
+	proc = cgpu;
+	bitfury = proc->device_data;
+
+#ifdef HAVE_CURSES
+	if (for_curses)
+	{
+		const char *cHrStatsOpt[] = {AS_BAD("DEAD "), AS_BAD("SICK "), "OFF  ", AS_BAD("REST "), AS_BAD(" ERR "), AS_BAD("WAIT "), " "};
+		const char *cHrStats;
+		int cHrStatsI = (sizeof(cHrStatsOpt) / sizeof(*cHrStatsOpt)) - 1;
+		bool all_dead = true, all_off = true, all_rdrv = true;
+		struct cgpu_info *proc = cgpu;
+		for (int i = 0; i < cgpu->procs; ++i, (proc = proc->next_proc))
+		{
+			switch (cHrStatsI) {
+				default:
+					if (proc->status == LIFE_WAIT)
+						cHrStatsI = 5;
+				case 5:
+					if (proc->deven == DEV_RECOVER_ERR)
+						cHrStatsI = 4;
+				case 4:
+					if (proc->deven == DEV_RECOVER)
+						cHrStatsI = 3;
+				case 3:
+					if (proc->status == LIFE_SICK || proc->status == LIFE_DEAD || proc->status == LIFE_DEAD2)
+					{
+						cHrStatsI = 1;
+						all_off = false;
+					}
+					else
+					{
+						if (likely(proc->deven == DEV_ENABLED))
+							all_off = false;
+						if (proc->deven != DEV_RECOVER_DRV)
+							all_rdrv = false;
+					}
+				case 1:
+					break;
+			}
+			if (likely(proc->status != LIFE_DEAD && proc->status != LIFE_DEAD2))
+				all_dead = false;
+			if (opt_show_procs)
+				break;
+		}
+		if (unlikely(all_dead))
+			cHrStatsI = 0;
+		else
+		if (unlikely(all_off))
+			cHrStatsI = 2;
+		cHrStats = cHrStatsOpt[cHrStatsI];
+		if (cHrStatsI == 2 && all_rdrv)
+			cHrStats = " RST ";
+
+		snprintf(buf, bufsz, "%s%s %2.1fC %.3fV", cHrStats, cgpu->dev_repr, cgpu->temp, bitfury->volt);
+	} else
+#endif
+	snprintf(buf, bufsz, " %s %2.1fC %.3fV", cgpu->dev_repr, cgpu->temp, bitfury->volt);
+	for(i = 0; i < cgpu->procs; i++) {
+		bitfury = proc->device_data;
+		tailsprintf(buf, bufsz, " %u-%.0f", bitfury->osc6_bits, bitfury->mhz);
+		proc = proc->next_proc;
+	}
+		//bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
+		//snprintf(buf, bufsz, " %u %u %u: ", bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+//	snprintf(buf, bufsz, " Count: %d %s", count, cgpu->dev_repr);
+
+	if (!opt_show_procs)
+		cgpu = cgpu->device;
+//#ifndef HAS_METABANK
+}
+
+//#define get_statline(buf, bufsz, cgpu)               get_statline3(buf, bufsz, cgpu, false, opt_show_procs)
+//#define get_statline2(buf, bufsz, cgpu, for_curses)  get_statline3(buf, bufsz, cgpu, for_curses, opt_show_procs)
+#define get_statline(buf, bufsz, cgpu)               get_statline4(buf, bufsz, cgpu, false, opt_show_procs)
+#define get_statline2(buf, bufsz, cgpu, for_curses)  get_statline4(buf, bufsz, cgpu, for_curses, opt_show_procs)
 
 static void text_print_status(int thr_id)
 {
@@ -7562,7 +7652,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		goto out_unlock;
 	showlog = true;
 	cgtime(&total_tv_end);
-
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
 	global_hashrate = ((unsigned long long)lround(total_rolling)) * 1000000;
@@ -7644,6 +7733,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		                total_diff_rejected + total_diff_stale, total_diff_accepted,
 		                hw_errors,
 		                total_bad_nonces, total_bad_nonces + total_diff1);
+
 		unlock_curses();
 	}
 #endif
@@ -7654,7 +7744,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	
 	percentf4(rejpcbuf, sizeof(rejpcbuf), total_diff_rejected + total_diff_stale, total_diff_accepted);
 	percentf4(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
-	
+
 	snprintf(logstatusline, sizeof(logstatusline),
 	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 		want_per_device_stats ? "ALL " : "",

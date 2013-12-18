@@ -468,7 +468,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			timer_set_now(&thr->tv_morework);
 			job_start_complete(thr);
 		}
-		
+
 		for (n = 0; newbuf[n] == oldbuf[n]; ++n)
 		{
 			if (unlikely(n >= 0xf))
@@ -481,7 +481,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				goto out;
 			}
 		}
-		
+
 		counter = bitfury_decnonce(newbuf[n]);
 		if ((counter & 0xFFC00000) == 0xdf800000)
 		{
@@ -489,7 +489,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			int32_t cycles = counter - bitfury->counter1;
 			if (cycles < 0)
 				cycles += 0x00400000;
-			
+
 			if (cycles & 0x00200000)
 			{
 				long long unsigned int period;
@@ -497,19 +497,20 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				struct timeval d_time;
 				
 				timersub(&(tv_now), &(bitfury->timer1), &d_time);
-				period = timeval_to_us(&d_time) * 1000ULL;
-				ns = (double)period / (double)(cycles);
-				bitfury->mhz = 1.0 / ns * 65.0 * 1000.0;
-				
+				period = timeval_to_us(&d_time);
+				ns = (double)(cycles) / (double)period * 65.0;
+				if (ns < 350) bitfury->mhz = ns;
+
 				if (bitfury->mhz_best)
 				{
-					if (bitfury->mhz < bitfury->mhz_best / 2)
+					if (bitfury->mhz < bitfury->mhz_best / 3)
 					{
-						applog(LOG_WARNING, "%"PRIpreprv": Frequency drop over 50%% detected, reinitialising",
+						applog(LOG_WARNING, "%"PRIpreprv": Frequency drop over 33%% detected, reinitialising",
 						       proc->proc_repr);
 						bitfury->force_reinit = true;
 					}
 				}
+
 				if ((int)bitfury->mhz > bitfury->mhz_best && bitfury->mhz_last > bitfury->mhz_best)
 				{
 					// mhz_best is the lowest of two sequential readings over the previous best
@@ -597,9 +598,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				}
 				if (++bitfury->sample_tot >= 0x40 || bitfury->sample_hwe >= 8)
 				{
-					if (bitfury->sample_hwe >= 8)
-					{
-						applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
+					if (bitfury->sample_hwe >= 8) {
+						applog(LOG_INFO, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
 						       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
 						bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 						bitfury->desync_counter = 99;

@@ -22,6 +22,7 @@
  * THE SOFTWARE.
  */
 
+#define HAS_METABANK2
 #include "config.h"
 
 #include <stdbool.h>
@@ -30,7 +31,21 @@
 #include "driver-bitfury.h"
 #include "libbitfury.h"
 #include "spidevc.h"
+#ifdef HAS_METABANK2
+#include "tm_i2cm.h"
+#else
 #include "tm_i2c.h"
+#endif
+
+static int renew_voltage = 1;
+static struct timeval metabank_started;
+typedef struct {
+	int check;
+	double temp;
+	double vc;
+} slots_stat_struct;
+
+static slots_stat_struct slots[32] = {0};
 
 BFG_REGISTER_DRIVER(metabank_drv)
 
@@ -120,20 +135,28 @@ int metabank_autodetect()
 					.drv = &metabank_drv,
 					.procs = chip_n,
 					.device_data = devicelist,
-					.cutofftemp = 50,
+					.cutofftemp = 80,
 				};
 				add_cgpu_slave(cgpu, prev_cgpu);
-				
+
+				// ### Set all vltage to 0.835V ###
+				applog(LOG_INFO, "Set voltage!");
+				applog(LOG_WARNING, "Slot[%02d]: %.3f V  %.1f C", i,
+					tm_i2c_set_voltage_abs(i, 0.835), tm_i2c_gettemp(i));
+
 				proc_count += chip_n;
 				if (!proc1)
 					proc1 = cgpu;
 				prev_cgpu = cgpu;
-			}
-			else
+			} else {
+				slot_on[i] = 0;
 				free(port);
+			}
 		}
 	}
-	
+
+	timer_set_now(&metabank_started);
+
 	if (proc1)
 		proc1->threads = 1;
 	
@@ -159,9 +182,9 @@ bool metabank_init(struct thr_info *thr)
 		proc->device_data = bitfury;
 		bitfury->spi->cgpu = proc;
 		bitfury_init_chip(proc);
-		bitfury->osc6_bits = 53;
+		bitfury->osc6_bits = 54;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-		bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
+		bitfury_init_freq_stat(&bitfury->chip_stat, 53, 56);
 		
 		if (proc->proc_id == proc->procs - 1)
 			free(devicelist);
@@ -180,15 +203,64 @@ static void metabank_shutdown(struct thr_info *thr)
 
 static bool metabank_get_stats(struct cgpu_info *cgpu)
 {
-	struct bitfury_device * const bitfury = cgpu->device_data;
+	struct bitfury_device * bitfury = cgpu->device_data;
 	float t;
+	struct timeval tv, now;
+	struct cgpu_info *proc, *cproc;
+	unsigned slot;
+	slots_stat_struct *stat = &slots[bitfury->slot];
 
-	t = tm_i2c_gettemp(bitfury->slot) * 0.1;
+	timer_set_now(&now);
 
-	if (t < -27) //Sometimes tm_i2c_gettemp() returns strange result, ignoring it.
-		return false;
+	if ((now.tv_sec & 3) == 0 && stat->check) {
+		slot = bitfury->slot;
+		t = tm_i2c_gettemp(slot);
+		if (t < -27 || t > 250) //Sometimes tm_i2c_gettemp() returns strange result, ignoring it.
+			return false;
+		cgpu->temp = t;
 
-	cgpu->temp = t;
+		if (t > 75) { // Drop Down voltage
+			tm_i2c_set_vid(slot, 0);
+			applog(LOG_WARNING, "-----=====!!!!! Slot %u set low voltage !!!!!=====-----", slot);
+		}
+		bitfury->volt = (slot & 1) ? tm_i2c_getcore1(slot) : tm_i2c_getcore0(slot);
+		stat->check = 0;
+		stat->temp = t;
+		stat->vc = bitfury->volt;
+
+		timersub(&now, &metabank_started, &tv);
+		if (renew_voltage && tv.tv_sec > 900) { // set new voltage after 15 min
+			int count = 0;
+			double mhz;
+			applog(LOG_WARNING, "Set new voltage!");
+			proc = cgpu->device;
+			while(proc) {
+				cproc = proc;
+				mhz = 0;
+				count = proc->procs;
+				for(int i = 0; i < cproc->procs; i++) {
+					bitfury = (struct bitfury_device *) proc->device_data;
+					mhz += bitfury->mhz;
+					proc = proc->next_proc;
+				}
+				mhz /= (double)count;
+				applog(LOG_WARNING, "Dev : %s slot %u %.0f, %d", cproc->dev_repr, bitfury->slot, mhz, count);
+				if (mhz < 213) {
+					applog(LOG_WARNING, " %s new voltage: %.3f V\t%.1f C",
+						cproc->dev_repr, tm_i2c_set_voltage_abs(bitfury->slot, 0.91), tm_i2c_gettemp(bitfury->slot));
+				} else {
+					applog(LOG_WARNING, " %s: no changes", cproc->dev_repr);
+				}
+			};
+			renew_voltage = 0;
+		}
+	} else {
+		if (now.tv_sec & 7 != 0) {
+			cgpu->temp = stat->temp;
+			bitfury->volt = stat->vc;
+			stat->check = 1;
+		}
+	}
 
 	return true;
 }
@@ -215,6 +287,7 @@ static struct api_data *metabank_api_extra_device_status(struct cgpu_info *cgpu)
 
 	vc0 = tm_i2c_getcore0(bitfury->slot);
 	vc1 = tm_i2c_getcore1(bitfury->slot);
+	bitfury->volt = (bitfury->slot & 1) ? vc1 : vc0;
 
 	root = api_add_volts(root, "Slot VC0", &vc0, true);
 	root = api_add_volts(root, "Slot VC1", &vc1, true);
