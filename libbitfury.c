@@ -151,11 +151,11 @@ void bitfury_set_freq(struct spi_port *port, int bits) {
 	bitfury_config_reg(port, 4, 1); /* Enable slow oscillator */
 }
 
-void bitfury_send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
+void bitfury_send_reinit(struct spi_port *port, int slot, int chip_n, int osc6) {
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
-	bitfury_set_freq(port, n);
+	bitfury_set_freq(port, osc6);
 	bitfury_send_conf(port);
 	bitfury_send_init(port);
 	spi_txrx(port);
