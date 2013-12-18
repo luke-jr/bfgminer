@@ -102,6 +102,8 @@ struct lowlevel_device_info *_vcom_devinfo_findorcreate(struct lowlevel_device_i
 {
 	struct lowlevel_device_info *devinfo;
 	char * const devid = _vcom_unique_id(devpath);
+	if (!devid)
+		return NULL;
 	HASH_FIND_STR(*devinfo_list, devid, devinfo);
 	if (!devinfo)
 	{
@@ -206,7 +208,7 @@ void _vcom_devinfo_scan_devserial(struct lowlevel_device_info ** const devinfo_l
 			continue;
 		strcpy(devfile, de->d_name);
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, devpath);
-		if (!(devinfo->manufacturer || devinfo->product || devinfo->serial))
+		if (devinfo && !(devinfo->manufacturer || devinfo->product || devinfo->serial))
 			devinfo->product = strdup(devfile);
 	}
 	closedir(D);
@@ -269,6 +271,8 @@ void _sysfs_find_tty(char *devpath, char *devfile, struct lowlevel_device_info *
 		
 		strcpy(&ttybuf[5], de->d_name);
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, ttybuf);
+		if (!devinfo)
+			continue;
 		BFGINIT(devinfo->manufacturer, _sysfs_do_read(devpath, devfile, "/manufacturer"));
 		BFGINIT(devinfo->product, _sysfs_do_read(devpath, devfile, "/product"));
 		BFGINIT(devinfo->serial, _sysfs_do_read(devpath, devfile, "/serial"));
@@ -452,6 +456,11 @@ out:
 	}
 	
 	devinfo = _vcom_devinfo_findorcreate(devinfo_list, devpath);
+	if (!devinfo)
+	{
+		free(serial);
+		return;
+	}
 	BFGINIT(devinfo->manufacturer, windows_usb_get_string(hubh, portno, devdesc->iManufacturer));
 	BFGINIT(devinfo->product, windows_usb_get_string(hubh, portno, devdesc->iProduct));
 	if (devinfo->serial)
@@ -628,6 +637,8 @@ void _vcom_devinfo_scan_ftdi(struct lowlevel_device_info ** const devinfo_list)
 		sprintf(devpathnum, "%d", (int)lComPortNumber);
 		
 		devinfo = _vcom_devinfo_findorcreate(devinfo_list, devpath);
+		if (!devinfo)
+			continue;
 		BFGINIT(devinfo->product, (bufptrs[i] && bufptrs[i][0]) ? strdup(bufptrs[i]) : NULL);
 		BFGINIT(devinfo->serial, maybe_strdup(_ftdi_get_string(serial, i, FT_OPEN_BY_SERIAL_NUMBER)));
 	}

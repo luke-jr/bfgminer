@@ -1157,6 +1157,7 @@ tryagain: ;
 		if (strncmp("COM", t, 3))
 			continue;
 		memcpy(devp, t, tLen);
+		// NOTE: We depend on _vcom_devinfo_findorcreate to further check that there's a number (and only a number) on the end
 		_vcom_devinfo_findorcreate(devinfo_list, dev);
 	}
 }
