@@ -61,20 +61,13 @@ int bfsb_autodetect()
 	struct bitfury_device **devicelist, *bitfury;
 	struct spi_port *port;
 	int i, j;
-	bool slot_on[32];
-	struct timespec t1, t2;
 	struct bitfury_device dummy_bitfury;
 	struct cgpu_info dummy_cgpu;
 
 	dummy_cgpu.device_data = &dummy_bitfury;
 	
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t1);
-	for (i = 0; i < 4; i++) {
-		slot_on[i] = 1;
-	}
-
-	for (i = 0; i < 32; i++) {
-		if (slot_on[i]) {
+	for (i = 0; i < 4; i++)
+	{
 			int chip_n;
 			
 			port = malloc(sizeof(*port));
@@ -115,10 +108,7 @@ int bfsb_autodetect()
 			}
 			else
 				free(port);
-		}
 	}
-
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t2);
 	
 	if (proc1)
 		proc1->threads = 1;
