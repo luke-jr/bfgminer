@@ -86,6 +86,10 @@ endif
 
 bfgminer_SOURCES	+= logging.c
 
+if USE_UDEVRULES
+dist_udevrules_DATA = 70-bfgminer.rules
+endif
+
 if NEED_BFG_DRIVER_PROXY
 bfgminer_SOURCES += driver-proxy.c driver-proxy.h
 endif

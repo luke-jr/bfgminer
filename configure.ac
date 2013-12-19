@@ -128,6 +128,8 @@ need_lowl_usb=no
 have_cygwin=false
 have_win32=false
 have_macho=false
+use_udevrules=true
+have_udevrules=false
 AUTOSCAN_CPPFLAGS=""
 AUTOSCAN_LIBS=""
 DLOPEN_FLAGS="-ldl"
@@ -156,6 +158,7 @@ esac
 case $target in
   *-*-mingw*)
     have_win32=true
+    use_udevrules=false
     DLOPEN_FLAGS=""
     WS2_LIBS="-lws2_32"
     MM_LIBS="-lwinmm"
@@ -164,13 +167,16 @@ case $target in
     ;;
   *-*-cygwin*)
 	have_cygwin=true
+    use_udevrules=false
 	;;
   powerpc-*-darwin*)
     CFLAGS="$CFLAGS -faltivec"
 		have_macho=true
+    use_udevrules=false
     ;;
 	*-*-darwin*)
 		have_macho=true
+    use_udevrules=false
 		;;
 esac
 
@@ -368,6 +374,7 @@ if test "x$bitforce" = xyes; then
 	need_lowl_vcom=yes
 	has_fpga=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
@@ -383,6 +390,7 @@ if test "x$icarus" = xyes; then
 	need_lowl_vcom=yes
 	has_fpga=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
@@ -496,6 +504,7 @@ if test "x$modminer" = xyes; then
 	need_lowl_vcom=yes
 	need_binloader=yes
 	has_fpga=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
 
@@ -559,6 +568,7 @@ if test "x$klondike" = xyes; then
 	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
 	need_lowl_usb=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 
@@ -586,6 +596,7 @@ if test "x$x6500" = xyes; then
 	need_lowl_usb=yes
 	need_binloader=yes
 	has_fpga=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
 
@@ -612,6 +623,7 @@ if test "x$ztex" = xyes; then
 	need_lowl_usb=yes
 	need_binloader=yes
 	has_fpga=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
 
@@ -626,6 +638,7 @@ if test "x$bifury" = "xyes"; then
 	AC_DEFINE([USE_BIFURY], [1], [Defined to 1 if Bi*Fury support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_BIFURY], [test x$bifury = xyes])
 
@@ -676,6 +689,7 @@ if test "x$bigpic" = "xyes"; then
 	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
@@ -698,6 +712,7 @@ if test "x$twinfury" = "xyes"; then
     AC_DEFINE([USE_TWINFURY], [1], [Defined to 1 if Twinfury USB miner support is wanted])
     need_lowl_vcom=yes
     has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_TWINFURY], [test x$twinfury = xyes])
 
@@ -720,6 +735,7 @@ if test "x$littlefury" = "xyes"; then
 	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
 
@@ -763,6 +779,7 @@ if test "x$nanofury" = "xyes"; then
 	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
 	need_lowl_hid=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
 
@@ -795,6 +812,7 @@ if test "x$hashbuster" = "xyes"; then
 	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster Nano support is wanted])
 	need_lowl_hid=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
@@ -820,6 +838,7 @@ if test "x$hashbusterusb" = xyes; then
 	AC_DEFINE([USE_HASHBUSTERUSB], [1], [Defined to 1 if HashBuster Micro support is wanted])
 	need_lowl_usb=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_HASHBUSTERUSB], [test x$hashbusterusb = xyes])
 
@@ -1083,6 +1102,27 @@ AC_SUBST(libblkmaker_LDFLAGS)
 AC_SUBST(libblkmaker_LIBS)
 
 
+$have_udevrules || use_udevrules=false
+if $use_udevrules; then
+	AC_ARG_WITH([udevrulesdir],
+		AS_HELP_STRING([--with-udevrulesdir=DIR], [Install udev rules into this directory]),
+		[], [
+			if test -d /lib/udev/rules.d; then
+				with_udevrulesdir=/lib/udev/rules.d
+			else
+				with_udevrulesdir=no
+			fi
+		]
+	)
+	if test "x$with_udevrulesdir" = "xno"; then
+		use_udevrules=false
+	fi
+	if $use_udevrules; then
+		AC_SUBST([udevrulesdir], [$with_udevrulesdir])
+	fi
+fi
+
+
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
@@ -1099,6 +1139,7 @@ AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$has_fpga != xno])
 AM_CONDITIONAL([HAS_ASIC], [test x$has_asic != xno])
+AM_CONDITIONAL([USE_UDEVRULES], [$use_udevrules])
 
 dnl Find YASM
 has_yasm=false
@@ -1467,6 +1508,10 @@ AC_CONFIG_FILES([
 	ccan/Makefile
 	lib/Makefile
 	])
+
+if $use_udevrules; then
+	AC_CONFIG_FILES([70-bfgminer.rules])
+fi
 
 AC_OUTPUT
 

@@ -159,6 +159,7 @@ BFGMiner specific configuration options:
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
 	--with-system-libblkmaker  Use system libblkmaker rather than bundled one
 	                           (default disabled)
+	--with-udevrulesdir=DIR Install udev rules into this directory
 	--without-sensors       Build with libsensors monitoring (default enabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libmicrohttpd Compile support for libmicrohttpd getwork server

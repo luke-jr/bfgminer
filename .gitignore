@@ -28,6 +28,7 @@ config.log
 config.status
 config.guess
 config.sub
+70-bfgminer.rules
 
 mingw32-config.cache
 
