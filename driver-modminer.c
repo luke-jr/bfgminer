@@ -130,6 +130,8 @@ modminer_detect_one(const char *devpath)
 	if (len < 1)
 		bailout(LOG_DEBUG, "ModMiner detect: no response to version request from %s", devpath);
 	buf[len] = '\0';
+	if (strncasecmp(buf, "ModMiner", 8))
+		bailout(LOG_DEBUG, "%s: %s: response did not begin with 'ModMiner'", __func__, devpath);
 	char*devname = strdup(buf);
 	applog(LOG_DEBUG, "ModMiner identified as: %s", devname);
 
