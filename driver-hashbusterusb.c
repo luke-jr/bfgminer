@@ -433,7 +433,7 @@ bool hashbusterusb_vrm_unlock(struct cgpu_info * const proc, const char * const 
 	hex2bin(&buf[1], code, size);
 	
 	hashbusterusb_io(h, buf, buf);
-	return memcmp(buf, "\x12\0", 2);
+	return !memcmp(buf, "\x12\0", 2);
 }
 
 static
