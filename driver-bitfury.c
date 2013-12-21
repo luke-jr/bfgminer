@@ -39,6 +39,8 @@
 
 BFG_REGISTER_DRIVER(bitfury_drv)
 
+static char *bitfury_spi_port_config(struct cgpu_info *, char *, char *, char *);
+
 static
 int bitfury_autodetect()
 {
@@ -55,6 +57,14 @@ int bitfury_autodetect()
 	spi_init();
 	if (!sys_spi)
 		return 0;
+	
+	{
+		struct bitfury_device dummy_bitfury = {
+			.spi = sys_spi,
+		};
+		drv_set_defaults(&bitfury_drv, bitfury_spi_port_config, &dummy_bitfury);
+	}
+	
 	chip_n = libbitfury_detectChips1(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
@@ -681,16 +691,10 @@ bool _bitfury_set_device_parse_setting(uint32_t * const rv, char * const setting
 	return true;
 }
 
-char *bitfury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+static
+char *bitfury_spi_port_config(struct cgpu_info * const proc, char *option, char *setting, char *replybuf)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
-	uint32_t newval;
-	
-	if (!strcasecmp(option, "help"))
-	{
-		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-%d (slow to fast)", BITFURY_MAX_OSC6_BITS);
-		return replybuf;
-	}
 	
 	if (!strcasecmp(option, "baud"))
 	{
@@ -699,6 +703,25 @@ char *bitfury_set_device(struct cgpu_info * const proc, char * const option, cha
 		
 		return NULL;
 	}
+	
+	return "";
+}
+
+char *bitfury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	char *rv;
+	uint32_t newval;
+	
+	if (!strcasecmp(option, "help"))
+	{
+		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-%d (slow to fast)", BITFURY_MAX_OSC6_BITS);
+		return replybuf;
+	}
+	
+	rv = bitfury_spi_port_config(proc, option, setting, replybuf);
+	if ((!rv) || rv[0])
+		return rv;
 	
 	if (!strcasecmp(option, "osc6_bits"))
 	{

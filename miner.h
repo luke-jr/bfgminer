@@ -1041,6 +1041,7 @@ extern void proc_enable(struct cgpu_info *);
 extern void reinit_device(struct cgpu_info *cgpu);
 
 extern void cgpu_set_defaults(struct cgpu_info *);
+extern void drv_set_defaults(const struct device_drv *, char *(*set_func)(struct cgpu_info *, char *, char *, char *), void *userp);
 
 #ifdef HAVE_ADL
 extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);
