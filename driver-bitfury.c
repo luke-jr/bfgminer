@@ -39,6 +39,8 @@
 
 BFG_REGISTER_DRIVER(bitfury_drv)
 
+static char *bitfury_spi_port_config(struct cgpu_info *, char *, char *, char *);
+
 static
 int bitfury_autodetect()
 {
@@ -55,6 +57,14 @@ int bitfury_autodetect()
 	spi_init();
 	if (!sys_spi)
 		return 0;
+	
+	{
+		struct bitfury_device dummy_bitfury = {
+			.spi = sys_spi,
+		};
+		drv_set_defaults(&bitfury_drv, bitfury_spi_port_config, &dummy_bitfury);
+	}
+	
 	chip_n = libbitfury_detectChips1(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
