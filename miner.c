@@ -3728,16 +3728,29 @@ static void curses_print_devstatus(struct cgpu_info *cgpu)
 }
 
 static
-void refresh_devstatus() {
-	if (curses_active_locked()) {
+void _refresh_devstatus(const bool already_have_lock) {
+	if ((!opt_compact) && (already_have_lock || curses_active_locked())) {
 		int i;
+		if (unlikely(!total_devices))
+		{
+			const int ypos = devcursor - 1;
+			if (ypos < statusy - 1 && wmove(statuswin, ypos, 0) != ERR)
+			{
+				wattron(statuswin, attr_bad);
+				bfg_waddstr(statuswin, "NO DEVICES FOUND: Press 'M' and '+' to add");
+				wclrtoeol(statuswin);
+				wattroff(statuswin, attr_bad);
+			}
+		}
 		for (i = 0; i < total_devices; i++)
 			curses_print_devstatus(get_devices(i));
 		touchwin(statuswin);
 		wrefresh(statuswin);
-		unlock_curses();
+		if (!already_have_lock)
+			unlock_curses();
 	}
 }
+#define refresh_devstatus() _refresh_devstatus(false)
 
 #endif
 
@@ -3806,7 +3819,7 @@ static void switch_logsize(void)
 			logstart = devcursor - 1;
 			logcursor = logstart + 1;
 		} else {
-			total_lines = (opt_show_procs ? total_devices : device_line_id_count);
+			total_lines = (opt_show_procs ? total_devices : device_line_id_count) ?: 1;
 			logstart = devcursor + total_lines;
 			logcursor = logstart;
 		}
@@ -9708,10 +9721,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status(ts);
-			for (i = 0; i < total_devices; i++)
-				curses_print_devstatus(get_devices(i));
-			touchwin(statuswin);
-			wrefresh(statuswin);
+			_refresh_devstatus(true);
 			touchwin(logwin);
 			wrefresh(logwin);
 			unlock_curses();
