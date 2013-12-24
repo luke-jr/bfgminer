@@ -159,6 +159,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	
 	_ssm_notify_sz = p - buf;
 	assert(_ssm_notify_sz <= bufsz);
+	free(_ssm_notify);
 	_ssm_notify = buf;
 	
 	LL_FOREACH(_ssm_connections, conn)
@@ -227,6 +228,7 @@ void stratumsrv_boot_all_subscribed(const char * const msg)
 {
 	struct stratumsrv_conn *conn, *tmp_conn;
 	
+	free(_ssm_notify);
 	_ssm_notify = NULL;
 	
 	// Boot all connections
