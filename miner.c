@@ -508,17 +508,30 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	if (!strcasecmp(pattern, "all"))
 		return true;
 	
+	const struct device_drv * const drv = cgpu->drv;
 	const char *p = pattern, *p2;
 	size_t L;
 	int n, i, c = -1;
 	struct cgpu_info *device;
 	
-	while (p[0] && !isdigit(p[0]))
+	if (!(strncasecmp(drv->dname, p, (L = strlen(drv->dname)))
+	   && strncasecmp(drv-> name, p, (L = strlen(drv-> name)))))
+		// dname or name
+		p = &pattern[L];
+	else
+	if (p[0] == 'd' && isdigit(p[1]))
+		// d#
 		++p;
+	else
+	if (isdigit(p[0]))
+		// #
+		{}
+	else
+		return false;
 	
 	L = p - pattern;
-	while (L && isspace(pattern[L-1]))
-		--L;
+	while (isspace(p[0]))
+		++p;
 	n = strtol(p, (void*)&p2, 0);
 	if (L == 0)
 	{
@@ -533,7 +546,6 @@ bool cgpu_match(const char * const pattern, const struct cgpu_info * const cgpu)
 	
 	if (L > 1 || tolower(pattern[0]) != 'd' || !p[0])
 	{
-		const struct device_drv * const drv = cgpu->drv;
 		if ((L == 3 && !strncasecmp(pattern, drv->name, 3)) ||
 			(L == strlen(drv->dname) && !strncasecmp(pattern, drv->dname, L)))
 			{}  // Matched name or dname
