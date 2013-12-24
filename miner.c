@@ -7449,6 +7449,7 @@ static void *input_thread(void __maybe_unused *userdata)
 		input = getch();
 		switch (input) {
 			case 'h': case 'H': case '?':
+			case KEY_F(1):
 				show_help();
 				break;
 		case 'q': case 'Q':
