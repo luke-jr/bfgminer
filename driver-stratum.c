@@ -161,10 +161,14 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	
 	ssj->swork.data_lock_p = NULL;
 	HASH_ADD_KEYPTR(hh, _ssm_jobs, ssj->my_job_id, strlen(ssj->my_job_id), ssj);
+	
+	if (likely(_ssm_cur_job_work.pool))
+		clean_work(&_ssm_cur_job_work);
 	_ssm_gen_dummy_work(&_ssm_cur_job_work, ssj, NULL, 0);
 	
 	_ssm_notify_sz = p - buf;
 	assert(_ssm_notify_sz <= bufsz);
+	free(_ssm_notify);
 	_ssm_notify = buf;
 	
 	LL_FOREACH(_ssm_connections, conn)
@@ -233,6 +237,7 @@ void stratumsrv_boot_all_subscribed(const char * const msg)
 {
 	struct stratumsrv_conn *conn, *tmp_conn;
 	
+	free(_ssm_notify);
 	_ssm_notify = NULL;
 	
 	// Boot all connections
