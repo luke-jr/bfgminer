@@ -831,6 +831,8 @@ void test_cgpu_match()
 	TEST_CGPU_MATCH("TST@testy@b")
 	TEST_CGPU_NOMATCH("TST@/dev/test@c")
 	TEST_CGPU_NOMATCH("TST@testy@c")
+	cgpu.device_path = "usb:000:999";
+	TEST_CGPU_MATCH("TST@usb:000:999")
 	drv.dname = "test7";
 	TEST_CGPU_MATCH("test7")
 	TEST_CGPU_MATCH("TEST7")
