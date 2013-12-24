@@ -819,6 +819,12 @@ void test_cgpu_match()
 	TEST_CGPU_MATCH("TST@testy@b")
 	TEST_CGPU_NOMATCH("TST@/dev/test@c")
 	TEST_CGPU_NOMATCH("TST@testy@c")
+	drv.dname = "test7";
+	TEST_CGPU_MATCH("test7")
+	TEST_CGPU_MATCH("TEST7")
+	TEST_CGPU_NOMATCH("test&")
+	TEST_CGPU_MATCH("test7 1-2")
+	TEST_CGPU_MATCH("test7@testy@b")
 }
 
 static
