@@ -6573,6 +6573,14 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"socks-proxy\" : \"%s\"", json_escape(opt_socks_proxy));
 	
 	_write_config_string_elist(fcfg, "scan", scan_devices);
+#ifdef USE_LIBMICROHTTPD
+	if (httpsrv_port != -1)
+		fprintf(fcfg, ",\n\"http-port\" : %d", httpsrv_port);
+#endif
+#ifdef USE_LIBEVENT
+	if (stratumsrv_port != -1)
+		fprintf(fcfg, ",\n\"stratum-port\" : %d", stratumsrv_port);
+#endif
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
 	
