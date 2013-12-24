@@ -10615,6 +10615,7 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 	if (!(false
 		|| (info->serial && !strcasecmp(ser, info->serial))
 		|| (info->path   && !strcasecmp(ser, info->path  ))
+		|| (info->devid  && !strcasecmp(ser, info->devid ))
 	))
 	{
 		char *devid = devpath_to_devid(ser);
