@@ -76,6 +76,8 @@ AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
 
+AC_CHECK_FUNCS([sleep])
+
 AC_FUNC_ALLOCA
 
 have_cygwin=false
