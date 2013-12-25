@@ -1,3 +1,69 @@
+BFGMiner Version 3.9.0 - December 25, 2013
+
+- Update official Win32 build compiler and library:
+- - Upgrade GCC from 4.8.1 to 4.8.2
+- - Upgrade libcurl from 7.28.1 to 7.34.0
+- Update official Win64 build compiler and library:
+- - Upgrade GCC from 4.7.3 to 4.8.2
+- - Upgrade mingw64-runtime from 2.0.8 to 3.0.0
+- Green-on-red title colours for Christmas release
+- write_config: Include http-port and stratum-port options
+- Interpret F1 as a request for Help
+- Bugfix: SSM: Free old _ssm_notify before replacing it
+- Bugfix: SSM: Clean _ssm_cur_job_work as needed to avoid memory leaks
+- Support matching --scan with lowlevel devid
+- cgpu_match: Unit test for USB device path matching
+- Bugfix: cgpu_match: Handle digits in dname (x6500)
+- cgpu_match: More unit tests (dname with digit)
+- cgpu_match: More unit tests (dname and case insensitivity)
+- Display "NO DEVICES FOUND" line in place of device list, when there are none
+- bitfury: Use drv_set_defaults to enable setting baud before probe
+- bitfury: Split out SPI port configuration option ("baud") to its own function
+- drv_set_defaults wrapper function around cgpu_set_defaults for use with
+options that may need to be set during probe
+- bitfury: Set poll interval to start iteration before responses are processed
+- modminer: Check identification begins with "ModMiner" to avoid false detection
+- Bugfix: hashbusterusb: Correct return value of hashbusterusb_vrm_unlock
+- Support for installing a udev rules file for Linux
+- twinfury: Remove unused variable to silence warning
+- cgpu_request_control should be a noop when called from the main thread
+- Bugfix: Handle errors creating a vcom devid more gracefully
+- Bugfix: _wlog: Allocate enough space for complete copy of log line
+- bfsb: Remove unused clock_gettime
+- Bugfix: bfsb: Remove useless slot_on which was never properly initialised
+- Bugfix: When QueryDosDevice fails, skip trying to parse its (undefined)
+results
+- hashbusterusb: Voltage should be in volts (not millivolts) for RPC
+- hashbusterusb: Provide access to VRM stuff from RPC
+- hashbusterusb: Use cgpu_request_control interface to safely access device from
+outside main thread
+- hashbusterusb: Include Voltage in RPC stats
+- Bugfix: hashbusterusb: Ensure unlock code is always allocated, even if null
+- hashbusterusb: Abstract code into hashbusterusb_vrm_lock
+- hashbusterusb: Abstract code into hashbusterusb_vrm_unlock
+- hashbusterusb: Abstract code into hashbusterusb_set_voltage
+- Bugfix: hashbusterusb: Check for voltage change error correctly
+- Abstract mutex_request code from X6500 driver into generic device API
+interface
+- hashbusterusb: Use standard identification behaviour
+- hashbusterusb: Abstract hashbusterusb_set_colour function
+- hashbusterusb: Get voltage with temperature
+- hashbusterusb: Clean up unused variable warnings
+- hashbusterusb: Use bitfury_wlogprint_status for osc6_bits displaying in Manage
+TUI
+- Bugfix: hashbusterusb: Remove ignored prompt for VRM lock
+- hashbusterusb: Use Manage/osc6_bits code from main bitfury driver
+- hashbusterusb: Provide access to VRM and identification in Manage TUI
+- hashbusterusb: Shutdown PSU
+- nanofury: Support identify function by turning off LED for 5 seconds
+- nanofury: nanofury_state structure
+- bitfury: Set poll interval to start iteration before responses are processed
+- Twinfury: moved voltage reading to the thread init function
+- Twinfury supply voltage initial reading: error log improved
+- Twinfury: Reading supply voltage on startup
+- Voltage scaling for twinfury implemented
+
+
 BFGMiner Version 3.8.1 - December 9, 2013
 
 - bfgminer-rpc: Catch error when server host fails to resolve to an IP

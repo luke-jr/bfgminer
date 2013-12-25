@@ -1,3 +1,12 @@
+bfgminer (3.9.0-0precise1) precise; urgency=low
+
+  * hashbusterusb: Voltage/VRM controls, and support for identify function (5 second LED colour change).
+  * nanofury: Support for identify function by turning LED off for 5 seconds.
+  * twinfury: Support for voltage information/control.
+  * Linux: New udev rules file to automatically put supported (and autodetectable) mining devices in the "video" UNIX group.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 25 Dec 2013 00:25:57 -0000
+
 bfgminer (3.8.1-0precise1) precise; urgency=low
 
   * Bug fixes only.
