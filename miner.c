@@ -307,6 +307,7 @@ bool curses_active;
 const
 #endif
 short default_bgcolor = COLOR_BLACK;
+static int attr_title = A_BOLD;
 #endif
 
 static
@@ -3387,7 +3388,7 @@ static void curses_print_status(const int ts)
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
-	wattron(statuswin, A_BOLD);
+	wattron(statuswin, attr_title);
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
 	timer_set_now(&now);
 	{
@@ -3408,7 +3409,15 @@ static void curses_print_status(const int ts)
 			, d.rem
 		);
 	}
-	wattroff(statuswin, A_BOLD);
+	{
+		// Spaces until end of line, using attr_title (not clear)
+		int x, maxx;
+		int __maybe_unused y;
+		getmaxyx(statuswin, y, maxx);
+		getyx(statuswin, y, x);
+		cg_wprintw(statuswin, "%*s", maxx - x, "");
+	}
+	wattroff(statuswin, attr_title);
 	
 	wattron(statuswin, menu_attr);
 	cg_mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
@@ -10072,6 +10081,8 @@ void enable_curses(void) {
 		menu_attr = COLOR_PAIR(1);
 		if (ERR != init_pair(2, COLOR_RED, default_bgcolor))
 			attr_bad |= COLOR_PAIR(2);
+		if (ERR != init_pair(3, COLOR_GREEN, COLOR_RED))
+			attr_title |= COLOR_PAIR(3);
 	}
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
