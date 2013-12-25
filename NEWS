@@ -1,3 +1,15 @@
+BFGMiner Version 3.2.9 - December 25, 2013
+
+- Update official Win32 build compiler and library:
+- - Upgrade GCC from 4.8.1 to 4.8.2
+- - Upgrade libcurl from 7.28.1 to 7.34.0
+- Update official Win64 build compiler and library:
+- - Upgrade GCC from 4.7.3 to 4.8.2
+- - Upgrade mingw64-runtime from 2.0.8 to 3.0.0
+- Green-on-red title colours for Christmas release
+- Bugfix: _wlog: Allocate enough space for complete copy of log line
+
+
 BFGMiner Version 3.2.8 - December 9, 2013
 
 - bfgminer-rpc: Catch error when server host fails to resolve to an IP
