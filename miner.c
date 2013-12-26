@@ -1788,6 +1788,9 @@ static struct opt_table opt_config_table[] = {
 		     "\n\tc\t\tLinux kernel sha256, implemented in C"
 #ifdef WANT_SSE2_4WAY
 		     "\n\t4way\t\ttcatm's 4-way SSE2 implementation"
+#endif 
+#ifdef WANT_NEON_4WAY
+			"\n\tNEON\t\tWIP ARM NEON SIMD 4-way"
 #endif
 #ifdef WANT_VIA_PADLOCK
 		     "\n\tvia\t\tVIA padlock implementation"

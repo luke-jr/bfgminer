@@ -90,6 +90,12 @@ extern bool ScanHash_4WaySSE2(struct thr_info*, const unsigned char *pmidstate,
 	const unsigned char *ptarget,
 	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
+extern bool ScanHash_NEON_4way(struct thr_info*, const unsigned char *pmidstate,
+        unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
+        const unsigned char *ptarget,
+        uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+
+
 extern bool ScanHash_altivec_4way(struct thr_info*, const unsigned char *pmidstate,
 	unsigned char *pdata,
 	unsigned char *phash1, unsigned char *phash,
@@ -145,9 +151,12 @@ extern bool scanhash_scrypt(struct thr_info *thr, int thr_id, unsigned char *pda
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
 const char *algo_names[] = {
-	[ALGO_C]		= "c",
+//	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= "4way",
+#endif
+#ifdef WANT_NEON_4WAY
+	[ALGO_NEON] 		= "NEON",
 #endif
 #ifdef WANT_VIA_PADLOCK
 	[ALGO_VIA]		= "via",
@@ -176,9 +185,12 @@ const char *algo_names[] = {
 };
 
 static const sha256_func sha256_funcs[] = {
-	[ALGO_C]		= (sha256_func)scanhash_c,
+//	[ALGO_C]		= (sha256_func)scanhash_c,
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= (sha256_func)ScanHash_4WaySSE2,
+#endif
+#ifdef WANT_NEON_4WAY
+	[ALGO_NEON] 		= (sha256_func)ScanHash_NEON_4way,
 #endif
 #ifdef WANT_ALTIVEC_4WAY
     [ALGO_ALTIVEC_4WAY] = (sha256_func) ScanHash_altivec_4way,
@@ -208,8 +220,8 @@ static const sha256_func sha256_funcs[] = {
 
 
 #ifdef WANT_CPUMINE
-enum sha256_algos opt_algo = ALGO_FASTAUTO;
-bool opt_usecpu = false;
+enum sha256_algos opt_algo = ALGO_NEON; //force default neon
+bool opt_usecpu = true; //normally false
 static bool forced_n_threads;
 #endif
 
@@ -630,10 +642,14 @@ static enum sha256_algos pick_fastest_algo()
 	enum sha256_algos best_algo = 0;
 	applog(LOG_ERR, "benchmarking all sha256 algorithms ...");
 
-	bench_algo(&best_rate, &best_algo, ALGO_C);
+//	bench_algo(&best_rate, &best_algo, ALGO_C);
 
 	#if defined(WANT_SSE2_4WAY)
 		bench_algo(&best_rate, &best_algo, ALGO_4WAY);
+	#endif
+
+	#if defined(WANT_NEON_4WAY)
+		bench_algo(&best_rate, &best_algo, ALGO_NEON);
 	#endif
 
 	#if defined(WANT_VIA_PADLOCK)
