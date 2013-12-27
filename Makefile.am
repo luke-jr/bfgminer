@@ -264,7 +264,8 @@ bfgminer_SOURCES += driver-bfsb.c
 endif
 
 if HAS_METABANK
-bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2c.c
+bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2cm.c
+#bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2c.c
 endif
 
 if HAS_LITTLEFURY

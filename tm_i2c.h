@@ -10,6 +10,10 @@
 #define TM_SET_MODE     0x21
 #define TM_SET_RED      0x22
 #define TM_SET_GREEN    0x23
+#define TM_SET_OE0      0x24
+#define TM_SET_OE1      0x25
+#define TM_SET_CORE0    0x26
+#define TM_SET_CORE1    0x27
 
 #define TM_GET_PORTB    0x30
 #define TM_SET_PORTB    0x31
@@ -40,4 +44,6 @@ void tm_i2c_set_oe(unsigned char slot);
 void tm_i2c_clear_oe(unsigned char slot);
 int tm_i2c_detect(unsigned char slot);
 unsigned char tm_i2c_slot2addr(unsigned char slot);
+double tm_i2c_set_voltage_abs(unsigned char slot2, double voltage);
+unsigned int tm_i2c_set_vid(unsigned char slot, unsigned char vid);
 
