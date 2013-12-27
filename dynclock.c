@@ -29,7 +29,7 @@ void dclk_msg_freqchange(const char *repr, int oldFreq, int newFreq, const char 
 {
 	applog(LOG_NOTICE, "%"PRIpreprv": Frequency %s from %u to %u MHz%s",
 	       repr,
-	       (oldFreq > newFreq ? "dropped" : "raised "),
+	       (oldFreq > newFreq ? "dropped" : "raised"),
 	       oldFreq, newFreq,
 	       tail ?: ""
 	);
