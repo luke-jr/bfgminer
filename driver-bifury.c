@@ -361,7 +361,9 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		const uint32_t ntime = strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		nonce = le32toh(nonce);
-		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		const struct cgpu_info *proc = device_proc_by_id(dev, chip);
+		if (unlikely(!proc))
+			proc = dev;
 		thr = proc->thr[0];
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
@@ -398,21 +400,33 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
-		thr = proc->thr[0];
-		hashes_done2(thr, 0xbd000000, NULL);
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
-		if (work)
+		if (likely(work))
 		{
+			if (likely(proc))
+			{
+				thr = proc->thr[0];
+				hashes_done2(thr, 0xbd000000, NULL);
+			}
+			else
+				applog(LOG_DEBUG, "%s: Unknown chip id: %s",
+				       dev->dev_repr, cmd);
 			HASH_DEL(master_thr->work_list, work);
 			free_work(work);
 		}
+		else
+			applog(LOG_WARNING, "%s: Unknown job id: %s",
+			       dev->dev_repr, cmd);
 	}
 	else
 	if (!strncmp(cmd, "hwerror ", 8))
 	{
 		const int chip = atoi(&cmd[8]);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		if (unlikely(!proc))
+			applogr(, LOG_DEBUG, "%s: Unknown chip id: %s",
+			        dev->dev_repr, cmd);
 		thr = proc->thr[0];
 		inc_hw_errors2(thr, NULL, UNKNOWN_NONCE);
 	}
