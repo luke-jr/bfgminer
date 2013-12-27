@@ -67,7 +67,8 @@ int tm_i2c_init() {
 	int fd;
 
 	fd = open("/dev/mem",O_RDWR|O_SYNC);
-	if (fd < 0) { perror("/dev/mem trouble"); return (1); }
+//	if (fd < 0) { perror("/dev/mem trouble"); return (1); }
+	if (fd < 0) return (1);
 	gpiom = mmap(0,4096,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0x20200000);
 	if (gpiom == MAP_FAILED) { perror("gpio mmap trouble"); return(1); }
 	close(fd);
@@ -136,7 +137,7 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 	msg_rdwr.msgs = &msg;
 	msg_rdwr.nmsgs = 1;
 	if ((i = ioctl(fd, I2C_RDWR, &msg_rdwr)) < 0) {
-		perror("ioctl error");
+		//perror("ioctl error");
 		return -1;
 	}
 
@@ -148,7 +149,7 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 	msg_rdwr.msgs = &msg;
 	msg_rdwr.nmsgs = 1;
 	if ((i = ioctl(fd, I2C_RDWR, &msg_rdwr)) < 0) {
-		perror("ioctl error");
+		//perror("ioctl error");
 		return -1;
 	}
 

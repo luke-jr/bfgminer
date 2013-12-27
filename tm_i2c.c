@@ -38,7 +38,7 @@ static int tm_i2c_fd;
 
 float tm_i2c_Data2Temp(unsigned int ans) {
 	float t = ans;
-	return (t / 1023.0 * 3.3 * 2-2.73) * 100.0;
+	return (t / 1023.0 * 3.3 - 2.73) * 100.0;
 }
 
 float tm_i2c_Data2Core(unsigned int ans) {

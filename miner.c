@@ -3461,7 +3461,6 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			bnbuf
 		);
 	}
-//#ifndef HAS_METABANK
 }
 
 void get_statline4(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_curses, bool opt_show_procs) {
@@ -3469,14 +3468,7 @@ void get_statline4(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	assert(for_curses == false);
 #endif
 	struct device_drv *drv = cgpu->drv;
-	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
-//	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
-	char rejpcbuf[6];
-	char bnbuf[6];
-	double dev_runtime;
 	int count, i;
-	
-	//struct bitfury_device **devicelist;
 	struct cgpu_info *proc;
 	struct bitfury_device *bitfury;
 
@@ -3533,22 +3525,16 @@ void get_statline4(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		if (cHrStatsI == 2 && all_rdrv)
 			cHrStats = " RST ";
 
-		snprintf(buf, bufsz, "%s%s %2.1fC %.3fV", cHrStats, cgpu->dev_repr, cgpu->temp, bitfury->volt);
+		snprintf(buf, bufsz, "%s%s %2.1fC %.3fV %X", cHrStats, cgpu->dev_repr, cgpu->temp, bitfury->volt, bitfury->slot);
 	} else
 #endif
-	snprintf(buf, bufsz, " %s %2.1fC %.3fV", cgpu->dev_repr, cgpu->temp, bitfury->volt);
+	snprintf(buf, bufsz, " %s %2.1fC %.3fV %X", cgpu->dev_repr, cgpu->temp, bitfury->volt);
+	
 	for(i = 0; i < cgpu->procs; i++) {
 		bitfury = proc->device_data;
-		tailsprintf(buf, bufsz, " %u-%.0f", bitfury->osc6_bits, bitfury->mhz);
+		tailsprintf(buf, bufsz, " %u-%.0f-%.1f", bitfury->osc6_bits, bitfury->mhz, proc->total_mhashes / total_secs / 1000.0);
 		proc = proc->next_proc;
 	}
-		//bitfury_init_freq_stat(&bitfury->chip_stat, 52, 56);
-		//snprintf(buf, bufsz, " %u %u %u: ", bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-//	snprintf(buf, bufsz, " Count: %d %s", count, cgpu->dev_repr);
-
-	if (!opt_show_procs)
-		cgpu = cgpu->device;
-//#ifndef HAS_METABANK
 }
 
 //#define get_statline(buf, bufsz, cgpu)               get_statline3(buf, bufsz, cgpu, false, opt_show_procs)

@@ -43,6 +43,7 @@ struct bitfury_device {
 	struct freq_stat chip_stat;
 	struct timeval timer1;
 	struct timeval tv_stat;
+	struct timeval tv_stat_long;
 	unsigned int counter1, counter2;
 	double mhz;
 	int mhz_last;

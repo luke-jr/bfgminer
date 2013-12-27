@@ -430,6 +430,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		
 		inp = rxbuf[j];
 		
+		if (proc->deven == DEV_DISABLED) continue;
+		
 		if (unlikely(bitfury->desync_counter == 99))
 		{
 			bitfury_init_oldbuf(proc, inp);
@@ -449,9 +451,11 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			inc_hw_errors2(thr, NULL, NULL);
 			if (unlikely(++bitfury->desync_counter >= 4))
 			{
-				applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating",
-				       proc->proc_repr);
+				if (bitfury->strange_counter > 50) proc->deven = DEV_DISABLED;
+				applog(LOG_WARNING, "%"PRIpreprv": Previous nonce mismatch (4th try), recalibrating %d",
+				       proc->proc_repr, bitfury->strange_counter);
 				bitfury_init_oldbuf(proc, inp);
+				bitfury->strange_counter++;
 				continue;
 			}
 			applog(LOG_DEBUG, "%"PRIpreprv": Previous nonce mismatch, ignoring response",
@@ -468,7 +472,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			timer_set_now(&thr->tv_morework);
 			job_start_complete(thr);
 		}
-
+		
 		for (n = 0; newbuf[n] == oldbuf[n]; ++n)
 		{
 			if (unlikely(n >= 0xf))
@@ -481,7 +485,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				goto out;
 			}
 		}
-
+		
 		counter = bitfury_decnonce(newbuf[n]);
 		if ((counter & 0xFFC00000) == 0xdf800000)
 		{
@@ -525,11 +529,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				copy_time(&(bitfury->timer1), &tv_now);
 			}
 		}
-		
+
 		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
 			copy_time(tvp_stat, &tv_now);
+			copy_time(&bitfury->tv_stat_long, &tv_now);
 		}
-		
+#ifndef USE_METABANK2
 		if (c->osc6_max)
 		{
 			if (timer_elapsed(tvp_stat, &tv_now) >= 60)
@@ -569,7 +574,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				}
 			}
 		}
-		
+#endif
 		if (n)
 		{
 			for (i = 0; i < n; ++i)
@@ -609,7 +614,33 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			}
 			bitfury->active = (bitfury->active + n) % 0x10;
 		}
-		
+#ifdef USE_METABANK2
+		if (timer_elapsed(tvp_stat, &tv_now) >= 10)
+		{
+			if (j == 0) {
+				struct bitfury_device *tbitfury;
+				int str_count = 0;
+				for (int k = 0; k < n_chips; ++k) {
+					tbitfury = procs[k]->device_data;
+					str_count += tbitfury->strange_counter;
+				}
+				applog(LOG_WARNING, "stranges=%d", str_count);
+			}
+			if (bitfury->strange_counter > 10 && bitfury->osc6_bits == c->osc6_min)
+				bitfury->osc6_bits -= 4;
+			if (bitfury->strange_counter > 3 && bitfury->osc6_bits > c->osc6_min)
+				bitfury_send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, --bitfury->osc6_bits);
+			bitfury->strange_counter = 0;
+			copy_time(tvp_stat, &tv_now);
+		}
+		tvp_stat = &bitfury->tv_stat_long;
+		if (timer_elapsed(tvp_stat, &tv_now) >= 900)
+		{
+			if (bitfury->osc6_bits < c->osc6_max && (proc->total_mhashes / total_secs) < 2800)
+				bitfury_send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, ++bitfury->osc6_bits);
+			copy_time(tvp_stat, &tv_now);
+		}
+#endif
 		memcpy(&oldbuf[0], &newbuf[n], 4 * (0x10 - n));
 		memcpy(&oldbuf[0x10 - n], &newbuf[0], 4 * n);
 		bitfury->oldjob = newjob;
@@ -625,8 +656,10 @@ out:
 			bitfury->mhz_best = 0;
 			bitfury->force_reinit = false;
 		}
+#ifndef USE_METABANK2
 		if (timer_elapsed(tvp_stat, &tv_now) >= 60)
 			copy_time(tvp_stat, &tv_now);
+#endif
 	}
 	
 	timer_set_delay(&master_thr->tv_poll, &tv_now, 10000);
