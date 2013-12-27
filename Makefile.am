@@ -255,6 +255,10 @@ endif
 if HAS_BITFURY
 bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h spidevc.h spidevc.c
 
+if HAVE_LINUX_SPI_SPIDEV_H
+bfgminer_SOURCES += gpio-linux.c gpio.h
+endif
+
 if HAS_BFSB
 bfgminer_SOURCES += driver-bfsb.c
 endif

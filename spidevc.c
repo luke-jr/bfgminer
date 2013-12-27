@@ -48,13 +48,14 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+
+#include "gpio.h"
 #endif
 
 #include "logging.h"
 
 #ifdef HAVE_LINUX_SPI
 bool sys_spi_txrx(struct spi_port *port);
-static volatile unsigned *gpio;
 #endif
 
 struct spi_port *sys_spi;
@@ -62,20 +63,8 @@ struct spi_port *sys_spi;
 void spi_init(void)
 {
 #ifdef HAVE_LINUX_SPI
-	int fd;
-	fd = open("/dev/mem",O_RDWR|O_SYNC);
-	if (fd < 0)
-	{
-		perror("/dev/mem trouble");
+	if (!bfg_gpio_init())
 		return;
-	}
-	gpio = mmap(0,4096,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0x20200000);
-	if (gpio == MAP_FAILED)
-	{
-		perror("gpio mmap trouble");
-		return;
-	}
-	close(fd);
 	
 	sys_spi = malloc(sizeof(*sys_spi));
 	*sys_spi = (struct spi_port){
@@ -86,40 +75,27 @@ void spi_init(void)
 
 #ifdef HAVE_LINUX_SPI
 
-#define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
-#define OUT_GPIO(g) *(gpio+((g)/10)) |=  (1<<(((g)%10)*3))
-#define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
-
-#define GPIO_SET *(gpio+7)  // sets   bits which are 1 ignores bits which are 0
-#define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
-
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
 int spi_reset(int a)
 {
 	int i,j;
 	int len = 8;
-	INP_GPIO(10); OUT_GPIO(10);
-	INP_GPIO(11); OUT_GPIO(11);
-	GPIO_SET = 1 << 11; // Set SCK
+	gpio_set_mode(linux_gpio, gpio_bitmask(10) | gpio_bitmask(11), BGD_OUTPUT);
+	gpio_set_value(linux_gpio, gpio_bitmask(11), true);
 	for (i = 0; i < 32; i++) { // On standard settings this unoptimized code produces 1 Mhz freq.
-		GPIO_SET = 1 << 10;
+		gpio_set_value(linux_gpio, gpio_bitmask(10), true);
 		for (j = 0; j < len; j++) {
 			a *= a;
 		}
-		GPIO_CLR = 1 << 10;
+		gpio_set_value(linux_gpio, gpio_bitmask(10), false);
 		for (j = 0; j < len; j++) {
 			a *= a;
 		}
 	}
-	GPIO_CLR = 1 << 10;
-	GPIO_CLR = 1 << 11;
-	INP_GPIO(10);
-	SET_GPIO_ALT(10,0);
-	INP_GPIO(11);
-	SET_GPIO_ALT(11,0);
-	INP_GPIO(9);
-	SET_GPIO_ALT(9,0);
+	gpio_set_value(linux_gpio, gpio_bitmask(10), false);
+	gpio_set_value(linux_gpio, gpio_bitmask(11), false);
+	gpio_set_mode(linux_gpio, gpio_bitmask(9) | gpio_bitmask(10) | gpio_bitmask(11), BGD_ALT(0));
 
 	return a;
 }
@@ -274,15 +250,14 @@ void spi_bfsb_select_bank(int bank)
 	int i;
 	for(i=0;i<4;i++)
 	{
-		INP_GPIO(banks[i]);
-		OUT_GPIO(banks[i]);
+		gpio_set_mode(linux_gpio, gpio_bitmask(banks[i]), BGD_OUTPUT);
 		if(i==bank)
 		{
-			GPIO_SET = 1 << banks[i]; // enable bank
+			gpio_set_value(linux_gpio, gpio_bitmask(banks[i]), true);  // enable bank
 		} 
 		else
 		{
-			GPIO_CLR = 1 << banks[i];// disable bank
+			gpio_set_value(linux_gpio, gpio_bitmask(banks[i]), false);  // disable bank
 		}
 	}
 	last_bank = bank;

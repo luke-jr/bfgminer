@@ -81,7 +81,12 @@ AC_CHECK_HEADERS(syslog.h)
 AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
-AC_CHECK_HEADERS([linux/spi/spidev.h])
+AC_CHECK_HEADERS([linux/spi/spidev.h],[
+	HAVE_LINUX_SPI_SPIDEV_H=true
+],[
+	HAVE_LINUX_SPI_SPIDEV_H=false
+])
+AM_CONDITIONAL([HAVE_LINUX_SPI_SPIDEV_H], [$HAVE_LINUX_SPI_SPIDEV_H])
 
 AC_CHECK_HEADERS([sys/file.h])
 
