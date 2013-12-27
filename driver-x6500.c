@@ -738,13 +738,23 @@ void x6500_user_set_clock(struct cgpu_info *cgpu, const int val)
 }
 
 static
+void x6500_user_set_max_clock(struct cgpu_info *cgpu, const int val)
+{
+	struct thr_info * const thr = cgpu->thr[0];
+	struct x6500_fpga_data *fpga = thr->cgpu_data;
+	const int multiplier = val / 2;
+	fpga->freqMaxMaxM =
+	fpga->dclk.freqMaxM = multiplier;
+}
+
+static
 char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
 {
 	int val;
 	
 	if (strcasecmp(option, "help") == 0) {
-		sprintf(replybuf, "clock: range %d-%d and a multiple of 2",
-		        X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+		sprintf(replybuf, "clock: range %d-%d and a multiple of 2\nmaxclock: default %d, range %d-%d and a multiple of 2",
+		        X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK, X6500_MAXIMUM_CLOCK, X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
 		return replybuf;
 	}
 	
@@ -762,6 +772,29 @@ char *x6500_set_device(struct cgpu_info *cgpu, char *option, char *setting, char
 		}
 		
 		x6500_user_set_clock(cgpu, val);
+		
+		return NULL;
+	}
+	
+	if (strcasecmp(option, "maxclock") == 0) {
+		if (!setting || !*setting) {
+			sprintf(replybuf, "missing maxclock setting");
+			return replybuf;
+		}
+		
+		val = atoi(setting);
+		if (val < X6500_MINIMUM_CLOCK || val > X6500_MAXIMUM_CLOCK || (val & 1) != 0) {
+			sprintf(replybuf, "invalid maxclock: '%s' valid range %d-%d and a multiple of 2",
+			        setting, X6500_MINIMUM_CLOCK, X6500_MAXIMUM_CLOCK);
+			return replybuf;
+		}
+		
+		x6500_user_set_max_clock(cgpu, val);
+                
+		applog(LOG_NOTICE, "%"PRIpreprv": Maximum frequency reset to %u MHz",
+		       cgpu->proc_repr,
+		       val
+		);
 		
 		return NULL;
 	}
