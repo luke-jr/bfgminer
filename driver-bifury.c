@@ -398,15 +398,24 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
-		thr = proc->thr[0];
-		hashes_done2(thr, 0xbd000000, NULL);
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
-		if (work)
+		if (likely(work))
 		{
+			if (likely(proc))
+			{
+				thr = proc->thr[0];
+				hashes_done2(thr, 0xbd000000, NULL);
+			}
+			else
+				applog(LOG_DEBUG, "%s: Unknown chip id: %s",
+				       dev->dev_repr, cmd);
 			HASH_DEL(master_thr->work_list, work);
 			free_work(work);
 		}
+		else
+			applog(LOG_WARNING, "%s: Unknown job id: %s",
+			       dev->dev_repr, cmd);
 	}
 	else
 	if (!strncmp(cmd, "hwerror ", 8))
