@@ -361,7 +361,9 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		const uint32_t ntime = strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
 		nonce = le32toh(nonce);
-		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		const struct cgpu_info *proc = device_proc_by_id(dev, chip);
+		if (unlikely(!proc))
+			proc = dev;
 		thr = proc->thr[0];
 		
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
