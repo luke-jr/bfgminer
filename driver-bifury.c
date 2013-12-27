@@ -422,6 +422,9 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 	{
 		const int chip = atoi(&cmd[8]);
 		const struct cgpu_info * const proc = device_proc_by_id(dev, chip);
+		if (unlikely(!proc))
+			applogr(, LOG_DEBUG, "%s: Unknown chip id: %s",
+			        dev->dev_repr, cmd);
 		thr = proc->thr[0];
 		inc_hw_errors2(thr, NULL, UNKNOWN_NONCE);
 	}
