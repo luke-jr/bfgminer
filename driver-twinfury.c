@@ -533,7 +533,8 @@ void twinfury_wlogprint_status(struct cgpu_info * const proc)
 
 //------------------------------------------------------------------------------
 struct device_drv twinfury_drv = {
-	.dname = "Twinfury",
+        //lowercase driver name so --scan pattern matching works
+	.dname = "twinfury",
 	.name = "TBF",
 	.probe_priority = -111,
 
