@@ -1206,7 +1206,9 @@ void _vcom_devinfo_scan_lsdev(struct lowlevel_device_info ** const devinfo_list)
 	memcpy(devpath, devdir, devdirlen);
 	devpath[devdirlen] = '/';
 	while ( (de = readdir(D)) ) {
-		if (!strncmp(de->d_name, "cu.", 3))
+		if (!strncmp(de->d_name, "cu.", 3)
+			//don't probe Bluetooth devices - causes bus errors and segfaults
+			&& strncmp(de->d_name, "cu.Bluetooth", 12))
 			goto trydev;
 		if (strncmp(de->d_name, "tty", 3))
 			continue;
