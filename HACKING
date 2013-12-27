@@ -26,11 +26,12 @@ struct device_drv basics
 ------------------------
 
 Every driver defines a `struct device_drv`. The `dname` field contains a
-short name of the driver. This should be the same name used in the source file:
-driver-foobar.c defines `dname` "foobar". The `name` field contains a three-
-letter abbreviation for the device, used in the representation of devices. For
-example, `dname` "FOO" would result in devices represented as "FOO 0", "FOO 1",
-etc and processors represented as "FOO 0a", "FOO 0b", etc.
+short name of the driver. This should consist only of lowercase alphabetic
+characters, and be the same name used in the source file: driver-foobar.c
+defines `dname` "foobar". The `name` field contains a three-letter abbreviation
+for the device, used in the representation of devices. For example, `dname`
+"FOO" would result in devices represented as "FOO 0", "FOO 1", etc and
+processors represented as "FOO 0a", "FOO 0b", etc.
 
 Drivers must define a function `drv_detect`, which is run at startup to detect
 devices. For each device (note: NOT each processor), it should allocate a
