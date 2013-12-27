@@ -474,7 +474,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			if (unlikely(n >= 0xf))
 			{
 				inc_hw_errors2(thr, NULL, NULL);
-				applog(LOG_DEBUG, "%"PRIpreprv": Full result match, reinitialising",
+				applog(LOG_INFO, "%"PRIpreprv": Full result match, reinitialising",
 				       proc->proc_repr);
 				bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 				bitfury->desync_counter = 99;
@@ -505,7 +505,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				{
 					if (bitfury->mhz < bitfury->mhz_best / 2)
 					{
-						applog(LOG_WARNING, "%"PRIpreprv": Frequency drop over 50%% detected, reinitialising",
+						applog(LOG_INFO, "%"PRIpreprv": Frequency drop over 50%% detected, reinitialising",
 						       proc->proc_repr);
 						bitfury->force_reinit = true;
 					}
@@ -599,7 +599,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				{
 					if (bitfury->sample_hwe >= 8)
 					{
-						applog(LOG_WARNING, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
+						applog(LOG_INFO, "%"PRIpreprv": %d of the last %d results were bad, reinitialising",
 						       proc->proc_repr, bitfury->sample_hwe, bitfury->sample_tot);
 						bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 						bitfury->desync_counter = 99;
