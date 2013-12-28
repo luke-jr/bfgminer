@@ -10,7 +10,7 @@
 /* Initialize SPI using this function */
 void spi_init(void);
 
-/* Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X */
+/* Do not allocate spi_port on the stack! OS X, at least, has a 512 KB default stack size for secondary threads */
 struct spi_port {
 	/* TX-RX single frame */
 	bool (*txrx)(struct spi_port *port);
