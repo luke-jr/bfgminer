@@ -144,7 +144,7 @@ bool hashbuster_spi_txrx(struct spi_port * const port)
 static
 int hashbuster_chip_count(hid_device *h)
 {
-	/* Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X */
+	/* Do not allocate spi_port on the stack! OS X, at least, has a 512 KB default stack size for secondary threads */
 	struct spi_port *spi = malloc(sizeof(*spi));
 	spi->txrx = hashbuster_spi_txrx;
 	spi->userp = h;
