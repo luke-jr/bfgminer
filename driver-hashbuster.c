@@ -142,6 +142,25 @@ bool hashbuster_spi_txrx(struct spi_port * const port)
 }
 
 static
+int hashbuster_chip_count(hid_device *h)
+{
+	/* Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X */
+	struct spi_port *spi = malloc(sizeof(*spi));
+	spi->txrx = hashbuster_spi_txrx;
+	spi->userp = h;
+	spi->repr = hashbuster_drv.dname;
+	spi->logprio = LOG_DEBUG;
+	spi->speed = 100000;
+	spi->mode = 0;
+	
+	const int chip_count = libbitfury_detectChips1(spi);
+	
+	free(spi);
+	
+	return chip_count;
+}
+
+static
 bool hashbuster_foundlowl(struct lowlevel_device_info * const info, __maybe_unused void *userp)
 {
 	const char * const product = info->product;
@@ -165,16 +184,8 @@ bool hashbuster_foundlowl(struct lowlevel_device_info * const info, __maybe_unus
 	if ((!hashbuster_io(h, buf, buf)) || buf[1] != 0x07)
 		applogr(false, LOG_DEBUG, "%s: Identify sequence didn't match on %s",
 		        __func__, path);
-	
-	struct spi_port spi = {
-		.txrx = hashbuster_spi_txrx,
-		.userp = h,
-		.repr = hashbuster_drv.dname,
-		.logprio = LOG_DEBUG,
-		.speed = 100000,
-		.mode = 0,
-	};
-	const int chip_n = libbitfury_detectChips1(&spi);
+		
+	const int chip_n = hashbuster_chip_count(h);
 	
 	hid_close(h);
 	

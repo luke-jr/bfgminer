@@ -10,6 +10,7 @@
 /* Initialize SPI using this function */
 void spi_init(void);
 
+/* Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X */
 struct spi_port {
 	/* TX-RX single frame */
 	bool (*txrx)(struct spi_port *port);

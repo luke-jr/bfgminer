@@ -223,12 +223,28 @@ bool littlefury_txrx(struct spi_port *port)
 }
 
 static
+int littlefury_chip_count(struct cgpu_info * const info)
+{
+	/* Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X */
+	struct spi_port *spi = malloc(sizeof(*spi));
+	spi->txrx = littlefury_txrx;
+	spi->cgpu = info;
+	spi->repr = littlefury_drv.dname;
+	spi->logprio = LOG_DEBUG;
+	
+	const int chip_count = libbitfury_detectChips1(spi);
+	
+	free(spi);
+	
+	return chip_count;
+}
+
+static
 bool littlefury_detect_one(const char *devpath)
 {
 	int fd, chips;
 	uint8_t buf[255];
 	uint16_t bufsz;
-	struct spi_port spi;
 	struct cgpu_info dummy;
 	char *devname;
 	
@@ -264,14 +280,9 @@ bool littlefury_detect_one(const char *devpath)
 	
 	dummy.device = &dummy;
 	dummy.device_fd = fd;
-	spi = (struct spi_port){
-		.txrx = littlefury_txrx,
-		.cgpu = &dummy,
-		.repr = littlefury_drv.dname,
-		.logprio = LOG_DEBUG,
-	};
 	
-	chips = libbitfury_detectChips1(&spi);
+	chips = littlefury_chip_count(&dummy);
+	
 	if (!chips) {
 		applog(LOG_WARNING, "%s: No Bitfury chips detected on %s",
 		       littlefury_drv.dname, devpath);
