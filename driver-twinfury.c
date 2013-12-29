@@ -420,10 +420,13 @@ void twinfury_poll(struct thr_info *thr)
 			if(response[0] == buffer[0])
 			{
 				const float temp = ((uint16_t)response[4] | (uint16_t)(response[5] << 8)) / 10.0;
-				char hex[93];
-				bin2hex(hex, response, 8);
-				applog(LOG_DEBUG, "%"PRIpreprv": TEMP: %s",
-					   dev->dev_repr, hex);
+				if (opt_dev_protocol && opt_debug)
+				{
+					char hex[93];
+					bin2hex(hex, response, 8);
+					applog(LOG_DEBUG, "%"PRIpreprv": TEMP: %s",
+						   dev->dev_repr, hex);
+				}
 
 				for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
 					proc->temp = temp;
