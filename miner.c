@@ -3604,6 +3604,20 @@ void bfg_hline(WINDOW *win, int y)
 		mvwhline(win, y, 0, '-', 80);
 }
 
+// Spaces until end of line, using current attributes (ie, not completely clear)
+static
+void bfg_wspctoeol(WINDOW *win)
+{
+	int x, maxx;
+	int __maybe_unused y;
+	getmaxyx(win, y, maxx);
+	getyx(win, y, x);
+	const int space_count = maxx - x;
+	char buf[space_count];
+	memset(buf, ' ', space_count);
+	waddnstr(win, buf, space_count);
+}
+
 static int menu_attr = A_REVERSE;
 
 #define CURBUFSIZ 256
@@ -3651,14 +3665,7 @@ static void curses_print_status(const int ts)
 			, d.rem
 		);
 	}
-	{
-		// Spaces until end of line, using attr_title (not clear)
-		int x, maxx;
-		int __maybe_unused y;
-		getmaxyx(statuswin, y, maxx);
-		getyx(statuswin, y, x);
-		cg_wprintw(statuswin, "%*s", maxx - x, "");
-	}
+	bfg_wspctoeol(statuswin);
 	wattroff(statuswin, attr_title);
 	
 	wattron(statuswin, menu_attr);
