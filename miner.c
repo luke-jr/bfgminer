@@ -3606,13 +3606,13 @@ void bfg_hline(WINDOW *win, int y)
 
 // Spaces until end of line, using current attributes (ie, not completely clear)
 static
-void bfg_wspctoeol(WINDOW *win)
+void bfg_wspctoeol(WINDOW * const win, const int offset)
 {
 	int x, maxx;
 	int __maybe_unused y;
 	getmaxyx(win, y, maxx);
 	getyx(win, y, x);
-	const int space_count = maxx - x;
+	const int space_count = (maxx - x) - offset;
 	char buf[space_count];
 	memset(buf, ' ', space_count);
 	waddnstr(win, buf, space_count);
@@ -3665,11 +3665,14 @@ static void curses_print_status(const int ts)
 			, d.rem
 		);
 	}
-	bfg_wspctoeol(statuswin);
+	bfg_wspctoeol(statuswin, 0);
 	wattroff(statuswin, attr_title);
 	
 	wattron(statuswin, menu_attr);
-	cg_mvwprintw(statuswin, 1, 0, " [M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit ");
+	wmove(statuswin, 1, 0);
+	bfg_waddstr(statuswin, " [M]anage devices [P]ool management [S]ettings [D]isplay options ");
+	bfg_wspctoeol(statuswin, 14);
+	bfg_waddstr(statuswin, "[H]elp [Q]uit ");
 	wattroff(statuswin, menu_attr);
 
 	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
