@@ -3332,39 +3332,21 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
 	
-	dev_runtime = cgpu_runtime(cgpu);
-	cgpu_utility(cgpu);
-	cgpu->utility_diff1 = cgpu->diff_accepted / dev_runtime * 60;
-	
-	double rolling = cgpu->rolling;
-	double mhashes = cgpu->total_mhashes;
+	double rolling, mhashes;
 	int accepted, rejected, stale;
-	if (opt_weighed_stats)
-	{
-		accepted = cgpu->diff_accepted;
-		rejected = cgpu->diff_rejected;
-		stale = cgpu->diff_stale;
-	}
-	else
-	{
-		accepted = cgpu->accepted;
-		rejected = cgpu->rejected;
-		stale = cgpu->stale;
-	}
-	double waccepted = cgpu->diff_accepted;
-	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
-	int hwerrs = cgpu->hw_errors;
-	int badnonces = cgpu->bad_nonces;
-	int goodnonces = cgpu->diff1;
+	double waccepted;
+	double wnotaccepted;
+	int hwerrs, badnonces, goodnonces;
 	
-	if (!opt_show_procs)
+	rolling = mhashes = waccepted = wnotaccepted = 0;
+	accepted = rejected = stale = hwerrs = badnonces = goodnonces = 0;
+	
 	{
 		struct cgpu_info *slave = cgpu;
-		for (int i = 1; i < cgpu->procs; ++i)
+		for (int i = 0; i < cgpu->procs; ++i, (slave = slave->next_proc))
 		{
-			slave = slave->next_proc;
-			
-			slave->utility = slave->accepted / dev_runtime * 60;
+			dev_runtime = cgpu_runtime(slave);
+			cgpu_utility(slave);
 			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
 			rolling += slave->rolling;
@@ -3386,6 +3368,9 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			hwerrs += slave->hw_errors;
 			badnonces += slave->bad_nonces;
 			goodnonces += slave->diff1;
+			
+			if (opt_show_procs)
+				break;
 		}
 	}
 	
