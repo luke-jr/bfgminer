@@ -216,7 +216,6 @@ static bool twinfury_init(struct thr_info *thr)
 	}
 
 	cgpu->device_fd = fd;
-	cgpu->dev_serial = info->id.serial;
 
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", cgpu->proc_repr, cgpu->device_path);
 
