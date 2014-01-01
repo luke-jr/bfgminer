@@ -11001,6 +11001,7 @@ int main(int argc, char *argv[])
 #ifndef HAVE_PTHREAD_CANCEL
 	setup_pthread_cancel_workaround();
 #endif
+	bfg_init_checksums();
 
 #ifdef WIN32
 	{

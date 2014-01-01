@@ -500,4 +500,8 @@ void maybe_strdup_if_null(const char **p, const char *s)
 extern void run_cmd(const char *cmd);
 
 
+extern void bfg_init_checksums(void);
+extern uint8_t crc8ccitt(const void *, size_t);
+
+
 #endif /* __UTIL_H__ */
