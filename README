@@ -282,6 +282,7 @@ Options for both config file and command line:
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
 --verbose           Log verbose output to stderr as well as status output
+--weighed-stats     Display statistics weighed to difficulty 1
 --userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file

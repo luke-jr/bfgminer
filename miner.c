@@ -217,6 +217,7 @@ static bool no_work;
 char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
+bool opt_weighed_stats;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
 #endif
@@ -2299,6 +2300,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
 			"Log verbose output to stderr as well as status output"),
+	OPT_WITHOUT_ARG("--weighed-stats",
+	                opt_set_bool, &opt_weighed_stats,
+	                "Display statistics weighed to difficulty 1"),
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--worksize|-w",
 		     set_worksize, NULL, NULL,
@@ -3334,9 +3338,19 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	
 	double rolling = cgpu->rolling;
 	double mhashes = cgpu->total_mhashes;
-	int accepted = cgpu->accepted;
-	int rejected = cgpu->rejected;
-	int stale = cgpu->stale;
+	int accepted, rejected, stale;
+	if (opt_weighed_stats)
+	{
+		accepted = cgpu->diff_accepted;
+		rejected = cgpu->diff_rejected;
+		stale = cgpu->diff_stale;
+	}
+	else
+	{
+		accepted = cgpu->accepted;
+		rejected = cgpu->rejected;
+		stale = cgpu->stale;
+	}
 	double waccepted = cgpu->diff_accepted;
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
@@ -3355,9 +3369,18 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			
 			rolling += slave->rolling;
 			mhashes += slave->total_mhashes;
-			accepted += slave->accepted;
-			rejected += slave->rejected;
-			stale += slave->stale;
+			if (opt_weighed_stats)
+			{
+				accepted += slave->diff_accepted;
+				rejected += slave->diff_rejected;
+				stale += slave->diff_stale;
+			}
+			else
+			{
+				accepted += slave->accepted;
+				rejected += slave->rejected;
+				stale += slave->stale;
+			}
 			waccepted += slave->diff_accepted;
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
@@ -6989,7 +7012,7 @@ retry:
 	wlogprint("[N]ormal [C]lear [S]ilent mode (disable all output)\n");
 	wlogprint("[D]ebug:%s\n[P]er-device:%s\n[Q]uiet:%s\n[V]erbose:%s\n"
 		  "[R]PC debug:%s\n[W]orkTime details:%s\nsu[M]mary detail level:%s\n"
-		  "[L]og interval:%d\n[Z]ero statistics\n",
+		  "[L]og interval:%d\nS[T]atistical counts: %s\n[Z]ero statistics\n",
 		opt_debug_console ? "on" : "off",
 	        want_per_device_stats? "on" : "off",
 		opt_quiet ? "on" : "off",
@@ -6997,7 +7020,8 @@ retry:
 		opt_protocol ? "on" : "off",
 		opt_worktime ? "on" : "off",
 		summary_detail_level_str(),
-		opt_log_interval);
+		opt_log_interval,
+		opt_weighed_stats ? "weighed" : "absolute");
 	wlogprint("Select an option or any other key to return\n");
 	logwin_update();
 	input = getch();
@@ -7073,6 +7097,10 @@ retry:
 	} else if (!strncasecmp(&input, "w", 1)) {
 		opt_worktime ^= true;
 		wlogprint("WorkTime details %s\n", opt_worktime ? "enabled" : "disabled");
+		goto retry;
+	} else if (!strncasecmp(&input, "t", 1)) {
+		opt_weighed_stats ^= true;
+		wlogprint("Now displaying %s statistics\n", opt_weighed_stats ? "weighed" : "absolute");
 		goto retry;
 	} else if (!strncasecmp(&input, "z", 1)) {
 		zero_stats();
@@ -7652,6 +7680,20 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		1e6*total_mhashes_done / total_secs,
 		utility_to_hashrate(total_diff1 * (wtotal ? (total_diff_accepted / wtotal) : 1) * 60 / total_secs));
 
+	int ui_accepted, ui_rejected, ui_stale;
+	if (opt_weighed_stats)
+	{
+		ui_accepted = total_diff_accepted;
+		ui_rejected = total_diff_rejected;
+		ui_stale = total_diff_stale;
+	}
+	else
+	{
+		ui_accepted = total_accepted;
+		ui_rejected = total_rejected;
+		ui_stale = total_stale;
+	}
+	
 #ifdef HAVE_CURSES
 	if (curses_active_locked()) {
 		float temp = 0;
@@ -7708,9 +7750,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		format_statline(statusline, sizeof(statusline),
 		                cHr, aHr,
 		                uHr,
-		                total_accepted,
-		                total_rejected,
-		                total_stale,
+		                ui_accepted,
+		                ui_rejected,
+		                ui_stale,
 		                total_diff_rejected + total_diff_stale, total_diff_accepted,
 		                hw_errors,
 		                total_bad_nonces, total_bad_nonces + total_diff1);
@@ -7731,9 +7773,9 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		opt_log_interval,
 		cHr, aHr,
 		uHr,
-		total_accepted,
-		total_rejected,
-		total_stale,
+		ui_accepted,
+		ui_rejected,
+		ui_stale,
 		rejpcbuf,
 		hw_errors,
 		bnbuf
