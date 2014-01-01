@@ -216,7 +216,6 @@ static bool twinfury_init(struct thr_info *thr)
 	}
 
 	cgpu->device_fd = fd;
-	cgpu->dev_serial = info->id.serial;
 
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", cgpu->proc_repr, cgpu->device_path);
 
@@ -419,14 +418,18 @@ void twinfury_poll(struct thr_info *thr)
 		{
 			if(response[0] == buffer[0])
 			{
-				uint16_t temp = response[4] | (response[5] << 8);
-				char hex[93];
-				bin2hex(hex, response, 8);
-				applog(LOG_DEBUG, "%"PRIpreprv": TEMP: %s",
-					   dev->dev_repr, hex);
+				const float temp = ((uint16_t)response[4] | (uint16_t)(response[5] << 8)) / 10.0;
+				if (opt_dev_protocol && opt_debug)
+				{
+					char hex[93];
+					bin2hex(hex, response, 8);
+					applog(LOG_DEBUG, "%"PRIpreprv": TEMP: %s",
+						   dev->dev_repr, hex);
+				}
 
-				dev->temp = (float)temp / 10.0;
-				applog(LOG_DEBUG, "%"PRIpreprv": Temperature: %f", dev->dev_repr, dev->temp);
+				for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
+					proc->temp = temp;
+				applog(LOG_DEBUG, "%"PRIpreprv": Temperature: %f", dev->dev_repr, temp);
 			}
 		}
 		else
