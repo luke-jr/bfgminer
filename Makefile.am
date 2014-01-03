@@ -285,6 +285,10 @@ endif
 
 endif
 
+if USE_HASHFAST
+bfgminer_SOURCES += driver-hashfast.c
+endif
+
 if NEED_BFG_LOWL_HID
 bfgminer_SOURCES += lowl-hid.c lowl-hid.h
 bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
