@@ -109,6 +109,10 @@ bool hidapi_load_library()
 		sprintf(&dlname[9], "%s.%s", *p,
 #ifdef WIN32
 		        "dll"
+#elif defined(__APPLE__)
+		        //Mach-O uses dylibs for shared libraries
+		        //http://www.finkproject.org/doc/porting/porting.en.html#shared
+		        "dylib"
 #else
 		        "so"
 #endif
