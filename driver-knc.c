@@ -317,16 +317,17 @@ nomorecores: ;
 		.cgpu = cgpu,
 		.workqueue_max = 1,
 	};
-	*spi = (struct spi_port){
-		.txrx = knc_spi_txrx,
-		.cgpu = cgpu,
-		.repr = knc_drv.dname,
-		.logprio = LOG_ERR,
-		.speed = KNC_SPI_SPEED,
-		.delay = KNC_SPI_DELAY,
-		.mode  = KNC_SPI_MODE,
-		.bits  = KNC_SPI_BITS,
-	};
+	
+	/* Be careful, read spidevc.h comments for warnings */
+	memset(spi, 0, sizeof(*spi));
+	spi->txrx = knc_spi_txrx;
+	spi->cgpu = cgpu;
+	spi->repr = knc_drv.dname;
+	spi->logprio = LOG_ERR;
+	spi->speed = KNC_SPI_SPEED;
+	spi->delay = KNC_SPI_DELAY;
+	spi->mode = KNC_SPI_MODE;
+	spi->bits = KNC_SPI_BITS;
 	
 	if (!knc_spi_open(cgpu->dev_repr, spi))
 		return false;
