@@ -10,7 +10,8 @@
 /* Initialize SPI using this function */
 void spi_init(void);
 
-/* Do not allocate spi_port on the stack! OS X, at least, has a 512 KB default stack size for secondary threads */
+/* Do not allocate spi_port on the stack! OS X, at least, has a 512 KB default stack size for secondary threads
+   This includes struct assignments which get allocated on the stack before being assigned to */
 struct spi_port {
 	/* TX-RX single frame */
 	bool (*txrx)(struct spi_port *port);

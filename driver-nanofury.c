@@ -275,12 +275,13 @@ bool nanofury_init(struct thr_info * const thr)
 		return false;
 	}
 	
-	*port = (struct spi_port){
-		.txrx = nanofury_spi_txrx,
-		.cgpu = cgpu,
-		.repr = cgpu->proc_repr,
-		.logprio = LOG_ERR,
-	};
+	/* Be careful, read spidevc.h comments for warnings */
+	memset(port, 0, sizeof(*port));
+	port->txrx = nanofury_spi_txrx;
+	port->cgpu = cgpu;
+	port->repr = cgpu->proc_repr;
+	port->logprio = LOG_ERR;
+		
 	*bitfury = (struct bitfury_device){
 		.spi = port,
 	};

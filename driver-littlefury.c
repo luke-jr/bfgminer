@@ -345,12 +345,13 @@ bool littlefury_thread_init(struct thr_info *thr)
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		spi = malloc(sizeof(*spi));
-		*spi = (struct spi_port){
-			.txrx = littlefury_txrx,
-			.cgpu = proc,
-			.repr = proc->proc_repr,
-			.logprio = LOG_ERR,
-		};
+		
+		/* Be careful, read spidevc.h comments for warnings */
+		memset(spi, 0, sizeof(*spi));
+		spi->txrx = littlefury_txrx;
+		spi->cgpu = proc;
+		spi->repr = proc->proc_repr;
+		spi->logprio = LOG_ERR;
 		
 		bitfury = malloc(sizeof(*bitfury));
 		*bitfury = (struct bitfury_device){

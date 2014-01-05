@@ -231,15 +231,16 @@ bool hashbuster_init(struct thr_info * const thr)
 	port = malloc(sizeof(*port));
 	if (!port)
 		applogr(false, LOG_ERR, "%s: Failed to allocate spi_port", cgpu->dev_repr);
-	*port = (struct spi_port){
-		.txrx = hashbuster_spi_txrx,
-		.userp = h,
-		.cgpu = cgpu,
-		.repr = cgpu->dev_repr,
-		.logprio = LOG_ERR,
-		.speed = 100000,
-		.mode = 0,
-	};
+	
+	/* Be careful, read spidevc.h comments for warnings */
+	memset(port, 0, sizeof(*port));
+	port->txrx = hashbuster_spi_txrx;
+	port->userp = h;
+	port->cgpu = cgpu;
+	port->repr = cgpu->dev_repr;
+	port->logprio = LOG_ERR;
+	port->speed = 100000;
+	port->mode = 0;
 	
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
