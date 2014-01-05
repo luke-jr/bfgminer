@@ -83,7 +83,7 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
-	bool quirk_reopen;
+	int quirk_reopen;
 	uint8_t user_set;
 	bool continue_search;
 
