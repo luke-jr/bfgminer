@@ -3332,6 +3332,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	if (!opt_show_procs)
 		cgpu = cgpu->device;
 	
+	dev_runtime = cgpu_runtime(cgpu);
+	
 	double rolling, mhashes;
 	int accepted, rejected, stale;
 	double waccepted;
@@ -3345,8 +3347,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		struct cgpu_info *slave = cgpu;
 		for (int i = 0; i < cgpu->procs; ++i, (slave = slave->next_proc))
 		{
-			dev_runtime = cgpu_runtime(slave);
-			cgpu_utility(slave);
+			slave->utility = slave->accepted / dev_runtime * 60;
 			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
 			rolling += slave->rolling;
