@@ -7524,6 +7524,27 @@ static void *input_thread(void __maybe_unused *userdata)
 			++devsummaryYOffset;
 			refresh_devstatus();
 			break;
+		case KEY_NPAGE:
+		{
+			const int visible_lines = logcursor - devcursor;
+			const int invisible_lines = total_lines - visible_lines;
+			if (devsummaryYOffset - visible_lines <= -invisible_lines)
+				devsummaryYOffset = -invisible_lines;
+			else
+				devsummaryYOffset -= visible_lines;
+			refresh_devstatus();
+			break;
+		}
+		case KEY_PPAGE:
+		{
+			const int visible_lines = logcursor - devcursor;
+			if (devsummaryYOffset + visible_lines >= 0)
+				devsummaryYOffset = 0;
+			else
+				devsummaryYOffset += visible_lines;
+			refresh_devstatus();
+			break;
+		}
 #endif
 		}
 		if (opt_realquiet) {
