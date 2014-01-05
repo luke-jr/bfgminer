@@ -3816,6 +3816,16 @@ static void print_status(int thr_id)
 }
 
 #ifdef HAVE_CURSES
+static
+void set_statusy(int maxy)
+{
+	if (logstart < maxy)
+		maxy = logstart;
+	
+	statusy = maxy;
+	logcursor = statusy;
+}
+
 /* Check for window resize. Called with curses mutex locked */
 static inline void change_logwinsize(void)
 {
@@ -3826,11 +3836,7 @@ static inline void change_logwinsize(void)
 		return;
 
 	if (y > statusy + 2 && statusy < logstart) {
-		if (y - 2 < logstart)
-			statusy = y - 2;
-		else
-			statusy = logstart;
-		logcursor = statusy;
+		set_statusy(y - 2);
 		mvwin(logwin, logcursor, 0);
 		bfg_wresize(statuswin, statusy, x);
 	}
@@ -3851,11 +3857,7 @@ static void check_winsizes(void)
 
 		erase();
 		x = getmaxx(statuswin);
-		if (logstart > LINES - 2)
-			statusy = LINES - 2;
-		else
-			statusy = logstart;
-		logcursor = statusy;
+		set_statusy(LINES - 2);
 		bfg_wresize(statuswin, statusy, x);
 		getmaxyx(mainwin, y, x);
 		y -= logcursor;
