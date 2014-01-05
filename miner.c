@@ -8199,12 +8199,23 @@ static void *stratum_thread(void *userdata)
 		if (unlikely(!pool->has_stratum))
 			break;
 
-		sock = pool->sock;
-		
 		/* Check to see whether we need to maintain this connection
 		 * indefinitely or just bring it up when we switch to this
 		 * pool */
-		if (sock == INVSOCK || (!sock_full(pool) && !cnx_needed(pool))) {
+		while (true)
+		{
+			sock = pool->sock;
+			
+			if (sock == INVSOCK)
+				applog(LOG_DEBUG, "Pool %u: Invalid socket, suspending",
+				       pool->pool_no);
+			else
+			if (!sock_full(pool) && !cnx_needed(pool))
+				applog(LOG_DEBUG, "Pool %u: Connection not needed, suspending",
+				       pool->pool_no);
+			else
+				break;
+			
 			suspend_stratum(pool);
 			clear_stratum_shares(pool);
 			clear_pool_work(pool);
