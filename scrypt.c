@@ -487,6 +487,6 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		}
 	}
 
-	free(scratchbuf);;
+	free(scratchbuf);
 	return ret;
 }
