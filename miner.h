@@ -1121,7 +1121,7 @@ extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
-extern int total_accepted, total_rejected, total_diff1;;
+extern int total_accepted, total_rejected, total_diff1;
 extern int total_bad_nonces;
 extern int total_getworks, total_stale, total_discarded;
 extern uint64_t total_bytes_rcvd, total_bytes_sent;
