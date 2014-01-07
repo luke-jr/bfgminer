@@ -434,6 +434,15 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		
 		if (unlikely(bitfury->desync_counter == 99))
 		{
+			if (bitfury_init_oldbuf(proc, inp) == false)
+			{
+				if (bitfury->osc6_bits > 40) {
+					bitfury->osc6_bits--;
+					bitfury->force_reinit = true;
+				} else {
+					proc->deven = DEV_DISABLED;
+				}
+			}
 			bitfury_init_oldbuf(proc, inp);
 			goto out;
 		}
