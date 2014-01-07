@@ -40,7 +40,7 @@
 #include <time.h>
 
 #define BITFURY_REFRESH_DELAY 100
-#define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
+#define BITFURY_DETECT_TRIES 1000 / BITFURY_REFRESH_DELAY
 
 unsigned bitfury_decnonce(unsigned in);
 
@@ -151,11 +151,11 @@ void bitfury_set_freq(struct spi_port *port, int bits) {
 	bitfury_config_reg(port, 4, 1); /* Enable slow oscillator */
 }
 
-void bitfury_send_reinit(struct spi_port *port, int slot, int chip_n, int n) {
+void bitfury_send_reinit(struct spi_port *port, int slot, int chip_n, int osc6) {
 	spi_clear_buf(port);
 	spi_emit_break(port);
 	spi_emit_fasync(port, chip_n);
-	bitfury_set_freq(port, n);
+	bitfury_set_freq(port, osc6);
 	bitfury_send_conf(port);
 	bitfury_send_init(port);
 	spi_txrx(port);
@@ -244,24 +244,14 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 
 	ocounter = 0;
 	for (i = 0; i < BITFURY_DETECT_TRIES; i++) {
-		int counter;
-
 		spi_clear_buf(port);
 		spi_emit_break(port);
 		spi_emit_fasync(port, chip_n);
 		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
-
-		counter = libbitfury_get_counter(newbuf, oldbuf);
-		if (ocounter) {
-			unsigned int cdiff = libbitfury_c_diff(ocounter, counter);
-
-			if (cdiff > 5000 && cdiff < 100000 && odiff > 5000 && odiff < 100000)
-				return 1;
-			odiff = cdiff;
-		}
-		ocounter = counter;
+		if (memcmp(oldbuf, newbuf, 17*4) != 0)
+			return 1;
 		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF) {
 			return 0;
 		}

@@ -43,6 +43,7 @@ struct bitfury_device {
 	struct freq_stat chip_stat;
 	struct timeval timer1;
 	struct timeval tv_stat;
+	struct timeval tv_stat_long;
 	unsigned int counter1, counter2;
 	double mhz;
 	int mhz_last;
@@ -54,6 +55,7 @@ struct bitfury_device {
 	int desync_counter;
 	int sample_hwe;
 	int sample_tot;
+	double volt;
 };
 
 extern void work_to_bitfury_payload(struct bitfury_payload *, struct work *);
