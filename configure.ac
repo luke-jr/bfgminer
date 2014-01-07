@@ -853,6 +853,7 @@ if test "x$hashfast" = xyes; then
 	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if HashFast support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
 
