@@ -65,17 +65,15 @@
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
 #define ICARUS_IO_SPEED 115200
 
-// The size of a successful nonce read
-#define ICARUS_READ_SIZE 4
+// The number of bytes in a nonce (always 4)
+// This is NOT the read-size for the Icarus driver
+// That is defined in ICARUS_INFO->read_size
+#define ICARUS_NONCE_SIZE 4
 
-// Ensure the sizes are correct for the Serial read
-#if (ICARUS_READ_SIZE != 4)
-#error ICARUS_READ_SIZE must be 4
-#endif
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-#define ICARUS_READ_TIME(baud) ((double)ICARUS_READ_SIZE * (double)8.0 / (double)(baud))
+#define ICARUS_READ_TIME(baud, read_size) ((double)read_size * (double)8.0 / (double)(baud))
 
 // Defined in deciseconds
 // There's no need to have this bigger, since the overhead/latency of extra work
@@ -184,18 +182,13 @@ static void rev(unsigned char *s, size_t l)
 #define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
 
-#define ICA_GETS_ERROR -1
-#define ICA_GETS_OK 0
-#define ICA_GETS_RESTART 1
-#define ICA_GETS_TIMEOUT 2
-
-int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count)
+int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count, int read_size)
 {
 	ssize_t ret = 0;
 	int rc = 0;
 	int epollfd = -1;
 	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
-	int read_amount = ICARUS_READ_SIZE;
+	int read_amount = read_size;
 	bool first = true;
 
 #ifdef HAVE_EPOLL
@@ -282,7 +275,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	}
 }
 
-static int icarus_write(int fd, const void *buf, size_t bufLen)
+int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
@@ -557,6 +550,27 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 	}
 }
 
+// Number of bytes remaining after reading a nonce from Icarus
+int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
+{
+	// How big a buffer?
+	int excess_size = info->read_size - ICARUS_NONCE_SIZE;
+
+	// Try to read one more to ensure the device doesn't return
+	// more than we want for this driver
+	excess_size++;
+
+	unsigned char excess_bin[excess_size];
+	// Read excess_size from Icarus
+	struct timeval tv_now;
+	timer_set_now(&tv_now);
+	//icarus_gets(excess_bin, fd, &tv_now, NULL, 1, excess_size);
+	int bytes_read = read(fd, excess_bin, excess_size);
+	// Number of bytes that were still available
+
+	return bytes_read;
+}
+
 bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
 {
 	int this_option_offset = ++option_offset;
@@ -582,7 +596,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 
 	const char golden_nonce[] = "000187a2";
 
-	unsigned char ob_bin[64], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
 	get_options(this_option_offset, info);
@@ -598,14 +612,25 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 		applog(LOG_DEBUG, "Icarus Detect: Failed to open %s", devpath);
 		return false;
 	}
+	
+	// Set a default so that individual drivers need not specify
+	// e.g. Cairnsmore
+	if (info->read_size == 0)
+		info->read_size = ICARUS_DEFAULT_READ_SIZE;
 
 	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 	cgtime(&tv_start);
 
 	memset(nonce_bin, 0, sizeof(nonce_bin));
-	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1);
-
+	// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
+	// We will then compare the bytes left in fd with info->read_size to determine
+	// if this is a valid device
+	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
+	
+	// How many bytes were left after reading the above nonce
+	int bytes_left = icarus_excess_nonce_size(fd, info);
+	
 	icarus_close(fd);
 
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
@@ -616,6 +641,16 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			devpath, nonce_hex, golden_nonce);
 		return false;
 	}
+		
+	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
+	{
+		applog(LOG_DEBUG,
+			   "Icarus Detect: "
+			   "Test failed at %s: expected %d bytes, got %d",
+			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
+		return false;
+	}
+	
 	applog(LOG_DEBUG,
 		"Icarus Detect: "
 		"Test succeeded at %s: got %s",
@@ -663,6 +698,7 @@ static bool icarus_detect_one(const char *devpath)
 	info->quirk_reopen = 1;
 	info->Hs = ICARUS_REV3_HASH_TIME;
 	info->timing_mode = MODE_DEFAULT;
+	info->read_size = ICARUS_DEFAULT_READ_SIZE;
 
 	if (!icarus_detect_custom(devpath, &icarus_drv, info)) {
 		free(info);
@@ -722,6 +758,10 @@ static bool icarus_init(struct thr_info *thr)
 	if (!info->work_division)
 	{
 		struct timeval tv_finish;
+		
+		// For reading the nonce from Icarus
+		unsigned char res_bin[info->read_size];
+		// For storing the the 32-bit nonce
 		uint32_t res;
 		
 		applog(LOG_DEBUG, "%"PRIpreprv": Work division not specified - autodetecting", icarus->proc_repr);
@@ -734,8 +774,12 @@ static bool icarus_init(struct thr_info *thr)
 			"BFG\0\x64\x61\x01\x1a\xc9\x06\xa9\x51\xfb\x9b\x3c\x73";
 		
 		icarus_write(fd, pkt, sizeof(pkt));
-		if (ICA_GETS_OK == icarus_gets((unsigned char*)&res, fd, &tv_finish, NULL, info->read_count))
+		memset(res_bin, 0, sizeof(res_bin));
+		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
+		{
+			memcpy(&res, res_bin, sizeof(res));
 			res = be32toh(res);
+		}
 		else
 			res = 0;
 		
@@ -862,6 +906,10 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	int fd = icarus->device_fd;
 	struct timeval tv_now;
 	double delapsed;
+	
+	// For reading the nonce from Icarus
+	unsigned char nonce_bin[info->read_size];
+	// For storing the the 32-bit nonce
 	uint32_t nonce;
 	
 	if (fd == -1)
@@ -882,9 +930,11 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 				break;
 			
 			// Try to get more nonces (ignoring work restart)
-			ret = icarus_gets((void *)&nonce, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10);
+			memset(nonce_bin, 0, sizeof(nonce_bin));
+			ret = icarus_gets(nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10, info->read_size);
 			if (ret == ICA_GETS_OK)
 			{
+				memcpy(&nonce, nonce_bin, sizeof(nonce));
 				nonce = be32toh(nonce);
 				submit_nonce(thr, state->last_work, nonce);
 			}
@@ -934,7 +984,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	uint32_t nonce;
 	struct work *nonce_work;
 	int64_t hash_count;
 	struct timeval tv_start = {.tv_sec=0}, elapsed;
@@ -964,6 +1013,11 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
 	info = icarus->device_data;
+	
+	// For reading the nonce from Icarus
+	unsigned char nonce_bin[info->read_size];
+	// For storing the the 32-bit nonce
+	uint32_t nonce;
 
 	if (unlikely(fd == -1) && !icarus_reopen(icarus, state, &fd))
 		return -1;
@@ -978,8 +1032,9 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		{
 			read_count = info->read_count;
 keepwaiting:
-			/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
-			ret = icarus_gets((void*)&nonce, fd, &state->tv_workfinish, thr, read_count);
+			/* Icarus will return info->read_size bytes nonces or nothing */
+			memset(nonce_bin, 0, sizeof(nonce_bin));
+			ret = icarus_gets(nonce_bin, fd, &state->tv_workfinish, thr, read_count, info->read_size);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -1020,6 +1075,7 @@ keepwaiting:
 
 	if (ret == ICA_GETS_OK)
 	{
+		memcpy(&nonce, nonce_bin, sizeof(nonce));
 		nonce_work = icarus_process_worknonce(state, &nonce);
 		if (likely(nonce_work))
 		{
@@ -1168,7 +1224,7 @@ keepwaiting:
 
 		Ti = (double)(elapsed.tv_sec)
 			+ ((double)(elapsed.tv_usec))/((double)1000000)
-			- ((double)ICARUS_READ_TIME(info->baud));
+			- ((double)ICARUS_READ_TIME(info->baud, info->read_size));
 		Xi = (double)hash_count;
 		history0->sumXiTi += Xi * Ti;
 		history0->sumXi += Xi;

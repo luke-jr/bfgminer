@@ -2911,3 +2911,60 @@ void run_cmd(const char *cmd)
 	pthread_t pth;
 	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
 }
+
+uint8_t crc5usb(unsigned char *ptr, uint8_t len)
+{
+    uint8_t i, j, k;
+    uint8_t crc = 0x1f;
+	
+    uint8_t crcin[5] = {1, 1, 1, 1, 1};
+    uint8_t crcout[5] = {1, 1, 1, 1, 1};
+    uint8_t din = 0;
+	
+    j = 0x80;
+    k = 0;
+	
+    for (i = 0; i < len; i++)
+    {
+    	if (*ptr & j)
+    		din = 1;
+    	else
+    		din = 0;
+		
+    	crcout[0] = crcin[4] ^ din;
+    	crcout[1] = crcin[0];
+    	crcout[2] = crcin[1] ^ crcin[4] ^ din;
+    	crcout[3] = crcin[2];
+    	crcout[4] = crcin[3];
+		
+        j = j >> 1;
+        k++;
+        if (k == 8)
+        {
+            j = 0x80;
+            k = 0;
+            ptr++;
+        }
+        memcpy(crcin, crcout, 5);
+    }
+	
+    crc = 0;
+    if(crcin[4])
+    	crc |= 0x10;
+	
+    if(crcin[3])
+    	crc |= 0x08;
+	
+    if(crcin[2])
+    	crc |= 0x04;
+	
+    if(crcin[1])
+    	crc |= 0x02;
+	
+    if(crcin[0])
+    	crc |= 0x01;
+	
+    return crc;
+}
+
+
