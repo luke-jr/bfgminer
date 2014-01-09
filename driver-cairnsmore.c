@@ -78,13 +78,16 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
 	return write(fd, pkt, sizeof(pkt)) == sizeof(pkt);
 }
 
-bool cairnsmore_supports_dynclock(int fd)
+bool cairnsmore_supports_dynclock(int fd, int read_size)
 {
 	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
 	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
-
+	
+	// For reading the nonce from Icarus
+	unsigned char nonce_bin[read_size];
+	// For storing the 32-bit nonce
 	uint32_t nonce = 0;
 	{
 		struct timeval tv_finish;
@@ -92,7 +95,8 @@ bool cairnsmore_supports_dynclock(int fd)
 			.work_restart = false,
 			.work_restart_notifier = {-1, -1},
 		};
-		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1);
+		icarus_gets(nonce_bin, fd, &tv_finish, &dummy, 1, read_size);
+		memcpy((char *)&nonce, nonce_bin, sizeof(nonce));
 	}
 	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x", nonce);
 	switch (nonce) {
@@ -133,7 +137,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 	struct ICARUS_INFO *info = cm1->device_data;
 	struct icarus_state *state = thr->cgpu_data;
 
-	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
+	if (cairnsmore_supports_dynclock(cm1->device_fd, info->read_size)) {
 		info->dclk_change_clock_func = cairnsmore_change_clock_func;
 
 		dclk_prepare(&info->dclk);
