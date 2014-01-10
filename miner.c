@@ -1915,7 +1915,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--coinbase-addr",
 		     set_b58addr, NULL, &opt_coinbase_script,
 		     "Set coinbase payout address for solo mining"),
-	OPT_WITH_ARG("--coinbase-payout|--cbaddr|--cb-addr|--payout",
+	OPT_WITH_ARG("--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
 		     set_b58addr, NULL, &opt_coinbase_script,
 		     opt_hidden),
 #endif
