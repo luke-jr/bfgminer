@@ -3622,6 +3622,11 @@ void bfg_wspctoeol(WINDOW * const win, const int offset)
 	getmaxyx(win, y, maxx);
 	getyx(win, y, x);
 	const int space_count = (maxx - x) - offset;
+	
+	// Check for negative - terminal too narrow
+	if (space_count <= 0)
+		return;
+	
 	char buf[space_count];
 	memset(buf, ' ', space_count);
 	waddnstr(win, buf, space_count);
