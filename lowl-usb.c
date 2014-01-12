@@ -24,7 +24,7 @@
 #include "util.h"
 
 static
-char *lowl_libusb_dup_string(libusb_device_handle * const handle, const uint8_t idx, const char * const idxname, const char * const fname)
+char *lowl_libusb_dup_string(libusb_device_handle * const handle, const uint8_t idx, const char * const idxname, const char * const fname, const char * const devid)
 {
 	if (!idx)
 		return NULL;
@@ -32,8 +32,8 @@ char *lowl_libusb_dup_string(libusb_device_handle * const handle, const uint8_t 
 	const int n = libusb_get_string_descriptor_ascii(handle, idx, buf, sizeof(buf)-1);
 	if (unlikely(n < 0)) {
 		// This could be LOG_ERR, but it's annoyingly common :/
-		applog(LOG_DEBUG, "%s: Error getting USB string %d (%s): %s",
-		       fname, idx, idxname, bfg_strerror(n, BST_LIBUSB));
+		applog(LOG_DEBUG, "%s: Error getting USB string %d (%s) from %s: %s",
+		       fname, idx, idxname, devid, bfg_strerror(n, BST_LIBUSB));
 		return NULL;
 	}
 	if (n == 0)
@@ -95,9 +95,9 @@ struct lowlevel_device_info *usb_devinfo_scan()
 			       __func__, info->devid, bfg_strerror(err, BST_LIBUSB));
 		else
 		{
-			info->manufacturer = lowl_libusb_dup_string(handle, desc.iManufacturer, "iManufacturer", __func__);
-			info->product = lowl_libusb_dup_string(handle, desc.iProduct, "iProduct", __func__);
-			info->serial = lowl_libusb_dup_string(handle, desc.iSerialNumber, "iSerialNumber", __func__);
+			info->manufacturer = lowl_libusb_dup_string(handle, desc.iManufacturer, "iManufacturer", __func__, info->devid);
+			info->product = lowl_libusb_dup_string(handle, desc.iProduct, "iProduct", __func__, info->devid);
+			info->serial = lowl_libusb_dup_string(handle, desc.iSerialNumber, "iSerialNumber", __func__, info->devid);
 			libusb_close(handle);
 		}
 
