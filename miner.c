@@ -3605,12 +3605,14 @@ void bfg_waddstr(WINDOW *win, const char *s)
 static inline
 void bfg_hline(WINDOW *win, int y)
 {
+	int maxx, __maybe_unused maxy;
+	getmaxyx(win, maxy, maxx);
 #ifdef USE_UNICODE
 	if (use_unicode)
-		mvwhline_set(win, y, 0, WACS_HLINE, 80);
+		mvwhline_set(win, y, 0, WACS_HLINE, maxx);
 	else
 #endif
-		mvwhline(win, y, 0, '-', 80);
+		mvwhline(win, y, 0, '-', maxx);
 }
 
 // Spaces until end of line, using current attributes (ie, not completely clear)
