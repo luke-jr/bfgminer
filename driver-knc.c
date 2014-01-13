@@ -731,6 +731,7 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	*/
 
 	timer_set_now(&tv_now);
+	volt = current = 0;
 	for (proc = cgpu, i = 0; proc && proc->device == cgpu; proc = proc->next_proc, ++i)
 	{
 		thr = proc->thr[0];
