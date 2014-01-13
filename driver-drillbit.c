@@ -38,6 +38,14 @@ enum drillbit_voltagecfg {
 	DBV_950mV = 3,
 };
 
+struct drillbit_board {
+	enum drillbit_voltagecfg core_voltage_cfg;
+	unsigned clock_level;
+	bool clock_div2;
+	bool use_ext_clock;
+	unsigned ext_clock_freq;
+};
+
 static
 bool drillbit_lowl_match(const struct lowlevel_device_info * const info)
 {
@@ -173,12 +181,8 @@ bool drillbit_send_config(struct cgpu_info * const dev)
 	if (unlikely(fd == -1))
 		return false;
 	
-	const uint8_t core_voltage = DBV_850mV;
-	const uint8_t clock_level = 40;
-	const uint8_t clock_div2 = 0;
-	const uint8_t use_ext_clock = 0;
-	const uint16_t ext_clock_freq = 200;
-	const uint8_t buf[7] = {'C', core_voltage, clock_level, clock_div2, use_ext_clock, ext_clock_freq};
+	const struct drillbit_board * const board = dev->device_data;
+	const uint8_t buf[7] = {'C', board->core_voltage_cfg, board->clock_level, (board->clock_div2 ? 1 : 0), (board->use_ext_clock ? 1 : 0), board->ext_clock_freq};
 	
 	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
 		applogr(false, LOG_ERR, "%s: Error sending config", dev->dev_repr);
@@ -194,7 +198,17 @@ bool drillbit_init(struct thr_info * const master_thr)
 	if (fd == -1)
 		return false;
 	
+	struct drillbit_board * const board = malloc(sizeof(*board));
 	dev->device_fd = fd;
+	dev->device_data = board;
+	*board = (struct drillbit_board){
+		.core_voltage_cfg = DBV_850mV,
+		.clock_level = 40,
+		.clock_div2 = false,
+		.use_ext_clock = false,
+		.ext_clock_freq = 200,
+	};
+	
 	if (!(drillbit_reset(dev) && drillbit_send_config(dev)))
 	{
 		serial_close(fd);
