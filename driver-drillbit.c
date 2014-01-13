@@ -45,6 +45,7 @@ struct drillbit_board {
 	bool use_ext_clock;
 	unsigned ext_clock_freq;
 	bool need_reinit;
+	bool trigger_identify;
 };
 
 static
@@ -428,8 +429,25 @@ void drillbit_poll(struct thr_info * const master_thr)
 			drillbit_resend_jobs(proc);
 		board->need_reinit = false;
 	}
+	if (board->trigger_identify)
+	{
+		const int fd = dev->device_fd;
+		applog(LOG_DEBUG, "%s: Sending identify command", dev->dev_repr);
+		if (1 != write(fd, "L", 1))
+			applog(LOG_ERR, "%s: Error writing identify command", dev->dev_repr);
+		drillbit_check_response(dev->dev_repr, fd, dev, 'L');
+		board->trigger_identify = false;
+	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
+}
+
+static bool drillbit_identify(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct drillbit_board * const board = dev->device_data;
+	board->trigger_identify = true;
+	return true;
 }
 
 static
@@ -628,6 +646,7 @@ struct device_drv drillbit_drv = {
 	.job_process_results = drillbit_job_process_results,
 	.poll = drillbit_poll,
 	.get_stats = drillbit_get_stats,
+	.identify_device = drillbit_identify,
 	
 	.get_api_stats = drillbit_api_stats,
 	.set_device = drillbit_set_device,
