@@ -10476,8 +10476,6 @@ void enable_curses(void) {
 		menu_attr = COLOR_PAIR(1);
 		if (ERR != init_pair(2, COLOR_RED, default_bgcolor))
 			attr_bad |= COLOR_PAIR(2);
-		if (ERR != init_pair(3, COLOR_GREEN, COLOR_RED))
-			attr_title |= COLOR_PAIR(3);
 	}
 	keypad(mainwin, true);
 	getmaxyx(mainwin, y, x);
