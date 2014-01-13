@@ -44,6 +44,7 @@ struct drillbit_board {
 	bool clock_div2;
 	bool use_ext_clock;
 	unsigned ext_clock_freq;
+	bool need_reinit;
 };
 
 static
@@ -250,6 +251,38 @@ bool drillbit_job_prepare(struct thr_info * const thr, struct work * const work,
 }
 
 static
+bool drillbit_resend_jobs(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	bool rv;
+	
+	if (thr->work)
+		if (!drillbit_job_prepare(thr, thr->work, 0))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Failed to resend %s work",
+			       proc->proc_repr, "current");
+			rv = false;
+		}
+	if (thr->next_work)
+	{
+		if (!drillbit_job_prepare(thr, thr->next_work, 0))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Failed to resend %s work",
+			       proc->proc_repr, "next");
+			rv = false;
+		}
+		if (!rv)
+		{
+			// Fake transition so we kinda recover eventually
+			mt_job_transition(thr);
+			job_start_complete(thr);
+			timer_set_now(&thr->tv_morework);
+		}
+	}
+	return rv;
+}
+
+static
 void drillbit_first_job_start(struct thr_info __maybe_unused * const thr)
 {
 	struct cgpu_info * const proc = thr->cgpu;
@@ -381,8 +414,20 @@ static
 void drillbit_poll(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu;
+	struct drillbit_board * const board = dev->device_data;
 	
 	drillbit_get_work_results(dev);
+	
+	if (board->need_reinit)
+	{
+		applog(LOG_NOTICE, "%s: Reinitialisation needed for configuration changes",
+		       dev->dev_repr);
+		drillbit_reset(dev);
+		drillbit_send_config(dev);
+		for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
+			drillbit_resend_jobs(proc);
+		board->need_reinit = false;
+	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
 }
@@ -413,6 +458,161 @@ bool drillbit_get_stats(struct cgpu_info * const dev)
 	return true;
 }
 
+static
+float drillbit_voltagecfg_volts(const enum drillbit_voltagecfg vcfg)
+{
+	switch (vcfg)
+	{
+		case DBV_650mV: return 0.65;
+		case DBV_750mV: return 0.75;
+		case DBV_850mV: return 0.85;
+		case DBV_950mV: return 0.95;
+	}
+	return 0;
+}
+
+static
+void drillbit_clockcfg_str(char * const buf, size_t bufsz, struct drillbit_board * const board)
+{
+	if (board->use_ext_clock)
+		snprintf(buf, bufsz, "%u", board->ext_clock_freq);
+	else
+		snprintf(buf, bufsz, "L%u", board->clock_level);
+	if (board->clock_div2)
+		tailsprintf(buf, bufsz, ":2");
+}
+
+static
+struct api_data *drillbit_api_stats(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct drillbit_board * const board = dev->device_data;
+	struct api_data *root = NULL;
+	char buf[0x100];
+	
+	drillbit_clockcfg_str(buf, sizeof(buf), board);
+	root = api_add_string(root, "ClockCfg", buf, true);
+	
+	float volts = drillbit_voltagecfg_volts(board->core_voltage_cfg);
+	root = api_add_volts(root, "Voltage", &volts, true);
+	
+	return root;
+}
+
+static
+char *drillbit_set_device(struct cgpu_info * const proc, char * const option, char *setting, char * const replybuf)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct drillbit_board * const board = dev->device_data;
+	
+	if (!strcasecmp(option, "help"))
+	{
+		sprintf(replybuf,
+			"voltage: 0.65, 0.75, 0.85, or 0.95 (volts)\n"
+			"clock: 80-230 (MHz) using external clock, or L0-L63 for internal clock levels; append :2 to activate div2"
+		);
+		return replybuf;
+	}
+	
+	if (!strcasecmp(option, "voltage"))
+	{
+		// NOTE: Do not use replybuf in here without implementing it in drillbit_tui_handle_choice
+		if (!setting || !*setting)
+			return "Missing voltage setting";
+		const int val = atof(setting) * 1000;
+		enum drillbit_voltagecfg vcfg;
+		switch (val)
+		{
+			case 650: case 649:
+				vcfg = DBV_650mV;
+				break;
+			case 750: case 749:
+				vcfg = DBV_750mV;
+				break;
+			case 850: case 849:
+				vcfg = DBV_850mV;
+				break;
+			case 950: case 949:
+				vcfg = DBV_950mV;
+				break;
+			default:
+				return "Invalid voltage value";
+		}
+		
+		board->core_voltage_cfg = vcfg;
+		board->need_reinit = true;
+		
+		return NULL;
+	}
+	
+	if (!strcasecmp(option, "clock"))
+	{
+		// NOTE: Do not use replybuf in here without implementing it in drillbit_tui_handle_choice
+		const bool use_ext_clock = !(setting[0] == 'L');
+		char *end = &setting[use_ext_clock ? 0 : 1];
+		const unsigned num = strtol(end, &end, 0);
+		const bool div2 = (end[0] == ':' && end[1] == '2');
+		// NOTE: board assignments are ordered such that it is safe to race
+		if (use_ext_clock)
+		{
+			if (num < 80 || num > 230)
+				return "External clock frequency out of range (80-230)";
+			board->clock_div2 = div2;
+			board->ext_clock_freq = num;
+			board->use_ext_clock = true;
+		}
+		else
+		{
+			if (num < 0 || num > 63)
+				return "Internal clock level out of range (0-63)";
+			board->clock_div2 = div2;
+			board->clock_level = num;
+			board->use_ext_clock = false;
+		}
+		board->need_reinit = true;
+		return NULL;
+	}
+	
+	sprintf(replybuf, "Unknown option: %s", option);
+	return replybuf;
+}
+
+#ifdef HAVE_CURSES
+static
+void drillbit_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock [V]oltage ");
+}
+
+static
+const char *drillbit_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	char *val;
+	switch (input)
+	{
+		case 'c': case 'C':
+			val = curses_input("Set clock (80-230 MHz using external clock, or L0-L63 for internal clock levels; append :2 to activate div2");
+			return drillbit_set_device(proc, "clock", val, NULL) ?: "Requesting clock change";
+		case 'v': case 'V':
+			val = curses_input("Set voltage (0.65, 0.75, 0.85, or 0.95)");
+			return drillbit_set_device(proc, "voltage", val, NULL) ?: "Requesting voltage change";
+	}
+	return NULL;
+}
+
+static
+void drillbit_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct drillbit_board * const board = dev->device_data;
+	char buf[0x100];
+	
+	drillbit_clockcfg_str(buf, sizeof(buf), board);
+	wlogprint("Clock: %s\n", buf);
+	wlogprint("Voltage: %.2f\n", drillbit_voltagecfg_volts(board->core_voltage_cfg));
+}
+#endif
+
 struct device_drv drillbit_drv = {
 	.dname = "drillbit",
 	.name = "DRB",
@@ -428,4 +628,12 @@ struct device_drv drillbit_drv = {
 	.job_process_results = drillbit_job_process_results,
 	.poll = drillbit_poll,
 	.get_stats = drillbit_get_stats,
+	
+	.get_api_stats = drillbit_api_stats,
+	.set_device = drillbit_set_device,
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = drillbit_wlogprint_status,
+	.proc_tui_wlogprint_choices = drillbit_tui_wlogprint_choices,
+	.proc_tui_handle_choice = drillbit_tui_handle_choice,
+#endif
 };
