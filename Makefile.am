@@ -138,7 +138,8 @@ bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c 	\
-		  sha256_altivec_4way.c
+		  sha256_altivec_4way.c \
+		  sha256_NEON_4way.c
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c

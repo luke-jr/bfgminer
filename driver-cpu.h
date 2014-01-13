@@ -25,6 +25,9 @@
 #if defined(__i386__) && defined(HAVE_SSE2)
 #define WANT_SSE2_4WAY 1
 #endif
+#if defined(__ARM_NEON__)
+#define WANT_NEON_4WAY 1
+#endif
 
 #ifdef __ALTIVEC__
 #define WANT_ALTIVEC_4WAY 1
@@ -51,8 +54,9 @@
 #endif
 
 enum sha256_algos {
-	ALGO_C,			/* plain C */
+//	ALGO_C,			/* plain C */
 	ALGO_4WAY,		/* parallel SSE2 */
+	ALGO_NEON,		/* parallel NEON  */
 	ALGO_VIA,		/* VIA padlock */
 	ALGO_CRYPTOPP,		/* Crypto++ (C) */
 	ALGO_CRYPTOPP_ASM32,	/* Crypto++ 32-bit assembly */
@@ -61,7 +65,6 @@ enum sha256_algos {
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
 	ALGO_SCRYPT,		/* scrypt */
-	
 	ALGO_FASTAUTO,		/* fast autodetect */
 	ALGO_AUTO		/* autodetect */
 };
