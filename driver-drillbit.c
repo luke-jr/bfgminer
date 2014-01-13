@@ -151,14 +151,32 @@ bool drillbit_lowl_probe(const struct lowlevel_device_info * const info)
 }
 
 static
+void drillbit_problem(struct cgpu_info * const dev)
+{
+	struct thr_info * const master_thr = dev->thr[0];
+	
+	if (dev->device_fd != -1)
+	{
+		serial_close(dev->device_fd);
+		dev->device_fd = -1;
+	}
+	timer_set_delay_from_now(&master_thr->tv_poll, 5000000);
+}
+
+#define problem(...)  do{  \
+	drillbit_problem(dev);  \
+	applogr(__VA_ARGS__);  \
+}while(0)
+
+static
 bool drillbit_check_response(const char * const repr, const int fd, struct cgpu_info * const dev, const char expect)
 {
 	uint8_t ack;
 	if (1 != serial_read(fd, &ack, 1))
-		applogr(false, LOG_ERR, "%s: Short read in response to '%c'",
+		problem(false, LOG_ERR, "%s: Short read in response to '%c'",
 		        repr, expect);
 	if (ack != expect)
-		applogr(false, LOG_ERR, "%s: Wrong response to '%c': %u",
+		problem(false, LOG_ERR, "%s: Wrong response to '%c': %u",
 		        dev->dev_repr, expect, (unsigned)ack);
 	return true;
 }
@@ -171,7 +189,7 @@ bool drillbit_reset(struct cgpu_info * const dev)
 		return false;
 	
 	if (1 != write(fd, "R", 1))
-		applogr(false, LOG_ERR, "%s: Error writing reset command", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Error writing reset command", dev->dev_repr);
 	
 	return drillbit_check_response(dev->dev_repr, fd, dev, 'R');
 }
@@ -187,21 +205,58 @@ bool drillbit_send_config(struct cgpu_info * const dev)
 	const uint8_t buf[7] = {'C', board->core_voltage_cfg, board->clock_level, (board->clock_div2 ? 1 : 0), (board->use_ext_clock ? 1 : 0), board->ext_clock_freq};
 	
 	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
-		applogr(false, LOG_ERR, "%s: Error sending config", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Error sending config", dev->dev_repr);
 	
 	return drillbit_check_response(dev->dev_repr, fd, dev, 'C');
+}
+
+static bool drillbit_resend_jobs(struct cgpu_info *proc);
+
+static
+bool drillbit_reconfigure(struct cgpu_info * const dev, const bool reopen)
+{
+	struct thr_info * const master_thr = dev->thr[0];
+	int fd = dev->device_fd;
+	if (reopen || fd == -1)
+	{
+		if (fd != -1)
+			serial_close(fd);
+		
+		dev->device_fd = fd = serial_open(dev->device_path, 0, 10, true);
+		if (fd == -1)
+			return false;
+	}
+	
+	if (!(drillbit_reset(dev) && drillbit_send_config(dev)))
+	{
+		serial_close(fd);
+		dev->device_fd = -1;
+		return false;
+	}
+	
+	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
+		drillbit_resend_jobs(proc);
+	
+	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
+	
+	return true;
+}
+
+static
+bool drillbit_ensure_configured(struct cgpu_info * const dev)
+{
+	if (dev->device_fd != -1)
+		return true;
+	return drillbit_reconfigure(dev, false);
 }
 
 static
 bool drillbit_init(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu;
-	const int fd = serial_open(dev->device_path, 0, 10, true);
-	if (fd == -1)
-		return false;
 	
+	dev->device_fd = -1;
 	struct drillbit_board * const board = malloc(sizeof(*board));
-	dev->device_fd = fd;
 	dev->device_data = board;
 	*board = (struct drillbit_board){
 		.core_voltage_cfg = DBV_850mV,
@@ -211,13 +266,8 @@ bool drillbit_init(struct thr_info * const master_thr)
 		.ext_clock_freq = 200,
 	};
 	
-	if (!(drillbit_reset(dev) && drillbit_send_config(dev)))
-	{
-		serial_close(fd);
-		return false;
-	}
+	drillbit_reconfigure(dev, false);
 	
-	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
 	return true;
 }
 
@@ -230,6 +280,9 @@ bool drillbit_job_prepare(struct thr_info * const thr, struct work * const work,
 	const int fd = dev->device_fd;
 	uint8_t buf[0x31];
 	
+	if (!drillbit_ensure_configured(dev))
+		return false;
+	
 	buf[0] = 'W';
 	buf[1] = chipid;
 	buf[2] = 0;  // high bits of chipid
@@ -237,11 +290,11 @@ bool drillbit_job_prepare(struct thr_info * const thr, struct work * const work,
 	memcpy(&buf[0x23], &work->data[0x40], 0xc);
 	
 	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
-		applogr(false, LOG_ERR, "%"PRIpreprv": Error sending work %d",
+		problem(false, LOG_ERR, "%"PRIpreprv": Error sending work %d",
 		        proc->proc_repr, work->id);
 	
 	if (!drillbit_check_response(proc->proc_repr, fd, dev, 'W'))
-		applogr(false, LOG_ERR, "%"PRIpreprv": Error queuing work %d",
+		problem(false, LOG_ERR, "%"PRIpreprv": Error queuing work %d",
 		        proc->proc_repr, work->id);
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Queued work %d",
@@ -339,20 +392,20 @@ bool drillbit_get_work_results(struct cgpu_info * const dev)
 	int i, j;
 	
 	if (1 != write(fd, "E", 1))
-		applogr(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
 	
 	if (sizeof(total) != serial_read(fd, &total, sizeof(total)))
-		applogr(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
 	total = le32toh(total);
 	
 	if (total > DRILLBIT_MAX_WORK_RESULTS)
-		applogr(false, LOG_ERR, "%s: Impossible number of total work: %lu",
+		problem(false, LOG_ERR, "%s: Impossible number of total work: %lu",
 		        dev->dev_repr, (unsigned long)total);
 	
 	for (i = 0; i < total; ++i)
 	{
 		if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
-			applogr(false, LOG_ERR, "%s: Short read on %dth total work",
+			problem(false, LOG_ERR, "%s: Short read on %dth total work",
 			        dev->dev_repr, i);
 		const int chipid = buf[0];
 		struct cgpu_info * const proc = drillbit_find_proc(dev, chipid);
@@ -417,16 +470,16 @@ void drillbit_poll(struct thr_info * const master_thr)
 	struct cgpu_info * const dev = master_thr->cgpu;
 	struct drillbit_board * const board = dev->device_data;
 	
+	if (!drillbit_ensure_configured(dev))
+		return;
+	
 	drillbit_get_work_results(dev);
 	
 	if (board->need_reinit)
 	{
 		applog(LOG_NOTICE, "%s: Reinitialisation needed for configuration changes",
 		       dev->dev_repr);
-		drillbit_reset(dev);
-		drillbit_send_config(dev);
-		for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
-			drillbit_resend_jobs(proc);
+		drillbit_reconfigure(dev, false);
 		board->need_reinit = false;
 	}
 	if (board->trigger_identify)
@@ -461,12 +514,12 @@ bool drillbit_get_stats(struct cgpu_info * const dev)
 		return false;
 	
 	if (1 != write(fd, "T", 1))
-		applogr(false, LOG_ERR, "%s: Error requesting temperature", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Error requesting temperature", dev->dev_repr);
 	
 	uint8_t buf[2];
 	
 	if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
-		applogr(false, LOG_ERR, "%s: Short read in response to 'T'", dev->dev_repr);
+		problem(false, LOG_ERR, "%s: Short read in response to 'T'", dev->dev_repr);
 	
 	float temp = ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
 	temp /= 10.;
