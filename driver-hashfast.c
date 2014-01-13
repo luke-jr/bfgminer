@@ -361,6 +361,11 @@ struct cgpu_info *hashfast_find_proc(struct thr_info * const master_thr, int chi
 {
 	struct cgpu_info *proc = master_thr->cgpu;
 	struct hashfast_dev_state * const devstate = proc->device_data;
+	if (coreaddr >= devstate->cores_per_chip)
+		return NULL;
+	const unsigned chip_count = proc->procs / devstate->cores_per_chip;
+	if (chipaddr >= chip_count)
+		return NULL;
 	struct hashfast_chip_state * const chipstate = &devstate->chipstates[chipaddr];
 	return chipstate->coreprocs[coreaddr];
 }
@@ -407,6 +412,13 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				uint32_t ntime = data[6] | ((data[7] & 0xf) << 8);
 				const bool search = data[7] & 0x10;
 				struct cgpu_info * const proc = hashfast_find_proc(master_thr, msg.chipaddr, coreaddr);
+				if (unlikely(!proc))
+				{
+					applog(LOG_ERR, "%s: Unknown chip/core address %u/%u",
+					       dev->dev_repr, (unsigned)msg.chipaddr, (unsigned)coreaddr);
+					inc_hw_errors_only(master_thr);
+					continue;
+				}
 				struct thr_info * const thr = proc->thr[0];
 				struct hashfast_core_state * const cs = thr->cgpu_data;
 				struct work *work;
@@ -456,6 +468,13 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 		{
 			const uint8_t *data = &msg.data[8];
 			struct cgpu_info *proc = hashfast_find_proc(master_thr, msg.chipaddr, 0);
+			if (unlikely(!proc))
+			{
+				applog(LOG_ERR, "%s: Unknown chip address %u",
+				       dev->dev_repr, (unsigned)msg.chipaddr);
+				inc_hw_errors_only(master_thr);
+				break;
+			}
 			struct hashfast_chip_state * const chipstate = &devstate->chipstates[msg.chipaddr];
 			hashfast_isn_t isn = hashfast_get_isn(chipstate, msg.hdata);
 			int cores_uptodate, cores_loaded, cores_active, cores_pending, cores_transitioned;
