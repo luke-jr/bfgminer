@@ -693,6 +693,31 @@ if test "x$bigpic" = "xyes"; then
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
+
+driverlist="$driverlist drillbit"
+AC_ARG_ENABLE([drillbit],
+	[AC_HELP_STRING([--disable-drillbit],[Compile support for DrillBit (default enabled)])],
+	[drillbit=$enableval],
+	[drillbit=auto]
+	)
+if test "x$drillbit" = "xno"; then
+	true
+elif test "x$bitfury" = "xyes"; then
+	drillbit=yes
+elif test "x$drillbit" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled DrillBit])
+else
+	drillbit=no
+fi
+if test "x$drillbit" = "xyes"; then
+	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if DrillBit support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+	have_udevrules=true
+fi
+AM_CONDITIONAL([USE_DRILLBIT], [test x$drillbit = xyes])
+
+
 driverlist="$driverlist twinfury"
 twinfury=auto
 AC_ARG_ENABLE([twinfury],
