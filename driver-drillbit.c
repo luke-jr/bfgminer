@@ -373,6 +373,32 @@ void drillbit_poll(struct thr_info * const master_thr)
 	timer_set_delay_from_now(&master_thr->tv_poll, 10000);
 }
 
+static
+bool drillbit_get_stats(struct cgpu_info * const dev)
+{
+	if (dev != dev->device)
+		return true;
+	
+	const int fd = dev->device_fd;
+	if (fd == -1)
+		return false;
+	
+	if (1 != write(fd, "T", 1))
+		applogr(false, LOG_ERR, "%s: Error requesting temperature", dev->dev_repr);
+	
+	uint8_t buf[2];
+	
+	if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
+		applogr(false, LOG_ERR, "%s: Short read in response to 'T'", dev->dev_repr);
+	
+	float temp = ((uint16_t)buf[0]) | ((uint16_t)buf[1] << 8);
+	temp /= 10.;
+	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
+		proc->temp = temp;
+	
+	return true;
+}
+
 struct device_drv drillbit_drv = {
 	.dname = "drillbit",
 	.name = "DRB",
@@ -387,4 +413,5 @@ struct device_drv drillbit_drv = {
 	.job_start = drillbit_first_job_start,
 	.job_process_results = drillbit_job_process_results,
 	.poll = drillbit_poll,
+	.get_stats = drillbit_get_stats,
 };
