@@ -500,4 +500,7 @@ void maybe_strdup_if_null(const char **p, const char *s)
 extern void run_cmd(const char *cmd);
 
 
+extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);
+
+
 #endif /* __UTIL_H__ */
