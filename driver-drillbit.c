@@ -340,6 +340,13 @@ bool drillbit_get_work_results(struct cgpu_info * const dev)
 				job_start_complete(thr);
 			}
 			else
+			if (bitfury_fudge_nonce2(thr->prev_work, &nonce))
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Result for PREVIOUS work",
+				       proc->proc_repr);
+				submit_nonce(thr, thr->prev_work, nonce);
+			}
+			else
 				inc_hw_errors(thr, thr->work, nonce);
 		}
 		if (is_idle && thr->next_work)
