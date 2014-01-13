@@ -713,7 +713,7 @@ if test "x$drillbit" = "xyes"; then
 	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if DrillBit support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
-	have_udevrules=true  # TODO
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_DRILLBIT], [test x$drillbit = xyes])
 
