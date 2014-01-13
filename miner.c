@@ -3700,8 +3700,8 @@ static void curses_print_status(const int ts)
 			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " Block: %s TG:%d Diff:%s (%s)  Started: %s",
-		  current_hash,(2016 - (known_blkheight % 2016)), block_diff, net_hashrate, blocktime);
+	cg_mvwprintw(statuswin, 3, 0, " Block: %s Diff:%s(%s) TG:%d Started:%s",
+		  current_hash, block_diff, net_hashrate,(2016 - (known_blkheight % 2016)), blocktime);
 	
 	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
 	char bwstr[12], incomestr[13];
