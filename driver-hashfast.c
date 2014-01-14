@@ -456,6 +456,8 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				
 				// TODO: implement 'search' option
 				
+				applog(LOG_DEBUG, "%"PRIpreprv": Found nonce for seq %02x (last=%02x): %08lx",
+				       proc->proc_repr, (unsigned)seq, (unsigned)cs->last_seq, (unsigned long)nonce);
 				submit_nonce(thr, work, nonce);
 				hashes_done2(thr, 0x100000000, NULL);
 			}
