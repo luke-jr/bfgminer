@@ -1386,13 +1386,13 @@ static void setup_url(struct pool *pool, char *arg)
 	opt_set_charp(arg, &pool->rpc_url);
 	if (strncmp(arg, "http://", 7) &&
 	    strncmp(arg, "https://", 8)) {
+		const size_t L = strlen(arg);
 		char *httpinput;
 
-		httpinput = malloc(255);
+		httpinput = malloc(8 + L);
 		if (!httpinput)
 			quit(1, "Failed to malloc httpinput");
-		strcpy(httpinput, "http://");
-		strncat(httpinput, arg, 248);
+		sprintf(httpinput, "http://%s", arg);
 		pool->rpc_url = httpinput;
 	}
 }
