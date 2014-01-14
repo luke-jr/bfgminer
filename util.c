@@ -2912,6 +2912,7 @@ void run_cmd(const char *cmd)
 	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
 }
 
+
 uint8_t crc5usb(unsigned char *ptr, uint8_t len)
 {
     uint8_t i, j, k;
@@ -2967,4 +2968,24 @@ uint8_t crc5usb(unsigned char *ptr, uint8_t len)
     return crc;
 }
 
+static uint8_t _crc8ccitt_table[0x100];
 
+void bfg_init_checksums(void)
+{
+	for (int i = 0; i < 0x100; ++i)
+	{
+		uint8_t crc = i;
+		for (int j = 0; j < 8; ++j)
+			crc = (crc << 1) ^ ((crc & 0x80) ? 7 : 0);
+		_crc8ccitt_table[i] = crc & 0xff;
+	}
+}
+
+uint8_t crc8ccitt(const void * const buf, const size_t buflen)
+{
+	const uint8_t *p = buf;
+	uint8_t crc = 0xff;
+	for (int i = 0; i < buflen; ++i)
+		crc = _crc8ccitt_table[crc ^ *p++];
+	return crc;
+}

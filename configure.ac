@@ -868,6 +868,21 @@ fi
 AM_CONDITIONAL([USE_HASHBUSTERUSB], [test x$hashbusterusb = xyes])
 
 
+driverlist="$driverlist hashfast"
+hashfast=yes
+AC_ARG_ENABLE([hashfast],
+	[AC_HELP_STRING([--disable-hashfast],[Compile support for HashFast (default enabled)])],
+	[hashfast=$enableval]
+)
+if test "x$hashfast" = xyes; then
+	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if HashFast support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+	have_udevrules=true
+fi
+AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
+
+
 driverlist="$driverlist metabank"
 metabank=no
 AC_ARG_ENABLE([metabank],

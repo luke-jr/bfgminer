@@ -501,6 +501,8 @@ extern void run_cmd(const char *cmd);
 
 
 extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);
+extern void bfg_init_checksums(void);
+extern uint8_t crc8ccitt(const void *, size_t);
 
 
 #endif /* __UTIL_H__ */
