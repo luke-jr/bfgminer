@@ -457,6 +457,7 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				// TODO: implement 'search' option
 				
 				submit_nonce(thr, work, nonce);
+				hashes_done2(thr, 0x100000000, NULL);
 			}
 			break;
 		}
@@ -500,7 +501,6 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 					++cores_transitioned;
 					cs->has_pending = false;
 					thr->queue_full = false;
-					hashes_done2(thr, 0x100000000, NULL);
 				}
 			}
 			applog(LOG_DEBUG, "%s: STATUS from chipaddr=0x%02x with hdata=0x%04x (isn=0x%lx): total=%d uptodate=%d active=%d pending=%d transitioned=%d",
