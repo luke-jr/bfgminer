@@ -15,6 +15,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include <utlist.h>
+
 #include "deviceapi.h"
 #include "logging.h"
 #include "lowlevel.h"
@@ -310,7 +312,7 @@ bool hashfast_init(struct thr_info * const master_thr)
 }
 
 static
-bool hashfast_job_prepare(struct thr_info * const thr, struct work * const work, __maybe_unused const uint64_t max_nonce)
+bool hashfast_queue_append(struct thr_info * const thr, struct work * const work)
 {
 	struct cgpu_info * const proc = thr->cgpu;
 	struct hashfast_dev_state * const devstate = proc->device_data;
@@ -324,10 +326,14 @@ bool hashfast_job_prepare(struct thr_info * const thr, struct work * const work,
 	uint8_t seq;
 	
 	if (cs->has_pending)
-		hashfast_send_msg(fd, cmd, HFOP_ABORT, cs->chipaddr, cs->coreaddr, 2, 0);
+	{
+		thr->queue_full = true;
+		return false;
+	}
 	
 	isn = ++chipstate->last_isn;
 	seq = ++cs->last_seq;
+	work->device_id = seq;
 	cs->last2_isn = cs->last_isn;
 	cs->last_isn = isn;
 	hashfast_prepare_msg(cmd, HFOP_HASH, cs->chipaddr, cs->coreaddr, (cs->coreaddr << 8) | seq, 56);
@@ -341,19 +347,24 @@ bool hashfast_job_prepare(struct thr_info * const thr, struct work * const work,
 	if (cmdlen != hashfast_write(fd, cmd, cmdlen))
 		return false;
 	
-	work->blk.nonce = 0xffffffff;
+	DL_APPEND(thr->work, work);
+	
 	return true;
 }
 
 static
-void hashfast_noop_job_start(struct thr_info __maybe_unused * const thr)
+void hashfast_queue_flush(struct thr_info * const thr)
 {
-}
-
-static
-int64_t hashfast_job_process_results(struct thr_info * const thr, struct work * const work, const bool stopping)
-{
-	return 0xffffffff;
+	struct cgpu_info * const proc = thr->cgpu;
+	struct hashfast_dev_state * const devstate = proc->device_data;
+	const int fd = devstate->fd;
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	uint8_t cmd[HASHFAST_HEADER_SIZE];
+	uint16_t hdata = 2;
+	if ((!thr->work) || stale_work(thr->work->prev, true))
+		// Abort current job too
+		hdata |= 1;
+	hashfast_send_msg(fd, cmd, HFOP_ABORT, cs->chipaddr, cs->coreaddr, hdata, 0);
 }
 
 static
@@ -383,6 +394,20 @@ hashfast_isn_t hashfast_get_isn(struct hashfast_chip_state * const chipstate, ui
 	if (cs->last_seq == (uint8_t)(seq + 1))
 		return cs->last2_isn;
 	return 0;
+}
+
+static
+void hashfast_free_work_prior(struct thr_info * const thr, struct work * const prior_to_work)
+{
+	struct work *work, *tmpwork;
+	DL_FOREACH_SAFE(thr->work, work, tmpwork)
+	{
+		if (work == prior_to_work)
+			break;
+		
+		DL_DELETE(thr->work, work);
+		free_work(work);
+	}
 }
 
 static
@@ -422,26 +447,9 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				struct thr_info * const thr = proc->thr[0];
 				struct hashfast_core_state * const cs = thr->cgpu_data;
 				struct work *work;
-				const char *workdesc;
-				uint8_t next_work_seq = cs->last_seq + (thr->next_work ? 0 : 1);
-				if (seq == next_work_seq)
-				{
-					work = thr->next_work;
-					workdesc = "next work";
-				}
-				else
-				if ((uint8_t)(seq + 1) == next_work_seq)
-				{
-					work = thr->work;
-					workdesc = "current work";
-				}
-				else
-				if ((uint8_t)(seq + 2) == next_work_seq)
-				{
-					work = thr->prev_work;
-					workdesc = "previous work";
-				}
-				else
+				
+				DL_SEARCH_SCALAR(thr->work, work, device_id, seq);
+				if (unlikely(!work))
 				{
 					applog(LOG_WARNING, "%"PRIpreprv": Unknown seq %02x (last=%02x)",
 					       proc->proc_repr, (unsigned)seq, (unsigned)cs->last_seq);
@@ -449,17 +457,10 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 					continue;
 				}
 				
-				if (unlikely(!work))
-				{
-					applog(LOG_WARNING, "%"PRIpreprv": Got nonce for undefined %s",
-					       proc->proc_repr, workdesc);
-					continue;
-				}
+				hashfast_free_work_prior(thr, work);
 				
 				// TODO: implement 'search' option
 				
-				applog(LOG_DEBUG, "%"PRIpreprv": Found nonce for %s %08lx",
-				       proc->proc_repr, workdesc, (unsigned long)nonce);
 				submit_nonce(thr, work, nonce);
 			}
 			break;
@@ -477,8 +478,8 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 			}
 			struct hashfast_chip_state * const chipstate = &devstate->chipstates[msg.chipaddr];
 			hashfast_isn_t isn = hashfast_get_isn(chipstate, msg.hdata);
-			int cores_uptodate, cores_loaded, cores_active, cores_pending, cores_transitioned;
-			cores_uptodate = cores_loaded = cores_active = cores_pending = cores_transitioned = 0;
+			int cores_uptodate, cores_active, cores_pending, cores_transitioned;
+			cores_uptodate = cores_active = cores_pending = cores_transitioned = 0;
 			for (int i = 0; i < devstate->cores_per_chip; ++i, (proc = proc->next_proc))
 			{
 				struct thr_info * const thr = proc->thr[0];
@@ -487,11 +488,6 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				const bool has_active  = bits & 1;
 				const bool has_pending = bits & 2;
 				bool try_transition = true;
-				
-				if (likely(thr->next_work))
-					++cores_loaded;
-				else
-					try_transition = false;
 				
 				if (cs->last_isn <= isn)
 					++cores_uptodate;
@@ -507,15 +503,14 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				if (try_transition)
 				{
 					++cores_transitioned;
-					mt_job_transition(thr);
-					timer_set_now(&thr->tv_morework);
-					job_start_complete(thr);
 					cs->has_pending = false;
+					thr->queue_full = false;
+					hashes_done2(thr, 0x100000000, NULL);
 				}
 			}
-			applog(LOG_DEBUG, "%s: STATUS from chipaddr=0x%02x with hdata=0x%04x (isn=0x%lx): total=%d loaded=%d uptodate=%d active=%d pending=%d transitioned=%d",
+			applog(LOG_DEBUG, "%s: STATUS from chipaddr=0x%02x with hdata=0x%04x (isn=0x%lx): total=%d uptodate=%d active=%d pending=%d transitioned=%d",
 			       dev->dev_repr, (unsigned)msg.chipaddr, (unsigned)msg.hdata, isn,
-			       devstate->cores_per_chip, cores_loaded, cores_uptodate,
+			       devstate->cores_per_chip, cores_uptodate,
 			       cores_active, cores_pending, cores_transitioned);
 			break;
 		}
@@ -555,9 +550,8 @@ struct device_drv hashfast_ums_drv = {
 	
 	.thread_init = hashfast_init,
 	
-	.minerloop = minerloop_async,
-	.job_prepare = hashfast_job_prepare,
-	.job_start = hashfast_noop_job_start,
-	.job_process_results = hashfast_job_process_results,
+	.minerloop = minerloop_queue,
+	.queue_append = hashfast_queue_append,
+	.queue_flush = hashfast_queue_flush,
 	.poll = hashfast_poll,
 };
