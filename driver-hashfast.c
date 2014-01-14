@@ -408,6 +408,18 @@ hashfast_isn_t hashfast_get_isn(struct hashfast_chip_state * const chipstate, ui
 }
 
 static
+void hashfast_submit_nonce(struct thr_info * const thr, struct work * const work, const uint32_t nonce, const bool searched)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Found nonce for seq %02x (last=%02x): %08lx%s",
+	       proc->proc_repr, (unsigned)work->device_id, (unsigned)cs->last_seq,
+	       (unsigned long)nonce, searched ? " (searched)" : "");
+	submit_nonce(thr, work, nonce);
+}
+
+static
 bool hashfast_poll_msg(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu;
@@ -431,7 +443,7 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				                     | (data[3] << 24);
 				const uint8_t seq = data[4];
 				const uint8_t coreaddr = data[5];
-				uint32_t ntime = data[6] | ((data[7] & 0xf) << 8);
+				// uint32_t ntime = data[6] | ((data[7] & 0xf) << 8);
 				const bool search = data[7] & 0x10;
 				struct cgpu_info * const proc = hashfast_find_proc(master_thr, msg.chipaddr, coreaddr);
 				if (unlikely(!proc))
@@ -454,12 +466,29 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 					continue;
 				}
 				
-				// TODO: implement 'search' option
+				unsigned nonces_found = 1;
 				
-				applog(LOG_DEBUG, "%"PRIpreprv": Found nonce for seq %02x (last=%02x): %08lx",
-				       proc->proc_repr, (unsigned)seq, (unsigned)cs->last_seq, (unsigned long)nonce);
-				submit_nonce(thr, work, nonce);
-				hashes_done2(thr, 0x100000000, NULL);
+				hashfast_submit_nonce(thr, work, nonce, false);
+				if (search)
+				{
+					for (int noffset = 1; noffset <= 0x80; ++noffset)
+					{
+						const uint32_t nonce2 = nonce + noffset;
+						if (test_nonce(work, nonce2, false))
+						{
+							hashfast_submit_nonce(thr, work, nonce2, true);
+							++nonces_found;
+						}
+					}
+					if (!nonces_found)
+					{
+						inc_hw_errors_only(thr);
+						applog(LOG_WARNING, "%"PRIpreprv": search=1, but failed to turn up any additional solutions",
+						       proc->proc_repr);
+					}
+				}
+				
+				hashes_done2(thr, 0x100000000 * nonces_found, NULL);
 			}
 			break;
 		}
