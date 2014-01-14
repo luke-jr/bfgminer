@@ -373,8 +373,14 @@ void hashfast_queue_flush(struct thr_info * const thr)
 	uint8_t cmd[HASHFAST_HEADER_SIZE];
 	uint16_t hdata = 2;
 	if ((!thr->work) || stale_work(thr->work->prev, true))
-		// Abort current job too
+	{
+		applog(LOG_DEBUG, "%"PRIpreprv": Flushing both active and pending work",
+		       proc->proc_repr);
 		hdata |= 1;
+	}
+	else
+		applog(LOG_DEBUG, "%"PRIpreprv": Flushing pending work",
+		       proc->proc_repr);
 	hashfast_send_msg(fd, cmd, HFOP_ABORT, cs->chipaddr, cs->coreaddr, hdata, 0);
 }
 
