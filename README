@@ -329,8 +329,7 @@ See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 To use ASICs or FPGAs, you will need to be sure the user BFGMiner is running as
 has appropriate permissions. This varies by operating system.
-On Gentoo: sudo usermod <username> -a -G uucp
-On Ubuntu: sudo usermod <username> -a -G dialout
+On Linux, with BFGMiner's udev rules: sudo usermod <username> -a -G video
 Note that on GNU/Linux systems, you will usually need to login again before
 group changes take effect.
 
@@ -799,17 +798,16 @@ original driver. Uninstalling the device (and WinUSB driver) from Device Manager
 and re-plugging it will usually trigger driver re-installation to the default
 drivers.
 
-Q: On Linux I can see the /dev/ttyUSB* devices for my ICA/BFL/MMQ FPGA, but
-BFGMiner can't mine on them?
+Q: On Linux I can see the /dev/ttyUSB* devices, but BFGMiner can't mine on them?
 A: Make sure you have the required privileges to access the /dev/ttyUSB*
 devices:
  sudo ls -las /dev/ttyUSB*
 will give output like:
- 0 crw-rw---- 1 root dialout 188, 0 2012-09-11 13:49 /dev/ttyUSB0
-This means your account must have the group 'dialout' or root privileges
-To permanently give your account the 'dialout' group:
- sudo usermod -G dialout -a `whoami`
-Then logout and back in again
+ 0 crw-rw---- 1 root video   188, 0 2012-09-11 13:49 /dev/ttyUSB0
+This means your account must have the group 'video' or root privileges.
+To permanently give your account the 'video' group:
+ sudo usermod -G video -a `whoami`
+Then logout and back in again.
 
 Q: Can I mine scrypt with FPGAs or ASICs?
 A: Currently no. Bitcoin ASICs are only useful for SHA256d systems and FPGAs
