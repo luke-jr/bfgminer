@@ -308,7 +308,7 @@ static
 bool drillbit_resend_jobs(struct cgpu_info * const proc)
 {
 	struct thr_info * const thr = proc->thr[0];
-	bool rv;
+	bool rv = true;
 	
 	if (thr->work)
 		if (!drillbit_job_prepare(thr, thr->work, 0))
