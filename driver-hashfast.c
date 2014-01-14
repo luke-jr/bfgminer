@@ -25,6 +25,8 @@
 
 BFG_REGISTER_DRIVER(hashfast_ums_drv)
 
+#define HASHFAST_QUEUE_MEMORY 0x20
+
 #define HASHFAST_ALL_CHIPS 0xff
 #define HASHFAST_ALL_CORES 0xff
 
@@ -262,6 +264,7 @@ struct hashfast_core_state {
 	hashfast_isn_t last_isn;
 	hashfast_isn_t last2_isn;
 	bool has_pending;
+	unsigned queued;
 };
 
 static
@@ -348,6 +351,14 @@ bool hashfast_queue_append(struct thr_info * const thr, struct work * const work
 		return false;
 	
 	DL_APPEND(thr->work, work);
+	if (cs->queued > HASHFAST_QUEUE_MEMORY)
+	{
+		struct work * const old_work = thr->work;
+		DL_DELETE(thr->work, old_work);
+		free_work(old_work);
+	}
+	else
+		++cs->queued;
 	
 	return true;
 }
@@ -397,20 +408,6 @@ hashfast_isn_t hashfast_get_isn(struct hashfast_chip_state * const chipstate, ui
 }
 
 static
-void hashfast_free_work_prior(struct thr_info * const thr, struct work * const prior_to_work)
-{
-	struct work *work, *tmpwork;
-	DL_FOREACH_SAFE(thr->work, work, tmpwork)
-	{
-		if (work == prior_to_work)
-			break;
-		
-		DL_DELETE(thr->work, work);
-		free_work(work);
-	}
-}
-
-static
 bool hashfast_poll_msg(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu;
@@ -456,8 +453,6 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 					inc_hw_errors2(thr, NULL, &nonce);
 					continue;
 				}
-				
-				hashfast_free_work_prior(thr, work);
 				
 				// TODO: implement 'search' option
 				
