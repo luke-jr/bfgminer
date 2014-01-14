@@ -49,6 +49,7 @@ BFG_REGISTER_DRIVER(cpu_drv)
 static inline void drop_policy(void)
 {
 	struct sched_param param;
+	param.sched_priority = 0;
 
 #ifdef SCHED_BATCH
 #ifdef SCHED_IDLE
