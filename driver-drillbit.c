@@ -46,6 +46,7 @@ struct drillbit_board {
 	unsigned ext_clock_freq;
 	bool need_reinit;
 	bool trigger_identify;
+	uint16_t caps;
 };
 
 static
@@ -139,7 +140,7 @@ err:
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
-		//.device_data = ,
+		.device_data = (void*)(intptr_t)caps,
 	};
 	return add_cgpu(cgpu);
 }
@@ -257,14 +258,15 @@ bool drillbit_init(struct thr_info * const master_thr)
 	
 	dev->device_fd = -1;
 	struct drillbit_board * const board = malloc(sizeof(*board));
-	dev->device_data = board;
 	*board = (struct drillbit_board){
 		.core_voltage_cfg = DBV_850mV,
 		.clock_level = 40,
 		.clock_div2 = false,
 		.use_ext_clock = false,
 		.ext_clock_freq = 200,
+		.caps = (intptr_t)dev->device_data,
 	};
+	dev->device_data = board;
 	
 	drillbit_reconfigure(dev, false);
 	
@@ -277,7 +279,7 @@ bool drillbit_job_prepare(struct thr_info * const thr, struct work * const work,
 	struct cgpu_info * const proc = thr->cgpu;
 	const int chipid = proc->proc_id;
 	struct cgpu_info * const dev = proc->device;
-	uint8_t buf[0x31];
+	uint8_t buf[0x2f];
 	
 	if (!drillbit_ensure_configured(dev))
 		return false;
@@ -509,6 +511,10 @@ bool drillbit_get_stats(struct cgpu_info * const dev)
 	if (dev != dev->device)
 		return true;
 	
+	struct drillbit_board * const board = dev->device_data;
+	if (!(board->caps & DBC_TEMP))
+		return true;
+	
 	const int fd = dev->device_fd;
 	if (fd == -1)
 		return false;
@@ -580,7 +586,8 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 	{
 		sprintf(replybuf,
 			"voltage: 0.65, 0.75, 0.85, or 0.95 (volts)\n"
-			"clock: 80-230 (MHz) using external clock, or L0-L63 for internal clock levels; append :2 to activate div2"
+			"clock: %sL0-L63 for internal clock levels; append :2 to activate div2",
+			(board->caps & DBC_EXT_CLOCK) ? "0-255 (MHz) using external clock (80-230 recommended), or " : ""
 		);
 		return replybuf;
 	}
@@ -626,8 +633,10 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		// NOTE: board assignments are ordered such that it is safe to race
 		if (use_ext_clock)
 		{
-			if (num < 80 || num > 230)
-				return "External clock frequency out of range (80-230)";
+			if (!(board->caps & DBC_EXT_CLOCK))
+				return "External clock not supported by this device";
+			if (num < 0 || num > 255)
+				return "External clock frequency out of range (0-255)";
 			board->clock_div2 = div2;
 			board->ext_clock_freq = num;
 			board->use_ext_clock = true;
