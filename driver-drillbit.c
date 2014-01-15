@@ -203,7 +203,7 @@ bool drillbit_send_config(struct cgpu_info * const dev)
 		return false;
 	
 	const struct drillbit_board * const board = dev->device_data;
-	const uint8_t buf[7] = {'C', board->core_voltage_cfg, board->clock_level, (board->clock_div2 ? 1 : 0), (board->use_ext_clock ? 1 : 0), board->ext_clock_freq};
+	const uint8_t buf[7] = {'C', board->core_voltage_cfg, board->clock_level, (board->clock_div2 ? 1 : 0), (board->use_ext_clock ? 1 : 0), (board->ext_clock_freq & 0xff), (board->ext_clock_freq >> 8)};
 	
 	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
 		problem(false, LOG_ERR, "%s: Error sending config", dev->dev_repr);
@@ -635,8 +635,8 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		{
 			if (!(board->caps & DBC_EXT_CLOCK))
 				return "External clock not supported by this device";
-			if (num < 0 || num > 255)
-				return "External clock frequency out of range (0-255)";
+			if (num < 0 || num > 0xffff)
+				return "External clock frequency out of range (0-65535)";
 			board->clock_div2 = div2;
 			board->ext_clock_freq = num;
 			board->use_ext_clock = true;
