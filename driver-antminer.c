@@ -31,6 +31,11 @@
 
 #define ANTMINER_STATUS_LEN 5
 
+#define ANTMINER_COMMAND_PREFIX 128
+#define ANTMINER_COMMAND_LED 1
+#define ANTMINER_COMMAND_ON 1
+#define ANTMINER_COMMAND_OFFSET 32
+
 BFG_REGISTER_DRIVER(antminer_drv)
 
 static
@@ -173,6 +178,35 @@ char *antminer_set_device(struct cgpu_info *cgpu, char *option, char *setting, c
 }
 
 static
+void antminer_flash_led(const struct cgpu_info *antminer)
+{
+	const int offset = ANTMINER_COMMAND_OFFSET;
+
+	uint8_t cmd_buf[4 + offset];
+	memset(cmd_buf, 0, sizeof(cmd_buf));
+
+	cmd_buf[offset + 0] = ANTMINER_COMMAND_PREFIX;
+	cmd_buf[offset + 1] = ANTMINER_COMMAND_LED;
+	cmd_buf[offset + 2] = ANTMINER_COMMAND_ON;
+	cmd_buf[offset + 3] = crc5usb(cmd_buf, sizeof(cmd_buf));
+
+	const int fd = antminer->device_fd;
+	icarus_write(fd, (char *)(&cmd_buf), sizeof(cmd_buf));
+}
+
+static
+bool antminer_identify(struct cgpu_info *antminer)
+{
+	for (int i = 0; i < 10; i++)
+	{
+		antminer_flash_led(antminer);
+		cgsleep_ms(250);
+	}
+
+	return true;
+}
+
+static
 void antminer_drv_init()
 {
 	antminer_drv = icarus_drv;
@@ -180,6 +214,7 @@ void antminer_drv_init()
 	antminer_drv.name = "AMU";
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.set_device = antminer_set_device,
+	antminer_drv.identify_device = antminer_identify;
 	++antminer_drv.probe_priority;
 }
 
