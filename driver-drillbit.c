@@ -46,6 +46,7 @@ struct drillbit_board {
 	unsigned ext_clock_freq;
 	bool need_reinit;
 	bool trigger_identify;
+	uint16_t caps;
 };
 
 static
@@ -139,7 +140,7 @@ err:
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
-		//.device_data = ,
+		.device_data = (void*)(intptr_t)caps,
 	};
 	return add_cgpu(cgpu);
 }
@@ -257,14 +258,15 @@ bool drillbit_init(struct thr_info * const master_thr)
 	
 	dev->device_fd = -1;
 	struct drillbit_board * const board = malloc(sizeof(*board));
-	dev->device_data = board;
 	*board = (struct drillbit_board){
 		.core_voltage_cfg = DBV_850mV,
 		.clock_level = 40,
 		.clock_div2 = false,
 		.use_ext_clock = false,
 		.ext_clock_freq = 200,
+		.caps = (intptr_t)dev->device_data,
 	};
+	dev->device_data = board;
 	
 	drillbit_reconfigure(dev, false);
 	
@@ -507,6 +509,10 @@ static
 bool drillbit_get_stats(struct cgpu_info * const dev)
 {
 	if (dev != dev->device)
+		return true;
+	
+	struct drillbit_board * const board = dev->device_data;
+	if (!(board->caps & DBC_TEMP))
 		return true;
 	
 	const int fd = dev->device_fd;
