@@ -2,7 +2,7 @@ Source: bfgminer
 Priority: optional
 Section: misc
 Maintainer: Luke Dashjr <luke_bfgminer@dashjr.org>
-Standards-Version: 3.9.0
+Standards-Version: 3.10.0
 Build-Depends: build-essential, debhelper, autoconf, automake, libtool, libssl-dev, yasm, pkg-config, libudev-dev, libcurl4-openssl-dev, wget, unzip, libjansson-dev, libncurses5-dev, libudev-dev, libusb-1.0-0-dev, git, quilt, uthash-dev, libsensors4-dev
 
 Package: bfgminer

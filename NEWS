@@ -1,3 +1,96 @@
+BFGMiner Version 3.10.0 - January 15, 2014
+
+- Downgrade official Windows build compiler to GCC 4.7.3.
+- Bugfix: Stratum: Accept JSON Number type for port number
+- Bugfix: proxy: Set start timer when creating new virtual devices
+- antminer: Add support for the Identify function - flashes LED 10 times
+- drillbit: Expand allowed external clock range to 0-255
+- drillbit: Forbid setting external clock usage if not supported by device
+- Check for DBC_TEMP capability before trying to read temperature
+- Bugfix: drillbit: Reduce work message to correct size
+- README: Update documentation for new udev rules and "video" group
+- Bugfix: opencl/adl: Set iSpeedType for get-fanspeed requests, and ensure we
+don't change do something weird with the fan when initially setting user-defined
+speed flag.
+- Bugfix: drillbit: Initialise rv variable
+- Bugfix: Simplify adding "http://" prefix to avoid strncat overflow (length
+excludes null byte)
+- hashfast: Debuglog work flushing
+- hashfast: Implement OP_NONCE search flag
+- hashfast: Log seq numbers for nonces found
+- hashfast: Count hashes done by nonces found, rather than no-pending-work
+(which could be triggered by flushes)
+- hashfast: Just keep a queue of the 32 most recent work items per core
+- hashfast: Convert to minerloop_queue driver model
+- hashfast: Gracefully complain if we are given an unknown chip or core address
+- udev rule for hashfast devices
+- hashfast: New driver using UMS protocol
+- CRC-8-CCITT implementation
+- AUTHORS: Add Lingchao Xu and move nwoolls up to antminer driver (and mention
+TwinFury driver for Andreas)
+- knc: Workaround false compiler warning about "uninitialised" vars
+- Bugfix: drillbit: Access fd after potentially reopening
+- Remove Christmas colouring
+- drillbit: Add udev rule
+- drillbit: Correct configure logic to check for generic bitfury code (needed to
+decode nonces)
+- drillbit: Implement some basic problem recovery
+- drillbit: Support identify command
+- drillbit: Read/write access to clock and voltage configuration from RPC and
+ManageTUI
+- drillbit: Store board configuration
+- drillbit: Read temperature sensor
+- drillbit: Check nonces against prev work
+- drillbit: Implement mining
+- drillbit: Only detection code
+- antminer: Initial support for the Bitmain AntMiner U1 ASIC Includes support
+for identifying the U1 separately from Icarus and Block Erupter Also includes
+overclocking via --set-device antminer:clock=xHEX
+- Extend horizontal lines to full screen width
+- Log devid for USB string request failures
+- Bugfix: segmentation fault if the terminal window is too narrow for the Help
+and Quit items
+- Accept "address" spelled out in --coinbase-addr option
+- Bugfix: document the need to package zlib1.dll in the Windows build
+instructions
+- Bugfix: Stratum: Re-read pool sock var after suspend+restart
+- Silence false uninitialised var use warning and calculate dev_runtime only
+once
+- Bugfix: HID API not properly detected on Mac OS X
+- Adjust device list size as necessary when accessing options
+- Avoid erasing the screen when statusy is not changing
+- Abstract common set_statusy code out of change_logwinsize and check_winsizes
+- TUI: Support pgup/pgdown for scrolling device list by page
+- Bugfix: icarus: quirk_reopen is an int
+- Bugfix: Do not allocate spi_port on the Stack, even to initialize -
+EXC_BAD_ACCESS on OS X
+- get_statline3: Simplify statistics gathering
+- Bugfix: twinfury: Use serial number formatted over USB, so it works with
+--scan
+- twinfury: Only debuglog temperature debugging data when --device-protocol-dump
+is enabled
+- Bugfix: twinfury: Populate temperature info on both processors
+- Option --weighed-stats to display A and R values weighed by difficulty
+- README.GPU: Document always-disabled-by-default for OpenCL driver
+- AUTHORS: Add Nate Woolls
+- Extend menu to full width of window
+- Abstract out spaces-to-eol to bfg_wspctoeol function
+- Elaborate on spi_port+stack problem in comments
+- Bugfix: Do not allocate spi_port on the Stack - EXC_BAD_ACCESS on OS X
+- Bugfix: don't attempt to probe Bluetooth devices when scanning hardware
+- x6500: Allow overriding the maximum frequency used by the dynclock logic Can
+now use e.g. --set-device x6500:maxclock=210 Prevents spending time on
+frequencies that only produce HW errors
+- HACKING: Clearly document that dname must be lowercase and alphabetic
+- bifury: Tolerate corruption in submit message, remapping shares to the first
+processor if chip id is unrecognised
+- bifury: Tolerate corruption in hwerror message
+- bifury: Tolerate corruption in job message, and only count hashes done when
+completing a known job
+- Use a lowercase driver name to fix --scan pattern matching Otherwise the
+following doesn't work: -S noauto -S twinfury:auto
+
+
 BFGMiner Version 3.9.0 - December 25, 2013
 
 - Update official Win32 build compiler and library:

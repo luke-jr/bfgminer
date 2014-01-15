@@ -1,3 +1,12 @@
+bfgminer (3.10.0-0precise1) precise; urgency=low
+
+  * Support for AntMiner U1, Drillbit, and HashFast devices.
+  * Option --weighed-stats to display share-count columns (A/R) weighed to difficulty 1.
+  * x6500: maxclock setting (use with --set-device) to limit dynamic clocking range.
+  * opencl/adl: Fixed crash on exit with R9 series GPUs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 15 Jan 2014 20:16:48 -0000
+
 bfgminer (3.9.0-0precise1) precise; urgency=low
 
   * hashbusterusb: Voltage/VRM controls, and support for identify function (5 second LED colour change).
