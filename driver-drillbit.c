@@ -277,7 +277,7 @@ bool drillbit_job_prepare(struct thr_info * const thr, struct work * const work,
 	struct cgpu_info * const proc = thr->cgpu;
 	const int chipid = proc->proc_id;
 	struct cgpu_info * const dev = proc->device;
-	uint8_t buf[0x31];
+	uint8_t buf[0x2f];
 	
 	if (!drillbit_ensure_configured(dev))
 		return false;
