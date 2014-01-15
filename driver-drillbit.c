@@ -587,7 +587,7 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		sprintf(replybuf,
 			"voltage: 0.65, 0.75, 0.85, or 0.95 (volts)\n"
 			"clock: %sL0-L63 for internal clock levels; append :2 to activate div2",
-			(board->caps & DBC_EXT_CLOCK) ? "80-230 (MHz) using external clock, or " : ""
+			(board->caps & DBC_EXT_CLOCK) ? "0-255 (MHz) using external clock (80-230 recommended), or " : ""
 		);
 		return replybuf;
 	}
@@ -635,8 +635,8 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		{
 			if (!(board->caps & DBC_EXT_CLOCK))
 				return "External clock not supported by this device";
-			if (num < 80 || num > 230)
-				return "External clock frequency out of range (80-230)";
+			if (num < 0 || num > 255)
+				return "External clock frequency out of range (0-255)";
 			board->clock_div2 = div2;
 			board->ext_clock_freq = num;
 			board->use_ext_clock = true;
