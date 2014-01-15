@@ -1982,18 +1982,30 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
-	const char *url, *port;
+	const char *url;
 	char address[256];
+	json_t *port_json;
 
 	url = __json_array_string(val, 0);
 	if (!url)
 		url = pool->sockaddr_url;
 
-	port = __json_array_string(val, 1);
-	if (!port)
-		port = pool->stratum_port;
-
-	snprintf(address, sizeof(address), "%s:%s", url, port);
+	port_json = json_array_get(val, 1);
+	if (json_is_number(port_json))
+	{
+		const unsigned port = json_number_value(port_json);
+		snprintf(address, sizeof(address), "%s:%u", url, port);
+	}
+	else
+	{
+		const char *port;
+		if (json_is_string(port_json))
+			port = json_string_value(port_json);
+		else
+			port = pool->stratum_port;
+		
+		snprintf(address, sizeof(address), "%s:%s", url, port);
+	}
 
 	if (!extract_sockaddr(address, &pool->sockaddr_url, &pool->stratum_port))
 		return false;
