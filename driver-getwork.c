@@ -195,6 +195,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			.device_data = client,
 			.device_path = user,
 		};
+		timer_set_now(&cgpu->cgminer_stats.start_tv);
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
 		{
 			free(client);
