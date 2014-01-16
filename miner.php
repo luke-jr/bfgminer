@@ -181,7 +181,7 @@ $customsummarypages = array('Mobile' => array($mobilepage, $mobilesum),
  'Stats' => array($statspage, $statssum),
  'Pools' => array($poolspage, $poolssum, $poolsext));
 #
-$here = $_SERVER['PHP_SELF'];
+$here = basename(__FILE__);
 #
 global $tablebegin, $tableend, $warnfont, $warnoff, $dfmt;
 #
