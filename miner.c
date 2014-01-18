@@ -276,10 +276,10 @@ static struct work *submit_waiting;
 notifier_t submit_waiting_notifier;
 
 int hw_errors;
-int total_accepted, total_rejected, total_diff1;
-int total_bad_nonces;
+int total_accepted, total_rejected;
 int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_rcvd, total_bytes_sent;
+double total_diff1, total_bad_nonces;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int staged_rollable;
 unsigned int new_blocks;
@@ -3108,8 +3108,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	double waccepted = cgpu->diff_accepted;
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
-	int badnonces = cgpu->bad_nonces;
-	int goodnonces = cgpu->diff1;
+	double badnonces = cgpu->bad_nonces;
+	double goodnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 	{
@@ -8604,8 +8604,8 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	++cgpu->hw_errors;
 	if (bad_nonce_p)
 	{
-		++total_bad_nonces;
-		++cgpu->bad_nonces;
+		total_bad_nonces += work->work_difficulty;
+		cgpu->bad_nonces += work->work_difficulty;
 	}
 	mutex_unlock(&stats_lock);
 
@@ -8677,9 +8677,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		}
 	
 	mutex_lock(&stats_lock);
-	total_diff1++;
-	thr->cgpu->diff1++;
-	work->pool->diff1++;
+	total_diff1       += work->work_difficulty;
+	thr ->cgpu->diff1 += work->work_difficulty;
+	work->pool->diff1 += work->work_difficulty;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	
