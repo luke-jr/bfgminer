@@ -1513,7 +1513,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	enum alive status = cgpu->status;
 	float temp = -1;
 	int accepted = 0, rejected = 0, stale = 0, hw_errors = 0;
-	double diff1 = 0, bad_nonces = 0;
+	double diff1 = 0, bad_diff1 = 0;
 	double diff_accepted = 0, diff_rejected = 0, diff_stale = 0;
 	int last_share_pool = -1;
 	time_t last_share_pool_time = -1, last_device_valid_work = -1;
@@ -1535,7 +1535,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		diff_accepted += proc->diff_accepted;
 		diff_rejected += proc->diff_rejected;
 		diff_stale += proc->diff_stale;
-		bad_nonces += proc->bad_nonces;
+		bad_diff1 += proc->bad_diff1;
 		if (status != proc->status)
 			status = LIFE_MIXED;
 		if (proc->temp > temp)
@@ -1586,8 +1586,8 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		root = api_add_diff(root, "Last Share Difficulty", &last_share_diff, false);
 	if (last_device_valid_work != -1)
 		root = api_add_time(root, "Last Valid Work", &last_device_valid_work, false);
-	double hwp = (bad_nonces + diff1) ?
-			(double)(bad_nonces) / (double)(bad_nonces + diff1) : 0;
+	double hwp = (bad_diff1 + diff1) ?
+			(double)(bad_diff1) / (double)(bad_diff1 + diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);
 	double rejp = diff1 ?
 			(double)(diff_rejected) / (double)(diff1) : 0;
@@ -2094,8 +2094,8 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
 	root = api_add_uint64(root, "Best Share", &(best_diff), true);
-	double hwp = (total_bad_nonces + total_diff1) ?
-			(double)(total_bad_nonces) / (double)(total_bad_nonces + total_diff1) : 0;
+	double hwp = (total_bad_diff1 + total_diff1) ?
+			(double)(total_bad_diff1) / (double)(total_bad_diff1 + total_diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);
 	double rejp = total_diff1 ?
 			(double)(total_diff_rejected) / (double)(total_diff1) : 0;
