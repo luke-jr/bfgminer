@@ -499,7 +499,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int stale;
-	double bad_nonces;
+	double bad_diff1;
 	int hw_errors;
 	double rolling;
 	double total_mhashes;
@@ -1102,7 +1102,7 @@ extern int total_accepted, total_rejected;
 extern int total_getworks, total_stale, total_discarded;
 extern uint64_t total_bytes_rcvd, total_bytes_sent;
 #define total_bytes_xfer (total_bytes_rcvd + total_bytes_sent)
-extern double total_diff1, total_bad_nonces;
+extern double total_diff1, total_bad_diff1;
 extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
