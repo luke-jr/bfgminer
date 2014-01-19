@@ -159,8 +159,10 @@ int opt_g_threads = -1;
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
 bool opt_scrypt;
+float nonce_diff = 1;
 #else
 static char detect_algo;
+const float nonce_diff = 1;
 #endif
 bool opt_restart = true;
 
@@ -8945,8 +8947,8 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	++cgpu->hw_errors;
 	if (bad_nonce_p)
 	{
-		total_bad_diff1 += work->work_difficulty;
-		cgpu->bad_diff1 += work->work_difficulty;
+		total_bad_diff1 += nonce_diff;
+		cgpu->bad_diff1 += nonce_diff;
 	}
 	mutex_unlock(&stats_lock);
 
@@ -9030,9 +9032,9 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		}
 	
 	mutex_lock(&stats_lock);
-	total_diff1       += work->work_difficulty;
-	thr ->cgpu->diff1 += work->work_difficulty;
-	work->pool->diff1 += work->work_difficulty;
+	total_diff1       += nonce_diff;
+	thr ->cgpu->diff1 += nonce_diff;
+	work->pool->diff1 += nonce_diff;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	
@@ -11507,6 +11509,8 @@ int main(int argc, char *argv[])
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
 		opt_scrypt = true;
 	}
+	if (opt_scrypt)
+		nonce_diff = 1. / 0x10000;
 #endif
 	detect_algo = 0;
 
