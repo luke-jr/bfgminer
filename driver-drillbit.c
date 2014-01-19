@@ -628,7 +628,7 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		// NOTE: Do not use replybuf in here without implementing it in drillbit_tui_handle_choice
 		const bool use_ext_clock = !(setting[0] == 'L');
 		char *end = &setting[use_ext_clock ? 0 : 1];
-		const unsigned num = strtol(end, &end, 0);
+		const long int num = strtol(end, &end, 0);
 		const bool div2 = (end[0] == ':' && end[1] == '2');
 		// NOTE: board assignments are ordered such that it is safe to race
 		if (use_ext_clock)
