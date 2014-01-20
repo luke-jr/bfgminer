@@ -8766,8 +8766,14 @@ int scan_serial(const char *s)
 	for (i = 0; i < total_devices_new; ++i)
 	{
 		cgpu = devices_new[i];
+		
 		load_temp_config_cgpu(cgpu, &dummy, &dummy);
 		allocate_cgpu(cgpu, &k);
+	}
+	for (i = 0; i < total_devices_new; ++i)
+	{
+		cgpu = devices_new[i];
+		
 		start_cgpu(cgpu);
 		register_device(cgpu);
 		++total_devices;
