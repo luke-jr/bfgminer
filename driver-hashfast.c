@@ -223,6 +223,9 @@ bool hashfast_detect_one(const char * const devpath)
 		goto err;
 	}
 	
+	if (serial_claim_v(devpath, &hashfast_ums_drv))
+		return false;
+	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &hashfast_ums_drv,
