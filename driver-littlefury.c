@@ -208,9 +208,17 @@ bool littlefury_txrx(struct spi_port *port)
 	const char * const repr = port->repr;
 	const int fd = cgpu->device->device_fd;
 	
+	if (unlikely(fd == -1))
+		return false;
+	
 	rbufsz = 1;
 	if (!bitfury_do_packet(logprio, repr, fd, rdbuf, &rbufsz, LFOP_SPI, NULL, 0))
+	{
+		littlefury_set_power(LOG_DEBUG, cgpu->dev_repr, fd, false);
+		serial_close(fd);
+		cgpu->device->device_fd = -1;
 		return false;
+	}
 	
 	while (bufsz)
 	{
