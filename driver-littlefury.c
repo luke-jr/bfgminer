@@ -188,6 +188,15 @@ bool bitfury_do_packet(int prio, const char *repr, const int fd, void * const bu
 }
 
 static
+bool littlefury_set_power(const int loglev, const char * const repr, const int fd, const bool power)
+{
+	const uint8_t pflg = (power ? '\1' : '\0');
+	uint8_t buf[1] = { pflg };
+	uint16_t bufsz = 1;
+	return bitfury_do_packet(loglev, repr, fd, buf, &bufsz, LFOP_REGPWR, buf, 1) && bufsz && (buf[0] == pflg);
+}
+
+static
 bool littlefury_txrx(struct spi_port *port)
 {
 	const struct cgpu_info * const cgpu = port->cgpu;
@@ -280,8 +289,7 @@ bool littlefury_detect_one(const char *devpath)
 	applog(LOG_DEBUG, "%s: Identified %s %d.%d.%d (features %02x)",
 	       littlefury_drv.dname, devname, buf[0], buf[1], buf[2], buf[3]);
 	
-	bufsz = sizeof(buf);
-	if (!(bitfury_do_packet(LOG_DEBUG, littlefury_drv.dname, fd, buf, &bufsz, LFOP_REGPWR, "\1", 1) && bufsz && buf[0]))
+	if (!littlefury_set_power(LOG_DEBUG, littlefury_drv.dname, fd, true))
 		applog(LOG_WARNING, "%s: Unable to power on chip(s) for %s",
 		       littlefury_drv.dname, devpath);
 	
@@ -300,8 +308,7 @@ bool littlefury_detect_one(const char *devpath)
 		       littlefury_drv.dname, chips);
 	}
 	
-	bufsz = sizeof(buf);
-	bitfury_do_packet(LOG_DEBUG, littlefury_drv.dname, fd, buf, &bufsz, LFOP_REGPWR, "\0", 1);
+	littlefury_set_power(LOG_DEBUG, littlefury_drv.dname, fd, false);
 	
 	serial_close(fd);
 	
@@ -390,9 +397,7 @@ void littlefury_disable(struct thr_info * const thr)
 		}
 	if (!any_running)
 	{
-		uint8_t buf[1];
-		uint16_t bufsz = 1;
-		if (!(bitfury_do_packet(LOG_ERR, dev->dev_repr, dev->device_fd, buf, &bufsz, LFOP_REGPWR, "\0", 1) && bufsz && !buf[0]))
+		if (!littlefury_set_power(LOG_ERR, dev->dev_repr, dev->device_fd, false))
 			applog(LOG_WARNING, "%s: Unable to power off chip(s)", dev->dev_repr);
 		serial_close(dev->device_fd);
 		dev->device_fd = -1;
@@ -415,11 +420,9 @@ static void littlefury_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
 	const int fd = cgpu->device->device_fd;
-	uint8_t buf[1];
-	uint16_t bufsz = 1;
 	
 	bitfury_shutdown(thr);
-	if (!(bitfury_do_packet(LOG_ERR, cgpu->dev_repr, fd, buf, &bufsz, LFOP_REGPWR, "\0", 1) && bufsz && !buf[0]))
+	if (!littlefury_set_power(LOG_ERR, cgpu->dev_repr, fd, false))
 		applog(LOG_WARNING, "%s: Unable to power off chip(s)", cgpu->dev_repr);
 }
 
