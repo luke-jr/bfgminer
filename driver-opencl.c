@@ -1610,6 +1610,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 #ifdef USE_SCRYPT
 		case KL_SCRYPT:
 			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
+			gpu->min_nonce_diff = 1./0x10000;
 			break;
 #endif
 		default:

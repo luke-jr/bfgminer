@@ -159,10 +159,8 @@ int opt_g_threads = -1;
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
 bool opt_scrypt;
-float nonce_diff = 1;
 #else
 static char detect_algo;
-const float nonce_diff = 1;
 #endif
 bool opt_restart = true;
 
@@ -8902,6 +8900,20 @@ struct work *get_work(struct thr_info *thr)
 	if (timercmp(&tv_get, &pool_stats->getwork_wait_min, <))
 		pool_stats->getwork_wait_min = tv_get;
 	++pool_stats->getwork_calls;
+	
+	if (work->work_difficulty < 1)
+	{
+		if (unlikely(work->work_difficulty < cgpu->min_nonce_diff))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Using work with lower difficulty than device supports",
+			       cgpu->proc_repr);
+			work->nonce_diff = cgpu->min_nonce_diff;
+		}
+		else
+			work->nonce_diff = work->work_difficulty;
+	}
+	else
+		work->nonce_diff = 1;
 
 	return work;
 }
@@ -8928,7 +8940,7 @@ static void submit_work_async2(struct work *work, struct timeval *tv_work_found)
 	_submit_work_async(work);
 }
 
-void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p)
+void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
 	
@@ -8954,11 +8966,6 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 
 	if (thr->cgpu->drv->hw_error)
 		thr->cgpu->drv->hw_error(thr);
-}
-
-void inc_hw_errors(struct thr_info *thr, const struct work *work, const uint32_t bad_nonce)
-{
-	inc_hw_errors2(thr, work, work ? &bad_nonce : NULL);
 }
 
 enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
@@ -9032,9 +9039,9 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 		}
 	
 	mutex_lock(&stats_lock);
-	total_diff1       += nonce_diff;
-	thr ->cgpu->diff1 += nonce_diff;
-	work->pool->diff1 += nonce_diff;
+	total_diff1       += work->nonce_diff;
+	thr ->cgpu->diff1 += work->nonce_diff;
+	work->pool->diff1 += work->nonce_diff;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	
@@ -10638,6 +10645,7 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	}
 
 	cgpu->max_hashes = 0;
+	BFGINIT(cgpu->min_nonce_diff, 1);
 
 	// Setup thread structs before starting any of the threads, in case they try to interact
 	for (j = 0; j < threadobj; ++j, ++*kp) {
@@ -11509,8 +11517,6 @@ int main(int argc, char *argv[])
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
 		opt_scrypt = true;
 	}
-	if (opt_scrypt)
-		nonce_diff = 1. / 0x10000;
 #endif
 	detect_algo = 0;
 

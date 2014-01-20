@@ -589,6 +589,9 @@ struct cgpu_info {
 
 	bool disable_watchdog;
 	bool shutdown;
+	
+	// Lowest difficulty supported for finding nonces
+	float min_nonce_diff;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
@@ -1373,6 +1376,7 @@ struct work {
 	UT_hash_handle hh;
 	
 	double		work_difficulty;
+	float		nonce_diff;
 
 	// Allow devices to identify work if multiple sub-devices
 	// DEPRECATED: New code should be using multiple processors instead
@@ -1404,9 +1408,18 @@ extern void get_datestamp(char *, size_t, time_t);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
-extern void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p);
+extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
+static inline
+void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)
+{
+	inc_hw_errors3(thr, work, bad_nonce_p, work ? work->nonce_diff : 1.);
+}
 #define UNKNOWN_NONCE ((uint32_t*)inc_hw_errors2)
-extern void inc_hw_errors(struct thr_info *, const struct work *, const uint32_t bad_nonce);
+static inline
+void inc_hw_errors(struct thr_info * const thr, const struct work * const work, const uint32_t bad_nonce)
+{
+	inc_hw_errors2(thr, work, work ? &bad_nonce : NULL);
+}
 #define inc_hw_errors_only(thr)  inc_hw_errors(thr, NULL, 0)
 enum test_nonce2_result {
 	TNR_GOOD = 1,
