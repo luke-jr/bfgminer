@@ -159,10 +159,8 @@ int opt_g_threads = -1;
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
 bool opt_scrypt;
-float nonce_diff = 1;
 #else
 static char detect_algo;
-const float nonce_diff = 1;
 #endif
 bool opt_restart = true;
 
@@ -278,10 +276,10 @@ static struct work *submit_waiting;
 notifier_t submit_waiting_notifier;
 
 int hw_errors;
-int total_accepted, total_rejected;
+int total_accepted, total_rejected, total_diff1;
+int total_bad_nonces;
 int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_rcvd, total_bytes_sent;
-double total_diff1, total_bad_diff1;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
 static int staged_rollable;
 unsigned int new_blocks;
@@ -3039,7 +3037,7 @@ static void adj_width(int var, int *length);
 static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 
 static
-void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int bad_diff1, int allnonces)
+void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int badnonces, int allnonces)
 {
 	char rejpcbuf[6];
 	char bnbuf[6];
@@ -3049,7 +3047,7 @@ void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, 
 	adj_width(stale, &swidth);
 	adj_width(hwerrs, &hwwidth);
 	percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
-	percentf3(bnbuf, sizeof(bnbuf), bad_diff1, allnonces);
+	percentf3(bnbuf, sizeof(bnbuf), badnonces, allnonces);
 	
 	tailsprintf(buf, bufsz, "%s/%s/%s | A:%*d R:%*d+%*d(%s) HW:%*d/%s",
 	            cHr, aHr, uHr,
@@ -3110,8 +3108,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	double waccepted = cgpu->diff_accepted;
 	double wnotaccepted = cgpu->diff_rejected + cgpu->diff_stale;
 	int hwerrs = cgpu->hw_errors;
-	double bad_diff1 = cgpu->bad_diff1;
-	double good_diff1 = cgpu->diff1;
+	int badnonces = cgpu->bad_nonces;
+	int goodnonces = cgpu->diff1;
 	
 	if (!opt_show_procs)
 	{
@@ -3131,8 +3129,8 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			waccepted += slave->diff_accepted;
 			wnotaccepted += slave->diff_rejected + slave->diff_stale;
 			hwerrs += slave->hw_errors;
-			bad_diff1 += slave->bad_diff1;
-			good_diff1 += slave->diff1;
+			badnonces += slave->bad_nonces;
+			goodnonces += slave->diff1;
 		}
 	}
 	
@@ -3145,7 +3143,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		3,
 		1e6*rolling,
 		1e6*mhashes / dev_runtime,
-		utility_to_hashrate(good_diff1 * (wtotal ? (waccepted / wtotal) : 1) * 60 / dev_runtime));
+		utility_to_hashrate(goodnonces * (wtotal ? (waccepted / wtotal) : 1) * 60 / dev_runtime));
 
 	// Processor representation
 #ifdef HAVE_CURSES
@@ -3243,13 +3241,13 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 		                accepted, rejected, stale,
 		                wnotaccepted, waccepted,
 		                hwerrs,
-		                bad_diff1, bad_diff1 + good_diff1);
+		                badnonces, badnonces + goodnonces);
 	}
 	else
 #endif
 	{
 		percentf4(rejpcbuf, sizeof(rejpcbuf), wnotaccepted, waccepted);
-		percentf4(bnbuf, sizeof(bnbuf), bad_diff1, good_diff1);
+		percentf4(bnbuf, sizeof(bnbuf), badnonces, goodnonces);
 		tailsprintf(buf, bufsz, "%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
 			opt_log_interval,
 			cHr, aHr, uHr,
@@ -6422,7 +6420,7 @@ void zero_stats(void)
 	total_ro = 0;
 	total_secs = 1.0;
 	total_diff1 = 0;
-	total_bad_diff1 = 0;
+	total_bad_nonces = 0;
 	found_blocks = 0;
 	total_diff_accepted = 0;
 	total_diff_rejected = 0;
@@ -6485,7 +6483,7 @@ void zero_stats(void)
 		cgpu->utility = 0.0;
 		cgpu->utility_diff1 = 0;
 		cgpu->last_share_pool_time = 0;
-		cgpu->bad_diff1 = 0;
+		cgpu->bad_nonces = 0;
 		cgpu->diff1 = 0;
 		cgpu->diff_accepted = 0;
 		cgpu->diff_rejected = 0;
@@ -7457,7 +7455,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		                total_stale,
 		                total_diff_rejected + total_diff_stale, total_diff_accepted,
 		                hw_errors,
-		                total_bad_diff1, total_bad_diff1 + total_diff1);
+		                total_bad_nonces, total_bad_nonces + total_diff1);
 		unlock_curses();
 	}
 #endif
@@ -7467,7 +7465,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	uHr[5] = ' ';
 	
 	percentf4(rejpcbuf, sizeof(rejpcbuf), total_diff_rejected + total_diff_stale, total_diff_accepted);
-	percentf4(bnbuf, sizeof(bnbuf), total_bad_diff1, total_diff1);
+	percentf4(bnbuf, sizeof(bnbuf), total_bad_nonces, total_diff1);
 	
 	snprintf(logstatusline, sizeof(logstatusline),
 	         "%s%ds:%s avg:%s u:%s | A:%d R:%d+%d(%s) HW:%d/%s",
@@ -8606,8 +8604,8 @@ void inc_hw_errors2(struct thr_info *thr, const struct work *work, const uint32_
 	++cgpu->hw_errors;
 	if (bad_nonce_p)
 	{
-		total_bad_diff1 += nonce_diff;
-		cgpu->bad_diff1 += nonce_diff;
+		++total_bad_nonces;
+		++cgpu->bad_nonces;
 	}
 	mutex_unlock(&stats_lock);
 
@@ -8679,9 +8677,9 @@ bool submit_nonce(struct thr_info *thr, struct work *work, uint32_t nonce)
 		}
 	
 	mutex_lock(&stats_lock);
-	total_diff1       += nonce_diff;
-	thr ->cgpu->diff1 += nonce_diff;
-	work->pool->diff1 += nonce_diff;
+	total_diff1++;
+	thr->cgpu->diff1++;
+	work->pool->diff1++;
 	thr->cgpu->last_device_valid_work = time(NULL);
 	mutex_unlock(&stats_lock);
 	
@@ -10939,8 +10937,6 @@ int main(int argc, char *argv[])
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
 		opt_scrypt = true;
 	}
-	if (opt_scrypt)
-		nonce_diff = 1. / 0x10000;
 #endif
 	detect_algo = 0;
 

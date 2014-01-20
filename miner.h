@@ -499,7 +499,7 @@ struct cgpu_info {
 	int accepted;
 	int rejected;
 	int stale;
-	double bad_diff1;
+	int bad_nonces;
 	int hw_errors;
 	double rolling;
 	double total_mhashes;
@@ -555,7 +555,7 @@ struct cgpu_info {
 	int gpu_powertune;
 	float gpu_vddc;
 #endif
-	double diff1;
+	int diff1;
 	double diff_accepted;
 	double diff_rejected;
 	double diff_stale;
@@ -1098,11 +1098,11 @@ extern double total_rolling;
 extern double total_mhashes_done;
 extern unsigned int new_blocks;
 extern unsigned int found_blocks;
-extern int total_accepted, total_rejected;
+extern int total_accepted, total_rejected, total_diff1;;
+extern int total_bad_nonces;
 extern int total_getworks, total_stale, total_discarded;
 extern uint64_t total_bytes_rcvd, total_bytes_sent;
 #define total_bytes_xfer (total_bytes_rcvd + total_bytes_sent)
-extern double total_diff1, total_bad_diff1;
 extern double total_diff_accepted, total_diff_rejected, total_diff_stale;
 extern unsigned int local_work;
 extern unsigned int total_go, total_ro;
@@ -1204,7 +1204,7 @@ struct pool {
 	int seq_rejects;
 	int seq_getfails;
 	int solved;
-	double diff1;
+	int diff1;
 	char diff[8];
 	int quota;
 	int quota_gcd;
