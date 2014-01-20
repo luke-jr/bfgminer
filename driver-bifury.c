@@ -152,6 +152,9 @@ bool bifury_detect_one(const char * const devpath)
 	applog(LOG_DEBUG, "%s: Found firmware %d.%d on hardware rev %d with %d chips",
 	       bifury_drv.dname, major, minor, hwrev, chips);
 	
+	if (serial_claim_v(devpath, &bifury_drv))
+		return false;
+	
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &bifury_drv,
