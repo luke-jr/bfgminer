@@ -131,6 +131,9 @@ err:
 		chips = 0x100;
 	}
 	
+	if (serial_claim_v(devpath, &drillbit_drv))
+		return false;
+	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &drillbit_drv,
