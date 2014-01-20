@@ -179,6 +179,8 @@ int httpsrv_port = -1;
 int stratumsrv_port = -1;
 #endif
 
+const
+int rescan_delay_ms = 1000;
 #ifdef HAVE_BFG_HOTPLUG
 bool opt_hotplug = 1;
 const
@@ -10594,10 +10596,12 @@ extern struct sigaction pcwm_orig_term_handler;
 
 bool bfg_need_detect_rescan;
 extern void probe_device(struct lowlevel_device_info *);
+static void schedule_rescan(const struct timeval *);
 
 static
 void drv_detect_all()
 {
+	bool rescanning = false;
 rescan:
 	bfg_need_detect_rescan = false;
 	
@@ -10628,8 +10632,19 @@ rescan:
 	
 	if (bfg_need_detect_rescan)
 	{
-		applog(LOG_DEBUG, "Device rescan requested");
-		goto rescan;
+		if (rescanning)
+		{
+			applog(LOG_DEBUG, "Device rescan requested a second time, delaying");
+			struct timeval tv_when;
+			timer_set_delay_from_now(&tv_when, rescan_delay_ms * 1000);
+			schedule_rescan(&tv_when);
+		}
+		else
+		{
+			rescanning = true;
+			applog(LOG_DEBUG, "Device rescan requested");
+			goto rescan;
+		}
 	}
 }
 
@@ -11024,12 +11039,94 @@ int scan_serial(const char *s)
 	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
+static pthread_mutex_t rescan_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool rescan_active;
+static struct timeval tv_rescan;
+static notifier_t rescan_notifier;
+
+static
+void *rescan_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	RenameThread("rescan");
+	
+	struct timeval tv_timeout, tv_now;
+	fd_set rfds;
+	
+	while (true)
+	{
+		mutex_lock(&rescan_mutex);
+		tv_timeout = tv_rescan;
+		if (!timer_isset(&tv_timeout))
+		{
+			rescan_active = false;
+			mutex_unlock(&rescan_mutex);
+			break;
+		}
+		mutex_unlock(&rescan_mutex);
+		
+		FD_ZERO(&rfds);
+		FD_SET(rescan_notifier[0], &rfds);
+		const int maxfd = rescan_notifier[0];
+		
+		timer_set_now(&tv_now);
+		if (select(maxfd+1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) > 0)
+			notifier_read(rescan_notifier);
+		
+		mutex_lock(&rescan_mutex);
+		if (timer_passed(&tv_rescan, NULL))
+		{
+			timer_unset(&tv_rescan);
+			mutex_unlock(&rescan_mutex);
+			applog(LOG_DEBUG, "Rescan timer expired, triggering");
+			scan_serial(NULL);
+		}
+		else
+			mutex_unlock(&rescan_mutex);
+	}
+	return NULL;
+}
+
+static
+void _schedule_rescan(const struct timeval * const tvp_when)
+{
+	if (rescan_active)
+	{
+		if (timercmp(tvp_when, &tv_rescan, <))
+			applog(LOG_DEBUG, "schedule_rescan: New schedule is before current, waiting it out");
+		else
+		{
+			applog(LOG_DEBUG, "schedule_rescan: New schedule is after current, delaying rescan");
+			tv_rescan = *tvp_when;
+		}
+		return;
+	}
+	
+	applog(LOG_DEBUG, "schedule_rescan: Scheduling rescan (no rescans currently pending)");
+	tv_rescan = *tvp_when;
+	rescan_active = true;
+	
+	static pthread_t pth;
+	if (unlikely(pthread_create(&pth, NULL, rescan_thread, NULL)))
+		applog(LOG_ERR, "Failed to start rescan thread");
+}
+
+static
+void schedule_rescan(const struct timeval * const tvp_when)
+{
+	mutex_lock(&rescan_mutex);
+	_schedule_rescan(tvp_when);
+	mutex_unlock(&rescan_mutex);
+}
+
 #ifdef HAVE_BFG_HOTPLUG
 static
 void hotplug_trigger()
 {
-	applog(LOG_DEBUG, "%s: Triggering rescan", __func__);
-	scan_serial(NULL);
+	applog(LOG_DEBUG, "%s: Scheduling rescan immediately", __func__);
+	struct timeval tv_now;
+	timer_set_now(&tv_now);
+	schedule_rescan(&tv_now);
 }
 #endif
 
@@ -11265,6 +11362,8 @@ int main(int argc, char *argv[])
 		quit(1, "Failed to pthread_cond_init gws_cond");
 
 	notifier_init(submit_waiting_notifier);
+	timer_unset(&tv_rescan);
+	notifier_init(rescan_notifier);
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
