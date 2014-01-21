@@ -64,6 +64,7 @@ static const char *protonames[] = {
 
 BFG_REGISTER_DRIVER(bitforce_drv)
 BFG_REGISTER_DRIVER(bitforce_queue_api)
+static const struct bfg_set_device_definition bitforce_set_device_funcs[];
 
 // Code must deal with a timeout
 #define BFopen(devpath)  serial_open(devpath, 0, 250, true)
@@ -315,6 +316,9 @@ static bool bitforce_detect_one(const char *devpath)
 		bitforce->name = strdup(pdevbuf + 7);
 	}
 	bitforce->device_data = initdata;
+	
+	// Skip fanspeed until we probe support for it
+	bitforce->set_device_funcs = &bitforce_set_device_funcs[1];
 
 	mutex_init(&bitforce->device_mutex);
 
@@ -607,7 +611,10 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 		{
 			bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "Z9X");
 			if (strncasecmp(voltbuf, "ERR", 3))
+			{
 				data->supports_fanspeed = true;
+				bitforce->set_device_funcs = bitforce_set_device_funcs;
+			}
 			data->probed = true;
 		}
 		bitforce_cmd1(fdDev, data->xlink_id, voltbuf, sizeof(voltbuf), "ZTX");
@@ -1537,19 +1544,12 @@ void bitforce_poll(struct thr_info *thr)
 }
 
 static
-char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, char *replybuf)
+const char *bitforce_set_fanmode(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct bitforce_data *data = proc->device_data;
 	pthread_mutex_t *mutexp = &proc->device->device_mutex;
 	int fd;
 	
-	if (!strcasecmp(option, "help"))
-	{
-		sprintf(replybuf, "fanmode: range 0-5 (low to fast) or 9 (auto)");
-		return replybuf;
-	}
-	
-	if (!strcasecmp(option, "fanmode"))
 	{
 		if (!data->supports_fanspeed)
 		{
@@ -1575,8 +1575,15 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 		mutex_unlock(mutexp);
 		return replybuf;
 	}
+}
+
+static
+const char *bitforce_rpc_send_cmd1(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct bitforce_data *data = proc->device_data;
+	pthread_mutex_t *mutexp = &proc->device->device_mutex;
+	int fd;
 	
-	if (!strcasecmp(option, "_cmd1"))
 	{
 		mutex_lock(mutexp);
 		fd = proc->device->device_fd;
@@ -1584,10 +1591,13 @@ char *bitforce_set_device(struct cgpu_info *proc, char *option, char *setting, c
 		mutex_unlock(mutexp);
 		return replybuf;
 	}
-	
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
 }
+
+static const struct bfg_set_device_definition bitforce_set_device_funcs[] = {
+	{"fanmode", bitforce_set_fanmode, "range 0-5 (low to fast) or 9 (auto)"},
+	{"_cmd1", bitforce_rpc_send_cmd1, NULL},
+	{NULL},
+};
 
 struct device_drv bitforce_drv = {
 	.dname = "bitforce",
@@ -1603,7 +1613,6 @@ struct device_drv bitforce_drv = {
 	.minerloop = minerloop_async,
 	.reinit_device = bitforce_reinit,
 	.get_stats = bitforce_get_stats,
-	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
@@ -2118,7 +2127,6 @@ struct device_drv bitforce_queue_api = {
 #endif
 	.get_api_stats = bitforce_drv_stats,
 	.get_stats = bitforce_get_stats,
-	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
 	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
