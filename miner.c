@@ -9805,8 +9805,9 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 		switch (success)
 		{
 			case SDR_OK:
-				applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s",
-				       cgpu->proc_repr, setstr);
+				applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s%s%s",
+				       cgpu->proc_repr, setstr,
+				       p ? ": " : "", p ?: "");
 				break;
 			case SDR_ERR:
 			case SDR_HELP:

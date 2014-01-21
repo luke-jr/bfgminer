@@ -1589,6 +1589,7 @@ const char *bitforce_rpc_send_cmd1(struct cgpu_info * const proc, const char * c
 		fd = proc->device->device_fd;
 		bitforce_cmd1b(fd, data->xlink_id, replybuf, 8000, setting, strlen(setting));
 		mutex_unlock(mutexp);
+		*success = SDR_OK;
 		return replybuf;
 	}
 }

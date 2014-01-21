@@ -486,6 +486,7 @@ struct CODES {
  { SEVERITY_WARN,  MSG_PGANOSET, PARAM_PGA,	"PGA %d does not support pgaset" },
  { SEVERITY_INFO,  MSG_PGAHELP, PARAM_BOTH,	"PGA %d set help: %s" },
  { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_PGA,	"PGA %d set OK" },
+ { SEVERITY_SUCC,  MSG_PGASETOK | USE_ALTMSG, PARAM_BOTH,	"PGA %d set OK: %s" },
  { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
 #endif
  { SEVERITY_ERR,   MSG_ZERMIS,	PARAM_NONE,	"Missing zero parameters" },
@@ -3353,7 +3354,10 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 			message(io_data, MSG_PGAHELP, id, ret, isjson);
 			break;
 		case SDR_OK:
-			message(io_data, MSG_PGASETOK, id, NULL, isjson);
+			if (ret)
+				message(io_data, MSG_PGASETOK | USE_ALTMSG, id, ret, isjson);
+			else
+				message(io_data, MSG_PGASETOK, id, NULL, isjson);
 			break;
 		case SDR_UNKNOWN:
 		case SDR_ERR:
