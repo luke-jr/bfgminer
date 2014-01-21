@@ -430,11 +430,12 @@ dedicated to this program,
 	https://bitcointalk.org/?topic=168174
 
 The block display shows:
-Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
+Block: ...1b89f8d3 #217364 Diff:7.67M(54.93Th/s) TG:364 Started:[17:17:22]
 
 This shows a short stretch of the current block, the next block's height and
-difficulty (including the network hashrate that difficulty represents), and when
-the search for the new block started.
+difficulty (including the network hashrate that difficulty represents), block 
+remaining until next difficulty adjustment, and when the search for the new 
+block started.
 
 The BFGMiner status line shows:
  ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  I:12.99mBTC/hr  BS:2.71k
