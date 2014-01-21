@@ -9753,7 +9753,6 @@ void proc_enable(struct cgpu_info *cgpu)
 
 void cgpu_set_defaults(struct cgpu_info * const cgpu)
 {
-	const struct device_drv * const drv = cgpu->drv;
 	struct string_elist *setstr_elist;
 	const char *p, *p2;
 	char replybuf[0x2000];
@@ -9776,13 +9775,6 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 		
 		applog(LOG_DEBUG, "%"PRIpreprv": %s: Matched with set default: %s",
 		       cgpu->proc_repr, __func__, setstr);
-		
-		if (!drv->set_device)
-		{
-			applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
-			       cgpu->proc_repr, setstr);
-			continue;
-		}
 		
 		if (p[0] == ':')
 			++p;
@@ -9808,13 +9800,25 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 			memcpy(setval, p2, L);
 		setval[L] = '\0';
 		
-		p = drv->set_device(cgpu, opt, setval, replybuf);
-		if (p)
-			applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
-			       cgpu->proc_repr, setstr, p);
-		else
-			applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s",
-			       cgpu->proc_repr, setstr);
+		enum bfg_set_device_replytype success;
+		p = proc_set_device(cgpu, opt, setval, replybuf, &success);
+		switch (success)
+		{
+			case SDR_OK:
+				applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s",
+				       cgpu->proc_repr, setstr);
+				break;
+			case SDR_ERR:
+			case SDR_HELP:
+			case SDR_UNKNOWN:
+				applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
+				       cgpu->proc_repr, setstr, p);
+				break;
+			case SDR_AUTO:
+			case SDR_NOSUPP:
+				applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
+				       cgpu->proc_repr, setstr);
+		}
 	}
 	cgpu->already_set_defaults = true;
 }

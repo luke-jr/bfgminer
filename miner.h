@@ -446,6 +446,7 @@ struct cgpu_info {
 	int cgminer_id;
 	int device_line_id;
 	struct device_drv *drv;
+	const struct bfg_set_device_definition *set_device_funcs;
 	const char *devtype;
 	int device_id;
 	char *dev_repr;

@@ -1157,7 +1157,7 @@ foundit:
 // All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
-static void message(struct io_data *io_data, int messageid, int paramid, char *param2, bool isjson)
+static void message(struct io_data * const io_data, int messageid, const int paramid, const char * const param2, const bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -3303,7 +3303,6 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 
@@ -3338,23 +3337,28 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	}
 
 	cgpu = get_devices(dev);
-	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
 		*(set++) = '\0';
 
-	if (!drv->set_device)
-		message(io_data, MSG_PGANOSET, id, NULL, isjson);
-	else {
-		char *ret = drv->set_device(cgpu, opt, set, buf);
-		if (ret) {
-			if (strcasecmp(opt, "help") == 0)
-				message(io_data, MSG_PGAHELP, id, ret, isjson);
-			else
-				message(io_data, MSG_PGASETERR, id, ret, isjson);
-		} else
+	enum bfg_set_device_replytype success;
+	const char *ret = proc_set_device(cgpu, opt, set, buf, &success);
+	switch (success)
+	{
+		case SDR_HELP:
+			message(io_data, MSG_PGAHELP, id, ret, isjson);
+			break;
+		case SDR_OK:
 			message(io_data, MSG_PGASETOK, id, NULL, isjson);
+			break;
+		case SDR_UNKNOWN:
+		case SDR_ERR:
+			message(io_data, MSG_PGASETERR, id, ret, isjson);
+			break;
+		case SDR_AUTO:
+		case SDR_NOSUPP:
+			message(io_data, MSG_PGANOSET, id, NULL, isjson);
 	}
 }
 #endif
