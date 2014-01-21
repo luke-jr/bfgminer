@@ -307,6 +307,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
 
+#define USE_ALTMSG 0x4000
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -1157,7 +1159,7 @@ foundit:
 // All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
-static void message(struct io_data * const io_data, int messageid, const int paramid, const char * const param2, const bool isjson)
+static void message(struct io_data * const io_data, const int messageid2, const int paramid, const char * const param2, const bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -1170,6 +1172,7 @@ static void message(struct io_data * const io_data, int messageid, const int par
 	int cpu;
 #endif
 	int i;
+	int messageid = messageid2 & ~USE_ALTMSG;
 
 	io_reinit(io_data);
 
@@ -1177,7 +1180,7 @@ static void message(struct io_data * const io_data, int messageid, const int par
 		io_put(io_data, JSON_START JSON_STATUS);
 
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
-		if (codes[i].code == messageid) {
+		if (codes[i].code == messageid2) {
 			switch (codes[i].severity) {
 				case SEVERITY_WARN:
 					severity[0] = 'W';
