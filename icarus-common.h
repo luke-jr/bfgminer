@@ -56,6 +56,11 @@ struct ICARUS_HISTORY {
 };
 
 enum timing_mode { MODE_DEFAULT, MODE_SHORT, MODE_LONG, MODE_VALUE };
+enum icarus_reopen_mode {
+	IRM_NEVER,
+	IRM_TIMEOUT,
+	IRM_CYCLE,
+};
 
 struct ICARUS_INFO {
 	// time to calculate the golden_ob
@@ -90,7 +95,7 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
-	int quirk_reopen;
+	enum icarus_reopen_mode reopen_mode;
 	uint8_t user_set;
 	bool continue_search;
 

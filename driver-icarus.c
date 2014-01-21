@@ -541,9 +541,9 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 					if (*colon2)
 						*(colon2++) = '\0';
 					if (strchr(colon, 'r'))
-						info->quirk_reopen = 2;
+						info->reopen_mode = IRM_CYCLE;
 					if (strchr(colon2, 'r'))
-						info->quirk_reopen = 0;
+						info->reopen_mode = IRM_NEVER;
 			  }
 			}
 		}
@@ -695,7 +695,7 @@ static bool icarus_detect_one(const char *devpath)
 	// if they support them and if setting them makes any difference
 	// N.B. B3000000 doesn't work on Icarus
 	info->baud = ICARUS_IO_SPEED;
-	info->quirk_reopen = 1;
+	info->reopen_mode = IRM_TIMEOUT;
 	info->Hs = ICARUS_REV3_HASH_TIME;
 	info->timing_mode = MODE_DEFAULT;
 	info->read_size = ICARUS_DEFAULT_READ_SIZE;
@@ -1050,7 +1050,7 @@ keepwaiting:
 						return -1;
 					break;
 				case ICA_GETS_TIMEOUT:
-					if (info->quirk_reopen == 1 && !icarus_reopen(icarus, state, &fd))
+					if (info->reopen_mode == IRM_TIMEOUT && !icarus_reopen(icarus, state, &fd))
 						return -1;
 				case ICA_GETS_OK:
 					break;
@@ -1110,7 +1110,7 @@ keepwaiting:
 	}
 	
 	// Force a USB close/reopen on any hw error
-	if (was_hw_error && info->quirk_reopen != 2) {
+	if (was_hw_error && info->reopen_mode != IRM_CYCLE) {
 		if (!icarus_reopen(icarus, state, &fd))
 			state->firstrun = true;
 	}
@@ -1123,7 +1123,7 @@ keepwaiting:
 	if (unlikely(icarus->deven != DEV_ENABLED || !icarus_job_start(thr)))
 		state->firstrun = true;
 
-	if (info->quirk_reopen == 2 && !icarus_reopen(icarus, state, &fd))
+	if (info->reopen_mode == IRM_CYCLE && !icarus_reopen(icarus, state, &fd))
 		state->firstrun = true;
 
 	work->blk.nonce = 0xffffffff;

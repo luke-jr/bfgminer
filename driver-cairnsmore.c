@@ -45,7 +45,7 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->baud = CAIRNSMORE1_IO_SPEED;
 	info->work_division = 2;
 	info->fpga_count = 2;
-	info->quirk_reopen = 0;
+	info->reopen_mode = IRM_NEVER;
 	info->Hs = CAIRNSMORE1_HASH_TIME;
 	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
