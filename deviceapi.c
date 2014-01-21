@@ -12,6 +12,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #ifdef WIN32
 #include <winsock2.h>
 #else
@@ -859,9 +860,16 @@ const char *proc_set_device_help(struct cgpu_info * const proc, const char * con
 nohelp:
 		return "No help available";
 	
+	size_t matchlen = 0;
+	if (newvalue)
+		while (!isspace(newvalue[0]))
+			++matchlen;
+	
 	for ( ; sdf->optname; ++sdf)
 	{
 		if (!sdf->description)
+			continue;
+		if (matchlen && (strncasecmp(optname, sdf->optname, matchlen) || optname[matchlen]))
 			continue;
 		if (first)
 			first = false;
