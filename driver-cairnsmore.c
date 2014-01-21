@@ -147,9 +147,9 @@ static bool cairnsmore_init(struct thr_info *thr)
 		       CAIRNSMORE1_DEFAULT_CLOCK, CAIRNSMORE1_MINIMUM_CLOCK, CAIRNSMORE1_MAXIMUM_CLOCK
 		);
 		// The dynamic-clocking firmware connects each FPGA as its own device
-		if (!(info->user_set & 1)) {
+		if (!(info->user_set & IUS_WORK_DIVISION)) {
 			info->work_division = 1;
-			if (!(info->user_set & 2))
+			if (!(info->user_set & IUS_FPGA_COUNT))
 				info->fpga_count = 1;
 		}
 	} else {

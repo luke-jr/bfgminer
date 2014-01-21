@@ -511,7 +511,7 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 				*(colon2++) = '\0';
 
 			if (*colon) {
-				info->user_set |= 1;
+				info->user_set |= IUS_WORK_DIVISION;
 				tmp = atoi(colon);
 				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8) {
 					*work_division = tmp;
@@ -527,7 +527,7 @@ static void get_options(int this_option_offset, struct ICARUS_INFO *info)
 					*(colon++) = '\0';
 
 			  if (*colon2) {
-				info->user_set |= 2;
+				info->user_set |= IUS_FPGA_COUNT;
 				tmp = atoi(colon2);
 				if (tmp > 0 && tmp <= *work_division)
 					*fpga_count = tmp;

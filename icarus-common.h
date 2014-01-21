@@ -61,6 +61,10 @@ enum icarus_reopen_mode {
 	IRM_TIMEOUT,
 	IRM_CYCLE,
 };
+enum icarus_user_settings {
+	IUS_WORK_DIVISION = 1,
+	IUS_FPGA_COUNT    = 2,
+};
 
 struct ICARUS_INFO {
 	// time to calculate the golden_ob
