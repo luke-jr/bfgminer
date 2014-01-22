@@ -9,8 +9,8 @@ KnCminer's Mercury, Jupiter and Saturn.
 AVALON
 ------
 
-Currently, Avalon boards are supported only by connecting them directly (or via
-a hub) to a regular PC running BFGMiner. It is also possible to install the
+Currently, Avalon boards are best supported only by connecting them directly (or
+via a hub) to a regular PC running BFGMiner. It is also possible to install the
 OpenWrt packages of BFGMiner to the Avalon's embedded controller, but this is
 not a simple task due to its lack of available flash space.
 
@@ -57,15 +57,6 @@ Sample settings for valid different frequencies (last 2 values):
 Frequency:
 This is the clock speed of the devices. Only specific values work, 256, 270,
 282 (default), 300, 325, 350 and 375.
-
-If you use the full curses based interface with Avalons you will get this
-information:
-AVA 0: 22/ 46C  60%/2400R
-
-The values are:
-ambient temp / highest device temp  set fan % / lowest detected fan RPM.
-
-Check the API for more detailed information.
 
 
 BFSB, MEGABIGPOWER, AND METABANK BITFURY BOARDS
