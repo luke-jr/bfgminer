@@ -9839,6 +9839,22 @@ void drv_set_defaults(const struct device_drv * const drv, char *(*set_func)(str
 	cgpu_set_defaults(&dummy_cgpu);
 }
 
+void drv_set_defaults2(const struct device_drv * const drv, const struct bfg_set_device_definition *setfuncs, void *userp)
+{
+	struct device_drv dummy_drv = *drv;
+	struct cgpu_info dummy_cgpu = {
+		.drv = &dummy_drv,
+		.device = &dummy_cgpu,
+		.device_id = -1,
+		.proc_id = -1,
+		.device_data = userp,
+		.set_device_funcs = setfuncs,
+	};
+	strcpy(dummy_cgpu.proc_repr, drv->name);
+	dummy_drv.set_device = NULL;
+	cgpu_set_defaults(&dummy_cgpu);
+}
+
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
