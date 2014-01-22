@@ -9759,7 +9759,7 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 	cgpu->already_set_defaults = true;
 }
 
-void drv_set_defaults(const struct device_drv * const drv, char *(*set_func)(struct cgpu_info *, char *, char *, char *), void *userp)
+void drv_set_defaults(const struct device_drv * const drv, const void *datap, void *userp, const char * const devpath, const char * const serial, const int mode)
 {
 	struct device_drv dummy_drv = *drv;
 	struct cgpu_info dummy_cgpu = {
@@ -9768,25 +9768,20 @@ void drv_set_defaults(const struct device_drv * const drv, char *(*set_func)(str
 		.device_id = -1,
 		.proc_id = -1,
 		.device_data = userp,
+		.device_path = devpath,
+		.dev_serial = serial,
 	};
 	strcpy(dummy_cgpu.proc_repr, drv->name);
-	dummy_drv.set_device = set_func;
-	cgpu_set_defaults(&dummy_cgpu);
-}
-
-void drv_set_defaults2(const struct device_drv * const drv, const struct bfg_set_device_definition *setfuncs, void *userp)
-{
-	struct device_drv dummy_drv = *drv;
-	struct cgpu_info dummy_cgpu = {
-		.drv = &dummy_drv,
-		.device = &dummy_cgpu,
-		.device_id = -1,
-		.proc_id = -1,
-		.device_data = userp,
-		.set_device_funcs = setfuncs,
-	};
-	strcpy(dummy_cgpu.proc_repr, drv->name);
-	dummy_drv.set_device = NULL;
+	switch (mode)
+	{
+		case 0:
+			dummy_drv.set_device = datap;
+			break;
+		case 1:
+			dummy_drv.set_device = NULL;
+			dummy_cgpu.set_device_funcs = datap;
+			break;
+	}
 	cgpu_set_defaults(&dummy_cgpu);
 }
 

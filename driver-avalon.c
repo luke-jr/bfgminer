@@ -533,7 +533,7 @@ static bool avalon_detect_one(const char *devpath)
 		.timeout = AVALON_DEFAULT_TIMEOUT,
 		.frequency = AVALON_DEFAULT_FREQUENCY,
 	};
-	drv_set_defaults2(&avalon_drv, avalon_set_device_funcs, info);
+	drv_set_defaults(&avalon_drv, avalon_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
 	       "(baud=%d miner_count=%d asic_count=%d timeout=%d frequency=%d)",

@@ -473,7 +473,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
-	drv_set_defaults2(api, icarus_set_device_funcs, info);
+	drv_set_defaults(api, icarus_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
 	int baud = info->baud;
 	int work_division = info->work_division;
