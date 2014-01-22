@@ -1,8 +1,8 @@
 EXECUTIVE SUMMARY ON GPU USAGE (SEE ALSO README.scrypt FOR SCRYPT MINING):
 
-By default, BFGMiner will NOT mine on any GPUs. If you wish to use your GPU to
-mine (generally not a good idea), you can explicitly enable it with the -S
-opencl:auto option.
+By default, BFGMiner will NOT mine on any GPUs unless in scrypt mode. If you
+wish to use your GPU to mine SHA256d (generally not a good idea), you can
+explicitly enable it with the -S opencl:auto option.
 
 Single pool, regular desktop:
 
