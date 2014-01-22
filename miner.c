@@ -48,9 +48,16 @@
 #ifndef WIN32
 #include <sys/resource.h>
 #include <sys/socket.h>
+#if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
+#include <libudev.h>
+#include <sys/epoll.h>
+#define HAVE_BFG_HOTPLUG
+#endif
 #else
 #include <winsock2.h>
 #include <windows.h>
+#include <dbt.h>
+#define HAVE_BFG_HOTPLUG
 #endif
 #include <ccan/opt/opt.h>
 #include <jansson.h>
@@ -172,6 +179,15 @@ int httpsrv_port = -1;
 int stratumsrv_port = -1;
 #endif
 
+const
+int rescan_delay_ms = 1000;
+#ifdef HAVE_BFG_HOTPLUG
+bool opt_hotplug = 1;
+const
+int hotplug_delay_ms = 100;
+#else
+const bool opt_hotplug;
+#endif
 struct string_elist *scan_devices;
 static struct string_elist *opt_set_device_list;
 bool opt_force_dev_init;
@@ -2094,6 +2110,15 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-getwork",
 			opt_set_invbool, &want_getwork,
 			"Disable getwork support"),
+	OPT_WITHOUT_ARG("--no-hotplug",
+#ifdef HAVE_BFG_HOTPLUG
+	                opt_set_invbool, &opt_hotplug,
+	                "Disable hotplug detection"
+#else
+	                set_null, &opt_hotplug,
+	                opt_hidden
+#endif
+	),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -10529,11 +10554,13 @@ extern struct sigaction pcwm_orig_term_handler;
 
 bool bfg_need_detect_rescan;
 extern void probe_device(struct lowlevel_device_info *);
+static void schedule_rescan(const struct timeval *);
 
 static
 void drv_detect_all()
 {
 	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
+	bool rescanning = false;
 rescan:
 	bfg_need_detect_rescan = false;
 	
@@ -10567,8 +10594,19 @@ rescan:
 	
 	if (bfg_need_detect_rescan)
 	{
-		applog(LOG_DEBUG, "Device rescan requested");
-		goto rescan;
+		if (rescanning)
+		{
+			applog(LOG_DEBUG, "Device rescan requested a second time, delaying");
+			struct timeval tv_when;
+			timer_set_delay_from_now(&tv_when, rescan_delay_ms * 1000);
+			schedule_rescan(&tv_when);
+		}
+		else
+		{
+			rescanning = true;
+			applog(LOG_DEBUG, "Device rescan requested");
+			goto rescan;
+		}
 	}
 }
 
@@ -10781,6 +10819,8 @@ void *probe_device_thread(void *p)
 			const size_t dnamelen = (colon - dname);
 			if (_probe_device_internal(info, dname, dnamelen))
 				return NULL;
+			else
+				bfg_need_detect_rescan = true;
 		}
 	}
 	
@@ -10817,6 +10857,8 @@ void *probe_device_thread(void *p)
 					continue;
 				if (drv->lowl_probe(info))
 					return NULL;
+				else
+					bfg_need_detect_rescan = true;
 			}
 		}
 	}
@@ -10847,6 +10889,7 @@ void *probe_device_thread(void *p)
 						if (drv->lowl_probe(info))
 							return NULL;
 					}
+					bfg_need_detect_rescan = true;
 					break;
 				}
 			}
@@ -10963,6 +11006,216 @@ int scan_serial(const char *s)
 	return create_new_cgpus(_scan_serial, (void*)s);
 }
 
+static pthread_mutex_t rescan_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool rescan_active;
+static struct timeval tv_rescan;
+static notifier_t rescan_notifier;
+
+static
+void *rescan_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	RenameThread("rescan");
+	
+	struct timeval tv_timeout, tv_now;
+	fd_set rfds;
+	
+	while (true)
+	{
+		mutex_lock(&rescan_mutex);
+		tv_timeout = tv_rescan;
+		if (!timer_isset(&tv_timeout))
+		{
+			rescan_active = false;
+			mutex_unlock(&rescan_mutex);
+			break;
+		}
+		mutex_unlock(&rescan_mutex);
+		
+		FD_ZERO(&rfds);
+		FD_SET(rescan_notifier[0], &rfds);
+		const int maxfd = rescan_notifier[0];
+		
+		timer_set_now(&tv_now);
+		if (select(maxfd+1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now)) > 0)
+			notifier_read(rescan_notifier);
+		
+		mutex_lock(&rescan_mutex);
+		if (timer_passed(&tv_rescan, NULL))
+		{
+			timer_unset(&tv_rescan);
+			mutex_unlock(&rescan_mutex);
+			applog(LOG_DEBUG, "Rescan timer expired, triggering");
+			scan_serial(NULL);
+		}
+		else
+			mutex_unlock(&rescan_mutex);
+	}
+	return NULL;
+}
+
+static
+void _schedule_rescan(const struct timeval * const tvp_when)
+{
+	if (rescan_active)
+	{
+		if (timercmp(tvp_when, &tv_rescan, <))
+			applog(LOG_DEBUG, "schedule_rescan: New schedule is before current, waiting it out");
+		else
+		{
+			applog(LOG_DEBUG, "schedule_rescan: New schedule is after current, delaying rescan");
+			tv_rescan = *tvp_when;
+		}
+		return;
+	}
+	
+	applog(LOG_DEBUG, "schedule_rescan: Scheduling rescan (no rescans currently pending)");
+	tv_rescan = *tvp_when;
+	rescan_active = true;
+	
+	static pthread_t pth;
+	if (unlikely(pthread_create(&pth, NULL, rescan_thread, NULL)))
+		applog(LOG_ERR, "Failed to start rescan thread");
+}
+
+static
+void schedule_rescan(const struct timeval * const tvp_when)
+{
+	mutex_lock(&rescan_mutex);
+	_schedule_rescan(tvp_when);
+	mutex_unlock(&rescan_mutex);
+}
+
+#ifdef HAVE_BFG_HOTPLUG
+static
+void hotplug_trigger()
+{
+	applog(LOG_DEBUG, "%s: Scheduling rescan immediately", __func__);
+	struct timeval tv_now;
+	timer_set_now(&tv_now);
+	schedule_rescan(&tv_now);
+}
+#endif
+
+#if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
+
+static
+void *hotplug_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	RenameThread("hotplug");
+	
+	struct udev * const udev = udev_new();
+	if (unlikely(!udev))
+		applogfailr(NULL, LOG_ERR, "udev_new");
+	struct udev_monitor * const mon = udev_monitor_new_from_netlink(udev, "udev");
+	if (unlikely(!mon))
+		applogfailr(NULL, LOG_ERR, "udev_monitor_new_from_netlink");
+	if (unlikely(udev_monitor_enable_receiving(mon)))
+		applogfailr(NULL, LOG_ERR, "udev_monitor_enable_receiving");
+	const int epfd = epoll_create(1);
+	if (unlikely(epfd == -1))
+		applogfailr(NULL, LOG_ERR, "epoll_create");
+	{
+		const int fd = udev_monitor_get_fd(mon);
+		struct epoll_event ev = {
+			.events = EPOLLIN | EPOLLPRI,
+			.data.fd = fd,
+		};
+		if (epoll_ctl(epfd, EPOLL_CTL_ADD, fd, &ev))
+			applogfailr(NULL, LOG_ERR, "epoll_ctl");
+	}
+	
+	struct epoll_event ev;
+	int rv;
+	bool pending = false;
+	while (true)
+	{
+		rv = epoll_wait(epfd, &ev, 1, pending ? hotplug_delay_ms : -1);
+		if (rv == -1)
+		{
+			if (errno == EAGAIN || errno == EINTR)
+				continue;
+			break;
+		}
+		if (!rv)
+		{
+			hotplug_trigger();
+			pending = false;
+			continue;
+		}
+		struct udev_device * const device = udev_monitor_receive_device(mon);
+		if (!device)
+			continue;
+		const char * const action = udev_device_get_action(device);
+		applog(LOG_DEBUG, "%s: Received %s event", __func__, action);
+		if (strcmp(action, "add"))
+			continue;
+		
+		pending = true;
+	}
+	
+	applogfailr(NULL, LOG_ERR, "epoll_wait");
+}
+
+#elif defined(WIN32)
+
+static UINT_PTR _hotplug_wintimer_id;
+
+VOID CALLBACK hotplug_win_timer(HWND hwnd, UINT msg, UINT_PTR idEvent, DWORD dwTime)
+{
+	KillTimer(NULL, _hotplug_wintimer_id);
+	_hotplug_wintimer_id = 0;
+	hotplug_trigger();
+}
+
+LRESULT CALLBACK hotplug_win_callback(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (msg == WM_DEVICECHANGE && wParam == DBT_DEVNODES_CHANGED)
+	{
+		applog(LOG_DEBUG, "%s: Received DBT_DEVNODES_CHANGED event", __func__);
+		_hotplug_wintimer_id = SetTimer(NULL, _hotplug_wintimer_id, hotplug_delay_ms, hotplug_win_timer);
+	}
+	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static
+void *hotplug_thread(__maybe_unused void *p)
+{
+	pthread_detach(pthread_self());
+	
+	WNDCLASS DummyWinCls = {
+		.lpszClassName = "BFGDummyWinCls",
+		.lpfnWndProc = hotplug_win_callback,
+	};
+	ATOM a = RegisterClass(&DummyWinCls);
+	if (unlikely(!a))
+		applogfailinfor(NULL, LOG_ERR, "RegisterClass", "%d", (int)GetLastError());
+	HWND hwnd = CreateWindow((void*)(intptr_t)a, NULL, WS_OVERLAPPED, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, NULL, NULL, NULL, NULL);
+	if (unlikely(!hwnd))
+		applogfailinfor(NULL, LOG_ERR, "CreateWindow", "%d", (int)GetLastError());
+	MSG msg;
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
+	quit(0, "WM_QUIT received");
+	return NULL;
+}
+
+#endif
+
+#ifdef HAVE_BFG_HOTPLUG
+static
+void hotplug_start()
+{
+	pthread_t pth;
+	if (unlikely(pthread_create(&pth, NULL, hotplug_thread, NULL)))
+		applog(LOG_ERR, "Failed to start hotplug thread");
+}
+#endif
+
 static void probe_pools(void)
 {
 	int i;
@@ -11076,6 +11329,8 @@ int main(int argc, char *argv[])
 		quit(1, "Failed to pthread_cond_init gws_cond");
 
 	notifier_init(submit_waiting_notifier);
+	timer_unset(&tv_rescan);
+	notifier_init(rescan_notifier);
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
@@ -11579,6 +11834,11 @@ begin_bench:
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
 		stratumsrv_start();
+#endif
+
+#ifdef HAVE_BFG_HOTPLUG
+	if (opt_hotplug && !opt_scrypt)
+		hotplug_start();
 #endif
 
 #ifdef HAVE_CURSES
