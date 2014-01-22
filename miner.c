@@ -10575,20 +10575,23 @@ extern void probe_device(struct lowlevel_device_info *);
 static
 void drv_detect_all()
 {
+	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
 rescan:
 	bfg_need_detect_rescan = false;
 	
 #ifdef HAVE_BFG_LOWLEVEL
-	struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
-	
-	LL_FOREACH_SAFE(infolist, info, infotmp)
-		probe_device(info);
-	LL_FOREACH_SAFE(infolist, info, infotmp)
-		pthread_join(info->probe_pth, NULL);
+	if (!opt_scrypt)
+	{
+		struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
+		
+		LL_FOREACH_SAFE(infolist, info, infotmp)
+			probe_device(info);
+		LL_FOREACH_SAFE(infolist, info, infotmp)
+			pthread_join(info->probe_pth, NULL);
+	}
 #endif
 	
 	struct driver_registration *reg, *tmp;
-	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
 	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
 	{
 		const struct device_drv * const drv = reg->drv;
@@ -10600,7 +10603,8 @@ rescan:
 	}
 
 #ifdef HAVE_BFG_LOWLEVEL
-	lowlevel_scan_free();
+	if (!opt_scrypt)
+		lowlevel_scan_free();
 #endif
 	
 	if (bfg_need_detect_rescan)
