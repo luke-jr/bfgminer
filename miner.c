@@ -2968,62 +2968,10 @@ double cgpu_utility(struct cgpu_info *cgpu)
 	return cgpu->utility = cgpu->accepted / dev_runtime * 60;
 }
 
-/* Convert a uint64_t value into a truncated string for displaying with its
- * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
-static void suffix_string(uint64_t val, char *buf, size_t bufsiz, int sigdigits)
-{
-	const double  dkilo = 1000.0;
-	const uint64_t kilo = 1000ull;
-	const uint64_t mega = 1000000ull;
-	const uint64_t giga = 1000000000ull;
-	const uint64_t tera = 1000000000000ull;
-	const uint64_t peta = 1000000000000000ull;
-	const uint64_t exa  = 1000000000000000000ull;
-	char suffix[2] = "";
-	bool decimal = true;
-	double dval;
-
-	if (val >= exa) {
-		val /= peta;
-		dval = (double)val / dkilo;
-		strcpy(suffix, "E");
-	} else if (val >= peta) {
-		val /= tera;
-		dval = (double)val / dkilo;
-		strcpy(suffix, "P");
-	} else if (val >= tera) {
-		val /= giga;
-		dval = (double)val / dkilo;
-		strcpy(suffix, "T");
-	} else if (val >= giga) {
-		val /= mega;
-		dval = (double)val / dkilo;
-		strcpy(suffix, "G");
-	} else if (val >= mega) {
-		val /= kilo;
-		dval = (double)val / dkilo;
-		strcpy(suffix, "M");
-	} else if (val >= kilo) {
-		dval = (double)val / dkilo;
-		strcpy(suffix, "k");
-	} else {
-		dval = val;
-		decimal = false;
-	}
-
-	if (!sigdigits) {
-		if (decimal)
-			snprintf(buf, bufsiz, "%.3g%s", dval, suffix);
-		else
-			snprintf(buf, bufsiz, "%d%s", (unsigned int)dval, suffix);
-	} else {
-		/* Always show sigdigits + 1, padded on right with zeroes
-		 * followed by suffix */
-		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
-
-		snprintf(buf, bufsiz, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
-	}
-}
+#define suffix_string(val, buf, bufsiz, sigdigits)  do{ \
+	_Static_assert(sigdigits == 0, "suffix_string only supported with sigdigits==0");  \
+	format_unit3(buf, bufsiz, FUP_DIFF, "", H2B_SHORTV, val, -1);  \
+}while(0)
 
 static float
 utility_to_hashrate(double utility)
@@ -3064,6 +3012,7 @@ enum h2bs_fmt {
 	H2B_NOUNIT,  // "xxx.x"
 	H2B_SHORT,   // "xxx.xMH/s"
 	H2B_SPACED,  // "xxx.x MH/s"
+	H2B_SHORTV,  // Like H2B_SHORT, but omit space for base unit
 };
 static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
@@ -3071,6 +3020,7 @@ enum bfu_floatprec {
 	FUP_INTEGER,
 	FUP_HASHES,
 	FUP_BTC,
+	FUP_DIFF,
 };
 
 static
@@ -3112,6 +3062,12 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 		else
 			prec = 2;
 		_SNP("%5.*f", prec, hashrate);
+		break;
+	case FUP_DIFF:
+		if (unit > _unitbase)
+			_SNP("%.3g", hashrate);
+		else
+			_SNP("%u", (unsigned int)hashrate);
 	}
 	
 	switch (fmt) {
@@ -3121,6 +3077,8 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 		_SNP("%c%s", _unitchar[unit], measurement);
 	default:
 		break;
+	case H2B_SHORTV:
+		_SNP("%.1s%s", (unit == _unitbase) ? "" : &_unitchar[unit], measurement);
 	}
 	
 	return rv;
