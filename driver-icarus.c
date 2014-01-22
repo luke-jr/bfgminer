@@ -146,24 +146,10 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define END_CONDITION 0x0000ffff
 #define DEFAULT_DETECT_THRESHOLD 1
 
-// Looking for options in --icarus-timing and --icarus-options:
-//
-// Code increments this each time we start to look at a device
-// However, this means that if other devices are checked by
-// the Icarus code (e.g. BFL) they will count in the option offset
-//
-// This, however, is deterministic so that's OK
-//
-// If we were to increment after successfully finding an Icarus
-// that would be random since an Icarus may fail and thus we'd
-// not be able to predict the option order
-//
-// This also assumes that serial_detect() checks them sequentially
-// and in the order specified on the command line
-//
 static int option_offset = -1;
 
 BFG_REGISTER_DRIVER(icarus_drv)
+extern const struct bfg_set_device_definition icarus_set_device_funcs[];
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 
@@ -454,100 +440,10 @@ static uint32_t mask(int work_division)
 		nonce_mask = 0x1fffffff;
 		break;
 	default:
-		quit(1, "Invalid2 icarus-options for work_division (%d) must be 1, 2, 4 or 8", work_division);
+		quit(1, "Invalid2 work_division (%d) must be 1, 2, 4 or 8", work_division);
 	}
 
 	return nonce_mask;
-}
-
-static void get_options(int this_option_offset, struct ICARUS_INFO *info)
-{
-	int *baud = &info->baud;
-	int *work_division = &info->work_division;
-	int *fpga_count = &info->fpga_count;
-
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2;
-	size_t max;
-	int i, tmp;
-
-	if (opt_icarus_options == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = opt_icarus_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	if (*buf) {
-		colon = strchr(buf, ':');
-		if (colon)
-			*(colon++) = '\0';
-
-		if (*buf) {
-			tmp = atoi(buf);
-			if (!valid_baud(*baud = tmp))
-				quit(1, "Invalid icarus-options for baud (%s)", buf);
-		}
-
-		if (colon && *colon) {
-			colon2 = strchr(colon, ':');
-			if (colon2)
-				*(colon2++) = '\0';
-
-			if (*colon) {
-				info->user_set |= IUS_WORK_DIVISION;
-				tmp = atoi(colon);
-				if (tmp == 1 || tmp == 2 || tmp == 4 || tmp == 8) {
-					*work_division = tmp;
-					*fpga_count = tmp;	// default to the same
-				} else {
-					quit(1, "Invalid icarus-options for work_division (%s) must be 1, 2, 4 or 8", colon);
-				}
-			}
-
-			if (colon2 && *colon2) {
-			  colon = strchr(colon2, ':');
-			  if (colon)
-					*(colon++) = '\0';
-
-			  if (*colon2) {
-				info->user_set |= IUS_FPGA_COUNT;
-				tmp = atoi(colon2);
-				if (tmp > 0 && tmp <= *work_division)
-					*fpga_count = tmp;
-				else {
-					quit(1, "Invalid icarus-options for fpga_count (%s) must be >0 and <=work_division (%d)", colon2, *work_division);
-				}
-			  }
-
-			  if (colon && *colon) {
-					colon2 = strchr(colon, '-') ?: "";
-					if (*colon2)
-						*(colon2++) = '\0';
-					if (strchr(colon, 'r'))
-						info->reopen_mode = IRM_CYCLE;
-					if (strchr(colon2, 'r'))
-						info->reopen_mode = IRM_NEVER;
-			  }
-			}
-		}
-	}
 }
 
 // Number of bytes remaining after reading a nonce from Icarus
@@ -599,7 +495,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
-	get_options(this_option_offset, info);
+	drv_set_defaults2(api, icarus_set_device_funcs, info);
 
 	int baud = info->baud;
 	int work_division = info->work_division;
@@ -666,6 +562,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
+	icarus->set_device_funcs = icarus_set_device_funcs;
 	add_cgpu(icarus);
 
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s",
@@ -1109,8 +1006,13 @@ keepwaiting:
 			dclk_errorCount(&info->dclk, qsec);
 	}
 	
-	// Force a USB close/reopen on any hw error
-	if (was_hw_error && info->reopen_mode != IRM_CYCLE) {
+	// Force a USB close/reopen on any hw error (or on request, eg for baud change)
+	if (was_hw_error || info->reopen_now)
+	{
+		info->reopen_now = false;
+		if (info->reopen_mode == IRM_CYCLE)
+		{}  // Do nothing here, we reopen after sending the job
+		else
 		if (!icarus_reopen(icarus, state, &fd))
 			state->firstrun = true;
 	}
@@ -1353,11 +1255,86 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
+static
+const char *icarus_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	const int baud = atoi(newvalue);
+	if (!valid_baud(baud))
+		return "Invalid baud setting";
+	if (info->baud != baud)
+	{
+		info->baud = baud;
+		info->reopen_now = true;
+	}
+	return NULL;
+}
+
+static
+const char *icarus_set_work_division(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	const int work_division = atoi(newvalue);
+	if (!(work_division == 1 || work_division == 2 || work_division == 4 || work_division == 8))
+		return "Invalid work_division: must be 1, 2, 4 or 8";
+	if (info->user_set & IUS_FPGA_COUNT)
+	{
+		if (info->fpga_count > work_division)
+			return "work_division must be >= fpga_count";
+	}
+	else
+		info->fpga_count = work_division;
+	info->user_set |= IUS_WORK_DIVISION;
+	info->work_division = work_division;
+	info->nonce_mask = mask(work_division);
+	return NULL;
+}
+
+static
+const char *icarus_set_fpga_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	const int fpga_count = atoi(newvalue);
+	if (fpga_count < 1 || fpga_count > info->work_division)
+		return "Invalid fpga_count: must be >0 and <=work_division";
+	info->fpga_count = fpga_count;
+	return NULL;
+}
+
+static
+const char *icarus_set_reopen(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	if ((!strcasecmp(newvalue, "never")) || !strcasecmp(newvalue, "-r"))
+		info->reopen_mode = IRM_NEVER;
+	else
+	if (!strcasecmp(newvalue, "timeout"))
+		info->reopen_mode = IRM_TIMEOUT;
+	else
+	if ((!strcasecmp(newvalue, "cycle")) || !strcasecmp(newvalue, "r"))
+		info->reopen_mode = IRM_CYCLE;
+	else
+	if (!strcasecmp(newvalue, "now"))
+		info->reopen_now = true;
+	else
+		return "Invalid reopen mode";
+	return NULL;
+}
+
 static void icarus_shutdown(struct thr_info *thr)
 {
 	do_icarus_close(thr);
 	free(thr->cgpu_data);
 }
+
+const struct bfg_set_device_definition icarus_set_device_funcs[] = {
+	// NOTE: Order of parameters below is important for --icarus-options
+	{"baud"         , icarus_set_baud         , "serial baud rate"},
+	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
+	{"fpga_count"   , icarus_set_fpga_count   , "number of chips working on pieces"},
+	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
+	{NULL},
+};
 
 struct device_drv icarus_drv = {
 	.dname = "icarus",

@@ -214,7 +214,6 @@ bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
 static bool no_work;
-char *opt_icarus_options = NULL;
 char *opt_icarus_timing = NULL;
 bool opt_worktime;
 bool opt_weighed_stats;
@@ -1768,10 +1767,38 @@ static char *set_api_mcast_des(const char *arg)
 }
 
 #ifdef USE_ICARUS
+extern const struct bfg_set_device_definition icarus_set_device_funcs[];
+
 static char *set_icarus_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_icarus_options);
-
+	if (strchr(arg, ','))
+		return "icarus-options no longer supports comma-delimited syntax, see README.FPGA for better control";
+	applog(LOG_WARNING, "icarus-options is deprecated! See README.FPGA for better control");
+	
+	char *opts = strdup(arg), *argdup;
+	argdup = opts;
+	const struct bfg_set_device_definition *sdf = icarus_set_device_funcs;
+	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
+	char buf[0x100], *saveptr, *opt;
+	for (int i = 0; i < 4; ++i, ++sdf)
+	{
+		opt = strtok_r(opts, ":", &saveptr);
+		opts = NULL;
+		
+		if (!opt)
+			break;
+		
+		if (!opt[0])
+			continue;
+		
+		for (int j = 0; j < 4; ++j)
+		{
+			snprintf(buf, sizeof(buf), "%s:%s=%s", drivers[j], sdf->optname, opt);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+		}
+	}
+	free(argdup);
 	return NULL;
 }
 
@@ -6650,8 +6677,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", json_escape(opt_api_groups));
-	if (opt_icarus_options)
-		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
 	if (opt_icarus_timing)
 		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
 #ifdef USE_KLONDIKE

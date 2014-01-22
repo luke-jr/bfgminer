@@ -100,6 +100,7 @@ struct ICARUS_INFO {
 	int fpga_count;
 	uint32_t nonce_mask;
 	enum icarus_reopen_mode reopen_mode;
+	bool reopen_now;
 	uint8_t user_set;
 	bool continue_search;
 
