@@ -1420,7 +1420,10 @@ static int opencl_autodetect()
 
 static void opencl_detect()
 {
-	noserial_detect_manual(&opencl_api, opencl_autodetect);
+	int flags = 0;
+	if (!opt_scrypt)
+		flags |= GDF_DEFAULT_NOAUTO;
+	generic_detect(&opencl_api, NULL, opencl_autodetect, flags);
 }
 
 static void reinit_opencl_device(struct cgpu_info *gpu)
