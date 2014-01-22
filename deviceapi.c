@@ -882,6 +882,22 @@ nohelp:
 	return replybuf;
 }
 
+const char *proc_set_device_temp_cutoff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	int target_diff = proc->cutofftemp - proc->targettemp;
+	proc->cutofftemp = atoi(newvalue);
+	if (!proc->targettemp_user)
+		proc->targettemp = proc->cutofftemp - target_diff;
+	return NULL;
+}
+
+const char *proc_set_device_temp_target(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	proc->targettemp = atoi(newvalue);
+	proc->targettemp_user = true;
+	return NULL;
+}
+
 static inline
 void _set_auto_sdr(enum bfg_set_device_replytype * const out_success, const char * const rv, const char * const optname)
 {
@@ -914,6 +930,12 @@ const char *_proc_set_device(struct cgpu_info * const proc, const char * const o
 			return rv;
 		}
 	
+	if (!strcasecmp(optname, "temp-cutoff"))
+		return proc_set_device_temp_cutoff(proc, optname, newvalue, replybuf, out_success);
+	else
+	if (!strcasecmp(optname, "temp-target"))
+		return proc_set_device_temp_target(proc, optname, newvalue, replybuf, out_success);
+	else
 	if (!strcasecmp(optname, "help"))
 		return proc_set_device_help(proc, optname, newvalue, replybuf, out_success);
 	

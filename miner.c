@@ -1634,107 +1634,32 @@ static char *set_sharelog(char *arg)
 	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
 }
 
-static char *temp_cutoff_str = "";
-static char *temp_target_str = "";
-
 char *set_temp_cutoff(char *arg)
 {
-	int val;
-
-	if (!(arg && arg[0]))
-		return "Invalid parameters for set temp cutoff";
-	val = atoi(arg);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp cutoff";
-	temp_cutoff_str = arg;
-
+	if (strchr(arg, ','))
+		return "temp-cutoff no longer supports comma-delimited syntax, use --set-device for better control";
+	applog(LOG_WARNING, "temp-cutoff is deprecated! Use --set-device for better control");
+	
+	char buf[0x100];
+	snprintf(buf, sizeof(buf), "all:temp-cutoff=%s", arg);
+	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+	string_elist_add(buf, &opt_set_device_list);
+	
 	return NULL;
 }
 
 char *set_temp_target(char *arg)
 {
-	int val;
-
-	if (!(arg && arg[0]))
-		return "Invalid parameters for set temp target";
-	val = atoi(arg);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp target";
-	temp_target_str = arg;
-
+	if (strchr(arg, ','))
+		return "temp-target no longer supports comma-delimited syntax, use --set-device for better control";
+	applog(LOG_WARNING, "temp-target is deprecated! Use --set-device for better control");
+	
+	char buf[0x100];
+	snprintf(buf, sizeof(buf), "all:temp-target=%s", arg);
+	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+	string_elist_add(buf, &opt_set_device_list);
+	
 	return NULL;
-}
-
-// For a single element string, this always returns the number (for all calls)
-// For multi-element strings, it returns each element as a number in order, and 0 when there are no more
-static int temp_strtok(char *base, char **n)
-{
-	char *i = *n;
-	char *p = strchr(i, ',');
-	if (p) {
-		p[0] = '\0';
-		*n = &p[1];
-	}
-	else
-	if (base != i)
-		*n = strchr(i, '\0');
-	return atoi(i);
-}
-
-static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char **target_np)
-{
-	int target_off, val;
-	
-	// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
-	if (!cgpu->cutofftemp)
-		cgpu->cutofftemp = opt_cutofftemp;
-	
-	// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
-	if (cgpu->targettemp)
-		target_off = cgpu->targettemp - cgpu->cutofftemp;
-	else
-		target_off = -6;
-	
-	cgpu->cutofftemp_default = cgpu->cutofftemp;
-	
-	val = temp_strtok(temp_cutoff_str, cutoff_np);
-	if (val < 0 || val > 200)
-		quit(1, "Invalid value passed to set temp cutoff");
-	if (val)
-		cgpu->cutofftemp = val;
-	
-	cgpu->targettemp_default = cgpu->cutofftemp + target_off;
-	
-	val = temp_strtok(temp_target_str, target_np);
-	if (val < 0 || val > 200)
-		quit(1, "Invalid value passed to set temp target");
-	if (val)
-		cgpu->targettemp = val;
-	else
-		cgpu->targettemp = cgpu->cutofftemp + target_off;
-	
-	applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
-	       cgpu->proc_repr,
-	       cgpu->targettemp, cgpu->cutofftemp);
-}
-
-static void load_temp_config()
-{
-	int i;
-	char *cutoff_n, *target_n;
-	struct cgpu_info *cgpu;
-
-	cutoff_n = temp_cutoff_str;
-	target_n = temp_target_str;
-
-	for (i = 0; i < total_devices; ++i) {
-		cgpu = get_devices(i);
-		load_temp_config_cgpu(cgpu, &cutoff_n, &target_n);
-	}
-	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
-		quit(1, "Too many values passed to set temp cutoff");
-	if (target_n != temp_target_str && target_n[0])
-		quit(1, "Too many values passed to set temp target");
 }
 
 static char *set_api_allow(const char *arg)
@@ -2292,7 +2217,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, NULL, &opt_cutofftemp,
-		     "Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list"),
+		     opt_hidden),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
@@ -2303,7 +2228,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--temp-target",
 		     set_temp_target, NULL, NULL,
-		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
+		     opt_hidden),
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
 #ifdef HAVE_CURSES
@@ -6413,57 +6338,6 @@ char *json_escape(const char *str)
 	return buf;
 }
 
-void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffset, size_t defoffset)
-{
-	int i, commas;
-	int *setp, allset;
-	uint8_t *defp;
-	
-	for (i = 0; ; ++i)
-	{
-		if (i == total_devices)
-			// All defaults
-			return;
-		setp = ((void*)devices[i]) + settingoffset;
-		defp = ((void*)devices[i]) + defoffset;
-		allset = *setp;
-		if (*setp != *defp)
-			break;
-	}
-	
-	fprintf(fcfg, ",\n\"%s\" : \"", configname);
-	
-	for (i = 1; ; ++i)
-	{
-		if (i == total_devices)
-		{
-			// All the same
-			fprintf(fcfg, "%d\"", allset);
-			return;
-		}
-		setp = ((void*)devices[i]) + settingoffset;
-		if (allset != *setp)
-			break;
-	}
-	
-	commas = 0;
-	for (i = 0; i < total_devices; ++i)
-	{
-		setp = ((void*)devices[i]) + settingoffset;
-		defp = ((void*)devices[i]) + defoffset;
-		if (*setp != *defp)
-		{
-			for ( ; commas; --commas)
-				fputs(",", fcfg);
-			fprintf(fcfg, "%d", *setp);
-		}
-		++commas;
-	}
-	fputs("\"", fcfg);
-}
-#define write_config_temps(fcfg, configname, settingname)  \
-	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
-
 static
 void _write_config_string_elist(FILE *fcfg, const char *configname, struct string_elist * const elist)
 {
@@ -6510,8 +6384,6 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-	write_config_temps(fcfg, "temp-cutoff", cutofftemp);
-	write_config_temps(fcfg, "temp-target", targettemp);
 #ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */
@@ -10970,7 +10842,6 @@ int create_new_cgpus(void (*addfunc)(void*), void *arg)
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	void *p;
-	char *dummy = "\0";
 	
 	mutex_lock(&mutex);
 	devcount = total_devices;
@@ -11024,7 +10895,6 @@ int create_new_cgpus(void (*addfunc)(void*), void *arg)
 	{
 		cgpu = devices_new[i];
 		
-		load_temp_config_cgpu(cgpu, &dummy, &dummy);
 		allocate_cgpu(cgpu, &k);
 	}
 	for (i = 0; i < total_devices_new; ++i)
@@ -11444,8 +11314,6 @@ int main(int argc, char *argv[])
 		else
 			applog(LOG_WARNING, "Waiting for devices");
 	}
-
-	load_temp_config();
 
 #ifdef HAVE_CURSES
 	switch_logsize();
