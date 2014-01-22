@@ -216,9 +216,6 @@ bool opt_disable_pool;
 static bool no_work;
 bool opt_worktime;
 bool opt_weighed_stats;
-#ifdef USE_AVALON
-char *opt_avalon_options = NULL;
-#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1742,10 +1739,34 @@ static char *set_icarus_timing(const char *arg)
 #endif
 
 #ifdef USE_AVALON
+extern const struct bfg_set_device_definition avalon_set_device_funcs[];
+
 static char *set_avalon_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_avalon_options);
-
+	if (strchr(arg, ','))
+		return "avalon-options no longer supports comma-delimited syntax, see README.FPGA for better control";
+	applog(LOG_WARNING, "avalon-options is deprecated! See README.FPGA for better control");
+	
+	char *opts = strdup(arg), *argdup;
+	argdup = opts;
+	const struct bfg_set_device_definition *sdf = avalon_set_device_funcs;
+	char buf[0x100], *saveptr, *opt;
+	for (int i = 0; i < 5; ++i, ++sdf)
+	{
+		opt = strtok_r(opts, ":", &saveptr);
+		opts = NULL;
+		
+		if (!opt)
+			break;
+		
+		if (!opt[0])
+			continue;
+		
+		snprintf(buf, sizeof(buf), "avalon:%s=%s", sdf->optname, opt);
+		applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+		string_elist_add(buf, &opt_set_device_list);
+	}
+	free(argdup);
 	return NULL;
 }
 #endif
