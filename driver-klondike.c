@@ -253,6 +253,7 @@ struct klondike_info {
 	int wque_size;
 	int wque_cleared;
 
+	int clock;
 	bool initialised;
 	
 	struct libusb_device_handle *usbdev_handle;
@@ -747,6 +748,7 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	int slaves, dev;
 
 	klninfo->initialised = false;
+	cgpu_set_defaults(klncgpu);
 
 	zero_kline(&kline);
 	kline.hd.cmd = KLN_CMD_STATUS;
@@ -785,13 +787,9 @@ static bool klondike_init(struct cgpu_info *klncgpu)
 	int size = 2;
 
 	// boundaries are checked by device, with valid values returned
-	if (opt_klondike_options != NULL) {
-		int hashclock;
-		double temptarget;
-
-		sscanf(opt_klondike_options, "%d:%lf", &hashclock, &temptarget);
-		SET_HASHCLOCK(kline.cfg.hashclock, hashclock);
-		kline.cfg.temptarget = cvtCToKln(temptarget);
+	{
+		SET_HASHCLOCK(kline.cfg.hashclock, klninfo->clock);
+		kline.cfg.temptarget = cvtCToKln(klncgpu->targettemp);
 		kline.cfg.tempcritical = 0; // hard code for old firmware
 		kline.cfg.fantarget = 0xff; // hard code for old firmware
 		size = sizeof(kline.cfg) - 2;
@@ -843,6 +841,21 @@ static void control_init(struct cgpu_info *klncgpu)
 }
 
 static
+const char *klondike_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct klondike_info * const klninfo = proc->device_data;
+	if (klninfo->initialised)
+		return "Cannot change clock after initialisation";
+	klninfo->clock = atoi(newvalue);
+	return NULL;
+}
+
+static const struct bfg_set_device_definition klondike_set_device_funcs[] = {
+	{"clock", klondike_set_clock, "clock frequency (can only be set at startup, with --set-device)"},
+	{NULL}
+};
+
+static
 bool klondike_lowl_match(const struct lowlevel_device_info * const info)
 {
 	if (!lowlevel_match_id(info, &lowl_usb, 0x04d8, 0xf60a))
@@ -875,12 +888,15 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 		.drv = &klondike_drv,
 		.deven = DEV_ENABLED,
 		.threads = 1,
+		.targettemp = 50,
 		.cutofftemp = (int)KLN_KILLWORK_TEMP,
+		.set_device_funcs = klondike_set_device_funcs,
 	};
 
 	klninfo = calloc(1, sizeof(*klninfo));
 	if (unlikely(!klninfo))
 		quit(1, "Failed to calloc klninfo in klondke_detect_one");
+	klninfo->clock = 282;
 	klncgpu->device_data = (void *)klninfo;
 
 	klninfo->free = new_klist_set(klncgpu);

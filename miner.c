@@ -219,9 +219,6 @@ bool opt_weighed_stats;
 #ifdef USE_AVALON
 char *opt_avalon_options = NULL;
 #endif
-#ifdef USE_KLONDIKE
-char *opt_klondike_options = NULL;
-#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1756,8 +1753,25 @@ static char *set_avalon_options(const char *arg)
 #ifdef USE_KLONDIKE
 static char *set_klondike_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_klondike_options);
-
+	char buf[0x100];
+	int hashclock;
+	double temptarget;
+	switch (sscanf(arg, "%d:%lf", &hashclock, &temptarget))
+	{
+		default:
+			return "Unrecognised --klondike-options";
+		case 2:
+			snprintf(buf, sizeof(buf), "klondike:temp-target=%lf", temptarget);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+			// fallthru
+		case 1:
+			snprintf(buf, sizeof(buf), "klondike:clock=%d", hashclock);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+	}
+	applog(LOG_WARNING, "klondike-options is deprecated! Use --set-device for better control");
+	
 	return NULL;
 }
 #endif
@@ -6558,10 +6572,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", json_escape(opt_api_groups));
-#ifdef USE_KLONDIKE
-	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
-#endif
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
