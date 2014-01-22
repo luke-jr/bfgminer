@@ -146,8 +146,6 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define END_CONDITION 0x0000ffff
 #define DEFAULT_DETECT_THRESHOLD 1
 
-static int option_offset = -1;
-
 BFG_REGISTER_DRIVER(icarus_drv)
 extern const struct bfg_set_device_definition icarus_set_device_funcs[];
 
@@ -303,44 +301,17 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 	}
 }
 
-static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
+static
+const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO *info = icarus->device_data;
+	struct ICARUS_INFO * const info = proc->device_data;
 	double Hs;
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *eq;
-	size_t max;
-	int i;
-
-	if (opt_icarus_timing == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = opt_icarus_timing;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	info->read_count = 0;
-	info->read_count_limit = 0; // 0 = no limit
+	char *eq;
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
 		// short
 		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
@@ -359,6 +330,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
 		// long
 		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
@@ -379,6 +351,7 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		info->Hs = Hs / NANOSEC;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
+		info->read_count = 0;
 		if ((eq = strchr(buf, '=')) != NULL)
 			info->read_count = atoi(eq+1);
 
@@ -388,6 +361,8 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		if (unlikely(info->read_count < 1))
 			info->read_count = 1;
 
+		info->read_count_limit = 0;  // 0 = no limit
+		
 		info->timing_mode = MODE_VALUE;
 		info->do_icarus_timing = false;
 	} else {
@@ -395,13 +370,14 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
+		info->read_count = 0;
 		if ((eq = strchr(buf, '=')) != NULL)
 			info->read_count = atoi(eq+1);
 
 		int def_read_count = ICARUS_READ_COUNT_TIMING;
 
 		if (info->timing_mode == MODE_DEFAULT) {
-			if (icarus->drv == &icarus_drv) {
+			if (proc->drv == &icarus_drv) {
 				info->do_default_detection = 0x10;
 			} else {
 				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
@@ -411,14 +387,18 @@ static void set_timing_mode(int this_option_offset, struct cgpu_info *icarus)
 		}
 		if (info->read_count < 1)
 			info->read_count = def_read_count;
+		
+		info->read_count_limit = 0;  // 0 = no limit
 	}
 
 	info->min_data_count = MIN_DATA_COUNT;
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d limit=%dms Hs=%e",
-		icarus->proc_repr,
+		proc->proc_repr,
 		timing_mode_str(info->timing_mode),
 		info->read_count, info->read_count_limit, info->Hs);
+	
+	return NULL;
 }
 
 static uint32_t mask(int work_division)
@@ -469,8 +449,6 @@ int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
 
 bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
 {
-	int this_option_offset = ++option_offset;
-
 	struct timeval tv_start, tv_finish;
 	int fd;
 
@@ -576,8 +554,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_data = info;
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
-
-	set_timing_mode(this_option_offset, icarus);
 
 	return true;
 }
@@ -1333,6 +1309,8 @@ const struct bfg_set_device_definition icarus_set_device_funcs[] = {
 	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
 	{"fpga_count"   , icarus_set_fpga_count   , "number of chips working on pieces"},
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
+	// NOTE: Below here, order is irrelevant
+	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
 	{NULL},
 };
 
