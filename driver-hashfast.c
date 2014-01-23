@@ -86,11 +86,12 @@ ssize_t hashfast_write(const int fd, void * const buf, size_t bufsz)
 	const ssize_t rv = write(fd, buf, bufsz);
 	if (opt_debug && opt_dev_protocol)
 	{
+		const int e = errno;
 		char hex[(bufsz * 2) + 1];
 		bin2hex(hex, buf, bufsz);
 		if (rv < 0)
-			applog(LOG_DEBUG, "%s fd=%d: SEND (%s) => %d",
-			       "hashfast", fd, hex, (int)rv);
+			applog(LOG_DEBUG, "%s fd=%d: SEND (%s) => %d errno=%d(%s)",
+			       "hashfast", fd, hex, (int)rv, e, bfg_strerror(e, BST_ERRNO));
 		else
 		if (rv < bufsz)
 			applog(LOG_DEBUG, "%s fd=%d: SEND %.*s(%s)",
