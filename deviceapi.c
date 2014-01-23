@@ -770,13 +770,14 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 		int ns;
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
-		const bool manylp = (lpcount > 26);
-		const char *as = (manylp ? "aa" : "a");
+		int lpdigits = 1;
+		for (int i = lpcount; i > 26 && lpdigits < 2; i /= 26)
+			++lpdigits;
 		
-		// Note, strcpy instead of assigning a byte to get the \0 too
-		strcpy(&cgpu->proc_repr[5], as);
+		memset(&cgpu->proc_repr[5], 'a', lpdigits);
+		cgpu->proc_repr[5 + lpdigits] = '\0';
 		ns = strlen(cgpu->proc_repr_ns);
-		strcpy(&cgpu->proc_repr_ns[ns], as);
+		strcpy(&cgpu->proc_repr_ns[ns], &cgpu->proc_repr[5]);
 		
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
@@ -784,17 +785,10 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 			slave = malloc(sizeof(*slave));
 			*slave = *cgpu;
 			slave->proc_id = i;
-			if (manylp)
+			for (int x = i, y = lpdigits; --y, x; x /= 26)
 			{
-				slave->proc_repr[5] += i / 26;
-				slave->proc_repr[6] += i % 26;
-				slave->proc_repr_ns[ns    ] += i / 26;
-				slave->proc_repr_ns[ns + 1] += i % 26;
-			}
-			else
-			{
-				slave->proc_repr[5] += i;
-				slave->proc_repr_ns[ns] += i;
+				slave->proc_repr_ns[ns + y] =
+				slave->proc_repr[5 + y] += (x % 26);
 			}
 			slave->threads = tpp;
 			devices_new[total_devices_new++] = slave;
