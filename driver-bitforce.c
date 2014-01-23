@@ -49,7 +49,6 @@
 enum bitforce_proto {
 	BFP_WORK   = 0,
 	BFP_RANGE  = 1,
-	BFP_QUEUE  = 2,
 	BFP_BQUEUE = 3,
 	BFP_PQUEUE = 4,
 };
@@ -57,7 +56,7 @@ enum bitforce_proto {
 static const char *protonames[] = {
 	"full work",
 	"nonce range",
-	"work queue",
+	NULL,
 	"bulk queue",
 	"parallel queue",
 };
@@ -703,7 +702,6 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->device_data;
-	int fdDev = bitforce->device->device_fd;
 	unsigned char *ob_ms = &data->next_work_ob[8];
 	unsigned char *ob_dt = &ob_ms[32];
 	
@@ -731,31 +729,6 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 			work->blk.nonce += bitforce->nonces + 1;
 			break;
 		}
-		case BFP_QUEUE:
-			if (thr->work)
-			{
-				pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
-				char pdevbuf[0x100];
-				
-				if (unlikely(fdDev == -1))
-					return false;
-				
-				mutex_lock(mutexp);
-				if (data->queued)
-					bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZQX");
-				bitforce_cmd2(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), data->next_work_cmd, data->next_work_obs, data->next_work_obsz);
-				mutex_unlock(mutexp);
-				if (unlikely(strncasecmp(pdevbuf, "OK", 2))) {
-					applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
-					bitforce_change_mode(bitforce, BFP_WORK);
-				}
-				else
-				{
-					dbg_block_data(bitforce);
-					data->queued = 1;
-				}
-			}
-			// fallthru...
 		case BFP_WORK:
 			work->blk.nonce = 0xffffffff;
 	}
@@ -779,9 +752,6 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 		{
 			case BFP_WORK:
 				data->next_work_cmd = "ZDX";
-				break;
-			case BFP_QUEUE:
-				data->next_work_cmd = "ZNX";
 			default:
 				;
 		}
@@ -864,10 +834,6 @@ re_send:
 		{
 			case BFP_RANGE:
 				applog(LOG_WARNING, "%"PRIpreprv": Does not support nonce range, disabling", bitforce->proc_repr);
-				bitforce_change_mode(bitforce, BFP_WORK);
-				goto re_send;
-			case BFP_QUEUE:
-				applog(LOG_WARNING, "%"PRIpreprv": Does not support work queue, disabling", bitforce->proc_repr);
 				bitforce_change_mode(bitforce, BFP_WORK);
 				goto re_send;
 			default:
@@ -982,8 +948,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	{
 		// We're likely here because of a work restart
 		// Since Bitforce cannot stop a work without losing results, only do it if the current job is finding stale shares
-		// BFP_QUEUE does not support stopping work at all
-		if (data->proto == BFP_QUEUE || !stale)
+		if (!stale)
 		{
 			delay_time_ms = bitforce->sleep_ms - bitforce->wait_ms;
 			timer_set_delay(&thr->tv_poll, &now, delay_time_ms * 1000);
@@ -1001,7 +966,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 			break;
 		}
 		
-		const char *cmd = (data->proto == BFP_QUEUE) ? "ZOX" : "ZFX";
+		const char * const cmd = "ZFX";
 		count = bitforce_zox(thr, cmd);
 
 		cgtime(&now);
@@ -1060,7 +1025,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 
 		data->result_busy_polled = bitforce->wait_ms;
 		
-		if (stale && data->proto != BFP_QUEUE)
+		if (stale)
 		{
 			applog(LOG_NOTICE, "%"PRIpreprv": Abandoning stale search to restart",
 			       bitforce->proc_repr);
@@ -1351,7 +1316,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 					data->queued_max = BITFORCE_MAX_QUEUED_MAX;
 			}
 			else
-				bitforce_change_mode(bitforce, BFP_QUEUE);
+				bitforce_change_mode(bitforce, BFP_WORK);
 			
 			// Clear job queue to start fresh; ignore response
 			bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
