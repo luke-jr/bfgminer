@@ -454,8 +454,8 @@ struct cgpu_info {
 	
 	int procs;
 	int proc_id;
-	char proc_repr[8];
-	char proc_repr_ns[8];
+	char proc_repr[9];
+	char proc_repr_ns[9];
 	struct cgpu_info *device;
 	struct cgpu_info *next_proc;
 	

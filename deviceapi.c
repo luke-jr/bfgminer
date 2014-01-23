@@ -771,7 +771,7 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
 		int lpdigits = 1;
-		for (int i = lpcount; i > 26 && lpdigits < 2; i /= 26)
+		for (int i = lpcount; i > 26 && lpdigits < 3; i /= 26)
 			++lpdigits;
 		
 		memset(&cgpu->proc_repr[5], 'a', lpdigits);
