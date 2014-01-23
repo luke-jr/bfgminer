@@ -71,6 +71,19 @@ enum hashfast_opcode {
 
 typedef unsigned long hashfast_isn_t;
 
+static inline
+float hashfast_temperature_conv(const uint8_t * const data)
+{
+	// Temperature is 12-bit fraction ranging between -61.5 C and ~178.5 C
+	uint32_t tempdata = ((uint32_t)data[1] << 8) | data[0];
+	tempdata &= 0xfff;
+	tempdata *= 240;
+	tempdata -= 251904;  // 61.5 * 4096
+	float temp = tempdata;
+	temp /= 4096.;
+	return temp;
+}
+
 struct hashfast_parsed_msg {
 	uint8_t opcode;
 	uint8_t chipaddr;
@@ -511,6 +524,7 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 			}
 			struct hashfast_chip_state * const chipstate = &devstate->chipstates[msg.chipaddr];
 			hashfast_isn_t isn = hashfast_get_isn(chipstate, msg.hdata);
+			const float temp = hashfast_temperature_conv(&msg.data[0]);
 			int cores_uptodate, cores_active, cores_pending, cores_transitioned;
 			cores_uptodate = cores_active = cores_pending = cores_transitioned = 0;
 			for (int i = 0; i < devstate->cores_per_chip; ++i, (proc = proc->next_proc))
@@ -521,6 +535,8 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				const bool has_active  = bits & 1;
 				const bool has_pending = bits & 2;
 				bool try_transition = true;
+				
+				proc->temp = temp;
 				
 				if (cs->last_isn <= isn)
 					++cores_uptodate;
