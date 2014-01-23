@@ -33,6 +33,7 @@ BFG_REGISTER_DRIVER(hashfast_ums_drv)
 #define HASHFAST_HEADER_SIZE 8
 #define HASHFAST_MAX_DATA 0x3fc
 #define HASHFAST_HASH_SIZE (0x20 + 0xc + 4 + 4 + 2 + 1 + 1)
+#define HASHFAST_MAX_VOLTAGES 4
 
 enum hashfast_opcode {
 	HFOP_NULL          =    0,
@@ -82,6 +83,13 @@ float hashfast_temperature_conv(const uint8_t * const data)
 	float temp = tempdata;
 	temp /= 4096.;
 	return temp;
+}
+
+static inline
+float hashfast_voltage_conv(const uint8_t vdata)
+{
+	// Voltage is 8-bit fraction ranging between 0 V and ~1.2 V
+	return (float)vdata / 256. * 1.2;
 }
 
 struct hashfast_parsed_msg {
@@ -267,6 +275,7 @@ struct hashfast_dev_state {
 struct hashfast_chip_state {
 	struct cgpu_info **coreprocs;
 	hashfast_isn_t last_isn;
+	float voltages[HASHFAST_MAX_VOLTAGES];
 };
 
 struct hashfast_core_state {
@@ -525,6 +534,8 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 			struct hashfast_chip_state * const chipstate = &devstate->chipstates[msg.chipaddr];
 			hashfast_isn_t isn = hashfast_get_isn(chipstate, msg.hdata);
 			const float temp = hashfast_temperature_conv(&msg.data[0]);
+			for (int i = 0; i < HASHFAST_MAX_VOLTAGES; ++i)
+				chipstate->voltages[i] = hashfast_voltage_conv(msg.data[2 + i]);
 			int cores_uptodate, cores_active, cores_pending, cores_transitioned;
 			cores_uptodate = cores_active = cores_pending = cores_transitioned = 0;
 			for (int i = 0; i < devstate->cores_per_chip; ++i, (proc = proc->next_proc))
@@ -589,6 +600,37 @@ void hashfast_poll(struct thr_info * const master_thr)
 	timer_set_delay_from_now(&master_thr->tv_poll, 100000);
 }
 
+#ifdef HAVE_CURSES
+static
+void hashfast_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct hashfast_dev_state * const devstate = proc->device_data;
+	struct thr_info * const thr = proc->thr[0];
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	struct hashfast_chip_state * const chipstate = &devstate->chipstates[cs->chipaddr];
+	
+	{
+		// -> "NNN.xxx / NNN.xxx / NNN.xxx"
+		size_t sz = (HASHFAST_MAX_VOLTAGES * 10) + 1;
+		char buf[sz];
+		char *s = buf;
+		int rv = 0;
+		for (int i = 0; i < HASHFAST_MAX_VOLTAGES; ++i)
+		{
+			const float voltage = chipstate->voltages[i];
+			if (!voltage)
+				continue;
+			_SNP("%.3f / ", voltage);
+		}
+		if (rv >= 3 && s[-2] == '/')
+		{
+			s[-3] = '\0';
+			wlogprint("Voltages: %s\n", buf);
+		}
+	}
+}
+#endif
+
 struct device_drv hashfast_ums_drv = {
 	.dname = "hashfast_ums",
 	.name = "HFA",
@@ -602,4 +644,8 @@ struct device_drv hashfast_ums_drv = {
 	.queue_append = hashfast_queue_append,
 	.queue_flush = hashfast_queue_flush,
 	.poll = hashfast_poll,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = hashfast_wlogprint_status,
+#endif
 };
