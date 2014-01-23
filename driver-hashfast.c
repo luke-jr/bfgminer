@@ -600,6 +600,26 @@ void hashfast_poll(struct thr_info * const master_thr)
 	timer_set_delay_from_now(&master_thr->tv_poll, 100000);
 }
 
+static
+struct api_data *hashfast_api_stats(struct cgpu_info * const proc)
+{
+	struct hashfast_dev_state * const devstate = proc->device_data;
+	struct thr_info * const thr = proc->thr[0];
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	struct hashfast_chip_state * const chipstate = &devstate->chipstates[cs->chipaddr];
+	struct api_data *root = NULL;
+	char key[] = "VoltageNN";
+	
+	for (int i = 0; i < HASHFAST_MAX_VOLTAGES; ++i)
+	{
+		snprintf(&key[7], 3, "%d", i);
+		if (chipstate->voltages[i])
+			root = api_add_volts(root, key, &chipstate->voltages[i], false);
+	}
+	
+	return root;
+}
+
 #ifdef HAVE_CURSES
 static
 void hashfast_wlogprint_status(struct cgpu_info * const proc)
@@ -644,6 +664,8 @@ struct device_drv hashfast_ums_drv = {
 	.queue_append = hashfast_queue_append,
 	.queue_flush = hashfast_queue_flush,
 	.poll = hashfast_poll,
+	
+	.get_api_stats = hashfast_api_stats,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = hashfast_wlogprint_status,
