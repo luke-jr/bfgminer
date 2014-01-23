@@ -47,11 +47,11 @@
 #define BITFORCE_MAX_BQUEUE_AT_ONCE 5
 
 enum bitforce_proto {
-	BFP_WORK,
-	BFP_RANGE,
-	BFP_QUEUE,
-	BFP_BQUEUE,
-	BFP_PQUEUE,
+	BFP_WORK   = 0,
+	BFP_RANGE  = 1,
+	BFP_QUEUE  = 2,
+	BFP_BQUEUE = 3,
+	BFP_PQUEUE = 4,
 };
 
 static const char *protonames[] = {
