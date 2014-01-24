@@ -44,7 +44,8 @@
 #define BITFORCE_GOAL_QRESULTS 5
 #define BITFORCE_MIN_QRESULT_WAIT BITFORCE_CHECK_INTERVAL_MS
 #define BITFORCE_MAX_QRESULT_WAIT 1000
-#define BITFORCE_MAX_BQUEUE_AT_ONCE 5
+#define BITFORCE_MAX_BQUEUE_AT_ONCE_65NM 5
+#define BITFORCE_MAX_BQUEUE_AT_ONCE_28NM 20
 
 enum bitforce_proto {
 	BFP_WORK   = 0,
@@ -128,6 +129,20 @@ void bitforce_cmd1b(int fd, int procid, void *buf, size_t bufsz, const char *cmd
 #define bitforce_cmd1(fd, xlinkid, buf, bufsz, cmd)  bitforce_cmd1b(fd, xlinkid, buf, bufsz, cmd, 3)
 
 static
+void bitforce_cmd1c(int fd, int procid, void *buf, size_t bufsz, void *cmd, size_t cmdsz)
+{
+	if (unlikely(opt_dev_protocol))
+	{
+		char hex[(cmdsz * 2) + 1];
+		bin2hex(hex, cmd, cmdsz);
+		applog(LOG_DEBUG, "DEVPROTO: CMD1 (fd=%d xlink=%d) HEX: %s", fd, procid, hex);
+	}
+	
+	bitforce_send(fd, procid, cmd, cmdsz);
+	BFgets(buf, bufsz, fd);
+}
+
+static
 void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd, void *data, size_t datasz)
 {
 	bitforce_cmd1(fd, procid, buf, bufsz, cmd);
@@ -150,6 +165,7 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 enum bitforce_style {
 	BFS_FPGA,
 	BFS_65NM,
+	BFS_28NM,
 };
 
 struct bitforce_init_data {
@@ -242,11 +258,17 @@ static bool bitforce_detect_one(const char *devpath)
 		if (!strncasecmp(pdevbuf, "CHAIN PRESENCE MASK:", 20))
 			initdata->devmask = strtol(&pdevbuf[20], NULL, 16);
 		else
-		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC"))
+		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC") && initdata->style == BFS_FPGA)
 			initdata->style = BFS_65NM;
 		else
 		if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 			parallel = atoi(&pdevbuf[27]);
+		else
+		if (!strncasecmp(pdevbuf, "ASIC CHANNELS:", 14))
+		{
+			procs = parallel = atoi(&pdevbuf[14]);
+			initdata->style = BFS_28NM;
+		}
 		else
 		if (!strncasecmp(pdevbuf, "MANUFACTURER:", 13))
 		{
@@ -348,6 +370,7 @@ struct bitforce_data {
 	bool missing_zwx;
 	bool already_have_results;
 	bool just_flushed;
+	int max_queue_at_once;
 	int ready_to_queue;
 	bool want_to_send_queue;
 	unsigned result_busy_polled;
@@ -1309,6 +1332,16 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			data->next_work_ob[8+32+12+8] = '\xAA';
 			data->next_work_obs = &data->next_work_ob[7];
 			
+			switch (style)
+			{
+				case BFS_FPGA:  // impossible
+				case BFS_65NM:
+					data->max_queue_at_once = BITFORCE_MAX_BQUEUE_AT_ONCE_65NM;
+					break;
+				case BFS_28NM:
+					data->max_queue_at_once = BITFORCE_MAX_BQUEUE_AT_ONCE_28NM;
+			}
+			
 			if (bitforce->drv == &bitforce_queue_api)
 			{
 				bitforce_change_mode(bitforce, data->parallel_protocol ? BFP_PQUEUE : BFP_BQUEUE);
@@ -1593,7 +1626,7 @@ void bitforce_set_queue_full(struct thr_info *thr)
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->device_data;
 	
-	thr->queue_full = (data->queued + data->ready_to_queue >= data->queued_max) || (data->ready_to_queue >= BITFORCE_MAX_BQUEUE_AT_ONCE);
+	thr->queue_full = (data->queued + data->ready_to_queue >= data->queued_max) || (data->ready_to_queue >= data->max_queue_at_once);
 }
 
 static
@@ -1610,14 +1643,17 @@ bool bitforce_send_queue(struct thr_info *thr)
 	
 	char buf[0x100];
 	int queued_ok;
-	size_t qjs_sz = (32 + 12 + 2);
-	size_t qjp_sz = 4 + (qjs_sz * data->ready_to_queue);
+	size_t qjs_sz = (32 + 12 + 1);
+	if (data->style == BFS_65NM)
+		++qjs_sz;
+	size_t qjp_sz = 7 + (qjs_sz * data->ready_to_queue);
+	if (data->style == BFS_65NM)
+		qjp_sz -= 3;
 	uint8_t qjp[qjp_sz], *qjs;
-	qjp[0] = qjp_sz - 1;
-	qjp[1] = 0xc1;
-	qjp[2] = data->ready_to_queue;
-	qjp[qjp_sz - 1] = 0xfe;
 	qjs = &qjp[qjp_sz - 1];
+	// NOTE: qjp is build backwards here
+	
+	*(--qjs) = 0xfe;
 	
 	work = thr->work_list->prev;
 	for (int i = data->ready_to_queue; i > 0; --i, work = work->prev)
@@ -1625,11 +1661,27 @@ bool bitforce_send_queue(struct thr_info *thr)
 		*(--qjs) = 0xaa;
 		memcpy(qjs -= 12, work->data + 64, 12);
 		memcpy(qjs -= 32, work->midstate, 32);
-		*(--qjs) = 45;
+		if (data->style == BFS_65NM)
+			*(--qjs) = 45;
+	}
+	
+	*(--qjs) = data->ready_to_queue;
+	*(--qjs) = 0xc1;
+	if (data->style == BFS_65NM)
+		*(--qjs) = qjp_sz;
+	else
+	{
+		*(--qjs) = qjp_sz >> 8;
+		*(--qjs) = qjp_sz & 0xff;
+		*(--qjs) = 'X';
+		*(--qjs) = 'W';
 	}
 	
 retry:
 	mutex_lock(mutexp);
+	if (data->style != BFS_65NM)
+		bitforce_cmd1c(fd, data->xlink_id, buf, sizeof(buf), qjp, qjp_sz);
+	else
 	if (data->missing_zwx)
 		bitforce_cmd2(fd, data->xlink_id, buf, sizeof(buf), "ZNX", &qjp[3], qjp_sz - 4);
 	else
@@ -1875,7 +1927,7 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 	
 	ndq = !data->queued;
 	if ((ndq)              // Device is idle
-	 || (data->ready_to_queue >= BITFORCE_MAX_BQUEUE_AT_ONCE)  // ...or 5 items ready to go
+	 || (data->ready_to_queue >= data->max_queue_at_once)  // ...or 5 items ready to go
 	 || (thr->queue_full)            // ...or done filling queue
 	 || (data->just_flushed)         // ...or queue was just flushed (only remaining job is partly done already)
 	 || (data->missing_zwx)          // ...or device can only queue one at a time
