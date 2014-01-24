@@ -147,8 +147,13 @@ void bitforce_cmd2(int fd, int procid, void *buf, size_t bufsz, const char *cmd,
 
 #define BFclose(fd) serial_close(fd)
 
+enum bitforce_style {
+	BFS_FPGA,
+	BFS_65NM,
+};
+
 struct bitforce_init_data {
-	bool sc;
+	enum bitforce_style style;
 	long devmask;
 	int *parallels;
 };
@@ -212,7 +217,7 @@ static bool bitforce_detect_one(const char *devpath)
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
 	initdata = malloc(sizeof(*initdata));
 	*initdata = (struct bitforce_init_data){
-		.sc = false,
+		.style = BFS_FPGA,
 	};
 	bitforce_cmd1(fdDev, 0, pdevbuf, sizeof(pdevbuf), "ZCX");
 	for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
@@ -238,7 +243,7 @@ static bool bitforce_detect_one(const char *devpath)
 			initdata->devmask = strtol(&pdevbuf[20], NULL, 16);
 		else
 		if (!strncasecmp(pdevbuf, "DEVICE:", 7) && strstr(pdevbuf, "SC"))
-			initdata->sc = true;
+			initdata->style = BFS_65NM;
 		else
 		if (!strncasecmp(pdevbuf, "CHIP PARALLELIZATION: YES @", 27))
 			parallel = atoi(&pdevbuf[27]);
@@ -288,17 +293,17 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 	BFclose(fdDev);
 	
-	if (unlikely((procs != 1 || parallel != 1) && !initdata->sc))
+	if (unlikely((procs != 1 || parallel != 1) && initdata->style == BFS_FPGA))
 	{
 		// Only bitforce_queue supports parallelization and XLINK, so force SC mode and hope for the best
 		applog(LOG_WARNING, "SC features detected with non-SC device; this is not supported!");
-		initdata->sc = true;
+		initdata->style = BFS_65NM;
 	}
 	
 	// We have a real BitForce!
 	bitforce = calloc(1, sizeof(*bitforce));
 	bitforce->drv = &bitforce_drv;
-	if (initdata->sc)
+	if (initdata->style != BFS_FPGA)
 		bitforce->drv = &bitforce_queue_api;
 	bitforce->device_path = strdup(devpath);
 	if (manuf)
@@ -306,7 +311,7 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce->deven = DEV_ENABLED;
 	bitforce->procs = parallel;
 	bitforce->threads = 1;
-	if (initdata->sc)
+	if (initdata->style != BFS_FPGA)
 		bitforce->cutofftemp = 85;
 
 	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
@@ -335,7 +340,7 @@ struct bitforce_data {
 	char noncebuf[14 + ((BITFORCE_MAX_QRESULTS+1) * BITFORCE_QRESULT_LINE_LEN)];
 	int poll_func;
 	enum bitforce_proto proto;
-	bool sc;
+	enum bitforce_style style;
 	int queued;
 	int queued_max;
 	int parallel;
@@ -600,7 +605,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	if (mutex_trylock(mutexp))
 		return false;
 
-	if (data->sc)
+	if (data->style != BFS_FPGA)
 	{
 		if (unlikely(!data->probed))
 		{
@@ -614,7 +619,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	bitforce_cmd1(fdDev, data->xlink_id, pdevbuf, sizeof(pdevbuf), "ZLX");
 	mutex_unlock(mutexp);
 	
-	if (data->sc && likely(voltbuf[0]))
+	if (data->style != BFS_FPGA && likely(voltbuf[0]))
 	{
 		// Process voltage info
 		// "NNNxxx,NNNxxx,NNNxxx"
@@ -755,7 +760,7 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 			default:
 				;
 		}
-		if (data->sc)
+		if (data->style != BFS_FPGA)
 		{
 			// "S|---------- MidState ----------||-DataTail-|E"
 			data->next_work_ob[7] = 45;
@@ -777,7 +782,7 @@ void bitforce_change_mode(struct cgpu_info *bitforce, enum bitforce_proto proto)
 		bitforce->sleep_ms /= 5;
 		data->sleep_ms_default /= 5;
 		data->next_work_cmd = "ZPX";
-		if (data->sc)
+		if (data->style != BFS_FPGA)
 		{
 			data->next_work_ob[7] = 53;
 			data->next_work_obsz = 54;
@@ -1264,7 +1269,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	struct bitforce_data *data;
 	struct bitforce_proc_data *procdata;
 	struct bitforce_init_data *initdata = bitforce->device_data;
-	bool sc = initdata->sc;
+	const enum bitforce_style style = initdata->style;
 	int xlink_id = 0, boardno = 0;
 	struct bitforce_proc_data *first_on_this_board;
 	char buf[100];
@@ -1288,7 +1293,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.xlink_id = xlink_id,
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
-			.sc = sc,
+			.style = style,
 			.sleep_ms_default = BITFORCE_SLEEP_MS,
 			.parallel = abs(initdata->parallels[boardno]),
 			.parallel_protocol = (initdata->parallels[boardno] != -1),
@@ -1298,7 +1303,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.handles_board = true,
 			.cgpu = bitforce,
 		};
-		if (sc)
+		if (style != BFS_FPGA)
 		{
 			// ".......S|---------- MidState ----------||-DataTail-||Nonces|E"
 			data->next_work_ob[8+32+12+8] = '\xAA';
@@ -1369,7 +1374,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	cgsleep_ms(wait);
 
-	if (sc)
+	if (style != BFS_FPGA)
 	{
 		// Clear results queue last, to start fresh; ignore response
 		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
