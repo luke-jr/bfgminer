@@ -157,6 +157,7 @@ int opt_bench_algo = -1;
 unsigned long long global_hashrate;
 static bool opt_unittest = false;
 unsigned long global_quota_gcd = 1;
+time_t last_getwork;
 
 #ifdef HAVE_OPENCL
 int opt_dynamic_interval = 7;
@@ -8849,6 +8850,7 @@ struct work *get_work(struct thr_info *thr)
 			wake_gws();
 		}
 	}
+	last_getwork = time(NULL);
 	applog(LOG_DEBUG, "%"PRIpreprv": Got work %d from get queue to get work for thread %d",
 	       cgpu->proc_repr, work->id, thr_id);
 

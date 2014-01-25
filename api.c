@@ -2106,6 +2106,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	double stalep = (total_diff_accepted + total_diff_rejected + total_diff_stale) ?
 			(double)(total_diff_stale) / (double)(total_diff_accepted + total_diff_rejected + total_diff_stale) : 0;
 	root = api_add_percent(root, "Pool Stale%", &stalep, false);
+	root = api_add_time(root, "Last getwork", &last_getwork, false);
 
 	mutex_unlock(&hash_lock);
 
