@@ -110,6 +110,36 @@ The STATUS section is:
    This defaults to the BFGMiner version but is the value of --api-description
    if it was specified at runtime.
 
+With API V3.1 you can also request multiple report replies in a single command
+request
+e.g. to request both summary and devs, the command would be summary+devs
+
+This is only available for report commands that don't need parameters,
+and is not available for commands that change anything
+Any parameters supplied will be ignored
+
+The extra formatting of the result is to have a section for each command
+e.g. summary|STATUS=....|devs|STATUS=...
+With JSON, each result is within a section of the command name
+e.g. {"summary":{"STATUS":[{"STATUS":"S"...}],"SUMMARY":[...],"id":1},
+      "devs":{"STATUS":[{"STATUS:"S"...}],"DEVS":[...],"id":1},"id":1}
+
+As before, if you supply bad JSON you'll just get a single 'E' STATUS section
+in the old format, since it doesn't switch to using the new format until it
+correctly processes the JSON and can match a '+' in the command
+
+If you request a command multiple times, e.g. devs+devs
+you'll just get it once
+If this results in only one command, it will still use the new layout
+with just the one command
+
+If you request a command that can't be used due to requiring parameters,
+a command that isn't a report, or an invalid command, you'll get an 'E' STATUS
+for that one but it will still attempt to process all other commands supplied
+
+Blank/missing commands are ignore e.g. +devs++
+will just show 'devs' using the new layout
+
 For API version 1.10 and later:
 
 The list of requests - a (*) means it requires privileged access - and replies:
@@ -470,6 +500,12 @@ api-example.py - a Python script to access the API.
 
 Feature Changelog for external applications using the API:
 
+
+API V3.1
+
+Multiple report request command with '+' e.g. summary+devs
+
+---------
 
 API V2.3 (BFGMiner v3.7.0)
 
