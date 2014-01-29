@@ -2859,6 +2859,39 @@ void notifier_init(notifier_t pipefd)
 #endif
 }
 
+
+void *bfg_slurp_file(void * const bufp, size_t bufsz, const char * const filename)
+{
+	char *buf = bufp;
+	FILE * const F = fopen(filename, "r");
+	if (!F)
+		goto err;
+	
+	if (!buf)
+	{
+		fseek(F, 0, SEEK_END);
+		const long filesz = ftell(F);
+		if (unlikely(filesz < 0))
+		{
+			fclose(F);
+			goto err;
+		}
+		rewind(F);
+		bufsz = filesz + 1;
+		buf = malloc(bufsz);
+	}
+	const size_t rsz = fread(buf, 1, bufsz - 1, F);
+	fclose(F);
+	buf[rsz] = '\0';
+	return buf;
+
+err:
+	if (buf)
+		buf[0] = '\0';
+	return NULL;
+}
+
+
 void notifier_wake(notifier_t fd)
 {
 	if (fd[1] == INVSOCK)
