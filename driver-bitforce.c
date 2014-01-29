@@ -218,6 +218,8 @@ mapfailB:
 		munmap((void*)devdata->bar[1], 0x1000);
 		goto mapfailB;
 	}
+	const volatile uint32_t * const respreg = &devdata->bar[2][2];
+	devdata->lasttag = (*respreg >> 16) & 0xff;
 	devdata->is_open = true;
 	return devdata->is_open;
 }
