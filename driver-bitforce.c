@@ -35,6 +35,8 @@
 #include "lowl-vcom.h"
 #include "util.h"
 
+#define BFL_PCI_VENDOR_ID 0x1cf9
+
 #define BITFORCE_SLEEP_MS 500
 #define BITFORCE_TIMEOUT_S 7
 #define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
@@ -437,6 +439,7 @@ void bitforce_cmd2(struct cgpu_info * const proc, void *buf, size_t bufsz, const
 }
 
 struct bitforce_init_data {
+	struct bitforce_lowl_interface *lowlif;
 	enum bitforce_style style;
 	long devmask;
 	int *parallels;
@@ -457,10 +460,15 @@ int bitforce_chips_to_plan_for(int parallel, int chipcount) {
 static
 bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
 {
+#ifdef HAVE_SYS_MMAN_H
+	if (info->lowl == &lowl_pci)
+		return info->vid == BFL_PCI_VENDOR_ID;
+#endif
 	return lowlevel_match_product(info, "BitFORCE", "SHA256");
 }
 
-static bool bitforce_detect_one(const char *devpath)
+static
+bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_interface * const lowlif)
 {
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
@@ -471,13 +479,14 @@ static bool bitforce_detect_one(const char *devpath)
 	struct bitforce_init_data *initdata;
 	char *manuf = NULL;
 	struct bitforce_data dummy_bfdata = {
-		.lowlif = &bfllif_vcom,
+		.lowlif = lowlif,
 		.xlink_id = 0,
 	};
 	struct cgpu_info dummy_cgpu = {
 		.device = &dummy_cgpu,
 		.dev_repr = "BFL",
 		.proc_repr = "BFL",
+		.device_path = devpath,
 		.device_fd = -1,
 		.device_data = &dummy_bfdata,
 	};
@@ -512,6 +521,7 @@ static bool bitforce_detect_one(const char *devpath)
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
 	initdata = malloc(sizeof(*initdata));
 	*initdata = (struct bitforce_init_data){
+		.lowlif = lowlif,
 		.style = BFS_FPGA,
 	};
 	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZCX", 3);
@@ -627,8 +637,18 @@ static bool bitforce_detect_one(const char *devpath)
 }
 
 static
+bool bitforce_detect_one(const char * const devpath)
+{
+	return bitforce_detect_oneof(devpath, &bfllif_vcom);
+}
+
+static
 bool bitforce_lowl_probe(const struct lowlevel_device_info * const info)
 {
+#ifdef HAVE_SYS_MMAN_H
+	if (info->lowl == &lowl_pci)
+		return bitforce_detect_oneof(info->path, &bfllif_uio);
+#endif
 	return vcom_lowl_probe_wrapper(info, bitforce_detect_one);
 }
 

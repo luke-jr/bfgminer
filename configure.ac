@@ -373,6 +373,10 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+	driverlist="$driverlist bitforce:uio/ac_cv_header_sys_mman_h"
+	if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
+		need_lowl_pci=yes
+	fi
 	need_lowl_vcom=yes
 	has_fpga=yes
 	has_asic=yes
