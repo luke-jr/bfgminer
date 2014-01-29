@@ -71,7 +71,15 @@ enum bitforce_style {
 	BFS_28NM,
 };
 
+struct bitforce_lowl_interface {
+	bool (*open)(struct cgpu_info *);
+	void (*close)(struct cgpu_info *);
+	void (*gets)(char *, size_t, struct cgpu_info *);
+	ssize_t (*write)(struct cgpu_info *, const void *, ssize_t);
+};
+
 struct bitforce_data {
+	struct bitforce_lowl_interface *lowlif;
 	bool is_open;
 	int xlink_id;
 	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
@@ -148,6 +156,13 @@ ssize_t bitforce_vcom_write(struct cgpu_info * const dev, const void *buf, ssize
 		return bufLen;
 }
 
+static struct bitforce_lowl_interface bfllif_vcom = {
+	.open = bitforce_vcom_open,
+	.close = bitforce_vcom_close,
+	.gets = bitforce_vcom_gets,
+	.write = bitforce_vcom_write,
+};
+
 static
 void bitforce_close(struct cgpu_info * const proc)
 {
@@ -155,15 +170,17 @@ void bitforce_close(struct cgpu_info * const proc)
 	struct bitforce_data * const devdata = dev->device_data;
 	
 	if (devdata->is_open)
-		bitforce_vcom_close(dev);
+		devdata->lowlif->close(dev);
 }
 
 static
 bool bitforce_open(struct cgpu_info * const proc)
 {
 	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	
 	bitforce_close(proc);
-	return bitforce_vcom_open(dev);
+	return devdata->lowlif->open(dev);
 }
 
 static
@@ -175,7 +192,7 @@ void bitforce_gets(char * const buf, const size_t bufLen, struct cgpu_info * con
 	if (unlikely(!devdata->is_open))
 		return;
 	
-	bitforce_vcom_gets(buf, bufLen, dev);
+	devdata->lowlif->gets(buf, bufLen, dev);
 	
 	if (unlikely(opt_dev_protocol))
 		applog(LOG_DEBUG, "DEVPROTO: %s: GETS: %s", dev->dev_repr, buf);
@@ -190,7 +207,7 @@ ssize_t bitforce_write(struct cgpu_info * const proc, const void * const buf, co
 	if (unlikely(!devdata->is_open))
 		return 0;
 	
-	return bitforce_vcom_write(dev, buf, bufLen);
+	return devdata->lowlif->write(dev, buf, bufLen);
 }
 
 static ssize_t bitforce_send(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
@@ -302,6 +319,7 @@ static bool bitforce_detect_one(const char *devpath)
 	struct bitforce_init_data *initdata;
 	char *manuf = NULL;
 	struct bitforce_data dummy_bfdata = {
+		.lowlif = &bfllif_vcom,
 		.xlink_id = 0,
 	};
 	struct cgpu_info dummy_cgpu = {
@@ -1382,6 +1400,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 		bitforce->device_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
+			.lowlif = &bfllif_vcom,
 			.xlink_id = xlink_id,
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
