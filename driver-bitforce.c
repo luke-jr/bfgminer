@@ -105,9 +105,8 @@ struct bitforce_data {
 
 // Code must deal with a timeout
 static
-bool bitforce_vcom_open(struct cgpu_info * const proc)
+bool bitforce_vcom_open(struct cgpu_info * const dev)
 {
-	struct cgpu_info * const dev = proc->device;
 	struct bitforce_data * const devdata = dev->device_data;
 	const char * const devpath = dev->device_path;
 	dev->device_fd = serial_open(devpath, 0, 250, true);
@@ -116,9 +115,8 @@ bool bitforce_vcom_open(struct cgpu_info * const proc)
 }
 
 static
-void bitforce_vcom_close(struct cgpu_info * const proc)
+void bitforce_vcom_close(struct cgpu_info * const dev)
 {
-	struct cgpu_info * const dev = proc->device;
 	struct bitforce_data * const devdata = dev->device_data;
 	if (devdata->is_open)
 	{
@@ -129,9 +127,8 @@ void bitforce_vcom_close(struct cgpu_info * const proc)
 }
 
 static
-void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const proc)
+void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const dev)
 {
-	struct cgpu_info * const dev = proc->device;
 	const int fd = dev->device_fd;
 	do {
 		buf[0] = '\0';
@@ -142,9 +139,8 @@ void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const proc)
 }
 
 static
-ssize_t bitforce_vcom_write(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
+ssize_t bitforce_vcom_write(struct cgpu_info * const dev, const void *buf, ssize_t bufLen)
 {
-	struct cgpu_info * const dev = proc->device;
 	const int fd = dev->device_fd;
 	if ((bufLen) != write(fd, buf, bufLen))
 		return 0;
@@ -159,14 +155,15 @@ void bitforce_close(struct cgpu_info * const proc)
 	struct bitforce_data * const devdata = dev->device_data;
 	
 	if (devdata->is_open)
-		bitforce_vcom_close(proc);
+		bitforce_vcom_close(dev);
 }
 
 static
 bool bitforce_open(struct cgpu_info * const proc)
 {
+	struct cgpu_info * const dev = proc->device;
 	bitforce_close(proc);
-	return bitforce_vcom_open(proc);
+	return bitforce_vcom_open(dev);
 }
 
 static
@@ -178,7 +175,7 @@ void bitforce_gets(char * const buf, const size_t bufLen, struct cgpu_info * con
 	if (unlikely(!devdata->is_open))
 		return;
 	
-	bitforce_vcom_gets(buf, bufLen, proc);
+	bitforce_vcom_gets(buf, bufLen, dev);
 	
 	if (unlikely(opt_dev_protocol))
 		applog(LOG_DEBUG, "DEVPROTO: %s: GETS: %s", dev->dev_repr, buf);
@@ -193,7 +190,7 @@ ssize_t bitforce_write(struct cgpu_info * const proc, const void * const buf, co
 	if (unlikely(!devdata->is_open))
 		return 0;
 	
-	return bitforce_vcom_write(proc, buf, bufLen);
+	return bitforce_vcom_write(dev, buf, bufLen);
 }
 
 static ssize_t bitforce_send(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
