@@ -129,32 +129,22 @@ void bitforce_vcom_close(struct cgpu_info * const proc)
 }
 
 static
-void BFgets(char *buf, size_t bufLen, struct cgpu_info * const proc)
+void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const proc)
 {
 	struct cgpu_info * const dev = proc->device;
-	struct bitforce_data * const devdata = dev->device_data;
-	if (unlikely(!devdata->is_open))
-		return;
 	const int fd = dev->device_fd;
-	char *obuf = buf;
 	do {
 		buf[0] = '\0';
 		--bufLen;
 	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
 
 	buf[0] = '\0';
-	
-	if (unlikely(opt_dev_protocol))
-		applog(LOG_DEBUG, "DEVPROTO: %s: GETS: %s", dev->dev_repr, obuf);
 }
 
 static
-ssize_t BFwrite(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
+ssize_t bitforce_vcom_write(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
 {
 	struct cgpu_info * const dev = proc->device;
-	struct bitforce_data * const devdata = dev->device_data;
-	if (unlikely(!devdata->is_open))
-		return 0;
 	const int fd = dev->device_fd;
 	if ((bufLen) != write(fd, buf, bufLen))
 		return 0;
@@ -162,12 +152,56 @@ ssize_t BFwrite(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
 		return bufLen;
 }
 
+static
+void bitforce_close(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	
+	if (devdata->is_open)
+		bitforce_vcom_close(proc);
+}
+
+static
+bool bitforce_open(struct cgpu_info * const proc)
+{
+	bitforce_close(proc);
+	return bitforce_vcom_open(proc);
+}
+
+static
+void bitforce_gets(char * const buf, const size_t bufLen, struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	
+	if (unlikely(!devdata->is_open))
+		return;
+	
+	bitforce_vcom_gets(buf, bufLen, proc);
+	
+	if (unlikely(opt_dev_protocol))
+		applog(LOG_DEBUG, "DEVPROTO: %s: GETS: %s", dev->dev_repr, buf);
+}
+
+static
+ssize_t bitforce_write(struct cgpu_info * const proc, const void * const buf, const ssize_t bufLen)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	
+	if (unlikely(!devdata->is_open))
+		return 0;
+	
+	return bitforce_vcom_write(proc, buf, bufLen);
+}
+
 static ssize_t bitforce_send(struct cgpu_info * const proc, const void *buf, ssize_t bufLen)
 {
 	struct bitforce_data * const data = proc->device_data;
 	const int procid = data->xlink_id;
 	if (!procid)
-		return BFwrite(proc, buf, bufLen);
+		return bitforce_write(proc, buf, bufLen);
 	
 	if (bufLen > 255)
 		return -1;
@@ -182,7 +216,7 @@ static ssize_t bitforce_send(struct cgpu_info * const proc, const void *buf, ssi
 	bufp = realbuf;
 	do
 	{
-		rv = BFwrite(proc, bufp, bufLeft);
+		rv = bitforce_write(proc, bufp, bufLeft);
 		if (rv <= 0)
 			return rv;
 		bufLeft -= rv;
@@ -199,7 +233,7 @@ void bitforce_cmd1b(struct cgpu_info * const proc, void *buf, size_t bufsz, cons
 		       proc->proc_repr, cmd);
 	
 	bitforce_send(proc, cmd, cmdsz);
-	BFgets(buf, bufsz, proc);
+	bitforce_gets(buf, bufsz, proc);
 }
 
 static
@@ -214,7 +248,7 @@ void bitforce_cmd1c(struct cgpu_info * const proc, void *buf, size_t bufsz, void
 	}
 	
 	bitforce_send(proc, cmd, cmdsz);
-	BFgets(buf, bufsz, proc);
+	bitforce_gets(buf, bufsz, proc);
 }
 
 static
@@ -233,7 +267,7 @@ void bitforce_cmd2(struct cgpu_info * const proc, void *buf, size_t bufsz, const
 	}
 	
 	bitforce_send(proc, data, datasz);
-	BFgets(buf, bufsz, proc);
+	bitforce_gets(buf, bufsz, proc);
 }
 
 struct bitforce_init_data {
@@ -282,7 +316,7 @@ static bool bitforce_detect_one(const char *devpath)
 	};
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
-	bitforce_vcom_open(&dummy_cgpu);
+	bitforce_open(&dummy_cgpu);
 
 	if (unlikely(!dummy_bfdata.is_open)) {
 		applog(LOG_DEBUG, "BFL: Failed to open %s", devpath);
@@ -292,19 +326,19 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
-		bitforce_vcom_close(&dummy_cgpu);
+		bitforce_close(&dummy_cgpu);
 		return 0;
 	}
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_DEBUG, "BFL: Didn't recognise BitForce on %s", devpath);
-		bitforce_vcom_close(&dummy_cgpu);
+		bitforce_close(&dummy_cgpu);
 		return false;
 	}
 
 	if (serial_claim_v(devpath, &bitforce_drv))
 	{
-		bitforce_vcom_close(&dummy_cgpu);
+		bitforce_close(&dummy_cgpu);
 		return false;
 	}
 	
@@ -315,10 +349,10 @@ static bool bitforce_detect_one(const char *devpath)
 	};
 	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZCX", 3);
 	for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
-		BFgets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu);
+		bitforce_gets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu);
 	for ( ;
 	      strncasecmp(pdevbuf, "OK", 2);
-	      BFgets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu) )
+	      bitforce_gets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu) )
 	{
 		pdevbuf_len = strlen(pdevbuf);
 		if (unlikely(!pdevbuf_len))
@@ -370,10 +404,10 @@ static bool bitforce_detect_one(const char *devpath)
 		maxchipno = 0;
 		bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZCX", 3);
 		for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
-			BFgets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu);
+			bitforce_gets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu);
 		for ( ;
 		      strncasecmp(pdevbuf, "OK", 2);
-		      BFgets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu) )
+		      bitforce_gets(pdevbuf, sizeof(pdevbuf), &dummy_cgpu) )
 		{
 			pdevbuf_len = strlen(pdevbuf);
 			if (unlikely(!pdevbuf_len))
@@ -391,7 +425,7 @@ static bool bitforce_detect_one(const char *devpath)
 		initdata->parallels[proc] = bitforce_chips_to_plan_for(initdata->parallels[proc], maxchipno);
 		parallel += abs(initdata->parallels[proc]);
 	}
-	bitforce_vcom_close(&dummy_cgpu);
+	bitforce_close(&dummy_cgpu);
 	
 	if (unlikely((procs != 1 || parallel != 1) && initdata->style == BFS_FPGA))
 	{
@@ -448,8 +482,7 @@ void bitforce_comm_error(struct thr_info *thr)
 	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
 	dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 	inc_hw_errors_only(thr);
-	bitforce_vcom_close(bitforce);
-	if (!bitforce_vcom_open(bitforce))
+	if (!bitforce_open(bitforce))
 	{
 		applog(LOG_ERR, "%s: Error reopening %s", bitforce->dev_repr, bitforce->device_path);
 		return;
@@ -462,7 +495,7 @@ static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	
-	if (unlikely(!bitforce_vcom_open(bitforce)))
+	if (unlikely(!bitforce_open(bitforce)))
 	{
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
 		return false;
@@ -481,7 +514,7 @@ void __bitforce_clear_buffer(struct cgpu_info * const dev)
 
 	do {
 		pdevbuf[0] = '\0';
-		BFgets(pdevbuf, sizeof(pdevbuf), dev);
+		bitforce_gets(pdevbuf, sizeof(pdevbuf), dev);
 	} while (pdevbuf[0] && (++count < 10));
 }
 
@@ -524,11 +557,11 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (devdata->is_open)
 	{
-		bitforce_vcom_close(bitforce);
+		bitforce_close(bitforce);
 		cgsleep_ms(5000);
 	}
 
-	bitforce_vcom_open(bitforce);
+	bitforce_open(bitforce);
 	if (unlikely(!devdata->is_open)) {
 		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, devpath);
@@ -541,7 +574,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		bitforce_cmd1b(bitforce, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(mutexp);
-			bitforce_vcom_close(bitforce);
+			bitforce_close(bitforce);
 			applog(LOG_ERR, "%s: Error reading/timeout (ZGX)", bitforce->dev_repr);
 			return;
 		}
@@ -552,7 +585,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(mutexp);
-		bitforce_vcom_close(bitforce);
+		bitforce_close(bitforce);
 		applog(LOG_ERR, "%s: Didn't recognise BitForce on %s returned: %s", bitforce->dev_repr, devpath, pdevbuf);
 		return;
 	}
@@ -946,7 +979,7 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 	mutex_lock(mutexp);
 	bitforce_cmd1b(bitforce, pdevbuf, sizeof(data->noncebuf), cmd, 3);
 	if (!strncasecmp(pdevbuf, "INPROCESS:", 10))
-		BFgets(pdevbuf, sizeof(data->noncebuf), bitforce);
+		bitforce_gets(pdevbuf, sizeof(data->noncebuf), bitforce);
 	if (!strncasecmp(pdevbuf, "COUNT:", 6))
 	{
 		count = atoi(&pdevbuf[6]);
@@ -959,7 +992,7 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 		
 		while (true)
 		{
-			BFgets(pmorebuf, szleft, bitforce);
+			bitforce_gets(pmorebuf, szleft, bitforce);
 			if (!strncasecmp(pmorebuf, "OK", 2))
 			{
 				pmorebuf[0] = '\0';  // process expects only results
@@ -1300,7 +1333,7 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 static void bitforce_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	bitforce_vcom_close(bitforce);
+	bitforce_close(bitforce);
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
