@@ -119,7 +119,7 @@ and is not available for commands that change anything
 Any parameters supplied will be ignored
 
 The extra formatting of the result is to have a section for each command
-e.g. summary|STATUS=....|devs|STATUS=...
+e.g. CMD=summary|STATUS=....|CMD=devs|STATUS=...
 With JSON, each result is within a section of the command name
 e.g. {"summary":{"STATUS":[{"STATUS":"S"...}],"SUMMARY":[...],"id":1},
       "devs":{"STATUS":[{"STATUS:"S"...}],"DEVS":[...],"id":1},"id":1}
