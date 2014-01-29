@@ -103,7 +103,26 @@ struct bitforce_data {
 };
 
 // Code must deal with a timeout
-#define BFopen(devpath)  serial_open(devpath, 0, 250, true)
+static
+bool bitforce_vcom_open(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	const char * const devpath = dev->device_path;
+	dev->device_fd = serial_open(devpath, 0, 250, true);
+	return (dev->device_fd != -1);
+}
+
+static
+void bitforce_vcom_close(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	const int fd = dev->device_fd;
+	if (fd != -1)
+	{
+		serial_close(fd);
+		dev->device_fd = -1;
+	}
+}
 
 static
 void BFgets(char *buf, size_t bufLen, struct cgpu_info * const proc)
@@ -215,8 +234,6 @@ void bitforce_cmd2(struct cgpu_info * const proc, void *buf, size_t bufsz, const
 	BFgets(buf, bufsz, proc);
 }
 
-#define BFclose(fd) serial_close(fd)
-
 struct bitforce_init_data {
 	enum bitforce_style style;
 	long devmask;
@@ -243,7 +260,6 @@ bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
 
 static bool bitforce_detect_one(const char *devpath)
 {
-	int fdDev = serial_open(devpath, 0, 10, true);
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
 	size_t pdevbuf_len;
@@ -259,11 +275,13 @@ static bool bitforce_detect_one(const char *devpath)
 		.device = &dummy_cgpu,
 		.dev_repr = "BFL",
 		.proc_repr = "BFL",
-		.device_fd = fdDev,
+		.device_fd = -1,
 		.device_data = &dummy_bfdata,
 	};
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
+	bitforce_vcom_open(&dummy_cgpu);
+	const int fdDev = dummy_cgpu.device_fd;
 
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_DEBUG, "BFL: Failed to open %s", devpath);
@@ -273,19 +291,19 @@ static bool bitforce_detect_one(const char *devpath)
 	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
-		BFclose(fdDev);
+		bitforce_vcom_close(&dummy_cgpu);
 		return 0;
 	}
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		applog(LOG_DEBUG, "BFL: Didn't recognise BitForce on %s", devpath);
-		BFclose(fdDev);
+		bitforce_vcom_close(&dummy_cgpu);
 		return false;
 	}
 
 	if (serial_claim_v(devpath, &bitforce_drv))
 	{
-		BFclose(fdDev);
+		bitforce_vcom_close(&dummy_cgpu);
 		return false;
 	}
 	
@@ -372,7 +390,7 @@ static bool bitforce_detect_one(const char *devpath)
 		initdata->parallels[proc] = bitforce_chips_to_plan_for(initdata->parallels[proc], maxchipno);
 		parallel += abs(initdata->parallels[proc]);
 	}
-	BFclose(fdDev);
+	bitforce_vcom_close(&dummy_cgpu);
 	
 	if (unlikely((procs != 1 || parallel != 1) && initdata->style == BFS_FPGA))
 	{
@@ -430,8 +448,9 @@ void bitforce_comm_error(struct thr_info *thr)
 	applog(LOG_ERR, "%"PRIpreprv": Comms error", bitforce->proc_repr);
 	dev_error(bitforce, REASON_DEV_COMMS_ERROR);
 	inc_hw_errors_only(thr);
-	BFclose(*p_fdDev);
-	int fd = *p_fdDev = BFopen(bitforce->device_path);
+	bitforce_vcom_close(bitforce);
+	bitforce_vcom_open(bitforce);
+	const int fd = *p_fdDev;
 	if (fd == -1)
 	{
 		applog(LOG_ERR, "%s: Error reopening %s", bitforce->dev_repr, bitforce->device_path);
@@ -444,14 +463,13 @@ void bitforce_comm_error(struct thr_info *thr)
 static bool bitforce_thread_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int fdDev = BFopen(bitforce->device_path);
+	bitforce_vcom_open(bitforce);
+	const int fdDev = bitforce->device_fd;
 
 	if (unlikely(fdDev == -1)) {
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
 		return false;
 	}
-
-	bitforce->device_fd = fdDev;
 
 	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
 
@@ -509,27 +527,25 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	applog(LOG_WARNING, "%"PRIpreprv": Re-initialising", bitforce->proc_repr);
 
 	if (fdDev != -1) {
-		BFclose(fdDev);
+		bitforce_vcom_close(bitforce);
 		cgsleep_ms(5000);
-		*p_fdDev = -1;
 	}
 
-	fdDev = BFopen(devpath);
+	bitforce_vcom_open(bitforce);
+	fdDev = bitforce->device_fd;
 	if (unlikely(fdDev == -1)) {
 		mutex_unlock(mutexp);
 		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, devpath);
 		return;
 	}
 
-	*p_fdDev = fdDev;
 	__bitforce_clear_buffer(bitforce);
 	
 	do {
 		bitforce_cmd1b(bitforce, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(mutexp);
-			BFclose(fdDev);
-			*p_fdDev = -1;
+			bitforce_vcom_close(bitforce);
 			applog(LOG_ERR, "%s: Error reading/timeout (ZGX)", bitforce->dev_repr);
 			return;
 		}
@@ -540,8 +556,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 
 	if (unlikely(!strstr(pdevbuf, "SHA256"))) {
 		mutex_unlock(mutexp);
-		BFclose(fdDev);
-		*p_fdDev = -1;
+		bitforce_vcom_close(bitforce);
 		applog(LOG_ERR, "%s: Didn't recognise BitForce on %s returned: %s", bitforce->dev_repr, devpath, pdevbuf);
 		return;
 	}
@@ -1285,10 +1300,7 @@ int64_t bitforce_job_process_results(struct thr_info *thr, struct work *work, __
 static void bitforce_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	int *p_fdDev = &bitforce->device->device_fd;
-
-	BFclose(*p_fdDev);
-	*p_fdDev = -1;
+	bitforce_vcom_close(bitforce);
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
