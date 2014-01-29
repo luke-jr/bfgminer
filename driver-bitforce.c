@@ -419,7 +419,7 @@ static void bitforce_clear_buffer(struct cgpu_info *bitforce)
 	mutex_lock(mutexp);
 	
 	fdDev = bitforce->device->device_fd;
-	if (fdDev)
+	if (fdDev != -1)
 	{
 		applog(LOG_DEBUG, "%"PRIpreprv": Clearing read buffer", bitforce->proc_repr);
 		__bitforce_clear_buffer(fdDev);
@@ -449,10 +449,10 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	
 	applog(LOG_WARNING, "%"PRIpreprv": Re-initialising", bitforce->proc_repr);
 
-	if (fdDev) {
+	if (fdDev != -1) {
 		BFclose(fdDev);
 		cgsleep_ms(5000);
-		*p_fdDev = 0;
+		*p_fdDev = -1;
 	}
 
 	fdDev = BFopen(devpath);
@@ -521,7 +521,7 @@ static void bitforce_flash_led(struct cgpu_info *bitforce)
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int fdDev = bitforce->device->device_fd;
 
-	if (!fdDev)
+	if (fdDev == -1)
 		return;
 
 	/* Do not try to flash the led if we're polling for a result to
@@ -579,7 +579,7 @@ static bool bitforce_get_temp(struct cgpu_info *bitforce)
 	char *s;
 	struct cgpu_info *chip_cgpu;
 
-	if (!fdDev)
+	if (fdDev == -1)
 		return false;
 
 	/* Do not try to get the temperature if we're polling for a result to
@@ -734,7 +734,7 @@ bool bitforce_job_prepare(struct thr_info *thr, struct work *work, __maybe_unuse
 				pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 				char pdevbuf[0x100];
 				
-				if (unlikely(!fdDev))
+				if (unlikely(fdDev == -1))
 					return false;
 				
 				mutex_lock(mutexp);
@@ -844,7 +844,7 @@ void bitforce_job_start(struct thr_info *thr)
 		return;
 	}
 
-	if (!fdDev)
+	if (fdDev == -1)
 		goto commerr;
 re_send:
 	mutex_lock(mutexp);
@@ -970,7 +970,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 	bitforce->wait_ms = tv_to_ms(elapsed);
 	bitforce->polling = true;
 	
-	if (!fdDev)
+	if (fdDev == -1)
 		goto commerr;
 
 	stale = stale_work(work, true);
@@ -1264,7 +1264,7 @@ static void bitforce_shutdown(struct thr_info *thr)
 	int *p_fdDev = &bitforce->device->device_fd;
 
 	BFclose(*p_fdDev);
-	*p_fdDev = 0;
+	*p_fdDev = -1;
 }
 
 static void biforce_thread_enable(struct thr_info *thr)
@@ -1631,7 +1631,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	int fd = bitforce->device->device_fd;
 	struct work *work;
 	
-	if (unlikely(!(fd && data->ready_to_queue)))
+	if (unlikely(!(fd != -1 && data->ready_to_queue)))
 		return false;
 	
 	char buf[0x100];
@@ -1729,7 +1729,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	struct thr_info *chip_thr;
 	int counts[data->parallel];
 	
-	if (unlikely(!fd))
+	if (unlikely(fd == -1))
 		return false;
 	
 again:
