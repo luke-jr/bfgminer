@@ -20,6 +20,14 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#ifdef HAVE_SYS_MMAN_H
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#endif
+
 #include "compat.h"
 #include "deviceapi.h"
 #include "miner.h"
@@ -81,6 +89,9 @@ struct bitforce_lowl_interface {
 struct bitforce_data {
 	struct bitforce_lowl_interface *lowlif;
 	bool is_open;
+	volatile uint32_t *bar[3];
+	uint8_t lasttag;
+	bytes_t getsbuf;
 	int xlink_id;
 	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
 	unsigned char *next_work_obs;    // Start of data to send
@@ -162,6 +173,147 @@ static struct bitforce_lowl_interface bfllif_vcom = {
 	.gets = bitforce_vcom_gets,
 	.write = bitforce_vcom_write,
 };
+
+#ifdef HAVE_SYS_MMAN_H
+static
+void *bitforce_mmap_bar(const char * const devpath, const int bar, const size_t sz, const int prot)
+{
+	char buf[0x100];
+	snprintf(buf, sizeof(buf), "/sys/bus/pci/devices/%s/resource%d", devpath, bar);
+	const int fd = open(buf, O_RDWR);
+	if (fd == -1)
+		return MAP_FAILED;
+	void * const rv = mmap(NULL, sz, prot, MAP_SHARED, fd, 0);
+	close(fd);
+	return rv;
+}
+
+static
+bool bitforce_uio_open(struct cgpu_info * const dev)
+{
+	struct bitforce_data * const devdata = dev->device_data;
+	const char * const devpath = dev->device_path;
+	devdata->bar[0] = bitforce_mmap_bar(devpath, 0, 0x1000, PROT_WRITE);
+	if (devdata->bar[0] == MAP_FAILED)
+	{
+		applog(LOG_ERR, "%s: mmap bar 0 failed", dev->dev_repr);
+mapfailA:
+		devdata->bar[0] = NULL;
+		return false;
+	}
+	devdata->bar[1] = bitforce_mmap_bar(devpath, 1, 0x1000, PROT_READ);
+	if (devdata->bar[1] == MAP_FAILED)
+	{
+		applog(LOG_ERR, "%s: mmap bar 1 failed", dev->dev_repr);
+mapfailB:
+		munmap((void*)devdata->bar[0], 0x1000);
+		goto mapfailA;
+	}
+	devdata->bar[2] = bitforce_mmap_bar(devpath, 2,   0x80, PROT_READ | PROT_WRITE);
+	if (devdata->bar[2] == MAP_FAILED)
+	{
+		applog(LOG_ERR, "%s: mmap bar 2 failed", dev->dev_repr);
+		munmap((void*)devdata->bar[1], 0x1000);
+		goto mapfailB;
+	}
+	devdata->is_open = true;
+	return devdata->is_open;
+}
+
+static
+void bitforce_uio_close(struct cgpu_info * const dev)
+{
+	struct bitforce_data * const devdata = dev->device_data;
+	if (devdata->is_open)
+	{
+		munmap((void*)devdata->bar[0], 0x1000);
+		munmap((void*)devdata->bar[1], 0x1000);
+		munmap((void*)devdata->bar[2],   0x80);
+		devdata->is_open = false;
+	}
+}
+
+static
+void bitforce_uio_gets(char * const buf, size_t bufLen, struct cgpu_info * const dev)
+{
+	struct bitforce_data * const devdata = dev->device_data;
+	const volatile uint32_t * const respreg = &devdata->bar[2][2];
+	const volatile uint32_t *respdata = devdata->bar[1];
+	const uint32_t looking_for = (uint32_t)devdata->lasttag << 0x10;
+	uint32_t resp;
+	bytes_t *b = &devdata->getsbuf;
+	
+	if (!bytes_len(&devdata->getsbuf))
+	{
+		while (((resp = *respreg) & 0xff0000) != looking_for)
+			cgsleep_ms(1);
+		
+		resp &= 0xffff;
+		if (unlikely(resp > 0x1000))
+			resp = 0x1000;
+		
+		const uint32_t respwords = (resp + 3) / 4;
+		swap32tobe(bytes_preappend(b, respwords * 4), (void*)respdata, respwords);
+		bytes_postappend(b, resp);
+	}
+	
+	ssize_t linelen = (bytes_find(b, '\n') + 1) ?: bytes_len(b);
+	if (linelen > --bufLen)
+		linelen = bufLen;
+	
+	memcpy(buf, bytes_buf(b), linelen);
+	bytes_shift(b, linelen);
+	buf[linelen] = '\0';
+}
+
+static
+ssize_t bitforce_uio_write(struct cgpu_info * const dev, const void * const bufp, ssize_t bufLen)
+{
+	const uint8_t *buf = bufp;
+	struct bitforce_data * const devdata = dev->device_data;
+	volatile uint32_t * const cmdreg = &devdata->bar[2][0];
+	volatile uint32_t * cmdbuf = devdata->bar[0];
+	uint32_t lastu32;
+	
+	if (unlikely(bufLen > 0x1000))
+		return 0;
+	
+	while (bufLen > 3)
+	{
+		*(cmdbuf++) = ((uint32_t)buf[0] << 0x18)
+		            | ((uint32_t)buf[1] << 0x10)
+		            | ((uint16_t)buf[2] <<    8)
+		            | buf[3];
+		buf += 4;
+		bufLen -= 4;
+	}
+	lastu32 = 0;
+	switch (bufLen)
+	{
+		case 3:
+			lastu32 |= ((uint16_t)buf[2] <<    8);
+		case 2:
+			lastu32 |= ((uint32_t)buf[1] << 0x10);
+		case 1:
+			lastu32 |= ((uint32_t)buf[0] << 0x18);
+			*cmdbuf = lastu32;
+		default:
+			;
+	}
+	if (++devdata->lasttag == 0)
+		++devdata->lasttag;
+	*cmdreg = ((uint32_t)devdata->lasttag << 0x10) | bufLen;
+	
+	return bufLen;
+}
+
+static struct bitforce_lowl_interface bfllif_uio = {
+	.open = bitforce_uio_open,
+	.close = bitforce_uio_close,
+	.gets = bitforce_uio_gets,
+	.write = bitforce_uio_write,
+};
+#endif
 
 static
 void bitforce_close(struct cgpu_info * const proc)
