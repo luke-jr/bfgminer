@@ -393,6 +393,9 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 			const float celsius = 0.1 * (float)decicelsius;
 			for (proc = dev; proc; proc = proc->next_proc)
 				proc->temp = celsius;
+			if (decicelsius >= 800)
+				// Thermal overheat causes restart losing the clock, so resend it while temperature is over 80 C
+				state->send_clock = true;
 		}
 	}
 	else
