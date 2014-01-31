@@ -9407,7 +9407,7 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 	return work;
 }
 
-static void flush_queue(struct cgpu_info *cgpu)
+void flush_queue(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 
