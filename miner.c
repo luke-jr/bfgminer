@@ -9115,11 +9115,10 @@ struct work *get_queued(struct cgpu_info *cgpu)
 			work = NULL;
 			wake_gws();
 			goto out_unlock;
-		}
-		__add_queued(cgpu, work);
+		} else
+			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
-out_unlock:
 	wr_unlock(&cgpu->qlock);
 
 	return work;
