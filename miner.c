@@ -9114,7 +9114,6 @@ struct work *get_queued(struct cgpu_info *cgpu)
 			discard_work(work);
 			work = NULL;
 			wake_gws();
-			goto out_unlock;
 		} else
 			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
