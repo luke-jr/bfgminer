@@ -26,5 +26,6 @@ GOTO="bfgminer_end"
 LABEL="bfgminer_add"
 
 GROUP="video"
+ENV{ID_MM_DEVICE_IGNORE}="1"
 
 LABEL="bfgminer_end"
