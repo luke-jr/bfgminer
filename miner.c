@@ -9082,11 +9082,6 @@ void mt_disable_start(struct thr_info *mythr)
 		drv->thread_disable(mythr);
 	
 	hashmeter2(mythr);
-	if (mythr->prev_work)
-		free_work(mythr->prev_work);
-	mythr->prev_work = mythr->work;
-	mythr->work = NULL;
-	mythr->_job_transition_in_progress = false;
 	__thr_being_msg(LOG_WARNING, mythr, "being disabled");
 	mythr->rolling = mythr->cgpu->rolling = 0;
 	thread_reportout(mythr);
