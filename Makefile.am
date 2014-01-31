@@ -300,7 +300,7 @@ bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 
 if NEED_BFG_LOWL_PCI
-bfgminer_SOURCES += lowl-pci.c
+bfgminer_SOURCES += lowl-pci.c lowl-pci.h
 endif
 
 bin_PROGRAMS += bfgminer-rpc
