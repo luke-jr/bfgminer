@@ -1427,6 +1427,18 @@ if test "x$found_endian" = "xno"; then
 fi
 
 
+AC_MSG_CHECKING([if good static asserts compile])
+AC_TRY_LINK([
+], [
+	_Static_assert(1, ":)");
+], [
+	AC_MSG_RESULT([yes])
+], [
+	AC_MSG_RESULT([no])
+	AC_DEFINE_UNQUOTED([_Static_assert(...)], [], [Turns _Static_assert into noop for compilers that don't support it])
+])
+
+
 AC_MSG_CHECKING([if GNU format attribute compiles])
 AC_TRY_COMPILE([
 	#define FORMAT_SYNTAX_CHECK(...) __attribute__(( format(__VA_ARGS__) ))
