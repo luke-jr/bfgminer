@@ -43,6 +43,10 @@
 	{
 		return (errno == EAGAIN || errno == EWOULDBLOCK);
 	}
+	static inline bool interrupted(void)
+	{
+		return (errno == EINTR);
+	}
 #elif defined WIN32
 	#include <ws2tcpip.h>
 	#include <winsock2.h>
@@ -59,6 +63,10 @@
 	static inline bool sock_blocks(void)
 	{
 		return (WSAGetLastError() == WSAEWOULDBLOCK);
+	}
+	static inline bool interrupted(void)
+	{
+		return (WSAGetLastError() == WSAEINTR);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH

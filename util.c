@@ -1574,11 +1574,14 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 		struct timeval timeout = {1, 0};
 		ssize_t sent;
 		fd_set wd;
-
+retry:
 		FD_ZERO(&wd);
 		FD_SET(sock, &wd);
-		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1)
+		if (select(sock + 1, NULL, &wd, NULL, &timeout) < 1) {
+			if (interrupted())
+				goto retry;
 			return SEND_SELECTFAIL;
+		}
 #ifdef __APPLE__
 		sent = send(pool->sock, s + ssent, len, SO_NOSIGPIPE);
 #elif WIN32
