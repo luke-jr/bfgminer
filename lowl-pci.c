@@ -87,7 +87,9 @@ struct lowl_pci_interface {
 struct lowl_pci_handle {
 	const char *path;
 	const struct lowl_pci_interface *lpi;
+	int fd[3];
 	uint32_t *bar[6];
+	off_t baroff[6];
 	size_t barsz[6];
 };
 
@@ -238,8 +240,9 @@ static const struct lowl_pci_interface lpi_uio = {
 
 static const struct lowl_pci_interface lpi_vfio;
 
+#define _VFIO_ACCESS_BAR_PROBLEM ((void*)&lpi_vfio)
 static
-void *_vfio_mmap_bar(const int device, const int bar, const size_t sz, const int prot)
+void *_vfio_access_bar(const int device, const int bar, const size_t sz, const int prot, off_t *out_offset)
 {
 	struct vfio_region_info region_info = { .argsz = sizeof(region_info) };
 	switch (bar)
@@ -252,19 +255,21 @@ void *_vfio_mmap_bar(const int device, const int bar, const size_t sz, const int
 		_BARCASE(4) _BARCASE(5)
 #undef _BARCASE
 		default:
-			return MAP_FAILED;
+			return _VFIO_ACCESS_BAR_PROBLEM;
 	}
 	if (ioctl(device, VFIO_DEVICE_GET_REGION_INFO, &region_info))
-		applogr(MAP_FAILED, LOG_ERR, "%s: VFIO_DEVICE_GET_REGION_INFO failed", __func__);
-	if (!(region_info.flags & VFIO_REGION_INFO_FLAG_MMAP))
-		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "mmap");
+		applogr(_VFIO_ACCESS_BAR_PROBLEM, LOG_ERR, "%s: VFIO_DEVICE_GET_REGION_INFO failed", __func__);
 	if ((prot & PROT_READ ) && !(region_info.flags & VFIO_REGION_INFO_FLAG_READ ))
-		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "read");
+		applogr(_VFIO_ACCESS_BAR_PROBLEM, LOG_ERR, "%s: region does not support %s", __func__, "read");
 	if ((prot & PROT_WRITE) && !(region_info.flags & VFIO_REGION_INFO_FLAG_WRITE))
-		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "write");
+		applogr(_VFIO_ACCESS_BAR_PROBLEM, LOG_ERR, "%s: region does not support %s", __func__, "write");
 	if (region_info.size < sz)
-		applogr(MAP_FAILED, LOG_ERR, "%s: region is only %lu bytes (needed %lu)",
+		applogr(_VFIO_ACCESS_BAR_PROBLEM, LOG_ERR, "%s: region is only %lu bytes (needed %lu)",
 		        __func__, (unsigned long)region_info.size, (unsigned long)sz);
+	
+	*out_offset = region_info.offset;
+	if (!(region_info.flags & VFIO_REGION_INFO_FLAG_MMAP))
+		return MAP_FAILED;
 	
 	return mmap(NULL, sz, prot, MAP_SHARED, device, region_info.offset);
 }
@@ -275,6 +280,7 @@ struct lowl_pci_handle *lowl_pci_open_vfio(const char * const path, const struct
 	ssize_t ss;
 	char *p;
 	int group = -1, device = -1;
+	off_t offset;
 	
 	struct lowl_pci_handle * const lph = malloc(sizeof(*lph));
 	*lph = (struct lowl_pci_handle){
@@ -350,14 +356,21 @@ struct lowl_pci_handle *lowl_pci_open_vfio(const char * const path, const struct
 		const int prot = _file_mode_to_mmap_prot(barcfg->mode);
 		if (unlikely(prot == -1))
 			goto err;
-		lph->bar[barno] = _vfio_mmap_bar(device, barno, barcfg->sz, prot);
+		lph->bar[barno] = _vfio_access_bar(device, barno, barcfg->sz, prot, &offset);
 		lph->barsz[barno] = barcfg->sz;
-		if (lph->bar[barno] == MAP_FAILED)
+		if (lph->bar[barno] == _VFIO_ACCESS_BAR_PROBLEM)
 		{
-			applog(LOG_ERR, "mmap %s bar %d failed", path, barno);
+			applog(LOG_ERR, "%s: Accessing %s bar %d failed", __func__, path, barno);
 			goto err;
 		}
+		else
+		if (lph->bar[barno] == MAP_FAILED)
+			lph->bar[barno] = NULL;
+		lph->baroff[barno] = offset;
 	}
+	lph->fd[0] = device;
+	lph->fd[1] = group;
+	lph->fd[2] = container;
 	return lph;
 
 err:
@@ -374,12 +387,45 @@ err:
 	return NULL;
 }
 
+static
+void lowl_pci_close_vfio(struct lowl_pci_handle * const lph)
+{
+	close(lph->fd[0]);
+	close(lph->fd[1]);
+	close(lph->fd[2]);
+	lowl_pci_close_mmap(lph);
+}
+
+static
+const uint32_t *lowl_pci_get_words_vfio(struct lowl_pci_handle * const lph, void * const buf, const size_t words, const int bar, const off_t offset)
+{
+	if (lph->bar[bar])
+		return lowl_pci_get_words_mmap(lph, buf, words, bar, offset);
+	
+	const size_t sz = 4 * words;
+	if (unlikely(sz != pread(lph->fd[0], buf, sz, (4 * offset) + lph->baroff[bar])))
+		return NULL;
+	return buf;
+}
+
+static
+bool lowl_pci_set_words_vfio(struct lowl_pci_handle * const lph, const uint32_t *buf, const size_t words, const int bar, const off_t offset)
+{
+	if (lph->bar[bar])
+		return lowl_pci_set_words_mmap(lph, buf, words, bar, offset);
+	
+	const size_t sz = 4 * words;
+	if (unlikely(sz != pwrite(lph->fd[0], buf, sz, (4 * offset) + lph->baroff[bar])))
+		return false;
+	return true;
+}
+
 static const struct lowl_pci_interface lpi_vfio = {
 	.open = lowl_pci_open_vfio,
-	.close = lowl_pci_close_mmap,
-	.get_words = lowl_pci_get_words_mmap,
+	.close = lowl_pci_close_vfio,
+	.get_words = lowl_pci_get_words_vfio,
 	.get_data  = lowl_pci_get_data_from_words,
-	.set_words = lowl_pci_set_words_mmap,
+	.set_words = lowl_pci_set_words_vfio,
 	.set_data  = lowl_pci_set_data_in_words,
 };
 
