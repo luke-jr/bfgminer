@@ -18,8 +18,12 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <utlist.h>
+
+#include <linux/vfio.h>
+#include <sys/ioctl.h>
 
 #include <sys/mman.h>
 
@@ -231,9 +235,159 @@ static const struct lowl_pci_interface lpi_uio = {
 	.set_data  = lowl_pci_set_data_in_words,
 };
 
+
+static const struct lowl_pci_interface lpi_vfio;
+
+static
+void *_vfio_mmap_bar(const int device, const int bar, const size_t sz, const int prot)
+{
+	struct vfio_region_info region_info = { .argsz = sizeof(region_info) };
+	switch (bar)
+	{
+#define _BARCASE(n)  \
+		case n:  \
+			region_info.index = VFIO_PCI_BAR ## n ## _REGION_INDEX;  \
+			break;
+		_BARCASE(0) _BARCASE(1) _BARCASE(2) _BARCASE(3)
+		_BARCASE(4) _BARCASE(5)
+#undef _BARCASE
+		default:
+			return MAP_FAILED;
+	}
+	if (ioctl(device, VFIO_DEVICE_GET_REGION_INFO, &region_info))
+		applogr(MAP_FAILED, LOG_ERR, "%s: VFIO_DEVICE_GET_REGION_INFO failed", __func__);
+	if (!(region_info.flags & VFIO_REGION_INFO_FLAG_MMAP))
+		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "mmap");
+	if ((prot & PROT_READ ) && !(region_info.flags & VFIO_REGION_INFO_FLAG_READ ))
+		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "read");
+	if ((prot & PROT_WRITE) && !(region_info.flags & VFIO_REGION_INFO_FLAG_WRITE))
+		applogr(MAP_FAILED, LOG_ERR, "%s: region does not support %s", __func__, "write");
+	if (region_info.size < sz)
+		applogr(MAP_FAILED, LOG_ERR, "%s: region is only %lu bytes (needed %lu)",
+		        __func__, (unsigned long)region_info.size, (unsigned long)sz);
+	
+	return mmap(NULL, sz, prot, MAP_SHARED, device, region_info.offset);
+}
+
+struct lowl_pci_handle *lowl_pci_open_vfio(const char * const path, const struct _lowl_pci_config * const barcfgs)
+{
+	char buf[0x100], buf2[0x100];
+	ssize_t ss;
+	char *p;
+	int group = -1, device = -1;
+	
+	struct lowl_pci_handle * const lph = malloc(sizeof(*lph));
+	*lph = (struct lowl_pci_handle){
+		.path = path,
+		.lpi = &lpi_vfio,
+	};
+	const char * const vfio_path = "/dev/vfio/vfio";
+	const int container = open(vfio_path, O_RDWR);
+	if (container == -1)
+	{
+		applog(LOG_ERR, "%s: Failed to open %s", __func__, vfio_path);
+		goto err;
+	}
+	{
+		const int vfio_ver = ioctl(container, VFIO_GET_API_VERSION);
+		if (vfio_ver != VFIO_API_VERSION)
+		{
+			applog(LOG_ERR, "%s: vfio API version mismatch (have=%d expect=%d)",
+			       __func__, vfio_ver, VFIO_API_VERSION);
+			goto err;
+		}
+	}
+	snprintf(buf, sizeof(buf), "/sys/bus/pci/devices/%s/iommu_group", path);
+	ss = readlink(buf, buf2, sizeof(buf2) - 1);
+	if (ss == -1)
+	{
+		applog(LOG_ERR, "%s: Failed to read %s", __func__, buf);
+		goto err;
+	}
+	buf2[ss] = '\0';
+	p = memrchr(buf2, '/', ss - 1);
+	if (p)
+		++p;
+	else
+		p = buf2;
+	snprintf(buf, sizeof(buf), "/dev/vfio/%s", p);
+	group = open(buf, O_RDWR);
+	if (group == -1)
+	{
+		applog(LOG_ERR, "%s: Failed to open %s", __func__, buf);
+		goto err;
+	}
+	struct vfio_group_status group_status = { .argsz = sizeof(group_status) };
+	if (ioctl(group, VFIO_GROUP_GET_STATUS, &group_status))
+	{
+		applog(LOG_ERR, "%s: VFIO_GROUP_GET_STATUS failed on iommu group %s", __func__, p);
+		goto err;
+	}
+	if (!(group_status.flags & VFIO_GROUP_FLAGS_VIABLE))
+	{
+		applog(LOG_ERR, "%s: iommu group %s is not viable", __func__, p);
+		goto err;
+	}
+	if (ioctl(group, VFIO_GROUP_SET_CONTAINER, &container))
+	{
+		applog(LOG_ERR, "%s: VFIO_GROUP_SET_CONTAINER failed on iommu group %s", __func__, p);
+		goto err;
+	}
+	if (ioctl(container, VFIO_SET_IOMMU, VFIO_TYPE1_IOMMU))
+	{
+		applog(LOG_ERR, "%s: Failed to set type1 iommu on group %s", __func__, p);
+		goto err;
+	}
+	device = ioctl(group, VFIO_GROUP_GET_DEVICE_FD, path);
+	if (device == -1)
+	{
+		applog(LOG_ERR, "%s: Failed to get device fd for %s in group %s", __func__, path, p);
+		goto err;
+	}
+	for (const struct _lowl_pci_config *barcfg = barcfgs; barcfg->bar != -1; ++barcfg)
+	{
+		const int barno = barcfg->bar;
+		const int prot = _file_mode_to_mmap_prot(barcfg->mode);
+		if (unlikely(prot == -1))
+			goto err;
+		lph->bar[barno] = _vfio_mmap_bar(device, barno, barcfg->sz, prot);
+		lph->barsz[barno] = barcfg->sz;
+		if (lph->bar[barno] == MAP_FAILED)
+		{
+			applog(LOG_ERR, "mmap %s bar %d failed", path, barno);
+			goto err;
+		}
+	}
+	return lph;
+
+err:
+	for (int i = 0; i < 6; ++i)
+		if (lph->bar[i])
+			munmap(lph->bar[i], lph->barsz[i]);
+	if (device != -1)
+		close(device);
+	if (group != -1)
+		close(group);
+	if (container != -1)
+		close(container);
+	free(lph);
+	return NULL;
+}
+
+static const struct lowl_pci_interface lpi_vfio = {
+	.open = lowl_pci_open_vfio,
+	.close = lowl_pci_close_mmap,
+	.get_words = lowl_pci_get_words_mmap,
+	.get_data  = lowl_pci_get_data_from_words,
+	.set_words = lowl_pci_set_words_mmap,
+	.set_data  = lowl_pci_set_data_in_words,
+};
+
+
 struct lowl_pci_handle *lowl_pci_open(const char * const path, const struct _lowl_pci_config * const barcfgs)
 {
 	return
+		lpi_vfio.open(path, barcfgs) ?:
 		lpi_uio.open(path, barcfgs) ?:
 		false;
 }
