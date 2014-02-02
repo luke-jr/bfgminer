@@ -223,6 +223,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &nanofury_drv,
+		.set_device_funcs = bitfury_set_device_funcs,
 		.device_data = lowlevel_ref(info),
 		.threads = 1,
 		// TODO: .name
@@ -393,7 +394,6 @@ struct device_drv nanofury_drv = {
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
 	.identify_device = nanofury_identify,
 	
 #ifdef HAVE_CURSES

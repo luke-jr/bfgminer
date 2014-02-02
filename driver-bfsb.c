@@ -96,6 +96,7 @@ int bfsb_autodetect()
 				cgpu = malloc(sizeof(*cgpu));
 				*cgpu = (struct cgpu_info){
 					.drv = &bfsb_drv,
+					.set_device_funcs = bitfury_set_device_funcs,
 					.procs = chip_n,
 					.device_data = devicelist,
 				};
@@ -176,7 +177,6 @@ struct device_drv bfsb_drv = {
 	.job_process_results = bitfury_job_process_results,
 	.get_api_extra_device_detail = bfsb_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
 	.thread_disable = bitfury_disable,
 	.thread_enable = bitfury_enable,
 	.thread_shutdown = bfsb_shutdown,

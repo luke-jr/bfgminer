@@ -38,8 +38,7 @@
 #include "spidevc.h"
 
 BFG_REGISTER_DRIVER(bitfury_drv)
-
-static char *bitfury_spi_port_config(struct cgpu_info *, char *, char *, char *);
+const struct bfg_set_device_definition bitfury_set_device_funcs[];
 
 static
 int bitfury_autodetect()
@@ -62,7 +61,7 @@ int bitfury_autodetect()
 		struct bitfury_device dummy_bitfury = {
 			.spi = sys_spi,
 		};
-		drv_set_defaults(&bitfury_drv, bitfury_spi_port_config, &dummy_bitfury, NULL, NULL, 0);
+		drv_set_defaults(&bitfury_drv, bitfury_set_device_funcs_probe, &dummy_bitfury, NULL, NULL, 1);
 	}
 	
 	chip_n = libbitfury_detectChips1(sys_spi);
@@ -74,6 +73,7 @@ int bitfury_autodetect()
 	}
 
 	bitfury_info->procs = chip_n;
+	bitfury_info->set_device_funcs = bitfury_set_device_funcs;
 	add_cgpu(bitfury_info);
 	
 	return 1;
@@ -671,7 +671,7 @@ struct api_data *bitfury_api_device_status(struct cgpu_info * const cgpu)
 }
 
 static
-bool _bitfury_set_device_parse_setting(uint32_t * const rv, char * const setting, char * const replybuf, const int maxval)
+bool _bitfury_set_device_parse_setting(uint32_t * const rv, const char * const setting, char * const replybuf, const int maxval)
 {
 	char *p;
 	long int nv;
@@ -691,55 +691,39 @@ bool _bitfury_set_device_parse_setting(uint32_t * const rv, char * const setting
 	return true;
 }
 
-static
-char *bitfury_spi_port_config(struct cgpu_info * const proc, char *option, char *setting, char *replybuf)
+const char *bitfury_set_baud(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
+	if (!_bitfury_set_device_parse_setting(&bitfury->spi->speed, setting, replybuf, INT_MAX))
+		return replybuf;
 	
-	if (!strcasecmp(option, "baud"))
-	{
-		if (!_bitfury_set_device_parse_setting(&bitfury->spi->speed, setting, replybuf, INT_MAX))
-			return replybuf;
-		
-		return NULL;
-	}
-	
-	return "";
+	return NULL;
 }
 
-char *bitfury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+const char *bitfury_set_osc6_bits(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
-	char *rv;
 	uint32_t newval;
+	struct freq_stat * const c = &bitfury->chip_stat;
 	
-	if (!strcasecmp(option, "help"))
-	{
-		sprintf(replybuf, "baud: SPI baud rate\nosc6_bits: range 1-%d (slow to fast)", BITFURY_MAX_OSC6_BITS);
+	newval = bitfury->osc6_bits;
+	if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, BITFURY_MAX_OSC6_BITS))
 		return replybuf;
-	}
 	
-	rv = bitfury_spi_port_config(proc, option, setting, replybuf);
-	if ((!rv) || rv[0])
-		return rv;
+	bitfury->osc6_bits = newval;
+	bitfury->force_reinit = true;
+	c->osc6_max = 0;
 	
-	if (!strcasecmp(option, "osc6_bits"))
-	{
-		struct freq_stat * const c = &bitfury->chip_stat;
-		newval = bitfury->osc6_bits;
-		if (!_bitfury_set_device_parse_setting(&newval, setting, replybuf, BITFURY_MAX_OSC6_BITS))
-			return replybuf;
-		
-		bitfury->osc6_bits = newval;
-		bitfury->force_reinit = true;
-		c->osc6_max = 0;
-		
-		return NULL;
-	}
-	
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
+	return NULL;
 }
+
+const struct bfg_set_device_definition bitfury_set_device_funcs[] = {
+	{"osc6_bits", bitfury_set_osc6_bits, "range 1-"BITFURY_MAX_OSC6_BITS_S" (slow to fast)"},
+	// NOTE: bitfury_set_device_funcs_probe should begin here:
+	{"baud", bitfury_set_baud, "SPI baud rate"},
+	{NULL},
+};
+const struct bfg_set_device_definition *bitfury_set_device_funcs_probe = &bitfury_set_device_funcs[1];
 
 #ifdef HAVE_CURSES
 void bitfury_tui_wlogprint_choices(struct cgpu_info *cgpu)
@@ -804,7 +788,6 @@ struct device_drv bitfury_drv = {
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitfury_wlogprint_status,

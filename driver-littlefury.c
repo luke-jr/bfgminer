@@ -327,6 +327,7 @@ bool littlefury_detect_one(const char *devpath)
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &littlefury_drv,
+		.set_device_funcs = bitfury_set_device_funcs,
 		.device_path = strdup(devpath),
 		.deven = DEV_ENABLED,
 		.procs = chips,
@@ -514,7 +515,6 @@ struct device_drv littlefury_drv = {
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitfury_wlogprint_status,
