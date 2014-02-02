@@ -363,6 +363,7 @@ void twinfury_poll(struct thr_info *thr)
 
 	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc, ++n_chips)
 	{
+		struct thr_info * const proc_thr = proc->thr[0];
 		struct twinfury_info *info = (struct twinfury_info *)proc->device_data;
 		
 		if (proc->flash_led)
@@ -401,9 +402,8 @@ void twinfury_poll(struct thr_info *thr)
 			applog(LOG_ERR, "%"PRIpreprv": Query timeout", proc->proc_repr);
 		}
 
-		if(twinfury_process_results(proc) == true)
+		if(twinfury_process_results(proc) && proc_thr->next_work)
 		{
-			struct thr_info *proc_thr = proc->thr[0];
 			mt_job_transition(proc_thr);
 			// TODO: Delay morework until right before it's needed
 			timer_set_now(&proc_thr->tv_morework);
