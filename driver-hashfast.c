@@ -252,6 +252,7 @@ bool hashfast_detect_one(const char * const devpath)
 		.procs = (pmsg->chipaddr * pmsg->coreaddr),
 		.threads = 1,
 		.device_data = pmsg,
+		.cutofftemp = 100,
 	};
 	return add_cgpu(cgpu);
 
