@@ -201,6 +201,7 @@ bool hashbuster_lowl_probe(const struct lowlevel_device_info * const info)
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &hashbuster_drv,
+		.set_device_funcs = bitfury_set_device_funcs,
 		.device_data = lowlevel_ref(info),
 		.threads = 1,
 		.procs = chip_n,
@@ -311,7 +312,6 @@ struct device_drv hashbuster_drv = {
 	
 	.get_api_extra_device_detail = bitfury_api_device_detail,
 	.get_api_extra_device_status = bitfury_api_device_status,
-	.set_device = bitfury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitfury_wlogprint_status,

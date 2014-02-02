@@ -118,6 +118,7 @@ int metabank_autodetect()
 				cgpu = malloc(sizeof(*cgpu));
 				*cgpu = (struct cgpu_info){
 					.drv = &metabank_drv,
+					.set_device_funcs = bitfury_set_device_funcs,
 					.procs = chip_n,
 					.device_data = devicelist,
 					.cutofftemp = 50,
@@ -241,7 +242,6 @@ struct device_drv metabank_drv = {
 	.get_api_extra_device_detail = metabank_api_extra_device_detail,
 	.get_api_extra_device_status = metabank_api_extra_device_status,
 	.get_stats = metabank_get_stats,
-	.set_device = bitfury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitfury_wlogprint_status,
