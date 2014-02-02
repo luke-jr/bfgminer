@@ -66,9 +66,7 @@ static
 bool nanofury_spi_txrx(struct spi_port * const port)
 {
 	struct cgpu_info * const cgpu = port->cgpu;
-	struct thr_info * const thr = cgpu->thr[0];
-	struct nanofury_state * const state = thr->cgpu_data;
-	struct mcp2210_device * const mcp = state->mcp;
+	struct mcp2210_device * const mcp = port->userp;
 	const void *wrbuf = spi_gettxbuf(port);
 	void *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
@@ -99,7 +97,11 @@ bool nanofury_spi_txrx(struct spi_port * const port)
 err:
 	mcp2210_spi_cancel(mcp);
 	nanofury_device_off(mcp);
-	hashes_done2(thr, -1, NULL);
+	if (cgpu)
+	{
+		struct thr_info * const thr = cgpu->thr[0];
+		hashes_done2(thr, -1, NULL);
+	}
 	return false;
 }
 
@@ -190,6 +192,8 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	const char * const product = info->product;
 	const char * const serial = info->serial;
 	struct mcp2210_device *mcp;
+	struct spi_port *port;
+	int chips;
 	
 	if (info->lowl != &lowl_mcp2210)
 	{
@@ -213,6 +217,15 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 		mcp2210_close(mcp);
 		return false;
 	}
+	
+	port = calloc(1, sizeof(*port));
+	port->userp = mcp;
+	port->txrx = nanofury_spi_txrx;
+	port->repr = nanofury_drv.dname;
+	port->logprio = LOG_DEBUG;
+	chips = libbitfury_detectChips1(port);
+	free(port);
+	
 	nanofury_device_off(mcp);
 	mcp2210_close(mcp);
 	
@@ -226,6 +239,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 		.set_device_funcs = bitfury_set_device_funcs,
 		.device_data = lowlevel_ref(info),
 		.threads = 1,
+		.procs = chips,
 		// TODO: .name
 		.device_path = strdup(info->path),
 		.dev_manufacturer = maybe_strdup(info->manufacturer),
@@ -241,7 +255,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 static
 bool nanofury_init(struct thr_info * const thr)
 {
-	struct cgpu_info * const cgpu = thr->cgpu;
+	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct lowlevel_device_info * const info = cgpu->device_data;
 	struct spi_port *port;
 	struct bitfury_device *bitfury;
@@ -263,7 +277,7 @@ bool nanofury_init(struct thr_info * const thr)
 	}
 	
 	port = malloc(sizeof(*port));
-	bitfury = malloc(sizeof(*bitfury));
+	bitfury = malloc(sizeof(*bitfury) * cgpu->procs);
 	state = malloc(sizeof(*state));
 	
 	if (!(port && bitfury && state))
@@ -282,21 +296,26 @@ bool nanofury_init(struct thr_info * const thr)
 	port->cgpu = cgpu;
 	port->repr = cgpu->proc_repr;
 	port->logprio = LOG_ERR;
+	port->userp = mcp;
 		
-	*bitfury = (struct bitfury_device){
-		.spi = port,
-	};
 	*state = (struct nanofury_state){
 		.mcp = mcp,
 	};
-	cgpu->device_data = bitfury;
 	thr->cgpu_data = state;
-	bitfury->osc6_bits = 50;
-	bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-	bitfury_init_chip(cgpu);
+	for (proc = cgpu; proc; (proc = proc->next_proc), ++bitfury)
+	{
+		*bitfury = (struct bitfury_device){
+			.spi = port,
+			.fasync = proc->proc_id,
+		};
+		proc->device_data = bitfury;
+		bitfury->osc6_bits = 50;
+		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_init_chip(proc);
+		proc->status = LIFE_INIT2;
+	}
 	
 	timer_set_now(&thr->tv_poll);
-	cgpu->status = LIFE_INIT2;
 	return true;
 }
 
