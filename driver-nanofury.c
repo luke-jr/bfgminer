@@ -33,9 +33,11 @@
 BFG_REGISTER_DRIVER(nanofury_drv)
 
 struct nanofury_state {
+	struct lowlevel_device_info *lowl_info;
 	struct mcp2210_device *mcp;
 	struct timeval identify_started;
 	bool identify_requested;
+	unsigned long current_baud;
 };
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
@@ -66,12 +68,23 @@ static
 bool nanofury_spi_txrx(struct spi_port * const port)
 {
 	struct cgpu_info * const cgpu = port->cgpu;
-	struct mcp2210_device * const mcp = port->userp;
+	struct nanofury_state * const state = port->userp;
+	struct mcp2210_device * const mcp = state->mcp;
 	const void *wrbuf = spi_gettxbuf(port);
 	void *rdbuf = spi_getrxbuf(port);
 	size_t bufsz = spi_getbufsz(port);
 	const uint8_t *ptrwrbuf = wrbuf;
 	uint8_t *ptrrdbuf = rdbuf;
+	
+	if (state->current_baud != port->speed)
+	{
+		applog(LOG_NOTICE, "%"PRIpreprv": Changing baud from %lu to %lu",
+		       cgpu ? cgpu->proc_repr : nanofury_drv.dname,
+		       (unsigned long)state->current_baud, (unsigned long)port->speed);
+		if (!mcp2210_configure_spi(mcp, port->speed, 0xffff, 0xffef, 0, 0, 0))
+			goto err;
+		state->current_baud = port->speed;
+	}
 	
 	nanofury_spi_reset(mcp);
 	
@@ -114,7 +127,7 @@ void nanofury_device_off(struct mcp2210_device * const mcp)
 }
 
 static
-bool nanofury_checkport(struct mcp2210_device * const mcp)
+bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long baud)
 {
 	int i;
 	const char tmp = 0;
@@ -140,7 +153,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp)
 	
 	// configure SPI
 	// This is the only place where speed, mode and other settings are configured!!!
-	if (!mcp2210_configure_spi(mcp, 200000, 0xffff, 0xffef, 0, 0, 0))
+	if (!mcp2210_configure_spi(mcp, baud, 0xffff, 0xffef, 0, 0, 0))
 		goto fail;
 	if (!mcp2210_set_spimode(mcp, 0))
 		goto fail;
@@ -193,6 +206,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	const char * const serial = info->serial;
 	struct mcp2210_device *mcp;
 	struct spi_port *port;
+	struct nanofury_state *state;
 	int chips;
 	
 	if (info->lowl != &lowl_mcp2210)
@@ -210,19 +224,34 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 		       __func__, product, serial);
 		return false;
 	}
-	if (!nanofury_checkport(mcp))
+	
+	state = malloc(sizeof(*state));
+	*state = (struct nanofury_state){
+		.mcp = mcp,
+	};
+	port = calloc(1, sizeof(*port));
+	port->userp = state;
+	port->txrx = nanofury_spi_txrx;
+	port->repr = nanofury_drv.dname;
+	port->logprio = LOG_DEBUG;
+	port->speed = 200000;
+	
+	{
+		struct bitfury_device dummy_bitfury = {
+			.spi = sys_spi,
+		};
+		drv_set_defaults(&nanofury_drv, bitfury_set_device_funcs_probe, &dummy_bitfury, NULL, NULL, 1);
+	}
+	
+	if (!nanofury_checkport(mcp, port->speed))
 	{
 		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but failed to detect nanofury",
 		       __func__, product, serial);
 		mcp2210_close(mcp);
 		return false;
 	}
+	state->current_baud = port->speed;
 	
-	port = calloc(1, sizeof(*port));
-	port->userp = mcp;
-	port->txrx = nanofury_spi_txrx;
-	port->repr = nanofury_drv.dname;
-	port->logprio = LOG_DEBUG;
 	chips = libbitfury_detectChips1(port);
 	free(port);
 	
@@ -230,14 +259,19 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	mcp2210_close(mcp);
 	
 	if (lowlevel_claim(&nanofury_drv, true, info))
+	{
+		free(state);
 		return false;
+	}
+	
+	state->lowl_info = lowlevel_ref(info);
 	
 	struct cgpu_info *cgpu;
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &nanofury_drv,
 		.set_device_funcs = bitfury_set_device_funcs,
-		.device_data = lowlevel_ref(info),
+		.device_data = state,
 		.threads = 1,
 		.procs = chips,
 		// TODO: .name
@@ -256,11 +290,11 @@ static
 bool nanofury_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
-	struct lowlevel_device_info * const info = cgpu->device_data;
+	struct nanofury_state * const state = cgpu->device_data;
+	struct lowlevel_device_info * const info = state->lowl_info;
 	struct spi_port *port;
 	struct bitfury_device *bitfury;
 	struct mcp2210_device *mcp;
-	struct nanofury_state *state;
 	
 	mcp = mcp2210_open(info);
 	lowlevel_devinfo_free(info);
@@ -269,7 +303,7 @@ bool nanofury_init(struct thr_info * const thr)
 		applog(LOG_ERR, "%"PRIpreprv": Failed to open mcp2210 device", cgpu->proc_repr);
 		return false;
 	}
-	if (!nanofury_checkport(mcp))
+	if (!nanofury_checkport(mcp, state->current_baud))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": checkport failed", cgpu->proc_repr);
 		mcp2210_close(mcp);
@@ -278,7 +312,6 @@ bool nanofury_init(struct thr_info * const thr)
 	
 	port = malloc(sizeof(*port));
 	bitfury = malloc(sizeof(*bitfury) * cgpu->procs);
-	state = malloc(sizeof(*state));
 	
 	if (!(port && bitfury && state))
 	{
@@ -296,12 +329,11 @@ bool nanofury_init(struct thr_info * const thr)
 	port->cgpu = cgpu;
 	port->repr = cgpu->proc_repr;
 	port->logprio = LOG_ERR;
-	port->userp = mcp;
+	port->speed = state->current_baud;
 		
-	*state = (struct nanofury_state){
-		.mcp = mcp,
-	};
+	state->mcp = mcp;
 	thr->cgpu_data = state;
+	port->userp = state;
 	for (proc = cgpu; proc; (proc = proc->next_proc), ++bitfury)
 	{
 		*bitfury = (struct bitfury_device){
@@ -335,7 +367,7 @@ void nanofury_enable(struct thr_info * const thr)
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
 	
-	nanofury_checkport(mcp);
+	nanofury_checkport(mcp, state->current_baud);
 	bitfury_enable(thr);
 }
 
