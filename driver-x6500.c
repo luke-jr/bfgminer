@@ -721,7 +721,7 @@ void x6500_fpga_poll(struct thr_info *thr)
 	x6500_process_results(thr, thr->work);
 	if (unlikely(!fpga->hashes_left))
 	{
-		mt_disable_start(thr);
+		mt_disable_start__async(thr);
 		thr->tv_poll.tv_sec = -1;
 	}
 	else

@@ -53,6 +53,7 @@ extern void mt_disable(struct thr_info *);  // blocks until reenabled
 extern int restart_wait(struct thr_info *, unsigned int ms);
 extern void minerloop_scanhash(struct thr_info *);
 
+extern void mt_disable_start__async(struct thr_info *);
 extern bool do_job_prepare(struct thr_info *, struct timeval *tvp_now);
 extern void job_prepare_complete(struct thr_info *);
 extern void do_get_results(struct thr_info *, bool proceed_with_new_job);

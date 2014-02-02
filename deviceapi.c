@@ -273,6 +273,16 @@ disabled:
 	}
 }
 
+void mt_disable_start__async(struct thr_info * const mythr)
+{
+	mt_disable_start(mythr);
+	if (mythr->prev_work)
+		free_work(mythr->prev_work);
+	mythr->prev_work = mythr->work;
+	mythr->work = NULL;
+	mythr->_job_transition_in_progress = false;
+}
+
 bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 {
 	struct cgpu_info *proc = mythr->cgpu;
@@ -349,7 +359,7 @@ void job_results_fetched(struct thr_info *mythr)
 			
 			do_process_results(mythr, &tv_now, mythr->prev_work, true);
 		}
-		mt_disable_start(mythr);
+		mt_disable_start__async(mythr);
 	}
 }
 
@@ -558,7 +568,7 @@ disabled: ;
 							mythr->_proceed_with_new_job = false;
 					}
 					else  // !mythr->_mt_disable_called
-						mt_disable_start(mythr);
+						mt_disable_start__async(mythr);
 				}
 			}
 			
