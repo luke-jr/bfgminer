@@ -237,7 +237,7 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 	spi_clear_buf(port);
 	spi_emit_break(port); /* First we want to break chain! Otherwise we'll get all of traffic bounced to output */
 	spi_emit_fasync(port, chip_n);
-	bitfury_set_freq(port, 52);  //54 - 3F, 53 - 1F
+	bitfury_set_freq(port, 30);
 	bitfury_send_conf(port);
 	bitfury_send_init(port);
 	spi_txrx(port);
@@ -257,7 +257,7 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 		if (ocounter) {
 			unsigned int cdiff = libbitfury_c_diff(ocounter, counter);
 
-			if (cdiff > 5000 && cdiff < 100000 && odiff > 5000 && odiff < 100000)
+			if (abs(odiff - cdiff) < 5000)
 				return 1;
 			odiff = cdiff;
 		}
