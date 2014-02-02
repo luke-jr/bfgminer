@@ -554,6 +554,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_data = info;
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
+	icarus_set_timing(icarus, NULL, "", NULL, NULL);
 
 	return true;
 }
