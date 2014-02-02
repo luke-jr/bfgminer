@@ -930,12 +930,6 @@ const char *_proc_set_device(struct cgpu_info * const proc, const char * const o
 			return rv;
 		}
 	
-	if (!strcasecmp(optname, "temp-cutoff"))
-		return proc_set_device_temp_cutoff(proc, optname, newvalue, replybuf, out_success);
-	else
-	if (!strcasecmp(optname, "temp-target"))
-		return proc_set_device_temp_target(proc, optname, newvalue, replybuf, out_success);
-	else
 	if (!strcasecmp(optname, "help"))
 		return proc_set_device_help(proc, optname, newvalue, replybuf, out_success);
 	
@@ -944,7 +938,7 @@ const char *_proc_set_device(struct cgpu_info * const proc, const char * const o
 	return replybuf;
 }
 
-const char *proc_set_device(struct cgpu_info * const proc, char * const optname, char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *__proc_set_device(struct cgpu_info * const proc, char * const optname, char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	if (proc->drv->set_device)
 	{
@@ -954,6 +948,24 @@ const char *proc_set_device(struct cgpu_info * const proc, char * const optname,
 	}
 	
 	return _proc_set_device(proc, optname, newvalue, replybuf, out_success);
+}
+
+const char *proc_set_device(struct cgpu_info * const proc, char * const optname, char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	const char * const rv = __proc_set_device(proc, optname, newvalue, replybuf, out_success);
+	switch (*out_success)
+	{
+		case SDR_NOSUPP:
+		case SDR_UNKNOWN:
+			if (!strcasecmp(optname, "temp-cutoff"))
+				return proc_set_device_temp_cutoff(proc, optname, newvalue, replybuf, out_success);
+			else
+			if (!strcasecmp(optname, "temp-target"))
+				return proc_set_device_temp_target(proc, optname, newvalue, replybuf, out_success);
+		default:
+			break;
+	}
+	return rv;
 }
 
 #ifdef NEED_BFG_LOWL_VCOM
