@@ -31,6 +31,7 @@
 #define NANOFURY_MAX_BYTES_PER_SPI_TRANSFER 60			// due to MCP2210 limitation
 
 BFG_REGISTER_DRIVER(nanofury_drv)
+static const struct bfg_set_device_definition nanofury_set_device_funcs[];
 
 struct nanofury_state {
 	struct lowlevel_device_info *lowl_info;
@@ -38,6 +39,8 @@ struct nanofury_state {
 	struct timeval identify_started;
 	bool identify_requested;
 	unsigned long current_baud;
+	bool ledalternating;
+	bool ledvalue;
 };
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
@@ -116,6 +119,20 @@ err:
 		hashes_done2(thr, -1, NULL);
 	}
 	return false;
+}
+
+static
+void nanofury_send_led_gpio(struct nanofury_state * const state)
+{
+	struct mcp2210_device * const mcp = state->mcp;
+	mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? MGV_HIGH : MGV_LOW);
+}
+
+static
+void nanofury_do_led_alternating(struct nanofury_state * const state)
+{
+	state->ledvalue = !state->ledvalue;
+	nanofury_send_led_gpio(state);
 }
 
 static
@@ -228,6 +245,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	state = malloc(sizeof(*state));
 	*state = (struct nanofury_state){
 		.mcp = mcp,
+		.ledvalue = true,
 	};
 	port = calloc(1, sizeof(*port));
 	port->userp = state;
@@ -270,7 +288,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &nanofury_drv,
-		.set_device_funcs = bitfury_set_device_funcs,
+		.set_device_funcs = nanofury_set_device_funcs,
 		.device_data = state,
 		.threads = 1,
 		.procs = chips,
@@ -347,6 +365,7 @@ bool nanofury_init(struct thr_info * const thr)
 		proc->status = LIFE_INIT2;
 	}
 	
+	nanofury_send_led_gpio(state);
 	timer_set_now(&thr->tv_poll);
 	return true;
 }
@@ -368,6 +387,7 @@ void nanofury_enable(struct thr_info * const thr)
 	struct mcp2210_device * const mcp = state->mcp;
 	
 	nanofury_checkport(mcp, state->current_baud);
+	nanofury_send_led_gpio(state);
 	bitfury_enable(thr);
 }
 
@@ -384,25 +404,42 @@ void nanofury_reinit(struct cgpu_info * const cgpu)
 }
 
 static
+double _nanofury_total_diff1(struct cgpu_info * const dev)
+{
+	double d = 0.;
+	for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
+		d += proc->diff1;
+	return d;
+}
+
+static
 void nanofury_poll(struct thr_info * const thr)
 {
+	struct cgpu_info * const dev = thr->cgpu;
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
+	double diff1_before;
 	
 	if (state->identify_requested)
 	{
 		if (!timer_isset(&state->identify_started))
-			// LED is normally on while mining, so turn it off for identify
-			mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_LOW);
+			mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? MGV_LOW : MGV_HIGH);
 		timer_set_delay_from_now(&state->identify_started, 5000000);
 		state->identify_requested = false;
 	}
 	
+	if (state->ledalternating && !timer_isset(&state->identify_started))
+		diff1_before = _nanofury_total_diff1(dev);
+	
 	bitfury_do_io(thr);
+	
+	if (state->ledalternating && (timer_isset(&state->identify_started) || diff1_before != _nanofury_total_diff1(dev)))
+		nanofury_do_led_alternating(state);
 	
 	if (timer_passed(&state->identify_started, NULL))
 	{
-		mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_HIGH);
+		// Also used when setting ledmode
+		nanofury_send_led_gpio(state);
 		timer_unset(&state->identify_started);
 	}
 }
@@ -424,6 +461,38 @@ void nanofury_shutdown(struct thr_info * const thr)
 	if (mcp)
 		nanofury_device_off(mcp);
 }
+
+const char *nanofury_set_ledmode(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct nanofury_state * const state = thr->cgpu_data;
+	
+	if (!strcasecmp(setting, "on"))
+	{
+		state->ledvalue = true;
+		state->ledalternating = false;
+	}
+	else
+	if (!strcasecmp(setting, "off"))
+		state->ledvalue = state->ledalternating = false;
+	else
+	if (!strcasecmp(setting, "alternating"))
+		state->ledalternating = true;
+	else
+		return "Invalid LED mode; must be on/off/alternating";
+	
+	if (!timer_isset(&state->identify_started))
+		timer_set_now(&state->identify_started);
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition nanofury_set_device_funcs[] = {
+	{"baud", bitfury_set_baud, "SPI baud rate"},
+	{"osc6_bits", bitfury_set_osc6_bits, "range 1-"BITFURY_MAX_OSC6_BITS_S" (slow to fast)"},
+	{"ledmode", nanofury_set_ledmode, "on/off/alternating"},
+	{NULL},
+};
 
 struct device_drv nanofury_drv = {
 	.dname = "nanofury",
