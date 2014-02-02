@@ -253,6 +253,7 @@ Options for both config file and command line:
 --protocol-dump|-P  Verbose dump of protocol-level activities
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
+--quit-summary <arg> Summary printed when you quit: none/devs/procs/detailed
 --real-quiet        Disable all output
 --remove-disabled   Remove disabled devices entirely, as if they didn't exist
 --request-diff <arg> Request a specific difficulty from pools (default: 1.0)

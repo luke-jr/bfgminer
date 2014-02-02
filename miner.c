@@ -103,6 +103,14 @@
 #	define USE_FPGA
 #endif
 
+enum bfg_quit_summary {
+	BQS_DEFAULT,
+	BQS_NONE,
+	BQS_DEVS,
+	BQS_PROCS,
+	BQS_DETAILED,
+};
+
 struct strategies strategies[] = {
 	{ "Failover" },
 	{ "Round Robin" },
@@ -130,6 +138,8 @@ static uint32_t template_nonce;
 #if BLKMAKER_VERSION > 0
 char *opt_coinbase_sig;
 #endif
+static enum bfg_quit_summary opt_quit_summary = BQS_DEFAULT;
+static bool include_serial_in_statline;
 char *request_target_str;
 float request_pdiff = 1.0;
 double request_bdiff;
@@ -1149,6 +1159,25 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 	return NULL;
 }
 #endif
+
+static
+char *set_quit_summary(const char * const arg)
+{
+	if (!(strcasecmp(arg, "none") && strcasecmp(arg, "no")))
+		opt_quit_summary = BQS_NONE;
+	else
+	if (!(strcasecmp(arg, "devs") && strcasecmp(arg, "devices")))
+		opt_quit_summary = BQS_DEVS;
+	else
+	if (!(strcasecmp(arg, "procs") && strcasecmp(arg, "processors") && strcasecmp(arg, "chips") && strcasecmp(arg, "cores")))
+		opt_quit_summary = BQS_PROCS;
+	else
+	if (!(strcasecmp(arg, "detailed") && strcasecmp(arg, "detail") && strcasecmp(arg, "all")))
+		opt_quit_summary = BQS_DETAILED;
+	else
+		return "Quit summary must be one of none/devs/procs/detailed";
+	return NULL;
+}
 
 static void bdiff_target_leadzero(unsigned char *target, double diff);
 
@@ -2185,6 +2214,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--quiet-work-updates|--quiet-work-update",
 			opt_set_bool, &opt_quiet_work_updates,
 			opt_hidden),
+	OPT_WITH_ARG("--quit-summary",
+	             set_quit_summary, NULL, NULL,
+	             "Summary printed when you quit: none/devs/procs/detailed"),
 	OPT_WITH_ARG("--quota|-U",
 		     set_quota, NULL, NULL,
 		     "quota;URL combination for server with load-balance strategy quotas"),
@@ -3379,6 +3411,9 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	else
 #endif
 		snprintf(buf, bufsz, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
+	
+	if (include_serial_in_statline && cgpu->dev_serial)
+		tailsprintf(buf, bufsz, "[serial=%s] ", cgpu->dev_serial);
 	
 	if (unlikely(cgpu->status == LIFE_INIT))
 	{
@@ -10089,18 +10124,24 @@ void print_summary(void)
 		}
 	}
 
-	applog(LOG_WARNING, "Summary of per device statistics:\n");
-	for (i = 0; i < total_devices; ++i) {
-		struct cgpu_info *cgpu = get_devices(i);
-
-		if ((!cgpu->proc_id) && cgpu->procs > 1)
-		{
-			// Device summary line
-			opt_show_procs = false;
-			log_print_status(cgpu);
-			opt_show_procs = true;
+	if (opt_quit_summary != BQS_NONE)
+	{
+		if (opt_quit_summary == BQS_DETAILED)
+			include_serial_in_statline = true;
+		applog(LOG_WARNING, "Summary of per device statistics:\n");
+		for (i = 0; i < total_devices; ++i) {
+			struct cgpu_info *cgpu = get_devices(i);
+			
+			if (!cgpu->proc_id)
+			{
+				// Device summary line
+				opt_show_procs = false;
+				log_print_status(cgpu);
+				opt_show_procs = true;
+			}
+			if ((opt_quit_summary == BQS_PROCS || opt_quit_summary == BQS_DETAILED) && cgpu->procs > 1)
+				log_print_status(cgpu);
 		}
-		log_print_status(cgpu);
 	}
 
 	if (opt_shares) {
@@ -11554,6 +11595,9 @@ int main(int argc, char *argv[])
 		else
 			applog(LOG_WARNING, "Waiting for devices");
 	}
+	
+	if (opt_quit_summary == BQS_DEFAULT)
+		opt_quit_summary = BQS_PROCS;
 
 #ifdef HAVE_CURSES
 	switch_logsize();
