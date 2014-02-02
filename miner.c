@@ -9956,8 +9956,8 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			else
 			if (cgpu->temp > cgpu->cutofftemp)
 			{
-				applog(LOG_WARNING, "%s hit thermal cutoff limit, disabling!",
-				       dev_str);
+				applog(LOG_WARNING, "%s hit thermal cutoff limit at %fC, disabling!",
+				       dev_str, cgpu->temp);
 				*denable = DEV_RECOVER;
 
 				dev_error(cgpu, REASON_DEV_THERMAL_CUTOFF);
