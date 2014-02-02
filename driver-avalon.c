@@ -45,8 +45,6 @@
 
 BFG_REGISTER_DRIVER(avalon_drv)
 
-static int option_offset = -1;
-
 static int avalon_init_task(struct avalon_task *at,
 			    uint8_t reset, uint8_t ff, uint8_t fan,
 			    uint8_t timeout, uint8_t asic_num,
@@ -419,118 +417,79 @@ static void avalon_idle(struct cgpu_info *avalon)
 	applog(LOG_ERR, "Avalon: Goto idle mode");
 }
 
-static void get_options(int this_option_offset, int *baud, int *miner_count,
-			int *asic_count, int *timeout, int *frequency)
+static
+const char *avalon_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2, *colon3, *colon4;
-	size_t max;
-	int i, tmp;
-
-	if (opt_avalon_options == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = opt_avalon_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	*baud = AVALON_IO_SPEED;
-	*miner_count = AVALON_DEFAULT_MINER_NUM - 8;
-	*asic_count = AVALON_DEFAULT_ASIC_NUM;
-	*timeout = AVALON_DEFAULT_TIMEOUT;
-	*frequency = AVALON_DEFAULT_FREQUENCY;
-
-	if (!(*buf))
-		return;
-
-	colon = strchr(buf, ':');
-	if (colon)
-		*(colon++) = '\0';
-
-	tmp = atoi(buf);
-	if (!valid_baud(*baud = tmp))
-		quit(1, "Invalid avalon-options for baud (%s)", buf);
-
-	if (colon && *colon) {
-		colon2 = strchr(colon, ':');
-		if (colon2)
-			*(colon2++) = '\0';
-
-		if (*colon) {
-			tmp = atoi(colon);
-			if (tmp > 0 && tmp <= AVALON_DEFAULT_MINER_NUM) {
-				*miner_count = tmp;
-			} else {
-				quit(1, "Invalid avalon-options for "
-					"miner_count (%s) must be 1 ~ %d",
-					colon, AVALON_DEFAULT_MINER_NUM);
-			}
-		}
-
-		if (colon2 && *colon2) {
-			colon3 = strchr(colon2, ':');
-			if (colon3)
-				*(colon3++) = '\0';
-
-			tmp = atoi(colon2);
-			if (tmp > 0 && tmp <= AVALON_DEFAULT_ASIC_NUM)
-				*asic_count = tmp;
-			else {
-				quit(1, "Invalid avalon-options for "
-					"asic_count (%s) must be 1 ~ %d",
-					colon2, AVALON_DEFAULT_ASIC_NUM);
-			}
-
-			if (colon3 && *colon3) {
-				colon4 = strchr(colon3, ':');
-				if (colon4)
-					*(colon4++) = '\0';
-
-				tmp = atoi(colon3);
-				if (tmp > 0 && tmp <= 0xff)
-					*timeout = tmp;
-				else {
-					quit(1, "Invalid avalon-options for "
-						"timeout (%s) must be 1 ~ %d",
-						colon3, 0xff);
-				}
-				if (colon4 && *colon4) {
-					tmp = atoi(colon4);
-					switch (tmp) {
-					case 256:
-					case 270:
-					case 282:
-					case 300:
-					case 325:
-					case 350:
-					case 375:
-						*frequency = tmp;
-						break;
-					default:
-						quit(1, "Invalid avalon-options for "
-							"frequency must be 256/270/282/300/325/350/375");
-					}
-				}
-			}
-		}
-	}
+	struct avalon_info * const info = proc->device_data;
+	const int baud = atoi(newvalue);
+	if (!valid_baud(baud))
+		return "Invalid baud setting";
+	info->baud = baud;
+	return NULL;
 }
+
+static
+const char *avalon_set_miner_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct avalon_info * const info = proc->device_data;
+	const int miner_count = atoi(newvalue);
+	if (miner_count <= 0 || miner_count > AVALON_DEFAULT_MINER_NUM)
+		return "Invalid miner_count: must be 1 ~ " AVALON_DEFAULT_MINER_NUM_S;
+	info->miner_count = miner_count;
+	return NULL;
+}
+
+static
+const char *avalon_set_asic_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct avalon_info * const info = proc->device_data;
+	const int asic_count = atoi(newvalue);
+	if (asic_count <= 0 || asic_count > AVALON_DEFAULT_ASIC_NUM)
+		return "Invalid asic_count: must be 1 ~ " AVALON_DEFAULT_ASIC_NUM_S;
+	info->asic_count = asic_count;
+	return NULL;
+}
+
+static
+const char *avalon_set_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct avalon_info * const info = proc->device_data;
+	const int timeout = atoi(newvalue);
+	if (timeout <= 0 || timeout > 0xff)
+		return "Invalid timeout: must be 1 ~ 255";
+	info->timeout = timeout;
+	return NULL;
+}
+
+static
+const char *avalon_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct avalon_info * const info = proc->device_data;
+	const int clock = atoi(newvalue);
+	switch (clock) {
+		default:
+			return "Invalid clock: must be 256/270/282/300/325/350/375";
+		case 256:
+		case 270:
+		case 282:
+		case 300:
+		case 325:
+		case 350:
+		case 375:
+			info->frequency = clock;
+	}
+	return NULL;
+}
+
+const struct bfg_set_device_definition avalon_set_device_funcs[] = {
+	// NOTE: Order of parameters below is important for --avalon-options
+	{"baud"       , avalon_set_baud       , "serial baud rate"},
+	{"miner_count", avalon_set_miner_count, ""},
+	{"asic_count" , avalon_set_asic_count , ""},
+	{"timeout"    , avalon_set_timeout    , "how long the device will work on a work item before accepting new work"},
+	{"clock"      , avalon_set_clock      , "clock speed: 256, 270, 282, 300, 325, 350, or 375"},
+	{NULL},
+};
 
 /* Non blocking clearing of anything in the buffer */
 static void avalon_clear_readbuf(int fd)
@@ -559,23 +518,31 @@ static bool avalon_detect_one(const char *devpath)
 	struct avalon_info *info;
 	struct avalon_result ar;
 	int fd, ret;
-	int baud, miner_count, asic_count, timeout, frequency = 0;
 	struct cgpu_info *avalon;
 
 	if (serial_claim(devpath, &avalon_drv))
 		return false;
 	
-	int this_option_offset = ++option_offset;
-	get_options(this_option_offset, &baud, &miner_count, &asic_count,
-		    &timeout, &frequency);
+	info = malloc(sizeof(*info));
+	if (unlikely(!info))
+		applogr(false, LOG_ERR, "Failed to malloc avalon_info data");
+	*info = (struct avalon_info){
+		.baud = AVALON_IO_SPEED,
+		.miner_count = AVALON_DEFAULT_MINER_NUM - 8,
+		.asic_count = AVALON_DEFAULT_ASIC_NUM,
+		.timeout = AVALON_DEFAULT_TIMEOUT,
+		.frequency = AVALON_DEFAULT_FREQUENCY,
+	};
+	drv_set_defaults(&avalon_drv, avalon_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
 	applog(LOG_DEBUG, "Avalon Detect: Attempting to open %s "
 	       "(baud=%d miner_count=%d asic_count=%d timeout=%d frequency=%d)",
-	       devpath, baud, miner_count, asic_count, timeout, frequency);
+	       devpath, info->baud, info->miner_count, info->asic_count, info->timeout, info->frequency);
 
-	fd = avalon_open2(devpath, baud, true);
+	fd = avalon_open2(devpath, info->baud, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_ERR, "Avalon Detect: Failed to open %s", devpath);
+		free(info);
 		return false;
 	}
 	avalon_clear_readbuf(fd);
@@ -586,27 +553,22 @@ static bool avalon_detect_one(const char *devpath)
 	avalon->device_path = strdup(devpath);
 	avalon->device_fd = fd;
 	avalon->threads = AVALON_MINER_THREADS;
+	avalon->set_device_funcs = avalon_set_device_funcs;
 	add_cgpu(avalon);
 
 	ret = avalon_reset(fd, &ar);
 	if (ret) {
 		; /* FIXME: I think IT IS avalon and wait on reset;
 		   * avalon_close(fd);
+		   * free(info);
 		   * return false; */
 	}
 	
 	applog(LOG_INFO, "Avalon Detect: Found at %s, mark as %d",
 	       devpath, avalon->device_id);
 
-	avalon->device_data = calloc(sizeof(struct avalon_info), 1);
-	if (unlikely(!(avalon->device_data)))
-		quit(1, "Failed to malloc avalon_info data");
-	info = avalon->device_data;
+	avalon->device_data = info;
 
-	info->baud = baud;
-	info->miner_count = miner_count;
-	info->asic_count = asic_count;
-	info->timeout = timeout;
 	info->read_count = ((float)info->timeout * AVALON_HASH_TIME_FACTOR *
 			    AVALON_TIME_FACTOR) / (float)info->miner_count;
 
@@ -620,7 +582,6 @@ static bool avalon_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->frequency = frequency;
 
 	/* Set asic to idle mode after detect */
 	avalon_idle(avalon);
@@ -646,6 +607,9 @@ static void avalon_init(struct cgpu_info *avalon)
 	struct avalon_info *info = avalon->device_data;
 	struct avalon_result ar;
 	int fd, ret;
+	
+	cgpu_set_defaults(avalon);
+	avalon->set_device_funcs = NULL;
 
 	avalon->device_fd = -1;
 	fd = avalon_open(avalon->device_path, info->baud);

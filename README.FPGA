@@ -136,43 +136,35 @@ be less than the firmware speed since you lose work on every block change.
 Icarus (ICA)
 ------------
 
-There are two hidden options in BFGMiner when Icarus support is compiled in:
+There are a number of options for Icarus-compatible devices which can be used
+with --set-devices (or the RPC pgaset method):
 
---icarus-options <arg> Set specific FPGA board configurations - one set of values for all or comma separated
-           baud:work_division:fpga_count:quirks
+    baud=N           The serial baud rate (default 115200)
+    work_division=N  The fraction of work divided up for each processor: 1, 2,
+                     4, or 8. e.g. 2 means each does half the nonce range
+                     (default 2)
+    fpga_count=N     The actual number of processors working; this would
+                     normally be the same as work_division. Range is from 1 up
+                     to <work_division>. It defaults to the value of
+                     work_division, or 2 if you don't specify work_division.
+    reopen=MODE      Controls how often the driver reopens the device to
+                     workaround issues. Choices are 'never', on 'timeout' only
+                     (default), or every 'cycle'.
+    timing=MODE      Set how the timing is calculated:
+                         default[=N]   Use the default hash time
+                         short[=N]     Calculate the hash time and stop
+                                       adjusting it at ~315 difficulty 1 shares
+                                       (~1hr)
+                         long=[N]      Re-calculate the hash time continuously
+                         value[=N]     Specify the hash time in nanoseconds
+                                       (e.g. 2.6316) and abort time (e.g.
+                                       2.6316=80).
 
-           baud           The Serial/USB baud rate - 115200 or 57600 only - default 115200
-           work_division  The fraction of work divided up for each FPGA chip - 1, 2, 4 or 8
-                          e.g. 2 means each FPGA does half the nonce range - default 2
-           fpga_count     The actual number of FPGA working - this would normally be the same
-                          as work_division - range is from 1 up to 'work_division'
-                          It defaults to the value of work_division - or 2 if you don't specify
-                          work_division
-           quirks         List of quirks to enable and disable (after a minus sign):
-                            r  Reopen device regularly to workaround buggy Icarus USB chipset
-                               (enabled by default)
-
-If you define fewer comma separated values than Icarus devices, the last values
-will be used for all extra devices.
-
-An example would be: --icarus-options 57600:2:1:-r
+An example would be: --set-device ECM:baud=57600 --set-device
+ECM:work_division=2 --set-device DCM:fpga_count=1 --set-device ECM:reopen=never
 This would mean: use 57600 baud, the FPGA board divides the work in half however
 only 1 FPGA actually runs on the board, and don't reopen the device (e.g. like
 an early CM1 Icarus copy bitstream).
-
---icarus-timing <arg> Set how the Icarus timing is calculated - one setting/value for all or comma separated
-           default[=N]   Use the default Icarus hash time (2.6316ns)
-           short=[N]     Calculate the hash time and stop adjusting it at ~315 difficulty 1 shares (~1hr)
-           long=[N]      Re-calculate the hash time continuously
-           value[=N]     Specify the hash time in nanoseconds (e.g. 2.6316) and abort time (e.g. 2.6316=80)
-
-If you define fewer comma separated values than Icarus devices, the last values
-will be used for all extra devices.
-
-Icarus timing is required for devices that do not exactly match a default
-Icarus Rev3 in processing speed.
-If you have an Icarus Rev3 you should not normally need to use --icarus-timing
-since the default values will maximise the Mh/s and display it correctly.
 
 Icarus timing is used to determine the number of hashes that have been checked
 when it aborts a nonce range (including on a longpoll).
@@ -181,8 +173,7 @@ range to avoid letting the Icarus go idle, but also to safely maximise that
 time.
 
 'short' or 'long' mode should only be used on a computer that has enough CPU
-available to run BFGMiner without any CPU delays (an active desktop or swapping
-computer would not be stable enough).
+available to run BFGMiner without any CPU delays.
 Any CPU delays while calculating the hash time will affect the result
 'short' mode only requires the computer to be stable until it has completed
 ~315 difficulty 1 shares, 'long' mode requires it to always be stable to ensure
@@ -211,11 +202,10 @@ time value (Hs) calculated.
 You can also use the RPC API 'stats' command to see the current hash time (Hs)
 at any time.
 
-The Icarus code currently only works with an FPGA device that supports the same
-commands as Icarus Rev3 requires and also is less than ~840Mh/s and greater
-than 2Mh/s.
-If an FPGA device does hash faster than ~840Mh/s it should work correctly if
-you supply the correct hash time nanoseconds value.
+The Icarus code currently only works with devices that support the same commands
+as Icarus Rev3 requires and also is less than ~840Mh/s and greater than 2Mh/s.
+If your device does hash faster than ~840Mh/s it should work correctly if you
+supply the correct hash time nanoseconds value.
 
 The timing code itself will affect the Icarus performance since it increases
 the delay after work is completed or aborted until it starts again.

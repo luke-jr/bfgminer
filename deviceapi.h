@@ -77,6 +77,22 @@ extern void *miner_thread(void *);
 extern void add_cgpu_live(void*);
 extern bool add_cgpu_slave(struct cgpu_info *, struct cgpu_info *master);
 
+enum bfg_set_device_replytype {
+	SDR_AUTO,
+	SDR_OK,
+	SDR_ERR,
+	SDR_HELP,
+	SDR_UNKNOWN,
+	SDR_NOSUPP,
+};
+typedef const char *(*bfg_set_device_func_t)(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+struct bfg_set_device_definition {
+	const char *optname;
+	bfg_set_device_func_t func;
+	const char *description;
+};
+extern const char *proc_set_device(struct cgpu_info *proc, char *optname, char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
 

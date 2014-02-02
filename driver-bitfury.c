@@ -62,7 +62,7 @@ int bitfury_autodetect()
 		struct bitfury_device dummy_bitfury = {
 			.spi = sys_spi,
 		};
-		drv_set_defaults(&bitfury_drv, bitfury_spi_port_config, &dummy_bitfury);
+		drv_set_defaults(&bitfury_drv, bitfury_spi_port_config, &dummy_bitfury, NULL, NULL, 0);
 	}
 	
 	chip_n = libbitfury_detectChips1(sys_spi);

@@ -307,6 +307,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
 
+#define USE_ALTMSG 0x4000
+
 enum code_severity {
 	SEVERITY_ERR,
 	SEVERITY_WARN,
@@ -484,6 +486,7 @@ struct CODES {
  { SEVERITY_WARN,  MSG_PGANOSET, PARAM_PGA,	"PGA %d does not support pgaset" },
  { SEVERITY_INFO,  MSG_PGAHELP, PARAM_BOTH,	"PGA %d set help: %s" },
  { SEVERITY_SUCC,  MSG_PGASETOK, PARAM_PGA,	"PGA %d set OK" },
+ { SEVERITY_SUCC,  MSG_PGASETOK | USE_ALTMSG, PARAM_BOTH,	"PGA %d set OK: %s" },
  { SEVERITY_ERR,   MSG_PGASETERR, PARAM_BOTH,	"PGA %d set failed: %s" },
 #endif
  { SEVERITY_ERR,   MSG_ZERMIS,	PARAM_NONE,	"Missing zero parameters" },
@@ -1157,7 +1160,7 @@ foundit:
 // All replies (except BYE and RESTART) start with a message
 //  thus for JSON, message() inserts JSON_START at the front
 //  and send_result() adds JSON_END at the end
-static void message(struct io_data *io_data, int messageid, int paramid, char *param2, bool isjson)
+static void message(struct io_data * const io_data, const int messageid2, const int paramid, const char * const param2, const bool isjson)
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
@@ -1170,6 +1173,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 	int cpu;
 #endif
 	int i;
+	int messageid = messageid2 & ~USE_ALTMSG;
 
 	io_reinit(io_data);
 
@@ -1177,7 +1181,7 @@ static void message(struct io_data *io_data, int messageid, int paramid, char *p
 		io_put(io_data, JSON_START JSON_STATUS);
 
 	for (i = 0; codes[i].severity != SEVERITY_FAIL; i++) {
-		if (codes[i].code == messageid) {
+		if (codes[i].code == messageid2) {
 			switch (codes[i].severity) {
 				case SEVERITY_WARN:
 					severity[0] = 'W';
@@ -3304,7 +3308,6 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
-	struct device_drv *drv;
 	char buf[TMPBUFSIZ];
 	int numpga = numpgas();
 
@@ -3339,23 +3342,31 @@ static void pgaset(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 	}
 
 	cgpu = get_devices(dev);
-	drv = cgpu->drv;
 
 	char *set = strchr(opt, ',');
 	if (set)
 		*(set++) = '\0';
 
-	if (!drv->set_device)
-		message(io_data, MSG_PGANOSET, id, NULL, isjson);
-	else {
-		char *ret = drv->set_device(cgpu, opt, set, buf);
-		if (ret) {
-			if (strcasecmp(opt, "help") == 0)
-				message(io_data, MSG_PGAHELP, id, ret, isjson);
+	enum bfg_set_device_replytype success;
+	const char *ret = proc_set_device(cgpu, opt, set, buf, &success);
+	switch (success)
+	{
+		case SDR_HELP:
+			message(io_data, MSG_PGAHELP, id, ret, isjson);
+			break;
+		case SDR_OK:
+			if (ret)
+				message(io_data, MSG_PGASETOK | USE_ALTMSG, id, ret, isjson);
 			else
-				message(io_data, MSG_PGASETERR, id, ret, isjson);
-		} else
-			message(io_data, MSG_PGASETOK, id, NULL, isjson);
+				message(io_data, MSG_PGASETOK, id, NULL, isjson);
+			break;
+		case SDR_UNKNOWN:
+		case SDR_ERR:
+			message(io_data, MSG_PGASETERR, id, ret, isjson);
+			break;
+		case SDR_AUTO:
+		case SDR_NOSUPP:
+			message(io_data, MSG_PGANOSET, id, NULL, isjson);
 	}
 }
 #endif

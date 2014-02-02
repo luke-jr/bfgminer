@@ -131,14 +131,13 @@ AUTO MODES:
 There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can be
 used independently of each other and are complementary. Both auto modes are
 designed to safely change settings while trying to maintain a target
-temperature. By default this is set to 75 degrees C but can be changed with:
+temperature. By default this is set to 75 degrees C but can be changed with the
+--set-device option. For example:
 
---temp-target
-e.g.
---temp-target 80
+--set-device OCL:temp-target=80
 Sets all cards' target temperature to 80 degrees.
 
---temp-target 75,85
+--set-device OCL0:temp-target=75 --set-device OCL1:temp-target=85
 Sets card 0 target temperature to 75, and card 1 to 85 degrees.
 
 AUTO FAN:
@@ -185,9 +184,7 @@ cutoff limit (95 degrees by default), BFGMiner will completely disable the GPU
 from mining and it will not be re-enabled unless manually done so. The cutoff
 temperature can be changed with:
 
---temp-cutoff
-e.g.
---temp-cutoff 95,105
+--set-device OCL0:temp-cutoff=95 --set-device OCL1:temp-cutoff=105
 Sets card 0 cutoff temperature to 95 and card 1 to 105.
 
 --gpu-memdiff -125

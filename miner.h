@@ -446,6 +446,7 @@ struct cgpu_info {
 	int cgminer_id;
 	int device_line_id;
 	struct device_drv *drv;
+	const struct bfg_set_device_definition *set_device_funcs;
 	const char *devtype;
 	int device_id;
 	char *dev_repr;
@@ -538,9 +539,8 @@ struct cgpu_info {
 
 	float temp;
 	int cutofftemp;
-	uint8_t cutofftemp_default;
 	int targettemp;
-	uint8_t targettemp_default;
+	bool targettemp_user;
 
 #ifdef HAVE_ADL
 	bool has_adl;
@@ -1045,7 +1045,7 @@ extern void proc_enable(struct cgpu_info *);
 extern void reinit_device(struct cgpu_info *cgpu);
 
 extern void cgpu_set_defaults(struct cgpu_info *);
-extern void drv_set_defaults(const struct device_drv *, char *(*set_func)(struct cgpu_info *, char *, char *, char *), void *userp);
+extern void drv_set_defaults(const struct device_drv *, const void *, void *userp, const char *devpath, const char *serial, int mode);
 
 #ifdef HAVE_ADL
 extern bool gpu_stats(int gpu, float *temp, int *engineclock, int *memclock, float *vddc, int *activity, int *fanspeed, int *fanpercent, int *powertune);

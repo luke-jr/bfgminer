@@ -231,16 +231,8 @@ bool opt_api_network;
 bool opt_delaynet;
 bool opt_disable_pool;
 static bool no_work;
-char *opt_icarus_options = NULL;
-char *opt_icarus_timing = NULL;
 bool opt_worktime;
 bool opt_weighed_stats;
-#ifdef USE_AVALON
-char *opt_avalon_options = NULL;
-#endif
-#ifdef USE_KLONDIKE
-char *opt_klondike_options = NULL;
-#endif
 
 char *opt_kernel_path;
 char *cgminer_path;
@@ -1653,107 +1645,32 @@ static char *set_sharelog(char *arg)
 	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
 }
 
-static char *temp_cutoff_str = "";
-static char *temp_target_str = "";
-
 char *set_temp_cutoff(char *arg)
 {
-	int val;
-
-	if (!(arg && arg[0]))
-		return "Invalid parameters for set temp cutoff";
-	val = atoi(arg);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp cutoff";
-	temp_cutoff_str = arg;
-
+	if (strchr(arg, ','))
+		return "temp-cutoff no longer supports comma-delimited syntax, use --set-device for better control";
+	applog(LOG_WARNING, "temp-cutoff is deprecated! Use --set-device for better control");
+	
+	char buf[0x100];
+	snprintf(buf, sizeof(buf), "all:temp-cutoff=%s", arg);
+	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+	string_elist_add(buf, &opt_set_device_list);
+	
 	return NULL;
 }
 
 char *set_temp_target(char *arg)
 {
-	int val;
-
-	if (!(arg && arg[0]))
-		return "Invalid parameters for set temp target";
-	val = atoi(arg);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp target";
-	temp_target_str = arg;
-
+	if (strchr(arg, ','))
+		return "temp-target no longer supports comma-delimited syntax, use --set-device for better control";
+	applog(LOG_WARNING, "temp-target is deprecated! Use --set-device for better control");
+	
+	char buf[0x100];
+	snprintf(buf, sizeof(buf), "all:temp-target=%s", arg);
+	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+	string_elist_add(buf, &opt_set_device_list);
+	
 	return NULL;
-}
-
-// For a single element string, this always returns the number (for all calls)
-// For multi-element strings, it returns each element as a number in order, and 0 when there are no more
-static int temp_strtok(char *base, char **n)
-{
-	char *i = *n;
-	char *p = strchr(i, ',');
-	if (p) {
-		p[0] = '\0';
-		*n = &p[1];
-	}
-	else
-	if (base != i)
-		*n = strchr(i, '\0');
-	return atoi(i);
-}
-
-static void load_temp_config_cgpu(struct cgpu_info *cgpu, char **cutoff_np, char **target_np)
-{
-	int target_off, val;
-	
-	// cutoff default may be specified by driver during probe; otherwise, opt_cutofftemp (const)
-	if (!cgpu->cutofftemp)
-		cgpu->cutofftemp = opt_cutofftemp;
-	
-	// target default may be specified by driver, and is moved with offset; otherwise, offset minus 6
-	if (cgpu->targettemp)
-		target_off = cgpu->targettemp - cgpu->cutofftemp;
-	else
-		target_off = -6;
-	
-	cgpu->cutofftemp_default = cgpu->cutofftemp;
-	
-	val = temp_strtok(temp_cutoff_str, cutoff_np);
-	if (val < 0 || val > 200)
-		quit(1, "Invalid value passed to set temp cutoff");
-	if (val)
-		cgpu->cutofftemp = val;
-	
-	cgpu->targettemp_default = cgpu->cutofftemp + target_off;
-	
-	val = temp_strtok(temp_target_str, target_np);
-	if (val < 0 || val > 200)
-		quit(1, "Invalid value passed to set temp target");
-	if (val)
-		cgpu->targettemp = val;
-	else
-		cgpu->targettemp = cgpu->cutofftemp + target_off;
-	
-	applog(LOG_DEBUG, "%"PRIprepr": Set temperature config: target=%d cutoff=%d",
-	       cgpu->proc_repr,
-	       cgpu->targettemp, cgpu->cutofftemp);
-}
-
-static void load_temp_config()
-{
-	int i;
-	char *cutoff_n, *target_n;
-	struct cgpu_info *cgpu;
-
-	cutoff_n = temp_cutoff_str;
-	target_n = temp_target_str;
-
-	for (i = 0; i < total_devices; ++i) {
-		cgpu = get_devices(i);
-		load_temp_config_cgpu(cgpu, &cutoff_n, &target_n);
-	}
-	if (cutoff_n != temp_cutoff_str && cutoff_n[0])
-		quit(1, "Too many values passed to set temp cutoff");
-	if (target_n != temp_target_str && target_n[0])
-		quit(1, "Too many values passed to set temp target");
 }
 
 static char *set_api_allow(const char *arg)
@@ -1785,26 +1702,88 @@ static char *set_api_mcast_des(const char *arg)
 }
 
 #ifdef USE_ICARUS
+extern const struct bfg_set_device_definition icarus_set_device_funcs[];
+
 static char *set_icarus_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_icarus_options);
-
+	if (strchr(arg, ','))
+		return "icarus-options no longer supports comma-delimited syntax, see README.FPGA for better control";
+	applog(LOG_WARNING, "icarus-options is deprecated! See README.FPGA for better control");
+	
+	char *opts = strdup(arg), *argdup;
+	argdup = opts;
+	const struct bfg_set_device_definition *sdf = icarus_set_device_funcs;
+	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
+	char buf[0x100], *saveptr, *opt;
+	for (int i = 0; i < 4; ++i, ++sdf)
+	{
+		opt = strtok_r(opts, ":", &saveptr);
+		opts = NULL;
+		
+		if (!opt)
+			break;
+		
+		if (!opt[0])
+			continue;
+		
+		for (int j = 0; j < 4; ++j)
+		{
+			snprintf(buf, sizeof(buf), "%s:%s=%s", drivers[j], sdf->optname, opt);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+		}
+	}
+	free(argdup);
 	return NULL;
 }
 
 static char *set_icarus_timing(const char *arg)
 {
-	opt_set_charp(arg, &opt_icarus_timing);
-
+	if (strchr(arg, ','))
+		return "icarus-timing no longer supports comma-delimited syntax, see README.FPGA for better control";
+	applog(LOG_WARNING, "icarus-timing is deprecated! See README.FPGA for better control");
+	
+	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
+	char buf[0x100];
+	for (int j = 0; j < 4; ++j)
+	{
+		snprintf(buf, sizeof(buf), "%s:timing=%s", drivers[j], arg);
+		applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+		string_elist_add(buf, &opt_set_device_list);
+	}
 	return NULL;
 }
 #endif
 
 #ifdef USE_AVALON
+extern const struct bfg_set_device_definition avalon_set_device_funcs[];
+
 static char *set_avalon_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_avalon_options);
-
+	if (strchr(arg, ','))
+		return "avalon-options no longer supports comma-delimited syntax, see README.FPGA for better control";
+	applog(LOG_WARNING, "avalon-options is deprecated! See README.FPGA for better control");
+	
+	char *opts = strdup(arg), *argdup;
+	argdup = opts;
+	const struct bfg_set_device_definition *sdf = avalon_set_device_funcs;
+	char buf[0x100], *saveptr, *opt;
+	for (int i = 0; i < 5; ++i, ++sdf)
+	{
+		opt = strtok_r(opts, ":", &saveptr);
+		opts = NULL;
+		
+		if (!opt)
+			break;
+		
+		if (!opt[0])
+			continue;
+		
+		snprintf(buf, sizeof(buf), "avalon:%s=%s", sdf->optname, opt);
+		applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+		string_elist_add(buf, &opt_set_device_list);
+	}
+	free(argdup);
 	return NULL;
 }
 #endif
@@ -1812,8 +1791,25 @@ static char *set_avalon_options(const char *arg)
 #ifdef USE_KLONDIKE
 static char *set_klondike_options(const char *arg)
 {
-	opt_set_charp(arg, &opt_klondike_options);
-
+	char buf[0x100];
+	int hashclock;
+	double temptarget;
+	switch (sscanf(arg, "%d:%lf", &hashclock, &temptarget))
+	{
+		default:
+			return "Unrecognised --klondike-options";
+		case 2:
+			snprintf(buf, sizeof(buf), "klondike:temp-target=%lf", temptarget);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+			// fallthru
+		case 1:
+			snprintf(buf, sizeof(buf), "klondike:clock=%d", hashclock);
+			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
+			string_elist_add(buf, &opt_set_device_list);
+	}
+	applog(LOG_WARNING, "klondike-options is deprecated! Use --set-device for better control");
+	
 	return NULL;
 }
 #endif
@@ -2282,7 +2278,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--temp-cutoff",
 		     set_temp_cutoff, NULL, &opt_cutofftemp,
-		     "Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list"),
+		     opt_hidden),
 	OPT_WITH_ARG("--temp-hysteresis",
 		     set_int_1_to_10, opt_show_intval, &opt_hysteresis,
 		     "Set how much the temperature can fluctuate outside limits when automanaging speeds"),
@@ -2293,7 +2289,7 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--temp-target",
 		     set_temp_target, NULL, NULL,
-		     "Target temperature when automatically managing fan and clock speeds, one value or comma separated list"),
+		     opt_hidden),
 	OPT_WITHOUT_ARG("--text-only|-T",
 			opt_set_invbool, &use_curses,
 #ifdef HAVE_CURSES
@@ -6361,57 +6357,6 @@ char *json_escape(const char *str)
 	return buf;
 }
 
-void _write_config_temps(FILE *fcfg, const char *configname, size_t settingoffset, size_t defoffset)
-{
-	int i, commas;
-	int *setp, allset;
-	uint8_t *defp;
-	
-	for (i = 0; ; ++i)
-	{
-		if (i == total_devices)
-			// All defaults
-			return;
-		setp = ((void*)devices[i]) + settingoffset;
-		defp = ((void*)devices[i]) + defoffset;
-		allset = *setp;
-		if (*setp != *defp)
-			break;
-	}
-	
-	fprintf(fcfg, ",\n\"%s\" : \"", configname);
-	
-	for (i = 1; ; ++i)
-	{
-		if (i == total_devices)
-		{
-			// All the same
-			fprintf(fcfg, "%d\"", allset);
-			return;
-		}
-		setp = ((void*)devices[i]) + settingoffset;
-		if (allset != *setp)
-			break;
-	}
-	
-	commas = 0;
-	for (i = 0; i < total_devices; ++i)
-	{
-		setp = ((void*)devices[i]) + settingoffset;
-		defp = ((void*)devices[i]) + defoffset;
-		if (*setp != *defp)
-		{
-			for ( ; commas; --commas)
-				fputs(",", fcfg);
-			fprintf(fcfg, "%d", *setp);
-		}
-		++commas;
-	}
-	fputs("\"", fcfg);
-}
-#define write_config_temps(fcfg, configname, settingname)  \
-	_write_config_temps(fcfg, configname, offsetof(struct cgpu_info, settingname), offsetof(struct cgpu_info, settingname ## _default))
-
 static
 void _write_config_string_elist(FILE *fcfg, const char *configname, struct string_elist * const elist)
 {
@@ -6458,8 +6403,6 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-	write_config_temps(fcfg, "temp-cutoff", cutofftemp);
-	write_config_temps(fcfg, "temp-target", targettemp);
 #ifdef HAVE_OPENCL
 	if (nDevs) {
 		/* Write GPU device values */
@@ -6634,14 +6577,6 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, ",\n\"api-description\" : \"%s\"", json_escape(opt_api_description));
 	if (opt_api_groups)
 		fprintf(fcfg, ",\n\"api-groups\" : \"%s\"", json_escape(opt_api_groups));
-	if (opt_icarus_options)
-		fprintf(fcfg, ",\n\"icarus-options\" : \"%s\"", json_escape(opt_icarus_options));
-	if (opt_icarus_timing)
-		fprintf(fcfg, ",\n\"icarus-timing\" : \"%s\"", json_escape(opt_icarus_timing));
-#ifdef USE_KLONDIKE
-	if (opt_klondike_options)
-		fprintf(fcfg, ",\n\"klondike-options\" : \"%s\"", json_escape(opt_klondike_options));
-#endif
 	fputs("\n}\n", fcfg);
 
 	json_escape_free();
@@ -9733,7 +9668,6 @@ void proc_enable(struct cgpu_info *cgpu)
 
 void cgpu_set_defaults(struct cgpu_info * const cgpu)
 {
-	const struct device_drv * const drv = cgpu->drv;
 	struct string_elist *setstr_elist;
 	const char *p, *p2;
 	char replybuf[0x2000];
@@ -9756,13 +9690,6 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 		
 		applog(LOG_DEBUG, "%"PRIpreprv": %s: Matched with set default: %s",
 		       cgpu->proc_repr, __func__, setstr);
-		
-		if (!drv->set_device)
-		{
-			applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
-			       cgpu->proc_repr, setstr);
-			continue;
-		}
 		
 		if (p[0] == ':')
 			++p;
@@ -9788,18 +9715,31 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 			memcpy(setval, p2, L);
 		setval[L] = '\0';
 		
-		p = drv->set_device(cgpu, opt, setval, replybuf);
-		if (p)
-			applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
-			       cgpu->proc_repr, setstr, p);
-		else
-			applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s",
-			       cgpu->proc_repr, setstr);
+		enum bfg_set_device_replytype success;
+		p = proc_set_device(cgpu, opt, setval, replybuf, &success);
+		switch (success)
+		{
+			case SDR_OK:
+				applog(LOG_DEBUG, "%"PRIpreprv": Applied rule %s%s%s",
+				       cgpu->proc_repr, setstr,
+				       p ? ": " : "", p ?: "");
+				break;
+			case SDR_ERR:
+			case SDR_HELP:
+			case SDR_UNKNOWN:
+				applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
+				       cgpu->proc_repr, setstr, p);
+				break;
+			case SDR_AUTO:
+			case SDR_NOSUPP:
+				applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
+				       cgpu->proc_repr, setstr);
+		}
 	}
 	cgpu->already_set_defaults = true;
 }
 
-void drv_set_defaults(const struct device_drv * const drv, char *(*set_func)(struct cgpu_info *, char *, char *, char *), void *userp)
+void drv_set_defaults(const struct device_drv * const drv, const void *datap, void *userp, const char * const devpath, const char * const serial, const int mode)
 {
 	struct device_drv dummy_drv = *drv;
 	struct cgpu_info dummy_cgpu = {
@@ -9808,9 +9748,20 @@ void drv_set_defaults(const struct device_drv * const drv, char *(*set_func)(str
 		.device_id = -1,
 		.proc_id = -1,
 		.device_data = userp,
+		.device_path = devpath,
+		.dev_serial = serial,
 	};
 	strcpy(dummy_cgpu.proc_repr, drv->name);
-	dummy_drv.set_device = set_func;
+	switch (mode)
+	{
+		case 0:
+			dummy_drv.set_device = datap;
+			break;
+		case 1:
+			dummy_drv.set_device = NULL;
+			dummy_cgpu.set_device_funcs = datap;
+			break;
+	}
 	cgpu_set_defaults(&dummy_cgpu);
 }
 
@@ -10919,7 +10870,6 @@ int create_new_cgpus(void (*addfunc)(void*), void *arg)
 	struct cgpu_info *cgpu;
 	struct thr_info *thr;
 	void *p;
-	char *dummy = "\0";
 	
 	mutex_lock(&mutex);
 	devcount = total_devices;
@@ -10973,7 +10923,6 @@ int create_new_cgpus(void (*addfunc)(void*), void *arg)
 	{
 		cgpu = devices_new[i];
 		
-		load_temp_config_cgpu(cgpu, &dummy, &dummy);
 		allocate_cgpu(cgpu, &k);
 	}
 	for (i = 0; i < total_devices_new; ++i)
@@ -11605,8 +11554,6 @@ int main(int argc, char *argv[])
 		else
 			applog(LOG_WARNING, "Waiting for devices");
 	}
-
-	load_temp_config();
 
 #ifdef HAVE_CURSES
 	switch_logsize();

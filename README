@@ -274,9 +274,7 @@ Options for both config file and command line:
 --stratum-port <arg> Port number to listen on for stratum miners (-1 means disabled) (default: -1)
 --submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
---temp-cutoff <arg> Maximum temperature devices will be allowed to reach before being disabled, one value or comma separated list
 --temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
---temp-target <arg> Target temperature when automatically managing fan and clock speeds
 --text-only|-T      Disable ncurses formatted screen output
 --unicode           Use Unicode characters in TUI
 --url|-o <arg>      URL for bitcoin JSON-RPC server
