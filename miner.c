@@ -11597,7 +11597,12 @@ int main(int argc, char *argv[])
 	}
 	
 	if (opt_quit_summary == BQS_DEFAULT)
-		opt_quit_summary = BQS_PROCS;
+	{
+		if (total_devices < 25)
+			opt_quit_summary = BQS_PROCS;
+		else
+			opt_quit_summary = BQS_DEVS;
+	}
 
 #ifdef HAVE_CURSES
 	switch_logsize();
