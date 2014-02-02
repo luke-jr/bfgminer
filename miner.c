@@ -10635,6 +10635,9 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 
 	cgpu->max_hashes = 0;
 	BFGINIT(cgpu->min_nonce_diff, 1);
+	
+	BFGINIT(cgpu->cutofftemp, opt_cutofftemp);
+	BFGINIT(cgpu->targettemp, cgpu->cutofftemp - 6);
 
 	// Setup thread structs before starting any of the threads, in case they try to interact
 	for (j = 0; j < threadobj; ++j, ++*kp) {
