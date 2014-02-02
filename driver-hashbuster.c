@@ -187,8 +187,11 @@ bool hashbuster_lowl_probe(const struct lowlevel_device_info * const info)
 		       __func__, path);
 	
 	if ((!hashbuster_io(h, buf, buf)) || buf[1] != 0x07)
+	{
+		hid_close(h);
 		applogr(false, LOG_DEBUG, "%s: Identify sequence didn't match on %s",
 		        __func__, path);
+	}
 		
 	const int chip_n = hashbuster_chip_count(h);
 	
@@ -227,7 +230,10 @@ bool hashbuster_init(struct thr_info * const thr)
 	lowlevel_devinfo_free(cgpu->device_data);
 	
 	if (!h)
+	{
+		hid_close(h);
 		applogr(false, LOG_ERR, "%s: Failed to open hid device", cgpu->dev_repr);
+	}
 	
 	port = malloc(sizeof(*port));
 	if (!port)
