@@ -10809,6 +10809,7 @@ void *probe_device_thread(void *p)
 			if (_probe_device_internal(info, dname, dnamelen))
 				return NULL;
 			else
+			if (opt_hotplug)
 				bfg_need_detect_rescan = true;
 		}
 	}
@@ -10847,6 +10848,7 @@ void *probe_device_thread(void *p)
 				if (drv->lowl_probe(info))
 					return NULL;
 				else
+				if (opt_hotplug)
 					bfg_need_detect_rescan = true;
 			}
 		}
@@ -10878,7 +10880,8 @@ void *probe_device_thread(void *p)
 						if (drv->lowl_probe(info))
 							return NULL;
 					}
-					bfg_need_detect_rescan = true;
+					if (opt_hotplug)
+						bfg_need_detect_rescan = true;
 					break;
 				}
 			}
