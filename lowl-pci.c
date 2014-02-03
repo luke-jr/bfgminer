@@ -9,7 +9,13 @@
 
 #include "config.h"
 
+#if defined(USE_VFIO) || defined(USE_UIO)
+#	define USE_LOWL_PCI_MMAP
+#	define USE_LOWL_PCI_DATA_WRAPPERS
+#endif
+
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,10 +28,14 @@
 
 #include <utlist.h>
 
+#ifdef USE_VFIO
 #include <linux/vfio.h>
 #include <sys/ioctl.h>
+#endif
 
+#ifdef USE_LOWL_PCI_MMAP
 #include <sys/mman.h>
+#endif
 
 #include "logging.h"
 #include "lowlevel.h"
@@ -87,12 +97,17 @@ struct lowl_pci_interface {
 struct lowl_pci_handle {
 	const char *path;
 	const struct lowl_pci_interface *lpi;
+#ifdef USE_VFIO
 	int fd[3];
-	uint32_t *bar[6];
 	off_t baroff[6];
+#endif
+#ifdef USE_LOWL_PCI_MMAP
+	uint32_t *bar[6];
 	size_t barsz[6];
+#endif
 };
 
+#ifdef USE_LOWL_PCI_MMAP
 static
 void lowl_pci_close_mmap(struct lowl_pci_handle * const lph)
 {
@@ -117,6 +132,24 @@ bool lowl_pci_set_words_mmap(struct lowl_pci_handle * const lph, const uint32_t 
 	return true;
 }
 
+static
+int _file_mode_to_mmap_prot(const int mode)
+{
+	switch (mode)
+	{
+		case O_RDONLY:
+			return PROT_READ;
+		case O_WRONLY:
+			return PROT_WRITE;
+		case O_RDWR:
+			return PROT_READ | PROT_WRITE;
+		default:
+			return -1;
+	}
+}
+#endif
+
+#ifdef USE_LOWL_PCI_DATA_WRAPPERS
 static
 const void *lowl_pci_get_data_from_words(struct lowl_pci_handle * const lph, void * const bufp, const size_t sz, const int bar, const off_t offset)
 {
@@ -165,24 +198,10 @@ bool lowl_pci_set_data_in_words(struct lowl_pci_handle * const lph, const void *
 	}
 	return lowl_pci_set_words(lph, wdata, words, bar, offset32);
 }
+#endif
 
+#ifdef USE_UIO
 static const struct lowl_pci_interface lpi_uio;
-
-static
-int _file_mode_to_mmap_prot(const int mode)
-{
-	switch (mode)
-	{
-		case O_RDONLY:
-			return PROT_READ;
-		case O_WRONLY:
-			return PROT_WRITE;
-		case O_RDWR:
-			return PROT_READ | PROT_WRITE;
-		default:
-			return -1;
-	}
-}
 
 static
 void *_uio_mmap_bar(const char * const path, const int bar, const size_t sz, const int prot)
@@ -236,8 +255,9 @@ static const struct lowl_pci_interface lpi_uio = {
 	.set_words = lowl_pci_set_words_mmap,
 	.set_data  = lowl_pci_set_data_in_words,
 };
+#endif
 
-
+#ifdef USE_VFIO
 static const struct lowl_pci_interface lpi_vfio;
 
 #define _VFIO_ACCESS_BAR_PROBLEM ((void*)&lpi_vfio)
@@ -428,13 +448,17 @@ static const struct lowl_pci_interface lpi_vfio = {
 	.set_words = lowl_pci_set_words_vfio,
 	.set_data  = lowl_pci_set_data_in_words,
 };
-
+#endif
 
 struct lowl_pci_handle *lowl_pci_open(const char * const path, const struct _lowl_pci_config * const barcfgs)
 {
 	return
+#ifdef USE_VFIO
 		lpi_vfio.open(path, barcfgs) ?:
+#endif
+#ifdef USE_UIO
 		lpi_uio.open(path, barcfgs) ?:
+#endif
 		false;
 }
 

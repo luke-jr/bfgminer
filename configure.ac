@@ -220,6 +220,36 @@ AC_CHECK_DECL([HASH_ITER],[
 ])
 
 
+lowl_pci=no
+if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
+	AC_ARG_WITH([uio],
+		[AC_HELP_STRING([--with-uio],[Compile support for PCI devices via Linux UIO interface (default enabled)])],
+		[uio=$withval],
+		[uio=yes])
+	AC_ARG_WITH([vfio],
+		[AC_HELP_STRING([--with-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
+		[vfio=$enableval],
+		[vfio=auto])
+	if test "x$vfio" != "xno"; then
+		AC_CHECK_HEADER([linux/vfio.h],[
+			vfio=yes
+		],[
+			if test "x$vfio" = "xyes"; then
+				AC_MSG_ERROR([Unable to find linux/vfio.h])
+			elif test "x$uio" = "xyes"; then
+				AC_MSG_WARN([linux/vfio.h not found; PCI device support will require UIO (and root access)])
+			else
+				AC_MSG_WARN([linux/vfio.h not found; PCI device support will not be available])
+			fi
+			vfio=no
+		])
+	fi
+	if test "x$vfio$uio" != xnono; then
+		lowl_pci=yes
+	fi
+fi
+
+
 driverlist="$driverlist cpu/cpumining"
 cpumining="no"
 
@@ -374,7 +404,7 @@ AC_ARG_ENABLE([bitforce],
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
 	driverlist="$driverlist bitforce:uio/ac_cv_header_sys_mman_h"
-	if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
+	if test "x$lowl_pci" = "xyes"; then
 		need_lowl_pci=yes
 	fi
 	need_lowl_vcom=yes
@@ -989,6 +1019,12 @@ fi
 if test x$need_lowl_pci = xyes; then
 	AC_DEFINE([NEED_BFG_LOWL_PCI], [1], [Defined to 1 if lowlevel PCI drivers are being used])
 	need_lowlevel=yes
+	if test x$uio = xyes; then
+		AC_DEFINE([USE_UIO], [1], [Defined to 1 if lowlevel PCI drivers should support UIO])
+	fi
+	if test x$vfio = xyes; then
+		AC_DEFINE([USE_VFIO], [1], [Defined to 1 if lowlevel PCI drivers should support VFIO])
+	fi
 fi
 
 if test x$need_lowl_usb = xyes; then
