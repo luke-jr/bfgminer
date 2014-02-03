@@ -173,7 +173,7 @@ char *antminer_set_device(struct cgpu_info *cgpu, char *option, char *setting, c
 		return antminer_set_clock(cgpu, setting, replybuf);
 	}
 
-	sprintf(replybuf, "Unknown option: %s", option);
+	sprintf(replybuf, "AntMiner unknown option: %s", option);
 	return replybuf;
 }
 
