@@ -160,6 +160,10 @@ BFGMiner specific configuration options:
 	--with-system-libblkmaker  Use system libblkmaker rather than bundled one
 	                           (default disabled)
 	--with-udevrulesdir=DIR Install udev rules into this directory
+	--without-uio           Compile support for PCI devices via Linux UIO
+	                        interface (default enabled)
+	--without-vfio          Compile support for PCI devices via Linux VFIO
+	                        interface (default enabled)
 	--without-sensors       Build with libsensors monitoring (default enabled)
 	--without-curses        Compile support for curses TUI (default enabled)
 	--without-libmicrohttpd Compile support for libmicrohttpd getwork server

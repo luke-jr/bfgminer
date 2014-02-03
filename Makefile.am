@@ -299,6 +299,10 @@ bfgminer_SOURCES += lowl-hid.c lowl-hid.h
 bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 
+if NEED_BFG_LOWL_PCI
+bfgminer_SOURCES += lowl-pci.c lowl-pci.h
+endif
+
 bin_PROGRAMS += bfgminer-rpc
 bfgminer_rpc_SOURCES = api-example.c
 bfgminer_rpc_LDADD = @WS2_LIBS@

@@ -181,6 +181,8 @@ enum bfg_strerror_type {
 };
 extern const char *bfg_strerror(int, enum bfg_strerror_type);
 
+extern void *bfg_slurp_file(void *buf, size_t bufsz, const char *filename);
+
 typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
