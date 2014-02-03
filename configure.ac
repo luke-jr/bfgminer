@@ -224,11 +224,11 @@ AC_CHECK_DECL([HASH_ITER],[
 lowl_pci=no
 if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
 	AC_ARG_WITH([uio],
-		[AC_HELP_STRING([--with-uio],[Compile support for PCI devices via Linux UIO interface (default enabled)])],
+		[AC_HELP_STRING([--without-uio],[Compile support for PCI devices via Linux UIO interface (default enabled)])],
 		[uio=$withval],
 		[uio=yes])
 	AC_ARG_WITH([vfio],
-		[AC_HELP_STRING([--with-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
+		[AC_HELP_STRING([--without-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
 		[vfio=$enableval],
 		[vfio=auto])
 	if test "x$vfio" != "xno"; then
