@@ -2542,7 +2542,7 @@ static char *opt_verusage_and_exit(const char *extra)
 {
 	puts(packagename);
 	printf("  Drivers:%s\n", BFG_DRIVERLIST);
-	printf("  Algoritms:%s\n", BFG_ALGOLIST);
+	printf("  Algorithms:%s\n", BFG_ALGOLIST);
 	printf("  Options:%s\n", BFG_OPTLIST);
 	printf("%s", opt_usage(opt_argv0, extra));
 	fflush(stdout);
