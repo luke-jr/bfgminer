@@ -2512,6 +2512,7 @@ extern const char *opt_argv0;
 static char *opt_verusage_and_exit(const char *extra)
 {
 	puts(packagename);
+	printf("  Lowlevel:%s\n", BFG_LOWLLIST);
 	printf("  Drivers:%s\n", BFG_DRIVERLIST);
 	printf("  Algoritms:%s\n", BFG_ALGOLIST);
 	printf("  Options:%s\n", BFG_OPTLIST);

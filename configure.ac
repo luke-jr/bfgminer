@@ -114,6 +114,7 @@ AC_CHECK_FUNCS([sleep])
 
 AC_FUNC_ALLOCA
 
+lowllist=
 driverlist=
 algolist=SHA256d
 optlist=
@@ -1011,26 +1012,32 @@ if test "x$opencl$need_lowl_hid" = xnono; then
 	DLOPEN_FLAGS=""
 fi
 
+lowllist="$lowllist hid/need_lowl_hid"
 if test x$need_lowl_hid = xyes; then
 	AC_DEFINE([NEED_BFG_LOWL_HID], [1], [Defined to 1 if lowlevel hid drivers are being used])
 	need_lowlevel=yes
 fi
 
+lowllist="$lowllist pci/need_lowl_pci"
 if test x$need_lowl_pci = xyes; then
 	AC_DEFINE([NEED_BFG_LOWL_PCI], [1], [Defined to 1 if lowlevel PCI drivers are being used])
 	need_lowlevel=yes
+	lowllist="$lowllist pci:uio/uio"
 	if test x$uio = xyes; then
 		AC_DEFINE([USE_UIO], [1], [Defined to 1 if lowlevel PCI drivers should support UIO])
 	fi
+	lowllist="$lowllist pci:vfio/vfio"
 	if test x$vfio = xyes; then
 		AC_DEFINE([USE_VFIO], [1], [Defined to 1 if lowlevel PCI drivers should support VFIO])
 	fi
 fi
 
+lowllist="$lowllist usb/need_lowl_usb"
 if test x$need_lowl_usb = xyes; then
 	need_lowlevel=yes
 fi
 
+lowllist="$lowllist vcom/need_lowl_vcom"
 if test x$need_lowl_vcom = xyes; then
 	need_lowlevel=yes
 fi
@@ -1568,6 +1575,7 @@ EOF
 	AC_DEFINE_UNQUOTED(AS_TR_CPP([BFG_$2]),["$_yeslist"],[List of drivers being built])
 	$2_print="  Enabled..$1..:${_yeslist}~  Disabled.$1..:${_nolist}${_enableactions}"
 ])
+BFG_PRINT_LIST([Lowlevel..],[lowllist])
 BFG_PRINT_LIST([Drivers...],[driverlist])
 BFG_PRINT_LIST([Algorithms],[algolist])
 BFG_PRINT_LIST([Options...],[optlist])
@@ -1618,6 +1626,7 @@ echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURS
 echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
 echo "  Installation.prefix..: $prefix"
 echo
+echo "${lowllist_print}" | tr '~' '\n'
 echo "${driverlist_print}" | tr '~' '\n'
 echo "${algolist_print}" | tr '~' '\n'
 echo "${optlist_print}" | tr '~' '\n'
