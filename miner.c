@@ -361,7 +361,7 @@ static char *current_hash;
 static uint32_t current_block_id;
 char *current_fullhash;
 
-static char datestamp[40];
+char datestamp[40];
 static char blocktime[32];
 time_t block_time;
 static char best_share[8] = "0";
