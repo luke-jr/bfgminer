@@ -1855,7 +1855,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	*(--qjs) = data->ready_to_queue;
 	*(--qjs) = 0xc1;
 	if (data->style == BFS_65NM)
-		*(--qjs) = qjp_sz;
+		*(--qjs) = qjp_sz - 1;
 	else
 	{
 		*(--qjs) = qjp_sz >> 8;
