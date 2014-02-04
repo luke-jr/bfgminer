@@ -618,21 +618,6 @@ void bitforce_comm_error(struct thr_info *thr)
 	bitforce_clear_buffer(bitforce);
 }
 
-static bool bitforce_thread_prepare(struct thr_info *thr)
-{
-	struct cgpu_info *bitforce = thr->cgpu;
-	
-	if (unlikely(!bitforce_open(bitforce)))
-	{
-		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
-		return false;
-	}
-
-	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
-
-	return true;
-}
-
 static
 void __bitforce_clear_buffer(struct cgpu_info * const dev)
 {
@@ -1607,6 +1592,13 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
 	cgsleep_ms(wait);
 
+	if (unlikely(!bitforce_open(bitforce)))
+	{
+		applog(LOG_ERR, "%s: Failed to open %s", bitforce->dev_repr, bitforce->device_path);
+		return false;
+	}
+	applog(LOG_INFO, "%s: Opened %s", bitforce->dev_repr, bitforce->device_path);
+	
 	if (style != BFS_FPGA)
 	{
 		// Clear results queue last, to start fresh; ignore response
@@ -1803,7 +1795,6 @@ struct device_drv bitforce_drv = {
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
-	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
 	.job_prepare = bitforce_job_prepare,
 	.job_start = bitforce_job_start,
@@ -2339,7 +2330,6 @@ struct device_drv bitforce_queue_api = {
 	.get_stats = bitforce_get_stats,
 	.set_device = bitforce_set_device,
 	.identify_device = bitforce_identify,
-	.thread_prepare = bitforce_thread_prepare,
 	.thread_init = bitforce_thread_init,
 	.queue_append = bitforce_queue_append,
 	.queue_flush = bitforce_queue_flush,
