@@ -1837,7 +1837,7 @@ bool bitforce_send_queue(struct thr_info *thr)
 	if (data->style == BFS_65NM)
 		qjp_sz -= 3;
 	uint8_t qjp[qjp_sz], *qjs;
-	qjs = &qjp[qjp_sz - 1];
+	qjs = &qjp[qjp_sz];
 	// NOTE: qjp is build backwards here
 	
 	*(--qjs) = 0xfe;
