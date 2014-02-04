@@ -180,9 +180,8 @@ bool hashbusterusb_lowl_probe(const struct lowlevel_device_info * const info)
 	struct lowl_usb_endpoint * const ep = usb_open_ep_pair(h, 0x81, 64, 0x01, 64);
 	usb_ep_set_timeouts_ms(ep, 100, 0);
 	
-	unsigned char OUTPacket[64];
+	unsigned char OUTPacket[64] = { 0xfe };
 	unsigned char INPacket[64];
-	OUTPacket[0] = 0xFE;
 	hashbusterusb_io(ep, INPacket, OUTPacket);
 	if (INPacket[1] == 0x18)
 	{
@@ -380,11 +379,8 @@ void hashbusterusb_shutdown(struct thr_info *thr)
 	struct lowl_usb_endpoint * const h = spi->userp;
 	
 	// Shutdown PSU
-	unsigned char OUTPacket[64];
+	unsigned char OUTPacket[64] = { 0x10 };
 	unsigned char INPacket[64];
-	OUTPacket[0] = 0x10;
-	OUTPacket[1] = 0x00;
-	OUTPacket[2] = 0x00;
 	hashbusterusb_io(h, INPacket, OUTPacket);
 }
 
