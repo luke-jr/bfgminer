@@ -13,7 +13,11 @@
 #include <winsock2.h>
 #endif
 
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifndef WIN32
 #include <sys/types.h>
