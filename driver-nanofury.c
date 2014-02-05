@@ -418,7 +418,7 @@ void nanofury_poll(struct thr_info * const thr)
 	struct cgpu_info * const dev = thr->cgpu;
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
-	double diff1_before;
+	double diff1_before = 0.;
 	
 	if (state->identify_requested)
 	{
