@@ -1611,7 +1611,7 @@ AC_CONFIG_FILES([
 	Makefile
 	x86_64/Makefile
 	x86_32/Makefile
-	ccan/Makefile
+	ccan.bfg/Makefile
 	lib/Makefile
 	])
 

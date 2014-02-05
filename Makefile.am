@@ -26,15 +26,15 @@ dist_rpcexamples_DATA = \
 		  api-example.c \
                   api-example.py
 
-SUBDIRS		= lib ccan
+SUBDIRS		= lib ccan.bfg
 
 # Without a redirected rule, code depending on different lib/*.h files may try to build dependencies of that in parallel, which can fail
 lib/%: lib_directory
 	@test -e $@
 lib_directory:
 	$(MAKE) -C lib
-ccan/libccan.a:
-	$(MAKE) -C ccan $*
+ccan.bfg/libccan.a:
+	$(MAKE) -C ccan.bfg $*
 
 INCLUDES	= -fno-strict-aliasing
 
@@ -44,11 +44,12 @@ bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ @RT_LIBS@ \
-		  @MATH_LIBS@ lib/libgnu.a ccan/libccan.a
+		  @MATH_LIBS@ lib/libgnu.a ccan.bfg/libccan.a
 bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
 bfgminer_CPPFLAGS += -DCGMINER_PREFIX='"$(pkgdatadir)"'
 
+bfgminer_CPPFLAGS += -I$(top_srcdir)/ccan-upstream
 bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
