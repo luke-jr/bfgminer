@@ -4240,6 +4240,7 @@ void api(int api_thr_id)
 					applog(LOG_DEBUG, "API: recv command: (%d) '%s'", n, buf);
 			}
 
+			firstjoin = isjoin = false;
 			if (!SOCKETFAIL(n)) {
 				// the time of the request in now
 				when = time(NULL);
@@ -4314,8 +4315,7 @@ void api(int api_thr_id)
 							quithere(1, "OOM cmdsbuf");
 						strcpy(cmdsbuf, "|");
 						param = NULL;
-					} else
-						firstjoin = isjoin = false;
+					}
 
 					cmdptr = cmd;
 					do {
