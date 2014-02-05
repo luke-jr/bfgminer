@@ -1075,8 +1075,8 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MAX_SHA_INTENSITY_STR "14"
 #define MIN_SCRYPT_INTENSITY 8
 #define MIN_SCRYPT_INTENSITY_STR "8"
-#define MAX_SCRYPT_INTENSITY 20
-#define MAX_SCRYPT_INTENSITY_STR "20"
+#define MAX_SCRYPT_INTENSITY 31
+#define MAX_SCRYPT_INTENSITY_STR "31"
 #ifdef USE_SCRYPT
 #define MIN_INTENSITY (opt_scrypt ? MIN_SCRYPT_INTENSITY : MIN_SHA_INTENSITY)
 #define MIN_INTENSITY_STR (opt_scrypt ? MIN_SCRYPT_INTENSITY_STR : MIN_SHA_INTENSITY_STR)
