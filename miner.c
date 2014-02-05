@@ -11866,10 +11866,8 @@ begin_bench:
 
 		cp = current_pool();
 
-		/* If the primary pool is a getwork pool and cannot roll work,
-		 * try to stage one extra work per mining thread */
-		if (!pool_localgen(cp) && !staged_rollable)
-			max_staged += mining_threads;
+		// Generally, each processor needs a new work, and all at once during work restarts
+		max_staged += mining_threads;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
