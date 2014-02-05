@@ -1938,7 +1938,7 @@ static struct opt_table opt_config_table[] = {
 			"Use nonce range on bitforce devices if supported"),
 #endif
 #ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--bench-algo|-b",
+	OPT_WITH_ARG("--bench-algo",
 		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
 		     opt_hidden),
 #endif
