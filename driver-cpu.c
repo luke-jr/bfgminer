@@ -209,7 +209,6 @@ static const sha256_func sha256_funcs[] = {
 
 #ifdef WANT_CPUMINE
 enum sha256_algos opt_algo = ALGO_FASTAUTO;
-bool opt_usecpu = false;
 static bool forced_n_threads;
 #endif
 

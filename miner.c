@@ -2005,11 +2005,6 @@ static struct opt_table opt_config_table[] = {
 	             opt_set_intval, opt_show_intval, &httpsrv_port,
 	             "Port number to listen on for HTTP getwork miners (-1 means disabled)"),
 #endif
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(USE_FPGA))
-	OPT_WITHOUT_ARG("--enable-cpu|-C",
-			opt_set_bool, &opt_usecpu,
-			opt_hidden),
-#endif
 	OPT_WITH_ARG("--expiry",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active)"),

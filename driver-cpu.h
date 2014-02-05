@@ -67,7 +67,6 @@ enum sha256_algos {
 };
 
 extern const char *algo_names[];
-extern bool opt_usecpu;
 extern struct device_drv cpu_drv;
 
 extern char *set_algo(const char *arg, enum sha256_algos *algo);
