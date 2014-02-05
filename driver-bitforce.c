@@ -1771,9 +1771,7 @@ const char *bitforce_set_fanmode(struct cgpu_info * const proc, const char * con
 static
 const char *bitforce_rpc_send_cmd1(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
-	struct bitforce_data *data = proc->device_data;
 	pthread_mutex_t *mutexp = &proc->device->device_mutex;
-	int fd;
 	
 	{
 		mutex_lock(mutexp);
