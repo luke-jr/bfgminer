@@ -14,23 +14,23 @@ mining performance.
 
 Single pool, dedicated miner:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9
 
 Single pool, first card regular desktop, 3 other dedicated cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password -I d,9,9,9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity d,9,9,9
 
 Multiple pool, dedicated miner:
 
-bfgminer -S opencl:auto -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
+bfgminer -S opencl:auto -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password --intensity 9
 
 Add overclocking settings, GPU and fan control for all cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -306,7 +306,7 @@ To work around this you would use:
 GPU FAQ:
 
 Q: Can I change the intensity settings individually for each GPU?
-A: Yes, pass a list separated by commas such as -I d,4,9,9
+A: Yes, pass a list separated by commas such as --intensity d,4,9,9
 
 Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
@@ -324,10 +324,10 @@ you will be able to run. You are more likely to hit your limits with BFGMiner
 and you will find you may need to overclock your GPU less aggressively. The
 software cannot be responsible and make your GPU hang directly. If you simply
 cannot get it to ever stop hanging, try decreasing the intensity, and if even
-that fails, try changing to the poclbm kernel with -k poclbm, though you will
-sacrifice performance. BFGMiner is designed to try and safely restart GPUs as
-much as possible, but NOT if that restart might actually crash the rest of the
-GPUs mining, or even the machine. It tries to restart them with a separate
+that fails, try changing to the poclbm kernel with --kernel poclbm, though you
+will sacrifice performance. BFGMiner is designed to try and safely restart GPUs
+as much as possible, but NOT if that restart might actually crash the rest of
+the GPUs mining, or even the machine. It tries to restart them with a separate
 thread and if that separate thread dies, it gives up trying to restart any more
 GPUs.
 

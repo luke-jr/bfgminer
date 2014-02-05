@@ -1852,7 +1852,7 @@ static char *set_null(const char __maybe_unused *arg)
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--algo|-a",
+	OPT_WITH_ARG("--algo",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
 		     "\tfastauto*\tQuick benchmark at startup to pick a working algorithm\n"
@@ -1881,6 +1881,9 @@ static struct opt_table opt_config_table[] = {
     "\n\taltivec_4way\tAltivec implementation for PowerPC G4 and G5 machines"
 #endif
 		),
+	OPT_WITH_ARG("-a",
+	             set_algo, show_algo, &opt_algo,
+	             opt_hidden),
 #endif
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
@@ -1975,9 +1978,12 @@ static struct opt_table opt_config_table[] = {
 			"Use compact display without per device statistics"),
 #endif
 #ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--cpu-threads|-t",
+	OPT_WITH_ARG("--cpu-threads",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
+	OPT_WITH_ARG("-t",
+	             force_nthreads_int, opt_show_intval, &opt_n_threads,
+	             opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--debug|-D",
 		     enable_debug, &opt_debug,
@@ -2004,9 +2010,12 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_usecpu,
 			opt_hidden),
 #endif
-	OPT_WITH_ARG("--expiry|-E",
+	OPT_WITH_ARG("--expiry",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active)"),
+	OPT_WITH_ARG("-E",
+	             set_int_0_to_9999, opt_show_intval, &opt_expiry,
+	             opt_hidden),
 	OPT_WITH_ARG("--expiry-lp",
 		     set_int_0_to_9999, opt_show_intval, &opt_expiry_lp,
 		     "Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active)"),
@@ -2025,9 +2034,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-platform",
 		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
 		     "Select OpenCL platform ID to use for GPU mining"),
-	OPT_WITH_ARG("--gpu-threads|-g",
+	OPT_WITH_ARG("--gpu-threads",
 		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
 		     "Number of threads per GPU (1 - 10)"),
+	OPT_WITH_ARG("-g",
+	             set_int_1_to_10, opt_show_intval, &opt_g_threads,
+	             opt_hidden),
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
@@ -2058,28 +2070,37 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--lookup-gap",
 		     set_lookup_gap, NULL, NULL,
 		     "Set GPU lookup gap for scrypt mining, comma separated"),
-	OPT_WITH_ARG("--intensity|-I",
+	OPT_WITH_ARG("--intensity",
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
 		     " -> " MAX_SCRYPT_INTENSITY_STR
 		     ",default: d to maintain desktop interactivity)"),
 #else
-	OPT_WITH_ARG("--intensity|-I",
+	OPT_WITH_ARG("--intensity",
 		     set_intensity, NULL, NULL,
 		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
 		     " -> " MAX_SHA_INTENSITY_STR
 		     ",default: d to maintain desktop interactivity)"),
 #endif
+	OPT_WITH_ARG("-I",
+	             set_intensity, NULL, NULL,
+	             opt_hidden),
 #endif
 #if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
-	OPT_WITH_ARG("--kernel-path|-K",
+	OPT_WITH_ARG("--kernel-path",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where bitstream and kernel files are"),
+	OPT_WITH_ARG("-K",
+	             opt_set_charp, opt_show_charp, &opt_kernel_path,
+	             opt_hidden),
 #endif
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--kernel|-k",
+	OPT_WITH_ARG("--kernel",
 		     set_kernel, NULL, NULL,
 		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
+	OPT_WITH_ARG("-k",
+	             set_kernel, NULL, NULL,
+	             opt_hidden),
 #endif
 #ifdef USE_ICARUS
 	OPT_WITH_ARG("--icarus-options",
@@ -2244,9 +2265,12 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--scan-device|--scan-serial|--devscan",
 		     add_serial, NULL, NULL,
 		     opt_hidden),
-	OPT_WITH_ARG("--scan-time|-s",
+	OPT_WITH_ARG("--scan-time",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     "Upper bound on time spent scanning current work, in seconds"),
+	OPT_WITH_ARG("-s",
+		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
+		     opt_hidden),
 	OPT_WITH_ARG("--scantime",
 		     set_int_0_to_9999, opt_show_intval, &opt_scantime,
 		     opt_hidden),
@@ -2347,9 +2371,12 @@ static struct opt_table opt_config_table[] = {
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--vectors|-v",
+	OPT_WITH_ARG("--vectors",
 		     set_vector, NULL, NULL,
 		     "Override detected optimal vector (1, 2 or 4) - one value or comma separated list"),
+	OPT_WITH_ARG("-v",
+	             set_vector, NULL, NULL,
+	             opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
@@ -2358,9 +2385,12 @@ static struct opt_table opt_config_table[] = {
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--worksize|-w",
+	OPT_WITH_ARG("--worksize",
 		     set_worksize, NULL, NULL,
 		     "Override detected optimal worksize - one value or comma separated list"),
+	OPT_WITH_ARG("-w",
+	             set_worksize, NULL, NULL,
+	             opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--unittest",
 			opt_set_bool, &opt_unittest, opt_hidden),

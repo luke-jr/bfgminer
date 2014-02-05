@@ -9,7 +9,7 @@ README for further information).
 
 The following CPU mining options are available:
 
---algo|-a <arg> Specify sha256 implementation for CPU mining:
+--algo <arg>        Specify sha256 implementation for CPU mining:
         fastauto*       Quick benchmark at startup to pick a working algorithm
         auto            Benchmark at startup and pick fastest algorithm
         c               Linux kernel sha256, implemented in C
@@ -21,7 +21,7 @@ The following CPU mining options are available:
         sse2_64         SSE2 64 bit implementation for x86_64 machines
         sse4_64         SSE4.1 64 bit implementation for x86_64 machines
         altivec_4way    Altivec implementation for PowerPC G4 and G5 machines
---cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
+--cpu-threads <arg> Number of miner CPU threads (default: -1)
 
 CPU FAQ:
 

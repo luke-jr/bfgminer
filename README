@@ -231,11 +231,11 @@ Options for both config file and command line:
 --device|-d <arg>   Enable only devices matching pattern (default: all)
 --disable-rejecting Automatically disable pools that continually reject shares
 --http-port <arg>   Port number to listen on for HTTP getwork miners (-1 means disabled) (default: -1)
---expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active) (default: 120)
+--expiry <arg>      Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active) (default: 120)
 --expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --force-dev-init    Always initialize devices when possible (such as bitstream uploads to some FPGAs)
---kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
+--kernel-path <arg> Specify a path to where bitstream and kernel files are
 --load-balance      Change multipool strategy from failover to quota based balance
 --log|-l <arg>      Interval in seconds between log output (default: 20)
 --log-file|-L <arg> Append log file for output messages
@@ -266,7 +266,7 @@ Options for both config file and command line:
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
 --scan|-S <arg>     Configure how to scan for mining devices
---scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
+--scan-time <arg>   Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
 --scrypt            Use the scrypt algorithm for mining (non-bitcoin)
@@ -299,7 +299,7 @@ GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
+--gpu-threads <arg> Number of threads per GPU (1 - 10) (default: -1)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-engine <arg>  GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
 --gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
@@ -310,12 +310,12 @@ GPU only options:
 --gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
 --gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
---intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
---kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
+--intensity <arg>   Intensity of GPU scanning (d or -10 -> 31,default: d to maintain desktop interactivity)
+--kernel <arg>      Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
 --no-adl            Disable the ATI display library used for monitoring and setting GPU parameters
 --temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
---vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
---worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
+--vectors <arg>     Override detected optimal vector (1, 2 or 4) - one value or comma separated list
+--worksize <arg>    Override detected optimal worksize - one value or comma separated list
 
 GPU mining is disabled by default for SHA256d if you have any dedicated mining
 devices, but can be enabled explicitly specifying the -S opencl:auto option.
@@ -752,9 +752,9 @@ A; Try the --net-delay option if you are on a getwork or GBT server.
 Q: How do I tune for P2Pool?
 A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
-with -g 1. It is also recommended to use --failover-only since the work is
-effectively like a different block chain. If mining with a Mini Rig, it is worth
-adding the --bfl-range option.
+with --gpu-threads 1. It is also recommended to use --failover-only since the
+work is effectively like a different block chain. If mining with a Mini Rig, it
+is worth adding the --bfl-range option.
 
 Q: Are OpenCL kernels from other mining software useable in BFGMiner?
 A: No, the APIs are slightly different between the different software and they

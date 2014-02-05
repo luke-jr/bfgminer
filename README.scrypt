@@ -40,7 +40,7 @@ lines are in the .bat before starting BFGMiner:
 setx GPU_MAX_ALLOC_PERCENT 100
 setx GPU_USE_SYNC_OBJECTS 1
 
---intensity XX (-I XX)
+--intensity XX
 
 Just like in Bitcoin mining, scrypt mining takes an intensity, however the
 scale goes from 0 to 31. 
@@ -99,7 +99,7 @@ all you will need to set.
 
 
 Optional parameters to tune:
--g, --thread-concurrency, --lookup-gap
+--gpu-threads, --thread-concurrency, --lookup-gap
 
 --thread-concurrency:
 This tunes the optimal size of work that scrypt can do. It is internally tuned
@@ -111,10 +111,11 @@ into --shaders and is ultimately a BETTER way to tune performance.
 SUMMARY: Spend lots of time finding the highest value that your device likes
 and increases hashrate.
 
--g:
+--gpu-threads:
 Once you have found the optimal shaders and intensity, you can start increasing
-the -g value till BFGMiner fails to start. This is really only of value if you
-want to run low intensities as you will be unable to run more than 1.
+the --gpu-threads value till BFGMiner fails to start. This is really only of
+value if you want to run low intensities as you will be unable to run more than
+1.
 SUMMARY: Don't touch this.
 
 --lookup-gap
@@ -127,12 +128,12 @@ SUMMARY: Don't touch this.
 
 
 Related parameters:
---worksize XX (-w XX)
+--worksize XX
 Has a minor effect, should be a multiple of 64 up to 256 maximum.
 SUMMARY: Worth playing with once everything else has been tried but will
 probably do nothing.
 
---vectors XX (-v XX)
+--vectors XX
 Vectors are NOT used by the scrypt mining kernel.
 SUMMARY: Does nothing.
 
@@ -180,7 +181,7 @@ generated.
 
 First try without any thread concurrency or even shaders, as BFGMiner will try to
 find an optimal value:
-bfgminer -I 13
+bfgminer --intensity 13
 
 If that starts mining, see what bin was generated, it is likely the largest
 meaningful TC you can set.
@@ -216,7 +217,7 @@ without crashing the GPU, you will have to use a lower memclock.
 Then, and only then, bother trying to increase intensity further.
 
 My final settings were:
---gpu-engine 1141  --gpu-memclock 1875 -I 20
+--gpu-engine 1141  --gpu-memclock 1875 --intensity 20
 for a hashrate of 745kH.
 
 Note I did not bother setting a thread concurrency. Once you have the magic
