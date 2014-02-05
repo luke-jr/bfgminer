@@ -43,8 +43,8 @@ setx GPU_USE_SYNC_OBJECTS 1
 --intensity XX (-I XX)
 
 Just like in Bitcoin mining, scrypt mining takes an intensity, however the
-scale goes from 0 to 20 to mimic the "Aggression" used in mtrlt's reaper. The
-reason this is crucial is that too high an intensity can actually be
+scale goes from 0 to 31. 
+The reason this is crucial is that too high an intensity can actually be
 disastrous with scrypt because it CAN run out of ram. High intensities
 start writing over the same ram and it is highly dependent on the GPU, but they
 can start actually DECREASING your hashrate, or even worse, start producing
