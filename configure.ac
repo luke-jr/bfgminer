@@ -82,6 +82,7 @@ AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/mman.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
+AC_CHECK_HEADERS([sys/termios.h])
 AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_MEMBER([struct i2c_msg.buf],[
@@ -1611,7 +1612,7 @@ AC_CONFIG_FILES([
 	Makefile
 	x86_64/Makefile
 	x86_32/Makefile
-	ccan/Makefile
+	ccan.bfg/Makefile
 	lib/Makefile
 	])
 

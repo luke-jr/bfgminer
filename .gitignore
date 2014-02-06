@@ -42,7 +42,7 @@ ext_deps
 config.h.in
 config.h
 
-ccan/libccan.a
+ccan*/libccan.a
 lib/arg-nonnull.h
 lib/c++defs.h
 lib/libgnu.a

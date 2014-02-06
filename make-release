@@ -38,7 +38,11 @@ cd "$TMPDIR"
 git submodule update --init
 {
 	git archive --prefix "$sw"/ --format tar "$tag"
-	git submodule --quiet foreach --recursive 'git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
+	git submodule --quiet foreach --recursive 'test x$name = xccan-upstream || git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
+	(
+		cd ccan-upstream
+		git archive --prefix "'"$sw"'/$path/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb}
+	)
 } | tar -xivp
 cd "$sw"
 NOSUBMODULES=1 \

@@ -31,7 +31,6 @@
 #ifndef WIN32
 #include <sys/resource.h>
 #endif
-#include <ccan/opt/opt.h>
 
 #define OMIT_OPENCL_API
 
