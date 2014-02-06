@@ -60,13 +60,15 @@
 	#define SOCKERR (WSAGetLastError())
 	#define SOCKERRMSG bfg_strerror(WSAGetLastError(), BST_SOCKET)
 
+	/* Check for windows variants of the errors as well as when ming
+	 * decides to wrap the error into the errno equivalent. */
 	static inline bool sock_blocks(void)
 	{
-		return (WSAGetLastError() == WSAEWOULDBLOCK);
+		return (WSAGetLastError() == WSAEWOULDBLOCK || errno == EAGAIN);
 	}
 	static inline bool interrupted(void)
 	{
-		return (WSAGetLastError() == WSAEINTR);
+		return (WSAGetLastError() == WSAEINTR || errno == EINTR);
 	}
 	#ifndef SHUT_RDWR
 	#define SHUT_RDWR SD_BOTH
