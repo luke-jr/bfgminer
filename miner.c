@@ -1132,6 +1132,12 @@ void opt_show_floatval(char buf[OPT_SHOW_LEN], const float *f)
 	snprintf(buf, OPT_SHOW_LEN, "%.1f", *f);
 }
 
+static
+char *set_bool_ignore_arg(const char * const arg, bool * const b)
+{
+	return opt_set_bool(b);
+}
+
 char *set_int_range(const char *arg, int *i, int min, int max)
 {
 	char *err = opt_set_intval(arg, i);
@@ -2603,13 +2609,24 @@ static char *opt_verusage_and_exit(const char *extra)
 	exit(0);
 }
 
+/* These options are parsed before anything else */
+static struct opt_table opt_early_table[] = {
+	OPT_EARLY_WITH_ARG("--config|-c",
+	                   set_bool_ignore_arg, NULL, &config_loaded,
+	                   opt_hidden),
+	OPT_EARLY_WITHOUT_ARG("--no-config",
+	                opt_set_bool, &config_loaded,
+	                "Inhibit loading default config file"),
+	OPT_ENDTABLE
+};
+
 /* These options are available from commandline only */
 static struct opt_table opt_cmdline_table[] = {
 	OPT_WITH_ARG("--config|-c",
 		     load_config, NULL, NULL,
 		     "Load a JSON-format configuration file\n"
 		     "See example.conf for an example configuration."),
-	OPT_WITHOUT_ARG("--no-config",
+	OPT_EARLY_WITHOUT_ARG("--no-config",
 	                opt_set_bool, &config_loaded,
 	                "Inhibit loading default config file"),
 	OPT_WITHOUT_ARG("--help|-h",
@@ -11326,6 +11343,7 @@ int main(int argc, char *argv[])
 	struct block *block;
 	unsigned int k;
 	int i;
+	int rearrange_pools = 0;
 	char *s;
 
 #ifdef WIN32
@@ -11445,6 +11463,19 @@ int main(int argc, char *argv[])
 	schedstart.tm.tm_sec = 1;
 	schedstop .tm.tm_sec = 1;
 
+	opt_register_table(opt_early_table, NULL);
+	opt_register_table(opt_config_table, NULL);
+	opt_register_table(opt_cmdline_table, NULL);
+	opt_early_parse(argc, argv, applog_and_exit);
+	
+	if (!config_loaded)
+	{
+		load_default_config();
+		rearrange_pools = total_pools;
+	}
+	
+	opt_free_table();
+	
 	/* parse command line */
 	opt_register_table(opt_config_table,
 			   "Options for both config file and command line");
@@ -11454,9 +11485,15 @@ int main(int argc, char *argv[])
 	opt_parse(&argc, argv, applog_and_exit);
 	if (argc != 1)
 		quit(1, "Unexpected extra commandline arguments");
-
-	if (!config_loaded)
-		load_default_config();
+	
+	if (rearrange_pools && rearrange_pools < total_pools)
+	{
+		// Prioritise commandline pools before default-config pools
+		for (i = 0; i < rearrange_pools; ++i)
+			pools[i]->prio += rearrange_pools;
+		for ( ; i < total_pools; ++i)
+			pools[i]->prio -= rearrange_pools;
+	}
 
 #ifndef HAVE_PTHREAD_CANCEL
 	// Can't do this any earlier, or config isn't loaded
