@@ -99,13 +99,13 @@ static void erupter_drv_init()
 	erupter_drv.lowl_match = erupter_lowl_match;
 	erupter_drv.lowl_probe = erupter_lowl_probe;
 	erupter_drv.identify_device = erupter_identify;
-	++erupter_drv.probe_priority;
+	erupter_drv.probe_priority = -120;
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";
 	erupter_drv.lowl_match = erupter_emerald_lowl_match;
 	erupter_drv.lowl_probe = erupter_emerald_lowl_probe;
-	++erupter_drv_emerald.probe_priority;
+	erupter_drv_emerald.probe_priority = -119;
 }
 
 struct device_drv erupter_drv = {
