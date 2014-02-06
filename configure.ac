@@ -74,8 +74,6 @@ AC_CHECK_HEADERS([sys/epoll.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
 
-AC_CHECK_HEADERS([sys/file.h])
-
 # Setuid
 AC_CHECK_HEADERS([pwd.h])
 
