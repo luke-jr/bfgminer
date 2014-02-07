@@ -9836,7 +9836,7 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 			case SDR_ERR:
 			case SDR_HELP:
 			case SDR_UNKNOWN:
-				applog(LOG_WARNING, "%"PRIpreprv": Applying rule %s: %s",
+				applog(LOG_DEBUG, "%"PRIpreprv": Applying rule %s: %s",
 				       cgpu->proc_repr, setstr, p);
 				break;
 			case SDR_AUTO:
