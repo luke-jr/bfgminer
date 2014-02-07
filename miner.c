@@ -2314,7 +2314,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_scrypt,
 			"Use the scrypt algorithm for mining (non-bitcoin)"),
 #endif
-	OPT_WITH_ARG("--set-device",
+	OPT_WITH_ARG("--set-device|--set",
 			opt_string_elist_add, NULL, &opt_set_device_list,
 			"Set default parameters on devices; eg, NFY:osc6_bits=50"),
 #if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
