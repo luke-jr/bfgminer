@@ -295,143 +295,59 @@ struct opencl_device_data {
 #endif
 
 
+static
+const char *_set_list(char * const arg, const char * const emsg, bool (*set_func)(struct cgpu_info *, const char *))
+{
+	int i, device = 0;
+	char *nextptr, buf[0x10];
+
+	nextptr = strtok(arg, ",");
+	if (nextptr == NULL)
+		return emsg;
+	if (!set_func(&gpus[device++], nextptr))
+		return emsg;
+	snprintf(buf, sizeof(buf), "%s", nextptr);
+
+	while ((nextptr = strtok(NULL, ",")) != NULL)
+		if (!set_func(&gpus[device++], nextptr))
+			return emsg;
+	if (device == 1) {
+		for (i = device; i < MAX_GPUDEVICES; i++)
+			set_func(&gpus[i], buf);
+	}
+
+	return NULL;
+}
+
+#define _SET_INT_LIST(PNAME, VCHECK, FIELD)  \
+static  \
+bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
+{  \
+	const int v = atoi(_val);  \
+	if (!(VCHECK))  \
+		return false;  \
+	cgpu->FIELD = v;  \
+	return true;  \
+}  \
+const char *set_ ## PNAME(char *arg)  \
+{  \
+	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
+}  \
+// END OF _SET_INT_LIST
+
+
 #ifdef HAVE_OPENCL
-char *set_vector(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set vector";
-	val = atoi(nextptr);
-	if (val != 1 && val != 2 && val != 4)
-		return "Invalid value passed to set_vector";
-
-	gpus[device++].vwidth = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val != 1 && val != 2 && val != 4)
-			return "Invalid value passed to set_vector";
-
-		gpus[device++].vwidth = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].vwidth = gpus[0].vwidth;
-	}
-
-	return NULL;
-}
-
-char *set_worksize(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set work size";
-	val = atoi(nextptr);
-	if (val < 1 || val > 9999)
-		return "Invalid value passed to set_worksize";
-
-	gpus[device++].work_size = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 1 || val > 9999)
-			return "Invalid value passed to set_worksize";
-
-		gpus[device++].work_size = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].work_size = gpus[0].work_size;
-	}
-
-	return NULL;
-}
+_SET_INT_LIST(vector  , (v == 1 || v == 2 || v == 4), vwidth   )
+_SET_INT_LIST(worksize, (v >= 1 && v <= 9999)       , work_size)
 
 #ifdef USE_SCRYPT
-char *set_shaders(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set lookup gap";
-	val = atoi(nextptr);
-
-	gpus[device++].shaders = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-
-		gpus[device++].shaders = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].shaders = gpus[0].shaders;
-	}
-
-	return NULL;
-}
-
-char *set_lookup_gap(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set lookup gap";
-	val = atoi(nextptr);
-
-	gpus[device++].opt_lg = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-
-		gpus[device++].opt_lg = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].opt_lg = gpus[0].opt_lg;
-	}
-
-	return NULL;
-}
-
-char *set_thread_concurrency(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set thread concurrency";
-	val = atoi(nextptr);
-
-	gpus[device++].opt_tc = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-
-		gpus[device++].opt_tc = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].opt_tc = gpus[0].opt_tc;
-	}
-
-	return NULL;
-}
+_SET_INT_LIST(shaders           , true, shaders)
+_SET_INT_LIST(lookup_gap        , true, opt_lg )
+_SET_INT_LIST(thread_concurrency, true, opt_tc )
 #endif
 
-static enum cl_kernels select_kernel(char *arg)
+static
+enum cl_kernels select_kernel(const char * const arg)
 {
 	if (!strcmp(arg, "diablo"))
 		return KL_DIABLO;
@@ -448,35 +364,20 @@ static enum cl_kernels select_kernel(char *arg)
 	return KL_NONE;
 }
 
-char *set_kernel(char *arg)
+static
+bool _set_kernel(struct cgpu_info * const cgpu, const char * const _val)
 {
-	enum cl_kernels kern;
-	int i, device = 0;
-	char *nextptr;
-
+	const enum cl_kernels kern = select_kernel(_val);
+	if (kern == KL_NONE)
+		return false;
+	cgpu->kernel = kern;
+	return true;
+}
+const char *set_kernel(char *arg)
+{
 	if (opt_scrypt)
 		return "Cannot specify a kernel with scrypt";
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set kernel";
-	kern = select_kernel(nextptr);
-	if (kern == KL_NONE)
-		return "Invalid parameter to set_kernel";
-	gpus[device++].kernel = kern;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		kern = select_kernel(nextptr);
-		if (kern == KL_NONE)
-			return "Invalid parameter to set_kernel";
-
-		gpus[device++].kernel = kern;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].kernel = gpus[0].kernel;
-	}
-
-	return NULL;
+	return _set_list(arg, "Invalid value passed to set_kernel", _set_kernel);
 }
 #endif
 
@@ -511,272 +412,64 @@ char *set_gpu_map(char *arg)
 	return NULL;
 }
 
-char *set_gpu_engine(char *arg)
+static
+bool _set_gpu_engine(struct cgpu_info * const cgpu, const char * const _val)
 {
-	int i, val1 = 0, val2 = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu engine";
-	get_intrange(nextptr, &val1, &val2);
+	int val1, val2;
+	get_intrange(_val, &val1, &val2);
 	if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999)
-		return "Invalid value passed to set_gpu_engine";
-
-	gpus[device].min_engine = val1;
-	gpus[device].gpu_engine = val2;
-	device++;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		get_intrange(nextptr, &val1, &val2);
-		if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999)
-			return "Invalid value passed to set_gpu_engine";
-		gpus[device].min_engine = val1;
-		gpus[device].gpu_engine = val2;
-		device++;
-	}
-
-	if (device == 1) {
-		for (i = 1; i < MAX_GPUDEVICES; i++) {
-			gpus[i].min_engine = gpus[0].min_engine;
-			gpus[i].gpu_engine = gpus[0].gpu_engine;
-		}
-	}
-
-	return NULL;
+		return false;
+	cgpu->min_engine = val1;
+	cgpu->gpu_engine = val2;
+	return true;
+}
+const char *set_gpu_engine(char *arg)
+{
+	return _set_list(arg, "Invalid value passed to set_gpu_engine", _set_gpu_engine);
 }
 
-char *set_gpu_fan(char *arg)
+static
+bool _set_gpu_fan(struct cgpu_info * const cgpu, const char * const _val)
 {
-	int i, val1 = 0, val2 = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu fan";
-	get_intrange(nextptr, &val1, &val2);
+	int val1, val2;
+	get_intrange(_val, &val1, &val2);
 	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100)
-		return "Invalid value passed to set_gpu_fan";
-
-	gpus[device].min_fan = val1;
-	gpus[device].gpu_fan = val2;
-	device++;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		get_intrange(nextptr, &val1, &val2);
-		if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100)
-			return "Invalid value passed to set_gpu_fan";
-
-		gpus[device].min_fan = val1;
-		gpus[device].gpu_fan = val2;
-		device++;
-	}
-
-	if (device == 1) {
-		for (i = 1; i < MAX_GPUDEVICES; i++) {
-			gpus[i].min_fan = gpus[0].min_fan;
-			gpus[i].gpu_fan = gpus[0].gpu_fan;
-		}
-	}
-
-	return NULL;
+		return false;
+	cgpu->min_fan = val1;
+	cgpu->gpu_fan = val2;
+	return true;
 }
-
-char *set_gpu_memclock(char *arg)
+const char *set_gpu_fan(char *arg)
 {
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu memclock";
-	val = atoi(nextptr);
-	if (val < 0 || val >= 9999)
-		return "Invalid value passed to set_gpu_memclock";
-
-	gpus[device++].gpu_memclock = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 0 || val >= 9999)
-			return "Invalid value passed to set_gpu_memclock";
-
-		gpus[device++].gpu_memclock = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].gpu_memclock = gpus[0].gpu_memclock;
-	}
-
-	return NULL;
+	return _set_list(arg, "Invalid value passed to set_gpu_fan", _set_gpu_fan);
 }
 
-char *set_gpu_memdiff(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu memdiff";
-	val = atoi(nextptr);
-	if (val < -9999 || val > 9999)
-		return "Invalid value passed to set_gpu_memdiff";
-
-	gpus[device++].gpu_memdiff = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < -9999 || val > 9999)
-			return "Invalid value passed to set_gpu_memdiff";
-
-		gpus[device++].gpu_memdiff = val;
-	}
-		if (device == 1) {
-			for (i = device; i < MAX_GPUDEVICES; i++)
-				gpus[i].gpu_memdiff = gpus[0].gpu_memdiff;
-		}
-
-			return NULL;
-}
-
-char *set_gpu_powertune(char *arg)
-{
-	int i, val = 0, device = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu powertune";
-	val = atoi(nextptr);
-	if (val < -99 || val > 99)
-		return "Invalid value passed to set_gpu_powertune";
-
-	gpus[device++].gpu_powertune = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < -99 || val > 99)
-			return "Invalid value passed to set_gpu_powertune";
-
-		gpus[device++].gpu_powertune = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].gpu_powertune = gpus[0].gpu_powertune;
-	}
-
-	return NULL;
-}
-
-char *set_gpu_vddc(char *arg)
-{
-	int i, device = 0;
-	float val = 0;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set gpu vddc";
-	val = atof(nextptr);
-	if (val < 0 || val >= 9999)
-		return "Invalid value passed to set_gpu_vddc";
-
-	gpus[device++].gpu_vddc = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atof(nextptr);
-		if (val < 0 || val >= 9999)
-			return "Invalid value passed to set_gpu_vddc";
-
-		gpus[device++].gpu_vddc = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++)
-			gpus[i].gpu_vddc = gpus[0].gpu_vddc;
-	}
-
-	return NULL;
-}
-
-char *set_temp_overheat(char *arg)
-{
-	int i, val = 0, device = 0, *to;
-	char *nextptr;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set temp overheat";
-	val = atoi(nextptr);
-	if (val < 0 || val > 200)
-		return "Invalid value passed to set temp overheat";
-
-	to = &gpus[device++].adl.overtemp;
-	*to = val;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		val = atoi(nextptr);
-		if (val < 0 || val > 200)
-			return "Invalid value passed to set temp overheat";
-
-		to = &gpus[device++].adl.overtemp;
-		*to = val;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++) {
-			to = &gpus[i].adl.overtemp;
-			*to = val;
-		}
-	}
-
-	return NULL;
-}
+_SET_INT_LIST(gpu_memclock , (v >=     1 && v <  9999), gpu_memclock )
+_SET_INT_LIST(gpu_memdiff  , (v >= -9999 && v <= 9999), gpu_memdiff  )
+_SET_INT_LIST(gpu_powertune, (v >=   -99 && v <=   99), gpu_powertune)
+_SET_INT_LIST(gpu_vddc     , (v >=     0 && v <  9999), gpu_vddc     )
+_SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
 #ifdef HAVE_OPENCL
-char *set_intensity(char *arg)
+static
+bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
 {
-	int i, device = 0, *tt;
-	char *nextptr, val = 0;
-
-	nextptr = strtok(arg, ",");
-	if (nextptr == NULL)
-		return "Invalid parameters for set intensity";
-	if (!strncasecmp(nextptr, "d", 1))
-		gpus[device].dynamic = true;
-	else {
-		gpus[device].dynamic = false;
-		val = atoi(nextptr);
-		if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
-			return "Invalid value passed to set intensity";
-		tt = &gpus[device].intensity;
-		*tt = val;
+	if (!strncasecmp(_val, "d", 1))
+		cgpu->dynamic = true;
+	else
+	{
+		const int v = atoi(_val);
+		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
+			return false;
+		cgpu->dynamic = false;
+		cgpu->intensity = v;
 	}
-
-	device++;
-
-	while ((nextptr = strtok(NULL, ",")) != NULL) {
-		if (!strncasecmp(nextptr, "d", 1))
-			gpus[device].dynamic = true;
-		else {
-			gpus[device].dynamic = false;
-			val = atoi(nextptr);
-			if (val < MIN_INTENSITY || val > MAX_GPU_INTENSITY)
-				return "Invalid value passed to set intensity";
-
-			tt = &gpus[device].intensity;
-			*tt = val;
-		}
-		device++;
-	}
-	if (device == 1) {
-		for (i = device; i < MAX_GPUDEVICES; i++) {
-			gpus[i].dynamic = gpus[0].dynamic;
-			gpus[i].intensity = gpus[0].intensity;
-		}
-	}
-
-	return NULL;
+	return true;
+}
+const char *set_intensity(char *arg)
+{
+	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
 }
 #endif
 
