@@ -59,7 +59,7 @@
 #include <dbt.h>
 #define HAVE_BFG_HOTPLUG
 #endif
-#include <ccan/ccan/opt/opt.h>
+#include <ccan/opt/opt.h>
 #include <jansson.h>
 #include <curl/curl.h>
 #include <libgen.h>
