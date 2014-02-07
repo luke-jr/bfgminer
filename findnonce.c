@@ -49,7 +49,7 @@ const uint32_t SHA256_K[64] = {
 	d = d + h; \
 	h = h + (rotate(a, 30) ^ rotate(a, 19) ^ rotate(a, 10)) + ((a & b) | (c & (a | b)))
 
-void precalc_hash(dev_blk_ctx *blk, uint32_t *state, uint32_t *data)
+void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data)
 {
 	cl_uint A, B, C, D, E, F, G, H;
 

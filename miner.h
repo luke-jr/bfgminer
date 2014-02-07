@@ -42,10 +42,6 @@
 #include "logging.h"
 #include "util.h"
 
-#ifdef HAVE_OPENCL
-#include "CL/cl.h"
-#endif /* HAVE_OPENCL */
-
 #ifdef STDC_HEADERS
 # include <stdlib.h>
 # include <stddef.h>
@@ -304,6 +300,7 @@ struct device_drv {
 	bool (*lowl_probe)(const struct lowlevel_device_info *);
 
 	// Processor-specific functions
+	void (*watchdog)(struct cgpu_info *, const struct timeval *tv_now);
 	void (*reinit_device)(struct cgpu_info *);
 	bool (*override_statline_temp2)(char *buf, size_t bufsz, struct cgpu_info *, bool per_processor);
 	struct api_data* (*get_api_extra_device_detail)(struct cgpu_info *);
@@ -516,45 +513,12 @@ struct cgpu_info {
 	int64_t max_hashes;
 
 	const char *kname;
-#ifdef HAVE_OPENCL
-	bool mapped;
-	int virtual_gpu;
-	int virtual_adl;
-	int intensity;
-	bool dynamic;
-
-	cl_uint vwidth;
-	size_t work_size;
-	enum cl_kernels kernel;
-	cl_ulong max_alloc;
-
-#ifdef USE_SCRYPT
-	int opt_lg, lookup_gap;
-	size_t opt_tc, thread_concurrency;
-	size_t shaders;
-#endif
-	struct timeval tv_gpustart;
-	int intervals;
-#endif
 
 	float temp;
 	int cutofftemp;
 	int targettemp;
 	bool targettemp_user;
 
-#ifdef HAVE_ADL
-	bool has_adl;
-	struct gpu_adl adl;
-
-	int gpu_engine;
-	int min_engine;
-	int gpu_fan;
-	int min_fan;
-	int gpu_memclock;
-	int gpu_memdiff;
-	int gpu_powertune;
-	float gpu_vddc;
-#endif
 	double diff1;
 	double diff_accepted;
 	double diff_rejected;
@@ -1143,40 +1107,6 @@ extern double current_diff;
 extern uint64_t best_diff;
 extern time_t block_time;
 
-#ifdef HAVE_OPENCL
-typedef struct {
-	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
-	cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
-	cl_uint cty_a; cl_uint cty_b; cl_uint cty_c; cl_uint cty_d;
-	cl_uint cty_e; cl_uint cty_f; cl_uint cty_g; cl_uint cty_h;
-	cl_uint merkle; cl_uint ntime; cl_uint nbits; cl_uint nonce;
-	cl_uint fW0; cl_uint fW1; cl_uint fW2; cl_uint fW3; cl_uint fW15;
-	cl_uint fW01r; cl_uint fcty_e; cl_uint fcty_e2;
-	cl_uint W16; cl_uint W17; cl_uint W2;
-	cl_uint PreVal4; cl_uint T1;
-	cl_uint C1addK5; cl_uint D1A; cl_uint W2A; cl_uint W17_2;
-	cl_uint PreVal4addT1; cl_uint T1substate0;
-	cl_uint PreVal4_2;
-	cl_uint PreVal0;
-	cl_uint PreW18;
-	cl_uint PreW19;
-	cl_uint PreW31;
-	cl_uint PreW32;
-
-	/* For diakgcn */
-	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
-	cl_uint zeroA, zeroB;
-	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
-#ifdef USE_SCRYPT
-	struct work *work;
-#endif
-} dev_blk_ctx;
-#else
-typedef struct {
-	uint32_t nonce;
-} dev_blk_ctx;
-#endif
-
 struct curl_ent {
 	CURL *curl;
 	struct curl_ent *next;
@@ -1349,7 +1279,9 @@ struct work {
 	int		rolls;
 	int		drv_rolllimit; /* How much the driver can roll ntime */
 
-	dev_blk_ctx	blk;
+	struct {
+		uint32_t nonce;
+	} blk;
 
 	struct thr_info	*thr;
 	int		thr_id;
@@ -1374,6 +1306,7 @@ struct work {
 	unsigned char	work_restart_id;
 	int		id;
 	int		device_id;
+	void *device_data;
 	UT_hash_handle hh;
 	
 	double		work_difficulty;

@@ -74,7 +74,6 @@
 #include "deviceapi.h"
 #include "logging.h"
 #include "miner.h"
-#include "findnonce.h"
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
@@ -2702,6 +2701,7 @@ void clean_work(struct work *work)
 	free(work->job_id);
 	bytes_free(&work->nonce2);
 	free(work->nonce1);
+	free(work->device_data);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -6513,92 +6513,7 @@ void write_config(FILE *fcfg)
 	fputs("\n]\n", fcfg);
 
 #ifdef HAVE_OPENCL
-	if (nDevs) {
-		/* Write GPU device values */
-		fputs(",\n\"intensity\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			if (i > 0)
-				fputc(',', fcfg);
-			if (gpus[i].dynamic)
-				fputc('d', fcfg);
-			else
-				fprintf(fcfg, "%d", gpus[i].intensity);
-		}
-		fputs("\",\n\"vectors\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				gpus[i].vwidth);
-		fputs("\",\n\"worksize\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].work_size);
-		fputs("\",\n\"kernel\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++) {
-			fprintf(fcfg, "%s", i > 0 ? "," : "");
-			switch (gpus[i].kernel) {
-				case KL_NONE: // Shouldn't happen
-					break;
-				case KL_POCLBM:
-					fprintf(fcfg, "poclbm");
-					break;
-				case KL_PHATK:
-					fprintf(fcfg, "phatk");
-					break;
-				case KL_DIAKGCN:
-					fprintf(fcfg, "diakgcn");
-					break;
-				case KL_DIABLO:
-					fprintf(fcfg, "diablo");
-					break;
-				case KL_SCRYPT:
-					fprintf(fcfg, "scrypt");
-					break;
-			}
-		}
-#ifdef USE_SCRYPT
-		fputs("\",\n\"lookup-gap\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].opt_lg);
-		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].opt_tc);
-		fputs("\",\n\"shaders\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-				(int)gpus[i].shaders);
-#endif
-#ifdef HAVE_ADL
-		fputs("\",\n\"gpu-engine\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_engine, gpus[i].gpu_engine);
-		fputs("\",\n\"gpu-fan\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "", gpus[i].min_fan, gpus[i].gpu_fan);
-		fputs("\",\n\"gpu-memclock\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memclock);
-		fputs("\",\n\"gpu-memdiff\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_memdiff);
-		fputs("\",\n\"gpu-powertune\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].gpu_powertune);
-		fputs("\",\n\"gpu-vddc\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", gpus[i].gpu_vddc);
-		fputs("\",\n\"temp-overheat\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", gpus[i].adl.overtemp);
-#endif
-		fputs("\"", fcfg);
-	}
-#endif
-#ifdef HAVE_ADL
-	if (opt_reorder)
-		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
+	write_config_opencl(fcfg);
 #endif
 #ifdef WANT_CPUMINE
 	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
@@ -9099,7 +9014,7 @@ out:
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
 {
 	if (wdiff->tv_sec > opt_scantime ||
-	    work->blk.nonce >= MAXTHREADS - hashes ||
+	    work->blk.nonce >= 0xfffffffe - hashes ||
 	    hashes >= 0xfffffffe ||
 	    stale_work(work, false))
 		return true;
@@ -9977,7 +9892,6 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			struct thr_info *thr = cgpu->thr[0];
 			enum dev_enable *denable;
 			char *dev_str = cgpu->proc_repr;
-			int gpu;
 
 			if (likely(drv_ready(cgpu)))
 			{
@@ -9987,21 +9901,10 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 					cgpu->drv->get_stats(cgpu);
 			}
 
-			gpu = cgpu->device_id;
 			denable = &cgpu->deven;
 
-#ifdef HAVE_ADL
-			if (adl_active && cgpu->has_adl)
-				gpu_autotune(gpu, denable);
-			if (opt_debug && cgpu->has_adl) {
-				int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
-				float temp = 0, vddc = 0;
-
-				if (gpu_stats(gpu, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune))
-					applog(LOG_DEBUG, "%.1f C  F: %d%%(%dRPM)  E: %dMHz  M: %dMHz  V: %.3fV  A: %d%%  P: %d%%",
-					temp, fanpercent, fanspeed, engineclock, memclock, vddc, activity, powertune);
-			}
-#endif
+			if (cgpu->drv->watchdog)
+				cgpu->drv->watchdog(cgpu, tvp_now);
 			
 			/* Thread is disabled */
 			if (*denable == DEV_DISABLED)
@@ -10074,12 +9977,6 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
 				run_cmd(cmd_sick);
 				
-#ifdef HAVE_ADL
-				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
-					applog(LOG_ERR, "GPU still showing activity suggesting a hard hang.");
-					applog(LOG_ERR, "Will not attempt to auto-restart it.");
-				} else
-#endif
 				if (opt_restart && cgpu->drv->reinit_device) {
 					applog(LOG_ERR, "%s: Attempting to restart", dev_str);
 					reinit_device(cgpu);
@@ -10095,11 +9992,6 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 				   (cgpu->status == LIFE_SICK || cgpu->status == LIFE_DEAD)) {
 				/* Attempt to restart a GPU that's sick or dead once every minute */
 				cgtime(&thr->sick);
-#ifdef HAVE_ADL
-				if (adl_active && cgpu->has_adl && gpu_activity(gpu) > 50) {
-					/* Again do not attempt to restart a device that may have hard hung */
-				} else
-#endif
 				if (opt_restart)
 					reinit_device(cgpu);
 			}
@@ -11455,9 +11347,7 @@ int main(int argc, char *argv[])
 	mutex_init(&submitting_lock);
 
 #ifdef HAVE_OPENCL
-	memset(gpus, 0, sizeof(gpus));
-	for (i = 0; i < MAX_GPUDEVICES; i++)
-		gpus[i].dynamic = true;
+	opencl_early_init();
 #endif
 
 	schedstart.tm.tm_sec = 1;

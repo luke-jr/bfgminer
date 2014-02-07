@@ -33,6 +33,7 @@
 #include "miner.h"
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
+#include "driver-opencl.h"
 
 #define HAVE_AN_FPGA 1
 
@@ -1338,7 +1339,8 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	int i;
 
 	for (i = 0; i < nDevs; i++) {
-		if (gpus[i].has_adl) {
+		struct opencl_device_data * const data = gpus[i].device_data;
+		if (data->has_adl) {
 			adlinuse = (char *)YES;
 			break;
 		}
@@ -2731,8 +2733,10 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
+	struct opencl_device_data * const data = gpus[id].device_data;
+	
 	if (!strncasecmp(value, DYNAMIC, 1)) {
-		gpus[id].dynamic = true;
+		data->dynamic = true;
 		strcpy(intensitystr, DYNAMIC);
 	}
 	else {
@@ -2742,8 +2746,8 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 			return;
 		}
 
-		gpus[id].dynamic = false;
-		gpus[id].intensity = intensity;
+		data->dynamic = false;
+		data->intensity = intensity;
 		sprintf(intensitystr, "%d", intensity);
 	}
 
