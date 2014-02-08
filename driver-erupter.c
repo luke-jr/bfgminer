@@ -103,8 +103,8 @@ static void erupter_drv_init()
 	
 	erupter_drv_emerald = erupter_drv;
 	erupter_drv_emerald.name = "BEE";
-	erupter_drv.lowl_match = erupter_emerald_lowl_match;
-	erupter_drv.lowl_probe = erupter_emerald_lowl_probe;
+	erupter_drv_emerald.lowl_match = erupter_emerald_lowl_match;
+	erupter_drv_emerald.lowl_probe = erupter_emerald_lowl_probe;
 	erupter_drv_emerald.probe_priority = -119;
 }
 
