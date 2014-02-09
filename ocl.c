@@ -28,6 +28,7 @@
 #define OMIT_OPENCL_API
 
 #include "deviceapi.h"
+#include "driver-opencl.h"
 #include "findnonce.h"
 #include "logging.h"
 #include "ocl.h"
@@ -394,6 +395,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	bool patchbfi = false, prog_built = false;
 	bool usebinary = opt_opencl_binaries, ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
+	struct opencl_device_data * const data = cgpu->device_data;
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
 	char *s;
@@ -550,12 +552,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	applog(LOG_DEBUG, "Max work group size reported %"PRId64, (int64_t)clState->max_work_size);
 
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&cgpu->max_alloc, NULL);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_MEM_ALLOC_SIZE", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)cgpu->max_alloc);
+	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)data->max_alloc);
 	
 	if (strstr(vbuff, "MESA"))
 	{
@@ -576,7 +578,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[255];
 	char numbuf[32];
 
-	if (cgpu->kernel == KL_NONE) {
+	if (data->kernel == KL_NONE) {
 		if (opt_scrypt) {
 			applog(LOG_INFO, "Selecting scrypt kernel");
 			clState->chosen_kernel = KL_SCRYPT;
@@ -605,9 +607,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_INFO, "Selecting phatk kernel");
 			clState->chosen_kernel = KL_PHATK;
 		}
-		cgpu->kernel = clState->chosen_kernel;
+		data->kernel = clState->chosen_kernel;
 	} else {
-		clState->chosen_kernel = cgpu->kernel;
+		clState->chosen_kernel = data->kernel;
 		if (clState->chosen_kernel == KL_PHATK &&
 		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
@@ -645,7 +647,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			strcpy(filename, SCRYPT_KERNNAME".cl");
 			strcpy(binaryfilename, SCRYPT_KERNNAME);
 			/* Scrypt only supports vector 1 */
-			cgpu->vwidth = 1;
+			data->vwidth = 1;
 			break;
 		case KL_NONE: /* Shouldn't happen */
 		case KL_DIABLO:
@@ -654,48 +656,48 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			break;
 	}
 
-	if (cgpu->vwidth)
-		clState->vwidth = cgpu->vwidth;
+	if (data->vwidth)
+		clState->vwidth = data->vwidth;
 	else {
 		clState->vwidth = preferred_vwidth;
-		cgpu->vwidth = preferred_vwidth;
+		data->vwidth = preferred_vwidth;
 	}
 
 	if (((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
 		clState->vwidth == 1 && clState->hasOpenCL11plus) || opt_scrypt)
 			clState->goffset = true;
 
-	if (cgpu->work_size && cgpu->work_size <= clState->max_work_size)
-		clState->wsize = cgpu->work_size;
+	if (data->work_size && data->work_size <= clState->max_work_size)
+		clState->wsize = data->work_size;
 	else if (opt_scrypt)
 		clState->wsize = 256;
 	else if (strstr(name, "Tahiti"))
 		clState->wsize = 64;
 	else
 		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
-	cgpu->work_size = clState->wsize;
+	data->work_size = clState->wsize;
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		if (!cgpu->opt_lg) {
+		if (!data->opt_lg) {
 			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
-			cgpu->lookup_gap = 2;
+			data->lookup_gap = 2;
 		} else
-			cgpu->lookup_gap = cgpu->opt_lg;
+			data->lookup_gap = data->opt_lg;
 
-		if (!cgpu->opt_tc) {
+		if (!data->opt_tc) {
 			unsigned int sixtyfours;
 
-			sixtyfours =  cgpu->max_alloc / 131072 / 64 - 1;
-			cgpu->thread_concurrency = sixtyfours * 64;
-			if (cgpu->shaders && cgpu->thread_concurrency > cgpu->shaders) {
-				cgpu->thread_concurrency -= cgpu->thread_concurrency % cgpu->shaders;
-				if (cgpu->thread_concurrency > cgpu->shaders * 5)
-					cgpu->thread_concurrency = cgpu->shaders * 5;
+			sixtyfours =  data->max_alloc / 131072 / 64 - 1;
+			data->thread_concurrency = sixtyfours * 64;
+			if (data->shaders && data->thread_concurrency > data->shaders) {
+				data->thread_concurrency -= data->thread_concurrency % data->shaders;
+				if (data->thread_concurrency > data->shaders * 5)
+					data->thread_concurrency = data->shaders * 5;
 			}
-			applog(LOG_DEBUG, "GPU %u: selecting thread concurrency of %lu", gpu,  (unsigned long)cgpu->thread_concurrency);
+			applog(LOG_DEBUG, "GPU %u: selecting thread concurrency of %lu", gpu,  (unsigned long)data->thread_concurrency);
 		} else
-			cgpu->thread_concurrency = cgpu->opt_tc;
+			data->thread_concurrency = data->opt_tc;
 	}
 #endif
 
@@ -728,7 +730,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		strcat(binaryfilename, "g");
 	if (opt_scrypt) {
 #ifdef USE_SCRYPT
-		sprintf(numbuf, "lg%utc%u", cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency);
+		sprintf(numbuf, "lg%utc%u", data->lookup_gap, (unsigned int)data->thread_concurrency);
 		strcat(binaryfilename, numbuf);
 #endif
 	} else {
@@ -808,7 +810,7 @@ build:
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			cgpu->lookup_gap, (unsigned int)cgpu->thread_concurrency, (int)clState->wsize);
+			data->lookup_gap, (unsigned int)data->thread_concurrency, (int)clState->wsize);
 	else
 #endif
 	{
@@ -1008,13 +1010,13 @@ built:
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {
-		size_t ipt = (1024 / cgpu->lookup_gap + (1024 % cgpu->lookup_gap > 0));
-		size_t bufsize = 128 * ipt * cgpu->thread_concurrency;
+		size_t ipt = (1024 / data->lookup_gap + (1024 % data->lookup_gap > 0));
+		size_t bufsize = 128 * ipt * data->thread_concurrency;
 
 		/* Use the max alloc value which has been rounded to a power of
 		 * 2 greater >= required amount earlier */
-		if (bufsize > cgpu->max_alloc) {
-			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu", gpu, (unsigned long)cgpu->max_alloc);
+		if (bufsize > data->max_alloc) {
+			applog(LOG_WARNING, "Maximum buffer memory device %d supports says %lu", gpu, (unsigned long)data->max_alloc);
 			applog(LOG_WARNING, "Your scrypt settings come to %lu", (unsigned long)bufsize);
 		}
 		applog(LOG_DEBUG, "Creating scrypt buffer sized %lu", (unsigned long)bufsize);
