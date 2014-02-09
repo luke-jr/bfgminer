@@ -487,6 +487,8 @@ const char *set_intensity(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
 }
+
+_SET_INT_LIST2(gpu_threads, (v >= 1 && v <= 10), cgpu->threads)
 #endif
 
 void write_config_opencl(FILE * const fcfg)
@@ -1276,7 +1278,8 @@ static int opencl_autodetect()
 		cgpu->deven = DEV_ENABLED;
 		cgpu->drv = &opencl_api;
 		cgpu->device_id = i;
-		cgpu->threads = opt_g_threads;
+		if (cgpu->threads == 0)
+			cgpu->threads = opt_g_threads;
 		data->virtual_gpu = i;
 		
 #ifdef HAVE_SENSORS
