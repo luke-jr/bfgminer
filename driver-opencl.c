@@ -326,7 +326,9 @@ const char *_set_list(char * const arg, const char * const emsg, bool (*set_func
 	return NULL;
 }
 
-#define _SET_INT_LIST(PNAME, VCHECK, FIELD)  \
+#define _SET_INT_LIST(PNAME, VCHECK, FIELD) _SET_INT_LIST_DATA(PNAME, VCHECK, FIELD)
+// END OF _SET_INT_LIST
+#define _SET_INT_LIST_DATA(PNAME, VCHECK, FIELD)  \
 static  \
 bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
 {  \
@@ -341,8 +343,22 @@ const char *set_ ## PNAME(char *arg)  \
 {  \
 	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
 }  \
-// END OF _SET_INT_LIST
-
+// END OF _SET_INT_LIST_DATA
+#define _SET_INT_LIST_CGPU(PNAME, VCHECK, FIELD)  \
+static  \
+bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
+{  \
+	const int v = atoi(_val);  \
+	if (!(VCHECK))  \
+		return false;  \
+	cgpu->FIELD = v;  \
+	return true;  \
+}  \
+const char *set_ ## PNAME(char *arg)  \
+{  \
+	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
+}  \
+// END OF _SET_INT_LIST_CGPU
 
 #ifdef HAVE_OPENCL
 _SET_INT_LIST(vector  , (v == 1 || v == 2 || v == 4), vwidth   )
@@ -486,6 +502,8 @@ const char *set_intensity(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
 }
+
+_SET_INT_LIST_CGPU(gpu_threads, (v >= 1 && v <= 10), threads)
 #endif
 
 void write_config_opencl(FILE * const fcfg)
@@ -1275,7 +1293,8 @@ static int opencl_autodetect()
 		cgpu->deven = DEV_ENABLED;
 		cgpu->drv = &opencl_api;
 		cgpu->device_id = i;
-		cgpu->threads = opt_g_threads;
+		if (cgpu->threads == 0)
+			cgpu->threads = opt_g_threads;
 		data->virtual_gpu = i;
 		
 #ifdef HAVE_SENSORS

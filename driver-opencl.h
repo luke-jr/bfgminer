@@ -86,6 +86,7 @@ extern const char *set_gpu_fan(char *arg);
 extern const char *set_gpu_memclock(char *arg);
 extern const char *set_gpu_memdiff(char *arg);
 extern const char *set_gpu_powertune(char *arg);
+extern const char *set_gpu_threads(char *arg);
 extern const char *set_gpu_vddc(char *arg);
 extern const char *set_temp_overheat(char *arg);
 extern const char *set_intensity(char *arg);
