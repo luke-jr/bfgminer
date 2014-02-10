@@ -326,39 +326,24 @@ const char *_set_list(char * const arg, const char * const emsg, bool (*set_func
 	return NULL;
 }
 
-#define _SET_INT_LIST(PNAME, VCHECK, FIELD) _SET_INT_LIST_DATA(PNAME, VCHECK, FIELD)
+#define _SET_INT_LIST2(PNAME, VCHECK, FIELD)  \
+static  \
+bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
+{  \
+	const int v = atoi(_val);  \
+	if (!(VCHECK))  \
+		return false;  \
+	FIELD = v;  \
+	return true;  \
+}  \
+const char *set_ ## PNAME(char *arg)  \
+{  \
+	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
+}  \
 // END OF _SET_INT_LIST
-#define _SET_INT_LIST_DATA(PNAME, VCHECK, FIELD)  \
-static  \
-bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
-{  \
-	const int v = atoi(_val);  \
-	if (!(VCHECK))  \
-		return false;  \
-	struct opencl_device_data * const data = cgpu->device_data;  \
-	data->FIELD = v;  \
-	return true;  \
-}  \
-const char *set_ ## PNAME(char *arg)  \
-{  \
-	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
-}  \
-// END OF _SET_INT_LIST_DATA
-#define _SET_INT_LIST_CGPU(PNAME, VCHECK, FIELD)  \
-static  \
-bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
-{  \
-	const int v = atoi(_val);  \
-	if (!(VCHECK))  \
-		return false;  \
-	cgpu->FIELD = v;  \
-	return true;  \
-}  \
-const char *set_ ## PNAME(char *arg)  \
-{  \
-	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
-}  \
-// END OF _SET_INT_LIST_CGPU
+
+#define _SET_INT_LIST(PNAME, VCHECK, FIELD)  \
+	_SET_INT_LIST2(PNAME, VCHECK, ((struct opencl_device_data *)cgpu->device_data)->FIELD)
 
 #ifdef HAVE_OPENCL
 _SET_INT_LIST(vector  , (v == 1 || v == 2 || v == 4), vwidth   )
