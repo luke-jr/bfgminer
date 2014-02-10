@@ -1264,6 +1264,27 @@ e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 ---------
 
 Default:
+ $rignames = false;
+
+Set $rignames to false to not affect the display.
+Set $rignames to one of 'ip' or 'ipx' to alter the name displayed
+if the rig doesn't have a 'name' in $rigs
+Currently:
+ 'ip' means use the 4th byte of the rig IP address as an integer
+ 'ipx' means use the 4th byte of the rig IP address as 2 hex bytes
+
+---------
+
+Default:
+ $rigbuttons = true;
+
+Set $rigbuttons to false to display a link rather than a button on
+the left of any summary table with rig buttons, in order to reduce
+the height of the table cells
+
+---------
+
+Default:
  $mcast = false;
 
 Set $mcast to true to look for your rigs and ignore $rigs.
