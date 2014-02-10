@@ -2,8 +2,8 @@
 session_start();
 date_default_timezone_set(@date_default_timezone_get());
 #
-global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
-global $rignames, $rigbuttons;
+global $doctype, $title, $miner, $port, $readonly, $notify;
+global $rigport, $rigs, $rignames, $rigbuttons;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
 global $mcastlistport, $mcasttimeout, $mcastretries, $allowgen;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
@@ -50,8 +50,11 @@ $checklastshare = true;
 # N.B. also if $readonly is true, it will not display the fields
 $poolinputs = false;
 #
+# Default port to use if any $rigs entries don't specify the port number
+$rigport = 4028;
+#
 # Set $rigs to an array of your BFGMiner rigs that are running
-#  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
+#  format: 'IP' or 'Host' or 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 $rigs = array('127.0.0.1:4028');
 #
 # Set $rignames to false, or one of 'ip' or 'ipx'
@@ -510,9 +513,12 @@ function getrigs()
 #
 function getsock($rig, $addr, $port)
 {
- global $rigips, $rignames, $rigipsecurity;
+ global $rigport, $rigips, $rignames, $rigipsecurity;
  global $haderror, $error, $socksndtimeoutsec, $sockrcvtimeoutsec;
 
+ $port = trim($port);
+ if (strlen($port) == 0)
+	$port = $rigport;
  $error = null;
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -1710,10 +1716,13 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		continue;
 
 	$parts = explode(':', $rig, 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		if (count($parts) > 2)
 			$name = $parts[2];
@@ -2620,10 +2629,13 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
  foreach ($rigs as $num => $rig)
  {
 	$parts = explode(':', $rig, 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		if (count($parts) > 2)
 			$name = $parts[2];
@@ -2981,10 +2993,13 @@ function display()
 		if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
 		{
 			$parts = explode(':', $rigs[$rig], 3);
-			if (count($parts) >= 2)
+			if (count($parts) >= 1)
 			{
 				$miner = $parts[0];
-				$port = $parts[1];
+				if (count($parts) >= 2)
+					$port = $parts[1];
+				else
+					$port = '';
 
 				if ($readonly !== true)
 					$preprocess = $arg;
@@ -3033,10 +3048,13 @@ function display()
  if (count($rigs) == 1)
  {
 	$parts = explode(':', $rigs[0], 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		htmlhead($mcerr, true, 0);
 		doOne(0, $preprocess);
@@ -3053,10 +3071,13 @@ function display()
  if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
  {
 	$parts = explode(':', $rigs[$rig], 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		htmlhead($mcerr, true, 0);
 		doOne($rig, $preprocess);

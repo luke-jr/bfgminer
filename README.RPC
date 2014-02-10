@@ -1251,14 +1251,22 @@ However, if $readonly is true, it will not display them.
 ---------
 
 Default:
+ $rigport = 4028;
+
+Default port to use if any $rigs entries don't specify the port number
+
+---------
+
+Default:
  $rigs = array('127.0.0.1:4028');
 
-Set $rigs to an array of your BFGMiner rigs that are running format: 'IP:Port'
- or 'Host:Port' or 'Host:Port:Name'.
+Set $rigs to an array of your BFGMiner rigs that are running format: 'IP' or
+ 'Host' or 'IP:Port' or 'Host:Port' or 'Host:Port:Name'.
 If you only have one rig, it will just show the detail of that rig.
 If you have more than one rig it will show a summary of all the rigs with
  buttons to show the details of each rig - the button contents will be 'Name'
  rather than rig number, if you specify 'Name'.
+If Port is missing or blank, it will try $rigport
 e.g. $rigs = array('127.0.0.1:4028','myrig.com:4028:Sugoi');
 
 ---------
