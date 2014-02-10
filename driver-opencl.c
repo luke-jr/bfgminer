@@ -488,7 +488,7 @@ const char *set_intensity(char *arg)
 	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
 }
 
-_SET_INT_LIST_CGPU(gpu_threads, (v >= 1 && v <= 10), threads)
+_SET_INT_LIST2(gpu_threads, (v >= 1 && v <= 10), cgpu->threads)
 #endif
 
 void write_config_opencl(FILE * const fcfg)
