@@ -86,6 +86,20 @@
 #include "driver-avalon.h"
 #endif
 
+<<<<<<<
+|||||||
+#ifdef USE_BFLSC
+#include "driver-bflsc.h"
+#endif
+=======
+#ifdef USE_AVALON2
+#include "driver-avalon2.h"
+#endif
+
+#ifdef USE_BFLSC
+#include "driver-bflsc.h"
+#endif
+>>>>>>>
 #ifdef HAVE_BFG_LOWLEVEL
 #include "lowlevel.h"
 #endif
@@ -100,9 +114,15 @@
 #include "scrypt.h"
 #endif
 
+<<<<<<<
 #include "version.h"
 
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
+|||||||
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
+=======
+#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_MODMINER)
+>>>>>>>
 #	define USE_FPGA
 #endif
 
@@ -2141,6 +2161,17 @@ static struct opt_table opt_config_table[] = {
 		     set_avalon_options, NULL, NULL,
 		     opt_hidden),
 #endif
+#ifdef USE_AVALON2
+	OPT_WITH_ARG("--avalon2-freq",
+		     set_avalon2_freq, NULL, NULL,
+		     "Set frequency range for Avalon2, single value or range"),
+	OPT_WITH_ARG("--avalon2-fan",
+		     set_avalon2_fan, NULL, NULL,
+		     "Set Avalon2 target fan speed"),
+	OPT_WITH_ARG("--avalon2-voltage",
+		     set_avalon2_voltage, NULL, NULL,
+		     "Set Avalon2 core voltage, in millivolts"),
+#endif
 #ifdef USE_KLONDIKE
 	OPT_WITH_ARG("--klondike-options",
 		     set_klondike_options, NULL, NULL,
@@ -3249,7 +3280,18 @@ int bfg_wresize(WINDOW *win, int lines, int columns)
 #else
 #	define bfg_wresize wresize
 #endif
+<<<<<<<
 
+|||||||
+#ifdef USE_BFLSC
+		"bflsc "
+=======
+#ifdef USE_AVALON2
+		"avalon2 "
+#endif
+#ifdef USE_BFLSC
+		"bflsc "
+>>>>>>>
 #endif
 
 void tailsprintf(char *buf, size_t bufsz, const char *fmt, ...)
@@ -9293,6 +9335,24 @@ bool pool_has_usable_swork(const struct pool * const pool)
 	return pool->stratum_notify;
 }
 
+#ifdef USE_AVALON2
+void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
+{
+	struct cgpu_info *cgpu = thr->cgpu;
+	struct device_drv *drv = cgpu->drv;
+
+	struct pool *pool = pools[pool_no];
+	struct work *work = make_work();
+
+	pool->nonce2 = nonce2;
+	gen_stratum_work(pool, work);
+
+	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
+	submit_nonce(thr, work, nonce);
+	free_work(work);
+}
+#endif
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */
@@ -9905,14 +9965,24 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
+<<<<<<<
 		fill_queue(mythr, cgpu, drv, thr_id);
+|||||||
+		mythr->work_update = false;
+=======
+#ifndef USE_AVALON2
+		mythr->work_update = false;
+#endif
+>>>>>>>
 
 		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);
 
+#ifndef USE_AVALON2
 		/* Reset the bool here in case the driver looks for it
 		 * synchronously in the scanwork loop. */
 		mythr->work_restart = false;
+#endif
 
 		if (unlikely(hashes == -1 )) {
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);

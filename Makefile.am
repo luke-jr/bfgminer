@@ -273,8 +273,20 @@ if USE_KNC
 bfgminer_SOURCES += driver-knc.c
 endif
 
+<<<<<<< HEAD
 if HAS_KLONDIKE
 bfgminer_SOURCES += driver-klondike.c driver-klondike.h driver-hashbusteravalon.c
+||||||| parent of 7c5b0b8... Add Avalon2 (2U size machine) support
+if HAS_MINION
+cgminer_SOURCES += driver-minion.c
+=======
+if HAS_AVALON2
+cgminer_SOURCES += driver-avalon2.c driver-avalon2.h crc16.c crc.h
+endif
+
+if HAS_MINION
+cgminer_SOURCES += driver-minion.c
+>>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 endif
 
 if HAS_MODMINER

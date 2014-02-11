@@ -1025,6 +1025,25 @@ if test "x$hashbuster" = "xyes"; then
 fi
 AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
 
+<<<<<<< HEAD
+||||||| parent of 7c5b0b8... Add Avalon2 (2U size machine) support
+minion="no"
+=======
+avalon2="no"
+
+AC_ARG_ENABLE([avalon2],
+	[AC_HELP_STRING([--enable-avalon2],[Compile support for Avalon2 (default disabled)])],
+	[avalon2=$enableval]
+	)
+if test "x$avalon2" = xyes; then
+	AC_DEFINE([USE_FPGA_SERIAL], [1], [Defined to 1 if serial support required])
+	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2 support is wanted])
+fi
+AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
+
+
+minion="no"
+>>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 
 driverlist="$driverlist hashbusterusb"
 AC_ARG_ENABLE([hashbusterusb],
@@ -1402,6 +1421,7 @@ if $use_udevrules; then
 	fi
 fi
 
+<<<<<<< HEAD
 
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
@@ -1416,6 +1436,15 @@ AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
+||||||| parent of 7c5b0b8... Add Avalon2 (2U size machine) support
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$modminer != xno])
+AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
+AM_CONDITIONAL([WANT_LIBBITFURY], [test x$want_libbitfury != xfalse])
+=======
+AM_CONDITIONAL([NEED_FPGAUTILS], [test x$avalon2$modminer != xno])
+AM_CONDITIONAL([WANT_USBUTILS], [test x$want_usbutils != xfalse])
+AM_CONDITIONAL([WANT_LIBBITFURY], [test x$want_libbitfury != xfalse])
+>>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
@@ -1809,6 +1838,170 @@ AC_CONFIG_FILES([
 	ccan.bfg/Makefile
 	lib/Makefile
 	])
+<<<<<<< HEAD
+||||||| parent of 7c5b0b8... Add Avalon2 (2U size machine) support
+AC_OUTPUT
+
+
+echo
+echo
+echo
+echo "------------------------------------------------------------------------"
+echo "$PACKAGE $VERSION"
+echo "------------------------------------------------------------------------"
+echo
+echo
+echo "Configuration Options Summary:"
+echo
+
+if test "x$libcurl" != xno; then
+	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
+else
+	echo "  libcurl(GBT+getwork).: Disabled"
+fi
+
+echo "  curses.TUI...........: $cursesmsg"
+
+
+echo
+if test "x$avalon" = xyes; then
+	echo "  Avalon.ASICs.........: Enabled"
+else
+	echo "  Avalon.ASICs.........: Disabled"
+fi
+
+if test "x$minion" = xyes; then
+	echo "  BlackArrowMinion.ASIC: Enabled"
+else
+	echo "  BlackArrowMinion.ASIC: Disabled"
+fi
+
+if test "x$bab" = xyes; then
+	echo "  BlackArrow.ASICs.....: Enabled"
+else
+	echo "  BlackArrow.ASICs.....: Disabled"
+fi
+
+if test "x$bflsc" = xyes; then
+	echo "  BFL.ASICs............: Enabled"
+else
+	echo "  BFL.ASICs............: Disabled"
+fi
+
+if test "x$bitforce" = xyes; then
+	echo "  BitForce.FPGAs.......: Enabled"
+else
+	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  BitFury.ASICs........: Enabled"
+else
+	echo "  BitFury.ASICs........: Disabled"
+fi
+
+if test "x$drillbit" = xyes; then
+	echo "  Drillbit.BitFury.....: Enabled"
+else
+	echo "  Drillbit.BitFury.....: Disabled"
+fi
+
+if test "x$hashfast" = xyes; then
+	echo "  Hashfast.ASICs.......: Enabled"
+else
+	echo "  Hashfast.ASICs.......: Disabled"
+fi
+
+if test "x$icarus" = xyes; then
+	echo "  Icarus.ASICs/FPGAs...: Enabled"
+else
+	echo "  Icarus.ASICs/FPGAs...: Disabled"
+fi
+=======
+AC_OUTPUT
+
+
+echo
+echo
+echo
+echo "------------------------------------------------------------------------"
+echo "$PACKAGE $VERSION"
+echo "------------------------------------------------------------------------"
+echo
+echo
+echo "Configuration Options Summary:"
+echo
+
+if test "x$libcurl" != xno; then
+	echo "  libcurl(GBT+getwork).: Enabled: $LIBCURL_LIBS"
+else
+	echo "  libcurl(GBT+getwork).: Disabled"
+fi
+
+echo "  curses.TUI...........: $cursesmsg"
+
+
+echo
+if test "x$avalon" = xyes; then
+	echo "  Avalon.ASICs.........: Enabled"
+else
+	echo "  Avalon.ASICs.........: Disabled"
+fi
+
+if test "x$avalon2" = xyes; then
+	echo "  Avalon2.ASICs.........: Enabled"
+else
+	echo "  Avalon2.ASICs.........: Disabled"
+fi
+
+if test "x$minion" = xyes; then
+	echo "  BlackArrowMinion.ASIC: Enabled"
+else
+	echo "  BlackArrowMinion.ASIC: Disabled"
+fi
+
+if test "x$bab" = xyes; then
+	echo "  BlackArrow.ASICs.....: Enabled"
+else
+	echo "  BlackArrow.ASICs.....: Disabled"
+fi
+
+if test "x$bflsc" = xyes; then
+	echo "  BFL.ASICs............: Enabled"
+else
+	echo "  BFL.ASICs............: Disabled"
+fi
+
+if test "x$bitforce" = xyes; then
+	echo "  BitForce.FPGAs.......: Enabled"
+else
+	echo "  BitForce.FPGAs.......: Disabled"
+fi
+
+if test "x$bitfury" = xyes; then
+	echo "  BitFury.ASICs........: Enabled"
+else
+	echo "  BitFury.ASICs........: Disabled"
+fi
+
+if test "x$drillbit" = xyes; then
+	echo "  Drillbit.BitFury.....: Enabled"
+else
+	echo "  Drillbit.BitFury.....: Disabled"
+fi
+
+if test "x$hashfast" = xyes; then
+	echo "  Hashfast.ASICs.......: Enabled"
+else
+	echo "  Hashfast.ASICs.......: Disabled"
+fi
+
+if test "x$icarus" = xyes; then
+	echo "  Icarus.ASICs/FPGAs...: Enabled"
+else
+	echo "  Icarus.ASICs/FPGAs...: Disabled"
+fi
+>>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 
 if $use_udevrules; then
 	AC_CONFIG_FILES([70-bfgminer.rules])
@@ -1817,10 +2010,20 @@ fi
 AC_OUTPUT
 
 
+<<<<<<< HEAD
 wordfilter ()
 {
   echo "$1" | sed 's/ \+/ /g;s/^ *//;s/ *$//'
 }
+||||||| parent of 7c5b0b8... Add Avalon2 (2U size machine) support
+if test "x$avalon$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion" = xnononononononononononono; then
+	AC_MSG_ERROR([No mining configured in])
+fi
+=======
+if test "x$avalon$avalon2$bab$bflsc$bitforce$bitfury$hashfast$icarus$klondike$knc$modminer$drillbit$minion" = xnononononononononononono; then
+	AC_MSG_ERROR([No mining configured in])
+fi
+>>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 
 echo
 echo "------------------------------------------------------------------------"
