@@ -60,19 +60,10 @@ static const char *msg_reply = "Reply";
 #define MAX_KLINES		1024	// unhandled reply limit
 #define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
 #define CMD_REPLY_RETRIES	8	// how many retries for cmds
-#define MAX_WORK_COUNT		4	// for now, must be binary multiple and match firmware
 #define TACH_FACTOR		87890	// fan rpm divisor
 
 #define KLN_KILLWORK_TEMP	53.5
 #define KLN_COOLED_DOWN		45.5
-
-/*
- *  Work older than 5s will already be completed
- *  FYI it must not be possible to complete 256 work
- *  items this quickly on a single device -
- *  thus limited to 219.9GH/s per device
- */
-#define OLD_WORK_MS ((int)(5 * 1000))
 
 /*
  * How many incorrect slave counts to ignore in a row
@@ -260,6 +251,9 @@ struct klondike_info {
 	
 	// TODO:
 	bool usbinfo_nodev;
+	
+	int max_work_count;
+	int old_work_ms;
 };
 
 static KLIST *new_klist_set(struct cgpu_info *klncgpu)
@@ -897,6 +891,8 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 	if (unlikely(!klninfo))
 		quit(1, "Failed to calloc klninfo in klondke_detect_one");
 	klninfo->clock = 282;
+	klninfo->max_work_count = 4;
+	klninfo->old_work_ms = 5000;
 	klncgpu->device_data = (void *)klninfo;
 
 	klninfo->free = new_klist_set(klncgpu);
@@ -972,7 +968,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	cgtime(&tv_now);
 	rd_lock(&(klncgpu->qlock));
 	HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
-		if (ms_tdiff(&tv_now, &(look->tv_stamp)) < OLD_WORK_MS &&
+		if (ms_tdiff(&tv_now, &(look->tv_stamp)) < klninfo->old_work_ms &&
 		    (look->subid == (kline->wr.dev*256 + kline->wr.workid))) {
 			work = look;
 			break;
@@ -1397,7 +1393,7 @@ static bool klondike_send_work(struct cgpu_info *klncgpu, int dev, struct work *
 		cgtime(&tv_old);
 		wr_lock(&klncgpu->qlock);
 		HASH_ITER(hh, klncgpu->queued_work, look, tmp) {
-			if (ms_tdiff(&tv_old, &(look->tv_stamp)) > OLD_WORK_MS) {
+			if (ms_tdiff(&tv_old, &(look->tv_stamp)) > klninfo->old_work_ms) {
 				__work_completed(klncgpu, look);
 				free_work(look);
 				wque_cleared++;
@@ -1467,13 +1463,13 @@ static bool klondike_queue_full(struct cgpu_info *klncgpu)
 que:
 
 	nowork = true;
-	for (queued = 0; queued < MAX_WORK_COUNT-1; queued++)
+	for (queued = 0; queued < klninfo->max_work_count - 1; ++queued)
 		for (dev = 0; dev <= slaves; dev++) {
 tryagain:
 			rd_lock(&(klninfo->stat_lock));
 			if (klninfo->jobque[dev].overheat) {
 				double temp = cvtKlnToC(klninfo->status[0].kline.ws.temp);
-				if ((queued == MAX_WORK_COUNT-2) &&
+				if ((queued == klninfo->max_work_count - 2) &&
 				    ms_tdiff(&now, &(klninfo->jobque[dev].last_update)) > (LATE_UPDATE_MS/2)) {
 					rd_unlock(&(klninfo->stat_lock));
 					klondike_get_stats(klncgpu);
