@@ -844,8 +844,26 @@ const char *klondike_set_clock(struct cgpu_info * const proc, const char * const
 	return NULL;
 }
 
+static
+const char *klondike_set_max_work_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct klondike_info * const klninfo = proc->device_data;
+	klninfo->max_work_count = atoi(newvalue);
+	return NULL;
+}
+
+static
+const char *klondike_set_old_work_time(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct klondike_info * const klninfo = proc->device_data;
+	klninfo->old_work_ms = atof(newvalue) * 1000.0;
+	return NULL;
+}
+
 static const struct bfg_set_device_definition klondike_set_device_funcs[] = {
 	{"clock", klondike_set_clock, "clock frequency (can only be set at startup, with --set-device)"},
+	{"max_work_count", klondike_set_max_work_count, "number of work items to queue on each bus"},
+	{"old_work_time", klondike_set_old_work_time, "number of seconds to retain work"},
 	{NULL}
 };
 
