@@ -876,28 +876,27 @@ bool klondike_lowl_match(const struct lowlevel_device_info * const info)
 }
 
 static
-bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
+bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, struct device_drv * const drv, struct klondike_info * const klninfo)
 {
 	if (unlikely(info->lowl != &lowl_usb))
 	{
 		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
 		       __func__, info->product, info->serial);
-		return false;
+		goto err;
 	}
 	struct libusb_device * const dev = info->lowl_data;
-	if (bfg_claim_libusb(&klondike_drv, true, dev))
-		return false;
+	if (bfg_claim_libusb(drv, true, dev))
+		goto err;
 	
 // static bool klondike_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
 	struct cgpu_info * const klncgpu = malloc(sizeof(*klncgpu));
-	struct klondike_info *klninfo = NULL;
 	KLINE kline;
 
 	if (unlikely(!klncgpu))
 		quit(1, "Failed to calloc klncgpu in klondike_detect_one");
 	
 	*klncgpu = (struct cgpu_info){
-		.drv = &klondike_drv,
+		.drv = drv,
 		.deven = DEV_ENABLED,
 		.threads = 1,
 		.targettemp = 50,
@@ -905,12 +904,6 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 		.set_device_funcs = klondike_set_device_funcs,
 	};
 
-	klninfo = calloc(1, sizeof(*klninfo));
-	if (unlikely(!klninfo))
-		quit(1, "Failed to calloc klninfo in klondke_detect_one");
-	klninfo->clock = 282;
-	klninfo->max_work_count = 4;
-	klninfo->old_work_ms = 5000;
 	klncgpu->device_data = (void *)klninfo;
 
 	klninfo->free = new_klist_set(klncgpu);
@@ -964,9 +957,26 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 		usb_uninit(klncgpu);
 	}
 	free(klninfo->free);
-	free(klninfo);
 	free(klncgpu);
+err:
+	free(klninfo);
 	return false;
+}
+
+static
+bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
+{
+	struct klondike_info * const klninfo = malloc(sizeof(*klninfo));
+	if (unlikely(!klninfo))
+		applogr(false, LOG_ERR, "%s: Failed to malloc klninfo", __func__);
+	
+	*klninfo = (struct klondike_info){
+		.clock = 282,
+		.max_work_count = 4,
+		.old_work_ms = 5000,
+	};
+	
+	return klondike_lowl_probe_custom(info, &klondike_drv, klninfo);
 }
 
 static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
