@@ -243,7 +243,7 @@ bfgminer_SOURCES += driver-knc.c
 endif
 
 if HAS_KLONDIKE
-bfgminer_SOURCES += driver-klondike.c
+bfgminer_SOURCES += driver-klondike.c driver-klondike.h driver-hashbusteravalon.c
 endif
 
 if HAS_MODMINER

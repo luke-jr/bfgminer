@@ -1,4 +1,5 @@
 /*
+ * Copyright 2014 Luke Dashjr
  * Copyright 2013 Andrew Smith
  * Copyright 2013 Con Kolivas
  * Copyright 2013 Chris Savery
@@ -28,6 +29,7 @@
 
 #include "compat.h"
 #include "deviceapi.h"
+#include "driver-klondike.h"
 #include "lowlevel.h"
 #include "lowl-usb.h"
 #include "miner.h"
@@ -206,55 +208,6 @@ typedef struct jobque {
 	int late_update_count;
 	int late_update_sequential;
 } JOBQUE;
-
-struct klondike_info {
-	pthread_rwlock_t stat_lock;
-	struct thr_info replies_thr;
-	cglock_t klist_lock;
-	KLIST *used;
-	KLIST *free;
-	int kline_count;
-	int used_count;
-	int block_seq;
-	KLIST *status;
-	DEVINFO *devinfo;
-	KLIST *cfg;
-	JOBQUE *jobque;
-	int noncecount;
-	uint64_t hashcount;
-	uint64_t errorcount;
-	uint64_t noisecount;
-	int incorrect_slave_sequential;
-	int16_t nonce_offset;
-
-	// us Delay from USB reply to being processed
-	double delay_count;
-	double delay_total;
-	double delay_min;
-	double delay_max;
-
-	struct timeval tv_last_nonce_received;
-
-	// Time from recieving one nonce to the next
-	double nonce_count;
-	double nonce_total;
-	double nonce_min;
-	double nonce_max;
-
-	int wque_size;
-	int wque_cleared;
-
-	int clock;
-	bool initialised;
-	
-	struct libusb_device_handle *usbdev_handle;
-	
-	// TODO:
-	bool usbinfo_nodev;
-	
-	int max_work_count;
-	int old_work_ms;
-};
 
 static KLIST *new_klist_set(struct cgpu_info *klncgpu)
 {
@@ -875,7 +828,6 @@ bool klondike_lowl_match(const struct lowlevel_device_info * const info)
 	return (info->manufacturer && strstr(info->manufacturer, "Klondike"));
 }
 
-static
 bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, struct device_drv * const drv, struct klondike_info * const klninfo)
 {
 	if (unlikely(info->lowl != &lowl_usb))

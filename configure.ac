@@ -583,7 +583,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 ])
 fi
 
-driverlist="$driverlist klondike"
+driverlist="$driverlist klondike hashbusteravalon/klondike"
 AC_ARG_ENABLE([klondike],
 	[AC_HELP_STRING([--disable-klondike],[Compile support for Klondike (default enabled)])],
 	[klondike=$enableval],
