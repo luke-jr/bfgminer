@@ -209,6 +209,20 @@ bool hashfast_lowl_match(const struct lowlevel_device_info * const info)
 }
 
 static
+const char *hashfast_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+
+{
+	uint16_t * const clockp = proc->device_data;
+	*clockp = atoi(newvalue);
+	return NULL;
+}
+
+static const struct bfg_set_device_definition hashfast_set_device_funcs_probe[] = {
+	{"clock", hashfast_set_clock, "clock frequency (can only be set at startup, with --set-device)"},
+	{NULL},
+};
+
+static
 bool hashfast_detect_one(const char * const devpath)
 {
 	uint16_t clock = 550;
@@ -220,6 +234,7 @@ bool hashfast_detect_one(const char * const devpath)
 		return false;
 	}
 	struct hashfast_parsed_msg * const pmsg = malloc(sizeof(*pmsg));
+	drv_set_defaults(&hashfast_ums_drv, hashfast_set_device_funcs_probe, &clock, devpath, detectone_meta_info.serial, 1);
 	hashfast_send_msg(fd, buf, HFOP_USB_INIT, 0, 0, clock, 0);
 	do {
 		if (!hashfast_parse_msg(fd, pmsg))
