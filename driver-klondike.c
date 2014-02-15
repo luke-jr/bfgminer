@@ -644,33 +644,35 @@ static bool klondike_get_stats(struct cgpu_info *klncgpu)
 	return true;
 }
 
-// TODO: this only enables the master (no slaves)
 static bool kln_enable(struct cgpu_info *klncgpu)
 {
+	struct klondike_info * const klninfo = klncgpu->device_data;
 	KLIST *kitem;
 	KLINE kline;
-	int tries = 2;
-	bool ok = false;
+	const int slaves = klninfo->status[0].kline.ws.slavecount;
 
 	zero_kline(&kline);
 	kline.hd.cmd = KLN_CMD_ENABLE;
-	kline.hd.dev = 0;
 	kline.hd.buf[0] = KLN_CMD_ENABLE_ON;
 	
-	while (tries-- > 0) {
-		kitem = SendCmdGetReply(klncgpu, &kline, 1);
-		if (kitem) {
-			kitem = release_kitem(klncgpu, kitem);
-			ok = true;
-			break;
+	for (int dev = 0; dev <= slaves; ++dev)
+	{
+		kline.hd.dev = dev;
+		for (int tries = 3; ; --tries)
+		{
+			kitem = SendCmdGetReply(klncgpu, &kline, 1);
+			cgsleep_ms(50);
+			if (kitem)
+			{
+				kitem = release_kitem(klncgpu, kitem);
+				break;
+			}
+			if (tries == 1)
+				return false;
 		}
-		cgsleep_ms(50);
 	}
-
-	if (ok)
-		cgsleep_ms(50);
-
-	return ok;
+	
+	return true;
 }
 
 static void kln_disable(struct cgpu_info *klncgpu, int dev, bool all)
