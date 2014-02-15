@@ -1036,7 +1036,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 			klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
 			kline->wr.workid, (unsigned int)nonce);
 
-	//inc_hw_errors(klncgpu->thr[0]);
+	inc_hw_errors2(klncgpu->thr[0], NULL, &nonce);
 }
 
 // thread to keep looking for replies
