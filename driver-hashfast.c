@@ -75,7 +75,7 @@ static inline
 float hashfast_temperature_conv(const uint8_t * const data)
 {
 	// Temperature is 12-bit fraction ranging between -61.5 C and ~178.5 C
-	uint32_t tempdata = ((uint32_t)data[1] << 8) | data[0];
+	int32_t tempdata = ((uint32_t)data[1] << 8) | data[0];
 	tempdata &= 0xfff;
 	tempdata *= 240;
 	tempdata -= 251904;  // 61.5 * 4096
