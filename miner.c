@@ -2063,10 +2063,10 @@ static struct opt_table opt_config_table[] = {
 		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
 		     "Select OpenCL platform ID to use for GPU mining"),
 	OPT_WITH_ARG("--gpu-threads",
-		     set_int_1_to_10, opt_show_intval, &opt_g_threads,
-		     "Number of threads per GPU (1 - 10)"),
+		     set_gpu_threads, opt_show_intval, &opt_g_threads,
+		     "Number of threads per GPU (1 - 10) - one value for all or separate by commas for per card"),
 	OPT_WITH_ARG("-g",
-	             set_int_1_to_10, opt_show_intval, &opt_g_threads,
+	             set_gpu_threads, opt_show_intval, &opt_g_threads,
 	             opt_hidden),
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--gpu-engine",
