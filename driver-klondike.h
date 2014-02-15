@@ -57,6 +57,7 @@ struct klondike_info {
 	
 	int max_work_count;
 	int old_work_ms;
+	int reply_wait_time;
 };
 
 extern bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, struct device_drv * const drv, struct klondike_info * const klninfo);

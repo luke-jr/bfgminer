@@ -60,7 +60,6 @@ static const char *msg_reply = "Reply";
 
 #define REPLY_SIZE		15	// adequate for all types of replies
 #define MAX_KLINES		1024	// unhandled reply limit
-#define REPLY_WAIT_TIME		100 	// poll interval for a cmd waiting it's reply
 #define CMD_REPLY_RETRIES	8	// how many retries for cmds
 #define TACH_FACTOR		87890	// fan rpm divisor
 
@@ -576,7 +575,7 @@ static KLIST *GetReply(struct cgpu_info *klncgpu, uint8_t cmd, uint8_t dev)
 	int retries = CMD_REPLY_RETRIES;
 
 	while (retries-- > 0 && klncgpu->shutdown == false) {
-		cgsleep_ms(REPLY_WAIT_TIME);
+		cgsleep_ms(klninfo->reply_wait_time);
 		cg_rlock(&klninfo->klist_lock);
 		kitem = klninfo->used;
 		while (kitem) {
@@ -815,10 +814,19 @@ const char *klondike_set_old_work_time(struct cgpu_info * const proc, const char
 	return NULL;
 }
 
+static
+const char *klondike_set_reply_wait_time(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct klondike_info * const klninfo = proc->device_data;
+	klninfo->reply_wait_time = atoi(newvalue);
+	return NULL;
+}
+
 static const struct bfg_set_device_definition klondike_set_device_funcs[] = {
 	{"clock", klondike_set_clock, "clock frequency (can only be set at startup, with --set-device)"},
 	{"max_work_count", klondike_set_max_work_count, "number of work items to queue on each bus"},
 	{"old_work_time", klondike_set_old_work_time, "number of seconds to retain work"},
+	{"reply_wait_time", klondike_set_reply_wait_time, "number of seconds poll interval"},
 	{NULL}
 };
 
@@ -882,7 +890,7 @@ bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, 
 						klncgpu->device_path,
 						sent, err);
 			}
-			cgsleep_ms(REPLY_WAIT_TIME*10);
+			cgsleep_ms(klninfo->reply_wait_time * 10);
 			err = usb_read(klncgpu, &kitem.kline, REPLY_SIZE, &recd);
 			if (err < 0) {
 				applog(LOG_ERR, "%s (%s) detect read failed (%d:%d)",
@@ -928,6 +936,7 @@ bool klondike_lowl_probe(const struct lowlevel_device_info * const info)
 		.clock = 282,
 		.max_work_count = 4,
 		.old_work_ms = 5000,
+		.reply_wait_time = 100,
 	};
 	
 	return klondike_lowl_probe_custom(info, &klondike_drv, klninfo);

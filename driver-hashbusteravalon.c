@@ -36,6 +36,7 @@ bool hashbusteravalon_lowl_probe(const struct lowlevel_device_info * const info)
 		.clock = 2425,
 		.max_work_count = 0x20,
 		.old_work_ms = 30000,
+		.reply_wait_time = 5,
 	};
 	
 	return klondike_lowl_probe_custom(info, &hashbusteravalon_drv, klninfo);
