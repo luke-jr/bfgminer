@@ -1380,7 +1380,7 @@ struct work {
 
 	// Allow devices to identify work if multiple sub-devices
 	// DEPRECATED: New code should be using multiple processors instead
-	unsigned char	subid;
+	int		subid;
 	
 	// Allow devices to timestamp work for their own purposes
 	struct timeval	tv_stamp;
