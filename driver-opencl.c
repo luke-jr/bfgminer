@@ -326,6 +326,16 @@ const char *_set_list(char * const arg, const char * const emsg, bool (*set_func
 	return NULL;
 }
 
+#define _SET_INTERFACE(PNAME)  \
+static  \
+const char *opencl_init_ ## PNAME (struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)  \
+{  \
+	if (!_set_ ## PNAME (proc, newvalue))  \
+		return "Invalid value for " #PNAME;  \
+	return NULL;  \
+}  \
+// END OF _SET_INTERFACE
+
 #define _SET_INT_LIST2(PNAME, VCHECK, FIELD)  \
 static  \
 bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
@@ -336,6 +346,7 @@ bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
 	FIELD = v;  \
 	return true;  \
 }  \
+_SET_INTERFACE(PNAME)  \
 const char *set_ ## PNAME(char *arg)  \
 {  \
 	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
@@ -383,6 +394,7 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char * const _val)
 	data->kernel = kern;
 	return true;
 }
+_SET_INTERFACE(kernel)
 const char *set_kernel(char *arg)
 {
 	if (opt_scrypt)
@@ -394,6 +406,15 @@ const char *set_kernel(char *arg)
 #ifdef HAVE_ADL
 /* This function allows us to map an adl device to an opencl device for when
  * simple enumeration has failed to match them. */
+static
+const char *opencl_init_gpu_map(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	data->virtual_adl = atoi(newvalue);
+	data->mapped = true;
+	return NULL;
+}
+
 char *set_gpu_map(char *arg)
 {
 	struct opencl_device_data *data;
@@ -437,9 +458,17 @@ bool _set_gpu_engine(struct cgpu_info * const cgpu, const char * const _val)
 	data->gpu_engine = val2;
 	return true;
 }
+_SET_INTERFACE(gpu_engine)
 const char *set_gpu_engine(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_gpu_engine", _set_gpu_engine);
+}
+static
+const char *opencl_set_gpu_engine(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_engineclock(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_engine";
+	return NULL;
 }
 
 static
@@ -454,15 +483,52 @@ bool _set_gpu_fan(struct cgpu_info * const cgpu, const char * const _val)
 	data->gpu_fan = val2;
 	return true;
 }
+_SET_INTERFACE(gpu_fan)
 const char *set_gpu_fan(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_gpu_fan", _set_gpu_fan);
 }
+static
+const char *opencl_set_gpu_fan(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_fanspeed(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_fan";
+	return NULL;
+}
 
 _SET_INT_LIST(gpu_memclock , (v >=     1 && v <  9999), gpu_memclock )
+static
+const char *opencl_set_gpu_memclock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_memoryclock(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_memclock";
+	return NULL;
+}
+
 _SET_INT_LIST(gpu_memdiff  , (v >= -9999 && v <= 9999), gpu_memdiff  )
+static
+const char *opencl_set_gpu_memdiff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	
+	if (!_set_gpu_memdiff(proc, newvalue))
+		return "Invalid value for gpu_memdiff";
+	
+	set_engineclock(proc->device_id, data->gpu_engine);
+	
+	return NULL;
+}
+
 _SET_INT_LIST(gpu_powertune, (v >=   -99 && v <=   99), gpu_powertune)
 _SET_INT_LIST(gpu_vddc     , (v >=     0 && v <  9999), gpu_vddc     )
+static
+const char *opencl_set_gpu_vddc(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_vddc(proc->device_id, atof(newvalue)))
+		return "Failed to set gpu_vddc";
+	return NULL;
+}
+
 _SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
@@ -481,8 +547,10 @@ bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
 		data->dynamic = false;
 		data->intensity = v;
 	}
+	pause_dynamic_threads(cgpu->device_id);
 	return true;
 }
+_SET_INTERFACE(intensity)
 const char *set_intensity(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
@@ -641,6 +709,8 @@ void write_config_opencl(FILE * const fcfg)
 
 #ifdef HAVE_OPENCL
 BFG_REGISTER_DRIVER(opencl_api)
+static const struct bfg_set_device_definition opencl_set_device_funcs_probe[];
+static const struct bfg_set_device_definition opencl_set_device_funcs[];
 
 char *print_ndevs_and_exit(int *ndevs)
 {
@@ -1308,6 +1378,10 @@ static int opencl_autodetect()
 		data->sensor = cn;
 #endif
 		
+		cgpu->set_device_funcs = opencl_set_device_funcs_probe;
+		cgpu_set_defaults(cgpu);
+		cgpu->set_device_funcs = opencl_set_device_funcs;
+		
 		add_cgpu(cgpu);
 	}
 
@@ -1694,6 +1768,60 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
+
+static
+const char *opencl_cannot_set(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	return "Cannot set at runtime (use --set-device on commandline)";
+}
+
+static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = {
+	{"intensity", opencl_init_intensity},
+	{"kernel", opencl_init_kernel},
+	{"threads", opencl_init_gpu_threads},
+	{"vector", opencl_init_vector},
+	{"work_size", opencl_init_worksize},
+#ifdef HAVE_ADL
+	{"adl_mapping", opencl_init_gpu_map},
+	{"clock", opencl_init_gpu_engine},
+	{"fan", opencl_init_gpu_fan},
+	{"memclock", opencl_init_gpu_memclock},
+	{"memdiff", opencl_init_gpu_memdiff},
+	{"powertune", opencl_init_gpu_powertune},
+	{"temp_overheat", opencl_init_temp_overheat},
+	{"voltage", opencl_init_gpu_vddc},
+#endif
+#ifdef USE_SCRYPT
+	{"shaders", opencl_init_shaders},
+	{"lookup_gap", opencl_init_lookup_gap},
+	{"thread_concurrency", opencl_init_thread_concurrency},
+#endif
+	{NULL}
+};
+
+static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
+	{"intensity", opencl_init_intensity, "Intensity of GPU scanning (d or -10 -> 31)"},
+	{"kernel", opencl_cannot_set, "Mining kernel code to use"},
+	{"threads", opencl_cannot_set, "Number of threads"},
+	{"vector", opencl_cannot_set, ""},
+	{"work_size", opencl_cannot_set, ""},
+#ifdef HAVE_ADL
+	{"adl_mapping", opencl_cannot_set, "Map to ADL device"},
+	{"clock", opencl_set_gpu_engine, "GPU engine clock"},
+	{"fan", opencl_set_gpu_fan, "GPU fan percentage range"},
+	{"memclock", opencl_set_gpu_memclock, "GPU memory clock"},
+	{"memdiff", opencl_set_gpu_memdiff, "Clock speed difference between GPU and memory (auto-gpu mode only)"},
+	{"powertune", opencl_cannot_set, "GPU powertune percentage"},
+	{"temp_overheat", opencl_init_temp_overheat, "Overheat temperature when automatically managing fan and GPU speeds"},
+	{"voltage", opencl_set_gpu_vddc, "GPU voltage"},
+#endif
+#ifdef USE_SCRYPT
+	{"shaders", opencl_cannot_set, "GPU shaders per card (scrypt only)"},
+	{"lookup_gap", opencl_cannot_set, "GPU lookup gap (scrypt only)"},
+	{"thread_concurrency", opencl_cannot_set, "GPU thread concurrency (scrypt only)"},
+#endif
+	{NULL}
+};
 
 struct device_drv opencl_api = {
 	.dname = "opencl",
