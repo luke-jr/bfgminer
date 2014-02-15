@@ -208,6 +208,15 @@ typedef struct jobque {
 	int late_update_sequential;
 } JOBQUE;
 
+static
+struct cgpu_info *klondike_get_proc(struct cgpu_info *cgpu, int procid)
+{
+	while (procid--)
+		if (cgpu->next_proc)
+			cgpu = cgpu->next_proc;
+	return cgpu;
+}
+
 static KLIST *new_klist_set(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
@@ -908,6 +917,25 @@ bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, 
 						  klncgpu->drv->dname,
 						  klncgpu->device_path,
 						  attempts, attempts == 1 ? "" : "s");
+				
+				kline.hd.cmd = KLN_CMD_STATUS;
+				if (!SendCmd(klncgpu, &kline, 0))
+				{
+					applog(LOG_DEBUG, "%s (%s) status request failed",
+					       klncgpu->drv->dname, klncgpu->device_path);
+					continue;
+				}
+				cgsleep_ms(klninfo->reply_wait_time * 10);
+				err = usb_read(klncgpu, &kitem.kline, REPLY_SIZE, &recd);
+				if (err < 0 || recd < REPLY_SIZE)
+				{
+					applog(LOG_DEBUG, "%s (%s) status request failed (2)",
+					       klncgpu->drv->dname, klncgpu->device_path);
+					continue;
+				}
+				
+				klncgpu->procs = 1 + kitem.kline.ws.slavecount;
+				
 				if (!add_cgpu(klncgpu))
 					break;
 				applog(LOG_DEBUG, "Klondike cgpu added");
@@ -947,12 +975,14 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
 	struct work *work, *look, *tmp;
 	KLINE *kline = &(kitem->kline);
+	struct cgpu_info * const proc = klondike_get_proc(klncgpu, kline->wr.dev);
+	struct thr_info * const thr = proc->thr[0];
 	struct timeval tv_now;
 	double us_diff;
 	uint32_t nonce = K_NONCE(kline->wr.nonce) + klninfo->nonce_offset;
 
-	applog(LOG_DEBUG, "%s%i:%d FOUND NONCE (%02x:%08x)",
-			  klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
+	applog(LOG_DEBUG, "%"PRIpreprv": FOUND NONCE (%02x:%08x)",
+	       proc->proc_repr,
 			  kline->wr.workid, (unsigned int)nonce);
 
 	work = NULL;
@@ -978,7 +1008,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 				{
 					applog(LOG_DEBUG, "%s: Matched both c0 and 180 offsets (%02x:%08lx)",
 					       klncgpu->dev_repr, kline->wr.workid, (unsigned long)nonce);
-					submit_nonce(klncgpu->thr[0], work, nonce - 0x180);
+					submit_nonce(thr, work, nonce - 0x180);
 					nonce -= 0xc0;
 				}
 				else
@@ -1005,15 +1035,15 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 		klninfo->noncecount++;
 		wr_unlock(&(klninfo->stat_lock));
 
-		applog(LOG_DEBUG, "%s%i:%d SUBMIT NONCE (%02x:%08x)",
-				  klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
+		applog(LOG_DEBUG, "%"PRIpreprv": SUBMIT NONCE (%02x:%08x)",
+		       proc->proc_repr,
 				  kline->wr.workid, (unsigned int)nonce);
 
 		cgtime(&tv_now);
-		bool ok = submit_nonce(klncgpu->thr[0], work, nonce);
+		bool ok = submit_nonce(thr, work, nonce);
 
-		applog(LOG_DEBUG, "%s%i:%d chip stats %d, %08x, %d, %d",
-				  klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
+		applog(LOG_DEBUG, "%"PRIpreprv": chip stats %d, %08x, %d, %d",
+		       proc->proc_repr,
 				  kline->wr.dev, (unsigned int)nonce,
 				  klninfo->devinfo[kline->wr.dev].rangesize,
 				  klninfo->status[kline->wr.dev].kline.ws.chipcount);
@@ -1047,6 +1077,7 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 			klninfo->nonce_total += us_diff;
 		}
 		klninfo->nonce_count++;
+		hashes_done2(thr, 0x100000000, NULL);
 
 		memcpy(&(klninfo->tv_last_nonce_received), &(kitem->tv_when),
 			sizeof(klninfo->tv_last_nonce_received));
@@ -1054,11 +1085,11 @@ static void klondike_check_nonce(struct cgpu_info *klncgpu, KLIST *kitem)
 		return;
 	}
 
-	applog(LOG_ERR, "%s%i:%d unknown work (%02x:%08x) - ignored",
-			klncgpu->drv->name, klncgpu->device_id, (int)(kline->wr.dev),
+	applog(LOG_ERR, "%"PRIpreprv": unknown work (%02x:%08x) - ignored",
+	       proc->proc_repr,
 			kline->wr.workid, (unsigned int)nonce);
 
-	inc_hw_errors2(klncgpu->thr[0], NULL, &nonce);
+	inc_hw_errors2(thr, NULL, &nonce);
 }
 
 // thread to keep looking for replies
@@ -1503,7 +1534,6 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *klncgpu = thr->cgpu;
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
-	int64_t newhashcount = 0;
 	int dev, slaves;
 
 	if (klninfo->usbinfo_nodev)
@@ -1527,12 +1557,11 @@ static int64_t klondike_scanwork(struct thr_info *thr)
 			if (maxcount != 0)
 				klninfo->hashcount += (newhashdev << 32) / maxcount;
 		}
-		newhashcount += 0xffffffffull * (uint64_t)klninfo->noncecount;
 		klninfo->noncecount = 0;
 		rd_unlock(&(klninfo->stat_lock));
 	}
 
-	return newhashcount;
+	return 0;
 }
 
 
