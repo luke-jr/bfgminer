@@ -1307,9 +1307,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	char buf[TMPBUFSIZ];
 	bool io_open;
 	struct driver_registration *reg, *regtmp;
-	int gpucount = 0;
 	int pgacount = 0;
-	int cpucount = 0;
 	char *adlinuse = (char *)NO;
 #ifdef HAVE_ADL
 	const char *adl = YES;
@@ -1326,24 +1324,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	const char *adl = NO;
 #endif
 
-#ifdef HAVE_OPENCL
-	gpucount = nDevs;
-#endif
-
 #ifdef HAVE_AN_FPGA
 	pgacount = numpgas();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpucount = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
 	message(io_data, MSG_MINECONFIG, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECONFIG : _MINECONFIG COMSTR);
 
-	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
-	root = api_add_int(root, "CPU Count", &cpucount, false);
 	root = api_add_int(root, "Pool Count", &total_pools, false);
 	root = api_add_const(root, "ADL", (char *)adl, false);
 	root = api_add_string(root, "ADL in use", adlinuse, false);
