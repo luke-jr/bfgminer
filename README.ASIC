@@ -74,7 +74,7 @@ one or more blades. First, start BFGMiner with the --http-port option. For
 example:
     bfgminer --http-port 8330
 Then configure your blade to connect to your BFGMiner instance on the same port,
-with a unique username per blade. It will then show up as a SGW device and
+with a unique username per blade. It will then show up as a PXY device and
 should work more or less like any other miner.
 
 
