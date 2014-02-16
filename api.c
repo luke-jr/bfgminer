@@ -264,6 +264,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGALRDIS 62
 #define MSG_PGAENA 63
 #define MSG_PGADIS 64
+#define MSG_PGAREI 0x101
 #define MSG_PGAUNW 65
 #endif
 
@@ -1827,6 +1828,23 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	message(io_data, MSG_PGADIS, id, NULL, isjson);
 }
 
+static void pgarestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	int id, dev;
+	
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
+		return;
+	
+	applog(LOG_DEBUG, "API: request to pgarestart dev id %d device %d %s",
+			id, dev, cgpu->dev_repr);
+	
+	reinit_device(cgpu);
+	
+	message(io_data, MSG_PGAREI, id, NULL, isjson);
+}
+
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
@@ -3384,6 +3402,7 @@ struct CMDS {
 	{ "pga",		pgadev,		false,	false },
 	{ "pgaenable",		pgaenable,	true,	false },
 	{ "pgadisable",		pgadisable,	true,	false },
+	{ "pgarestart",		pgarestart,	true,	false },
 	{ "pgaidentify",	pgaidentify,	true,	false },
 	{ "proc",		pgadev,		false,	false },
 	{ "procenable",		pgaenable,	true,	false },

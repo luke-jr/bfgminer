@@ -310,6 +310,10 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               stating the results of the disable request
                               This is only available if PGA mining is enabled
 
+ pgarestart|N (*)
+               none           There is no reply section just the STATUS section
+                              stating the results of the restart request
+
  pgaidentify|N (*)
                none           This is equivalent to PROCIDENTIFY on the first
                               processor of any given device
@@ -482,6 +486,9 @@ API V3.1
 Multiple report request command with '+' e.g. summary+devs
 
 CPU and OpenCL devices are now included as "PGAs", to enable migration to a simpler interface.
+
+Added API commands:
+ 'pgarestart'
 
 Deprecated API commands:
  'gpuintensity'
