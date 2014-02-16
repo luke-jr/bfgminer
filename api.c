@@ -1705,28 +1705,44 @@ static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 }
 
 #ifdef HAVE_AN_FPGA
+static
+struct cgpu_info *get_pga_cgpu(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group, int *id_p, int *dev_p)
+{
+	int numpga = numpgas();
+	
+	if (numpga == 0) {
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
+		return NULL;
+	}
+	
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return NULL;
+	}
+	
+	*id_p = atoi(param);
+	if (*id_p < 0 || *id_p >= numpga) {
+		message(io_data, MSG_INVPGA, *id_p, NULL, isjson);
+		return NULL;
+	}
+	
+	*dev_p = pgadevice(*id_p);
+	if (*dev_p < 0) { // Should never happen
+		message(io_data, MSG_INVPGA, *id_p, NULL, isjson);
+		return NULL;
+	}
+	
+	return get_devices(*dev_p);
+}
+
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	if (!get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev))
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
+	
 	message(io_data, MSG_PGADEV, id, NULL, isjson);
 
 	if (isjson)
@@ -1741,34 +1757,13 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu, *proc;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 	bool already;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
-
+	
 	applog(LOG_DEBUG, "API: request to pgaenable %s id %d device %d %s",
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
@@ -1802,34 +1797,13 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu, *proc;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 	bool already;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
-
+	
 	applog(LOG_DEBUG, "API: request to pgadisable %s id %d device %d %s",
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
@@ -1857,32 +1831,12 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 {
 	struct cgpu_info *cgpu;
 	struct device_drv *drv;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
+	
 	drv = cgpu->drv;
 
 	if (drv->identify_device && drv->identify_device(cgpu))
