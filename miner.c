@@ -2062,55 +2062,41 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--gpu-platform",
 		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
 		     "Select OpenCL platform ID to use for GPU mining"),
-	OPT_WITH_ARG("--gpu-threads",
-		     set_gpu_threads, opt_show_intval, &opt_g_threads,
-		     "Number of threads per GPU (1 - 10) - one value for all or separate by commas for per card"),
-	OPT_WITH_ARG("-g",
+	OPT_WITH_ARG("--gpu-threads|-g",
 	             set_gpu_threads, opt_show_intval, &opt_g_threads,
 	             opt_hidden),
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--gpu-engine",
 		     set_gpu_engine, NULL, NULL,
-		     "GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)"),
+	             opt_hidden),
 	OPT_WITH_ARG("--gpu-fan",
 		     set_gpu_fan, NULL, NULL,
-		     "GPU fan percentage range - one value, range and/or comma separated list (e.g. 0-85,85,65)"),
+	             opt_hidden),
 	OPT_WITH_ARG("--gpu-map",
 		     set_gpu_map, NULL, NULL,
 		     "Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)"),
 	OPT_WITH_ARG("--gpu-memclock",
 		     set_gpu_memclock, NULL, NULL,
-		     "Set the GPU memory (over)clock in MHz - one value for all or separate by commas for per card"),
+	             opt_hidden),
 	OPT_WITH_ARG("--gpu-memdiff",
 		     set_gpu_memdiff, NULL, NULL,
-		     "Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode"),
+	             opt_hidden),
 	OPT_WITH_ARG("--gpu-powertune",
 		     set_gpu_powertune, NULL, NULL,
-		     "Set the GPU powertune percentage - one value for all or separate by commas for per card"),
+	             opt_hidden),
 	OPT_WITHOUT_ARG("--gpu-reorder",
 			opt_set_bool, &opt_reorder,
 			"Attempt to reorder GPU devices according to PCI Bus ID"),
 	OPT_WITH_ARG("--gpu-vddc",
 		     set_gpu_vddc, NULL, NULL,
-		     "Set the GPU voltage in Volts - one value for all or separate by commas for per card"),
+	             opt_hidden),
 #endif
 #ifdef USE_SCRYPT
 	OPT_WITH_ARG("--lookup-gap",
 		     set_lookup_gap, NULL, NULL,
-		     "Set GPU lookup gap for scrypt mining, comma separated"),
-	OPT_WITH_ARG("--intensity",
-		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
-		     " -> " MAX_SCRYPT_INTENSITY_STR
-		     ",default: d to maintain desktop interactivity)"),
-#else
-	OPT_WITH_ARG("--intensity",
-		     set_intensity, NULL, NULL,
-		     "Intensity of GPU scanning (d or " MIN_SHA_INTENSITY_STR
-		     " -> " MAX_SHA_INTENSITY_STR
-		     ",default: d to maintain desktop interactivity)"),
+	             opt_hidden),
 #endif
-	OPT_WITH_ARG("-I",
+	OPT_WITH_ARG("--intensity|-I",
 	             set_intensity, NULL, NULL,
 	             opt_hidden),
 #endif
@@ -2123,10 +2109,7 @@ static struct opt_table opt_config_table[] = {
 	             opt_hidden),
 #endif
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--kernel",
-		     set_kernel, NULL, NULL,
-		     "Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated"),
-	OPT_WITH_ARG("-k",
+	OPT_WITH_ARG("--kernel|-k",
 	             set_kernel, NULL, NULL,
 	             opt_hidden),
 #endif
@@ -2319,7 +2302,7 @@ static struct opt_table opt_config_table[] = {
 #if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,
-		     "GPU shaders per card for tuning scrypt, comma separated"),
+	             opt_hidden),
 #endif
 #ifdef HAVE_PWD_H
         OPT_WITH_ARG("--setuid",
@@ -2369,7 +2352,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_ADL
 	OPT_WITH_ARG("--temp-overheat",
 		     set_temp_overheat, opt_show_intval, &opt_overheattemp,
-		     "Overheat temperature when automatically managing fan and GPU speeds, one value or comma separated list"),
+	             opt_hidden),
 #endif
 	OPT_WITH_ARG("--temp-target",
 		     set_temp_target, NULL, NULL,
@@ -2385,7 +2368,7 @@ static struct opt_table opt_config_table[] = {
 #if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
-		     "Set GPU thread concurrency for scrypt mining, comma separated"),
+	             opt_hidden),
 #endif
 #ifdef USE_UNICODE
 	OPT_WITHOUT_ARG("--unicode",
@@ -2399,10 +2382,7 @@ static struct opt_table opt_config_table[] = {
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--vectors",
-		     set_vector, NULL, NULL,
-		     "Override detected optimal vector (1, 2 or 4) - one value or comma separated list"),
-	OPT_WITH_ARG("-v",
+	OPT_WITH_ARG("--vectors|-v",
 	             set_vector, NULL, NULL,
 	             opt_hidden),
 #endif
@@ -2413,10 +2393,7 @@ static struct opt_table opt_config_table[] = {
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
 #ifdef HAVE_OPENCL
-	OPT_WITH_ARG("--worksize",
-		     set_worksize, NULL, NULL,
-		     "Override detected optimal worksize - one value or comma separated list"),
-	OPT_WITH_ARG("-w",
+	OPT_WITH_ARG("--worksize|-w",
 	             set_worksize, NULL, NULL,
 	             opt_hidden),
 #endif

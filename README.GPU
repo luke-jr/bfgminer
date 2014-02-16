@@ -14,23 +14,23 @@ mining performance.
 
 Single pool, dedicated miner:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --set-device intensity=9
 
 Single pool, first card regular desktop, 3 other dedicated cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity d,9,9,9
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --set-device intensity=9 --set-device OCL0:intensity=d
 
 Multiple pool, dedicated miner:
 
-bfgminer -S opencl:auto -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password --intensity 9
+bfgminer -S opencl:auto -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password --set-device intensity=9
 
 Add overclocking settings, GPU and fan control for all cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --set-device intensity=9 --auto-fan --auto-gpu --set-device OCL:clock=750-950 --set-device OCL:memclock=300
 
 Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
 
-bfgminer -S opencl:auto -o http://pool:port -u username -p password --intensity 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
+bfgminer -S opencl:auto -o http://pool:port -u username -p password --set-device intensity=9 --auto-fan --auto-gpu --set-device OCL0:clock=750-950 --set-device OCL1:clock=945 --set-device OCL2:clock=700-930 --set-device OCL3:clock=960 --set-device OCL:memclock=300
 
 READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
 
@@ -114,18 +114,14 @@ specified. All settings can all be changed within the menu on the fly on a
 per-GPU basis.
 
 For example:
---gpu-engine 950 --gpu-memclock 825
+--set-device OCL:clock=950 --set-device OCL:memclock=825
 
 will try to set all GPU engine clocks to 950 and all memory clocks to 825,
 while:
---gpu-engine 950,945,930,960 --gpu-memclock 300
+--set-device OCL0:clock=950 --set-device OCL1:clock=945 --set-device OCL2:clock=930 --set-device OCL3:clock=960 --set-device OCL:memclock=300
 
 will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
 960 and all memory clocks to 300.
-
-You can substitute 0 to leave the engine clock of a card at its default.
-For example, to keep the 2nd GPU to its default clocks:
---gpu-engine 950,0,930,960 --gpu-memclock 300,0,300,300
 
 AUTO MODES:
 There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can be
@@ -143,7 +139,7 @@ Sets card 0 target temperature to 75, and card 1 to 85 degrees.
 AUTO FAN:
 e.g.
 --auto-fan (implies 85% upper limit)
---gpu-fan 25-85,65 --auto-fan
+--set-device OCL0:fan=25-85 --set-device OCL1:fan=65 --auto-fan
 
 Fan control in auto fan works off the theory that the minimum possible fan
 required to maintain an optimal temperature will use less power, make less
@@ -152,17 +148,16 @@ limited to 85% if the temperature is below "overheat" intentionally, as higher
 fanspeeds on GPUs do not produce signficantly more cooling, yet significantly
 shorten the lifespan of the fans. If temperature reaches the overheat value,
 fanspeed will still be increased to 100%. The overheat value is set to 85
-degrees by default and can be changed with:
+degrees by default and can be changed with the temp_overheat setting:
 
---temp-overheat
 e.g.
---temp-overheat 75,85
+--set-device OCL0:temp_overheat=75 --set-device OCL1:temp_overheat=85
 Sets card 0 overheat threshold to 75 degrees and card 1 to 85.
 
 AUTO GPU:
 e.g.
---auto-gpu --gpu-engine 750-950
---auto-gpu --gpu-engine 750-950,945,700-930,960
+--auto-gpu --set-device OCL:clock=750-950
+--auto-gpu --set-device OCL0:clock=750-950 --set-device OCL1:clock=945 --set-device OCL2:clock=700-930 --set-device OCL3:clock=960
 
 GPU control in auto gpu tries to maintain as high a clock speed as possible
 while not reaching overheat temperatures. As a lower clock speed limit, the
@@ -187,7 +182,7 @@ temperature can be changed with:
 --set-device OCL0:temp-cutoff=95 --set-device OCL1:temp-cutoff=105
 Sets card 0 cutoff temperature to 95 and card 1 to 105.
 
---gpu-memdiff -125
+--set-device OCL:memdiff=-125
 This setting will modify the memory speed whenever the GPU clock speed is
 modified by --auto-gpu. In this example, it will set the memory speed to be 125
 MHz lower than the GPU speed. This is useful for some cards like the 6970 which
@@ -306,7 +301,9 @@ To work around this you would use:
 GPU FAQ:
 
 Q: Can I change the intensity settings individually for each GPU?
-A: Yes, pass a list separated by commas such as --intensity d,4,9,9
+A: Yes, specify the devices by identifier: --set-device intensity=9 --set-device
+OCL0:intensity=d --set-device OCL1:intensity=4 (be sure you set the catch-all
+first!)
 
 Q: The CPU usage is high.
 A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
@@ -324,12 +321,12 @@ you will be able to run. You are more likely to hit your limits with BFGMiner
 and you will find you may need to overclock your GPU less aggressively. The
 software cannot be responsible and make your GPU hang directly. If you simply
 cannot get it to ever stop hanging, try decreasing the intensity, and if even
-that fails, try changing to the poclbm kernel with --kernel poclbm, though you
-will sacrifice performance. BFGMiner is designed to try and safely restart GPUs
-as much as possible, but NOT if that restart might actually crash the rest of
-the GPUs mining, or even the machine. It tries to restart them with a separate
-thread and if that separate thread dies, it gives up trying to restart any more
-GPUs.
+that fails, try changing to the poclbm kernel with --set-device
+OCL:kernel=poclbm, though you will sacrifice performance. BFGMiner is designed
+to try and safely restart GPUs as much as possible, but NOT if that restart
+might actually crash the rest of the GPUs mining, or even the machine. It tries
+to restart them with a separate thread and if that separate thread dies, it
+gives up trying to restart any more GPUs.
 
 Q: Can you change the autofan/autogpu to change speeds in a different manner?
 A: The defaults are sane and safe. I'm not interested in changing them further.
