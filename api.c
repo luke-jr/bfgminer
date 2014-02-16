@@ -535,14 +535,6 @@ struct APIGROUPS {
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
 
-#ifdef HAVE_OPENCL
-extern struct device_drv opencl_api;
-#endif
-
-#ifdef WANT_CPUMINE
-extern struct device_drv cpu_drv;
-#endif
-
 struct io_data {
 	bytes_t data;
 	SOCKETTYPE sock;
@@ -1110,14 +1102,6 @@ static int numpgas()
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef HAVE_OPENCL
-		if (devices[i]->drv == &opencl_api)
-			continue;
-#endif
-#ifdef WANT_CPUMINE
-		if (devices[i]->drv == &cpu_drv)
-			continue;
-#endif
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
 		++count;
@@ -1133,14 +1117,6 @@ static int pgadevice(int pgaid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef HAVE_OPENCL
-		if (devices[i]->drv == &opencl_api)
-			continue;
-#endif
-#ifdef WANT_CPUMINE
-		if (devices[i]->drv == &cpu_drv)
-			continue;
-#endif
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
 		++count;

@@ -505,6 +505,8 @@ API V3.1
 
 Multiple report request command with '+' e.g. summary+devs
 
+CPU and OpenCL devices are now included as "PGAs", to enable migration to a simpler interface.
+
 ---------
 
 API V2.3 (BFGMiner v3.7.0)
