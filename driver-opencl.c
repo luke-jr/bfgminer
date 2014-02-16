@@ -552,6 +552,11 @@ unsigned long intensity_to_oclthreads(double intensity, const bool is_sha256d)
 	return pow(2, intensity);
 }
 
+double oclthreads_to_xintensity(const unsigned long oclthreads, const cl_uint max_compute_units)
+{
+	return (double)oclthreads / (double)max_compute_units / 64.;
+}
+
 unsigned long xintensity_to_oclthreads(const double xintensity, const cl_uint max_compute_units)
 {
 	return xintensity * max_compute_units * 0x40;
@@ -812,7 +817,9 @@ static
 void opencl_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
-	struct thr_info *thr;
+	struct thr_info *thr = cgpu->thr[0];
+	const int thr_id = thr->id;
+	_clState * const clState = clStates[thr_id];
 	int i;
 	char checkin[40];
 	double displayed_rolling;
@@ -820,7 +827,20 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 	char logline[255];
 	strcpy(logline, ""); // In case it has no data
 	
-	tailsprintf(logline, sizeof(logline), "I:%s%g  ", (data->dynamic ? "d" : ""), oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
+	{
+		double intensity = oclthreads_to_intensity(data->oclthreads, !opt_scrypt);
+		double xintensity = oclthreads_to_xintensity(data->oclthreads, clState->max_compute_units);
+		const char *iunit = "";
+		if (xintensity - (int)xintensity < intensity - (int)intensity)
+		{
+			intensity = xintensity;
+			iunit = "x";
+		}
+		tailsprintf(logline, sizeof(logline), "I:%s%s%g ",
+		            (data->dynamic ? "d" : ""),
+		            iunit,
+		            intensity);
+	}
 #ifdef HAVE_ADL
 	if (data->has_adl) {
 		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
@@ -828,29 +848,29 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 
 		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
 			if (fanspeed != -1 || fanpercent != -1) {
-				tailsprintf(logline, sizeof(logline), "F: ");
+				tailsprintf(logline, sizeof(logline), "F:");
 				if (fanspeed > 9999)
 					fanspeed = 9999;
 				if (fanpercent != -1)
 				{
-					tailsprintf(logline, sizeof(logline), "%d%% ", fanpercent);
+					tailsprintf(logline, sizeof(logline), "%d%%", fanpercent);
 					if (fanspeed != -1)
-						tailsprintf(logline, sizeof(logline), "(%d RPM) ", fanspeed);
+						tailsprintf(logline, sizeof(logline), "(%dRPM)", fanspeed);
 				}
 				else
-					tailsprintf(logline, sizeof(logline), "%d RPM ", fanspeed);
+					tailsprintf(logline, sizeof(logline), "%dRPM", fanspeed);
 				tailsprintf(logline, sizeof(logline), " ");
 			}
 			if (engineclock != -1)
-				tailsprintf(logline, sizeof(logline), "E: %d MHz  ", engineclock);
+				tailsprintf(logline, sizeof(logline), "E:%dMHz ", engineclock);
 			if (memclock != -1)
-				tailsprintf(logline, sizeof(logline), "M: %d MHz  ", memclock);
+				tailsprintf(logline, sizeof(logline), "M:%dMHz ", memclock);
 			if (vddc != -1)
-				tailsprintf(logline, sizeof(logline), "V: %.3fV  ", vddc);
+				tailsprintf(logline, sizeof(logline), "V:%.3fV ", vddc);
 			if (activity != -1)
-				tailsprintf(logline, sizeof(logline), "A: %d%%  ", activity);
+				tailsprintf(logline, sizeof(logline), "A:%d%% ", activity);
 			if (powertune != -1)
-				tailsprintf(logline, sizeof(logline), "P: %d%%", powertune);
+				tailsprintf(logline, sizeof(logline), "P:%d%%", powertune);
 		}
 	}
 #endif
