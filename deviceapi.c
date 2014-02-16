@@ -957,10 +957,10 @@ const char *proc_set_device(struct cgpu_info * const proc, char * const optname,
 	{
 		case SDR_NOSUPP:
 		case SDR_UNKNOWN:
-			if (!strcasecmp(optname, "temp-cutoff"))
+			if (!strcasecmp(optname, "temp-cutoff") || !strcasecmp(optname, "temp_cutoff"))
 				return proc_set_device_temp_cutoff(proc, optname, newvalue, replybuf, out_success);
 			else
-			if (!strcasecmp(optname, "temp-target"))
+			if (!strcasecmp(optname, "temp-target") || !strcasecmp(optname, "temp_target"))
 				return proc_set_device_temp_target(proc, optname, newvalue, replybuf, out_success);
 		default:
 			break;
