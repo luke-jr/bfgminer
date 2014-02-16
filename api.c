@@ -2727,28 +2727,28 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 {
 	int id;
 	char *value;
-	int intensity;
 	char intensitystr[7];
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
+	struct cgpu_info * const cgpu = &gpus[id];
 	struct opencl_device_data * const data = gpus[id].device_data;
 	
-	if (!strncasecmp(value, DYNAMIC, 1)) {
-		data->dynamic = true;
-		strcpy(intensitystr, DYNAMIC);
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "intensity", value, buf, &success);
+	if (success == SDR_OK)
+	{
+		if (data->dynamic)
+			strcpy(intensitystr, DYNAMIC);
+		else
+			snprintf(intensitystr, sizeof(intensitystr), "%d", data->intensity);
 	}
-	else {
-		intensity = atoi(value);
-		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-			message(io_data, MSG_INVINT, 0, value, isjson);
-			return;
-		}
-
-		data->dynamic = false;
-		data->intensity = intensity;
-		sprintf(intensitystr, "%d", intensity);
+	else
+	{
+		message(io_data, MSG_INVINT, 0, value, isjson);
+		return;
 	}
 
 	message(io_data, MSG_GPUINT, id, intensitystr, isjson);
@@ -2759,14 +2759,16 @@ static void gpumem(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int clock;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	clock = atoi(value);
-
-	if (set_memoryclock(id, clock))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "memclock", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUMERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUMEM, id, value, isjson);
@@ -2780,14 +2782,16 @@ static void gpuengine(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int clock;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	clock = atoi(value);
-
-	if (set_engineclock(id, clock))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "clock", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUEERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUENG, id, value, isjson);
@@ -2801,14 +2805,16 @@ static void gpufan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int fan;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	fan = atoi(value);
-
-	if (set_fanspeed(id, fan))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "fan", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUFERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUFAN, id, value, isjson);
@@ -2822,14 +2828,16 @@ static void gpuvddc(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	float vddc;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	vddc = atof(value);
-
-	if (set_vddc(id, vddc))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "voltage", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUVERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUVDDC, id, value, isjson);
