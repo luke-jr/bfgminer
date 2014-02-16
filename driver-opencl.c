@@ -1518,6 +1518,9 @@ static struct api_data*
 get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 {
 	struct opencl_device_data * const data = gpu->device_data;
+	struct thr_info * const thr = gpu->thr[0];
+	const int thr_id = thr->id;
+	_clState * const clState = clStates[thr_id];
 	struct api_data*root = NULL;
 
 	float gt, gv;
@@ -1535,11 +1538,17 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 	root = api_add_int(root, "Powertune", &pt, true);
 
 	char intensity[20];
+	uint32_t oclthreads = data->oclthreads;
+	double intensityf = oclthreads_to_intensity(oclthreads, !opt_scrypt);
+	double xintensity = oclthreads_to_xintensity(oclthreads, clState->max_compute_units);
 	if (data->dynamic)
 		strcpy(intensity, "D");
 	else
-		sprintf(intensity, "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
+		sprintf(intensity, "%g", intensityf);
 	root = api_add_string(root, "Intensity", intensity, true);
+	root = api_add_uint32(root, "OCLThreads", &oclthreads, true);
+	root = api_add_double(root, "CIntensity", &intensityf, true);
+	root = api_add_double(root, "XIntensity", &xintensity, true);
 
 	return root;
 }
