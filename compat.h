@@ -185,6 +185,10 @@ typedef long suseconds_t;
 
 #endif /* WIN32 */
 
+#ifndef HAVE_LOG2
+#	define log2(n)  (log(n) / log(2))
+#endif
+
 #ifndef HAVE_PTHREAD_CANCEL
 
 // Bionic (Android) is intentionally missing pthread_cancel, so it is implemented using pthread_kill (handled in util.c)

@@ -2679,7 +2679,7 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 		if (data->dynamic)
 			strcpy(intensitystr, DYNAMIC);
 		else
-			snprintf(intensitystr, sizeof(intensitystr), "%d", data->intensity);
+			snprintf(intensitystr, sizeof(intensitystr), "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
 	}
 	else
 	{

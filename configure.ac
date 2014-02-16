@@ -1547,6 +1547,12 @@ AC_TRY_COMPILE([
 ])
 
 
+save_LIBS="$LIBS"
+LIBS="$LIBS $MATH_LIBS"
+AC_CHECK_FUNCS([log2])
+LIBS="$save_LIBS"
+
+
 if test "x$prefix" = xNONE; then
 	prefix=/usr/local
 fi

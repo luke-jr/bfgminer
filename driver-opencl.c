@@ -22,6 +22,7 @@
 #include <windows.h>
 #endif
 
+#include <math.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -533,6 +534,22 @@ _SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
 #ifdef HAVE_OPENCL
+// SHA256d "intensity" has an artificial offset of -15
+double oclthreads_to_intensity(const unsigned long oclthreads, const bool is_sha256d)
+{
+	double intensity = log2(oclthreads);
+	if (is_sha256d)
+		intensity -= 15.;
+	return intensity;
+}
+
+unsigned long intensity_to_oclthreads(double intensity, const bool is_sha256d)
+{
+	if (is_sha256d)
+		intensity += 15;
+	return pow(2, intensity);
+}
+
 static
 bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
 {
@@ -541,11 +558,11 @@ bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
 		data->dynamic = true;
 	else
 	{
-		const int v = atoi(_val);
+		const double v = atof(_val);
 		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
 			return false;
 		data->dynamic = false;
-		data->intensity = v;
+		data->oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
 	}
 	pause_dynamic_threads(cgpu->device_id);
 	return true;
@@ -575,7 +592,7 @@ void write_config_opencl(FILE * const fcfg)
 			if (data->dynamic)
 				fputc('d', fcfg);
 			else
-				fprintf(fcfg, "%d", data->intensity);
+				fprintf(fcfg, "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
 		}
 		fputs("\",\n\"vectors\" : \"", fcfg);
 		for(i = 0; i < nDevs; i++)
@@ -772,7 +789,7 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 	char logline[255];
 	strcpy(logline, ""); // In case it has no data
 	
-	tailsprintf(logline, sizeof(logline), "I:%s%d  ", (data->dynamic ? "d" : ""), data->intensity);
+	tailsprintf(logline, sizeof(logline), "I:%s%g  ", (data->dynamic ? "d" : ""), oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
 #ifdef HAVE_ADL
 	if (data->has_adl) {
 		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
@@ -863,7 +880,6 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	{
 		case 'i': case 'I':
 		{
-			int intensity;
 			char *intvar;
 
 			if (opt_scrypt) {
@@ -883,13 +899,9 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 				free(intvar);
 				return "Dynamic mode enabled\n";
 			}
-			intensity = atoi(intvar);
-			free(intvar);
-			if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY)
+			if (!_set_intensity(cgpu, intvar))
 				return "Invalid intensity (out of range)\n";
-			data->dynamic = false;
-			data->intensity = intensity;
-			pause_dynamic_threads(cgpu->device_id);
+			free(intvar);
 			return "Intensity changed\n";
 		}
 		case 'r': case 'R':
@@ -1193,25 +1205,6 @@ cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, _
 	return status;
 }
 #endif
-
-static void set_threads_hashes(unsigned int vectors,int64_t *hashes, size_t *globalThreads,
-			       unsigned int minthreads, __maybe_unused int *intensity)
-{
-	unsigned int threads = 0;
-
-	while (threads < minthreads) {
-		threads = 1 << ((opt_scrypt ? 0 : 15) + *intensity);
-		if (threads < minthreads) {
-			if (likely(*intensity < MAX_INTENSITY))
-				(*intensity)++;
-			else
-				threads = minthreads;
-		}
-	}
-
-	*globalThreads = threads;
-	*hashes = threads * vectors;
-}
 #endif /* HAVE_OPENCL */
 
 
@@ -1495,7 +1488,7 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 	if (data->dynamic)
 		strcpy(intensity, "D");
 	else
-		sprintf(intensity, "%d", data->intensity);
+		sprintf(intensity, "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
 	root = api_add_string(root, "Intensity", intensity, true);
 
 	return root;
@@ -1690,17 +1683,26 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		cgtime(&tv_gpuend);
 		gpu_us = us_tdiff(&tv_gpuend, &data->tv_gpustart) / data->intervals;
 		if (gpu_us > dynamic_us) {
-			if (data->intensity > MIN_INTENSITY)
-				--data->intensity;
+			const unsigned long min_oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
+			data->oclthreads /= 2;
+			if (data->oclthreads < min_oclthreads)
+				data->oclthreads = min_oclthreads;
 		} else if (gpu_us < dynamic_us / 2) {
-			if (data->intensity < MAX_INTENSITY)
-				++data->intensity;
+			const unsigned long max_oclthreads = intensity_to_oclthreads(MAX_INTENSITY, !opt_scrypt);
+			data->oclthreads *= 2;
+			if (data->oclthreads > max_oclthreads)
+				data->oclthreads = max_oclthreads;
 		}
 		memcpy(&(data->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
 		data->intervals = 0;
 	}
 
-	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &data->intensity);
+	if (data->oclthreads < localThreads[0])
+		data->oclthreads = localThreads[0];
+	globalThreads[0] = data->oclthreads;
+	hashes = globalThreads[0];
+	hashes *= clState->vwidth;
+	
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
