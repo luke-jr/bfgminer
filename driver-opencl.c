@@ -22,6 +22,7 @@
 #include <windows.h>
 #endif
 
+#include <ctype.h>
 #include <math.h>
 #include <string.h>
 #include <stdbool.h>
@@ -271,6 +272,7 @@ extern char *opt_kernel_path;
 extern int gpur_thr_id;
 extern bool opt_noadl;
 extern bool have_opencl;
+static _clState *clStates[MAX_GPUDEVICES];
 
 
 
@@ -550,18 +552,47 @@ unsigned long intensity_to_oclthreads(double intensity, const bool is_sha256d)
 	return pow(2, intensity);
 }
 
+unsigned long xintensity_to_oclthreads(const double xintensity, const cl_uint max_compute_units)
+{
+	return xintensity * max_compute_units * 0x40;
+}
+
 static
-bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
+bool _set_intensity(struct cgpu_info * const cgpu, const char *_val)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
+	
+	data->dynamic = false;
+	data->_init_xintensity = 0;
+	
 	if (!strncasecmp(_val, "d", 1))
+	{
 		data->dynamic = true;
+		++_val;
+	}
+	
+	if (!strncasecmp(_val, "x", 1))
+	{
+		const double v = atof(&_val[1]);
+		if (v < 1 || v > 9999)
+			return false;
+		
+		if (cgpu->thr)
+		{
+			struct thr_info * const thr = cgpu->thr[0];
+			const int thr_id = thr->id;
+			_clState * const clState = clStates[thr_id];
+			
+			data->oclthreads = xintensity_to_oclthreads(v, clState->max_compute_units);
+		}
+		data->_init_xintensity = v;
+	}
 	else
+	if (isdigit(_val[0]))
 	{
 		const double v = atof(_val);
 		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
 			return false;
-		data->dynamic = false;
 		data->oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
 	}
 	pause_dynamic_threads(cgpu->device_id);
@@ -929,7 +960,6 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 
 
 #ifdef HAVE_OPENCL
-static _clState *clStates[MAX_GPUDEVICES];
 
 #define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
@@ -1802,7 +1832,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = 
 };
 
 static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
-	{"intensity", opencl_init_intensity, "Intensity of GPU scanning (d or -10 -> 31)"},
+	{"intensity", opencl_init_intensity, "Intensity of GPU scanning (d, -10 -> 31, or x1 to x9999)"},
 	{"kernel", opencl_cannot_set, "Mining kernel code to use"},
 	{"threads", opencl_cannot_set, "Number of threads"},
 	{"vector", opencl_cannot_set, ""},

@@ -552,6 +552,15 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	applog(LOG_DEBUG, "Max work group size reported %"PRId64, (int64_t)clState->max_work_size);
 
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(clState->max_compute_units), (void *)&clState->max_compute_units, NULL);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_COMPUTE_UNITS", status);
+		return NULL;
+	}
+	if (data->_init_xintensity)
+		data->oclthreads = xintensity_to_oclthreads(data->_init_xintensity, clState->max_compute_units);
+	applog(LOG_DEBUG, "Max compute units reported %u", (unsigned)clState->max_compute_units);
+	
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_MEM_ALLOC_SIZE", status);
