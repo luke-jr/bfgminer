@@ -278,30 +278,6 @@ The list of requests - a (*) means it requires privileged access - and replies:
                none           There is no reply section just the STATUS section
                               stating the results of the restart request
 
- gpuintensity|N,I (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N intensity
-                              to I
-
- gpumem|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N memoryclock
-                              to V MHz
-
- gpuengine|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N clock
-                              to V MHz
-
- gpufan|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N fan speed
-                              to V%
-
- gpuvddc|N,V (*)
-               none           There is no reply section just the STATUS section
-                              stating the results of setting GPU N vddc to V
-
  save|filename (*)
                none           There is no reply section just the STATUS section
                               stating success or failure saving the BFGMiner
@@ -506,6 +482,13 @@ API V3.1
 Multiple report request command with '+' e.g. summary+devs
 
 CPU and OpenCL devices are now included as "PGAs", to enable migration to a simpler interface.
+
+Deprecated API commands:
+ 'gpuintensity'
+ 'gpumem'
+ 'gpuengine'
+ 'gpufan'
+ 'gpuvddc'
 
 ---------
 
