@@ -744,7 +744,11 @@ AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 if test "x$need_lowl_vcom" != "xno"; then
 	# Lowlevel VCOM doesn't need libusb, but it can take advantage of it to reattach drivers
-	need_lowl_usb=yes
+	if test "x$libusb" != xno; then
+		need_lowl_usb=yes
+	elif test "x$libusb$want_libusb" = xnoyes; then
+		AC_MSG_ERROR([Could not find libusb, which you specifically requested])
+	fi
 fi
 
 if test "x$need_lowl_usb" = "xno"; then
