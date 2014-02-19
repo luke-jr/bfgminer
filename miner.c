@@ -1628,16 +1628,26 @@ static char *set_sharelog(char *arg)
 	return _bfgopt_set_file(arg, &sharelog_file, "a", "share log");
 }
 
+static
+void _add_set_device_option(const char * const func, const char * const buf)
+{
+	applog(LOG_DEBUG, "%s: Using --set-device %s", func, buf);
+	string_elist_add(buf, &opt_set_device_list);
+}
+
+#define add_set_device_option(...)  do{  \
+	char _tmp1718[0x100];  \
+	snprintf(_tmp1718, sizeof(_tmp1718), __VA_ARGS__);  \
+	_add_set_device_option(__func__, _tmp1718);  \
+}while(0)
+
 char *set_temp_cutoff(char *arg)
 {
 	if (strchr(arg, ','))
 		return "temp-cutoff no longer supports comma-delimited syntax, use --set-device for better control";
 	applog(LOG_WARNING, "temp-cutoff is deprecated! Use --set-device for better control");
 	
-	char buf[0x100];
-	snprintf(buf, sizeof(buf), "all:temp-cutoff=%s", arg);
-	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-	string_elist_add(buf, &opt_set_device_list);
+	add_set_device_option("all:temp-cutoff=%s", arg);
 	
 	return NULL;
 }
@@ -1648,10 +1658,7 @@ char *set_temp_target(char *arg)
 		return "temp-target no longer supports comma-delimited syntax, use --set-device for better control";
 	applog(LOG_WARNING, "temp-target is deprecated! Use --set-device for better control");
 	
-	char buf[0x100];
-	snprintf(buf, sizeof(buf), "all:temp-target=%s", arg);
-	applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-	string_elist_add(buf, &opt_set_device_list);
+	add_set_device_option("all:temp-target=%s", arg);
 	
 	return NULL;
 }
@@ -1697,7 +1704,7 @@ static char *set_icarus_options(const char *arg)
 	argdup = opts;
 	const struct bfg_set_device_definition *sdf = icarus_set_device_funcs;
 	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
-	char buf[0x100], *saveptr, *opt;
+	char *saveptr, *opt;
 	for (int i = 0; i < 4; ++i, ++sdf)
 	{
 		opt = strtok_r(opts, ":", &saveptr);
@@ -1710,11 +1717,7 @@ static char *set_icarus_options(const char *arg)
 			continue;
 		
 		for (int j = 0; j < 4; ++j)
-		{
-			snprintf(buf, sizeof(buf), "%s:%s=%s", drivers[j], sdf->optname, opt);
-			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-			string_elist_add(buf, &opt_set_device_list);
-		}
+			add_set_device_option("%s:%s=%s", drivers[j], sdf->optname, opt);
 	}
 	free(argdup);
 	return NULL;
@@ -1727,13 +1730,8 @@ static char *set_icarus_timing(const char *arg)
 	applog(LOG_WARNING, "icarus-timing is deprecated! See README.FPGA for better control");
 	
 	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
-	char buf[0x100];
 	for (int j = 0; j < 4; ++j)
-	{
-		snprintf(buf, sizeof(buf), "%s:timing=%s", drivers[j], arg);
-		applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-		string_elist_add(buf, &opt_set_device_list);
-	}
+		add_set_device_option("%s:timing=%s", drivers[j], arg);
 	return NULL;
 }
 #endif
@@ -1750,7 +1748,7 @@ static char *set_avalon_options(const char *arg)
 	char *opts = strdup(arg), *argdup;
 	argdup = opts;
 	const struct bfg_set_device_definition *sdf = avalon_set_device_funcs;
-	char buf[0x100], *saveptr, *opt;
+	char *saveptr, *opt;
 	for (int i = 0; i < 5; ++i, ++sdf)
 	{
 		opt = strtok_r(opts, ":", &saveptr);
@@ -1762,9 +1760,7 @@ static char *set_avalon_options(const char *arg)
 		if (!opt[0])
 			continue;
 		
-		snprintf(buf, sizeof(buf), "avalon:%s=%s", sdf->optname, opt);
-		applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-		string_elist_add(buf, &opt_set_device_list);
+		add_set_device_option("avalon:%s=%s", sdf->optname, opt);
 	}
 	free(argdup);
 	return NULL;
@@ -1774,7 +1770,6 @@ static char *set_avalon_options(const char *arg)
 #ifdef USE_KLONDIKE
 static char *set_klondike_options(const char *arg)
 {
-	char buf[0x100];
 	int hashclock;
 	double temptarget;
 	switch (sscanf(arg, "%d:%lf", &hashclock, &temptarget))
@@ -1782,14 +1777,10 @@ static char *set_klondike_options(const char *arg)
 		default:
 			return "Unrecognised --klondike-options";
 		case 2:
-			snprintf(buf, sizeof(buf), "klondike:temp-target=%lf", temptarget);
-			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-			string_elist_add(buf, &opt_set_device_list);
+			add_set_device_option("klondike:temp-target=%lf", temptarget);
 			// fallthru
 		case 1:
-			snprintf(buf, sizeof(buf), "klondike:clock=%d", hashclock);
-			applog(LOG_DEBUG, "%s: Using --set-device %s", __func__, buf);
-			string_elist_add(buf, &opt_set_device_list);
+			add_set_device_option("klondike:clock=%d", hashclock);
 	}
 	applog(LOG_WARNING, "klondike-options is deprecated! Use --set-device for better control");
 	
