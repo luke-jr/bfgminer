@@ -64,7 +64,7 @@ bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
 # common sources
 bfgminer_SOURCES := miner.c
 
-bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
+bfgminer_SOURCES += miner.h compat.h  \
 	deviceapi.c deviceapi.h \
 		   util.c util.h logging.h		\
 		   sha2.c sha2.h api.c
@@ -143,6 +143,7 @@ bfgminer_SOURCES	+= \
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
+bfgminer_SOURCES += bench_block.h
 
 if HAVE_SSE2
 bfgminer_LDADD  += libsse2cpuminer.a
