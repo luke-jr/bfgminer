@@ -8924,6 +8924,12 @@ static
 void _submit_work_async(struct work *work)
 {
 	applog(LOG_DEBUG, "Pushing submit work to work thread");
+	
+	if (opt_benchmark)
+	{
+		free_work(work);
+		return;
+	}
 
 	mutex_lock(&submitting_lock);
 	++total_submitting;
@@ -11567,6 +11573,7 @@ begin_bench:
 	cgtime(&total_tv_start);
 	cgtime(&total_tv_end);
 
+	if (!opt_benchmark)
 	{
 		pthread_t submit_thread;
 		if (unlikely(pthread_create(&submit_thread, NULL, submit_work_thread, NULL)))
