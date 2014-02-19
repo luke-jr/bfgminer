@@ -354,6 +354,10 @@ bfgminer_SOURCES += lowl-hid.c lowl-hid.h
 bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 
+if NEED_BFG_LOWL_MSWIN
+bfgminer_SOURCES += lowl-mswin.c lowl-mswin.h
+endif
+
 if NEED_BFG_LOWL_PCI
 bfgminer_SOURCES += lowl-pci.c lowl-pci.h
 
