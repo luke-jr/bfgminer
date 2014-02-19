@@ -2701,7 +2701,8 @@ void clean_work(struct work *work)
 	free(work->job_id);
 	bytes_free(&work->nonce2);
 	free(work->nonce1);
-	free(work->device_data);
+	if (work->device_data_free_func)
+		work->device_data_free_func(work);
 
 	if (work->tmpl) {
 		struct pool *pool = work->pool;
@@ -5176,6 +5177,9 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 		ntime += noffset;
 		*work_ntime = htobe32(ntime);
 	}
+	
+	if (work->device_data_dup_func)
+		work->device_data = work->device_data_dup_func(work);
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations

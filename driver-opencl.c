@@ -854,11 +854,32 @@ static _clState *clStates[MAX_GPUDEVICES];
 #define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
 
 static
+void *_opencl_work_data_dup(struct work * const work)
+{
+	struct opencl_work_data *p = malloc(sizeof(*p));
+	memcpy(p, work->device_data, sizeof(*p));
+#ifdef USE_SCRYPT
+	p->work = work;
+#endif
+	return p;
+}
+
+static
+void _opencl_work_data_free(struct work * const work)
+{
+	free(work->device_data);
+}
+
+static
 struct opencl_work_data *_opencl_work_data(struct work * const work)
 {
-	if (work->device_data)
-		return work->device_data;
-	return (work->device_data = calloc(1, sizeof(struct opencl_work_data)));
+	if (!work->device_data)
+	{
+		work->device_data = calloc(1, sizeof(struct opencl_work_data));
+		work->device_data_dup_func = _opencl_work_data_dup;
+		work->device_data_free_func = _opencl_work_data_free;
+	}
+	return work->device_data;
 }
 
 static

@@ -1306,8 +1306,12 @@ struct work {
 	unsigned char	work_restart_id;
 	int		id;
 	int		device_id;
-	void *device_data;
 	UT_hash_handle hh;
+	
+	// Please don't use this if it's at all possible, I'd like to get rid of it eventually.
+	void *device_data;
+	void *(*device_data_dup_func)(struct work *);
+	void (*device_data_free_func)(struct work *);
 	
 	double		work_difficulty;
 	float		nonce_diff;
