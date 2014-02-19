@@ -94,7 +94,7 @@ ssize_t hashfast_write(const int fd, void * const buf, size_t bufsz)
 		else
 		if (rv < bufsz)
 			applog(LOG_DEBUG, "%s fd=%d: SEND %.*s(%s)",
-			       "hashfast", fd, rv * 2, hex, &hex[rv * 2]);
+			       "hashfast", fd, (int)(rv * 2), hex, &hex[rv * 2]);
 		else
 		if (rv > bufsz)
 			applog(LOG_DEBUG, "%s fd=%d: SEND %s => +%d",
