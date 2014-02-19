@@ -71,7 +71,6 @@
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
-#include "bench_block.h"
 #include "scrypt.h"
 
 #ifdef USE_AVALON
@@ -4523,18 +4522,21 @@ static void calc_diff(struct work *work, int known)
 
 static void get_benchmark_work(struct work *work)
 {
-	// Use a random work block pulled from a pool
-	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
-
-	size_t bench_size = sizeof(*work);
-	size_t work_size = sizeof(bench_block);
-	size_t min_size = (work_size < bench_size ? work_size : bench_size);
-	memset(work, 0, sizeof(*work));
-	memcpy(work, &bench_block, min_size);
+	static uint32_t blkhdr[20];
+	for (int i = 19; i >= 0; --i)
+		if (++blkhdr[i])
+			break;
+	
+	memcpy(&work->data[ 0], blkhdr, 80);
+	memcpy(&work->data[80], workpadding_bin, 48);
+	calc_midstate(work);
+	set_target(work->target, 1.0);
+	
 	work->mandatory = true;
 	work->pool = pools[0];
 	cgtime(&work->tv_getwork);
 	copy_time(&work->tv_getwork_reply, &work->tv_getwork);
+	copy_time(&work->tv_staged, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
 }
@@ -11228,8 +11230,6 @@ int main(int argc, char *argv[])
 	if (opt_benchmark) {
 		struct pool *pool;
 
-		if (opt_scrypt)
-			quit(1, "Cannot use benchmark mode with scrypt");
 		want_longpoll = false;
 		pool = add_pool();
 		pool->rpc_url = malloc(255);
