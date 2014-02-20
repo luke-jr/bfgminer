@@ -1469,7 +1469,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 	if (!cgpu->name)
-		cgpu->name = strdup(name);
+		cgpu->name = trimmed_strdup(name);
 	if (!cgpu->kname)
 	{
 		switch (clStates[i]->chosen_kernel) {
