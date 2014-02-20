@@ -207,7 +207,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		{
 			ev.data.fd = thr->work_restart_notifier[0];
 			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_notifier[0], &ev))
-				applog(LOG_ERR, "Icarus: Error adding work restart fd to epoll");
+				applog(LOG_ERR, "%s: Error adding work restart fd to epoll", __func__);
 			else
 			{
 				epoll_timeout *= read_count;
@@ -216,7 +216,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		}
 	}
 	else
-		applog(LOG_ERR, "Icarus: Error creating epoll");
+		applog(LOG_ERR, "%s: Error creating epoll", __func__);
 	}
 #endif
 
@@ -260,7 +260,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		if (thr && thr->work_restart) {
 			if (epollfd != -1)
 				close(epollfd);
-			applog(LOG_DEBUG, "Icarus Read: Interrupted by work restart");
+			applog(LOG_DEBUG, "%s: Interrupted by work restart", __func__);
 			return ICA_GETS_RESTART;
 		}
 
@@ -268,7 +268,8 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		if (rc >= read_count) {
 			if (epollfd != -1)
 				close(epollfd);
-			applog(LOG_DEBUG, "Icarus Read: No data in %.2f seconds",
+			applog(LOG_DEBUG, "%s: No data in %.2f seconds",
+			       __func__,
 			       (float)rc * epoll_timeout / 1000.);
 			return ICA_GETS_TIMEOUT;
 		}
@@ -605,11 +606,11 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	int work_division = info->work_division;
 	int fpga_count = info->fpga_count;
 
-	applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
+	applog(LOG_DEBUG, "%s: Attempting to open %s", api->dname, devpath);
 
 	fd = icarus_open2(devpath, baud, true);
 	if (unlikely(fd == -1)) {
-		applog(LOG_DEBUG, "Icarus Detect: Failed to open %s", devpath);
+		applog(LOG_DEBUG, "%s: Failed to open %s", api->dname, devpath);
 		return false;
 	}
 	
@@ -636,8 +637,9 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
 	if (strncmp(nonce_hex, golden_nonce, 8)) {
 		applog(LOG_DEBUG,
-			"Icarus Detect: "
+			"%s: "
 			"Test failed at %s: get %s, should: %s",
+			api->dname,
 			devpath, nonce_hex, golden_nonce);
 		return false;
 	}
@@ -645,15 +647,17 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
 	{
 		applog(LOG_DEBUG,
-			   "Icarus Detect: "
+			   "%s: "
 			   "Test failed at %s: expected %d bytes, got %d",
+			   api->dname,
 			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
 		return false;
 	}
 	
 	applog(LOG_DEBUG,
-		"Icarus Detect: "
+		"%s: "
 		"Test succeeded at %s: got %s",
+	       api->dname,
 			devpath, nonce_hex);
 
 	if (serial_claim_v(devpath, api))
@@ -722,14 +726,15 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	int fd = icarus_open2(icarus->device_path, info->baud, true);
 	if (unlikely(-1 == fd)) {
-		applog(LOG_ERR, "Failed to open Icarus on %s",
+		applog(LOG_ERR, "%s: Failed to open %s",
+		       icarus->dev_repr,
 		       icarus->device_path);
 		return false;
 	}
 
 	icarus->device_fd = fd;
 
-	applog(LOG_INFO, "Opened Icarus on %s", icarus->device_path);
+	applog(LOG_INFO, "%s: Opened %s", icarus->dev_repr, icarus->device_path);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
