@@ -264,6 +264,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_PGALRDIS 62
 #define MSG_PGAENA 63
 #define MSG_PGADIS 64
+#define MSG_PGAREI 0x101
 #define MSG_PGAUNW 65
 #endif
 
@@ -534,14 +535,6 @@ struct APIGROUPS {
 
 static struct IP4ACCESS *ipaccess = NULL;
 static int ips = 0;
-
-#ifdef HAVE_OPENCL
-extern struct device_drv opencl_api;
-#endif
-
-#ifdef WANT_CPUMINE
-extern struct device_drv cpu_drv;
-#endif
 
 struct io_data {
 	bytes_t data;
@@ -1110,14 +1103,6 @@ static int numpgas()
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef HAVE_OPENCL
-		if (devices[i]->drv == &opencl_api)
-			continue;
-#endif
-#ifdef WANT_CPUMINE
-		if (devices[i]->drv == &cpu_drv)
-			continue;
-#endif
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
 		++count;
@@ -1133,14 +1118,6 @@ static int pgadevice(int pgaid)
 
 	rd_lock(&devices_lock);
 	for (i = 0; i < total_devices; i++) {
-#ifdef HAVE_OPENCL
-		if (devices[i]->drv == &opencl_api)
-			continue;
-#endif
-#ifdef WANT_CPUMINE
-		if (devices[i]->drv == &cpu_drv)
-			continue;
-#endif
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
 		++count;
@@ -1330,9 +1307,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	char buf[TMPBUFSIZ];
 	bool io_open;
 	struct driver_registration *reg, *regtmp;
-	int gpucount = 0;
 	int pgacount = 0;
-	int cpucount = 0;
 	char *adlinuse = (char *)NO;
 #ifdef HAVE_ADL
 	const char *adl = YES;
@@ -1349,24 +1324,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	const char *adl = NO;
 #endif
 
-#ifdef HAVE_OPENCL
-	gpucount = nDevs;
-#endif
-
 #ifdef HAVE_AN_FPGA
 	pgacount = numpgas();
-#endif
-
-#ifdef WANT_CPUMINE
-	cpucount = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
 	message(io_data, MSG_MINECONFIG, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECONFIG : _MINECONFIG COMSTR);
 
-	root = api_add_int(root, "GPU Count", &gpucount, false);
 	root = api_add_int(root, "PGA Count", &pgacount, false);
-	root = api_add_int(root, "CPU Count", &cpucount, false);
 	root = api_add_int(root, "Pool Count", &total_pools, false);
 	root = api_add_const(root, "ADL", (char *)adl, false);
 	root = api_add_string(root, "ADL in use", adlinuse, false);
@@ -1729,28 +1694,44 @@ static void devscan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 }
 
 #ifdef HAVE_AN_FPGA
+static
+struct cgpu_info *get_pga_cgpu(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group, int *id_p, int *dev_p)
+{
+	int numpga = numpgas();
+	
+	if (numpga == 0) {
+		message(io_data, MSG_PGANON, 0, NULL, isjson);
+		return NULL;
+	}
+	
+	if (param == NULL || *param == '\0') {
+		message(io_data, MSG_MISID, 0, NULL, isjson);
+		return NULL;
+	}
+	
+	*id_p = atoi(param);
+	if (*id_p < 0 || *id_p >= numpga) {
+		message(io_data, MSG_INVPGA, *id_p, NULL, isjson);
+		return NULL;
+	}
+	
+	*dev_p = pgadevice(*id_p);
+	if (*dev_p < 0) { // Should never happen
+		message(io_data, MSG_INVPGA, *id_p, NULL, isjson);
+		return NULL;
+	}
+	
+	return get_devices(*dev_p);
+}
+
 static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	if (!get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev))
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
+	
 	message(io_data, MSG_PGADEV, id, NULL, isjson);
 
 	if (isjson)
@@ -1765,34 +1746,13 @@ static void pgadev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu, *proc;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 	bool already;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
-
+	
 	applog(LOG_DEBUG, "API: request to pgaenable %s id %d device %d %s",
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
@@ -1826,34 +1786,13 @@ static void pgaenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu, *proc;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 	bool already;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
-
+	
 	applog(LOG_DEBUG, "API: request to pgadisable %s id %d device %d %s",
 			per_proc ? "proc" : "dev", id, dev, cgpu->proc_repr_ns);
 
@@ -1877,36 +1816,33 @@ static void pgadisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	message(io_data, MSG_PGADIS, id, NULL, isjson);
 }
 
+static void pgarestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
+{
+	struct cgpu_info *cgpu;
+	int id, dev;
+	
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
+		return;
+	
+	applog(LOG_DEBUG, "API: request to pgarestart dev id %d device %d %s",
+			id, dev, cgpu->dev_repr);
+	
+	reinit_device(cgpu);
+	
+	message(io_data, MSG_PGAREI, id, NULL, isjson);
+}
+
 static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	struct cgpu_info *cgpu;
 	struct device_drv *drv;
-	int numpga = numpgas();
-	int id;
+	int id, dev;
 
-	if (numpga == 0) {
-		message(io_data, MSG_PGANON, 0, NULL, isjson);
+	cgpu = get_pga_cgpu(io_data, c, param, isjson, group, &id, &dev);
+	if (!cgpu)
 		return;
-	}
-
-	if (param == NULL || *param == '\0') {
-		message(io_data, MSG_MISID, 0, NULL, isjson);
-		return;
-	}
-
-	id = atoi(param);
-	if (id < 0 || id >= numpga) {
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	int dev = pgadevice(id);
-	if (dev < 0) { // Should never happen
-		message(io_data, MSG_INVPGA, id, NULL, isjson);
-		return;
-	}
-
-	cgpu = get_devices(dev);
+	
 	drv = cgpu->drv;
 
 	if (drv->identify_device && drv->identify_device(cgpu))
@@ -2727,28 +2663,28 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 {
 	int id;
 	char *value;
-	int intensity;
 	char intensitystr[7];
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
+	struct cgpu_info * const cgpu = &gpus[id];
 	struct opencl_device_data * const data = gpus[id].device_data;
 	
-	if (!strncasecmp(value, DYNAMIC, 1)) {
-		data->dynamic = true;
-		strcpy(intensitystr, DYNAMIC);
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "intensity", value, buf, &success);
+	if (success == SDR_OK)
+	{
+		if (data->dynamic)
+			strcpy(intensitystr, DYNAMIC);
+		else
+			snprintf(intensitystr, sizeof(intensitystr), "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
 	}
-	else {
-		intensity = atoi(value);
-		if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY) {
-			message(io_data, MSG_INVINT, 0, value, isjson);
-			return;
-		}
-
-		data->dynamic = false;
-		data->intensity = intensity;
-		sprintf(intensitystr, "%d", intensity);
+	else
+	{
+		message(io_data, MSG_INVINT, 0, value, isjson);
+		return;
 	}
 
 	message(io_data, MSG_GPUINT, id, intensitystr, isjson);
@@ -2759,14 +2695,16 @@ static void gpumem(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int clock;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	clock = atoi(value);
-
-	if (set_memoryclock(id, clock))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "memclock", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUMERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUMEM, id, value, isjson);
@@ -2780,14 +2718,16 @@ static void gpuengine(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int clock;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	clock = atoi(value);
-
-	if (set_engineclock(id, clock))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "clock", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUEERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUENG, id, value, isjson);
@@ -2801,14 +2741,16 @@ static void gpufan(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	int fan;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	fan = atoi(value);
-
-	if (set_fanspeed(id, fan))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "fan", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUFERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUFAN, id, value, isjson);
@@ -2822,14 +2764,16 @@ static void gpuvddc(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 #ifdef HAVE_ADL
 	int id;
 	char *value;
-	float vddc;
+	char buf[TMPBUFSIZ];
 
 	if (!splitgpuvalue(io_data, param, &id, &value, isjson))
 		return;
 
-	vddc = atof(value);
-
-	if (set_vddc(id, vddc))
+	struct cgpu_info * const cgpu = &gpus[id];
+	
+	enum bfg_set_device_replytype success;
+	proc_set_device(cgpu, "voltage", value, buf, &success);
+	if (success != SDR_OK)
 		message(io_data, MSG_GPUVERR, id, value, isjson);
 	else
 		message(io_data, MSG_GPUVDDC, id, value, isjson);
@@ -3446,6 +3390,7 @@ struct CMDS {
 	{ "pga",		pgadev,		false,	false },
 	{ "pgaenable",		pgaenable,	true,	false },
 	{ "pgadisable",		pgadisable,	true,	false },
+	{ "pgarestart",		pgarestart,	true,	false },
 	{ "pgaidentify",	pgaidentify,	true,	false },
 	{ "proc",		pgadev,		false,	false },
 	{ "procenable",		pgaenable,	true,	false },

@@ -40,7 +40,7 @@ lines are in the .bat before starting BFGMiner:
 setx GPU_MAX_ALLOC_PERCENT 100
 setx GPU_USE_SYNC_OBJECTS 1
 
---intensity XX
+intensity=XX
 
 Just like in Bitcoin mining, scrypt mining takes an intensity, however the
 scale goes from 0 to 31. 
@@ -54,7 +54,7 @@ to a running desktop and performance WILL be poor. The lower limit to intensity
 with scrypt is usually 8 and BFGMiner will prevent it going too low.
 SUMMARY: Setting this for reasonable hashrates is mandatory.
 
---shaders XXX
+shaders=XXX
 
 is a new option where you tell BFGMiner how many shaders your GPU has. This
 helps BFGMiner try to choose some meaningful baseline parameters. Use this table
@@ -99,41 +99,40 @@ all you will need to set.
 
 
 Optional parameters to tune:
---gpu-threads, --thread-concurrency, --lookup-gap
+threads, thread-concurrency, lookup-gap
 
---thread-concurrency:
+thread-concurrency:
 This tunes the optimal size of work that scrypt can do. It is internally tuned
 by BFGMiner to be the highest reasonable multiple of shaders that it can
 allocate on your GPU. Ideally it should be a multiple of your shader count.
 vliw5 architecture (R5XXX) would be best at 5x shaders, while VLIW4 (R6xxx and
 R7xxx) are best at 4x. Setting thread concurrency overrides anything you put
-into --shaders and is ultimately a BETTER way to tune performance.
+into the shaders config and is ultimately a BETTER way to tune performance.
 SUMMARY: Spend lots of time finding the highest value that your device likes
 and increases hashrate.
 
---gpu-threads:
+threads:
 Once you have found the optimal shaders and intensity, you can start increasing
-the --gpu-threads value till BFGMiner fails to start. This is really only of
-value if you want to run low intensities as you will be unable to run more than
-1.
+the threads value till BFGMiner fails to start. This is really only of value if
+you want to run low intensities as you will be unable to run more than 1.
 SUMMARY: Don't touch this.
 
---lookup-gap
+lookup-gap:
 This tunes a compromise between ram usage and performance. Performance peaks
 at a gap of 2, but increasing the gap can save you some GPU ram, but almost
 always at the cost of significant loss of hashrate. Setting lookup gap
-overrides the default of 2, but BFGMiner will use the --shaders value to choose
-a thread-concurrency if you haven't chosen one.
+overrides the default of 2, but BFGMiner will use the provided shaders value to
+choose a thread-concurrency if you haven't chosen one.
 SUMMARY: Don't touch this.
 
 
 Related parameters:
---worksize XX
+work_size=XX
 Has a minor effect, should be a multiple of 64 up to 256 maximum.
 SUMMARY: Worth playing with once everything else has been tried but will
 probably do nothing.
 
---vectors XX
+vectors=XX
 Vectors are NOT used by the scrypt mining kernel.
 SUMMARY: Does nothing.
 
@@ -157,7 +156,8 @@ required for scrypt mining, and 4GB is suggested.
 Finally, the power consumption while mining at high engine clocks, very high
 memory clocks can be far in excess of what you might imagine.
 For example, a 7970 running with the following settings:
---thread-concurrency 22392 --gpu-engine 1135 --gpu-memclock 1890
+--set-device OCL:thread-concurrency=22392 --set-device OCL:clock=1135
+--set-device OCL:memclock=1890
 was using 305W!
 
 ---
@@ -181,7 +181,7 @@ generated.
 
 First try without any thread concurrency or even shaders, as BFGMiner will try to
 find an optimal value:
-bfgminer --intensity 13
+bfgminer --set-device OCL:intensity=13
 
 If that starts mining, see what bin was generated, it is likely the largest
 meaningful TC you can set.
@@ -190,13 +190,13 @@ scrypt130302Tahitiglg2tc22392w64l8.bin
 
 Note that tc22392 tells you what thread concurrency it was. It should start
 without TC parameters, but you never know. So if it doesn't, start with
---thread-concurrency 8192 and add 2048 to it at a time till you find the highest
-value it will start successfully at.
+--set-device OCL:thread-concurrency=8192 and add 2048 to it at a time till you
+find the highest value it will start successfully at.
 
 If you wish to get a little extra from your hardware, you may also try
 overclocking. Do note that this will damage your GPUs and void your warranty,
-so unless you are willing to take that risk, skip the --gpu-engine and
---gpu-memclock sections!
+so unless you are willing to take that risk, skip the clock and memclock
+parameters!
 
 Then start overclocking the eyeballs off your memory, as 7970s are exquisitely
 sensitive to memory speed and amazingly overclockable but please make sure it
@@ -217,14 +217,14 @@ without crashing the GPU, you will have to use a lower memclock.
 Then, and only then, bother trying to increase intensity further.
 
 My final settings were:
---gpu-engine 1141  --gpu-memclock 1875 --intensity 20
+--set-device OCL:clock=1141 --set-device OCL:memclock=1875 --set-device OCL:intensity=20
 for a hashrate of 745kH.
 
 Note I did not bother setting a thread concurrency. Once you have the magic
 endpoint, look at what tc was chosen by the bin file generated and then hard
-code that in next time (eg --thread-concurrency 22392) as slight changes in
-thread concurrency will happen every time if you don't specify one, and the tc
-to clock ratios are critical!
+code that in next time (eg --set-device OCL:thread-concurrency=22392) as slight
+changes in thread concurrency will happen every time if you don't specify one,
+and the tc to clock ratios are critical!
 
 Your numbers will be your numbers depending on your hardware combination and OS,
 so don't expect to get exactly the same results!

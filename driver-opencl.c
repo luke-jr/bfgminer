@@ -22,6 +22,8 @@
 #include <windows.h>
 #endif
 
+#include <ctype.h>
+#include <math.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -270,6 +272,7 @@ extern char *opt_kernel_path;
 extern int gpur_thr_id;
 extern bool opt_noadl;
 extern bool have_opencl;
+static _clState *clStates[MAX_GPUDEVICES];
 
 
 
@@ -326,6 +329,16 @@ const char *_set_list(char * const arg, const char * const emsg, bool (*set_func
 	return NULL;
 }
 
+#define _SET_INTERFACE(PNAME)  \
+static  \
+const char *opencl_init_ ## PNAME (struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)  \
+{  \
+	if (!_set_ ## PNAME (proc, newvalue))  \
+		return "Invalid value for " #PNAME;  \
+	return NULL;  \
+}  \
+// END OF _SET_INTERFACE
+
 #define _SET_INT_LIST2(PNAME, VCHECK, FIELD)  \
 static  \
 bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
@@ -336,6 +349,7 @@ bool _set_ ## PNAME (struct cgpu_info * const cgpu, const char * const _val)  \
 	FIELD = v;  \
 	return true;  \
 }  \
+_SET_INTERFACE(PNAME)  \
 const char *set_ ## PNAME(char *arg)  \
 {  \
 	return _set_list(arg, "Invalid value passed to " #PNAME, _set_ ## PNAME);  \
@@ -383,6 +397,7 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char * const _val)
 	data->kernel = kern;
 	return true;
 }
+_SET_INTERFACE(kernel)
 const char *set_kernel(char *arg)
 {
 	if (opt_scrypt)
@@ -394,6 +409,15 @@ const char *set_kernel(char *arg)
 #ifdef HAVE_ADL
 /* This function allows us to map an adl device to an opencl device for when
  * simple enumeration has failed to match them. */
+static
+const char *opencl_init_gpu_map(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	data->virtual_adl = atoi(newvalue);
+	data->mapped = true;
+	return NULL;
+}
+
 char *set_gpu_map(char *arg)
 {
 	struct opencl_device_data *data;
@@ -437,9 +461,17 @@ bool _set_gpu_engine(struct cgpu_info * const cgpu, const char * const _val)
 	data->gpu_engine = val2;
 	return true;
 }
+_SET_INTERFACE(gpu_engine)
 const char *set_gpu_engine(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_gpu_engine", _set_gpu_engine);
+}
+static
+const char *opencl_set_gpu_engine(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_engineclock(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_engine";
+	return NULL;
 }
 
 static
@@ -454,35 +486,124 @@ bool _set_gpu_fan(struct cgpu_info * const cgpu, const char * const _val)
 	data->gpu_fan = val2;
 	return true;
 }
+_SET_INTERFACE(gpu_fan)
 const char *set_gpu_fan(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_gpu_fan", _set_gpu_fan);
 }
+static
+const char *opencl_set_gpu_fan(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_fanspeed(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_fan";
+	return NULL;
+}
 
 _SET_INT_LIST(gpu_memclock , (v >=     1 && v <  9999), gpu_memclock )
+static
+const char *opencl_set_gpu_memclock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_memoryclock(proc->device_id, atoi(newvalue)))
+		return "Failed to set gpu_memclock";
+	return NULL;
+}
+
 _SET_INT_LIST(gpu_memdiff  , (v >= -9999 && v <= 9999), gpu_memdiff  )
+static
+const char *opencl_set_gpu_memdiff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	
+	if (!_set_gpu_memdiff(proc, newvalue))
+		return "Invalid value for gpu_memdiff";
+	
+	set_engineclock(proc->device_id, data->gpu_engine);
+	
+	return NULL;
+}
+
 _SET_INT_LIST(gpu_powertune, (v >=   -99 && v <=   99), gpu_powertune)
 _SET_INT_LIST(gpu_vddc     , (v >=     0 && v <  9999), gpu_vddc     )
+static
+const char *opencl_set_gpu_vddc(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (set_vddc(proc->device_id, atof(newvalue)))
+		return "Failed to set gpu_vddc";
+	return NULL;
+}
+
 _SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
 #ifdef HAVE_OPENCL
+// SHA256d "intensity" has an artificial offset of -15
+double oclthreads_to_intensity(const unsigned long oclthreads, const bool is_sha256d)
+{
+	double intensity = log2(oclthreads);
+	if (is_sha256d)
+		intensity -= 15.;
+	return intensity;
+}
+
+unsigned long intensity_to_oclthreads(double intensity, const bool is_sha256d)
+{
+	if (is_sha256d)
+		intensity += 15;
+	return pow(2, intensity);
+}
+
+double oclthreads_to_xintensity(const unsigned long oclthreads, const cl_uint max_compute_units)
+{
+	return (double)oclthreads / (double)max_compute_units / 64.;
+}
+
+unsigned long xintensity_to_oclthreads(const double xintensity, const cl_uint max_compute_units)
+{
+	return xintensity * max_compute_units * 0x40;
+}
+
 static
-bool _set_intensity(struct cgpu_info * const cgpu, const char * const _val)
+bool _set_intensity(struct cgpu_info * const cgpu, const char *_val)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
+	
+	data->dynamic = false;
+	data->_init_xintensity = 0;
+	
 	if (!strncasecmp(_val, "d", 1))
-		data->dynamic = true;
-	else
 	{
-		const int v = atoi(_val);
+		data->dynamic = true;
+		++_val;
+	}
+	
+	if (!strncasecmp(_val, "x", 1))
+	{
+		const double v = atof(&_val[1]);
+		if (v < 1 || v > 9999)
+			return false;
+		
+		if (cgpu->thr)
+		{
+			struct thr_info * const thr = cgpu->thr[0];
+			const int thr_id = thr->id;
+			_clState * const clState = clStates[thr_id];
+			
+			data->oclthreads = xintensity_to_oclthreads(v, clState->max_compute_units);
+		}
+		data->_init_xintensity = v;
+	}
+	else
+	if (isdigit(_val[0]))
+	{
+		const double v = atof(_val);
 		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
 			return false;
-		data->dynamic = false;
-		data->intensity = v;
+		data->oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
 	}
+	pause_dynamic_threads(cgpu->device_id);
 	return true;
 }
+_SET_INTERFACE(intensity)
 const char *set_intensity(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to intensity", _set_intensity);
@@ -493,145 +614,6 @@ _SET_INT_LIST2(gpu_threads, (v >= 1 && v <= 10), cgpu->threads)
 
 void write_config_opencl(FILE * const fcfg)
 {
-	int i;
-#ifdef HAVE_OPENCL
-	if (nDevs) {
-		/* Write GPU device values */
-		fputs(",\n\"intensity\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			if (i > 0)
-				fputc(',', fcfg);
-			if (data->dynamic)
-				fputc('d', fcfg);
-			else
-				fprintf(fcfg, "%d", data->intensity);
-		}
-		fputs("\",\n\"vectors\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-			        data->vwidth);
-		}
-		fputs("\",\n\"worksize\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-			        (int)data->work_size);
-		}
-		fputs("\",\n\"kernel\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++) {
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s", i > 0 ? "," : "");
-			switch (data->kernel) {
-				case KL_NONE: // Shouldn't happen
-					break;
-				case KL_POCLBM:
-					fprintf(fcfg, "poclbm");
-					break;
-				case KL_PHATK:
-					fprintf(fcfg, "phatk");
-					break;
-				case KL_DIAKGCN:
-					fprintf(fcfg, "diakgcn");
-					break;
-				case KL_DIABLO:
-					fprintf(fcfg, "diablo");
-					break;
-				case KL_SCRYPT:
-					fprintf(fcfg, "scrypt");
-					break;
-			}
-		}
-#ifdef USE_SCRYPT
-		fputs("\",\n\"lookup-gap\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-			        (int)data->opt_lg);
-		}
-		fputs("\",\n\"thread-concurrency\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-			        (int)data->opt_tc);
-		}
-		fputs("\",\n\"shaders\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "",
-			        (int)data->shaders);
-		}
-#endif
-#ifdef HAVE_ADL
-		fputs("\",\n\"gpu-engine\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "",
-			        data->min_engine, data->gpu_engine);
-		}
-		fputs("\",\n\"gpu-fan\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d-%d", i > 0 ? "," : "",
-			        data->min_fan, data->gpu_fan);
-		}
-		fputs("\",\n\"gpu-memclock\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", data->gpu_memclock);
-		}
-		fputs("\",\n\"gpu-memdiff\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", data->gpu_memdiff);
-		}
-		fputs("\",\n\"gpu-powertune\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", data->gpu_powertune);
-		}
-		fputs("\",\n\"gpu-vddc\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%1.3f", i > 0 ? "," : "", data->gpu_vddc);
-		}
-		fputs("\",\n\"temp-overheat\" : \"", fcfg);
-		for(i = 0; i < nDevs; i++)
-		{
-			struct cgpu_info * const cgpu = &gpus[i];
-			struct opencl_device_data * const data = cgpu->device_data;
-			fprintf(fcfg, "%s%d", i > 0 ? "," : "", data->adl.overtemp);
-		}
-#endif
-		fputs("\"", fcfg);
-	}
-#endif
 #ifdef HAVE_ADL
 	if (opt_reorder)
 		fprintf(fcfg, ",\n\"gpu-reorder\" : true");
@@ -641,6 +623,8 @@ void write_config_opencl(FILE * const fcfg)
 
 #ifdef HAVE_OPENCL
 BFG_REGISTER_DRIVER(opencl_api)
+static const struct bfg_set_device_definition opencl_set_device_funcs_probe[];
+static const struct bfg_set_device_definition opencl_set_device_funcs[];
 
 char *print_ndevs_and_exit(int *ndevs)
 {
@@ -694,7 +678,9 @@ static
 void opencl_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
-	struct thr_info *thr;
+	struct thr_info *thr = cgpu->thr[0];
+	const int thr_id = thr->id;
+	_clState * const clState = clStates[thr_id];
 	int i;
 	char checkin[40];
 	double displayed_rolling;
@@ -702,7 +688,20 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 	char logline[255];
 	strcpy(logline, ""); // In case it has no data
 	
-	tailsprintf(logline, sizeof(logline), "I:%s%d  ", (data->dynamic ? "d" : ""), data->intensity);
+	{
+		double intensity = oclthreads_to_intensity(data->oclthreads, !opt_scrypt);
+		double xintensity = oclthreads_to_xintensity(data->oclthreads, clState->max_compute_units);
+		const char *iunit = "";
+		if (xintensity - (int)xintensity < intensity - (int)intensity)
+		{
+			intensity = xintensity;
+			iunit = "x";
+		}
+		tailsprintf(logline, sizeof(logline), "I:%s%s%g ",
+		            (data->dynamic ? "d" : ""),
+		            iunit,
+		            intensity);
+	}
 #ifdef HAVE_ADL
 	if (data->has_adl) {
 		int engineclock = 0, memclock = 0, activity = 0, fanspeed = 0, fanpercent = 0, powertune = 0;
@@ -710,29 +709,29 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 
 		if (gpu_stats(cgpu->device_id, &temp, &engineclock, &memclock, &vddc, &activity, &fanspeed, &fanpercent, &powertune)) {
 			if (fanspeed != -1 || fanpercent != -1) {
-				tailsprintf(logline, sizeof(logline), "F: ");
+				tailsprintf(logline, sizeof(logline), "F:");
 				if (fanspeed > 9999)
 					fanspeed = 9999;
 				if (fanpercent != -1)
 				{
-					tailsprintf(logline, sizeof(logline), "%d%% ", fanpercent);
+					tailsprintf(logline, sizeof(logline), "%d%%", fanpercent);
 					if (fanspeed != -1)
-						tailsprintf(logline, sizeof(logline), "(%d RPM) ", fanspeed);
+						tailsprintf(logline, sizeof(logline), "(%dRPM)", fanspeed);
 				}
 				else
-					tailsprintf(logline, sizeof(logline), "%d RPM ", fanspeed);
+					tailsprintf(logline, sizeof(logline), "%dRPM", fanspeed);
 				tailsprintf(logline, sizeof(logline), " ");
 			}
 			if (engineclock != -1)
-				tailsprintf(logline, sizeof(logline), "E: %d MHz  ", engineclock);
+				tailsprintf(logline, sizeof(logline), "E:%dMHz ", engineclock);
 			if (memclock != -1)
-				tailsprintf(logline, sizeof(logline), "M: %d MHz  ", memclock);
+				tailsprintf(logline, sizeof(logline), "M:%dMHz ", memclock);
 			if (vddc != -1)
-				tailsprintf(logline, sizeof(logline), "V: %.3fV  ", vddc);
+				tailsprintf(logline, sizeof(logline), "V:%.3fV ", vddc);
 			if (activity != -1)
-				tailsprintf(logline, sizeof(logline), "A: %d%%  ", activity);
+				tailsprintf(logline, sizeof(logline), "A:%d%% ", activity);
 			if (powertune != -1)
-				tailsprintf(logline, sizeof(logline), "P: %d%%", powertune);
+				tailsprintf(logline, sizeof(logline), "P:%d%%", powertune);
 		}
 	}
 #endif
@@ -793,7 +792,6 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	{
 		case 'i': case 'I':
 		{
-			int intensity;
 			char *intvar;
 
 			if (opt_scrypt) {
@@ -813,13 +811,9 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 				free(intvar);
 				return "Dynamic mode enabled\n";
 			}
-			intensity = atoi(intvar);
-			free(intvar);
-			if (intensity < MIN_INTENSITY || intensity > MAX_INTENSITY)
+			if (!_set_intensity(cgpu, intvar))
 				return "Invalid intensity (out of range)\n";
-			data->dynamic = false;
-			data->intensity = intensity;
-			pause_dynamic_threads(cgpu->device_id);
+			free(intvar);
 			return "Intensity changed\n";
 		}
 		case 'r': case 'R':
@@ -847,7 +841,6 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 
 
 #ifdef HAVE_OPENCL
-static _clState *clStates[MAX_GPUDEVICES];
 
 #define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
@@ -1123,25 +1116,6 @@ cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, _
 	return status;
 }
 #endif
-
-static void set_threads_hashes(unsigned int vectors,int64_t *hashes, size_t *globalThreads,
-			       unsigned int minthreads, __maybe_unused int *intensity)
-{
-	unsigned int threads = 0;
-
-	while (threads < minthreads) {
-		threads = 1 << ((opt_scrypt ? 0 : 15) + *intensity);
-		if (threads < minthreads) {
-			if (likely(*intensity < MAX_INTENSITY))
-				(*intensity)++;
-			else
-				threads = minthreads;
-		}
-	}
-
-	*globalThreads = threads;
-	*hashes = threads * vectors;
-}
 #endif /* HAVE_OPENCL */
 
 
@@ -1308,6 +1282,10 @@ static int opencl_autodetect()
 		data->sensor = cn;
 #endif
 		
+		cgpu->set_device_funcs = opencl_set_device_funcs_probe;
+		cgpu_set_defaults(cgpu);
+		cgpu->set_device_funcs = opencl_set_device_funcs;
+		
 		add_cgpu(cgpu);
 	}
 
@@ -1401,6 +1379,9 @@ static struct api_data*
 get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 {
 	struct opencl_device_data * const data = gpu->device_data;
+	struct thr_info * const thr = gpu->thr[0];
+	const int thr_id = thr->id;
+	_clState * const clState = clStates[thr_id];
 	struct api_data*root = NULL;
 
 	float gt, gv;
@@ -1418,11 +1399,17 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 	root = api_add_int(root, "Powertune", &pt, true);
 
 	char intensity[20];
+	uint32_t oclthreads = data->oclthreads;
+	double intensityf = oclthreads_to_intensity(oclthreads, !opt_scrypt);
+	double xintensity = oclthreads_to_xintensity(oclthreads, clState->max_compute_units);
 	if (data->dynamic)
 		strcpy(intensity, "D");
 	else
-		sprintf(intensity, "%d", data->intensity);
+		sprintf(intensity, "%g", intensityf);
 	root = api_add_string(root, "Intensity", intensity, true);
+	root = api_add_uint32(root, "OCLThreads", &oclthreads, true);
+	root = api_add_double(root, "CIntensity", &intensityf, true);
+	root = api_add_double(root, "XIntensity", &xintensity, true);
 
 	return root;
 }
@@ -1616,17 +1603,26 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		cgtime(&tv_gpuend);
 		gpu_us = us_tdiff(&tv_gpuend, &data->tv_gpustart) / data->intervals;
 		if (gpu_us > dynamic_us) {
-			if (data->intensity > MIN_INTENSITY)
-				--data->intensity;
+			const unsigned long min_oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
+			data->oclthreads /= 2;
+			if (data->oclthreads < min_oclthreads)
+				data->oclthreads = min_oclthreads;
 		} else if (gpu_us < dynamic_us / 2) {
-			if (data->intensity < MAX_INTENSITY)
-				++data->intensity;
+			const unsigned long max_oclthreads = intensity_to_oclthreads(MAX_INTENSITY, !opt_scrypt);
+			data->oclthreads *= 2;
+			if (data->oclthreads > max_oclthreads)
+				data->oclthreads = max_oclthreads;
 		}
 		memcpy(&(data->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
 		data->intervals = 0;
 	}
 
-	set_threads_hashes(clState->vwidth, &hashes, globalThreads, localThreads[0], &data->intensity);
+	if (data->oclthreads < localThreads[0])
+		data->oclthreads = localThreads[0];
+	globalThreads[0] = data->oclthreads;
+	hashes = globalThreads[0];
+	hashes *= clState->vwidth;
+	
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
@@ -1694,6 +1690,60 @@ static void opencl_thread_shutdown(struct thr_info *thr)
 	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
+
+static
+const char *opencl_cannot_set(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	return "Cannot set at runtime (use --set-device on commandline)";
+}
+
+static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = {
+	{"intensity", opencl_init_intensity},
+	{"kernel", opencl_init_kernel},
+	{"threads", opencl_init_gpu_threads},
+	{"vector", opencl_init_vector},
+	{"work_size", opencl_init_worksize},
+#ifdef HAVE_ADL
+	{"adl_mapping", opencl_init_gpu_map},
+	{"clock", opencl_init_gpu_engine},
+	{"fan", opencl_init_gpu_fan},
+	{"memclock", opencl_init_gpu_memclock},
+	{"memdiff", opencl_init_gpu_memdiff},
+	{"powertune", opencl_init_gpu_powertune},
+	{"temp_overheat", opencl_init_temp_overheat},
+	{"voltage", opencl_init_gpu_vddc},
+#endif
+#ifdef USE_SCRYPT
+	{"shaders", opencl_init_shaders},
+	{"lookup_gap", opencl_init_lookup_gap},
+	{"thread_concurrency", opencl_init_thread_concurrency},
+#endif
+	{NULL}
+};
+
+static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
+	{"intensity", opencl_init_intensity, "Intensity of GPU scanning (d, -10 -> 31, or x1 to x9999)"},
+	{"kernel", opencl_cannot_set, "Mining kernel code to use"},
+	{"threads", opencl_cannot_set, "Number of threads"},
+	{"vector", opencl_cannot_set, ""},
+	{"work_size", opencl_cannot_set, ""},
+#ifdef HAVE_ADL
+	{"adl_mapping", opencl_cannot_set, "Map to ADL device"},
+	{"clock", opencl_set_gpu_engine, "GPU engine clock"},
+	{"fan", opencl_set_gpu_fan, "GPU fan percentage range"},
+	{"memclock", opencl_set_gpu_memclock, "GPU memory clock"},
+	{"memdiff", opencl_set_gpu_memdiff, "Clock speed difference between GPU and memory (auto-gpu mode only)"},
+	{"powertune", opencl_cannot_set, "GPU powertune percentage"},
+	{"temp_overheat", opencl_init_temp_overheat, "Overheat temperature when automatically managing fan and GPU speeds"},
+	{"voltage", opencl_set_gpu_vddc, "GPU voltage"},
+#endif
+#ifdef USE_SCRYPT
+	{"shaders", opencl_cannot_set, "GPU shaders per card (scrypt only)"},
+	{"lookup_gap", opencl_cannot_set, "GPU lookup gap (scrypt only)"},
+	{"thread_concurrency", opencl_cannot_set, "GPU thread concurrency (scrypt only)"},
+#endif
+	{NULL}
+};
 
 struct device_drv opencl_api = {
 	.dname = "opencl",

@@ -299,35 +299,16 @@ GPU only options:
 
 --auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
 --auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---gpu-threads <arg> Number of threads per GPU (1 - 10) - one value for all or separate by commas for per card (default: -1)
 --gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
---gpu-engine <arg>  GPU engine (over)clock range in MHz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
---gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
---gpu-memclock <arg> Set the GPU memory (over)clock in MHz - one value for all or separate by commas for per card.
---gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-platform <arg> Select OpenCL platform ID to use for GPU mining
---gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
---gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
---intensity <arg>   Intensity of GPU scanning (d or -10 -> 31,default: d to maintain desktop interactivity)
---kernel <arg>      Override sha256 kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
 --no-adl            Disable the ATI display library used for monitoring and setting GPU parameters
---temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
---vectors <arg>     Override detected optimal vector (1, 2 or 4) - one value or comma separated list
---worksize <arg>    Override detected optimal worksize - one value or comma separated list
 
 GPU mining is disabled by default for SHA256d if you have any dedicated mining
 devices, but can be enabled explicitly specifying the -S opencl:auto option.
 
 See README.GPU for more information regarding GPU mining.
-
-scrypt only options:
-
---lookup-gap <arg>  Set GPU lookup gap for scrypt mining, comma separated
---shaders <arg>     GPU shaders per card for tuning scrypt, comma separated
---thread-concurrency <arg> Set GPU thread concurrency for scrypt mining, comma separated
-
 See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 
@@ -752,9 +733,9 @@ A; Try the --net-delay option if you are on a getwork or GBT server.
 Q: How do I tune for P2Pool?
 A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
-with --gpu-threads 1. It is also recommended to use --failover-only since the
-work is effectively like a different block chain. If mining with a Mini Rig, it
-is worth adding the --bfl-range option.
+with --set-device OCL:threads=1. It is also recommended to use --failover-only
+since the work is effectively like a different block chain. If mining with a
+Mini Rig, it is worth adding the --bfl-range option.
 
 Q: Are OpenCL kernels from other mining software useable in BFGMiner?
 A: No, the APIs are slightly different between the different software and they
