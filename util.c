@@ -2939,6 +2939,24 @@ void _bytes_alloc_failure(size_t sz)
 }
 
 
+char *trimmed_strdup(const char *s)
+{
+	size_t n;
+	char *c;
+	
+	while (isspace(s[0]))
+		++s;
+	n = strlen(s) - 1;
+	while (isspace(s[n]))
+		--n;
+	++n;
+	c = malloc(n + 1);
+	c[n] = '\0';
+	memcpy(c, s, n);
+	return c;
+}
+
+
 void *cmd_thread(void *cmdp)
 {
 	const char *cmd = cmdp;

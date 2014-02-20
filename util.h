@@ -498,6 +498,8 @@ void maybe_strdup_if_null(const char **p, const char *s)
 		*p = maybe_strdup(s);
 }
 
+extern char *trimmed_strdup(const char *);
+
 
 extern void run_cmd(const char *cmd);
 
