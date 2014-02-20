@@ -603,7 +603,7 @@ void *miner_thread(void *userdata)
 	if (cgpu->deven != DEV_ENABLED)
 		mt_disable_start(mythr);
 	
-	if (drv_ready(cgpu))
+	if (drv_ready(cgpu) && !cgpu->already_set_defaults)
 		cgpu_set_defaults(cgpu);
 	
 	thread_reportout(mythr);
