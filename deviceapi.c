@@ -713,7 +713,7 @@ void *miner_thread(void *userdata)
 		goto out;
 	}
 
-	if (drv_ready(cgpu))
+	if (drv_ready(cgpu) && !cgpu->already_set_defaults)
 		cgpu_set_defaults(cgpu);
 	
 	thread_reportout(mythr);
