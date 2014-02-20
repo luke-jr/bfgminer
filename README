@@ -665,6 +665,15 @@ Q: BFGMiner segfaults when I change my shell window size.
 A: Older versions of libncurses have a bug to do with refreshing a window
 after a size change. Upgrading to a new version of curses will fix it.
 
+Q: I have multiple USB stick devices but I can't get them all to work at once?
+A: Very few USB hubs deliver the promised power required to run as many devices
+as they fit if all of them draw power from USB.
+
+Q: I've plugged my devices into my USB hub but nothing shows up?
+A: RPis and Windows have incomplete or non-standard USB3 support so they may
+never work. It may be possible to get a USB3 hub to work by plugging it into a
+USB2 hub.
+
 Q: Can I mine on servers from different networks (eg smartcoin and bitcoin) at
 the same time?
 A: No, BFGMiner keeps a database of the block it's working on to ensure it does
