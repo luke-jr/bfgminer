@@ -562,17 +562,15 @@ unsigned long xintensity_to_oclthreads(const double xintensity, const cl_uint ma
 	return xintensity * max_compute_units * 0x40;
 }
 
-static
-bool _set_intensity(struct cgpu_info * const cgpu, const char *_val)
+bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_val)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
-	
-	data->dynamic = false;
-	data->_init_xintensity = 0;
+	unsigned long oclthreads = 0;
+	bool dynamic = false;
 	
 	if (!strncasecmp(_val, "d", 1))
 	{
-		data->dynamic = true;
+		dynamic = true;
 		++_val;
 	}
 	
@@ -582,15 +580,15 @@ bool _set_intensity(struct cgpu_info * const cgpu, const char *_val)
 		if (v < 1 || v > 9999)
 			return false;
 		
-		if (cgpu->thr)
+		// thr etc won't be initialised here, so avoid dereferencing it
+		if (data->oclthreads)
 		{
 			struct thr_info * const thr = cgpu->thr[0];
 			const int thr_id = thr->id;
 			_clState * const clState = clStates[thr_id];
 			
-			data->oclthreads = xintensity_to_oclthreads(v, clState->max_compute_units);
+			oclthreads = xintensity_to_oclthreads(v, clState->max_compute_units);
 		}
-		data->_init_xintensity = v;
 	}
 	else
 	if (isdigit(_val[0]))
@@ -598,11 +596,26 @@ bool _set_intensity(struct cgpu_info * const cgpu, const char *_val)
 		const double v = atof(_val);
 		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
 			return false;
-		data->oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
+		oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
 	}
-	pause_dynamic_threads(cgpu->device_id);
+	
+	// Make actual assignments after we know the values are valid
+	data->dynamic = dynamic;
+	if (data->oclthreads)
+	{
+		data->oclthreads = oclthreads;
+		pause_dynamic_threads(cgpu->device_id);
+	}
+	else
+	{
+		if (unlikely(data->_init_intensity))
+			free(data->_init_intensity);
+		data->_init_intensity = strdup(_val);
+	}
+	
 	return true;
 }
+#define _set_intensity opencl_set_intensity_from_str
 _SET_INTERFACE(intensity)
 const char *set_intensity(char *arg)
 {
@@ -1469,7 +1482,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 		return false;
 	}
 	if (!cgpu->name)
-		cgpu->name = strdup(name);
+		cgpu->name = trimmed_strdup(name);
 	if (!cgpu->kname)
 	{
 		switch (clStates[i]->chosen_kernel) {
