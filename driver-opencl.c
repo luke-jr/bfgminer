@@ -454,11 +454,15 @@ bool _set_gpu_engine(struct cgpu_info * const cgpu, const char * const _val)
 {
 	int val1, val2;
 	get_intrange(_val, &val1, &val2);
-	if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999)
+	if (val1 < 0 || val1 > 9999 || val2 < 0 || val2 > 9999 || val2 < val1)
 		return false;
+	
 	struct opencl_device_data * const data = cgpu->device_data;
+	struct gpu_adl * const ga = &data->adl;
+	
 	data->min_engine = val1;
 	data->gpu_engine = val2;
+	ga->autoengine = (val1 != val2);
 	return true;
 }
 _SET_INTERFACE(gpu_engine)
@@ -469,8 +473,38 @@ const char *set_gpu_engine(char *arg)
 static
 const char *opencl_set_gpu_engine(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	if (set_engineclock(proc->device_id, atoi(newvalue)))
-		return "Failed to set gpu_engine";
+	struct opencl_device_data * const data = proc->device_data;
+	struct gpu_adl * const ga = &data->adl;
+	
+	int val1, val2;
+	get_intrange(newvalue, &val1, &val2);
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
+		return "Invalid value for clock";
+	
+	if (val1 == val2)
+	{
+		if (set_engineclock(proc->device_id, val1))
+			return "Failed to set gpu_engine";
+		ga->autoengine = false;
+	}
+	else
+	{
+		// Ensure current clock is within range
+		if (ga->lastengine < val1)
+		{
+			if (set_engineclock(proc->device_id, val1))
+				return "Failed to set gpu_engine";
+		}
+		else
+		if (ga->lastengine > val2)
+			if (set_engineclock(proc->device_id, val2))
+				return "Failed to set gpu_engine";
+		
+		data->min_engine = val1;
+		data->gpu_engine = val2;
+		ga->autoengine = true;
+	}
+	
 	return NULL;
 }
 
