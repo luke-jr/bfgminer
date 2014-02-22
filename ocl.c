@@ -557,8 +557,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_COMPUTE_UNITS", status);
 		return NULL;
 	}
-	if (data->_init_xintensity)
-		data->oclthreads = xintensity_to_oclthreads(data->_init_xintensity, clState->max_compute_units);
+	if (data->_init_intensity)
+	{
+		data->oclthreads = 1;  // Needed to ensure we don't just try to re-save the string (which would free before strduping and segfault anyway)
+		opencl_set_intensity_from_str(cgpu, data->_init_intensity);
+	}
+	else
+		data->oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
 	applog(LOG_DEBUG, "Max compute units reported %u", (unsigned)clState->max_compute_units);
 	
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);

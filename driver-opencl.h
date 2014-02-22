@@ -15,7 +15,7 @@ struct opencl_device_data {
 	int virtual_gpu;
 	int virtual_adl;
 	unsigned long oclthreads;
-	double _init_xintensity;
+	char *_init_intensity;
 	bool dynamic;
 	
 	cl_uint vwidth;
@@ -53,6 +53,7 @@ struct opencl_device_data {
 extern double oclthreads_to_intensity(unsigned long oclthreads, bool is_sha256d);
 extern unsigned long intensity_to_oclthreads(double intensity, bool is_sha256d);
 extern unsigned long xintensity_to_oclthreads(double xintensity, cl_uint max_compute_units);
+extern bool opencl_set_intensity_from_str(struct cgpu_info *, const char *newvalue);
 
 struct opencl_work_data {
 	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
