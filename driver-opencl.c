@@ -479,11 +479,15 @@ bool _set_gpu_fan(struct cgpu_info * const cgpu, const char * const _val)
 {
 	int val1, val2;
 	get_intrange(_val, &val1, &val2);
-	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100)
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
 		return false;
+	
 	struct opencl_device_data * const data = cgpu->device_data;
+	struct gpu_adl * const ga = &data->adl;
+	
 	data->min_fan = val1;
 	data->gpu_fan = val2;
+	ga->autofan = (val1 != val2);
 	return true;
 }
 _SET_INTERFACE(gpu_fan)
@@ -494,8 +498,38 @@ const char *set_gpu_fan(char *arg)
 static
 const char *opencl_set_gpu_fan(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	if (set_fanspeed(proc->device_id, atoi(newvalue)))
-		return "Failed to set gpu_fan";
+	struct opencl_device_data * const data = proc->device_data;
+	struct gpu_adl * const ga = &data->adl;
+	
+	int val1, val2;
+	get_intrange(newvalue, &val1, &val2);
+	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
+		return "Invalid value for fan";
+	
+	if (val1 == val2)
+	{
+		if (set_fanspeed(proc->device_id, val1))
+			return "Failed to set gpu_fan";
+		ga->autofan = false;
+	}
+	else
+	{
+		// Ensure current fan is within range
+		if (ga->targetfan < val1)
+		{
+			if (set_fanspeed(proc->device_id, val1))
+				return "Failed to set gpu_fan";
+		}
+		else
+		if (ga->targetfan > val2)
+			if (set_fanspeed(proc->device_id, val2))
+				return "Failed to set gpu_fan";
+		
+		data->min_fan = val1;
+		data->gpu_fan = val2;
+		ga->autofan = true;
+	}
+	
 	return NULL;
 }
 
