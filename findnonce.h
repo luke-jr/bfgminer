@@ -1,5 +1,5 @@
-#ifndef __FINDNONCE_H__
-#define __FINDNONCE_H__
+#ifndef BFG_FINDNONCE_H
+#define BFG_FINDNONCE_H
 
 #include <stdint.h>
 

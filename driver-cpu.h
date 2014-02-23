@@ -10,8 +10,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef __DEVICE_CPU_H__
-#define __DEVICE_CPU_H__
+#ifndef BFG_DRIVER_CPU_H
+#define BFG_DRIVER_CPU_H
 
 #include "miner.h"
 

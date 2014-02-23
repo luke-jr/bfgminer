@@ -8,8 +8,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef __LOGGING_H__
-#define __LOGGING_H__
+#ifndef BFG_LOGGING_H
+#define BFG_LOGGING_H
 
 #include "config.h"
 

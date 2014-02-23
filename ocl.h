@@ -1,5 +1,5 @@
-#ifndef __OCL_H__
-#define __OCL_H__
+#ifndef BFG_OCL_H
+#define BFG_OCL_H
 
 #include "config.h"
 
