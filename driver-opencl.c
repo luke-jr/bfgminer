@@ -1349,7 +1349,6 @@ static int opencl_autodetect()
 		cgpu = &gpus[i];
 		struct opencl_device_data * const data = cgpu->device_data;
 		
-		cgpu->devtype = "GPU";
 		cgpu->deven = DEV_ENABLED;
 		cgpu->drv = &opencl_api;
 		cgpu->device_id = i;

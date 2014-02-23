@@ -10553,8 +10553,6 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	int j;
 	
 	struct device_drv *api = cgpu->drv;
-	if (!cgpu->devtype)
-		cgpu->devtype = "PGA";
 	cgpu->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 	
 	int threadobj = cgpu->threads;
