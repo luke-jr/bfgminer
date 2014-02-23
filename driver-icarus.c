@@ -490,6 +490,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	
 	// Set a default so that individual drivers need not specify
 	// e.g. Cairnsmore
+	BFGINIT(info->probe_read_count, 1);
 	if (info->read_size == 0)
 		info->read_size = ICARUS_DEFAULT_READ_SIZE;
 
@@ -501,7 +502,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
 	// We will then compare the bytes left in fd with info->read_size to determine
 	// if this is a valid device
-	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
+	icarus_gets(nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
 	
 	// How many bytes were left after reading the above nonce
 	int bytes_left = icarus_excess_nonce_size(fd, info);
@@ -1247,6 +1248,14 @@ const char *icarus_set_baud(struct cgpu_info * const proc, const char * const op
 }
 
 static
+const char *icarus_set_probe_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	info->probe_read_count = atof(newvalue) * 10.0 / ICARUS_READ_FAULT_DECISECONDS;
+	return NULL;
+}
+
+static
 const char *icarus_set_work_division(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;
@@ -1310,6 +1319,7 @@ const struct bfg_set_device_definition icarus_set_device_funcs[] = {
 	{"fpga_count"   , icarus_set_fpga_count   , "number of chips working on pieces"},
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	// NOTE: Below here, order is irrelevant
+	{"probe_timeout", icarus_set_probe_timeout},
 	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
 	{NULL},
 };
