@@ -1925,12 +1925,12 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
 	cb2_len = strlen(coinbase2) / 2;
 
-	bytes_resize(&pool->swork.coinbase, pool->swork.nonce2_offset + pool->n2size + cb2_len);
+	bytes_resize(&pool->swork.coinbase, pool->swork.nonce2_offset + pool->swork.n2size + cb2_len);
 	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
 	hex2bin(coinbase, coinbase1, cb1_len);
 	hex2bin(&coinbase[cb1_len], pool->nonce1, pool->n1_len);
 	// NOTE: gap for nonce2, filled at work generation time
-	hex2bin(&coinbase[pool->swork.nonce2_offset + pool->n2size], coinbase2, cb2_len);
+	hex2bin(&coinbase[pool->swork.nonce2_offset + pool->swork.n2size], coinbase2, cb2_len);
 	
 	bytes_resize(&pool->swork.merkle_bin, 32 * merkles);
 	for (i = 0; i < merkles; i++)
@@ -2445,7 +2445,7 @@ resend:
 	free(pool->nonce1);
 	pool->nonce1 = nonce1;
 	pool->n1_len = strlen(nonce1) / 2;
-	pool->n2size = n2size;
+	pool->swork.n2size = n2size;
 	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
 #ifdef WORDS_BIGENDIAN
 	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
@@ -2470,7 +2470,7 @@ out:
 		pool->swork.diff = 1;
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
-			       pool->pool_no, pool->nonce1, pool->n2size);
+			       pool->pool_no, pool->nonce1, pool->swork.n2size);
 		}
 	} else {
 		if (recvd)

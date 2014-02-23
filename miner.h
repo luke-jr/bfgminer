@@ -1139,6 +1139,7 @@ struct stratum_work {
 	
 	bytes_t coinbase;
 	size_t nonce2_offset;
+	int n2size;
 	
 	int merkles;
 	bytes_t merkle_bin;
@@ -1253,7 +1254,6 @@ struct pool {
 #ifdef WORDS_BIGENDIAN
 	int nonce2off;
 #endif
-	int n2size;
 	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;

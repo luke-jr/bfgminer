@@ -2965,7 +2965,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			swork->job_id = NULL;
 			swork->clean = true;
 			// FIXME: Do something with expire
-			pool->nonce2sz = pool->n2size = GBT_XNONCESZ;
+			pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 			pool->nonce2 = 0;
 			cg_wunlock(&pool->data_lock);
 		}
@@ -8742,9 +8742,10 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	cg_wlock(&pool->data_lock);
 	pool->swork.data_lock_p = &pool->data_lock;
 	
-	bytes_resize(&work->nonce2, pool->n2size);
-	if (pool->nonce2sz < pool->n2size)
-		memset(&bytes_buf(&work->nonce2)[pool->nonce2sz], 0, pool->n2size - pool->nonce2sz);
+	const int n2size = pool->swork.n2size;
+	bytes_resize(&work->nonce2, n2size);
+	if (pool->nonce2sz < n2size)
+		memset(&bytes_buf(&work->nonce2)[pool->nonce2sz], 0, n2size - pool->nonce2sz);
 	memcpy(bytes_buf(&work->nonce2),
 #ifdef WORDS_BIGENDIAN
 	// NOTE: On big endian, the most significant bits are stored at the end, so skip the LSBs

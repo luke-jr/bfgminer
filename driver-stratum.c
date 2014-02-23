@@ -44,7 +44,6 @@ struct stratumsrv_job {
 	
 	struct pool *pool;
 	uint8_t work_restart_id;
-	uint8_t n2size;
 	struct timeval tv_prepared;
 	struct stratum_work swork;
 	char *nonce1;
@@ -81,9 +80,9 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 		.work_restart_id = ssj->work_restart_id,
 		.tv_staged = ssj->tv_prepared,
 	};
-	bytes_resize(&work->nonce2, ssj->n2size);
+	bytes_resize(&work->nonce2, ssj->swork.n2size);
 	s = bytes_buf(&work->nonce2);
-	p = &s[ssj->n2size - _ssm_client_xnonce2sz];
+	p = &s[ssj->swork.n2size - _ssm_client_xnonce2sz];
 	if (extranonce2)
 		hex2bin(p, extranonce2, _ssm_client_xnonce2sz);
 #ifndef __OPTIMIZE__
@@ -104,7 +103,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
-	const int n2size = pool->n2size;
+	const int n2size = pool->swork.n2size;
 	char my_job_id[33];
 	int i;
 	struct stratumsrv_job *ssj;
@@ -149,7 +148,6 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 		
 		.pool = pool,
 		.work_restart_id = pool->work_restart_id,
-		.n2size = n2size,
 		.nonce1 = maybe_strdup(pool->nonce1),
 	};
 	timer_set_now(&ssj->tv_prepared);
