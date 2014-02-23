@@ -229,7 +229,7 @@ bfgminer_SOURCES += driver-twinfury.c driver-twinfury.h
 endif
 
 if HAS_ICARUS
-bfgminer_SOURCES += driver-icarus.c icarus-common.h
+bfgminer_SOURCES += driver-icarus.c driver-icarus.h
 bfgminer_SOURCES += driver-cairnsmore.c
 bfgminer_SOURCES += driver-erupter.c
 bfgminer_SOURCES += driver-antminer.c

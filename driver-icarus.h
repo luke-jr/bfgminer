@@ -9,8 +9,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef ICARUS_COMMON_H
-#define ICARUS_COMMON_H
+#ifndef BFG_DRIVER_ICARUS_H
+#define BFG_DRIVER_ICARUS_H
 
 #include <stdbool.h>
 #include <stdint.h>

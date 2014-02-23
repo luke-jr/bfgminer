@@ -14,7 +14,7 @@
 
 #include "compat.h"
 #include "dynclock.h"
-#include "icarus-common.h"
+#include "driver-icarus.h"
 #include "lowlevel.h"
 #include "lowl-vcom.h"
 #include "miner.h"
