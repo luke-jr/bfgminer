@@ -9948,19 +9948,22 @@ void hash_queued_work(struct thr_info *mythr)
  * so this must be taken into consideration in the driver. */
 void hash_driver_work(struct thr_info *mythr)
 {
+	const long cycle = opt_log_interval / 5 ? : 1;
 	struct timeval tv_start = {0, 0}, tv_end;
 	struct cgpu_info *cgpu = mythr->cgpu;
 	struct device_drv *drv = cgpu->drv;
 	const int thr_id = mythr->id;
 	int64_t hashes_done = 0;
 	
+	if (unlikely(cgpu->deven != DEV_ENABLED))
+		mt_disable(mythr);
+	
 	while (likely(!cgpu->shutdown))
 	{
 		struct timeval diff;
 		int64_t hashes;
 		
-		mythr->work_update = false;
-		
+		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);
 		
 		/* Reset the bool here in case the driver looks for it
@@ -9972,15 +9975,13 @@ void hash_driver_work(struct thr_info *mythr)
 			applog(LOG_ERR, "%s %d failure, disabling!", drv->name, cgpu->device_id);
 			cgpu->deven = DEV_DISABLED;
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-			break;
+			mt_disable(mythr);
 		}
 		
 		hashes_done += hashes;
 		cgtime(&tv_end);
 		timersub(&tv_end, &tv_start, &diff);
-		/* Update the hashmeter at most 5 times per second */
-		if ((hashes_done && (diff.tv_sec > 0 || diff.tv_usec > 200000)) ||
-		    diff.tv_sec >= opt_log_interval)
+		if (diff.tv_sec >= cycle)
 		{
 			hashmeter(thr_id, &diff, hashes_done);
 			hashes_done = 0;
@@ -9988,12 +9989,16 @@ void hash_driver_work(struct thr_info *mythr)
 		}
 		
 		if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
-			mt_disable(mythr, thr_id, drv);
+			mt_disable(mythr);
 		
-		if (mythr->work_update)
-			drv->update_work(cgpu);
+		if (unlikely(mythr->work_restart))
+		{
+			flush_queue(cgpu);
+			if (drv->flush_work)
+				drv->flush_work(cgpu);
+		}
 	}
-	cgpu->deven = DEV_DISABLED;
+	// cgpu->deven = DEV_DISABLED; set in miner_thread
 }
 
 // Called by minerloop, when it is re-enabling a processor
