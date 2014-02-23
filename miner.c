@@ -1954,10 +1954,10 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_ADL
 	OPT_WITHOUT_ARG("--auto-fan",
 			opt_set_bool, &opt_autofan,
-			"Automatically adjust all GPU fan speeds to maintain a target temperature"),
+			opt_hidden),
 	OPT_WITHOUT_ARG("--auto-gpu",
 			opt_set_bool, &opt_autoengine,
-			"Automatically adjust all GPU engine clock speeds to maintain a target temperature"),
+			opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--balance",
 		     set_balance, &pool_strategy,
@@ -2058,7 +2058,7 @@ static struct opt_table opt_config_table[] = {
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
 		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
-		     "Set the refresh interval in ms for GPUs using dynamic intensity"),
+		     opt_hidden),
 	OPT_WITH_ARG("--gpu-platform",
 		     set_int_0_to_9999, opt_show_intval, &opt_platform_id,
 		     "Select OpenCL platform ID to use for GPU mining"),

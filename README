@@ -297,9 +297,6 @@ See example.conf for an example configuration.
 
 GPU only options:
 
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
 --gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
 --gpu-platform <arg> Select OpenCL platform ID to use for GPU mining
 --gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
