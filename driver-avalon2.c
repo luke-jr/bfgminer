@@ -36,8 +36,8 @@
 
 #include "miner.h"
 #include "driver-avalon2.h"
-#include "crc.h"
 #include "lowl-vcom.h"
+#include "util.h"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
@@ -138,7 +138,7 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 	pkg->idx = idx;
 	pkg->cnt = cnt;
 
-	crc = crc16(pkg->data, AVA2_P_DATA_LEN);
+	crc = crc16xmodem(pkg->data, AVA2_P_DATA_LEN);
 
 	pkg->crc[0] = (crc & 0xff00) >> 8;
 	pkg->crc[1] = crc & 0x00ff;
@@ -180,7 +180,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	memcpy((uint8_t *)ar, pkg, AVA2_READ_SIZE);
 
 	if (ar->head[0] == AVA2_H1 && ar->head[1] == AVA2_H2) {
-		expected_crc = crc16(ar->data, AVA2_P_DATA_LEN);
+		expected_crc = crc16xmodem(ar->data, AVA2_P_DATA_LEN);
 		actual_crc = (ar->crc[0] & 0xff) |
 			((ar->crc[1] & 0xff) << 8);
 
