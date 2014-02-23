@@ -1,5 +1,5 @@
-#ifndef __ADL_H__
-#define __ADL_H__
+#ifndef BFG_ADL_H
+#define BFG_ADL_H
 #ifdef HAVE_ADL
 
 #include <stdbool.h>

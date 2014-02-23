@@ -11,8 +11,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef __MINER_H__
-#define __MINER_H__
+#ifndef BFG_MINER_H
+#define BFG_MINER_H
 
 #include "config.h"
 

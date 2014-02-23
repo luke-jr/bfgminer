@@ -1,5 +1,5 @@
-#if !defined(__BENCH_BLOCK_H__)
-	#define __BENCH_BLOCK_H__ 1
+#ifndef BFG_BENCH_BLOCK_H
+#define BFG_BENCH_BLOCK_H
 
 	// Random work pulled from a pool
         #define CGMINER_BENCHMARK_BLOCK                                                                         \
@@ -36,4 +36,4 @@
                 0x55, 0xF1, 0x44, 0x4E, 0x00, 0x00, 0x00, 0x00, 0x79, 0x63, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, \
                 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,                                                 \
 
-#endif // !defined(__BENCH_BLOCK_H__)
+#endif

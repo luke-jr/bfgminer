@@ -10,8 +10,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef __UTIL_H__
-#define __UTIL_H__
+#ifndef BFG_UTIL_H
+#define BFG_UTIL_H
 
 #include <stdbool.h>
 #include <stdint.h>

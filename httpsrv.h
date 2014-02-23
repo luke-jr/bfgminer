@@ -1,5 +1,5 @@
-#ifndef _BFG_HTTPSRV_H
-#define _BFG_HTTPSRV_H
+#ifndef BFG_HTTPSRV_H
+#define BFG_HTTPSRV_H
 
 #include <microhttpd.h>
 
