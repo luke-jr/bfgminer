@@ -1396,9 +1396,8 @@ static void reinit_opencl_device(struct cgpu_info *gpu)
 	tq_push(control_thr[gpur_thr_id].q, gpu);
 }
 
-// FIXME: Legacy (called by TUI) for side effects
 static
-bool override_opencl_statline_temp(char *buf, size_t bufsz, struct cgpu_info *gpu, __maybe_unused bool per_processor)
+bool opencl_get_stats(struct cgpu_info * const gpu)
 {
 	__maybe_unused struct opencl_device_data * const data = gpu->device_data;
 #ifdef HAVE_SENSORS
@@ -1419,7 +1418,7 @@ bool override_opencl_statline_temp(char *buf, size_t bufsz, struct cgpu_info *gp
 				continue;
 			
 			gpu->temp = val;
-			return false;
+			return true;
 		}
 	}
 #endif
@@ -1430,7 +1429,7 @@ bool override_opencl_statline_temp(char *buf, size_t bufsz, struct cgpu_info *gp
 		gpu_fanspeed(gpuid);
 	}
 #endif
-	return false;
+	return true;
 }
 
 static
@@ -1832,7 +1831,7 @@ struct device_drv opencl_api = {
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.watchdog = opencl_watchdog,
-	.override_statline_temp2 = override_opencl_statline_temp,
+	.get_stats = opencl_get_stats,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = opencl_wlogprint_status,
 	.proc_tui_wlogprint_choices = opencl_tui_wlogprint_choices,
