@@ -156,10 +156,11 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 }
 
 extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
+
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
-	struct cgpu_info *avalon2;
-	struct avalon2_info *info;
+	struct cgpu_info *avalon2 = NULL;
+	struct avalon2_info *info = NULL;
 	struct pool *pool;
 
 	unsigned int expected_crc;
@@ -212,6 +213,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				applog(LOG_DEBUG, "Avalon2: Wrong miner/pool/id no %d,%d,%d", miner, pool_no, modular_id);
 				break;
 			} else
+			if (thr)
 				info->matching_work[modular_id * AVA2_DEFAULT_MINERS + miner]++;
 			nonce2 = bswap_32(nonce2);
 			nonce = be32toh(nonce);
@@ -229,29 +231,32 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
 			break;
 		case AVA2_P_STATUS:
-			memcpy(&tmp, ar->data, 4);
-			tmp = be32toh(tmp);
-			info->temp[0 + modular_id * 2] = tmp >> 16;
-			info->temp[1 + modular_id * 2] = tmp & 0xffff;
+			if (thr)
+			{
+				memcpy(&tmp, ar->data, 4);
+				tmp = be32toh(tmp);
+				info->temp[0 + modular_id * 2] = tmp >> 16;
+				info->temp[1 + modular_id * 2] = tmp & 0xffff;
 
-			memcpy(&tmp, ar->data + 4, 4);
-			tmp = be32toh(tmp);
-			info->fan[0 + modular_id * 2] = tmp >> 16;
-			info->fan[1 + modular_id * 2] = tmp & 0xffff;
+				memcpy(&tmp, ar->data + 4, 4);
+				tmp = be32toh(tmp);
+				info->fan[0 + modular_id * 2] = tmp >> 16;
+				info->fan[1 + modular_id * 2] = tmp & 0xffff;
 
-			memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
-			memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
-			memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
-			memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
-			info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
-			info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
-			info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
-			info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
+				memcpy(&(info->get_frequency[modular_id]), ar->data + 8, 4);
+				memcpy(&(info->get_voltage[modular_id]), ar->data + 12, 4);
+				memcpy(&(info->local_work[modular_id]), ar->data + 16, 4);
+				memcpy(&(info->hw_work[modular_id]), ar->data + 20, 4);
+				info->get_frequency[modular_id] = be32toh(info->get_frequency[modular_id]);
+				info->get_voltage[modular_id] = be32toh(info->get_voltage[modular_id]);
+				info->local_work[modular_id] = be32toh(info->local_work[modular_id]);
+				info->hw_work[modular_id] = be32toh(info->hw_work[modular_id]);
 
-			info->local_works[modular_id] += info->local_work[modular_id];
-			info->hw_works[modular_id] += info->hw_work[modular_id];
+				info->local_works[modular_id] += info->local_work[modular_id];
+				info->hw_works[modular_id] += info->hw_work[modular_id];
 
-			avalon2->temp = info->temp[0]; /* FIXME: */
+				avalon2->temp = info->temp[0]; /* FIXME: */
+			}
 			break;
 		case AVA2_P_ACKDETECT:
 			break;
@@ -335,13 +340,13 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 
 	memcpy(buf, pkg, AVA2_WRITE_SIZE);
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon2: Sent(%ld):", nr_len);
+		applog(LOG_DEBUG, "Avalon2: Sent(%ld):", (long)nr_len);
 		hexdump((uint8_t *)buf, nr_len);
 	}
 
 	ret = write(fd, buf, nr_len);
 	if (unlikely(ret != nr_len)) {
-		applog(LOG_DEBUG, "Avalon2: Send(%d)!", ret);
+		applog(LOG_DEBUG, "Avalon2: Send(%d)!", (int)ret);
 		return AVA2_SEND_ERROR;
 	}
 
@@ -374,7 +379,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %ld, %d, %d, %d, %d",
-	       bytes_len(&pool->swork.coinbase),
+	       (long)bytes_len(&pool->swork.coinbase),
 	       pool->swork.nonce2_offset,
 	       pool->swork.n2size,
 	       36,
@@ -743,7 +748,8 @@ static struct api_data *avalon2_api_stats(struct cgpu_info *cgpu)
 	double hwp;
 	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++) {
 		sprintf(buf, "ID%d MM Version", i + 1);
-		root = api_add_string(root, buf, &(info->mm_version[i]), false);
+		const char * const mmv = info->mm_version[i];
+		root = api_add_string(root, buf, mmv, false);
 	}
 	for (i = 0; i < AVA2_DEFAULT_MINERS * AVA2_DEFAULT_MODULARS; i++) {
 		sprintf(buf, "Match work count%02d", i + 1);
