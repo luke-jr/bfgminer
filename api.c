@@ -33,23 +33,9 @@
 #endif
 #include "miner.h"
 #include "util.h"
-<<<<<<<
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 #include "driver-opencl.h"
 #include "version.h"
-|||||||
-#include "klist.h"
-
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || defined(USE_MINION)
-#define HAVE_AN_ASIC 1
-#endif
-=======
-#include "klist.h"
-
-#if defined(USE_BFLSC) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_HASHFAST) || defined(USE_BITFURY) || defined(USE_KLONDIKE) || defined(USE_KNC) || defined(USE_BAB) || defined(USE_DRILLBIT) || defined(USE_MINION)
-#define HAVE_AN_ASIC 1
-#endif
->>>>>>> 7c5b0b8... Add Avalon2 (2U size machine) support
 
 #define HAVE_AN_FPGA 1
 

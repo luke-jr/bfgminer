@@ -32,15 +32,17 @@
   #include <io.h>
 #endif
 
-#include "elist.h"
+#include <utlist.h>
+
 #include "miner.h"
-#include "fpgautils.h"
 #include "driver-avalon2.h"
 #include "crc.h"
-#include "hexdump.c"
+#include "lowl-vcom.h"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
+
+BFG_REGISTER_DRIVER(avalon2_drv)
 
 int opt_avalon2_freq_min = AVA2_DEFAULT_FREQUENCY;
 int opt_avalon2_freq_max = AVA2_DEFAULT_FREQUENCY_MAX;
@@ -372,28 +374,28 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %ld, %d, %d, %d, %d",
-	       pool->swork.cb_len,
-	       pool->nonce2_offset,
-	       pool->n2size,
-	       pool->merkle_offset,
+	       bytes_len(&pool->swork.coinbase),
+	       pool->swork.nonce2_offset,
+	       pool->swork.n2size,
+	       36,
 	       pool->swork.merkles);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
-	tmp = be32toh(pool->swork.cb_len);
+	tmp = be32toh(bytes_len(&pool->swork.coinbase));
 	memcpy(pkg.data, &tmp, 4);
 
-	tmp = be32toh(pool->nonce2_offset);
+	tmp = be32toh(pool->swork.nonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(pool->n2size);
+	tmp = be32toh(pool->swork.n2size);
 	memcpy(pkg.data + 8, &tmp, 4);
 
-	tmp = be32toh(pool->merkle_offset);
+	tmp = be32toh(36);
 	memcpy(pkg.data + 12, &tmp, 4);
 
 	tmp = be32toh(pool->swork.merkles);
 	memcpy(pkg.data + 16, &tmp, 4);
 
-	tmp = be32toh((int)pool->swork.diff);
+	tmp = be32toh((int)pdiff_to_bdiff(target_diff(pool->swork.target)));
 	memcpy(pkg.data + 20, &tmp, 4);
 
 	tmp = be32toh((int)pool->pool_no);
@@ -403,13 +405,12 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	set_target(target, pool->swork.diff);
+	memcpy(target, pool->swork.target, sizeof(target));
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
-		char *target_str;
-		target_str = bin2hex(target, 32);
+		char target_str[(32 * 2) + 1];
+		bin2hex(target_str, target, 32);
 		applog(LOG_DEBUG, "Avalon2: Pool stratum target: %s", target_str);
-		free(target_str);
 	}
 	avalon2_init_pkg(&pkg, AVA2_P_TARGET, 1, 1);
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
@@ -429,18 +430,18 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	a = pool->swork.cb_len / AVA2_P_DATA_LEN;
-	b = pool->swork.cb_len % AVA2_P_DATA_LEN;
+	a = bytes_len(&pool->swork.coinbase) / AVA2_P_DATA_LEN;
+	b = bytes_len(&pool->swork.coinbase) % AVA2_P_DATA_LEN;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message COINBASE: %d %d", a, b);
 	for (i = 0; i < a; i++) {
-		memcpy(pkg.data, pool->coinbase + i * 32, 32);
+		memcpy(pkg.data, bytes_buf(&pool->swork.coinbase) + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
 	}
 	if (b) {
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
-		memcpy(pkg.data, pool->coinbase + i * 32, b);
+		memcpy(pkg.data, bytes_buf(&pool->swork.coinbase) + i * 32, b);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
@@ -450,16 +451,22 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %d", b);
 	for (i = 0; i < b; i++) {
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
-		memcpy(pkg.data, pool->swork.merkle_bin[i], 32);
+		memcpy(pkg.data, &bytes_buf(&pool->swork.merkle_bin)[0x20 * i], 32);
 		avalon2_init_pkg(&pkg, AVA2_P_MERKLES, i + 1, b);
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
 	}
 
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message HEADER: 4");
+	uint8_t header_bin[0x80];
+	memcpy(&header_bin[0], pool->swork.header1, 36);
+	*((uint32_t*)&header_bin[68]) = htobe32(pool->swork.ntime);
+	memcpy(&header_bin[72], pool->swork.diffbits, 4);
+	memset(&header_bin[76], 0, 4);  // nonce
+	memcpy(&header_bin[80], bfg_workpadding_bin, 48);
 	for (i = 0; i < 4; i++) {
 		memset(pkg.data, 0, AVA2_P_HEADER);
-		memcpy(pkg.data, pool->header_bin + i * 32, 32);
+		memcpy(pkg.data, header_bin + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_HEADER, i + 1, 4);
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
@@ -581,7 +588,7 @@ static bool avalon2_detect_one(const char *devpath)
 
 static inline void avalon2_detect()
 {
-	serial_detect(&avalon2_drv, avalon2_detect_one);
+	generic_detect(&avalon2_drv, avalon2_detect_one, NULL, 0);
 }
 
 static void avalon2_init(struct cgpu_info *avalon2)
@@ -655,27 +662,27 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 	uint32_t tmp, range, start;
 	int i;
 
-	if (thr->work_restart || thr->work_update ||
+	if (thr->work_restart || thr->work_restart ||
 	    info->first) {
 		info->new_stratum = true;
 		applog(LOG_DEBUG, "Avalon2: New stratum: restart: %d, update: %d, first: %d",
-		       thr->work_restart, thr->work_update, info->first);
-		thr->work_update = false;
+		       thr->work_restart, thr->work_restart, info->first);
+		thr->work_restart = false;
 		thr->work_restart = false;
 		if (unlikely(info->first))
 			info->first = false;
 
-		get_work(thr, thr->id); /* Make sure pool is ready */
+		get_work(thr); /* Make sure pool is ready */
 
 		pool = current_pool();
 		if (!pool->has_stratum)
 			quit(1, "Avalon2: Miner Manager have to use stratum pool");
-		if (pool->swork.cb_len > AVA2_P_COINBASE_SIZE)
+		if (bytes_len(&pool->swork.coinbase) > AVA2_P_COINBASE_SIZE)
 			quit(1, "Avalon2: Miner Manager pool coinbase length have to less then %d", AVA2_P_COINBASE_SIZE);
 		if (pool->swork.merkles > AVA2_P_MERKLES_COUNT)
 			quit(1, "Avalon2: Miner Manager merkles have to less then %d", AVA2_P_MERKLES_COUNT);
 
-		info->diff = (int)pool->swork.diff - 1;
+		info->diff = (int)pdiff_to_bdiff(target_diff(pool->swork.target)) - 1;
 		info->pool_no = pool->pool_no;
 
 		cg_wlock(&pool->data_lock);
@@ -787,14 +794,13 @@ static void avalon2_shutdown(struct thr_info *thr)
 }
 
 struct device_drv avalon2_drv = {
-	.drv_id = DRIVER_avalon2,
 	.dname = "avalon2",
 	.name = "AV2",
 	.get_api_stats = avalon2_api_stats,
 	.drv_detect = avalon2_detect,
 	.reinit_device = avalon2_init,
 	.thread_prepare = avalon2_prepare,
-	.hash_work = hash_driver_work,
+	.minerloop = hash_driver_work,
 	.scanwork = avalon2_scanhash,
 	.thread_shutdown = avalon2_shutdown,
 };

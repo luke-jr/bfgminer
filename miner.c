@@ -86,20 +86,10 @@
 #include "driver-avalon.h"
 #endif
 
-<<<<<<<
-|||||||
-#ifdef USE_BFLSC
-#include "driver-bflsc.h"
-#endif
-=======
 #ifdef USE_AVALON2
 #include "driver-avalon2.h"
 #endif
 
-#ifdef USE_BFLSC
-#include "driver-bflsc.h"
-#endif
->>>>>>>
 #ifdef HAVE_BFG_LOWLEVEL
 #include "lowlevel.h"
 #endif
@@ -114,15 +104,9 @@
 #include "scrypt.h"
 #endif
 
-<<<<<<<
 #include "version.h"
 
-#if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
-|||||||
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_MODMINER)
-=======
-#if defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_MODMINER)
->>>>>>>
+#if defined(USE_AVALON) || defined(USE_AVALON2) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
 
@@ -2795,7 +2779,8 @@ void free_work(struct work *work)
 	free(work);
 }
 
-static const char *workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
+const char *bfg_workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
+#define workpadding_bin bfg_workpadding_bin
 
 // Must only be called with ch_lock held!
 static
@@ -3280,18 +3265,7 @@ int bfg_wresize(WINDOW *win, int lines, int columns)
 #else
 #	define bfg_wresize wresize
 #endif
-<<<<<<<
 
-|||||||
-#ifdef USE_BFLSC
-		"bflsc "
-=======
-#ifdef USE_AVALON2
-		"avalon2 "
-#endif
-#ifdef USE_BFLSC
-		"bflsc "
->>>>>>>
 #endif
 
 void tailsprintf(char *buf, size_t bufsz, const char *fmt, ...)
@@ -9347,7 +9321,7 @@ void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2
 	pool->nonce2 = nonce2;
 	gen_stratum_work(pool, work);
 
-	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
+//	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
 	submit_nonce(thr, work, nonce);
 	free_work(work);
 }
@@ -9965,15 +9939,7 @@ void hash_queued_work(struct thr_info *mythr)
 		struct timeval diff;
 		int64_t hashes;
 
-<<<<<<<
 		fill_queue(mythr, cgpu, drv, thr_id);
-|||||||
-		mythr->work_update = false;
-=======
-#ifndef USE_AVALON2
-		mythr->work_update = false;
-#endif
->>>>>>>
 
 		thread_reportin(mythr);
 		hashes = drv->scanwork(mythr);

@@ -11,8 +11,8 @@
 #ifndef _AVALON2_H_
 #define _AVALON2_H_
 
+#include "lowl-vcom.h"
 #include "util.h"
-#include "fpgautils.h"
 
 #ifdef USE_AVALON2
 
