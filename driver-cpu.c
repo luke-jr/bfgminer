@@ -764,7 +764,6 @@ static int cpu_autodetect()
 
 		cgpu = &cpus[i];
 		cgpu->drv = &cpu_drv;
-		cgpu->devtype = "CPU";
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
 		cgpu->kname = algo_names[opt_algo];

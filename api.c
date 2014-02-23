@@ -1421,8 +1421,6 @@ int find_index_by_cgpu(struct cgpu_info *cgpu)
 			break;
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
-		if (cgpu->devtype == devices[i]->devtype)
-			++n;
 	}
 	rd_unlock(&devices_lock);
 	return n;
@@ -1521,7 +1519,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 			break;
 	}
 
-	root = api_add_int(root, (char*)cgpu->devtype, &n, true);
+	root = api_add_int(root, "PGA", &n, true);
 	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Enabled", bool2str(enabled), false);
 	root = api_add_string(root, "Status", status2str(status), false);
