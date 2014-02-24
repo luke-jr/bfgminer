@@ -44,7 +44,6 @@ struct stratumsrv_job {
 	
 	struct timeval tv_prepared;
 	struct stratum_work swork;
-	char *nonce1;
 	
 	UT_hash_handle hh;
 };
@@ -91,7 +90,7 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 	memcpy(p, &xnonce1, _ssm_client_octets);
 	if (p != s)
 		memset(s, '\xbb', p - s);
-	gen_stratum_work2(work, &ssj->swork, ssj->nonce1);
+	gen_stratum_work2(work, &ssj->swork);
 }
 
 static
@@ -143,7 +142,6 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	ssj = malloc(sizeof(*ssj));
 	*ssj = (struct stratumsrv_job){
 		.my_job_id = strdup(my_job_id),
-		.nonce1 = maybe_strdup(pool->nonce1),
 	};
 	timer_set_now(&ssj->tv_prepared);
 	stratum_work_cpy(&ssj->swork, swork);
@@ -177,7 +175,6 @@ void _ssj_free(struct stratumsrv_job * const ssj)
 {
 	free(ssj->my_job_id);
 	stratum_work_clean(&ssj->swork);
-	free(ssj->nonce1);
 	free(ssj);
 }
 

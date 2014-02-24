@@ -5727,7 +5727,7 @@ next_write_sws:
 			cg_rlock(&pool->data_lock);
 			// NOTE: cgminer only does this check on retries, but BFGMiner does it for even the first/normal submit; therefore, it needs to be such that it always is true on the same connection regardless of session management
 			// NOTE: Worst case scenario for a false positive: the pool rejects it as H-not-zero
-			sessionid_match = (!pool->nonce1) || !strcmp(work->nonce1, pool->nonce1);
+			sessionid_match = (!pool->swork.nonce1) || !strcmp(work->nonce1, pool->swork.nonce1);
 			cg_runlock(&pool->data_lock);
 			if (!sessionid_match)
 			{
@@ -8712,6 +8712,7 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	*dst = *src;
 	if (dst->tr)
 		tmpl_incref(dst->tr);
+	dst->nonce1 = maybe_strdup(src->nonce1);
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
@@ -8721,6 +8722,7 @@ void stratum_work_clean(struct stratum_work * const swork)
 {
 	if (swork->tr)
 		tmpl_decref(swork->tr);
+	free(swork->nonce1);
 	free(swork->job_id);
 	bytes_free(&swork->coinbase);
 	bytes_free(&swork->merkle_bin);
@@ -8764,12 +8766,12 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	
 	work->pool = pool;
 	work->work_restart_id = pool->swork.work_restart_id;
-	gen_stratum_work2(work, &pool->swork, pool->nonce1);
+	gen_stratum_work2(work, &pool->swork);
 	
 	cgtime(&work->tv_staged);
 }
 
-void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char *nonce1)
+void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 {
 	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
 	uint8_t *merkle_bin;
@@ -8810,7 +8812,7 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 
 	/* Copy parameters required for share submission */
 	work->job_id = maybe_strdup(swork->job_id);
-	work->nonce1 = maybe_strdup(nonce1);
+	work->nonce1 = maybe_strdup(swork->nonce1);
 	if (swork->data_lock_p)
 		cg_runlock(swork->data_lock_p);
 
