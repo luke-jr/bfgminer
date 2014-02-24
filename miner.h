@@ -1157,6 +1157,9 @@ struct stratum_work {
 	bool opaque;
 	
 	cglock_t *data_lock_p;
+	
+	struct pool *pool;
+	unsigned char work_restart_id;
 };
 
 #define RBUFSIZE 8192

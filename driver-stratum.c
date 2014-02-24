@@ -42,8 +42,6 @@ static notifier_t _ssm_update_notifier;
 struct stratumsrv_job {
 	char *my_job_id;
 	
-	struct pool *pool;
-	uint8_t work_restart_id;
 	struct timeval tv_prepared;
 	struct stratum_work swork;
 	char *nonce1;
@@ -76,8 +74,8 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 	uint8_t *p, *s;
 	
 	*work = (struct work){
-		.pool = ssj->pool,
-		.work_restart_id = ssj->work_restart_id,
+		.pool = ssj->swork.pool,
+		.work_restart_id = ssj->swork.work_restart_id,
 		.tv_staged = ssj->tv_prepared,
 	};
 	bytes_resize(&work->nonce2, ssj->swork.n2size);
@@ -145,9 +143,6 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	ssj = malloc(sizeof(*ssj));
 	*ssj = (struct stratumsrv_job){
 		.my_job_id = strdup(my_job_id),
-		
-		.pool = pool,
-		.work_restart_id = pool->work_restart_id,
 		.nonce1 = maybe_strdup(pool->nonce1),
 	};
 	timer_set_now(&ssj->tv_prepared);

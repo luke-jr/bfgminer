@@ -1047,6 +1047,7 @@ struct pool *add_pool(void)
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
+	pool->swork.pool = pool;
 
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
@@ -2964,6 +2965,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			free(swork->job_id);
 			swork->job_id = NULL;
 			swork->clean = true;
+			swork->work_restart_id = pool->work_restart_id;
 			// FIXME: Do something with expire
 			pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 			pool->nonce2 = 0;
@@ -6319,7 +6321,10 @@ static bool test_work_current(struct work *work)
 			}
 		}
 	  if (work->longpoll) {
+		struct pool * const pool = work->pool;
 		++work->pool->work_restart_id;
+		if (work->tr && work->tr == pool->swork.tr)
+			pool->swork.work_restart_id = pool->work_restart_id;
 		update_last_work(work);
 		if ((!restart) && work->pool == current_pool()) {
 			applog(
@@ -8301,6 +8306,7 @@ static void *stratum_thread(void *userdata)
 				have_block_height(block_id, height);
 			}
 
+			pool->swork.work_restart_id =
 			++pool->work_restart_id;
 			if (test_work_current(work)) {
 				/* Only accept a work update if this stratum
@@ -8757,7 +8763,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	pool->nonce2++;
 	
 	work->pool = pool;
-	work->work_restart_id = work->pool->work_restart_id;
+	work->work_restart_id = pool->swork.work_restart_id;
 	gen_stratum_work2(work, &pool->swork, pool->nonce1);
 	
 	cgtime(&work->tv_staged);
