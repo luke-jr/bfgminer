@@ -231,6 +231,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		{
 			if (epollfd != -1)
 				close(epollfd);
+			print_hex((char *)buf, read_size, "Read from UART:\n");
 			return ICA_GETS_OK;
 		}
 
@@ -264,6 +265,7 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
+	print_hex((char*)buf, bufLen, "Send to UART:\n"); 
 	if (unlikely(fd == -1))
 		return 1;
 	
@@ -276,7 +278,7 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 
 #define icarus_close(fd) serial_close(fd)
 
-static void do_icarus_close(struct thr_info *thr)
+void do_icarus_close(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	const int fd = icarus->device_fd;
@@ -453,27 +455,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	struct timeval tv_start, tv_finish;
 	int fd;
 
-	// Block 171874 nonce = (0xa2870100) = 0x000187a2
-	// N.B. golden_ob MUST take less time to calculate
-	//	than the timeout set in icarus_open()
-	//	This one takes ~0.53ms on Rev3 Icarus
-	const char golden_ob[] =
-		"4679ba4ec99876bf4bfe086082b40025"
-		"4df6c356451471139a3afa71e48f544a"
-		"00000000000000000000000000000000"
-		"0000000087320b1a1426674f2fa722ce";
-	/* NOTE: This gets sent to basically every port specified in --scan-serial,
-	 *       even ones that aren't Icarus; be sure they can all handle it, when
-	 *       this is changed...
-	 *       BitForce: Ignores entirely
-	 *       ModMiner: Starts (useless) work, gets back to clean state
-	 */
-
-	const char golden_nonce[] = "000187a2";
-
-	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
-	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
-
 	drv_set_defaults(api, icarus_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
 	int baud = info->baud;
@@ -493,7 +474,40 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (info->read_size == 0)
 		info->read_size = ICARUS_DEFAULT_READ_SIZE;
 
-	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
+	// Set work defaults
+	if (info->golden_ob == NULL)
+	{
+		// Block 171874 nonce = (0xa2870100) = 0x000187a2
+		// N.B. golden_ob MUST take less time to calculate
+		//	than the timeout set in icarus_open()
+		//	This one takes ~0.53ms on Rev3 Icarus
+		info->golden_ob =
+		"4679ba4ec99876bf4bfe086082b40025"
+		"4df6c356451471139a3afa71e48f544a"
+		"00000000000000000000000000000000"
+		"0000000087320b1a1426674f2fa722ce";
+		/* NOTE: This gets sent to basically every port specified in --scan-serial,
+		 *       even ones that aren't Icarus; be sure they can all handle it, when
+		 *       this is changed...
+		 *       BitForce: Ignores entirely
+		 *       ModMiner: Starts (useless) work, gets back to clean state
+		 */
+
+		info->golden_nonce = "000187a2";
+		info->work_size = 64;
+	}
+
+	if (info->detect_init_func != NULL)
+	{
+		info->detect_init_func(devpath, fd);
+		usleep(1000);
+	}
+
+	unsigned char ob_bin[info->work_size], nonce_bin[ICARUS_NONCE_SIZE];
+	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
+	
+	memset(ob_bin, 0, sizeof(ob_bin));
+	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 	cgtime(&tv_start);
 
@@ -502,24 +516,28 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// We will then compare the bytes left in fd with info->read_size to determine
 	// if this is a valid device
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
+
+	if (info->reverse_nonce)
+		rev(nonce_bin, 4);
 	
 	// How many bytes were left after reading the above nonce
 	int bytes_left = icarus_excess_nonce_size(fd, info);
-	
-	icarus_close(fd);
 
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
+	if (strncmp(nonce_hex, info->golden_nonce, 8))
+	{
+		icarus_close(fd);
 		applog(LOG_DEBUG,
 			"%s: "
 			"Test failed at %s: get %s, should: %s",
 			api->dname,
-			devpath, nonce_hex, golden_nonce);
+			devpath, nonce_hex, info->golden_nonce);
 		return false;
 	}
 		
 	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
 	{
+		icarus_close(fd);
 		applog(LOG_DEBUG,
 			   "%s: "
 			   "Test failed at %s: expected %d bytes, got %d",
@@ -528,6 +546,9 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 		return false;
 	}
 	
+	if (info->reopen_mode != IRM_NEVER)
+		icarus_close(fd);
+
 	applog(LOG_DEBUG,
 		"%s: "
 		"Test succeeded at %s: got %s",
@@ -542,7 +563,11 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus = calloc(1, sizeof(struct cgpu_info));
 	icarus->drv = api;
 	icarus->device_path = strdup(devpath);
-	icarus->device_fd = -1;
+	if (info->reopen_mode == IRM_NEVER)
+		icarus->device_fd = fd;
+	else
+		icarus->device_fd = -1;
+
 	icarus->threads = 1;
 	icarus->set_device_funcs = icarus_set_device_funcs;
 	add_cgpu(icarus);
@@ -596,9 +621,22 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
 
-	icarus->device_fd = -1;
 
-	int fd = icarus_open2(icarus->device_path, info->baud, true);
+	int fd = 0;
+	if (info->reopen_mode == IRM_NEVER)
+	{
+		if(icarus->device_fd >0)
+			fd = icarus->device_fd;
+		else
+			fd = icarus_open(icarus->device_path, info[icarus->device_id].baud);
+		usleep(1000);
+	}
+	else
+	{
+		icarus->device_fd = -1;
+		fd = icarus_open2(icarus->device_path, info->baud, true);
+	}
+
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to open %s",
 		       icarus->dev_repr,
@@ -737,6 +775,9 @@ static bool icarus_job_start(struct thr_info *thr)
 	int fd = icarus->device_fd;
 	int ret;
 
+	if (info->job_start_init_func != NULL)
+		info->job_start_init_func(icarus->device_path, fd);
+
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(!state->firstrun)) {
@@ -746,7 +787,7 @@ static bool icarus_job_start(struct thr_info *thr)
 	
 	cgtime(&state->tv_workstart);
 
-	ret = icarus_write(fd, ob_bin, 64);
+	ret = icarus_write(fd, ob_bin, info->work_size);
 	if (ret) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", icarus->proc_repr, ret);
@@ -755,8 +796,8 @@ static bool icarus_job_start(struct thr_info *thr)
 	}
 
 	if (opt_debug) {
-		char ob_hex[129];
-		bin2hex(ob_hex, ob_bin, 64);
+		char ob_hex[(sizeof(ob_bin) * 2) + 1];
+		bin2hex(ob_hex, ob_bin, info->work_size);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
 			ob_hex);
@@ -887,7 +928,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct icarus_state *state = thr->cgpu_data;
 	was_first_run = state->firstrun;
 
-	icarus_job_prepare(thr, work, max_nonce);
+	if (icarus->drv->job_prepare != NULL)
+		icarus->drv->job_prepare(thr, work, max_nonce);
+	else
+		icarus_job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
@@ -934,6 +978,9 @@ keepwaiting:
 				case ICA_GETS_OK:
 					break;
 			}
+
+			if (info->reverse_nonce)
+				rev(nonce_bin, 4);
 		}
 
 		tv_start = state->tv_workstart;

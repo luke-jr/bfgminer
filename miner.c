@@ -1781,7 +1781,7 @@ static char *set_icarus_options(const char *arg)
 	char *opts = strdup(arg), *argdup;
 	argdup = opts;
 	const struct bfg_set_device_definition *sdf = icarus_set_device_funcs;
-	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
+	const char *drivers[] = {"dualminer", "antminer", "cairnsmore", "erupter", "icarus"};
 	char *saveptr, *opt;
 	for (int i = 0; i < 4; ++i, ++sdf)
 	{
@@ -1807,7 +1807,7 @@ static char *set_icarus_timing(const char *arg)
 		return "icarus-timing no longer supports comma-delimited syntax, see README.FPGA for better control";
 	applog(LOG_WARNING, "icarus-timing is deprecated! See README.FPGA for better control");
 	
-	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
+	const char *drivers[] = {"dualminer", "antminer", "cairnsmore", "erupter", "icarus"};
 	for (int j = 0; j < 4; ++j)
 		add_set_device_option("%s:timing=%s", drivers[j], arg);
 	return NULL;
@@ -8623,7 +8623,7 @@ void set_target(unsigned char *dest_target, double diff)
 	
 	if (opt_debug) {
 		char htarget[65];
-		bin2hex(htarget, rtarget, 32);
+		bin2hex(htarget, dest_target, 32);
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 	}
 }
@@ -10500,15 +10500,12 @@ rescan:
 	bfg_need_detect_rescan = false;
 	
 #ifdef HAVE_BFG_LOWLEVEL
-	if (!opt_scrypt)
-	{
-		struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
-		
-		LL_FOREACH_SAFE(infolist, info, infotmp)
-			probe_device(info);
-		LL_FOREACH_SAFE(infolist, info, infotmp)
-			pthread_join(info->probe_pth, NULL);
-	}
+	struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
+	
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		probe_device(info);
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		pthread_join(info->probe_pth, NULL);
 #endif
 	
 	struct driver_registration *reg, *tmp;

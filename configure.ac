@@ -414,7 +414,7 @@ if test "x$bitforce" = xyes; then
 fi
 AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
 
-driverlist="$driverlist icarus cairnsmore/icarus erupter/icarus antminer/icarus"
+driverlist="$driverlist icarus cairnsmore/icarus erupter/icarus antminer/icarus dualminer/icarus"
 AC_ARG_ENABLE([icarus],
 	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
 	[icarus=$enableval],
