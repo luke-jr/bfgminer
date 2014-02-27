@@ -4226,8 +4226,8 @@ void api(int api_thr_id)
 				if (!did) {
 					if (strchr(cmd, CMDJOIN)) {
 						firstjoin = isjoin = true;
-						// cmd + leading '|' + '\0'
-						cmdsbuf = malloc(strlen(cmd) + 2);
+						// cmd + leading+tailing '|' + '\0'
+						cmdsbuf = malloc(strlen(cmd) + 3);
 						if (!cmdsbuf)
 							quithere(1, "OOM cmdsbuf");
 						strcpy(cmdsbuf, "|");
