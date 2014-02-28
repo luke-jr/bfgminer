@@ -8643,6 +8643,11 @@ void stratum_work_clean(struct stratum_work * const swork)
 	bytes_free(&swork->merkle_bin);
 }
 
+bool pool_has_usable_swork(const struct pool * const pool)
+{
+	return pool->stratum_notify;
+}
+
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */

@@ -275,11 +275,11 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 	else
 		stratumsrv_job_pruner();
 	
-	if (!pool->stratum_notify)
+	if (!pool_has_usable_swork(pool))
 	{
-		applog(LOG_WARNING, "SSM: Not using a stratum server upstream!");
+		applog(LOG_WARNING, "SSM: No usable 2D work upstream!");
 		if (clean)
-			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
+			stratumsrv_boot_all_subscribed("Current upstream pool does not have usable 2D work");
 		goto out;
 	}
 	
