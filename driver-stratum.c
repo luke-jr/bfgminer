@@ -367,6 +367,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	const char * const extranonce2 = __json_array_string(params, 2);
 	const char * const ntime = __json_array_string(params, 3);
 	const char * const nonce = __json_array_string(params, 4);
+	uint8_t xnonce2[work2d_xnonce2sz];
 	uint32_t nonce_n;
 	
 	if (unlikely(!client))
@@ -390,7 +391,8 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	
 	// Generate dummy work
 	work = &_work;
-	_ssm_gen_dummy_work(work, &ssj->swork, &ssj->tv_prepared, extranonce2, *xnonce1_p);
+	hex2bin(xnonce2, extranonce2, work2d_xnonce2sz);
+	work2d_gen_dummy_work(work, &ssj->swork, &ssj->tv_prepared, xnonce2, *xnonce1_p);
 	
 	// Submit nonce
 	hex2bin(&work->data[68], ntime, 4);
