@@ -2647,6 +2647,40 @@ static void calc_midstate(struct work *work)
 	swap32tole(work->midstate, work->midstate, 8);
 }
 
+static
+struct bfg_tmpl_ref *tmpl_makeref(blktemplate_t * const tmpl)
+{
+	struct bfg_tmpl_ref * const tr = malloc(sizeof(*tr));
+	*tr = (struct bfg_tmpl_ref){
+		.tmpl = tmpl,
+		.refcount = 1,
+	};
+	mutex_init(&tr->mutex);
+	return tr;
+}
+
+static
+void tmpl_incref(struct bfg_tmpl_ref * const tr)
+{
+	mutex_lock(&tr->mutex);
+	++tr->refcount;
+	mutex_unlock(&tr->mutex);
+}
+
+static
+void tmpl_decref(struct bfg_tmpl_ref * const tr)
+{
+	mutex_lock(&tr->mutex);
+	bool free_tmpl = !--tr->refcount;
+	mutex_unlock(&tr->mutex);
+	if (free_tmpl)
+	{
+		blktmpl_free(tr->tmpl);
+		mutex_destroy(&tr->mutex);
+		free(tr);
+	}
+}
+
 static struct work *make_work(void)
 {
 	struct work *work = calloc(1, sizeof(struct work));
@@ -2671,16 +2705,8 @@ void clean_work(struct work *work)
 	if (work->device_data_free_func)
 		work->device_data_free_func(work);
 
-	if (work->tmpl) {
-		struct pool *pool = work->pool;
-		mutex_lock(&pool->pool_lock);
-		bool free_tmpl = !--*work->tmpl_refcount;
-		mutex_unlock(&pool->pool_lock);
-		if (free_tmpl) {
-			blktmpl_free(work->tmpl);
-			free(work->tmpl_refcount);
-		}
-	}
+	if (work->tr)
+		tmpl_decref(work->tr);
 
 	memset(work, 0, sizeof(struct work));
 }
@@ -2764,28 +2790,30 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			detect_algo = 2;
 	}
 	
-	if (work->tmpl) {
+	if (work->tr)
+	{
+		blktemplate_t * const tmpl = work->tr->tmpl;
 		struct timeval tv_now;
 		cgtime(&tv_now);
-		const char *err = blktmpl_add_jansson(work->tmpl, res_val, tv_now.tv_sec);
+		const char *err = blktmpl_add_jansson(tmpl, res_val, tv_now.tv_sec);
 		if (err) {
 			applog(LOG_ERR, "blktmpl error: %s", err);
 			return false;
 		}
-		work->rolltime = blkmk_time_left(work->tmpl, tv_now.tv_sec);
+		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
 		if (opt_coinbase_script.sz)
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
-			blkmk_init_generation2(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz, &newcb);
+			blkmk_init_generation2(tmpl, opt_coinbase_script.data, opt_coinbase_script.sz, &newcb);
 #else
-			newcb = !work->tmpl->cbtxn;
-			blkmk_init_generation(work->tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
+			newcb = !tmpl->cbtxn;
+			blkmk_init_generation(tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
 #endif
 			if (newcb)
 			{
-				ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, &template_nonce, sizeof(template_nonce));
+				ssize_t ae = blkmk_append_coinbase_safe(tmpl, &template_nonce, sizeof(template_nonce));
 				if (ae < (ssize_t)sizeof(template_nonce))
 					applog(LOG_WARNING, "Cannot append template-nonce to coinbase on pool %u (%"PRId64") - you might be wasting hashing!", work->pool->pool_no, (int64_t)ae);
 				++template_nonce;
@@ -2794,7 +2822,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 #endif
 #if BLKMAKER_VERSION > 0
 		{
-			ssize_t ae = blkmk_append_coinbase_safe(work->tmpl, opt_coinbase_sig, 101);
+			ssize_t ae = blkmk_append_coinbase_safe(tmpl, opt_coinbase_sig, 101);
 			static bool appenderr = false;
 			if (ae <= 0) {
 				if (opt_coinbase_sig) {
@@ -2830,7 +2858,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 					free(tmp);
 					truncatewarning = true;
 				}
-				ae = blkmk_append_coinbase_safe(work->tmpl, cbappend, ae);
+				ae = blkmk_append_coinbase_safe(tmpl, cbappend, ae);
 				if (ae <= 0) {
 					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%"PRId64")", (int64_t)ae);
 					appenderr = true;
@@ -2839,13 +2867,13 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			}
 		}
 #endif
-		if (blkmk_get_data(work->tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
+		if (blkmk_get_data(tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
 			return false;
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], workpadding_bin, 48);
 
 		const struct blktmpl_longpoll_req *lp;
-		if ((lp = blktmpl_get_longpoll(work->tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
+		if ((lp = blktmpl_get_longpoll(tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
 			free(pool->lp_id);
 			pool->lp_id = strdup(lp->id);
 
@@ -2875,7 +2903,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		applog(LOG_ERR, "JSON inval target");
 		return false;
 	}
-	if (work->tmpl) {
+	if (work->tr)
+	{
 		for (size_t i = 0; i < sizeof(work->target) / 2; ++i)
 		{
 			int p = (sizeof(work->target) - 1) - i;
@@ -2895,7 +2924,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	cgtime(&work->tv_staged);
 	
-	pool_set_opaque(pool, !work->tmpl);
+	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
 
@@ -4103,7 +4132,7 @@ static
 void maybe_local_submit(const struct work *work)
 {
 #if BLKMAKER_VERSION > 3
-	if (unlikely(work->block && work->tmpl))
+	if (unlikely(work->block && work->tr))
 	{
 		// This is a block with a full template (GBT)
 		// Regardless of the result, submit to local bitcoind(s) as well
@@ -4269,17 +4298,19 @@ static char *submit_upstream_work_request(struct work *work)
 	char *s, *sd;
 	struct pool *pool = work->pool;
 
-	if (work->tmpl) {
+	if (work->tr)
+	{
+		blktemplate_t * const tmpl = work->tr->tmpl;
 		json_t *req;
 		unsigned char data[80];
 		
 		swap32yes(data, work->data, 80 / 4);
 #if BLKMAKER_VERSION > 3
 		if (work->do_foreign_submit)
-			req = blkmk_submit_foreign_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
+			req = blkmk_submit_foreign_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
 		else
 #endif
-			req = blkmk_submit_jansson(work->tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
+			req = blkmk_submit_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
 		s = json_dumps(req, 0);
 		json_decref(req);
 		sd = malloc(161);
@@ -4301,7 +4332,7 @@ static char *submit_upstream_work_request(struct work *work)
 	}
 
 	applog(LOG_DEBUG, "DBG: sending %s submit RPC call: %s", pool->rpc_url, sd);
-	if (work->tmpl)
+	if (work->tr)
 		free(sd);
 	else
 		s = realloc_strcat(s, "\n");
@@ -4603,7 +4634,7 @@ static void wake_gws(void);
 
 static void update_last_work(struct work *work)
 {
-	if (!work->tmpl)
+	if (!work->tr)
 		// Only save GBT jobs, since rollntime isn't coordinated well yet
 		return;
 
@@ -4670,14 +4701,11 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 			return strdup(getwork_req);
 		case PLP_GETBLOCKTEMPLATE:
 			work->getwork_mode = GETWORK_MODE_GBT;
-			work->tmpl_refcount = malloc(sizeof(*work->tmpl_refcount));
-			if (!work->tmpl_refcount)
-				return NULL;
-			work->tmpl = blktmpl_create();
-			if (!work->tmpl)
+			blktemplate_t * const tmpl = blktmpl_create();
+			if (!tmpl)
 				goto gbtfail2;
-			*work->tmpl_refcount = 1;
-			gbt_capabilities_t caps = blktmpl_addcaps(work->tmpl);
+			work->tr = tmpl_makeref(tmpl);
+			gbt_capabilities_t caps = blktmpl_addcaps(tmpl);
 			if (!caps)
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
@@ -4703,11 +4731,9 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 	return NULL;
 
 gbtfail:
-	blktmpl_free(work->tmpl);
-	work->tmpl = NULL;
+	tmpl_decref(work->tr);
+	work->tr = NULL;
 gbtfail2:
-	free(work->tmpl_refcount);
-	work->tmpl_refcount = NULL;
 	return NULL;
 }
 
@@ -5074,10 +5100,11 @@ static inline bool can_roll(struct work *work)
 		return false;
 	if (!(work->pool && !work->clone))
 		return false;
-	if (work->tmpl) {
+	if (work->tr)
+	{
 		if (stale_work(work, false))
 			return false;
-		return blkmk_work_left(work->tmpl);
+		return blkmk_work_left(work->tr->tmpl);
 	}
 	return (work->rolltime &&
 		work->rolls < 7000 && !stale_work(work, false));
@@ -5085,10 +5112,11 @@ static inline bool can_roll(struct work *work)
 
 static void roll_work(struct work *work)
 {
-	if (work->tmpl) {
+	if (work->tr)
+	{
 		struct timeval tv_now;
 		cgtime(&tv_now);
-		if (blkmk_get_data(work->tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
+		if (blkmk_get_data(work->tr->tmpl, work->data, 80, tv_now.tv_sec, NULL, &work->dataid) < 76)
 			applog(LOG_ERR, "Failed to get next data from template; spinning wheels!");
 		swap32yes(work->data, work->data, 80 / 4);
 		calc_midstate(work);
@@ -5132,12 +5160,8 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 		work->nonce1 = strdup(base_work->nonce1);
 	bytes_cpy(&work->nonce2, &base_work->nonce2);
 
-	if (base_work->tmpl) {
-		struct pool *pool = work->pool;
-		mutex_lock(&pool->pool_lock);
-		++*work->tmpl_refcount;
-		mutex_unlock(&pool->pool_lock);
-	}
+	if (base_work->tr)
+		tmpl_incref(base_work->tr);
 	
 	if (noffset)
 	{
@@ -5243,7 +5267,7 @@ bool stale_work(struct work *work, bool share)
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
 	 * scantime */
-	if (work->rolltime >= opt_scantime || work->tmpl)
+	if (work->rolltime >= opt_scantime || work->tr)
 		work_expiry = work->rolltime;
 	else
 		work_expiry = opt_expiry;
@@ -8415,7 +8439,7 @@ badwork:
 		/* Decipher the longpoll URL, if any, and store it in ->lp_url */
 
 		const struct blktmpl_longpoll_req *lp;
-		if (work->tmpl && (lp = blktmpl_get_longpoll(work->tmpl))) {
+		if (work->tr && (lp = blktmpl_get_longpoll(work->tr->tmpl))) {
 			// NOTE: work_decode takes care of lp id
 			pool->lp_url = lp->uri ? absolute_uri(lp->uri, pool->rpc_url) : pool->rpc_url;
 			if (!pool->lp_url)
@@ -11888,10 +11912,10 @@ retry:
 				work = make_clone(pool->last_work_copy);
 				mutex_unlock(&pool->last_work_lock);
 				roll_work(work);
-				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tmpl, tv_now.tv_sec));
+				applog(LOG_DEBUG, "Generated work from latest GBT job in get_work_thread with %d seconds left", (int)blkmk_time_left(work->tr->tmpl, tv_now.tv_sec));
 				stage_work(work);
 				continue;
-			} else if (last_work->tmpl && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tmpl) > (unsigned long)mining_threads) {
+			} else if (last_work->tr && pool->proto == PLP_GETBLOCKTEMPLATE && blkmk_work_left(last_work->tr->tmpl) > (unsigned long)mining_threads) {
 				// Don't free last_work_copy, since it is used to detect upstream provides plenty of work per template
 			} else {
 				free_work(last_work);

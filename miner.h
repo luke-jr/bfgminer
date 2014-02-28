@@ -1126,6 +1126,12 @@ enum pool_protocol {
 	PLP_GETBLOCKTEMPLATE,
 };
 
+struct bfg_tmpl_ref {
+	blktemplate_t *tmpl;
+	int refcount;
+	pthread_mutex_t mutex;
+};
+
 struct stratum_work {
 	char *job_id;
 	bool clean;
@@ -1322,8 +1328,7 @@ struct work {
 	// Allow devices to timestamp work for their own purposes
 	struct timeval	tv_stamp;
 
-	blktemplate_t	*tmpl;
-	int		*tmpl_refcount;
+	struct bfg_tmpl_ref *tr;
 	unsigned int	dataid;
 	bool		do_foreign_submit;
 
