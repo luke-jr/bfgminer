@@ -11,8 +11,10 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "miner.h"
+#include "util.h"
 
 #define MAX_DIVISIONS 255
 
@@ -44,4 +46,29 @@ void release_work2d_(uint32_t xnonce1)
 {
 	xnonce1 = le32toh(xnonce1);
 	work2d_reserved[xnonce1] = false;
+}
+
+void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const char * const extranonce2, const uint32_t xnonce1)
+{
+	uint8_t *p, *s;
+	
+	*work = (struct work){
+		.pool = swork->pool,
+		.work_restart_id = swork->work_restart_id,
+		.tv_staged = *tvp_prepared,
+	};
+	bytes_resize(&work->nonce2, swork->n2size);
+	s = bytes_buf(&work->nonce2);
+	p = &s[swork->n2size - work2d_xnonce2sz];
+	if (extranonce2)
+		hex2bin(p, extranonce2, work2d_xnonce2sz);
+#ifndef __OPTIMIZE__
+	else
+		memset(p, '\0', work2d_xnonce2sz);
+#endif
+	p -= work2d_xnonce1sz;
+	memcpy(p, &xnonce1, work2d_xnonce1sz);
+	if (p != s)
+		memset(s, '\xbb', p - s);
+	gen_stratum_work2(work, swork);
 }
