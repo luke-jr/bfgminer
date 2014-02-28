@@ -68,18 +68,18 @@ struct stratumsrv_conn {
 static struct stratumsrv_conn *_ssm_connections;
 
 static
-void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const char * const extranonce2, uint32_t xnonce1)
+void _ssm_gen_dummy_work(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const char * const extranonce2, const uint32_t xnonce1)
 {
 	uint8_t *p, *s;
 	
 	*work = (struct work){
-		.pool = ssj->swork.pool,
-		.work_restart_id = ssj->swork.work_restart_id,
-		.tv_staged = ssj->tv_prepared,
+		.pool = swork->pool,
+		.work_restart_id = swork->work_restart_id,
+		.tv_staged = *tvp_prepared,
 	};
-	bytes_resize(&work->nonce2, ssj->swork.n2size);
+	bytes_resize(&work->nonce2, swork->n2size);
 	s = bytes_buf(&work->nonce2);
-	p = &s[ssj->swork.n2size - _ssm_client_xnonce2sz];
+	p = &s[swork->n2size - _ssm_client_xnonce2sz];
 	if (extranonce2)
 		hex2bin(p, extranonce2, _ssm_client_xnonce2sz);
 #ifndef __OPTIMIZE__
@@ -90,7 +90,7 @@ void _ssm_gen_dummy_work(struct work *work, struct stratumsrv_job *ssj, const ch
 	memcpy(p, &xnonce1, _ssm_client_octets);
 	if (p != s)
 		memset(s, '\xbb', p - s);
-	gen_stratum_work2(work, &ssj->swork);
+	gen_stratum_work2(work, swork);
 }
 
 static
@@ -153,7 +153,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	
 	if (likely(_ssm_cur_job_work.pool))
 		clean_work(&_ssm_cur_job_work);
-	_ssm_gen_dummy_work(&_ssm_cur_job_work, ssj, NULL, 0);
+	_ssm_gen_dummy_work(&_ssm_cur_job_work, &ssj->swork, &ssj->tv_prepared, NULL, 0);
 	
 	_ssm_notify_sz = p - buf;
 	assert(_ssm_notify_sz <= bufsz);
@@ -414,7 +414,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	
 	// Generate dummy work
 	work = &_work;
-	_ssm_gen_dummy_work(work, ssj, extranonce2, *xnonce1_p);
+	_ssm_gen_dummy_work(work, &ssj->swork, &ssj->tv_prepared, extranonce2, *xnonce1_p);
 	
 	// Submit nonce
 	hex2bin(&work->data[68], ntime, 4);
