@@ -72,3 +72,25 @@ void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const
 		memset(s, '\xbb', p - s);
 	gen_stratum_work2(work, swork);
 }
+
+bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1, const uint32_t nonce, const uint32_t ntime, bool * const out_is_stale)
+{
+	struct work _work, *work;
+	bool rv;
+	
+	// Generate dummy work
+	work = &_work;
+	work2d_gen_dummy_work(work, swork, tvp_prepared, xnonce2, xnonce1);
+	*(uint32_t *)&work->data[68] = htobe32(ntime);
+	
+	// Check if it's stale, if desired
+	if (out_is_stale)
+		*out_is_stale = stale_work(work, true);
+	
+	// Submit nonce
+	rv = submit_nonce(thr, work, nonce);
+	
+	clean_work(work);
+	
+	return rv;
+}

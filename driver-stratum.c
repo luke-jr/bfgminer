@@ -358,7 +358,6 @@ static
 void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const char *idstr, struct stratumsrv_conn * const conn)
 {
 	uint32_t * const xnonce1_p = &conn->xnonce1_le;
-	struct work _work, *work;
 	struct stratumsrv_job *ssj;
 	struct proxy_client *client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
 	struct cgpu_info *cgpu;
@@ -368,7 +367,8 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	const char * const ntime = __json_array_string(params, 3);
 	const char * const nonce = __json_array_string(params, 4);
 	uint8_t xnonce2[work2d_xnonce2sz];
-	uint32_t nonce_n;
+	uint32_t ntime_n, nonce_n;
+	bool is_stale;
 	
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
@@ -389,24 +389,20 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	if (!ssj)
 		return_stratumsrv_failure(21, "Job not found");
 	
-	// Generate dummy work
-	work = &_work;
 	hex2bin(xnonce2, extranonce2, work2d_xnonce2sz);
-	work2d_gen_dummy_work(work, &ssj->swork, &ssj->tv_prepared, xnonce2, *xnonce1_p);
 	
 	// Submit nonce
-	hex2bin(&work->data[68], ntime, 4);
+	hex2bin((void*)&ntime_n, ntime, 4);
+	ntime_n = be32toh(ntime_n);
 	hex2bin((void*)&nonce_n, nonce, 4);
 	nonce_n = le32toh(nonce_n);
-	if (!submit_nonce(thr, work, nonce_n))
+	if (!work2d_submit_nonce(thr, &ssj->swork, &ssj->tv_prepared, xnonce2, *xnonce1_p, nonce_n, ntime_n, &is_stale))
 		_stratumsrv_failure(bev, idstr, 23, "H-not-zero");
 	else
-	if (stale_work(work, true))
+	if (is_stale)
 		_stratumsrv_failure(bev, idstr, 21, "stale");
 	else
 		_stratumsrv_success(bev, idstr);
-	
-	clean_work(work);
 	
 	if (!conn->hashes_done_ext)
 	{
