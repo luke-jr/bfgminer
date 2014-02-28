@@ -150,7 +150,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 		.pool = pool,
 		.work_restart_id = pool->work_restart_id,
 		.n2size = n2size,
-		.nonce1 = strdup(pool->nonce1),
+		.nonce1 = maybe_strdup(pool->nonce1),
 	};
 	timer_set_now(&ssj->tv_prepared);
 	stratum_work_cpy(&ssj->swork, swork);

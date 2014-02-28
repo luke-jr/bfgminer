@@ -304,6 +304,15 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 }
 
 static inline
+void bytes_assimilate_raw(bytes_t * const b, void * const buf, const size_t bufsz, const size_t buflen)
+{
+	free(b->buf);
+	b->buf = buf;
+	b->allocsz = bufsz;
+	b->sz = buflen;
+}
+
+static inline
 void bytes_shift(bytes_t *b, size_t shift)
 {
 	if (shift >= b->sz)

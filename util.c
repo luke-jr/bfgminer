@@ -1907,6 +1907,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
+	if (pool->swork.tr)
+	{
+		tmpl_decref(pool->swork.tr);
+		pool->swork.tr = NULL;
+	}
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	

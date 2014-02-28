@@ -2667,7 +2667,6 @@ void tmpl_incref(struct bfg_tmpl_ref * const tr)
 	mutex_unlock(&tr->mutex);
 }
 
-static
 void tmpl_decref(struct bfg_tmpl_ref * const tr)
 {
 	mutex_lock(&tr->mutex);
@@ -2777,11 +2776,21 @@ void pool_set_opaque(struct pool *pool, bool opaque)
 		       pool->pool_no);
 }
 
+static double target_diff(const unsigned char *);
+
+#define GBT_XNONCESZ (sizeof(uint32_t))
+
+#if 1 // FIXME BLKMAKER_VERSION > 4
+#define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
+       blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
+#endif
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
 	json_t *tmp_val;
 	bool ret = false;
+	struct timeval tv_now;
 
 	if (unlikely(detect_algo == 1)) {
 		json_t *tmp = json_object_get(res_val, "algorithm");
@@ -2790,11 +2799,11 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			detect_algo = 2;
 	}
 	
+	timer_set_now(&tv_now);
+	
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
-		struct timeval tv_now;
-		cgtime(&tv_now);
 		const char *err = blktmpl_add_jansson(tmpl, res_val, tv_now.tv_sec);
 		if (err) {
 			applog(LOG_ERR, "blktmpl error: %s", err);
@@ -2922,8 +2931,48 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	memset(work->hash, 0, sizeof(work->hash));
 
-	cgtime(&work->tv_staged);
+	work->tv_staged = tv_now;
 	
+#if 1 // FIXME BLKMAKER_VERSION > 4
+	if (work->tr)
+	{
+		blktemplate_t * const tmpl = work->tr->tmpl;
+		uint8_t buf[80];
+		int16_t expire;
+		uint8_t *cbtxn;
+		size_t cbtxnsz;
+		size_t cbextranonceoffset;
+		int branchcount;
+		libblkmaker_hash_t *branches;
+		
+		if (blkmk_get_mdata(tmpl, buf, sizeof(buf), tv_now.tv_sec, &expire, &cbtxn, &cbtxnsz, &cbextranonceoffset, &branchcount, &branches, GBT_XNONCESZ))
+		{
+			struct stratum_work * const swork = &pool->swork;
+			const size_t branchdatasz = branchcount * 0x20;
+			
+			cg_wlock(&pool->data_lock);
+			swork->tr = work->tr;
+			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
+			swork->nonce2_offset = cbextranonceoffset;
+			bytes_assimilate_raw(&swork->merkle_bin, branches, branchdatasz, branchdatasz);
+			swork->merkles = branchcount;
+			memcpy(swork->header1, &buf[0], 36);
+			swork->ntime = le32toh(*(uint32_t *)(&buf[68]));
+			swork->tv_received = tv_now;
+			memcpy(swork->diffbits, &buf[72], 4);
+			swork->diff = target_diff(work->target);
+			free(swork->job_id);
+			swork->job_id = NULL;
+			swork->clean = true;
+			// FIXME: Do something with expire
+			pool->nonce2sz = pool->n2size = GBT_XNONCESZ;
+			pool->nonce2 = 0;
+			cg_wunlock(&pool->data_lock);
+		}
+		else
+			applog(LOG_DEBUG, "blkmk_get_mdata failed for pool %u", pool->pool_no);
+	}
+#endif  // BLKMAKER_VERSION > 4
 	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
@@ -8655,13 +8704,17 @@ void set_target(unsigned char *dest_target, double diff)
 void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work * const src)
 {
 	*dst = *src;
-	dst->job_id = strdup(src->job_id);
+	if (dst->tr)
+		tmpl_incref(dst->tr);
+	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
 {
+	if (swork->tr)
+		tmpl_decref(swork->tr);
 	free(swork->job_id);
 	bytes_free(&swork->coinbase);
 	bytes_free(&swork->merkle_bin);
@@ -8669,6 +8722,13 @@ void stratum_work_clean(struct stratum_work * const swork)
 
 bool pool_has_usable_swork(const struct pool * const pool)
 {
+	if (pool->swork.tr)
+	{
+		// GBT
+		struct timeval tv_now;
+		timer_set_now(&tv_now);
+		return blkmk_time_left(pool->swork.tr->tmpl, tv_now.tv_sec);
+	}
 	return pool->stratum_notify;
 }
 
@@ -8742,8 +8802,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	work->sdiff = swork->diff;
 
 	/* Copy parameters required for share submission */
-	work->job_id = strdup(swork->job_id);
-	work->nonce1 = strdup(nonce1);
+	work->job_id = maybe_strdup(swork->job_id);
+	work->nonce1 = maybe_strdup(nonce1);
 	if (swork->data_lock_p)
 		cg_runlock(swork->data_lock_p);
 
