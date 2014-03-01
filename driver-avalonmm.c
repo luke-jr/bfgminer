@@ -35,7 +35,7 @@
 #include <utlist.h>
 
 #include "miner.h"
-#include "driver-avalon2.h"
+#include "driver-avalonmm.h"
 #include "lowl-vcom.h"
 #include "util.h"
 #include "work2d.h"
@@ -818,8 +818,8 @@ static void avalon2_shutdown(struct thr_info *thr)
 }
 
 struct device_drv avalon2_drv = {
-	.dname = "avalon2",
-	.name = "AV2",
+	.dname = "avalonmm",
+	.name = "AVM",
 	.get_api_stats = avalon2_api_stats,
 	.drv_detect = avalon2_detect,
 	.reinit_device = avalon2_init,

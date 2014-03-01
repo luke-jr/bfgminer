@@ -278,7 +278,7 @@ bfgminer_SOURCES += driver-klondike.c driver-klondike.h driver-hashbusteravalon.
 endif
 
 if HAS_AVALON2
-bfgminer_SOURCES += driver-avalon2.c driver-avalon2.h
+bfgminer_SOURCES += driver-avalonmm.c driver-avalonmm.h
 endif
 
 if HAS_MODMINER

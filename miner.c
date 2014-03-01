@@ -87,7 +87,7 @@
 #endif
 
 #ifdef USE_AVALON2
-#include "driver-avalon2.h"
+#include "driver-avalonmm.h"
 #endif
 
 #ifdef HAVE_BFG_LOWLEVEL

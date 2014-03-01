@@ -556,14 +556,14 @@ fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
 
-driverlist="$driverlist avalon2"
-AC_ARG_ENABLE([avalon2],
-	[AC_HELP_STRING([--disable-avalon2],[Compile support for Avalon2 (default enabled)])],
+driverlist="$driverlist avalonmm/avalon2"
+AC_ARG_ENABLE([avalonmm],
+	[AC_HELP_STRING([--disable-avalonmm],[Compile support for Avalon2/3 (default enabled)])],
 	[avalon2=$enableval],
 	[avalon2=yes]
 	)
 if test "x$avalon2" = xyes; then
-	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2 support is wanted])
+	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2/3 support is wanted])
 	need_lowl_vcom=yes
 	need_work2d=yes
 	has_asic=yes
