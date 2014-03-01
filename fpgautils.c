@@ -1352,7 +1352,7 @@ int get_serial_cts(int fd)
 {
 	int flags;
 
-	if (!fd)
+	if (fd == -1)
 		return -1;
 
 	ioctl(fd, TIOCMGET, &flags);
@@ -1363,7 +1363,7 @@ int set_serial_rts(int fd, int rts)
 {
 	int flags;
 
-	if (!fd)
+	if (fd == -1)
 		return -1;
 
 	ioctl(fd, TIOCMGET, &flags);
@@ -1379,7 +1379,7 @@ int set_serial_rts(int fd, int rts)
 #else
 int get_serial_cts(const int fd)
 {
-	if (!fd)
+	if (fd == -1)
 		return -1;
 	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
 	if (!fh)
