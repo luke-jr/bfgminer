@@ -780,7 +780,7 @@ static bool icarus_job_start(struct thr_info *thr)
 	}
 
 	if (opt_debug) {
-		char ob_hex[(sizeof(ob_bin) * 2) + 1];
+		char ob_hex[(info->work_size * 2) + 1];
 		bin2hex(ob_hex, ob_bin, info->work_size);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
