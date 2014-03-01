@@ -613,6 +613,9 @@ bool icarus_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, icarus_detect_one);
 }
 
+static
+bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce);
+
 static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -647,6 +650,9 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	icarus->status = LIFE_INIT2;
 	
+	if (icarus->drv->job_prepare == NULL)
+		icarus->drv->job_prepare = icarus_job_prepare;
+
 	return true;
 }
 
@@ -912,10 +918,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct icarus_state *state = thr->cgpu_data;
 	was_first_run = state->firstrun;
 
-	if (icarus->drv->job_prepare != NULL)
-		icarus->drv->job_prepare(thr, work, max_nonce);
-	else
-		icarus_job_prepare(thr, work, max_nonce);
+	icarus->drv->job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
