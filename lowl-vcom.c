@@ -1140,6 +1140,29 @@ int get_serial_cts(const int fd)
 
 	return (flags & MS_CTS_ON) ? 1 : 0;
 }
+
+int set_serial_rts(int fd, int rts)
+{
+	if (fd == -1)
+		return -1;
+	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
+	if (fh == INVALID_HANDLE_VALUE)
+		return -1;
+	
+	DCB dcb;
+	if (!GetCommState(fh, &dcb))
+		applogfailinfor(-1, LOG_DEBUG, "GetCommState", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	if (rts)
+		dcb.fRtsControl = RTS_CONTROL_ENABLE;
+	else
+		dcb.fRtsControl = RTS_CONTROL_DISABLE;
+	
+	if (!SetCommState(fh, &dcb))
+		applogfailinfor(-1, LOG_DEBUG, "SetCommState", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+	
+	return rts ? 1 : 0;
+}
 #endif // ! WIN32
 
 struct lowlevel_driver lowl_vcom = {
