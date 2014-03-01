@@ -51,7 +51,7 @@ bool dualminer_detect_init(const char *devpath, int fd)
 {
 	gc3355_dual_reset(fd);
 
-	opt_scrypt ? gc3355_opt_scrypt_only_init(fd) : gc3355_dualminer_init(fd);
+	gc3355_dualminer_init(fd, opt_scrypt);
 
 	return true;
 }

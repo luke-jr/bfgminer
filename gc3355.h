@@ -35,7 +35,7 @@ extern
 void gc3355_opt_scrypt_only_init(int fd);
 
 extern
-void gc3355_dualminer_init(int fd);
+void gc3355_dualminer_init(int fd, bool is_scrypt_only);
 
 extern
 void gc3355_opt_scrypt_init(int fd);

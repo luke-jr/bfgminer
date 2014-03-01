@@ -808,7 +808,7 @@ void gc3355_open_scrypt_unit(int fd, int status)
 	}
 }
 
-void gc3355_dualminer_init(int fd)
+void gc3355_dualminer_init(int fd, bool is_scrypt_only)
 {
 
 	const char *init_ob[] =
@@ -831,15 +831,18 @@ void gc3355_dualminer_init(int fd)
 		""
 	};
 
-	if (opt_scrypt)
-		gc3355_send_cmds(fd, initscrypt_ob);
+	if (is_scrypt_only)
+		gc3355_opt_scrypt_only_init(fd);
 	else
-		gc3355_send_cmds(fd, init_ob);
+	{
+		if (opt_scrypt)
+			gc3355_send_cmds(fd, initscrypt_ob);
+		else
+			gc3355_send_cmds(fd, init_ob);
 
-	if (!opt_scrypt)
-		gc3355_pll_freq_init2(fd, opt_dualminer_pll);
-
-	return;
+		if (!opt_scrypt)
+			gc3355_pll_freq_init2(fd, opt_dualminer_pll);
+	}
 }
 
 void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only)
