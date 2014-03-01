@@ -80,7 +80,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	char my_job_id[33];
 	int i;
 	struct stratumsrv_job *ssj;
-	ssize_t n2pad = n2size - _ssm_client_octets - _ssm_client_xnonce2sz;
+	ssize_t n2pad = work2d_pad_xnonce_size(swork);
 	if (n2pad < 0)
 		return false;
 	size_t coinb1in_lenx = swork->nonce2_offset * 2;
@@ -96,7 +96,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	uint32_t ntime_n;
 	bin2hex(prevhash, &swork->header1[4], 32);
 	bin2hex(coinb1, bytes_buf(&swork->coinbase), swork->nonce2_offset);
-	memset(&coinb1[coinb1in_lenx], 'B', n2padx);
+	work2d_pad_xnonce(&coinb1[coinb1in_lenx], swork, true);
 	coinb1[coinb1_lenx] = '\0';
 	bin2hex(coinb2, &bytes_buf(&swork->coinbase)[swork->nonce2_offset + n2size], coinb2_len);
 	p += sprintf(p, "{\"params\":[\"%s\",\"%s\",\"%s\",\"%s\",[", my_job_id, prevhash, coinb1, coinb2);

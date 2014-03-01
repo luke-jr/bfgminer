@@ -48,6 +48,27 @@ void release_work2d_(uint32_t xnonce1)
 	work2d_reserved[xnonce1] = false;
 }
 
+int work2d_pad_xnonce_size(const struct stratum_work * const swork)
+{
+	return swork->n2size - work2d_xnonce1sz - work2d_xnonce2sz;
+}
+
+void *work2d_pad_xnonce(void * const buf_, const struct stratum_work * const swork, const bool hex)
+{
+	uint8_t * const buf = buf_;
+	int pad = work2d_pad_xnonce_size(swork);
+	if (pad < 0)
+		return NULL;
+	if (hex)
+	{
+		pad *= 2;
+		memset(buf, 'b', pad);
+	}
+	else
+		memset(buf, '\xbb', pad);
+	return &buf[pad];
+}
+
 void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1)
 {
 	uint8_t *p, *s;
@@ -68,8 +89,7 @@ void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const
 #endif
 	p -= work2d_xnonce1sz;
 	memcpy(p, &xnonce1, work2d_xnonce1sz);
-	if (p != s)
-		memset(s, '\xbb', p - s);
+	work2d_pad_xnonce(s, swork, false);
 	gen_stratum_work2(work, swork);
 }
 
