@@ -198,7 +198,7 @@ if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif
 
-if USE_LIBEVENT
+if NEED_BFG_WORK2D
 bfgminer_SOURCES  += work2d.c work2d.h
 endif
 
