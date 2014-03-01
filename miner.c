@@ -9309,21 +9309,6 @@ bool pool_has_usable_swork(const struct pool * const pool)
 	return pool->stratum_notify;
 }
 
-#ifdef USE_AVALON2
-void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce)
-{
-	struct pool *pool = pools[pool_no];
-	struct work *work = make_work();
-
-	pool->nonce2 = nonce2;
-	gen_stratum_work(pool, work);
-
-//	work->device_diff = MIN(drv->working_diff, work->work_difficulty);
-	submit_nonce(thr, work, nonce);
-	free_work(work);
-}
-#endif
-
 /* Generates stratum based work based on the most recent notify information
  * from the pool. This will keep generating work while a pool is down so we use
  * other means to detect when the pool has died in stratum_thread */

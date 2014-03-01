@@ -38,6 +38,7 @@
 #include "driver-avalon2.h"
 #include "lowl-vcom.h"
 #include "util.h"
+#include "work2d.h"
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
@@ -155,8 +156,6 @@ static int job_idcmp(uint8_t *job_id, char *pool_job_id)
 	return 0;
 }
 
-extern void submit_nonce2_nonce(struct thr_info *thr, uint32_t pool_no, uint32_t nonce2, uint32_t nonce);
-
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2 = NULL;
@@ -166,6 +165,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner, modular_id;
+	void *xnonce2;
 	int pool_no;
 	uint8_t job_id[5];
 	int tmp;
@@ -198,6 +198,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		case AVA2_P_NONCE:
 			memcpy(&miner, ar->data + 0, 4);
 			memcpy(&pool_no, ar->data + 4, 4);
+			xnonce2 = &ar->data[8];
 			memcpy(&nonce2, ar->data + 8, 4);
 			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 16, 4);
@@ -228,7 +229,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				break;
 
 			if (thr && !info->new_stratum)
-				submit_nonce2_nonce(thr, pool_no, nonce2, nonce);
+				work2d_submit_nonce(thr, &pool->swork, &info->tv_prepared, xnonce2, info->xnonce1, nonce, pool->swork.ntime, NULL, target_diff(pool->swork.target));
 			break;
 		case AVA2_P_STATUS:
 			if (thr)
@@ -371,27 +372,32 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 
 static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 {
+	struct cgpu_info * const dev = thr->cgpu;
+	struct avalon2_info * const info = dev->device_data;
+	struct stratum_work * const swork = &pool->swork;
 	/* FIXME: what if new stratum arrive when writing */
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
 	int job_id_len;
+	const size_t xnonce2_offset = pool->swork.nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
+	bytes_t coinbase = BYTES_INIT;
 
 	/* Send out the first stratum message STATIC */
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message STATIC: %ld, %d, %d, %d, %d",
+	applog(LOG_DEBUG, "Avalon2: Stratum package: %ld, %d, %d, %d, %d",
 	       (long)bytes_len(&pool->swork.coinbase),
-	       pool->swork.nonce2_offset,
-	       pool->swork.n2size,
+	       xnonce2_offset,
+	       work2d_xnonce2sz,
 	       36,
 	       pool->swork.merkles);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 	tmp = be32toh(bytes_len(&pool->swork.coinbase));
 	memcpy(pkg.data, &tmp, 4);
 
-	tmp = be32toh(pool->swork.nonce2_offset);
+	tmp = be32toh(xnonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(pool->swork.n2size);
+	tmp = be32toh(work2d_xnonce2sz);
 	memcpy(pkg.data + 8, &tmp, 4);
 
 	tmp = be32toh(36);
@@ -435,22 +441,28 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
+	// Need to add extranonce padding
+	bytes_cpy(&coinbase, &pool->swork.coinbase);
+	work2d_pad_xnonce(&(bytes_buf(&coinbase)[pool->swork.nonce2_offset]), swork, false);
+	
 	a = bytes_len(&pool->swork.coinbase) / AVA2_P_DATA_LEN;
 	b = bytes_len(&pool->swork.coinbase) % AVA2_P_DATA_LEN;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message COINBASE: %d %d", a, b);
 	for (i = 0; i < a; i++) {
-		memcpy(pkg.data, bytes_buf(&pool->swork.coinbase) + i * 32, 32);
+		memcpy(pkg.data, bytes_buf(&coinbase) + i * 32, 32);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, a + (b ? 1 : 0));
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
 	}
 	if (b) {
 		memset(pkg.data, 0, AVA2_P_DATA_LEN);
-		memcpy(pkg.data, bytes_buf(&pool->swork.coinbase) + i * 32, b);
+		memcpy(pkg.data, bytes_buf(&coinbase) + i * 32, b);
 		avalon2_init_pkg(&pkg, AVA2_P_COINBASE, i + 1, i + 1);
 		while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 			;
 	}
+	
+	bytes_free(&coinbase);
 
 	b = pool->swork.merkles;
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message MERKLES: %d", b);
@@ -477,6 +489,9 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 			;
 
 	}
+	
+	timer_set_now(&info->tv_prepared);
+	
 	return 0;
 }
 
@@ -623,6 +638,9 @@ static bool avalon2_prepare(struct thr_info *thr)
 
 	if (info->fd == -1)
 		avalon2_init(avalon2);
+	
+	if (!reserve_work2d_(&info->xnonce1))
+		applogr(false, LOG_ERR, "%s: Failed to reserve 2D work", avalon2->dev_repr);
 
 	info->first = true;
 

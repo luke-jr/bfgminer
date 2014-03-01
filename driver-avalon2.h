@@ -80,6 +80,7 @@ struct avalon2_pkg {
 struct avalon2_info {
 	int fd;
 	int baud;
+	uint32_t xnonce1;
 
 	int set_frequency;
 	int set_voltage;
@@ -112,6 +113,8 @@ struct avalon2_info {
 
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
+	
+	struct timeval tv_prepared;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
