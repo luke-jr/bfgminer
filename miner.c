@@ -8623,7 +8623,7 @@ void set_target(unsigned char *dest_target, double diff)
 	
 	if (opt_debug) {
 		char htarget[65];
-		bin2hex(htarget, dest_target, 32);
+		bin2hex(htarget, rtarget, 32);
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 	}
 }
