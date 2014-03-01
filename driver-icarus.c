@@ -505,7 +505,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (info->detect_init_func != NULL)
 	{
 		info->detect_init_func(devpath, fd);
-		usleep(1000);
 	}
 
 	unsigned char ob_bin[info->work_size], nonce_bin[ICARUS_NONCE_SIZE];

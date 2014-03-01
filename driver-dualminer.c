@@ -52,6 +52,8 @@ bool dualminer_detect_init(const char *devpath, int fd)
 	gc3355_dual_reset(fd);
 
 	gc3355_dualminer_init(fd, opt_scrypt);
+	
+	usleep(1000);
 
 	return true;
 }
