@@ -340,7 +340,6 @@ bool opt_hubfans = false;
 void gc3355_dual_reset(int fd)
 {
 	static int i = 0;
-	applog(LOG_DEBUG,"--->>>%s():%d\n",__FUNCTION__, i++);
 
 #ifdef WIN32
 	DCB dcb;
@@ -639,20 +638,13 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 
 	int sha2_number=0;
 	if (opt_sha2_gating== NULL)
-	{
-	    applog(LOG_DEBUG,"%s(): no --sha2, use default 70 sha2 Unit\n",__FUNCTION__);
 	    sha2_number = 70;
-	}
 	else
 	{
-	    applog(LOG_DEBUG,"%s(): %s:%d\n",__FUNCTION__, opt_sha2_gating, atoi(opt_sha2_gating));
 	    if (atoi(opt_sha2_gating) <= 160 && atoi(opt_sha2_gating) >= 0)
 			sha2_number = atoi(opt_sha2_gating);
 		else
-		{
-			applog(LOG_DEBUG,"%s():invalid sha2 number:%s:%d, use default 70 sha2 Unit\n",__FUNCTION__,opt_sha2_gating,atoi(opt_sha2_gating));
 			sha2_number = 70;
-	    }
 	}
 
 	for(i = 0; i < 5; i++)
@@ -677,7 +669,7 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 		usleep(DEFAULT_DELAY_TIME);
 	}
 
-	opt_sha2_number=sha2_number;
+	opt_sha2_number = sha2_number;
 }
 
 static
@@ -881,6 +873,4 @@ void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only)
 				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
 		}
 	}
-
-	applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 }

@@ -72,6 +72,7 @@ bool dualminer_job_start_init(const struct thr_info *thr)
 
 		gc3355_init(fd, opt_dualminer_pll, opt_dualminer_sha2_gating, opt_scrypt);
 
+		applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d; have fan: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt, opt_hubfans);
 		if (gc3355_get_cts_status(fd) != 1)
 		{
 			//Scrypt + SHA2 mode
@@ -85,7 +86,7 @@ bool dualminer_job_start_init(const struct thr_info *thr)
 		if (opt_scrypt)
 			icarus->min_nonce_diff = 1./0x10000;
 
-		applog(LOG_DEBUG, "dualminer: Init: pll=%d, sha2num=%d", opt_pll_freq, opt_sha2_number);
+		applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_number);
 	}
 
 	if (opt_scrypt)

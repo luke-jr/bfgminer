@@ -29,6 +29,9 @@ extern
 int opt_sha2_number;
 
 extern
+bool opt_hubfans;
+
+extern
 void gc3355_dual_reset(int fd);
 
 extern
@@ -43,6 +46,8 @@ void gc3355_opt_scrypt_init(int fd);
 extern
 void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only);
 
+//once this is made an option, needs to be >= 0 and <= 160
+//already enforced in gc3355 but no stdout yet
 extern
 void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
 
