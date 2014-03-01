@@ -233,6 +233,9 @@ bfgminer_SOURCES += driver-icarus.c icarus-common.h
 bfgminer_SOURCES += driver-cairnsmore.c
 bfgminer_SOURCES += driver-erupter.c
 bfgminer_SOURCES += driver-antminer.c
+endif
+
+if USE_DUALMINER
 bfgminer_SOURCES += driver-dualminer.c gc3355.c gc3355.h
 endif
 
