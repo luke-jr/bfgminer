@@ -3051,13 +3051,11 @@ uint8_t crc8ccitt(const void * const buf, const size_t buflen)
 	return crc;
 }
 
-static
-unsigned char hex_str[2048];
-
 void print_hex(unsigned char *data, int len, const unsigned char * prefix)
 {
     int i, j, s, blank;
     unsigned char *p = data;
+	unsigned char hex_str[2048];
     unsigned char *ptr = hex_str;
 
     memset(hex_str, 0, sizeof(hex_str));
