@@ -229,7 +229,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				break;
 
 			if (thr && !info->new_stratum)
-				work2d_submit_nonce(thr, &pool->swork, &info->tv_prepared, xnonce2, info->xnonce1, nonce, pool->swork.ntime, NULL, target_diff(pool->swork.target));
+				work2d_submit_nonce(thr, &pool->swork, &info->tv_prepared, xnonce2, info->xnonce1, nonce, pool->swork.ntime, NULL, 1.);
 			break;
 		case AVA2_P_STATUS:
 			if (thr)
@@ -416,7 +416,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	memcpy(target, pool->swork.target, sizeof(target));
+	memset(&target[   0], 0xff, 0x1c);
+	memset(&target[0x1c],    0,    4);
 	memcpy(pkg.data, target, 32);
 	if (opt_debug) {
 		char target_str[(32 * 2) + 1];
