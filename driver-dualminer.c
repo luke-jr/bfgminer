@@ -79,7 +79,7 @@ bool dualminer_detect_one(const char *devpath)
 		.timing_mode = MODE_DEFAULT,
 		.reopen_mode = IRM_NEVER,
 		.do_icarus_timing = false,
-		.reverse_nonce = true,
+		.nonce_bigendian = true,
 		.work_division = 2,
 		.fpga_count = 2,
 		.detect_init_func = dualminer_detect_init,

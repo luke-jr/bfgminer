@@ -517,7 +517,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// if this is a valid device
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
 
-	if (info->reverse_nonce)
+	if (info->nonce_bigendian)
 		rev(nonce_bin, 4);
 	
 	// How many bytes were left after reading the above nonce
@@ -979,7 +979,7 @@ keepwaiting:
 					break;
 			}
 
-			if (info->reverse_nonce)
+			if (info->nonce_bigendian)
 				rev(nonce_bin, 4);
 		}
 

@@ -115,7 +115,7 @@ struct ICARUS_INFO {
 	// Support for custom algorithms
 	char *golden_ob;
 	char *golden_nonce;
-	bool reverse_nonce;
+	bool nonce_bigendian;
 	int work_size;
 
 	// Support for custom initializers
