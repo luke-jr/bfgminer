@@ -339,7 +339,7 @@ bool opt_hubfans = false;
 
 void gc3355_dual_reset(int fd)
 {
-	static int i=0;
+	static int i = 0;
 	applog(LOG_DEBUG,"--->>>%s():%d\n",__FUNCTION__, i++);
 
 #ifdef WIN32
@@ -855,25 +855,14 @@ void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only)
 		if (opt_scrypt)
 		{
 			if (is_scrypt_only)
-			{
 				gc3355_send_cmds(fd, scrypt_only_init);
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
-			else
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 		}
 		else
 		{
 			if (opt_hubfans)
-			{
 				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
 			else
-			{
 				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
 		}
 	}
 	else
@@ -882,25 +871,16 @@ void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only)
 		if (opt_scrypt)
 		{
 			if (is_scrypt_only)
-			{
 				gc3355_send_cmds(fd, scrypt_only_init);
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
-			else
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 		}
 		else
 		{
 			if (opt_hubfans)
-			{
 				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
 			else
-			{
 				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
-			}
 		}
 	}
+
+	applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 }
