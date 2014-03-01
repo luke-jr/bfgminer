@@ -565,6 +565,7 @@ AC_ARG_ENABLE([avalon2],
 if test "x$avalon2" = xyes; then
 	AC_DEFINE([USE_AVALON2], [1], [Defined to 1 if Avalon2 support is wanted])
 	need_lowl_vcom=yes
+	need_work2d=yes
 	has_asic=yes
 fi
 AM_CONDITIONAL([HAS_AVALON2], [test x$avalon2 = xyes])
