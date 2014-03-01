@@ -66,7 +66,8 @@ enum icarus_user_settings {
 	IUS_FPGA_COUNT    = 2,
 };
 
-typedef bool (*icarus_init_func_t)(const char *devpath, int fd);
+typedef bool (*icarus_device_init_func_t)(const char *devpath, int fd);
+typedef bool (*icarus_thread_init_func_t)(const struct thr_info *thr);
 
 struct ICARUS_INFO {
 	// time to calculate the golden_ob
@@ -119,9 +120,8 @@ struct ICARUS_INFO {
 	int work_size;
 
 	// Support for custom initializers
-	icarus_init_func_t detect_init_func;
-	icarus_init_func_t job_start_init_func;
-	
+	icarus_device_init_func_t detect_init_func;
+	icarus_thread_init_func_t job_start_init_func;
 };
 
 struct icarus_state {

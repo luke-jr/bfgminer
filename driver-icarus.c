@@ -527,10 +527,11 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// How many bytes were left after reading the above nonce
 	int bytes_left = icarus_excess_nonce_size(fd, info);
 
+	icarus_close(fd);
+
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
 	if (strncmp(nonce_hex, info->golden_nonce, 8))
 	{
-		icarus_close(fd);
 		applog(LOG_DEBUG,
 			"%s: "
 			"Test failed at %s: get %s, should: %s",
@@ -541,7 +542,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 		
 	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
 	{
-		icarus_close(fd);
 		applog(LOG_DEBUG,
 			   "%s: "
 			   "Test failed at %s: expected %d bytes, got %d",
@@ -549,9 +549,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
 		return false;
 	}
-	
-	if (info->reopen_mode != IRM_NEVER)
-		icarus_close(fd);
 
 	applog(LOG_DEBUG,
 		"%s: "
@@ -567,11 +564,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus = calloc(1, sizeof(struct cgpu_info));
 	icarus->drv = api;
 	icarus->device_path = strdup(devpath);
-	if (info->reopen_mode == IRM_NEVER)
-		icarus->device_fd = fd;
-	else
-		icarus->device_fd = -1;
-
+	icarus->device_fd = -1;
 	icarus->threads = 1;
 	icarus->set_device_funcs = icarus_set_device_funcs;
 	add_cgpu(icarus);
@@ -625,21 +618,9 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
 
-
-	int fd = 0;
-	if (info->reopen_mode == IRM_NEVER)
-	{
-		if(icarus->device_fd >0)
-			fd = icarus->device_fd;
-		else
-			fd = icarus_open(icarus->device_path, info[icarus->device_id].baud);
-		usleep(1000);
-	}
-	else
-	{
-		icarus->device_fd = -1;
-		fd = icarus_open2(icarus->device_path, info->baud, true);
-	}
+	icarus->device_fd = -1;
+	
+	int fd = icarus_open2(icarus->device_path, info->baud, true);
 
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to open %s",
@@ -780,7 +761,7 @@ static bool icarus_job_start(struct thr_info *thr)
 	int ret;
 
 	if (info->job_start_init_func != NULL)
-		info->job_start_init_func(icarus->device_path, fd);
+		info->job_start_init_func(thr);
 
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too

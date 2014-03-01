@@ -59,8 +59,35 @@ bool dualminer_detect_init(const char *devpath, int fd)
 }
 
 static
-bool dualminer_job_start_init(const char *devpath, int fd)
+bool dualminer_job_start_init(const struct thr_info *thr)
 {
+	struct cgpu_info *icarus = thr->cgpu;
+	struct icarus_state * const state = thr->cgpu_data;
+	int fd = icarus->device_fd;
+
+	if (state->firstrun)
+	{
+		if (opt_scrypt)
+			gc3355_set_rts_status(fd, RTS_HIGH);
+
+		gc3355_init(fd, opt_dualminer_pll, opt_dualminer_sha2_gating, opt_scrypt);
+
+		if (gc3355_get_cts_status(fd) != 1)
+		{
+			//Scrypt + SHA2 mode
+			if (opt_scrypt)
+			{
+				struct ICARUS_INFO *info = icarus->device_data;
+				info->Hs = DUALMINER_SCRYPT_HASH_TIME * 2;
+			}
+		}
+
+		if (opt_scrypt)
+			icarus->min_nonce_diff = 1./0x10000;
+
+		applog(LOG_DEBUG, "dualminer: Init: pll=%d, sha2num=%d", opt_pll_freq, opt_sha2_number);
+	}
+
 	if (opt_scrypt)
 		gc3355_opt_scrypt_init(fd);
 
@@ -79,7 +106,6 @@ bool dualminer_detect_one(const char *devpath)
 	*info = (struct ICARUS_INFO){
 		.baud = DUALMINER_IO_SPEED,
 		.timing_mode = MODE_DEFAULT,
-		.reopen_mode = IRM_NEVER,
 		.do_icarus_timing = false,
 		.nonce_bigendian = true,
 		.work_division = 2,
@@ -137,33 +163,6 @@ static
 bool dualminer_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	return vcom_lowl_probe_wrapper(info, dualminer_detect_one);
-}
-
-static
-bool dualminer_thread_init(struct thr_info *thr)
-{
-	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->device_data;
-	int fd = icarus->device_fd;
-
-	if (opt_scrypt)
-		gc3355_set_rts_status(fd, RTS_HIGH);
-
-	gc3355_init(fd, opt_dualminer_pll, opt_dualminer_sha2_gating, opt_scrypt);
-
-	if (gc3355_get_cts_status(fd) != 1)
-	{
-		//Scrypt + SHA2 mode
-		if (opt_scrypt)
-			info->Hs = DUALMINER_SCRYPT_HASH_TIME * 2;
-	}
-
-	if (opt_scrypt)
-		icarus->min_nonce_diff = 1./0x10000;
-
-	applog(LOG_DEBUG, "dualminer: Init: pll=%d, sha2num=%d", opt_pll_freq, opt_sha2_number);
-
-	return true;
 }
 
 static
@@ -228,7 +227,6 @@ void dualminer_drv_init()
 	dualminer_drv.dname = "dualminer";
 	dualminer_drv.name = "DMR";
 	dualminer_drv.lowl_probe = dualminer_lowl_probe;
-	dualminer_drv.thread_init = dualminer_thread_init;
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
 	++dualminer_drv.probe_priority;
