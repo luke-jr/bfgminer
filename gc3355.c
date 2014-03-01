@@ -23,12 +23,10 @@
 
 #define DEFAULT_DELAY_TIME 2000
 
-#define HUBFANS_0_9V_BTC "60"
-#define HUBFANS_1_2V_BTC "0"
-#define DEFAULT_0_9V_BTC "60"
-#define DEFAULT_1_2V_BTC "0"
-
-#define LTC_UNIT_OPEN  0
+#define HUBFANS_0_9V_sha2 "60"
+#define HUBFANS_1_2V_sha2 "0"
+#define DEFAULT_0_9V_sha2 "60"
+#define DEFAULT_1_2V_sha2 "0"
 
 static
 const char *pll_freq_1200M_cmd[] =
@@ -143,7 +141,7 @@ const char *pll_freq_400M_cmd[] =
 };
 
 static
-const char *btc_gating[] =
+const char *sha2_gating[] =
 {
 	"55AAEF0200000000",
 	"55AAEF0300000000",
@@ -154,7 +152,7 @@ const char *btc_gating[] =
 };
 
 static
-const char *btc_single_open[] =
+const char *sha2_single_open[] =
 {
 	"55AAEF0200000001",
 	"55AAEF0200000003",
@@ -320,7 +318,7 @@ const char *btc_single_open[] =
 };
 
 static
-const char *ltc_only_init[] =
+const char *scrypt_only_init[] =
 {
 	"55AAEF0200000000",
 	"55AAEF0300000000",
@@ -334,9 +332,9 @@ const char *ltc_only_init[] =
 };
 
 char *opt_dualminer_pll = NULL;
-char *opt_dualminer_btc_gating = NULL;
+char *opt_dualminer_sha2_gating = NULL;
 int opt_pll_freq = 400;
-int opt_btc_number = 160;
+int opt_sha2_number = 160;
 bool opt_hubfans = false;
 
 void gc3355_dual_reset(int fd)
@@ -619,13 +617,13 @@ void gc3355_pll_freq_init2(int fd, char *pll_freq)
 }
 
 
-void gc3355_open_btc_unit(int fd, char *opt_btc_gating)
+void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 {
 	unsigned char ob_bin[32];
 	int i;
 
-	//---btc unit---
-	char btc_gating[5][17] =
+	//---sha2 unit---
+	char sha2_gating[5][17] =
 	{
 		"55AAEF0200000000",
 		"55AAEF0300000000",
@@ -637,59 +635,59 @@ void gc3355_open_btc_unit(int fd, char *opt_btc_gating)
 	{
 	    unsigned int i32[5];
 	    unsigned char c8[20] ;
-	}btc_group;
+	}sha2_group;
 
-	int btc_number=0;
-	if (opt_btc_gating== NULL)
+	int sha2_number=0;
+	if (opt_sha2_gating== NULL)
 	{
-	    applog(LOG_DEBUG,"%s(): no --btc, use default 70 BTC Unit\n",__FUNCTION__);
-	    btc_number = 70;
+	    applog(LOG_DEBUG,"%s(): no --sha2, use default 70 sha2 Unit\n",__FUNCTION__);
+	    sha2_number = 70;
 	}
 	else
 	{
-	    applog(LOG_DEBUG,"%s(): %s:%d\n",__FUNCTION__, opt_btc_gating, atoi(opt_btc_gating));
-	    if (atoi(opt_btc_gating) <= 160 && atoi(opt_btc_gating) >= 0)
-			btc_number = atoi(opt_btc_gating);
+	    applog(LOG_DEBUG,"%s(): %s:%d\n",__FUNCTION__, opt_sha2_gating, atoi(opt_sha2_gating));
+	    if (atoi(opt_sha2_gating) <= 160 && atoi(opt_sha2_gating) >= 0)
+			sha2_number = atoi(opt_sha2_gating);
 		else
 		{
-			applog(LOG_DEBUG,"%s():invalid btc number:%s:%d, use default 70 BTC Unit\n",__FUNCTION__,opt_btc_gating,atoi(opt_btc_gating));
-			btc_number = 70;
+			applog(LOG_DEBUG,"%s():invalid sha2 number:%s:%d, use default 70 sha2 Unit\n",__FUNCTION__,opt_sha2_gating,atoi(opt_sha2_gating));
+			sha2_number = 70;
 	    }
 	}
 
 	for(i = 0; i < 5; i++)
-		btc_group.i32[i] = 0;
+		sha2_group.i32[i] = 0;
 
-	for(i = 0; i < btc_number; i++)
-		btc_group.i32[i / 32] += 1 << ( i % 32);
+	for(i = 0; i < sha2_number; i++)
+		sha2_group.i32[i / 32] += 1 << ( i % 32);
 
 	for(i = 0; i < 20; i++)
-		sprintf(&btc_gating[i / 4][8 + (i % 4) * 2], "%02x", btc_group.c8[i]);
-	//---btc unit end---
+		sprintf(&sha2_gating[i / 4][8 + (i % 4) * 2], "%02x", sha2_group.c8[i]);
+	//---sha2 unit end---
 
 	for(i = 0; i < 5; i++)
 	{
 		memset(ob_bin, 0, sizeof(ob_bin));
 
-		if (btc_gating[i][0] == '\0')
+		if (sha2_gating[i][0] == '\0')
 			break;
 
-		hex2bin(ob_bin, btc_gating[i], sizeof(ob_bin));
+		hex2bin(ob_bin, sha2_gating[i], sizeof(ob_bin));
 		icarus_write(fd, ob_bin, 8);
 		usleep(DEFAULT_DELAY_TIME);
 	}
 
-	opt_btc_number=btc_number;
+	opt_sha2_number=sha2_number;
 }
 
 static
-void gc3355_open_btc_unit_single(int fd, unsigned int index)
+void gc3355_open_sha2_unit_single(int fd, unsigned int index)
 {
 	unsigned char ob_bin[32];
 	int i;
 
-	//---btc unit---
-	char btc_gating[5][17] =
+	//---sha2 unit---
+	char sha2_gating[5][17] =
 	{
 		"55AAEF0200000000",
 		"55AAEF0300000000",
@@ -701,40 +699,40 @@ void gc3355_open_btc_unit_single(int fd, unsigned int index)
 	{
 	    unsigned int i32[5];
 	    unsigned char c8[20];
-	}btc_group;
+	}sha2_group;
 
 	for(i = 0; i < 5; i++)
-		btc_group.i32[i] = 0;
+		sha2_group.i32[i] = 0;
 
     index = index%160;
 
-	btc_group.i32[index / 32] += 1 << (index % 32);
+	sha2_group.i32[index / 32] += 1 << (index % 32);
 
 	for(i = 0; i < 20; i++)
-		sprintf(&btc_gating[i / 4][8 + (i % 4) * 2], "%02x", btc_group.c8[i]);
-	//---btc unit end---
+		sprintf(&sha2_gating[i / 4][8 + (i % 4) * 2], "%02x", sha2_group.c8[i]);
+	//---sha2 unit end---
 
 	for(i = 0; i < 5; i++)
 	{
 		memset(ob_bin, 0, sizeof(ob_bin));
 
-		if (btc_gating[i][0] == '\0')
+		if (sha2_gating[i][0] == '\0')
 			break;
 
-		hex2bin(ob_bin, btc_gating[i], sizeof(ob_bin));
+		hex2bin(ob_bin, sha2_gating[i], sizeof(ob_bin));
 		icarus_write(fd, ob_bin, 8);
 		usleep(DEFAULT_DELAY_TIME);
 	}
 }
 
 static
-void gc3355_open_btc_unit_one_by_one(int fd, char *opt_btc_gating)
+void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
 {
 	int unit_count = 0;
 	unsigned char ob_bin[32];
 	int i;
 
-	unit_count = atoi(opt_btc_gating);
+	unit_count = atoi(opt_sha2_gating);
 
 	if (unit_count < 0)
 		unit_count = 0;
@@ -746,19 +744,19 @@ void gc3355_open_btc_unit_one_by_one(int fd, char *opt_btc_gating)
 		for(i = 0; i <= unit_count; i++)
 		{
 			memset(ob_bin, 0, sizeof(ob_bin));
-			hex2bin(ob_bin, btc_single_open[i], sizeof(ob_bin));
+			hex2bin(ob_bin, sha2_single_open[i], sizeof(ob_bin));
 			icarus_write(fd, ob_bin, 8);
 			usleep(DEFAULT_DELAY_TIME * 2);
 		}
-		opt_btc_number=unit_count;
+		opt_sha2_number=unit_count;
 	}
 	else if (unit_count == 0)
-		gc3355_send_cmds(fd, btc_gating);
+		gc3355_send_cmds(fd, sha2_gating);
 }
 
-void gc3355_opt_ltc_only_init(int fd)
+void gc3355_opt_scrypt_only_init(int fd)
 {
-	const char *init_ltc_only_ob[] =
+	const char *init_scrypt_only_ob[] =
 	{
 		"55AAEF0200000000",
 		"55AAEF0300000000",
@@ -771,21 +769,21 @@ void gc3355_opt_ltc_only_init(int fd)
 		""
 	};
 
-	gc3355_send_cmds(fd, init_ltc_only_ob);
+	gc3355_send_cmds(fd, init_scrypt_only_ob);
 
 	gc3355_pll_freq_init2(fd, opt_dualminer_pll);
 }
 
 
-void gc3355_open_ltc_unit(int fd, int status)
+void gc3355_open_scrypt_unit(int fd, int status)
 {
-	const char *ltc_only_ob[] =
+	const char *scrypt_only_ob[] =
 	{
 		"55AA1F2810000000",
 		"",
 	};
 
-	const char *ltc_ob[] =
+	const char *scrypt_ob[] =
 	{
 		"55AA1F2814000000",
 		"",
@@ -794,19 +792,19 @@ void gc3355_open_ltc_unit(int fd, int status)
 	unsigned char ob_bin[32];
 	int i = 0;
 
-	if (status == LTC_UNIT_OPEN)
+	if (status == SCRYPT_UNIT_OPEN)
 	{
 		if (opt_scrypt)
-			gc3355_opt_ltc_only_init(fd);
+			gc3355_opt_scrypt_only_init(fd);
 		else
 			gc3355_opt_scrypt_init(fd);
 	}
 	else
 	{
 		if (opt_scrypt)
-			gc3355_send_cmds(fd, ltc_only_ob);
+			gc3355_send_cmds(fd, scrypt_only_ob);
 		else
-			gc3355_send_cmds(fd, ltc_ob);
+			gc3355_send_cmds(fd, scrypt_ob);
 	}
 }
 
@@ -844,61 +842,61 @@ void gc3355_dualminer_init(int fd)
 	return;
 }
 
-void gc3355_init(int fd, char *pll_freq, char *btc_unit, bool is_ltc_only)
+void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only)
 {
 	char *unit, *freq;
 	
 	if (gc3355_get_cts_status(fd) == 1)
 	{
-		//1.2v - LTC mode
+		//1.2v - Scrypt mode
 		if (opt_scrypt)
 		{
-			if (is_ltc_only)
+			if (is_scrypt_only)
 			{
-				gc3355_send_cmds(fd, ltc_only_init);
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				gc3355_send_cmds(fd, scrypt_only_init);
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 			else
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 		}
 		else
 		{
 			if (opt_hubfans)
 			{
-				((btc_unit == NULL) ? gc3355_open_btc_unit_one_by_one(fd, HUBFANS_1_2V_BTC) : gc3355_open_btc_unit_one_by_one(fd, btc_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 			else
 			{
-				((btc_unit == NULL) ? gc3355_open_btc_unit_one_by_one(fd, DEFAULT_1_2V_BTC) : gc3355_open_btc_unit_one_by_one(fd, btc_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 		}
 	}
 	else
 	{
-		//0.9v - LTC + SHA mode
+		//0.9v - Scrypt + SHA mode
 		if (opt_scrypt)
 		{
-			if (is_ltc_only)
+			if (is_scrypt_only)
 			{
-				gc3355_send_cmds(fd, ltc_only_init);
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				gc3355_send_cmds(fd, scrypt_only_init);
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 			else
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 		}
 		else
 		{
 			if (opt_hubfans)
 			{
-				((btc_unit == NULL) ? gc3355_open_btc_unit_one_by_one(fd, HUBFANS_0_9V_BTC) : gc3355_open_btc_unit_one_by_one(fd, btc_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 			else
 			{
-				((btc_unit == NULL) ? gc3355_open_btc_unit_one_by_one(fd, DEFAULT_0_9V_BTC) : gc3355_open_btc_unit_one_by_one(fd, btc_unit));
-				applog(LOG_DEBUG,"%s(): scrypt: %d, ltc only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_ltc_only, opt_hubfans);
+				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+				applog(LOG_DEBUG,"%s(): scrypt: %d, scrypt only: %d; have fan: %d\n", __FUNCTION__, opt_scrypt, is_scrypt_only, opt_hubfans);
 			}
 		}
 	}

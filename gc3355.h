@@ -13,23 +13,26 @@
 
 #include <stdbool.h>
 
+#define SCRYPT_UNIT_OPEN  0
+#define SCRYPT_UNIT_CLOSE 1
+
 extern
 char *opt_dualminer_pll;
 
 extern
-char *opt_dualminer_btc_gating;
+char *opt_dualminer_sha2_gating;
 
 extern
 int opt_pll_freq;
 
 extern
-int opt_btc_number;
+int opt_sha2_number;
 
 extern
 void gc3355_dual_reset(int fd);
 
 extern
-void gc3355_opt_ltc_only_init(int fd);
+void gc3355_opt_scrypt_only_init(int fd);
 
 extern
 void gc3355_dualminer_init(int fd);
@@ -38,13 +41,13 @@ extern
 void gc3355_opt_scrypt_init(int fd);
 
 extern
-void gc3355_init(int fd, char *pll_freq, char *btc_unit, bool is_ltc_only);
+void gc3355_init(int fd, char *pll_freq, char *sha2_unit, bool is_scrypt_only);
 
 extern
-void gc3355_open_btc_unit(int fd, char *opt_btc_gating);
+void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
 
 extern
-void gc3355_open_ltc_unit(int fd, int status);
+void gc3355_open_scrypt_unit(int fd, int status);
 
 extern
 int gc3355_get_cts_status(int fd);

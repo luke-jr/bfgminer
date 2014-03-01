@@ -36,12 +36,10 @@
 #define DUALMINER_IO_SPEED 115200
 
 #define DUALMINER_SCRYPT_HASH_TIME 0.00001350
-
 #define DUALMINER_SHA2_HASH_TIME 0.000000001950
 
 #define RTS_LOW 0
 #define RTS_HIGH 1
-#define LTC_UNIT_CLOSE 1
 
 BFG_REGISTER_DRIVER(dualminer_drv)
 
@@ -50,7 +48,7 @@ bool dualminer_detect_init(const char *devpath, int fd)
 {
 	gc3355_dual_reset(fd);
 
-	opt_scrypt ? gc3355_opt_ltc_only_init(fd) : gc3355_dualminer_init(fd);
+	opt_scrypt ? gc3355_opt_scrypt_only_init(fd) : gc3355_dualminer_init(fd);
 
 	return true;
 }
@@ -146,11 +144,11 @@ bool dualminer_thread_init(struct thr_info *thr)
 	if (opt_scrypt)
 		gc3355_set_rts_status(fd, RTS_HIGH);
 
-	gc3355_init(fd, opt_dualminer_pll, opt_dualminer_btc_gating, opt_scrypt);
+	gc3355_init(fd, opt_dualminer_pll, opt_dualminer_sha2_gating, opt_scrypt);
 
 	if (gc3355_get_cts_status(fd) != 1)
 	{
-		//LTC + SHA mode
+		//Scrypt + SHA2 mode
 		if (opt_scrypt)
 			info->Hs = DUALMINER_SCRYPT_HASH_TIME * 2;
 	}
@@ -158,7 +156,7 @@ bool dualminer_thread_init(struct thr_info *thr)
 	if (opt_scrypt)
 		icarus->min_nonce_diff = 1./0x10000;
 
-	applog(LOG_DEBUG, "dualminer: Init: pll=%d, btcnum=%d", opt_pll_freq, opt_btc_number);
+	applog(LOG_DEBUG, "dualminer: Init: pll=%d, sha2num=%d", opt_pll_freq, opt_sha2_number);
 
 	return true;
 }
@@ -167,9 +165,9 @@ static
 void dualminer_thread_shutdown(struct thr_info *thr)
 {
 	if (opt_scrypt)
-		gc3355_open_ltc_unit(thr->cgpu->device_fd, LTC_UNIT_CLOSE);
+		gc3355_open_scrypt_unit(thr->cgpu->device_fd, SCRYPT_UNIT_CLOSE);
 	else
-		gc3355_open_btc_unit(thr->cgpu->device_fd, "0");
+		gc3355_open_sha2_unit(thr->cgpu->device_fd, "0");
 
 	gc3355_set_rts_status(thr->cgpu->device_fd, RTS_LOW);
 	do_icarus_close(thr);
