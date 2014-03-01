@@ -231,7 +231,10 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		{
 			if (epollfd != -1)
 				close(epollfd);
-			print_hex((char *)buf, read_size, "Read from UART:\n");
+
+			if (opt_dev_protocol && opt_debug)
+				print_hex((char *)buf, read_size, "Read from UART:\n");
+
 			return ICA_GETS_OK;
 		}
 
@@ -265,7 +268,9 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 
-	print_hex((char*)buf, bufLen, "Send to UART:\n"); 
+	if (opt_dev_protocol && opt_debug)
+		print_hex((char*)buf, bufLen, "Send to UART:\n");
+
 	if (unlikely(fd == -1))
 		return 1;
 	
