@@ -1781,7 +1781,7 @@ static char *set_icarus_options(const char *arg)
 	char *opts = strdup(arg), *argdup;
 	argdup = opts;
 	const struct bfg_set_device_definition *sdf = icarus_set_device_funcs;
-	const char *drivers[] = {"dualminer", "antminer", "cairnsmore", "erupter", "icarus"};
+	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
 	char *saveptr, *opt;
 	for (int i = 0; i < 4; ++i, ++sdf)
 	{
@@ -1807,7 +1807,7 @@ static char *set_icarus_timing(const char *arg)
 		return "icarus-timing no longer supports comma-delimited syntax, see README.FPGA for better control";
 	applog(LOG_WARNING, "icarus-timing is deprecated! See README.FPGA for better control");
 	
-	const char *drivers[] = {"dualminer", "antminer", "cairnsmore", "erupter", "icarus"};
+	const char *drivers[] = {"antminer", "cairnsmore", "erupter", "icarus"};
 	for (int j = 0; j < 4; ++j)
 		add_set_device_option("%s:timing=%s", drivers[j], arg);
 	return NULL;
