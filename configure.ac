@@ -656,9 +656,6 @@ else
 fi
 AM_CONDITIONAL([NEED_BFG_DRIVER_PROXY], [test x$libevent$httpsrv != xnono])
 
-driverlist="$driverlist avalon2"
-avalon2="no"
-
 
 driverlist="$driverlist modminer"
 AC_ARG_ENABLE([modminer],
