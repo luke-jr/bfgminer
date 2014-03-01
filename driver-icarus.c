@@ -526,7 +526,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	
 	// How many bytes were left after reading the above nonce
 	int bytes_left = icarus_excess_nonce_size(fd, info);
-
+	
 	icarus_close(fd);
 
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
@@ -549,7 +549,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
 		return false;
 	}
-
+	
 	applog(LOG_DEBUG,
 		"%s: "
 		"Test succeeded at %s: got %s",
@@ -619,9 +619,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct ICARUS_INFO *info = icarus->device_data;
 
 	icarus->device_fd = -1;
-	
-	int fd = icarus_open2(icarus->device_path, info->baud, true);
 
+	int fd = icarus_open2(icarus->device_path, info->baud, true);
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to open %s",
 		       icarus->dev_repr,
