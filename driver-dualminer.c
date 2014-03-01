@@ -107,7 +107,7 @@ bool dualminer_detect_one(const char *devpath)
 		.baud = DUALMINER_IO_SPEED,
 		.timing_mode = MODE_DEFAULT,
 		.do_icarus_timing = false,
-		.nonce_bigendian = true,
+		.nonce_littleendian = true,
 		.work_division = 2,
 		.fpga_count = 2,
 		.detect_init_func = dualminer_detect_init,

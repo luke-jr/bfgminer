@@ -521,7 +521,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// if this is a valid device
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
 
-	if (info->nonce_bigendian)
+	if (info->nonce_littleendian)
 		rev(nonce_bin, 4);
 	
 	// How many bytes were left after reading the above nonce
@@ -685,7 +685,7 @@ static bool icarus_init(struct thr_info *thr)
 		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
 		{
 			memcpy(&res, res_bin, sizeof(res));
-			res = be32toh(res);
+			res = info->nonce_littleendian ? le32toh(res) : be32toh(res);
 		}
 		else
 			res = 0;
@@ -797,9 +797,9 @@ static bool icarus_job_start(struct thr_info *thr)
 }
 
 static
-struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonce)
+struct work *icarus_process_worknonce(const struct ICARUS_INFO *info, struct icarus_state *state, uint32_t *nonce)
 {
-	*nonce = be32toh(*nonce);
+	*nonce = info->nonce_littleendian ? le32toh(*nonce) : be32toh(*nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
 	if (likely(state->last2_work && test_nonce(state->last2_work, *nonce, false)))
@@ -845,7 +845,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
-				nonce = be32toh(nonce);
+				nonce = info->nonce_littleendian ? le32toh(nonce) : be32toh(nonce);
 				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
@@ -965,9 +965,6 @@ keepwaiting:
 				case ICA_GETS_OK:
 					break;
 			}
-
-			if (info->nonce_bigendian)
-				rev(nonce_bin, 4);
 		}
 
 		tv_start = state->tv_workstart;
@@ -989,7 +986,7 @@ keepwaiting:
 	if (ret == ICA_GETS_OK)
 	{
 		memcpy(&nonce, nonce_bin, sizeof(nonce));
-		nonce_work = icarus_process_worknonce(state, &nonce);
+		nonce_work = icarus_process_worknonce(info, state, &nonce);
 		if (likely(nonce_work))
 		{
 			if (nonce_work == state->last2_work)
