@@ -10500,15 +10500,12 @@ rescan:
 	bfg_need_detect_rescan = false;
 	
 #ifdef HAVE_BFG_LOWLEVEL
-	if (!opt_scrypt)
-	{
-		struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
-		
-		LL_FOREACH_SAFE(infolist, info, infotmp)
-			probe_device(info);
-		LL_FOREACH_SAFE(infolist, info, infotmp)
-			pthread_join(info->probe_pth, NULL);
-	}
+	struct lowlevel_device_info * const infolist = lowlevel_scan(), *info, *infotmp;
+	
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		probe_device(info);
+	LL_FOREACH_SAFE(infolist, info, infotmp)
+		pthread_join(info->probe_pth, NULL);
 #endif
 	
 	struct driver_registration *reg, *tmp;
