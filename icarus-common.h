@@ -112,6 +112,7 @@ struct ICARUS_INFO {
 	
 	const char *golden_ob;
 	const char *golden_nonce;
+	bool nonce_littleendian;
 };
 
 struct icarus_state {

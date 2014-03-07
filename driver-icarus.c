@@ -163,6 +163,12 @@ static void rev(unsigned char *s, size_t l)
 	}
 }
 
+static inline
+uint32_t icarus_nonce32toh(const struct ICARUS_INFO * const info, const uint32_t nonce)
+{
+	return info->nonce_littleendian ? le32toh(nonce) : be32toh(nonce);
+}
+
 #define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
 
@@ -664,7 +670,7 @@ static bool icarus_init(struct thr_info *thr)
 		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
 		{
 			memcpy(&res, res_bin, sizeof(res));
-			res = be32toh(res);
+			res = icarus_nonce32toh(info, res);
 		}
 		else
 			res = 0;
@@ -773,9 +779,9 @@ static bool icarus_job_start(struct thr_info *thr)
 }
 
 static
-struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonce)
+struct work *icarus_process_worknonce(const struct ICARUS_INFO * const info, struct icarus_state *state, uint32_t *nonce)
 {
-	*nonce = be32toh(*nonce);
+	*nonce = icarus_nonce32toh(info, *nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
 	if (likely(state->last2_work && test_nonce(state->last2_work, *nonce, false)))
@@ -821,7 +827,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
-				nonce = be32toh(nonce);
+				nonce = icarus_nonce32toh(info, nonce);
 				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
@@ -962,7 +968,7 @@ keepwaiting:
 	if (ret == ICA_GETS_OK)
 	{
 		memcpy(&nonce, nonce_bin, sizeof(nonce));
-		nonce_work = icarus_process_worknonce(state, &nonce);
+		nonce_work = icarus_process_worknonce(info, state, &nonce);
 		if (likely(nonce_work))
 		{
 			if (nonce_work == state->last2_work)
