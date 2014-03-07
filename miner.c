@@ -10520,8 +10520,7 @@ rescan:
 	}
 
 #ifdef HAVE_BFG_LOWLEVEL
-	if (!opt_scrypt)
-		lowlevel_scan_free();
+	lowlevel_scan_free();
 #endif
 	
 	if (bfg_need_detect_rescan)
