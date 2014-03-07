@@ -276,7 +276,7 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 
 #define icarus_close(fd) serial_close(fd)
 
-static void do_icarus_close(struct thr_info *thr)
+void do_icarus_close(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	const int fd = icarus->device_fd;
