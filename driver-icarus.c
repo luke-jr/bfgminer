@@ -900,7 +900,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct icarus_state *state = thr->cgpu_data;
 	was_first_run = state->firstrun;
 
-	icarus_job_prepare(thr, work, max_nonce);
+	icarus->drv->job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
@@ -1342,6 +1342,7 @@ struct device_drv icarus_drv = {
 	.thread_prepare = icarus_prepare,
 	.thread_init = icarus_init,
 	.scanhash = icarus_scanhash,
+	.job_prepare = icarus_job_prepare,
 	.thread_disable = close_device_fd,
 	.thread_shutdown = icarus_shutdown,
 };
