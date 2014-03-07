@@ -172,6 +172,14 @@ uint32_t icarus_nonce32toh(const struct ICARUS_INFO * const info, const uint32_t
 #define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
 #define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
 
+static
+void icarus_log_protocol(int fd, const void *buf, size_t bufLen, const char *prefix)
+{
+	char hex[(bufLen * 2) + 1];
+	bin2hex(hex, buf, bufLen);
+	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s %s", icarus_drv.dname, fd, prefix, hex);
+}
+
 int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count, int read_size)
 {
 	ssize_t ret = 0;
@@ -237,6 +245,10 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 		{
 			if (epollfd != -1)
 				close(epollfd);
+
+			if (opt_dev_protocol && opt_debug)
+				icarus_log_protocol(fd, buf, read_size, "RECV");
+
 			return ICA_GETS_OK;
 		}
 
@@ -269,6 +281,9 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 int icarus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
+
+	if (opt_dev_protocol && opt_debug)
+		icarus_log_protocol(fd, buf, bufLen, "SEND");
 
 	if (unlikely(fd == -1))
 		return 1;
