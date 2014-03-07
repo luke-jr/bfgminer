@@ -66,6 +66,9 @@ enum icarus_user_settings {
 	IUS_FPGA_COUNT    = 2,
 };
 
+typedef bool (*icarus_device_init_func_t)(const char *devpath, int fd);
+typedef bool (*icarus_thread_init_func_t)(const struct thr_info *thr);
+
 struct ICARUS_INFO {
 	// time to calculate the golden_ob
 	struct timeval golden_tv;
@@ -109,6 +112,16 @@ struct ICARUS_INFO {
 	
 	// Bytes to read from Icarus for nonce
 	int read_size;
+
+	// Support for custom algorithms
+	char *golden_ob;
+	char *golden_nonce;
+	bool nonce_littleendian;
+
+	// Support for custom initializers
+	icarus_device_init_func_t detect_init_func;
+	icarus_thread_init_func_t job_start_init_func;
+	
 };
 
 struct icarus_state {
@@ -120,11 +133,12 @@ struct icarus_state {
 	bool changework;
 	bool identify;
 	
-	uint8_t ob_bin[64];
+	uint8_t ob_bin[160];
 };
 
 bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
 extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
 extern int icarus_write(int fd, const void *buf, size_t bufLen);
+void do_icarus_close(struct thr_info *thr);
 
 #endif

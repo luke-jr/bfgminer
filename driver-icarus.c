@@ -276,7 +276,7 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 
 #define icarus_close(fd) serial_close(fd)
 
-static void do_icarus_close(struct thr_info *thr)
+void do_icarus_close(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	const int fd = icarus->device_fd;
@@ -453,27 +453,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	struct timeval tv_start, tv_finish;
 	int fd;
 
-	// Block 171874 nonce = (0xa2870100) = 0x000187a2
-	// N.B. golden_ob MUST take less time to calculate
-	//	than the timeout set in icarus_open()
-	//	This one takes ~0.53ms on Rev3 Icarus
-	const char golden_ob[] =
-		"4679ba4ec99876bf4bfe086082b40025"
-		"4df6c356451471139a3afa71e48f544a"
-		"00000000000000000000000000000000"
-		"0000000087320b1a1426674f2fa722ce";
-	/* NOTE: This gets sent to basically every port specified in --scan-serial,
-	 *       even ones that aren't Icarus; be sure they can all handle it, when
-	 *       this is changed...
-	 *       BitForce: Ignores entirely
-	 *       ModMiner: Starts (useless) work, gets back to clean state
-	 */
-
-	const char golden_nonce[] = "000187a2";
-
-	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
-	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
-
 	drv_set_defaults(api, icarus_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
 	int baud = info->baud;
@@ -493,7 +472,37 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (info->read_size == 0)
 		info->read_size = ICARUS_DEFAULT_READ_SIZE;
 
-	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
+	// Set work defaults
+	if (info->golden_ob == NULL)
+	{
+		// Block 171874 nonce = (0xa2870100) = 0x000187a2
+		// N.B. golden_ob MUST take less time to calculate
+		//	than the timeout set in icarus_open()
+		//	This one takes ~0.53ms on Rev3 Icarus
+		info->golden_ob =
+			"4679ba4ec99876bf4bfe086082b40025"
+			"4df6c356451471139a3afa71e48f544a"
+			"00000000000000000000000000000000"
+			"0000000087320b1a1426674f2fa722ce";
+		/* NOTE: This gets sent to basically every port specified in --scan-serial,
+		 *       even ones that aren't Icarus; be sure they can all handle it, when
+		 *       this is changed...
+		 *       BitForce: Ignores entirely
+		 *       ModMiner: Starts (useless) work, gets back to clean state
+		 */
+
+		info->golden_nonce = "000187a2";
+	}
+
+	if (info->detect_init_func != NULL)
+		info->detect_init_func(devpath, fd);
+
+	int work_size = strlen(info->golden_ob) / 2;
+	unsigned char ob_bin[work_size], nonce_bin[ICARUS_NONCE_SIZE];
+	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
+	
+	memset(ob_bin, 0, sizeof(ob_bin));
+	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 	cgtime(&tv_start);
 
@@ -503,18 +512,22 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// if this is a valid device
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1, ICARUS_NONCE_SIZE);
 	
+	if (info->nonce_littleendian)
+		rev(nonce_bin, 4);
+	
 	// How many bytes were left after reading the above nonce
 	int bytes_left = icarus_excess_nonce_size(fd, info);
 	
 	icarus_close(fd);
 
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
+	if (strncmp(nonce_hex, info->golden_nonce, 8))
+	{
 		applog(LOG_DEBUG,
 			"%s: "
 			"Test failed at %s: get %s, should: %s",
 			api->dname,
-			devpath, nonce_hex, golden_nonce);
+			devpath, nonce_hex, info->golden_nonce);
 		return false;
 	}
 		
@@ -591,6 +604,9 @@ bool icarus_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, icarus_detect_one);
 }
 
+static
+bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce);
+
 static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -625,6 +641,9 @@ static bool icarus_prepare(struct thr_info *thr)
 
 	icarus->status = LIFE_INIT2;
 	
+	if (icarus->drv->job_prepare == NULL)
+		icarus->drv->job_prepare = icarus_job_prepare;
+
 	return true;
 }
 
@@ -657,7 +676,7 @@ static bool icarus_init(struct thr_info *thr)
 		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
 		{
 			memcpy(&res, res_bin, sizeof(res));
-			res = be32toh(res);
+			res = info->nonce_littleendian ? le32toh(res) : be32toh(res);
 		}
 		else
 			res = 0;
@@ -737,6 +756,9 @@ static bool icarus_job_start(struct thr_info *thr)
 	int fd = icarus->device_fd;
 	int ret;
 
+	if (info->job_start_init_func != NULL)
+		info->job_start_init_func(thr);
+
 	// Handle dynamic clocking for "subclass" devices
 	// This needs to run before sending next job, since it hashes the command too
 	if (info->dclk.freqM && likely(!state->firstrun)) {
@@ -746,7 +768,8 @@ static bool icarus_job_start(struct thr_info *thr)
 	
 	cgtime(&state->tv_workstart);
 
-	ret = icarus_write(fd, ob_bin, 64);
+	int work_size = strlen(info->golden_ob) / 2;
+	ret = icarus_write(fd, ob_bin, work_size);
 	if (ret) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", icarus->proc_repr, ret);
@@ -755,8 +778,8 @@ static bool icarus_job_start(struct thr_info *thr)
 	}
 
 	if (opt_debug) {
-		char ob_hex[129];
-		bin2hex(ob_hex, ob_bin, 64);
+		char ob_hex[strlen(info->golden_ob) + 1];
+		bin2hex(ob_hex, ob_bin, work_size);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
 			ob_hex);
@@ -766,9 +789,9 @@ static bool icarus_job_start(struct thr_info *thr)
 }
 
 static
-struct work *icarus_process_worknonce(struct icarus_state *state, uint32_t *nonce)
+struct work *icarus_process_worknonce(const struct ICARUS_INFO *info, struct icarus_state *state, uint32_t *nonce)
 {
-	*nonce = be32toh(*nonce);
+	*nonce = info->nonce_littleendian ? le32toh(*nonce) : be32toh(*nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
 	if (likely(state->last2_work && test_nonce(state->last2_work, *nonce, false)))
@@ -814,7 +837,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
-				nonce = be32toh(nonce);
+				nonce = info->nonce_littleendian ? le32toh(nonce) : be32toh(nonce);
 				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
@@ -887,7 +910,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct icarus_state *state = thr->cgpu_data;
 	was_first_run = state->firstrun;
 
-	icarus_job_prepare(thr, work, max_nonce);
+	icarus->drv->job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
 	fd = icarus->device_fd;
@@ -955,7 +978,7 @@ keepwaiting:
 	if (ret == ICA_GETS_OK)
 	{
 		memcpy(&nonce, nonce_bin, sizeof(nonce));
-		nonce_work = icarus_process_worknonce(state, &nonce);
+		nonce_work = icarus_process_worknonce(info, state, &nonce);
 		if (likely(nonce_work))
 		{
 			if (nonce_work == state->last2_work)
