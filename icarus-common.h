@@ -109,6 +109,9 @@ struct ICARUS_INFO {
 	
 	// Bytes to read from Icarus for nonce
 	int read_size;
+	
+	const char *golden_ob;
+	const char *golden_nonce;
 };
 
 struct icarus_state {

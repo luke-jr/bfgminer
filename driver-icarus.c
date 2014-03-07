@@ -453,25 +453,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	struct timeval tv_start, tv_finish;
 	int fd;
 
-	// Block 171874 nonce = (0xa2870100) = 0x000187a2
-	// N.B. golden_ob MUST take less time to calculate
-	//	than the timeout set in icarus_open()
-	//	This one takes ~0.53ms on Rev3 Icarus
-	const char golden_ob[] =
-		"4679ba4ec99876bf4bfe086082b40025"
-		"4df6c356451471139a3afa71e48f544a"
-		"00000000000000000000000000000000"
-		"0000000087320b1a1426674f2fa722ce";
-	/* NOTE: This gets sent to basically every port specified in --scan-serial,
-	 *       even ones that aren't Icarus; be sure they can all handle it, when
-	 *       this is changed...
-	 *       BitForce: Ignores entirely
-	 *       ModMiner: Starts (useless) work, gets back to clean state
-	 */
-
-	const char golden_nonce[] = "000187a2";
-
-	unsigned char ob_bin[64], nonce_bin[ICARUS_NONCE_SIZE];
+	unsigned char nonce_bin[ICARUS_NONCE_SIZE];
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
 	drv_set_defaults(api, icarus_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
@@ -492,8 +474,32 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	// e.g. Cairnsmore
 	if (info->read_size == 0)
 		info->read_size = ICARUS_DEFAULT_READ_SIZE;
+	
+	if (!info->golden_ob)
+	{
+		// Block 171874 nonce = (0xa2870100) = 0x000187a2
+		// NOTE: this MUST take less time to calculate
+		//	than the timeout set in icarus_open()
+		//	This one takes ~0.53ms on Rev3 Icarus
+		info->golden_ob =
+			"4679ba4ec99876bf4bfe086082b40025"
+			"4df6c356451471139a3afa71e48f544a"
+			"00000000000000000000000000000000"
+			"0000000087320b1a1426674f2fa722ce";
+		/* NOTE: This gets sent to basically every port specified in --scan-serial,
+		 *       even ones that aren't Icarus; be sure they can all handle it, when
+		 *       this is changed...
+		 *       BitForce: Ignores entirely
+		 *       ModMiner: Starts (useless) work, gets back to clean state
+		 */
+		
+		info->golden_nonce = "000187a2";
+	}
 
-	hex2bin(ob_bin, golden_ob, sizeof(ob_bin));
+	int ob_size = strlen(info->golden_ob) / 2;
+	unsigned char ob_bin[ob_size];
+	
+	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
 	cgtime(&tv_start);
 
@@ -509,12 +515,13 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus_close(fd);
 
 	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, golden_nonce, 8)) {
+	if (strncmp(nonce_hex, info->golden_nonce, 8))
+	{
 		applog(LOG_DEBUG,
 			"%s: "
 			"Test failed at %s: get %s, should: %s",
 			api->dname,
-			devpath, nonce_hex, golden_nonce);
+			devpath, nonce_hex, info->golden_nonce);
 		return false;
 	}
 		
