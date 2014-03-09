@@ -419,75 +419,77 @@ bool drillbit_get_work_results(struct cgpu_info * const dev)
 	uint32_t total;
 	int i, j;
 	
-	if (1 != write(fd, "E", 1))
-		problem(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
+	do {
+		if (1 != write(fd, "E", 1))
+			problem(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
 	
-	if (sizeof(total) != serial_read(fd, &total, sizeof(total)))
-		problem(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
-	total = le32toh(total);
+		if (sizeof(total) != serial_read(fd, &total, sizeof(total)))
+			problem(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
+		total = le32toh(total);
 	
-	if (total > DRILLBIT_MAX_WORK_RESULTS)
-		problem(false, LOG_ERR, "%s: Impossible number of total work: %lu",
-		        dev->dev_repr, (unsigned long)total);
+		if (total > DRILLBIT_MAX_WORK_RESULTS)
+			problem(false, LOG_ERR, "%s: Impossible number of total work: %lu",
+				dev->dev_repr, (unsigned long)total);
 	
-	for (i = 0; i < total; ++i)
-	{
-		if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
-			problem(false, LOG_ERR, "%s: Short read on %dth total work",
-			        dev->dev_repr, i);
-		const int chipid = buf[0];
-		struct cgpu_info * const proc = drillbit_find_proc(dev, chipid);
-		struct thr_info * const thr = proc->thr[0];
-		if (unlikely(!proc))
+		for (i = 0; i < total; ++i)
 		{
-			applog(LOG_ERR, "%s: Unknown chip id %d", dev->dev_repr, chipid);
-			continue;
-		}
-		const bool is_idle = buf[3];
-		int nonces = buf[2];
-		if (nonces > DRILLBIT_MAX_RESULT_NONCES)
-		{
-			applog(LOG_ERR, "%"PRIpreprv": More than %d nonces claimed, impossible",
-			       proc->proc_repr, (int)DRILLBIT_MAX_RESULT_NONCES);
-			nonces = DRILLBIT_MAX_RESULT_NONCES;
-		}
-		applog(LOG_DEBUG, "%"PRIpreprv": Handling completion of %d nonces. is_idle=%d work=%p next_work=%p",
-		       proc->proc_repr, nonces, is_idle, thr->work, thr->next_work);
-		const uint32_t *nonce_p = (void*)&buf[4];
-		for (j = 0; j < nonces; ++j, ++nonce_p)
-		{
-			uint32_t nonce = bitfury_decnonce(*nonce_p);
-			if (bitfury_fudge_nonce2(thr->work, &nonce))
-				submit_nonce(thr, thr->work, nonce);
-			else
-			if (bitfury_fudge_nonce2(thr->next_work, &nonce))
+			if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
+				problem(false, LOG_ERR, "%s: Short read on %dth total work",
+					dev->dev_repr, i);
+			const int chipid = buf[0];
+			struct cgpu_info * const proc = drillbit_find_proc(dev, chipid);
+			struct thr_info * const thr = proc->thr[0];
+			if (unlikely(!proc))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": Result for next work, transitioning",
-				       proc->proc_repr);
-				submit_nonce(thr, thr->next_work, nonce);
+				applog(LOG_ERR, "%s: Unknown chip id %d", dev->dev_repr, chipid);
+				continue;
+			}
+			const bool is_idle = buf[3];
+			int nonces = buf[2];
+			if (nonces > DRILLBIT_MAX_RESULT_NONCES)
+			{
+				applog(LOG_ERR, "%"PRIpreprv": More than %d nonces claimed, impossible",
+					proc->proc_repr, (int)DRILLBIT_MAX_RESULT_NONCES);
+				nonces = DRILLBIT_MAX_RESULT_NONCES;
+			}
+			applog(LOG_DEBUG, "%"PRIpreprv": Handling completion of %d nonces from chip %d. is_idle=%d work=%p next_work=%p",
+				proc->proc_repr, nonces, chipid, is_idle, thr->work, thr->next_work);
+			const uint32_t *nonce_p = (void*)&buf[4];
+			for (j = 0; j < nonces; ++j, ++nonce_p)
+			{
+				uint32_t nonce = bitfury_decnonce(*nonce_p);
+				if (bitfury_fudge_nonce2(thr->work, &nonce))
+					submit_nonce(thr, thr->work, nonce);
+				else
+					if (bitfury_fudge_nonce2(thr->next_work, &nonce))
+					{
+						applog(LOG_DEBUG, "%"PRIpreprv": Result for next work, transitioning",
+							proc->proc_repr);
+						submit_nonce(thr, thr->next_work, nonce);
+						mt_job_transition(thr);
+						job_start_complete(thr);
+					}
+					else
+						if (bitfury_fudge_nonce2(thr->prev_work, &nonce))
+						{
+							applog(LOG_DEBUG, "%"PRIpreprv": Result for PREVIOUS work",
+								proc->proc_repr);
+							submit_nonce(thr, thr->prev_work, nonce);
+						}
+						else
+							inc_hw_errors(thr, thr->work, nonce);
+			}
+			if (is_idle && thr->next_work)
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Chip went idle without any results for next work",
+					proc->proc_repr);
 				mt_job_transition(thr);
 				job_start_complete(thr);
 			}
-			else
-			if (bitfury_fudge_nonce2(thr->prev_work, &nonce))
-			{
-				applog(LOG_DEBUG, "%"PRIpreprv": Result for PREVIOUS work",
-				       proc->proc_repr);
-				submit_nonce(thr, thr->prev_work, nonce);
-			}
-			else
-				inc_hw_errors(thr, thr->work, nonce);
+			if (!thr->next_work)
+				timer_set_now(&thr->tv_morework);
 		}
-		if (is_idle && thr->next_work)
-		{
-			applog(LOG_DEBUG, "%"PRIpreprv": Chip went idle without any results for next work",
-			       proc->proc_repr);
-			mt_job_transition(thr);
-			job_start_complete(thr);
-		}
-		if (!thr->next_work)
-			timer_set_now(&thr->tv_morework);
-	}
+	} while(total > 0);
 	
 	return true;
 }
