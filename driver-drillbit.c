@@ -77,7 +77,7 @@ err:
 	char * const product = (void*)&buf[1];
 	buf[9] = '\0';  // Ensure it is null-terminated (clobbers serial, but we already parsed it)
 	unsigned chips = buf[0xd];
-	intptr_t caps = buf[0xe] | ((intptr_t)buf[0xf] << 8);
+	uint16_t caps = buf[0xe] | ((uint16_t)buf[0xf] << 8);
 	if (!product[0])
 		applogr(false, LOG_DEBUG, "%s: %s: Null product name", __func__, devpath);
 	if (!serialno)
@@ -113,8 +113,6 @@ err:
 		// Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
 		caps |= DBC_EXT_CLOCK;
 	
-        caps |= ((intptr_t)protover) << 16; // Store protocol version in capability field, temporarily
-
 	char *serno = malloc(9);
 	snprintf(serno, 9, "%08lx", serialno);
 	
@@ -128,6 +126,8 @@ err:
 	if (serial_claim_v(devpath, &drillbit_drv))
 		return false;
 	
+	intptr_t device_data = caps | ((intptr_t)protover << 16); // Store capabilities & protocol version in device_data, temporarily
+
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &drillbit_drv,
@@ -137,7 +137,7 @@ err:
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
-		.device_data = (void *)(intptr_t)caps,
+		.device_data = (void *)device_data,
 	};
 	return add_cgpu(cgpu);
 }
@@ -281,7 +281,7 @@ bool drillbit_init(struct thr_info * const master_thr)
 	
 	dev->device_fd = -1;
 
-	unsigned caps = (intptr_t)dev->device_data; // capabilities & protocol version stored here
+	intptr_t device_data = (intptr_t)dev->device_data; // capabilities & protocol version stored here
 
 	struct drillbit_board * const board = malloc(sizeof(*board));
 	*board = (struct drillbit_board){
@@ -289,8 +289,8 @@ bool drillbit_init(struct thr_info * const master_thr)
 		.clock_freq = 200,
 		.clock_div2 = false,
 		.use_ext_clock = false,
-		.caps = caps,
-		.protover = caps >> 16,
+		.caps = device_data,
+		.protover = device_data >> 16,
 	};
 	dev->device_data = board;
 	
