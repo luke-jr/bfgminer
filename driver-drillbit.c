@@ -95,7 +95,7 @@ err:
 			strcpy(product, "Eight");
 	}
 	else
-	if ((chips % 8 == 0) && !strcmp(product, "Eight"))
+	if ((chips >= 8) && (chips <= 64) && (chips % 8 == 0) && !strcmp(product, "Eight"))
 	{}  // Known device
 	else
 	if (chips == 1 && !strcmp(product, "Thumb"))
