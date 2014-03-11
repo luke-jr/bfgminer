@@ -103,11 +103,12 @@ err:
 	else
 		loglev = LOG_DEBUG;
 	
-	if (protover < DRILLBIT_MIN_VERSION || (loglev == LOG_DEBUG && protover > DRILLBIT_MAX_VERSION)) {
-		applogr(false, LOG_ERR, "%s: %s: Device firmware uses newer Drillbit protocol %u. We only support up to %u. Find a newer BFGMiner!",
+	if (protover < DRILLBIT_MIN_VERSION || (loglev == LOG_DEBUG && protover > DRILLBIT_MAX_VERSION))
+		applogr(false, loglev, "%s: %s: Unknown device protocol version %u.",
+		        __func__, devpath, protover);
+	if (protover > DRILLBIT_MAX_VERSION)
+		applogr(false, loglev, "%s: %s: Device firmware uses newer Drillbit protocol %u. We only support up to %u. Find a newer BFGMiner!",
 		        __func__, devpath, protover, (unsigned)DRILLBIT_MAX_VERSION);
-		return false;
-	}
 	
 	if (protover == 2 && chips == 1)
 		// Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
