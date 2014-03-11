@@ -31,6 +31,13 @@ enum drillbit_capability {
 	DBC_EXT_CLOCK = 2,
 };
 
+enum drillbit_voltagecfg {
+       DBV_650mV = 0,
+       DBV_750mV = 2,
+       DBV_850mV = 1,
+       DBV_950mV = 3,
+}; // Flags used for pre-V4 configuration format only
+
 struct drillbit_board {
 	unsigned core_voltage;
 	unsigned clock_freq;
@@ -203,13 +210,13 @@ bool drillbit_send_config(struct cgpu_info * const dev)
 	uint8_t buf[7] = {'C'};
 	if(board->protover < 4) {
 		if(board->core_voltage < 750)
-			buf[1] = 0; // 650mV
+			buf[1] = DBV_650mV;
 		else if(board->core_voltage < 850)
-			buf[1] = 1; // 750mV
+			buf[1] = DBV_750mV;
 		else if(board->core_voltage < 950)
-			buf[1] = 2; // 850mV
+			buf[1] = DBV_850mV;
 		else
-			buf[1] = 3; // 950mV
+			buf[1] = DBV_950mV;
 		if(board->clock_freq < 64) // internal clock level, either direct or MHz/5
 			buf[2] = board->clock_freq;
 		else
