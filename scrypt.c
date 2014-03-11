@@ -451,7 +451,6 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		     unsigned char __maybe_unused *phash, const unsigned char *ptarget,
 		     uint32_t max_nonce, uint32_t *last_nonce, uint32_t n)
 {
-	uint32_t *nonce = (uint32_t *)(pdata + 76);
 	char *scratchbuf;
 	uint32_t data[20];
 	uint32_t tmp_hash7;
@@ -469,13 +468,13 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 	while(1) {
 		uint32_t ostate[8];
 
-		*nonce = ++n;
+		++n;
 		data[19] = htobe32(n);
 		scrypt_1024_1_1_256_sp(data, scratchbuf, ostate);
 		tmp_hash7 = be32toh(ostate[7]);
 
 		if (unlikely(tmp_hash7 <= Htarg)) {
-			((uint32_t *)pdata)[19] = htobe32(n);
+			((uint32_t *)pdata)[19] = n;
 			*last_nonce = n;
 			ret = true;
 			break;
