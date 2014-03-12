@@ -64,7 +64,7 @@ static inline void affine_to_cpu(int id, int cpu)
 
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
-	sched_setaffinity(0, sizeof(&set), &set);
+	sched_setaffinity(0, sizeof(set), &set);
 	applog(LOG_INFO, "Binding cpu mining thread %d to cpu %d", id, cpu);
 }
 #else
