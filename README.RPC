@@ -435,6 +435,9 @@ api-example.py - a Python script to access the API.
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
  If you specify a command it will send that request instead.
 
+If you are using Node.js, you can also use the miner-rpc package and script:
+https://www.npmjs.org/package/miner-rpc
+
 ----------
 
 Feature Changelog for external applications using the API:
