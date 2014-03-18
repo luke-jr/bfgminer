@@ -114,8 +114,9 @@ struct ICARUS_INFO {
 	const char *golden_nonce;
 	bool nonce_littleendian;
 	
-	// Custom driver function
+	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
+	bool (*job_start_func)(struct thr_info *);
 };
 
 struct icarus_state {
@@ -134,5 +135,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARU
 extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
 extern int icarus_write(int fd, const void *buf, size_t bufLen);
 extern void do_icarus_close(struct thr_info *thr);
+extern bool icarus_job_start(struct thr_info *);
 
 #endif

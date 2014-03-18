@@ -650,6 +650,8 @@ static bool icarus_init(struct thr_info *thr)
 	struct ICARUS_INFO *info = icarus->device_data;
 	int fd = icarus->device_fd;
 	
+	BFGINIT(info->job_start_func, icarus_job_start);
+	
 	if (!info->work_division)
 	{
 		struct timeval tv_finish;
@@ -744,7 +746,7 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	return true;
 }
 
-static bool icarus_job_start(struct thr_info *thr)
+bool icarus_job_start(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
@@ -853,7 +855,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	if (!state->firstrun)
 	{
 		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
-		if (!icarus_job_start(thr))
+		if (!info->job_start_func(thr))
 no_job_start:
 			state->firstrun = true;
 	}
@@ -1020,7 +1022,7 @@ keepwaiting:
 		// Delay job start until later...
 	}
 	else
-	if (unlikely(icarus->deven != DEV_ENABLED || !icarus_job_start(thr)))
+	if (unlikely(icarus->deven != DEV_ENABLED || !info->job_start_func(thr)))
 		state->firstrun = true;
 
 	if (info->reopen_mode == IRM_CYCLE && !icarus_reopen(icarus, state, &fd))
