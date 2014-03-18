@@ -135,9 +135,7 @@ extern bool scanhash_sse2_32(struct thr_info*, const unsigned char *pmidstate, u
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce);
 
-extern bool scanhash_scrypt(struct thr_info *thr, int thr_id, unsigned char *pdata, unsigned char *scratchbuf,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, unsigned long *hashes_done);
+extern bool scanhash_scrypt(struct thr_info *, const unsigned char *pmidstate, unsigned char *pdata, unsigned char *phash1, unsigned char __maybe_unused *phash, const unsigned char *ptarget, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
 
 
