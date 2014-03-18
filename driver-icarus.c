@@ -507,6 +507,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	
 	int ob_size = strlen(info->golden_ob) / 2;
 	unsigned char ob_bin[ob_size];
+	BFGINIT(info->ob_size, ob_size);
 	
 	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
 	icarus_write(fd, ob_bin, sizeof(ob_bin));
@@ -648,9 +649,11 @@ static bool icarus_init(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
+	struct icarus_state * const state = thr->cgpu_data;
 	int fd = icarus->device_fd;
 	
 	BFGINIT(info->job_start_func, icarus_job_start);
+	BFGINIT(state->ob_bin, malloc(info->ob_size));
 	
 	if (!info->work_division)
 	{
@@ -764,7 +767,7 @@ bool icarus_job_start(struct thr_info *thr)
 	
 	cgtime(&state->tv_workstart);
 
-	ret = icarus_write(fd, ob_bin, 64);
+	ret = icarus_write(fd, ob_bin, info->ob_size);
 	if (ret) {
 		do_icarus_close(thr);
 		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", icarus->proc_repr, ret);
@@ -773,8 +776,8 @@ bool icarus_job_start(struct thr_info *thr)
 	}
 
 	if (opt_debug) {
-		char ob_hex[129];
-		bin2hex(ob_hex, ob_bin, 64);
+		char ob_hex[(info->ob_size * 2) + 1];
+		bin2hex(ob_hex, ob_bin, info->ob_size);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
 			icarus->proc_repr,
 			ob_hex);

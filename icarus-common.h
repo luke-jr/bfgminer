@@ -110,6 +110,7 @@ struct ICARUS_INFO {
 	// Bytes to read from Icarus for nonce
 	int read_size;
 	
+	size_t ob_size;
 	const char *golden_ob;
 	const char *golden_nonce;
 	bool nonce_littleendian;
@@ -128,7 +129,7 @@ struct icarus_state {
 	bool changework;
 	bool identify;
 	
-	uint8_t ob_bin[64];
+	uint8_t *ob_bin;
 };
 
 bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
