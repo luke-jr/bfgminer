@@ -113,6 +113,9 @@ struct ICARUS_INFO {
 	const char *golden_ob;
 	const char *golden_nonce;
 	bool nonce_littleendian;
+	
+	// Custom driver function
+	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 };
 
 struct icarus_state {

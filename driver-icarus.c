@@ -502,6 +502,9 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 		info->golden_nonce = "000187a2";
 	}
 
+	if (info->detect_init_func)
+		info->detect_init_func(devpath, fd, info);
+	
 	int ob_size = strlen(info->golden_ob) / 2;
 	unsigned char ob_bin[ob_size];
 	
