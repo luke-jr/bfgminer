@@ -374,7 +374,7 @@ static bool ztex_prepare(struct thr_info *thr)
 		thr->cgpu->deven = DEV_DISABLED;
 		return true;
 	}
-	ztex->dclk.freqM = ztex->dclk.freqMaxM+1;;
+	ztex->dclk.freqM = ztex->dclk.freqMaxM+1;
 	//ztex_updateFreq(thr);
 	libztex_setFreq(ztex, ztex->dclk.freqMDefault, cgpu->proc_repr);
 	ztex_releaseFpga(ztex);

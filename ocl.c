@@ -325,7 +325,7 @@ int clDevicesNum(void) {
 	}
 
 	if (opt_platform_id < 0)
-		opt_platform_id = mdplatform;;
+		opt_platform_id = mdplatform;
 	if (mdmesa && opt_g_threads == -1)
 		opt_g_threads = 1;
 

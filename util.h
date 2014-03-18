@@ -253,7 +253,7 @@ void bytes_extend_buf(bytes_t * const b, const size_t newsz)
 static inline
 void bytes_resize(bytes_t * const b, const size_t newsz)
 {
-	bytes_extend_buf(b, newsz);;
+	bytes_extend_buf(b, newsz);
 	b->sz = newsz;
 }
 
