@@ -30,12 +30,10 @@
 #include "driver-proxy.h"
 #include "miner.h"
 #include "util.h"
+#include "work2d.h"
 
-#define MAX_CLIENTS 255
-
-static bool _ssm_xnonce1s[MAX_CLIENTS + 1] = { true };
-static uint8_t _ssm_client_octets;
-static uint8_t _ssm_client_xnonce2sz;
+#define _ssm_client_octets     work2d_xnonce1sz
+#define _ssm_client_xnonce2sz  work2d_xnonce2sz
 static char *_ssm_notify;
 static int _ssm_notify_sz;
 static struct event *ev_notify;
@@ -152,7 +150,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 		.pool = pool,
 		.work_restart_id = pool->work_restart_id,
 		.n2size = n2size,
-		.nonce1 = strdup(pool->nonce1),
+		.nonce1 = maybe_strdup(pool->nonce1),
 	};
 	timer_set_now(&ssj->tv_prepared);
 	stratum_work_cpy(&ssj->swork, swork);
@@ -277,11 +275,11 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 	else
 		stratumsrv_job_pruner();
 	
-	if (!pool->stratum_notify)
+	if (!pool_has_usable_swork(pool))
 	{
-		applog(LOG_WARNING, "SSM: Not using a stratum server upstream!");
+		applog(LOG_WARNING, "SSM: No usable 2D work upstream!");
 		if (clean)
-			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
+			stratumsrv_boot_all_subscribed("Current upstream pool does not have usable 2D work");
 		goto out;
 	}
 	
@@ -368,12 +366,8 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 	
 	if (!*xnonce1_p)
 	{
-		uint32_t xnonce1;
-		for (xnonce1 = MAX_CLIENTS; _ssm_xnonce1s[xnonce1]; --xnonce1)
-			if (!xnonce1)
-				return_stratumsrv_failure(20, "Maximum clients already connected");
-		_ssm_xnonce1s[xnonce1] = true;
-		*xnonce1_p = htole32(xnonce1);
+		if (!reserve_work2d_(xnonce1_p))
+			return_stratumsrv_failure(20, "Maximum clients already connected");
 	}
 	
 	bin2hex(xnonce1x, xnonce1_p, _ssm_client_octets);
@@ -540,12 +534,11 @@ static
 void stratumsrv_client_close(struct stratumsrv_conn * const conn)
 {
 	struct bufferevent * const bev = conn->bev;
-	uint32_t xnonce1 = le32toh(conn->xnonce1_le);
 	
 	bufferevent_free(bev);
 	LL_DELETE(_ssm_connections, conn);
+	release_work2d_(conn->xnonce1_le);
 	free(conn);
-	_ssm_xnonce1s[xnonce1] = false;
 }
 
 static
@@ -626,9 +619,7 @@ void *stratumsrv_thread(__maybe_unused void *p)
 	pthread_detach(pthread_self());
 	RenameThread("stratumsrv");
 	
-	for (uint64_t n = MAX_CLIENTS; n; n >>= 8)
-		++_ssm_client_octets;
-	_ssm_client_xnonce2sz = 2;
+	work2d_init();
 	
 	struct event_base *evbase = event_base_new();
 	_smm_evbase = evbase;

@@ -198,6 +198,10 @@ if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif
 
+if USE_LIBEVENT
+bfgminer_SOURCES  += work2d.c work2d.h
+endif
+
 if HAS_FPGA
 dist_doc_DATA += README.FPGA
 endif

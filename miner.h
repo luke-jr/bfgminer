@@ -1126,7 +1126,14 @@ enum pool_protocol {
 	PLP_GETBLOCKTEMPLATE,
 };
 
+struct bfg_tmpl_ref {
+	blktemplate_t *tmpl;
+	int refcount;
+	pthread_mutex_t mutex;
+};
+
 struct stratum_work {
+	struct bfg_tmpl_ref *tr;
 	char *job_id;
 	bool clean;
 	
@@ -1140,6 +1147,7 @@ struct stratum_work {
 	uint8_t diffbits[4];
 	uint32_t ntime;
 	struct timeval tv_received;
+	struct timeval tv_expire;
 
 	double diff;
 
@@ -1322,8 +1330,7 @@ struct work {
 	// Allow devices to timestamp work for their own purposes
 	struct timeval	tv_stamp;
 
-	blktemplate_t	*tmpl;
-	int		*tmpl_refcount;
+	struct bfg_tmpl_ref *tr;
 	unsigned int	dataid;
 	bool		do_foreign_submit;
 
@@ -1344,6 +1351,7 @@ extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
+extern bool pool_has_usable_swork(const struct pool *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
@@ -1412,6 +1420,7 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void tmpl_decref(struct bfg_tmpl_ref *);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
