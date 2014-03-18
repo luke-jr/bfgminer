@@ -1256,6 +1256,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 			}
 
 			root = api_add_string(root, _STATUS, severity, false);
+			root = api_add_escape(root, "Since", datestamp, false);
 			root = api_add_time(root, "When", &when, false);
 			root = api_add_int(root, "Code", &messageid, false);
 			root = api_add_escape(root, "Msg", buf, false);
