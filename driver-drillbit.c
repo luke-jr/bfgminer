@@ -21,7 +21,7 @@
 BFG_REGISTER_DRIVER(drillbit_drv)
 
 #define DRILLBIT_MIN_VERSION 2
-#define DRILLBIT_MAX_VERSION 3
+#define DRILLBIT_MAX_VERSION 4
 
 #define DRILLBIT_MAX_WORK_RESULTS 0x400
 #define DRILLBIT_MAX_RESULT_NONCES 0x10
@@ -31,22 +31,15 @@ enum drillbit_capability {
 	DBC_EXT_CLOCK = 2,
 };
 
-enum drillbit_voltagecfg {
-	DBV_650mV = 0,
-	DBV_750mV = 2,
-	DBV_850mV = 1,
-	DBV_950mV = 3,
-};
-
 struct drillbit_board {
-	enum drillbit_voltagecfg core_voltage_cfg;
-	unsigned clock_level;
+	unsigned core_voltage;
+	unsigned clock_freq;
 	bool clock_div2;
 	bool use_ext_clock;
-	unsigned ext_clock_freq;
 	bool need_reinit;
 	bool trigger_identify;
 	uint16_t caps;
+	uint8_t protover;
 };
 
 static
@@ -84,7 +77,7 @@ err:
 	char * const product = (void*)&buf[1];
 	buf[9] = '\0';  // Ensure it is null-terminated (clobbers serial, but we already parsed it)
 	unsigned chips = buf[0xd];
-	uint16_t caps = (uint16_t)buf[0xe] | ((uint16_t)buf[0xf] << 8);
+	uint16_t caps = buf[0xe] | ((uint16_t)buf[0xf] << 8);
 	if (!product[0])
 		applogr(false, LOG_DEBUG, "%s: %s: Null product name", __func__, devpath);
 	if (!serialno)
@@ -102,7 +95,7 @@ err:
 			strcpy(product, "Eight");
 	}
 	else
-	if (chips == 8 && !strcmp(product, "Eight"))
+	if ((chips >= 8) && (chips <= 64) && (chips % 8 == 0) && !strcmp(product, "Eight"))
 	{}  // Known device
 	else
 	if (chips == 1 && !strcmp(product, "Thumb"))
@@ -134,6 +127,8 @@ err:
 	if (serial_claim_v(devpath, &drillbit_drv))
 		return false;
 	
+	intptr_t device_data = caps | ((intptr_t)protover << 16); // Store capabilities & protocol version in device_data, temporarily
+
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &drillbit_drv,
@@ -143,7 +138,7 @@ err:
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
-		.device_data = (void*)(intptr_t)caps,
+		.device_data = (void *)device_data,
 	};
 	return add_cgpu(cgpu);
 }
@@ -206,8 +201,34 @@ bool drillbit_send_config(struct cgpu_info * const dev)
 		return false;
 	
 	const struct drillbit_board * const board = dev->device_data;
-	const uint8_t buf[7] = {'C', board->core_voltage_cfg, board->clock_level, (board->clock_div2 ? 1 : 0), (board->use_ext_clock ? 1 : 0), (board->ext_clock_freq & 0xff), (board->ext_clock_freq >> 8)};
-	
+	uint8_t buf[7] = {'C'};
+	if(board->protover < 4) {
+		if(board->core_voltage < 750)
+			buf[1] = 0; // 650mV
+		else if(board->core_voltage < 850)
+			buf[1] = 1; // 750mV
+		else if(board->core_voltage < 950)
+			buf[1] = 2; // 850mV
+		else
+			buf[1] = 3; // 950mV
+		if(board->clock_freq < 64) // internal clock level, either direct or MHz/5
+			buf[2] = board->clock_freq;
+		else
+			buf[2] = board->clock_freq / 5;
+		buf[3] = board->clock_div2 ? 1 : 0;
+		buf[4] = board->use_ext_clock ? 1 : 0;
+		buf[5] = board->clock_freq;
+		buf[6] = board->clock_freq >> 8;
+	}
+	else {
+		buf[1] = board->core_voltage;
+		buf[2] = board->core_voltage >> 8;
+		buf[3] = board->clock_freq;
+		buf[4] = board->clock_freq >> 8;
+		buf[5] = board->clock_div2 ? 1 : 0;
+		buf[6] = board->use_ext_clock ? 1 : 0;
+	}
+
 	if (sizeof(buf) != write(fd, buf, sizeof(buf)))
 		problem(false, LOG_ERR, "%s: Error sending config", dev->dev_repr);
 	
@@ -260,14 +281,17 @@ bool drillbit_init(struct thr_info * const master_thr)
 	struct cgpu_info * const dev = master_thr->cgpu;
 	
 	dev->device_fd = -1;
+
+	intptr_t device_data = (intptr_t)dev->device_data; // capabilities & protocol version stored here
+
 	struct drillbit_board * const board = malloc(sizeof(*board));
 	*board = (struct drillbit_board){
-		.core_voltage_cfg = DBV_850mV,
-		.clock_level = 40,
+		.core_voltage = 850,
+		.clock_freq = 200,
 		.clock_div2 = false,
 		.use_ext_clock = false,
-		.ext_clock_freq = 200,
-		.caps = (intptr_t)dev->device_data,
+		.caps = device_data,
+		.protover = device_data >> 16,
 	};
 	dev->device_data = board;
 	
@@ -396,75 +420,77 @@ bool drillbit_get_work_results(struct cgpu_info * const dev)
 	uint32_t total;
 	int i, j;
 	
-	if (1 != write(fd, "E", 1))
-		problem(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
+	do {
+		if (1 != write(fd, "E", 1))
+			problem(false, LOG_ERR, "%s: Error sending request for work results", dev->dev_repr);
 	
-	if (sizeof(total) != serial_read(fd, &total, sizeof(total)))
-		problem(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
-	total = le32toh(total);
+		if (sizeof(total) != serial_read(fd, &total, sizeof(total)))
+			problem(false, LOG_ERR, "%s: Short read in response to 'E'", dev->dev_repr);
+		total = le32toh(total);
 	
-	if (total > DRILLBIT_MAX_WORK_RESULTS)
-		problem(false, LOG_ERR, "%s: Impossible number of total work: %lu",
-		        dev->dev_repr, (unsigned long)total);
+		if (total > DRILLBIT_MAX_WORK_RESULTS)
+			problem(false, LOG_ERR, "%s: Impossible number of total work: %lu",
+				dev->dev_repr, (unsigned long)total);
 	
-	for (i = 0; i < total; ++i)
-	{
-		if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
-			problem(false, LOG_ERR, "%s: Short read on %dth total work",
-			        dev->dev_repr, i);
-		const int chipid = buf[0];
-		struct cgpu_info * const proc = drillbit_find_proc(dev, chipid);
-		struct thr_info * const thr = proc->thr[0];
-		if (unlikely(!proc))
+		for (i = 0; i < total; ++i)
 		{
-			applog(LOG_ERR, "%s: Unknown chip id %d", dev->dev_repr, chipid);
-			continue;
-		}
-		const bool is_idle = buf[3];
-		int nonces = buf[2];
-		if (nonces > DRILLBIT_MAX_RESULT_NONCES)
-		{
-			applog(LOG_ERR, "%"PRIpreprv": More than %d nonces claimed, impossible",
-			       proc->proc_repr, (int)DRILLBIT_MAX_RESULT_NONCES);
-			nonces = DRILLBIT_MAX_RESULT_NONCES;
-		}
-		applog(LOG_DEBUG, "%"PRIpreprv": Handling completion of %d nonces. is_idle=%d work=%p next_work=%p",
-		       proc->proc_repr, nonces, is_idle, thr->work, thr->next_work);
-		const uint32_t *nonce_p = (void*)&buf[4];
-		for (j = 0; j < nonces; ++j, ++nonce_p)
-		{
-			uint32_t nonce = bitfury_decnonce(*nonce_p);
-			if (bitfury_fudge_nonce2(thr->work, &nonce))
-				submit_nonce(thr, thr->work, nonce);
-			else
-			if (bitfury_fudge_nonce2(thr->next_work, &nonce))
+			if (sizeof(buf) != serial_read(fd, buf, sizeof(buf)))
+				problem(false, LOG_ERR, "%s: Short read on %dth total work",
+					dev->dev_repr, i);
+			const int chipid = buf[0];
+			struct cgpu_info * const proc = drillbit_find_proc(dev, chipid);
+			struct thr_info * const thr = proc->thr[0];
+			if (unlikely(!proc))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": Result for next work, transitioning",
-				       proc->proc_repr);
-				submit_nonce(thr, thr->next_work, nonce);
+				applog(LOG_ERR, "%s: Unknown chip id %d", dev->dev_repr, chipid);
+				continue;
+			}
+			const bool is_idle = buf[3];
+			int nonces = buf[2];
+			if (nonces > DRILLBIT_MAX_RESULT_NONCES)
+			{
+				applog(LOG_ERR, "%"PRIpreprv": More than %d nonces claimed, impossible",
+					proc->proc_repr, (int)DRILLBIT_MAX_RESULT_NONCES);
+				nonces = DRILLBIT_MAX_RESULT_NONCES;
+			}
+			applog(LOG_DEBUG, "%"PRIpreprv": Handling completion of %d nonces from chip %d. is_idle=%d work=%p next_work=%p",
+				proc->proc_repr, nonces, chipid, is_idle, thr->work, thr->next_work);
+			const uint32_t *nonce_p = (void*)&buf[4];
+			for (j = 0; j < nonces; ++j, ++nonce_p)
+			{
+				uint32_t nonce = bitfury_decnonce(*nonce_p);
+				if (bitfury_fudge_nonce2(thr->work, &nonce))
+					submit_nonce(thr, thr->work, nonce);
+				else
+					if (bitfury_fudge_nonce2(thr->next_work, &nonce))
+					{
+						applog(LOG_DEBUG, "%"PRIpreprv": Result for next work, transitioning",
+							proc->proc_repr);
+						submit_nonce(thr, thr->next_work, nonce);
+						mt_job_transition(thr);
+						job_start_complete(thr);
+					}
+					else
+						if (bitfury_fudge_nonce2(thr->prev_work, &nonce))
+						{
+							applog(LOG_DEBUG, "%"PRIpreprv": Result for PREVIOUS work",
+								proc->proc_repr);
+							submit_nonce(thr, thr->prev_work, nonce);
+						}
+						else
+							inc_hw_errors(thr, thr->work, nonce);
+			}
+			if (is_idle && thr->next_work)
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Chip went idle without any results for next work",
+					proc->proc_repr);
 				mt_job_transition(thr);
 				job_start_complete(thr);
 			}
-			else
-			if (bitfury_fudge_nonce2(thr->prev_work, &nonce))
-			{
-				applog(LOG_DEBUG, "%"PRIpreprv": Result for PREVIOUS work",
-				       proc->proc_repr);
-				submit_nonce(thr, thr->prev_work, nonce);
-			}
-			else
-				inc_hw_errors(thr, thr->work, nonce);
+			if (!thr->next_work)
+				timer_set_now(&thr->tv_morework);
 		}
-		if (is_idle && thr->next_work)
-		{
-			applog(LOG_DEBUG, "%"PRIpreprv": Chip went idle without any results for next work",
-			       proc->proc_repr);
-			mt_job_transition(thr);
-			job_start_complete(thr);
-		}
-		if (!thr->next_work)
-			timer_set_now(&thr->tv_morework);
-	}
+	} while(total > 0);
 	
 	return true;
 }
@@ -539,25 +565,9 @@ bool drillbit_get_stats(struct cgpu_info * const dev)
 }
 
 static
-float drillbit_voltagecfg_volts(const enum drillbit_voltagecfg vcfg)
-{
-	switch (vcfg)
-	{
-		case DBV_650mV: return 0.65;
-		case DBV_750mV: return 0.75;
-		case DBV_850mV: return 0.85;
-		case DBV_950mV: return 0.95;
-	}
-	return 0;
-}
-
-static
 void drillbit_clockcfg_str(char * const buf, size_t bufsz, struct drillbit_board * const board)
 {
-	if (board->use_ext_clock)
-		snprintf(buf, bufsz, "%u", board->ext_clock_freq);
-	else
-		snprintf(buf, bufsz, "L%u", board->clock_level);
+	snprintf(buf, bufsz, "%u", board->clock_freq);
 	if (board->clock_div2)
 		tailsprintf(buf, bufsz, ":2");
 }
@@ -573,7 +583,7 @@ struct api_data *drillbit_api_stats(struct cgpu_info * const proc)
 	drillbit_clockcfg_str(buf, sizeof(buf), board);
 	root = api_add_string(root, "ClockCfg", buf, true);
 	
-	float volts = drillbit_voltagecfg_volts(board->core_voltage_cfg);
+	float volts = board->core_voltage / 1000.0;
 	root = api_add_volts(root, "Voltage", &volts, true);
 	
 	return root;
@@ -601,26 +611,7 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		if (!setting || !*setting)
 			return "Missing voltage setting";
 		const int val = atof(setting) * 1000;
-		enum drillbit_voltagecfg vcfg;
-		switch (val)
-		{
-			case 650: case 649:
-				vcfg = DBV_650mV;
-				break;
-			case 750: case 749:
-				vcfg = DBV_750mV;
-				break;
-			case 850: case 849:
-				vcfg = DBV_850mV;
-				break;
-			case 950: case 949:
-				vcfg = DBV_950mV;
-				break;
-			default:
-				return "Invalid voltage value";
-		}
-		
-		board->core_voltage_cfg = vcfg;
+		board->core_voltage = val;
 		board->need_reinit = true;
 		
 		return NULL;
@@ -638,20 +629,12 @@ char *drillbit_set_device(struct cgpu_info * const proc, char * const option, ch
 		{
 			if (!(board->caps & DBC_EXT_CLOCK))
 				return "External clock not supported by this device";
-			if (num < 0 || num > 0xffff)
-				return "External clock frequency out of range (0-65535)";
-			board->clock_div2 = div2;
-			board->ext_clock_freq = num;
 			board->use_ext_clock = true;
 		}
-		else
-		{
-			if (num < 0 || num > 63)
-				return "Internal clock level out of range (0-63)";
-			board->clock_div2 = div2;
-			board->clock_level = num;
-			board->use_ext_clock = false;
-		}
+		if (num < 0 || num > 0xffff)
+			return "Clock frequency out of range (0-65535)";
+		board->clock_div2 = div2;
+		board->clock_freq = num;
 		board->need_reinit = true;
 		return NULL;
 	}
@@ -692,7 +675,7 @@ void drillbit_wlogprint_status(struct cgpu_info * const proc)
 	
 	drillbit_clockcfg_str(buf, sizeof(buf), board);
 	wlogprint("Clock: %s\n", buf);
-	wlogprint("Voltage: %.2f\n", drillbit_voltagecfg_volts(board->core_voltage_cfg));
+	wlogprint("Voltage: %.2f\n", board->core_voltage / 1000.0);
 }
 #endif
 
