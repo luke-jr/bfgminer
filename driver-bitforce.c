@@ -428,9 +428,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		.dev_repr = "BFL",
 		.proc_repr = "BFL",
 		.device_path = devpath,
-		.device_fd = -1,
 		.device_data = &dummy_bfdata,
 	};
+	dummy_cgpu.device_fd = -1;
 
 	applog(LOG_DEBUG, "BFL: Attempting to open %s", devpath);
 	bitforce_open(&dummy_cgpu);

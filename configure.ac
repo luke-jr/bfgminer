@@ -403,7 +403,7 @@ AC_ARG_ENABLE([bitforce],
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
-	driverlist="$driverlist bitforce:uio/ac_cv_header_sys_mman_h"
+	driverlist="$driverlist bitforce:pci/need_lowl_pci"
 	if test "x$lowl_pci" = "xyes"; then
 		need_lowl_pci=yes
 	fi
