@@ -464,9 +464,6 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		applog(LOG_ERR, "Failed to malloc scratchbuf in scanhash_scrypt");
 		return ret;
 	}
-
-	// we always hash in big endian
-	n = htobe32(n);
 	
 	while(1) {
 		uint32_t ostate[8];
@@ -489,8 +486,7 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		++n;
 	}
 
-	// last_nonce is expected to be host-endian
-	*last_nonce = be32toh(n);
+	*last_nonce = n;
 	
 	free(scratchbuf);
 	return ret;
