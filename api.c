@@ -1532,6 +1532,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	char mhsname[27];
 	sprintf(mhsname, "MHS %ds", opt_log_interval);
 	root = api_add_mhs(root, mhsname, &rolling, false);
+	root = api_add_mhs(root, "MHS rolling", &rolling, false);
 	root = api_add_int(root, "Accepted", &accepted, false);
 	root = api_add_int(root, "Rejected", &rejected, false);
 	root = api_add_int(root, "Hardware Errors", &hw_errors, false);

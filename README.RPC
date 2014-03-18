@@ -452,8 +452,9 @@ CPU and OpenCL devices are now included as "PGAs", to enable migration to a simp
 Added API commands:
  'pgarestart'
 
-Modified API command:
+Modified API commands:
  'devs' - remove 'GPU Count' and 'CPU Count'
+ 'summary' - add 'MHS rolling'
 
 Deprecated API commands:
  'cpu'

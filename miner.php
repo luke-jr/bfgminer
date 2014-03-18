@@ -1197,7 +1197,7 @@ function showdatetime()
 #
 global $singlerigsum;
 $singlerigsum = array(
- 'devs' => array('MHS av' => 1, 'MHS 5s' => 1, 'Accepted' => 1, 'Rejected' => 1,
+ 'devs' => array('MHS av' => 1, 'MHS rolling' => 1, 'Accepted' => 1, 'Rejected' => 1,
                  'Temperature' => 2,
 			'Hardware Errors' => 1, 'Utility' => 1, 'Total MH' => 1),
  'pools' => array('Getworks' => 1, 'Accepted' => 1, 'Rejected' => 1, 'Discarded' => 1,
