@@ -1992,7 +1992,7 @@ static struct opt_table opt_config_table[] = {
 		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
 		     opt_set_intval, NULL, &opt_shares,
-		     "Quit after mining N shares (default: unlimited)"),
+		     "Quit after mining 2^32 * N hashes worth of shares (default: unlimited)"),
 	OPT_WITHOUT_ARG("--show-processors",
 			opt_set_bool, &opt_show_procs,
 			"Show per processor statistics in summary"),

@@ -256,7 +256,7 @@ Options for both config file and command line:
 --set-device <arg>  Set default parameters on devices; eg, NFY:osc6_bits=50
 --setuid <arg>      Username of an unprivileged user to run as
 --sharelog <arg>    Append share log to file
---shares <arg>      Quit after mining N shares (default: unlimited)
+--shares <arg>      Quit after mining 2^32 * N hashes worth of shares (default: unlimited)
 --show-processors   Show per processor statistics in summary
 --skip-security-checks <arg> Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)
 --socks-proxy <arg> Set socks proxy (host:port) for all pools without a proxy specified
