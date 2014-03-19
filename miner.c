@@ -8866,6 +8866,9 @@ void _submit_work_async(struct work *work)
 	
 	if (opt_benchmark)
 	{
+		json_t * const jn = json_null();
+		rebuild_hash(work);
+		share_result(jn, jn, jn, work, false, "");
 		free_work(work);
 		return;
 	}
