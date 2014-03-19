@@ -1,5 +1,5 @@
-#ifndef __DEVICEAPI_H__
-#define __DEVICEAPI_H__
+#ifndef BFG_DEVICEAPI_H
+#define BFG_DEVICEAPI_H
 
 #include <stdbool.h>
 #include <stdint.h>

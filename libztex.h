@@ -1,5 +1,5 @@
-#ifndef __LIBZTEX_H__
-#define __LIBZTEX_H__
+#ifndef BFG_LIBZTEX_H
+#define BFG_LIBZTEX_H
 
 #include <stdbool.h>
 #include <stdint.h>

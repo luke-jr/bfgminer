@@ -7,8 +7,8 @@
  * any later version.  See COPYING for more details.
  */
 
-#ifndef __COMPAT_H__
-#define __COMPAT_H__
+#ifndef BFG_COMPAT_H
+#define BFG_COMPAT_H
 
 #include "config.h"
 

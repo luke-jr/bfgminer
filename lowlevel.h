@@ -1,5 +1,5 @@
-#ifndef _BFG_LOWLEVEL_H
-#define _BFG_LOWLEVEL_H
+#ifndef BFG_LOWLEVEL_H
+#define BFG_LOWLEVEL_H
 
 #include <stdbool.h>
 #include <stdint.h>
