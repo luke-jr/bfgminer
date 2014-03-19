@@ -1060,6 +1060,13 @@ struct pool *add_pool(void)
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
 
+	if (opt_benchmark)
+	{
+		// Don't add to pools array, but immediately remove it
+		remove_pool(pool);
+		return pool;
+	}
+	
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 
@@ -4581,7 +4588,7 @@ static void calc_diff(struct work *work, int known)
 static void get_benchmark_work(struct work *work)
 {
 	static uint32_t blkhdr[20];
-	for (int i = 19; i >= 0; --i)
+	for (int i = 18; i >= 0; --i)
 		if (++blkhdr[i])
 			break;
 	
@@ -6787,6 +6794,11 @@ retry:
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
+		if (opt_benchmark)
+		{
+			wlogprint("Cannot add pools in benchmark mode");
+			goto retry;
+		}
 		input_pool(true);
 		goto updated;
 	} else if (!strncasecmp(&input, "r", 1)) {
@@ -8843,6 +8855,9 @@ void _submit_work_async(struct work *work)
 	
 	if (opt_benchmark)
 	{
+		json_t * const jn = json_null();
+		rebuild_hash(work);
+		share_result(jn, jn, jn, work, false, "");
 		free_work(work);
 		return;
 	}
@@ -11404,9 +11419,17 @@ int main(int argc, char *argv[])
 	
 	if (opt_benchmark) {
 		struct pool *pool;
+		
+		while (total_pools)
+			remove_pool(pools[0]);
 
 		want_longpoll = false;
+		
+		// Temporarily disable opt_benchmark to avoid auto-removal
+		opt_benchmark = false;
 		pool = add_pool();
+		opt_benchmark = true;
+		
 		pool->rpc_url = malloc(255);
 		strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
