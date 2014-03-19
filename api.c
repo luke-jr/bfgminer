@@ -1421,6 +1421,7 @@ int find_index_by_cgpu(struct cgpu_info *cgpu)
 			break;
 		if (devices[i]->device != devices[i] && !per_proc)
 			continue;
+		++n;
 	}
 	rd_unlock(&devices_lock);
 	return n;
