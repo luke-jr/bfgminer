@@ -1397,7 +1397,7 @@ int get_serial_cts(const int fd)
 	if (fd == -1)
 		return -1;
 	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
-	if (!fh)
+	if (fh == INVALID_HANDLE_VALUE)
 		return -1;
 
 	DWORD flags;
