@@ -361,30 +361,10 @@ struct CODES {
  { SEVERITY_ERR,   MSG_NOPOOL,	PARAM_NONE,	"No pools" },
 
  { SEVERITY_SUCC,  MSG_DEVS,	PARAM_DMAX,
-#ifdef HAVE_OPENCL
-		 	 	 	 	"%d GPU(s)"
-#endif
-#if defined(HAVE_AN_FPGA) && defined(HAVE_OPENCL)
-						" - "
-#endif
-#ifdef HAVE_AN_FPGA
 						"%d PGA(s)"
-#endif
-#if defined(WANT_CPUMINE) && (defined(HAVE_OPENCL) || defined(HAVE_AN_FPGA))
-						" - "
-#endif
-#ifdef WANT_CPUMINE
-						"%d CPU(s)"
-#endif
  },
 
- { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No GPUs"
-#ifdef HAVE_AN_FPGA
-						"/PGAs"
-#endif
-#ifdef WANT_CPUMINE
-						"/CPUs"
-#endif
+ { SEVERITY_ERR,   MSG_NODEVS,	PARAM_NONE,	"No PGAs"
  },
 
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
@@ -1213,26 +1193,10 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 					sprintf(buf, codes[i].description, paramid, total_pools - 1);
 					break;
 				case PARAM_DMAX:
-#ifdef HAVE_AN_FPGA
 					pga = numpgas();
-#endif
-#ifdef WANT_CPUMINE
-					if (opt_n_threads > 0)
-						cpu = num_processors;
-					else
-						cpu = 0;
-#endif
 
 					sprintf(buf, codes[i].description
-#ifdef HAVE_OPENCL
-						, nDevs
-#endif
-#ifdef HAVE_AN_FPGA
 						, pga
-#endif
-#ifdef WANT_CPUMINE
-						, cpu
-#endif
 						);
 					break;
 				case PARAM_CMD:
