@@ -219,7 +219,7 @@ bool use_curses;
 bool have_libusb;
 #endif
 static bool opt_submit_stale = true;
-static int opt_shares;
+static float opt_shares;
 static int opt_submit_threads = 0x40;
 bool opt_fail_only;
 bool opt_autofan;
@@ -2310,8 +2310,8 @@ static struct opt_table opt_config_table[] = {
 		     set_sharelog, NULL, NULL,
 		     "Append share log to file"),
 	OPT_WITH_ARG("--shares",
-		     opt_set_intval, NULL, &opt_shares,
-		     "Quit after mining N shares (default: unlimited)"),
+		     opt_set_floatval, NULL, &opt_shares,
+		     "Quit after mining 2^32 * N hashes worth of shares (default: unlimited)"),
 	OPT_WITHOUT_ARG("--show-processors",
 			opt_set_bool, &opt_show_procs,
 			"Show per processor statistics in summary"),
@@ -4167,7 +4167,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		}
 		sharelog("accept", work);
 		if (opt_shares && total_diff_accepted >= opt_shares) {
-			applog(LOG_WARNING, "Successfully mined %d accepted shares as requested and exiting.", opt_shares);
+			applog(LOG_WARNING, "Successfully mined %g accepted shares as requested and exiting.", opt_shares);
 			kill_work();
 			return;
 		}
@@ -6531,7 +6531,7 @@ void write_config(FILE *fcfg)
 		else
 			fprintf(fcfg, ",\n\"request-diff\" : %f", request_pdiff);
 	}
-	fprintf(fcfg, ",\n\"shares\" : \"%d\"", opt_shares);
+	fprintf(fcfg, ",\n\"shares\" : %g", opt_shares);
 	if (pool_strategy == POOL_BALANCE)
 		fputs(",\n\"balance\" : true", fcfg);
 	if (pool_strategy == POOL_LOADBALANCE)
@@ -10106,9 +10106,9 @@ void print_summary(void)
 	}
 
 	if (opt_shares) {
-		applog(LOG_WARNING, "Mined %.0f accepted shares of %d requested\n", total_diff_accepted, opt_shares);
+		applog(LOG_WARNING, "Mined %g accepted shares of %g requested\n", total_diff_accepted, opt_shares);
 		if (opt_shares > total_diff_accepted)
-			applog(LOG_WARNING, "WARNING - Mined only %.0f shares of %d requested.", total_diff_accepted, opt_shares);
+			applog(LOG_WARNING, "WARNING - Mined only %g shares of %g requested.", total_diff_accepted, opt_shares);
 	}
 	applog(LOG_WARNING, " ");
 
