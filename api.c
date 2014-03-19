@@ -1412,15 +1412,19 @@ struct api_data *api_add_device_identifier(struct api_data *root, struct cgpu_in
 static
 int find_index_by_cgpu(struct cgpu_info *cgpu)
 {
+	if (per_proc)
+		return cgpu->cgminer_id;
+	
 	int n = 0, i;
 	
+	// Quickly traverse the devices array backward until we reach the 0th device, counting as we go
 	rd_lock(&devices_lock);
-	for (i = 0; i < total_devices; ++i)
+	while (true)
 	{
-		if (devices[i] == cgpu)
+		i = cgpu->device->cgminer_id;
+		if (!i)
 			break;
-		if (devices[i]->device != devices[i] && !per_proc)
-			continue;
+		cgpu = devices[--i];
 		++n;
 	}
 	rd_unlock(&devices_lock);
