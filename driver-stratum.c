@@ -372,6 +372,7 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 		for (xnonce1 = MAX_CLIENTS; _ssm_xnonce1s[xnonce1]; --xnonce1)
 			if (!xnonce1)
 				return_stratumsrv_failure(20, "Maximum clients already connected");
+		_ssm_xnonce1s[xnonce1] = true;
 		*xnonce1_p = htole32(xnonce1);
 	}
 	
@@ -539,10 +540,12 @@ static
 void stratumsrv_client_close(struct stratumsrv_conn * const conn)
 {
 	struct bufferevent * const bev = conn->bev;
+	uint32_t xnonce1 = le32toh(conn->xnonce1_le);
 	
 	bufferevent_free(bev);
 	LL_DELETE(_ssm_connections, conn);
 	free(conn);
+	_ssm_xnonce1s[xnonce1] = false;
 }
 
 static
