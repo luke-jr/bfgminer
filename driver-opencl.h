@@ -1,5 +1,5 @@
-#ifndef __DEVICE_GPU_H__
-#define __DEVICE_GPU_H__
+#ifndef BFG_DRIVER_OPENCL
+#define BFG_DRIVER_OPENCL
 
 #include <stdbool.h>
 

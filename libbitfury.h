@@ -1,5 +1,5 @@
-#ifndef __LIBBITFURY_H__
-#define __LIBBITFURY_H__
+#ifndef BFG_LIBBITFURY_H
+#define BFG_LIBBITFURY_H
 
 #include <stdbool.h>
 #include <stdint.h>
