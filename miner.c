@@ -1060,6 +1060,13 @@ struct pool *add_pool(void)
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
 
+	if (opt_benchmark)
+	{
+		// Don't add to pools array, but immediately remove it
+		remove_pool(pool);
+		return pool;
+	}
+	
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
 
@@ -6810,6 +6817,11 @@ retry:
 	input = getch();
 
 	if (!strncasecmp(&input, "a", 1)) {
+		if (opt_benchmark)
+		{
+			wlogprint("Cannot add pools in benchmark mode");
+			goto retry;
+		}
 		input_pool(true);
 		goto updated;
 	} else if (!strncasecmp(&input, "r", 1)) {
@@ -11432,9 +11444,17 @@ int main(int argc, char *argv[])
 	
 	if (opt_benchmark) {
 		struct pool *pool;
+		
+		while (total_pools)
+			remove_pool(pools[0]);
 
 		want_longpoll = false;
+		
+		// Temporarily disable opt_benchmark to avoid auto-removal
+		opt_benchmark = false;
 		pool = add_pool();
+		opt_benchmark = true;
+		
 		pool->rpc_url = malloc(255);
 		strcpy(pool->rpc_url, "Benchmark");
 		pool->rpc_user = pool->rpc_url;
