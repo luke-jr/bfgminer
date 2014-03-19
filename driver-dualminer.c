@@ -105,6 +105,17 @@ void dualminer_teardown_device(int fd)
 }
 
 static
+bool dualminer_init(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	
+	if (opt_scrypt)
+		cgpu->min_nonce_diff = 1./0x10000;
+	
+	return icarus_init(thr);
+}
+
+static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
 	struct ICARUS_INFO *info = icarus->device_data;
@@ -124,9 +135,6 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 		if (opt_scrypt)
 			info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
 	}
-
-	if (opt_scrypt)
-		icarus->min_nonce_diff = 1./0x10000;
 
 	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_number);
 }
@@ -313,6 +321,7 @@ void dualminer_drv_init()
 	dualminer_drv.dname = "dualminer";
 	dualminer_drv.name = "DMU";
 	dualminer_drv.lowl_probe = dualminer_lowl_probe;
+	dualminer_drv.thread_init = dualminer_init;
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
 	dualminer_drv.set_device = dualminer_set_device;

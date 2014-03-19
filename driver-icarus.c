@@ -660,7 +660,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	return true;
 }
 
-static bool icarus_init(struct thr_info *thr)
+bool icarus_init(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
