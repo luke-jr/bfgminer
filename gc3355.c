@@ -525,7 +525,7 @@ void gc3355_pll_freq_init2(int fd, int pll_freq)
 
 void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 {
-	unsigned char ob_bin[32];
+	unsigned char ob_bin[8];
 	int i;
 
 	//---sha2 unit---
@@ -566,8 +566,6 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 
 	for(i = 0; i < 5; i++)
 	{
-		memset(ob_bin, 0, sizeof(ob_bin));
-
 		if (sha2_gating[i][0] == '\0')
 			break;
 
@@ -583,7 +581,7 @@ static
 void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
 {
 	int unit_count = 0;
-	unsigned char ob_bin[32];
+	unsigned char ob_bin[8];
 	int i;
 
 	unit_count = atoi(opt_sha2_gating);
@@ -597,7 +595,6 @@ void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
 	{
 		for(i = 0; i <= unit_count; i++)
 		{
-			memset(ob_bin, 0, sizeof(ob_bin));
 			hex2bin(ob_bin, sha2_single_open[i], sizeof(ob_bin));
 			icarus_write(fd, ob_bin, 8);
 			usleep(DEFAULT_DELAY_TIME * 2);
