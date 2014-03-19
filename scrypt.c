@@ -465,28 +465,30 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 		applog(LOG_ERR, "Failed to malloc scratchbuf in scanhash_scrypt");
 		return ret;
 	}
-
+	
 	while(1) {
 		uint32_t ostate[8];
 
-		*nonce = ++n;
-		data[19] = htobe32(n);
+		data[19] = n;
 		scrypt_1024_1_1_256_sp(data, scratchbuf, ostate);
 		tmp_hash7 = be32toh(ostate[7]);
 
 		if (unlikely(tmp_hash7 <= Htarg)) {
-			((uint32_t *)pdata)[19] = htobe32(n);
-			*last_nonce = n;
+			// nonce passed in data is always little-endian, while we are always hashing in big endian
+			*nonce = swab32(n);
 			ret = true;
 			break;
 		}
 
 		if (unlikely((n >= max_nonce) || thr->work_restart)) {
-			*last_nonce = n;
 			break;
 		}
+		
+		++n;
 	}
 
-	free(scratchbuf);;
+	*last_nonce = n;
+	
+	free(scratchbuf);
 	return ret;
 }
