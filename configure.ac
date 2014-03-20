@@ -220,16 +220,32 @@ AC_CHECK_DECL([HASH_ITER],[
 ])
 
 
+ddyes=yes
+ddauto=auto
+ddno=no
+AC_ARG_ENABLE([other-drivers],
+	[AC_HELP_STRING([--disable-other-drivers],[Build without drivers by default unless explicitly enabled])],
+	[
+		if test x$enableval = xyes; then
+			ddno=yes
+		else
+			ddyes=no
+			ddauto=no
+		fi
+	]
+)
+
+
 lowl_pci=no
 if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
 	AC_ARG_WITH([uio],
 		[AC_HELP_STRING([--without-uio],[Compile support for PCI devices via Linux UIO interface (default enabled)])],
 		[uio=$withval],
-		[uio=yes])
+		[uio=$ddyes])
 	AC_ARG_WITH([vfio],
 		[AC_HELP_STRING([--without-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
 		[vfio=$enableval],
-		[vfio=auto])
+		[vfio=$ddauto])
 	if test "x$vfio" != "xno"; then
 		AC_CHECK_HEADER([linux/vfio.h],[
 			vfio=yes
@@ -251,11 +267,10 @@ fi
 
 
 driverlist="$driverlist cpu/cpumining"
-cpumining="no"
-
 AC_ARG_ENABLE([cpumining],
 	[AC_HELP_STRING([--enable-cpumining],[Build with CPU mining support (default disabled)])],
-	[cpumining=$enableval]
+	[cpumining=$enableval],
+	[cpumining=$ddno]
 	)
 if test "x$cpumining" = xyes; then
 	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
@@ -265,11 +280,10 @@ fi
 AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
 
 driverlist="$driverlist opencl"
-opencl="no"
-
 AC_ARG_ENABLE([opencl],
 	[AC_HELP_STRING([--enable-opencl],[Compile support for OpenCL (default disabled)])],
-	[opencl=$enableval]
+	[opencl=$enableval],
+	[opencl=$ddno]
 	)
 if test "x$opencl" = xyes; then
 	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
@@ -346,12 +360,12 @@ AC_SUBST(JANSSON_CFLAGS)
 AC_SUBST(JANSSON_LIBS)
 
 if test "x$opencl" = xyes; then
-	adl="yes"
+	adl="$ddyes"
 	
 driverlist="$driverlist opencl:sensors/with_sensors"
 AC_ARG_WITH([sensors],
 	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
-	[true],[with_sensors=auto])
+	[true],[with_sensors=$ddauto])
 if test "x$opencl" != xyes; then
 	with_sensors=no
 fi
@@ -399,7 +413,7 @@ driverlist="$driverlist bitforce"
 AC_ARG_ENABLE([bitforce],
 	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
 	[bitforce=$enableval],
-	[bitforce=yes]
+	[bitforce=$ddyes]
 	)
 if test "x$bitforce" = xyes; then
 	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
@@ -418,7 +432,7 @@ driverlist="$driverlist icarus cairnsmore/icarus erupter/icarus antminer/icarus"
 AC_ARG_ENABLE([icarus],
 	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
 	[icarus=$enableval],
-	[icarus=yes]
+	[icarus=$ddyes]
 	)
 if test "x$icarus" = xyes; then
 	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
@@ -434,7 +448,7 @@ driverlist="$driverlist dualminer"
 AC_ARG_ENABLE([dualminer],
 	[AC_HELP_STRING([--disable-dualminer],[Compile support for DualMiner (default enabled)])],
 	[dualminer=$enableval],
-	[dualminer=auto]
+	[dualminer=$ddauto]
 	)
 if test "x$dualminer" = "xno"; then
 	true
@@ -456,7 +470,7 @@ avalon="no"
 AC_ARG_ENABLE([avalon],
 	[AC_HELP_STRING([--disable-avalon],[Compile support for Avalon (default enabled)])],
 	[avalon=$enableval],
-	[avalon=yes]
+	[avalon=$ddyes]
 	)
 if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
@@ -470,7 +484,7 @@ driverlist="$driverlist knc"
 AC_ARG_ENABLE([knc],
 	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],
 	[knc=$enableval],
-	[knc=no]
+	[knc=$ddno]
 	)
 if test "x$knc" = xyes; then
 	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
@@ -491,10 +505,10 @@ if test "x$knc" = xyes; then
 fi
 AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
 
-httpsrv=auto
 AC_ARG_WITH([libmicrohttpd],
 	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],
-	[httpsrv=$withval]
+	[httpsrv=$withval],
+	[httpsrv=$ddauto]
 )
 if test "x$httpsrv" != "xno"; then
 	PKG_CHECK_MODULES([libmicrohttpd],[libmicrohttpd >= 0.9.5],[
@@ -513,10 +527,10 @@ if test "x$httpsrv" != "xno"; then
 fi
 AM_CONDITIONAL([USE_LIBMICROHTTPD], [test x$httpsrv = xyes])
 
-libevent=auto
 AC_ARG_WITH([libevent],
 	[AC_HELP_STRING([--without-libevent],[Compile support for libevent stratum server (default enabled)])],
-	[libevent=$withval]
+	[libevent=$withval],
+	[libevent=$ddauto]
 )
 if test "x$libevent" != "xno"; then
 	PKG_CHECK_MODULES([libevent],[libevent >= 2.0.3],[
@@ -552,7 +566,7 @@ driverlist="$driverlist modminer"
 AC_ARG_ENABLE([modminer],
 	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
 	[modminer=$enableval],
-	[modminer=yes]
+	[modminer=$ddyes]
 	)
 if test "x$modminer" = xyes; then
 	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
@@ -572,7 +586,7 @@ libusb_include_path=""
 AC_ARG_WITH([libusb],
 	[AC_HELP_STRING([--without-libusb],[Compile using libusb (default enabled)])],
 	[want_libusb=$withval],
-	[want_libusb=auto]
+	[want_libusb=$ddauto]
 	)
 if test "x$want_libusb" != "xno"; then
 PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
@@ -607,7 +621,7 @@ driverlist="$driverlist klondike hashbusteravalon/klondike"
 AC_ARG_ENABLE([klondike],
 	[AC_HELP_STRING([--disable-klondike],[Compile support for Klondike (default enabled)])],
 	[klondike=$enableval],
-	[klondike=auto]
+	[klondike=$ddauto]
 	)
 if test "x$klondike$want_libusb" = xyesno; then
 	AC_MSG_ERROR([You disabled libusb, required for Klondike support])
@@ -633,7 +647,7 @@ driverlist="$driverlist x6500"
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
 	[x6500=$enableval],
-	[x6500=auto]
+	[x6500=$ddauto]
 	)
 if test "x$x6500$want_libusb" = xyesno; then
 	AC_MSG_ERROR([You disabled libusb, required for X6500 support])
@@ -660,7 +674,7 @@ driverlist="$driverlist ztex"
 AC_ARG_ENABLE([ztex],
 	[AC_HELP_STRING([--disable-ztex],[Compile support for ZTEX (default if libusb)])],
 	[ztex=$enableval],
-	[ztex=auto]
+	[ztex=$ddauto]
 	)
 if test "x$ztex$want_libusb" = xyesno; then
 	AC_MSG_ERROR([You disabled libusb, required for ZTEX support])
@@ -688,7 +702,7 @@ driverlist="$driverlist bifury"
 AC_ARG_ENABLE([bifury],
 	[AC_HELP_STRING([--disable-bifury],[Compile support for Bi*Fury (default enabled)])],
 	[bifury=$enableval],
-	[bifury=yes]
+	[bifury=$ddyes]
 	)
 if test "x$bifury" = "xyes"; then
 	AC_DEFINE([USE_BIFURY], [1], [Defined to 1 if Bi*Fury support is wanted])
@@ -700,10 +714,10 @@ AM_CONDITIONAL([USE_BIFURY], [test x$bifury = xyes])
 
 
 driverlist="$driverlist bitfury_gpio/bitfury"
-bitfury=yes
 AC_ARG_ENABLE([bitfury],
 	[AC_HELP_STRING([--disable-bitfury],[Compile support for Bitfury (default enabled)])],
-	[bitfury=$enableval]
+	[bitfury=$enableval],
+	[bitfury=$ddyes]
 	)
 if test "x$bitfury" = xyes; then
 	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
@@ -712,10 +726,10 @@ AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
 
 driverlist="$driverlist bfsb"
-bfsb=no
 AC_ARG_ENABLE([bfsb],
 	[AC_HELP_STRING([--enable-bfsb],[Compile support for BFSB (default disabled)])],
-	[bfsb=$enableval]
+	[bfsb=$enableval],
+	[bfsb=$ddno]
 	)
 if test "x$bfsb" = "xyes"; then
 	if test "x$bitfury" = "xno"; then
@@ -727,10 +741,10 @@ AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
 
 
 driverlist="$driverlist bigpic"
-bigpic=auto
 AC_ARG_ENABLE([bigpic],
 	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
-	[bigpic=$enableval]
+	[bigpic=$enableval],
+	[bigpic=$ddauto]
 	)
 if test "x$bigpic" = "xno"; then
 	true
@@ -754,7 +768,7 @@ driverlist="$driverlist drillbit"
 AC_ARG_ENABLE([drillbit],
 	[AC_HELP_STRING([--disable-drillbit],[Compile support for DrillBit (default enabled)])],
 	[drillbit=$enableval],
-	[drillbit=auto]
+	[drillbit=$ddauto]
 	)
 if test "x$drillbit" = "xno"; then
 	true
@@ -775,10 +789,10 @@ AM_CONDITIONAL([USE_DRILLBIT], [test x$drillbit = xyes])
 
 
 driverlist="$driverlist twinfury"
-twinfury=auto
 AC_ARG_ENABLE([twinfury],
     [AC_HELP_STRING([--disable-twinfury],[Compile support for Twinfury USB miner (default enabled)])],
-    [twinfury=$enableval]
+    [twinfury=$enableval],
+    [twinfury=$ddauto]
     )
 if test "x$twinfury" = "xno"; then
     true
@@ -798,10 +812,10 @@ fi
 AM_CONDITIONAL([HAS_TWINFURY], [test x$twinfury = xyes])
 
 driverlist="$driverlist littlefury"
-littlefury=auto
 AC_ARG_ENABLE([littlefury],
 	[AC_HELP_STRING([--disable-littlefury],[Compile support for LittleFury (default enabled)])],
-	[littlefury=$enableval]
+	[littlefury=$enableval],
+	[littlefury=$ddauto]
 	)
 if test "x$littlefury" = "xno"; then
 	true
@@ -833,10 +847,10 @@ done
 
 
 driverlist="$driverlist nanofury"
-nanofury=auto
 AC_ARG_ENABLE([nanofury],
 	[AC_HELP_STRING([--disable-nanofury],[Compile support for NanoFury (default enabled)])],
-	[nanofury=$enableval]
+	[nanofury=$enableval],
+	[nanofury=$ddauto]
 	)
 if test "x$nanofury" = "xno"; then
 	true
@@ -866,10 +880,10 @@ AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
 
 
 driverlist="$driverlist hashbuster"
-hashbuster=auto
 AC_ARG_ENABLE([hashbuster],
 	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster Nano (default enabled)])],
-	[hashbuster=$enableval]
+	[hashbuster=$enableval],
+	[hashbuster=$ddauto],
 	)
 if test "x$hashbuster" = "xno"; then
 	true
@@ -902,7 +916,7 @@ driverlist="$driverlist hashbusterusb"
 AC_ARG_ENABLE([hashbusterusb],
 	[AC_HELP_STRING([--disable-hashbusterusb],[Compile support for HashBuster Micro (default if libusb)])],
 	[hashbusterusb=$enableval],
-	[hashbusterusb=auto]
+	[hashbusterusb=$ddauto]
 	)
 if test "x$hashbusterusb$want_libusb" = xyesno; then
 	AC_MSG_ERROR([You disabled libusb, required for HashBuster Micro support])
@@ -925,10 +939,10 @@ AM_CONDITIONAL([USE_HASHBUSTERUSB], [test x$hashbusterusb = xyes])
 
 
 driverlist="$driverlist hashfast"
-hashfast=yes
 AC_ARG_ENABLE([hashfast],
 	[AC_HELP_STRING([--disable-hashfast],[Compile support for HashFast (default enabled)])],
-	[hashfast=$enableval]
+	[hashfast=$enableval],
+	[hashfast=$ddyes]
 )
 if test "x$hashfast" = xyes; then
 	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if HashFast support is wanted])
@@ -940,10 +954,10 @@ AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
 
 
 driverlist="$driverlist metabank"
-metabank=no
 AC_ARG_ENABLE([metabank],
 	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
-	[metabank=$enableval]
+	[metabank=$enableval],
+	[metabank=$ddno]
 	)
 if test "x$metabank" = "xyes"; then
 	if test "x$bitfury" = "xno"; then

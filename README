@@ -135,6 +135,8 @@ Optional Dependencies:
 
 BFGMiner specific configuration options:
 	--disable-avalon        Compile support for Avalon (default enabled)
+	--disable-other-drivers Build without drivers by default unless explicitly
+	                        enabled
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
