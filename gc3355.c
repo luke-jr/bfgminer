@@ -14,6 +14,7 @@
 #include "miner.h"
 #include "icarus-common.h"
 #include "logging.h"
+#include "lowl-vcom.h"
 
 #ifndef WIN32
   #include <sys/ioctl.h>
@@ -339,31 +340,9 @@ bool opt_dual_mode = false;
 
 void gc3355_dual_reset(int fd)
 {
-#ifdef WIN32
-	DCB dcb;
-
-	memset(&dcb, 0, sizeof(DCB));
-	GetCommState(_get_osfhandle(fd), &dcb);
-	dcb.fDtrControl = DTR_CONTROL_ENABLE;
-	SetCommState(_get_osfhandle(fd), &dcb);
-	Sleep(1);
-	GetCommState(_get_osfhandle(fd), &dcb);
-	dcb.fDtrControl = DTR_CONTROL_DISABLE;
-	SetCommState(_get_osfhandle(fd), &dcb);
-
-#else
-
-	int dtr_flag = 0;
-	ioctl(fd, TIOCMGET, &dtr_flag);
-	dtr_flag |= TIOCM_DTR;
-	ioctl(fd, TIOCMSET, &dtr_flag);
-	usleep(1000);
-	ioctl(fd, TIOCMGET, &dtr_flag);
-	dtr_flag &= ~TIOCM_DTR;
-	ioctl(fd, TIOCMSET, &dtr_flag);
-
-#endif
-
+	set_serial_dtr(fd, 1);
+	cgsleep_ms(1000);
+	set_serial_dtr(fd, 0);
 }
 
 static
