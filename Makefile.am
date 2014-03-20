@@ -143,7 +143,6 @@ bfgminer_SOURCES	+= \
 
 # the CPU portion extracted from original main.c
 bfgminer_SOURCES += driver-cpu.h driver-cpu.c
-bfgminer_SOURCES += bench_block.h
 
 if HAVE_SSE2
 bfgminer_LDADD  += libsse2cpuminer.a
