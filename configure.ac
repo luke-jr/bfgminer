@@ -430,6 +430,26 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+driverlist="$driverlist dualminer"
+AC_ARG_ENABLE([dualminer],
+	[AC_HELP_STRING([--disable-dualminer],[Compile support for DualMiner (default enabled)])],
+	[dualminer=$enableval],
+	[dualminer=auto]
+	)
+if test "x$dualminer" = "xno"; then
+	true
+elif test "x$icarus" = "xyes"; then
+	dualminer=yes
+elif test "x$dualminer" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled DualMiner])
+else
+	dualminer=no
+fi
+if test "x$dualminer" = "xyes"; then
+	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
+fi
+AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+
 driverlist="$driverlist avalon"
 avalon="no"
 

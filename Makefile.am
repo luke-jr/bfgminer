@@ -235,6 +235,10 @@ bfgminer_SOURCES += driver-erupter.c
 bfgminer_SOURCES += driver-antminer.c
 endif
 
+if USE_DUALMINER
+bfgminer_SOURCES += driver-dualminer.c gc3355.c gc3355.h
+endif
+
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
 endif
