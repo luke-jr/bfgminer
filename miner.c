@@ -7421,8 +7421,8 @@ void show_help(void)
 		"hashrates: %ds decaying / all-time average / all-time average (effective)\n"
 		, opt_log_interval);
 	_wlogprint(
-		"A: accepted shares | R: rejected+discarded(%% of total)\n"
-		"HW: hardware errors / %% nonces invalid\n"
+		"A: accepted shares | R: rejected+discarded(% of total)\n"
+		"HW: hardware errors / % nonces invalid\n"
 		"\n"
 		"Press any key to clear"
 	);
