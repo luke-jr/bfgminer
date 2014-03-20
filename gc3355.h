@@ -57,10 +57,7 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
 extern
 void gc3355_open_scrypt_unit(int fd, int status);
 
-extern
-int gc3355_get_cts_status(int fd);
-
-extern
-void gc3355_set_rts_status(int fd, unsigned int value);
+#define gc3355_get_cts_status(fd)  (get_serial_cts(fd) ? 0 : 1)
+#define gc3355_set_rts_status(fd, val)  set_serial_rts(fd, val)
 
 #endif
