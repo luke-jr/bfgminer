@@ -572,9 +572,9 @@ libusb_include_path=""
 AC_ARG_WITH([libusb],
 	[AC_HELP_STRING([--without-libusb],[Compile using libusb (default enabled)])],
 	[want_libusb=$withval],
-	[want_libusb=yes]
+	[want_libusb=auto]
 	)
-if test "x$want_libusb" = "xyes"; then
+if test "x$want_libusb" != "xno"; then
 PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 	libusb=yes
 ],[
