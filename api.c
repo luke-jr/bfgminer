@@ -1933,7 +1933,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 			root = api_add_escape(root, "Stratum URL", pool->stratum_url, false);
 		else
 			root = api_add_const(root, "Stratum URL", BLANK, false);
-		root = api_add_uint64(root, "Best Share", &(pool->best_diff), true);
+		root = api_add_diff(root, "Best Share", &(pool->best_diff), true);
 		if (pool->admin_msg)
 			root = api_add_escape(root, "Message", pool->admin_msg, true);
 		double rejp = (pool->diff_accepted + pool->diff_rejected + pool->diff_stale) ?
@@ -2001,7 +2001,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	root = api_add_diff(root, "Difficulty Accepted", &(total_diff_accepted), true);
 	root = api_add_diff(root, "Difficulty Rejected", &(total_diff_rejected), true);
 	root = api_add_diff(root, "Difficulty Stale", &(total_diff_stale), true);
-	root = api_add_uint64(root, "Best Share", &(best_diff), true);
+	root = api_add_diff(root, "Best Share", &(best_diff), true);
 	double hwp = (total_bad_diff1 + total_diff1) ?
 			(double)(total_bad_diff1) / (double)(total_bad_diff1 + total_diff1) : 0;
 	root = api_add_percent(root, "Device Hardware%", &hwp, false);

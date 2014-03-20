@@ -366,7 +366,7 @@ static char best_share[8] = "0";
 double current_diff = 0xFFFFFFFFFFFFFFFFULL;
 static char block_diff[8];
 static char net_hashrate[10];
-uint64_t best_diff = 0;
+double best_diff = 0;
 
 static bool known_blkheight_current;
 static uint32_t known_blkheight;
@@ -4070,14 +4070,14 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
-static uint64_t share_diff(const struct work *);
+static double share_diff(const struct work *);
 
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
 	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
 	char shrdiffdisp[16];
-	int tgtdiff = floor(work->work_difficulty);
+	const double tgtdiff = work->work_difficulty;
 	char tgtdiffdisp[16];
 	char where[20];
 	
@@ -4568,7 +4568,7 @@ static void calc_diff(struct work *work, int known)
 	difficulty = work->work_difficulty;
 
 	pool_stats->last_diff = difficulty;
-	suffix_string((uint64_t)difficulty, work->pool->diff, sizeof(work->pool->diff), 0);
+	suffix_string(difficulty, work->pool->diff, sizeof(work->pool->diff), 0);
 
 	if (difficulty == pool_stats->min_diff)
 		pool_stats->min_diff_count++;
@@ -5346,9 +5346,9 @@ bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-static uint64_t share_diff(const struct work *work)
+static double share_diff(const struct work *work)
 {
-	uint64_t ret;
+	double ret;
 	bool new_best = false;
 
 	ret = target_diff(work->hash);

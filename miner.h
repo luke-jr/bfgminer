@@ -1103,7 +1103,7 @@ extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern char *current_fullhash;
 extern double current_diff;
-extern uint64_t best_diff;
+extern double best_diff;
 extern time_t block_time;
 
 struct curl_ent {
@@ -1225,7 +1225,7 @@ struct pool {
 	struct timeval tv_last_work_time;
 	time_t last_share_time;
 	double last_share_diff;
-	uint64_t best_diff;
+	double best_diff;
 
 	struct cgminer_stats cgminer_stats;
 	struct cgminer_pool_stats cgminer_pool_stats;
@@ -1273,7 +1273,7 @@ struct work {
 	unsigned char	target[32];
 	unsigned char	hash[32];
 
-	uint64_t	share_diff;
+	double share_diff;
 
 	int		rolls;
 	int		drv_rolllimit; /* How much the driver can roll ntime */
