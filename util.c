@@ -1306,8 +1306,7 @@ void _now_gettimeofday(struct timeval *tv)
 /* Windows start time is since 1601 lol so convert it to unix epoch 1970. */
 #define EPOCHFILETIME (116444736000000000LL)
 
-/* Return the system time as an lldiv_t in decimicroseconds. */
-static void decius_time(lldiv_t *lidiv)
+void _now_gettimeofday(struct timeval *tv)
 {
 	FILETIME ft;
 	LARGE_INTEGER li;
@@ -1318,16 +1317,8 @@ static void decius_time(lldiv_t *lidiv)
 	li.QuadPart -= EPOCHFILETIME;
 
 	/* SystemTime is in decimicroseconds so divide by an unusual number */
-	*lidiv = lldiv(li.QuadPart, 10000000);
-}
-
-void _now_gettimeofday(struct timeval *tv)
-{
-	lldiv_t lidiv;
-
-	decius_time(&lidiv);
-	tv->tv_sec = lidiv.quot;
-	tv->tv_usec = lidiv.rem / 10;
+	tv->tv_sec  = li.QuadPart / 10000000;
+	tv->tv_usec = li.QuadPart % 10000000;
 }
 #endif
 
