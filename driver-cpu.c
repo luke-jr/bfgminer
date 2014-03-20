@@ -32,7 +32,6 @@
 #include "compat.h"
 #include "deviceapi.h"
 #include "miner.h"
-#include "bench_block.h"
 #include "logging.h"
 #include "util.h"
 #include "driver-cpu.h"
@@ -226,16 +225,10 @@ double bench_algo_stage3(
 	enum sha256_algos algo
 )
 {
-	// Use a random work block pulled from a pool
-	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
 	struct work work __attribute__((aligned(128)));
 	unsigned char hash1[64];
 
-	size_t bench_size = sizeof(work);
-	size_t work_size = sizeof(bench_block);
-	size_t min_size = (work_size < bench_size ? work_size : bench_size);
-	memset(&work, 0, sizeof(work));
-	memcpy(&work, &bench_block, min_size);
+	get_benchmark_work(&work);
 
 	static struct thr_info dummy;
 
@@ -258,7 +251,7 @@ double bench_algo_stage3(
 					work.target,
 					max_nonce,
 					&last_nonce,
-					work.blk.nonce
+					0
 				);
 			}
 	timer_set_now(&end);
@@ -472,9 +465,9 @@ static double bench_algo_stage2(
 		}
 
 		// Construct new command line based on that
-		char *p = strlen(cmd_line) + cmd_line;
-		sprintf(p, " --bench-algo %d", algo);
-		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", "1");
+		char buf[0x20];
+		snprintf(buf, sizeof(buf), "%d", algo);
+		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf);
 
 		// Launch a debug copy of BFGMiner
 		STARTUPINFO startup_info;

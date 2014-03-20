@@ -1342,6 +1342,7 @@ struct work {
 
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
+extern void get_benchmark_work(struct work *);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);

@@ -161,7 +161,6 @@ int opt_queue = 1;
 int opt_scantime = 60;
 int opt_expiry = 120;
 int opt_expiry_lp = 3600;
-int opt_bench_algo = -1;
 unsigned long long global_hashrate;
 static bool opt_unittest = false;
 unsigned long global_quota_gcd = 1;
@@ -1966,11 +1965,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--bfl-range",
 			opt_set_bool, &opt_bfl_noncerange,
 			"Use nonce range on bitforce devices if supported"),
-#endif
-#ifdef WANT_CPUMINE
-	OPT_WITH_ARG("--bench-algo",
-		     set_int_0_to_9999, opt_show_intval, &opt_bench_algo,
-		     opt_hidden),
 #endif
 #ifdef HAVE_CHROOT
         OPT_WITH_ARG("--chroot-dir",
@@ -4585,7 +4579,28 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
-static void get_benchmark_work(struct work *work)
+static
+void setup_benchmark_pool()
+{
+	struct pool *pool;
+	
+	want_longpoll = false;
+	
+	// Temporarily disable opt_benchmark to avoid auto-removal
+	opt_benchmark = false;
+	pool = add_pool();
+	opt_benchmark = true;
+	
+	pool->rpc_url = malloc(255);
+	strcpy(pool->rpc_url, "Benchmark");
+	pool->rpc_user = pool->rpc_url;
+	pool->rpc_pass = pool->rpc_url;
+	enable_pool(pool);
+	pool->idle = false;
+	successful_connect = true;
+}
+
+void get_benchmark_work(struct work *work)
 {
 	static uint32_t blkhdr[20];
 	for (int i = 18; i >= 0; --i)
@@ -11323,16 +11338,46 @@ int main(int argc, char *argv[])
 	strcpy(cgminer_path, dirname(s));
 	free(s);
 	strcat(cgminer_path, "/");
-#ifdef WANT_CPUMINE
-	// Hack to make cgminer silent when called recursively on WIN32
-	int skip_to_bench = 0;
-	#if defined(WIN32)
+fprintf(stderr, ">>>\n");fflush(stderr);
+#if defined(WANT_CPUMINE) && defined(WIN32)
+	{
 		char buf[32];
-		if (GetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf, 16))
-			skip_to_bench = 1;
-		if (GetEnvironmentVariable("CGMINER_BENCH_ALGO", buf, 16))
-			skip_to_bench = 1;
-	#endif // defined(WIN32)
+		int gev = GetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf, sizeof(buf));
+		if (gev > 0 && gev < sizeof(buf))
+		{
+			setup_benchmark_pool();
+			double rate = bench_algo_stage3(atoi(buf));
+			
+			// Write result to shared memory for parent
+			char unique_name[64];
+			
+			if (GetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name, 32))
+			{
+				HANDLE map_handle = CreateFileMapping(
+					INVALID_HANDLE_VALUE,   // use paging file
+					NULL,                   // default security attributes
+					PAGE_READWRITE,         // read/write access
+					0,                      // size: high 32-bits
+					4096,                   // size: low 32-bits
+					unique_name             // name of map object
+				);
+				if (NULL != map_handle) {
+					void *shared_mem = MapViewOfFile(
+						map_handle,     // object to map view of
+						FILE_MAP_WRITE, // read/write access
+						0,              // high offset:  map from
+						0,              // low offset:   beginning
+						0               // default: map entire file
+					);
+					if (NULL != shared_mem)
+						CopyMemory(shared_mem, &rate, sizeof(rate));
+					(void)UnmapViewOfFile(shared_mem);
+				}
+				(void)CloseHandle(map_handle);
+			}
+			exit(0);
+		}
+	}
 #endif
 
 	devcursor = 8;
@@ -11428,25 +11473,10 @@ int main(int argc, char *argv[])
 	raise_fd_limits();
 	
 	if (opt_benchmark) {
-		struct pool *pool;
-		
 		while (total_pools)
 			remove_pool(pools[0]);
 
-		want_longpoll = false;
-		
-		// Temporarily disable opt_benchmark to avoid auto-removal
-		opt_benchmark = false;
-		pool = add_pool();
-		opt_benchmark = true;
-		
-		pool->rpc_url = malloc(255);
-		strcpy(pool->rpc_url, "Benchmark");
-		pool->rpc_user = pool->rpc_url;
-		pool->rpc_pass = pool->rpc_url;
-		enable_pool(pool);
-		pool->idle = false;
-		successful_connect = true;
+		setup_benchmark_pool();
 	}
 	
 	if (opt_unittest) {
@@ -11505,45 +11535,7 @@ int main(int argc, char *argv[])
 #ifdef USE_SCRYPT
 	if (opt_scrypt)
 		set_scrypt_algo(&opt_algo);
-	else
 #endif
-	if (0 <= opt_bench_algo) {
-		double rate = bench_algo_stage3(opt_bench_algo);
-
-		if (!skip_to_bench)
-			printf("%.5f (%s)\n", rate, algo_names[opt_bench_algo]);
-		else {
-			// Write result to shared memory for parent
-#if defined(WIN32)
-				char unique_name[64];
-
-				if (GetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name, 32) || GetEnvironmentVariable("CGMINER_SHARED_MEM", unique_name, 32)) {
-					HANDLE map_handle = CreateFileMapping(
-						INVALID_HANDLE_VALUE,   // use paging file
-						NULL,                   // default security attributes
-						PAGE_READWRITE,         // read/write access
-						0,                      // size: high 32-bits
-						4096,			// size: low 32-bits
-						unique_name		// name of map object
-					);
-					if (NULL != map_handle) {
-						void *shared_mem = MapViewOfFile(
-							map_handle,	// object to map view of
-							FILE_MAP_WRITE, // read/write access
-							0,              // high offset:  map from
-							0,              // low offset:   beginning
-							0		// default: map entire file
-						);
-						if (NULL != shared_mem)
-							CopyMemory(shared_mem, &rate, sizeof(rate));
-						(void)UnmapViewOfFile(shared_mem);
-					}
-					(void)CloseHandle(map_handle);
-				}
-#endif
-		}
-		exit(0);
-	}
 #endif
 
 	bfg_devapi_init();
