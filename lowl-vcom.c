@@ -1108,7 +1108,8 @@ int get_serial_cts(int fd)
 	return (flags & TIOCM_CTS) ? 1 : 0;
 }
 
-int set_serial_rts(int fd, int rts)
+static
+int _set_serial_cmflag(int fd, int flag, bool val)
 {
 	int flags;
 
@@ -1117,13 +1118,23 @@ int set_serial_rts(int fd, int rts)
 
 	ioctl(fd, TIOCMGET, &flags);
 	
-	if (rts)
-		flags |= TIOCM_RTS;
+	if (val)
+		flags |= flag;
 	else
-		flags &= ~TIOCM_RTS;
+		flags &= ~flag;
 
 	ioctl(fd, TIOCMSET, &flags);
-	return rts ? 1 : 0;
+	return val ? 1 : 0;
+}
+
+int set_serial_dtr(int fd, int dtr)
+{
+	return _set_serial_cmflag(fd, TIOCM_DTR, dtr);
+}
+
+int set_serial_rts(int fd, int rts)
+{
+	return _set_serial_cmflag(fd, TIOCM_RTS, rts);
 }
 #else
 int get_serial_cts(const int fd)
@@ -1141,7 +1152,8 @@ int get_serial_cts(const int fd)
 	return (flags & MS_CTS_ON) ? 1 : 0;
 }
 
-int set_serial_rts(int fd, int rts)
+static
+int _set_serial_cmflag(int fd, void (*setfunc)(DCB*, bool), bool val, const char * const fname)
 {
 	if (fd == -1)
 		return -1;
@@ -1151,18 +1163,34 @@ int set_serial_rts(int fd, int rts)
 	
 	DCB dcb;
 	if (!GetCommState(fh, &dcb))
-		applogfailinfor(-1, LOG_DEBUG, "GetCommState", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+		applogr(-1, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
+		        "GetCommState", __FILE__, fname, __LINE__,
+		        bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	if (rts)
-		dcb.fRtsControl = RTS_CONTROL_ENABLE;
-	else
-		dcb.fRtsControl = RTS_CONTROL_DISABLE;
+	setfunc(&dcb, val);
 	
 	if (!SetCommState(fh, &dcb))
-		applogfailinfor(-1, LOG_DEBUG, "SetCommState", "%s", bfg_strerror(GetLastError(), BST_SYSTEM));
+		applogr(-1, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
+		        "GetCommState", __FILE__, fname, __LINE__,
+		        bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return rts ? 1 : 0;
+	return val ? 1 : 0;
 }
+#define _set_serial_cmflag2(name, field, trueval, falseval)  \
+static  \
+void _set_serial_cmflag_ ## name(DCB *dcb, bool val)  \
+{  \
+	dcb->field = val ? (trueval) : (falseval);  \
+}  \
+  \
+int set_serial_ ## name(int fd, int val)  \
+{  \
+	return _set_serial_cmflag(fd, _set_serial_cmflag_ ## name, val, "set_serial_" #name);  \
+}  \
+// END _set_serial_cmflag2
+
+_set_serial_cmflag2(dtr, fDtrControl, DTR_CONTROL_ENABLE, DTR_CONTROL_DISABLE)
+_set_serial_cmflag2(rts, fRtsControl, RTS_CONTROL_ENABLE, RTS_CONTROL_DISABLE)
 #endif // ! WIN32
 
 struct lowlevel_driver lowl_vcom = {

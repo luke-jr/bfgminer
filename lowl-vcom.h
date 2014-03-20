@@ -39,6 +39,7 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 extern int serial_close(int fd);
 
 extern int get_serial_cts(int fd);
+extern int set_serial_dtr(int fd, int dtr);
 extern int set_serial_rts(int fd, int rts);
 extern bool valid_baud(int baud);
 
