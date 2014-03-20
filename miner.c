@@ -11338,7 +11338,6 @@ int main(int argc, char *argv[])
 	strcpy(cgminer_path, dirname(s));
 	free(s);
 	strcat(cgminer_path, "/");
-fprintf(stderr, ">>>\n");fflush(stderr);
 #if defined(WANT_CPUMINE) && defined(WIN32)
 	{
 		char buf[32];
