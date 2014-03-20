@@ -467,9 +467,9 @@ static double bench_algo_stage2(
 		}
 
 		// Construct new command line based on that
-		char *p = strlen(cmd_line) + cmd_line;
-		sprintf(p, " --bench-algo %d", algo);
-		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", "1");
+		char buf[0x20];
+		snprintf(buf, sizeof(buf), "%d", algo);
+		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf);
 
 		// Launch a debug copy of BFGMiner
 		STARTUPINFO startup_info;
