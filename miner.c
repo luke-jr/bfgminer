@@ -10497,6 +10497,14 @@ static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t
 	return true;
 }
 
+static
+int drv_algo_check(const struct device_drv * const drv)
+{
+	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
+	const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
+	return (algos & algomatch);
+}
+
 #ifndef HAVE_PTHREAD_CANCEL
 extern void setup_pthread_cancel_workaround();
 extern struct sigaction pcwm_orig_term_handler;
@@ -10509,7 +10517,6 @@ static void schedule_rescan(const struct timeval *);
 static
 void drv_detect_all()
 {
-	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
 	bool rescanning = false;
 rescan:
 	bfg_need_detect_rescan = false;
@@ -10527,8 +10534,7 @@ rescan:
 	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
 	{
 		const struct device_drv * const drv = reg->drv;
-		const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
-		if (0 == (algos & algomatch) || !drv->drv_detect)
+		if (!(drv_algo_check(drv) && drv->drv_detect))
 			continue;
 		
 		drv->drv_detect();
@@ -10720,6 +10726,9 @@ const struct device_drv *_probe_device_find_drv(const char * const _dname, const
 			return NULL;
 	}
 	
+	if (!drv_algo_check(dreg->drv))
+		return NULL;
+	
 	return dreg->drv;
 }
 
@@ -10727,7 +10736,7 @@ static
 bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
 {
 	const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-	if (!(drv && drv->lowl_probe))
+	if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 		return false;
 	return drv->lowl_probe(info);
 }
@@ -10776,6 +10785,9 @@ void *probe_device_thread(void *p)
 	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 	{
 		const struct device_drv * const drv = dreg->drv;
+		
+		if (!drv_algo_check(drv))
+			continue;
 		
 		// Check for "noauto" flag
 		// NOTE: driver-specific configuration overrides general
@@ -10831,6 +10843,8 @@ void *probe_device_thread(void *p)
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
 						const struct device_drv * const drv = dreg->drv;
+						if (!drv_algo_check(drv))
+							continue;
 						if (drv->lowl_probe_by_name_only)
 							continue;
 						if (!drv->lowl_probe)
