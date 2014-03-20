@@ -4608,7 +4608,7 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
-static void get_benchmark_work(struct work *work)
+void get_benchmark_work(struct work *work)
 {
 	static uint32_t blkhdr[20];
 	for (int i = 18; i >= 0; --i)
