@@ -320,6 +320,7 @@ void dualminer_drv_init()
 	dualminer_drv = icarus_drv;
 	dualminer_drv.dname = "dualminer";
 	dualminer_drv.name = "DMU";
+	dualminer_drv.supported_algos = POW_SCRYPT | POW_SHA256D;
 	dualminer_drv.lowl_probe = dualminer_lowl_probe;
 	dualminer_drv.thread_init = dualminer_init;
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
