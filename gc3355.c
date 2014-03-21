@@ -12,7 +12,7 @@
 
 #include <string.h>
 #include "miner.h"
-#include "icarus-common.h"
+#include "driver-icarus.h"
 #include "logging.h"
 
 #ifndef WIN32

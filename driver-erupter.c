@@ -12,7 +12,7 @@
 #include <stdbool.h>
 
 #include "miner.h"
-#include "icarus-common.h"
+#include "driver-icarus.h"
 #include "lowlevel.h"
 #include "lowl-vcom.h"
 

@@ -19,7 +19,7 @@
 #include <strings.h>
 
 #include "miner.h"
-#include "icarus-common.h"
+#include "driver-icarus.h"
 #include "lowlevel.h"
 #include "lowl-vcom.h"
 #include "deviceapi.h"
