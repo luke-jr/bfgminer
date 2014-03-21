@@ -626,21 +626,6 @@ bool icarus_lowl_probe(const struct lowlevel_device_info * const info)
 static bool icarus_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->device_data;
-
-	icarus->device_fd = -1;
-
-	int fd = icarus_open2(icarus->device_path, info->baud, true);
-	if (unlikely(-1 == fd)) {
-		applog(LOG_ERR, "%s: Failed to open %s",
-		       icarus->dev_repr,
-		       icarus->device_path);
-		return false;
-	}
-
-	icarus->device_fd = fd;
-
-	applog(LOG_INFO, "%s: Opened %s", icarus->dev_repr, icarus->device_path);
 
 	struct icarus_state *state;
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
@@ -665,7 +650,16 @@ bool icarus_init(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 	struct ICARUS_INFO *info = icarus->device_data;
 	struct icarus_state * const state = thr->cgpu_data;
-	int fd = icarus->device_fd;
+	
+	int fd = icarus_open2(icarus->device_path, info->baud, true);
+	icarus->device_fd = fd;
+	if (unlikely(-1 == fd)) {
+		applog(LOG_ERR, "%s: Failed to open %s",
+		       icarus->dev_repr,
+		       icarus->device_path);
+		return false;
+	}
+	applog(LOG_INFO, "%s: Opened %s", icarus->dev_repr, icarus->device_path);
 	
 	BFGINIT(info->job_start_func, icarus_job_start);
 	BFGINIT(state->ob_bin, malloc(info->ob_size));
