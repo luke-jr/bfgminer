@@ -14,6 +14,7 @@
 #include "miner.h"
 #include "driver-icarus.h"
 #include "logging.h"
+#include "lowl-vcom.h"
 
 #ifndef WIN32
   #include <sys/ioctl.h>
@@ -339,31 +340,9 @@ bool opt_dual_mode = false;
 
 void gc3355_dual_reset(int fd)
 {
-#ifdef WIN32
-	DCB dcb;
-
-	memset(&dcb, 0, sizeof(DCB));
-	GetCommState(_get_osfhandle(fd), &dcb);
-	dcb.fDtrControl = DTR_CONTROL_ENABLE;
-	SetCommState(_get_osfhandle(fd), &dcb);
-	Sleep(1);
-	GetCommState(_get_osfhandle(fd), &dcb);
-	dcb.fDtrControl = DTR_CONTROL_DISABLE;
-	SetCommState(_get_osfhandle(fd), &dcb);
-
-#else
-
-	int dtr_flag = 0;
-	ioctl(fd, TIOCMGET, &dtr_flag);
-	dtr_flag |= TIOCM_DTR;
-	ioctl(fd, TIOCMSET, &dtr_flag);
-	usleep(1000);
-	ioctl(fd, TIOCMGET, &dtr_flag);
-	dtr_flag &= ~TIOCM_DTR;
-	ioctl(fd, TIOCMSET, &dtr_flag);
-
-#endif
-
+	set_serial_dtr(fd, 1);
+	cgsleep_ms(1000);
+	set_serial_dtr(fd, 0);
 }
 
 static
@@ -394,45 +373,6 @@ void gc3355_opt_scrypt_init(int fd)
 	};
 
 	gc3355_send_cmds(fd, initscrypt_ob);
-}
-
-int gc3355_get_cts_status(int fd)
-{
-	int ret;
-	int status = 0;
-#ifdef WIN32
-	GetCommModemStatus(_get_osfhandle(fd), &status);
-	applog(LOG_DEBUG, "Get CTS Status is : %d [Windows: 0 is 1.2; 16 is 0.9]\n", status);
-	ret = (status == 0) ? 1 : 0;
-	return ret;
-#else
-	ioctl(fd, TIOCMGET, &status);
-	ret = (status & 0x20) ? 0 : 1;
-	applog(LOG_DEBUG, "Get CTS Status is : %d [Linux: 1 is 1.2; 0 is 0.9]\n", ret);
-	return ret;
-#endif
-}
-
-void gc3355_set_rts_status(int fd, unsigned int value)
-{
-#ifdef WIN32
-	DCB dcb;
-	memset(&dcb, 0, sizeof(DCB));
-	GetCommState(_get_osfhandle(fd), &dcb);
-	if (value != 0)
-		dcb.fRtsControl = RTS_CONTROL_ENABLE;
-	else
-		dcb.fRtsControl = RTS_CONTROL_DISABLE;
-	SetCommState(_get_osfhandle(fd), &dcb);
-#else
-	int rts_flag = 0;
-	ioctl(fd, TIOCMGET, &rts_flag);
-	if (value != 0)
-		rts_flag |= TIOCM_RTS;
-	else
-		rts_flag &= ~TIOCM_RTS;
-	ioctl(fd, TIOCMSET, &rts_flag);
-#endif
 }
 
 static
