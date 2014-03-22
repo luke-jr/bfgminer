@@ -2,7 +2,8 @@
 session_start();
 date_default_timezone_set(@date_default_timezone_get());
 #
-global $doctype, $title, $miner, $port, $readonly, $notify, $rigs;
+global $doctype, $title, $miner, $port, $readonly, $notify;
+global $rigport, $rigs, $rignames, $rigbuttons;
 global $mcast, $mcastexpect, $mcastaddr, $mcastport, $mcastcode;
 global $mcastlistport, $mcasttimeout, $mcastretries, $allowgen;
 global $rigipsecurity, $rigtotals, $forcerigtotals;
@@ -49,9 +50,19 @@ $checklastshare = true;
 # N.B. also if $readonly is true, it will not display the fields
 $poolinputs = false;
 #
+# Default port to use if any $rigs entries don't specify the port number
+$rigport = 4028;
+#
 # Set $rigs to an array of your BFGMiner rigs that are running
-#  format: 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
+#  format: 'IP' or 'Host' or 'IP:Port' or 'Host:Port' or 'Host:Port:Name'
 $rigs = array('127.0.0.1:4028');
+#
+# Set $rignames to false, or one of 'ip' or 'ipx'
+#  this says what to use if $rigs doesn't have a 'name'
+$rignames = false;
+#
+# Set $rigbuttons to false to display a link rather than a button
+$rigbuttons = true;
 #
 # Set $mcast to true to look for your rigs and ignore $rigs
 $mcast = false;
@@ -247,6 +258,9 @@ $colourtable = array(
 $miner = null;
 $port = null;
 #
+global $rigips;
+$rigips = array();
+#
 # Ensure it is only ever shown once
 global $showndate;
 $showndate = false;
@@ -287,6 +301,14 @@ function getcss($cssname, $dom = false)
 function getdom($domname)
 {
  return getcss($domname, true);
+}
+#
+# N.B. don't call this before calling htmlhead()
+function php_pr($cmd)
+{
+ global $here, $autorefresh;
+
+ return "$here?ref=$autorefresh$cmd";
 }
 #
 function htmlhead($mcerr, $checkapi, $rig, $pg = null, $noscript = false)
@@ -491,9 +513,12 @@ function getrigs()
 #
 function getsock($rig, $addr, $port)
 {
- global $rigipsecurity;
+ global $rigport, $rigips, $rignames, $rigipsecurity;
  global $haderror, $error, $socksndtimeoutsec, $sockrcvtimeoutsec;
 
+ $port = trim($port);
+ if (strlen($port) == 0)
+	$port = $rigport;
  $error = null;
  $socket = null;
  $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
@@ -534,6 +559,9 @@ function getsock($rig, $addr, $port)
 	socket_close($socket);
 	return null;
  }
+ if ($rignames !== false && !isset($rigips[$addr]))
+	if (socket_getpeername($socket, $ip) == true)
+		$rigips[$addr] = $ip;
  return $socket;
 }
 #
@@ -1567,39 +1595,67 @@ function process($cmds, $rig)
 #
 function rigname($rig, $rigname)
 {
- global $rigs;
+ global $rigs, $rignames, $rigips;
 
  if (isset($rigs[$rig]))
  {
 	$parts = explode(':', $rigs[$rig], 3);
 	if (count($parts) == 3)
 		$rigname = $parts[2];
+	else
+		if ($rignames !== false)
+		{
+			switch ($rignames)
+			{
+			case 'ip':
+				if (isset($parts[0]) && isset($rigips[$parts[0]]))
+				{
+					$ip = explode('.', $rigips[$parts[0]]);
+					if (count($ip) == 4)
+						$rigname = intval($ip[3]);
+				}
+				break;
+			case 'ipx':
+				if (isset($parts[0]) && isset($rigips[$parts[0]]))
+				{
+					$ip = explode('.', $rigips[$parts[0]]);
+					if (count($ip) == 4)
+						$rigname = intval($ip[3], 16);
+				}
+				break;
+			}
+		}
  }
 
  return $rigname;
 }
 #
-function riginput($rig, $rigname)
+function riginput($rig, $rigname, $usebuttons)
 {
  $rigname = rigname($rig, $rigname);
 
- return "<input type=button value='$rigname' onclick='pr(\"&rig=$rig\",null)'>";
+ if ($usebuttons === true)
+	return "<input type=button value='$rigname' onclick='pr(\"&rig=$rig\",null)'>";
+ else
+	return "<a href='".php_pr("&rig=$rig")."'>$rigname</a>";
 }
 #
-function rigbutton($rig, $rigname, $when, $row)
+function rigbutton($rig, $rigname, $when, $row, $usebuttons)
 {
  list($value, $class) = fmt('BUTTON', 'Rig', '', $when, $row);
 
  if ($rig === '')
 	$ri = '&nbsp;';
  else
-	$ri = riginput($rig, $rigname);
+	$ri = riginput($rig, $rigname, $usebuttons);
 
  return "<td align=middle$class>$ri</td>";
 }
 #
 function showrigs($anss, $headname, $rigname)
 {
+ global $rigbuttons;
+
  $dthead = array($headname => 1, 'STATUS' => 1, 'Description' => 1, 'When' => 1, 'API' => 1, 'CGMiner' => 1);
  showhead('', $dthead);
 
@@ -1622,7 +1678,7 @@ function showrigs($anss, $headname, $rigname)
 		foreach ($dthead as $name => $x)
 		{
 			if ($item == 'STATUS' && $name == $headname)
-				echo rigbutton($rig, $rigname.$rig, $when, null);
+				echo rigbutton($rig, $rigname.$rig, $when, null, $rigbuttons);
 			else
 			{
 				if (isset($row[$name]))
@@ -1641,7 +1697,7 @@ function showrigs($anss, $headname, $rigname)
 function doforeach($cmd, $des, $sum, $head, $datetime)
 {
  global $miner, $port;
- global $error, $readonly, $notify, $rigs;
+ global $error, $readonly, $notify, $rigs, $rigbuttons;
  global $warnfont, $warnoff, $dfmt;
  global $rigerror;
 
@@ -1660,10 +1716,13 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 		continue;
 
 	$parts = explode(':', $rig, 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		if (count($parts) > 2)
 			$name = $parts[2];
@@ -1778,7 +1837,7 @@ function doforeach($cmd, $des, $sum, $head, $datetime)
 					echo "<td align=right$class>Total:</td>";
 				}
 				else
-					echo rigbutton($rig, "Rig $rig", $when, $row);
+					echo rigbutton($rig, "Rig $rig", $when, $row, $rigbuttons);
 			}
 			else
 			{
@@ -1811,7 +1870,7 @@ function refreshbuttons()
 #
 function pagebuttons($rig, $pg)
 {
- global $readonly, $rigs, $userlist, $ses;
+ global $readonly, $rigs, $rigbuttons, $userlist, $ses;
  global $allowcustompages, $customsummarypages;
 
  if ($rig === null)
@@ -1850,10 +1909,12 @@ function pagebuttons($rig, $pg)
  if ($userlist === null || isset($_SESSION[$ses]))
  {
 	if ($prev !== null)
-		echo riginput($prev, 'Prev').'&nbsp;';
+		echo riginput($prev, 'Prev', true).'&nbsp;';
+
 	echo "<input type=button value='Refresh' onclick='pr(\"$refresh\",null)'>&nbsp;";
+
 	if ($next !== null)
-		echo riginput($next, 'Next').'&nbsp;';
+		echo riginput($next, 'Next', true).'&nbsp;';
 	echo '&nbsp;';
 	if (count($rigs) > 1)
 		echo "<input type=button value='Summary' onclick='pr(\"\",null)'>&nbsp;";
@@ -2215,6 +2276,8 @@ function secmatch($section, $field)
 #
 function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total)
 {
+ global $rigbuttons;
+
  foreach ($result as $sec => $row)
  {
 	$secname = preg_replace('/\d/', '', $sec);
@@ -2231,7 +2294,7 @@ function customset($showfields, $sum, $section, $rig, $isbutton, $result, $total
 
 
 	if ($isbutton)
-		echo rigbutton($rig, $rig, $when, $row);
+		echo rigbutton($rig, $rig, $when, $row, $rigbuttons);
 	else
 	{
 		list($ignore, $class) = fmt('total', '', '', $when, $row);
@@ -2566,10 +2629,13 @@ function processcustompage($pagename, $sections, $sum, $ext, $namemap)
  foreach ($rigs as $num => $rig)
  {
 	$parts = explode(':', $rig, 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		if (count($parts) > 2)
 			$name = $parts[2];
@@ -2927,10 +2993,13 @@ function display()
 		if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
 		{
 			$parts = explode(':', $rigs[$rig], 3);
-			if (count($parts) >= 2)
+			if (count($parts) >= 1)
 			{
 				$miner = $parts[0];
-				$port = $parts[1];
+				if (count($parts) >= 2)
+					$port = $parts[1];
+				else
+					$port = '';
 
 				if ($readonly !== true)
 					$preprocess = $arg;
@@ -2979,10 +3048,13 @@ function display()
  if (count($rigs) == 1)
  {
 	$parts = explode(':', $rigs[0], 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		htmlhead($mcerr, true, 0);
 		doOne(0, $preprocess);
@@ -2999,10 +3071,13 @@ function display()
  if ($rig != null and $rig != '' and $rig >= 0 and $rig < count($rigs))
  {
 	$parts = explode(':', $rigs[$rig], 3);
-	if (count($parts) >= 2)
+	if (count($parts) >= 1)
 	{
 		$miner = $parts[0];
-		$port = $parts[1];
+		if (count($parts) >= 2)
+			$port = $parts[1];
+		else
+			$port = '';
 
 		htmlhead($mcerr, true, 0);
 		doOne($rig, $preprocess);

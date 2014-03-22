@@ -9110,7 +9110,12 @@ struct work *get_queued(struct cgpu_info *cgpu)
 	wr_lock(&cgpu->qlock);
 	if (cgpu->unqueued_work) {
 		work = cgpu->unqueued_work;
-		__add_queued(cgpu, work);
+		if (unlikely(stale_work(work, false))) {
+			discard_work(work);
+			work = NULL;
+			wake_gws();
+		} else
+			__add_queued(cgpu, work);
 		cgpu->unqueued_work = NULL;
 	}
 	wr_unlock(&cgpu->qlock);
