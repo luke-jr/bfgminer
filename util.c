@@ -1976,6 +1976,9 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
+	if (opt_disable_client_reconnect)
+		return false;
+	
 	const char *url;
 	char address[256];
 	json_t *port_json;

@@ -924,6 +924,7 @@ extern bool opt_api_listen;
 extern bool opt_api_network;
 extern bool opt_delaynet;
 extern time_t last_getwork;
+extern bool opt_disable_client_reconnect;
 extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
