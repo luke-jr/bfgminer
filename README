@@ -749,6 +749,15 @@ A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
 the full startup output and a summary of your hardware, operating system, and if
 applicable, ATI driver version and ATI stream version.
 
+Q: Why isn't BFGMiner performing well or working on my Raspberry Pi?
+A: Raspberry Pis have hardware defect(s) which affect USB devices to varying
+degrees. Some devices will never be able to work on them, some work fine, and
+some require hacks to workaround the problem. One common workaround is to add
+the dwc_otg.speed=1 parameter to /boot/cmdline.txt. Note that this will slow
+down the USB bus to USB 1.1 speeds, which also affects network bandwidth since
+the Raspberry Pi uses a USB network interface. You may wish to consider
+upgrading to a BeagleBone or UDOO controller.
+
 Q: Can I mine with BFGMiner on a Mac?
 A: BFGMiner will compile on OS X, but the performance of GPU mining is
 compromised due to the OpenCL implementation on OS X, there is no temperature or
