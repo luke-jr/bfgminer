@@ -37,6 +37,8 @@
 #include "util.h"
 #include "spidevc.h"
 
+//#define MB2_Hgood	2800
+#define MB2_Hgood	2650
 BFG_REGISTER_DRIVER(bitfury_drv)
 
 static
@@ -645,7 +647,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		tvp_stat = &bitfury->tv_stat_long;
 		if (timer_elapsed(tvp_stat, &tv_now) >= 900)
 		{
-			if (bitfury->osc6_bits < c->osc6_max && (proc->total_mhashes / total_secs) < 2800)
+			if (bitfury->osc6_bits < c->osc6_max && (proc->total_mhashes / total_secs) < MB2_Hgood)
 				bitfury_send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, ++bitfury->osc6_bits);
 			copy_time(tvp_stat, &tv_now);
 		}

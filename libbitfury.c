@@ -250,7 +250,7 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 		spi_txrx(port);
 		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
-		if (memcmp(oldbuf, newbuf, 17*4) != 0)
+		if (memcmp(oldbuf, newbuf, 17*4) != 0 && i > 2)
 			return 1;
 		if (newbuf[16] != 0 && newbuf[16] != 0xFFFFFFFF) {
 			return 0;

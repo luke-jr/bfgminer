@@ -37,6 +37,15 @@
 #include "tm_i2cm.h"
 #endif
 
+/*
+#define MB2_Hdiff	220
+#define MB2_Vnorm	0.835
+#define MB2_Vhigh	0.91
+*/
+#define MB2_Hdiff	205
+#define MB2_Vnorm	0.79
+#define MB2_Vhigh	0.82
+
 static int renew_voltage = 1;
 static struct timeval mb_stat[32];
 
@@ -143,7 +152,7 @@ int metabank_autodetect()
 				// ### Set all vltage to 0.835V ###
 				applog(LOG_INFO, "Set voltage!");
 				applog(LOG_WARNING, "Slot[%02d]: %.3f V  %.1f C", i,
-					tm_i2c_set_voltage_abs(i, 0.835), tm_i2c_gettemp(i));
+					tm_i2c_set_voltage_abs(i, MB2_Vnorm), tm_i2c_gettemp(i));
 #endif
 				
 				proc_count += chip_n;
@@ -240,7 +249,7 @@ static bool metabank_get_stats(struct cgpu_info *cgpu)
 		stat->temp = t;
 		stat->vc = bitfury->volt;
 		
-		if (stat->vc < 0.8 && !renew_voltage && t > 0 && t < 50 && timer_elapsed(&bitfury->tv_stat_long, &now) < 60) { // No overheat return voltage
+		if (stat->vc < 0.74 && !renew_voltage && t > 0 && t < 50 && timer_elapsed(&bitfury->tv_stat_long, &now) < 60) { // No overheat return voltage
 			renew_voltage = 1;
 			applog(LOG_WARNING, "Restore voltage after overheat");
 			proc = cgpu->device;
@@ -250,7 +259,7 @@ static bool metabank_get_stats(struct cgpu_info *cgpu)
 				if (bitfury->slot != slot) {
 					slot = bitfury->slot;
 					applog(LOG_WARNING, "%s slot[%02d]: %.3f V  %.1f C",
-						proc->dev_repr, slot, tm_i2c_set_voltage_abs(slot, 0.835), tm_i2c_gettemp(slot));
+						proc->dev_repr, slot, tm_i2c_set_voltage_abs(slot, MB2_Vnorm), tm_i2c_gettemp(slot));
 				}
 				proc = proc->next_proc;
 			}
@@ -274,9 +283,9 @@ static bool metabank_get_stats(struct cgpu_info *cgpu)
 					proc = proc->next_proc;
 				}
 				mhz /= (double)count;
-				if (mhz < 220) {
+				if (mhz < MB2_Hdiff) {
 					applog(LOG_WARNING, "Dev : %s slot[%u]=(%.0f, %d) new voltage: %.3f V\t%.1f C",
-						cproc->dev_repr, bitfury->slot, mhz, count, tm_i2c_set_voltage_abs(bitfury->slot, 0.91), tm_i2c_gettemp(bitfury->slot));
+						cproc->dev_repr, bitfury->slot, mhz, count, tm_i2c_set_voltage_abs(bitfury->slot, MB2_Vhigh), tm_i2c_gettemp(bitfury->slot));
 				} else {
 					applog(LOG_WARNING, "Dev : %s slot[%u]=(%.0f, %d) no changes",
 						cproc->dev_repr, bitfury->slot, mhz, count);
