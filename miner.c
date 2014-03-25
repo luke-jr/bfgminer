@@ -7839,7 +7839,14 @@ bool parse_stratum_response(struct pool *pool, char *s)
 			applog(LOG_DEBUG, "Received %s for pool %u job %s",
 			       is_array ? "transaction list" : "no-transaction-list response",
 			       pool->pool_no, &json_string_value(id_val)[6]);
-			if (strcmp(json_string_value(id_val) + 6, pool->swork.job_id) || !is_array)
+			if (!is_array)
+			{
+				// No need to wait for a timeout
+				timer_unset(&pool->swork.tv_transparency);
+				pool_set_opaque(pool, true);
+				goto fishy;
+			}
+			if (strcmp(json_string_value(id_val) + 6, pool->swork.job_id))
 				// We only care about a transaction list for the current job id
 				goto fishy;
 			
