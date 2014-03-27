@@ -676,7 +676,21 @@ after a size change. Upgrading to a new version of curses will fix it.
 
 Q: I have multiple USB stick devices but I can't get them all to work at once?
 A: Very few USB hubs deliver the promised power required to run as many devices
-as they fit if all of them draw power from USB.
+as they fit if all of them draw power from USB. Devices may use up to 2.5 watts
+of power (or 4.5 watts for USB 3 devices), and mining USB sticks usually need it
+all. You can estimate how much power your USB hub can provide by multiplying its
+power supply's output amps by volts (so, if it says 12V 2.5A, you have 12*2.5=
+30 watts).
+
+Q: I've confirmed my USB miners are powered sufficiently, but BFGMiner still
+is having problems running more than a few at once?
+A: Some USB hosts cannot deal with polling as often as miners may need for quick
+delivery of shares. On Linux, you can request putting VCOM devices in "high
+latency" mode (or rather, disabling the default "low latency" mode) using the
+setserial command:
+    setserial /dev/ttyUSB0 '^low_latency'
+You can further tweak device latency by finding the latency_timer attribute in
+sysfs.
 
 Q: I've plugged my devices into my USB hub but nothing shows up?
 A: RPis and Windows have incomplete or non-standard USB3 support so they may
