@@ -136,6 +136,7 @@ Optional Dependencies:
 BFGMiner specific configuration options:
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--enable-cpumining      Build with cpu mining support(default disabled)
+	--disable-dualminer     Compile support for DualMiner (default enabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
@@ -793,14 +794,14 @@ To permanently give your account the 'video' group:
 Then logout and back in again.
 
 Q: Can I mine scrypt with FPGAs or ASICs?
-A: Currently no. Bitcoin ASICs are only useful for SHA256d systems and FPGAs
-generally aren't designed to handle scrypt efficiently.
+A: BFGMiner supports scrypt mining using DualMiner USB sticks, based on the
+Gridseed GC3355 ASIC.
 
-Q: Why does BFGMiner show difficulty 0 when mining scrypt?
+Q: Why does BFGMiner show a fractional difficulty when mining scrypt?
 A: BFGMiner consistently uses pdiff measurement for difficulty everywhere,
 rather than other measurements that may exist. For scrypt, pdiff 1 is very
 difficult, and higher get exponentially harder. It is unlikely you will want to
-use pdiff 1+ with scrypt until you have FPGAs and/or ASICs for it.
+use pdiff 1+ with scrypt any time soon.
 
 Q: What is stratum and how do I use it?
 A: Stratum is a protocol designed to reduce resources for mining pools at the
