@@ -97,6 +97,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 			.threads = 0,
 			.device_data = client,
 			.device_path = user,
+			.min_nonce_diff = (opt_scrypt ? (1./0x10000) : 1.),
 		};
 		timer_set_now(&cgpu->cgminer_stats.start_tv);
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))

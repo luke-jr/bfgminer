@@ -14,6 +14,7 @@
 #endif
 
 #include <stdint.h>
+#include <string.h>
 
 #ifndef WIN32
 #include <sys/types.h>
@@ -144,7 +145,12 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 				rejreason = NULL;
 			
 			if (!hashesdone)
-				hashesdone = "0x100000000";
+			{
+				if (opt_scrypt)
+					hashesdone = "0x10000";
+				else
+					hashesdone = "0x100000000";
+			}
 		}
 		
 		reply = malloc(36 + idstr_sz);
@@ -171,7 +177,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	}
 	
 	{
-		const size_t replysz = 590 + idstr_sz;
+		size_t replysz = 590 + idstr_sz;
 		
 		work = get_work(thr);
 		reply = malloc(replysz);
@@ -182,6 +188,14 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		memcpy(&reply[442], "\",\"hash1\":\"00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000\"},\"id\":", 147);
 		memcpy(&reply[589], idstr ?: "0", idstr_sz);
 		memcpy(&reply[589 + idstr_sz], "}", 1);
+		if (opt_scrypt)
+		{
+			memset(&reply[90], 'f', 4);
+			replysz += 21;
+			reply = realloc(reply, replysz);
+			memmove(&reply[443 + 21], &reply[443], replysz - (443 + 21));
+			memcpy(&reply[443], ",\"algorithm\":\"scrypt\"", 21);
+		}
 		
 		timer_set_now(&work->tv_work_start);
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
