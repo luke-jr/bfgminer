@@ -1869,7 +1869,7 @@ void stratum_probe_transparency(struct pool *pool)
 	        pool->swork.job_id);
 	stratum_send(pool, s, sLen);
 	if ((!pool->swork.opaque) && !timer_isset(&pool->swork.tv_transparency))
-		cgtime(&pool->swork.tv_transparency);
+		timer_set_delay_from_now(&pool->swork.tv_transparency, 21093750L);
 	pool->swork.transparency_probed = true;
 }
 
