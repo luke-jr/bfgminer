@@ -1016,6 +1016,13 @@ extern int swork_id;
 extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
+<<<<<<< HEAD
+||||||| parent of c7d6886... allow url based config files
+#ifdef HAVE_LIBCURL
+=======
+#ifdef HAVE_LIBCURL
+extern json_t *json_web_config(CURL *curl, const char *url);
+>>>>>>> c7d6886... allow url based config files
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
