@@ -10,7 +10,9 @@
 
 #include "gc3355.h"
 
+#include <stdint.h>
 #include <string.h>
+
 #include "miner.h"
 #include "driver-icarus.h"
 #include "logging.h"
@@ -28,118 +30,6 @@
 #define HUBFANS_1_2V_sha2 "0"
 #define DEFAULT_0_9V_sha2 "60"
 #define DEFAULT_1_2V_sha2 "0"
-
-static
-const char *pll_freq_1200M_cmd[] =
-{
-	"55AAEF000500E085",
-	"55AA0FFFB02800C0",
-	"",
-};
-
-static
-const char *pll_freq_1100M_cmd[] =
-{
-	"55AAEF0005006085",
-	"55AA0FFF4C2500C0",
-	"",
-};
-
-static
-const char *pll_freq_1000M_cmd[] =
-{
-	"55AAEF000500E084",
-	"55AA0FFFE82100C0",
-	"",
-};
-
-static
-const char *pll_freq_950M_cmd[] =
-{
-	"55AAEF000500A084",
-	"55AA0FFF362000C0",
-	"",
-};
-
-static
-const char *pll_freq_900M_cmd[] =
-{
-	"55AAEF0005006084",
-	"55AA0FFF841E00C0",
-	"",
-};
-
-static
-const char *pll_freq_850M_cmd[] =
-{
-	"55AAEF0005002084",
-	"55AA0FFFD21C00C0",
-	"",
-};
-
-static
-const char *pll_freq_800M_cmd[] =
-{
-	"55AAEF000500E083",
-	"55AA0FFF201B00C0",
-	"",
-};
-
-static
-const char *pll_freq_750M_cmd[] =
-{
-	"55AAEF000500A083",
-	"55AA0FFF6E1900C0",
-	"",
-};
-
-static
-const char *pll_freq_700M_cmd[] =
-{
-	"55AAEF0005006083",
-	"55AA0FFFBC1700C0",
-	"",
-};
-
-static
-const char *pll_freq_650M_cmd[] =
-{
-	"55AAEF0005002083",
-	"55AA0FFF0A1600C0",
-	"",
-};
-
-static
-const char *pll_freq_600M_cmd[] =
-{
-	"55AAEF000500E082",
-	"55AA0FFF581400C0",
-	"",
-};
-
-static
-const char *pll_freq_550M_cmd[] =
-{
-	"55AAEF000500A082",
-	"55AA0FFFA61200C0",
-	"",
-};
-
-static
-const char *pll_freq_500M_cmd[] =
-{
-	"55AAEF0005006082",
-	"55AA0FFFF41000C0",
-	"",
-};
-
-static
-const char *pll_freq_400M_cmd[] =
-{
-	"55AAEF000500E081",
-	"55AA0FFF900D00C0",
-	"",
-};
 
 static
 const char *sha2_gating[] =
@@ -346,6 +236,83 @@ void gc3355_dual_reset(int fd)
 }
 
 static
+void gc3355_set_register(uint8_t * const buf, const uint8_t clusaddr, const uint8_t chipaddr, const uint8_t regaddr, const uint32_t val)
+{
+	buf[0] = 0x55;
+	buf[1] = 0xaa;
+	buf[2] = (clusaddr << 4) | chipaddr;
+	buf[3] = regaddr;
+	buf[4] = (val >>    0) & 0xff;
+	buf[5] = (val >>    8) & 0xff;
+	buf[6] = (val >> 0x10) & 0xff;
+	buf[7] = (val >> 0x18) & 0xff;
+}
+
+static
+void gc3355_config_cpm(uint8_t * const buf, const uint8_t chipaddr, const float mhz)
+{
+	// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_Register_Spec.pdf
+	const uint8_t pll_bypass = 1;
+	const uint8_t pll_bandselect = 0;
+	const uint8_t pll_outdiv = 0;
+	
+	uint8_t freq_div, freq_mult, last_freq_mult;  // mhz = (25 / freq_div * freq_mult)
+	float actual_mhz, last_actual_mhz = -1;
+	for (freq_div = 1; freq_div <= 32; ++freq_div)
+	{
+		freq_mult = mhz * freq_div / 25;
+		if (freq_mult > 0x80)
+			freq_mult = 0x80;
+		actual_mhz = 25. / freq_div * freq_mult;
+		if (last_actual_mhz > actual_mhz)
+		{
+			--freq_div;
+			freq_mult = last_freq_mult;
+			if (opt_debug)
+				actual_mhz = 25. / freq_div * freq_mult;
+			break;
+		}
+		if (actual_mhz > mhz - .5)
+			break;
+		last_actual_mhz = actual_mhz;
+		last_freq_mult = freq_mult;
+	}
+	const uint8_t pll_F = freq_mult - 1;
+	const uint8_t pll_R = freq_div - 1;
+	
+	const uint8_t core_clk_out1_diven = 0;
+	const uint8_t core_clk_sel1 = 0;
+	const uint8_t core_clk_sel0 = 0;
+	const uint8_t pll_clk_gate = 0;
+	const uint8_t pll_recfg = 1;
+	const uint8_t cfg_cpm = 1;
+	const uint32_t cfg = (pll_bypass << 31) | (pll_bandselect << 30) | (pll_outdiv << 28) | (pll_F << 21) | (pll_R << 16) | (core_clk_out1_diven << 6) | (core_clk_sel1 << 5) | (core_clk_sel0 << 4) | (pll_clk_gate << 3) | (pll_recfg << 2) | (cfg_cpm << 0);
+	gc3355_set_register(buf, 0xe, chipaddr, 0, cfg);
+}
+
+// NOTE: MHz must match CPM config
+static
+void gc3355_config_sha256d(uint8_t * const buf, const uint8_t chipaddr, const float mhz, const uint32_t baud)
+{
+	// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_Register_Spec.pdf
+	const uint8_t force_start = 1;
+	const uint8_t uart_enable = 1;
+	const uint8_t uart_debug = 0;
+	const uint8_t byte_order = 0;
+	const uint16_t rpt_cycle = (mhz * 1000000 / baud);
+	const uint32_t cfg = (force_start << 31) | (uart_enable << 30) | (uart_debug << 29) | (byte_order << 28) | rpt_cycle;
+	gc3355_set_register(buf, 0, chipaddr, 0xff, cfg);
+}
+
+static
+int gc3355_write(const int fd, const void * const buf, const size_t bufsz)
+{
+	const int rv = icarus_write(fd, buf, bufsz);
+	usleep(DEFAULT_DELAY_TIME);
+	return rv;
+}
+
+static
 void gc3355_send_cmds(int fd, const char *cmds[])
 {
 	int i = 0;
@@ -378,88 +345,25 @@ void gc3355_opt_scrypt_init(int fd)
 static
 void gc3355_pll_freq_init2(int fd, int pll_freq)
 {
-	switch(pll_freq)
+	const uint8_t chipaddr = 0xf;
+	const uint32_t baud = 115200;  // FIXME: Make this configurable
+	uint8_t buf[8];
+	
+	if (!pll_freq)
 	{
-		case 400:
-		{
-			gc3355_send_cmds(fd, pll_freq_400M_cmd);
-			break;
-		}
-		case 500:
-		{
-			gc3355_send_cmds(fd, pll_freq_500M_cmd);
-			break;
-		}
-		case 550:
-		{
-			gc3355_send_cmds(fd, pll_freq_550M_cmd);
-			break;
-		}
-		case 600:
-		{
-			gc3355_send_cmds(fd, pll_freq_600M_cmd);
-			break;
-		}
-		case 650:
-		{
-			gc3355_send_cmds(fd, pll_freq_650M_cmd);
-			break;
-		}
-		case 700:
-		{
-			gc3355_send_cmds(fd, pll_freq_700M_cmd);
-			break;
-		}
-		case 750:
-		{
-			gc3355_send_cmds(fd, pll_freq_750M_cmd);
-			break;
-		}
-		case 800:
-		{
-			gc3355_send_cmds(fd, pll_freq_800M_cmd);
-			break;
-		}
-		case 850:
-		{
-			gc3355_send_cmds(fd, pll_freq_850M_cmd);
-			break;
-		}
-		case 900:
-		{
-			gc3355_send_cmds(fd, pll_freq_900M_cmd);
-			break;
-		}
-		case 950:
-		{
-			gc3355_send_cmds(fd, pll_freq_950M_cmd);
-			break;
-		}
-		case 1000:
-		{
-			gc3355_send_cmds(fd, pll_freq_1000M_cmd);
-			break;
-		}
-		case 1100:
-		{
-			gc3355_send_cmds(fd, pll_freq_1100M_cmd);
-			break;
-		}
-		case 1200:
-		{
-			gc3355_send_cmds(fd, pll_freq_1200M_cmd);
-			break;
-		}
-		default:
-		{
-			if (gc3355_get_cts_status(fd) == 1)
-				//1.2v - Scrypt mode
-				gc3355_send_cmds(fd, pll_freq_850M_cmd);
-			else
-				//0.9v - Scrypt + SHA mode
-				gc3355_send_cmds(fd, pll_freq_550M_cmd);
-		}
+		if (gc3355_get_cts_status(fd) == 1)
+			//1.2v - Scrypt mode
+			pll_freq = 850;
+		else
+			//0.9v - Scrypt + SHA mode
+			pll_freq = 550;
 	}
+	
+	gc3355_config_cpm(buf, chipaddr, pll_freq);
+	gc3355_write(fd, buf, sizeof(buf));
+	
+	gc3355_config_sha256d(buf, chipaddr, pll_freq, baud);
+	gc3355_write(fd, buf, sizeof(buf));
 }
 
 
