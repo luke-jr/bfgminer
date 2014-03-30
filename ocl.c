@@ -573,11 +573,25 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	}
 	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)data->max_alloc);
 	
-	if (strstr(vbuff, "MESA"))
+	find = strstr(vbuff, "MESA");
+	if (find)
 	{
-		applog(LOG_DEBUG, "Mesa OpenCL platform detected, disabling OpenCL kernel binaries and bitalign");
-		clState->hasBitAlign = false;
-		usebinary = false;
+		long int major = strtol(&find[4], &s, 10), minor;
+		if (!major)
+		{} // No version number at all
+		else
+		if (s[0] == '.')
+			minor = strtol(&s[1], NULL, 10);
+		else
+			minor = 0;
+		if (major < 10 || (major == 10 && minor < 1))
+		{
+			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld), disabling OpenCL kernel binaries and bitalign", major, minor);
+			clState->hasBitAlign = false;
+			usebinary = false;
+		}
+		else
+			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld)", major, minor);
 		ismesa = true;
 	}
 
