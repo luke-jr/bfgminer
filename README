@@ -251,7 +251,6 @@ Options for both config file and command line:
 --no-restart        Do not attempt to restart devices that hang
 --no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale
---no-opencl-binaries Don't attempt to use or save OpenCL kernel binaries
 --no-unicode        Don't use Unicode characters in TUI
 --noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server

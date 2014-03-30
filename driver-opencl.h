@@ -10,6 +10,14 @@
 
 #include "miner.h"
 
+enum opencl_binary_usage {
+	OBU_DEFAULT  = 0,
+	OBU_LOAD     = 1,
+	OBU_SAVE     = 2,
+	OBU_LOADSAVE = 3,
+	OBU_NONE     = 4,
+};
+
 struct opencl_device_data {
 	bool mapped;
 	int virtual_gpu;
@@ -23,6 +31,7 @@ struct opencl_device_data {
 	enum cl_kernels kernel;
 	cl_ulong max_alloc;
 	
+	enum opencl_binary_usage opt_opencl_binaries;
 #ifdef USE_SCRYPT
 	int opt_lg, lookup_gap;
 	size_t opt_tc, thread_concurrency;

@@ -1747,6 +1747,14 @@ char *set_temp_target(char *arg)
 	return NULL;
 }
 
+static
+char *set_no_opencl_binaries(__maybe_unused void * const dummy)
+{
+	applog(LOG_WARNING, "The --no-opencl-binaries option is deprecated! Use --set-device OCL:binary=no");
+	add_set_device_option("OCL:binary=no");
+	return NULL;
+}
+
 static char *set_api_allow(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_allow);
@@ -2192,8 +2200,8 @@ static struct opt_table opt_config_table[] = {
 		        "Don't submit shares if they are detected as stale"),
 #ifdef HAVE_OPENCL
 	OPT_WITHOUT_ARG("--no-opencl-binaries",
-	                opt_set_invbool, &opt_opencl_binaries,
-	                "Don't attempt to use or save OpenCL kernel binaries"),
+	                set_no_opencl_binaries, NULL,
+	                opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--no-unicode",
 #ifdef USE_UNICODE

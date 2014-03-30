@@ -406,6 +406,31 @@ const char *set_kernel(char *arg)
 }
 #endif
 
+static
+const char *opencl_init_binary(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	
+	if (!(strcasecmp(newvalue, "no") && strcasecmp(newvalue, "never") && strcasecmp(newvalue, "none")))
+		data->opt_opencl_binaries = OBU_NONE;
+	else
+	if (!(strcasecmp(newvalue, "load") && strcasecmp(newvalue, "read")))
+		data->opt_opencl_binaries = OBU_LOAD;
+	else
+	if (!(strcasecmp(newvalue, "save") && strcasecmp(newvalue, "write")))
+		data->opt_opencl_binaries = OBU_SAVE;
+	else
+	if (!(strcasecmp(newvalue, "yes") && strcasecmp(newvalue, "always") && strcasecmp(newvalue, "both")))
+		data->opt_opencl_binaries = OBU_LOADSAVE;
+	else
+	if (!(strcasecmp(newvalue, "default")))
+		data->opt_opencl_binaries = OBU_DEFAULT;
+	else
+		return "Invalid value passed to opencl binary";
+	
+	return NULL;
+}
+
 #ifdef HAVE_ADL
 /* This function allows us to map an adl device to an opencl device for when
  * simple enumeration has failed to match them. */
@@ -1781,6 +1806,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = 
 	{"threads", opencl_init_gpu_threads},
 	{"vector", opencl_init_vector},
 	{"work_size", opencl_init_worksize},
+	{"binary", opencl_init_binary},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_init_gpu_map},
 	{"clock", opencl_init_gpu_engine},
@@ -1805,6 +1831,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
 	{"threads", opencl_cannot_set, "Number of threads"},
 	{"vector", opencl_cannot_set, ""},
 	{"work_size", opencl_cannot_set, ""},
+	{"binary", opencl_cannot_set, ""},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_cannot_set, "Map to ADL device"},
 	{"clock", opencl_set_gpu_engine, "GPU engine clock"},

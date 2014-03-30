@@ -209,12 +209,6 @@ CL_API_ENTRY cl_int CL_API_CALL
                        cl_event *       /* event */) CL_API_SUFFIX__VERSION_1_0;
 
 int opt_platform_id = -1;
-#ifdef __APPLE__
-// Apple OpenCL doesn't like using binaries this way
-bool opt_opencl_binaries;
-#else
-bool opt_opencl_binaries = true;
-#endif
 
 char *file_contents(const char *filename, int *length)
 {
@@ -393,7 +387,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
 	bool patchbfi = false, prog_built = false;
-	bool usebinary = opt_opencl_binaries, ismesa = false;
+	bool ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct opencl_device_data * const data = cgpu->device_data;
 	cl_platform_id platform = NULL;
@@ -586,13 +580,28 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			minor = 0;
 		if (major < 10 || (major == 10 && minor < 1))
 		{
-			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld), disabling OpenCL kernel binaries and bitalign", major, minor);
+			if (data->opt_opencl_binaries == OBU_DEFAULT)
+			{
+				applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld), disabling OpenCL kernel binaries and bitalign", major, minor);
+				data->opt_opencl_binaries = OBU_NONE;
+			}
+			else
+				applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld), disabling bitalign", major, minor);
 			clState->hasBitAlign = false;
-			usebinary = false;
 		}
 		else
 			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld)", major, minor);
 		ismesa = true;
+	}
+	
+	if (data->opt_opencl_binaries == OBU_DEFAULT)
+	{
+#ifdef __APPLE__
+		// Apple OpenCL doesn't like using binaries this way
+		data->opt_opencl_binaries = OBU_NONE;
+#else
+		data->opt_opencl_binaries = OBU_LOADSAVE;
+#endif
 	}
 
 	/* Create binary filename based on parameters passed to opencl
@@ -775,7 +784,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	applog(LOG_DEBUG, "OCL%2u: Configured OpenCL kernel name: %s", gpu, binaryfilename);
 	strcat(binaryfilename, ".bin");
 	
-	if (!usebinary)
+	if (!(data->opt_opencl_binaries & OBU_LOAD))
 		goto build;
 
 	binaryfile = fopen(binaryfilename, "rb");
@@ -877,7 +886,7 @@ build:
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
 	if (patchbfi) {
-		if (usebinary)
+		if (data->opt_opencl_binaries == OBU_LOADSAVE)
 		{
 			strcat(CompilerOptions, " -D BFI_INT");
 			applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
@@ -913,7 +922,7 @@ build:
 
 	prog_built = true;
 	
-	if (!usebinary)
+	if (!(data->opt_opencl_binaries & OBU_SAVE))
 		goto built;
 
 	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
