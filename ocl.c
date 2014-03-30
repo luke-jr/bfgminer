@@ -863,8 +863,16 @@ build:
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
 	if (patchbfi) {
-		strcat(CompilerOptions, " -D BFI_INT");
-		applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
+		if (usebinary)
+		{
+			strcat(CompilerOptions, " -D BFI_INT");
+			applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
+		}
+		else
+		{
+			patchbfi = false;
+			applog(LOG_WARNING, "BFI_INT patch requiring device found, but OpenCL binary usage disabled; cannot BFI_INT patch");
+		}
 	} else
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
 
