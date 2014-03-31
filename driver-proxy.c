@@ -120,7 +120,11 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 			proxy_first_client(cgpu);
 	}
 	else
+	{
 		mutex_unlock(&proxy_clients_mutex);
+		cgpu = client->cgpu;
+	}
+	thread_reportin(cgpu->thr[0]);
 	return client;
 }
 
