@@ -339,7 +339,12 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 	bin2hex(xnonce1x, xnonce1_p, _ssm_client_octets);
 	bufsz = sprintf(buf, "{\"id\":%s,\"result\":[[[\"mining.set_difficulty\",\"x\"],[\"mining.notify\",\"%s\"]],\"%s\",%d],\"error\":null}\n", idstr, xnonce1x, xnonce1x, _ssm_client_xnonce2sz);
 	bufferevent_write(bev, buf, bufsz);
-	bufferevent_write(bev, "{\"params\":[0.9999847412109375],\"id\":null,\"method\":\"mining.set_difficulty\"}\n", 75);
+	bufferevent_write(bev, "{\"params\":[", 11);
+	if (opt_scrypt)
+		bufferevent_write(bev, "0.000015258556232", 17);
+	else
+		bufferevent_write(bev, "0.9999847412109375", 18);
+	bufferevent_write(bev, "],\"id\":null,\"method\":\"mining.set_difficulty\"}\n", 46);
 	bufferevent_write(bev, _ssm_notify, _ssm_notify_sz);
 }
 
@@ -368,7 +373,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	const char * const nonce = __json_array_string(params, 4);
 	uint8_t xnonce2[work2d_xnonce2sz];
 	uint32_t ntime_n, nonce_n;
-	const float nonce_diff = 1;
+	const float nonce_diff = opt_scrypt ? (1./0x10000) : 1.;
 	bool is_stale;
 	
 	if (unlikely(!client))
@@ -411,7 +416,8 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 		timer_set_now(&tv_now);
 		timersub(&tv_now, &conn->tv_hashes_done, &tv_delta);
 		conn->tv_hashes_done = tv_now;
-		hashes_done(thr, 0x100000000, &tv_delta, NULL);
+		const uint64_t hashes = opt_scrypt ? 0x10000 : 0x100000000;
+		hashes_done(thr, hashes, &tv_delta, NULL);
 	}
 }
 
