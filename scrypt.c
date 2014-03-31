@@ -420,30 +420,16 @@ void scrypt_regenhash(struct work *work)
 	flip32(ohash, ohash);
 }
 
-static const uint32_t diff1targ = 0x0000ffff;
-
-/* Used externally as confirmation of correct OCL code */
-int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t nonce)
+/* Used by test_nonce functions */
+void scrypt_hash_data(unsigned char * const out_hash, const unsigned char * const pdata)
 {
-	uint32_t tmp_hash7, Htarg = le32toh(((const uint32_t *)ptarget)[7]);
 	uint32_t data[20], ohash[8];
 	char *scratchbuf;
 
-	be32enc_vect(data, (const uint32_t *)pdata, 19);
-	data[19] = htobe32(nonce);
+	be32enc_vect(data, (const uint32_t *)pdata, 20);
 	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	tmp_hash7 = be32toh(ohash[7]);
-
-	applog(LOG_DEBUG, "htarget %08lx diff1 %08lx hash %08lx",
-				(long unsigned int)Htarg,
-				(long unsigned int)diff1targ,
-				(long unsigned int)tmp_hash7);
-	if (tmp_hash7 > diff1targ)
-		return -1;
-	if (tmp_hash7 > Htarg)
-		return 0;
-	return 1;
+	swap32yes(out_hash, ohash, 32/4);
 }
 
 bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *pmidstate,
