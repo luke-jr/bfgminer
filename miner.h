@@ -1126,12 +1126,23 @@ enum pool_protocol {
 	PLP_GETBLOCKTEMPLATE,
 };
 
+struct bfg_tmpl_ref {
+	blktemplate_t *tmpl;
+	int refcount;
+	pthread_mutex_t mutex;
+};
+
 struct stratum_work {
+	// Used only as a session id for resuming
+	char *nonce1;
+	
+	struct bfg_tmpl_ref *tr;
 	char *job_id;
 	bool clean;
 	
 	bytes_t coinbase;
 	size_t nonce2_offset;
+	int n2size;
 	
 	int merkles;
 	bytes_t merkle_bin;
@@ -1140,6 +1151,7 @@ struct stratum_work {
 	uint8_t diffbits[4];
 	uint32_t ntime;
 	struct timeval tv_received;
+	struct timeval tv_expire;
 
 	double diff;
 
@@ -1148,6 +1160,9 @@ struct stratum_work {
 	bool opaque;
 	
 	cglock_t *data_lock_p;
+	
+	struct pool *pool;
+	unsigned char work_restart_id;
 };
 
 #define RBUFSIZE 8192
@@ -1238,14 +1253,12 @@ struct pool {
 	char *sockbuf;
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
-	char *nonce1;
 	size_t n1_len;
 	uint32_t nonce2;
 	int nonce2sz;
 #ifdef WORDS_BIGENDIAN
 	int nonce2off;
 #endif
-	int n2size;
 	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
@@ -1322,8 +1335,7 @@ struct work {
 	// Allow devices to timestamp work for their own purposes
 	struct timeval	tv_stamp;
 
-	blktemplate_t	*tmpl;
-	int		*tmpl_refcount;
+	struct bfg_tmpl_ref *tr;
 	unsigned int	dataid;
 	bool		do_foreign_submit;
 
@@ -1345,7 +1357,8 @@ extern void get_datestamp(char *, size_t, time_t);
 extern void get_benchmark_work(struct work *);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
-extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
+extern bool pool_has_usable_swork(const struct pool *);
+extern void gen_stratum_work2(struct work *, struct stratum_work *);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
 void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)
@@ -1413,6 +1426,7 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void tmpl_decref(struct bfg_tmpl_ref *);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
