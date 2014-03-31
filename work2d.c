@@ -93,7 +93,7 @@ void work2d_gen_dummy_work(struct work * const work, struct stratum_work * const
 	gen_stratum_work2(work, swork);
 }
 
-bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1, const uint32_t nonce, const uint32_t ntime, bool * const out_is_stale)
+bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * const swork, const struct timeval * const tvp_prepared, const void * const xnonce2, const uint32_t xnonce1, const uint32_t nonce, const uint32_t ntime, bool * const out_is_stale, const float nonce_diff)
 {
 	struct work _work, *work;
 	bool rv;
@@ -102,6 +102,7 @@ bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * cons
 	work = &_work;
 	work2d_gen_dummy_work(work, swork, tvp_prepared, xnonce2, xnonce1);
 	*(uint32_t *)&work->data[68] = htobe32(ntime);
+	work->nonce_diff = nonce_diff;
 	
 	// Check if it's stale, if desired
 	if (out_is_stale)

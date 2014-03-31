@@ -368,6 +368,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	const char * const nonce = __json_array_string(params, 4);
 	uint8_t xnonce2[work2d_xnonce2sz];
 	uint32_t ntime_n, nonce_n;
+	const float nonce_diff = 1;
 	bool is_stale;
 	
 	if (unlikely(!client))
@@ -396,7 +397,7 @@ void stratumsrv_mining_submit(struct bufferevent *bev, json_t *params, const cha
 	ntime_n = be32toh(ntime_n);
 	hex2bin((void*)&nonce_n, nonce, 4);
 	nonce_n = le32toh(nonce_n);
-	if (!work2d_submit_nonce(thr, &ssj->swork, &ssj->tv_prepared, xnonce2, *xnonce1_p, nonce_n, ntime_n, &is_stale))
+	if (!work2d_submit_nonce(thr, &ssj->swork, &ssj->tv_prepared, xnonce2, *xnonce1_p, nonce_n, ntime_n, &is_stale, nonce_diff))
 		_stratumsrv_failure(bev, idstr, 23, "H-not-zero");
 	else
 	if (is_stale)
