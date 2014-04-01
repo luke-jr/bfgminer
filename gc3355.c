@@ -26,8 +26,10 @@
   #include <io.h>
 #endif
 
-#define DEFAULT_0_9V_sha2 "60"
-#define DEFAULT_1_2V_sha2 "0"
+// options configurable by the end-user
+
+int opt_sha2_units = -1;
+
 
 // SHA-2 commands
 
@@ -224,7 +226,6 @@ const char *scrypt_only_init_cmd[] =
 	NULL
 };
 
-char *opt_dualminer_sha2_gating = NULL;
 int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 int opt_sha2_number = 160;
 bool opt_dual_mode = false;
@@ -424,25 +425,21 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 }
 
 static
-void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
+void gc3355_open_sha2_units(int fd, int sha2_units)
 {
 	int unit_count = 0;
 	unsigned char ob_bin[8];
 	int i;
 
-	unit_count = atoi(opt_sha2_gating);
+	// should be 0 - 160
+	unit_count = sha2_units < 0 ? 0 : sha2_units > 160 ? 160 : sha2_units;
 
-	if (unit_count < 0)
-		unit_count = 0;
-	if (unit_count > 160)
-		unit_count = 160;
-
-	if (unit_count > 0 && unit_count <= 160)
+	if (unit_count > 0)
 	{
 		for(i = 0; i <= unit_count; i++)
 		{
 			hex2bin(ob_bin, sha2_open_cmd[i], sizeof(ob_bin));
-			icarus_write(fd, ob_bin, 8);
+			gc3355_write(fd, ob_bin, 8);
 			cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 		}
 		opt_sha2_number = unit_count;
@@ -521,34 +518,15 @@ void gc3355_dualminer_init(int fd)
 		gc3355_set_pll_freq(fd, opt_pll_freq);
 }
 
-void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
+void gc3355_init(int fd, int sha2_units, bool is_scrypt_only)
 {
-	if (gc3355_get_cts_status(fd) == 1)
+	if (opt_scrypt)
 	{
-		//1.2v - Scrypt mode
-		if (opt_scrypt)
-		{
-			if (is_scrypt_only)
-				gc3355_opt_scrypt_only_init(fd);
-		}
-		else
-		{
-			((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-		}
+		if (is_scrypt_only)
+			gc3355_opt_scrypt_only_init(fd);
 	}
 	else
-	{
-		//0.9v - Scrypt + SHA mode
-		if (opt_scrypt)
-		{
-			if (is_scrypt_only)
-				gc3355_opt_scrypt_only_init(fd);
-		}
-		else
-		{
-			((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-		}
-	}
+		gc3355_open_sha2_units(fd, sha2_units);
 }
 
 void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)

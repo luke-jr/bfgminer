@@ -42,6 +42,9 @@
 #define DUALMINER_SCRYPT_READ_COUNT 48  // 4.8s to read
 #define DUALMINER_SHA2_READ_COUNT	16  // 1.6s to read
 
+#define DUALMINER_0_9V_SHA2_UNITS  60
+#define DUALMINER_1_2V_SHA2_UNITS   0
+
 static
 const char sha2_golden_ob[] =
 	"55aa0f00a08701004a548fe471fa3a9a"
@@ -122,7 +125,20 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	if (opt_scrypt)
 		set_serial_rts(fd, BGV_HIGH);
 
-	gc3355_init(fd, opt_dualminer_sha2_gating, !opt_dual_mode);
+	if (opt_sha2_units == -1)
+	{
+		if (gc3355_get_cts_status(fd) == 1)
+		{
+			//1.2v - Scrypt mode
+			opt_sha2_units = DUALMINER_1_2V_SHA2_UNITS;
+		}
+		else
+		{
+			//0.9v - Scrypt + SHA mode
+			opt_sha2_units = DUALMINER_0_9V_SHA2_UNITS;
+		}
+	}
+	gc3355_init(fd, opt_sha2_units, !opt_dual_mode);
 	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt);
 
 	if (gc3355_get_cts_status(fd) != 1)

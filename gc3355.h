@@ -16,13 +16,16 @@
 
 #include "miner.h"
 
+// options configurable by the end-user
+
+extern int opt_sha2_units;
+
+// GridSeed common code begins here
+
 #define GC3355_COMMAND_DELAY_MS 20
 
 #define SCRYPT_UNIT_OPEN  0
 #define SCRYPT_UNIT_CLOSE 1
-
-extern
-char *opt_dualminer_sha2_gating;
 
 extern
 int opt_pll_freq;
@@ -51,7 +54,7 @@ extern
 void gc3355_scrypt_only_reset(int fd);
 
 extern
-void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only);
+void gc3355_init(int fd, int sha2_units, bool is_scrypt_only);
 
 extern
 void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
