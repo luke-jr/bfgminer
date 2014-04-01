@@ -95,6 +95,7 @@ void dualminer_teardown_device(int fd)
 	else
 		gc3355_open_sha2_unit(fd, "0");
 
+	// set request to send (RTS) status
 	set_serial_rts(fd, BGV_LOW);
 }
 
@@ -109,6 +110,7 @@ bool dualminer_init(struct thr_info * const thr)
 	return icarus_init(thr);
 }
 
+// runs when job starts and the device has been reset (or first run)
 static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
@@ -135,6 +137,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 
 // ICARUS_INFO functions - icarus-common.h
 
+// runs after fd is opened but before the device detection code
 static
 bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __maybe_unused info)
 {
@@ -143,6 +146,7 @@ bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __m
 	return true;
 }
 
+// runs each time a job starts
 static
 bool dualminer_job_start(struct thr_info * const thr)
 {
@@ -151,6 +155,7 @@ bool dualminer_job_start(struct thr_info * const thr)
 	int fd = icarus->device_fd;
 
 	if (state->firstrun)
+		// runs when job starts and the device has been reset (or first run)
 		dualminer_init_firstrun(icarus);
 
 	if (opt_scrypt)

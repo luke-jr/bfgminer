@@ -1,5 +1,6 @@
 /*
  * Copyright 2014 Nate Woolls
+ * Copyright 2014 GridSeed Team
  * Copyright 2014 Dualminer Team
  *
  * This program is free software; you can redistribute it and/or modify it

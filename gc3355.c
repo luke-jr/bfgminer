@@ -1,5 +1,7 @@
 /*
  * Copyright 2014 Nate Woolls
+ * Copyright 2013 Luke Dashjr
+ * Copyright 2014 GridSeed Team
  * Copyright 2014 Dualminer Team
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -29,17 +31,20 @@
 #define DEFAULT_0_9V_sha2 "60"
 #define DEFAULT_1_2V_sha2 "0"
 
+// SHA-2 commands
+
 static
 const char *sha2_gating_cmd[] =
 {
-	"55AAEF0200000000",
-	"55AAEF0300000000",
-	"55AAEF0400000000",
-	"55AAEF0500000000",
-	"55AAEF0600000000",
+	"55AAEF0200000000",  // Chip 1 - power down SHA-2 (unless masked w/PLL)
+	"55AAEF0300000000",  // Chip 2
+	"55AAEF0400000000",  // Chip 3
+	"55AAEF0500000000",  // Chip 4
+	"55AAEF0600000000",  // Chip 5
 	"",
 };
 
+// maps the above SHA chip gating with SHA-2 units
 static
 const char *sha2_open_cmd[] =
 {
@@ -206,6 +211,7 @@ const char *sha2_open_cmd[] =
 	"",
 };
 
+// called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
 static
 const char *scrypt_only_init_cmd[] =
 {
@@ -227,6 +233,7 @@ bool opt_dual_mode = false;
 
 void gc3355_reset_dtr(int fd)
 {
+	// set data terminal ready (DTR) status
 	set_serial_dtr(fd, BGV_HIGH);
 	cgsleep_ms(1000);
 	set_serial_dtr(fd, BGV_LOW);
@@ -548,13 +555,18 @@ void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
 
 void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
 {
+	// command header
 	cmd[0] = 0x55;
 	cmd[1] = 0xaa;
 	cmd[2] = 0x1f;
 	cmd[3] = 0x00;
+	
+	// task data
 	memcpy(cmd + 4, work->target, 32);
 	memcpy(cmd + 36, work->midstate, 32);
 	memcpy(cmd + 68, work->data, 80);
+	
+	// nonce_max
 	cmd[148] = 0xff;
 	cmd[149] = 0xff;
 	cmd[150] = 0xff;
@@ -567,10 +579,13 @@ void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool sim
 	memset(temp_bin, 0, 64);
 	memcpy(temp_bin, work->midstate, 32);
 	memcpy(temp_bin+52, work->data + 64, 12);
+	
+	// command header
 	cmd[0] = 0x55;
 	cmd[1] = 0xaa;
 	cmd[2] = 0x0f;
-	cmd[3] = 0x00;
+	cmd[3] = 0x00;  // Scrypt header sig - used by DualMiner in Dual Mode
+	
 	memcpy(cmd + 8, temp_bin, 32);
 	memcpy(cmd + 40, temp_bin + 52, 12);
 }
