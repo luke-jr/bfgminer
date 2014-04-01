@@ -164,7 +164,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	unsigned int expected_crc;
 	unsigned int actual_crc;
 	uint32_t nonce, nonce2, miner, modular_id;
-	void *xnonce2;
 	int pool_no;
 	uint8_t job_id[5];
 	int tmp;
@@ -197,7 +196,6 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 		case AVA2_P_NONCE:
 			memcpy(&miner, ar->data + 0, 4);
 			memcpy(&pool_no, ar->data + 4, 4);
-			xnonce2 = &ar->data[8];
 			memcpy(&nonce2, ar->data + 8, 4);
 			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 16, 4);
@@ -225,7 +223,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 				break;
 
 			if (thr && !info->new_stratum)
-				work2d_submit_nonce(thr, &info->swork, &info->tv_prepared, xnonce2, info->xnonce1, nonce, info->swork.ntime, NULL, 1.);
+				work2d_submit_nonce(thr, &info->swork, &info->tv_prepared, &nonce2, info->xnonce1, nonce, info->swork.ntime, NULL, 1.);
 			break;
 		case AVA2_P_STATUS:
 			if (thr)
