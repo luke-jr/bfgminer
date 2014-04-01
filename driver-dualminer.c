@@ -261,32 +261,9 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	memset(state->ob_bin, 0, info->ob_size);
 
 	if (opt_scrypt)
-	{
-		state->ob_bin[0] = 0x55;
-		state->ob_bin[1] = 0xaa;
-		state->ob_bin[2] = 0x1f;
-		state->ob_bin[3] = 0x00;
-		memcpy(state->ob_bin + 4, work->target, 32);
-		memcpy(state->ob_bin + 36, work->midstate, 32);
-		memcpy(state->ob_bin + 68, work->data, 80);
-		state->ob_bin[148] = 0xff;
-		state->ob_bin[149] = 0xff;
-		state->ob_bin[150] = 0xff;
-		state->ob_bin[151] = 0xff;
-	}
+		gc3355_scrypt_prepare_work(state->ob_bin, work);
 	else
-	{
-		uint8_t temp_bin[64];
-		memset(temp_bin, 0, 64);
-		memcpy(temp_bin, work->midstate, 32);
-		memcpy(temp_bin+52, work->data + 64, 12);
-		state->ob_bin[0] = 0x55;
-		state->ob_bin[1] = 0xaa;
-		state->ob_bin[2] = 0x0f;
-		state->ob_bin[3] = 0x00;
-		memcpy(state->ob_bin + 8, temp_bin, 32);
-		memcpy(state->ob_bin + 40, temp_bin + 52, 12);
-	}
+		gc3355_sha2_prepare_work(state->ob_bin, work, false);
 
 	return true;
 }

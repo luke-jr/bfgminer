@@ -545,3 +545,32 @@ void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
 		}
 	}
 }
+
+void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
+{
+	cmd[0] = 0x55;
+	cmd[1] = 0xaa;
+	cmd[2] = 0x1f;
+	cmd[3] = 0x00;
+	memcpy(cmd + 4, work->target, 32);
+	memcpy(cmd + 36, work->midstate, 32);
+	memcpy(cmd + 68, work->data, 80);
+	cmd[148] = 0xff;
+	cmd[149] = 0xff;
+	cmd[150] = 0xff;
+	cmd[151] = 0xff;
+}
+
+void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool simple)
+{
+	uint8_t temp_bin[64];
+	memset(temp_bin, 0, 64);
+	memcpy(temp_bin, work->midstate, 32);
+	memcpy(temp_bin+52, work->data + 64, 12);
+	cmd[0] = 0x55;
+	cmd[1] = 0xaa;
+	cmd[2] = 0x0f;
+	cmd[3] = 0x00;
+	memcpy(cmd + 8, temp_bin, 32);
+	memcpy(cmd + 40, temp_bin + 52, 12);
+}

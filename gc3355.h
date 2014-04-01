@@ -13,6 +13,8 @@
 
 #include <stdbool.h>
 
+#include "miner.h"
+
 #define SCRYPT_UNIT_OPEN  0
 #define SCRYPT_UNIT_CLOSE 1
 
@@ -53,6 +55,9 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
 
 extern
 void gc3355_open_scrypt_unit(int fd, int status);
+
+extern void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *);
+extern void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *, bool simple);
 
 #define gc3355_get_cts_status(fd)  ((get_serial_cts(fd) == BGV_LOW) ? 1 : 0)
 
