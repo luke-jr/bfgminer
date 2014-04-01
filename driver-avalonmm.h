@@ -115,6 +115,7 @@ struct avalon2_info {
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 	
 	struct timeval tv_prepared;
+	struct stratum_work swork;
 };
 
 #define AVA2_WRITE_SIZE (sizeof(struct avalon2_pkg))
