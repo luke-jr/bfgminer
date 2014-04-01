@@ -633,6 +633,7 @@ static bool avalon2_prepare(struct thr_info *thr)
 	if (info->fd == -1)
 		avalon2_init(avalon2);
 	
+	work2d_init();
 	if (!reserve_work2d_(&info->xnonce1))
 		applogr(false, LOG_ERR, "%s: Failed to reserve 2D work", avalon2->dev_repr);
 
