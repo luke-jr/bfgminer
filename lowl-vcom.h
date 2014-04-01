@@ -38,6 +38,18 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 extern int serial_close(int fd);
 
+enum
+{
+	RTS_LOW = 0,
+	RTS_HIGH = 1
+};
+
+enum
+{
+	DTR_LOW = 0,
+	DTR_HIGH = 1
+};
+
 extern int get_serial_cts(int fd);
 extern int set_serial_dtr(int fd, int dtr);
 extern int set_serial_rts(int fd, int rts);
