@@ -569,21 +569,44 @@ void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
 	cmd[149] = 0xff;
 	cmd[150] = 0xff;
 	cmd[151] = 0xff;
+	
+	// taskid
+	int workid = work->id;
+	memcpy(cmd + 152, &(workid), 4);
 }
 
 void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool simple)
 {
-	uint8_t temp_bin[64];
-	memset(temp_bin, 0, 64);
-	memcpy(temp_bin, work->midstate, 32);
-	memcpy(temp_bin+52, work->data + 64, 12);
-	
-	// command header
-	cmd[0] = 0x55;
-	cmd[1] = 0xaa;
-	cmd[2] = 0x0f;
-	cmd[3] = 0x00;  // Scrypt header sig - used by DualMiner in Dual Mode
-	
-	memcpy(cmd + 8, temp_bin, 32);
-	memcpy(cmd + 40, temp_bin + 52, 12);
+	if (simple)
+	{
+		// command header
+		cmd[0] = 0x55;
+		cmd[1] = 0xaa;
+		cmd[2] = 0x0f;
+		cmd[3] = 0x01; // SHA header sig
+		
+		memcpy(cmd + 4, work->midstate, 32);
+		memcpy(cmd + 36, work->data + 64, 12);
+		
+		// taskid
+		int workid = work->id;
+		memcpy(cmd + 48, &(workid), 4);
+	}
+	else
+	{
+		// command header
+		cmd[0] = 0x55;
+		cmd[1] = 0xaa;
+		cmd[2] = 0x0f;
+		cmd[3] = 0x00; // Scrypt header sig - used by DualMiner in Dual Mode
+		
+		uint8_t temp_bin[64];
+		memset(temp_bin, 0, 64);
+		
+		memcpy(temp_bin, work->midstate, 32);
+		memcpy(temp_bin + 52, work->data + 64, 12);
+		
+		memcpy(cmd + 8, work->midstate, 32);
+		memcpy(cmd + 40, temp_bin + 52, 12);
+	}
 }
