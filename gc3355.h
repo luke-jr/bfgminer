@@ -16,6 +16,8 @@
 
 #include "miner.h"
 
+#define GC3355_COMMAND_DELAY_MS 20
+
 #define SCRYPT_UNIT_OPEN  0
 #define SCRYPT_UNIT_CLOSE 1
 

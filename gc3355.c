@@ -26,8 +26,6 @@
   #include <io.h>
 #endif
 
-#define DEFAULT_DELAY_TIME_MS 2
-
 #define DEFAULT_0_9V_sha2 "60"
 #define DEFAULT_1_2V_sha2 "0"
 
@@ -235,7 +233,7 @@ void gc3355_reset_dtr(int fd)
 {
 	// set data terminal ready (DTR) status
 	set_serial_dtr(fd, BGV_HIGH);
-	cgsleep_ms(1000);
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	set_serial_dtr(fd, BGV_LOW);
 }
 
@@ -312,7 +310,7 @@ static
 int gc3355_write(const int fd, const void * const buf, const size_t bufsz)
 {
 	const int rv = icarus_write(fd, buf, bufsz);
-	cgsleep_ms(DEFAULT_DELAY_TIME_MS);
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	return rv;
 }
 
@@ -330,7 +328,7 @@ void gc3355_send_cmds(int fd, const char *cmds[])
 
 		hex2bin(ob_bin, cmds[i], strlen(cmds[i]) / 2);
 		icarus_write(fd, ob_bin, 8);
-		cgsleep_ms(DEFAULT_DELAY_TIME_MS);
+		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	}
 }
 
@@ -419,7 +417,7 @@ void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
 
 		hex2bin(ob_bin, sha2_gating[i], sizeof(ob_bin));
 		icarus_write(fd, ob_bin, 8);
-		cgsleep_ms(DEFAULT_DELAY_TIME_MS);
+		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	}
 
 	opt_sha2_number = sha2_number;
@@ -445,7 +443,7 @@ void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
 		{
 			hex2bin(ob_bin, sha2_open_cmd[i], sizeof(ob_bin));
 			icarus_write(fd, ob_bin, 8);
-			cgsleep_ms(DEFAULT_DELAY_TIME_MS * 2);
+			cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 		}
 		opt_sha2_number = unit_count;
 	}
