@@ -35,9 +35,9 @@
 
 #define DUALMINER_IO_SPEED 115200
 
-#define DUALMINER_SCRYPT_HASH_TIME		0.00001428571429
+#define DUALMINER_SCRYPT_SM_HASH_TIME   0.00001428571429
 #define DUALMINER_SCRYPT_DM_HASH_TIME	0.00003333333333
-#define DUALMINER_SHA2_HASH_TIME		0.00000000300000
+#define DUALMINER_SHA2_DM_HASH_TIME     0.00000000300000
 
 #define DUALMINER_SCRYPT_READ_COUNT 48  // 4.8s to read
 #define DUALMINER_SHA2_READ_COUNT	16  // 1.6s to read
@@ -77,7 +77,7 @@ const struct bfg_set_device_definition dualminer_set_device_funcs[];
 static
 void dualminer_bootstrap_device(int fd)
 {
-	gc3355_dual_reset(fd);
+	gc3355_reset_dtr(fd);
 
 	if (opt_scrypt && !opt_dual_mode)
 		gc3355_opt_scrypt_only_init(fd);
@@ -158,7 +158,7 @@ bool dualminer_job_start(struct thr_info * const thr)
 		if (opt_dual_mode)
 			gc3355_dualminer_init(fd);
 		else
-			gc3355_opt_scrypt_init(fd);
+			gc3355_scrypt_only_reset(fd);
 	}
 
 	return icarus_job_start(thr);
@@ -190,13 +190,13 @@ bool dualminer_detect_one(const char *devpath)
 	{
 		info->golden_ob = (char*)scrypt_golden_ob;
 		info->golden_nonce = (char*)scrypt_golden_nonce;
-		info->Hs = DUALMINER_SCRYPT_HASH_TIME;
+		info->Hs = DUALMINER_SCRYPT_SM_HASH_TIME;
 	}
 	else
 	{
 		info->golden_ob = (char*)sha2_golden_ob;
 		info->golden_nonce = (char*)sha2_golden_nonce;
-		info->Hs = DUALMINER_SHA2_HASH_TIME;
+		info->Hs = DUALMINER_SHA2_DM_HASH_TIME;
 	}
 
 	drv_set_defaults(drv, dualminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);

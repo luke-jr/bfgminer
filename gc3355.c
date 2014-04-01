@@ -32,7 +32,7 @@
 #define DEFAULT_1_2V_sha2 "0"
 
 static
-const char *sha2_gating[] =
+const char *sha2_gating_cmd[] =
 {
 	"55AAEF0200000000",
 	"55AAEF0300000000",
@@ -43,7 +43,7 @@ const char *sha2_gating[] =
 };
 
 static
-const char *sha2_single_open[] =
+const char *sha2_open_cmd[] =
 {
 	"55AAEF0200000001",
 	"55AAEF0200000003",
@@ -209,7 +209,7 @@ const char *sha2_single_open[] =
 };
 
 static
-const char *scrypt_only_init[] =
+const char *scrypt_only_init_cmd[] =
 {
 	"55AAEF0200000000",
 	"55AAEF0300000000",
@@ -223,12 +223,12 @@ const char *scrypt_only_init[] =
 };
 
 char *opt_dualminer_sha2_gating = NULL;
-int opt_pll_freq = 0; // default is set in gc3355_pll_freq_init2
+int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 int opt_sha2_number = 160;
 bool opt_hubfans = false;
 bool opt_dual_mode = false;
 
-void gc3355_dual_reset(int fd)
+void gc3355_reset_dtr(int fd)
 {
 	set_serial_dtr(fd, BGV_HIGH);
 	cgsleep_ms(1000);
@@ -330,7 +330,7 @@ void gc3355_send_cmds(int fd, const char *cmds[])
 	}
 }
 
-void gc3355_opt_scrypt_init(int fd)
+void gc3355_scrypt_only_reset(int fd)
 {
 	const char *initscrypt_ob[] =
 	{
@@ -343,7 +343,7 @@ void gc3355_opt_scrypt_init(int fd)
 }
 
 static
-void gc3355_pll_freq_init2(int fd, int pll_freq)
+void gc3355_set_pll_freq(int fd, int pll_freq)
 {
 	const uint8_t chipaddr = 0xf;
 	const uint32_t baud = 115200;  // FIXME: Make this configurable
@@ -439,21 +439,21 @@ void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
 	{
 		for(i = 0; i <= unit_count; i++)
 		{
-			hex2bin(ob_bin, sha2_single_open[i], sizeof(ob_bin));
+			hex2bin(ob_bin, sha2_open_cmd[i], sizeof(ob_bin));
 			icarus_write(fd, ob_bin, 8);
 			usleep(DEFAULT_DELAY_TIME * 2);
 		}
 		opt_sha2_number = unit_count;
 	}
 	else if (unit_count == 0)
-		gc3355_send_cmds(fd, sha2_gating);
+		gc3355_send_cmds(fd, sha2_gating_cmd);
 }
 
 void gc3355_opt_scrypt_only_init(int fd)
 {
-	gc3355_send_cmds(fd, scrypt_only_init);
+	gc3355_send_cmds(fd, scrypt_only_init_cmd);
 
-	gc3355_pll_freq_init2(fd, opt_pll_freq);
+	gc3355_set_pll_freq(fd, opt_pll_freq);
 }
 
 
@@ -474,7 +474,7 @@ void gc3355_open_scrypt_unit(int fd, int status)
 	if (status == SCRYPT_UNIT_OPEN)
 	{
 		if (opt_dual_mode)
-			gc3355_opt_scrypt_init(fd);
+			gc3355_scrypt_only_reset(fd);
 		else
 			gc3355_opt_scrypt_only_init(fd);
 	}
@@ -516,7 +516,7 @@ void gc3355_dualminer_init(int fd)
 		gc3355_send_cmds(fd, init_ob);
 
 	if (!opt_scrypt)
-		gc3355_pll_freq_init2(fd, opt_pll_freq);
+		gc3355_set_pll_freq(fd, opt_pll_freq);
 }
 
 void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)

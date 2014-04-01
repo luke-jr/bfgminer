@@ -37,7 +37,7 @@ extern
 bool opt_hubfans;
 
 extern
-void gc3355_dual_reset(int fd);
+void gc3355_reset_dtr(int fd);
 
 extern
 void gc3355_opt_scrypt_only_init(int fd);
@@ -46,7 +46,7 @@ extern
 void gc3355_dualminer_init(int fd);
 
 extern
-void gc3355_opt_scrypt_init(int fd);
+void gc3355_scrypt_only_reset(int fd);
 
 extern
 void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only);
