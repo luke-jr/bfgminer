@@ -45,6 +45,9 @@
 #define DUALMINER_0_9V_SHA2_UNITS  60
 #define DUALMINER_1_2V_SHA2_UNITS   0
 
+#define DUALMINER_DM_DEFAULT_FREQUENCY  550
+#define DUALMINER_SM_DEFAULT_FREQUENCY  850
+
 static
 const char sha2_golden_ob[] =
 	"55aa0f00a08701004a548fe471fa3a9a"
@@ -147,6 +150,16 @@ void dualminer_set_defaults(int fd)
 			opt_sha2_units = DUALMINER_1_2V_SHA2_UNITS;  // dip-switch in L position
 		else
 			opt_sha2_units = DUALMINER_0_9V_SHA2_UNITS;  // dip-switch in B position
+	}
+	
+	// set opt_pll_freq defaults depending on dip-switch
+	if (opt_pll_freq <= 0)
+	{
+		// get clear to send (CTS) status
+		if (gc3355_get_cts_status(fd) == 1)
+			opt_pll_freq = DUALMINER_SM_DEFAULT_FREQUENCY; // 1.2v - dip-switch in L position
+		else
+			opt_pll_freq = DUALMINER_DM_DEFAULT_FREQUENCY; // 0.9v - dip-switch in B position
 	}
 }
 

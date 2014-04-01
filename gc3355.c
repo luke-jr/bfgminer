@@ -29,6 +29,7 @@
 // options configurable by the end-user
 
 int opt_sha2_units = -1;
+int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 
 
 // SHA-2 commands
@@ -226,7 +227,6 @@ const char *scrypt_only_init_cmd[] =
 	NULL
 };
 
-int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 bool opt_dual_mode = false;
 
 void gc3355_reset_dtr(int fd)
