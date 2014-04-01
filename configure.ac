@@ -461,8 +461,23 @@ else
 fi
 if test "x$dualminer" = "xyes"; then
 	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
+	AC_DEFINE([USE_GC3355], [1], [Defined to 1 if GC3355 support is wanted])
 fi
 AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+AM_CONDITIONAL([USE_GC3355], [test x$dualminer = xyes])
+
+driverlist="$driverlist gridseed"
+gridseed=yes
+AC_ARG_ENABLE([gridseed],
+	[AC_HELP_STRING([--disable-gridseed],[Compile support for GridSeed (default enabled)])],
+	[gridseed=$enableval]
+	)
+if test "x$gridseed" = "xyes"; then
+	AC_DEFINE([USE_GRIDSEED], [1], [Defined to 1 if GridSeed support is wanted])
+	AC_DEFINE([USE_GC3355], [1], [Defined to 1 if GC3355 support is wanted])
+fi
+AM_CONDITIONAL([USE_GRIDSEED], [test x$gridseed = xyes])
+AM_CONDITIONAL([USE_GC3355], [test x$gridseed = xyes])
 
 driverlist="$driverlist avalon"
 avalon="no"
