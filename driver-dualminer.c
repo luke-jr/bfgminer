@@ -122,19 +122,6 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	if (opt_scrypt)
 		set_serial_rts(fd, BGV_HIGH);
 
-	if (opt_sha2_units == -1)
-	{
-		if (gc3355_get_cts_status(fd) == 1)
-		{
-			//1.2v - Scrypt mode
-			opt_sha2_units = DUALMINER_1_2V_SHA2_UNITS;
-		}
-		else
-		{
-			//0.9v - Scrypt + SHA mode
-			opt_sha2_units = DUALMINER_0_9V_SHA2_UNITS;
-		}
-	}
 	gc3355_init(fd, opt_sha2_units, !opt_dual_mode);
 	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt);
 
@@ -148,12 +135,29 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_units);
 }
 
+// set defaults for options that the user didn't specify
+static
+void dualminer_set_defaults(int fd)
+{
+	// set opt_sha2_units defaults depending on dip-switch
+	if (opt_sha2_units == -1)
+	{
+		// get clear to send (CTS) status
+		if (gc3355_get_cts_status(fd) == 1)
+			opt_sha2_units = DUALMINER_1_2V_SHA2_UNITS;  // dip-switch in L position
+		else
+			opt_sha2_units = DUALMINER_0_9V_SHA2_UNITS;  // dip-switch in B position
+	}
+}
+
 // ICARUS_INFO functions - icarus-common.h
 
 // runs after fd is opened but before the device detection code
 static
 bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __maybe_unused info)
 {
+	dualminer_set_defaults(fd);
+	
 	dualminer_bootstrap_device(fd);
 
 	return true;
