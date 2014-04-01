@@ -103,6 +103,19 @@ void dualminer_teardown_device(int fd)
 }
 
 static
+void dualminer_init_hashrate(struct cgpu_info * const cgpu)
+{
+	int fd = cgpu->device_fd;
+	struct ICARUS_INFO *info = cgpu->device_data;
+
+	// get clear to send (CTS) status
+	if ((gc3355_get_cts_status(fd) != 1) &&  // 0.9v - dip-switch set to B
+		(opt_scrypt))
+		// adjust hash-rate for voltage
+		info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
+}
+
+static
 bool dualminer_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
@@ -117,23 +130,17 @@ bool dualminer_init(struct thr_info * const thr)
 static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
-	struct ICARUS_INFO *info = icarus->device_data;
 	int fd = icarus->device_fd;
 
 	dualminer_bootstrap_device(fd);
 
 	if (opt_scrypt)
 		set_serial_rts(fd, BGV_HIGH);
+	
+	dualminer_init_hashrate(icarus);
 
 	gc3355_init(fd, opt_sha2_units, !opt_dual_mode);
 	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt);
-
-	if (gc3355_get_cts_status(fd) != 1)
-	{
-		// Scrypt + SHA2 mode
-		if (opt_scrypt)
-			info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
-	}
 
 	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_units);
 }
