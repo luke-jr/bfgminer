@@ -12,6 +12,21 @@
 #ifndef bfgminer_gc3355_commands_h
 #define bfgminer_gc3355_commands_h
 
+// General GC3355 commands
+
+static
+const char *firmware_request_cmd[] =
+{
+	"55AAC000909090900000000001000000", // get firmware version of GC3355
+	NULL
+};
+
+static
+const char *no_fifo_cmd[] = {
+	"55AAC000D0D0D0D00000000001000000",
+	NULL
+};
+
 // SHA-2 commands
 
 static
@@ -189,6 +204,15 @@ const char *sha2_open_cmd[] =
 	"55AAEF063FFFFFFF",
 	"55AAEF067FFFFFFF",
 	"55AAEF06FFFFFFFF",
+	NULL
+};
+
+static
+const char *multichip_init_cmd[] =
+{
+	"55AAC000C0C0C0C00500000001000000", // set number of sub-chips (05 in this case)
+	"55AAEF020000000000000000000000000000000000000000", // power down all SHA-2 modules
+	"55AAEF3020000000", // Enable SHA-2 OR NOT - NO SCRYPT ACCEPTS WITHOUT THIS???
 	NULL
 };
 
