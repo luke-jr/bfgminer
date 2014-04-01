@@ -93,11 +93,8 @@ void dualminer_bootstrap_device(int fd)
 static
 void dualminer_teardown_device(int fd)
 {
-	if (opt_scrypt)
-		gc3355_open_scrypt_unit(fd, SCRYPT_UNIT_CLOSE);
-	else
-		gc3355_open_sha2_unit(fd, "0");
-
+	// set data terminal ready (DTR) status
+	set_serial_dtr(fd, BGV_HIGH);
 	// set request to send (RTS) status
 	set_serial_rts(fd, BGV_LOW);
 }

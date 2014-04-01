@@ -56,12 +56,6 @@ void gc3355_scrypt_only_reset(int fd);
 extern
 void gc3355_init(int fd, int sha2_units, bool is_scrypt_only);
 
-extern
-void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating);
-
-extern
-void gc3355_open_scrypt_unit(int fd, int status);
-
 extern void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *);
 extern void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *, bool simple);
 

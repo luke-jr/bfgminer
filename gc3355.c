@@ -369,61 +369,6 @@ void gc3355_set_pll_freq(int fd, int pll_freq)
 	gc3355_write(fd, buf, sizeof(buf));
 }
 
-
-void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
-{
-	unsigned char ob_bin[8];
-	int i;
-
-	//---sha2 unit---
-	char sha2_gating[5][17] =
-	{
-		"55AAEF0200000000",
-		"55AAEF0300000000",
-		"55AAEF0400000000",
-		"55AAEF0500000000",
-		"55AAEF0600000000",
-	};
-	union
-	{
-	    unsigned int i32[5];
-	    unsigned char c8[20] ;
-	}sha2_group;
-
-	int sha2_number=0;
-	if (opt_sha2_gating== NULL)
-	    sha2_number = 70;
-	else
-	{
-	    if (atoi(opt_sha2_gating) <= 160 && atoi(opt_sha2_gating) >= 0)
-			sha2_number = atoi(opt_sha2_gating);
-		else
-			sha2_number = 70;
-	}
-
-	for(i = 0; i < 5; i++)
-		sha2_group.i32[i] = 0;
-
-	for(i = 0; i < sha2_number; i++)
-		sha2_group.i32[i / 32] += 1 << ( i % 32);
-
-	for(i = 0; i < 20; i++)
-		sprintf(&sha2_gating[i / 4][8 + (i % 4) * 2], "%02x", sha2_group.c8[i]);
-	//---sha2 unit end---
-
-	for(i = 0; i < 5; i++)
-	{
-		if (sha2_gating[i][0] == '\0')
-			break;
-
-		hex2bin(ob_bin, sha2_gating[i], sizeof(ob_bin));
-		icarus_write(fd, ob_bin, 8);
-		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
-	}
-
-	opt_sha2_number = sha2_number;
-}
-
 static
 void gc3355_open_sha2_units(int fd, int sha2_units)
 {
@@ -453,37 +398,6 @@ void gc3355_opt_scrypt_only_init(int fd)
 	gc3355_send_cmds(fd, scrypt_only_init_cmd);
 
 	gc3355_set_pll_freq(fd, opt_pll_freq);
-}
-
-
-void gc3355_open_scrypt_unit(int fd, int status)
-{
-	const char *scrypt_only_ob[] =
-	{
-		"55AA1F2810000000",
-		NULL
-	};
-
-	const char *scrypt_ob[] =
-	{
-		"55AA1F2814000000",
-		NULL
-	};
-
-	if (status == SCRYPT_UNIT_OPEN)
-	{
-		if (opt_dual_mode)
-			gc3355_scrypt_only_reset(fd);
-		else
-			gc3355_opt_scrypt_only_init(fd);
-	}
-	else
-	{
-		if (opt_dual_mode)
-			gc3355_send_cmds(fd, scrypt_ob);
-		else
-			gc3355_send_cmds(fd, scrypt_only_ob);
-	}
 }
 
 void gc3355_dualminer_init(int fd)
