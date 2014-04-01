@@ -41,8 +41,7 @@ void gc3355_reset_dtr(int fd);
 
 extern void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_only);
 
-extern
-void gc3355_dualminer_init(int fd);
+extern void gc3355_scrypt_reset(int fd);
 
 extern
 void gc3355_scrypt_only_reset(int fd);

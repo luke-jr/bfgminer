@@ -230,6 +230,17 @@ const char *scrypt_init_cmd[] =
 	NULL
 };
 
+// called before job start by GridSeed when mining scrypt
+// called before job start by DualMiner when mining scrypt in scrypt+sha (dual-mode)
+static
+const char *scrypt_reset_cmd[] =
+{
+	// faster, for start of each job:
+	"55AA1F2816000000",  // Reset Scrypt(?)
+	"55AA1F2817000000",  // Enable GCP(?)
+	NULL
+};
+
 // called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
 static
 const char *scrypt_only_init_cmd[] =
@@ -486,36 +497,9 @@ void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_on
 	}
 }
 
-void gc3355_dualminer_init(int fd)
+void gc3355_scrypt_reset(int fd)
 {
-
-	const char *init_ob[] =
-	{
-#if 1
-		"55AAEF0200000000",
-		"55AAEF0300000000",
-		"55AAEF0400000000",
-		"55AAEF0500000000",
-		"55AAEF0600000000",
-#endif
-		"55AAEF3020000000",
-		"55AA1F2817000000",
-		NULL
-	};
-	const char *initscrypt_ob[] =
-	{
-		"55AA1F2814000000",
-		"55AA1F2817000000",
-		NULL
-	};
-
-	if (opt_scrypt)
-		gc3355_send_cmds(fd, initscrypt_ob);
-	else
-		gc3355_send_cmds(fd, init_ob);
-
-	if (!opt_scrypt)
-		gc3355_set_pll_freq(fd, opt_pll_freq);
+	gc3355_send_cmds(fd, scrypt_reset_cmd);
 }
 
 void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)

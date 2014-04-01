@@ -181,7 +181,7 @@ bool dualminer_job_start(struct thr_info * const thr)
 	if (opt_scrypt)
 	{
 		if (opt_dual_mode)
-			gc3355_dualminer_init(fd);
+			gc3355_scrypt_reset(fd);
 		else
 			gc3355_scrypt_only_reset(fd);
 	}
