@@ -146,16 +146,6 @@ static int avalon2_init_pkg(struct avalon2_pkg *pkg, uint8_t type, uint8_t idx, 
 	return 0;
 }
 
-static int job_idcmp(uint8_t *job_id, char *pool_job_id)
-{
-	int i = 0;
-	for (i = 0; i < 4; i++) {
-		if (job_id[i] != *(pool_job_id + strlen(pool_job_id) - 4 + i))
-			return 1;
-	}
-	return 0;
-}
-
 static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg)
 {
 	struct cgpu_info *avalon2 = NULL;
@@ -166,7 +156,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 	uint32_t nonce, nonce2, miner, modular_id;
 	void *xnonce2;
 	int pool_no;
-	uint8_t job_id[5];
+	uint32_t jobid;
 	int tmp;
 
 	int type = AVA2_GETS_ERROR;
@@ -202,8 +192,7 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			memcpy(&nonce2, ar->data + 8, 4);
 			/* Calc time    ar->data + 12 */
 			memcpy(&nonce, ar->data + 16, 4);
-			memset(job_id, 0, 5);
-			memcpy(job_id, ar->data + 20, 4);
+			memcpy(&jobid, ar->data + 20, sizeof(jobid));
 
 			miner = be32toh(miner);
 			pool_no = be32toh(pool_no);
@@ -220,9 +209,9 @@ static int decode_pkg(struct thr_info *thr, struct avalon2_ret *ar, uint8_t *pkg
 			nonce = be32toh(nonce);
 			nonce -= 0x180;
 
-			applog(LOG_DEBUG, "Avalon2: Found! [%s] %d:(%08x) (%08x)",
-			       job_id, pool_no, nonce2, nonce);
-			if (job_idcmp(job_id, info->swork.job_id))
+			applog(LOG_DEBUG, "Avalon2: Found! [%08lx] %d:(%08x) (%08x)",
+			       (unsigned long)jobid, pool_no, nonce2, nonce);
+			if (jobid != info->jobid)
 				break;
 
 			if (thr && !info->new_stratum)
@@ -376,7 +365,6 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	struct avalon2_pkg pkg;
 	int i, a, b, tmp;
 	unsigned char target[32];
-	int job_id_len;
 	const size_t xnonce2_offset = pool->swork.nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
 	bytes_t coinbase = BYTES_INIT;
 
@@ -426,15 +414,12 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 		;
 
 
-	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %s",
-	       pool->swork.job_id);
+	++info->jobid;
+	applog(LOG_DEBUG, "Avalon2: Pool stratum message JOBS_ID: %08lx",
+	       (unsigned long)info->jobid);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
 
-	job_id_len = strlen(pool->swork.job_id);
-	job_id_len = job_id_len >= 4 ? 4 : job_id_len;
-	for (i = 0; i < job_id_len; i++) {
-		pkg.data[i] = *(pool->swork.job_id + strlen(pool->swork.job_id) - 4 + i);
-	}
+	memcpy(pkg.data, &info->jobid, sizeof(info->jobid));
 	avalon2_init_pkg(&pkg, AVA2_P_JOB_ID, 1, 1);
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;

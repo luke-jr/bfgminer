@@ -114,6 +114,7 @@ struct avalon2_info {
 	int modulars[AVA2_DEFAULT_MODULARS];
 	char mm_version[AVA2_DEFAULT_MODULARS][16];
 	
+	uint32_t jobid;
 	struct timeval tv_prepared;
 	struct stratum_work swork;
 };
