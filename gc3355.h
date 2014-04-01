@@ -30,12 +30,6 @@ extern int opt_sha2_units;
 extern
 int opt_pll_freq;
 
-//mining both Scrypt & SHA2 at the same time with two processes
-//SHA2 process must be run first, no arg requirements, first serial port will be used
-//Scrypt process must be launched after, --scrypt and --dual-mode args required
-extern
-bool opt_dual_mode;
-
 extern
 void gc3355_reset_dtr(int fd);
 

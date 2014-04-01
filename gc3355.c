@@ -280,7 +280,6 @@ const char *sha2_chip_reset_cmd[] =
 	NULL
 };
 
-bool opt_dual_mode = false;
 
 void gc3355_reset_dtr(int fd)
 {
