@@ -30,11 +30,6 @@ extern int opt_sha2_units;
 extern
 int opt_pll_freq;
 
-//once this is made an option, needs to be >= 0 and <= 160
-//already enforced in gc3355 but no stdout yet
-extern
-int opt_sha2_number;
-
 //mining both Scrypt & SHA2 at the same time with two processes
 //SHA2 process must be run first, no arg requirements, first serial port will be used
 //Scrypt process must be launched after, --scrypt and --dual-mode args required

@@ -227,7 +227,6 @@ const char *scrypt_only_init_cmd[] =
 };
 
 int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
-int opt_sha2_number = 160;
 bool opt_dual_mode = false;
 
 void gc3355_reset_dtr(int fd)
@@ -387,7 +386,6 @@ void gc3355_open_sha2_units(int fd, int sha2_units)
 			gc3355_write(fd, ob_bin, 8);
 			cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 		}
-		opt_sha2_number = unit_count;
 	}
 	else if (unit_count == 0)
 		gc3355_send_cmds(fd, sha2_gating_cmd);

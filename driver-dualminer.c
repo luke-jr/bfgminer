@@ -145,7 +145,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 			info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
 	}
 
-	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_number);
+	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_units);
 }
 
 // ICARUS_INFO functions - icarus-common.h
