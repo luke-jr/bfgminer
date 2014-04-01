@@ -41,7 +41,7 @@ const char *sha2_gating_cmd[] =
 	"55AAEF0400000000",  // Chip 3
 	"55AAEF0500000000",  // Chip 4
 	"55AAEF0600000000",  // Chip 5
-	"",
+	NULL
 };
 
 // maps the above SHA chip gating with SHA-2 units
@@ -208,7 +208,7 @@ const char *sha2_open_cmd[] =
 	"55AAEF063FFFFFFF",
 	"55AAEF067FFFFFFF",
 	"55AAEF06FFFFFFFF",
-	"",
+	NULL
 };
 
 // called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
@@ -223,7 +223,7 @@ const char *scrypt_only_init_cmd[] =
 	"55AAEF3040000000",
 	"55AA1F2810000000",
 	"55AA1F2813000000",
-	"",
+	NULL
 };
 
 char *opt_dualminer_sha2_gating = NULL;
@@ -325,7 +325,7 @@ void gc3355_send_cmds(int fd, const char *cmds[])
 	{
 		memset(ob_bin, 0, sizeof(ob_bin));
 
-		if (cmds[i][0] == 0)
+		if (cmds[i] == NULL)
 			break;
 
 		hex2bin(ob_bin, cmds[i], strlen(cmds[i]) / 2);
@@ -340,7 +340,7 @@ void gc3355_scrypt_only_reset(int fd)
 	{
 		"55AA1F2810000000",
 		"55AA1F2813000000",
-		""
+		NULL
 	};
 
 	gc3355_send_cmds(fd, initscrypt_ob);
@@ -466,13 +466,13 @@ void gc3355_open_scrypt_unit(int fd, int status)
 	const char *scrypt_only_ob[] =
 	{
 		"55AA1F2810000000",
-		"",
+		NULL
 	};
 
 	const char *scrypt_ob[] =
 	{
 		"55AA1F2814000000",
-		"",
+		NULL
 	};
 
 	if (status == SCRYPT_UNIT_OPEN)
@@ -505,13 +505,13 @@ void gc3355_dualminer_init(int fd)
 #endif
 		"55AAEF3020000000",
 		"55AA1F2817000000",
-		""
+		NULL
 	};
 	const char *initscrypt_ob[] =
 	{
 		"55AA1F2814000000",
 		"55AA1F2817000000",
-		""
+		NULL
 	};
 
 	if (opt_scrypt)
