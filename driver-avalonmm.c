@@ -439,9 +439,10 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	while (avalon2_send_pkg(fd, &pkg, thr) != AVA2_SEND_OK)
 		;
 
-	// Need to add extranonce padding
+	// Need to add extranonce padding and extranonce2
 	bytes_cpy(&coinbase, &pool->swork.coinbase);
 	work2d_pad_xnonce(&(bytes_buf(&coinbase)[pool->swork.nonce2_offset]), swork, false);
+	memcpy(&(bytes_buf(&coinbase)[pool->swork.nonce2_offset + work2d_pad_xnonce_size(swork)]), &info->xnonce1, work2d_xnonce1sz);
 	
 	a = bytes_len(&pool->swork.coinbase) / AVA2_P_DATA_LEN;
 	b = bytes_len(&pool->swork.coinbase) % AVA2_P_DATA_LEN;
