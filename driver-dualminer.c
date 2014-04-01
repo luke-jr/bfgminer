@@ -128,9 +128,11 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	
 	dualminer_init_hashrate(icarus);
 
-	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt);
-
-	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_units);
+	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, scrypt: %d, scrypt only: %d",
+		   icarus->proc_repr,
+		   opt_pll_freq,
+		   opt_scrypt,
+		   opt_scrypt && !opt_dual_mode);
 }
 
 // set defaults for options that the user didn't specify
