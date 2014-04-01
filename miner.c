@@ -1059,6 +1059,7 @@ struct pool *add_pool(void)
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
+	pool->swork.data_lock_p = &pool->data_lock;
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
@@ -9283,6 +9284,9 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+	
+	// Clear data_lock_p, which is locking src, but not necessarily dst
+	dst->data_lock_p = NULL;
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
@@ -9317,7 +9321,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	clean_work(work);
 	
 	cg_wlock(&pool->data_lock);
-	pool->swork.data_lock_p = &pool->data_lock;
 	
 	const int n2size = pool->swork.n2size;
 	bytes_resize(&work->nonce2, n2size);
