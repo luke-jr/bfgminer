@@ -256,6 +256,16 @@ const char *scrypt_only_init_cmd[] =
 	NULL
 };
 
+// called before job start by DualMiner when mining scrypt in scrypt-only (not dual-mode)
+// called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
+static
+const char *scrypt_only_reset_cmd[] =
+{
+	"55AA1F2810000000",  // Close Scrypt(?)
+	"55AA1F2813000000",  // Open Scrypt(?)
+	NULL
+};
+
 static
 const char *gcp_chip_reset_cmd[] =
 {
@@ -377,14 +387,7 @@ void gc3355_send_cmds(int fd, const char *cmds[])
 
 void gc3355_scrypt_only_reset(int fd)
 {
-	const char *initscrypt_ob[] =
-	{
-		"55AA1F2810000000",
-		"55AA1F2813000000",
-		NULL
-	};
-
-	gc3355_send_cmds(fd, initscrypt_ob);
+	gc3355_send_cmds(fd, scrypt_only_reset_cmd);
 }
 
 static
