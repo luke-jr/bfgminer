@@ -212,6 +212,24 @@ const char *sha2_open_cmd[] =
 	NULL
 };
 
+static
+const char *sha2_init_cmd[] =
+{
+	"55AAEF3020000000",  // Enable SHA-2
+	"55AA1F2817000000",  // Enable GCP
+	NULL
+};
+
+// called when initializing GridSeed device
+// called while initializing DualMiner when mining in scrypt+sha (dual-mode)
+static
+const char *scrypt_init_cmd[] =
+{
+	"55AA1F2814000000",  // Enable Scrypt
+	"55AA1F2817000000",  // Enable GCP
+	NULL
+};
+
 // called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
 static
 const char *scrypt_only_init_cmd[] =
@@ -224,6 +242,20 @@ const char *scrypt_only_init_cmd[] =
 	"55AAEF3040000000",
 	"55AA1F2810000000",
 	"55AA1F2813000000",
+	NULL
+};
+
+static
+const char *gcp_chip_reset_cmd[] =
+{
+	"55AAC000808080800000000001000000",  // GCP (GridChip) reset
+	NULL
+};
+
+static
+const char *sha2_chip_reset_cmd[] =
+{
+	"55AAC000E0E0E0E00000000001000000",  // SHA2 reset
 	NULL
 };
 
@@ -391,11 +423,67 @@ void gc3355_open_sha2_units(int fd, int sha2_units)
 		gc3355_send_cmds(fd, sha2_gating_cmd);
 }
 
-void gc3355_opt_scrypt_only_init(int fd)
+void gc3355_scrypt_init(int fd)
 {
-	gc3355_send_cmds(fd, scrypt_only_init_cmd);
+	gc3355_send_cmds(fd, scrypt_init_cmd);
+}
 
-	gc3355_set_pll_freq(fd, opt_pll_freq);
+static
+void gc3355_scrypt_only_init(int fd)
+{
+	gc3355_send_cmds(fd, sha2_gating_cmd);
+	gc3355_send_cmds(fd, scrypt_only_init_cmd);
+	gc3355_scrypt_only_reset(fd);
+}
+
+static
+void gc3355_sha2_init(int fd)
+{
+	gc3355_send_cmds(fd, sha2_gating_cmd);
+	gc3355_send_cmds(fd, sha2_init_cmd);
+}
+
+static
+void gc3355_reset_chips(int fd)
+{
+	// reset chips
+	gc3355_send_cmds(fd, gcp_chip_reset_cmd);
+	gc3355_send_cmds(fd, sha2_chip_reset_cmd);
+}
+
+void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_only)
+{
+	gc3355_reset_chips(fd);
+
+	gc3355_reset_dtr(fd);
+
+
+	// initialize units
+	if (opt_scrypt && scrypt_only)
+		gc3355_scrypt_only_init(fd);
+	else
+	{
+		gc3355_sha2_init(fd);
+		gc3355_scrypt_init(fd);
+	}
+
+	//set freq
+	gc3355_set_pll_freq(fd, pll_freq);
+
+	// zzz
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
+
+	if (!detect_only)
+	{
+		if (!opt_scrypt)
+		{
+			// open sha2 units
+			gc3355_open_sha2_units(fd, opt_sha2_units);
+		}
+
+		// set request to send (RTS) status
+		set_serial_rts(fd, BGV_HIGH);
+	}
 }
 
 void gc3355_dualminer_init(int fd)
@@ -428,17 +516,6 @@ void gc3355_dualminer_init(int fd)
 
 	if (!opt_scrypt)
 		gc3355_set_pll_freq(fd, opt_pll_freq);
-}
-
-void gc3355_init(int fd, int sha2_units, bool is_scrypt_only)
-{
-	if (opt_scrypt)
-	{
-		if (is_scrypt_only)
-			gc3355_opt_scrypt_only_init(fd);
-	}
-	else
-		gc3355_open_sha2_units(fd, sha2_units);
 }
 
 void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)

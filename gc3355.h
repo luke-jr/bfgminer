@@ -39,17 +39,13 @@ bool opt_dual_mode;
 extern
 void gc3355_reset_dtr(int fd);
 
-extern
-void gc3355_opt_scrypt_only_init(int fd);
+extern void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_only);
 
 extern
 void gc3355_dualminer_init(int fd);
 
 extern
 void gc3355_scrypt_only_reset(int fd);
-
-extern
-void gc3355_init(int fd, int sha2_units, bool is_scrypt_only);
 
 extern void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *);
 extern void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *, bool simple);
