@@ -565,8 +565,6 @@ static bool avalon2_detect_one(const char *devpath)
 		memcpy(mm_version[i], ret_pkg.data, 15);
 		mm_version[i][15] = '\0';
 	}
-	if (!modular[0] && !modular[1] && !modular[2])
-		return false;
 
 	/* We have a real Avalon! */
 	avalon2 = calloc(1, sizeof(struct cgpu_info));
@@ -584,9 +582,8 @@ static bool avalon2_detect_one(const char *devpath)
 
 	info = avalon2->device_data;
 
-	strcpy(info->mm_version[0], mm_version[0]);
-	strcpy(info->mm_version[1], mm_version[1]);
-	strcpy(info->mm_version[2], mm_version[2]);
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
+		strcpy(info->mm_version[i], mm_version[i]);
 
 	info->baud = AVA2_IO_SPEED;
 	info->fan_pwm = AVA2_DEFAULT_FAN_PWM;
@@ -596,9 +593,8 @@ static bool avalon2_detect_one(const char *devpath)
 	info->temp_history_index = 0;
 	info->temp_sum = 0;
 	info->temp_old = 0;
-	info->modulars[0] = modular[0];
-	info->modulars[1] = modular[1];
-	info->modulars[2] = modular[2];	/* Enable modular */
+	for (i = 0; i < AVA2_DEFAULT_MODULARS; i++)
+		info->modulars[i] = modular[i];  /* Enable modular */
 
 	info->fd = -1;
 	/* Set asic to idle mode after detect */
