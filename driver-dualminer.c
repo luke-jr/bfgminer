@@ -84,7 +84,7 @@ void dualminer_bootstrap_device(int fd)
 	else
 		gc3355_dualminer_init(fd);
 
-	usleep(1000);
+	cgsleep_ms(1);
 }
 
 static
