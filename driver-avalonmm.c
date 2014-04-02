@@ -461,6 +461,7 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	applog(LOG_DEBUG, "Avalon2: Pool stratum message HEADER: 4");
 	uint8_t header_bin[0x80];
 	memcpy(&header_bin[0], pool->swork.header1, 36);
+	// FIXME: Initialise merkleroot to not leak info
 	*((uint32_t*)&header_bin[68]) = htobe32(pool->swork.ntime);
 	memcpy(&header_bin[72], pool->swork.diffbits, 4);
 	memset(&header_bin[76], 0, 4);  // nonce
