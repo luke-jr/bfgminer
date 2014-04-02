@@ -230,9 +230,9 @@ bool opt_dual_mode = false;
 
 void gc3355_dual_reset(int fd)
 {
-	set_serial_dtr(fd, 1);
+	set_serial_dtr(fd, BGV_HIGH);
 	cgsleep_ms(1000);
-	set_serial_dtr(fd, 0);
+	set_serial_dtr(fd, BGV_LOW);
 }
 
 static

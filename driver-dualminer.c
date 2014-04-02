@@ -68,12 +68,6 @@ const char scrypt_golden_ob[] =
 static
 const char scrypt_golden_nonce[] = "dd0c0500";
 
-enum
-{
-	RTS_LOW = 0,
-	RTS_HIGH = 1
-};
-
 BFG_REGISTER_DRIVER(dualminer_drv)
 static
 const struct bfg_set_device_definition dualminer_set_device_funcs[];
@@ -101,7 +95,7 @@ void dualminer_teardown_device(int fd)
 	else
 		gc3355_open_sha2_unit(fd, "0");
 
-	gc3355_set_rts_status(fd, RTS_LOW);
+	set_serial_rts(fd, BGV_LOW);
 }
 
 static
@@ -124,7 +118,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	dualminer_bootstrap_device(fd);
 
 	if (opt_scrypt)
-		gc3355_set_rts_status(fd, RTS_HIGH);
+		set_serial_rts(fd, BGV_HIGH);
 
 	gc3355_init(fd, opt_dualminer_sha2_gating, !opt_dual_mode);
 	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d; have fan: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt, opt_hubfans);
