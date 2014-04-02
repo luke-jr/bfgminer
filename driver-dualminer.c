@@ -121,7 +121,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 		set_serial_rts(fd, BGV_HIGH);
 
 	gc3355_init(fd, opt_dualminer_sha2_gating, !opt_dual_mode);
-	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d; have fan: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt, opt_hubfans);
+	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt);
 
 	if (gc3355_get_cts_status(fd) != 1)
 	{

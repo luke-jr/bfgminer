@@ -34,9 +34,6 @@ extern
 bool opt_dual_mode;
 
 extern
-bool opt_hubfans;
-
-extern
 void gc3355_reset_dtr(int fd);
 
 extern

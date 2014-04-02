@@ -26,8 +26,6 @@
 
 #define DEFAULT_DELAY_TIME 2000
 
-#define HUBFANS_0_9V_sha2 "60"
-#define HUBFANS_1_2V_sha2 "0"
 #define DEFAULT_0_9V_sha2 "60"
 #define DEFAULT_1_2V_sha2 "0"
 
@@ -225,7 +223,6 @@ const char *scrypt_only_init_cmd[] =
 char *opt_dualminer_sha2_gating = NULL;
 int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 int opt_sha2_number = 160;
-bool opt_hubfans = false;
 bool opt_dual_mode = false;
 
 void gc3355_reset_dtr(int fd)
@@ -531,10 +528,7 @@ void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
 		}
 		else
 		{
-			if (opt_hubfans)
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-			else
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+			((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
 		}
 	}
 	else
@@ -547,10 +541,7 @@ void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
 		}
 		else
 		{
-			if (opt_hubfans)
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-			else
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+			((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
 		}
 	}
 }
