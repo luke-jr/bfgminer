@@ -390,7 +390,8 @@ void gc3355_log_protocol(int fd, const char *buf, size_t size, const char *prefi
 {
 	char hex[(size * 2) + 1];
 	bin2hex(hex, buf, size);
-	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s(%3lu) %s", GC3355_CHIP_NAME, fd, prefix, size, hex);
+	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s(%3lu) %s",
+	       GC3355_CHIP_NAME, fd, prefix, (unsigned long)size, hex);
 }
 
 int gc3355_read(int fd, char *buf, size_t size)
@@ -727,9 +728,6 @@ void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool sim
 
 uint32_t gc3355_get_firmware_version(int fd)
 {
-	unsigned char detect_data[16];
-	int size = sizeof(detect_data);
-	
 	gc3355_send_cmds(fd, firmware_request_cmd);
 	
 	char buf[GC3355_READ_SIZE];

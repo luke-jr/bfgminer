@@ -146,7 +146,7 @@ bool gridseed_set_queue_full(const struct cgpu_info * const device, int needwork
 static
 bool gridseed_thread_init(struct thr_info *master_thr)
 {
-	struct cgpu_info * const device = master_thr->cgpu, *proc;
+	struct cgpu_info * const device = master_thr->cgpu;
 	gridseed_set_queue_full(device, 0);
 	timer_set_now(&master_thr->tv_poll);
 	
@@ -201,7 +201,6 @@ bool gridseed_set_queue_full(const struct cgpu_info * const device, int needwork
 static
 bool gridseed_send_work(const struct cgpu_info * const device, struct work *work)
 {
-	struct gc3355_orb_info * const info = device->device_data;
 	int work_size = opt_scrypt ? 156 : 52;
 	unsigned char cmd[work_size];
 	
@@ -356,12 +355,10 @@ static
 void gridseed_poll(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const device = master_thr->cgpu;
-	int fd = device->device_fd;
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
 	struct timeval tv_timeout;
 	timer_set_delay_from_now(&tv_timeout, GRIDSEED_LONG_WORK_DELAY_MS * 1000);  // X MS
-	bool timeout = false;
 	
 	while (!master_thr->work_restart && (read = gc3355_read(device->device_fd, (char *)buf, GC3355_READ_SIZE)) > 0)
 	{
@@ -389,7 +386,6 @@ void gridseed_poll(struct thr_info * const master_thr)
 		{
 			// allow work to be sent to the device
 			applog(LOG_DEBUG, "%s poll: timeout met", device->dev_repr);
-			timeout = true;
 			break;
 		}
 	}
