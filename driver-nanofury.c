@@ -238,7 +238,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	{
 		struct bitfury_device dummy_bitfury = {
-			.spi = sys_spi,
+			.spi = port,
 		};
 		drv_set_defaults(&nanofury_drv, bitfury_set_device_funcs_probe, &dummy_bitfury, NULL, NULL, 1);
 	}
