@@ -350,15 +350,16 @@ bool nanofury_init(struct thr_info * const thr)
 	port->speed = state->current_baud;
 		
 	state->mcp = mcp;
-	thr->cgpu_data = state;
 	port->userp = state;
 	for (proc = cgpu; proc; (proc = proc->next_proc), ++bitfury)
 	{
+		struct thr_info * const mythr = proc->thr[0];
 		*bitfury = (struct bitfury_device){
 			.spi = port,
 			.fasync = proc->proc_id,
 		};
 		proc->device_data = bitfury;
+		mythr->cgpu_data = state;
 		bitfury->osc6_bits = 50;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		bitfury_init_chip(proc);
