@@ -4138,7 +4138,7 @@ retry:
 		pool = cp;
 
 out:
-	if (cp != pool)
+	if (cp != pool && !(pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE))
 	{
 		if (!pool_active(pool, false))
 		{
