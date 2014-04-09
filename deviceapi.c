@@ -712,18 +712,13 @@ bool add_cgpu(struct cgpu_info *cgpu)
 {
 	int lpcount;
 	
-	renumber_cgpu(cgpu);
 	if (!cgpu->procs)
 		cgpu->procs = 1;
 	lpcount = cgpu->procs;
 	cgpu->device = cgpu;
 	
 	cgpu->dev_repr = malloc(6);
-	sprintf(cgpu->dev_repr, "%s%2u", cgpu->drv->name, cgpu->device_id % 100);
 	cgpu->dev_repr_ns = malloc(6);
-	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id % 100);
-	strcpy(cgpu->proc_repr, cgpu->dev_repr);
-	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
 #ifdef HAVE_FPGAUTILS
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
@@ -736,16 +731,8 @@ bool add_cgpu(struct cgpu_info *cgpu)
 	
 	if (lpcount > 1)
 	{
-		int ns;
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
-		const bool manylp = (lpcount > 26);
-		const char *as = (manylp ? "aa" : "a");
-		
-		// Note, strcpy instead of assigning a byte to get the \0 too
-		strcpy(&cgpu->proc_repr[5], as);
-		ns = strlen(cgpu->proc_repr_ns);
-		strcpy(&cgpu->proc_repr_ns[ns], as);
 		
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
@@ -753,18 +740,6 @@ bool add_cgpu(struct cgpu_info *cgpu)
 			slave = malloc(sizeof(*slave));
 			*slave = *cgpu;
 			slave->proc_id = i;
-			if (manylp)
-			{
-				slave->proc_repr[5] += i / 26;
-				slave->proc_repr[6] += i % 26;
-				slave->proc_repr_ns[ns    ] += i / 26;
-				slave->proc_repr_ns[ns + 1] += i % 26;
-			}
-			else
-			{
-				slave->proc_repr[5] += i;
-				slave->proc_repr_ns[ns] += i;
-			}
 			slave->threads = tpp;
 			devices_new[total_devices_new++] = slave;
 			*nlp_p = slave;
@@ -775,6 +750,7 @@ bool add_cgpu(struct cgpu_info *cgpu)
 		cgpu->threads -= (tpp * (lpcount - 1));
 	}
 
+	renumber_cgpu(cgpu);
 	cgpu->last_device_valid_work = time(NULL);
 	
 	return true;
