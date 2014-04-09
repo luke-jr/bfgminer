@@ -1054,7 +1054,6 @@ struct pool *add_pool(void)
 
 	pool->rpc_proxy = NULL;
 	pool->quota = 1;
-	adjust_quota_gcd();
 
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
@@ -1068,6 +1067,8 @@ struct pool *add_pool(void)
 	
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
+	
+	adjust_quota_gcd();
 
 	return pool;
 }
