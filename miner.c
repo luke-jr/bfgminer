@@ -10560,6 +10560,47 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+	
+	// Build repr strings
+	sprintf(cgpu->dev_repr, "%s%2u", cgpu->drv->name, cgpu->device_id % 100);
+	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id % 100);
+	strcpy(cgpu->proc_repr, cgpu->dev_repr);
+	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
+	
+	const int lpcount = cgpu->procs;
+	if (lpcount > 1)
+	{
+		int ns;
+		struct cgpu_info *slave;
+		const bool manylp = (lpcount > 26);
+		const char *as = (manylp ? "aa" : "a");
+		
+		// Note, strcpy instead of assigning a byte to get the \0 too
+		strcpy(&cgpu->proc_repr[5], as);
+		ns = strlen(cgpu->proc_repr_ns);
+		strcpy(&cgpu->proc_repr_ns[ns], as);
+		
+		slave = cgpu;
+		for (int i = 1; i < lpcount; ++i)
+		{
+			slave = slave->next_proc;
+			strcpy(slave->dev_repr, cgpu->dev_repr);
+			strcpy(slave->proc_repr, cgpu->proc_repr);
+			strcpy(slave->proc_repr_ns, cgpu->proc_repr_ns);
+			if (manylp)
+			{
+				slave->proc_repr[5] += i / 26;
+				slave->proc_repr[6] += i % 26;
+				slave->proc_repr_ns[ns    ] += i / 26;
+				slave->proc_repr_ns[ns + 1] += i % 26;
+			}
+			else
+			{
+				slave->proc_repr[5] += i;
+				slave->proc_repr_ns[ns] += i;
+			}
+		}
+	}
 }
 
 static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)
