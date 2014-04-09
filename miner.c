@@ -10525,6 +10525,41 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 		cgpu->device_id = d->lastid = 0;
 		HASH_ADD_STR(devids, name, d);
 	}
+	
+	// Build repr strings
+	sprintf(cgpu->dev_repr, "%s%2u", cgpu->drv->name, cgpu->device_id % 100);
+	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id % 100);
+	strcpy(cgpu->proc_repr, cgpu->dev_repr);
+	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
+	
+	const int lpcount = cgpu->procs;
+	if (lpcount > 1)
+	{
+		int ns;
+		struct cgpu_info *slave;
+		int lpdigits = 1;
+		for (int i = lpcount; i > 26 && lpdigits < 3; i /= 26)
+			++lpdigits;
+		
+		memset(&cgpu->proc_repr[5], 'a', lpdigits);
+		cgpu->proc_repr[5 + lpdigits] = '\0';
+		ns = strlen(cgpu->proc_repr_ns);
+		strcpy(&cgpu->proc_repr_ns[ns], &cgpu->proc_repr[5]);
+		
+		slave = cgpu;
+		for (int i = 1; i < lpcount; ++i)
+		{
+			slave = slave->next_proc;
+			strcpy(slave->dev_repr, cgpu->dev_repr);
+			strcpy(slave->proc_repr, cgpu->proc_repr);
+			strcpy(slave->proc_repr_ns, cgpu->proc_repr_ns);
+			for (int x = i, y = lpdigits; --y, x; x /= 26)
+			{
+				slave->proc_repr_ns[ns + y] =
+				slave->proc_repr[5 + y] += (x % 26);
+			}
+		}
+	}
 }
 
 static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t length)

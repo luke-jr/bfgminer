@@ -754,18 +754,13 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 {
 	int lpcount;
 	
-	renumber_cgpu(cgpu);
 	if (!cgpu->procs)
 		cgpu->procs = 1;
 	lpcount = cgpu->procs;
 	cgpu->device = cgpu;
 	
 	cgpu->dev_repr = malloc(6);
-	sprintf(cgpu->dev_repr, "%s%2u", cgpu->drv->name, cgpu->device_id % 100);
 	cgpu->dev_repr_ns = malloc(6);
-	sprintf(cgpu->dev_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id % 100);
-	strcpy(cgpu->proc_repr, cgpu->dev_repr);
-	sprintf(cgpu->proc_repr_ns, "%s%u", cgpu->drv->name, cgpu->device_id);
 	
 #ifdef NEED_BFG_LOWL_VCOM
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
@@ -778,17 +773,8 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 	
 	if (lpcount > 1)
 	{
-		int ns;
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
-		int lpdigits = 1;
-		for (int i = lpcount; i > 26 && lpdigits < 3; i /= 26)
-			++lpdigits;
-		
-		memset(&cgpu->proc_repr[5], 'a', lpdigits);
-		cgpu->proc_repr[5 + lpdigits] = '\0';
-		ns = strlen(cgpu->proc_repr_ns);
-		strcpy(&cgpu->proc_repr_ns[ns], &cgpu->proc_repr[5]);
 		
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
@@ -796,11 +782,6 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 			slave = malloc(sizeof(*slave));
 			*slave = *cgpu;
 			slave->proc_id = i;
-			for (int x = i, y = lpdigits; --y, x; x /= 26)
-			{
-				slave->proc_repr_ns[ns + y] =
-				slave->proc_repr[5 + y] += (x % 26);
-			}
 			slave->threads = tpp;
 			devices_new[total_devices_new++] = slave;
 			*nlp_p = slave;
@@ -811,6 +792,7 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 		cgpu->threads -= (tpp * (lpcount - 1));
 	}
 
+	renumber_cgpu(cgpu);
 	cgpu->last_device_valid_work = time(NULL);
 	
 	return true;
