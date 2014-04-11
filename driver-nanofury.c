@@ -27,6 +27,7 @@
 #define NANOFURY_GP_PIN_LED 0
 #define NANOFURY_GP_PIN_SCK_OVR 5
 #define NANOFURY_GP_PIN_PWR_EN 6
+#define NANOFURY_GP_PIN_PWR_EN0 7
 
 #define NANOFURY_MAX_BYTES_PER_SPI_TRANSFER 60			// due to MCP2210 limitation
 
@@ -163,6 +164,10 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	
 	// PWR_EN
 	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, MGV_HIGH))
+		goto fail;
+	
+	// PWR_EN0
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, MGV_LOW))
 		goto fail;
 	
 	// cancel any outstanding SPI transfers
