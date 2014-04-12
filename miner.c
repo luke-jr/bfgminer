@@ -4413,7 +4413,7 @@ out:
 }
 
 /* Specifies whether we can use this pool for work or not. */
-static bool pool_unworkable(struct pool *pool)
+static bool pool_unworkable(const struct pool * const pool)
 {
 	if (pool->idle)
 		return true;
@@ -4422,6 +4422,18 @@ static bool pool_unworkable(struct pool *pool)
 	if (pool->has_stratum && !pool->stratum_active)
 		return true;
 	return false;
+}
+
+static
+bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+{
+	if (pool_unworkable(pool))
+		return false;
+	if (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
+		return true;
+	if (!cp)
+		cp = current_pool();
+	return (pool == cp);
 }
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
@@ -4529,7 +4541,7 @@ retry:
 		pool = cp;
 
 out:
-	if (cp != pool && !(pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE))
+	if (!pool_actively_in_use(pool, cp))
 	{
 		if (!pool_active(pool, false))
 		{
@@ -5076,7 +5088,7 @@ static inline bool should_roll(struct work *work)
 	struct timeval now;
 	time_t expiry;
 
-	if (work->pool != current_pool() && pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE)
+	if (!pool_actively_in_use(work->pool, NULL))
 		return false;
 
 	if (stale_work(work, false))
@@ -5361,8 +5373,8 @@ bool stale_work(struct work *work, bool share)
 
 	/* If the user only wants strict failover, any work from a pool other than
 	 * the current one is always considered stale */
-	if (opt_fail_only && !share && pool != current_pool() && !work->mandatory &&
-	    pool_strategy != POOL_LOADBALANCE && pool_strategy != POOL_BALANCE) {
+	if (opt_fail_only && !share && !work->mandatory && !pool_actively_in_use(pool, NULL))
+	{
 		applog(LOG_DEBUG, "Work stale due to fail only pool mismatch (pool %u vs %u)", pool->pool_no, current_pool()->pool_no);
 		return true;
 	}
@@ -8077,12 +8089,6 @@ static bool cnx_needed(struct pool *pool)
 	if (pool->enabled != POOL_ENABLED)
 		return false;
 
-	/* Balance strategies need all pools online */
-	if (pool_strategy == POOL_BALANCE)
-		return true;
-	if (pool_strategy == POOL_LOADBALANCE)
-		return true;
-
 	/* Idle stratum pool needs something to kick it alive again */
 	if (pool->has_stratum && pool->idle)
 		return true;
@@ -8090,7 +8096,7 @@ static bool cnx_needed(struct pool *pool)
 	/* Getwork pools without opt_fail_only need backup pools up to be able
 	 * to leak shares */
 	cp = current_pool();
-	if (cp == pool)
+	if (pool_actively_in_use(pool, cp))
 		return true;
 	if (!pool_localgen(cp) && (!opt_fail_only || !cp->hdr_path))
 		return true;
@@ -9411,9 +9417,8 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	while (!cnx_needed(pool) && (pool->enabled == POOL_DISABLED ||
-	       (pool != current_pool() && pool_strategy != POOL_LOADBALANCE &&
-	       pool_strategy != POOL_BALANCE))) {
+	while ((!cnx_needed(pool)) && !pool_actively_in_use(pool, NULL))
+	{
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
