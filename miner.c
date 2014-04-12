@@ -147,7 +147,7 @@ bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
-bool opt_quiet_work_updates;
+bool opt_quiet_work_updates = true;
 bool opt_quiet;
 bool opt_realquiet;
 int loginput_size;
@@ -2390,6 +2390,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
 			"Log verbose output to stderr as well as status output"),
+	OPT_WITHOUT_ARG("--verbose-work-updates|--verbose-work-update",
+			opt_set_invbool, &opt_quiet_work_updates,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--weighed-stats",
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
