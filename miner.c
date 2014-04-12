@@ -5899,15 +5899,21 @@ static bool test_work_current(struct work *work)
 		}
 		if (work->longpoll)
 		{
+			struct pool * const cp = current_pool();
 			++work->pool->work_restart_id;
 			update_last_work(work);
-			if ((!restart) && work->pool == current_pool())
+			if (!restart)
 			{
-				applog(
-				       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
-				       "Longpoll from pool %d requested work update",
-					work->pool->pool_no);
-				restart = true;
+				if (pool_actively_in_use(work->pool, cp))
+				{
+					applog(
+					       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
+					       "Longpoll from pool %d requested work update",
+					       work->pool->pool_no);
+				}
+				
+				if (work->pool == cp)
+					restart = true;
 			}
 		}
 		if (restart)
@@ -8018,12 +8024,14 @@ static void *stratum_thread(void *userdata)
 			if (test_work_current(work)) {
 				/* Only accept a work update if this stratum
 				 * connection is from the current pool */
-				if (pool == current_pool()) {
+				struct pool * const cp = current_pool();
+				if (pool == cp)
 					restart_threads();
+				
+				if (pool_actively_in_use(pool, cp))
 					applog(
 					       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
 					       "Stratum from pool %d requested work update", pool->pool_no);
-				}
 			} else
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
 			free_work(work);
