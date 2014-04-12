@@ -130,7 +130,7 @@ char *antminer_set_clock(struct cgpu_info *cgpu, char *setting, char *replybuf)
 	
 	if (!hex2bin(reg_data, hex_setting, strlen(hex_setting) / 2))
 	{
-		sprintf(replybuf, "invalid clock: '%s' data must be a hexidecimal value", hex_setting);
+		sprintf(replybuf, "invalid clock: '%s' data must be a hexadecimal value", hex_setting);
 		return replybuf;
 	}
 	
