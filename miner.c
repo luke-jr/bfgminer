@@ -4054,15 +4054,21 @@ static bool pool_unworkable(const struct pool * const pool)
 }
 
 static
-bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+bool pool_actively_desired(const struct pool * const pool, const struct pool *cp)
 {
-	if (pool_unworkable(pool))
+	if (pool->enabled != POOL_ENABLED)
 		return false;
 	if (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
 		return true;
 	if (!cp)
 		cp = current_pool();
 	return (pool == cp);
+}
+
+static
+bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+{
+	return (!pool_unworkable(pool)) && pool_actively_desired(pool, cp);
 }
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
