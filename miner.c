@@ -4042,7 +4042,7 @@ out:
 }
 
 /* Specifies whether we can use this pool for work or not. */
-static bool pool_unworkable(struct pool *pool)
+static bool pool_unworkable(const struct pool * const pool)
 {
 	if (pool->idle)
 		return true;
@@ -4051,6 +4051,18 @@ static bool pool_unworkable(struct pool *pool)
 	if (pool->has_stratum && !pool->stratum_active)
 		return true;
 	return false;
+}
+
+static
+bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+{
+	if (pool_unworkable(pool))
+		return false;
+	if (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
+		return true;
+	if (!cp)
+		cp = current_pool();
+	return (pool == cp);
 }
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
