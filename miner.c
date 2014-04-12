@@ -21,6 +21,7 @@
 #endif
 
 #include <ctype.h>
+#include <float.h>
 #include <limits.h>
 #include <locale.h>
 #include <stdio.h>
@@ -146,7 +147,7 @@ bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
-bool opt_quiet_work_updates;
+bool opt_quiet_work_updates = true;
 bool opt_quiet;
 bool opt_realquiet;
 int loginput_size;
@@ -2389,6 +2390,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--verbose",
 			opt_set_bool, &opt_log_output,
 			"Log verbose output to stderr as well as status output"),
+	OPT_WITHOUT_ARG("--verbose-work-updates|--verbose-work-update",
+			opt_set_invbool, &opt_quiet_work_updates,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--weighed-stats",
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
@@ -3359,6 +3363,27 @@ void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, 
 	            bnbuf
 	);
 }
+
+static
+const char *pool_proto_str(const struct pool * const pool)
+{
+	if (pool->idle)
+		return "Dead ";
+	if (pool->has_stratum)
+		return "Strtm";
+	if (pool->lp_url && pool->proto != pool->lp_proto)
+		return "Mixed";
+	switch (pool->proto)
+	{
+		case PLP_GETBLOCKTEMPLATE:
+			return " GBT ";
+		case PLP_GETWORK:
+			return "GWork";
+		default:
+			return "Alive";
+	}
+}
+
 #endif
 
 static inline
@@ -3717,6 +3742,8 @@ static int menu_attr = A_REVERSE;
 	bfg_waddstr(win, tmp42); \
 } while (0)
 
+static bool pool_unworkable(const struct pool *);
+
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(const int ts)
 {
@@ -3759,15 +3786,74 @@ static void curses_print_status(const int ts)
 	bfg_waddstr(statuswin, "[H]elp [Q]uit ");
 	wattroff(statuswin, menu_attr);
 
-	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && total_pools > 1) {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to multiple pools with%s block change notify",
-			have_longpoll ? "": "out");
-	} else if (pool->has_stratum) {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with stratum as user %s",
-			pool->sockaddr_url, pool->diff, pool->rpc_user);
-	} else {
-		cg_mvwprintw(statuswin, 2, 0, " Connected to %s diff %s with%s LP as user %s",
-			pool->sockaddr_url, pool->diff, have_longpoll ? "": "out", pool->rpc_user);
+	if ((pool_strategy == POOL_LOADBALANCE  || pool_strategy == POOL_BALANCE) && enabled_pools > 1) {
+		char poolinfo[20], poolinfo2[20];
+		int poolinfooff = 0, poolinfo2off, workable_pools = 0;
+		double lowdiff = DBL_MAX, highdiff = -1;
+		struct pool *lowdiff_pool = pools[0], *highdiff_pool = pools[0];
+		time_t oldest_work_restart = time(NULL) + 1;
+		struct pool *oldest_work_restart_pool = pools[0];
+		for (int i = 0; i < total_pools; ++i)
+		{
+			if (pool_unworkable(pools[i]))
+				continue;
+			
+			// NOTE: Only set pool var when it's workable; if only one is, it gets used by single-pool code
+			pool = pools[i];
+			++workable_pools;
+			
+			if (poolinfooff < sizeof(poolinfo))
+				poolinfooff += snprintf(&poolinfo[poolinfooff], sizeof(poolinfo) - poolinfooff, "%u,", pool->pool_no);
+			
+			struct cgminer_pool_stats * const pool_stats = &pool->cgminer_pool_stats;
+			if (pool_stats->last_diff < lowdiff)
+			{
+				lowdiff = pool_stats->last_diff;
+				lowdiff_pool = pool;
+			}
+			if (pool_stats->last_diff > highdiff)
+			{
+				highdiff = pool_stats->last_diff;
+				highdiff_pool = pool;
+			}
+			
+			if (oldest_work_restart >= pool->work_restart_time)
+			{
+				oldest_work_restart = pool->work_restart_time;
+				oldest_work_restart_pool = pool;
+			}
+		}
+		if (workable_pools == 1)
+			goto one_workable_pool;
+		poolinfo2off = snprintf(poolinfo2, sizeof(poolinfo2), "%u (", workable_pools);
+		if (poolinfooff > sizeof(poolinfo2) - poolinfo2off - 1)
+			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s...)", sizeof(poolinfo2) - poolinfo2off - 5, poolinfo);
+		else
+			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s)%*s", poolinfooff - 1, poolinfo, sizeof(poolinfo2), "");
+		cg_mvwprintw(statuswin, 2, 0, " Pools: %s  Diff:%s%s%s  %c  LU:%s",
+		             poolinfo2,
+		             lowdiff_pool->diff,
+		             (lowdiff == highdiff) ? "" : "-",
+		             (lowdiff == highdiff) ? "" : highdiff_pool->diff,
+		             have_longpoll ? '+' : '-',
+		             oldest_work_restart_pool->work_restart_timestamp);
+	}
+	else
+	{
+one_workable_pool: ;
+		char pooladdr[19];
+		{
+			size_t pooladdrlen = strlen(pool->sockaddr_url);
+			if (pooladdrlen > 20)
+				snprintf(pooladdr, sizeof(pooladdr), "...%s", &pool->sockaddr_url[pooladdrlen - (sizeof(pooladdr) - 4)]);
+			else
+				snprintf(pooladdr, sizeof(pooladdr), "%*s", -(sizeof(pooladdr) - 1), pool->sockaddr_url);
+		}
+		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
+		             pool->pool_no, pooladdr, pool->diff,
+		             have_longpoll ? '+' : '-', pool_proto_str(pool),
+		             pool->work_restart_timestamp,
+		             pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
@@ -6085,6 +6171,13 @@ bool stale_work_future(struct work *work, bool share, unsigned long ustime)
 	return rv;
 }
 
+static
+void pool_update_work_restart_time(struct pool * const pool)
+{
+	pool->work_restart_time = time(NULL);
+	get_timestamp(pool->work_restart_timestamp, sizeof(pool->work_restart_timestamp), pool->work_restart_time);
+}
+
 static void restart_threads(void)
 {
 	struct pool *cp = current_pool();
@@ -6242,6 +6335,7 @@ static bool test_work_current(struct work *work)
 		set_blockdiff(work);
 		wr_unlock(&blk_lock);
 		pool->block_id = block_id;
+		pool_update_work_restart_time(pool);
 		
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
@@ -6274,6 +6368,7 @@ static bool test_work_current(struct work *work)
 		{
 			bool was_active = pool->block_id != 0;
 			pool->block_id = block_id;
+			pool_update_work_restart_time(pool);
 			if (!work->longpoll)
 				update_last_work(work);
 			if (was_active)
@@ -6308,6 +6403,7 @@ static bool test_work_current(struct work *work)
 			struct pool * const cp = current_pool();
 			++pool->work_restart_id;
 			update_last_work(work);
+			pool_update_work_restart_time(pool);
 			applog(
 			       ((!opt_quiet_work_updates) && pool_actively_in_use(pool, cp) ? LOG_NOTICE : LOG_DEBUG),
 			       "Longpoll from pool %d requested work update",
@@ -6805,25 +6901,7 @@ updated:
 					wlogprint("Rejectin ");
 					break;
 			}
-			if (pool->idle)
-				wlogprint("Dead ");
-			else
-			if (pool->has_stratum)
-				wlogprint("Strtm");
-			else
-			if (pool->lp_url && pool->proto != pool->lp_proto)
-				wlogprint("Mixed");
-			else
-				switch (pool->proto) {
-					case PLP_GETBLOCKTEMPLATE:
-						wlogprint(" GBT ");
-						break;
-					case PLP_GETWORK:
-						wlogprint("GWork");
-						break;
-					default:
-						wlogprint("Alive");
-				}
+			wlogprint(pool_proto_str(pool));
 			wlogprint(" Quota %d Pool %d: %s  User:%s\n",
 				pool->quota,
 				pool->pool_no,
@@ -7449,10 +7527,11 @@ out:
 
 void show_help(void)
 {
-	loginput_mode(10);
+	loginput_mode(11);
 	
 	// NOTE: wlogprint is a macro with a buffer limit
 	_wlogprint(
+		"LU: oldest explicit work update currently being used for new work\n"
 		"ST: work in queue              | F: network fails   | NB: new blocks detected\n"
 		"AS: shares being submitted     | BW: bandwidth (up/down)\n"
 		"E: # shares * diff per 2kB bw  | I: expected income | BS: best share ever found\n"
@@ -8294,6 +8373,7 @@ static void *stratum_thread(void *userdata)
 			}
 
 			++pool->work_restart_id;
+			pool_update_work_restart_time(pool);
 			if (test_work_current(work)) {
 				/* Only accept a work update if this stratum
 				 * connection is from the current pool */
