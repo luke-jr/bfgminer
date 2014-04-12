@@ -6113,36 +6113,40 @@ static bool test_work_current(struct work *work)
 {
 	bool ret = true;
 	char hexstr[65];
-
+	
 	if (work->mandatory)
 		return ret;
-
+	
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
-
+	
 	/* Hack to work around dud work sneaking into test */
 	bin2hex(hexstr, work->data + 8, 18);
 	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
 		goto out_free;
-
+	
+	struct pool * const pool = work->pool;
+	
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr)) {
+	if (!block_exists(hexstr))
+	{
 		struct block *s = calloc(sizeof(struct block), 1);
 		int deleted_block = 0;
 		ret = false;
-
+		
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		strcpy(s->hash, hexstr);
 		s->block_no = new_blocks++;
-
+		
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since
 		 * work from blocks before this is virtually impossible and we
 		 * want to prevent memory usage from continually rising */
-		if (HASH_COUNT(blocks) > 6) {
+		if (HASH_COUNT(blocks) > 6)
+		{
 			struct block *oldblock;
-
+			
 			HASH_SORT(blocks, block_sort);
 			oldblock = blocks;
 			deleted_block = oldblock->block_no;
@@ -6152,8 +6156,8 @@ static bool test_work_current(struct work *work)
 		HASH_ADD_STR(blocks, hash, s);
 		set_blockdiff(work);
 		wr_unlock(&blk_lock);
-		work->pool->block_id = block_id;
-
+		pool->block_id = block_id;
+		
 		if (deleted_block)
 			applog(LOG_DEBUG, "Deleted block %d from database", deleted_block);
 #if BLKMAKER_VERSION > 1
@@ -6162,35 +6166,46 @@ static bool test_work_current(struct work *work)
 		set_curblock(hexstr, &work->data[4]);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
-
-		if (!work->stratum) {
-			if (work->longpoll) {
+		
+		if (!work->stratum)
+		{
+			if (work->longpoll)
+			{
 				applog(LOG_NOTICE, "Longpoll from pool %d detected new block",
-				       work->pool->pool_no);
-			} else if (have_longpoll)
+				       pool->pool_no);
+			}
+			else
+			if (have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
 				applog(LOG_NOTICE, "New block detected on network");
 		}
 		restart_threads();
-	} else {
+	}
+	else
+	{
 		bool restart = false;
-		struct pool *curpool = NULL;
-		if (unlikely(work->pool->block_id != block_id)) {
-			bool was_active = work->pool->block_id != 0;
-			work->pool->block_id = block_id;
+		if (unlikely(pool->block_id != block_id))
+		{
+			bool was_active = pool->block_id != 0;
+			pool->block_id = block_id;
 			if (!work->longpoll)
 				update_last_work(work);
-			if (was_active) {  // Pool actively changed block
-				if (work->pool == (curpool = current_pool()))
+			if (was_active)
+			{
+				// Pool actively changed block
+				if (pool == current_pool())
 					restart = true;
-				if (block_id == current_block_id) {
+				if (block_id == current_block_id)
+				{
 					// Caught up, only announce if this pool is the one in use
 					if (restart)
 						applog(LOG_NOTICE, "%s %d caught up to new block",
 						       work->longpoll ? "Longpoll from pool" : "Pool",
-						       work->pool->pool_no);
-				} else {
+						       pool->pool_no);
+				}
+				else
+				{
 					// Switched to a block we know, but not the latest... why?
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
@@ -6198,22 +6213,24 @@ static bool test_work_current(struct work *work)
 					blkhashstr(hexstr, &work->data[4]);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
-					       work->pool->pool_no,
+					       pool->pool_no,
 					       hexstr);
 				}
 			}
 		}
-	  if (work->longpoll) {
-		++work->pool->work_restart_id;
-		update_last_work(work);
-		if ((!restart) && work->pool == current_pool()) {
-			applog(
-			       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
-			       "Longpoll from pool %d requested work update",
-				work->pool->pool_no);
-			restart = true;
+		if (work->longpoll)
+		{
+			++pool->work_restart_id;
+			update_last_work(work);
+			if ((!restart) && pool == current_pool())
+			{
+				applog(
+				       (opt_quiet_work_updates ? LOG_DEBUG : LOG_NOTICE),
+				       "Longpoll from pool %d requested work update",
+					pool->pool_no);
+				restart = true;
+			}
 		}
-	  }
 		if (restart)
 			restart_threads();
 	}
