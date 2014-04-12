@@ -1181,6 +1181,8 @@ struct pool {
 	bool removed;
 	bool lp_started;
 	unsigned char	work_restart_id;
+	time_t work_restart_time;
+	char work_restart_timestamp[11];
 	uint32_t	block_id;
 
 	enum pool_protocol proto;

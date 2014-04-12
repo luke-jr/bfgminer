@@ -413,6 +413,22 @@ dedicated to this program,
 	https://bitcointalk.org/?topic=78192
 	https://bitcointalk.org/?topic=168174
 
+If you are mining on a single pool, the pool display shows:
+ Pool 0: ...s.m.eligius.st   Diff:16  +Strtm  LU:[03:26:16]  User:1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
+
+This tells you which pool you're using, as well as its current share difficulty,
+protocol, and last explicit work update. If BFGMiner has a working block
+notification source, the protocol will be prefixed by a plus sign. If not, a
+minus sign.
+
+If you are mining on multiple pools at once, the pool display instead shows:
+ Pools: 2 (0,1)              Diff:4-16  +  LU:[03:25:30]
+
+You get the total number of working pools, the pool numbers for each of those,
+the range of current share difficulties, whether block notification is working
+(plus/minus), and the oldest explicit work update currently being used for new
+work.
+
 The block display shows:
 Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
 
