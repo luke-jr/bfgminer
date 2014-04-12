@@ -145,6 +145,18 @@ void nanofury_device_off(struct mcp2210_device * const mcp)
 }
 
 static
+bool nanofury_power_enable(struct mcp2210_device * const mcp, const bool poweron)
+{
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, poweron ? MGV_HIGH : MGV_LOW))
+		return false;
+	
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, poweron ? MGV_LOW : MGV_HIGH))
+		return false;
+	
+	return true;
+}
+
+static
 bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long baud)
 {
 	int i;
@@ -162,13 +174,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_HIGH))
 		goto fail;
 	
-	// PWR_EN
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, MGV_HIGH))
-		goto fail;
-	
-	// PWR_EN0
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, MGV_LOW))
-		goto fail;
+	nanofury_power_enable(mcp, true);
 	
 	// cancel any outstanding SPI transfers
 	mcp2210_spi_cancel(mcp);
