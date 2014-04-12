@@ -4511,15 +4511,21 @@ static bool pool_unworkable(const struct pool * const pool)
 }
 
 static
-bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+bool pool_actively_desired(const struct pool * const pool, const struct pool *cp)
 {
-	if (pool_unworkable(pool))
+	if (pool->enabled != POOL_ENABLED)
 		return false;
 	if (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
 		return true;
 	if (!cp)
 		cp = current_pool();
 	return (pool == cp);
+}
+
+static
+bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
+{
+	return (!pool_unworkable(pool)) && pool_actively_desired(pool, cp);
 }
 
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
@@ -8191,7 +8197,7 @@ static bool cnx_needed(struct pool *pool)
 	/* Getwork pools without opt_fail_only need backup pools up to be able
 	 * to leak shares */
 	cp = current_pool();
-	if (pool_actively_in_use(pool, cp))
+	if (pool_actively_desired(pool, cp))
 		return true;
 	if (!pool_localgen(cp) && (!opt_fail_only || !cp->hdr_path))
 		return true;
@@ -9514,7 +9520,7 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
-	while ((!cnx_needed(pool)) && !pool_actively_in_use(pool, NULL))
+	while (!cnx_needed(pool))
 	{
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
