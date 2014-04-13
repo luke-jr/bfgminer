@@ -784,10 +784,6 @@ with --set-device OCL:threads=1. It is also recommended to use --failover-only
 since the work is effectively like a different block chain. If mining with a
 Mini Rig, it is worth adding the --bfl-range option.
 
-Q: Are OpenCL kernels from other mining software useable in BFGMiner?
-A: No, the APIs are slightly different between the different software and they
-will not work.
-
 Q: I run PHP on windows to access the API with the example miner.php. Why does
 it fail when php is installed properly but I only get errors about Sockets not
 working in the logs?
