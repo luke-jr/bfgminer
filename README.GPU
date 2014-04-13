@@ -441,6 +441,10 @@ Q: Scrypt fails to initialise the kernel every time?
 A: Your parameters are too high. Don't add GPU threads, don't set intensity too
 high, decrease thread concurrency. See the README.scrypt for a lot more help.
 
+Q: Are OpenCL kernels from other mining software useable in BFGMiner?
+A: No, the APIs are often slightly different between the different software and
+they will not work without modifying BFGMiner itself.
+
 Q: BFGMiner stops mining (or my GPUs go DEAD) and I can't close it?
 A: Once the driver has crashed, there is no way for BFGMiner to close cleanly.
 You will have to kill it, and depending on how corrupted your driver state has
