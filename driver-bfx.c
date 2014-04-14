@@ -17,7 +17,7 @@
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
-#include "ft232r.h"
+#include "lowl-ftdi.h"
 #include "miner.h"
 #include "util.h"
 

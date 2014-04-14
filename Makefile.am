@@ -304,7 +304,7 @@ bfgminer_SOURCES += driver-hashfast.c
 endif
 
 if NEED_BFG_LOWL_FTDI
-bfgminer_SOURCES += ft232r.c ft232r.h
+bfgminer_SOURCES += lowl-ftdi.c lowl-ftdi.h
 endif
 
 if NEED_BFG_LOWL_HID
