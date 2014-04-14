@@ -256,7 +256,7 @@ void gc3355_config_cpm(uint8_t * const buf, const uint8_t chipaddr, const float 
 	const uint8_t pll_bandselect = 0;
 	const uint8_t pll_outdiv = 0;
 	
-	uint8_t freq_div, freq_mult, last_freq_mult;  // mhz = (25 / freq_div * freq_mult)
+	uint8_t freq_div, freq_mult, last_freq_mult = 0;  // mhz = (25 / freq_div * freq_mult)
 	float actual_mhz, last_actual_mhz = -1;
 	for (freq_div = 1; freq_div <= 32; ++freq_div)
 	{
