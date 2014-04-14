@@ -203,7 +203,7 @@ ssize_t ft232r_flush(struct ft232r_device_handle *dev)
 	return r;
 }
 
-ssize_t ft232r_write(struct ft232r_device_handle *dev, void *data, size_t count)
+ssize_t ft232r_write(struct ft232r_device_handle * const dev, const void * const data, const size_t count)
 {
 	uint16_t bufleft;
 	ssize_t r;
@@ -234,8 +234,10 @@ ssize_t ft232r_write(struct ft232r_device_handle *dev, void *data, size_t count)
 
 typedef ssize_t (*ft232r_rwfunc_t)(struct ft232r_device_handle *, void*, size_t);
 
-static ssize_t ft232r_rw_all(ft232r_rwfunc_t rwfunc, struct ft232r_device_handle *dev, void *data, size_t count)
+static
+ssize_t ft232r_rw_all(const void * const rwfunc_p, struct ft232r_device_handle * const dev, void * const data, size_t count)
 {
+	ft232r_rwfunc_t rwfunc = rwfunc_p;
 	char *p = data;
 	ssize_t writ = 0, total = 0;
 
@@ -247,9 +249,9 @@ static ssize_t ft232r_rw_all(ft232r_rwfunc_t rwfunc, struct ft232r_device_handle
 	return total ?: writ;
 }
 
-ssize_t ft232r_write_all(struct ft232r_device_handle *dev, void *data, size_t count)
+ssize_t ft232r_write_all(struct ft232r_device_handle * const dev, const void * const data, size_t count)
 {
-	return ft232r_rw_all(ft232r_write, dev, data, count);
+	return ft232r_rw_all(ft232r_write, dev, (void*)data, count);
 }
 
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
