@@ -89,7 +89,8 @@ struct ft232r_device_handle {
 	uint16_t obufsz;
 };
 
-struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * const info)
+static
+struct ft232r_device_handle *ftdi_common_open(const struct lowlevel_device_info * const info)
 {
 	libusb_device * const dev = info->lowl_data;
 	
@@ -109,10 +110,6 @@ struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * con
 	}
 	if (libusb_claim_interface(devh, 0)) {
 		applog(LOG_ERR, "ft232r_open: Error claiming interface");
-		return NULL;
-	}
-	if (libusb_control_transfer(devh, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BAUDRATE, FTDI_BAUDRATE_3M, NULL, 0, FTDI_TIMEOUT) < 0) {
-		applog(LOG_ERR, "ft232r_open: Error performing control transfer");
 		return NULL;
 	}
 
@@ -135,6 +132,21 @@ struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * con
 	ftdi->obuf = malloc(ftdi->osz);
 	libusb_free_config_descriptor(cfg);
 
+	return ftdi;
+}
+
+struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * const info)
+{
+	struct ft232r_device_handle * const ftdi = ftdi_common_open(info);
+	if (!ftdi)
+		return NULL;
+	
+	if (libusb_control_transfer(ftdi->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_BAUDRATE, FTDI_BAUDRATE_3M, NULL, 0, FTDI_TIMEOUT) < 0) {
+		applog(LOG_ERR, "ft232r_open: Error performing control transfer");
+		ft232r_close(ftdi);
+		return NULL;
+	}
+	
 	return ftdi;
 }
 
