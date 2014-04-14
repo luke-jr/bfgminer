@@ -32,7 +32,10 @@
 #include "driver-opencl.h"
 #include "findnonce.h"
 #include "logging.h"
+#include "miner.h"
 #include "ocl.h"
+#include "sha2.h"
+#include "util.h"
 
 /* Platform API */
 extern
@@ -655,7 +658,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_INFO, "Selecting phatk kernel");
 			clState->chosen_kernel = KL_PHATK;
 		}
-		data->kernel_file = strdup(opencl_get_default_kernel_filename(clState->chosen_kernel));
+		data->kernel_file = strdup(opencl_get_kernel_interface_name(clState->chosen_kernel));
 	}
 	
 	snprintf(filename, sizeof(filename), "%s.cl", data->kernel_file);
@@ -664,6 +667,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char *source = file_contents(filename, &pl);
 	if (!source)
 		return NULL;
+	{
+		uint8_t hash[0x20];
+		char hashhex[7];
+		sha256((void*)source, pl, hash);
+		bin2hex(hashhex, hash, 3);
+		tailsprintf(binaryfilename, sizeof(binaryfilename), "-%s", hashhex);
+	}
 	s = strstr(source, "kernel-interface:");
 	if (s)
 	{

@@ -114,10 +114,10 @@ if HAVE_OPENCL
 bfgminer_SOURCES += driver-opencl.h driver-opencl.c
 bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
-bfgminer_SOURCES += *.cl
+bfgminer_SOURCES += opencl/*.cl
 
 kernelsdir = $(pkgdatadir)/opencl
-dist_kernels_DATA = $(top_srcdir)/*.cl
+dist_kernels_DATA = $(top_srcdir)/opencl/*.cl
 
 dist_doc_DATA += README.GPU
 

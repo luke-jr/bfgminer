@@ -263,7 +263,6 @@ typedef cl_int (*queue_kernel_parameters_func_t)(_clState *, struct work *, cl_u
 
 struct opencl_kernel_interface {
 	const char *kiname;
-	const char *default_filename;
 	queue_kernel_parameters_func_t queue_kernel_parameters_func;
 };
 
@@ -402,23 +401,11 @@ const char *opencl_get_kernel_interface_name(const enum cl_kernels kern)
 	return ki->kiname;
 }
 
-const char *opencl_get_default_kernel_filename(const enum cl_kernels kern)
-{
-	struct opencl_kernel_interface *ki = &kernel_interfaces[kern];
-	return ki->default_filename;
-}
-
 static
 bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 {
 	FILE *F;
-	const enum cl_kernels kern = select_kernel(_val);
 	struct opencl_device_data * const data = cgpu->device_data;
-	{
-		const char *kname = opencl_get_default_kernel_filename(kern);
-		if (kname)
-			_val = kname;
-	}
 	
 	size_t knamelen = strlen(_val);
 	char filename[knamelen + 3 + 1];
@@ -1262,12 +1249,12 @@ cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, _
 static
 struct opencl_kernel_interface kernel_interfaces[] = {
 	{NULL},
-	{"poclbm",   "poclbm130302", queue_poclbm_kernel},
-	{"phatk",     "phatk121016", queue_phatk_kernel},
-	{"diakgcn", "diakgcn121016", queue_diakgcn_kernel},
-	{"diablo",   "diablo130302", queue_diablo_kernel},
+	{"poclbm",  queue_poclbm_kernel },
+	{"phatk",   queue_phatk_kernel  },
+	{"diakgcn", queue_diakgcn_kernel},
+	{"diablo",  queue_diablo_kernel },
 #ifdef USE_SCRYPT
-	{"scrypt",   "scrypt130511", queue_scrypt_kernel},
+	{"scrypt",  queue_scrypt_kernel },
 #endif
 };
 
