@@ -255,7 +255,7 @@ bfgminer_SOURCES += driver-modminer.c
 endif
 
 if HAS_X6500
-bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
+bfgminer_SOURCES += driver-x6500.c jtag.c jtag.h
 endif
 
 if HAS_ZTEX
@@ -297,6 +297,10 @@ endif
 
 if USE_HASHFAST
 bfgminer_SOURCES += driver-hashfast.c
+endif
+
+if NEED_BFG_LOWL_FTDI
+bfgminer_SOURCES += ft232r.c ft232r.h
 endif
 
 if NEED_BFG_LOWL_HID

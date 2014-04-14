@@ -124,6 +124,7 @@ need_binloader=no
 need_dynclock=no
 need_lowl_vcom=no
 need_lowlevel=no
+need_lowl_ftdi=no
 need_lowl_hid=no
 need_lowl_pci=no
 need_lowl_usb=no
@@ -663,7 +664,7 @@ fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
 	need_dynclock=yes
-	need_lowl_usb=yes
+	need_lowl_ftdi=yes
 	need_binloader=yes
 	has_fpga=yes
 	have_udevrules=true
@@ -977,6 +978,12 @@ if test "x$need_lowl_vcom" != "xno"; then
 	fi
 fi
 
+lowllist="$lowllist ftdi/need_lowl_ftdi"
+if test x$need_lowl_ftdi = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_FTDI], [1], [Defined to 1 if lowlevel ftdi drivers are being used])
+	need_lowl_usb=yes
+fi
+
 if test "x$need_lowl_usb" = "xno"; then
 	libusb=no
 	LIBUSB_LIBS=''
@@ -1258,6 +1265,7 @@ AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_FTDI], [test x$need_lowl_ftdi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
