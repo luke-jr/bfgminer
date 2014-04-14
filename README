@@ -259,6 +259,7 @@ Options for both config file and command line:
 --no-gbt            Disable getblocktemplate support
 --no-getwork        Disable getwork support
 --no-longpoll       Disable X-Long-Polling support
+--no-pool-redirect  Ignore pool requests to redirect to another server
 --no-restart        Do not attempt to restart devices that hang
 --no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale

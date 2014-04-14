@@ -1758,6 +1758,14 @@ char *set_no_opencl_binaries(__maybe_unused void * const dummy)
 	return NULL;
 }
 
+static
+char *disable_pool_redirect(__maybe_unused void * const dummy)
+{
+	opt_disable_client_reconnect = true;
+	want_stratum = false;
+	return NULL;
+}
+
 static char *set_api_allow(const char *arg)
 {
 	opt_set_charp(arg, &opt_api_allow);
@@ -2187,7 +2195,10 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden),
 	OPT_WITHOUT_ARG("--no-client-reconnect",
 			opt_set_invbool, &opt_disable_client_reconnect,
-			"Disable 'client.reconnect' stratum functionality"),
+			opt_hidden),
+	OPT_WITHOUT_ARG("--no-pool-redirect",
+			disable_pool_redirect, NULL,
+			"Ignore pool requests to redirect to another server"),
 	OPT_WITHOUT_ARG("--no-restart",
 			opt_set_invbool, &opt_restart,
 			"Do not attempt to restart devices that hang"
