@@ -179,7 +179,18 @@ static ssize_t ft232r_readwrite(struct ft232r_device_handle *dev, unsigned char 
 				errno = ETIMEDOUT;
 				return -1;
 			}
+			// fallthru
 		case 0:
+			if (opt_dev_protocol)
+			{
+				char x[(transferred * 2) + 1];
+				bin2hex(x, data, transferred);
+				applog(LOG_DEBUG, "ft232r %p: %s: %s",
+				       dev,
+				       (endpoint & LIBUSB_ENDPOINT_IN) ? "RECV" : "SEND",
+				       x);
+			}
+			
 			return transferred;
 		default:
 			errno = EIO;
