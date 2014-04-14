@@ -688,6 +688,9 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		kiname[kinamelen] = '\0';
 		clState->chosen_kernel = select_kernel(kiname);
 	}
+	else
+	if (opt_scrypt)
+		clState->chosen_kernel = KL_SCRYPT;
 	switch (clState->chosen_kernel) {
 		case KL_NONE:
 			applog(LOG_ERR, "%s: Failed to identify kernel interface for %s",
