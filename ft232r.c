@@ -24,6 +24,7 @@
 
 #define FT232R_IDVENDOR   0x0403
 #define FT232R_IDPRODUCT  0x6001
+#define FT232H_IDPRODUCT  0x6014
 
 static
 void ft232r_devinfo_free(struct lowlevel_device_info * const info)
@@ -55,6 +56,7 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 {
 	struct lowlevel_device_info *devinfo_list = NULL;
 	
+	lowlevel_detect_id(_ft232r_devinfo_scan_cb, &devinfo_list, &lowl_usb, FT232R_IDVENDOR, FT232H_IDPRODUCT);
 	lowlevel_detect_id(_ft232r_devinfo_scan_cb, &devinfo_list, &lowl_usb, FT232R_IDVENDOR, FT232R_IDPRODUCT);
 	
 	return devinfo_list;
