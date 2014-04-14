@@ -231,10 +231,13 @@ C:\MinGW\msys\1.0\home\USER\bfgminer
 
 	bfgminer.exe
 	bfgminer-rpc.exe
-	*.cl
 	COPYING
 	LICENSE 
 	README*
+
+C:\MinGW\msys\1.0\home\USER\bfgminer\opencl
+
+	*.cl
 
 C:\MinGW\msys\1.0\home\USER\bfgminer\libblkmaker\.libs  
 

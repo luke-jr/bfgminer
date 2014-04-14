@@ -116,10 +116,10 @@ for build in "${builds[@]}"; do
 			libblkmaker/.libs/*.dll \
 			*.exe
 	fi
-	cp -v \
+	cp -vr \
 		*.exe \
 		libblkmaker/.libs/*.dll \
-		*.cl \
+		opencl \
 		example.conf \
 		windows-build.txt \
 		miner.php \
