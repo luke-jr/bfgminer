@@ -145,6 +145,7 @@ BFGMiner specific configuration options:
 	--enable-bfsb           Compile support for BFSB (default disabled)
 	--disable-bigpic        Compile support for Big Picture Mining USB (default
 	                        enabled)
+	--disable-bfx           Compile support for BFx2 (default if libusb)
 	--disable-littlefury    Compile support for LittleFury (default enabled)
 	--disable-nanofury      Compile support for NanoFury (default enabled)
 	--disable-hashbuster    Compile support for HashBuster Nano (default

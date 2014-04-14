@@ -273,6 +273,10 @@ if HAS_BFSB
 bfgminer_SOURCES += driver-bfsb.c
 endif
 
+if USE_BFX
+bfgminer_SOURCES += driver-bfx.c
+endif
+
 if HAS_METABANK
 bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2c.c
 endif

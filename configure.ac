@@ -765,6 +765,39 @@ fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
 
 
+driverlist="$driverlist bfx"
+AC_ARG_ENABLE([bfx],
+	[AC_HELP_STRING([--disable-bfx],[Compile support for BFx2 (default if libusb)])],
+	[bfx=$enableval],
+	[bfx=$ddauto]
+	)
+if test "x$bfx" = "xno"; then
+	true
+elif test "x$bitfury$libusb" = "xyesyes"; then
+	bfx=yes
+elif test "x$bfx" = "xyes"; then
+	if test "x$want_libusb" = "xno"; then
+		AC_MSG_ERROR([You disabled libusb, required for BFx2 support])
+	elif test "x$libusb" = "xno"; then
+		AC_MSG_ERROR([Could not find libusb, required for BFx2 support])
+	else
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFx2])
+	fi
+elif test "x$bfx" = "xauto"; then
+	bfx="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for BFx2 support])
+		bfx_enableaction="install libusb 1.0+"
+	fi
+fi
+if test "x$bfx" = xyes; then
+	AC_DEFINE([USE_BFX], [1], [Defined to 1 if BFx2 support is wanted])
+	need_lowl_ftdi=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_BFX], [test x$bfx = xyes])
+
+
 driverlist="$driverlist drillbit"
 AC_ARG_ENABLE([drillbit],
 	[AC_HELP_STRING([--disable-drillbit],[Compile support for DrillBit (default enabled)])],
