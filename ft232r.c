@@ -26,6 +26,8 @@
 #define FT232R_IDPRODUCT  0x6001
 #define FT232H_IDPRODUCT  0x6014
 
+#define FT232H_LATENCY_MS  2
+
 static
 void ft232r_devinfo_free(struct lowlevel_device_info * const info)
 {
@@ -68,14 +70,27 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 
 #define FTDI_REQUEST_RESET           0
 #define FTDI_REQUEST_SET_BAUDRATE    3
+#define FTDI_REQUEST_SET_EVENT_CHAR     0x06
+#define FTDI_REQUEST_SET_ERROR_CHAR     0x07
+#define FTDI_REQUEST_SET_LATENCY_TIMER  0x09
 #define FTDI_REQUEST_SET_BITMODE  0x0b
 #define FTDI_REQUEST_GET_PINS     0x0c
 #define FTDI_REQUEST_GET_BITMODE  0x0c
 
+#define FTDI_RESET_SIO  0
+
 #define FTDI_BAUDRATE_3M  0,0
+
+#define FTDI_BITMODE_MPSSE  0x02
 
 #define FTDI_INDEX       1
 #define FTDI_TIMEOUT  1000
+
+// http://www.ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
+#define FTDI_LOOPBACK_DISABLE  0x85
+#define FTDI_TCK_DIVISOR       0x86
+// Divide-by-five clock prescaler
+#define FTDI_DIV5_ENABLE       0x8b
 
 struct ft232r_device_handle {
 	libusb_device_handle *h;
@@ -87,6 +102,7 @@ struct ft232r_device_handle {
 	uint16_t osz;
 	unsigned char *obuf;
 	uint16_t obufsz;
+	bool mpsse;
 };
 
 static
@@ -148,6 +164,84 @@ struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * con
 	}
 	
 	return ftdi;
+}
+
+static
+void ft232h_mpsse_clock_divisor(uint8_t * const buf, const unsigned long clock, const unsigned long freq)
+{
+	const uint16_t divisor = (clock / freq / 2) - 1;
+	buf[0] = divisor & 0xff;
+	buf[1] = divisor >> 8;
+}
+
+static ssize_t ft232r_readwrite(struct ft232r_device_handle *, unsigned char, void *, size_t);
+
+struct ft232r_device_handle *ft232h_open_mpsse(const struct lowlevel_device_info * const info)
+{
+	if (info->pid != FT232H_IDPRODUCT)
+		return NULL;
+	
+	struct ft232r_device_handle * const ftdi = ftdi_common_open(info);
+	uint8_t buf[3];
+	if (!ftdi)
+		return NULL;
+	
+	if (libusb_control_transfer(ftdi->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_RESET, FTDI_RESET_SIO, 1, NULL, 0, FTDI_TIMEOUT) < 0)
+	{
+		applog(LOG_ERR, "%s: Error requesting %s", __func__, "SIO reset");
+		goto err;
+	}
+	
+	if (libusb_control_transfer(ftdi->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_LATENCY_TIMER, FT232H_LATENCY_MS, 1, NULL, 0, FTDI_TIMEOUT) < 0)
+	{
+		applog(LOG_ERR, "%s: Error setting %s", __func__, "latency timer");
+		goto err;
+	}
+	
+	if (libusb_control_transfer(ftdi->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_EVENT_CHAR, 0, 1, NULL, 0, FTDI_TIMEOUT) < 0)
+	{
+		applog(LOG_ERR, "%s: Error setting %s", __func__, "event char");
+		goto err;
+	}
+	
+	if (libusb_control_transfer(ftdi->h, FTDI_REQTYPE_OUT, FTDI_REQUEST_SET_ERROR_CHAR, 0, 1, NULL, 0, FTDI_TIMEOUT) < 0)
+	{
+		applog(LOG_ERR, "%s: Error setting %s", __func__, "error char");
+		goto err;
+	}
+	
+	if (!ft232r_set_bitmode(ftdi, 0, FTDI_BITMODE_MPSSE))
+	{
+		applog(LOG_ERR, "%s: Error setting %s", __func__, "MPSSE bitmode");
+		goto err;
+	}
+	
+	buf[0] = FTDI_DIV5_ENABLE;
+	if (ft232r_readwrite(ftdi, ftdi->o, buf, 1) != 1)
+	{
+		applog(LOG_ERR, "%s: Error requesting %s", __func__, "divide-by-five clock prescaler");
+		goto err;
+	}
+	
+	buf[0] = FTDI_TCK_DIVISOR;
+	ft232h_mpsse_clock_divisor(&buf[1], 12000000, 200000);
+	if (ft232r_readwrite(ftdi, ftdi->o, buf, 3) != 3)
+	{
+		applog(LOG_ERR, "%s: Error setting %s", __func__, "MPSSE clock divisor");
+		goto err;
+	}
+	
+	buf[0] = FTDI_LOOPBACK_DISABLE;
+	if (ft232r_readwrite(ftdi, ftdi->o, buf, 1) != 1)
+		applog(LOG_WARNING, "%s: Error disabling loopback", __func__);
+	
+	ftdi->mpsse = true;
+	
+	return ftdi;
+
+err:
+	ft232r_close(ftdi);
+	return NULL;
 }
 
 void ft232r_close(struct ft232r_device_handle *dev)
@@ -270,9 +364,28 @@ ssize_t ft232r_rw_all(const void * const rwfunc_p, struct ft232r_device_handle *
 	return total ?: writ;
 }
 
-ssize_t ft232r_write_all(struct ft232r_device_handle * const dev, const void * const data, size_t count)
+ssize_t ft232r_write_all(struct ft232r_device_handle * const dev, const void * const data_p, size_t count)
 {
-	return ft232r_rw_all(ft232r_write, dev, (void*)data, count);
+	const uint8_t *data = data_p;
+	if (dev->mpsse)
+	{
+		ssize_t e;
+		while (count > 0x10000)
+		{
+			e = ft232r_write_all(dev, data, 0x10000);
+			if (e != 0x10000)
+				return e;
+			data += 0x10000;
+			count -= 0x10000;
+		}
+		
+		const uint16_t ftdilen = count - 1;
+		const uint8_t cmd[] = { 0x11, ftdilen & 0xff, ftdilen >> 8 };
+		e = ft232r_rw_all(ft232r_write, dev, (void*)cmd, 3);
+		if (e != 3)
+			return e;
+	}
+	return ft232r_rw_all(ft232r_write, dev, (void*)data, count) + (data - (uint8_t*)data_p);
 }
 
 ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
