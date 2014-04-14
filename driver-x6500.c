@@ -25,8 +25,8 @@
 #include "jtag.h"
 #include "logging.h"
 #include "miner.h"
-#include "ft232r.h"
 #include "lowlevel.h"
+#include "lowl-ftdi.h"
 #include "lowl-usb.h"
 
 #define X6500_USB_PRODUCT "X6500 FPGA Miner"

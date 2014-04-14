@@ -138,6 +138,7 @@ BFGMiner driver configuration options:
 	                        enabled
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
+	--disable-bfx           Compile support for BFx2 (default if libusb)
 	--disable-bifury        Compile support for Bi*Fury (default enabled)
 	--disable-bigpic        Compile support for Big Picture Mining USB (default
 	                        enabled)

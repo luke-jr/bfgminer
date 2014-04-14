@@ -124,6 +124,7 @@ need_binloader=no
 need_dynclock=no
 need_lowl_vcom=no
 need_lowlevel=no
+need_lowl_ftdi=no
 need_lowl_hid=no
 need_lowl_pci=no
 need_lowl_usb=no
@@ -663,7 +664,7 @@ fi
 if test "x$x6500" = xyes; then
 	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
 	need_dynclock=yes
-	need_lowl_usb=yes
+	need_lowl_ftdi=yes
 	need_binloader=yes
 	has_fpga=yes
 	have_udevrules=true
@@ -762,6 +763,39 @@ if test "x$bigpic" = "xyes"; then
 	have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
+
+
+driverlist="$driverlist bfx"
+AC_ARG_ENABLE([bfx],
+	[AC_HELP_STRING([--disable-bfx],[Compile support for BFx2 (default if libusb)])],
+	[bfx=$enableval],
+	[bfx=$ddauto]
+	)
+if test "x$bfx" = "xno"; then
+	true
+elif test "x$bitfury$libusb" = "xyesyes"; then
+	bfx=yes
+elif test "x$bfx" = "xyes"; then
+	if test "x$want_libusb" = "xno"; then
+		AC_MSG_ERROR([You disabled libusb, required for BFx2 support])
+	elif test "x$libusb" = "xno"; then
+		AC_MSG_ERROR([Could not find libusb, required for BFx2 support])
+	else
+		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFx2])
+	fi
+elif test "x$bfx" = "xauto"; then
+	bfx="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for BFx2 support])
+		bfx_enableaction="install libusb 1.0+"
+	fi
+fi
+if test "x$bfx" = xyes; then
+	AC_DEFINE([USE_BFX], [1], [Defined to 1 if BFx2 support is wanted])
+	need_lowl_ftdi=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_BFX], [test x$bfx = xyes])
 
 
 driverlist="$driverlist drillbit"
@@ -975,6 +1009,12 @@ if test "x$need_lowl_vcom" != "xno"; then
 	elif test "x$libusb$want_libusb" = xnoyes; then
 		AC_MSG_ERROR([Could not find libusb, which you specifically requested])
 	fi
+fi
+
+lowllist="$lowllist ftdi/need_lowl_ftdi"
+if test x$need_lowl_ftdi = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_FTDI], [1], [Defined to 1 if lowlevel ftdi drivers are being used])
+	need_lowl_usb=yes
 fi
 
 if test "x$need_lowl_usb" = "xno"; then
@@ -1258,6 +1298,7 @@ AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_FTDI], [test x$need_lowl_ftdi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])

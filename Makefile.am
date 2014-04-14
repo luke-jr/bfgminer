@@ -255,7 +255,7 @@ bfgminer_SOURCES += driver-modminer.c
 endif
 
 if HAS_X6500
-bfgminer_SOURCES += driver-x6500.c ft232r.c ft232r.h jtag.c jtag.h
+bfgminer_SOURCES += driver-x6500.c jtag.c jtag.h
 endif
 
 if HAS_ZTEX
@@ -271,6 +271,10 @@ bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h 
 
 if HAS_BFSB
 bfgminer_SOURCES += driver-bfsb.c
+endif
+
+if USE_BFX
+bfgminer_SOURCES += driver-bfx.c
 endif
 
 if HAS_METABANK
@@ -297,6 +301,10 @@ endif
 
 if USE_HASHFAST
 bfgminer_SOURCES += driver-hashfast.c
+endif
+
+if NEED_BFG_LOWL_FTDI
+bfgminer_SOURCES += lowl-ftdi.c lowl-ftdi.h
 endif
 
 if NEED_BFG_LOWL_HID

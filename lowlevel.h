@@ -57,7 +57,7 @@ extern struct lowlevel_device_info *lowlevel_ref(const struct lowlevel_device_in
 extern void lowlevel_devinfo_semicpy(struct lowlevel_device_info *dst, const struct lowlevel_device_info *src);
 extern void lowlevel_devinfo_free(struct lowlevel_device_info *);
 
-#ifdef USE_X6500
+#ifdef NEED_BFG_LOWL_FTDI
 extern struct lowlevel_driver lowl_ft232r;
 #endif
 #ifdef NEED_BFG_LOWL_HID

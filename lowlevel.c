@@ -94,7 +94,7 @@ struct lowlevel_device_info *lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
-#ifdef USE_X6500
+#ifdef NEED_BFG_LOWL_FTDI
 	devinfo_mid_list = lowl_ft232r.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif

@@ -16,7 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ft232r.h"
+#include "lowl-ftdi.h"
 #include "jtag.h"
 #include "logging.h"
 #include "miner.h"
