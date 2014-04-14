@@ -211,10 +211,9 @@ CL_API_ENTRY cl_int CL_API_CALL
 
 int opt_platform_id = -1;
 
-char *file_contents(const char *filename, int *length)
+FILE *opencl_open_kernel(const char * const filename)
 {
 	char *fullpath = alloca(PATH_MAX);
-	void *buffer;
 	FILE *f;
 
 	/* Try in the optional kernel path or installed prefix first */
@@ -228,9 +227,19 @@ char *file_contents(const char *filename, int *length)
 	/* Finally try opening it directly */
 	if (!f)
 		f = fopen(filename, "rb");
+	
+	return f;
+}
+
+char *file_contents(const char *filename, int *length)
+{
+	void *buffer;
+	FILE *f;
+
+	f = opencl_open_kernel(filename);
 
 	if (!f) {
-		applog(LOG_ERR, "Unable to open %s or %s for reading", filename, fullpath);
+		applog(LOG_ERR, "Unable to open %s for reading", filename);
 		return NULL;
 	}
 

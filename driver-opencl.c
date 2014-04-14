@@ -411,6 +411,7 @@ const char *opencl_get_default_kernel_filename(const enum cl_kernels kern)
 static
 bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 {
+	FILE *F;
 	const enum cl_kernels kern = select_kernel(_val);
 	struct opencl_device_data * const data = cgpu->device_data;
 	{
@@ -423,8 +424,10 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 	char filename[knamelen + 3 + 1];
 	sprintf(filename, "%s.cl", _val);
 	
-	if (access(filename, R_OK))
+	F = opencl_open_kernel(filename);
+	if (!F)
 		return false;
+	fclose(F);
 	
 	free(data->kernel_file);
 	data->kernel_file = strdup(_val);
