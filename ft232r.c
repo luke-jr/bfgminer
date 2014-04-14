@@ -87,6 +87,8 @@ struct lowlevel_device_info *ft232r_devinfo_scan()
 #define FTDI_TIMEOUT  1000
 
 // http://www.ftdichip.com/Support/Documents/AppNotes/AN_108_Command_Processor_for_MPSSE_and_MCU_Host_Bus_Emulation_Modes.pdf
+#define FTDI_ADBUS_SET         0x80
+#define FTDI_ACBUS_SET         0x82
 #define FTDI_LOOPBACK_DISABLE  0x85
 #define FTDI_TCK_DIVISOR       0x86
 // Divide-by-five clock prescaler
@@ -455,6 +457,14 @@ bool ft232r_get_cbus_bits(struct ft232r_device_handle *dev, bool *out_sio0, bool
 	*out_sio0 = data & 1;
 	*out_sio1 = data & 2;
 	return true;
+}
+
+bool ft232h_mpsse_set_axbus(struct ft232r_device_handle * const ftdi, const uint8_t value, const uint8_t directions, const bool adbus)
+{
+	if (ft232r_flush(ftdi))
+		cgsleep_ms(1);
+	const uint8_t buf[] = { adbus ? FTDI_ADBUS_SET : FTDI_ACBUS_SET, value, directions };
+	return (ft232r_write(ftdi, buf, 3) == 3) && (ft232r_flush(ftdi) == 3);
 }
 
 struct lowlevel_driver lowl_ft232r = {
