@@ -17,6 +17,8 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+// kernel-interface: diablo
+
 #ifdef VECTORS4
 	typedef uint4 z;
 #elif defined(VECTORS2)

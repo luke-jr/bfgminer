@@ -259,6 +259,15 @@ load_opencl_symbols() {
 #endif
 
 
+typedef cl_int (*queue_kernel_parameters_func_t)(_clState *, struct work *, cl_uint);
+
+struct opencl_kernel_interface {
+	const char *kiname;
+	const char *default_filename;
+	queue_kernel_parameters_func_t queue_kernel_parameters_func;
+};
+
+
 #ifdef HAVE_CURSES
 extern WINDOW *mainwin, *statuswin, *logwin;
 extern void enable_curses(void);
@@ -273,6 +282,7 @@ extern int gpur_thr_id;
 extern bool opt_noadl;
 extern bool have_opencl;
 static _clState *clStates[MAX_GPUDEVICES];
+static struct opencl_kernel_interface kernel_interfaces[];
 
 
 
@@ -369,7 +379,6 @@ _SET_INT_LIST(lookup_gap        , true, opt_lg )
 _SET_INT_LIST(thread_concurrency, true, opt_tc )
 #endif
 
-static
 enum cl_kernels select_kernel(const char * const arg)
 {
 	if (!strcmp(arg, "diablo"))
@@ -387,21 +396,44 @@ enum cl_kernels select_kernel(const char * const arg)
 	return KL_NONE;
 }
 
+const char *opencl_get_kernel_interface_name(const enum cl_kernels kern)
+{
+	struct opencl_kernel_interface *ki = &kernel_interfaces[kern];
+	return ki->kiname;
+}
+
+const char *opencl_get_default_kernel_filename(const enum cl_kernels kern)
+{
+	struct opencl_kernel_interface *ki = &kernel_interfaces[kern];
+	return ki->default_filename;
+}
+
 static
-bool _set_kernel(struct cgpu_info * const cgpu, const char * const _val)
+bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 {
 	const enum cl_kernels kern = select_kernel(_val);
-	if (kern == KL_NONE)
-		return false;
 	struct opencl_device_data * const data = cgpu->device_data;
-	data->kernel = kern;
+	{
+		const char *kname = opencl_get_default_kernel_filename(kern);
+		if (kname)
+			_val = kname;
+	}
+	
+	size_t knamelen = strlen(_val);
+	char filename[knamelen + 3 + 1];
+	sprintf(filename, "%s.cl", _val);
+	
+	if (access(filename, R_OK))
+		return false;
+	
+	free(data->kernel_file);
+	data->kernel_file = strdup(_val);
+	
 	return true;
 }
 _SET_INTERFACE(kernel)
 const char *set_kernel(char *arg)
 {
-	if (opt_scrypt)
-		return "Cannot specify a kernel with scrypt";
 	return _set_list(arg, "Invalid value passed to set_kernel", _set_kernel);
 }
 #endif
@@ -1224,6 +1256,19 @@ cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, _
 #endif /* HAVE_OPENCL */
 
 
+static
+struct opencl_kernel_interface kernel_interfaces[] = {
+	{NULL},
+	{"poclbm",   "poclbm130302", queue_poclbm_kernel},
+	{"phatk",     "phatk121016", queue_phatk_kernel},
+	{"diakgcn", "diakgcn121016", queue_diakgcn_kernel},
+	{"diablo",   "diablo130302", queue_diablo_kernel},
+#ifdef USE_SCRYPT
+	{"scrypt",   "scrypt130511", queue_scrypt_kernel},
+#endif
+};
+
+
 #ifdef HAVE_OPENCL
 /* We have only one thread that ever re-initialises GPUs, thus if any GPU
  * init command fails due to a completely wedged GPU, the thread will never
@@ -1574,29 +1619,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	if (!cgpu->name)
 		cgpu->name = trimmed_strdup(name);
 	if (!cgpu->kname)
-	{
-		switch (clStates[i]->chosen_kernel) {
-			case KL_DIABLO:
-				cgpu->kname = "diablo";
-				break;
-			case KL_DIAKGCN:
-				cgpu->kname = "diakgcn";
-				break;
-			case KL_PHATK:
-				cgpu->kname = "phatk";
-				break;
-#ifdef USE_SCRYPT
-			case KL_SCRYPT:
-				cgpu->kname = "scrypt";
-				break;
-#endif
-			case KL_POCLBM:
-				cgpu->kname = "poclbm";
-				break;
-			default:
-				break;
-		}
-	}
+		cgpu->kname = opencl_get_kernel_interface_name(clStates[i]->chosen_kernel);
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	get_now_datestamp(cgpu->init, sizeof(cgpu->init));
 

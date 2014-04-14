@@ -2,6 +2,8 @@
 // I have therefore decided to keep it public-domain.
 // Modified version copyright 2011-2012 Con Kolivas
 
+// kernel-interface: phatk
+
 #ifdef VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2

@@ -28,7 +28,7 @@ struct opencl_device_data {
 	
 	cl_uint vwidth;
 	size_t work_size;
-	enum cl_kernels kernel;
+	char *kernel_file;
 	cl_ulong max_alloc;
 	
 	enum opencl_binary_usage opt_opencl_binaries;
@@ -112,6 +112,9 @@ extern const char *set_shaders(char *arg);
 extern const char *set_lookup_gap(char *arg);
 extern const char *set_thread_concurrency(char *arg);
 #endif
+extern enum cl_kernels select_kernel(const char *);
+extern const char *opencl_get_kernel_interface_name(const enum cl_kernels);
+extern const char *opencl_get_default_kernel_filename(const enum cl_kernels);
 extern const char *set_kernel(char *arg);
 extern void write_config_opencl(FILE *);
 void manage_gpu(void);
