@@ -25,7 +25,7 @@ enum ft232r_reset_purge {
 
 struct ft232r_device_handle;
 
-extern struct ft232r_device_handle *ft232r_open(struct lowlevel_device_info *);
+extern struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info *);
 extern void ft232r_close(struct ft232r_device_handle *);
 extern bool ft232r_purge_buffers(struct ft232r_device_handle *, enum ft232r_reset_purge);
 extern bool ft232r_set_bitmode(struct ft232r_device_handle *, uint8_t mask, uint8_t mode);

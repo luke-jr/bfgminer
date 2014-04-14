@@ -87,13 +87,9 @@ struct ft232r_device_handle {
 	uint16_t obufsz;
 };
 
-struct ft232r_device_handle *ft232r_open(struct lowlevel_device_info *info)
+struct ft232r_device_handle *ft232r_open(const struct lowlevel_device_info * const info)
 {
 	libusb_device * const dev = info->lowl_data;
-	info->lowl_data = NULL;
-	
-	if (!dev)
-		return NULL;
 	
 	// FIXME: Cleanup on errors
 	libusb_device_handle *devh;
