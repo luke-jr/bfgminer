@@ -3843,11 +3843,13 @@ static void curses_print_status(const int ts)
 one_workable_pool: ;
 		char pooladdr[19];
 		{
-			size_t pooladdrlen = strlen(pool->sockaddr_url);
+			const char *rawaddr = pool->sockaddr_url;
+			BFGINIT(rawaddr, pool->rpc_url);
+			size_t pooladdrlen = strlen(rawaddr);
 			if (pooladdrlen > 20)
-				snprintf(pooladdr, sizeof(pooladdr), "...%s", &pool->sockaddr_url[pooladdrlen - (sizeof(pooladdr) - 4)]);
+				snprintf(pooladdr, sizeof(pooladdr), "...%s", &rawaddr[pooladdrlen - (sizeof(pooladdr) - 4)]);
 			else
-				snprintf(pooladdr, sizeof(pooladdr), "%*s", -(sizeof(pooladdr) - 1), pool->sockaddr_url);
+				snprintf(pooladdr, sizeof(pooladdr), "%*s", -(sizeof(pooladdr) - 1), rawaddr);
 		}
 		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
 		             pool->pool_no, pooladdr, pool->diff,
