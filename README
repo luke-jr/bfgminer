@@ -133,53 +133,63 @@ Optional Dependencies:
 	  yasm 1.0.1+        http://yasm.tortall.net/
 
 
-BFGMiner specific configuration options:
-	--disable-avalon        Compile support for Avalon (default enabled)
+BFGMiner driver configuration options:
 	--disable-other-drivers Build without drivers by default unless explicitly
 	                        enabled
-	--enable-cpumining      Build with cpu mining support(default disabled)
-	--disable-dualminer     Compile support for DualMiner (default enabled)
-	--enable-opencl         Compile support for OpenCL (default disabled)
-	--disable-adl           Build without ADL monitoring (default enabled)
-	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--disable-avalon        Compile support for Avalon (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
+	--disable-bifury        Compile support for Bi*Fury (default enabled)
 	--disable-bigpic        Compile support for Big Picture Mining USB (default
 	                        enabled)
-	--disable-littlefury    Compile support for LittleFury (default enabled)
-	--disable-nanofury      Compile support for NanoFury (default enabled)
+	--disable-bitforce      Compile support for BitForce (default enabled)
+	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--enable-cpumining      Build with CPU mining support (default disabled)
+	--disable-drillbit      Compile support for DrillBit (default enabled)
+	--disable-dualminer     Compile support for DualMiner (default enabled)
 	--disable-hashbuster    Compile support for HashBuster Nano (default
 	                        enabled)
-	--disable-hashbuster2   Compile support for HashBuster Micro (default if
+	--disable-hashbusterusb Compile support for HashBuster Micro (default if
 	                        libusb)
-	--enable-metabank       Compile support for Metabank (default disabled)
-	--disable-bitforce      Compile support for BitForce (default enabled)
+	--disable-hashfast      Compile support for HashFast (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--disable-klondike      Compile support for Klondike (default enabled)
 	--enable-knc            Compile support for KnC (default disabled)
+	--disable-littlefury    Compile support for LittleFury (default enabled)
+	--enable-metabank       Compile support for Metabank (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
-	--disable-x6500         Compile support for X6500 (default enabled)
+	--disable-nanofury      Compile support for NanoFury (default enabled)
+	--enable-opencl         Compile support for OpenCL (default disabled)
+	--disable-adl           Build without ADL monitoring (default enabled)
+	--disable-twinfury      Compile support for Twinfury USB miner (default
+	                        enabled)
+	--disable-x6500         Compile support for X6500 (default if libusb)
 	--disable-ztex          Compile support for ZTEX (default if libusb)
+
+BFGMiner algorithm configuration option:
 	--enable-scrypt         Compile support for scrypt mining (default disabled)
-	--with-system-libblkmaker  Use system libblkmaker rather than bundled one
-	                           (default disabled)
+
+BFGMiner dependency configuration options:
+	--without-curses        Compile support for curses TUI (default enabled)
+	--without-libevent      Compile support for libevent stratum server (default
+	                        enabled)
+	--without-libmicrohttpd Compile support for libmicrohttpd getwork server
+	                        (default enabled)
+	--without-libudev       Autodetect FPGAs using libudev (default enabled)
+	--without-libusb        Compile using libusb (default enabled)
+	--without-sensors       Build with libsensors monitoring (default enabled)
+	--with-system-libblkmaker
+	                        Use system libblkmaker rather than bundled one
+	                        (default disabled)
 	--with-udevrulesdir=DIR Install udev rules into this directory
 	--without-uio           Compile support for PCI devices via Linux UIO
 	                        interface (default enabled)
 	--without-vfio          Compile support for PCI devices via Linux VFIO
 	                        interface (default enabled)
-	--without-sensors       Build with libsensors monitoring (default enabled)
-	--without-curses        Compile support for curses TUI (default enabled)
-	--without-libmicrohttpd Compile support for libmicrohttpd getwork server
-	                        (default enabled)
-	--without-libevent      Compile support for libevent stratum server (default
-	                        enabled)
-	--without-libusb        Compile using libusb (default enabled)
-	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 
 Basic *nix build instructions:
 
 ./autogen.sh    # only needed if building from git repo
-./configure
+./configure  # list configuration options here
 make
 
 No installation is necessary. You may run BFGMiner from the build directory
