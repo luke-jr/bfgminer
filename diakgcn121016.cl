@@ -3,6 +3,8 @@
 // Parts and / or ideas for this kernel are based upon the public-domain poclbm project, the phatk kernel by Phateus and the DiabloMiner kernel by DiabloD3.
 // The kernel was rewritten by me (Diapolo) and is still public-domain!
 
+// kernel-interface: diakgcn
+
 #ifdef VECTORS4
 	typedef uint4 u;
 #elif defined VECTORS2

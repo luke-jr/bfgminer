@@ -435,8 +435,13 @@ A: Your parameters are too high. Don't add GPU threads, don't set intensity too
 high, decrease thread concurrency. See the README.scrypt for a lot more help.
 
 Q: Are OpenCL kernels from other mining software useable in BFGMiner?
-A: No, the APIs are often slightly different between the different software and
-they will not work without modifying BFGMiner itself.
+A: The interfaces are often slightly different between the different software,
+so in most cases they will not work without modifying BFGMiner itself. However,
+if the kernel is compatible with one BFGMiner supports, you can edit it in a
+text editor and add a line that looks like this to the top:
+    // kernel-interface: poclbm
+This will instruct BFGMiner to use the poclbm kernel interface. Then to use the
+kernel, just use --set OCL:kernel=mykernel where the filename is mykernel.cl.
 
 Q: BFGMiner stops mining (or my GPUs go DEAD) and I can't close it?
 A: Once the driver has crashed, there is no way for BFGMiner to close cleanly.

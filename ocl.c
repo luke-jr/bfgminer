@@ -11,6 +11,7 @@
 #include "config.h"
 #ifdef HAVE_OPENCL
 
+#include <ctype.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -392,7 +393,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	struct opencl_device_data * const data = cgpu->device_data;
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
-	char *s;
+	char *s, *q;
 	cl_platform_id* platforms;
 	cl_uint preferred_vwidth;
 	cl_device_id *devices;
@@ -615,7 +616,8 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[255];
 	char numbuf[32];
 
-	if (data->kernel == KL_NONE) {
+	if (!data->kernel_file)
+	{
 		if (opt_scrypt) {
 			applog(LOG_INFO, "Selecting scrypt kernel");
 			clState->chosen_kernel = KL_SCRYPT;
@@ -644,20 +646,51 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			applog(LOG_INFO, "Selecting phatk kernel");
 			clState->chosen_kernel = KL_PHATK;
 		}
-		data->kernel = clState->chosen_kernel;
-	} else {
-		clState->chosen_kernel = data->kernel;
-		if (clState->chosen_kernel == KL_PHATK &&
-		    (strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
-		     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
-		     strstr(vbuff, "923.1") || strstr(vbuff, "938.2") ||
-		     strstr(vbuff, "1113.2"))) {
-			applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
-			applog(LOG_WARNING, "You are running SDK 2.6+ which performs poorly with this kernel.");
-			applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
-			applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
-		}
+		data->kernel_file = strdup(opencl_get_default_kernel_filename(clState->chosen_kernel));
 	}
+	
+	snprintf(filename, sizeof(filename), "%s.cl", data->kernel_file);
+	snprintf(binaryfilename, sizeof(filename), "%s", data->kernel_file);
+	int pl;
+	char *source = file_contents(filename, &pl);
+	if (!source)
+		return NULL;
+	s = strstr(source, "kernel-interface:");
+	if (s)
+	{
+		for (s = &s[17]; s[0] && isspace(s[0]); ++s)
+			if (s[0] == '\n' || s[0] == '\r')
+				break;
+		for (q = s; q[0] && !isspace(q[0]); ++q)
+		{}  // Find end of string
+		const size_t kinamelen = q - s;
+		char kiname[kinamelen + 1];
+		memcpy(kiname, s, kinamelen);
+		kiname[kinamelen] = '\0';
+		clState->chosen_kernel = select_kernel(kiname);
+	}
+	switch (clState->chosen_kernel) {
+		case KL_NONE:
+			applog(LOG_ERR, "%s: Failed to identify kernel interface for %s",
+			       cgpu->dev_repr, data->kernel_file);
+			free(source);
+			return NULL;
+		case KL_PHATK:
+			if ((strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
+			     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
+			     strstr(vbuff, "923.1") || strstr(vbuff, "938.2") ||
+			     strstr(vbuff, "1113.2"))) {
+				applog(LOG_WARNING, "WARNING: You have selected the phatk kernel.");
+				applog(LOG_WARNING, "You are running SDK 2.6+ which performs poorly with this kernel.");
+				applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
+				applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
+			}
+		default:
+			;
+	}
+	applog(LOG_DEBUG, "%s: Using kernel %s with interface %s",
+	       cgpu->dev_repr, data->kernel_file,
+	       opencl_get_kernel_interface_name(clState->chosen_kernel));
 
 	/* For some reason 2 vectors is still better even if the card says
 	 * otherwise, and many cards lie about their max so use 256 as max
@@ -666,32 +699,6 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		preferred_vwidth = 1;
 	else if (preferred_vwidth > 2)
 		preferred_vwidth = 2;
-
-	switch (clState->chosen_kernel) {
-		case KL_POCLBM:
-			strcpy(filename, POCLBM_KERNNAME".cl");
-			strcpy(binaryfilename, POCLBM_KERNNAME);
-			break;
-		case KL_PHATK:
-			strcpy(filename, PHATK_KERNNAME".cl");
-			strcpy(binaryfilename, PHATK_KERNNAME);
-			break;
-		case KL_DIAKGCN:
-			strcpy(filename, DIAKGCN_KERNNAME".cl");
-			strcpy(binaryfilename, DIAKGCN_KERNNAME);
-			break;
-		case KL_SCRYPT:
-			strcpy(filename, SCRYPT_KERNNAME".cl");
-			strcpy(binaryfilename, SCRYPT_KERNNAME);
-			/* Scrypt only supports vector 1 */
-			data->vwidth = 1;
-			break;
-		case KL_NONE: /* Shouldn't happen */
-		case KL_DIABLO:
-			strcpy(filename, DIABLO_KERNNAME".cl");
-			strcpy(binaryfilename, DIABLO_KERNNAME);
-			break;
-	}
 
 	if (data->vwidth)
 		clState->vwidth = data->vwidth;
@@ -741,15 +748,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	FILE *binaryfile;
 	size_t *binary_sizes;
 	char **binaries;
-	int pl;
-	char *source = file_contents(filename, &pl);
 	size_t sourceSize[] = {(size_t)pl};
 	cl_uint slot, cpnd;
 
 	slot = cpnd = 0;
-
-	if (!source)
-		return NULL;
 
 	binary_sizes = calloc(sizeof(size_t) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binary_sizes)) {
