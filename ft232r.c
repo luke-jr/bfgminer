@@ -79,7 +79,8 @@ struct ft232r_device_handle {
 	libusb_device_handle *h;
 	uint8_t i;
 	uint8_t o;
-	unsigned char ibuf[256];
+	int iPktSz;
+	unsigned char ibuf[0x400];
 	int ibufLen;
 	uint16_t osz;
 	unsigned char *obuf;
@@ -130,6 +131,7 @@ struct ft232r_device_handle *ft232r_open(struct lowlevel_device_info *info)
 	ftdi = calloc(1, sizeof(*ftdi));
 	ftdi->h = devh;
 	ftdi->i = altcfg->endpoint[0].bEndpointAddress;
+	ftdi->iPktSz = altcfg->endpoint[0].wMaxPacketSize;
 	ftdi->o = altcfg->endpoint[1].bEndpointAddress;
 	ftdi->osz = 0x1000;
 	ftdi->obuf = malloc(ftdi->osz);
@@ -260,14 +262,14 @@ ssize_t ft232r_read(struct ft232r_device_handle *dev, void *data, size_t count)
 	if (r < 0)
 		return r;
 	
-	// First 2 bytes of every 0x40 are FTDI status or something
+	// First 2 bytes of every packet are FTDI status or something
 	while (dev->ibufLen <= 2) {
 		// TODO: Implement a timeout for status byte repeating
 		int transferred = ft232r_readwrite(dev, dev->i, dev->ibuf, sizeof(dev->ibuf));
 		if (transferred <= 0)
 			return transferred;
 		dev->ibufLen = transferred;
-		for (adj = 0x40; dev->ibufLen > adj; adj += 0x40 - 2) {
+		for (adj = dev->iPktSz; dev->ibufLen > adj; adj += dev->iPktSz - 2) {
 			dev->ibufLen -= 2;
 			memmove(&dev->ibuf[adj], &dev->ibuf[adj+2], dev->ibufLen - adj);
 		}
