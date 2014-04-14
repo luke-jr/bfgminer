@@ -10658,7 +10658,6 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 		for (int i = 1; i < lpcount; ++i)
 		{
 			slave = slave->next_proc;
-			strcpy(slave->dev_repr, cgpu->dev_repr);
 			strcpy(slave->proc_repr, cgpu->proc_repr);
 			strcpy(slave->proc_repr_ns, cgpu->proc_repr_ns);
 			for (int x = i, y = lpdigits; --y, x; x /= 26)
