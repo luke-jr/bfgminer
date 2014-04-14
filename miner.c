@@ -6909,7 +6909,7 @@ updated:
 					wlogprint("Rejectin ");
 					break;
 			}
-			wlogprint(pool_proto_str(pool));
+			_wlogprint(pool_proto_str(pool));
 			wlogprint(" Quota %d Pool %d: %s  User:%s\n",
 				pool->quota,
 				pool->pool_no,
