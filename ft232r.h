@@ -41,5 +41,6 @@ extern bool ft232r_get_cbus_bits(struct ft232r_device_handle *dev, bool *out_sio
 extern bool ft232h_mpsse_set_axbus(struct ft232r_device_handle *, uint8_t value, uint8_t directions, bool adbus);
 #define ft232h_mpsse_set_acbus(ftdi, val, dir)  ft232h_mpsse_set_axbus(ftdi, val, dir, false)
 #define ft232h_mpsse_set_adbus(ftdi, val, dir)  ft232h_mpsse_set_axbus(ftdi, val, dir, true)
+extern ssize_t ft232h_mpsse_readwrite_all(struct ft232r_device_handle *, void *read_data, const void *write_data, size_t count);
 
 #endif

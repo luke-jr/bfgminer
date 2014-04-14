@@ -467,6 +467,34 @@ bool ft232h_mpsse_set_axbus(struct ft232r_device_handle * const ftdi, const uint
 	return (ft232r_write(ftdi, buf, 3) == 3) && (ft232r_flush(ftdi) == 3);
 }
 
+ssize_t ft232h_mpsse_readwrite_all(struct ft232r_device_handle * const dev, void * const read_data_p, const void * const write_data_p, size_t count)
+{
+	uint8_t *read_data = read_data_p;
+	const uint8_t *write_data = write_data_p;
+	
+	while (count > 0x10000)
+	{
+		ft232h_mpsse_readwrite_all(dev, read_data, write_data, 0x10000);
+		read_data += 0x10000;
+		write_data += 0x10000;
+		count -= 0x10000;
+	}
+	
+	const uint16_t ftdilen = count - 1;
+	const uint8_t cmd[] = { 0x31, ftdilen & 0xff, ftdilen >> 8 };
+	ssize_t e;
+	
+	e = ft232r_rw_all(ft232r_write, dev, (void*)cmd, 3);
+	if (e != 3)
+		return e;
+	
+	e = ft232r_rw_all(ft232r_write, dev, (void*)write_data, count);
+	if (e != count)
+		return e;
+	
+	return ft232r_read_all(dev, read_data, count) + (read_data - (uint8_t*)read_data_p);
+}
+
 struct lowlevel_driver lowl_ft232r = {
 	.dname = "ft232r",
 	.devinfo_scan = ft232r_devinfo_scan,
