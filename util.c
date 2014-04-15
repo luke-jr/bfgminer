@@ -1394,33 +1394,36 @@ double tdiff(struct timeval *end, struct timeval *start)
 }
 
 
+int utf8_len(const uint8_t b)
+{
+	if (!(b & 0x80))
+		return 1;
+	if (!(b & 0x20))
+		return 2;
+	else
+	if (!(b & 0x10))
+		return 3;
+	else
+		return 4;
+}
+
 int32_t utf8_decode(const void *b, int *out_len)
 {
 	int32_t w;
 	const unsigned char *s = b;
 	
-	if (!(s[0] & 0x80))
-	{
+	*out_len = utf8_len(s[0]);
+	
+	if (*out_len == 1)
 		// ASCII
-		*out_len = 1;
 		return s[0];
-	}
 	
 #ifdef STRICT_UTF8
 	if (unlikely(!(s[0] & 0x40)))
 		goto invalid;
-#endif
-	
-	if (!(s[0] & 0x20))
-		*out_len = 2;
-	else
-	if (!(s[0] & 0x10))
-		*out_len = 3;
-	else
-	if (likely(!(s[0] & 8)))
-		*out_len = 4;
-	else
+	if (unlikely(s[0] & 0x38 == 0x38))
 		goto invalid;
+#endif
 	
 	w = s[0] & ((2 << (6 - *out_len)) - 1);
 	for (int i = 1; i < *out_len; ++i)
@@ -1441,9 +1444,28 @@ int32_t utf8_decode(const void *b, int *out_len)
 	
 	return w;
 
+#ifdef STRICT_UTF8
 invalid:
 	*out_len = 1;
 	return REPLACEMENT_CHAR;
+#endif
+}
+
+size_t utf8_strlen(const void * const b)
+{
+	const uint8_t *s = b;
+	size_t c = 0;
+	int clen, i;
+	while (s[0])
+	{
+		clen = utf8_len(s[0]);
+		for (i = 0; i < clen; ++i)
+			if (!s[i])
+				clen = 1;
+		++c;
+		s += clen;
+	}
+	return c;
 }
 
 static
@@ -1451,6 +1473,17 @@ void _utf8_test(const char *s, const wchar_t expected, int expectedlen)
 {
 	int len;
 	wchar_t r;
+	
+	if (expected != REPLACEMENT_CHAR)
+	{
+		len = utf8_len(((uint8_t*)s)[0]);
+		if (len != expectedlen)
+			applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got utf8_len=>%d", (unsigned long)expected, expectedlen, len);
+		len = utf8_strlen(s);
+		if (len != (s[0] ? 1 : 0))
+			applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got utf8_strlen=>%d", (unsigned long)expected, expectedlen, len);
+		len = -1;
+	}
 	
 	r = utf8_decode(s, &len);
 	if (unlikely(r != expected || expectedlen != len))
