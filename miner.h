@@ -439,8 +439,15 @@ struct cgminer_pool_stats {
 	uint64_t net_bytes_received;
 };
 
+
 #define PRIprepr "-6s"
 #define PRIpreprv "s"
+
+#define ALLOC_H2B_NOUNIT  5
+#define ALLOC_H2B_SHORT   6
+#define ALLOC_H2B_SPACED  7
+#define ALLOC_H2B_SHORTV  6
+
 
 struct cgpu_info {
 	int cgminer_id;
@@ -1231,7 +1238,7 @@ struct pool {
 	int seq_getfails;
 	int solved;
 	double diff1;
-	char diff[8];
+	char diff[ALLOC_H2B_SHORTV];
 	int quota;
 	int quota_gcd;
 	int quota_used;
