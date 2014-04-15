@@ -10928,19 +10928,11 @@ const struct device_drv *_probe_device_find_drv(const char * const _dname, const
 }
 
 static
-bool _probe_device_internal(struct lowlevel_device_info * const info, const char * const dname, const size_t dnamelen)
-{
-	const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-	if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-		return false;
-	return drv->lowl_probe(info);
-}
-
-static
 void *probe_device_thread(void *p)
 {
 	struct lowlevel_device_info * const infolist = p;
 	struct lowlevel_device_info *info = infolist;
+	bool request_rescan = false;
 	
 	{
 		char threadname[5 + strlen(info->devid) + 1];
@@ -10968,11 +10960,14 @@ void *probe_device_thread(void *p)
 			if (!_probe_device_match(info, ser))
 				continue;
 			const size_t dnamelen = (colon - dname);
-			if (_probe_device_internal(info, dname, dnamelen))
+			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
+			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+				continue;
+			if (drv->lowl_probe(info))
 				return NULL;
 			else
 			if (opt_hotplug)
-				bfg_need_detect_rescan = true;
+				request_rescan = true;
 		}
 	}
 	
@@ -11048,7 +11043,7 @@ void *probe_device_thread(void *p)
 							return NULL;
 					}
 					if (opt_hotplug)
-						bfg_need_detect_rescan = true;
+						request_rescan = true;
 					break;
 				}
 			}
@@ -11059,10 +11054,17 @@ void *probe_device_thread(void *p)
 		const size_t dnamelen = (colon - dname);
 		LL_FOREACH2(infolist, info, same_devid_next)
 		{
-			if (_probe_device_internal(info, dname, dnamelen))
+			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
+			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+				continue;
+			if (drv->lowl_probe(info))
 				return NULL;
 		}
 	}
+	
+	// Only actually request a rescan if we never found any cgpu
+	if (request_rescan)
+		bfg_need_detect_rescan = true;
 	
 	return NULL;
 }
