@@ -3194,15 +3194,24 @@ int format_unit3(char *buf, size_t sz, enum bfu_floatprec fprec, const char *mea
 			_SNP("%u", (unsigned int)hashrate);
 	}
 	
-	switch (fmt) {
-	case H2B_SPACED:
-		_SNP(" ");
-	case H2B_SHORT:
-		_SNP("%c%s", _unitchar[unit], measurement);
-	default:
-		break;
-	case H2B_SHORTV:
-		_SNP("%.1s%s", (unit == _unitbase) ? "" : &_unitchar[unit], measurement);
+	if (fmt != H2B_NOUNIT)
+	{
+		char uc[3] = {_unitchar[unit], '\0'};
+		switch (fmt) {
+			case H2B_SPACED:
+				_SNP(" ");
+			default:
+				break;
+			case H2B_SHORTV:
+				if (isspace(uc[0]))
+					uc[0] = '\0';
+		}
+		
+		if (uc[0] == '\xb5')
+			// Convert to UTF-8
+			snprintf(uc, sizeof(uc), "%s", U8_MICRO);
+		
+		_SNP("%s%s", uc, measurement);
 	}
 	
 	return rv;
@@ -3651,17 +3660,15 @@ void bfg_waddstr(WINDOW *win, const char *s)
 		if (p != s)
 			waddnstr(win, s, p - s);
 		w = utf8_decode(p, &wlen);
-		if (unlikely(p[0] == '\xb5'))  // HACK for Mu (SI prefix micro-)
-		{
-			w = unicode_micro;
-			wlen = 1;
-		}
 		s = p += wlen;
 		switch(w)
 		{
 			// NOTE: U+F000-U+F7FF are reserved for font hacks
 			case '\0':
 				return;
+			case 0xb5:  // micro symbol
+				w = unicode_micro;
+				goto default_addch;
 			case 0xf000:  // "bad" off
 				wattroff(win, attr_bad);
 				break;
@@ -3688,6 +3695,7 @@ void bfg_waddstr(WINDOW *win, const char *s)
 				if (w > WCHAR_MAX || !iswprint(w))
 					w = '*';
 			default:
+default_addch:
 				if (w > WCHAR_MAX || !(iswprint(w) || w == '\n'))
 				{
 #if REPLACEMENT_CHAR <= WCHAR_MAX

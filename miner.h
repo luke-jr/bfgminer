@@ -440,10 +440,10 @@ struct cgminer_pool_stats {
 #define PRIprepr "-6s"
 #define PRIpreprv "s"
 
-#define ALLOC_H2B_NOUNIT  5
-#define ALLOC_H2B_SHORT   6
-#define ALLOC_H2B_SPACED  7
-#define ALLOC_H2B_SHORTV  6
+#define ALLOC_H2B_NOUNIT  6
+#define ALLOC_H2B_SHORT   7
+#define ALLOC_H2B_SPACED  8
+#define ALLOC_H2B_SHORTV  7
 
 
 struct cgpu_info {
