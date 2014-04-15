@@ -486,7 +486,8 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	json = JSON_LOADS(ln, &jerr);
 	if (!json)
 	{
-		applog(LOG_ERR, "SSM: JSON parse error: %s", ln);
+		if (strncmp(ln, "GET ", 4))
+			applog(LOG_ERR, "SSM: JSON parse error: %s", ln);
 		return false;
 	}
 	
