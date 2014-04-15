@@ -363,10 +363,10 @@ char *current_fullhash;
 static char datestamp[40];
 static char blocktime[32];
 time_t block_time;
-static char best_share[8] = "0";
+static char best_share[ALLOC_H2B_SHORTV] = "0";
 double current_diff = 0xFFFFFFFFFFFFFFFFULL;
-static char block_diff[8];
-static char net_hashrate[10];
+static char block_diff[ALLOC_H2B_SHORTV];
+static char net_hashrate[ALLOC_H2B_SHORT];
 double best_diff = 0;
 
 static bool known_blkheight_current;
@@ -3139,7 +3139,6 @@ enum h2bs_fmt {
 	H2B_SPACED,  // "xxx.x MH/s"
 	H2B_SHORTV,  // Like H2B_SHORT, but omit space for base unit
 };
-static const size_t h2bs_fmt_size[] = {6, 10, 11};
 
 enum bfu_floatprec {
 	FUP_INTEGER,
@@ -3324,7 +3323,8 @@ void test_decimal_width()
 		format_unit2(testbuf1, sizeof(testbuf1), true, "x", H2B_SHORT, testn      , -1);
 		format_unit2(testbuf2, sizeof(testbuf2), true, "x", H2B_SHORT, testn * 1e3, -1);
 		format_unit2(testbuf3, sizeof(testbuf3), true, "x", H2B_SHORT, testn * 1e6, -1);
-		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s |", testn, testbuf1, testbuf2, testbuf3);
+		snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s |", testn, testbuf1, testbuf2, testbuf3);
+		width = utf8_strlen(printbuf);
 		if (unlikely((saved != -1) && (width != saved))) {
 			applog(LOG_ERR, "Test width mismatch in format_unit2! %d not %d at %10g", width, saved, testn);
 			applog(LOG_ERR, "%s", printbuf);
@@ -3339,7 +3339,8 @@ void test_decimal_width()
 		format_unit2(testbuf2, sizeof(testbuf2), true, "x", H2B_SHORT, testn * 1e3, -1);
 		format_unit2(testbuf3, sizeof(testbuf3), true, "x", H2B_SHORT, testn * 1e6, -1);
 		format_unit2(testbuf4, sizeof(testbuf4), true, "x", H2B_SHORT, testn * 1e9, -1);
-		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s %s |", testn, testbuf1, testbuf2, testbuf3, testbuf4);
+		snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s %s |", testn, testbuf1, testbuf2, testbuf3, testbuf4);
+		width = utf8_strlen(printbuf);
 		if (unlikely((saved != -1) && (width != saved))) {
 			applog(LOG_ERR, "Test width mismatch in pick_unit! %d not %d at %10g", width, saved, testn);
 			applog(LOG_ERR, "%s", printbuf);
@@ -3428,7 +3429,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 #endif
 	struct device_drv *drv = cgpu->drv;
 	enum h2bs_fmt hashrate_style = for_curses ? H2B_SHORT : H2B_SPACED;
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[hashrate_style]];
+	char cHr[ALLOC_H2B_NOUNIT+1], aHr[ALLOC_H2B_NOUNIT+1], uHr[max(ALLOC_H2B_SHORT, ALLOC_H2B_SPACED)+3+1];
 	char rejpcbuf[6];
 	char bnbuf[6];
 	double dev_runtime;
@@ -3484,7 +3485,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	
 	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
-		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[hashrate_style]}),
+		((size_t[]){sizeof(cHr), sizeof(aHr), sizeof(uHr)}),
 		true, "h/s", hashrate_style,
 		3,
 		1e6*rolling,
@@ -3877,7 +3878,7 @@ one_workable_pool: ;
 		  current_hash, block_diff, net_hashrate, blocktime);
 	
 	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
-	char bwstr[12], incomestr[13];
+	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
 	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
 	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
 		ts,
@@ -4182,9 +4183,9 @@ static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
 	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
-	char shrdiffdisp[16];
+	char shrdiffdisp[ALLOC_H2B_SHORTV];
 	const double tgtdiff = work->work_difficulty;
-	char tgtdiffdisp[16];
+	char tgtdiffdisp[ALLOC_H2B_SHORTV];
 	char where[20];
 	
 	cgpu = get_thr_cgpu(work->thr_id);
@@ -6505,7 +6506,7 @@ static bool input_pool(bool live);
 static void display_pool_summary(struct pool *pool)
 {
 	double efficiency = 0.0;
-	char xfer[17], bw[19];
+	char xfer[ALLOC_H2B_NOUNIT+ALLOC_H2B_SPACED+4+1], bw[ALLOC_H2B_NOUNIT+ALLOC_H2B_SPACED+6+1];
 	int pool_secs;
 
 	if (curses_active_locked()) {
@@ -6763,7 +6764,6 @@ void zero_bestshare(void)
 	int i;
 
 	best_diff = 0;
-	memset(best_share, 0, 8);
 	suffix_string(best_diff, best_share, sizeof(best_share), 0);
 
 	for (i = 0; i < total_pools; i++) {
@@ -7705,7 +7705,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	static double local_mhashes_done = 0;
 	double local_mhashes = (double)hashes_done / 1000000.0;
 	bool showlog = false;
-	char cHr[h2bs_fmt_size[H2B_NOUNIT]], aHr[h2bs_fmt_size[H2B_NOUNIT]], uHr[h2bs_fmt_size[H2B_SPACED]];
+	char cHr[ALLOC_H2B_NOUNIT+1], aHr[ALLOC_H2B_NOUNIT+1], uHr[ALLOC_H2B_SPACED+3+1];
 	char rejpcbuf[6];
 	char bnbuf[6];
 	struct thr_info *thr;
@@ -7788,7 +7788,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	
 	multi_format_unit_array2(
 		((char*[]){cHr, aHr, uHr}),
-		((size_t[]){h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_NOUNIT], h2bs_fmt_size[H2B_SPACED]}),
+		((size_t[]){sizeof(cHr), sizeof(aHr), sizeof(uHr)}),
 		true, "h/s", H2B_SHORT,
 		3,
 		1e6*total_rolling,
@@ -10166,7 +10166,7 @@ void print_summary(void)
 	struct timeval diff;
 	int hours, mins, secs, i;
 	double utility, efficiency = 0.0;
-	char xfer[17], bw[19];
+	char xfer[(ALLOC_H2B_SPACED*2)+4+1], bw[(ALLOC_H2B_SPACED*2)+6+1];
 	int pool_secs;
 
 	timersub(&total_tv_end, &total_tv_start, &diff);
