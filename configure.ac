@@ -122,6 +122,7 @@ need_dynclock=no
 need_lowl_vcom=no
 need_lowlevel=no
 need_lowl_hid=no
+need_lowl_spi=no
 need_lowl_usb=no
 have_cygwin=false
 have_win32=false
@@ -430,6 +431,7 @@ if test "x$knc" = xyes; then
 		#endif
 	])
 	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC support is wanted])
+	need_lowl_spi=yes
 fi
 AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
 
@@ -649,6 +651,7 @@ AC_ARG_ENABLE([bitfury],
 	)
 if test "x$bitfury" = xyes; then
 	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+	need_lowl_spi=yes
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
@@ -903,6 +906,11 @@ if test "x$need_lowl_vcom" != "xno"; then
 	elif test "x$libusb$want_libusb" = xnoyes; then
 		AC_MSG_ERROR([Could not find libusb, which you specifically requested])
 	fi
+fi
+
+lowllist="$lowllist spi/need_lowl_spi"
+if test x$need_lowl_spi = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_SPI], [1], [Defined to 1 if lowlevel SPI drivers are being used])
 fi
 
 if test "x$need_lowl_usb" = "xno"; then
@@ -1170,6 +1178,7 @@ AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])

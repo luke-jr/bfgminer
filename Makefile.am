@@ -263,7 +263,7 @@ bfgminer_SOURCES += driver-bifury.c
 endif
 
 if HAS_BITFURY
-bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h spidevc.h spidevc.c
+bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h
 
 if HAS_BFSB
 bfgminer_SOURCES += driver-bfsb.c
@@ -298,6 +298,10 @@ endif
 if NEED_BFG_LOWL_HID
 bfgminer_SOURCES += lowl-hid.c lowl-hid.h
 bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
+endif
+
+if NEED_BFG_LOWL_SPI
+bfgminer_SOURCES += spidevc.h spidevc.c
 endif
 
 bin_PROGRAMS += bfgminer-rpc
