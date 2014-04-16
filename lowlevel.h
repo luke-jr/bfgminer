@@ -7,6 +7,8 @@
 
 #include <uthash.h>
 
+#include "miner.h"
+
 struct lowlevel_device_info;
 
 typedef bool (*lowl_found_devinfo_func_t)(struct lowlevel_device_info *, void *);
@@ -73,7 +75,7 @@ extern struct lowlevel_driver lowl_pci;
 extern struct lowlevel_driver lowl_usb;
 #else
 // Dummy definition for the various "don't warn if just a lower-level interface" checks
-static struct lowlevel_driver lowl_usb;
+static __maybe_unused struct lowlevel_driver lowl_usb;
 #endif
 #ifdef NEED_BFG_LOWL_VCOM
 extern struct lowlevel_driver lowl_vcom;

@@ -1750,6 +1750,7 @@ char *set_temp_target(char *arg)
 	return NULL;
 }
 
+#ifdef HAVE_OPENCL
 static
 char *set_no_opencl_binaries(__maybe_unused void * const dummy)
 {
@@ -1757,6 +1758,7 @@ char *set_no_opencl_binaries(__maybe_unused void * const dummy)
 	add_set_device_option("OCL:binary=no");
 	return NULL;
 }
+#endif
 
 static
 char *disable_pool_redirect(__maybe_unused void * const dummy)
