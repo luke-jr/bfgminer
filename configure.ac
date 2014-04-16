@@ -127,6 +127,7 @@ need_lowlevel=no
 need_lowl_ftdi=no
 need_lowl_hid=no
 need_lowl_pci=no
+need_lowl_spi=no
 need_lowl_usb=no
 have_cygwin=false
 have_win32=false
@@ -503,6 +504,7 @@ if test "x$knc" = xyes; then
 		#endif
 	])
 	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC support is wanted])
+	need_lowl_spi=yes
 fi
 AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
 
@@ -722,6 +724,7 @@ AC_ARG_ENABLE([bitfury],
 	)
 if test "x$bitfury" = xyes; then
 	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+	need_lowl_spi=yes
 fi
 AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
 
@@ -1017,6 +1020,11 @@ if test x$need_lowl_ftdi = xyes; then
 	need_lowl_usb=yes
 fi
 
+lowllist="$lowllist spi/need_lowl_spi"
+if test x$need_lowl_spi = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_SPI], [1], [Defined to 1 if lowlevel SPI drivers are being used])
+fi
+
 if test "x$need_lowl_usb" = "xno"; then
 	libusb=no
 	LIBUSB_LIBS=''
@@ -1301,6 +1309,7 @@ AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_FTDI], [test x$need_lowl_ftdi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])

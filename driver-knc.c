@@ -29,8 +29,8 @@
 
 #include "deviceapi.h"
 #include "logging.h"
+#include "lowl-spi.h"
 #include "miner.h"
-#include "spidevc.h"
 
 #define KNC_POLL_INTERVAL_US 10000
 #define KNC_SPI_SPEED 3000000
@@ -318,7 +318,7 @@ nomorecores: ;
 		.workqueue_max = 1,
 	};
 	
-	/* Be careful, read spidevc.h comments for warnings */
+	/* Be careful, read lowl-spi.h comments for warnings */
 	memset(spi, 0, sizeof(*spi));
 	spi->txrx = knc_spi_txrx;
 	spi->cgpu = cgpu;

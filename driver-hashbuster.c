@@ -239,7 +239,7 @@ bool hashbuster_init(struct thr_info * const thr)
 	if (!port)
 		applogr(false, LOG_ERR, "%s: Failed to allocate spi_port", cgpu->dev_repr);
 	
-	/* Be careful, read spidevc.h comments for warnings */
+	/* Be careful, read lowl-spi.h comments for warnings */
 	memset(port, 0, sizeof(*port));
 	port->txrx = hashbuster_spi_txrx;
 	port->userp = h;

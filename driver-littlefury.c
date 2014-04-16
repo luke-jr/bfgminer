@@ -19,9 +19,9 @@
 #include "libbitfury.h"
 #include "logging.h"
 #include "lowlevel.h"
+#include "lowl-spi.h"
 #include "lowl-vcom.h"
 #include "miner.h"
-#include "spidevc.h"
 #include "util.h"
 
 
@@ -365,7 +365,7 @@ bool littlefury_thread_init(struct thr_info *thr)
 	{
 		spi = malloc(sizeof(*spi));
 		
-		/* Be careful, read spidevc.h comments for warnings */
+		/* Be careful, read lowl-spi.h comments for warnings */
 		memset(spi, 0, sizeof(*spi));
 		spi->txrx = littlefury_txrx;
 		spi->cgpu = proc;

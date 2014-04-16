@@ -4,8 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "lowl-spi.h"
 #include "miner.h"
-#include "spidevc.h"
 
 struct work;
 

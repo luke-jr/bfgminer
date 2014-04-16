@@ -33,8 +33,7 @@
 #include "logging.h"
 #include "miner.h"
 #include "libbitfury.h"
-
-#include "spidevc.h"
+#include "lowl-spi.h"
 #include "sha2.h"
 
 #include <time.h>

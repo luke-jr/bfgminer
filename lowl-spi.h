@@ -1,5 +1,5 @@
-#ifndef SPIDEVC_H
-#define SPIDEVC_H
+#ifndef BFG_LOWL_SPI_H
+#define BFG_LOWL_SPI_H
 
 #include <stdbool.h>
 #include <stdint.h>

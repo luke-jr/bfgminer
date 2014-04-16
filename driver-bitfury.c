@@ -34,8 +34,8 @@
 #include "deviceapi.h"
 #include "driver-bitfury.h"
 #include "libbitfury.h"
+#include "lowl-spi.h"
 #include "util.h"
-#include "spidevc.h"
 
 BFG_REGISTER_DRIVER(bitfury_drv)
 const struct bfg_set_device_definition bitfury_set_device_funcs[];

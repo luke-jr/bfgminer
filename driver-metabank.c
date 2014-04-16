@@ -29,7 +29,7 @@
 #include "deviceapi.h"
 #include "driver-bitfury.h"
 #include "libbitfury.h"
-#include "spidevc.h"
+#include "lowl-spi.h"
 #include "tm_i2c.h"
 
 BFG_REGISTER_DRIVER(metabank_drv)

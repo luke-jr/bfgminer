@@ -267,7 +267,7 @@ bfgminer_SOURCES += driver-bifury.c
 endif
 
 if HAS_BITFURY
-bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h spidevc.h spidevc.c
+bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h
 
 if HAS_BFSB
 bfgminer_SOURCES += driver-bfsb.c
@@ -314,6 +314,10 @@ endif
 
 if NEED_BFG_LOWL_PCI
 bfgminer_SOURCES += lowl-pci.c lowl-pci.h
+endif
+
+if NEED_BFG_LOWL_SPI
+bfgminer_SOURCES += lowl-spi.h lowl-spi.c
 endif
 
 bin_PROGRAMS += bfgminer-rpc

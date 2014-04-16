@@ -226,7 +226,7 @@ bool bfx_init(struct thr_info * const thr)
 		return false;
 	}
 	
-	/* Be careful, read spidevc.h comments for warnings */
+	/* Be careful, read lowl-spi.h comments for warnings */
 	memset(port, 0, sizeof(*port));
 	port->txrx = bfx_spi_txrx;
 	port->cgpu = cgpu;

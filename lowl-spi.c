@@ -27,8 +27,6 @@
 #define HAVE_LINUX_SPI
 #endif
 
-#include "spidevc.h"
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -51,6 +49,7 @@
 #endif
 
 #include "logging.h"
+#include "lowl-spi.h"
 
 #ifdef HAVE_LINUX_SPI
 bool sys_spi_txrx(struct spi_port *port);

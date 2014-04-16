@@ -28,8 +28,8 @@
 
 #include "deviceapi.h"
 #include "libbitfury.h"
-#include "spidevc.h"
 #include "driver-bitfury.h"
+#include "lowl-spi.h"
 
 BFG_REGISTER_DRIVER(bfsb_drv)
 
