@@ -966,6 +966,7 @@ bool _serial_detect_all(struct lowlevel_device_info * const info, void * const u
 }
 #endif
 
+// NOTE: This is never used for any actual VCOM devices, which should use the new lowlevel interface
 int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_func_t autoscan, int flags)
 {
 	struct string_elist *iter, *tmp;
@@ -974,7 +975,6 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 	char found = 0;
 	bool forceauto = flags & 1;
 	bool hasname;
-	bool doall = false;
 	size_t namel = strlen(api->name);
 	size_t dnamel = strlen(api->dname);
 
@@ -1008,25 +1008,12 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 		{}  // do nothing
 		else
 		if (!strcmp(dev, "all"))
-			doall = true;
-#ifdef NEED_BFG_LOWL_VCOM
-		else
-		if (serial_claim(dev, NULL))
-		{
-			applog(LOG_DEBUG, "%s is already claimed... skipping probes", dev);
-			string_elist_del(&scan_devices, iter);
-		}
-#endif
+		{}  // n/a
 		else if (detectone(dev)) {
 			string_elist_del(&scan_devices, iter);
 			++found;
 		}
 	}
-
-#ifdef NEED_BFG_LOWL_VCOM
-	if (doall && detectone)
-		found += lowlevel_detect_id(_serial_detect_all, detectone, &lowl_vcom, 0, 0);
-#endif
 	
 	if ((forceauto || !(inhibitauto || found)) && autoscan)
 		found += autoscan();
