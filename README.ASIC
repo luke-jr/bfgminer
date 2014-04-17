@@ -152,8 +152,8 @@ by step install for BFGMiner on this distro;
 -----------------Start------------
 cat >/etc/opkg/feeds.conf <<\EOF
 src/gz noarch http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/all/
-src/gz base http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/cortexa8hf-vfp-neon/base/
-src/gz beaglebone http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/cortexa8hf-vfp-neon/machine/beaglebone/
+src/gz base http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/armv7ahf-vfp-neon/base/
+src/gz beaglebone http://feeds.angstrom-distribution.org/feeds/v2013.06/ipk/eglibc/armv7ahf-vfp-neon/machine/beaglebone/
 EOF
 
 opkg update
@@ -164,7 +164,6 @@ opkg update
 opkg install update-alternatives
 opkg install automake autoconf make gcc cpp binutils git less pkgconfig-dev ncurses-dev libtool nano bash i2c-tools-dev
 while ! opkg install libcurl-dev; do true; done
-ln -s aclocal-1.12 /usr/share/aclocal
 
 curl http://www.digip.org/jansson/releases/jansson-2.0.1.tar.bz2 | tar -xjvp
 cd jansson-2.0.1
