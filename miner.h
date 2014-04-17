@@ -1250,7 +1250,7 @@ struct pool {
 	char *sockaddr_url; /* stripped url used for sockaddr */
 	char *nonce1;
 	size_t n1_len;
-	uint32_t nonce2;
+	uint64_t nonce2;
 	int nonce2sz;
 #ifdef WORDS_BIGENDIAN
 	int nonce2off;
