@@ -3873,7 +3873,7 @@ static void mcast()
 	struct sockaddr_in listen;
 	struct ip_mreq grp;
 	struct sockaddr_in came_from;
-	time_t bindstart;
+	struct timeval bindstart;
 	const char *binderror;
 	SOCKETTYPE mcast_sock;
 	SOCKETTYPE reply_sock;
@@ -3913,11 +3913,11 @@ static void mcast()
 
 	// try for more than 1 minute ... in case the old one hasn't completely gone yet
 	bound = 0;
-	bindstart = time(NULL);
+	timer_set_now(&bindstart);
 	while (bound == 0) {
 		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
 			binderror = SOCKERRMSG;
-			if ((time(NULL) - bindstart) > 61)
+			if (timer_elapsed(&bindstart, NULL) > 61)
 				break;
 			else
 				cgsleep_ms(30000);
