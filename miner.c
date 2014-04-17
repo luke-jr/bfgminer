@@ -9832,8 +9832,16 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			 * intermittently failing pools from being used. */
 			if (!pool->idle && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio() &&
 			    now.tv_sec - pool->tv_idle.tv_sec > opt_fail_switch_delay) {
-				applog(LOG_WARNING, "Pool %d %s stable for %d seconds",
-				       pool->pool_no, pool->rpc_url, opt_fail_switch_delay);
+				if (opt_fail_switch_delay % 60)
+					applog(LOG_WARNING, "Pool %d %s stable for %d second%s",
+					       pool->pool_no, pool->rpc_url,
+					       opt_fail_switch_delay,
+					       (opt_fail_switch_delay == 1 ? "" : "s"));
+				else
+					applog(LOG_WARNING, "Pool %d %s stable for %d minute%s",
+					       pool->pool_no, pool->rpc_url,
+					       opt_fail_switch_delay / 60,
+					       (opt_fail_switch_delay == 60 ? "" : "s"));
 				switch_pools(NULL);
 			}
 		}
