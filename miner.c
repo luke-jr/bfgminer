@@ -8231,7 +8231,7 @@ static bool cnx_needed(struct pool *pool)
 
 	/* Keep the connection open to allow any stray shares to be submitted
 	 * on switching pools for 2 minutes. */
-	if (!timer_passed(&pool->tv_last_work_time, NULL))
+	if (timer_elapsed(&pool->tv_last_work_time, NULL) < 120)
 		return true;
 
 	/* If the pool has only just come to life and is higher priority than
