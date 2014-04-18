@@ -4,6 +4,8 @@
 #include "config.h"
 
 #include <stdbool.h>
+#include <stdio.h>
+
 #ifdef HAVE_OPENCL
 #include "CL/cl.h"
 
@@ -31,6 +33,7 @@ typedef struct {
 	enum cl_kernels chosen_kernel;
 } _clState;
 
+extern FILE *opencl_open_kernel(const char *filename);
 extern char *file_contents(const char *filename, int *length);
 extern int clDevicesNum(void);
 extern _clState *initCl(unsigned int gpu, char *name, size_t nameSize);
