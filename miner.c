@@ -3827,9 +3827,9 @@ static void curses_print_status(const int ts)
 			goto one_workable_pool;
 		poolinfo2off = snprintf(poolinfo2, sizeof(poolinfo2), "%u (", workable_pools);
 		if (poolinfooff > sizeof(poolinfo2) - poolinfo2off - 1)
-			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s...)", sizeof(poolinfo2) - poolinfo2off - 5, poolinfo);
+			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s...)", (int)(sizeof(poolinfo2) - poolinfo2off - 5), poolinfo);
 		else
-			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s)%*s", poolinfooff - 1, poolinfo, sizeof(poolinfo2), "");
+			snprintf(&poolinfo2[poolinfo2off], sizeof(poolinfo2) - poolinfo2off, "%.*s)%*s", (int)(poolinfooff - 1), poolinfo, (int)(sizeof(poolinfo2)), "");
 		cg_mvwprintw(statuswin, 2, 0, " Pools: %s  Diff:%s%s%s  %c  LU:%s",
 		             poolinfo2,
 		             lowdiff_pool->diff,
