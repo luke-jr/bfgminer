@@ -3849,7 +3849,7 @@ one_workable_pool: ;
 			if (pooladdrlen > 20)
 				snprintf(pooladdr, sizeof(pooladdr), "...%s", &rawaddr[pooladdrlen - (sizeof(pooladdr) - 4)]);
 			else
-				snprintf(pooladdr, sizeof(pooladdr), "%*s", -(sizeof(pooladdr) - 1), rawaddr);
+				snprintf(pooladdr, sizeof(pooladdr), "%*s", -(int)(sizeof(pooladdr) - 1), rawaddr);
 		}
 		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
 		             pool->pool_no, pooladdr, pool->diff,
