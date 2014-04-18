@@ -99,7 +99,14 @@ all you will need to set.
 
 
 Optional parameters to tune:
-threads, thread-concurrency, lookup-gap
+kernel, threads, thread-concurrency, lookup-gap
+
+kernel:
+This selects the OpenCL code to use. By default, the kernel named "scrypt" will
+be used. BFGMiner also includes Zuikkis's optimised version, which you can use
+with:
+    --set-device OCL:kernel=zuikkis
+Note that this version requires lookup-gap set to 2 (which is default).
 
 thread-concurrency:
 This tunes the optimal size of work that scrypt can do. It is internally tuned
@@ -133,7 +140,7 @@ SUMMARY: Worth playing with once everything else has been tried but will
 probably do nothing.
 
 vectors=XX
-Vectors are NOT used by the scrypt mining kernel.
+Vectors are NOT used by scrypt mining kernels.
 SUMMARY: Does nothing.
 
 
