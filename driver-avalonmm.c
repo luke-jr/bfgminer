@@ -356,7 +356,7 @@ static int avalon2_send_pkg(int fd, const struct avalon2_pkg *pkg,
 	return AVA2_SEND_OK;
 }
 
-static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
+static int avalon2_stratum_pkgs(const int fd, struct pool * const pool, struct thr_info * const thr, uint32_t * const xnonce2_start_p, uint32_t * const xnonce2_range_p)
 {
 	struct cgpu_info * const dev = thr->cgpu;
 	struct avalon2_info * const info = dev->device_data;
@@ -367,12 +367,14 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	unsigned char target[32];
 	const size_t xnonce2_offset = pool->swork.nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
 	bytes_t coinbase = BYTES_INIT;
+	
+	// check pool->swork.nonce2_offset + 4 > bytes_len(&pool->swork.coinbase)
 
 	/* Send out the first stratum message STATIC */
 	applog(LOG_DEBUG, "Avalon2: Stratum package: %ld, %d, %d, %d, %d",
 	       (long)bytes_len(&pool->swork.coinbase),
 	       xnonce2_offset,
-	       work2d_xnonce2sz,
+	       4,
 	       36,
 	       pool->swork.merkles);
 	memset(pkg.data, 0, AVA2_P_DATA_LEN);
@@ -382,7 +384,8 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 	tmp = be32toh(xnonce2_offset);
 	memcpy(pkg.data + 4, &tmp, 4);
 
-	tmp = be32toh(work2d_xnonce2sz);
+	// MM currently only works with 32-bit extranonce2; we use nonce2 range to keep it sane
+	tmp = be32toh(4);
 	memcpy(pkg.data + 8, &tmp, 4);
 
 	tmp = be32toh(36);
@@ -426,8 +429,29 @@ static int avalon2_stratum_pkgs(int fd, struct pool *pool, struct thr_info *thr)
 
 	// Need to add extranonce padding and extranonce2
 	bytes_cpy(&coinbase, &pool->swork.coinbase);
-	work2d_pad_xnonce(&(bytes_buf(&coinbase)[pool->swork.nonce2_offset]), swork, false);
-	memcpy(&(bytes_buf(&coinbase)[pool->swork.nonce2_offset + work2d_pad_xnonce_size(swork)]), &info->xnonce1, work2d_xnonce1sz);
+	uint8_t *cbp = bytes_buf(&coinbase);
+	cbp += pool->swork.nonce2_offset;
+	work2d_pad_xnonce(cbp, swork, false);
+	cbp += work2d_pad_xnonce_size(swork);
+	memcpy(cbp, &info->xnonce1, work2d_xnonce1sz);
+	cbp += work2d_xnonce1sz;
+	
+	const int fixed_bytes = 4 - work2d_xnonce2sz;
+	if (fixed_bytes > 0)
+	{
+		memset(cbp, '\0', work2d_xnonce2sz);
+		memcpy(xnonce2_start_p, cbp, sizeof(*xnonce2_start_p));
+		*xnonce2_start_p = bswap_32(*xnonce2_start_p);
+		*xnonce2_range_p = (1 << (8 * work2d_xnonce2sz)) - 1;
+	}
+	else
+	{
+		*xnonce2_start_p = 0;
+		*xnonce2_range_p = 0xffffffff;
+	}
+	applog(LOG_DEBUG, "%s: Using xnonce2 start=0x%08lx range=0x%08lx",
+	       dev->dev_repr,
+	       (unsigned long)*xnonce2_start_p, (unsigned long)*xnonce2_range_p);
 	
 	a = bytes_len(&pool->swork.coinbase) / AVA2_P_DATA_LEN;
 	b = bytes_len(&pool->swork.coinbase) % AVA2_P_DATA_LEN;
@@ -692,7 +716,7 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 		info->pool_no = pool->pool_no;
 
 		cg_wlock(&pool->data_lock);
-		avalon2_stratum_pkgs(info->fd, pool, thr);
+		avalon2_stratum_pkgs(info->fd, pool, thr, &start, &range);
 		cg_wunlock(&pool->data_lock);
 
 		/* Configuer the parameter from outside */
@@ -713,10 +737,6 @@ static int64_t avalon2_scanhash(struct thr_info *thr)
 
 		tmp = be32toh(info->set_frequency);
 		memcpy(send_pkg.data + 8, &tmp, 4);
-
-		/* Configure the nonce2 offset and range */
-		range = 0xffffffff / total_devices;
-		start = range * avalon2->device_id;
 
 		tmp = be32toh(start);
 		memcpy(send_pkg.data + 12, &tmp, 4);
