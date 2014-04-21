@@ -9656,7 +9656,7 @@ void print_summary(void)
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
 #ifdef WANT_CPUMINE
-	if (opt_n_threads)
+	if (opt_n_threads > 0)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
@@ -9764,7 +9764,7 @@ void _bfg_clean_up(void)
 	if (!opt_realquiet && successful_connect)
 		print_summary();
 
-	if (opt_n_threads)
+	if (opt_n_threads > 0)
 		free(cpus);
 
 	curl_global_cleanup();
@@ -10919,10 +10919,9 @@ begin_bench:
 #endif
 
 #ifdef WANT_CPUMINE
-	applog(LOG_INFO, "%d cpu miner threads started, "
-		"using SHA256 '%s' algorithm.",
-		opt_n_threads,
-		algo_names[opt_algo]);
+	if (opt_n_threads > 0)
+		applog(LOG_INFO, "%d cpu miner threads started, using '%s' algorithm.",
+		       opt_n_threads, algo_names[opt_algo]);
 #endif
 
 	cgtime(&total_tv_start);
