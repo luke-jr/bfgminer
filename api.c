@@ -1918,7 +1918,8 @@ static void cpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *p
 	bool io_open = false;
 	int id;
 
-	if (opt_n_threads == 0) {
+	if (opt_n_threads <= 0)
+	{
 		message(io_data, MSG_CPUNON, 0, NULL, isjson);
 		return;
 	}
@@ -2068,7 +2069,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
 #ifdef WANT_CPUMINE
-	if (opt_n_threads)
+	if (opt_n_threads > 0)
 	root = api_add_string(root, "Algorithm", algo, false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
@@ -2262,7 +2263,8 @@ static void cpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 {
 	int id;
 
-	if (opt_n_threads == 0) {
+	if (opt_n_threads <= 0)
+	{
 		message(io_data, MSG_CPUNON, 0, NULL, isjson);
 		return;
 	}
@@ -2300,7 +2302,8 @@ static void cpudisable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 {
 	int id;
 
-	if (opt_n_threads == 0) {
+	if (opt_n_threads <= 0)
+	{
 		message(io_data, MSG_CPUNON, 0, NULL, isjson);
 		return;
 	}
@@ -2333,7 +2336,8 @@ static void cpurestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 {
 	int id;
 
-	if (opt_n_threads == 0) {
+	if (opt_n_threads <= 0)
+	{
 		message(io_data, MSG_CPUNON, 0, NULL, isjson);
 		return;
 	}
