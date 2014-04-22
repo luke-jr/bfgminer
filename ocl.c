@@ -576,14 +576,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	find = strstr(vbuff, "MESA");
 	if (find)
 	{
-		long int major = strtol(&find[4], &s, 10), minor;
+		long int major = strtol(&find[4], &s, 10), minor = 0;
 		if (!major)
 		{} // No version number at all
 		else
 		if (s[0] == '.')
 			minor = strtol(&s[1], NULL, 10);
-		else
-			minor = 0;
 		if (major < 10 || (major == 10 && minor < 1))
 		{
 			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld), disabling OpenCL kernel binaries and bitalign", major, minor);
