@@ -263,6 +263,7 @@ bool knc_init(struct thr_info * const thr)
 		if (proc->device != proc)
 		{
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
+			proc = proc->next_proc;
 			continue;
 		}
 		
