@@ -10397,6 +10397,45 @@ static void raise_fd_limits(void)
 #endif
 }
 
+#if defined(WIN32) && (defined(HAVE_OPENCL) || defined(WANT_CPUMINE))
+// If all devices are CPU/GPU, and the console window is hidden, show a message to confirm the user intends to be mining after a few seconds
+static void *thread_confirm_bfgminer(__maybe_unused void * const p)
+{
+	sleep(10);
+	
+	HWND conwin = GetConsoleWindow();
+	
+	if (conwin && IsWindowVisible(conwin))
+		return NULL;
+	
+	for (int i = 0; i < total_devices; ++i)
+	{
+		struct cgpu_info * const cgpu = get_devices(i);
+		if (1
+#ifdef HAVE_OPENCL
+			&& cgpu->drv != &opencl_api
+#endif
+#ifdef WANT_CPUMINE
+			&& cgpu->drv != &cpu_drv
+#endif
+		)
+			return NULL;
+	}
+	
+	if (MessageBox(NULL,
+	               "Your computer just started running BFGMiner, a Bitcoin mining program.\n"
+	               "\n"
+	               "If you did not intentionally start BFGMiner yourself, this may be a sign of unauthorised access to your computer! If this is the case, you are recommended to immediately power off your computer and consult with a security expert.\n"
+	               "\n"
+	               "Do you want BFGMiner to keep running?",
+	               "Do you want BFGMiner to keep running?",
+	               MB_YESNO | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST) == IDNO)
+		quit(0, "User requested with message box");
+	
+	return NULL;
+}
+#endif
+
 extern void bfg_init_threadlocal();
 extern void stratumsrv_start();
 
@@ -10986,6 +11025,14 @@ begin_bench:
 	pthread_detach(thr->pth);
 #endif
 
+#if defined(WIN32) && (defined(HAVE_OPENCL) || defined(WANT_CPUMINE))
+	{
+		pthread_t confirm_thread;
+		if (unlikely(pthread_create(&confirm_thread, NULL, thread_confirm_bfgminer, NULL)))
+			quit(1, "confirm thread create failed");
+	}
+#endif
+	
 	/* Just to be sure */
 	if (total_control_threads != 7)
 		quit(1, "incorrect total_control_threads (%d) should be 7", total_control_threads);
