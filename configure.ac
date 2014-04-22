@@ -1570,6 +1570,7 @@ fi
 
 AC_MSG_CHECKING([if good static asserts compile])
 AC_TRY_LINK([
+	#include <stddef.h>
 ], [
 	_Static_assert(1, ":)");
 ], [
