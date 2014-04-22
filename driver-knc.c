@@ -56,6 +56,10 @@
 #define KNC_HWERR_DISABLE_SECS (10)
 #define KNC_MAX_DISABLE_SECS   (15 * 60)
 
+#define KNC_CORES_PER_DIE  0x30
+#define KNC_DIE_PER_CHIP      4
+#define KNC_CORES_PER_CHIP  (KNC_CORES_PER_DIE * KNC_DIE_PER_CHIP)
+
 
 static const char * const i2cpath = "/dev/i2c-2";
 
@@ -154,7 +158,7 @@ bool knc_detect_one(const char *devpath)
 		.drv = &knc_drv,
 		.device_path = strdup(devpath),
 		.deven = DEV_ENABLED,
-		.procs = 192,
+		.procs = KNC_CORES_PER_CHIP,
 		.threads = prev_cgpu ? 0 : 1,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
@@ -240,7 +244,7 @@ void knc_clean_flush(struct spi_port * const spi)
 static
 bool knc_init(struct thr_info * const thr)
 {
-	const int max_cores = 192;
+	const int max_cores = KNC_CORES_PER_CHIP;
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_device *knc;
@@ -736,9 +740,9 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	{
 		thr = proc->thr[0];
 		knccore = thr->cgpu_data;
-		die = i / 0x30;
+		die = i / KNC_CORES_PER_DIE;
 		
-		if (0 == i % 0x30)
+		if (0 == i % KNC_CORES_PER_DIE)
 		{
 			if (ioctl(i2c, I2C_SLAVE, i2cslave_dcdc[die]))
 			{
