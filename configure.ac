@@ -619,6 +619,31 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 ])
 fi
 
+driverlist="$driverlist cointerra"
+AC_ARG_ENABLE([cointerra],
+	[AC_HELP_STRING([--disable-cointerra],[Compile support for CoinTerra (default if libusb)])],
+	[cointerra=$enableval],
+	[cointerra=$ddauto]
+	)
+if test "x$cointerra$want_libusb" = xyesno; then
+	AC_MSG_ERROR([You disabled libusb, required for CoinTerra support])
+elif test "x$cointerra$libusb" = xyesno; then
+	AC_MSG_ERROR([Could not find libusb, required for CoinTerra support])
+elif test "x$cointerra" = xauto; then
+	cointerra="$libusb"
+	if test "x$libusb" = xno; then
+		AC_MSG_WARN([Could not find libusb, required for CoinTerra support])
+		cointerra_enableaction="install libusb 1.0+"
+	fi
+fi
+if test "x$cointerra" = xyes; then
+	AC_DEFINE([USE_COINTERRA], [1], [Defined to 1 if CoinTerra support is wanted])
+	need_lowl_usb=yes
+	has_asic=yes
+	have_udevrules=true
+fi
+AM_CONDITIONAL([USE_COINTERRA], [test x$cointerra = xyes])
+
 driverlist="$driverlist klondike hashbusteravalon/klondike"
 AC_ARG_ENABLE([klondike],
 	[AC_HELP_STRING([--disable-klondike],[Compile support for Klondike (default enabled)])],
