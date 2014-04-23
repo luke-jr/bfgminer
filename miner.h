@@ -716,6 +716,7 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+#define flip12(dest_p, src_p) swap32yes(dest_p, src_p, 12 / 4)
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
 #define WATCHDOG_INTERVAL  2
@@ -1424,6 +1425,7 @@ extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work_noffset(const struct work *base_work, int noffset);
 #define copy_work(work_in) copy_work_noffset(work_in, 0)
+extern double share_diff(const struct work *);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

@@ -4191,8 +4191,6 @@ static void reject_pool(struct pool *pool)
 	pool->enabled = POOL_REJECTING;
 }
 
-static double share_diff(const struct work *);
-
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
@@ -5508,7 +5506,7 @@ bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-static double share_diff(const struct work *work)
+double share_diff(const struct work *work)
 {
 	double ret;
 	bool new_best = false;
