@@ -10,6 +10,8 @@
 
 #include "config.h"
 
+#include <string.h>
+
 #include "miner.h"
 #include "deviceapi.h"
 #include "driver-cointerra.h"
@@ -214,15 +216,58 @@ static void cta_close(struct cgpu_info *cointerra)
 	cta_clear_work(cointerra);
 }
 
+static void cta_parse_info(struct cgpu_info *, struct cointerra_info *, char *);
+static void msg_from_hu16(char *, int, uint16_t);
+
+static
+bool cointerra_wait_for_info(struct cointerra_info * const ctainfo, struct lowl_usb_endpoint * const ep)
+{
+	char buf[CTA_MSG_SIZE];
+	int amount;
+	
+	cta_gen_message(buf, CTA_SEND_REQUEST);
+	msg_from_hu16(buf, CTA_REQ_MSGTYPE, CTA_RECV_INFO);
+	msg_from_hu16(buf, CTA_REQ_INTERVAL, 0);
+	amount = usb_write(ep, buf, CTA_MSG_SIZE);
+	if (amount != CTA_MSG_SIZE)
+		return false;
+	
+	do {
+		amount = usb_read(ep, buf, CTA_MSG_SIZE);
+		if (amount != CTA_MSG_SIZE)
+			applogr(false, LOG_ERR, "%s: Read error %s, read %d",
+			        __func__, bfg_strerror(errno, BST_ERRNO), amount);
+		
+		if (memcmp(buf, cointerra_hdr, 2))
+			applogr(false, LOG_ERR, "%s: Packet header mismatch", __func__);
+	} while (buf[CTA_MSG_TYPE] != CTA_RECV_INFO);
+	
+	cta_parse_info(NULL, ctainfo, buf);
+	
+	return true;
+}
+
 static
 bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 {
+	struct cointerra_info ctainfo;
 	struct libusb_device_handle *usbh;
 	struct lowl_usb_endpoint *ep;
+	bool b;
+	
 	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep))
 		return false;
+	mutex_init(&ctainfo.lock);
+	b = cointerra_wait_for_info(&ctainfo, ep);
+	mutex_destroy(&ctainfo.lock);
 	usb_close_ep(ep);
 	libusb_close(usbh);
+	
+	if (!b)
+		return false;
+	
+	applog(LOG_DEBUG, "%s: Found %lu cores on %s",
+	       __func__, (unsigned long)ctainfo.cores, info->devid);
 
 	struct cgpu_info * const dev = malloc(sizeof(*dev));
 	*dev = (struct cgpu_info){
