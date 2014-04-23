@@ -272,7 +272,7 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 	struct cgpu_info * const dev = malloc(sizeof(*dev));
 	*dev = (struct cgpu_info){
 		.drv = &cointerra_drv,
-		.procs = 1,  // TODO
+		.procs = ctainfo.cores,
 		.device_data = lowlevel_ref(info),
 		.threads = 1,
 		.device_path = strdup(info->devid),
@@ -383,9 +383,13 @@ static void cta_parse_reqwork(struct cgpu_info *cointerra, struct cointerra_info
 static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerra,
 				struct cointerra_info *info, char *buf)
 {
+	struct cgpu_info *corecgpu;
+	struct thr_info *corethr;
 	uint32_t timestamp_offset, mcu_tag;
 	uint16_t retwork;
 	struct work *work;
+	uint8_t asic, core, pipe, coreno;
+	int pipeno, bitchar, bitbit;
 
 	/* No endian switch needs doing here since it's sent and returned as
 	 * the same 4 bytes */
@@ -393,6 +397,24 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 	mcu_tag = hu32_from_msg(buf, CTA_MCU_TAG);
 	const uint8_t wdiffbits = u8_from_msg(buf, CTA_WORK_DIFFBITS);
 	const uint32_t nonce = hu32_from_msg(buf, CTA_MATCH_NONCE);
+	
+	asic = u8_from_msg(buf, CTA_MCU_ASIC);
+	core = u8_from_msg(buf, CTA_MCU_CORE);
+	pipe = u8_from_msg(buf, CTA_MCU_PIPE);
+	pipeno = asic * 512 + core * 128 + pipe;
+	
+	corecgpu = cointerra;
+	for (int i = 0; i < pipeno; ++i)
+	{
+		corecgpu = corecgpu->next_proc;
+		if (unlikely(!corecgpu))
+		{
+			corecgpu = cointerra;
+			break;
+		}
+	}
+	corethr = corecgpu->thr[0];
+	
 	applog(LOG_DEBUG, "%s %d: Match message for id 0x%04x MCU id 0x%08x received",
 	       cointerra->drv->name, cointerra->device_id, retwork, mcu_tag);
 
@@ -401,6 +423,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 		unsigned char rhash[32];
 		char outhash[16];
 		double wdiff;
+		uint64_t hashes;
 		bool ret;
 
 		timestamp_offset = hu32_from_msg(buf, CTA_MATCH_NOFFSET);
@@ -413,6 +436,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 		/* Test against the difficulty we asked for along with the work */
 		wdiff = bits_to_diff(wdiffbits);
+		hashes = (uint64_t)wdiff * 0x100000000ull;
 		ret = true; // TODO: test_nonce_diff(work, nonce, wdiff);
 
 		if (opt_debug) {
@@ -422,16 +446,10 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			applog(LOG_DEBUG, "submit work %s 0x%04x 0x%08x %d 0x%08x",
 			       outhash, retwork, mcu_tag, timestamp_offset, nonce);
 		}
+		
+		hashes_done2(corethr, hashes, NULL);
 
 		if (likely(ret)) {
-			uint8_t asic, core, pipe, coreno;
-			int pipeno, bitchar, bitbit;
-			uint64_t hashes;
-
-			asic = u8_from_msg(buf, CTA_MCU_ASIC);
-			core = u8_from_msg(buf, CTA_MCU_CORE);
-			pipe = u8_from_msg(buf, CTA_MCU_PIPE);
-			pipeno = asic * 512 + core * 128 + pipe;
 			coreno = asic * 4 + core;
 			if (unlikely(asic > 1 || core > 3 || pipe > 127 || pipeno > 1023)) {
 				applog(LOG_WARNING, "%s %d: MCU invalid pipe asic %d core %d pipe %d",
@@ -446,9 +464,8 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 			applog(LOG_DEBUG, "%s %d: Submitting tested work job_id %s work_id %u",
 			       cointerra->drv->name, cointerra->device_id, work->job_id, work->subid);
-			ret = submit_nonce(thr, work, nonce);
+			ret = submit_nonce(corethr, work, nonce);
 
-			hashes = (uint64_t)wdiff * 0x100000000ull;
 			mutex_lock(&info->lock);
 			info->share_hashes += hashes;
 			info->tot_core_hashes[coreno] += hashes;
@@ -486,7 +503,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 	} else {
 		applog(LOG_INFO, "%s %d: Matching work id 0x%X %d not found", cointerra->drv->name,
 		       cointerra->device_id, retwork, __LINE__);
-		inc_hw_errors3(thr, NULL, &nonce, bits_to_diff(wdiffbits));
+		inc_hw_errors3(corethr, NULL, &nonce, bits_to_diff(wdiffbits));
 
 		mutex_lock(&info->lock);
 		info->no_matching_work++;
@@ -1051,6 +1068,7 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	int64_t hashes;
 
 	applog(LOG_DEBUG, "%s %d: cta_scanwork %d", cointerra->drv->name, cointerra->device_id,__LINE__);
+	hashes = 0;
 
 	if (unlikely(0))
 	{
@@ -1110,7 +1128,6 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	}
 
 	mutex_lock(&info->lock);
-	hashes = info->share_hashes;
 	info->tot_share_hashes += info->share_hashes;
 	info->tot_calc_hashes += info->hashes;
 	info->hashes = info->share_hashes = 0;
