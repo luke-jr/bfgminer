@@ -77,9 +77,6 @@ static bool cta_open(struct cgpu_info *cointerra)
 	cgtimer_t ts_start;
 	bool ret = false;
 
-	if (cointerra->usbinfo.nodev)
-		return false;
-
 	applog(LOG_INFO, "CTA_OPEN");
 
 	cta_gen_message(buf, CTA_SEND_RESET);
@@ -88,9 +85,6 @@ static bool cta_open(struct cgpu_info *cointerra)
 	buf[CTA_RESET_DIFF] = diff_to_bits(CTA_INIT_DIFF);
 	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
 	buf[CTA_RESET_PSLOAD] = opt_ps_load;
-
-	if (cointerra->usbinfo.nodev)
-		return ret;
 
 	err = usb_write(cointerra, buf, CTA_MSG_SIZE, &amount, C_CTA_WRITE);
 	if (err) {
@@ -113,9 +107,6 @@ static bool cta_open(struct cgpu_info *cointerra)
 			       cointerra->drv->name, cointerra->device_id);
 			break;
 		}
-
-		if (cointerra->usbinfo.nodev)
-			break;
 
 		err = usb_read(cointerra, buf + offset, CTA_MSG_SIZE - offset, &amount, C_CTA_READ);
 		if (err && err != LIBUSB_ERROR_TIMEOUT) {
@@ -200,7 +191,8 @@ static struct cgpu_info *cta_detect_one(struct libusb_device *dev, struct usb_fi
 	applog(LOG_INFO, "%s %d: Found at %s", cointerra->drv->name,
 	       cointerra->device_id, cointerra->device_path);
 
-	while (!cta_open(cointerra) && !cointerra->usbinfo.nodev) {
+	while (!cta_open(cointerra))
+	{
 		if (tries++ > 3)
 			goto failed_open;
 		applog(LOG_INFO, "%s %d: Failed to open %d times, retrying", cointerra->drv->name,
@@ -686,7 +678,8 @@ static void *cta_recv_thread(void *arg)
 		char buf[CTA_READBUF_SIZE];
 		int amount, err;
 
-		if (unlikely(cointerra->usbinfo.nodev)) {
+		if (unlikely(0))
+		{
 			applog(LOG_DEBUG, "%s %d: Device disappeared, disabling recv thread",
 			       cointerra->drv->name, cointerra->device_id);
 			break;
@@ -743,9 +736,6 @@ static bool cta_send_msg(struct cgpu_info *cointerra, char *buf)
 	struct cointerra_info *info = cointerra->device_data;
 	int amount, err;
 
-	if (unlikely(cointerra->usbinfo.nodev))
-		return false;
-
 	/* Serialise usb writes to prevent overlap in case multiple threads
 	 * send messages */
 	mutex_lock(&info->sendlock);
@@ -765,9 +755,6 @@ static bool cta_prepare(struct thr_info *thr)
 	struct cgpu_info *cointerra = thr->cgpu;
 	struct cointerra_info *info = calloc(sizeof(struct cointerra_info), 1);
 	char buf[CTA_MSG_SIZE];
-
-	if (unlikely(cointerra->usbinfo.nodev))
-		return false;
 
 	if (unlikely(!info))
 		quit(1, "Failed to calloc info in cta_detect_one");
@@ -978,7 +965,8 @@ static int64_t cta_scanwork(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "%s %d: cta_scanwork %d", cointerra->drv->name, cointerra->device_id,__LINE__);
 
-	if (unlikely(cointerra->usbinfo.nodev)) {
+	if (unlikely(0))
+	{
 		hashes = -1;
 		goto out;
 	}
@@ -1041,7 +1029,7 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	info->hashes = info->share_hashes = 0;
 	mutex_unlock(&info->lock);
 
-	if (unlikely(cointerra->usbinfo.nodev))
+	if (unlikely(0))
 		hashes = -1;
 out:
 	return hashes;
