@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -17,7 +17,7 @@
 #define CTA_SCAN_INTERVAL 500
 #define CTA_RESET_TIMEOUT 1000
 
-#define CTA_INIT_DIFF		32*0.9999847412109375
+#define CTA_INIT_DIFF		32
 
 #if 0
 /* FIXME: how big should this be? */
@@ -142,6 +142,9 @@ int opt_cta_load;
 int opt_ps_load;
 
 struct cointerra_info {
+	struct libusb_device_handle *usbh;
+	struct lowl_usb_endpoint *ep;
+	
 	/* Info data */
 	uint16_t hwrev;
 	uint32_t serial;

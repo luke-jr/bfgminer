@@ -1,5 +1,6 @@
 /*
- * Copyright 2013-2014 Con Kolivas <kernel@kolivas.org>
+ * Copyright 2013-2014 Con Kolivas
+ * Copyright 2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -10,8 +11,13 @@
 #include "config.h"
 
 #include "miner.h"
+#include "deviceapi.h"
 #include "driver-cointerra.h"
+#include "lowlevel.h"
+#include "lowl-usb.h"
 #include <math.h>
+
+BFG_REGISTER_DRIVER(cointerra_drv)
 
 static const char *cointerra_hdr = "ZZ";
 
@@ -30,7 +36,6 @@ static uint8_t diff_to_bits(double diff)
 	uint64_t diff64;
 	uint8_t i;
 
-	diff /= 0.9999847412109375;
 	diff *= (double)2147483648.0;
 	if (diff > 0x8000000000000000ULL)
 		diff = 0x8000000000000000ULL;
@@ -70,9 +75,10 @@ static char *mystrstr(char *haystack, int size, const char *needle)
 	return NULL;
 }
 
-static bool cta_open(struct cgpu_info *cointerra)
+static
+bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr)
 {
-	int err, amount, offset = 0;
+	int amount, offset = 0;
 	char buf[CTA_MSG_SIZE];
 	cgtimer_t ts_start;
 	bool ret = false;
@@ -86,9 +92,11 @@ static bool cta_open(struct cgpu_info *cointerra)
 	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
 	buf[CTA_RESET_PSLOAD] = opt_ps_load;
 
-	err = usb_write(cointerra, buf, CTA_MSG_SIZE, &amount, C_CTA_WRITE);
-	if (err) {
-		applog(LOG_INFO, "Write error %d, wrote %d of %d", err, amount, CTA_MSG_SIZE);
+	amount = usb_write(ep, buf, CTA_MSG_SIZE);
+	if (amount != CTA_MSG_SIZE) {
+		applog(LOG_INFO, "Write error %s, wrote %d of %d",
+		       bfg_strerror(errno, BST_ERRNO),
+		       amount, CTA_MSG_SIZE);
 		return ret;
 	}
 
@@ -103,15 +111,14 @@ static bool cta_open(struct cgpu_info *cointerra)
 		cgtimer_time(&ts_now);
 		cgtimer_sub(&ts_now, &ts_start, &ts_diff);
 		if (cgtimer_to_ms(&ts_diff) > 2000) {
-			applog(LOG_DEBUG, "%s %d: Timed out waiting for response to reset init",
-			       cointerra->drv->name, cointerra->device_id);
+			applog(LOG_DEBUG, "%s: Timed out waiting for response to reset init", repr);
 			break;
 		}
 
-		err = usb_read(cointerra, buf + offset, CTA_MSG_SIZE - offset, &amount, C_CTA_READ);
-		if (err && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_INFO, "%s %d: Read error %d, read %d", cointerra->drv->name,
-			       cointerra->device_id, err, amount);
+		amount = usb_read(ep, buf + offset, CTA_MSG_SIZE - offset);
+		if (amount != (CTA_MSG_SIZE - offset) && amount != 0) {
+			applog(LOG_INFO, "%s: Read error %s, read %d",
+			       repr, bfg_strerror(errno, BST_ERRNO), amount);
 			break;
 		}
 		if (!amount)
@@ -138,14 +145,40 @@ static bool cta_open(struct cgpu_info *cointerra)
 			/* We can't store any other data returned with this
 			 * reset since we have not allocated any memory for
 			 * a cointerra_info structure yet. */
-			applog(LOG_INFO, "%s %d: Successful reset init received",
-			       cointerra->drv->name, cointerra->device_id);
+			applog(LOG_INFO, "%s: Successful reset init received", repr);
 			ret = true;
 			break;
 		}
 	}
 
 	return ret;
+}
+
+static
+bool cointerra_open(const struct lowlevel_device_info * const info, const char * const repr, struct libusb_device_handle ** const usbh_p, struct lowl_usb_endpoint ** const ep_p)
+{
+	if (libusb_open(info->lowl_data, usbh_p))
+		applogr(false, LOG_DEBUG, "%s: USB open failed on %s",
+		        cointerra_drv.dname, info->devid);
+	*ep_p = usb_open_ep_pair(*usbh_p, LIBUSB_ENDPOINT_IN | 1, 64, LIBUSB_ENDPOINT_OUT | 1, 64);
+	if (!*ep_p)
+	{
+		applog(LOG_DEBUG, "%s: Endpoint open failed on %s",
+		       cointerra_drv.dname, info->devid);
+fail:
+		libusb_close(*usbh_p);
+		*usbh_p = NULL;
+		return false;
+	}
+	
+	if (!cta_open(*ep_p, repr))
+	{
+		usb_close_ep(*ep_p);
+		*ep_p = NULL;
+		goto fail;
+	}
+	
+	return true;
 }
 
 static void cta_clear_work(struct cgpu_info *cgpu)
@@ -169,7 +202,7 @@ static void cta_close(struct cgpu_info *cointerra)
 
 	/* Open does the same reset init followed by response as is required to
 	 * close the device. */
-	if (!cta_open(cointerra)) {
+	if (!cta_open(info->ep, cointerra->dev_repr)) {
 		applog(LOG_INFO, "%s %d: Reset on close failed", cointerra->drv->name,
 			cointerra->device_id);
 	}
@@ -181,45 +214,39 @@ static void cta_close(struct cgpu_info *cointerra)
 	cta_clear_work(cointerra);
 }
 
-static struct cgpu_info *cta_detect_one(struct libusb_device *dev, struct usb_find_devices *found)
+static
+bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	struct cgpu_info *cointerra = usb_alloc_cgpu(&cointerra_drv, 1);
-	int tries = 0;
+	struct libusb_device_handle *usbh;
+	struct lowl_usb_endpoint *ep;
+	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep))
+		return false;
+	usb_close_ep(ep);
+	libusb_close(usbh);
 
-	if (!usb_init(cointerra, dev, found))
-		goto fail;
-	applog(LOG_INFO, "%s %d: Found at %s", cointerra->drv->name,
-	       cointerra->device_id, cointerra->device_path);
-
-	while (!cta_open(cointerra))
-	{
-		if (tries++ > 3)
-			goto failed_open;
-		applog(LOG_INFO, "%s %d: Failed to open %d times, retrying", cointerra->drv->name,
-		       cointerra->device_id, tries);
-	}
-
-	if (!add_cgpu(cointerra))
-		goto fail_close;
-
-	update_usb_stats(cointerra);
-	applog(LOG_INFO, "%s %d: Successfully set up %s", cointerra->drv->name,
-	       cointerra->device_id, cointerra->device_path);
-	return cointerra;
-
-fail_close:
-	cta_close(cointerra);
-failed_open:
-	applog(LOG_INFO, "%s %d: Failed to initialise %s", cointerra->drv->name,
-	       cointerra->device_id, cointerra->device_path);
-fail:
-	usb_free_cgpu(cointerra);
-	return NULL;
+	struct cgpu_info * const dev = malloc(sizeof(*dev));
+	*dev = (struct cgpu_info){
+		.drv = &cointerra_drv,
+		.procs = 1,  // TODO
+		.device_data = lowlevel_ref(info),
+		.threads = 1,
+		.device_path = strdup(info->devid),
+		.dev_manufacturer = maybe_strdup(info->manufacturer),
+		.dev_product = maybe_strdup(info->product),
+		.dev_serial = maybe_strdup(info->serial),
+		.deven = DEV_ENABLED,
+		.min_nonce_diff = CTA_INIT_DIFF,
+	};
+	const bool rv = add_cgpu(dev);
+	applog(LOG_INFO, "%s: Successfully set up %s",
+	       cointerra_drv.dname, dev->dev_repr);
+	return rv;
 }
 
-static void cta_detect(bool __maybe_unused hotplug)
+static
+bool cointerra_lowl_match(const struct lowlevel_device_info * const info)
 {
-	usb_detect(&cointerra_drv, cta_detect_one);
+	return lowlevel_match_lowlproduct(info, &lowl_usb, "GoldStrike");
 }
 
 /* This function will remove a work item from the hashtable if it matches the
@@ -319,13 +346,13 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 	 * the same 4 bytes */
 	retwork = *(uint16_t *)(&buf[CTA_DRIVER_TAG]);
 	mcu_tag = hu32_from_msg(buf, CTA_MCU_TAG);
+	const uint8_t wdiffbits = u8_from_msg(buf, CTA_WORK_DIFFBITS);
+	const uint32_t nonce = hu32_from_msg(buf, CTA_MATCH_NONCE);
 	applog(LOG_DEBUG, "%s %d: Match message for id 0x%04x MCU id 0x%08x received",
 	       cointerra->drv->name, cointerra->device_id, retwork, mcu_tag);
 
 	work = clone_work_by_id(cointerra, retwork);
 	if (likely(work)) {
-		uint8_t wdiffbits = u8_from_msg(buf, CTA_WORK_DIFFBITS);
-		uint32_t nonce = hu32_from_msg(buf, CTA_MATCH_NONCE);
 		unsigned char rhash[32];
 		char outhash[16];
 		double wdiff;
@@ -341,12 +368,12 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 		/* Test against the difficulty we asked for along with the work */
 		wdiff = bits_to_diff(wdiffbits);
-		ret = test_nonce_diff(work, nonce, wdiff);
+		ret = true; // TODO: test_nonce_diff(work, nonce, wdiff);
 
 		if (opt_debug) {
 			/* Debugging, remove me */
 			swab256(rhash, work->hash);
-			__bin2hex(outhash, rhash, 8);
+			bin2hex(outhash, rhash, 8);
 			applog(LOG_DEBUG, "submit work %s 0x%04x 0x%08x %d 0x%08x",
 			       outhash, retwork, mcu_tag, timestamp_offset, nonce);
 		}
@@ -374,7 +401,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 
 			applog(LOG_DEBUG, "%s %d: Submitting tested work job_id %s work_id %u",
 			       cointerra->drv->name, cointerra->device_id, work->job_id, work->subid);
-			ret = submit_tested_work(thr, work);
+			ret = submit_nonce(thr, work, nonce);
 
 			hashes = (uint64_t)wdiff * 0x100000000ull;
 			mutex_lock(&info->lock);
@@ -388,24 +415,21 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 			applog(LOG_DEBUG, "%s %d: Notify bad match work",
 			       cointerra->drv->name, cointerra->device_id);
 			if (opt_debug) {
-				uint64_t sdiff = share_diff(work);
 				unsigned char midstate[32], wdata[12];
 				char hexmidstate[68], hexwdata[28];
 				uint16_t wid;
 
 				memcpy(&wid, &info->work_id, 2);
 				flip32(midstate, work->midstate);
-				__bin2hex(hexmidstate, midstate, 32);
+				bin2hex(hexmidstate, midstate, 32);
 				flip12(wdata, &work->data[64]);
-				__bin2hex(hexwdata, wdata, 12);
+				bin2hex(hexwdata, wdata, 12);
 				applog(LOG_DEBUG, "False match sent: work id %u midstate %s  blkhdr %s",
 				       wid, hexmidstate, hexwdata);
 				applog(LOG_DEBUG, "False match reports: work id 0x%04x MCU id 0x%08x work diff %.1f",
 				       retwork, mcu_tag, wdiff);
 				applog(LOG_DEBUG, "False match tested: nonce 0x%08x noffset %d %s",
 				       nonce, timestamp_offset, outhash);
-				applog(LOG_DEBUG, "False match devdiff set to %.1f share diff calc %"PRIu64,
-				       work->device_diff, sdiff);
 			}
 
 			/* Tell the device we got a false match */
@@ -417,7 +441,7 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 	} else {
 		applog(LOG_INFO, "%s %d: Matching work id 0x%X %d not found", cointerra->drv->name,
 		       cointerra->device_id, retwork, __LINE__);
-		inc_hw_errors(thr);
+		inc_hw_errors3(thr, NULL, &nonce, bits_to_diff(wdiffbits));
 
 		mutex_lock(&info->lock);
 		info->no_matching_work++;
@@ -437,7 +461,7 @@ static void cta_parse_wdone(struct thr_info *thr, struct cgpu_info *cointerra,
 	else {
 		applog(LOG_INFO, "%s %d: Done work not found id 0x%X %d",
 		       cointerra->drv->name, cointerra->device_id, retwork, __LINE__);
-		inc_hw_errors(thr);
+		inc_hw_errors_only(thr);
 	}
 
 	/* Removing hashes from work done message */
@@ -532,11 +556,14 @@ static void cta_parse_info(struct cgpu_info *cointerra, struct cointerra_info *i
 	info->max_diffbits = u8_from_msg(buf, CTA_INFO_MAXDIFFBITS);
 	mutex_unlock(&info->lock);
 
+#if 0
 	if (!cointerra->unique_id) {
 		uint32_t b32 = htobe32(info->serial);
 
-		cointerra->unique_id = bin2hex((unsigned char *)&b32, 4);
+		cointerra->unique_id = malloc((4 * 2) + 1);
+		bin2hex(cointerra->unique_id, &b32, 4);
 	}
+#endif
 }
 
 static void cta_parse_rdone(struct cgpu_info *cointerra, struct cointerra_info *info,
@@ -593,6 +620,7 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 
 	mutex_unlock(&info->lock);
 
+#if 0
 	/* Autovoltage is positive only once at startup and eventually drops
 	 * to zero. After that time we reset the stats since they're unreliable
 	 * till then. */
@@ -613,6 +641,7 @@ static void cta_parse_debug(struct cointerra_info *info, char *buf)
 		cointerra->diff_rejected = 0;
 		cointerra->last_share_diff = 0;
 	}
+#endif
 }
 
 static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
@@ -676,7 +705,7 @@ static void *cta_recv_thread(void *arg)
 
 	while (likely(!cointerra->shutdown)) {
 		char buf[CTA_READBUF_SIZE];
-		int amount, err;
+		int amount;
 
 		if (unlikely(0))
 		{
@@ -685,10 +714,10 @@ static void *cta_recv_thread(void *arg)
 			break;
 		}
 
-		err = usb_read(cointerra, buf + offset, CTA_MSG_SIZE, &amount, C_CTA_READ);
-		if (err && err != LIBUSB_ERROR_TIMEOUT) {
-			applog(LOG_ERR, "%s %d: Read error %d, read %d", cointerra->drv->name,
-			       cointerra->device_id, err, amount);
+		amount = usb_read(info->ep, buf + offset, CTA_MSG_SIZE);
+		if (amount != CTA_MSG_SIZE && amount != 0) {
+			applog(LOG_ERR, "%s: Read error %s, read %d",
+			       cointerra->dev_repr, bfg_strerror(errno, BST_ERRNO), amount);
 			break;
 		}
 		offset += amount;
@@ -700,7 +729,7 @@ static void *cta_recv_thread(void *arg)
 			if (unlikely(!msg)) {
 				applog(LOG_WARNING, "%s %d: No message header found, discarding buffer",
 				       cointerra->drv->name, cointerra->device_id);
-				inc_hw_errors(thr);
+				inc_hw_errors_only(thr);
 				/* Save the last byte in case it's the fist
 				 * byte of a header. */
 				begin = CTA_MSG_SIZE - 1;
@@ -713,7 +742,7 @@ static void *cta_recv_thread(void *arg)
 				begin = msg - buf;
 				applog(LOG_WARNING, "%s %d: Reads out of sync, discarding %d bytes",
 				       cointerra->drv->name, cointerra->device_id, begin);
-				inc_hw_errors(thr);
+				inc_hw_errors_only(thr);
 				offset -= begin;
 				memmove(buf, msg, offset);
 				if (offset < CTA_MSG_SIZE)
@@ -734,17 +763,17 @@ static void *cta_recv_thread(void *arg)
 static bool cta_send_msg(struct cgpu_info *cointerra, char *buf)
 {
 	struct cointerra_info *info = cointerra->device_data;
-	int amount, err;
+	int amount;
 
 	/* Serialise usb writes to prevent overlap in case multiple threads
 	 * send messages */
 	mutex_lock(&info->sendlock);
-	err = usb_write(cointerra, buf, CTA_MSG_SIZE, &amount, C_CTA_WRITE);
+	amount = usb_write(info->ep, buf, CTA_MSG_SIZE);
 	mutex_unlock(&info->sendlock);
 
-	if (unlikely(err || amount != CTA_MSG_SIZE)) {
-		applog(LOG_ERR, "%s %d: Write error %d, wrote %d of %d", cointerra->drv->name,
-		       cointerra->device_id, err, amount, CTA_MSG_SIZE);
+	if (unlikely(amount != CTA_MSG_SIZE)) {
+		applog(LOG_ERR, "%s: Write error %s, wrote %d of %d",
+		       cointerra->dev_repr, bfg_strerror(errno, BST_ERRNO), amount, CTA_MSG_SIZE);
 		return false;
 	}
 	return true;
@@ -753,9 +782,12 @@ static bool cta_send_msg(struct cgpu_info *cointerra, char *buf)
 static bool cta_prepare(struct thr_info *thr)
 {
 	struct cgpu_info *cointerra = thr->cgpu;
+	struct lowlevel_device_info * const llinfo = cointerra->device_data;
 	struct cointerra_info *info = calloc(sizeof(struct cointerra_info), 1);
 	char buf[CTA_MSG_SIZE];
 
+	sleep(1);
+	
 	if (unlikely(!info))
 		quit(1, "Failed to calloc info in cta_detect_one");
 	cointerra->device_data = info;
@@ -763,6 +795,9 @@ static bool cta_prepare(struct thr_info *thr)
 	 * for a req-work message. */
 	info->requested = CTA_MAX_QUEUE;
 
+	if (!cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep))
+		return false;
+	
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->sendlock);
@@ -830,7 +865,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 		info->work_id = 1;
 	work->subid = info->work_id;
 
-	diffbits = diff_to_bits(work->device_diff);
+	diffbits = diff_to_bits(work->nonce_diff);
 
 	cta_gen_message(buf, CTA_SEND_WORK);
 
@@ -872,7 +907,7 @@ static void cta_send_reset(struct cgpu_info *cointerra, struct cointerra_info *i
 	int ret, retries = 0;
 
 	/* Clear any accumulated messages in case we've gotten out of sync. */
-	// TODO
+	notifier_reset(info->reset_notifier);
 resend:
 	cta_gen_message(buf, CTA_SEND_RESET);
 
@@ -888,7 +923,7 @@ resend:
 	 * return to submitting other messages. Use a timeout in case we have
 	 * a problem and the reset done message never returns. */
 	if (reset_type == CTA_RESET_NEW) {
-		ret = notifier_read(info->reset_notifier, CTA_RESET_TIMEOUT);
+		ret = notifier_wait_us(info->reset_notifier, CTA_RESET_TIMEOUT * 1000);
 		if (ret) {
 			if (++retries < 3) {
 				applog(LOG_INFO, "%s %d: Timed out waiting for reset done msg, retrying",
@@ -903,13 +938,20 @@ resend:
 	}
 }
 
+static void cta_update_work(struct cgpu_info *);
+
 static void cta_flush_work(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
 
+	if (1)
+		cta_update_work(cointerra);
+	else
+	{
 	applog(LOG_INFO, "%s %d: cta_flush_work %d", cointerra->drv->name, cointerra->device_id,
 	       __LINE__);
 	cta_send_reset(cointerra, info, CTA_RESET_NEW, 0);
+	}
 	info->thr->work_restart = false;
 }
 
@@ -1187,7 +1229,7 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 			int count = 0;
 
 			sprintf(asiccore, "Asic%dCore%d", asic, core);
-			__bin2hex(bitmaphex, &info->pipe_bitmap[coreno], 16);
+			bin2hex(bitmaphex, &info->pipe_bitmap[coreno], 16);
 			for (i = coreno; i < coreno + 16; i++)
 				count += bits_set(info->pipe_bitmap[i]);
 			snprintf(bitmapcount, 40, "%d:%s", count, bitmaphex);
@@ -1208,37 +1250,18 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static void cta_statline_before(char *buf, size_t bufsiz, struct cgpu_info *cointerra)
-{
-	struct cointerra_info *info = cointerra->device_data;
-	double max_volt = 0;
-	int freq = 0, i;
-
-	for (i = 0; i < CTA_CORES; i++) {
-		if (info->corevolts[i] > max_volt)
-			max_volt = info->corevolts[i];
-		if (info->corefreqs[i] > freq)
-			freq = info->corefreqs[i];
-	}
-	max_volt /= 1000;
-
-	tailsprintf(buf, bufsiz, "%3dMHz %3.1fC %3.2fV", freq, cointerra->temp, max_volt);
-}
-
 struct device_drv cointerra_drv = {
-	.drv_id = DRIVER_cointerra,
 	.dname = "cointerra",
 	.name = "CTA",
-	.drv_detect = cta_detect,
-	.thread_prepare = cta_prepare,
-	.hash_work = hash_queued_work,
+	.lowl_match = cointerra_lowl_match,
+	.lowl_probe = cointerra_lowl_probe,
+	.thread_init = cta_prepare,
+	.minerloop = hash_queued_work,
 	.queue_full = cta_fill,
-	.update_work = cta_update_work,
+	// TODO .update_work = cta_update_work,
 	.scanwork = cta_scanwork,
 	.flush_work = cta_wake,
 	.get_api_stats = cta_api_stats,
-	.get_statline_before = cta_statline_before,
 	.thread_shutdown = cta_shutdown,
-	.zero_stats = cta_zero_stats,
-	.max_diff = 32, // Set it below the actual limit to check nonces
+	// TODO .zero_stats = cta_zero_stats,
 };
