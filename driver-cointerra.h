@@ -218,7 +218,7 @@ struct cointerra_info {
 	pthread_mutex_t sendlock;
 	pthread_cond_t wake_cond;
 	pthread_t read_thr;
-	cgsem_t reset_sem;
+	notifier_t reset_notifier;
 };
 
 #endif /* COINTERRA_H */

@@ -576,7 +576,7 @@ static void cta_parse_rdone(struct cgpu_info *cointerra, struct cointerra_info *
 		cta_clear_work(cointerra);
 		/* Tell reset sender that the reset is complete
 			* and it may resume. */
-		cgsem_post(&info->reset_sem);
+		notifier_wake(info->reset_notifier);
 	}
 }
 
@@ -781,7 +781,7 @@ static bool cta_prepare(struct thr_info *thr)
 	mutex_init(&info->sendlock);
 	if (unlikely(pthread_cond_init(&info->wake_cond, NULL)))
 		quit(1, "Failed to create cta pthread cond");
-	cgsem_init(&info->reset_sem);
+	notifier_init(info->reset_notifier);
 	if (pthread_create(&info->read_thr, NULL, cta_recv_thread, (void *)thr))
 		quit(1, "Failed to create cta_recv_thread");
 
@@ -885,7 +885,7 @@ static void cta_send_reset(struct cgpu_info *cointerra, struct cointerra_info *i
 	int ret, retries = 0;
 
 	/* Clear any accumulated messages in case we've gotten out of sync. */
-	cgsem_reset(&info->reset_sem);
+	// TODO
 resend:
 	cta_gen_message(buf, CTA_SEND_RESET);
 
@@ -901,7 +901,7 @@ resend:
 	 * return to submitting other messages. Use a timeout in case we have
 	 * a problem and the reset done message never returns. */
 	if (reset_type == CTA_RESET_NEW) {
-		ret = cgsem_mswait(&info->reset_sem, CTA_RESET_TIMEOUT);
+		ret = notifier_read(info->reset_notifier, CTA_RESET_TIMEOUT);
 		if (ret) {
 			if (++retries < 3) {
 				applog(LOG_INFO, "%s %d: Timed out waiting for reset done msg, retrying",
