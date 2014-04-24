@@ -115,7 +115,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        CGMiner=BFGMiner version
+ version       VERSION        Miner="BFGMiner " BFGMiner version
+                              CGMiner=BFGMiner version
                               API=API version
 
  config        CONFIG         Some miner configuration information:
@@ -469,6 +470,13 @@ api-example.py - a Python script to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V
+
+Modified API commands:
+ 'version' - add 'Miner'
+
+---------
 
 API V2.1 (BFGMiner v3.4.0)
 
