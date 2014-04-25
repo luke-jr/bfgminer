@@ -8041,7 +8041,7 @@ fishy:
 		/* Since the share is untracked, we can only guess at what the
 		 * work difficulty is based on the current pool diff. */
 		cg_rlock(&pool->data_lock);
-		pool_diff = pool->swork.diff;
+		pool_diff = target_diff(pool->swork.target);
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
@@ -8900,11 +8900,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
 
-	/* Store the stratum work diff to check it still matches the pool's
-	 * stratum diff when submitting shares */
-	work->sdiff = swork->diff;
-
 	/* Copy parameters required for share submission */
+	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = strdup(swork->job_id);
 	work->nonce1 = strdup(nonce1);
 	if (swork->data_lock_p)
@@ -8921,8 +8918,6 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	}
 
 	calc_midstate(work);
-
-	set_target(work->target, work->sdiff);
 
 	local_work++;
 	work->stratum = true;

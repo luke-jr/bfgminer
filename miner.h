@@ -1145,7 +1145,7 @@ struct stratum_work {
 	uint32_t ntime;
 	struct timeval tv_received;
 
-	double diff;
+	uint8_t target[32];
 
 	bool transparency_probed;
 	struct timeval tv_transparency;
@@ -1305,7 +1305,6 @@ struct work {
 	bool		stratum;
 	char 		*job_id;
 	bytes_t		nonce2;
-	double		sdiff;
 	char		*nonce1;
 
 	unsigned char	work_restart_id;
