@@ -278,8 +278,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               The filename is optional and will use the BFGMiner
                               default if not specified
 
- quit (*)      none           There is no status section but just a single "BYE"
-                              reply before BFGMiner quits
+ quit (*)      none           There is no reply section just the STATUS section
+                              before BFGMiner quits
 
  notify        NOTIFY         The last status and history count of each devices
                               problem
@@ -336,8 +336,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               supported by the 'devs' command
                               e.g. DEVDETAILS=0,Name=BFL,ID=0,ProcID=0,Driver=bitforce,...|
 
- restart (*)   none           There is no status section but just a single
-                              "RESTART" reply before BFGMiner restarts
+ restart (*)   none           There is no reply section just the STATUS section
+                              before BFGMiner restarts
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
