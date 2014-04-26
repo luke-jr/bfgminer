@@ -1596,7 +1596,8 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {1, 0};
-		ssize_t sent;
+		size_t sent = 0;
+		CURLcode rc;
 		fd_set wd;
 retry:
 		FD_ZERO(&wd);
@@ -1606,14 +1607,9 @@ retry:
 				goto retry;
 			return SEND_SELECTFAIL;
 		}
-#ifdef __APPLE__
-		sent = send(pool->sock, s + ssent, len, SO_NOSIGPIPE);
-#elif WIN32
-		sent = send(pool->sock, s + ssent, len, 0);
-#else
-		sent = send(pool->sock, s + ssent, len, MSG_NOSIGNAL);
-#endif
-		if (sent < 0) {
+		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
+		if (rc != CURLE_OK)
+		{
 			if (!sock_blocks())
 				return SEND_SENDFAIL;
 			sent = 0;
@@ -1697,14 +1693,13 @@ static void clear_sockbuf(struct pool *pool)
 
 static void clear_sock(struct pool *pool)
 {
-	ssize_t n;
+	size_t n = 0;
 
 	mutex_lock(&pool->stratum_lock);
 	do {
+		n = 0;
 		if (pool->sock)
-			n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
-		else
-			n = 0;
+			curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1752,18 +1747,21 @@ char *recv_line(struct pool *pool)
 		do {
 			char s[RBUFSIZE];
 			size_t slen;
-			ssize_t n;
+			size_t n = 0;
+			CURLcode rc;
 
 			memset(s, 0, RBUFSIZE);
-			n = recv(pool->sock, s, RECVSIZE, 0);
-			if (!n) {
+			rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+			if (rc == CURLE_OK && !n)
+			{
 				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
 				suspend_stratum(pool);
 				break;
 			}
 			cgtime(&now);
 			waited = tdiff(&now, &rstart);
-			if (n < 0) {
+			if (rc != CURLE_OK)
+			{
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
 				socket_recv_errno = SOCKERR;
