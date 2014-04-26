@@ -99,6 +99,7 @@ const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
 
 extern const char *__json_array_string(json_t *, unsigned int entry);
 
+extern bool isCalpha(int);
 static inline
 bool isCspace(int c)
 {
@@ -110,6 +111,10 @@ bool isCspace(int c)
 			return false;
 	}
 }
+
+extern const char *get_registered_domain(size_t *out_len, const char *, size_t len);
+extern const char *extract_domain(size_t *out_len, const char *uri, size_t urilen);
+extern void test_domain_funcs();
 
 typedef struct timeval cgtimer_t;
 

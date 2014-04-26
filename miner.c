@@ -11695,6 +11695,7 @@ int main(int argc, char *argv[])
 		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
+		test_domain_funcs();
 		utf8_test();
 	}
 

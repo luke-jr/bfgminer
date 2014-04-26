@@ -1883,6 +1883,157 @@ static char *json_array_string(json_t *val, unsigned int entry)
 	return NULL;
 }
 
+bool isCalpha(const int c)
+{
+	if (c >= 'A' && c <= 'Z')
+		return true;
+	if (c >= 'a' && c <= 'z')
+		return true;
+	return false;
+}
+
+const char *get_registered_domain(size_t * const out_domainlen, const char * const fqdn, const size_t fqdnlen)
+{
+	const char *s;
+	int dots = 0;
+	
+	for (s = &fqdn[fqdnlen-1]; s >= fqdn; --s)
+	{
+		if (s[0] == '.')
+		{
+			*out_domainlen = fqdnlen - (&s[1] - fqdn);
+			if (++dots >= 2 && *out_domainlen > 5)
+				return &s[1];
+		}
+		else
+		if (!(dots || isCalpha(s[0])))
+			return NULL;
+	}
+	
+	*out_domainlen = fqdnlen;
+	return fqdn;
+}
+
+const char *extract_domain(size_t * const out_domainlen, const char * const uri, const size_t urilen)
+{
+	const char *p = uri, *b, *q, *s;
+	bool alldigit;
+	
+	p = memchr(&p[1], '/', urilen - (&p[1] - uri));
+	if (p)
+	{
+		if (p[-1] == ':')
+		{
+			// part of the URI scheme, ignore it
+			while (p[0] == '/')
+				++p;
+			p = memchr(p, '/', urilen - (p - uri)) ?: &uri[urilen];
+		}
+	}
+	else
+		p = &uri[urilen];
+	
+	s = p;
+	q = memrchr(uri, ':', p - uri);
+	if (q)
+	{
+		alldigit = true;
+		for (q = b = &q[1]; q < p; ++q)
+			if (!isdigit(q[0]))
+			{
+				alldigit = false;
+				break;
+			}
+		if (alldigit && p != b)
+			p = &b[-1];
+	}
+	
+	alldigit = true;
+	for (b = uri; b < p; ++b)
+	{
+		if (b[0] == ':')
+			break;
+		if (alldigit && !isdigit(b[0]))
+			alldigit = false;
+	}
+	if ((b < p && b[0] == ':') && (b == uri || !alldigit))
+		b = &b[1];
+	else
+		b = uri;
+	while (b <= p && b[0] == '/')
+		++b;
+	if (p - b > 1 && b[0] == '[' && p[-1] == ']')
+	{
+		++b;
+		--p;
+	}
+	else
+	if (memchr(b, ':', p - b))
+		p = s;
+	if (p > b && p[-1] == '.')
+		--p;
+	
+	*out_domainlen = p - b;
+	return b;
+}
+
+static
+void _test_extract_domain(const char * const expect, const char * const uri)
+{
+	size_t sz;
+	const char * const d = extract_domain(&sz, uri, strlen(uri));
+	if (sz != strlen(expect) || strncasecmp(d, expect, sz))
+		applog(LOG_WARNING, "extract_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"", uri, sz, d, expect);
+}
+
+static
+void _test_get_regd_domain(const char * const expect, const char * const fqdn)
+{
+	size_t sz;
+	const char * const d = get_registered_domain(&sz, fqdn, strlen(fqdn));
+	if ((expect == NULL) ? (d != NULL) : (d == NULL || sz != strlen(expect) || strncasecmp(d, expect, sz)))
+		applog(LOG_WARNING, "get_registered_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"", fqdn, sz, d, expect);
+}
+
+void test_domain_funcs()
+{
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334/abc/abc/");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st/abc/abc/");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st");
+	_test_extract_domain("s.m.eligius.st", "http:s.m.eligius.st");
+	_test_extract_domain("s.m.eligius.st", "stratum+tcp:s.m.eligius.st");
+	_test_extract_domain("s.m.eligius.st", "stratum+tcp:s.m.eligius.st:3334");
+	_test_extract_domain("s.m.eligius.st", "stratum+tcp://s.m.eligius.st:3334");
+	_test_extract_domain("s.m.eligius.st", "stratum+tcp://s.m.eligius.st:3334///");
+	_test_extract_domain("s.m.eligius.st", "stratum+tcp://s.m.eligius.st.:3334///");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334///");
+	_test_extract_domain("foohost", "foohost:3334");
+	_test_extract_domain("foohost", "foohost:3334///");
+	_test_extract_domain("foohost", "foohost:3334/abc.com//");
+	_test_extract_domain("", "foohost:");
+	_test_extract_domain("3334", "foohost://3334/abc.com//");
+	_test_extract_domain("192.0.2.0", "foohost:192.0.2.0");
+	_test_extract_domain("192.0.2.0", "192.0.2.0:3334");
+	_test_extract_domain("192.0.2.0", "192.0.2.0:3334///");
+	_test_extract_domain("2001:db8::1", "2001:db8::1");
+	_test_extract_domain("2001:db8::1", "http://[2001:db8::1]");
+	_test_extract_domain("2001:db8::1", "http:[2001:db8::1]");
+	_test_extract_domain("2001:db8::1", "http://[2001:db8::1]:42");
+	_test_extract_domain("2001:db8::1", "http://[2001:db8::1]:42/abc//def/ghi");
+	_test_extract_domain("2001:db8::cafe", "http://[2001:db8::cafe]");
+	_test_extract_domain("2001:db8::cafe", "http:[2001:db8::cafe]");
+	_test_extract_domain("2001:db8::cafe", "http://[2001:db8::cafe]:42");
+	_test_extract_domain("2001:db8::cafe", "http://[2001:db8::cafe]:42/abc//def/ghi");
+	_test_get_regd_domain("eligius.st", "s.m.eligius.st");
+	_test_get_regd_domain("eligius.st", "eligius.st");
+	_test_get_regd_domain("foohost.co.uk", "myserver.foohost.co.uk");
+	_test_get_regd_domain("foohost", "foohost");
+	_test_get_regd_domain(NULL, "192.0.2.0");
+	_test_get_regd_domain(NULL, "2001:db8::1");
+}
+
 void stratum_probe_transparency(struct pool *pool)
 {
 	// Request transaction data to discourage pools from doing anything shady
