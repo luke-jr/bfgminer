@@ -2241,6 +2241,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
+	bool try_tls = true;
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -2265,14 +2266,10 @@ static bool setup_stratum_curl(struct pool *pool)
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
-	/* Create a http url for use with curl */
-	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
-
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-	curl_easy_setopt(curl, CURLOPT_URL, s);
 	if (!opt_delaynet)
 		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 
@@ -2287,6 +2284,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 	
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)0);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1);
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -2296,8 +2295,22 @@ static bool setup_stratum_curl(struct pool *pool)
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
 	}
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
+	
+retry:
+	/* Create a http url for use with curl */
+	sprintf(s, "http%s://%s:%s", try_tls ? "s" : "",
+	        pool->sockaddr_url, pool->stratum_port);
+	curl_easy_setopt(curl, CURLOPT_URL, s);
+	
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
+		if (try_tls)
+		{
+			applog(LOG_DEBUG, "Stratum connect failed with TLS to pool %u: %s",
+			       pool->pool_no, curl_err_str);
+			try_tls = false;
+			goto retry;
+		}
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
 errout:
 		curl_easy_cleanup(curl);
