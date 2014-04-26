@@ -9157,7 +9157,23 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 		return TNR_GOOD;
 
 	if (!hash_target_check_v(work->hash, work->target))
-		return TNR_HIGH;
+	{
+		bool high_hash = true;
+		struct pool * const pool = work->pool;
+		if (pool->stratum_active)
+		{
+			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
+			if (memcmp(pool->swork.target, work->target, sizeof(work->target)))
+			{
+				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
+				       pool->pool_no);
+				if (hash_target_check_v(work->hash, pool->swork.target))
+					high_hash = false;
+			}
+		}
+		if (high_hash)
+			return TNR_HIGH;
+	}
 
 	return TNR_GOOD;
 }
