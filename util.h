@@ -114,6 +114,7 @@ bool isCspace(int c)
 
 extern const char *get_registered_domain(size_t *out_len, const char *, size_t len);
 extern const char *extract_domain(size_t *out_len, const char *uri, size_t urilen);
+extern bool match_domains(const char *a, size_t alen, const char *b, size_t blen);
 extern void test_domain_funcs();
 
 typedef struct timeval cgtimer_t;

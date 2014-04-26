@@ -1977,6 +1977,19 @@ const char *extract_domain(size_t * const out_domainlen, const char * const uri,
 	return b;
 }
 
+bool match_domains(const char * const a, const size_t alen, const char * const b, const size_t blen)
+{
+	size_t a_domainlen, b_domainlen;
+	const char *a_domain, *b_domain;
+	a_domain = extract_domain(&a_domainlen, a, alen);
+	a_domain = get_registered_domain(&a_domainlen, a_domain, a_domainlen);
+	b_domain = extract_domain(&b_domainlen, b, blen);
+	b_domain = get_registered_domain(&b_domainlen, b_domain, b_domainlen);
+	if (a_domainlen != b_domainlen)
+		return false;
+	return !strncasecmp(a_domain, b_domain, a_domainlen);
+}
+
 static
 void _test_extract_domain(const char * const expect, const char * const uri)
 {
