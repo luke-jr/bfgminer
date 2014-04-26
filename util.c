@@ -1998,11 +1998,26 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	if (diff == 0)
 		return false;
 
+	if ((int64_t)diff != diff)
+	{
+		// Always assume fractional values are proper bdiff per specification
+		diff = bdiff_to_pdiff(diff);
+	}
+	else
+	{
+		// Integer; allow it to be interpreted as pdiff, since some the difference is trivial and some pools see it this way
+		if (opt_scrypt)
+		{
+			// Some scrypt pools multiply difficulty by 0x10000; since diff 1 is pretty difficult for scrypt right now, this is a safe assumption (otherwise they would be using a fractional value)
+			diff /= 0x10000;
+		}
+	}
+	
 	cg_wlock(&pool->data_lock);
-	set_target_to_bdiff(pool->swork.target, diff);
+	set_target_to_pdiff(pool->swork.target, diff);
 	cg_wunlock(&pool->data_lock);
 
-	applog(LOG_DEBUG, "Pool %d stratum bdifficulty set to %f", pool->pool_no, diff);
+	applog(LOG_DEBUG, "Pool %d stratum difficulty set to %g", pool->pool_no, diff);
 
 	return true;
 }
