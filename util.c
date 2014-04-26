@@ -2013,6 +2013,9 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		}
 	}
 	
+	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+		diff = 1;
+	
 	cg_wlock(&pool->data_lock);
 	set_target_to_pdiff(pool->swork.target, diff);
 	cg_wunlock(&pool->data_lock);
