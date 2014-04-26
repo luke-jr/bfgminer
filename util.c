@@ -2183,6 +2183,9 @@ static bool parse_reconnect(struct pool *pool, json_t *val)
 	url = __json_array_string(val, 0);
 	if (!url)
 		url = pool->sockaddr_url;
+	else
+	if (!pool_may_redirect_to(pool, url))
+		return false;
 
 	port_json = json_array_get(val, 1);
 	if (json_is_number(port_json))
