@@ -1221,7 +1221,7 @@ char *set_quit_summary(const char * const arg)
 	return NULL;
 }
 
-static void bdiff_target_leadzero(unsigned char *target, double diff);
+static void pdiff_target_leadzero(void *, double);
 
 char *set_request_diff(const char *arg, float *p)
 {
@@ -1231,7 +1231,7 @@ char *set_request_diff(const char *arg, float *p)
 		return e;
 	
 	request_bdiff = (double)*p * 0.9999847412109375;
-	bdiff_target_leadzero(target, request_bdiff);
+	pdiff_target_leadzero(target, *p);
 	request_target_str = malloc(65);
 	bin2hex(request_target_str, target, 32);
 	
@@ -4755,7 +4755,7 @@ void get_benchmark_work(struct work *work)
 	memcpy(&work->data[ 0], blkhdr, 80);
 	memcpy(&work->data[80], workpadding_bin, 48);
 	calc_midstate(work);
-	set_target(work->target, 1.0);
+	set_target_to_pdiff(work->target, 1.0);
 	
 	work->mandatory = true;
 	work->pool = pools[0];
@@ -8041,7 +8041,7 @@ fishy:
 		/* Since the share is untracked, we can only guess at what the
 		 * work difficulty is based on the current pool diff. */
 		cg_rlock(&pool->data_lock);
-		pool_diff = pool->swork.diff;
+		pool_diff = target_diff(pool->swork.target);
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
@@ -8775,42 +8775,33 @@ void gen_hash(unsigned char *data, unsigned char *hash, int len)
 	sha256(hash1, 32, hash);
 }
 
-/* Diff 1 is a 256 bit unsigned integer of
- * 0x00000000ffff0000000000000000000000000000000000000000000000000000
- * so we use a big endian 64 bit unsigned integer centred on the 5th byte to
+/* PDiff 1 is a 256 bit unsigned integer of
+ * 0x00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+ * so we use a big endian 32 bit unsigned integer positioned at the Nth byte to
  * cover a huge range of difficulty targets, though not all 256 bits' worth */
-static void bdiff_target_leadzero(unsigned char *target, double diff)
+static void pdiff_target_leadzero(void * const target_p, double diff)
 {
-	uint64_t *data64, h64;
-	double d64;
-
-	d64 = diffone;
-	d64 /= diff;
-	d64 = ceil(d64);
-	h64 = d64;
-
-	memset(target, 0, 32);
-	if (d64 < 18446744073709551616.0) {
-		unsigned char *rtarget = target;
-		memset(rtarget, 0, 32);
-		if (opt_scrypt)
-			data64 = (uint64_t *)(rtarget + 2);
-		else
-			data64 = (uint64_t *)(rtarget + 4);
-		*data64 = htobe64(h64);
-	} else {
-		/* Support for the classic all FFs just-below-1 diff */
-		if (opt_scrypt)
-			memset(&target[2], 0xff, 30);
-		else
-			memset(&target[4], 0xff, 28);
+	uint8_t *target = target_p;
+	diff *= 0x100000000;
+	int skip = log2(diff) / 8;
+	if (skip)
+	{
+		if (skip > 0x1c)
+			skip = 0x1c;
+		diff /= pow(0x100, skip);
+		memset(target, 0, skip);
 	}
+	uint32_t n = 0xffffffff;
+	n = (double)n / diff;
+	n = htobe32(n);
+	memcpy(&target[skip], &n, sizeof(n));
+	memset(&target[skip + sizeof(n)], 0xff, 32 - (skip + sizeof(n)));
 }
 
-void set_target(unsigned char *dest_target, double diff)
+void set_target_to_pdiff(void * const dest_target, const double pdiff)
 {
 	unsigned char rtarget[32];
-	bdiff_target_leadzero(rtarget, diff);
+	pdiff_target_leadzero(rtarget, pdiff);
 	swab256(dest_target, rtarget);
 	
 	if (opt_debug) {
@@ -8818,6 +8809,77 @@ void set_target(unsigned char *dest_target, double diff)
 		bin2hex(htarget, rtarget, 32);
 		applog(LOG_DEBUG, "Generated target %s", htarget);
 	}
+}
+
+void set_target_to_bdiff(void * const dest_target, const double bdiff)
+{
+	set_target_to_pdiff(dest_target, bdiff_to_pdiff(bdiff));
+}
+
+void _test_target(void * const funcp, const char * const funcname, const bool little_endian, const void * const expectp, const double diff)
+{
+	uint8_t bufr[32], buf[32], expectr[32], expect[32];
+	int off;
+	void (*func)(void *, double) = funcp;
+	
+	func(little_endian ? bufr : buf, diff);
+	if (little_endian)
+		swab256(buf, bufr);
+	
+	swap32tobe(expect, expectp, 256/32);
+	
+	// Fuzzy comparison: the first 32 bits set must match, and the actual target must be >= the expected
+	for (off = 0; off < 28 && !buf[off]; ++off)
+	{}
+	
+	if (memcmp(&buf[off], &expect[off], 4))
+	{
+testfail: ;
+		char hexbuf[65], expectbuf[65];
+		bin2hex(hexbuf, buf, 32);
+		bin2hex(expectbuf, expect, 32);
+		applogr(, LOG_WARNING, "%s test failed: diff %g got %s (expected %s)",
+		        funcname, diff, hexbuf, expectbuf);
+	}
+	
+	if (!little_endian)
+		swab256(bufr, buf);
+	swab256(expectr, expect);
+	
+	if (!hash_target_check(expectr, bufr))
+		goto testfail;
+}
+
+#define TEST_TARGET(func, le, expect, diff)  \
+	_test_target(func, #func, le, expect, diff)
+
+void test_target()
+{
+	uint32_t expect[8] = {0};
+	// bdiff 1 should be exactly 00000000ffff0000000006f29cfd29510a6caee84634e86a57257cf03152537f due to floating-point imprecision (pdiff1 / 1.0000152590218966)
+	expect[0] = 0x0000ffff;
+	TEST_TARGET(set_target_to_bdiff, true, expect, 1./0x10000);
+	expect[0] = 0;
+	expect[1] = 0xffff0000;
+	TEST_TARGET(set_target_to_bdiff, true, expect, 1);
+	expect[1] >>= 1;
+	TEST_TARGET(set_target_to_bdiff, true, expect, 2);
+	expect[1] >>= 3;
+	TEST_TARGET(set_target_to_bdiff, true, expect, 0x10);
+	expect[1] >>= 4;
+	TEST_TARGET(set_target_to_bdiff, true, expect, 0x100);
+	
+	memset(&expect[1], '\xff', 28);
+	expect[0] = 0x0000ffff;
+	TEST_TARGET(set_target_to_pdiff, true, expect, 1./0x10000);
+	expect[0] = 0;
+	TEST_TARGET(set_target_to_pdiff, true, expect, 1);
+	expect[1] >>= 1;
+	TEST_TARGET(set_target_to_pdiff, true, expect, 2);
+	expect[1] >>= 3;
+	TEST_TARGET(set_target_to_pdiff, true, expect, 0x10);
+	expect[1] >>= 4;
+	TEST_TARGET(set_target_to_pdiff, true, expect, 0x100);
 }
 
 void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work * const src)
@@ -8900,11 +8962,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
 
-	/* Store the stratum work diff to check it still matches the pool's
-	 * stratum diff when submitting shares */
-	work->sdiff = swork->diff;
-
 	/* Copy parameters required for share submission */
+	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = strdup(swork->job_id);
 	work->nonce1 = strdup(nonce1);
 	if (swork->data_lock_p)
@@ -8921,8 +8980,6 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	}
 
 	calc_midstate(work);
-
-	set_target(work->target, work->sdiff);
 
 	local_work++;
 	work->stratum = true;
@@ -9100,7 +9157,23 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 		return TNR_GOOD;
 
 	if (!hash_target_check_v(work->hash, work->target))
-		return TNR_HIGH;
+	{
+		bool high_hash = true;
+		struct pool * const pool = work->pool;
+		if (pool->stratum_active)
+		{
+			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
+			if (memcmp(pool->swork.target, work->target, sizeof(work->target)))
+			{
+				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
+				       pool->pool_no);
+				if (hash_target_check_v(work->hash, pool->swork.target))
+					high_hash = false;
+			}
+		}
+		if (high_hash)
+			return TNR_HIGH;
+	}
 
 	return TNR_GOOD;
 }
@@ -11695,6 +11768,7 @@ int main(int argc, char *argv[])
 		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
+		test_target();
 		utf8_test();
 	}
 

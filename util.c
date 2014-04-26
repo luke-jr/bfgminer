@@ -1998,11 +1998,29 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	if (diff == 0)
 		return false;
 
+	if ((int64_t)diff != diff)
+	{
+		// Always assume fractional values are proper bdiff per specification
+		diff = bdiff_to_pdiff(diff);
+	}
+	else
+	{
+		// Integer; allow it to be interpreted as pdiff, since some the difference is trivial and some pools see it this way
+		if (opt_scrypt)
+		{
+			// Some scrypt pools multiply difficulty by 0x10000; since diff 1 is pretty difficult for scrypt right now, this is a safe assumption (otherwise they would be using a fractional value)
+			diff /= 0x10000;
+		}
+	}
+	
+	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+		diff = 1;
+	
 	cg_wlock(&pool->data_lock);
-	pool->swork.diff = diff;
+	set_target_to_pdiff(pool->swork.target, diff);
 	cg_wunlock(&pool->data_lock);
 
-	applog(LOG_DEBUG, "Pool %d stratum bdifficulty set to %f", pool->pool_no, diff);
+	applog(LOG_DEBUG, "Pool %d stratum difficulty set to %g", pool->pool_no, diff);
 
 	return true;
 }
@@ -2492,7 +2510,7 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
-		pool->swork.diff = 1;
+		set_target_to_pdiff(pool->swork.target, 1);
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->nonce1, pool->n2size);

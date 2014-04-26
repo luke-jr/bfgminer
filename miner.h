@@ -1001,7 +1001,9 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
-extern void set_target(unsigned char *dest_target, double diff);
+extern void set_target_to_pdiff(void *dest_target, double pdiff);
+#define bdiff_to_pdiff(n) (n * 1.0000152587)
+extern void set_target_to_bdiff(void *dest_target, double bdiff);
 
 extern void kill_work(void);
 extern void app_restart(void);
@@ -1145,7 +1147,7 @@ struct stratum_work {
 	uint32_t ntime;
 	struct timeval tv_received;
 
-	double diff;
+	uint8_t target[32];
 
 	bool transparency_probed;
 	struct timeval tv_transparency;
@@ -1305,7 +1307,6 @@ struct work {
 	bool		stratum;
 	char 		*job_id;
 	bytes_t		nonce2;
-	double		sdiff;
 	char		*nonce1;
 
 	unsigned char	work_restart_id;
