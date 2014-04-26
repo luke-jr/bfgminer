@@ -1907,7 +1907,10 @@ const char *get_registered_domain(size_t * const out_domainlen, const char * con
 		}
 		else
 		if (!(dots || isCalpha(s[0])))
-			return NULL;
+		{
+			*out_domainlen = fqdnlen;
+			return fqdn;
+		}
 	}
 	
 	*out_domainlen = fqdnlen;
@@ -2004,7 +2007,7 @@ void _test_get_regd_domain(const char * const expect, const char * const fqdn)
 {
 	size_t sz;
 	const char * const d = get_registered_domain(&sz, fqdn, strlen(fqdn));
-	if ((expect == NULL) ? (d != NULL) : (d == NULL || sz != strlen(expect) || strncasecmp(d, expect, sz)))
+	if (d == NULL || sz != strlen(expect) || strncasecmp(d, expect, sz))
 		applog(LOG_WARNING, "get_registered_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"", fqdn, sz, d, expect);
 }
 
@@ -2043,8 +2046,8 @@ void test_domain_funcs()
 	_test_get_regd_domain("eligius.st", "eligius.st");
 	_test_get_regd_domain("foohost.co.uk", "myserver.foohost.co.uk");
 	_test_get_regd_domain("foohost", "foohost");
-	_test_get_regd_domain(NULL, "192.0.2.0");
-	_test_get_regd_domain(NULL, "2001:db8::1");
+	_test_get_regd_domain("192.0.2.0", "192.0.2.0");
+	_test_get_regd_domain("2001:db8::1", "2001:db8::1");
 }
 
 void stratum_probe_transparency(struct pool *pool)
