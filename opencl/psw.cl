@@ -29,6 +29,8 @@
  * online backup system.
  */
 
+// kernel-interface: scrypt
+
 __constant uint ES[2] = { 0x00FF00FF, 0xFF00FF00 };
 __constant uint K[] = {
 	0x428a2f98U,
