@@ -56,6 +56,10 @@
 #define KNC_HWERR_DISABLE_SECS (10)
 #define KNC_MAX_DISABLE_SECS   (15 * 60)
 
+#define KNC_CORES_PER_DIE  0x30
+#define KNC_DIE_PER_CHIP      4
+#define KNC_CORES_PER_CHIP  (KNC_CORES_PER_DIE * KNC_DIE_PER_CHIP)
+
 
 static const char * const i2cpath = "/dev/i2c-2";
 
@@ -77,6 +81,7 @@ enum knc_i2c_core_status {
 };
 
 BFG_REGISTER_DRIVER(knc_drv)
+static const struct bfg_set_device_definition knc_set_device_funcs[];
 
 struct knc_device {
 	int i2c;
@@ -96,6 +101,7 @@ struct knc_core {
 	int asicno;
 	int coreno;
 	
+	bool use_dcdc;
 	float volt;
 	float current;
 	
@@ -153,8 +159,9 @@ bool knc_detect_one(const char *devpath)
 	*cgpu = (struct cgpu_info){
 		.drv = &knc_drv,
 		.device_path = strdup(devpath),
+		.set_device_funcs = knc_set_device_funcs,
 		.deven = DEV_ENABLED,
-		.procs = 192,
+		.procs = KNC_CORES_PER_CHIP,
 		.threads = prev_cgpu ? 0 : 1,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
@@ -240,7 +247,7 @@ void knc_clean_flush(struct spi_port * const spi)
 static
 bool knc_init(struct thr_info * const thr)
 {
-	const int max_cores = 192;
+	const int max_cores = KNC_CORES_PER_CHIP;
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_device *knc;
@@ -263,6 +270,7 @@ bool knc_init(struct thr_info * const thr)
 		if (proc->device != proc)
 		{
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
+			proc = proc->next_proc;
 			continue;
 		}
 		
@@ -287,6 +295,7 @@ bool knc_init(struct thr_info * const thr)
 					.coreno = i + j,
 					.hwerr_in_row = 0,
 					.hwerr_disable_time = KNC_HWERR_DISABLE_SECS,
+					.use_dcdc = true,
 				};
 				timer_set_now(&knccore->enable_at);
 				proc->device_data = knc;
@@ -328,6 +337,8 @@ nomorecores: ;
 	spi->delay = KNC_SPI_DELAY;
 	spi->mode = KNC_SPI_MODE;
 	spi->bits = KNC_SPI_BITS;
+	
+	cgpu_set_defaults(cgpu);
 	
 	if (!knc_spi_open(cgpu->dev_repr, spi))
 		return false;
@@ -736,9 +747,9 @@ bool knc_get_stats(struct cgpu_info * const cgpu)
 	{
 		thr = proc->thr[0];
 		knccore = thr->cgpu_data;
-		die = i / 0x30;
+		die = i / KNC_CORES_PER_DIE;
 		
-		if (0 == i % 0x30)
+		if (0 == i % KNC_CORES_PER_DIE && knccore->use_dcdc)
 		{
 			if (ioctl(i2c, I2C_SLAVE, i2cslave_dcdc[die]))
 			{
@@ -787,8 +798,11 @@ struct api_data *knc_api_extra_device_status(struct cgpu_info * const cgpu)
 	struct thr_info * const thr = cgpu->thr[0];
 	struct knc_core * const knccore = thr->cgpu_data;
 	
-	root = api_add_volts(root, "Voltage", &knccore->volt, false);
-	root = api_add_volts(root, "DCDC Current", &knccore->current, false);
+	if (knccore->use_dcdc)
+	{
+		root = api_add_volts(root, "Voltage", &knccore->volt, false);
+		root = api_add_volts(root, "DCDC Current", &knccore->current, false);
+	}
 	
 	return root;
 }
@@ -800,10 +814,64 @@ void knc_wlogprint_status(struct cgpu_info * const cgpu)
 	struct thr_info * const thr = cgpu->thr[0];
 	struct knc_core * const knccore = thr->cgpu_data;
 	
-	wlogprint("Voltage: %.3f  DCDC Current: %.3f\n",
-	          knccore->volt, knccore->current);
+	if (knccore->use_dcdc)
+		wlogprint("Voltage: %.3f  DCDC Current: %.3f\n",
+		          knccore->volt, knccore->current);
 }
 #endif
+
+static
+const char *knc_set_use_dcdc(struct cgpu_info *proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	int core_index_on_die = proc->proc_id % KNC_CORES_PER_DIE;
+	bool nv;
+	
+	if (!(strcasecmp(newvalue, "no") && strcasecmp(newvalue, "false") && strcasecmp(newvalue, "0") && strcasecmp(newvalue, "off") && strcasecmp(newvalue, "disable")))
+		nv = false;
+	else
+	if (!(strcasecmp(newvalue, "yes") && strcasecmp(newvalue, "true") && strcasecmp(newvalue, "on") && strcasecmp(newvalue, "enable")))
+		nv = true;
+	else
+	{
+		char *p;
+		strtol(newvalue, &p, 0);
+		if (newvalue[0] && !p[0])
+			nv = true;
+		else
+			return "Usage: use_dcdc=yes/no";
+	}
+	
+	if (core_index_on_die)
+	{
+		const int seek = (proc->proc_id / KNC_CORES_PER_DIE) * KNC_CORES_PER_DIE;
+		proc = proc->device;
+		for (int i = 0; i < seek; ++i)
+			proc = proc->next_proc;
+	}
+	
+	{
+		struct thr_info * const mythr = proc->thr[0];
+		struct knc_core * const knccore = mythr->cgpu_data;
+		
+		if (knccore->use_dcdc == nv)
+			return NULL;
+	}
+	
+	for (int i = 0; i < KNC_CORES_PER_DIE; (proc = proc->next_proc), ++i)
+	{
+		struct thr_info * const mythr = proc->thr[0];
+		struct knc_core * const knccore = mythr->cgpu_data;
+		
+		knccore->use_dcdc = nv;
+	}
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition knc_set_device_funcs[] = {
+	{"use_dcdc", knc_set_use_dcdc, "whether to access DCDC module for voltage/current information"},
+	{NULL}
+};
 
 struct device_drv knc_drv = {
 	.dname = "knc",

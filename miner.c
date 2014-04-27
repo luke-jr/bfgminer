@@ -10213,7 +10213,7 @@ void print_summary(void)
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
 #ifdef WANT_CPUMINE
-	if (opt_n_threads)
+	if (opt_n_threads > 0)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
 	applog(LOG_WARNING, "Runtime: %d hrs : %d mins : %d secs", hours, mins, secs);
@@ -10332,7 +10332,7 @@ void _bfg_clean_up(bool restarting)
 			print_summary();
 	}
 
-	if (opt_n_threads)
+	if (opt_n_threads > 0)
 		free(cpus);
 
 	curl_global_cleanup();
@@ -11422,7 +11422,7 @@ static void raise_fd_limits(void)
 {
 #ifdef HAVE_SETRLIMIT
 	struct rlimit fdlimit;
-	unsigned long old_soft_limit;
+	rlim_t old_soft_limit;
 	char frombuf[0x10] = "unlimited";
 	char hardbuf[0x10] = "unlimited";
 	
@@ -11439,11 +11439,11 @@ static void raise_fd_limits(void)
 	if (fdlimit.rlim_max != RLIM_INFINITY)
 		snprintf(hardbuf, sizeof(hardbuf), "%lu", (unsigned long)fdlimit.rlim_max);
 	if (old_soft_limit != RLIM_INFINITY)
-		snprintf(frombuf, sizeof(frombuf), "%lu", old_soft_limit);
+		snprintf(frombuf, sizeof(frombuf), "%lu", (unsigned long)old_soft_limit);
 	
 	if (fdlimit.rlim_cur == old_soft_limit)
 		applogr(, LOG_DEBUG, "setrlimit: Soft fd limit not being changed from %lu (FD_SETSIZE=%lu; hard limit=%s)",
-		        old_soft_limit, (unsigned long)FD_SETSIZE, hardbuf);
+		        (unsigned long)old_soft_limit, (unsigned long)FD_SETSIZE, hardbuf);
 	
 	if (setrlimit(RLIMIT_NOFILE, &fdlimit))
 		applogr(, LOG_DEBUG, "setrlimit: Failed to change soft fd limit from %s to %lu (FD_SETSIZE=%lu; hard limit=%s)",
@@ -11976,10 +11976,9 @@ begin_bench:
 #endif
 
 #ifdef WANT_CPUMINE
-	applog(LOG_INFO, "%d cpu miner threads started, "
-		"using SHA256 '%s' algorithm.",
-		opt_n_threads,
-		algo_names[opt_algo]);
+	if (opt_n_threads > 0)
+		applog(LOG_INFO, "%d cpu miner threads started, using '%s' algorithm.",
+		       opt_n_threads, algo_names[opt_algo]);
 #endif
 
 	cgtime(&total_tv_start);
