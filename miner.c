@@ -11190,10 +11190,9 @@ void *hotplug_thread(__maybe_unused void *p)
 			continue;
 		const char * const action = udev_device_get_action(device);
 		applog(LOG_DEBUG, "%s: Received %s event", __func__, action);
-		if (strcmp(action, "add"))
-			continue;
-		
-		pending = true;
+		if (!strcmp(action, "add"))
+			pending = true;
+		udev_device_unref(device);
 	}
 	
 	applogfailr(NULL, LOG_ERR, "epoll_wait");
