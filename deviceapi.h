@@ -110,4 +110,23 @@ extern FILE *open_bitstream(const char *dname, const char *filename);
 
 extern void close_device_fd(struct thr_info *);
 
+#define set_on_all_procs(dev, attr, nv)  do{  \
+	for (struct cgpu_info *_proc = dev; _proc; _proc = _proc->next_proc)  \
+		_proc->attr = nv;  \
+}while(0)
+
+static inline
+struct cgpu_info *get_proc_by_id(struct cgpu_info * const dev, const int procno)
+{
+	struct cgpu_info *proc = dev;
+	for (int i = 0; i < procno; ++i)
+	{
+		proc = proc->next_proc;
+		if (!proc)
+			return NULL;
+	}
+	return proc;
+}
+
+
 #endif
