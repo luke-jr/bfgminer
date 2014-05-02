@@ -233,7 +233,6 @@ bool opt_bfl_noncerange;
 
 struct thr_info *control_thr;
 struct thr_info **mining_thr;
-static int gwsched_thr_id;
 static int stage_thr_id;
 static int watchpool_thr_id;
 static int watchdog_thr_id;
@@ -8180,7 +8179,8 @@ retry_stratum:
 
 			applog(LOG_DEBUG, "Pushing pooltest work to base pool");
 
-			tq_push(control_thr[stage_thr_id].q, work);
+			if (likely(control_thr))
+				tq_push(control_thr[stage_thr_id].q, work);
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
@@ -10598,6 +10598,13 @@ int main(int argc, char *argv[])
 
 	notifier_init(submit_waiting_notifier);
 
+	/* Create a unique get work queue */
+	getq = tq_new();
+	if (!getq)
+		quit(1, "Failed to create getq");
+	/* We use the getq mutex as the staged lock */
+	stgd_lock = &getq->mutex;
+
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
 #ifdef WANT_CPUMINE
@@ -10952,7 +10959,6 @@ int main(int argc, char *argv[])
 	if (!control_thr)
 		quit(1, "Failed to calloc control_thr");
 
-	gwsched_thr_id = 0;
 	stage_thr_id = 1;
 	thr = &control_thr[stage_thr_id];
 	thr->q = tq_new();
@@ -10962,13 +10968,6 @@ int main(int argc, char *argv[])
 	if (thr_info_create(thr, NULL, stage_thread, thr))
 		quit(1, "stage thread create failed");
 	pthread_detach(thr->pth);
-
-	/* Create a unique get work queue */
-	getq = tq_new();
-	if (!getq)
-		quit(1, "Failed to create getq");
-	/* We use the getq mutex as the staged lock */
-	stgd_lock = &getq->mutex;
 
 	if (opt_benchmark)
 		goto begin_bench;
