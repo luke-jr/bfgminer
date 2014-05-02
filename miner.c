@@ -2786,6 +2786,14 @@ void pool_set_opaque(struct pool *pool, bool opaque)
 		       pool->pool_no);
 }
 
+bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
+{
+	const char *p = strchr(pool->rpc_url, '#');
+	if (unlikely(p && strstr(&p[1], "redirect")))
+		return true;
+	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
+}
+
 static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 {
 	json_t *res_val = json_object_get(val, "result");
@@ -8515,7 +8523,7 @@ tryagain:
 
 	/* Detect if a http getwork pool has an X-Stratum header at startup,
 	 * and if so, switch to that in preference to getwork if it works */
-	if (pool->stratum_url && want_stratum && (pool->has_stratum || stratum_works(pool))) {
+	if (pool->stratum_url && want_stratum && pool_may_redirect_to(pool, pool->stratum_url) && (pool->has_stratum || stratum_works(pool))) {
 		if (!pool->has_stratum) {
 
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
@@ -11694,6 +11702,7 @@ int main(int argc, char *argv[])
 		test_cgpu_match();
 		test_intrange();
 		test_decimal_width();
+		test_domain_funcs();
 		utf8_test();
 	}
 

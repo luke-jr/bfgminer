@@ -1411,6 +1411,7 @@ extern bool _log_curses_only(int prio, const char *datetime, const char *str);
 extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
+extern bool pool_may_redirect_to(struct pool *, const char *uri);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
