@@ -137,6 +137,14 @@ bool cointerra_reset(struct lowl_usb_endpoint * const ep, const enum cointerra_r
 }
 
 static
+void cointerra_set_queue_full(struct cgpu_info * const dev, const bool nv)
+{
+	if (dev->thr[0]->queue_full == nv)
+		return;
+	set_on_all_procs(dev, thr[0]->queue_full, nv);
+}
+
+static
 bool cointerra_lowl_match(const struct lowlevel_device_info * const info)
 {
 	return lowlevel_match_lowlproduct(info, &lowl_usb, "GoldStrike");
@@ -223,7 +231,7 @@ bool cointerra_init(struct thr_info * const master_thr)
 	cointerra_reset(ep, CRL_INIT);
 	
 	// Queue is full until device asks for work
-	set_on_all_procs(dev, thr[0]->queue_full, true);
+	cointerra_set_queue_full(dev, true);
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, 100000);
 	
@@ -240,7 +248,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	
 	if (unlikely(!devstate->works_requested))
 	{
-		set_on_all_procs(dev, thr[0]->queue_full, true);
+		cointerra_set_queue_full(dev, true);
 		return false;
 	}
 	
@@ -257,7 +265,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	HASH_ADD_INT(master_thr->work, device_id, work);
 	++devstate->next_work_id;
 	if (!--devstate->works_requested)
-		set_on_all_procs(dev, thr[0]->queue_full, true);
+		cointerra_set_queue_full(dev, true);
 	
 	return true;
 }
@@ -285,7 +293,7 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 		{
 			devstate->works_requested = upk_u16le(buf, 0);
 			const bool qf = !devstate->works_requested;
-			set_on_all_procs(dev, thr[0]->queue_full, qf);
+			cointerra_set_queue_full(dev, qf);
 			break;
 		}
 		case CMTI_MATCH:
