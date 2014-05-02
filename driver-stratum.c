@@ -504,6 +504,8 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	if (!method)
 	{
 		applog(LOG_ERR, "SSM: JSON missing method: %s", ln);
+errout:
+		json_decref(json);
 		return false;
 	}
 	
@@ -511,7 +513,7 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	if (!params)
 	{
 		applog(LOG_ERR, "SSM: JSON missing params: %s", ln);
-		return false;
+		goto errout;
 	}
 	
 	applog(LOG_DEBUG, "SSM: RECV: %s", ln);
@@ -534,6 +536,7 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 		_stratumsrv_failure(bev, idstr, -3, "Method not supported");
 	
 	free(idstr);
+	json_decref(json);
 	return true;
 }
 
