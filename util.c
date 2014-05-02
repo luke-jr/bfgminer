@@ -1596,7 +1596,8 @@ static enum send_ret __stratum_send(struct pool *pool, char *s, ssize_t len)
 
 	while (len > 0 ) {
 		struct timeval timeout = {1, 0};
-		ssize_t sent;
+		size_t sent = 0;
+		CURLcode rc;
 		fd_set wd;
 retry:
 		FD_ZERO(&wd);
@@ -1606,14 +1607,9 @@ retry:
 				goto retry;
 			return SEND_SELECTFAIL;
 		}
-#ifdef __APPLE__
-		sent = send(pool->sock, s + ssent, len, SO_NOSIGPIPE);
-#elif WIN32
-		sent = send(pool->sock, s + ssent, len, 0);
-#else
-		sent = send(pool->sock, s + ssent, len, MSG_NOSIGNAL);
-#endif
-		if (sent < 0) {
+		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
+		if (rc != CURLE_OK)
+		{
 			if (!sock_blocks())
 				return SEND_SENDFAIL;
 			sent = 0;
@@ -1697,14 +1693,13 @@ static void clear_sockbuf(struct pool *pool)
 
 static void clear_sock(struct pool *pool)
 {
-	ssize_t n;
+	size_t n = 0;
 
 	mutex_lock(&pool->stratum_lock);
 	do {
+		n = 0;
 		if (pool->sock)
-			n = recv(pool->sock, pool->sockbuf, RECVSIZE, 0);
-		else
-			n = 0;
+			curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
 
@@ -1752,18 +1747,21 @@ char *recv_line(struct pool *pool)
 		do {
 			char s[RBUFSIZE];
 			size_t slen;
-			ssize_t n;
+			size_t n = 0;
+			CURLcode rc;
 
 			memset(s, 0, RBUFSIZE);
-			n = recv(pool->sock, s, RECVSIZE, 0);
-			if (!n) {
+			rc = curl_easy_recv(pool->stratum_curl, s, RECVSIZE, &n);
+			if (rc == CURLE_OK && !n)
+			{
 				applog(LOG_DEBUG, "Socket closed waiting in recv_line");
 				suspend_stratum(pool);
 				break;
 			}
 			cgtime(&now);
 			waited = tdiff(&now, &rstart);
-			if (n < 0) {
+			if (rc != CURLE_OK)
+			{
 				//Save errno from being overweitten bei socket_ commands 
 				int socket_recv_errno;
 				socket_recv_errno = SOCKERR;
@@ -2413,6 +2411,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
+	bool try_tls = true;
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -2437,14 +2436,10 @@ static bool setup_stratum_curl(struct pool *pool)
 		pool->sockbuf_size = RBUFSIZE;
 	}
 
-	/* Create a http url for use with curl */
-	sprintf(s, "http://%s:%s", pool->sockaddr_url, pool->stratum_port);
-
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
-	curl_easy_setopt(curl, CURLOPT_URL, s);
 	if (!opt_delaynet)
 		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
 
@@ -2459,6 +2454,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 	
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)0);
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1);
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -2468,8 +2465,22 @@ static bool setup_stratum_curl(struct pool *pool)
 		curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5);
 	}
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
+	
+retry:
+	/* Create a http url for use with curl */
+	sprintf(s, "http%s://%s:%s", try_tls ? "s" : "",
+	        pool->sockaddr_url, pool->stratum_port);
+	curl_easy_setopt(curl, CURLOPT_URL, s);
+	
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
+		if (try_tls)
+		{
+			applog(LOG_DEBUG, "Stratum connect failed with TLS to pool %u: %s",
+			       pool->pool_no, curl_err_str);
+			try_tls = false;
+			goto retry;
+		}
 		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
 errout:
 		curl_easy_cleanup(curl);
