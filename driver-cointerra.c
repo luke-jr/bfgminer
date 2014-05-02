@@ -36,6 +36,7 @@ enum cointerra_msg_type_out {
 	CMTO_HWERR     = 5,
 	CMTO_LEDCTL    = 6,
 	CMTO_HASHRATE  = 7,
+	CMTO_GET_INFO  = 0x21,
 };
 
 enum cointerra_msg_type_in {
@@ -147,9 +148,12 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	unsigned pipes;
 	{
-		e = cointerra_request(usbh, CMTI_INFO, 0);
-		if (e)
-			goto err;
+		{
+			uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
+			e = cointerra_write_msg(usbh, cointerra_drv.dname, CMTO_GET_INFO, buf, COINTERRA_USB_TIMEOUT);
+			if (e)
+				goto err;
+		}
 		
 		uint8_t msgtype;
 		uint8_t buf[COINTERRA_MSG_SIZE];
