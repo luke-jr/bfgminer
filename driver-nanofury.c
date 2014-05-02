@@ -371,8 +371,23 @@ bool nanofury_init(struct thr_info * const thr)
 		};
 		proc->device_data = bitfury;
 		mythr->cgpu_data = state;
-		bitfury->osc6_bits = 50;
+		bitfury->osc6_bits = 5;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_init_chip(proc);
+	}
+	
+	while (bitfury->osc6_bits < 50)
+	{
+		for (proc = cgpu; proc; proc = proc->next_proc)
+		{
+			bitfury = proc->device_data;
+			bitfury->osc6_bits += 5;
+			bitfury_send_freq(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		}
+	}
+	
+	for (proc = cgpu; proc; proc = proc->next_proc)
+	{
 		bitfury_init_chip(proc);
 		proc->status = LIFE_INIT2;
 	}
