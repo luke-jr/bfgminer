@@ -107,15 +107,13 @@ bool cointerra_read_msg(uint8_t * const out_msgtype, uint8_t * const out, struct
 {
 	uint8_t ss[] = {COINTERRA_START_SEQ};
 	uint8_t buf[COINTERRA_PACKET_SIZE];
+	usb_search(ep, ss, sizeof(ss), NULL);
 	const int xfer = usb_read(ep, buf, sizeof(buf));
 	if (!xfer)
 		return false;
 	if (xfer != sizeof(buf))
 		applogr(false, LOG_ERR, "%s: Packet size mismatch (actual=%d expected=%d)",
 		        repr, xfer, (int)sizeof(buf));
-	for (int i = sizeof(ss); i--; )
-		if (ss[i] != buf[i])
-			applogr(LIBUSB_ERROR_OTHER;, LOG_ERR, "%s: Packet start sequence mismatch", repr);
 	uint8_t * const bufp = &buf[sizeof(ss)];
 	*out_msgtype = upk_u8(bufp, 0);
 	memcpy(out, &bufp[1], COINTERRA_MSGBODY_SIZE);
