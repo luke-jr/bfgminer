@@ -234,11 +234,12 @@ void usb_ep_set_timeouts_ms(struct lowl_usb_endpoint * const ep, const unsigned 
 	ep->timeout_ms_w = timeout_ms_w;
 }
 
-ssize_t usb_read(struct lowl_usb_endpoint * const ep, void * const data, size_t datasz)
+static
+ssize_t lowl_usb_read_to_buf(struct lowl_usb_endpoint * const ep, const size_t datasz)
 {
 	unsigned timeout;
 	size_t xfer;
-	if ( (xfer = bytes_len(&ep->_buf_r)) < datasz)
+	xfer = bytes_len(&ep->_buf_r);
 	{
 		bytes_extend_buf(&ep->_buf_r, datasz + ep->packetsz_r - 1);
 		unsigned char *p = &bytes_buf(&ep->_buf_r)[xfer];
@@ -274,6 +275,17 @@ ssize_t usb_read(struct lowl_usb_endpoint * const ep, void * const data, size_t 
 			timeout = 0;
 		}
 	}
+	return datasz;
+}
+
+ssize_t usb_read(struct lowl_usb_endpoint * const ep, void * const data, const size_t datasz)
+{
+	if (bytes_len(&ep->_buf_r) < datasz)
+	{
+		ssize_t r = lowl_usb_read_to_buf(ep, datasz);
+		if (r <= 0)
+			return r;
+	}
 	memcpy(data, bytes_buf(&ep->_buf_r), datasz);
 	bytes_shift(&ep->_buf_r, datasz);
 	return datasz;
@@ -306,6 +318,44 @@ ssize_t usb_write(struct lowl_usb_endpoint * const ep, const void * const data, 
 	}
 	errno = 0;
 	return datasz;
+}
+
+static
+size_t lowl_usb_search_move(bytes_t * const dest_bytes, bytes_t * const src_bytes, const size_t movesz)
+{
+	if (dest_bytes)
+		bytes_append(dest_bytes, bytes_buf(src_bytes), movesz);
+	bytes_shift(src_bytes, movesz);
+	return movesz;
+}
+
+ssize_t usb_search(struct lowl_usb_endpoint * const ep, const void * const data, const size_t datasz, bytes_t * const discard)
+{
+	size_t discarded = 0;
+	
+	while (true)
+	{
+		const uint8_t * const buf = bytes_buf(&ep->_buf_r);
+		size_t slen = bytes_len(&ep->_buf_r);
+		if (slen >= datasz)
+		{
+			slen -= datasz;
+			for (size_t i = 0; i <= slen; ++i)
+			{
+				if (!memcmp(&buf[i], data, datasz))
+				{
+					if (i)
+						discarded += lowl_usb_search_move(discard, &ep->_buf_r, i);
+					return discarded;
+				}
+			}
+			discarded += lowl_usb_search_move(discard, &ep->_buf_r, slen + 1);
+		}
+		
+		ssize_t r = lowl_usb_read_to_buf(ep, datasz);
+		if (r <= 0)
+			return r;
+	}
 }
 
 void usb_close_ep(struct lowl_usb_endpoint * const ep)

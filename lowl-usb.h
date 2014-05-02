@@ -19,6 +19,7 @@ extern struct lowl_usb_endpoint *usb_open_ep_pair(struct libusb_device_handle *,
 extern void usb_ep_set_timeouts_ms(struct lowl_usb_endpoint *, unsigned timeout_ms_r, unsigned timeout_ms_w);
 extern ssize_t usb_read(struct lowl_usb_endpoint *, void *, size_t);
 extern ssize_t usb_write(struct lowl_usb_endpoint *, const void *, size_t);
+extern ssize_t usb_search(struct lowl_usb_endpoint *, const void *needle, size_t needlesz, bytes_t *discard);
 extern void usb_close_ep(struct lowl_usb_endpoint *);
 
 #endif
