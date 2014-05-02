@@ -234,7 +234,6 @@ bool opt_bfl_noncerange;
 
 struct thr_info *control_thr;
 struct thr_info **mining_thr;
-static int gwsched_thr_id;
 static int watchpool_thr_id;
 static int watchdog_thr_id;
 #ifdef HAVE_CURSES
@@ -11203,6 +11202,13 @@ int main(int argc, char *argv[])
 
 	notifier_init(submit_waiting_notifier);
 
+	/* Create a unique get work queue */
+	getq = tq_new();
+	if (!getq)
+		quit(1, "Failed to create getq");
+	/* We use the getq mutex as the staged lock */
+	stgd_lock = &getq->mutex;
+
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
 #ifdef WANT_CPUMINE
@@ -11544,14 +11550,6 @@ int main(int argc, char *argv[])
 	control_thr = calloc(total_control_threads, sizeof(*thr));
 	if (!control_thr)
 		quit(1, "Failed to calloc control_thr");
-
-	gwsched_thr_id = 0;
-	/* Create a unique get work queue */
-	getq = tq_new();
-	if (!getq)
-		quit(1, "Failed to create getq");
-	/* We use the getq mutex as the staged lock */
-	stgd_lock = &getq->mutex;
 
 	if (opt_benchmark)
 		goto begin_bench;
