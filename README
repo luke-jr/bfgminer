@@ -139,6 +139,8 @@ BFGMiner specific configuration options:
 	                        enabled
 	--enable-cpumining      Build with cpu mining support(default disabled)
 	--disable-dualminer     Compile support for DualMiner (default enabled)
+	--disable-gridseed      Compile support for GridSeed (default enabled with
+	                        scrypt)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
@@ -827,8 +829,8 @@ To permanently give your account the 'video' group:
 Then logout and back in again.
 
 Q: Can I mine scrypt with FPGAs or ASICs?
-A: BFGMiner supports scrypt mining using DualMiner USB sticks, based on the
-Gridseed GC3355 ASIC.
+A: BFGMiner supports scrypt mining with GridSeed GC3355 ASICs, using either
+DualMiner USB sticks or the 5-chip orb.
 
 Q: Why does BFGMiner show a fractional difficulty when mining scrypt?
 A: BFGMiner consistently uses pdiff measurement for difficulty everywhere,
