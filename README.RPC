@@ -146,7 +146,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        CGMiner=BFGMiner version
+ version       VERSION        Miner="BFGMiner " BFGMiner version
+                              CGMiner=BFGMiner version
                               API=API version
 
  config        CONFIG         Some miner configuration information:
@@ -455,6 +456,7 @@ Added API commands:
 Modified API commands:
  'devs' - remove 'GPU Count' and 'CPU Count'
  'summary' - add 'MHS rolling'
+ 'version' - add 'Miner'
 
 Deprecated API commands:
  'cpu'
