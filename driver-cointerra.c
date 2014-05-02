@@ -59,6 +59,7 @@ enum cointerra_reset_level {
 
 struct cointerra_dev_state {
 	libusb_device_handle *usbh;
+	struct lowl_usb_endpoint *ep;
 	unsigned pipes_per_asic;
 	unsigned pipes_per_die;
 	int works_requested;
@@ -68,7 +69,26 @@ struct cointerra_dev_state {
 static const uint8_t cointerra_startseq[] = {COINTERRA_START_SEQ};
 
 static
-int cointerra_write_msg(libusb_device_handle * const usbh, const char * const repr, const uint8_t msgtype, const void * const msgbody, const unsigned timeout)
+bool cointerra_open(const struct lowlevel_device_info * const info, const char * const repr, libusb_device_handle ** const usbh_p, struct lowl_usb_endpoint ** const ep_p)
+{
+	if (libusb_open(info->lowl_data, usbh_p))
+		applogr(false, LOG_DEBUG, "%s: USB open failed on %s",
+		        repr, info->devid);
+	*ep_p = usb_open_ep_pair(*usbh_p, COINTERRA_EP_R, 64, COINTERRA_EP_W, 64);
+	usb_ep_set_timeouts_ms(*ep_p, COINTERRA_USB_TIMEOUT, COINTERRA_USB_TIMEOUT);
+	if (!*ep_p)
+	{
+		applog(LOG_DEBUG, "%s: Endpoint open failed on %s",
+		       repr, info->devid);
+		libusb_close(*usbh_p);
+		*usbh_p = NULL;
+		return false;
+	}
+	return true;
+}
+
+static
+bool cointerra_write_msg(struct lowl_usb_endpoint * const ep, const char * const repr, const uint8_t msgtype, const void * const msgbody)
 {
 	uint8_t buf[COINTERRA_PACKET_SIZE], *p;
 	memcpy(buf, cointerra_startseq, sizeof(cointerra_startseq));
@@ -76,53 +96,46 @@ int cointerra_write_msg(libusb_device_handle * const usbh, const char * const re
 	pk_u8(p, 0, msgtype);
 	memcpy(&p[1], msgbody, COINTERRA_MSGBODY_SIZE);
 	
-	int e, xfer;
+	if (usb_write(ep, buf, sizeof(buf)) != sizeof(buf))
+		return false;
 	
-	e = libusb_bulk_transfer(usbh, COINTERRA_EP_W, buf, sizeof(buf), &xfer, timeout);
-	if (e)
-		return e;
-	
-	if (xfer != COINTERRA_PACKET_SIZE)
-		return LIBUSB_ERROR_OTHER;
-	
-	return 0;
+	return true;
 }
 
 static
-int cointerra_read_msg(uint8_t * const out_msgtype, uint8_t * const out, libusb_device_handle * const usbh, const char * const repr, const unsigned timeout)
+bool cointerra_read_msg(uint8_t * const out_msgtype, uint8_t * const out, struct lowl_usb_endpoint * const ep, const char * const repr)
 {
 	uint8_t ss[] = {COINTERRA_START_SEQ};
 	uint8_t buf[COINTERRA_PACKET_SIZE];
-	int e, xfer;
-	e = libusb_bulk_transfer(usbh, COINTERRA_EP_R, buf, sizeof(buf), &xfer, timeout);
-	if (e)
-		return e;
-	if (xfer != COINTERRA_PACKET_SIZE)
-		applogr(LIBUSB_ERROR_OTHER, LOG_ERR, "%s: Packet size mismatch (actual=%d expected=%d)",
-		        repr, xfer, (int)COINTERRA_PACKET_SIZE);
+	const int xfer = usb_read(ep, buf, sizeof(buf));
+	if (!xfer)
+		return false;
+	if (xfer != sizeof(buf))
+		applogr(false, LOG_ERR, "%s: Packet size mismatch (actual=%d expected=%d)",
+		        repr, xfer, (int)sizeof(buf));
 	for (int i = sizeof(ss); i--; )
 		if (ss[i] != buf[i])
 			applogr(LIBUSB_ERROR_OTHER;, LOG_ERR, "%s: Packet start sequence mismatch", repr);
 	uint8_t * const bufp = &buf[sizeof(ss)];
 	*out_msgtype = upk_u8(bufp, 0);
 	memcpy(out, &bufp[1], COINTERRA_MSGBODY_SIZE);
-	return 0;
+	return true;
 }
 
 static
-int cointerra_request(libusb_device_handle * const usbh, const uint8_t msgtype, uint16_t interval_cs)
+bool cointerra_request(struct lowl_usb_endpoint * const ep, const uint8_t msgtype, uint16_t interval_cs)
 {
 	uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
 	pk_u16le(buf, 0, msgtype);
 	pk_u16le(buf, 2, interval_cs);
-	return cointerra_write_msg(usbh, cointerra_drv.dname, CMTO_REQUEST, buf, COINTERRA_USB_TIMEOUT);
+	return cointerra_write_msg(ep, cointerra_drv.dname, CMTO_REQUEST, buf);
 }
 
 static
-int cointerra_reset(libusb_device_handle * const usbh, const enum cointerra_reset_level crl)
+bool cointerra_reset(struct lowl_usb_endpoint * const ep, const enum cointerra_reset_level crl)
 {
 	uint8_t buf[COINTERRA_MSGBODY_SIZE] = { crl };
-	return cointerra_write_msg(usbh, cointerra_drv.dname, CMTO_RESET, buf, COINTERRA_USB_TIMEOUT);
+	return cointerra_write_msg(ep, cointerra_drv.dname, CMTO_RESET, buf);
 }
 
 static
@@ -134,24 +147,22 @@ bool cointerra_lowl_match(const struct lowlevel_device_info * const info)
 static
 bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	int e;
+	bool rv = false;
 	
 	if (info->lowl != &lowl_usb)
 		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" %s, but lowlevel driver is not usb_generic!",
 		        __func__, info->product, info->devid);
 	
 	libusb_device_handle *usbh;
-	e = libusb_open(info->lowl_data, &usbh);
-	if (e)
-		applogr(false, LOG_ERR, "%s: Failed to open %s: %s",
-		        cointerra_drv.dname, info->devid, bfg_strerror(e, BST_LIBUSB));
+	struct lowl_usb_endpoint *ep;
+	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep))
+		return false;
 	
 	unsigned pipes;
 	{
 		{
 			uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
-			e = cointerra_write_msg(usbh, cointerra_drv.dname, CMTO_GET_INFO, buf, COINTERRA_USB_TIMEOUT);
-			if (e)
+			if (!cointerra_write_msg(ep, cointerra_drv.dname, CMTO_GET_INFO, buf))
 				goto err;
 		}
 		
@@ -159,8 +170,7 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 		uint8_t buf[COINTERRA_MSG_SIZE];
 		while (true)
 		{
-			e = cointerra_read_msg(&msgtype, buf, usbh, cointerra_drv.dname, COINTERRA_USB_TIMEOUT);
-			if (e)
+			if (!cointerra_read_msg(&msgtype, buf, ep, cointerra_drv.dname))
 				goto err;
 			if (msgtype == CMTI_INFO)
 				break;
@@ -185,11 +195,12 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 		.dev_serial = maybe_strdup(info->serial),
 		.deven = DEV_ENABLED,
 	};
-	return add_cgpu(cgpu);
+	rv = add_cgpu(cgpu);
 
 err:
+	usb_close_ep(ep);
 	libusb_close(usbh);
-	return false;
+	return rv;
 }
 
 static
@@ -198,23 +209,20 @@ bool cointerra_init(struct thr_info * const master_thr)
 	struct cgpu_info * const dev = master_thr->cgpu;
 	struct lowlevel_device_info * const info = dev->device_data;
 	struct cointerra_dev_state * const devstate = malloc(sizeof(*devstate));
-	int e;
 	
 	dev->device_data = devstate;
 	*devstate = (struct cointerra_dev_state){
 		.pipes_per_die = 120,
 		.pipes_per_asic = 240,
 	};
-	e = libusb_open(info->lowl_data, &devstate->usbh);
-	if (e)
-		applogr(false, LOG_ERR, "%s: Failed to open %s: %s",
-		        dev->dev_repr, info->devid, bfg_strerror(e, BST_LIBUSB));
-	libusb_device_handle * const usbh = devstate->usbh;
+	if (!cointerra_open(info, dev->dev_repr, &devstate->usbh, &devstate->ep))
+		return false;
+	struct lowl_usb_endpoint * const ep = devstate->ep;
 	
 	// Request regular status updates
-	cointerra_request(usbh, CMTI_STATUS, 0x83d);
+	cointerra_request(ep, CMTI_STATUS, 0x83d);
 	
-	cointerra_reset(usbh, CRL_INIT);
+	cointerra_reset(ep, CRL_INIT);
 	
 	// Queue is full until device asks for work
 	set_on_all_procs(dev, thr[0]->queue_full, true);
@@ -231,7 +239,6 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	struct thr_info * const master_thr = dev->thr[0];
 	struct cointerra_dev_state * const devstate = dev->device_data;
 	uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
-	int e;
 	
 	if (unlikely(!devstate->works_requested))
 	{
@@ -246,8 +253,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	swap32yes(&buf[0x26], &work->data[0x40],  0xc / 4);
 	pk_u16le(buf, 50, 0);  // ntime roll limit
 	pk_u16le(buf, 52, 0x20);  // number of zero bits in results
-	e = cointerra_write_msg(devstate->usbh, cointerra_drv.dname, CMTO_WORK, buf, COINTERRA_USB_TIMEOUT);
-	if (e)
+	if (!cointerra_write_msg(devstate->ep, cointerra_drv.dname, CMTO_WORK, buf))
 		return false;
 	
 	HASH_ADD_INT(master_thr->work, device_id, work);
@@ -269,12 +275,10 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 	struct cgpu_info * const dev = master_thr->cgpu, *proc;
 	struct thr_info *mythr;
 	struct cointerra_dev_state * const devstate = dev->device_data;
-	int e;
 	uint8_t msgtype;
 	uint8_t buf[COINTERRA_MSGBODY_SIZE];
 	
-	e = cointerra_read_msg(&msgtype, buf, devstate->usbh, dev->dev_repr, COINTERRA_USB_POLL_TIMEOUT);
-	if (e)
+	if (!cointerra_read_msg(&msgtype, buf, devstate->ep, dev->dev_repr))
 		return false;
 	
 	switch (msgtype)
