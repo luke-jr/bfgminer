@@ -513,7 +513,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				
 				if (bitfury->mhz_best)
 				{
-					if (bitfury->mhz < bitfury->mhz_best / 2)
+					const double mhz_half_best = bitfury->mhz_best / 2;
+					if (bitfury->mhz < mhz_half_best && bitfury->mhz_last < mhz_half_best)
 					{
 						applog(LOG_WARNING, "%"PRIpreprv": Frequency drop over 50%% detected, reinitialising",
 						       proc->proc_repr);
