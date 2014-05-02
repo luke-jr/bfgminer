@@ -169,8 +169,6 @@ static const char ISJSON = '{';
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
 #define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
-#define JSON_BYE	JSON1 _BYE JSON1
-#define JSON_RESTART	JSON1 _RESTART JSON1
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
@@ -305,6 +303,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_ZERNOSUM 97
 
 #define MSG_DEVSCAN 0x100
+#define MSG_BYE 0x101
 
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
@@ -476,6 +475,7 @@ struct CODES {
  { SEVERITY_SUCC,  MSG_ZERSUM,	PARAM_STR,	"Zeroed %s stats with summary" },
  { SEVERITY_SUCC,  MSG_ZERNOSUM, PARAM_STR,	"Zeroed %s stats without summary" },
  { SEVERITY_SUCC,  MSG_DEVSCAN, PARAM_COUNT,	"Added %d new device(s)" },
+ { SEVERITY_SUCC,  MSG_BYE,		PARAM_STR,	"%s" },
  { SEVERITY_FAIL, 0, 0, NULL }
 };
 
@@ -595,12 +595,6 @@ static bool io_add(struct io_data *io_data, char *buf)
 		io_flush(io_data, false);
 	bytes_append(&io_data->data, buf, len);
 	return true;
-}
-
-static bool io_put(struct io_data *io_data, char *buf)
-{
-	bytes_reset(&io_data->data);
-	return io_add(io_data, buf);
 }
 
 static void io_close(struct io_data *io_data)
@@ -2758,10 +2752,7 @@ static void gpuvddc(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 
 void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	if (isjson)
-		io_put(io_data, JSON_START JSON_BYE);
-	else
-		io_put(io_data, _BYE);
+	message(io_data, MSG_BYE, 0, _BYE, isjson);
 
 	bye = true;
 	do_a_quit = true;
@@ -2769,10 +2760,7 @@ void doquit(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused
 
 void dorestart(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __maybe_unused char *param, bool isjson, __maybe_unused char group)
 {
-	if (isjson)
-		io_put(io_data, JSON_START JSON_RESTART);
-	else
-		io_put(io_data, _RESTART);
+	message(io_data, MSG_BYE, 0, _RESTART, isjson);
 
 	bye = true;
 	do_a_restart = true;
