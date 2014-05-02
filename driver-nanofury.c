@@ -53,14 +53,14 @@ bool nanofury_spi_reset(struct mcp2210_device * const mcp)
 	char buf[1];
 	
 	// SCK_OVRRIDE
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_SCK_OVR, MGV_HIGH))
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_SCK_OVR, BGV_HIGH))
 		return false;
 	
 	for (r = 0; r < 16; ++r)
 		if (!mcp2210_spi_transfer(mcp, tx, buf, 1))
 			return false;
 	
-	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) == MGV_ERROR)
+	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) == BGV_ERROR)
 		return false;
 	
 	return true;
@@ -126,7 +126,7 @@ static
 void nanofury_send_led_gpio(struct nanofury_state * const state)
 {
 	struct mcp2210_device * const mcp = state->mcp;
-	mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? MGV_HIGH : MGV_LOW);
+	mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? BGV_HIGH : BGV_LOW);
 }
 
 static
@@ -147,10 +147,10 @@ void nanofury_device_off(struct mcp2210_device * const mcp)
 static
 bool nanofury_power_enable(struct mcp2210_device * const mcp, const bool poweron)
 {
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, poweron ? MGV_HIGH : MGV_LOW))
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, poweron ? BGV_HIGH : BGV_LOW))
 		return false;
 	
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, poweron ? MGV_LOW : MGV_HIGH))
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, poweron ? BGV_LOW : BGV_HIGH))
 		return false;
 	
 	return true;
@@ -165,13 +165,13 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	
 	// default: set everything to input
 	for (i = 0; i < 9; ++i)
-		if (MGV_ERROR == mcp2210_get_gpio_input(mcp, i))
+		if (BGV_ERROR == mcp2210_get_gpio_input(mcp, i))
 			goto fail;
 	
 	// configure the pins that we need:
 	
 	// LED
-	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, MGV_HIGH))
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, BGV_HIGH))
 		goto fail;
 	
 	nanofury_power_enable(mcp, true);
@@ -191,7 +191,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	
 	// after this command SCK_OVRRIDE should read the same as current SCK value (which for mode 0 should be 0)
 	
-	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != MGV_LOW)
+	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != BGV_LOW)
 		goto fail;
 	
 	// switch SCK to polarity (default SCK=1 in mode 2)
@@ -202,7 +202,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	
 	// after this command SCK_OVRRIDE should read the same as current SCK value (which for mode 2 should be 1)
 	
-	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != MGV_HIGH)
+	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != BGV_HIGH)
 		goto fail;
 	
 	// switch SCK to polarity (default SCK=0 in mode 0)
@@ -211,7 +211,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	if (!mcp2210_spi_transfer(mcp, &tmp, &tmprx, 1))
 		goto fail;
 	
-	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != MGV_LOW)
+	if (mcp2210_get_gpio_input(mcp, NANOFURY_GP_PIN_SCK_OVR) != BGV_LOW)
 		goto fail;
 	
 	return true;
@@ -435,7 +435,7 @@ void nanofury_poll(struct thr_info * const thr)
 	if (state->identify_requested)
 	{
 		if (!timer_isset(&state->identify_started))
-			mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? MGV_LOW : MGV_HIGH);
+			mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, state->ledvalue ? BGV_LOW : BGV_HIGH);
 		timer_set_delay_from_now(&state->identify_started, 5000000);
 		state->identify_requested = false;
 	}

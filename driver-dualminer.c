@@ -33,14 +33,25 @@
   #include <io.h>
 #endif
 
+// mining both Scrypt & SHA2 at the same time with two processes
+// SHA2 process must be run first, no arg requirements, first serial port will be used
+// Scrypt process must be launched after, --scrypt and --dual-mode args required
+bool opt_dual_mode = false;
+
 #define DUALMINER_IO_SPEED 115200
 
-#define DUALMINER_SCRYPT_HASH_TIME		0.00001428571429
+#define DUALMINER_SCRYPT_SM_HASH_TIME   0.00001428571429
 #define DUALMINER_SCRYPT_DM_HASH_TIME	0.00003333333333
-#define DUALMINER_SHA2_HASH_TIME		0.00000000300000
+#define DUALMINER_SHA2_DM_HASH_TIME     0.00000000300000
 
 #define DUALMINER_SCRYPT_READ_COUNT 48  // 4.8s to read
 #define DUALMINER_SHA2_READ_COUNT	16  // 1.6s to read
+
+#define DUALMINER_0_9V_SHA2_UNITS  60
+#define DUALMINER_1_2V_SHA2_UNITS   0
+
+#define DUALMINER_DM_DEFAULT_FREQUENCY  550
+#define DUALMINER_SM_DEFAULT_FREQUENCY  850
 
 static
 const char sha2_golden_ob[] =
@@ -68,12 +79,6 @@ const char scrypt_golden_ob[] =
 static
 const char scrypt_golden_nonce[] = "dd0c0500";
 
-enum
-{
-	RTS_LOW = 0,
-	RTS_HIGH = 1
-};
-
 BFG_REGISTER_DRIVER(dualminer_drv)
 static
 const struct bfg_set_device_definition dualminer_set_device_funcs[];
@@ -81,27 +86,25 @@ const struct bfg_set_device_definition dualminer_set_device_funcs[];
 // device helper functions
 
 static
-void dualminer_bootstrap_device(int fd)
+void dualminer_teardown_device(int fd)
 {
-	gc3355_dual_reset(fd);
-
-	if (opt_scrypt && !opt_dual_mode)
-		gc3355_opt_scrypt_only_init(fd);
-	else
-		gc3355_dualminer_init(fd);
-
-	usleep(1000);
+	// set data terminal ready (DTR) status
+	set_serial_dtr(fd, BGV_HIGH);
+	// set request to send (RTS) status
+	set_serial_rts(fd, BGV_LOW);
 }
 
 static
-void dualminer_teardown_device(int fd)
+void dualminer_init_hashrate(struct cgpu_info * const cgpu)
 {
-	if (opt_scrypt)
-		gc3355_open_scrypt_unit(fd, SCRYPT_UNIT_CLOSE);
-	else
-		gc3355_open_sha2_unit(fd, "0");
+	int fd = cgpu->device_fd;
+	struct ICARUS_INFO *info = cgpu->device_data;
 
-	gc3355_set_rts_status(fd, RTS_LOW);
+	// get clear to send (CTS) status
+	if ((gc3355_get_cts_status(fd) != 1) &&  // 0.9v - dip-switch set to B
+		(opt_scrypt))
+		// adjust hash-rate for voltage
+		info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
 }
 
 static
@@ -115,40 +118,62 @@ bool dualminer_init(struct thr_info * const thr)
 	return icarus_init(thr);
 }
 
+// runs when job starts and the device has been reset (or first run)
 static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
-	struct ICARUS_INFO *info = icarus->device_data;
 	int fd = icarus->device_fd;
 
-	dualminer_bootstrap_device(fd);
+	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, false);
+	
+	dualminer_init_hashrate(icarus);
 
-	if (opt_scrypt)
-		gc3355_set_rts_status(fd, RTS_HIGH);
+	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, scrypt: %d, scrypt only: %d",
+		   icarus->proc_repr,
+		   opt_pll_freq,
+		   opt_scrypt,
+		   opt_scrypt && !opt_dual_mode);
+}
 
-	gc3355_init(fd, opt_dualminer_sha2_gating, !opt_dual_mode);
-	applog(LOG_DEBUG, "%"PRIpreprv": scrypt: %d, scrypt only: %d; have fan: %d\n", icarus->proc_repr, opt_scrypt, opt_scrypt, opt_hubfans);
-
-	if (gc3355_get_cts_status(fd) != 1)
+// set defaults for options that the user didn't specify
+static
+void dualminer_set_defaults(int fd)
+{
+	// set opt_sha2_units defaults depending on dip-switch
+	if (opt_sha2_units == -1)
 	{
-		// Scrypt + SHA2 mode
-		if (opt_scrypt)
-			info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
+		// get clear to send (CTS) status
+		if (gc3355_get_cts_status(fd) == 1)
+			opt_sha2_units = DUALMINER_1_2V_SHA2_UNITS;  // dip-switch in L position
+		else
+			opt_sha2_units = DUALMINER_0_9V_SHA2_UNITS;  // dip-switch in B position
 	}
-
-	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, sha2num=%d", icarus->proc_repr, opt_pll_freq, opt_sha2_number);
+	
+	// set opt_pll_freq defaults depending on dip-switch
+	if (opt_pll_freq <= 0)
+	{
+		// get clear to send (CTS) status
+		if (gc3355_get_cts_status(fd) == 1)
+			opt_pll_freq = DUALMINER_SM_DEFAULT_FREQUENCY; // 1.2v - dip-switch in L position
+		else
+			opt_pll_freq = DUALMINER_DM_DEFAULT_FREQUENCY; // 0.9v - dip-switch in B position
+	}
 }
 
 // ICARUS_INFO functions - icarus-common.h
 
+// runs after fd is opened but before the device detection code
 static
 bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __maybe_unused info)
 {
-	dualminer_bootstrap_device(fd);
+	dualminer_set_defaults(fd);
+	
+	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, true);
 
 	return true;
 }
 
+// runs each time a job starts
 static
 bool dualminer_job_start(struct thr_info * const thr)
 {
@@ -157,14 +182,15 @@ bool dualminer_job_start(struct thr_info * const thr)
 	int fd = icarus->device_fd;
 
 	if (state->firstrun)
+		// runs when job starts and the device has been reset (or first run)
 		dualminer_init_firstrun(icarus);
 
 	if (opt_scrypt)
 	{
 		if (opt_dual_mode)
-			gc3355_dualminer_init(fd);
+			gc3355_scrypt_reset(fd);
 		else
-			gc3355_opt_scrypt_init(fd);
+			gc3355_scrypt_only_reset(fd);
 	}
 
 	return icarus_job_start(thr);
@@ -196,13 +222,13 @@ bool dualminer_detect_one(const char *devpath)
 	{
 		info->golden_ob = (char*)scrypt_golden_ob;
 		info->golden_nonce = (char*)scrypt_golden_nonce;
-		info->Hs = DUALMINER_SCRYPT_HASH_TIME;
+		info->Hs = DUALMINER_SCRYPT_SM_HASH_TIME;
 	}
 	else
 	{
 		info->golden_ob = (char*)sha2_golden_ob;
 		info->golden_nonce = (char*)sha2_golden_nonce;
-		info->Hs = DUALMINER_SHA2_HASH_TIME;
+		info->Hs = DUALMINER_SHA2_DM_HASH_TIME;
 	}
 
 	drv_set_defaults(drv, dualminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
@@ -267,32 +293,9 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	memset(state->ob_bin, 0, info->ob_size);
 
 	if (opt_scrypt)
-	{
-		state->ob_bin[0] = 0x55;
-		state->ob_bin[1] = 0xaa;
-		state->ob_bin[2] = 0x1f;
-		state->ob_bin[3] = 0x00;
-		memcpy(state->ob_bin + 4, work->target, 32);
-		memcpy(state->ob_bin + 36, work->midstate, 32);
-		memcpy(state->ob_bin + 68, work->data, 80);
-		state->ob_bin[148] = 0xff;
-		state->ob_bin[149] = 0xff;
-		state->ob_bin[150] = 0xff;
-		state->ob_bin[151] = 0xff;
-	}
+		gc3355_scrypt_prepare_work(state->ob_bin, work);
 	else
-	{
-		uint8_t temp_bin[64];
-		memset(temp_bin, 0, 64);
-		memcpy(temp_bin, work->midstate, 32);
-		memcpy(temp_bin+52, work->data + 64, 12);
-		state->ob_bin[0] = 0x55;
-		state->ob_bin[1] = 0xaa;
-		state->ob_bin[2] = 0x0f;
-		state->ob_bin[3] = 0x00;
-		memcpy(state->ob_bin + 8, temp_bin, 32);
-		memcpy(state->ob_bin + 40, temp_bin + 52, 12);
-	}
+		gc3355_sha2_prepare_work(state->ob_bin, work, false);
 
 	return true;
 }

@@ -1,5 +1,7 @@
 /*
  * Copyright 2014 Nate Woolls
+ * Copyright 2013 Luke Dashjr
+ * Copyright 2014 GridSeed Team
  * Copyright 2014 Dualminer Team
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -24,26 +26,46 @@
   #include <io.h>
 #endif
 
-#define DEFAULT_DELAY_TIME 2000
+// options configurable by the end-user
 
-#define HUBFANS_0_9V_sha2 "60"
-#define HUBFANS_1_2V_sha2 "0"
-#define DEFAULT_0_9V_sha2 "60"
-#define DEFAULT_1_2V_sha2 "0"
+int opt_sha2_units = -1;
+int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
+
+#define GC3355_CHIP_NAME  "gc3355"
+#define DEFAULT_ORB_SHA2_CORES  16
+
+
+// General GC3355 commands
 
 static
-const char *sha2_gating[] =
+const char *firmware_request_cmd[] =
 {
-	"55AAEF0200000000",
-	"55AAEF0300000000",
-	"55AAEF0400000000",
-	"55AAEF0500000000",
-	"55AAEF0600000000",
-	"",
+	"55AAC000909090900000000001000000",  // get firmware version of GC3355
+	NULL
 };
 
 static
-const char *sha2_single_open[] =
+const char *no_fifo_cmd[] = {
+	"55AAC000D0D0D0D00000000001000000",
+	NULL
+};
+
+// SHA-2 commands
+
+static
+const char *sha2_gating_cmd[] =
+{
+	"55AAEF0200000000",  // Chip 1 - power down SHA-2 (unless masked w/PLL)
+	"55AAEF0300000000",  // Chip 2
+	"55AAEF0400000000",  // Chip 3
+	"55AAEF0500000000",  // Chip 4
+	"55AAEF0600000000",  // Chip 5
+	NULL
+};
+
+// maps the above SHA chip gating with SHA-2 units
+static
+const char *sha2_open_cmd[] =
 {
 	"55AAEF0200000001",
 	"55AAEF0200000003",
@@ -205,11 +227,50 @@ const char *sha2_single_open[] =
 	"55AAEF063FFFFFFF",
 	"55AAEF067FFFFFFF",
 	"55AAEF06FFFFFFFF",
-	"",
+	NULL
 };
 
 static
-const char *scrypt_only_init[] =
+const char *multichip_init_cmd[] =
+{
+	"55AAC000C0C0C0C00500000001000000",  // set number of sub-chips (05 in this case)
+	"55AAEF020000000000000000000000000000000000000000",  // power down all SHA-2 modules
+	"55AAEF3020000000",  // Enable SHA-2 OR NOT - NO SCRYPT ACCEPTS WITHOUT THIS???
+	NULL
+};
+
+static
+const char *sha2_init_cmd[] =
+{
+	"55AAEF3020000000",  // Enable SHA-2
+	"55AA1F2817000000",  // Enable GCP
+	NULL
+};
+
+// called when initializing GridSeed device
+// called while initializing DualMiner when mining in scrypt+sha (dual-mode)
+static
+const char *scrypt_init_cmd[] =
+{
+	"55AA1F2814000000",  // Enable Scrypt
+	"55AA1F2817000000",  // Enable GCP
+	NULL
+};
+
+// called before job start by GridSeed when mining scrypt
+// called before job start by DualMiner when mining scrypt in scrypt+sha (dual-mode)
+static
+const char *scrypt_reset_cmd[] =
+{
+	// faster, for start of each job:
+	"55AA1F2816000000",  // Reset Scrypt(?)
+	"55AA1F2817000000",  // Enable GCP(?)
+	NULL
+};
+
+// called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
+static
+const char *scrypt_only_init_cmd[] =
 {
 	"55AAEF0200000000",
 	"55AAEF0300000000",
@@ -219,20 +280,40 @@ const char *scrypt_only_init[] =
 	"55AAEF3040000000",
 	"55AA1F2810000000",
 	"55AA1F2813000000",
-	"",
+	NULL
 };
 
-char *opt_dualminer_sha2_gating = NULL;
-int opt_pll_freq = 0; // default is set in gc3355_pll_freq_init2
-int opt_sha2_number = 160;
-bool opt_hubfans = false;
-bool opt_dual_mode = false;
-
-void gc3355_dual_reset(int fd)
+// called before job start by DualMiner when mining scrypt in scrypt-only (not dual-mode)
+// called while initializing DualMiner when mining scrypt in scrypt-only (not dual-mode)
+static
+const char *scrypt_only_reset_cmd[] =
 {
-	set_serial_dtr(fd, 1);
-	cgsleep_ms(1000);
-	set_serial_dtr(fd, 0);
+	"55AA1F2810000000",  // Close Scrypt(?)
+	"55AA1F2813000000",  // Open Scrypt(?)
+	NULL
+};
+
+static
+const char *gcp_chip_reset_cmd[] =
+{
+	"55AAC000808080800000000001000000",  // GCP (GridChip) reset
+	NULL
+};
+
+static
+const char *sha2_chip_reset_cmd[] =
+{
+	"55AAC000E0E0E0E00000000001000000",  // SHA2 reset
+	NULL
+};
+
+
+void gc3355_reset_dtr(int fd)
+{
+	// set data terminal ready (DTR) status
+	set_serial_dtr(fd, BGV_HIGH);
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
+	set_serial_dtr(fd, BGV_LOW);
 }
 
 static
@@ -305,252 +386,365 @@ void gc3355_config_sha256d(uint8_t * const buf, const uint8_t chipaddr, const fl
 }
 
 static
-int gc3355_write(const int fd, const void * const buf, const size_t bufsz)
+void gc3355_log_protocol(int fd, const char *buf, size_t size, const char *prefix)
 {
-	const int rv = icarus_write(fd, buf, bufsz);
-	usleep(DEFAULT_DELAY_TIME);
-	return rv;
+	char hex[(size * 2) + 1];
+	bin2hex(hex, buf, size);
+	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s(%3lu) %s",
+	       GC3355_CHIP_NAME, fd, prefix, (unsigned long)size, hex);
+}
+
+int gc3355_read(int fd, char *buf, size_t size)
+{
+	size_t read;
+	int tries = 20;
+	
+	while (tries > 0)
+	{
+		read = serial_read(fd, buf, size);
+		if (read > 0)
+			break;
+		
+		tries--;
+	}
+	
+	if (unlikely(tries == 0))
+		return -1;
+	
+	if ((read > 0) && opt_dev_protocol)
+		gc3355_log_protocol(fd, buf, read, "RECV");
+	
+	return read;
+}
+
+ssize_t gc3355_write(int fd, const void * const buf, const size_t size)
+{
+	if (opt_dev_protocol)
+		gc3355_log_protocol(fd, buf, size, "SEND");
+	
+	return write(fd, buf, size);
 }
 
 static
-void gc3355_send_cmds(int fd, const char *cmds[])
+void _gc3355_send_cmds_bin(int fd, const char *cmds[], bool is_bin, int size)
 {
 	int i = 0;
-	unsigned char ob_bin[32];
-	for(i = 0 ;; i++)
+	unsigned char ob_bin[512];
+	for (i = 0; ; i++)
 	{
-		memset(ob_bin, 0, sizeof(ob_bin));
-
-		if (cmds[i][0] == 0)
+		const char *cmd = cmds[i];
+		if (cmd == NULL)
 			break;
 
-		hex2bin(ob_bin, cmds[i], strlen(cmds[i]) / 2);
-		icarus_write(fd, ob_bin, 8);
-		usleep(DEFAULT_DELAY_TIME);
+		if (is_bin)
+			gc3355_write(fd, cmd, size);
+		else
+		{
+			int bin_size = strlen(cmd) / 2;
+			hex2bin(ob_bin, cmd, bin_size);
+			gc3355_write(fd, ob_bin, bin_size);
+		}
+		
+		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	}
 }
 
-void gc3355_opt_scrypt_init(int fd)
-{
-	const char *initscrypt_ob[] =
-	{
-		"55AA1F2810000000",
-		"55AA1F2813000000",
-		""
-	};
+#define gc3355_send_cmds_bin(fd, cmds, size)  _gc3355_send_cmds_bin(fd, cmds, true, size)
+#define gc3355_send_cmds(fd, cmds)  _gc3355_send_cmds_bin(fd, cmds, false, -1)
 
-	gc3355_send_cmds(fd, initscrypt_ob);
+void gc3355_scrypt_only_reset(int fd)
+{
+	gc3355_send_cmds(fd, scrypt_only_reset_cmd);
 }
 
-static
-void gc3355_pll_freq_init2(int fd, int pll_freq)
+void gc3355_set_pll_freq(int fd, int pll_freq)
 {
 	const uint8_t chipaddr = 0xf;
 	const uint32_t baud = 115200;  // FIXME: Make this configurable
 	uint8_t buf[8];
 	
-	if (!pll_freq)
-	{
-		if (gc3355_get_cts_status(fd) == 1)
-			//1.2v - Scrypt mode
-			pll_freq = 850;
-		else
-			//0.9v - Scrypt + SHA mode
-			pll_freq = 550;
-	}
-	
 	gc3355_config_cpm(buf, chipaddr, pll_freq);
 	gc3355_write(fd, buf, sizeof(buf));
+	
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	
 	gc3355_config_sha256d(buf, chipaddr, pll_freq, baud);
 	gc3355_write(fd, buf, sizeof(buf));
 }
 
-
-void gc3355_open_sha2_unit(int fd, char *opt_sha2_gating)
-{
-	unsigned char ob_bin[8];
-	int i;
-
-	//---sha2 unit---
-	char sha2_gating[5][17] =
-	{
-		"55AAEF0200000000",
-		"55AAEF0300000000",
-		"55AAEF0400000000",
-		"55AAEF0500000000",
-		"55AAEF0600000000",
-	};
-	union
-	{
-	    unsigned int i32[5];
-	    unsigned char c8[20] ;
-	}sha2_group;
-
-	int sha2_number=0;
-	if (opt_sha2_gating== NULL)
-	    sha2_number = 70;
-	else
-	{
-	    if (atoi(opt_sha2_gating) <= 160 && atoi(opt_sha2_gating) >= 0)
-			sha2_number = atoi(opt_sha2_gating);
-		else
-			sha2_number = 70;
-	}
-
-	for(i = 0; i < 5; i++)
-		sha2_group.i32[i] = 0;
-
-	for(i = 0; i < sha2_number; i++)
-		sha2_group.i32[i / 32] += 1 << ( i % 32);
-
-	for(i = 0; i < 20; i++)
-		sprintf(&sha2_gating[i / 4][8 + (i % 4) * 2], "%02x", sha2_group.c8[i]);
-	//---sha2 unit end---
-
-	for(i = 0; i < 5; i++)
-	{
-		if (sha2_gating[i][0] == '\0')
-			break;
-
-		hex2bin(ob_bin, sha2_gating[i], sizeof(ob_bin));
-		icarus_write(fd, ob_bin, 8);
-		usleep(DEFAULT_DELAY_TIME);
-	}
-
-	opt_sha2_number = sha2_number;
-}
-
 static
-void gc3355_open_sha2_unit_one_by_one(int fd, char *opt_sha2_gating)
+void gc3355_open_sha2_units(int fd, int sha2_units)
 {
 	int unit_count = 0;
 	unsigned char ob_bin[8];
 	int i;
 
-	unit_count = atoi(opt_sha2_gating);
+	// should be 0 - 160
+	unit_count = sha2_units < 0 ? 0 : sha2_units > 160 ? 160 : sha2_units;
 
-	if (unit_count < 0)
-		unit_count = 0;
-	if (unit_count > 160)
-		unit_count = 160;
-
-	if (unit_count > 0 && unit_count <= 160)
+	if (unit_count > 0)
 	{
 		for(i = 0; i <= unit_count; i++)
 		{
-			hex2bin(ob_bin, sha2_single_open[i], sizeof(ob_bin));
-			icarus_write(fd, ob_bin, 8);
-			usleep(DEFAULT_DELAY_TIME * 2);
+			hex2bin(ob_bin, sha2_open_cmd[i], sizeof(ob_bin));
+			gc3355_write(fd, ob_bin, 8);
+			cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 		}
-		opt_sha2_number = unit_count;
 	}
 	else if (unit_count == 0)
-		gc3355_send_cmds(fd, sha2_gating);
+		gc3355_send_cmds(fd, sha2_gating_cmd);
 }
 
-void gc3355_opt_scrypt_only_init(int fd)
+void gc3355_scrypt_init(int fd)
 {
-	gc3355_send_cmds(fd, scrypt_only_init);
-
-	gc3355_pll_freq_init2(fd, opt_pll_freq);
+	gc3355_send_cmds(fd, scrypt_init_cmd);
 }
 
-
-void gc3355_open_scrypt_unit(int fd, int status)
+static
+void gc3355_scrypt_only_init(int fd)
 {
-	const char *scrypt_only_ob[] =
-	{
-		"55AA1F2810000000",
-		"",
-	};
+	gc3355_send_cmds(fd, sha2_gating_cmd);
+	gc3355_send_cmds(fd, scrypt_only_init_cmd);
+	gc3355_scrypt_only_reset(fd);
+}
 
-	const char *scrypt_ob[] =
-	{
-		"55AA1F2814000000",
-		"",
-	};
-
-	if (status == SCRYPT_UNIT_OPEN)
-	{
-		if (opt_dual_mode)
-			gc3355_opt_scrypt_init(fd);
-		else
-			gc3355_opt_scrypt_only_init(fd);
+static
+void gc3355_open_sha2_cores(int fd, int sha2_cores)
+{
+	unsigned char cmd[24], c1, c2;
+	uint16_t	mask;
+	int i;
+	
+	mask = 0x00;
+	for (i = 0; i < sha2_cores; i++)
+		mask = mask << 1 | 0x01;
+	
+	if (mask == 0)
+		return;
+	
+	c1 = mask & 0x00ff;
+	c2 = mask >> 8;
+	
+	memset(cmd, 0, sizeof(cmd));
+	memcpy(cmd, "\x55\xaa\xef\x02", 4);
+	for (i = 4; i < 24; i++) {
+		cmd[i] = ((i % 2) == 0) ? c1 : c2;
+		gc3355_write(fd, cmd, sizeof(cmd));
+		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	}
-	else
+	return;
+}
+
+static
+void gc3355_init_sha2_nonce(int fd)
+{
+	char **cmds, *p;
+	uint32_t nonce, step;
+	int i;
+	
+	cmds = calloc(sizeof(char *) *(GC3355_ORB_DEFAULT_CHIPS + 1), 1);
+	
+	if (unlikely(!cmds))
+		quit(1, "Failed to calloc init nonce commands data array");
+	
+	step = 0xffffffff / GC3355_ORB_DEFAULT_CHIPS;
+	
+	for (i = 0; i < GC3355_ORB_DEFAULT_CHIPS; i++)
 	{
-		if (opt_dual_mode)
-			gc3355_send_cmds(fd, scrypt_ob);
-		else
-			gc3355_send_cmds(fd, scrypt_only_ob);
+		p = calloc(8, 1);
+		
+		if (unlikely(!p))
+			quit(1, "Failed to calloc init nonce commands data");
+		
+		memcpy(p, "\x55\xaa\x00\x00", 4);
+		
+		p[2] = i;
+		nonce = htole32(step * i);
+		memcpy(p + 4, &nonce, sizeof(nonce));
+		cmds[i] = p;
 	}
+	
+	cmds[i] = NULL;
+	gc3355_send_cmds_bin(fd, (const char **)cmds, 8);
+	
+	for (i = 0; i < GC3355_ORB_DEFAULT_CHIPS; i++)
+		free(cmds[i]);
+	
+	free(cmds);
+	return;
 }
 
-void gc3355_dualminer_init(int fd)
+void gc3355_sha2_init(int fd)
 {
-
-	const char *init_ob[] =
-	{
-#if 1
-		"55AAEF0200000000",
-		"55AAEF0300000000",
-		"55AAEF0400000000",
-		"55AAEF0500000000",
-		"55AAEF0600000000",
-#endif
-		"55AAEF3020000000",
-		"55AA1F2817000000",
-		""
-	};
-	const char *initscrypt_ob[] =
-	{
-		"55AA1F2814000000",
-		"55AA1F2817000000",
-		""
-	};
-
-	if (opt_scrypt)
-		gc3355_send_cmds(fd, initscrypt_ob);
-	else
-		gc3355_send_cmds(fd, init_ob);
-
-	if (!opt_scrypt)
-		gc3355_pll_freq_init2(fd, opt_pll_freq);
+	gc3355_send_cmds(fd, sha2_gating_cmd);
+	gc3355_send_cmds(fd, sha2_init_cmd);
 }
 
-void gc3355_init(int fd, char *sha2_unit, bool is_scrypt_only)
+static
+void gc3355_reset_chips(int fd)
 {
-	if (gc3355_get_cts_status(fd) == 1)
+	// reset chips
+	gc3355_send_cmds(fd, gcp_chip_reset_cmd);
+	gc3355_send_cmds(fd, sha2_chip_reset_cmd);
+}
+
+void gc3355_init_device(int fd, int pll_freq, bool scrypt_only, bool detect_only, bool usbstick)
+{
+	gc3355_reset_chips(fd);
+
+	if (usbstick)
+		gc3355_reset_dtr(fd);
+
+	if (usbstick)
 	{
-		//1.2v - Scrypt mode
-		if (opt_scrypt)
+		// initialize units
+		if (opt_scrypt && scrypt_only)
+			gc3355_scrypt_only_init(fd);
+		else
 		{
-			if (is_scrypt_only)
-				gc3355_opt_scrypt_only_init(fd);
+			gc3355_sha2_init(fd);
+			gc3355_scrypt_init(fd);
 		}
-		else
+
+		//set freq
+		gc3355_set_pll_freq(fd, pll_freq);
+	}
+	else
+	{
+		// zzz
+		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
+		
+		// initialize units
+		gc3355_send_cmds(fd, multichip_init_cmd);
+		gc3355_scrypt_init(fd);
+
+		//set freq
+		gc3355_set_pll_freq(fd, pll_freq);
+		
+		//init sha2 nonce
+		gc3355_init_sha2_nonce(fd);
+	}
+
+	// zzz
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
+
+	if (!detect_only)
+	{
+		if (!opt_scrypt)
 		{
-			if (opt_hubfans)
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+			if (usbstick)
+				// open sha2 units
+				gc3355_open_sha2_units(fd, opt_sha2_units);
 			else
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_1_2V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
+			{
+				// open sha2 cores
+				gc3355_open_sha2_cores(fd, DEFAULT_ORB_SHA2_CORES);
+			}
 		}
+
+		if (usbstick)
+			// set request to send (RTS) status
+			set_serial_rts(fd, BGV_HIGH);
+		else
+			// no fifo for orb
+			gc3355_send_cmds(fd, no_fifo_cmd);
+	}
+}
+
+void gc3355_init_usborb(int fd, int pll_freq, bool scrypt_only, bool detect_only)
+{
+	gc3355_init_device(fd, pll_freq, scrypt_only, detect_only, false);
+}
+
+void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_only)
+{
+	gc3355_init_device(fd, pll_freq, scrypt_only, detect_only, true);
+}
+
+void gc3355_scrypt_reset(int fd)
+{
+	gc3355_send_cmds(fd, scrypt_reset_cmd);
+}
+
+void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
+{
+	// command header
+	cmd[0] = 0x55;
+	cmd[1] = 0xaa;
+	cmd[2] = 0x1f;
+	cmd[3] = 0x00;
+	
+	// task data
+	memcpy(cmd + 4, work->target, 32);
+	memcpy(cmd + 36, work->midstate, 32);
+	memcpy(cmd + 68, work->data, 80);
+	
+	// nonce_max
+	cmd[148] = 0xff;
+	cmd[149] = 0xff;
+	cmd[150] = 0xff;
+	cmd[151] = 0xff;
+	
+	// taskid
+	int workid = work->id;
+	memcpy(cmd + 152, &(workid), 4);
+}
+
+void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool simple)
+{
+	if (simple)
+	{
+		// command header
+		cmd[0] = 0x55;
+		cmd[1] = 0xaa;
+		cmd[2] = 0x0f;
+		cmd[3] = 0x01; // SHA header sig
+		
+		memcpy(cmd + 4, work->midstate, 32);
+		memcpy(cmd + 36, work->data + 64, 12);
+		
+		// taskid
+		int workid = work->id;
+		memcpy(cmd + 48, &(workid), 4);
 	}
 	else
 	{
-		//0.9v - Scrypt + SHA mode
-		if (opt_scrypt)
-		{
-			if (is_scrypt_only)
-				gc3355_opt_scrypt_only_init(fd);
-		}
-		else
-		{
-			if (opt_hubfans)
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, HUBFANS_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-			else
-				((sha2_unit == NULL) ? gc3355_open_sha2_unit_one_by_one(fd, DEFAULT_0_9V_sha2) : gc3355_open_sha2_unit_one_by_one(fd, sha2_unit));
-		}
+		// command header
+		cmd[0] = 0x55;
+		cmd[1] = 0xaa;
+		cmd[2] = 0x0f;
+		cmd[3] = 0x00; // Scrypt header sig - used by DualMiner in Dual Mode
+		
+		uint8_t temp_bin[64];
+		memset(temp_bin, 0, 64);
+		
+		memcpy(temp_bin, work->midstate, 32);
+		memcpy(temp_bin + 52, work->data + 64, 12);
+		
+		memcpy(cmd + 8, work->midstate, 32);
+		memcpy(cmd + 40, temp_bin + 52, 12);
 	}
+}
+
+uint32_t gc3355_get_firmware_version(int fd)
+{
+	gc3355_send_cmds(fd, firmware_request_cmd);
+	
+	char buf[GC3355_READ_SIZE];
+	int read = gc3355_read(fd, buf, GC3355_READ_SIZE);
+	if (read != GC3355_READ_SIZE)
+	{
+		applog(LOG_ERR, "%s: Failed reading work from %d", GC3355_CHIP_NAME, fd);
+		return -1;
+	}
+	
+	// firmware response begins with 55aac000 90909090
+	if (memcmp(buf, "\x55\xaa\xc0\x00\x90\x90\x90\x90", GC3355_READ_SIZE - 4) != 0)
+	{
+		return -1;
+	}
+	
+	uint32_t fw_version = le32toh(*(uint32_t *)(buf + 8));
+	
+	return fw_version;
 }

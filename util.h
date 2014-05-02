@@ -111,6 +111,14 @@ bool isCspace(int c)
 	}
 }
 
+
+enum bfg_gpio_value {
+	BGV_LOW   =  0,
+	BGV_HIGH  =  1,
+	BGV_ERROR = -1,
+};
+
+
 typedef struct timeval cgtimer_t;
 
 struct thr_info;

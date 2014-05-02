@@ -122,6 +122,7 @@ has_fpga=no
 has_asic=no
 need_binloader=no
 need_dynclock=no
+need_gc3355=no
 need_lowl_vcom=no
 need_lowlevel=no
 need_lowl_ftdi=no
@@ -236,6 +237,16 @@ AC_ARG_ENABLE([other-drivers],
 		fi
 	]
 )
+
+
+algolist="$algolist scrypt"
+AC_ARG_ENABLE([scrypt],
+	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
+	[scrypt=$enableval],
+	[scrypt=no])
+if test "x$scrypt" = xyes; then
+	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
+fi
 
 
 lowl_pci=no
@@ -463,8 +474,25 @@ else
 fi
 if test "x$dualminer" = "xyes"; then
 	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
+	need_gc3355=yes
 fi
 AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+
+driverlist="$driverlist gridseed"
+AC_ARG_ENABLE([gridseed],
+	[AC_HELP_STRING([--disable-gridseed],[Compile support for GridSeed (default enabled with scrypt)])],
+	[gridseed=$enableval],
+	[gridseed=$scrypt])
+if test "x$gridseed" = "xyes"; then
+	if test "x$scrypt" = "xno"; then
+		AC_MSG_ERROR([You explicitly enabled GridSeed, but did not enable scrypt (SHA2 not supported)])
+	fi
+	AC_DEFINE([USE_GRIDSEED], [1], [Defined to 1 if GridSeed support is wanted])
+	need_gc3355=yes
+	need_lowl_vcom=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_GRIDSEED], [test x$gridseed = xyes])
 
 driverlist="$driverlist avalon"
 avalon="no"
@@ -1038,18 +1066,6 @@ if test "x$libusb" = xyes; then
 fi
 
 
-algolist="$algolist scrypt"
-scrypt="no"
-
-AC_ARG_ENABLE([scrypt],
-	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
-	[scrypt=$enableval]
-	)
-if test "x$scrypt" = xyes; then
-	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
-fi
-
-
 if test x$need_lowl_vcom = xyes; then
 	AC_DEFINE([NEED_BFG_LOWL_VCOM], [1], [Defined to 1 if lowlevel VCOM drivers are being used])
 	need_lowlevel=yes
@@ -1304,6 +1320,7 @@ fi
 AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
+AM_CONDITIONAL([USE_GC3355], [test x$need_gc3355 = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_FTDI], [test x$need_lowl_ftdi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])

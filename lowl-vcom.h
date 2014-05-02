@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "deviceapi.h"
+#include "util.h"
 
 struct device_drv;
 struct cgpu_info;
@@ -38,9 +39,9 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 extern int serial_close(int fd);
 
-extern int get_serial_cts(int fd);
-extern int set_serial_dtr(int fd, int dtr);
-extern int set_serial_rts(int fd, int rts);
+extern enum bfg_gpio_value get_serial_cts(int fd);
+extern enum bfg_gpio_value set_serial_dtr(int fd, enum bfg_gpio_value dtr);
+extern enum bfg_gpio_value set_serial_rts(int fd, enum bfg_gpio_value rts);
 extern bool valid_baud(int baud);
 
 #endif

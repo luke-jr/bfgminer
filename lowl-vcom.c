@@ -1097,24 +1097,24 @@ ssize_t _serial_read(int fd, char *buf, size_t bufsiz, char *eol)
 
 #ifndef WIN32
 
-int get_serial_cts(int fd)
+enum bfg_gpio_value get_serial_cts(int fd)
 {
 	int flags;
 
 	if (fd == -1)
-		return -1;
+		return BGV_ERROR;
 
 	ioctl(fd, TIOCMGET, &flags);
-	return (flags & TIOCM_CTS) ? 1 : 0;
+	return (flags & TIOCM_CTS) ? BGV_HIGH : BGV_LOW;
 }
 
 static
-int _set_serial_cmflag(int fd, int flag, bool val)
+enum bfg_gpio_value _set_serial_cmflag(int fd, int flag, bool val)
 {
 	int flags;
 
 	if (fd == -1)
-		return -1;
+		return BGV_ERROR;
 
 	ioctl(fd, TIOCMGET, &flags);
 	
@@ -1124,57 +1124,57 @@ int _set_serial_cmflag(int fd, int flag, bool val)
 		flags &= ~flag;
 
 	ioctl(fd, TIOCMSET, &flags);
-	return val ? 1 : 0;
+	return val ? BGV_HIGH : BGV_LOW;
 }
 
-int set_serial_dtr(int fd, int dtr)
+enum bfg_gpio_value set_serial_dtr(int fd, enum bfg_gpio_value dtr)
 {
 	return _set_serial_cmflag(fd, TIOCM_DTR, dtr);
 }
 
-int set_serial_rts(int fd, int rts)
+enum bfg_gpio_value set_serial_rts(int fd, enum bfg_gpio_value rts)
 {
 	return _set_serial_cmflag(fd, TIOCM_RTS, rts);
 }
 #else
-int get_serial_cts(const int fd)
+enum bfg_gpio_value get_serial_cts(const int fd)
 {
 	if (fd == -1)
-		return -1;
+		return BGV_ERROR;
 	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
 	if (fh == INVALID_HANDLE_VALUE)
-		return -1;
+		return BGV_ERROR;
 
 	DWORD flags;
 	if (!GetCommModemStatus(fh, &flags))
-		return -1;
+		return BGV_ERROR;
 
-	return (flags & MS_CTS_ON) ? 1 : 0;
+	return (flags & MS_CTS_ON) ? BGV_HIGH : BGV_LOW;
 }
 
 static
-int _set_serial_cmflag(int fd, void (*setfunc)(DCB*, bool), bool val, const char * const fname)
+enum bfg_gpio_value _set_serial_cmflag(int fd, void (*setfunc)(DCB*, bool), bool val, const char * const fname)
 {
 	if (fd == -1)
-		return -1;
+		return BGV_ERROR;
 	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
 	if (fh == INVALID_HANDLE_VALUE)
-		return -1;
+		return BGV_ERROR;
 	
 	DCB dcb;
 	if (!GetCommState(fh, &dcb))
-		applogr(-1, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
+		applogr(BGV_ERROR, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
 		        "GetCommState", __FILE__, fname, __LINE__,
 		        bfg_strerror(GetLastError(), BST_SYSTEM));
 	
 	setfunc(&dcb, val);
 	
 	if (!SetCommState(fh, &dcb))
-		applogr(-1, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
+		applogr(BGV_ERROR, LOG_DEBUG, "Failed to %s"IN_FMT_FFL": %s",
 		        "GetCommState", __FILE__, fname, __LINE__,
 		        bfg_strerror(GetLastError(), BST_SYSTEM));
 	
-	return val ? 1 : 0;
+	return val ? BGV_HIGH : BGV_LOW;
 }
 #define _set_serial_cmflag2(name, field, trueval, falseval)  \
 static  \
@@ -1183,7 +1183,7 @@ void _set_serial_cmflag_ ## name(DCB *dcb, bool val)  \
 	dcb->field = val ? (trueval) : (falseval);  \
 }  \
   \
-int set_serial_ ## name(int fd, int val)  \
+enum bfg_gpio_value set_serial_ ## name(int fd, enum bfg_gpio_value val)  \
 {  \
 	return _set_serial_cmflag(fd, _set_serial_cmflag_ ## name, val, "set_serial_" #name);  \
 }  \
