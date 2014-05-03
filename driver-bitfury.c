@@ -177,11 +177,11 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
 	struct bitfury_payload payload = {
-		.midstate = "\xf9\x9a\xf0\xd5\x72\x34\x41\xdc\x9e\x10\xd1\x1f\xeb\xcd\xe3\xf5"
-		            "\x52\xf1\x14\x63\x06\x14\xd1\x12\x15\x25\x39\xd1\x7d\x77\x5a\xfd",
-		.m7    = 0xafbd0b42,
-		.ntime = 0xb6c24563,
-		.nbits = 0x6dfa4352,
+		.midstate = "\x33\xfb\x46\xdc\x61\x2a\x7a\x23\xf0\xa2\x2d\x63\x31\x54\x21\xdc"
+		            "\xae\x86\xfe\xc3\x88\xc1\x9c\x8c\x20\x18\x10\x68\xfc\x95\x3f\xf7",
+		.m7    = 0xc3baafef,
+		.ntime = 0x326fa351,
+		.nbits = 0x6461011a,
 	};
 	bitfury_payload_to_atrvec(bitfury->atrvec, &payload);
 	return bitfury_init_oldbuf(proc, NULL);
@@ -259,7 +259,8 @@ bool bitfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused
 		       proc->proc_repr, hex);
 	}
 	work_to_bitfury_payload(&bitfury->payload, work);
-	bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+	if (bitfury->chipgen)
+		bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 	
 	work->blk.nonce = 0xffffffff;
 	return true;
@@ -471,7 +472,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		else
 			bitfury->desync_counter = 0;
 		
-		if (bitfury->oldjob != newjob && thr->next_work)
+		if (bitfury->oldjob != newjob && thr->next_work && bitfury->chipgen)
 		{
 			mt_job_transition(thr);
 			// TODO: Delay morework until right before it's needed
@@ -585,6 +586,26 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			for (i = 0; i < n; ++i)
 			{
 				nonce = bitfury_decnonce(newbuf[i]);
+				if (unlikely(!bitfury->chipgen))
+				{
+					switch (nonce)
+					{
+						case 0x6cc054e0:
+							if (++bitfury->chipgen_probe > 4)
+								bitfury->chipgen = 1;
+							break;
+						case 0xed7081a3:
+						case 0xf883df88:
+							bitfury->chipgen = 2;
+					}
+					if (bitfury->chipgen)
+					{
+						applog(LOG_DEBUG, "%"PRIpreprv": Detected bitfury gen%d chip",
+						       proc->proc_repr, bitfury->chipgen);
+						bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+					}
+				}
+				else
 				if (fudge_nonce(thr->work, &nonce))
 				{
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
@@ -592,6 +613,10 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					submit_nonce(thr, thr->work, nonce);
 					bitfury->counter2 += 1;
 				}
+				else
+				if (!thr->prev_work)
+					applog(LOG_DEBUG, "%"PRIpreprv": Ignoring unrecognised nonce %08lx (no prev work)",
+					       proc->proc_repr, (unsigned long)be32toh(nonce));
 				else
 				if (fudge_nonce(thr->prev_work, &nonce))
 				{
@@ -655,6 +680,8 @@ struct api_data *bitfury_api_device_detail(struct cgpu_info * const cgpu)
 	struct api_data *root = NULL;
 	
 	root = api_add_uint(root, "fasync", &bitfury->fasync, false);
+	if (bitfury->chipgen)
+		root = api_add_int(root, "Chip Generation", &bitfury->chipgen, false);
 	
 	return root;
 }
@@ -767,7 +794,10 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 void bitfury_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct bitfury_device * const bitfury = cgpu->device_data;
-	wlogprint("Oscillator bits: %d\n", bitfury->osc6_bits);
+	wlogprint("Oscillator bits: %d", bitfury->osc6_bits);
+	if (bitfury->chipgen)
+		wlogprint("  Chip generation: %d", bitfury->chipgen);
+	wlogprint("\n");
 }
 #endif
 

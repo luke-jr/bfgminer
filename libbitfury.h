@@ -38,6 +38,8 @@ struct bitfury_device {
 	unsigned oldbuf[17];
 	bool oldjob;
 	int active;
+	int chipgen;
+	int chipgen_probe;
 	uint32_t atrvec[20];
 	struct bitfury_payload payload;
 	struct freq_stat chip_stat;
