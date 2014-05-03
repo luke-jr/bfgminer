@@ -248,6 +248,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	
 	if (unlikely(!devstate->works_requested))
 	{
+		applog(LOG_DEBUG, "%s: Attempt to queue work while none requested; rejecting", dev->dev_repr);
 		cointerra_set_queue_full(dev, true);
 		return false;
 	}
@@ -265,7 +266,10 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	HASH_ADD_INT(master_thr->work, device_id, work);
 	++devstate->next_work_id;
 	if (!--devstate->works_requested)
+	{
+		applog(LOG_DEBUG, "%s: Sent all requested works, queue full", dev->dev_repr);
 		cointerra_set_queue_full(dev, true);
+	}
 	
 	return true;
 }
@@ -293,6 +297,8 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 		{
 			devstate->works_requested = upk_u16le(buf, 0);
 			const bool qf = !devstate->works_requested;
+			applog(LOG_DEBUG, "%s: %u works requested",
+			       dev->dev_repr, devstate->works_requested);
 			cointerra_set_queue_full(dev, qf);
 			break;
 		}
