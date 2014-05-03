@@ -255,6 +255,12 @@ ssize_t lowl_usb_read_to_buf(struct lowl_usb_endpoint * const ep, const size_t d
 			{
 				case 0:
 				case LIBUSB_ERROR_TIMEOUT:
+					if (opt_dev_protocol)
+					{
+						char x[(pxfer * 2) + 1];
+						bin2hex(x, p, pxfer);
+						applog(LOG_DEBUG, "%s ep=%p: %s", "usb_read ", ep, x);
+					}
 					if (!pxfer)
 						// Behaviour is like tcsetattr-style timeout
 						return 0;
@@ -303,6 +309,12 @@ ssize_t usb_write(struct lowl_usb_endpoint * const ep, const void * const data, 
 		{
 			case 0:
 			case LIBUSB_ERROR_TIMEOUT:
+				if (opt_dev_protocol)
+				{
+					char x[(pxfer * 2) + 1];
+					bin2hex(x, p, pxfer);
+					applog(LOG_DEBUG, "%s ep=%p: %s", __func__, ep, x);
+				}
 				p += pxfer;
 				rem -= pxfer;
 				break;
