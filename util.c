@@ -1883,6 +1883,16 @@ static char *json_array_string(json_t *val, unsigned int entry)
 	return NULL;
 }
 
+void *my_memrchr(const void * const datap, const int c, const size_t sz)
+{
+	const uint8_t *data = datap;
+	const uint8_t *p = &data[sz];
+	while (p > data)
+		if (*--p == c)
+			return (void *)p;
+	return NULL;
+}
+
 bool isCalpha(const int c)
 {
 	if (c >= 'A' && c <= 'Z')
@@ -1937,7 +1947,7 @@ const char *extract_domain(size_t * const out_domainlen, const char * const uri,
 		p = &uri[urilen];
 	
 	s = p;
-	q = memrchr(uri, ':', p - uri);
+	q = my_memrchr(uri, ':', p - uri);
 	if (q)
 	{
 		alldigit = true;
