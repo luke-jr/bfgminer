@@ -512,7 +512,7 @@ int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, boo
 	if (unlikely(stopping))
 		timer_unset(&thr->tv_poll);
 	
-	// Bitfury chips process only 768/1024 of the nonce range
+	// Bitfury chips process only 756/1024 of the nonce range
 	return 0xbd000000;
 }
 
