@@ -1132,6 +1132,13 @@ struct bfg_tmpl_ref {
 	pthread_mutex_t mutex;
 };
 
+struct ntime_roll_limits {
+	uint32_t min;
+	uint32_t max;
+	uint16_t minoff;
+	uint16_t maxoff;
+};
+
 struct stratum_work {
 	struct bfg_tmpl_ref *tr;
 	char *job_id;
@@ -1145,8 +1152,11 @@ struct stratum_work {
 	
 	uint8_t header1[36];
 	uint8_t diffbits[4];
+	
 	uint32_t ntime;
 	struct timeval tv_received;
+	struct ntime_roll_limits ntime_roll_limits;
+	
 	struct timeval tv_expire;
 
 	double diff;
@@ -1284,7 +1294,7 @@ struct work {
 	uint64_t	share_diff;
 
 	int		rolls;
-	int		drv_rolllimit; /* How much the driver can roll ntime */
+	struct ntime_roll_limits ntime_roll_limits;
 
 	struct {
 		uint32_t nonce;
@@ -1425,6 +1435,8 @@ extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
+extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll);
+extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

@@ -2776,6 +2776,21 @@ void pool_set_opaque(struct pool *pool, bool opaque)
 		       pool->pool_no);
 }
 
+void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll)
+{
+	*nrl = (struct ntime_roll_limits){
+		.min = ntime_base,
+		.max = ntime_base + ntime_roll,
+		.minoff = -ntime_roll,
+		.maxoff = ntime_roll,
+	};
+}
+
+void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_roll)
+{
+	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll);
+}
+
 static double target_diff(const unsigned char *);
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
@@ -2880,6 +2895,13 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			return false;
 		swap32yes(work->data, work->data, 80 / 4);
 		memcpy(&work->data[80], workpadding_bin, 48);
+		
+		work->ntime_roll_limits = (struct ntime_roll_limits){
+			.min = tmpl->mintime,
+			.max = tmpl->maxtime,
+			.minoff = tmpl->mintimeoff,
+			.maxoff = tmpl->maxtimeoff,
+		};
 
 		const struct blktmpl_longpoll_req *lp;
 		if ((lp = blktmpl_get_longpoll(tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
@@ -2901,6 +2923,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		applog(LOG_ERR, "JSON inval data");
 		return false;
 	}
+	else
+		work_set_simple_ntime_roll_limit(work, 0);
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
@@ -4677,6 +4701,7 @@ static void get_benchmark_work(struct work *work)
 	copy_time(&work->tv_staged, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
+	work_set_simple_ntime_roll_limit(work, 60);
 }
 
 static void wake_gws(void);
@@ -5179,6 +5204,7 @@ static void roll_work(struct work *work)
 	ntime = be32toh(*work_ntime);
 	ntime++;
 	*work_ntime = htobe32(ntime);
+		work_set_simple_ntime_roll_limit(work, 0);
 
 		applog(LOG_DEBUG, "Successfully rolled time header in work");
 	}
@@ -8796,6 +8822,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
+	
+	work->ntime_roll_limits = swork->ntime_roll_limits;
 
 	/* Store the stratum work diff to check it still matches the pool's
 	 * stratum diff when submitting shares */
@@ -8827,8 +8855,6 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork, const char
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
-	/* Nominally allow a driver to ntime roll 60 seconds */
-	work->drv_rolllimit = 60;
 	calc_diff(work, 0);
 }
 
