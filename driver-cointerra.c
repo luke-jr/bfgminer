@@ -366,7 +366,10 @@ die_temps_done:
 		}
 		case CMTI_SETTINGS:
 		case CMTI_INFO:
+			break;
 		case CMTI_LOGMSG:
+			applog(LOG_NOTICE, "%s: Devlog: %.*s", dev->dev_repr, (int)COINTERRA_MSGBODY_SIZE, buf);
+			break;
 		case CMTI_RESETDONE:
 		case CMTI_ERRINFO:
 			break;
