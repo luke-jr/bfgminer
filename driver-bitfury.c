@@ -670,8 +670,18 @@ out:
 
 int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
 {
-	// Bitfury chips process only 768/1024 of the nonce range
-	return 0xbd000000;
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	switch (bitfury->chipgen)
+	{
+		default:
+		case 1:
+			// Bitfury gen1 chips process only 756/1024 of the nonce range
+			return 0xbd000000;
+		case 2:
+			// Bitfury gen2 chips process only 864/1024 of the nonce range
+			return 0xd8000000;
+	}
 }
 
 struct api_data *bitfury_api_device_detail(struct cgpu_info * const cgpu)
