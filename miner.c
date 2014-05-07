@@ -9274,19 +9274,39 @@ void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_
 		thr->cgpu->drv->hw_error(thr);
 }
 
-enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
+static
+bool test_hash(const void * const phash, const float diff)
 {
-	uint32_t *hash2_32 = (uint32_t *)&work->hash[0];
+	const uint32_t * const hash = phash;
+	if (diff >= 1.)
+		// FIXME: > 1 should check more
+		return !hash[7];
+	
+	const uint32_t Htarg = (uint32_t)(0x100000000 * diff) - 1;
+	const uint32_t tmp_hash7 = le32toh(hash[7]);
+	
+	applog(LOG_DEBUG, "htarget %08lx hash %08lx",
+				(long unsigned int)Htarg,
+				(long unsigned int)tmp_hash7);
+	return (tmp_hash7 <= Htarg);
+}
 
-	hash_data(work->hash, work->data);
+enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool checktarget)
+{
+	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
+	*work_nonce = htole32(nonce);
 
-	if (hash2_32[7] != 0)
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		scrypt_hash_data(work->hash, work->data);
+	else
+#endif
+		hash_data(work->hash, work->data);
+	
+	if (!test_hash(work->hash, work->nonce_diff))
 		return TNR_BAD;
-
-	if (!checktarget)
-		return TNR_GOOD;
-
-	if (!hash_target_check_v(work->hash, work->target))
+	
+	if (checktarget && !hash_target_check_v(work->hash, work->target))
 	{
 		bool high_hash = true;
 		struct pool * const pool = work->pool;
@@ -9304,22 +9324,8 @@ enum test_nonce2_result hashtest2(struct work *work, bool checktarget)
 		if (high_hash)
 			return TNR_HIGH;
 	}
-
+	
 	return TNR_GOOD;
-}
-
-enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool checktarget)
-{
-	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
-	*work_nonce = htole32(nonce);
-
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		// NOTE: Depends on scrypt_test return matching enum values
-		return scrypt_test(work->data, work->target, nonce);
-#endif
-
-	return hashtest2(work, checktarget);
 }
 
 /* Returns true if nonce for work was a valid share */
@@ -9350,7 +9356,7 @@ bool submit_noffset_nonce(struct thr_info *thr, struct work *work_in, uint32_t n
 	work->thr_id = thr->id;
 
 	/* Do one last check before attempting to submit the work */
-	/* Side effect: sets work->data for us */
+	/* Side effect: sets work->data and work->hash for us */
 	res = test_nonce2(work, nonce);
 	
 	if (unlikely(res == TNR_BAD))
