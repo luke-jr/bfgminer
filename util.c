@@ -2109,6 +2109,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
+	if (pool->swork.tr)
+	{
+		tmpl_decref(pool->swork.tr);
+		pool->swork.tr = NULL;
+	}
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
@@ -2117,6 +2122,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	hex2bin((void*)&pool->swork.ntime, ntime, 4);
 	pool->swork.ntime = be32toh(pool->swork.ntime);
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
+	
+	/* Nominally allow a driver to ntime roll 60 seconds */
+	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
 	
 	cb1_len = strlen(coinbase1) / 2;
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;

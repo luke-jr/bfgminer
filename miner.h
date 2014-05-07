@@ -1132,7 +1132,21 @@ enum pool_protocol {
 	PLP_GETBLOCKTEMPLATE,
 };
 
+struct bfg_tmpl_ref {
+	blktemplate_t *tmpl;
+	int refcount;
+	pthread_mutex_t mutex;
+};
+
+struct ntime_roll_limits {
+	uint32_t min;
+	uint32_t max;
+	uint16_t minoff;
+	uint16_t maxoff;
+};
+
 struct stratum_work {
+	struct bfg_tmpl_ref *tr;
 	char *job_id;
 	bool clean;
 	
@@ -1144,8 +1158,12 @@ struct stratum_work {
 	
 	uint8_t header1[36];
 	uint8_t diffbits[4];
+	
 	uint32_t ntime;
 	struct timeval tv_received;
+	struct ntime_roll_limits ntime_roll_limits;
+	
+	struct timeval tv_expire;
 
 	uint8_t target[32];
 
@@ -1284,7 +1302,7 @@ struct work {
 	double share_diff;
 
 	int		rolls;
-	int		drv_rolllimit; /* How much the driver can roll ntime */
+	struct ntime_roll_limits ntime_roll_limits;
 
 	struct {
 		uint32_t nonce;
@@ -1329,8 +1347,7 @@ struct work {
 	// Allow devices to timestamp work for their own purposes
 	struct timeval	tv_stamp;
 
-	blktemplate_t	*tmpl;
-	int		*tmpl_refcount;
+	struct bfg_tmpl_ref *tr;
 	unsigned int	dataid;
 	bool		do_foreign_submit;
 
@@ -1352,6 +1369,7 @@ extern void get_datestamp(char *, size_t, time_t);
 extern void get_benchmark_work(struct work *);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
+extern bool pool_has_usable_swork(const struct pool *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
@@ -1421,10 +1439,13 @@ extern void tq_freeze(struct thread_q *tq);
 extern void tq_thaw(struct thread_q *tq);
 extern bool successful_connect;
 extern void adl(void);
+extern void tmpl_decref(struct bfg_tmpl_ref *);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
+extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll);
+extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
