@@ -106,6 +106,10 @@ const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
 
 extern const char *__json_array_string(json_t *, unsigned int entry);
 
+#ifndef min
+#  define min(a, b)  ((a) < (b) ? (a) : (b))
+#endif
+
 extern void *my_memrchr(const void *, int, size_t);
 
 extern bool isCalpha(int);
