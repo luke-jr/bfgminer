@@ -2795,7 +2795,7 @@ static double target_diff(const unsigned char *);
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
-#if 1 // FIXME BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 4
 #define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
        blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
 #endif
@@ -2957,7 +2957,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	work->tv_staged = tv_now;
 	
-#if 1 // FIXME BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 4
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
