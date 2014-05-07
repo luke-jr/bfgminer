@@ -6,6 +6,10 @@ bs_dir="$(dirname "$0")"
 
 if test -z "$NOSUBMODULES" ; then
 	echo 'Getting submodules...'
+	
+	# Older versions had INSTALL in git; remove it so git can update cleanly
+	rm -f libblkmaker/INSTALL
+	
 	(
 		cd "${bs_dir}"
 		git submodule update --init
