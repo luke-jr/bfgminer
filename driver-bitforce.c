@@ -2187,6 +2187,15 @@ void bitforce_queue_flush(struct thr_info *thr)
 		flushed = 0;
 	}
 	
+	if (flushed > data->queued)
+	{
+		applog(LOG_WARNING, "%"PRIpreprv": Flushed %u jobs from device, but only %u were queued",
+		       bitforce->proc_repr, flushed, data->queued);
+		inc_hw_errors_only(thr);
+		// We need to avoid trying to delete more items than we've sent, or a segfault is upcoming...
+		flushed = data->queued;
+	}
+	
 	data->queued -= flushed;
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver (queued<=%d)",
