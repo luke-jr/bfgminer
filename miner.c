@@ -9227,8 +9227,9 @@ struct work *get_work(struct thr_info *thr)
 	{
 		if (unlikely(work->work_difficulty < cgpu->min_nonce_diff))
 		{
-			applog(LOG_WARNING, "%"PRIpreprv": Using work with lower difficulty than device supports",
-			       cgpu->proc_repr);
+			if (cgpu->min_nonce_diff - work->work_difficulty > 1./0x10000000)
+				applog(LOG_WARNING, "%"PRIpreprv": Using work with lower difficulty than device supports",
+				       cgpu->proc_repr);
 			work->nonce_diff = cgpu->min_nonce_diff;
 		}
 		else
