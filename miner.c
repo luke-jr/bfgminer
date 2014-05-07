@@ -4856,6 +4856,29 @@ void setup_benchmark_pool()
 	enable_pool(pool);
 	pool->idle = false;
 	successful_connect = true;
+	
+	{
+		struct stratum_work * const swork = &pool->swork;
+		const int branchcount = 15;  // 1 MB block
+		const size_t branchdatasz = branchcount * 0x20;
+		const size_t coinbase_sz = 6 * 1024;
+		
+		bytes_resize(&swork->coinbase, coinbase_sz);
+		memset(bytes_buf(&swork->coinbase), '\xff', coinbase_sz);
+		swork->nonce2_offset = 0;
+		
+		bytes_resize(&swork->merkle_bin, branchdatasz);
+		memset(bytes_buf(&swork->merkle_bin), '\xff', branchdatasz);
+		swork->merkles = branchcount;
+		
+		memset(swork->header1, '\xff', 36);
+		swork->ntime = 0x7fffffff;
+		timer_unset(&swork->tv_received);
+		memset(swork->diffbits, '\0', 4);
+		set_target_to_pdiff(swork->target, 1.0);
+		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
+		pool->nonce2 = 0;
+	}
 }
 
 void get_benchmark_work(struct work *work)
@@ -9016,6 +9039,8 @@ void stratum_work_clean(struct stratum_work * const swork)
 
 bool pool_has_usable_swork(const struct pool * const pool)
 {
+	if (opt_benchmark)
+		return true;
 	if (pool->swork.tr)
 	{
 		// GBT
