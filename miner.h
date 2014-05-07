@@ -1146,12 +1146,16 @@ struct ntime_roll_limits {
 };
 
 struct stratum_work {
+	// Used only as a session id for resuming
+	char *nonce1;
+	
 	struct bfg_tmpl_ref *tr;
 	char *job_id;
 	bool clean;
 	
 	bytes_t coinbase;
 	size_t nonce2_offset;
+	int n2size;
 	
 	int merkles;
 	bytes_t merkle_bin;
@@ -1172,6 +1176,9 @@ struct stratum_work {
 	bool opaque;
 	
 	cglock_t *data_lock_p;
+	
+	struct pool *pool;
+	unsigned char work_restart_id;
 };
 
 #define RBUFSIZE 8192
@@ -1264,14 +1271,12 @@ struct pool {
 	char *sockbuf;
 	size_t sockbuf_size;
 	char *sockaddr_url; /* stripped url used for sockaddr */
-	char *nonce1;
 	size_t n1_len;
 	uint64_t nonce2;
 	int nonce2sz;
 #ifdef WORDS_BIGENDIAN
 	int nonce2off;
 #endif
-	int n2size;
 	char *sessionid;
 	bool has_stratum;
 	bool stratum_active;
@@ -1370,7 +1375,7 @@ extern void get_benchmark_work(struct work *);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
 extern bool pool_has_usable_swork(const struct pool *);
-extern void gen_stratum_work2(struct work *, struct stratum_work *, const char *nonce1);
+extern void gen_stratum_work2(struct work *, struct stratum_work *);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
 void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)

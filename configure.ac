@@ -130,6 +130,7 @@ need_lowl_hid=no
 need_lowl_pci=no
 need_lowl_spi=no
 need_lowl_usb=no
+need_work2d=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -581,6 +582,9 @@ if test "x$libevent" != "xno"; then
 			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
 	])
+	if test "x$libevent" = "xyes"; then
+		need_work2d=yes
+	fi
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])
 
@@ -1327,6 +1331,7 @@ AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
+AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
