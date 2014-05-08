@@ -4884,7 +4884,7 @@ void setup_benchmark_pool()
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
 		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
-		set_target_to_pdiff(swork->target, 1.0);
+		set_target_to_pdiff(swork->target, opt_scrypt ? (1./0x10000) : 1.);
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
 	}
@@ -4892,6 +4892,7 @@ void setup_benchmark_pool()
 
 void get_benchmark_work(struct work *work)
 {
+	struct pool * const pool = pools[0];
 	uint32_t * const blkhdr = benchmark_blkhdr;
 	for (int i = 16; i >= 0; --i)
 		if (++blkhdr[i])
@@ -4900,7 +4901,7 @@ void get_benchmark_work(struct work *work)
 	memcpy(&work->data[ 0], blkhdr, 80);
 	memcpy(&work->data[80], workpadding_bin, 48);
 	calc_midstate(work);
-	set_target_to_pdiff(work->target, 1.0);
+	memcpy(work->target, pool->swork.target, sizeof(work->target));
 	
 	work->mandatory = true;
 	work->pool = pools[0];
