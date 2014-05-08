@@ -4837,6 +4837,8 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
+static uint32_t benchmark_blkhdr[20];
+
 static
 void setup_benchmark_pool()
 {
@@ -4858,6 +4860,13 @@ void setup_benchmark_pool()
 	successful_connect = true;
 	
 	{
+		uint32_t * const blkhdr = benchmark_blkhdr;
+		blkhdr[2] = htobe32(1);
+		blkhdr[17] = htobe32(0x7fffffff);  // timestamp
+		blkhdr[18] = htobe32(0x1700ffff);  // "bits"
+	}
+	
+	{
 		struct stratum_work * const swork = &pool->swork;
 		const int branchcount = 15;  // 1 MB block
 		const size_t branchdatasz = branchcount * 0x20;
@@ -4874,7 +4883,7 @@ void setup_benchmark_pool()
 		memset(swork->header1, '\xff', 36);
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
-		memset(swork->diffbits, '\0', 4);
+		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
 		set_target_to_pdiff(swork->target, 1.0);
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
@@ -4883,8 +4892,8 @@ void setup_benchmark_pool()
 
 void get_benchmark_work(struct work *work)
 {
-	static uint32_t blkhdr[20];
-	for (int i = 18; i >= 0; --i)
+	uint32_t * const blkhdr = benchmark_blkhdr;
+	for (int i = 16; i >= 0; --i)
 		if (++blkhdr[i])
 			break;
 	
