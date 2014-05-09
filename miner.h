@@ -1452,6 +1452,22 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
+
+#define NTIME_DATA_OFFSET  0x44
+
+static inline
+uint32_t work_get_ntime(const struct work * const work)
+{
+	return upk_u32be(work->data, 0x44);
+}
+
+static inline
+void work_set_ntime(struct work * const work, const uint32_t ntime)
+{
+	pk_u32be(work->data, 0x44, ntime);
+}
+
+
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
