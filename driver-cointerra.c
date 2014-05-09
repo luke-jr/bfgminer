@@ -9,14 +9,18 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "compat.h"
 #include "deviceapi.h"
 #include "logging.h"
 #include "lowlevel.h"
 #include "lowl-usb.h"
+
+#define COINTERRA_MAX_NONCE_DIFF  0x20
 
 #define COINTERRA_EP_R  (LIBUSB_ENDPOINT_IN  | 1)
 #define COINTERRA_EP_W  (LIBUSB_ENDPOINT_OUT | 1)
@@ -245,6 +249,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	struct thr_info * const master_thr = dev->thr[0];
 	struct cointerra_dev_state * const devstate = dev->device_data;
 	uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
+	uint16_t zerobits;
 	
 	if (unlikely(!devstate->works_requested))
 	{
@@ -259,7 +264,17 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	swap32yes(&buf[   6],  work->midstate  , 0x20 / 4);
 	swap32yes(&buf[0x26], &work->data[0x40],  0xc / 4);
 	pk_u16le(buf, 50, 0);  // ntime roll limit
-	pk_u16le(buf, 52, 0x20);  // number of zero bits in results
+	
+	// Use the real share difficulty up to COINTERRA_MAX_NONCE_DIFF
+	if (work->work_difficulty >= COINTERRA_MAX_NONCE_DIFF)
+		work->nonce_diff = COINTERRA_MAX_NONCE_DIFF;
+	else
+		work->nonce_diff = work->work_difficulty;
+	zerobits = log2(floor(work->nonce_diff));
+	work->nonce_diff = pow(2, zerobits);
+	zerobits += 0x20;
+	pk_u16le(buf, 52, zerobits);
+	
 	if (!cointerra_write_msg(devstate->ep, cointerra_drv.dname, CMTO_WORK, buf))
 		return false;
 	
@@ -309,6 +324,7 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 			const int die = buf[2], asic = buf[3], pipeno = buf[5];
 			const unsigned procno = (asic * devstate->pipes_per_asic) + (die * devstate->pipes_per_die) + pipeno;
 			const uint32_t timeoff = upk_u32le(buf, 42);
+			const uint16_t zerobits = upk_u16le(buf, 52);
 			const uint32_t nonce = upk_u32le(buf, 57);
 			
 			proc = get_proc_by_id(dev, procno) ?: dev;
@@ -323,6 +339,7 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 				break;
 			}
 			
+			work->nonce_diff = pow(2, zerobits - 0x20);
 			submit_noffset_nonce(mythr, work, nonce, timeoff);
 			
 			// hashes_done must be counted by matches because cointerra devices do not provide a way to know which pipe completed matchless work
