@@ -2856,6 +2856,32 @@ void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_
 	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll, tvp_ref);
 }
 
+int work_ntime_range(struct work * const work, const struct timeval * const tvp_earliest, const struct timeval * const tvp_latest, const int desired_roll)
+{
+	const struct ntime_roll_limits * const nrl = &work->ntime_roll_limits;
+	const uint32_t ref_ntime = work_get_ntime(work);
+	const int earliest_elapsed = timer_elapsed(&nrl->tv_ref, tvp_earliest);
+	const int   latest_elapsed = timer_elapsed(&nrl->tv_ref, tvp_latest);
+	// minimum ntime is the latest possible result (add a second to spare) adjusted for minimum offset (or fixed minimum ntime)
+	uint32_t min_ntime = max(nrl->min, ref_ntime + latest_elapsed+1 + nrl->minoff);
+	// maximum ntime is the earliest possible result adjusted for maximum offset (or fixed maximum ntime)
+	uint32_t max_ntime = min(nrl->max, ref_ntime + earliest_elapsed + nrl->maxoff);
+	if (max_ntime < min_ntime)
+		return -1;
+	
+	if (max_ntime - min_ntime > desired_roll)
+	{
+		// Adjust min_ntime upward for accuracy, when possible
+		const int mid_elapsed = ((latest_elapsed - earliest_elapsed) / 2) + earliest_elapsed;
+		uint32_t ideal_ntime = ref_ntime + mid_elapsed;
+		if (ideal_ntime > min_ntime)
+			min_ntime = min(ideal_ntime, max_ntime - desired_roll);
+	}
+	
+	work_set_ntime(work, min_ntime);
+	return max_ntime - min_ntime;
+}
+
 #if BLKMAKER_VERSION > 1
 static
 void refresh_bitcoind_address(const bool fresh)
