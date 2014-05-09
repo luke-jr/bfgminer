@@ -44,12 +44,6 @@ const char *firmware_request_cmd[] =
 	NULL
 };
 
-static
-const char *no_fifo_cmd[] = {
-	"55AAC000D0D0D0D00000000001000000",
-	NULL
-};
-
 // SHA-2 commands
 
 static
@@ -645,9 +639,6 @@ void gc3355_init_device(int fd, int pll_freq, bool scrypt_only, bool detect_only
 		if (usbstick)
 			// set request to send (RTS) status
 			set_serial_rts(fd, BGV_HIGH);
-		else
-			// no fifo for orb
-			gc3355_send_cmds(fd, no_fifo_cmd);
 	}
 }
 
