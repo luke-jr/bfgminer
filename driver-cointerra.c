@@ -19,7 +19,11 @@
 #include "logging.h"
 #include "lowlevel.h"
 #include "lowl-usb.h"
+#include "miner.h"
+#include "util.h"
 
+#define COINTERRA_LATEST_RESULT_USECS  (10 * 1000000)
+#define COINTERRA_DESIRED_ROLL    60
 #define COINTERRA_MAX_NONCE_DIFF  0x20
 
 #define COINTERRA_EP_R  (LIBUSB_ENDPOINT_IN  | 1)
@@ -248,8 +252,9 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	struct cgpu_info * const dev = thr->cgpu->device;
 	struct thr_info * const master_thr = dev->thr[0];
 	struct cointerra_dev_state * const devstate = dev->device_data;
+	struct timeval tv_now, tv_latest;
 	uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
-	uint16_t zerobits;
+	uint16_t ntimeroll, zerobits;
 	
 	if (unlikely(!devstate->works_requested))
 	{
@@ -258,12 +263,17 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 		return false;
 	}
 	
+	timer_set_now(&tv_now);
+	timer_set_delay(&tv_latest, &tv_now, COINTERRA_LATEST_RESULT_USECS);
+	ntimeroll = max(0, work_ntime_range(work, &tv_now, &tv_latest, COINTERRA_DESIRED_ROLL));
+	
 	work->device_id = devstate->next_work_id;
 	
 	pk_u16be(buf, 0, work->device_id);
 	swap32yes(&buf[   6],  work->midstate  , 0x20 / 4);
 	swap32yes(&buf[0x26], &work->data[0x40],  0xc / 4);
-	pk_u16le(buf, 50, 0);  // ntime roll limit
+	
+	pk_u16le(buf, 50, ntimeroll);
 	
 	// Use the real share difficulty up to COINTERRA_MAX_NONCE_DIFF
 	if (work->work_difficulty >= COINTERRA_MAX_NONCE_DIFF)
