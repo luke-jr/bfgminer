@@ -1142,8 +1142,8 @@ struct ntime_roll_limits {
 	uint32_t min;
 	uint32_t max;
 	struct timeval tv_ref;
-	uint16_t minoff;
-	uint16_t maxoff;
+	int16_t minoff;
+	int16_t maxoff;
 };
 
 struct stratum_work {
