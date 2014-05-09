@@ -1452,6 +1452,7 @@ extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
 extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
+extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
 
 #define NTIME_DATA_OFFSET  0x44
 
