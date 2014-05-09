@@ -2416,7 +2416,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
 	
 	/* Nominally allow a driver to ntime roll 60 seconds */
-	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
+	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60, &pool->swork.tv_received);
 	
 	cb1_len = strlen(coinbase1) / 2;
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;

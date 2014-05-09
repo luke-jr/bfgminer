@@ -1199,6 +1199,7 @@ struct bfg_tmpl_ref {
 struct ntime_roll_limits {
 	uint32_t min;
 	uint32_t max;
+	struct timeval tv_ref;
 	uint16_t minoff;
 	uint16_t maxoff;
 };
@@ -1524,8 +1525,8 @@ extern struct work *copy_work_noffset(const struct work *base_work, int noffset)
 #define copy_work(work_in) copy_work_noffset(work_in, 0)
 extern double share_diff(const struct work *);
 extern const char *bfg_workpadding_bin;
-extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll);
-extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll);
+extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
+extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_hash(struct work *);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
