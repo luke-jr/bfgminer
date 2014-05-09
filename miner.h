@@ -1141,6 +1141,7 @@ struct bfg_tmpl_ref {
 struct ntime_roll_limits {
 	uint32_t min;
 	uint32_t max;
+	struct timeval tv_ref;
 	uint16_t minoff;
 	uint16_t maxoff;
 };
@@ -1449,8 +1450,8 @@ extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
-extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll);
-extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll);
+extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
+extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

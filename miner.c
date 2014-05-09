@@ -2819,19 +2819,21 @@ bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
 }
 
-void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll)
+void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll, const struct timeval * const tvp_ref)
 {
+	const int offsets = max(ntime_roll, 60);
 	*nrl = (struct ntime_roll_limits){
 		.min = ntime_base,
 		.max = ntime_base + ntime_roll,
-		.minoff = -ntime_roll,
-		.maxoff = ntime_roll,
+		.tv_ref = *tvp_ref,
+		.minoff = -offsets,
+		.maxoff = offsets,
 	};
 }
 
-void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_roll)
+void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_roll, const struct timeval * const tvp_ref)
 {
-	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll);
+	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll, tvp_ref);
 }
 
 static double target_diff(const unsigned char *);
@@ -2942,6 +2944,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		work->ntime_roll_limits = (struct ntime_roll_limits){
 			.min = tmpl->mintime,
 			.max = tmpl->maxtime,
+			.tv_ref = tv_now,
 			.minoff = tmpl->mintimeoff,
 			.maxoff = tmpl->maxtimeoff,
 		};
@@ -2967,7 +2970,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		return false;
 	}
 	else
-		work_set_simple_ntime_roll_limit(work, 0);
+		work_set_simple_ntime_roll_limit(work, 0, &tv_now);
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
@@ -4910,7 +4913,7 @@ void get_benchmark_work(struct work *work)
 	copy_time(&work->tv_staged, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
-	work_set_simple_ntime_roll_limit(work, 60);
+	work_set_simple_ntime_roll_limit(work, 60, &work->tv_getwork);
 }
 
 static void wake_gws(void);
@@ -5413,7 +5416,7 @@ static void roll_work(struct work *work)
 	ntime = be32toh(*work_ntime);
 	ntime++;
 	*work_ntime = htobe32(ntime);
-		work_set_simple_ntime_roll_limit(work, 0);
+		work_set_simple_ntime_roll_limit(work, 0, &work->ntime_roll_limits.tv_ref);
 
 		applog(LOG_DEBUG, "Successfully rolled time header in work");
 	}
