@@ -376,6 +376,7 @@ bool nanofury_init(struct thr_info * const thr)
 		bitfury_init_chip(proc);
 	}
 	
+	--bitfury;
 	while (bitfury->osc6_bits < 50)
 	{
 		for (proc = cgpu; proc; proc = proc->next_proc)
