@@ -360,6 +360,10 @@ bool nanofury_init(struct thr_info * const thr)
 	port->logprio = LOG_ERR;
 	port->speed = state->current_baud;
 		
+	
+	const int init_osc6_bits = 50;
+	const int ramp_osc6_bits = (cgpu->procs > 1) ? 5 : init_osc6_bits;
+	
 	state->mcp = mcp;
 	port->userp = state;
 	for (proc = cgpu; proc; (proc = proc->next_proc), ++bitfury)
@@ -371,12 +375,13 @@ bool nanofury_init(struct thr_info * const thr)
 		};
 		proc->device_data = bitfury;
 		mythr->cgpu_data = state;
-		bitfury->osc6_bits = 5;
+		bitfury->osc6_bits = ramp_osc6_bits;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		bitfury_init_chip(proc);
 	}
 	
-	while (bitfury->osc6_bits < 50)
+	--bitfury;
+	while (bitfury->osc6_bits < init_osc6_bits)
 	{
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
