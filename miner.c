@@ -2785,7 +2785,7 @@ void pick_unit(float hashrate, unsigned char *unit)
 {
 	unsigned char i;
 	
-	if (hashrate == 0)
+	if (hashrate == 0 || !isfinite(hashrate))
 	{
 		if (*unit < _unitbase)
 			*unit = _unitbase;
