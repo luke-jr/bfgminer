@@ -8621,10 +8621,14 @@ static bool pool_active(struct pool *pool, bool pinging)
 		return pool->stratum_active;
 	
 	timer_set_now(&tv_now);
+	if (pool->idle)
+	{
+		if (timer_elapsed(&pool->tv_idle, &tv_now) < 30)
+			return false;
+	}
+	else
 	if (timer_isset(&pool->tv_last_work_time) && timer_elapsed(&pool->tv_last_work_time, &tv_now) < 60)
 		return true;
-	if (pool->idle && timer_elapsed(&pool->tv_idle, &tv_now) < 30)
-		return false;
 	
 		applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
