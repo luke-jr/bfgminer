@@ -403,6 +403,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		{
 			const uint32_t work_ntime = be32toh(*(uint32_t*)&work->data[68]);
 			submit_noffset_nonce(thr, work, nonce, ntime - work_ntime);
+			hashes_done2(thr, 0x100000000, NULL);
 		}
 		else
 		if (!jobid)
@@ -439,12 +440,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
 		if (likely(work))
 		{
-			if (likely(proc))
-			{
-				thr = proc->thr[0];
-				hashes_done2(thr, 0xbd000000, NULL);
-			}
-			else
+			if (unlikely(!proc))
 				applog(LOG_DEBUG, "%s: Unknown chip id: %s",
 				       dev->dev_repr, cmd);
 			if (state->free_after_job)
