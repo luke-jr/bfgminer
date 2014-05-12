@@ -28,6 +28,7 @@
 #define BIFURY_MAX_QUEUED 0x10
 
 BFG_REGISTER_DRIVER(bifury_drv)
+static const struct bfg_set_device_definition bifury_set_device_funcs[];
 
 const char bifury_init_cmds[] = "flush\ntarget ffffffff\nmaxroll 0\n";
 
@@ -159,6 +160,7 @@ bool bifury_detect_one(const char * const devpath)
 	*cgpu = (struct cgpu_info){
 		.drv = &bifury_drv,
 		.device_path = strdup(devpath),
+		.set_device_funcs = bifury_set_device_funcs,
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
@@ -503,38 +505,21 @@ struct api_data *bifury_api_device_status(struct cgpu_info * const proc)
 	return root;
 }
 
-char *bifury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+const char *bifury_set_osc6_bits(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct bifury_state * const state = proc->device_data;
 	
-	if (!strcasecmp(option, "help"))
-	{
-		sprintf(replybuf, "osc6_bits: range 33-63 (slow to fast)");
-		return replybuf;
-	}
+	if (!setting || !*setting)
+		return "missing setting";
 	
-	if (!strcasecmp(option, "osc6_bits"))
-	{
-		if (!setting || !*setting)
-		{
-			sprintf(replybuf, "missing setting");
-			return replybuf;
-		}
-		const int val = atoi(setting);
-		if (val < 33 || val > 63)
-		{
-			sprintf(replybuf, "invalid setting");
-			return replybuf;
-		}
-		
-		state->osc6_bits[proc->proc_id] = val;
-		state->send_clock = true;
-		
-		return NULL;
-	}
+	const int val = atoi(setting);
+	if (val < 33 || val > 63)
+		return "invalid setting";
 	
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
+	state->osc6_bits[proc->proc_id] = val;
+	state->send_clock = true;
+	
+	return NULL;
 }
 
 #ifdef HAVE_CURSES
@@ -572,6 +557,11 @@ void bifury_wlogprint_status(struct cgpu_info * const proc)
 }
 #endif
 
+static const struct bfg_set_device_definition bifury_set_device_funcs[] = {
+	{"osc6_bits", bifury_set_osc6_bits, "range 33-63 (slow to fast)"},
+	{NULL},
+};
+
 struct device_drv bifury_drv = {
 	.dname = "bifury",
 	.name = "BIF",
@@ -589,7 +579,6 @@ struct device_drv bifury_drv = {
 	.poll = bifury_poll,
 	
 	.get_api_extra_device_status = bifury_api_device_status,
-	.set_device = bifury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bifury_wlogprint_status,
