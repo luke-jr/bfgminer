@@ -530,6 +530,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	find = strstr(extensions, camo);
 	if (find)
 		clState->hasBitAlign = true;
+	free(extensions);
 
 	/* Check for OpenCL >= 1.0 support, needed for global offset parameter usage. */
 	char * devoclver = malloc(1024);
@@ -543,6 +544,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	find = strstr(devoclver, ocl10);
 	if (!find)
 		clState->hasOpenCL11plus = true;
+	free(devoclver);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
@@ -878,6 +880,7 @@ build:
 		char *log = malloc(logSize);
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 		applog(LOG_ERR, "%s", log);
+		free(log);
 		return NULL;
 	}
 
@@ -1003,6 +1006,7 @@ built:
 			char *log = malloc(logSize);
 			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 			applog(LOG_ERR, "%s", log);
+			free(log);
 			return NULL;
 		}
 	}
