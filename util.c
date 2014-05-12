@@ -2092,7 +2092,6 @@ curl_socket_t grab_socket_opensocket_cb(void *clientp, __maybe_unused curlsockty
 
 static bool setup_stratum_curl(struct pool *pool)
 {
-	char curl_err_str[CURL_ERROR_SIZE];
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
@@ -2125,7 +2124,7 @@ static bool setup_stratum_curl(struct pool *pool)
 
 	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30);
-	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, pool->curl_err_str);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 	curl_easy_setopt(curl, CURLOPT_URL, s);
 	if (!opt_delaynet)
@@ -2153,7 +2152,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
 	pool->sock = INVSOCK;
 	if (curl_easy_perform(curl)) {
-		applog(LOG_INFO, "Stratum connect failed to pool %d: %s", pool->pool_no, curl_err_str);
+		applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
+		       pool->pool_no, pool->curl_err_str);
 errout:
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
