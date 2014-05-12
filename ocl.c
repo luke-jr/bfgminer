@@ -339,6 +339,28 @@ int clDevicesNum(void) {
 	return most_devices;
 }
 
+cl_int bfg_clBuildProgram(_clState * const clState, const cl_device_id const devid, const char * const CompilerOptions)
+{
+	cl_int status;
+	
+	status = clBuildProgram(clState->program, 1, &devid, CompilerOptions, NULL, NULL);
+	
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error %d: Building Program (clBuildProgram)", status);
+		size_t logSize;
+		status = clGetProgramBuildInfo(clState->program, devid, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+		
+		char *log = malloc(logSize ?: 1);
+		status = clGetProgramBuildInfo(clState->program, devid, CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
+		if (logSize > 0 && log[0])
+			applog(LOG_ERR, "%s", log);
+		free(log);
+	}
+	
+	return status;
+}
+
 static int advance(char **area, unsigned *remaining, const char *marker)
 {
 	char *find = memmem(*area, *remaining, marker, strlen(marker));
@@ -869,21 +891,11 @@ build:
 		strcat(CompilerOptions, " -D OCL1");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
-	status = clBuildProgram(clState->program, 1, &devices[gpu], CompilerOptions , NULL, NULL);
+	status = bfg_clBuildProgram(clState, devices[gpu], CompilerOptions);
 	free(CompilerOptions);
 
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Building Program (clBuildProgram)", status);
-		size_t logSize;
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
-
-		char *log = malloc(logSize ?: 1);
-		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-		if (logSize > 0 && log[0])
-			applog(LOG_ERR, "%s", log);
-		free(log);
+	if (status != CL_SUCCESS)
 		return NULL;
-	}
 
 	prog_built = true;
 	
@@ -998,19 +1010,9 @@ built:
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */
-		status = clBuildProgram(clState->program, 1, &devices[gpu], NULL, NULL, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Building Program (clBuildProgram)", status);
-			size_t logSize;
-			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
-
-			char *log = malloc(logSize ?: 1);
-			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-			if (logSize > 0 && log[0])
-				applog(LOG_ERR, "%s", log);
-			free(log);
+		status = bfg_clBuildProgram(clState, devices[gpu], NULL);
+		if (status != CL_SUCCESS)
 			return NULL;
-		}
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
