@@ -520,7 +520,7 @@ char *bifury_set_device(struct cgpu_info * const proc, char * const option, char
 			sprintf(replybuf, "missing setting");
 			return replybuf;
 		}
-		const uint8_t val = atoi(setting);
+		const int val = atoi(setting);
 		if (val < 33 || val > 63)
 		{
 			sprintf(replybuf, "invalid setting");
