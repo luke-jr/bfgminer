@@ -79,6 +79,7 @@
 #include "driver-cpu.h"
 #include "driver-opencl.h"
 #include "scrypt.h"
+#include "util.h"
 
 #ifdef USE_AVALON
 #include "driver-avalon.h"
@@ -2813,8 +2814,7 @@ void pool_set_opaque(struct pool *pool, bool opaque)
 
 bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 {
-	const char *p = strchr(pool->rpc_url, '#');
-	if (unlikely(p && strstr(&p[1], "redirect")))
+	if (uri_get_param_bool(pool->rpc_url, "redirect", false))
 		return true;
 	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
 }
@@ -4347,12 +4347,10 @@ void maybe_local_submit(const struct work *work)
 		// This is a block with a full template (GBT)
 		// Regardless of the result, submit to local bitcoind(s) as well
 		struct work *work_cp;
-		char *p;
 		
 		for (int i = 0; i < total_pools; ++i)
 		{
-			p = strchr(pools[i]->rpc_url, '#');
-			if (likely(!(p && strstr(&p[1], "allblocks"))))
+			if (!uri_get_param_bool(pools[i]->rpc_url, "allblocks", false))
 				continue;
 			
 			applog(LOG_DEBUG, "Attempting submission of full block to pool %d", pools[i]->pool_no);
@@ -11957,6 +11955,7 @@ int main(int argc, char *argv[])
 		test_decimal_width();
 		test_domain_funcs();
 		test_target();
+		test_uri_get_param();
 		utf8_test();
 	}
 

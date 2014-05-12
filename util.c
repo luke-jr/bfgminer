@@ -2058,6 +2058,64 @@ void test_domain_funcs()
 	_test_get_regd_domain("2001:db8::1", "2001:db8::1");
 }
 
+bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+{
+	const char *start = strchr(uri, '#');
+	bool invert = false, foundval = true;
+	if (!start)
+		return defval;
+	const char *p = start;
+	++start;
+nextmatch:
+	p = strstr(&p[1], param);
+	if (!p)
+		return defval;
+	const char *q = &p[strlen(param)];
+	if (isCalpha(q[0]))
+		goto nextmatch;
+	if (p - start >= 2 && (!strncasecmp(&p[-2], "no", 2)) && !isCalpha(p[-3]))
+		invert = true;
+	else
+	if (isCalpha(p[-1]))
+		goto nextmatch;
+	if (q[0] == '=')
+	{
+		++q;
+		if (q[0] == '0' && !isCalpha(q[1]))
+			foundval = false;
+	}
+	if (invert)
+		foundval = !foundval;
+	return foundval;
+}
+
+static
+void _test_uri_get_param(const char * const uri, const char * const param, const bool defval, const bool expect)
+{
+	const bool actual = uri_get_param_bool(uri, param, defval);
+	if (actual != expect)
+		applog(LOG_WARNING, "%s(\"%s\", \"%s\", %s) test failed",
+		       "uri_get_param_bool", uri, param, defval ? "true" : "false");
+}
+
+void test_uri_get_param()
+{
+	_test_uri_get_param("stratum+tcp://footest/#redirect", "redirect", false, true);
+	_test_uri_get_param("stratum+tcp://footest/#redirectme", "redirect", false, false);
+	_test_uri_get_param("stratum+tcp://footest/#noredirect", "redirect", false, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=0", "redirect", false, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=1", "redirect", false, true);
+	_test_uri_get_param("stratum+tcp://footest/#redirect", "redirect", true, true);
+	_test_uri_get_param("stratum+tcp://footest/#redirectme", "redirect", true, true);
+	_test_uri_get_param("stratum+tcp://footest/#noredirect", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=0", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=1", "redirect", true, true);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=0,foo=1", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=1,foo=0", "redirect", false, true);
+	_test_uri_get_param("stratum+tcp://footest/#foo=1,noredirect=0,foo=1", "redirect", false, true);
+	_test_uri_get_param("stratum+tcp://footest/#bar=0,noredirect=1,foo=0", "redirect", true, false);
+}
+
 void stratum_probe_transparency(struct pool *pool)
 {
 	// Request transaction data to discourage pools from doing anything shady
