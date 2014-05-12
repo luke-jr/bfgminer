@@ -8077,7 +8077,10 @@ retry_stratum:
 				init_stratum_thread(pool);
 			}
 			else
+			{
 				pool_tclear(pool, &pool->stratum_init);
+				pool->tv_idle = tv_getwork_reply;
+			}
 			return ret;
 		}
 		return pool->stratum_active;
@@ -8121,6 +8124,7 @@ badwork:
 			pool->proto = proto = pool_protocol_fallback(proto);
 			if (PLP_NONE != proto)
 				goto tryagain;
+			pool->tv_idle = tv_getwork_reply;
 			free_work(work);
 			goto out;
 		}
@@ -8168,6 +8172,7 @@ badwork:
 		pool->proto = proto;
 		goto tryagain;
 	} else {
+		pool->tv_idle = tv_getwork_reply;
 		free_work(work);
 nohttp:
 		/* If we failed to parse a getwork, this could be a stratum
