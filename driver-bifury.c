@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -77,6 +78,7 @@ struct bifury_state {
 	uint8_t *osc6_bits;
 	bool send_clock;
 	unsigned max_queued;
+	bool free_after_job;
 };
 
 static
@@ -250,6 +252,7 @@ bool bifury_thread_init(struct thr_info *master_thr)
 		.buf = BYTES_INIT,
 		.osc6_bits = malloc(sizeof(*state->osc6_bits) * dev->procs),
 		.max_queued = BIFURY_MAX_QUEUED,
+		.free_after_job = true,
 	};
 	for (int i = 0; i < dev->procs; ++i)
 		state->osc6_bits[i] = 54;
@@ -423,8 +426,11 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 			else
 				applog(LOG_DEBUG, "%s: Unknown chip id: %s",
 				       dev->dev_repr, cmd);
-			HASH_DEL(master_thr->work_list, work);
-			free_work(work);
+			if (state->free_after_job)
+			{
+				HASH_DEL(master_thr->work_list, work);
+				free_work(work);
+			}
 		}
 		else
 			applog(LOG_WARNING, "%s: Unknown job id: %s",
@@ -541,6 +547,23 @@ const char *bifury_set_max_queued(struct cgpu_info * const proc, const char * co
 	return NULL;
 }
 
+const char *bifury_set_free_after_job(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct bifury_state * const state = proc->device_data;
+	
+	if (!setting || !*setting)
+		return "missing setting";
+	
+	char *end;
+	const bool val = bfg_strtobool(setting, &end, 0);
+	if (end[0] && !isspace(end[0]))
+		return "invalid setting";
+	
+	state->free_after_job = val;
+	
+	return NULL;
+}
+
 #ifdef HAVE_CURSES
 void bifury_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
@@ -578,6 +601,7 @@ void bifury_wlogprint_status(struct cgpu_info * const proc)
 
 static const struct bfg_set_device_definition bifury_set_device_funcs[] = {
 	{"max_queued", bifury_set_max_queued, NULL},
+	{"free_after_job", bifury_set_free_after_job, NULL},
 	{"osc6_bits", bifury_set_osc6_bits, "range 33-63 (slow to fast)"},
 	{NULL},
 };
