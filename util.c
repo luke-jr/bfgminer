@@ -2504,7 +2504,7 @@ static bool setup_stratum_curl(struct pool *pool)
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
-	bool try_tls = true;
+	bool try_tls = uri_get_param_bool(pool->rpc_url, "tls", true);
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
