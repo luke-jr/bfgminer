@@ -486,7 +486,7 @@ bool stratumsrv_process_line(struct bufferevent * const bev, const char * const 
 	json = JSON_LOADS(ln, &jerr);
 	if (!json)
 	{
-		if (strncmp(ln, "GET ", 4))
+		if (strncmp(ln, "GET ", 4) && strncmp(ln, "POST ", 5) && ln[0] != '\x16' /* TLS handshake */)
 			applog(LOG_ERR, "SSM: JSON parse error: %s", ln);
 		return false;
 	}
