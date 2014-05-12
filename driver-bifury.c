@@ -87,6 +87,27 @@ bool bifury_lowl_match(const struct lowlevel_device_info * const info)
 	return lowlevel_match_product(info, "bi\xe2\x80\xa2""fury");
 }
 
+const char *bifury_init_chips(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	int *procs_p = proc->device_data;
+	
+	if (!setting || !*setting)
+		return "missing setting";
+	
+	const int val = atoi(setting);
+	if (val < 1)
+		return "invalid setting";
+	
+	*procs_p = val;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition bifury_set_device_funcs_probe[] = {
+	{"chips", bifury_init_chips, NULL},
+	{NULL},
+};
+
 static
 bool bifury_detect_one(const char * const devpath)
 {
@@ -159,6 +180,8 @@ bool bifury_detect_one(const char * const devpath)
 	
 	if (serial_claim_v(devpath, &bifury_drv))
 		return false;
+	
+	drv_set_defaults(&bifury_drv, bifury_set_device_funcs_probe, &chips, devpath, detectone_meta_info.serial, 1);
 	
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
