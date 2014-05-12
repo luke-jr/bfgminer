@@ -2058,6 +2058,53 @@ void test_domain_funcs()
 	_test_get_regd_domain("2001:db8::1", "2001:db8::1");
 }
 
+struct bfg_strtobool_keyword {
+	bool val;
+	const char *keyword;
+};
+
+bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused const int opts)
+{
+	struct bfg_strtobool_keyword keywords[] = {
+		{false, "false"},
+		{false, "never"},
+		{false, "none"},
+		{false, "off"},
+		{false, "no"},
+		{false, "0"},
+		
+		{true , "always"},
+		{true , "true"},
+		{true , "yes"},
+		{true , "on"},
+	};
+	
+	const int total_keywords = sizeof(keywords) / sizeof(*keywords);
+	for (int i = 0; i < total_keywords; ++i)
+	{
+		const size_t kwlen = strlen(keywords[i].keyword);
+		if (!strncasecmp(keywords[i].keyword, s, kwlen))
+		{
+			if (endptr)
+				*endptr = (char*)&s[kwlen];
+			return keywords[i].val;
+		}
+	}
+	
+	char *lend;
+	strtol(s, &lend, 0);
+	if (lend > s)
+	{
+		if (endptr)
+			*endptr = lend;
+		// Any number other than "0" is intentionally considered true, including 0x0
+		return true;
+	}
+	
+	*endptr = (char*)s;
+	return false;
+}
+
 bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
 {
 	const char *start = strchr(uri, '#');
@@ -2081,8 +2128,10 @@ nextmatch:
 	if (q[0] == '=')
 	{
 		++q;
-		if (q[0] == '0' && !isCalpha(q[1]))
-			foundval = false;
+		char *end;
+		bool v = bfg_strtobool(q, &end, 0);
+		if (end > q && !isCalpha(end[0]))
+			foundval = v;
 	}
 	if (invert)
 		foundval = !foundval;
@@ -2114,6 +2163,9 @@ void test_uri_get_param()
 	_test_uri_get_param("stratum+tcp://footest/#redirect=1,foo=0", "redirect", false, true);
 	_test_uri_get_param("stratum+tcp://footest/#foo=1,noredirect=0,foo=1", "redirect", false, true);
 	_test_uri_get_param("stratum+tcp://footest/#bar=0,noredirect=1,foo=0", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=false", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=no", "redirect", true, false);
+	_test_uri_get_param("stratum+tcp://footest/#redirect=yes", "redirect", false, true);
 }
 
 void stratum_probe_transparency(struct pool *pool)

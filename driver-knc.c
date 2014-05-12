@@ -31,6 +31,7 @@
 #include "logging.h"
 #include "lowl-spi.h"
 #include "miner.h"
+#include "util.h"
 
 #define KNC_POLL_INTERVAL_US 10000
 #define KNC_SPI_SPEED 3000000
@@ -825,21 +826,11 @@ const char *knc_set_use_dcdc(struct cgpu_info *proc, const char * const optname,
 {
 	int core_index_on_die = proc->proc_id % KNC_CORES_PER_DIE;
 	bool nv;
+	char *end;
 	
-	if (!(strcasecmp(newvalue, "no") && strcasecmp(newvalue, "false") && strcasecmp(newvalue, "0") && strcasecmp(newvalue, "off") && strcasecmp(newvalue, "disable")))
-		nv = false;
-	else
-	if (!(strcasecmp(newvalue, "yes") && strcasecmp(newvalue, "true") && strcasecmp(newvalue, "on") && strcasecmp(newvalue, "enable")))
-		nv = true;
-	else
-	{
-		char *p;
-		strtol(newvalue, &p, 0);
-		if (newvalue[0] && !p[0])
-			nv = true;
-		else
-			return "Usage: use_dcdc=yes/no";
-	}
+	nv = bfg_strtobool(newvalue, &end, 0);
+	if (!(newvalue[0] && !end[0]))
+		return "Usage: use_dcdc=yes/no";
 	
 	if (core_index_on_die)
 	{
