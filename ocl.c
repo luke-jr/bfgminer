@@ -877,9 +877,10 @@ build:
 		size_t logSize;
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 
-		char *log = malloc(logSize);
+		char *log = malloc(logSize ?: 1);
 		status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-		applog(LOG_ERR, "%s", log);
+		if (logSize > 0 && log[0])
+			applog(LOG_ERR, "%s", log);
 		free(log);
 		return NULL;
 	}
@@ -1003,9 +1004,10 @@ built:
 			size_t logSize;
 			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 
-			char *log = malloc(logSize);
+			char *log = malloc(logSize ?: 1);
 			status = clGetProgramBuildInfo(clState->program, devices[gpu], CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
-			applog(LOG_ERR, "%s", log);
+			if (logSize > 0 && log[0])
+				applog(LOG_ERR, "%s", log);
 			free(log);
 			return NULL;
 		}
