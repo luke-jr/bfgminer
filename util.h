@@ -119,6 +119,8 @@ extern const char *extract_domain(size_t *out_len, const char *uri, size_t urile
 extern bool match_domains(const char *a, size_t alen, const char *b, size_t blen);
 extern void test_domain_funcs();
 
+extern bool bfg_strtobool(const char *, char **endptr, int opts);
+
 extern bool uri_get_param_bool(const char *uri, const char *param, bool defval);
 extern void test_uri_get_param();
 
