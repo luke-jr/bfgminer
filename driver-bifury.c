@@ -27,8 +27,6 @@
 #include "miner.h"
 #include "util.h"
 
-#define BIFURY_MAX_QUEUED 0x10
-
 BFG_REGISTER_DRIVER(bifury_drv)
 static const struct bfg_set_device_definition bifury_set_device_funcs[];
 
@@ -274,7 +272,7 @@ bool bifury_thread_init(struct thr_info *master_thr)
 	*state = (struct bifury_state){
 		.buf = BYTES_INIT,
 		.osc6_bits = malloc(sizeof(*state->osc6_bits) * dev->procs),
-		.max_queued = BIFURY_MAX_QUEUED,
+		.max_queued = dev->procs * 4,
 		.free_after_job = true,
 	};
 	for (int i = 0; i < dev->procs; ++i)
