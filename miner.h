@@ -1307,6 +1307,7 @@ struct pool {
 	char *stratum_url;
 	char *stratum_port;
 	CURL *stratum_curl;
+	char curl_err_str[CURL_ERROR_SIZE];
 	SOCKETTYPE sock;
 	char *sockbuf;
 	size_t sockbuf_size;
