@@ -272,7 +272,7 @@ bool bifury_thread_init(struct thr_info *master_thr)
 	*state = (struct bifury_state){
 		.buf = BYTES_INIT,
 		.osc6_bits = malloc(sizeof(*state->osc6_bits) * dev->procs),
-		.max_queued = dev->procs * 4,
+		.max_queued = dev->procs * 5,
 		.free_after_job = true,
 	};
 	for (int i = 0; i < dev->procs; ++i)
