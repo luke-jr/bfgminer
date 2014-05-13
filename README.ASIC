@@ -123,6 +123,19 @@ ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
 
 
+HEX*FURY
+--------
+
+Hex*Fury uses the bifury driver. Miners using earlier boards may need to
+workaround bugs in the firmware:
+    bfgminer --set bifury:chips=6 --set bifury:free_after_job=no
+This may cause poor behaviour or performance from other bifury-based devices.
+If you encounter this, you can set the workarounds per-device by using their
+serial number (which can be seen in the TUI device manager; in this example,
+141407160211cdf):
+    bfgminer --set bifury@141407160211cdf:chips=15 ...
+
+
 KLONDIKE
 --------
 
@@ -205,6 +218,16 @@ If you want to run BFGMiner as a normal user:
     chown <username> /dev/vfio/<iommu_group>
 Depending on your system, you may also need to do:
     echo 1 | sudo tee /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
+
+
+ONESTRINGMINER
+--------------
+
+OneStringMiner boards use the bifury driver. Miners using earlier boards may
+need to workaround bugs in the firmware:
+    bfgminer --set bifury:chips=15 --set bifury:free_after_job=no
+If you have different devices using the bifury driver, see the section on
+Hex*Fury for applying workarounds per-device.
 
 
 ---
