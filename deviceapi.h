@@ -107,4 +107,9 @@ extern FILE *open_bitstream(const char *dname, const char *filename);
 
 extern void close_device_fd(struct thr_info *);
 
+#define for_each_managed_proc(procvar, dev)  \
+	for (struct cgpu_info *procvar = dev; procvar; procvar = procvar->next_proc)
+#define for_each_logical_proc(procvar, dev)  \
+	for (struct cgpu_info *procvar = dev; procvar->proc_id < dev->procs; procvar = procvar->next_proc)
+
 #endif
