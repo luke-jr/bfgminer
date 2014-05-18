@@ -4790,7 +4790,6 @@ out:
 }
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
-static const uint64_t diffone = 0xFFFF000000000000ull;
 
 static double target_diff(const unsigned char *target)
 {
