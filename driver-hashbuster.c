@@ -91,7 +91,7 @@ bool hashbuster_spi_reset(hid_device * const h, uint8_t chips)
 	uint8_t buf[0x40] = {'\x02', chips};
 	if (!hashbuster_io(h, buf, buf))
 		return false;
-	return (buf[1] == '\xff');
+	return (buf[1] == 0xff);
 }
 
 static
