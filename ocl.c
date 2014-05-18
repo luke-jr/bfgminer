@@ -331,7 +331,7 @@ int clDevicesNum(void) {
 	return most_devices;
 }
 
-cl_int bfg_clBuildProgram(_clState * const clState, const cl_device_id const devid, const char * const CompilerOptions)
+cl_int bfg_clBuildProgram(_clState * const clState, const cl_device_id devid, const char * const CompilerOptions)
 {
 	cl_int status;
 	
