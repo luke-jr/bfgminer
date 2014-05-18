@@ -34,6 +34,7 @@ BFG_REGISTER_DRIVER(hashfast_ums_drv)
 #define HASHFAST_MAX_DATA 0x3fc
 #define HASHFAST_HASH_SIZE (0x20 + 0xc + 4 + 4 + 2 + 1 + 1)
 #define HASHFAST_MAX_VOLTAGES 4
+#define HASHFAST_CONFIG_DATA_SIZE  0x10
 
 enum hashfast_opcode {
 	HFOP_NULL          =    0,
@@ -68,6 +69,19 @@ enum hashfast_opcode {
 	HFOP_USB_GWQSTATS  = 0x8a,
 	HFOP_USB_NOTICE    = 0x8b,
 	HFOP_USB_DEBUG     = 0xff,
+};
+
+enum hashfast_config_hdata {
+	HFCH_WRITE         = 1 << 0xf,
+	HFCH_THERMAL_LIMIT = 1 << 0xe,
+	HFCH_TACHO         = 1 << 0xd,
+};
+
+enum hashfast_config_flags {
+	HFCF_STATUS_PERIOD = 1 << 0xb,
+	HFCF_STATUS_IDLE   = 1 << 0xc,
+	HFCF_STATUS_EMPTY  = 1 << 0xd,
+	HFCF_PWM_ACTIVE_LV = 1 << 0xe,
 };
 
 typedef unsigned long hashfast_isn_t;
@@ -280,6 +294,7 @@ bool hashfast_detect_one(const char * const devpath)
 		.device_data = pmsg,
 		.cutofftemp = 100,
 	};
+	
 	return add_cgpu(cgpu);
 
 err:
@@ -304,6 +319,7 @@ struct hashfast_chip_state {
 	struct cgpu_info **coreprocs;
 	hashfast_isn_t last_isn;
 	float voltages[HASHFAST_MAX_VOLTAGES];
+	uint8_t cfgdata[HASHFAST_CONFIG_DATA_SIZE];
 };
 
 struct hashfast_core_state {
@@ -316,6 +332,51 @@ struct hashfast_core_state {
 	bool has_pending;
 	unsigned queued;
 };
+
+static
+void hashfast_init_cfgdata(struct hashfast_chip_state * const chipstate)
+{
+	uint8_t * const cfgdata = chipstate->cfgdata;
+	
+	const uint16_t status_ms = 500;
+	const bool send_status_on_core_idle = false;
+	const bool send_status_on_pending_empty = false;
+	const bool pwm_active_level = false;
+	const uint8_t status_batching_delay_ms = 0;
+	const uint8_t watchdog_sec = 0;
+	const uint8_t rx_header_timeout = 20, rx_data_timeout = 20;
+	const uint8_t stats_sec = 10;
+	const uint8_t temp_measure_ms = 100;
+	const uint16_t lf_clocks_per_usec = 125 /* FIXME: or 126? */;
+	const uint8_t max_nonces_per_frame = 1;
+	const uint8_t voltage_sample_points = 0x1f;
+	const uint8_t pwm_phases = 1, pwm_period = 0, pwm_pulse_period = 0;
+	const uint8_t temp_trim = 0;
+	
+	pk_u16le(cfgdata, 0,
+	         (status_ms & 0x7ff) | (status_ms ? HFCF_STATUS_PERIOD : 0) |
+	         (send_status_on_core_idle     ? HFCF_STATUS_IDLE   : 0) |
+	         (send_status_on_pending_empty ? HFCF_STATUS_EMPTY  : 0) |
+	         (pwm_active_level             ? HFCF_PWM_ACTIVE_LV : 0));
+	pk_u8(cfgdata, 2, status_batching_delay_ms);
+	pk_u8(cfgdata, 3, watchdog_sec & 0x7f);
+	
+	pk_u8(cfgdata, 4, rx_header_timeout & 0x7f);
+	pk_u8(cfgdata, 5, rx_data_timeout   & 0x7f);
+	pk_u8(cfgdata, 6, stats_sec         & 0x7f);
+	pk_u8(cfgdata, 7, temp_measure_ms);
+	
+	pk_u16le(cfgdata, 8,
+	         ((lf_clocks_per_usec - 1) & 0xfff) |
+	         ((max_nonces_per_frame & 0xf) << 0xc));
+	pk_u8(cfgdata, 0xa, voltage_sample_points);
+	pk_u8(cfgdata, 0xb,
+	      ((pwm_phases - 1) & 3) |
+	      ((temp_trim & 0xf) << 2));
+	
+	pk_u16le(cfgdata, 0xc, pwm_period);
+	pk_u16le(cfgdata, 0xe, pwm_pulse_period);
+}
 
 static
 bool hashfast_init(struct thr_info * const master_thr)
@@ -340,6 +401,7 @@ bool hashfast_init(struct thr_info * const master_thr)
 		*chipstate = (struct hashfast_chip_state){
 			.coreprocs = malloc(sizeof(struct cgpu_info *) * pmsg->coreaddr),
 		};
+		hashfast_init_cfgdata(chipstate);
 	}
 	
 	for ((i = 0), (proc = dev); proc; ++i, (proc = proc->next_proc))
