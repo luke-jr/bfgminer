@@ -259,6 +259,13 @@ bool hashfast_detect_one(const char * const devpath)
 		        __func__, devpath, pmsg->data[8]);
 		goto err;
 	}
+	uint16_t fwrev = upk_u16le(pmsg->data, 0);
+	if (!fwrev)
+	{
+		// fwrev == 0 means latest experimental; make it >= every possible comparison
+		fwrev = 0xffff;
+		pk_u16le(pmsg->data, 0, fwrev);
+	}
 	
 	if (serial_claim_v(devpath, &hashfast_ums_drv))
 		return false;
@@ -290,6 +297,7 @@ struct hashfast_dev_state {
 	uint8_t cores_per_chip;
 	int fd;
 	struct hashfast_chip_state *chipstates;
+	uint16_t fwrev;
 };
 
 struct hashfast_chip_state {
@@ -323,6 +331,7 @@ bool hashfast_init(struct thr_info * const master_thr)
 		.chipstates = chipstates,
 		.cores_per_chip = pmsg->coreaddr,
 		.fd = serial_open(dev->device_path, 0, 1, true),
+		.fwrev = upk_u16le(pmsg->data, 0),
 	};
 	
 	for (i = 0; i < pmsg->chipaddr; ++i)
