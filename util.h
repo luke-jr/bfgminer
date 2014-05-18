@@ -271,6 +271,8 @@ uint8_t upk_u8(const void * const bufp, const int offset)
 	return buf[offset];
 }
 
+#define upk_u8be(buf, offset)  upk_u8(buf, offset)
+
 static inline
 uint16_t upk_u16be(const void * const bufp, const int offset)
 {
@@ -302,6 +304,8 @@ uint64_t upk_u64be(const void * const bufp, const int offset)
 	     | (((uint64_t)buf[offset+6]) <<    8)
 	     | (((uint64_t)buf[offset+7]) <<    0);
 }
+
+#define upk_u8le(buf, offset)  upk_u8(buf, offset)
 
 static inline
 uint16_t upk_u16le(const void * const bufp, const int offset)
@@ -343,6 +347,8 @@ void pk_u8(void * const bufp, const int offset, const uint8_t nv)
 	buf[offset] = nv;
 }
 
+#define pk_u8be(buf, offset, nv)  pk_u8(buf, offset, nv)
+
 static inline
 void pk_u16be(void * const bufp, const int offset, const uint16_t nv)
 {
@@ -375,6 +381,8 @@ void pk_u64be(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+7] = (nv >>    0) & 0xff;
 }
 
+#define pk_u8le(buf, offset, nv)  pk_u8(buf, offset, nv)
+
 static inline
 void pk_u16le(void * const bufp, const int offset, const uint16_t nv)
 {
@@ -406,6 +414,35 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+6] = (nv >> 0x30) & 0xff;
 	buf[offset+7] = (nv >> 0x38) & 0xff;
 }
+
+#define _pk_uNle(bitwidth, newvalue)  do{  \
+	uint ## bitwidth ## _t _mask = 1;  \
+	_mask <<= _bitlen;  \
+	--_mask;  \
+	uint ## bitwidth ## _t _filt = _mask;  \
+	_filt <<= _bitoff;  \
+	_filt = ~_filt;  \
+	uint ## bitwidth ## _t _u = upk_u ## bitwidth ## le(_buf, 0);  \
+	_u = (_u & _filt) | (((newvalue) & _mask) << _bitoff);  \
+	pk_u ## bitwidth ## le(_buf, 0, _u);  \
+}while(0)
+
+#define pk_uNle(bufp, offset, bitoffset, bitlength, newvalue)  do{  \
+	uint8_t * const _buf = &((uint8_t *)(bufp))[offset];  \
+	const int _bitoff = (bitoffset), _bitlen = bitlength;  \
+	const int _bittot = bitoffset + bitlength;  \
+	_Static_assert((bitoffset + bitlength) <= 0x40, "Too many bits addressed in pk_uNle (bitoffset + bitlength must be <= 64)");  \
+	if (_bittot <=    8)  \
+		_pk_uNle( 8, newvalue);  \
+	else  \
+	if (_bittot <= 0x10)  \
+		_pk_uNle(16, newvalue);  \
+	else  \
+	if (_bittot <= 0x20)  \
+		_pk_uNle(32, newvalue);  \
+	else  \
+		_pk_uNle(64, newvalue);  \
+}while(0)
 
 #define is_power_of_two(n)  \
 	(0 == ((n) && ((n) - 1)))
