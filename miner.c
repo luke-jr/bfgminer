@@ -4671,6 +4671,22 @@ bool pool_actively_in_use(const struct pool * const pool, const struct pool *cp)
 	return (!pool_unworkable(pool)) && pool_actively_desired(pool, cp);
 }
 
+static
+bool pool_supports_block_change_notification(struct pool * const pool)
+{
+	return pool->has_stratum || pool->lp_url;
+}
+
+static
+bool pool_has_active_block_change_notification(struct pool * const pool)
+{
+	return pool->stratum_active || pool->lp_active;
+}
+
+static struct pool *_select_longpoll_pool(struct pool *, bool(*)(struct pool *));
+#define select_longpoll_pool(pool)  _select_longpoll_pool(pool, pool_supports_block_change_notification)
+#define pool_active_lp_pool(pool)  _select_longpoll_pool(pool, pool_has_active_block_change_notification)
+
 /* In balanced mode, the amount of diff1 solutions per pool is monitored as a
  * rolling average per 10 minutes and if pools start getting more, it biases
  * away from them to distribute work evenly. The share count is reset to the
@@ -9791,16 +9807,17 @@ static void convert_to_work(json_t *val, int rolltime, struct pool *pool, struct
 /* If we want longpoll, enable it for the chosen default pool, or, if
  * the pool does not support longpoll, find the first one that does
  * and use its longpoll support */
-static struct pool *select_longpoll_pool(struct pool *cp)
+static
+struct pool *_select_longpoll_pool(struct pool *cp, bool(*func)(struct pool *))
 {
 	int i;
 
-	if (cp->lp_url)
+	if (func(cp))
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
-		if (pool->has_stratum || pool->lp_url)
+		if (func(pool))
 			return pool;
 	}
 	return NULL;
