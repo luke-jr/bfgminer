@@ -104,6 +104,16 @@ static void databuf_free(struct data_buffer *db)
 	memset(db, 0, sizeof(*db));
 }
 
+struct json_rpc_call_state {
+	struct data_buffer all_data;
+	struct header_info hi;
+	void *priv;
+	char curl_err_str[CURL_ERROR_SIZE];
+	struct curl_slist *headers;
+	struct upload_buffer upload_data;
+	struct pool *pool;
+};
+
 // aka data_buffer_write
 static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 			  void *user_data)
@@ -151,7 +161,8 @@ static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb,
 static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 			     void *user_data)
 {
-	struct upload_buffer *ub = user_data;
+	struct json_rpc_call_state * const state = user_data;
+	struct upload_buffer * const ub = &state->upload_data;
 	unsigned int len = size * nmemb;
 
 	if (len > ub->len)
@@ -377,16 +388,6 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 	return 0;
 }
 
-struct json_rpc_call_state {
-	struct data_buffer all_data;
-	struct header_info hi;
-	void *priv;
-	char curl_err_str[CURL_ERROR_SIZE];
-	struct curl_slist *headers;
-	struct upload_buffer upload_data;
-	struct pool *pool;
-};
-
 void json_rpc_call_async(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool longpoll,
@@ -428,7 +429,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state->all_data);
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
-	curl_easy_setopt(curl, CURLOPT_READDATA, &state->upload_data);
+	curl_easy_setopt(curl, CURLOPT_READDATA, state);
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &state->curl_err_str[0]);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
