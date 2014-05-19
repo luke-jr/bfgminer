@@ -1223,6 +1223,7 @@ struct pool {
 	char *lp_id;
 	enum pool_protocol lp_proto;
 	curl_socket_t lp_socket;
+	bool lp_active;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
