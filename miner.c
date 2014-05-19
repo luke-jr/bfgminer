@@ -9813,6 +9813,7 @@ static void wait_lpcurrent(struct pool *pool)
 {
 	while (!cnx_needed(pool))
 	{
+		pool->lp_active = false;
 		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
 		mutex_unlock(&lp_lock);
@@ -9954,6 +9955,7 @@ lpfail:
 	}
 
 out:
+	pool->lp_active = false;
 	curl_easy_cleanup(curl);
 
 	return NULL;

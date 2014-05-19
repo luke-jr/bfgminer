@@ -112,6 +112,7 @@ struct json_rpc_call_state {
 	struct curl_slist *headers;
 	struct upload_buffer upload_data;
 	struct pool *pool;
+	bool longpoll;
 };
 
 // aka data_buffer_write
@@ -164,6 +165,12 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 	struct json_rpc_call_state * const state = user_data;
 	struct upload_buffer * const ub = &state->upload_data;
 	unsigned int len = size * nmemb;
+	
+	if (state->longpoll)
+	{
+		struct pool * const pool = state->pool;
+		pool->lp_active = true;
+	}
 
 	if (len > ub->len)
 		len = ub->len;
@@ -404,7 +411,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	struct curl_slist *headers = NULL;
 
 	if (longpoll)
+	{
 		state->all_data.idlemarker = &pool->lp_socket;
+		state->longpoll = true;
+	}
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
