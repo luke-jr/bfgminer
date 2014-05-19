@@ -9929,12 +9929,13 @@ retry_pool:
 			 * time. */
 			cgtime(&end);
 			free_work(work);
-			if (end.tv_sec - start.tv_sec > 30)
-				continue;
-			if (failures == 1)
-				applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
+			if (end.tv_sec - start.tv_sec <= 30)
+			{
+				if (failures == 1)
+					applog(LOG_WARNING, "longpoll failed for %s, retrying every 30s", lp_url);
 lpfail:
-			cgsleep_ms(30000);
+				cgsleep_ms(30000);
+			}
 		}
 
 		if (pool != cp) {
