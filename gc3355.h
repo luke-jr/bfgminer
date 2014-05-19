@@ -33,7 +33,7 @@ int opt_pll_freq;
 struct gc3355_orb_info
 {
 	uint16_t freq;
-	int needwork;
+	struct timeval scanhash_time;
 };
 
 #define gc3355_open(path)  serial_open(path, 115200, 1, true)
