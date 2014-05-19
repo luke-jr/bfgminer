@@ -8406,6 +8406,10 @@ static bool cnx_needed(struct pool *pool)
 	/* We've run out of work, bring anything back to life. */
 	if (no_work)
 		return true;
+	
+	// If the current pool lacks its own block change detection, see if we are needed for that
+	if (pool_active_lp_pool(cp) == pool)
+		return true;
 
 	return false;
 }
