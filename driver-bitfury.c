@@ -588,14 +588,14 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				nonce = bitfury_decnonce(newbuf[i]);
 				if (unlikely(!bitfury->chipgen))
 				{
-					switch (nonce)
+					switch (nonce & 0xe03fffff)
 					{
-						case 0x6cc054e0:
+						case 0x600054e0:
 							if (++bitfury->chipgen_probe > 4)
 								bitfury->chipgen = 1;
 							break;
-						case 0xed7081a3:
-						case 0xf883df88:
+						case 0xe03081a3:
+						case 0xe003df88:
 							bitfury->chipgen = 2;
 					}
 					if (bitfury->chipgen)
