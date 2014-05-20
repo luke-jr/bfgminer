@@ -37,6 +37,8 @@
 #include "lowl-spi.h"
 #include "util.h"
 
+static const int chipgen_timeout_secs = 30;
+
 BFG_REGISTER_DRIVER(bitfury_drv)
 const struct bfg_set_device_definition bitfury_set_device_funcs[];
 
@@ -541,9 +543,11 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			copy_time(tvp_stat, &tv_now);
 		}
 		
+		int stat_elapsed_secs = timer_elapsed(tvp_stat, &tv_now);
+		
 		if (c->osc6_max)
 		{
-			if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+			if (stat_elapsed_secs >= 60)
 			{
 				double mh_diff, s_diff;
 				const int osc = bitfury->osc6_bits;
@@ -603,11 +607,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 							bitfury->chipgen = 2;
 					}
 					if (bitfury->chipgen)
-					{
-						applog(LOG_DEBUG, "%"PRIpreprv": Detected bitfury gen%d chip",
-						       proc->proc_repr, bitfury->chipgen);
-						bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
-					}
+						goto chipgen_detected;
 				}
 				else
 				if (fudge_nonce(thr->work, &nonce))
@@ -647,6 +647,16 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					bitfury->sample_tot = bitfury->sample_hwe = 0;
 				}
 			}
+			if ((!bitfury->chipgen) && stat_elapsed_secs >= chipgen_timeout_secs)
+			{
+				bitfury->chipgen = 1;
+				applog(LOG_WARNING, "%"PRIpreprv": Failed to detect chip generation in %d seconds, falling back to gen%d assumption",
+				       proc->proc_repr, chipgen_timeout_secs, bitfury->chipgen);
+chipgen_detected:
+				applog(LOG_DEBUG, "%"PRIpreprv": Detected bitfury gen%d chip",
+				       proc->proc_repr, bitfury->chipgen);
+				bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+			}
 			bitfury->active = (bitfury->active + n) % 0x10;
 		}
 		
@@ -665,7 +675,7 @@ out:
 			bitfury->mhz_best = 0;
 			bitfury->force_reinit = false;
 		}
-		if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+		if (stat_elapsed_secs >= 60)
 			copy_time(tvp_stat, &tv_now);
 	}
 	
