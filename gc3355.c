@@ -10,6 +10,8 @@
  * any later version.  See COPYING for more details.
  */
 
+#include "config.h"
+
 #include "gc3355.h"
 
 #include <stdint.h>
