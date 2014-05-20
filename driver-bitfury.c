@@ -590,8 +590,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				{
 					switch (nonce & 0xe03fffff)
 					{
+						case 0x40060f87:
 						case 0x600054e0:
-							if (++bitfury->chipgen_probe > 4)
+						case 0x80156423:
+						case 0x991abced:
+						case 0xa004b2a0:
+							if (++bitfury->chipgen_probe > 0x10)
 								bitfury->chipgen = 1;
 							break;
 						case 0xe03081a3:
