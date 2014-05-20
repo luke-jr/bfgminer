@@ -989,16 +989,27 @@ extern int _bfg_console_prev_cancelstate;
 static inline
 void bfg_console_lock(void)
 {
-	_bfg_console_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_bfg_console_prev_cancelstate);
+	int prev_cancelstate;
+	bool cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &prev_cancelstate);
 	mutex_lock(&console_lock);
+	_bfg_console_cancel_disabled = cancel_disabled;
+	if (cancel_disabled)
+		_bfg_console_prev_cancelstate = prev_cancelstate;
 }
 
 static inline
 void bfg_console_unlock(void)
 {
-	mutex_unlock(&console_lock);
-	if (_bfg_console_cancel_disabled)
-		pthread_setcancelstate(_bfg_console_prev_cancelstate, &_bfg_console_prev_cancelstate);
+	int prev_cancelstate;
+	bool cancel_disabled = _bfg_console_cancel_disabled;
+	if (cancel_disabled)
+	{
+		prev_cancelstate = _bfg_console_prev_cancelstate;
+		mutex_unlock(&console_lock);
+		pthread_setcancelstate(prev_cancelstate, &prev_cancelstate);
+	}
+	else
+		mutex_unlock(&console_lock);
 }
 
 
