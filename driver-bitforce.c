@@ -487,6 +487,13 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 	}
 	
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
+	
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		s = strdup(&pdevbuf[7]);
+	}
+	
 	initdata = malloc(sizeof(*initdata));
 	*initdata = (struct bitforce_init_data){
 		.lowlif = lowlif,
@@ -596,10 +603,8 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 	if (initdata->style != BFS_FPGA)
 		bitforce->cutofftemp = 85;
 
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
-		s[0] = '\0';
-		bitforce->name = strdup(pdevbuf + 7);
-	}
+	if (s)
+		bitforce->name = s;
 	bitforce->device_data = initdata;
 	
 	// Skip fanspeed until we probe support for it
