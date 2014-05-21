@@ -211,6 +211,13 @@ static bool bitforce_detect_one(const char *devpath)
 	}
 	
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
+	
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		s = strdup(&pdevbuf[7]);
+	}
+	
 	initdata = malloc(sizeof(*initdata));
 	*initdata = (struct bitforce_init_data){
 		.sc = false,
@@ -310,10 +317,8 @@ static bool bitforce_detect_one(const char *devpath)
 	if (initdata->sc)
 		bitforce->cutofftemp = 85;
 
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
-		s[0] = '\0';
-		bitforce->name = strdup(pdevbuf + 7);
-	}
+	if (s)
+		bitforce->name = s;
 	bitforce->device_data = initdata;
 
 	mutex_init(&bitforce->device_mutex);
