@@ -936,6 +936,23 @@ bool valid_baud(int baud)
 	}
 }
 
+bool vcom_set_timeout(const int fdDev, const uint8_t timeout)
+{
+#ifdef WIN32
+	const HANDLE hSerial = (HANDLE)_get_osfhandle(fdDev);
+	// Code must specify a valid timeout value (0 means don't timeout)
+	const DWORD ctoms = ((DWORD)timeout * 100);
+	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
+	SetCommTimeouts(hSerial, &cto);
+#else
+	struct termios my_termios;
+	
+	tcgetattr(fdDev, &my_termios);
+	my_termios.c_cc[VTIME] = (cc_t)timeout;
+	tcsetattr(fdDev, TCSANOW, &my_termios);
+#endif
+}
+
 /* NOTE: Linux only supports uint8_t (decisecond) timeouts; limiting it in
  *       this interface buys us warnings when bad constants are passed in.
  */
