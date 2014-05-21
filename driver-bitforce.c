@@ -32,6 +32,8 @@
 #define BFL_PCI_VENDOR_ID 0x1cf9
 
 #define BITFORCE_SLEEP_MS 500
+#define BITFORCE_VCOM_TIMEOUT_DSEC     250
+#define BITFORCE_VCOM_TIMEOUT_DSEC_ZCX  10
 #define BITFORCE_TIMEOUT_S 7
 #define BITFORCE_TIMEOUT_MS (BITFORCE_TIMEOUT_S * 1000)
 #define BITFORCE_LONG_TIMEOUT_S 25
@@ -81,6 +83,7 @@ struct bitforce_lowl_interface {
 	void (*close)(struct cgpu_info *);
 	void (*gets)(char *, size_t, struct cgpu_info *);
 	ssize_t (*write)(struct cgpu_info *, const void *, ssize_t);
+	bool (*set_timeout)(struct cgpu_info* , uint8_t);
 };
 
 struct bitforce_data {
@@ -125,7 +128,7 @@ bool bitforce_vcom_open(struct cgpu_info * const dev)
 {
 	struct bitforce_data * const devdata = dev->device_data;
 	const char * const devpath = dev->device_path;
-	dev->device_fd = serial_open(devpath, 0, 250, true);
+	dev->device_fd = serial_open(devpath, 0, BITFORCE_VCOM_TIMEOUT_DSEC, true);
 	devdata->is_open = (dev->device_fd != -1);
 	return devdata->is_open;
 }
@@ -164,11 +167,19 @@ ssize_t bitforce_vcom_write(struct cgpu_info * const dev, const void *buf, ssize
 		return bufLen;
 }
 
+static
+bool bitforce_vcom_set_timeout(struct cgpu_info * const dev, const uint8_t timeout)
+{
+	const int fd = dev->device_fd;
+	return vcom_set_timeout(fd, timeout);
+}
+
 static struct bitforce_lowl_interface bfllif_vcom = {
 	.open = bitforce_vcom_open,
 	.close = bitforce_vcom_close,
 	.gets = bitforce_vcom_gets,
 	.write = bitforce_vcom_write,
+	.set_timeout = bitforce_vcom_set_timeout,
 };
 
 #ifdef NEED_BFG_LOWL_PCI
@@ -284,10 +295,10 @@ void bitforce_gets(char * const buf, const size_t bufLen, struct cgpu_info * con
 	struct cgpu_info * const dev = proc->device;
 	struct bitforce_data * const devdata = dev->device_data;
 	
-	if (unlikely(!devdata->is_open))
-		return;
-	
-	devdata->lowlif->gets(buf, bufLen, dev);
+	if (likely(devdata->is_open))
+		devdata->lowlif->gets(buf, bufLen, dev);
+	else
+		buf[0] = '\0';
 	
 	if (unlikely(opt_dev_protocol))
 		applog(LOG_DEBUG, "DEVPROTO: %s: GETS: %s", dev->dev_repr, buf);
@@ -379,6 +390,22 @@ void bitforce_cmd2(struct cgpu_info * const proc, void *buf, size_t bufsz, const
 	bitforce_gets(buf, bufsz, proc);
 }
 
+static
+void bitforce_zgx(struct cgpu_info * const proc, void *buf, size_t bufsz)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	
+	if (devdata->is_open && devdata->lowlif->set_timeout)
+	{
+		devdata->lowlif->set_timeout(dev, BITFORCE_VCOM_TIMEOUT_DSEC_ZCX);
+		bitforce_cmd1b(proc, buf, bufsz, "ZGX", 3);
+		devdata->lowlif->set_timeout(dev, BITFORCE_VCOM_TIMEOUT_DSEC);
+	}
+	else
+		bitforce_cmd1b(proc, buf, bufsz, "ZGX", 3);
+}
+
 struct bitforce_init_data {
 	struct bitforce_lowl_interface *lowlif;
 	enum bitforce_style style;
@@ -440,7 +467,7 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		return false;
 	}
 
-	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
+	bitforce_zgx(&dummy_cgpu, pdevbuf, sizeof(pdevbuf));
 	if (unlikely(!pdevbuf[0])) {
 		applog(LOG_DEBUG, "BFL: Error reading/timeout (ZGX)");
 		bitforce_close(&dummy_cgpu);
@@ -687,7 +714,7 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	__bitforce_clear_buffer(bitforce);
 	
 	do {
-		bitforce_cmd1b(bitforce, pdevbuf, sizeof(pdevbuf), "ZGX", 3);
+		bitforce_zgx(bitforce, pdevbuf, sizeof(pdevbuf));
 		if (unlikely(!pdevbuf[0])) {
 			mutex_unlock(mutexp);
 			bitforce_close(bitforce);
