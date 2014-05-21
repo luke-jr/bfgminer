@@ -684,6 +684,7 @@ bool vcom_lowl_probe_wrapper(const struct lowlevel_device_info * const info, det
 				bfg_need_detect_rescan = true;
 		}
 #endif
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		return false;
 	}
 	detectone_meta_info = (struct detectone_meta_info_t){

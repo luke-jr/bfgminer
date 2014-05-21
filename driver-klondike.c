@@ -851,6 +851,7 @@ bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, 
 {
 	if (unlikely(info->lowl != &lowl_usb))
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
 		       __func__, info->product, info->serial);
 		goto err;

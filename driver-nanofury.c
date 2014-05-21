@@ -245,6 +245,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	if (info->lowl != &lowl_mcp2210)
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		if (info->lowl != &lowl_hid && info->lowl != &lowl_usb)
 			applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not mcp2210!",
 			       __func__, product, serial);

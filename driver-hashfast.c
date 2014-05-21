@@ -203,8 +203,6 @@ ignoresome:
 static
 bool hashfast_lowl_match(const struct lowlevel_device_info * const info)
 {
-	if (!lowlevel_match_id(info, &lowl_vcom, 0, 0))
-		return false;
 	return (info->manufacturer && strstr(info->manufacturer, "HashFast"));
 }
 

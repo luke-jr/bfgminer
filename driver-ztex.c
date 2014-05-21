@@ -89,6 +89,7 @@ bool ztex_lowl_probe(const struct lowlevel_device_info * const info)
 	const char * const serial = info->serial;
 	if (info->lowl != &lowl_usb)
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
 		       __func__, product, serial);
 		return false;

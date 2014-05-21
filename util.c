@@ -3006,6 +3006,7 @@ struct bfgtls_data {
 #ifdef NEED_BFG_LOWL_VCOM
 	struct detectone_meta_info_t __detectone_meta_info;
 #endif
+	enum bfg_probe_result_flags_values probe_result_flags;
 };
 
 static
@@ -3051,6 +3052,11 @@ struct detectone_meta_info_t *_detectone_meta_info()
 	return &get_bfgtls()->__detectone_meta_info;
 }
 #endif
+
+enum bfg_probe_result_flags_values *_bfg_probe_result_flags()
+{
+	return &get_bfgtls()->probe_result_flags;
+}
 
 void bfg_init_threadlocal()
 {

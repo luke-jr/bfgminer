@@ -11234,6 +11234,21 @@ const struct device_drv *_probe_device_find_drv(const char * const _dname, const
 }
 
 static
+bool _probe_device_do_probe(const struct device_drv * const drv, const struct lowlevel_device_info * const info, bool * const request_rescan_p)
+{
+	bfg_probe_result_flags = 0;
+	if (drv->lowl_probe(info))
+	{
+		if (!(bfg_probe_result_flags & BPR_CONTINUE_PROBES))
+			return true;
+	}
+	else
+	if (request_rescan_p && opt_hotplug && !(bfg_probe_result_flags & BPR_DONT_RESCAN))
+		*request_rescan_p = true;
+	return false;
+}
+
+static
 void *probe_device_thread(void *p)
 {
 	struct lowlevel_device_info * const infolist = p;
@@ -11269,11 +11284,8 @@ void *probe_device_thread(void *p)
 			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
 			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;
-			if (drv->lowl_probe(info))
+			if (_probe_device_do_probe(drv, info, &request_rescan))
 				return NULL;
-			else
-			if (opt_hotplug)
-				request_rescan = true;
 		}
 	}
 	
@@ -11311,11 +11323,8 @@ void *probe_device_thread(void *p)
 			{
 				if (!drv->lowl_match(info))
 					continue;
-				if (drv->lowl_probe(info))
+				if (_probe_device_do_probe(drv, info, &request_rescan))
 					return NULL;
-				else
-				if (opt_hotplug)
-					bfg_need_detect_rescan = true;
 			}
 		}
 	}
@@ -11336,6 +11345,7 @@ void *probe_device_thread(void *p)
 #endif
 					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
+					bool dont_rescan = false;
 					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
 					{
 						const struct device_drv * const drv = dreg->drv;
@@ -11345,10 +11355,12 @@ void *probe_device_thread(void *p)
 							continue;
 						if (!drv->lowl_probe)
 							continue;
-						if (drv->lowl_probe(info))
+						if (_probe_device_do_probe(drv, info, NULL))
 							return NULL;
+						if (bfg_probe_result_flags & BPR_DONT_RESCAN)
+							dont_rescan = true;
 					}
-					if (opt_hotplug)
+					if (opt_hotplug && !dont_rescan)
 						request_rescan = true;
 					break;
 				}
@@ -11363,7 +11375,7 @@ void *probe_device_thread(void *p)
 			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
 			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;
-			if (drv->lowl_probe(info))
+			if (_probe_device_do_probe(drv, info, NULL))
 				return NULL;
 		}
 	}
