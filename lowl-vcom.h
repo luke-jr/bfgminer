@@ -39,6 +39,7 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 extern int serial_close(int fd);
 
+extern bool vcom_set_timeout(int fd, uint8_t timeout);
 extern enum bfg_gpio_value get_serial_cts(int fd);
 extern enum bfg_gpio_value set_serial_dtr(int fd, enum bfg_gpio_value dtr);
 extern enum bfg_gpio_value set_serial_rts(int fd, enum bfg_gpio_value rts);
