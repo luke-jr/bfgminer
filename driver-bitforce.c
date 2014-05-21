@@ -509,6 +509,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		if (!strncasecmp(pdevbuf, "PROCESSOR ", 10))
 			maxchipno = max(maxchipno, atoi(&pdevbuf[10]));
 		else
+		if (!strncasecmp(pdevbuf, "CHANNEL", 7))
+			maxchipno = max(maxchipno, atoi(&pdevbuf[7]));
+		else
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
 		else
