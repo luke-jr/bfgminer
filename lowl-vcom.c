@@ -944,13 +944,13 @@ bool vcom_set_timeout(const int fdDev, const uint8_t timeout)
 	// Code must specify a valid timeout value (0 means don't timeout)
 	const DWORD ctoms = ((DWORD)timeout * 100);
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
-	SetCommTimeouts(hSerial, &cto);
+	return (SetCommTimeouts(hSerial, &cto) != 0);
 #else
 	struct termios my_termios;
 	
 	tcgetattr(fdDev, &my_termios);
 	my_termios.c_cc[VTIME] = (cc_t)timeout;
-	tcsetattr(fdDev, TCSANOW, &my_termios);
+	return (tcsetattr(fdDev, TCSANOW, &my_termios) == 0);
 #endif
 }
 
