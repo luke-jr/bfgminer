@@ -435,6 +435,23 @@ bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
 	return lowlevel_match_product(info, "BitFORCE", "SHA256");
 }
 
+char *bitforce_copy_name(char * const pdevbuf)
+{
+	char *s;
+	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
+	{
+		s[0] = '\0';
+		s = strdup(&pdevbuf[7]);
+	}
+	else
+	{
+		for (s = &pdevbuf[strlen(pdevbuf)]; isspace(*--s); )
+			*s = '\0';
+		s = strdup(pdevbuf);
+	}
+	return s;
+}
+
 static
 bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_interface * const lowlif)
 {
@@ -488,11 +505,7 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 	
 	applog(LOG_DEBUG, "Found BitForce device on %s", devpath);
 	
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>"))))
-	{
-		s[0] = '\0';
-		s = strdup(&pdevbuf[7]);
-	}
+	s = bitforce_copy_name(pdevbuf);
 	
 	initdata = malloc(sizeof(*initdata));
 	*initdata = (struct bitforce_init_data){
@@ -697,7 +710,6 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 	pthread_mutex_t *mutexp = &bitforce->device->device_mutex;
 	int retries = 0;
 	char pdevbuf[0x100];
-	char *s;
 	
 	if (!procdata->handles_board)
 		return;
@@ -741,11 +753,8 @@ void bitforce_reinit(struct cgpu_info *bitforce)
 		return;
 	}
 	
-	if (likely((!memcmp(pdevbuf, ">>>ID: ", 7)) && (s = strstr(pdevbuf + 3, ">>>")))) {
-		s[0] = '\0';
-		free((void*)bitforce->name);
-		bitforce->name = strdup(pdevbuf + 7);
-	}
+	free((void*)bitforce->name);
+	bitforce->name = bitforce_copy_name(pdevbuf);
 
 	bitforce->sleep_ms = data->sleep_ms_default;
 	
