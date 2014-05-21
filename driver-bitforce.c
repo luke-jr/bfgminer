@@ -523,7 +523,7 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		else
 		if (!strncasecmp(pdevbuf, "ASIC CHANNELS:", 14))
 		{
-			procs = parallel = atoi(&pdevbuf[14]);
+			parallel = atoi(&pdevbuf[14]);
 			initdata->style = BFS_28NM;
 		}
 		else
