@@ -6445,6 +6445,7 @@ static bool block_exists(char *hexstr)
 	return false;
 }
 
+#if 0
 /* Tests if this work is from a block that has been seen before */
 static inline bool from_existing_block(struct work *work)
 {
@@ -6455,6 +6456,7 @@ static inline bool from_existing_block(struct work *work)
 	ret = block_exists(hexstr);
 	return ret;
 }
+#endif
 
 static int block_sort(struct block *blocka, struct block *blockb)
 {

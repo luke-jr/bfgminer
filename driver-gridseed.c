@@ -211,7 +211,6 @@ static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_info *info = device->device_data;
 
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
