@@ -441,6 +441,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		uint32_t * const newbuf = &bitfury->newbuf[0];
 		uint32_t * const oldbuf = &bitfury->oldbuf[0];
 		
+		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
+			copy_time(tvp_stat, &tv_now);
+		}
+		
+		int stat_elapsed_secs = timer_elapsed(tvp_stat, &tv_now);
+		
 		inp = rxbuf[j];
 		
 		if (unlikely(bitfury->desync_counter == 99))
@@ -538,12 +544,6 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				copy_time(&(bitfury->timer1), &tv_now);
 			}
 		}
-		
-		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
-			copy_time(tvp_stat, &tv_now);
-		}
-		
-		int stat_elapsed_secs = timer_elapsed(tvp_stat, &tv_now);
 		
 		if (c->osc6_max)
 		{
