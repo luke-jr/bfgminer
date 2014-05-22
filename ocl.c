@@ -1082,6 +1082,9 @@ built:
 		applog(LOG_ERR, "Error %d: Creating Kernel from program. (clCreateKernel)", status);
 		return NULL;
 	}
+	
+	free((void*)cgpu->kname);
+	cgpu->kname = strdup(data->kernel_file);
 
 #ifdef USE_SCRYPT
 	if (opt_scrypt) {

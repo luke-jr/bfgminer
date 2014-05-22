@@ -1611,8 +1611,6 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	}
 	if (!cgpu->name)
 		cgpu->name = trimmed_strdup(name);
-	if (!cgpu->kname)
-		cgpu->kname = opencl_get_kernel_interface_name(clStates[i]->chosen_kernel);
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	get_now_datestamp(cgpu->init, sizeof(cgpu->init));
 
