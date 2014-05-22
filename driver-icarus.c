@@ -663,7 +663,7 @@ bool icarus_init(struct thr_info *thr)
 	applog(LOG_INFO, "%s: Opened %s", icarus->dev_repr, icarus->device_path);
 	
 	BFGINIT(info->job_start_func, icarus_job_start);
-	BFGINIT(state->ob_bin, malloc(info->ob_size));
+	BFGINIT(state->ob_bin, calloc(1, info->ob_size));
 	
 	if (!info->work_division)
 	{
