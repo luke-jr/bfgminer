@@ -763,8 +763,19 @@ Q: What happened to CPU mining?
 A: See README.CPU for more information.
 
 Q: Is there a GUI version?
-A: Yes, Nate Woolls maintains a GUI interface for BFGMiner called MultiMiner,
-available at http://multiminerapp.com
+A: Yes, there are a number of GUI interfaces for BFGMiner:
+Name        Website                                Operating system(s)
+----        -------                                -------------------
+EasyMiner   http://www.butterflylabs.com/drivers/  Android, Linux, Windows
+MacMiner    http://fabulouspanda.co.uk/macminer/   Mac
+MultiMiner  http://www.multiminerapp.com/          Linux, Mac, Windows (.NET)
+
+Q: Is there a "bare-metal" version?
+A: Yes, there are a few dedicated mining operating systems built on BFGMiner:
+Name        Website                              Hardware
+----        -------                              --------
+MinePeon    http://mineforeman.com/minepeon/     BeagleBone Black, Raspberry Pi
+PiMP        http://getpimp.org/                  x86
 
 Q: I'm having an issue. What debugging information should I provide?
 A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
