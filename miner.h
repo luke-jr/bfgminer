@@ -724,6 +724,17 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[7] = swab32(src[0]);
 }
 
+static inline
+void bswap_96p(void * const dest_p, const void * const src_p)
+{
+	uint32_t * const dest = dest_p;
+	const uint32_t * const src = src_p;
+	
+	dest[0] = bswap_32(src[2]);
+	dest[1] = bswap_32(src[1]);
+	dest[2] = bswap_32(src[0]);
+}
+
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
 #define WATCHDOG_INTERVAL  2

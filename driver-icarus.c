@@ -151,18 +151,6 @@ extern const struct bfg_set_device_definition icarus_set_device_funcs[];
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 
-static void rev(unsigned char *s, size_t l)
-{
-	size_t i, j;
-	unsigned char t;
-
-	for (i = 0, j = l - 1; i < j; i++, j--) {
-		t = s[i];
-		s[i] = s[j];
-		s[j] = t;
-	}
-}
-
 static inline
 uint32_t icarus_nonce32toh(const struct ICARUS_INFO * const info, const uint32_t nonce)
 {
@@ -744,8 +732,8 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	struct icarus_state * const state = thr->cgpu_data;
 	uint8_t * const ob_bin = state->ob_bin;
 	
-	memcpy(ob_bin, work->midstate, 32);
-	memcpy(ob_bin + 52, work->data + 64, 12);
+	swab256(ob_bin, work->midstate);
+	bswap_96p(&ob_bin[0x34], &work->data[0x40]);
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
 	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
@@ -753,8 +741,6 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 		       icarus->proc_repr);
 		ob_bin[56] = 0;
 	}
-	rev(ob_bin, 32);
-	rev(ob_bin + 52, 12);
 	
 	return true;
 }
