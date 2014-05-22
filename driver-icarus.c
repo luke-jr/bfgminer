@@ -653,7 +653,7 @@ static bool icarus_init(struct thr_info *thr)
 	int fd = icarus->device_fd;
 	
 	BFGINIT(info->job_start_func, icarus_job_start);
-	BFGINIT(state->ob_bin, malloc(info->ob_size));
+	BFGINIT(state->ob_bin, calloc(1, info->ob_size));
 	
 	if (!info->work_division)
 	{
