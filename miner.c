@@ -8625,6 +8625,12 @@ static bool stratum_works(struct pool *pool)
 	return true;
 }
 
+static
+bool pool_recently_got_work(struct pool * const pool, const struct timeval * const tvp_now)
+{
+	return (timer_isset(&pool->tv_last_work_time) && timer_elapsed(&pool->tv_last_work_time, tvp_now) < 60);
+}
+
 static bool pool_active(struct pool *pool, bool pinging)
 {
 	struct timeval tv_now, tv_getwork, tv_getwork_reply;
@@ -8646,7 +8652,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 			return false;
 	}
 	else
-	if (timer_isset(&pool->tv_last_work_time) && timer_elapsed(&pool->tv_last_work_time, &tv_now) < 60)
+	if (pool_recently_got_work(pool, &tv_now))
 		return true;
 	
 		applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
