@@ -40,6 +40,7 @@ struct cgpu_info *gridseed_alloc_device(const char *path, struct device_drv *dri
 	device->device_fd = -1;
 	device->threads = 1;
 	device->device_data = info;
+	device->dev_serial = detectone_meta_info.serial;
 	
 	return device;
 }
