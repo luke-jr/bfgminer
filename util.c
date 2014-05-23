@@ -1610,7 +1610,7 @@ retry:
 		rc = curl_easy_send(pool->stratum_curl, s + ssent, len, &sent);
 		if (rc != CURLE_OK)
 		{
-			if (!sock_blocks())
+			if (rc != CURLE_AGAIN)
 				return SEND_SENDFAIL;
 			sent = 0;
 		}
@@ -1762,11 +1762,9 @@ char *recv_line(struct pool *pool)
 			waited = tdiff(&now, &rstart);
 			if (rc != CURLE_OK)
 			{
-				//Save errno from being overweitten bei socket_ commands 
-				int socket_recv_errno;
-				socket_recv_errno = SOCKERR;
-				if (!sock_blocks() || !socket_full(pool, DEFAULT_SOCKWAIT - waited)) {
-					applog(LOG_DEBUG, "Failed to recv sock in recv_line: %s", bfg_strerror(socket_recv_errno, BST_SOCKET));
+				if (rc != CURLE_AGAIN || !socket_full(pool, DEFAULT_SOCKWAIT - waited))
+				{
+					applog(LOG_DEBUG, "Failed to recv sock in recv_line");
 					suspend_stratum(pool);
 					break;
 				}
