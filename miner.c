@@ -1044,6 +1044,7 @@ struct pool *add_pool(void)
 	pool->pool_no = pool->prio = total_pools;
 	mutex_init(&pool->last_work_lock);
 	mutex_init(&pool->pool_lock);
+	mutex_init(&pool->pool_test_lock);
 	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
@@ -8441,6 +8442,8 @@ static bool supports_resume(struct pool *pool)
 	return ret;
 }
 
+static bool pools_active;
+
 /* One stratum thread per pool that has stratum waits on the socket checking
  * for new messages and for the integrity of the socket connection. We reset
  * the connection based on the integrity of the receive side only as the send
@@ -8478,7 +8481,7 @@ static void *stratum_thread(void *userdata)
 				applog(LOG_DEBUG, "Pool %u: Invalid socket, suspending",
 				       pool->pool_no);
 			else
-			if (!sock_full(pool) && !cnx_needed(pool))
+			if (!sock_full(pool) && !cnx_needed(pool) && pools_active)
 				applog(LOG_DEBUG, "Pool %u: Connection not needed, suspending",
 				       pool->pool_no);
 			else
@@ -8636,24 +8639,46 @@ static bool pool_active(struct pool *pool, bool pinging)
 	struct timeval tv_now, tv_getwork, tv_getwork_reply;
 	bool ret = false;
 	json_t *val;
-	CURL *curl;
+	CURL *curl = NULL;
 	int rolltime;
 	char *rpc_req;
 	struct work *work;
 	enum pool_protocol proto;
 
 	if (pool->stratum_init)
-		return pool->stratum_active;
+	{
+		if (pool->stratum_active)
+			return true;
+	}
+	else
+	if (!pool->idle)
+	{
+		timer_set_now(&tv_now);
+		if (pool_recently_got_work(pool, &tv_now))
+			return true;
+	}
+	
+	mutex_lock(&pool->pool_test_lock);
+	
+	if (pool->stratum_init)
+	{
+		ret = pool->stratum_active;
+		goto out;
+	}
 	
 	timer_set_now(&tv_now);
+	
 	if (pool->idle)
 	{
 		if (timer_elapsed(&pool->tv_idle, &tv_now) < 30)
-			return false;
+			goto out;
 	}
 	else
 	if (pool_recently_got_work(pool, &tv_now))
-		return true;
+	{
+		ret = true;
+		goto out;
+	}
 	
 		applog(LOG_INFO, "Testing pool %s", pool->rpc_url);
 
@@ -8661,7 +8686,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	curl = curl_easy_init();
 	if (unlikely(!curl)) {
 		applog(LOG_ERR, "CURL initialisation failed");
-		return false;
+		goto out;
 	}
 
 	if (!(want_gbt || want_getwork))
@@ -8703,8 +8728,7 @@ tryagain:
 			json_decref(val);
 
 retry_stratum:
-		curl_easy_cleanup(curl);
-		
+		;
 		/* We create the stratum thread for each pool just after
 		 * successful authorisation. Once the init flag has been set
 		 * we never unset it and the stratum thread is responsible for
@@ -8712,7 +8736,7 @@ retry_stratum:
 		bool init = pool_tset(pool, &pool->stratum_init);
 
 		if (!init) {
-			bool ret = initiate_stratum(pool) && auth_stratum(pool);
+			ret = initiate_stratum(pool) && auth_stratum(pool);
 
 			if (ret)
 			{
@@ -8724,9 +8748,10 @@ retry_stratum:
 				pool_tclear(pool, &pool->stratum_init);
 				pool->tv_idle = tv_getwork_reply;
 			}
-			return ret;
+			goto out;
 		}
-		return pool->stratum_active;
+		ret = pool->stratum_active;
+		goto out;
 	}
 	else if (pool->has_stratum)
 		shutdown_stratum(pool);
@@ -8830,7 +8855,9 @@ nohttp:
 			applog(LOG_WARNING, "Pool %u slow/down or URL or credentials invalid", pool->pool_no);
 	}
 out:
-	curl_easy_cleanup(curl);
+	if (curl)
+		curl_easy_cleanup(curl);
+	mutex_unlock(&pool->pool_test_lock);
 	return ret;
 }
 
@@ -10668,8 +10695,6 @@ char *curses_input(const char *query)
 	return input;
 }
 #endif
-
-static bool pools_active = false;
 
 static void *test_pool_thread(void *arg)
 {

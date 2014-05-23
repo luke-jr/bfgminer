@@ -1271,6 +1271,7 @@ struct pool {
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;
+	pthread_mutex_t pool_test_lock;
 	cglock_t data_lock;
 
 	struct thread_q *submit_q;

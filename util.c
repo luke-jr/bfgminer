@@ -2859,12 +2859,14 @@ out:
 
 bool restart_stratum(struct pool *pool)
 {
+	mutex_lock(&pool->pool_test_lock);
 	if (pool->stratum_active)
 		suspend_stratum(pool);
 	if (!initiate_stratum(pool))
 		return false;
 	if (!auth_stratum(pool))
 		return false;
+	mutex_unlock(&pool->pool_test_lock);
 	return true;
 }
 
