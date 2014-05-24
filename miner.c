@@ -10253,7 +10253,7 @@ void cgpu_set_defaults(struct cgpu_info * const cgpu)
 				break;
 			case SDR_AUTO:
 			case SDR_NOSUPP:
-				applog(LOG_WARNING, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
+				applog(LOG_DEBUG, "%"PRIpreprv": set_device is not implemented (trying to apply rule: %s)",
 				       cgpu->proc_repr, setstr);
 		}
 	}
