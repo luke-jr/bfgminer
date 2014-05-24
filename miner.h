@@ -287,7 +287,7 @@ enum bfg_probe_result_flags_values {
 	BPR_DONT_RESCAN     = 1<< 1,
 	BPR_WRONG_DEVTYPE   = BPR_CONTINUE_PROBES | BPR_DONT_RESCAN,
 };
-extern enum bfg_probe_result_flags_values *_bfg_probe_result_flags();
+extern unsigned *_bfg_probe_result_flags();
 #define bfg_probe_result_flags (*_bfg_probe_result_flags())
 
 struct device_drv {
