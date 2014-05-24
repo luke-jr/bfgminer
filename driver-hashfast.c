@@ -204,7 +204,7 @@ static
 bool hashfast_lowl_match(const struct lowlevel_device_info * const info)
 {
 	if (lowlevel_match_product(info, "GoldenNonce"))
-		return true; UDEV
+		return true;
 	return (info->manufacturer && strstr(info->manufacturer, "HashFast"));
 }
 
