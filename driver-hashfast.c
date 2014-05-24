@@ -313,6 +313,11 @@ bool hashfast_init(struct thr_info * const master_thr)
 	
 	// TODO: actual clock = [12,13]
 	
+	for_each_managed_proc(proc, dev)
+	{
+		proc->status = LIFE_INIT2;
+	}
+	
 	timer_set_now(&master_thr->tv_poll);
 	return true;
 }
