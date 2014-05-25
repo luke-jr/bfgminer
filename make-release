@@ -35,6 +35,10 @@ git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
 cd "$TMPDIR"
+sed 's/^\[submodule "\(.*\)"\]$/\1/;t;d' .gitmodules |
+ while read submodule; do
+	git config submodule.$submodule.url "$IDIR/.git/modules/$submodule"
+done
 git submodule update --init
 {
 	git archive --prefix "$sw"/ --format tar "$tag"
