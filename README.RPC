@@ -437,7 +437,7 @@ api-example.py - a Python script to access the API.
  If you specify a command it will send that request instead.
 
 api-example.rb - a Ruby script to access the API.
-  usage: ruby api-example.py command[:parameter] [HOST [PORT]]
+  usage: ruby api-example.rb command[:parameter] [HOST [PORT]]
 
 If you are using Node.js, you can also use the miner-rpc package and script:
 https://www.npmjs.org/package/miner-rpc
