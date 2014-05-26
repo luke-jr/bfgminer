@@ -321,7 +321,10 @@ bool littlefury_detect_one(const char *devpath)
 	serial_close(fd);
 	
 	if (serial_claim_v(devpath, &littlefury_drv))
+	{
+		free(devname);
 		return false;
+	}
 	
 	struct cgpu_info *cgpu;
 	cgpu = malloc(sizeof(*cgpu));
