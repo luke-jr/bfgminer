@@ -1634,7 +1634,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 }
 
 struct device_drv klondike_drv = {
-	.dname = "Klondike",
+	.dname = "klondike",
 	.name = "KLN",
 	.drv_detect = klondike_detect,
 	.get_api_stats = klondike_api_stats,
