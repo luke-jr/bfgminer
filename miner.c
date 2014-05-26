@@ -12354,7 +12354,7 @@ begin_bench:
 #endif
 
 #ifdef HAVE_BFG_HOTPLUG
-	if (opt_hotplug && !opt_scrypt)
+	if (opt_hotplug)
 		hotplug_start();
 #endif
 
