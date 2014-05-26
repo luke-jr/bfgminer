@@ -1,3 +1,625 @@
+BFGMiner Version 4.0.0 - May 26, 2014
+
+- Workaround Homebrew-induced segfault during device scan
+- Allow hotplug with scrypt
+- Bugfix: test_domain_funcs: printf precisions must be int, not size_t
+- littlefury: Cleanup to make avoiding memory leak easier
+- Bugfix: Avoid using an enum type to hold a bitfield
+- ruby extension is "rb" not "py"
+- README.RPC: Document api-example.rb
+- Add Ruby Api Example
+- hashfast: Check devices with Product matching "GoldenNonce" so we have a
+vendor-neutral way to detect them
+- Reduce set_device-not-implemented message to debug log level, since it can
+occur for init-only settings
+- Use a mutex to block pool_active on a common check per pool at any given time
+- Use cURL return code to check if cURL sockets hit CURLE_AGAIN
+- Abstract pool_recently_got_work into a dedicated function
+- AUTHORS: Dmitry Smirnov contributes BFGMiner packaging to Debian
+- README: Talk about more GUIs and mining OSs
+- icarus: Minor optimisation (swap byte order in 32-bit always-aligned groups,
+and skip pointless memory copy)
+- icarus: Initialise ob_bin to avoid leaking other memory to device
+- Bugfix: bitfury: Set stat_elapsed_secs early, just in case we jump with goto
+- Bugfix: Report actual kernel name in RPC, rather than kernel interface name
+- README.scrypt: Document psw kernel
+- opencl: Another optimised scrypt kernel ("psw")
+- README.scrypt: Document zuikkis kernel
+- opencl: Optimised scrypt kernel ("zuikkis")
+- Bugfix: Silence harmless warnings
+- Bugfix: vcom_set_timeout: Return whether successful
+- bitforce: Set name for ASIC devices
+- Bugfix: Avoid unnecessary rescans due to wrong devtype
+- bitforce: Support 28nm ChannelNN format for ZCX
+- Bugfix: bitforce: Don't confuse channels with X-Link
+- Bugfix: bitforce: Set VCOM timeout to 1 second for ZGX request, since it
+sometimes lacks a newline
+- lowl-vcom: vcom_set_timeout function
+- bitfury: Eventually (after 30 seconds) give up trying to detect chip
+generation and just assume gen1
+- bitfury: Use other nonces for gen1 detection so one bad core can't break it
+- Bugfix: bitfury: Account for necessary nonce fudging during chipgen detection
+- gridseed: Switch from the Queued miner loop to the Scanhash miner loop
+Improves performance on Raspberry Pi Fixes inaccurate hashrate estimates Fixes
+bug overwriting work inadvertently
+- If the current pool lacks its own block change detection, keep the pool used
+for that connected
+- pool_active_lp_pool function to complement select_longpoll_pool
+- Track which pools have active longpoll connections
+- Avoid retrying longpoll requests for removed pools (and possibly change block
+change notification source for existing ones) if longpoll connection gets
+dropped
+- util: Pass full json_rpc_call_state to upload_data_cb
+- Remove now-unused variable
+- nanofury: Update enable/disable/reinit to cleanly handle multichip devices
+- DevAPI: for_each_{managed,logical}_proc helper macros
+- bifury: Default max_queued to chips * 5 + 6 so it is back up to the original
+16 for bi*fury (which seems to need it sometimes)
+- bifury: Default max_queued to chips * 5 for extra breathing room (avoids
+occasional issues with Hex*Fury)
+- README.ASIC: Document workarounds for OSM/Hex*Fury firmware bugs
+- bifury: Measure hashes done by nonces found since we cannot tell what
+generation chip is in use
+- bifury: Default max_queued to chips * 4
+- bifury: chips init setting to workaround buggy hardware which reports wrong
+chip count
+- bifury: free_after_job setting to workaround buggy hardware which ignores
+maxroll
+- bfg_strtobool helper function
+- bifury: Enable runtime modification of max_queued
+- bifury: Migrate to set_device_funcs interface
+- Stratum: Accept a "notls" parameter on pool URIs to disable opportunistic TLS
+- uri_get_param_bool helper function for pool parameters
+- nanofury: Only ramp up osc6_bits on multichip devices
+- Bugfix: nanofury: Move the bitfury pointer back to the last element before
+starting the ramp up loop
+- Bugfix: Use pdiff 1/0x10000 for scrypt benchmarking
+- benchmark: Use sane bits (of a very high difficulty to avoid triggering
+anti-reorg protections)
+- Ignore work difficulty minisculely harder (ie, rounding error) than what
+device supports
+- Benchmark: Add 2D work support
+- SSM: Use a lower share difficulty in scrypt mode
+- Rework test_nonce to share common logic for scrypt and SHA256d
+- work2d: Accept nonce difficulty with submissions
+- configure: Make work2d building abstract from libevent
+- work2d: Standardised way to pad extranonce beyond what work2d manages
+- Abstract code from stratumsrv_mining_submit into new work2d_submit_nonce
+function
+- Avoid handling hex encoding in work2d
+- Move/rename _ssm_gen_dummy_work to work2d_gen_dummy_work
+- SSM: Refactor _ssm_gen_dummy_work to work with struct stratum_work instead of
+struct stratumsrv_job
+- Move "nonce1" session id from struct pool to struct stratum_work
+- Add pool and work_restart_id to struct stratum_work so they can be used
+independently of struct pool
+- Move n2size from struct pool to struct stratum_work
+- autogen.sh: Automate cleaning INSTALL out of libblkmaker so git updates
+properly
+- Update libblkmaker to 0.4.0
+- Replace drv_rolllimit with struct ntime_roll_limits
+- util: Unpack and pack utility functions ([u]pk_u{8,16,32}{le,be})
+- GBT: Do not allow drivers to roll ntime
+- GBT: Use libblkmaker 2D work to service SSM and potentially other 2D work
+drivers
+- Hide blktemplate_t behind bfg_tmpl_ref to abstract reference counter
+- Add pool_has_usable_swork function
+- SSM: Split stratum work division into 2D work manager ("work2d")
+- bitforce: Avoid crashing when broken devices report more jobs flushed than
+they had to flush
+- nanofury: Gradually ramp up osc6_bits for NF6 design
+- util: memrchr is not portable (GNU extension), so implement our own my_memrchr
+- bitfury: Report correct hashrate for gen2 chips
+- bitfury: Detect gen2 chips
+- Stratum: If difficulty calculates out to 0.999 to 1, round it up to 1 to avoid
+something SHA2 hardware cannot handle
+- Stratum: If the pool target has changed since the job a work came from, check
+any shares against the new target too in case it expects retroactive difficulty
+adjustments
+- Stratum: Interpret integer difficulty values as pdiff (or Ldiff, for scrypt)
+to avoid losing shares on non-compliant servers
+- Rework difficulty-to-target functions to error on the safe side, and
+consistently work in pdiff or bdiff
+- Simplify stratum to convert difficulty to target immediately
+- Stratum: Attempt connection with unauthenticated TLS, with failover to raw TCP
+- Stratum: Return to curl_easy_{send,recv}
+- get_registered_domain: Return full IP for raw IP addresses, so they can at
+least redirect to the same IP
+- Reject redirection across different registered domain names (can be disabled
+by appending #redirect to pool URI)
+- util: match_domains function
+- util: Add isCalpha, get_registered_domain, and extract_domain functions
+- README: Update for gridseed 5-chip orb
+- configure: Clean up gridseed logic to only build by default when scrypt is
+enabled
+- gridseed: Fix warnings
+- gridseed: Added support for Scrypt hashing with 5-chip GridSeed devices
+- dualminer: Only one debug message needed for all init options
+- dualminer: Move opt_dual_mode to dualminer file
+- gc3355: move scrypt_only_reset_cmd out of scrypt_only_reset
+- dualminer: No need to reconfigure frequency every work
+- dualminer: refactor gc3355 code for readability, maintainability and use with
+other devices
+- dualminer: Abstract dualminer_init_hashrate out of dualminer_init_firstrun
+- dualminer: Initialise opt_pll_freq along with opt_sha2_units
+- dualminer: Move opt_sha2_units initialisation to new dualminer_set_defaults
+function
+- dualminer: Remove unnecessary opt_sha2_number
+- dualminer: Simplify teardown
+- dualminer: No need to parse strings for SHA2 unit counts
+- gc3355: Support for appending jobs with task id
+- gc3355: increase delays to 20ms
+- gc3355: use NULL for end-of-command terminator
+- dualminer: comment what various things are for and/or do
+- dualminer: Split gc3355_scrypt_prepare_work and gc3355_sha2_prepare_work out
+of dualminer_job_prepare
+- dualminer: Use cgsleep_ms rather than usleep
+- gc3355: Remove unused opt_hubfans variable
+- dualminer: rename various things to be clearer
+- Use a common enum bfg_gpio_value for both lowl-vcom (cts, dtr, rts) and
+mcp2210
+- README.RPC: Document quit/restart reply format change
+- RPC: Provide a full status section for quit/restart commands
+- RPC: Add "Miner" to version response to include software name along with
+version
+- Bugfix: Dereference udev monitor events when done with them
+- opencl: Workaround false warning regarding Mesa version number parsing
+- configure: Include <stddef.h> for _Static_assert check
+- opencl: If kernel does not specify an interface in scrypt mode, assume it's
+the scrypt interface
+- opencl: Replace dated versioning with hash of source code
+- opencl: Search all the same kernel paths when setting kernel
+- opencl: Accept arbitrary kernel filenames, provided they specify a kernel
+interface somewhere in the source file
+- Bugfix: Explicitly pass precision and width as int type
+- Make pool stability message use nicer English
+- Failover pool switching back delay is now configurable.
+- Expand extranonce2 size to 64-bit
+- README.ASIC: KnCMiner: Suggest --disable-other-drivers and remove
+no-optimisation CFLAGS
+- configure: libusb is implied by lowl-usb, so no need to list it as an option
+separately
+- Silence warnings when built without various drivers
+- DevAPI: Remove long deprecated serial_detect function family
+- Bugfix: Turn spidevc into lowl-spi to fix building the knc driver without the
+bitfury driver
+- Avoid triggering unnecessary device rescans (such as with pre-lowlevel
+drivers)
+- Replace --no-client-reconnect with --no-pool-redirect which also disables
+X-Stratum header redirects
+- Partial: A new --no-client-reconnect command that disables the
+'client.reconnect' function.
+- ftdi: Rename files to lowl-ftdi.{c,h} to fit with naming convention
+- bfx: New driver for BFx2 Bitfury USB stick miners
+- ftdi: ft232h_mpsse_readwrite_all function to do both reading and writing
+concurrently in MPSSE mode
+- ftdi: ft232h_mpsse_set_axbus function
+- ftdi: Support for ft232h MPSSE mode (currently only works with
+ft232r_write_all)
+- ftdi: Split most of ft232r_open into a ftdi_common_open function
+- ftdi: Support for --device-protocol-dump
+- ftdi: Scan for ft232h-based devices
+- ftdi: Avoid neutering lowlevel_device_info when opening it
+- ftdi: Accept const data in write functions
+- ftdi: Use actual USB packet size for FTDI status removal
+- ftdi: Make ftdi lowlevel code independent of x6500 driver
+- dualminer: Workaround false compiler warning in gc3355_config_cpm
+- Bugfix: --disable-other-drivers should not force libusb to be unused
+- Bugfix: README: Alphabetise and categorise build configuration options (and
+add missing ones)
+- TUI: Use _wlogprint for pool proto to avoid compiler warning
+- Bugfix: TUI: Fall back to RPC URI if sockaddr_url hasn't been extracted (such
+as benchmark mode)
+- Hide work update messages unless explicitly enabled with hidden
+--verbose-work-updates flag
+- TUI: Redesign pool info line to include share difficulties in multipool modes
+and last explicity work update timestamp
+- nanofury: Abstract both power gpios into a nanofury_power_enable function
+- nanofury: Add NANOFURY_GP_PIN_PWR_EN0 (inverted PWR_EN) - support for power
+management (hardware) optimizations
+- Bugfix: nanofury: Set cgpu_data for all processors (eg, to avoid crashing in
+nanofury_set_ledmode for non-first procs)
+- Bugfix: nanofury: Use correct SPI port for baud setting
+- proxy: "Report in" clients when their info is looked up by username
+- opencl: Replace (and deprecate) --no-opencl-binaries option, with --set
+opencl:binary=no
+- opencl: Reenable OpenCL kernel binaries for Mesa OpenCL >= 10.1
+- gc3355: Replace frequency-setting hex blobs with logic
+- README: Update for DualMiner
+- make-release: Switch to xz for source releases
+- Stratum: If a pool explicitly tells us it doesn't support get_transactions, no
+need to wait for a timeout
+- api - buffer size off by 1 for joined commands
+- miner.php - define a default rigport (that can be changed) and don't require a
+port number in the rigs array
+- miner.php allow links for rig buttons in tables and allow using the 4th IP
+octet if no rig name - default disabled for both
+- Remove wrong goto
+- Remove the unqueued work reference when we discard work from get queued as'
+well.
+- Wake the global work scheduler when we remove a work item from the unqueued
+work pointer.
+- Discard work that is stale in the get_queued() function, returning NULL
+instead.
+- Bugfix: dualminer: Declare support for both SHA256d and scrypt algorithms
+- gc3355: Use lowl-vcom set_serial_dtr function
+- lowl-vcom: Implement set_serial_dtr
+- gc3355: Use lowl-vcom cts/rts functions
+- lowl-vcom: Implement set_serial_rts for Windows
+- lowl-vcom: set_serial_rts should return the new rts value, if anything
+- Rename icarus-common.h to driver-icarus.h
+- icarus: probe_timeout setting to control how long we wait before giving up on
+probes
+- icarus: Defer initial open until init
+- Remove debugging garbage that snuck in
+- configure: New --disable-other-drivers options for users who want to build
+just select drivers
+- Simplify _now_gettimeofday on Windows, working around weird WINE crash
+- cpu: Fix and simplify benchmarking on Windows (removes hidden --bench-algo
+option)
+- Remove old bench_block.h, no longer needed
+- Bugfix: cpu: Adapt benchmarking code to new benchmark work generator
+- Report precise share difficulties below 1
+- Bugfix: lowlevel: Pretend drivers not matching the active algorithm don't
+exist
+- Bugfix: dualminer: Set min_nonce_diff before getting work
+- Bugfix: gc3355: Use correct byte counts for hex2bin
+- configure: Fix up dualminer logic
+- dualminer: Support for mining both Scrypt and SHA2 using DualMiner GC3355
+thumb sticks
+- miner: scan for low level devices even if --scrypt is specified by the user
+(to detect Scrypt ASICs)
+- icarus: output protocol information if the user specifies
+--device-protocol-dump
+- icarus: Support for driver-specified job command lengths
+- icarus: Support for custom driver job start function
+- icarus: Support for custom driver initialisation function
+- icarus: Call icarus_job_prepare via driver job_prepare key so it can be
+overridden
+- icarus: generic support for devices that return little-endian nonces
+- icarus: allow custom probes
+- icarus: expose do_icarus_close
+- RPC: Remove separate CPU and GPU counters from devs Msg
+- RPC: Optimise find_index_by_cgpu
+- Bugfix: RPC: Restore PGA index counting
+- Accept decimal values for --shares, and clarify weighed nature of the value
+- benchmark: Remove all real pools, and prevent adding them
+- benchmark: Fake submission of "shares"
+- benchmark: Roll data before nonce only
+- Bugfix: configure: Report bitforce:pci instead of bitforce:uio
+- bitforce: Workaround broken/old compilers by setting device_fd outside of
+initialisation
+- AUTHORS: Update email for Kano
+- RPC: Add "MHS rolling" key to status mirroring "MHS %ds"
+- minorfix: remove extra semicolon
+- Drillbit: Revert needless commit 270c1d01f, thanks @luke-jr
+- Drillbit: Add upper and lower bounds to "Eight boards have a multiple of 8
+ASICs" check
+- Drillbit: Clarify use of device_data pointer to store capabilities/protocol
+version temporarily
+- Drillbit: Keep reading work for as long as the device returns results.
+- Drillbit: Be strict about not accepting any boards with newer protocol
+versions. Protocol version bumps are non-backwards-compatible.
+- Drillbit: Add support for "protocol version 4", non-device-specific
+configuration packet format
+- README.RPC: Add link to Node.js RPC wrapper
+- opencl: Get temperature and fan speed updates with get_stats interface rather
+than abusing statline override interface
+- Bugfix: Remove devtype variable from driver API
+- opencl: Deprecate --auto-{fan,gpu} and --gpu-dyninterval options
+- opencl: Infer autoengine mode when the clock setting receives a range
+- opencl: Infer autofan mode when the fan setting receives a range
+- Bugfix: opencl: Defer initial intensity assignment until init, so opt_scrypt
+has a chance to be set
+- opencl: Strip leading and trailing spaces from names
+- trimmed_strdup helper function
+- icarus: Replace hard-coded "Icarus" mentions
+- opencl: Deprecate all dedicated commandline options for parameters accessible
+via set_device
+- opencl: Make current intensity, xintensity, and oclthreads available via RPC
+- opencl: Redo Manage TUI detail line to use xintensity when more reasonable
+- opencl: Support for setting oclthreads as intensity=xNNN (for NNN xintensity);
+also allow setting d<whatever> for an initial dynamic intensity
+- opencl: Store oclthreads and only convert to/from intensity numbers when
+dealing with external interfaces
+- RPC: Deprecate all cpu* and gpu* commands, and remove CPU/GPU counts from
+'devs' response
+- RPC: pgarestart command to match {cpu,gpu}restart
+- RPC: Unify common code under get_pga_cgpu function
+- README.RPC: Deprecate gpu{intensity,mem,engine,fan,vddc} now that they can be
+accessed via {pga,proc}set
+- RPC: Consider CPU and OpenCL devices as "PGAs" to begin migration to a simpler
+interface
+- RPC: Turn gpu{intensity,mem,engine,fan,vddc} into wrappers around set_device
+- opencl: Support configuration using set_device interface
+- Bugfix: miner_thread: Don't call cgpu_set_defaults if it has already been
+called
+- Common add_set_device_option for automatically generated --set-device options
+- Bugfix: opencl: Safely handle work->device_data across work copies and cleans
+- set_device: Accept underscores for temp_{cutoff,target}
+- opencl: Allow specifying a comma separated list for --gpu-threads
+- opencl: _SET_INT_LIST2 to set variables not necessarily within
+opencl_device_data
+- hashfast: Enable setting device-wide clock at probe time using USB_INIT
+- Bugfix: hashfast: Use signed type for manipulating raw temperature data, in
+case it is below 0 C
+- hashbusteravalon: Add udev rule
+- klondike: Split up work and submissions among logical processors
+- klondike: Make reply_wait_time a settable variable (configured lower for
+hashbusteravalon)
+- klondike: Explicitly enable slaves as well as the master
+- hashbusteravalon: Klondike-based metadriver
+- klondike: Pre-initialise klninfo separately from probe
+- klondike: Allow setting max_work_count and max_work_time via set_device
+- klondike: Variablise max_work_count and old_work_ms
+- Move all OpenCL-specific data behind device_data pointers, and relocate
+OpenCL-specific code out of miner.c
+- opencl: Macro-ise code for list options
+- Reduce failure applying set-device rules to debug loglevel
+- Add --set as alias for --set-device
+- Bugfix: miner.c: Correct ccan include
+- Bugfix: Correct ccan-upstream directory include
+- Load default config before commandline options, so the latter override the
+former (but prioritise defaultconfig pools last)
+- configure: Check for sys/termios.h used by ccan/opt
+- make-release: Only include specific components of ccan
+- Use git submodule for ccan (moving opt_*_floatval into miner.c)
+- Probe erupter before icarus, since they are far more common now
+- Accept --no-config option to inhibit loading default config file, even without
+specifying another config
+- Bugfix: RPC: Ensure isjoin always gets initialised
+- bitforce: Remove two really-unused variables
+- nanofury: Silence false warning from some compilers about uninitialised
+variable use
+- hashfast: Promote problematic write() replies to warning level
+- hashfast: Log errno on write failures
+- Extend maximum processor count to 17,576 (3 letters)
+- DevAPI: Make processor lettering code more extensible
+- Remove shorthand option for undocumented --bench-algo
+- Remove long-deprecated and non-functional --enable-cpu option
+- Deprecate shorthand options for uncommonly-used --algo, --cpu-threads,
+--expiry, --gpu-threads, --intensity, --kernel-path, --kernel, --scan-time,
+--vectors, and --worksize
+- API-README correct new text format documentation
+- API allow multiple commands/replies in one request
+- Due to work restarts causing ~all processors to request work at once, it is
+always ideal to stage at least mining_threads extra works
+- scrypt: raise the maximum GPU intensity for scrypt mining to 31 - benefits
+shown for AMD R9 290 models
+- Bugfix: bitforce: ZNX/ZWX expect size minus 1
+- Bugfix: bitforce: Start building send_queue command at the real end
+- Bugfix: bitforce: Defer opening until after devdata is initialised (since it
+is now used to track open-ness)
+- Document uio/vfio configure options as --without-* since they are enabled by
+default when available
+- Include list of lowlevels built in configure and --help output
+- lowl-pci: Autodetect build-time support for UIO and/or VFIO during configure
+- README.ASIC: Document how to use Monarch in a PCI-Express arrangement on Linux
+- lowl-pci/vfio: Support pread/pwrite access to bars
+- lowl-pci: Support for vfio
+- Abstract UIO-specific code from bitforce driver into lowl-pci
+- bitforce: Initialise lasttag based on response register
+- bitforce: Tie in UIO with lowl-pci
+- lowl-pci: New lowlevel driver for raw PCI devices
+- util: bfg_slurp_file function to quickly read a file
+- bitforce: Support for PCI interface via UIO
+- bitforce: Hide vcom interfaces behind new struct bitforce_lowl_interface
+- bitforce: Let the lowlevel interface deal only with the actual device
+cgpu_info
+- bitforce: Abstract most of VCOM layer away from driver code
+- bitforce: Avoid checking fd by adding is_open flag
+- bitforce: Replace BF{open,close} with more abstract bitforce_vcom_{open,close}
+- bitforce: Abstract fd access mostly down to BFgets/BFwrite
+- bitforce: Support for 28nm WX single-stage bulkqueue command
+- bitforce: Use enum for style (FPGA vs SC)
+- bitforce: Remove never-used and buggy "work queue" mode
+- Round temperature to an integer in thermal cutoff warning
+- Bugfix: icarus: Initialise read_count and other timing-related variables
+- Change default log interval to 20 seconds
+- hashfast: Bump default thermal cutoff temperature to 100 C
+- Bugfix: DevAPI: Ensure temp-cutoff and temp-target are always supported
+settings
+- Bugfix: Initialise cutoff and target temperatures in allocate_cgpu if not
+initialised by the driver
+- Include temperature in thermal cutoff warning
+- Avoid automatic rescans when hotplug is disabled
+- nanofury: New "ledmode" RPC setting, to control LED behaviour
+- nanofury: Support for changing baud rate
+- nanofury: Detect number of chips, so multiple can be used
+- bitfury: When detecting chips, oscillate slower and tolerate clocks outside of
+a predefined range
+- Default --quit-summary to devs if there are more than 24 processors
+- Control printing of quit device summary with --quit-summary option
+- bitfury: Migrate all drivers to set_device_funcs interface
+- drv_set_defaults: Take devpath and serial params so matching by those can work
+- avalon: Replace avalon-options with set_device_funcs
+- klondike: Replace klondike-options with set_device_funcs
+- Replace temp-cutoff and temp-target parameters with set-device options
+- README.FPGA: Update documentation for Icarus driver
+- icarus: Replace icarus-timing with set_device_funcs (including wrapper for
+single icarus-timing case)
+- icarus: Replace icarus-options with set_device_funcs (including wrapper for
+single icarus-options case)
+- drv_set_defaults2 function to work with set_device_funcs
+- icarus: Clarify user_set flags with an enum
+- icarus: Clarify reopen modes with an enum
+- Accept parameter to set_device "help" as a request for help on a specific
+setting
+- set_device_funcs support for returning messages on success
+- RPC: Support for alternate message strings
+- bitfurce: Use new set_device_funcs interface
+- Refactor set_device interface to use option arrays
+- configure: Turn _Static_assert into a noop if the compiler lacks support
+- Store when the last getwork was retrieved and display it in the API summary.
+- bitforce: Consistently use fd -1 when device is not open
+- hashfast: Support for voltage in RPC stats
+- hashfast: Support for voltage displayed in ManageTUI
+- hashfast: Support for temperature
+- Trigger automatic rescans if an expected probe fails (assuming the device just
+needs more time to initialise)
+- Schedule rescan after a 1 second delay, should it be requested twice
+- hotplug: Wait 100ms before rescanning, so plugging in a hub can be handled at
+once and drivers have time to finish initialisation
+- Linux hotplug: Ignore EAGAIN and EINTR from epoll_wait so debugging works
+- Common hotplug_trigger function to use regardless of platform-specific
+implementation
+- Autoscan for new devices on Linux using libudev
+- Autoscan for new devices on Windows when DBT_DEVNODES_CHANGED message is
+broadcast
+- Replace suffix_string with a wrapper around format_unit3
+- Skip lowlevel-based scans in scrypt mode
+- README.GPU: Document new opencl autodetect behaviour
+- opencl: Enable by default in scrypt mode
+
+
+BFGMiner Version 3.10.1 - May 26, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.34.0 to 7.37.0 (and SSL support enabled)
+- - libjansson from 2.4 to 2.6
+- - libmicrohttpd from 0.9.30 to 0.9.35 (now Win64 also)
+- - libusb from libusbx 1.0.17 to 1.0.18
+- Update libblkmaker to 0.3.3
+- make-release: Copy submodules from local system
+- make-release: Automatically determine DLL dependencies to include
+- Bugfix: littlefury: Avoid memory leak for already-claimed devices
+- Bugfix: drillbit: Avoid 9-byte memory leak for already-claimed devices
+- Bugfix: lowl-ftdi: ft232r_close: Free device handle
+- Bugfix: bitfury: Avoid memory leaks when detect fails
+- Bugfix: klondike: Correct case of dname
+- Bugfix: hashfast: Set LIFE_INIT2 so a dead engine doesn't hold up the stats
+line
+- Bugfix: bitforce: Restore device name loading for FPGA Singles
+- Bugfix: Add config.h include to files missing it
+- Bugfix: swap32to?e: Ensure conditionals always have the same type
+- Bugfix: Protect prev_cancelstate variables under console lock
+- opencl: Silence warning about duplicate const qualifier
+- hashbuster: Avoid signed char problems in return status check
+- Bugfix: bfg_claim_any: Use a mutex to avoid races around device claims
+- SSM: Silence JSON parse error message for HTTP POST and TLS attempts
+- bifury: Defer precision loss until after checking osc6_bits value
+- opencl: bfg_clBuildProgram function to share common error handling (logging)
+code
+- opencl: Avoid printing empty build logs
+- Bugfix: opencl: Free allocated memory when done with it
+- Bugfix: Stratum: Use an error buffer on struct pool rather than the stack, so
+it remains valid for the lifetime of the connection
+- Bugfix: Reset tv_idle on pools after test failure
+- Bugfix: Ignore last work time if pool is known to be down
+- pick_unit: Avoid infinite loop when passed inf float
+- Bugfix: bitfury: Correct comment about how much of the nonce range chips
+process
+- Bugfix: Initialise getq (and stgd_lock) earlier so it is ready in case startup
+interactive pool-add tries to stage work
+- bitfury: Wait for two low frequency measurements before acting on a freq drop
+(in case of a single misread)
+- Bugfix: SSM: decref parsed JSON when done with it
+- knc: use_dcdc setting that Nov batch users can use to disable DCDC usage
+- knc: Replace numeric constants with KNC_CORES_PER_DIE, KNC_DIE_PER_CHIP, and
+KNC_CORES_PER_CHIP defines
+- Bugfix: knc: Actually skip over extra processors rather than infinite loop
+- Bugfix: Use rlim_t type for old_soft_limit so comparison with RLIM_INFINITY is
+correct on all platforms
+- Update alloca logic to work on more platforms
+- start-bfgminer.sh: Shell script to (re)start bfgminer in a background screen
+session
+- Bugfix: Handle disabled CPU support properly in various places
+- Bugfix: README.ASIC: KnCMiner: Use supported Angstrom feeds only
+- Bugfix: pool_active: Skip testing explicitly when we have a recent answer
+- RPC: Use struct timeval for mcast bind timer
+- Bugfix: Restore 2-minutes-past-last-work wait before terminating unused
+stratum connections
+- Partial: Bugfix: Turn spidevc into lowl-spi to fix building the knc driver
+without the bitfury driver
+- SSM: Silence JSON parse error message for HTTP attempts
+- Bugfix: Use UTF-8 for micro prefix internally (and in logging)
+- Consistently allocate space used for formatting numbers
+- util: utf8_len and utf8_strlen functions to quickly measure a character or
+string
+- Bugfix: README: Add missing driver build configuration options
+- Bugfix: renumber_cgpu: No need to copy dev_repr over itself (and trying to is
+undefined)
+- Move OpenCL kernel FAQ to README.GPU and clarify it a bit
+- Bugfix: Log work updates for all active pools in multipool mode
+- test_work_current: Cleanup
+- Bugfix: Differentiate pool_actively_desired from pool_actively_in_use for
+cnx_needed
+- Abstract pool_actively_in_use to handle multipool checking for multiple uses
+- Bugfix: antminer: Fix typo
+- Bugfix: renumber_cgpu: Rebuild repr strings to match new information
+- Bugfix: Skip final pool_active check in balancing modes (where pools switch
+around often)
+- Bugfix: Adjust quota GCD only after completely adding the pool, otherwise it
+will be ignored by the adjustment
+- Bugfix: opencl: Can only BFI_INT patch if using OpenCL binaries
+- SGW: Support for scrypt
+- README: Document VCOM low_latency flag and latency_timer sysfs attribute,
+which can help run more VCOM-based devices on low-end USB hosts
+- Add USB faqs.
+- Bugfix: Stratum: Wait a bit for a response before assuming the pool is hiding
+block contents
+- README: FAQ about Raspberry Pi issues
+- Check for when errno is set on windows as well as the windows variant for
+errors.
+- Partial: Handle interruptions to various select calls in util.c
+- Bugfix: configure: Only fail due to not having libusb, if the user really
+needs or wants libusb
+- Bugfix: Update help display to replace (U)tility with (I)ncome
+- Bugfix: Deduplicate % symbols in help display
+- Bugfix: Correct documentation for --shares option
+- cpu/scrypt: Fix last_nonce to be host endian also
+- Bugfix: cpu: Correct results found by scrypt algorithm
+- Bugfix: lowl-vcom: _get_osfhandle failure returns INVALID_HANDLE_VALUE, not
+NULL
+- Bugfix: lowl-vcom: Invalid fd checks should be for -1, not 0
+- Bugfix: SSM: Actually acquire and release extranonce1s
+- Bugfix: C reserves identifiers beginning with an underscore and uppercase
+letter or another underscore
+- Skip trying to submit shares in benchmark mode
+- Rework benchmark mode
+- Bugfix: configure: Only pull in lowl-usb for lowl-vcom if libusb is available
+- Bugfix: hashfast: Ensure size of hex data passed to applog is of type int
+- README.ASIC: Update "SGW" virtual device identifier to current "PXY"
+- Bugfix: klondike: Reenable hw error reporting on nonces found for unknown work
+- Bugfix: Expand deprecated work->subid field to int width, needed by klondike
+driver for tracking work
+- Bugfix: erupter: Sapphire detected as Emerald and Emerald not detected
+- configure: Remove duplicate sys/file.h check
+- Bugfix: httpsrv: Add missing includes for stdarg, stddef, stdio, and stdlib
+- hashbusterusb: Initialise send packets fully to avoid leaking uninitialised
+data to devices
+- Bugfix: Correct typo in --help ("AlgoritHms")
+- Bugfix: twinfury: Avoid crashing when next_work is not populated here
+- Bugfix: hashbusterusb: Close device after failures
+- Bugfix: hashbuster: Close device after failures
+- README: List --quota in options
+- README.ASIC: Update documentation for Avalon
+- Bugfix: Leave thr->*work alone when disabling non-minerloop_async devices
+- udev rules: Set flag so ModemManager ignores devices
+- bifury: Thermal overheat causes restart losing the clock, so resend it while
+temperature is over 80 C
+- bitforce: Explicitly assign indexes for bitforce_proto enum
+- Bugfix: RPC: MSG_PGASETOK does not have a string param
+- littlefury: Close device if there are any communication problems
+- littlefury: Abstract out littlefury_set_power
+- Bugfix: hashfast: Add missing serial_claim
+- Bugfix: drillbit: Add missing serial_claim
+- Bugfix: bifury: Add missing serial_claim
+- Bugfix: littlefury: Add missing serial_claim
+- Bugfix: Allocate all new devices completely, before trying to activate any
+(since the first processor may control the secondary ones)
+- Since scrypt miners tend to work at actual share difficulty, use that for
+diff1 counting
+- Bugfix: diff1 measurements should be increased by nonce difficulty, not share
+difficulty
+- drillbit: strtol into a long int so negative responses properly get an error
+- Rename *nonces variables to *_diff1 to reflect their nature better
+- Refactor diff1 records to properly weigh non-diff1 work
+- AUTHORS: Add Nico Oelgart
+- Fixed multiple XSS injection vectors
+- drillbit: Expand allowed external clock range to 0-65535
+
+
 BFGMiner Version 3.10.0 - January 15, 2014
 
 - Downgrade official Windows build compiler to GCC 4.7.3.

@@ -1,3 +1,39 @@
+bfgminer (4.0.0-0precise1) precise; urgency=low
+
+  * Various options (specifically, --temp-cutoff, --temp-target, and the various --<driver>-options) have been migrated to the --set-device interface.
+  * Automatic hotplug support for Linux and Windows.
+  * TUI: Redesigned pool information line to include share difficulties in multipool modes and timestamp of the last explicit work update (which are no longer logged).
+  * Forbid cross-domain server redirection by default, unless pool URI has #redirect in it.
+  * Stratum: Unauthenticated TLS support.
+  * Stratum: Improve support for stratum-compliant scrypt servers, while still cleanly handling the expectations of many broken servers.
+  * bifury: Support for OneStringMiner and Hex*Fury (see README.ASIC for notes about boards with buggy firmware).
+  * bitfury: Detect gen2 chips and report hashrate correctly.
+  * bfx: New driver for BFx2 Bitfury USB stick miners.
+  * bitforce: Support for Monarch 28nm cards, including PCI-Express support on Linux (see README.ASIC for setup instructions).
+  * drillbit: Add support for protocol version 4 devices.
+  * dualminer: New driver, supporting both SHA256d and scrypt ASIC mining.
+  * gridseed: New driver, supporting only scrypt ASIC mining.
+  * hashbusteravalon: New driver for Avalon2-based HashBuster devices, such as the HashBuster Alpha.
+  * hashfast: Display of temperature and voltage, as well as setting clock frequency at startup.
+  * icarus & cairnsmore: Since Block Erupters are far more popular, and less unprofitable, the erupter driver is now preferred over icarus and cairnsmore drivers. This means you must change -S all to -S icarus:all or -S cairnsmore:all.
+  * knc: Added a use_dcdc setting that can be used on Nov batch units to avoid triggering DCDC problems (--set knc:use_dcdc=no).
+  * nanofury: Support for new, multi-chip NF2 and NF6 units.
+  * RPC: cpu* and gpu* commands have all been deprecated; CPUs and GPUs are now accessible using pga* and proc* commands just like everything else.
+  * Stratum proxy: Support for GBT upstream pools, as well as scrypt algorithm.
+  * getwork proxy: Support for scrypt and included in Win64 binaries.
+  * opencl: Major updating of code to use set-device interfaces.
+  * opencl: Support for loading kernels by filename, provided they use a known interface. Loading most scrypt kernel should just work, and most SHA2 kernels can be enabled by adding a single comment to the CL source.
+  * opencl: Support for new "xintensity" unit by using --set-device OCL:intensity=x5 (for example).
+  * opencl: Raise max scrypt GPU intensity to 31, and enabled driver by default for scrypt.
+  * opencl: Add some optimised scrypt kernels by zuikkis and psw.
+  * scrypt: Fixed nonce-based (third) hashrate, and display sub-one share difficulties.
+  * Default log interval (and first hashrate rolling average) increased from 5 seconds to 20 seconds to make it more useful.
+  * Benchmark mode refactored to work for both SHA256d and scrypt, and with the third hashrate.
+  * Many uncommon options (including CPU and GPU mining related ones) have had their "shorthand" forms deprecated. A future release will remove (and perhaps redefine) these shorthands entirely.
+  * Bundled a start-bfgminer.sh shell script for *nix which will start/restart BFGMiner in a screen session, and can safely be used in init/cron tasks.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 26 May 2014 19:47:18 -0000
+
 bfgminer (3.10.0-0precise1) precise; urgency=low
 
   * Support for AntMiner U1, Drillbit, and HashFast devices.
