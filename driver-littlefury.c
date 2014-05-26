@@ -270,7 +270,7 @@ bool littlefury_detect_one(const char *devpath)
 	uint8_t buf[255];
 	uint16_t bufsz;
 	struct cgpu_info dummy;
-	char *devname;
+	char *devname = NULL;
 	
 	fd = serial_open(devpath, 0, 10, true);
 	applog(LOG_DEBUG, "%s: %s %s",
@@ -309,7 +309,6 @@ bool littlefury_detect_one(const char *devpath)
 	if (!chips) {
 		applog(LOG_WARNING, "%s: No Bitfury chips detected on %s",
 		       littlefury_drv.dname, devpath);
-		free(devname);
 		goto err;
 	} else {
 		applog(LOG_DEBUG, "%s: %d chips detected",
@@ -318,13 +317,10 @@ bool littlefury_detect_one(const char *devpath)
 	
 	littlefury_set_power(LOG_DEBUG, littlefury_drv.dname, fd, false);
 	
-	serial_close(fd);
-	
 	if (serial_claim_v(devpath, &littlefury_drv))
-	{
-		free(devname);
-		return false;
-	}
+		goto err;
+	
+	serial_close(fd);
 	
 	struct cgpu_info *cgpu;
 	cgpu = malloc(sizeof(*cgpu));
@@ -346,6 +342,7 @@ bool littlefury_detect_one(const char *devpath)
 err:
 	if (fd != -1)
 		serial_close(fd);
+	free(devname);
 	return false;
 }
 
