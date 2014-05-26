@@ -121,9 +121,6 @@ err:
 		// Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
 		caps |= DBC_EXT_CLOCK;
 	
-	char *serno = malloc(9);
-	snprintf(serno, 9, "%08lx", serialno);
-	
 	if (chips > 0x100)
 	{
 		applog(LOG_WARNING, "%s: %s: %u chips reported, but driver only supports up to 256",
@@ -133,6 +130,9 @@ err:
 	
 	if (serial_claim_v(devpath, &drillbit_drv))
 		return false;
+	
+	char *serno = malloc(9);
+	snprintf(serno, 9, "%08lx", serialno);
 	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
