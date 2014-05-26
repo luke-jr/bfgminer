@@ -49,14 +49,14 @@ int bitfury_autodetect()
 	int chip_n;
 	struct cgpu_info *bitfury_info;
 
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &bitfury_drv;
-	bitfury_info->threads = 1;
-
 	applog(LOG_INFO, "INFO: bitfury_detect");
 	spi_init();
 	if (!sys_spi)
 		return 0;
+	
+	bitfury_info = calloc(1, sizeof(struct cgpu_info));
+	bitfury_info->drv = &bitfury_drv;
+	bitfury_info->threads = 1;
 	
 	{
 		struct bitfury_device dummy_bitfury = {
@@ -68,6 +68,7 @@ int bitfury_autodetect()
 	chip_n = libbitfury_detectChips1(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
+		free(bitfury_info);
 		return 0;
 	} else {
 		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
