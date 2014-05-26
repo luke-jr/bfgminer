@@ -1,5 +1,7 @@
 BFGMiner Version 4.0.0 - May 26, 2014
 
+- Update openwrt Makefile for xz source
+- Update libblkmaker to 0.4.0
 - Workaround Homebrew-induced segfault during device scan
 - Allow hotplug with scrypt
 - Bugfix: test_domain_funcs: printf precisions must be int, not size_t
@@ -52,7 +54,6 @@ dropped
 - util: Pass full json_rpc_call_state to upload_data_cb
 - Remove now-unused variable
 - nanofury: Update enable/disable/reinit to cleanly handle multichip devices
-- DevAPI: for_each_{managed,logical}_proc helper macros
 - bifury: Default max_queued to chips * 5 + 6 so it is back up to the original
 16 for bi*fury (which seems to need it sometimes)
 - bifury: Default max_queued to chips * 5 for extra breathing room (avoids
@@ -164,6 +165,7 @@ mcp2210
 version
 - Bugfix: Dereference udev monitor events when done with them
 - opencl: Workaround false warning regarding Mesa version number parsing
+- knc: use_dcdc setting that Nov batch users can use to disable DCDC usage
 - configure: Include <stddef.h> for _Static_assert check
 - opencl: If kernel does not specify an interface in scrypt mode, assume it's
 the scrypt interface
@@ -479,6 +481,7 @@ BFGMiner Version 3.10.1 - May 26, 2014
 - - libjansson from 2.4 to 2.6
 - - libmicrohttpd from 0.9.30 to 0.9.35 (now Win64 also)
 - - libusb from libusbx 1.0.17 to 1.0.18
+- DevAPI: for_each_{managed,logical}_proc helper macros
 - Update libblkmaker to 0.3.3
 - make-release: Copy submodules from local system
 - make-release: Automatically determine DLL dependencies to include
@@ -514,7 +517,6 @@ interactive pool-add tries to stage work
 - bitfury: Wait for two low frequency measurements before acting on a freq drop
 (in case of a single misread)
 - Bugfix: SSM: decref parsed JSON when done with it
-- knc: use_dcdc setting that Nov batch users can use to disable DCDC usage
 - knc: Replace numeric constants with KNC_CORES_PER_DIE, KNC_DIE_PER_CHIP, and
 KNC_CORES_PER_CHIP defines
 - Bugfix: knc: Actually skip over extra processors rather than infinite loop
