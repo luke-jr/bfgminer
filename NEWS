@@ -1,3 +1,150 @@
+BFGMiner Version 3.10.1 - May 26, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.34.0 to 7.37.0 (and SSL support enabled)
+- - libjansson from 2.4 to 2.6
+- - libmicrohttpd from 0.9.30 to 0.9.35 (now Win64 also)
+- - libusb from libusbx 1.0.17 to 1.0.18
+- Update libblkmaker to 0.3.3
+- make-release: Copy submodules from local system
+- make-release: Automatically determine DLL dependencies to include
+- Bugfix: littlefury: Avoid memory leak for already-claimed devices
+- Bugfix: drillbit: Avoid 9-byte memory leak for already-claimed devices
+- Bugfix: lowl-ftdi: ft232r_close: Free device handle
+- Bugfix: bitfury: Avoid memory leaks when detect fails
+- Bugfix: klondike: Correct case of dname
+- Bugfix: hashfast: Set LIFE_INIT2 so a dead engine doesn't hold up the stats
+line
+- Bugfix: bitforce: Restore device name loading for FPGA Singles
+- Bugfix: Add config.h include to files missing it
+- Bugfix: swap32to?e: Ensure conditionals always have the same type
+- Bugfix: Protect prev_cancelstate variables under console lock
+- opencl: Silence warning about duplicate const qualifier
+- hashbuster: Avoid signed char problems in return status check
+- Bugfix: bfg_claim_any: Use a mutex to avoid races around device claims
+- SSM: Silence JSON parse error message for HTTP POST and TLS attempts
+- bifury: Defer precision loss until after checking osc6_bits value
+- opencl: bfg_clBuildProgram function to share common error handling (logging)
+code
+- opencl: Avoid printing empty build logs
+- Bugfix: opencl: Free allocated memory when done with it
+- Bugfix: Stratum: Use an error buffer on struct pool rather than the stack, so
+it remains valid for the lifetime of the connection
+- Bugfix: Reset tv_idle on pools after test failure
+- Bugfix: Ignore last work time if pool is known to be down
+- pick_unit: Avoid infinite loop when passed inf float
+- Bugfix: bitfury: Correct comment about how much of the nonce range chips
+process
+- Bugfix: Initialise getq (and stgd_lock) earlier so it is ready in case startup
+interactive pool-add tries to stage work
+- bitfury: Wait for two low frequency measurements before acting on a freq drop
+(in case of a single misread)
+- Bugfix: SSM: decref parsed JSON when done with it
+- knc: use_dcdc setting that Nov batch users can use to disable DCDC usage
+- knc: Replace numeric constants with KNC_CORES_PER_DIE, KNC_DIE_PER_CHIP, and
+KNC_CORES_PER_CHIP defines
+- Bugfix: knc: Actually skip over extra processors rather than infinite loop
+- Bugfix: Use rlim_t type for old_soft_limit so comparison with RLIM_INFINITY is
+correct on all platforms
+- Update alloca logic to work on more platforms
+- start-bfgminer.sh: Shell script to (re)start bfgminer in a background screen
+session
+- Bugfix: Handle disabled CPU support properly in various places
+- Bugfix: README.ASIC: KnCMiner: Use supported Angstrom feeds only
+- Bugfix: pool_active: Skip testing explicitly when we have a recent answer
+- RPC: Use struct timeval for mcast bind timer
+- Bugfix: Restore 2-minutes-past-last-work wait before terminating unused
+stratum connections
+- Partial: Bugfix: Turn spidevc into lowl-spi to fix building the knc driver
+without the bitfury driver
+- SSM: Silence JSON parse error message for HTTP attempts
+- Bugfix: Use UTF-8 for micro prefix internally (and in logging)
+- Consistently allocate space used for formatting numbers
+- util: utf8_len and utf8_strlen functions to quickly measure a character or
+string
+- Bugfix: README: Add missing driver build configuration options
+- Bugfix: renumber_cgpu: No need to copy dev_repr over itself (and trying to is
+undefined)
+- Move OpenCL kernel FAQ to README.GPU and clarify it a bit
+- Bugfix: Log work updates for all active pools in multipool mode
+- test_work_current: Cleanup
+- Bugfix: Differentiate pool_actively_desired from pool_actively_in_use for cnx_needed
+- Abstract pool_actively_in_use to handle multipool checking for multiple uses
+- Bugfix: antminer: Fix typo
+- Bugfix: renumber_cgpu: Rebuild repr strings to match new information
+- Bugfix: Skip final pool_active check in balancing modes (where pools switch
+around often)
+- Bugfix: Adjust quota GCD only after completely adding the pool, otherwise it
+will be ignored by the adjustment
+- Bugfix: opencl: Can only BFI_INT patch if using OpenCL binaries
+- SGW: Support for scrypt
+- README: Document VCOM low_latency flag and latency_timer sysfs attribute,
+which can help run more VCOM-based devices on low-end USB hosts
+- Add USB faqs.
+- Bugfix: Stratum: Wait a bit for a response before assuming the pool is hiding
+block contents
+- README: FAQ about Raspberry Pi issues
+- Check for when errno is set on windows as well as the windows variant for
+errors.
+- Partial: Handle interruptions to various select calls in util.c
+- Bugfix: configure: Only fail due to not having libusb, if the user really
+needs or wants libusb
+- Bugfix: Update help display to replace (U)tility with (I)ncome
+- Bugfix: Deduplicate % symbols in help display
+- Bugfix: Correct documentation for --shares option
+- cpu/scrypt: Fix last_nonce to be host endian also
+- Bugfix: cpu: Correct results found by scrypt algorithm
+- Bugfix: lowl-vcom: _get_osfhandle failure returns INVALID_HANDLE_VALUE, not
+NULL
+- Bugfix: lowl-vcom: Invalid fd checks should be for -1, not 0
+- Bugfix: SSM: Actually acquire and release extranonce1s
+- Bugfix: C reserves identifiers beginning with an underscore and uppercase
+letter or another underscore
+- Skip trying to submit shares in benchmark mode
+- Rework benchmark mode
+- Bugfix: configure: Only pull in lowl-usb for lowl-vcom if libusb is available
+- Bugfix: hashfast: Ensure size of hex data passed to applog is of type int
+- README.ASIC: Update "SGW" virtual device identifier to current "PXY"
+- Bugfix: klondike: Reenable hw error reporting on nonces found for unknown work
+- Bugfix: Expand deprecated work->subid field to int width, needed by klondike
+driver for tracking work
+- Bugfix: erupter: Sapphire detected as Emerald and Emerald not detected
+- configure: Remove duplicate sys/file.h check
+- Bugfix: httpsrv: Add missing includes for stdarg, stddef, stdio, and stdlib
+- hashbusterusb: Initialise send packets fully to avoid leaking uninitialised
+data to devices
+- Bugfix: Correct typo in --help ("AlgoritHms")
+- Bugfix: twinfury: Avoid crashing when next_work is not populated here
+- Bugfix: hashbusterusb: Close device after failures
+- Bugfix: hashbuster: Close device after failures
+- README: List --quota in options
+- README.ASIC: Update documentation for Avalon
+- Bugfix: Leave thr->*work alone when disabling non-minerloop_async devices
+- udev rules: Set flag so ModemManager ignores devices
+- bifury: Thermal overheat causes restart losing the clock, so resend it while
+temperature is over 80 C
+- bitforce: Explicitly assign indexes for bitforce_proto enum
+- Bugfix: RPC: MSG_PGASETOK does not have a string param
+- littlefury: Close device if there are any communication problems
+- littlefury: Abstract out littlefury_set_power
+- Bugfix: hashfast: Add missing serial_claim
+- Bugfix: drillbit: Add missing serial_claim
+- Bugfix: bifury: Add missing serial_claim
+- Bugfix: littlefury: Add missing serial_claim
+- Bugfix: Allocate all new devices completely, before trying to activate any
+(since the first processor may control the secondary ones)
+- Since scrypt miners tend to work at actual share difficulty, use that for
+diff1 counting
+- Bugfix: diff1 measurements should be increased by nonce difficulty, not share
+difficulty
+- drillbit: strtol into a long int so negative responses properly get an error
+- Rename *nonces variables to *_diff1 to reflect their nature better
+- Refactor diff1 records to properly weigh non-diff1 work
+- AUTHORS: Add Nico Oelgart
+- Fixed multiple XSS injection vectors
+- drillbit: Expand allowed external clock range to 0-65535
+
+
 BFGMiner Version 3.10.0 - January 15, 2014
 
 - Downgrade official Windows build compiler to GCC 4.7.3.

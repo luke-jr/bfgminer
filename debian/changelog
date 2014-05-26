@@ -1,3 +1,9 @@
+bfgminer (3.10.1-0precise1) precise; urgency=low
+
+  * Bug fixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 26 May 2014 21:10:16 -0000
+
 bfgminer (3.10.0-0precise1) precise; urgency=low
 
   * Support for AntMiner U1, Drillbit, and HashFast devices.
