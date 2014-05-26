@@ -14,7 +14,7 @@ PKG_TITLE:=BFGMiner
 PKG_VERSION:=4.0.0
 PKG_RELEASE:=1
 
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).txz
 PKG_SOURCE_URL:=http://luke.dashjr.org/programs/bitcoin/files/$(PKG_NAME)/$(PKG_VERSION)/
 
 PKG_INSTALL:=1
