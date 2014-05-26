@@ -1,3 +1,84 @@
+BFGMiner Version 3.5.8 - May 26, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.34.0 to 7.37.0 (and SSL support enabled)
+- - libjansson from 2.4 to 2.6
+- - libmicrohttpd from 0.9.30 to 0.9.35 (now Win64 also)
+- - libusb from libusbx 1.0.17 to 1.0.18
+- Update libblkmaker to 0.3.3
+- make-release: Copy submodules from local system
+- make-release: Automatically determine DLL dependencies to include
+- Bugfix: lowl-ftdi: ft232r_close: Free device handle
+- Bugfix: bitfury: Avoid memory leaks when detect fails
+- Bugfix: bitforce: Restore device name loading for FPGA Singles
+- Bugfix: swap32to?e: Ensure conditionals always have the same type
+- Bugfix: Protect prev_cancelstate variables under console lock
+- hashbuster: Avoid signed char problems in return status check
+- Bugfix: opencl: Free allocated memory when done with it
+- Bugfix: Stratum: Use an error buffer on struct pool rather than the stack, so
+it remains valid for the lifetime of the connection
+- Bugfix: bitfury: Correct comment about how much of the nonce range chips
+process
+- Bugfix: Initialise getq (and stgd_lock) earlier so it is ready in case startup
+interactive pool-add tries to stage work
+- Bugfix: SSM: decref parsed JSON when done with it
+- Bugfix: knc: Actually skip over extra processors rather than infinite loop
+- Bugfix: Handle disabled CPU support properly in various places
+- RPC: Use struct timeval for mcast bind timer
+- Bugfix: Restore 2-minutes-past-last-work wait before terminating unused
+stratum connections
+- Partial: Bugfix: Turn spidevc into lowl-spi to fix building the knc driver
+without the bitfury driver
+- Bugfix: renumber_cgpu: No need to copy dev_repr over itself (and trying to is
+undefined)
+- Move OpenCL kernel FAQ to README.GPU and clarify it a bit
+- Modified: Bugfix: Log work updates for all active pools in multipool mode
+- Partial: test_work_current: Cleanup
+- Differentiate pool_actively_desired from pool_actively_in_use for cnx_needed
+- Backport pool_actively_in_use from BFGMiner 4.0
+- Bugfix: renumber_cgpu: Rebuild repr strings to match new information
+- Bugfix: Skip final pool_active check in balancing modes (where pools switch
+around often)
+- Bugfix: Adjust quota GCD only after completely adding the pool, otherwise it
+will be ignored by the adjustment
+- Bugfix: opencl: Can only BFI_INT patch if using OpenCL binaries
+- README: Document VCOM low_latency flag and latency_timer sysfs attribute,
+which can help run more VCOM-based devices on low-end USB hosts
+- Add USB faqs.
+- Bugfix: Stratum: Wait a bit for a response before assuming the pool is hiding
+block contents
+- README: FAQ about Raspberry Pi issues
+- Check for when errno is set on windows as well as the windows variant for
+errors.
+- Partial: Handle interruptions to various select calls in util.c
+- Bugfix: Update help display to replace (U)tility with (I)ncome
+- Bugfix: Deduplicate % symbols in help display
+- Bugfix: Correct documentation for --shares option
+- cpu/scrypt: Fix last_nonce to be host endian also
+- Bugfix: cpu: Correct results found by scrypt algorithm
+- Bugfix: lowl-vcom: _get_osfhandle failure returns INVALID_HANDLE_VALUE, not
+NULL
+- Bugfix: lowl-vcom: Invalid fd checks should be for -1, not 0
+- Bugfix: SSM: Actually acquire and release extranonce1s
+- Bugfix: C reserves identifiers beginning with an underscore and uppercase
+letter or another underscore
+- README.ASIC: Update "SGW" virtual device identifier to current "PXY"
+- configure: Remove duplicate sys/file.h check
+- Bugfix: httpsrv: Add missing includes for stdarg, stddef, stdio, and stdlib
+- Bugfix: Correct typo in --help ("AlgoritHms")
+- Bugfix: hashbuster: Close device after failures
+- README: List --quota in options
+- README.ASIC: Update documentation for Avalon
+- bitforce: Explicitly assign indexes for bitforce_proto enum
+- Bugfix: RPC: MSG_PGASETOK does not have a string param
+- Bugfix: littlefury: Add missing serial_claim
+- Bugfix: Allocate all new devices completely, before trying to activate any
+(since the first processor may control the secondary ones)
+- Revert "Green-on-red title colours for Christmas release"
+- AUTHORS: Add Nico Oelgart
+- Fixed multiple XSS injection vectors
+
+
 BFGMiner Version 3.5.7 - January 15, 2014
 
 - Bugfix: Stratum: Accept JSON Number type for port number
