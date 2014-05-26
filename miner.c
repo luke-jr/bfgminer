@@ -11281,6 +11281,8 @@ bool _probe_device_do_probe(const struct device_drv * const drv, const struct lo
 	return false;
 }
 
+bool dummy_check_never_true = false;
+
 static
 void *probe_device_thread(void *p)
 {
@@ -11354,6 +11356,24 @@ void *probe_device_thread(void *p)
 		{
 			LL_FOREACH2(infolist, info, same_devid_next)
 			{
+				/*
+				 The below call to applog is absolutely necessary
+				 Starting with commit 76d0cc183b1c9ddcc0ef34d2e43bc696ef9de92e installing BFGMiner on
+				 Mac OS X using Homebrew results in a binary that segfaults on startup
+				 There are two unresolved issues:
+
+				 1) The BFGMiner authors cannot find a way to install BFGMiner with Homebrew that results
+				    in debug symbols being available to help troubleshoot the issue
+				 2) The issue disappears when unrelated code changes are made, such as adding the following
+				    call to applog with infolist and / or p
+				 
+				 We would encourage revisiting this in the future to come up with a more concrete solution
+				 Reproducing should only require commenting / removing the following line and installing
+				 BFGMiner using "brew install bfgminer --HEAD"
+				 */
+				if (dummy_check_never_true)
+					applog(LOG_DEBUG, "lowl_match: %p(%s) %p %p %p", drv, drv->dname, info, infolist, p);
+				
 				if (!drv->lowl_match(info))
 					continue;
 				if (_probe_device_do_probe(drv, info, &request_rescan))
