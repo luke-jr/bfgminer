@@ -148,6 +148,7 @@ void ft232r_close(struct ft232r_device_handle *dev)
 	libusb_release_interface(dev->h, 0);
 	libusb_reset_device(dev->h);
 	libusb_close(dev->h);
+	free(dev);
 }
 
 bool ft232r_purge_buffers(struct ft232r_device_handle *dev, enum ft232r_reset_purge purge)
