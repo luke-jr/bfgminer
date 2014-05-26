@@ -35,6 +35,10 @@ git branch TMP "$tag"
 git clone . "$TMPDIR" -b TMP --depth 1
 git branch -D TMP
 cd "$TMPDIR"
+sed 's/^\[submodule "\(.*\)"\]$/\1/;t;d' .gitmodules |
+ while read submodule; do
+	git config submodule.$submodule.url "$IDIR/.git/modules/$submodule"
+done
 git submodule update --init
 {
 	git archive --prefix "$sw"/ --format tar "$tag"
@@ -55,21 +59,6 @@ zip -r "$OUTDIR/${sw}.zip" "$sw"
 tar -cJvpf "$OUTDIR/${sw}.txz" "$sw"
 SRCDIR="$TMPDIR/$sw"
 
-dlls='
-	backtrace.dll
-	pdcurses.dll
-	libcurl-4.dll
-	libevent-2-0-5.dll
-	libhidapi-0.dll
-	pthreadGC2.dll
-	libjansson-4.dll
-	libusb-1.0.dll
-	zlib1.dll
-'
-libmicrohttpd_dlls='
-	libmicrohttpd-10.dll
-	libplibc-1.dll
-'
 docs='
 	AUTHORS
 	COPYING
@@ -126,19 +115,88 @@ for build in "${builds[@]}"; do
 		"$PKGDIR/"
 	mkdir "$PKGDIR/bitstreams"
 	
-	mydlls="$dlls"
-	if "${machine}-objdump" -p bfgminer.exe | grep -q "DLL Name: libmicrohttpd"; then
-		mydlls="$mydlls $libmicrohttpd_dlls"
-	fi
-	for dll in $mydlls; do
-		libdir="/usr/$machine/usr/lib"
-		[ -e "$libdir/$dll" ] ||
-			libdir="/usr/$machine/usr/bin"
-		[ -e "$libdir/$dll" ] ||
-			continue
-		cp -v -L "$libdir/$dll" "$PKGDIR"
-		"$machine"-strip "$PKGDIR/$dll"
-	done
+	ls "$PKGDIR" | grep '\.\(exe\|dll\)$' |
+	 perl -e '
+		use strict;
+		use warnings;
+		use File::Basename;
+		use File::Glob;
+		
+		my ($PKGDIR, $machine) = @ARGV;
+		my @todo = map { chomp; $_ } <STDIN>;
+		my %have = map { lc $_=>undef } (@todo, qw(
+			advapi32.dll
+			imagehlp.dll
+			kernel32.dll
+			msvcrt.dll
+			setupapi.dll
+			shell32.dll
+			user32.dll
+			winmm.dll
+			ws2_32.dll
+			wsock32.dll
+		));
+		# Optional/dlopen libs
+		push @todo, qw(
+			backtrace.dll
+			libhidapi-0.dll
+			libfootest.dll
+		);
+		sub ciexist {
+			my ($f) = @_;
+			my $lcf = lc $f;
+			for my $match (File::Glob::bsd_glob("${f}*", File::Glob::GLOB_CSH | File::Glob::GLOB_NOCASE)) {
+				my $matchlc = lc $match;
+				if ($matchlc eq $lcf) {
+					return basename($match);
+				}
+			}
+			undef
+		}
+		sub copydll {
+			my ($dlllc, $opt) = @_;
+			my $dll;
+			my $libdir;
+			for my $check_libdir (
+				"/usr/$machine/usr/lib",
+				"/usr/$machine/usr/bin",
+			) {
+				$dll = ciexist "$check_libdir/${dlllc}";
+				if ($dll) {
+					$libdir = $check_libdir;
+					last
+				}
+			}
+			if (not defined $libdir) {
+				return if $opt;
+				die "Cannot find $dlllc\n"
+			}
+			system("cp -v -L \"$libdir/$dll\" \"$PKGDIR\"") && die "Copy $dll failed\n";
+			system("\"${machine}-strip\" \"$PKGDIR/$dll\"") && die "Strip $dll failed\n";
+			push @todo, $dll;
+			$have{$dlllc} = undef;
+			1
+		}
+		while (my $c = shift @todo) {
+			if (not ciexist "$PKGDIR/$c") {
+				copydll $c, 1;
+				# copydll will add it to @todo again if found
+				next
+			}
+			
+			my $found;
+			print("Processing dependencies for ${c}...\n");
+			my $objdump = `"${machine}-objdump" -p "${PKGDIR}/${c}"`;
+			while ($objdump =~ /\G(?:\n|.)*?^\s*DLL Name\:\s*(.*)$/mg) {
+				my $dlllc = lc $1;
+				++$found;
+				next if exists $have{$dlllc};
+				
+				copydll $dlllc;
+			}
+			die "Failed to objdump $c\n" unless $found;
+		}
+' "$PKGDIR" "$machine"
 	
 	make clean
 	cd "$PKGDIR/.."
