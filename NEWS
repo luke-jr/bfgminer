@@ -5,6 +5,7 @@ BFGMiner Version 3.10.1 - May 26, 2014
 - - libjansson from 2.4 to 2.6
 - - libmicrohttpd from 0.9.30 to 0.9.35 (now Win64 also)
 - - libusb from libusbx 1.0.17 to 1.0.18
+- DevAPI: for_each_{managed,logical}_proc helper macros
 - Update libblkmaker to 0.3.3
 - make-release: Copy submodules from local system
 - make-release: Automatically determine DLL dependencies to include
@@ -40,7 +41,6 @@ interactive pool-add tries to stage work
 - bitfury: Wait for two low frequency measurements before acting on a freq drop
 (in case of a single misread)
 - Bugfix: SSM: decref parsed JSON when done with it
-- knc: use_dcdc setting that Nov batch users can use to disable DCDC usage
 - knc: Replace numeric constants with KNC_CORES_PER_DIE, KNC_DIE_PER_CHIP, and
 KNC_CORES_PER_CHIP defines
 - Bugfix: knc: Actually skip over extra processors rather than infinite loop
