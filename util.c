@@ -2009,7 +2009,8 @@ void _test_extract_domain(const char * const expect, const char * const uri)
 	size_t sz;
 	const char * const d = extract_domain(&sz, uri, strlen(uri));
 	if (sz != strlen(expect) || strncasecmp(d, expect, sz))
-		applog(LOG_WARNING, "extract_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"", uri, sz, d, expect);
+		applog(LOG_WARNING, "extract_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"",
+		       uri, (int)sz, d, expect);
 }
 
 static
@@ -2018,7 +2019,8 @@ void _test_get_regd_domain(const char * const expect, const char * const fqdn)
 	size_t sz;
 	const char * const d = get_registered_domain(&sz, fqdn, strlen(fqdn));
 	if (d == NULL || sz != strlen(expect) || strncasecmp(d, expect, sz))
-		applog(LOG_WARNING, "get_registered_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"", fqdn, sz, d, expect);
+		applog(LOG_WARNING, "get_registered_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"",
+		       fqdn, (int)sz, d, expect);
 }
 
 void test_domain_funcs()
