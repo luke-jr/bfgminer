@@ -949,47 +949,6 @@ void noncelog(const struct work * const work)
 		applog(LOG_ERR, "noncelog fwrite error");
 }
 
-static void sharelog(const char*disposition, const struct work*work)
-{
-	char target[(sizeof(work->target) * 2) + 1];
-	char hash[(sizeof(work->hash) * 2) + 1];
-	char data[(sizeof(work->data) * 2) + 1];
-	struct cgpu_info *cgpu;
-	unsigned long int t;
-	struct pool *pool;
-	int thr_id, rv;
-	char s[1024];
-	size_t ret;
-
-	if (!sharelog_file)
-		return;
-
-	thr_id = work->thr_id;
-	cgpu = get_thr_cgpu(thr_id);
-	pool = work->pool;
-	t = work->ts_getwork + timer_elapsed(&work->tv_getwork, &work->tv_work_found);
-	bin2hex(target, work->target, sizeof(work->target));
-	bin2hex(hash, work->hash, sizeof(work->hash));
-	bin2hex(data, work->data, sizeof(work->data));
-
-	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
-	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s,%u,%s,%s\n", t, disposition, target, pool->rpc_url, cgpu->proc_repr_ns, thr_id, hash, data);
-	if (rv >= (int)(sizeof(s)))
-		s[sizeof(s) - 1] = '\0';
-	else if (rv < 0) {
-		applog(LOG_ERR, "sharelog printf error");
-		return;
-	}
-
-	mutex_lock(&sharelog_lock);
-	ret = fwrite(s, rv, 1, sharelog_file);
-	fflush(sharelog_file);
-	mutex_unlock(&sharelog_lock);
-
-	if (ret != 1)
-		applog(LOG_ERR, "sharelog fwrite error");
-}
-
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
@@ -4304,6 +4263,53 @@ static void reject_pool(struct pool *pool)
 }
 
 static double share_diff(const struct work *);
+
+static void sharelog(const char*disposition, const struct work*work)
+{
+	char target[(sizeof(work->target) * 2) + 1];
+	char hash[(sizeof(work->hash) * 2) + 1];
+	char data[(sizeof(work->data) * 2) + 1];
+	char shrdiffdisp[ALLOC_H2B_SHORTV];
+	char tgtdiffdisp[ALLOC_H2B_SHORTV];
+	struct cgpu_info *cgpu;
+	unsigned long int t;
+	struct pool *pool;
+	int thr_id, rv;
+	char s[1024];
+	size_t ret;
+
+	if (!sharelog_file)
+		return;
+
+	/* Convert float difficulties into human readable strings */
+	suffix_string(work->share_diff, shrdiffdisp, sizeof(shrdiffdisp), 0);
+	suffix_string(work->work_difficulty, tgtdiffdisp, sizeof(tgtdiffdisp), 0);
+
+	thr_id = work->thr_id;
+	cgpu = get_thr_cgpu(thr_id);
+	pool = work->pool;
+	t = work->ts_getwork + timer_elapsed(&work->tv_getwork, &work->tv_work_found);
+	bin2hex(target, work->target, sizeof(work->target));
+	bin2hex(hash, work->hash, sizeof(work->hash));
+	bin2hex(data, work->data, sizeof(work->data));
+
+	// timestamp,disposition,target,pool,dev,thr,sharehash,sharedata,workdiff/tgtdiff, float found difficulty, float requested difficulty
+	rv = snprintf(s, sizeof(s), "%lu,%s,%s,%s,%s,%u,%s,%s,%s/%s,%f,%f\n", t, disposition, target, pool->rpc_url, cgpu->proc_repr_ns, thr_id, hash, data, shrdiffdisp, tgtdiffdisp, work->share_diff, work->work_difficulty);
+	if (rv >= (int)(sizeof(s)))
+		s[sizeof(s) - 1] = '\0';
+	else if (rv < 0) {
+		applog(LOG_ERR, "sharelog printf error");
+		return;
+	}
+
+	mutex_lock(&sharelog_lock);
+	ret = fwrite(s, rv, 1, sharelog_file);
+	fflush(sharelog_file);
+	mutex_unlock(&sharelog_lock);
+
+	if (ret != 1)
+		applog(LOG_ERR, "sharelog fwrite error");
+}
 
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
