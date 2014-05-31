@@ -16,6 +16,7 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -1017,8 +1018,14 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%.15f", *((double *)(root->data)));
 				break;
 			case API_DIFF:
-				sprintf(buf, "%.8f", *((double *)(root->data)));
+			{
+				const double *fp = root->data;
+				if (fmod(*fp, 1.))
+					sprintf(buf, "%.8f", *fp);
+				else
+					sprintf(buf, "%.0f", *fp);
 				break;
+			}
 			case API_BOOL:
 				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
