@@ -108,6 +108,8 @@ struct pool;
 enum dev_reason;
 struct cgpu_info;
 
+extern void set_cloexec_socket(SOCKETTYPE, bool cloexec);
+
 extern void json_rpc_call_async(CURL *, const char *url, const char *userpass, const char *rpc_req, bool longpoll, struct pool *pool, bool share, void *priv);
 extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime, void *out_priv);
 
