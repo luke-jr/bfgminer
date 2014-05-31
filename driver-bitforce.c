@@ -1653,8 +1653,16 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	if (style != BFS_FPGA)
 	{
 		// Clear results queue last, to start fresh; ignore response
+		int last_xlink_id = -1;
 		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
+		{
+			struct bitforce_data * const data = bitforce->device_data;
+			if (data->xlink_id == last_xlink_id)
+				continue;
+			last_xlink_id = data->xlink_id;
+			thr = bitforce->thr[0];
 			bitforce_zox(thr, "ZOX");
+		}
 	}
 	
 	return true;
