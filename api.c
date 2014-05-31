@@ -3895,7 +3895,7 @@ void api(int api_thr_id)
 
 		if (ips == 0) {
 			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
@@ -3906,7 +3906,7 @@ void api(int api_thr_id)
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
 
 	memset(&serv, 0, sizeof(serv));
@@ -3917,7 +3917,7 @@ void api(int api_thr_id)
 		serv.sin_addr.s_addr = inet_addr(localaddr);
 		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
@@ -3955,13 +3955,12 @@ void api(int api_thr_id)
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		CLOSESOCKET(*apisock);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (opt_api_allow)
