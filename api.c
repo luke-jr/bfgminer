@@ -3357,6 +3357,17 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		       (long)bytes_len(&io_data->data));
 }
 
+static
+void _tidyup_socket(SOCKETTYPE * const sockp)
+{
+	if (*sockp != INVSOCK) {
+		shutdown(*sockp, SHUT_RDWR);
+		CLOSESOCKET(*sockp);
+		*sockp = INVSOCK;
+		free(sockp);
+	}
+}
+
 static void tidyup(__maybe_unused void *arg)
 {
 	mutex_lock(&quit_restart_lock);
@@ -3365,12 +3376,7 @@ static void tidyup(__maybe_unused void *arg)
 
 	bye = true;
 
-	if (*apisock != INVSOCK) {
-		shutdown(*apisock, SHUT_RDWR);
-		CLOSESOCKET(*apisock);
-		*apisock = INVSOCK;
-		free(apisock);
-	}
+	_tidyup_socket(apisock);
 
 	if (ipaccess != NULL) {
 		free(ipaccess);
