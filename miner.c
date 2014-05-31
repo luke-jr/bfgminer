@@ -6765,6 +6765,7 @@ void zero_stats(void)
 		pool->getfail_occasions = 0;
 		pool->remotefail_occasions = 0;
 		pool->last_share_time = 0;
+		pool->works = 0;
 		pool->diff1 = 0;
 		pool->diff_accepted = 0;
 		pool->diff_rejected = 0;
