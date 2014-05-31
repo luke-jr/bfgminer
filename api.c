@@ -3826,6 +3826,7 @@ static void mcast()
 								replybuf, (int)rep, (int)reply_sock);
 				}
 
+				shutdown(reply_sock, SHUT_RDWR);
 				CLOSESOCKET(reply_sock);
 			}
 		} else
@@ -4109,6 +4110,7 @@ void api(int api_thr_id)
 				}
 			}
 		}
+		shutdown(c, SHUT_RDWR);
 		CLOSESOCKET(c);
 	}
 die:
