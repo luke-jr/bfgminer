@@ -332,6 +332,22 @@ static int keep_sockalive(SOCKETTYPE fd)
 	return ret;
 }
 
+void set_cloexec_socket(SOCKETTYPE sock, const bool cloexec)
+{
+#ifdef WIN32
+	SetHandleInformation(sock, HANDLE_FLAG_INHERIT, cloexec ? 0 : HANDLE_FLAG_INHERIT);
+#elif defined(F_GETFD) && defined(F_SETFD) && defined(O_CLOEXEC)
+	const int curflags = fcntl(sock, F_GETFD);
+	int flags = curflags;
+	if (cloexec)
+		flags |= FD_CLOEXEC;
+	else
+		flags &= ~FD_CLOEXEC;
+	if (flags != curflags)
+		fcntl(sock, F_SETFD, flags);
+#endif
+}
+
 int json_rpc_call_sockopt_cb(void __maybe_unused *userdata, curl_socket_t fd,
 			     curlsocktype __maybe_unused purpose)
 {

@@ -586,6 +586,9 @@ void stratumsrv_change_port()
 	_smm_listener = evconnlistener_new_bind(evbase, stratumlistener, NULL, (
 		LEV_OPT_CLOSE_ON_FREE | LEV_OPT_CLOSE_ON_EXEC | LEV_OPT_REUSEABLE
 	), 0x10, (void*)&sin, sizeof(sin));
+	
+	// NOTE: libevent doesn't seem to implement LEV_OPT_CLOSE_ON_EXEC for Windows, so we must do this ourselves
+	set_cloexec_socket(evconnlistener_get_fd(_smm_listener), true);
 }
 
 static

@@ -3882,6 +3882,8 @@ static void mcast()
 	
 	*mcastsock = socket(AF_INET, SOCK_DGRAM, 0);
 
+	set_cloexec_socket(*mcastsock, true);
+	
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(*mcastsock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
 		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
@@ -4076,6 +4078,8 @@ void api(int api_thr_id)
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		pthread_exit(NULL);
 	}
+	
+	set_cloexec_socket(*apisock, true);
 
 	memset(&serv, 0, sizeof(serv));
 
