@@ -3550,6 +3550,25 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		       (long)bytes_len(&io_data->data));
 }
 
+static
+void _tidyup_socket(SOCKETTYPE * const sockp)
+{
+	if (*sockp != INVSOCK) {
+		shutdown(*sockp, SHUT_RDWR);
+		CLOSESOCKET(*sockp);
+		*sockp = INVSOCK;
+		free(sockp);
+	}
+}
+
+static
+void tidyup_socket(void * const arg)
+{
+	mutex_lock(&quit_restart_lock);
+	_tidyup_socket(arg);
+	mutex_unlock(&quit_restart_lock);
+}
+
 static void tidyup(__maybe_unused void *arg)
 {
 	mutex_lock(&quit_restart_lock);
@@ -3558,12 +3577,7 @@ static void tidyup(__maybe_unused void *arg)
 
 	bye = true;
 
-	if (*apisock != INVSOCK) {
-		shutdown(*apisock, SHUT_RDWR);
-		CLOSESOCKET(*apisock);
-		*apisock = INVSOCK;
-		free(apisock);
-	}
+	_tidyup_socket(apisock);
 
 	if (ipaccess != NULL) {
 		free(ipaccess);
@@ -3879,7 +3893,7 @@ static void mcast()
 	struct sockaddr_in came_from;
 	struct timeval bindstart;
 	const char *binderror;
-	SOCKETTYPE mcast_sock;
+	SOCKETTYPE *mcastsock;
 	SOCKETTYPE reply_sock;
 	socklen_t came_from_siz;
 	char *connectaddr;
@@ -3902,10 +3916,14 @@ static void mcast()
 		quit(1, "Invalid Multicast Address");
 	grp.imr_interface.s_addr = INADDR_ANY;
 
-	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
+	mcastsock = malloc(sizeof(*mcastsock));
+	*mcastsock = INVSOCK;
+	pthread_cleanup_push(tidyup_socket, mcastsock);
+	
+	*mcastsock = socket(AF_INET, SOCK_DGRAM, 0);
 
 	int optval = 1;
-	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
+	if (SOCKETFAIL(setsockopt(*mcastsock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
 		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
 		goto die;
 	}
@@ -3919,7 +3937,7 @@ static void mcast()
 	bound = 0;
 	timer_set_now(&bindstart);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
+		if (SOCKETFAIL(bind(*mcastsock, (struct sockaddr *)(&listen), sizeof(listen)))) {
 			binderror = SOCKERRMSG;
 			if (timer_elapsed(&bindstart, NULL) > 61)
 				break;
@@ -3934,7 +3952,7 @@ static void mcast()
 		goto die;
 	}
 
-	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
+	if (SOCKETFAIL(setsockopt(*mcastsock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
 		applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
 		goto die;
 	}
@@ -3951,10 +3969,10 @@ static void mcast()
 
 		count++;
 		came_from_siz = sizeof(came_from);
-		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf) - 1,
+		if (SOCKETFAIL(rep = recvfrom(*mcastsock, buf, sizeof(buf) - 1,
 						0, (struct sockaddr *)(&came_from), &came_from_siz))) {
 			applog(LOG_DEBUG, "API mcast failed count=%d (%s) (%d)",
-					count, SOCKERRMSG, (int)mcast_sock);
+					count, SOCKERRMSG, (int)*mcastsock);
 			continue;
 		}
 
@@ -4001,6 +4019,7 @@ static void mcast()
 								replybuf, (int)rep, (int)reply_sock);
 				}
 
+				shutdown(reply_sock, SHUT_RDWR);
 				CLOSESOCKET(reply_sock);
 			}
 		} else
@@ -4008,8 +4027,8 @@ static void mcast()
 	}
 
 die:
-
-	CLOSESOCKET(mcast_sock);
+	;  // statement in case pthread_cleanup_pop doesn't start with one
+	pthread_cleanup_pop(true);
 }
 
 static void *mcast_thread(void *userdata)
@@ -4088,14 +4107,14 @@ void api(int api_thr_id)
 
 		if (ips == 0) {
 			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
 	*apisock = socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
 
 	memset(&serv, 0, sizeof(serv));
@@ -4106,7 +4125,7 @@ void api(int api_thr_id)
 		serv.sin_addr.s_addr = inet_addr(localaddr);
 		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
@@ -4144,13 +4163,12 @@ void api(int api_thr_id)
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		CLOSESOCKET(*apisock);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (opt_api_allow)
@@ -4284,6 +4302,7 @@ void api(int api_thr_id)
 				}
 			}
 		}
+		shutdown(c, SHUT_RDWR);
 		CLOSESOCKET(c);
 	}
 die:
