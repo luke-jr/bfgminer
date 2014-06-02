@@ -56,7 +56,7 @@ void gc3355_scrypt_only_reset(int fd);
 
 extern void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *);
 extern void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *, bool simple);
-extern uint32_t gc3355_get_firmware_version(int fd);
+extern int64_t gc3355_get_firmware_version(int fd);
 extern void gc3355_set_pll_freq(int fd, int pll_freq);
 
 #define gc3355_get_cts_status(fd)  ((get_serial_cts(fd) == BGV_LOW) ? 1 : 0)
