@@ -94,11 +94,15 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 		return false;
 	
 	device->device_fd = fd;
+
+	info->chips = GC3355_ORB_DEFAULT_CHIPS;
+	if((fw_version & 0xffff) == 0x1402)
+		info->chips = GC3355_BLADE_DEFAULT_CHIPS;
 	
 	gc3355_init_usborb(device->device_fd, info->freq, false, false);
 	
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s", device->proc_repr, path);
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: firmware=%d", device->proc_repr, fw_version);
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: firmware=%d, chips=%d", device->proc_repr, fw_version, info->chips);
 	
 	return true;
 }
@@ -203,7 +207,7 @@ int64_t gridseed_estimate_hashes(struct thr_info *thr)
 	cgtime(&info->scanhash_time);
 	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
 
-	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq * GC3355_ORB_DEFAULT_CHIPS);
+	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq * info->chips);
 }
 
 // read from device for nonce or command
