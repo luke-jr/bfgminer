@@ -28,11 +28,13 @@ int opt_pll_freq;
 
 #define GC3355_COMMAND_DELAY_MS 20
 #define GC3355_ORB_DEFAULT_CHIPS   5
+#define GC3355_BLADE_DEFAULT_CHIPS	40
 #define GC3355_READ_SIZE          12
 
 struct gc3355_orb_info
 {
 	uint16_t freq;
+	uint8_t chips;
 	struct timeval scanhash_time;
 };
 
