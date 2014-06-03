@@ -737,7 +737,7 @@ int64_t gc3355_get_firmware_version(int fd)
 		return -1;
 	}
 	
-	uint32_t fw_version = le32toh(*(uint32_t *)(buf + 8));
+	uint32_t fw_version = be32toh(*(uint32_t *)(buf + 8));
 	
 	return fw_version;
 }
