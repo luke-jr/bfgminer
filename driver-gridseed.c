@@ -76,7 +76,7 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	
 	gridseed_empty_work(fd);
 	
-	uint32_t fw_version = gc3355_get_firmware_version(fd);
+	int64_t fw_version = gc3355_get_firmware_version(fd);
 	
 	if (fw_version == -1)
 	{
@@ -98,7 +98,7 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	gc3355_init_usborb(device->device_fd, info->freq, false, false);
 	
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s", device->proc_repr, path);
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: firmware=%d", device->proc_repr, fw_version);
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: firmware=%"PRId64, device->proc_repr, fw_version);
 	
 	return true;
 }

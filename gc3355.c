@@ -719,7 +719,7 @@ void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work, bool sim
 	}
 }
 
-uint32_t gc3355_get_firmware_version(int fd)
+int64_t gc3355_get_firmware_version(int fd)
 {
 	gc3355_send_cmds(fd, firmware_request_cmd);
 	
