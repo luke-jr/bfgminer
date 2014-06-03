@@ -233,11 +233,11 @@ bool dualminer_detect_one(const char *devpath)
 
 	drv_set_defaults(drv, dualminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
-	if (!icarus_detect_custom(devpath, drv, info))
+	/*if (!icarus_detect_custom(devpath, drv, info))
 	{
 		free(info);
 		return false;
-	}
+	}*/
 
 	if (opt_scrypt)
 		info->read_count = DUALMINER_SCRYPT_READ_COUNT; // 4.8s to read

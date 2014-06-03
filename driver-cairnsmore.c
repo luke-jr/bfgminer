@@ -50,10 +50,10 @@ static bool cairnsmore_detect_one(const char *devpath)
 	info->timing_mode = MODE_LONG;
 	info->do_icarus_timing = true;
 
-	if (!icarus_detect_custom(devpath, &cairnsmore_drv, info)) {
+	/*if (!icarus_detect_custom(devpath, &cairnsmore_drv, info)) {
 		free(info);
 		return false;
-	}
+	}*/
 	return true;
 }
 
@@ -92,7 +92,7 @@ bool cairnsmore_supports_dynclock(int fd)
 			.work_restart = false,
 			.work_restart_notifier = {-1, -1},
 		};
-		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1, ICARUS_DEFAULT_READ_SIZE);
+		//icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1, ICARUS_DEFAULT_READ_SIZE);
 	}
 	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x", nonce);
 	switch (nonce) {

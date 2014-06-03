@@ -42,6 +42,7 @@
 // keeping a ongoing average of recent data
 #define INFO_HISTORY 10
 
+static int option_offset = -1;
 extern struct device_drv icarus_drv;
 
 struct ICARUS_HISTORY {
@@ -75,7 +76,8 @@ struct ICARUS_INFO {
 
 	// seconds per Hash
 	double Hs;
-	int read_count;
+	uint32_t read_count;
+	uint64_t golden_speed_percore;// speed pre core per sec
 	int probe_read_count;
 	// ds limit for (short=/long=) read_count
 	int read_count_limit;
@@ -96,7 +98,18 @@ struct ICARUS_INFO {
 	struct timeval history_time;
 
 	// icarus-options
+	int check_num;
 	int baud;
+	int cores_perchip;
+	int chips_count_max;
+	int chips_count;
+	int chip_clk;
+	uint32_t clk_header;
+	int chips_bit_num;//log2(chips_count_max)
+
+	char core_hash[10];
+	char chip_hash[10];
+	char board_hash[10];
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
@@ -121,6 +134,9 @@ struct ICARUS_INFO {
 	bool (*job_start_func)(struct thr_info *);
 };
 
+// One for each possible device
+static struct ICARUS_INFO **icarus_info;
+
 struct icarus_state {
 	bool firstrun;
 	struct timeval tv_workstart;
@@ -133,8 +149,9 @@ struct icarus_state {
 	uint8_t *ob_bin;
 };
 
-bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
-extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
+//bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
+extern void suffix_string(uint64_t val, char *buf, int sigdigits);
+extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size, uint32_t *);
 extern int icarus_write(int fd, const void *buf, size_t bufLen);
 extern bool icarus_init(struct thr_info *);
 extern void do_icarus_close(struct thr_info *thr);

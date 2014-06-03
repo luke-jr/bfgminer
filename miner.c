@@ -219,6 +219,13 @@ bool use_curses;
 #ifdef HAVE_LIBUSB
 bool have_libusb;
 #endif
+
+bool opt_ltc_debug = false;
+bool opt_ltc_nocheck_golden = false;
+bool opt_nocheck_scrypt = false;
+int opt_chips_count = 1;
+int opt_chip_clk = 200; //MegaHz
+
 static bool opt_submit_stale = true;
 static float opt_shares;
 static int opt_submit_threads = 0x40;
@@ -2132,12 +2139,29 @@ static struct opt_table opt_config_table[] = {
 	             opt_hidden),
 #endif
 #ifdef USE_ICARUS
+	#if 0
 	OPT_WITH_ARG("--icarus-options",
 		     set_icarus_options, NULL, NULL,
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
 		     opt_hidden),
+	#endif	 
+OPT_WITHOUT_ARG("--ltc-debug",
+			 opt_set_bool, &opt_ltc_debug,
+			 "Enable ltc debug output"),			 
+OPT_WITHOUT_ARG("--nocheck-golden",
+			 opt_set_bool, &opt_ltc_nocheck_golden,
+			 "Disable ltc init golden check"),
+OPT_WITHOUT_ARG("--nocheck-scrypt",
+			 opt_set_bool, &opt_nocheck_scrypt,
+			 "Disable scrypt result check, must enable in openwrt building"),
+OPT_WITH_ARG("--chips-count",
+		 set_int_1_to_65535, opt_show_intval, &opt_chips_count,
+		 "Chips count in one com port"),
+OPT_WITH_ARG("--ltc-clk",
+		 set_int_1_to_65535, opt_show_intval, &opt_chip_clk,
+		 "clock Mhz"),		 
 #endif
 #ifdef USE_AVALON
 	OPT_WITH_ARG("--avalon-options",
@@ -10290,8 +10314,8 @@ void drv_set_defaults(const struct device_drv * const drv, const void *datap, vo
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_SICK_TIME		60
-#define WATCHDOG_DEAD_TIME		600
+#define WATCHDOG_SICK_TIME		300
+#define WATCHDOG_DEAD_TIME		1800
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
 #define WATCHDOG_DEAD_COUNT		(WATCHDOG_DEAD_TIME/WATCHDOG_INTERVAL)
 

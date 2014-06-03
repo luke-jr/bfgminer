@@ -54,11 +54,11 @@ bool antminer_detect_one(const char *devpath)
 		.read_size = 5,
 	};
 	
-	if (!icarus_detect_custom(devpath, drv, info))
+	/*if (!icarus_detect_custom(devpath, drv, info))
 	{
 		free(info);
 		return false;
-	}
+	}*/
 	
 	info->read_count = 15;
 	
@@ -99,7 +99,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	applog(LOG_DEBUG, "%"PRIpreprv": Get clock: OK", cgpu->proc_repr);
 	
 	memset(rebuf, 0, sizeof(rebuf));
-	err = icarus_gets(rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
+	//err = icarus_gets(rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
 	
 	// Timeout is ok - checking specifically for an error here
 	if (err == ICA_GETS_ERROR)
