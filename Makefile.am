@@ -243,6 +243,10 @@ bfgminer_SOURCES += driver-erupter.c
 bfgminer_SOURCES += driver-antminer.c
 endif
 
+if HAS_ZEUS
+bfgminer_SOURCES += driver-zeus.c driver-zeus.h
+endif
+
 if USE_GC3355
 bfgminer_SOURCES += gc3355.c gc3355.h
 endif

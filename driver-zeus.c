@@ -10,22 +10,22 @@
  */
 
 /*
- * Those code should be works fine with V2 and V3 bitstream of Icarus.
+ * Those code should be works fine with V2 and V3 bitstream of Zeus.
  * Operation:
  *   No detection implement.
  *   Input: 64B = 32B midstate + 20B fill bytes + last 12 bytes of block head.
- *   Return: send back 32bits immediately when Icarus found a valid nonce.
+ *   Return: send back 32bits immediately when Zeus found a valid nonce.
  *           no query protocol implemented here, if no data send back in ~11.3
  *           seconds (full cover time on 32bit nonce range by 380MH/s speed)
  *           just send another work.
  * Notice:
- *   1. Icarus will start calculate when you push a work to them, even they
+ *   1. Zeus will start calculate when you push a work to them, even they
  *      are busy.
- *   2. The 2 FPGAs on Icarus will distribute the job, one will calculate the
+ *   2. The 2 FPGAs on Zeus will distribute the job, one will calculate the
  *      0 ~ 7FFFFFFF, another one will cover the 80000000 ~ FFFFFFFF.
  *   3. It's possible for 2 FPGAs both find valid nonce in the meantime, the 2
  *      valid nonce will all be send back.
- *   4. Icarus will stop work when: a valid nonce has been found or 32 bits
+ *   4. Zeus will stop work when: a valid nonce has been found or 32 bits
  *      nonce range is completely calculated.
  */
 
@@ -60,7 +60,7 @@
 
 #include "compat.h"
 #include "dynclock.h"
-#include "driver-icarus.h"
+#include "driver-zeus.h"
 #include "lowl-vcom.h"
 
 #define CHIP_GEN1_CORES 8
@@ -72,46 +72,46 @@ extern bool opt_ltc_debug;
 extern int opt_chips_count;
 extern int opt_chip_clk;
 extern bool opt_ltc_nocheck_golden;
-int opt_chips_count_max=1; 
+int zeus_opt_chips_count_max=1; 
 
 
 // The serial I/O speed - Linux uses a define 'B115200' in bits/termios.h
-#define ICARUS_IO_SPEED 115200
+#define ZEUS_IO_SPEED 115200
 
 // The size of a successful nonce read
-#define ICARUS_READ_SIZE 4
+#define ZEUS_READ_SIZE 4
 
 // The number of bytes in a nonce (always 4)
-// This is NOT the read-size for the Icarus driver
-// That is defined in ICARUS_INFO->read_size
-#define ICARUS_NONCE_SIZE 4
+// This is NOT the read-size for the Zeus driver
+// That is defined in ZEUS_INFO->read_size
+#define ZEUS_NONCE_SIZE 4
 
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
 ASSERT1(sizeof(uint32_t) == 4);
 
-//#define ICARUS_READ_TIME(baud, read_size) ((double)read_size * (double)8.0 / (double)(baud))
+//#define ZEUS_READ_TIME(baud, read_size) ((double)read_size * (double)8.0 / (double)(baud))
 
 // Defined in deciseconds
 // There's no need to have this bigger, since the overhead/latency of extra work
 // is pretty small once you get beyond a 10s nonce range time and 10s also
-// means that nothing slower than 429MH/s can go idle so most icarus devices
+// means that nothing slower than 429MH/s can go idle so most zeus devices
 // will always mine without idling
-#define ICARUS_READ_COUNT_LIMIT_MAX 100
+#define ZEUS_READ_COUNT_LIMIT_MAX 100
 
 // In timing mode: Default starting value until an estimate can be obtained
 // 5 seconds allows for up to a ~840MH/s device
-#define ICARUS_READ_COUNT_TIMING	(5 * TIME_FACTOR)
+#define ZEUS_READ_COUNT_TIMING	(5 * TIME_FACTOR)
 
-// For a standard Icarus REV3
-#define ICARUS_REV3_HASH_TIME 0.00000000264083
+// For a standard Zeus REV3
+#define ZEUS_REV3_HASH_TIME 0.00000000264083
 
-// Icarus Rev3 doesn't send a completion message when it finishes
+// Zeus Rev3 doesn't send a completion message when it finishes
 // the full nonce range, so to avoid being idle we must abort the
 // work (by starting a new work) shortly before it finishes
 //
 // Thus we need to estimate 2 things:
 //	1) How many hashes were done if the work was aborted
-//	2) How high can the timeout be before the Icarus is idle,
+//	2) How high can the timeout be before the Zeus is idle,
 //		to minimise the number of work started
 //	We set 2) to 'the calculated estimate' - 1
 //	to ensure the estimate ends before idle
@@ -132,7 +132,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 //	W = Sum(Ti)/n - (Hs*Sum(Xi))/n
 //
 // N.B. W is less when aborting work since we aren't waiting for the reply
-//	to be transferred back (ICARUS_READ_TIME)
+//	to be transferred back (ZEUS_READ_TIME)
 //	Calculating the hashes aborted at n seconds is thus just n/Hs
 //	(though this is still a slight overestimate due to code delays)
 //
@@ -140,7 +140,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 // Both below must be exceeded to complete a set of data
 // Minimum how long after the first, the last data point must be
 #define HISTORY_SEC 60
-// Minimum how many points a single ICARUS_HISTORY should have
+// Minimum how many points a single ZEUS_HISTORY should have
 #define MIN_DATA_COUNT 5
 // The value above used is doubled each history until it exceeds:
 #define MAX_MIN_DATA_COUNT 100
@@ -162,20 +162,20 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 #define END_CONDITION 0x0000ffff
 #define DEFAULT_DETECT_THRESHOLD 1
 
-BFG_REGISTER_DRIVER(icarus_drv)
-extern const struct bfg_set_device_definition icarus_set_device_funcs[];
+BFG_REGISTER_DRIVER(zeus_drv)
+extern const struct bfg_set_device_definition zeus_set_device_funcs[];
 
-extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
+extern void convert_zeus_to_cairnsmore(struct cgpu_info *);
 
 static inline
-uint32_t icarus_nonce32toh(const struct ICARUS_INFO * const info, const uint32_t nonce)
+uint32_t zeus_nonce32toh(const struct ZEUS_INFO * const info, const uint32_t nonce)
 {
 	return info->nonce_littleendian ? le32toh(nonce) : be32toh(nonce);
 }
 
 uint8_t flush_buf[400];
 
-void flush_uart(int fd)
+void zeus_flush_uart(int fd)
 {
 #ifdef WIN32
 
@@ -194,7 +194,7 @@ void flush_uart(int fd)
 	
 
 
-int log_2(int value)   //·ÇµÝ¹éÅÐ¶ÏÒ»¸öÊýÊÇ2µÄ¶àÉÙ´Î·½  
+int zeus_log_2(int value)   //·ÇµÝ¹éÅÐ¶ÏÒ»¸öÊýÊÇ2µÄ¶àÉÙ´Î·½  
 {  
     int x=0;  
     while(value>1)  
@@ -206,7 +206,7 @@ int log_2(int value)   //·ÇµÝ¹éÅÐ¶ÏÒ»¸öÊýÊÇ2µÄ¶àÉÙ´Î·
 }  
 
 
-uint32_t get_revindex(uint32_t value,int bit_num)
+uint32_t zeus_get_revindex(uint32_t value,int bit_num)
 {
 
 	uint32_t newvalue;
@@ -243,23 +243,23 @@ static void rev(unsigned char *s, size_t l)
 
 
 
-#define icarus_open2(devpath, baud, purge)  serial_open(devpath, baud, ICARUS_READ_FAULT_DECISECONDS, purge)
-#define icarus_open(devpath, baud)  icarus_open2(devpath, baud, false)
+#define zeus_open2(devpath, baud, purge)  serial_open(devpath, baud, ZEUS_READ_FAULT_DECISECONDS, purge)
+#define zeus_open(devpath, baud)  zeus_open2(devpath, baud, false)
 
 static
-void icarus_log_protocol(int fd, const void *buf, size_t bufLen, const char *prefix)
+void zeus_log_protocol(int fd, const void *buf, size_t bufLen, const char *prefix)
 {
 	char hex[(bufLen * 2) + 1];
 	bin2hex(hex, buf, bufLen);
-	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s %s", icarus_drv.dname, fd, prefix, hex);
+	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s %s", zeus_drv.dname, fd, prefix, hex);
 }
 
-int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count, int read_size, uint32_t *elapsed_count)
+int zeus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count, int read_size, uint32_t *elapsed_count)
 {
 	ssize_t ret = 0;
 	int rc = 0;
 	int epollfd = -1;
-	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
+	int epoll_timeout = ZEUS_READ_FAULT_DECISECONDS * 100;
 	int read_amount = read_size;
 	bool first = true;
 	
@@ -323,7 +323,7 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 				close(epollfd);
 
 			if (opt_dev_protocol && opt_debug)
-				icarus_log_protocol(fd, buf, read_size, "RECV");
+				zeus_log_protocol(fd, buf, read_size, "RECV");
 
 			return ICA_GETS_OK;
 		}
@@ -355,21 +355,21 @@ int icarus_gets(unsigned char *buf, int fd, struct timeval *tv_finish, struct th
 	}
 }
 
-int icarus_write(int fd, const void *buf, size_t bufLen)
+int zeus_write(int fd, const void *buf, size_t bufLen)
 {
 	size_t ret;
 /*
-	unsigned char ob_bin[84], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char ob_bin[84], nonce_bin[ZEUS_READ_SIZE];
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 	#if 0
 		char *hexstr;
 		hexstr = bin2hex(nonce_hex, buf, bufLen);
-		applog(LOG_WARNING, "icarus_write %s", hexstr);
+		applog(LOG_WARNING, "zeus_write %s", hexstr);
 		free(hexstr);
 	#endif
 */
 	if (opt_dev_protocol && opt_debug)
-		icarus_log_protocol(fd, buf, bufLen, "SEND");
+		zeus_log_protocol(fd, buf, bufLen, "SEND");
 
 	if (unlikely(fd == -1))
 		return 1;
@@ -381,16 +381,16 @@ int icarus_write(int fd, const void *buf, size_t bufLen)
 	return 0;
 }
 
-#define icarus_close(fd) serial_close(fd)
+#define zeus_close(fd) serial_close(fd)
 
-void do_icarus_close(struct thr_info *thr)
+void do_zeus_close(struct thr_info *thr)
 {
-	struct cgpu_info *icarus = thr->cgpu;
-	const int fd = icarus->device_fd;
+	struct cgpu_info *zeus = thr->cgpu;
+	const int fd = zeus->device_fd;
 	if (fd == -1)
 		return;
-	icarus_close(fd);
-	icarus->device_fd = -1;
+	zeus_close(fd);
+	zeus->device_fd = -1;
 }
 
 static const char *timing_mode_str(enum timing_mode timing_mode)
@@ -410,50 +410,50 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 }
 
 static
-const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
+	struct ZEUS_INFO * const info = proc->device_data;
 	double Hs;
 	char *eq;
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
 		// short
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count = ZEUS_READ_COUNT_TIMING;
 		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_SHORT;
-		info->do_icarus_timing = true;
+		info->do_zeus_timing = true;
 	} else if (strncasecmp(buf, MODE_SHORT_STREQ, strlen(MODE_SHORT_STREQ)) == 0) {
 		// short=limit
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count = ZEUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_SHORT;
-		info->do_icarus_timing = true;
+		info->do_zeus_timing = true;
 
 		info->read_count_limit = atoi(&buf[strlen(MODE_SHORT_STREQ)]);
 		if (info->read_count_limit < 0)
 			info->read_count_limit = 0;
-		if (info->read_count_limit > ICARUS_READ_COUNT_LIMIT_MAX)
-			info->read_count_limit = ICARUS_READ_COUNT_LIMIT_MAX;
+		if (info->read_count_limit > ZEUS_READ_COUNT_LIMIT_MAX)
+			info->read_count_limit = ZEUS_READ_COUNT_LIMIT_MAX;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
 		// long
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count = ZEUS_READ_COUNT_TIMING;
 		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_LONG;
-		info->do_icarus_timing = true;
+		info->do_zeus_timing = true;
 	} else if (strncasecmp(buf, MODE_LONG_STREQ, strlen(MODE_LONG_STREQ)) == 0) {
 		// long=limit
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_count = ZEUS_READ_COUNT_TIMING;
 
 		info->timing_mode = MODE_LONG;
-		info->do_icarus_timing = true;
+		info->do_zeus_timing = true;
 
 		info->read_count_limit = atoi(&buf[strlen(MODE_LONG_STREQ)]);
 		if (info->read_count_limit < 0)
 			info->read_count_limit = 0;
-		if (info->read_count_limit > ICARUS_READ_COUNT_LIMIT_MAX)
-			info->read_count_limit = ICARUS_READ_COUNT_LIMIT_MAX;
+		if (info->read_count_limit > ZEUS_READ_COUNT_LIMIT_MAX)
+			info->read_count_limit = ZEUS_READ_COUNT_LIMIT_MAX;
 	} else if ((Hs = atof(buf)) != 0) {
 		// ns[=read_count]
 		info->Hs = Hs / NANOSEC;
@@ -472,7 +472,7 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 		info->read_count_limit = 0;  // 0 = no limit
 		
 		info->timing_mode = MODE_VALUE;
-		info->do_icarus_timing = false;
+		info->do_zeus_timing = false;
 	} else {
 		// Anything else in buf just uses DEFAULT mode
 
@@ -482,16 +482,16 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 		if ((eq = strchr(buf, '=')) != NULL)
 			info->read_count = atoi(eq+1);
 
-		int def_read_count = ICARUS_READ_COUNT_TIMING;
+		int def_read_count = ZEUS_READ_COUNT_TIMING;
 
 		if (info->timing_mode == MODE_DEFAULT) {
-			if (proc->drv == &icarus_drv) {
+			if (proc->drv == &zeus_drv) {
 				info->do_default_detection = 0x10;
 			} else {
 				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
 			}
 
-			info->do_icarus_timing = false;
+			info->do_zeus_timing = false;
 		}
 		if (info->read_count < 1)
 			info->read_count = def_read_count;
@@ -534,21 +534,21 @@ static uint32_t mask(int work_division)
 	return nonce_mask;
 }
 
-// Number of bytes remaining after reading a nonce from Icarus
-int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
+// Number of bytes remaining after reading a nonce from Zeus
+int zeus_excess_nonce_size(int fd, struct ZEUS_INFO *info)
 {
 	// How big a buffer?
-	int excess_size = info->read_size - ICARUS_NONCE_SIZE;
+	int excess_size = info->read_size - ZEUS_NONCE_SIZE;
 
 	// Try to read one more to ensure the device doesn't return
 	// more than we want for this driver
 	excess_size++;
 
 	unsigned char excess_bin[excess_size];
-	// Read excess_size from Icarus
+	// Read excess_size from Zeus
 	struct timeval tv_now;
 	timer_set_now(&tv_now);
-	//icarus_gets(excess_bin, fd, &tv_now, NULL, 1, excess_size);
+	//zeus_gets(excess_bin, fd, &tv_now, NULL, 1, excess_size);
 	int bytes_read = read(fd, excess_bin, excess_size);
 	// Number of bytes that were still available
 
@@ -557,7 +557,7 @@ int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
 
 /* Convert a uint64_t value into a truncated string for displaying with its
  * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
-void suffix_string(uint64_t val, char *buf, int sigdigits)
+void zeus_suffix_string(uint64_t val, char *buf, int sigdigits)
 {
 	const double  dkilo = 1000.0;
 	const uint64_t kilo = 1000ull;
@@ -612,7 +612,7 @@ void suffix_string(uint64_t val, char *buf, int sigdigits)
 	}
 }
 
-int update_num(int chips_count)
+int zeus_update_num(int chips_count)
 {
 	int i;
 	for (i=1;i<1024;i=i*2){
@@ -624,13 +624,13 @@ int update_num(int chips_count)
 }
 
 /**
- * See if we can detect a single instance of the Icarus chip.
+ * See if we can detect a single instance of the Zeus chip.
  **/
-static bool icarus_detect_one(const char *devpath)
+static bool zeus_detect_one(const char *devpath)
 {
 	int this_option_offset = ++option_offset;
 
-	struct ICARUS_INFO *info;
+	struct ZEUS_INFO *info;
 	int fd;
 	struct timeval tv_start, tv_finish;
 	struct timeval golden_tv;
@@ -642,7 +642,7 @@ static bool icarus_detect_one(const char *devpath)
 	uint32_t clk_reg_init;
 	uint64_t golden_speed_percore;
 	
-	applog(LOG_DEBUG, "Looking for Icarus devices...");
+	applog(LOG_DEBUG, "Looking for Zeus devices...");
 #if 1	
 	if(opt_chip_clk>(0xff*3/2)){
 		opt_chip_clk = 0xff*3/2;
@@ -674,25 +674,25 @@ static bool icarus_detect_one(const char *devpath)
 
 
 
-	unsigned char ob_bin[84], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char ob_bin[84], nonce_bin[ZEUS_READ_SIZE];
 	//char *nonce_hex;
 	char nonce_hex[(sizeof(nonce_bin) * 2) + 1];
 
 
-	baud = ICARUS_IO_SPEED;
+	baud = ZEUS_IO_SPEED;
 	cores_perchip = CHIP_CORES;
 	chips_count = opt_chips_count;
-	if(chips_count>opt_chips_count_max){
-		opt_chips_count_max = update_num(chips_count);
+	if(chips_count>zeus_opt_chips_count_max){
+		zeus_opt_chips_count_max = zeus_update_num(chips_count);
 	}
-	chips_count_max = opt_chips_count_max;
+	chips_count_max = zeus_opt_chips_count_max;
 
 
-		applog(LOG_DEBUG, "Icarus Detect: Attempting to open %s", devpath);
+		applog(LOG_DEBUG, "Zeus Detect: Attempting to open %s", devpath);
 		
-		fd = icarus_open2(devpath, baud, true);
+		fd = zeus_open2(devpath, baud, true);
 		if (unlikely(fd == -1)) {
-			applog(LOG_ERR, "Icarus Detect: Failed to open %s", devpath);
+			applog(LOG_ERR, "Zeus Detect: Failed to open %s", devpath);
 			return false;
 		}
 		
@@ -711,20 +711,20 @@ static bool icarus_detect_one(const char *devpath)
 	}
 
 	
-	flush_uart(fd);
+	zeus_flush_uart(fd);
 		
 	clk_header = (clk_reg_init<<24)+((0xff-clk_reg_init)<<16);
 	sprintf(clk_header_str,"%08x",clk_header+0x01);
 	memcpy(golden_ob2,clk_header_str,8);
 		
 	hex2bin(ob_bin, golden_ob2, numbytes);
-	icarus_write(fd, ob_bin, numbytes);
+	zeus_write(fd, ob_bin, numbytes);
 	sleep(1);
-	flush_uart(fd);
-	icarus_write(fd, ob_bin, numbytes);
+	zeus_flush_uart(fd);
+	zeus_write(fd, ob_bin, numbytes);
 	sleep(1);
-	flush_uart(fd);
-	icarus_write(fd, ob_bin, numbytes);
+	zeus_flush_uart(fd);
+	zeus_write(fd, ob_bin, numbytes);
 	read(fd, flush_buf, 400);
 
 
@@ -733,12 +733,12 @@ static bool icarus_detect_one(const char *devpath)
 	memcpy(golden_ob2,clk_header_str,8);
 		
 	hex2bin(ob_bin, golden_ob2, numbytes);
-	icarus_write(fd, ob_bin, numbytes);
+	zeus_write(fd, ob_bin, numbytes);
 	sleep(1);
-	flush_uart(fd);
-	icarus_write(fd, ob_bin, numbytes);
+	zeus_flush_uart(fd);
+	zeus_write(fd, ob_bin, numbytes);
 	sleep(1);
-	flush_uart(fd);
+	zeus_flush_uart(fd);
 
 
 
@@ -751,20 +751,20 @@ static bool icarus_detect_one(const char *devpath)
 		
 		read(fd, flush_buf, 400);
 		hex2bin(ob_bin, golden_ob, numbytes);	
-		icarus_write(fd, ob_bin, numbytes);
+		zeus_write(fd, ob_bin, numbytes);
 		cgtime(&tv_start);
 
 		memset(nonce_bin, 0, sizeof(nonce_bin));
 		
 		uint32_t elapsed_count;
-		icarus_gets(nonce_bin, fd, &tv_finish, NULL, 50, ICARUS_READ_SIZE, &elapsed_count);
-		icarus_close(fd);
+		zeus_gets(nonce_bin, fd, &tv_finish, NULL, 50, ZEUS_READ_SIZE, &elapsed_count);
+		zeus_close(fd);
 
 		//nonce_hex = bin2hex(nonce_bin, sizeof(nonce_bin));
 		bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
 		if (strncmp(nonce_hex, golden_nonce, 8)) {
 			applog(LOG_ERR,
-				"Icarus Detect: "
+				"Zeus Detect: "
 				"Test failed at %s: get %s, should: %s",
 				devpath, nonce_hex, golden_nonce);
 			//free(nonce_hex);
@@ -785,35 +785,35 @@ static bool icarus_detect_one(const char *devpath)
 	}
 	else{
 		
-		icarus_close(fd);
+		zeus_close(fd);
 		golden_speed_percore = (((opt_chip_clk*2)/3)*1024)/8;
 	}
 
-	/* We have a real Icarus! */
-	struct cgpu_info *icarus;
-	icarus = calloc(1, sizeof(struct cgpu_info));
-	icarus->drv = &icarus_drv;
-	icarus->device_path = strdup(devpath);
-	icarus->device_fd = -1;
-	icarus->threads = 1;
-	add_cgpu(icarus);
-	icarus_info = realloc(icarus_info, sizeof(struct ICARUS_INFO *) * (total_devices + 1));
+	/* We have a real Zeus! */
+	struct cgpu_info *zeus;
+	zeus = calloc(1, sizeof(struct cgpu_info));
+	zeus->drv = &zeus_drv;
+	zeus->device_path = strdup(devpath);
+	zeus->device_fd = -1;
+	zeus->threads = 1;
+	add_cgpu(zeus);
+	zeus_info = realloc(zeus_info, sizeof(struct ZEUS_INFO *) * (total_devices + 1));
 
-	applog(LOG_INFO, "Found Icarus at %s, mark as %d",
-		devpath, icarus->device_id);
+	applog(LOG_INFO, "Found Zeus at %s, mark as %d",
+		devpath, zeus->device_id);
 
-	applog(LOG_DEBUG, "Icarus: Init: %d baud=%d cores_perchip=%d chips_count=%d",
-		icarus->device_id, baud, cores_perchip, chips_count);
+	applog(LOG_DEBUG, "Zeus: Init: %d baud=%d cores_perchip=%d chips_count=%d",
+		zeus->device_id, baud, cores_perchip, chips_count);
 
 	// Since we are adding a new device on the end it needs to always be allocated
-	icarus_info[icarus->device_id] = (struct ICARUS_INFO *)malloc(sizeof(struct ICARUS_INFO));
-	if (unlikely(!(icarus_info[icarus->device_id])))
-		quit(1, "Failed to malloc ICARUS_INFO");
+	zeus_info[zeus->device_id] = (struct ZEUS_INFO *)malloc(sizeof(struct ZEUS_INFO));
+	if (unlikely(!(zeus_info[zeus->device_id])))
+		quit(1, "Failed to malloc ZEUS_INFO");
 
-	info = icarus_info[icarus->device_id];
+	info = zeus_info[zeus->device_id];
 
 	// Initialise everything to zero for a new device
-	memset(info, 0, sizeof(struct ICARUS_INFO));
+	memset(info, 0, sizeof(struct ZEUS_INFO));
 
 	info->check_num = 0x1234;
 	info->baud = baud;
@@ -823,7 +823,7 @@ static bool icarus_detect_one(const char *devpath)
 	if ((chips_count_max &(chips_count_max-1))!=0){
 		quit(1, "chips_count_max  must be 2^n");
 	}	
-	info->chips_bit_num = log_2(chips_count_max);
+	info->chips_bit_num = zeus_log_2(chips_count_max);
 	info->golden_speed_percore = golden_speed_percore;
 
 
@@ -836,9 +836,9 @@ static bool icarus_detect_one(const char *devpath)
 	
 	info->clk_header=clk_header;
 	
-	suffix_string(golden_speed_percore, info->core_hash, 0);
-	suffix_string(golden_speed_percore*cores_perchip, info->chip_hash, 0);
-	suffix_string(golden_speed_percore*cores_perchip*chips_count, info->board_hash, 0);
+	zeus_suffix_string(golden_speed_percore, info->core_hash, 0);
+	zeus_suffix_string(golden_speed_percore*cores_perchip, info->chip_hash, 0);
+	zeus_suffix_string(golden_speed_percore*cores_perchip*chips_count, info->board_hash, 0);
 
 	if(opt_ltc_debug){
 		applog(LOG_ERR,
@@ -851,18 +851,18 @@ static bool icarus_detect_one(const char *devpath)
 }
 
 static
-bool icarus_lowl_probe(const struct lowlevel_device_info * const info)
+bool zeus_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	return vcom_lowl_probe_wrapper(info, icarus_detect_one);
+	return vcom_lowl_probe_wrapper(info, zeus_detect_one);
 }
 
-static bool icarus_prepare(struct thr_info *thr)
+static bool zeus_prepare(struct thr_info *thr)
 {
-	struct cgpu_info *icarus = thr->cgpu;
+	struct cgpu_info *zeus = thr->cgpu;
 
-	struct icarus_state *state;
+	struct zeus_state *state;
 
-	applog(LOG_DEBUG, "Called Icarus prepare..");
+	applog(LOG_DEBUG, "Called Zeus prepare..");
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
 	state->firstrun = true;
 
@@ -875,43 +875,43 @@ static bool icarus_prepare(struct thr_info *thr)
 	}
 #endif
 
-	icarus->min_nonce_diff = 1./0x10000;
-	icarus->status = LIFE_INIT2;
+	zeus->min_nonce_diff = 1./0x10000;
+	zeus->status = LIFE_INIT2;
 	
 	return true;
 }
 
-bool icarus_init(struct thr_info *thr)
+bool zeus_init(struct thr_info *thr)
 {
-	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->device_data;
-	struct icarus_state * const state = thr->cgpu_data;
+	struct cgpu_info *zeus = thr->cgpu;
+	struct ZEUS_INFO *info = zeus->device_data;
+	struct zeus_state * const state = thr->cgpu_data;
 	
 	applog(LOG_DEBUG, "Opening ports..");
-	int fd = icarus_open2(icarus->device_path, info->baud, true);
+	int fd = zeus_open2(zeus->device_path, info->baud, true);
 	applog(LOG_DEBUG, "Ports may be open...");
-	icarus->device_fd = fd;
+	zeus->device_fd = fd;
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to open %s",
-		       icarus->dev_repr,
-		       icarus->device_path);
+		       zeus->dev_repr,
+		       zeus->device_path);
 		return false;
 	}
-	applog(LOG_INFO, "%s: Opened %s", icarus->dev_repr, icarus->device_path);
+	applog(LOG_INFO, "%s: Opened %s", zeus->dev_repr, zeus->device_path);
 	
-	BFGINIT(info->job_start_func, icarus_job_start);
+	BFGINIT(info->job_start_func, zeus_job_start);
 	BFGINIT(state->ob_bin, calloc(1, info->ob_size));
 	
 	if (!info->work_division)
 	{
 		struct timeval tv_finish;
 		
-		// For reading the nonce from Icarus
+		// For reading the nonce from Zeus
 		unsigned char res_bin[info->read_size];
 		// For storing the the 32-bit nonce
 		uint32_t res;
 		
-		applog(LOG_DEBUG, "%"PRIpreprv": Work division not specified - autodetecting", icarus->proc_repr);
+		applog(LOG_DEBUG, "%"PRIpreprv": Work division not specified - autodetecting", zeus->proc_repr);
 		
 		// Special packet to probe work_division
 		unsigned char pkt[64] =
@@ -920,13 +920,13 @@ bool icarus_init(struct thr_info *thr)
 			"BFGMiner Probe\0\0"
 			"BFG\0\x64\x61\x01\x1a\xc9\x06\xa9\x51\xfb\x9b\x3c\x73";
 		
-		icarus_write(fd, pkt, sizeof(pkt));
+		zeus_write(fd, pkt, sizeof(pkt));
 		memset(res_bin, 0, sizeof(res_bin));
 		uint32_t elapsed_count;
-		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size, &elapsed_count))
+		if (ICA_GETS_OK == zeus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size, &elapsed_count))
 		{
 			memcpy(&res, res_bin, sizeof(res));
-			res = icarus_nonce32toh(info, res);
+			res = zeus_nonce32toh(info, res);
 		}
 		else
 			res = 0;
@@ -945,10 +945,10 @@ bool icarus_init(struct thr_info *thr)
 				info->work_division = 8;
 				break;
 			default:
-				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed (assuming 2): got %08x", icarus->proc_repr, res);
+				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed (assuming 2): got %08x", zeus->proc_repr, res);
 				info->work_division = 2;
 		}
-		applog(LOG_DEBUG, "%"PRIpreprv": Work division autodetection got %08x (=%d)", icarus->proc_repr, res, info->work_division);
+		applog(LOG_DEBUG, "%"PRIpreprv": Work division autodetection got %08x (=%d)", zeus->proc_repr, res, info->work_division);
 	}
 	
 	if (!info->fpga_count)
@@ -959,16 +959,16 @@ bool icarus_init(struct thr_info *thr)
 	return true;
 }
 
-static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, int *fdp)
+static bool zeus_reopen(struct cgpu_info *zeus, struct zeus_state *state, int *fdp)
 {
-	struct ICARUS_INFO *info = icarus->device_data;
+	struct ZEUS_INFO *info = zeus->device_data;
 
-	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Icarus's buggy USB-UART
-	do_icarus_close(icarus->thr[0]);
-	*fdp = icarus->device_fd = icarus_open(icarus->device_path, info->baud);
+	// Reopen the serial port to workaround a USB-host-chipset-specific issue with the Zeus's buggy USB-UART
+	do_zeus_close(zeus->thr[0]);
+	*fdp = zeus->device_fd = zeus_open(zeus->device_path, info->baud);
 	if (unlikely(-1 == *fdp)) {
-		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", icarus->proc_repr, icarus->device_path);
-		dev_error(icarus, REASON_DEV_COMMS_ERROR);
+		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", zeus->proc_repr, zeus->device_path);
+		dev_error(zeus, REASON_DEV_COMMS_ERROR);
 		state->firstrun = true;
 		return false;
 	}
@@ -976,33 +976,33 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 }
 
 static
-bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
+bool zeus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused uint64_t max_nonce)
 {
-	struct cgpu_info * const icarus = thr->cgpu;
-	struct icarus_state * const state = thr->cgpu_data;
+	struct cgpu_info * const zeus = thr->cgpu;
+	struct zeus_state * const state = thr->cgpu_data;
 	uint8_t * const ob_bin = state->ob_bin;
 	
-	applog(LOG_DEBUG, "Icarus : Preparing job...");
+	applog(LOG_DEBUG, "Zeus : Preparing job...");
 	swab256(ob_bin, work->midstate);
 	bswap_96p(&ob_bin[0x34], &work->data[0x40]);
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
 	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
 		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
-		       icarus->proc_repr);
+		       zeus->proc_repr);
 		ob_bin[56] = 0;
 	}
 	
 	return true;
 }
 
-bool icarus_job_start(struct thr_info *thr)
+bool zeus_job_start(struct thr_info *thr)
 {
-	struct cgpu_info *icarus = thr->cgpu;
-	struct ICARUS_INFO *info = icarus->device_data;
-	struct icarus_state *state = thr->cgpu_data;
+	struct cgpu_info *zeus = thr->cgpu;
+	struct ZEUS_INFO *info = zeus->device_data;
+	struct zeus_state *state = thr->cgpu_data;
 	const uint8_t * const ob_bin = state->ob_bin;
-	int fd = icarus->device_fd;
+	int fd = zeus->device_fd;
 	int ret;
 
 	// Handle dynamic clocking for "subclass" devices
@@ -1014,11 +1014,11 @@ bool icarus_job_start(struct thr_info *thr)
 	
 	cgtime(&state->tv_workstart);
 
-	ret = icarus_write(fd, ob_bin, info->ob_size);
+	ret = zeus_write(fd, ob_bin, info->ob_size);
 	if (ret) {
-		do_icarus_close(thr);
-		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", icarus->proc_repr, ret);
-		dev_error(icarus, REASON_DEV_COMMS_ERROR);
+		do_zeus_close(thr);
+		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", zeus->proc_repr, ret);
+		dev_error(zeus, REASON_DEV_COMMS_ERROR);
 		return false;	/* This should never happen */
 	}
 
@@ -1026,7 +1026,7 @@ bool icarus_job_start(struct thr_info *thr)
 		char ob_hex[(info->ob_size * 2) + 1];
 		bin2hex(ob_hex, ob_bin, info->ob_size);
 		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
-			icarus->proc_repr,
+			zeus->proc_repr,
 			ob_hex);
 	}
 
@@ -1034,9 +1034,9 @@ bool icarus_job_start(struct thr_info *thr)
 }
 
 static
-struct work *icarus_process_worknonce(const struct ICARUS_INFO * const info, struct icarus_state *state, uint32_t *nonce)
+struct work *zeus_process_worknonce(const struct ZEUS_INFO * const info, struct zeus_state *state, uint32_t *nonce)
 {
-	*nonce = icarus_nonce32toh(info, *nonce);
+	*nonce = zeus_nonce32toh(info, *nonce);
 	if (test_nonce(state->last_work, *nonce, false))
 		return state->last_work;
 	if (likely(state->last2_work && test_nonce(state->last2_work, *nonce, false)))
@@ -1047,14 +1047,14 @@ struct work *icarus_process_worknonce(const struct ICARUS_INFO * const info, str
 static
 void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
 {
-	const struct cgpu_info * const icarus = thr->cgpu;
-	const struct ICARUS_INFO * const info = icarus->device_data;
-	struct icarus_state * const state = thr->cgpu_data;
-	int fd = icarus->device_fd;
+	const struct cgpu_info * const zeus = thr->cgpu;
+	const struct ZEUS_INFO * const info = zeus->device_data;
+	struct zeus_state * const state = thr->cgpu_data;
+	int fd = zeus->device_fd;
 	struct timeval tv_now;
 	double delapsed;
 	
-	// For reading the nonce from Icarus
+	// For reading the nonce from Zeus
 	unsigned char nonce_bin[info->read_size];
 	// For storing the the 32-bit nonce
 	uint32_t nonce;
@@ -1068,7 +1068,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	
 	if (!was_first_run)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", zeus->proc_repr);
 		while (true)
 		{
 			cgtime(&tv_now);
@@ -1079,33 +1079,33 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			// Try to get more nonces (ignoring work restart)
 			memset(nonce_bin, 0, sizeof(nonce_bin));
 			uint32_t elapsed_count;
-			ret = icarus_gets(nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10, info->read_size, &elapsed_count);
+			ret = zeus_gets(nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10, info->read_size, &elapsed_count);
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
-				nonce = icarus_nonce32toh(info, nonce);
+				nonce = zeus_nonce32toh(info, nonce);
 				submit_nonce(thr, state->last_work, nonce);
 			}
 		}
 	}
 	else
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", zeus->proc_repr);
 	
 	// 3. Delay 3 more seconds
-	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
+	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", zeus->proc_repr);
 	cgsleep_ms(3000);
 	
 	// Check for work restart in the meantime
 	if (thr->work_restart)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", zeus->proc_repr);
 		goto no_job_start;
 	}
 	
 	// 4. Start next job
 	if (!state->firstrun)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", zeus->proc_repr);
 		if (!info->job_start_func(thr))
 no_job_start:
 			state->firstrun = true;
@@ -1115,7 +1115,7 @@ no_job_start:
 }
 
 static
-void icarus_transition_work(struct icarus_state *state, struct work *work)
+void zeus_transition_work(struct zeus_state *state, struct work *work)
 {
 	if (state->last2_work)
 		free_work(state->last2_work);
@@ -1123,18 +1123,18 @@ void icarus_transition_work(struct icarus_state *state, struct work *work)
 	state->last_work = copy_work(work);
 }
 
-void update_chip_stat(struct ICARUS_INFO *info,uint32_t nonce);
+void update_chip_stat(struct ZEUS_INFO *info,uint32_t nonce);
 
-static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
+static int64_t zeus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
-	struct cgpu_info *icarus;
+	struct cgpu_info *zeus;
 	int fd;
 	int ret;
 
-	struct ICARUS_INFO *info;
+	struct ZEUS_INFO *info;
 	int numbytes = 84;				// KRAMBLE 76 byte protocol
-	unsigned char ob_bin[84], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char ob_bin[84], nonce_bin[ZEUS_READ_SIZE];
 	char *ob_hex;
 
 	struct work *nonce_work;
@@ -1148,7 +1148,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	bool was_hw_error = false;
 	bool was_first_run;
 
-	struct ICARUS_HISTORY *history0, *history;
+	struct ZEUS_HISTORY *history0, *history;
 	int count;
 	double Hs, W, fullnonce;
 	//int read_count;
@@ -1159,15 +1159,15 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	elapsed.tv_sec = elapsed.tv_usec = 0;
 
-	icarus = thr->cgpu;
-	struct icarus_state *state = thr->cgpu_data;
+	zeus = thr->cgpu;
+	struct zeus_state *state = thr->cgpu_data;
 	was_first_run = state->firstrun;
 
-	icarus->drv->job_prepare(thr, work, max_nonce);
+	zeus->drv->job_prepare(thr, work, max_nonce);
 
 	// Wait for the previous run's result
-	fd = icarus->device_fd;
-	info = icarus->device_data;
+	fd = zeus->device_fd;
+	info = zeus->device_data;
 	
 		uint32_t clock = info->clk_header;
 
@@ -1201,18 +1201,18 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		//ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 		//ob_hex = bin2hex(nonce_hex, ob_bin, 8);
 		bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-		applog(LOG_ERR, "Icarus %d nounce2 = %s readcount = %d try sent: %s",
-			icarus->device_id,work->nonce2,info->read_count, nonce_hex);
+		applog(LOG_ERR, "Zeus %d nounce2 = %s readcount = %d try sent: %s",
+			zeus->device_id,work->nonce2,info->read_count, nonce_hex);
 		//free(nonce_hex);
 	}
 
 
 	read(fd, flush_buf, 400);
-	ret = icarus_write(fd, ob_bin, 84); 
+	ret = zeus_write(fd, ob_bin, 84); 
 	if (ret) {
-		do_icarus_close(thr);
-		applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
-		dev_error(icarus, REASON_DEV_COMMS_ERROR);
+		do_zeus_close(thr);
+		applog(LOG_ERR, "%s%i: Comms error", zeus->drv->name, zeus->device_id);
+		dev_error(zeus, REASON_DEV_COMMS_ERROR);
 		return 0;	/* This should never happen */
 	}
 
@@ -1220,7 +1220,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	cgtime(&tv_start);
 
 
-	/* Icarus will return 4 bytes (ICARUS_READ_SIZE) nonces or nothing */
+	/* Zeus will return 4 bytes (ZEUS_READ_SIZE) nonces or nothing */
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 
 
@@ -1231,16 +1231,16 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	uint32_t elapsed_count;
 	uint32_t read_count = info->read_count;
 	while(1){
-		ret = icarus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count, info->read_size, &elapsed_count);
+		ret = zeus_gets(nonce_bin, fd, &tv_finish, thr, info->read_count, info->read_size, &elapsed_count);
 		if (ret == ICA_GETS_ERROR) {
-			do_icarus_close(thr);
-			applog(LOG_ERR, "%s%i: Comms error", icarus->drv->name, icarus->device_id);
-			dev_error(icarus, REASON_DEV_COMMS_ERROR);
+			do_zeus_close(thr);
+			applog(LOG_ERR, "%s%i: Comms error", zeus->drv->name, zeus->device_id);
+			dev_error(zeus, REASON_DEV_COMMS_ERROR);
 			return 0;
 		}
 #ifndef WIN32
 //openwrt
-		flush_uart(fd);
+		zeus_flush_uart(fd);
 #endif
 
 		work->blk.nonce = 0xffffffff;
@@ -1279,15 +1279,15 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 #endif
 
 
-		curr_hw_errors = icarus->hw_errors;
+		curr_hw_errors = zeus->hw_errors;
 
 		submit_nonce(thr, work, nonce);
 		
-		was_hw_error = (curr_hw_errors < icarus->hw_errors);
+		was_hw_error = (curr_hw_errors < zeus->hw_errors);
 
 		if (was_hw_error){
 			
-			flush_uart(fd);
+			zeus_flush_uart(fd);
 			if (opt_ltc_debug&&1) {
 				applog(LOG_ERR, "ERR nonce:%08x ",nonce);
 			}
@@ -1296,7 +1296,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 			
 			if (opt_ltc_debug&&0) {
 #if CHIP_GEN==1
-				uint32_t chip_index=get_revindex(nonce,info->chips_bit_num);
+				uint32_t chip_index=zeus_get_revindex(nonce,info->chips_bit_num);
 				uint32_t core_index=(nonce&0xe0000000)>>29;
 #else
 #error
@@ -1312,10 +1312,10 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 }
 
-static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
+static struct api_data *zeus_drv_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct ICARUS_INFO *info = cgpu->device_data;
+	struct ZEUS_INFO *info = cgpu->device_data;
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
@@ -1334,7 +1334,7 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 	root = api_add_uint(root, "min_data_count", &(info->min_data_count), false);
 	root = api_add_uint(root, "timing_values", &(info->history[0].values), false);
 	root = api_add_const(root, "timing_mode", timing_mode_str(info->timing_mode), false);
-	root = api_add_bool(root, "is_timing", &(info->do_icarus_timing), false);
+	root = api_add_bool(root, "is_timing", &(info->do_zeus_timing), false);
 	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "work_division", &(info->work_division), false);
 	root = api_add_int(root, "fpga_count", &(info->fpga_count), false);
@@ -1348,9 +1348,9 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 }
 
 static
-const char *icarus_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
+	struct ZEUS_INFO * const info = proc->device_data;
 	const int baud = atoi(newvalue);
 	if (!valid_baud(baud))
 		return "Invalid baud setting";
@@ -1363,17 +1363,17 @@ const char *icarus_set_baud(struct cgpu_info * const proc, const char * const op
 }
 
 static
-const char *icarus_set_probe_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_probe_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
-	info->probe_read_count = atof(newvalue) * 10.0 / ICARUS_READ_FAULT_DECISECONDS;
+	struct ZEUS_INFO * const info = proc->device_data;
+	info->probe_read_count = atof(newvalue) * 10.0 / ZEUS_READ_FAULT_DECISECONDS;
 	return NULL;
 }
 
 static
-const char *icarus_set_work_division(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_work_division(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
+	struct ZEUS_INFO * const info = proc->device_data;
 	const int work_division = atoi(newvalue);
 	if (!(work_division == 1 || work_division == 2 || work_division == 4 || work_division == 8))
 		return "Invalid work_division: must be 1, 2, 4 or 8";
@@ -1391,9 +1391,9 @@ const char *icarus_set_work_division(struct cgpu_info * const proc, const char *
 }
 
 static
-const char *icarus_set_fpga_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_fpga_count(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
+	struct ZEUS_INFO * const info = proc->device_data;
 	const int fpga_count = atoi(newvalue);
 	if (fpga_count < 1 || fpga_count > info->work_division)
 		return "Invalid fpga_count: must be >0 and <=work_division";
@@ -1402,9 +1402,9 @@ const char *icarus_set_fpga_count(struct cgpu_info * const proc, const char * co
 }
 
 static
-const char *icarus_set_reopen(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *zeus_set_reopen(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
+	struct ZEUS_INFO * const info = proc->device_data;
 	if ((!strcasecmp(newvalue, "never")) || !strcasecmp(newvalue, "-r"))
 		info->reopen_mode = IRM_NEVER;
 	else
@@ -1421,59 +1421,59 @@ const char *icarus_set_reopen(struct cgpu_info * const proc, const char * const 
 	return NULL;
 }
 
-static void icarus_shutdown(struct thr_info *thr)
+static void zeus_shutdown(struct thr_info *thr)
 {
   applog(LOG_DEBUG, "Shutting down...");
-	do_icarus_close(thr);
+	do_zeus_close(thr);
 	free(thr->cgpu_data);
 }
 
-const struct bfg_set_device_definition icarus_set_device_funcs[] = {
-	// NOTE: Order of parameters below is important for --icarus-options
-	{"baud"         , icarus_set_baud         , "serial baud rate"},
-	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
-	{"fpga_count"   , icarus_set_fpga_count   , "number of chips working on pieces"},
-	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
+const struct bfg_set_device_definition zeus_set_device_funcs[] = {
+	// NOTE: Order of parameters below is important for --zeus-options
+	{"baud"         , zeus_set_baud         , "serial baud rate"},
+	{"work_division", zeus_set_work_division, "number of pieces work is split into"},
+	{"fpga_count"   , zeus_set_fpga_count   , "number of chips working on pieces"},
+	{"reopen"       , zeus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	// NOTE: Below here, order is irrelevant
-	{"probe_timeout", icarus_set_probe_timeout},
-	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
+	{"probe_timeout", zeus_set_probe_timeout},
+	{"timing"       , zeus_set_timing       , "timing of device; see README.FPGA"},
 	{NULL},
 };
 
-struct device_drv icarus_drv = {
-	.dname = "icarus",
-	.name = "ICA",
+struct device_drv zeus_drv = {
+	.dname = "zeus",
+	.name = "ZUS",
 	.supported_algos = POW_SCRYPT,
 	//.max_diff = 32768,
 	//.probe_priority = -115,
 
 	// Detect device.
-	.lowl_probe = icarus_lowl_probe,
+	.lowl_probe = zeus_lowl_probe,
 
 	// ???
-	//.get_api_stats = icarus_drv_stats,
+	//.get_api_stats = zeus_drv_stats,
 	
 	// Initalize device.
-	.thread_prepare = icarus_prepare,
+	.thread_prepare = zeus_prepare,
 
 	// ???
-	//.thread_init = icarus_init,
+	//.thread_init = zeus_init,
 
 	.minerloop = minerloop_scanhash,
 
 	// scanhash mining hooks
-	.scanhash = icarus_scanhash,
+	.scanhash = zeus_scanhash,
 	// XXX Missing prepare work?
 
-	//.prepare_work = icarus_job_prepare,
+	//.prepare_work = zeus_job_prepare,
 	// ???
-	.job_prepare = icarus_job_prepare,
+	.job_prepare = zeus_job_prepare,
 
 	// ???
 	//.thread_disable = close_device_fd,
 
 	// teardown device
-	.thread_shutdown = icarus_shutdown,
+	.thread_shutdown = zeus_shutdown,
 
 	// need specify settings/options?
 };
