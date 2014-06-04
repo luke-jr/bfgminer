@@ -2160,12 +2160,12 @@ nextmatch:
 	return URI_FIND_PARAM_FOUND;
 }
 
-bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+enum bfg_tristate uri_get_param_bool2(const char * const uri, const char * const param)
 {
 	bool invert, foundval = true;
 	const char *q = uri_find_param(uri, param, &invert);
 	if (!q)
-		return defval;
+		return BTS_UNKNOWN;
 	else
 	if (q != URI_FIND_PARAM_FOUND)
 	{
@@ -2177,6 +2177,14 @@ bool uri_get_param_bool(const char * const uri, const char * const param, const 
 	if (invert)
 		foundval = !foundval;
 	return foundval;
+}
+
+bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+{
+	const enum bfg_tristate rv = uri_get_param_bool2(uri, param);
+	if (rv == BTS_UNKNOWN)
+		return defval;
+	return rv;
 }
 
 static
