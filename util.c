@@ -2633,7 +2633,13 @@ static bool setup_stratum_curl(struct pool *pool)
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
-	bool try_tls = uri_get_param_bool(pool->rpc_url, "tls", true);
+	bool tls_only = false, try_tls = true;
+	
+	{
+		const enum bfg_tristate tlsparam = uri_get_param_bool2(pool->rpc_url, "tls");
+		if (tlsparam != BTS_UNKNOWN)
+			try_tls = tls_only = tlsparam;
+	}
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -2700,11 +2706,15 @@ retry:
 		{
 			applog(LOG_DEBUG, "Stratum connect failed with TLS to pool %u: %s",
 			       pool->pool_no, pool->curl_err_str);
-			try_tls = false;
-			goto retry;
+			if (!tls_only)
+			{
+				try_tls = false;
+				goto retry;
+			}
 		}
-		applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
-		       pool->pool_no, pool->curl_err_str);
+		else
+			applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
+			       pool->pool_no, pool->curl_err_str);
 errout:
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
