@@ -2132,29 +2132,43 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 	return false;
 }
 
-bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+#define URI_FIND_PARAM_FOUND ((const char *)uri_find_param)
+
+const char *uri_find_param(const char * const uri, const char * const param, bool * const invert_p)
 {
 	const char *start = strchr(uri, '#');
-	bool invert = false, foundval = true;
+	if (invert_p)
+		*invert_p = false;
 	if (!start)
-		return defval;
+		return NULL;
 	const char *p = start;
 	++start;
 nextmatch:
 	p = strstr(&p[1], param);
 	if (!p)
-		return defval;
+		return NULL;
 	const char *q = &p[strlen(param)];
 	if (isCalpha(q[0]))
 		goto nextmatch;
-	if (p - start >= 2 && (!strncasecmp(&p[-2], "no", 2)) && !isCalpha(p[-3]))
-		invert = true;
+	if (invert_p && p - start >= 2 && (!strncasecmp(&p[-2], "no", 2)) && !isCalpha(p[-3]))
+		*invert_p = true;
 	else
 	if (isCalpha(p[-1]))
 		goto nextmatch;
 	if (q[0] == '=')
+		return &q[1];
+	return URI_FIND_PARAM_FOUND;
+}
+
+bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+{
+	bool invert, foundval = true;
+	const char *q = uri_find_param(uri, param, &invert);
+	if (!q)
+		return defval;
+	else
+	if (q != URI_FIND_PARAM_FOUND)
 	{
-		++q;
 		char *end;
 		bool v = bfg_strtobool(q, &end, 0);
 		if (end > q && !isCalpha(end[0]))
