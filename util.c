@@ -2180,6 +2180,27 @@ bool uri_get_param_bool(const char * const uri, const char * const param, const 
 }
 
 static
+void _test_uri_find_param(const char * const uri, const char * const param, const ssize_t expect_offset, const int expect_invert)
+{
+	bool invert;
+	const char *actual = uri_find_param(uri, param, (expect_invert >= 0) ? &invert : NULL);
+	ssize_t actual_offset;
+	if (actual == URI_FIND_PARAM_FOUND)
+		actual_offset = -1;
+	else
+	if (!actual)
+		actual_offset = -2;
+	else
+		actual_offset = actual - uri;
+	int actual_invert = (expect_invert >= 0) ? (invert ? 1 : 0) : -1;
+	if (actual_offset != expect_offset || expect_invert != actual_invert)
+		applog(LOG_WARNING, "%s(\"%s\", \"%s\", %s) test failed (offset: expect=%d actual=%d; invert: expect=%d actual=%d)",
+		       "uri_find_param", uri, param, (expect_invert >= 0) ? "(invert)" : "NULL",
+		       expect_offset, actual_offset,
+		       expect_invert, actual_invert);
+}
+
+static
 void _test_uri_get_param(const char * const uri, const char * const param, const bool defval, const bool expect)
 {
 	const bool actual = uri_get_param_bool(uri, param, defval);
@@ -2190,6 +2211,13 @@ void _test_uri_get_param(const char * const uri, const char * const param, const
 
 void test_uri_get_param()
 {
+	_test_uri_find_param("stratum+tcp://footest/#redirect", "redirect", -1, -1);
+	_test_uri_find_param("stratum+tcp://footest/#redirectme", "redirect", -2, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect", "redirect", -2, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect", "redirect", -1, 1);
+	_test_uri_find_param("stratum+tcp://footest/#redirect", "redirect", -1, 0);
+	_test_uri_find_param("stratum+tcp://footest/#redirect=", "redirect", 32, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect=", "redirect", 34, 1);
 	_test_uri_get_param("stratum+tcp://footest/#redirect", "redirect", false, true);
 	_test_uri_get_param("stratum+tcp://footest/#redirectme", "redirect", false, false);
 	_test_uri_get_param("stratum+tcp://footest/#noredirect", "redirect", false, false);
