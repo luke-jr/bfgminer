@@ -255,16 +255,23 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 static
 char *gridseed_set_device(struct cgpu_info *device, char *option, char *setting, char *replybuf)
 {
+	int val = atoi(setting);
+	struct gc3355_orb_info *info = device->device_data;
+
 	if (strcasecmp(option, "clock") == 0)
 	{
-		int val = atoi(setting);
-		
-		struct gc3355_orb_info *info = (struct gc3355_orb_info *)(device->device_data);
 		info->freq = val;
 		int fd = device->device_fd;
 		
 		gc3355_set_pll_freq(fd, val);
 		
+		return NULL;
+	}
+
+	if (strcasecmp(option, "chips") == 0)
+	{
+		info->chips = val;
+
 		return NULL;
 	}
 	
