@@ -35,10 +35,10 @@ static bool _erupter_detect_one(const char *devpath, struct device_drv *drv)
 		.continue_search = true,
 	};
 
-	/*if (!icarus_detect_custom(devpath, drv, info)) {
+	if (!icarus_detect_custom(devpath, drv, info)) {
 		free(info);
 		return false;
-	}*/
+	}
 	return true;
 }
 
