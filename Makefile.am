@@ -244,7 +244,7 @@ bfgminer_SOURCES += driver-antminer.c
 endif
 
 if HAS_ZEUS
-bfgminer_SOURCES += driver-zeus.c driver-zeus.h
+bfgminer_SOURCES += driver-zeus.c 
 endif
 
 if USE_GC3355
