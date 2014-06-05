@@ -149,10 +149,8 @@ static
 void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const dev)
 {
 	const int fd = dev->device_fd;
-	do {
-		buf[0] = '\0';
-		--bufLen;
-	} while (likely(bufLen && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'));
+	while (likely(bufLen > 1 && read(fd, buf, 1) == 1 && (buf++)[0] != '\n'))
+	{}
 
 	buf[0] = '\0';
 }
