@@ -2867,15 +2867,9 @@ bool restart_stratum(struct pool *pool)
 		suspend_stratum(pool);
 	
 	if (!initiate_stratum(pool))
-	{
-		ret = false;
-		goto out;
-	}
+		return_via(out, ret = false);
 	if (!auth_stratum(pool))
-	{
-		ret = false;
-		goto out;
-	}
+		return_via(out, ret = false);
 	
 out:
 	mutex_unlock(&pool->pool_test_lock);
