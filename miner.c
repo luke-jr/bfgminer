@@ -3965,6 +3965,8 @@ static void curses_print_status(const int ts)
 				oldest_work_restart_pool = pool;
 			}
 		}
+		if (unlikely(!workable_pools))
+			goto no_workable_pools;
 		if (workable_pools == 1)
 			goto one_workable_pool;
 		poolinfo2off = snprintf(poolinfo2, sizeof(poolinfo2), "%u (", workable_pools);
@@ -3979,6 +3981,14 @@ static void curses_print_status(const int ts)
 		             (lowdiff == highdiff) ? "" : highdiff_pool->diff,
 		             have_longpoll ? '+' : '-',
 		             oldest_work_restart_pool->work_restart_timestamp);
+	}
+	else
+	if (pool_unworkable(pool))
+	{
+no_workable_pools: ;
+		wattron(statuswin, attr_bad);
+		cg_mvwprintw(statuswin, 2, 0, " (all pools are dead) ");
+		wattroff(statuswin, attr_bad);
 	}
 	else
 	{
