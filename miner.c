@@ -8112,7 +8112,7 @@ retry_stratum:
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
-			cgtime(&pool->tv_idle);
+			pool->tv_idle = tv_getwork_reply;
 		} else {
 badwork:
 			json_decref(val);
@@ -9291,7 +9291,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
-				cgtime(&pool->tv_idle);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}
