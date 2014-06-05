@@ -1581,6 +1581,13 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	if (url_len < 1)
 		return false;
+	
+	if (url_len >= sizeof(url_address))
+	{
+		applog(LOG_WARNING, "%s: Truncating overflowed address '%.*s'",
+		       __func__, url_len, url_begin);
+		url_len = sizeof(url_address) - 1;
+	}
 
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
@@ -2479,7 +2486,8 @@ resend:
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
-	if (!n2size) {
+	if (n2size < 1)
+	{
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		free(sessionid);
 		free(nonce1);
