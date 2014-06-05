@@ -2634,11 +2634,16 @@ static bool setup_stratum_curl(struct pool *pool)
 	char s[RBUFSIZE];
 	bool ret = false;
 	bool tls_only = false, try_tls = true;
+	bool tlsca = uri_get_param_bool(pool->rpc_url, "tlsca", false);
 	
 	{
 		const enum bfg_tristate tlsparam = uri_get_param_bool2(pool->rpc_url, "tls");
 		if (tlsparam != BTS_UNKNOWN)
 			try_tls = tls_only = tlsparam;
+		else
+		if (tlsca)
+			// If tlsca is enabled, require TLS by default
+			tls_only = true;
 	}
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
@@ -2682,8 +2687,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 	
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)0);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)(tlsca ? 2 : 0));
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)(tlsca ? 1 : 0));
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1);
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
