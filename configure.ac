@@ -458,6 +458,22 @@ if test "x$icarus" = xyes; then
 fi
 AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
+driverlist="$driverlist zeus"
+AC_ARG_ENABLE([zeus],
+        [AC_HELP_STRING([--disable-zeus],[Compile support for Zeus (default enabled)])],
+        [zeus=$enableval],
+        [zeus=$ddyes]
+        )
+if test "x$zeus" = xyes; then
+        AC_DEFINE([USE_ZEUS], [1], [Defined to 1 if Zeus support is wanted])
+        need_dynclock=yes
+        need_lowl_vcom=yes
+        has_fpga=yes
+        has_asic=yes
+        have_udevrules=true
+fi
+AM_CONDITIONAL([HAS_ZEUS], [test x$zeus = xyes])
+
 driverlist="$driverlist dualminer"
 AC_ARG_ENABLE([dualminer],
 	[AC_HELP_STRING([--disable-dualminer],[Compile support for DualMiner (default enabled)])],

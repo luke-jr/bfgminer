@@ -623,6 +623,9 @@ int update_num(int chips_count)
 	return 1024;
 }
 
+/**
+ * See if we can detect a single instance of the Icarus chip.
+ **/
 static bool icarus_detect_one(const char *devpath)
 {
 	int this_option_offset = ++option_offset;
@@ -639,6 +642,7 @@ static bool icarus_detect_one(const char *devpath)
 	uint32_t clk_reg_init;
 	uint64_t golden_speed_percore;
 	
+	applog(LOG_DEBUG, "Looking for Icarus devices...");
 #if 1	
 	if(opt_chip_clk>(0xff*3/2)){
 		opt_chip_clk = 0xff*3/2;
@@ -857,6 +861,8 @@ static bool icarus_prepare(struct thr_info *thr)
 	struct cgpu_info *icarus = thr->cgpu;
 
 	struct icarus_state *state;
+
+	applog(LOG_DEBUG, "Called Icarus prepare..");
 	thr->cgpu_data = state = calloc(1, sizeof(*state));
 	state->firstrun = true;
 
@@ -869,6 +875,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	}
 #endif
 
+	icarus->min_nonce_diff = 1./0x10000;
 	icarus->status = LIFE_INIT2;
 	
 	return true;
@@ -880,7 +887,9 @@ bool icarus_init(struct thr_info *thr)
 	struct ICARUS_INFO *info = icarus->device_data;
 	struct icarus_state * const state = thr->cgpu_data;
 	
+	applog(LOG_DEBUG, "Opening ports..");
 	int fd = icarus_open2(icarus->device_path, info->baud, true);
+	applog(LOG_DEBUG, "Ports may be open...");
 	icarus->device_fd = fd;
 	if (unlikely(-1 == fd)) {
 		applog(LOG_ERR, "%s: Failed to open %s",
@@ -973,6 +982,7 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	struct icarus_state * const state = thr->cgpu_data;
 	uint8_t * const ob_bin = state->ob_bin;
 	
+	applog(LOG_DEBUG, "Icarus : Preparing job...");
 	swab256(ob_bin, work->midstate);
 	bswap_96p(&ob_bin[0x34], &work->data[0x40]);
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
@@ -1413,6 +1423,7 @@ const char *icarus_set_reopen(struct cgpu_info * const proc, const char * const 
 
 static void icarus_shutdown(struct thr_info *thr)
 {
+  applog(LOG_DEBUG, "Shutting down...");
 	do_icarus_close(thr);
 	free(thr->cgpu_data);
 }
@@ -1432,14 +1443,37 @@ const struct bfg_set_device_definition icarus_set_device_funcs[] = {
 struct device_drv icarus_drv = {
 	.dname = "icarus",
 	.name = "ICA",
+	.supported_algos = POW_SCRYPT,
 	//.max_diff = 32768,
-	.probe_priority = -115,
+	//.probe_priority = -115,
+
+	// Detect device.
 	.lowl_probe = icarus_lowl_probe,
-	.get_api_stats = icarus_drv_stats,
+
+	// ???
+	//.get_api_stats = icarus_drv_stats,
+	
+	// Initalize device.
 	.thread_prepare = icarus_prepare,
-	.thread_init = icarus_init,
+
+	// ???
+	//.thread_init = icarus_init,
+
+	.minerloop = minerloop_scanhash,
+
+	// scanhash mining hooks
 	.scanhash = icarus_scanhash,
+	// XXX Missing prepare work?
+
+	//.prepare_work = icarus_job_prepare,
+	// ???
 	.job_prepare = icarus_job_prepare,
-	.thread_disable = close_device_fd,
+
+	// ???
+	//.thread_disable = close_device_fd,
+
+	// teardown device
 	.thread_shutdown = icarus_shutdown,
+
+	// need specify settings/options?
 };
