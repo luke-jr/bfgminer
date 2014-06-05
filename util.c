@@ -2859,15 +2859,28 @@ out:
 
 bool restart_stratum(struct pool *pool)
 {
+	bool ret = true;
+	
 	mutex_lock(&pool->pool_test_lock);
+	
 	if (pool->stratum_active)
 		suspend_stratum(pool);
+	
 	if (!initiate_stratum(pool))
-		return false;
+	{
+		ret = false;
+		goto out;
+	}
 	if (!auth_stratum(pool))
-		return false;
+	{
+		ret = false;
+		goto out;
+	}
+	
+out:
 	mutex_unlock(&pool->pool_test_lock);
-	return true;
+	
+	return ret;
 }
 
 void dev_error_update(struct cgpu_info *dev, enum dev_reason reason)
