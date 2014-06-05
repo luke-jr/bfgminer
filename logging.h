@@ -43,6 +43,11 @@ extern bool want_per_device_stats;
 /* global log_level, messages with lower or equal prio are logged */
 extern int opt_log_level;
 
+#define return_via(label, stmt)  do {  \
+	stmt;  \
+	goto label;  \
+} while (0)
+
 #define LOGBUFSIZ 0x1000
 
 extern void _applog(int prio, const char *str);
@@ -70,6 +75,12 @@ extern void _applog(int prio, const char *str);
 	return rv;  \
 } while (0)
 
+#define return_via_applog(label, expr, prio, ...)  do {  \
+	applog(prio, __VA_ARGS__);  \
+	expr;  \
+	goto label;  \
+} while (0)
+
 #define appperror(prio, s)  do {  \
 	const char *_tmp43 = bfg_strerror(errno, BST_ERRNO);  \
 	if (s && s[0])  \
@@ -92,6 +103,12 @@ extern void _applog(int prio, const char *str);
 	return rv;  \
 } while (0)
 
+#define return_via_applogfailinfo(label, expr, prio, failed, fmt, ...)  do {  \
+	applogfailinfo(prio, failed, fmt, __VA_ARGS__);  \
+	expr;  \
+	goto label;  \
+} while (0)
+
 #define applogfail(prio, failed)  do {  \
 	applog(prio, "Failed to %s"IN_FMT_FFL,  \
 	       failed,  \
@@ -101,6 +118,12 @@ extern void _applog(int prio, const char *str);
 #define applogfailr(rv, prio, failed)  do {  \
 	applogfail(prio, failed);  \
 	return rv;  \
+} while (0)
+
+#define return_via_applogfail(label, expr, prio, failed)  do {  \
+	applogfail(prio, failed);  \
+	expr;  \
+	goto label;  \
 } while (0)
 
 extern void _bfg_clean_up(bool);

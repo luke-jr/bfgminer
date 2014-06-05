@@ -220,11 +220,12 @@ bool use_curses;
 bool have_libusb;
 #endif
 
+//ZeusMiner Definition
 bool opt_ltc_debug = false;
 bool opt_ltc_nocheck_golden = false;
 bool opt_nocheck_scrypt = false;
 int opt_chips_count = 1;
-int opt_chip_clk = 200; //MegaHz
+int opt_chip_clk = 200;
 
 static bool opt_submit_stale = true;
 static float opt_shares;
@@ -2139,29 +2140,12 @@ static struct opt_table opt_config_table[] = {
 	             opt_hidden),
 #endif
 #ifdef USE_ICARUS
-	#if 0
 	OPT_WITH_ARG("--icarus-options",
 		     set_icarus_options, NULL, NULL,
 		     opt_hidden),
 	OPT_WITH_ARG("--icarus-timing",
 		     set_icarus_timing, NULL, NULL,
 		     opt_hidden),
-	#endif	 
-OPT_WITHOUT_ARG("--ltc-debug",
-			 opt_set_bool, &opt_ltc_debug,
-			 "Enable ltc debug output"),			 
-OPT_WITHOUT_ARG("--nocheck-golden",
-			 opt_set_bool, &opt_ltc_nocheck_golden,
-			 "Disable ltc init golden check"),
-OPT_WITHOUT_ARG("--nocheck-scrypt",
-			 opt_set_bool, &opt_nocheck_scrypt,
-			 "Disable scrypt result check, must enable in openwrt building"),
-OPT_WITH_ARG("--chips-count",
-		 set_int_1_to_65535, opt_show_intval, &opt_chips_count,
-		 "Chips count in one com port"),
-OPT_WITH_ARG("--ltc-clk",
-		 set_int_1_to_65535, opt_show_intval, &opt_chip_clk,
-		 "clock Mhz"),		 
 #endif
 #ifdef USE_AVALON
 	OPT_WITH_ARG("--avalon-options",
@@ -2458,6 +2442,23 @@ OPT_WITH_ARG("--ltc-clk",
 			"Display extra work time debug information"),
 	OPT_WITH_ARG("--pools",
 			opt_set_bool, NULL, NULL, opt_hidden),
+#ifdef USE_ZEUS
+	OPT_WITHOUT_ARG("--ltc-debug",
+			 opt_set_bool, &opt_ltc_debug,
+			 "Enable ltc debug output"),			 
+	OPT_WITHOUT_ARG("--nocheck-golden",
+			 opt_set_bool, &opt_ltc_nocheck_golden,
+			 "Disable ltc init golden check"),
+	OPT_WITHOUT_ARG("--nocheck-scrypt",
+			 opt_set_bool, &opt_nocheck_scrypt,
+			 "Disable scrypt result check, must enable in openwrt building"),
+	OPT_WITH_ARG("--chips-count",
+		 set_int_1_to_65535, opt_show_intval, &opt_chips_count,
+		 "Chips count in one com port"),
+	OPT_WITH_ARG("--ltc-clk",
+		 set_int_1_to_65535, opt_show_intval, &opt_chip_clk,
+		 "clock Mhz"),		 
+#endif
 	OPT_ENDTABLE
 };
 
@@ -8808,7 +8809,7 @@ retry_stratum:
 			total_getworks++;
 			pool->getwork_requested++;
 			ret = true;
-			cgtime(&pool->tv_idle);
+			pool->tv_idle = tv_getwork_reply;
 		} else {
 badwork:
 			json_decref(val);
@@ -10157,7 +10158,6 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 
 			/* Test pool is idle once every minute */
 			if (pool->idle && now.tv_sec - pool->tv_idle.tv_sec > 30) {
-				cgtime(&pool->tv_idle);
 				if (pool_active(pool, true) && pool_tclear(pool, &pool->idle))
 					pool_resus(pool);
 			}

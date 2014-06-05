@@ -1,3 +1,10 @@
+bfgminer (4.0.0) custom build
+ * zeus: New driver, supporting Zeus miner scrypt only ASIC mining.
+ 
+ -- Darkwinde <Darkwinde@web.de>, fbatogo <> 
+
+
+
 BFGMiner Version 4.0.0 - May 26, 2014
 
 - Update openwrt Makefile for xz source

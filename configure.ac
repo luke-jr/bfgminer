@@ -460,19 +460,21 @@ AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
 
 driverlist="$driverlist zeus"
 AC_ARG_ENABLE([zeus],
-        [AC_HELP_STRING([--disable-zeus],[Compile support for Zeus (default enabled)])],
-        [zeus=$enableval],
-        [zeus=$ddyes]
-        )
-if test "x$zeus" = xyes; then
-        AC_DEFINE([USE_ZEUS], [1], [Defined to 1 if Zeus support is wanted])
-        need_dynclock=yes
-        need_lowl_vcom=yes
-        has_fpga=yes
-        has_asic=yes
-        have_udevrules=true
+	[AC_HELP_STRING([--disable-zeus],[Compile support for Zeus (default enabled with scrypt)])],
+	[zeus=$enableval],
+	[zeus=$scrypt])
+if test "x$zeus" = "xyes"; then
+	if test "x$scrypt" = "xno"; then
+		AC_MSG_ERROR([You explicitly enabled Zeus, but did not enable scrypt (SHA2 not supported)!!!])
+	fi
+	AC_DEFINE([USE_ZEUS], [1], [Defined to 1 if Zeus support is wanted])
+	need_dynclock=yes
+    need_lowl_vcom=yes
+    has_fpga=yes
+    has_asic=yes
+    have_udevrules=true
 fi
-AM_CONDITIONAL([HAS_ZEUS], [test x$zeus = xyes])
+AM_CONDITIONAL([USE_ZEUS], [test x$zeus = xyes])
 
 driverlist="$driverlist dualminer"
 AC_ARG_ENABLE([dualminer],

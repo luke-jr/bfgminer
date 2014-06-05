@@ -1,3 +1,9 @@
+bfgminer (4.0.0) custom build
+ * zeus: New driver, supporting Zeus miner scrypt only ASIC mining.
+ 
+ -- Darkwinde <Darkwinde@web.de>, fbatogo <> 
+
+ 
 bfgminer (4.0.0-0precise1) precise; urgency=low
 
   * Various options (specifically, --temp-cutoff, --temp-target, and the various --<driver>-options) have been migrated to the --set-device interface.

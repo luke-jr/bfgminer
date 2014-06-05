@@ -1,7 +1,7 @@
 /*
- * Copyright 2012 Luke Dashjr
- * Copyright 2012 Xiangfu <xiangfu@openmobilefree.com>
- * Copyright 2012 Andrew Smith
+ * Copyright 2014 zeusminer.com
+ * Copyright 2014 fbatogo
+ * Copyright 2014 Darkwinde
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -10,22 +10,22 @@
  */
 
 /*
- * Those code should be works fine with V2 and V3 bitstream of Icarus.
+ * Those code should be works fine with V2 and V3 bitstream of Zeus.
  * Operation:
  *   No detection implement.
  *   Input: 64B = 32B midstate + 20B fill bytes + last 12 bytes of block head.
- *   Return: send back 32bits immediately when Icarus found a valid nonce.
+ *   Return: send back 32bits immediately when Zeus found a valid nonce.
  *           no query protocol implemented here, if no data send back in ~11.3
  *           seconds (full cover time on 32bit nonce range by 380MH/s speed)
  *           just send another work.
  * Notice:
- *   1. Icarus will start calculate when you push a work to them, even they
+ *   1. Zeus will start calculate when you push a work to them, even they
  *      are busy.
- *   2. The 2 FPGAs on Icarus will distribute the job, one will calculate the
+ *   2. The 2 FPGAs on Zeus will distribute the job, one will calculate the
  *      0 ~ 7FFFFFFF, another one will cover the 80000000 ~ FFFFFFFF.
  *   3. It's possible for 2 FPGAs both find valid nonce in the meantime, the 2
  *      valid nonce will all be send back.
- *   4. Icarus will stop work when: a valid nonce has been found or 32 bits
+ *   4. Zeus will stop work when: a valid nonce has been found or 32 bits
  *      nonce range is completely calculated.
  */
 
@@ -298,8 +298,65 @@ static void do_zeus_close(struct thr_info *thr)
 	zeus->device_fd = -1;
 }
 
+//REQUIRED 2 Compile! What is it for????
+/* Convert a uint64_t value into a truncated string for displaying with its
+ * associated suitable for Mega, Giga etc. Buf array needs to be long enough */
+void suffix_string(uint64_t val, char *buf, int sigdigits)
+{
+	const double  dkilo = 1000.0;
+	const uint64_t kilo = 1000ull;
+	const uint64_t mega = 1000000ull;
+	const uint64_t giga = 1000000000ull;
+	const uint64_t tera = 1000000000000ull;
+	const uint64_t peta = 1000000000000000ull;
+	const uint64_t exa  = 1000000000000000000ull;
+	char suffix[2] = "";
+	bool decimal = true;
+	double dval;
 
-extern void suffix_string(uint64_t val, char *buf, int sigdigits);
+	if (val >= exa) {
+		val /= peta;
+		dval = (double)val / dkilo;
+		sprintf(suffix, "E");
+	} else if (val >= peta) {
+		val /= tera;
+		dval = (double)val / dkilo;
+		sprintf(suffix, "P");
+	} else if (val >= tera) {
+		val /= giga;
+		dval = (double)val / dkilo;
+		sprintf(suffix, "T");
+	} else if (val >= giga) {
+		val /= mega;
+		dval = (double)val / dkilo;
+		sprintf(suffix, "G");
+	} else if (val >= mega) {
+		val /= kilo;
+		dval = (double)val / dkilo;
+		sprintf(suffix, "M");
+	} else if (val >= kilo) {
+		dval = (double)val / dkilo;
+		sprintf(suffix, "K");
+	} else {
+		dval = val;
+		decimal = false;
+	}
+
+	if (!sigdigits) {
+		if (decimal)
+			sprintf(buf, "%.3g%s", dval, suffix);
+		else
+			sprintf(buf, "%d%s", (unsigned int)dval, suffix);
+	} else {
+		/* Always show sigdigits + 1, padded on right with zeroes
+		 * followed by suffix */
+		int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
+
+		sprintf(buf, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
+	}
+}
+
+
 int zeus_update_num(int chips_count)
 {
 	int i;

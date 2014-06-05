@@ -1583,6 +1583,13 @@ bool extract_sockaddr(char *url, char **sockaddr_url, char **sockaddr_port)
 
 	if (url_len < 1)
 		return false;
+	
+	if (url_len >= sizeof(url_address))
+	{
+		applog(LOG_WARNING, "%s: Truncating overflowed address '%.*s'",
+		       __func__, url_len, url_begin);
+		url_len = sizeof(url_address) - 1;
+	}
 
 	sprintf(url_address, "%.*s", url_len, url_begin);
 
@@ -2132,29 +2139,43 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 	return false;
 }
 
-bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+#define URI_FIND_PARAM_FOUND ((const char *)uri_find_param)
+
+const char *uri_find_param(const char * const uri, const char * const param, bool * const invert_p)
 {
 	const char *start = strchr(uri, '#');
-	bool invert = false, foundval = true;
+	if (invert_p)
+		*invert_p = false;
 	if (!start)
-		return defval;
+		return NULL;
 	const char *p = start;
 	++start;
 nextmatch:
 	p = strstr(&p[1], param);
 	if (!p)
-		return defval;
+		return NULL;
 	const char *q = &p[strlen(param)];
 	if (isCalpha(q[0]))
 		goto nextmatch;
-	if (p - start >= 2 && (!strncasecmp(&p[-2], "no", 2)) && !isCalpha(p[-3]))
-		invert = true;
+	if (invert_p && p - start >= 2 && (!strncasecmp(&p[-2], "no", 2)) && !isCalpha(p[-3]))
+		*invert_p = true;
 	else
 	if (isCalpha(p[-1]))
 		goto nextmatch;
 	if (q[0] == '=')
+		return &q[1];
+	return URI_FIND_PARAM_FOUND;
+}
+
+enum bfg_tristate uri_get_param_bool2(const char * const uri, const char * const param)
+{
+	bool invert, foundval = true;
+	const char *q = uri_find_param(uri, param, &invert);
+	if (!q)
+		return BTS_UNKNOWN;
+	else
+	if (q != URI_FIND_PARAM_FOUND)
 	{
-		++q;
 		char *end;
 		bool v = bfg_strtobool(q, &end, 0);
 		if (end > q && !isCalpha(end[0]))
@@ -2163,6 +2184,35 @@ nextmatch:
 	if (invert)
 		foundval = !foundval;
 	return foundval;
+}
+
+bool uri_get_param_bool(const char * const uri, const char * const param, const bool defval)
+{
+	const enum bfg_tristate rv = uri_get_param_bool2(uri, param);
+	if (rv == BTS_UNKNOWN)
+		return defval;
+	return rv;
+}
+
+static
+void _test_uri_find_param(const char * const uri, const char * const param, const ssize_t expect_offset, const int expect_invert)
+{
+	bool invert;
+	const char *actual = uri_find_param(uri, param, (expect_invert >= 0) ? &invert : NULL);
+	ssize_t actual_offset;
+	if (actual == URI_FIND_PARAM_FOUND)
+		actual_offset = -1;
+	else
+	if (!actual)
+		actual_offset = -2;
+	else
+		actual_offset = actual - uri;
+	int actual_invert = (expect_invert >= 0) ? (invert ? 1 : 0) : -1;
+	if (actual_offset != expect_offset || expect_invert != actual_invert)
+		applog(LOG_WARNING, "%s(\"%s\", \"%s\", %s) test failed (offset: expect=%d actual=%d; invert: expect=%d actual=%d)",
+		       "uri_find_param", uri, param, (expect_invert >= 0) ? "(invert)" : "NULL",
+		       expect_offset, actual_offset,
+		       expect_invert, actual_invert);
 }
 
 static
@@ -2176,6 +2226,13 @@ void _test_uri_get_param(const char * const uri, const char * const param, const
 
 void test_uri_get_param()
 {
+	_test_uri_find_param("stratum+tcp://footest/#redirect", "redirect", -1, -1);
+	_test_uri_find_param("stratum+tcp://footest/#redirectme", "redirect", -2, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect", "redirect", -2, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect", "redirect", -1, 1);
+	_test_uri_find_param("stratum+tcp://footest/#redirect", "redirect", -1, 0);
+	_test_uri_find_param("stratum+tcp://footest/#redirect=", "redirect", 32, -1);
+	_test_uri_find_param("stratum+tcp://footest/#noredirect=", "redirect", 34, 1);
 	_test_uri_get_param("stratum+tcp://footest/#redirect", "redirect", false, true);
 	_test_uri_get_param("stratum+tcp://footest/#redirectme", "redirect", false, false);
 	_test_uri_get_param("stratum+tcp://footest/#noredirect", "redirect", false, false);
@@ -2583,7 +2640,18 @@ static bool setup_stratum_curl(struct pool *pool)
 	CURL *curl = NULL;
 	char s[RBUFSIZE];
 	bool ret = false;
-	bool try_tls = uri_get_param_bool(pool->rpc_url, "tls", true);
+	bool tls_only = false, try_tls = true;
+	bool tlsca = uri_get_param_bool(pool->rpc_url, "tlsca", false);
+	
+	{
+		const enum bfg_tristate tlsparam = uri_get_param_bool2(pool->rpc_url, "tls");
+		if (tlsparam != BTS_UNKNOWN)
+			try_tls = tls_only = tlsparam;
+		else
+		if (tlsca)
+			// If tlsca is enabled, require TLS by default
+			tls_only = true;
+	}
 
 	applog(LOG_DEBUG, "initiate_stratum with sockbuf=%p", pool->sockbuf);
 	mutex_lock(&pool->stratum_lock);
@@ -2626,8 +2694,8 @@ static bool setup_stratum_curl(struct pool *pool)
 	curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 	
 	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)0);
-	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)0);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, (long)(tlsca ? 2 : 0));
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, (long)(tlsca ? 1 : 0));
 	if (pool->rpc_proxy) {
 		curl_easy_setopt(curl, CURLOPT_HTTPPROXYTUNNEL, 1);
 		curl_easy_setopt(curl, CURLOPT_PROXY, pool->rpc_proxy);
@@ -2650,11 +2718,15 @@ retry:
 		{
 			applog(LOG_DEBUG, "Stratum connect failed with TLS to pool %u: %s",
 			       pool->pool_no, pool->curl_err_str);
-			try_tls = false;
-			goto retry;
+			if (!tls_only)
+			{
+				try_tls = false;
+				goto retry;
+			}
 		}
-		applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
-		       pool->pool_no, pool->curl_err_str);
+		else
+			applog(LOG_INFO, "Stratum connect failed to pool %d: %s",
+			       pool->pool_no, pool->curl_err_str);
 errout:
 		curl_easy_cleanup(curl);
 		pool->stratum_curl = NULL;
@@ -2811,7 +2883,8 @@ resend:
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
-	if (!n2size) {
+	if (n2size < 1)
+	{
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		free(sessionid);
 		free(nonce1);
@@ -2877,15 +2950,22 @@ out:
 
 bool restart_stratum(struct pool *pool)
 {
+	bool ret = true;
+	
 	mutex_lock(&pool->pool_test_lock);
+	
 	if (pool->stratum_active)
 		suspend_stratum(pool);
+	
 	if (!initiate_stratum(pool))
-		return false;
+		return_via(out, ret = false);
 	if (!auth_stratum(pool))
-		return false;
+		return_via(out, ret = false);
+	
+out:
 	mutex_unlock(&pool->pool_test_lock);
-	return true;
+	
+	return ret;
 }
 
 void dev_error_update(struct cgpu_info *dev, enum dev_reason reason)

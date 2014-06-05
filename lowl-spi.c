@@ -273,17 +273,20 @@ void spi_bfsb_select_bank(int bank)
 	int i;
 	for(i=0;i<4;i++)
 	{
+		if (i == bank)
+			continue;
+		
 		INP_GPIO(banks[i]);
 		OUT_GPIO(banks[i]);
-		if(i==bank)
-		{
-			GPIO_SET = 1 << banks[i]; // enable bank
-		} 
-		else
-		{
-			GPIO_CLR = 1 << banks[i];// disable bank
-		}
+		GPIO_CLR = 1 << banks[i];
 	}
+	
+	if (bank != -1)
+	{
+		OUT_GPIO(banks[bank]);
+		GPIO_SET = 1 << banks[bank];
+	}
+	
 	last_bank = bank;
 }
 #endif

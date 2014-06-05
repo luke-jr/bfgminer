@@ -166,6 +166,8 @@ BFGMiner driver configuration options:
 	--disable-twinfury      Compile support for Twinfury USB miner (default
 	                        enabled)
 	--disable-x6500         Compile support for X6500 (default if libusb)
+	--disable-zeus          Compile support for ZeusMiner (default enabled with
+	                        scrypt)
 	--disable-ztex          Compile support for ZTEX (default if libusb)
 
 BFGMiner algorithm configuration option:

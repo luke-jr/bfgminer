@@ -81,6 +81,12 @@
 
 #define IGNORE_RETURN_VALUE(expr)  {if(expr);}(void)0
 
+enum bfg_tristate {
+	BTS_FALSE = (int)false,
+	BTS_TRUE  = (int)true,
+	BTS_UNKNOWN,
+};
+
 #if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
 #else
@@ -121,6 +127,7 @@ extern void test_domain_funcs();
 
 extern bool bfg_strtobool(const char *, char **endptr, int opts);
 
+extern enum bfg_tristate uri_get_param_bool2(const char *ri, const char *param);
 extern bool uri_get_param_bool(const char *uri, const char *param, bool defval);
 extern void test_uri_get_param();
 

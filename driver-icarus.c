@@ -633,7 +633,7 @@ static bool icarus_prepare(struct thr_info *thr)
 	
 	return true;
 }
-/*
+
 bool icarus_init(struct thr_info *thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
@@ -708,7 +708,7 @@ bool icarus_init(struct thr_info *thr)
 	
 	return true;
 }
-*/
+
 static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, int *fdp)
 {
 	struct ICARUS_INFO *info = icarus->device_data;
