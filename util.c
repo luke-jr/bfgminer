@@ -1705,7 +1705,8 @@ resend:
 		goto out;
 	}
 	n2size = json_integer_value(json_array_get(res_val, 2));
-	if (!n2size) {
+	if (n2size < 1)
+	{
 		applog(LOG_INFO, "Failed to get n2size in initiate_stratum");
 		free(sessionid);
 		free(nonce1);
