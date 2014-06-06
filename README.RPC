@@ -163,7 +163,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Failover-Only=true/false, <- failover-only setting
                               ScanTime=N, <- --scan-time setting
                               Queue=N, <- --queue setting
-                              Expiry=N| <- --expiry setting
+                              Expiry=N, <- --expiry setting
+                              Coinbase-Sig=X| <- extra coinbase data in blocks
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
