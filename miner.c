@@ -12074,8 +12074,8 @@ int main(int argc, char *argv[])
 
 	applog(LOG_WARNING, "Started %s", packagename);
 	{
-		struct bfg_loaded_configfile *configfile, *tmp_cfgfile;
-		LL_FOREACH_SAFE(bfg_loaded_configfiles, configfile, tmp_cfgfile)
+		struct bfg_loaded_configfile *configfile;
+		LL_FOREACH(bfg_loaded_configfiles, configfile)
 		{
 			char * const cnfbuf = configfile->filename;
 			int fileconf_load = configfile->fileconf_load;
@@ -12093,9 +12093,6 @@ int main(int argc, char *argv[])
 				default:
 					break;
 			}
-			free(cnfbuf);
-			LL_DELETE(bfg_loaded_configfiles, configfile);
-			free(configfile);
 		}
 	}
 

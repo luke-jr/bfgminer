@@ -1328,6 +1328,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 #if BLKMAKER_VERSION > 0
 	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
 #endif
+	
+	struct bfg_loaded_configfile *configfile;
+	i = 0;
+	LL_FOREACH(bfg_loaded_configfiles, configfile)
+	{
+		snprintf(buf, sizeof(buf), "ConfigFile%d", i++);
+		root = api_add_string(root, buf, configfile->filename, false);
+	}
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
