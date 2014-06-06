@@ -665,6 +665,16 @@ static inline void string_elist_del(struct string_elist **head, struct string_el
 }
 
 
+struct bfg_loaded_configfile {
+	char *filename;
+	int fileconf_load;
+	
+	struct bfg_loaded_configfile *next;
+};
+
+extern struct bfg_loaded_configfile *bfg_loaded_configfiles;
+
+
 static inline uint32_t swab32(uint32_t v)
 {
 	return bswap_32(v);

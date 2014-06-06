@@ -2439,16 +2439,14 @@ static struct opt_table opt_config_table[] = {
 
 static char *load_config(const char *arg, void __maybe_unused *unused);
 
-static int fileconf_load;
-
-static char *parse_config(json_t *config, bool fileconf)
+static char *parse_config(json_t *config, bool fileconf, int * const fileconf_load_p)
 {
 	static char err_buf[200];
 	struct opt_table *opt;
 	json_t *val;
 
-	if (fileconf && !fileconf_load)
-		fileconf_load = 1;
+	if (fileconf && !*fileconf_load_p)
+		*fileconf_load_p = 1;
 
 	for (opt = opt_config_table; opt->type != OPT_END; opt++) {
 		char *p, *name, *sp;
@@ -2495,7 +2493,7 @@ static char *parse_config(json_t *config, bool fileconf)
 					if (json_is_string(json_array_get(val, n)))
 						err = opt->cb_arg(json_string_value(json_array_get(val, n)), opt->u.arg);
 					else if (json_is_object(json_array_get(val, n)))
-						err = parse_config(json_array_get(val, n), false);
+						err = parse_config(json_array_get(val, n), false, fileconf_load_p);
 				}
 			  }
 			} else if (opt->type & OPT_NOARG) {
@@ -2515,7 +2513,7 @@ static char *parse_config(json_t *config, bool fileconf)
 				 * JSON is still valid after that. */
 				if (fileconf) {
 					applog(LOG_ERR, "Invalid config option %s: %s", p, err);
-					fileconf_load = -1;
+					*fileconf_load_p = -1;
 				} else {
 					snprintf(err_buf, sizeof(err_buf), "Parsing JSON option %s: %s",
 						p, err);
@@ -2533,7 +2531,7 @@ static char *parse_config(json_t *config, bool fileconf)
 	return NULL;
 }
 
-char *cnfbuf = NULL;
+struct bfg_loaded_configfile *bfg_loaded_configfiles;
 
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
@@ -2541,9 +2539,13 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_t *config;
 	char *json_error;
 	size_t siz;
+	struct bfg_loaded_configfile *cfginfo;
 
-	if (!cnfbuf)
-		cnfbuf = strdup(arg);
+	cfginfo = malloc(sizeof(*cfginfo));
+	*cfginfo = (struct bfg_loaded_configfile){
+		.filename = strdup(arg),
+	};
+	LL_APPEND(bfg_loaded_configfiles, cfginfo);
 
 	if (++include_count > JSON_MAX_DEPTH)
 		return JSON_MAX_DEPTH_ERR;
@@ -2567,12 +2569,12 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 
 	/* Parse the config now, so we can override it.  That can keep pointers
 	 * so don't free config object. */
-	return parse_config(config, true);
+	return parse_config(config, true, &cfginfo->fileconf_load);
 }
 
 static void load_default_config(void)
 {
-	cnfbuf = malloc(PATH_MAX);
+	char cnfbuf[PATH_MAX];
 
 #if defined(unix)
 	if (getenv("HOME") && *getenv("HOME")) {
@@ -2592,10 +2594,6 @@ static void load_default_config(void)
 #endif
 	if (!access(cnfbuf, R_OK))
 		load_config(cnfbuf, NULL);
-	else {
-		free(cnfbuf);
-		cnfbuf = NULL;
-	}
 }
 
 extern const char *opt_argv0;
@@ -12075,23 +12073,30 @@ int main(int argc, char *argv[])
 #endif
 
 	applog(LOG_WARNING, "Started %s", packagename);
-	if (cnfbuf) {
-		applog(LOG_NOTICE, "Loaded configuration file %s", cnfbuf);
-		switch (fileconf_load) {
-			case 0:
-				applog(LOG_WARNING, "Fatal JSON error in configuration file.");
-				applog(LOG_WARNING, "Configuration file could not be used.");
-				break;
-			case -1:
-				applog(LOG_WARNING, "Error in configuration file, partially loaded.");
-				if (use_curses)
-					applog(LOG_WARNING, "Start BFGMiner with -T to see what failed to load.");
-				break;
-			default:
-				break;
+	{
+		struct bfg_loaded_configfile *configfile, *tmp_cfgfile;
+		LL_FOREACH_SAFE(bfg_loaded_configfiles, configfile, tmp_cfgfile)
+		{
+			char * const cnfbuf = configfile->filename;
+			int fileconf_load = configfile->fileconf_load;
+			applog(LOG_NOTICE, "Loaded configuration file %s", cnfbuf);
+			switch (fileconf_load) {
+				case 0:
+					applog(LOG_WARNING, "Fatal JSON error in configuration file.");
+					applog(LOG_WARNING, "Configuration file could not be used.");
+					break;
+				case -1:
+					applog(LOG_WARNING, "Error in configuration file, partially loaded.");
+					if (use_curses)
+						applog(LOG_WARNING, "Start BFGMiner with -T to see what failed to load.");
+					break;
+				default:
+					break;
+			}
+			free(cnfbuf);
+			LL_DELETE(bfg_loaded_configfiles, configfile);
+			free(configfile);
 		}
-		free(cnfbuf);
-		cnfbuf = NULL;
 	}
 
 	i = strlen(opt_kernel_path) + 2;
