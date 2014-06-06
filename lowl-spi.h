@@ -10,6 +10,13 @@
 /* Initialize SPI using this function */
 void spi_init(void);
 
+#ifdef HAVE_LINUX_SPI_SPIDEV_H
+extern void bfg_gpio_setpin_output(unsigned pin);
+extern void bfg_gpio_set_high(unsigned mask);
+extern void bfg_gpio_set_low(unsigned mask);
+extern unsigned bfg_gpio_get();
+#endif
+
 /* Do not allocate spi_port on the stack! OS X, at least, has a 512 KB default stack size for secondary threads
    This includes struct assignments which get allocated on the stack before being assigned to */
 struct spi_port {

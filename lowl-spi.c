@@ -91,6 +91,27 @@ void spi_init(void)
 
 #define GPIO_SET *(gpio+7)  // sets   bits which are 1 ignores bits which are 0
 #define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
+#define GPIO_LEV *(gpio+13)
+
+void bfg_gpio_setpin_output(const unsigned pin)
+{
+	OUT_GPIO(pin);
+}
+
+void bfg_gpio_set_high(const unsigned mask)
+{
+	GPIO_SET = mask;
+}
+
+void bfg_gpio_set_low(const unsigned mask)
+{
+	GPIO_CLR = mask;
+}
+
+unsigned bfg_gpio_get()
+{
+	return GPIO_LEV;
+}
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
