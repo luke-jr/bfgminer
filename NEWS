@@ -1,3 +1,27 @@
+BFGMiner Version 3.10.2 - June 6, 2014
+
+- README.RPC: Document Coinbase-Sig in config reply
+- Bugfix: initiate_stratum: Ensure extranonce2 size is not negative (which could
+lead to exploits later as too little memory gets allocated)
+- Stratum: extract_sockaddr: Truncate overlong addresses rather than stack
+overflow
+- Bugfix: Avoid setting tv_idle before testing pool (it will be set if the test
+fails)
+- bfsb: Disable all banks before enabling the one we want, to avoid having two
+enabled at the same time (eg, when switching from bank 3 to bank 2)
+- Bugfix: Zero pool "Works"
+- Bugfix: Set any listening sockets to close-on-exec/non-inheritable to avoid
+issues rebinding them on restart
+- RPC: Explicitly shutdown communication on client sockets to avoid them being
+held open by forked processes
+- RPC: Clean up mcast socket with tidyup_socket
+- RPC: Move socket tidyup code to its own function
+- Bugfix: RPC: Use pthread_exit rather than returning from the RPC thread, to
+ensure tidyup gets called
+- Bugfix: bitforce: During initialisation, clear each XLink slave exactly once
+only
+
+
 BFGMiner Version 3.10.1 - May 26, 2014
 
 - Upgraded Windows libraries:
