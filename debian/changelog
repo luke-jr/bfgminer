@@ -1,3 +1,11 @@
+bfgminer (4.1.0-0precise1) precise; urgency=low
+
+  * Stratum: Fix recovery of dead pools.
+  * gridseed: 80-chip G-Blade support.
+  * Stratum: Support for authenticated TLS with the CA model, using #tlsca URI parameter.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 06 Jun 2014 02:35:20 -0000
+
 bfgminer (4.0.0-0precise1) precise; urgency=low
 
   * Various options (specifically, --temp-cutoff, --temp-target, and the various --<driver>-options) have been migrated to the --set-device interface.

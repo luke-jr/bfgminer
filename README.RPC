@@ -449,6 +449,13 @@ https://www.npmjs.org/package/miner-rpc
 Feature Changelog for external applications using the API:
 
 
+API V3.2 (BFGMiner v4.1.0)
+
+Modified API command:
+ 'config' - add 'ConfigFile'N
+
+---------
+
 API V3.1 (BFGMiner v4.0.0)
 
 Multiple report request command with '+' e.g. summary+devs

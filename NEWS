@@ -1,3 +1,47 @@
+BFGMiner Version 4.1.0 - June 6, 2014
+
+- RPC: Include a list of config files loaded in "config" reply
+- Bugfix: Save a linked list of config files loaded so output makes sense
+(previously only the most recent config file was named, and errors were reported
+inconsistently)
+- README.RPC: Document Coinbase-Sig in config reply
+- Bugfix: Safely handle pool status line when no pools are alive
+- bitforce: Refactor bitforce_vcom_gets slightly to be more sane
+- Bugfix: initiate_stratum: Ensure extranonce2 size is not negative (which could
+lead to exploits later as too little memory gets allocated)
+- Stratum: extract_sockaddr: Truncate overlong addresses rather than stack
+overflow
+- Stratum: tlsca parameter to require CA validation of TLS certificate
+- Bugfix: Avoid setting tv_idle before testing pool (it will be set if the test
+fails)
+- restart_stratum: Make use of return_via
+- return_via helper function family to assign a variable and goto
+- Bugfix: restart_stratum: Release pool_test_lock on failure
+- bfsb: Disable all banks before enabling the one we want, to avoid having two
+enabled at the same time (eg, when switching from bank 3 to bank 2)
+- Interpret present "tls" parameter to require TLS
+- uri_get_param_bool2 returning a tristate
+- Tests for uri_find_param
+- Split uri_find_param out of uri_get_param_bool
+- gridseed: Allow specifying an arbitrary number of chips with --set gsd:chips=X
+- gridseed: added support for the 80-chip (two blades of 40 chips) G-Blade
+Scrypt-only miner
+- Bugfix: gridseed: use a signed integer so that returning -1 has defined
+behavior
+- RPC: Return integer difficulties without decimal places
+- Bugfix: Zero pool "Works"
+- Bugfix: Set any listening sockets to close-on-exec/non-inheritable to avoid
+issues rebinding them on restart
+- RPC: Explicitly shutdown communication on client sockets to avoid them being
+held open by forked processes
+- RPC: Clean up mcast socket with tidyup_socket
+- RPC: Move socket tidyup code to its own function
+- Bugfix: RPC: Use pthread_exit rather than returning from the RPC thread, to
+ensure tidyup gets called
+- Bugfix: bitforce: During initialisation, clear each XLink slave exactly once
+only
+
+
 BFGMiner Version 4.0.0 - May 26, 2014
 
 - Update openwrt Makefile for xz source
