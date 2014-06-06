@@ -1,3 +1,82 @@
+BASED ON:
+BFG Miner: https://github.com/luke-jr/bfgminer
+Zeus Miner: http://zeusminer.com/
+
+
+
+BUILD FROM SOURCE:
+1) SSH/Log into your OS
+2) CD into the repository to clone to
+3) Enter the following command to clone the repository to your local directory
+git clone https://github.com/Darkwinde/bfgminer.git
+4) To compile the miner perform the following commands (each one can take a while, no worry)
+cd bfgminer
+./autogen.sh
+chmod +x ./configure
+./configure CFLAGS="-O3" --enable-scrypt
+make
+
+
+
+START MINER WINDOWS:
+./bfgminer --scrypt -o stratum+tcp://URL:PORT -u USERNAME -p PASSWORD --nocheck-golden --chips-count 6 --ltc-clk 328 -S zeus:\\.\COM5
+
+START MINER LINUx:
+./bfgminer --scrypt -o stratum+tcp://URL:PORT -u USERNAME -p PASSWORD --nocheck-golden --chips-count 6 --ltc-clk 328 -S zeus:/dev/ttyUSB0
+
+
+
+HINTS:
+Chips-Count
+   Blizzard: 6
+   Cyclone: 96
+   Hurricane X2: 48 (2*24)
+   Hurricane X3: 64 (2*32)
+   Thunder X2: 96 (4*24)
+   Thunder X3: 128 (4*32)
+
+LTC-CLK (Core Clock)
+Start with 280 and increase the clock frequency step by step until the hardware errors got to high (>10%).
+The most likely spot seems to be a value of 328.
+
+S (Searching for Devices)
+Depending on your infrastructure you might can use search all or set a specific USB port. The port name depends on the interfaces the miner plugged to.
+You can figure it out by using command: 
+ls /dev/tty*
+
+
+
+USB ACCESS
+If you don't have access to /dev/tty* devices as a user on Linux:
+When mining on linux, but not using 'sudo' and not logged into 'root' you
+may get a USB priviledge error (-3), so you may also need to do the following:
+1) SSH/Log into your OS
+2) CD into the cgminer directory
+3) Copy the file "01-cgminer.rules" to udev:
+cp 01-cgminer.rules  /etc/udev/rules.d/01-cgminer.rules
+4) Perform the following command:
+lsusb
+5) You get something like this:
+Bus 001 Device 005: ID 10c4:ea60 Cygnal Integrated Products, Inc. CP210x UART Bridge / myAVR mySmartUSB light
+5.1) The HEX string after ID is the required Vendor ID and Product ID, delimitered by a colon
+6) Edit the file "01-cgminer.rules" with an editor of your choice and add:
+ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SUBSYSTEMS=="usb", ACTION=="add", MODE="0666", GROUP="plugdev"
+6.1) Change the idVendor and idProduct according to the HEX string got from point 4).
+6.2) Save changes and leave the file
+5) Add yourself to plugdev group
+usermod -G plugdev -a whoami
+5.1) If plugdev group does not exist:
+groupadd plugdev
+6) Reboot your system
+
+
+
+
+
+
+ -----------------------------------
+| Original Readme of bfgminer 4.0.0 |
+ -----------------------------------
 BFGMiner:
 St. Barbara's Faithfully Glorified Mining Initiative Naturally Exceeding Rivals
 or Basically a Freaking Good Miner
