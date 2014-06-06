@@ -1275,9 +1275,9 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct driver_registration *reg, *regtmp;
 	int pgacount = 0;
 	char *adlinuse = (char *)NO;
+	int i;
 #ifdef HAVE_ADL
 	const char *adl = YES;
-	int i;
 
 	for (i = 0; i < nDevs; i++) {
 		struct opencl_device_data * const data = gpus[i].device_data;
