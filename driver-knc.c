@@ -214,23 +214,7 @@ fail:
 	return false;
 }
 
-static
-bool knc_spi_txrx(struct spi_port * const spi)
-{
-	const void * const wrbuf = spi_gettxbuf(spi);
-	void * const rdbuf = spi_getrxbuf(spi);
-	const size_t bufsz = spi_getbufsz(spi);
-	const int fd = spi->fd;
-	struct spi_ioc_transfer xf = {
-		.tx_buf = (uintptr_t) wrbuf,
-		.rx_buf = (uintptr_t) rdbuf,
-		.len = bufsz,
-		.delay_usecs = spi->delay,
-		.speed_hz = spi->speed,
-		.bits_per_word = spi->bits,
-	};
-	return (ioctl(fd, SPI_IOC_MESSAGE(1), &xf) > 0);
-}
+#define knc_spi_txrx  linux_spi_txrx
 
 static
 void knc_clean_flush(struct spi_port * const spi)

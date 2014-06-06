@@ -80,6 +80,7 @@ bool spi_txrx(struct spi_port *port)
 }
 
 extern bool sys_spi_txrx(struct spi_port *);
+extern bool linux_spi_txrx(struct spi_port *);
 
 void spi_bfsb_select_bank(int bank);
 
