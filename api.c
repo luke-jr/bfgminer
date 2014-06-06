@@ -3866,7 +3866,7 @@ static void mcast()
 
 	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
 
-	set_cloexec_socket(*mcastsock, true);
+	set_cloexec_socket(mcast_sock, true);
 	
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
