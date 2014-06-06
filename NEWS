@@ -1,5 +1,6 @@
 BFGMiner Version 3.10.2 - June 6, 2014
 
+- Update libblkmaker to 0.4.0
 - README.RPC: Document Coinbase-Sig in config reply
 - Bugfix: initiate_stratum: Ensure extranonce2 size is not negative (which could
 lead to exploits later as too little memory gets allocated)
