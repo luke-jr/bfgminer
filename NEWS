@@ -1,5 +1,6 @@
 BFGMiner Version 4.1.0 - June 6, 2014
 
+- Bugfix: Ensure variables are declared even without ADL support
 - RPC: Include a list of config files loaded in "config" reply
 - Bugfix: Save a linked list of config files loaded so output makes sense
 (previously only the most recent config file was named, and errors were reported
