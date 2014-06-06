@@ -620,6 +620,7 @@ static bool zeus_prepare(struct thr_info *thr)
 	}
 
 	zeus->device_fd = fd;
+	zeus->min_nonce_diff = 1./0x10000;
 
 	applog(LOG_INFO, "Opened Zeus on %s", zeus->device_path);
 	cgtime(&now);
@@ -703,9 +704,10 @@ static int64_t zeus_scanhash(struct thr_info *thr, struct work *work,
 		//ob_hex = bin2hex(ob_bin, sizeof(ob_bin));
 	  ob_hex = calloc(1, (8+1)*2);
 	  bin2hex(ob_hex, ob_bin, 8);
-	  // XXX Bad pointer here.
-		applog(LOG_ERR, "Zeus %d nounce2 = %s readcount = %d try sent: %s",
+
+	  /*		applog(LOG_ERR, "Zeus %d nounce2 = %s readcount = %d try sent: %s",
 			zeus->device_id,work->nonce2,info->read_count, ob_hex);
+	  */
 		free(ob_hex);
 	}
 
