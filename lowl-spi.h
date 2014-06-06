@@ -36,6 +36,8 @@ struct spi_port {
 	uint16_t delay;
 	uint8_t mode;
 	uint8_t bits;
+	int chipselect;
+	int *chipselect_current;
 };
 
 extern struct spi_port *sys_spi;
