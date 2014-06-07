@@ -53,9 +53,24 @@ bool jingtian_spi_txrx(struct spi_port * const port)
 			bfg_gpio_set_low(cs_set_low);
 		if (cs_set_high)
 			bfg_gpio_set_high(cs_set_high);
+		if (opt_dev_protocol)
+			applog(LOG_DEBUG, "%s(%p): CS %d", __func__, port, port->chipselect);
 		*port->chipselect_current = port->chipselect;
 	}
-	return linux_spi_txrx(port);
+	if (opt_dev_protocol)
+	{
+		char x[(spi_getbufsz(port) * 2) + 1];
+		bin2hex(x, spi_gettxbuf(port), spi_getbufsz(port));
+		applog(LOG_DEBUG, "%s(%p): %cX %s", __func__, port, 'T', x);
+	}
+	bool rv = linux_spi_txrx(port);
+	if (opt_dev_protocol)
+	{
+		char x[(spi_getbufsz(port) * 2) + 1];
+		bin2hex(x, spi_getrxbuf(port), spi_getbufsz(port));
+		applog(LOG_DEBUG, "%s(%p): %cX %s", __func__, port, 'R', x);
+	}
+	return rv;
 }
 
 static
