@@ -314,10 +314,10 @@ void rockminer_poll(struct thr_info * const master_thr)
 			{
 				const uint32_t nonce = upk_u32be(reply, 0);
 				struct work *work;
-				if (test_nonce(chip->works[taskid], nonce, false))
+				if (chip->works[taskid] && test_nonce(chip->works[taskid], nonce, false))
 				{}
 				else
-				if (test_nonce(chip->works[taskid ? 0 : 1], nonce, false))
+				if (chip->works[taskid ? 0 : 1] && test_nonce(chip->works[taskid ? 0 : 1], nonce, false))
 				{
 					applog(LOG_DEBUG, "%"PRIpreprv": We have task ids inverted; fixing", proc->proc_repr);
 					work = chip->works[0];
