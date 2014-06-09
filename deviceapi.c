@@ -1083,3 +1083,16 @@ void close_device_fd(struct thr_info * const thr)
 		applog(LOG_DEBUG, "%"PRIpreprv": Closed device fd", proc->proc_repr);
 	}
 }
+
+
+struct cgpu_info *device_proc_by_id(struct cgpu_info * const dev, const int procid)
+{
+	struct cgpu_info *proc = dev;
+	for (int i = 0; i < procid; ++i)
+	{
+		proc = proc->next_proc;
+		if (unlikely((!proc) || proc->device != dev))
+			return NULL;
+	}
+	return proc;
+}
