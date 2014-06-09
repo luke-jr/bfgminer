@@ -19,6 +19,7 @@
 #include "miner.h"
 
 #define ROCKMINER_MIN_FREQ_MHZ  200
+#define ROCKMINER_DEF_FREQ_MHZ  270
 #define ROCKMINER_POLL_US         0
 #define ROCKMINER_RETRY_US  5000000
 
@@ -212,7 +213,7 @@ bool rockminer_init(struct thr_info * const master_thr)
 		thr->cgpu_data = chip;
 		
 		rockminer_job_buf_init(chip->next_work_req, proc->proc_id);
-		rockminer_job_buf_set_freq(chip->next_work_req, ROCKMINER_MIN_FREQ_MHZ);
+		rockminer_job_buf_set_freq(chip->next_work_req, ROCKMINER_DEF_FREQ_MHZ);
 	}
 	
 	timer_set_now(&master_thr->tv_poll);
