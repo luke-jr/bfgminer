@@ -1036,6 +1036,20 @@ fi
 AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
+driverlist="$driverlist rockminer"
+AC_ARG_ENABLE([rockminer],
+	[AC_HELP_STRING([--disable-rockminer],[Compile support for RockMiner (default enabled)])],
+	[rockminer=$enableval],
+	[rockminer=$ddyes]
+)
+if test "x$rockminer" = xyes; then
+	AC_DEFINE([USE_ROCKMINER], [1], [Defined to 1 if RockMiner support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_ROCKMINER], [test x$rockminer = xyes])
+
+
 if test "x$need_lowl_vcom" != "xno"; then
 	# Lowlevel VCOM doesn't need libusb, but it can take advantage of it to reattach drivers
 	if test "x$libusb" != xno; then
