@@ -417,6 +417,19 @@ static const struct bfg_set_device_definition rockminer_set_device_funcs[] = {
 	{NULL}
 };
 
+static
+struct api_data *rockminer_get_extra_device_status(struct cgpu_info * const proc)
+{
+	struct api_data *root = NULL;
+	struct thr_info * const thr = proc->thr[0];
+	struct rockminer_chip_data * const chip = thr->cgpu_data;
+	
+	double d = ((int)chip->next_work_req[0x31] + 1) * 10;
+	root = api_add_freq(root, "Frequency", &d, true);
+	
+	return root;
+}
+
 struct device_drv rockminer_drv = {
 	.dname = "rockminer",
 	.name = "RKM",
@@ -429,4 +442,6 @@ struct device_drv rockminer_drv = {
 	.queue_append = rockminer_queue_append,
 	.queue_flush = rockminer_queue_flush,
 	.poll = rockminer_poll,
+	
+	.get_api_extra_device_status = rockminer_get_extra_device_status,
 };
