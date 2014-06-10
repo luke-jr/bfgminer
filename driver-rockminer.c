@@ -278,6 +278,7 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	if (!rockminer_send_work(thr))
 	{
 		rockminer_dead(dev);
+		inc_hw_errors_only(thr);
 		applogr(false, LOG_ERR, "%"PRIpreprv": Failed to send work", proc->proc_repr);
 	}
 	
@@ -310,6 +311,11 @@ void rockminer_poll(struct thr_info * const master_thr)
 		if (fd < 0)
 		{
 			timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_RETRY_US);
+			for_each_managed_proc(proc, dev)
+			{
+				struct thr_info * const thr = proc->thr[0];
+				inc_hw_errors_only(thr);
+			}
 			applogr(, LOG_ERR, "%s: Failed to open %s", dev->dev_repr, dev->device_path);
 		}
 		dev->device_fd = fd;
@@ -334,6 +340,11 @@ void rockminer_poll(struct thr_info * const master_thr)
 		struct cgpu_info * const proc = device_proc_by_id(dev, chipid);
 		if (unlikely(!proc))
 		{
+			for_each_managed_proc(proc, dev)
+			{
+				struct thr_info * const thr = proc->thr[0];
+				inc_hw_errors_only(thr);
+			}
 			applog(LOG_ERR, "%s: Chip id %d out of range", dev->dev_repr, chipid);
 			continue;
 		}
@@ -390,11 +401,13 @@ void rockminer_poll(struct thr_info * const master_thr)
 			// A task completed, but no request followed
 			// This means it missed our last task send, so we need to resend it
 			applog(LOG_WARNING, "%"PRIpreprv": No task request? Probably lost, resending task %d", proc->proc_repr, chip->last_taskid);
+			inc_hw_errors_only(thr);
 			timer_set_delay(&chip->tv_midtask_timeout, &tv_now, ROCKMINER_MIDTASK_RETRY_US);
 			if (!rockminer_send_work(thr))
 			{
 				rockminer_dead(dev);
 				timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_RETRY_US);
+				inc_hw_errors_only(thr);
 				applogr(, LOG_ERR, "%"PRIpreprv": Failed to resend work", proc->proc_repr);
 			}
 		}
