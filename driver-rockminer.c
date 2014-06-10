@@ -211,6 +211,9 @@ bool rockminer_init(struct thr_info * const master_thr)
 		struct rockminer_chip_data * const chip = malloc(sizeof(*chip));
 		
 		thr->cgpu_data = chip;
+		*chip = (struct rockminer_chip_data){
+			.last_taskid = 0,
+		};
 		
 		rockminer_job_buf_init(chip->next_work_req, proc->proc_id);
 		rockminer_job_buf_set_freq(chip->next_work_req, ROCKMINER_DEF_FREQ_MHZ);
