@@ -9,6 +9,7 @@ minerd
 minerd.exe
 *.o
 *.bin
+*.bak
 
 autom4te.cache
 .deps
