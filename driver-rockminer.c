@@ -303,7 +303,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 // 		const uint8_t prodid = reply[5] >> 6;
 		const uint8_t chipid = reply[5] & 0x3f;
 		const uint8_t taskid = reply[6] & 1;
-// 		const uint8_t temp = reply[7];
+		const uint8_t temp = reply[7];
 		struct cgpu_info * const proc = device_proc_by_id(dev, chipid);
 		if (unlikely(!proc))
 		{
@@ -312,6 +312,9 @@ void rockminer_poll(struct thr_info * const master_thr)
 		}
 		struct thr_info * const thr = proc->thr[0];
 		struct rockminer_chip_data * const chip = thr->cgpu_data;
+		
+		if (temp != 128)
+			proc->temp = temp;
 		
 		switch (cmd) {
 			case ROCKMINER_REPLY_NONCE_FOUND:
