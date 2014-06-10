@@ -261,6 +261,7 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	if (chip->works[chip->last_taskid])
 		free_work(chip->works[chip->last_taskid]);
 	chip->works[chip->last_taskid] = work;
+	applog(LOG_DEBUG, "%"PRIpreprv": Work %d queued as task %d", proc->proc_repr, work->id, chip->last_taskid);
 	
 	return true;
 }
@@ -333,9 +334,11 @@ void rockminer_poll(struct thr_info * const master_thr)
 				break;
 			}
 			case ROCKMINER_REPLY_TASK_COMPLETE:
+				applog(LOG_DEBUG, "%"PRIpreprv": Task %d completed", proc->proc_repr, taskid);
 				hashes_done2(thr, 0x100000000, NULL);
 				break;
 			case ROCKMINER_REPLY_GET_TASK:
+				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
 				break;
 		}
