@@ -1,7 +1,7 @@
-BFGMiner Version 4.1.99 -> Custom Build 4 ZeusMiner
-- Zeus: New driver, supporting ZeusMiner scrypt only ASIC
-
->>> Darkwinde <Darkwinde@web.de>
+bfgminer (4.1.99) custom build
+ * zeus: New driver, supporting Zeus miner scrypt only ASIC mining.
+ 
+ -- Darkwinde <Darkwinde@web.de>
 
 BFGMiner Version 4.1.0 - June 6, 2014
 - Bugfix: Ensure variables are declared even without ADL support

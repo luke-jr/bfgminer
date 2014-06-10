@@ -1275,9 +1275,9 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct driver_registration *reg, *regtmp;
 	int pgacount = 0;
 	char *adlinuse = (char *)NO;
+	int i;
 #ifdef HAVE_ADL
 	const char *adl = YES;
-	int i;
 
 	for (i = 0; i < nDevs; i++) {
 		struct opencl_device_data * const data = gpus[i].device_data;
@@ -1328,6 +1328,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 #if BLKMAKER_VERSION > 0
 	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
 #endif
+	
+	struct bfg_loaded_configfile *configfile;
+	i = 0;
+	LL_FOREACH(bfg_loaded_configfiles, configfile)
+	{
+		snprintf(buf, sizeof(buf), "ConfigFile%d", i++);
+		root = api_add_string(root, buf, configfile->filename, false);
+	}
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
