@@ -1046,6 +1046,7 @@ if test "x$rockminer" = xyes; then
 	AC_DEFINE([USE_ROCKMINER], [1], [Defined to 1 if RockMiner support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	have_udevrules=true
 fi
 AM_CONDITIONAL([USE_ROCKMINER], [test x$rockminer = xyes])
 

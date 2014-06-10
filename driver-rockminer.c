@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "deviceapi.h"
+#include "lowlevel.h"
 #include "lowl-vcom.h"
 #include "miner.h"
 
@@ -60,6 +61,12 @@ static
 void rockminer_job_buf_set_freq(uint8_t * const buf, const unsigned short freq)
 {
 	buf[0x31] = (freq / 10) - 1;
+}
+
+static
+bool rockminer_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_product(info, "R-BOX miner") || lowlevel_match_product(info, "RX-BOX miner");
 }
 
 static const uint8_t golden_midstate[] = {
@@ -478,6 +485,7 @@ struct device_drv rockminer_drv = {
 	.dname = "rockminer",
 	.name = "RKM",
 	
+	.lowl_match = rockminer_lowl_match,
 	.lowl_probe = rockminer_lowl_probe,
 	
 	.thread_init = rockminer_init,
