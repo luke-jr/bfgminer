@@ -418,17 +418,61 @@ static const struct bfg_set_device_definition rockminer_set_device_funcs[] = {
 };
 
 static
+int rockminer_get_clock(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct rockminer_chip_data * const chip = thr->cgpu_data;
+	return ((int)chip->next_work_req[0x31] + 1) * 10;
+}
+
+static
 struct api_data *rockminer_get_extra_device_status(struct cgpu_info * const proc)
 {
 	struct api_data *root = NULL;
-	struct thr_info * const thr = proc->thr[0];
-	struct rockminer_chip_data * const chip = thr->cgpu_data;
 	
-	double d = ((int)chip->next_work_req[0x31] + 1) * 10;
+	double d = rockminer_get_clock(proc);
 	root = api_add_freq(root, "Frequency", &d, true);
 	
 	return root;
 }
+
+#ifdef HAVE_CURSES
+static
+void rockminer_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *rockminer_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	static char buf[0x100];  // Static for replies
+	
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			sprintf(buf, "Set clock speed (range %d-%d, multiple of 10)", ROCKMINER_MIN_FREQ_MHZ, ROCKMINER_MAX_FREQ_MHZ);
+			char * const val = curses_input(buf);
+			const char * const msg = rockminer_set_clock(proc, "clock", val ?: "", NULL, NULL);
+			free(val);
+			if (msg)
+			{
+				snprintf(buf, sizeof(buf), "%s\n", msg);
+				return buf;
+			}
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void rockminer_wlogprint_status(struct cgpu_info * const proc)
+{
+	wlogprint("Clock speed: %d\n", rockminer_get_clock(proc));
+}
+#endif
 
 struct device_drv rockminer_drv = {
 	.dname = "rockminer",
@@ -444,4 +488,10 @@ struct device_drv rockminer_drv = {
 	.poll = rockminer_poll,
 	
 	.get_api_extra_device_status = rockminer_get_extra_device_status,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = rockminer_wlogprint_status,
+	.proc_tui_wlogprint_choices = rockminer_tui_wlogprint_choices,
+	.proc_tui_handle_choice = rockminer_tui_handle_choice,
+#endif
 };
