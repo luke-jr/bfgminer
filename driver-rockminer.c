@@ -20,6 +20,7 @@
 
 #define ROCKMINER_MIN_FREQ_MHZ  200
 #define ROCKMINER_DEF_FREQ_MHZ  270
+#define ROCKMINER_MAX_FREQ_MHZ  290
 #define ROCKMINER_POLL_US         0
 #define ROCKMINER_RETRY_US  5000000
 #define ROCKMINER_MIDTASK_TIMEOUT_US  500000
@@ -36,6 +37,7 @@ enum rockminer_replies {
 };
 
 BFG_REGISTER_DRIVER(rockminer_drv)
+static const struct bfg_set_device_definition rockminer_set_device_funcs[];
 
 struct rockminer_chip_data {
 	uint8_t next_work_req[ROCKMINER_WORK_REQ_SIZE];
@@ -181,6 +183,7 @@ bool rockminer_detect_one(const char * const devpath)
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &rockminer_drv,
+		.set_device_funcs = rockminer_set_device_funcs,
 		.device_path = strdup(devpath),
 		.deven = DEV_ENABLED,
 		.procs = chips,
@@ -392,6 +395,27 @@ void rockminer_poll(struct thr_info * const master_thr)
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_POLL_US);
 }
+
+static
+const char *rockminer_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct rockminer_chip_data * const chip = thr->cgpu_data;
+	
+	const int val = atoi(newvalue);
+	if (val < ROCKMINER_MIN_FREQ_MHZ || val > ROCKMINER_MAX_FREQ_MHZ)
+		return "Invalid clock speed";
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Changing clock frequency for future jobs to %d MHz", proc->proc_repr, val);
+	rockminer_job_buf_set_freq(chip->next_work_req, val);
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition rockminer_set_device_funcs[] = {
+	{"clock", rockminer_set_clock, "clock frequency"},
+	{NULL}
+};
 
 struct device_drv rockminer_drv = {
 	.dname = "rockminer",
