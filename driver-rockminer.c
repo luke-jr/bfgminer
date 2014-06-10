@@ -22,6 +22,8 @@
 #define ROCKMINER_DEF_FREQ_MHZ  270
 #define ROCKMINER_POLL_US         0
 #define ROCKMINER_RETRY_US  5000000
+#define ROCKMINER_MIDTASK_TIMEOUT_US  500000
+#define ROCKMINER_MIDTASK_RETRY_US   1000000
 
 #define ROCKMINER_MAX_CHIPS  64
 #define ROCKMINER_WORK_REQ_SIZE  0x40
@@ -39,6 +41,7 @@ struct rockminer_chip_data {
 	uint8_t next_work_req[ROCKMINER_WORK_REQ_SIZE];
 	struct work *works[2];
 	uint8_t last_taskid;
+	struct timeval tv_midtask_timeout;
 };
 
 static
@@ -237,6 +240,17 @@ void rockminer_dead(struct cgpu_info * const dev)
 }
 
 static
+bool rockminer_send_work(struct thr_info * const thr)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
+	struct rockminer_chip_data * const chip = thr->cgpu_data;
+	const int fd = dev->device_fd;
+	
+	return (write(fd, chip->next_work_req, sizeof(chip->next_work_req)) == sizeof(chip->next_work_req));
+}
+
+static
 bool rockminer_queue_append(struct thr_info * const thr, struct work * const work)
 {
 	struct cgpu_info * const proc = thr->cgpu;
@@ -251,7 +265,7 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	
 	memcpy(&chip->next_work_req[   0], work->midstate, 0x20);
 	memcpy(&chip->next_work_req[0x34], &work->data[0x40], 0xc);
-	if (write(fd, chip->next_work_req, sizeof(chip->next_work_req)) != sizeof(chip->next_work_req))
+	if (!rockminer_send_work(thr))
 	{
 		rockminer_dead(dev);
 		applogr(false, LOG_ERR, "%"PRIpreprv": Failed to send work", proc->proc_repr);
@@ -292,7 +306,10 @@ void rockminer_poll(struct thr_info * const master_thr)
 		for_each_managed_proc(proc, dev)
 		{
 			struct thr_info * const thr = proc->thr[0];
+			struct rockminer_chip_data * const chip = thr->cgpu_data;
+			
 			thr->queue_full = false;
+			timer_unset(&chip->tv_midtask_timeout);
 		}
 	}
 	
@@ -339,15 +356,39 @@ void rockminer_poll(struct thr_info * const master_thr)
 			case ROCKMINER_REPLY_TASK_COMPLETE:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d completed", proc->proc_repr, taskid);
 				hashes_done2(thr, 0x100000000, NULL);
+				timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_TIMEOUT_US);
 				break;
 			case ROCKMINER_REPLY_GET_TASK:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
+				timer_unset(&chip->tv_midtask_timeout);
 				break;
 		}
 	}
 	if (rsz < 0)
 		rockminer_dead(dev);
+	
+	struct timeval tv_now;
+	timer_set_now(&tv_now);
+	for_each_managed_proc(proc, dev)
+	{
+		struct thr_info * const thr = proc->thr[0];
+		struct rockminer_chip_data * const chip = thr->cgpu_data;
+		
+		if (timer_passed(&chip->tv_midtask_timeout, &tv_now))
+		{
+			// A task completed, but no request followed
+			// This means it missed our last task send, so we need to resend it
+			applog(LOG_WARNING, "%"PRIpreprv": No task request? Probably lost, resending task %d", proc->proc_repr, chip->last_taskid);
+			timer_set_delay(&chip->tv_midtask_timeout, &tv_now, ROCKMINER_MIDTASK_RETRY_US);
+			if (!rockminer_send_work(thr))
+			{
+				rockminer_dead(dev);
+				timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_RETRY_US);
+				applogr(, LOG_ERR, "%"PRIpreprv": Failed to resend work", proc->proc_repr);
+			}
+		}
+	}
 	
 	timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_POLL_US);
 }
