@@ -364,19 +364,6 @@ void bifury_queue_flush(struct thr_info * const thr)
 }
 
 static
-const struct cgpu_info *device_proc_by_id(const struct cgpu_info * const dev, int procid)
-{
-	const struct cgpu_info *proc = dev;
-	for (int i = 0; i < procid; ++i)
-	{
-		proc = proc->next_proc;
-		if (unlikely(!proc))
-			return NULL;
-	}
-	return proc;
-}
-
-static
 void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 {
 	struct thr_info * const master_thr = dev->thr[0];
