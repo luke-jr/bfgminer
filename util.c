@@ -317,7 +317,7 @@ static int keep_sockalive(SOCKETTYPE fd)
 void set_cloexec_socket(SOCKETTYPE sock, const bool cloexec)
 {
 #ifdef WIN32
-	SetHandleInformation(sock, HANDLE_FLAG_INHERIT, cloexec ? 0 : HANDLE_FLAG_INHERIT);
+	SetHandleInformation((HANDLE)sock, HANDLE_FLAG_INHERIT, cloexec ? 0 : HANDLE_FLAG_INHERIT);
 #elif defined(F_GETFD) && defined(F_SETFD) && defined(O_CLOEXEC)
 	const int curflags = fcntl(sock, F_GETFD);
 	int flags = curflags;
