@@ -9887,7 +9887,7 @@ static void wait_lpcurrent(struct pool *pool)
 
 static curl_socket_t save_curl_socket(void *vpool, __maybe_unused curlsocktype purpose, struct curl_sockaddr *addr) {
 	struct pool *pool = vpool;
-	curl_socket_t sock = socket(addr->family, addr->socktype, addr->protocol);
+	curl_socket_t sock = bfg_socket(addr->family, addr->socktype, addr->protocol);
 	pool->lp_socket = sock;
 	return sock;
 }

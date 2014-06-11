@@ -3895,9 +3895,7 @@ static void mcast()
 	*mcastsock = INVSOCK;
 	pthread_cleanup_push(tidyup_socket, mcastsock);
 	
-	*mcastsock = socket(AF_INET, SOCK_DGRAM, 0);
-
-	set_cloexec_socket(*mcastsock, true);
+	*mcastsock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
 	
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(*mcastsock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
@@ -3978,7 +3976,7 @@ static void mcast()
 							&buf[expect_code_len], reply_port);
 
 				came_from.sin_port = htons(reply_port);
-				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+				reply_sock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
 							"cgm-%s-%d-%s",
@@ -4088,14 +4086,12 @@ void api(int api_thr_id)
 		}
 	}
 
-	*apisock = socket(AF_INET, SOCK_STREAM, 0);
+	*apisock = bfg_socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		pthread_exit(NULL);
 	}
 	
-	set_cloexec_socket(*apisock, true);
-
 	memset(&serv, 0, sizeof(serv));
 
 	serv.sin_family = AF_INET;

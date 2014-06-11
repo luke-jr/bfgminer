@@ -335,7 +335,7 @@ static int keep_sockalive(SOCKETTYPE fd)
 void set_cloexec_socket(SOCKETTYPE sock, const bool cloexec)
 {
 #ifdef WIN32
-	SetHandleInformation(sock, HANDLE_FLAG_INHERIT, cloexec ? 0 : HANDLE_FLAG_INHERIT);
+	SetHandleInformation((HANDLE)sock, HANDLE_FLAG_INHERIT, cloexec ? 0 : HANDLE_FLAG_INHERIT);
 #elif defined(F_GETFD) && defined(F_SETFD) && defined(O_CLOEXEC)
 	const int curflags = fcntl(sock, F_GETFD);
 	int flags = curflags;
@@ -2630,7 +2630,7 @@ out:
 curl_socket_t grab_socket_opensocket_cb(void *clientp, __maybe_unused curlsocktype purpose, struct curl_sockaddr *addr)
 {
 	struct pool *pool = clientp;
-	curl_socket_t sck = socket(addr->family, addr->socktype, addr->protocol);
+	curl_socket_t sck = bfg_socket(addr->family, addr->socktype, addr->protocol);
 	pool->sock = sck;
 	return sck;
 }
@@ -3284,11 +3284,11 @@ void notifier_init(notifier_t pipefd)
 #ifdef WIN32
 #define WindowsErrorStr(e)  bfg_strerror(e, BST_SOCKET)
 	SOCKET listener, connecter, acceptor;
-	listener = socket(AF_INET, SOCK_STREAM, 0);
+	listener = bfg_socket(AF_INET, SOCK_STREAM, 0);
 	if (listener == INVALID_SOCKET)
 		quit(1, "Failed to create listener socket"IN_FMT_FFL": %s",
 		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
-	connecter = socket(AF_INET, SOCK_STREAM, 0);
+	connecter = bfg_socket(AF_INET, SOCK_STREAM, 0);
 	if (connecter == INVALID_SOCKET)
 		quit(1, "Failed to create connect socket"IN_FMT_FFL": %s",
 		     __FILE__, __func__, __LINE__, WindowsErrorStr(WSAGetLastError()));
