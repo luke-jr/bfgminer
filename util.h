@@ -27,6 +27,7 @@
 
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
+	#include <sys/types.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
@@ -108,7 +109,28 @@ struct pool;
 enum dev_reason;
 struct cgpu_info;
 
+
 extern void set_cloexec_socket(SOCKETTYPE, bool cloexec);
+
+static inline
+SOCKETTYPE bfg_socket(const int domain, const int type, const int protocol)
+{
+	const bool cloexec = true;
+	SOCKETTYPE sock;
+#ifdef WIN32
+# ifndef WSA_FLAG_NO_HANDLE_INHERIT
+#  define WSA_FLAG_NO_HANDLE_INHERIT 0x80
+# endif
+	sock = WSASocket(domain, type, protocol, NULL, 0, WSA_FLAG_OVERLAPPED | ((cloexec) ? WSA_FLAG_NO_HANDLE_INHERIT : 0));
+	if (sock == INVSOCK)
+#endif
+	sock = socket(domain, type, protocol);
+	if (sock == INVSOCK)
+		return INVSOCK;
+	set_cloexec_socket(sock, cloexec);
+	return sock;
+}
+
 
 extern void json_rpc_call_async(CURL *, const char *url, const char *userpass, const char *rpc_req, bool longpoll, struct pool *pool, bool share, void *priv);
 extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime, void *out_priv);

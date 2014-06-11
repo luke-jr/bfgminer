@@ -3859,9 +3859,7 @@ static void mcast()
 		quit(1, "Invalid Multicast Address");
 	grp.imr_interface.s_addr = INADDR_ANY;
 
-	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
-
-	set_cloexec_socket(*mcastsock, true);
+	mcast_sock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
 	
 	int optval = 1;
 	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
@@ -3942,7 +3940,7 @@ static void mcast()
 							&buf[expect_code_len], reply_port);
 
 				came_from.sin_port = htons(reply_port);
-				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+				reply_sock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
 							"cgm-%s-%d-%s",
@@ -4055,14 +4053,12 @@ void api(int api_thr_id)
 	 * to ensure curl has already called WSAStartup() in windows */
 	cgsleep_ms(opt_log_interval*1000);
 
-	*apisock = socket(AF_INET, SOCK_STREAM, 0);
+	*apisock = bfg_socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
 		return;
 	}
 	
-	set_cloexec_socket(*apisock, true);
-
 	memset(&serv, 0, sizeof(serv));
 
 	serv.sin_family = AF_INET;
