@@ -1,3 +1,11 @@
+BFGMiner Version 3.10.3 - June 11, 2014
+
+- Upgraded Windows libmicrohttpd from 0.9.35 to 0.9.38_pre33603
+- SGW: Workaround BE Cube bugs with new libmicrohttpd by forcing HTTP 1.0
+response
+- set_cloexec_socket: Explicitly cast SOCKET to HANDLE
+
+
 BFGMiner Version 3.10.2 - June 6, 2014
 
 - Update libblkmaker to 0.4.0
