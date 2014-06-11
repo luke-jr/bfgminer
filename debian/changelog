@@ -1,3 +1,9 @@
+bfgminer (4.2.0-0precise1) precise; urgency=low
+
+  * rockminer: New driver for ROCKMINER R-BOX.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 11 Jun 2014 03:03:50 -0000
+
 bfgminer (4.1.0-0precise1) precise; urgency=low
 
   * Stratum: Fix recovery of dead pools.

@@ -1,3 +1,27 @@
+BFGMiner Version 4.2.0 - June 11, 2014
+
+- Upgraded Windows libmicrohttpd from 0.9.35 to 0.9.38_pre33603
+- SGW: Workaround BE Cube bugs with new libmicrohttpd by forcing HTTP 1.0
+response
+- rockminer: Increase hw error count for problems
+- rockminer: Autodetect with "R-BOX miner" or "RX-BOX miner" product strings
+- rockminer: Support for seeing and setting clock frequency in Manage TUI
+- rockminer: Include clock frequency in RPC processor status
+- rockminer: Support for setting clock frequency
+- rockminer: Workaround lost tasks by resending them
+- rockminer: Support for temperature sensors
+- rockminer: Debug messages
+- Bugfix: rockminer: Initialise rockminer_chip_data
+- Bugfix: rockminer: Ensure work actually exists before testing against it
+- rockminer: Mine at 270 MHz
+- rockminer: Implement mining (at 200 MHz)
+- DevAPI: Move device_proc_by_id out of bifury driver, since it is generically
+useful
+- rockminer: Detection code for new driver
+- bfg_socket wrapper to ensure sockets are close-on-exec
+- set_cloexec_socket: Explicitly cast SOCKET to HANDLE
+
+
 BFGMiner Version 4.1.0 - June 6, 2014
 
 - Bugfix: Ensure variables are declared even without ADL support
