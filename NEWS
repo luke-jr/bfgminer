@@ -1,5 +1,6 @@
 BFGMiner Version 3.5.9 - June 6, 2014
 
+- Bugfix: RPC: Downgrade mcast_sock reference for 3.5.x
 - README.RPC: Document Coinbase-Sig in config reply
 - Bugfix: initiate_stratum: Ensure extranonce2 size is not negative (which could
 lead to exploits later as too little memory gets allocated)
