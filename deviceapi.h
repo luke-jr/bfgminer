@@ -113,7 +113,7 @@ extern void close_device_fd(struct thr_info *);
 #define for_each_managed_proc(procvar, dev)  \
 	for (struct cgpu_info *procvar = dev; procvar; procvar = procvar->next_proc)
 #define for_each_logical_proc(procvar, dev)  \
-	for (struct cgpu_info *procvar = dev; procvar->proc_id < dev->procs; procvar = procvar->next_proc)
+	for (struct cgpu_info *procvar = dev; procvar && procvar->device == (dev); procvar = procvar->next_proc)
 extern struct cgpu_info *device_proc_by_id(struct cgpu_info *dev, int procid);
 
 #endif
