@@ -5684,18 +5684,9 @@ static double share_diff(const struct work *work)
 	return ret;
 }
 
-static void regen_hash(struct work *work)
+static
+void work_check_for_block(struct work * const work)
 {
-	hash_data(work->hash, work->data);
-}
-
-static void rebuild_hash(struct work *work)
-{
-	if (opt_scrypt)
-		scrypt_regenhash(work);
-	else
-		regen_hash(work);
-
 	work->share_diff = share_diff(work);
 	if (unlikely(work->share_diff >= current_diff)) {
 		work->block = true;
@@ -5769,7 +5760,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		.work = work,
 	};
 
-	rebuild_hash(work);
+	work_check_for_block(work);
 
 	if (stale_work(work, true)) {
 		work->stale = true;
@@ -9320,7 +9311,7 @@ void _submit_work_async(struct work *work)
 	if (opt_benchmark)
 	{
 		json_t * const jn = json_null();
-		rebuild_hash(work);
+		work_check_for_block(work);
 		share_result(jn, jn, jn, work, false, "");
 		free_work(work);
 		return;
