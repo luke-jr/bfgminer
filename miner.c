@@ -9371,6 +9371,16 @@ void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_
 		thr->cgpu->drv->hw_error(thr);
 }
 
+void work_hash(struct work * const work)
+{
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		scrypt_hash_data(work->hash, work->data);
+	else
+#endif
+		hash_data(work->hash, work->data);
+}
+
 static
 bool test_hash(const void * const phash, const float diff)
 {
@@ -9393,12 +9403,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	*work_nonce = htole32(nonce);
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		scrypt_hash_data(work->hash, work->data);
-	else
-#endif
-		hash_data(work->hash, work->data);
+	work_hash(work);
 	
 	if (!test_hash(work->hash, work->nonce_diff))
 		return TNR_BAD;
