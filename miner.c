@@ -5692,18 +5692,9 @@ static double share_diff(const struct work *work)
 	return ret;
 }
 
-static void regen_hash(struct work *work)
+static
+void work_check_for_block(struct work * const work)
 {
-	hash_data(work->hash, work->data);
-}
-
-static void rebuild_hash(struct work *work)
-{
-	if (opt_scrypt)
-		scrypt_regenhash(work);
-	else
-		regen_hash(work);
-
 	work->share_diff = share_diff(work);
 	if (unlikely(work->share_diff >= current_diff)) {
 		work->block = true;
@@ -5777,7 +5768,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		.work = work,
 	};
 
-	rebuild_hash(work);
+	work_check_for_block(work);
 
 	if (stale_work(work, true)) {
 		work->stale = true;
@@ -9329,7 +9320,7 @@ void _submit_work_async(struct work *work)
 	if (opt_benchmark)
 	{
 		json_t * const jn = json_null();
-		rebuild_hash(work);
+		work_check_for_block(work);
 		share_result(jn, jn, jn, work, false, "");
 		free_work(work);
 		return;
@@ -9380,6 +9371,16 @@ void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_
 		thr->cgpu->drv->hw_error(thr);
 }
 
+void work_hash(struct work * const work)
+{
+#ifdef USE_SCRYPT
+	if (opt_scrypt)
+		scrypt_hash_data(work->hash, work->data);
+	else
+#endif
+		hash_data(work->hash, work->data);
+}
+
 static
 bool test_hash(const void * const phash, const float diff)
 {
@@ -9402,12 +9403,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	uint32_t *work_nonce = (uint32_t *)(work->data + 64 + 12);
 	*work_nonce = htole32(nonce);
 
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		scrypt_hash_data(work->hash, work->data);
-	else
-#endif
-		hash_data(work->hash, work->data);
+	work_hash(work);
 	
 	if (!test_hash(work->hash, work->nonce_diff))
 		return TNR_BAD;
