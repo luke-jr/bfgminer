@@ -131,6 +131,21 @@ uint8_t flush_buf[400];
 
 BFG_REGISTER_DRIVER(zeus_drv);
 
+//Calculates the target difficulty
+static const uint64_t diffone = 0xFFFF000000000000ull;
+static double target_diff(const unsigned char *target)
+{
+	uint64_t *data64, d64;
+	char rtarget[32];
+    
+	swab256(rtarget, target);
+	data64=(uint64_t *)(rtarget + 2);
+	d64=be64toh(*data64);
+	if(unlikely(!d64))
+		d64=1;
+	
+	return diffone/d64;
+}
 
 /**
  * Flush the UART on the Zeus controller board.
@@ -556,8 +571,9 @@ static int64_t zeus_scanhash(struct thr_info *thr, struct work *work,
 
   uint32_t clock = info->clk_header;
 
-  int diff; // XXX  = floor(work->device_diff);
-  
+  uint32_t diff = floor(target_diff(work->target));
+  applog(LOG_ERR, "Work Diff: %d", diff);
+
   if(diff<info->chips_count){
     diff=info->chips_count;
   }
