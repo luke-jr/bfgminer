@@ -572,11 +572,9 @@ static int64_t zeus_scanhash(struct thr_info *thr, struct work *work,
   uint32_t clock = info->clk_header;
 
   uint32_t diff = floor(target_diff(work->target));
-  applog(LOG_ERR, "Work Diff: %d", diff);
+  applog(LOG_DEBUG, "Work Diff: %d", diff);
 
-  if(diff<info->chips_count){
-    diff=info->chips_count;
-  }
+  if(diff < 1) diff = 1;
 		
   uint32_t target_me = 0xffff/diff;
   uint32_t header = clock+target_me;
