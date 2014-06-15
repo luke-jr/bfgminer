@@ -413,6 +413,16 @@ void rockminer_poll(struct thr_info * const master_thr)
 			applog(LOG_WARNING, "%"PRIpreprv": No task request? Probably lost, resending task %d", proc->proc_repr, chip->last_taskid);
 			inc_hw_errors_only(thr);
 			timer_set_delay(&chip->tv_midtask_timeout, &tv_now, ROCKMINER_MIDTASK_RETRY_US);
+			struct work *work;
+			if ((!(work = chip->works[chip->last_taskid])) || stale_work(work, false))
+			{
+				// Either no work was queued, or it was stale
+				// Instead of resending, just queue a new one
+				if (!chip->requested_work)
+					chip->requested_work = 1;
+				thr->queue_full = false;
+			}
+			else
 			if (!rockminer_send_work(thr))
 			{
 				rockminer_dead(dev);
