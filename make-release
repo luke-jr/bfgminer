@@ -51,7 +51,7 @@ NOCONFIGURE=1 \
 find . -name autom4te.cache |
  xargs rm -r
 cd ..
-zip -r "$OUTDIR/${sw}.zip" "$sw"
+zip -y -r "$OUTDIR/${sw}.zip" "$sw"
 tar cjvpf "$OUTDIR/${sw}.tbz2" "$sw"
 SRCDIR="$TMPDIR/$sw"
 
