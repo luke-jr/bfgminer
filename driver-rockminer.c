@@ -45,6 +45,7 @@ struct rockminer_chip_data {
 	struct work *works[2];
 	uint8_t last_taskid;
 	struct timeval tv_midtask_timeout;
+	int requested_work;
 };
 
 static
@@ -268,10 +269,11 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	struct rockminer_chip_data * const chip = thr->cgpu_data;
 	const int fd = dev->device_fd;
 	
-	thr->queue_full = true;
-	
-	if (fd < 0)
+	if (fd < 0 || !chip->requested_work)
+	{
+		thr->queue_full = true;
 		return false;
+	}
 	
 	memcpy(&chip->next_work_req[   0], work->midstate, 0x20);
 	memcpy(&chip->next_work_req[0x34], &work->data[0x40], 0xc);
@@ -287,6 +289,9 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 		free_work(chip->works[chip->last_taskid]);
 	chip->works[chip->last_taskid] = work;
 	applog(LOG_DEBUG, "%"PRIpreprv": Work %d queued as task %d", proc->proc_repr, work->id, chip->last_taskid);
+	
+	if (!--chip->requested_work)
+		thr->queue_full = true;
 	
 	return true;
 }
@@ -324,6 +329,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 			struct thr_info * const thr = proc->thr[0];
 			struct rockminer_chip_data * const chip = thr->cgpu_data;
 			
+			chip->requested_work = 1;
 			thr->queue_full = false;
 			timer_unset(&chip->tv_midtask_timeout);
 		}
@@ -382,6 +388,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 			case ROCKMINER_REPLY_GET_TASK:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
+				++chip->requested_work;
 				timer_unset(&chip->tv_midtask_timeout);
 				break;
 		}
