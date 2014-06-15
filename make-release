@@ -42,10 +42,10 @@ done
 git submodule update --init
 {
 	git archive --prefix "$sw"/ --format tar "$tag"
-	git submodule --quiet foreach --recursive 'test x$name = xccan-upstream || git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
+	git submodule --quiet foreach --recursive 'test x$name = xccan || git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
 	(
 		cd ccan-upstream
-		git archive --prefix "'"$sw"'/$path/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb}
+		git archive --prefix "$sw/ccan-upstream/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb} licenses/{CC0,GPL-3,LGPL-2.1}
 	)
 } | tar -xivp
 cd "$sw"
@@ -55,7 +55,7 @@ NOCONFIGURE=1 \
 find . -name autom4te.cache |
  xargs rm -r
 cd ..
-zip -r "$OUTDIR/${sw}.zip" "$sw"
+zip -y -r "$OUTDIR/${sw}.zip" "$sw"
 tar -cJvpf "$OUTDIR/${sw}.txz" "$sw"
 SRCDIR="$TMPDIR/$sw"
 
