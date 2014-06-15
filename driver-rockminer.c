@@ -26,6 +26,7 @@
 #define ROCKMINER_RETRY_US  5000000
 #define ROCKMINER_MIDTASK_TIMEOUT_US  500000
 #define ROCKMINER_MIDTASK_RETRY_US   1000000
+#define ROCKMINER_TASK_TIMEOUT_US    5273438
 
 #define ROCKMINER_MAX_CHIPS  64
 #define ROCKMINER_WORK_REQ_SIZE  0x40
@@ -45,6 +46,7 @@ struct rockminer_chip_data {
 	struct work *works[2];
 	uint8_t last_taskid;
 	struct timeval tv_midtask_timeout;
+	int requested_work;
 };
 
 static
@@ -268,10 +270,11 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	struct rockminer_chip_data * const chip = thr->cgpu_data;
 	const int fd = dev->device_fd;
 	
-	thr->queue_full = true;
-	
-	if (fd < 0)
+	if (fd < 0 || !chip->requested_work)
+	{
+		thr->queue_full = true;
 		return false;
+	}
 	
 	memcpy(&chip->next_work_req[   0], work->midstate, 0x20);
 	memcpy(&chip->next_work_req[0x34], &work->data[0x40], 0xc);
@@ -286,7 +289,11 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	if (chip->works[chip->last_taskid])
 		free_work(chip->works[chip->last_taskid]);
 	chip->works[chip->last_taskid] = work;
+	timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_RETRY_US);
 	applog(LOG_DEBUG, "%"PRIpreprv": Work %d queued as task %d", proc->proc_repr, work->id, chip->last_taskid);
+	
+	if (!--chip->requested_work)
+		thr->queue_full = true;
 	
 	return true;
 }
@@ -319,13 +326,16 @@ void rockminer_poll(struct thr_info * const master_thr)
 			applogr(, LOG_ERR, "%s: Failed to open %s", dev->dev_repr, dev->device_path);
 		}
 		dev->device_fd = fd;
+		struct timeval tv_timeout;
+		timer_set_delay_from_now(&tv_timeout, ROCKMINER_TASK_TIMEOUT_US);
 		for_each_managed_proc(proc, dev)
 		{
 			struct thr_info * const thr = proc->thr[0];
 			struct rockminer_chip_data * const chip = thr->cgpu_data;
 			
+			chip->requested_work = 1;
 			thr->queue_full = false;
-			timer_unset(&chip->tv_midtask_timeout);
+			chip->tv_midtask_timeout = tv_timeout;
 		}
 	}
 	
@@ -382,7 +392,8 @@ void rockminer_poll(struct thr_info * const master_thr)
 			case ROCKMINER_REPLY_GET_TASK:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
-				timer_unset(&chip->tv_midtask_timeout);
+				++chip->requested_work;
+				timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
 				break;
 		}
 	}
@@ -403,6 +414,16 @@ void rockminer_poll(struct thr_info * const master_thr)
 			applog(LOG_WARNING, "%"PRIpreprv": No task request? Probably lost, resending task %d", proc->proc_repr, chip->last_taskid);
 			inc_hw_errors_only(thr);
 			timer_set_delay(&chip->tv_midtask_timeout, &tv_now, ROCKMINER_MIDTASK_RETRY_US);
+			struct work *work;
+			if ((!(work = chip->works[chip->last_taskid])) || stale_work(work, false))
+			{
+				// Either no work was queued, or it was stale
+				// Instead of resending, just queue a new one
+				if (!chip->requested_work)
+					chip->requested_work = 1;
+				thr->queue_full = false;
+			}
+			else
 			if (!rockminer_send_work(thr))
 			{
 				rockminer_dead(dev);
