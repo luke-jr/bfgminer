@@ -41,7 +41,7 @@ git submodule update --init
 	git submodule --quiet foreach --recursive 'test x$name = xccan || git archive --prefix "'"$sw"'/$path/" --format tar HEAD'
 	(
 		cd ccan-upstream
-		git archive --prefix "$sw/ccan-upstream/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb}
+		git archive --prefix "$sw/ccan-upstream/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb} licenses/{CC0,GPL-3,LGPL-2.1}
 	)
 } | tar -xivp
 cd "$sw"
