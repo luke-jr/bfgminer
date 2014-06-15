@@ -69,7 +69,7 @@ docs='
 for build in "${builds[@]}"; do
 	PKGNAME="${sw}-${build}"
 	PKGDIR="$TMPDIR/$PKGNAME"
-	cd "$TMPDIR"
+	cd "$SRCDIR"
 	mkdir -vp "$PKGDIR"
 	for v in machine CFLAGS; do
 		eval "${v}"="'$(eval echo "\${${build}_${v}}")'"
@@ -81,8 +81,6 @@ for build in "${builds[@]}"; do
 		sed 's/$/\r/' <"$doc" >"$PKGDIR/${doc}.txt"
 	done
 	
-	NOCONFIGURE=1 \
-	./autogen.sh
 	./configure \
 		--prefix='C:\\Program Files\\BFGMiner\\' \
 		CFLAGS="${CFLAGS} -Wall" \
