@@ -26,6 +26,7 @@
 #define ROCKMINER_RETRY_US  5000000
 #define ROCKMINER_MIDTASK_TIMEOUT_US  500000
 #define ROCKMINER_MIDTASK_RETRY_US   1000000
+#define ROCKMINER_TASK_TIMEOUT_US    5273438
 
 #define ROCKMINER_MAX_CHIPS  64
 #define ROCKMINER_WORK_REQ_SIZE  0x40
@@ -324,6 +325,8 @@ void rockminer_poll(struct thr_info * const master_thr)
 			applogr(, LOG_ERR, "%s: Failed to open %s", dev->dev_repr, dev->device_path);
 		}
 		dev->device_fd = fd;
+		struct timeval tv_timeout;
+		timer_set_delay_from_now(&tv_timeout, ROCKMINER_TASK_TIMEOUT_US);
 		for_each_managed_proc(proc, dev)
 		{
 			struct thr_info * const thr = proc->thr[0];
@@ -331,7 +334,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 			
 			chip->requested_work = 1;
 			thr->queue_full = false;
-			timer_unset(&chip->tv_midtask_timeout);
+			chip->tv_midtask_timeout = tv_timeout;
 		}
 	}
 	
@@ -389,7 +392,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
 				++chip->requested_work;
-				timer_unset(&chip->tv_midtask_timeout);
+				timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
 				break;
 		}
 	}
