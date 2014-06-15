@@ -289,6 +289,7 @@ bool rockminer_queue_append(struct thr_info * const thr, struct work * const wor
 	if (chip->works[chip->last_taskid])
 		free_work(chip->works[chip->last_taskid]);
 	chip->works[chip->last_taskid] = work;
+	timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_RETRY_US);
 	applog(LOG_DEBUG, "%"PRIpreprv": Work %d queued as task %d", proc->proc_repr, work->id, chip->last_taskid);
 	
 	if (!--chip->requested_work)
