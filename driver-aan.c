@@ -226,6 +226,7 @@ bool aan_init(struct thr_info * const master_thr)
 		*chip = (struct aan_chip_data){
 			.chipid = ++chipid,
 			.desired_nonce_pdiff = AAN_DEFAULT_NONCE_PDIFF,
+			.pllreg = 0x87a9,  // 850 MHz
 		};
 	}
 	master_thr->tv_poll = tv_now;
@@ -435,6 +436,7 @@ badjob:
 	for_each_logical_proc(proc, dev)
 	{
 		struct thr_info * const thr = proc->thr[0];
+		struct aan_chip_data * const chip = thr->cgpu_data;
 		const int i = proc->proc_id;
 		uint8_t reg[AAN_REGISTER_SIZE];
 		
@@ -443,6 +445,20 @@ badjob:
 			applog(LOG_ERR, "%"PRIpreprv": Failed to read reg", proc->proc_repr);
 			continue;
 		}
+		const uint16_t pllreg = upk_u16be(reg, 0);
+		if (pllreg != chip->pllreg)
+		{
+			// Wait for chip to idle before changing register
+			if (!(reg[3] & 3))
+			{
+				applog(LOG_DEBUG, "%"PRIpreprv": Asserting PLL change: %04x->%04x", proc->proc_repr, pllreg, chip->pllreg);
+				uint8_t regset[AAN_REGISTER_SIZE];
+				memcpy(&regset[2], &reg[2], AAN_REGISTER_SIZE - 2);
+				pk_u16be(regset, 0, chip->pllreg);
+				aan_spi_cmd_send(spi, AAN_WRITE_REG, chip->chipid, regset, AAN_REGISTER_SIZE);
+			}
+		}
+		else
 		if ((reg[3] & 2) != 2)
 		{
 			struct cgpu_info * const master_dev = board->master_dev;
