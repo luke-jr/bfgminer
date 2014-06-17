@@ -105,40 +105,56 @@ bool jingtian_detect_one(const char * const devpath)
 		applogr(false, LOG_DEBUG, "%s: Failed to open %s", jingtian_drv.dname, devpath);
 	
 	struct cgpu_info *cgpu, *prev_cgpu = NULL;
-	struct spi_port * const spi = calloc(sizeof(*spi), 1), *spicopy;
-	spi->txrx = jingtian_spi_txrx;
-	spi->userp = &jingtian_hooks;
-	spi->fd = fd;
-	spi->speed = 4000000;
-	spi->delay = 0;
-	spi->mode = 1;
-	spi->bits = 8;
-	spi->chipselect_current = malloc(sizeof(*spi->chipselect_current));
-	*spi->chipselect_current = -1;
+	struct spi_port *spi;
+	int * const chipselect_current = malloc(sizeof(*spi->chipselect_current));
+	*chipselect_current = -1;
+	
+	int devpath_len = strlen(devpath);
+	
+	int chipcount[jingtian_max_cs];
+	struct spi_port *spi_a[jingtian_max_cs];
 	for (int i = 0; i < jingtian_max_cs; ++i)
 	{
+		spi = spi_a[i] = calloc(sizeof(*spi), 1);
+		spi->repr = malloc(devpath_len + 0x10);
+		sprintf((void*)spi->repr, "%s(cs%d)", devpath, i);
+		spi->txrx = jingtian_spi_txrx;
+		spi->userp = &jingtian_hooks;
+		spi->fd = fd;
+		spi->speed = 4000000;
+		spi->delay = 0;
+		spi->mode = 1;
+		spi->bits = 8;
 		spi->chipselect = i;
-		chips = aan_detect_spi(spi);
-		applog(LOG_DEBUG, "%s: %d chips found on %s CS %d",
-		       jingtian_drv.dname, chips, devpath, i);
+		spi->chipselect_current = chipselect_current;
+	}
+	
+	aan_detect_spi(chipcount, spi_a, jingtian_max_cs);
+	
+	for (int i = 0; i < jingtian_max_cs; ++i)
+	{
+		chips = chipcount[i];
+		free((void*)spi_a[i]->repr);
+		spi_a[i]->repr = NULL;
 		if (chips <= 0)
+		{
+			free(spi_a[i]);
 			continue;
-		spicopy = malloc(sizeof(*spicopy));
-		memcpy(spicopy, spi, sizeof(*spicopy));
+		}
 		cgpu = malloc(sizeof(*cgpu));
 		*cgpu = (struct cgpu_info){
 			.drv = &jingtian_drv,
 			.procs = chips,
-			.device_data = spicopy,
+			.device_data = spi_a[i],
 		};
 		add_cgpu_slave(cgpu, prev_cgpu);
 		prev_cgpu = cgpu;
 		found += chips;
 	}
+	
 	close(fd);
 	if (!found)
-		free(spi->chipselect_current);
-	free(spi);
+		free(chipselect_current);
 	return found;
 }
 

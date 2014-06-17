@@ -96,25 +96,69 @@ bool aan_spi_cmd(struct spi_port * const spi, const uint8_t cmd, const uint8_t c
 	return true;
 }
 
-static
-int aan_spi_autoaddress(struct spi_port * const spi, const struct timeval * const tvp_timeout)
-{
-	if (!aan_spi_cmd(spi, AAN_BIST_START, AAN_ALL_CHIPS, NULL, 0, tvp_timeout))
-		applogr(-1, LOG_DEBUG, "%s: %s failed", __func__, "AAN_BIST_START");
-	spi_emit_nop(spi, 2);
-	if (!spi_txrx(spi))
-		applogr(-1, LOG_DEBUG, "%s: %s failed", __func__, "spi_txrx");
-	uint8_t * const rx = spi_getrxbuf(spi);
-	return rx[1];
-}
-
-int aan_detect_spi(struct spi_port * const spi)
+int aan_detect_spi(int * const out_chipcount, struct spi_port * const * const spi_a, const int spi_n)
 {
 	struct timeval tv_timeout;
 	timer_set_delay_from_now(&tv_timeout, AAN_PROBE_TIMEOUT_US);
-	if (!aan_spi_cmd(spi, AAN_RESET, AAN_ALL_CHIPS, NULL, 0, &tv_timeout))
-		return -1;
-	return aan_spi_autoaddress(spi, &tv_timeout);
+	
+	int state[spi_n];
+	int completed = 0;
+	
+	for (int i = 0; i < spi_n; ++i)
+	{
+		struct spi_port * const spi = spi_a[i];
+		aan_spi_cmd_send(spi, state[i] = AAN_RESET, AAN_ALL_CHIPS, NULL, 0);
+		spi_emit_nop(spi, 2);
+		out_chipcount[i] = -1;
+	}
+	
+	do {
+		for (int i = 0; i < spi_n; ++i)
+		{
+			if (state[i] == -1)
+				continue;
+			struct spi_port * const spi = spi_a[i];
+			if (unlikely(!spi_txrx(spi)))
+			{
+spifail:
+				state[i] = -1;
+				continue;
+			}
+			uint8_t * const rx = spi_getrxbuf(spi);
+			if (rx[0] == state[i] && rx[1] == AAN_ALL_CHIPS)
+			{
+				switch (state[i])
+				{
+					case AAN_RESET:
+						applog(LOG_DEBUG, "%s: Reset complete", spi->repr);
+						spi_clear_buf(spi);
+						aan_spi_cmd_send(spi, state[i] = AAN_BIST_START, AAN_ALL_CHIPS, NULL, 0);
+						spi_emit_nop(spi, 2);
+						break;
+					case AAN_BIST_START:
+						if (unlikely(!spi_txrx(spi)))
+							goto spifail;
+						out_chipcount[i] = rx[1];
+						state[i] = -1;
+						++completed;
+						applog(LOG_DEBUG, "%s: BIST_START complete (%d chips)", spi->repr, rx[1]);
+						break;
+				}
+				continue;
+			}
+			aan_spi_parse_rx(spi);
+		}
+	} while (completed < spi_n && likely(!timer_passed(&tv_timeout, NULL)));
+	
+	for (int i = 0; i < spi_n; ++i)
+	{
+		struct spi_port * const spi = spi_a[i];
+		spi_clear_buf(spi);
+	}
+	
+	applog(LOG_DEBUG, "%s completed for %d out of %d SPI ports", __func__, completed, spi_n);
+	
+	return completed;
 }
 
 static

@@ -9,6 +9,6 @@ struct aan_hooks {
 	void (*precmd)(struct spi_port *);
 };
 
-extern int aan_detect_spi(struct spi_port *);
+extern int aan_detect_spi(int *out_chipcount, struct spi_port * const *spi_a, int spi_n);
 
 #endif
