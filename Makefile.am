@@ -69,8 +69,10 @@ bfgminer_SOURCES	+= miner.h compat.h bench_block.h	\
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
+SUBDIRS += $(LIBBLKMAKER_SUBDIRS)
+LIBBLKMAKER_SUBDIRS =
 if NEED_LIBBLKMAKER
-SUBDIRS           += libblkmaker
+LIBBLKMAKER_SUBDIRS         += libblkmaker
 EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
 libblkmaker_directory:
 	cd libblkmaker && $(MAKE)
