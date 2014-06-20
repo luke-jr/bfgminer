@@ -488,45 +488,48 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 
 	if (info->detect_init_func)
 		info->detect_init_func(devpath, fd, info);
-	
-	int ob_size = strlen(info->golden_ob) / 2;
-	unsigned char ob_bin[ob_size];
-	BFGINIT(info->ob_size, ob_size);
-	
-	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
-	icarus_write(fd, ob_bin, sizeof(ob_bin));
-	cgtime(&tv_start);
 
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
-	// We will then compare the bytes left in fd with info->read_size to determine
-	// if this is a valid device
-	icarus_gets(nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
-	
-	// How many bytes were left after reading the above nonce
-	int bytes_left = icarus_excess_nonce_size(fd, info);
-	
-	icarus_close(fd);
+	if (!info->ignore_golden_nonce)
+	{
+		int ob_size = strlen(info->golden_ob) / 2;
+		unsigned char ob_bin[ob_size];
+		BFGINIT(info->ob_size, ob_size);
 
-	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-	if (!info->ignore_golden_nonce && strncmp(nonce_hex, info->golden_nonce, 8))
-	{
-		applog(LOG_DEBUG,
-			"%s: "
-			"Test failed at %s: get %s, should: %s",
-			api->dname,
-			devpath, nonce_hex, info->golden_nonce);
-		return false;
-	}
-		
-	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
-	{
-		applog(LOG_DEBUG,
-			   "%s: "
-			   "Test failed at %s: expected %d bytes, got %d",
-			   api->dname,
-			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
-		return false;
+		hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
+		icarus_write(fd, ob_bin, sizeof(ob_bin));
+		cgtime(&tv_start);
+
+		memset(nonce_bin, 0, sizeof(nonce_bin));
+		// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
+		// We will then compare the bytes left in fd with info->read_size to determine
+		// if this is a valid device
+		icarus_gets(nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
+
+		// How many bytes were left after reading the above nonce
+		int bytes_left = icarus_excess_nonce_size(fd, info);
+
+		icarus_close(fd);
+
+		bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
+		if (strncmp(nonce_hex, info->golden_nonce, 8))
+		{
+			applog(LOG_DEBUG,
+				   "%s: "
+				   "Test failed at %s: get %s, should: %s",
+				   api->dname,
+				   devpath, nonce_hex, info->golden_nonce);
+			return false;
+		}
+
+		if (info->read_size - ICARUS_NONCE_SIZE != bytes_left)
+		{
+			applog(LOG_DEBUG,
+				   "%s: "
+				   "Test failed at %s: expected %d bytes, got %d",
+				   api->dname,
+				   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
+			return false;
+		}
 	}
 	
 	applog(LOG_DEBUG,
