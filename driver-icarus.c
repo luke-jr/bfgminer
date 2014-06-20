@@ -531,6 +531,9 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			return false;
 		}
 	}
+	else
+		icarus_close(fd);
+
 	
 	applog(LOG_DEBUG,
 		"%s: "
