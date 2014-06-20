@@ -23,6 +23,9 @@
 #define ZEUS_CHIPS_COUNT_MAX	1
 #define ZEUS_CHIPS_COUNT		6
 #define ZEUS_DEFAULT_CLOCK		328
+#define ZEUSMINER_MIN_CLOCK		200
+#define ZEUSMINER_MAX_CLOCK		383
+
 
 BFG_REGISTER_DRIVER(zeusminer_drv)
 
@@ -34,16 +37,8 @@ const struct bfg_set_device_definition zeusminer_set_device_funcs[];
 static
 uint32_t zeusminer_calc_clk_header(uint16_t freq)
 {
-	int chip_clk = freq;
-
-	//max clock 383MHz, min clock 200MHz
-	if (chip_clk > 383)
-		chip_clk = 383;
-	else if (chip_clk < 200)
-		chip_clk = 200;
-
 	//set clk_reg based on chip_clk
-	uint32_t clk_reg = (uint32_t)(chip_clk * 2 / 3);
+	uint32_t clk_reg = (uint32_t)(freq * 2 / 3);
 
 	//clock speed mask for header
 	uint32_t clk_header = (clk_reg << 24)+ ((0xff - clk_reg) << 16);
@@ -147,7 +142,15 @@ const char *zeusminer_set_clock(struct cgpu_info * const device, const char * co
 {
 	struct ICARUS_INFO * const info = device->device_data;
 
-	info->freq = atoi(setting);
+	int val = atoi(setting);
+
+	if (val < ZEUSMINER_MIN_CLOCK || val > ZEUSMINER_MAX_CLOCK) {
+		sprintf(replybuf, "invalid clock: '%s' valid range %d-%d",
+				setting, ZEUSMINER_MIN_CLOCK, ZEUSMINER_MAX_CLOCK);
+		return replybuf;
+	}
+
+	info->freq = val;
 
 	return NULL;
 }
