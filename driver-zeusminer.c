@@ -71,20 +71,6 @@ double zeusminer_calc_target_diff(const unsigned char *target)
 	return zeusminer_diff_one / d64;
 }
 
-static
-void zeusminer_reverse_bytes(unsigned char *s, size_t l)
-{
-	size_t i, j;
-	unsigned char t;
-
-	for (i = 0, j = l - 1; i < j; i++, j--)
-	{
-		t = s[i];
-		s[i] = s[j];
-		s[j] = t;
-	}
-}
-
 // ICARUS_INFO functions - driver-icarus.h
 
 // device detection
@@ -262,10 +248,8 @@ bool zeusminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	uint32_t target_me = 0xffff / diff;
 	uint32_t header = clk_header + target_me;
 
-	memcpy(state->ob_bin, (uint8_t *)&header, 4);
-	memcpy(&state->ob_bin[4], work->data, 80);
-	zeusminer_reverse_bytes(state->ob_bin, 4);
-	zeusminer_reverse_bytes(state->ob_bin + 4, 80);
+	swabn(state->ob_bin, (uint8_t *)&header, 4);
+	swabn(state->ob_bin + 4, work->data, 80);
 
 	return true;
 }
