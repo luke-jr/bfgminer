@@ -489,12 +489,12 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (info->detect_init_func)
 		info->detect_init_func(devpath, fd, info);
 
+	int ob_size = strlen(info->golden_ob) / 2;
+	unsigned char ob_bin[ob_size];
+	BFGINIT(info->ob_size, ob_size);
+
 	if (!info->ignore_golden_nonce)
 	{
-		int ob_size = strlen(info->golden_ob) / 2;
-		unsigned char ob_bin[ob_size];
-		BFGINIT(info->ob_size, ob_size);
-
 		hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
 		icarus_write(fd, ob_bin, sizeof(ob_bin));
 		cgtime(&tv_start);
