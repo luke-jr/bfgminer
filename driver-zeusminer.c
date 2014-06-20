@@ -86,7 +86,6 @@ bool zeusminer_detect_one(const char *devpath)
 		.golden_nonce = (char*)scrypt_golden_nonce,
 		.chips = ZEUS_CHIPS_COUNT,
 		.freq = ZEUS_DEFAULT_CLOCK,
-		.cores = ZEUS_CHIP_CORES,
 	};
 
 	//pick up any user-defined settings passed in via --set
@@ -97,7 +96,7 @@ bool zeusminer_detect_one(const char *devpath)
 	//the nonce range is split into 2^(10+3) parts
 	info->work_division = 8192;
 
-	info->fpga_count = info->chips * info->cores;
+	info->fpga_count = info->chips * ZEUS_CHIP_CORES;
 
 	//send the requested Chip Speed with the detect golden OB
 	//we use the time this request takes in order to calc hashes
@@ -117,7 +116,7 @@ bool zeusminer_detect_one(const char *devpath)
 
 	double duration_sec;
 	const double hash_count = (double)0xd26;
-	uint64_t default_hashes_per_core = (((info->freq * 2) / 3) * 1024) / info->cores;
+	uint64_t default_hashes_per_core = (((info->freq * 2) / 3) * 1024) / ZEUS_CHIP_CORES;
 
 	if (info->ignore_golden_nonce)
 		duration_sec = hash_count / default_hashes_per_core;
@@ -125,7 +124,7 @@ bool zeusminer_detect_one(const char *devpath)
 		duration_sec = ((double)(info->golden_tv.tv_sec) + ((double)(info->golden_tv.tv_usec)) / ((double)1000000));
 
 	//determines how the hash rate is calculated when no nonce is returned
-	info->Hs = (double)(duration_sec / hash_count / info->chips / info->cores);
+	info->Hs = (double)(duration_sec / hash_count / info->chips / ZEUS_CHIP_CORES);
 
 	//set the read_count (how long to wait for a result) based on chips, cores, and time to find a nonce
 	int chips_count_max = ZEUS_CHIPS_COUNT_MAX;
@@ -134,7 +133,7 @@ bool zeusminer_detect_one(const char *devpath)
 	//golden_speed_per_core is the number of hashes / second / core
 	uint64_t golden_speed_per_core = (uint64_t)(hash_count / duration_sec);
 	//don't combine the following two lines - overflows leaving info->read_count at 0
-	info->read_count = (uint32_t)((4294967296 * 10) / (info->cores * chips_count_max * golden_speed_per_core * 2));
+	info->read_count = (uint32_t)((4294967296 * 10) / (ZEUS_CHIP_CORES * chips_count_max * golden_speed_per_core * 2));
 	info->read_count = info->read_count * 3/4;
 
 	return true;
@@ -164,16 +163,6 @@ const char *zeusminer_set_chips(struct cgpu_info * const device, const char * co
 }
 
 static
-const char *zeusminer_set_cores(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
-{
-	struct ICARUS_INFO * const info = device->device_data;
-
-	info->cores = atoi(setting);
-
-	return NULL;
-}
-
-static
 const char *zeusminer_set_ignore_golden_nonce(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct ICARUS_INFO * const info = device->device_data;
@@ -187,7 +176,6 @@ static
 const struct bfg_set_device_definition zeusminer_set_device_funcs[] = {
 	{ "clock", zeusminer_set_clock, NULL },
 	{ "chips", zeusminer_set_chips, NULL },
-	{ "cores", zeusminer_set_cores, NULL },
 	{ "ignore_golden_nonce",zeusminer_set_ignore_golden_nonce, NULL },
 	{ NULL },
 };

@@ -139,7 +139,6 @@ struct ICARUS_INFO {
 	// Storage for Icarus-based drivers since fpga_count directly affects nonce_mask
 	uint16_t freq;
 	uint8_t chips;
-	uint8_t cores;
 };
 
 struct icarus_state {
