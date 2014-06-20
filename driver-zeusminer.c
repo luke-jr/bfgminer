@@ -215,7 +215,7 @@ bool zeusminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	uint32_t header = clk_header + target_me;
 	
 	pk_u32be(state->ob_bin, 0, header);
-	swabn(state->ob_bin + 4, work->data, 80);
+	bswap_32mult(&state->ob_bin[4], work->data, 80/4);
 	
 	return true;
 }

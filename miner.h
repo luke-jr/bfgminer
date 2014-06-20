@@ -746,24 +746,15 @@ void bswap_96p(void * const dest_p, const void * const src_p)
 }
 
 static inline
-void swabn(void * const dest_p, const void * const src_p, size_t sz)
+void bswap_32mult(void * const dest_p, const void * const src_p, const size_t sz)
 {
-	char *s = (char *)src_p;
-	char *d = (char *)dest_p + sz - 1;
+	const uint32_t *s = src_p;
+	const uint32_t *s_end = &s[sz];
+	uint32_t *d = dest_p;
+	d = &d[sz - 1];
 	
-	if (src_p == dest_p)
-	{
-		char t;
-		for (sz /= 2; sz > 0; --sz, ++s, --d)
-		{
-			t = *s;
-			*s = *d;
-			*d = t;
-		}
-	}
-	else
-		for ( ; sz > 0; --sz, ++s, --d)
-			*d = *s;
+	for ( ; s < s_end; ++s, --d)
+		*d = bswap_32(*s);
 }
 
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
