@@ -121,7 +121,6 @@ bool zeusminer_detect_one(const char *devpath)
 		.chips = ZEUS_CHIPS_COUNT,
 		.freq = ZEUS_DEFAULT_CLOCK,
 		.cores = ZEUS_CHIP_CORES,
-		.ignore_nonce_mask = true,
 	};
 
 	//pick up any user-defined settings passed in via --set
