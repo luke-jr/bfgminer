@@ -1,6 +1,7 @@
 /*
  * Copyright 2014 Nate Woolls
  * Copyright 2014 ZeusMiner Team
+ * Copyright 2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -213,7 +214,7 @@ bool zeusminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	uint32_t target_me = 0xffff / diff;
 	uint32_t header = clk_header + target_me;
 	
-	swabn(state->ob_bin, (uint8_t *)&header, 4);
+	pk_u32be(state->ob_bin, 0, header);
 	swabn(state->ob_bin + 4, work->data, 80);
 	
 	return true;
