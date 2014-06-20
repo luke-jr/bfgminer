@@ -1,6 +1,5 @@
 /*
  * Copyright 2014 Nate Woolls
- * Copyright 2014 John Stefanopoulos
  * Copyright 2014 ZeusMiner Team
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -52,25 +51,6 @@ uint32_t zeusminer_calc_clk_header(uint16_t freq)
 	return clk_header;
 }
 
-static
-const uint64_t zeusminer_diff_one = 0xFFFF000000000000ull;
-
-static
-double zeusminer_calc_target_diff(const unsigned char *target)
-{
-	uint64_t *data64, d64;
-	char rtarget[32];
-
-	swab256(rtarget, target);
-	data64 = (uint64_t *)(rtarget + 2);
-	d64 = be64toh(*data64);
-
-	if(unlikely(!d64))
-		d64 = 1;
-
-	return zeusminer_diff_one / d64;
-}
-
 // ICARUS_INFO functions - driver-icarus.h
 
 // device detection
@@ -99,7 +79,7 @@ bool zeusminer_detect_one(const char *devpath)
 	*info = (struct ICARUS_INFO){
 		.baud = ZEUSMINER_IO_SPEED,
 		.timing_mode = MODE_DEFAULT,
-		.do_icarus_timing = false,
+		.do_icarus_timing = true,
 		.work_division = 1,
 		.fpga_count = 1,
 		.probe_read_count = 5,
@@ -237,14 +217,8 @@ bool zeusminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	struct icarus_state * const state = thr->cgpu_data;
 	struct ICARUS_INFO * const info = device->device_data;
 
-	memset(state->ob_bin, 0, info->ob_size);
-
 	uint32_t clk_header = zeusminer_calc_clk_header(info->freq);
-	uint32_t diff = floor(zeusminer_calc_target_diff(work->target));
-
-	if(diff < 1)
-		diff = 1;
-
+	uint32_t diff = work->nonce_diff * 0x10000;
 	uint32_t target_me = 0xffff / diff;
 	uint32_t header = clk_header + target_me;
 
