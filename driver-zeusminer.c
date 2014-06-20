@@ -126,6 +126,13 @@ bool zeusminer_detect_one(const char *devpath)
 	//pick up any user-defined settings passed in via --set
 	drv_set_defaults(drv, zeusminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 
+	//3 bits of 32 bits nonce are reserved for cores’ combination
+	//10 bits of 32 bits nonce are reserved for chips’ combination
+	//the nonce range is split into 2^(10+3) parts
+	info->work_division = 8192;
+
+	info->fpga_count = info->chips * info->cores;
+
 	//send the requested Chip Speed with the detect golden OB
 	//we use the time this request takes in order to calc hashes
 	//so we need to use the same Chip Speed used when hashing
