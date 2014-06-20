@@ -73,8 +73,6 @@ struct ICARUS_INFO {
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
-	// seconds per Hash
-	double Hs;
 	int read_count;
 	int probe_read_count;
 	// ds limit for (short=/long=) read_count
@@ -97,9 +95,22 @@ struct ICARUS_INFO {
 
 	// icarus-options
 	int baud;
+
+	// Used to calculate / display hash count
+	// when no nonce is found
+	// seconds per Hash
+	double Hs;
+
+	// Used to calculate / display hash count
+	// when a nonce is found
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
+	// Calculate hashes based on info->Hs rather than nonce_mask
+	// Using nonce_mask doesn't scale when work division
+	// is not a power of 2
+	bool ignore_nonce_mask;
+
 	enum icarus_reopen_mode reopen_mode;
 	bool reopen_now;
 	uint8_t user_set;

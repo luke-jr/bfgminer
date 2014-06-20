@@ -1068,9 +1068,15 @@ keepwaiting:
 		inc_hw_errors(thr, state->last_work, nonce);
 	icarus_transition_work(state, work);
 
-	hash_count = (nonce & info->nonce_mask);
-	hash_count++;
-	hash_count *= info->fpga_count;
+	if (info->ignore_nonce_mask)
+		hash_count = ((double)(elapsed.tv_sec)
+					  + ((double)(elapsed.tv_usec))/((double)1000000)) / info->Hs;
+	else
+	{
+		hash_count = (nonce & info->nonce_mask);
+		hash_count++;
+		hash_count *= info->fpga_count;
+	}
 
 	applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
 	       icarus->proc_repr,
