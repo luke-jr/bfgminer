@@ -4,6 +4,7 @@ dnl * Copyright 2010-2011 Jeff Garzik
 dnl * Copyright 2012 Xiangfu
 dnl * Copyright 2011 Rusty Russell
 dnl * Copyright 2011 Mark Crichton
+dnl * Copyright 2013-2014 Nate Woolls
 dnl *
 dnl * This program is free software; you can redistribute it and/or modify it
 dnl * under the terms of the GNU General Public License as published by the Free
@@ -478,6 +479,30 @@ if test "x$dualminer" = "xyes"; then
 	need_gc3355=yes
 fi
 AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+
+driverlist="$driverlist zeusminer"
+AC_ARG_ENABLE([zeusminer],
+	[AC_HELP_STRING([--disable-zeusminer],[Compile support for ZeusMiner (default enabled with scrypt)])],
+	[zeusminer=$enableval],
+	[zeusminer=$scrypt])
+if test "x$zeusminer" = "xno"; then
+	true
+elif test "x$icarus" = "xyes"; then
+	if test "x$scrypt" = "xno"; then
+		AC_MSG_ERROR([You explicitly enabled ZeusMiner, but did not enable scrypt])
+	else
+		zeusminer=yes
+	fi
+elif test "x$zeusminer" = "xyes"; then
+	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled ZeusMiner])
+else
+	zeusminer=no
+fi
+if test "x$zeusminer" = "xyes"; then
+	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_ZEUSMINER], [test x$zeusminer = xyes])
 
 driverlist="$driverlist gridseed"
 AC_ARG_ENABLE([gridseed],

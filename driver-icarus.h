@@ -132,6 +132,12 @@ struct ICARUS_INFO {
 	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 	bool (*job_start_func)(struct thr_info *);
+	
+#ifdef USE_ZEUSMINER
+	// Hardware information, doesn't affect anything directly
+	uint16_t freq;
+	uint8_t chips;
+#endif
 };
 
 struct icarus_state {

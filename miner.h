@@ -745,6 +745,27 @@ void bswap_96p(void * const dest_p, const void * const src_p)
 	dest[2] = bswap_32(src[0]);
 }
 
+static inline
+void swabn(void * const dest_p, const void * const src_p, size_t sz)
+{
+	char *s = (char *)src_p;
+	char *d = (char *)dest_p + sz - 1;
+	
+	if (src_p == dest_p)
+	{
+		char t;
+		for (sz /= 2; sz > 0; --sz, ++s, --d)
+		{
+			t = *s;
+			*s = *d;
+			*d = t;
+		}
+	}
+	else
+		for ( ; sz > 0; --sz, ++s, --d)
+			*d = *s;
+}
+
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
 #define WATCHDOG_INTERVAL  2

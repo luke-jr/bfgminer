@@ -2,6 +2,7 @@
 # Copyright 2012 zefir
 # Copyright 2011-2013 Con Kolivas
 # Copyright 2013 James Z.M. Gao
+# Copyright 2013-2014 Nate Woolls
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -255,6 +256,10 @@ endif
 
 if USE_DUALMINER
 bfgminer_SOURCES += driver-dualminer.c
+endif
+
+if USE_ZEUSMINER
+bfgminer_SOURCES += driver-zeusminer.c
 endif
 
 if HAS_AVALON
