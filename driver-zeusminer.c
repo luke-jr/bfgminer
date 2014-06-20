@@ -158,7 +158,7 @@ bool zeusminer_detect_one(const char *devpath)
 	//set the read_count (how long to wait for a result) based on chips, cores, and time to find a nonce
 	int chips_count_max = ZEUS_CHIPS_COUNT_MAX;
 	if (info->chips > chips_count_max)
-		chips_count_max = nearest_pow(info->chips);
+		chips_count_max = upper_power_of_two(info->chips);
 	//golden_speed_per_core is the number of hashes / second / core
 	uint64_t golden_speed_per_core = (uint64_t)(hash_count / duration_sec);
 	//don't combine the following two lines - overflows leaving info->read_count at 0
