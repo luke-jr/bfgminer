@@ -115,6 +115,8 @@ struct ICARUS_INFO {
 	const char *golden_ob;
 	const char *golden_nonce;
 	bool nonce_littleendian;
+	// Don't check the golden nonce returned when probing
+	bool ignore_golden_nonce;
 	
 	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
