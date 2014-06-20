@@ -70,11 +70,16 @@ struct ICARUS_INFO {
 	// time to calculate the golden_ob
 	struct timeval golden_tv;
 
+	// History structures for calculating read_count
+	// when info->do_icarus_timing is true
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
+	// Timeout scanning for a nonce (deciseconds)
 	int read_count;
+	// Timeout scanning for a golden nonce (deciseconds)
 	int probe_read_count;
+
 	// ds limit for (short=/long=) read_count
 	int read_count_limit;
 
@@ -121,7 +126,8 @@ struct ICARUS_INFO {
 	
 	// Bytes to read from Icarus for nonce
 	int read_size;
-	
+
+	// Settings used when probing / detecting
 	size_t ob_size;
 	const char *golden_ob;
 	const char *golden_nonce;
