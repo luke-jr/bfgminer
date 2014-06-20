@@ -138,6 +138,12 @@ struct ICARUS_INFO {
 	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 	bool (*job_start_func)(struct thr_info *);
+
+	// Hardware information, doesn't affect anything directly
+	// Storage for Icarus-based drivers since fpga_count directly affects nonce_mask
+	uint16_t freq;
+	uint8_t chips;
+	uint8_t cores;
 };
 
 struct icarus_state {
