@@ -3524,3 +3524,16 @@ uint8_t crc8ccitt(const void * const buf, const size_t buflen)
 		crc = _crc8ccitt_table[crc ^ *p++];
 	return crc;
 }
+
+// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
+uint32_t nearest_pow(uint32_t num)
+{
+    num--;
+    num |= num >> 1;
+    num |= num >> 2;
+    num |= num >> 4;
+    num |= num >> 8;
+    num |= num >> 16;
+    num++;
+    return num;
+}
