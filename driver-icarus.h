@@ -111,10 +111,6 @@ struct ICARUS_INFO {
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
-	// Calculate hashes based on info->Hs rather than nonce_mask
-	// Using nonce_mask doesn't scale when work division
-	// is not a power of 2
-	bool ignore_nonce_mask;
 
 	enum icarus_reopen_mode reopen_mode;
 	bool reopen_now;
@@ -126,7 +122,7 @@ struct ICARUS_INFO {
 	
 	// Bytes to read from Icarus for nonce
 	int read_size;
-
+	
 	// Settings used when probing / detecting
 	size_t ob_size;
 	const char *golden_ob;
