@@ -413,27 +413,7 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 
 static uint32_t mask(int work_division)
 {
-	uint32_t nonce_mask = 0x7fffffff;
-
-	// yes we can calculate these, but this way it's easy to see what they are
-	switch (work_division) {
-	case 1:
-		nonce_mask = 0xffffffff;
-		break;
-	case 2:
-		nonce_mask = 0x7fffffff;
-		break;
-	case 4:
-		nonce_mask = 0x3fffffff;
-		break;
-	case 8:
-		nonce_mask = 0x1fffffff;
-		break;
-	default:
-		quit(1, "Invalid2 work_division (%d) must be 1, 2, 4 or 8", work_division);
-	}
-
-	return nonce_mask;
+	return 0xffffffff / upper_power_of_two(work_division);
 }
 
 // Number of bytes remaining after reading a nonce from Icarus
@@ -1288,8 +1268,6 @@ const char *icarus_set_work_division(struct cgpu_info * const proc, const char *
 {
 	struct ICARUS_INFO * const info = proc->device_data;
 	const int work_division = atoi(newvalue);
-	if (!(work_division == 1 || work_division == 2 || work_division == 4 || work_division == 8))
-		return "Invalid work_division: must be 1, 2, 4 or 8";
 	if (info->user_set & IUS_FPGA_COUNT)
 	{
 		if (info->fpga_count > work_division)
