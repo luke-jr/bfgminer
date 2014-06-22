@@ -411,6 +411,7 @@ struct bitforce_init_data {
 	enum bitforce_style style;
 	long devmask;
 	int *parallels;
+	unsigned queue_depth;
 };
 
 static
@@ -486,6 +487,7 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 	*initdata = (struct bitforce_init_data){
 		.lowlif = lowlif,
 		.style = BFS_FPGA,
+		.queue_depth = BITFORCE_MAX_QUEUED_MAX,
 	};
 	bitforce_cmd1b(&dummy_cgpu, pdevbuf, sizeof(pdevbuf), "ZCX", 3);
 	for (int i = 0; (!pdevbuf[0]) && i < 4; ++i)
@@ -524,6 +526,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 			parallel = atoi(&pdevbuf[14]);
 			initdata->style = BFS_28NM;
 		}
+		else
+		if (!strncasecmp(pdevbuf, "Queue Depth:", 12))
+			initdata->queue_depth = atoi(&pdevbuf[12]);
 		else
 		if (!strncasecmp(pdevbuf, "MANUFACTURER:", 13))
 		{
@@ -1567,8 +1572,8 @@ static bool bitforce_thread_init(struct thr_info *thr)
 				data->queued_max = data->parallel * 2;
 				if (data->queued_max < BITFORCE_MIN_QUEUED_MAX)
 					data->queued_max = BITFORCE_MIN_QUEUED_MAX;
-				if (data->queued_max > BITFORCE_MAX_QUEUED_MAX)
-					data->queued_max = BITFORCE_MAX_QUEUED_MAX;
+				if (data->queued_max > initdata->queue_depth)
+					data->queued_max = initdata->queue_depth;
 			}
 			else
 				bitforce_change_mode(bitforce, BFP_WORK);
