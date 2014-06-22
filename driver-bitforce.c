@@ -412,6 +412,7 @@ struct bitforce_init_data {
 	long devmask;
 	int *parallels;
 	unsigned queue_depth;
+	unsigned long scan_interval_ms;
 };
 
 static
@@ -529,6 +530,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		else
 		if (!strncasecmp(pdevbuf, "Queue Depth:", 12))
 			initdata->queue_depth = atoi(&pdevbuf[12]);
+		else
+		if (!strncasecmp(pdevbuf, "Scan Interval:", 14))
+			initdata->scan_interval_ms = atoi(&pdevbuf[14]);
 		else
 		if (!strncasecmp(pdevbuf, "MANUFACTURER:", 13))
 		{
@@ -1592,6 +1596,10 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			if (opt_bfl_noncerange)
 				bitforce_change_mode(bitforce, BFP_RANGE);
 		}
+		
+		if (initdata->scan_interval_ms)
+			bitforce->sleep_ms = initdata->scan_interval_ms;
+		
 		bitforce->status = LIFE_INIT2;
 		
 		first_on_this_board = procdata;
