@@ -403,6 +403,9 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+7] = (nv >> 0x38) & 0xff;
 }
 
+#define is_power_of_two(n)  \
+	(0 == ((n) && ((n) - 1)))
+
 static inline
 uint32_t upper_power_of_two_u32(uint32_t n)
 {
