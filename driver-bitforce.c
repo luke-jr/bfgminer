@@ -417,12 +417,7 @@ static
 int bitforce_chips_to_plan_for(int parallel, int chipcount) {
 	if (parallel < 1)
 		return parallel;
-	if (chipcount > 15) return 32;
-	if (chipcount >  7) return 16;
-	if (chipcount >  3) return  8;
-	if (chipcount >  1) return  4;
-	if (chipcount     ) return  2;
-	                    return  1;
+	return upper_power_of_two_u32(chipcount);
 }
 
 static
