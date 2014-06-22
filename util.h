@@ -372,6 +372,16 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+7] = (nv >> 0x38) & 0xff;
 }
 
+static inline
+uint32_t upper_power_of_two_u32(uint32_t n)
+{
+	--n;
+	for (int i = 1; i <= 0x10; i *= 2)
+		n |= n >> i;
+	++n;
+	return n;
+}
+
 
 typedef struct bytes_t {
 	uint8_t *buf;
