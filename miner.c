@@ -10901,6 +10901,8 @@ void *probe_device_thread(void *p)
 		const size_t dnamelen = (colon - dname);
 		LL_FOREACH2(infolist, info, same_devid_next)
 		{
+			if (info->lowl->exclude_from_all)
+				continue;
 			if (_probe_device_internal(info, dname, dnamelen))
 				return NULL;
 		}

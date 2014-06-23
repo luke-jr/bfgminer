@@ -490,4 +490,5 @@ void lowl_pci_close(struct lowl_pci_handle * const lph)
 struct lowlevel_driver lowl_pci = {
 	.dname = "pci",
 	.devinfo_scan = pci_devinfo_scan,
+	.exclude_from_all = true,
 };
