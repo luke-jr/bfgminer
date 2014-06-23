@@ -117,6 +117,7 @@ struct bitforce_data {
 	float temp[2];
 	long *volts;
 	int volts_count;
+	unsigned max_queueid;
 	
 	bool probed;
 	bool supports_fanspeed;
@@ -413,6 +414,7 @@ struct bitforce_init_data {
 	int *parallels;
 	unsigned queue_depth;
 	unsigned long scan_interval_ms;
+	unsigned max_queueid;
 };
 
 static
@@ -510,6 +512,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		if (!strncasecmp(pdevbuf, "CHANNEL", 7))
 			maxchipno = max(maxchipno, atoi(&pdevbuf[7]));
 		else
+		if (!strncasecmp(pdevbuf, "CORTEX-", 7))
+			maxchipno = max(maxchipno, strtol(&pdevbuf[7], NULL, 0x10));
+		else
 		if (!strncasecmp(pdevbuf, "DEVICES IN CHAIN:", 17))
 			procs = atoi(&pdevbuf[17]);
 		else
@@ -533,6 +538,9 @@ bool bitforce_detect_oneof(const char * const devpath, struct bitforce_lowl_inte
 		else
 		if (!strncasecmp(pdevbuf, "Scan Interval:", 14))
 			initdata->scan_interval_ms = atoi(&pdevbuf[14]);
+		else
+		if (!strncasecmp(pdevbuf, "Max Queue ID:", 13))
+			initdata->max_queueid = strtol(&pdevbuf[13], NULL, 0x10);
 		else
 		if (!strncasecmp(pdevbuf, "MANUFACTURER:", 13))
 		{
@@ -1546,6 +1554,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			.sleep_ms_default = BITFORCE_SLEEP_MS,
 			.parallel = abs(initdata->parallels[boardno]),
 			.parallel_protocol = (initdata->parallels[boardno] != -1),
+			.max_queueid = initdata->max_queueid,
 		};
 		thr->cgpu_data = procdata = malloc(sizeof(*procdata));
 		*procdata = (struct bitforce_proc_data){
@@ -1951,7 +1960,27 @@ retry:
 	if (data->missing_zwx)
 		queued_ok = 1;
 	else
-		queued_ok = atoi(&buf[9]);
+	{
+		char *p;
+		queued_ok = strtol(&buf[9], &p, 0);
+		if (data->max_queueid)
+		{
+			if (unlikely(p[0] != ':'))
+				applog(LOG_ERR, "%"PRIpreprv": Successfully queued %d/%d jobs, but no queue ids returned (queued<=%d)", bitforce->proc_repr, queued_ok, data->ready_to_queue, data->queued + queued_ok);
+			else
+			{
+				// NOTE: work is set to just-before the first item from the build-command loop earlier
+				// NOTE: This ugly statement ends up with the first work item queued
+				work = work ? (work->next ?: work) : thr->work_list;
+				for (int i = data->ready_to_queue; i > 0; --i, (work = work->next))
+				{
+					work->device_id = strtol(&p[1], &p, 0x10);
+					if (unlikely(!p[0]))
+						--p;
+				}
+			}
+		}
+	}
 	data->queued += queued_ok;
 	applog(LOG_DEBUG, "%"PRIpreprv": Successfully queued %d/%d jobs on device (queued<=%d)",
 	       bitforce->proc_repr,
@@ -2016,27 +2045,39 @@ again:
 		if ( (noncebuf = next_line(buf)) )
 			noncebuf[-1] = '\0';
 		
-		if (strlen(buf) <= 90)
+		if (data->max_queueid)
 		{
-			applog(LOG_ERR, "%"PRIpreprv": Gibberish within queue results: %s", bitforce->proc_repr, buf);
-			continue;
+			const work_device_id_t queueid = strtol(buf, &end, 0x10);
+			if (unlikely(!end[0]))
+				goto gibberish;
+			DL_SEARCH_SCALAR(thr->work_list, thiswork, device_id, queueid);
+		}
+		else
+		{
+			if (strlen(buf) <= 90)
+			{
+gibberish:
+				applog(LOG_ERR, "%"PRIpreprv": Gibberish within queue results: %s", bitforce->proc_repr, buf);
+				continue;
+			}
+			
+			hex2bin(midstate, buf, 32);
+			hex2bin(datatail, &buf[65], 12);
+			
+			thiswork = NULL;
+			DL_FOREACH(thr->work_list, work)
+			{
+				if (unlikely(memcmp(work->midstate, midstate, 32)))
+					continue;
+				if (unlikely(memcmp(&work->data[64], datatail, 12)))
+					continue;
+				thiswork = work;
+				break;
+			}
+			
+			end = &buf[89];
 		}
 		
-		hex2bin(midstate, buf, 32);
-		hex2bin(datatail, &buf[65], 12);
-		
-		thiswork = NULL;
-		DL_FOREACH(thr->work_list, work)
-		{
-			if (unlikely(memcmp(work->midstate, midstate, 32)))
-				continue;
-			if (unlikely(memcmp(&work->data[64], datatail, 12)))
-				continue;
-			thiswork = work;
-			break;
-		}
-		
-		end = &buf[89];
 		chip_cgpu = bitforce;
 		if (data->parallel_protocol)
 		{
@@ -2072,7 +2113,7 @@ again:
 				applog(LOG_ERR, "%"PRIpreprv": Missing nonces in queue results: %s", chip_cgpu->proc_repr, buf);
 				goto finishresult;
 			}
-			bitforce_process_result_nonces(chip_thr, work, &end[1]);
+			bitforce_process_result_nonces(chip_thr, thiswork, &end[1]);
 		}
 		++fcount;
 		++counts[chipno];
@@ -2250,19 +2291,30 @@ void bitforce_queue_flush(struct thr_info *thr)
 	// "ZqX" returns jobs in progress, allowing us to sanity check
 	// NOTE: Must process buffer into hash table BEFORE calling bitforce_queue_do_results, which clobbers it
 	// NOTE: Must do actual sanity check AFTER calling bitforce_queue_do_results, to ensure we don't delete completed jobs
+	
+	const size_t keysz = data->max_queueid ? sizeof(work_device_id_t) : sizeof(this->key);
+	
 	if (buf2)
 	{
 		// First, turn buf2 into a hash
 		for ( ; buf2[0]; buf2 = next_line(buf2))
 		{
 			this = malloc(sizeof(*this));
-			hex2bin(&this->key[ 0], &buf2[ 0], 32);
-			hex2bin(&this->key[32], &buf2[65], 12);
-			HASH_FIND(hh, processing, &this->key[0], sizeof(this->key), item);
+			if (data->max_queueid)
+			{
+				const work_device_id_t queueid = strtol(buf2, NULL, 0x10);
+				memcpy(&this->key[0], &queueid, sizeof(queueid));
+			}
+			else
+			{
+				hex2bin(&this->key[ 0], &buf2[ 0], 32);
+				hex2bin(&this->key[32], &buf2[65], 12);
+			}
+			HASH_FIND(hh, processing, &this->key[0], keysz, item);
 			if (likely(!item))
 			{
 				this->instances = 1;
-				HASH_ADD(hh, processing, key, sizeof(this->key), this);
+				HASH_ADD(hh, processing, key, keysz, this);
 			}
 			else
 			{
@@ -2283,9 +2335,14 @@ void bitforce_queue_flush(struct thr_info *thr)
 		// Now iterate over the work_list and delete anything not in the hash
 		DL_FOREACH_SAFE(thr->work_list, work, tmp)
 		{
-			memcpy(&key[ 0],  work->midstate, 32);
-			memcpy(&key[32], &work->data[64], 12);
-			HASH_FIND(hh, processing, &key[0], sizeof(key), item);
+			if (data->max_queueid)
+				memcpy(&key[0], &work->device_id, sizeof(work->device_id));
+			else
+			{
+				memcpy(&key[ 0],  work->midstate, 32);
+				memcpy(&key[32], &work->data[64], 12);
+			}
+			HASH_FIND(hh, processing, &key[0], keysz, item);
 			if (unlikely(!item))
 			{
 				char hex[89];
