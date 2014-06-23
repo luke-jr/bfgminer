@@ -11427,11 +11427,11 @@ void *probe_device_thread(void *p)
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
+		const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
+		if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+			continue;
 		LL_FOREACH2(infolist, info, same_devid_next)
 		{
-			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-				continue;
 			if (info->lowl->exclude_from_all)
 				continue;
 			if (_probe_device_do_probe(drv, info, NULL))
