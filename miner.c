@@ -128,11 +128,7 @@ static bool want_longpoll = true;
 static bool want_gbt = true;
 static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
-struct _cbscript_t {
-	char *data;
-	size_t sz;
-};
-static struct _cbscript_t opt_coinbase_script;
+static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t template_nonce;
 #endif
 #if BLKMAKER_VERSION > 0
@@ -1188,7 +1184,8 @@ char *set_strdup(const char *arg, char **p)
 }
 
 #if BLKMAKER_VERSION > 1
-static char *set_b58addr(const char *arg, struct _cbscript_t *p)
+static
+char *set_b58addr(const char * const arg, bytes_t * const b)
 {
 	size_t scriptsz = blkmk_address_to_script(NULL, 0, arg);
 	if (!scriptsz)
@@ -1198,9 +1195,7 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 		free(script);
 		return "Failed to convert address to script";
 	}
-	free(p->data);
-	p->data = script;
-	p->sz = scriptsz;
+	bytes_assimilate_raw(b, script, scriptsz, scriptsz);
 	return NULL;
 }
 #endif
@@ -2869,14 +2864,14 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
-		if (opt_coinbase_script.sz)
+		if (bytes_len(&opt_coinbase_script))
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
-			blkmk_init_generation2(tmpl, opt_coinbase_script.data, opt_coinbase_script.sz, &newcb);
+			blkmk_init_generation2(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script), &newcb);
 #else
 			newcb = !tmpl->cbtxn;
-			blkmk_init_generation(tmpl, opt_coinbase_script.data, opt_coinbase_script.sz);
+			blkmk_init_generation(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script));
 #endif
 			if (newcb)
 			{
@@ -5016,7 +5011,7 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if (opt_coinbase_script.sz)
+			if (bytes_len(&opt_coinbase_script))
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
