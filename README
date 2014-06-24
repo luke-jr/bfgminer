@@ -260,6 +260,7 @@ Options for both config file and command line:
 --net-delay         Impose small delays in networking to avoid overloading slow routers
 --no-gbt            Disable getblocktemplate support
 --no-getwork        Disable getwork support
+--no-local-bitcoin  Disable adding pools for local bitcoin RPC servers
 --no-longpoll       Disable X-Long-Polling support
 --no-pool-redirect  Ignore pool requests to redirect to another server
 --no-restart        Do not attempt to restart devices that hang

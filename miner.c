@@ -123,6 +123,7 @@ static char packagename[256];
 
 bool opt_protocol;
 bool opt_dev_protocol;
+static bool opt_load_bitcoin_conf = true;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
@@ -2207,6 +2208,9 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-local-bitcoin",
+	                opt_set_invbool, &opt_load_bitcoin_conf,
+	                "Disable adding pools for local bitcoin RPC servers"),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -10949,6 +10953,86 @@ out:
 }
 #endif
 
+static
+bool _add_local_gbt(const char * const filepath, void * __maybe_unused userp)
+{
+	struct pool *pool;
+	char buf[0x100];
+	char *rpcuser = NULL, *rpcpass = NULL;
+	int rpcport = 0, rpcssl = -101;
+	FILE * const F = fopen(filepath, "r");
+	if (!F)
+		applogr(false, LOG_WARNING, "%s: Failed to open %s for reading", "add_local_gbt", filepath);
+	
+	while (fgets(buf, sizeof(buf), F))
+	{
+		if (!strncasecmp(buf, "rpcuser=", 8))
+			rpcuser = trimmed_strdup(&buf[8]);
+		else
+		if (!strncasecmp(buf, "rpcpassword=", 12))
+			rpcpass = trimmed_strdup(&buf[12]);
+		else
+		if (!strncasecmp(buf, "rpcport=", 8))
+			rpcport = atoi(&buf[8]);
+		else
+		if (!strncasecmp(buf, "rpcssl=", 7))
+			rpcssl = atoi(&buf[7]);
+		else
+			continue;
+		if (rpcuser && rpcpass && rpcport && rpcssl != -101)
+			break;
+	}
+	
+	fclose(F);
+	
+	if (!rpcpass)
+	{
+		applog(LOG_DEBUG, "%s: Did not find rpcpassword in %s", "add_local_gbt", filepath);
+err:
+		free(rpcuser);
+		free(rpcpass);
+		goto out;
+	}
+	
+	if (!rpcport)
+		rpcport = 8332;
+	
+	if (rpcssl == -101)
+		rpcssl = 0;
+	
+	const int uri_sz = 0x30;
+	char * const uri = malloc(uri_sz);
+	snprintf(uri, uri_sz, "http%s://localhost:%d/#getcbaddr#allblocks", rpcssl ? "s" : "", rpcport);
+	
+	applog(LOG_DEBUG, "Local bitcoin RPC server on port %d found in %s", rpcport, filepath);
+	
+	pool = add_pool();
+	if (!pool)
+	{
+		applog(LOG_ERR, "%s: Error adding pool for bitcoin configured in %s", "add_local_gbt", filepath);
+		goto err;
+	}
+	
+	if (!rpcuser)
+		rpcuser = "";
+	
+	pool->quota = 0;
+	adjust_quota_gcd();
+	pool->failover_only = true;
+	add_pool_details(pool, false, uri, rpcuser, rpcpass);
+	
+	applog(LOG_NOTICE, "Added local bitcoin RPC server on port %d as pool %d", rpcport, pool->pool_no);
+	
+out:
+	return false;
+}
+
+static
+void add_local_gbt(void)
+{
+	appdata_file_call("Bitcoin", "bitcoin.conf", _add_local_gbt, NULL);
+}
+
 #if defined(unix) || defined(__APPLE__)
 static void fork_monitor()
 {
@@ -12299,6 +12383,9 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
+	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
+		add_local_gbt();
+	
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
 #ifdef HAVE_CURSES
