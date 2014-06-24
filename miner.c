@@ -864,6 +864,7 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 		free(script);
 		return "Failed to convert address to script";
 	}
+	free(p->data);
 	p->data = script;
 	p->sz = scriptsz;
 	return NULL;
