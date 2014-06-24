@@ -10126,6 +10126,14 @@ void print_summary(void)
 
 	if (opt_quit_summary != BQS_NONE)
 	{
+		if (opt_quit_summary == BQS_DEFAULT)
+		{
+			if (total_devices < 25)
+				opt_quit_summary = BQS_PROCS;
+			else
+				opt_quit_summary = BQS_DEVS;
+		}
+		
 		if (opt_quit_summary == BQS_DETAILED)
 			include_serial_in_statline = true;
 		applog(LOG_WARNING, "Summary of per device statistics:\n");
@@ -11596,14 +11604,6 @@ int main(int argc, char *argv[])
 			applog(LOG_WARNING, "Waiting for devices");
 	}
 	
-	if (opt_quit_summary == BQS_DEFAULT)
-	{
-		if (total_devices < 25)
-			opt_quit_summary = BQS_PROCS;
-		else
-			opt_quit_summary = BQS_DEVS;
-	}
-
 #ifdef HAVE_CURSES
 	switch_logsize();
 #endif
