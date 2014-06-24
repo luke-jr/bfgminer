@@ -1932,6 +1932,78 @@ bool isCalpha(const int c)
 	return false;
 }
 
+static
+bool _appdata_file_call(const char * const appname, const char * const filename, const appdata_file_callback_t cb, void * const userp, const char * const path)
+{
+	if (!(path && path[0]))
+		return false;
+	char filepath[PATH_MAX];
+	snprintf(filepath, sizeof(filepath), "%s/%s/%s", path, appname, filename);
+	if (!access(filepath, R_OK))
+		return cb(filepath, userp);
+	return false;
+}
+
+#define _APPDATA_FILE_CALL(appname, path)  do{  \
+	if (_appdata_file_call(appname, filename, cb, userp, path))  \
+		return true;  \
+}while(0)
+
+bool appdata_file_call(const char *appname, const char * const filename, const appdata_file_callback_t cb, void * const userp)
+{
+	size_t appname_len = strlen(appname);
+	char appname_lcd[appname_len + 1];
+	appname_lcd[0] = '.';
+	char *appname_lc = &appname_lcd[1];
+	for (size_t i = 0; i <= appname_len; ++i)
+		appname_lc[i] = tolower(appname[i]);
+	appname_lc[appname_len] = '\0';
+	
+	const char * const HOME = getenv("HOME");
+	
+	_APPDATA_FILE_CALL(".", ".");
+	
+#ifdef WIN32
+	_APPDATA_FILE_CALL(appname, getenv("APPDATA"));
+#elif defined(__APPLE__)
+	if (HOME && HOME[0])
+	{
+		char AppSupport[strlen(HOME) + 28 + 1];
+		snprintf(AppSupport, sizeof(AppSupport), "%s/Library/Application Support", HOME);
+		_APPDATA_FILE_CALL(appname, AppSupport);
+	}
+#endif
+	
+	_APPDATA_FILE_CALL(appname_lcd, HOME);
+	
+#ifdef WIN32
+	_APPDATA_FILE_CALL(appname, getenv("ALLUSERSAPPDATA"));
+#elif defined(__APPLE__)
+	_APPDATA_FILE_CALL(appname, "/Library/Application Support");
+#endif
+#ifndef WIN32
+	_APPDATA_FILE_CALL(appname_lc, "/etc");
+#endif
+	
+	return false;
+}
+
+static
+bool _appdata_file_find_first(const char * const filepath, void *userp)
+{
+	char **rv = userp;
+	*rv = strdup(filepath);
+	return true;
+}
+
+char *appdata_file_find_first(const char * const appname, const char * const filename)
+{
+	char *rv;
+	if (appdata_file_call(appname, filename, _appdata_file_find_first, &rv))
+		return rv;
+	return NULL;
+}
+
 const char *get_registered_domain(size_t * const out_domainlen, const char * const fqdn, const size_t fqdnlen)
 {
 	const char *s;

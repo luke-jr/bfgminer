@@ -121,6 +121,10 @@ bool isCspace(int c)
 	}
 }
 
+typedef bool (*appdata_file_callback_t)(const char *, void *);
+extern bool appdata_file_call(const char *appname, const char *filename, appdata_file_callback_t, void *userp);
+extern char *appdata_file_find_first(const char *appname, const char *filename);
+
 extern const char *get_registered_domain(size_t *out_len, const char *, size_t len);
 extern const char *extract_domain(size_t *out_len, const char *uri, size_t urilen);
 extern bool match_domains(const char *a, size_t alen, const char *b, size_t blen);
