@@ -2195,11 +2195,11 @@ bool uri_get_param_bool(const char * const uri, const char * const param, const 
 }
 
 static
-void _test_uri_find_param(const char * const uri, const char * const param, const ssize_t expect_offset, const int expect_invert)
+void _test_uri_find_param(const char * const uri, const char * const param, const int expect_offset, const int expect_invert)
 {
 	bool invert;
 	const char *actual = uri_find_param(uri, param, (expect_invert >= 0) ? &invert : NULL);
-	ssize_t actual_offset;
+	int actual_offset;
 	if (actual == URI_FIND_PARAM_FOUND)
 		actual_offset = -1;
 	else
