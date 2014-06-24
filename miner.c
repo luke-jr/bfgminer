@@ -1134,6 +1134,7 @@ static char *set_b58addr(const char *arg, struct _cbscript_t *p)
 		free(script);
 		return "Failed to convert address to script";
 	}
+	free(p->data);
 	p->data = script;
 	p->sz = scriptsz;
 	return NULL;
@@ -1476,12 +1477,12 @@ static char *set_userpass(const char *arg)
 	pool = pools[total_users - 1];
 	updup = strdup(arg);
 	opt_set_charp(arg, &pool->rpc_userpass);
-	pool->rpc_user = strtok(updup, ":");
-	if (!pool->rpc_user)
-		return "Failed to find : delimited user info";
-	pool->rpc_pass = strtok(NULL, ":");
-	if (!pool->rpc_pass)
-		pool->rpc_pass = "";
+	pool->rpc_user = updup;
+	pool->rpc_pass = strchr(updup, ':');
+	if (pool->rpc_pass)
+		pool->rpc_pass++[0] = '\0';
+	else
+		pool->rpc_pass = &updup[strlen(updup)];
 
 	return NULL;
 }
