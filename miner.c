@@ -1074,6 +1074,12 @@ struct pool *add_pool(void)
 	return pool;
 }
 
+static
+void pool_set_uri(struct pool * const pool, char * const uri)
+{
+	pool->rpc_url = uri;
+}
+
 /* Pool variant of test and set */
 static bool pool_tset(struct pool *pool, bool *var)
 {
@@ -1439,7 +1445,7 @@ bool detect_stratum(struct pool *pool, char *url)
 		return false;
 
 	if (!strncasecmp(url, "stratum+tcp://", 14)) {
-		pool->rpc_url = strdup(url);
+		pool_set_uri(pool, strdup(url));
 		pool->has_stratum = true;
 		pool->stratum_url = pool->sockaddr_url;
 		return true;
@@ -1471,7 +1477,7 @@ static void setup_url(struct pool *pool, char *arg)
 		if (!httpinput)
 			quit(1, "Failed to malloc httpinput");
 		sprintf(httpinput, "http://%s", arg);
-		pool->rpc_url = httpinput;
+		pool_set_uri(pool, httpinput);
 	}
 }
 
@@ -4871,6 +4877,7 @@ void setup_benchmark_pool()
 	
 	pool->rpc_url = malloc(255);
 	strcpy(pool->rpc_url, "Benchmark");
+	pool_set_uri(pool, pool->rpc_url);
 	pool->rpc_user = pool->rpc_url;
 	pool->rpc_pass = pool->rpc_url;
 	enable_pool(pool);
@@ -8714,7 +8721,7 @@ tryagain:
 
 		applog(LOG_NOTICE, "Switching pool %d %s to %s", pool->pool_no, pool->rpc_url, pool->stratum_url);
 		if (!pool->rpc_url)
-			pool->rpc_url = strdup(pool->stratum_url);
+			pool_set_uri(pool, strdup(pool->stratum_url));
 		pool->has_stratum = true;
 
 		}
@@ -10734,7 +10741,7 @@ bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char 
 {
 	size_t siz;
 
-	pool->rpc_url = url;
+	pool_set_uri(pool, url);
 	pool->rpc_user = user;
 	pool->rpc_pass = pass;
 	siz = strlen(pool->rpc_user) + strlen(pool->rpc_pass) + 2;
