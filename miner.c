@@ -2584,28 +2584,28 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	return parse_config(config, true, &cfginfo->fileconf_load);
 }
 
+static
+bool _load_default_configs(const char * const filepath, void * __maybe_unused userp)
+{
+	bool * const found_defcfg_p = userp;
+	*found_defcfg_p = true;
+	
+	load_config(filepath, NULL);
+	
+	// Regardless of status of loading the config file, we should continue loading other defaults
+	return false;
+}
+
 static void load_default_config(void)
 {
-	char cnfbuf[PATH_MAX];
-
-#if defined(unix)
-	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(cnfbuf, getenv("HOME"));
-		strcat(cnfbuf, "/");
-	} else
-		strcpy(cnfbuf, "");
-	char *dirp = cnfbuf + strlen(cnfbuf);
-	strcpy(dirp, ".bfgminer/");
-	strcat(dirp, def_conf);
-	if (access(cnfbuf, R_OK))
+	bool found_defcfg = false;
+	appdata_file_call("BFGMiner", def_conf, _load_default_configs, &found_defcfg);
+	
+	if (!found_defcfg)
+	{
 		// No BFGMiner config, try Cgminer's...
-		strcpy(dirp, ".cgminer/cgminer.conf");
-#else
-	strcpy(cnfbuf, "");
-	strcat(cnfbuf, def_conf);
-#endif
-	if (!access(cnfbuf, R_OK))
-		load_config(cnfbuf, NULL);
+		appdata_file_call("cgminer", "cgminer.conf", _load_default_configs, &found_defcfg);
+	}
 }
 
 extern const char *opt_argv0;
