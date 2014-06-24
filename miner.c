@@ -213,6 +213,7 @@ bool use_curses = true;
 #else
 bool use_curses;
 #endif
+int last_logstatusline_len;
 #ifdef HAVE_LIBUSB
 bool have_libusb;
 #endif
@@ -3831,7 +3832,8 @@ static void text_print_status(int thr_id)
 	cgpu = get_thr_cgpu(thr_id);
 	if (cgpu) {
 		get_statline(logline, sizeof(logline), cgpu);
-		printf("%s\n", logline);
+		printf("\n%s\r", logline);
+		fflush(stdout);
 	}
 }
 
@@ -8028,7 +8030,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 
 				get_statline(logline, sizeof(logline), cgpu);
 				if (!curses_active) {
-					printf("%s          \r", logline);
+					printf("\n%s\r", logline);
 					fflush(stdout);
 				} else
 					applog(LOG_INFO, "%s", logline);
@@ -8176,7 +8178,23 @@ out_unlock:
 
 	if (showlog) {
 		if (!curses_active) {
-			printf("%s          \r", logstatusline);
+			if (want_per_device_stats)
+				printf("\n%s\r", logstatusline);
+			else
+			{
+				const int logstatusline_len = strlen(logstatusline);
+				int padding;
+				if (last_logstatusline_len > logstatusline_len)
+					padding = (last_logstatusline_len - logstatusline_len);
+				else
+				{
+					padding = 0;
+					if (last_logstatusline_len == -1)
+						puts("");
+				}
+				printf("%s%*s\r", logstatusline, padding, "");
+				last_logstatusline_len = logstatusline_len;
+			}
 			fflush(stdout);
 		} else
 			applog(LOG_INFO, "%s", logstatusline);

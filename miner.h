@@ -938,6 +938,7 @@ extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern int last_logstatusline_len;
 #ifdef HAVE_LIBUSB
 extern bool have_libusb;
 #endif

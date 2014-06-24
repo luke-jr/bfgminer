@@ -34,7 +34,11 @@ static void _my_log_curses(int prio, const char *datetime, const char *str)
 		;
 	else
 #endif
-		printf(" %s %s%s", datetime, str, "                    \n");
+	{
+		last_logstatusline_len = -1;
+		printf("\n %s %s\r", datetime, str);
+		fflush(stdout);
+	}
 }
 
 /* high-level logging function, based on global opt_log_level */
