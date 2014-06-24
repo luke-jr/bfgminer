@@ -2624,10 +2624,11 @@ static char *opt_verusage_and_exit(const char *extra)
 
 /* These options are parsed before anything else */
 static struct opt_table opt_early_table[] = {
-	OPT_EARLY_WITH_ARG("--config|-c",
+	// Default config is loaded in command line order, like a regular config
+	OPT_EARLY_WITH_ARG("--config|-c|--default-config",
 	                   set_bool_ignore_arg, NULL, &config_loaded,
 	                   opt_hidden),
-	OPT_EARLY_WITHOUT_ARG("--no-config",
+	OPT_EARLY_WITHOUT_ARG("--no-config|--no-default-config",
 	                opt_set_bool, &config_loaded,
 	                "Inhibit loading default config file"),
 	OPT_ENDTABLE
@@ -2641,7 +2642,13 @@ static struct opt_table opt_cmdline_table[] = {
 		     "See example.conf for an example configuration."),
 	OPT_EARLY_WITHOUT_ARG("--no-config",
 	                opt_set_bool, &config_loaded,
+	                opt_hidden),
+	OPT_EARLY_WITHOUT_ARG("--no-default-config",
+	                opt_set_bool, &config_loaded,
 	                "Inhibit loading default config file"),
+	OPT_WITHOUT_ARG("--default-config",
+	                load_default_config, NULL,
+	                "Always load the default config file"),
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),

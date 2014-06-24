@@ -307,6 +307,8 @@ Options for both config file and command line:
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
 See example.conf for an example configuration.
+--no-default-config Inhibit loading default config file
+--default-config    Always load the default config file
 --help|-h           Print this message
 --version|-V        Display version and exit
 
