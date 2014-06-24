@@ -1030,6 +1030,8 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
+static void enable_pool(struct pool *);
+
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -1049,10 +1051,13 @@ struct pool *add_pool(void)
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
 
+	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */
 	pool->tv_idle.tv_sec = ~0UL;
 	
 	cgtime(&pool->cgminer_stats.start_tv);
+	pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
+	pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
 
 	pool->rpc_proxy = NULL;
 	pool->quota = 1;
@@ -1071,6 +1076,8 @@ struct pool *add_pool(void)
 	pools[total_pools++] = pool;
 	
 	adjust_quota_gcd();
+	
+	enable_pool(pool);
 
 	return pool;
 }
@@ -12261,9 +12268,6 @@ int main(int argc, char *argv[])
 		struct pool *pool = pools[i];
 		size_t siz;
 
-		pool->cgminer_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
-		pool->cgminer_pool_stats.getwork_wait_min.tv_sec = MIN_SEC_UNSET;
-
 		if (!pool->rpc_url)
 			quit(1, "No URI supplied for pool %u", i);
 		
@@ -12312,13 +12316,6 @@ int main(int argc, char *argv[])
 
 	if (opt_benchmark)
 		goto begin_bench;
-
-	for (i = 0; i < total_pools; i++) {
-		struct pool *pool  = pools[i];
-
-		enable_pool(pool);
-		pool->idle = true;
-	}
 
 	applog(LOG_NOTICE, "Probing for an alive pool");
 	do {
