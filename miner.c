@@ -128,6 +128,7 @@ static bool want_longpoll = true;
 static bool want_gbt = true;
 static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
+static bool have_at_least_one_getcbaddr;
 static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t template_nonce;
 #endif
@@ -1078,6 +1079,8 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
+	if (uri_get_param_bool(uri, "getcbaddr", false))
+		have_at_least_one_getcbaddr = true;
 }
 
 /* Pool variant of test and set */
@@ -2835,6 +2838,72 @@ void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_
 	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll);
 }
 
+static
+void refresh_bitcoind_address(const bool fresh)
+{
+	if (!have_at_least_one_getcbaddr)
+		return;
+	
+	char getcbaddr_req[60];
+	CURL *curl = NULL;
+	json_t *json, *j2;
+	const char *s, *s2;
+	bytes_t newscript = BYTES_INIT;
+	
+	snprintf(getcbaddr_req, sizeof(getcbaddr_req), "{\"method\":\"get%saddress\",\"id\":0,\"params\":[\"BFGMiner\"]}", fresh ? "new" : "account");
+	
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool * const pool = pools[i];
+		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			continue;
+		
+		applog(LOG_DEBUG, "Refreshing coinbase address from pool %d", pool->pool_no);
+		if (!curl)
+		{
+			curl = curl_easy_init();
+			if (unlikely(!curl))
+			{
+				applogfail(LOG_ERR, "curl_easy_init");
+				break;
+			}
+		}
+		json = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, getcbaddr_req, false, false, NULL, pool, true);
+		j2 = json_object_get(json, "error");
+		if (unlikely(!json_is_null(j2)))
+		{
+			char *estr = NULL;
+			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, json_string_value(j2) ?: (estr = json_dumps_ANY(j2, JSON_ENSURE_ASCII | JSON_SORT_KEYS)));
+			free(estr);
+			continue;
+		}
+		s = bfg_json_obj_string(json, "result", NULL);
+		if (unlikely(!s))
+		{
+			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, "(return value was not a String)");
+			continue;
+		}
+		s2 = set_b58addr(s, &newscript);
+		if (unlikely(s2))
+		{
+			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
+			continue;
+		}
+		if (bytes_eq(&newscript, &opt_coinbase_script))
+		{
+			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
+			break;
+		}
+		bytes_assimilate(&opt_coinbase_script, &newscript);
+		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
+		break;
+	}
+	
+	bytes_free(&newscript);
+	if (curl)
+		curl_easy_cleanup(curl);
+}
+
 static double target_diff(const unsigned char *);
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
@@ -2870,6 +2939,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
+		if ((!tmpl->cbtxn) && !bytes_len(&opt_coinbase_script))
+		{
+			// We are about to fail here because we lack a coinbase transaction
+			// Try to get an address from bitcoind to use to avoid this
+			refresh_bitcoind_address(false);
+		}
 		if (bytes_len(&opt_coinbase_script))
 		{
 			bool newcb;
@@ -5018,7 +5093,7 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if (bytes_len(&opt_coinbase_script))
+			if (bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr)
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
@@ -5705,6 +5780,7 @@ void work_check_for_block(struct work * const work)
 		found_blocks++;
 		work->mandatory = true;
 		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
+		refresh_bitcoind_address(true);
 	}
 }
 
