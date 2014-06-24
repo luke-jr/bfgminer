@@ -3661,8 +3661,11 @@ void logwin_update(void)
 static void enable_pool(struct pool *pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
+		mutex_lock(&lp_lock);
 		enabled_pools++;
 		pool->enabled = POOL_ENABLED;
+		pthread_cond_broadcast(&lp_cond);
+		mutex_unlock(&lp_lock);
 	}
 }
 
@@ -4820,14 +4823,19 @@ out_unlock:
 
 static void pool_died(struct pool *pool)
 {
+	mutex_lock(&lp_lock);
 	if (!pool_tset(pool, &pool->idle)) {
 		cgtime(&pool->tv_idle);
+		pthread_cond_broadcast(&lp_cond);
+		mutex_unlock(&lp_lock);
 		if (pool == current_pool()) {
 			applog(LOG_WARNING, "Pool %d %s not responding!", pool->pool_no, pool->rpc_url);
 			switch_pools(NULL);
 		} else
 			applog(LOG_INFO, "Pool %d %s failed to return work", pool->pool_no, pool->rpc_url);
 	}
+	else
+		mutex_unlock(&lp_lock);
 }
 
 bool stale_work(struct work *work, bool share)
@@ -5559,6 +5567,9 @@ void switch_pools(struct pool *selected)
 
 	currentpool = pools[pool_no];
 	pool = currentpool;
+	mutex_lock(&lp_lock);
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
 	cg_wunlock(&control_lock);
 
 	/* Set the lagging flag to avoid pool not providing work fast enough
@@ -6637,7 +6648,10 @@ retry:
 				goto retry;
 			}
 		}
+		mutex_lock(&lp_lock);
 		pool_strategy = selected;
+		pthread_cond_broadcast(&lp_cond);
+		mutex_unlock(&lp_lock);
 		switch_pools(NULL);
 		goto updated;
 	} else if (!strncasecmp(&input, "i", 1)) {
@@ -9015,13 +9029,13 @@ static struct pool *select_longpoll_pool(struct pool *cp)
  */
 static void wait_lpcurrent(struct pool *pool)
 {
+	mutex_lock(&lp_lock);
 	while (!cnx_needed(pool) && (pool->enabled == POOL_DISABLED ||
 	       (pool != current_pool() && pool_strategy != POOL_LOADBALANCE &&
 	       pool_strategy != POOL_BALANCE))) {
-		mutex_lock(&lp_lock);
 		pthread_cond_wait(&lp_cond, &lp_lock);
-		mutex_unlock(&lp_lock);
 	}
+	mutex_unlock(&lp_lock);
 }
 
 static curl_socket_t save_curl_socket(void *vpool, __maybe_unused curlsocktype purpose, struct curl_sockaddr *addr) {
