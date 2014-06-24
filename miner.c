@@ -1059,16 +1059,16 @@ struct pool *add_pool(void)
 	pool->sock = INVSOCK;
 	pool->lp_socket = CURL_SOCKET_BAD;
 
+	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
+	pools[total_pools++] = pool;
+	
 	if (opt_benchmark)
 	{
-		// Don't add to pools array, but immediately remove it
+		// Immediately remove it
 		remove_pool(pool);
 		return pool;
 	}
 	
-	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
-	pools[total_pools++] = pool;
-
 	return pool;
 }
 
