@@ -4798,18 +4798,25 @@ static struct pool *_select_longpoll_pool(struct pool *, bool(*)(struct pool *))
 static struct pool *select_balanced(struct pool *cp)
 {
 	int i, lowest = cp->shares;
-	struct pool *ret = cp;
+	struct pool *ret = cp, *failover_pool = NULL;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
 		if (pool_unworkable(pool))
 			continue;
+		if (pool->failover_only)
+		{
+			BFGINIT(failover_pool, pool);
+			continue;
+		}
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
 			ret = pool;
 		}
 	}
+	if (pool_unworkable(ret) && failover_pool)
+		ret = failover_pool;
 
 	ret->shares++;
 	return ret;
@@ -4834,6 +4841,8 @@ static inline struct pool *select_pool(bool lagging)
 retry:
 	if (pool_strategy == POOL_BALANCE) {
 		pool = select_balanced(cp);
+		if (pool_unworkable(pool))
+			goto simple_failover;
 		goto out;
 	}
 
@@ -4877,6 +4886,7 @@ retry:
 			rotating_pool = 0;
 	}
 
+simple_failover:
 	/* If there are no alive pools with quota, choose according to
 	 * priority. */
 	if (!pool) {
@@ -6320,7 +6330,7 @@ static bool pool_unusable(struct pool *pool)
 
 void switch_pools(struct pool *selected)
 {
-	struct pool *pool, *last_pool;
+	struct pool *pool, *last_pool, *failover_pool = NULL;
 	int i, pool_no, next_pool;
 
 	cg_wlock(&control_lock);
@@ -6368,6 +6378,11 @@ void switch_pools(struct pool *selected)
 				pool = pools[next_pool];
 				if (pool_unusable(pool))
 					continue;
+				if (pool->failover_only)
+				{
+					BFGINIT(failover_pool, pool);
+					continue;
+				}
 				pool_no = next_pool;
 				break;
 			}
@@ -6376,8 +6391,10 @@ void switch_pools(struct pool *selected)
 			break;
 	}
 
-	currentpool = pools[pool_no];
-	pool = currentpool;
+	pool = pools[pool_no];
+	if (pool_unusable(pool) && failover_pool)
+		pool = failover_pool;
+	currentpool = pool;
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
@@ -7187,12 +7204,15 @@ updated:
 
 			if (pool == current_pool())
 				wattron(logwin, A_BOLD);
-			if (pool->enabled != POOL_ENABLED)
+			if (pool->enabled != POOL_ENABLED || pool->failover_only)
 				wattron(logwin, A_DIM);
 			wlogprint("%d: ", pool->prio);
 			switch (pool->enabled) {
 				case POOL_ENABLED:
-					wlogprint("Enabled  ");
+					if (pool->failover_only)
+						wlogprint("Failover ");
+					else
+						wlogprint("Enabled  ");
 					break;
 				case POOL_DISABLED:
 					wlogprint("Disabled ");
@@ -7258,6 +7278,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
+		pool->failover_only = false;
 		enable_pool(pool);
 		switch_pools(pool);
 		goto updated;
@@ -7283,6 +7304,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
+		pool->failover_only = false;
 		enable_pool(pool);
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);

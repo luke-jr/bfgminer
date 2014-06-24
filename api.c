@@ -1900,6 +1900,9 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 				if (pool->idle)
 					status = (char *)DEAD;
 				else
+				if (pool->failover_only)
+					status = "Failover";
+				else
 					status = (char *)ALIVE;
 				break;
 			default:
@@ -2324,6 +2327,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
+	pool->failover_only = false;
 	pool->enabled = POOL_ENABLED;
 	cg_runlock(&control_lock);
 	switch_pools(pool);
@@ -2437,11 +2441,12 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	if (pool->enabled == POOL_ENABLED) {
+	if (pool->enabled == POOL_ENABLED && !pool->failover_only) {
 		message(io_data, MSG_ALRENAP, id, NULL, isjson);
 		return;
 	}
 
+	pool->failover_only = false;
 	pool->enabled = POOL_ENABLED;
 	if (pool->prio < current_pool()->prio)
 		switch_pools(pool);
