@@ -131,7 +131,7 @@ extern void _bfg_clean_up(bool);
 #define quit(status, fmt, ...) do { \
 	_bfg_clean_up(false);  \
 	if (fmt) { \
-		fprintf(stderr, fmt, ##__VA_ARGS__);  \
+		fprintf(stderr, "\n" fmt, ##__VA_ARGS__);  \
 	} \
 	fprintf(stderr, "\n");  \
 	fflush(stderr);  \
