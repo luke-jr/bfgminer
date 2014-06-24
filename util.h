@@ -157,12 +157,12 @@ typedef struct bytes_t {
 	size_t allocsz;
 } bytes_t;
 
-#define BYTES_INIT ((bytes_t){.buf=NULL,})
+#define BYTES_INIT {.buf=NULL,}
 
 static inline
 void bytes_init(bytes_t *b)
 {
-	*b = BYTES_INIT;
+	*b = (bytes_t)BYTES_INIT;
 }
 
 // This can't be inline without ugly const/non-const issues
