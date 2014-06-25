@@ -81,6 +81,7 @@ enum bitforce_style {
 struct bitforce_lowl_interface {
 	bool (*open)(struct cgpu_info *);
 	void (*close)(struct cgpu_info *);
+	ssize_t (*read)(void *, size_t, struct cgpu_info *);
 	void (*gets)(char *, size_t, struct cgpu_info *);
 	ssize_t (*write)(struct cgpu_info *, const void *, ssize_t);
 	bool (*set_timeout)(struct cgpu_info* , uint8_t);
@@ -147,6 +148,28 @@ void bitforce_vcom_close(struct cgpu_info * const dev)
 }
 
 static
+ssize_t bitforce_vcom_read(void * const buf_p, size_t bufLen, struct cgpu_info * const dev)
+{
+	uint8_t *buf = buf_p;
+	const int fd = dev->device_fd;
+	ssize_t rv, ret = 0;
+	while (bufLen > 0)
+	{
+		rv = read(fd, buf, bufLen);
+		if (rv <= 0)
+		{
+			if (ret > 0)
+				return ret;
+			return rv;
+		}
+		buf += rv;
+		bufLen -= rv;
+		ret += rv;
+	}
+	return ret;
+}
+
+static
 void bitforce_vcom_gets(char *buf, size_t bufLen, struct cgpu_info * const dev)
 {
 	const int fd = dev->device_fd;
@@ -178,6 +201,7 @@ bool bitforce_vcom_set_timeout(struct cgpu_info * const dev, const uint8_t timeo
 static struct bitforce_lowl_interface bfllif_vcom = {
 	.open = bitforce_vcom_open,
 	.close = bitforce_vcom_close,
+	.read = bitforce_vcom_read,
 	.gets = bitforce_vcom_gets,
 	.write = bitforce_vcom_write,
 	.set_timeout = bitforce_vcom_set_timeout,
@@ -213,7 +237,7 @@ void bitforce_pci_close(struct cgpu_info * const dev)
 }
 
 static
-void bitforce_pci_gets(char * const buf, size_t bufLen, struct cgpu_info * const dev)
+void _bitforce_pci_read(struct cgpu_info * const dev)
 {
 	struct bitforce_data * const devdata = dev->device_data;
 	const uint32_t looking_for = (uint32_t)devdata->lasttag << 0x10;
@@ -233,7 +257,35 @@ void bitforce_pci_gets(char * const buf, size_t bufLen, struct cgpu_info * const
 		if (lowl_pci_read_data(devdata->lph, buf, resp, 1, 0))
 			bytes_postappend(b, resp);
 	}
+}
+
+static
+ssize_t bitforce_pci_read(void * const buf, const size_t bufLen, struct cgpu_info * const dev)
+{
+	struct bitforce_data * const devdata = dev->device_data;
+	bytes_t *b = &devdata->getsbuf;
 	
+	_bitforce_pci_read(dev);
+	ssize_t datalen = bytes_len(b);
+	if (datalen <= 0)
+		return datalen;
+	
+	if (datalen > bufLen)
+		datalen = bufLen;
+	
+	memcpy(buf, bytes_buf(b), datalen);
+	bytes_shift(b, datalen);
+	
+	return datalen;
+}
+
+static
+void bitforce_pci_gets(char * const buf, size_t bufLen, struct cgpu_info * const dev)
+{
+	struct bitforce_data * const devdata = dev->device_data;
+	bytes_t *b = &devdata->getsbuf;
+	
+	_bitforce_pci_read(dev);
 	ssize_t linelen = (bytes_find(b, '\n') + 1) ?: bytes_len(b);
 	if (linelen > --bufLen)
 		linelen = bufLen;
@@ -265,6 +317,7 @@ ssize_t bitforce_pci_write(struct cgpu_info * const dev, const void * const bufp
 static struct bitforce_lowl_interface bfllif_pci = {
 	.open = bitforce_pci_open,
 	.close = bitforce_pci_close,
+	.read = bitforce_pci_read,
 	.gets = bitforce_pci_gets,
 	.write = bitforce_pci_write,
 };
@@ -288,6 +341,30 @@ bool bitforce_open(struct cgpu_info * const proc)
 	
 	bitforce_close(proc);
 	return devdata->lowlif->open(dev);
+}
+
+static
+ssize_t bitforce_read(struct cgpu_info * const proc, void * const buf, const size_t bufLen)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct bitforce_data * const devdata = dev->device_data;
+	ssize_t rv;
+	
+	if (likely(devdata->is_open))
+		rv = devdata->lowlif->read(buf, bufLen, dev);
+	else
+		rv = -1;
+	
+	if (unlikely(opt_dev_protocol))
+	{
+		size_t datalen = (rv > 0) ? rv : 0;
+		char hex[(rv * 2) + 1];
+		bin2hex(hex, buf, datalen);
+		applog(LOG_DEBUG, "DEVPROTO: %s: READ(%lu): %s",
+		       dev->dev_repr, (unsigned long)bufLen, hex);
+	}
+	
+	return rv;
 }
 
 static
