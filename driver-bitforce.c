@@ -2304,6 +2304,24 @@ struct _jobinfo {
 };
 
 static
+void _bitforce_queue_flush_add_to_processing(struct _jobinfo ** const processing_p, struct _jobinfo * const this, const size_t keysz)
+{
+	struct _jobinfo *item;
+	HASH_FIND(hh, *processing_p, &this->key[0], keysz, item);
+	if (likely(!item))
+	{
+		this->instances = 1;
+		HASH_ADD(hh, *processing_p, key, keysz, this);
+	}
+	else
+	{
+		// This should really only happen in testing/benchmarking...
+		++item->instances;
+		free(this);
+	}
+}
+
+static
 void bitforce_queue_flush(struct thr_info *thr)
 {
 	struct bitforce_proc_data *procdata = thr->cgpu_data;
@@ -2315,12 +2333,15 @@ void bitforce_queue_flush(struct thr_info *thr)
 	char *buf = &data->noncebuf[0], *buf2 = NULL;
 	const char *cmd = "ZqX";
 	unsigned flushed;
+	int inproc = -1;
 	struct _jobinfo *processing = NULL, *item, *this;
 	
 	if (data->parallel == 1)
 		// Pre-parallelization neither needs nor supports "ZqX"
 		cmd = "ZQX";
-	// TODO: Call "ZQX" most of the time: don't need to do sanity checks so often
+	else
+	if (data->max_queueid)
+		cmd = "FLB";
 	bitforce_zox(thr, cmd);
 	if (!strncasecmp(buf, "OK:FLUSHED", 10))
 		flushed = atoi(&buf[10]);
@@ -2329,6 +2350,12 @@ void bitforce_queue_flush(struct thr_info *thr)
 	{
 		flushed = atoi(&buf2[8]);
 		buf2 = next_line(buf2);
+	}
+	else
+	if ((!strncasecmp(buf, "BIN-InP:", 7)) && (buf2 = strstr(buf, "FLUSHED:")) )
+	{
+		inproc = atoi(&buf[7]);
+		flushed = atoi(&buf2[8]);
 	}
 	else
 	if (!strncasecmp(buf, "OK", 2))
@@ -2371,6 +2398,30 @@ void bitforce_queue_flush(struct thr_info *thr)
 	
 	const size_t keysz = data->max_queueid ? sizeof(work_device_id_t) : sizeof(this->key);
 	
+	if (inproc != -1)
+	{
+		size_t total = inproc + flushed, readsz;
+		uint16_t data[total];
+		total *= 2;
+		readsz = bitforce_read(bitforce, data, total);
+		if (unlikely(readsz != total))
+			applog(LOG_ERR, "%"PRIpreprv": Short read for FLB result", bitforce->proc_repr);
+		readsz /= 2;
+		
+		// For now, we only care about the ones in process
+		// TODO: sanity check flushed work too
+		if (readsz > inproc)
+			readsz = inproc;
+		
+		while (readsz--)
+		{
+			this = malloc(sizeof(*this));
+			const work_device_id_t queueid = be16toh(data[readsz]);
+			memcpy(&this->key[0], &queueid, sizeof(queueid));
+			_bitforce_queue_flush_add_to_processing(&processing, this, keysz);
+		}
+	}
+	else
 	if (buf2)
 	{
 		// First, turn buf2 into a hash
@@ -2387,18 +2438,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 				hex2bin(&this->key[ 0], &buf2[ 0], 32);
 				hex2bin(&this->key[32], &buf2[65], 12);
 			}
-			HASH_FIND(hh, processing, &this->key[0], keysz, item);
-			if (likely(!item))
-			{
-				this->instances = 1;
-				HASH_ADD(hh, processing, key, keysz, this);
-			}
-			else
-			{
-				// This should really only happen in testing/benchmarking...
-				++item->instances;
-				free(this);
-			}
+			_bitforce_queue_flush_add_to_processing(&processing, this, keysz);
 		}
 	}
 	
