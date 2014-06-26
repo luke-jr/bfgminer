@@ -1104,34 +1104,6 @@ struct pool *current_pool(void)
 	return pool;
 }
 
-// Copied from ccan/opt/helpers.c
-static char *arg_bad(const char *fmt, const char *arg)
-{
-	char *str = malloc(strlen(fmt) + strlen(arg));
-	sprintf(str, fmt, arg);
-	return str;
-}
-
-static
-char *opt_set_floatval(const char *arg, float *f)
-{
-	char *endp;
-
-	errno = 0;
-	*f = strtof(arg, &endp);
-	if (*endp || !arg[0])
-		return arg_bad("'%s' is not a number", arg);
-	if (errno)
-		return arg_bad("'%s' is out of range", arg);
-	return NULL;
-}
-
-static
-void opt_show_floatval(char buf[OPT_SHOW_LEN], const float *f)
-{
-	snprintf(buf, OPT_SHOW_LEN, "%.1f", *f);
-}
-
 char *set_int_range(const char *arg, int *i, int min, int max)
 {
 	char *err = opt_set_intval(arg, i);
