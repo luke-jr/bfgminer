@@ -2300,25 +2300,153 @@ bool bitforce_queue_append(struct thr_info *thr, struct work *work)
 struct _jobinfo {
 	uint8_t key[32+12];
 	int instances;
+	int flushed_instances;
 	UT_hash_handle hh;
 };
 
 static
-void _bitforce_queue_flush_add_to_processing(struct _jobinfo ** const processing_p, struct _jobinfo * const this, const size_t keysz)
+void _bitforce_queue_flush_add_to_processing(struct _jobinfo ** const processing_p, struct _jobinfo * const this, const size_t keysz, const bool was_flushed)
 {
 	struct _jobinfo *item;
 	HASH_FIND(hh, *processing_p, &this->key[0], keysz, item);
 	if (likely(!item))
 	{
-		this->instances = 1;
+		item = this;
+		this->flushed_instances = this->instances = 0;
 		HASH_ADD(hh, *processing_p, key, keysz, this);
 	}
 	else
 	{
 		// This should really only happen in testing/benchmarking...
-		++item->instances;
 		free(this);
 	}
+	if (was_flushed)
+		++item->flushed_instances;
+	else
+		++item->instances;
+}
+
+static
+void bitforce_delete_last_n_work(struct thr_info * const thr, int n)
+{
+	while (n--)
+		work_list_del(&thr->work_list, thr->work_list->prev);
+}
+
+static
+void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobinfo ** const processing_p, const size_t keysz)
+{
+	struct cgpu_info * const bitforce = thr->cgpu;
+	struct bitforce_data * const data = bitforce->device_data;
+	struct work *work, *tmp;
+	struct _jobinfo *item, *this;
+	uint8_t key[keysz];
+	char hex[(keysz * 2) + 1];
+	
+	// Iterate over the work_list and delete anything not in the hash
+	DL_FOREACH_SAFE(thr->work_list, work, tmp)
+	{
+		if (data->max_queueid)
+		{
+			memcpy(&key[0], &work->device_id, sizeof(work->device_id));
+			snprintf(hex, sizeof(hex), "%04x", work->device_id);
+		}
+		else
+		{
+			memcpy(&key[ 0],  work->midstate, 32);
+			memcpy(&key[32], &work->data[64], 12);
+			bin2hex(hex, key, keysz);
+		}
+		HASH_FIND(hh, *processing_p, &key[0], keysz, item);
+		if (unlikely(!item))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is missing queued job! %s", bitforce->proc_repr, hex);
+			work_list_del(&thr->work_list, work);
+			continue;
+		}
+		if (item->instances)
+		{
+			applog(LOG_DEBUG, "%"PRIpreprv": Queue flush: %s inprogress", bitforce->proc_repr, hex);
+			--item->instances;
+		}
+		else
+		{
+			--item->flushed_instances;
+			work_list_del(&thr->work_list, work);
+			applog(LOG_DEBUG, "%"PRIpreprv": Queue flush: %s flushed", bitforce->proc_repr, hex);
+		}
+		if (likely(!(item->instances + item->flushed_instances)))
+		{
+			HASH_DEL(*processing_p, item);
+			free(item);
+		}
+	}
+	if (unlikely(*processing_p))
+	{
+		HASH_ITER(hh, *processing_p, item, this)
+		{
+			bin2hex(hex, &item->key[0], keysz);
+			if (item->instances)
+				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device %s unknown work %s (%d)", bitforce->proc_repr, "is processing", hex, item->instances);
+			if (item->flushed_instances)
+				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device %s unknown work %s (%d)", bitforce->proc_repr, "flushed", hex, item->flushed_instances);
+			
+			HASH_DEL(*processing_p, item);
+			free(item);
+		}
+	}
+}
+
+static
+void bitforce_finish_flush(struct thr_info * const thr, const int flushed)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	struct bitforce_data * const data = bitforce->device_data;
+	
+	data->queued -= flushed;
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver (queued<=%d)",
+	       bitforce->proc_repr, flushed, data->ready_to_queue, data->queued);
+	
+	bitforce_set_queue_full(thr);
+	data->just_flushed = true;
+	data->want_to_send_queue = false;
+	data->ready_to_queue = 0;
+}
+
+static
+void bitforce_process_flb_result(struct thr_info * const thr, int inproc, int flushed)
+{
+	struct cgpu_info *bitforce = thr->cgpu;
+	
+	size_t total = inproc + flushed, readsz;
+	uint16_t buf[total];
+	readsz = bitforce_read(bitforce, buf, total * 2) / 2;
+	if (unlikely(readsz != total))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Short read for FLB result", bitforce->proc_repr);
+		if (readsz < inproc)
+		{
+			inproc = readsz;
+			flushed = 0;
+		}
+		else
+			flushed = readsz - inproc;
+	}
+	
+	const int keysz = sizeof(work_device_id_t);
+	struct _jobinfo *processing = NULL, *this;
+	for (int i = inproc + flushed; i--; )
+	{
+		this = malloc(sizeof(*this));
+		const work_device_id_t queueid = be16toh(buf[i]);
+		memcpy(&this->key[0], &queueid, sizeof(queueid));
+		_bitforce_queue_flush_add_to_processing(&processing, this, keysz, !(i < inproc));
+	}
+	
+	bitforce_queue_flush_sanity_check(thr, &processing, keysz);
+	
+	bitforce_finish_flush(thr, flushed);
 }
 
 static
@@ -2333,8 +2461,10 @@ void bitforce_queue_flush(struct thr_info *thr)
 	char *buf = &data->noncebuf[0], *buf2 = NULL;
 	const char *cmd = "ZqX";
 	unsigned flushed;
-	int inproc = -1;
-	struct _jobinfo *processing = NULL, *item, *this;
+	struct _jobinfo *processing = NULL, *this;
+	
+	// First, eliminate all unsent works
+	bitforce_delete_last_n_work(thr, data->ready_to_queue);
 	
 	if (data->parallel == 1)
 		// Pre-parallelization neither needs nor supports "ZqX"
@@ -2352,10 +2482,13 @@ void bitforce_queue_flush(struct thr_info *thr)
 		buf2 = next_line(buf2);
 	}
 	else
-	if ((!strncasecmp(buf, "BIN-InP:", 7)) && (buf2 = strstr(buf, "FLUSHED:")) )
+	if ((!strncasecmp(buf, "BIN-InP:", 8)) && (buf2 = strstr(buf, "FLUSHED:")) )
 	{
-		inproc = atoi(&buf[7]);
+		const int
+		inproc = atoi(&buf[8]);
 		flushed = atoi(&buf2[8]);
+		bitforce_process_flb_result(thr, inproc, flushed);
+		return;
 	}
 	else
 	if (!strncasecmp(buf, "OK", 2))
@@ -2379,18 +2512,8 @@ void bitforce_queue_flush(struct thr_info *thr)
 		flushed = data->queued;
 	}
 	
-	data->queued -= flushed;
-	
-	applog(LOG_DEBUG, "%"PRIpreprv": Flushed %u jobs from device and %d from driver (queued<=%d)",
-	       bitforce->proc_repr, flushed, data->ready_to_queue, data->queued);
-	
-	flushed += data->ready_to_queue;
-	data->ready_to_queue = 0;
-	while (flushed--)
-		work_list_del(&thr->work_list, thr->work_list->prev);
-	bitforce_set_queue_full(thr);
-	data->just_flushed = true;
-	data->want_to_send_queue = false;
+	bitforce_delete_last_n_work(thr, flushed);
+	bitforce_finish_flush(thr, flushed);
 	
 	// "ZqX" returns jobs in progress, allowing us to sanity check
 	// NOTE: Must process buffer into hash table BEFORE calling bitforce_queue_do_results, which clobbers it
@@ -2398,30 +2521,6 @@ void bitforce_queue_flush(struct thr_info *thr)
 	
 	const size_t keysz = data->max_queueid ? sizeof(work_device_id_t) : sizeof(this->key);
 	
-	if (inproc != -1)
-	{
-		size_t total = inproc + flushed, readsz;
-		uint16_t data[total];
-		total *= 2;
-		readsz = bitforce_read(bitforce, data, total);
-		if (unlikely(readsz != total))
-			applog(LOG_ERR, "%"PRIpreprv": Short read for FLB result", bitforce->proc_repr);
-		readsz /= 2;
-		
-		// For now, we only care about the ones in process
-		// TODO: sanity check flushed work too
-		if (readsz > inproc)
-			readsz = inproc;
-		
-		while (readsz--)
-		{
-			this = malloc(sizeof(*this));
-			const work_device_id_t queueid = be16toh(data[readsz]);
-			memcpy(&this->key[0], &queueid, sizeof(queueid));
-			_bitforce_queue_flush_add_to_processing(&processing, this, keysz);
-		}
-	}
-	else
 	if (buf2)
 	{
 		// First, turn buf2 into a hash
@@ -2438,54 +2537,14 @@ void bitforce_queue_flush(struct thr_info *thr)
 				hex2bin(&this->key[ 0], &buf2[ 0], 32);
 				hex2bin(&this->key[32], &buf2[65], 12);
 			}
-			_bitforce_queue_flush_add_to_processing(&processing, this, keysz);
+			_bitforce_queue_flush_add_to_processing(&processing, this, keysz, false);
 		}
 	}
 	
 	bitforce_queue_do_results(thr);
 	
 	if (buf2)
-	{
-		struct work *work, *tmp;
-		uint8_t key[32+12];
-		
-		// Now iterate over the work_list and delete anything not in the hash
-		DL_FOREACH_SAFE(thr->work_list, work, tmp)
-		{
-			if (data->max_queueid)
-				memcpy(&key[0], &work->device_id, sizeof(work->device_id));
-			else
-			{
-				memcpy(&key[ 0],  work->midstate, 32);
-				memcpy(&key[32], &work->data[64], 12);
-			}
-			HASH_FIND(hh, processing, &key[0], keysz, item);
-			if (unlikely(!item))
-			{
-				char hex[89];
-				bin2hex(hex, key, 32+12);
-				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is missing queued job! %s", bitforce->proc_repr, hex);
-				work_list_del(&thr->work_list, work);
-				continue;
-			}
-			if (likely(!--item->instances))
-			{
-				HASH_DEL(processing, item);
-				free(item);
-			}
-		}
-		if (unlikely( (flushed = HASH_COUNT(processing)) ))
-		{
-			//applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is working on %d unknown jobs!", bitforce->proc_repr, flushed);
-			// FIXME: Probably these were jobs finished after ZqX, included in the result check we just did
-			// NOTE: We need to do that result check first to avoid deleting work_list items for things just solved
-			HASH_ITER(hh, processing, item, this)
-			{
-				HASH_DEL(processing, item);
-				free(item);
-			}
-		}
-	}
+		bitforce_queue_flush_sanity_check(thr, &processing, keysz);
 }
 
 static

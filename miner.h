@@ -1312,6 +1312,7 @@ struct pool {
 #define GETWORK_MODE_GBT 'G'
 
 typedef unsigned work_device_id_t;
+#define PRIwdi "04x"
 
 struct work {
 	unsigned char	data[128];
