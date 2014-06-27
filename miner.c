@@ -123,6 +123,7 @@ static char packagename[256];
 
 bool opt_protocol;
 bool opt_dev_protocol;
+static bool opt_load_bitcoin_conf = true;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
@@ -2180,6 +2181,9 @@ static struct opt_table opt_config_table[] = {
 	                opt_hidden
 #endif
 	),
+	OPT_WITHOUT_ARG("--no-local-bitcoin",
+	                opt_set_invbool, &opt_load_bitcoin_conf,
+	                "Disable adding pools for local bitcoin RPC servers"),
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -2557,28 +2561,28 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	return parse_config(config, true, &cfginfo->fileconf_load);
 }
 
+static
+bool _load_default_configs(const char * const filepath, void * __maybe_unused userp)
+{
+	bool * const found_defcfg_p = userp;
+	*found_defcfg_p = true;
+	
+	load_config(filepath, NULL);
+	
+	// Regardless of status of loading the config file, we should continue loading other defaults
+	return false;
+}
+
 static void load_default_config(void)
 {
-	char cnfbuf[PATH_MAX];
-
-#if defined(unix)
-	if (getenv("HOME") && *getenv("HOME")) {
-	        strcpy(cnfbuf, getenv("HOME"));
-		strcat(cnfbuf, "/");
-	} else
-		strcpy(cnfbuf, "");
-	char *dirp = cnfbuf + strlen(cnfbuf);
-	strcpy(dirp, ".bfgminer/");
-	strcat(dirp, def_conf);
-	if (access(cnfbuf, R_OK))
+	bool found_defcfg = false;
+	appdata_file_call("BFGMiner", def_conf, _load_default_configs, &found_defcfg);
+	
+	if (!found_defcfg)
+	{
 		// No BFGMiner config, try Cgminer's...
-		strcpy(dirp, ".cgminer/cgminer.conf");
-#else
-	strcpy(cnfbuf, "");
-	strcat(cnfbuf, def_conf);
-#endif
-	if (!access(cnfbuf, R_OK))
-		load_config(cnfbuf, NULL);
+		appdata_file_call("cgminer", "cgminer.conf", _load_default_configs, &found_defcfg);
+	}
 }
 
 extern const char *opt_argv0;
@@ -2597,10 +2601,11 @@ static char *opt_verusage_and_exit(const char *extra)
 
 /* These options are parsed before anything else */
 static struct opt_table opt_early_table[] = {
-	OPT_EARLY_WITH_ARG("--config|-c",
+	// Default config is loaded in command line order, like a regular config
+	OPT_EARLY_WITH_ARG("--config|-c|--default-config",
 	                   set_bool_ignore_arg, NULL, &config_loaded,
 	                   opt_hidden),
-	OPT_EARLY_WITHOUT_ARG("--no-config",
+	OPT_EARLY_WITHOUT_ARG("--no-config|--no-default-config",
 	                opt_set_bool, &config_loaded,
 	                "Inhibit loading default config file"),
 	OPT_ENDTABLE
@@ -2614,7 +2619,13 @@ static struct opt_table opt_cmdline_table[] = {
 		     "See example.conf for an example configuration."),
 	OPT_EARLY_WITHOUT_ARG("--no-config",
 	                opt_set_bool, &config_loaded,
+	                opt_hidden),
+	OPT_EARLY_WITHOUT_ARG("--no-default-config",
+	                opt_set_bool, &config_loaded,
 	                "Inhibit loading default config file"),
+	OPT_WITHOUT_ARG("--default-config",
+	                load_default_config, NULL,
+	                "Always load the default config file"),
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
@@ -4765,18 +4776,25 @@ static struct pool *_select_longpoll_pool(struct pool *, bool(*)(struct pool *))
 static struct pool *select_balanced(struct pool *cp)
 {
 	int i, lowest = cp->shares;
-	struct pool *ret = cp;
+	struct pool *ret = cp, *failover_pool = NULL;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
 		if (pool_unworkable(pool))
 			continue;
+		if (pool->failover_only)
+		{
+			BFGINIT(failover_pool, pool);
+			continue;
+		}
 		if (pool->shares < lowest) {
 			lowest = pool->shares;
 			ret = pool;
 		}
 	}
+	if (pool_unworkable(ret) && failover_pool)
+		ret = failover_pool;
 
 	ret->shares++;
 	return ret;
@@ -4801,6 +4819,8 @@ static inline struct pool *select_pool(bool lagging)
 retry:
 	if (pool_strategy == POOL_BALANCE) {
 		pool = select_balanced(cp);
+		if (pool_unworkable(pool))
+			goto simple_failover;
 		goto out;
 	}
 
@@ -4844,6 +4864,7 @@ retry:
 			rotating_pool = 0;
 	}
 
+simple_failover:
 	/* If there are no alive pools with quota, choose according to
 	 * priority. */
 	if (!pool) {
@@ -6287,7 +6308,7 @@ static bool pool_unusable(struct pool *pool)
 
 void switch_pools(struct pool *selected)
 {
-	struct pool *pool, *last_pool;
+	struct pool *pool, *last_pool, *failover_pool = NULL;
 	int i, pool_no, next_pool;
 
 	cg_wlock(&control_lock);
@@ -6335,6 +6356,11 @@ void switch_pools(struct pool *selected)
 				pool = pools[next_pool];
 				if (pool_unusable(pool))
 					continue;
+				if (pool->failover_only)
+				{
+					BFGINIT(failover_pool, pool);
+					continue;
+				}
 				pool_no = next_pool;
 				break;
 			}
@@ -6343,8 +6369,10 @@ void switch_pools(struct pool *selected)
 			break;
 	}
 
-	currentpool = pools[pool_no];
-	pool = currentpool;
+	pool = pools[pool_no];
+	if (pool_unusable(pool) && failover_pool)
+		pool = failover_pool;
+	currentpool = pool;
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
@@ -7154,12 +7182,15 @@ updated:
 
 			if (pool == current_pool())
 				wattron(logwin, A_BOLD);
-			if (pool->enabled != POOL_ENABLED)
+			if (pool->enabled != POOL_ENABLED || pool->failover_only)
 				wattron(logwin, A_DIM);
 			wlogprint("%d: ", pool->prio);
 			switch (pool->enabled) {
 				case POOL_ENABLED:
-					wlogprint("Enabled  ");
+					if (pool->failover_only)
+						wlogprint("Failover ");
+					else
+						wlogprint("Enabled  ");
 					break;
 				case POOL_DISABLED:
 					wlogprint("Disabled ");
@@ -7225,6 +7256,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
+		pool->failover_only = false;
 		enable_pool(pool);
 		switch_pools(pool);
 		goto updated;
@@ -7250,6 +7282,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
+		pool->failover_only = false;
 		enable_pool(pool);
 		if (pool->prio < current_pool()->prio)
 			switch_pools(pool);
@@ -10910,6 +10943,86 @@ out:
 }
 #endif
 
+static
+bool _add_local_gbt(const char * const filepath, void * __maybe_unused userp)
+{
+	struct pool *pool;
+	char buf[0x100];
+	char *rpcuser = NULL, *rpcpass = NULL;
+	int rpcport = 0, rpcssl = -101;
+	FILE * const F = fopen(filepath, "r");
+	if (!F)
+		applogr(false, LOG_WARNING, "%s: Failed to open %s for reading", "add_local_gbt", filepath);
+	
+	while (fgets(buf, sizeof(buf), F))
+	{
+		if (!strncasecmp(buf, "rpcuser=", 8))
+			rpcuser = trimmed_strdup(&buf[8]);
+		else
+		if (!strncasecmp(buf, "rpcpassword=", 12))
+			rpcpass = trimmed_strdup(&buf[12]);
+		else
+		if (!strncasecmp(buf, "rpcport=", 8))
+			rpcport = atoi(&buf[8]);
+		else
+		if (!strncasecmp(buf, "rpcssl=", 7))
+			rpcssl = atoi(&buf[7]);
+		else
+			continue;
+		if (rpcuser && rpcpass && rpcport && rpcssl != -101)
+			break;
+	}
+	
+	fclose(F);
+	
+	if (!rpcpass)
+	{
+		applog(LOG_DEBUG, "%s: Did not find rpcpassword in %s", "add_local_gbt", filepath);
+err:
+		free(rpcuser);
+		free(rpcpass);
+		goto out;
+	}
+	
+	if (!rpcport)
+		rpcport = 8332;
+	
+	if (rpcssl == -101)
+		rpcssl = 0;
+	
+	const int uri_sz = 0x30;
+	char * const uri = malloc(uri_sz);
+	snprintf(uri, uri_sz, "http%s://localhost:%d/#getcbaddr#allblocks", rpcssl ? "s" : "", rpcport);
+	
+	applog(LOG_DEBUG, "Local bitcoin RPC server on port %d found in %s", rpcport, filepath);
+	
+	pool = add_pool();
+	if (!pool)
+	{
+		applog(LOG_ERR, "%s: Error adding pool for bitcoin configured in %s", "add_local_gbt", filepath);
+		goto err;
+	}
+	
+	if (!rpcuser)
+		rpcuser = "";
+	
+	pool->quota = 0;
+	adjust_quota_gcd();
+	pool->failover_only = true;
+	add_pool_details(pool, false, uri, rpcuser, rpcpass);
+	
+	applog(LOG_NOTICE, "Added local bitcoin RPC server on port %d as pool %d", rpcport, pool->pool_no);
+	
+out:
+	return false;
+}
+
+static
+void add_local_gbt(void)
+{
+	appdata_file_call("Bitcoin", "bitcoin.conf", _add_local_gbt, NULL);
+}
+
 #if defined(unix) || defined(__APPLE__)
 static void fork_monitor()
 {
@@ -12260,6 +12373,9 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
+	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
+		add_local_gbt();
+	
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
 #ifdef HAVE_CURSES

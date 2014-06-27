@@ -1249,6 +1249,7 @@ struct pool {
 	bool probed;
 	int force_rollntime;
 	enum pool_enable enabled;
+	bool failover_only;  // NOTE: Ignored by failover and loadbalance strategies (use priority and quota respectively)
 	bool submit_old;
 	bool removed;
 	bool lp_started;
