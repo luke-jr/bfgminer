@@ -2334,7 +2334,7 @@ void bitforce_delete_last_n_work(struct thr_info * const thr, int n)
 }
 
 static
-void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobinfo ** const processing_p, const size_t keysz)
+void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobinfo ** const processing_p, const size_t keysz, const bool ignore_race)
 {
 	struct cgpu_info * const bitforce = thr->cgpu;
 	struct bitforce_data * const data = bitforce->device_data;
@@ -2386,7 +2386,7 @@ void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobi
 		HASH_ITER(hh, *processing_p, item, this)
 		{
 			bin2hex(hex, &item->key[0], keysz);
-			if (item->instances)
+			if (item->instances && !ignore_race)
 				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device %s unknown work %s (%d)", bitforce->proc_repr, "is processing", hex, item->instances);
 			if (item->flushed_instances)
 				applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device %s unknown work %s (%d)", bitforce->proc_repr, "flushed", hex, item->flushed_instances);
@@ -2444,7 +2444,7 @@ void bitforce_process_flb_result(struct thr_info * const thr, int inproc, int fl
 		_bitforce_queue_flush_add_to_processing(&processing, this, keysz, !(i < inproc));
 	}
 	
-	bitforce_queue_flush_sanity_check(thr, &processing, keysz);
+	bitforce_queue_flush_sanity_check(thr, &processing, keysz, false);
 	
 	bitforce_finish_flush(thr, flushed);
 }
@@ -2544,7 +2544,8 @@ void bitforce_queue_flush(struct thr_info *thr)
 	bitforce_queue_do_results(thr);
 	
 	if (buf2)
-		bitforce_queue_flush_sanity_check(thr, &processing, keysz);
+		// There is a race condition where the flush may have reported a job as in progress even though we completed and processed its results just now - so we just silence the sanity check
+		bitforce_queue_flush_sanity_check(thr, &processing, keysz, true);
 }
 
 static
