@@ -1063,14 +1063,22 @@ keepwaiting:
 	// Only ICA_GETS_OK gets here
 	
 	if (likely(!was_hw_error))
+	{
 		submit_nonce(thr, nonce_work, nonce);
-	else
-		inc_hw_errors(thr, state->last_work, nonce);
-	icarus_transition_work(state, work);
 
-	hash_count = (nonce & info->nonce_mask);
-	hash_count++;
-	hash_count *= info->fpga_count;
+		// Calculate hashrate based on info->nonce_mask, nonce was valid
+		hash_count = (nonce & info->nonce_mask);
+		hash_count++;
+		hash_count *= info->fpga_count;
+	}
+	else
+	{
+		inc_hw_errors(thr, state->last_work, nonce);
+
+		// Estimate hashrate based on info->Hs, nonce was invalid
+		hash_count = ((double)(elapsed.tv_sec) + ((double)(elapsed.tv_usec))/((double)1000000)) / info->Hs;
+	}
+	icarus_transition_work(state, work);
 
 	applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
 	       icarus->proc_repr,
