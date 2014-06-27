@@ -413,27 +413,7 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 
 static uint32_t mask(int work_division)
 {
-	uint32_t nonce_mask = 0x7fffffff;
-
-	// yes we can calculate these, but this way it's easy to see what they are
-	switch (work_division) {
-	case 1:
-		nonce_mask = 0xffffffff;
-		break;
-	case 2:
-		nonce_mask = 0x7fffffff;
-		break;
-	case 4:
-		nonce_mask = 0x3fffffff;
-		break;
-	case 8:
-		nonce_mask = 0x1fffffff;
-		break;
-	default:
-		quit(1, "Invalid2 work_division (%d) must be 1, 2, 4 or 8", work_division);
-	}
-
-	return nonce_mask;
+	return 0xffffffff / upper_power_of_two(work_division);
 }
 
 // Number of bytes remaining after reading a nonce from Icarus
@@ -512,42 +492,48 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	int ob_size = strlen(info->golden_ob) / 2;
 	unsigned char ob_bin[ob_size];
 	BFGINIT(info->ob_size, ob_size);
-	
-	hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
-	icarus_write(fd, ob_bin, sizeof(ob_bin));
-	cgtime(&tv_start);
 
-	memset(nonce_bin, 0, sizeof(nonce_bin));
-	// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
-	// We will then compare the bytes left in fd with info->read_size to determine
-	// if this is a valid device
-	icarus_gets(nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
-	
-	// How many bytes were left after reading the above nonce
-	int bytes_left = icarus_excess_nonce_size(fd, info);
-	
-	icarus_close(fd);
+	if (!info->ignore_golden_nonce)
+	{
+		hex2bin(ob_bin, info->golden_ob, sizeof(ob_bin));
+		icarus_write(fd, ob_bin, sizeof(ob_bin));
+		cgtime(&tv_start);
 
-	bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
-	if (strncmp(nonce_hex, info->golden_nonce, 8))
-	{
-		applog(LOG_DEBUG,
-			"%s: "
-			"Test failed at %s: get %s, should: %s",
-			api->dname,
-			devpath, nonce_hex, info->golden_nonce);
-		return false;
+		memset(nonce_bin, 0, sizeof(nonce_bin));
+		// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
+		// We will then compare the bytes left in fd with info->read_size to determine
+		// if this is a valid device
+		icarus_gets(nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
+
+		// How many bytes were left after reading the above nonce
+		int bytes_left = icarus_excess_nonce_size(fd, info);
+
+		icarus_close(fd);
+
+		bin2hex(nonce_hex, nonce_bin, sizeof(nonce_bin));
+		if (strncmp(nonce_hex, info->golden_nonce, 8))
+		{
+			applog(LOG_DEBUG,
+				   "%s: "
+				   "Test failed at %s: get %s, should: %s",
+				   api->dname,
+				   devpath, nonce_hex, info->golden_nonce);
+			return false;
+		}
+
+		if (info->read_size - ICARUS_NONCE_SIZE != bytes_left)
+		{
+			applog(LOG_DEBUG,
+				   "%s: "
+				   "Test failed at %s: expected %d bytes, got %d",
+				   api->dname,
+				   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
+			return false;
+		}
 	}
-		
-	if (info->read_size - ICARUS_NONCE_SIZE != bytes_left) 
-	{
-		applog(LOG_DEBUG,
-			   "%s: "
-			   "Test failed at %s: expected %d bytes, got %d",
-			   api->dname,
-			   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
-		return false;
-	}
+	else
+		icarus_close(fd);
+
 	
 	applog(LOG_DEBUG,
 		"%s: "
@@ -1282,8 +1268,6 @@ const char *icarus_set_work_division(struct cgpu_info * const proc, const char *
 {
 	struct ICARUS_INFO * const info = proc->device_data;
 	const int work_division = atoi(newvalue);
-	if (!(work_division == 1 || work_division == 2 || work_division == 4 || work_division == 8))
-		return "Invalid work_division: must be 1, 2, 4 or 8";
 	if (info->user_set & IUS_FPGA_COUNT)
 	{
 		if (info->fpga_count > work_division)
