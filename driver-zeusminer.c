@@ -77,12 +77,6 @@ bool zeusminer_detect_one(const char *devpath)
 		.baud = ZEUSMINER_IO_SPEED,
 		.timing_mode = MODE_DEFAULT,
 		.do_icarus_timing = true,
-		
-		// 3 bits of 32 bits nonce are reserved for cores' combination
-		// 10 bits of 32 bits nonce are reserved for chips' combination
-		// the nonce range is split into 2^(10+3) parts
-		.work_division = 8192,
-		
 		.probe_read_count = 5,
 		.golden_nonce = scrypt_golden_nonce,
 		.chips = ZEUSMINER_CHIPS_COUNT,
@@ -92,6 +86,7 @@ bool zeusminer_detect_one(const char *devpath)
 	//pick up any user-defined settings passed in via --set
 	drv_set_defaults(drv, zeusminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
 	
+	info->work_division = upper_power_of_two_u32(info->chips * ZEUSMINER_CHIP_CORES);
 	info->fpga_count = info->chips * ZEUSMINER_CHIP_CORES;
 	
 	//send the requested Chip Speed with the detect golden OB
