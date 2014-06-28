@@ -708,14 +708,14 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 // end
 
 #ifdef WORDS_BIGENDIAN
-#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, sz))
+#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
 #  define LOCAL_swap32be(type, var, sz)  ;
 #  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
 #  define LOCAL_swap32le(type, var, sz)  LOCAL_swap32(type, var, sz)
 #else
 #  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
 #  define LOCAL_swap32be(type, var, sz)  LOCAL_swap32(type, var, sz)
-#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, sz))
+#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
 #  define LOCAL_swap32le(type, var, sz)  ;
 #endif
 
