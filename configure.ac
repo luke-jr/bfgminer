@@ -484,19 +484,17 @@ driverlist="$driverlist zeusminer"
 AC_ARG_ENABLE([zeusminer],
 	[AC_HELP_STRING([--disable-zeusminer],[Compile support for ZeusMiner (default enabled with scrypt)])],
 	[zeusminer=$enableval],
-	[zeusminer=$scrypt])
+	[zeusminer=$ddauto])
 if test "x$zeusminer" = "xno"; then
 	true
-elif test "x$icarus" = "xyes"; then
-	if test "x$scrypt" = "xno"; then
-		AC_MSG_ERROR([You explicitly enabled ZeusMiner, but did not enable scrypt])
-	else
-		zeusminer=yes
-	fi
-elif test "x$zeusminer" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled ZeusMiner])
-else
+elif test "x$icarus$scrypt" = "xyesyes"; then
+	zeusminer=yes
+elif test "x$zeusminer" = "xauto"; then
 	zeusminer=no
+elif test "x$scrypt" = "xno"; then
+	AC_MSG_ERROR([You explicitly enabled ZeusMiner, but did not enable scrypt])
+elif test "x$icarus" = "xno"; then
+	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled ZeusMiner])
 fi
 if test "x$zeusminer" = "xyes"; then
 	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
