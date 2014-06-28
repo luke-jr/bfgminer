@@ -62,6 +62,10 @@ config PACKAGE_$(PKG_NAME)_libusb
 	bool "Build with libusb support (X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_scrypt
+	bool "Build with scrypt algorithm support"
+	depends on PACKAGE_$(PKG_NAME)
+	default y
 endef
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_curses
@@ -84,6 +88,10 @@ endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --disable-x6500 --disable-ztex
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_scrypt
+CONFIGURE_ARGS += --enable-scrypt
 endif
 
 TARGET_CFLAGS += -std=gnu99
