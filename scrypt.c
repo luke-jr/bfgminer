@@ -415,10 +415,10 @@ void scrypt_regenhash(struct work *work)
 	uint32_t *ohash = (uint32_t *)(work->hash);
 
 	be32enc_vect(data, (const uint32_t *)work->data, 19);
-	data[19] = htobe32(*nonce);
+	data[19] = swab32(*nonce);
 	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	flip32(ohash, ohash);
+	swap32tobe(ohash, ohash, 8);
 }
 
 static const uint32_t diff1targ = 0x0000ffff;
@@ -431,10 +431,10 @@ int scrypt_test(unsigned char *pdata, const unsigned char *ptarget, uint32_t non
 	char *scratchbuf;
 
 	be32enc_vect(data, (const uint32_t *)pdata, 19);
-	data[19] = htobe32(nonce);
+	data[19] = swab32(nonce);
 	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	tmp_hash7 = be32toh(ohash[7]);
+	tmp_hash7 = swab32(ohash[7]);
 
 	applog(LOG_DEBUG, "htarget %08lx diff1 %08lx hash %08lx",
 				(long unsigned int)Htarg,
