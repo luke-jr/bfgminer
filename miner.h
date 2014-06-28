@@ -745,6 +745,18 @@ void bswap_96p(void * const dest_p, const void * const src_p)
 	dest[2] = bswap_32(src[0]);
 }
 
+static inline
+void bswap_32mult(void * const dest_p, const void * const src_p, const size_t sz)
+{
+	const uint32_t *s = src_p;
+	const uint32_t *s_end = &s[sz];
+	uint32_t *d = dest_p;
+	d = &d[sz - 1];
+	
+	for ( ; s < s_end; ++s, --d)
+		*d = bswap_32(*s);
+}
+
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
 #define WATCHDOG_INTERVAL  2

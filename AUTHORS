@@ -3,6 +3,7 @@ GPU mining and refactor: Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbg
 AntMiner driver: Nate Woolls <nwoolls@gmail.com> and Lingchao Xu <lingchao.xu@bitmaintech.com>
 DualMiner driver: Nate Woolls <nwoolls@gmail.com> and Dualminer Team <dualminer@broadeng.net>
 GridSeed driver: Nate Woolls <nwoolls@gmail.com> and GridSeed Team <develop@gridseed.com>
+ZeusMiner driver: Nate Woolls <nwoolls@gmail.com> and ZeusMiner Team <cs@zeusminer.com>
 Bitfury GPIO-based drivers: Bitfury and Anatoly Legkodymov <legko777@fastmail.fm>
 Big Picture Mining and TwinFury drivers: Andreas Auer <aauer1@gmail.com>
 Avalon and Icarus drivers: Xiangfu <xiangfu@openmobilefree.net>
