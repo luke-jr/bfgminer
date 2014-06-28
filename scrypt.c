@@ -480,7 +480,7 @@ void scrypt_regenhash(struct work *work)
 	data[19] = htobe32(*nonce);
 	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	flip32(ohash, ohash);
+	swap32tobe(ohash, ohash, 8);
 }
 
 /* Used by test_nonce functions */
@@ -492,7 +492,7 @@ void scrypt_hash_data(unsigned char * const out_hash, const unsigned char * cons
 	be32enc_vect(data, (const uint32_t *)pdata, 20);
 	scratchbuf = alloca(SCRATCHBUF_SIZE);
 	scrypt_1024_1_1_256_sp(data, scratchbuf, ohash);
-	swap32yes(out_hash, ohash, 32/4);
+	swap32tobe((void*)out_hash, ohash, 32/4);
 }
 
 bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *pmidstate,
