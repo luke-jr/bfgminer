@@ -520,11 +520,10 @@ bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *p
 
 		data[19] = n;
 		scrypt_1024_1_1_256_sp(data, scratchbuf, ostate);
-		tmp_hash7 = be32toh(ostate[7]);
+		tmp_hash7 = swab32(ostate[7]);
 
 		if (unlikely(tmp_hash7 <= Htarg)) {
-			// nonce passed in data is always little-endian, while we are always hashing in big endian
-			*nonce = swab32(n);
+			*nonce = htobe32(n);
 			ret = true;
 			break;
 		}
