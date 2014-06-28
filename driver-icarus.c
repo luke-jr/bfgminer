@@ -881,7 +881,6 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	double Hs, W, fullnonce;
 	int read_count;
 	bool limited;
-	int64_t estimate_hashes;
 	uint32_t values;
 	int64_t hash_count_range;
 
@@ -1025,46 +1024,56 @@ keepwaiting:
 
 	// OK, done starting Icarus's next job... now process the last run's result!
 
-	// aborted before becoming idle, get new work
-	if (ret == ICA_GETS_TIMEOUT || ret == ICA_GETS_RESTART) {
+	if (ret == ICA_GETS_OK && !was_hw_error)
+	{
+		submit_nonce(thr, nonce_work, nonce);
+		
 		icarus_transition_work(state, work);
-		// ONLY up to just when it aborted
-		// We didn't read a reply so we don't subtract ICARUS_READ_TIME
-		estimate_hashes = ((double)(elapsed.tv_sec)
-					+ ((double)(elapsed.tv_usec))/((double)1000000)) / info->Hs;
+		
+		hash_count = (nonce & info->nonce_mask);
+		hash_count++;
+		hash_count *= info->fpga_count;
+
+		applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
+		       icarus->proc_repr,
+		       nonce,
+		       (uint64_t)hash_count,
+		       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
+	}
+	else
+	{
+		double estimate_hashes = elapsed.tv_sec;
+		estimate_hashes += ((double)elapsed.tv_usec) / 1000000.;
+		
+		if (ret == ICA_GETS_OK)
+		{
+			inc_hw_errors(thr, state->last_work, nonce);
+			estimate_hashes -= ICARUS_READ_TIME(info->baud, info->read_size);
+		}
+		
+		icarus_transition_work(state, work);
+		
+		estimate_hashes /= info->Hs;
 
 		// If some Serial-USB delay allowed the full nonce range to
 		// complete it can't have done more than a full nonce
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
 
-		applog(LOG_DEBUG, "%"PRIpreprv" no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
+		applog(LOG_DEBUG, "%"PRIpreprv" %s nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
 		       icarus->proc_repr,
+		       (ret == ICA_GETS_OK) ? "bad" : "no",
 		       (uint64_t)estimate_hashes,
 		       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
 
 		hash_count = estimate_hashes;
-		goto out;
+		
+		if (ret != ICA_GETS_OK)
+			goto out;
 	}
 
 	// Only ICA_GETS_OK gets here
 	
-	if (likely(!was_hw_error))
-		submit_nonce(thr, nonce_work, nonce);
-	else
-		inc_hw_errors(thr, state->last_work, nonce);
-	icarus_transition_work(state, work);
-
-	hash_count = (nonce & info->nonce_mask);
-	hash_count++;
-	hash_count *= info->fpga_count;
-
-	applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
-	       icarus->proc_repr,
-	       nonce,
-	       (uint64_t)hash_count,
-	       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
-
 	if (info->do_default_detection && elapsed.tv_sec >= DEFAULT_DETECT_THRESHOLD) {
 		int MHs = (double)hash_count / ((double)elapsed.tv_sec * 1e6 + (double)elapsed.tv_usec);
 		--info->do_default_detection;
