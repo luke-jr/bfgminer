@@ -3289,7 +3289,7 @@ static void adj_width(int var, int *length);
 static int awidth = 1, rwidth = 1, swidth = 1, hwwidth = 1;
 
 static
-void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, int wnotaccepted, int waccepted, int hwerrs, int bad_diff1, int allnonces)
+void format_statline(char *buf, size_t bufsz, const char *cHr, const char *aHr, const char *uHr, int accepted, int rejected, int stale, double wnotaccepted, double waccepted, int hwerrs, double bad_diff1, double allnonces)
 {
 	char rejpcbuf[6];
 	char bnbuf[6];
