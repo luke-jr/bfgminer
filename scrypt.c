@@ -93,7 +93,7 @@ SHA256_Transform(uint32_t * state, const uint32_t block[16], int swap)
 	/* 1. Prepare message schedule W. */
 	if(swap)
 		for (i = 0; i < 16; i++)
-			W[i] = htobe32(block[i]);
+			W[i] = swab32(block[i]);
 	else
 		memcpy(W, block, 64);
 	for (i = 16; i < 64; i += 2) {
@@ -235,6 +235,7 @@ PBKDF2_SHA256_80_128(const uint32_t * passwd, uint32_t * buf)
 	memcpy(PShoctx.buf+8, outerpad, 32);
 
 	/* Iterate through the blocks. */
+	swap32tole(PShictx.buf, PShictx.buf, 0x10);
 	for (i = 0; i < 4; i++) {
 		uint32_t istate[8];
 		uint32_t ostate[8];
@@ -246,7 +247,7 @@ PBKDF2_SHA256_80_128(const uint32_t * passwd, uint32_t * buf)
 
 		memcpy(ostate, PShoctx.state, 32);
 		SHA256_Transform(ostate, PShoctx.buf, 0);
-		be32enc_vect(buf+i*8, ostate, 8);
+		swap32yes(buf+i*8, ostate, 8);
 	}
 }
 
