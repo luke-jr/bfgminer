@@ -403,6 +403,55 @@ static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint
 	PBKDF2_SHA256_80_128_32(input, X, ostate);
 }
 
+static
+void bin2hex32(char * const out_hex, const uint32_t * const data, const size_t n)
+{
+	uint32_t dataswap[n];
+	swap32tobe(dataswap, data, n);
+	bin2hex(out_hex, dataswap, n * 4);
+}
+
+void test_scrypt(void)
+{
+	static const uint32_t input[20] = {0};
+	uint32_t X[32];
+	char hex[257];
+	{
+		PBKDF2_SHA256_80_128(input, X);
+		static const uint32_t expect_X[] = {
+			0x0ea9ea2c, 0x458a4459, 0xac2e8931, 0x227bb8f5,
+			0xf2b1fe63, 0x65f4ca78, 0xc13ee80a, 0x9dd6a8b9,
+			0x37a70962, 0xce24556e, 0x169081af, 0x73a06c4c,
+			0x7feffbbe, 0x90188614, 0x499f4152, 0x174f00cf,
+			0x5a2f89a9, 0x9f98d171, 0x2ff50782, 0xc8c551b1,
+			0xcf4afba2, 0x089745f0, 0x37553b1f, 0xbca60eec,
+			0x193ed225, 0x0d4c2da1, 0x4a670674, 0x4420645c,
+			0x432ead7e, 0xa70b8496, 0x1d992334, 0x842b14de,
+		};
+		if (memcmp(expect_X, X, sizeof(expect_X)))
+		{
+			bin2hex32(hex, X, 32);
+			applog(LOG_ERR, "%s: %s failed (got %s)", __func__, "PBKDF2_SHA256_80_128", hex);
+		}
+	}
+	{
+		for (int i = 0; i < 0x10; ++i)
+			X[i] = i;
+		salsa20_8(X, input);
+		static const uint32_t expect_X[] = {
+			0x4fdd18f5, 0xe08388b9, 0xc05479a8, 0x7086ab5c,
+			0x0888bb83, 0x75102855, 0x58a08522, 0x166cf522,
+			0x0f2a4a9d, 0x232514d2, 0x0bc658d7, 0x681b4136,
+			0x0586532d, 0xd271b814, 0x2a045976, 0x5d47fa5a,
+		};
+		if (memcmp(expect_X, X, sizeof(expect_X)))
+		{
+			bin2hex32(hex, X, 16);
+			applog(LOG_ERR, "%s; %s failed (got %s)", __func__, "salsa20_8", hex);
+		}
+	}
+}
+
 /* 131583 rounded up to 4 byte alignment */
 #define SCRATCHBUF_SIZE	(131584)
 

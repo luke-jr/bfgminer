@@ -6,6 +6,7 @@
 #include "miner.h"
 
 #ifdef USE_SCRYPT
+extern void test_scrypt(void);
 extern void scrypt_hash_data(unsigned char *out_hash, const unsigned char *data);
 extern void scrypt_regenhash(struct work *work);
 

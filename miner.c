@@ -12259,6 +12259,9 @@ int main(int argc, char *argv[])
 		test_intrange();
 		test_decimal_width();
 		test_domain_funcs();
+#ifdef USE_SCRYPT
+		test_scrypt();
+#endif
 		test_target();
 		test_uri_get_param();
 		utf8_test();
