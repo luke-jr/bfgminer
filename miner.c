@@ -5005,6 +5005,9 @@ void get_benchmark_work(struct work *work)
 	
 	memcpy(&work->data[ 0], blkhdr, 80);
 	memcpy(&work->data[80], workpadding_bin, 48);
+	char hex[161];
+	bin2hex(hex, work->data, 80);
+	applog(LOG_DEBUG, "Generated benchmark header %s", hex);
 	calc_midstate(work);
 	memcpy(work->target, pool->swork.target, sizeof(work->target));
 	
