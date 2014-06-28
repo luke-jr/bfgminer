@@ -403,6 +403,9 @@ static void scrypt_1024_1_1_256_sp(const uint32_t* input, char* scratchpad, uint
 	PBKDF2_SHA256_80_128_32(input, X, ostate);
 }
 
+/* 131583 rounded up to 4 byte alignment */
+#define SCRATCHBUF_SIZE	(131584)
+
 static
 void bin2hex32(char * const out_hex, const uint32_t * const data, const size_t n)
 {
@@ -450,10 +453,20 @@ void test_scrypt(void)
 			applog(LOG_ERR, "%s; %s failed (got %s)", __func__, "salsa20_8", hex);
 		}
 	}
+	{
+		char scratchpad[SCRATCHBUF_SIZE];
+		scrypt_1024_1_1_256_sp(input, scratchpad, X);
+		static const uint32_t expect_X[] = {
+			0x161d0876, 0xf3b93b10, 0x48cda1bd, 0xeaa7332e,
+			0xe210f713, 0x1b42013c, 0xb43913a6, 0x553a4b69,
+		};
+		if (memcmp(expect_X, X, sizeof(expect_X)))
+		{
+			bin2hex32(hex, X, 8);
+			applog(LOG_ERR, "%s: %s failed (got %s)", __func__, "scrypt_1024_1_1_256_sp", hex);
+		}
+	}
 }
-
-/* 131583 rounded up to 4 byte alignment */
-#define SCRATCHBUF_SIZE	(131584)
 
 void scrypt_regenhash(struct work *work)
 {
