@@ -2362,6 +2362,7 @@ void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobi
 		{
 			applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device is missing queued job! %s", bitforce->proc_repr, hex);
 			work_list_del(&thr->work_list, work);
+			--data->queued;
 			continue;
 		}
 		if (item->instances)
@@ -2373,6 +2374,7 @@ void bitforce_queue_flush_sanity_check(struct thr_info * const thr, struct _jobi
 		{
 			--item->flushed_instances;
 			work_list_del(&thr->work_list, work);
+			// NOTE: data->queued is decremented later via bitforce_finish_flush
 			applog(LOG_DEBUG, "%"PRIpreprv": Queue flush: %s flushed", bitforce->proc_repr, hex);
 		}
 		if (likely(!(item->instances + item->flushed_instances)))
@@ -2460,6 +2462,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	struct bitforce_data *data = bitforce->device_data;
 	char *buf = &data->noncebuf[0], *buf2 = NULL;
 	const char *cmd = "ZqX";
+	int inproc = -1;
 	unsigned flushed;
 	struct _jobinfo *processing = NULL, *this;
 	
@@ -2478,17 +2481,19 @@ void bitforce_queue_flush(struct thr_info *thr)
 	else
 	if ((!strncasecmp(buf, "COUNT:", 6)) && (buf2 = strstr(buf, "FLUSHED:")) )
 	{
+		inproc = atoi(&buf[6]);
 		flushed = atoi(&buf2[8]);
 		buf2 = next_line(buf2);
 	}
 	else
 	if ((!strncasecmp(buf, "BIN-InP:", 8)) && (buf2 = strstr(buf, "FLUSHED:")) )
 	{
-		const int
 		inproc = atoi(&buf[8]);
 		flushed = atoi(&buf2[8]);
+		if (unlikely(data->queued != inproc + flushed))
+			applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device work count mismatch (dev inproc=%d, dev flushed=%u, queued=%d)", bitforce->proc_repr, inproc, flushed, data->queued);
 		bitforce_process_flb_result(thr, inproc, flushed);
-		return;
+		goto final;
 	}
 	else
 	if (!strncasecmp(buf, "OK", 2))
@@ -2546,6 +2551,13 @@ void bitforce_queue_flush(struct thr_info *thr)
 	if (buf2)
 		// There is a race condition where the flush may have reported a job as in progress even though we completed and processed its results just now - so we just silence the sanity check
 		bitforce_queue_flush_sanity_check(thr, &processing, keysz, true);
+	
+final:
+	if (unlikely(inproc != -1 && inproc != data->queued))
+	{
+		applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device work inprogress count mismatch (dev inproc=%d, queued=%d)", bitforce->proc_repr, inproc, data->queued);
+		data->queued = inproc;
+	}
 }
 
 static
