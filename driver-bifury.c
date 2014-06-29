@@ -70,7 +70,7 @@ parse:
 
 struct bifury_state {
 	bytes_t buf;
-	uint32_t last_work_id;
+	work_device_id_t last_work_id;
 	int needwork;
 	bool has_needwork;
 	uint8_t *osc6_bits;

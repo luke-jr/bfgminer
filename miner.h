@@ -1355,6 +1355,9 @@ struct pool {
 #define GETWORK_MODE_STRATUM 'S'
 #define GETWORK_MODE_GBT 'G'
 
+typedef unsigned work_device_id_t;
+#define PRIwdi "04x"
+
 struct work {
 	unsigned char	data[128];
 	unsigned char	midstate[32];
@@ -1391,7 +1394,7 @@ struct work {
 
 	unsigned char	work_restart_id;
 	int		id;
-	int		device_id;
+	work_device_id_t device_id;
 	UT_hash_handle hh;
 	
 	// Please don't use this if it's at all possible, I'd like to get rid of it eventually.

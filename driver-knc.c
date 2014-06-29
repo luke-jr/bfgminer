@@ -598,7 +598,7 @@ void knc_poll(struct thr_info * const thr)
 			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
 			work->device_id = knc->next_id++ & 0x7fff;
-			HASH_ADD_INT(knc->devicework, device_id, work);
+			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
 			if (!--workaccept)
 				break;
 		}
