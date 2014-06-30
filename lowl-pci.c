@@ -158,7 +158,7 @@ const void *lowl_pci_get_data_from_words(struct lowl_pci_handle * const lph, voi
 	const off_t offset8  = offset % 4;
 	const size_t words = (sz + offset8 + 3) / 4;
 	const uint32_t * const wdata = lowl_pci_get_words(lph, buf, words, bar, offset32);
-	swap32tobe(buf, wdata, words);
+	swap32tobe((uint32_t *)buf, wdata, words);
 	return &buf[offset8];
 }
 
