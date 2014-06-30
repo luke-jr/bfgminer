@@ -1,3 +1,12 @@
+bfgminer (4.3.0-0precise1) precise; urgency=low
+
+  * URI parameter #getcbaddr to request coinbase address from bitcoind or compatible servers for solo mining.
+  * When running on systems with a configured Bitcoin Core server, it is automatically configured as a final failover and used for local block submission (GBT pools only) to reduce the risk of a stale block.
+  * bitforce: Implement some last-minute Monarch interface changes.
+  * zeusminer: New driver for these scrypt ASIC devices.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 30 Jun 2014 14:55:06 -0000
+
 bfgminer (4.2.0-0precise1) precise; urgency=low
 
   * rockminer: New driver for ROCKMINER R-BOX.

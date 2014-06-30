@@ -1,3 +1,95 @@
+BFGMiner Version 4.3.0 - June 30, 2014
+
+- openwrt: Disable libusb via --without-libusb
+- Avoid waiting for local bitcoind test if we have other pools defined already
+- lowl-pci: Silence warning on big endian
+- bitfury: Portability fixes, including big endian compatibility
+- Bugfix: bifury: strtoll already implies native endian, no need to flip it
+again
+- bitforce: Additional sanity checks, including ensuring our final queued count
+matches that seen by the device
+- bitforce: Go back to ignoring race-triggered sanity check warnings for ZqX
+- bitforce: Refactor FLB and queue flush sanity checks
+- bitforce: Use binary FLB protocol for Monarch
+- bitforce: Add bitforce_read function to deal with binary responses
+- bitforce: Support for queue id based jobs
+- Make work->device_id unsigned
+- bitforce: Support device explicit "Scan Interval" to override hardcoded sleep
+times
+- bitforce: Allow queued_max to exceed BITFORCE_MAX_QUEUED_MAX iff the firmware
+provides an explicit Queue Depth
+- bitforce: Fix bitforce_chips_to_plan_for to work beyond 32 chips
+- configure: Clean up zeusminer logic
+- icarus: Use estimated hashes for hw errors (more accurate hashrate for devices
+where hw error values vary significantly from hashes performed)
+- zeusminer: Bugfix: calculate work_division based on chips and cores
+- Replace swabn with bswap_32mult (matching swap32yes parameters and
+performance)
+- Bugfix: zeusminer: Correctly encode job header regardless of native endian
+- zeusminer: support added for ZeusMiner scrypt ASICs
+- icarus: refactoring: commenting ICARUS_INFO members
+- icarus: Accept any power of two as a valid work_division
+- icarus: option added for Icarus-based drivers to ignore the golden nonce
+during probe
+- util: is_power_of_two function
+- Bugfix: Display proper statline R and HW error percents for values < 1
+- openwrt: Provide scrypt option
+- Benchmark: Debuglog headers generated
+- Bugfix: cpu: Fix scrypt CPU miner
+- Bugfix: scrypt: Fix scrypt hash postprocessing for big endian
+- Bugfix: scrypt: Correct endian handling in PBKDF2_SHA256_80_128
+- scrypt: Add unit test for scrypt_1024_1_1_256_sp
+- scrypt: Add unit tests for PBKDF2_SHA256_80_128 and salsa20_8
+- Bugfix: Copy ALL the data with swap32to<native>
+- Automatically add pool configured from bitcoin.conf for failover only
+- Add failover_only pool flag, to avoid using it regardless of strategy
+- Accept --default-config option to search and load default configuration files,
+even if user is specifying their own
+- Use appdata_file_call to find BFGMiner config file(s)
+- util: appdata_file_call and appdata_file_find_first functions
+- ccan: Update to latest version (which includes floatval option support)
+- Bugfix: Adapt quit function to new logging design
+- Workaround GCC 4.6 initialisation bugs with BYTES_INIT
+- Bugfix: Use int rather than ssize_t to type-match %d expectation
+- Minor refactor of text-only mode: avoid wasting bottom line of console, and
+save status lines as they are replaced by log items
+- Bugfix: Wake up wait_lpcurrent if its conditions for returning may have
+changed
+- Defer determining --quit-summary default until it is needed, so hotplugged
+devices affect it
+- Bugfix: In benchmark mode, only remove the new pools after putting them in the
+array, since the removal will try to remove it from the array
+- Bugfix: Initialise struct pool in add_pool rather than halfway through startup
+- URI parameter #getcbaddr to request coinbase address from bitcoind or
+compatible servers
+- pool_set_uri function
+- util: bytes_eq and bytes_assimilate
+- Replace struct _cbscript_t with bytes_t for simplicity
+- Bugfix: Parse userpass option with strchr rather than strtok to avoid
+usernameless passwords getting into the username field and being displayed
+- Bugfix: Free old coinbase script before setting a new one
+- util: upper_power_of_two_u32 function
+- Avoid unnecessarily finding drivers in a loop
+- lowl-pci: Never probe via -S *:all
+- configure: Succeed even if the libblkmaker submodule is missing (only
+--with-system-libblkmaker)
+- rockminer: Reset task timeout when queuing work
+- rockminer: When we detect a task failure, check if we ought to grab a new work
+rather than resend
+- rockminer: Add a time limit before resending work even outside of midtask
+state
+- Bugfix: rockminer: Keep count of requested jobs properly
+- make-release: Include ccan LICENSE symlinks as symlinks even in ZIP
+- make-release: Ensure ccan licenses get included in source
+- Bugfix: make-release: Correctly avoid unused parts of ccan
+- make-release: Do builds with the official source release, to test that it
+works
+- Bugfix: DevAPI: Make for_each_logical_proc work correctly
+- Avoid double hashing of shares
+- Create work_hash function to abstractly produce work->hash from work->data
+regardless of algorithm used
+
+
 BFGMiner Version 4.2.0 - June 11, 2014
 
 - Upgraded Windows libmicrohttpd from 0.9.35 to 0.9.38_pre33603
