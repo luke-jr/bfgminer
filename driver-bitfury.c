@@ -124,6 +124,7 @@ bool bitfury_init_oldbuf(struct cgpu_info * const proc, const uint32_t *inp)
 	struct bitfury_device * const bitfury = proc->device_data;
 	uint32_t * const oldbuf = &bitfury->oldbuf[0];
 	uint32_t * const buf = &bitfury->newbuf[0];
+	uint32_t *inp_new;
 	int i, differ, tried = 0;
 	
 	if (!inp)
@@ -137,8 +138,10 @@ tryagain:
 		return false;
 	}
 	++tried;
-	memcpy(buf, inp, 0x10 * 4);
-	inp = bitfury_just_io(bitfury);
+	swap32tole(buf, inp, 0x10);
+	inp_new = bitfury_just_io(bitfury);
+	swap32tole(inp_new, inp_new, 0x10);
+	inp = inp_new;
 	differ = -1;
 	for (i = 0; i < 0x10; ++i)
 	{
@@ -182,9 +185,9 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 	struct bitfury_payload payload = {
 		.midstate = "\x33\xfb\x46\xdc\x61\x2a\x7a\x23\xf0\xa2\x2d\x63\x31\x54\x21\xdc"
 		            "\xae\x86\xfe\xc3\x88\xc1\x9c\x8c\x20\x18\x10\x68\xfc\x95\x3f\xf7",
-		.m7    = 0xc3baafef,
-		.ntime = 0x326fa351,
-		.nbits = 0x6461011a,
+		.m7    = htole32(0xc3baafef),
+		.ntime = htole32(0x326fa351),
+		.nbits = htole32(0x6461011a),
 	};
 	bitfury_payload_to_atrvec(bitfury->atrvec, &payload);
 	return bitfury_init_oldbuf(proc, NULL);
@@ -428,7 +431,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	
 	for (j = 0; j < n_chips; ++j)
 	{
-		memcpy(rxbuf_copy[j], rxbuf[j], 0x11 * 4);
+		swap32tole(rxbuf_copy[j], rxbuf[j], 0x11);
 		rxbuf[j] = rxbuf_copy[j];
 	}
 	
