@@ -83,7 +83,7 @@ CONFIGURE_ARGS += --with-libmicrohttpd
 endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
-CONFIGURE_ARGS += --disable-x6500 --disable-ztex
+CONFIGURE_ARGS += --without-libusb
 endif
 
 TARGET_CFLAGS += -std=gnu99
