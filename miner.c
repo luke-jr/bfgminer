@@ -10947,8 +10947,9 @@ out:
 #endif
 
 static
-bool _add_local_gbt(const char * const filepath, void * __maybe_unused userp)
+bool _add_local_gbt(const char * const filepath, void *userp)
 {
+	const bool * const live_p = userp;
 	struct pool *pool;
 	char buf[0x100];
 	char *rpcuser = NULL, *rpcpass = NULL;
@@ -11012,7 +11013,7 @@ err:
 	pool->quota = 0;
 	adjust_quota_gcd();
 	pool->failover_only = true;
-	add_pool_details(pool, false, uri, rpcuser, rpcpass);
+	add_pool_details(pool, *live_p, uri, rpcuser, rpcpass);
 	
 	applog(LOG_NOTICE, "Added local bitcoin RPC server on port %d as pool %d", rpcport, pool->pool_no);
 	
@@ -11021,9 +11022,9 @@ out:
 }
 
 static
-void add_local_gbt(void)
+void add_local_gbt(bool live)
 {
-	appdata_file_call("Bitcoin", "bitcoin.conf", _add_local_gbt, NULL);
+	appdata_file_call("Bitcoin", "bitcoin.conf", _add_local_gbt, &live);
 }
 
 #if defined(unix) || defined(__APPLE__)
@@ -12380,7 +12381,7 @@ int main(int argc, char *argv[])
 #endif
 
 	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
-		add_local_gbt();
+		add_local_gbt(total_pools);
 	
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
