@@ -1,5 +1,6 @@
 BFGMiner Version 4.3.0 - June 30, 2014
 
+- Bugfix: zeusminer: Include config.h
 - openwrt: Disable libusb via --without-libusb
 - Avoid waiting for local bitcoind test if we have other pools defined already
 - lowl-pci: Silence warning on big endian
