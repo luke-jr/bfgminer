@@ -1,3 +1,14 @@
+BFGMiner Version 3.5.11 - June 30, 2014
+
+- Bugfix: Parse userpass option with strchr rather than strtok to avoid
+usernameless passwords getting into the username field and being displayed
+- Bugfix: Free old coinbase script before setting a new one
+- configure: Succeed even if the libblkmaker submodule is missing (only
+--with-system-libblkmaker)
+- make-release: Do builds with the official source release, to test that it
+works
+
+
 BFGMiner Version 3.5.10 - June 11, 2014
 
 - Upgraded Windows libmicrohttpd from 0.9.35 to 0.9.38_pre33603
