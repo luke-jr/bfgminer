@@ -1,3 +1,26 @@
+BFGMiner Version 3.10.4 - June 30, 2014
+
+- openwrt: Disable libusb via --without-libusb
+- Bugfix: bifury: strtoll already implies native endian, no need to flip it
+again
+- Bugfix: Display proper statline R and HW error percents for values < 1
+- Bugfix: cpu: Fix scrypt CPU miner
+- Bugfix: scrypt: Fix scrypt hash postprocessing for big endian
+- Bugfix: scrypt: Correct endian handling in PBKDF2_SHA256_80_128
+- Bugfix: Copy ALL the data with swap32to<native>
+- Bugfix: Wake up wait_lpcurrent if its conditions for returning may have
+changed
+- Bugfix: Initialise struct pool in add_pool rather than halfway through startup
+- Bugfix: Parse userpass option with strchr rather than strtok to avoid
+usernameless passwords getting into the username field and being displayed
+- Bugfix: Free old coinbase script before setting a new one
+- configure: Succeed even if the libblkmaker submodule is missing (only
+--with-system-libblkmaker)
+- make-release: Do builds with the official source release, to test that it
+works
+- Bugfix: DevAPI: Make for_each_logical_proc work correctly
+
+
 BFGMiner Version 3.10.3 - June 11, 2014
 
 - Upgraded Windows libmicrohttpd from 0.9.35 to 0.9.38_pre33603
