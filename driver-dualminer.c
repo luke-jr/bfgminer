@@ -329,7 +329,9 @@ void dualminer_drv_init()
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
 	dualminer_drv.set_device = dualminer_set_device;
-	++dualminer_drv.probe_priority;
+
+	// currently setup specifically to probe after ZeusMiner
+	dualminer_drv.probe_priority = -50;
 }
 
 struct device_drv dualminer_drv =

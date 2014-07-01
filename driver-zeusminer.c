@@ -240,7 +240,8 @@ void zeusminer_drv_init()
 	zeusminer_drv.job_prepare = zeusminer_job_prepare;
 	
 	// specify driver probe priority
-	++zeusminer_drv.probe_priority;
+	// currently setup specifically to probe before DualMiner
+	zeusminer_drv.probe_priority = -100;
 }
 
 struct device_drv zeusminer_drv = {
