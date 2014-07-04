@@ -2887,11 +2887,19 @@ void refresh_bitcoind_address(const bool fresh)
 			}
 		}
 		json = json_rpc_call(curl, pool->rpc_url, pool->rpc_userpass, getcbaddr_req, false, false, NULL, pool, true);
-		j2 = json_object_get(json, "error");
-		if (unlikely(!json_is_null(j2)))
+		if (unlikely((!json) || !json_is_null( (j2 = json_object_get(json, "error")) )))
 		{
+			const char *estrc;
 			char *estr = NULL;
-			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, json_string_value(j2) ?: (estr = json_dumps_ANY(j2, JSON_ENSURE_ASCII | JSON_SORT_KEYS)));
+			if (!(json && j2))
+				estrc = NULL;
+			else
+			{
+				estrc = json_string_value(j2);
+				if (!estrc)
+					estrc = estr = json_dumps_ANY(j2, JSON_ENSURE_ASCII | JSON_SORT_KEYS);
+			}
+			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, estrc);
 			free(estr);
 			continue;
 		}
