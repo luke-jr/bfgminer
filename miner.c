@@ -1053,6 +1053,9 @@ struct pool *add_pool(void)
 	adjust_quota_gcd();
 	
 	enable_pool(pool);
+	
+	if (!currentpool)
+		currentpool = pool;
 
 	return pool;
 }
