@@ -78,7 +78,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	json_error_t jerr;
 	struct work *work;
 	char *reply;
-	const char *hashesdone = NULL;
+	long long hashes_done = -1;
 	int ret;
 	
 	if (bytes_len(upbuf))
@@ -123,7 +123,11 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	cgpu = client->cgpu;
 	thr = cgpu->thr[0];
 	
-	hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+	{
+		const char * const hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+		if (hashesdone)
+			hashes_done = strtoll(hashesdone, NULL, 0);
+	}
 	
 	if (submit)
 	{
@@ -150,13 +154,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			else
 				rejreason = NULL;
 			
-			if (!hashesdone)
-			{
-				if (opt_scrypt)
-					hashesdone = "0x10000";
-				else
-					hashesdone = "0x100000000";
-			}
+			if (hashes_done == -1)
+				hashes_done = (double)0x100000000 * work->nonce_diff;
 		}
 		
 		reply = malloc(36 + idstr_sz);
@@ -186,8 +185,16 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		size_t replysz = 590 + idstr_sz;
 		
 		work = get_work(thr);
+		work->nonce_diff = client->desired_share_pdiff;
+		if (work->nonce_diff > work->work_difficulty)
+			work->nonce_diff = work->work_difficulty;
+		
 		reply = malloc(replysz);
-		memcpy(reply, "{\"error\":null,\"result\":{\"target\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000\",\"data\":\"", 108);
+		uint8_t target[0x20];
+		set_target_to_pdiff(target, work->nonce_diff);
+		memcpy(reply, "{\"error\":null,\"result\":{\"target\":\"", 34);
+		bin2hex(&reply[34], target, sizeof(target));
+		memcpy(&reply[98], "\",\"data\":\"", 10);
 		bin2hex(&reply[108], work->data, 128);
 		memcpy(&reply[364], "\",\"midstate\":\"", 14);
 		bin2hex(&reply[378], work->midstate, 32);
@@ -196,7 +203,6 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		memcpy(&reply[589 + idstr_sz], "}", 1);
 		if (opt_scrypt)
 		{
-			memset(&reply[90], 'f', 4);
 			replysz += 21;
 			reply = realloc(reply, replysz);
 			memmove(&reply[443 + 21], &reply[443], replysz - (443 + 21));
@@ -214,8 +220,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	}
 	
 out:
-	if (hashesdone)
-		hashes_done2(thr, strtoll(hashesdone, NULL, 0), NULL);
+	if (hashes_done != -1)
+		hashes_done2(thr, hashes_done, NULL);
 	
 	free(idstr);
 	if (json)
