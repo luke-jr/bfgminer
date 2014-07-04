@@ -502,6 +502,8 @@ static void applog_and_exit(const char *fmt, ...)
 char *devpath_to_devid(const char *devpath)
 {
 #ifndef WIN32
+	if (devpath[0] != '/')
+		return NULL;
 	struct stat my_stat;
 	if (stat(devpath, &my_stat))
 		return NULL;
