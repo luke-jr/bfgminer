@@ -60,6 +60,8 @@ static struct evconnlistener *_smm_listener;
 
 struct stratumsrv_conn_userlist {
 	struct proxy_client *client;
+	struct stratumsrv_conn *conn;
+	struct stratumsrv_conn_userlist *client_next;
 	struct stratumsrv_conn_userlist *next;
 };
 
@@ -394,8 +396,10 @@ void stratumsrv_mining_authorize(struct bufferevent * const bev, json_t * const 
 	struct stratumsrv_conn_userlist *ule = malloc(sizeof(*ule));
 	*ule = (struct stratumsrv_conn_userlist){
 		.client = client,
+		.conn = conn,
 	};
 	LL_PREPEND(conn->authorised_users, ule);
+	LL_PREPEND2(client->stratumsrv_connlist, ule, client_next);
 	
 	_stratumsrv_success(bev, idstr);
 }
@@ -563,7 +567,9 @@ void stratumsrv_client_close(struct stratumsrv_conn * const conn)
 	release_work2d_(conn->xnonce1_le);
 	LL_FOREACH_SAFE(conn->authorised_users, ule, uletmp)
 	{
+		struct proxy_client * const client = ule->client;
 		LL_DELETE(conn->authorised_users, ule);
+		LL_DELETE(client->stratumsrv_connlist, ule);
 		free(ule);
 	}
 	free(conn);

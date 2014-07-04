@@ -5,6 +5,10 @@
 
 #include "miner.h"
 
+#ifdef USE_LIBEVENT
+struct stratumsrv_conn_userlist;
+#endif
+
 extern struct device_drv proxy_drv;
 
 struct proxy_client {
@@ -13,6 +17,10 @@ struct proxy_client {
 	struct work *work;
 	struct timeval tv_hashes_done;
 	float desired_share_pdiff;
+	
+#ifdef USE_LIBEVENT
+	struct stratumsrv_conn_userlist *stratumsrv_connlist;
+#endif
 	
 	UT_hash_handle hh;
 };
