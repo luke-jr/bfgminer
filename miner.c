@@ -774,6 +774,9 @@ struct pool *add_pool(void)
 
 	pools = realloc(pools, sizeof(struct pool *) * (total_pools + 2));
 	pools[total_pools++] = pool;
+	
+	if (!currentpool)
+		currentpool = pool;
 
 	return pool;
 }
