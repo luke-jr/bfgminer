@@ -11009,9 +11009,11 @@ err:
 	if (rpcssl == -101)
 		rpcssl = 0;
 	
+	const bool have_cbaddr = bytes_len(&opt_coinbase_script);
+	
 	const int uri_sz = 0x30;
 	char * const uri = malloc(uri_sz);
-	snprintf(uri, uri_sz, "http%s://localhost:%d/#getcbaddr#allblocks", rpcssl ? "s" : "", rpcport);
+	snprintf(uri, uri_sz, "http%s://localhost:%d/%s#allblocks", rpcssl ? "s" : "", rpcport, have_cbaddr ? "" : "#getcbaddr");
 	
 	applog(LOG_DEBUG, "Local bitcoin RPC server on port %d found in %s", rpcport, filepath);
 	
