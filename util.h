@@ -721,6 +721,9 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 #define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
 
 
+extern int double_find_precision(double, double base);
+
+
 #define REPLACEMENT_CHAR (0xFFFD)
 #define U8_DEGREE "\xc2\xb0"
 #define U8_MICRO  "\xc2\xb5"
