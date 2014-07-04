@@ -131,6 +131,7 @@ static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 static bool have_at_least_one_getcbaddr;
 static bytes_t opt_coinbase_script = BYTES_INIT;
+static uint32_t coinbase_script_block_id;
 static uint32_t template_nonce;
 #endif
 #if BLKMAKER_VERSION > 0
@@ -2921,6 +2922,7 @@ void refresh_bitcoind_address(const bool fresh)
 			break;
 		}
 		bytes_assimilate(&opt_coinbase_script, &newscript);
+		coinbase_script_block_id = current_block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
 		break;
 	}
@@ -2965,12 +2967,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
-		if ((!tmpl->cbtxn) && !bytes_len(&opt_coinbase_script))
-		{
-			// We are about to fail here because we lack a coinbase transaction
-			// Try to get an address from bitcoind to use to avoid this
+		if ((!tmpl->cbtxn) && coinbase_script_block_id != current_block_id)
 			refresh_bitcoind_address(false);
-		}
 		if (bytes_len(&opt_coinbase_script))
 		{
 			bool newcb;
@@ -5824,7 +5822,6 @@ void work_check_for_block(struct work * const work)
 		found_blocks++;
 		work->mandatory = true;
 		applog(LOG_NOTICE, "Found block for pool %d!", work->pool->pool_no);
-		refresh_bitcoind_address(true);
 	}
 }
 
