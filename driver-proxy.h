@@ -5,6 +5,8 @@
 
 #include "miner.h"
 
+extern struct device_drv proxy_drv;
+
 struct proxy_client {
 	char *username;
 	struct cgpu_info *cgpu;

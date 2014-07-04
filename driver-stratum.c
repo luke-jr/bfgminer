@@ -587,6 +587,25 @@ void stratumsrv_event(struct bufferevent *bev, short events, void *p)
 }
 
 static
+const char *stratumsrv_init_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct stratumsrv_conn * const conn = proc->device_data;
+	
+	const double nv = atof(newvalue);
+	if (nv <= 0)
+		return "Invalid difficulty";
+	
+	conn->desired_share_pdiff = nv;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition stratumsrv_set_device_funcs_newconnect[] = {
+	{"diff", stratumsrv_init_diff, NULL},
+	{NULL},
+};
+
+static
 void stratumlistener(struct evconnlistener *listener, evutil_socket_t sock, struct sockaddr *addr, int len, void *p)
 {
 	struct stratumsrv_conn *conn;
@@ -597,6 +616,7 @@ void stratumlistener(struct evconnlistener *listener, evutil_socket_t sock, stru
 		.bev = bev,
 		.desired_share_pdiff = opt_scrypt ? (1./0x10000) : 1.,
 	};
+	drv_set_defaults(&proxy_drv, stratumsrv_set_device_funcs_newconnect, conn, NULL, NULL, 1);
 	LL_PREPEND(_ssm_connections, conn);
 	bufferevent_setcb(bev, stratumsrv_read, NULL, stratumsrv_event, conn);
 	bufferevent_enable(bev, EV_READ | EV_WRITE);
