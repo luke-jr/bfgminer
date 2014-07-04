@@ -58,6 +58,11 @@ static struct event_base *_smm_evbase;
 static bool _smm_running;
 static struct evconnlistener *_smm_listener;
 
+struct stratumsrv_conn_userlist {
+	struct proxy_client *client;
+	struct stratumsrv_conn_userlist *next;
+};
+
 struct stratumsrv_conn {
 	struct bufferevent *bev;
 	uint32_t xnonce1_le;
@@ -65,7 +70,7 @@ struct stratumsrv_conn {
 	bool hashes_done_ext;
 	float current_share_pdiff;
 	float desired_share_pdiff;
-	bool have_authorised_user;
+	struct stratumsrv_conn_userlist *authorised_users;
 	
 	struct stratumsrv_conn *next;
 };
@@ -383,10 +388,14 @@ void stratumsrv_mining_authorize(struct bufferevent * const bev, json_t * const 
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
 	
-	if ((!conn->have_authorised_user) || client->desired_share_pdiff < conn->desired_share_pdiff)
+	if ((!conn->authorised_users) || client->desired_share_pdiff < conn->desired_share_pdiff)
 		conn->desired_share_pdiff = client->desired_share_pdiff;
 	
-	conn->have_authorised_user = true;
+	struct stratumsrv_conn_userlist *ule = malloc(sizeof(*ule));
+	*ule = (struct stratumsrv_conn_userlist){
+		.client = client,
+	};
+	LL_PREPEND(conn->authorised_users, ule);
 	
 	_stratumsrv_success(bev, idstr);
 }
@@ -547,10 +556,16 @@ static
 void stratumsrv_client_close(struct stratumsrv_conn * const conn)
 {
 	struct bufferevent * const bev = conn->bev;
+	struct stratumsrv_conn_userlist *ule, *uletmp;
 	
 	bufferevent_free(bev);
 	LL_DELETE(_ssm_connections, conn);
 	release_work2d_(conn->xnonce1_le);
+	LL_FOREACH_SAFE(conn->authorised_users, ule, uletmp)
+	{
+		LL_DELETE(conn->authorised_users, ule);
+		free(ule);
+	}
 	free(conn);
 }
 
