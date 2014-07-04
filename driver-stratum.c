@@ -178,6 +178,33 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	return true;
 }
 
+void stratumsrv_client_changed_diff(struct proxy_client * const client)
+{
+	int connections_affected = 0, connections_changed = 0;
+	struct stratumsrv_conn_userlist *ule, *ule2;
+	LL_FOREACH(client->stratumsrv_connlist, ule)
+	{
+		struct stratumsrv_conn * const conn = ule->conn;
+		
+		++connections_affected;
+		
+		float desired_share_pdiff = client->desired_share_pdiff;
+		LL_FOREACH(conn->authorised_users, ule2)
+		{
+			struct proxy_client * const other_client = ule2->client;
+			if (other_client->desired_share_pdiff < desired_share_pdiff)
+				desired_share_pdiff = other_client->desired_share_pdiff;
+		}
+		if (conn->desired_share_pdiff != desired_share_pdiff)
+		{
+			conn->desired_share_pdiff = desired_share_pdiff;
+			++connections_changed;
+		}
+	}
+	if (connections_affected)
+		applog(LOG_DEBUG, "Proxy-share difficulty change for user '%s' affected %d connections (%d changed difficulty)", client->username, connections_affected, connections_changed);
+}
+
 static
 void _ssj_free(struct stratumsrv_job * const ssj)
 {

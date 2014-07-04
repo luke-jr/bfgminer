@@ -143,6 +143,10 @@ const char *proxy_set_diff(struct cgpu_info * const proc, const char * const opt
 	
 	client->desired_share_pdiff = nv;
 	
+#ifdef USE_LIBEVENT
+	stratumsrv_client_changed_diff(client);
+#endif
+	
 	return NULL;
 }
 

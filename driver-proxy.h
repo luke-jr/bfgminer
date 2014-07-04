@@ -27,4 +27,8 @@ struct proxy_client {
 
 extern struct proxy_client *proxy_find_or_create_client(const char *user);
 
+#ifdef USE_LIBEVENT
+extern void stratumsrv_client_changed_diff(struct proxy_client *);
+#endif
+
 #endif
