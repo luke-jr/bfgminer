@@ -10,6 +10,7 @@ struct proxy_client {
 	struct cgpu_info *cgpu;
 	struct work *work;
 	struct timeval tv_hashes_done;
+	float desired_share_pdiff;
 	
 	UT_hash_handle hh;
 };

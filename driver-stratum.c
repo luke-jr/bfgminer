@@ -65,6 +65,7 @@ struct stratumsrv_conn {
 	bool hashes_done_ext;
 	float current_share_pdiff;
 	float desired_share_pdiff;
+	bool have_authorised_user;
 	
 	struct stratumsrv_conn *next;
 };
@@ -375,12 +376,17 @@ void stratumsrv_mining_subscribe(struct bufferevent * const bev, json_t * const 
 }
 
 static
-void stratumsrv_mining_authorize(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
+void stratumsrv_mining_authorize(struct bufferevent * const bev, json_t * const params, const char * const idstr, struct stratumsrv_conn * const conn)
 {
 	struct proxy_client * const client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
 	
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
+	
+	if ((!conn->have_authorised_user) || client->desired_share_pdiff < conn->desired_share_pdiff)
+		conn->desired_share_pdiff = client->desired_share_pdiff;
+	
+	conn->have_authorised_user = true;
 	
 	_stratumsrv_success(bev, idstr);
 }
@@ -525,7 +531,7 @@ errout:
 		stratumsrv_mining_hashes_done(bev, params, idstr, conn);
 	else
 	if (!strcasecmp(method, "mining.authorize"))
-		stratumsrv_mining_authorize(bev, params, idstr, &conn->xnonce1_le);
+		stratumsrv_mining_authorize(bev, params, idstr, conn);
 	else
 	if (!strcasecmp(method, "mining.subscribe"))
 		stratumsrv_mining_subscribe(bev, params, idstr, conn);
