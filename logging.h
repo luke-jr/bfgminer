@@ -133,7 +133,6 @@ extern void _bfg_clean_up(bool);
 	if (fmt) { \
 		fprintf(stderr, "\n" fmt, ##__VA_ARGS__);  \
 	} \
-	fprintf(stderr, "\n");  \
 	fflush(stderr);  \
 	_quit(status); \
 } while (0)
