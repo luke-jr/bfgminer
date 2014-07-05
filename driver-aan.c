@@ -52,7 +52,6 @@ bool aan_spi_txrx(struct spi_port * const spi)
 		return false;
 	
 	aan_spi_parse_rx(spi);
-	spi_clear_buf(spi);
 	return true;
 }
 
@@ -68,11 +67,10 @@ bool aan_spi_cmd_resp(struct spi_port * const spi, const uint8_t cmd, const uint
 {
 	const uint8_t cmdbuf[2] = {cmd, chip};
 	
-	spi_emit_nop(spi, 2);
-	
 	uint8_t * const rx = spi_getrxbuf(spi);
 	while (true)
 	{
+		spi_emit_nop(spi, 2);
 		if (unlikely(!spi_txrx(spi)))
 			return false;
 		if (!memcmp(rx, cmdbuf, 2))
@@ -108,7 +106,6 @@ int aan_detect_spi(int * const out_chipcount, struct spi_port * const * const sp
 	{
 		struct spi_port * const spi = spi_a[i];
 		aan_spi_cmd_send(spi, state[i] = AAN_RESET, AAN_ALL_CHIPS, NULL, 0);
-		spi_emit_nop(spi, 2);
 		out_chipcount[i] = -1;
 	}
 	
@@ -118,6 +115,7 @@ int aan_detect_spi(int * const out_chipcount, struct spi_port * const * const sp
 			if (state[i] == -1)
 				continue;
 			struct spi_port * const spi = spi_a[i];
+			spi_emit_nop(spi, 2);
 			if (unlikely(!spi_txrx(spi)))
 			{
 spifail:
@@ -144,17 +142,12 @@ spifail:
 						applog(LOG_DEBUG, "%s: BIST_START complete (%d chips)", spi->repr, rx[1]);
 						break;
 				}
+				spi_clear_buf(spi);
 				continue;
 			}
 			aan_spi_parse_rx(spi);
 		}
 	} while (completed < spi_n && likely(!timer_passed(&tv_timeout, NULL)));
-	
-	for (int i = 0; i < spi_n; ++i)
-	{
-		struct spi_port * const spi = spi_a[i];
-		spi_clear_buf(spi);
-	}
 	
 	applog(LOG_DEBUG, "%s completed for %d out of %d SPI ports", __func__, completed, spi_n);
 	
@@ -164,5 +157,5 @@ spifail:
 static
 void aan_spi_parse_rx(struct spi_port * const spi)
 {
-	// TODO
+	spi_clear_buf(spi);
 }
