@@ -50,6 +50,36 @@ struct rockminer_chip_data {
 };
 
 static
+void rockminer_log_protocol(int fd, const void *buf, size_t bufLen, const char *prefix)
+{
+	char hex[(bufLen * 2) + 1];
+	bin2hex(hex, buf, bufLen);
+	applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: %s %s", rockminer_drv.dname, fd, prefix, hex);
+}
+
+static
+int rockminer_read(int fd, void *buf, size_t bufLen)
+{
+	int result = read(fd, buf, bufLen);
+	
+	if (result < 0)
+		applog(LOG_ERR, "%s: %s fd %d", rockminer_drv.dname, "Failed to read", fd);
+	else if ((result > 0) && opt_dev_protocol && opt_debug)
+		rockminer_log_protocol(fd, buf, bufLen, "RECV");
+
+	return result;
+}
+
+static
+int rockminer_write(int fd, const void *buf, size_t bufLen)
+{
+	if (opt_dev_protocol && opt_debug)
+		rockminer_log_protocol(fd, buf, bufLen, "SEND");
+
+	return write(fd, buf, bufLen);
+}
+
+static
 void rockminer_job_buf_init(uint8_t * const buf, const uint8_t chipid)
 {
 	memset(&buf[0x20], 0, 0x10);
@@ -114,7 +144,7 @@ int8_t rockminer_bisect_chips(const int fd, uint8_t * const buf)
 			tests[i] = chipid;
 			
 			buf[0x32] = chipid;
-			if (write(fd, buf, ROCKMINER_WORK_REQ_SIZE) != ROCKMINER_WORK_REQ_SIZE)
+			if (rockminer_write(fd, buf, ROCKMINER_WORK_REQ_SIZE) != ROCKMINER_WORK_REQ_SIZE)
 				applogr(-1, LOG_DEBUG, "%s(%d): Error sending request for chip %d", __func__, fd, chipid);
 			
 			tailsprintf(msg, sizeof(msg), "%d ", chipid);
@@ -123,7 +153,7 @@ int8_t rockminer_bisect_chips(const int fd, uint8_t * const buf)
 		msg[strlen(msg)-1] = '\0';
 		applog(LOG_DEBUG, "%s(%d): Testing chips %s (within range %d-%d)", __func__, fd, msg, minvalid, maxvalid);
 		
-		while ( (rsz = read(fd, reply, sizeof(reply))) == sizeof(reply))
+		while ( (rsz = rockminer_read(fd, reply, sizeof(reply))) == sizeof(reply))
 		{
 			const uint8_t chipid = reply[5] & 0x3f;
 			if (chipid > minvalid)
@@ -168,12 +198,12 @@ bool rockminer_detect_one(const char * const devpath)
 	memcpy(&buf[   0], golden_midstate, 0x20);
 	memcpy(&buf[0x34], golden_datatail,  0xc);
 	
-	if (write(fd, buf, sizeof(buf)) != sizeof(buf))
+	if (rockminer_write(fd, buf, sizeof(buf)) != sizeof(buf))
 		return_via_applog(err, , LOG_DEBUG, "%s: %s %s", rockminer_drv.dname, "Error sending request to ", devpath);
 	
 	while (true)
 	{
-		rsz = read(fd, reply, sizeof(reply));
+		rsz = rockminer_read(fd, reply, sizeof(reply));
 		if (rsz != sizeof(reply))
 			return_via_applog(err, , LOG_DEBUG, "%s: Short read from %s (%d)", rockminer_drv.dname, devpath, rsz);
 		if ((!memcmp(reply, golden_result, sizeof(golden_result))) && (reply[4] & 0xf) == ROCKMINER_REPLY_NONCE_FOUND)
@@ -259,7 +289,7 @@ bool rockminer_send_work(struct thr_info * const thr)
 	struct rockminer_chip_data * const chip = thr->cgpu_data;
 	const int fd = dev->device_fd;
 	
-	return (write(fd, chip->next_work_req, sizeof(chip->next_work_req)) == sizeof(chip->next_work_req));
+	return (rockminer_write(fd, chip->next_work_req, sizeof(chip->next_work_req)) == sizeof(chip->next_work_req));
 }
 
 static
@@ -339,7 +369,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 		}
 	}
 	
-	while ( (rsz = read(fd, reply, sizeof(reply))) == sizeof(reply))
+	while ( (rsz = rockminer_read(fd, reply, sizeof(reply))) == sizeof(reply))
 	{
 // 		const uint8_t status = reply[4] >> 4;
 		const enum rockminer_replies cmd = reply[4] & 0xf;
