@@ -145,7 +145,9 @@ bool jingtian_detect_one(const char * const devpath)
 		*cgpu = (struct cgpu_info){
 			.drv = &jingtian_drv,
 			.procs = chips,
+			.threads = prev_cgpu ? 0 : 1,
 			.device_data = spi_a[i],
+			.device_path = strdup(devpath),
 		};
 		add_cgpu_slave(cgpu, prev_cgpu);
 		prev_cgpu = cgpu;
@@ -170,8 +172,33 @@ void jingtian_detect(void)
 	generic_detect(&jingtian_drv, jingtian_detect_one, jingtian_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
+static
+bool jingtian_init(struct thr_info * const master_thr)
+{
+	struct cgpu_info * const master_dev = master_thr->cgpu;
+	const char * const devpath = master_dev->device_path;
+	const int fd = open(devpath, O_RDWR);
+	if (fd < 0)
+		applogr(false, LOG_ERR, "%s: Failed to open %s", master_dev->dev_repr, devpath);
+	
+	for_each_managed_proc(proc, master_dev)
+	{
+		struct spi_port * const spi = proc->device_data;
+		spi->fd = fd;
+	}
+	
+	return aan_init(master_thr);
+}
+
 struct device_drv jingtian_drv = {
 	.dname = "jingtian",
 	.name = "JTN",
 	.drv_detect = jingtian_detect,
+	
+	.thread_init = jingtian_init,
+	
+	.minerloop = minerloop_queue,
+	.queue_append = aan_queue_append,
+	.queue_flush = aan_queue_flush,
+	.poll = aan_poll,
 };
