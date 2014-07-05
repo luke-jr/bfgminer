@@ -123,12 +123,12 @@ static char packagename[256];
 
 bool opt_protocol;
 bool opt_dev_protocol;
-static bool opt_load_bitcoin_conf = true;
 static bool opt_benchmark;
 static bool want_longpoll = true;
 static bool want_gbt = true;
 static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
+static bool opt_load_bitcoin_conf = true;
 static bool have_at_least_one_getcbaddr;
 static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t coinbase_script_block_id;
@@ -1088,8 +1088,10 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
+#if BLKMAKER_VERSION > 1
 	if (uri_get_param_bool(uri, "getcbaddr", false))
 		have_at_least_one_getcbaddr = true;
+#endif
 }
 
 /* Pool variant of test and set */
@@ -2210,8 +2212,12 @@ static struct opt_table opt_config_table[] = {
 #endif
 	),
 	OPT_WITHOUT_ARG("--no-local-bitcoin",
+#if BLKMAKER_VERSION > 1
 	                opt_set_invbool, &opt_load_bitcoin_conf,
 	                "Disable adding pools for local bitcoin RPC servers"),
+#else
+	                set_null, NULL, opt_hidden),
+#endif
 	OPT_WITHOUT_ARG("--no-longpoll",
 			opt_set_invbool, &want_longpoll,
 			"Disable X-Long-Polling support"),
@@ -2857,6 +2863,7 @@ void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_
 	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll);
 }
 
+#if BLKMAKER_VERSION > 1
 static
 void refresh_bitcoind_address(const bool fresh)
 {
@@ -2931,6 +2938,7 @@ void refresh_bitcoind_address(const bool fresh)
 	if (curl)
 		curl_easy_cleanup(curl);
 }
+#endif
 
 static double target_diff(const unsigned char *);
 
@@ -10958,6 +10966,7 @@ out:
 }
 #endif
 
+#if BLKMAKER_VERSION > 1
 static
 bool _add_local_gbt(const char * const filepath, void *userp)
 {
@@ -11040,6 +11049,7 @@ void add_local_gbt(bool live)
 {
 	appdata_file_call("Bitcoin", "bitcoin.conf", _add_local_gbt, &live);
 }
+#endif
 
 #if defined(unix) || defined(__APPLE__)
 static void fork_monitor()
@@ -12391,8 +12401,10 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
+#if BLKMAKER_VERSION > 1
 	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
 		add_local_gbt(total_pools);
+#endif
 	
 	if (!total_pools) {
 		applog(LOG_WARNING, "Need to specify at least one pool server.");
