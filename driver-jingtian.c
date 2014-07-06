@@ -231,4 +231,6 @@ struct device_drv jingtian_drv = {
 	.queue_append = aan_queue_append,
 	.queue_flush = aan_queue_flush,
 	.poll = aan_poll,
+	
+	.get_api_extra_device_status = aan_api_device_status,
 };

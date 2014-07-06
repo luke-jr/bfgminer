@@ -30,7 +30,8 @@ struct aan_chip_data {
 	struct work *works[AAN_MAX_JOBID];
 	float desired_nonce_pdiff;
 	float current_nonce_pdiff;
-	uint16_t pllreg;
+	uint16_t desired_pllreg;
+	uint16_t current_pllreg;
 };
 
 extern int aan_detect_spi(int *out_chipcount, struct spi_port * const *spi_a, int spi_n);
@@ -43,5 +44,7 @@ extern void aan_poll(struct thr_info *);
 
 extern const char *aan_set_diff(struct cgpu_info *, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *);
 extern const struct bfg_set_device_definition aan_set_device_funcs[];
+
+extern struct api_data *aan_api_device_status(struct cgpu_info *);
 
 #endif

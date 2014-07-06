@@ -309,7 +309,7 @@ bool aan_init(struct thr_info * const master_thr)
 		*chip = (struct aan_chip_data){
 			.chipid = ++chipid,
 			.desired_nonce_pdiff = AAN_DEFAULT_NONCE_PDIFF,
-			.pllreg = 0x87a9,  // 850 MHz
+			.desired_pllreg = 0x87a9,  // 850 MHz
 		};
 	}
 	master_thr->tv_poll = tv_now;
@@ -529,15 +529,16 @@ badjob:
 			continue;
 		}
 		const uint16_t pllreg = upk_u16be(reg, 0);
-		if (pllreg != chip->pllreg)
+		chip->current_pllreg = pllreg;
+		if (pllreg != chip->desired_pllreg)
 		{
 			// Wait for chip to idle before changing register
 			if (!(reg[3] & 3))
 			{
-				applog(LOG_DEBUG, "%"PRIpreprv": Asserting PLL change: %04x->%04x", proc->proc_repr, pllreg, chip->pllreg);
+				applog(LOG_DEBUG, "%"PRIpreprv": Asserting PLL change: %04x->%04x", proc->proc_repr, pllreg, chip->desired_pllreg);
 				uint8_t regset[AAN_REGISTER_SIZE];
 				memcpy(&regset[2], &reg[2], AAN_REGISTER_SIZE - 2);
-				pk_u16be(regset, 0, chip->pllreg);
+				pk_u16be(regset, 0, chip->desired_pllreg);
 				aan_spi_cmd_send(spi, AAN_WRITE_REG, chip->chipid, regset, AAN_REGISTER_SIZE);
 			}
 		}
@@ -591,7 +592,7 @@ const char *aan_set_clock(struct cgpu_info * const proc, const char * const optn
 	if (nv <= 0 || nv > AAN_MAX_FREQ)
 		return "Invalid clock frequency";
 	
-	chip->pllreg = aan_freq2pll(nv);
+	chip->desired_pllreg = aan_freq2pll(nv);
 	
 	return NULL;
 }
@@ -608,6 +609,18 @@ const char *aan_set_diff(struct cgpu_info * const proc, const char * const optna
 	chip->desired_nonce_pdiff = nv;
 	
 	return NULL;
+}
+
+struct api_data *aan_api_device_status(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct aan_chip_data * const chip = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	double mhz = aan_pll2freq(chip->current_pllreg);
+	root = api_add_freq(root, "Frequency", &mhz, true);
+	
+	return root;
 }
 
 const struct bfg_set_device_definition aan_set_device_funcs[] = {
