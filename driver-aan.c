@@ -588,11 +588,20 @@ const char *aan_set_clock(struct cgpu_info * const proc, const char * const optn
 	struct thr_info * const thr = proc->thr[0];
 	struct aan_chip_data * const chip = thr->cgpu_data;
 	
-	const int nv = atoi(newvalue);
-	if (nv <= 0 || nv > AAN_MAX_FREQ)
-		return "Invalid clock frequency";
-	
-	chip->desired_pllreg = aan_freq2pll(nv);
+	if (newvalue[0] == 'x')
+	{
+		char *p;
+		chip->desired_pllreg = strtol(&newvalue[1], &p, 0x10);
+		if (p != &newvalue[5])
+			return "Invalid hex PLL data";
+	}
+	else
+	{
+		const int nv = atoi(newvalue);
+		if (nv <= 0 || nv > AAN_MAX_FREQ)
+			return "Invalid clock frequency";
+		chip->desired_pllreg = aan_freq2pll(nv);
+	}
 	
 	return NULL;
 }
