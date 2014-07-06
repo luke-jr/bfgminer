@@ -23,6 +23,9 @@
 
 #define AAN_DEFAULT_NONCE_PDIFF  8
 
+// WARNING: Do not just change this without fixing aan_freq2pll!
+#define AAN_MAX_FREQ  6132
+
 #define AAN_PROBE_TIMEOUT_US  3750000
 #define AAN_INIT_TIMEOUT_US   5000000
 #define AAN_READ_INTERVAL_US   100000
@@ -39,6 +42,86 @@ enum aan_cmd {
 	AAN_READ_REG             = 0x0a,
 	AAN_READ_REG_RESP        = 0x1a,
 };
+
+static
+unsigned aan_pll2freq(const uint16_t pll)
+{
+	const uint8_t pll_postdiv = (pll >> 0xe);
+	const uint8_t pll_prediv = (pll >> 9) & 0x1f;
+	const uint16_t pll_fbdiv = pll & 0x1ff;
+	return (12 * pll_fbdiv) / pll_prediv / (1 << (pll_postdiv - 1));
+}
+
+static
+uint16_t aan_freq2pll(unsigned freq)
+{
+retry: ;
+	uint8_t postdiv = 3, prediv = 3;
+	uint16_t fbdiv = freq / 3;
+	if (fbdiv * 3 == freq)
+		prediv = 1;
+	else
+		fbdiv = freq;
+	if (!(fbdiv & 3))
+	{
+		fbdiv >>= 2;
+		postdiv = 1;
+	}
+	else
+	if (!(fbdiv & 1))
+	{
+		fbdiv >>= 1;
+		postdiv = 2;
+	}
+	if (fbdiv > 0x1ff)
+	{
+		--freq;
+		goto retry;
+	}
+	const uint16_t pll = (((postdiv << 5) | prediv) << 9) | fbdiv;
+	return pll;
+}
+
+static
+void _test_aan_pll(const unsigned expect, const uint8_t postdiv, const uint8_t prediv, const uint16_t fbdiv)
+{
+	const uint16_t pll = (((postdiv << 5) | prediv) << 9) | fbdiv;
+	const unsigned got = aan_pll2freq(pll);
+	if (got != expect)
+		applog(LOG_WARNING, "%s test failed for %4u(%x,%02x,%3d): got %4u", "aan_pll2freq", expect, postdiv, prediv, fbdiv, got);
+}
+
+static
+void _test_aan_pll2(const unsigned freq)
+{
+	const uint16_t pll = aan_freq2pll(freq);
+	const unsigned got = aan_pll2freq(pll);
+	if (got / 12 != freq / 12)
+	{
+		const uint8_t postdiv = (pll >> 0xe);
+		const uint8_t prediv = (pll >> 9) & 0x1f;
+		const uint16_t fbdiv = pll & 0x1ff;
+		applog(LOG_WARNING, "%s test failed for %4u: got %4u(%x,%02x,%3d)", "aan_freq2pll", freq, got, postdiv, prediv, fbdiv);
+	}
+}
+
+void test_aan_pll(void)
+{
+	_test_aan_pll(1000, 0b01,0b00011,0b011111010);
+	_test_aan_pll( 950, 0b10,0b00011,0b111011011);
+	_test_aan_pll( 900, 0b01,0b00001,0b001001011);
+	_test_aan_pll( 850, 0b10,0b00011,0b110101001);
+	_test_aan_pll( 800, 0b01,0b00011,0b011001000);
+	_test_aan_pll( 750, 0b10,0b00001,0b001111101);
+	_test_aan_pll( 700, 0b01,0b00011,0b010101111);
+	_test_aan_pll( 650, 0b10,0b00011,0b101000101);
+	_test_aan_pll( 600, 0b01,0b00001,0b000110010);
+	_test_aan_pll( 550, 0b10,0b00011,0b100010011);
+	_test_aan_pll( 500, 0b10,0b00011,0b011111010);
+	_test_aan_pll( 100, 0b11,0b00011,0b001100100);
+	for (unsigned i = 1; i <= AAN_MAX_FREQ; ++i)
+		_test_aan_pll2(i);
+}
 
 static void aan_spi_parse_rx(struct spi_port *);
 

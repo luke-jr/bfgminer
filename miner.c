@@ -11801,6 +11801,7 @@ static void raise_fd_limits(void)
 
 extern void bfg_init_threadlocal();
 extern void stratumsrv_start();
+extern void test_aan_pll(void);
 
 int main(int argc, char *argv[])
 {
@@ -12049,6 +12050,9 @@ int main(int argc, char *argv[])
 		test_target();
 		test_uri_get_param();
 		utf8_test();
+#ifdef USE_JINGTIAN
+		test_aan_pll();
+#endif
 	}
 
 #ifdef HAVE_CURSES
