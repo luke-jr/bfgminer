@@ -582,6 +582,20 @@ void aan_poll(struct thr_info * const master_thr)
 		timer_unset(&master_thr->tv_poll);
 }
 
+const char *aan_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct aan_chip_data * const chip = thr->cgpu_data;
+	
+	const int nv = atoi(newvalue);
+	if (nv <= 0 || nv > AAN_MAX_FREQ)
+		return "Invalid clock frequency";
+	
+	chip->pllreg = aan_freq2pll(nv);
+	
+	return NULL;
+}
+
 const char *aan_set_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct thr_info * const thr = proc->thr[0];
@@ -597,6 +611,7 @@ const char *aan_set_diff(struct cgpu_info * const proc, const char * const optna
 }
 
 const struct bfg_set_device_definition aan_set_device_funcs[] = {
+	{"clock", aan_set_clock, "clock frequency (MHz)"},
 	{"diff", aan_set_diff, "desired nonce difficulty"},
 	{NULL},
 };
