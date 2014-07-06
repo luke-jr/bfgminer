@@ -28,6 +28,8 @@ static const int jingtian_cs_gpio[] = {14, 15, 18};
 static const int jingtian_max_cs = 1 << (sizeof(jingtian_cs_gpio) / sizeof(*jingtian_cs_gpio));
 static const uint8_t jingtian_pre_header[] = {0xb5, 0xb5};
 
+#define JINGTIAN_REGISTER_EXTRA_SIZE  2
+
 BFG_REGISTER_DRIVER(jingtian_drv)
 
 static
@@ -80,9 +82,30 @@ void jingtian_precmd(struct spi_port * const spi)
 }
 
 static
+bool jingtian_read_reg(struct spi_port * const spi, const uint8_t chip, void * const out_buf, const struct timeval * const tvp_timeout)
+{
+	if (!aan_read_reg_direct(spi, chip, out_buf, tvp_timeout))
+		return false;
+	
+	spi_emit_nop(spi, JINGTIAN_REGISTER_EXTRA_SIZE);
+	if (!spi_txrx(spi))
+		applogr(false, LOG_DEBUG, "%s: %s failed", __func__, "spi_txrx");
+	
+	struct cgpu_info * const dev = spi->cgpu;
+	if (unlikely(!dev))
+		return true;
+	struct cgpu_info * const proc = aan_proc_for_chipid(dev, chip);
+	
+	uint8_t * const rx = spi_getrxbuf(spi);
+	proc->temp = upk_u16be(rx, 0);
+	
+	return true;
+}
+
+static
 struct aan_hooks jingtian_hooks = {
 	.precmd = jingtian_precmd,
-	.read_reg = aan_read_reg_direct,
+	.read_reg = jingtian_read_reg,
 };
 
 static
@@ -151,6 +174,7 @@ bool jingtian_detect_one(const char * const devpath)
 			.device_path = strdup(devpath),
 			.set_device_funcs = aan_set_device_funcs,
 		};
+		spi_a[i]->cgpu = cgpu;
 		add_cgpu_slave(cgpu, prev_cgpu);
 		prev_cgpu = cgpu;
 		found += chips;

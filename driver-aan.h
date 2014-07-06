@@ -37,6 +37,7 @@ extern bool aan_read_reg_direct(struct spi_port *, uint8_t chip, void *out_buf, 
 extern bool aan_init(struct thr_info *);
 extern bool aan_queue_append(struct thr_info *, struct work *);
 extern void aan_queue_flush(struct thr_info *);
+extern struct cgpu_info *aan_proc_for_chipid(struct cgpu_info *, int chipid);
 extern void aan_poll(struct thr_info *);
 
 extern const char *aan_set_diff(struct cgpu_info *, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *);

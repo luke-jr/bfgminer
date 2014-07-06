@@ -294,7 +294,6 @@ void aan_queue_flush(struct thr_info * const thr)
 	// TODO
 }
 
-static
 struct cgpu_info *aan_proc_for_chipid(struct cgpu_info * const dev, const int chipid)
 {
 	struct cgpu_info *proc = dev;
