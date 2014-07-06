@@ -102,8 +102,7 @@ bool aan_spi_cmd(struct spi_port * const spi, const uint8_t cmd, const uint8_t c
 	return true;
 }
 
-static
-bool aan_read_reg(struct spi_port * const spi, const uint8_t chip, void * const out_buf, const struct timeval * const tvp_timeout)
+bool aan_read_reg_direct(struct spi_port * const spi, const uint8_t chip, void * const out_buf, const struct timeval * const tvp_timeout)
 {
 	if (!aan_spi_cmd_send(spi, AAN_READ_REG, chip, NULL, 0))
 		return false;
@@ -118,6 +117,13 @@ bool aan_read_reg(struct spi_port * const spi, const uint8_t chip, void * const 
 	memcpy(out_buf, rx, AAN_REGISTER_SIZE);
 	
 	return true;
+}
+
+static inline
+bool aan_read_reg(struct spi_port * const spi, const uint8_t chip, void * const out_buf, const struct timeval * const tvp_timeout)
+{
+	const struct aan_hooks * const hooks = spi->userp;
+	return hooks->read_reg(spi, chip, out_buf, tvp_timeout);
 }
 
 int aan_detect_spi(int * const out_chipcount, struct spi_port * const * const spi_a, const int spi_n)

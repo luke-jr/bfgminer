@@ -12,6 +12,7 @@
 
 struct aan_hooks {
 	void (*precmd)(struct spi_port *);
+	bool (*read_reg)(struct spi_port *, uint8_t chip, void *out_buf, const struct timeval *tvp_timeout);
 };
 
 struct aan_board_data {
@@ -32,6 +33,7 @@ struct aan_chip_data {
 };
 
 extern int aan_detect_spi(int *out_chipcount, struct spi_port * const *spi_a, int spi_n);
+extern bool aan_read_reg_direct(struct spi_port *, uint8_t chip, void *out_buf, const struct timeval *tvp_timeout);
 extern bool aan_init(struct thr_info *);
 extern bool aan_queue_append(struct thr_info *, struct work *);
 extern void aan_queue_flush(struct thr_info *);

@@ -82,6 +82,7 @@ void jingtian_precmd(struct spi_port * const spi)
 static
 struct aan_hooks jingtian_hooks = {
 	.precmd = jingtian_precmd,
+	.read_reg = aan_read_reg_direct,
 };
 
 static
