@@ -85,6 +85,24 @@ void spi_init(void)
 
 #ifdef HAVE_LINUX_SPI
 
+int spi_open(struct spi_port * const spi, const char * const devpath)
+{
+	const int fd = open(devpath, O_RDWR);
+	if (fd < 0)
+		return fd;
+	
+	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi->speed) < 0
+	 || ioctl(fd, SPI_IOC_WR_MODE, &spi->mode) < 0
+	 || ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &spi->bits) < 0)
+	{
+		close(fd);
+		return -1;
+	}
+	
+	spi->fd = fd;
+	return fd;
+}
+
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define OUT_GPIO(g) *(gpio+((g)/10)) |=  (1<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))

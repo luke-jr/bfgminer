@@ -88,6 +88,7 @@ bool spi_txrx(struct spi_port *port)
 	return port->txrx(port);
 }
 
+extern int spi_open(struct spi_port *, const char *);
 extern bool sys_spi_txrx(struct spi_port *);
 extern bool linux_spi_txrx(struct spi_port *);
 

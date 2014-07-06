@@ -18,6 +18,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <sys/ioctl.h>
+#include <linux/types.h>
+#include <linux/spi/spidev.h>
+
 #include "deviceapi.h"
 #include "driver-aan.h"
 #include "logging.h"
@@ -135,8 +139,13 @@ bool jingtian_detect_one(const char * const devpath)
 	
 	jingtian_common_init();
 	
-	const int fd = open(devpath, O_RDWR);
-	if (fd < 0)
+	struct spi_port spi_cfg;
+	memset(&spi_cfg, 0, sizeof(spi_cfg));
+	spi_cfg.speed = 4000000;
+	spi_cfg.delay = 0;
+	spi_cfg.mode = SPI_MODE_1;
+	spi_cfg.bits = 8;
+	if (spi_open(&spi_cfg, devpath) < 0)
 		applogr(false, LOG_DEBUG, "%s: Failed to open %s", jingtian_drv.dname, devpath);
 	
 	struct cgpu_info *cgpu, *prev_cgpu = NULL;
@@ -151,15 +160,11 @@ bool jingtian_detect_one(const char * const devpath)
 	for (int i = 0; i < jingtian_max_cs; ++i)
 	{
 		spi = spi_a[i] = calloc(sizeof(*spi), 1);
+		memcpy(spi, &spi_cfg, sizeof(*spi));
 		spi->repr = malloc(devpath_len + 0x10);
 		sprintf((void*)spi->repr, "%s(cs%d)", devpath, i);
 		spi->txrx = jingtian_spi_txrx;
 		spi->userp = &jingtian_hooks;
-		spi->fd = fd;
-		spi->speed = 4000000;
-		spi->delay = 0;
-		spi->mode = 1;
-		spi->bits = 8;
 		spi->chipselect = i;
 		spi->chipselect_current = chipselect_current;
 	}
@@ -191,7 +196,7 @@ bool jingtian_detect_one(const char * const devpath)
 		found += chips;
 	}
 	
-	close(fd);
+	close(spi_cfg.fd);
 	if (!found)
 		free(chipselect_current);
 	return found;
