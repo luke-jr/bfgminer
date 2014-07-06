@@ -436,14 +436,14 @@ badjob:
 	{
 		struct thr_info * const thr = proc->thr[0];
 		const int i = proc->proc_id;
-		uint8_t spi_rx[8];
+		uint8_t reg[AAN_REGISTER_SIZE];
 		
-		if (!aan_read_reg(spi, i + 1, &spi_rx[2], NULL))
+		if (!aan_read_reg(spi, i + 1, reg, NULL))
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Failed to read reg", proc->proc_repr);
 			continue;
 		}
-		if ((spi_rx[5] & 2) != 2)
+		if ((reg[3] & 2) != 2)
 		{
 			struct cgpu_info * const master_dev = board->master_dev;
 			struct aan_board_data * const master_board = master_dev->device_data;
