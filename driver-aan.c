@@ -477,3 +477,22 @@ void aan_poll(struct thr_info * const master_thr)
 		// Avoid polling when we have queues to fill
 		timer_unset(&master_thr->tv_poll);
 }
+
+const char *aan_set_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct aan_chip_data * const chip = thr->cgpu_data;
+	
+	const double nv = atof(newvalue);
+	if (nv <= 0)
+		return "Invalid difficulty";
+	
+	chip->desired_nonce_pdiff = nv;
+	
+	return NULL;
+}
+
+const struct bfg_set_device_definition aan_set_device_funcs[] = {
+	{"diff", aan_set_diff, "desired nonce difficulty"},
+	{NULL},
+};

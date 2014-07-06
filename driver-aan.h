@@ -37,4 +37,7 @@ extern bool aan_queue_append(struct thr_info *, struct work *);
 extern void aan_queue_flush(struct thr_info *);
 extern void aan_poll(struct thr_info *);
 
+extern const char *aan_set_diff(struct cgpu_info *, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *);
+extern const struct bfg_set_device_definition aan_set_device_funcs[];
+
 #endif

@@ -148,6 +148,7 @@ bool jingtian_detect_one(const char * const devpath)
 			.threads = prev_cgpu ? 0 : 1,
 			.device_data = spi_a[i],
 			.device_path = strdup(devpath),
+			.set_device_funcs = aan_set_device_funcs,
 		};
 		add_cgpu_slave(cgpu, prev_cgpu);
 		prev_cgpu = cgpu;
