@@ -25,6 +25,7 @@
 #include "util.h"
 
 static const int jingtian_cs_gpio[] = {14, 15, 18};
+static const int jingtian_spi_enable_gpio = 25;
 static const int jingtian_max_cs = 1 << (sizeof(jingtian_cs_gpio) / sizeof(*jingtian_cs_gpio));
 static const uint8_t jingtian_pre_header[] = {0xb5, 0xb5};
 
@@ -51,10 +52,12 @@ bool jingtian_spi_txrx(struct spi_port * const port)
 			else
 				cs_set_low  |= (1 << jingtian_cs_gpio[i]);
 		}
+		bfg_gpio_set_high(1 << jingtian_spi_enable_gpio);
 		if (cs_set_low)
 			bfg_gpio_set_low(cs_set_low);
 		if (cs_set_high)
 			bfg_gpio_set_high(cs_set_high);
+		bfg_gpio_set_low(1 << jingtian_spi_enable_gpio);
 		if (opt_dev_protocol)
 			applog(LOG_DEBUG, "%s(%p): CS %d", __func__, port, port->chipselect);
 		*port->chipselect_current = port->chipselect;
@@ -115,6 +118,7 @@ void jingtian_common_init(void)
 	spi_init();
 	for (int i = 0; i < sizeof(jingtian_cs_gpio) / sizeof(*jingtian_cs_gpio); ++i)
 		bfg_gpio_setpin_output(jingtian_cs_gpio[i]);
+	bfg_gpio_setpin_output(jingtian_spi_enable_gpio);
 }
 
 static
