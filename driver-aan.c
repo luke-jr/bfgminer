@@ -311,6 +311,8 @@ bool aan_init(struct thr_info * const master_thr)
 			.desired_nonce_pdiff = AAN_DEFAULT_NONCE_PDIFF,
 			.desired_pllreg = 0x87a9,  // 850 MHz
 		};
+		
+		cgpu_set_defaults(proc);
 	}
 	master_thr->tv_poll = tv_now;
 	
