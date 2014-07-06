@@ -21,6 +21,8 @@
 #include "miner.h"
 #include "util.h"
 
+#define AAN_DEFAULT_NONCE_PDIFF  8
+
 #define AAN_PROBE_TIMEOUT_US  3750000
 #define AAN_INIT_TIMEOUT_US   5000000
 #define AAN_READ_INTERVAL_US   100000
@@ -217,6 +219,7 @@ bool aan_init(struct thr_info * const master_thr)
 		thr->queue_full = true;
 		*chip = (struct aan_chip_data){
 			.chipid = ++chipid,
+			.desired_nonce_pdiff = AAN_DEFAULT_NONCE_PDIFF,
 		};
 	}
 	master_thr->tv_poll = tv_now;
@@ -232,7 +235,8 @@ bool aan_spi_send_work(struct spi_port * const spi, const uint8_t chipid, const 
 	swab256(&buf[0], work->midstate);
 	swap32yes(&buf[0x20], &work->data[0x40], 3);
 	memset(&buf[0x2c], 0, 4);         // start nonce
-	pk_u32le(buf, 0x30, 0x1d001fff);  // compressed target, pdiff1 + 1
+	uint32_t compressed_target = (uint32_t)(0x10000 / work->nonce_diff) | (/*exponent*/ 0x1d << 24);
+	pk_u32le(buf, 0x30, compressed_target);
 	memset(&buf[0x34], 0xff, 4);      // end nonce
 	
 	return aan_spi_cmd_send(spi, AAN_WRITE_JOB | (jobid << 4), chipid, buf, sizeof(buf));
@@ -243,13 +247,19 @@ static bool set_work(struct cgpu_info *, uint8_t, struct work *);
 bool aan_queue_append(struct thr_info * const thr, struct work * const work)
 {
 	struct cgpu_info *proc = thr->cgpu;
+	struct aan_chip_data * const chip = thr->cgpu_data;
 	struct cgpu_info *dev = proc->device;
 	struct aan_board_data *board = dev->device_data;
 	struct cgpu_info * const master_dev = board->master_dev;
 	struct aan_board_data * const master_board = master_dev->device_data;
 	
 	applog(LOG_DEBUG, "%s: queue_append queues_empty=%d", proc->proc_repr, master_board->queues_empty-1);
-	work->nonce_diff = 8;  // FIXME
+	
+	work->nonce_diff = work->work_difficulty;
+	if (work->nonce_diff > chip->desired_nonce_pdiff)
+		work->nonce_diff = chip->desired_nonce_pdiff;
+	chip->current_nonce_pdiff = work->nonce_diff;
+	
 	if (set_work(dev, proc->proc_id + 1, work))
 		hashes_done2(thr, 0x100000000, NULL);
 	
@@ -407,7 +417,7 @@ void aan_scanwork(struct cgpu_info * const dev, struct thr_info * const master_t
 		if (job_id < 1 || job_id > 4)
 		{
 badjob:
-			inc_hw_errors3(thr, NULL, &nonce, 8./*FIXME*/);
+			inc_hw_errors3(thr, NULL, &nonce, chip->current_nonce_pdiff);
 			continue;
 		}
 		struct work * const work = chip->works[job_id - 1];

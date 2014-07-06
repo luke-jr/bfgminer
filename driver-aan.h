@@ -27,6 +27,8 @@ struct aan_chip_data {
 	uint8_t chipid;
 	int8_t last_jobid;
 	struct work *works[AAN_MAX_JOBID];
+	float desired_nonce_pdiff;
+	float current_nonce_pdiff;
 };
 
 extern int aan_detect_spi(int *out_chipcount, struct spi_port * const *spi_a, int spi_n);
