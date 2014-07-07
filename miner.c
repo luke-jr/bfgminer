@@ -11035,6 +11035,18 @@ err:
 		snprintf(hfuri, sizeof(hfuri), "port %d", rpcport);
 	applog(LOG_DEBUG, "Local bitcoin RPC server on %s found in %s", hfuri, filepath);
 	
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool *pool = pools[i];
+		
+		if (!(strcmp(pool->rpc_url, uri) || strcmp(pool->rpc_pass, rpcpass)))
+		{
+			applog(LOG_DEBUG, "Server on %s is already configured, not adding as failover", hfuri);
+			free(uri);
+			goto err;
+		}
+	}
+	
 	pool = add_pool();
 	if (!pool)
 	{
