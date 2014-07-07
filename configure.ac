@@ -1044,6 +1044,20 @@ fi
 AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
 
 
+driverlist="$driverlist jingtian"
+AC_ARG_ENABLE([jingtian],
+	[AC_HELP_STRING([--enable-jingtian],[Compile support for JingTian (default disabled)])],
+	[jingtian=$enableval],
+	[jingtian=$ddno]
+	)
+if test "x$jingtian" = "xyes"; then
+	AC_DEFINE([USE_JINGTIAN], [1], [Defined to 1 if JingTian support is wanted])
+	need_lowl_spi=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_JINGTIAN], [test x$jingtian = xyes])
+
+
 driverlist="$driverlist metabank"
 AC_ARG_ENABLE([metabank],
 	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],

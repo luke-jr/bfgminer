@@ -689,6 +689,9 @@ redo:
 			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
+		// HACK: Some designs set the main thr tv_poll from secondary thrs
+		reduce_timeout_to(&tv_timeout, &cgpu->thr[0]->tv_poll);
+		
 		do_notifier_select(thr, &tv_timeout);
 	}
 }

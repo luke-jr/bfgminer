@@ -85,12 +85,52 @@ void spi_init(void)
 
 #ifdef HAVE_LINUX_SPI
 
+int spi_open(struct spi_port * const spi, const char * const devpath)
+{
+	const int fd = open(devpath, O_RDWR);
+	if (fd < 0)
+		return fd;
+	
+	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi->speed) < 0
+	 || ioctl(fd, SPI_IOC_WR_MODE, &spi->mode) < 0
+	 || ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &spi->bits) < 0)
+	{
+		close(fd);
+		return -1;
+	}
+	
+	spi->fd = fd;
+	return fd;
+}
+
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define OUT_GPIO(g) *(gpio+((g)/10)) |=  (1<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
 
 #define GPIO_SET *(gpio+7)  // sets   bits which are 1 ignores bits which are 0
 #define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
+#define GPIO_LEV *(gpio+13)
+
+void bfg_gpio_setpin_output(const unsigned pin)
+{
+	INP_GPIO(pin);
+	OUT_GPIO(pin);
+}
+
+void bfg_gpio_set_high(const unsigned mask)
+{
+	GPIO_SET = mask;
+}
+
+void bfg_gpio_set_low(const unsigned mask)
+{
+	GPIO_CLR = mask;
+}
+
+unsigned bfg_gpio_get()
+{
+	return GPIO_LEV;
+}
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
@@ -194,6 +234,23 @@ bool sys_spi_txrx(struct spi_port *port)
 	spi_reset(4321);
 
 	return true;
+}
+
+bool linux_spi_txrx(struct spi_port * const spi)
+{
+	const void * const wrbuf = spi_gettxbuf(spi);
+	void * const rdbuf = spi_getrxbuf(spi);
+	const size_t bufsz = spi_getbufsz(spi);
+	const int fd = spi->fd;
+	struct spi_ioc_transfer xf = {
+		.tx_buf = (uintptr_t) wrbuf,
+		.rx_buf = (uintptr_t) rdbuf,
+		.len = bufsz,
+		.delay_usecs = spi->delay,
+		.speed_hz = spi->speed,
+		.bits_per_word = spi->bits,
+	};
+	return (ioctl(fd, SPI_IOC_MESSAGE(1), &xf) > 0);
 }
 
 #endif

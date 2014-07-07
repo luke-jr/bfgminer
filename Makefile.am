@@ -327,6 +327,11 @@ if USE_HASHFAST
 bfgminer_SOURCES += driver-hashfast.c
 endif
 
+if USE_JINGTIAN
+bfgminer_SOURCES += driver-aan.c driver-aan.h
+bfgminer_SOURCES += driver-jingtian.c
+endif
+
 if USE_ROCKMINER
 bfgminer_SOURCES += driver-rockminer.c
 endif
