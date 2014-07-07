@@ -215,6 +215,7 @@ Options for both config file and command line:
 --api-mcast         Enable API Multicast listener, default: disabled
 --api-mcast-addr <arg> API Multicast listen address (default: "224.0.0.75")
 --api-mcast-code <arg> Code expected in the API Multicast message, don't use '-' (default: "FTW")
+--api-mcast-des <arg>  Description appended to the API Multicast reply, default: ''
 --api-mcast-port <arg> API Multicast listen port (default: 4028)
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
@@ -229,6 +230,7 @@ Options for both config file and command line:
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
 --debuglog          Enable debug logging
+--device-protocol-dump Verbose dump of device protocol-level activities
 --device|-d <arg>   Enable only devices matching pattern (default: all)
 --disable-rejecting Automatically disable pools that continually reject shares
 --http-port <arg>   Port number to listen on for HTTP getwork miners (-1 means disabled) (default: -1)
@@ -254,13 +256,13 @@ Options for both config file and command line:
 --noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-priority <arg> Priority for just the previous-defined pool
 --pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
 --quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
---remove-disabled   Remove disabled devices entirely, as if they didn't exist
 --request-diff <arg> Request a specific difficulty from pools (default: 1.0)
 --retries <arg>     Number of times to retry failed submissions before giving up (-1 means never) (default: -1)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
@@ -290,6 +292,7 @@ Options for both config file and command line:
 --verbose           Log verbose output to stderr as well as status output
 --weighed-stats     Display statistics weighed to difficulty 1
 --userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
+--worktime                     Display extra work time debug information
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
 See example.conf for an example configuration.
