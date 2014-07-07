@@ -1,3 +1,9 @@
+bfgminer (4.4.0-0precise1) precise; urgency=low
+
+  * getwork and stratum proxy drivers: Proxy-share difficulty is now adjustable using --set pxy:diff=N and/or --set pxy@username:diff=N
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 07 Jul 2014 16:34:42 -0000
+
 bfgminer (4.3.0-0precise1) precise; urgency=low
 
   * URI parameter #getcbaddr to request coinbase address from bitcoind or compatible servers for solo mining.

@@ -1,3 +1,70 @@
+BFGMiner Version 4.4.0 - July 7, 2014
+
+- lowl-vcom: Added support for auto scanning (-S auto) on Mac OS X
+- rockminer: implement --device-protocol-dump for debugging
+- README: Update for commandline options
+- README: Update configure options
+- Bugfix: bfg_gpio_setpin_output: Clear alt-function bits via INP_GPIO macro
+- jingtian: Explicitly configure SPI device while opening
+- jingtian: Toggle ASIC reset GPIO at startup
+- aan: Set defaults as soon as a proc is initialised
+- aan: Allow specifying clock as xHEXX for a raw PLL register config
+- aan: Include current frequency in RPC status
+- aan: Implement --set jtn:clock=MHz
+- aan: Logic to calculate PLL configurations for a given frequency
+- jingtian: Use SPI enable GPIO to disconnect SPI during chipselect changes
+- aan: Set PLL to 850 MHz
+- aan: Simplify register buffer
+- jingtian: Decode extra temperature bytes in read_reg
+- aan: Add a read_reg hook
+- aan: Enable configuring nonce diff with (eg) --set jtn:diff=32
+- aan: Properly handle nonce_diff
+- aan: Implement mining
+- DevAPI: Some designs set the main thr tv_poll from secondary thrs, so check it
+after the loop
+- aan: aan_spi_parse_rx implies spi_clear_buf
+- jingtian: Do detection asynchronously across all possible chipselects so they
+complete in parallel
+- aan: Refactor aan_spi_cmd a bit
+- jingtian: Implement device protocol dump
+- jingtian: Detection-only code for new driver
+- lowl-spi: GPIO access functions
+- lowl-spi: Move knc_spi_txrx to linux_spi_txrx
+- SGW: Support for proxy-share difficulty preferences
+- SSM: Propagate proxy-share difficulty changes to established connections
+- SSM: Track stratum connections for each proxy user
+- SSM: Track authorised users for each connection
+- SSM: Initialise proxyshare difficulty from --set pxy:diff=N
+- proxy: Accept --set pxy:diff=N to set preferred proxyshare difficulty
+- proxy: Provide a place to store desired proxyshare difficulty on a
+per-username basis, and copy it to SSM connections when authorising them
+- SSM: Track proxy share difficulties
+- Expose target_diff function and add pdiff_to_bdiff macro
+- util: double_find_precision function to identify ideal precision for a fp
+number
+- work2d: Expose WORK2D_MAX_DIVISIONS in header
+- add_local_gbt: Avoid adding servers already configured
+- Bugfix: Avoid writing automatically configured local GBT servers to the config
+file unless they have been manually enabled
+- add_local_gbt: Use rpcconnect when configured
+- rockminer: Bugfix: must specify a baud rate (maximum of 115200) to get a read
+response
+- Bugfix: Use atexit() to ensure a final \n is always printed at exit to work
+cleanly with new logging design
+- Restore compatibility with old versions of libblkmaker
+- Bugfix: probe for ZeusMiner before probing for DualMiner
+- Wait until coinbase-addr is needed again, before updating it following a block
+change (always using getaccountaddress)
+- Don't automatically use #getcbaddr for local bitcoind if the user provided
+their own
+- Bugfix: refresh_bitcoind_address: Check for NULL json (which is not JSON
+"null")
+- Bugfix: add_pool: If no current pool set, initialise it (otherwise pool
+testing may start a longpoll thread which tries to access currentpool
+uninitialised)
+- devpath_to_devid: *nix: Reject anything that doesn't begin with a /
+
+
 BFGMiner Version 4.3.0 - June 30, 2014
 
 - Bugfix: zeusminer: Include config.h
