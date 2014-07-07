@@ -10973,7 +10973,7 @@ bool _add_local_gbt(const char * const filepath, void *userp)
 	const bool * const live_p = userp;
 	struct pool *pool;
 	char buf[0x100];
-	char *rpcuser = NULL, *rpcpass = NULL;
+	char *rpcuser = NULL, *rpcpass = NULL, *rpcconnect = NULL;
 	int rpcport = 0, rpcssl = -101;
 	FILE * const F = fopen(filepath, "r");
 	if (!F)
@@ -10993,8 +10993,11 @@ bool _add_local_gbt(const char * const filepath, void *userp)
 		if (!strncasecmp(buf, "rpcssl=", 7))
 			rpcssl = atoi(&buf[7]);
 		else
+		if (!strncasecmp(buf, "rpcconnect=", 11))
+			rpcconnect = trimmed_strdup(&buf[11]);
+		else
 			continue;
-		if (rpcuser && rpcpass && rpcport && rpcssl != -101)
+		if (rpcuser && rpcpass && rpcport && rpcssl != -101 && rpcconnect)
 			break;
 	}
 	
@@ -11019,9 +11022,14 @@ err:
 	
 	const int uri_sz = 0x30;
 	char * const uri = malloc(uri_sz);
-	snprintf(uri, uri_sz, "http%s://localhost:%d/%s#allblocks", rpcssl ? "s" : "", rpcport, have_cbaddr ? "" : "#getcbaddr");
+	snprintf(uri, uri_sz, "http%s://%s:%d/%s#allblocks", rpcssl ? "s" : "", rpcconnect ?: "localhost", rpcport, have_cbaddr ? "" : "#getcbaddr");
 	
-	applog(LOG_DEBUG, "Local bitcoin RPC server on port %d found in %s", rpcport, filepath);
+	char hfuri[0x40];
+	if (rpcconnect)
+		snprintf(hfuri, sizeof(hfuri), "%s:%d", rpcconnect, rpcport);
+	else
+		snprintf(hfuri, sizeof(hfuri), "port %d", rpcport);
+	applog(LOG_DEBUG, "Local bitcoin RPC server on %s found in %s", hfuri, filepath);
 	
 	pool = add_pool();
 	if (!pool)
@@ -11038,7 +11046,7 @@ err:
 	pool->failover_only = true;
 	add_pool_details(pool, *live_p, uri, rpcuser, rpcpass);
 	
-	applog(LOG_NOTICE, "Added local bitcoin RPC server on port %d as pool %d", rpcport, pool->pool_no);
+	applog(LOG_NOTICE, "Added local bitcoin RPC server on %s as pool %d", hfuri, pool->pool_no);
 	
 out:
 	return false;
