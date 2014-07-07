@@ -155,6 +155,7 @@ BFGMiner driver configuration options:
 	                        libusb)
 	--disable-hashfast      Compile support for HashFast (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
+	--enable-jingtian       Compile support for JingTian (default disabled)
 	--disable-klondike      Compile support for Klondike (default enabled)
 	--enable-knc            Compile support for KnC (default disabled)
 	--disable-littlefury    Compile support for LittleFury (default enabled)
@@ -163,9 +164,12 @@ BFGMiner driver configuration options:
 	--disable-nanofury      Compile support for NanoFury (default enabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
+	--disable-rockminer     Compile support for RockMiner (default enabled)
 	--disable-twinfury      Compile support for Twinfury USB miner (default
 	                        enabled)
 	--disable-x6500         Compile support for X6500 (default if libusb)
+	--disable-zeusminer     Compile support for ZeusMiner (default enabled with
+	                        scrypt)
 	--disable-ztex          Compile support for ZTEX (default if libusb)
 
 BFGMiner algorithm configuration option:
