@@ -27,6 +27,8 @@
 #define ROCKMINER_MIDTASK_TIMEOUT_US  500000
 #define ROCKMINER_MIDTASK_RETRY_US   1000000
 #define ROCKMINER_TASK_TIMEOUT_US    5273438
+#define ROCKMINER_IO_SPEED 115200
+#define ROCKMINER_READ_TIMEOUT 1 //deciseconds
 
 #define ROCKMINER_MAX_CHIPS  64
 #define ROCKMINER_WORK_REQ_SIZE  0x40
@@ -48,6 +50,12 @@ struct rockminer_chip_data {
 	struct timeval tv_midtask_timeout;
 	int requested_work;
 };
+
+static
+int rockminer_open(const char *devpath)
+{
+	return serial_open(devpath, ROCKMINER_IO_SPEED, ROCKMINER_READ_TIMEOUT, true);
+}
 
 static
 void rockminer_job_buf_init(uint8_t * const buf, const uint8_t chipid)
@@ -157,7 +165,7 @@ bool rockminer_detect_one(const char * const devpath)
 	uint8_t buf[ROCKMINER_WORK_REQ_SIZE], reply[ROCKMINER_REPLY_SIZE];
 	ssize_t rsz;
 	
-	fd = serial_open(devpath, 0, 1, true);
+	fd = rockminer_open(devpath);
 	if (fd < 0)
 		return_via_applog(err, , LOG_DEBUG, "%s: %s %s", rockminer_drv.dname, "Failed to open", devpath);
 	
@@ -314,7 +322,7 @@ void rockminer_poll(struct thr_info * const master_thr)
 	
 	if (fd < 0)
 	{
-		fd = serial_open(dev->device_path, 0, 1, true);
+		fd = rockminer_open(dev->device_path);
 		if (fd < 0)
 		{
 			timer_set_delay_from_now(&master_thr->tv_poll, ROCKMINER_RETRY_US);
