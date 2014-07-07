@@ -1057,6 +1057,8 @@ extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);
+#define pdiff_to_bdiff(n) (n * 0.9999847412109375)
+extern double target_diff(const unsigned char *target);
 
 extern void kill_work(void);
 extern void app_restart(void);

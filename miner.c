@@ -2918,8 +2918,6 @@ void refresh_bitcoind_address(const bool fresh)
 }
 #endif
 
-static double target_diff(const unsigned char *);
-
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
 #if BLKMAKER_VERSION > 4
@@ -4917,7 +4915,7 @@ out:
 
 static double DIFFEXACTONE = 26959946667150639794667015087019630673637144422540572481103610249215.0;
 
-static double target_diff(const unsigned char *target)
+double target_diff(const unsigned char *target)
 {
 	double targ = 0;
 	signed int i;
