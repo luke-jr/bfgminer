@@ -113,6 +113,7 @@ int spi_open(struct spi_port * const spi, const char * const devpath)
 
 void bfg_gpio_setpin_output(const unsigned pin)
 {
+	INP_GPIO(pin);
 	OUT_GPIO(pin);
 }
 
