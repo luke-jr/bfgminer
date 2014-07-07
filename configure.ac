@@ -182,6 +182,7 @@ case $target in
     use_udevrules=false
     ;;
 	*-*-darwin*)
+		LDFLAGS="$LDFLAGS -framework IOKit -framework CoreFoundation"
 		have_macho=true
     use_udevrules=false
 		;;
