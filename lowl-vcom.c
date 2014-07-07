@@ -3,6 +3,7 @@
  * Copyright 2013 Con Kolivas
  * Copyright 2012 Andrew Smith
  * Copyright 2013 Xiangfu
+ * Copyright 2014 Nate Woolls
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -76,6 +77,12 @@ enum {
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
 #include <sys/ioctl.h>
+#endif
+
+#ifdef __APPLE__
+#include <IOKit/IOKitLib.h>
+#include <IOKit/IOCFPlugIn.h>
+#include <IOKit/usb/IOUSBLib.h>
 #endif
 
 #include "logging.h"
@@ -184,6 +191,122 @@ void _vcom_devinfo_scan_udev(struct lowlevel_device_info ** const devinfo_list)
 	}
 	udev_enumerate_unref(enumerate);
 	udev_unref(udev);
+}
+#endif
+
+#ifdef __APPLE__
+static
+const char * _iokit_get_string_descriptor(IOUSBDeviceInterface300 ** const usb_device, const uint8_t string_idx)
+{
+	UInt16 buf[64];
+	IOUSBDevRequest dev_req;
+
+	dev_req.bmRequestType = USBmakebmRequestType(kUSBIn, kUSBStandard, kUSBDevice);
+	dev_req.bRequest = kUSBRqGetDescriptor;
+	dev_req.wValue = (kUSBStringDesc << 8) | string_idx;
+	dev_req.wIndex = 0x409; //English
+	dev_req.wLength = sizeof(buf);
+	dev_req.pData = buf;
+
+	kern_return_t kret = (*usb_device)->DeviceRequest(usb_device, &dev_req);
+	if (kret != 0)
+		return NULL;
+
+	size_t str_len = (dev_req.wLenDone / 2) - 1;
+
+	return ucs2_to_utf8_dup(&buf[1], str_len);
+}
+
+static
+IOUSBDeviceInterface300 ** _iokit_get_service_device(const io_service_t usb_svc)
+{
+	IOCFPlugInInterface ** plugin;
+	SInt32 score;
+	IOUSBDeviceInterface300 ** usb_device;
+
+	IOCreatePlugInInterfaceForService(usb_svc, kIOUSBDeviceUserClientTypeID,
+									  kIOCFPlugInInterfaceID, &plugin, &score);
+	(*plugin)->QueryInterface(plugin,
+							  CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID300),
+							  (LPVOID)&usb_device);
+	(*plugin)->Release(plugin);
+
+	return usb_device;
+}
+
+static
+bool _iokit_get_device_path(const io_service_t usb_svc, char * const buf, const size_t buf_len)
+{
+	CFTypeRef dev_path_cf = IORegistryEntrySearchCFProperty(usb_svc, kIOServicePlane, CFSTR("IOCalloutDevice"),
+															kCFAllocatorDefault, kIORegistryIterateRecursively);
+	if (dev_path_cf)
+	{
+		CFStringGetCString(dev_path_cf, buf, buf_len, kCFStringEncodingASCII);
+		CFRelease(dev_path_cf);
+
+		return true;
+	}
+
+	return false;
+}
+
+static
+void _vcom_devinfo_scan_iokit_service(struct lowlevel_device_info ** const devinfo_list, const io_service_t usb_svc)
+{
+	IOUSBDeviceInterface300 ** usb_device = _iokit_get_service_device(usb_svc);
+
+	IOReturn ret = (*usb_device)->USBDeviceOpen(usb_device);
+	if (ret == kIOReturnSuccess)
+	{
+		char dev_path[PATH_MAX];
+
+		if (_iokit_get_device_path(usb_svc, dev_path, PATH_MAX))
+		{
+			UInt8 manuf_idx;
+			UInt8 prod_idx;
+			UInt8 serialno_idx;
+
+			(*usb_device)->USBGetManufacturerStringIndex(usb_device, &manuf_idx);
+			(*usb_device)->USBGetProductStringIndex(usb_device, &prod_idx);
+			(*usb_device)->USBGetSerialNumberStringIndex(usb_device, &serialno_idx);
+
+			const char * dev_manuf = _iokit_get_string_descriptor(usb_device, manuf_idx);
+			const char * dev_product = _iokit_get_string_descriptor(usb_device, prod_idx);
+			const char * dev_serial = _iokit_get_string_descriptor(usb_device, serialno_idx);
+
+			struct lowlevel_device_info *devinfo;
+			devinfo = _vcom_devinfo_findorcreate(devinfo_list, dev_path);
+
+			BFGINIT(devinfo->manufacturer, (char *)dev_manuf);
+			BFGINIT(devinfo->product, (char *)dev_product);
+			BFGINIT(devinfo->serial, (char *)dev_serial);
+		}
+
+		(*usb_device)->USBDeviceClose(usb_device);
+	}
+}
+
+static
+void _vcom_devinfo_scan_iokit(struct lowlevel_device_info ** const devinfo_list)
+{
+	CFMutableDictionaryRef matching_dict = IOServiceMatching(kIOUSBDeviceClassName);
+	if (matching_dict == NULL)
+		return;
+
+	io_iterator_t iterator;
+	kern_return_t kret = IOServiceGetMatchingServices(kIOMasterPortDefault, matching_dict, &iterator);
+	if (kret != KERN_SUCCESS)
+		return;
+
+	io_service_t usb_svc;
+	while ((usb_svc = IOIteratorNext(iterator)))
+	{
+		_vcom_devinfo_scan_iokit_service(devinfo_list, usb_svc);
+
+		IOObjectRelease(usb_svc);
+	}
+
+	IOObjectRelease(iterator);
 }
 #endif
 
@@ -758,6 +881,9 @@ struct lowlevel_device_info *vcom_devinfo_scan()
 #endif
 #ifdef HAVE_LIBUDEV
 	_vcom_devinfo_scan_udev(&devinfo_hash);
+#endif
+#ifdef __APPLE__
+	_vcom_devinfo_scan_iokit(&devinfo_hash);
 #endif
 	// Missing Manufacturer:
 #ifdef WIN32
