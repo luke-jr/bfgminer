@@ -6956,6 +6956,10 @@ void write_config(FILE *fcfg)
 	for(i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
+		if (pool->failover_only)
+			// Don't write failover-only (automatically added) pools to the config file for now
+			continue;
+		
 		if (pool->quota != 1) {
 			fprintf(fcfg, "%s\n\t{\n\t\t\"quota\" : \"%d;%s\",", i > 0 ? "," : "",
 				pool->quota,
