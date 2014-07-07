@@ -295,7 +295,7 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	if (opt_scrypt)
 		gc3355_scrypt_prepare_work(state->ob_bin, work);
 	else
-		gc3355_sha2_prepare_work(state->ob_bin, work, false);
+		gc3355_sha2_prepare_work(state->ob_bin, work);
 
 	return true;
 }

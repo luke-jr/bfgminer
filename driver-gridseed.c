@@ -19,7 +19,6 @@
 #include "gc3355.h"
 
 #define GRIDSEED_DEFAULT_FREQUENCY  600
-#define GRIDSEED_MAX_QUEUED          10
 #define GRIDSEED_HASH_SPEED			0.0851128926	// in ms
 
 BFG_REGISTER_DRIVER(gridseed_drv)
@@ -135,12 +134,9 @@ bool gridseed_thread_prepare(struct thr_info *thr)
 {
 	thr->cgpu_data = calloc(1, sizeof(*thr->cgpu_data));
 	
-	if (opt_scrypt)
-	{
-		struct cgpu_info *device = thr->cgpu;
-		device->min_nonce_diff = 1./0x10000;
-	}
-	
+	struct cgpu_info *device = thr->cgpu;
+	device->min_nonce_diff = 1./0x10000;
+
 	return true;
 }
 
@@ -148,8 +144,8 @@ static
 void gridseed_thread_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
+
 	gc3355_close(device->device_fd);
-	
 	free(thr->cgpu_data);
 }
 
@@ -163,22 +159,12 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 {
 	struct cgpu_info *device = thr->cgpu;
 	struct gc3355_orb_info *info = device->device_data;
-
-	int work_size = opt_scrypt ? 156 : 52;
-	unsigned char cmd[work_size];
+	unsigned char cmd[156];
 	
-	cgtime(&info->scanhash_time);
+	timer_set_now(&info->scanhash_time);
 
-	//from GC3355 docs if we are using FIFO
-	work->id = 12345678;
-
-	if (opt_scrypt)
-	{
-		gc3355_scrypt_reset(device->device_fd);
-		gc3355_scrypt_prepare_work(cmd, work);
-	}
-	else
-		gc3355_sha2_prepare_work(cmd, work, true);
+	gc3355_scrypt_reset(device->device_fd);
+	gc3355_scrypt_prepare_work(cmd, work);
 	
 	// send work
 	if (sizeof(cmd) != gc3355_write(device->device_fd, cmd, sizeof(cmd)))
@@ -204,7 +190,8 @@ int64_t gridseed_estimate_hashes(struct thr_info *thr)
 	struct cgpu_info *device = thr->cgpu;
 	struct gc3355_orb_info *info = device->device_data;
 	struct timeval old_scanhash_time = info->scanhash_time;
-	cgtime(&info->scanhash_time);
+
+	timer_set_now(&info->scanhash_time);
 	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
 
 	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq * info->chips);
@@ -222,20 +209,11 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 
 	while (!thr->work_restart && (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) > 0)
 	{
-		if (buf[0] == 0x55)
+		if ((buf[0] == 0x55) && (buf[1] == 0x20))
 		{
-			switch(buf[1]) {
-				case 0xaa:
-					// Queue length result
-					// could watch for watchdog reset here
-					break;
-				case 0x10: // BTC result
-				case 0x20: // LTC result
-				{
-					gridseed_submit_nonce(thr, buf, work);
-					break;
-				}
-			}
+			// LTC result
+			gridseed_submit_nonce(thr, buf, work);
+			break;
 		}
 		else
 		{
@@ -261,9 +239,7 @@ char *gridseed_set_device(struct cgpu_info *device, char *option, char *setting,
 	if (strcasecmp(option, "clock") == 0)
 	{
 		info->freq = val;
-		int fd = device->device_fd;
-		
-		gc3355_set_pll_freq(fd, val);
+		gc3355_set_pll_freq(device->device_fd, val);
 		
 		return NULL;
 	}
