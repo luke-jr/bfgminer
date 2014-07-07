@@ -255,34 +255,27 @@ void _vcom_devinfo_scan_iokit_service(struct lowlevel_device_info ** const devin
 {
 	IOUSBDeviceInterface300 ** usb_device = _iokit_get_service_device(usb_svc);
 
-	IOReturn ret = (*usb_device)->USBDeviceOpen(usb_device);
-	if (ret == kIOReturnSuccess)
+	char dev_path[PATH_MAX];
+	if (_iokit_get_device_path(usb_svc, dev_path, PATH_MAX))
 	{
-		char dev_path[PATH_MAX];
+		UInt8 manuf_idx;
+		UInt8 prod_idx;
+		UInt8 serialno_idx;
 
-		if (_iokit_get_device_path(usb_svc, dev_path, PATH_MAX))
-		{
-			UInt8 manuf_idx;
-			UInt8 prod_idx;
-			UInt8 serialno_idx;
+		(*usb_device)->USBGetManufacturerStringIndex(usb_device, &manuf_idx);
+		(*usb_device)->USBGetProductStringIndex(usb_device, &prod_idx);
+		(*usb_device)->USBGetSerialNumberStringIndex(usb_device, &serialno_idx);
 
-			(*usb_device)->USBGetManufacturerStringIndex(usb_device, &manuf_idx);
-			(*usb_device)->USBGetProductStringIndex(usb_device, &prod_idx);
-			(*usb_device)->USBGetSerialNumberStringIndex(usb_device, &serialno_idx);
+		const char * dev_manuf = _iokit_get_string_descriptor(usb_device, manuf_idx);
+		const char * dev_product = _iokit_get_string_descriptor(usb_device, prod_idx);
+		const char * dev_serial = _iokit_get_string_descriptor(usb_device, serialno_idx);
 
-			const char * dev_manuf = _iokit_get_string_descriptor(usb_device, manuf_idx);
-			const char * dev_product = _iokit_get_string_descriptor(usb_device, prod_idx);
-			const char * dev_serial = _iokit_get_string_descriptor(usb_device, serialno_idx);
+		struct lowlevel_device_info *devinfo;
+		devinfo = _vcom_devinfo_findorcreate(devinfo_list, dev_path);
 
-			struct lowlevel_device_info *devinfo;
-			devinfo = _vcom_devinfo_findorcreate(devinfo_list, dev_path);
-
-			BFGINIT(devinfo->manufacturer, (char *)dev_manuf);
-			BFGINIT(devinfo->product, (char *)dev_product);
-			BFGINIT(devinfo->serial, (char *)dev_serial);
-		}
-
-		(*usb_device)->USBDeviceClose(usb_device);
+		BFGINIT(devinfo->manufacturer, (char *)dev_manuf);
+		BFGINIT(devinfo->product, (char *)dev_product);
+		BFGINIT(devinfo->serial, (char *)dev_serial);
 	}
 }
 
