@@ -213,7 +213,6 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 		{
 			// LTC result
 			gridseed_submit_nonce(thr, buf, work);
-			break;
 		}
 		else
 		{
