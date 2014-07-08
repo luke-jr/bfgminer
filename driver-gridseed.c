@@ -19,7 +19,9 @@
 #include "gc3355.h"
 
 #define GRIDSEED_DEFAULT_FREQUENCY  600
-#define GRIDSEED_HASH_SPEED			0.0851128926	// in ms
+
+// 60Kh/s at 700MHz in ms
+#define GRIDSEED_HASH_SPEED			0.08571428571429
 
 BFG_REGISTER_DRIVER(gridseed_drv)
 
@@ -202,23 +204,44 @@ static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *device = thr->cgpu;
+	struct gc3355_orb_info *info = device->device_data;
+	struct timeval tv_nonce_range, tv_hashes_done;
+
+	// total hashrate of this device:
+	uint32_t hashes_per_sec = GRIDSEED_HASH_SPEED * (double)(1000 * info->freq * info->chips);
+	// amount of time it takes this device to scan a nonce range:
+	uint32_t nonce_range_sec = 0xffffffff / hashes_per_sec;
+	// timer to break out of scanning should we scan an entire nonce range
+	timer_set_delay_from_now(&tv_nonce_range, nonce_range_sec * 1000000);
+
+	// timer to estimate hashes every 10s for runs of no shares
+	const uint32_t hashes_delay = 10 * 1000000;
+	timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
 
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
 	int fd = device->device_fd;
 
-	while (!thr->work_restart && (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) > 0)
+	while (!thr->work_restart &&											// true when new work is available (miner.c)
+		   (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) >= 0 &&	// only check for failure - allow 0 bytes
+		   !timer_passed(&tv_nonce_range, NULL))							// true when we've had time to scan a range
 	{
-		if ((buf[0] == 0x55) && (buf[1] == 0x20))
+		if (timer_passed(&tv_hashes_done, NULL))
 		{
-			// LTC result
+			hashes_done2(thr, gridseed_estimate_hashes(thr), NULL);
+			timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
+		}
+
+		if (read == 0)
+			continue;
+		else if ((buf[0] == 0x55) && (buf[1] == 0x20))
+		{
 			gridseed_submit_nonce(thr, buf, work);
+			hashes_done2(thr, gridseed_estimate_hashes(thr), NULL);
+			timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
 		}
 		else
-		{
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
-			break;
-		}
 	}
 
 	return gridseed_estimate_hashes(thr);
