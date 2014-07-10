@@ -210,10 +210,8 @@ To enable uio on your cards, you may need to do:
     echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/uio_pci_generic/new_id
 
 Enabling vfio is similar, but more complicated, but allows you to run BFGMiner
-without root privileges. First, load the kernel module and tell it to accept the
-Monarch:
+without root privileges. First, load the kernel module:
     sudo modprobe vfio-pci
-    echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
 Next, identify what the device ids are for your card(s):
     lspci -D | grep 1cf9  # the first number of each line is the device id
 From that, you can identify its IOMMU group, and list all devices sharing that
@@ -223,6 +221,9 @@ group:
 All of the devices listed (other than the Monarch), if any, will need to be
 disabled and unbound! To do that, use:
     echo "$DEVICE_ID" | sudo tee "/sys/bus/pci/devices/$DEVICE_ID/driver/unbind"
+    echo "$DEVICE_CODE" | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
+Note that $DEVICE_ID should be something like "0000:01:00.0" and $DEVICE_CODE is
+something like "1cf9 0001" (this example is the Monarch itself).
 If you want to run BFGMiner as a normal user:
     chown "$USERNAME" "/dev/vfio/$IOMMU_GROUP_ID"
 Depending on your system, you may also need to do:
