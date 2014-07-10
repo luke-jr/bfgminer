@@ -645,6 +645,19 @@ struct api_data *hashfast_api_stats(struct cgpu_info * const proc)
 	return root;
 }
 
+static
+struct api_data *hashfast_api_devdetail(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	root = api_add_uint8(root, "Chip Address", &cs->chipaddr, false);
+	root = api_add_uint8(root, "Core Address", &cs->coreaddr, false);
+	
+	return root;
+}
+
 #ifdef HAVE_CURSES
 static
 void hashfast_wlogprint_status(struct cgpu_info * const proc)
@@ -691,6 +704,7 @@ struct device_drv hashfast_ums_drv = {
 	.poll = hashfast_poll,
 	
 	.get_api_stats = hashfast_api_stats,
+	.get_api_extra_device_detail = hashfast_api_devdetail,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = hashfast_wlogprint_status,
