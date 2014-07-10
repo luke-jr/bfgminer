@@ -218,13 +218,13 @@ Next, identify what the device ids are for your card(s):
     lspci -D | grep 1cf9  # the first number of each line is the device id
 From that, you can identify its IOMMU group, and list all devices sharing that
 group:
-    readlink /sys/bus/pci/devices/<device_id>/iommu_group
-    ls /sys/kernel/iommu_groups/<iommu_group>/devices/
+    readlink "/sys/bus/pci/devices/$DEVICE_ID/iommu_group"
+    ls "/sys/kernel/iommu_groups/$IOMMU_GROUP_ID/devices/"
 All of the devices listed (other than the Monarch), if any, will need to be
 disabled and unbound! To do that, use:
-    echo <device_id> | sudo tee /sys/bus/pci/devices/<device_id>/driver/unbind
+    echo "$DEVICE_ID" | sudo tee "/sys/bus/pci/devices/$DEVICE_ID/driver/unbind"
 If you want to run BFGMiner as a normal user:
-    chown <username> /dev/vfio/<iommu_group>
+    chown "$USERNAME" "/dev/vfio/$IOMMU_GROUP_ID"
 Depending on your system, you may also need to do:
     echo 1 | sudo tee /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
 
