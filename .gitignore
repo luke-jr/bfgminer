@@ -51,6 +51,8 @@ lib/string.h
 lib/stdint.h
 lib/warn-on-use.h
 iospeeds_local.h
+version.h
+version.h.new
 
 mkinstalldirs
 
