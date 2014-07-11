@@ -25,6 +25,7 @@
 
 BFG_REGISTER_DRIVER(gridseed_drv)
 
+static const struct bfg_set_device_definition gridseed_set_device_funcs_probe[];
 static const struct bfg_set_device_definition gridseed_set_device_funcs_live[];
 
 /*
@@ -92,16 +93,19 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	if (serial_claim_v(path, driver))
 		return false;
 	
-	struct cgpu_info *device = gridseed_alloc_device(path, driver, info);
-	
-	if (!add_cgpu(device))
-		return false;
-	
-	device->device_fd = fd;
-
 	info->chips = GC3355_ORB_DEFAULT_CHIPS;
 	if((fw_version & 0xffff) == 0x1402)
 		info->chips = GC3355_BLADE_DEFAULT_CHIPS;
+	
+	//pick up any user-defined settings passed in via --set
+	drv_set_defaults(driver, gridseed_set_device_funcs_probe, info, path, detectone_meta_info.serial, 1);
+	
+	struct cgpu_info *device = gridseed_alloc_device(path, driver, info);
+	device->device_fd = fd;
+	device->procs = info->chips;
+	
+	if (!add_cgpu(device))
+		return false;
 	
 	gc3355_init_usborb(device->device_fd, info->freq, false, false);
 	
@@ -184,13 +188,22 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 static
 void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[GC3355_READ_SIZE], struct work * const work)
 {
+	struct cgpu_info *device = thr->cgpu;
+	
 	uint32_t nonce = *(uint32_t *)(buf + 4);
 	nonce = le32toh(nonce);
-	submit_nonce(thr, work, nonce);
+	uint32_t chip = nonce / ((uint32_t)0xffffffff / device->procs);
+	
+	const struct cgpu_info *proc = device_proc_by_id(device, chip);
+	if (unlikely(!proc))
+		proc = device;
+	struct thr_info *proc_thr = proc->thr[0];
+	
+	submit_nonce(proc_thr, work, nonce);
 }
 
 static
-int64_t gridseed_estimate_hashes(struct thr_info *thr)
+int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
 	struct gc3355_orb_info *info = device->device_data;
@@ -199,7 +212,17 @@ int64_t gridseed_estimate_hashes(struct thr_info *thr)
 	timer_set_now(&info->scanhash_time);
 	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
 
-	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq * info->chips);
+	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq);
+}
+
+static
+void gridseed_hashes_done(struct thr_info *thr)
+{
+	struct cgpu_info *device = thr->cgpu;
+	int64_t chip_hashes = gridseed_calculate_chip_hashes(thr);
+	
+	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
+		hashes_done2(proc->thr[0], chip_hashes, NULL);
 }
 
 // read from device for nonce or command
@@ -231,7 +254,7 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 	{
 		if (timer_passed(&tv_hashes_done, NULL))
 		{
-			hashes_done2(thr, gridseed_estimate_hashes(thr), NULL);
+			gridseed_hashes_done(thr);
 			timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
 		}
 
@@ -240,14 +263,14 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 		else if ((buf[0] == 0x55) && (buf[1] == 0x20))
 		{
 			gridseed_submit_nonce(thr, buf, work);
-			hashes_done2(thr, gridseed_estimate_hashes(thr), NULL);
+			gridseed_hashes_done(thr);
 			timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
 		}
 		else
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
 	}
 
-	return gridseed_estimate_hashes(thr);
+	return 0;
 }
 
 /*
@@ -255,6 +278,7 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
  */
 
 // support for --set-device
+// must be set before probing the device
 
 static
 const char *gridseed_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
@@ -280,11 +304,18 @@ const char *gridseed_set_chips(struct cgpu_info * const device, const char * con
 	return NULL;
 }
 
-// for setting clock and chips
+// for setting clock and chips during probe / detect
+static
+const struct bfg_set_device_definition gridseed_set_device_funcs_probe[] = {
+	{ "clock", gridseed_set_clock, NULL },
+	{ "chips", gridseed_set_chips, NULL },
+	{ NULL },
+};
+
+// for setting clock while mining
 static
 const struct bfg_set_device_definition gridseed_set_device_funcs_live[] = {
 	{ "clock", gridseed_set_clock, NULL },
-	{ "chips", gridseed_set_chips, NULL },
 	{ NULL },
 };
 
