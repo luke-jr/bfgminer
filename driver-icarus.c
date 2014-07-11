@@ -551,6 +551,11 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_fd = -1;
 	icarus->threads = 1;
 	icarus->set_device_funcs = icarus_set_device_funcs;
+
+#ifdef USE_ZEUSMINER
+	icarus->procs = info->chips;
+#endif
+
 	add_cgpu(icarus);
 
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s",
@@ -781,6 +786,18 @@ struct work *icarus_process_worknonce(const struct ICARUS_INFO * const info, str
 }
 
 static
+struct thr_info *icarus_thread_for_nonce(const struct cgpu_info * const icarus, uint32_t nonce)
+{
+	uint32_t chip = nonce / ((uint32_t)0xffffffff / icarus->procs);
+
+	const struct cgpu_info *proc = device_proc_by_id((struct cgpu_info *)icarus, chip);
+	if (unlikely(!proc))
+		proc = icarus;
+
+	return proc->thr[0];
+}
+
+static
 void handle_identify(struct thr_info * const thr, int ret, const bool was_first_run)
 {
 	const struct cgpu_info * const icarus = thr->cgpu;
@@ -819,7 +836,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
 				nonce = icarus_nonce32toh(info, nonce);
-				submit_nonce(thr, state->last_work, nonce);
+				submit_nonce(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
 			}
 		}
 	}
@@ -858,7 +875,18 @@ void icarus_transition_work(struct icarus_state *state, struct work *work)
 	state->last_work = copy_work(work);
 }
 
-static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
+static
+void icarus_hashes_done(struct thr_info *thr, int64_t total_hashes)
+{
+	struct cgpu_info *device = thr->cgpu;
+	int64_t chip_hashes = total_hashes / device->procs;
+
+	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
+		hashes_done2(proc->thr[0], chip_hashes, NULL);
+}
+
+static
+int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 				__maybe_unused int64_t max_nonce)
 {
 	struct cgpu_info *icarus;
@@ -964,7 +992,7 @@ keepwaiting:
 			if (nonce_work == state->last2_work)
 			{
 				// nonce was for the last job; submit and keep processing the current one
-				submit_nonce(thr, nonce_work, nonce);
+				submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 				goto keepwaiting;
 			}
 			if (info->continue_search)
@@ -972,7 +1000,7 @@ keepwaiting:
 				read_count = info->read_count - ((timer_elapsed_us(&state->tv_workstart, NULL) / (1000000 / TIME_FACTOR)) + 1);
 				if (read_count)
 				{
-					submit_nonce(thr, nonce_work, nonce);
+					submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 					goto keepwaiting;
 				}
 			}
@@ -1026,7 +1054,7 @@ keepwaiting:
 
 	if (ret == ICA_GETS_OK && !was_hw_error)
 	{
-		submit_nonce(thr, nonce_work, nonce);
+		submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 		
 		icarus_transition_work(state, work);
 		
@@ -1047,7 +1075,7 @@ keepwaiting:
 		
 		if (ret == ICA_GETS_OK)
 		{
-			inc_hw_errors(thr, state->last_work, nonce);
+			inc_hw_errors(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
 			estimate_hashes -= ICARUS_READ_TIME(info->baud, info->read_size);
 		}
 		
@@ -1216,8 +1244,10 @@ keepwaiting:
 out:
 	if (unlikely(state->identify))
 		handle_identify(thr, ret, was_first_run);
-	
-	return hash_count;
+
+	icarus_hashes_done(thr, hash_count);
+
+	return 0;
 }
 
 static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
