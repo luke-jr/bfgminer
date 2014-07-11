@@ -25,6 +25,8 @@
 
 BFG_REGISTER_DRIVER(gridseed_drv)
 
+static const struct bfg_set_device_definition gridseed_set_device_funcs_live[];
+
 /*
  * helper functions
  */
@@ -41,6 +43,7 @@ struct cgpu_info *gridseed_alloc_device(const char *path, struct device_drv *dri
 	device->device_fd = -1;
 	device->threads = 1;
 	device->device_data = info;
+	device->set_device_funcs = gridseed_set_device_funcs_live;
 	
 	return device;
 }
@@ -251,31 +254,39 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
  * specify settings / options
  */
 
-// support for --set-device dualminer:clock=freq
+// support for --set-device
+
 static
-char *gridseed_set_device(struct cgpu_info *device, char *option, char *setting, char *replybuf)
+const char *gridseed_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
+	struct gc3355_orb_info * const info = device->device_data;
 	int val = atoi(setting);
-	struct gc3355_orb_info *info = device->device_data;
 
-	if (strcasecmp(option, "clock") == 0)
-	{
-		info->freq = val;
-		gc3355_set_pll_freq(device->device_fd, val);
-		
-		return NULL;
-	}
+	info->freq = val;
+	// below required as we may already be mining
+	gc3355_set_pll_freq(device->device_fd, val);
 
-	if (strcasecmp(option, "chips") == 0)
-	{
-		info->chips = val;
-
-		return NULL;
-	}
-	
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
+	return NULL;
 }
+
+static
+const char *gridseed_set_chips(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct gc3355_orb_info * const info = device->device_data;
+	int val = atoi(setting);
+	
+	info->chips = val;
+	
+	return NULL;
+}
+
+// for setting clock and chips
+static
+const struct bfg_set_device_definition gridseed_set_device_funcs_live[] = {
+	{ "clock", gridseed_set_clock, NULL },
+	{ "chips", gridseed_set_chips, NULL },
+	{ NULL },
+};
 
 struct device_drv gridseed_drv =
 {
@@ -299,7 +310,4 @@ struct device_drv gridseed_drv =
 	
 	// teardown device
 	.thread_shutdown = gridseed_thread_shutdown,
-	
-	// specify settings / options
-	.set_device = gridseed_set_device,
 };
