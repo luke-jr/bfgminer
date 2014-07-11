@@ -48,6 +48,7 @@ git submodule update --init
 		git archive --prefix "$sw/ccan-upstream/" --format tar HEAD ccan/{build_assert,cast,compiler,opt,typesafe_cb} licenses/{CC0,GPL-3,LGPL-2.1}
 	)
 } | tar -xivp
+./gen-version.sh >"$sw"/version.h
 cd "$sw"
 NOSUBMODULES=1 \
 NOCONFIGURE=1 \

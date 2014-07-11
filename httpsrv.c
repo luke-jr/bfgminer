@@ -29,6 +29,7 @@
 
 #include "logging.h"
 #include "util.h"
+#include "version.h"
 
 static struct MHD_Daemon *httpsrv;
 

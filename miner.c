@@ -99,6 +99,8 @@
 #include "scrypt.h"
 #endif
 
+#include "version.h"
+
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
@@ -3934,6 +3936,15 @@ void bfg_hline(WINDOW *win, int y)
 		mvwhline(win, y, 0, '-', maxx);
 }
 
+static
+int bfg_win_linelen(WINDOW * const win)
+{
+	int maxx;
+	int __maybe_unused y;
+	getmaxyx(win, y, maxx);
+	return maxx;
+}
+
 // Spaces until end of line, using current attributes (ie, not completely clear)
 static
 void bfg_wspctoeol(WINDOW * const win, const int offset)
@@ -3982,7 +3993,18 @@ static void curses_print_status(const int ts)
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	wattron(statuswin, attr_title);
-	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " version " VERSION " - Started: %s", datestamp);
+	const int linelen = bfg_win_linelen(statuswin);
+	int titlelen = 1 + strlen(PACKAGE) + 1 + strlen(VERSION) + 3 + 21 + 3 + 19;
+	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " ");
+	if (titlelen + 17 < linelen)
+		cg_wprintw(statuswin, "version ");
+	cg_wprintw(statuswin, VERSION " - ");
+	if (titlelen + 9 < linelen)
+		cg_wprintw(statuswin, "Started: ");
+	else
+	if (titlelen + 7 <= linelen)
+		cg_wprintw(statuswin, "Start: ");
+	cg_wprintw(statuswin, "%s", datestamp);
 	timer_set_now(&now);
 	{
 		unsigned int days, hours;

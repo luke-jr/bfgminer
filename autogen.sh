@@ -23,3 +23,8 @@ echo 'Running autoreconf -if...'
 	rm -f aclocal.m4 ltmain.sh
 	autoreconf -if ${AC_FLAGS}
 )
+
+echo 'Updating version.h...'
+if ./gen-version.sh >version.h.new; then
+	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
+fi

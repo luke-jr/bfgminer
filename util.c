@@ -59,6 +59,7 @@
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
+#include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
 
