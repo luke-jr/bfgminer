@@ -136,7 +136,7 @@ struct ICARUS_INFO {
 #ifdef USE_ZEUSMINER
 	// Hardware information, doesn't affect anything directly
 	uint16_t freq;
-	uint8_t chips;
+	uint16_t chips;
 #endif
 };
 
