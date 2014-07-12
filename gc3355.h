@@ -34,7 +34,7 @@ int opt_pll_freq;
 struct gc3355_orb_info
 {
 	uint16_t freq;
-	uint8_t chips;
+	unsigned chips;
 	struct timeval scanhash_time;
 };
 
