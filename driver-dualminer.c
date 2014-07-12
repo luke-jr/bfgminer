@@ -212,8 +212,7 @@ bool dualminer_detect_one(const char *devpath)
 		.timing_mode = MODE_DEFAULT,
 		.do_icarus_timing = false,
 		.nonce_littleendian = true,
-		.work_division = 2,
-		.fpga_count = 2,
+		.work_division = 1,
 		.detect_init_func = dualminer_detect_init,
 		.job_start_func = dualminer_job_start
 	};
