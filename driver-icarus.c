@@ -438,6 +438,56 @@ int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
 	return bytes_read;
 }
 
+int icarus_probe_work_division(const int fd, const char * const repr, struct ICARUS_INFO * const info)
+{
+	struct timeval tv_finish;
+	
+	// For reading the nonce from Icarus
+	unsigned char res_bin[info->read_size];
+	// For storing the the 32-bit nonce
+	uint32_t res;
+	int work_division = 0;
+	
+	applog(LOG_DEBUG, "%s: Work division not specified - autodetecting", repr);
+	
+	// Special packet to probe work_division
+	unsigned char pkt[64] =
+		"\x2e\x4c\x8f\x91\xfd\x59\x5d\x2d\x7e\xa2\x0a\xaa\xcb\x64\xa2\xa0"
+		"\x43\x82\x86\x02\x77\xcf\x26\xb6\xa1\xee\x04\xc5\x6a\x5b\x50\x4a"
+		"BFGMiner Probe\0\0"
+		"BFG\0\x64\x61\x01\x1a\xc9\x06\xa9\x51\xfb\x9b\x3c\x73";
+	
+	icarus_write(fd, pkt, sizeof(pkt));
+	memset(res_bin, 0, sizeof(res_bin));
+	if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
+	{
+		memcpy(&res, res_bin, sizeof(res));
+		res = icarus_nonce32toh(info, res);
+	}
+	else
+		res = 0;
+	
+	switch (res) {
+		case 0x04C0FDB4:
+			work_division = 1;
+			break;
+		case 0x82540E46:
+			work_division = 2;
+			break;
+		case 0x417C0F36:
+			work_division = 4;
+			break;
+		case 0x60C994D5:
+			work_division = 8;
+			break;
+		default:
+			applog(LOG_ERR, "%s: Work division autodetection failed (assuming 2): got %08x", repr, res);
+			work_division = 2;
+	}
+	applog(LOG_DEBUG, "%s: Work division autodetection got %08x (=%d)", repr, res, work_division);
+	return work_division;
+}
+
 bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
 {
 	struct timeval tv_start, tv_finish;
@@ -640,52 +690,7 @@ bool icarus_init(struct thr_info *thr)
 	BFGINIT(state->ob_bin, calloc(1, info->ob_size));
 	
 	if (!info->work_division)
-	{
-		struct timeval tv_finish;
-		
-		// For reading the nonce from Icarus
-		unsigned char res_bin[info->read_size];
-		// For storing the the 32-bit nonce
-		uint32_t res;
-		
-		applog(LOG_DEBUG, "%"PRIpreprv": Work division not specified - autodetecting", icarus->proc_repr);
-		
-		// Special packet to probe work_division
-		unsigned char pkt[64] =
-			"\x2e\x4c\x8f\x91\xfd\x59\x5d\x2d\x7e\xa2\x0a\xaa\xcb\x64\xa2\xa0"
-			"\x43\x82\x86\x02\x77\xcf\x26\xb6\xa1\xee\x04\xc5\x6a\x5b\x50\x4a"
-			"BFGMiner Probe\0\0"
-			"BFG\0\x64\x61\x01\x1a\xc9\x06\xa9\x51\xfb\x9b\x3c\x73";
-		
-		icarus_write(fd, pkt, sizeof(pkt));
-		memset(res_bin, 0, sizeof(res_bin));
-		if (ICA_GETS_OK == icarus_gets(res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
-		{
-			memcpy(&res, res_bin, sizeof(res));
-			res = icarus_nonce32toh(info, res);
-		}
-		else
-			res = 0;
-		
-		switch (res) {
-			case 0x04C0FDB4:
-				info->work_division = 1;
-				break;
-			case 0x82540E46:
-				info->work_division = 2;
-				break;
-			case 0x417C0F36:
-				info->work_division = 4;
-				break;
-			case 0x60C994D5:
-				info->work_division = 8;
-				break;
-			default:
-				applog(LOG_ERR, "%"PRIpreprv": Work division autodetection failed (assuming 2): got %08x", icarus->proc_repr, res);
-				info->work_division = 2;
-		}
-		applog(LOG_DEBUG, "%"PRIpreprv": Work division autodetection got %08x (=%d)", icarus->proc_repr, res, info->work_division);
-	}
+		info->work_division = icarus_probe_work_division(fd, icarus->proc_repr, info);
 	
 	if (!info->fpga_count)
 		info->fpga_count = info->work_division;
