@@ -86,10 +86,10 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 		return false;
 	}
 	
-	struct cgpu_info *device = gridseed_alloc_device(path, driver, info);
-	
 	if (serial_claim_v(path, driver))
 		return false;
+	
+	struct cgpu_info *device = gridseed_alloc_device(path, driver, info);
 	
 	if (!add_cgpu(device))
 		return false;
