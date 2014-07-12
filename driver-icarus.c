@@ -313,9 +313,8 @@ static const char *timing_mode_str(enum timing_mode timing_mode)
 }
 
 static
-const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * const repr, const struct device_drv * const drv, const char * const buf)
 {
-	struct ICARUS_INFO * const info = proc->device_data;
 	double Hs;
 	char *eq;
 
@@ -388,7 +387,7 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 		int def_read_count = ICARUS_READ_COUNT_TIMING;
 
 		if (info->timing_mode == MODE_DEFAULT) {
-			if (proc->drv == &icarus_drv) {
+			if (drv == &icarus_drv) {
 				info->do_default_detection = 0x10;
 			} else {
 				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
@@ -405,11 +404,18 @@ const char *icarus_set_timing(struct cgpu_info * const proc, const char * const 
 	info->min_data_count = MIN_DATA_COUNT;
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d limit=%dms Hs=%e",
-		proc->proc_repr,
+		repr,
 		timing_mode_str(info->timing_mode),
 		info->read_count, info->read_count_limit, info->Hs);
 	
 	return NULL;
+}
+
+static
+const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	return _icarus_set_timing(info, proc->proc_repr, proc->drv, buf);
 }
 
 static uint32_t mask(int work_division)
@@ -594,6 +600,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (serial_claim_v(devpath, api))
 		return false;
 
+	_icarus_set_timing(info, api->dname, api, "");
 	if (!info->fpga_count)
 	{
 		if (!info->work_division)
@@ -614,6 +621,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
+	icarus->procs = info->fpga_count;
 	icarus->set_device_funcs = icarus_set_device_funcs_live;
 	add_cgpu(icarus);
 
@@ -628,7 +636,6 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_data = info;
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
-	icarus_set_timing(icarus, NULL, "", NULL, NULL);
 
 	return true;
 }
@@ -710,6 +717,18 @@ bool icarus_init(struct thr_info *thr)
 	info->nonce_mask = mask(info->work_division);
 	
 	return true;
+}
+
+static
+struct thr_info *icarus_thread_for_nonce(const struct cgpu_info * const icarus, const uint32_t nonce)
+{
+	struct ICARUS_INFO * const info = icarus->device_data;
+	unsigned proc_id = 0;
+	for (int i = info->work_division, j = 0; i /= 2; ++j)
+		if (nonce & (1 << (31 - j)))
+			proc_id |= (1 << j);
+	const struct cgpu_info * const proc = device_proc_by_id(icarus, proc_id) ?: icarus;
+	return proc->thr[0];
 }
 
 static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, int *fdp)
@@ -835,7 +854,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
 				nonce = icarus_nonce32toh(info, nonce);
-				submit_nonce(thr, state->last_work, nonce);
+				submit_nonce(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
 			}
 		}
 	}
@@ -980,7 +999,7 @@ keepwaiting:
 			if (nonce_work == state->last2_work)
 			{
 				// nonce was for the last job; submit and keep processing the current one
-				submit_nonce(thr, nonce_work, nonce);
+				submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 				goto keepwaiting;
 			}
 			if (info->continue_search)
@@ -988,7 +1007,7 @@ keepwaiting:
 				read_count = info->read_count - ((timer_elapsed_us(&state->tv_workstart, NULL) / (1000000 / TIME_FACTOR)) + 1);
 				if (read_count)
 				{
-					submit_nonce(thr, nonce_work, nonce);
+					submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 					goto keepwaiting;
 				}
 			}
@@ -1042,7 +1061,7 @@ keepwaiting:
 
 	if (ret == ICA_GETS_OK && !was_hw_error)
 	{
-		submit_nonce(thr, nonce_work, nonce);
+		submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 		
 		icarus_transition_work(state, work);
 		
@@ -1063,7 +1082,8 @@ keepwaiting:
 		
 		if (ret == ICA_GETS_OK)
 		{
-			inc_hw_errors(thr, state->last_work, nonce);
+			// We can't be sure which processor got the error, but at least this is a decent guess
+			inc_hw_errors(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
 			estimate_hashes -= ICARUS_READ_TIME(info->baud, info->read_size);
 		}
 		
@@ -1233,6 +1253,18 @@ out:
 	if (unlikely(state->identify))
 		handle_identify(thr, ret, was_first_run);
 	
+	int hash_count_per_proc = hash_count / icarus->procs;
+	if (hash_count_per_proc > 0)
+	{
+		for_each_managed_proc(proc, icarus)
+		{
+			struct thr_info * const proc_thr = proc->thr[0];
+			
+			hashes_done2(proc_thr, hash_count_per_proc, NULL);
+			hash_count -= hash_count_per_proc;
+		}
+	}
+	
 	return hash_count;
 }
 
@@ -1314,7 +1346,7 @@ const char *icarus_set_fpga_count(struct cgpu_info * const proc, const char * co
 {
 	struct ICARUS_INFO * const info = proc->device_data;
 	const int fpga_count = atoi(newvalue);
-	if (fpga_count < 1 || fpga_count > info->work_division)
+	if (fpga_count < 1 || (fpga_count > info->work_division && info->work_division))
 		return "Invalid fpga_count: must be >0 and <=work_division";
 	info->fpga_count = fpga_count;
 	return NULL;
