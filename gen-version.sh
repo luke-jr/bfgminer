@@ -14,7 +14,7 @@ if [ -z "$gitdesc" ]; then
 		gitdesc="$current"
 	fi
 fi
-version=$(sed 's/^bfgminer-//' <<<"$gitdesc")
+version=$(echo "$gitdesc" | sed 's/^bfgminer-//')
 cat <<EOF
 #define BFG_GIT_DESCRIBE "$gitdesc"
 #ifdef VERSION
