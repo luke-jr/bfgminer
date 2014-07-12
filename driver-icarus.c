@@ -594,6 +594,19 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	if (serial_claim_v(devpath, api))
 		return false;
 
+	if (!info->fpga_count)
+	{
+		if (!info->work_division)
+		{
+			fd = icarus_open2(devpath, baud, true);
+			info->work_division = icarus_probe_work_division(fd, api->dname, info);
+			icarus_close(fd);
+		}
+		info->fpga_count = info->work_division;
+	}
+	// Lock fpga_count from set_work_division
+	info->user_set |= IUS_FPGA_COUNT;
+	
 	/* We have a real Icarus! */
 	struct cgpu_info *icarus;
 	icarus = calloc(1, sizeof(struct cgpu_info));
@@ -691,9 +704,6 @@ bool icarus_init(struct thr_info *thr)
 	
 	if (!info->work_division)
 		info->work_division = icarus_probe_work_division(fd, icarus->proc_repr, info);
-	
-	if (!info->fpga_count)
-		info->fpga_count = info->work_division;
 	
 	if (!is_power_of_two(info->work_division))
 		info->work_division = upper_power_of_two_u32(info->work_division);
