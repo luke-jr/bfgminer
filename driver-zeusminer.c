@@ -241,6 +241,14 @@ bool zeusminer_override_statline_temp2(char *buf, size_t bufsz, struct cgpu_info
 	return false;
 }
 
+// return the Chip # in via the API when procdetails is called
+static
+struct api_data *zeusminer_get_api_extra_device_detail(struct cgpu_info *device)
+{
+	int chip = device->proc_id / ZEUSMINER_CHIP_CORES;
+	return api_add_int(NULL, "Chip", &chip, true);
+}
+
 // device_drv definition - miner.h
 
 static
@@ -270,6 +278,9 @@ void zeusminer_drv_init()
 	// output the chip # when viewing per-proc stats
 	// so we can easily ID chips vs cores
 	zeusminer_drv.override_statline_temp2 = zeusminer_override_statline_temp2;
+
+	// output the chip # via RPC API
+	zeusminer_drv.get_api_extra_device_detail = zeusminer_get_api_extra_device_detail;
 }
 
 struct device_drv zeusminer_drv = {
