@@ -148,6 +148,7 @@ static const char *MODE_UNKNOWN_STR = "unknown";
 
 BFG_REGISTER_DRIVER(icarus_drv)
 extern const struct bfg_set_device_definition icarus_set_device_funcs[];
+extern const struct bfg_set_device_definition icarus_set_device_funcs_live[];
 
 extern void convert_icarus_to_cairnsmore(struct cgpu_info *);
 
@@ -550,7 +551,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	icarus->device_path = strdup(devpath);
 	icarus->device_fd = -1;
 	icarus->threads = 1;
-	icarus->set_device_funcs = icarus_set_device_funcs;
+	icarus->set_device_funcs = icarus_set_device_funcs_live;
 	add_cgpu(icarus);
 
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s",
@@ -1338,6 +1339,14 @@ const struct bfg_set_device_definition icarus_set_device_funcs[] = {
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	// NOTE: Below here, order is irrelevant
 	{"probe_timeout", icarus_set_probe_timeout},
+	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
+	{NULL},
+};
+
+const struct bfg_set_device_definition icarus_set_device_funcs_live[] = {
+	{"baud"         , icarus_set_baud         , "serial baud rate"},
+	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
+	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
 	{NULL},
 };
