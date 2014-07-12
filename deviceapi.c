@@ -1088,9 +1088,9 @@ void close_device_fd(struct thr_info * const thr)
 }
 
 
-struct cgpu_info *device_proc_by_id(struct cgpu_info * const dev, const int procid)
+struct cgpu_info *device_proc_by_id(const struct cgpu_info * const dev, const int procid)
 {
-	struct cgpu_info *proc = dev;
+	struct cgpu_info *proc = (void*)dev;
 	for (int i = 0; i < procid; ++i)
 	{
 		proc = proc->next_proc;
