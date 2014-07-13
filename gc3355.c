@@ -495,32 +495,38 @@ void gc3355_sha2_init(int fd)
 	gc3355_send_cmds(fd, sha2_init_cmd);
 }
 
-void gc3355_init_device(int fd, int pll_freq, bool scrypt_only, bool detect_only, bool usbstick)
+void gc3355_init_miner(int fd, int pll_freq)
 {
 	gc3355_send_cmds(fd, gcp_chip_reset_cmd);
 
 	// zzz
 	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 
-	if (usbstick)
-	{
-		gc3355_send_cmds(fd, sha2_chip_reset_cmd);
+	// initialize units
+	gc3355_send_cmds(fd, multichip_init_cmd);
+	gc3355_scrypt_init(fd);
 
-		// initialize units
-		gc3355_reset_dtr(fd);
+	//set freq
+	gc3355_set_pll_freq(fd, pll_freq);
+}
 
-		if (opt_scrypt && scrypt_only)
-			gc3355_scrypt_only_init(fd);
-		else
-		{
-			gc3355_sha2_init(fd);
-			gc3355_scrypt_init(fd);
-		}
-	}
+void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_only)
+{
+	gc3355_send_cmds(fd, gcp_chip_reset_cmd);
+
+	// zzz
+	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
+
+	gc3355_send_cmds(fd, sha2_chip_reset_cmd);
+
+	// initialize units
+	gc3355_reset_dtr(fd);
+
+	if (opt_scrypt && scrypt_only)
+		gc3355_scrypt_only_init(fd);
 	else
 	{
-		// initialize units
-		gc3355_send_cmds(fd, multichip_init_cmd);
+		gc3355_sha2_init(fd);
 		gc3355_scrypt_init(fd);
 	}
 
@@ -530,7 +536,7 @@ void gc3355_init_device(int fd, int pll_freq, bool scrypt_only, bool detect_only
 	// zzz
 	cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 
-	if (usbstick && !detect_only)
+	if (!detect_only)
 	{
 		if (!opt_scrypt)
 			// open sha2 units
@@ -539,16 +545,6 @@ void gc3355_init_device(int fd, int pll_freq, bool scrypt_only, bool detect_only
 		// set request to send (RTS) status
 		set_serial_rts(fd, BGV_HIGH);
 	}
-}
-
-void gc3355_init_usborb(int fd, int pll_freq, bool scrypt_only, bool detect_only)
-{
-	gc3355_init_device(fd, pll_freq, scrypt_only, detect_only, false);
-}
-
-void gc3355_init_usbstick(int fd, int pll_freq, bool scrypt_only, bool detect_only)
-{
-	gc3355_init_device(fd, pll_freq, scrypt_only, detect_only, true);
 }
 
 void gc3355_scrypt_reset(int fd)
