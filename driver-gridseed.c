@@ -273,6 +273,24 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 	return 0;
 }
 
+// watchdog support
+
+static
+void gridseed_reinit_device(struct cgpu_info * const cgpu)
+{
+	gc3355_close(cgpu->device_fd);
+	cgpu->device_fd = gc3355_open(cgpu->device_path);
+
+	if (unlikely(cgpu->device_fd == -1))
+	{
+		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", cgpu->proc_repr, cgpu->device_path);
+		dev_error(cgpu, REASON_DEV_COMMS_ERROR);
+		return;
+	}
+
+	gc3355_init_miner(cgpu->device_fd, opt_pll_freq);
+}
+
 /*
  * specify settings / options
  */
@@ -341,4 +359,6 @@ struct device_drv gridseed_drv =
 	
 	// teardown device
 	.thread_shutdown = gridseed_thread_shutdown,
+
+	.reinit_device = gridseed_reinit_device,
 };
