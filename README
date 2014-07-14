@@ -786,7 +786,9 @@ Q: Is there a "bare-metal" version?
 A: Yes, there are a few dedicated mining operating systems built on BFGMiner:
 Name        Website                              Hardware
 ----        -------                              --------
+Controla    http://hashra.com/support            Raspberry Pi
 MinePeon    http://mineforeman.com/minepeon/     BeagleBone Black, Raspberry Pi
+Minera      http://getminera.com/                Raspberry Pi
 PiMP        http://getpimp.org/                  x86
 
 Q: I'm having an issue. What debugging information should I provide?
