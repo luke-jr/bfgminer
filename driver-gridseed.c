@@ -33,7 +33,7 @@ static const struct bfg_set_device_definition gridseed_set_device_funcs_live[];
  */
 
 static
-struct cgpu_info *gridseed_alloc_device(const char *path, struct device_drv *driver, struct gc3355_orb_info *info)
+struct cgpu_info *gridseed_alloc_device(const char *path, struct device_drv *driver, struct gc3355_info *info)
 {
 	struct cgpu_info *device = calloc(1, sizeof(struct cgpu_info));
 	if (unlikely(!device))
@@ -50,11 +50,11 @@ struct cgpu_info *gridseed_alloc_device(const char *path, struct device_drv *dri
 }
 
 static
-struct gc3355_orb_info *gridseed_alloc_info()
+struct gc3355_info *gridseed_alloc_info()
 {
-	struct gc3355_orb_info *info = calloc(1, sizeof(struct gc3355_orb_info));
+	struct gc3355_info *info = calloc(1, sizeof(struct gc3355_info));
 	if (unlikely(!info))
-		quit(1, "Failed to malloc gc3355_orb_info");
+		quit(1, "Failed to malloc gc3355_info");
 	
 	info->freq = GRIDSEED_DEFAULT_FREQUENCY;
 	
@@ -73,7 +73,7 @@ void gridseed_empty_work(int fd)
  */
 
 static
-bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct gc3355_orb_info *info)
+bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct gc3355_info *info)
 {
 	int fd = gc3355_open(path);
 	if(fd < 0)
@@ -107,7 +107,7 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	if (!add_cgpu(device))
 		return false;
 	
-	gc3355_init_usborb(device->device_fd, info->freq, false, false);
+	gc3355_init_miner(device->device_fd, info->freq);
 	
 	applog(LOG_INFO, "Found %"PRIpreprv" at %s", device->proc_repr, path);
 	applog(LOG_DEBUG, "%"PRIpreprv": Init: firmware=%"PRId64", chips=%d", device->proc_repr, fw_version, info->chips);
@@ -118,7 +118,7 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 static
 bool gridseed_detect_one(const char *path)
 {
-	struct gc3355_orb_info *info = gridseed_alloc_info();
+	struct gc3355_info *info = gridseed_alloc_info();
 	
 	if (!gridseed_detect_custom(path, &gridseed_drv, info))
 	{
@@ -167,7 +167,7 @@ static
 bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
 	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_orb_info *info = device->device_data;
+	struct gc3355_info *info = device->device_data;
 	unsigned char cmd[156];
 	
 	timer_set_now(&info->scanhash_time);
@@ -206,7 +206,7 @@ static
 int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_orb_info *info = device->device_data;
+	struct gc3355_info *info = device->device_data;
 	struct timeval old_scanhash_time = info->scanhash_time;
 
 	timer_set_now(&info->scanhash_time);
@@ -230,7 +230,7 @@ static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_orb_info *info = device->device_data;
+	struct gc3355_info *info = device->device_data;
 	struct timeval tv_nonce_range, tv_hashes_done;
 
 	// total hashrate of this device:
@@ -273,6 +273,14 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 	return 0;
 }
 
+// watchdog support
+
+static
+void gridseed_reinit_device(struct cgpu_info * const cgpu)
+{
+	gc3355_init_miner(cgpu->device_fd, opt_pll_freq);
+}
+
 /*
  * specify settings / options
  */
@@ -283,7 +291,7 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 static
 const char *gridseed_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
-	struct gc3355_orb_info * const info = device->device_data;
+	struct gc3355_info * const info = device->device_data;
 	int val = atoi(setting);
 
 	info->freq = val;
@@ -296,7 +304,7 @@ const char *gridseed_set_clock(struct cgpu_info * const device, const char * con
 static
 const char *gridseed_set_chips(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
-	struct gc3355_orb_info * const info = device->device_data;
+	struct gc3355_info * const info = device->device_data;
 	int val = atoi(setting);
 	
 	info->chips = val;
@@ -341,4 +349,6 @@ struct device_drv gridseed_drv =
 	
 	// teardown device
 	.thread_shutdown = gridseed_thread_shutdown,
+
+	.reinit_device = gridseed_reinit_device,
 };

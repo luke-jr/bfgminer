@@ -124,7 +124,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
 	int fd = icarus->device_fd;
 
-	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, false);
+	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, false);
 	
 	dualminer_init_hashrate(icarus);
 
@@ -168,7 +168,7 @@ bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __m
 {
 	dualminer_set_defaults(fd);
 	
-	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, true);
+	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, true);
 
 	return true;
 }
@@ -212,8 +212,7 @@ bool dualminer_detect_one(const char *devpath)
 		.timing_mode = MODE_DEFAULT,
 		.do_icarus_timing = false,
 		.nonce_littleendian = true,
-		.work_division = 2,
-		.fpga_count = 2,
+		.work_division = 1,
 		.detect_init_func = dualminer_detect_init,
 		.job_start_func = dualminer_job_start
 	};
@@ -300,6 +299,14 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	return true;
 }
 
+// watchdog support
+
+static
+void dualminer_reinit_device(struct cgpu_info * const cgpu)
+{
+	gc3355_init_dualminer(cgpu->device_fd, opt_pll_freq, !opt_dual_mode, true);
+}
+
 // support for --set-device dualminer:clock=freq
 static
 char *dualminer_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
@@ -332,6 +339,8 @@ void dualminer_drv_init()
 
 	// currently setup specifically to probe after ZeusMiner
 	dualminer_drv.probe_priority = -50;
+
+	dualminer_drv.reinit_device = dualminer_reinit_device;
 }
 
 struct device_drv dualminer_drv =
