@@ -563,6 +563,11 @@ struct cgpu_info {
 
 	bool disable_watchdog;
 	bool shutdown;
+
+	// Used by watchdog to check nonces vs pdiff
+	struct timeval watchdog_nonce_alert_tv;
+	struct timeval watchdog_last_init_tv;
+	struct timeval watchdog_last_nonce_tv;
 	
 	// Lowest difficulty supported for finding nonces
 	float min_nonce_diff;
