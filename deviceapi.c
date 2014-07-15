@@ -797,6 +797,7 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 
 	renumber_cgpu(cgpu);
 	cgpu->last_device_valid_work = time(NULL);
+	timer_set_now(&cgpu->watchdog_last_nonce_tv);
 	
 	return true;
 }

@@ -299,6 +299,14 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	return true;
 }
 
+// watchdog support
+
+static
+void dualminer_reinit_device(struct cgpu_info * const cgpu)
+{
+	gc3355_init_dualminer(cgpu->device_fd, opt_pll_freq, !opt_dual_mode, true);
+}
+
 // support for --set-device dualminer:clock=freq
 static
 char *dualminer_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
@@ -331,6 +339,8 @@ void dualminer_drv_init()
 
 	// currently setup specifically to probe after ZeusMiner
 	dualminer_drv.probe_priority = -50;
+
+	dualminer_drv.reinit_device = dualminer_reinit_device;
 }
 
 struct device_drv dualminer_drv =
