@@ -10566,6 +10566,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 	return NULL;
 }
 
+static
 int get_secs_since_nonce(const struct cgpu_info * const cgpu, const struct timeval * const tvp_now)
 {
 	time_t last_nonce = cgpu->watchdog_last_nonce_tv.tv_sec;
@@ -10581,6 +10582,7 @@ int get_secs_since_nonce(const struct cgpu_info * const cgpu, const struct timev
 	return secs_since;
 }
 
+static
 float calc_secs_per_nonce(const struct cgpu_info * const cgpu)
 {
 	double pool_diff = target_diff(pools[cgpu->last_share_pool]->swork.target);
@@ -10590,6 +10592,54 @@ float calc_secs_per_nonce(const struct cgpu_info * const cgpu)
 	double secs_per_nonce = (1 / nonces_per_min) * 60;
 
 	return secs_per_nonce;
+}
+
+static
+void watchdog_check_last_nonce(struct cgpu_info * const cgpu, const struct timeval * const tvp_now)
+{
+	float secs_per_nonce = calc_secs_per_nonce(cgpu);
+
+	if (!isinf(secs_per_nonce))
+	{
+		// initialize watchdog_last_init_tv
+		if (cgpu->watchdog_last_init_tv.tv_sec == 0)
+			timer_set_now(&cgpu->watchdog_last_init_tv);
+
+		// only check / alert every alert_delay_secs seconds
+		if ((cgpu->watchdog_nonce_alert_tv.tv_sec == 0) || timer_passed(&cgpu->watchdog_nonce_alert_tv, NULL))
+		{
+			const int alert_delay_secs = 15;
+			timer_set_delay_from_now(&cgpu->watchdog_nonce_alert_tv, alert_delay_secs * 1000000);
+
+			int secs_since_nonce = get_secs_since_nonce(cgpu, tvp_now);
+			char *dev_str = cgpu->proc_repr;
+
+			applog(LOG_INFO, "%s: Expecting nonce every %f secs (%d secs elapsed)",
+				   dev_str,
+				   secs_per_nonce,
+				   secs_since_nonce);
+
+			// 10.0 seems to work reliably through testing many devices & pools
+			// use lower values for testing
+			const float bad_luck = 10.0;
+
+			if (secs_since_nonce > (secs_per_nonce * bad_luck))
+			{
+				applog(LOG_ERR, "%s: Expected nonce after %f secs (%d secs elapsed)",
+					   dev_str,
+					   secs_per_nonce,
+					   secs_since_nonce);
+
+				if (opt_restart)
+				{
+					if (cgpu->drv->reinit_device)
+						applog(LOG_ERR, "%s: Attempting to restart", dev_str);
+
+					reinit_device(cgpu);
+				}
+			}
+		}
+	}
 }
 
 void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
@@ -10700,49 +10750,8 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 				if (opt_restart)
 					reinit_device(cgpu);
 			}
-
-	float secs_per_nonce = calc_secs_per_nonce(cgpu);
-
-	if (!isinf(secs_per_nonce))
-	{
-		// initialize watchdog_last_init_tv
-		if (cgpu->watchdog_last_init_tv.tv_sec == 0)
-			timer_set_now(&cgpu->watchdog_last_init_tv);
-
-		// only check / alert every alert_delay_secs seconds
-		if ((cgpu->watchdog_nonce_alert_tv.tv_sec == 0) || timer_passed(&cgpu->watchdog_nonce_alert_tv, NULL))
-		{
-			const int alert_delay_secs = 15;
-			timer_set_delay_from_now(&cgpu->watchdog_nonce_alert_tv, alert_delay_secs * 1000000);
-
-			int secs_since_nonce = get_secs_since_nonce(cgpu, tvp_now);
-
-			applog(LOG_INFO, "%s: Expecting nonce every %f secs (%d secs elapsed)",
-				   cgpu->proc_repr,
-				   secs_per_nonce,
-				   secs_since_nonce);
-
-			// 7.75 seems to work reliably through testing many devices & pools
-			// use lower values for testing
-			const float bad_luck = 7.75;
-
-			if (secs_since_nonce > (secs_per_nonce * bad_luck))
-			{
-				applog(LOG_ERR, "%s: Expected nonce after %f secs (%d secs elapsed)",
-					   cgpu->proc_repr,
-					   secs_per_nonce,
-					   secs_since_nonce);
-
-				if (opt_restart)
-				{
-					if (cgpu->drv->reinit_device)
-						applog(LOG_ERR, "%s: Attempting to restart", dev_str);
-
-					reinit_device(cgpu);
-				}
-			}
-		}
-	}
+			
+			watchdog_check_last_nonce(cgpu, tvp_now);
 }
 
 static void log_print_status(struct cgpu_info *cgpu)
