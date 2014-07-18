@@ -209,8 +209,14 @@ To enable uio on your cards, you may need to do:
     sudo modprobe uio_pci_generic
     echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/uio_pci_generic/new_id
 
-Enabling vfio is similar, but more complicated, but allows you to run BFGMiner
-without root privileges. First, load the kernel module:
+Enabling vfio is similar, but allows you to run BFGMiner without root
+privileges. Since setting this up is more complicated, BFGMiner includes a
+setup-vfio script (which must be run with root permissions). Simply run:
+    sudo setup-vfio --unsafe --user $(whoami) 1cf9 0001
+You will be asked about each Monarch found, and must answer 'yes' to each one.
+
+If you wish to manually setup VFIO, follow these steps:
+First, load the kernel module:
     sudo modprobe vfio-pci
 Next, identify what the device ids are for your card(s):
     lspci -D | grep 1cf9  # the first number of each line is the device id

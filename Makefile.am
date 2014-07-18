@@ -40,6 +40,8 @@ INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
+sbin_SCRIPTS =
+
 bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
 bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
@@ -301,6 +303,10 @@ endif
 
 if NEED_BFG_LOWL_PCI
 bfgminer_SOURCES += lowl-pci.c lowl-pci.h
+
+if USE_VFIO
+sbin_SCRIPTS += setup-vfio
+endif
 endif
 
 bin_PROGRAMS += bfgminer-rpc

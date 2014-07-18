@@ -1031,6 +1031,7 @@ if test x$need_lowl_pci = xyes; then
 		AC_DEFINE([USE_VFIO], [1], [Defined to 1 if lowlevel PCI drivers should support VFIO])
 	fi
 fi
+AM_CONDITIONAL([USE_VFIO], [test x$need_lowl_pci$vfio = xyesyes])
 
 lowllist="$lowllist usb/need_lowl_usb"
 if test x$need_lowl_usb = xyes; then
