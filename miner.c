@@ -226,6 +226,7 @@ static float opt_shares;
 static int opt_submit_threads = 0x40;
 bool opt_fail_only;
 int opt_fail_switch_delay = 300;
+static bool opt_morenotices;
 bool opt_autofan;
 bool opt_autoengine;
 bool opt_noadl;
@@ -2113,6 +2114,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--intensity|-I",
 	             set_intensity, NULL, NULL,
 	             opt_hidden),
+	OPT_WITHOUT_ARG("--more-notices",
+	             opt_set_bool, &opt_morenotices,
+	             "Shows work restart and new block notices, hidden by default"),
 #endif
 #if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 	OPT_WITH_ARG("--kernel-path",
@@ -2663,12 +2667,14 @@ static bool jobj_binary(const json_t *obj, const char *key,
 	tmp = json_object_get(obj, key);
 	if (unlikely(!tmp)) {
 		if (unlikely(required))
-			applog(LOG_ERR, "JSON key '%s' not found", key);
+			if (opt_morenotices)
+				applog(LOG_ERR, "JSON key '%s' not found", key);
 		return false;
 	}
 	hexstr = json_string_value(tmp);
 	if (unlikely(!hexstr)) {
-		applog(LOG_ERR, "JSON key '%s' is not a string", key);
+		if (opt_morenotices)
+			applog(LOG_ERR, "JSON key '%s' is not a string", key);
 		return false;
 	}
 	if (!hex2bin(buf, hexstr, buflen))
@@ -3049,7 +3055,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 	else
 	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
-		applog(LOG_ERR, "JSON inval data");
+		if (opt_morenotices)
+			applog(LOG_ERR, "JSON inval data");
 		return false;
 	}
 	else
@@ -3057,12 +3064,14 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
-		applog(LOG_DEBUG, "Calculating midstate locally");
+		if (opt_morenotices)
+			applog(LOG_DEBUG, "Calculating midstate locally");
 		calc_midstate(work);
 	}
 
 	if (unlikely(!jobj_binary(res_val, "target", work->target, sizeof(work->target), true))) {
-		applog(LOG_ERR, "JSON inval target");
+		if (opt_morenotices)
+			applog(LOG_ERR, "JSON inval target");
 		return false;
 	}
 	if (work->tr)
@@ -5903,9 +5912,9 @@ static struct submit_work_state *begin_submission(struct work *work)
 	if (stale_work(work, true)) {
 		work->stale = true;
 		if (opt_submit_stale)
-			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as user requested", pool->pool_no);
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting (user)", pool->pool_no);
 		else if (pool->submit_old)
-			applog(LOG_NOTICE, "Pool %d stale share detected, submitting as pool requested", pool->pool_no);
+			applog(LOG_NOTICE, "Pool %d stale share detected, submitting (pool)", pool->pool_no);
 		else {
 			applog(LOG_NOTICE, "Pool %d stale share detected, discarding", pool->pool_no);
 			submit_discard_share(work);
@@ -6680,18 +6689,21 @@ static bool test_work_current(struct work *work)
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 		
-		if (!work->stratum)
+		if (opt_morenotices)
 		{
-			if (work->longpoll)
+			if (!work->stratum)
 			{
-				applog(LOG_NOTICE, "Longpoll from pool %d detected new block",
-				       pool->pool_no);
+				if (work->longpoll)
+				{
+					applog(LOG_NOTICE, "Longpoll from pool %d detected new block",
+					       	pool->pool_no);
 			}
-			else
-			if (have_longpoll)
-				applog(LOG_NOTICE, "New block detected on network before longpoll");
-			else
-				applog(LOG_NOTICE, "New block detected on network");
+				else
+				if (have_longpoll)
+					applog(LOG_NOTICE, "New block detected on network before longpoll");
+				else
+					applog(LOG_NOTICE, "New block detected on network");
+			}
 		}
 		restart_threads();
 	}
@@ -8751,11 +8763,13 @@ static void *stratum_thread(void *userdata)
 				struct pool * const cp = current_pool();
 				if (pool == cp)
 					restart_threads();
-				
-				applog(
-				       ((!opt_quiet_work_updates) && pool_actively_in_use(pool, cp) ? LOG_NOTICE : LOG_DEBUG),
-				       "Stratum from pool %d requested work update", pool->pool_no);
-			} else
+				if (opt_morenotices)
+				{
+					applog(
+					       ((!opt_quiet_work_updates) && pool_actively_in_use(pool, cp) ? LOG_NOTICE : LOG_DEBUG),
+					       "Stratum from pool %d requested work update", pool->pool_no);
+				}
+			} else if (opt_morenotices)
 				applog(LOG_NOTICE, "Stratum from pool %d detected new block", pool->pool_no);
 			free_work(work);
 		}
