@@ -1497,7 +1497,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		bitforce->sleep_ms = BITFORCE_SLEEP_MS;
 		bitforce->device_data = data = malloc(sizeof(*data));
 		*data = (struct bitforce_data){
-			.lowlif = &bfllif_vcom,
+			.lowlif = initdata->lowlif,
 			.xlink_id = xlink_id,
 			.next_work_ob = ">>>>>>>>|---------- MidState ----------||-DataTail-||Nonces|>>>>>>>>",
 			.proto = BFP_RANGE,
