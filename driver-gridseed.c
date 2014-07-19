@@ -256,6 +256,8 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 		{
 			gridseed_hashes_done(thr);
 			timer_set_delay_from_now(&tv_hashes_done, hashes_delay);
+			applog(LOG_ERR, "Init device       %"PRIpreprv"", device->proc_repr);
+			gc3355_scrypt_reset(device->device_fd);
 		}
 
 		if (read == 0)
