@@ -1437,7 +1437,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_int(root, "Target Temperature", &cgpu->targettemp, false);
 	root = api_add_int(root, "Cutoff Temperature", &cgpu->cutofftemp, false);
 
-	if (cgpu->drv->get_api_extra_device_detail)
+	if ((per_proc || cgpu->procs <= 1) && cgpu->drv->get_api_extra_device_detail)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_detail(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
