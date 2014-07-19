@@ -34,7 +34,10 @@
 BFG_REGISTER_DRIVER(zeusminer_drv)
 
 static
-const struct bfg_set_device_definition zeusminer_set_device_funcs[];
+const struct bfg_set_device_definition zeusminer_set_device_funcs_probe[];
+
+static
+const struct bfg_set_device_definition zeusminer_set_device_funcs_live[];
 
 // device helper functions
 
@@ -86,7 +89,7 @@ bool zeusminer_detect_one(const char *devpath)
 	};
 	
 	//pick up any user-defined settings passed in via --set
-	drv_set_defaults(drv, zeusminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
+	drv_set_defaults(drv, zeusminer_set_device_funcs_probe, info, devpath, detectone_meta_info.serial, 1);
 	
 	info->work_division = upper_power_of_two_u32(info->chips * ZEUSMINER_CHIP_CORES);
 	info->fpga_count = info->chips * ZEUSMINER_CHIP_CORES;
@@ -173,11 +176,19 @@ const char *zeusminer_set_ignore_golden_nonce(struct cgpu_info * const device, c
 	return NULL;
 }
 
+// for setting clock and chips during probe / detect
 static
-const struct bfg_set_device_definition zeusminer_set_device_funcs[] = {
+const struct bfg_set_device_definition zeusminer_set_device_funcs_probe[] = {
 	{ "clock", zeusminer_set_clock, NULL },
 	{ "chips", zeusminer_set_chips, NULL },
 	{ "ignore_golden_nonce",zeusminer_set_ignore_golden_nonce, NULL },
+	{ NULL },
+};
+
+// for setting clock while mining
+static
+const struct bfg_set_device_definition zeusminer_set_device_funcs_live[] = {
+	{ "clock", zeusminer_set_clock, NULL },
 	{ NULL },
 };
 
@@ -195,6 +206,7 @@ bool zeusminer_thread_init(struct thr_info * const thr)
 	struct cgpu_info * const device = thr->cgpu;
 	
 	device->min_nonce_diff = 1./0x10000;
+	device->set_device_funcs = zeusminer_set_device_funcs_live;
 	
 	return icarus_init(thr);
 }
