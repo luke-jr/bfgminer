@@ -3,7 +3,7 @@ SUPPORTED DEVICES
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
 Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
-KnCminer's Mercury, Jupiter and Saturn.
+KnCMiner's Mercury, Jupiter and Saturn.
 
 
 AVALON
@@ -144,10 +144,12 @@ KLONDIKE
 KNCMINER
 --------
 
-The KnC miner uses a BeagleBoneBlack(BBB) as the host, this is pluged into a
-cape that holds the FPGA and connections for 4-6 ASICS depending on the cape
-version. The BBB runs the Angstrom linux distribution, the following is a step
-by step install for BFGMiner on this distro;
+KnCMiner rigs use a BeagleBone Black (BBB) as the host; this is pluged into a
+"cape" with a FPGA and connections for 4-6 ASIC modules (depending on the cape
+version). Note that in addition to the usual dependencies, this driver also
+requires i2c-tools (aka libi2c-dev on some systems). The BBB comes with the
+Ångström Distribution by default. The following is a step by step install for
+BFGMiner on this system;
 
 -----------------Start------------
 cat >/etc/opkg/feeds.conf <<\EOF
@@ -182,8 +184,6 @@ make AR=arm-angstrom-linux-gnueabi-ar
 ./bfgminer -S knc:auto -c /config/cgminer.conf
 
 ---------------END-------------
-
-BFGMiner has also been incorporated into an unofficial firmware by uski01 called Bertmod this can be found on the kncminer forum.
 
 ---
 
