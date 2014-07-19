@@ -1459,7 +1459,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	if (cgpu->device_path)
 		root = api_add_string(root, "Device Path", cgpu->device_path, false);
 
-	if (cgpu->drv->get_api_extra_device_detail)
+	if ((per_proc || cgpu->procs <= 1) && cgpu->drv->get_api_extra_device_detail)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_detail(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
