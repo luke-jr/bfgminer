@@ -270,6 +270,10 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
 	}
 
+	// estimate remaining hashes for elapsed time
+	// e.g. work_restart ~hashes_delay after tv_hashes_done
+	gridseed_hashes_done(thr);
+
 	return 0;
 }
 
