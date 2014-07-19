@@ -172,9 +172,6 @@ make AR=arm-angstrom-linux-gnueabi-ar
 
 ---------------END-------------
 
-BFGMiner has also been incorporated into an unofficial firmware by uski01 called
-Bertmod; this can be found on the KnCMiner forum.
-
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
