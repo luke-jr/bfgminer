@@ -394,7 +394,7 @@ AC_ARG_ENABLE([knc],
 if test "x$knc" = xyes; then
 	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
 	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
-		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools (NOT linux headers) is required for knc driver])
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for knc driver])
 	],[
 		#include <stddef.h>
 		#ifdef HAVE_LINUX_I2C_DEV_USER_H
