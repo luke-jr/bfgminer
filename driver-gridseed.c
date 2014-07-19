@@ -85,7 +85,7 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	
 	if (fw_version == -1)
 	{
-		applog(LOG_ERR, "%s: Invalid detect response from %s", gridseed_drv.dname, path);
+		applog(LOG_DEBUG, "%s: Invalid detect response from %s", gridseed_drv.dname, path);
 		gc3355_close(fd);
 		return false;
 	}

@@ -602,7 +602,7 @@ int64_t gc3355_get_firmware_version(int fd)
 	int read = gc3355_read(fd, buf, GC3355_READ_SIZE);
 	if (read != GC3355_READ_SIZE)
 	{
-		applog(LOG_ERR, "%s: Failed reading work from %d", GC3355_CHIP_NAME, fd);
+		applog(LOG_DEBUG, "%s: Failed reading work from %d", GC3355_CHIP_NAME, fd);
 		return -1;
 	}
 	
