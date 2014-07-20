@@ -360,7 +360,12 @@ ssize_t bitforce_read(struct cgpu_info * const proc, void * const buf, const siz
 	ssize_t rv;
 	
 	if (likely(devdata->is_open))
-		rv = devdata->lowlif->read(buf, bufLen, dev);
+	{
+		if (bufLen == 0)
+			rv = 0;
+		else
+			rv = devdata->lowlif->read(buf, bufLen, dev);
+	}
 	else
 		rv = -1;
 	
