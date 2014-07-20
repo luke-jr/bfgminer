@@ -388,9 +388,22 @@ void gc3355_log_protocol(int fd, const char *buf, size_t size, const char *prefi
 	       GC3355_CHIP_NAME, fd, prefix, (unsigned long)size, hex);
 }
 
-ssize_t gc3355_read(int fd, char *buf, size_t size)
+int gc3355_read(int fd, char *buf, size_t size)
 {
-	size_t read = serial_read(fd, buf, size);
+	size_t read;
+	int tries = 20;
+	
+	while (tries > 0)
+	{
+		read = serial_read(fd, buf, size);
+		if (read > 0)
+			break;
+		
+		tries--;
+	}
+	
+	if (unlikely(tries == 0))
+		return -1;
 	
 	if ((read > 0) && opt_dev_protocol)
 		gc3355_log_protocol(fd, buf, read, "RECV");

@@ -41,7 +41,7 @@ struct gc3355_info
 #define gc3355_open(path)  serial_open(path, 115200, 1, true)
 #define gc3355_close(fd)  serial_close(fd)
 
-extern ssize_t gc3355_read(int fd, char *buf, size_t size);
+extern int gc3355_read(int fd, char *buf, size_t size);
 extern ssize_t gc3355_write(int fd, const void * const buf, const size_t size);
 
 extern void gc3355_init_miner(int fd, int pll_freq);
