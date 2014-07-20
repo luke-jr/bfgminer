@@ -41,6 +41,8 @@ INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
+sbin_SCRIPTS =
+
 if HAVE_WINDOWS
 else
 bin_SCRIPTS = start-bfgminer.sh
@@ -354,6 +356,10 @@ endif
 
 if NEED_BFG_LOWL_PCI
 bfgminer_SOURCES += lowl-pci.c lowl-pci.h
+
+if USE_VFIO
+sbin_SCRIPTS += setup-vfio
+endif
 endif
 
 if NEED_BFG_LOWL_SPI
