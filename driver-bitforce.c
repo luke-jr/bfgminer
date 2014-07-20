@@ -92,6 +92,7 @@ struct bitforce_data {
 	bool is_open;
 	struct lowl_pci_handle *lph;
 	uint8_t lasttag;
+	uint8_t lasttag_read;
 	bytes_t getsbuf;
 	int xlink_id;
 	unsigned char next_work_ob[70];  // Data aligned for 32-bit access
@@ -219,6 +220,8 @@ bool bitforce_pci_open(struct cgpu_info * const dev)
 	if (!devdata->lph)
 		return false;
 	devdata->lasttag = (lowl_pci_get_word(devdata->lph, 2, 2) >> 16) & 0xff;
+	devdata->lasttag_read = 0;
+	bytes_reset(&devdata->getsbuf);
 	devdata->is_open = true;
 	return devdata->is_open;
 }
@@ -242,8 +245,14 @@ void _bitforce_pci_read(struct cgpu_info * const dev)
 	uint32_t resp;
 	bytes_t *b = &devdata->getsbuf;
 	
-	if (!bytes_len(&devdata->getsbuf))
+	if (devdata->lasttag != devdata->lasttag_read)
 	{
+		if (unlikely(bytes_len(b)))
+		{
+			applog(LOG_WARNING, "%s: %ld bytes remaining in read buffer at new command", dev->dev_repr, (long)bytes_len(&devdata->getsbuf));
+			bytes_reset(b);
+		}
+		
 		while (((resp = lowl_pci_get_word(devdata->lph, 2, 2)) & 0xff0000) != looking_for)
 			cgsleep_ms(1);
 		
@@ -254,6 +263,8 @@ void _bitforce_pci_read(struct cgpu_info * const dev)
 		void * const buf = bytes_preappend(b, resp + LOWL_PCI_GET_DATA_PADDING);
 		if (lowl_pci_read_data(devdata->lph, buf, resp, 1, 0))
 			bytes_postappend(b, resp);
+		
+		devdata->lasttag_read = devdata->lasttag;
 	}
 }
 
