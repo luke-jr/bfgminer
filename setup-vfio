@@ -104,8 +104,8 @@ for TARGET_DEVICE_ID in $(ls $DEVICES_PATH); do
 	for RELATED_DEVICE_ID in ${extradevsq} ${extradevs}; do
 		if [ -e "${DEVICES_PATH}/${RELATED_DEVICE_ID}/driver" ]; then
 			echo "$RELATED_DEVICE_ID" >"${DEVICES_PATH}/${RELATED_DEVICE_ID}/driver/unbind" || die "Failed to unbind $RELATED_DEVICE_ID"
-			echo "$(<"${DEVICES_PATH}/${RELATED_DEVICE_ID}/vendor") $(<"${DEVICES_PATH}/${RELATED_DEVICE_ID}/device")" >"${VFIO_PCI_NEW_ID}" || die "Failed to associate device id with ${VFIO_MODULE} module"
 		fi
+		echo "$(<"${DEVICES_PATH}/${RELATED_DEVICE_ID}/vendor") $(<"${DEVICES_PATH}/${RELATED_DEVICE_ID}/device")" >"${VFIO_PCI_NEW_ID}" || die "Failed to associate device id with ${VFIO_MODULE} module"
 	done
 	IOMMU_GROUP="$(basename "$(readlink "${DEVICES_PATH}/${TARGET_DEVICE_ID}/iommu_group")")"
 	VFIO_DEVICE="/dev/vfio/$IOMMU_GROUP"
