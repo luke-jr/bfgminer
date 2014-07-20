@@ -1624,6 +1624,19 @@ static bool bitforce_identify(struct cgpu_info *bitforce)
 	return true;
 }
 
+static
+void bitforce_zero_stats(struct cgpu_info * const proc)
+{
+	struct bitforce_data *data = proc->device_data;
+	
+	// These don't get cleared when not-read, so we clear them here
+	data->volts_count = 0;
+	data->temp[0] = data->temp[1] = 0;
+	free(data->volts);
+	
+	proc->avg_wait_f = 0;
+}
+
 static bool bitforce_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
@@ -2658,6 +2671,7 @@ struct device_drv bitforce_queue_api = {
 	.lowl_probe = bitforce_lowl_probe,
 	.minerloop = minerloop_queue,
 	.reinit_device = bitforce_reinit,
+	.zero_stats = bitforce_zero_stats,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bitforce_wlogprint_status,
 	.proc_tui_wlogprint_choices = bitforce_tui_wlogprint_choices,
