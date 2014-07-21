@@ -63,6 +63,7 @@ enum cointerra_reset_level {
 	CRL_WORK_UPDATE = 1,
 	CRL_NEW_BLOCK   = 2,
 	CRL_INIT        = 3,
+	CRL_DIFF        = 4,
 };
 
 struct cointerra_dev_state {
@@ -140,7 +141,7 @@ bool cointerra_request(struct lowl_usb_endpoint * const ep, const uint8_t msgtyp
 static
 bool cointerra_reset(struct lowl_usb_endpoint * const ep, const enum cointerra_reset_level crl)
 {
-	uint8_t buf[COINTERRA_MSGBODY_SIZE] = { crl };
+	uint8_t buf[COINTERRA_MSGBODY_SIZE] = { crl, 37/*diff 32*/, 255, 0 };
 	return cointerra_write_msg(ep, cointerra_drv.dname, CMTO_RESET, buf);
 }
 
@@ -236,7 +237,7 @@ bool cointerra_init(struct thr_info * const master_thr)
 	// Request regular status updates
 	cointerra_request(ep, CMTI_STATUS, 0x83d);
 	
-	cointerra_reset(ep, CRL_INIT);
+	cointerra_reset(ep, CRL_INIT | CRL_DIFF);
 	
 	// Queue is full until device asks for work
 	cointerra_set_queue_full(dev, true);
