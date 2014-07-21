@@ -9667,12 +9667,16 @@ out:
 	return ret;
 }
 
-bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t hashes)
+// return true of we should stop working on this piece of work
+// returning false means we will keep scanning for a nonce
+// assumptions: work->blk.nonce is the number of nonces completed in the work
+// see minerloop_scanhash comments for more details & usage
+bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t max_hashes)
 {
-	if (wdiff->tv_sec > opt_scantime ||
-	    work->blk.nonce >= 0xfffffffe - hashes ||
-	    hashes >= 0xfffffffe ||
-	    stale_work(work, false))
+	if (wdiff->tv_sec > opt_scantime ||                 // scan-time has elapsed (user specified, default 60s)
+	    work->blk.nonce >= 0xfffffffe - max_hashes ||   // are there enough nonces left in the work
+	    max_hashes >= 0xfffffffe ||                     // assume we are scanning a full nonce range
+	    stale_work(work, false))                        // work is stale
 		return true;
 	return false;
 }
