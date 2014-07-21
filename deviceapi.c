@@ -239,7 +239,11 @@ void minerloop_scanhash(struct thr_info *mythr)
 			* it is not in the driver code. */
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			timer_set_now(&tv_start);
+
+			/* api->scanhash should scan the work for valid nonces
+			 * until max_nonce is reached or thr_info->work_restart */
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+
 			timer_set_now(&tv_end);
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_testcancel();
@@ -269,6 +273,10 @@ disabled:
 				mt_disable(mythr);
 			
 			timersub(&tv_end, &work->tv_work_start, &tv_worktime);
+
+		/* The inner do-while loop will exit unless the device is capable of
+		 * scanning a specific nonce range (currently CPU and GPU drivers)
+		 * See abandon_work comments for more details */
 		} while (!abandon_work(work, &tv_worktime, cgpu->max_hashes));
 		free_work(work);
 	}
