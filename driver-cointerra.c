@@ -227,8 +227,9 @@ bool cointerra_init(struct thr_info * const master_thr)
 	
 	dev->device_data = devstate;
 	*devstate = (struct cointerra_dev_state){
+		// TODO: Calculate these from info
 		.pipes_per_die = 120,
-		.pipes_per_asic = 240,
+		.pipes_per_asic = 480,
 	};
 	if (!cointerra_open(info, dev->dev_repr, &devstate->usbh, &devstate->ep))
 		return false;
@@ -334,7 +335,9 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 		{
 			struct work *work;
 			const int workid = upk_u16be(buf, 0);
-			const int die = buf[2], asic = buf[3], pipeno = buf[5];
+			const int die = buf[2], asic = buf[3];
+			// For some reason, pipe numbers skip 0x?f
+			const int pipeno = ((buf[5] >> 4) * 0xf) + (buf[5] & 0xf);
 			const unsigned procno = (asic * devstate->pipes_per_asic) + (die * devstate->pipes_per_die) + pipeno;
 			const uint32_t timeoff = upk_u32le(buf, 42);
 			const uint16_t zerobits = upk_u16le(buf, 52);
