@@ -19,7 +19,8 @@
 #include "gc3355.h"
 
 #define GRIDSEED_DEFAULT_FREQUENCY  600
-#define GRIDSEED_HASH_SPEED			0.0851128926	// in ms
+// 60Kh/s at 700MHz in ms
+#define GRIDSEED_HASH_SPEED			0.08571428571429
 
 BFG_REGISTER_DRIVER(gridseed_drv)
 
