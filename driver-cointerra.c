@@ -354,7 +354,7 @@ bool cointerra_poll_msg(struct thr_info * const master_thr)
 			submit_noffset_nonce(mythr, work, nonce, timeoff);
 			
 			// hashes_done must be counted by matches because cointerra devices do not provide a way to know which pipe completed matchless work
-			hashes_done2(mythr, 0x100000000, NULL);
+			hashes_done2(mythr, 0x100000000 * work->nonce_diff, NULL);
 			
 			break;
 		}
