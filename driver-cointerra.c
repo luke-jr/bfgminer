@@ -268,6 +268,8 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	timer_set_delay(&tv_latest, &tv_now, COINTERRA_LATEST_RESULT_USECS);
 	ntimeroll = max(0, work_ntime_range(work, &tv_now, &tv_latest, COINTERRA_DESIRED_ROLL));
 	
+	if (unlikely(!devstate->next_work_id))
+		++devstate->next_work_id;
 	work->device_id = devstate->next_work_id;
 	
 	pk_u16be(buf, 0, work->device_id);
