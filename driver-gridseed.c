@@ -173,6 +173,10 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 
 	gc3355_scrypt_reset(device->device_fd);
 	gc3355_scrypt_prepare_work(cmd, work);
+
+	// prevent register corruption
+	// otherwise device may hang (rare issue)
+	cgsleep_ms(100);
 	
 	// send work
 	if (sizeof(cmd) != gc3355_write(device->device_fd, cmd, sizeof(cmd)))
