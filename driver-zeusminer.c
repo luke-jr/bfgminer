@@ -81,7 +81,9 @@ bool zeusminer_detect_one(const char *devpath)
 	*info = (struct ICARUS_INFO){
 		.baud = ZEUSMINER_IO_SPEED,
 		.timing_mode = MODE_DEFAULT,
-		.do_icarus_timing = true,
+		// if do_icarus_timing is true, the timing adjustment may
+		// result in a read_count that considers the device Idle
+		.do_icarus_timing = false,
 		.probe_read_count = 5,
 		.golden_nonce = scrypt_golden_nonce,
 		.chips = ZEUSMINER_CHIPS_COUNT,
