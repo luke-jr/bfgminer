@@ -178,6 +178,7 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 	if (sizeof(cmd) != gc3355_write(device->device_fd, cmd, sizeof(cmd)))
 	{
 		applog(LOG_ERR, "%s: Failed to send work", device->dev_repr);
+		dev_error(device, REASON_DEV_COMMS_ERROR);
 		return false;
 	}
 
@@ -246,6 +247,12 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
 			break;
 		}
+	}
+
+	if (read == -1)
+	{
+		applog(LOG_ERR, "%s: Failed to read result", device->dev_repr);
+		dev_error(device, REASON_DEV_COMMS_ERROR);
 	}
 
 	gridseed_hashes_done(thr);
