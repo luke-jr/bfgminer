@@ -191,6 +191,10 @@ bool dualminer_job_start(struct thr_info * const thr)
 			gc3355_scrypt_reset(fd);
 		else
 			gc3355_scrypt_only_reset(fd);
+
+		// prevent register corruption
+		// otherwise device may hang (rare issue)
+		cgsleep_ms(100);
 	}
 
 	return icarus_job_start(thr);
