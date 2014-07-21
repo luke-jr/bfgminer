@@ -403,7 +403,7 @@ int gc3355_read(int fd, char *buf, size_t size)
 	}
 	
 	if (unlikely(tries == 0))
-		return -1;
+		return read;
 	
 	if ((read > 0) && opt_dev_protocol)
 		gc3355_log_protocol(fd, buf, read, "RECV");
