@@ -2460,22 +2460,34 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 	if ((int64_t)diff != diff)
 	{
-		// Always assume fractional values are proper bdiff per specification
+		// Assume fractional values are proper bdiff per specification
+		// Allow integers to be interpreted as pdiff, since the difference is trivial and some pools see it this way
 		diff = bdiff_to_pdiff(diff);
-	}
-	else
-	{
-		// Integer; allow it to be interpreted as pdiff, since some the difference is trivial and some pools see it this way
-		if (opt_scrypt)
-		{
-			// Some scrypt pools multiply difficulty by 0x10000; since diff 1 is pretty difficult for scrypt right now, this is a safe assumption (otherwise they would be using a fractional value)
-			diff /= 0x10000;
-		}
 	}
 	
 	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
 		diff = 1;
 	
+#ifdef USE_SCRYPT
+	// Broken Scrypt pools multiply difficulty by 0x10000
+	const double broken_scrypt_diff_multiplier = 0x10000;
+
+	/* 7/12/2014: P2Pool code was fixed: https://github.com/forrestv/p2pool/pull/210
+	   7/15/2014: Popular pools unfixed: wemineltc, dogehouse, p2pool.org
+                  Cannot find a broken Scrypt pool that will dispense diff 64 or lower */
+
+	// Ideally pools will fix their implementation and we can remove this
+	// This should suffice until miners are hashing Scrypt at ~4-32 Gh/s (based on a share rate target of 10-60s)
+
+	const double maximum_acceptable_scrypt_diff = 64;
+	// Diff 64 at 4.26 Gh/s = 1 share / 60s
+	// Diff 64 at 25.0 Gh/s = 1 share / 13s
+	// Diff 64 at 32.0 Gh/s = 1 share / 10s
+
+	if (opt_scrypt && (diff > maximum_acceptable_scrypt_diff))
+		diff /= broken_scrypt_diff_multiplier;
+#endif
+
 	cg_wlock(&pool->data_lock);
 	set_target_to_pdiff(pool->swork.target, diff);
 	cg_wunlock(&pool->data_lock);
