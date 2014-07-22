@@ -67,6 +67,38 @@ void gridseed_empty_work(int fd)
 	gc3355_read(fd, (char *)buf, GC3355_READ_SIZE);
 }
 
+static
+struct thr_info *gridseed_thread_by_chip(const struct cgpu_info * const device, uint32_t const chip)
+{
+	const struct cgpu_info *proc = device_proc_by_id(device, chip);
+	if (unlikely(!proc))
+		proc = device;
+	return proc->thr[0];
+}
+
+static
+int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
+{
+	struct cgpu_info *device = thr->cgpu;
+	struct gc3355_info *info = device->device_data;
+	struct timeval old_scanhash_time = info->scanhash_time;
+
+	timer_set_now(&info->scanhash_time);
+	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
+
+	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq);
+}
+
+static
+void gridseed_hashes_done(struct thr_info *thr)
+{
+	struct cgpu_info *device = thr->cgpu;
+	int64_t chip_hashes = gridseed_calculate_chip_hashes(thr);
+
+	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
+		hashes_done2(proc->thr[0], chip_hashes, NULL);
+}
+
 /*
  * device detection
  */
@@ -198,35 +230,9 @@ void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[
 	nonce = le32toh(nonce);
 	uint32_t chip = nonce / ((uint32_t)0xffffffff / device->procs);
 	
-	const struct cgpu_info *proc = device_proc_by_id(device, chip);
-	if (unlikely(!proc))
-		proc = device;
-	struct thr_info *proc_thr = proc->thr[0];
+	struct thr_info *proc_thr = gridseed_thread_by_chip(device, chip);
 	
 	submit_nonce(proc_thr, work, nonce);
-}
-
-static
-int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
-{
-	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_info *info = device->device_data;
-	struct timeval old_scanhash_time = info->scanhash_time;
-
-	timer_set_now(&info->scanhash_time);
-	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
-
-	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq);
-}
-
-static
-void gridseed_hashes_done(struct thr_info *thr)
-{
-	struct cgpu_info *device = thr->cgpu;
-	int64_t chip_hashes = gridseed_calculate_chip_hashes(thr);
-	
-	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
-		hashes_done2(proc->thr[0], chip_hashes, NULL);
 }
 
 // read from device for nonce or command
@@ -234,7 +240,6 @@ static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *device = thr->cgpu;
-
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
 	int fd = device->device_fd;
@@ -242,10 +247,7 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 	while (!thr->work_restart && (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) > 0)
 	{
 		if ((buf[0] == 0x55) && (buf[1] == 0x20))
-		{
-			// LTC result
 			gridseed_submit_nonce(thr, buf, work);
-		}
 		else
 		{
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);

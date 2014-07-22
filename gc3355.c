@@ -388,7 +388,7 @@ void gc3355_log_protocol(int fd, const char *buf, size_t size, const char *prefi
 	       GC3355_CHIP_NAME, fd, prefix, (unsigned long)size, hex);
 }
 
-int gc3355_read(int fd, char *buf, size_t size)
+ssize_t gc3355_read(int fd, char *buf, size_t size)
 {
 	size_t read;
 	int tries = 20;
@@ -621,9 +621,7 @@ int64_t gc3355_get_firmware_version(int fd)
 	
 	// firmware response begins with 55aac000 90909090
 	if (memcmp(buf, "\x55\xaa\xc0\x00\x90\x90\x90\x90", GC3355_READ_SIZE - 4) != 0)
-	{
 		return -1;
-	}
 	
 	uint32_t fw_version = be32toh(*(uint32_t *)(buf + 8));
 	
