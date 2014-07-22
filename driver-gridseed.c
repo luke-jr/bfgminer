@@ -174,8 +174,11 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 	gc3355_scrypt_reset(device->device_fd);
 	gc3355_scrypt_prepare_work(cmd, work);
 
-	// prevent register corruption
-	// otherwise device may hang (rare issue)
+	// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_DataSheet.pdf
+	// WAIT: Before start a new transaction, WAIT Cycle must be inserted.
+	// WAIT Cycle value is programmable register in UART and default wait
+	// time is UART receive 32 bits time (One DATA Cycle).
+	// Note: prevents register corruption
 	cgsleep_ms(100);
 	
 	// send work

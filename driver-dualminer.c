@@ -192,8 +192,11 @@ bool dualminer_job_start(struct thr_info * const thr)
 		else
 			gc3355_scrypt_only_reset(fd);
 
-		// prevent register corruption
-		// otherwise device may hang (rare issue)
+		// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_DataSheet.pdf
+		// WAIT: Before start a new transaction, WAIT Cycle must be inserted.
+		// WAIT Cycle value is programmable register in UART and default wait
+		// time is UART receive 32 bits time (One DATA Cycle).
+		// Note: prevents register corruption
 		cgsleep_ms(100);
 	}
 
