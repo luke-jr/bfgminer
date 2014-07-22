@@ -27,7 +27,6 @@ int opt_pll_freq;
 
 // GridSeed common code begins here
 
-#define GC3355_COMMAND_DELAY_MS 20
 #define GC3355_ORB_DEFAULT_CHIPS   5
 #define GC3355_BLADE_DEFAULT_CHIPS	40
 #define GC3355_READ_SIZE          12

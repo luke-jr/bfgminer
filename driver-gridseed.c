@@ -90,13 +90,19 @@ int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
 }
 
 static
-void gridseed_hashes_done(struct thr_info *thr)
+int64_t gridseed_hashes_done(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
 	int64_t chip_hashes = gridseed_calculate_chip_hashes(thr);
+	int64_t total_hashes = 0;
 
-	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
+	for_each_managed_proc(proc, device)
+	{
+		total_hashes += chip_hashes;
 		hashes_done2(proc->thr[0], chip_hashes, NULL);
+	}
+
+	return total_hashes;
 }
 
 /*
@@ -221,6 +227,10 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 		return false;
 	}
 
+	// after sending work to the device, minerloop_scanhash-based
+	// drivers must set work->blk.nonce to the last nonce to hash
+	work->blk.nonce = 0xffffffff;
+
 	return true;
 }
 
@@ -231,7 +241,7 @@ void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[
 	
 	uint32_t nonce = *(uint32_t *)(buf + 4);
 	nonce = le32toh(nonce);
-	uint32_t chip = nonce / ((uint32_t)0xffffffff / device->procs);
+	uint32_t chip = nonce / (work->blk.nonce / device->procs);
 	
 	struct thr_info *proc_thr = gridseed_thread_by_chip(device, chip);
 	
@@ -239,6 +249,9 @@ void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[
 }
 
 // read from device for nonce or command
+// unless the device can target specific nonce ranges, the scanhash routine should loop
+// until the device has processed the work item, scanning the full nonce range
+// return the total number of hashes done
 static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
@@ -246,16 +259,21 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
 	int fd = device->device_fd;
+	int64_t total_hashes = 0;
 
-	while (!thr->work_restart && (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) > 0)
+	while (!thr->work_restart                                                   // true when new work is available (miner.c)
+	    && ((read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) >= 0)       // only check for failure - allow 0 bytes
+	    && (total_hashes < max_nonce))                                          // false when we've had time to scan a range
 	{
+		total_hashes += gridseed_hashes_done(thr);
+
+		if (read == 0)
+			continue;
+
 		if ((buf[0] == 0x55) && (buf[1] == 0x20))
 			gridseed_submit_nonce(thr, buf, work);
 		else
-		{
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
-			break;
-		}
 	}
 
 	if (read == -1)

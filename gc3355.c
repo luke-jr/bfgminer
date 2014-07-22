@@ -33,7 +33,9 @@
 int opt_sha2_units = -1;
 int opt_pll_freq = 0; // default is set in gc3355_set_pll_freq
 
-#define GC3355_CHIP_NAME  "gc3355"
+#define GC3355_CHIP_NAME         "gc3355"
+#define GC3355_COMMAND_DELAY_MS  20
+#define GC3355_WRITE_DELAY_MS    10
 
 // General GC3355 commands
 
@@ -390,20 +392,7 @@ void gc3355_log_protocol(int fd, const char *buf, size_t size, const char *prefi
 
 ssize_t gc3355_read(int fd, char *buf, size_t size)
 {
-	size_t read;
-	int tries = 20;
-	
-	while (tries > 0)
-	{
-		read = serial_read(fd, buf, size);
-		if (read > 0)
-			break;
-		
-		tries--;
-	}
-	
-	if (unlikely(tries == 0))
-		return read;
+	size_t read = serial_read(fd, buf, size);
 	
 	if ((read > 0) && opt_dev_protocol)
 		gc3355_log_protocol(fd, buf, read, "RECV");
@@ -415,12 +404,21 @@ ssize_t gc3355_write(int fd, const void * const buf, const size_t size)
 {
 	if (opt_dev_protocol)
 		gc3355_log_protocol(fd, buf, size, "SEND");
-	
-	return write(fd, buf, size);
+
+	ssize_t result = write(fd, buf, size);
+
+	// gc3355 can suffer register corruption if multiple writes are
+	// made in a short period of time.
+	// This is not possible to reproduce on Mac OS X where the serial
+	// drivers seem to carry an additional overhead / latency.
+	// This is reproducable on Linux though by removing the following:
+	cgsleep_ms(GC3355_WRITE_DELAY_MS);
+
+	return result;
 }
 
 static
-void _gc3355_send_cmds_bin(int fd, const char *cmds[], bool is_bin, int size)
+void gc3355_send_cmds(int fd, const char *cmds[])
 {
 	int i = 0;
 	unsigned char ob_bin[512];
@@ -430,21 +428,13 @@ void _gc3355_send_cmds_bin(int fd, const char *cmds[], bool is_bin, int size)
 		if (cmd == NULL)
 			break;
 
-		if (is_bin)
-			gc3355_write(fd, cmd, size);
-		else
-		{
-			int bin_size = strlen(cmd) / 2;
-			hex2bin(ob_bin, cmd, bin_size);
-			gc3355_write(fd, ob_bin, bin_size);
-		}
-		
+		int bin_size = strlen(cmd) / 2;
+		hex2bin(ob_bin, cmd, bin_size);
+		gc3355_write(fd, ob_bin, bin_size);
+
 		cgsleep_ms(GC3355_COMMAND_DELAY_MS);
 	}
 }
-
-#define gc3355_send_cmds_bin(fd, cmds, size)  _gc3355_send_cmds_bin(fd, cmds, true, size)
-#define gc3355_send_cmds(fd, cmds)  _gc3355_send_cmds_bin(fd, cmds, false, -1)
 
 void gc3355_scrypt_only_reset(int fd)
 {
