@@ -20,7 +20,9 @@
 
 #define GRIDSEED_DEFAULT_FREQUENCY  600
 // 60Kh/s at 700MHz in ms
-#define GRIDSEED_HASH_SPEED			0.08571428571429
+#define GRIDSEED_HASH_SPEED         0.08571428571429
+// GridSeed driver currently scans a full nonce range
+#define GRIDSEED_MAX_NONCE          0xffffffff
 
 BFG_REGISTER_DRIVER(gridseed_drv)
 
@@ -76,27 +78,71 @@ struct thr_info *gridseed_thread_by_chip(const struct cgpu_info * const device, 
 	return proc->thr[0];
 }
 
+// return the number of hashes done in elapsed_ms
 static
-int64_t gridseed_calculate_chip_hashes(struct thr_info *thr)
+int64_t gridseed_calculate_chip_hashes_ms(const struct cgpu_info * const device, int const elapsed_ms)
 {
-	struct cgpu_info *device = thr->cgpu;
 	struct gc3355_info *info = device->device_data;
-	struct timeval old_scanhash_time = info->scanhash_time;
-
-	timer_set_now(&info->scanhash_time);
-	int elapsed_ms = ms_tdiff(&info->scanhash_time, &old_scanhash_time);
-
 	return GRIDSEED_HASH_SPEED * (double)elapsed_ms * (double)(info->freq);
 }
 
+// return the number of hashes done since start_tv
 static
-void gridseed_hashes_done(struct thr_info *thr)
+int64_t gridseed_calculate_chip_hashes(const struct cgpu_info * const device, struct timeval const start_tv)
 {
-	struct cgpu_info *device = thr->cgpu;
-	int64_t chip_hashes = gridseed_calculate_chip_hashes(thr);
+	struct timeval now_tv;
+	timer_set_now(&now_tv);
+	int elapsed_ms = ms_tdiff(&now_tv, &start_tv);
 
-	for (struct cgpu_info *proc = device; proc; proc = proc->next_proc)
-		hashes_done2(proc->thr[0], chip_hashes, NULL);
+	return gridseed_calculate_chip_hashes_ms(device, elapsed_ms);
+}
+
+// adjust calculated hashes that overflow possible values
+static
+int64_t gridseed_fix_hashes_done(int64_t const hashes_done)
+{
+	int64_t result = hashes_done;
+
+	// not possible to complete more than 0xffffffff nonces
+	if (unlikely(result > 0xffffffff))
+		result = 0xffffffff;
+
+	return result;
+}
+
+// report on hashes done since start_tv
+// return the number of hashes done since start_tv
+static
+int64_t gridseed_hashes_done(struct cgpu_info * const device, struct timeval const start_tv, int64_t previous_hashes)
+{
+	int64_t total_chip_hashes = gridseed_calculate_chip_hashes(device, start_tv);
+	total_chip_hashes = gridseed_fix_hashes_done(total_chip_hashes);
+
+	int64_t previous_chip_hashes = previous_hashes / device->procs;
+	int64_t recent_chip_hashes = total_chip_hashes - previous_chip_hashes;
+	int64_t total_hashes = 0;
+
+	for_each_managed_proc(proc, device)
+	{
+		total_hashes += recent_chip_hashes;
+		hashes_done2(proc->thr[0], recent_chip_hashes, NULL);
+	}
+
+	return total_hashes;
+}
+
+// return duration in seconds for device to scan a nonce range
+static
+uint32_t gridseed_nonce_range_duration(const struct cgpu_info * const device)
+{
+	struct gc3355_info *info = device->device_data;
+
+	// total hashrate of this device:
+	uint32_t hashes_per_sec = gridseed_calculate_chip_hashes_ms(device, 1000) * info->chips;
+	// amount of time it takes this device to scan a nonce range:
+	uint32_t nonce_range_sec = 0xffffffff / hashes_per_sec;
+
+	return nonce_range_sec;
 }
 
 /*
@@ -195,13 +241,10 @@ void gridseed_thread_shutdown(struct thr_info *thr)
 
 // send work to the device
 static
-bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
+bool gridseed_job_start(const struct thr_info * const thr, struct work * const work)
 {
 	struct cgpu_info *device = thr->cgpu;
-	struct gc3355_info *info = device->device_data;
 	unsigned char cmd[156];
-	
-	timer_set_now(&info->scanhash_time);
 
 	gc3355_scrypt_reset(device->device_fd);
 	gc3355_scrypt_prepare_work(cmd, work);
@@ -221,6 +264,10 @@ bool gridseed_prepare_work(struct thr_info __maybe_unused *thr, struct work *wor
 		return false;
 	}
 
+	// after sending work to the device, minerloop_scanhash-based
+	// drivers must set work->blk.nonce to the last nonce to hash
+	work->blk.nonce = GRIDSEED_MAX_NONCE;
+
 	return true;
 }
 
@@ -231,7 +278,7 @@ void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[
 	
 	uint32_t nonce = *(uint32_t *)(buf + 4);
 	nonce = le32toh(nonce);
-	uint32_t chip = nonce / ((uint32_t)0xffffffff / device->procs);
+	uint32_t chip = nonce / (GRIDSEED_MAX_NONCE / device->procs);
 	
 	struct thr_info *proc_thr = gridseed_thread_by_chip(device, chip);
 	
@@ -239,23 +286,54 @@ void gridseed_submit_nonce(struct thr_info * const thr, const unsigned char buf[
 }
 
 // read from device for nonce or command
+// unless the device can target specific nonce ranges, the scanhash routine should loop
+// until the device has processed the work item, scanning the full nonce range
+// return the total number of hashes done
 static
 int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
 {
 	struct cgpu_info *device = thr->cgpu;
+	struct timeval start_tv, nonce_range_tv, report_hashes_tv;
+
+	// amount of time it takes this device to scan a nonce range:
+	uint32_t nonce_full_range_sec = gridseed_nonce_range_duration(device);
+	// timer to break out of scanning should we close in on an entire nonce range
+	// should break out before the range is scanned, so we are doing 99% of the range
+	uint64_t nonce_near_range_usec = (nonce_full_range_sec * 1000000. * 0.99);
+	timer_set_delay_from_now(&nonce_range_tv, nonce_near_range_usec);
+
+	// timer to calculate hashes every 10s
+	const uint32_t report_delay = 10 * 1000000;
+	timer_set_delay_from_now(&report_hashes_tv, report_delay);
+
+	// start the job
+	timer_set_now(&start_tv);
+	gridseed_job_start(thr, work);
+
+	// scan for results
 	unsigned char buf[GC3355_READ_SIZE];
 	int read = 0;
 	int fd = device->device_fd;
+	int64_t total_hashes = 0;
+	bool range_nearly_scanned = false;
 
-	while (!thr->work_restart && (read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) > 0)
+	while (!thr->work_restart                                                   // true when new work is available (miner.c)
+	    && ((read = gc3355_read(fd, (char *)buf, GC3355_READ_SIZE)) >= 0)       // only check for failure - allow 0 bytes
+	    && !(range_nearly_scanned = timer_passed(&nonce_range_tv, NULL)))       // true when we've nearly scanned a nonce range
 	{
+		if (timer_passed(&report_hashes_tv, NULL))
+		{
+			total_hashes += gridseed_hashes_done(device, start_tv, total_hashes);
+			timer_set_delay_from_now(&report_hashes_tv, report_delay);
+		}
+
+		if (read == 0)
+			continue;
+
 		if ((buf[0] == 0x55) && (buf[1] == 0x20))
 			gridseed_submit_nonce(thr, buf, work);
 		else
-		{
 			applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
-			break;
-		}
 	}
 
 	if (read == -1)
@@ -264,7 +342,9 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 		dev_error(device, REASON_DEV_COMMS_ERROR);
 	}
 
-	gridseed_hashes_done(thr);
+	// calculate remaining hashes for elapsed time
+	// e.g. work_restart ~report_delay after report_hashes_tv
+	gridseed_hashes_done(device, start_tv, total_hashes);
 
 	return 0;
 }
@@ -332,7 +412,6 @@ struct device_drv gridseed_drv =
 	.minerloop = minerloop_scanhash,
 	
 	// scanhash mining hooks
-	.prepare_work = gridseed_prepare_work,
 	.scanhash = gridseed_scanhash,
 	
 	// teardown device
