@@ -21,7 +21,8 @@
 
 #define ROCKMINER_MIN_FREQ_MHZ  200
 #define ROCKMINER_DEF_FREQ_MHZ  270
-#define ROCKMINER_MAX_FREQ_MHZ  290
+#define ROCKMINER_MAX_SAFE_FREQ_MHZ  290
+#define ROCKMINER_MAX_FREQ_MHZ  2560
 #define ROCKMINER_POLL_US         0
 #define ROCKMINER_RETRY_US  5000000
 #define ROCKMINER_MIDTASK_TIMEOUT_US  500000
@@ -438,14 +439,24 @@ void rockminer_poll(struct thr_info * const master_thr)
 }
 
 static
-const char *rockminer_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *rockminer_set_clock(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct thr_info * const thr = proc->thr[0];
 	struct rockminer_chip_data * const chip = thr->cgpu_data;
+	bool unsafe = false;
+	
+	if (!strncasecmp(newvalue, "unsafe:", 7))
+	{
+		newvalue += 7;
+		unsafe = true;
+	}
 	
 	const int val = atoi(newvalue);
 	if (val < ROCKMINER_MIN_FREQ_MHZ || val > ROCKMINER_MAX_FREQ_MHZ)
 		return "Invalid clock speed";
+	else
+	if (val > ROCKMINER_MAX_SAFE_FREQ_MHZ && !unsafe)
+		return "Dangerous clock speed (use \"unsafe:N\" to force)";
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Changing clock frequency for future jobs to %d MHz", proc->proc_repr, val);
 	rockminer_job_buf_set_freq(chip->next_work_req, val);
