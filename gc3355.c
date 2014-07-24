@@ -593,10 +593,8 @@ void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
 	cmd[149] = 0xff;
 	cmd[150] = 0xff;
 	cmd[151] = 0xff;
-	
-	// taskid
-	int workid = work->id;
-	memcpy(cmd + 152, &(workid), 4);
+
+	// 0x25 - 0x28 are for specific Scrypt unit configs, don't set without reason
 }
 
 void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work)
