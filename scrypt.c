@@ -1,5 +1,7 @@
 /*-
- * Copyright 2009 Colin Percival, 2011 ArtForz
+ * Copyright 2009 Colin Percival
+ * Copyright 2011 ArtForz
+ * Copyright 2014 Luke Dashjr
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without

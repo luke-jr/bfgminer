@@ -1,4 +1,4 @@
-dnl * Copyright 2012-2013 Luke Dashjr
+dnl * Copyright 2011-2014 Luke Dashjr
 dnl * Copyright 2011-2013 Con Kolivas
 dnl * Copyright 2010-2011 Jeff Garzik
 dnl * Copyright 2012 Xiangfu

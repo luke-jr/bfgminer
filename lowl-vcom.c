@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
  * Copyright 2013 Con Kolivas
  * Copyright 2012 Andrew Smith
  * Copyright 2013 Xiangfu

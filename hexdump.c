@@ -3,7 +3,7 @@
  * output is equal to 'hexdump -C'
  * should be compatible to 64bit architectures
  *
- * Copyright (c) 2009 Daniel Mack <daniel@caiaq.de>
+ * Copyright 2009 Daniel Mack
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

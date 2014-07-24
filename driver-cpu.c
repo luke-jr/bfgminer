@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
- * Copyright 2011-2013 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it

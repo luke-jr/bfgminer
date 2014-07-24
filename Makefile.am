@@ -1,4 +1,4 @@
-# Copyright 2012-2013 Luke Dashjr
+# Copyright 2012-2014 Luke Dashjr
 # Copyright 2012 zefir
 # Copyright 2011-2013 Con Kolivas
 # Copyright 2013 James Z.M. Gao

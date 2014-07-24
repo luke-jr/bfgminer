@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  * Copyright 2013 Vladimir Strinski
  *
  * This program is free software; you can redistribute it and/or modify it
