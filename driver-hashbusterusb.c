@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  * Copyright 2013 Vladimir Strinski
  * Copyright 2013 HashBuster team
  *

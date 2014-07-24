@@ -1,9 +1,11 @@
 /*
- * Copyright 2011-2013 Con Kolivas
- * Copyright 2011-2013 Luke Dashjr
- * Copyright 2010 Jeff Garzik
+ * Copyright 2011-2014 Con Kolivas
+ * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2014 Nate Woolls
+ * Copyright 2010-2011 Jeff Garzik
  * Copyright 2012 Giel van Schijndel
  * Copyright 2012 Gavin Andresen
+ * Copyright 2013 Lingchao Xu
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free

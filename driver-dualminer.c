@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2014 Dualminer Team
  *

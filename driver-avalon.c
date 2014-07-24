@@ -1,8 +1,8 @@
 /*
  * Copyright 2012-2013 Xiangfu
  * Copyright 2013 Con Kolivas <kernel@kolivas.org>
- * Copyright 2012-2013 Luke Dashjr
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free

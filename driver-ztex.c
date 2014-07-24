@@ -1,6 +1,6 @@
 /*
  * Copyright 2012 nelisky
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
  * Copyright 2012-2013 Denis Ahrens
  * Copyright 2012 Xiangfu
  *

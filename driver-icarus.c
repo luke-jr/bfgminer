@@ -1,6 +1,7 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
  * Copyright 2012 Xiangfu
+ * Copyright 2014 Nate Woolls
  * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
