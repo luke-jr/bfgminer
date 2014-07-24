@@ -229,6 +229,26 @@ bool zeusminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	return true;
 }
 
+// display the Chip # in the UI when viewing per-proc details
+static
+bool zeusminer_override_statline_temp2(char *buf, size_t bufsz, struct cgpu_info *device, __maybe_unused bool per_processor)
+{
+	if (per_processor && ((device->proc_id % ZEUSMINER_CHIP_CORES) == 0))
+	{
+		tailsprintf(buf, bufsz, "C:%-3d", device->proc_id / ZEUSMINER_CHIP_CORES);
+		return true;
+	}
+	return false;
+}
+
+// return the Chip # in via the API when procdetails is called
+static
+struct api_data *zeusminer_get_api_extra_device_detail(struct cgpu_info *device)
+{
+	int chip = device->proc_id / ZEUSMINER_CHIP_CORES;
+	return api_add_int(NULL, "Chip", &chip, true);
+}
+
 // device_drv definition - miner.h
 
 static
@@ -254,6 +274,13 @@ void zeusminer_drv_init()
 	// specify driver probe priority
 	// currently setup specifically to probe before DualMiner
 	zeusminer_drv.probe_priority = -100;
+
+	// output the chip # when viewing per-proc stats
+	// so we can easily ID chips vs cores
+	zeusminer_drv.override_statline_temp2 = zeusminer_override_statline_temp2;
+
+	// output the chip # via RPC API
+	zeusminer_drv.get_api_extra_device_detail = zeusminer_get_api_extra_device_detail;
 }
 
 struct device_drv zeusminer_drv = {
