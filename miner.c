@@ -9673,7 +9673,8 @@ out:
 // see minerloop_scanhash comments for more details & usage
 bool abandon_work(struct work *work, struct timeval *wdiff, uint64_t max_hashes)
 {
-	if (wdiff->tv_sec > opt_scantime ||                 // scan-time has elapsed (user specified, default 60s)
+	if (work->blk.nonce == 0xffffffff ||                // known we are scanning a full nonce range
+	    wdiff->tv_sec > opt_scantime ||                 // scan-time has elapsed (user specified, default 60s)
 	    work->blk.nonce >= 0xfffffffe - max_hashes ||   // are there enough nonces left in the work
 	    max_hashes >= 0xfffffffe ||                     // assume we are scanning a full nonce range
 	    stale_work(work, false))                        // work is stale
