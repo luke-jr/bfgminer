@@ -567,18 +567,28 @@ void gc3355_scrypt_reset(int fd)
 
 void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
 {
+	// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_Register_Spec.pdf
+
 	// command header
-	cmd[0] = 0x55;
-	cmd[1] = 0xaa;
-	cmd[2] = 0x1f;
-	cmd[3] = 0x00;
+	cmd[0] = 0x55;  // static header
+	cmd[1] = 0xaa;  // static header
+	cmd[2] = 0x1f;  // 0x1 (for Scrypt) | chip_id (0xf for broadcast)
+	cmd[3] = 0x00;  // identifies the following task data, beginning with 0x00
+	                // gc3355 supports sending batches of work at once
+	                // in which case this would be incremented for each batch
 	
-	// task data
+	// task data - starts at 0x0 (with 4 byte offset for header)
 	memcpy(cmd + 4, work->target, 32);
 	memcpy(cmd + 36, work->midstate, 32);
 	memcpy(cmd + 68, work->data, 80);
-	
-	// nonce_max
+
+	// nonce min - starts at 0x23 (with 4 byte offset for header)
+	cmd[144] = 0x00;
+	cmd[145] = 0x00;
+	cmd[146] = 0x00;
+	cmd[147] = 0x00;
+
+	// nonce max - starts at 0x24 (with 4 byte offset for header)
 	cmd[148] = 0xff;
 	cmd[149] = 0xff;
 	cmd[150] = 0xff;
@@ -591,20 +601,27 @@ void gc3355_scrypt_prepare_work(unsigned char cmd[156], struct work *work)
 
 void gc3355_sha2_prepare_work(unsigned char cmd[52], struct work *work)
 {
+	// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_Register_Spec.pdf
+
 	// command header
-	cmd[0] = 0x55;
-	cmd[1] = 0xaa;
-	cmd[2] = 0x0f;
-	cmd[3] = 0x00; // Scrypt header sig - used by DualMiner in Dual Mode
+	cmd[0] = 0x55;  // static header
+	cmd[1] = 0xaa;  // static header
+	cmd[2] = 0x0f;  // 0x0 (for SHA2) | chip_id (0xf for broadcast)
+	cmd[3] = 0x00;  // identifies the following task data, beginning with 0x00
+	                // gc3355 supports sending batches of work at once
+	                // in which case this would be incremented for each batch
 
-	uint8_t temp_bin[64];
-	memset(temp_bin, 0, 64);
+	// initial nonce - starts at 0x0 (with 4 byte offset for header)
+	cmd[4] = 0x00;
+	cmd[5] = 0x00;
+	cmd[6] = 0x00;
+	cmd[7] = 0x00;
 
-	memcpy(temp_bin, work->midstate, 32);
-	memcpy(temp_bin + 52, work->data + 64, 12);
-
+	// task data - starts at 0x1 (with 4 byte offset for header)
 	memcpy(cmd + 8, work->midstate, 32);
-	memcpy(cmd + 40, temp_bin + 52, 12);
+	memcpy(cmd + 40, work->data + 64, 12);
+
+	// 0x1e - 0xff are for specific SHA2 unit configs, don't set without reason
 }
 
 int64_t gc3355_get_firmware_version(int fd)
