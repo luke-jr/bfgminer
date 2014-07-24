@@ -2476,17 +2476,16 @@ static bool parse_diff(struct pool *pool, json_t *val)
 
 	/* 7/12/2014: P2Pool code was fixed: https://github.com/forrestv/p2pool/pull/210
 	   7/15/2014: Popular pools unfixed: wemineltc, dogehouse, p2pool.org
-                  Cannot find a broken Scrypt pool that will dispense diff 64 or lower */
+                  Cannot find a broken Scrypt pool that will dispense diff lower than 16 */
 
 	// Ideally pools will fix their implementation and we can remove this
-	// This should suffice until miners are hashing Scrypt at ~4-32 Gh/s (based on a share rate target of 10-60s)
+	// This should suffice until miners are hashing Scrypt at ~1-7 Gh/s (based on a share rate target of 10-60s)
 
-	const double maximum_acceptable_scrypt_diff = 64;
-	// Diff 64 at 4.26 Gh/s = 1 share / 60s
-	// Diff 64 at 25.0 Gh/s = 1 share / 13s
-	// Diff 64 at 32.0 Gh/s = 1 share / 10s
+	const double minimum_broken_scrypt_diff = 16;
+	// Diff 16 at 1.15 Gh/s = 1 share / 60s
+	// Diff 16 at 7.00 Gh/s = 1 share / 10s
 
-	if (opt_scrypt && (diff > maximum_acceptable_scrypt_diff))
+	if (opt_scrypt && (diff >= minimum_broken_scrypt_diff))
 		diff /= broken_scrypt_diff_multiplier;
 #endif
 
