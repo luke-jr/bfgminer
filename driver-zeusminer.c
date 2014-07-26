@@ -106,7 +106,9 @@ bool zeusminer_detect_one(const char *devpath)
 	
 	info->golden_ob = scrypt_golden_ob;
 	
-	if (!icarus_detect_custom(devpath, drv, info))
+	if (!icarus_detect_custom(devpath, drv, info) &&
+		//ZM doesn't respond to detection 1 out of ~30 times
+		!icarus_detect_custom(devpath, drv, info))
 	{
 		free(info);
 		return false;
