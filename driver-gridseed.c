@@ -408,13 +408,13 @@ const struct bfg_set_device_definition gridseed_set_device_funcs_live[] = {
 
 #ifdef HAVE_CURSES
 static
-void gridseed_tui_wlogprint_choices(struct cgpu_info * const device)
+void gridseed_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
 	wlogprint("[C]lock speed ");
 }
 
 static
-const char *gridseed_tui_handle_choice(struct cgpu_info * const device, const int input)
+const char *gridseed_tui_handle_choice(struct cgpu_info * const proc, const int input)
 {
 	static char buf[0x100];  // Static for replies
 
@@ -425,7 +425,7 @@ const char *gridseed_tui_handle_choice(struct cgpu_info * const device, const in
 			sprintf(buf, "Set clock speed");
 			char * const setting = curses_input(buf);
 
-			gridseed_set_clock_freq(device, atoi(setting));
+			gridseed_set_clock_freq(proc->device, atoi(setting));
 
 			return "Clock speed changed\n";
 		}
@@ -434,9 +434,9 @@ const char *gridseed_tui_handle_choice(struct cgpu_info * const device, const in
 }
 
 static
-void gridseed_wlogprint_status(struct cgpu_info * const device)
+void gridseed_wlogprint_status(struct cgpu_info * const proc)
 {
-	struct gc3355_info * const info = device->device_data;
+	struct gc3355_info * const info = proc->device->device_data;
 	wlogprint("Clock speed: %d\n", info->freq);
 }
 #endif
