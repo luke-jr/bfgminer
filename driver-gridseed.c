@@ -270,21 +270,28 @@ int64_t gridseed_scanhash(struct thr_info *thr, struct work *work, int64_t __may
 }
 
 /*
- * specify settings / options
+ * specify settings / options via RPC or command line
  */
 
 // support for --set-device
 // must be set before probing the device
 
 static
-const char *gridseed_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+void gridseed_set_clock_freq(struct cgpu_info * const device, int const freq)
 {
 	struct gc3355_info * const info = device->device_data;
-	int val = atoi(setting);
 
-	info->freq = val;
+	info->freq = freq;
 	// below required as we may already be mining
-	gc3355_set_pll_freq(device->device_fd, val);
+	gc3355_set_pll_freq(device->device_fd, freq);
+
+	applog(LOG_ERR, "%s: gridseed_set_clock_freq", device->dev_repr);
+}
+
+static
+const char *gridseed_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	gridseed_set_clock_freq(device, atoi(setting));
 
 	return NULL;
 }
@@ -315,6 +322,45 @@ const struct bfg_set_device_definition gridseed_set_device_funcs_live[] = {
 	{ NULL },
 };
 
+/*
+ * specify settings / options via TUI
+ */
+
+#ifdef HAVE_CURSES
+static
+void gridseed_tui_wlogprint_choices(struct cgpu_info * const device)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *gridseed_tui_handle_choice(struct cgpu_info * const device, const int input)
+{
+	static char buf[0x100];  // Static for replies
+
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			sprintf(buf, "Set clock speed");
+			char * const setting = curses_input(buf);
+
+			gridseed_set_clock_freq(device, atoi(setting));
+
+			return "Clock speed changed\n";
+		}
+	}
+	return NULL;
+}
+
+static
+void gridseed_wlogprint_status(struct cgpu_info * const device)
+{
+	struct gc3355_info * const info = device->device_data;
+	wlogprint("Clock speed: %d\n", info->freq);
+}
+#endif
+
 struct device_drv gridseed_drv =
 {
 	// metadata
@@ -337,4 +383,11 @@ struct device_drv gridseed_drv =
 	
 	// teardown device
 	.thread_shutdown = gridseed_thread_shutdown,
+
+	// TUI support - e.g. setting clock via UI
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = gridseed_wlogprint_status,
+	.proc_tui_wlogprint_choices = gridseed_tui_wlogprint_choices,
+	.proc_tui_handle_choice = gridseed_tui_handle_choice,
+#endif
 };
