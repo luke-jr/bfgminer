@@ -282,9 +282,11 @@ const char *gridseed_set_clock(struct cgpu_info * const device, const char * con
 	struct gc3355_info * const info = device->device_data;
 	int val = atoi(setting);
 
+	if ((info->freq != val) &&                          // method called for each processor, we only want to set pll once
+	    (device->device_fd > 0))                        // we may not be mining yet, in which case just store freq
+	    gc3355_set_pll_freq(device->device_fd, val);    // clock was set via RPC or TUI
+
 	info->freq = val;
-	// below required as we may already be mining
-	gc3355_set_pll_freq(device->device_fd, val);
 
 	return NULL;
 }
