@@ -242,6 +242,17 @@ AC_ARG_ENABLE([other-drivers],
 )
 
 
+broad_udevrules=false
+AC_ARG_ENABLE([broad-udevrules],
+	[AC_HELP_STRING([--enable-broad-udevrules],[Include udev rules for ambiguous devices which may not be miners])],
+	[
+		if test "x$enableval" = "xyes"; then
+			broad_udevrules=true
+		fi
+	]
+)
+
+
 algolist="$algolist scrypt"
 AC_ARG_ENABLE([scrypt],
 	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
@@ -478,6 +489,7 @@ fi
 if test "x$dualminer" = "xyes"; then
 	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
 	need_gc3355=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
 
@@ -500,6 +512,7 @@ fi
 if test "x$zeusminer" = "xyes"; then
 	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_ZEUSMINER], [test x$zeusminer = xyes])
 
@@ -516,6 +529,7 @@ if test "x$gridseed" = "xyes"; then
 	need_gc3355=yes
 	need_lowl_vcom=yes
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_GRIDSEED], [test x$gridseed = xyes])
 
@@ -531,6 +545,7 @@ if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
@@ -852,6 +867,7 @@ if test "x$bfx" = xyes; then
 	AC_DEFINE([USE_BFX], [1], [Defined to 1 if BFx2 support is wanted])
 	need_lowl_ftdi=yes
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_BFX], [test x$bfx = xyes])
 
@@ -1397,6 +1413,7 @@ AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$has_fpga != xno])
 AM_CONDITIONAL([HAS_ASIC], [test x$has_asic != xno])
 AM_CONDITIONAL([USE_UDEVRULES], [$use_udevrules])
+AM_CONDITIONAL([BROAD_UDEVRULES], [$broad_udevrules])
 
 dnl Find YASM
 has_yasm=false

@@ -25,6 +25,31 @@ LABEL="bfgminer_start"
 @HAS_X6500_TRUE@ENV{idVendor}=="0403", ENV{idProduct}=="6001", ENV{ID_MODEL}=="*X6500 FPGA Miner*", GOTO="bfgminer_add"
 @HAS_ZTEX_TRUE@ENV{ID_MODEL}=="*btcminer for ZTEX*", GOTO="bfgminer_add"
 
+# The below are broad udev rules that may match devices other than the miners expected.
+# You can uncomment them with the --enable-broad-udevrules configure option.
+
+# Avalon1
+@BROAD_UDEVRULES_TRUE@@HAS_AVALON_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", GOTO="bfgminer_add"
+# DualMiner
+@BROAD_UDEVRULES_TRUE@@USE_DUALMINER_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", GOTO="bfgminer_add"
+# GridSeed
+@BROAD_UDEVRULES_TRUE@@USE_GRIDSEED_TRUE@ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", GOTO="bfgminer_add"
+# Icarus
+@BROAD_UDEVRULES_TRUE@@HAS_ICARUS_TRUE@ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", GOTO="bfgminer_add"
+# Cairnsmore1
+@BROAD_UDEVRULES_TRUE@@HAS_ICARUS_TRUE@ATTRS{idVendor}=="067b", ATTRS{idProduct}=="0230", GOTO="bfgminer_add"
+@BROAD_UDEVRULES_TRUE@@HAS_ICARUS_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="8350", GOTO="bfgminer_add"
+# Block Erupter and Antminer U*
+@BROAD_UDEVRULES_TRUE@@HAS_ICARUS_TRUE@ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", GOTO="bfgminer_add"
+# ZeusMiner
+@BROAD_UDEVRULES_TRUE@@USE_ZEUSMINER_TRUE@ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", GOTO="bfgminer_add"
+# Possibly unprogrammed ZTEX
+@BROAD_UDEVRULES_TRUE@@HAS_ZTEX_TRUE@ATTRS{idVendor}=="221a", ATTRS{idProduct}=="0100", GOTO="bfgminer_add"
+# BFx2
+@BROAD_UDEVRULES_TRUE@@USE_BFX_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", GOTO="bfgminer_add"
+# RockMiner
+@BROAD_UDEVRULES_TRUE@@USE_ROCKMINER_TRUE@ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", GOTO="bfgminer_add"
+
 GOTO="bfgminer_end"
 
 LABEL="bfgminer_add"

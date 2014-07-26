@@ -136,6 +136,9 @@ Optional Dependencies:
 BFGMiner driver configuration options:
 	--disable-other-drivers Build without drivers by default unless explicitly
 	                        enabled
+	--enable-broad-udevrules
+	                        Include udev rules for ambiguous devices which may
+	                        not be miners
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
 	--disable-bfx           Compile support for BFx2 (default if libusb)
