@@ -1,3 +1,88 @@
+BFGMiner Version 4.5.0 - July 26, 2014
+
+- Bugfix: zeusminer: Fix crash in TUI with newly introduced feature
+- Bugfix: gridseed: Fix crash in TUI with newly introduced feature
+- gridseed: Add the ability to set clock speed via the TUI
+- bitforce: Support for Monarch devices on Windows using new "mswin" lowlevel
+interface to scan for KMDF driver
+- Bugfix: gridseed: Implement a proper scanhash routine for GridSeeds
+- zeusminer: Add the ability to set clock speed via the TUI
+- Bugfix: gridseed: Only set PLL frequency once (not once per processor)
+- Bugfix: zeusminer: Retry detection on failure - ZM fails detection 1 / ~30
+times
+- Bugfix: zeusminer: Enabling the ZeusMiner driver should flag needing lowl-vcom
+- aan: Silence false warnings
+- Include broad udev rules when configured with --enable-broad-udevrules option
+- Bugfix: util: Lower the threshold for considering pool Scrypt diff broken
+- Bugfix: gc3355: Do not send work_id (or anything) in the last 4 bytes of work
+- gridseed: Refactor code to clean up and organize
+- gridseed: Document GridSeed specifics with comments and URLs
+- Copyright cleanups and updates
+- Bugfix: zeusminer: using icarus timing can lead to false positive Idle
+detection
+- zeusminer: Return the Chip # via the RPC API call procdetails
+- zeusminer: Display the Chip # in the UI when viewing per-proc details
+- Bugfix: miner: Check work->blk.nonce to see if work should be abandoned
+- rockminer: Allow setting clock 300-2560 as long as prefixed by "unsafe:"
+- util: Work around broken Scrypt pools automatically using realistic pdiff
+assumptions
+- scanhash: Document scanhash related methods with comments
+- Bugfix: gridseed: Report communication errors using dev_error()
+- gc3355: Return bytes read to distinguish 0 bytes from error
+- Bugfix: gridseed: Add delay between Scrypt reset and sending work
+- gridseed: Bugfix: fix the constant used for estimated hash rates
+- klondike: zero_stats support
+- bitforce: zero_stats support (Temperature, Voltage, and Avg Wait)
+- avalon: zero_stats support (temp_max, no_matching_work, match_work_count%d)
+- Add driver interface for zero_stats function
+- Bugfix: bitforce: Short-circuit bitforce_read(0) to avoid lowlif issues
+- Bugfix: bitforce: Ensure data for the current command is always read (and only
+once), with lowl-pci
+- Bugfix: setup-vfio: Add device ids to vfio-pci even if they didn't have a
+driver previously
+- Bugfix: lowl-pci: Use volatile qualifier for PCI mmaps
+- Bugfix: bitforce: Use lowlevel interface device was probed with, for actual
+mining
+- setup-vfio: New shell script to automatically configure VFIO
+- README.ASIC: Monarch: Need to do new_id for every affected device, and only
+after unbinding them
+- README.ASIC: Monarch: Use shell variables for commands
+- gridseed: Bugfix: Revert earlier changes to scanhash based on feedback
+- hashfast: Support for changing clock at runtime
+- hashfast: Store a copy of what we believe to be the chip configuration data
+- hashfast: Store firmware revision
+- util: pk_uNle macro for changing a number inside a packed structure
+- README.ASIC: KnCMiner: Talk about additional i2c-tools dependency
+- README.ASIC: KnCMiner: Remove mention of now-obsolete Bertmod
+- README.ASIC: KnCMiner: Grammatical corrections
+- Bugfix: RPC: Avoid processor-specific details in devdetails
+- gridseed: Bugfix: log invalid detect responses as debug info, not an error
+- zeusminer: Support setting clock via RPC API procset call
+- README: Add Controla and Minera controller software links & info
+- gridseed: Bugfix: Fix hash-rate calculation when no nonces are being found
+- dualminer: Bugfix: assign the proper value for work_division
+- gridseed: Refactor to clarify GridSeed terminology
+- gridseed: Add support for displaying per-chip statistics
+- gridseed: Convert to use newer set_device_funcs interface
+- Bugfix: gridseed: Don't leak cgpu_info when devices are already claimed
+- icarus: Processor detail support
+- DevAPI: Allow using device_proc_by_id with const struct cgpu_info
+- icarus: Ensure fpga_count is finalised before add_cgpu is called
+- icarus: Move work_division autodetection code into new
+icarus_probe_work_division function
+- icarus: Remove ability to change fpga_count at runtime
+- Bugfix: gen-version.sh: Replace bashism ("here string")
+- gridseed: Support devices with more than 255 physical processors
+- Use `git describe` to generate version.h to avoid user confusion over builds
+from git
+- zeusminer: Support devices with more than 255 physical processors
+- hashfast: Include chip/core address in RPC procdetails
+- gridseed: Reduce traffic sending work to GridSeed devices
+- gridseed: Bugfix: previous refactor (unpublished) changed logic
+- gc3355: Refactor to remove SHA2 code specific to the 5-Chip GridSeed Orb
+- lowl-vcom: Bugfix: do not attempt to open the USB devices when enumerating
+
+
 BFGMiner Version 4.4.0 - July 7, 2014
 
 - lowl-vcom: Added support for auto scanning (-S auto) on Mac OS X

@@ -1,3 +1,16 @@
+bfgminer (4.5.0-0precise1) precise; urgency=low
+
+  * bitforce: A new setup-vfio shell script is included to simplify configuring VFIO for Monarchs on PCIe.
+  * cairnsmore, icarus, zeusminer: Per-core mining statistics support.
+  * gridseed: Ability to set clock speed via Manage TUI.
+  * hashfast: Include chip/core address in RPC procdetails.
+  * hashfast: Implement ability to change clock setting at runtime.
+  * rockminer: Allow setting clock 300-2560 as long as prefixed by "unsafe:".
+  * zeusminer: Support for the GAW War Machine.
+  * zeusminer: Ability to set clock speed via Manage TUI.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Jul 2014 16:26:25 -0000
+
 bfgminer (4.4.0-0precise1) precise; urgency=low
 
   * getwork and stratum proxy drivers: Proxy-share difficulty is now adjustable using --set pxy:diff=N and/or --set pxy@username:diff=N
