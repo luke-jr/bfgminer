@@ -272,9 +272,9 @@ spifail:
 bool aan_init(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const master_dev = master_thr->cgpu, *dev = NULL;
-	struct aan_board_data *board;
+	struct aan_board_data *board = NULL;
 	struct timeval tv_timeout, tv_now;
-	int chipid;
+	int chipid = 0;
 	for_each_managed_proc(proc, master_dev)
 	{
 		struct spi_port * const spi = proc->device_data;
