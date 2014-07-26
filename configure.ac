@@ -511,6 +511,7 @@ elif test "x$icarus" = "xno"; then
 fi
 if test "x$zeusminer" = "xyes"; then
 	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
+	need_lowl_vcom=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
 fi
