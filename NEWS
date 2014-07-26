@@ -1,3 +1,12 @@
+BFGMiner Version 3.10.6 - July 26, 2014
+
+- Copyright cleanups
+- README.ASIC: KnCMiner: Talk about additional i2c-tools dependency
+- README.ASIC: KnCMiner: Remove mention of now-obsolete Bertmod
+- README.ASIC: KnCMiner: Grammatical corrections
+- Bugfix: RPC: Avoid processor-specific details in devdetails
+
+
 BFGMiner Version 3.10.5 - July 7, 2014
 
 - README: Update for commandline options
