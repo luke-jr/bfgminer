@@ -109,6 +109,11 @@ struct lowlevel_device_info *lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
+#ifdef NEED_BFG_LOWL_MSWIN
+	devinfo_mid_list = lowl_mswin.devinfo_scan();
+	LL_CONCAT(devinfo_list, devinfo_mid_list);
+#endif
+	
 #ifdef NEED_BFG_LOWL_PCI
 	devinfo_mid_list = lowl_pci.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);

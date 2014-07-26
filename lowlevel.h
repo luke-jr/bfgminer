@@ -70,6 +70,9 @@ extern struct lowlevel_driver lowl_hid;
 #ifdef USE_NANOFURY
 extern struct lowlevel_driver lowl_mcp2210;
 #endif
+#ifdef NEED_BFG_LOWL_MSWIN
+extern struct lowlevel_driver lowl_mswin;
+#endif
 #ifdef NEED_BFG_LOWL_PCI
 extern struct lowlevel_driver lowl_pci;
 #endif

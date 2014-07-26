@@ -25,6 +25,9 @@
 #include "deviceapi.h"
 #include "miner.h"
 #include "lowlevel.h"
+#ifdef NEED_BFG_LOWL_MSWIN
+#include "lowl-mswin.h"
+#endif
 #include "lowl-pci.h"
 #include "lowl-vcom.h"
 #include "util.h"
@@ -522,6 +525,10 @@ bool bitforce_lowl_match(const struct lowlevel_device_info * const info)
 	if (info->lowl == &lowl_pci)
 		return info->vid == BFL_PCI_VENDOR_ID;
 #endif
+#ifdef NEED_BFG_LOWL_MSWIN
+	if (lowl_mswin_match_guid(info, &WIN_GUID_DEVINTERFACE_MonarchKMDF))
+		return true;
+#endif
 	return lowlevel_match_product(info, "BitFORCE", "SHA256");
 }
 
@@ -743,6 +750,10 @@ bool bitforce_lowl_probe(const struct lowlevel_device_info * const info)
 #ifdef NEED_BFG_LOWL_PCI
 	if (info->lowl == &lowl_pci)
 		return bitforce_detect_oneof(info->path, &bfllif_pci);
+#endif
+#ifdef NEED_BFG_LOWL_MSWIN
+	if (lowl_mswin_match_guid(info, &WIN_GUID_DEVINTERFACE_MonarchKMDF))
+		return bitforce_detect_oneof(info->path, &bfllif_vcom);
 #endif
 	return vcom_lowl_probe_wrapper(info, bitforce_detect_one);
 }
