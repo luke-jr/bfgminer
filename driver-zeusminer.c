@@ -269,13 +269,13 @@ struct api_data *zeusminer_get_api_extra_device_detail(struct cgpu_info *device)
 
 #ifdef HAVE_CURSES
 static
-void zeusminer_tui_wlogprint_choices(struct cgpu_info * const device)
+void zeusminer_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
 	wlogprint("[C]lock speed ");
 }
 
 static
-const char *zeusminer_tui_handle_choice(struct cgpu_info * const device, const int input)
+const char *zeusminer_tui_handle_choice(struct cgpu_info * const proc, const int input)
 {
 	static char buf[0x100];  // Static for replies
 
@@ -286,7 +286,7 @@ const char *zeusminer_tui_handle_choice(struct cgpu_info * const device, const i
 			sprintf(buf, "Set clock speed");
 			char * const setting = curses_input(buf);
 
-			if (zeusminer_set_clock_freq(device, atoi(setting)))
+			if (zeusminer_set_clock_freq(proc->device, atoi(setting)))
 			{
 				return "Clock speed changed\n";
 			}
@@ -302,9 +302,9 @@ const char *zeusminer_tui_handle_choice(struct cgpu_info * const device, const i
 }
 
 static
-void zeusminer_wlogprint_status(struct cgpu_info * const device)
+void zeusminer_wlogprint_status(struct cgpu_info * const proc)
 {
-	struct ICARUS_INFO * const info = device->device_data;
+	struct ICARUS_INFO * const info = proc->device->device_data;
 	wlogprint("Clock speed: %d\n", info->freq);
 }
 #endif
