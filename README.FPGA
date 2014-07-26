@@ -110,10 +110,11 @@ a cost of 1% in overall hashrate so this feature is disabled by default. It
 is only recommended you enable this if you are mining with a Mini Rig on
 P2Pool.
 
-BFGMiner also bundles a bitforce-firmware-flash utility on Linux. Using this,
-you can change the bitstream firmware on BitForce Singles. It is untested with
-other devices. Use at your own risk! Windows users may use Butterfly Labs
-EasyMiner to change firmware.
+BitFORCE FPGA Single units can have their bitstream modified using the
+bitforce-firmware-flash utility on Linux, which can be obtained from:
+    https://github.com/luke-jr/bitforce-fpga-firmware-flash
+It is untested with other devices. Use at your own risk! Windows users may use
+Butterfly Labs EasyMiner to change firmware.
 
 To compile:
  make bitforce-firmware-flash
@@ -129,7 +130,7 @@ it may have worked successfully anyway.
 Test mining on it to be sure if it worked or not.
 
 You need to give BFGMiner about 10 minutes mining with the BFL to be sure of
-the Mh/s value reported with the changed firmware - and the MH/s reported will
+the Mh/s value reported with the changed firmware - and the Mh/s reported will
 be less than the firmware speed since you lose work on every block change.
 
 

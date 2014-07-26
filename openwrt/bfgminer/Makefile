@@ -121,23 +121,5 @@ endef
 
 ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)
 
-#### BitForce firmware flash ####
-
-define Package/bitforce-firmware-flash
-$(call Package/$(PKG_NAME)/Default)
-	TITLE:=BitForce firmware flash tool
-endef
-
-define Package/bitforce-firmware-flash/description
-BitForce firmware flash tool
-endef
-
-define Package/bitforce-firmware-flash/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitforce-firmware-flash $(1)/usr/bin
-endef
-
-ALL_$(PKG_NAME)_PACKAGES += bitforce-firmware-flash
-
 
 $(foreach bitstream,$(ALL_$(PKG_NAME)_PACKAGES),$(eval $(call BuildPackage,$(bitstream))))
