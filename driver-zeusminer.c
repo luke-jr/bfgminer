@@ -143,19 +143,29 @@ bool zeusminer_detect_one(const char *devpath)
 // must be set before probing the device
 
 static
-const char *zeusminer_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+bool zeusminer_set_clock_freq(struct cgpu_info * const device, int const freq)
 {
 	struct ICARUS_INFO * const info = device->device_data;
-	
+
+	if (freq < ZEUSMINER_MIN_CLOCK || freq > ZEUSMINER_MAX_CLOCK)
+		return false;
+
+	info->freq = freq;
+
+	return true;
+}
+
+static
+const char *zeusminer_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
 	int val = atoi(setting);
 	
-	if (val < ZEUSMINER_MIN_CLOCK || val > ZEUSMINER_MAX_CLOCK) {
+	if (!zeusminer_set_clock_freq(device, val))
+	{
 		sprintf(replybuf, "invalid clock: '%s' valid range %d-%d",
 		        setting, ZEUSMINER_MIN_CLOCK, ZEUSMINER_MAX_CLOCK);
 		return replybuf;
 	}
-	
-	info->freq = val;
 	
 	return NULL;
 }
@@ -253,6 +263,52 @@ struct api_data *zeusminer_get_api_extra_device_detail(struct cgpu_info *device)
 	return api_add_int(NULL, "Chip", &chip, true);
 }
 
+/*
+ * specify settings / options via TUI
+ */
+
+#ifdef HAVE_CURSES
+static
+void zeusminer_tui_wlogprint_choices(struct cgpu_info * const device)
+{
+	wlogprint("[C]lock speed ");
+}
+
+static
+const char *zeusminer_tui_handle_choice(struct cgpu_info * const device, const int input)
+{
+	static char buf[0x100];  // Static for replies
+
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			sprintf(buf, "Set clock speed");
+			char * const setting = curses_input(buf);
+
+			if (zeusminer_set_clock_freq(device, atoi(setting)))
+			{
+				return "Clock speed changed\n";
+			}
+			else
+			{
+				sprintf(buf, "Invalid clock: '%s' valid range %d-%d",
+						setting, ZEUSMINER_MIN_CLOCK, ZEUSMINER_MAX_CLOCK);
+				return buf;
+			}
+		}
+	}
+	return NULL;
+}
+
+static
+void zeusminer_wlogprint_status(struct cgpu_info * const device)
+{
+	struct ICARUS_INFO * const info = device->device_data;
+	wlogprint("Clock speed: %d\n", info->freq);
+}
+#endif
+
 // device_drv definition - miner.h
 
 static
@@ -285,6 +341,13 @@ void zeusminer_drv_init()
 
 	// output the chip # via RPC API
 	zeusminer_drv.get_api_extra_device_detail = zeusminer_get_api_extra_device_detail;
+
+	// TUI support - e.g. setting clock via UI
+#ifdef HAVE_CURSES
+	zeusminer_drv.proc_wlogprint_status = zeusminer_wlogprint_status;
+	zeusminer_drv.proc_tui_wlogprint_choices = zeusminer_tui_wlogprint_choices;
+	zeusminer_drv.proc_tui_handle_choice = zeusminer_tui_handle_choice;
+#endif
 }
 
 struct device_drv zeusminer_drv = {
