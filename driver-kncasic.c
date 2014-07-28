@@ -54,7 +54,6 @@ struct knc_die;
 struct knc_core_state {
 	int generation;
 	int core;
-	int coreid;
 	struct knc_die *die;
 	struct {
 		int slot;
@@ -338,8 +337,6 @@ static bool knc_detect_one(void *ctx)
 			}
 		}
 	}
-	for (core = 0; core < cores; core++)
-		knc->core[core].coreid = core;
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
