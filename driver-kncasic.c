@@ -26,9 +26,6 @@
 #include "knc-transport.h"
 #include "knc-asic.h"
 
-#define MAX_ASICS               6
-#define DIES_PER_ASIC           4
-#define MAX_CORES_PER_DIE       360
 #define WORKS_PER_CORE          3
 
 #define CORE_ERROR_LIMIT	30
@@ -102,7 +99,7 @@ struct knc_state {
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
 	int dies;
-	struct knc_die die[MAX_ASICS*DIES_PER_ASIC];
+	struct knc_die die[KNC_MAX_ASICS * KNC_DIES_PER_ASIC];
 	int cores;
 	int scan_adjust;
 	int startup;
@@ -286,15 +283,15 @@ static bool knc_detect_one(void *ctx)
 	int channel, die, cores = 0, core;
 	struct cgpu_info *cgpu;
 	struct knc_state *knc;
-	struct knc_die_info die_info[MAX_ASICS][DIES_PER_ASIC];
+	struct knc_die_info die_info[KNC_MAX_ASICS][KNC_DIES_PER_ASIC];
 
 	memset(die_info, 0, sizeof(die_info));
 
 	/* Send GETINFO to each die to detect if it is usable */
-	for (channel = 0; channel < MAX_ASICS; channel++) {
+	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
 		if (!knc_trnsp_asic_detect(ctx, channel))
 			continue;
-		for (die = 0; die < DIES_PER_ASIC; die++) {
+		for (die = 0; die < KNC_DIES_PER_ASIC; die++) {
 		    if (knc_detect_die(ctx, channel, die, &die_info[channel][die]) == 0)
 			cores += die_info[channel][die].cores;
 		}
@@ -322,8 +319,8 @@ static bool knc_detect_one(void *ctx)
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
-	for (channel = 0; channel < MAX_ASICS; channel++) {
-		for (die = 0; die < DIES_PER_ASIC; die++) {
+	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
+		for (die = 0; die < KNC_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
 				knc->die[dies].die = die;
