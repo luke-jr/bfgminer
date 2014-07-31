@@ -145,8 +145,8 @@ bool avalonmm_detect_one(const char * const devpath)
 {
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
 	enum avalonmm_reply reply;
-	int total_modules = 0;
 	const int fd = serial_open(devpath, 0, 1, true);
+	struct cgpu_info *prev_cgpu = NULL;
 	if (fd == -1)
 		applogr(false, LOG_DEBUG, "%s: Failed to open %s", __func__, devpath);
 	
@@ -160,26 +160,23 @@ bool avalonmm_detect_one(const char * const devpath)
 	{
 		if (reply != AMR_DETECT_ACK)
 			continue;
-		int i = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
-		applog(LOG_DEBUG, "%s: Confirmed module %d", __func__, i);
-		++total_modules;
+		
+		struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
+		*cgpu = (struct cgpu_info){
+			.drv = &avalonmm_drv,
+			.device_path = prev_cgpu ? prev_cgpu->device_path : strdup(devpath),
+			.deven = DEV_ENABLED,
+			.procs = 1,
+			.threads = prev_cgpu ? 0 : 1,
+		};
+		
+		add_cgpu_slave(cgpu, prev_cgpu);
+		prev_cgpu = cgpu;
 	}
 	
 	serial_close(fd);
 	
-	if (!total_modules)
-		return false;
-	
-	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
-	*cgpu = (struct cgpu_info){
-		.drv = &avalonmm_drv,
-		.device_path = strdup(devpath),
-		.deven = DEV_ENABLED,
-		.procs = total_modules,
-		.threads = 1,
-	};
-	
-	return add_cgpu(cgpu);
+	return prev_cgpu;
 }
 
 static
