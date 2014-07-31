@@ -269,6 +269,10 @@ if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
 endif
 
+if USE_AVALONMM
+bfgminer_SOURCES += driver-avalonmm.c driver-avalonmm.h
+endif
+
 if USE_KNC
 bfgminer_SOURCES += driver-knc.c
 endif
