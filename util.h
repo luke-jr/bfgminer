@@ -265,6 +265,15 @@ static inline void align_len(size_t *len)
 
 
 static inline
+uint8_t bitflip8(uint8_t p)
+{
+	p = ((p & 0xaa) >> 1) | ((p & 0x55) << 1);
+	p = ((p & 0xcc) >> 2) | ((p & 0x33) << 2);
+	p = ((p & 0xf0) >> 4) | ((p & 0x0f) << 4);
+	return p;
+}
+
+static inline
 uint8_t upk_u8(const void * const bufp, const int offset)
 {
 	const uint8_t * const buf = bufp;

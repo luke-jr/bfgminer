@@ -265,11 +265,7 @@ void *spi_emit_buf_reverse(struct spi_port *port, const void *p, size_t sz)
 	for (size_t i = 0; i < sz; ++i)
 	{
 		// Reverse bit order in each byte!
-		unsigned char p = str[i];
-		p = ((p & 0xaa)>>1) | ((p & 0x55) << 1);
-		p = ((p & 0xcc)>>2) | ((p & 0x33) << 2);
-		p = ((p & 0xf0)>>4) | ((p & 0x0f) << 4);
-		port->spibuf[port->spibufsz++] = p;
+		port->spibuf[port->spibufsz++] = bitflip8(str[i]);
 	}
 	return rv;
 }
