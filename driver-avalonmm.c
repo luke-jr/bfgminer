@@ -21,9 +21,18 @@
 #include "logging.h"
 #include "lowlevel.h"
 #include "lowl-vcom.h"
+#include "miner.h"
 #include "util.h"
+#include "work2d.h"
 
 #define AVALONMM_MAX_MODULES  4
+#define AVALONMM_MAX_COINBASE_SIZE  (6 * 1024)
+#define AVALONMM_MAX_MERKLES  20
+
+// Must be a power of two
+#define AVALONMM_CACHED_JOBS  2
+
+#define AVALONMM_NONCE_OFFSET  0x180
 
 BFG_REGISTER_DRIVER(avalonmm_drv)
 
@@ -32,9 +41,19 @@ BFG_REGISTER_DRIVER(avalonmm_drv)
 
 enum avalonmm_cmd {
 	AMC_DETECT     = 0x0a,
+	AMC_NEW_JOB    = 0x0b,
+	AMC_JOB_ID     = 0x0c,
+	AMC_COINBASE   = 0x0d,
+	AMC_MERKLES    = 0x0e,
+	AMC_BLKHDR     = 0x0f,
+	AMC_POLL       = 0x10,
+	AMC_TARGET     = 0x11,
+	AMC_START      = 0x13,
 };
 
 enum avalonmm_reply {
+	AMR_NONCE      = 0x17,
+	AMR_STATUS     = 0x18,
 	AMR_DETECT_ACK = 0x19,
 };
 
@@ -98,7 +117,7 @@ ssize_t avalonmm_read(const int fd, const int logprio, enum avalonmm_reply *out_
 				applog(LOG_DEBUG, "DEVPROTO fd=%d RECV (%d)", fd, (int)r);
 		}
 		if (r != sizeof(pkt))
-			applogr(-1, logprio, "%s: read failed", __func__);
+			return -1;
 		if (memcmp(pkt, "AV", 2))
 			applogr(-1, logprio, "%s: bad header", __func__);
 		good_crc = crc16xmodem(&pkt[5], AVALONMM_PKT_DATA_SIZE);
@@ -161,10 +180,12 @@ bool avalonmm_detect_one(const char * const devpath)
 		if (reply != AMR_DETECT_ACK)
 			continue;
 		
+		int moduleno = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
 		struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 		*cgpu = (struct cgpu_info){
 			.drv = &avalonmm_drv,
 			.device_path = prev_cgpu ? prev_cgpu->device_path : strdup(devpath),
+			.device_data = (void*)(intptr_t)moduleno,
 			.deven = DEV_ENABLED,
 			.procs = 1,
 			.threads = prev_cgpu ? 0 : 1,
@@ -185,9 +206,360 @@ bool avalonmm_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, avalonmm_detect_one);
 }
 
+struct avalonmm_job {
+	struct stratum_work swork;
+	uint32_t jobid;
+	struct timeval tv_prepared;
+};
+
+struct avalonmm_chain_state {
+	uint32_t xnonce1;
+	struct avalonmm_job *jobs[AVALONMM_CACHED_JOBS];
+	uint32_t next_jobid;
+};
+
+struct avalonmm_module_state {
+	unsigned module_id;
+	uint16_t temp[2];
+};
+
+static
+bool avalonmm_init(struct thr_info * const master_thr)
+{
+	struct cgpu_info * const master_dev = master_thr->cgpu, *dev = NULL;
+	const char * const devpath = master_dev->device_path;
+	const int fd = serial_open(devpath, 0, 1, true);
+	
+	master_dev->device_fd = fd;
+	if (unlikely(fd == -1))
+		applogr(false, LOG_ERR, "%s: Failed to initialise", master_dev->dev_repr);
+	
+	struct avalonmm_chain_state * const chain = malloc(sizeof(*chain));
+	*chain = (struct avalonmm_chain_state){
+		.xnonce1 = 0,
+	};
+	
+	work2d_init();
+	if (!reserve_work2d_(&chain->xnonce1))
+	{
+		applog(LOG_ERR, "%s: Failed to reserve 2D work", master_dev->dev_repr);
+		free(chain);
+		serial_close(fd);
+		return false;
+	}
+	
+	for_each_managed_proc(proc, master_dev)
+	{
+		if (dev == proc->device)
+			continue;
+		dev = proc->device;
+		
+		struct thr_info * const thr = proc->thr[0];
+		
+		struct avalonmm_module_state * const module = malloc(sizeof(*module));
+		*module = (struct avalonmm_module_state){
+			.module_id = (intptr_t)dev->device_data,
+		};
+		
+		proc->device_data = chain;
+		thr->cgpu_data = module;
+	}
+	
+	for_each_managed_proc(proc, master_dev)
+	{
+		proc->status = LIFE_INIT2;
+	}
+	
+	return true;
+}
+
+static
+bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain, const struct stratum_work * const swork, uint32_t jobid)
+{
+	uint8_t buf[AVALONMM_PKT_DATA_SIZE];
+	bytes_t coinbase = BYTES_INIT;
+	
+	int coinbase_len = bytes_len(&swork->coinbase);
+	if (coinbase_len > AVALONMM_MAX_COINBASE_SIZE)
+		return false;
+	
+	if (swork->merkles > AVALONMM_MAX_MERKLES)
+		return false;
+	
+	pk_u32be(buf,    0, coinbase_len);
+	
+	// Avalon MM cannot handle xnonce2_size other than 4, and works in big endian, so we use a range to ensure the preceding bytes match
+	const size_t real_xnonce2_offset = swork->nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
+	const int fixed_mm_xnonce2_bytes = (work2d_xnonce2sz >= 4) ? 0 : (4 - work2d_xnonce2sz);
+	const size_t mm_xnonce2_offset = real_xnonce2_offset - fixed_mm_xnonce2_bytes;
+	pk_u32be(buf,    4, mm_xnonce2_offset);
+	
+	pk_u32be(buf,    8, 4);  // extranonce2 size, but only 4 is supported - smaller sizes are handled by limiting the range
+	pk_u32be(buf, 0x0c, 36);  // merkle_offset, always 36 for Bitcoin
+	pk_u32be(buf, 0x10, swork->merkles);
+	pk_u32be(buf, 0x14, 1);  // diff? poorly defined
+	pk_u32be(buf, 0x18, 0);  // pool number - none of its business
+	if (!avalonmm_write_cmd(fd, AMC_NEW_JOB, buf, 0x1c))
+		return false;
+	
+	memset(buf, '\xff', 0x1c);
+	memset(&buf[0x1c], '\0', 4);
+	if (!avalonmm_write_cmd(fd, AMC_TARGET, buf, 0x20))
+		return false;
+	
+	pk_u32be(buf, 0, jobid);
+	if (!avalonmm_write_cmd(fd, AMC_JOB_ID, buf, 4))
+		return false;
+	
+	// Need to add extranonce padding and extranonce2
+	bytes_cpy(&coinbase, &swork->coinbase);
+	uint8_t *cbp = bytes_buf(&coinbase);
+	cbp += swork->nonce2_offset;
+	work2d_pad_xnonce(cbp, swork, false);
+	cbp += work2d_pad_xnonce_size(swork);
+	memcpy(cbp, &chain->xnonce1, work2d_xnonce1sz);
+	cbp += work2d_xnonce1sz;
+	if (!avalonmm_write_cmd(fd, AMC_COINBASE, bytes_buf(&coinbase), bytes_len(&coinbase)))
+		return false;
+	
+	if (!avalonmm_write_cmd(fd, AMC_MERKLES, bytes_buf(&swork->merkle_bin), bytes_len(&swork->merkle_bin)))
+		return false;
+	
+	uint8_t header_bin[0x80];
+	memcpy(&header_bin[   0], swork->header1, 0x24);
+	memset(&header_bin[0x24], '\0', 0x20);  // merkle root
+	pk_u32be(header_bin, 0x44, swork->ntime);
+	memcpy(&header_bin[0x48], swork->diffbits, 4);
+	memset(&header_bin[0x4c], '\0', 4);  // nonce
+	memcpy(&header_bin[0x50], bfg_workpadding_bin, 0x30);
+	if (!avalonmm_write_cmd(fd, AMC_BLKHDR, header_bin, sizeof(header_bin)))
+		return false;
+	
+	uint8_t mm_xnonce2_start[4];
+	uint32_t xnonce2_range;
+	if (fixed_mm_xnonce2_bytes > 0)
+	{
+		memcpy(mm_xnonce2_start, &cbp[-fixed_mm_xnonce2_bytes], fixed_mm_xnonce2_bytes);
+		memset(&mm_xnonce2_start[fixed_mm_xnonce2_bytes], '\0', work2d_xnonce2sz);
+		xnonce2_range = (1 << (8 * work2d_xnonce2sz)) - 1;
+	}
+	else
+	{
+		memset(mm_xnonce2_start, '\0', 4);
+		xnonce2_range = 0xffffffff;
+	}
+	
+	pk_u32be(buf, 0, 80);  // fan speed %
+	uint16_t voltcfg = ((uint16_t)bitflip8((0x78 - /*deci-milli-volts*/6625 / 125) << 1 | 1)) << 8;
+	pk_u32be(buf, 4, voltcfg);
+	pk_u32be(buf, 8, 450/*freq*/);
+	memcpy(&buf[0xc], mm_xnonce2_start, 4);
+	pk_u32be(buf, 0x10, xnonce2_range);
+	if (!avalonmm_write_cmd(fd, AMC_START, buf, 0x14))
+		return false;
+	
+	return true;
+}
+
+static
+void avalonmm_free_job(struct avalonmm_job * const mmjob)
+{
+	stratum_work_clean(&mmjob->swork);
+	free(mmjob);
+}
+
+static
+bool avalonmm_update_swork_from_pool(struct cgpu_info * const master_dev, struct pool * const pool)
+{
+	struct avalonmm_chain_state * const chain = master_dev->device_data;
+	const int fd = master_dev->device_fd;
+	struct avalonmm_job *mmjob = malloc(sizeof(*mmjob));
+	*mmjob = (struct avalonmm_job){
+		.jobid = chain->next_jobid,
+	};
+	cg_rlock(&pool->data_lock);
+	stratum_work_cpy(&mmjob->swork, &pool->swork);
+	cg_runlock(&pool->data_lock);
+	timer_set_now(&mmjob->tv_prepared);
+	mmjob->swork.data_lock_p = NULL;
+	if (!avalonmm_send_swork(fd, chain, &mmjob->swork, mmjob->jobid))
+	{
+		avalonmm_free_job(mmjob);
+		return false;
+	}
+	applog(LOG_DEBUG, "%s: Upload of job id %08lx complete", master_dev->dev_repr, (unsigned long)mmjob->jobid);
+	++chain->next_jobid;
+	
+	struct avalonmm_job **jobentry = &chain->jobs[mmjob->jobid % AVALONMM_CACHED_JOBS];
+	if (*jobentry)
+		avalonmm_free_job(*jobentry);
+	*jobentry = mmjob;
+	
+	return true;
+}
+
+static
+bool avalonmm_update_swork(struct cgpu_info * const master_dev)
+{
+	struct pool *pool = current_pool();
+	if (!pool_has_usable_swork(pool))
+		return false;
+	return avalonmm_update_swork_from_pool(master_dev, pool);
+}
+
+static
+struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info * const master_dev, const uint32_t module_id)
+{
+	struct cgpu_info *dev = NULL;
+	for_each_managed_proc(proc, master_dev)
+	{
+		if (dev == proc->device)
+			continue;
+		dev = proc->device;
+		
+		struct thr_info * const thr = dev->thr[0];
+		struct avalonmm_module_state * const module = thr->cgpu_data;
+		
+		if (module->module_id == module_id)
+			return dev;
+	}
+	return NULL;
+}
+
+static
+bool avalonmm_poll_once(struct cgpu_info * const master_dev)
+{
+	struct avalonmm_chain_state * const chain = master_dev->device_data;
+	const int fd = master_dev->device_fd;
+	uint8_t buf[AVALONMM_PKT_DATA_SIZE];
+	enum avalonmm_reply reply;
+	
+	if (avalonmm_read(fd, LOG_ERR, &reply, buf, sizeof(buf)) < 0)
+		return false;
+	
+	switch (reply)
+	{
+		case AMR_STATUS:
+		{
+			const uint32_t module_id = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
+			struct cgpu_info * const dev = avalonmm_dev_for_module_id(master_dev, module_id);
+			
+			if (unlikely(!dev))
+			{
+				struct thr_info * const master_thr = master_dev->thr[0];
+				applog(LOG_ERR, "%s: %s for unknown module id %lu", master_dev->dev_repr, "Status", (unsigned long)module_id);
+				inc_hw_errors_only(master_thr);
+				break;
+			}
+			
+			struct thr_info * const thr = dev->thr[0];
+			struct avalonmm_module_state * const module = thr->cgpu_data;
+			
+			module->temp[0] = upk_u16be(buf,    0);
+			module->temp[1] = upk_u16be(buf,    2);
+#if 0
+			module->fan [0] = upk_u16be(buf,    4);
+			module->fan [1] = upk_u16be(buf,    6);
+			module->freq    = upk_u32be(buf,    8);
+			module->voltage = upk_u32be(buf, 0x0c);
+#endif
+			
+			dev->temp = max(module->temp[0], module->temp[1]);
+			
+			break;
+		}
+		case AMR_NONCE:
+		{
+			const int fixed_mm_xnonce2_bytes = (work2d_xnonce2sz >= 4) ? 0 : (4 - work2d_xnonce2sz);
+			const uint8_t * const xnonce2 = &buf[8 + fixed_mm_xnonce2_bytes];
+			const uint32_t nonce = upk_u32be(buf, 0x10) - AVALONMM_NONCE_OFFSET;
+			const uint32_t jobid = upk_u32be(buf, 0x14);
+			const uint32_t module_id = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
+			struct cgpu_info * const dev = avalonmm_dev_for_module_id(master_dev, module_id);
+			
+			if (unlikely(!dev))
+			{
+				struct thr_info * const master_thr = master_dev->thr[0];
+				applog(LOG_ERR, "%s: %s for unknown module id %lu", master_dev->dev_repr, "Nonce", (unsigned long)module_id);
+				inc_hw_errors_only(master_thr);
+				break;
+			}
+			
+			struct thr_info * const thr = dev->thr[0];
+			
+			bool invalid_jobid = false;
+			if (unlikely((uint32_t)(chain->next_jobid - AVALONMM_CACHED_JOBS) > chain->next_jobid))
+				// Jobs wrap around
+				invalid_jobid = (jobid < chain->next_jobid - AVALONMM_CACHED_JOBS && jobid >= chain->next_jobid);
+			else
+				invalid_jobid = (jobid < chain->next_jobid - AVALONMM_CACHED_JOBS || jobid >= chain->next_jobid);
+			if (unlikely(invalid_jobid))
+			{
+				applog(LOG_ERR, "%s: Bad job id %08lx", dev->dev_repr, (unsigned long)jobid);
+				inc_hw_errors_only(thr);
+				break;
+			}
+			struct avalonmm_job * const mmjob = chain->jobs[jobid % AVALONMM_CACHED_JOBS];
+			
+			work2d_submit_nonce(thr, &mmjob->swork, &mmjob->tv_prepared, xnonce2, chain->xnonce1, nonce, mmjob->swork.ntime, NULL, 1.);
+			break;
+		}
+	}
+	
+	return true;
+}
+
+static
+void avalonmm_poll(struct cgpu_info * const master_dev, int n)
+{
+	while (n > 0)
+	{
+		if (avalonmm_poll_once(master_dev))
+			--n;
+	}
+}
+
+static
+void avalonmm_minerloop(struct thr_info * const master_thr)
+{
+	struct cgpu_info * const master_dev = master_thr->cgpu;
+	const int fd = master_dev->device_fd;
+	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
+	
+	while (likely(!master_dev->shutdown))
+	{
+		master_thr->work_restart = false;
+		avalonmm_update_swork(master_dev);
+		
+		while (likely(!master_thr->work_restart))
+		{
+			struct cgpu_info *dev = NULL;
+			int n = 0;
+			for_each_managed_proc(proc, master_dev)
+			{
+				if (dev == proc->device)
+					continue;
+				dev = proc->device;
+				
+				struct thr_info * const thr = dev->thr[0];
+				struct avalonmm_module_state * const module = thr->cgpu_data;
+				
+				pk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4, module->module_id);
+				avalonmm_write_cmd(fd, AMC_POLL, buf, AVALONMM_PKT_DATA_SIZE);
+				++n;
+			}
+			avalonmm_poll(master_dev, n);
+			cgsleep_ms(100);
+		}
+	}
+}
+
 struct device_drv avalonmm_drv = {
 	.dname = "avalonmm",
 	.name = "AVM",
 	
 	.lowl_probe = avalonmm_lowl_probe,
+	
+	.thread_init = avalonmm_init,
+	.minerloop = avalonmm_minerloop,
 };
