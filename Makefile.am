@@ -84,6 +84,7 @@ update-version:
 	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
 version.h: update-version
 bfgminer_SOURCES += version.h
+BUILT_SOURCES = version.h
 
 SUBDIRS += $(LIBBLKMAKER_SUBDIRS)
 LIBBLKMAKER_SUBDIRS =
