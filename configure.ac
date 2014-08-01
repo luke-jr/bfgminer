@@ -571,6 +571,21 @@ fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
 
 
+driverlist="$driverlist avalonmm"
+AC_ARG_ENABLE([avalonmm],
+	[AC_HELP_STRING([--disable-avalonmm],[Compile support for Avalon2/3 (default enabled)])],
+	[avalonmm=$enableval],
+	[avalonmm=$ddyes]
+	)
+if test "x$avalonmm" = xyes; then
+	AC_DEFINE([USE_AVALONMM], [1], [Defined to 1 if Avalon2/3 support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+	$broad_udevrules && have_udevrules=true
+fi
+AM_CONDITIONAL([USE_AVALONMM], [test x$avalonmm = xyes])
+
+
 driverlist="$driverlist knc"
 AC_ARG_ENABLE([knc],
 	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],

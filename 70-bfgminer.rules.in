@@ -30,6 +30,8 @@ LABEL="bfgminer_start"
 
 # Avalon1
 @BROAD_UDEVRULES_TRUE@@HAS_AVALON_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", GOTO="bfgminer_add"
+# AvalonMM
+@BROAD_UDEVRULES_TRUE@@USE_AVALONMM_TRUE@ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", GOTO="bfgminer_add"
 # DualMiner
 @BROAD_UDEVRULES_TRUE@@USE_DUALMINER_TRUE@ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6010", GOTO="bfgminer_add"
 # GridSeed

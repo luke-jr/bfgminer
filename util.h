@@ -265,6 +265,15 @@ static inline void align_len(size_t *len)
 
 
 static inline
+uint8_t bitflip8(uint8_t p)
+{
+	p = ((p & 0xaa) >> 1) | ((p & 0x55) << 1);
+	p = ((p & 0xcc) >> 2) | ((p & 0x33) << 2);
+	p = ((p & 0xf0) >> 4) | ((p & 0x0f) << 4);
+	return p;
+}
+
+static inline
 uint8_t upk_u8(const void * const bufp, const int offset)
 {
 	const uint8_t * const buf = bufp;
@@ -804,5 +813,8 @@ extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);
 extern void bfg_init_checksums(void);
 extern uint8_t crc8ccitt(const void *, size_t);
 
+extern uint16_t crc16(const void *, size_t, uint16_t init);
+#define crc16ffff(  DATA, SZ)  crc16(DATA, SZ, 0xffff)
+#define crc16xmodem(DATA, SZ)  crc16(DATA, SZ, 0)
 
 #endif /* __UTIL_H__ */
