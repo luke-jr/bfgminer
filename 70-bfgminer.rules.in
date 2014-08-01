@@ -54,7 +54,7 @@ GOTO="bfgminer_end"
 
 LABEL="bfgminer_add"
 
-GROUP="video"
+@USE_UDEVRULES_GROUP_TRUE@GROUP="@UDEVRULES_GROUP@"
 ENV{ID_MM_DEVICE_IGNORE}="1"
 
 LABEL="bfgminer_end"

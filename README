@@ -191,6 +191,9 @@ BFGMiner dependency configuration options:
 	                        Use system libblkmaker rather than bundled one
 	                        (default disabled)
 	--with-udevrulesdir=DIR Install udev rules into this directory
+	--with-udevrules-group=groupname
+	                        Configure mining devices to be owned by a specific
+	                        group (default `video')
 	--without-uio           Compile support for PCI devices via Linux UIO
 	                        interface (default enabled)
 	--without-vfio          Compile support for PCI devices via Linux VFIO

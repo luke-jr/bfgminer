@@ -253,6 +253,21 @@ AC_ARG_ENABLE([broad-udevrules],
 	]
 )
 
+use_udevrules_group=true
+udevrules_group="video"
+AC_ARG_WITH([udevrules-group],
+	[AC_HELP_STRING([--with-udevrules-group=groupname],[Configure mining devices to be owned by a specific group (default `video')])],
+	[
+		if test "x$withval" = "xno"; then
+			use_udevrules_group=false
+		else
+			udevrules_group="$withval"
+		fi
+	]
+)
+AM_CONDITIONAL([USE_UDEVRULES_GROUP], [$use_udevrules_group])
+AC_SUBST([UDEVRULES_GROUP], [$udevrules_group])
+
 
 algolist="$algolist scrypt"
 AC_ARG_ENABLE([scrypt],
