@@ -499,6 +499,7 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 				xnonce2[i] = backward_xnonce2[(work2d_xnonce2sz - 1) - i];
 			
 			work2d_submit_nonce(thr, &mmjob->swork, &mmjob->tv_prepared, xnonce2, chain->xnonce1, nonce, mmjob->swork.ntime, NULL, mmjob->nonce_diff);
+			hashes_done2(thr, mmjob->nonce_diff * 0x100000000, NULL);
 			break;
 		}
 	}
