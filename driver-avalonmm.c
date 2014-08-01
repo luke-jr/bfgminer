@@ -554,13 +554,13 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev, int64_t *out_module
 				invalid_jobid = (jobid < chain->next_jobid - AVALONMM_CACHED_JOBS && jobid >= chain->next_jobid);
 			else
 				invalid_jobid = (jobid < chain->next_jobid - AVALONMM_CACHED_JOBS || jobid >= chain->next_jobid);
-			if (unlikely(invalid_jobid))
+			struct avalonmm_job * const mmjob = chain->jobs[jobid % AVALONMM_CACHED_JOBS];
+			if (unlikely(invalid_jobid || !mmjob))
 			{
 				applog(LOG_ERR, "%s: Bad job id %08lx", dev->dev_repr, (unsigned long)jobid);
 				inc_hw_errors_only(thr);
 				break;
 			}
-			struct avalonmm_job * const mmjob = chain->jobs[jobid % AVALONMM_CACHED_JOBS];
 			
 			uint8_t xnonce2[work2d_xnonce2sz];
 			for (int i = 0; i < work2d_xnonce2sz; ++i)
@@ -654,6 +654,7 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 				struct avalonmm_module_state * const module = thr->cgpu_data;
 				
 				pk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4, module->module_id);
+				
 				avalonmm_write_cmd(fd, AMC_POLL, buf, AVALONMM_PKT_DATA_SIZE);
 				++n;
 			}
