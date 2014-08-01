@@ -6,8 +6,8 @@ Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
 KnCMiner's Mercury, Jupiter and Saturn.
 
 
-AVALON
-------
+AVALON 1
+--------
 
 Currently, Avalon boards are best supported by connecting them directly (or via
 a hub) to a regular PC running BFGMiner. It is also possible to install the
@@ -45,6 +45,26 @@ Sample settings for valid different frequencies (last 2 values):
 45:282
 47:270
 50:256
+
+
+AVALON 2/3
+----------
+
+Avalon 2/3 units communicate with a UART, usually attached to your host via a
+generic USB UART adapter. Therefore, you will need to manually probe the correct
+UART device with the -S option:
+
+-S avalonmm:\\.\COM22
+
+Next, use the --set option to configure at least your desired clock frequency
+and voltage.
+
+Avalon 2: --set avalonmm:clock=1500 --set avalonmm:voltage=1
+Avalon 3: --set avalonmm:clock=450 --set avalonmm:voltage=0.6625
+
+You may also want to set the fan speed, which is specified as a percentage:
+
+--set avalonmm:fan=95
 
 
 BFSB, MEGABIGPOWER, AND METABANK BITFURY BOARDS
