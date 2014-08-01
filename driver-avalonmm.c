@@ -226,7 +226,7 @@ struct avalonmm_chain_state {
 };
 
 struct avalonmm_module_state {
-	unsigned module_id;
+	uint32_t module_id;
 	uint16_t temp[2];
 	uint16_t fan[2];
 	uint32_t clock_actual;
@@ -659,6 +659,21 @@ static const struct bfg_set_device_definition avalonmm_set_device_funcs[] = {
 };
 
 static
+struct api_data *avalonmm_api_extra_device_detail(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
+	struct thr_info * const thr = dev->thr[0];
+	struct avalonmm_module_state * const module = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	root = api_add_uint32(root, "Module Id", &module->module_id, false);
+	root = api_add_uint32(root, "ExtraNonce1", &chain->xnonce1, false);
+	
+	return root;
+}
+
+static
 struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 {
 	struct cgpu_info * const dev = proc->device;
@@ -713,5 +728,6 @@ struct device_drv avalonmm_drv = {
 	.thread_init = avalonmm_init,
 	.minerloop = avalonmm_minerloop,
 	
+	.get_api_extra_device_detail = avalonmm_api_extra_device_detail,
 	.get_api_extra_device_status = avalonmm_api_extra_device_status,
 };
