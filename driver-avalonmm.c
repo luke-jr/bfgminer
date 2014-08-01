@@ -755,6 +755,7 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 }
 
 #ifdef HAVE_CURSES
+static
 void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 {
 	struct cgpu_info * const dev = proc->device;
@@ -799,6 +800,47 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 		wlogprint("Voltage: %u.%04u V\n", (unsigned)(dmvolts / 10000), (unsigned)(dmvolts % 10000));
 	}
 }
+
+static
+void avalonmm_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock speed ");
+	//wlogprint("[F]an speed ");  // To be implemented
+	wlogprint("[V]oltage ");
+}
+
+static
+const char *avalonmm_tui_wrapper(struct cgpu_info * const proc, bfg_set_device_func_t func, const char * const prompt)
+{
+	static char replybuf[0x20];
+	char * const cvar = curses_input(prompt);
+	if (!cvar)
+		return "Cancelled\n";
+	
+	const char *reply = func(proc, NULL, cvar, NULL, NULL);
+	free(cvar);
+	if (reply)
+	{
+		snprintf(replybuf, sizeof(replybuf), "%s\n", reply);
+		return replybuf;
+	}
+	
+	return "Successful\n";
+}
+
+static
+const char *avalonmm_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+			return avalonmm_tui_wrapper(proc, avalonmm_set_clock  , "Set clock speed (Avalon2: 1500; Avalon3: 450)");
+		
+		case 'v': case 'V':
+			return avalonmm_tui_wrapper(proc, avalonmm_set_voltage, "Set voltage (Avalon2: 1.0; Avalon3: 0.6625)");
+	}
+	return NULL;
+}
 #endif
 
 struct device_drv avalonmm_drv = {
@@ -815,5 +857,7 @@ struct device_drv avalonmm_drv = {
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = avalonmm_wlogprint_status,
+	.proc_tui_wlogprint_choices = avalonmm_tui_wlogprint_choices,
+	.proc_tui_handle_choice = avalonmm_tui_handle_choice,
 #endif
 };
