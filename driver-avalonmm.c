@@ -28,6 +28,7 @@
 #define AVALONMM_MAX_MODULES  4
 #define AVALONMM_MAX_COINBASE_SIZE  (6 * 1024)
 #define AVALONMM_MAX_MERKLES  20
+#define AVALONMM_MAX_NONCE_DIFF  0x20
 
 // Must be a power of two
 #define AVALONMM_CACHED_JOBS  2
@@ -210,6 +211,7 @@ struct avalonmm_job {
 	struct stratum_work swork;
 	uint32_t jobid;
 	struct timeval tv_prepared;
+	double nonce_diff;
 };
 
 struct avalonmm_chain_state {
@@ -274,7 +276,7 @@ bool avalonmm_init(struct thr_info * const master_thr)
 }
 
 static
-bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain, const struct stratum_work * const swork, uint32_t jobid)
+bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain, const struct stratum_work * const swork, uint32_t jobid, double *out_nonce_diff)
 {
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE];
 	bytes_t coinbase = BYTES_INIT;
@@ -299,8 +301,12 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 	if (!avalonmm_write_cmd(fd, AMC_NEW_JOB, buf, 0x1c))
 		return false;
 	
-	memset(buf, '\xff', 0x1c);
-	memset(&buf[0x1c], '\0', 4);
+	double nonce_diff = target_diff(swork->target);
+	if (nonce_diff >= AVALONMM_MAX_NONCE_DIFF)
+		set_target_to_pdiff(buf, nonce_diff = AVALONMM_MAX_NONCE_DIFF);
+	else
+		memcpy(buf, swork->target, 0x20);
+	*out_nonce_diff = nonce_diff;
 	if (!avalonmm_write_cmd(fd, AMC_TARGET, buf, 0x20))
 		return false;
 	
@@ -378,7 +384,7 @@ bool avalonmm_update_swork_from_pool(struct cgpu_info * const master_dev, struct
 	cg_runlock(&pool->data_lock);
 	timer_set_now(&mmjob->tv_prepared);
 	mmjob->swork.data_lock_p = NULL;
-	if (!avalonmm_send_swork(fd, chain, &mmjob->swork, mmjob->jobid))
+	if (!avalonmm_send_swork(fd, chain, &mmjob->swork, mmjob->jobid, &mmjob->nonce_diff))
 	{
 		avalonmm_free_job(mmjob);
 		return false;
@@ -492,7 +498,7 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 			for (int i = 0; i < work2d_xnonce2sz; ++i)
 				xnonce2[i] = backward_xnonce2[(work2d_xnonce2sz - 1) - i];
 			
-			work2d_submit_nonce(thr, &mmjob->swork, &mmjob->tv_prepared, xnonce2, chain->xnonce1, nonce, mmjob->swork.ntime, NULL, 1.);
+			work2d_submit_nonce(thr, &mmjob->swork, &mmjob->tv_prepared, xnonce2, chain->xnonce1, nonce, mmjob->swork.ntime, NULL, mmjob->nonce_diff);
 			break;
 		}
 	}
