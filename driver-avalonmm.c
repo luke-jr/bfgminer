@@ -799,15 +799,15 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	{
 		flag = true;
 		if (module->fan[1])
-			wlogprint("Fans: %u RPM %u RPM", (unsigned)module->fan[0], (unsigned)module->fan[1]);
+			wlogprint("Fans: %u RPM, %u RPM (%u%%)", (unsigned)module->fan[0], (unsigned)module->fan[1], chain->fan_desired);
 		else
-			wlogprint("Fan: %u RPM", (unsigned)module->fan[0]);
+			wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[0], chain->fan_desired);
 	}
 	else
 	if (module->fan[1])
 	{
 		flag = true;
-		wlogprint("Fan: %u RPM", (unsigned)module->fan[1]);
+		wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[1], chain->fan_desired);
 	}
 	if (flag)
 		wlogprint("\n");
