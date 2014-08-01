@@ -36,6 +36,7 @@
 #define AVALONMM_NONCE_OFFSET  0x180
 
 BFG_REGISTER_DRIVER(avalonmm_drv)
+static const struct bfg_set_device_definition avalonmm_set_device_funcs[];
 
 #define AVALONMM_PKT_DATA_SIZE  0x20
 #define AVALONMM_PKT_SIZE  (AVALONMM_PKT_DATA_SIZE + 7)
@@ -187,6 +188,7 @@ bool avalonmm_detect_one(const char * const devpath)
 			.drv = &avalonmm_drv,
 			.device_path = prev_cgpu ? prev_cgpu->device_path : strdup(devpath),
 			.device_data = (void*)(intptr_t)moduleno,
+			.set_device_funcs = avalonmm_set_device_funcs,
 			.deven = DEV_ENABLED,
 			.procs = 1,
 			.threads = prev_cgpu ? 0 : 1,
@@ -218,12 +220,18 @@ struct avalonmm_chain_state {
 	uint32_t xnonce1;
 	struct avalonmm_job *jobs[AVALONMM_CACHED_JOBS];
 	uint32_t next_jobid;
+	
+	uint32_t clock_desired;
 };
 
 struct avalonmm_module_state {
 	unsigned module_id;
 	uint16_t temp[2];
+	uint32_t clock_actual;
 };
+
+static struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info *, uint32_t);
+static bool avalonmm_poll_once(struct cgpu_info *, int64_t *);
 
 static
 bool avalonmm_init(struct thr_info * const master_thr)
@@ -231,6 +239,8 @@ bool avalonmm_init(struct thr_info * const master_thr)
 	struct cgpu_info * const master_dev = master_thr->cgpu, *dev = NULL;
 	const char * const devpath = master_dev->device_path;
 	const int fd = serial_open(devpath, 115200, 1, true);
+	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
+	int64_t module_id;
 	
 	master_dev->device_fd = fd;
 	if (unlikely(fd == -1))
@@ -267,10 +277,44 @@ bool avalonmm_init(struct thr_info * const master_thr)
 		thr->cgpu_data = module;
 	}
 	
+	dev = NULL;
 	for_each_managed_proc(proc, master_dev)
 	{
+		cgpu_set_defaults(proc);
 		proc->status = LIFE_INIT2;
 	}
+	
+	
+	if (!chain->clock_desired)
+	{
+		// Get a reasonable default frequency
+		dev = master_dev;
+		struct thr_info * const thr = dev->thr[0];
+		struct avalonmm_module_state * const module = thr->cgpu_data;
+		
+resend:
+		pk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4, module->module_id);
+		avalonmm_write_cmd(fd, AMC_POLL, buf, AVALONMM_PKT_DATA_SIZE);
+		
+		while (avalonmm_poll_once(master_dev, &module_id))
+		{
+			if (module_id != module->module_id)
+				continue;
+			
+			if (module->clock_actual)
+			{
+				chain->clock_desired = module->clock_actual;
+				break;
+			}
+			else
+				goto resend;
+		}
+	}
+	
+	if (likely(chain->clock_desired))
+		applog(LOG_DEBUG, "%s: Frequency is initialised with %d MHz", master_dev->dev_repr, chain->clock_desired);
+	else
+		applogr(false, LOG_ERR, "%s: No frequency detected, please use --set %s@%s:clock=MHZ", master_dev->dev_repr, master_dev->drv->dname, devpath);
 	
 	return true;
 }
@@ -354,7 +398,7 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 	pk_u32be(buf, 0, 80);  // fan speed %
 	uint16_t voltcfg = ((uint16_t)bitflip8((0x78 - /*deci-milli-volts*/6625 / 125) << 1 | 1)) << 8;
 	pk_u32be(buf, 4, voltcfg);
-	pk_u32be(buf, 8, 450/*freq*/);
+	pk_u32be(buf, 8, chain->clock_desired);
 	memcpy(&buf[0xc], mm_xnonce2_start, 4);
 	pk_u32be(buf, 0x10, xnonce2_range);
 	if (!avalonmm_write_cmd(fd, AMC_START, buf, 0x14))
@@ -420,12 +464,14 @@ struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info * const master_dev
 }
 
 static
-bool avalonmm_poll_once(struct cgpu_info * const master_dev)
+bool avalonmm_poll_once(struct cgpu_info * const master_dev, int64_t *out_module_id)
 {
 	struct avalonmm_chain_state * const chain = master_dev->device_data;
 	const int fd = master_dev->device_fd;
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE];
 	enum avalonmm_reply reply;
+	
+	*out_module_id = -1;
 	
 	if (avalonmm_read(fd, LOG_ERR, &reply, buf, sizeof(buf)) < 0)
 		return false;
@@ -445,6 +491,8 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 				break;
 			}
 			
+			*out_module_id = module_id;
+			
 			struct thr_info * const thr = dev->thr[0];
 			struct avalonmm_module_state * const module = thr->cgpu_data;
 			
@@ -453,7 +501,9 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 #if 0
 			module->fan [0] = upk_u16be(buf,    4);
 			module->fan [1] = upk_u16be(buf,    6);
-			module->freq    = upk_u32be(buf,    8);
+#endif
+			module->clock_actual = upk_u32be(buf, 8);
+#if 0
 			module->voltage = upk_u32be(buf, 0x0c);
 #endif
 			
@@ -477,6 +527,8 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 				inc_hw_errors_only(master_thr);
 				break;
 			}
+			
+			*out_module_id = module_id;
 			
 			struct thr_info * const thr = dev->thr[0];
 			
@@ -510,9 +562,10 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 static
 void avalonmm_poll(struct cgpu_info * const master_dev, int n)
 {
+	int64_t dummy;
 	while (n > 0)
 	{
-		if (avalonmm_poll_once(master_dev))
+		if (avalonmm_poll_once(master_dev, &dummy))
 			--n;
 	}
 }
@@ -557,6 +610,25 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 		}
 	}
 }
+
+static
+const char *avalonmm_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct avalonmm_chain_state * const chain = proc->device_data;
+	
+	const int nv = atoi(newvalue);
+	if (nv < 0)
+		return "Invalid clock";
+	
+	chain->clock_desired = nv;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition avalonmm_set_device_funcs[] = {
+	{"clock", avalonmm_set_clock, "clock frequency"},
+	{NULL},
+};
 
 struct device_drv avalonmm_drv = {
 	.dname = "avalonmm",
