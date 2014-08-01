@@ -728,12 +728,12 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 		}
 	}
 	
-	strcpy(buf, "Fan Percent ");
+	strcpy(buf, "Fan RPM ");
 	for (int i = 0; i < 2; ++i)
 	{
 		if (module->fan[i])
 		{
-			buf[0xc] = '0' + i;
+			buf[8] = '0' + i;
 			root = api_add_uint16(root, buf, &module->fan[i], false);
 		}
 	}
@@ -777,15 +777,15 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	{
 		flag = true;
 		if (module->fan[1])
-			wlogprint("Fans: %u%% %u%%", (unsigned)module->fan[0], (unsigned)module->fan[1]);
+			wlogprint("Fans: %u RPM %u RPM", (unsigned)module->fan[0], (unsigned)module->fan[1]);
 		else
-			wlogprint("Fan: %u%%", (unsigned)module->fan[0]);
+			wlogprint("Fan: %u RPM", (unsigned)module->fan[0]);
 	}
 	else
 	if (module->fan[1])
 	{
 		flag = true;
-		wlogprint("Fan: %u%%", (unsigned)module->fan[1]);
+		wlogprint("Fan: %u RPM", (unsigned)module->fan[1]);
 	}
 	if (flag)
 		wlogprint("\n");
@@ -796,7 +796,7 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	if (module->voltcfg_actual)
 	{
 		const uint32_t dmvolts = avalonmm_dmvolts_from_voltage_config(module->voltcfg_actual);
-		wlogprint("Voltage: %u.%04u\n", (unsigned)(dmvolts / 10000), (unsigned)(dmvolts % 10000));
+		wlogprint("Voltage: %u.%04u V\n", (unsigned)(dmvolts / 10000), (unsigned)(dmvolts % 10000));
 	}
 }
 #endif
