@@ -495,6 +495,9 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev, int64_t *out_module
 	
 	switch (reply)
 	{
+		case AMR_DETECT_ACK:
+			break;
+		
 		case AMR_STATUS:
 		{
 			const uint32_t module_id = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
