@@ -733,6 +733,7 @@ static
 struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 {
 	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
 	struct thr_info * const thr = dev->thr[0];
 	struct avalonmm_module_state * const module = thr->cgpu_data;
 	struct api_data *root = NULL;
@@ -748,6 +749,8 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 			root = api_add_temp(root, buf, &temp, true);
 		}
 	}
+	
+	root = api_add_uint8(root, "Fan Percent", &chain->fan_desired, false);
 	
 	strcpy(buf, "Fan RPM ");
 	for (int i = 0; i < 2; ++i)
