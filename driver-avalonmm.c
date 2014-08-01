@@ -395,15 +395,6 @@ bool avalonmm_update_swork_from_pool(struct cgpu_info * const master_dev, struct
 }
 
 static
-bool avalonmm_update_swork(struct cgpu_info * const master_dev)
-{
-	struct pool *pool = current_pool();
-	if (!pool_has_usable_swork(pool))
-		return false;
-	return avalonmm_update_swork_from_pool(master_dev, pool);
-}
-
-static
 struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info * const master_dev, const uint32_t module_id)
 {
 	struct cgpu_info *dev = NULL;
@@ -524,15 +515,22 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const master_dev = master_thr->cgpu;
 	const int fd = master_dev->device_fd;
+	struct pool *nextpool = current_pool(), *pool = NULL;
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
 	
 	while (likely(!master_dev->shutdown))
 	{
 		master_thr->work_restart = false;
-		avalonmm_update_swork(master_dev);
+		if (!pool_has_usable_swork(nextpool))
+			; // FIXME
+		else
+		if (avalonmm_update_swork_from_pool(master_dev, nextpool))
+			pool = nextpool;
 		
-		while (likely(!master_thr->work_restart))
+		while (likely(!(master_thr->work_restart || ((nextpool = current_pool()) != pool && pool_has_usable_swork(nextpool)))))
 		{
+			cgsleep_ms(10);
+			
 			struct cgpu_info *dev = NULL;
 			int n = 0;
 			for_each_managed_proc(proc, master_dev)
@@ -549,7 +547,6 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 				++n;
 			}
 			avalonmm_poll(master_dev, n);
-			cgsleep_ms(100);
 		}
 	}
 }
