@@ -222,13 +222,28 @@ struct avalonmm_chain_state {
 	uint32_t next_jobid;
 	
 	uint32_t clock_desired;
+	uint32_t voltcfg_desired;
 };
 
 struct avalonmm_module_state {
 	unsigned module_id;
 	uint16_t temp[2];
 	uint32_t clock_actual;
+	uint32_t voltcfg_actual;
 };
+
+static
+uint16_t avalonmm_voltage_config_from_dmvolts(uint32_t dmvolts)
+{
+	return ((uint16_t)bitflip8((0x78 - dmvolts / 125) << 1 | 1)) << 8;
+}
+
+// Potentially lossy!
+static
+uint32_t avalonmm_dmvolts_from_voltage_config(uint32_t voltcfg)
+{
+	return (0x78 - (bitflip8(voltcfg >> 8) >> 1)) * 125;
+}
 
 static struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info *, uint32_t);
 static bool avalonmm_poll_once(struct cgpu_info *, int64_t *);
@@ -248,7 +263,7 @@ bool avalonmm_init(struct thr_info * const master_thr)
 	
 	struct avalonmm_chain_state * const chain = malloc(sizeof(*chain));
 	*chain = (struct avalonmm_chain_state){
-		.xnonce1 = 0,
+		.voltcfg_desired = avalonmm_voltage_config_from_dmvolts(6625),
 	};
 	
 	work2d_init();
@@ -396,8 +411,7 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 		xnonce2_range = 0xffffffff;
 	
 	pk_u32be(buf, 0, 80);  // fan speed %
-	uint16_t voltcfg = ((uint16_t)bitflip8((0x78 - /*deci-milli-volts*/6625 / 125) << 1 | 1)) << 8;
-	pk_u32be(buf, 4, voltcfg);
+	pk_u32be(buf, 4, chain->voltcfg_desired);
 	pk_u32be(buf, 8, chain->clock_desired);
 	memcpy(&buf[0xc], mm_xnonce2_start, 4);
 	pk_u32be(buf, 0x10, xnonce2_range);
@@ -503,9 +517,7 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev, int64_t *out_module
 			module->fan [1] = upk_u16be(buf,    6);
 #endif
 			module->clock_actual = upk_u32be(buf, 8);
-#if 0
-			module->voltage = upk_u32be(buf, 0x0c);
-#endif
+			module->voltcfg_actual = upk_u32be(buf, 0x0c);
 			
 			dev->temp = max(module->temp[0], module->temp[1]);
 			
@@ -625,8 +637,23 @@ const char *avalonmm_set_clock(struct cgpu_info * const proc, const char * const
 	return NULL;
 }
 
+static
+const char *avalonmm_set_voltage(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct avalonmm_chain_state * const chain = proc->device_data;
+	
+	const long val = atof(newvalue) * 10000;
+	if (val < 0 || val > 15000)
+		return "Invalid voltage value";
+	
+	chain->voltcfg_desired = avalonmm_voltage_config_from_dmvolts(val);
+	
+	return NULL;
+}
+
 static const struct bfg_set_device_definition avalonmm_set_device_funcs[] = {
 	{"clock", avalonmm_set_clock, "clock frequency"},
+	{"voltage", avalonmm_set_voltage, "voltage (0 to 1.5 volts)"},
 	{NULL},
 };
 
