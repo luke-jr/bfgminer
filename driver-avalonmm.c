@@ -626,7 +626,8 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 static
 const char *avalonmm_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
-	struct avalonmm_chain_state * const chain = proc->device_data;
+	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
 	
 	const int nv = atoi(newvalue);
 	if (nv < 0)
@@ -640,7 +641,8 @@ const char *avalonmm_set_clock(struct cgpu_info * const proc, const char * const
 static
 const char *avalonmm_set_voltage(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
-	struct avalonmm_chain_state * const chain = proc->device_data;
+	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
 	
 	const long val = atof(newvalue) * 10000;
 	if (val < 0 || val > 15000)
@@ -657,6 +659,30 @@ static const struct bfg_set_device_definition avalonmm_set_device_funcs[] = {
 	{NULL},
 };
 
+static
+struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct thr_info * const thr = dev->thr[0];
+	struct avalonmm_module_state * const module = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	if (module->clock_actual)
+	{
+		double freq = module->clock_actual;
+		root = api_add_freq(root, "Frequency", &freq, true);
+	}
+	
+	if (module->voltcfg_actual)
+	{
+		float volts = avalonmm_dmvolts_from_voltage_config(module->voltcfg_actual);
+		volts /= 10000;
+		root = api_add_volts(root, "Voltage", &volts, true);
+	}
+	
+	return root;
+}
+
 struct device_drv avalonmm_drv = {
 	.dname = "avalonmm",
 	.name = "AVM",
@@ -665,4 +691,6 @@ struct device_drv avalonmm_drv = {
 	
 	.thread_init = avalonmm_init,
 	.minerloop = avalonmm_minerloop,
+	
+	.get_api_extra_device_status = avalonmm_api_extra_device_status,
 };
