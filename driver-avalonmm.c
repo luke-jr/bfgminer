@@ -719,6 +719,53 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 	return root;
 }
 
+#ifdef HAVE_CURSES
+void avalonmm_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
+	struct thr_info * const thr = dev->thr[0];
+	struct avalonmm_module_state * const module = thr->cgpu_data;
+	bool flag;
+	
+	wlogprint("ExtraNonce1:%0*lx  ModuleId:%lu\n", work2d_xnonce1sz * 2, (unsigned long)chain->xnonce1, (unsigned long)module->module_id);
+	
+	flag = false;
+	if (module->temp[0] && module->temp[1])
+	{
+		flag = true;
+		wlogprint("Temperatures: %uC %uC", (unsigned)module->temp[0], (unsigned)module->temp[1]);
+		if (module->fan[0] || module->fan[1])
+			wlogprint("  ");
+	}
+	if (module->fan[0])
+	{
+		flag = true;
+		if (module->fan[1])
+			wlogprint("Fans: %u%% %u%%", (unsigned)module->fan[0], (unsigned)module->fan[1]);
+		else
+			wlogprint("Fan: %u%%", (unsigned)module->fan[0]);
+	}
+	else
+	if (module->fan[1])
+	{
+		flag = true;
+		wlogprint("Fan: %u%%", (unsigned)module->fan[1]);
+	}
+	if (flag)
+		wlogprint("\n");
+	
+	if (module->clock_actual)
+		wlogprint("Clock speed: %lu\n", (unsigned long)module->clock_actual);
+	
+	if (module->voltcfg_actual)
+	{
+		const uint32_t dmvolts = avalonmm_dmvolts_from_voltage_config(module->voltcfg_actual);
+		wlogprint("Voltage: %u.%04u\n", (unsigned)(dmvolts / 10000), (unsigned)(dmvolts % 10000));
+	}
+}
+#endif
+
 struct device_drv avalonmm_drv = {
 	.dname = "avalonmm",
 	.name = "AVM",
@@ -730,4 +777,8 @@ struct device_drv avalonmm_drv = {
 	
 	.get_api_extra_device_detail = avalonmm_api_extra_device_detail,
 	.get_api_extra_device_status = avalonmm_api_extra_device_status,
+	
+#ifdef HAVE_CURSES
+	.proc_wlogprint_status = avalonmm_wlogprint_status,
+#endif
 };
