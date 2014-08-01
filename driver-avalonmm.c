@@ -582,6 +582,18 @@ void avalonmm_poll(struct cgpu_info * const master_dev, int n)
 }
 
 static
+struct thr_info *avalonmm_should_disable(struct cgpu_info * const master_dev)
+{
+	for_each_managed_proc(proc, master_dev)
+	{
+		struct thr_info * const thr = proc->thr[0];
+		if (thr->pause || proc->deven != DEV_ENABLED)
+			return thr;
+	}
+	return NULL;
+}
+
+static
 void avalonmm_minerloop(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const master_dev = master_thr->cgpu;
@@ -591,6 +603,29 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 	
 	while (likely(!master_dev->shutdown))
 	{
+		if (avalonmm_should_disable(master_dev))
+		{
+			struct thr_info *thr;
+			while ( (thr = avalonmm_should_disable(master_dev)) )
+			{
+				if (!thr->_mt_disable_called)
+					if (avalonmm_write_cmd(fd, AMC_NEW_JOB, NULL, 0))
+					{
+						for_each_managed_proc(proc, master_dev)
+						{
+							struct thr_info * const thr = proc->thr[0];
+							mt_disable_start(thr);
+						}
+					}
+				notifier_read(thr->notifier);
+			}
+			for_each_managed_proc(proc, master_dev)
+			{
+				struct thr_info * const thr = proc->thr[0];
+				mt_disable_finish(thr);
+			}
+		}
+		
 		master_thr->work_restart = false;
 		if (!pool_has_usable_swork(nextpool))
 			; // FIXME
@@ -598,7 +633,7 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 		if (avalonmm_update_swork_from_pool(master_dev, nextpool))
 			pool = nextpool;
 		
-		while (likely(!(master_thr->work_restart || ((nextpool = current_pool()) != pool && pool_has_usable_swork(nextpool)))))
+		while (likely(!(master_thr->work_restart || ((nextpool = current_pool()) != pool && pool_has_usable_swork(nextpool)) || avalonmm_should_disable(master_dev))))
 		{
 			cgsleep_ms(10);
 			
