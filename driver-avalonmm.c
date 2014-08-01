@@ -228,6 +228,7 @@ struct avalonmm_chain_state {
 struct avalonmm_module_state {
 	unsigned module_id;
 	uint16_t temp[2];
+	uint16_t fan[2];
 	uint32_t clock_actual;
 	uint32_t voltcfg_actual;
 };
@@ -512,10 +513,8 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev, int64_t *out_module
 			
 			module->temp[0] = upk_u16be(buf,    0);
 			module->temp[1] = upk_u16be(buf,    2);
-#if 0
 			module->fan [0] = upk_u16be(buf,    4);
 			module->fan [1] = upk_u16be(buf,    6);
-#endif
 			module->clock_actual = upk_u32be(buf, 8);
 			module->voltcfg_actual = upk_u32be(buf, 0x0c);
 			
@@ -666,6 +665,28 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 	struct thr_info * const thr = dev->thr[0];
 	struct avalonmm_module_state * const module = thr->cgpu_data;
 	struct api_data *root = NULL;
+	char buf[0x10];
+	
+	strcpy(buf, "Temperature");
+	for (int i = 0; i < 2; ++i)
+	{
+		if (module->temp[i])
+		{
+			float temp = module->temp[i];
+			buf[0xb] = '0' + i;
+			root = api_add_temp(root, buf, &temp, true);
+		}
+	}
+	
+	strcpy(buf, "Fan Percent ");
+	for (int i = 0; i < 2; ++i)
+	{
+		if (module->fan[i])
+		{
+			buf[0xc] = '0' + i;
+			root = api_add_uint16(root, buf, &module->fan[i], false);
+		}
+	}
 	
 	if (module->clock_actual)
 	{
