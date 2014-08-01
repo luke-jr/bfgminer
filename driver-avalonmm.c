@@ -221,6 +221,7 @@ struct avalonmm_chain_state {
 	struct avalonmm_job *jobs[AVALONMM_CACHED_JOBS];
 	uint32_t next_jobid;
 	
+	uint8_t fan_desired;
 	uint32_t clock_desired;
 	uint32_t voltcfg_desired;
 };
@@ -264,6 +265,7 @@ bool avalonmm_init(struct thr_info * const master_thr)
 	
 	struct avalonmm_chain_state * const chain = malloc(sizeof(*chain));
 	*chain = (struct avalonmm_chain_state){
+		.fan_desired = 90,
 		.voltcfg_desired = avalonmm_voltage_config_from_dmvolts(6625),
 	};
 	
@@ -411,7 +413,7 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 	else
 		xnonce2_range = 0xffffffff;
 	
-	pk_u32be(buf, 0, 80);  // fan speed %
+	pk_u32be(buf, 0, chain->fan_desired);
 	pk_u32be(buf, 4, chain->voltcfg_desired);
 	pk_u32be(buf, 8, chain->clock_desired);
 	memcpy(&buf[0xc], mm_xnonce2_start, 4);
@@ -673,6 +675,21 @@ const char *avalonmm_set_clock(struct cgpu_info * const proc, const char * const
 }
 
 static
+const char *avalonmm_set_fan(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct cgpu_info * const dev = proc->device;
+	struct avalonmm_chain_state * const chain = dev->device_data;
+	
+	const int nv = atoi(newvalue);
+	if (nv < 0 || nv > 100)
+		return "Invalid fan speed";
+	
+	chain->fan_desired = nv;
+	
+	return NULL;
+}
+
+static
 const char *avalonmm_set_voltage(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct cgpu_info * const dev = proc->device;
@@ -689,6 +706,7 @@ const char *avalonmm_set_voltage(struct cgpu_info * const proc, const char * con
 
 static const struct bfg_set_device_definition avalonmm_set_device_funcs[] = {
 	{"clock", avalonmm_set_clock, "clock frequency"},
+	{"fan", avalonmm_set_fan, "fan speed (0-100 percent)"},
 	{"voltage", avalonmm_set_voltage, "voltage (0 to 1.5 volts)"},
 	{NULL},
 };
@@ -805,7 +823,7 @@ static
 void avalonmm_tui_wlogprint_choices(struct cgpu_info * const proc)
 {
 	wlogprint("[C]lock speed ");
-	//wlogprint("[F]an speed ");  // To be implemented
+	wlogprint("[F]an speed ");
 	wlogprint("[V]oltage ");
 }
 
@@ -835,6 +853,9 @@ const char *avalonmm_tui_handle_choice(struct cgpu_info * const proc, const int 
 	{
 		case 'c': case 'C':
 			return avalonmm_tui_wrapper(proc, avalonmm_set_clock  , "Set clock speed (Avalon2: 1500; Avalon3: 450)");
+		
+		case 'f': case 'F':
+			return avalonmm_tui_wrapper(proc, avalonmm_set_fan    , "Set fan speed (0-100 percent)");
 		
 		case 'v': case 'V':
 			return avalonmm_tui_wrapper(proc, avalonmm_set_voltage, "Set voltage (Avalon2: 1.0; Avalon3: 0.6625)");
