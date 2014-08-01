@@ -566,7 +566,7 @@ if test "x$avalonmm" = xyes; then
 	AC_DEFINE([USE_AVALONMM], [1], [Defined to 1 if Avalon2/3 support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
-	# TODO: $broad_udevrules && have_udevrules=true
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_AVALONMM], [test x$avalonmm = xyes])
 
