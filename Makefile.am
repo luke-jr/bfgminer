@@ -270,7 +270,7 @@ bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
 endif
 
 if USE_AVALONMM
-bfgminer_SOURCES += driver-avalonmm.c driver-avalonmm.h
+bfgminer_SOURCES += driver-avalonmm.c
 endif
 
 if USE_KNC
