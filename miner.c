@@ -7198,7 +7198,8 @@ void zero_stats(void)
 		cgpu->cgminer_stats.getwork_wait_max.tv_usec = 0;
 		mutex_unlock(&hash_lock);
 		
-		cgpu->drv->zero_stats(cgpu);
+		if (cgpu->drv->zero_stats)
+			cgpu->drv->zero_stats(cgpu);
 	}
 }
 
