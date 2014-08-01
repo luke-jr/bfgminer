@@ -228,7 +228,7 @@ bool avalonmm_init(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const master_dev = master_thr->cgpu, *dev = NULL;
 	const char * const devpath = master_dev->device_path;
-	const int fd = serial_open(devpath, 0, 1, true);
+	const int fd = serial_open(devpath, 115200, 1, true);
 	
 	master_dev->device_fd = fd;
 	if (unlikely(fd == -1))
@@ -288,14 +288,11 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 	
 	pk_u32be(buf,    0, coinbase_len);
 	
-	// Avalon MM cannot handle xnonce2_size other than 4, and works in big endian, so we use a range to ensure the preceding bytes match
-	const size_t real_xnonce2_offset = swork->nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
-	const int fixed_mm_xnonce2_bytes = (work2d_xnonce2sz >= 4) ? 0 : (4 - work2d_xnonce2sz);
-	const size_t mm_xnonce2_offset = real_xnonce2_offset - fixed_mm_xnonce2_bytes;
-	pk_u32be(buf,    4, mm_xnonce2_offset);
+	const size_t xnonce2_offset = swork->nonce2_offset + work2d_pad_xnonce_size(swork) + work2d_xnonce1sz;
+	pk_u32be(buf,    4, xnonce2_offset);
 	
 	pk_u32be(buf,    8, 4);  // extranonce2 size, but only 4 is supported - smaller sizes are handled by limiting the range
-	pk_u32be(buf, 0x0c, 36);  // merkle_offset, always 36 for Bitcoin
+	pk_u32be(buf, 0x0c, 0x24);  // merkle_offset, always 0x24 for Bitcoin
 	pk_u32be(buf, 0x10, swork->merkles);
 	pk_u32be(buf, 0x14, 1);  // diff? poorly defined
 	pk_u32be(buf, 0x18, 0);  // pool number - none of its business
@@ -335,19 +332,18 @@ bool avalonmm_send_swork(const int fd, struct avalonmm_chain_state * const chain
 	if (!avalonmm_write_cmd(fd, AMC_BLKHDR, header_bin, sizeof(header_bin)))
 		return false;
 	
+	// Avalon MM cannot handle xnonce2_size other than 4, and works in big endian, so we use a range to ensure the following bytes match
+	const int fixed_mm_xnonce2_bytes = (work2d_xnonce2sz >= 4) ? 0 : (4 - work2d_xnonce2sz);
 	uint8_t mm_xnonce2_start[4];
 	uint32_t xnonce2_range;
+	memset(mm_xnonce2_start, '\0', 4);
+	cbp += work2d_xnonce2sz;
+	for (int i = 1; i <= fixed_mm_xnonce2_bytes; ++i)
+		mm_xnonce2_start[fixed_mm_xnonce2_bytes - i] = cbp++[0];
 	if (fixed_mm_xnonce2_bytes > 0)
-	{
-		memcpy(mm_xnonce2_start, &cbp[-fixed_mm_xnonce2_bytes], fixed_mm_xnonce2_bytes);
-		memset(&mm_xnonce2_start[fixed_mm_xnonce2_bytes], '\0', work2d_xnonce2sz);
 		xnonce2_range = (1 << (8 * work2d_xnonce2sz)) - 1;
-	}
 	else
-	{
-		memset(mm_xnonce2_start, '\0', 4);
 		xnonce2_range = 0xffffffff;
-	}
 	
 	pk_u32be(buf, 0, 80);  // fan speed %
 	uint16_t voltcfg = ((uint16_t)bitflip8((0x78 - /*deci-milli-volts*/6625 / 125) << 1 | 1)) << 8;
@@ -471,7 +467,7 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 		case AMR_NONCE:
 		{
 			const int fixed_mm_xnonce2_bytes = (work2d_xnonce2sz >= 4) ? 0 : (4 - work2d_xnonce2sz);
-			const uint8_t * const xnonce2 = &buf[8 + fixed_mm_xnonce2_bytes];
+			const uint8_t * const backward_xnonce2 = &buf[8 + fixed_mm_xnonce2_bytes];
 			const uint32_t nonce = upk_u32be(buf, 0x10) - AVALONMM_NONCE_OFFSET;
 			const uint32_t jobid = upk_u32be(buf, 0x14);
 			const uint32_t module_id = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
@@ -500,6 +496,10 @@ bool avalonmm_poll_once(struct cgpu_info * const master_dev)
 				break;
 			}
 			struct avalonmm_job * const mmjob = chain->jobs[jobid % AVALONMM_CACHED_JOBS];
+			
+			uint8_t xnonce2[work2d_xnonce2sz];
+			for (int i = 0; i < work2d_xnonce2sz; ++i)
+				xnonce2[i] = backward_xnonce2[(work2d_xnonce2sz - 1) - i];
 			
 			work2d_submit_nonce(thr, &mmjob->swork, &mmjob->tv_prepared, xnonce2, chain->xnonce1, nonce, mmjob->swork.ntime, NULL, 1.);
 			break;
