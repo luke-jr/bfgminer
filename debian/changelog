@@ -1,3 +1,9 @@
+bfgminer (4.6.0-0precise1) precise; urgency=low
+
+  * avalonmm: New driver for both Avalon2 and Avalon3 rigs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 02 Aug 2014 03:10:10 -0000
+
 bfgminer (4.5.0-0precise1) precise; urgency=low
 
   * bitforce: A new setup-vfio shell script is included to simplify configuring VFIO for Monarchs on PCIe.

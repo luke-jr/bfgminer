@@ -1,3 +1,43 @@
+BFGMiner Version 4.6.0 - August 2, 2014
+
+- avalonmm: Even if no fans report speed, display set %
+- Bugfix: avalonmm: Fix fan speed setting
+- Bugfix: avalonmm: Actually read the result needed to get the correct module id
+- README.ASIC: Document AvalonMM driver usage with Avalon 2/3 rigs
+- Bugfix: Makefile.am: Remove reference to non-existent driver-avalonmm.h
+- avalonmm: Safely handle an improper job id that is within the last 2 sent
+- avalonmm: Include asserted fan speed in RPC
+- avalonmm: Include asserted fan speed in ManageTUI
+- avalonmm: Silence warning about detect ack at runtime
+- avalonmm: Make fan speed an option (both RPC and TUI)
+- avalonmm: Allow changing clock speed and voltage from Manage TUI
+- Bugfix: avalonmm: Show proper units for fans & voltage
+- avalonmm: Support for disabling the entire chain
+- Implement broad_udevrules for avalonmm
+- avalonmm: Show extranonce1, module id, temperatures, fans, clock, and voltage
+in Manage TUI
+- avalonmm: Include Module Id and ExtraNonce1 in RPC devdetails
+- avalonmm: Add Temperature0/1 and Fan Percent 0/1 to RPC
+- avalonmm: Add Frequency and Voltage to RPC
+- avalonmm: Add voltage setting (defaults to 0.6625 V)
+- avalonmm: Add clock setting and try to autodetect it if not provided
+- avalonmm: Implement hashmeter
+- avalonmm: Adjust device target up to pdiff 32 when possible
+- avalonmm: Update job when current pool changes
+- Bugfix: avalonmm: MM flips the xnonce2, so we need to do the same
+- avalonmm: Implement mining logic
+- lowl-spi: Move bit order reverse to bitflip8 function in util
+- avalonmm: Treat multiple chained modules as slaves rather than processors
+- avalonmm: Probing for devices using Avalon Miner Manager (Avalon2/3 rigs)
+- littlefury: Move crc16 logic to util
+- Use BUILT_SOURCES to ensure version.h is always built first
+- configure option --with-udevrules-group to allow customising the group name
+used
+- Bugfix: zero_stats: Only call cgpu function if it exists
+- Remove FPGA-only bitforce-firmware-flash tool (now located at
+https://github.com/luke-jr/bitforce-fpga-firmware-flash )
+
+
 BFGMiner Version 4.5.0 - July 26, 2014
 
 - Bugfix: zeusminer: Fix crash in TUI with newly introduced feature
