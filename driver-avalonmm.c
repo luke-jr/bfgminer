@@ -221,7 +221,7 @@ struct avalonmm_chain_state {
 	struct avalonmm_job *jobs[AVALONMM_CACHED_JOBS];
 	uint32_t next_jobid;
 	
-	uint8_t fan_desired;
+	uint32_t fan_desired;
 	uint32_t clock_desired;
 	uint32_t voltcfg_desired;
 };
@@ -247,6 +247,18 @@ uint32_t avalonmm_dmvolts_from_voltage_config(uint32_t voltcfg)
 	return (0x78 - (bitflip8(voltcfg >> 8) >> 1)) * 125;
 }
 
+static
+uint32_t avalonmm_fan_config_from_percent(uint8_t percent)
+{
+	return (0x3ff - percent * 0x3ff / 100);
+}
+
+static
+uint8_t avalonmm_fan_percent_from_config(uint32_t cfg)
+{
+	return (0x3ff - cfg) * 100 / 0x3ff;
+}
+
 static struct cgpu_info *avalonmm_dev_for_module_id(struct cgpu_info *, uint32_t);
 static bool avalonmm_poll_once(struct cgpu_info *, int64_t *);
 
@@ -265,7 +277,7 @@ bool avalonmm_init(struct thr_info * const master_thr)
 	
 	struct avalonmm_chain_state * const chain = malloc(sizeof(*chain));
 	*chain = (struct avalonmm_chain_state){
-		.fan_desired = 90,
+		.fan_desired = avalonmm_fan_config_from_percent(90),
 		.voltcfg_desired = avalonmm_voltage_config_from_dmvolts(6625),
 	};
 	
@@ -688,7 +700,7 @@ const char *avalonmm_set_fan(struct cgpu_info * const proc, const char * const o
 	if (nv < 0 || nv > 100)
 		return "Invalid fan speed";
 	
-	chain->fan_desired = nv;
+	chain->fan_desired = avalonmm_fan_config_from_percent(nv);
 	
 	return NULL;
 }
@@ -751,7 +763,10 @@ struct api_data *avalonmm_api_extra_device_status(struct cgpu_info * const proc)
 		}
 	}
 	
-	root = api_add_uint8(root, "Fan Percent", &chain->fan_desired, false);
+	{
+		uint8_t fan_percent = avalonmm_fan_percent_from_config(chain->fan_desired);
+		root = api_add_uint8(root, "Fan Percent", &fan_percent, true);
+	}
 	
 	strcpy(buf, "Fan RPM ");
 	for (int i = 0; i < 2; ++i)
@@ -787,34 +802,29 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	struct avalonmm_chain_state * const chain = dev->device_data;
 	struct thr_info * const thr = dev->thr[0];
 	struct avalonmm_module_state * const module = thr->cgpu_data;
-	bool flag;
 	
 	wlogprint("ExtraNonce1:%0*lx  ModuleId:%lu\n", work2d_xnonce1sz * 2, (unsigned long)chain->xnonce1, (unsigned long)module->module_id);
 	
-	flag = false;
 	if (module->temp[0] && module->temp[1])
 	{
-		flag = true;
 		wlogprint("Temperatures: %uC %uC", (unsigned)module->temp[0], (unsigned)module->temp[1]);
 		if (module->fan[0] || module->fan[1])
 			wlogprint("  ");
 	}
+	unsigned fan_percent = avalonmm_fan_percent_from_config(chain->fan_desired);
 	if (module->fan[0])
 	{
-		flag = true;
 		if (module->fan[1])
-			wlogprint("Fans: %u RPM, %u RPM (%u%%)", (unsigned)module->fan[0], (unsigned)module->fan[1], chain->fan_desired);
+			wlogprint("Fans: %u RPM, %u RPM (%u%%)", (unsigned)module->fan[0], (unsigned)module->fan[1], fan_percent);
 		else
-			wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[0], chain->fan_desired);
+			wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[0], fan_percent);
 	}
 	else
 	if (module->fan[1])
-	{
-		flag = true;
-		wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[1], chain->fan_desired);
-	}
-	if (flag)
-		wlogprint("\n");
+		wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[1], fan_percent);
+	else
+		wlogprint("Fan: %u%%", fan_percent);
+	wlogprint("\n");
 	
 	if (module->clock_actual)
 		wlogprint("Clock speed: %lu\n", (unsigned long)module->clock_actual);
