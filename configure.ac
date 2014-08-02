@@ -580,6 +580,7 @@ AC_ARG_ENABLE([avalonmm],
 if test "x$avalonmm" = xyes; then
 	AC_DEFINE([USE_AVALONMM], [1], [Defined to 1 if Avalon2/3 support is wanted])
 	need_lowl_vcom=yes
+	need_work2d=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
 fi
