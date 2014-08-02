@@ -1644,6 +1644,7 @@ void bitforce_zero_stats(struct cgpu_info * const proc)
 	data->volts_count = 0;
 	data->temp[0] = data->temp[1] = 0;
 	free(data->volts);
+	data->volts = NULL;
 	
 	proc->avg_wait_f = 0;
 }
