@@ -177,7 +177,7 @@ bool avalonmm_detect_one(const char * const devpath)
 		avalonmm_write_cmd(fd, AMC_DETECT, buf, AVALONMM_PKT_DATA_SIZE);
 	}
 	
-	while (avalonmm_read(fd, LOG_DEBUG, &reply, NULL, 0) > 0)
+	while (avalonmm_read(fd, LOG_DEBUG, &reply, buf, AVALONMM_PKT_DATA_SIZE) > 0)
 	{
 		if (reply != AMR_DETECT_ACK)
 			continue;
