@@ -802,14 +802,11 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	struct avalonmm_chain_state * const chain = dev->device_data;
 	struct thr_info * const thr = dev->thr[0];
 	struct avalonmm_module_state * const module = thr->cgpu_data;
-	bool flag;
 	
 	wlogprint("ExtraNonce1:%0*lx  ModuleId:%lu\n", work2d_xnonce1sz * 2, (unsigned long)chain->xnonce1, (unsigned long)module->module_id);
 	
-	flag = false;
 	if (module->temp[0] && module->temp[1])
 	{
-		flag = true;
 		wlogprint("Temperatures: %uC %uC", (unsigned)module->temp[0], (unsigned)module->temp[1]);
 		if (module->fan[0] || module->fan[1])
 			wlogprint("  ");
@@ -817,7 +814,6 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	unsigned fan_percent = avalonmm_fan_percent_from_config(chain->fan_desired);
 	if (module->fan[0])
 	{
-		flag = true;
 		if (module->fan[1])
 			wlogprint("Fans: %u RPM, %u RPM (%u%%)", (unsigned)module->fan[0], (unsigned)module->fan[1], fan_percent);
 		else
@@ -825,12 +821,10 @@ void avalonmm_wlogprint_status(struct cgpu_info * const proc)
 	}
 	else
 	if (module->fan[1])
-	{
-		flag = true;
 		wlogprint("Fan: %u RPM (%u%%)", (unsigned)module->fan[1], fan_percent);
-	}
-	if (flag)
-		wlogprint("\n");
+	else
+		wlogprint("Fan: %u%%", fan_percent);
+	wlogprint("\n");
 	
 	if (module->clock_actual)
 		wlogprint("Clock speed: %lu\n", (unsigned long)module->clock_actual);
