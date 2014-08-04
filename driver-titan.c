@@ -9,8 +9,14 @@
  */
 
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/spi/spidev.h>
 
 #include "deviceapi.h"
+#include "logging.h"
+#include "lowl-spi.h"
+#include "miner.h"
+#include "util.h"
 
 #define	KNC_TITAN_MAX_ASICS		6
 #define	KNC_TITAN_DIES_PER_ASIC		4
@@ -19,36 +25,118 @@
 
 #define	KNC_TITAN_DEFAULT_FREQUENCY	600
 
+#define KNC_TITAN_HWERR_DISABLE_SECS	10
+
+#define	KNC_TITAN_SPI_SPEED		3000000
+#define	KNC_TITAN_SPI_DELAY		0
+#define	KNC_TITAN_SPI_MODE		(SPI_CPHA | SPI_CPOL | SPI_CS_HIGH)
+#define	KNC_TITAN_SPI_BITS		8
+
 BFG_REGISTER_DRIVER(knc_titan_drv)
 
 static const struct bfg_set_device_definition knc_titan_set_device_funcs[];
 
 struct knc_titan_info {
+	struct spi_port *spi;
+	struct cgpu_info *cgpu;
 	int freq;
 };
+
+struct knc_titan_core {
+	int asicno;
+	int coreno;
+	int hwerr_in_row;
+	int hwerr_disable_time;
+	struct timeval enable_at;
+	struct timeval first_hwerr;
+};
+
+static struct spi_port global_spi;
+
+static bool knc_titan_spi_open(const char *repr, struct spi_port * const spi)
+{
+	const char * const spipath = "/dev/spidev1.0";
+	const int fd = open(spipath, O_RDWR);
+	const uint8_t lsbfirst = 0;
+	if (0 > fd)
+		return false;
+	if (ioctl(fd, SPI_IOC_WR_MODE         , &spi->mode )) goto fail;
+	if (ioctl(fd, SPI_IOC_WR_LSB_FIRST    , &lsbfirst  )) goto fail;
+	if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &spi->bits )) goto fail;
+	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ , &spi->speed)) goto fail;
+	spi->fd = fd;
+	return true;
+
+fail:
+	close(fd);
+	spi->fd = -1;
+	applog(LOG_WARNING, "%s: Failed to open %s", repr, spipath);
+	return false;
+}
+
+#define	knc_titan_spi_txrx	linux_spi_txrx
+
+static bool knc_titan_spi_get_info(const char *repr, struct spi_port * const spi, int * cores)
+{
+	uint8_t get_info_cmd[] = {0x80, 0x00, 0x00, 0x00, 0xCC, 0x1D, 0x69, 0x27};
+	const int spi_get_info_sz = 25;
+	uint8_t *rxbuf;
+	uint16_t revision;
+
+	spi_clear_buf(spi);
+	spi_emit_buf(spi, get_info_cmd, sizeof(get_info_cmd));
+	spi_emit_nop(spi, spi_get_info_sz - spi_getbufsz(spi));
+	spi_txrx(spi);
+	rxbuf = spi_getrxbuf(spi);
+
+	revision = (rxbuf[6] << 8) | rxbuf[7];
+	if (0xA102 != revision)
+		return false;
+
+	*cores = (rxbuf[4] << 8) | rxbuf[5];
+	return true;
+}
 
 static bool knc_titan_detect_one(const char *devpath)
 {
 	static struct cgpu_info *prev_cgpu = NULL;
 	struct cgpu_info *cgpu;
-	int i;
-	const int fd = open(devpath, O_RDWR);
-	uint8_t buf[0x20];
+	struct spi_port *spi = &global_spi;
+	int cores = 0;
 
-	if (unlikely(-1 == fd)) {
-		applog(LOG_DEBUG, "%s: Failed to open %s", __func__, devpath);
+	cgpu = malloc(sizeof(*cgpu));
+	if (unlikely(!cgpu))
+		quit(1, "Failed to alloc cgpu_info");
+
+	if (!prev_cgpu) {
+		/* Be careful, read lowl-spi.h comments for warnings */
+		memset(spi, 0, sizeof(*spi));
+		spi->txrx = knc_titan_spi_txrx;
+		spi->cgpu = cgpu;
+		spi->repr = knc_titan_drv.dname;
+		spi->logprio = LOG_ERR;
+		spi->speed = KNC_TITAN_SPI_SPEED;
+		spi->delay = KNC_TITAN_SPI_DELAY;
+		spi->mode = KNC_TITAN_SPI_MODE;
+		spi->bits = KNC_TITAN_SPI_BITS;
+
+		if (!knc_titan_spi_open(knc_titan_drv.name, spi)) {
+			free(cgpu);
+			return false;
+		}
+	}
+
+	if (!knc_titan_spi_get_info(knc_titan_drv.name, spi, &cores)) {
+		free(cgpu);
 		return false;
 	}
 
-	close(fd);
-
-	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info) {
 		.drv = &knc_titan_drv,
 		.device_path = strdup(devpath),
 		.set_device_funcs = knc_titan_set_device_funcs,
 		.deven = DEV_ENABLED,
-		.procs = KNC_TITAN_CORES_PER_ASIC,
+		.procs = cores,
 		.threads = prev_cgpu ? 0 : 1,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
@@ -58,17 +146,17 @@ static bool knc_titan_detect_one(const char *devpath)
 
 static int knc_titan_detect_auto(void)
 {
-	const int first = 3, last = 3 + KNC_TITAN_MAX_ASICS - 1;
+	const int first = 0, last = KNC_TITAN_MAX_ASICS - 1;
 	char devpath[256];
 	int found = 0, i;
-	
+
 	for (i = first; i <= last; ++i)
 	{
-		sprintf(devpath, "/dev/i2c-%d", i);
+		sprintf(devpath, "%d", i);
 		if (knc_titan_detect_one(devpath))
 			++found;
 	}
-	
+
 	return found;
 }
 
@@ -77,35 +165,53 @@ static void knc_titan_detect(void)
 	generic_detect(&knc_titan_drv, knc_titan_detect_one, knc_titan_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
-static struct knc_titan_info *knc_titan_alloc_info(void)
-{
-	struct knc_titan_info *info = calloc(1, sizeof(struct knc_titan_info));
-	if (unlikely(!info))
-		quit(1, "Failed to malloc knc_titan_info");
-	
-	info->freq = KNC_TITAN_DEFAULT_FREQUENCY;
-	
-	return info;
-}
-
 static bool knc_titan_init(struct thr_info * const thr)
 {
+	const int max_cores = KNC_TITAN_CORES_PER_ASIC;
+	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info *knc;
+	struct knc_titan_core *knccore;
+	int i, asic;
 
-	knc = malloc(sizeof(*knc));
+	knc = calloc(1, sizeof(*knc));
+	if (unlikely(!knc))
+		quit(1, "Failed to alloc knc_titan_info");
 
-	for (proc = cgpu; proc; proc = proc->next_proc)
-	{
-		if (proc->device != proc)
-		{
+	for (proc = cgpu; proc; ) {
+		if (proc->device != proc) {
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
 			proc = proc->next_proc;
 			continue;
 		}
-		knc = knc_titan_alloc_info();
-		proc->device_data = knc;
+
+		asic = atoi(proc->device_path);
+
+		for (i = 0; i < max_cores; ++i) {
+			mythr = proc->thr[0];
+			mythr->cgpu_data = knccore = malloc(sizeof(*knccore));
+			if (unlikely(!knccore))
+				quit(1, "Failed to alloc knc_titan_core");
+			*knccore = (struct knc_titan_core) {
+				.asicno = asic,
+				.coreno = i,
+				.hwerr_in_row = 0,
+				.hwerr_disable_time = KNC_TITAN_HWERR_DISABLE_SECS,
+			};
+			timer_set_now(&knccore->enable_at);
+			proc->device_data = knc;
+
+			proc = proc->next_proc;
+			if ((!proc) || proc->device == proc)
+				break;
+		}
 	}
+
+	*knc = (struct knc_titan_info) {
+		.spi = &global_spi,
+		.cgpu = cgpu,
+		.freq = KNC_TITAN_DEFAULT_FREQUENCY,
+	};
 
 	cgpu_set_defaults(cgpu);
 
@@ -179,7 +285,7 @@ static void knc_titan_wlogprint_status(struct cgpu_info * const proc)
 struct device_drv knc_titan_drv =
 {
 	/* metadata */
-	.dname = "knc-titan",
+	.dname = "titan",
 	.name = "KNC",
 	.supported_algos = POW_SCRYPT,
 	.drv_detect = knc_titan_detect,
