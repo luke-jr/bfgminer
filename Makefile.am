@@ -276,7 +276,7 @@ endif
 
 if USE_KNC
 if HAS_SCRYPT
-bfgminer_SOURCES += driver-titan.c
+bfgminer_SOURCES += driver-titan.c titan-asic.c titan-asic.h
 else
 bfgminer_SOURCES += driver-knc.c
 endif

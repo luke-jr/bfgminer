@@ -18,10 +18,7 @@
 #include "miner.h"
 #include "util.h"
 
-#define	KNC_TITAN_MAX_ASICS		6
-#define	KNC_TITAN_DIES_PER_ASIC		4
-#define KNC_TITAN_CORES_PER_DIE		48
-#define	KNC_TITAN_CORES_PER_ASIC	(KNC_TITAN_CORES_PER_DIE * KNC_TITAN_DIES_PER_ASIC)
+#include "titan-asic.h"
 
 #define	KNC_TITAN_DEFAULT_FREQUENCY	600
 
@@ -76,33 +73,14 @@ fail:
 
 #define	knc_titan_spi_txrx	linux_spi_txrx
 
-static bool knc_titan_spi_get_info(const char *repr, struct spi_port * const spi, int * cores)
-{
-	uint8_t get_info_cmd[] = {0x80, 0x00, 0x00, 0x00, 0xCC, 0x1D, 0x69, 0x27};
-	const int spi_get_info_sz = 25;
-	uint8_t *rxbuf;
-	uint16_t revision;
-
-	spi_clear_buf(spi);
-	spi_emit_buf(spi, get_info_cmd, sizeof(get_info_cmd));
-	spi_emit_nop(spi, spi_get_info_sz - spi_getbufsz(spi));
-	spi_txrx(spi);
-	rxbuf = spi_getrxbuf(spi);
-
-	revision = (rxbuf[6] << 8) | rxbuf[7];
-	if (0xA102 != revision)
-		return false;
-
-	*cores = (rxbuf[4] << 8) | rxbuf[5];
-	return true;
-}
-
 static bool knc_titan_detect_one(const char *devpath)
 {
 	static struct cgpu_info *prev_cgpu = NULL;
 	struct cgpu_info *cgpu;
 	struct spi_port *spi = &global_spi;
-	int cores = 0;
+	int cores = 0, die;
+	struct titan_info_response resp;
+	char repr[6];
 
 	cgpu = malloc(sizeof(*cgpu));
 	if (unlikely(!cgpu))
@@ -126,10 +104,18 @@ static bool knc_titan_detect_one(const char *devpath)
 		}
 	}
 
-	if (!knc_titan_spi_get_info(knc_titan_drv.name, spi, &cores)) {
+	snprintf(repr, sizeof(repr), "%s%s", knc_titan_drv.name, devpath);
+	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+		if (!knc_titan_spi_get_info(repr, spi, &resp, die, KNC_TITAN_CORES_PER_DIE))
+			continue;
+		cores += resp.cores;
+	}
+	if (0 == cores) {
 		free(cgpu);
 		return false;
 	}
+
+	applog(LOG_NOTICE, "%s: Found ASIC with %d cores", repr, cores);
 
 	*cgpu = (struct cgpu_info) {
 		.drv = &knc_titan_drv,
