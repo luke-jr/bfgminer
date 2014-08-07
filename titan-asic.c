@@ -21,6 +21,7 @@
 #define	KNC_ASIC_CMD_REPORT		0x82
 #define	KNC_ASIC_CMD_SETWORK		0x81
 #define	KNC_ASIC_CMD_SETWORK_URGENT	0x83
+#define	KNC_ASIC_CMD_SETUP_CORE		0x87
 
 /* Error bits */
 #define	ERR_SEND_CRC_FAIL	(1 << 0)
@@ -80,6 +81,23 @@ exit_other_error:
 			*errors |= ERR_RCV_CRC_FAIL;
 	}
 
+#if 0
+	{
+		uint8_t *txbuf = spi_gettxbuf(spi);
+		char str[8192];
+		int i, n;
+		n = 0;
+		for (i = 0; i < transfer_size; ++i)
+			n += sprintf(&str[n], i ? ",0x%02hhX" : "0x%02hhX", txbuf[i]);
+		applog(LOG_NOTICE, "TX: %s", str);
+		n = 0;
+		for (i = 0; i < transfer_size; ++i)
+			n += sprintf(&str[n], i ? ",0x%02hhX" : "0x%02hhX", rxbuf[i]);
+		applog(LOG_NOTICE, "RX: %s", str);
+		if (0 < rcv_crc_data_len)
+			applog(LOG_NOTICE, "RX-CRC: 0x%08X", crc);
+	}
+#endif
 	return rxbuf;
 }
 
@@ -245,5 +263,233 @@ bool knc_titan_get_report(const char *repr, struct spi_port * const spi, struct 
 		return false;
 	}
 	knc_titan_parse_get_report(&rxbuf[4], report);
+	return true;
+}
+
+bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct titan_setup_core_params *params, int die, int core)
+{
+	/* The size of command is the same as for set_work */
+	uint8_t setup_core_cmd[SETWORK_CMD_SIZE] = {
+		KNC_ASIC_CMD_SETUP_CORE,
+		die,
+		(core >> 8) & 0xFF,
+		core & 0xFF,
+		/* next follows padding and data */
+	};
+	const int send_size = sizeof(setup_core_cmd);
+	const int transfer_size = send_size + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
+	uint8_t *rxbuf;
+	uint32_t errors;
+	uint32_t *src, *dst;
+	int i;
+	struct titan_packed_core_params {
+		/* WORD [0] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t padding			:26;
+		uint32_t bad_address_mask_0_6msb	:6;
+#else
+		uint32_t bad_address_mask_0_6msb	:6;
+		uint32_t padding			:26;
+#endif
+		/* WORD [1] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t bad_address_mask_0_4lsb	:4;
+		uint32_t bad_address_mask_1		:10;
+		uint32_t bad_address_match_0		:10;
+		uint32_t bad_address_match_1_8msb	:8;
+#else
+		uint32_t bad_address_match_1_8msb	:8;
+		uint32_t bad_address_match_0		:10;
+		uint32_t bad_address_mask_1		:10;
+		uint32_t bad_address_mask_0_4lsb	:4;
+#endif
+		/* WORD [2] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t bad_address_match_1_2lsb	:2;
+		uint32_t difficulty			:6;
+		uint32_t thread_enable			:8;
+		uint32_t thread_base_address_0		:10;
+		uint32_t thread_base_address_1_6msb	:6;
+#else
+		uint32_t thread_base_address_1_6msb	:6;
+		uint32_t thread_base_address_0		:10;
+		uint32_t thread_enable			:8;
+		uint32_t difficulty			:6;
+		uint32_t bad_address_match_1_2lsb	:2;
+#endif
+		/* WORD [3] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t thread_base_address_1_4lsb	:4;
+		uint32_t thread_base_address_2		:10;
+		uint32_t thread_base_address_3		:10;
+		uint32_t thread_base_address_4_8msb	:8;
+#else
+		uint32_t thread_base_address_4_8msb	:8;
+		uint32_t thread_base_address_3		:10;
+		uint32_t thread_base_address_2		:10;
+		uint32_t thread_base_address_1_4lsb	:4;
+#endif
+		/* WORD [4] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t thread_base_address_4_2lsb	:2;
+		uint32_t thread_base_address_5		:10;
+		uint32_t thread_base_address_6		:10;
+		uint32_t thread_base_address_7		:10;
+#else
+		uint32_t thread_base_address_7		:10;
+		uint32_t thread_base_address_6		:10;
+		uint32_t thread_base_address_5		:10;
+		uint32_t thread_base_address_4_2lsb	:2;
+#endif
+		/* WORD [5] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t lookup_gap_mask_0		:10;
+		uint32_t lookup_gap_mask_1		:10;
+		uint32_t lookup_gap_mask_2		:10;
+		uint32_t lookup_gap_mask_3_2msb		:2;
+#else
+		uint32_t lookup_gap_mask_3_2msb		:2;
+		uint32_t lookup_gap_mask_2		:10;
+		uint32_t lookup_gap_mask_1		:10;
+		uint32_t lookup_gap_mask_0		:10;
+#endif
+		/* WORD [6] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t lookup_gap_mask_3_8lsb		:8;
+		uint32_t lookup_gap_mask_4		:10;
+		uint32_t lookup_gap_mask_5		:10;
+		uint32_t lookup_gap_mask_6_4msb		:4;
+#else
+		uint32_t lookup_gap_mask_6_4msb		:4;
+		uint32_t lookup_gap_mask_5		:10;
+		uint32_t lookup_gap_mask_4		:10;
+		uint32_t lookup_gap_mask_3_8lsb		:8;
+#endif
+		/* WORD [7] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t lookup_gap_mask_6_6lsb		:6;
+		uint32_t lookup_gap_mask_7		:10;
+		uint32_t N_mask_0			:10;
+		uint32_t N_mask_1_6msb			:6;
+#else
+		uint32_t N_mask_1_6msb			:6;
+		uint32_t N_mask_0			:10;
+		uint32_t lookup_gap_mask_7		:10;
+		uint32_t lookup_gap_mask_6_6lsb		:6;
+#endif
+		/* WORD [8] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t N_mask_1_4lsb			:4;
+		uint32_t N_mask_2			:10;
+		uint32_t N_mask_3			:10;
+		uint32_t N_mask_4_8msb			:8;
+#else
+		uint32_t N_mask_4_8msb			:8;
+		uint32_t N_mask_3			:10;
+		uint32_t N_mask_2			:10;
+		uint32_t N_mask_1_4lsb			:4;
+#endif
+		/* WORD [9] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t N_mask_4_2lsb			:2;
+		uint32_t N_mask_5			:10;
+		uint32_t N_mask_6			:10;
+		uint32_t N_mask_7			:10;
+#else
+		uint32_t N_mask_7			:10;
+		uint32_t N_mask_6			:10;
+		uint32_t N_mask_5			:10;
+		uint32_t N_mask_4_2lsb			:2;
+#endif
+		/* WORD [10] */
+#if (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+		uint32_t N_shift_0			:4;
+		uint32_t N_shift_1			:4;
+		uint32_t N_shift_2			:4;
+		uint32_t N_shift_3			:4;
+		uint32_t N_shift_4			:4;
+		uint32_t N_shift_5			:4;
+		uint32_t N_shift_6			:4;
+		uint32_t N_shift_7			:4;
+#else
+		uint32_t N_shift_7			:4;
+		uint32_t N_shift_6			:4;
+		uint32_t N_shift_5			:4;
+		uint32_t N_shift_4			:4;
+		uint32_t N_shift_3			:4;
+		uint32_t N_shift_2			:4;
+		uint32_t N_shift_1			:4;
+		uint32_t N_shift_0			:4;
+#endif
+		/* WORD [11] */
+		uint32_t nonce_top;
+		/* WORD [12] */
+		uint32_t nonce_bottom;
+	} __attribute__((packed)) packed_params;
+
+	packed_params.padding = 0;
+	packed_params.bad_address_mask_0_6msb = (params->bad_address_mask[0] >> 4) & 0x03F;
+	packed_params.bad_address_mask_0_4lsb = params->bad_address_mask[0] & 0x00F;
+	packed_params.bad_address_mask_1 = params->bad_address_mask[1];
+	packed_params.bad_address_match_0 = params->bad_address_match[0];
+	packed_params.bad_address_match_1_8msb = (params->bad_address_match[1] >> 2) & 0x0FF;
+	packed_params.bad_address_match_1_2lsb = params->bad_address_match[1] & 0x003;
+	packed_params.difficulty = params->difficulty;
+	packed_params.thread_enable = params->thread_enable;
+	packed_params.thread_base_address_0 = params->thread_base_address[0];
+	packed_params.thread_base_address_1_6msb = (params->thread_base_address[1] >> 4) & 0x03F;
+	packed_params.thread_base_address_1_4lsb = params->thread_base_address[1] & 0x00F;
+	packed_params.thread_base_address_2 = params->thread_base_address[2];
+	packed_params.thread_base_address_3 = params->thread_base_address[3];
+	packed_params.thread_base_address_4_8msb = (params->thread_base_address[4] >> 2) & 0x0FF;
+	packed_params.thread_base_address_4_2lsb = params->thread_base_address[4] & 0x003;
+	packed_params.thread_base_address_5 = params->thread_base_address[5];
+	packed_params.thread_base_address_6 = params->thread_base_address[6];
+	packed_params.thread_base_address_7 = params->thread_base_address[7];
+	packed_params.lookup_gap_mask_0 = params->lookup_gap_mask[0];
+	packed_params.lookup_gap_mask_1 = params->lookup_gap_mask[1];
+	packed_params.lookup_gap_mask_2 = params->lookup_gap_mask[2];
+	packed_params.lookup_gap_mask_3_2msb = (params->lookup_gap_mask[3] >> 8) & 0x003;
+	packed_params.lookup_gap_mask_3_8lsb = params->lookup_gap_mask[3] & 0x0FF;
+	packed_params.lookup_gap_mask_4 = params->lookup_gap_mask[4];
+	packed_params.lookup_gap_mask_5 = params->lookup_gap_mask[5];
+	packed_params.lookup_gap_mask_6_4msb = (params->lookup_gap_mask[6] >> 6) & 0x00F;
+	packed_params.lookup_gap_mask_6_6lsb = params->lookup_gap_mask[6] & 0x03F;
+	packed_params.lookup_gap_mask_7 = params->lookup_gap_mask[7];
+	packed_params.N_mask_0 = params->N_mask[0];
+	packed_params.N_mask_1_6msb = (params->N_mask[1] >> 4) & 0x03F;
+	packed_params.N_mask_1_4lsb = params->N_mask[1] & 0x00F;
+	packed_params.N_mask_2 = params->N_mask[2];
+	packed_params.N_mask_3 = params->N_mask[3];
+	packed_params.N_mask_4_8msb = (params->N_mask[4] >> 2) & 0x0FF;
+	packed_params.N_mask_4_2lsb = params->N_mask[4] & 0x003;
+	packed_params.N_mask_5 = params->N_mask[5];
+	packed_params.N_mask_6 = params->N_mask[6];
+	packed_params.N_mask_7 = params->N_mask[7];
+	packed_params.N_shift_0 = params->N_shift[0];
+	packed_params.N_shift_1 = params->N_shift[1];
+	packed_params.N_shift_2 = params->N_shift[2];
+	packed_params.N_shift_3 = params->N_shift[3];
+	packed_params.N_shift_4 = params->N_shift[4];
+	packed_params.N_shift_5 = params->N_shift[5];
+	packed_params.N_shift_6 = params->N_shift[6];
+	packed_params.N_shift_7 = params->N_shift[7];
+	packed_params.nonce_top = params->nonce_top;
+	packed_params.nonce_bottom = params->nonce_bottom;
+
+	src = (uint32_t *)&packed_params;
+	dst = (uint32_t *)(&setup_core_cmd[send_size - sizeof(packed_params)]);
+	for (i = 0; i < (sizeof(packed_params) / 4); ++i)
+		dst[i] = htobe32(src[i]);
+
+	rxbuf = spi_transfer(spi, setup_core_cmd, send_size, transfer_size, 0, &errors);
+	if (NULL == rxbuf) {
+		applog(LOG_ERR, "%s[%d:%d] knc_titan_setup_core: Unrecognized error", repr, die, core);
+		return false;
+	}
+	if (0 != errors) {
+		applog(LOG_ERR, "%s[%d:%d] knc_titan_setup_core: Communication failed, errors = 0x%X", repr, die, core, errors);
+		return false;
+	}
 	return true;
 }
