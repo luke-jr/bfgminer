@@ -33,22 +33,34 @@ BFG_REGISTER_DRIVER(knc_titan_drv)
 
 static const struct bfg_set_device_definition knc_titan_set_device_funcs[];
 
-struct knc_titan_info {
-	struct spi_port *spi;
-	struct cgpu_info *cgpu;
-	int freq;
-};
-
 struct knc_titan_core {
 	int asicno;
-	int coreno;
+	int dieno; /* inside asic */
+	int coreno; /* inside die */
+	struct knc_titan_die *die;
+	struct cgpu_info *proc;
+
 	int hwerr_in_row;
 	int hwerr_disable_time;
 	struct timeval enable_at;
 	struct timeval first_hwerr;
 };
 
-static struct spi_port global_spi;
+struct knc_titan_die {
+	int asicno;
+	int dieno; /* inside asic */
+	int cores;
+	struct cgpu_info *first_proc;
+
+	int freq;
+};
+
+struct knc_titan_info {
+	struct spi_port *spi;
+	struct cgpu_info *cgpu;
+	int cores;
+	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
+};
 
 static bool knc_titan_spi_open(const char *repr, struct spi_port * const spi)
 {
@@ -77,8 +89,9 @@ static bool knc_titan_detect_one(const char *devpath)
 {
 	static struct cgpu_info *prev_cgpu = NULL;
 	struct cgpu_info *cgpu;
-	struct spi_port *spi = &global_spi;
-	int cores = 0, die;
+	struct spi_port *spi;
+	struct knc_titan_info *knc;
+	int cores = 0, asic, die;
 	struct titan_info_response resp;
 	char repr[6];
 
@@ -87,6 +100,10 @@ static bool knc_titan_detect_one(const char *devpath)
 		quit(1, "Failed to alloc cgpu_info");
 
 	if (!prev_cgpu) {
+		spi = calloc(1, sizeof(*spi));
+		if (unlikely(!spi))
+			quit(1, "Failed to alloc spi_port");
+
 		/* Be careful, read lowl-spi.h comments for warnings */
 		memset(spi, 0, sizeof(*spi));
 		spi->txrx = knc_titan_spi_txrx;
@@ -102,16 +119,48 @@ static bool knc_titan_detect_one(const char *devpath)
 			free(cgpu);
 			return false;
 		}
+
+		knc = calloc(1, sizeof(*knc));
+		if (unlikely(!knc))
+			quit(1, "Failed to alloc knc_titan_info");
+
+		knc->spi = spi;
+		knc->cgpu = cgpu;
+	} else {
+		knc = prev_cgpu->device_data;
+		spi = knc->spi;
 	}
 
-	snprintf(repr, sizeof(repr), "%s%s", knc_titan_drv.name, devpath);
+	snprintf(repr, sizeof(repr), "%s %s", knc_titan_drv.name, devpath);
+	asic = atoi(devpath);
 	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 		if (!knc_titan_spi_get_info(repr, spi, &resp, die, KNC_TITAN_CORES_PER_DIE))
 			continue;
-		cores += resp.cores;
+		if (0 < resp.cores) {
+			knc->dies[asic][die] = (struct knc_titan_die) {
+				.asicno = asic,
+				.dieno = die,
+				.cores = resp.cores,
+				.first_proc = cgpu,
+				.freq = KNC_TITAN_DEFAULT_FREQUENCY,
+			};
+			cores += resp.cores;
+		} else {
+			knc->dies[asic][die] = (struct knc_titan_die) {
+				.asicno = -INT_MAX,
+				.dieno = -INT_MAX,
+				.cores = 0,
+				.first_proc = NULL,
+			};
+		}
 	}
 	if (0 == cores) {
 		free(cgpu);
+		if (!prev_cgpu) {
+			free(knc);
+			close(spi->fd);
+			free(spi);
+		}
 		return false;
 	}
 
@@ -124,6 +173,7 @@ static bool knc_titan_detect_one(const char *devpath)
 		.deven = DEV_ENABLED,
 		.procs = cores,
 		.threads = prev_cgpu ? 0 : 1,
+		.device_data = knc,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
 	prev_cgpu = cgpu;
@@ -156,13 +206,10 @@ static bool knc_titan_init(struct thr_info * const thr)
 	const int max_cores = KNC_TITAN_CORES_PER_ASIC;
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
-	struct knc_titan_info *knc;
 	struct knc_titan_core *knccore;
-	int i, asic;
-
-	knc = calloc(1, sizeof(*knc));
-	if (unlikely(!knc))
-		quit(1, "Failed to alloc knc_titan_info");
+	struct knc_titan_info *knc;
+	int i, asic, die, core_base;
+	int total_cores = 0;
 
 	for (proc = cgpu; proc; ) {
 		if (proc->device != proc) {
@@ -172,34 +219,78 @@ static bool knc_titan_init(struct thr_info * const thr)
 		}
 
 		asic = atoi(proc->device_path);
+		knc = proc->device_data;
 
+		die = 0;
+		core_base = 0;
 		for (i = 0; i < max_cores; ++i) {
+			while (i >= (core_base + knc->dies[asic][die].cores)) {
+				core_base += knc->dies[asic][die].cores;
+				if (++die >= KNC_TITAN_DIES_PER_ASIC)
+					break;
+			}
+			if (die >= KNC_TITAN_DIES_PER_ASIC)
+				break;
+
 			mythr = proc->thr[0];
 			mythr->cgpu_data = knccore = malloc(sizeof(*knccore));
 			if (unlikely(!knccore))
 				quit(1, "Failed to alloc knc_titan_core");
 			*knccore = (struct knc_titan_core) {
 				.asicno = asic,
-				.coreno = i,
+				.dieno = die,
+				.coreno = i - core_base,
+				.die = &(knc->dies[asic][die]),
+				.proc = proc,
 				.hwerr_in_row = 0,
 				.hwerr_disable_time = KNC_TITAN_HWERR_DISABLE_SECS,
 			};
 			timer_set_now(&knccore->enable_at);
 			proc->device_data = knc;
+			++total_cores;
+			applog(LOG_DEBUG, "%s Allocated core %d:%d:%d", proc->device->dev_repr, asic, die, (i - core_base));
 
 			proc = proc->next_proc;
 			if ((!proc) || proc->device == proc)
 				break;
 		}
+
+		knc->cores = total_cores;
 	}
 
-	*knc = (struct knc_titan_info) {
-		.spi = &global_spi,
-		.cgpu = cgpu,
-		.freq = KNC_TITAN_DEFAULT_FREQUENCY,
+	cgpu_set_defaults(cgpu);
+	if (0 >= total_cores)
+		return false;
+
+	/* Init nonce ranges for cores */
+	double nonce_step = 4294967296.0 / total_cores;
+	double nonce_f = 0.0;
+	struct titan_setup_core_params setup_params = {
+		.bad_address_mask = {0, 0},
+		.bad_address_match = {0x3FF, 0x3FF},
+		.difficulty = 0xC,
+		.thread_enable = 0xFF,
+		.thread_base_address = {0, 1, 2, 3, 4, 5, 6, 7},
+		.lookup_gap_mask = {0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7},
+		.N_mask = {0, 0, 0, 0, 0, 0, 0, 0},
+		.N_shift = {0, 0, 0, 0, 0, 0, 0, 0},
+		.nonce_bottom = 0,
+		.nonce_top = 0xFFFFFFFF,
 	};
 
-	cgpu_set_defaults(cgpu);
+	for (proc = cgpu; proc; proc = proc->next_proc) {
+		nonce_f += nonce_step;
+		setup_params.nonce_bottom = setup_params.nonce_top + 1;
+		if (NULL != proc->next_proc)
+			setup_params.nonce_top = nonce_f;
+		else
+			setup_params.nonce_top = 0xFFFFFFFF;
+		knc = proc->device_data;
+		mythr = proc->thr[0];
+		knccore = mythr->cgpu_data;
+		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
+		knc_titan_setup_core(proc->device->dev_repr, knc->spi, &setup_params, knccore->dieno, knccore->coreno);
+	}
 
 	return true;
 }
@@ -218,8 +309,6 @@ static int64_t knc_titan_scanhash(struct thr_info *thr, struct work *work, int64
  */
 static void knc_titan_set_clock_freq(struct cgpu_info * const device, int const val)
 {
-	struct knc_titan_info * const info = device->device_data;
-	info->freq = val;
 }
 
 static const char *knc_titan_set_clock(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
