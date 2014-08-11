@@ -24,6 +24,8 @@
 
 #define KNC_TITAN_HWERR_DISABLE_SECS	10
 
+#define	KNC_POLL_INTERVAL_US		10000
+
 #define	KNC_TITAN_SPI_SPEED		3000000
 #define	KNC_TITAN_SPI_DELAY		0
 #define	KNC_TITAN_SPI_MODE		(SPI_CPHA | SPI_CPOL | SPI_CS_HIGH)
@@ -39,6 +41,8 @@ struct knc_titan_core {
 	int coreno; /* inside die */
 	struct knc_titan_die *die;
 	struct cgpu_info *proc;
+
+	int next_slot;
 
 	int hwerr_in_row;
 	int hwerr_disable_time;
@@ -60,6 +64,14 @@ struct knc_titan_info {
 	struct cgpu_info *cgpu;
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
+
+	bool need_flush;
+	struct work *workqueue;
+	int workqueue_size;
+	int workqueue_max;
+	int next_id;
+
+	struct work *devicework;
 };
 
 static bool knc_titan_spi_open(const char *repr, struct spi_port * const spi)
@@ -126,6 +138,7 @@ static bool knc_titan_detect_one(const char *devpath)
 
 		knc->spi = spi;
 		knc->cgpu = cgpu;
+		knc->workqueue_max = 1;
 	} else {
 		knc = prev_cgpu->device_data;
 		spi = knc->spi;
@@ -240,6 +253,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 				.asicno = asic,
 				.dieno = die,
 				.coreno = i - core_base,
+				.next_slot = 1,
 				.die = &(knc->dies[asic][die]),
 				.proc = proc,
 				.hwerr_in_row = 0,
@@ -292,12 +306,152 @@ static bool knc_titan_init(struct thr_info * const thr)
 		knc_titan_setup_core(proc->device->dev_repr, knc->spi, &setup_params, knccore->dieno, knccore->coreno);
 	}
 
+	timer_set_now(&thr->tv_poll);
+
 	return true;
 }
 
-static int64_t knc_titan_scanhash(struct thr_info *thr, struct work *work, int64_t __maybe_unused max_nonce)
+static void knc_titan_set_queue_full(struct knc_titan_info * const knc)
 {
-	return 0;
+	const bool full = (knc->workqueue_size >= knc->workqueue_max);
+	struct cgpu_info *proc;
+
+	for (proc = knc->cgpu; proc; proc = proc->next_proc) {
+		struct thr_info * const thr = proc->thr[0];
+		thr->queue_full = full;
+	}
+}
+
+static void knc_titan_remove_local_queue(struct knc_titan_info * const knc, struct work * const work)
+{
+	DL_DELETE(knc->workqueue, work);
+	free_work(work);
+	--knc->workqueue_size;
+}
+
+static void knc_titan_prune_local_queue(struct thr_info *thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct knc_titan_info * const knc = cgpu->device_data;
+	struct work *work, *tmp;
+
+	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
+		if (stale_work(work, false))
+			knc_titan_remove_local_queue(knc, work);
+	}
+	knc_titan_set_queue_full(knc);
+}
+
+static bool knc_titan_queue_append(struct thr_info * const thr, struct work * const work)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct knc_titan_info * const knc = cgpu->device_data;
+
+	if (knc->workqueue_size >= knc->workqueue_max) {
+		knc_titan_prune_local_queue(thr);
+		if (thr->queue_full)
+			return false;
+	}
+
+	DL_APPEND(knc->workqueue, work);
+	++knc->workqueue_size;
+
+	knc_titan_set_queue_full(knc);
+	if (thr->queue_full)
+		knc_titan_prune_local_queue(thr);
+
+	return true;
+}
+
+#define HASH_LAST_ADDED(head, out)  \
+	(out = (head) ? (ELMT_FROM_HH((head)->hh.tbl, (head)->hh.tbl->tail)) : NULL)
+
+static void knc_titan_queue_flush(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct knc_titan_info * const knc = cgpu->device_data;
+	struct work *work, *tmp;
+
+	if (knc->cgpu != cgpu)
+		return;
+
+	DL_FOREACH_SAFE(knc->workqueue, work, tmp){
+		knc_titan_remove_local_queue(knc, work);
+	}
+	knc_titan_set_queue_full(knc);
+
+	HASH_LAST_ADDED(knc->devicework, work);
+	if (work && stale_work(work, true)) {
+		knc->need_flush = true;
+		timer_set_now(&thr->tv_poll);
+	}
+}
+
+static void knc_titan_poll(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct knc_titan_info * const knc = cgpu->device_data;
+	struct spi_port * const spi = knc->spi;
+	struct knc_titan_core *knccore;
+	struct work *work, *tmp;
+	int workaccept = 0;
+	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
+	struct titan_report report;
+	bool urgent = false;
+
+	knc_titan_prune_local_queue(thr);
+
+	spi_clear_buf(spi);
+	if (knc->need_flush) {
+		applog(LOG_NOTICE, "%s: Flushing stale works", knc_titan_drv.dname);
+		urgent = true;
+	}
+	knccore = cgpu->thr[0]->cgpu_data;
+	DL_FOREACH(knc->workqueue, work) {
+		bool work_accepted;
+		if (!knc_titan_set_work(cgpu->dev_repr, knc->spi, &report, 0, 0xFFFF, knccore->next_slot, work, urgent, &work_accepted))
+			work_accepted = false;
+		if (!work_accepted)
+			break;
+		if (++(knccore->next_slot) >= 16)
+			knccore->next_slot = 1;
+		urgent = false;
+		++workaccept;
+	}
+
+	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
+
+	while (true) {
+		/* TODO: collect reports from processors */
+	}
+
+	if (knc->need_flush) {
+		knc->need_flush = false;
+		HASH_ITER(hh, knc->devicework, work, tmp)
+		{
+			HASH_DEL(knc->devicework, work);
+			free_work(work);
+		}
+		delay_usecs = 0;
+	}
+
+	if (workaccept) {
+		if (workaccept >= knc->workqueue_max) {
+			knc->workqueue_max = workaccept;
+			delay_usecs = 0;
+		}
+		DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
+			--knc->workqueue_size;
+			DL_DELETE(knc->workqueue, work);
+			work->device_id = knc->next_id++;
+			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
+			if (!--workaccept)
+				break;
+		}
+		knc_titan_set_queue_full(knc);
+	}
+
+	timer_set_delay_from_now(&thr->tv_poll, delay_usecs);
 }
 
 /*
@@ -367,11 +521,11 @@ struct device_drv knc_titan_drv =
 
 	.thread_init = knc_titan_init,
 
-	/* specify mining type - scanhash */
-	.minerloop = minerloop_scanhash,
-
-	/* scanhash mining hooks */
-	.scanhash = knc_titan_scanhash,
+	/* specify mining type - queue */
+	.minerloop = minerloop_queue,
+	.queue_append = knc_titan_queue_append,
+	.queue_flush = knc_titan_queue_flush,
+	.poll = knc_titan_poll,
 
 	/* TUI support - e.g. setting clock via UI */
 #ifdef HAVE_CURSES

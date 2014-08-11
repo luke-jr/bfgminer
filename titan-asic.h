@@ -45,7 +45,7 @@ struct titan_setup_core_params {
 
 bool knc_titan_spi_get_info(const char *repr, struct spi_port * const spi, struct titan_info_response *resp, int die, int core_hint);
 bool knc_titan_get_report(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core);
-bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core, int slot, struct work *work, bool urgent);
+bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted);
 bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct titan_setup_core_params *params, int die, int core);
 
 #endif /* __TITAN_ASIC_H */

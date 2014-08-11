@@ -40,7 +40,7 @@
 /* send_size - size of send_buf, without crc
  * transfer_size - total size of transfer
  */
-static uint8_t * spi_transfer(struct spi_port * const spi, uint8_t *send_buf, int send_size, int transfer_size, int rcv_crc_data_len, uint32_t *errors)
+static uint8_t * spi_transfer(struct spi_port * const spi, uint8_t *send_buf, int send_size, int transfer_size, int rcv_crc_data_len, uint32_t *errors, bool *work_accepted)
 {
 	uint8_t *rxbuf, crcbuf[CRC32_SIZE];
 	uint32_t crc;
@@ -52,6 +52,7 @@ static uint8_t * spi_transfer(struct spi_port * const spi, uint8_t *send_buf, in
 	}
 
 	*errors = 0;
+	*work_accepted = false;
 	if (transfer_size < min_transfer_size) {
 exit_other_error:
 		*errors |= ERR_OTHER_ERR;
@@ -80,7 +81,7 @@ exit_other_error:
 		if (crc != be32toh(*((uint32_t *)crcbuf)))
 			*errors |= ERR_RCV_CRC_FAIL;
 	}
-
+	*work_accepted = ((0 == *errors) && (rcv_status & RCV_STATUS_ACCEPTED_WORK));
 #if 0
 	{
 		uint8_t *txbuf = spi_gettxbuf(spi);
@@ -115,9 +116,10 @@ bool knc_titan_spi_get_info(const char *repr, struct spi_port * const spi, struc
 	uint16_t revision;
 	int transfer_size = 24 + ((core_hint + 3) / 4);
 	int i, core;
+	bool unused;
 
 	for (i = 0; i < 3; ++i) {
-		rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors);
+		rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors, &unused);
 		if (NULL == rxbuf) {
 exit_unrec_error:	applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: Unrecognized error", repr, die);
 			return false;
@@ -147,7 +149,7 @@ exit_bad_revision:	applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: Bad revision 
 			applog(LOG_NOTICE, "%s[%d] core hint %d might be wrong, new guess is %d", repr, die, core_hint, resp->cores);
 			transfer_size = 24 + ((resp->cores + 3) / 4);
 			for (i = 0; i < 3; ++i) {
-				rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors);
+				rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors, &unused);
 				if (NULL == rxbuf)
 					goto exit_unrec_error;
 				if (errors != ERR_SEND_CRC_FAIL)
@@ -208,7 +210,7 @@ static void knc_titan_parse_get_report(uint8_t *data, struct titan_report *repor
 	}
 }
 
-bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core, int slot, struct work *work, bool urgent)
+bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted)
 {
 #define	SETWORK_CMD_SIZE	(5 + BLOCK_HEADER_BYTES_WITHOUT_NONCE)
 	uint8_t set_work_cmd_aligned[3 + SETWORK_CMD_SIZE] = {
@@ -232,7 +234,7 @@ bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct ti
 	for (i = 0; i < (BLOCK_HEADER_BYTES_WITHOUT_NONCE / 4); ++i)
 		dst[i] = htobe32(src[i]);
 
-	rxbuf = spi_transfer(spi, &set_work_cmd_aligned[3], send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors);
+	rxbuf = spi_transfer(spi, &set_work_cmd_aligned[3], send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors, work_accepted);
 	if (NULL == rxbuf) {
 		applog(LOG_ERR, "%s[%d:%d] knc_titan_set_work: Unrecognized error", repr, die, core);
 		return false;
@@ -252,8 +254,9 @@ bool knc_titan_get_report(const char *repr, struct spi_port * const spi, struct 
 	const int transfer_size = send_size + 2 + KNC_TITAN_NONCES_PER_REPORT * 5 + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
 	uint8_t *rxbuf;
 	uint32_t errors;
+	bool unused;
 
-	rxbuf = spi_transfer(spi, get_report_cmd, send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors);
+	rxbuf = spi_transfer(spi, get_report_cmd, send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors, &unused);
 	if (NULL == rxbuf) {
 		applog(LOG_ERR, "%s[%d:%d] knc_titan_get_report: Unrecognized error", repr, die, core);
 		return false;
@@ -280,6 +283,7 @@ bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct 
 	const int transfer_size = send_size + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
 	uint8_t *rxbuf;
 	uint32_t errors;
+	bool unused;
 	uint32_t *src, *dst;
 	int i;
 	struct titan_packed_core_params {
@@ -482,7 +486,7 @@ bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct 
 	for (i = 0; i < (sizeof(packed_params) / 4); ++i)
 		dst[i] = htobe32(src[i]);
 
-	rxbuf = spi_transfer(spi, setup_core_cmd, send_size, transfer_size, 0, &errors);
+	rxbuf = spi_transfer(spi, setup_core_cmd, send_size, transfer_size, 0, &errors, &unused);
 	if (NULL == rxbuf) {
 		applog(LOG_ERR, "%s[%d:%d] knc_titan_setup_core: Unrecognized error", repr, die, core);
 		return false;
