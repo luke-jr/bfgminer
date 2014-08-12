@@ -15,6 +15,7 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/epoll.h>
@@ -25,6 +26,8 @@
 #include "deviceapi.h"
 #include "logging.h"
 #include "miner.h"
+
+#define MINERGATE_MAX_NONCE_DIFF  0x20
 
 #define MINERGATE_PROTOCOL_VER  6
 #define MINERGATE_MAGIC  0xcaf4
@@ -234,7 +237,15 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 	memcpy(&my_buf[   8], &work->data[0x44], 4);  // ntime
 	memcpy(&my_buf[0x0c], &work->data[0x40], 4);  // merkle-tail
 	memcpy(&my_buf[0x10], work->midstate, 0x20);
-	pk_u8(my_buf, 0x30, 0x20);  // search leading zeros
+	
+	if (work->work_difficulty >= MINERGATE_MAX_NONCE_DIFF)
+		work->nonce_diff = MINERGATE_MAX_NONCE_DIFF;
+	else
+		work->nonce_diff = work->work_difficulty;
+	const uint16_t zerobits = log2(floor(work->nonce_diff * 4294967296));
+	work->nonce_diff = pow(2, zerobits) / 4294967296;
+	pk_u8(my_buf, 0x30, zerobits);
+	
 	pk_u8(my_buf, 0x31,    0);  // ntime limit
 	pk_u8(my_buf, 0x32,    0);  // ntime offset
 	pk_u8(my_buf, 0x33,    0);  // reserved
