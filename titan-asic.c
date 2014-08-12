@@ -229,10 +229,18 @@ bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct ti
 	uint32_t *src, *dst;
 	uint32_t errors;
 
-	src = (uint32_t *)work->data;
-	dst = (uint32_t *)(&set_work_cmd_aligned[3 + 5]);
-	for (i = 0; i < (BLOCK_HEADER_BYTES_WITHOUT_NONCE / 4); ++i)
-		dst[i] = htobe32(src[i]);
+	if (NULL != work) {
+		src = (uint32_t *)work->data;
+		dst = (uint32_t *)(&set_work_cmd_aligned[3 + 5]);
+		for (i = 0; i < (BLOCK_HEADER_BYTES_WITHOUT_NONCE / 4); ++i)
+			dst[i] = htobe32(src[i]);
+	} else {
+		/* Empty work is allowed only for the "purge" (slot = 0) operation */
+		if (0 != slot) {
+			applog(LOG_ERR, "%s[%d:%d] knc_titan_set_work: Invalid work", repr, die, core);
+			return false;
+		}
+	}
 
 	rxbuf = spi_transfer(spi, &set_work_cmd_aligned[3], send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors, work_accepted);
 	if (NULL == rxbuf) {

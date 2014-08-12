@@ -201,8 +201,7 @@ static int knc_titan_detect_auto(void)
 	char devpath[256];
 	int found = 0, i;
 
-	for (i = first; i <= last; ++i)
-	{
+	for (i = first; i <= last; ++i) {
 		sprintf(devpath, "%d", i);
 		if (knc_titan_detect_one(devpath))
 			++found;
@@ -214,6 +213,13 @@ static int knc_titan_detect_auto(void)
 static void knc_titan_detect(void)
 {
 	generic_detect(&knc_titan_drv, knc_titan_detect_one, knc_titan_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
+}
+
+static void knc_titan_clean_flush(const char *repr, struct spi_port * const spi, int die)
+{
+	struct titan_report report;
+	bool unused;
+	knc_titan_set_work(repr, spi, &report, die, 0xFFFF, 0, NULL, true, &unused);
 }
 
 static bool knc_titan_init(struct thr_info * const thr)
@@ -265,6 +271,9 @@ static bool knc_titan_init(struct thr_info * const thr)
 			proc->device_data = knc;
 			++total_cores;
 			applog(LOG_DEBUG, "%s Allocated core %d:%d:%d", proc->device->dev_repr, asic, die, (i - core_base));
+
+			if (0 == knccore->coreno)
+				knc_titan_clean_flush(proc->device->dev_repr, knc->spi, knccore->dieno);
 
 			proc = proc->next_proc;
 			if ((!proc) || proc->device == proc)
