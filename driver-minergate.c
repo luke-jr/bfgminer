@@ -397,6 +397,31 @@ bool minergate_get_stats(struct cgpu_info * const dev)
 	return true;
 }
 
+static
+struct api_data *minergate_api_extra_device_status(struct cgpu_info * const dev)
+{
+	struct thr_info * const thr = dev->thr[0];
+	struct minergate_state * const state = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	mutex_lock(&dev->device_mutex);
+	if (state->stats_count > 1)
+	{
+		char buf[0x10];
+		for (unsigned i = 0; i < state->stats_count; ++i)
+		{
+			float temp = state->stats[i];
+			if (!temp)
+				continue;
+			sprintf(buf, "Temperature%u", i);
+			root = api_add_temp(root, buf, &temp, true);
+		}
+	}
+	mutex_unlock(&dev->device_mutex);
+	
+	return root;
+}
+
 struct device_drv minergate_drv = {
 	.dname = "minergate",
 	.name = "MGT",
@@ -410,4 +435,5 @@ struct device_drv minergate_drv = {
 	.poll = minergate_poll,
 	
 	.get_stats = minergate_get_stats,
+	.get_api_extra_device_status = minergate_api_extra_device_status,
 };
