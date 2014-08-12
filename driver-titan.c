@@ -403,7 +403,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct titan_info_response info_resp;
 	int asic = 0; /* TODO: the asic number must iterate from 0 to 5 */
 	int die = 0; /* TODO: the die number must iterate from 0 to 3 */
-	int core;
 	int i, tmp_int;
 
 	knc_titan_prune_local_queue(thr);
@@ -452,8 +451,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 				if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
 				    (report.nonces[i].nonce == knccore->last_nonce.nonce))
 					break;
-				knccore->last_nonce.slot = report.nonces[i].slot;
-				knccore->last_nonce.nonce = report.nonces[i].nonce;
 				tmp_int = report.nonces[i].slot;
 				HASH_FIND_INT(knc->devicework, &tmp_int, work);
 				if (!work) {
@@ -463,7 +460,11 @@ static void knc_titan_poll(struct thr_info * const thr)
 				if (submit_nonce(mythr, work, report.nonces[i].nonce))
 					knccore->hwerr_in_row = 0;
 			}
+			knccore->last_nonce.slot = report.nonces[0].slot;
+			knccore->last_nonce.nonce = report.nonces[0].nonce;
 		}
+		/* TODO: switch to next asic/die */
+		break;
 	}
 
 	if (workaccept) {
