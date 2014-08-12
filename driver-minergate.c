@@ -298,6 +298,7 @@ void minergate_poll(struct thr_info * const thr)
 	if (rsp_count || opt_dev_protocol)
 		applog(LOG_DEBUG, "%s: Received %u job completions", dev->dev_repr, rsp_count);
 	uint32_t nonce;
+	int64_t hashes = 0;
 	for (unsigned i = 0; i < rsp_count; ++i, (jobrsp += MINERGATE_PKT_RSP_ITEM_SZ))
 	{
 		work_device_id_t jobid = upk_u32be(jobrsp, 0);
@@ -327,8 +328,10 @@ void minergate_poll(struct thr_info * const thr)
 		}
 		
 		HASH_DEL(thr->work, work);
+		hashes += 100000000 * work->nonce_diff;
 		free_work(work);
 	}
+	hashes_done2(thr, hashes, NULL);
 	
 	minergate_queue_full(thr);
 	timer_set_delay_from_now(&thr->tv_poll, MINERGATE_POLL_US);
