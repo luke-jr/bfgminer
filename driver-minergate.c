@@ -15,6 +15,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -28,6 +29,8 @@
 #include "miner.h"
 
 #define MINERGATE_MAX_NONCE_DIFF  0x20
+
+static const char * const minergate_stats_file = "/var/run/mg_rate_temp";
 
 #define MINERGATE_PROTOCOL_VER  6
 #define MINERGATE_MAGIC  0xcaf4
@@ -54,6 +57,8 @@ struct minergate_state {
 	work_device_id_t next_jobid;
 	unsigned ready_to_queue;
 	uint8_t *req_buffer;
+	long *stats;
+	unsigned stats_count;
 };
 
 static
@@ -194,6 +199,7 @@ bool minergate_init(struct thr_info * const thr)
 	thr->cgpu_data = state;
 	thr->work = thr->work_list = NULL;
 	
+	mutex_init(&dev->device_mutex);
 	memset(state->req_buffer, 0, MINERGATE_PKT_REQ_SZ);
 	pk_u8(state->req_buffer, 2, MINERGATE_PROTOCOL_VER);
 	state->req_buffer[3] = MRPF_FIRST;
@@ -342,6 +348,55 @@ err:
 	timer_set_delay_from_now(&thr->tv_poll, MINERGATE_RETRY_US);
 }
 
+static
+bool minergate_get_stats(struct cgpu_info * const dev)
+{
+	static const int skip_stats = 1;
+	struct thr_info * const thr = dev->thr[0];
+	struct minergate_state * const state = thr->cgpu_data;
+	
+	FILE *F = fopen(minergate_stats_file, "r");
+	char buf[0x100];
+	if (F)
+	{
+		char *p = fgets(buf, sizeof(buf), F);
+		fclose(F);
+		if (p)
+		{
+			long nums[0x80];
+			char *endptr;
+			unsigned i;
+			float max_temp = 0;
+			for (i = 0; 1; ++i)
+			{
+				if (!p[0])
+					break;
+				nums[i] = strtol(p, &endptr, 0);
+				if (p == endptr)
+					break;
+				if (i >= skip_stats && nums[i] > max_temp)
+					max_temp = nums[i];
+				while (endptr[0] && !isspace(endptr[0]))
+					++endptr;
+				while (endptr[0] && isspace(endptr[0]))
+					++endptr;
+				p = endptr;
+			}
+			i -= skip_stats;
+			long *new_stats = malloc(sizeof(*state->stats) * i);
+			memcpy(new_stats, &nums[skip_stats], sizeof(*nums) * i);
+			mutex_lock(&dev->device_mutex);
+			free(state->stats);
+			state->stats = new_stats;
+			state->stats_count = i;
+			mutex_unlock(&dev->device_mutex);
+			dev->temp = max_temp;
+		}
+	}
+	
+	return true;
+}
+
 struct device_drv minergate_drv = {
 	.dname = "minergate",
 	.name = "MGT",
@@ -353,4 +408,6 @@ struct device_drv minergate_drv = {
 	.queue_append = minergate_queue_append,
 	.queue_flush = minergate_queue_flush,
 	.poll = minergate_poll,
+	
+	.get_stats = minergate_get_stats,
 };
