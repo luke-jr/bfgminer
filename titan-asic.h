@@ -13,6 +13,11 @@
 
 #define	KNC_TITAN_ASIC_REVISION		0xA102
 
+struct nonce_report {
+	uint32_t nonce;
+	uint8_t slot;
+};
+
 struct titan_info_response {
 	uint64_t pll_state;
 	uint16_t cores;
@@ -24,10 +29,7 @@ struct titan_report {
 	uint8_t flags;
 	uint8_t core_counter;
 	uint8_t slot_core;
-	struct nonce_report {
-		uint32_t nonce;
-		uint8_t slot;
-	} nonces[KNC_TITAN_NONCES_PER_REPORT];
+	struct nonce_report nonces[KNC_TITAN_NONCES_PER_REPORT];
 };
 
 struct titan_setup_core_params {

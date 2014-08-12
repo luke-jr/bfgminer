@@ -48,6 +48,8 @@ struct knc_titan_core {
 	int hwerr_disable_time;
 	struct timeval enable_at;
 	struct timeval first_hwerr;
+
+	struct nonce_report last_nonce;
 };
 
 struct knc_titan_die {
@@ -389,7 +391,8 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 
 static void knc_titan_poll(struct thr_info * const thr)
 {
-	struct cgpu_info * const cgpu = thr->cgpu;
+	struct thr_info *mythr;
+	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info * const knc = cgpu->device_data;
 	struct spi_port * const spi = knc->spi;
 	struct knc_titan_core *knccore;
@@ -397,56 +400,76 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int workaccept = 0;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
 	struct titan_report report;
-	bool urgent = false;
+	struct titan_info_response info_resp;
+	int asic = 0; /* TODO: the asic number must iterate from 0 to 5 */
+	int die = 0; /* TODO: the die number must iterate from 0 to 3 */
+	int core;
+	int i, tmp_int;
 
 	knc_titan_prune_local_queue(thr);
 
 	spi_clear_buf(spi);
-	if (knc->need_flush) {
-		applog(LOG_NOTICE, "%s: Flushing stale works", knc_titan_drv.dname);
-		urgent = true;
-	}
 	knccore = cgpu->thr[0]->cgpu_data;
-	DL_FOREACH(knc->workqueue, work) {
+	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
 		bool work_accepted;
-		if (!knc_titan_set_work(cgpu->dev_repr, knc->spi, &report, 0, 0xFFFF, knccore->next_slot, work, urgent, &work_accepted))
+		if (!knc_titan_set_work(cgpu->dev_repr, knc->spi, &report, die, 0xFFFF, knccore->next_slot, work, knc->need_flush, &work_accepted))
 			work_accepted = false;
 		if (!work_accepted)
 			break;
+		if (knc->need_flush) {
+			knc->need_flush = false;
+			applog(LOG_NOTICE, "%s: Flushing stale works", knc_titan_drv.dname);
+			HASH_ITER(hh, knc->devicework, work, tmp) {
+				HASH_DEL(knc->devicework, work);
+				free_work(work);
+			}
+			delay_usecs = 0;
+		}
+		--knc->workqueue_size;
+		DL_DELETE(knc->workqueue, work);
+		work->device_id = knccore->next_slot;
+		HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
 		if (++(knccore->next_slot) >= 16)
 			knccore->next_slot = 1;
-		urgent = false;
 		++workaccept;
 	}
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
 
 	while (true) {
-		/* TODO: collect reports from processors */
-	}
-
-	if (knc->need_flush) {
-		knc->need_flush = false;
-		HASH_ITER(hh, knc->devicework, work, tmp)
-		{
-			HASH_DEL(knc->devicework, work);
-			free_work(work);
+		if (0 >= knc->dies[asic][die].cores)
+			break;
+		if (!knc_titan_spi_get_info(cgpu->dev_repr, knc->spi, &info_resp, die, knc->dies[asic][die].cores))
+			break;
+		for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
+			mythr = proc->thr[0];
+			knccore = mythr->cgpu_data;
+			if (!info_resp.have_report[knccore->coreno])
+				continue;
+			if (!knc_titan_get_report(proc->proc_repr, knc->spi, &report, die, knccore->coreno))
+				continue;
+			for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
+				if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
+				    (report.nonces[i].nonce == knccore->last_nonce.nonce))
+					break;
+				knccore->last_nonce.slot = report.nonces[i].slot;
+				knccore->last_nonce.nonce = report.nonces[i].nonce;
+				tmp_int = report.nonces[i].slot;
+				HASH_FIND_INT(knc->devicework, &tmp_int, work);
+				if (!work) {
+					applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
+					continue;
+				}
+				if (submit_nonce(mythr, work, report.nonces[i].nonce))
+					knccore->hwerr_in_row = 0;
+			}
 		}
-		delay_usecs = 0;
 	}
 
 	if (workaccept) {
 		if (workaccept >= knc->workqueue_max) {
 			knc->workqueue_max = workaccept;
 			delay_usecs = 0;
-		}
-		DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
-			--knc->workqueue_size;
-			DL_DELETE(knc->workqueue, work);
-			work->device_id = knc->next_id++;
-			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
-			if (!--workaccept)
-				break;
 		}
 		knc_titan_set_queue_full(knc);
 	}
