@@ -98,7 +98,7 @@ struct knc_state {
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
 	int dies;
-	struct knc_die die[KNC_MAX_ASICS * KNC_DIES_PER_ASIC];
+	struct knc_die die[KNC_MAX_ASICS * KNC_MAX_DIES_PER_ASIC];
 	int cores;
 	int scan_adjust;
 	int startup;
@@ -282,7 +282,7 @@ static bool knc_detect_one(void *ctx)
 	int channel, die, cores = 0, core;
 	struct cgpu_info *cgpu;
 	struct knc_state *knc;
-	struct knc_die_info die_info[KNC_MAX_ASICS][KNC_DIES_PER_ASIC];
+	struct knc_die_info die_info[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
 
 	memset(die_info, 0, sizeof(die_info));
 
@@ -290,7 +290,7 @@ static bool knc_detect_one(void *ctx)
 	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
 		if (!knc_trnsp_asic_detect(ctx, channel))
 			continue;
-		for (die = 0; die < KNC_DIES_PER_ASIC; die++) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 		    if (knc_detect_die(ctx, channel, die, &die_info[channel][die]) == 0)
 			cores += die_info[channel][die].cores;
 		}
@@ -319,7 +319,7 @@ static bool knc_detect_one(void *ctx)
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
 	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
-		for (die = 0; die < KNC_DIES_PER_ASIC; die++) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
 				knc->die[dies].die = die;
