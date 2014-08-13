@@ -34,6 +34,7 @@
 /* Specify here minimum number of leading zeroes in hash */
 #define	DEFAULT_DIFF_FILTERING_ZEROES	12
 #define	DEFAULT_DIFF_FILTERING_FLOAT	(1. / ((double)(0x00000000FFFFFFFF >> DEFAULT_DIFF_FILTERING_ZEROES)))
+#define	DEFAULT_DIFF_HASHES_PER_NONCE	(1 << DEFAULT_DIFF_FILTERING_ZEROES)
 
 BFG_REGISTER_DRIVER(knc_titan_drv)
 
@@ -492,15 +493,17 @@ static void knc_titan_poll(struct thr_info * const thr)
 				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
 					if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
 					    (report.nonces[i].nonce == knccore->last_nonce.nonce))
-					break;
+						break;
 					tmp_int = report.nonces[i].slot;
 					HASH_FIND_INT(knc->devicework, &tmp_int, work);
 					if (!work) {
 						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
 						continue;
 					}
-					if (submit_nonce(mythr, work, report.nonces[i].nonce))
+					if (submit_nonce(mythr, work, report.nonces[i].nonce)) {
+						hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
 						knccore->hwerr_in_row = 0;
+					}
 				}
 			}
 			knccore->last_nonce.slot = report.nonces[0].slot;
