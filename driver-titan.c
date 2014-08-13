@@ -145,7 +145,7 @@ static bool knc_titan_detect_one(const char *devpath)
 
 		knc->spi = spi;
 		knc->cgpu = cgpu;
-		knc->workqueue_max = 1;
+		knc->workqueue_max = KNC_TITAN_WORKSLOTS_PER_CORE + 1;
 	} else {
 		knc = prev_cgpu->device_data;
 		spi = knc->spi;
