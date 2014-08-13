@@ -31,6 +31,10 @@
 #define	KNC_TITAN_SPI_MODE		(SPI_CPHA | SPI_CPOL | SPI_CS_HIGH)
 #define	KNC_TITAN_SPI_BITS		8
 
+/* Specify here minimum number of leading zeroes in hash */
+#define	DEFAULT_DIFF_FILTERING_ZEROES	12
+#define	DEFAULT_DIFF_FILTERING_FLOAT	(1. / ((double)(0x00000000FFFFFFFF >> DEFAULT_DIFF_FILTERING_ZEROES)))
+
 BFG_REGISTER_DRIVER(knc_titan_drv)
 
 static const struct bfg_set_device_definition knc_titan_set_device_funcs[];
@@ -233,6 +237,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	int total_cores = 0;
 
 	for (proc = cgpu; proc; ) {
+		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 		if (proc->device != proc) {
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
 			proc = proc->next_proc;
@@ -293,7 +298,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct titan_setup_core_params setup_params = {
 		.bad_address_mask = {0, 0},
 		.bad_address_match = {0x3FF, 0x3FF},
-		.difficulty = 0xC,
+		.difficulty = DEFAULT_DIFF_FILTERING_ZEROES,
 		.thread_enable = 0xFF,
 		.thread_base_address = {0, 1, 2, 3, 4, 5, 6, 7},
 		.lookup_gap_mask = {0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7},
@@ -319,6 +324,14 @@ static bool knc_titan_init(struct thr_info * const thr)
 
 	timer_set_now(&thr->tv_poll);
 
+	return true;
+}
+
+static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+
+	work->nonce_diff = cgpu->min_nonce_diff;
 	return true;
 }
 
@@ -559,6 +572,7 @@ struct device_drv knc_titan_drv =
 	.queue_append = knc_titan_queue_append,
 	.queue_flush = knc_titan_queue_flush,
 	.poll = knc_titan_poll,
+	.prepare_work = knc_titan_prepare_work,
 
 	/* TUI support - e.g. setting clock via UI */
 #ifdef HAVE_CURSES
