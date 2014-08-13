@@ -335,6 +335,20 @@ static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 	return true;
 }
 
+static void knc_titan_clear_last_nonce(struct knc_titan_info * const knc)
+{
+	struct thr_info * mythr;
+	struct cgpu_info *proc;
+	struct knc_titan_core *knccore;
+
+	for (proc = knc->cgpu; proc; proc = proc->next_proc) {
+		mythr = proc->thr[0];
+		knccore = mythr->cgpu_data;
+		knccore->last_nonce.slot = 0;
+		knccore->last_nonce.nonce = 0;
+	}
+}
+
 static void knc_titan_set_queue_full(struct knc_titan_info * const knc)
 {
 	const bool full = (knc->workqueue_size >= knc->workqueue_max);
@@ -416,7 +430,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info * const knc = cgpu->device_data;
-	struct spi_port * const spi = knc->spi;
 	struct knc_titan_core *knccore;
 	struct work *work, *tmp;
 	int workaccept = 0;
@@ -429,7 +442,9 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	knc_titan_prune_local_queue(thr);
 
-	spi_clear_buf(spi);
+	if (knc->need_flush)
+		knc_titan_clear_last_nonce(knc);
+
 	knccore = cgpu->thr[0]->cgpu_data;
 	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
 		bool work_accepted;
@@ -472,18 +487,21 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			if (!knc_titan_get_report(proc->proc_repr, knc->spi, &report, die, knccore->coreno))
 				continue;
-			for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-				if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
-				    (report.nonces[i].nonce == knccore->last_nonce.nonce))
+			/* if last_nonce.slot == 0, then there was a flush and all reports are stale */
+			if (0 != knccore->last_nonce.slot) {
+				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
+					if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
+					    (report.nonces[i].nonce == knccore->last_nonce.nonce))
 					break;
-				tmp_int = report.nonces[i].slot;
-				HASH_FIND_INT(knc->devicework, &tmp_int, work);
-				if (!work) {
-					applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
-					continue;
+					tmp_int = report.nonces[i].slot;
+					HASH_FIND_INT(knc->devicework, &tmp_int, work);
+					if (!work) {
+						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
+						continue;
+					}
+					if (submit_nonce(mythr, work, report.nonces[i].nonce))
+						knccore->hwerr_in_row = 0;
 				}
-				if (submit_nonce(mythr, work, report.nonces[i].nonce))
-					knccore->hwerr_in_row = 0;
 			}
 			knccore->last_nonce.slot = report.nonces[0].slot;
 			knccore->last_nonce.nonce = report.nonces[0].nonce;
