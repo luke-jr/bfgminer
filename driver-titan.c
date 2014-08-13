@@ -438,11 +438,12 @@ static void knc_titan_poll(struct thr_info * const thr)
 		if (!work_accepted)
 			break;
 		if (knc->need_flush) {
+			struct work *work1, *tmp1;
 			knc->need_flush = false;
 			applog(LOG_NOTICE, "%s: Flushing stale works", knc_titan_drv.dname);
-			HASH_ITER(hh, knc->devicework, work, tmp) {
-				HASH_DEL(knc->devicework, work);
-				free_work(work);
+			HASH_ITER(hh, knc->devicework, work1, tmp1) {
+				HASH_DEL(knc->devicework, work1);
+				free_work(work1);
 			}
 			delay_usecs = 0;
 		}
