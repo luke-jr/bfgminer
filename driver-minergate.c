@@ -59,6 +59,7 @@ struct minergate_state {
 	uint8_t *req_buffer;
 	long *stats;
 	unsigned stats_count;
+	struct work *flushed_work;
 };
 
 static
@@ -236,6 +237,7 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 		return false;
 	
 	work->device_id = (uint32_t)(state->next_jobid++);
+	work->tv_stamp.tv_sec = 0;
 	
 	uint8_t * const my_buf = &state->req_buffer[MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * state->ready_to_queue++)];
 	pk_u32be(my_buf,  0, work->device_id);
@@ -287,6 +289,7 @@ void minergate_poll(struct thr_info * const thr)
 	if (MINERGATE_PKT_REQ_SZ != write(fd, state->req_buffer, MINERGATE_PKT_REQ_SZ))
 		return_via_applog(err, , LOG_ERR, "%s: write incomplete or failed", dev->dev_repr);
 	
+	uint8_t flags = state->req_buffer[3];
 	state->req_buffer[3] = 0;
 	state->ready_to_queue = 0;
 	thr->work_list = NULL;
@@ -334,10 +337,22 @@ void minergate_poll(struct thr_info * const thr)
 		}
 		
 		HASH_DEL(thr->work, work);
-		hashes += 100000000 * work->nonce_diff;
+		applog(LOG_DEBUG, "%s: %s job %"PRIwdi" completed", dev->dev_repr, work->tv_stamp.tv_sec ? "Flushed" : "Active", work->device_id);
+		if (!work->tv_stamp.tv_sec)
+			hashes += 100000000 * work->nonce_diff;
 		free_work(work);
 	}
 	hashes_done2(thr, hashes, NULL);
+	
+	if (flags & MRPF_FLUSH)
+	{
+		// Mark all remaining jobs as flushed so we don't count them in hashes_done
+		struct work *worktmp;
+		HASH_ITER(hh, thr->work, work, worktmp)
+		{
+			work->tv_stamp.tv_sec = 1;
+		}
+	}
 	
 	minergate_queue_full(thr);
 	timer_set_delay_from_now(&thr->tv_poll, MINERGATE_POLL_US);
