@@ -231,6 +231,7 @@ bool minergate_queue_full(struct thr_info * const thr)
 static
 bool minergate_queue_append(struct thr_info * const thr, struct work * const work)
 {
+	struct cgpu_info * const dev = thr->cgpu;
 	struct minergate_state * const state = thr->cgpu_data;
 	
 	if (minergate_queue_full(thr))
@@ -258,6 +259,14 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 	pk_u8(my_buf, 0x32,    0);  // ntime offset
 	pk_u8(my_buf, 0x33,    0);  // reserved
 	
+	struct work *oldwork;
+	HASH_FIND(hh, thr->work, &work->device_id, sizeof(work->device_id), oldwork);
+	if (unlikely(oldwork))
+	{
+		applog(LOG_WARNING, "%s: Reusing allocated device id %"PRIwdi, dev->dev_repr, work->device_id);
+		HASH_DEL(thr->work, oldwork);
+		free_work(oldwork);
+	}
 	HASH_ADD(hh, thr->work, device_id, sizeof(work->device_id), work);
 	LL_PREPEND(thr->work_list, work);
 	timer_set_delay_from_now(&thr->tv_poll, 0);
