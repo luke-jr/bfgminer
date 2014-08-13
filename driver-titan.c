@@ -466,6 +466,8 @@ static void knc_titan_poll(struct thr_info * const thr)
 		for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
 			mythr = proc->thr[0];
 			knccore = mythr->cgpu_data;
+			if ((knccore->dieno != die) || (knccore->asicno != asic))
+				break;
 			if (!info_resp.have_report[knccore->coreno])
 				continue;
 			if (!knc_titan_get_report(proc->proc_repr, knc->spi, &report, die, knccore->coreno))
