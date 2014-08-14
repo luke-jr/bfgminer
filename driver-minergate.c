@@ -222,6 +222,10 @@ bool minergate_queue_full(struct thr_info * const thr)
 	if (state->ready_to_queue >= max_requests)
 		qf = true;
 	else
+	if (state->req_buffer[3] & MRPF_FLUSH)
+		// Job flush occurs after new jobs get queued, so we have to wait until it completes
+		qf = true;
+	else
 		qf = false;
 	
 	thr->queue_full = qf;
