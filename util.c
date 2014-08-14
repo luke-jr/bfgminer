@@ -2396,6 +2396,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	if (pool->next_nonce1)
+	{
+		free(pool->swork.nonce1);
+		pool->n1_len = strlen(pool->next_nonce1) / 2;
+		pool->swork.nonce1 = pool->next_nonce1;
+		pool->next_nonce1 = NULL;
+	}
+	int n2size = pool->swork.n2size = pool->next_n2size;
+	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
+#ifdef WORDS_BIGENDIAN
+	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
+#endif
+	
 	hex2bin(&pool->swork.header1[0], bbversion,  4);
 	hex2bin(&pool->swork.header1[4], prev_hash, 32);
 	hex2bin((void*)&pool->swork.ntime, ntime, 4);
@@ -2993,14 +3006,9 @@ resend:
 	cg_wlock(&pool->data_lock);
 	free(pool->sessionid);
 	pool->sessionid = sessionid;
-	free(pool->swork.nonce1);
-	pool->swork.nonce1 = nonce1;
-	pool->n1_len = strlen(nonce1) / 2;
-	pool->swork.n2size = n2size;
-	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
-#ifdef WORDS_BIGENDIAN
-	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
-#endif
+	free(pool->next_nonce1);
+	pool->next_nonce1 = nonce1;
+	pool->next_n2size = n2size;
 	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)
@@ -3021,7 +3029,7 @@ out:
 		set_target_to_pdiff(pool->next_target, 1);
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
-			       pool->pool_no, pool->swork.nonce1, pool->swork.n2size);
+			       pool->pool_no, pool->next_nonce1, pool->next_n2size);
 		}
 	} else {
 		if (recvd)
