@@ -2776,10 +2776,24 @@ bool auth_stratum(struct pool *pool)
 		if (parse_method(pool, sret))
 			free(sret);
 		else
-			break;
+		{
+			bool unknown = true;
+			val = JSON_LOADS(sret, &err);
+			json_t *j_id = json_object_get(val, "id");
+			if (json_is_string(j_id))
+			{
+				if (!strcmp(json_string_value(j_id), "auth"))
+					break;
+				else
+				if (!strcmp(json_string_value(j_id), "xnsub"))
+					unknown = false;
+			}
+			if (unknown)
+				applog(LOG_WARNING, "Pool %u: Unknown stratum msg: %s", pool->pool_no, sret);
+			free(sret);
+		}
 	}
 
-	val = JSON_LOADS(sret, &err);
 	free(sret);
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
@@ -3106,7 +3120,7 @@ out:
 		
 		if (uri_get_param_bool(pool->rpc_url, "xnsub", false))
 		{
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.extranonce.subscribe\", \"params\": []}", swork_id++);
+			sprintf(s, "{\"id\": \"xnsub\", \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
 			_stratum_send(pool, s, strlen(s), true);
 		}
 	} else {
