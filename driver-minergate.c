@@ -283,9 +283,20 @@ static
 void minergate_queue_flush(struct thr_info * const thr)
 {
 	struct minergate_state * const state = thr->cgpu_data;
+	struct work *work, *worktmp;
 	
-	// TODO: prune state->ready_to_queue
+	// Flush internal ready-to-queue list
+	LL_FOREACH_SAFE(thr->work_list, work, worktmp)
+	{
+		HASH_DEL(thr->work, work);
+		LL_DELETE(thr->work_list, work);
+		free_work(work);
+	}
+	state->ready_to_queue = 0;
+	
+	// Trigger minergate flush
 	state->req_buffer[3] |= MRPF_FLUSH;
+	
 	timer_set_delay_from_now(&thr->tv_poll, 0);
 }
 
