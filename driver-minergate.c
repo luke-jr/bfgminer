@@ -203,8 +203,9 @@ bool minergate_init(struct thr_info * const thr)
 	mutex_init(&dev->device_mutex);
 	memset(state->req_buffer, 0, MINERGATE_PKT_REQ_SZ);
 	pk_u8(state->req_buffer, 2, MINERGATE_PROTOCOL_VER);
-	state->req_buffer[3] = MRPF_FIRST;
+	state->req_buffer[3] = MRPF_FIRST | MRPF_FLUSH;
 	pk_u16le(state->req_buffer, 4, MINERGATE_MAGIC);
+	timer_set_delay_from_now(&thr->tv_poll, 0);
 	
 	return true;
 }
