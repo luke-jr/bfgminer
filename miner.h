@@ -1344,6 +1344,7 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
+	uint8_t next_target[0x20];
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
 	char *admin_msg;

@@ -2421,6 +2421,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		hex2bin(&bytes_buf(&pool->swork.merkle_bin)[i * 32], json_string_value(json_array_get(arr, i)), 32);
 	pool->swork.merkles = merkles;
 	pool->nonce2 = 0;
+	
+	memcpy(pool->swork.target, pool->next_target, 0x20);
+	
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
@@ -2490,7 +2493,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 #endif
 
 	cg_wlock(&pool->data_lock);
-	set_target_to_pdiff(pool->swork.target, diff);
+	set_target_to_pdiff(pool->next_target, diff);
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Pool %d stratum difficulty set to %g", pool->pool_no, diff);
@@ -3015,7 +3018,7 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
-		set_target_to_pdiff(pool->swork.target, 1);
+		set_target_to_pdiff(pool->next_target, 1);
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->swork.nonce1, pool->swork.n2size);
