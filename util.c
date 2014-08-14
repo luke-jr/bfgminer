@@ -2396,6 +2396,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	if (pool->next_nonce1)
+	{
+		free(pool->swork.nonce1);
+		pool->n1_len = strlen(pool->next_nonce1) / 2;
+		pool->swork.nonce1 = pool->next_nonce1;
+		pool->next_nonce1 = NULL;
+	}
+	int n2size = pool->swork.n2size = pool->next_n2size;
+	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
+#ifdef WORDS_BIGENDIAN
+	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
+#endif
+	
 	hex2bin(&pool->swork.header1[0], bbversion,  4);
 	hex2bin(&pool->swork.header1[4], prev_hash, 32);
 	hex2bin((void*)&pool->swork.ntime, ntime, 4);
@@ -2421,6 +2434,9 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		hex2bin(&bytes_buf(&pool->swork.merkle_bin)[i * 32], json_string_value(json_array_get(arr, i)), 32);
 	pool->swork.merkles = merkles;
 	pool->nonce2 = 0;
+	
+	memcpy(pool->swork.target, pool->next_target, 0x20);
+	
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Received stratum notify from pool %u with job_id=%s",
@@ -2490,11 +2506,77 @@ static bool parse_diff(struct pool *pool, json_t *val)
 #endif
 
 	cg_wlock(&pool->data_lock);
-	set_target_to_pdiff(pool->swork.target, diff);
+	set_target_to_pdiff(pool->next_target, diff);
 	cg_wunlock(&pool->data_lock);
 
 	applog(LOG_DEBUG, "Pool %d stratum difficulty set to %g", pool->pool_no, diff);
 
+	return true;
+}
+
+static
+bool stratum_set_extranonce(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	char *nonce1 = NULL;
+	int n2size = 0;
+	json_t *j;
+	
+	if (!json_is_array(params))
+		goto err;
+	switch (json_array_size(params))
+	{
+		default:  // >=2
+			// n2size
+			j = json_array_get(params, 1);
+			if (json_is_number(j))
+			{
+				n2size = json_integer_value(j);
+				if (n2size < 1)
+					goto err;
+			}
+			else
+			if (!json_is_null(j))
+				goto err;
+			// fallthru
+		case 1:
+			// nonce1
+			j = json_array_get(params, 0);
+			if (json_is_string(j))
+				nonce1 = strdup(json_string_value(j));
+			else
+			if (!json_is_null(j))
+				goto err;
+			break;
+		case 0:
+			applog(LOG_WARNING, "Pool %u: No-op mining.set_extranonce?", pool->pool_no);
+			return true;
+	}
+	
+	cg_wlock(&pool->data_lock);
+	if (nonce1)
+	{
+		free(pool->next_nonce1);
+		pool->next_nonce1 = nonce1;
+	}
+	if (n2size)
+		pool->next_n2size = n2size;
+	cg_wunlock(&pool->data_lock);
+	
+	return true;
+
+err:
+	applog(LOG_ERR, "Pool %u: Invalid mining.set_extranonce", pool->pool_no);
+	
+	json_t *id = json_object_get(val, "id");
+	if (id && !json_is_null(id))
+	{
+		char s[RBUFSIZE], *idstr;
+		idstr = json_dumps_ANY(id, 0);
+		sprintf(s, "{\"id\": %s, \"result\": null, \"error\": [20, \"Invalid params\"]}", idstr);
+		free(idstr);
+		stratum_send(pool, s, strlen(s));
+	}
+	
 	return true;
 }
 
@@ -2658,6 +2740,12 @@ bool parse_method(struct pool *pool, char *s)
 		ret = true;
 		goto out;
 	}
+	
+	if (!strncasecmp(buf, "mining.set_extranonce", 21) && stratum_set_extranonce(pool, val, params)) {
+		ret = true;
+		goto out;
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -2688,10 +2776,24 @@ bool auth_stratum(struct pool *pool)
 		if (parse_method(pool, sret))
 			free(sret);
 		else
-			break;
+		{
+			bool unknown = true;
+			val = JSON_LOADS(sret, &err);
+			json_t *j_id = json_object_get(val, "id");
+			if (json_is_string(j_id))
+			{
+				if (!strcmp(json_string_value(j_id), "auth"))
+					break;
+				else
+				if (!strcmp(json_string_value(j_id), "xnsub"))
+					unknown = false;
+			}
+			if (unknown)
+				applog(LOG_WARNING, "Pool %u: Unknown stratum msg: %s", pool->pool_no, sret);
+			free(sret);
+		}
 	}
 
-	val = JSON_LOADS(sret, &err);
 	free(sret);
 	res_val = json_object_get(val, "result");
 	err_val = json_object_get(val, "error");
@@ -2990,14 +3092,9 @@ resend:
 	cg_wlock(&pool->data_lock);
 	free(pool->sessionid);
 	pool->sessionid = sessionid;
-	free(pool->swork.nonce1);
-	pool->swork.nonce1 = nonce1;
-	pool->n1_len = strlen(nonce1) / 2;
-	pool->swork.n2size = n2size;
-	pool->nonce2sz  = (n2size > sizeof(pool->nonce2)) ? sizeof(pool->nonce2) : n2size;
-#ifdef WORDS_BIGENDIAN
-	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
-#endif
+	free(pool->next_nonce1);
+	pool->next_nonce1 = nonce1;
+	pool->next_n2size = n2size;
 	cg_wunlock(&pool->data_lock);
 
 	if (sessionid)
@@ -3015,10 +3112,16 @@ out:
 		if (!pool->stratum_url)
 			pool->stratum_url = pool->sockaddr_url;
 		pool->stratum_active = true;
-		set_target_to_pdiff(pool->swork.target, 1);
+		set_target_to_pdiff(pool->next_target, 1);
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
-			       pool->pool_no, pool->swork.nonce1, pool->swork.n2size);
+			       pool->pool_no, pool->next_nonce1, pool->next_n2size);
+		}
+		
+		if (uri_get_param_bool(pool->rpc_url, "xnsub", false))
+		{
+			sprintf(s, "{\"id\": \"xnsub\", \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
+			_stratum_send(pool, s, strlen(s), true);
 		}
 	} else {
 		if (recvd)

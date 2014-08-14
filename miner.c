@@ -9588,11 +9588,11 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 		if (pool->stratum_active)
 		{
 			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
-			if (memcmp(pool->swork.target, work->target, sizeof(work->target)))
+			if (memcmp(pool->next_target, work->target, sizeof(work->target)))
 			{
 				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
 				       pool->pool_no);
-				if (hash_target_check_v(work->hash, pool->swork.target))
+				if (hash_target_check_v(work->hash, pool->next_target))
 					high_hash = false;
 			}
 		}
