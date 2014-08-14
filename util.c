@@ -2514,6 +2514,72 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	return true;
 }
 
+static
+bool stratum_set_extranonce(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	char *nonce1 = NULL;
+	int n2size = 0;
+	json_t *j;
+	
+	if (!json_is_array(params))
+		goto err;
+	switch (json_array_size(params))
+	{
+		default:  // >=2
+			// n2size
+			j = json_array_get(params, 1);
+			if (json_is_number(j))
+			{
+				n2size = json_integer_value(j);
+				if (n2size < 1)
+					goto err;
+			}
+			else
+			if (!json_is_null(j))
+				goto err;
+			// fallthru
+		case 1:
+			// nonce1
+			j = json_array_get(params, 0);
+			if (json_is_string(j))
+				nonce1 = strdup(json_string_value(j));
+			else
+			if (!json_is_null(j))
+				goto err;
+			break;
+		case 0:
+			applog(LOG_WARNING, "Pool %u: No-op mining.set_extranonce?", pool->pool_no);
+			return true;
+	}
+	
+	cg_wlock(&pool->data_lock);
+	if (nonce1)
+	{
+		free(pool->next_nonce1);
+		pool->next_nonce1 = nonce1;
+	}
+	if (n2size)
+		pool->next_n2size = n2size;
+	cg_wunlock(&pool->data_lock);
+	
+	return true;
+
+err:
+	applog(LOG_ERR, "Pool %u: Invalid mining.set_extranonce", pool->pool_no);
+	
+	json_t *id = json_object_get(val, "id");
+	if (id && !json_is_null(id))
+	{
+		char s[RBUFSIZE], *idstr;
+		idstr = json_dumps_ANY(id, 0);
+		sprintf(s, "{\"id\": %s, \"result\": null, \"error\": [20, \"Invalid params\"]}", idstr);
+		free(idstr);
+		stratum_send(pool, s, strlen(s));
+	}
+	
+	return true;
+}
+
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	if (opt_disable_client_reconnect)
@@ -2674,6 +2740,12 @@ bool parse_method(struct pool *pool, char *s)
 		ret = true;
 		goto out;
 	}
+	
+	if (!strncasecmp(buf, "mining.set_extranonce", 21) && stratum_set_extranonce(pool, val, params)) {
+		ret = true;
+		goto out;
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -3030,6 +3102,12 @@ out:
 		if (opt_protocol) {
 			applog(LOG_DEBUG, "Pool %d confirmed mining.subscribe with extranonce1 %s extran2size %d",
 			       pool->pool_no, pool->next_nonce1, pool->next_n2size);
+		}
+		
+		if (uri_get_param_bool(pool->rpc_url, "xnsub", false))
+		{
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.extranonce.subscribe\", \"params\": []}", swork_id++);
+			_stratum_send(pool, s, strlen(s), true);
 		}
 	} else {
 		if (recvd)
