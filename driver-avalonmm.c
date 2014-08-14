@@ -166,7 +166,7 @@ bool avalonmm_detect_one(const char * const devpath)
 {
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
 	enum avalonmm_reply reply;
-	const int fd = serial_open(devpath, 0, 1, true);
+	const int fd = serial_open(devpath, 115200, 1, true);
 	struct cgpu_info *prev_cgpu = NULL;
 	if (fd == -1)
 		applogr(false, LOG_DEBUG, "%s: Failed to open %s", __func__, devpath);
