@@ -655,7 +655,6 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 			cgsleep_ms(10);
 			
 			struct cgpu_info *dev = NULL;
-			int n = 0;
 			for_each_managed_proc(proc, master_dev)
 			{
 				if (dev == proc->device)
@@ -668,9 +667,8 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 				pk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4, module->module_id);
 				
 				avalonmm_write_cmd(fd, AMC_POLL, buf, AVALONMM_PKT_DATA_SIZE);
-				++n;
+				avalonmm_poll(master_dev, 1);
 			}
-			avalonmm_poll(master_dev, n);
 		}
 	}
 }
