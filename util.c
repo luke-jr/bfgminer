@@ -2439,7 +2439,7 @@ size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t 
 	return size;
 }
 
-static size_t varint_decode(uint8_t *p, uint64_t *n)
+static size_t varint_decode(const uint8_t *p, uint64_t *n)
 {
 	int i;
 	if (p[0] == 0xff) {
@@ -2460,16 +2460,96 @@ static size_t varint_decode(uint8_t *p, uint64_t *n)
 	return 1;
 }
 
+static bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script )
+{
+	int i;
+	size_t pos;
+	uint64_t len, total, target, amount, curr_pk_script_len;
+	char addr[35];
+
+	if (cbsize < 90) { /* Smallest possible length */
+		applog(LOG_ERR, "Coinbase check: invalid length -- %zu", cbsize);
+		return false;
+	}
+	pos = 4; /* Skip the version */
+
+	if (varint_decode(coinbase + pos, &len) != 1 || len != 1) {
+		applog(LOG_ERR, "Coinbase check: multiple inputs (%ld) in coinbase", len);
+		return false;
+	}
+	pos += 1 /* varint length */ + 32 /* prevhash */ + 4 /* 0xffffffff */;
+
+	if (varint_decode(coinbase + pos, &len) != 1 || len > 100) {
+		applog(LOG_ERR, "Coinbase check: input script sig too long: %ld", len);
+		return false;
+	}
+	pos += 1 /* varint length */ + len + 4 /* 0xffffffff */; 
+
+	total = target = 0;
+
+	for (pos += varint_decode(coinbase + pos, &len); len > 0; --len) {
+		for (amount = 0, i = 7; i >= 0; --i)
+			amount = (amount << 8) + coinbase[pos + i];
+		total += amount;
+		pos += 8; /* amount length */
+
+		if (varint_decode(coinbase + pos, &curr_pk_script_len) != 1 || curr_pk_script_len > 25) {
+			applog(LOG_ERR, "Coinbase check: output script too long: %ld", curr_pk_script_len);
+			return false;
+		}
+		pos += 1 /* varint length */;
+
+		if (script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr) > sizeof(addr)) {
+			char script[51];
+			bin2hex(script, coinbase + pos, curr_pk_script_len);
+			applog(LOG_ERR, "Coinbase check: output script to an invalid address: %s", script);
+			return false;
+		}
+		if (compare_op && compare_op->op) {
+			i = (bytes_len(target_script) == curr_pk_script_len &&
+				!memcmp(bytes_buf(target_script), coinbase + pos, curr_pk_script_len));
+			if (i)
+				target += amount;
+		} /* else i = 0; has been set to 0 at the begin of iteration */
+		if (opt_debug)
+			applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
+		pos += curr_pk_script_len;
+	}
+	if (!total) {
+		applog(LOG_ERR, "Coinbase check: output no coins");
+		return false;
+	}
+	if (compare_op && compare_op->op) {
+		bool pass_cb_check;
+		float cb_perc = (double)target / total;
+		if (compare_op->op == '>')
+			pass_cb_check = (cb_perc > compare_op->value);
+		else if (compare_op->op == '<')
+			pass_cb_check = (cb_perc < compare_op->value);
+		else
+			pass_cb_check = (cb_perc == compare_op->value);
+		if (!pass_cb_check) {
+			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
+				cb_perc, target, total, compare_op->op, compare_op->value);
+			return false;
+		}
+		if (opt_debug)
+			applog(LOG_DEBUG, "Coinbase output: target/total = %g %c %g",
+				cb_perc, compare_op->op, compare_op->value);
+	}
+
+	return true;
+}
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	const char *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
 	char *job_id;
-	bool clean, pass_cb_check, ret = false;
+	bool clean, ret = false;
 	int merkles, i;
-	size_t cb1_len, cb2_len, pos;
+	size_t cb1_len, cb2_len, n1_len;
 	json_t *arr;
-	uint64_t len, total, target;
-	float cb_perc;
+	bytes_t new_coinbase;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
@@ -2496,6 +2576,21 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		goto out;
 
 	cg_wlock(&pool->data_lock);
+
+	cb1_len = strlen(coinbase1) / 2;
+	cb2_len = strlen(coinbase2) / 2;
+	n1_len = pool->next_nonce1 ? strlen(pool->next_nonce1) / 2 : pool->n1_len;
+	bytes_resize(&new_coinbase, cb1_len + n1_len + pool->next_n2size + cb2_len);
+	uint8_t *coinbase = bytes_buf(&new_coinbase);
+	hex2bin(coinbase, coinbase1, cb1_len);
+	hex2bin(coinbase + cb1_len + n1_len + pool->next_n2size, coinbase2, cb2_len);
+	if (!check_coinbase(coinbase, bytes_len(&new_coinbase), &opt_coinbase_perc_op, &opt_coinbase_script)) {
+		/* We can safely quit here, since no change had been made till now */
+		cg_wunlock(&pool->data_lock);
+		bytes_free(&new_coinbase);
+		goto out;
+	}
+
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
@@ -2510,7 +2605,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
-		pool->n1_len = strlen(pool->next_nonce1) / 2;
+		pool->n1_len = n1_len;
 		pool->swork.nonce1 = pool->next_nonce1;
 		pool->next_nonce1 = NULL;
 	}
@@ -2529,82 +2624,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	/* Nominally allow a driver to ntime roll 60 seconds */
 	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
 
-	cb1_len = strlen(coinbase1) / 2;
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
-	cb2_len = strlen(coinbase2) / 2;
-	bytes_resize(&pool->swork.coinbase, pool->swork.nonce2_offset + pool->swork.n2size + cb2_len);
-	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
-	hex2bin(coinbase, coinbase1, cb1_len);
+	bytes_assimilate(&pool->swork.coinbase, &new_coinbase);
+	bytes_free(&new_coinbase);
 	hex2bin(&coinbase[cb1_len], pool->swork.nonce1, pool->n1_len);
 	// NOTE: gap for nonce2, filled at work generation time
-	hex2bin(&coinbase[pool->swork.nonce2_offset + pool->swork.n2size], coinbase2, cb2_len);
-
-	if (opt_coinbase_perc_op.op) {
-		pos = 4;
-		if (varint_decode(coinbase + pos, &len) != 1 || len != 1) {
-			cg_wunlock(&pool->data_lock);
-			applog(LOG_ERR, "Coinbase check: multiple inputs (%ld) in coinbase", len);
-			goto out;
-		}
-		pos += 1 /* varint length */ + 32 /* prevhash */ + 4 /* 0xffffffff */;
-		if (varint_decode(coinbase + pos, &len) != 1 || len > 100) {
-			cg_wunlock(&pool->data_lock);
-			applog(LOG_ERR, "Coinbase check: input script sig too long: %ld", len);
-			goto out;
-		}
-		total = target = 0;
-		pos += 1 /* varint length */ + len + 4 /* 0xffffffff */; 
-		for (pos += varint_decode(coinbase + pos, &len); len > 0; --len) {
-			uint64_t amount = 0, curr_pk_script_len;
-			char addr[35];
-
-			for (i = 7; i >= 0; --i)
-				amount = (amount << 8) + coinbase[pos + i];
-			total += amount;
-			pos += 8; /* amount length */
-			if (varint_decode(coinbase + pos, &curr_pk_script_len) != 1 || curr_pk_script_len > 25) {
-				cg_wunlock(&pool->data_lock);
-				applog(LOG_ERR, "Coinbase check: output script too long: %ld", curr_pk_script_len);
-				goto out;
-			}
-			pos += 1 /* varint length */;
-			if (script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr) > sizeof(addr)) {
-				char script[51];
-				bin2hex(script, coinbase + pos, curr_pk_script_len);
-				cg_wunlock(&pool->data_lock);
-				applog(LOG_ERR, "Coinbase check: output script to an invalid address: %s", script);
-				goto out;
-			}
-			i = (bytes_len(&opt_coinbase_script) == curr_pk_script_len &&
-				!memcmp(bytes_buf(&opt_coinbase_script), coinbase + pos, curr_pk_script_len));
-			if (i)
-				target += amount;
-			if (opt_debug)
-				applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
-			pos += curr_pk_script_len;
-		}
-		if (!total) {
-			cg_wunlock(&pool->data_lock);
-			applog(LOG_ERR, "Coinbase check: output no coins");
-			goto out;
-		}
-		cb_perc = (double)target / total;
-		if (opt_coinbase_perc_op.op == '>')
-			pass_cb_check = (cb_perc > opt_coinbase_perc_op.value);
-		else if (opt_coinbase_perc_op.op == '<')
-			pass_cb_check = (cb_perc < opt_coinbase_perc_op.value);
-		else
-			pass_cb_check = (cb_perc == opt_coinbase_perc_op.value);
-		if (!pass_cb_check) {
-			cg_wunlock(&pool->data_lock);
-			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
-				cb_perc, target, total, opt_coinbase_perc_op.op, opt_coinbase_perc_op.value);
-			goto out;
-		}
-		if (opt_debug)
-			applog(LOG_DEBUG, "Coinbase output: target/total = %g %c %g",
-				cb_perc, opt_coinbase_perc_op.op, opt_coinbase_perc_op.value);
-	}
 
 	bytes_resize(&pool->swork.merkle_bin, 32 * merkles);
 	for (i = 0; i < merkles; i++)
