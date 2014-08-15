@@ -2402,7 +2402,7 @@ inline bool b58dec(uint8_t *bin, size_t binsz, const char *b58, size_t b58sz)
 	return _blkmk_b58tobin(bin, binsz, b58, b58sz);
 }
 
-static bool test_address( char *addr, size_t *addrsz, uint8_t ver, const uint8_t *pkhash )
+static bool test_address(char *addr, size_t *addrsz, uint8_t ver, const uint8_t *pkhash)
 {
 	uint8_t buf[25], hret[32];
 
@@ -2439,7 +2439,7 @@ size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t 
 	return size;
 }
 
-static size_t varint_decode(const uint8_t *p, uint64_t *n)
+size_t varint_decode(const uint8_t *p, uint64_t *n)
 {
 	int i;
 	if (p[0] == 0xff) {
@@ -2460,7 +2460,8 @@ static size_t varint_decode(const uint8_t *p, uint64_t *n)
 	return 1;
 }
 
-static bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script )
+/* NOTE: The caller should ensure an valid target_script pointer if providing an valid compare_op pointer */
+bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script)
 {
 	int i;
 	size_t pos;
