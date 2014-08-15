@@ -161,12 +161,17 @@ ssize_t avalonmm_read(const int fd, const int logprio, enum avalonmm_reply *out_
 	return (((ssize_t)got) * AVALONMM_PKT_DATA_SIZE);
 }
 
+struct avalonmm_init_data {
+	int module_id;
+	uint32_t mmversion;
+};
+
 static
 bool avalonmm_detect_one(const char * const devpath)
 {
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
 	enum avalonmm_reply reply;
-	const int fd = serial_open(devpath, 0, 1, true);
+	const int fd = serial_open(devpath, 115200, 1, true);
 	struct cgpu_info *prev_cgpu = NULL;
 	if (fd == -1)
 		applogr(false, LOG_DEBUG, "%s: Failed to open %s", __func__, devpath);
@@ -183,11 +188,25 @@ bool avalonmm_detect_one(const char * const devpath)
 			continue;
 		
 		int moduleno = upk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4);
+		uint32_t mmversion;
+		{
+			char mmver[5];
+			memcpy(mmver, buf, 4);
+			mmver[4] = '\0';
+			mmversion = atol(mmver);
+		}
+		
+		struct avalonmm_init_data * const initdata = malloc(sizeof(*initdata));
+		*initdata = (struct avalonmm_init_data){
+			.module_id = moduleno,
+			.mmversion = mmversion,
+		};
+		
 		struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 		*cgpu = (struct cgpu_info){
 			.drv = &avalonmm_drv,
 			.device_path = prev_cgpu ? prev_cgpu->device_path : strdup(devpath),
-			.device_data = (void*)(intptr_t)moduleno,
+			.device_data = initdata,
 			.set_device_funcs = avalonmm_set_device_funcs,
 			.deven = DEV_ENABLED,
 			.procs = 1,
@@ -228,6 +247,7 @@ struct avalonmm_chain_state {
 
 struct avalonmm_module_state {
 	uint32_t module_id;
+	uint32_t mmversion;
 	uint16_t temp[2];
 	uint16_t fan[2];
 	uint32_t clock_actual;
@@ -266,6 +286,7 @@ static
 bool avalonmm_init(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const master_dev = master_thr->cgpu, *dev = NULL;
+	struct avalonmm_init_data * const master_initdata = master_dev->device_data;
 	const char * const devpath = master_dev->device_path;
 	const int fd = serial_open(devpath, 115200, 1, true);
 	uint8_t buf[AVALONMM_PKT_DATA_SIZE] = {0};
@@ -278,8 +299,16 @@ bool avalonmm_init(struct thr_info * const master_thr)
 	struct avalonmm_chain_state * const chain = malloc(sizeof(*chain));
 	*chain = (struct avalonmm_chain_state){
 		.fan_desired = avalonmm_fan_config_from_percent(90),
-		.voltcfg_desired = avalonmm_voltage_config_from_dmvolts(6625),
 	};
+	
+	switch (master_initdata->mmversion)
+	{
+		case 2014:
+			chain->voltcfg_desired = avalonmm_voltage_config_from_dmvolts(10000);
+			break;
+		default:
+			chain->voltcfg_desired = avalonmm_voltage_config_from_dmvolts(6625);
+	}
 	
 	work2d_init();
 	if (!reserve_work2d_(&chain->xnonce1))
@@ -297,12 +326,15 @@ bool avalonmm_init(struct thr_info * const master_thr)
 		dev = proc->device;
 		
 		struct thr_info * const thr = proc->thr[0];
+		struct avalonmm_init_data * const initdata = dev->device_data;
 		
 		struct avalonmm_module_state * const module = malloc(sizeof(*module));
 		*module = (struct avalonmm_module_state){
-			.module_id = (intptr_t)dev->device_data,
+			.module_id = initdata->module_id,
+			.mmversion = initdata->mmversion,
 		};
 		
+		free(initdata);
 		proc->device_data = chain;
 		thr->cgpu_data = module;
 	}
@@ -313,7 +345,6 @@ bool avalonmm_init(struct thr_info * const master_thr)
 		cgpu_set_defaults(proc);
 		proc->status = LIFE_INIT2;
 	}
-	
 	
 	if (!chain->clock_desired)
 	{
@@ -338,6 +369,19 @@ resend:
 			}
 			else
 				goto resend;
+		}
+		
+		if (!chain->clock_desired)
+		{
+			switch (module->mmversion)
+			{
+				case 2014:
+					chain->clock_desired = 1500;
+					break;
+				case 3314:
+					chain->clock_desired = 450;
+					break;
+			}
 		}
 	}
 	
@@ -655,7 +699,6 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 			cgsleep_ms(10);
 			
 			struct cgpu_info *dev = NULL;
-			int n = 0;
 			for_each_managed_proc(proc, master_dev)
 			{
 				if (dev == proc->device)
@@ -668,9 +711,8 @@ void avalonmm_minerloop(struct thr_info * const master_thr)
 				pk_u32be(buf, AVALONMM_PKT_DATA_SIZE - 4, module->module_id);
 				
 				avalonmm_write_cmd(fd, AMC_POLL, buf, AVALONMM_PKT_DATA_SIZE);
-				++n;
+				avalonmm_poll(master_dev, 1);
 			}
-			avalonmm_poll(master_dev, n);
 		}
 	}
 }

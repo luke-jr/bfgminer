@@ -340,6 +340,10 @@ bfgminer_SOURCES += driver-aan.c driver-aan.h
 bfgminer_SOURCES += driver-jingtian.c
 endif
 
+if USE_MINERGATE
+bfgminer_SOURCES += driver-minergate.c
+endif
+
 if USE_ROCKMINER
 bfgminer_SOURCES += driver-rockminer.c
 endif

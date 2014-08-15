@@ -1127,6 +1127,19 @@ fi
 AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
 
 
+driverlist="$driverlist minergate"
+AC_ARG_ENABLE([minergate],
+	[AC_HELP_STRING([--enable-minergate],[Compile support for Spondoolies minergate interface (default disabled)])],
+	[minergate=$enableval],
+	[minergate=$ddno]
+	)
+if test "x$minergate" = "xyes"; then
+	AC_DEFINE([USE_MINERGATE], [1], [Defined to 1 if Spondoolies minergate interface support is wanted])
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_MINERGATE], [test x$minergate = xyes])
+
+
 driverlist="$driverlist rockminer"
 AC_ARG_ENABLE([rockminer],
 	[AC_HELP_STRING([--disable-rockminer],[Compile support for RockMiner (default enabled)])],
