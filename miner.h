@@ -1495,6 +1495,8 @@ extern double cgpu_utility(struct cgpu_info *);
 extern void kill_work(void);
 extern int prioritize_pools(char *param, int *pid);
 extern void validate_pool_priorities(void);
+extern void enable_pool(struct pool *pool);
+extern void disable_pool(struct pool *pool, enum pool_enable enable_status);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);

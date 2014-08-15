@@ -1040,8 +1040,6 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
-static void enable_pool(struct pool *);
-
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -4420,7 +4418,7 @@ void logwin_update(void)
 }
 #endif
 
-static void enable_pool(struct pool *pool)
+void enable_pool(struct pool *pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
 		mutex_lock(&lp_lock);
@@ -4431,20 +4429,17 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
-#ifdef HAVE_CURSES
-static void disable_pool(struct pool *pool)
+void disable_pool(struct pool *pool, enum pool_enable enable_status)
 {
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_DISABLED;
-}
-#endif
-
-static void reject_pool(struct pool *pool)
-{
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_REJECTING;
+	if (pool->enabled != POOL_ENABLED) {
+		pool->enabled = enable_status;
+		return;
+	}
+	mutex_lock(&lp_lock);
+	enabled_pools--;
+	pool->enabled = enable_status;
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
 }
 
 static double share_diff(const struct work *);
@@ -4634,7 +4629,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
-				reject_pool(pool);
+				disable_pool(pool, POOL_REJECTING);
 				if (pool == current_pool())
 					switch_pools(NULL);
 				pool->seq_rejects = 0;
@@ -7319,7 +7314,7 @@ retry:
 			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
-		disable_pool(pool);
+		disable_pool(pool, POOL_DISABLED);
 		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
@@ -7344,7 +7339,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		disable_pool(pool);
+		disable_pool(pool, POOL_DISABLED);
 		if (pool == current_pool())
 			switch_pools(NULL);
 		goto updated;

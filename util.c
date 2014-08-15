@@ -2590,6 +2590,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		/* We can safely quit here, since no change had been made till now */
 		cg_wunlock(&pool->data_lock);
 		bytes_free(&new_coinbase);
+
+		applog(LOG_ERR, "Disable pool %d for failing to pass coinbase check", pool->pool_no);
+		disable_pool(pool, POOL_DISABLED);
+		if (pool == current_pool())
+			switch_pools(NULL);
 		goto out;
 	}
 
