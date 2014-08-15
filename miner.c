@@ -4419,8 +4419,12 @@ void disable_pool(struct pool * const pool, const enum pool_enable enable_status
 		return;
 	}
 	
+	/* Fall into the lock area */
+	mutex_lock(&lp_lock);
 	--enabled_pools;
 	pool->enabled = enable_status;
+	mutex_unlock(&lp_lock);
+	
 	if (pool == current_pool())
 		switch_pools(NULL);
 }
