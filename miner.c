@@ -71,6 +71,7 @@
 #include <blkmaker.h>
 #include <blkmaker_jansson.h>
 #include <blktemplate.h>
+#include <libbase58.h>
 
 #include "compat.h"
 #include "deviceapi.h"
@@ -1572,6 +1573,86 @@ static char *set_userpass(const char *arg)
 	return NULL;
 }
 
+static char *set_cbcaddr(char *arg)
+{
+	struct pool *pool;
+	char *p, *addr;
+	bytes_t target_script = BYTES_INIT;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-addr list";
+	
+	pool = pools[total_pools - 1];
+	
+	/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
+	 * need support it later, but now leave the code just so.
+	 *
+	 * Regarding details of address prefix 'x', check the below URL:
+	 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
+	 */
+	pool->cb_param.testnet = (arg[0] != '1' && arg[0] != '3' && arg[0] != 'x');
+	
+	for (; (addr = strtok_r(arg, ",", &p)); arg = NULL)
+	{
+		struct addr_hash *ah;
+		
+		if (set_b58addr(addr, &target_script))
+			/* No bother to free memory since we are going to exit anyway */
+			return "Invalid address in --coinbase-check-address list";
+		
+		HASH_FIND_STR(pool->cb_param.addr_ht, addr, ah);
+		if (!ah)
+		{
+			/* Note: for the below allocated memory we have good way to release its memory
+			 * since we can't be sure there are no reference to the pool struct when remove_pool() 
+			 * get called.
+			 *
+			 * We just hope the remove_pool() would not be called many many times during
+			 * the whole running life of this program.
+			 */
+			ah = malloc(sizeof(struct addr_hash));
+			ah->addr = addr;
+			HASH_ADD_STR(pool->cb_param.addr_ht, addr, ah);
+		}
+	}
+	bytes_free(&target_script);
+	
+	return NULL;
+}
+
+static char *set_cbctotal(const char *arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-total argument";
+	
+	pool = pools[total_pools - 1];
+	pool->cb_param.total = atoll(arg);
+	if (pool->cb_param.total < 0)
+		return "The total payout amount in coinbase should be greater than 0";
+	
+	return NULL;
+}
+
+static char *set_cbcperc(const char *arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-percent argument";
+	
+	pool = pools[total_pools - 1];
+	if (!pool->cb_param.addr_ht)
+		return "Define --coinbase-check-addr list first, then the --coinbase-check-total argument";
+	
+	pool->cb_param.perc = atof(arg);
+	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
+		return "The percentage should be between 0 and 1";
+	
+	return NULL;
+}
+
 static char *set_pool_priority(const char *arg)
 {
 	struct pool *pool;
@@ -2442,6 +2523,24 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--coinbase-check-addr",
+			set_cbcaddr, NULL, NULL,
+			"A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','"),
+	OPT_WITH_ARG("--cbcheck-addr|--cbc-addr|--cbcaddr",
+			set_cbcaddr, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-total",
+			set_cbctotal, NULL, NULL,
+			"The least total payout amount expected in coinbase received from the previous-defined pool"),
+	OPT_WITH_ARG("--cbcheck-total|--cbc-total|--cbctotal",
+			set_cbctotal, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-percent",
+			set_cbcperc, NULL, NULL,
+			"The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool"),
+	OPT_WITH_ARG("--cbcheck-percent|--cbc-percent|--cbcpercent|--cbcperc",
+			set_cbcperc, NULL, NULL,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
@@ -3113,6 +3212,12 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		{
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
+			
+			if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
+			{
+				applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
+				disable_pool(pool, POOL_MISBEHAVING);
+			}
 			
 			cg_wlock(&pool->data_lock);
 			swork->tr = work->tr;
@@ -7319,6 +7424,9 @@ updated:
 					break;
 				case POOL_REJECTING:
 					wlogprint("Rejectin ");
+					break;
+				case POOL_MISBEHAVING:
+					wlogprint("Misbehav ");
 					break;
 			}
 			_wlogprint(pool_proto_str(pool));
@@ -12228,6 +12336,7 @@ int main(int argc, char *argv[])
 	
 	atexit(bfg_atexit);
 
+	b58_sha256_impl = my_blkmaker_sha256_callback;
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
 	bfg_init_threadlocal();
