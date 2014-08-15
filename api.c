@@ -2553,7 +2553,7 @@ static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	disable_pool(pool);
+	disable_pool(pool, POOL_DISABLED);
 
 	message(io_data, MSG_DISPOOL, id, NULL, isjson);
 }

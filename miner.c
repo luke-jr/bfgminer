@@ -4406,20 +4406,21 @@ void enable_pool(struct pool * const pool)
 	}
 }
 
-void disable_pool(struct pool * const pool)
+void disable_pool(struct pool * const pool, const enum pool_enable enable_status)
 {
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_DISABLED;
-	if (pool == current_pool())
-		switch_pools(NULL);
-}
-
-static void reject_pool(struct pool *pool)
-{
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_REJECTING;
+	if (pool->enabled == POOL_DISABLED)
+		/* had been manually disabled before */
+		return;
+	
+	if (pool->enabled != POOL_ENABLED)
+	{
+		/* has been programmatically disabled already, just change to the new status directly */
+		pool->enabled = enable_status;
+		return;
+	}
+	
+	--enabled_pools;
+	pool->enabled = enable_status;
 	if (pool == current_pool())
 		switch_pools(NULL);
 }
@@ -4611,7 +4612,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			if (pool->seq_rejects > utility * 3) {
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
-				reject_pool(pool);
+				disable_pool(pool, POOL_REJECTING);
 				pool->seq_rejects = 0;
 			}
 		}
@@ -6864,7 +6865,7 @@ void remove_pool(struct pool *pool)
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
 
-	disable_pool(pool);
+	disable_pool(pool, POOL_DISABLED);
 	
 	/* Boost priority of any lower prio than this one */
 	for (i = 0; i < total_pools; i++) {
@@ -7320,7 +7321,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		disable_pool(pool);
+		disable_pool(pool, POOL_DISABLED);
 		goto updated;
 	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
