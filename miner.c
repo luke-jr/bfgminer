@@ -133,7 +133,9 @@ static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 static bool opt_load_bitcoin_conf = true;
 static bool have_at_least_one_getcbaddr;
-static bytes_t opt_coinbase_script = BYTES_INIT;
+bool opt_testnet_addr = false;
+bytes_t opt_coinbase_script = BYTES_INIT;
+compare_op_t opt_coinbase_perc_op = COMPARE_OP_INIT;
 static uint32_t coinbase_script_block_id;
 static uint32_t template_nonce;
 #endif
@@ -1196,7 +1198,22 @@ char *set_b58addr(const char * const arg, bytes_t * const b)
 		free(script);
 		return "Failed to convert address to script";
 	}
+	opt_testnet_addr = (arg[0] != '1');
 	bytes_assimilate_raw(b, script, scriptsz, scriptsz);
+	return NULL;
+}
+
+static
+char *set_payperc(const char * const arg, compare_op_t * op)
+{
+	if (!bytes_len(&opt_coinbase_script))
+		return "Specify coinbase-addr before coinbase-perc";
+
+	if (arg[0] != '>' && arg[0] != '<' && arg[0] != '=')
+		return "Invalid coinbase-perc, need a '>', '<' or '=' prefix";
+
+	op->op = arg[0];
+	op->value = atof(&arg[1]);
 	return NULL;
 }
 #endif
@@ -2004,9 +2021,15 @@ static struct opt_table opt_config_table[] = {
 #if BLKMAKER_VERSION > 1
 	OPT_WITH_ARG("--coinbase-addr",
 		     set_b58addr, NULL, &opt_coinbase_script,
-		     "Set coinbase payout address for solo mining"),
+		     "Set coinbase payout address for solo mining, or stratum pool mining coinbase checking"),
 	OPT_WITH_ARG("--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
 		     set_b58addr, NULL, &opt_coinbase_script,
+		     opt_hidden),
+	OPT_WITH_ARG("--coinbase-perc",
+		     set_payperc, NULL, &opt_coinbase_perc_op,
+		     "Specify the percent regards how much benefit the payout address gains"),
+	OPT_WITH_ARG("--coinbase-percent|--payout-percent|--payperc",
+		     set_payperc, NULL, &opt_coinbase_perc_op,
 		     opt_hidden),
 #endif
 #if BLKMAKER_VERSION > 0
@@ -9353,14 +9376,14 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
-	
+
 	memcpy(&work->data[0], swork->header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
 	*((uint32_t*)&work->data[68]) = htobe32(swork->ntime + timer_elapsed(&swork->tv_received, NULL));
 	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
-	
+
 	work->ntime_roll_limits = swork->ntime_roll_limits;
 
 	/* Copy parameters required for share submission */
@@ -12115,7 +12138,7 @@ int main(int argc, char *argv[])
 #ifdef WIN32
 	LoadLibrary("backtrace.dll");
 #endif
-	
+
 	atexit(bfg_atexit);
 
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
@@ -12134,7 +12157,7 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to initialise Winsock: %s", bfg_strerror(i, BST_SOCKET));
 	}
 #endif
-	
+
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
@@ -12211,10 +12234,10 @@ int main(int argc, char *argv[])
 		{
 			setup_benchmark_pool();
 			double rate = bench_algo_stage3(atoi(buf));
-			
+
 			// Write result to shared memory for parent
 			char unique_name[64];
-			
+
 			if (GetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name, 32))
 			{
 				HANDLE map_handle = CreateFileMapping(
@@ -12269,7 +12292,7 @@ int main(int argc, char *argv[])
 	opt_register_table(opt_config_table, NULL);
 	opt_register_table(opt_cmdline_table, NULL);
 	opt_early_parse(argc, argv, applog_and_exit);
-	
+
 	if (!config_loaded)
 	{
 		load_default_config();
