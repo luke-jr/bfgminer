@@ -2511,7 +2511,8 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compar
 				!memcmp(bytes_buf(target_script), coinbase + pos, curr_pk_script_len));
 			if (i)
 				target += amount;
-		} /* else i = 0; has been set to 0 at the begin of iteration */
+		} else
+			i = 0;
 		if (opt_debug)
 			applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
 		pos += curr_pk_script_len;
