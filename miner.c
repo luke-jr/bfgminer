@@ -1038,8 +1038,6 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
-static void enable_pool(struct pool *);
-
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -4397,7 +4395,7 @@ void logwin_update(void)
 }
 #endif
 
-static void enable_pool(struct pool *pool)
+void enable_pool(struct pool * const pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
 		mutex_lock(&lp_lock);
@@ -4408,20 +4406,22 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
-#ifdef HAVE_CURSES
-static void disable_pool(struct pool *pool)
+void disable_pool(struct pool * const pool)
 {
 	if (pool->enabled == POOL_ENABLED)
 		enabled_pools--;
 	pool->enabled = POOL_DISABLED;
+	if (pool == current_pool())
+		switch_pools(NULL);
 }
-#endif
 
 static void reject_pool(struct pool *pool)
 {
 	if (pool->enabled == POOL_ENABLED)
 		enabled_pools--;
 	pool->enabled = POOL_REJECTING;
+	if (pool == current_pool())
+		switch_pools(NULL);
 }
 
 static double share_diff(const struct work *);
@@ -4612,8 +4612,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
 				       pool->pool_no, pool->seq_rejects);
 				reject_pool(pool);
-				if (pool == current_pool())
-					switch_pools(NULL);
 				pool->seq_rejects = 0;
 			}
 		}
@@ -7322,8 +7320,6 @@ retry:
 		}
 		pool = pools[selected];
 		disable_pool(pool);
-		if (pool == current_pool())
-			switch_pools(NULL);
 		goto updated;
 	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
@@ -12338,7 +12334,10 @@ int main(int argc, char *argv[])
 	
 	if (opt_benchmark) {
 		while (total_pools)
+		{
+			disable_pool(pools[0]);
 			remove_pool(pools[0]);
+		}
 
 		setup_benchmark_pool();
 	}
