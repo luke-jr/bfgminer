@@ -940,6 +940,9 @@ struct pool;
 
 extern bool opt_protocol;
 extern bool opt_dev_protocol;
+extern bool opt_testnet_addr;
+extern bytes_t opt_coinbase_script;
+extern compare_op_t opt_coinbase_perc_op;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
 extern bool have_longpoll;
