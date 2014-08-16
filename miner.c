@@ -3076,6 +3076,14 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		return false;
 	}
 	else
+	if (!check_coinbase(work->data, sizeof(work->data), &opt_coinbase_perc_op, &opt_coinbase_script)) {
+		applog(LOG_ERR, "Disable pool %d for failing to pass coinbase check", pool->pool_no);
+		disable_pool(pool, POOL_DISABLED);
+		if (pool == current_pool())
+			switch_pools(NULL);
+		return false;
+	}
+	else
 		work_set_simple_ntime_roll_limit(work, 0);
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
