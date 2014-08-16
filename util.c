@@ -2489,32 +2489,26 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compar
 	total = target = 0;
 
 	for (pos += varint_decode(coinbase + pos, &len); len > 0; --len) {
-		for (amount = 0, i = 7; i >= 0; --i)
-			amount = (amount << 8) + coinbase[pos + i];
-		total += amount;
+		amount = upk_u64le(coinbase, pos);
 		pos += 8; /* amount length */
 
-		if (varint_decode(coinbase + pos, &curr_pk_script_len) != 1 || curr_pk_script_len > 25) {
-			applog(LOG_ERR, "Coinbase check: output script too long: %ld", curr_pk_script_len);
-			return false;
-		}
-		pos += 1 /* varint length */;
+		total += amount;
 
-		if (script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr) > sizeof(addr)) {
-			char script[51];
-			bin2hex(script, coinbase + pos, curr_pk_script_len);
-			applog(LOG_ERR, "Coinbase check: output script to an invalid address: %s", script);
-			return false;
+		pos += varint_decode(coinbase + pos, &curr_pk_script_len);
+
+		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr);
+		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
+			if (compare_op && compare_op->op) {
+				i = (bytes_len(target_script) == curr_pk_script_len &&
+					!memcmp(bytes_buf(target_script), coinbase + pos, curr_pk_script_len));
+				if (i)
+					target += amount;
+			} else
+				i = 0;
+			if (opt_debug)
+				applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
 		}
-		if (compare_op && compare_op->op) {
-			i = (bytes_len(target_script) == curr_pk_script_len &&
-				!memcmp(bytes_buf(target_script), coinbase + pos, curr_pk_script_len));
-			if (i)
-				target += amount;
-		} else
-			i = 0;
-		if (opt_debug)
-			applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
+
 		pos += curr_pk_script_len;
 	}
 	if (!total) {
@@ -2592,7 +2586,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		bytes_free(&new_coinbase);
 
 		applog(LOG_ERR, "Disable pool %d for failing to pass coinbase check", pool->pool_no);
-		disable_pool(pool, POOL_DISABLED);
+		disable_pool(pool, POOL_MISBEHAVING);
 		if (pool == current_pool())
 			switch_pools(NULL);
 		goto out;

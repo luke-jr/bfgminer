@@ -3078,7 +3078,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	else
 	if (!check_coinbase(work->data, sizeof(work->data), &opt_coinbase_perc_op, &opt_coinbase_script)) {
 		applog(LOG_ERR, "Disable pool %d for failing to pass coinbase check", pool->pool_no);
-		disable_pool(pool, POOL_DISABLED);
+		disable_pool(pool, POOL_MISBEHAVING);
 		if (pool == current_pool())
 			switch_pools(NULL);
 		return false;
@@ -4439,14 +4439,19 @@ void enable_pool(struct pool *pool)
 
 void disable_pool(struct pool *pool, enum pool_enable enable_status)
 {
+	if (pool->enabled == POOL_DISABLED)
+		/* had been manually disabled before */
+		return;
 	if (pool->enabled != POOL_ENABLED) {
+		/* has been set POOL_REJECTING or POOL_MISBEHAVING,
+		   just change to the new status directly */
 		pool->enabled = enable_status;
 		return;
 	}
+	/* Fall into the lock area */
 	mutex_lock(&lp_lock);
 	enabled_pools--;
 	pool->enabled = enable_status;
-	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
 }
 

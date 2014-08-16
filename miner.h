@@ -1184,6 +1184,7 @@ enum pool_enable {
 	POOL_DISABLED,
 	POOL_ENABLED,
 	POOL_REJECTING,
+	POOL_MISBEHAVING,
 };
 
 enum pool_protocol {
@@ -1530,6 +1531,7 @@ extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
+extern bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script);
 
 enum api_data_type {
 	API_ESCAPE,
