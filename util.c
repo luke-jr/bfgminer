@@ -2466,6 +2466,7 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compar
 	int i;
 	size_t pos;
 	uint64_t len, total, target, amount, curr_pk_script_len;
+	bool do_payout_check;
 	char addr[35];
 
 	if (cbsize < 90) { /* Smallest possible length */
@@ -2484,17 +2485,34 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compar
 		applog(LOG_ERR, "Coinbase check: input script sig too long: %ld", len);
 		return false;
 	}
-	pos += 1 /* varint length */ + len + 4 /* 0xffffffff */; 
+	pos += 1 /* varint length */ + len + 4 /* 0xffffffff */;
+
+	do_payout_check = (compare_op && compare_op->op);
+
+	if (cbsize <= pos) {
+		if (do_payout_check) {
+incomplete_cb:
+			applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
+			return false;
+		}
+		/* Blindly believe this is a good but truncated cb */
+		return true;
+	}
 
 	total = target = 0;
 
 	for (pos += varint_decode(coinbase + pos, &len); len > 0; --len) {
+		if (cbsize <= pos + 8 && do_payout_check)
+			goto incomplete_cb;
+
 		amount = upk_u64le(coinbase, pos);
 		pos += 8; /* amount length */
 
 		total += amount;
 
 		pos += varint_decode(coinbase + pos, &curr_pk_script_len);
+		if (cbsize <= pos + curr_pk_script_len && do_payout_check)
+			goto incomplete_cb;
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
@@ -2515,7 +2533,7 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compar
 		applog(LOG_ERR, "Coinbase check: output no coins");
 		return false;
 	}
-	if (compare_op && compare_op->op) {
+	if (do_payout_check) {
 		bool pass_cb_check;
 		float cb_perc = (double)target / total;
 		if (compare_op->op == '>')
