@@ -68,7 +68,7 @@ size_t spi_getbufsz(struct spi_port *port)
 	return port->spibufsz;
 }
 
-extern void spi_emit_buf(struct spi_port *, const void *, size_t);
+extern void *spi_emit_buf(struct spi_port *, const void *, size_t);
 
 extern void spi_emit_break(struct spi_port *port); /* BREAK CONNECTIONS AFTER RESET */
 extern void spi_emit_fsync(struct spi_port *port); /* FEED-THROUGH TO NEXT CHIP SYNCHRONOUSLY (WITH FLIP-FLOP) */

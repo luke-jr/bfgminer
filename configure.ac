@@ -753,6 +753,20 @@ fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 
 
+driverlist="$driverlist neptune"
+AC_ARG_ENABLE([neptune],
+	[AC_HELP_STRING([--enable-neptune],[Compile support for KnCMiner Neptune (default disabled)])],
+	[neptune=$enableval],
+	[neptune=$ddno]
+	)
+if test "x$neptune" = xyes; then
+	PKG_CHECK_MODULES([zlib],[zlib])
+	AC_DEFINE([USE_NEPTUNE], [1], [Defined to 1 if Neptune support is wanted])
+	need_lowl_spi=yes
+fi
+AM_CONDITIONAL([USE_NEPTUNE], [test x$neptune = xyes])
+
+
 driverlist="$driverlist x6500"
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
@@ -1871,8 +1885,8 @@ echo "------------------------------------------------------------------------"
 echo "$PACKAGE $VERSION configuration options summary"
 echo "------------------------------------------------------------------------"
 echo
-echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
-echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
+echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $zlib_CFLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
+echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $zlib_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
 echo "  Installation.prefix..: $prefix"
 echo
 echo "${lowllist_print}" | tr '~' '\n'

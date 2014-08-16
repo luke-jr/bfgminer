@@ -270,12 +270,14 @@ void *spi_emit_buf_reverse(struct spi_port *port, const void *p, size_t sz)
 	return rv;
 }
 
-void spi_emit_buf(struct spi_port * const port, const void * const str, const size_t sz)
+void *spi_emit_buf(struct spi_port * const port, const void * const str, const size_t sz)
 {
+	void * const rv = &port->spibuf_rx[port->spibufsz];
 	if (port->spibufsz + sz >= SPIMAXSZ)
-		return;
+		return NULL;
 	memcpy(&port->spibuf[port->spibufsz], str, sz);
 	port->spibufsz += sz;
+	return rv;
 }
 
 /* TODO: in production, emit just bit-sequences! Eliminate padding to byte! */

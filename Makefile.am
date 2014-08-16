@@ -69,6 +69,9 @@ bfgminer_LDADD += $(libblkmaker_LIBS)
 bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
 bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
 
+bfgminer_CPPFLAGS += $(zlib_CFLAGS)
+bfgminer_LDADD += $(zlib_LIBS)
+
 # common sources
 bfgminer_SOURCES := miner.c
 
@@ -284,6 +287,10 @@ endif
 
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
+endif
+
+if USE_NEPTUNE
+bfgminer_SOURCES += driver-neptune.c
 endif
 
 if HAS_X6500
