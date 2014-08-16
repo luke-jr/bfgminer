@@ -2524,7 +2524,13 @@ incomplete_cb:
 			} else
 				i = 0;
 			if (opt_debug)
-				applog(LOG_DEBUG, "Coinbase output: %10ld - %34s%c", amount, addr, i ? '*' : '\0');
+				applog(LOG_DEBUG, "Coinbase output: %10ld -- %34s%c", amount, addr, i ? '*' : '\0');
+		} else if (opt_debug) {
+			i = (sizeof(addr) - 1) / 2;
+			if (i > curr_pk_script_len)
+				i = curr_pk_script_len;
+			bin2hex(addr, coinbase + pos, i);
+			applog(LOG_DEBUG, "Coinbase output: %10ld PK %34s%c", amount, addr, (i < curr_pk_script_len) ? '-' : '\0');
 		}
 
 		pos += curr_pk_script_len;
