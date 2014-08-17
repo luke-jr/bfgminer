@@ -2593,8 +2593,15 @@ incomplete_cb:
 		applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
 		return false;
 	}
+
+	if (cbsize < pos + 4) {
+		applog(LOG_ERR, "Coinbase check: No room for locktime");
+		return false;
+	}
+	pos += 4;
+
 	if (opt_debug)
-		applog(LOG_DEBUG, "Coinbase output: (target, total) = (%ld, %ld)", target, total);
+		applog(LOG_DEBUG, "Coinbase: (size, pos, target, total) = (%zu, %zu, %ld, %ld)", cbsize, pos, target, total);
 
 	return true;
 }
