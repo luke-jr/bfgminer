@@ -2432,7 +2432,6 @@ static bool test_address(char *addr, size_t *addrsz, uint8_t ver, const uint8_t 
 
 size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t scriptsz, bool testnet)
 {
-	uint8_t buf[32], hret[32];
 	char addr[35];
 	size_t size = sizeof(addr);
 	bool bok = false;
@@ -2455,7 +2454,6 @@ size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t 
 
 size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
-	int i;
 	if (size > 8 && p[0] == 0xff) {
 		*n = upk_u64le(p, 0);
 		return 9;
@@ -2554,7 +2552,7 @@ incomplete_cb:
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			if (target_addr || cbperc_compare_op && cbperc_compare_op->op) {
+			if (target_addr || (cbperc_compare_op && cbperc_compare_op->op)) {
 				i = (bytes_len(&target_script) == curr_pk_script_len &&
 					!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
 				if (i) {
