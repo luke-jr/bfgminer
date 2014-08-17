@@ -6864,6 +6864,8 @@ void remove_pool(struct pool *pool)
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
 
+	disable_pool(pool);
+	
 	/* Boost priority of any lower prio than this one */
 	for (i = 0; i < total_pools; i++) {
 		other = pools[i];
@@ -7294,7 +7296,6 @@ retry:
 			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
-		disable_pool(pool);
 		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
@@ -12334,10 +12335,7 @@ int main(int argc, char *argv[])
 	
 	if (opt_benchmark) {
 		while (total_pools)
-		{
-			disable_pool(pools[0]);
 			remove_pool(pools[0]);
-		}
 
 		setup_benchmark_pool();
 	}
