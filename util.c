@@ -2552,7 +2552,7 @@ incomplete_cb:
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			if (target_addr || (cbperc_compare_op && cbperc_compare_op->op)) {
+			if (target_addr) {
 				i = (bytes_len(&target_script) == curr_pk_script_len &&
 					!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
 				if (i) {
