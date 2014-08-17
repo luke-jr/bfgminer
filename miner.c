@@ -133,7 +133,7 @@ static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 static bool opt_load_bitcoin_conf = true;
 static bool have_at_least_one_getcbaddr;
-bytes_t opt_coinbase_script = BYTES_INIT;
+static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t coinbase_script_block_id;
 static uint32_t template_nonce;
 #endif
@@ -2038,7 +2038,7 @@ static struct opt_table opt_config_table[] = {
 #if BLKMAKER_VERSION > 1
 	OPT_WITH_ARG("--coinbase-addr",
 		     set_b58addr, NULL, &opt_coinbase_script,
-		     "Set coinbase payout address for solo mining, or stratum pool mining coinbase checking"),
+		     "Set coinbase payout address for solo mining"),
 	OPT_WITH_ARG("--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
 		     set_b58addr, NULL, &opt_coinbase_script,
 		     opt_hidden),
