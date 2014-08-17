@@ -12,7 +12,6 @@ Original CPU mining software: Jeff Garzik <jgarzik@pobox.com>
 RPC API: Andrew Smith <kan0i@kano-kun.net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
 
 Debian packaging: Dmitry Smirnov <onlyjob@member.fsf.org>
-SUSE packaging: Christian Berendt <berendt@b1-systems.de>
 Ubuntu packaging: Graeme Humphries <graeme@sudo.ca>
 
 Contributors:
@@ -50,6 +49,7 @@ Paul Wouters <pwouters@redhat.com>
 Abracadabra <hocuscapocus@gmail.com>
 Josh Lehan <krellan@krellan.net>
 pontus <liquidpontus@yahoo.se>
+Christian Berendt <berendt@b1-systems.de>
 Nico Oelgart <nico@nicoswd.com>
 Tydus <Tydus@Tydus.org>
 Raulo <p987341@gmail.com>
