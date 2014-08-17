@@ -1,3 +1,38 @@
+BFGMiner Version 4.7.0 - August 17, 2014
+
+- AUTHORS: Simpler design, alphabetise lists
+- Remove obsolete SuSE packaging
+- Bugfix: test_hash: Fix Htarg calculation for exact binary divisions of diff 1
+- Fix target calculation from diff < 1.0 in test_hash()
+- avalonmm: Try to autodetect a sane default voltage and clock from MM version
+- avalonmm: Only poll one module at a time, so they don't try to talk over each
+other
+- avalonmm: Set baud rate for detection
+- Stratum: Ignore response from mining.extranonce.subscribe
+- Stratum: Implement mining.set_extranonce, and advertise support for it to
+pools with a #xnsub flag
+- Stratum: Keep nonce1 and n2size in a "staging" state until mining.notify is
+received
+- Stratum: Avoid putting new targets on pool stratum_work until mining.notify is
+received for it
+- minergate: Flush during init
+- minergate: Flush ready-to-queue list
+- minergate: Avoid preparing new jobs to queue while we are pending a flush,
+since the flush would occur after queuing the new jobs
+- minergate: Check for reused job ids
+- minergate: Avoid counting flushed jobs toward hashes done
+- minergate: Report all temperatures individually to RPC
+- minergate: Load temperatures from stats file
+- minergate: Implement hashmeter
+- minergate: Scale nonce difficulty up to pdiff 32
+- minergate: Implement mining
+- minergate: Support for detecting a SP10
+- Bugfix: configure: avalonmm needs work2d
+- Bugfix: bitforce: Remove sanity check triggered by race conditions on 65nm
+devices
+- Bugfix: bitforce: Avoid double-free of voltage data
+
+
 BFGMiner Version 4.6.0 - August 2, 2014
 
 - avalonmm: Even if no fans report speed, display set %
