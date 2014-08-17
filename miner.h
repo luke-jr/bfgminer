@@ -940,9 +940,7 @@ struct pool;
 
 extern bool opt_protocol;
 extern bool opt_dev_protocol;
-extern bool opt_testnet_addr;
 extern bytes_t opt_coinbase_script;
-extern compare_op_t opt_coinbase_perc_op;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
 extern bool have_longpoll;
@@ -1509,6 +1507,7 @@ extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern bool pool_may_redirect_to(struct pool *, const char *uri);
+extern bool get_pool_cbparam(struct pool * const, char *, size_t, compare_op_t *, compare_op_t *);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -1531,7 +1530,9 @@ extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
-extern bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script);
+extern char *set_b58addr(const char * const arg, bytes_t * const b);
+extern size_t uri_get_param(const char * const uri, const char * const param, char *val, size_t size);
+extern bool check_coinbase(const uint8_t *, size_t, const char *, compare_op_t *, compare_op_t *);
 
 enum api_data_type {
 	API_ESCAPE,

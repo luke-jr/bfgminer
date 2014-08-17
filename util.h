@@ -468,7 +468,7 @@ uint32_t upper_power_of_two_u32(uint32_t n)
 
 typedef struct compare_op_t {
 	char op;
-	float value;
+	double value;
 } compare_op_t;
 
 #define COMPARE_OP_INIT {.op='\0',}

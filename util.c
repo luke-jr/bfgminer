@@ -2253,6 +2253,20 @@ nextmatch:
 	return URI_FIND_PARAM_FOUND;
 }
 
+size_t uri_get_param(const char * const uri, const char * const param, char *val, size_t size)
+{
+	const char *p, *q = uri_find_param(uri, param, NULL);
+	if (q && q != URI_FIND_PARAM_FOUND) {
+		for (p = q; *p && *p != ','; ++p);
+		if (p - q < size) {
+			memcpy(val, q, p - q);
+			val[p - q] = '\0';
+		}
+		return (p - q + 1);
+	}
+	return 0;
+}
+
 enum bfg_tristate uri_get_param_bool2(const char * const uri, const char * const param)
 {
 	bool invert, foundval = true;
@@ -2439,70 +2453,93 @@ size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t 
 	return size;
 }
 
-size_t varint_decode(const uint8_t *p, uint64_t *n)
+size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
 	int i;
-	if (p[0] == 0xff) {
-		for (*n = 0, i = 8; i > 0; --i)
-			*n = (*n << 8) + p[i];
+	if (size > 8 && p[0] == 0xff) {
+		*n = upk_u64le(p, 0);
 		return 9;
 	}
-	if (p[0] == 0xfe) {
-		for (*n = 0, i = 4; i > 0; --i)
-			*n = (*n << 8) + p[i];
+	if (size > 4 && p[0] == 0xfe) {
+		*n = upk_u32le(p, 0);
 		return 5;
 	}
-	if (p[0] == 0xfd) {
-		*n = p[1] + ((uint64_t)p[2] << 8);
+	if (size > 2 && p[0] == 0xfd) {
+		*n = upk_u16le(p, 0);
 		return 3;
 	}
-	*n = p[0];
-	return 1;
+	if (size > 0) {
+		*n = p[0];
+		return 1;
+	}
+	return 0;
 }
 
-/* NOTE: The caller should ensure an valid target_script pointer if providing an valid compare_op pointer */
-bool check_coinbase(const uint8_t *coinbase, size_t cbsize, compare_op_t *compare_op, bytes_t *target_script)
+static inline bool do_compare(double value, compare_op_t *op)
+{
+	switch (op->op) {
+	case '>':
+		return (value > op->value);
+	case '<':
+		return (value < op->value);
+	case '=':
+		return (value == op->value);
+	default:
+		return true;
+	}
+}
+
+bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
+	const char *target_addr, compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op )
 {
 	int i;
 	size_t pos;
 	uint64_t len, total, target, amount, curr_pk_script_len;
-	bool do_payout_check;
+	bool on_testnet = false, found_target = false;
+	bytes_t target_script = BYTES_INIT;
 	char addr[35];
 
-	if (cbsize < 90) { /* Smallest possible length */
+	if (cbsize < 62) { /* Smallest possible length */
 		applog(LOG_ERR, "Coinbase check: invalid length -- %zu", cbsize);
 		return false;
 	}
 	pos = 4; /* Skip the version */
 
-	if (varint_decode(coinbase + pos, &len) != 1 || len != 1) {
-		applog(LOG_ERR, "Coinbase check: multiple inputs (%ld) in coinbase", len);
+	if (coinbase[pos] != 1) {
+		applog(LOG_ERR, "Coinbase check: multiple inputs in coinbase: 0x%02x", coinbase[pos]);
 		return false;
 	}
 	pos += 1 /* varint length */ + 32 /* prevhash */ + 4 /* 0xffffffff */;
 
-	if (varint_decode(coinbase + pos, &len) != 1 || len > 100) {
-		applog(LOG_ERR, "Coinbase check: input script sig too long: %ld", len);
+	if (coinbase[pos] < 2 || coinbase[pos] > 100) {
+		applog(LOG_ERR, "Coinbase check: invalid input script sig length: 0x%02x", coinbase[pos]);
 		return false;
 	}
-	pos += 1 /* varint length */ + len + 4 /* 0xffffffff */;
-
-	do_payout_check = (compare_op && compare_op->op);
+	pos += 1 /* varint length */ + coinbase[pos] + 4 /* 0xffffffff */;
 
 	if (cbsize <= pos) {
-		if (do_payout_check) {
 incomplete_cb:
-			applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
+		applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
+		return false;
+	}
+
+	if (target_addr) {
+		if (set_b58addr(target_addr, &target_script)) {
+			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s", target_addr);
 			return false;
 		}
-		/* Blindly believe this is a good but truncated cb */
-		return true;
+		on_testnet = target_addr[0] != '1' && target_addr[0] != '3' && target_addr[0] != 'x';
 	}
 
 	total = target = 0;
 
-	for (pos += varint_decode(coinbase + pos, &len); len > 0; --len) {
-		if (cbsize <= pos + 8 && do_payout_check)
+	i = varint_decode(coinbase + pos, cbsize - pos, &len);
+	if (!i)
+		goto incomplete_cb;
+	pos += i;
+
+	while (len-- > 0) {
+		if (cbsize <= pos + 8)
 			goto incomplete_cb;
 
 		amount = upk_u64le(coinbase, pos);
@@ -2510,53 +2547,55 @@ incomplete_cb:
 
 		total += amount;
 
-		pos += varint_decode(coinbase + pos, &curr_pk_script_len);
-		if (cbsize <= pos + curr_pk_script_len && do_payout_check)
+		i = varint_decode(coinbase + pos, cbsize - pos, &curr_pk_script_len);
+		if (!i || cbsize <= pos + i + curr_pk_script_len)
 			goto incomplete_cb;
+		pos += i;
 
-		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, opt_testnet_addr);
+		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			if (compare_op && compare_op->op) {
-				i = (bytes_len(target_script) == curr_pk_script_len &&
-					!memcmp(bytes_buf(target_script), coinbase + pos, curr_pk_script_len));
-				if (i)
+			if (target_addr || cbperc_compare_op && cbperc_compare_op->op) {
+				i = (bytes_len(&target_script) == curr_pk_script_len &&
+					!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
+				if (i) {
+					found_target = true;
 					target += amount;
+				}
 			} else
 				i = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Coinbase output: %10ld -- %34s%c", amount, addr, i ? '*' : '\0');
 		} else if (opt_debug) {
-			i = (sizeof(addr) - 1) / 2;
-			if (i > curr_pk_script_len)
-				i = curr_pk_script_len;
-			bin2hex(addr, coinbase + pos, i);
-			applog(LOG_DEBUG, "Coinbase output: %10ld PK %34s%c", amount, addr, (i < curr_pk_script_len) ? '-' : '\0');
+			char *hex = addr;
+			if (curr_pk_script_len * 2 >= sizeof(addr))
+				hex = malloc(curr_pk_script_len * 2 + 1);
+			if (hex) {
+				bin2hex(hex, coinbase + pos, curr_pk_script_len);
+				applog(LOG_DEBUG, "Coinbase output: %10ld PK %34s", amount, hex);
+				if (hex != addr)
+					free(hex);
+			} else
+				applog(LOG_DEBUG, "Coinbase output: %10ld PK (Unknown)", amount);
 		}
 
 		pos += curr_pk_script_len;
 	}
-	if (!total) {
-		applog(LOG_ERR, "Coinbase check: output no coins");
+	if (cbtotal_compare_op && !do_compare(total, cbtotal_compare_op)) {
+		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %ld, expecting %c %ld",
+			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
 		return false;
 	}
-	if (do_payout_check) {
-		bool pass_cb_check;
-		float cb_perc = (double)target / total;
-		if (compare_op->op == '>')
-			pass_cb_check = (cb_perc > compare_op->value);
-		else if (compare_op->op == '<')
-			pass_cb_check = (cb_perc < compare_op->value);
-		else
-			pass_cb_check = (cb_perc == compare_op->value);
-		if (!pass_cb_check) {
-			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
-				cb_perc, target, total, compare_op->op, compare_op->value);
-			return false;
-		}
-		if (opt_debug)
-			applog(LOG_DEBUG, "Coinbase output: target/total = %g %c %g",
-				cb_perc, compare_op->op, compare_op->value);
+	if (cbperc_compare_op && !do_compare((double)target / total, cbperc_compare_op)) {
+		applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
+			(double)target / total, target, total, cbperc_compare_op->op, cbperc_compare_op->value);
+		return false;
+	} else if (target_addr && !found_target) {
+		applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
+		return false;
 	}
+	if (opt_debug)
+		applog(LOG_DEBUG, "Coinbase output: (target, total, perc) = (%ld, %ld, %g)",
+			target, total, (double)target / total);
 
 	return true;
 }
@@ -2569,7 +2608,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	int merkles, i;
 	size_t cb1_len, cb2_len, n1_len;
 	json_t *arr;
-	bytes_t new_coinbase;
+	char cbaddr[35];
+	compare_op_t cbtotal_compare_op = COMPARE_OP_INIT, cbperc_compare_op = COMPARE_OP_INIT;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
@@ -2595,26 +2635,20 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (!job_id)
 		goto out;
 
+	get_pool_cbparam(pool, cbaddr, sizeof(cbaddr), &cbtotal_compare_op, &cbperc_compare_op);
+
 	cg_wlock(&pool->data_lock);
 
 	cb1_len = strlen(coinbase1) / 2;
 	cb2_len = strlen(coinbase2) / 2;
 	n1_len = pool->next_nonce1 ? strlen(pool->next_nonce1) / 2 : pool->n1_len;
-	bytes_resize(&new_coinbase, cb1_len + n1_len + pool->next_n2size + cb2_len);
-	uint8_t *coinbase = bytes_buf(&new_coinbase);
+	bytes_resize(&pool->swork.coinbase, cb1_len + n1_len + pool->next_n2size + cb2_len);
+	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
 	hex2bin(coinbase, coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len + n1_len + pool->next_n2size, coinbase2, cb2_len);
-	if (!check_coinbase(coinbase, bytes_len(&new_coinbase), &opt_coinbase_perc_op, &opt_coinbase_script)) {
-		/* We can safely quit here, since no change had been made till now */
-		cg_wunlock(&pool->data_lock);
-		bytes_free(&new_coinbase);
-
-		applog(LOG_ERR, "Disable pool %d for failing to pass coinbase check", pool->pool_no);
-		disable_pool(pool, POOL_MISBEHAVING);
-		if (pool == current_pool())
-			switch_pools(NULL);
-		goto out;
-	}
+	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), cbaddr, &cbtotal_compare_op, &cbperc_compare_op))
+		applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
+		/* Just go through the rest process to avoid an "unknown stratum message" log */
 
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
@@ -2650,8 +2684,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
 
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
-	bytes_assimilate(&pool->swork.coinbase, &new_coinbase);
-	bytes_free(&new_coinbase);
 	hex2bin(&coinbase[cb1_len], pool->swork.nonce1, pool->n1_len);
 	// NOTE: gap for nonce2, filled at work generation time
 

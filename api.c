@@ -2554,8 +2554,6 @@ static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 	}
 
 	disable_pool(pool, POOL_DISABLED);
-	if (pool == current_pool())
-		switch_pools(NULL);
 
 	message(io_data, MSG_DISPOOL, id, NULL, isjson);
 }
@@ -2597,7 +2595,6 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	disable_pool(pool, POOL_DISABLED);
 	rpc_url = escape_string(pool->rpc_url, isjson);
 	if (rpc_url != pool->rpc_url)
 		dofree = true;
