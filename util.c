@@ -2585,17 +2585,16 @@ incomplete_cb:
 			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
 		return false;
 	}
-	if (cbperc_compare_op && !do_compare((double)target / total, cbperc_compare_op)) {
+	if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
 		applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
-			(double)target / total, target, total, cbperc_compare_op->op, cbperc_compare_op->value);
+			(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
 		return false;
 	} else if (target_addr && !found_target) {
 		applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
 		return false;
 	}
 	if (opt_debug)
-		applog(LOG_DEBUG, "Coinbase output: (target, total, perc) = (%ld, %ld, %g)",
-			target, total, (double)target / total);
+		applog(LOG_DEBUG, "Coinbase output: (target, total) = (%ld, %ld)", target, total);
 
 	return true;
 }
