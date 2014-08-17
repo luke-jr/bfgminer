@@ -9562,7 +9562,7 @@ bool test_hash(const void * const phash, const float diff)
 		// FIXME: > 1 should check more
 		return !hash[7];
 	
-	const uint32_t Htarg = (uint32_t)(0x100000000 * diff) - 1;
+	const uint32_t Htarg = (uint32_t)(1. / diff);
 	const uint32_t tmp_hash7 = le32toh(hash[7]);
 	
 	applog(LOG_DEBUG, "htarget %08lx hash %08lx",
