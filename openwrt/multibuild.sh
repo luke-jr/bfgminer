@@ -52,7 +52,7 @@ for cfn in $vcfglist; do
 	yes '' | make oldconfig
 	make {tools,toolchain}/install package/bfgminer/{clean,compile}
 	mkdir "$reporoot/$plat" -pv
-	cp -v "bin/$plat/packages/"b{fgminer,itforce}*_${plat}.ipk "$reporoot/$plat/"
+	cp -v "bin/$plat/packages/"bfgminer*_${plat}.ipk "$reporoot/$plat/"
 	if [ -d "$reporoot/${BITSTREAM_PKG_PATH}" ]; then
 	(
 		cd "$reporoot/$plat"
