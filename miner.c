@@ -1099,10 +1099,10 @@ static inline bool get_compare_param(const char * const uri, const char * const 
 		if (size < 2 || size > sizeof(value))
 			return false;
 
-		if (value[0] != '>' && value[0] != '<' && value[0] != '=')
+		if (value[0] != '>' && value[0] != '+' && value[0] != '<' && value[0] != '-' && value[0] != '=')
 			return false;
 
-		op->op = value[0];
+		op->op = (value[0] == '+' ? '>' : (value[0] == '-' ? '<' : value[0]));
 		op->value = atof(&value[1]);
 	}
 	return true;
