@@ -6419,10 +6419,10 @@ void switch_pools(struct pool *selected)
 	if (pool_unusable(pool) && failover_pool)
 		pool = failover_pool;
 	currentpool = pool;
+	cg_wunlock(&control_lock);
 	mutex_lock(&lp_lock);
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
-	cg_wunlock(&control_lock);
 
 	/* Set the lagging flag to avoid pool not providing work fast enough
 	 * messages in failover only mode since  we have to get all fresh work
