@@ -2329,7 +2329,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 	pool = pools[id];
 	pool->failover_only = false;
-	pool->enabled = POOL_ENABLED;
+	enable_pool(pool);
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2448,7 +2448,7 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool->failover_only = false;
-	pool->enabled = POOL_ENABLED;
+	enable_pool(pool);
 	if (pool->prio < current_pool()->prio)
 		switch_pools(pool);
 
@@ -2553,9 +2553,7 @@ static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	pool->enabled = POOL_DISABLED;
-	if (pool == current_pool())
-		switch_pools(NULL);
+	disable_pool(pool, POOL_DISABLED);
 
 	message(io_data, MSG_DISPOOL, id, NULL, isjson);
 }
@@ -2597,7 +2595,6 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	pool->enabled = POOL_DISABLED;
 	rpc_url = escape_string(pool->rpc_url, isjson);
 	if (rpc_url != pool->rpc_url)
 		dofree = true;

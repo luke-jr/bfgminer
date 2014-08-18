@@ -1181,6 +1181,7 @@ enum pool_enable {
 	POOL_DISABLED,
 	POOL_ENABLED,
 	POOL_REJECTING,
+	POOL_MISBEHAVING,
 };
 
 enum pool_protocol {
@@ -1492,6 +1493,8 @@ extern double cgpu_utility(struct cgpu_info *);
 extern void kill_work(void);
 extern int prioritize_pools(char *param, int *pid);
 extern void validate_pool_priorities(void);
+extern void enable_pool(struct pool *pool);
+extern void disable_pool(struct pool *pool, enum pool_enable enable_status);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
@@ -1503,6 +1506,7 @@ extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern bool pool_may_redirect_to(struct pool *, const char *uri);
+extern bool get_pool_cbparam(struct pool * const, char *, size_t, compare_op_t *, compare_op_t *);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -1525,6 +1529,9 @@ extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
+extern char *set_b58addr(const char * const arg, bytes_t * const b);
+extern size_t uri_get_param(const char * const uri, const char * const param, char *val, size_t size);
+extern bool check_coinbase(const uint8_t *, size_t, const char *, compare_op_t *, compare_op_t *);
 
 enum api_data_type {
 	API_ESCAPE,

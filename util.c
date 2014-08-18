@@ -61,6 +61,7 @@
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
+#include "sha2.h"
 #include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
@@ -2252,6 +2253,20 @@ nextmatch:
 	return URI_FIND_PARAM_FOUND;
 }
 
+size_t uri_get_param(const char * const uri, const char * const param, char *val, size_t size)
+{
+	const char *p, *q = uri_find_param(uri, param, NULL);
+	if (q && q != URI_FIND_PARAM_FOUND) {
+		for (p = q; *p && *p != ','; ++p);
+		if (p - q < size) {
+			memcpy(val, q, p - q);
+			val[p - q] = '\0';
+		}
+		return (p - q + 1);
+	}
+	return 0;
+}
+
 enum bfg_tristate uri_get_param_bool2(const char * const uri, const char * const param)
 {
 	bool invert, foundval = true;
@@ -2351,14 +2366,254 @@ void stratum_probe_transparency(struct pool *pool)
 	pool->swork.transparency_probed = true;
 }
 
+static const char b58digits[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+bool b58enc(char *b58, size_t *b58sz, const uint8_t *bin, size_t binsz)
+{
+	int i, j, carry, high, zcount = 0;
+	size_t size;
+	uint8_t *buf;
+
+	while (zcount < binsz && !bin[zcount]) ++zcount;
+
+	size = (binsz - zcount) * 138 / 100 + 1;
+	buf = malloc(size);
+	if (!buf)
+		return false;
+	memset(buf, 0, size);
+
+	for (i = zcount, high = size - 1; i < binsz; ++i, high = j) {
+		for (carry = bin[i], j = size - 1; (j > high) || carry; --j) {
+			carry += 256 * buf[j];
+			buf[j] = carry % 58;
+			carry /= 58;
+		}
+	}
+
+	for (j = 0; j < size && !buf[j]; ++j);
+
+	if (*b58sz <= zcount + size - j) {
+		free(buf);
+		*b58sz = zcount + size - j + 1;
+		return false;
+	}
+
+	if (zcount)
+		memset(b58, '1', zcount);
+	for (i = zcount; j < size; ++i, ++j)
+		b58[i] = b58digits[buf[j]];
+	b58[i] = '\0';
+	*b58sz = i + 1;
+
+	free(buf);
+	return true;
+}
+
+inline bool b58dec(uint8_t *bin, size_t binsz, const char *b58, size_t b58sz)
+{
+	/* Leverage _blkmk_b58tobin from libblkmaker */
+	extern bool _blkmk_b58tobin(void *bin, size_t binsz, const char *b58, size_t b58sz);
+	return _blkmk_b58tobin(bin, binsz, b58, b58sz);
+}
+
+static bool test_address(char *addr, size_t *addrsz, uint8_t ver, const uint8_t *pkhash)
+{
+	uint8_t buf[25], hret[32];
+
+	buf[0] = ver;
+	memcpy(buf + 1, pkhash, 20);
+	sha256(buf, 21, hret);
+	sha256(hret, 32, hret);
+	memcpy(buf + 21, hret, 4);
+
+	return (b58enc(addr, addrsz, buf, 25) && (*addrsz == 35 || *addrsz == 34) &&
+			b58dec(buf, sizeof(buf), addr, *addrsz - 1) && buf[0] == ver && !memcmp(buf + 1, pkhash, 20));
+}
+
+size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t scriptsz, bool testnet)
+{
+	char addr[35];
+	size_t size = sizeof(addr);
+	bool bok = false;
+
+	if (scriptsz == 25) {
+		if (script[0] != 0x76 || script[1] != 0xa9 || script[2] != 0x14 || script[23] != 0x88 || script[24] != 0xac)
+			return 0;
+		bok = test_address(addr, &size, testnet ? 0x6f : 0x00, script + 3);
+	} else if (scriptsz == 23) {
+		if (script[0] != 0xa9 || script[1] != 0x14 || script[22] != 0x87)
+			return 0;
+		bok = test_address(addr, &size, testnet ? 0xc4 : 0x05, script + 2);
+	}
+	if (!bok)
+		return 0;
+	if (outsz >= size)
+		strcpy(out, addr);
+	return size;
+}
+
+size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
+{
+	if (size > 8 && p[0] == 0xff) {
+		*n = upk_u64le(p, 0);
+		return 9;
+	}
+	if (size > 4 && p[0] == 0xfe) {
+		*n = upk_u32le(p, 0);
+		return 5;
+	}
+	if (size > 2 && p[0] == 0xfd) {
+		*n = upk_u16le(p, 0);
+		return 3;
+	}
+	if (size > 0) {
+		*n = p[0];
+		return 1;
+	}
+	return 0;
+}
+
+static inline bool do_compare(double value, compare_op_t *op)
+{
+	switch (op->op) {
+	case '>':
+		return (value > op->value);
+	case '<':
+		return (value < op->value);
+	case '=':
+		return (value == op->value);
+	default:
+		return true;
+	}
+}
+
+bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
+	const char *target_addr, compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op )
+{
+	int i;
+	size_t pos;
+	uint64_t len, total, target, amount, curr_pk_script_len;
+	bool on_testnet = false, found_target = false;
+	bytes_t target_script = BYTES_INIT;
+	char addr[35];
+
+	if (cbsize < 62) { /* Smallest possible length */
+		applog(LOG_ERR, "Coinbase check: invalid length -- %zu", cbsize);
+		return false;
+	}
+	pos = 4; /* Skip the version */
+
+	if (coinbase[pos] != 1) {
+		applog(LOG_ERR, "Coinbase check: multiple inputs in coinbase: 0x%02x", coinbase[pos]);
+		return false;
+	}
+	pos += 1 /* varint length */ + 32 /* prevhash */ + 4 /* 0xffffffff */;
+
+	if (coinbase[pos] < 2 || coinbase[pos] > 100) {
+		applog(LOG_ERR, "Coinbase check: invalid input script sig length: 0x%02x", coinbase[pos]);
+		return false;
+	}
+	pos += 1 /* varint length */ + coinbase[pos] + 4 /* 0xffffffff */;
+
+	if (cbsize <= pos) {
+incomplete_cb:
+		applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
+		return false;
+	}
+
+	if (target_addr) {
+		if (set_b58addr(target_addr, &target_script)) {
+			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s", target_addr);
+			return false;
+		}
+		on_testnet = target_addr[0] != '1' && target_addr[0] != '3' && target_addr[0] != 'x';
+	}
+
+	total = target = 0;
+
+	i = varint_decode(coinbase + pos, cbsize - pos, &len);
+	if (!i)
+		goto incomplete_cb;
+	pos += i;
+
+	while (len-- > 0) {
+		if (cbsize <= pos + 8)
+			goto incomplete_cb;
+
+		amount = upk_u64le(coinbase, pos);
+		pos += 8; /* amount length */
+
+		total += amount;
+
+		i = varint_decode(coinbase + pos, cbsize - pos, &curr_pk_script_len);
+		if (!i || cbsize <= pos + i + curr_pk_script_len)
+			goto incomplete_cb;
+		pos += i;
+
+		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
+		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
+			if (target_addr) {
+				i = (bytes_len(&target_script) == curr_pk_script_len &&
+					!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
+				if (i) {
+					found_target = true;
+					target += amount;
+				}
+			} else
+				i = 0;
+			if (opt_debug)
+				applog(LOG_DEBUG, "Coinbase output: %10ld -- %34s%c", amount, addr, i ? '*' : '\0');
+		} else if (opt_debug) {
+			char *hex = addr;
+			if (curr_pk_script_len * 2 >= sizeof(addr))
+				hex = malloc(curr_pk_script_len * 2 + 1);
+			if (hex) {
+				bin2hex(hex, coinbase + pos, curr_pk_script_len);
+				applog(LOG_DEBUG, "Coinbase output: %10ld PK %34s", amount, hex);
+				if (hex != addr)
+					free(hex);
+			} else
+				applog(LOG_DEBUG, "Coinbase output: %10ld PK (Unknown)", amount);
+		}
+
+		pos += curr_pk_script_len;
+	}
+	if (cbtotal_compare_op && !do_compare(total, cbtotal_compare_op)) {
+		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %ld, expecting %c %ld",
+			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
+		return false;
+	}
+	if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
+		applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
+			(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
+		return false;
+	} else if (target_addr && !found_target) {
+		applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
+		return false;
+	}
+
+	if (cbsize < pos + 4) {
+		applog(LOG_ERR, "Coinbase check: No room for locktime");
+		return false;
+	}
+	pos += 4;
+
+	if (opt_debug)
+		applog(LOG_DEBUG, "Coinbase: (size, pos, target, total) = (%zu, %zu, %ld, %ld)", cbsize, pos, target, total);
+
+	return true;
+}
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	const char *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
 	char *job_id;
 	bool clean, ret = false;
 	int merkles, i;
-	size_t cb1_len, cb2_len;
+	size_t cb1_len, cb2_len, n1_len;
 	json_t *arr;
+	char cbaddr[35];
+	compare_op_t cbtotal_compare_op = COMPARE_OP_INIT, cbperc_compare_op = COMPARE_OP_INIT;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
@@ -2379,12 +2634,26 @@ static bool parse_notify(struct pool *pool, json_t *val)
 
 	if (!prev_hash || !coinbase1 || !coinbase2 || !bbversion || !nbit || !ntime)
 		goto out;
-	
+
 	job_id = json_array_string(val, 0);
 	if (!job_id)
 		goto out;
 
+	get_pool_cbparam(pool, cbaddr, sizeof(cbaddr), &cbtotal_compare_op, &cbperc_compare_op);
+
 	cg_wlock(&pool->data_lock);
+
+	cb1_len = strlen(coinbase1) / 2;
+	cb2_len = strlen(coinbase2) / 2;
+	n1_len = pool->next_nonce1 ? strlen(pool->next_nonce1) / 2 : pool->n1_len;
+	bytes_resize(&pool->swork.coinbase, cb1_len + n1_len + pool->next_n2size + cb2_len);
+	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
+	hex2bin(coinbase, coinbase1, cb1_len);
+	hex2bin(coinbase + cb1_len + n1_len + pool->next_n2size, coinbase2, cb2_len);
+	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), cbaddr, &cbtotal_compare_op, &cbperc_compare_op))
+		applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
+		/* Just go through the rest process to avoid an "unknown stratum message" log */
+
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
 	pool->swork.job_id = job_id;
@@ -2395,11 +2664,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	}
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
-	
+
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
-		pool->n1_len = strlen(pool->next_nonce1) / 2;
+		pool->n1_len = n1_len;
 		pool->swork.nonce1 = pool->next_nonce1;
 		pool->next_nonce1 = NULL;
 	}
@@ -2408,27 +2677,20 @@ static bool parse_notify(struct pool *pool, json_t *val)
 #ifdef WORDS_BIGENDIAN
 	pool->nonce2off = (n2size < sizeof(pool->nonce2)) ? (sizeof(pool->nonce2) - n2size) : 0;
 #endif
-	
+
 	hex2bin(&pool->swork.header1[0], bbversion,  4);
 	hex2bin(&pool->swork.header1[4], prev_hash, 32);
 	hex2bin((void*)&pool->swork.ntime, ntime, 4);
 	pool->swork.ntime = be32toh(pool->swork.ntime);
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
-	
+
 	/* Nominally allow a driver to ntime roll 60 seconds */
 	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
-	
-	cb1_len = strlen(coinbase1) / 2;
-	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
-	cb2_len = strlen(coinbase2) / 2;
 
-	bytes_resize(&pool->swork.coinbase, pool->swork.nonce2_offset + pool->swork.n2size + cb2_len);
-	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
-	hex2bin(coinbase, coinbase1, cb1_len);
+	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
 	hex2bin(&coinbase[cb1_len], pool->swork.nonce1, pool->n1_len);
 	// NOTE: gap for nonce2, filled at work generation time
-	hex2bin(&coinbase[pool->swork.nonce2_offset + pool->swork.n2size], coinbase2, cb2_len);
-	
+
 	bytes_resize(&pool->swork.merkle_bin, 32 * merkles);
 	for (i = 0; i < merkles; i++)
 		hex2bin(&bytes_buf(&pool->swork.merkle_bin)[i * 32], json_string_value(json_array_get(arr, i)), 32);

@@ -1038,8 +1038,6 @@ void adjust_quota_gcd(void)
 	applog(LOG_DEBUG, "Global quota greatest common denominator set to %lu", gcd);
 }
 
-static void enable_pool(struct pool *);
-
 /* Return value is ignored if not called from add_pool_details */
 struct pool *add_pool(void)
 {
@@ -1091,6 +1089,43 @@ struct pool *add_pool(void)
 		currentpool = pool;
 
 	return pool;
+}
+
+static inline bool get_compare_param(const char * const uri, const char * const param, compare_op_t *op)
+{
+	char value[32]; /* We don't expect an too long value */
+	size_t size = uri_get_param(uri, param, value, sizeof(value));
+	if (size) {
+		if (size < 2 || size > sizeof(value))
+			return false;
+
+		if (value[0] != '>' && value[0] != '+' && value[0] != '<' && value[0] != '-' && value[0] != '=')
+			return false;
+
+		op->op = (value[0] == '+' ? '>' : (value[0] == '-' ? '<' : value[0]));
+		op->value = atof(&value[1]);
+	}
+	return true;
+}
+
+bool get_pool_cbparam(struct pool * const pool, char *cbaddr, size_t cbaddrsz,
+	compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op)
+{
+	size_t size;
+
+	if (cbaddr) {
+		size = uri_get_param(pool->rpc_url, "cbaddr", cbaddr, cbaddrsz);
+		if (size && size > cbaddrsz)
+			return false;
+	}
+
+	if (cbtotal_compare_op && !get_compare_param(pool->rpc_url, "cbtotal", cbtotal_compare_op))
+		return false;
+
+	if (cbperc_compare_op && !get_compare_param(pool->rpc_url, "cbperc", cbperc_compare_op))
+		return false;
+
+	return true;
 }
 
 static
@@ -1185,7 +1220,6 @@ char *set_strdup(const char *arg, char **p)
 }
 
 #if BLKMAKER_VERSION > 1
-static
 char *set_b58addr(const char * const arg, bytes_t * const b)
 {
 	size_t scriptsz = blkmk_address_to_script(NULL, 0, arg);
@@ -3104,8 +3138,17 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		{
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
-			
+			char cbaddr[35];
+			compare_op_t cbtotal_compare_op, cbperc_compare_op;
+
+			get_pool_cbparam(pool, cbaddr, sizeof(cbaddr), &cbtotal_compare_op, &cbperc_compare_op);
+			if (!check_coinbase(cbtxn, cbtxnsz, cbaddr, &cbtotal_compare_op, &cbperc_compare_op)) {
+				applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
+				disable_pool(pool, POOL_MISBEHAVING);
+			}
+
 			cg_wlock(&pool->data_lock);
+
 			swork->tr = work->tr;
 			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
 			swork->nonce2_offset = cbextranonceoffset;
@@ -3123,6 +3166,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			// FIXME: Do something with expire
 			pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 			pool->nonce2 = 0;
+
 			cg_wunlock(&pool->data_lock);
 		}
 		else
@@ -4397,7 +4441,7 @@ void logwin_update(void)
 }
 #endif
 
-static void enable_pool(struct pool *pool)
+void enable_pool(struct pool *pool)
 {
 	if (pool->enabled != POOL_ENABLED) {
 		mutex_lock(&lp_lock);
@@ -4408,20 +4452,27 @@ static void enable_pool(struct pool *pool)
 	}
 }
 
-#ifdef HAVE_CURSES
-static void disable_pool(struct pool *pool)
+void disable_pool(struct pool *pool, enum pool_enable enable_status)
 {
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_DISABLED;
-}
-#endif
+	if (pool->enabled == POOL_DISABLED)
+		/* had been manually disabled before */
+		return;
 
-static void reject_pool(struct pool *pool)
-{
-	if (pool->enabled == POOL_ENABLED)
-		enabled_pools--;
-	pool->enabled = POOL_REJECTING;
+	if (pool->enabled != POOL_ENABLED) {
+		/* has been set POOL_REJECTING or POOL_MISBEHAVING,
+		   just change to the new status directly */
+		pool->enabled = enable_status;
+		return;
+	}
+
+	/* Fall into the lock area */
+	mutex_lock(&lp_lock);
+	enabled_pools--;
+	pool->enabled = enable_status;
+	mutex_unlock(&lp_lock);
+
+	if (pool == current_pool())
+		switch_pools(NULL);
 }
 
 static double share_diff(const struct work *);
@@ -4609,11 +4660,9 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			double utility = total_accepted / total_secs * 60;
 
 			if (pool->seq_rejects > utility * 3) {
-				applog(LOG_WARNING, "Pool %d rejected %d sequential shares, disabling!",
-				       pool->pool_no, pool->seq_rejects);
-				reject_pool(pool);
-				if (pool == current_pool())
-					switch_pools(NULL);
+				applog(LOG_WARNING, "Mark pool %d as rejecting after it rejected %d sequential shares",
+					pool->pool_no, pool->seq_rejects);
+				disable_pool(pool, POOL_REJECTING);
 				pool->seq_rejects = 0;
 			}
 		}
@@ -6866,6 +6915,8 @@ void remove_pool(struct pool *pool)
 	int i, last_pool = total_pools - 1;
 	struct pool *other;
 
+	disable_pool(pool, POOL_DISABLED);
+
 	/* Boost priority of any lower prio than this one */
 	for (i = 0; i < total_pools; i++) {
 		other = pools[i];
@@ -6873,15 +6924,17 @@ void remove_pool(struct pool *pool)
 			other->prio--;
 	}
 
-	if (pool->pool_no < last_pool) {
+ 	if (pool->pool_no < last_pool) {
 		/* Swap the last pool for this one */
 		(pools[last_pool])->pool_no = pool->pool_no;
 		pools[pool->pool_no] = pools[last_pool];
 	}
+
 	/* Give it an invalid number */
 	pool->pool_no = total_pools;
 	pool->removed = true;
 	pool->has_stratum = false;
+
 	total_pools--;
 }
 
@@ -7248,6 +7301,9 @@ updated:
 				case POOL_REJECTING:
 					wlogprint("Rejectin ");
 					break;
+				case POOL_MISBEHAVING:
+					wlogprint("Misbehav ");
+					break;
 			}
 			_wlogprint(pool_proto_str(pool));
 			wlogprint(" Quota %d Pool %d: %s  User:%s\n",
@@ -7296,7 +7352,6 @@ retry:
 			wlogprint("Unable to remove pool due to activity\n");
 			goto retry;
 		}
-		disable_pool(pool);
 		remove_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "s", 1)) {
@@ -7321,9 +7376,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		disable_pool(pool);
-		if (pool == current_pool())
-			switch_pools(NULL);
+		disable_pool(pool, POOL_DISABLED);
 		goto updated;
 	} else if (!strncasecmp(&input, "e", 1)) {
 		selected = curses_int("Select pool number");
@@ -9353,14 +9406,14 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	data32 = (uint32_t *)merkle_sha;
 	swap32 = (uint32_t *)merkle_root;
 	flip32(swap32, data32);
-	
+
 	memcpy(&work->data[0], swork->header1, 36);
 	memcpy(&work->data[36], merkle_root, 32);
 	*((uint32_t*)&work->data[68]) = htobe32(swork->ntime + timer_elapsed(&swork->tv_received, NULL));
 	memcpy(&work->data[72], swork->diffbits, 4);
 	memset(&work->data[76], 0, 4);  // nonce
 	memcpy(&work->data[80], workpadding_bin, 48);
-	
+
 	work->ntime_roll_limits = swork->ntime_roll_limits;
 
 	/* Copy parameters required for share submission */
@@ -12115,7 +12168,7 @@ int main(int argc, char *argv[])
 #ifdef WIN32
 	LoadLibrary("backtrace.dll");
 #endif
-	
+
 	atexit(bfg_atexit);
 
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
@@ -12134,7 +12187,7 @@ int main(int argc, char *argv[])
 			quit(1, "Failed to initialise Winsock: %s", bfg_strerror(i, BST_SOCKET));
 	}
 #endif
-	
+
 	/* This dangerous functions tramples random dynamically allocated
 	 * variables so do it before anything at all */
 	if (unlikely(curl_global_init(CURL_GLOBAL_ALL)))
@@ -12211,10 +12264,10 @@ int main(int argc, char *argv[])
 		{
 			setup_benchmark_pool();
 			double rate = bench_algo_stage3(atoi(buf));
-			
+
 			// Write result to shared memory for parent
 			char unique_name[64];
-			
+
 			if (GetEnvironmentVariable("BFGMINER_SHARED_MEM", unique_name, 32))
 			{
 				HANDLE map_handle = CreateFileMapping(
@@ -12269,7 +12322,7 @@ int main(int argc, char *argv[])
 	opt_register_table(opt_config_table, NULL);
 	opt_register_table(opt_cmdline_table, NULL);
 	opt_early_parse(argc, argv, applog_and_exit);
-	
+
 	if (!config_loaded)
 	{
 		load_default_config();
@@ -12342,7 +12395,7 @@ int main(int argc, char *argv[])
 
 		setup_benchmark_pool();
 	}
-	
+
 	if (opt_unittest) {
 		test_cgpu_match();
 		test_intrange();
