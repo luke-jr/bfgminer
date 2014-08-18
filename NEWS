@@ -1,5 +1,7 @@
 BFGMiner Version 4.7.0 - August 17, 2014
 
+- openwrt/multibuild: Avoid copying bitforce-firmware-flash, which is no longer
+included
 - AUTHORS: Simpler design, alphabetise lists
 - Remove obsolete SuSE packaging
 - Bugfix: test_hash: Fix Htarg calculation for exact binary divisions of diff 1
