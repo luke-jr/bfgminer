@@ -574,8 +574,6 @@ static void CRYPTOPP_FASTCALL X86_SHA256_HashBlocks(word32 *state, const word32 
 #endif
 }
 
-static inline bool HasSSE2(void) { return false; }
-
 static void SHA256_Transform32(word32 *state, const word32 *data)
 {
 	word32 W[16];
