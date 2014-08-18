@@ -1083,10 +1083,10 @@ struct pool *add_pool(void)
 	
 	adjust_quota_gcd();
 	
-	enable_pool(pool);
-	
 	if (!currentpool)
 		currentpool = pool;
+	
+	enable_pool(pool);
 
 	return pool;
 }
@@ -4403,6 +4403,8 @@ void enable_pool(struct pool * const pool)
 		pool->enabled = POOL_ENABLED;
 		pthread_cond_broadcast(&lp_cond);
 		mutex_unlock(&lp_lock);
+		if (pool->prio < current_pool()->prio)
+			switch_pools(pool);
 	}
 }
 
@@ -4536,7 +4538,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		if (unlikely(pool->enabled == POOL_REJECTING)) {
 			applog(LOG_WARNING, "Rejecting pool %d now accepting shares, re-enabling!", pool->pool_no);
 			enable_pool(pool);
-			switch_pools(NULL);
 		}
 
 		if (unlikely(work->block)) {
@@ -6357,6 +6358,9 @@ void switch_pools(struct pool *selected)
 	struct pool *pool, *last_pool, *failover_pool = NULL;
 	int i, pool_no, next_pool;
 
+	if (selected)
+		enable_pool(selected);
+	
 	cg_wlock(&control_lock);
 	last_pool = currentpool;
 	pool_no = currentpool->pool_no;
@@ -7311,7 +7315,6 @@ retry:
 		}
 		pool = pools[selected];
 		pool->failover_only = false;
-		enable_pool(pool);
 		switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
@@ -7336,8 +7339,6 @@ retry:
 		pool = pools[selected];
 		pool->failover_only = false;
 		enable_pool(pool);
-		if (pool->prio < current_pool()->prio)
-			switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)

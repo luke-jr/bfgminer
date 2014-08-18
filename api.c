@@ -2329,7 +2329,6 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 	pool = pools[id];
 	pool->failover_only = false;
-	enable_pool(pool);
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2449,8 +2448,6 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 
 	pool->failover_only = false;
 	enable_pool(pool);
-	if (pool->prio < current_pool()->prio)
-		switch_pools(pool);
 
 	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }
