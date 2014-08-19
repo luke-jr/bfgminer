@@ -62,6 +62,7 @@
 #include "compat.h"
 #include "util.h"
 #include "sha2.h"
+#include "ripemd160.h"
 #include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
@@ -2416,7 +2417,8 @@ inline bool b58dec(uint8_t *bin, size_t binsz, const char *b58, size_t b58sz)
 	return _blkmk_b58tobin(bin, binsz, b58, b58sz);
 }
 
-static bool test_address(char *addr, size_t *addrsz, uint8_t ver, const uint8_t *pkhash)
+/* Caller ensure the pkhash is 20 bytes */
+static bool pubkeyhash_to_address(char *addr, size_t *addrsz, const uint8_t ver, const uint8_t *pkhash)
 {
 	uint8_t buf[25], hret[32];
 
@@ -2430,28 +2432,57 @@ static bool test_address(char *addr, size_t *addrsz, uint8_t ver, const uint8_t 
 			b58dec(buf, sizeof(buf), addr, *addrsz - 1) && buf[0] == ver && !memcmp(buf + 1, pkhash, 20));
 }
 
+static bool pubkey_to_address(char *addr, size_t *addrsz, const uint8_t ver, const uint8_t *pubkey, const size_t pksize)
+{
+	uint8_t hret[32];
+
+	sha256(pubkey, pksize, hret);
+	ripemd160(hret, 32, hret);
+
+	return pubkeyhash_to_address(addr, addrsz, ver, hret);
+}
+
 size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t scriptsz, bool testnet)
 {
 	char addr[35];
 	size_t size = sizeof(addr);
 	bool bok = false;
 
-	if (scriptsz == 25) {
-		if (script[0] != 0x76 || script[1] != 0xa9 || script[2] != 0x14 || script[23] != 0x88 || script[24] != 0xac)
-			return 0;
-		bok = test_address(addr, &size, testnet ? 0x6f : 0x00, script + 3);
-	} else if (scriptsz == 23) {
-		if (script[0] != 0xa9 || script[1] != 0x14 || script[22] != 0x87)
-			return 0;
-		bok = test_address(addr, &size, testnet ? 0xc4 : 0x05, script + 2);
-	}
+	if (scriptsz == 25 && script[0] == 0x76 && script[1] == 0xa9 && script[2] == 0x14 && script[23] == 0x88 && script[24] == 0xac)
+		bok = pubkeyhash_to_address(addr, &size, testnet ? 0x6f : 0x00, script + 3);
+	else if (scriptsz == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87)
+		bok = pubkeyhash_to_address(addr, &size, testnet ? 0xc4 : 0x05, script + 2);
+	else if (scriptsz == 66 && (script[0] > 3 && script[0] < 8) && script[65] == 0xac)
+		bok = pubkey_to_address(addr, &size, testnet ? 0x6f : 0x00, script, 65);
+	else if (scriptsz == 34 && (script[0] == 2 && script[0] == 3) && script[33] == 0xac)
+		bok = pubkey_to_address(addr, &size, testnet ? 0x6f : 0x00, script, 33);
 	if (!bok)
 		return 0;
 	if (outsz >= size)
 		strcpy(out, addr);
 	return size;
 }
+/*
+void test_pk_2_addr()
+{
+	uint8_t pk[66];
+	char addr[35];
 
+	hex2bin(pk, "04ae1a62fe09c5f51b13905f07f06b99a2f7159b2225f374cd378d71302fa28414e7aab37397f554a7df5f142c21c1b7303b8a0626f1baded5c72a704f7e6cd84cac", 66);
+	if (!script_to_address(addr, sizeof(addr), pk, 66, false) || strcmp(addr, "1Q2TWHE3GMdB6BZKafqwxXtWAWgFt5Jvm3")) {
+		fprintf(stderr, "pubkey_to_address failed\n");
+		exit(1);
+	}
+
+	hex2bin(pk, "0411db93e1dcdb8a016b49840f8c53bc1eb68a382e97b1482ecad7b148a6909a5cb2e0eaddfb84ccf9744464f82e160bfa9b8b64f9d4c03f999b8643f656b412a3ac", 66);
+	if (!script_to_address(addr, sizeof(addr), pk, 66, false) || strcmp(addr, "12cbQLTFMXRnSzktFkuoG3eHoMeFtpTu3S")) {
+		fprintf(stderr, "pubkey_to_address failed\n");
+		exit(1);
+	}
+
+	printf("Pubkey To Address OK\n");
+}
+*/
 size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
 	if (size > 8 && p[0] == 0xff) {
@@ -2523,10 +2554,10 @@ incomplete_cb:
 
 	if (target_addr) {
 		/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
- 		 * need support it later, but now leave the code just so.
- 		 *
+		 * need support it later, but now leave the code just so.
+		 *
 		 * Regarding details of address prefix 'x', check the below URL:
- 		 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
+		 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
 		 */
 		if (set_b58addr(target_addr, &target_script)) {
 			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s, ignoring it", target_addr);

@@ -72,10 +72,10 @@ bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
 # common sources
 bfgminer_SOURCES := miner.c
 
-bfgminer_SOURCES += miner.h compat.h  \
+bfgminer_SOURCES += miner.h compat.h \
 	deviceapi.c deviceapi.h \
-		   util.c util.h logging.h		\
-		   sha2.c sha2.h api.c
+	util.c util.h logging.h	\
+	ripemd160.c ripemd160.h sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
 .PHONY: update-version
