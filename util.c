@@ -2590,12 +2590,11 @@ incomplete_cb:
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			i = (target_addr && bytes_len(&target_script) == curr_pk_script_len &&
-				!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
-			if (i) {
+			if (target_addr && !strcmp(addr, target_addr)) {
 				found_target = true;
 				target += amount;
-			}
+			} else
+				i = 0;
 			if (opt_debug)
 				applog(LOG_DEBUG, "Coinbase output: %10lu -- %34s%c", amount, addr, i ? '*' : '\0');
 		} else if (opt_debug) {
@@ -2687,9 +2686,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
 	hex2bin(coinbase, coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len + n1_len + pool->next_n2size, coinbase2, cb2_len);
-	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), cbaddr, &cbtotal_compare_op, &cbperc_compare_op))
+	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), cbaddr, &cbtotal_compare_op, &cbperc_compare_op)) {
 		applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
 		/* Just go through the rest process to avoid an "unknown stratum message" log */
+		disable_pool(pool, POOL_MISBEHAVING);
+	}
 
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);
