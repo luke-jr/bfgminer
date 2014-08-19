@@ -2257,7 +2257,7 @@ size_t uri_get_param(const char * const uri, const char * const param, char *val
 {
 	const char *p, *q = uri_find_param(uri, param, NULL);
 	if (q && q != URI_FIND_PARAM_FOUND) {
-		for (p = q; *p && *p != ','; ++p);
+		for (p = q; *p && *p != ',' && *p != '#'; ++p);
 		if (p - q < size) {
 			memcpy(val, q, p - q);
 			val[p - q] = '\0';
@@ -2498,7 +2498,7 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
 	char addr[35];
 
 	if (cbsize < 62) { /* Smallest possible length */
-		applog(LOG_ERR, "Coinbase check: invalid length -- %zu", cbsize);
+		applog(LOG_ERR, "Coinbase check: invalid length -- %lu", cbsize);
 		return false;
 	}
 	pos = 4; /* Skip the version */
@@ -2522,10 +2522,17 @@ incomplete_cb:
 	}
 
 	if (target_addr) {
+		/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
+ 		 * need support it later, but now leave the code just so.
+ 		 *
+		 * Regarding details of address prefix 'x', check the below URL:
+ 		 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
+		 */
 		if (set_b58addr(target_addr, &target_script)) {
-			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s", target_addr);
-			return false;
+			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s, ignoring it", target_addr);
+			target_addr = NULL;
 		}
+
 		on_testnet = target_addr[0] != '1' && target_addr[0] != '3' && target_addr[0] != 'x';
 	}
 
@@ -2552,44 +2559,43 @@ incomplete_cb:
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			if (target_addr) {
-				i = (bytes_len(&target_script) == curr_pk_script_len &&
-					!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
-				if (i) {
-					found_target = true;
-					target += amount;
-				}
-			} else
-				i = 0;
+			i = (target_addr && bytes_len(&target_script) == curr_pk_script_len &&
+				!memcmp(bytes_buf(&target_script), coinbase + pos, curr_pk_script_len));
+			if (i) {
+				found_target = true;
+				target += amount;
+			}
 			if (opt_debug)
-				applog(LOG_DEBUG, "Coinbase output: %10ld -- %34s%c", amount, addr, i ? '*' : '\0');
+				applog(LOG_DEBUG, "Coinbase output: %10lu -- %34s%c", amount, addr, i ? '*' : '\0');
 		} else if (opt_debug) {
 			char *hex = addr;
 			if (curr_pk_script_len * 2 >= sizeof(addr))
 				hex = malloc(curr_pk_script_len * 2 + 1);
 			if (hex) {
 				bin2hex(hex, coinbase + pos, curr_pk_script_len);
-				applog(LOG_DEBUG, "Coinbase output: %10ld PK %34s", amount, hex);
+				applog(LOG_DEBUG, "Coinbase output: %10lu PK %34s", amount, hex);
 				if (hex != addr)
 					free(hex);
 			} else
-				applog(LOG_DEBUG, "Coinbase output: %10ld PK (Unknown)", amount);
+				applog(LOG_DEBUG, "Coinbase output: %10lu PK (Unknown)", amount);
 		}
 
 		pos += curr_pk_script_len;
 	}
 	if (cbtotal_compare_op && !do_compare(total, cbtotal_compare_op)) {
-		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %ld, expecting %c %ld",
+		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %lu, expecting %c %lu",
 			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
 		return false;
 	}
-	if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
-		applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%ld/%ld), expecting %c %g",
-			(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
-		return false;
-	} else if (target_addr && !found_target) {
-		applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
-		return false;
+	if (target_addr) {
+		if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
+			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%lu/%lu), expecting %c %g",
+				(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
+			return false;
+		} else if (!found_target) {
+			applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
+			return false;
+		}
 	}
 
 	if (cbsize < pos + 4) {
@@ -2599,7 +2605,7 @@ incomplete_cb:
 	pos += 4;
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "Coinbase: (size, pos, target, total) = (%zu, %zu, %ld, %ld)", cbsize, pos, target, total);
+		applog(LOG_DEBUG, "Coinbase: (size, pos, target, total) = (%lu, %lu, %lu, %lu)", cbsize, pos, target, total);
 
 	return true;
 }
