@@ -2254,18 +2254,28 @@ nextmatch:
 	return URI_FIND_PARAM_FOUND;
 }
 
-size_t uri_get_param(const char * const uri, const char * const param, char *val, size_t size)
+/* Caller can set val to NULL to ask for an auto memory allocation */
+char *uri_get_param(const char * const uri, const char * const param, char *val, size_t *size)
 {
 	const char *p, *q = uri_find_param(uri, param, NULL);
 	if (q && q != URI_FIND_PARAM_FOUND) {
+		size_t orgsz = *size;
+
 		for (p = q; *p && *p != ',' && *p != '#'; ++p);
-		if (p - q < size) {
+		*size = p - q + 1;
+
+		if (!val) {
+			val = malloc(orgsz = *size);
+			if (unlikely(!val))
+				quithere(1, "Failed to allocate memory during parsing URI param");
+		}
+		if (p - q < orgsz) {
 			memcpy(val, q, p - q);
 			val[p - q] = '\0';
+			return val;
 		}
-		return (p - q + 1);
 	}
-	return 0;
+	return NULL;
 }
 
 enum bfg_tristate uri_get_param_bool2(const char * const uri, const char * const param)
@@ -2521,12 +2531,11 @@ static inline bool do_compare(double value, compare_op_t *op)
 bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
 	const char *target_addr, compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op )
 {
-	int i;
+	int i, addr_c = 0;
 	size_t pos;
 	uint64_t len, total, target, amount, curr_pk_script_len;
-	bool on_testnet = false, found_target = false;
-	bytes_t target_script = BYTES_INIT;
-	char addr[35];
+	bool on_testnet = false, found_target = false, ret = false;
+	char **addr_v = NULL;
 
 	if (cbsize < 62) { /* Smallest possible length */
 		applog(LOG_ERR, "Coinbase check: invalid length -- %lu", cbsize);
@@ -2549,21 +2558,48 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
 	if (cbsize <= pos) {
 incomplete_cb:
 		applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
-		return false;
+		goto out;
 	}
 
 	if (target_addr) {
+		bytes_t target_script = BYTES_INIT;
+		int count = 4;
+
+		char *p = strdup(target_addr);
+		addr_v = malloc(count * sizeof(char *));
+		if (unlikely(!p || !addr_v))
+out_of_memory:
+			quithere(1, "Failed to clone target address during coinbase check");
+
+		for (addr_c = 0; p; ++addr_c) {
+			if (addr_c == count) {
+				count *= 2;
+				addr_v = realloc(addr_v, count * sizeof(char *));
+				if (unlikely(!addr_v))
+					goto out_of_memory;
+			}
+			addr_v[addr_c] = p;
+
+			p = strchr(p, '+');
+			if (p)
+				*p++ = '\0';
+
+			if (set_b58addr(addr_v[addr_c], &target_script)) {
+				applog(LOG_ERR, "Coinbase check: against an invalid addr: %s, ignoring the list", addr_v[addr_c]);
+				free(addr_v[addr_c = 0]);
+				free(addr_v);
+				break;
+			}
+		}
+
+		bytes_free(&target_script);
+
 		/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
 		 * need support it later, but now leave the code just so.
 		 *
 		 * Regarding details of address prefix 'x', check the below URL:
 		 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
 		 */
-		if (set_b58addr(target_addr, &target_script)) {
-			applog(LOG_ERR, "Coinbase check: against an invalid addr: %s, ignoring it", target_addr);
-			target_addr = NULL;
-		}
-
 		on_testnet = target_addr[0] != '1' && target_addr[0] != '3' && target_addr[0] != 'x';
 	}
 
@@ -2575,6 +2611,8 @@ incomplete_cb:
 	pos += i;
 
 	while (len-- > 0) {
+		char addr[35];
+
 		if (cbsize <= pos + 8)
 			goto incomplete_cb;
 
@@ -2590,7 +2628,9 @@ incomplete_cb:
 
 		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			if (target_addr && !strcmp(addr, target_addr)) {
+			for (i = 0; i < addr_c && strcmp(addr, addr_v[i]); ++i);
+			if (addr_c && i < addr_c) {
+				i = 1;
 				found_target = true;
 				target += amount;
 			} else
@@ -2615,29 +2655,39 @@ incomplete_cb:
 	if (cbtotal_compare_op && !do_compare(total, cbtotal_compare_op)) {
 		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %lu, expecting %c %lu",
 			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
-		return false;
+		goto out;
 	}
-	if (target_addr) {
+	if (addr_c) {
 		if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
 			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%lu/%lu), expecting %c %g",
 				(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
-			return false;
+			goto out;
 		} else if (!found_target) {
-			applog(LOG_ERR, "Coinbase check: not found target %s", target_addr);
-			return false;
+			applog(LOG_ERR, "Coinbase check: not found target addr");
+			goto out;
 		}
 	}
 
 	if (cbsize < pos + 4) {
 		applog(LOG_ERR, "Coinbase check: No room for locktime");
-		return false;
+		goto out;
 	}
 	pos += 4;
 
 	if (opt_debug)
-		applog(LOG_DEBUG, "Coinbase: (size, pos, target, total) = (%lu, %lu, %lu, %lu)", cbsize, pos, target, total);
+		applog(LOG_DEBUG, "Coinbase: (size, pos, addr_count, target, total) = (%lu, %lu, %d, %lu, %lu)",
+			cbsize, pos, addr_c, target, total);
 
-	return true;
+	ret = true;
+
+out:
+
+	if (addr_c) {
+		free(addr_v[0]);
+		free(addr_v);
+	}
+
+	return ret;
 }
 
 static bool parse_notify(struct pool *pool, json_t *val)
@@ -2648,7 +2698,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	int merkles, i;
 	size_t cb1_len, cb2_len, n1_len;
 	json_t *arr;
-	char cbaddr[35];
+	char *cbaddr;
 	compare_op_t cbtotal_compare_op = COMPARE_OP_INIT, cbperc_compare_op = COMPARE_OP_INIT;
 
 	arr = json_array_get(val, 4);
@@ -2675,7 +2725,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (!job_id)
 		goto out;
 
-	get_pool_cbparam(pool, cbaddr, sizeof(cbaddr), &cbtotal_compare_op, &cbperc_compare_op);
+	get_pool_cbparam(pool, &cbaddr, &cbtotal_compare_op, &cbperc_compare_op);
 
 	cg_wlock(&pool->data_lock);
 
@@ -2691,6 +2741,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		/* Just go through the rest process to avoid an "unknown stratum message" log */
 		disable_pool(pool, POOL_MISBEHAVING);
 	}
+	if (cbaddr)
+		free(cbaddr);
 
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);

@@ -1094,9 +1094,9 @@ struct pool *add_pool(void)
 static inline bool get_compare_param(const char * const uri, const char * const param, compare_op_t *op)
 {
 	char value[32]; /* We don't expect an too long value */
-	size_t size = uri_get_param(uri, param, value, sizeof(value));
-	if (size) {
-		if (size < 2 || size > sizeof(value))
+	size_t size = sizeof(value);
+	if (uri_get_param(uri, param, value, &size)) {
+		if (size < 3)
 			return false;
 
 		if (value[0] != '>' && value[0] != '+' && value[0] != '<' && value[0] != '-' && value[0] != '=')
@@ -1104,25 +1104,26 @@ static inline bool get_compare_param(const char * const uri, const char * const 
 
 		op->op = (value[0] == '+' ? '>' : (value[0] == '-' ? '<' : value[0]));
 		op->value = atof(&value[1]);
-	}
+	} else if (size > sizeof(value))
+		return false;
+
 	return true;
 }
 
-bool get_pool_cbparam(struct pool * const pool, char *cbaddr, size_t cbaddrsz,
+bool get_pool_cbparam(struct pool * const pool, char **cbaddr,
 	compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op)
 {
-	size_t size;
+	size_t size = 0;
 
-	if (cbaddr) {
-		size = uri_get_param(pool->rpc_url, "cbaddr", cbaddr, cbaddrsz);
-		if (size && size > cbaddrsz)
+	if ((*cbaddr = uri_get_param(pool->rpc_url, "cbaddr", *cbaddr = NULL, &size)) && cbperc_compare_op) {
+		if (!get_compare_param(pool->rpc_url, "cbperc", cbperc_compare_op))
 			return false;
+		if (cbperc_compare_op->op == '<')
+			/* We don't really need '<' comparison */
+			cbperc_compare_op->op = '\0';
 	}
 
 	if (cbtotal_compare_op && !get_compare_param(pool->rpc_url, "cbtotal", cbtotal_compare_op))
-		return false;
-
-	if (cbperc_compare_op && !get_compare_param(pool->rpc_url, "cbperc", cbperc_compare_op))
 		return false;
 
 	return true;
@@ -3138,14 +3139,16 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		{
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
-			char cbaddr[35];
+			char *cbaddr;
 			compare_op_t cbtotal_compare_op, cbperc_compare_op;
 
-			get_pool_cbparam(pool, cbaddr, sizeof(cbaddr), &cbtotal_compare_op, &cbperc_compare_op);
+			get_pool_cbparam(pool, &cbaddr, &cbtotal_compare_op, &cbperc_compare_op);
 			if (!check_coinbase(cbtxn, cbtxnsz, cbaddr, &cbtotal_compare_op, &cbperc_compare_op)) {
 				applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
 				disable_pool(pool, POOL_MISBEHAVING);
 			}
+			if (cbaddr)
+				free(cbaddr);
 
 			cg_wlock(&pool->data_lock);
 
