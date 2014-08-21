@@ -26,6 +26,7 @@
 
 #include "deviceapi.h"
 #include "logging.h"
+#include "lowlevel.h"
 #include "miner.h"
 
 #define MINERGATE_MAX_NONCE_DIFF  0x20
@@ -152,6 +153,9 @@ bool minergate_detect_one(const char * const devpath)
 	uint16_t responses = upk_u16le(buf, 6);
 	if (responses > minergate_max_responses)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: More than maximum responses", minergate_drv.dname, devpath);
+	
+	if (bfg_claim_any2(&minergate_drv, devpath, "unix", devpath))
+		goto out;
 	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
