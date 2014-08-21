@@ -2514,28 +2514,13 @@ size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 	return 0;
 }
 
-static inline bool do_compare(double value, compare_op_t *op)
+/* Caller ensure cb_param is an valid pointer */
+bool check_coinbase(const uint8_t *coinbase, size_t cbsize, const struct coinbase_param *cb_param)
 {
-	switch (op->op) {
-	case '>':
-		return (value > op->value);
-	case '<':
-		return (value < op->value);
-	case '=':
-		return (value == op->value);
-	default:
-		return true;
-	}
-}
-
-bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
-	const char *target_addr, compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op )
-{
-	int i, addr_c = 0;
+	int i;
 	size_t pos;
 	uint64_t len, total, target, amount, curr_pk_script_len;
-	bool on_testnet = false, found_target = false, ret = false;
-	char **addr_v = NULL;
+	bool found_target = false, ret = false;
 
 	if (cbsize < 62) { /* Smallest possible length */
 		applog(LOG_ERR, "Coinbase check: invalid length -- %lu", cbsize);
@@ -2558,49 +2543,7 @@ bool check_coinbase(const uint8_t *coinbase, size_t cbsize,
 	if (cbsize <= pos) {
 incomplete_cb:
 		applog(LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
-		goto out;
-	}
-
-	if (target_addr) {
-		bytes_t target_script = BYTES_INIT;
-		int count = 4;
-
-		char *p = strdup(target_addr);
-		addr_v = malloc(count * sizeof(char *));
-		if (unlikely(!p || !addr_v))
-out_of_memory:
-			quithere(1, "Failed to clone target address during coinbase check");
-
-		for (addr_c = 0; p; ++addr_c) {
-			if (addr_c == count) {
-				count *= 2;
-				addr_v = realloc(addr_v, count * sizeof(char *));
-				if (unlikely(!addr_v))
-					goto out_of_memory;
-			}
-			addr_v[addr_c] = p;
-
-			p = strchr(p, '+');
-			if (p)
-				*p++ = '\0';
-
-			if (set_b58addr(addr_v[addr_c], &target_script)) {
-				applog(LOG_ERR, "Coinbase check: against an invalid addr: %s, ignoring the list", addr_v[addr_c]);
-				free(addr_v[addr_c = 0]);
-				free(addr_v);
-				break;
-			}
-		}
-
-		bytes_free(&target_script);
-
-		/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
-		 * need support it later, but now leave the code just so.
-		 *
-		 * Regarding details of address prefix 'x', check the below URL:
-		 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
-		 */
-		on_testnet = target_addr[0] != '1' && target_addr[0] != '3' && target_addr[0] != 'x';
+		return false;
 	}
 
 	total = target = 0;
@@ -2626,17 +2569,16 @@ out_of_memory:
 			goto incomplete_cb;
 		pos += i;
 
-		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, on_testnet);
+		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, cb_param->testnet);
 		if (i && i <= sizeof(addr)) { /* So this script is to payout to an valid address */
-			for (i = 0; i < addr_c && strcmp(addr, addr_v[i]); ++i);
-			if (addr_c && i < addr_c) {
-				i = 1;
+			struct addr_hash *ah = NULL;
+			HASH_FIND_STR(cb_param->addr_ht, addr, ah);
+			if (ah) {
 				found_target = true;
 				target += amount;
-			} else
-				i = 0;
+			}
 			if (opt_debug)
-				applog(LOG_DEBUG, "Coinbase output: %10lu -- %34s%c", amount, addr, i ? '*' : '\0');
+				applog(LOG_DEBUG, "Coinbase output: %10lu -- %34s%c", amount, addr, ah ? '*' : '\0');
 		} else if (opt_debug) {
 			char *hex = addr;
 			if (curr_pk_script_len * 2 >= sizeof(addr))
@@ -2652,42 +2594,33 @@ out_of_memory:
 
 		pos += curr_pk_script_len;
 	}
-	if (cbtotal_compare_op && !do_compare(total, cbtotal_compare_op)) {
-		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %lu, expecting %c %lu",
-			total, cbtotal_compare_op->op, (uint64_t)cbtotal_compare_op->value);
-		goto out;
+	if (total < cb_param->total) {
+		applog(LOG_ERR, "Coinbase check: lopsided total output amount = %lu, expecting >=%ld",
+			total, cb_param->total);
+		return false;
 	}
-	if (addr_c) {
-		if (cbperc_compare_op && !(total && do_compare((double)target / total, cbperc_compare_op))) {
-			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%lu/%lu), expecting %c %g",
-				(total ? (double)target / total : 0), target, total, cbperc_compare_op->op, cbperc_compare_op->value);
-			goto out;
+	if (cb_param->addr_ht) {
+		if (cb_param->perc && !(total && (float)((double)target / total) >= cb_param->perc)) {
+			applog(LOG_ERR, "Coinbase check: lopsided target/total = %g(%lu/%lu), expecting >=%g",
+				(total ? (double)target / total : 0), target, total, cb_param->perc);
+			return false;
 		} else if (!found_target) {
-			applog(LOG_ERR, "Coinbase check: not found target addr");
-			goto out;
+			applog(LOG_ERR, "Coinbase check: not found any target addr");
+			return false;
 		}
 	}
 
 	if (cbsize < pos + 4) {
 		applog(LOG_ERR, "Coinbase check: No room for locktime");
-		goto out;
+		return false;
 	}
 	pos += 4;
 
 	if (opt_debug)
 		applog(LOG_DEBUG, "Coinbase: (size, pos, addr_count, target, total) = (%lu, %lu, %d, %lu, %lu)",
-			cbsize, pos, addr_c, target, total);
+			cbsize, pos, HASH_COUNT(cb_param->addr_ht), target, total);
 
-	ret = true;
-
-out:
-
-	if (addr_c) {
-		free(addr_v[0]);
-		free(addr_v);
-	}
-
-	return ret;
+	return true;
 }
 
 static bool parse_notify(struct pool *pool, json_t *val)
@@ -2698,8 +2631,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	int merkles, i;
 	size_t cb1_len, cb2_len, n1_len;
 	json_t *arr;
-	char *cbaddr;
-	compare_op_t cbtotal_compare_op = COMPARE_OP_INIT, cbperc_compare_op = COMPARE_OP_INIT;
 
 	arr = json_array_get(val, 4);
 	if (!arr || !json_is_array(arr))
@@ -2725,8 +2656,6 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	if (!job_id)
 		goto out;
 
-	get_pool_cbparam(pool, &cbaddr, &cbtotal_compare_op, &cbperc_compare_op);
-
 	cg_wlock(&pool->data_lock);
 
 	cb1_len = strlen(coinbase1) / 2;
@@ -2736,13 +2665,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	uint8_t *coinbase = bytes_buf(&pool->swork.coinbase);
 	hex2bin(coinbase, coinbase1, cb1_len);
 	hex2bin(coinbase + cb1_len + n1_len + pool->next_n2size, coinbase2, cb2_len);
-	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), cbaddr, &cbtotal_compare_op, &cbperc_compare_op)) {
+	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), &pool->cb_param)) {
 		applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
 		/* Just go through the rest process to avoid an "unknown stratum message" log */
 		disable_pool(pool, POOL_MISBEHAVING);
 	}
-	if (cbaddr)
-		free(cbaddr);
 
 	cgtime(&pool->swork.tv_received);
 	free(pool->swork.job_id);

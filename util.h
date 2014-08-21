@@ -466,13 +466,6 @@ uint32_t upper_power_of_two_u32(uint32_t n)
 	return n;
 }
 
-typedef struct compare_op_t {
-	char op;
-	double value;
-} compare_op_t;
-
-#define COMPARE_OP_INIT {.op='\0',}
-
 typedef struct bytes_t {
 	uint8_t *buf;
 	size_t sz;

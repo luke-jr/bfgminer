@@ -317,7 +317,7 @@ static struct pool *currentpool = NULL;
 int total_pools, enabled_pools;
 enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
-static int total_urls, total_users, total_passes;
+static int total_urls, total_users, total_passes, total_cbaddrs, total_cbtotals, total_cbpercs;
 
 static
 #ifndef HAVE_CURSES
@@ -1088,45 +1088,15 @@ struct pool *add_pool(void)
 	if (!currentpool)
 		currentpool = pool;
 
+	/* skip coinbase check param for previous pool */
+	if (total_cbaddrs < total_pools - 1)
+		total_cbaddrs = total_pools - 1;
+	if (total_cbtotals < total_pools - 1)
+		total_cbtotals = total_pools - 1;
+	if (total_cbpercs < total_pools - 1)
+		total_cbpercs = total_pools - 1;
+
 	return pool;
-}
-
-static inline bool get_compare_param(const char * const uri, const char * const param, compare_op_t *op)
-{
-	char value[32]; /* We don't expect an too long value */
-	size_t size = sizeof(value);
-	if (uri_get_param(uri, param, value, &size)) {
-		if (size < 3)
-			return false;
-
-		if (value[0] != '>' && value[0] != '+' && value[0] != '<' && value[0] != '-' && value[0] != '=')
-			return false;
-
-		op->op = (value[0] == '+' ? '>' : (value[0] == '-' ? '<' : value[0]));
-		op->value = atof(&value[1]);
-	} else if (size > sizeof(value))
-		return false;
-
-	return true;
-}
-
-bool get_pool_cbparam(struct pool * const pool, char **cbaddr,
-	compare_op_t *cbtotal_compare_op, compare_op_t *cbperc_compare_op)
-{
-	size_t size = 0;
-
-	if ((*cbaddr = uri_get_param(pool->rpc_url, "cbaddr", *cbaddr = NULL, &size)) && cbperc_compare_op) {
-		if (!get_compare_param(pool->rpc_url, "cbperc", cbperc_compare_op))
-			return false;
-		if (cbperc_compare_op->op == '<')
-			/* We don't really need '<' comparison */
-			cbperc_compare_op->op = '\0';
-	}
-
-	if (cbtotal_compare_op && !get_compare_param(pool->rpc_url, "cbtotal", cbtotal_compare_op))
-		return false;
-
-	return true;
 }
 
 static
@@ -1597,6 +1567,89 @@ static char *set_userpass(const char *arg)
 		pool->rpc_pass++[0] = '\0';
 	else
 		pool->rpc_pass = &updup[strlen(updup)];
+
+	return NULL;
+}
+
+static char *set_cbcaddr(char *arg)
+{
+	struct pool *pool;
+	char *p = arg, *addr;
+	bytes_t target_script = BYTES_INIT;
+
+	total_cbaddrs++;
+	if (total_cbaddrs > total_pools)
+		add_pool();
+
+	pool = pools[total_cbaddrs - 1];
+
+	/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
+	 * need support it later, but now leave the code just so.
+	 *
+	 * Regarding details of address prefix 'x', check the below URL:
+	 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
+	 */
+	pool->cb_param.testnet = (p[0] != '1' && p[0] != '3' && p[0] != 'x');
+
+	while (p) {
+		struct addr_hash *ah;
+		char *addr = p;
+
+		p = strchr(p, ',');
+		if (p)
+			*p++ = '\0';
+
+		if (set_b58addr(addr, &target_script))
+			/* No bother to free memory since we are going to exit anyway */
+			return "Invalid address in --coinbase-check-address list";
+
+		HASH_FIND_STR(pool->cb_param.addr_ht, addr, ah);
+		if (!ah) {
+			/* Note: for the below allocated memory we have good way to release its memory
+			 * since we can't be sure there are no reference to the pool struct when remove_pool() 
+			 * get called.
+			 *
+			 * We just hope the remove_pool() would not be called many many times during
+			 * the whole running life of this program.
+			 */
+			ah = malloc(sizeof(struct addr_hash));
+			ah->addr = addr;
+			HASH_ADD_STR(pool->cb_param.addr_ht, addr, ah);
+		}
+	}
+	bytes_free(&target_script);
+
+	return NULL;
+}
+
+static char *set_cbctotal(const char *arg)
+{
+	struct pool *pool;
+
+	total_cbtotals++;
+	if (total_cbtotals > total_pools)
+		add_pool();
+
+	pool = pools[total_cbtotals - 1];
+	pool->cb_param.total = atoll(arg);
+	if (pool->cb_param.total < 0)
+		return "The total payout amount in coinbase should be greater than 0";
+
+	return NULL;
+}
+
+static char *set_cbcperc(const char *arg)
+{
+	struct pool *pool;
+
+	total_cbpercs++;
+	if (total_cbpercs > total_pools)
+		add_pool();
+
+	pool = pools[total_cbpercs - 1];
+	pool->cb_param.perc = atof(arg);
+	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
+		return "The percentage should be between 0 and 1";
 
 	return NULL;
 }
@@ -2468,6 +2521,24 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--coinbase-check-addr",
+			set_cbcaddr, NULL, NULL,
+			"A list of address to check against in coinbase payout list received from pool, separated by ','"),
+	OPT_WITH_ARG("--cbcheck-addr|--cbc-addr|--cbcaddr",
+			set_cbcaddr, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-total",
+			set_cbctotal, NULL, NULL,
+			"The least total payout amount expected in coinbase received from pool"),
+	OPT_WITH_ARG("--cbcheck-total|--cbc-total|--cbctotal",
+			set_cbctotal, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-percent",
+			set_cbcperc, NULL, NULL,
+			"The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument"),
+	OPT_WITH_ARG("--cbcheck-percent|--cbc-percent|--cbcpercent|--cbcperc",
+			set_cbcperc, NULL, NULL,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
@@ -3139,16 +3210,11 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		{
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
-			char *cbaddr;
-			compare_op_t cbtotal_compare_op, cbperc_compare_op;
 
-			get_pool_cbparam(pool, &cbaddr, &cbtotal_compare_op, &cbperc_compare_op);
-			if (!check_coinbase(cbtxn, cbtxnsz, cbaddr, &cbtotal_compare_op, &cbperc_compare_op)) {
+			if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param)) {
 				applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
 				disable_pool(pool, POOL_MISBEHAVING);
 			}
-			if (cbaddr)
-				free(cbaddr);
 
 			cg_wlock(&pool->data_lock);
 
