@@ -317,7 +317,7 @@ static struct pool *currentpool = NULL;
 int total_pools, enabled_pools;
 enum pool_strategy pool_strategy = POOL_FAILOVER;
 int opt_rotate_period;
-static int total_urls, total_users, total_passes, total_cbaddrs, total_cbtotals, total_cbpercs;
+static int total_urls, total_users, total_passes;
 
 static
 #ifndef HAVE_CURSES
@@ -1088,14 +1088,6 @@ struct pool *add_pool(void)
 	if (!currentpool)
 		currentpool = pool;
 
-	/* skip coinbase check param for previous pool */
-	if (total_cbaddrs < total_pools - 1)
-		total_cbaddrs = total_pools - 1;
-	if (total_cbtotals < total_pools - 1)
-		total_cbtotals = total_pools - 1;
-	if (total_cbpercs < total_pools - 1)
-		total_cbpercs = total_pools - 1;
-
 	return pool;
 }
 
@@ -1577,11 +1569,10 @@ static char *set_cbcaddr(char *arg)
 	char *p = arg, *addr;
 	bytes_t target_script = BYTES_INIT;
 
-	total_cbaddrs++;
-	if (total_cbaddrs > total_pools)
-		add_pool();
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-addr list";
 
-	pool = pools[total_cbaddrs - 1];
+	pool = pools[total_pools - 1];
 
 	/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
 	 * need support it later, but now leave the code just so.
@@ -1626,11 +1617,10 @@ static char *set_cbctotal(const char *arg)
 {
 	struct pool *pool;
 
-	total_cbtotals++;
-	if (total_cbtotals > total_pools)
-		add_pool();
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-total argument";
 
-	pool = pools[total_cbtotals - 1];
+	pool = pools[total_pools - 1];
 	pool->cb_param.total = atoll(arg);
 	if (pool->cb_param.total < 0)
 		return "The total payout amount in coinbase should be greater than 0";
@@ -1642,11 +1632,13 @@ static char *set_cbcperc(const char *arg)
 {
 	struct pool *pool;
 
-	total_cbpercs++;
-	if (total_cbpercs > total_pools)
-		add_pool();
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-percent argument";
 
-	pool = pools[total_cbpercs - 1];
+	pool = pools[total_pools - 1];
+	if (!pool->cb_param.addr_ht)
+		return "Define --coinbase-check-addr list first, then the --coinbase-check-total argument";
+
 	pool->cb_param.perc = atof(arg);
 	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
 		return "The percentage should be between 0 and 1";
@@ -2523,19 +2515,19 @@ static struct opt_table opt_config_table[] = {
 		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--coinbase-check-addr",
 			set_cbcaddr, NULL, NULL,
-			"A list of address to check against in coinbase payout list received from pool, separated by ','"),
+			"A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','"),
 	OPT_WITH_ARG("--cbcheck-addr|--cbc-addr|--cbcaddr",
 			set_cbcaddr, NULL, NULL,
 			opt_hidden),
 	OPT_WITH_ARG("--coinbase-check-total",
 			set_cbctotal, NULL, NULL,
-			"The least total payout amount expected in coinbase received from pool"),
+			"The least total payout amount expected in coinbase received from the previous-defined pool"),
 	OPT_WITH_ARG("--cbcheck-total|--cbc-total|--cbctotal",
 			set_cbctotal, NULL, NULL,
 			opt_hidden),
 	OPT_WITH_ARG("--coinbase-check-percent",
 			set_cbcperc, NULL, NULL,
-			"The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument"),
+			"The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool"),
 	OPT_WITH_ARG("--cbcheck-percent|--cbc-percent|--cbcpercent|--cbcperc",
 			set_cbcperc, NULL, NULL,
 			opt_hidden),
