@@ -1566,7 +1566,7 @@ static char *set_userpass(const char *arg)
 static char *set_cbcaddr(char *arg)
 {
 	struct pool *pool;
-	char *p = arg, *addr;
+	char *p, *addr;
 	bytes_t target_script = BYTES_INIT;
 
 	if (!total_pools)
@@ -1580,15 +1580,10 @@ static char *set_cbcaddr(char *arg)
 	 * Regarding details of address prefix 'x', check the below URL:
 	 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
 	 */
-	pool->cb_param.testnet = (p[0] != '1' && p[0] != '3' && p[0] != 'x');
+	pool->cb_param.testnet = (arg[0] != '1' && arg[0] != '3' && arg[0] != 'x');
 
-	while (p) {
+	for (; (addr = strtok_r(arg, ",", &p)); arg = NULL) {
 		struct addr_hash *ah;
-		char *addr = p;
-
-		p = strchr(p, ',');
-		if (p)
-			*p++ = '\0';
 
 		if (set_b58addr(addr, &target_script))
 			/* No bother to free memory since we are going to exit anyway */
