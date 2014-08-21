@@ -2464,7 +2464,7 @@ size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t 
 		bok = pubkeyhash_to_address(addr, &size, testnet ? 0xc4 : 0x05, script + 2);
 	else if (scriptsz == 66 && (script[0] > 3 && script[0] < 8) && script[65] == 0xac)
 		bok = pubkey_to_address(addr, &size, testnet ? 0x6f : 0x00, script, 65);
-	else if (scriptsz == 34 && (script[0] == 2 && script[0] == 3) && script[33] == 0xac)
+	else if (scriptsz == 34 && (script[0] == 2 || script[0] == 3) && script[33] == 0xac)
 		bok = pubkey_to_address(addr, &size, testnet ? 0x6f : 0x00, script, 33);
 	if (!bok)
 		return 0;
