@@ -9498,6 +9498,7 @@ void _submit_work_async(struct work *work)
 		work_check_for_block(work);
 		share_result(jn, jn, jn, work, false, "");
 		free_work(work);
+		json_decref(jn);
 		return;
 	}
 
