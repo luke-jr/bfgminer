@@ -5002,6 +5002,7 @@ static void pool_update_work_restart_time(struct pool *);
 static void restart_threads(void);
 
 static uint32_t benchmark_blkhdr[20];
+static const int benchmark_update_interval = 1;
 
 static
 void *benchmark_intense_work_update_thread(void *userp)
@@ -5016,7 +5017,7 @@ void *benchmark_intense_work_update_thread(void *userp)
 	
 	while (true)
 	{
-		sleep(1);
+		sleep(benchmark_update_interval);
 		
 		cg_wlock(&pool->data_lock);
 		for (int i = 36; --i >= 0; )
@@ -9561,7 +9562,7 @@ void _submit_work_async(struct work *work)
 		if (stale_work(work, true))
 		{
 			char stalemsg[0x10];
-			snprintf(stalemsg, sizeof(stalemsg), "stale %us", work->pool->work_restart_id - work->work_restart_id);
+			snprintf(stalemsg, sizeof(stalemsg), "stale %us", benchmark_update_interval * (work->pool->work_restart_id - work->work_restart_id));
 			result = json_string(stalemsg);
 		}
 		else
