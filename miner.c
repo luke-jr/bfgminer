@@ -4997,6 +4997,8 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
+static void gen_stratum_work(struct pool *, struct work *);
+static void pool_update_work_restart_time(struct pool *);
 static void restart_threads(void);
 
 static uint32_t benchmark_blkhdr[20];
@@ -5021,6 +5023,13 @@ void *benchmark_intense_work_update_thread(void *userp)
 			if (++blkhdr[i])
 				break;
 		cg_wunlock(&pool->data_lock);
+		
+		struct work *work = make_work();
+		gen_stratum_work(pool, work);
+		pool->swork.work_restart_id = ++pool->work_restart_id;
+		pool_update_work_restart_time(pool);
+		test_work_current(work);
+		free_work(work);
 		
 		restart_threads();
 	}
@@ -5087,8 +5096,6 @@ void setup_benchmark_pool()
 			applog(LOG_WARNING, "Failed to start benchmark intense work update thread");
 	}
 }
-
-static void gen_stratum_work(struct pool *pool, struct work *work);
 
 void get_benchmark_work(struct work *work)
 {
@@ -5757,9 +5764,6 @@ bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	uint32_t block_id;
 	unsigned getwork_delay;
-
-	if (opt_benchmark)
-		return false;
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
@@ -9552,10 +9556,19 @@ void _submit_work_async(struct work *work)
 	
 	if (opt_benchmark)
 	{
-		json_t * const jn = json_null();
+		json_t * const jn = json_null(), *result;
 		work_check_for_block(work);
-		share_result(jn, jn, jn, work, false, "");
+		if (stale_work(work, true))
+		{
+			char stalemsg[0x10];
+			snprintf(stalemsg, sizeof(stalemsg), "stale %us", work->pool->work_restart_id - work->work_restart_id);
+			result = json_string(stalemsg);
+		}
+		else
+			result = json_incref(jn);
+		share_result(jn, result, jn, work, false, "");
 		free_work(work);
+		json_decref(result);
 		json_decref(jn);
 		return;
 	}
