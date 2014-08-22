@@ -126,7 +126,7 @@ static char packagename[256];
 
 bool opt_protocol;
 bool opt_dev_protocol;
-static bool opt_benchmark;
+static bool opt_benchmark, opt_benchmark_intense;
 static bool want_longpoll = true;
 static bool want_gbt = true;
 static bool want_getwork = true;
@@ -1430,6 +1430,14 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
+static
+char *set_benchmark_intense()
+{
+	opt_benchmark = true;
+	opt_benchmark_intense = true;
+	return NULL;
+}
+
 /* Detect that url is for a stratum protocol either via the presence of
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
@@ -1980,6 +1988,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
 			"Run BFGMiner in benchmark mode - produces no shares"),
+	OPT_WITHOUT_ARG("--benchmark-intense",
+			set_benchmark_intense, &opt_benchmark_intense,
+			"Run BFGMiner in intensive benchmark mode - produces no shares"),
 #if defined(USE_BITFORCE)
 	OPT_WITHOUT_ARG("--bfl-range",
 			opt_set_bool, &opt_bfl_noncerange,
