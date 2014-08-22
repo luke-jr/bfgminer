@@ -5031,7 +5031,7 @@ void setup_benchmark_pool()
 		struct stratum_work * const swork = &pool->swork;
 		const int branchcount = 15;  // 1 MB block
 		const size_t branchdatasz = branchcount * 0x20;
-		const size_t coinbase_sz = 6 * 1024;
+		const size_t coinbase_sz = (opt_benchmark_intense ? 250 : 6) * 1024;
 		
 		bytes_resize(&swork->coinbase, coinbase_sz);
 		memset(bytes_buf(&swork->coinbase), '\xff', coinbase_sz);
