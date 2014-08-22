@@ -228,7 +228,7 @@ double bench_algo_stage3(
 	struct work work __attribute__((aligned(128)));
 	unsigned char hash1[64];
 
-	get_benchmark_work(&work);
+	get_benchmark_work(&work, false);
 
 	static struct thr_info dummy;
 

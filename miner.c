@@ -5098,9 +5098,9 @@ void setup_benchmark_pool()
 	}
 }
 
-void get_benchmark_work(struct work *work)
+void get_benchmark_work(struct work *work, bool use_swork)
 {
-	if (opt_benchmark_intense)
+	if (use_swork)
 	{
 		gen_stratum_work(pools[0], work);
 		work->getwork_mode = GETWORK_MODE_BENCHMARK;
@@ -12892,7 +12892,7 @@ retry:
 		}
 
 		if (opt_benchmark) {
-			get_benchmark_work(work);
+			get_benchmark_work(work, opt_benchmark_intense);
 			applog(LOG_DEBUG, "Generated benchmark work");
 			stage_work(work);
 			continue;
