@@ -9550,6 +9550,12 @@ struct work *get_work(struct thr_info *thr)
 	return work;
 }
 
+struct dupe_hash_elem {
+	uint8_t hash[0x20];
+	struct timeval tv_prune;
+	UT_hash_handle hh;
+};
+
 static
 void _submit_work_async(struct work *work)
 {
@@ -9557,8 +9563,37 @@ void _submit_work_async(struct work *work)
 	
 	if (opt_benchmark)
 	{
-		json_t * const jn = json_null(), *result;
+		json_t * const jn = json_null(), *result = NULL;
 		work_check_for_block(work);
+		{
+			static struct dupe_hash_elem *dupe_hashes;
+			struct dupe_hash_elem *dhe, *dhetmp;
+			HASH_FIND(hh, dupe_hashes, &work->hash, sizeof(dhe->hash), dhe);
+			if (dhe)
+				result = json_string("duplicate");
+			else
+			{
+				struct timeval tv_now;
+				timer_set_now(&tv_now);
+				
+				// Prune old entries
+				HASH_ITER(hh, dupe_hashes, dhe, dhetmp)
+				{
+					if (!timer_passed(&dhe->tv_prune, &tv_now))
+						break;
+					HASH_DEL(dupe_hashes, dhe);
+					free(dhe);
+				}
+				
+				dhe = malloc(sizeof(*dhe));
+				memcpy(dhe->hash, work->hash, sizeof(dhe->hash));
+				timer_set_delay(&dhe->tv_prune, &tv_now, 337500000);
+				HASH_ADD(hh, dupe_hashes, hash, sizeof(dhe->hash), dhe);
+			}
+		}
+		if (result)
+		{}
+		else
 		if (stale_work(work, true))
 		{
 			char stalemsg[0x10];
