@@ -4997,7 +4997,35 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
+static void restart_threads(void);
+
 static uint32_t benchmark_blkhdr[20];
+
+static
+void *benchmark_intense_work_update_thread(void *userp)
+{
+	pthread_detach(pthread_self());
+	RenameThread("benchmark-intense");
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	
+	struct pool * const pool = userp;
+	struct stratum_work * const swork = &pool->swork;
+	uint8_t * const blkhdr = swork->header1;
+	
+	while (true)
+	{
+		sleep(1);
+		
+		cg_wlock(&pool->data_lock);
+		for (int i = 36; --i >= 0; )
+			if (++blkhdr[i])
+				break;
+		cg_wunlock(&pool->data_lock);
+		
+		restart_threads();
+	}
+	return NULL;
+}
 
 static
 void setup_benchmark_pool()
@@ -5041,13 +5069,22 @@ void setup_benchmark_pool()
 		memset(bytes_buf(&swork->merkle_bin), '\xff', branchdatasz);
 		swork->merkles = branchcount;
 		
-		memset(swork->header1, '\xff', 36);
+		swork->header1[0] = '\xff';
+		memset(&swork->header1[1], '\0', 34);
+		swork->header1[35] = '\x01';
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
 		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
 		set_target_to_pdiff(swork->target, opt_scrypt ? (1./0x10000) : 1.);
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
+	}
+	
+	if (opt_benchmark_intense)
+	{
+		pthread_t pth;
+		if (unlikely(pthread_create(&pth, NULL, benchmark_intense_work_update_thread, pool)))
+			applog(LOG_WARNING, "Failed to start benchmark intense work update thread");
 	}
 }
 
