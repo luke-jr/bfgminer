@@ -5051,8 +5051,18 @@ void setup_benchmark_pool()
 	}
 }
 
+static void gen_stratum_work(struct pool *pool, struct work *work);
+
 void get_benchmark_work(struct work *work)
 {
+	if (opt_benchmark_intense)
+	{
+		gen_stratum_work(pools[0], work);
+		work->getwork_mode = GETWORK_MODE_BENCHMARK;
+		work_set_simple_ntime_roll_limit(work, 0);
+		return;
+	}
+	
 	struct pool * const pool = pools[0];
 	uint32_t * const blkhdr = benchmark_blkhdr;
 	for (int i = 16; i >= 0; --i)
@@ -8606,7 +8616,6 @@ static bool cnx_needed(struct pool *pool)
 
 static void wait_lpcurrent(struct pool *pool);
 static void pool_resus(struct pool *pool);
-static void gen_stratum_work(struct pool *pool, struct work *work);
 
 static void stratum_resumed(struct pool *pool)
 {
