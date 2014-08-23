@@ -65,10 +65,6 @@ bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 bfgminer_CPPFLAGS += $(AUTOSCAN_CPPFLAGS)
 bfgminer_LDADD += $(AUTOSCAN_LIBS)
 
-bfgminer_LDADD += $(libblkmaker_LIBS)
-bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
-bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
-
 # common sources
 bfgminer_SOURCES := miner.c
 
@@ -86,22 +82,11 @@ version.h: update-version
 bfgminer_SOURCES += version.h
 BUILT_SOURCES = version.h
 
-SUBDIRS += $(LIBBLKMAKER_SUBDIRS)
-LIBBLKMAKER_SUBDIRS =
-if NEED_LIBBLKMAKER
-LIBBLKMAKER_SUBDIRS         += libblkmaker
-EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
-libblkmaker_directory:
-	cd libblkmaker && $(MAKE)
-
-if HAVE_CYGWIN
-EXTRA_bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
-
-cyg%.dll: libblkmaker/.libs/cyg%.dll
-	cp -p $< $@
-endif
-
-endif
+SUBDIRS += $(libblkmaker_SUBDIRS)
+bfgminer_LDADD += $(libblkmaker_LIBS)
+bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
+EXTRA_bfgminer_DEPENDENCIES += $(libblkmaker_EXTRADEPS)
+@BUNDLED_LIB_RULES@
 
 bfgminer_SOURCES	+= logging.c
 

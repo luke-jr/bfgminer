@@ -1386,44 +1386,7 @@ else
 fi
 
 
-maybe_ldconfig=
-AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[true],[with_system_libblkmaker=no])
-if test "x$with_system_libblkmaker" = "xyes"; then
-	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
-		true
-	],[
-		AC_MSG_ERROR([Could not find system libblkmaker])
-	])
-else
-	save_LDFLAGS="$LDFLAGS"
-	LDFLAGS="$LDFLAGS -Wl,-zorigin"
-	origin_LDFLAGS=
-	AC_MSG_CHECKING([whether the linker recognizes the -zorigin option])
-	AC_TRY_LINK([],[],[
-		AC_MSG_RESULT([yes])
-		origin_LDFLAGS=',-zorigin'
-	],[
-		AC_MSG_RESULT([no])
-	])
-	LDFLAGS="$save_LDFLAGS"
-	
-	libblkmaker_CFLAGS='-Ilibblkmaker'
-	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs'"$origin_LDFLAGS"
-	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
-	AC_CONFIG_SUBDIRS([libblkmaker])
-	_ROOTPATH=$PATH$PATH_SEPARATOR`echo $PATH | sed s/bin/sbin/g`
-	possible_ldconfigs="${target}-ldconfig"
-	if test "x$cross_compiling" != "xyes"; then
-		possible_ldconfigs="${possible_ldconfigs} ldconfig"
-	fi
-	AC_CHECK_PROGS([LDCONFIG],[${possible_ldconfigs}],[],[$_ROOTPATH])
-	if test "x$LDCONFIG" != "x"; then
-		maybe_ldconfig=" && $LDCONFIG"
-	fi
-fi
-AC_SUBST(libblkmaker_CFLAGS)
-AC_SUBST(libblkmaker_LDFLAGS)
-AC_SUBST(libblkmaker_LIBS)
+BFG_BUNDLED_LIB([libblkmaker],[libblkmaker_jansson-0.1],[no],[libblkmaker],[blkmaker_jansson-0.1 blkmaker-0.1])
 
 
 $have_udevrules || use_udevrules=false
@@ -1447,7 +1410,6 @@ if $use_udevrules; then
 fi
 
 
-AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
 AM_CONDITIONAL([USE_GC3355], [test x$need_gc3355 = xyes])
@@ -1859,6 +1821,7 @@ if $use_udevrules; then
 fi
 
 AC_OUTPUT
+BFG_CUSTOM_SUBDIRS_OUTPUT
 
 
 wordfilter ()
@@ -1872,7 +1835,7 @@ echo "$PACKAGE $VERSION configuration options summary"
 echo "------------------------------------------------------------------------"
 echo
 echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
-echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
+echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
 echo "  Installation.prefix..: $prefix"
 echo
 echo "${lowllist_print}" | tr '~' '\n'
