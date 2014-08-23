@@ -82,10 +82,10 @@ version.h: update-version
 bfgminer_SOURCES += version.h
 BUILT_SOURCES = version.h
 
-SUBDIRS += $(libblkmaker_SUBDIRS)
-bfgminer_LDADD += $(libblkmaker_LIBS)
-bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
-EXTRA_bfgminer_DEPENDENCIES += $(libblkmaker_EXTRADEPS)
+SUBDIRS += $(libbase58_SUBDIRS) $(libblkmaker_SUBDIRS)
+bfgminer_LDADD += $(libbase58_LIBS) $(libblkmaker_LIBS)
+bfgminer_CPPFLAGS += $(libbase58_CFLAGS) $(libblkmaker_CFLAGS)
+EXTRA_bfgminer_DEPENDENCIES += $(libbase58_EXTRADEPS) $(libblkmaker_EXTRADEPS)
 @BUNDLED_LIB_RULES@
 
 bfgminer_SOURCES	+= logging.c

@@ -99,6 +99,7 @@ TARGET_CFLAGS += -Iuthash-1.9.8/src
 
 CONFIGURE_ARGS += --without-libudev
 CONFIGURE_ARGS += --without-sensors
+CONFIGURE_ARGS += --without-system-libbase58
 
 define Build/Prepare
 	$(call Build/Prepare/Default)
@@ -117,6 +118,7 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME)-rpc $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/libblkmaker*.so* $(1)/usr/lib
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/libbase58*.so* $(1)/usr/lib
 endef
 
 ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)

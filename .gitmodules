@@ -4,3 +4,6 @@
 [submodule "ccan"]
 	path = ccan-upstream
 	url = git://git.ozlabs.org/~ccan/ccan
+[submodule "libbase58"]
+	path = libbase58
+	url = https://github.com/luke-jr/libbase58.git
