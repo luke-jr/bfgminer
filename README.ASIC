@@ -257,6 +257,45 @@ If you have different devices using the bifury driver, see the section on
 Hex*Fury for applying workarounds per-device.
 
 
+GRIDSEED
+--------
+
+Gridseed units, at the present time, come in two versions: Blade - a 40 chip unit and Orb - a 5 chip unit.
+Orb units can be used to mine both SHA256 and Scrypt based coins whereas the Blade is Scrypt only. BFGMiner only
+supports Scrypt mode for the Orb units.
+
+BFGMiner allows a miner to connect both types of units to a single miner instance and provides for granular
+control of the clock frequencies for each device and each chip on each device. The basic use of this
+feature is to use the --set option on from the command line:
+
+bfgminer --scrypt -S gridseed:all --set gridseed@<device_serial_number>:clock=825
+
+for multiple devices, add multiple --set 's.
+
+Additionally, these can be added to the bfgminer.conf file for persistence like this:
+
+"set" : [
+        "gridseed@<device_serial_number>:clock=825",
+        "gridseed@<device_serial_number>:clock=850",
+        "gridseed@<device_serial_number>:clock=875"
+]
+
+To find the device serial number, start bfgminer and press  <M> to manage devices, then <Page Down> or
+<down arrow> through the list of devices and take note of the device serial number in the device
+information shown.
+
+...
+Select processor to manage using up/down arrow keys
+ GSD 0a:       |  74.4/ 72.9/ 10.2kh/s | A:  1 R:0+0(none) HW:0/none
+  STM32 Virtual COM Port from STMicroelectronics
+Serial: 6D85278F5650
+Clock speed: 875
+...
+
+So for example, an entry would look like this:
+        gridseed@6D85278F5650:clock=875
+
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
