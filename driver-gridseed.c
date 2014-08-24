@@ -18,7 +18,10 @@
 #include "lowl-vcom.h"
 #include "gc3355.h"
 
-#define GRIDSEED_DEFAULT_FREQUENCY  600
+/* These are stable defaults for the ORB and BLADE (ie High speed and no HW errors)
+   seperated here to allow blades and orbs to peacefully coexist in one miner instance */
+#define GRIDSEED_ORB_DEFAULT_FREQUENCY  875
+#define GRIDSEED_BLADE_DEFAULT_FREQUENCY  825
 // 60Kh/s at 700MHz in ms
 #define GRIDSEED_HASH_SPEED         0.08571428571429
 // GridSeed driver currently scans a full nonce range
@@ -173,6 +176,12 @@ bool gridseed_detect_custom(const char *path, struct device_drv *driver, struct 
 	info->chips = GC3355_ORB_DEFAULT_CHIPS;
 	if((fw_version & 0xffff) == 0x1402)
 		info->chips = GC3355_BLADE_DEFAULT_CHIPS;
+		
+	/* The ORB frequency is already set as the default
+	   if we have a mix of blades and orbs and a blade
+	   is detected set the BLADE freq for it */
+	 if(info->chips == GC3355_BLADE_DEFAULT_CHIPS)
+                info->freq = GRIDSEED_BLADE_DEFAULT_FREQUENCY;	
 	
 	//pick up any user-defined settings passed in via --set
 	drv_set_defaults(driver, gridseed_set_device_funcs_probe, info, path, detectone_meta_info.serial, 1);
