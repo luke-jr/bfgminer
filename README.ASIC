@@ -260,9 +260,11 @@ Hex*Fury for applying workarounds per-device.
 GRIDSEED
 --------
 
-Gridessed units at the present time come in two versions:  Blade - a 40 chip unit and Orb - a 5 chip unit.
-Orb units can be used to mine both SHA256 and Scrypt based coins whereas the Blade is Scrypt only.  BFGMiner
-allows a miner to connect both types of units to a single miner instance and provides for granular
+Gridseed units, at the present time, come in two versions: Blade - a 40 chip unit and Orb - a 5 chip unit.
+Orb units can be used to mine both SHA256 and Scrypt based coins whereas the Blade is Scrypt only. BFGMiner only
+supports Scrypt mode for the Orb units.
+
+BFGMiner allows a miner to connect both types of units to a single miner instance and provides for granular
 control of the clock frequencies for each device and each chip on each device. The basic use of this
 feature is to use the --set option on from the command line:
 
@@ -270,7 +272,7 @@ bfgminer --scrypt -S gridseed:all --set gridseed@<device_serial_number>:clock=82
 
 for multiple devices, add multiple --set 's.
 
-Additionally, these can be added to the bfgminer.conf file for persistance like this:
+Additionally, these can be added to the bfgminer.conf file for persistence like this:
 
 "set" : [
         "gridseed@<device_serial_number>:clock=825",
