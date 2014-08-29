@@ -2945,6 +2945,12 @@ void pool_check_coinbase(struct pool * const pool, const uint8_t * const cbtxn, 
 		applog(LOG_ERR, "Pool %d misbehaving (%s), disabling!", pool->pool_no, "coinbase check");
 		disable_pool(pool, POOL_MISBEHAVING);
 	}
+	else
+	if (pool->enabled == POOL_MISBEHAVING)
+	{
+		applog(LOG_NOTICE, "Pool %d no longer misbehaving, re-enabling!", pool->pool_no);
+		enable_pool(pool);
+	}
 }
 
 void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll)
@@ -8729,7 +8735,8 @@ static bool cnx_needed(struct pool *pool)
 {
 	struct pool *cp;
 
-	if (pool->enabled != POOL_ENABLED)
+	// We want to keep a connection open for rejecting or misbehaving pools, to detect when/if they change their tune
+	if (pool->enabled == POOL_DISABLED)
 		return false;
 
 	/* Idle stratum pool needs something to kick it alive again */
