@@ -2942,8 +2942,11 @@ void pool_check_coinbase(struct pool * const pool, const uint8_t * const cbtxn, 
 {
 	if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
 	{
-		applog(LOG_ERR, "Pool %d misbehaving (%s), disabling!", pool->pool_no, "coinbase check");
-		disable_pool(pool, POOL_MISBEHAVING);
+		if (pool->enabled == POOL_ENABLED)
+		{
+			applog(LOG_ERR, "Pool %d misbehaving (%s), disabling!", pool->pool_no, "coinbase check");
+			disable_pool(pool, POOL_MISBEHAVING);
+		}
 	}
 	else
 	if (pool->enabled == POOL_MISBEHAVING)
