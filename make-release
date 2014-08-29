@@ -97,16 +97,19 @@ for build in "${builds[@]}"; do
 		--enable-modminer \
 		--enable-ztex \
 		--enable-scrypt \
+		--without-system-libbase58 \
 		--host="$machine"
 	make $MAKEOPTS
 	if test "x$DEBUG_RELEASE" != "x1"; then
 		"$machine"-strip \
 			libblkmaker/.libs/*.dll \
+			libbase58/.libs/*.dll \
 			*.exe
 	fi
 	cp -vr \
 		*.exe \
 		libblkmaker/.libs/*.dll \
+		libbase58/.libs/*.dll \
 		opencl \
 		example.conf \
 		windows-build.txt \
