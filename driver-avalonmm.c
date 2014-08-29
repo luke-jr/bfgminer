@@ -196,6 +196,15 @@ bool avalonmm_detect_one(const char * const devpath)
 			mmversion = atol(mmver);
 		}
 		
+		if (!prev_cgpu)
+		{
+			if (serial_claim_v(devpath, &avalonmm_drv))
+			{
+				serial_close(fd);
+				return false;
+			}
+		}
+		
 		struct avalonmm_init_data * const initdata = malloc(sizeof(*initdata));
 		*initdata = (struct avalonmm_init_data){
 			.module_id = moduleno,
