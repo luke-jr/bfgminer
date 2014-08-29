@@ -9101,7 +9101,7 @@ out:
 
 static void pool_resus(struct pool *pool)
 {
-	if (pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
+	if (pool->enabled == POOL_ENABLED && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio())
 		applog(LOG_WARNING, "Pool %d %s alive, testing stability", pool->pool_no, pool->rpc_url);
 	else
 		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
@@ -10432,8 +10432,8 @@ static void *watchpool_thread(void __maybe_unused *userdata)
 			/* Only switch pools if the failback pool has been
 			 * alive for more than 5 minutes (default) to prevent
 			 * intermittently failing pools from being used. */
-			if (!pool->idle && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio() &&
-			    now.tv_sec - pool->tv_idle.tv_sec > opt_fail_switch_delay) {
+			if (!pool->idle && pool->enabled == POOL_ENABLED && pool_strategy == POOL_FAILOVER && pool->prio < cp_prio() && now.tv_sec - pool->tv_idle.tv_sec > opt_fail_switch_delay)
+			{
 				if (opt_fail_switch_delay % 60)
 					applog(LOG_WARNING, "Pool %d %s stable for %d second%s",
 					       pool->pool_no, pool->rpc_url,
