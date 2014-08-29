@@ -246,6 +246,7 @@ Options for both config file and command line:
 --api-port          Port number of miner API (default: 4028)
 --balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
+--benchmark-intense Run BFGMiner in intensive benchmark mode - produces no shares
 --chroot-dir <arg>  Chroot to a directory right after startup
 --cmd-idle <arg>    Execute a command when a device is allowed to be idle (rest or wait)
 --cmd-sick <arg>    Execute a command when a device is declared sick

@@ -126,7 +126,7 @@ static char packagename[256];
 
 bool opt_protocol;
 bool opt_dev_protocol;
-static bool opt_benchmark;
+static bool opt_benchmark, opt_benchmark_intense;
 static bool want_longpoll = true;
 static bool want_gbt = true;
 static bool want_getwork = true;
@@ -1430,6 +1430,14 @@ static char *set_rr(enum pool_strategy *strategy)
 	return NULL;
 }
 
+static
+char *set_benchmark_intense()
+{
+	opt_benchmark = true;
+	opt_benchmark_intense = true;
+	return NULL;
+}
+
 /* Detect that url is for a stratum protocol either via the presence of
  * stratum+tcp or by detecting a stratum server response */
 bool detect_stratum(struct pool *pool, char *url)
@@ -1980,6 +1988,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--benchmark",
 			opt_set_bool, &opt_benchmark,
 			"Run BFGMiner in benchmark mode - produces no shares"),
+	OPT_WITHOUT_ARG("--benchmark-intense",
+			set_benchmark_intense, &opt_benchmark_intense,
+			"Run BFGMiner in intensive benchmark mode - produces no shares"),
 #if defined(USE_BITFORCE)
 	OPT_WITHOUT_ARG("--bfl-range",
 			opt_set_bool, &opt_bfl_noncerange,
@@ -4986,7 +4997,45 @@ static void calc_diff(struct work *work, int known)
 	}
 }
 
+static void gen_stratum_work(struct pool *, struct work *);
+static void pool_update_work_restart_time(struct pool *);
+static void restart_threads(void);
+
 static uint32_t benchmark_blkhdr[20];
+static const int benchmark_update_interval = 1;
+
+static
+void *benchmark_intense_work_update_thread(void *userp)
+{
+	pthread_detach(pthread_self());
+	RenameThread("benchmark-intense");
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	
+	struct pool * const pool = userp;
+	struct stratum_work * const swork = &pool->swork;
+	uint8_t * const blkhdr = swork->header1;
+	
+	while (true)
+	{
+		sleep(benchmark_update_interval);
+		
+		cg_wlock(&pool->data_lock);
+		for (int i = 36; --i >= 0; )
+			if (++blkhdr[i])
+				break;
+		cg_wunlock(&pool->data_lock);
+		
+		struct work *work = make_work();
+		gen_stratum_work(pool, work);
+		pool->swork.work_restart_id = ++pool->work_restart_id;
+		pool_update_work_restart_time(pool);
+		test_work_current(work);
+		free_work(work);
+		
+		restart_threads();
+	}
+	return NULL;
+}
 
 static
 void setup_benchmark_pool()
@@ -5020,7 +5069,7 @@ void setup_benchmark_pool()
 		struct stratum_work * const swork = &pool->swork;
 		const int branchcount = 15;  // 1 MB block
 		const size_t branchdatasz = branchcount * 0x20;
-		const size_t coinbase_sz = 6 * 1024;
+		const size_t coinbase_sz = (opt_benchmark_intense ? 250 : 6) * 1024;
 		
 		bytes_resize(&swork->coinbase, coinbase_sz);
 		memset(bytes_buf(&swork->coinbase), '\xff', coinbase_sz);
@@ -5030,7 +5079,9 @@ void setup_benchmark_pool()
 		memset(bytes_buf(&swork->merkle_bin), '\xff', branchdatasz);
 		swork->merkles = branchcount;
 		
-		memset(swork->header1, '\xff', 36);
+		swork->header1[0] = '\xff';
+		memset(&swork->header1[1], '\0', 34);
+		swork->header1[35] = '\x01';
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
 		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
@@ -5038,10 +5089,25 @@ void setup_benchmark_pool()
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
 	}
+	
+	if (opt_benchmark_intense)
+	{
+		pthread_t pth;
+		if (unlikely(pthread_create(&pth, NULL, benchmark_intense_work_update_thread, pool)))
+			applog(LOG_WARNING, "Failed to start benchmark intense work update thread");
+	}
 }
 
-void get_benchmark_work(struct work *work)
+void get_benchmark_work(struct work *work, bool use_swork)
 {
+	if (use_swork)
+	{
+		gen_stratum_work(pools[0], work);
+		work->getwork_mode = GETWORK_MODE_BENCHMARK;
+		work_set_simple_ntime_roll_limit(work, 0);
+		return;
+	}
+	
 	struct pool * const pool = pools[0];
 	uint32_t * const blkhdr = benchmark_blkhdr;
 	for (int i = 16; i >= 0; --i)
@@ -5699,9 +5765,6 @@ bool stale_work(struct work *work, bool share)
 	struct pool *pool;
 	uint32_t block_id;
 	unsigned getwork_delay;
-
-	if (opt_benchmark)
-		return false;
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
@@ -8595,7 +8658,6 @@ static bool cnx_needed(struct pool *pool)
 
 static void wait_lpcurrent(struct pool *pool);
 static void pool_resus(struct pool *pool);
-static void gen_stratum_work(struct pool *pool, struct work *work);
 
 static void stratum_resumed(struct pool *pool)
 {
@@ -9488,6 +9550,12 @@ struct work *get_work(struct thr_info *thr)
 	return work;
 }
 
+struct dupe_hash_elem {
+	uint8_t hash[0x20];
+	struct timeval tv_prune;
+	UT_hash_handle hh;
+};
+
 static
 void _submit_work_async(struct work *work)
 {
@@ -9495,10 +9563,48 @@ void _submit_work_async(struct work *work)
 	
 	if (opt_benchmark)
 	{
-		json_t * const jn = json_null();
+		json_t * const jn = json_null(), *result = NULL;
 		work_check_for_block(work);
-		share_result(jn, jn, jn, work, false, "");
+		{
+			static struct dupe_hash_elem *dupe_hashes;
+			struct dupe_hash_elem *dhe, *dhetmp;
+			HASH_FIND(hh, dupe_hashes, &work->hash, sizeof(dhe->hash), dhe);
+			if (dhe)
+				result = json_string("duplicate");
+			else
+			{
+				struct timeval tv_now;
+				timer_set_now(&tv_now);
+				
+				// Prune old entries
+				HASH_ITER(hh, dupe_hashes, dhe, dhetmp)
+				{
+					if (!timer_passed(&dhe->tv_prune, &tv_now))
+						break;
+					HASH_DEL(dupe_hashes, dhe);
+					free(dhe);
+				}
+				
+				dhe = malloc(sizeof(*dhe));
+				memcpy(dhe->hash, work->hash, sizeof(dhe->hash));
+				timer_set_delay(&dhe->tv_prune, &tv_now, 337500000);
+				HASH_ADD(hh, dupe_hashes, hash, sizeof(dhe->hash), dhe);
+			}
+		}
+		if (result)
+		{}
+		else
+		if (stale_work(work, true))
+		{
+			char stalemsg[0x10];
+			snprintf(stalemsg, sizeof(stalemsg), "stale %us", benchmark_update_interval * (work->pool->work_restart_id - work->work_restart_id));
+			result = json_string(stalemsg);
+		}
+		else
+			result = json_incref(jn);
+		share_result(jn, result, jn, work, false, "");
 		free_work(work);
+		json_decref(result);
 		json_decref(jn);
 		return;
 	}
@@ -12786,7 +12892,7 @@ retry:
 		}
 
 		if (opt_benchmark) {
-			get_benchmark_work(work);
+			get_benchmark_work(work, opt_benchmark_intense);
 			applog(LOG_DEBUG, "Generated benchmark work");
 			stage_work(work);
 			continue;
