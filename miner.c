@@ -2940,6 +2940,9 @@ bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 
 void pool_check_coinbase(struct pool * const pool, const uint8_t * const cbtxn, const size_t cbtxnsz)
 {
+	if (uri_get_param_bool(pool->rpc_url, "skipcbcheck", false))
+	{}
+	else
 	if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
 	{
 		if (pool->enabled == POOL_ENABLED)
