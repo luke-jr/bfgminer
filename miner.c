@@ -4395,9 +4395,9 @@ static inline struct pool *select_pool(bool lagging)
 	bool avail = false;
 	int tested, i;
 
+retry:
 	cp = current_pool();
 
-retry:
 	if (pool_strategy == POOL_BALANCE) {
 		pool = select_balanced(cp);
 		goto out;
