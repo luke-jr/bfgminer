@@ -2583,12 +2583,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	
 	memcpy(pool->swork.target, pool->next_target, 0x20);
 	
-	if (!check_coinbase(coinbase, bytes_len(&pool->swork.coinbase), &pool->cb_param))
-	{
-		applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
-		/* Just go through the rest process to avoid an "unknown stratum message" log */
-		disable_pool(pool, POOL_MISBEHAVING);
-	}
+	pool_check_coinbase(pool, coinbase, bytes_len(&pool->swork.coinbase));
 	
 	cg_wunlock(&pool->data_lock);
 

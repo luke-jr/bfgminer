@@ -2938,6 +2938,15 @@ bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
 }
 
+void pool_check_coinbase(struct pool * const pool, const uint8_t * const cbtxn, const size_t cbtxnsz)
+{
+	if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
+	{
+		applog(LOG_ERR, "Pool %d misbehaving (%s), disabling!", pool->pool_no, "coinbase check");
+		disable_pool(pool, POOL_MISBEHAVING);
+	}
+}
+
 void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll)
 {
 	*nrl = (struct ntime_roll_limits){
@@ -3213,11 +3222,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
 			
-			if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
-			{
-				applog(LOG_ERR, "Mark pool %d as misbehaving for failing to pass coinbase check", pool->pool_no);
-				disable_pool(pool, POOL_MISBEHAVING);
-			}
+			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
 			swork->tr = work->tr;

@@ -1525,6 +1525,7 @@ extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern bool pool_may_redirect_to(struct pool *, const char *uri);
+extern void pool_check_coinbase(struct pool *, const uint8_t *cbtxn, size_t cbtxnsz);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
