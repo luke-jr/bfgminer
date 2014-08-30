@@ -663,16 +663,27 @@ To log share data to a file named "share.log", you can use either:
 
 For every share found, data will be logged in a CSV (Comma Separated Value)
 format:
-    timestamp,disposition,target,pool,dev,thr,sharehash,sharedata
+    timestamp,disposition,target,pool,dev,thr,sharehash,sharedata,workdiff/target,found,requested
 For example (this is wrapped, but it's all on one line for real):
-    1335313090,reject,
-    ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000,
-    http://localhost:8337,GPU0,0,
-    6f983c918f3299b58febf95ec4d0c7094ed634bc13754553ec34fc3800000000,
-    00000001a0980aff4ce4a96d53f4b89a2d5f0e765c978640fe24372a000001c5
-    000000004a4366808f81d44f26df3d69d7dc4b3473385930462d9ab707b50498
-    f681634a4f1f63d01a0cd43fb338000000000080000000000000000000000000
-    0000000000000000000000000000000000000000000000000000000080020000
+    4998055,accept,
+    ffffffffffffffffffffffffffffffffffffffffffffff4b3789410000000000,
+    stratum+tcp://localhost:9332,PXY13,13,
+    bae84ec3fdb6d614ab5999abca7654ccbbe1a73f54067bcf27f2060000000000,
+    000000028a05e92c580642ed369fd8e22b07244994d746d351b7495f0000000000000000dc268e13d59412fb3f35f8e20113c78193f7221f5da3605860055ff6e1bf572f5387979618692842f5736cd2000000800000000000000000000000000000000000000000000000000000000000000000000000000000000080020000,
+    9.44k/1k,9435.179268,1000.000000
+
+A simple script to find out 'which is my highest share finding device' could be written as
+
+ grep accept share.log | awk -F, ' { print $10,$5,$9,$1 } ' | sort -n | tail -50
+
+Which would show you the top 50 highest shares, and the devices that found them, similar to
+this:
+  54348645.573858 PXY8 54.3M/1k 4986283
+  55335891.507618 PXY14 55.3M/1k 4993049
+  55758873.568663 PXY16 55.8M/1k 4976537
+  182207768.711241 PXY8 182M/1k 4986817
+  463526981.514786 PXY8 464M/1k 4971323
+  2346305925.106580 PXY4 2.35G/1k 4967377
 
 ---
 
