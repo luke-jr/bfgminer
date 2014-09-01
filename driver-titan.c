@@ -110,6 +110,7 @@ static bool knc_titan_detect_one(const char *devpath)
 	asic = atoi(devpath);
 	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 		die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
+		die_info.version = KNC_VERSION_TITAN;
 		if (!knc_titan_get_info(repr, ctx, asic, die, &die_info))
 			continue;
 		if (0 < die_info.cores) {
@@ -433,6 +434,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 		if (0 >= knc->dies[asic][die].cores)
 			break;
 		die_info.cores = knc->dies[asic][die].cores; /* core hint */
+		die_info.version = KNC_VERSION_TITAN;
 		if (!knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
 			break;
 		for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
