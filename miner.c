@@ -1647,9 +1647,9 @@ static char *set_cbcperc(const char *arg)
 	if (!pool->cb_param.scripts)
 		return "Define --coinbase-check-addr list first, then the --coinbase-check-total argument";
 	
-	pool->cb_param.perc = atof(arg);
+	pool->cb_param.perc = atof(arg) / 100;
 	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
-		return "The percentage should be between 0 and 1";
+		return "The percentage should be between 0 and 100";
 	
 	return NULL;
 }
