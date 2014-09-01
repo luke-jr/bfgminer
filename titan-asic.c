@@ -81,7 +81,7 @@ bool knc_titan_setup_core(const char *repr, void * const ctx, int channel, int d
 		/* next follows padding and data */
 	};
 	const int send_size = sizeof(setup_core_cmd);
-	int response_length = send_size;
+	int response_length = send_size - 4;
 	uint8_t response[response_length];
 	int status;
 	uint32_t *src, *dst;
@@ -287,7 +287,9 @@ bool knc_titan_setup_core(const char *repr, void * const ctx, int channel, int d
 		dst[i] = htobe32(src[i]);
 
 	status = knc_syncronous_transfer(ctx, channel, send_size, setup_core_cmd, response_length, response);
-	if (status) {
+	/* For this command ASIC does not send CRC in response, so ignore it */
+	status &= ~(KNC_ERR_CRC);
+	if (status != KNC_ACCEPTED) {
 		applog(LOG_ERR, "%s[%d:%d]: setup_core failed (%x)", repr, channel, die, status);
 		return false;
 	}
