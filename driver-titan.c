@@ -83,7 +83,7 @@ struct knc_titan_info {
 
 static bool knc_titan_spi_open(const char *repr, struct spi_port * const spi)
 {
-	const char * const spipath = "/dev/spidev0.1";
+	const char * const spipath = "/dev/spidev1.0";
 	const int fd = open(spipath, O_RDWR);
 	const uint8_t lsbfirst = 0;
 	if (0 > fd)
