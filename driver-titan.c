@@ -10,11 +10,9 @@
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <linux/spi/spidev.h>
 
 #include "deviceapi.h"
 #include "logging.h"
-#include "lowl-spi.h"
 #include "miner.h"
 #include "util.h"
 
@@ -25,11 +23,6 @@
 #define KNC_TITAN_HWERR_DISABLE_SECS	10
 
 #define	KNC_POLL_INTERVAL_US		10000
-
-#define	KNC_TITAN_SPI_SPEED		3000000
-#define	KNC_TITAN_SPI_DELAY		0
-#define	KNC_TITAN_SPI_MODE		(SPI_CPHA | SPI_CPOL | SPI_CS_HIGH)
-#define	KNC_TITAN_SPI_BITS		8
 
 /* Specify here minimum number of leading zeroes in hash */
 #define	DEFAULT_DIFF_FILTERING_ZEROES	12
@@ -67,7 +60,7 @@ struct knc_titan_die {
 };
 
 struct knc_titan_info {
-	struct spi_port *spi;
+	void *ctx;
 	struct cgpu_info *cgpu;
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
@@ -81,37 +74,14 @@ struct knc_titan_info {
 	struct work *devicework;
 };
 
-static bool knc_titan_spi_open(const char *repr, struct spi_port * const spi)
-{
-	const char * const spipath = "/dev/spidev1.0";
-	const int fd = open(spipath, O_RDWR);
-	const uint8_t lsbfirst = 0;
-	if (0 > fd)
-		return false;
-	if (ioctl(fd, SPI_IOC_WR_MODE         , &spi->mode )) goto fail;
-	if (ioctl(fd, SPI_IOC_WR_LSB_FIRST    , &lsbfirst  )) goto fail;
-	if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &spi->bits )) goto fail;
-	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ , &spi->speed)) goto fail;
-	spi->fd = fd;
-	return true;
-
-fail:
-	close(fd);
-	spi->fd = -1;
-	applog(LOG_WARNING, "%s: Failed to open %s", repr, spipath);
-	return false;
-}
-
-#define	knc_titan_spi_txrx	linux_spi_txrx
-
 static bool knc_titan_detect_one(const char *devpath)
 {
 	static struct cgpu_info *prev_cgpu = NULL;
 	struct cgpu_info *cgpu;
-	struct spi_port *spi;
+	void *ctx;
 	struct knc_titan_info *knc;
 	int cores = 0, asic, die;
-	struct titan_info_response resp;
+	struct knc_die_info die_info;
 	char repr[6];
 
 	cgpu = malloc(sizeof(*cgpu));
@@ -119,22 +89,7 @@ static bool knc_titan_detect_one(const char *devpath)
 		quit(1, "Failed to alloc cgpu_info");
 
 	if (!prev_cgpu) {
-		spi = calloc(1, sizeof(*spi));
-		if (unlikely(!spi))
-			quit(1, "Failed to alloc spi_port");
-
-		/* Be careful, read lowl-spi.h comments for warnings */
-		memset(spi, 0, sizeof(*spi));
-		spi->txrx = knc_titan_spi_txrx;
-		spi->cgpu = cgpu;
-		spi->repr = knc_titan_drv.dname;
-		spi->logprio = LOG_ERR;
-		spi->speed = KNC_TITAN_SPI_SPEED;
-		spi->delay = KNC_TITAN_SPI_DELAY;
-		spi->mode = KNC_TITAN_SPI_MODE;
-		spi->bits = KNC_TITAN_SPI_BITS;
-
-		if (!knc_titan_spi_open(knc_titan_drv.name, spi)) {
+		if (NULL == (ctx = knc_trnsp_new(NULL))) {
 			free(cgpu);
 			return false;
 		}
@@ -143,28 +98,29 @@ static bool knc_titan_detect_one(const char *devpath)
 		if (unlikely(!knc))
 			quit(1, "Failed to alloc knc_titan_info");
 
-		knc->spi = spi;
+		knc->ctx = ctx;
 		knc->cgpu = cgpu;
 		knc->workqueue_max = KNC_TITAN_WORKSLOTS_PER_CORE + 1;
 	} else {
 		knc = prev_cgpu->device_data;
-		spi = knc->spi;
+		ctx = knc->ctx;
 	}
 
 	snprintf(repr, sizeof(repr), "%s %s", knc_titan_drv.name, devpath);
 	asic = atoi(devpath);
 	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
-		if (!knc_titan_spi_get_info(repr, spi, &resp, die, KNC_TITAN_CORES_PER_DIE))
+		die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
+		if (!knc_titan_get_info(repr, ctx, asic, die, &die_info))
 			continue;
-		if (0 < resp.cores) {
+		if (0 < die_info.cores) {
 			knc->dies[asic][die] = (struct knc_titan_die) {
 				.asicno = asic,
 				.dieno = die,
-				.cores = resp.cores,
+				.cores = die_info.cores,
 				.first_proc = cgpu,
 				.freq = KNC_TITAN_DEFAULT_FREQUENCY,
 			};
-			cores += resp.cores;
+			cores += die_info.cores;
 		} else {
 			knc->dies[asic][die] = (struct knc_titan_die) {
 				.asicno = -INT_MAX,
@@ -178,8 +134,7 @@ static bool knc_titan_detect_one(const char *devpath)
 		free(cgpu);
 		if (!prev_cgpu) {
 			free(knc);
-			close(spi->fd);
-			free(spi);
+			knc_trnsp_free(ctx);
 		}
 		return false;
 	}
@@ -220,11 +175,11 @@ static void knc_titan_detect(void)
 	generic_detect(&knc_titan_drv, knc_titan_detect_one, knc_titan_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
-static void knc_titan_clean_flush(const char *repr, struct spi_port * const spi, int die)
+static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, int die)
 {
-	struct titan_report report;
+	struct knc_report report;
 	bool unused;
-	knc_titan_set_work(repr, spi, &report, die, 0xFFFF, 0, NULL, true, &unused);
+	knc_titan_set_work(repr, ctx, asic, die, 0xFFFF, 0, NULL, true, &unused, &report);
 }
 
 static bool knc_titan_init(struct thr_info * const thr)
@@ -279,7 +234,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 			applog(LOG_DEBUG, "%s Allocated core %d:%d:%d", proc->device->dev_repr, asic, die, (i - core_base));
 
 			if (0 == knccore->coreno)
-				knc_titan_clean_flush(proc->device->dev_repr, knc->spi, knccore->dieno);
+				knc_titan_clean_flush(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno);
 
 			proc = proc->next_proc;
 			if ((!proc) || proc->device == proc)
@@ -320,7 +275,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 		mythr = proc->thr[0];
 		knccore = mythr->cgpu_data;
 		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
-		knc_titan_setup_core(proc->device->dev_repr, knc->spi, &setup_params, knccore->dieno, knccore->coreno);
+		knc_titan_setup_core(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 
 	timer_set_now(&thr->tv_poll);
@@ -435,8 +390,8 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct work *work, *tmp;
 	int workaccept = 0;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
-	struct titan_report report;
-	struct titan_info_response info_resp;
+	struct knc_report report;
+	struct knc_die_info die_info;
 	int asic = 0; /* TODO: the asic number must iterate from 0 to 5 */
 	int die = 0; /* TODO: the die number must iterate from 0 to 3 */
 	int i, tmp_int;
@@ -449,7 +404,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	knccore = cgpu->thr[0]->cgpu_data;
 	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
 		bool work_accepted;
-		if (!knc_titan_set_work(cgpu->dev_repr, knc->spi, &report, die, 0xFFFF, knccore->next_slot, work, knc->need_flush, &work_accepted))
+		if (!knc_titan_set_work(cgpu->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, knc->need_flush, &work_accepted, &report))
 			work_accepted = false;
 		if (!work_accepted)
 			break;
@@ -477,37 +432,38 @@ static void knc_titan_poll(struct thr_info * const thr)
 	while (true) {
 		if (0 >= knc->dies[asic][die].cores)
 			break;
-		if (!knc_titan_spi_get_info(cgpu->dev_repr, knc->spi, &info_resp, die, knc->dies[asic][die].cores))
+		die_info.cores = knc->dies[asic][die].cores; /* core hint */
+		if (!knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
 			break;
 		for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
 			mythr = proc->thr[0];
 			knccore = mythr->cgpu_data;
 			if ((knccore->dieno != die) || (knccore->asicno != asic))
 				break;
-			if (!info_resp.have_report[knccore->coreno])
+			if (!die_info.has_report[knccore->coreno])
 				continue;
-			if (!knc_titan_get_report(proc->proc_repr, knc->spi, &report, die, knccore->coreno))
+			if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
 				continue;
 			/* if last_nonce.slot == 0, then there was a flush and all reports are stale */
 			if (0 != knccore->last_nonce.slot) {
 				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-					if ((report.nonces[i].slot == knccore->last_nonce.slot) &&
-					    (report.nonces[i].nonce == knccore->last_nonce.nonce))
+					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
+					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
 						break;
-					tmp_int = report.nonces[i].slot;
+					tmp_int = report.nonce[i].slot;
 					HASH_FIND_INT(knc->devicework, &tmp_int, work);
 					if (!work) {
 						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
 						continue;
 					}
-					if (submit_nonce(mythr, work, report.nonces[i].nonce)) {
+					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
 						hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
 						knccore->hwerr_in_row = 0;
 					}
 				}
 			}
-			knccore->last_nonce.slot = report.nonces[0].slot;
-			knccore->last_nonce.nonce = report.nonces[0].nonce;
+			knccore->last_nonce.slot = report.nonce[0].slot;
+			knccore->last_nonce.nonce = report.nonce[0].nonce;
 		}
 		/* TODO: switch to next asic/die */
 		break;

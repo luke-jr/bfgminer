@@ -8,277 +8,70 @@
  * any later version.  See COPYING for more details.
  */
 
-#include <zlib.h>
-
 #include "miner.h"
 #include "logging.h"
-#include "lowl-spi.h"
 
 #include "titan-asic.h"
 
-/* ASIC Command codes */
-#define	KNC_ASIC_CMD_GETINFO		0x80
-#define	KNC_ASIC_CMD_REPORT		0x82
-#define	KNC_ASIC_CMD_SETWORK		0x81
-#define	KNC_ASIC_CMD_SETWORK_URGENT	0x83
-#define	KNC_ASIC_CMD_SETUP_CORE		0x87
-
-/* Error bits */
-#define	ERR_SEND_CRC_FAIL	(1 << 0)
-#define	ERR_RCV_CRC_FAIL	(1 << 1)
-#define	ERR_BAD_RESPONSE	(1 << 2)
-#define	ERR_OTHER_ERR		(1 << 31)
-
-#define	CRC32_SIZE			4
-/* In SPI responses after crc goes trailer: status(1 byte) + address(3 bytes) */
-#define	SPI_RESPONSE_TRAILER_SIZE	4
-
-#define	RCV_STATUS_NOFLAGS	0x81
-#define	RCV_STATUS_ACCEPTED_WORK (1 << 2)
-#define	RCV_STATUS_SEND_CRC_BAD	(1 << 5)
-
-/* send_size - size of send_buf, without crc
- * transfer_size - total size of transfer
- */
-static uint8_t * spi_transfer(struct spi_port * const spi, uint8_t *send_buf, int send_size, int transfer_size, int rcv_crc_data_len, uint32_t *errors, bool *work_accepted)
+bool knc_titan_get_info(const char *repr, void * const ctx, int channel, int die, struct knc_die_info *die_info)
 {
-	uint8_t *rxbuf, crcbuf[CRC32_SIZE];
-	uint32_t crc;
-	uint8_t rcv_status;
-	int min_transfer_size = send_size + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
-	if (0 < rcv_crc_data_len) {
-		if (min_transfer_size < (4 + rcv_crc_data_len + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE))
-			min_transfer_size = 4 + rcv_crc_data_len + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
-	}
-
-	*errors = 0;
-	*work_accepted = false;
-	if (transfer_size < min_transfer_size) {
-exit_other_error:
-		*errors |= ERR_OTHER_ERR;
-		return NULL;
-	}
-	spi_clear_buf(spi);
-	spi_emit_buf(spi, send_buf, send_size);
-	crc = crc32(0, Z_NULL, 0);
-	crc = crc32(crc, send_buf, send_size);
-	*((uint32_t *)crcbuf) = htobe32(crc);
-	spi_emit_buf(spi, crcbuf, CRC32_SIZE);
-	spi_emit_nop(spi, transfer_size - spi_getbufsz(spi));
-	if (!spi_txrx(spi))
-		goto exit_other_error;
-	rxbuf = spi_getrxbuf(spi);
-
-	rcv_status = rxbuf[transfer_size - SPI_RESPONSE_TRAILER_SIZE];
-	if (RCV_STATUS_NOFLAGS != (rcv_status & (~(RCV_STATUS_SEND_CRC_BAD | RCV_STATUS_ACCEPTED_WORK))))
-		*errors |= ERR_BAD_RESPONSE;
-	if (rcv_status & RCV_STATUS_SEND_CRC_BAD)
-		*errors |= ERR_SEND_CRC_FAIL;
-	if (0 < rcv_crc_data_len) {
-		crc = crc32(0, Z_NULL, 0);
-		crc = crc32(crc, rxbuf + 4, rcv_crc_data_len);
-		memcpy(crcbuf, &rxbuf[4 + rcv_crc_data_len], CRC32_SIZE);
-		if (crc != be32toh(*((uint32_t *)crcbuf)))
-			*errors |= ERR_RCV_CRC_FAIL;
-	}
-	*work_accepted = ((0 == *errors) && (rcv_status & RCV_STATUS_ACCEPTED_WORK));
-#if 0
-	{
-		uint8_t *txbuf = spi_gettxbuf(spi);
-		char str[8192];
-		int i, n;
-		n = 0;
-		for (i = 0; i < transfer_size; ++i)
-			n += sprintf(&str[n], i ? ",0x%02hhX" : "0x%02hhX", txbuf[i]);
-		applog(LOG_NOTICE, "TX: %s", str);
-		n = 0;
-		for (i = 0; i < transfer_size; ++i)
-			n += sprintf(&str[n], i ? ",0x%02hhX" : "0x%02hhX", rxbuf[i]);
-		applog(LOG_NOTICE, "RX: %s", str);
-		if (0 < rcv_crc_data_len)
-			applog(LOG_NOTICE, "RX-CRC: 0x%08X", crc);
-	}
-#endif
-	return rxbuf;
+	int rc;
+	rc = knc_detect_die(ctx, channel, die, die_info);
+	return (0 == rc);
 }
 
-/*
- * core_hint - which number of cores is expected. The function needs to know it to
- *   calculate the SPI transfer size. It uses this hint for the first transfer.
- *   If the first transfer fails, it assumes that it is because of wrong hint and
- *   then tries to detect right number of cores from the first response.
- */
-bool knc_titan_spi_get_info(const char *repr, struct spi_port * const spi, struct titan_info_response *resp, int die, int core_hint)
+bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted, struct knc_report *report)
 {
-	uint8_t get_info_cmd[] = {KNC_ASIC_CMD_GETINFO, die, 0x00, 0x00};
-	uint8_t *rxbuf;
-	uint32_t errors;
-	uint16_t revision;
-	int transfer_size = 24 + ((core_hint + 3) / 4);
-	int i, core;
-	bool unused;
+	int request_length = 4 + 1 + 6*4 + 3*4 + 8*4;
+	uint8_t request[request_length];
+	int response_length = 1 + 1 + (1 + 4) * 5;
+	uint8_t response[response_length];
+	int status;
 
-	for (i = 0; i < 3; ++i) {
-		rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors, &unused);
-		if (NULL == rxbuf) {
-exit_unrec_error:	applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: Unrecognized error", repr, die);
+	request_length = knc_prepare_titan_setwork(request, die, core, slot, work, urgent);
+	status = knc_syncronous_transfer(ctx, channel, request_length, request, response_length, response);
+	if (status != KNC_ACCEPTED) {
+		*work_accepted = false;
+		if (response[0] == 0x7f) {
+			applog(LOG_DEBUG, "%s[%d:%d]: Core disabled", repr, channel, die);
 			return false;
 		}
-		if (errors != ERR_SEND_CRC_FAIL)
-			break;
-		/* If the only error is SEND_CRC, assume there was a communication error
-		 * and retry three times
-		 */
-	}
-	if (ERR_SEND_CRC_FAIL == errors) {
-		applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: CRC error in Tx", repr, die);
-		return false;
-	}
-
-	if (0 != errors) {
-		/* It might be that we have different number of cores. Try to guess it
-		 * from partial response.
-		 */
-		revision = (rxbuf[6] << 8) | rxbuf[7];
-		if (KNC_TITAN_ASIC_REVISION != revision) {
-exit_bad_revision:	applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: Bad revision 0x%04hX", repr, die, revision);
+		if (status & KNC_ERR_MASK) {
+			applog(LOG_ERR, "%s[%d:%d]: Failed to set work state (%x)", repr, channel, die, status);
 			return false;
 		}
-		resp->cores = (rxbuf[4] << 8) | rxbuf[5];
-		if (resp->cores != core_hint) {
-			applog(LOG_NOTICE, "%s[%d] core hint %d might be wrong, new guess is %d", repr, die, core_hint, resp->cores);
-			transfer_size = 24 + ((resp->cores + 3) / 4);
-			for (i = 0; i < 3; ++i) {
-				rxbuf = spi_transfer(spi, get_info_cmd, sizeof(get_info_cmd), transfer_size, transfer_size - 4 - CRC32_SIZE - SPI_RESPONSE_TRAILER_SIZE, &errors, &unused);
-				if (NULL == rxbuf)
-					goto exit_unrec_error;
-				if (errors != ERR_SEND_CRC_FAIL)
-					break;
-				/* If the only error is SEND_CRC, assume there was a communication error
-				 * and retry three times
-				 */
-			}
+		if (!(status & KNC_ERR_MASK)) {
+			/* !KNC_ERRMASK */
+			applog(LOG_DEBUG, "%s[%d:%d]: Core busy", repr, channel, die, status);
 		}
 	}
 
-	if (0 != errors) {
-		applog(LOG_ERR, "%s[%d] knc_titan_spi_get_info: Communication failed, errors = 0x%X", repr, die, errors);
-		return false;
-	}
-
-	revision = (rxbuf[6] << 8) | rxbuf[7];
-	if (KNC_TITAN_ASIC_REVISION != revision)
-		goto exit_bad_revision;
-	resp->cores = (rxbuf[4] << 8) | rxbuf[5];
-	resp->pll_state = *((uint64_t *)(&rxbuf[8]));
-	for (core = 0; core < resp->cores; ) {
-		uint8_t data = rxbuf[16 + (core / 4)];
-		resp->want_work[core] = !!(data & (1 << 7));
-		resp->have_report[core] = !!(data & (1 << 6));
-		if (++core >= resp->cores)
-			break;
-		resp->want_work[core] = !!(data & (1 << 5));
-		resp->have_report[core] = !!(data & (1 << 4));
-		if (++core >= resp->cores)
-			break;
-		resp->want_work[core] = !!(data & (1 << 3));
-		resp->have_report[core] = !!(data & (1 << 2));
-		if (++core >= resp->cores)
-			break;
-		resp->want_work[core] = !!(data & (1 << 1));
-		resp->have_report[core] = !!(data & (1 << 0));
-		if (++core >= resp->cores)
-			break;
-	}
-
+	knc_decode_report(response, report, KNC_VERSION_TITAN);
 	return true;
 }
 
-static void knc_titan_parse_get_report(uint8_t *data, struct titan_report *report)
+bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int die, int core, struct knc_report *report)
 {
-	int i;
+	uint8_t request[4];
+	int request_length;
+	int response_length = 1 + 1 + (1 + 4) * 5;
+	uint8_t response[response_length];
+	int status;
 
-	report->flags = data[0];
-	report->core_counter = data[1];
-	report->slot_core = (data[2] >> 4) & 0x0F;
-	for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-		report->nonces[i].slot = data[2 + i * 5] & 0x0F;
-		report->nonces[i].nonce = ((uint32_t)data[2 + i * 5 + 1] << 24) |
-					  ((uint32_t)data[2 + i * 5 + 2] << 16) |
-					  ((uint32_t)data[2 + i * 5 + 3] << 8) |
-					  ((uint32_t)data[2 + i * 5 + 4]);
+	request_length = knc_prepare_report(request, die, core);
+	status = knc_syncronous_transfer(ctx, channel, request_length, request, response_length, response);
+	if (status) {
+		applog(LOG_ERR, "%s[%d:%d]: get_report failed (%x)", repr, channel, die, status);
+		return false;
 	}
+
+	knc_decode_report(response, report, KNC_VERSION_TITAN);
+	return true;
 }
 
-bool knc_titan_set_work(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted)
+bool knc_titan_setup_core(const char *repr, void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params)
 {
 #define	SETWORK_CMD_SIZE	(5 + BLOCK_HEADER_BYTES_WITHOUT_NONCE)
-	uint8_t set_work_cmd_aligned[3 + SETWORK_CMD_SIZE] = {
-		0, 0, 0, /* three extra bytes for alignment */
-		urgent ? KNC_ASIC_CMD_SETWORK_URGENT : KNC_ASIC_CMD_SETWORK,
-		die,
-		(core >> 8) & 0xFF,
-		core & 0xFF,
-		0xF0 | (slot & 0x0F),
-		/* next follows data. Thanks to the first three extra bytes it is 64bit-aligned */
-	};
-	const int send_size = sizeof(set_work_cmd_aligned) - 3;
-	const int transfer_size = send_size + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
-	uint8_t *rxbuf;
-	int i;
-	uint32_t *src, *dst;
-	uint32_t errors;
-
-	if (NULL != work) {
-		src = (uint32_t *)work->data;
-		dst = (uint32_t *)(&set_work_cmd_aligned[3 + 5]);
-		for (i = 0; i < (BLOCK_HEADER_BYTES_WITHOUT_NONCE / 4); ++i)
-			dst[i] = htobe32(src[i]);
-	} else {
-		/* Empty work is allowed only for the "purge" (slot = 0) operation */
-		if (0 != slot) {
-			applog(LOG_ERR, "%s[%d:%d] knc_titan_set_work: Invalid work", repr, die, core);
-			return false;
-		}
-	}
-
-	rxbuf = spi_transfer(spi, &set_work_cmd_aligned[3], send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors, work_accepted);
-	if (NULL == rxbuf) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_set_work: Unrecognized error", repr, die, core);
-		return false;
-	}
-	if (0 != errors) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_set_work: Communication failed, errors = 0x%X", repr, die, core, errors);
-		return false;
-	}
-	knc_titan_parse_get_report(&rxbuf[4], report);
-	return true;
-}
-
-bool knc_titan_get_report(const char *repr, struct spi_port * const spi, struct titan_report *report, int die, int core)
-{
-	uint8_t get_report_cmd[] = {KNC_ASIC_CMD_REPORT, die, (core >> 8) & 0xFF, core & 0xFF};
-	const int send_size = sizeof(get_report_cmd);
-	const int transfer_size = send_size + 2 + KNC_TITAN_NONCES_PER_REPORT * 5 + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
-	uint8_t *rxbuf;
-	uint32_t errors;
-	bool unused;
-
-	rxbuf = spi_transfer(spi, get_report_cmd, send_size, transfer_size, 2 + KNC_TITAN_NONCES_PER_REPORT * 5, &errors, &unused);
-	if (NULL == rxbuf) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_get_report: Unrecognized error", repr, die, core);
-		return false;
-	}
-	if (0 != errors) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_get_report: Communication failed, errors = 0x%X", repr, die, core, errors);
-		return false;
-	}
-	knc_titan_parse_get_report(&rxbuf[4], report);
-	return true;
-}
-
-bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct titan_setup_core_params *params, int die, int core)
-{
 	/* The size of command is the same as for set_work */
 	uint8_t setup_core_cmd[SETWORK_CMD_SIZE] = {
 		KNC_ASIC_CMD_SETUP_CORE,
@@ -288,10 +81,9 @@ bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct 
 		/* next follows padding and data */
 	};
 	const int send_size = sizeof(setup_core_cmd);
-	const int transfer_size = send_size + CRC32_SIZE + SPI_RESPONSE_TRAILER_SIZE;
-	uint8_t *rxbuf;
-	uint32_t errors;
-	bool unused;
+	int response_length = send_size;
+	uint8_t response[response_length];
+	int status;
 	uint32_t *src, *dst;
 	int i;
 	struct titan_packed_core_params {
@@ -494,14 +286,11 @@ bool knc_titan_setup_core(const char *repr, struct spi_port * const spi, struct 
 	for (i = 0; i < (sizeof(packed_params) / 4); ++i)
 		dst[i] = htobe32(src[i]);
 
-	rxbuf = spi_transfer(spi, setup_core_cmd, send_size, transfer_size, 0, &errors, &unused);
-	if (NULL == rxbuf) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_setup_core: Unrecognized error", repr, die, core);
+	status = knc_syncronous_transfer(ctx, channel, send_size, setup_core_cmd, response_length, response);
+	if (status) {
+		applog(LOG_ERR, "%s[%d:%d]: setup_core failed (%x)", repr, channel, die, status);
 		return false;
 	}
-	if (0 != errors) {
-		applog(LOG_ERR, "%s[%d:%d] knc_titan_setup_core: Communication failed, errors = 0x%X", repr, die, core, errors);
-		return false;
-	}
+
 	return true;
 }

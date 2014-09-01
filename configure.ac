@@ -609,7 +609,9 @@ if test "x$knc" = xyes; then
 		#endif
 	])
 	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC support is wanted])
-	need_lowl_spi=yes
+	if test "x$scrypt" != xyes; then
+		need_lowl_spi=yes
+	fi
 fi
 AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
 
