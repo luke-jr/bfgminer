@@ -252,6 +252,9 @@ Options for both config file and command line:
 --cmd-sick <arg>    Execute a command when a device is declared sick
 --cmd-dead <arg>    Execute a command when a device is declared dead
 --coinbase-addr <arg> Set coinbase payout address for solo mining
+--coinbase-check-addr <arg> A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','
+--coinbase-check-total <arg> The least total payout amount expected in coinbase received from the previous-defined pool
+--coinbase-check-percent <arg> The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool
 --coinbase-sig <arg> Set coinbase signature when possible
 --compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
