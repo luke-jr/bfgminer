@@ -30,7 +30,9 @@ bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die
 
 	request_length = knc_prepare_titan_setwork(request, die, core, slot, work, urgent);
 	status = knc_syncronous_transfer(ctx, channel, request_length, request, response_length, response);
-	if (status != KNC_ACCEPTED) {
+	if (status == KNC_ACCEPTED) {
+		*work_accepted = true;
+	} else {
 		*work_accepted = false;
 		if (response[0] == 0x7f) {
 			applog(LOG_DEBUG, "%s[%d:%d]: Core disabled", repr, channel, die);
