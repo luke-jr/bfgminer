@@ -1594,13 +1594,13 @@ static char *set_cbcaddr(char *arg)
 	
 	for (; (addr = strtok_r(arg, ",", &p)); arg = NULL)
 	{
-		struct addr_hash *ah;
+		struct bytes_hashtbl *ah;
 		
 		if (set_b58addr(addr, &target_script))
 			/* No bother to free memory since we are going to exit anyway */
 			return "Invalid address in --coinbase-check-address list";
 		
-		HASH_FIND_STR(pool->cb_param.addr_ht, addr, ah);
+		HASH_FIND(hh, pool->cb_param.scripts, bytes_buf(&target_script), bytes_len(&target_script), ah);
 		if (!ah)
 		{
 			/* Note: for the below allocated memory we have good way to release its memory
@@ -1610,9 +1610,10 @@ static char *set_cbcaddr(char *arg)
 			 * We just hope the remove_pool() would not be called many many times during
 			 * the whole running life of this program.
 			 */
-			ah = malloc(sizeof(struct addr_hash));
-			ah->addr = addr;
-			HASH_ADD_STR(pool->cb_param.addr_ht, addr, ah);
+			ah = malloc(sizeof(*ah));
+			bytes_init(&ah->b);
+			bytes_assimilate(&ah->b, &target_script);
+			HASH_ADD(hh, pool->cb_param.scripts, b.buf, bytes_len(&ah->b), ah);
 		}
 	}
 	bytes_free(&target_script);
@@ -1643,7 +1644,7 @@ static char *set_cbcperc(const char *arg)
 		return "Define pool first, then the --coinbase-check-percent argument";
 	
 	pool = pools[total_pools - 1];
-	if (!pool->cb_param.addr_ht)
+	if (!pool->cb_param.scripts)
 		return "Define --coinbase-check-addr list first, then the --coinbase-check-total argument";
 	
 	pool->cb_param.perc = atof(arg);

@@ -1246,14 +1246,14 @@ struct stratum_work {
  * Build an hash table in case there are lots
  * of addresses to check against
  */
-struct addr_hash {
-	char* addr;
+struct bytes_hashtbl {
+	bytes_t b;
 	UT_hash_handle hh;
 };
 
 struct coinbase_param {
 	bool testnet;
-	struct addr_hash *addr_ht;
+	struct bytes_hashtbl *scripts;
 	int64_t total;
 	float perc;
 };

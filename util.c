@@ -2428,8 +2428,6 @@ incomplete_cb:
 	
 	while (len-- > 0)
 	{
-		char addr[35];
-		
 		if (cbsize <= pos + 8)
 			goto incomplete_cb;
 		
@@ -2443,42 +2441,32 @@ incomplete_cb:
 			goto incomplete_cb;
 		pos += i;
 		
-		i = script_to_address(addr, sizeof(addr), coinbase + pos, curr_pk_script_len, cb_param->testnet);
-		if (i && i <= sizeof(addr))
+		struct bytes_hashtbl *ah = NULL;
+		HASH_FIND(hh, cb_param->scripts, &coinbase[pos], curr_pk_script_len, ah);
+		if (ah)
 		{
-			/* So this script is to payout to an valid address */
-			struct addr_hash *ah = NULL;
-			HASH_FIND_STR(cb_param->addr_ht, addr, ah);
-			if (ah)
-			{
-				found_target = true;
-				target += amount;
-			}
-			if (opt_debug)
-				applog(LOG_DEBUG, "Coinbase output: %10"PRIu64" -- %34s%c", amount, addr, ah ? '*' : '\0');
+			found_target = true;
+			target += amount;
 		}
-		else
+		
 		if (opt_debug)
 		{
-			char *hex = addr;
-			if (curr_pk_script_len * 2 >= sizeof(addr))
-				hex = malloc(curr_pk_script_len * 2 + 1);
-			if (hex)
+			char s[(curr_pk_script_len * 2) + 3];
+			i = script_to_address(s, sizeof(s), &coinbase[pos], curr_pk_script_len, cb_param->testnet);
+			if (!(i && i <= sizeof(s)))
 			{
-				bin2hex(hex, coinbase + pos, curr_pk_script_len);
-				applog(LOG_DEBUG, "Coinbase output: %10"PRIu64" PK %34s", amount, hex);
-				if (hex != addr)
-					free(hex);
+				s[0] = '[';
+				bin2hex(&s[1], &coinbase[pos], curr_pk_script_len);
+				strcpy(&s[(curr_pk_script_len * 2) + 1], "]");
 			}
-			else
-				applog(LOG_DEBUG, "Coinbase output: %10"PRIu64" PK (Unknown)", amount);
+			applog(LOG_DEBUG, "Coinbase output: %10"PRIu64" -- %s%s", amount, s, ah ? "*" : "");
 		}
 		
 		pos += curr_pk_script_len;
 	}
 	if (total < cb_param->total)
 		applogr(false, LOG_ERR, "Coinbase check: lopsided total output amount = %"PRIu64", expecting >=%"PRIu64, total, cb_param->total);
-	if (cb_param->addr_ht)
+	if (cb_param->scripts)
 	{
 		if (cb_param->perc && !(total && (float)((double)target / total) >= cb_param->perc))
 			applogr(false, LOG_ERR, "Coinbase check: lopsided target/total = %g(%"PRIu64"/%"PRIu64"), expecting >=%g", (total ? (double)target / total : (double)0), target, total, cb_param->perc);
@@ -2492,7 +2480,7 @@ incomplete_cb:
 	pos += 4;
 	
 	if (opt_debug)
-		applog(LOG_DEBUG, "Coinbase: (size, pos, addr_count, target, total) = (%lu, %lu, %d, %"PRIu64", %"PRIu64")", (unsigned long)cbsize, (unsigned long)pos, (int)(HASH_COUNT(cb_param->addr_ht)), target, total);
+		applog(LOG_DEBUG, "Coinbase: (size, pos, addr_count, target, total) = (%lu, %lu, %d, %"PRIu64", %"PRIu64")", (unsigned long)cbsize, (unsigned long)pos, (int)(HASH_COUNT(cb_param->scripts)), target, total);
 	
 	return true;
 }
