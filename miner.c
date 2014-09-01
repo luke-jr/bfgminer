@@ -2953,7 +2953,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
-		if ((!tmpl->cbtxn) && coinbase_script_block_id != current_block_id)
+		const uint32_t tmpl_block_id = ((uint32_t*)tmpl->prevblk)[0];
+		if ((!tmpl->cbtxn) && coinbase_script_block_id != tmpl_block_id)
 			refresh_bitcoind_address(false);
 		if (bytes_len(&opt_coinbase_script))
 		{

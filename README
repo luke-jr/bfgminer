@@ -554,13 +554,17 @@ BFGMiner supports solo mining with any GBT-compatible bitcoin node (such as
 bitcoind). To use this mode, you need to specify the URL of your bitcoind node
 using the usual pool options (--url, --userpass, etc), and the --coinbase-addr
 option to specify the Bitcoin address you wish to receive the block rewards
-mined. If you are solo mining with more than one instance of BFGMiner (or any
-other software) per payout address, you must also specify data using the
+mined. When you run Bitcoin Core on the same computer as your miner, the pool
+itself will be automatically configured for you.
+
+IMPORTANT: If you are solo mining with more than one instance of BFGMiner (or
+any other software) per payout address, you must also specify data using the
 --coinbase-sig option to ensure each miner is working on unique work. Note
 that this data will be publicly seen if your miner finds a block using any
-GBT-enabled pool, even when not solo mining (such as failover). If your
-bitcoin node does not support longpolling (for example, bitcoind 0.8.x), you
-should consider setting up a failover pool to provide you with block
+GBT-enabled pool, even when not solo mining (such as failover).
+
+If your bitcoin node does not support longpolling (for example, bitcoind 0.8.x),
+you should consider setting up a failover pool to provide you with block
 notifications. Note that solo mining does not use shares, so BFGMiner's adjusted
 hashrate (third column) may suddenly drop to zero if a block you submit is
 rejected; this does not indicate that it has stopped mining.
