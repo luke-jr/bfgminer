@@ -2997,11 +2997,23 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
 				const char full[] = PACKAGE " " VERSION;
+				char *need_free = NULL;
 				if (!cbappend) {
 					if ((size_t)ae >= sizeof(full) - 1)
 						cbappend = full;
 					else if ((size_t)ae >= sizeof(PACKAGE) - 1)
-						cbappend = PACKAGE;
+					{
+						const char *pos = strchr(full, '-');
+						size_t sz = (pos - full);
+						if (pos && ae > sz)
+						{
+							cbappend = need_free = malloc(sz + 1);
+							memcpy(need_free, full, sz);
+							need_free[sz] = '\0';
+						}
+						else
+							cbappend = PACKAGE;
+					}
 					else
 						cbappend = "BFG";
 				}
@@ -3024,6 +3036,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 					truncatewarning = true;
 				}
 				ae = blkmk_append_coinbase_safe(tmpl, cbappend, ae);
+				free(need_free);
 				if (ae <= 0) {
 					applog((appenderr ? LOG_DEBUG : LOG_WARNING), "Error appending coinbase signature (%"PRId64")", (int64_t)ae);
 					appenderr = true;
