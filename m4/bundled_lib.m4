@@ -14,7 +14,6 @@ BUNDLED_LIB_RULES=
 ])
 
 AC_SUBST(BUNDLED_LIB_RULES)
-AM_SUBST_NOTMAKE(BUNDLED_LIB_RULES)
 
 AC_DEFUN([BFG_CHECK_LD_ORIGIN],[
 if ! $origin_LDFLAGS_checked; then
@@ -58,6 +57,7 @@ AC_DEFUN([BFG_BUNDLED_LIB_VARS],[
 $1_directory:
 	\$(MAKE) -C $2
 "
+	AM_SUBST_NOTMAKE([BUNDLED_LIB_RULES])
 	if $have_cygwin; then
 		$1_EXTRADEPS="$$1_EXTRADEPS m4_foreach_w([mylib],[$3],[ cyg[]mylib[]-0.dll])"
 		BUNDLED_LIB_RULES="$BUNDLED_LIB_RULES[]m4_foreach_w([mylib],[$3],[
