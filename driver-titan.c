@@ -25,7 +25,7 @@
 #define	KNC_POLL_INTERVAL_US		10000
 
 /* Specify here minimum number of leading zeroes in hash */
-#define	DEFAULT_DIFF_FILTERING_ZEROES	12
+#define	DEFAULT_DIFF_FILTERING_ZEROES	24
 #define	DEFAULT_DIFF_FILTERING_FLOAT	(1. / ((double)(0x00000000FFFFFFFF >> DEFAULT_DIFF_FILTERING_ZEROES)))
 #define	DEFAULT_DIFF_HASHES_PER_NONCE	(1 << DEFAULT_DIFF_FILTERING_ZEROES)
 
@@ -257,7 +257,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct titan_setup_core_params setup_params = {
 		.bad_address_mask = {0, 0},
 		.bad_address_match = {0x3FF, 0x3FF},
-		.difficulty = DEFAULT_DIFF_FILTERING_ZEROES,
+		.difficulty = DEFAULT_DIFF_FILTERING_ZEROES - 1,
 		.thread_enable = 0xFF,
 		.thread_base_address = {0, 1, 2, 3, 4, 5, 6, 7},
 		.lookup_gap_mask = {0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7, 0x7},
