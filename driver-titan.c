@@ -283,6 +283,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 
+	knc->need_flush = true;
 	timer_set_now(&thr->tv_poll);
 
 	return true;
@@ -294,20 +295,6 @@ static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 
 	work->nonce_diff = cgpu->min_nonce_diff;
 	return true;
-}
-
-static void knc_titan_clear_last_nonce(struct knc_titan_info * const knc)
-{
-	struct thr_info * mythr;
-	struct cgpu_info *proc;
-	struct knc_titan_core *knccore;
-
-	for (proc = knc->cgpu; proc; proc = proc->next_proc) {
-		mythr = proc->thr[0];
-		knccore = mythr->cgpu_data;
-		knccore->last_nonce.slot = 0;
-		knccore->last_nonce.nonce = 0;
-	}
 }
 
 static void knc_titan_set_queue_full(struct knc_titan_info * const knc)
@@ -391,7 +378,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info * const knc = cgpu->device_data;
-	struct knc_titan_core *knccore;
+	struct knc_titan_core *knccore, *core1;
 	struct work *work, *tmp;
 	int workaccept = 0;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
@@ -403,9 +390,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	knc_titan_prune_local_queue(thr);
 
-	if (knc->need_flush)
-		knc_titan_clear_last_nonce(knc);
-
 	knccore = cgpu->thr[0]->cgpu_data;
 	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
 		bool work_accepted = false;
@@ -414,8 +398,23 @@ static void knc_titan_poll(struct thr_info * const thr)
 				if (0 >= knc->dies[asic][die].cores)
 					continue;
 				bool die_work_accepted = false;
-				if (!knc_titan_set_work(knc->dies[asic][die].first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, knc->need_flush, &die_work_accepted, &report))
-					die_work_accepted = false;
+				if (knc->need_flush) {
+					for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
+						mythr = proc->thr[0];
+						core1 = mythr->cgpu_data;
+						bool unused;
+						if ((core1->dieno != die) || (core1->asicno != asic))
+							break;
+						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, knccore->next_slot, work, true, &unused, &report)) {
+							core1->last_nonce.slot = report.nonce[0].slot;
+							core1->last_nonce.nonce = report.nonce[0].nonce;
+							die_work_accepted = true;
+						}
+					}
+				} else {
+					if (!knc_titan_set_work(knc->dies[asic][die].first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, false, &die_work_accepted, &report))
+						die_work_accepted = false;
+				}
 				if (die_work_accepted)
 					work_accepted = true;
 			}
@@ -460,22 +459,19 @@ static void knc_titan_poll(struct thr_info * const thr)
 					continue;
 				if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
 					continue;
-				/* if last_nonce.slot == 0, then there was a flush and all reports are stale */
-				if (0 != knccore->last_nonce.slot) {
-					for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-						if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
-						    (report.nonce[i].nonce == knccore->last_nonce.nonce))
-							break;
-						tmp_int = report.nonce[i].slot;
-						HASH_FIND_INT(knc->devicework, &tmp_int, work);
-						if (!work) {
-							applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
-							continue;
-						}
-						if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
-							hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
-							knccore->hwerr_in_row = 0;
-						}
+				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
+					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
+					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
+						break;
+					tmp_int = report.nonce[i].slot;
+					HASH_FIND_INT(knc->devicework, &tmp_int, work);
+					if (!work) {
+						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
+						continue;
+					}
+					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
+						hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
+						knccore->hwerr_in_row = 0;
 					}
 				}
 				knccore->last_nonce.slot = report.nonce[0].slot;
