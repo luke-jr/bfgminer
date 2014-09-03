@@ -18,7 +18,7 @@
 
 #include "titan-asic.h"
 
-#define	KNC_TITAN_DEFAULT_FREQUENCY	600
+#define	KNC_TITAN_DEFAULT_FREQUENCY	275
 
 #define KNC_TITAN_HWERR_DISABLE_SECS	10
 
