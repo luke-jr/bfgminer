@@ -234,8 +234,10 @@ static bool knc_titan_init(struct thr_info * const thr)
 			++total_cores;
 			applog(LOG_DEBUG, "%s Allocated core %d:%d:%d", proc->device->dev_repr, asic, die, (i - core_base));
 
-			if (0 == knccore->coreno)
+			if (0 == knccore->coreno) {
+				knc->dies[asic][die].first_proc = proc;
 				knc_titan_clean_flush(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno);
+			}
 
 			proc = proc->next_proc;
 			if ((!proc) || proc->device == proc)
