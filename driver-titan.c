@@ -264,6 +264,8 @@ static bool knc_titan_init(struct thr_info * const thr)
 		.nonce_bottom = 0,
 		.nonce_top = 0xFFFFFFFF,
 	};
+	/* Use 2 threads per core */
+	fill_in_thread_params(2, &setup_params);
 
 	for (proc = cgpu; proc; proc = proc->next_proc) {
 		nonce_f += nonce_step;
