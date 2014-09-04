@@ -1191,6 +1191,10 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	uint64_t ghs, val;
 	char buf[64];
 
+	asic = cgpu->proc_id / 480;
+	int coreabs = cgpu->proc_id / 120;
+	core = coreabs % 4;
+	
 	/* Info data */
 	root = api_add_uint16(root, "HW Revision", &info->hwrev, false);
 	root = api_add_uint32(root, "Serial", &info->serial, false);
@@ -1207,7 +1211,8 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint8(root, "Max diffbits", &info->max_diffbits, false);
 
 	/* Status readings */
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "CoreTemp%d", i);
 		root = api_add_int16(root, buf, &info->coretemp[i], false);
 	}
@@ -1222,12 +1227,14 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 		sprintf(buf, "FanRPM%d", i);
 		root = api_add_uint16(root, buf, &info->fan_tachs[i], false);
 	}
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "CoreFreqs%d", i);
 		root = api_add_uint16(root, buf, &info->corefreqs[i], false);
 	}
 
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "CoreVolts%d", i);
 		root = api_add_uint16(root, buf, &info->corevolts[i], false);
 	}
@@ -1237,7 +1244,8 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	root = api_add_uint16(root, "Active", &info->active, false);
 
 	/* Status settings */
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "CorePerfMode%d", i);
 		root = api_add_uint8(root, buf, &info->coreperf[i], false);
 	}
@@ -1246,14 +1254,16 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 		root = api_add_uint8(root, buf, &info->fanspeed[i], false);
 	}
 	root = api_add_uint8(root, "DiesActive", &info->dies_active, false);
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "PipesEnabled%d", i);
 		root = api_add_uint8(root, buf, &info->pipes_enabled[i], false);
 	}
 
 	/* Status debug */
 	root = api_add_int(root, "Underruns", &info->tot_underruns, false);
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "HWErrors%d", i);
 		root = api_add_uint16(root, buf, &info->tot_hw_errors[i], false);
 	}
@@ -1282,14 +1292,14 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 	dev_runtime = tdiff(&now, &info->core_hash_start);
 	if (dev_runtime < 1)
 		dev_runtime = 1;
-	for (i = 0; i < CTA_CORES; i++) {
+	{
+		i = coreabs;
 		sprintf(buf, "Core%d hashrate", i);
 		ghs = info->tot_core_hashes[i] / dev_runtime;
 		root = api_add_uint64(root, buf, &ghs, true);
 	}
 	root = api_add_uint32(root, "Uptime",&info->uptime,false);
-	for (asic = 0; asic < 2; asic++) {
-		for (core = 0; core < 4; core++) {
+	{
 			char bitmapcount[40], asiccore[12];
 			int count = 0;
 
@@ -1300,7 +1310,6 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 			snprintf(bitmapcount, 40, "%d:%s", count, bitmaphex);
 			root = api_add_string(root, asiccore, bitmapcount, true);
 			coreno += 16;
-		}
 	}
 	root = api_add_uint8(root, "AV", &info->autovoltage, false);
 	root = api_add_uint8(root, "Power Supply Percent", &info->current_ps_percent, false);
