@@ -272,6 +272,10 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 	applog(LOG_DEBUG, "%s: Found %lu cores on %s",
 	       __func__, (unsigned long)ctainfo.cores, info->devid);
 
+	libusb_device * const usbdev = info->lowl_data;
+	if (bfg_claim_libusb(&cointerra_drv, true, usbdev))
+		return false;
+	
 	struct cgpu_info * const dev = malloc(sizeof(*dev));
 	*dev = (struct cgpu_info){
 		.drv = &cointerra_drv,
@@ -853,7 +857,9 @@ static bool cta_prepare(struct thr_info *thr)
 	 * for a req-work message. */
 	info->requested = CTA_MAX_QUEUE;
 
-	if (!cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep))
+	bool open_rv = cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep);
+	lowlevel_devinfo_free(llinfo);
+	if (!open_rv)
 		return false;
 	
 	info->thr = thr;
