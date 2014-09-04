@@ -419,7 +419,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 				if (NULL == knccore)
 					knccore = first_proc->thr[0]->cgpu_data;
 				bool die_work_accepted = false;
-				if (knc->need_flush[asic]) {
+				if (knc->need_flush[asic] || need_replace) {
 					for (proc = first_proc; proc; proc = proc->next_proc) {
 						mythr = proc->thr[0];
 						core1 = mythr->cgpu_data;
@@ -433,7 +433,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knc->next_slot[asic], work, need_replace, &die_work_accepted, &report))
+					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knc->next_slot[asic], work, false, &die_work_accepted, &report))
 						die_work_accepted = false;
 				}
 				if (die_work_accepted)
