@@ -65,7 +65,7 @@ struct knc_titan_info {
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
 
-	bool need_flush;
+	bool need_flush[KNC_TITAN_MAX_ASICS];
 	struct work *workqueue;
 	int workqueue_size;
 	int workqueue_max;
@@ -283,7 +283,8 @@ static bool knc_titan_init(struct thr_info * const thr)
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 
-	knc->need_flush = true;
+	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic)
+		knc->need_flush[asic] = true;
 	timer_set_now(&thr->tv_poll);
 
 	return true;
@@ -368,7 +369,9 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 
 	HASH_LAST_ADDED(knc->devicework, work);
 	if (work && stale_work(work, true)) {
-		knc->need_flush = true;
+		int asic;
+		for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic)
+			knc->need_flush[asic] = true;
 		timer_set_now(&thr->tv_poll);
 	}
 }
@@ -390,16 +393,20 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	knc_titan_prune_local_queue(thr);
 
-	knccore = cgpu->thr[0]->cgpu_data;
-	DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
-		bool work_accepted = false;
-		for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
+			bool work_accepted = false;
+			knccore = NULL;
 			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 				if (0 >= knc->dies[asic][die].cores)
 					continue;
+				struct cgpu_info *first_proc = knc->dies[asic][die].first_proc;
+				/* knccore is the core data of the first core in this asic */
+				if (NULL == knccore)
+					knccore = first_proc->thr[0]->cgpu_data;
 				bool die_work_accepted = false;
-				if (knc->need_flush) {
-					for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
+				if (knc->need_flush[asic]) {
+					for (proc = first_proc; proc; proc = proc->next_proc) {
 						mythr = proc->thr[0];
 						core1 = mythr->cgpu_data;
 						bool unused;
@@ -412,32 +419,34 @@ static void knc_titan_poll(struct thr_info * const thr)
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(knc->dies[asic][die].first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, false, &die_work_accepted, &report))
+					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, false, &die_work_accepted, &report))
 						die_work_accepted = false;
 				}
 				if (die_work_accepted)
 					work_accepted = true;
 			}
-		}
-		if (!work_accepted)
-			break;
-		if (knc->need_flush) {
-			struct work *work1, *tmp1;
-			knc->need_flush = false;
-			applog(LOG_NOTICE, "%s: Flushing stale works", knc_titan_drv.dname);
-			HASH_ITER(hh, knc->devicework, work1, tmp1) {
-				HASH_DEL(knc->devicework, work1);
-				free_work(work1);
+			if ((!work_accepted) || (NULL == knccore))
+				break;
+			if (knc->need_flush[asic]) {
+				struct work *work1, *tmp1;
+				knc->need_flush[asic] = false;
+				applog(LOG_NOTICE, "%s: Flushing stale works", knccore->proc->dev_repr);
+				HASH_ITER(hh, knc->devicework, work1, tmp1) {
+					if (asic == ((work1->device_id >> 8) & 0xFF)) {
+						HASH_DEL(knc->devicework, work1);
+						free_work(work1);
+					}
+				}
+				delay_usecs = 0;
 			}
-			delay_usecs = 0;
+			--knc->workqueue_size;
+			DL_DELETE(knc->workqueue, work);
+			work->device_id = (asic << 8) | knccore->next_slot;
+			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
+			if (++(knccore->next_slot) >= 16)
+				knccore->next_slot = 1;
+			++workaccept;
 		}
-		--knc->workqueue_size;
-		DL_DELETE(knc->workqueue, work);
-		work->device_id = knccore->next_slot;
-		HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
-		if (++(knccore->next_slot) >= 16)
-			knccore->next_slot = 1;
-		++workaccept;
 	}
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
@@ -463,10 +472,10 @@ static void knc_titan_poll(struct thr_info * const thr)
 					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
 					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
 						break;
-					tmp_int = report.nonce[i].slot;
+					tmp_int = (asic << 8) | report.nonce[i].slot;
 					HASH_FIND_INT(knc->devicework, &tmp_int, work);
 					if (!work) {
-						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u", proc->proc_repr, tmp_int);
+						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u (asic %d)", proc->proc_repr, (unsigned)report.nonce[i].slot, asic);
 						continue;
 					}
 					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
