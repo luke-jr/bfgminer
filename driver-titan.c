@@ -31,6 +31,9 @@
 
 BFG_REGISTER_DRIVER(knc_titan_drv)
 
+/* 3 - default number of threads per core */
+static int opt_knc_threads_per_core = 3;
+
 static const struct bfg_set_device_definition knc_titan_set_device_funcs[];
 
 struct knc_titan_core {
@@ -270,8 +273,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 		.nonce_bottom = 0,
 		.nonce_top = 0xFFFFFFFF,
 	};
-	/* Use 2 threads per core */
-	fill_in_thread_params(2, &setup_params);
+	fill_in_thread_params(opt_knc_threads_per_core, &setup_params);
 
 	for (proc = cgpu; proc; proc = proc->next_proc) {
 		nonce_f += nonce_step;
