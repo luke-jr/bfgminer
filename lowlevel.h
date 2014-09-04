@@ -15,6 +15,8 @@ typedef bool (*lowl_found_devinfo_func_t)(struct lowlevel_device_info *, void *)
 
 struct lowlevel_driver {
 	const char *dname;
+	bool exclude_from_all;
+	
 	struct lowlevel_device_info *(*devinfo_scan)();
 	void (*devinfo_free)(struct lowlevel_device_info *);
 };
@@ -67,6 +69,9 @@ extern struct lowlevel_driver lowl_hid;
 #endif
 #ifdef USE_NANOFURY
 extern struct lowlevel_driver lowl_mcp2210;
+#endif
+#ifdef NEED_BFG_LOWL_MSWIN
+extern struct lowlevel_driver lowl_mswin;
 #endif
 #ifdef NEED_BFG_LOWL_PCI
 extern struct lowlevel_driver lowl_pci;

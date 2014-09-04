@@ -1,8 +1,8 @@
 /*
  * Copyright 2012-2013 Xiangfu
  * Copyright 2013 Con Kolivas <kernel@kolivas.org>
- * Copyright 2012-2013 Luke Dashjr
- * Copyright 2012 Andrew Smith
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -513,6 +513,18 @@ static void avalon_clear_readbuf(int fd)
 	} while (ret > 0);
 }
 
+static
+void avalon_zero_stats(struct cgpu_info * const cgpu)
+{
+	struct avalon_info *info = cgpu->device_data;
+	
+	info->temp_max = 0;
+	info->no_matching_work = 0;
+	
+	for (int i = 0; i < info->miner_count; ++i)
+		info->matching_work[i] = 0;
+}
+
 static bool avalon_detect_one(const char *devpath)
 {
 	struct avalon_info *info;
@@ -573,7 +585,7 @@ static bool avalon_detect_one(const char *devpath)
 			    AVALON_TIME_FACTOR) / (float)info->miner_count;
 
 	info->fan_pwm = AVALON_DEFAULT_FAN_MIN_PWM;
-	info->temp_max = 0;
+	avalon_zero_stats(avalon);
 	/* This is for check the temp/fan every 3~4s */
 	info->temp_history_count = (4 / (float)((float)info->timeout * ((float)1.67/0x32))) + 1;
 	if (info->temp_history_count <= 0)
@@ -987,6 +999,7 @@ struct device_drv avalon_drv = {
 	.minerloop = hash_queued_work,
 	.queue_full = avalon_fill,
 	.scanwork = avalon_scanhash,
+	.zero_stats = avalon_zero_stats,
 	.get_api_stats = avalon_api_stats,
 	.reinit_device = avalon_init,
 	.thread_shutdown = avalon_shutdown,

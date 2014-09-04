@@ -1,8 +1,9 @@
 /*
- * Copyright 2011-2013 Luke Dashjr
+ * Copyright 2011-2014 Luke Dashjr
  * Copyright 2011-2012 Con Kolivas
  * Copyright 2012-2013 Andrew Smith
  * Copyright 2010 Jeff Garzik
+ * Copyright 2014 Nate Woolls
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -239,7 +240,11 @@ void minerloop_scanhash(struct thr_info *mythr)
 			* it is not in the driver code. */
 			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 			timer_set_now(&tv_start);
+
+			/* api->scanhash should scan the work for valid nonces
+			 * until max_nonce is reached or thr_info->work_restart */
 			hashes = api->scanhash(mythr, work, work->blk.nonce + max_nonce);
+
 			timer_set_now(&tv_end);
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_testcancel();
@@ -269,6 +274,10 @@ disabled:
 				mt_disable(mythr);
 			
 			timersub(&tv_end, &work->tv_work_start, &tv_worktime);
+
+		/* The inner do-while loop will exit unless the device is capable of
+		 * scanning a specific nonce range (currently CPU and GPU drivers)
+		 * See abandon_work comments for more details */
 		} while (!abandon_work(work, &tv_worktime, cgpu->max_hashes));
 		free_work(work);
 	}
@@ -689,6 +698,9 @@ redo:
 			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
 		
+		// HACK: Some designs set the main thr tv_poll from secondary thrs
+		reduce_timeout_to(&tv_timeout, &cgpu->thr[0]->tv_poll);
+		
 		do_notifier_select(thr, &tv_timeout);
 	}
 }
@@ -1082,4 +1094,17 @@ void close_device_fd(struct thr_info * const thr)
 		proc->device_fd = -1;
 		applog(LOG_DEBUG, "%"PRIpreprv": Closed device fd", proc->proc_repr);
 	}
+}
+
+
+struct cgpu_info *device_proc_by_id(const struct cgpu_info * const dev, const int procid)
+{
+	struct cgpu_info *proc = (void*)dev;
+	for (int i = 0; i < procid; ++i)
+	{
+		proc = proc->next_proc;
+		if (unlikely((!proc) || proc->device != dev))
+			return NULL;
+	}
+	return proc;
 }

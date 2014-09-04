@@ -1,9 +1,10 @@
-dnl * Copyright 2012-2013 Luke Dashjr
+dnl * Copyright 2011-2014 Luke Dashjr
 dnl * Copyright 2011-2013 Con Kolivas
 dnl * Copyright 2010-2011 Jeff Garzik
 dnl * Copyright 2012 Xiangfu
 dnl * Copyright 2011 Rusty Russell
 dnl * Copyright 2011 Mark Crichton
+dnl * Copyright 2013-2014 Nate Woolls
 dnl *
 dnl * This program is free software; you can redistribute it and/or modify it
 dnl * under the terms of the GNU General Public License as published by the Free
@@ -12,8 +13,8 @@ dnl * any later version.  See COPYING for more details.
 
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
-m4_define([v_maj], [3])
-m4_define([v_min], [99])
+m4_define([v_maj], [4])
+m4_define([v_min], [7])
 m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
@@ -122,13 +123,16 @@ has_fpga=no
 has_asic=no
 need_binloader=no
 need_dynclock=no
+need_gc3355=no
 need_lowl_vcom=no
 need_lowlevel=no
 need_lowl_ftdi=no
 need_lowl_hid=no
+need_lowl_mswin=no
 need_lowl_pci=no
 need_lowl_spi=no
 need_lowl_usb=no
+need_work2d=no
 have_cygwin=false
 have_win32=false
 have_macho=false
@@ -179,6 +183,7 @@ case $target in
     use_udevrules=false
     ;;
 	*-*-darwin*)
+		LDFLAGS="$LDFLAGS -framework IOKit -framework CoreFoundation"
 		have_macho=true
     use_udevrules=false
 		;;
@@ -236,6 +241,42 @@ AC_ARG_ENABLE([other-drivers],
 		fi
 	]
 )
+
+
+broad_udevrules=false
+AC_ARG_ENABLE([broad-udevrules],
+	[AC_HELP_STRING([--enable-broad-udevrules],[Include udev rules for ambiguous devices which may not be miners])],
+	[
+		if test "x$enableval" = "xyes"; then
+			broad_udevrules=true
+		fi
+	]
+)
+
+use_udevrules_group=true
+udevrules_group="video"
+AC_ARG_WITH([udevrules-group],
+	[AC_HELP_STRING([--with-udevrules-group=groupname],[Configure mining devices to be owned by a specific group (default `video')])],
+	[
+		if test "x$withval" = "xno"; then
+			use_udevrules_group=false
+		else
+			udevrules_group="$withval"
+		fi
+	]
+)
+AM_CONDITIONAL([USE_UDEVRULES_GROUP], [$use_udevrules_group])
+AC_SUBST([UDEVRULES_GROUP], [$udevrules_group])
+
+
+algolist="$algolist scrypt"
+AC_ARG_ENABLE([scrypt],
+	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
+	[scrypt=$enableval],
+	[scrypt=no])
+if test "x$scrypt" = xyes; then
+	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
+fi
 
 
 lowl_pci=no
@@ -424,6 +465,10 @@ if test "x$bitforce" = xyes; then
 		need_lowl_pci=yes
 	fi
 	need_lowl_vcom=yes
+	driverlist="$driverlist bitforce:mswin/need_lowl_mswin"
+	if test x$have_win32 = xtrue; then
+		need_lowl_mswin=yes
+	fi
 	has_fpga=yes
 	has_asic=yes
 	have_udevrules=true
@@ -463,8 +508,51 @@ else
 fi
 if test "x$dualminer" = "xyes"; then
 	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
+	need_gc3355=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+
+driverlist="$driverlist zeusminer"
+AC_ARG_ENABLE([zeusminer],
+	[AC_HELP_STRING([--disable-zeusminer],[Compile support for ZeusMiner (default enabled with scrypt)])],
+	[zeusminer=$enableval],
+	[zeusminer=$ddauto])
+if test "x$zeusminer" = "xno"; then
+	true
+elif test "x$icarus$scrypt" = "xyesyes"; then
+	zeusminer=yes
+elif test "x$zeusminer" = "xauto"; then
+	zeusminer=no
+elif test "x$scrypt" = "xno"; then
+	AC_MSG_ERROR([You explicitly enabled ZeusMiner, but did not enable scrypt])
+elif test "x$icarus" = "xno"; then
+	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled ZeusMiner])
+fi
+if test "x$zeusminer" = "xyes"; then
+	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+	$broad_udevrules && have_udevrules=true
+fi
+AM_CONDITIONAL([USE_ZEUSMINER], [test x$zeusminer = xyes])
+
+driverlist="$driverlist gridseed"
+AC_ARG_ENABLE([gridseed],
+	[AC_HELP_STRING([--disable-gridseed],[Compile support for GridSeed (default enabled with scrypt)])],
+	[gridseed=$enableval],
+	[gridseed=$scrypt])
+if test "x$gridseed" = "xyes"; then
+	if test "x$scrypt" = "xno"; then
+		AC_MSG_ERROR([You explicitly enabled GridSeed, but did not enable scrypt (SHA2 not supported)])
+	fi
+	AC_DEFINE([USE_GRIDSEED], [1], [Defined to 1 if GridSeed support is wanted])
+	need_gc3355=yes
+	need_lowl_vcom=yes
+	has_asic=yes
+	$broad_udevrules && have_udevrules=true
+fi
+AM_CONDITIONAL([USE_GRIDSEED], [test x$gridseed = xyes])
 
 driverlist="$driverlist avalon"
 avalon="no"
@@ -478,8 +566,25 @@ if test "x$avalon" = xyes; then
 	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
 	need_lowl_vcom=yes
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
+
+
+driverlist="$driverlist avalonmm"
+AC_ARG_ENABLE([avalonmm],
+	[AC_HELP_STRING([--disable-avalonmm],[Compile support for Avalon2/3 (default enabled)])],
+	[avalonmm=$enableval],
+	[avalonmm=$ddyes]
+	)
+if test "x$avalonmm" = xyes; then
+	AC_DEFINE([USE_AVALONMM], [1], [Defined to 1 if Avalon2/3 support is wanted])
+	need_lowl_vcom=yes
+	need_work2d=yes
+	has_asic=yes
+	$broad_udevrules && have_udevrules=true
+fi
+AM_CONDITIONAL([USE_AVALONMM], [test x$avalonmm = xyes])
 
 
 driverlist="$driverlist knc"
@@ -491,7 +596,7 @@ AC_ARG_ENABLE([knc],
 if test "x$knc" = xyes; then
 	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
 	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
-		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools (NOT linux headers) is required for knc driver])
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for knc driver])
 	],[
 		#include <stddef.h>
 		#ifdef HAVE_LINUX_I2C_DEV_USER_H
@@ -553,6 +658,9 @@ if test "x$libevent" != "xno"; then
 			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
 	])
+	if test "x$libevent" = "xyes"; then
+		need_work2d=yes
+	fi
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])
 
@@ -821,6 +929,7 @@ if test "x$bfx" = xyes; then
 	AC_DEFINE([USE_BFX], [1], [Defined to 1 if BFx2 support is wanted])
 	need_lowl_ftdi=yes
 	has_asic=yes
+	$broad_udevrules && have_udevrules=true
 fi
 AM_CONDITIONAL([USE_BFX], [test x$bfx = xyes])
 
@@ -1014,6 +1123,20 @@ fi
 AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
 
 
+driverlist="$driverlist jingtian"
+AC_ARG_ENABLE([jingtian],
+	[AC_HELP_STRING([--enable-jingtian],[Compile support for JingTian (default disabled)])],
+	[jingtian=$enableval],
+	[jingtian=$ddno]
+	)
+if test "x$jingtian" = "xyes"; then
+	AC_DEFINE([USE_JINGTIAN], [1], [Defined to 1 if JingTian support is wanted])
+	need_lowl_spi=yes
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_JINGTIAN], [test x$jingtian = xyes])
+
+
 driverlist="$driverlist metabank"
 AC_ARG_ENABLE([metabank],
 	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
@@ -1027,6 +1150,34 @@ if test "x$metabank" = "xyes"; then
 	AC_DEFINE([USE_METABANK], [1], [Defined to 1 if Metabank support is wanted])
 fi
 AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
+
+
+driverlist="$driverlist minergate"
+AC_ARG_ENABLE([minergate],
+	[AC_HELP_STRING([--enable-minergate],[Compile support for Spondoolies minergate interface (default disabled)])],
+	[minergate=$enableval],
+	[minergate=$ddno]
+	)
+if test "x$minergate" = "xyes"; then
+	AC_DEFINE([USE_MINERGATE], [1], [Defined to 1 if Spondoolies minergate interface support is wanted])
+	has_asic=yes
+fi
+AM_CONDITIONAL([USE_MINERGATE], [test x$minergate = xyes])
+
+
+driverlist="$driverlist rockminer"
+AC_ARG_ENABLE([rockminer],
+	[AC_HELP_STRING([--disable-rockminer],[Compile support for RockMiner (default enabled)])],
+	[rockminer=$enableval],
+	[rockminer=$ddyes]
+)
+if test "x$rockminer" = xyes; then
+	AC_DEFINE([USE_ROCKMINER], [1], [Defined to 1 if RockMiner support is wanted])
+	need_lowl_vcom=yes
+	has_asic=yes
+	have_udevrules=true
+fi
+AM_CONDITIONAL([USE_ROCKMINER], [test x$rockminer = xyes])
 
 
 if test "x$need_lowl_vcom" != "xno"; then
@@ -1060,18 +1211,6 @@ if test "x$libusb" = xyes; then
 	CFLAGS="$LIBUSB_CFLAGS $CFLAGS"
 	AC_CHECK_DECLS([libusb_error_name],[true],[true],[#include <libusb.h>])
 	CFLAGS="$save_CFLAGS"
-fi
-
-
-algolist="$algolist scrypt"
-scrypt="no"
-
-AC_ARG_ENABLE([scrypt],
-	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
-	[scrypt=$enableval]
-	)
-if test "x$scrypt" = xyes; then
-	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
 fi
 
 
@@ -1127,6 +1266,12 @@ if test x$need_lowl_hid = xyes; then
 	need_lowlevel=yes
 fi
 
+lowllist="$lowllist mswin/need_lowl_mswin"
+if test x$need_lowl_mswin = xyes; then
+	AC_DEFINE([NEED_BFG_LOWL_MSWIN], [1], [Defined to 1 if lowlevel mswin drivers are being used])
+	need_lowlevel=yes
+fi
+
 lowllist="$lowllist pci/need_lowl_pci"
 if test x$need_lowl_pci = xyes; then
 	AC_DEFINE([NEED_BFG_LOWL_PCI], [1], [Defined to 1 if lowlevel PCI drivers are being used])
@@ -1140,6 +1285,7 @@ if test x$need_lowl_pci = xyes; then
 		AC_DEFINE([USE_VFIO], [1], [Defined to 1 if lowlevel PCI drivers should support VFIO])
 	fi
 fi
+AM_CONDITIONAL([USE_VFIO], [test x$need_lowl_pci$vfio = xyesyes])
 
 lowllist="$lowllist usb/need_lowl_usb"
 if test x$need_lowl_usb = xyes; then
@@ -1265,44 +1411,8 @@ else
 fi
 
 
-maybe_ldconfig=
-AC_ARG_WITH([system-libblkmaker], [AC_HELP_STRING([--with-system-libblkmaker], [Use system libblkmaker rather than bundled one (default disabled)])],[true],[with_system_libblkmaker=no])
-if test "x$with_system_libblkmaker" = "xyes"; then
-	PKG_CHECK_MODULES([libblkmaker],[libblkmaker_jansson-0.1],[
-		true
-	],[
-		AC_MSG_ERROR([Could not find system libblkmaker])
-	])
-else
-	save_LDFLAGS="$LDFLAGS"
-	LDFLAGS="$LDFLAGS -Wl,-zorigin"
-	origin_LDFLAGS=
-	AC_MSG_CHECKING([whether the linker recognizes the -zorigin option])
-	AC_TRY_LINK([],[],[
-		AC_MSG_RESULT([yes])
-		origin_LDFLAGS=',-zorigin'
-	],[
-		AC_MSG_RESULT([no])
-	])
-	LDFLAGS="$save_LDFLAGS"
-	
-	libblkmaker_CFLAGS='-Ilibblkmaker'
-	libblkmaker_LDFLAGS='-Llibblkmaker/.libs -Wl,-rpath,\$$ORIGIN/libblkmaker/.libs'"$origin_LDFLAGS"
-	libblkmaker_LIBS='-lblkmaker_jansson-0.1 -lblkmaker-0.1'
-	AC_CONFIG_SUBDIRS([libblkmaker])
-	_ROOTPATH=$PATH$PATH_SEPARATOR`echo $PATH | sed s/bin/sbin/g`
-	possible_ldconfigs="${target}-ldconfig"
-	if test "x$cross_compiling" != "xyes"; then
-		possible_ldconfigs="${possible_ldconfigs} ldconfig"
-	fi
-	AC_CHECK_PROGS([LDCONFIG],[${possible_ldconfigs}],[],[$_ROOTPATH])
-	if test "x$LDCONFIG" != "x"; then
-		maybe_ldconfig=" && $LDCONFIG"
-	fi
-fi
-AC_SUBST(libblkmaker_CFLAGS)
-AC_SUBST(libblkmaker_LDFLAGS)
-AC_SUBST(libblkmaker_LIBS)
+BFG_BUNDLED_LIB([libbase58],[libbase58],[auto],[libbase58],[base58],[],[--disable-tool --disable-static --enable-shared])
+BFG_BUNDLED_LIB([libblkmaker],[libblkmaker_jansson-0.1],[no],[libblkmaker],[blkmaker_jansson-0.1 blkmaker-0.1],[libbase58])
 
 
 $have_udevrules || use_udevrules=false
@@ -1326,15 +1436,17 @@ if $use_udevrules; then
 fi
 
 
-AM_CONDITIONAL([NEED_LIBBLKMAKER], [test x$with_system_libblkmaker != xyes])
 AM_CONDITIONAL([NEED_BFG_BINLOADER], [test x$need_binloader = xyes])
 AM_CONDITIONAL([NEED_DYNCLOCK], [test x$need_dynclock = xyes])
+AM_CONDITIONAL([USE_GC3355], [test x$need_gc3355 = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_VCOM], [test x$need_lowl_vcom = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_FTDI], [test x$need_lowl_ftdi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_HID], [test x$need_lowl_hid = xyes])
+AM_CONDITIONAL([NEED_BFG_LOWL_MSWIN], [test x$need_lowl_mswin = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
+AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
@@ -1346,6 +1458,7 @@ AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
 AM_CONDITIONAL([HAS_FPGA], [test x$has_fpga != xno])
 AM_CONDITIONAL([HAS_ASIC], [test x$has_asic != xno])
 AM_CONDITIONAL([USE_UDEVRULES], [$use_udevrules])
+AM_CONDITIONAL([BROAD_UDEVRULES], [$broad_udevrules])
 
 dnl Find YASM
 has_yasm=false
@@ -1734,6 +1847,7 @@ if $use_udevrules; then
 fi
 
 AC_OUTPUT
+BFG_CUSTOM_SUBDIRS_OUTPUT
 
 
 wordfilter ()
@@ -1746,8 +1860,8 @@ echo "------------------------------------------------------------------------"
 echo "$PACKAGE $VERSION configuration options summary"
 echo "------------------------------------------------------------------------"
 echo
-echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
-echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $libblkmaker_LDFLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libblkmaker_LIBS"`
+echo "  CFLAGS...............: "`wordfilter "$CPPFLAGS $AUTOSCAN_CPPFLAGS $NCURSES_CPPFLAGS $PTHREAD_FLAGS $CFLAGS $LIBUSB_CFLAGS $JANSSON_CFLAGS $PTHREAD_FLAGS $libbase58_CFLAGS $libblkmaker_CFLAGS $hidapi_CFLAGS"`
+echo "  LDFLAGS..............: "`wordfilter "$LDFLAGS $AUTOSCAN_LIBS $PTHREAD_FLAGS $PTHREAD_LIBS $LIBS $DLOPEN_FLAGS $LIBCURL_LIBS $JANSSON_LIBS $NCURSES_LIBS $PDCURSES_LIBS $WS2_LIBS $MATH_LIBS $UDEV_LIBS $LIBUSB_LIBS $RT_LIBS $sensors_LIBS $libbase58_LIBS $libblkmaker_LIBS"`
 echo "  Installation.prefix..: $prefix"
 echo
 echo "${lowllist_print}" | tr '~' '\n'

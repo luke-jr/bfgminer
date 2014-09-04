@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -9,6 +9,8 @@
 
 #include "config.h"
 
+#include <ctype.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -25,9 +27,8 @@
 #include "miner.h"
 #include "util.h"
 
-#define BIFURY_MAX_QUEUED 0x10
-
 BFG_REGISTER_DRIVER(bifury_drv)
+static const struct bfg_set_device_definition bifury_set_device_funcs[];
 
 const char bifury_init_cmds[] = "flush\ntarget ffffffff\nmaxroll 0\n";
 
@@ -69,11 +70,13 @@ parse:
 
 struct bifury_state {
 	bytes_t buf;
-	uint32_t last_work_id;
+	work_device_id_t last_work_id;
 	int needwork;
 	bool has_needwork;
 	uint8_t *osc6_bits;
 	bool send_clock;
+	unsigned max_queued;
+	bool free_after_job;
 };
 
 static
@@ -81,6 +84,27 @@ bool bifury_lowl_match(const struct lowlevel_device_info * const info)
 {
 	return lowlevel_match_product(info, "bi\xe2\x80\xa2""fury");
 }
+
+const char *bifury_init_chips(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	int *procs_p = proc->device_data;
+	
+	if (!setting || !*setting)
+		return "missing setting";
+	
+	const int val = atoi(setting);
+	if (val < 1)
+		return "invalid setting";
+	
+	*procs_p = val;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition bifury_set_device_funcs_probe[] = {
+	{"chips", bifury_init_chips, NULL},
+	{NULL},
+};
 
 static
 bool bifury_detect_one(const char * const devpath)
@@ -155,10 +179,13 @@ bool bifury_detect_one(const char * const devpath)
 	if (serial_claim_v(devpath, &bifury_drv))
 		return false;
 	
+	drv_set_defaults(&bifury_drv, bifury_set_device_funcs_probe, &chips, devpath, detectone_meta_info.serial, 1);
+	
 	cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &bifury_drv,
 		.device_path = strdup(devpath),
+		.set_device_funcs = bifury_set_device_funcs,
 		.deven = DEV_ENABLED,
 		.procs = chips,
 		.threads = 1,
@@ -245,6 +272,8 @@ bool bifury_thread_init(struct thr_info *master_thr)
 	*state = (struct bifury_state){
 		.buf = BYTES_INIT,
 		.osc6_bits = malloc(sizeof(*state->osc6_bits) * dev->procs),
+		.max_queued = dev->procs * 5 + 6,
+		.free_after_job = true,
 	};
 	for (int i = 0; i < dev->procs; ++i)
 		state->osc6_bits[i] = 54;
@@ -304,7 +333,7 @@ bool bifury_queue_append(struct thr_info * const thr, struct work *work)
 		return false;
 	}
 	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
-	int prunequeue = HASH_COUNT(master_thr->work_list) - BIFURY_MAX_QUEUED;
+	int prunequeue = HASH_COUNT(master_thr->work_list) - state->max_queued;
 	if (prunequeue > 0)
 	{
 		struct work *tmp;
@@ -335,19 +364,6 @@ void bifury_queue_flush(struct thr_info * const thr)
 }
 
 static
-const struct cgpu_info *device_proc_by_id(const struct cgpu_info * const dev, int procid)
-{
-	const struct cgpu_info *proc = dev;
-	for (int i = 0; i < procid; ++i)
-	{
-		proc = proc->next_proc;
-		if (unlikely(!proc))
-			return NULL;
-	}
-	return proc;
-}
-
-static
 void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 {
 	struct thr_info * const master_thr = dev->thr[0];
@@ -363,7 +379,6 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		const uint32_t jobid = strtoll(&p[1], &p, 0x10);
 		const uint32_t ntime = strtoll(&p[1], &p, 0x10);
 		const int chip = atoi(&p[1]);
-		nonce = le32toh(nonce);
 		const struct cgpu_info *proc = device_proc_by_id(dev, chip);
 		if (unlikely(!proc))
 			proc = dev;
@@ -374,6 +389,7 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		{
 			const uint32_t work_ntime = be32toh(*(uint32_t*)&work->data[68]);
 			submit_noffset_nonce(thr, work, nonce, ntime - work_ntime);
+			hashes_done2(thr, 0x100000000, NULL);
 		}
 		else
 		if (!jobid)
@@ -410,16 +426,14 @@ void bifury_handle_cmd(struct cgpu_info * const dev, const char * const cmd)
 		HASH_FIND(hh, master_thr->work_list, &jobid, sizeof(jobid), work);
 		if (likely(work))
 		{
-			if (likely(proc))
-			{
-				thr = proc->thr[0];
-				hashes_done2(thr, 0xbd000000, NULL);
-			}
-			else
+			if (unlikely(!proc))
 				applog(LOG_DEBUG, "%s: Unknown chip id: %s",
 				       dev->dev_repr, cmd);
-			HASH_DEL(master_thr->work_list, work);
-			free_work(work);
+			if (state->free_after_job)
+			{
+				HASH_DEL(master_thr->work_list, work);
+				free_work(work);
+			}
 		}
 		else
 			applog(LOG_WARNING, "%s: Unknown job id: %s",
@@ -503,38 +517,54 @@ struct api_data *bifury_api_device_status(struct cgpu_info * const proc)
 	return root;
 }
 
-char *bifury_set_device(struct cgpu_info * const proc, char * const option, char * const setting, char * const replybuf)
+const char *bifury_set_osc6_bits(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct bifury_state * const state = proc->device_data;
 	
-	if (!strcasecmp(option, "help"))
-	{
-		sprintf(replybuf, "osc6_bits: range 33-63 (slow to fast)");
-		return replybuf;
-	}
+	if (!setting || !*setting)
+		return "missing setting";
 	
-	if (!strcasecmp(option, "osc6_bits"))
-	{
-		if (!setting || !*setting)
-		{
-			sprintf(replybuf, "missing setting");
-			return replybuf;
-		}
-		const uint8_t val = atoi(setting);
-		if (val < 33 || val > 63)
-		{
-			sprintf(replybuf, "invalid setting");
-			return replybuf;
-		}
-		
-		state->osc6_bits[proc->proc_id] = val;
-		state->send_clock = true;
-		
-		return NULL;
-	}
+	const int val = atoi(setting);
+	if (val < 33 || val > 63)
+		return "invalid setting";
 	
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
+	state->osc6_bits[proc->proc_id] = val;
+	state->send_clock = true;
+	
+	return NULL;
+}
+
+const char *bifury_set_max_queued(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct bifury_state * const state = proc->device_data;
+	
+	if (!setting || !*setting)
+		return "missing setting";
+	
+	const long val = strtol(setting, NULL, 0);
+	if (val < 1 || val > UINT_MAX)
+		return "invalid setting";
+	
+	state->max_queued = val;
+	
+	return NULL;
+}
+
+const char *bifury_set_free_after_job(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct bifury_state * const state = proc->device_data;
+	
+	if (!setting || !*setting)
+		return "missing setting";
+	
+	char *end;
+	const bool val = bfg_strtobool(setting, &end, 0);
+	if (end[0] && !isspace(end[0]))
+		return "invalid setting";
+	
+	state->free_after_job = val;
+	
+	return NULL;
 }
 
 #ifdef HAVE_CURSES
@@ -572,6 +602,13 @@ void bifury_wlogprint_status(struct cgpu_info * const proc)
 }
 #endif
 
+static const struct bfg_set_device_definition bifury_set_device_funcs[] = {
+	{"max_queued", bifury_set_max_queued, NULL},
+	{"free_after_job", bifury_set_free_after_job, NULL},
+	{"osc6_bits", bifury_set_osc6_bits, "range 33-63 (slow to fast)"},
+	{NULL},
+};
+
 struct device_drv bifury_drv = {
 	.dname = "bifury",
 	.name = "BIF",
@@ -589,7 +626,6 @@ struct device_drv bifury_drv = {
 	.poll = bifury_poll,
 	
 	.get_api_extra_device_status = bifury_api_device_status,
-	.set_device = bifury_set_device,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = bifury_wlogprint_status,

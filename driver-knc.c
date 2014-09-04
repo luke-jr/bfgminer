@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -31,6 +31,7 @@
 #include "logging.h"
 #include "lowl-spi.h"
 #include "miner.h"
+#include "util.h"
 
 #define KNC_POLL_INTERVAL_US 10000
 #define KNC_SPI_SPEED 3000000
@@ -213,23 +214,7 @@ fail:
 	return false;
 }
 
-static
-bool knc_spi_txrx(struct spi_port * const spi)
-{
-	const void * const wrbuf = spi_gettxbuf(spi);
-	void * const rdbuf = spi_getrxbuf(spi);
-	const size_t bufsz = spi_getbufsz(spi);
-	const int fd = spi->fd;
-	struct spi_ioc_transfer xf = {
-		.tx_buf = (uintptr_t) wrbuf,
-		.rx_buf = (uintptr_t) rdbuf,
-		.len = bufsz,
-		.delay_usecs = spi->delay,
-		.speed_hz = spi->speed,
-		.bits_per_word = spi->bits,
-	};
-	return (ioctl(fd, SPI_IOC_MESSAGE(1), &xf) > 0);
-}
+#define knc_spi_txrx  linux_spi_txrx
 
 static
 void knc_clean_flush(struct spi_port * const spi)
@@ -597,7 +582,7 @@ void knc_poll(struct thr_info * const thr)
 			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
 			work->device_id = knc->next_id++ & 0x7fff;
-			HASH_ADD_INT(knc->devicework, device_id, work);
+			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
 			if (!--workaccept)
 				break;
 		}
@@ -825,21 +810,11 @@ const char *knc_set_use_dcdc(struct cgpu_info *proc, const char * const optname,
 {
 	int core_index_on_die = proc->proc_id % KNC_CORES_PER_DIE;
 	bool nv;
+	char *end;
 	
-	if (!(strcasecmp(newvalue, "no") && strcasecmp(newvalue, "false") && strcasecmp(newvalue, "0") && strcasecmp(newvalue, "off") && strcasecmp(newvalue, "disable")))
-		nv = false;
-	else
-	if (!(strcasecmp(newvalue, "yes") && strcasecmp(newvalue, "true") && strcasecmp(newvalue, "on") && strcasecmp(newvalue, "enable")))
-		nv = true;
-	else
-	{
-		char *p;
-		strtol(newvalue, &p, 0);
-		if (newvalue[0] && !p[0])
-			nv = true;
-		else
-			return "Usage: use_dcdc=yes/no";
-	}
+	nv = bfg_strtobool(newvalue, &end, 0);
+	if (!(newvalue[0] && !end[0]))
+		return "Usage: use_dcdc=yes/no";
 	
 	if (core_index_on_die)
 	{

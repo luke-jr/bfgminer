@@ -1,5 +1,6 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2013 Nate Woolls
  * Copyright 2012 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -137,6 +138,7 @@ bool x6500_lowl_probe(const struct lowlevel_device_info * const info)
 	const char * const serial = info->serial;
 	if (info->lowl != &lowl_ft232r)
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		if (info->lowl != &lowl_usb)
 			applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not ft232r!",
 			       __func__, product, serial);

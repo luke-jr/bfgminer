@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2012-2014 Luke Dashjr
  * Copyright 2013 Andrew Smith
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -34,7 +34,11 @@ static void _my_log_curses(int prio, const char *datetime, const char *str)
 		;
 	else
 #endif
-		printf(" %s %s%s", datetime, str, "                    \n");
+	{
+		last_logstatusline_len = -1;
+		printf("\n %s %s\r", datetime, str);
+		fflush(stdout);
+	}
 }
 
 /* high-level logging function, based on global opt_log_level */

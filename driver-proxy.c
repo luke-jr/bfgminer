@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -21,6 +21,7 @@
 #include "util.h"
 
 BFG_REGISTER_DRIVER(proxy_drv)
+static const struct bfg_set_device_definition proxy_set_device_funcs[];
 
 static
 struct proxy_client *proxy_clients;
@@ -94,6 +95,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 		client = malloc(sizeof(*client));
 		*cgpu = (struct cgpu_info){
 			.drv = &proxy_drv,
+			.set_device_funcs = proxy_set_device_funcs,
 			.threads = 0,
 			.device_data = client,
 			.device_path = user,
@@ -110,6 +112,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 		*client = (struct proxy_client){
 			.username = user,
 			.cgpu = cgpu,
+			.desired_share_pdiff = opt_scrypt ? (1./0x10000) : 1.,
 		};
 		
 		b = HASH_COUNT(proxy_clients);
@@ -118,6 +121,8 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 		
 		if (!b)
 			proxy_first_client(cgpu);
+		
+		cgpu_set_defaults(cgpu);
 	}
 	else
 	{
@@ -128,6 +133,23 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 	return client;
 }
 
+static
+const char *proxy_set_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct proxy_client * const client = proc->device_data;
+	const double nv = atof(newvalue);
+	if (nv <= 0)
+		return "Invalid difficulty";
+	
+	client->desired_share_pdiff = nv;
+	
+#ifdef USE_LIBEVENT
+	stratumsrv_client_changed_diff(client);
+#endif
+	
+	return NULL;
+}
+
 #ifdef HAVE_CURSES
 static
 void proxy_wlogprint_status(struct cgpu_info *cgpu)
@@ -136,6 +158,11 @@ void proxy_wlogprint_status(struct cgpu_info *cgpu)
 	wlogprint("Username: %s\n", client->username);
 }
 #endif
+
+static const struct bfg_set_device_definition proxy_set_device_funcs[] = {
+	{"diff", proxy_set_diff, "desired share difficulty for clients"},
+	{NULL},
+};
 
 struct device_drv proxy_drv = {
 	.dname = "proxy",

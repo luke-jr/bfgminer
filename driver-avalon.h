@@ -1,6 +1,7 @@
 /*
  * Copyright 2013 Avalon project
  * Copyright 2013 Con Kolivas
+ * Copyright 2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -128,7 +129,7 @@ struct avalon_info {
 #define avalon_open(devpath, baud)  avalon_open2(devpath, baud, true)
 #define avalon_close(fd) close(fd)
 
-#define avalon_buffer_full(fd)	get_serial_cts(fd)
+#define avalon_buffer_full(fd)	(get_serial_cts(fd) != BGV_LOW)
 
 #define AVALON_READ_TIME(baud) ((double)AVALON_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]

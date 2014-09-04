@@ -146,7 +146,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
 
  Request       Reply Section  Details
  -------       -------------  -------
- version       VERSION        CGMiner=BFGMiner version
+ version       VERSION        Miner="BFGMiner " BFGMiner version
+                              CGMiner=BFGMiner version
                               API=API version
 
  config        CONFIG         Some miner configuration information:
@@ -162,7 +163,9 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Failover-Only=true/false, <- failover-only setting
                               ScanTime=N, <- --scan-time setting
                               Queue=N, <- --queue setting
-                              Expiry=N| <- --expiry setting
+                              Expiry=N, <- --expiry setting
+                              Coinbase-Sig=X, <- extra coinbase data in blocks
+                              ConfigFileN=X| <- filename of configs loaded
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -244,8 +247,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               The filename is optional and will use the BFGMiner
                               default if not specified
 
- quit (*)      none           There is no status section but just a single "BYE"
-                              reply before BFGMiner quits
+ quit (*)      none           There is no reply section just the STATUS section
+                              before BFGMiner quits
 
  notify        NOTIFY         The last status and history count of each devices
                               problem
@@ -306,8 +309,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               supported by the 'devs' command
                               e.g. DEVDETAILS=0,Name=BFL,ID=0,ProcID=0,Driver=bitforce,...|
 
- restart (*)   none           There is no status section but just a single
-                              "RESTART" reply before BFGMiner restarts
+ restart (*)   none           There is no reply section just the STATUS section
+                              before BFGMiner restarts
 
  stats         STATS          Each device or pool that has 1 or more getworks
                               with a list of stats regarding getwork times
@@ -435,6 +438,9 @@ api-example.py - a Python script to access the API.
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
  If you specify a command it will send that request instead.
 
+api-example.rb - a Ruby script to access the API.
+  usage: ruby api-example.rb command[:parameter] [HOST [PORT]]
+
 If you are using Node.js, you can also use the miner-rpc package and script:
 https://www.npmjs.org/package/miner-rpc
 
@@ -443,7 +449,14 @@ https://www.npmjs.org/package/miner-rpc
 Feature Changelog for external applications using the API:
 
 
-API V3.1
+API V3.2 (BFGMiner v4.1.0)
+
+Modified API command:
+ 'config' - add 'ConfigFile'N
+
+---------
+
+API V3.1 (BFGMiner v4.0.0)
 
 Multiple report request command with '+' e.g. summary+devs
 
@@ -454,7 +467,10 @@ Added API commands:
 
 Modified API commands:
  'devs' - remove 'GPU Count' and 'CPU Count'
+ 'quit' - expand reply to include a complete STATUS section
+ 'restart' - expand reply to include a complete STATUS section
  'summary' - add 'MHS rolling'
+ 'version' - add 'Miner'
 
 Deprecated API commands:
  'cpu'

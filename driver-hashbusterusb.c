@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  * Copyright 2013 Vladimir Strinski
  * Copyright 2013 HashBuster team
  *
@@ -156,11 +156,17 @@ bool hashbusterusb_lowl_probe(const struct lowlevel_device_info * const info)
 	libusb_device_handle *h;
 	
 	if (info->lowl != &lowl_usb)
+	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		applogr(false, LOG_DEBUG, "%s: Matched \"%s\" %s, but lowlevel driver is not usb_generic!",
 		       __func__, product, info->devid);
+	}
 	
 	if (info->vid != 0xFA04 || info->pid != 0x000D)
+	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		applogr(false, LOG_DEBUG, "%s: Wrong VID/PID", __func__);
+	}
 	
 	libusb_device *dev = info->lowl_data;
 	if ( (j = libusb_open(dev, &h)) )

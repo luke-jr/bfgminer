@@ -1,12 +1,14 @@
 /*
- * Copyright 2013 Luke Dashjr
- * Copyright 2013 Angus Gratton
+ * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2014 Angus Gratton
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
  * Software Foundation; either version 3 of the License, or (at your option)
  * any later version.  See COPYING for more details.
  */
+
+#include "config.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -45,8 +47,6 @@ struct drillbit_board {
 static
 bool drillbit_lowl_match(const struct lowlevel_device_info * const info)
 {
-	if (!lowlevel_match_id(info, &lowl_vcom, 0, 0))
-		return false;
 	return (info->manufacturer && strstr(info->manufacturer, "Drillbit"));
 }
 
@@ -114,9 +114,6 @@ err:
 		// Production firmware Thumbs don't set any capability bits, so fill in the EXT_CLOCK one
 		caps |= DBC_EXT_CLOCK;
 	
-	char *serno = malloc(9);
-	snprintf(serno, 9, "%08lx", serialno);
-	
 	if (chips > 0x100)
 	{
 		applog(LOG_WARNING, "%s: %s: %u chips reported, but driver only supports up to 256",
@@ -129,6 +126,9 @@ err:
 	
 	intptr_t device_data = caps | ((intptr_t)protover << 16); // Store capabilities & protocol version in device_data, temporarily
 
+	char *serno = malloc(9);
+	snprintf(serno, 9, "%08lx", serialno);
+	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
 		.drv = &drillbit_drv,

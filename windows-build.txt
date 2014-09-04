@@ -239,6 +239,10 @@ C:\MinGW\msys\1.0\home\USER\bfgminer\opencl
 
 	*.cl
 
+C:\MinGW\msys\1.0\home\USER\bfgminer\libbase58\.libs
+
+	libbase58-0.dll
+
 C:\MinGW\msys\1.0\home\USER\bfgminer\libblkmaker\.libs  
 
 	libblkmaker-0.1-0.dll

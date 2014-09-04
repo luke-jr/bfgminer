@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright 2012 Xiangfu
+# Copyright 2012-2013 Xiangfu
 # Copyright 2012-2013 Andrew Smith
 # Copyright 2013 Luke Dashjr
 #

@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 bitfury
  * Copyright 2013 Anatoly Legkodymov
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -37,6 +37,8 @@
 #include "lowl-spi.h"
 #include "util.h"
 
+static const int chipgen_timeout_secs = 30;
+
 BFG_REGISTER_DRIVER(bitfury_drv)
 const struct bfg_set_device_definition bitfury_set_device_funcs[];
 
@@ -48,14 +50,14 @@ int bitfury_autodetect()
 	int chip_n;
 	struct cgpu_info *bitfury_info;
 
-	bitfury_info = calloc(1, sizeof(struct cgpu_info));
-	bitfury_info->drv = &bitfury_drv;
-	bitfury_info->threads = 1;
-
 	applog(LOG_INFO, "INFO: bitfury_detect");
 	spi_init();
 	if (!sys_spi)
 		return 0;
+	
+	bitfury_info = calloc(1, sizeof(struct cgpu_info));
+	bitfury_info->drv = &bitfury_drv;
+	bitfury_info->threads = 1;
 	
 	{
 		struct bitfury_device dummy_bitfury = {
@@ -67,6 +69,7 @@ int bitfury_autodetect()
 	chip_n = libbitfury_detectChips1(sys_spi);
 	if (!chip_n) {
 		applog(LOG_WARNING, "No Bitfury chips detected!");
+		free(bitfury_info);
 		return 0;
 	} else {
 		applog(LOG_WARNING, "BITFURY: %d chips detected!", chip_n);
@@ -121,6 +124,7 @@ bool bitfury_init_oldbuf(struct cgpu_info * const proc, const uint32_t *inp)
 	struct bitfury_device * const bitfury = proc->device_data;
 	uint32_t * const oldbuf = &bitfury->oldbuf[0];
 	uint32_t * const buf = &bitfury->newbuf[0];
+	uint32_t *inp_new;
 	int i, differ, tried = 0;
 	
 	if (!inp)
@@ -134,8 +138,10 @@ tryagain:
 		return false;
 	}
 	++tried;
-	memcpy(buf, inp, 0x10 * 4);
-	inp = bitfury_just_io(bitfury);
+	swap32tole(buf, inp, 0x10);
+	inp_new = bitfury_just_io(bitfury);
+	swap32tole(inp_new, inp_new, 0x10);
+	inp = inp_new;
 	differ = -1;
 	for (i = 0; i < 0x10; ++i)
 	{
@@ -177,11 +183,11 @@ bool bitfury_init_chip(struct cgpu_info * const proc)
 {
 	struct bitfury_device * const bitfury = proc->device_data;
 	struct bitfury_payload payload = {
-		.midstate = "\xf9\x9a\xf0\xd5\x72\x34\x41\xdc\x9e\x10\xd1\x1f\xeb\xcd\xe3\xf5"
-		            "\x52\xf1\x14\x63\x06\x14\xd1\x12\x15\x25\x39\xd1\x7d\x77\x5a\xfd",
-		.m7    = 0xafbd0b42,
-		.ntime = 0xb6c24563,
-		.nbits = 0x6dfa4352,
+		.midstate = "\x33\xfb\x46\xdc\x61\x2a\x7a\x23\xf0\xa2\x2d\x63\x31\x54\x21\xdc"
+		            "\xae\x86\xfe\xc3\x88\xc1\x9c\x8c\x20\x18\x10\x68\xfc\x95\x3f\xf7",
+		.m7    = htole32(0xc3baafef),
+		.ntime = htole32(0x326fa351),
+		.nbits = htole32(0x6461011a),
 	};
 	bitfury_payload_to_atrvec(bitfury->atrvec, &payload);
 	return bitfury_init_oldbuf(proc, NULL);
@@ -259,7 +265,8 @@ bool bitfury_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused
 		       proc->proc_repr, hex);
 	}
 	work_to_bitfury_payload(&bitfury->payload, work);
-	bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+	if (bitfury->chipgen)
+		bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
 	
 	work->blk.nonce = 0xffffffff;
 	return true;
@@ -424,7 +431,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 	
 	for (j = 0; j < n_chips; ++j)
 	{
-		memcpy(rxbuf_copy[j], rxbuf[j], 0x11 * 4);
+		swap32tole(rxbuf_copy[j], rxbuf[j], 0x11);
 		rxbuf[j] = rxbuf_copy[j];
 	}
 	
@@ -437,6 +444,12 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		c = &bitfury->chip_stat;
 		uint32_t * const newbuf = &bitfury->newbuf[0];
 		uint32_t * const oldbuf = &bitfury->oldbuf[0];
+		
+		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
+			copy_time(tvp_stat, &tv_now);
+		}
+		
+		int stat_elapsed_secs = timer_elapsed(tvp_stat, &tv_now);
 		
 		inp = rxbuf[j];
 		
@@ -471,7 +484,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 		else
 			bitfury->desync_counter = 0;
 		
-		if (bitfury->oldjob != newjob && thr->next_work)
+		if (bitfury->oldjob != newjob && thr->next_work && bitfury->chipgen)
 		{
 			mt_job_transition(thr);
 			// TODO: Delay morework until right before it's needed
@@ -513,7 +526,8 @@ void bitfury_do_io(struct thr_info * const master_thr)
 				
 				if (bitfury->mhz_best)
 				{
-					if (bitfury->mhz < bitfury->mhz_best / 2)
+					const double mhz_half_best = bitfury->mhz_best / 2;
+					if (bitfury->mhz < mhz_half_best && bitfury->mhz_last < mhz_half_best)
 					{
 						applog(LOG_WARNING, "%"PRIpreprv": Frequency drop over 50%% detected, reinitialising",
 						       proc->proc_repr);
@@ -535,13 +549,9 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			}
 		}
 		
-		if (tvp_stat->tv_sec == 0 && tvp_stat->tv_usec == 0) {
-			copy_time(tvp_stat, &tv_now);
-		}
-		
 		if (c->osc6_max)
 		{
-			if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+			if (stat_elapsed_secs >= 60)
 			{
 				double mh_diff, s_diff;
 				const int osc = bitfury->osc6_bits;
@@ -584,6 +594,26 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			for (i = 0; i < n; ++i)
 			{
 				nonce = bitfury_decnonce(newbuf[i]);
+				if (unlikely(!bitfury->chipgen))
+				{
+					switch (nonce & 0xe03fffff)
+					{
+						case 0x40060f87:
+						case 0x600054e0:
+						case 0x80156423:
+						case 0x991abced:
+						case 0xa004b2a0:
+							if (++bitfury->chipgen_probe > 0x10)
+								bitfury->chipgen = 1;
+							break;
+						case 0xe03081a3:
+						case 0xe003df88:
+							bitfury->chipgen = 2;
+					}
+					if (bitfury->chipgen)
+						goto chipgen_detected;
+				}
+				else
 				if (fudge_nonce(thr->work, &nonce))
 				{
 					applog(LOG_DEBUG, "%"PRIpreprv": nonce %x = %08lx (work=%p)",
@@ -591,6 +621,10 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					submit_nonce(thr, thr->work, nonce);
 					bitfury->counter2 += 1;
 				}
+				else
+				if (!thr->prev_work)
+					applog(LOG_DEBUG, "%"PRIpreprv": Ignoring unrecognised nonce %08lx (no prev work)",
+					       proc->proc_repr, (unsigned long)be32toh(nonce));
 				else
 				if (fudge_nonce(thr->prev_work, &nonce))
 				{
@@ -617,6 +651,16 @@ void bitfury_do_io(struct thr_info * const master_thr)
 					bitfury->sample_tot = bitfury->sample_hwe = 0;
 				}
 			}
+			if ((!bitfury->chipgen) && stat_elapsed_secs >= chipgen_timeout_secs)
+			{
+				bitfury->chipgen = 1;
+				applog(LOG_WARNING, "%"PRIpreprv": Failed to detect chip generation in %d seconds, falling back to gen%d assumption",
+				       proc->proc_repr, chipgen_timeout_secs, bitfury->chipgen);
+chipgen_detected:
+				applog(LOG_DEBUG, "%"PRIpreprv": Detected bitfury gen%d chip",
+				       proc->proc_repr, bitfury->chipgen);
+				bitfury_payload_to_atrvec(bitfury->atrvec, &bitfury->payload);
+			}
 			bitfury->active = (bitfury->active + n) % 0x10;
 		}
 		
@@ -635,7 +679,7 @@ out:
 			bitfury->mhz_best = 0;
 			bitfury->force_reinit = false;
 		}
-		if (timer_elapsed(tvp_stat, &tv_now) >= 60)
+		if (stat_elapsed_secs >= 60)
 			copy_time(tvp_stat, &tv_now);
 	}
 	
@@ -644,8 +688,18 @@ out:
 
 int64_t bitfury_job_process_results(struct thr_info *thr, struct work *work, bool stopping)
 {
-	// Bitfury chips process only 768/1024 of the nonce range
-	return 0xbd000000;
+	struct cgpu_info * const proc = thr->cgpu;
+	struct bitfury_device * const bitfury = proc->device_data;
+	switch (bitfury->chipgen)
+	{
+		default:
+		case 1:
+			// Bitfury gen1 chips process only 756/1024 of the nonce range
+			return 0xbd000000;
+		case 2:
+			// Bitfury gen2 chips process only 864/1024 of the nonce range
+			return 0xd8000000;
+	}
 }
 
 struct api_data *bitfury_api_device_detail(struct cgpu_info * const cgpu)
@@ -654,6 +708,8 @@ struct api_data *bitfury_api_device_detail(struct cgpu_info * const cgpu)
 	struct api_data *root = NULL;
 	
 	root = api_add_uint(root, "fasync", &bitfury->fasync, false);
+	if (bitfury->chipgen)
+		root = api_add_int(root, "Chip Generation", &bitfury->chipgen, false);
 	
 	return root;
 }
@@ -766,7 +822,10 @@ const char *bitfury_tui_handle_choice(struct cgpu_info *cgpu, int input)
 void bitfury_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct bitfury_device * const bitfury = cgpu->device_data;
-	wlogprint("Oscillator bits: %d\n", bitfury->osc6_bits);
+	wlogprint("Oscillator bits: %d", bitfury->osc6_bits);
+	if (bitfury->chipgen)
+		wlogprint("  Chip generation: %d", bitfury->chipgen);
+	wlogprint("\n");
 }
 #endif
 

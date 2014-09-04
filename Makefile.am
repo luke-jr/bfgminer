@@ -1,7 +1,8 @@
-# Copyright 2012-2013 Luke Dashjr
+# Copyright 2012-2014 Luke Dashjr
 # Copyright 2012 zefir
 # Copyright 2011-2013 Con Kolivas
 # Copyright 2013 James Z.M. Gao
+# Copyright 2013-2014 Nate Woolls
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -40,6 +41,8 @@ INCLUDES	= -fno-strict-aliasing
 
 bin_PROGRAMS	= bfgminer
 
+sbin_SCRIPTS =
+
 if HAVE_WINDOWS
 else
 bin_SCRIPTS = start-bfgminer.sh
@@ -62,10 +65,6 @@ bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 bfgminer_CPPFLAGS += $(AUTOSCAN_CPPFLAGS)
 bfgminer_LDADD += $(AUTOSCAN_LIBS)
 
-bfgminer_LDADD += $(libblkmaker_LIBS)
-bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
-bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
-
 # common sources
 bfgminer_SOURCES := miner.c
 
@@ -75,20 +74,19 @@ bfgminer_SOURCES += miner.h compat.h  \
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
-if NEED_LIBBLKMAKER
-SUBDIRS           += libblkmaker
-EXTRA_bfgminer_DEPENDENCIES += libblkmaker_directory
-libblkmaker_directory:
-	cd libblkmaker && $(MAKE)
+.PHONY: update-version
+update-version:
+	./gen-version.sh >version.h.new
+	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
+version.h: update-version
+bfgminer_SOURCES += version.h
+BUILT_SOURCES = version.h
 
-if HAVE_CYGWIN
-EXTRA_bfgminer_DEPENDENCIES += cygblkmaker-0.1-0.dll cygblkmaker_jansson-0.1-0.dll
-
-cyg%.dll: libblkmaker/.libs/cyg%.dll
-	cp -p $< $@
-endif
-
-endif
+SUBDIRS += $(libbase58_SUBDIRS) $(libblkmaker_SUBDIRS)
+bfgminer_LDADD += $(libbase58_LIBS) $(libblkmaker_LIBS)
+bfgminer_CPPFLAGS += $(libbase58_CFLAGS) $(libblkmaker_CFLAGS)
+EXTRA_bfgminer_DEPENDENCIES += $(libbase58_EXTRADEPS) $(libblkmaker_EXTRADEPS)
+@BUNDLED_LIB_RULES@
 
 bfgminer_SOURCES	+= logging.c
 
@@ -202,6 +200,10 @@ if NEED_DYNCLOCK
 bfgminer_SOURCES += dynclock.c dynclock.h
 endif
 
+if NEED_BFG_WORK2D
+bfgminer_SOURCES  += work2d.c work2d.h
+endif
+
 if HAS_FPGA
 dist_doc_DATA += README.FPGA
 endif
@@ -212,12 +214,6 @@ endif
 
 if HAS_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
-
-if HAVE_WINDOWS
-else
-bin_PROGRAMS += bitforce-firmware-flash
-bitforce_firmware_flash_SOURCES = bitforce-firmware-flash.c
-endif
 endif
 
 if HAS_BIGPIC
@@ -239,12 +235,28 @@ bfgminer_SOURCES += driver-erupter.c
 bfgminer_SOURCES += driver-antminer.c
 endif
 
+if USE_GC3355
+bfgminer_SOURCES += gc3355.c gc3355.h
+endif
+
+if USE_GRIDSEED
+bfgminer_SOURCES += driver-gridseed.c
+endif
+
 if USE_DUALMINER
-bfgminer_SOURCES += driver-dualminer.c gc3355.c gc3355.h
+bfgminer_SOURCES += driver-dualminer.c
+endif
+
+if USE_ZEUSMINER
+bfgminer_SOURCES += driver-zeusminer.c
 endif
 
 if HAS_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
+endif
+
+if USE_AVALONMM
+bfgminer_SOURCES += driver-avalonmm.c
 endif
 
 if USE_KNC
@@ -312,6 +324,19 @@ if USE_HASHFAST
 bfgminer_SOURCES += driver-hashfast.c
 endif
 
+if USE_JINGTIAN
+bfgminer_SOURCES += driver-aan.c driver-aan.h
+bfgminer_SOURCES += driver-jingtian.c
+endif
+
+if USE_MINERGATE
+bfgminer_SOURCES += driver-minergate.c
+endif
+
+if USE_ROCKMINER
+bfgminer_SOURCES += driver-rockminer.c
+endif
+
 if NEED_BFG_LOWL_FTDI
 bfgminer_SOURCES += lowl-ftdi.c lowl-ftdi.h
 endif
@@ -321,8 +346,16 @@ bfgminer_SOURCES += lowl-hid.c lowl-hid.h
 bfgminer_CPPFLAGS += $(hidapi_CFLAGS)
 endif
 
+if NEED_BFG_LOWL_MSWIN
+bfgminer_SOURCES += lowl-mswin.c lowl-mswin.h
+endif
+
 if NEED_BFG_LOWL_PCI
 bfgminer_SOURCES += lowl-pci.c lowl-pci.h
+
+if USE_VFIO
+sbin_SCRIPTS += setup-vfio
+endif
 endif
 
 if NEED_BFG_LOWL_SPI

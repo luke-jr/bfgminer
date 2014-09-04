@@ -1,5 +1,6 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2014 Nate Woolls
  * Copyright 2012 Xiangfu
  * Copyright 2012 Andrew Smith
  *
@@ -70,13 +71,16 @@ struct ICARUS_INFO {
 	// time to calculate the golden_ob
 	struct timeval golden_tv;
 
+	// History structures for calculating read_count
+	// when info->do_icarus_timing is true
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
-	// seconds per Hash
-	double Hs;
+	// Timeout scanning for a nonce (deciseconds)
 	int read_count;
+	// Timeout scanning for a golden nonce (deciseconds)
 	int probe_read_count;
+	
 	// ds limit for (short=/long=) read_count
 	int read_count_limit;
 
@@ -97,9 +101,16 @@ struct ICARUS_INFO {
 
 	// icarus-options
 	int baud;
+	
+	// Used to calculate / display hash count when nonce is NOT found
+	// seconds per Hash
+	double Hs;
+	
+	// Used to calculate / display hash count when a nonce is found
 	int work_division;
 	int fpga_count;
 	uint32_t nonce_mask;
+	
 	enum icarus_reopen_mode reopen_mode;
 	bool reopen_now;
 	uint8_t user_set;
@@ -111,14 +122,23 @@ struct ICARUS_INFO {
 	// Bytes to read from Icarus for nonce
 	int read_size;
 	
+	// Settings used when probing / detecting
 	size_t ob_size;
 	const char *golden_ob;
 	const char *golden_nonce;
 	bool nonce_littleendian;
+	// Don't check the golden nonce returned when probing
+	bool ignore_golden_nonce;
 	
 	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 	bool (*job_start_func)(struct thr_info *);
+	
+#ifdef USE_ZEUSMINER
+	// Hardware information, doesn't affect anything directly
+	uint16_t freq;
+	uint16_t chips;
+#endif
 };
 
 struct icarus_state {

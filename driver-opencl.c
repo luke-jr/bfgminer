@@ -1,6 +1,7 @@
 /*
- * Copyright 2011-2012 Con Kolivas
- * Copyright 2011-2013 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2014 Nate Woolls
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -432,9 +433,12 @@ static
 const char *opencl_init_binary(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct opencl_device_data * const data = proc->device_data;
+	char *end;
+	bool nv;
 	
-	if (!(strcasecmp(newvalue, "no") && strcasecmp(newvalue, "never") && strcasecmp(newvalue, "none")))
-		data->opt_opencl_binaries = OBU_NONE;
+	nv = bfg_strtobool(newvalue, &end, 0);
+	if (newvalue[0] && !end[0])
+		data->opt_opencl_binaries = nv ? OBU_LOADSAVE : OBU_NONE;
 	else
 	if (!(strcasecmp(newvalue, "load") && strcasecmp(newvalue, "read")))
 		data->opt_opencl_binaries = OBU_LOAD;
@@ -442,7 +446,7 @@ const char *opencl_init_binary(struct cgpu_info * const proc, const char * const
 	if (!(strcasecmp(newvalue, "save") && strcasecmp(newvalue, "write")))
 		data->opt_opencl_binaries = OBU_SAVE;
 	else
-	if (!(strcasecmp(newvalue, "yes") && strcasecmp(newvalue, "always") && strcasecmp(newvalue, "both")))
+	if (!(strcasecmp(newvalue, "both")))
 		data->opt_opencl_binaries = OBU_LOADSAVE;
 	else
 	if (!(strcasecmp(newvalue, "default")))
@@ -1608,8 +1612,6 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	}
 	if (!cgpu->name)
 		cgpu->name = trimmed_strdup(name);
-	if (!cgpu->kname)
-		cgpu->kname = opencl_get_kernel_interface_name(clStates[i]->chosen_kernel);
 	applog(LOG_INFO, "initCl() finished. Found %s", name);
 	get_now_datestamp(cgpu->init, sizeof(cgpu->init));
 
