@@ -406,16 +406,11 @@ static void cta_parse_recvmatch(struct thr_info *thr, struct cgpu_info *cointerr
 	pipe = u8_from_msg(buf, CTA_MCU_PIPE);
 	pipeno = asic * 512 + core * 128 + pipe;
 	
-	corecgpu = cointerra;
-	for (int i = 0; i < pipeno; ++i)
-	{
-		corecgpu = corecgpu->next_proc;
-		if (unlikely(!corecgpu))
-		{
-			corecgpu = cointerra;
-			break;
-		}
-	}
+	// For some reason, pipe numbers skip 0x?f
+	const int bfg_pipeno = ((pipe >> 4) * 0xf) + (pipe & 0xf);
+	const unsigned procno = (asic * 480) + (core * 120) + bfg_pipeno;
+	
+	corecgpu = device_proc_by_id(cointerra, procno) ?: cointerra;
 	corethr = corecgpu->thr[0];
 	
 	applog(LOG_DEBUG, "%s %d: Match message for id 0x%04x MCU id 0x%08x received",
@@ -855,7 +850,8 @@ static bool cta_prepare(struct thr_info *thr)
 	
 	if (unlikely(!info))
 		quit(1, "Failed to calloc info in cta_detect_one");
-	cointerra->device_data = info;
+	for_each_managed_proc(proc, cointerra)
+		proc->device_data = info;
 	/* Nominally set a requested value when starting, preempting the need
 	 * for a req-work message. */
 	info->requested = CTA_MAX_QUEUE;
