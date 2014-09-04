@@ -357,6 +357,8 @@ bool selecting_device;
 unsigned selected_device;
 #endif
 
+static int max_lpdigits;
+
 static char current_block[40];
 
 /* Protected by ch_lock */
@@ -3711,7 +3713,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	if (for_curses)
 	{
 		if (opt_show_procs)
-			snprintf(buf, bufsz, " %"PRIprepr": ", cgpu->proc_repr);
+			snprintf(buf, bufsz, " %*s: ", -(5 + max_lpdigits), cgpu->proc_repr);
 		else
 			snprintf(buf, bufsz, " %s: ", cgpu->dev_repr);
 	}
@@ -4150,7 +4152,7 @@ one_workable_pool: ;
 	{
 		int offset = 8 /* device */ + 5 /* temperature */ + 1 /* padding space */;
 		if (opt_show_procs && !opt_compact)
-			++offset;  // proc letter
+			offset += max_lpdigits;  // proc letter(s)
 		if (have_unicode_degrees)
 			++offset;  // degrees symbol
 		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
@@ -8181,7 +8183,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
 		
 		divx = 7;
 		if (opt_show_procs && !opt_compact)
-			++divx;
+			divx += max_lpdigits;
 		
 		if (bad)
 		{
@@ -11299,6 +11301,9 @@ void renumber_cgpu(struct cgpu_info *cgpu)
 		int lpdigits = 1;
 		for (int i = lpcount; i > 26 && lpdigits < 3; i /= 26)
 			++lpdigits;
+		
+		if (lpdigits > max_lpdigits)
+			max_lpdigits = lpdigits;
 		
 		memset(&cgpu->proc_repr[5], 'a', lpdigits);
 		cgpu->proc_repr[5 + lpdigits] = '\0';
