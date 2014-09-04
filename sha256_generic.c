@@ -1,15 +1,8 @@
 /*
- * Cryptographic API.
- *
- * SHA-256, as specified in
- * http://csrc.nist.gov/groups/STM/cavp/documents/shs/sha256-384-512.pdf
- *
- * SHA-256 code by Jean-Luc Cooke <jlcooke@certainkey.com>.
- *
- * Copyright (c) Jean-Luc Cooke <jlcooke@certainkey.com>
- * Copyright (c) Andrew McDonald <andrew@mcdonald.org.uk>
- * Copyright (c) 2002 James Morris <jmorris@intercode.com.au>
- * SHA224 Support Copyright 2007 Intel Corporation <jonathan.lynch@intel.com>
+ * Copyright Jean-Luc Cooke
+ * Copyright Andrew McDonald
+ * Copyright 2002 James Morris
+ * SHA224 Support Copyright 2007 Intel Corporation (by Jonathan Lynch)
  * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it

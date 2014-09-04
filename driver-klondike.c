@@ -3,6 +3,7 @@
  * Copyright 2013 Andrew Smith
  * Copyright 2013 Con Kolivas
  * Copyright 2013 Chris Savery
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -697,6 +698,19 @@ static void kln_disable(struct cgpu_info *klncgpu, int dev, bool all)
 	}
 }
 
+static
+void klondike_zero_stats(struct cgpu_info * const proc)
+{
+	struct klondike_info * const klninfo = proc->device_data;
+	
+	for (int devn = klninfo->status[0].kline.ws.slavecount; devn >= 0; --devn)
+		for (int i = klninfo->status[devn].kline.ws.chipcount * 2; --i >= 0; )
+			klninfo->devinfo[devn].chipstats[i] = 0;
+	klninfo->hashcount = klninfo->errorcount = klninfo->noisecount = 0;
+	klninfo->delay_count = klninfo->delay_total = klninfo->delay_min = klninfo->delay_max = 0;
+	klninfo->nonce_count = klninfo->nonce_total = klninfo->nonce_min = klninfo->nonce_max = 0;
+}
+
 static bool klondike_init(struct cgpu_info *klncgpu)
 {
 	struct klondike_info *klninfo = (struct klondike_info *)(klncgpu->device_data);
@@ -851,6 +865,7 @@ bool klondike_lowl_probe_custom(const struct lowlevel_device_info * const info, 
 {
 	if (unlikely(info->lowl != &lowl_usb))
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not usb!",
 		       __func__, info->product, info->serial);
 		goto err;
@@ -1686,7 +1701,7 @@ static struct api_data *klondike_api_stats(struct cgpu_info *klncgpu)
 }
 
 struct device_drv klondike_drv = {
-	.dname = "Klondike",
+	.dname = "klondike",
 	.name = "KLN",
 	.lowl_match = klondike_lowl_match,
 	.lowl_probe = klondike_lowl_probe,
@@ -1701,6 +1716,7 @@ struct device_drv klondike_drv = {
 	.thread_shutdown = klondike_shutdown,
 	.thread_enable = klondike_thread_enable,
 	
+	.zero_stats = klondike_zero_stats,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = klondike_wlogprint_status,
 #endif

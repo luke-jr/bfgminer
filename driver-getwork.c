@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -32,28 +32,34 @@
 #include "miner.h"
 
 static
-void getwork_prepare_resp(struct MHD_Response *resp)
+void getwork_prepare_resp(struct MHD_Response *resp, struct MHD_Connection * const conn)
 {
 	httpsrv_prepare_resp(resp);
 	MHD_add_response_header(resp, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
 	MHD_add_response_header(resp, "X-Mining-Extensions", "hashesdone");
+#if MHD_VERSION >= 0x00093701
+	const char * const agent = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "User-Agent");
+	// Block Erupter products can't handle the Connection: close header, so force HTTP/1.0 for them
+	if (!(strcmp(agent, "BE Cube BTC Miner") && strcmp(agent, "Jephis PIC Miner")))
+		MHD_set_response_options(resp, MHD_RF_HTTP_VERSION_1_0_ONLY, MHD_RO_END);
+#endif
 }
 
 static
-struct MHD_Response *getwork_gen_error(int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
+struct MHD_Response *getwork_gen_error(int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz, struct MHD_Connection * const conn)
 {
 	size_t replysz = 0x40 + strlen(errmsg) + idstr_sz;
 	char * const reply = malloc(replysz);
 	replysz = snprintf(reply, replysz, "{\"result\":null,\"error\":{\"code\":%d,\"message\":\"%s\"},\"id\":%s}", errcode, errmsg, idstr ?: "0");
 	struct MHD_Response * const resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-	getwork_prepare_resp(resp);
+	getwork_prepare_resp(resp, conn);
 	return resp;
 }
 
 static
 int getwork_error(struct MHD_Connection *conn, int16_t errcode, const char *errmsg, const char *idstr, size_t idstr_sz)
 {
-	struct MHD_Response * const resp = getwork_gen_error(errcode, errmsg, idstr, idstr_sz);
+	struct MHD_Response * const resp = getwork_gen_error(errcode, errmsg, idstr, idstr_sz, conn);
 	const int ret = MHD_queue_response(conn, 500, resp);
 	MHD_destroy_response(resp);
 	return ret;
@@ -72,7 +78,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	json_error_t jerr;
 	struct work *work;
 	char *reply;
-	const char *hashesdone = NULL;
+	long long hashes_done = -1;
 	int ret;
 	
 	if (bytes_len(upbuf))
@@ -102,7 +108,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	user = MHD_basic_auth_get_username_password(conn, NULL);
 	if (!user)
 	{
-		resp = getwork_gen_error(-4096, "Please provide a username", idstr, idstr_sz);
+		resp = getwork_gen_error(-4096, "Please provide a username", idstr, idstr_sz, conn);
 		ret = MHD_queue_basic_auth_fail_response(conn, PACKAGE, resp);
 		goto out;
 	}
@@ -117,7 +123,11 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	cgpu = client->cgpu;
 	thr = cgpu->thr[0];
 	
-	hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+	{
+		const char * const hashesdone = MHD_lookup_connection_value(conn, MHD_HEADER_KIND, "X-Hashes-Done");
+		if (hashesdone)
+			hashes_done = strtoll(hashesdone, NULL, 0);
+	}
 	
 	if (submit)
 	{
@@ -144,13 +154,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			else
 				rejreason = NULL;
 			
-			if (!hashesdone)
-			{
-				if (opt_scrypt)
-					hashesdone = "0x10000";
-				else
-					hashesdone = "0x100000000";
-			}
+			if (hashes_done == -1)
+				hashes_done = (double)0x100000000 * work->nonce_diff;
 		}
 		
 		reply = malloc(36 + idstr_sz);
@@ -158,7 +163,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		sprintf(reply, "{\"error\":null,\"result\":%s,\"id\":%s}",
 		        rejreason ? "false" : "true", idstr);
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		getwork_prepare_resp(resp);
+		getwork_prepare_resp(resp, conn);
 		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		if (rejreason)
 			MHD_add_response_header(resp, "X-Reject-Reason", rejreason);
@@ -169,7 +174,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 	
 	if (cgpu->deven == DEV_DISABLED)
 	{
-		resp = getwork_gen_error(-10, "Virtual device has been disabled", idstr, idstr_sz);
+		resp = getwork_gen_error(-10, "Virtual device has been disabled", idstr, idstr_sz, conn);
 		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		ret = MHD_queue_response(conn, 500, resp);
 		MHD_destroy_response(resp);
@@ -180,8 +185,16 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		size_t replysz = 590 + idstr_sz;
 		
 		work = get_work(thr);
+		work->nonce_diff = client->desired_share_pdiff;
+		if (work->nonce_diff > work->work_difficulty)
+			work->nonce_diff = work->work_difficulty;
+		
 		reply = malloc(replysz);
-		memcpy(reply, "{\"error\":null,\"result\":{\"target\":\"ffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000\",\"data\":\"", 108);
+		uint8_t target[0x20];
+		set_target_to_pdiff(target, work->nonce_diff);
+		memcpy(reply, "{\"error\":null,\"result\":{\"target\":\"", 34);
+		bin2hex(&reply[34], target, sizeof(target));
+		memcpy(&reply[98], "\",\"data\":\"", 10);
 		bin2hex(&reply[108], work->data, 128);
 		memcpy(&reply[364], "\",\"midstate\":\"", 14);
 		bin2hex(&reply[378], work->midstate, 32);
@@ -190,7 +203,6 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		memcpy(&reply[589 + idstr_sz], "}", 1);
 		if (opt_scrypt)
 		{
-			memset(&reply[90], 'f', 4);
 			replysz += 21;
 			reply = realloc(reply, replysz);
 			memmove(&reply[443 + 21], &reply[443], replysz - (443 + 21));
@@ -201,15 +213,15 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
 		
 		resp = MHD_create_response_from_buffer(replysz, reply, MHD_RESPMEM_MUST_FREE);
-		getwork_prepare_resp(resp);
+		getwork_prepare_resp(resp, conn);
 		MHD_add_response_header(resp, "X-Mining-Identifier", cgpu->proc_repr);
 		ret = MHD_queue_response(conn, 200, resp);
 		MHD_destroy_response(resp);
 	}
 	
 out:
-	if (hashesdone)
-		hashes_done2(thr, strtoll(hashesdone, NULL, 0), NULL);
+	if (hashes_done != -1)
+		hashes_done2(thr, hashes_done, NULL);
 	
 	free(idstr);
 	if (json)

@@ -1,5 +1,5 @@
 #
-# Copyright 2013 Luke Dashjr
+# Copyright 2013-2014 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -11,10 +11,10 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=3.10.0
+PKG_VERSION:=4.7.0
 PKG_RELEASE:=1
 
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tbz2
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).txz
 PKG_SOURCE_URL:=http://luke.dashjr.org/programs/bitcoin/files/$(PKG_NAME)/$(PKG_VERSION)/
 
 PKG_INSTALL:=1
@@ -62,6 +62,10 @@ config PACKAGE_$(PKG_NAME)_libusb
 	bool "Build with libusb support (X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_scrypt
+	bool "Build with scrypt algorithm support"
+	depends on PACKAGE_$(PKG_NAME)
+	default y
 endef
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_curses
@@ -83,7 +87,11 @@ CONFIGURE_ARGS += --with-libmicrohttpd
 endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
-CONFIGURE_ARGS += --disable-x6500 --disable-ztex
+CONFIGURE_ARGS += --without-libusb
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_scrypt
+CONFIGURE_ARGS += --enable-scrypt
 endif
 
 TARGET_CFLAGS += -std=gnu99
@@ -91,6 +99,7 @@ TARGET_CFLAGS += -Iuthash-1.9.8/src
 
 CONFIGURE_ARGS += --without-libudev
 CONFIGURE_ARGS += --without-sensors
+CONFIGURE_ARGS += --without-system-libbase58
 
 define Build/Prepare
 	$(call Build/Prepare/Default)
@@ -109,27 +118,10 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME)-rpc $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/libblkmaker*.so* $(1)/usr/lib
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/libbase58*.so* $(1)/usr/lib
 endef
 
 ALL_$(PKG_NAME)_PACKAGES += $(PKG_NAME)
-
-#### BitForce firmware flash ####
-
-define Package/bitforce-firmware-flash
-$(call Package/$(PKG_NAME)/Default)
-	TITLE:=BitForce firmware flash tool
-endef
-
-define Package/bitforce-firmware-flash/description
-BitForce firmware flash tool
-endef
-
-define Package/bitforce-firmware-flash/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bitforce-firmware-flash $(1)/usr/bin
-endef
-
-ALL_$(PKG_NAME)_PACKAGES += bitforce-firmware-flash
 
 
 $(foreach bitstream,$(ALL_$(PKG_NAME)_PACKAGES),$(eval $(call BuildPackage,$(bitstream))))

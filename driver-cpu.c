@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
- * Copyright 2011-2013 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -228,7 +228,7 @@ double bench_algo_stage3(
 	struct work work __attribute__((aligned(128)));
 	unsigned char hash1[64];
 
-	get_benchmark_work(&work);
+	get_benchmark_work(&work, false);
 
 	static struct thr_info dummy;
 

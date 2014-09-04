@@ -3,11 +3,11 @@ SUPPORTED DEVICES
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
 Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
-KnCminer's Mercury, Jupiter and Saturn.
+KnCMiner's Mercury, Jupiter and Saturn.
 
 
-AVALON
-------
+AVALON 1
+--------
 
 Currently, Avalon boards are best supported by connecting them directly (or via
 a hub) to a regular PC running BFGMiner. It is also possible to install the
@@ -45,6 +45,26 @@ Sample settings for valid different frequencies (last 2 values):
 45:282
 47:270
 50:256
+
+
+AVALON 2/3
+----------
+
+Avalon 2/3 units communicate with a UART, usually attached to your host via a
+generic USB UART adapter. Therefore, you will need to manually probe the correct
+UART device with the -S option:
+
+-S avalonmm:\\.\COM22
+
+Next, use the --set option to configure at least your desired clock frequency
+and voltage.
+
+Avalon 2: --set avalonmm:clock=1500 --set avalonmm:voltage=1
+Avalon 3: --set avalonmm:clock=450 --set avalonmm:voltage=0.6625
+
+You may also want to set the fan speed, which is specified as a percentage:
+
+--set avalonmm:fan=95
 
 
 BFSB, MEGABIGPOWER, AND METABANK BITFURY BOARDS
@@ -123,6 +143,19 @@ ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
 
 
+HEX*FURY
+--------
+
+Hex*Fury uses the bifury driver. Miners using earlier boards may need to
+workaround bugs in the firmware:
+    bfgminer --set bifury:chips=6 --set bifury:free_after_job=no
+This may cause poor behaviour or performance from other bifury-based devices.
+If you encounter this, you can set the workarounds per-device by using their
+serial number (which can be seen in the TUI device manager; in this example,
+141407160211cdf):
+    bfgminer --set bifury@141407160211cdf:chips=15 ...
+
+
 KLONDIKE
 --------
 
@@ -132,10 +165,12 @@ KLONDIKE
 KNCMINER
 --------
 
-The KnC miner uses a BeagleBoneBlack(BBB) as the host, this is pluged into a
-cape that holds the FPGA and connections for 4-6 ASICS depending on the cape
-version. The BBB runs the Angstrom linux distribution, the following is a step
-by step install for BFGMiner on this distro;
+KnCMiner rigs use a BeagleBone Black (BBB) as the host; this is pluged into a
+"cape" with a FPGA and connections for 4-6 ASIC modules (depending on the cape
+version). Note that in addition to the usual dependencies, this driver also
+requires i2c-tools (aka libi2c-dev on some systems). The BBB comes with the
+Ångström Distribution by default. The following is a step by step install for
+BFGMiner on this system;
 
 -----------------Start------------
 cat >/etc/opkg/feeds.conf <<\EOF
@@ -171,8 +206,6 @@ make AR=arm-angstrom-linux-gnueabi-ar
 
 ---------------END-------------
 
-BFGMiner has also been incorporated into an unofficial firmware by uski01 called Bertmod this can be found on the kncminer forum.
-
 
 MONARCH
 -------
@@ -187,24 +220,83 @@ To enable uio on your cards, you may need to do:
     sudo modprobe uio_pci_generic
     echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/uio_pci_generic/new_id
 
-Enabling vfio is similar, but more complicated, but allows you to run BFGMiner
-without root privileges. First, load the kernel module and tell it to accept the
-Monarch:
+Enabling vfio is similar, but allows you to run BFGMiner without root
+privileges. Since setting this up is more complicated, BFGMiner includes a
+setup-vfio script (which must be run with root permissions). Simply run:
+    sudo setup-vfio --unsafe --user $(whoami) 1cf9 0001
+You will be asked about each Monarch found, and must answer 'yes' to each one.
+
+If you wish to manually setup VFIO, follow these steps:
+First, load the kernel module:
     sudo modprobe vfio-pci
-    echo 1cf9 0001 | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
 Next, identify what the device ids are for your card(s):
     lspci -D | grep 1cf9  # the first number of each line is the device id
 From that, you can identify its IOMMU group, and list all devices sharing that
 group:
-    readlink /sys/bus/pci/devices/<device_id>/iommu_group
-    ls /sys/kernel/iommu_groups/<iommu_group>/devices/
+    readlink "/sys/bus/pci/devices/$DEVICE_ID/iommu_group"
+    ls "/sys/kernel/iommu_groups/$IOMMU_GROUP_ID/devices/"
 All of the devices listed (other than the Monarch), if any, will need to be
 disabled and unbound! To do that, use:
-    echo <device_id> | sudo tee /sys/bus/pci/devices/<device_id>/driver/unbind
+    echo "$DEVICE_ID" | sudo tee "/sys/bus/pci/devices/$DEVICE_ID/driver/unbind"
+    echo "$DEVICE_CODE" | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
+Note that $DEVICE_ID should be something like "0000:01:00.0" and $DEVICE_CODE is
+something like "1cf9 0001" (this example is the Monarch itself).
 If you want to run BFGMiner as a normal user:
-    chown <username> /dev/vfio/<iommu_group>
+    chown "$USERNAME" "/dev/vfio/$IOMMU_GROUP_ID"
 Depending on your system, you may also need to do:
     echo 1 | sudo tee /sys/module/vfio_iommu_type1/parameters/allow_unsafe_interrupts
+
+
+ONESTRINGMINER
+--------------
+
+OneStringMiner boards use the bifury driver. Miners using earlier boards may
+need to workaround bugs in the firmware:
+    bfgminer --set bifury:chips=15 --set bifury:free_after_job=no
+If you have different devices using the bifury driver, see the section on
+Hex*Fury for applying workarounds per-device.
+
+
+GRIDSEED
+--------
+
+Gridseed units, at the present time, come in two versions: Blade - a 40 chip
+unit and Orb - a 5 chip unit. Orb units can be used to mine both SHA256d and
+scrypt based coins whereas the Blade is scrypt only, although BFGMiner only
+supports scrypt mode at this time.
+
+BFGMiner allows a miner to connect both types of units to a single miner
+instance and provides for granular control of the clock frequencies for each
+device and each chip on each device. The basic use of this feature is to use the
+--set option on from the command line:
+
+bfgminer --scrypt -S gridseed:all --set gridseed@<serial_number>:clock=825
+
+for multiple devices, add multiple --set arguments.
+
+Additionally, these can be added to the bfgminer.conf file for persistence like
+this:
+
+"set" : [
+        "gridseed@<serial_number>:clock=825",
+        "gridseed@<serial_number>:clock=850",
+        "gridseed@<serial_number>:clock=875"
+]
+
+To find the device serial number, start bfgminer and press <M> to manage
+devices, then <Page Down> or <down arrow> through the list of devices and take
+note of the device serial number in the device information shown.
+
+...
+Select processor to manage using up/down arrow keys
+ GSD 0a:       |  74.4/ 72.9/ 10.2kh/s | A:  1 R:0+0(none) HW:0/none
+  STM32 Virtual COM Port from STMicroelectronics
+Serial: 6D85278F5650
+Clock speed: 875
+...
+
+So for example, an entry would look like this:
+        gridseed@6D85278F5650:clock=875
 
 
 ---

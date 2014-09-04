@@ -1,6 +1,6 @@
 /*
  * Copyright 2013-2014 Luke Dashjr
- * Copyright 2012-2013 Con Kolivas
+ * Copyright 2012-2014 Con Kolivas
  * Copyright 2011 Andrew Smith
  * Copyright 2011 Jeff Garzik
  *
@@ -27,6 +27,7 @@
 
 #if defined(unix) || defined(__APPLE__)
 	#include <errno.h>
+	#include <sys/types.h>
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
@@ -81,6 +82,12 @@
 
 #define IGNORE_RETURN_VALUE(expr)  {if(expr);}(void)0
 
+enum bfg_tristate {
+	BTS_FALSE = (int)false,
+	BTS_TRUE  = (int)true,
+	BTS_UNKNOWN,
+};
+
 #if JANSSON_MAJOR_VERSION >= 2
 #define JSON_LOADS(str, err_ptr) json_loads((str), 0, (err_ptr))
 #else
@@ -118,10 +125,20 @@ bool isCspace(int c)
 	}
 }
 
+typedef bool (*appdata_file_callback_t)(const char *, void *);
+extern bool appdata_file_call(const char *appname, const char *filename, appdata_file_callback_t, void *userp);
+extern char *appdata_file_find_first(const char *appname, const char *filename);
+
 extern const char *get_registered_domain(size_t *out_len, const char *, size_t len);
 extern const char *extract_domain(size_t *out_len, const char *uri, size_t urilen);
 extern bool match_domains(const char *a, size_t alen, const char *b, size_t blen);
 extern void test_domain_funcs();
+
+extern bool bfg_strtobool(const char *, char **endptr, int opts);
+
+extern enum bfg_tristate uri_get_param_bool2(const char *ri, const char *param);
+extern bool uri_get_param_bool(const char *uri, const char *param, bool defval);
+extern void test_uri_get_param();
 
 
 enum bfg_gpio_value {
@@ -137,6 +154,29 @@ struct thr_info;
 struct pool;
 enum dev_reason;
 struct cgpu_info;
+
+
+extern void set_cloexec_socket(SOCKETTYPE, bool cloexec);
+
+static inline
+SOCKETTYPE bfg_socket(const int domain, const int type, const int protocol)
+{
+	const bool cloexec = true;
+	SOCKETTYPE sock;
+#ifdef WIN32
+# ifndef WSA_FLAG_NO_HANDLE_INHERIT
+#  define WSA_FLAG_NO_HANDLE_INHERIT 0x80
+# endif
+	sock = WSASocket(domain, type, protocol, NULL, 0, WSA_FLAG_OVERLAPPED | ((cloexec) ? WSA_FLAG_NO_HANDLE_INHERIT : 0));
+	if (sock == INVSOCK)
+#endif
+	sock = socket(domain, type, protocol);
+	if (sock == INVSOCK)
+		return INVSOCK;
+	set_cloexec_socket(sock, cloexec);
+	return sock;
+}
+
 
 extern void json_rpc_call_async(CURL *, const char *url, const char *userpass, const char *rpc_req, bool longpoll, struct pool *pool, bool share, void *priv);
 extern json_t *json_rpc_call_completed(CURL *, int rc, bool probe, int *rolltime, void *out_priv);
@@ -229,11 +269,22 @@ static inline void align_len(size_t *len)
 
 
 static inline
+uint8_t bitflip8(uint8_t p)
+{
+	p = ((p & 0xaa) >> 1) | ((p & 0x55) << 1);
+	p = ((p & 0xcc) >> 2) | ((p & 0x33) << 2);
+	p = ((p & 0xf0) >> 4) | ((p & 0x0f) << 4);
+	return p;
+}
+
+static inline
 uint8_t upk_u8(const void * const bufp, const int offset)
 {
 	const uint8_t * const buf = bufp;
 	return buf[offset];
 }
+
+#define upk_u8be(buf, offset)  upk_u8(buf, offset)
 
 static inline
 uint16_t upk_u16be(const void * const bufp, const int offset)
@@ -266,6 +317,8 @@ uint64_t upk_u64be(const void * const bufp, const int offset)
 	     | (((uint64_t)buf[offset+6]) <<    8)
 	     | (((uint64_t)buf[offset+7]) <<    0);
 }
+
+#define upk_u8le(buf, offset)  upk_u8(buf, offset)
 
 static inline
 uint16_t upk_u16le(const void * const bufp, const int offset)
@@ -307,6 +360,8 @@ void pk_u8(void * const bufp, const int offset, const uint8_t nv)
 	buf[offset] = nv;
 }
 
+#define pk_u8be(buf, offset, nv)  pk_u8(buf, offset, nv)
+
 static inline
 void pk_u16be(void * const bufp, const int offset, const uint16_t nv)
 {
@@ -338,6 +393,8 @@ void pk_u64be(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+6] = (nv >>    8) & 0xff;
 	buf[offset+7] = (nv >>    0) & 0xff;
 }
+
+#define pk_u8le(buf, offset, nv)  pk_u8(buf, offset, nv)
 
 static inline
 void pk_u16le(void * const bufp, const int offset, const uint16_t nv)
@@ -371,6 +428,48 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 	buf[offset+7] = (nv >> 0x38) & 0xff;
 }
 
+#define _pk_uNle(bitwidth, newvalue)  do{  \
+	uint ## bitwidth ## _t _mask = 1;  \
+	_mask <<= _bitlen;  \
+	--_mask;  \
+	uint ## bitwidth ## _t _filt = _mask;  \
+	_filt <<= _bitoff;  \
+	_filt = ~_filt;  \
+	uint ## bitwidth ## _t _u = upk_u ## bitwidth ## le(_buf, 0);  \
+	_u = (_u & _filt) | (((newvalue) & _mask) << _bitoff);  \
+	pk_u ## bitwidth ## le(_buf, 0, _u);  \
+}while(0)
+
+#define pk_uNle(bufp, offset, bitoffset, bitlength, newvalue)  do{  \
+	uint8_t * const _buf = &((uint8_t *)(bufp))[offset];  \
+	const int _bitoff = (bitoffset), _bitlen = bitlength;  \
+	const int _bittot = bitoffset + bitlength;  \
+	_Static_assert((bitoffset + bitlength) <= 0x40, "Too many bits addressed in pk_uNle (bitoffset + bitlength must be <= 64)");  \
+	if (_bittot <=    8)  \
+		_pk_uNle( 8, newvalue);  \
+	else  \
+	if (_bittot <= 0x10)  \
+		_pk_uNle(16, newvalue);  \
+	else  \
+	if (_bittot <= 0x20)  \
+		_pk_uNle(32, newvalue);  \
+	else  \
+		_pk_uNle(64, newvalue);  \
+}while(0)
+
+#define is_power_of_two(n)  \
+	(0 == ((n) && ((n) - 1)))
+
+static inline
+uint32_t upper_power_of_two_u32(uint32_t n)
+{
+	--n;
+	for (int i = 1; i <= 0x10; i *= 2)
+		n |= n >> i;
+	++n;
+	return n;
+}
+
 
 typedef struct bytes_t {
 	uint8_t *buf;
@@ -378,12 +477,12 @@ typedef struct bytes_t {
 	size_t allocsz;
 } bytes_t;
 
-#define BYTES_INIT ((bytes_t){.buf=NULL,})
+#define BYTES_INIT {.buf=NULL,}
 
 static inline
 void bytes_init(bytes_t *b)
 {
-	*b = BYTES_INIT;
+	*b = (bytes_t)BYTES_INIT;
 }
 
 // This can't be inline without ugly const/non-const issues
@@ -404,6 +503,14 @@ ssize_t bytes_find(const bytes_t * const b, const uint8_t needle)
 		if (buf[i] == needle)
 			return i;
 	return -1;
+}
+
+static inline
+bool bytes_eq(const bytes_t * const a, const bytes_t * const b)
+{
+	if (a->sz != b->sz)
+		return false;
+	return !memcmp(a->buf, b->buf, a->sz);
 }
 
 extern void _bytes_alloc_failure(size_t);
@@ -475,6 +582,19 @@ void bytes_cpy(bytes_t *dst, const bytes_t *src)
 		dst->allocsz = half;
 	dst->buf = malloc(dst->allocsz);
 	memcpy(dst->buf, src->buf, dst->sz);
+}
+
+// Efficiently moves the data from src to dst, emptying src in the process
+static inline
+void bytes_assimilate(bytes_t * const dst, bytes_t * const src)
+{
+	void * const buf = dst->buf;
+	const size_t allocsz = dst->allocsz;
+	*dst = *src;
+	*src = (bytes_t){
+		.buf = buf,
+		.allocsz = allocsz,
+	};
 }
 
 static inline
@@ -651,6 +771,9 @@ struct timeval *select_timeout(struct timeval *tvp_timeout, struct timeval *tvp_
 #define _SNP(...)  _SNP2(snprintf, __VA_ARGS__)
 
 
+extern int double_find_precision(double, double base);
+
+
 #define REPLACEMENT_CHAR (0xFFFD)
 #define U8_DEGREE "\xc2\xb0"
 #define U8_MICRO  "\xc2\xb5"
@@ -694,5 +817,8 @@ extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);
 extern void bfg_init_checksums(void);
 extern uint8_t crc8ccitt(const void *, size_t);
 
+extern uint16_t crc16(const void *, size_t, uint16_t init);
+#define crc16ffff(  DATA, SZ)  crc16(DATA, SZ, 0xffff)
+#define crc16xmodem(DATA, SZ)  crc16(DATA, SZ, 0)
 
 #endif /* __UTIL_H__ */

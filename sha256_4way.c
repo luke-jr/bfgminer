@@ -67,18 +67,6 @@ static inline __m128i SHR(__m128i x, const int n) {
 #define SIGMA0_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x), 7),ROTR((x), 18)), SHR((x), 3 )))
 #define SIGMA1_256(x)       (_mm_xor_si128(_mm_xor_si128(ROTR((x),17),ROTR((x), 19)), SHR((x), 10)))
 
-static inline unsigned int store32(const __m128i x, int i) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x;
-    return box.ret[i];
-}
-
-static inline void store_epi32(const __m128i x, unsigned int *x0, unsigned int *x1, unsigned int *x2, unsigned int *x3) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x;
-    *x0 = box.ret[3]; *x1 = box.ret[2]; *x2 = box.ret[1]; *x3 = box.ret[0];
-}
-
 #define add4(x0, x1, x2, x3) _mm_add_epi32(_mm_add_epi32(x0, x1),_mm_add_epi32( x2,x3))
 #define add5(x0, x1, x2, x3, x4) _mm_add_epi32(add4(x0, x1, x2, x3), x4)
 
@@ -86,19 +74,6 @@ static inline void store_epi32(const __m128i x, unsigned int *x0, unsigned int *
     T1 = add5(h, BIGSIGMA1_256(e), Ch(e, f, g), _mm_set1_epi32(sha256_consts[i]), w);   \
 d = _mm_add_epi32(d, T1);                                           \
 h = _mm_add_epi32(T1, _mm_add_epi32(BIGSIGMA0_256(a), Maj(a, b, c)));
-
-static inline void dumpreg(__m128i x, char *msg) {
-    union { unsigned int ret[4]; __m128i x; } box;
-    box.x = x ;
-    printf("%s %08x %08x %08x %08x\n", msg, box.ret[0], box.ret[1], box.ret[2], box.ret[3]);
-}
-
-#if 1
-#define dumpstate(i) printf("%s: %08x %08x %08x %08x %08x %08x %08x %08x %08x\n", \
-        __func__, store32(w0, i), store32(a, i), store32(b, i), store32(c, i), store32(d, i), store32(e, i), store32(f, i), store32(g, i), store32(h, i));
-#else
-#define dumpstate()
-#endif
 
 static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};

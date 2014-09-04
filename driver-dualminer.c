@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2014 Dualminer Team
  *
@@ -124,7 +124,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
 	int fd = icarus->device_fd;
 
-	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, false);
+	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, false);
 	
 	dualminer_init_hashrate(icarus);
 
@@ -168,7 +168,7 @@ bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __m
 {
 	dualminer_set_defaults(fd);
 	
-	gc3355_init_usbstick(fd, opt_pll_freq, !opt_dual_mode, true);
+	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, true);
 
 	return true;
 }
@@ -191,6 +191,13 @@ bool dualminer_job_start(struct thr_info * const thr)
 			gc3355_scrypt_reset(fd);
 		else
 			gc3355_scrypt_only_reset(fd);
+
+		// See https://github.com/gridseed/gc3355-doc/blob/master/GC3355_DataSheet.pdf
+		// WAIT: Before start a new transaction, WAIT Cycle must be inserted.
+		// WAIT Cycle value is programmable register in UART and default wait
+		// time is UART receive 32 bits time (One DATA Cycle).
+		// Note: prevents register corruption
+		cgsleep_ms(100);
 	}
 
 	return icarus_job_start(thr);
@@ -212,8 +219,7 @@ bool dualminer_detect_one(const char *devpath)
 		.timing_mode = MODE_DEFAULT,
 		.do_icarus_timing = false,
 		.nonce_littleendian = true,
-		.work_division = 2,
-		.fpga_count = 2,
+		.work_division = 1,
 		.detect_init_func = dualminer_detect_init,
 		.job_start_func = dualminer_job_start
 	};
@@ -295,7 +301,7 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 	if (opt_scrypt)
 		gc3355_scrypt_prepare_work(state->ob_bin, work);
 	else
-		gc3355_sha2_prepare_work(state->ob_bin, work, false);
+		gc3355_sha2_prepare_work(state->ob_bin, work);
 
 	return true;
 }
@@ -329,7 +335,9 @@ void dualminer_drv_init()
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
 	dualminer_drv.set_device = dualminer_set_device;
-	++dualminer_drv.probe_priority;
+
+	// currently setup specifically to probe after ZeusMiner
+	dualminer_drv.probe_priority = -50;
 }
 
 struct device_drv dualminer_drv =

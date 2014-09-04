@@ -1,6 +1,6 @@
 /*
  * Copyright 2013 bitfury
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -85,12 +85,52 @@ void spi_init(void)
 
 #ifdef HAVE_LINUX_SPI
 
+int spi_open(struct spi_port * const spi, const char * const devpath)
+{
+	const int fd = open(devpath, O_RDWR);
+	if (fd < 0)
+		return fd;
+	
+	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &spi->speed) < 0
+	 || ioctl(fd, SPI_IOC_WR_MODE, &spi->mode) < 0
+	 || ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &spi->bits) < 0)
+	{
+		close(fd);
+		return -1;
+	}
+	
+	spi->fd = fd;
+	return fd;
+}
+
 #define INP_GPIO(g) *(gpio+((g)/10)) &= ~(7<<(((g)%10)*3))
 #define OUT_GPIO(g) *(gpio+((g)/10)) |=  (1<<(((g)%10)*3))
 #define SET_GPIO_ALT(g,a) *(gpio+(((g)/10))) |= (((a)<=3?(a)+4:(a)==4?3:2)<<(((g)%10)*3))
 
 #define GPIO_SET *(gpio+7)  // sets   bits which are 1 ignores bits which are 0
 #define GPIO_CLR *(gpio+10) // clears bits which are 1 ignores bits which are 0
+#define GPIO_LEV *(gpio+13)
+
+void bfg_gpio_setpin_output(const unsigned pin)
+{
+	INP_GPIO(pin);
+	OUT_GPIO(pin);
+}
+
+void bfg_gpio_set_high(const unsigned mask)
+{
+	GPIO_SET = mask;
+}
+
+void bfg_gpio_set_low(const unsigned mask)
+{
+	GPIO_CLR = mask;
+}
+
+unsigned bfg_gpio_get()
+{
+	return GPIO_LEV;
+}
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
 static
@@ -196,6 +236,23 @@ bool sys_spi_txrx(struct spi_port *port)
 	return true;
 }
 
+bool linux_spi_txrx(struct spi_port * const spi)
+{
+	const void * const wrbuf = spi_gettxbuf(spi);
+	void * const rdbuf = spi_getrxbuf(spi);
+	const size_t bufsz = spi_getbufsz(spi);
+	const int fd = spi->fd;
+	struct spi_ioc_transfer xf = {
+		.tx_buf = (uintptr_t) wrbuf,
+		.rx_buf = (uintptr_t) rdbuf,
+		.len = bufsz,
+		.delay_usecs = spi->delay,
+		.speed_hz = spi->speed,
+		.bits_per_word = spi->bits,
+	};
+	return (ioctl(fd, SPI_IOC_MESSAGE(1), &xf) > 0);
+}
+
 #endif
 
 static
@@ -208,11 +265,7 @@ void *spi_emit_buf_reverse(struct spi_port *port, const void *p, size_t sz)
 	for (size_t i = 0; i < sz; ++i)
 	{
 		// Reverse bit order in each byte!
-		unsigned char p = str[i];
-		p = ((p & 0xaa)>>1) | ((p & 0x55) << 1);
-		p = ((p & 0xcc)>>2) | ((p & 0x33) << 2);
-		p = ((p & 0xf0)>>4) | ((p & 0x0f) << 4);
-		port->spibuf[port->spibufsz++] = p;
+		port->spibuf[port->spibufsz++] = bitflip8(str[i]);
 	}
 	return rv;
 }
@@ -273,17 +326,20 @@ void spi_bfsb_select_bank(int bank)
 	int i;
 	for(i=0;i<4;i++)
 	{
+		if (i == bank)
+			continue;
+		
 		INP_GPIO(banks[i]);
 		OUT_GPIO(banks[i]);
-		if(i==bank)
-		{
-			GPIO_SET = 1 << banks[i]; // enable bank
-		} 
-		else
-		{
-			GPIO_CLR = 1 << banks[i];// disable bank
-		}
+		GPIO_CLR = 1 << banks[i];
 	}
+	
+	if (bank != -1)
+	{
+		OUT_GPIO(banks[bank]);
+		GPIO_SET = 1 << banks[bank];
+	}
+	
 	last_bank = bank;
 }
 #endif

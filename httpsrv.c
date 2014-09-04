@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -29,6 +29,7 @@
 
 #include "logging.h"
 #include "util.h"
+#include "version.h"
 
 static struct MHD_Daemon *httpsrv;
 

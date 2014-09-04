@@ -1,6 +1,6 @@
 /*
- * Copyright 2013 Luke Dashjr
- * Copyright 2013 Vladimir Strinski
+ * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2014 Vladimir Strinski
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -42,6 +42,7 @@ struct nanofury_state {
 	unsigned long current_baud;
 	bool ledalternating;
 	bool ledvalue;
+	bool powered_off;
 };
 
 // Bit-banging reset, to reset more chips in chain - toggle for longer period... Each 3 reset cycles reset first chip in chain
@@ -66,7 +67,7 @@ bool nanofury_spi_reset(struct mcp2210_device * const mcp)
 	return true;
 }
 
-static void nanofury_device_off(struct mcp2210_device *);
+static void nanofury_device_off(struct mcp2210_device *, struct nanofury_state *);
 
 static
 bool nanofury_spi_txrx(struct spi_port * const port)
@@ -113,7 +114,7 @@ bool nanofury_spi_txrx(struct spi_port * const port)
 
 err:
 	mcp2210_spi_cancel(mcp);
-	nanofury_device_off(mcp);
+	nanofury_device_off(mcp, state);
 	if (cgpu)
 	{
 		struct thr_info * const thr = cgpu->thr[0];
@@ -137,15 +138,17 @@ void nanofury_do_led_alternating(struct nanofury_state * const state)
 }
 
 static
-void nanofury_device_off(struct mcp2210_device * const mcp)
+void nanofury_device_off(struct mcp2210_device * const mcp, struct nanofury_state * const state)
 {
 	// Try to reset everything back to input
 	for (int i = 0; i < 9; ++i)
 		mcp2210_get_gpio_input(mcp, i);
+	if (state)
+		state->powered_off = true;
 }
 
 static
-bool nanofury_power_enable(struct mcp2210_device * const mcp, const bool poweron)
+bool nanofury_power_enable(struct mcp2210_device * const mcp, const bool poweron, struct nanofury_state * const state)
 {
 	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN, poweron ? BGV_HIGH : BGV_LOW))
 		return false;
@@ -153,11 +156,14 @@ bool nanofury_power_enable(struct mcp2210_device * const mcp, const bool poweron
 	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, poweron ? BGV_LOW : BGV_HIGH))
 		return false;
 	
+	if (state)
+		state->powered_off = !poweron;
+	
 	return true;
 }
 
 static
-bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long baud)
+bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long baud, struct nanofury_state * const state)
 {
 	int i;
 	const char tmp = 0;
@@ -174,7 +180,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_LED, BGV_HIGH))
 		goto fail;
 	
-	nanofury_power_enable(mcp, true);
+	nanofury_power_enable(mcp, true, state);
 	
 	// cancel any outstanding SPI transfers
 	mcp2210_spi_cancel(mcp);
@@ -217,7 +223,7 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	return true;
 
 fail:
-	nanofury_device_off(mcp);
+	nanofury_device_off(mcp, state);
 	return false;
 }
 
@@ -239,6 +245,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	
 	if (info->lowl != &lowl_mcp2210)
 	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
 		if (info->lowl != &lowl_hid && info->lowl != &lowl_usb)
 			applog(LOG_DEBUG, "%s: Matched \"%s\" serial \"%s\", but lowlevel driver is not mcp2210!",
 			       __func__, product, serial);
@@ -272,7 +279,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 		drv_set_defaults(&nanofury_drv, bitfury_set_device_funcs_probe, &dummy_bitfury, NULL, NULL, 1);
 	}
 	
-	if (!nanofury_checkport(mcp, port->speed))
+	if (!nanofury_checkport(mcp, port->speed, NULL))
 	{
 		applog(LOG_WARNING, "%s: Matched \"%s\" serial \"%s\", but failed to detect nanofury",
 		       __func__, product, serial);
@@ -284,7 +291,7 @@ bool nanofury_lowl_probe(const struct lowlevel_device_info * const info)
 	chips = libbitfury_detectChips1(port);
 	free(port);
 	
-	nanofury_device_off(mcp);
+	nanofury_device_off(mcp, NULL);
 	mcp2210_close(mcp);
 	
 	if (lowlevel_claim(&nanofury_drv, true, info))
@@ -332,7 +339,7 @@ bool nanofury_init(struct thr_info * const thr)
 		applog(LOG_ERR, "%"PRIpreprv": Failed to open mcp2210 device", cgpu->proc_repr);
 		return false;
 	}
-	if (!nanofury_checkport(mcp, state->current_baud))
+	if (!nanofury_checkport(mcp, state->current_baud, state))
 	{
 		applog(LOG_ERR, "%"PRIpreprv": checkport failed", cgpu->proc_repr);
 		mcp2210_close(mcp);
@@ -360,6 +367,10 @@ bool nanofury_init(struct thr_info * const thr)
 	port->logprio = LOG_ERR;
 	port->speed = state->current_baud;
 		
+	
+	const int init_osc6_bits = 50;
+	const int ramp_osc6_bits = (cgpu->procs > 1) ? 5 : init_osc6_bits;
+	
 	state->mcp = mcp;
 	port->userp = state;
 	for (proc = cgpu; proc; (proc = proc->next_proc), ++bitfury)
@@ -371,12 +382,13 @@ bool nanofury_init(struct thr_info * const thr)
 		};
 		proc->device_data = bitfury;
 		mythr->cgpu_data = state;
-		bitfury->osc6_bits = 5;
+		bitfury->osc6_bits = ramp_osc6_bits;
 		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
 		bitfury_init_chip(proc);
 	}
 	
-	while (bitfury->osc6_bits < 50)
+	--bitfury;
+	while (bitfury->osc6_bits < init_osc6_bits)
 	{
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
@@ -400,34 +412,56 @@ bool nanofury_init(struct thr_info * const thr)
 static
 void nanofury_disable(struct thr_info * const thr)
 {
+	struct cgpu_info * const proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
 	
 	bitfury_disable(thr);
-	nanofury_device_off(mcp);
+	
+	// Before powering off, ensure no other chip needs power
+	for_each_managed_proc(oproc, dev)
+		if (oproc->deven == DEV_ENABLED)
+			return;
+	
+	applog(LOG_NOTICE, "%s: Last chip disabled, shutting off power",
+	       dev->dev_repr);
+	nanofury_device_off(mcp, state);
 }
 
 static
 void nanofury_enable(struct thr_info * const thr)
 {
+	struct cgpu_info * const proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
 	
-	nanofury_checkport(mcp, state->current_baud);
-	nanofury_send_led_gpio(state);
+	if (state->powered_off)
+	{
+		// All chips were disabled, so we need to power back on
+		applog(LOG_DEBUG, "%s: Enabling power",
+		       dev->dev_repr);
+		nanofury_checkport(mcp, state->current_baud, state);
+		nanofury_send_led_gpio(state);
+	}
+	
 	bitfury_enable(thr);
 }
 
 static
-void nanofury_reinit(struct cgpu_info * const cgpu)
+void nanofury_reinit(struct cgpu_info * const proc)
 {
-	struct thr_info * const thr = cgpu->thr[0];
+	struct thr_info * const thr = proc->thr[0];
+	struct cgpu_info * const dev = proc->device;
 	struct nanofury_state * const state = thr->cgpu_data;
 	struct mcp2210_device * const mcp = state->mcp;
 	
-	nanofury_device_off(mcp);
+	nanofury_device_off(mcp, state);
 	cgsleep_ms(1);
-	nanofury_enable(thr);
+	for_each_managed_proc(oproc, dev)
+		if (oproc->deven == DEV_ENABLED)
+			nanofury_enable(oproc->thr[0]);
 }
 
 static
@@ -486,7 +520,7 @@ void nanofury_shutdown(struct thr_info * const thr)
 	struct mcp2210_device * const mcp = state->mcp;
 	
 	if (mcp)
-		nanofury_device_off(mcp);
+		nanofury_device_off(mcp, state);
 }
 
 const char *nanofury_set_ledmode(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)

@@ -102,7 +102,7 @@ struct lowl_pci_handle {
 	off_t baroff[6];
 #endif
 #ifdef USE_LOWL_PCI_MMAP
-	uint32_t *bar[6];
+	volatile uint32_t *bar[6];
 	size_t barsz[6];
 #endif
 };
@@ -113,20 +113,24 @@ void lowl_pci_close_mmap(struct lowl_pci_handle * const lph)
 {
 	for (int i = 0; i < 6; ++i)
 		if (lph->bar[i])
-			munmap(lph->bar[i], lph->barsz[i]);
+			munmap((void*)lph->bar[i], lph->barsz[i]);
 	free(lph);
 }
 
 static
 const uint32_t *lowl_pci_get_words_mmap(struct lowl_pci_handle * const lph, void * const buf, const size_t words, const int bar, const off_t offset)
 {
-	return &lph->bar[bar][offset];
+	volatile uint32_t *src = &lph->bar[bar][offset];
+	uint32_t *dest = buf;
+	for (int i = 0; i < words; ++i)
+		*(dest++) = *(src++);
+	return buf;
 }
 
 static
 bool lowl_pci_set_words_mmap(struct lowl_pci_handle * const lph, const uint32_t *buf, const size_t words, const int bar, const off_t offset)
 {
-	uint32_t *dest = &lph->bar[bar][offset];
+	volatile uint32_t *dest = &lph->bar[bar][offset];
 	for (int i = 0; i < words; ++i)
 		*(dest++) = *(buf++);
 	return true;
@@ -158,7 +162,7 @@ const void *lowl_pci_get_data_from_words(struct lowl_pci_handle * const lph, voi
 	const off_t offset8  = offset % 4;
 	const size_t words = (sz + offset8 + 3) / 4;
 	const uint32_t * const wdata = lowl_pci_get_words(lph, buf, words, bar, offset32);
-	swap32tobe(buf, wdata, words);
+	swap32tobe((uint32_t *)buf, wdata, words);
 	return &buf[offset8];
 }
 
@@ -242,7 +246,7 @@ struct lowl_pci_handle *lowl_pci_open_uio(const char * const path, const struct 
 err:
 	for (int i = 0; i < 6; ++i)
 		if (lph->bar[i])
-			munmap(lph->bar[i], lph->barsz[i]);
+			munmap((void*)lph->bar[i], lph->barsz[i]);
 	free(lph);
 	return NULL;
 }
@@ -396,7 +400,7 @@ struct lowl_pci_handle *lowl_pci_open_vfio(const char * const path, const struct
 err:
 	for (int i = 0; i < 6; ++i)
 		if (lph->bar[i])
-			munmap(lph->bar[i], lph->barsz[i]);
+			munmap((void*)lph->bar[i], lph->barsz[i]);
 	if (device != -1)
 		close(device);
 	if (group != -1)
@@ -490,4 +494,5 @@ void lowl_pci_close(struct lowl_pci_handle * const lph)
 struct lowlevel_driver lowl_pci = {
 	.dname = "pci",
 	.devinfo_scan = pci_devinfo_scan,
+	.exclude_from_all = true,
 };

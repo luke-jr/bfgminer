@@ -1,5 +1,5 @@
 /*
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -34,6 +34,7 @@ BFG_REGISTER_DRIVER(hashfast_ums_drv)
 #define HASHFAST_MAX_DATA 0x3fc
 #define HASHFAST_HASH_SIZE (0x20 + 0xc + 4 + 4 + 2 + 1 + 1)
 #define HASHFAST_MAX_VOLTAGES 4
+#define HASHFAST_CONFIG_DATA_SIZE  0x10
 
 enum hashfast_opcode {
 	HFOP_NULL          =    0,
@@ -63,11 +64,29 @@ enum hashfast_opcode {
 	HFOP_USB_SHUTDOWN  = 0x85,
 	HFOP_DIE_STATUS    = 0x86,
 	HFOP_GWQ_STATUS    = 0x87,
+	HFOP_UMS_CLOCK_CHANGE = 0x88,
 	HFOP_WORK_RESTART  = 0x88,
 	HFOP_USB_STATS1    = 0x89,
 	HFOP_USB_GWQSTATS  = 0x8a,
 	HFOP_USB_NOTICE    = 0x8b,
 	HFOP_USB_DEBUG     = 0xff,
+};
+
+enum hashfast_config_hdata {
+	HFCH_WRITE         = 1 << 0xf,
+	HFCH_THERMAL_LIMIT = 1 << 0xe,
+	HFCH_TACHO         = 1 << 0xd,
+};
+
+enum hashfast_config_flags {
+	HFCF_STATUS_PERIOD = 1 << 0xb,
+	HFCF_STATUS_IDLE   = 1 << 0xc,
+	HFCF_STATUS_EMPTY  = 1 << 0xd,
+	HFCF_PWM_ACTIVE_LV = 1 << 0xe,
+};
+
+enum hashfast_clock_change_cmd {
+	HFWR_SET_CLOCK     = 1 << 0xc,
 };
 
 typedef unsigned long hashfast_isn_t;
@@ -203,8 +222,8 @@ ignoresome:
 static
 bool hashfast_lowl_match(const struct lowlevel_device_info * const info)
 {
-	if (!lowlevel_match_id(info, &lowl_vcom, 0, 0))
-		return false;
+	if (lowlevel_match_product(info, "GoldenNonce"))
+		return true;
 	return (info->manufacturer && strstr(info->manufacturer, "HashFast"));
 }
 
@@ -218,9 +237,11 @@ const char *hashfast_set_clock(struct cgpu_info * const proc, const char * const
 }
 
 static const struct bfg_set_device_definition hashfast_set_device_funcs_probe[] = {
-	{"clock", hashfast_set_clock, "clock frequency (can only be set at startup, with --set-device)"},
+	{"clock", hashfast_set_clock, "clock frequency"},
 	{NULL},
 };
+
+static const struct bfg_set_device_definition hashfast_set_device_funcs[];
 
 static
 bool hashfast_detect_one(const char * const devpath)
@@ -259,9 +280,19 @@ bool hashfast_detect_one(const char * const devpath)
 		        __func__, devpath, pmsg->data[8]);
 		goto err;
 	}
+	uint16_t fwrev = upk_u16le(pmsg->data, 0);
+	if (!fwrev)
+	{
+		// fwrev == 0 means latest experimental; make it >= every possible comparison
+		fwrev = 0xffff;
+		pk_u16le(pmsg->data, 0, fwrev);
+	}
 	
 	if (serial_claim_v(devpath, &hashfast_ums_drv))
 		return false;
+	
+	// Hijack hdata for a quick way to transfer clock to init
+	pmsg->hdata = clock;
 	
 	struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
 	*cgpu = (struct cgpu_info){
@@ -273,6 +304,10 @@ bool hashfast_detect_one(const char * const devpath)
 		.device_data = pmsg,
 		.cutofftemp = 100,
 	};
+	
+	if (fwrev >= 0x0005)
+		cgpu->set_device_funcs = hashfast_set_device_funcs;
+	
 	return add_cgpu(cgpu);
 
 err:
@@ -290,12 +325,16 @@ struct hashfast_dev_state {
 	uint8_t cores_per_chip;
 	int fd;
 	struct hashfast_chip_state *chipstates;
+	uint16_t fwrev;
 };
 
 struct hashfast_chip_state {
 	struct cgpu_info **coreprocs;
 	hashfast_isn_t last_isn;
 	float voltages[HASHFAST_MAX_VOLTAGES];
+	uint16_t clock;
+	uint16_t clock_desired;
+	uint8_t cfgdata[HASHFAST_CONFIG_DATA_SIZE];
 };
 
 struct hashfast_core_state {
@@ -308,6 +347,80 @@ struct hashfast_core_state {
 	bool has_pending;
 	unsigned queued;
 };
+
+static
+const char *hashfast_set_clock_runtime(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct hashfast_dev_state * const devstate = proc->device_data;
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	struct hashfast_chip_state * const chipstate = &devstate->chipstates[cs->chipaddr];
+	
+	const int nv = atoi(newvalue);
+	if (nv >= 0xfff)
+		return "Clock frequency too high";
+	
+	chipstate->clock_desired = nv;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition hashfast_set_device_funcs[] = {
+	{"clock", hashfast_set_clock_runtime, "clock frequency"},
+	{NULL},
+};
+
+static
+void hashfast_init_cfgdata(struct hashfast_chip_state * const chipstate)
+{
+	uint8_t * const cfgdata = chipstate->cfgdata;
+	
+	const uint16_t status_ms = 500;
+	const bool send_status_on_core_idle = false;
+	const bool send_status_on_pending_empty = false;
+	const bool pwm_active_level = false;
+	const uint8_t status_batching_delay_ms = 0;
+	const uint8_t watchdog_sec = 0;
+	const uint8_t rx_header_timeout = 20, rx_data_timeout = 20;
+	const uint8_t stats_sec = 10;
+	const uint8_t temp_measure_ms = 100;
+	const uint16_t lf_clocks_per_usec = 125 /* FIXME: or 126? */;
+	const uint8_t max_nonces_per_frame = 1;
+	const uint8_t voltage_sample_points = 0x1f;
+	const uint8_t pwm_phases = 1, pwm_period = 0, pwm_pulse_period = 0;
+	const uint8_t temp_trim = 0;
+	
+	pk_u16le(cfgdata, 0,
+	         (status_ms & 0x7ff) | (status_ms ? HFCF_STATUS_PERIOD : 0) |
+	         (send_status_on_core_idle     ? HFCF_STATUS_IDLE   : 0) |
+	         (send_status_on_pending_empty ? HFCF_STATUS_EMPTY  : 0) |
+	         (pwm_active_level             ? HFCF_PWM_ACTIVE_LV : 0));
+	pk_u8(cfgdata, 2, status_batching_delay_ms);
+	pk_u8(cfgdata, 3, watchdog_sec & 0x7f);
+	
+	pk_u8(cfgdata, 4, rx_header_timeout & 0x7f);
+	pk_u8(cfgdata, 5, rx_data_timeout   & 0x7f);
+	pk_u8(cfgdata, 6, stats_sec         & 0x7f);
+	pk_u8(cfgdata, 7, temp_measure_ms);
+	
+	pk_u16le(cfgdata, 8,
+	         ((lf_clocks_per_usec - 1) & 0xfff) |
+	         ((max_nonces_per_frame & 0xf) << 0xc));
+	pk_u8(cfgdata, 0xa, voltage_sample_points);
+	pk_u8(cfgdata, 0xb,
+	      ((pwm_phases - 1) & 3) |
+	      ((temp_trim & 0xf) << 2));
+	
+	pk_u16le(cfgdata, 0xc, pwm_period);
+	pk_u16le(cfgdata, 0xe, pwm_pulse_period);
+}
+
+static
+uint16_t hashfast_chip_thermal_cutoff_hdata(const float temp)
+{
+	const uint16_t v = (temp + 61.5) * 0x1000 / 240;
+	return HFCH_THERMAL_LIMIT | (v & 0x3ff);
+}
 
 static
 bool hashfast_init(struct thr_info * const master_thr)
@@ -323,14 +436,20 @@ bool hashfast_init(struct thr_info * const master_thr)
 		.chipstates = chipstates,
 		.cores_per_chip = pmsg->coreaddr,
 		.fd = serial_open(dev->device_path, 0, 1, true),
+		.fwrev = upk_u16le(pmsg->data, 0),
 	};
+	
+	const uint16_t clock = pmsg->hdata;
 	
 	for (i = 0; i < pmsg->chipaddr; ++i)
 	{
 		chipstate = &chipstates[i];
 		*chipstate = (struct hashfast_chip_state){
 			.coreprocs = malloc(sizeof(struct cgpu_info *) * pmsg->coreaddr),
+			.clock = clock,
+			.clock_desired = clock,
 		};
+		hashfast_init_cfgdata(chipstate);
 	}
 	
 	for ((i = 0), (proc = dev); proc; ++i, (proc = proc->next_proc))
@@ -352,6 +471,11 @@ bool hashfast_init(struct thr_info * const master_thr)
 	
 	// TODO: actual clock = [12,13]
 	
+	for_each_managed_proc(proc, dev)
+	{
+		proc->status = LIFE_INIT2;
+	}
+	
 	timer_set_now(&master_thr->tv_poll);
 	return true;
 }
@@ -370,7 +494,7 @@ bool hashfast_queue_append(struct thr_info * const thr, struct work * const work
 	hashfast_isn_t isn;
 	uint8_t seq;
 	
-	if (cs->has_pending)
+	if (cs->has_pending || chipstate->clock_desired != chipstate->clock)
 	{
 		thr->queue_full = true;
 		return false;
@@ -544,6 +668,7 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 		{
 			const uint8_t *data = &msg.data[8];
 			struct cgpu_info *proc = hashfast_find_proc(master_thr, msg.chipaddr, 0);
+			struct cgpu_info *first_proc = proc;
 			if (unlikely(!proc))
 			{
 				applog(LOG_ERR, "%s: Unknown chip address %u",
@@ -584,13 +709,50 @@ bool hashfast_poll_msg(struct thr_info * const master_thr)
 				{
 					++cores_transitioned;
 					cs->has_pending = false;
-					thr->queue_full = false;
+					// Avoid refilling pending slot if we are preparing to change the clock frequency
+					if (chipstate->clock_desired == chipstate->clock)
+						thr->queue_full = false;
 				}
 			}
 			applog(LOG_DEBUG, "%s: STATUS from chipaddr=0x%02x with hdata=0x%04x (isn=0x%lx): total=%d uptodate=%d active=%d pending=%d transitioned=%d",
 			       dev->dev_repr, (unsigned)msg.chipaddr, (unsigned)msg.hdata, isn,
 			       devstate->cores_per_chip, cores_uptodate,
 			       cores_active, cores_pending, cores_transitioned);
+			if ((!cores_active) && chipstate->clock_desired != chipstate->clock)
+			{
+				// All cores finished their work, change clock frequency and then refill
+				uint8_t buf[HASHFAST_HEADER_SIZE + HASHFAST_CONFIG_DATA_SIZE];
+				uint16_t clock = chipstate->clock_desired, hdata;
+				if (!hashfast_send_msg(fd, buf, HFOP_UMS_CLOCK_CHANGE, msg.chipaddr, 0, HFWR_SET_CLOCK | clock, 0))
+				{
+					applog(LOG_ERR, "%"PRIpreprv": Clock change failure (%s)", proc->proc_repr, "OP_UMS_CLOCK_CHANGE");
+					goto clockchangefailed;
+				}
+				// Until we send HFOP_CONFIG, the state is undefined
+				chipstate->clock = 0;
+				
+				hdata = HFCH_WRITE;
+				hdata |= hashfast_chip_thermal_cutoff_hdata(110);
+				pk_uNle(chipstate->cfgdata, 8, 0, 0xc, clock);
+				memcpy(&buf[HASHFAST_HEADER_SIZE], chipstate->cfgdata, HASHFAST_CONFIG_DATA_SIZE);
+				if (!hashfast_send_msg(fd, buf, HFOP_CONFIG, msg.chipaddr, 0, hdata, HASHFAST_CONFIG_DATA_SIZE))
+				{
+					applog(LOG_ERR, "%"PRIpreprv": Clock change failure (%s)", proc->proc_repr, "OP_CONFIG");
+					goto clockchangefailed;
+				}
+				
+				chipstate->clock = clock;
+				
+				// Time to refill queues
+				proc = first_proc;
+				for (int i = 0; i < devstate->cores_per_chip; ++i, (proc = proc->next_proc))
+				{
+					struct thr_info * const thr = proc->thr[0];
+					thr->queue_full = false;
+				}
+				
+clockchangefailed: ;
+			}
 			break;
 		}
 	}
@@ -636,6 +798,19 @@ struct api_data *hashfast_api_stats(struct cgpu_info * const proc)
 		if (chipstate->voltages[i])
 			root = api_add_volts(root, key, &chipstate->voltages[i], false);
 	}
+	
+	return root;
+}
+
+static
+struct api_data *hashfast_api_devdetail(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct hashfast_core_state * const cs = thr->cgpu_data;
+	struct api_data *root = NULL;
+	
+	root = api_add_uint8(root, "Chip Address", &cs->chipaddr, false);
+	root = api_add_uint8(root, "Core Address", &cs->coreaddr, false);
 	
 	return root;
 }
@@ -686,6 +861,7 @@ struct device_drv hashfast_ums_drv = {
 	.poll = hashfast_poll,
 	
 	.get_api_stats = hashfast_api_stats,
+	.get_api_extra_device_detail = hashfast_api_devdetail,
 	
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = hashfast_wlogprint_status,

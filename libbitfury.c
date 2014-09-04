@@ -1,7 +1,7 @@
 /*
  * Copyright 2013 bitfury
  * Copyright 2013 Anatoly Legkodymov
- * Copyright 2013 Luke Dashjr
+ * Copyright 2013-2014 Luke Dashjr
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -41,7 +41,7 @@
 #define BITFURY_REFRESH_DELAY 100
 #define BITFURY_DETECT_TRIES 3000 / BITFURY_REFRESH_DELAY
 
-unsigned bitfury_decnonce(unsigned in);
+uint32_t bitfury_decnonce(uint32_t);
 
 /* Configuration registers - control oscillators and such stuff. PROGRAMMED when magic number is matches, UNPROGRAMMED (default) otherwise */
 static
@@ -77,7 +77,7 @@ const int8_t bitfury_counters[16] = { 64, 64,
 #define S1(x) (rotrFixed(x,6)^rotrFixed(x,11)^rotrFixed(x,25))
 
 /* SHA256 CONSTANTS */
-static const unsigned SHA_K[64] = {
+static const uint32_t SHA_K[64] = {
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
         0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
         0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -91,20 +91,24 @@ static const unsigned SHA_K[64] = {
 
 
 static
-void libbitfury_ms3_compute(unsigned *p)
+void libbitfury_ms3_compute(uint32_t *p)
 {
-	unsigned a,b,c,d,e,f,g,h, ne, na,  i;
+	uint32_t cp[8];
+	uint32_t a,b,c,d,e,f,g,h, ne, na,  i;
 
-	a = p[0]; b = p[1]; c = p[2]; d = p[3]; e = p[4]; f = p[5]; g = p[6]; h = p[7];
+	swap32tole(cp, p, 8);
+	a = cp[0]; b = cp[1]; c = cp[2]; d = cp[3]; e = cp[4]; f = cp[5]; g = cp[6]; h = cp[7];
 
 	for (i = 0; i < 3; i++) {
-		ne = p[i+16] + SHA_K[i] + h + Ch(e,f,g) + S1(e) + d;
-		na = p[i+16] + SHA_K[i] + h + Ch(e,f,g) + S1(e) + S0(a) + Maj(a,b,c);
+		const uint32_t x = le32toh(p[i+16]);
+		ne = x + SHA_K[i] + h + Ch(e,f,g) + S1(e) + d;
+		na = x + SHA_K[i] + h + Ch(e,f,g) + S1(e) + S0(a) + Maj(a,b,c);
 		d = c; c = b; b = a; a = na;
 		h = g; g = f; f = e; e = ne;
 	}
 
 	p[15] = a; p[14] = b; p[13] = c; p[12] = d; p[11] = e; p[10] = f; p[9] = g; p[8] = h;
+	swap32tole(&p[8], &p[8], 8);
 }
 
 static
@@ -123,20 +127,33 @@ static
 void bitfury_send_init(struct spi_port *port) {
 	/* Prepare internal buffers */
 	/* PREPARE BUFFERS (INITIAL PROGRAMMING) */
-	unsigned w[16];
-	unsigned atrvec[] = {
-		0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
-		0,0,0,0,0,0,0,0,
-		0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
-	};
-
-	libbitfury_ms3_compute(&atrvec[0]);
-	memset(&w, 0, sizeof(w)); w[3] = 0xffffffff; w[4] = 0x80000000; w[15] = 0x00000280;
-	spi_emit_data(port, 0x1000, w, 16*4);
-	spi_emit_data(port, 0x1400, w,  8*4);
-	memset(w, 0, sizeof(w)); w[0] = 0x80000000; w[7] = 0x100;
-	spi_emit_data(port, 0x1900, &w[0],8*4); /* Prepare MS and W buffers! */
-	spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+	{
+		uint32_t w[] = {
+			0,0,0,0xffffffff,
+			0x80000000,0,0,0,
+			0,0,0,0,
+			0,0,0,0x00000280,
+		};
+		swap32tole(w, w, sizeof(w)/4);
+		spi_emit_data(port, 0x1000, w, 16*4);
+		spi_emit_data(port, 0x1400, w,  8*4);
+	}
+	{
+		uint32_t w[] = {
+			0x80000000,0,0,0,
+			0,0,0,0x100,
+		};
+		swap32tole(w, w, sizeof(w)/4);
+		spi_emit_data(port, 0x1900, &w[0],8*4); /* Prepare MS and W buffers! */
+		uint32_t atrvec[] = {
+			0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
+			0,0,0,0,0,0,0,0,
+			0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
+		};
+		libbitfury_ms3_compute(&atrvec[0]);
+		swap32tole(atrvec, atrvec, sizeof(atrvec)/4);
+		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
+	}
 }
 
 static
@@ -145,6 +162,7 @@ void bitfury_set_freq(struct spi_port *port, int bits) {
 	const uint8_t *
 	osc6 = (unsigned char *)&freq;
 	freq = (1ULL << bits) - 1ULL;
+	freq = htole64(freq);
 
 	spi_emit_data(port, 0x6000, osc6, 8); /* Program internal on-die slow oscillator frequency */
 	bitfury_config_reg(port, 4, 1); /* Enable slow oscillator */
@@ -177,16 +195,16 @@ void bitfury_send_freq(struct spi_port *port, int slot, int chip_n, int bits) {
 }
 
 static
-unsigned int libbitfury_c_diff(unsigned ocounter, unsigned counter) {
+uint32_t libbitfury_c_diff(uint32_t ocounter, uint32_t counter) {
 	return counter >  ocounter ? counter - ocounter : (0x003FFFFF - ocounter) + counter;
 }
 
 static
-int libbitfury_get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
+uint32_t libbitfury_get_counter(uint32_t *newbuf, uint32_t *oldbuf) {
 	int j;
 	for(j = 0; j < 16; j++) {
 		if (newbuf[j] != oldbuf[j]) {
-			unsigned counter = bitfury_decnonce(newbuf[j]);
+			uint32_t counter = bitfury_decnonce(newbuf[j]);
 			if ((counter & 0xFFC00000) == 0xdf800000) {
 				counter -= 0xdf800000;
 				return counter;
@@ -199,7 +217,7 @@ int libbitfury_get_counter(unsigned int *newbuf, unsigned int *oldbuf) {
 static
 int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 	/* Test vectors to calculate (using address-translated loads) */
-	unsigned atrvec[] = {
+	uint32_t atrvec[] = {
 		0xb0e72d8e, 0x1dc5b862, 0xe9e7c4a6, 0x3050f1f5, 0x8a1a6b7e, 0x7ec384e8, 0x42c1c3fc, 0x8ed158a1, /* MIDSTATE */
 		0,0,0,0,0,0,0,0,
 		0x8a0bb7b7, 0x33af304f, 0x0b290c1a, 0xf0c4e61f, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
@@ -221,9 +239,9 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 		0x6f3806c3, 0x41f82a4f, 0x3fd40c1a, 0x00334b39, /* WDATA: hashMerleRoot[7], nTime, nBits, nNonce */
 	};
 	int i;
-	unsigned newbuf[17], oldbuf[17];
-	unsigned ocounter;
-	int odiff = 0;
+	uint32_t newbuf[17] = {0}, oldbuf[17] = {0};
+	uint32_t ocounter;
+	long odiff = 0;
 
 	memset(newbuf, 0, 17 * 4);
 	memset(oldbuf, 0, 17 * 4);
@@ -231,6 +249,8 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 	libbitfury_ms3_compute(&atrvec[0]);
 	libbitfury_ms3_compute(&atrvec[20]);
 	libbitfury_ms3_compute(&atrvec[40]);
+	
+	swap32tole(atrvec, atrvec, sizeof(atrvec)/4);
 
 
 	spi_clear_buf(port);
@@ -250,11 +270,11 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 		spi_emit_fasync(port, chip_n);
 		spi_emit_data(port, 0x3000, &atrvec[0], 19*4);
 		spi_txrx(port);
-		memcpy(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17*4);
+		swap32tole(newbuf, spi_getrxbuf(port) + 4 + chip_n, 17);
 
 		counter = libbitfury_get_counter(newbuf, oldbuf);
 		if (ocounter) {
-			unsigned int cdiff = libbitfury_c_diff(ocounter, counter);
+			uint32_t cdiff = libbitfury_c_diff(ocounter, counter);
 
 			if (abs(odiff - cdiff) < 5000)
 				return 1;
@@ -278,9 +298,9 @@ int libbitfury_detectChips1(struct spi_port *port) {
 }
 
 // in  = 1f 1e 1d 1c 1b 1a 19 18 17 16 15 14 13 12 11 10  f  e  d  c  b  a  9  8  7  6  5  4  3  2  1  0
-unsigned bitfury_decnonce(unsigned in)
+uint32_t bitfury_decnonce(uint32_t in)
 {
-	unsigned out;
+	uint32_t out;
 
 	/* First part load */
 	out = (in & 0xFF) << 24; in >>= 8;
@@ -303,14 +323,14 @@ unsigned bitfury_decnonce(unsigned in)
 
 static
 int libbitfury_rehash(const void *midstate, const uint32_t m7, const uint32_t ntime, const uint32_t nbits, uint32_t nnonce) {
-	unsigned char in[16];
-	unsigned int *in32 = (unsigned int *)in;
-	unsigned int *mid32 = (unsigned int *)midstate;
-	unsigned out32[8];
-	unsigned char *out = (unsigned char *) out32;
+	uint8_t in[16];
+	uint32_t *in32 = (uint32_t *)in;
+	const uint32_t *mid32 = midstate;
+	uint32_t out32[8];
+	uint8_t *out = (uint8_t *) out32;
 #ifdef BITFURY_REHASH_DEBUG
-	static unsigned history[512];
-	static unsigned history_p;
+	static uint32_t history[512];
+	static uint32_t history_p;
 #endif
 	sha256_ctx ctx;
 
@@ -320,11 +340,10 @@ int libbitfury_rehash(const void *midstate, const uint32_t m7, const uint32_t nt
 	ctx.tot_len = 64;
 	ctx.len = 0;
 
-	nnonce = bswap_32(nnonce);
 	in32[0] = bswap_32(m7);
 	in32[1] = bswap_32(ntime);
 	in32[2] = bswap_32(nbits);
-	in32[3] = nnonce;
+	in32[3] = bswap_32(nnonce);
 
 	sha256_update(&ctx, in, 16);
 	sha256_final(&ctx, out);
@@ -362,15 +381,12 @@ bool bitfury_fudge_nonce(const void *midstate, const uint32_t m7, const uint32_t
 }
 
 void work_to_bitfury_payload(struct bitfury_payload *p, struct work *w) {
-	unsigned char flipped_data[80];
-
 	memset(p, 0, sizeof(struct bitfury_payload));
-	swap32yes(flipped_data, w->data, 80 / 4);
 
 	memcpy(p->midstate, w->midstate, 32);
-	p->m7 = bswap_32(*(unsigned *)(flipped_data + 64));
-	p->ntime = bswap_32(*(unsigned *)(flipped_data + 68));
-	p->nbits = bswap_32(*(unsigned *)(flipped_data + 72));
+	p->m7 = *(uint32_t *)&w->data[0x40];
+	p->ntime = *(uint32_t *)&w->data[0x44];
+	p->nbits = *(uint32_t *)&w->data[0x48];
 }
 
 void bitfury_payload_to_atrvec(uint32_t *atrvec, struct bitfury_payload *p)

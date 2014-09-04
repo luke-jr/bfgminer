@@ -1,5 +1,6 @@
 /*
- * Copyright 2013 gluk <glukolog@mail.ru>
+ * Copyright 2013 gluk
+ * Copyright 2013 Anatoly Legkodymov
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

@@ -1,5 +1,6 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2014 Nate Woolls
  * Copyright 2011-2013 Con Kolivas
  * Copyright 2012-2013 Andrew Smith
  * Copyright 2011 Glenn Francis Murray
@@ -282,6 +283,14 @@ struct thr_info;
 struct work;
 struct lowlevel_device_info;
 
+enum bfg_probe_result_flags_values {
+	BPR_CONTINUE_PROBES = 1<< 0,
+	BPR_DONT_RESCAN     = 1<< 1,
+	BPR_WRONG_DEVTYPE   = BPR_CONTINUE_PROBES | BPR_DONT_RESCAN,
+};
+extern unsigned *_bfg_probe_result_flags();
+#define bfg_probe_result_flags (*_bfg_probe_result_flags())
+
 struct device_drv {
 	const char *dname;
 	const char *name;
@@ -308,6 +317,7 @@ struct device_drv {
 	void (*proc_wlogprint_status)(struct cgpu_info *);
 	void (*proc_tui_wlogprint_choices)(struct cgpu_info *);
 	const char *(*proc_tui_handle_choice)(struct cgpu_info *, int input);
+	void (*zero_stats)(struct cgpu_info *);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
@@ -657,6 +667,16 @@ static inline void string_elist_del(struct string_elist **head, struct string_el
 }
 
 
+struct bfg_loaded_configfile {
+	char *filename;
+	int fileconf_load;
+	
+	struct bfg_loaded_configfile *next;
+};
+
+extern struct bfg_loaded_configfile *bfg_loaded_configfiles;
+
+
 static inline uint32_t swab32(uint32_t v)
 {
 	return bswap_32(v);
@@ -690,14 +710,14 @@ static inline void swap32yes(void*out, const void*in, size_t sz) {
 // end
 
 #ifdef WORDS_BIGENDIAN
-#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : memmove(out, in, sz))
+#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
 #  define LOCAL_swap32be(type, var, sz)  ;
 #  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
 #  define LOCAL_swap32le(type, var, sz)  LOCAL_swap32(type, var, sz)
 #else
 #  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
 #  define LOCAL_swap32be(type, var, sz)  LOCAL_swap32(type, var, sz)
-#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : memmove(out, in, sz))
+#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
 #  define LOCAL_swap32le(type, var, sz)  ;
 #endif
 
@@ -714,6 +734,29 @@ static inline void swab256(void *dest_p, const void *src_p)
 	dest[5] = swab32(src[2]);
 	dest[6] = swab32(src[1]);
 	dest[7] = swab32(src[0]);
+}
+
+static inline
+void bswap_96p(void * const dest_p, const void * const src_p)
+{
+	uint32_t * const dest = dest_p;
+	const uint32_t * const src = src_p;
+	
+	dest[0] = bswap_32(src[2]);
+	dest[1] = bswap_32(src[1]);
+	dest[2] = bswap_32(src[0]);
+}
+
+static inline
+void bswap_32mult(void * const dest_p, const void * const src_p, const size_t sz)
+{
+	const uint32_t *s = src_p;
+	const uint32_t *s_end = &s[sz];
+	uint32_t *d = dest_p;
+	d = &d[sz - 1];
+	
+	for ( ; s < s_end; ++s, --d)
+		*d = bswap_32(*s);
 }
 
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
@@ -909,6 +952,7 @@ extern bool opt_fail_only;
 extern bool opt_autofan;
 extern bool opt_autoengine;
 extern bool use_curses;
+extern int last_logstatusline_len;
 #ifdef HAVE_LIBUSB
 extern bool have_libusb;
 #endif
@@ -982,16 +1026,27 @@ extern int _bfg_console_prev_cancelstate;
 static inline
 void bfg_console_lock(void)
 {
-	_bfg_console_cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &_bfg_console_prev_cancelstate);
+	int prev_cancelstate;
+	bool cancel_disabled = !pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &prev_cancelstate);
 	mutex_lock(&console_lock);
+	_bfg_console_cancel_disabled = cancel_disabled;
+	if (cancel_disabled)
+		_bfg_console_prev_cancelstate = prev_cancelstate;
 }
 
 static inline
 void bfg_console_unlock(void)
 {
-	mutex_unlock(&console_lock);
-	if (_bfg_console_cancel_disabled)
-		pthread_setcancelstate(_bfg_console_prev_cancelstate, &_bfg_console_prev_cancelstate);
+	int prev_cancelstate;
+	bool cancel_disabled = _bfg_console_cancel_disabled;
+	if (cancel_disabled)
+	{
+		prev_cancelstate = _bfg_console_prev_cancelstate;
+		mutex_unlock(&console_lock);
+		pthread_setcancelstate(prev_cancelstate, &prev_cancelstate);
+	}
+	else
+		mutex_unlock(&console_lock);
 }
 
 
@@ -1004,6 +1059,8 @@ extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);
+#define pdiff_to_bdiff(n) (n * 0.9999847412109375)
+extern double target_diff(const unsigned char *target);
 
 extern void kill_work(void);
 extern void app_restart(void);
@@ -1209,6 +1266,7 @@ struct pool {
 	bool probed;
 	int force_rollntime;
 	enum pool_enable enabled;
+	bool failover_only;  // NOTE: Ignored by failover and loadbalance strategies (use priority and quota respectively)
 	bool submit_old;
 	bool removed;
 	bool lp_started;
@@ -1224,6 +1282,7 @@ struct pool {
 	char *lp_id;
 	enum pool_protocol lp_proto;
 	curl_socket_t lp_socket;
+	bool lp_active;
 
 	unsigned int getwork_requested;
 	unsigned int stale_shares;
@@ -1241,6 +1300,7 @@ struct pool {
 	char *rpc_proxy;
 
 	pthread_mutex_t pool_lock;
+	pthread_mutex_t pool_test_lock;
 	cglock_t data_lock;
 
 	struct thread_q *submit_q;
@@ -1268,6 +1328,7 @@ struct pool {
 	char *stratum_url;
 	char *stratum_port;
 	CURL *stratum_curl;
+	char curl_err_str[CURL_ERROR_SIZE];
 	SOCKETTYPE sock;
 	char *sockbuf;
 	size_t sockbuf_size;
@@ -1284,6 +1345,9 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
+	uint8_t next_target[0x20];
+	char *next_nonce1;
+	int next_n2size;
 	pthread_t stratum_thread;
 	pthread_mutex_t stratum_lock;
 	char *admin_msg;
@@ -1298,6 +1362,9 @@ struct pool {
 #define GETWORK_MODE_BENCHMARK 'B'
 #define GETWORK_MODE_STRATUM 'S'
 #define GETWORK_MODE_GBT 'G'
+
+typedef unsigned work_device_id_t;
+#define PRIwdi "04x"
 
 struct work {
 	unsigned char	data[128];
@@ -1335,7 +1402,7 @@ struct work {
 
 	unsigned char	work_restart_id;
 	int		id;
-	int		device_id;
+	work_device_id_t device_id;
 	UT_hash_handle hh;
 	
 	// Please don't use this if it's at all possible, I'd like to get rid of it eventually.
@@ -1372,7 +1439,7 @@ struct work {
 
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)
-extern void get_benchmark_work(struct work *);
+extern void get_benchmark_work(struct work *, bool use_swork);
 extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work *src);
 extern void stratum_work_clean(struct stratum_work *);
 extern bool pool_has_usable_swork(const struct pool *);
@@ -1426,6 +1493,8 @@ extern double cgpu_utility(struct cgpu_info *);
 extern void kill_work(void);
 extern int prioritize_pools(char *param, int *pid);
 extern void validate_pool_priorities(void);
+extern void enable_pool(struct pool *);
+extern void disable_pool(struct pool *, enum pool_enable);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
 extern void write_config(FILE *fcfg);
@@ -1450,6 +1519,7 @@ extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
 extern struct work *copy_work(const struct work *base_work);
+extern const char *bfg_workpadding_bin;
 extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
 extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
@@ -1469,6 +1539,7 @@ void work_set_ntime(struct work * const work, const uint32_t ntime)
 }
 
 
+extern void work_hash(struct work *);
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);

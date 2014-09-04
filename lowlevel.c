@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2012-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -109,6 +109,11 @@ struct lowlevel_device_info *lowlevel_scan()
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
 #endif
 	
+#ifdef NEED_BFG_LOWL_MSWIN
+	devinfo_mid_list = lowl_mswin.devinfo_scan();
+	LL_CONCAT(devinfo_list, devinfo_mid_list);
+#endif
+	
 #ifdef NEED_BFG_LOWL_PCI
 	devinfo_mid_list = lowl_pci.devinfo_scan();
 	LL_CONCAT(devinfo_list, devinfo_mid_list);
@@ -211,11 +216,14 @@ struct _device_claim {
 struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verbose, const char * const devpath)
 {
 	static struct _device_claim *claims = NULL;
+	static pthread_mutex_t claims_lock = PTHREAD_MUTEX_INITIALIZER;
 	struct _device_claim *c;
 	
+	mutex_lock(&claims_lock);
 	HASH_FIND_STR(claims, devpath, c);
 	if (c)
 	{
+		mutex_unlock(&claims_lock);
 		if (verbose && opt_debug)
 		{
 			char logbuf[LOGBUFSIZ];
@@ -236,12 +244,16 @@ struct device_drv *bfg_claim_any(struct device_drv * const api, const char *verb
 	}
 	
 	if (!api)
+	{
+		mutex_unlock(&claims_lock);
 		return NULL;
+	}
 	
 	c = malloc(sizeof(*c));
 	c->devpath = strdup(devpath);
 	c->drv = api;
 	HASH_ADD_KEYPTR(hh, claims, c->devpath, strlen(devpath), c);
+	mutex_unlock(&claims_lock);
 	return NULL;
 }
 

@@ -1,7 +1,7 @@
 /*
- * Copyright 2011-2013 Andrew Smith
- * Copyright 2011-2013 Con Kolivas
- * Copyright 2012-2013 Luke Dashjr
+ * Copyright 2011-2014 Andrew Smith
+ * Copyright 2011-2014 Con Kolivas
+ * Copyright 2012-2014 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -16,6 +16,7 @@
 
 #include "config.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 #include "driver-opencl.h"
+#include "version.h"
 
 #define HAVE_AN_FPGA 1
 
@@ -1017,8 +1019,14 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 				sprintf(buf, "%.15f", *((double *)(root->data)));
 				break;
 			case API_DIFF:
-				sprintf(buf, "%.8f", *((double *)(root->data)));
+			{
+				const double *fp = root->data;
+				if (fmod(*fp, 1.))
+					sprintf(buf, "%.8f", *fp);
+				else
+					sprintf(buf, "%.0f", *fp);
 				break;
+			}
 			case API_BOOL:
 				sprintf(buf, "%s", *((bool *)(root->data)) ? TRUESTR : FALSESTR);
 				break;
@@ -1268,9 +1276,9 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct driver_registration *reg, *regtmp;
 	int pgacount = 0;
 	char *adlinuse = (char *)NO;
+	int i;
 #ifdef HAVE_ADL
 	const char *adl = YES;
-	int i;
 
 	for (i = 0; i < nDevs; i++) {
 		struct opencl_device_data * const data = gpus[i].device_data;
@@ -1321,6 +1329,14 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 #if BLKMAKER_VERSION > 0
 	root = api_add_string(root, "Coinbase-Sig", opt_coinbase_sig, true);
 #endif
+	
+	struct bfg_loaded_configfile *configfile;
+	i = 0;
+	LL_FOREACH(bfg_loaded_configfiles, configfile)
+	{
+		snprintf(buf, sizeof(buf), "ConfigFile%d", i++);
+		root = api_add_string(root, buf, configfile->filename, false);
+	}
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
@@ -1421,7 +1437,7 @@ static void devdetail_an(struct io_data *io_data, struct cgpu_info *cgpu, bool i
 	root = api_add_int(root, "Target Temperature", &cgpu->targettemp, false);
 	root = api_add_int(root, "Cutoff Temperature", &cgpu->cutofftemp, false);
 
-	if (cgpu->drv->get_api_extra_device_detail)
+	if ((per_proc || cgpu->procs <= 1) && cgpu->drv->get_api_extra_device_detail)
 		root = api_add_extra(root, cgpu->drv->get_api_extra_device_detail(cgpu));
 
 	root = print_data(root, buf, isjson, precom);
@@ -1885,6 +1901,9 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 				if (pool->idle)
 					status = (char *)DEAD;
 				else
+				if (pool->failover_only)
+					status = "Failover";
+				else
 					status = (char *)ALIVE;
 				break;
 			default:
@@ -2309,7 +2328,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	pool->enabled = POOL_ENABLED;
+	pool->failover_only = false;
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2422,14 +2441,13 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	if (pool->enabled == POOL_ENABLED) {
+	if (pool->enabled == POOL_ENABLED && !pool->failover_only) {
 		message(io_data, MSG_ALRENAP, id, NULL, isjson);
 		return;
 	}
 
-	pool->enabled = POOL_ENABLED;
-	if (pool->prio < current_pool()->prio)
-		switch_pools(pool);
+	pool->failover_only = false;
+	enable_pool(pool);
 
 	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }
@@ -2532,9 +2550,7 @@ static void disablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 		return;
 	}
 
-	pool->enabled = POOL_DISABLED;
-	if (pool == current_pool())
-		switch_pools(NULL);
+	disable_pool(pool, POOL_DISABLED);
 
 	message(io_data, MSG_DISPOOL, id, NULL, isjson);
 }
@@ -2576,7 +2592,6 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	pool->enabled = POOL_DISABLED;
 	rpc_url = escape_string(pool->rpc_url, isjson);
 	if (rpc_url != pool->rpc_url)
 		dofree = true;
@@ -3510,6 +3525,25 @@ static void send_result(struct io_data *io_data, SOCKETTYPE c, bool isjson)
 		       (long)bytes_len(&io_data->data));
 }
 
+static
+void _tidyup_socket(SOCKETTYPE * const sockp)
+{
+	if (*sockp != INVSOCK) {
+		shutdown(*sockp, SHUT_RDWR);
+		CLOSESOCKET(*sockp);
+		*sockp = INVSOCK;
+		free(sockp);
+	}
+}
+
+static
+void tidyup_socket(void * const arg)
+{
+	mutex_lock(&quit_restart_lock);
+	_tidyup_socket(arg);
+	mutex_unlock(&quit_restart_lock);
+}
+
 static void tidyup(__maybe_unused void *arg)
 {
 	mutex_lock(&quit_restart_lock);
@@ -3518,12 +3552,7 @@ static void tidyup(__maybe_unused void *arg)
 
 	bye = true;
 
-	if (*apisock != INVSOCK) {
-		shutdown(*apisock, SHUT_RDWR);
-		CLOSESOCKET(*apisock);
-		*apisock = INVSOCK;
-		free(apisock);
-	}
+	_tidyup_socket(apisock);
 
 	if (ipaccess != NULL) {
 		free(ipaccess);
@@ -3839,7 +3868,7 @@ static void mcast()
 	struct sockaddr_in came_from;
 	struct timeval bindstart;
 	const char *binderror;
-	SOCKETTYPE mcast_sock;
+	SOCKETTYPE *mcastsock;
 	SOCKETTYPE reply_sock;
 	socklen_t came_from_siz;
 	char *connectaddr;
@@ -3862,10 +3891,14 @@ static void mcast()
 		quit(1, "Invalid Multicast Address");
 	grp.imr_interface.s_addr = INADDR_ANY;
 
-	mcast_sock = socket(AF_INET, SOCK_DGRAM, 0);
-
+	mcastsock = malloc(sizeof(*mcastsock));
+	*mcastsock = INVSOCK;
+	pthread_cleanup_push(tidyup_socket, mcastsock);
+	
+	*mcastsock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
+	
 	int optval = 1;
-	if (SOCKETFAIL(setsockopt(mcast_sock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
+	if (SOCKETFAIL(setsockopt(*mcastsock, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)))) {
 		applog(LOG_ERR, "API mcast setsockopt SO_REUSEADDR failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
 		goto die;
 	}
@@ -3879,7 +3912,7 @@ static void mcast()
 	bound = 0;
 	timer_set_now(&bindstart);
 	while (bound == 0) {
-		if (SOCKETFAIL(bind(mcast_sock, (struct sockaddr *)(&listen), sizeof(listen)))) {
+		if (SOCKETFAIL(bind(*mcastsock, (struct sockaddr *)(&listen), sizeof(listen)))) {
 			binderror = SOCKERRMSG;
 			if (timer_elapsed(&bindstart, NULL) > 61)
 				break;
@@ -3894,7 +3927,7 @@ static void mcast()
 		goto die;
 	}
 
-	if (SOCKETFAIL(setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
+	if (SOCKETFAIL(setsockopt(*mcastsock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (void *)(&grp), sizeof(grp)))) {
 		applog(LOG_ERR, "API mcast join failed (%s)%s", SOCKERRMSG, MUNAVAILABLE);
 		goto die;
 	}
@@ -3911,10 +3944,10 @@ static void mcast()
 
 		count++;
 		came_from_siz = sizeof(came_from);
-		if (SOCKETFAIL(rep = recvfrom(mcast_sock, buf, sizeof(buf) - 1,
+		if (SOCKETFAIL(rep = recvfrom(*mcastsock, buf, sizeof(buf) - 1,
 						0, (struct sockaddr *)(&came_from), &came_from_siz))) {
 			applog(LOG_DEBUG, "API mcast failed count=%d (%s) (%d)",
-					count, SOCKERRMSG, (int)mcast_sock);
+					count, SOCKERRMSG, (int)*mcastsock);
 			continue;
 		}
 
@@ -3943,7 +3976,7 @@ static void mcast()
 							&buf[expect_code_len], reply_port);
 
 				came_from.sin_port = htons(reply_port);
-				reply_sock = socket(AF_INET, SOCK_DGRAM, 0);
+				reply_sock = bfg_socket(AF_INET, SOCK_DGRAM, 0);
 
 				snprintf(replybuf, sizeof(replybuf),
 							"cgm-%s-%d-%s",
@@ -3961,6 +3994,7 @@ static void mcast()
 								replybuf, (int)rep, (int)reply_sock);
 				}
 
+				shutdown(reply_sock, SHUT_RDWR);
 				CLOSESOCKET(reply_sock);
 			}
 		} else
@@ -3968,8 +4002,8 @@ static void mcast()
 	}
 
 die:
-
-	CLOSESOCKET(mcast_sock);
+	;  // statement in case pthread_cleanup_pop doesn't start with one
+	pthread_cleanup_pop(true);
 }
 
 static void *mcast_thread(void *userdata)
@@ -4048,16 +4082,16 @@ void api(int api_thr_id)
 
 		if (ips == 0) {
 			applog(LOG_WARNING, "API not running (no valid IPs specified)%s", UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
-	*apisock = socket(AF_INET, SOCK_STREAM, 0);
+	*apisock = bfg_socket(AF_INET, SOCK_STREAM, 0);
 	if (*apisock == INVSOCK) {
 		applog(LOG_ERR, "API1 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
-
+	
 	memset(&serv, 0, sizeof(serv));
 
 	serv.sin_family = AF_INET;
@@ -4066,7 +4100,7 @@ void api(int api_thr_id)
 		serv.sin_addr.s_addr = inet_addr(localaddr);
 		if (serv.sin_addr.s_addr == (in_addr_t)INVINETADDR) {
 			applog(LOG_ERR, "API2 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-			return;
+			pthread_exit(NULL);
 		}
 	}
 
@@ -4104,13 +4138,12 @@ void api(int api_thr_id)
 
 	if (bound == 0) {
 		applog(LOG_ERR, "API bind to port %d failed (%s)%s", port, binderror, UNAVAILABLE);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (SOCKETFAIL(listen(*apisock, QUEUE))) {
 		applog(LOG_ERR, "API3 initialisation failed (%s)%s", SOCKERRMSG, UNAVAILABLE);
-		CLOSESOCKET(*apisock);
-		return;
+		pthread_exit(NULL);
 	}
 
 	if (opt_api_allow)
@@ -4297,6 +4330,7 @@ inochi:
 					send_result(io_data, c, isjson);
 			}
 		}
+		shutdown(c, SHUT_RDWR);
 		CLOSESOCKET(c);
 	}
 die:

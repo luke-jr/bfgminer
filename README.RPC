@@ -163,7 +163,9 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               Failover-Only=true/false, <- failover-only setting
                               ScanTime=N, <- --scan-time setting
                               Queue=N, <- --queue setting
-                              Expiry=N| <- --expiry setting
+                              Expiry=N, <- --expiry setting
+                              Coinbase-Sig=X, <- extra coinbase data in blocks
+                              ConfigFileN=X| <- filename of configs loaded
 
  summary       SUMMARY        The status summary of the miner
                               e.g. Elapsed=NNN,Found Blocks=N,Getworks=N,...|
@@ -436,6 +438,9 @@ api-example.py - a Python script to access the API.
  by default it sends a 'summary' request to the miner at 127.0.0.1:4028
  If you specify a command it will send that request instead.
 
+api-example.rb - a Ruby script to access the API.
+  usage: ruby api-example.rb command[:parameter] [HOST [PORT]]
+
 If you are using Node.js, you can also use the miner-rpc package and script:
 https://www.npmjs.org/package/miner-rpc
 
@@ -444,7 +449,14 @@ https://www.npmjs.org/package/miner-rpc
 Feature Changelog for external applications using the API:
 
 
-API V3.1
+API V3.2 (BFGMiner v4.1.0)
+
+Modified API command:
+ 'config' - add 'ConfigFile'N
+
+---------
+
+API V3.1 (BFGMiner v4.0.0)
 
 Multiple report request command with '+' e.g. summary+devs
 

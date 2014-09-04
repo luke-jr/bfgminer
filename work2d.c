@@ -15,8 +15,9 @@
 
 #include "miner.h"
 #include "util.h"
+#include "work2d.h"
 
-#define MAX_DIVISIONS 255
+#define MAX_DIVISIONS  WORK2D_MAX_DIVISIONS
 
 static bool work2d_reserved[MAX_DIVISIONS + 1] = { true };
 int work2d_xnonce1sz;
