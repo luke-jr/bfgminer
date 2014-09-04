@@ -200,6 +200,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct knc_titan_info *knc;
 	int i, asic, die, core_base;
 	int total_cores = 0;
+	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
 	for (proc = cgpu; proc; ) {
 		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
@@ -239,6 +240,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 			timer_set_now(&knccore->enable_at);
 			proc->device_data = knc;
 			++total_cores;
+			++(asic_cores[asic]);
 			applog(LOG_DEBUG, "%s Allocated core %d:%d:%d", proc->device->dev_repr, asic, die, (i - core_base));
 
 			if (0 == knccore->coreno) {
@@ -275,16 +277,26 @@ static bool knc_titan_init(struct thr_info * const thr)
 	};
 	fill_in_thread_params(opt_knc_threads_per_core, &setup_params);
 
+	int prev_asic = -1;
 	for (proc = cgpu; proc; proc = proc->next_proc) {
+		knc = proc->device_data;
+		mythr = proc->thr[0];
+		knccore = mythr->cgpu_data;
+		if (knccore->asicno != prev_asic) {
+			int numcores = asic_cores[knccore->asicno];
+			if (numcores < 1)
+				numcores = 1;
+			prev_asic = knccore->asicno;
+			nonce_f = 0.0;
+			nonce_step = 4294967296.0 / numcores;
+			setup_params.nonce_top = 0xFFFFFFFF;
+		}
 		nonce_f += nonce_step;
 		setup_params.nonce_bottom = setup_params.nonce_top + 1;
 		if (NULL != proc->next_proc)
 			setup_params.nonce_top = nonce_f;
 		else
 			setup_params.nonce_top = 0xFFFFFFFF;
-		knc = proc->device_data;
-		mythr = proc->thr[0];
-		knccore = mythr->cgpu_data;
 		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
