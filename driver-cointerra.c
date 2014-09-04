@@ -548,7 +548,6 @@ static void u16array_from_msg(uint16_t *u16, int entries, int var, char *buf)
 static void cta_parse_statread(struct cgpu_info *cointerra, struct cointerra_info *info,
 			       char *buf)
 {
-	float max_temp = 0;
 	int i;
 
 	mutex_lock(&info->lock);
@@ -565,14 +564,12 @@ static void cta_parse_statread(struct cgpu_info *cointerra, struct cointerra_inf
 	info->active = hu16_from_msg(buf, CTA_STAT_ACTIVE);
 	mutex_unlock(&info->lock);
 
+	struct cgpu_info *proc = cointerra;
 	for (i = 0; i < CTA_CORES; i++) {
-		if (info->coretemp[i] > max_temp)
-			max_temp = info->coretemp[i];
+		float temp = info->coretemp[i] / 100.;
+		for (int j = 0; j < 120; (++j), (proc = proc->next_proc))
+			proc->temp = temp;
 	}
-	max_temp /= 100.0;
-	/* Store the max temperature in the cgpu struct as an exponentially
-	 * changing value. */
-	cointerra->temp = cointerra->temp * 0.63 + max_temp * 0.37;
 }
 
 static void u8array_from_msg(uint8_t *u8, int entries, int var, char *buf)
