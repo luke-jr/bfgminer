@@ -12,6 +12,10 @@
 #define	KNC_TITAN_THREADS_PER_CORE	8
 #define	KNC_TITAN_NONCES_PER_REPORT	5
 
+/* Valid slot numbers: 1..15 */
+#define	KNC_TITAN_MIN_WORK_SLOT_NUM	1
+#define	KNC_TITAN_MAX_WORK_SLOT_NUM	15
+
 struct nonce_report {
 	uint32_t nonce;
 	uint8_t slot;

@@ -40,8 +40,6 @@ struct knc_titan_core {
 	struct knc_titan_die *die;
 	struct cgpu_info *proc;
 
-	int next_slot;
-
 	int hwerr_in_row;
 	int hwerr_disable_time;
 	struct timeval enable_at;
@@ -65,7 +63,14 @@ struct knc_titan_info {
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
 
+	/* Per-ASIC data */
 	bool need_flush[KNC_TITAN_MAX_ASICS];
+	int next_slot[KNC_TITAN_MAX_ASICS];
+	/* First slot after flush. If next_slot reaches this, then
+	 * we need to re-flush all the cores to avoid duplicating slot numbers
+	 * for different works */
+	int first_slot[KNC_TITAN_MAX_ASICS];
+
 	struct work *workqueue;
 	int workqueue_size;
 	int workqueue_max;
@@ -223,7 +228,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 				.asicno = asic,
 				.dieno = die,
 				.coreno = i - core_base,
-				.next_slot = 1,
 				.die = &(knc->dies[asic][die]),
 				.proc = proc,
 				.hwerr_in_row = 0,
@@ -283,8 +287,11 @@ static bool knc_titan_init(struct thr_info * const thr)
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 
-	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic)
+	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		knc->next_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
+		knc->first_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
 		knc->need_flush[asic] = true;
+	}
 	timer_set_now(&thr->tv_poll);
 
 	return true;
@@ -396,6 +403,11 @@ static void knc_titan_poll(struct thr_info * const thr)
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
 			bool work_accepted = false;
+			bool need_replace;
+			if (knc->first_slot[asic] > KNC_TITAN_MIN_WORK_SLOT_NUM)
+				need_replace = ((knc->next_slot[asic] + 1) == knc->first_slot[asic]);
+			else
+				need_replace = (knc->next_slot[asic] == KNC_TITAN_MAX_WORK_SLOT_NUM);
 			knccore = NULL;
 			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 				if (0 >= knc->dies[asic][die].cores)
@@ -412,14 +424,14 @@ static void knc_titan_poll(struct thr_info * const thr)
 						bool unused;
 						if ((core1->dieno != die) || (core1->asicno != asic))
 							break;
-						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, knccore->next_slot, work, true, &unused, &report)) {
+						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, knc->next_slot[asic], work, true, &unused, &report)) {
 							core1->last_nonce.slot = report.nonce[0].slot;
 							core1->last_nonce.nonce = report.nonce[0].nonce;
 							die_work_accepted = true;
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knccore->next_slot, work, false, &die_work_accepted, &report))
+					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knc->next_slot[asic], work, need_replace, &die_work_accepted, &report))
 						die_work_accepted = false;
 				}
 				if (die_work_accepted)
@@ -427,10 +439,12 @@ static void knc_titan_poll(struct thr_info * const thr)
 			}
 			if ((!work_accepted) || (NULL == knccore))
 				break;
-			if (knc->need_flush[asic]) {
+			if (knc->need_flush[asic] || need_replace) {
 				struct work *work1, *tmp1;
+				applog(LOG_NOTICE, "%s: Flushing stale works (%s)", knccore->proc->dev_repr,
+				       knc->need_flush[asic] ? "New work" : "Slot collision");
 				knc->need_flush[asic] = false;
-				applog(LOG_NOTICE, "%s: Flushing stale works", knccore->proc->dev_repr);
+				knc->first_slot[asic] = knc->next_slot[asic];
 				HASH_ITER(hh, knc->devicework, work1, tmp1) {
 					if (asic == ((work1->device_id >> 8) & 0xFF)) {
 						HASH_DEL(knc->devicework, work1);
@@ -441,10 +455,10 @@ static void knc_titan_poll(struct thr_info * const thr)
 			}
 			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
-			work->device_id = (asic << 8) | knccore->next_slot;
+			work->device_id = (asic << 8) | knc->next_slot[asic];
 			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
-			if (++(knccore->next_slot) >= 16)
-				knccore->next_slot = 1;
+			if (++(knc->next_slot[asic]) > KNC_TITAN_MAX_WORK_SLOT_NUM)
+				knc->next_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
 			++workaccept;
 		}
 	}
