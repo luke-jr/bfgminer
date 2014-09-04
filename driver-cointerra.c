@@ -19,6 +19,9 @@
 #include "lowl-usb.h"
 #include <math.h>
 
+static const unsigned cointerra_desired_roll = 60;
+static const unsigned long cointerra_latest_result_usecs = (10 * 1000000);
+
 BFG_REGISTER_DRIVER(cointerra_drv)
 
 static const char *cointerra_hdr = "ZZ";
@@ -897,6 +900,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
 	bool ret = true;
+	struct timeval tv_now, tv_latest;
 	char buf[CTA_MSG_SIZE];
 	struct work *work = NULL;
 	unsigned short nroll_limit;
@@ -939,7 +943,11 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	flip12(swab, &work->data[64]);
 	memcpy(buf + CTA_WORK_DATA, swab, 12);
 
-	nroll_limit = htole16(work->drv_rolllimit);
+	timer_set_now(&tv_now);
+	timer_set_delay(&tv_latest, &tv_now, cointerra_latest_result_usecs);
+	nroll_limit = max(0, work_ntime_range(work, &tv_now, &tv_latest, cointerra_desired_roll));
+	
+	nroll_limit = htole16(nroll_limit);
 	memcpy(buf + CTA_WORK_NROLL, &nroll_limit, 2);
 
 	memcpy(buf + CTA_WORK_DIFFBITS, &diffbits, 1);
@@ -1324,5 +1332,5 @@ struct device_drv cointerra_drv = {
 	.flush_work = cta_wake,
 	.get_api_stats = cta_api_stats,
 	.thread_shutdown = cta_shutdown,
-	// TODO .zero_stats = cta_zero_stats,
+	.zero_stats = cta_zero_stats,
 };
