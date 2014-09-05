@@ -926,28 +926,10 @@ static void cta_send_reset(struct cgpu_info *cointerra, struct cointerra_info *i
 			   uint8_t reset_type, uint8_t diffbits);
 static void cta_flush_work(struct cgpu_info *cointerra);
 
-/* *_fill and *_scanwork are serialised wrt to each other */
-static bool cta_fill(struct cgpu_info *cointerra)
+static
+bool cointerra_queue_append(struct thr_info * const thr, struct work * const work)
 {
-	struct cointerra_info *info = cointerra->device_data;
-	bool ret = true;
-	struct work *work = NULL;
-
-	//applog(LOG_WARNING, "%s %d: cta_fill %d", cointerra->drv->name, cointerra->device_id,__LINE__);
-
-	if (unlikely(info->thr->work_restart))
-		cta_flush_work(cointerra);
-
-	mutex_lock(&info->lock);
-	work = get_queued(cointerra);
-	if (unlikely(!work)) {
-		ret = false;
-		goto out_unlock;
-	}
-	cgtime(&work->tv_work_start);
-	// if (!cointerra_queue_append(cointerra->thr[0], work)) ...
-{
-	struct cgpu_info * const dev = cointerra->device; // thr->cgpu->device;
+	struct cgpu_info * const dev = thr->cgpu->device;
 // 	struct thr_info * const master_thr = dev->thr[0];
 	struct cointerra_info * const devstate = dev->device_data;
 	struct timeval tv_now, tv_latest;
@@ -958,7 +940,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	{
 		applog(LOG_DEBUG, "%s: Attempt to queue work while none requested; rejecting", dev->dev_repr);
 // 		cointerra_set_queue_full(dev, true);
-		return_via(retl, ret = false);
+		return false;
 	}
 	
 	timer_set_now(&tv_now);
@@ -987,7 +969,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	pk_u16le(buf, 52, zerobits);
 	
 	if (!cointerra_write_msg(devstate->ep, cointerra_drv.dname, CMTO_WORK, buf))
-		return_via(retl, ret = false);
+		return false;
 	
 // 	HASH_ADD_INT(master_thr->work, device_id, work);
 	++devstate->work_id;
@@ -997,10 +979,29 @@ static bool cta_fill(struct cgpu_info *cointerra)
 // 		cointerra_set_queue_full(dev, true);
 	}
 	
-	return_via(retl, ret = true);
+	return true;
 }
-retl:
-	if (!ret)
+
+/* *_fill and *_scanwork are serialised wrt to each other */
+static bool cta_fill(struct cgpu_info *cointerra)
+{
+	struct cointerra_info *info = cointerra->device_data;
+	bool ret = true;
+	struct work *work = NULL;
+
+	//applog(LOG_WARNING, "%s %d: cta_fill %d", cointerra->drv->name, cointerra->device_id,__LINE__);
+
+	if (unlikely(info->thr->work_restart))
+		cta_flush_work(cointerra);
+
+	mutex_lock(&info->lock);
+	work = get_queued(cointerra);
+	if (unlikely(!work)) {
+		ret = false;
+		goto out_unlock;
+	}
+	cgtime(&work->tv_work_start);
+	if (!cointerra_queue_append(cointerra->thr[0], work))
 	{
 		work_completed(cointerra, work);
 		applog(LOG_INFO, "%s %d: Failed to send work",
