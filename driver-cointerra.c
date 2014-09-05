@@ -931,11 +931,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
 	bool ret = true;
-	struct timeval tv_now, tv_latest;
-	char buf[CTA_MSG_SIZE-3];
 	struct work *work = NULL;
-	unsigned short nroll_limit;
-	uint16_t zerobits;
 
 	//applog(LOG_WARNING, "%s %d: cta_fill %d", cointerra->drv->name, cointerra->device_id,__LINE__);
 
@@ -943,35 +939,43 @@ static bool cta_fill(struct cgpu_info *cointerra)
 		cta_flush_work(cointerra);
 
 	mutex_lock(&info->lock);
-	if (!info->requested)
-		goto out_unlock;
 	work = get_queued(cointerra);
 	if (unlikely(!work)) {
 		ret = false;
 		goto out_unlock;
 	}
-	if (--info->requested > 0)
-		ret = false;
-
+	cgtime(&work->tv_work_start);
+	// if (!cointerra_queue_append(cointerra->thr[0], work)) ...
+{
+	struct cgpu_info * const dev = cointerra->device; // thr->cgpu->device;
+// 	struct thr_info * const master_thr = dev->thr[0];
+	struct cointerra_info * const devstate = dev->device_data;
+	struct timeval tv_now, tv_latest;
+	uint8_t buf[COINTERRA_MSGBODY_SIZE] = {0};
+	uint16_t ntimeroll, zerobits;
+	
+	if (unlikely(!devstate->requested))
+	{
+		applog(LOG_DEBUG, "%s: Attempt to queue work while none requested; rejecting", dev->dev_repr);
+// 		cointerra_set_queue_full(dev, true);
+		return_via(retl, ret = false);
+	}
+	
 	timer_set_now(&tv_now);
 	timer_set_delay(&tv_latest, &tv_now, cointerra_latest_result_usecs);
-	nroll_limit = max(0, work_ntime_range(work, &tv_now, &tv_latest, cointerra_desired_roll));
+	ntimeroll = max(0, work_ntime_range(work, &tv_now, &tv_latest, cointerra_desired_roll));
 	
-	/* It does not matter what endian this uint16_t is since it will be
-	 * the same value on sending to the MC as returning in match/done. This
-	 * will automatically wrap as a uint16_t. It cannot be zero for the MCU
-	 * though. */
-	if (unlikely(++info->work_id == 0))
-		info->work_id = 1;
-	work->subid = info->work_id;
-
-	pk_u16be(buf, 0, work->subid);
-	work->subid = htobe16(work->subid);
+	if (unlikely(!devstate->work_id))
+		++devstate->work_id;
+	work->device_id = devstate->work_id;
+	
+	pk_u16be(buf, 0, work->device_id);
+	work->subid = htobe16(work->device_id);
 	swap32yes(&buf[   6],  work->midstate  , 0x20 / 4);
 	swap32yes(&buf[0x26], &work->data[0x40],  0xc / 4);
 	
-	pk_u16le(buf, 50, nroll_limit);
-
+	pk_u16le(buf, 50, ntimeroll);
+	
 	// Use the real share difficulty up to cointerra_max_nonce_diff
 	if (work->work_difficulty >= cointerra_max_nonce_diff)
 		work->nonce_diff = cointerra_max_nonce_diff;
@@ -982,18 +986,29 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	zerobits += 0x20;
 	pk_u16le(buf, 52, zerobits);
 	
-	cgtime(&work->tv_work_start);
-	applog(LOG_DEBUG, "%s %d: Sending work job_id %s work_id %u", cointerra->drv->name,
-	       cointerra->device_id, work->job_id, work->subid);
-	if (!cointerra_write_msg(info->ep, cointerra->dev_repr, CMTO_WORK, buf))
+	if (!cointerra_write_msg(devstate->ep, cointerra_drv.dname, CMTO_WORK, buf))
+		return_via(retl, ret = false);
+	
+// 	HASH_ADD_INT(master_thr->work, device_id, work);
+	++devstate->work_id;
+	if (!--devstate->requested)
 	{
-		cgtime(&work->tv_work_start);
+		applog(LOG_DEBUG, "%s: Sent all requested works, queue full", dev->dev_repr);
+// 		cointerra_set_queue_full(dev, true);
+	}
+	
+	return_via(retl, ret = true);
+}
+retl:
+	if (!ret)
+	{
 		work_completed(cointerra, work);
 		applog(LOG_INFO, "%s %d: Failed to send work",
 		       cointerra->drv->name, cointerra->device_id);
 		/* The device will fail after this */
 		ret = false;
 	}
+	ret = !info->requested;
 
 out_unlock:
 	mutex_unlock(&info->lock);
