@@ -865,7 +865,7 @@ static bool cta_prepare(struct thr_info *thr)
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->sendlock);
-	if (unlikely(pthread_cond_init(&info->wake_cond, NULL)))
+	if (unlikely(pthread_cond_init(&info->wake_cond, bfg_condattr)))
 		quit(1, "Failed to create cta pthread cond");
 	notifier_init(info->reset_notifier);
 	if (pthread_create(&info->read_thr, NULL, cta_recv_thread, (void *)thr))
@@ -1089,12 +1089,9 @@ static int64_t cta_scanwork(struct thr_info *thr)
 		     cointerra->drv->name, cointerra->device_id,__LINE__);
 		cta_flush_work(cointerra);
 	} else {
-		struct timespec abstime, tsdiff = {0, 500000000};
+		struct timeval tv = { .tv_usec = 500000, };
 		time_t now_t;
 		int i;
-
-		timeval_to_spec(&abstime, &now);
-		timeraddspec(&abstime, &tsdiff);
 
 		/* Discard work that was started more than 5 minutes ago as
 		 * a safety precaution backup in case the hardware failed to
@@ -1117,7 +1114,7 @@ static int64_t cta_scanwork(struct thr_info *thr)
 		/* Sleep for up to 0.5 seconds, waking if we need work or
 		 * have received a restart message. */
 		mutex_lock(&info->lock);
-		pthread_cond_timedwait(&info->wake_cond, &info->lock, &abstime);
+		bfg_cond_timedwait(&info->wake_cond, &info->lock, &tv);
 		mutex_unlock(&info->lock);
 
 		if (thr->work_restart) {
