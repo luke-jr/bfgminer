@@ -23,8 +23,24 @@ static const unsigned cointerra_desired_roll = 60;
 static const unsigned long cointerra_latest_result_usecs = (10 * 1000000);
 static const unsigned cointerra_max_nonce_diff = 0x20;
 
+#define COINTERRA_PACKET_SIZE  0x40
+#define COINTERRA_START_SEQ  0x5a,0x5a
+#define COINTERRA_MSG_SIZE  (COINTERRA_PACKET_SIZE - sizeof(cointerra_startseq))
+#define COINTERRA_MSGBODY_SIZE  (COINTERRA_MSG_SIZE - 1)
+
 BFG_REGISTER_DRIVER(cointerra_drv)
 
+enum cointerra_msg_type_out {
+	CMTO_RESET     = 1,
+	CMTO_WORK      = 2,
+	CMTO_REQUEST   = 4,
+	CMTO_HWERR     = 5,
+	CMTO_LEDCTL    = 6,
+	CMTO_HASHRATE  = 7,
+	CMTO_GET_INFO  = 0x21,
+};
+
+static const uint8_t cointerra_startseq[] = {COINTERRA_START_SEQ};
 static const char *cointerra_hdr = "ZZ";
 
 int opt_ps_load;
@@ -822,6 +838,21 @@ static void *cta_recv_thread(void *arg)
 	return NULL;
 }
 
+static
+bool cointerra_write_msg(struct lowl_usb_endpoint * const ep, const char * const repr, const uint8_t msgtype, const void * const msgbody)
+{
+	uint8_t buf[COINTERRA_PACKET_SIZE], *p;
+	memcpy(buf, cointerra_startseq, sizeof(cointerra_startseq));
+	p = &buf[sizeof(cointerra_startseq)];
+	pk_u8(p, 0, msgtype);
+	memcpy(&p[1], msgbody, COINTERRA_MSGBODY_SIZE);
+	
+	if (usb_write(ep, buf, sizeof(buf)) != sizeof(buf))
+		return false;
+	
+	return true;
+}
+
 static bool cta_send_msg(struct cgpu_info *cointerra, char *buf)
 {
 	struct cointerra_info *info = cointerra->device_data;
@@ -901,7 +932,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	struct cointerra_info *info = cointerra->device_data;
 	bool ret = true;
 	struct timeval tv_now, tv_latest;
-	char buf[CTA_MSG_SIZE];
+	char buf[CTA_MSG_SIZE-3];
 	struct work *work = NULL;
 	unsigned short nroll_limit;
 	uint16_t zerobits;
@@ -934,14 +965,12 @@ static bool cta_fill(struct cgpu_info *cointerra)
 		info->work_id = 1;
 	work->subid = info->work_id;
 
-	cta_gen_message(buf, CTA_SEND_WORK);
-
-	pk_u16be(buf, 3+0, work->subid);
+	pk_u16be(buf, 0, work->subid);
 	work->subid = htobe16(work->subid);
-	swap32yes(&buf[3+   6],  work->midstate  , 0x20 / 4);
-	swap32yes(&buf[3+0x26], &work->data[0x40],  0xc / 4);
+	swap32yes(&buf[   6],  work->midstate  , 0x20 / 4);
+	swap32yes(&buf[0x26], &work->data[0x40],  0xc / 4);
 	
-	pk_u16le(buf, 3+50, nroll_limit);
+	pk_u16le(buf, 50, nroll_limit);
 
 	// Use the real share difficulty up to cointerra_max_nonce_diff
 	if (work->work_difficulty >= cointerra_max_nonce_diff)
@@ -951,22 +980,23 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	zerobits = log2(floor(work->nonce_diff));
 	work->nonce_diff = pow(2, zerobits);
 	zerobits += 0x20;
-	pk_u16le(buf, 3+52, zerobits);
+	pk_u16le(buf, 52, zerobits);
+	
+	cgtime(&work->tv_work_start);
+	applog(LOG_DEBUG, "%s %d: Sending work job_id %s work_id %u", cointerra->drv->name,
+	       cointerra->device_id, work->job_id, work->subid);
+	if (!cointerra_write_msg(info->ep, cointerra->dev_repr, CMTO_WORK, buf))
+	{
+		cgtime(&work->tv_work_start);
+		work_completed(cointerra, work);
+		applog(LOG_INFO, "%s %d: Failed to send work",
+		       cointerra->drv->name, cointerra->device_id);
+		/* The device will fail after this */
+		ret = false;
+	}
 
 out_unlock:
 	mutex_unlock(&info->lock);
-
-	if (work) {
-		cgtime(&work->tv_work_start);
-		applog(LOG_DEBUG, "%s %d: Sending work job_id %s work_id %u", cointerra->drv->name,
-		       cointerra->device_id, work->job_id, work->subid);
-		if (unlikely(!cta_send_msg(cointerra, buf))) {
-			work_completed(cointerra, work);
-			applog(LOG_INFO, "%s %d: Failed to send work",
-			       cointerra->drv->name, cointerra->device_id);
-			/* The device will fail after this */
-		}
-	}
 
 	return ret;
 }
