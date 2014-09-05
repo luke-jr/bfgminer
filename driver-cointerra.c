@@ -21,6 +21,7 @@
 
 static const unsigned cointerra_desired_roll = 60;
 static const unsigned long cointerra_latest_result_usecs = (10 * 1000000);
+static const unsigned cointerra_max_nonce_diff = 0x20;
 
 BFG_REGISTER_DRIVER(cointerra_drv)
 
@@ -903,8 +904,7 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	char buf[CTA_MSG_SIZE];
 	struct work *work = NULL;
 	unsigned short nroll_limit;
-	uint32_t swab[8];
-	uint8_t diffbits;
+	uint16_t zerobits;
 
 	//applog(LOG_WARNING, "%s %d: cta_fill %d", cointerra->drv->name, cointerra->device_id,__LINE__);
 
@@ -922,6 +922,10 @@ static bool cta_fill(struct cgpu_info *cointerra)
 	if (--info->requested > 0)
 		ret = false;
 
+	timer_set_now(&tv_now);
+	timer_set_delay(&tv_latest, &tv_now, cointerra_latest_result_usecs);
+	nroll_limit = max(0, work_ntime_range(work, &tv_now, &tv_latest, cointerra_desired_roll));
+	
 	/* It does not matter what endian this uint16_t is since it will be
 	 * the same value on sending to the MC as returning in match/done. This
 	 * will automatically wrap as a uint16_t. It cannot be zero for the MCU
@@ -930,26 +934,24 @@ static bool cta_fill(struct cgpu_info *cointerra)
 		info->work_id = 1;
 	work->subid = info->work_id;
 
-	diffbits = diff_to_bits(work->nonce_diff);
-
 	cta_gen_message(buf, CTA_SEND_WORK);
 
- 	memcpy(buf + CTA_DRIVER_TAG, &info->work_id, 2);
-
-	flip32(swab, work->midstate);
-	memcpy(buf + CTA_WORK_MIDSTATE, swab, 32);
-
-	flip12(swab, &work->data[64]);
-	memcpy(buf + CTA_WORK_DATA, swab, 12);
-
-	timer_set_now(&tv_now);
-	timer_set_delay(&tv_latest, &tv_now, cointerra_latest_result_usecs);
-	nroll_limit = max(0, work_ntime_range(work, &tv_now, &tv_latest, cointerra_desired_roll));
+	pk_u16be(buf, 3+0, work->subid);
+	work->subid = htobe16(work->subid);
+	swap32yes(&buf[3+   6],  work->midstate  , 0x20 / 4);
+	swap32yes(&buf[3+0x26], &work->data[0x40],  0xc / 4);
 	
-	nroll_limit = htole16(nroll_limit);
-	memcpy(buf + CTA_WORK_NROLL, &nroll_limit, 2);
+	pk_u16le(buf, 3+50, nroll_limit);
 
-	memcpy(buf + CTA_WORK_DIFFBITS, &diffbits, 1);
+	// Use the real share difficulty up to cointerra_max_nonce_diff
+	if (work->work_difficulty >= cointerra_max_nonce_diff)
+		work->nonce_diff = cointerra_max_nonce_diff;
+	else
+		work->nonce_diff = work->work_difficulty;
+	zerobits = log2(floor(work->nonce_diff));
+	work->nonce_diff = pow(2, zerobits);
+	zerobits += 0x20;
+	pk_u16le(buf, 3+52, zerobits);
 
 out_unlock:
 	mutex_unlock(&info->lock);
