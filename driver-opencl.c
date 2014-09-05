@@ -1283,7 +1283,7 @@ void *reinit_gpu(void *userdata)
 
 select_cgpu:
 	sel_cgpu =
-	cgpu = tq_pop(mythr->q, NULL);
+	cgpu = tq_pop(mythr->q);
 	if (!cgpu)
 		goto out;
 	
