@@ -23,6 +23,7 @@ static const unsigned cointerra_desired_roll = 60;
 static const unsigned long cointerra_latest_result_usecs = (10 * 1000000);
 static const unsigned cointerra_max_nonce_diff = 0x20;
 
+#define COINTERRA_USB_TIMEOUT  500
 #define COINTERRA_PACKET_SIZE  0x40
 #define COINTERRA_START_SEQ  0x5a,0x5a
 #define COINTERRA_MSG_SIZE  (COINTERRA_PACKET_SIZE - sizeof(cointerra_startseq))
@@ -183,6 +184,7 @@ bool cointerra_open(const struct lowlevel_device_info * const info, const char *
 		applogr(false, LOG_DEBUG, "%s: USB open failed on %s",
 		        cointerra_drv.dname, info->devid);
 	*ep_p = usb_open_ep_pair(*usbh_p, LIBUSB_ENDPOINT_IN | 1, 64, LIBUSB_ENDPOINT_OUT | 1, 64);
+	usb_ep_set_timeouts_ms(*ep_p, COINTERRA_USB_TIMEOUT, COINTERRA_USB_TIMEOUT);
 	if (!*ep_p)
 	{
 		applog(LOG_DEBUG, "%s: Endpoint open failed on %s",
@@ -218,9 +220,6 @@ static void cta_clear_work(struct cgpu_info *cgpu)
 static void cta_close(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
-
-	/* Wait for read thread to die */
-	pthread_join(info->read_thr, NULL);
 
 	/* Open does the same reset init followed by response as is required to
 	 * close the device. */
@@ -408,9 +407,6 @@ static void cta_parse_reqwork(struct cgpu_info *cointerra, struct cointerra_info
 	mutex_lock(&info->lock);
 	info->requested = retwork;
 	cointerra_set_queue_full(cointerra, !retwork);
-	/* Wake up the main scanwork loop since we need more
-		* work. */
-	pthread_cond_signal(&info->wake_cond);
 	mutex_unlock(&info->lock);
 }
 
@@ -780,16 +776,13 @@ static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
 	}
 }
 
-static void *cta_recv_thread(void *arg)
+static
+void cta_recv_thread(void *arg)
 {
 	struct thr_info *thr = (struct thr_info *)arg;
 	struct cgpu_info *cointerra = thr->cgpu;
 	struct cointerra_info *info = cointerra->device_data;
-	char threadname[24];
 	int offset = 0;
-
-	snprintf(threadname, 24, "cta_recv/%d", cointerra->device_id);
-	RenameThread(threadname);
 
 	while (likely(!cointerra->shutdown)) {
 		char buf[CTA_READBUF_SIZE];
@@ -843,9 +836,9 @@ static void *cta_recv_thread(void *arg)
 			if (offset > 0)
 				memmove(buf, buf + CTA_MSG_SIZE, offset);
 		}
+		
+		break;
 	}
-
-	return NULL;
 }
 
 static
@@ -908,11 +901,7 @@ static bool cta_prepare(struct thr_info *thr)
 	info->thr = thr;
 	mutex_init(&info->lock);
 	mutex_init(&info->sendlock);
-	if (unlikely(pthread_cond_init(&info->wake_cond, bfg_condattr)))
-		quit(1, "Failed to create cta pthread cond");
 	notifier_init(info->reset_notifier);
-	if (pthread_create(&info->read_thr, NULL, cta_recv_thread, (void *)thr))
-		quit(1, "Failed to create cta_recv_thread");
 
 	/* Request a single status setting message */
 	cta_gen_message(buf, CTA_SEND_REQUEST);
@@ -1116,7 +1105,6 @@ static void cta_scanwork(struct thr_info *thr)
 		     cointerra->drv->name, cointerra->device_id,__LINE__);
 		cta_flush_work(cointerra);
 	} else {
-		struct timeval tv = { .tv_usec = 500000, };
 		time_t now_t;
 		int i;
 
@@ -1140,9 +1128,7 @@ static void cta_scanwork(struct thr_info *thr)
 
 		/* Sleep for up to 0.5 seconds, waking if we need work or
 		 * have received a restart message. */
-		mutex_lock(&info->lock);
-		bfg_cond_timedwait(&info->wake_cond, &info->lock, &tv);
-		mutex_unlock(&info->lock);
+		cta_recv_thread(thr);
 
 		if (thr->work_restart) {
 			applog(LOG_INFO, "%s %d: Flush work line %d",
@@ -1161,18 +1147,6 @@ static void cta_scanwork(struct thr_info *thr)
 	info->tot_share_hashes += info->share_hashes;
 	info->tot_calc_hashes += info->hashes;
 	info->hashes = info->share_hashes = 0;
-	mutex_unlock(&info->lock);
-}
-
-/* This is used for a work restart. We don't actually perform the work restart
- * here but wake up the scanwork loop if it's waiting on the conditional so
- * that it can test for the restart message. */
-static void cta_wake(struct cgpu_info *cointerra)
-{
-	struct cointerra_info *info = cointerra->device_data;
-
-	mutex_lock(&info->lock);
-	pthread_cond_signal(&info->wake_cond);
 	mutex_unlock(&info->lock);
 }
 
@@ -1357,7 +1331,6 @@ struct device_drv cointerra_drv = {
 	.queue_flush = cointerra_queue_flush,
 	// TODO .update_work = cta_update_work,
 	.poll = cta_scanwork,
-	.flush_work = cta_wake,
 	.get_api_stats = cta_api_stats,
 	.thread_shutdown = cta_shutdown,
 	.zero_stats = cta_zero_stats,

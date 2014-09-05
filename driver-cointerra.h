@@ -219,8 +219,6 @@ struct cointerra_info {
 	struct thr_info *thr;
 	pthread_mutex_t lock;
 	pthread_mutex_t sendlock;
-	pthread_cond_t wake_cond;
-	pthread_t read_thr;
 	notifier_t reset_notifier;
 };
 
