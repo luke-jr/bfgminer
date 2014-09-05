@@ -1025,7 +1025,7 @@ struct pool *add_pool(void)
 	pool->pool_no = pool->prio = total_pools;
 	mutex_init(&pool->last_work_lock);
 	mutex_init(&pool->pool_lock);
-	if (unlikely(pthread_cond_init(&pool->cr_cond, NULL)))
+	if (unlikely(pthread_cond_init(&pool->cr_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
 	mutex_init(&pool->stratum_lock);
@@ -8558,7 +8558,6 @@ static struct work *hash_pop(void)
 {
 	struct work *work = NULL, *tmp;
 	int hc;
-	struct timespec ts;
 
 retry:
 	mutex_lock(stgd_lock);
@@ -8576,9 +8575,9 @@ retry:
 			staged_full = false;  // Let it fill up before triggering an underrun again
 			no_work = true;
 		}
-		ts = (struct timespec){ .tv_sec = opt_log_interval, };
 		pthread_cond_signal(&gws_cond);
-		if (ETIMEDOUT == pthread_cond_timedwait(&getq->cond, stgd_lock, &ts))
+		const struct timeval tv = { .tv_sec = opt_log_interval, };
+		if (ETIMEDOUT == bfg_cond_timedwait(&getq->cond, stgd_lock, &tv))
 		{
 			run_cmd(cmd_idle);
 			pthread_cond_signal(&gws_cond);
@@ -11090,10 +11089,10 @@ int main(int argc, char *argv[])
 	rwlock_init(&devices_lock);
 
 	mutex_init(&lp_lock);
-	if (unlikely(pthread_cond_init(&lp_cond, NULL)))
+	if (unlikely(pthread_cond_init(&lp_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init lp_cond");
 
-	if (unlikely(pthread_cond_init(&gws_cond, NULL)))
+	if (unlikely(pthread_cond_init(&gws_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init gws_cond");
 
 	notifier_init(submit_waiting_notifier);
