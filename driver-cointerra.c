@@ -313,6 +313,15 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 }
 
 static
+void cointerra_set_queue_full(struct cgpu_info * const dev, const bool nv)
+{
+	if (dev->thr[0]->queue_full == nv)
+		return;
+	for_each_managed_proc(proc, dev)
+		proc->thr[0]->queue_full = nv;
+}
+
+static
 bool cointerra_lowl_match(const struct lowlevel_device_info * const info)
 {
 	return lowlevel_match_lowlproduct(info, &lowl_usb, "GoldStrike");
@@ -398,6 +407,7 @@ static void cta_parse_reqwork(struct cgpu_info *cointerra, struct cointerra_info
 
 	mutex_lock(&info->lock);
 	info->requested = retwork;
+	cointerra_set_queue_full(cointerra, !retwork);
 	/* Wake up the main scanwork loop since we need more
 		* work. */
 	pthread_cond_signal(&info->wake_cond);
@@ -888,6 +898,7 @@ static bool cta_prepare(struct thr_info *thr)
 	/* Nominally set a requested value when starting, preempting the need
 	 * for a req-work message. */
 	info->requested = CTA_MAX_QUEUE;
+	cointerra_set_queue_full(cointerra, false);
 
 	bool open_rv = cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep);
 	lowlevel_devinfo_free(llinfo);
@@ -918,6 +929,8 @@ static bool cta_prepare(struct thr_info *thr)
 		return false;
 
 	cgtime(&info->core_hash_start);
+	
+	timer_set_now(&thr->tv_poll);
 
 	return true;
 }
@@ -939,7 +952,7 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 	if (unlikely(!devstate->requested))
 	{
 		applog(LOG_DEBUG, "%s: Attempt to queue work while none requested; rejecting", dev->dev_repr);
-// 		cointerra_set_queue_full(dev, true);
+		cointerra_set_queue_full(dev, true);
 		return false;
 	}
 	
@@ -972,49 +985,24 @@ bool cointerra_queue_append(struct thr_info * const thr, struct work * const wor
 		return false;
 	
 // 	HASH_ADD_INT(master_thr->work, device_id, work);
+	{
+		++dev->queued_count;
+		timer_set_now(&work->tv_work_start);
+		HASH_ADD_INT(dev->queued_work, id, work);
+	}
 	++devstate->work_id;
 	if (!--devstate->requested)
 	{
 		applog(LOG_DEBUG, "%s: Sent all requested works, queue full", dev->dev_repr);
-// 		cointerra_set_queue_full(dev, true);
+		cointerra_set_queue_full(dev, true);
 	}
 	
 	return true;
 }
 
-/* *_fill and *_scanwork are serialised wrt to each other */
-static bool cta_fill(struct cgpu_info *cointerra)
+static
+void cointerra_queue_flush(struct thr_info * const thr)
 {
-	struct cointerra_info *info = cointerra->device_data;
-	bool ret = true;
-	struct work *work = NULL;
-
-	//applog(LOG_WARNING, "%s %d: cta_fill %d", cointerra->drv->name, cointerra->device_id,__LINE__);
-
-	if (unlikely(info->thr->work_restart))
-		cta_flush_work(cointerra);
-
-	mutex_lock(&info->lock);
-	work = get_queued(cointerra);
-	if (unlikely(!work)) {
-		ret = false;
-		goto out_unlock;
-	}
-	cgtime(&work->tv_work_start);
-	if (!cointerra_queue_append(cointerra->thr[0], work))
-	{
-		work_completed(cointerra, work);
-		applog(LOG_INFO, "%s %d: Failed to send work",
-		       cointerra->drv->name, cointerra->device_id);
-		/* The device will fail after this */
-		ret = false;
-	}
-	ret = !info->requested;
-
-out_unlock:
-	mutex_unlock(&info->lock);
-
-	return ret;
 }
 
 static void cta_send_reset(struct cgpu_info *cointerra, struct cointerra_info *info,
@@ -1114,21 +1102,12 @@ static void cta_send_corehashes(struct cgpu_info *cointerra, struct cointerra_in
 	cta_send_msg(cointerra, buf);
 }
 
-static int64_t cta_scanwork(struct thr_info *thr)
+static void cta_scanwork(struct thr_info *thr)
 {
 	struct cgpu_info *cointerra = thr->cgpu;
 	struct cointerra_info *info = cointerra->device_data;
 	double corehash_time;
 	struct timeval now;
-	int64_t hashes;
-
-	hashes = 0;
-
-	if (unlikely(0))
-	{
-		hashes = -1;
-		goto out;
-	}
 
 	cgtime(&now);
 
@@ -1183,11 +1162,6 @@ static int64_t cta_scanwork(struct thr_info *thr)
 	info->tot_calc_hashes += info->hashes;
 	info->hashes = info->share_hashes = 0;
 	mutex_unlock(&info->lock);
-
-	if (unlikely(0))
-		hashes = -1;
-out:
-	return hashes;
 }
 
 /* This is used for a work restart. We don't actually perform the work restart
@@ -1378,10 +1352,11 @@ struct device_drv cointerra_drv = {
 	.lowl_match = cointerra_lowl_match,
 	.lowl_probe = cointerra_lowl_probe,
 	.thread_init = cta_prepare,
-	.minerloop = hash_queued_work,
-	.queue_full = cta_fill,
+	.minerloop = minerloop_queue,
+	.queue_append = cointerra_queue_append,
+	.queue_flush = cointerra_queue_flush,
 	// TODO .update_work = cta_update_work,
-	.scanwork = cta_scanwork,
+	.poll = cta_scanwork,
 	.flush_work = cta_wake,
 	.get_api_stats = cta_api_stats,
 	.thread_shutdown = cta_shutdown,
