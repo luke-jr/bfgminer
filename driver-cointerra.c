@@ -179,9 +179,14 @@ bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr, stru
 static
 bool cointerra_open(const struct lowlevel_device_info * const info, const char * const repr, struct libusb_device_handle ** const usbh_p, struct lowl_usb_endpoint ** const ep_p, struct cointerra_info * const devstate)
 {
+	int e;
 	if (libusb_open(info->lowl_data, usbh_p))
 		applogr(false, LOG_DEBUG, "%s: USB open failed on %s",
 		        cointerra_drv.dname, info->devid);
+	if ( (e = libusb_set_configuration(*usbh_p, 1)) )
+		return_via_applog(fail, , LOG_ERR, "%s: Failed to %s on %s: %s", repr, "set configuration 1", info->devid, bfg_strerror(e, BST_LIBUSB));
+	if ( (e = libusb_claim_interface(*usbh_p, 0)) )
+		return_via_applog(fail, , LOG_ERR, "%s: Failed to %s on %s: %s", repr, "claim interface 0", info->devid, bfg_strerror(e, BST_LIBUSB));
 	*ep_p = usb_open_ep_pair(*usbh_p, LIBUSB_ENDPOINT_IN | 1, 64, LIBUSB_ENDPOINT_OUT | 1, 64);
 	usb_ep_set_timeouts_ms(*ep_p, COINTERRA_USB_TIMEOUT, COINTERRA_USB_TIMEOUT);
 	if (!*ep_p)
