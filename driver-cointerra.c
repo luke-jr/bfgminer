@@ -188,7 +188,6 @@ bool cointerra_open(const struct lowlevel_device_info * const info, const char *
 	if ( (e = libusb_claim_interface(*usbh_p, 0)) )
 		return_via_applog(fail, , LOG_ERR, "%s: Failed to %s on %s: %s", repr, "claim interface 0", info->devid, bfg_strerror(e, BST_LIBUSB));
 	*ep_p = usb_open_ep_pair(*usbh_p, LIBUSB_ENDPOINT_IN | 1, 64, LIBUSB_ENDPOINT_OUT | 1, 64);
-	usb_ep_set_timeouts_ms(*ep_p, COINTERRA_USB_TIMEOUT, COINTERRA_USB_TIMEOUT);
 	if (!*ep_p)
 	{
 		applog(LOG_DEBUG, "%s: Endpoint open failed on %s",
@@ -929,6 +928,7 @@ static bool cta_prepare(struct thr_info *thr)
 
 	cgtime(&info->core_hash_start);
 	
+	usb_ep_set_timeouts_ms(info->ep, COINTERRA_USB_TIMEOUT, COINTERRA_USB_TIMEOUT);
 	timer_set_now(&thr->tv_poll);
 
 	return true;
