@@ -44,8 +44,6 @@ enum cointerra_msg_type_out {
 static const uint8_t cointerra_startseq[] = {COINTERRA_START_SEQ};
 static const char *cointerra_hdr = "ZZ";
 
-int opt_ps_load;
-
 static void cta_gen_message(char *msg, char type)
 {
 	memset(msg, 0, CTA_MSG_SIZE);
@@ -99,7 +97,7 @@ static char *mystrstr(char *haystack, int size, const char *needle)
 }
 
 static
-bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr)
+bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr, struct cointerra_info * const devstate)
 {
 	int amount, offset = 0;
 	char buf[CTA_MSG_SIZE];
@@ -112,8 +110,8 @@ bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr)
 	// set the initial difficulty
 	buf[CTA_RESET_TYPE] = CTA_RESET_INIT | CTA_RESET_DIFF;
 	buf[CTA_RESET_DIFF] = diff_to_bits(CTA_INIT_DIFF);
-	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
-	buf[CTA_RESET_PSLOAD] = opt_ps_load;
+	buf[CTA_RESET_LOAD] = devstate->set_load ?: 255;
+	buf[CTA_RESET_PSLOAD] = 0;
 
 	amount = usb_write(ep, buf, CTA_MSG_SIZE);
 	if (amount != CTA_MSG_SIZE) {
@@ -178,7 +176,7 @@ bool cta_open(struct lowl_usb_endpoint * const ep, const char * const repr)
 }
 
 static
-bool cointerra_open(const struct lowlevel_device_info * const info, const char * const repr, struct libusb_device_handle ** const usbh_p, struct lowl_usb_endpoint ** const ep_p)
+bool cointerra_open(const struct lowlevel_device_info * const info, const char * const repr, struct libusb_device_handle ** const usbh_p, struct lowl_usb_endpoint ** const ep_p, struct cointerra_info * const devstate)
 {
 	if (libusb_open(info->lowl_data, usbh_p))
 		applogr(false, LOG_DEBUG, "%s: USB open failed on %s",
@@ -195,7 +193,7 @@ fail:
 		return false;
 	}
 	
-	if (!cta_open(*ep_p, repr))
+	if (!cta_open(*ep_p, repr, devstate))
 	{
 		usb_close_ep(*ep_p);
 		*ep_p = NULL;
@@ -223,7 +221,7 @@ static void cta_close(struct cgpu_info *cointerra)
 
 	/* Open does the same reset init followed by response as is required to
 	 * close the device. */
-	if (!cta_open(info->ep, cointerra->dev_repr)) {
+	if (!cta_open(info->ep, cointerra->dev_repr, info)) {
 		applog(LOG_INFO, "%s %d: Reset on close failed", cointerra->drv->name,
 			cointerra->device_id);
 	}
@@ -269,12 +267,12 @@ bool cointerra_wait_for_info(struct cointerra_info * const ctainfo, struct lowl_
 static
 bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 {
-	struct cointerra_info ctainfo;
+	struct cointerra_info ctainfo = { .set_load = 0, };
 	struct libusb_device_handle *usbh;
 	struct lowl_usb_endpoint *ep;
 	bool b;
 	
-	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep))
+	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep, &ctainfo))
 		return false;
 	mutex_init(&ctainfo.lock);
 	b = cointerra_wait_for_info(&ctainfo, ep);
@@ -893,7 +891,7 @@ static bool cta_prepare(struct thr_info *thr)
 	info->requested = CTA_MAX_QUEUE;
 	cointerra_set_queue_full(cointerra, false);
 
-	bool open_rv = cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep);
+	bool open_rv = cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep, info);
 	lowlevel_devinfo_free(llinfo);
 	if (!open_rv)
 		return false;
@@ -1006,8 +1004,8 @@ resend:
 	cta_gen_message(buf, CTA_SEND_RESET);
 
 	buf[CTA_RESET_TYPE] = reset_type;
-	buf[CTA_RESET_LOAD] = opt_cta_load ? opt_cta_load : 255;
-	buf[CTA_RESET_PSLOAD] = opt_ps_load;
+	buf[CTA_RESET_LOAD] = info->set_load ?: 255;
+	buf[CTA_RESET_PSLOAD] = 0;
 
 	applog(LOG_INFO, "%s %d: Sending Reset type %u with diffbits %u", cointerra->drv->name,
 	       cointerra->device_id, reset_type, diffbits);

@@ -138,12 +138,10 @@
 #define CTA_REQ_INTERVAL	5
 
 
-int opt_cta_load;
-int opt_ps_load;
-
 struct cointerra_info {
 	struct libusb_device_handle *usbh;
 	struct lowl_usb_endpoint *ep;
+	uint8_t set_load;
 	
 	/* Info data */
 	uint16_t hwrev;
