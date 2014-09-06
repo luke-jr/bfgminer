@@ -4145,16 +4145,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 		applog(LOG_DEBUG, "PROOF OF WORK RESULT: false (booooo)");
 		if (!QUIET) {
-			char where[20];
 			char disposition[36] = "reject";
 			char reason[32];
 
 			strcpy(reason, "");
-			if (total_pools > 1)
-				snprintf(where, sizeof(where), "pool %d", work->pool->pool_no);
-			else
-				strcpy(where, "");
-
 			if (!json_is_string(res))
 				res = json_object_get(val, "reject-reason");
 			if (res) {
