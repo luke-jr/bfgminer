@@ -771,8 +771,7 @@ static void cta_parse_msg(struct thr_info *thr, struct cgpu_info *cointerra,
 			cta_parse_info(cointerra, info, buf);
 			break;
 		case CTA_RECV_MSG:
-			applog(LOG_NOTICE, "%s %d: MSG: %s",
-			       cointerra->drv->name, cointerra->device_id, &buf[CTA_MSG_RECVD]);
+			applog(LOG_NOTICE, "%s: Devlog: %.*s", cointerra->dev_repr, (int)COINTERRA_MSGBODY_SIZE, &buf[CTA_MSG_RECVD]);
 			break;
 		case CTA_RECV_RDONE:
 			cta_parse_rdone(cointerra, info, buf);
