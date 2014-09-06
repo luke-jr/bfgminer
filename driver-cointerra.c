@@ -220,11 +220,14 @@ static void cta_close(struct cgpu_info *cointerra)
 {
 	struct cointerra_info *info = cointerra->device_data;
 
-	/* Open does the same reset init followed by response as is required to
-	 * close the device. */
-	if (!cta_open(info->ep, cointerra->dev_repr, info)) {
-		applog(LOG_INFO, "%s %d: Reset on close failed", cointerra->drv->name,
-			cointerra->device_id);
+	if (info->ep)
+	{
+		/* Open does the same reset init followed by response as is required to
+		 * close the device. */
+		if (!cta_open(info->ep, cointerra->dev_repr, info)) {
+			applog(LOG_INFO, "%s %d: Reset on close failed", cointerra->drv->name,
+				cointerra->device_id);
+		}
 	}
 
 	mutex_destroy(&info->lock);
