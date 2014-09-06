@@ -4068,6 +4068,25 @@ void maybe_local_submit(const struct work *work)
 #endif
 }
 
+static
+json_t *extract_reject_reason_j(json_t * const val, json_t *res, json_t * const err, const struct work * const work)
+{
+	if (json_is_string(res))
+		return res;
+	if ( (res = json_object_get(val, "reject-reason")) )
+		return res;
+	if (work->stratum && err && json_is_array(err) && json_array_size(err) >= 2 && (res = json_array_get(err, 1)) && json_is_string(res))
+		return res;
+	return NULL;
+}
+
+static
+const char *extract_reject_reason(json_t * const val, json_t *res, json_t * const err, const struct work * const work)
+{
+	json_t * const j = extract_reject_reason_j(val, res, err, work);
+	return j ? json_string_value(j) : NULL;
+}
+
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
@@ -4149,11 +4168,9 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			char reason[32];
 
 			strcpy(reason, "");
-			if (!json_is_string(res))
-				res = json_object_get(val, "reject-reason");
-			if (res) {
-				const char *reasontmp = json_string_value(res);
-
+			const char *reasontmp = extract_reject_reason(val, res, err, work);
+			if (reasontmp)
+			{
 				size_t reasonLen = strlen(reasontmp);
 				if (reasonLen > 28)
 					reasonLen = 28;
@@ -4162,14 +4179,6 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
 				memcpy(disposition + 7, reasontmp, reasonLen);
 				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			} else if (work->stratum && err && json_is_array(err)) {
-				json_t *reason_val = json_array_get(err, 1);
-				char *reason_str;
-
-				if (reason_val && json_is_string(reason_val)) {
-					reason_str = (char *)json_string_value(reason_val);
-					snprintf(reason, 31, " (%s)", reason_str);
-				}
 			}
 
 			share_result_msg(work, "Rejected", reason, resubmit, worktime);
