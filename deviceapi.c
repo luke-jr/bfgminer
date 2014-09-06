@@ -489,7 +489,7 @@ void cgpu_setup_control_requests(struct cgpu_info * const cgpu)
 {
 	mutex_init(&cgpu->device_mutex);
 	notifier_init(cgpu->thr[0]->mutex_request);
-	pthread_cond_init(&cgpu->device_cond, NULL);
+	pthread_cond_init(&cgpu->device_cond, bfg_condattr);
 }
 
 void cgpu_request_control(struct cgpu_info * const cgpu)

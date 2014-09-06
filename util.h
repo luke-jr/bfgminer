@@ -224,6 +224,10 @@ int cgtimer_to_ms(cgtimer_t *cgt)
 	return (cgt->tv_sec * 1000) + (cgt->tv_usec / 1000);
 }
 
+extern int bfg_cond_timedwait(pthread_cond_t * restrict, pthread_mutex_t * restrict, const struct timeval *);
+extern pthread_condattr_t *bfg_condattr_();
+#define bfg_condattr (bfg_condattr_())
+
 #define cgtimer_sub(a, b, res)  timersub(a, b, res)
 double us_tdiff(struct timeval *end, struct timeval *start);
 double tdiff(struct timeval *end, struct timeval *start);
