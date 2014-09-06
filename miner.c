@@ -4087,6 +4087,23 @@ const char *extract_reject_reason(json_t * const val, json_t *res, json_t * cons
 	return j ? json_string_value(j) : NULL;
 }
 
+static
+int put_in_parens(char * const buf, const size_t bufsz, const char * const s)
+{
+	if (!s)
+	{
+		if (bufsz)
+			buf[0] = '\0';
+		return 0;
+	}
+	
+	int p = snprintf(buf, bufsz, " (%s", s);
+	if (p >= bufsz - 1)
+		p = bufsz - 2;
+	strcpy(&buf[p], ")");
+	return p + 1;
+}
+
 /* Theoretically threads could race when modifying accepted and
  * rejected values but the chance of two submits completing at the
  * same time is zero so there is no point adding extra locking */
@@ -4167,19 +4184,10 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 			char disposition[36] = "reject";
 			char reason[32];
 
-			strcpy(reason, "");
 			const char *reasontmp = extract_reject_reason(val, res, err, work);
-			if (reasontmp)
-			{
-				size_t reasonLen = strlen(reasontmp);
-				if (reasonLen > 28)
-					reasonLen = 28;
-				reason[0] = ' '; reason[1] = '(';
-				memcpy(2 + reason, reasontmp, reasonLen);
-				reason[reasonLen + 2] = ')'; reason[reasonLen + 3] = '\0';
-				memcpy(disposition + 7, reasontmp, reasonLen);
-				disposition[6] = ':'; disposition[reasonLen + 7] = '\0';
-			}
+			int n = put_in_parens(reason, sizeof(reason), reasontmp);
+			if (reason[0])
+				snprintf(&disposition[6], sizeof(disposition) - 6, ":%.*s", n - 3, &reason[2]);
 
 			share_result_msg(work, "Rejected", reason, resubmit, worktime);
 			sharelog(disposition, work);
