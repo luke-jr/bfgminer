@@ -30,6 +30,7 @@ static const unsigned cointerra_max_nonce_diff = 0x20;
 #define COINTERRA_MSGBODY_SIZE  (COINTERRA_MSG_SIZE - 1)
 
 BFG_REGISTER_DRIVER(cointerra_drv)
+static const struct bfg_set_device_definition cointerra_set_device_funcs[];
 
 enum cointerra_msg_type_out {
 	CMTO_RESET     = 1,
@@ -293,6 +294,7 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 	struct cgpu_info * const dev = malloc(sizeof(*dev));
 	*dev = (struct cgpu_info){
 		.drv = &cointerra_drv,
+		.set_device_funcs = cointerra_set_device_funcs,
 		.procs = ctainfo.cores,
 		.device_data = lowlevel_ref(info),
 		.threads = 1,
@@ -890,6 +892,8 @@ static bool cta_prepare(struct thr_info *thr)
 	 * for a req-work message. */
 	info->requested = CTA_MAX_QUEUE;
 	cointerra_set_queue_full(cointerra, false);
+	
+	cgpu_set_defaults(cointerra);
 
 	bool open_rv = cointerra_open(llinfo, cointerra->dev_repr, &info->usbh, &info->ep, info);
 	lowlevel_devinfo_free(llinfo);
@@ -1317,6 +1321,25 @@ static struct api_data *cta_api_stats(struct cgpu_info *cgpu)
 
 	return root;
 }
+
+static
+const char *cointerra_set_load(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success)
+{
+	struct cointerra_info * const devstate = proc->device_data;
+	
+	const int nv = atoi(newvalue);
+	if (nv <= 0 || nv > 0xff)
+		return "Invalid power stepping value";
+	
+	devstate->set_load = nv;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition cointerra_set_device_funcs[] = {
+	{"load", cointerra_set_load, "power stepping (1-255)"},
+	{NULL},
+};
 
 struct device_drv cointerra_drv = {
 	.dname = "cointerra",
