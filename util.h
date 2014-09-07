@@ -106,6 +106,10 @@ const char *bfg_json_obj_string(json_t *json, const char *key, const char *fail)
 
 extern const char *__json_array_string(json_t *, unsigned int entry);
 
+#ifndef min
+#  define min(a, b)  ((a) < (b) ? (a) : (b))
+#endif
+
 extern void *my_memrchr(const void *, int, size_t);
 
 extern bool isCalpha(int);
@@ -257,6 +261,9 @@ typedef SOCKETTYPE notifier_t[2];
 extern void notifier_init(notifier_t);
 extern void notifier_wake(notifier_t);
 extern void notifier_read(notifier_t);
+extern bool notifier_wait(notifier_t, const struct timeval *);
+extern bool notifier_wait_us(notifier_t, unsigned long long usecs);
+extern void notifier_reset(notifier_t);
 extern void notifier_init_invalid(notifier_t);
 extern void notifier_destroy(notifier_t);
 

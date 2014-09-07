@@ -130,22 +130,6 @@ bool lowl_usb_attach_kernel_driver(const struct lowlevel_device_info * const inf
 	return rv;
 }
 
-struct libusb_device_handle *lowl_usb_open(struct lowlevel_device_info * const info)
-{
-	libusb_device * const dev = info->lowl_data;
-	
-	if (!dev)
-		return NULL;
-	
-	libusb_device_handle *devh;
-
-	if (libusb_open(dev, &devh)) {
-		applog(LOG_ERR, "%s: Error opening device", __func__);
-		return NULL;
-	}
-	return devh;
-}
-
 struct device_drv *bfg_claim_usb(struct device_drv * const api, const bool verbose, const uint8_t usbbus, const uint8_t usbaddr)
 {
 	char * const devpath = bfg_make_devid_usb(usbbus, usbaddr);
@@ -313,11 +297,6 @@ void usb_close_ep(struct lowl_usb_endpoint * const ep)
 	if (ep->packetsz_r != -1)
 		bytes_free(&ep->_buf_r);
 	free(ep);
-}
-
-void lowl_usb_close(struct libusb_device_handle * const devh)
-{
-	libusb_close(devh);
 }
 
 struct lowlevel_driver lowl_usb = {

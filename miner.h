@@ -759,6 +759,7 @@ void bswap_32mult(void * const dest_p, const void * const src_p, const size_t sz
 		*d = bswap_32(*s);
 }
 
+#define flip12(dest_p, src_p) swap32yes(dest_p, src_p, 12 / 4)
 #define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
 
 #define WATCHDOG_INTERVAL  2
@@ -1198,6 +1199,7 @@ struct bfg_tmpl_ref {
 struct ntime_roll_limits {
 	uint32_t min;
 	uint32_t max;
+	struct timeval tv_ref;
 	uint16_t minoff;
 	uint16_t maxoff;
 };
@@ -1475,8 +1477,10 @@ extern struct work *__find_work_bymidstate(struct work *que, char *midstate, siz
 extern struct work *find_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern struct work *clone_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
 extern void __work_completed(struct cgpu_info *cgpu, struct work *work);
+extern int age_queued_work(struct cgpu_info *cgpu, double secs);
 extern void work_completed(struct cgpu_info *cgpu, struct work *work);
 extern struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate, size_t midstatelen, char *data, int offset, size_t datalen);
+extern void flush_queue(struct cgpu_info *cgpu);
 extern bool abandon_work(struct work *, struct timeval *work_runtime, uint64_t hashes);
 extern void hash_queued_work(struct thr_info *mythr);
 extern void get_statline3(char *buf, size_t bufsz, struct cgpu_info *, bool for_curses, bool opt_show_procs);
@@ -1517,11 +1521,30 @@ extern void tmpl_decref(struct bfg_tmpl_ref *);
 extern void clean_work(struct work *work);
 extern void free_work(struct work *work);
 extern void __copy_work(struct work *work, const struct work *base_work);
-extern struct work *copy_work(const struct work *base_work);
+extern struct work *copy_work_noffset(const struct work *base_work, int noffset);
+#define copy_work(work_in) copy_work_noffset(work_in, 0)
+extern double share_diff(const struct work *);
 extern const char *bfg_workpadding_bin;
-extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll);
-extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll);
+extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
+extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
+extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
 extern void work_hash(struct work *);
+
+#define NTIME_DATA_OFFSET  0x44
+
+static inline
+uint32_t work_get_ntime(const struct work * const work)
+{
+	return upk_u32be(work->data, 0x44);
+}
+
+static inline
+void work_set_ntime(struct work * const work, const uint32_t ntime)
+{
+	pk_u32be(work->data, 0x44, ntime);
+}
+
+
 extern char *devpath_to_devid(const char *);
 extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
@@ -1533,6 +1556,7 @@ enum api_data_type {
 	API_STRING,
 	API_CONST,
 	API_UINT8,
+	API_INT16,
 	API_UINT16,
 	API_INT,
 	API_UINT,
@@ -1568,6 +1592,7 @@ extern struct api_data *api_add_escape(struct api_data *root, char *name, char *
 extern struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data);
 extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
 extern struct api_data *api_add_uint8(struct api_data *root, char *name, uint8_t *data, bool copy_data);
+extern struct api_data *api_add_int16(struct api_data *root, char *name, uint16_t *data, bool copy_data);
 extern struct api_data *api_add_uint16(struct api_data *root, char *name, uint16_t *data, bool copy_data);
 extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
 extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);

@@ -2468,7 +2468,7 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	hex2bin(&pool->swork.diffbits[0], nbit, 4);
 	
 	/* Nominally allow a driver to ntime roll 60 seconds */
-	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60);
+	set_simple_ntime_roll_limit(&pool->swork.ntime_roll_limits, pool->swork.ntime, 60, &pool->swork.tv_received);
 	
 	cb1_len = strlen(coinbase1) / 2;
 	pool->swork.nonce2_offset = cb1_len + pool->n1_len;
@@ -3637,6 +3637,42 @@ void notifier_read(notifier_t fd)
 #else
 	IGNORE_RETURN_VALUE(read(fd[0], buf, sizeof(buf)));
 #endif
+}
+
+bool notifier_wait(notifier_t notifier, const struct timeval *tvp_timeout)
+{
+	struct timeval tv_now, tv_timeout;
+	fd_set rfds;
+	int e;
+	
+	while (true)
+	{
+		FD_ZERO(&rfds);
+		FD_SET(notifier[0], &rfds);
+		tv_timeout = *tvp_timeout;
+		timer_set_now(&tv_now);
+		e = select(notifier[0]+1, &rfds, NULL, NULL, select_timeout(&tv_timeout, &tv_now));
+		if (e > 0)
+			return true;
+		if (e == 0)
+			return false;
+	}
+}
+
+bool notifier_wait_us(notifier_t notifier, const unsigned long long usecs)
+{
+	struct timeval tv_timeout = TIMEVAL_USECS(usecs);
+	return notifier_wait(notifier, &tv_timeout);
+}
+
+void notifier_reset(notifier_t notifier)
+{
+	fd_set rfds;
+	struct timeval tv_timeout = { .tv_sec = 0, };
+	FD_ZERO(&rfds);
+	FD_SET(notifier[0], &rfds);
+	while (select(notifier[0]+1, &rfds, NULL, NULL, &tv_timeout) != 0)
+		notifier_read(notifier);
 }
 
 void notifier_init_invalid(notifier_t fd)

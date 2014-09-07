@@ -2841,19 +2841,47 @@ bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
 }
 
-void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll)
+void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll, const struct timeval * const tvp_ref)
 {
+	const int offsets = max(ntime_roll, 60);
 	*nrl = (struct ntime_roll_limits){
 		.min = ntime_base,
 		.max = ntime_base + ntime_roll,
-		.minoff = -ntime_roll,
-		.maxoff = ntime_roll,
+		.tv_ref = *tvp_ref,
+		.minoff = -offsets,
+		.maxoff = offsets,
 	};
 }
 
-void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_roll)
+void work_set_simple_ntime_roll_limit(struct work * const work, const int ntime_roll, const struct timeval * const tvp_ref)
 {
-	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll);
+	set_simple_ntime_roll_limit(&work->ntime_roll_limits, upk_u32be(work->data, 0x44), ntime_roll, tvp_ref);
+}
+
+int work_ntime_range(struct work * const work, const struct timeval * const tvp_earliest, const struct timeval * const tvp_latest, const int desired_roll)
+{
+	const struct ntime_roll_limits * const nrl = &work->ntime_roll_limits;
+	const uint32_t ref_ntime = work_get_ntime(work);
+	const int earliest_elapsed = timer_elapsed(&nrl->tv_ref, tvp_earliest);
+	const int   latest_elapsed = timer_elapsed(&nrl->tv_ref, tvp_latest);
+	// minimum ntime is the latest possible result (add a second to spare) adjusted for minimum offset (or fixed minimum ntime)
+	uint32_t min_ntime = max(nrl->min, ref_ntime + latest_elapsed+1 + nrl->minoff);
+	// maximum ntime is the earliest possible result adjusted for maximum offset (or fixed maximum ntime)
+	uint32_t max_ntime = min(nrl->max, ref_ntime + earliest_elapsed + nrl->maxoff);
+	if (max_ntime < min_ntime)
+		return -1;
+	
+	if (max_ntime - min_ntime > desired_roll)
+	{
+		// Adjust min_ntime upward for accuracy, when possible
+		const int mid_elapsed = ((latest_elapsed - earliest_elapsed) / 2) + earliest_elapsed;
+		uint32_t ideal_ntime = ref_ntime + mid_elapsed;
+		if (ideal_ntime > min_ntime)
+			min_ntime = min(ideal_ntime, max_ntime - desired_roll);
+	}
+	
+	work_set_ntime(work, min_ntime);
+	return max_ntime - min_ntime;
 }
 
 #if BLKMAKER_VERSION > 1
@@ -3055,6 +3083,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		work->ntime_roll_limits = (struct ntime_roll_limits){
 			.min = tmpl->mintime,
 			.max = tmpl->maxtime,
+			.tv_ref = tv_now,
 			.minoff = tmpl->mintimeoff,
 			.maxoff = tmpl->maxtimeoff,
 		};
@@ -3080,7 +3109,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		return false;
 	}
 	else
-		work_set_simple_ntime_roll_limit(work, 0);
+		work_set_simple_ntime_roll_limit(work, 0, &tv_now);
 
 	if (!jobj_binary(res_val, "midstate", work->midstate, sizeof(work->midstate), false)) {
 		// Calculate it ourselves
@@ -4458,8 +4487,6 @@ void disable_pool(struct pool * const pool, const enum pool_enable enable_status
 		switch_pools(NULL);
 }
 
-static double share_diff(const struct work *);
-
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
@@ -5138,9 +5165,11 @@ void get_benchmark_work(struct work *work, bool use_swork)
 {
 	if (use_swork)
 	{
+		struct timeval tv_now;
+		timer_set_now(&tv_now);
 		gen_stratum_work(pools[0], work);
 		work->getwork_mode = GETWORK_MODE_BENCHMARK;
-		work_set_simple_ntime_roll_limit(work, 0);
+		work_set_simple_ntime_roll_limit(work, 0, &tv_now);
 		return;
 	}
 	
@@ -5165,7 +5194,7 @@ void get_benchmark_work(struct work *work, bool use_swork)
 	copy_time(&work->tv_staged, &work->tv_getwork);
 	work->getwork_mode = GETWORK_MODE_BENCHMARK;
 	calc_diff(work, 0);
-	work_set_simple_ntime_roll_limit(work, 60);
+	work_set_simple_ntime_roll_limit(work, 60, &work->tv_getwork);
 }
 
 static void wake_gws(void);
@@ -5668,7 +5697,7 @@ static void roll_work(struct work *work)
 	ntime = be32toh(*work_ntime);
 	ntime++;
 	*work_ntime = htobe32(ntime);
-		work_set_simple_ntime_roll_limit(work, 0);
+		work_set_simple_ntime_roll_limit(work, 0, &work->ntime_roll_limits.tv_ref);
 
 		applog(LOG_DEBUG, "Successfully rolled time header in work");
 	}
@@ -5716,12 +5745,14 @@ static void _copy_work(struct work *work, const struct work *base_work, int noff
 }
 
 /* Generates a copy of an existing work struct, creating fresh heap allocations
- * for all dynamically allocated arrays within the struct */
-struct work *copy_work(const struct work *base_work)
+ * for all dynamically allocated arrays within the struct. noffset is used for
+ * when a driver has internally rolled the ntime, noffset is a relative value.
+ * The macro copy_work() calls this function with an noffset of 0. */
+struct work *copy_work_noffset(const struct work *base_work, int noffset)
 {
 	struct work *work = make_work();
 
-	_copy_work(work, base_work, 0);
+	_copy_work(work, base_work, noffset);
 
 	return work;
 }
@@ -5904,7 +5935,7 @@ bool stale_work(struct work *work, bool share)
 	return false;
 }
 
-static double share_diff(const struct work *work)
+double share_diff(const struct work *work)
 {
 	double ret;
 	bool new_best = false;
@@ -9991,6 +10022,30 @@ void __work_completed(struct cgpu_info *cgpu, struct work *work)
 	cgpu->queued_count--;
 	HASH_DEL(cgpu->queued_work, work);
 }
+
+/* This iterates over a queued hashlist finding work started more than secs
+ * seconds ago and discards the work as completed. The driver must set the
+ * work->tv_work_start value appropriately. Returns the number of items aged. */
+int age_queued_work(struct cgpu_info *cgpu, double secs)
+{
+	struct work *work, *tmp;
+	struct timeval tv_now;
+	int aged = 0;
+
+	cgtime(&tv_now);
+
+	wr_lock(&cgpu->qlock);
+	HASH_ITER(hh, cgpu->queued_work, work, tmp) {
+		if (tdiff(&tv_now, &work->tv_work_start) > secs) {
+			__work_completed(cgpu, work);
+			aged++;
+		}
+	}
+	wr_unlock(&cgpu->qlock);
+
+	return aged;
+}
+
 /* This function should be used by queued device drivers when they're sure
  * the work struct is no longer in use. */
 void work_completed(struct cgpu_info *cgpu, struct work *work)
@@ -10017,7 +10072,7 @@ struct work *take_queued_work_bymidstate(struct cgpu_info *cgpu, char *midstate,
 	return work;
 }
 
-static void flush_queue(struct cgpu_info *cgpu)
+void flush_queue(struct cgpu_info *cgpu)
 {
 	struct work *work = NULL;
 
