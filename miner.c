@@ -4168,6 +4168,15 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 
 			test_work_current(&fakework);
 		}
+	}
+	else
+	if (!hash_target_check(work->hash, work->target))
+	{
+		// This was submitted despite failing the proper target
+		// Quietly ignore the reject
+		char reason[32];
+		put_in_parens(reason, sizeof(reason), extract_reject_reason(val, res, err, work));
+		applog(LOG_DEBUG, "Share above target rejected%s by pool %u as expected, ignoring", reason, pool->pool_no);
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
