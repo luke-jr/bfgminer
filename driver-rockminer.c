@@ -388,13 +388,15 @@ void rockminer_poll(struct thr_info * const master_thr)
 			case ROCKMINER_REPLY_TASK_COMPLETE:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d completed", proc->proc_repr, taskid);
 				hashes_done2(thr, 0x100000000, NULL);
-				timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_TIMEOUT_US);
+				if (proc->deven == DEV_ENABLED)
+					timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_TIMEOUT_US);
 				break;
 			case ROCKMINER_REPLY_GET_TASK:
 				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 				thr->queue_full = false;
 				++chip->requested_work;
-				timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
+				if (proc->deven == DEV_ENABLED)
+					timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
 				break;
 		}
 	}
@@ -410,6 +412,11 @@ void rockminer_poll(struct thr_info * const master_thr)
 		
 		if (timer_passed(&chip->tv_midtask_timeout, &tv_now))
 		{
+			if (proc->deven != DEV_ENABLED)
+			{
+				timer_unset(&chip->tv_midtask_timeout);
+				continue;
+			}
 			// A task completed, but no request followed
 			// This means it missed our last task send, so we need to resend it
 			applog(LOG_WARNING, "%"PRIpreprv": No task request? Probably lost, resending task %d", proc->proc_repr, chip->last_taskid);
