@@ -1157,7 +1157,6 @@ void _now_is_not_set(__maybe_unused struct timeval *tv)
 void (*timer_set_now)(struct timeval *tv) = _now_is_not_set;
 void (*cgsleep_us_r)(cgtimer_t *, int64_t) = _cgsleep_us_r_nanosleep;
 
-static clockid_t bfg_timedwait_clk;
 #ifdef HAVE_CLOCK_GETTIME_MONOTONIC
 static clockid_t bfg_timer_clk;
 
@@ -1203,58 +1202,9 @@ bool _bfg_try_clock_gettime(clockid_t clk)
 }
 #endif
 
-int bfg_cond_timedwait(pthread_cond_t * restrict cond, pthread_mutex_t * restrict mutex, const struct timeval *tvp)
-{
-	struct timespec ts;
-	clock_gettime(bfg_timedwait_clk, &ts);
-	ts.tv_sec += tvp->tv_sec;
-	ts.tv_nsec += (long)tvp->tv_usec * 1000;
-	if (ts.tv_nsec > 1000000000L)
-	{
-		++ts.tv_sec;
-		ts.tv_nsec -= 1000000000L;
-	}
-	return pthread_cond_timedwait(cond, mutex, &ts);
-}
-
 pthread_condattr_t *bfg_condattr_()
 {
-	static pthread_condattr_t attr;
-	static bool initialized;
-	
-	if (unlikely(!initialized))
-	{
-		pthread_condattr_init(&attr);
-#ifdef HAVE_CLOCK_GETTIME_MONOTONIC
-#ifdef HAVE_CLOCK_GETTIME_MONOTONIC_RAW
-		if (!pthread_condattr_setclock(&attr, CLOCK_MONOTONIC_RAW))
-		{
-			applog(LOG_DEBUG, "Timers: Using %s for cond timedwait", "CLOCK_MONOTONIC_RAW");
-			bfg_timedwait_clk = CLOCK_MONOTONIC_RAW;
-		}
-		else
-#endif
-		if (!pthread_condattr_setclock(&attr, CLOCK_MONOTONIC))
-		{
-			applog(LOG_DEBUG, "Timers: Using %s for cond timedwait", "CLOCK_MONOTONIC");
-			bfg_timedwait_clk = CLOCK_MONOTONIC;
-		}
-		else
-#endif
-		if (!pthread_condattr_setclock(&attr, CLOCK_REALTIME))
-		{
-			applog(LOG_DEBUG, "Timers: Using %s for cond timedwait", "CLOCK_REALTIME");
-			bfg_timedwait_clk = CLOCK_REALTIME;
-		}
-		else
-		{
-			applog(LOG_DEBUG, "Timers: Cannot find a clock for cond timedwait");
-			return NULL;
-		}
-		initialized = true;
-	}
-	
-	return &attr;
+	return NULL;
 }
 
 static
