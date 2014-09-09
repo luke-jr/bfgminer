@@ -9301,10 +9301,26 @@ static void pool_resus(struct pool *pool)
 		applog(LOG_INFO, "Pool %d %s alive", pool->pool_no, pool->rpc_url);
 }
 
+static
+void *cmd_idle_thread(void * const __maybe_unused userp)
+{
+	pthread_detach(pthread_self());
+	RenameThread("cmd-idle");
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+	
+	sleep(opt_log_interval);
+	pthread_testcancel();
+	run_cmd(cmd_idle);
+	
+	return NULL;
+}
+
 static struct work *hash_pop(void)
 {
 	struct work *work = NULL, *tmp;
 	int hc;
+	bool did_cmd_idle = false;
+	pthread_t cmd_idle_thr;
 
 retry:
 	mutex_lock(stgd_lock);
@@ -9323,14 +9339,16 @@ retry:
 			no_work = true;
 		}
 		pthread_cond_signal(&gws_cond);
-		const struct timeval tv = { .tv_sec = opt_log_interval, };
-		if (ETIMEDOUT == bfg_cond_timedwait(&getq->cond, stgd_lock, &tv))
+		
+		if (cmd_idle && !did_cmd_idle)
 		{
-			run_cmd(cmd_idle);
-			pthread_cond_signal(&gws_cond);
-			pthread_cond_wait(&getq->cond, stgd_lock);
+			if (likely(!pthread_create(&cmd_idle_thr, NULL, cmd_idle_thread, NULL)))
+				did_cmd_idle = true;
 		}
+		pthread_cond_wait(&getq->cond, stgd_lock);
 	}
+	if (did_cmd_idle)
+		pthread_cancel(cmd_idle_thr);
 	
 	no_work = false;
 
