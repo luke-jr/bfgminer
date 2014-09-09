@@ -1182,6 +1182,7 @@ enum pool_enable {
 	POOL_DISABLED,
 	POOL_ENABLED,
 	POOL_REJECTING,
+	POOL_MISBEHAVING,
 };
 
 enum pool_protocol {
@@ -1242,6 +1243,22 @@ struct stratum_work {
 
 #define RBUFSIZE 8192
 #define RECVSIZE (RBUFSIZE - 4)
+
+/*
+ * Build an hash table in case there are lots
+ * of addresses to check against
+ */
+struct bytes_hashtbl {
+	bytes_t b;
+	UT_hash_handle hh;
+};
+
+struct coinbase_param {
+	bool testnet;
+	struct bytes_hashtbl *scripts;
+	int64_t total;
+	float perc;
+};
 
 struct pool {
 	int pool_no;
@@ -1353,6 +1370,9 @@ struct pool {
 	pthread_mutex_t stratum_lock;
 	char *admin_msg;
 
+	/* param for coinbase check */
+	struct coinbase_param cb_param;
+	
 	pthread_mutex_t last_work_lock;
 	struct work *last_work_copy;
 };
@@ -1509,6 +1529,7 @@ extern void clear_logwin(void);
 extern void logwin_update(void);
 extern bool pool_tclear(struct pool *pool, bool *var);
 extern bool pool_may_redirect_to(struct pool *, const char *uri);
+extern void pool_check_coinbase(struct pool *, const uint8_t *cbtxn, size_t cbtxnsz);
 extern struct thread_q *tq_new(void);
 extern void tq_free(struct thread_q *tq);
 extern bool tq_push(struct thread_q *tq, void *data);
@@ -1550,6 +1571,7 @@ extern struct thr_info *get_thread(int thr_id);
 extern struct cgpu_info *get_devices(int id);
 extern int create_new_cgpus(void (*addfunc)(void*), void *arg);
 extern int scan_serial(const char *);
+extern bool check_coinbase(const uint8_t *, size_t, const struct coinbase_param *cb_param);
 
 enum api_data_type {
 	API_ESCAPE,

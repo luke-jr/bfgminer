@@ -71,6 +71,7 @@
 #include <blkmaker.h>
 #include <blkmaker_jansson.h>
 #include <blktemplate.h>
+#include <libbase58.h>
 
 #include "compat.h"
 #include "deviceapi.h"
@@ -1574,6 +1575,87 @@ static char *set_userpass(const char *arg)
 	return NULL;
 }
 
+static char *set_cbcaddr(char *arg)
+{
+	struct pool *pool;
+	char *p, *addr;
+	bytes_t target_script = BYTES_INIT;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-addr list";
+	
+	pool = pools[total_pools - 1];
+	
+	/* NOTE: 'x' is a new prefix which leads both mainnet and testnet address, we would
+	 * need support it later, but now leave the code just so.
+	 *
+	 * Regarding details of address prefix 'x', check the below URL:
+	 * https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#Serialization_format
+	 */
+	pool->cb_param.testnet = (arg[0] != '1' && arg[0] != '3' && arg[0] != 'x');
+	
+	for (; (addr = strtok_r(arg, ",", &p)); arg = NULL)
+	{
+		struct bytes_hashtbl *ah;
+		
+		if (set_b58addr(addr, &target_script))
+			/* No bother to free memory since we are going to exit anyway */
+			return "Invalid address in --coinbase-check-address list";
+		
+		HASH_FIND(hh, pool->cb_param.scripts, bytes_buf(&target_script), bytes_len(&target_script), ah);
+		if (!ah)
+		{
+			/* Note: for the below allocated memory we have good way to release its memory
+			 * since we can't be sure there are no reference to the pool struct when remove_pool() 
+			 * get called.
+			 *
+			 * We just hope the remove_pool() would not be called many many times during
+			 * the whole running life of this program.
+			 */
+			ah = malloc(sizeof(*ah));
+			bytes_init(&ah->b);
+			bytes_assimilate(&ah->b, &target_script);
+			HASH_ADD(hh, pool->cb_param.scripts, b.buf, bytes_len(&ah->b), ah);
+		}
+	}
+	bytes_free(&target_script);
+	
+	return NULL;
+}
+
+static char *set_cbctotal(const char *arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-total argument";
+	
+	pool = pools[total_pools - 1];
+	pool->cb_param.total = atoll(arg);
+	if (pool->cb_param.total < 0)
+		return "The total payout amount in coinbase should be greater than 0";
+	
+	return NULL;
+}
+
+static char *set_cbcperc(const char *arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Define pool first, then the --coinbase-check-percent argument";
+	
+	pool = pools[total_pools - 1];
+	if (!pool->cb_param.scripts)
+		return "Define --coinbase-check-addr list first, then the --coinbase-check-total argument";
+	
+	pool->cb_param.perc = atof(arg) / 100;
+	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
+		return "The percentage should be between 0 and 100";
+	
+	return NULL;
+}
+
 static char *set_pool_priority(const char *arg)
 {
 	struct pool *pool;
@@ -2444,6 +2526,24 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 		     set_userpass, NULL, NULL,
 		     "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--coinbase-check-addr",
+			set_cbcaddr, NULL, NULL,
+			"A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','"),
+	OPT_WITH_ARG("--cbcheck-addr|--cbc-addr|--cbcaddr",
+			set_cbcaddr, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-total",
+			set_cbctotal, NULL, NULL,
+			"The least total payout amount expected in coinbase received from the previous-defined pool"),
+	OPT_WITH_ARG("--cbcheck-total|--cbc-total|--cbctotal",
+			set_cbctotal, NULL, NULL,
+			opt_hidden),
+	OPT_WITH_ARG("--coinbase-check-percent",
+			set_cbcperc, NULL, NULL,
+			"The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool"),
+	OPT_WITH_ARG("--cbcheck-percent|--cbc-percent|--cbcpercent|--cbcperc",
+			set_cbcperc, NULL, NULL,
+			opt_hidden),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
@@ -2841,6 +2941,27 @@ bool pool_may_redirect_to(struct pool * const pool, const char * const uri)
 	return match_domains(pool->rpc_url, strlen(pool->rpc_url), uri, strlen(uri));
 }
 
+void pool_check_coinbase(struct pool * const pool, const uint8_t * const cbtxn, const size_t cbtxnsz)
+{
+	if (uri_get_param_bool(pool->rpc_url, "skipcbcheck", false))
+	{}
+	else
+	if (!check_coinbase(cbtxn, cbtxnsz, &pool->cb_param))
+	{
+		if (pool->enabled == POOL_ENABLED)
+		{
+			applog(LOG_ERR, "Pool %d misbehaving (%s), disabling!", pool->pool_no, "coinbase check");
+			disable_pool(pool, POOL_MISBEHAVING);
+		}
+	}
+	else
+	if (pool->enabled == POOL_MISBEHAVING)
+	{
+		applog(LOG_NOTICE, "Pool %d no longer misbehaving, re-enabling!", pool->pool_no);
+		enable_pool(pool);
+	}
+}
+
 void set_simple_ntime_roll_limit(struct ntime_roll_limits * const nrl, const uint32_t ntime_base, const int ntime_roll, const struct timeval * const tvp_ref)
 {
 	const int offsets = max(ntime_roll, 60);
@@ -3158,6 +3279,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		{
 			struct stratum_work * const swork = &pool->swork;
 			const size_t branchdatasz = branchcount * 0x20;
+			
+			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
 			swork->tr = work->tr;
@@ -7387,6 +7510,9 @@ updated:
 				case POOL_REJECTING:
 					wlogprint("Rejectin ");
 					break;
+				case POOL_MISBEHAVING:
+					wlogprint("Misbehav ");
+					break;
 			}
 			_wlogprint(pool_proto_str(pool));
 			wlogprint(" Quota %d Pool %d: %s  User:%s\n",
@@ -8683,7 +8809,8 @@ static bool cnx_needed(struct pool *pool)
 {
 	struct pool *cp;
 
-	if (pool->enabled != POOL_ENABLED)
+	// We want to keep a connection open for rejecting or misbehaving pools, to detect when/if they change their tune
+	if (pool->enabled == POOL_DISABLED)
 		return false;
 
 	/* Idle stratum pool needs something to kick it alive again */
@@ -12321,6 +12448,7 @@ int main(int argc, char *argv[])
 	
 	atexit(bfg_atexit);
 
+	b58_sha256_impl = my_blkmaker_sha256_callback;
 	blkmk_sha256_impl = my_blkmaker_sha256_callback;
 
 	bfg_init_threadlocal();

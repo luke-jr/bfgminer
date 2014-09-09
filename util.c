@@ -53,6 +53,7 @@
 # include <mmsystem.h>
 #endif
 
+#include <libbase58.h>
 #include <utlist.h>
 
 #ifdef NEED_BFG_LOWL_VCOM
@@ -2403,6 +2404,139 @@ void stratum_probe_transparency(struct pool *pool)
 	pool->swork.transparency_probed = true;
 }
 
+size_t script_to_address(char *out, size_t outsz, const uint8_t *script, size_t scriptsz, bool testnet)
+{
+	char addr[35];
+	size_t size = sizeof(addr);
+	bool bok = false;
+	
+	if (scriptsz == 25 && script[0] == 0x76 && script[1] == 0xa9 && script[2] == 0x14 && script[23] == 0x88 && script[24] == 0xac)
+		bok = b58check_enc(addr, &size, testnet ? 0x6f : 0x00, &script[3], 20);
+	else if (scriptsz == 23 && script[0] == 0xa9 && script[1] == 0x14 && script[22] == 0x87)
+		bok = b58check_enc(addr, &size, testnet ? 0xc4 : 0x05, &script[2], 20);
+	if (!bok)
+		return 0;
+	if (outsz >= size)
+		strcpy(out, addr);
+	return size;
+}
+
+size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
+{
+	if (size > 8 && p[0] == 0xff)
+	{
+		*n = upk_u64le(p, 0);
+		return 9;
+	}
+	if (size > 4 && p[0] == 0xfe)
+	{
+		*n = upk_u32le(p, 0);
+		return 5;
+	}
+	if (size > 2 && p[0] == 0xfd)
+	{
+		*n = upk_u16le(p, 0);
+		return 3;
+	}
+	if (size > 0)
+	{
+		*n = p[0];
+		return 1;
+	}
+	return 0;
+}
+
+/* Caller ensure cb_param is an valid pointer */
+bool check_coinbase(const uint8_t *coinbase, size_t cbsize, const struct coinbase_param *cb_param)
+{
+	int i;
+	size_t pos;
+	uint64_t len, total, target, amount, curr_pk_script_len;
+	bool found_target = false;
+	
+	if (cbsize < 62)
+		/* Smallest possible length */
+		applogr(false, LOG_ERR, "Coinbase check: invalid length -- %lu", (unsigned long)cbsize);
+	pos = 4; /* Skip the version */
+	
+	if (coinbase[pos] != 1)
+		applogr(false, LOG_ERR, "Coinbase check: multiple inputs in coinbase: 0x%02x", coinbase[pos]);
+	pos += 1 /* varint length */ + 32 /* prevhash */ + 4 /* 0xffffffff */;
+	
+	if (coinbase[pos] < 2 || coinbase[pos] > 100)
+		applogr(false, LOG_ERR, "Coinbase check: invalid input script sig length: 0x%02x", coinbase[pos]);
+	pos += 1 /* varint length */ + coinbase[pos] + 4 /* 0xffffffff */;
+	
+	if (cbsize <= pos)
+incomplete_cb:
+		applogr(false, LOG_ERR, "Coinbase check: incomplete coinbase for payout check");
+	
+	total = target = 0;
+	
+	i = varint_decode(coinbase + pos, cbsize - pos, &len);
+	if (!i)
+		goto incomplete_cb;
+	pos += i;
+	
+	while (len-- > 0)
+	{
+		if (cbsize <= pos + 8)
+			goto incomplete_cb;
+		
+		amount = upk_u64le(coinbase, pos);
+		pos += 8; /* amount length */
+		
+		total += amount;
+		
+		i = varint_decode(coinbase + pos, cbsize - pos, &curr_pk_script_len);
+		if (!i || cbsize <= pos + i + curr_pk_script_len)
+			goto incomplete_cb;
+		pos += i;
+		
+		struct bytes_hashtbl *ah = NULL;
+		HASH_FIND(hh, cb_param->scripts, &coinbase[pos], curr_pk_script_len, ah);
+		if (ah)
+		{
+			found_target = true;
+			target += amount;
+		}
+		
+		if (opt_debug)
+		{
+			char s[(curr_pk_script_len * 2) + 3];
+			i = script_to_address(s, sizeof(s), &coinbase[pos], curr_pk_script_len, cb_param->testnet);
+			if (!(i && i <= sizeof(s)))
+			{
+				s[0] = '[';
+				bin2hex(&s[1], &coinbase[pos], curr_pk_script_len);
+				strcpy(&s[(curr_pk_script_len * 2) + 1], "]");
+			}
+			applog(LOG_DEBUG, "Coinbase output: %10"PRIu64" -- %s%s", amount, s, ah ? "*" : "");
+		}
+		
+		pos += curr_pk_script_len;
+	}
+	if (total < cb_param->total)
+		applogr(false, LOG_ERR, "Coinbase check: lopsided total output amount = %"PRIu64", expecting >=%"PRIu64, total, cb_param->total);
+	if (cb_param->scripts)
+	{
+		if (cb_param->perc && !(total && (float)((double)target / total) >= cb_param->perc))
+			applogr(false, LOG_ERR, "Coinbase check: lopsided target/total = %g(%"PRIu64"/%"PRIu64"), expecting >=%g", (total ? (double)target / total : (double)0), target, total, cb_param->perc);
+		else
+		if (!found_target)
+			applogr(false, LOG_ERR, "Coinbase check: not found any target addr");
+	}
+	
+	if (cbsize < pos + 4)
+		applogr(false, LOG_ERR, "Coinbase check: No room for locktime");
+	pos += 4;
+	
+	if (opt_debug)
+		applog(LOG_DEBUG, "Coinbase: (size, pos, addr_count, target, total) = (%lu, %lu, %d, %"PRIu64", %"PRIu64")", (unsigned long)cbsize, (unsigned long)pos, (int)(HASH_COUNT(cb_param->scripts)), target, total);
+	
+	return true;
+}
+
 static bool parse_notify(struct pool *pool, json_t *val)
 {
 	const char *prev_hash, *coinbase1, *coinbase2, *bbversion, *nbit, *ntime;
@@ -2488,6 +2622,8 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->nonce2 = 0;
 	
 	memcpy(pool->swork.target, pool->next_target, 0x20);
+	
+	pool_check_coinbase(pool, coinbase, bytes_len(&pool->swork.coinbase));
 	
 	cg_wunlock(&pool->data_lock);
 
