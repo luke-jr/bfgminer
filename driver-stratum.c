@@ -112,7 +112,10 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	struct stratumsrv_job *ssj;
 	ssize_t n2pad = n2size - _ssm_client_octets - _ssm_client_xnonce2sz;
 	if (n2pad < 0)
+	{
+		cg_runlock(&pool->data_lock);
 		return false;
+	}
 	size_t coinb1in_lenx = swork->nonce2_offset * 2;
 	size_t n2padx = n2pad * 2;
 	size_t coinb1_lenx = coinb1in_lenx + n2padx;
