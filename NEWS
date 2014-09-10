@@ -1,3 +1,13 @@
+BFGMiner Version 3.10.7 - September 10, 2014
+
+- Bugfix: bitforce: Initialise variable to NULL
+- Bugfix: SSM: Check that a username is provided to mining.authorize
+- Bugfix: SSM: When n2pad<0, release lock before returning
+- Bugfix: SSM: Make buffers long enough to avoid overflows
+- Bugfix: Recheck current_pool after calling pool_died
+- Bugfix: Stable pool recovery: Only care if the pool is enabled
+
+
 BFGMiner Version 3.10.6 - July 26, 2014
 
 - Copyright cleanups
