@@ -8355,6 +8355,10 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	/* Totals are updated by all threads so can race without locking */
 	mutex_lock(&hash_lock);
 	cgtime(&temp_tv_end);
+	
+	timersub(&temp_tv_end, &total_tv_start, &total_diff);
+	total_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
+	
 	timersub(&temp_tv_end, &total_tv_end, &total_diff);
 
 	total_mhashes_done += local_mhashes;
@@ -8368,10 +8372,6 @@ static void hashmeter(int thr_id, struct timeval *diff,
 	local_secs = (double)total_diff.tv_sec + ((double)total_diff.tv_usec / 1000000.0);
 	decay_time(&total_rolling, local_mhashes_done / local_secs, local_secs);
 	global_hashrate = ((unsigned long long)lround(total_rolling)) * 1000000;
-
-	timersub(&total_tv_end, &total_tv_start, &total_diff);
-	total_secs = (double)total_diff.tv_sec +
-		((double)total_diff.tv_usec / 1000000.0);
 
 	double wtotal = (total_diff_accepted + total_diff_rejected + total_diff_stale);
 	
