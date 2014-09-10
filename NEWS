@@ -1,3 +1,40 @@
+BFGMiner Version 4.7.1 - September 10, 2014
+
+- Bugfix: Reorder LDADD and such for priority
+- Bugfix: bitforce: Initialise variable to NULL
+- Bugfix: SSM: Use client_next member consistently when working with
+stratumsrv_connlist
+- Bugfix: SSM: Check that a username is provided to mining.authorize
+- Bugfix: SSM: When n2pad<0, release lock before returning
+- Bugfix: SSM: Make buffers long enough to avoid overflows
+- Bugfix: Need signed types for ntime min/max offsets
+- Bugfix: rockminer: Fix processor disabling
+- rockminer: Limit even unsafe frequencies to 640 MHz, since above that
+overflows frequency bits and triggers fan control
+- tq_pop: Remove abstime argument since nothing used it and it wouldn't work
+anyway (uses CLOCK_REALTIME while we use CLOCK_MONOTONIC[_RAW] when possible)
+- Bugfix: Check last solo generation tx against new template rather than most
+recent
+- README: Explicitly mention automatic solo mining configuration, and stress the
+importance of --coinbase-sig
+- Bugfix: Recheck current_pool after calling pool_died
+- Bugfix: Stable pool recovery: Only care if the pool is enabled
+- README.ASIC: Add a section for Gridseed
+- Bugfix: benchmark: Free json_null() after use
+- Bugfix: minergate: Claim socket before we initialise a cgpu for it
+- Bugfix: avalonmm: Claim device before we initialise a cgpu for it
+- Bugfix: switch_pools: Broadcast lp_cond outside of control_lock to avoid
+deadlocking
+- Protect enabled_pools by a mutex in disable_pool function
+- Combine reject_pool into disable_pool function, and don't allow it to override
+a manual disable
+- Call disable_pool() at the begin of remove_pool() and combine them when
+appears together in the code
+- Bugfix: Always call enable_pool and disable_pool to ensure consistent handling
+of the situations
+- Remove dead CPU mining code to silence warnings
+
+
 BFGMiner Version 4.7.0 - August 17, 2014
 
 - openwrt/multibuild: Avoid copying bitforce-firmware-flash, which is no longer

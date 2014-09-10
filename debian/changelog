@@ -1,3 +1,9 @@
+bfgminer (4.7.1-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 10 Sep 2014 04:33:12 -0000
+
 bfgminer (4.7.0-0precise1) precise; urgency=low
 
   * avalonmm: Guess sensible defaults when user does not specify clock/voltage.
