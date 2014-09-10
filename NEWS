@@ -1,3 +1,122 @@
+BFGMiner Version 4.8.0 - September 10, 2014
+
+- Improve precision of total_secs used in (at least) RPC summary Elapsed
+- Bump embedded libblkmaker to 0.5.0
+- Bump embedded libbase58 to 0.1.1
+- Remove now-unused bfg_cond_timedwait which cannot be made portable
+- Spawn a new thread for cmd-idle rather than relying on problematic pthread
+timedwait
+- README: --coinbase-check-* options
+- Bugfix: Accept actual percentages for --coinbase-check-percent
+- Optimise coinbase check logic by using actual script bytes everywhere possible
+- Pool option #skipcbcheck to disable new coinbase checks
+- pool_check_coinbase: Avoid redisabling an already misbehaving pool
+- Bugfix: Keep connection active for rejecting and misbehaving pools so we can
+detect when they recover
+- Share pool coinbase check reaction code
+- Initial version of coinbase checking function for GBT and stratum
+- cointerra: Ensure devlog messages cannot overflow
+- Bugfix: cointerra: Defer setting USB timeout until after initialisation
+- cointerra: Set configuration and claim interface
+- Bugfix: cointerra: Check ep is open before trying to talk to it (crash at init
+failure)
+- cointerra: Support for --set cta:load=N
+- cointerra: Store load setting on struct cointerra_info
+- cointerra: Operate within a single thread
+- cointerra: Update to minerloop_queue
+- cointerra: Split work packet into cointerra_queue_append function
+- cointerra: Prepare for splitting work packet into cointerra_queue_append
+function
+- cointerra: Use more fresh code for work packet
+- cointerra: Use fresh code for work packet
+- Bugfix: cointerra: Use bfg_cond_timedwait to avoid spinning
+- cointerra: Claim and release lowlevel device
+- cointerra: Propagate per-core temperatures to each processor
+- cointerra: Reduce redundant stats information
+- cointerra: Correctly divide up individual processors
+- cointerra: Update to latest BFGMiner
+- work_ntime_range helper function
+- work_{get,set}_ntime inline functions
+- Store a reference timeval with ntime_roll_limits
+- util: min macro
+- cointerra: Cleanup debugging
+- cointerra: Divide up processors
+- cointerra: Wait for info packet on probe
+- cointerra: Dirty BFGMiner port
+- lowl-usb: Cleanup dead code
+- notifier_wait, notifier_wait_us, and notifier_reset functions
+- Export the flush_queue function for use by drivers.
+- Provide a function to discard queued work based on age.
+- Export share_diff function and add flip12 macro
+- Provide a copy_work_noffset function for copying a work struct but changing
+its ntime.
+- Add api_add_int16 to API functions.
+- cointerra: Remove nodev checks for now
+- cointerra: Replace reset semaphore with a simple notifier
+- Build cointerra driver
+- cointerra: Import driver from cgminer as-is
+- Silently ignore shares rejected if they were above target and only got
+submitted "just in case"
+- Abstract put_in_parens function
+- Abstract extract_reject_reason function
+- Remove dead code
+- Bugfix: bfg_cond_timedwait providing semantics expected for --cmd-idle
+implementation
+- Per-processor TUI: Align columns for more-than-one proc letter
+- m4/bundled_lib: Workaround bug in autoconf <2.64
+- If full version is too long, try truncating it at '-'
+- Bugfix: Fix CPU miner benchmarking within benchmark-intense mode
+- benchmark: Detect duplicate shares within 5 minutes
+- benchmark-intense: benchmark_update_interval constant in code
+- benchmark-intense: Detect stale results
+- benchmark-intense: Update work every second
+- benchmark-intense: Simulate 250 KB generation transaction
+- benchmark-intense: Generate individual work items from 2D work (tests host CPU
+rate of work production)
+- Introduce --benchmark-intense option
+- Import libbase58 for base58 encoding/decoding
+- Cleanup libblkmaker bundling code to mostly live in autoconf macros
+- Always check if we should switch pools when enabling one, and always enable
+pools we want to switch to
+
+
+BFGMiner Version 4.7.1 - September 10, 2014
+
+- Bugfix: Reorder LDADD and such for priority
+- Bugfix: bitforce: Initialise variable to NULL
+- Bugfix: SSM: Use client_next member consistently when working with
+stratumsrv_connlist
+- Bugfix: SSM: Check that a username is provided to mining.authorize
+- Bugfix: SSM: When n2pad<0, release lock before returning
+- Bugfix: SSM: Make buffers long enough to avoid overflows
+- Bugfix: Need signed types for ntime min/max offsets
+- Bugfix: rockminer: Fix processor disabling
+- rockminer: Limit even unsafe frequencies to 640 MHz, since above that
+overflows frequency bits and triggers fan control
+- tq_pop: Remove abstime argument since nothing used it and it wouldn't work
+anyway (uses CLOCK_REALTIME while we use CLOCK_MONOTONIC[_RAW] when possible)
+- Bugfix: Check last solo generation tx against new template rather than most
+recent
+- README: Explicitly mention automatic solo mining configuration, and stress the
+importance of --coinbase-sig
+- Bugfix: Recheck current_pool after calling pool_died
+- Bugfix: Stable pool recovery: Only care if the pool is enabled
+- README.ASIC: Add a section for Gridseed
+- Bugfix: benchmark: Free json_null() after use
+- Bugfix: minergate: Claim socket before we initialise a cgpu for it
+- Bugfix: avalonmm: Claim device before we initialise a cgpu for it
+- Bugfix: switch_pools: Broadcast lp_cond outside of control_lock to avoid
+deadlocking
+- Protect enabled_pools by a mutex in disable_pool function
+- Combine reject_pool into disable_pool function, and don't allow it to override
+a manual disable
+- Call disable_pool() at the begin of remove_pool() and combine them when
+appears together in the code
+- Bugfix: Always call enable_pool and disable_pool to ensure consistent handling
+of the situations
+- Remove dead CPU mining code to silence warnings
+
+
 BFGMiner Version 4.7.0 - August 17, 2014
 
 - openwrt/multibuild: Avoid copying bitforce-firmware-flash, which is no longer

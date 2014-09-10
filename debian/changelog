@@ -1,3 +1,12 @@
+bfgminer (4.8.0-0precise1) precise; urgency=low
+
+  * New option --benchmark-intense for hardware manufacturers to properly test their miners can perform properly as Bitcoin grows.
+  * Logic to check validity and optionally benefactors of the generation transaction (GBT and Stratum only). See the new --coinbase-check-* options to configure it, or append #skipcbcheck to pool URIs to disable it.
+  * cointerra: New driver for the TerraMiner
+  * Stratum proxy: Numerous crash conditions fixed.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 10 Sep 2014 03:57:13 -0000
+
 bfgminer (4.7.0-0precise1) precise; urgency=low
 
   * avalonmm: Guess sensible defaults when user does not specify clock/voltage.
