@@ -48,26 +48,32 @@ else
 bin_SCRIPTS = start-bfgminer.sh
 endif
 
-bfgminer_LDFLAGS	= $(PTHREAD_FLAGS)
-bfgminer_LDADD	= $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
+# first, our own stuff
+bfgminer_LDADD    = lib/libgnu.a ccan.bfg/libccan.a
+bfgminer_LDFLAGS  =
+bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib -I$(top_srcdir)/ccan-upstream
+
+# second, potentially embedded libs
+bfgminer_LDADD    += $(libblkmaker_LIBS)
+bfgminer_LDFLAGS  += $(libblkmaker_LDFLAGS)
+bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
+
+# finally, everything else
+bfgminer_LDFLAGS += $(PTHREAD_FLAGS)
+bfgminer_LDADD   += $(DLOPEN_FLAGS) @LIBCURL_LIBS@ @JANSSON_LIBS@ @PTHREAD_LIBS@ \
 		  @NCURSES_LIBS@ @PDCURSES_LIBS@ @WS2_LIBS@ \
 		  @UDEV_LIBS@ @LIBUSB_LIBS@ @MM_LIBS@ @RT_LIBS@ \
-		  @MATH_LIBS@ lib/libgnu.a ccan.bfg/libccan.a
-bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
+                    $(MATH_LIBS)
+bfgminer_CPPFLAGS += @LIBUSB_CFLAGS@ @LIBCURL_CFLAGS@
 
 bfgminer_CPPFLAGS += -DCGMINER_PREFIX='"$(pkgdatadir)"'
 
-bfgminer_CPPFLAGS += -I$(top_srcdir)/ccan-upstream
 bfgminer_CPPFLAGS += @JANSSON_CFLAGS@
 bfgminer_CPPFLAGS += $(PTHREAD_FLAGS)
 bfgminer_CPPFLAGS += $(NCURSES_CPPFLAGS)
 
 bfgminer_CPPFLAGS += $(AUTOSCAN_CPPFLAGS)
 bfgminer_LDADD += $(AUTOSCAN_LIBS)
-
-bfgminer_LDADD += $(libblkmaker_LIBS)
-bfgminer_LDFLAGS += $(libblkmaker_LDFLAGS)
-bfgminer_CPPFLAGS += $(libblkmaker_CFLAGS)
 
 # common sources
 bfgminer_SOURCES := miner.c
