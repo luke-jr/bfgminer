@@ -178,7 +178,7 @@ static bool bitforce_detect_one(const char *devpath)
 	struct cgpu_info *bitforce;
 	char pdevbuf[0x100];
 	size_t pdevbuf_len;
-	char *s;
+	char *s = NULL;
 	int procs = 1, parallel = -1;
 	long maxchipno = 0;
 	struct bitforce_init_data *initdata;
