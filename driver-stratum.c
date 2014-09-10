@@ -188,7 +188,7 @@ void stratumsrv_client_changed_diff(struct proxy_client * const client)
 {
 	int connections_affected = 0, connections_changed = 0;
 	struct stratumsrv_conn_userlist *ule, *ule2;
-	LL_FOREACH(client->stratumsrv_connlist, ule)
+	LL_FOREACH2(client->stratumsrv_connlist, ule, client_next)
 	{
 		struct stratumsrv_conn * const conn = ule->conn;
 		
@@ -606,7 +606,7 @@ void stratumsrv_client_close(struct stratumsrv_conn * const conn)
 	{
 		struct proxy_client * const client = ule->client;
 		LL_DELETE(conn->authorised_users, ule);
-		LL_DELETE(client->stratumsrv_connlist, ule);
+		LL_DELETE2(client->stratumsrv_connlist, ule, client_next);
 		free(ule);
 	}
 	free(conn);
