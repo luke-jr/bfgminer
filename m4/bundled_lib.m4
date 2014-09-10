@@ -61,7 +61,7 @@ $1_directory:
 	if $have_cygwin; then
 		$1_EXTRADEPS="$$1_EXTRADEPS m4_foreach_w([mylib],[$3],[ cyg[]mylib[]-0.dll])"
 		BUNDLED_LIB_RULES="$BUNDLED_LIB_RULES[]m4_foreach_w([mylib],[$3],[
-cyg[]mylib[]-0.dll: $2/.libs/cyg[]mylib[]-0.dll
+cyg[]mylib[]-%.dll: $2/.libs/cyg[]mylib[]-%.dll
 	cp -p \$< \$[]@
 ])"
 	fi

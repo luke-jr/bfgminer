@@ -245,8 +245,8 @@ C:\MinGW\msys\1.0\home\USER\bfgminer\libbase58\.libs
 
 C:\MinGW\msys\1.0\home\USER\bfgminer\libblkmaker\.libs  
 
-	libblkmaker-0.1-0.dll
-	libblkmaker_jansson-0.1-0.dll
+	libblkmaker-0.1-6.dll
+	libblkmaker_jansson-0.1-6.dll
 
 C:\MinGW\bin
 
