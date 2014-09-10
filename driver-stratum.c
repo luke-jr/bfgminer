@@ -391,7 +391,11 @@ void stratumsrv_mining_subscribe(struct bufferevent *bev, json_t *params, const 
 static
 void stratumsrv_mining_authorize(struct bufferevent *bev, json_t *params, const char *idstr, uint32_t *xnonce1_p)
 {
-	struct proxy_client * const client = stratumsrv_find_or_create_client(__json_array_string(params, 0));
+	const char * const username = __json_array_string(params, 0);
+	if (!username)
+		return_stratumsrv_failure(20, "Missing or non-String username parameter");
+	
+	struct proxy_client * const client = stratumsrv_find_or_create_client(username);
 	
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
