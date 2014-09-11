@@ -38,6 +38,14 @@ static const uint8_t PREAMBLE[] = { 0xDE, 0xAD, 0xBE, 0xEF };
 static
 bool twinfury_send_command(const int fd, const void * const tx, const uint16_t tx_size)
 {
+	if (opt_dev_protocol)
+	{
+		char hex[((4 + tx_size) * 2) + 1];
+		bin2hex(hex, PREAMBLE, 4);
+		bin2hex(&hex[8], tx, tx_size);
+		applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: SEND: %s", twinfury_drv.dname, fd, hex);
+	}
+	
 	if(4 != write(fd, PREAMBLE, 4))
 	{
 		return false;
@@ -67,6 +75,13 @@ int16_t twinfury_wait_response(const int fd, const void * const rx, const uint16
 		timeout--;
 	}
 
+	if (opt_dev_protocol)
+	{
+		char hex[(rx_len * 2) + 1];
+		bin2hex(hex, rx, rx_len);
+		applog(LOG_DEBUG, "%s fd=%d: DEVPROTO: RECV(%u=>%d): %s", twinfury_drv.dname, fd, rx_size, rx_len, hex);
+	}
+	
 	if(unlikely(timeout == 0))
 	{
 		return -1;
@@ -199,14 +214,6 @@ static bool twinfury_init(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "%"PRIpreprv": init", cgpu->proc_repr);
 
-	for(i=1, proc = cgpu->next_proc; proc; proc = proc->next_proc, i++)
-	{
-		struct twinfury_info *data = calloc(1, sizeof(struct twinfury_info));
-		proc->device_data = data;
-		data->tx_buffer[0] = 'W';
-		data->tx_buffer[1] = i;
-	}
-
 	int fd = serial_open(cgpu->device_path, info->baud, 1, true);
 	if (unlikely(-1 == fd))
 	{
@@ -220,7 +227,6 @@ static bool twinfury_init(struct thr_info *thr)
 	applog(LOG_INFO, "%"PRIpreprv": Opened %s", cgpu->proc_repr, cgpu->device_path);
 
 	info->tx_buffer[0] = 'W';
-	info->tx_buffer[1] = 0x00;
 
 	if(info->id.version == 2)
 	{
@@ -232,7 +238,7 @@ static bool twinfury_init(struct thr_info *thr)
 				info->voltage  =  (buf[4] & 0xFF);
 				info->voltage |=  (buf[5] << 8);
 
-				applog(LOG_DEBUG, "%"PRIpreprv": Voltage: %dmV", cgpu->dev_repr, info->voltage);
+				applog(LOG_DEBUG, "%s: Voltage: %dmV", cgpu->dev_repr, info->voltage);
 				if(info->voltage < 800 || info->voltage > 950)
 				{
 					info->voltage = 0;
@@ -250,6 +256,14 @@ static bool twinfury_init(struct thr_info *thr)
 		}
 	}
 
+	for(i=1, proc = cgpu->next_proc; proc; proc = proc->next_proc, i++)
+	{
+		struct twinfury_info *data = malloc(sizeof(struct twinfury_info));
+		*data = *info;
+		proc->device_data = data;
+		data->tx_buffer[1] = i;
+	}
+	
 	timer_set_now(&thr->tv_poll);
 
 	return true;
@@ -419,14 +433,6 @@ void twinfury_poll(struct thr_info *thr)
 			if(response[0] == buffer[0])
 			{
 				const float temp = ((uint16_t)response[4] | (uint16_t)(response[5] << 8)) / 10.0;
-				if (opt_dev_protocol && opt_debug)
-				{
-					char hex[93];
-					bin2hex(hex, response, 8);
-					applog(LOG_DEBUG, "%"PRIpreprv": TEMP: %s",
-						   dev->dev_repr, hex);
-				}
-
 				for (struct cgpu_info *proc = dev; proc; proc = proc->next_proc)
 					proc->temp = temp;
 				applog(LOG_DEBUG, "%"PRIpreprv": Temperature: %f", dev->dev_repr, temp);
@@ -451,15 +457,6 @@ void twinfury_job_start(struct thr_info *thr)
 
 	uint8_t buffer[8];
 	int16_t len;
-
-
-	if (opt_dev_protocol && opt_debug)
-	{
-		char hex[93];
-		bin2hex(hex, info->tx_buffer, 46);
-		applog(LOG_DEBUG, "%"PRIpreprv": SEND: %s",
-		       board->proc_repr, hex);
-	}
 
 	if(!twinfury_send_command(device_fd, info->tx_buffer, 46))
 	{
