@@ -301,6 +301,11 @@ bool littlefury_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, littlefury_detect_one);
 }
 
+struct littlefury_state {
+	int chips_enabled;
+	bool powered;
+};
+
 static
 bool littlefury_thread_init(struct thr_info *thr)
 {
@@ -308,10 +313,17 @@ bool littlefury_thread_init(struct thr_info *thr)
 	struct cgpu_info *proc;
 	struct spi_port *spi;
 	struct bitfury_device *bitfury;
+	struct littlefury_state * const lfstate = malloc(sizeof(*lfstate));
 	int i = 0;
+	
+	*lfstate = (struct littlefury_state){
+		.chips_enabled = 0,
+	};
 	
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
+		struct thr_info * const proc_thr = proc->thr[0];
+		
 		spi = malloc(sizeof(*spi));
 		
 		/* Be careful, read lowl-spi.h comments for warnings */
@@ -330,6 +342,9 @@ bool littlefury_thread_init(struct thr_info *thr)
 		proc->device_data = bitfury;
 		
 		bitfury->osc6_bits = 50;
+		
+		proc_thr->cgpu_data = lfstate;
+		++lfstate->chips_enabled;
 	}
 	
 	timer_set_now(&thr->tv_poll);
@@ -337,30 +352,59 @@ bool littlefury_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static void littlefury_common_error(struct cgpu_info *, enum dev_reason);
+
+static
+bool littlefury_power_on(struct cgpu_info * const dev)
+{
+	struct thr_info * const master_thr = dev->thr[0];
+	struct littlefury_state * const lfstate = master_thr->cgpu_data;
+	
+	applog(LOG_DEBUG, "%s: Turning power on", dev->dev_repr);
+	if (!littlefury_set_power(LOG_WARNING, dev->dev_repr, dev->device_fd, true))
+	{
+		applog(LOG_ERR, "%s: Unable to power on chip(s)", dev->dev_repr);
+		littlefury_common_error(dev, REASON_THREAD_FAIL_INIT);
+		serial_close(dev->device_fd);
+		dev->device_fd = -1;
+		lfstate->powered = false;
+		return false;
+	}
+	
+	lfstate->powered = true;
+	return true;
+}
+
+static
+void littlefury_chip_init(struct cgpu_info * const proc)
+{
+	struct bitfury_device * const bitfury = proc->device_data;
+	bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+	bitfury_init_chip(proc);
+}
+
 static
 void littlefury_disable(struct thr_info * const thr)
 {
 	struct cgpu_info *proc = thr->cgpu;
 	struct cgpu_info * const dev = proc->device;
+	struct littlefury_state * const lfstate = thr->cgpu_data;
 	
 	bitfury_disable(thr);
 	
 	// If all chips disabled, kill power and close device
-	bool any_running = false;
-	for (proc = dev; proc; proc = proc->next_proc)
-		if (proc->deven == DEV_ENABLED && !proc->thr[0]->pause)
-		{
-			any_running = true;
-			break;
-		}
-	if (!any_running)
+	if (!--lfstate->chips_enabled)
 	{
+		applog(LOG_DEBUG, "%s: 0 chips enabled, turning off power", dev->dev_repr);
+		lfstate->powered = false;
 		if (!littlefury_set_power(LOG_ERR, dev->dev_repr, dev->device_fd, false))
 			applog(LOG_WARNING, "%s: Unable to power off chip(s)", dev->dev_repr);
 		serial_close(dev->device_fd);
 		dev->device_fd = -1;
 		timer_unset(&dev->thr[0]->tv_poll);
 	}
+	else
+		applog(LOG_DEBUG, "%s: %d chips enabled, power remains on", dev->dev_repr, lfstate->chips_enabled);
 }
 
 static
@@ -369,6 +413,19 @@ void littlefury_enable(struct thr_info * const thr)
 	struct cgpu_info *proc = thr->cgpu;
 	struct cgpu_info * const dev = proc->device;
 	struct thr_info * const master_thr = dev->thr[0];
+	struct littlefury_state * const lfstate = thr->cgpu_data;
+	
+	++lfstate->chips_enabled;
+	
+	if (dev->device_fd != -1 && !lfstate->powered)
+		littlefury_power_on(dev);
+	
+	if (dev->device_fd != -1)
+	{
+		struct bitfury_device * const bitfury = proc->device_data;
+		bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
+		bitfury_init_chip(proc);
+	}
 	
 	if (!timer_isset(&master_thr->tv_poll))
 		timer_set_now(&master_thr->tv_poll);
@@ -399,13 +456,11 @@ static
 void littlefury_poll(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu, *proc;
+	struct littlefury_state * const lfstate = master_thr->cgpu_data;
 	int fd = dev->device_fd;
 	
 	if (unlikely(fd == -1))
 	{
-		uint8_t buf[1];
-		uint16_t bufsz = 1;
-		
 		fd = serial_open(dev->device_path, 0, 10, true);
 		if (unlikely(fd == -1))
 		{
@@ -415,23 +470,20 @@ void littlefury_poll(struct thr_info * const master_thr)
 			return;
 		}
 		
-		if (!(bitfury_do_packet(LOG_DEBUG, littlefury_drv.dname, fd, buf, &bufsz, LFOP_REGPWR, "\1", 1) && bufsz && buf[0]))
-		{
-			applog(LOG_ERR, "%s: Unable to power on chip(s)", dev->dev_repr);
-			serial_close(fd);
-			littlefury_common_error(dev, REASON_THREAD_FAIL_INIT);
-			return;
-		}
-		
 		dev->device_fd = fd;
+		lfstate->powered = false;
+	}
+	
+	if (unlikely(!lfstate->powered))
+	{
+		if (!littlefury_power_on(dev))
+			return;
 		
 		for (proc = dev; proc; proc = proc->next_proc)
 		{
 			if (proc->deven != DEV_ENABLED || proc->thr[0]->pause)
 				continue;
-			struct bitfury_device * const bitfury = proc->device_data;
-			bitfury_send_reinit(bitfury->spi, bitfury->slot, bitfury->fasync, bitfury->osc6_bits);
-			bitfury_init_chip(proc);
+			littlefury_chip_init(proc);
 		}
 	}
 	
