@@ -545,10 +545,15 @@ void minerloop_async(struct thr_info *mythr)
 			}
 			else  // ! should_be_running
 			{
+				if (unlikely(mythr->_job_transition_in_progress && timer_isset(&mythr->tv_morework)))
+				{
+					// Really only happens at startup
+					applog(LOG_DEBUG, "%"PRIpreprv": Job transition in progress, with morework timer enabled: unsetting in-progress flag", proc->proc_repr);
+					mythr->_job_transition_in_progress = false;
+				}
 				if (unlikely((is_running || !mythr->_mt_disable_called) && !mythr->_job_transition_in_progress))
 				{
 disabled: ;
-					timer_unset(&mythr->tv_morework);
 					if (is_running)
 					{
 						if (mythr->busy_state != TBS_GETTING_RESULTS)
@@ -560,6 +565,8 @@ disabled: ;
 					else  // !mythr->_mt_disable_called
 						mt_disable_start(mythr);
 				}
+				
+				timer_unset(&mythr->tv_morework);
 			}
 			
 			if (timer_passed(&mythr->tv_morework, &tv_now))
