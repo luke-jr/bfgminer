@@ -399,9 +399,6 @@ void littlefury_disable(struct thr_info * const thr)
 		lfstate->powered = false;
 		if (!littlefury_set_power(LOG_ERR, dev->dev_repr, dev->device_fd, false))
 			applog(LOG_WARNING, "%s: Unable to power off chip(s)", dev->dev_repr);
-		serial_close(dev->device_fd);
-		dev->device_fd = -1;
-		timer_unset(&dev->thr[0]->tv_poll);
 	}
 	else
 		applog(LOG_DEBUG, "%s: %d chips enabled, power remains on", dev->dev_repr, lfstate->chips_enabled);
@@ -453,6 +450,26 @@ void littlefury_common_error(struct cgpu_info * const dev, const enum dev_reason
 }
 
 static
+bool littlefury_get_stats(struct cgpu_info * const dev)
+{
+	if (dev != dev->device)
+		return true;
+	
+	uint16_t bufsz = 2;
+	uint8_t buf[bufsz];
+	
+	if (bitfury_do_packet(LOG_WARNING, dev->dev_repr, dev->device_fd, buf, &bufsz, LFOP_TEMP, NULL, 0) && bufsz == sizeof(buf))
+	{
+		float temp = upk_u16be(buf, 0);
+		temp = (1.3979 * temp) - 295.23;
+		for_each_managed_proc(proc, dev)
+			proc->temp = temp;
+	}
+	
+	return true;
+}
+
+static
 void littlefury_poll(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu, *proc;
@@ -474,7 +491,7 @@ void littlefury_poll(struct thr_info * const master_thr)
 		lfstate->powered = false;
 	}
 	
-	if (unlikely(!lfstate->powered))
+	if (unlikely((!lfstate->powered) && lfstate->chips_enabled > 0))
 	{
 		if (!littlefury_power_on(dev))
 			return;
@@ -487,7 +504,13 @@ void littlefury_poll(struct thr_info * const master_thr)
 		}
 	}
 	
-	return bitfury_do_io(master_thr);
+	littlefury_get_stats(dev);
+	
+	bitfury_do_io(master_thr);
+	
+	if (!timer_isset(&master_thr->tv_poll))
+		// We want to keep polling temperature
+		timer_set_delay_from_now(&master_thr->tv_poll, 1000000);
 }
 
 static
