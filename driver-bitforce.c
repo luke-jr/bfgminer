@@ -2614,13 +2614,14 @@ void bitforce_queue_flush(struct thr_info *thr)
 		bitforce_queue_flush_sanity_check(thr, &processing, keysz, true);
 	
 final: ;
-#if 0
-	if (unlikely(inproc != -1 && inproc != data->queued))
+if (data->style == BFS_28NM)
 	{
-		applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device work inprogress count mismatch (dev inproc=%d, queued=%d)", bitforce->proc_repr, inproc, data->queued);
-		data->queued = inproc;
+		if (unlikely(inproc != -1 && inproc != data->queued))
+		{
+			applog(LOG_WARNING, "%"PRIpreprv": Sanity check: Device work inprogress count mismatch (dev inproc=%d, queued=%d)", bitforce->proc_repr, inproc, data->queued);
+			data->queued = inproc;
+		}
 	}
-#endif
 }
 
 static
