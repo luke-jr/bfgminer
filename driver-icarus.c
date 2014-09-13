@@ -1272,7 +1272,8 @@ out:
 static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
-	struct ICARUS_INFO *info = cgpu->device_data;
+	//use cgpu->device to handle multiple processors
+	struct ICARUS_INFO * const info = cgpu->device->device_data;
 
 	// Warning, access to these is not locked - but we don't really
 	// care since hashing performance is way more important than
