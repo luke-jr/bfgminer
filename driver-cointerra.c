@@ -280,6 +280,12 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 	struct lowl_usb_endpoint *ep;
 	bool b;
 	
+	if (info->lowl != &lowl_usb)
+	{
+		bfg_probe_result_flags = BPR_WRONG_DEVTYPE;
+		return false;
+	}
+	
 	if (!cointerra_open(info, cointerra_drv.dname, &usbh, &ep, &ctainfo))
 		return false;
 	mutex_init(&ctainfo.lock);
