@@ -1,6 +1,10 @@
 test "x$1" = "xI-am-okay-with-destroying-my-system" || exit 1
 set -ex
 
+# Upgrading GCC triggers locale rebuild, so just do the one in use
+sudo rm /var/lib/locales/supported.d/*
+echo $LANG UTF-8 | sudo tee /var/lib/locales/supported.d/en
+
 echo -e 'deb http://ftp.us.debian.org/debian/ wheezy main\ndeb http://security.debian.org/ wheezy/updates main' | sudo tee '/etc/apt/sources.list'
 sudo rm -r /etc/apt/sources.list.d
 curl https://ftp-master.debian.org/keys/archive-key-7.0.asc | sudo apt-key add -
