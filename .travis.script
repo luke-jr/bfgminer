@@ -1,7 +1,9 @@
 test "x$1" = "xI-am-okay-with-destroying-my-system" || exit 1
 set -ex
 
-[ "$CC" = "clang" ] && CC=$(which "$CC")
+export CC=$(which "$myCC")
+$CC --version
+
 ./autogen.sh
 ./configure $GLOBAL_CONFIGURE_ARGS $CONFIGURE_ARGS
 make CFLAGS="$GLOBAL_CFLAGS $BUILD_CFLAGS" $MAKEOPTS

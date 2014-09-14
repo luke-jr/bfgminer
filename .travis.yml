@@ -1,18 +1,18 @@
 os: linux
 language: c
-compiler:
-  - clang
-  - gcc
 env:
   global:
     - MAKEOPTS=-j3
     - GLOBAL_CFLAGS='-O2 -Wall'
     - GLOBAL_CONFIGURE_ARGS='--prefix=/usr'
-  matrix:
-    # Upgrade GCC to avoid false warnings; build the full project with -Werror
-    - UBUNTU_DEPS='gcc libhidapi-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt'
 matrix:
   fast_finish: true
+  include:
+    - compiler: ": Full GCC"
+      # Upgrade GCC to avoid false warnings; build the full project with -Werror
+      env: myCC='gcc' UBUNTU_DEPS='gcc libhidapi-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt'
+    - compiler: ": Full LLVM"
+      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt'
 install:
   - bash .travis.deps I-am-okay-with-destroying-my-system
 script:
