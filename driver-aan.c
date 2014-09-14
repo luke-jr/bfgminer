@@ -88,7 +88,10 @@ void _test_aan_pll(const unsigned expect, const uint8_t postdiv, const uint8_t p
 	const uint16_t pll = (((postdiv << 5) | prediv) << 9) | fbdiv;
 	const unsigned got = aan_pll2freq(pll);
 	if (got != expect)
+	{
+		++unittest_failures;
 		applog(LOG_WARNING, "%s test failed for %4u(%x,%02x,%3d): got %4u", "aan_pll2freq", expect, postdiv, prediv, fbdiv, got);
+	}
 }
 
 static
@@ -98,6 +101,7 @@ void _test_aan_pll2(const unsigned freq)
 	const unsigned got = aan_pll2freq(pll);
 	if (got / 12 != freq / 12)
 	{
+		++unittest_failures;
 		const uint8_t postdiv = (pll >> 0xe);
 		const uint8_t prediv = (pll >> 9) & 0x1f;
 		const uint16_t fbdiv = pll & 0x1ff;

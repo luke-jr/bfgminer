@@ -436,6 +436,7 @@ void test_scrypt(void)
 		};
 		if (memcmp(expect_X, X, sizeof(expect_X)))
 		{
+			++unittest_failures;
 			bin2hex32(hex, X, 32);
 			applog(LOG_ERR, "%s: %s failed (got %s)", __func__, "PBKDF2_SHA256_80_128", hex);
 		}
@@ -452,6 +453,7 @@ void test_scrypt(void)
 		};
 		if (memcmp(expect_X, X, sizeof(expect_X)))
 		{
+			++unittest_failures;
 			bin2hex32(hex, X, 16);
 			applog(LOG_ERR, "%s; %s failed (got %s)", __func__, "salsa20_8", hex);
 		}
@@ -465,6 +467,7 @@ void test_scrypt(void)
 		};
 		if (memcmp(expect_X, X, sizeof(expect_X)))
 		{
+			++unittest_failures;
 			bin2hex32(hex, X, 8);
 			applog(LOG_ERR, "%s: %s failed (got %s)", __func__, "scrypt_1024_1_1_256_sp", hex);
 		}

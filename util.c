@@ -1521,16 +1521,25 @@ void _utf8_test(const char *s, const wchar_t expected, int expectedlen)
 	{
 		len = utf8_len(((uint8_t*)s)[0]);
 		if (len != expectedlen)
+		{
+			++unittest_failures;
 			applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got utf8_len=>%d", (unsigned long)expected, expectedlen, len);
+		}
 		len = utf8_strlen(s);
 		if (len != (s[0] ? 1 : 0))
+		{
+			++unittest_failures;
 			applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got utf8_strlen=>%d", (unsigned long)expected, expectedlen, len);
+		}
 		len = -1;
 	}
 	
 	r = utf8_decode(s, &len);
 	if (unlikely(r != expected || expectedlen != len))
+	{
+		++unittest_failures;
 		applog(LOG_ERR, "UTF-8 test U+%06lX (len %d) failed: got U+%06lX (len %d)", (unsigned long)expected, expectedlen, (unsigned long)r, len);
+	}
 }
 #define _test_intrange(s, ...)  _test_intrange(s, (int[]){ __VA_ARGS__ })
 
@@ -2127,8 +2136,11 @@ void _test_extract_domain(const char * const expect, const char * const uri)
 	size_t sz;
 	const char * const d = extract_domain(&sz, uri, strlen(uri));
 	if (sz != strlen(expect) || strncasecmp(d, expect, sz))
+	{
+		++unittest_failures;
 		applog(LOG_WARNING, "extract_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"",
 		       uri, (int)sz, d, expect);
+	}
 }
 
 static
@@ -2137,8 +2149,11 @@ void _test_get_regd_domain(const char * const expect, const char * const fqdn)
 	size_t sz;
 	const char * const d = get_registered_domain(&sz, fqdn, strlen(fqdn));
 	if (d == NULL || sz != strlen(expect) || strncasecmp(d, expect, sz))
+	{
+		++unittest_failures;
 		applog(LOG_WARNING, "get_registered_domain \"%s\" test failed; got \"%.*s\" instead of \"%s\"",
 		       fqdn, (int)sz, d, expect);
+	}
 }
 
 void test_domain_funcs()
@@ -2297,10 +2312,13 @@ void _test_uri_find_param(const char * const uri, const char * const param, cons
 		actual_offset = actual - uri;
 	int actual_invert = (expect_invert >= 0) ? (invert ? 1 : 0) : -1;
 	if (actual_offset != expect_offset || expect_invert != actual_invert)
+	{
+		++unittest_failures;
 		applog(LOG_WARNING, "%s(\"%s\", \"%s\", %s) test failed (offset: expect=%d actual=%d; invert: expect=%d actual=%d)",
 		       "uri_find_param", uri, param, (expect_invert >= 0) ? "(invert)" : "NULL",
 		       expect_offset, actual_offset,
 		       expect_invert, actual_invert);
+	}
 }
 
 static
@@ -2308,8 +2326,11 @@ void _test_uri_get_param(const char * const uri, const char * const param, const
 {
 	const bool actual = uri_get_param_bool(uri, param, defval);
 	if (actual != expect)
+	{
+		++unittest_failures;
 		applog(LOG_WARNING, "%s(\"%s\", \"%s\", %s) test failed",
 		       "uri_get_param_bool", uri, param, defval ? "true" : "false");
+	}
 }
 
 void test_uri_get_param()
