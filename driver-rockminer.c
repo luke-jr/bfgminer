@@ -176,7 +176,7 @@ bool rockminer_detect_one(const char * const devpath)
 	{
 		rsz = read(fd, reply, sizeof(reply));
 		if (rsz != sizeof(reply))
-			return_via_applog(err, , LOG_DEBUG, "%s: Short read from %s (%d)", rockminer_drv.dname, devpath, rsz);
+			return_via_applog(err, , LOG_DEBUG, "%s: Short read from %s (%d)", rockminer_drv.dname, devpath, (int)rsz);
 		if ((!memcmp(reply, golden_result, sizeof(golden_result))) && (reply[4] & 0xf) == ROCKMINER_REPLY_NONCE_FOUND)
 			break;
 	}
