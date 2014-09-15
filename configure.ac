@@ -261,7 +261,7 @@ if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
 		[uio=$ddyes])
 	AC_ARG_WITH([vfio],
 		[AC_HELP_STRING([--without-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
-		[vfio=$enableval],
+		[vfio=$withval],
 		[vfio=$ddauto])
 	if test "x$vfio" != "xno"; then
 		AC_CHECK_HEADER([linux/vfio.h],[
