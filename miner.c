@@ -168,6 +168,7 @@ int opt_expiry = 120;
 int opt_expiry_lp = 3600;
 unsigned long long global_hashrate;
 static bool opt_unittest = false;
+unsigned unittest_failures;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
 
@@ -760,11 +761,17 @@ invsyntax:
 
 #define TEST_CGPU_MATCH(pattern)  \
 	if (!cgpu_match(pattern, &cgpu))  \
+	{  \
+		++unittest_failures;  \
 		applog(LOG_ERR, "%s: Pattern \"%s\" should have matched!", __func__, pattern);  \
+	}  \
 // END TEST_CGPU_MATCH
 #define TEST_CGPU_NOMATCH(pattern)  \
 	if (cgpu_match(pattern, &cgpu))  \
+	{  \
+		++unittest_failures;  \
 		applog(LOG_ERR, "%s: Pattern \"%s\" should NOT have matched!", __func__, pattern);  \
+	}  \
 // END TEST_CGPU_MATCH
 static __maybe_unused
 void test_cgpu_match()
@@ -1362,10 +1369,16 @@ void _test_intrange(const char *s, const int v[2])
 {
 	int a[2];
 	if (!get_intrange(s, &a[0], &a[1]))
+	{
+		++unittest_failures;
 		applog(LOG_ERR, "Test \"%s\" failed: returned false", s);
+	}
 	for (int i = 0; i < 2; ++i)
 		if (unlikely(a[i] != v[i]))
+		{
+			++unittest_failures;
 			applog(LOG_ERR, "Test \"%s\" failed: value %d should be %d but got %d", s, i, v[i], a[i]);
+		}
 }
 #define _test_intrange(s, ...)  _test_intrange(s, (int[]){ __VA_ARGS__ })
 
@@ -1374,7 +1387,10 @@ void _test_intrange_fail(const char *s)
 {
 	int a[2];
 	if (get_intrange(s, &a[0], &a[1]))
+	{
+		++unittest_failures;
 		applog(LOG_ERR, "Test !\"%s\" failed: returned true with %d and %d", s, a[0], a[1]);
+	}
 }
 
 static
@@ -3702,6 +3718,7 @@ void test_decimal_width()
 		percentf3(testbuf2, sizeof(testbuf2), testn, 10.0);
 		width = snprintf(printbuf, sizeof(printbuf), "%10g %s %s |", testn, testbuf1, testbuf2);
 		if (unlikely((saved != -1) && (width != saved))) {
+			++unittest_failures;
 			applog(LOG_ERR, "Test width mismatch in percentf3! %d not %d at %10g", width, saved, testn);
 			applog(LOG_ERR, "%s", printbuf);
 		}
@@ -3717,6 +3734,7 @@ void test_decimal_width()
 		snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s |", testn, testbuf1, testbuf2, testbuf3);
 		width = utf8_strlen(printbuf);
 		if (unlikely((saved != -1) && (width != saved))) {
+			++unittest_failures;
 			applog(LOG_ERR, "Test width mismatch in format_unit2! %d not %d at %10g", width, saved, testn);
 			applog(LOG_ERR, "%s", printbuf);
 		}
@@ -3733,6 +3751,7 @@ void test_decimal_width()
 		snprintf(printbuf, sizeof(printbuf), "%10g %s %s %s %s |", testn, testbuf1, testbuf2, testbuf3, testbuf4);
 		width = utf8_strlen(printbuf);
 		if (unlikely((saved != -1) && (width != saved))) {
+			++unittest_failures;
 			applog(LOG_ERR, "Test width mismatch in pick_unit! %d not %d at %10g", width, saved, testn);
 			applog(LOG_ERR, "%s", printbuf);
 		}
@@ -9489,6 +9508,7 @@ void _test_target(void * const funcp, const char * const funcname, const bool li
 	if (memcmp(&buf[off], &expect[off], 4))
 	{
 testfail: ;
+		++unittest_failures;
 		char hexbuf[65], expectbuf[65];
 		bin2hex(hexbuf, buf, 32);
 		bin2hex(expectbuf, expect, 32);
@@ -12706,6 +12726,8 @@ int main(int argc, char *argv[])
 #ifdef USE_JINGTIAN
 		test_aan_pll();
 #endif
+		if (unittest_failures)
+			quit(1, "Unit tests failed");
 	}
 
 #ifdef HAVE_CURSES

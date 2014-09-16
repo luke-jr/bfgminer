@@ -83,6 +83,13 @@ bfgminer_SOURCES += miner.h compat.h  \
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
 
+TESTS = test-bfgminer.sh
+EXTRA_DIST += test-bfgminer.sh
+SH_LOG_COMPILER = /bin/sh
+AM_TESTS_ENVIRONMENT = PATH='$(srcdir)':"$$PATH"; export PATH;
+TESTS_ENVIRONMENT = $(AM_TESTS_ENVIRONMENT)
+TEST_EXTENSIONS = .sh
+
 .PHONY: update-version
 update-version:
 	./gen-version.sh >version.h.new

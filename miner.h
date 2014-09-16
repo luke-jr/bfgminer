@@ -1165,6 +1165,7 @@ extern int opt_hysteresis;
 extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
+extern unsigned unittest_failures;
 extern char *current_fullhash;
 extern double current_diff;
 extern double best_diff;
