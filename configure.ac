@@ -1135,6 +1135,7 @@ AC_ARG_ENABLE([minergate],
 	)
 if test "x$minergate" = "xyes"; then
 	AC_DEFINE([USE_MINERGATE], [1], [Defined to 1 if Spondoolies minergate interface support is wanted])
+	need_lowlevel=yes
 	has_asic=yes
 fi
 AM_CONDITIONAL([USE_MINERGATE], [test x$minergate = xyes])
