@@ -104,6 +104,10 @@ EXTRA_bfgminer_DEPENDENCIES += $(libbase58_EXTRADEPS) $(libblkmaker_EXTRADEPS)
 
 bfgminer_SOURCES	+= logging.c
 
+if HAVE_WINDOWS
+bfgminer_SOURCES += winhacks.h
+endif
+
 if USE_UDEVRULES
 dist_udevrules_DATA = 70-bfgminer.rules
 endif

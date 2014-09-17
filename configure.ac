@@ -34,7 +34,7 @@ AC_CONFIG_HEADERS([config.h])
 
 AH_BOTTOM([
 #ifdef WIN32
-#include <winsock2.h>
+#include "winhacks.h"
 #endif
 ])
 
