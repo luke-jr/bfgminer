@@ -162,7 +162,7 @@ KLONDIKE
 --klondike-options <arg> Set klondike options clock:temptarget
 
 
-KNCMINER
+KNCMINER (Jupiter)
 --------
 
 KnCMiner rigs use a BeagleBone Black (BBB) as the host; this is pluged into a
@@ -206,6 +206,23 @@ make AR=arm-angstrom-linux-gnueabi-ar
 
 ---------------END-------------
 
+KNCMINER (Titan)
+--------
+
+Titan uses RaspberryPi as a controller.
+
+Build instructions:
+-----------------Start------------
+
+git clone git@github.com:KnCMiner/bfgminer.git
+cd bfgminer
+./autogen.sh
+./configure --enable-scrypt --enable-knc --disable-other-drivers --without-libusb --disable-gridseed CFLAGS="-g -Iuthash/src -DCONTROLLER_BOARD_RPI"
+make
+sudo /etc/init.d/bfgminer.sh restart
+screen -r
+
+---------------END-------------
 
 MONARCH
 -------
