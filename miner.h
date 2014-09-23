@@ -28,6 +28,9 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <sched.h>
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
 
 #include <blkmaker.h>
 #include <blktemplate.h>
