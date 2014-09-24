@@ -457,6 +457,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 			}
 			if ((!work_accepted) || (NULL == knccore))
 				break;
+			bool was_flushed = false;
 			if (knc->need_flush[asic] || need_replace) {
 				struct work *work1, *tmp1;
 				applog(LOG_NOTICE, "%s: Flushing stale works (%s)", knccore->proc->dev_repr,
@@ -470,6 +471,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					}
 				}
 				delay_usecs = 0;
+				was_flushed = true;
 			}
 			--knc->workqueue_size;
 			DL_DELETE(knc->workqueue, work);
@@ -478,6 +480,11 @@ static void knc_titan_poll(struct thr_info * const thr)
 			if (++(knc->next_slot[asic]) > KNC_TITAN_MAX_WORK_SLOT_NUM)
 				knc->next_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
 			++workaccept;
+			/* If we know for sure that this work was urgent, then we don't need to hurry up
+			 * with filling next slot, we have plenty of time until current work completes.
+			 * So, better to proceed with other ASICs. */
+			if (was_flushed)
+				break;
 		}
 	}
 
