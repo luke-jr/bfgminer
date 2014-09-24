@@ -24,6 +24,10 @@
 
 #define	KNC_POLL_INTERVAL_US		10000
 
+/* Work queue pre-fill level.
+ * Must be high enough to supply all ASICs with works after a flush */
+#define WORK_QUEUE_PREFILL		10
+
 /* Specify here minimum number of leading zeroes in hash */
 #define	DEFAULT_DIFF_FILTERING_ZEROES	24
 #define	DEFAULT_DIFF_FILTERING_FLOAT	(1. / ((double)(0x00000000FFFFFFFF >> DEFAULT_DIFF_FILTERING_ZEROES)))
@@ -108,7 +112,7 @@ static bool knc_titan_detect_one(const char *devpath)
 
 		knc->ctx = ctx;
 		knc->cgpu = cgpu;
-		knc->workqueue_max = KNC_TITAN_WORKSLOTS_PER_CORE + 1;
+		knc->workqueue_max = WORK_QUEUE_PREFILL;
 	} else {
 		knc = prev_cgpu->device_data;
 		ctx = knc->ctx;
