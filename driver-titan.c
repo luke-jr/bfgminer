@@ -161,9 +161,12 @@ static bool knc_titan_detect_one(const char *devpath)
 		.deven = DEV_ENABLED,
 		.procs = cores,
 		.threads = prev_cgpu ? 0 : 1,
+		.extra_work_queue = -1,
 		.device_data = knc,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
+	if (!prev_cgpu)
+		cgpu->extra_work_queue += WORK_QUEUE_PREFILL;
 	prev_cgpu = cgpu;
 	return rv;
 }

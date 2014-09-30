@@ -212,6 +212,7 @@ struct cgpu_info **devices_new;
 bool have_opencl;
 int opt_n_threads = -1;
 int mining_threads;
+int base_queue;
 int num_processors;
 #ifdef HAVE_CURSES
 bool use_curses = true;
@@ -11255,7 +11256,9 @@ void register_device(struct cgpu_info *cgpu)
 
 	if (!cgpu->proc_id)
 		cgpu->device_line_id = device_line_id_count++;
-	mining_threads += cgpu->threads ?: 1;
+	int thr_objs = cgpu->threads ?: 1;
+	mining_threads += thr_objs;
+	base_queue += thr_objs + cgpu->extra_work_queue;
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
 #endif
@@ -12707,7 +12710,7 @@ begin_bench:
 		cp = current_pool();
 
 		// Generally, each processor needs a new work, and all at once during work restarts
-		max_staged += mining_threads;
+		max_staged += base_queue;
 
 		mutex_lock(stgd_lock);
 		ts = __total_staged();
