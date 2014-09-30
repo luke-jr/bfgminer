@@ -44,7 +44,7 @@ bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die
 		}
 		if (!(status & KNC_ERR_MASK)) {
 			/* !KNC_ERRMASK */
-			applog(LOG_DEBUG, "%s[%d:%d]: Core busy", repr, channel, die, status);
+			applog(LOG_DEBUG, "%s[%d:%d]: Core busy (%x)", repr, channel, die, status);
 		}
 	}
 
