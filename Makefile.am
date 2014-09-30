@@ -267,7 +267,7 @@ bfgminer_SOURCES += driver-zeusminer.c
 endif
 
 if HAS_AVALON
-bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
+bfgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if USE_AVALONMM

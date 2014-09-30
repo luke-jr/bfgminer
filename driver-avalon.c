@@ -200,8 +200,9 @@ static int avalon_send_task(int fd, const struct avalon_task *at,
 	if (at->reset)
 		nr_len = 1;
 	if (opt_debug) {
-		applog(LOG_DEBUG, "Avalon: Sent(%u):", (unsigned int)nr_len);
-		hexdump((uint8_t *)buf, nr_len);
+		char x[(nr_len * 2) + 1];
+		bin2hex(x, buf, nr_len);
+		applog(LOG_DEBUG, "Avalon: Sent(%u): %s", (unsigned int)nr_len, x);
 	}
 	ret = write(fd, buf, nr_len);
 	if (unlikely(ret != nr_len))
@@ -290,8 +291,9 @@ static int avalon_get_result(int fd, struct avalon_result *ar,
 
 	if (ret == AVA_GETS_OK) {
 		if (opt_debug) {
-			applog(LOG_DEBUG, "Avalon: get:");
-			hexdump((uint8_t *)result, AVALON_READ_SIZE);
+			char x[(AVALON_READ_SIZE * 2) + 1];
+			bin2hex(x, result, AVALON_READ_SIZE);
+			applog(LOG_DEBUG, "Avalon: get: %s", x);
 		}
 		memcpy((uint8_t *)ar, result, AVALON_READ_SIZE);
 	}
@@ -334,8 +336,9 @@ static void avalon_get_reset(int fd, struct avalon_result *ar)
 	ret = avalon_gets(fd, (uint8_t*)ar, read_count, NULL, NULL);
 	
 	if (ret == AVA_GETS_OK && opt_debug) {
-		applog(LOG_DEBUG, "Avalon: get:");
-		hexdump((uint8_t *)ar, AVALON_READ_SIZE);
+		char x[(AVALON_READ_SIZE * 2) + 1];
+		bin2hex(x, ar, AVALON_READ_SIZE);
+		applog(LOG_DEBUG, "Avalon: get: %s", x);
 	}
 }
 
