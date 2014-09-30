@@ -16,7 +16,7 @@ matrix:
     - compiler: ": pkgconf"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev pkgconf' EXTRA_DEPS='libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --enable-tool'
     - compiler: ": MinGW64"
-      env: UBUNTU_DEPS='gcc-mingw-w64-x86-64' EXTRA_DEPS='pkg-config yasm' CROSS_BINPKGS='x86_64-w64-mingw32' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --host=x86_64-w64-mingw32 --disable-knc --disable-bfsb --disable-jingtian --disable-metabank --disable-minergate'
+      env: UBUNTU_DEPS='gcc-mingw-w64-x86-64' EXTRA_DEPS='pkg-config yasm' CROSS_BINPKGS='x86_64-w64-mingw32' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --host=x86_64-w64-mingw32 --disable-knc --disable-bfsb --disable-jingtian --disable-metabank --disable-minergate --disable-titan'
     - compiler: ": Std SHA2"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS=''
     - compiler: ": Std scrypt"
@@ -42,15 +42,15 @@ matrix:
     - compiler: ": No libmicrohttpd"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-libmicrohttpd'
     - compiler: ": No libi2c-dev"
-      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --disable-knc'
+      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --disable-knc --disable-titan'
     - compiler: ": No yasm"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev libsensors4-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt'
     - compiler: ": No libsensors"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-sensors'
     - compiler: ": No opt deps"
-      env: myCC='clang' EXTRA_DEPS='pkg-config' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-uio --without-vfio --without-sensors --without-libmicrohttpd --without-libevent --without-libusb --without-curses --without-libudev --disable-knc'
+      env: myCC='clang' EXTRA_DEPS='pkg-config' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-uio --without-vfio --without-sensors --without-libmicrohttpd --without-libevent --without-libusb --without-curses --without-libudev --disable-knc --disable-titan'
     - compiler: ": Only ncurses"
-      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-uio --without-vfio --without-sensors --without-libmicrohttpd --without-libevent --without-libusb --without-libudev --disable-knc'
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-uio --without-vfio --without-sensors --without-libmicrohttpd --without-libevent --without-libusb --without-libudev --disable-knc --disable-titan'
     - compiler: ": Only CPU"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev yasm' CONFIGURE_ARGS='--disable-other-drivers --enable-cpumining --enable-scrypt'
     - compiler: ": Only OpenCL"
@@ -83,6 +83,8 @@ matrix:
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libusb-1.0-0-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-cointerra'
     - compiler: ": Only klondike"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libusb-1.0-0-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-klondike'
+    - compiler: ": Only titan"
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-scrypt --enable-titan'
     - compiler: ": Only x6500"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libusb-1.0-0-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-x6500'
     - compiler: ": Only ztex"
