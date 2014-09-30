@@ -790,7 +790,12 @@ AC_ARG_ENABLE([titan],
 	[titan=$enableval],
 	[titan=$ddno]
 	)
-if test "x$titan" = xyes; then
+if test "x$titan" != xno && test "x$titan" != xauto; then
+	titan_controller=$titan
+	if test "x$titan" = xyes; then
+		titan_controller=RPI
+	fi
+	titan=yes
 	if test "x$scrypt" = "xno"; then
 		AC_MSG_ERROR([You explicitly enabled KnC Titan, but did not enable scrypt])
 	fi
@@ -809,6 +814,10 @@ if test "x$titan" = xyes; then
 		#endif
 	])
 	AC_DEFINE([USE_TITAN], [1], [Defined to 1 if KnC Titan support is wanted])
+	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
+	AH_TEMPLATE([CONTROLLER_BOARD_BACKPLANE])
+	AH_TEMPLATE([CONTROLLER_BOARD_BBB])
+	AH_TEMPLATE([CONTROLLER_BOARD_RPI])
 fi
 AM_CONDITIONAL([USE_TITAN], [test x$titan = xyes])
 

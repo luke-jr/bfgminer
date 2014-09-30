@@ -217,7 +217,7 @@ Build instructions:
 git clone git@github.com:KnCMiner/bfgminer.git
 cd bfgminer
 ./autogen.sh
-./configure --enable-scrypt --enable-titan --disable-other-drivers --without-libusb --disable-gridseed CFLAGS="-g -Iuthash/src -DCONTROLLER_BOARD_RPI"
+./configure --enable-scrypt --enable-titan --disable-other-drivers CFLAGS="-Iuthash/src"
 make
 sudo /etc/init.d/bfgminer.sh restart
 screen -r
