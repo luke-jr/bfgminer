@@ -1,8 +1,8 @@
 #ifndef __TITAN_ASIC_H
 #define __TITAN_ASIC_H
 
-#include "knc-asic.h"
-#include "knc-transport.h"
+#include "knc-asic/knc-asic.h"
+#include "knc-asic/knc-transport.h"
 
 #define	KNC_TITAN_MAX_ASICS		6
 #define	KNC_TITAN_DIES_PER_ASIC		4
