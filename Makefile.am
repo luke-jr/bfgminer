@@ -275,12 +275,7 @@ bfgminer_SOURCES += driver-avalonmm.c
 endif
 
 if USE_KNC
-if HAS_SCRYPT
-bfgminer_SOURCES += driver-titan.c titan-asic.c knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c titan-asic.h knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
-bfgminer_CPPFLAGS += -I. -I./knc-asic/include -I./knc-asic
-else
 bfgminer_SOURCES += driver-knc.c
-endif
 endif
 
 if HAS_KLONDIKE
@@ -289,6 +284,11 @@ endif
 
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
+endif
+
+if USE_TITAN
+bfgminer_SOURCES += driver-titan.c titan-asic.c knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c titan-asic.h knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
+bfgminer_CPPFLAGS += -I. -I./knc-asic/include -I./knc-asic
 endif
 
 if HAS_X6500
