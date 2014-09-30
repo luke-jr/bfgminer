@@ -28,6 +28,9 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <sched.h>
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
 
 #include <blkmaker.h>
 #include <blktemplate.h>
@@ -468,6 +471,7 @@ struct cgpu_info {
 	char proc_repr_ns[9];
 	struct cgpu_info *device;
 	struct cgpu_info *next_proc;
+	int extra_work_queue;
 	
 	const char *device_path;
 	void *device_data;

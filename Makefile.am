@@ -270,7 +270,7 @@ bfgminer_SOURCES += driver-zeusminer.c
 endif
 
 if HAS_AVALON
-bfgminer_SOURCES += driver-avalon.c driver-avalon.h hexdump.c
+bfgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
 if USE_AVALONMM
@@ -287,6 +287,10 @@ endif
 
 if HAS_MODMINER
 bfgminer_SOURCES += driver-modminer.c
+endif
+
+if USE_TITAN
+bfgminer_SOURCES += driver-titan.c titan-asic.c knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c titan-asic.h knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
 endif
 
 if HAS_X6500

@@ -784,6 +784,35 @@ fi
 AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
 
 
+driverlist="$driverlist titan"
+AC_ARG_ENABLE([titan],
+	[AC_HELP_STRING([--enable-titan],[Compile support for KnC Titan (default disabled)])],
+	[titan=$enableval],
+	[titan=$ddno]
+	)
+if test "x$titan" = xyes; then
+	if test "x$scrypt" = "xno"; then
+		AC_MSG_ERROR([You explicitly enabled KnC Titan, but did not enable scrypt])
+	fi
+	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
+	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for titan driver])
+	],[
+		#include <stddef.h>
+		#ifdef HAVE_LINUX_I2C_DEV_USER_H
+		#include <linux/i2c-dev-user.h>
+		#else
+		#ifdef NEED_LINUX_I2C_H
+		#include <linux/i2c.h>
+		#endif
+		#include <linux/i2c-dev.h>
+		#endif
+	])
+	AC_DEFINE([USE_TITAN], [1], [Defined to 1 if KnC Titan support is wanted])
+fi
+AM_CONDITIONAL([USE_TITAN], [test x$titan = xyes])
+
+
 driverlist="$driverlist x6500"
 AC_ARG_ENABLE([x6500],
 	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],

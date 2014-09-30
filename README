@@ -168,6 +168,7 @@ BFGMiner driver configuration options:
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-rockminer     Compile support for RockMiner (default enabled)
+	--enable-titan          Compile support for KnC Titan (default disabled)
 	--disable-twinfury      Compile support for Twinfury USB miner (default
 	                        enabled)
 	--disable-x6500         Compile support for X6500 (default if libusb)
