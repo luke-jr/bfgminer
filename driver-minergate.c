@@ -447,7 +447,7 @@ void minergate_poll(struct thr_info * const thr)
 		{
 			submit_nonce(thr, work, nonce);
 			
-			nonce = upk_u32be(jobrsp, 0xc);
+			nonce = upk_u32le(jobrsp, 0xc);
 			if (nonce)
 				submit_nonce(thr, work, nonce);
 		}
