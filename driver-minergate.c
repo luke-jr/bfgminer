@@ -34,17 +34,11 @@
 static const char * const minergate_stats_file = "/var/run/mg_rate_temp";
 
 #define MINERGATE_MAGIC  0xcaf4
-static const int minergate_max_responses = 300;
 #define MINERGATE_PKT_HEADER_SZ       8
 #define MINERGATE_PKT_REQ_ITEM_SZ  0x34
-#define MINERGATE_PKT_REQ_MAX     100
 #define MINERGATE_PKT_RSP_ITEM_SZ  0x14
-#define MINERGATE_PKT_RSP_MAX     300
 #define MINERGATE_POLL_US      100000
 #define MINERGATE_RETRY_US    5000000
-
-#define MINERGATE_PKT_REQ_SZ  (MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * MINERGATE_PKT_REQ_MAX))
-#define MINERGATE_PKT_RSP_SZ  (MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_RSP_ITEM_SZ * MINERGATE_PKT_RSP_MAX))
 
 BFG_REGISTER_DRIVER(minergate_drv)
 
@@ -60,6 +54,11 @@ enum minergate_reqpkt_flags {
 
 struct minergate_config {
 	uint8_t protover;
+	int n_req;
+	int n_rsp;
+	
+	int pkt_req_sz;
+	int pkt_rsp_sz;
 };
 
 struct minergate_state {
@@ -130,8 +129,26 @@ const char *minergate_init_protover(struct cgpu_info * const proc, const char * 
 	return NULL;
 }
 
+static
+const char *minergate_init_n_req(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	mgcfg->n_req = atoi(newvalue);
+	return NULL;
+}
+
+static
+const char *minergate_init_n_rsp(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	mgcfg->n_rsp = atoi(newvalue);
+	return NULL;
+}
+
 static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
 	{"protover", minergate_init_protover, NULL},
+	{"n_req", minergate_init_n_req, NULL},
+	{"n_rsp", minergate_init_n_rsp, NULL},
 	{NULL},
 };
 
@@ -148,11 +165,29 @@ bool minergate_detect_one(const char * const devpath)
 		.protover = MPV_SP10,
 	};
 	drv_set_defaults(&minergate_drv, minergate_set_device_funcs_probe, mgcfg, devpath, NULL, 1);
+	switch (mgcfg->protover)
+	{
+		case MPV_SP10:
+			BFGINIT(mgcfg->n_req, 100);
+			BFGINIT(mgcfg->n_rsp, 300);
+			break;
+		case MPV_SP30:
+			BFGINIT(mgcfg->n_req, 30);
+			BFGINIT(mgcfg->n_rsp, 60);
+			break;
+	}
+	mgcfg->pkt_req_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * mgcfg->n_req);
+	mgcfg->pkt_rsp_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_RSP_ITEM_SZ * mgcfg->n_rsp);
 	
 	int epfd = -1;
-	uint8_t buf[MINERGATE_PKT_REQ_SZ] = {0xbf, 0x90, mgcfg->protover, MRPF_FIRST, 0,0, 0 /* req count */,};
+	uint8_t buf[mgcfg->pkt_req_sz];
+	buf[0] = 0xbf;
+	buf[1] = 0x90;
+	buf[2] = mgcfg->protover;
+	buf[3] = MRPF_FIRST;
 	pk_u16le(buf, 4, MINERGATE_MAGIC);
-	if (MINERGATE_PKT_REQ_SZ != write(fd, buf, MINERGATE_PKT_REQ_SZ))
+	memset(&buf[6], '\0', mgcfg->pkt_req_sz - 6);
+	if (mgcfg->pkt_req_sz != write(fd, buf, mgcfg->pkt_req_sz))
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: write incomplete or failed", minergate_drv.dname, devpath);
 	
 	epfd = epoll_create(1);
@@ -185,7 +220,7 @@ bool minergate_detect_one(const char * const devpath)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: %s mismatch", minergate_drv.dname, devpath, "magic");
 	
 	uint16_t responses = upk_u16le(buf, 6);
-	if (responses > minergate_max_responses)
+	if (responses > mgcfg->n_rsp)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: More than maximum responses", minergate_drv.dname, devpath);
 	
 	if (bfg_claim_any2(&minergate_drv, devpath, "unix", devpath))
@@ -233,7 +268,7 @@ bool minergate_init(struct thr_info * const thr)
 	if (fd < 0)
 		applogr(false, LOG_ERR, "%s: Cannot connect", dev->dev_repr);
 	
-	struct minergate_state * const state = malloc(sizeof(*state) + MINERGATE_PKT_REQ_SZ);
+	struct minergate_state * const state = malloc(sizeof(*state) + mgcfg->pkt_req_sz);
 	if (!state)
 		applogr(false, LOG_ERR, "%s: %s failed", dev->dev_repr, "malloc");
 	*state = (struct minergate_state){
@@ -243,7 +278,7 @@ bool minergate_init(struct thr_info * const thr)
 	thr->work = thr->work_list = NULL;
 	
 	mutex_init(&dev->device_mutex);
-	memset(state->req_buffer, 0, MINERGATE_PKT_REQ_SZ);
+	memset(state->req_buffer, 0, mgcfg->pkt_req_sz);
 	pk_u8(state->req_buffer, 2, mgcfg->protover);
 	state->req_buffer[3] = MRPF_FIRST | MRPF_FLUSH;
 	pk_u16le(state->req_buffer, 4, MINERGATE_MAGIC);
@@ -255,14 +290,16 @@ bool minergate_init(struct thr_info * const thr)
 static
 bool minergate_queue_full(struct thr_info * const thr)
 {
-	static const unsigned max_minergate_jobs = 300, max_requests = 100;
+	static const unsigned max_minergate_jobs = 300;
+	struct cgpu_info * const dev = thr->cgpu;
+	struct minergate_config * const mgcfg = dev->device_data;
 	struct minergate_state * const state = thr->cgpu_data;
 	bool qf;
 	
 	if (HASH_COUNT(thr->work) + state->ready_to_queue >= max_minergate_jobs)
 		qf = true;
 	else
-	if (state->ready_to_queue >= max_requests)
+	if (state->ready_to_queue >= mgcfg->n_req)
 		qf = true;
 	else
 	if (state->req_buffer[3] & MRPF_FLUSH)
@@ -303,7 +340,7 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 	pk_u8(my_buf, 0x30, zerobits);
 	
 	pk_u8(my_buf, 0x31,    0);  // ntime limit
-	pk_u8(my_buf, 0x32,    0);  // ntime offset
+	pk_u8(my_buf, 0x32,    0);  // pv6: ntime offset ; pv30: reserved
 	pk_u8(my_buf, 0x33,    0);  // reserved
 	
 	struct work *oldwork;
@@ -350,11 +387,12 @@ void minergate_poll(struct thr_info * const thr)
 	struct minergate_config * const mgcfg = dev->device_data;
 	struct minergate_state * const state = thr->cgpu_data;
 	const int fd = dev->device_fd;
+	uint8_t buf[mgcfg->pkt_rsp_sz];
 	
 	if (opt_dev_protocol || state->ready_to_queue)
 		applog(LOG_DEBUG, "%s: Polling with %u new jobs", dev->dev_repr, state->ready_to_queue);
 	pk_u16le(state->req_buffer, 6, state->ready_to_queue);
-	if (MINERGATE_PKT_REQ_SZ != write(fd, state->req_buffer, MINERGATE_PKT_REQ_SZ))
+	if (mgcfg->pkt_req_sz != write(fd, state->req_buffer, mgcfg->pkt_req_sz))
 		return_via_applog(err, , LOG_ERR, "%s: write incomplete or failed", dev->dev_repr);
 	
 	uint8_t flags = state->req_buffer[3];
@@ -362,8 +400,7 @@ void minergate_poll(struct thr_info * const thr)
 	state->ready_to_queue = 0;
 	thr->work_list = NULL;
 	
-	uint8_t buf[MINERGATE_PKT_RSP_SZ];
-	if (minergate_read(fd, buf, MINERGATE_PKT_RSP_SZ) != MINERGATE_PKT_RSP_SZ)
+	if (minergate_read(fd, buf, mgcfg->pkt_rsp_sz) != mgcfg->pkt_rsp_sz)
 		return_via_applog(err, , LOG_ERR, "%s: %s failed", dev->dev_repr, "read");
 	
 	if (upk_u8(buf, 2) != mgcfg->protover || upk_u16le(buf, 4) != MINERGATE_MAGIC)
