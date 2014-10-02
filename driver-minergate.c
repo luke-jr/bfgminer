@@ -56,6 +56,7 @@ struct minergate_config {
 	uint8_t protover;
 	int n_req;
 	int n_rsp;
+	int queue;
 	
 	int pkt_req_sz;
 	int pkt_rsp_sz;
@@ -145,10 +146,19 @@ const char *minergate_init_n_rsp(struct cgpu_info * const proc, const char * con
 	return NULL;
 }
 
+static
+const char *minergate_init_queue(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	mgcfg->queue = atoi(newvalue);
+	return NULL;
+}
+
 static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
 	{"protover", minergate_init_protover, NULL},
 	{"n_req", minergate_init_n_req, NULL},
 	{"n_rsp", minergate_init_n_rsp, NULL},
+	{"queue", minergate_init_queue, NULL},
 	{NULL},
 };
 
@@ -170,10 +180,12 @@ bool minergate_detect_one(const char * const devpath)
 		case MPV_SP10:
 			BFGINIT(mgcfg->n_req, 100);
 			BFGINIT(mgcfg->n_rsp, 300);
+			BFGINIT(mgcfg->queue, 300);
 			break;
 		case MPV_SP30:
 			BFGINIT(mgcfg->n_req, 30);
 			BFGINIT(mgcfg->n_rsp, 60);
+			BFGINIT(mgcfg->queue, 40);
 			break;
 	}
 	mgcfg->pkt_req_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * mgcfg->n_req);
@@ -290,13 +302,12 @@ bool minergate_init(struct thr_info * const thr)
 static
 bool minergate_queue_full(struct thr_info * const thr)
 {
-	static const unsigned max_minergate_jobs = 300;
 	struct cgpu_info * const dev = thr->cgpu;
 	struct minergate_config * const mgcfg = dev->device_data;
 	struct minergate_state * const state = thr->cgpu_data;
 	bool qf;
 	
-	if (HASH_COUNT(thr->work) + state->ready_to_queue >= max_minergate_jobs)
+	if (HASH_COUNT(thr->work) + state->ready_to_queue >= mgcfg->queue)
 		qf = true;
 	else
 	if (state->ready_to_queue >= mgcfg->n_req)
