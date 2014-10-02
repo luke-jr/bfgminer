@@ -33,7 +33,6 @@
 
 static const char * const minergate_stats_file = "/var/run/mg_rate_temp";
 
-#define MINERGATE_PROTOCOL_VER  6
 #define MINERGATE_MAGIC  0xcaf4
 static const int minergate_max_responses = 300;
 #define MINERGATE_PKT_HEADER_SZ       8
@@ -49,9 +48,18 @@ static const int minergate_max_responses = 300;
 
 BFG_REGISTER_DRIVER(minergate_drv)
 
+enum minergate_protocol_ver {
+	MPV_SP10 =  6,
+	MPV_SP30 = 30,
+};
+
 enum minergate_reqpkt_flags {
 	MRPF_FIRST = 1,
 	MRPF_FLUSH = 2,
+};
+
+struct minergate_config {
+	uint8_t protover;
 };
 
 struct minergate_state {
@@ -108,6 +116,26 @@ ssize_t minergate_read(const int fd, void * const buf_p, size_t bufLen)
 }
 
 static
+const char *minergate_init_protover(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	
+	int i = atoi(newvalue);
+	
+	if (i != MPV_SP10 || i != MPV_SP30)
+		return "Invalid protocol version";
+	
+	mgcfg->protover = i;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
+	{"protover", minergate_init_protover, NULL},
+	{NULL},
+};
+
+static
 bool minergate_detect_one(const char * const devpath)
 {
 	bool rv = false;
@@ -115,8 +143,14 @@ bool minergate_detect_one(const char * const devpath)
 	if (unlikely(fd < 0))
 		applogr(false, LOG_DEBUG, "%s: %s: Cannot connect", minergate_drv.dname, devpath);
 	
+	struct minergate_config * const mgcfg = malloc(sizeof(*mgcfg));
+	*mgcfg = (struct minergate_config){
+		.protover = MPV_SP10,
+	};
+	drv_set_defaults(&minergate_drv, minergate_set_device_funcs_probe, mgcfg, devpath, NULL, 1);
+	
 	int epfd = -1;
-	uint8_t buf[MINERGATE_PKT_REQ_SZ] = {0xbf, 0x90, MINERGATE_PROTOCOL_VER, MRPF_FIRST, 0,0, 0 /* req count */,};
+	uint8_t buf[MINERGATE_PKT_REQ_SZ] = {0xbf, 0x90, mgcfg->protover, MRPF_FIRST, 0,0, 0 /* req count */,};
 	pk_u16le(buf, 4, MINERGATE_MAGIC);
 	if (MINERGATE_PKT_REQ_SZ != write(fd, buf, MINERGATE_PKT_REQ_SZ))
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: write incomplete or failed", minergate_drv.dname, devpath);
@@ -145,7 +179,7 @@ bool minergate_detect_one(const char * const devpath)
 	
 	if (buf[1] != 0x90)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: %s mismatch", minergate_drv.dname, devpath, "request_id");
-	if (buf[2] != MINERGATE_PROTOCOL_VER)
+	if (buf[2] != mgcfg->protover)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: %s mismatch", minergate_drv.dname, devpath, "Protocol version");
 	if (upk_u16le(buf, 4) != MINERGATE_MAGIC)
 		return_via_applog(out, , LOG_DEBUG, "%s: %s: %s mismatch", minergate_drv.dname, devpath, "magic");
@@ -161,12 +195,15 @@ bool minergate_detect_one(const char * const devpath)
 	*cgpu = (struct cgpu_info){
 		.drv = &minergate_drv,
 		.device_path = strdup(devpath),
+		.device_data = mgcfg,
 		.deven = DEV_ENABLED,
 		.threads = 1,
 	};
 	rv = add_cgpu(cgpu);
 	
 out:
+	if (!rv)
+		free(mgcfg);
 	close(fd);
 	if (epfd >= 0)
 		close(epfd);
@@ -189,6 +226,7 @@ static
 bool minergate_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
+	struct minergate_config * const mgcfg = dev->device_data;
 	
 	const int fd = minergate_open(dev->device_path);
 	dev->device_fd = fd;
@@ -206,7 +244,7 @@ bool minergate_init(struct thr_info * const thr)
 	
 	mutex_init(&dev->device_mutex);
 	memset(state->req_buffer, 0, MINERGATE_PKT_REQ_SZ);
-	pk_u8(state->req_buffer, 2, MINERGATE_PROTOCOL_VER);
+	pk_u8(state->req_buffer, 2, mgcfg->protover);
 	state->req_buffer[3] = MRPF_FIRST | MRPF_FLUSH;
 	pk_u16le(state->req_buffer, 4, MINERGATE_MAGIC);
 	timer_set_delay_from_now(&thr->tv_poll, 0);
@@ -309,6 +347,7 @@ static
 void minergate_poll(struct thr_info * const thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
+	struct minergate_config * const mgcfg = dev->device_data;
 	struct minergate_state * const state = thr->cgpu_data;
 	const int fd = dev->device_fd;
 	
@@ -327,7 +366,7 @@ void minergate_poll(struct thr_info * const thr)
 	if (minergate_read(fd, buf, MINERGATE_PKT_RSP_SZ) != MINERGATE_PKT_RSP_SZ)
 		return_via_applog(err, , LOG_ERR, "%s: %s failed", dev->dev_repr, "read");
 	
-	if (upk_u8(buf, 2) != MINERGATE_PROTOCOL_VER || upk_u16le(buf, 4) != MINERGATE_MAGIC)
+	if (upk_u8(buf, 2) != mgcfg->protover || upk_u16le(buf, 4) != MINERGATE_MAGIC)
 		return_via_applog(err, , LOG_ERR, "%s: Protocol mismatch", dev->dev_repr);
 	
 	uint8_t *jobrsp = &buf[MINERGATE_PKT_HEADER_SZ];
