@@ -541,11 +541,17 @@ driverlist="$driverlist gridseed"
 AC_ARG_ENABLE([gridseed],
 	[AC_HELP_STRING([--disable-gridseed],[Compile support for GridSeed (default enabled with scrypt)])],
 	[gridseed=$enableval],
-	[gridseed=$scrypt])
+	[gridseed=$ddauto])
+if test "x$gridseed" = "xno"; then
+	true
+elif test "x$scrypt" = "xyes"; then
+	gridseed=yes
+elif test "x$gridseed" = "xauto"; then
+	gridseed=no
+else
+	AC_MSG_ERROR([You explicitly enabled GridSeed, but did not enable scrypt (SHA2 not supported)])
+fi
 if test "x$gridseed" = "xyes"; then
-	if test "x$scrypt" = "xno"; then
-		AC_MSG_ERROR([You explicitly enabled GridSeed, but did not enable scrypt (SHA2 not supported)])
-	fi
 	AC_DEFINE([USE_GRIDSEED], [1], [Defined to 1 if GridSeed support is wanted])
 	need_gc3355=yes
 	need_lowl_vcom=yes
