@@ -57,6 +57,7 @@ struct minergate_config {
 	int n_req_queue;
 	int n_rsp;
 	int queue;
+	char *stats_file;
 	
 	int pkt_req_sz;
 	int pkt_rsp_sz;
@@ -163,12 +164,22 @@ const char *minergate_init_queue(struct cgpu_info * const proc, const char * con
 	return NULL;
 }
 
+static
+const char *minergate_init_stats_file(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	free(mgcfg->stats_file);
+	mgcfg->stats_file = trimmed_strdup(newvalue);
+	return NULL;
+}
+
 static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
 	{"protover", minergate_init_protover, NULL},
 	{"n_req", minergate_init_n_req, NULL},
 	{"n_req_queue", minergate_init_n_req_queue, NULL},
 	{"n_rsp", minergate_init_n_rsp, NULL},
 	{"queue", minergate_init_queue, NULL},
+	{"stats_file", minergate_init_stats_file, NULL},
 	{NULL},
 };
 
@@ -202,6 +213,7 @@ bool minergate_detect_one(const char * const devpath)
 			mgcfg->pkt_rsp_item_sz = 0x10;
 			break;
 	}
+	BFGINIT(mgcfg->stats_file, strdup(minergate_stats_file));
 	mgcfg->pkt_req_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * mgcfg->n_req);
 	mgcfg->pkt_rsp_sz = MINERGATE_PKT_HEADER_SZ + (mgcfg->pkt_rsp_item_sz * mgcfg->n_rsp);
 	
@@ -508,10 +520,14 @@ static
 bool minergate_get_stats(struct cgpu_info * const dev)
 {
 	static const int skip_stats = 1;
+	struct minergate_config * const mgcfg = dev->device_data;
 	struct thr_info * const thr = dev->thr[0];
 	struct minergate_state * const state = thr->cgpu_data;
 	
-	FILE *F = fopen(minergate_stats_file, "r");
+	if (!(mgcfg->stats_file && mgcfg->stats_file[0]))
+		return true;
+	
+	FILE *F = fopen(mgcfg->stats_file, "r");
 	char buf[0x100];
 	if (F)
 	{
