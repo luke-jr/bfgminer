@@ -184,7 +184,7 @@ static const struct bfg_set_device_definition minergate_set_device_funcs_probe[]
 };
 
 static
-bool minergate_detect_one(const char * const devpath)
+bool minergate_detect_one_extra(const char * const devpath, const enum minergate_protocol_ver def_protover)
 {
 	bool rv = false;
 	const int fd = minergate_open(devpath);
@@ -193,7 +193,7 @@ bool minergate_detect_one(const char * const devpath)
 	
 	struct minergate_config * const mgcfg = malloc(sizeof(*mgcfg));
 	*mgcfg = (struct minergate_config){
-		.protover = MPV_SP10,
+		.protover = def_protover,
 	};
 	drv_set_defaults(&minergate_drv, minergate_set_device_funcs_probe, mgcfg, devpath, NULL, 1);
 	switch (mgcfg->protover)
@@ -284,9 +284,20 @@ out:
 }
 
 static
+bool minergate_detect_one(const char * const devpath)
+{
+	return minergate_detect_one_extra(devpath, MPV_SP10);
+}
+
+static
 int minergate_detect_auto(void)
 {
-	return minergate_detect_one("/tmp/connection_pipe") ? 1 : 0;
+	int total = 0;
+	if (minergate_detect_one_extra("/tmp/connection_pipe", MPV_SP10))
+		++total;
+	if (minergate_detect_one_extra("/tmp/connection_pipe_sp30", MPV_SP30))
+		++total;
+	return total;
 }
 
 static
