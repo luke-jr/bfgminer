@@ -461,14 +461,15 @@ void minergate_poll(struct thr_info * const thr)
 			// Increment HW errors even if no nonce to submit
 			inc_hw_errors_only(thr);
 		
-		if (unlikely(!work))
-			continue;
-		
-		HASH_DEL(thr->work, work);
-		applog(LOG_DEBUG, "%s: %s job %"PRIwdi" completed", dev->dev_repr, work->tv_stamp.tv_sec ? "Flushed" : "Active", work->device_id);
-		if (!work->tv_stamp.tv_sec)
-			hashes += 100000000 * work->nonce_diff;
-		free_work(work);
+		const bool work_completed = (mgcfg->protover == MPV_SP10) ? (bool)work : (bool)jobrsp[0xe];
+		if (work_completed)
+		{
+			HASH_DEL(thr->work, work);
+			applog(LOG_DEBUG, "%s: %s job %"PRIwdi" completed", dev->dev_repr, work->tv_stamp.tv_sec ? "Flushed" : "Active", work->device_id);
+			if (!work->tv_stamp.tv_sec)
+				hashes += 100000000 * work->nonce_diff;
+			free_work(work);
+		}
 	}
 	hashes_done2(thr, hashes, NULL);
 	
