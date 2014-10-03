@@ -284,11 +284,11 @@ if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
 	AC_ARG_WITH([uio],
 		[AC_HELP_STRING([--without-uio],[Compile support for PCI devices via Linux UIO interface (default enabled)])],
 		[uio=$withval],
-		[uio=$ddyes])
+		[uio=yes])
 	AC_ARG_WITH([vfio],
 		[AC_HELP_STRING([--without-vfio],[Compile support for PCI devices via Linux VFIO interface (default enabled)])],
-		[vfio=$enableval],
-		[vfio=$ddauto])
+		[vfio=$withval],
+		[vfio=auto])
 	if test "x$vfio" != "xno"; then
 		AC_CHECK_HEADER([linux/vfio.h],[
 			vfio=yes
@@ -403,12 +403,12 @@ AC_SUBST(JANSSON_CFLAGS)
 AC_SUBST(JANSSON_LIBS)
 
 if test "x$opencl" = xyes; then
-	adl="$ddyes"
+	adl="yes"
 	
 driverlist="$driverlist opencl:sensors/with_sensors"
 AC_ARG_WITH([sensors],
 	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
-	[true],[with_sensors=$ddauto])
+	[true],[with_sensors=auto])
 if test "x$opencl" != xyes; then
 	with_sensors=no
 fi
