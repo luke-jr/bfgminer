@@ -36,7 +36,6 @@ static const char * const minergate_stats_file = "/var/run/mg_rate_temp";
 #define MINERGATE_MAGIC  0xcaf4
 #define MINERGATE_PKT_HEADER_SZ       8
 #define MINERGATE_PKT_REQ_ITEM_SZ  0x34
-#define MINERGATE_PKT_RSP_ITEM_SZ  0x14
 #define MINERGATE_POLL_US      100000
 #define MINERGATE_RETRY_US    5000000
 
@@ -60,6 +59,7 @@ struct minergate_config {
 	
 	int pkt_req_sz;
 	int pkt_rsp_sz;
+	int pkt_rsp_item_sz;
 };
 
 struct minergate_state {
@@ -181,15 +181,17 @@ bool minergate_detect_one(const char * const devpath)
 			BFGINIT(mgcfg->n_req, 100);
 			BFGINIT(mgcfg->n_rsp, 300);
 			BFGINIT(mgcfg->queue, 300);
+			mgcfg->pkt_rsp_item_sz = 0x14;
 			break;
 		case MPV_SP30:
 			BFGINIT(mgcfg->n_req, 30);
 			BFGINIT(mgcfg->n_rsp, 60);
 			BFGINIT(mgcfg->queue, 40);
+			mgcfg->pkt_rsp_item_sz = 0x10;
 			break;
 	}
 	mgcfg->pkt_req_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * mgcfg->n_req);
-	mgcfg->pkt_rsp_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_RSP_ITEM_SZ * mgcfg->n_rsp);
+	mgcfg->pkt_rsp_sz = MINERGATE_PKT_HEADER_SZ + (mgcfg->pkt_rsp_item_sz * mgcfg->n_rsp);
 	
 	int epfd = -1;
 	uint8_t buf[mgcfg->pkt_req_sz];
@@ -438,7 +440,7 @@ void minergate_poll(struct thr_info * const thr)
 		applog(LOG_DEBUG, "%s: Received %u job completions", dev->dev_repr, rsp_count);
 	uint32_t nonce;
 	int64_t hashes = 0;
-	for (unsigned i = 0; i < rsp_count; ++i, (jobrsp += MINERGATE_PKT_RSP_ITEM_SZ))
+	for (unsigned i = 0; i < rsp_count; ++i, (jobrsp += mgcfg->pkt_rsp_item_sz))
 	{
 		work_device_id_t jobid = upk_u32be(jobrsp, 0);
 		nonce = upk_u32le(jobrsp, 8);
@@ -448,8 +450,11 @@ void minergate_poll(struct thr_info * const thr)
 		
 		if (minergate_submit(thr, work, nonce))
 		{
-			nonce = upk_u32le(jobrsp, 0xc);
-			minergate_submit(thr, work, nonce);
+			if (mgcfg->protover == MPV_SP10)
+			{
+				nonce = upk_u32le(jobrsp, 0xc);
+				minergate_submit(thr, work, nonce);
+			}
 		}
 		else
 		if (unlikely(!work))
