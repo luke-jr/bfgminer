@@ -96,7 +96,6 @@ unsigned int tm_i2c_req(int fd, unsigned char addr, unsigned char cmd, unsigned 
 		return -1;
 	}
 
-	//hexdump(buf, 10);
 	ret = (tm->data_msb << 8) + tm->data_lsb;
 	if (tm->cmd == cmd) return ret;
 	return 0;
