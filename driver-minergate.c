@@ -392,6 +392,20 @@ void minergate_queue_flush(struct thr_info * const thr)
 }
 
 static
+bool minergate_submit(struct thr_info * const thr, struct work * const work, const uint32_t nonce)
+{
+	if (!nonce)
+		return false;
+	
+	if (likely(work))
+		submit_nonce(thr, work, nonce);
+	else
+		inc_hw_errors3(thr, NULL, &nonce, 1.);
+	
+	return true;
+}
+
+static
 void minergate_poll(struct thr_info * const thr)
 {
 	struct cgpu_info * const dev = thr->cgpu;
@@ -429,28 +443,21 @@ void minergate_poll(struct thr_info * const thr)
 		work_device_id_t jobid = upk_u32be(jobrsp, 0);
 		nonce = upk_u32le(jobrsp, 8);
 		HASH_FIND(hh, thr->work, &jobid, sizeof(jobid), work);
-		if (!work)
-		{
+		if (unlikely(!work))
 			applog(LOG_ERR, "%s: Unknown job %"PRIwdi, dev->dev_repr, jobid);
-			if (nonce)
-			{
-				inc_hw_errors3(thr, NULL, &nonce, 1.);
-				nonce = upk_u32le(jobrsp, 0xc);
-				if (nonce)
-					inc_hw_errors3(thr, NULL, &nonce, 1.);
-			}
-			else
-				inc_hw_errors_only(thr);
-			continue;
-		}
-		if (nonce)
+		
+		if (minergate_submit(thr, work, nonce))
 		{
-			submit_nonce(thr, work, nonce);
-			
 			nonce = upk_u32le(jobrsp, 0xc);
-			if (nonce)
-				submit_nonce(thr, work, nonce);
+			minergate_submit(thr, work, nonce);
 		}
+		else
+		if (unlikely(!work))
+			// Increment HW errors even if no nonce to submit
+			inc_hw_errors_only(thr);
+		
+		if (unlikely(!work))
+			continue;
 		
 		HASH_DEL(thr->work, work);
 		applog(LOG_DEBUG, "%s: %s job %"PRIwdi" completed", dev->dev_repr, work->tv_stamp.tv_sec ? "Flushed" : "Active", work->device_id);
