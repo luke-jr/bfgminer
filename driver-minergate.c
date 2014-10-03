@@ -54,6 +54,7 @@ enum minergate_reqpkt_flags {
 struct minergate_config {
 	uint8_t protover;
 	int n_req;
+	int n_req_queue;
 	int n_rsp;
 	int queue;
 	
@@ -139,6 +140,14 @@ const char *minergate_init_n_req(struct cgpu_info * const proc, const char * con
 }
 
 static
+const char *minergate_init_n_req_queue(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct minergate_config * const mgcfg = proc->device_data;
+	mgcfg->n_req_queue = atoi(newvalue);
+	return NULL;
+}
+
+static
 const char *minergate_init_n_rsp(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct minergate_config * const mgcfg = proc->device_data;
@@ -157,6 +166,7 @@ const char *minergate_init_queue(struct cgpu_info * const proc, const char * con
 static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
 	{"protover", minergate_init_protover, NULL},
 	{"n_req", minergate_init_n_req, NULL},
+	{"n_req_queue", minergate_init_n_req_queue, NULL},
 	{"n_rsp", minergate_init_n_rsp, NULL},
 	{"queue", minergate_init_queue, NULL},
 	{NULL},
@@ -179,12 +189,14 @@ bool minergate_detect_one(const char * const devpath)
 	{
 		case MPV_SP10:
 			BFGINIT(mgcfg->n_req, 100);
+			BFGINIT(mgcfg->n_req_queue, mgcfg->n_req);
 			BFGINIT(mgcfg->n_rsp, 300);
 			BFGINIT(mgcfg->queue, 300);
 			mgcfg->pkt_rsp_item_sz = 0x14;
 			break;
 		case MPV_SP30:
 			BFGINIT(mgcfg->n_req, 30);
+			BFGINIT(mgcfg->n_req_queue, min(10, mgcfg->n_req));
 			BFGINIT(mgcfg->n_rsp, 60);
 			BFGINIT(mgcfg->queue, 40);
 			mgcfg->pkt_rsp_item_sz = 0x10;
@@ -312,7 +324,7 @@ bool minergate_queue_full(struct thr_info * const thr)
 	if (HASH_COUNT(thr->work) + state->ready_to_queue >= mgcfg->queue)
 		qf = true;
 	else
-	if (state->ready_to_queue >= mgcfg->n_req)
+	if (state->ready_to_queue >= mgcfg->n_req_queue)
 		qf = true;
 	else
 	if (state->req_buffer[3] & MRPF_FLUSH)
