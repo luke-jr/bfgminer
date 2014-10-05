@@ -1,3 +1,9 @@
+bfgminer (4.9.0-0precise1) precise; urgency=low
+
+  * titan: Driver for KnCMiner's scrypt ASIC machine.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 05 Oct 2014 05:34:21 -0000
+
 bfgminer (4.8.0-0precise1) precise; urgency=low
 
   * New option --benchmark-intense for hardware manufacturers to properly test their miners can perform properly as Bitcoin grows.
