@@ -1,3 +1,22 @@
+BFGMiner Version 4.7.2 - October 5, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.37.0 to 7.38.0
+- - libusb from 1.0.18 to 1.0.19 (Win64 only)
+- - mingw64-runtime from 3.1.0 to 3.2.0 (Win64 only)
+- - uthash from 1.9.7 to 1.9.9
+- RPC: Initialise json_config to silence false warning
+- Bugfix: configure: Affect gridseed driver with --disable-other-drivers
+- Bugfix: configure: minergate driver needs lowlevel for claiming sockets
+- Bugfix: configure: --disable-other-drivers should not affect non-driver
+options
+- Bugfix: configure: --with[out]-vfio needs $withval, not $enableval
+- Bugfix: rockminer: Correct types for short read error message
+- Bugfix: icarus: fix the STATS RPC API call crashes with a multi-proc device
+- bitforce: Reinstate device work inprogress count sanity check for 28nm devices
+- Bugfix: async minerloop fix for devices disabled at start
+
+
 BFGMiner Version 4.7.1 - September 10, 2014
 
 - Bugfix: Reorder LDADD and such for priority
