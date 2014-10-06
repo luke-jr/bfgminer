@@ -198,6 +198,44 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, 
 	knc_titan_set_work(repr, ctx, asic, die, 0xFFFF, 0, NULL, true, &unused, &report);
 }
 
+static uint32_t nonce_tops[KNC_TITAN_DIES_PER_ASIC][KNC_TITAN_CORES_PER_DIE];
+static bool nonce_tops_inited = false;
+
+static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
+{
+	if (!nonce_tops_inited) {
+		uint32_t top;
+		double nonce_f, nonce_step;
+		int die, core;
+
+		nonce_f = 0.0;
+		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_ASIC;
+
+		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			for (core = 0; core < KNC_TITAN_CORES_PER_DIE; ++core) {
+				nonce_f += nonce_step;
+				if ((core < (KNC_TITAN_CORES_PER_DIE - 1)) || (die < (KNC_TITAN_DIES_PER_ASIC - 1)))
+					top = nonce_f;
+				else
+					top = 0xFFFFFFFF;
+				nonce_tops[die][core] = top;
+			}
+		}
+
+		nonce_tops_inited = true;
+	}
+
+	*nonce_top = nonce_tops[dieno][coreno];
+	if (coreno > 0) {
+		*nonce_bottom = nonce_tops[dieno][coreno - 1] + 1;
+		return;
+	}
+	if (dieno > 0) {
+		*nonce_bottom = nonce_tops[dieno - 1][KNC_TITAN_CORES_PER_DIE - 1] + 1;
+	}
+	*nonce_bottom = 0;
+}
+
 static bool knc_titan_init(struct thr_info * const thr)
 {
 	const int max_cores = KNC_TITAN_CORES_PER_ASIC;
@@ -268,8 +306,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 		return false;
 
 	/* Init nonce ranges for cores */
-	double nonce_step = 4294967296.0 / total_cores;
-	double nonce_f = 0.0;
 	struct titan_setup_core_params setup_params = {
 		.bad_address_mask = {0, 0},
 		.bad_address_match = {0x3FF, 0x3FF},
@@ -284,26 +320,11 @@ static bool knc_titan_init(struct thr_info * const thr)
 	};
 	fill_in_thread_params(opt_knc_threads_per_core, &setup_params);
 
-	int prev_asic = -1;
 	for (proc = cgpu; proc; proc = proc->next_proc) {
 		knc = proc->device_data;
 		mythr = proc->thr[0];
 		knccore = mythr->cgpu_data;
-		if (knccore->asicno != prev_asic) {
-			int numcores = asic_cores[knccore->asicno];
-			if (numcores < 1)
-				numcores = 1;
-			prev_asic = knccore->asicno;
-			nonce_f = 0.0;
-			nonce_step = 4294967296.0 / numcores;
-			setup_params.nonce_top = 0xFFFFFFFF;
-		}
-		nonce_f += nonce_step;
-		setup_params.nonce_bottom = setup_params.nonce_top + 1;
-		if (NULL != proc->next_proc)
-			setup_params.nonce_top = nonce_f;
-		else
-			setup_params.nonce_top = 0xFFFFFFFF;
+		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
