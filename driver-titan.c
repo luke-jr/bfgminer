@@ -339,6 +339,24 @@ static bool knc_titan_init(struct thr_info * const thr)
 	return true;
 }
 
+static bool die_enable(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
+{
+	sprintf(errbuf, "die_enable[%d:%d] not imnplemented", asic, die);
+	return false;
+}
+
+static bool die_disable(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
+{
+	sprintf(errbuf, "die_disable[%d:%d] not imnplemented", asic, die);
+	return false;
+}
+
+static bool die_reconfigure(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
+{
+	sprintf(errbuf, "die_reconfigure[%d:%d] not imnplemented", asic, die);
+	return false;
+}
+
 static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 {
 	struct cgpu_info * const cgpu = thr->cgpu;
@@ -580,8 +598,36 @@ static const char *knc_titan_set_clock(struct cgpu_info * const device, const ch
 	return NULL;
 }
 
+static const char *knc_titan_die_ena(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	int asic, die;
+	char str[256];
+
+	/* command format: ASIC:N;DIE:N;MODE:ENABLE|DISABLE|RECONFIGURE */
+	if (3 != sscanf(setting, "ASIC:%d;DIE:%d;MODE:%255s", &asic, &die, str)) {
+error_bad_params:
+		sprintf(replybuf, "Die setup failed, bad parameters");
+		return replybuf;
+	}
+	if (0 == strncasecmp(str, "enable", sizeof(str) - 1)) {
+		if (!die_enable(device->device_data, asic, die, replybuf))
+			return replybuf;
+	} else if (0 == strncasecmp(str, "disable", sizeof(str) - 1)) {
+                if (!die_disable(device->device_data, asic, die, replybuf))
+                        return replybuf;
+        } else if (0 == strncasecmp(str, "reconfigure", sizeof(str) - 1)) {
+                if (!die_reconfigure(device->device_data, asic, die, replybuf))
+                        return replybuf;
+	} else
+		goto error_bad_params;
+	sprintf(replybuf, "Die setup Ok; asic %d die %d cmd %s", asic, die, str);
+	*success = SDR_OK;
+	return replybuf;
+}
+
 static const struct bfg_set_device_definition knc_titan_set_device_funcs[] = {
 	{ "clock", knc_titan_set_clock, NULL },
+	{ "die", knc_titan_die_ena, NULL },
 	{ NULL },
 };
 
