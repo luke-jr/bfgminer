@@ -124,7 +124,7 @@ static bool knc_titan_detect_one(const char *devpath)
 		die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 		die_info.version = KNC_VERSION_TITAN;
 		if (!knc_titan_get_info(repr, ctx, asic, die, &die_info))
-			continue;
+			die_info.cores = -1;
 		if (0 < die_info.cores) {
 			knc->dies[asic][die] = (struct knc_titan_die) {
 				.asicno = asic,
