@@ -194,11 +194,11 @@ static void knc_titan_detect(void)
 	generic_detect(&knc_titan_drv, knc_titan_detect_one, knc_titan_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
-static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, int die)
+static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, int die, int core)
 {
 	struct knc_report report;
 	bool unused;
-	knc_titan_set_work(repr, ctx, asic, die, ALL_CORES, 0, NULL, true, &unused, &report);
+	knc_titan_set_work(repr, ctx, asic, die, core, 0, NULL, true, &unused, &report);
 }
 
 static uint32_t nonce_tops[KNC_TITAN_DIES_PER_ASIC][KNC_TITAN_CORES_PER_DIE];
@@ -270,6 +270,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knccore = mythr->cgpu_data;
 		if ((asic != knccore->asicno) || (die != knccore->dieno))
 			break;
+		knc_titan_clean_flush(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
 		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
@@ -332,7 +333,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 
 			if (0 == knccore->coreno) {
 				knc->dies[asic][die].first_proc = proc;
-				knc_titan_clean_flush(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno);
 			}
 
 			proc = proc->next_proc;
@@ -391,7 +391,6 @@ static bool die_enable(struct knc_titan_info * const knc, int asic, int die, cha
 	if (0 >= knc->dies[asic][die].cores)
 		res = die_test_and_add(knc, asic, die, errbuf);
 	if (res) {
-		knc_titan_clean_flush(knc->dies[asic][die].first_proc->device->dev_repr, knc->ctx, asic, die);
 		res = configure_one_die(knc, asic, die);
 	}
 	cgpu_release_control(knc->cgpu);
