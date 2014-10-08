@@ -64,6 +64,13 @@ struct knc_titan_die {
 	int cores;
 	struct cgpu_info *first_proc;
 
+	bool need_flush;
+	int next_slot;
+	/* First slot after flush. If next_slot reaches this, then
+	 * we need to re-flush all the cores to avoid duplicating slot numbers
+	 * for different works */
+	int first_slot;
+
 	int freq;
 };
 
@@ -72,14 +79,6 @@ struct knc_titan_info {
 	struct cgpu_info *cgpu;
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
-
-	/* Per-ASIC data */
-	bool need_flush[KNC_TITAN_MAX_ASICS];
-	int next_slot[KNC_TITAN_MAX_ASICS];
-	/* First slot after flush. If next_slot reaches this, then
-	 * we need to re-flush all the cores to avoid duplicating slot numbers
-	 * for different works */
-	int first_slot[KNC_TITAN_MAX_ASICS];
 
 	struct work *workqueue;
 	int workqueue_size;
@@ -279,7 +278,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 	applog(LOG_NOTICE, "%s [%d-%d] Die configured", repr, asic, die);
-	knc->need_flush[asic] = true;
+	knc->dies[asic][die].need_flush = true;
 
 	return true;
 }
@@ -357,10 +356,9 @@ static bool knc_titan_init(struct thr_info * const thr)
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			configure_one_die(knc, asic, die);
+			knc->dies[asic][die].next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
+			knc->dies[asic][die].first_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
 		}
-		knc->next_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
-		knc->first_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
-		knc->need_flush[asic] = true;
 	}
 	timer_set_now(&thr->tv_poll);
 
@@ -496,12 +494,20 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 
 	HASH_LAST_ADDED(knc->devicework, work);
 	if (work && stale_work(work, true)) {
-		int asic;
-		for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic)
-			knc->need_flush[asic] = true;
+		int asic, die;
+		for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+				knc->dies[asic][die].need_flush = true;
+			}
+		}
 		timer_set_now(&thr->tv_poll);
 	}
 }
+
+#define	MAKE_WORKID(asic, die, slot)	((((uint32_t)(asic)) << 16) | ((uint32_t)(die) << 8) | ((uint32_t)(slot)))
+#define	ASIC_FROM_WORKID(workid)		((((uint32_t)(workid)) >> 16) & 0xFF)
+#define	DIE_FROM_WORKID(workid)			((((uint32_t)(workid)) >> 8) & 0xFF)
+#define	SLOT_FROM_WORKID(workid)		(((uint32_t)(workid)) & 0xFF)
 
 static void knc_titan_poll(struct thr_info * const thr)
 {
@@ -517,76 +523,73 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int asic;
 	int die;
 	int i, tmp_int;
+	struct knc_titan_die *die_p;
 
 	knc_titan_prune_local_queue(thr);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
-		DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
-			bool work_accepted = false;
-			bool need_replace;
-			if (knc->first_slot[asic] > KNC_TITAN_MIN_WORK_SLOT_NUM)
-				need_replace = ((knc->next_slot[asic] + 1) == knc->first_slot[asic]);
-			else
-				need_replace = (knc->next_slot[asic] == KNC_TITAN_MAX_WORK_SLOT_NUM);
-			knccore = NULL;
-			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
-				if (0 >= knc->dies[asic][die].cores)
-					continue;
-				struct cgpu_info *first_proc = knc->dies[asic][die].first_proc;
-				/* knccore is the core data of the first core in this asic */
-				if (NULL == knccore)
-					knccore = first_proc->thr[0]->cgpu_data;
-				bool die_work_accepted = false;
-				if (knc->need_flush[asic] || need_replace) {
+		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			die_p = &(knc->dies[asic][die]);
+			if (0 >= die_p->cores)
+				continue;
+			struct cgpu_info *first_proc = die_p->first_proc;
+			DL_FOREACH_SAFE(knc->workqueue, work, tmp) {
+				bool work_accepted = false;
+				bool need_replace;
+				if (die_p->first_slot > KNC_TITAN_MIN_WORK_SLOT_NUM)
+					need_replace = ((die_p->next_slot + 1) == die_p->first_slot);
+				else
+					need_replace = (die_p->next_slot == KNC_TITAN_MAX_WORK_SLOT_NUM);
+				if (die_p->need_flush || need_replace) {
 					for (proc = first_proc; proc; proc = proc->next_proc) {
 						mythr = proc->thr[0];
 						core1 = mythr->cgpu_data;
 						bool unused;
 						if ((core1->dieno != die) || (core1->asicno != asic))
 							break;
-						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, knc->next_slot[asic], work, true, &unused, &report)) {
+						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, die_p->next_slot, work, true, &unused, &report)) {
 							core1->last_nonce.slot = report.nonce[0].slot;
 							core1->last_nonce.nonce = report.nonce[0].nonce;
-							die_work_accepted = true;
+							work_accepted = true;
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, knc->next_slot[asic], work, false, &die_work_accepted, &report))
-						die_work_accepted = false;
+					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
+						work_accepted = false;
 				}
-				if (die_work_accepted)
-					work_accepted = true;
-			}
-			if ((!work_accepted) || (NULL == knccore))
-				break;
-			bool was_flushed = false;
-			if (knc->need_flush[asic] || need_replace) {
-				struct work *work1, *tmp1;
-				applog(LOG_NOTICE, "%s: Flushing stale works (%s)", knccore->proc->dev_repr,
-				       knc->need_flush[asic] ? "New work" : "Slot collision");
-				knc->need_flush[asic] = false;
-				knc->first_slot[asic] = knc->next_slot[asic];
-				HASH_ITER(hh, knc->devicework, work1, tmp1) {
-					if (asic == ((work1->device_id >> 8) & 0xFF)) {
-						HASH_DEL(knc->devicework, work1);
-						free_work(work1);
+				knccore = first_proc->thr[0]->cgpu_data;
+				if ((!work_accepted) || (NULL == knccore))
+					break;
+				bool was_flushed = false;
+				if (die_p->need_flush || need_replace) {
+					struct work *work1, *tmp1;
+					applog(LOG_NOTICE, "%s[%d-%d] Flushing stale works (%s)", first_proc->dev_repr, asic, die,
+					       die_p->need_flush ? "New work" : "Slot collision");
+					die_p->need_flush = false;
+					die_p->first_slot = die_p->next_slot;
+					HASH_ITER(hh, knc->devicework, work1, tmp1) {
+						if ( (asic == ASIC_FROM_WORKID(work1->device_id)) &&
+							 (die == DIE_FROM_WORKID(work1->device_id)) ) {
+							HASH_DEL(knc->devicework, work1);
+							free_work(work1);
+						}
 					}
+					delay_usecs = 0;
+					was_flushed = true;
 				}
-				delay_usecs = 0;
-				was_flushed = true;
+				--knc->workqueue_size;
+				DL_DELETE(knc->workqueue, work);
+				work->device_id = MAKE_WORKID(asic, die, die_p->next_slot);
+				HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
+				if (++(die_p->next_slot) > KNC_TITAN_MAX_WORK_SLOT_NUM)
+					die_p->next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
+				++workaccept;
+				/* If we know for sure that this work was urgent, then we don't need to hurry up
+				 * with filling next slot, we have plenty of time until current work completes.
+				 * So, better to proceed with other ASICs/knc. */
+				if (was_flushed)
+					break;
 			}
-			--knc->workqueue_size;
-			DL_DELETE(knc->workqueue, work);
-			work->device_id = (asic << 8) | knc->next_slot[asic];
-			HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
-			if (++(knc->next_slot[asic]) > KNC_TITAN_MAX_WORK_SLOT_NUM)
-				knc->next_slot[asic] = KNC_TITAN_MIN_WORK_SLOT_NUM;
-			++workaccept;
-			/* If we know for sure that this work was urgent, then we don't need to hurry up
-			 * with filling next slot, we have plenty of time until current work completes.
-			 * So, better to proceed with other ASICs. */
-			if (was_flushed)
-				break;
 		}
 	}
 
@@ -594,13 +597,14 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
-			if (0 >= knc->dies[asic][die].cores)
+			die_p = &(knc->dies[asic][die]);
+			if (0 >= die_p->cores)
 				continue;
-			die_info.cores = knc->dies[asic][die].cores; /* core hint */
+			die_info.cores = die_p->cores; /* core hint */
 			die_info.version = KNC_VERSION_TITAN;
 			if (!knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
 				continue;
-			for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
+			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
 				mythr = proc->thr[0];
 				knccore = mythr->cgpu_data;
 				if ((knccore->dieno != die) || (knccore->asicno != asic))
@@ -613,7 +617,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
 					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
 						break;
-					tmp_int = (asic << 8) | report.nonce[i].slot;
+					tmp_int = MAKE_WORKID(asic, die, report.nonce[i].slot);
 					HASH_FIND_INT(knc->devicework, &tmp_int, work);
 					if (!work) {
 						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u (asic %d)", proc->proc_repr, (unsigned)report.nonce[i].slot, asic);
