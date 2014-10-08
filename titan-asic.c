@@ -39,7 +39,7 @@ bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die
 			return false;
 		}
 		if (status & KNC_ERR_MASK) {
-			applog(LOG_ERR, "%s[%d:%d]: Failed to set work state (%x)", repr, channel, die, status);
+			applog(LOG_INFO, "%s[%d:%d]: Failed to set work state (%x)", repr, channel, die, status);
 			return false;
 		}
 		if (!(status & KNC_ERR_MASK)) {
@@ -63,7 +63,7 @@ bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int d
 	request_length = knc_prepare_report(request, die, core);
 	status = knc_syncronous_transfer(ctx, channel, request_length, request, response_length, response);
 	if (status) {
-		applog(LOG_ERR, "%s[%d:%d]: get_report failed (%x)", repr, channel, die, status);
+		applog(LOG_INFO, "%s[%d:%d]: get_report failed (%x)", repr, channel, die, status);
 		return false;
 	}
 
