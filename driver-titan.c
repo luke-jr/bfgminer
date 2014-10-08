@@ -358,22 +358,55 @@ static bool knc_titan_init(struct thr_info * const thr)
 	return true;
 }
 
+static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
+{
+	struct knc_die_info die_info;
+	char repr[6];
+
+	snprintf(repr, sizeof(repr), "%s %d", knc_titan_drv.name, asic);
+	die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
+	die_info.version = KNC_VERSION_TITAN;
+	if (!knc_titan_get_info(repr, knc->ctx, asic, die, &die_info))
+		die_info.cores = -1;
+	if (0 < die_info.cores) {
+		sprintf(errbuf, "Die[%d:%d] not detected", asic, die);
+		return false;
+	}
+
+	/* TODO: add procs */
+	sprintf(errbuf, "Die[%d:%d] has %d cores; was not added (addition not implemented)", asic, die, die_info.cores);
+
+	return false;
+}
+
 static bool die_enable(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
-	sprintf(errbuf, "die_enable[%d:%d] not imnplemented", asic, die);
-	return false;
+	bool res = true;
+
+	cgpu_request_control(knc->cgpu);
+	if (0 >= knc->dies[asic][die].cores)
+		res = die_test_and_add(knc, asic, die, errbuf);
+	if (res) {
+		knc_titan_clean_flush(knc->dies[asic][die].first_proc->device->dev_repr, knc->ctx, asic, die);
+		res = configure_one_die(knc, asic, die);
+	}
+	cgpu_release_control(knc->cgpu);
+
+	return res;
 }
 
 static bool die_disable(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
+	cgpu_request_control(knc->cgpu);
+	/* TODO: delete procs */
+	cgpu_release_control(knc->cgpu);
 	sprintf(errbuf, "die_disable[%d:%d] not imnplemented", asic, die);
 	return false;
 }
 
 static bool die_reconfigure(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
-	sprintf(errbuf, "die_reconfigure[%d:%d] not imnplemented", asic, die);
-	return false;
+	return die_enable(knc, asic, die, errbuf);
 }
 
 static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
