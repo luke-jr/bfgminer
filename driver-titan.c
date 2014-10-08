@@ -74,6 +74,8 @@ struct knc_titan_die {
 	int first_slot;
 
 	struct timeval last_share;
+	/* Don't use this! DC/DCs don't like broadcast urgent setworks */
+	bool broadcast_flushes;
 
 	int freq;
 };
@@ -248,10 +250,12 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	struct thr_info *mythr;
 	struct knc_titan_core *knccore;
 	char *repr;
+	struct knc_titan_die *die_p;
 
 	if ((0 > asic) || (KNC_TITAN_MAX_ASICS <= asic) || (0 > die) || (KNC_TITAN_DIES_PER_ASIC <= die))
 		return false;
-	if (0 >= knc->dies[asic][die].cores)
+	die_p = &(knc->dies[asic][die]);
+	if (0 >= die_p->cores)
 		return false;
 
 	/* Init nonce ranges for cores */
@@ -269,7 +273,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	};
 	fill_in_thread_params(opt_knc_threads_per_core, &setup_params);
 
-	first_proc = knc->dies[asic][die].first_proc;
+	first_proc = die_p->first_proc;
 	repr = first_proc->device->dev_repr;
 	for (proc = first_proc; proc; proc = proc->next_proc) {
 		mythr = proc->thr[0];
@@ -282,8 +286,9 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 	applog(LOG_NOTICE, "%s [%d-%d] Die configured", repr, asic, die);
-	knc->dies[asic][die].need_flush = true;
-	timer_set_now(&(knc->dies[asic][die].last_share));
+	die_p->need_flush = true;
+	timer_set_now(&(die_p->last_share));
+	die_p->broadcast_flushes = false;
 
 	return true;
 }
@@ -547,16 +552,24 @@ static void knc_titan_poll(struct thr_info * const thr)
 				else
 					need_replace = (die_p->next_slot == KNC_TITAN_MAX_WORK_SLOT_NUM);
 				if (die_p->need_flush || need_replace) {
-					for (proc = first_proc; proc; proc = proc->next_proc) {
-						mythr = proc->thr[0];
-						core1 = mythr->cgpu_data;
-						bool unused;
-						if ((core1->dieno != die) || (core1->asicno != asic))
-							break;
-						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, die_p->next_slot, work, true, &unused, &report)) {
-							core1->last_nonce.slot = report.nonce[0].slot;
-							core1->last_nonce.nonce = report.nonce[0].nonce;
+					bool unused;
+					if (die_p->broadcast_flushes) {
+						/* Use broadcast */
+						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, true, &unused, &report)) {
 							work_accepted = true;
+						}
+					} else {
+						/* Use unicasts */
+						for (proc = first_proc; proc; proc = proc->next_proc) {
+							mythr = proc->thr[0];
+							core1 = mythr->cgpu_data;
+							if ((core1->dieno != die) || (core1->asicno != asic))
+								break;
+							if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, die_p->next_slot, work, true, &unused, &report)) {
+								core1->last_nonce.slot = report.nonce[0].slot;
+								core1->last_nonce.nonce = report.nonce[0].nonce;
+								work_accepted = true;
+							}
 						}
 					}
 				} else {
