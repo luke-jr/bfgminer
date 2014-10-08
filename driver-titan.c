@@ -24,6 +24,8 @@
 
 #define	KNC_POLL_INTERVAL_US		10000
 
+#define	DIE_HEALTH_INTERVAL_SEC		10
+
 /* Broadcast address to all cores in a die */
 #define	ALL_CORES	0xFFFF
 
@@ -70,6 +72,8 @@ struct knc_titan_die {
 	 * we need to re-flush all the cores to avoid duplicating slot numbers
 	 * for different works */
 	int first_slot;
+
+	struct timeval last_share;
 
 	int freq;
 };
@@ -279,6 +283,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	}
 	applog(LOG_NOTICE, "%s [%d-%d] Die configured", repr, asic, die);
 	knc->dies[asic][die].need_flush = true;
+	timer_set_now(&(knc->dies[asic][die].last_share));
 
 	return true;
 }
@@ -524,6 +529,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int die;
 	int i, tmp_int;
 	struct knc_titan_die *die_p;
+	struct timeval tv_now;
 
 	knc_titan_prune_local_queue(thr);
 
@@ -594,6 +600,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	}
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
+	timer_set_now(&tv_now);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
@@ -613,6 +620,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					continue;
 				if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
 					continue;
+				timer_set_now(&(die_p->last_share));
 				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
 					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
 					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
@@ -631,6 +639,17 @@ static void knc_titan_poll(struct thr_info * const thr)
 				knccore->last_nonce.slot = report.nonce[0].slot;
 				knccore->last_nonce.nonce = report.nonce[0].nonce;
 			}
+		}
+
+		/* Check die health */
+		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			die_p = &(knc->dies[asic][die]);
+			if (0 >= die_p->cores)
+				continue;
+			if (timer_elapsed(&(die_p->last_share), &tv_now) < DIE_HEALTH_INTERVAL_SEC)
+				continue;
+			/* Reconfigure die */
+			configure_one_die(knc, asic, die);
 		}
 	}
 
