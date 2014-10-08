@@ -341,6 +341,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	}
 
 	cgpu_set_defaults(cgpu);
+	cgpu_setup_control_requests(cgpu);
 	if (0 >= total_cores)
 		return false;
 
