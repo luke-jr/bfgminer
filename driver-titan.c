@@ -279,6 +279,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
 	applog(LOG_NOTICE, "%s [%d-%d] Die configured", repr, asic, die);
+	knc->need_flush[asic] = true;
 
 	return true;
 }
