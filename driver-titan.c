@@ -24,6 +24,9 @@
 
 #define	KNC_POLL_INTERVAL_US		10000
 
+/* Broadcast address to all cores in a die */
+#define	ALL_CORES	0xFFFF
+
 /* Work queue pre-fill level.
  * Must be high enough to supply all ASICs with works after a flush */
 #define WORK_QUEUE_PREFILL		10
@@ -195,7 +198,7 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, 
 {
 	struct knc_report report;
 	bool unused;
-	knc_titan_set_work(repr, ctx, asic, die, 0xFFFF, 0, NULL, true, &unused, &report);
+	knc_titan_set_work(repr, ctx, asic, die, ALL_CORES, 0, NULL, true, &unused, &report);
 }
 
 static uint32_t nonce_tops[KNC_TITAN_DIES_PER_ASIC][KNC_TITAN_CORES_PER_DIE];
@@ -544,7 +547,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, 0xFFFF, knc->next_slot[asic], work, false, &die_work_accepted, &report))
+					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, knc->next_slot[asic], work, false, &die_work_accepted, &report))
 						die_work_accepted = false;
 				}
 				if (die_work_accepted)
