@@ -712,8 +712,12 @@ error_bad_params:
                 if (!die_disable(device->device_data, asic, die, replybuf))
                         return replybuf;
         } else if (0 == strncasecmp(str, "reconfigure", sizeof(str) - 1)) {
-                if (!die_reconfigure(device->device_data, asic, die, replybuf))
+                if (!die_reconfigure(device->device_data, asic, die, replybuf)) {
+						/* Do not return error on reconfigure command! 
+						 * (or the whole bfgminer eill be restarted) */
+						*success = SDR_OK;
                         return replybuf;
+				}
 	} else
 		goto error_bad_params;
 	sprintf(replybuf, "Die setup Ok; asic %d die %d cmd %s", asic, die, str);
