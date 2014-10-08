@@ -241,9 +241,10 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 
 static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 {
-	struct cgpu_info *proc;
+	struct cgpu_info *proc, *first_proc;
 	struct thr_info *mythr;
 	struct knc_titan_core *knccore;
+	char *repr;
 
 	if ((0 > asic) || (KNC_TITAN_MAX_ASICS <= asic) || (0 > die) || (KNC_TITAN_DIES_PER_ASIC <= die))
 		return false;
@@ -265,16 +266,19 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	};
 	fill_in_thread_params(opt_knc_threads_per_core, &setup_params);
 
-	for (proc = knc->dies[asic][die].first_proc; proc; proc = proc->next_proc) {
+	first_proc = knc->dies[asic][die].first_proc;
+	repr = first_proc->device->dev_repr;
+	for (proc = first_proc; proc; proc = proc->next_proc) {
 		mythr = proc->thr[0];
 		knccore = mythr->cgpu_data;
 		if ((asic != knccore->asicno) || (die != knccore->dieno))
 			break;
-		knc_titan_clean_flush(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
+		knc_titan_clean_flush(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
 		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
-		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", proc->device->dev_repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
-		knc_titan_setup_core_local(proc->device->dev_repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
+		applog(LOG_DEBUG, "%s Setup core %d:%d:%d, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
+		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
 	}
+	applog(LOG_NOTICE, "%s [%d-%d] Die configured", repr, asic, die);
 
 	return true;
 }
