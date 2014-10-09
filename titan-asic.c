@@ -22,7 +22,7 @@ bool knc_titan_get_info(const char *repr, void * const ctx, int channel, int die
 
 bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted, struct knc_report *report)
 {
-	int request_length = 4 + 1 + 6*4 + 3*4 + 8*4;
+	int request_length = 4 + 1 + BLOCK_HEADER_BYTES_WITHOUT_NONCE;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 	uint8_t response[response_length];
