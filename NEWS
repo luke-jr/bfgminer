@@ -1,3 +1,94 @@
+BFGMiner Version 4.9.0 - October 5, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.37.0 to 7.38.0
+- - libusb from 1.0.18 to 1.0.19 (Win64 only)
+- - mingw64-runtime from 3.1.0 to 3.2.0 (Win64 only)
+- - uthash from 1.9.7 to 1.9.9
+- Travis: Update for titan driver
+- configure: Accept --enable-titan=CONTROLLER to select controller
+- make-release: Remove unnecessary knc-asic/{*.rbf,*system,waas} from release
+source
+- extra_work_queue so devices can influence their effect on the central work
+queue somewhat (titan needs less than 1-per-proc)
+- Avoid adding include paths for titan driver
+- Bugfix: titan: Add missing printf formatting for core busy status
+- avalon: Drop custom hexdump logging
+- Build titan driver independently from knc (Jupiter) driver
+- titan: Do not fill up next slot immediately after urgent setwork
+- titan: Pre-fill work queue so that all ASICs have fresh jobs after a flush
+- Build instructions for KnC Titan
+- Doesn't compile without explicitly included inttypes.h on some machines
+- knc-asic: Updated to e5c986d3c44fde8c5b069508ef6979f2f2be92d6
+- Fix Makefile.am to build bfgminer for titan
+- titan: Subdivide full nonce range only between cores in one ASIC (because
+works are now distributed per-ASIC too)
+- titan: DC/DCs does not like broadcast flushes (urgent setwork). Do not do it!
+- titan: Preparation to setting threads-per-core externally, by user
+- titan: Re-flush cores in case of slot number collision
+- titan: Per-ASIC flush, per-ASIC work management
+- titan: Start cores after flush individually, not by broadcast.
+- titan: Default frequency is 275 MHz
+- titan: Difficulty is offset by one in ASIC cores.
+- titan: Fix first_proc pointer
+- titan: Use 2 threads per core
+- titan: Use setup_core from knc-asic library
+- titan: Poll all enabled ASICs amd dies, not only one
+- titan: Properly set work_accepted flag
+- titan: Hint detection function about expected device type
+- titan: Fix setup_core command
+- titan: Use knc-asic library for transport layer
+- Add knc-asic as submodule
+- titan: Change spi device to spidev1.0
+- titan: Add define to .h file
+- titan: Increase workqueue size up to number of slots per core
+- titan: Send data to hashmeter
+- titan: Disregard stale reports after flush
+- titan: Check for next asic/die switch when processing info results
+- Bugfix: titan: Fix segfault
+- titan: Set actual hardware nonce_diff for works in prepare_work
+- titan: Do clean flush ("purge") on init
+- titan: Store last_nonce right
+- titan: First attempt to process nonce responses
+- titan: Change 'scanhash' minerloop to 'queue'
+- titan: Init all cores for their own nonce ranges
+- titan: For RPi we use spidev0.1
+- titan: Setup_core command implemented
+- titan: New commands set_work & get_report
+- titan: Move asic-specific functionality to the separate file (titan-asic.c)
+- titan: First ugly detect of Titan chip over SPI
+- knc-titan: Begin work on Titan (scrypt miner) driver
+- libbase58: Use git URI for submodule to avoid failure on systems without HTTPS
+support
+- Travis: Cross-compile a Win64 build
+- RPC: Initialise json_config to silence false warning
+- Make sure MOUSE_MOVED from wincon is ignored (it conflicts with curses)
+- Travis: Perform full builds with libbase58's base58 tool (which is used for
+tests)
+- Travis: Test many configuration variations
+- Travis: Build with libsensors and VFIO
+- Travis: Upgrading GCC triggers locale rebuild, so just do the one in use
+- Travis: No need to upgrade GCC for LLVM build
+- Travis build configuration
+- Run BFGMiner's unit tests for 'make check', and have --unittest exit with
+failure if any problems occur
+- libbase58: Update to pick up on LLVM fixes
+- Bugfix: configure: Affect gridseed driver with --disable-other-drivers
+- Bugfix: configure: minergate driver needs lowlevel for claiming sockets
+- Bugfix: configure: --disable-other-drivers should not affect non-driver
+options
+- Bugfix: configure: --with[out]-vfio needs $withval, not $enableval
+- Bugfix: rockminer: Correct types for short read error message
+- Bugfix: icarus: fix the STATS RPC API call crashes with a multi-proc device
+- Bugfix: cointerra: Check lowlevel device is USB before trying to probe it (as
+USB)
+- bitforce: Reinstate device work inprogress count sanity check for 28nm devices
+- littlefury: Read uC temperature sensor
+- littlefury: Keep track of enabled chips and power state explicitly in case of
+trouble
+- Bugfix: async minerloop fix for devices disabled at start
+- twinfury: Implement device protocol dump more low-level
+
 BFGMiner Version 4.8.0 - September 10, 2014
 
 - Improve precision of total_secs used in (at least) RPC summary Elapsed
@@ -281,6 +372,7 @@ from git
 
 BFGMiner Version 4.4.0 - July 7, 2014
 
+- Update official Windows build compiler from GCC 4.7.3 to 4.7.4
 - lowl-vcom: Added support for auto scanning (-S auto) on Mac OS X
 - rockminer: implement --device-protocol-dump for debugging
 - README: Update for commandline options
@@ -1135,6 +1227,7 @@ difficulty
 BFGMiner Version 3.10.0 - January 15, 2014
 
 - Downgrade official Windows build compiler to GCC 4.7.3.
+- Update official Win64 build mingw64-runtime from 3.0.0 to 3.1.0
 - Bugfix: Stratum: Accept JSON Number type for port number
 - Bugfix: proxy: Set start timer when creating new virtual devices
 - antminer: Add support for the Identify function - flashes LED 10 times
