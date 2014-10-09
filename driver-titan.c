@@ -31,7 +31,7 @@
 
 /* Work queue pre-fill level.
  * Must be high enough to supply all ASICs with works after a flush */
-#define WORK_QUEUE_PREFILL		10
+#define	WORK_QUEUE_PREFILL			20
 
 /* Specify here minimum number of leading zeroes in hash */
 #define	DEFAULT_DIFF_FILTERING_ZEROES	24
@@ -173,8 +173,11 @@ static bool knc_titan_detect_one(const char *devpath)
 		.device_data = knc,
 	};
 	const bool rv = add_cgpu_slave(cgpu, prev_cgpu);
-	if (!prev_cgpu)
-		cgpu->extra_work_queue += WORK_QUEUE_PREFILL;
+	if (!prev_cgpu) {
+		cgpu->extra_work_queue += WORK_QUEUE_PREFILL - opt_queue;
+		if (0 > cgpu->extra_work_queue)
+			cgpu->extra_work_queue = 0;
+	}
 	prev_cgpu = cgpu;
 	return rv;
 }
