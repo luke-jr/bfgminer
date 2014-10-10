@@ -24,7 +24,7 @@
 
 #define	KNC_POLL_INTERVAL_US		10000
 
-#define	DIE_HEALTH_INTERVAL_SEC		10
+#define	DIE_HEALTH_INTERVAL_SEC		20
 
 /* Broadcast address to all cores in a die */
 #define	ALL_CORES	0xFFFF
