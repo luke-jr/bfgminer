@@ -23,6 +23,7 @@ struct nonce_report {
 
 bool knc_titan_get_info(const char *repr, void * const ctx, int channel, int die, struct knc_die_info *die_info);
 bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die, int core, int slot, struct work *work, bool urgent, bool *work_accepted, struct knc_report *report);
+bool knc_titan_set_work_multi(const char *repr, void * const ctx, int channel, int die, int core_start, int slot, struct work *work, bool urgent, bool *work_accepted, struct knc_report *reports, int num);
 bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int die, int core, struct knc_report *report);
 bool knc_titan_setup_core_local(const char *repr, void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params);
 
