@@ -537,9 +537,11 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int die;
 	int i, tmp_int;
 	struct knc_titan_die *die_p;
-	struct timeval tv_now;
+	struct timeval tv_now, tv_prev;
+	bool any_was_flushed = false;
 
 	knc_titan_prune_local_queue(thr);
+	timer_set_now(&tv_prev);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
@@ -558,20 +560,31 @@ static void knc_titan_poll(struct thr_info * const thr)
 					bool unused;
 					if (die_p->broadcast_flushes) {
 						/* Use broadcast */
-						if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, true, &unused, &report)) {
+						if (knc_titan_set_work(first_proc->device->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, true, &unused, &report)) {
 							work_accepted = true;
 						}
 					} else {
 						/* Use unicasts */
+						bool work_acc_arr[die_p->cores];
+						struct knc_report reports[die_p->cores];
 						for (proc = first_proc; proc; proc = proc->next_proc) {
 							mythr = proc->thr[0];
 							core1 = mythr->cgpu_data;
 							if ((core1->dieno != die) || (core1->asicno != asic))
 								break;
-							if (knc_titan_set_work(proc->proc_repr, knc->ctx, asic, die, core1->coreno, die_p->next_slot, work, true, &unused, &report)) {
-								core1->last_nonce.slot = report.nonce[0].slot;
-								core1->last_nonce.nonce = report.nonce[0].nonce;
-								work_accepted = true;
+							work_acc_arr[core1->coreno] = false;
+						}
+						if (knc_titan_set_work_multi(first_proc->device->dev_repr, knc->ctx, asic, die, 0, die_p->next_slot, work, true, work_acc_arr, reports, die_p->cores)) {
+							for (proc = first_proc; proc; proc = proc->next_proc) {
+								mythr = proc->thr[0];
+								core1 = mythr->cgpu_data;
+								if ((core1->dieno != die) || (core1->asicno != asic))
+									break;
+								if (work_acc_arr[core1->coreno]) {
+									core1->last_nonce.slot = reports[core1->coreno].nonce[0].slot;
+									core1->last_nonce.nonce = reports[core1->coreno].nonce[0].nonce;
+									work_accepted = true;
+								}
 							}
 						}
 					}
@@ -598,6 +611,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					}
 					delay_usecs = 0;
 					was_flushed = true;
+					any_was_flushed = true;
 				}
 				--knc->workqueue_size;
 				DL_DELETE(knc->workqueue, work);
@@ -617,6 +631,10 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
 	timer_set_now(&tv_now);
+	if (any_was_flushed) {
+		double diff = ((tv_now.tv_sec - tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - tv_prev.tv_usec)) / 1000000.0;
+		applog(LOG_INFO, "%s: Flush took %f secs", knc_titan_drv.dname, diff);
+	}
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
@@ -644,7 +662,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					tmp_int = MAKE_WORKID(asic, die, report.nonce[i].slot);
 					HASH_FIND_INT(knc->devicework, &tmp_int, work);
 					if (!work) {
-						applog(LOG_WARNING, "%"PRIpreprv": Got nonce for unknown work in slot %u (asic %d)", proc->proc_repr, (unsigned)report.nonce[i].slot, asic);
+						applog(LOG_WARNING, "%"PRIpreprv"[%d:%d:%d]: Got nonce for unknown work in slot %u", proc->proc_repr, asic, die, knccore->coreno, (unsigned)report.nonce[i].slot);
 						continue;
 					}
 					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
