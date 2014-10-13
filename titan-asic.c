@@ -55,23 +55,29 @@ bool knc_titan_set_work(const char *repr, void * const ctx, int channel, int die
 bool knc_titan_set_work_multi(const char *repr, void * const ctx, int channel, int die, int core_start, int slot, struct work *work, bool urgent, bool *work_accepted, struct knc_report *reports, int num)
 {
 	int REQUEST_BUFSIZE = 4 + 1 + BLOCK_HEADER_BYTES_WITHOUT_NONCE;
-	uint8_t *requests = malloc(REQUEST_BUFSIZE * num);
+	int RESPONSE_BUFSIZE = 1 + 1 + (1 + 4) * 5;
+	int i, core;
+	uint8_t *requests = NULL;
+	uint8_t *responses = NULL;
+	int *request_lengths = NULL;
+	int *response_lengths = NULL;
+	int *statuses = NULL;
+
+	requests = malloc(REQUEST_BUFSIZE * num);
 	if (NULL == requests)
 		goto exit_err;
-	int RESPONSE_BUFSIZE = 1 + 1 + (1 + 4) * 5;
-	uint8_t *responses = malloc(RESPONSE_BUFSIZE * num);
+	responses = malloc(RESPONSE_BUFSIZE * num);
 	if (NULL == responses)
 		goto exit_err;
-	int *request_lengths = malloc(num * sizeof(int));
+	request_lengths = malloc(num * sizeof(int));
 	if (NULL == request_lengths)
 		goto exit_err;
-	int *response_lengths = malloc(num * sizeof(int));
+	response_lengths = malloc(num * sizeof(int));
 	if (NULL == response_lengths)
 		goto exit_err;
-	int *statuses = malloc(num * sizeof(int));
+	statuses = malloc(num * sizeof(int));
 	if (NULL == statuses)
 		goto exit_err;
-	int i, core;
 
 	for (i = 0, core = core_start; i < num; ++i, ++core) {
 		request_lengths[i] = knc_prepare_titan_setwork(&requests[REQUEST_BUFSIZE * i], die, core, slot, work, urgent);
