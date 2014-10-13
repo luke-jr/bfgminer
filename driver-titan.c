@@ -735,7 +735,7 @@ error_bad_params:
 	} else if (0 == strncasecmp(str, "reconfigure", sizeof(str) - 1)) {
 		if (!die_reconfigure(device->device_data, asic, die, replybuf)) {
 			/* Do not return error on reconfigure command!
-			 * (or the whole bfgminer eill be restarted) */
+			 * (or the whole bfgminer will be restarted) */
 			*success = SDR_OK;
 			return replybuf;
 		}
