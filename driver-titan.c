@@ -522,6 +522,34 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 #define	DIE_FROM_WORKID(workid)			((((uint32_t)(workid)) >> 8) & 0xFF)
 #define	SLOT_FROM_WORKID(workid)		(((uint32_t)(workid)) & 0xFF)
 
+static bool knc_titan_process_report(struct knc_titan_info * const knc, struct knc_titan_core * const knccore, struct knc_report * const report)
+{
+	int i, tmp_int;
+	struct work *work;
+	struct cgpu_info * const proc = knccore->proc;
+	bool ret = false;
+
+	for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
+		if ((report->nonce[i].slot == knccore->last_nonce.slot) &&
+		    (report->nonce[i].nonce == knccore->last_nonce.nonce))
+			break;
+		ret = true;
+		tmp_int = MAKE_WORKID(knccore->asicno, knccore->dieno, report->nonce[i].slot);
+		HASH_FIND_INT(knc->devicework, &tmp_int, work);
+		if (!work) {
+			applog(LOG_WARNING, "%"PRIpreprv"[%d:%d:%d]: Got nonce for unknown work in slot %u", proc->proc_repr, knccore->asicno, knccore->dieno, knccore->coreno, (unsigned)report->nonce[i].slot);
+			continue;
+		}
+		if (submit_nonce(proc->thr[0], work, report->nonce[i].nonce)) {
+			hashes_done2(proc->thr[0], DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
+			knccore->hwerr_in_row = 0;
+		}
+	}
+	knccore->last_nonce.slot = report->nonce[0].slot;
+	knccore->last_nonce.nonce = report->nonce[0].nonce;
+	return ret;
+}
+
 static void knc_titan_poll(struct thr_info * const thr)
 {
 	struct thr_info *mythr;
@@ -535,7 +563,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct knc_die_info die_info;
 	int asic;
 	int die;
-	int i, tmp_int;
 	struct knc_titan_die *die_p;
 	struct timeval tv_now, tv_prev;
 	bool any_was_flushed = false;
@@ -581,8 +608,10 @@ static void knc_titan_poll(struct thr_info * const thr)
 								if ((core1->dieno != die) || (core1->asicno != asic))
 									break;
 								if (work_acc_arr[core1->coreno]) {
-									core1->last_nonce.slot = reports[core1->coreno].nonce[0].slot;
-									core1->last_nonce.nonce = reports[core1->coreno].nonce[0].nonce;
+									/* Submit stale shares just in case we are working with multi-coin pool
+									 * and those shares still might be useful (merged mining case etc) */
+									if (knc_titan_process_report(knc, core1, &(reports[core1->coreno])))
+										timer_set_now(&(die_p->last_share));
 									work_accepted = true;
 								}
 							}
@@ -622,7 +651,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 				++workaccept;
 				/* If we know for sure that this work was urgent, then we don't need to hurry up
 				 * with filling next slot, we have plenty of time until current work completes.
-				 * So, better to proceed with other ASICs/knc. */
+				 * So, better to proceed with other ASICs/dies. */
 				if (was_flushed)
 					break;
 			}
@@ -654,24 +683,8 @@ static void knc_titan_poll(struct thr_info * const thr)
 					continue;
 				if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
 					continue;
-				timer_set_now(&(die_p->last_share));
-				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
-					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
-						break;
-					tmp_int = MAKE_WORKID(asic, die, report.nonce[i].slot);
-					HASH_FIND_INT(knc->devicework, &tmp_int, work);
-					if (!work) {
-						applog(LOG_WARNING, "%"PRIpreprv"[%d:%d:%d]: Got nonce for unknown work in slot %u", proc->proc_repr, asic, die, knccore->coreno, (unsigned)report.nonce[i].slot);
-						continue;
-					}
-					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
-						hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
-						knccore->hwerr_in_row = 0;
-					}
-				}
-				knccore->last_nonce.slot = report.nonce[0].slot;
-				knccore->last_nonce.nonce = report.nonce[0].nonce;
+				if (knc_titan_process_report(knc, knccore, &report))
+					timer_set_now(&(die_p->last_share));
 			}
 		}
 
