@@ -197,6 +197,7 @@ cd ..
 git clone git://github.com/luke-jr/bfgminer
 cd bfgminer
 ./autogen.sh
+git clone git://github.com/troydhanson/uthash
 ./configure --host=arm-angstrom-linux-gnueabi --enable-knc --disable-other-drivers CFLAGS="-I$PWD/uthash/src"
 make AR=arm-angstrom-linux-gnueabi-ar
 
@@ -216,7 +217,7 @@ Build instructions:
 git clone git@github.com:KnCMiner/bfgminer.git
 cd bfgminer
 ./autogen.sh
-./configure --enable-scrypt --enable-titan --disable-other-drivers CFLAGS="-Iuthash/src"
+./configure --enable-scrypt --enable-titan --disable-other-drivers
 make
 sudo /etc/init.d/bfgminer.sh restart
 screen -r
