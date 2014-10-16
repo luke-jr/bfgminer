@@ -147,13 +147,10 @@ bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int d
 	return true;
 }
 
-/* Use bare function without extra checks */
-extern bool knc_titan_setup_core_(void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params);
-
 /* This fails if core is hashing!
  * Stop it before setting up.
  */
 bool knc_titan_setup_core_local(const char *repr, void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params)
 {
-	return knc_titan_setup_core_(ctx, channel, die, core, params);
+	return knc_titan_setup_core_(LOG_INFO, ctx, channel, die, core, params);
 }

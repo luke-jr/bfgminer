@@ -278,6 +278,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 
 	first_proc = die_p->first_proc;
 	repr = first_proc->device->dev_repr;
+	bool success = true;
 	for (proc = first_proc; proc; proc = proc->next_proc) {
 		mythr = proc->thr[0];
 		knccore = mythr->cgpu_data;
@@ -286,9 +287,10 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knc_titan_clean_flush(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
 		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s[%d:%d:%d]: Setup core, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
-		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
+		if (!knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params))
+			success = false;
 	}
-	applog(LOG_NOTICE, "%s[%d-%d] Die configured", repr, asic, die);
+	applog(LOG_NOTICE, "%s[%d-%d] Die configur%s", repr, asic, die, success ? "ed successfully" : "ation failed");
 	die_p->need_flush = true;
 	timer_set_now(&(die_p->last_share));
 	die_p->broadcast_flushes = false;
