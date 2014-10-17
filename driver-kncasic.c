@@ -558,6 +558,8 @@ static void knc_process_responses(struct thr_info *thr)
 				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
 				knc_core_process_report(thr, core, rxbuf);
 				break;
+			default:
+				break;
 			}
 		}
 
