@@ -213,38 +213,6 @@ static void knc_flush(struct thr_info *thr)
         knc_process_responses(thr);
 }
 
-static void knc_sync(struct thr_info *thr)
-{
-	struct cgpu_info *cgpu = thr->cgpu;
-	struct knc_state *knc = cgpu->device_data;
-	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
-	int sent = 0;
-	pthread_mutex_lock(&knc->spi_qlock);
-	if (buffer->state == KNC_SPI_IDLE && buffer->size > 0) {
-		buffer->state = KNC_SPI_PENDING;
-		pthread_cond_signal(&knc->spi_qcond);
-		knc->send_buffer += 1;
-		knc->send_buffer_count += 1;
-		if (knc->send_buffer >= KNC_SPI_BUFFERS)
-			knc->send_buffer = 0;
-		sent = 1;
-	}
-	int prev_buffer = knc->send_buffer - 1;
-	if (prev_buffer < 0)
-		prev_buffer = KNC_SPI_BUFFERS - 1;
-	buffer = &knc->spi_buffer[prev_buffer];
-	while (buffer->state == KNC_SPI_PENDING)
-		pthread_cond_wait(&knc->spi_qcond, &knc->spi_qlock);
-	pthread_mutex_unlock(&knc->spi_qlock);
-
-	int pending = knc->send_buffer - knc->read_buffer;
-	if (pending <= 0)
-		pending += KNC_SPI_BUFFERS;
-	pending -= 1 - sent;
-	applog(LOG_INFO, "KnC: sync %d pending buffers", pending);
-        knc_process_responses(thr);
-}
-
 static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int request_length, uint8_t *request, int response_length, int response_type, uint32_t data)
 {
 	struct cgpu_info *cgpu = thr->cgpu;
@@ -607,11 +575,9 @@ static void knc_process_responses(struct thr_info *thr)
 static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
 {
 	struct knc_state *knc = core->die->knc;
-	struct cgpu_info *cgpu = knc->cgpu;
 	int request_length = 4 + 1 + 6*4 + 3*4 + 8*4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
-	uint8_t response[response_length];
 
 	int slot = knc_core_next_slot(core);
 	if (slot < 0)
@@ -662,12 +628,9 @@ error:
 
 static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *core)
 {
-	struct knc_state *knc = core->die->knc;
-	struct cgpu_info *cgpu = knc->cgpu;
 	int request_length = 4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
-	uint8_t response[response_length];
 
 	applog(LOG_DEBUG, "KnC: %d.%d.%d Request report", core->die->channel, core->die->die, core->core);
 
@@ -683,7 +646,6 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 		return 0;
 	}
 
-error:
 	applog(LOG_INFO, "KnC: Failed to scan work report");
 	knc_core_failure(core);
 	return -1;
@@ -697,7 +659,6 @@ static int64_t knc_scanwork(struct thr_info *thr)
 #define KNC_COUNT_UNIT shares
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
-	int64_t ret = 0;
 	uint32_t last_count = knc->KNC_COUNT_UNIT;
 
 	applog(LOG_DEBUG, "KnC running scanwork");
@@ -795,8 +756,7 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
 	struct api_data *root = NULL;
-	unsigned int cursize;
-	int asic, core, n;
+	int core, n;
 	char label[256];
 
 	root = api_add_int(root, "dies", &knc->dies, 1);
@@ -845,7 +805,6 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 
 		/* Core based stats */
 		{
-			int active = 0;
 			uint64_t errors = 0;
 			uint64_t shares = 0;
 			uint64_t works = 0;
