@@ -82,6 +82,8 @@ struct knc_core_state {
 	struct timeval hold_work_until;
 	struct timeval timeout;
 	bool inuse;
+	
+	struct cgpu_info *proc;
 };
 
 struct knc_state;
@@ -316,6 +318,7 @@ static bool knc_detect_one(void *ctx)
 
 	cgpu->drv = &kncasic_drv;
 	cgpu->name = "KnCminer";
+	cgpu->procs = cores;
 	cgpu->threads = 1;
 
 	cgpu->device_data = knc;
@@ -331,6 +334,12 @@ static bool knc_detect_one(void *ctx)
 	}
 	
 	add_cgpu(cgpu);
+	
+	core = 0;
+	for_each_managed_proc(proc, cgpu)
+	{
+		knc->core[core++].proc = proc;
+	}
 
 	return true;
 }
@@ -446,11 +455,15 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 		return;
 	for (i = 0; i < WORKS_PER_CORE; i++) {
 		if (slot == core->workslot[i].slot && core->workslot[i].work) {
+			struct cgpu_info * const proc = core->proc;
+			struct thr_info * const corethr = proc->thr[0];
+			
 			applog(LOG_INFO, "KnC: %d.%d.%d found nonce %08x", core->die->channel, core->die->die, core->core, nonce);
-			if (submit_nonce(thr, core->workslot[i].work, nonce)) {
+			if (submit_nonce(corethr, core->workslot[i].work, nonce)) {
 				/* Good share */
 				core->shares++;
 				core->die->knc->shares++;
+				hashes_done2(corethr, 0x100000000, NULL);
 				/* This core is useful. Ignore any errors */
 				core->errors_now = 0;
 			} else {
@@ -658,10 +671,8 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
  */
 static int64_t knc_scanwork(struct thr_info *thr)
 {
-#define KNC_COUNT_UNIT shares
 	struct cgpu_info *cgpu = thr->cgpu;
 	struct knc_state *knc = cgpu->device_data;
-	uint32_t last_count = knc->KNC_COUNT_UNIT;
 
 	applog(LOG_DEBUG, "KnC running scanwork");
 
@@ -723,7 +734,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	knc_flush(thr);
 
-	return (int64_t)(knc->KNC_COUNT_UNIT - last_count) * 0x100000000UL;
+	return 0;
 }
 
 static void knc_flush_work(struct cgpu_info *cgpu)
@@ -840,9 +851,7 @@ void hash_driver_work(struct thr_info * const thr)
 	
 	while (likely(!cgpu->shutdown))
 	{
-		int64_t hashes = drv->scanwork(thr);
-		if (unlikely(!hashes_done2(thr, hashes, NULL)))
-			break;
+		drv->scanwork(thr);
 		
 		if (unlikely(thr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(thr);
