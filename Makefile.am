@@ -294,7 +294,11 @@ bfgminer_SOURCES += driver-modminer.c
 endif
 
 if USE_TITAN
-bfgminer_SOURCES += driver-titan.c titan-asic.c knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c titan-asic.h knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
+bfgminer_SOURCES += driver-titan.c titan-asic.c titan-asic.h
+endif
+
+if NEED_KNC_ASIC
+bfgminer_SOURCES += knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
 endif
 
 if HAS_X6500

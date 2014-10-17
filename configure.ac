@@ -133,6 +133,7 @@ need_lowl_mswin=no
 need_lowl_pci=no
 need_lowl_spi=no
 need_lowl_usb=no
+need_knc_asic=no
 need_work2d=no
 have_cygwin=false
 have_win32=false
@@ -619,12 +620,10 @@ if test "x$kncasic" != xno && test "x$kncasic" != xauto; then
 		kncasic_controller=BBB
 	fi
 	kncasic=yes
+	need_knc_asic=yes
 	need_linux_i2c_dev=yes
 	AC_DEFINE([USE_KNCASIC], [1], [Defined to 1 if KnC gen 2 support is wanted])
-	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
-	AH_TEMPLATE([CONTROLLER_BOARD_BACKPLANE])
-	AH_TEMPLATE([CONTROLLER_BOARD_BBB])
-	AH_TEMPLATE([CONTROLLER_BOARD_RPI])
+	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$kncasic_controller],[1])
 fi
 AM_CONDITIONAL([USE_KNCASIC], [test x$kncasic = xyes])
 
@@ -818,6 +817,7 @@ if test "x$titan" != xno && test "x$titan" != xauto; then
 	if test "x$scrypt" = "xno"; then
 		AC_MSG_ERROR([You explicitly enabled KnC Titan, but did not enable scrypt])
 	fi
+	need_knc_asic=yes
 	need_linux_i2c_dev=yes
 	AC_DEFINE([USE_TITAN], [1], [Defined to 1 if KnC Titan support is wanted])
 	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
@@ -1515,6 +1515,7 @@ AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
+AM_CONDITIONAL([NEED_KNC_ASIC], [test x$need_knc_asic = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
