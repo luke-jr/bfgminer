@@ -437,8 +437,9 @@ static void knc_core_failure(struct knc_core_state *core)
 	if (knc_core_disabled(core))
 		return;
 	if (core->errors_now > CORE_ERROR_LIMIT) {
-		applog(LOG_ERR, "KnC: %d.%d.%d disabled for %ld seconds due to repeated hardware errors",
-			core->die->channel, core->die->die, core->core, (long)core_disable_interval.tv_sec);
+		struct cgpu_info * const proc = core->proc;
+		applog(LOG_ERR, "%"PRIpreprv" disabled for %ld seconds due to repeated hardware errors",
+			proc->proc_repr, (long)core_disable_interval.tv_sec);
 		timeradd(&now, &core_disable_interval, &core->disabled_until);
 	}
 }
@@ -458,7 +459,7 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 			struct cgpu_info * const proc = core->proc;
 			struct thr_info * const corethr = proc->thr[0];
 			
-			applog(LOG_INFO, "KnC: %d.%d.%d found nonce %08x", core->die->channel, core->die->die, core->core, nonce);
+			applog(LOG_INFO, "%"PRIpreprv" found nonce %08x", proc->proc_repr, nonce);
 			if (submit_nonce(corethr, core->workslot[i].work, nonce)) {
 				/* Good share */
 				core->shares++;
@@ -467,7 +468,7 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 				/* This core is useful. Ignore any errors */
 				core->errors_now = 0;
 			} else {
-				applog(LOG_INFO, "KnC: %d.%d.%d hwerror nonce %08x", core->die->channel, core->die->die, core->core, nonce);
+				applog(LOG_INFO, "%"PRIpreprv" hwerror nonce %08x", proc->proc_repr, nonce);
 				/* Bad share */
 				knc_core_failure(core);
 			}
@@ -477,11 +478,12 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 
 static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response)
 {
+	struct cgpu_info * const proc = core->proc;
 	struct knc_report *report = &core->report;
 	knc_decode_report(response, report, core->die->version);
 	bool had_event = false;
 
-	applog(LOG_DEBUG, "KnC %d.%d.%d: Process report %d %d(%d) / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+	applog(LOG_DEBUG, "%"PRIpreprv": Process report %d %d(%d) / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	int n;
 	for (n = 0; n < KNC_NONCES_PER_REPORT; n++) {
 		if (report->nonce[n].slot < 0)
@@ -495,12 +497,12 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 
 	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
 		had_event = true;
-		applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+		applog(LOG_INFO, "%"PRIpreprv": New work %d %d / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* Core switched to next work */
 		if (core->workslot[0].work) {
 			core->die->knc->completed++;
 			core->completed++;
-			applog(LOG_INFO, "KnC: Work completed on core %d.%d.%d!", core->die->channel, core->die->die, core->core);
+			applog(LOG_INFO, "%"PRIpreprv": Work completed!", proc->proc_repr);
 			free_work(core->workslot[0].work);
 		}
 		core->workslot[0] = core->workslot[1];
@@ -509,7 +511,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 
 		/* or did it switch directly to pending work? */
 		if (report->active_slot == core->workslot[2].slot) {
-			applog(LOG_INFO, "KnC: New work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			applog(LOG_INFO, "%"PRIpreprv": New work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 			if (core->workslot[0].work)
 				free_work(core->workslot[0].work);
 			core->workslot[0] = core->workslot[2];
@@ -520,7 +522,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 
 	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
 		had_event = true;
-		applog(LOG_INFO, "KnC: Accepted work on %d.%d.%d, %d %d %d %d (pending)", core->die->channel, core->die->die, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+		applog(LOG_INFO, "%"PRIpreprv": Accepted work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* core accepted next work */
 		if (core->workslot[1].work)
 			free_work(core->workslot[1].work);
@@ -531,13 +533,13 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 
 	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
 		had_event = true;
-		applog(LOG_INFO, "KnC: Setwork failed on core %d.%d.%d?", core->die->channel, core->die->die, core->core);
+		applog(LOG_INFO, "%"PRIpreprv": Setwork failed?", proc->proc_repr);
 		free_work(core->workslot[2].work);
 		core->workslot[2].slot = -1;
 	}
 
 	if (had_event)
-		applog(LOG_INFO, "KnC: Exit report on %d.%d.%d, %d %d / %d %d %d", core->die->channel, core->die->die, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+		applog(LOG_INFO, "%"PRIpreprv": Exit report %d %d / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 
 	return 0;
 }
@@ -553,12 +555,13 @@ static void knc_process_responses(struct thr_info *thr)
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			struct knc_core_state *core = response_info->core;
+			struct cgpu_info * const proc = core->proc;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			/* Invert KNC_ACCEPTED to simplify logics below */
 			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))
 				status ^= KNC_ACCEPTED;
 			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
-				applog(LOG_ERR, "KnC %d.%d.%d: Communication error (%x / %d)", core->die->channel, core->die->die, core->core, status, i);
+				applog(LOG_ERR, "%s: Communication error (%x / %d)", proc->proc_repr, status, i);
 				if (status == KNC_ACCEPTED) {
 					/* Core refused our work vector. Likely out of sync. Reset it */
 					core->inuse = false;
@@ -590,6 +593,7 @@ static void knc_process_responses(struct thr_info *thr)
 static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
 {
 	struct knc_state *knc = core->die->knc;
+	struct cgpu_info * const proc = core->proc;
 	int request_length = 4 + 1 + 6*4 + 3*4 + 8*4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
@@ -598,7 +602,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	if (slot < 0)
 		goto error;
 
-	applog(LOG_INFO, "KnC setwork%s  %d.%d.%d = %d, %d %d / %d %d %d", clean ? " CLEAN" : "", core->die->channel, core->die->die, core->core, slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+	applog(LOG_INFO, "%"PRIpreprv" setwork%s  = %d, %d %d / %d %d %d", proc->proc_repr, clean ? " CLEAN" : "", slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	if (!clean && !knc_core_need_work(core))
 		goto error;
 
@@ -634,8 +638,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	return 0;
 
 error:
-	applog(LOG_INFO, "KnC: %d.%d.%d Failed to setwork (%d)",
-			core->die->channel, core->die->die, core->core, core->errors_now);
+	applog(LOG_INFO, "%"PRIpreprv": Failed to setwork (%d)", proc->proc_repr, core->errors_now);
 	knc_core_failure(core);
 	free_work(work);
 	return -1;
@@ -643,11 +646,12 @@ error:
 
 static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *core)
 {
+	struct cgpu_info * const proc = core->proc;
 	int request_length = 4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 
-	applog(LOG_DEBUG, "KnC: %d.%d.%d Request report", core->die->channel, core->die->die, core->core);
+	applog(LOG_DEBUG, "%"PRIpreprv": Request report", proc->proc_repr);
 
 	request_length = knc_prepare_report(request, core->die->die, core->core);
 
@@ -661,7 +665,7 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 		return 0;
 	}
 
-	applog(LOG_INFO, "KnC: Failed to scan work report");
+	applog(LOG_INFO, "%"PRIpreprv": Failed to scan work report", proc->proc_repr);
 	knc_core_failure(core);
 	return -1;
 }
@@ -695,11 +699,12 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	for (i = 0; i < knc->cores; i++) {
 		struct knc_core_state *core = &knc->core[i];
+		struct cgpu_info * const proc = core->proc;
 		bool clean = !core->inuse;
 		if (knc_core_disabled(core))
 			continue;
 		if (core->generation != knc->generation) {
-			applog(LOG_INFO, "KnC %d.%d.%d flush gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
+			applog(LOG_INFO, "%"PRIpreprv" flush gen=%d/%d", proc->proc_repr, core->generation, knc->generation);
 			/* clean set state, forget everything */
 			int slot;
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
@@ -710,7 +715,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			core->hold_work_until = now;
 			core->generation = knc->generation;
 		} else if (timercmp(&core->timeout, &now, <=) && (core->workslot[0].slot > 0 || core->workslot[1].slot > 0 || core->workslot[2].slot > 0)) {
-			applog(LOG_ERR, "KnC %d.%d.%d timeout gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
+			applog(LOG_ERR, "%"PRIpreprv" timeout gen=%d/%d", proc->proc_repr, core->generation, knc->generation);
 			clean = true;
 		}
 		if (!knc_core_has_work(core))
