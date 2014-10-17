@@ -281,6 +281,10 @@ if USE_KNC
 bfgminer_SOURCES += driver-knc.c
 endif
 
+if USE_KNCASIC
+bfgminer_SOURCES += driver-kncasic.c
+endif
+
 if HAS_KLONDIKE
 bfgminer_SOURCES += driver-klondike.c driver-klondike.h driver-hashbusteravalon.c
 endif

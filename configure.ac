@@ -619,6 +619,40 @@ if test "x$knc" = xyes; then
 fi
 AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
 
+driverlist="$driverlist kncasic"
+AC_ARG_ENABLE([kncasic],
+	[AC_HELP_STRING([--enable-kncasic],[Compile support for KnC gen 2 (default disabled)])],
+	[kncasic=$enableval],
+	[kncasic=$ddno]
+	)
+if test "x$kncasic" != xno && test "x$kncasic" != xauto; then
+	kncasic_controller=$kncasic
+	if test "x$kncasic" = xyes; then
+		kncasic_controller=BBB
+	fi
+	kncasic=yes
+	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
+	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for knc driver])
+	],[
+		#include <stddef.h>
+		#ifdef HAVE_LINUX_I2C_DEV_USER_H
+		#include <linux/i2c-dev-user.h>
+		#else
+		#ifdef NEED_LINUX_I2C_H
+		#include <linux/i2c.h>
+		#endif
+		#include <linux/i2c-dev.h>
+		#endif
+	])
+	AC_DEFINE([USE_KNCASIC], [1], [Defined to 1 if KnC gen 2 support is wanted])
+	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
+	AH_TEMPLATE([CONTROLLER_BOARD_BACKPLANE])
+	AH_TEMPLATE([CONTROLLER_BOARD_BBB])
+	AH_TEMPLATE([CONTROLLER_BOARD_RPI])
+fi
+AM_CONDITIONAL([USE_KNCASIC], [test x$kncasic = xyes])
+
 AC_ARG_WITH([libmicrohttpd],
 	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],
 	[httpsrv=$withval],
@@ -791,11 +825,21 @@ AC_ARG_ENABLE([titan],
 	[titan=$ddno]
 	)
 if test "x$titan" != xno && test "x$titan" != xauto; then
-	titan_controller=$titan
 	if test "x$titan" = xyes; then
-		titan_controller=RPI
+		if test "x$kncasic" = "xyes"; then
+			titan_controller="$kncasic_controller"
+		else
+			titan_controller=RPI
+		fi
+	else
+		titan_controller=$titan
+		titan=yes
+		if test "x$kncasic" = "xyes"; then
+			if test "x$kncasic_controller" != "$titan_controller"; then
+				AC_MSG_ERROR([Can only build kncasic and titan drivers together for the same controller (kncasic=$kncasic_controller vs titan=$titan_controller)])
+			fi
+		fi
 	fi
-	titan=yes
 	if test "x$scrypt" = "xno"; then
 		AC_MSG_ERROR([You explicitly enabled KnC Titan, but did not enable scrypt])
 	fi

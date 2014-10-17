@@ -21,10 +21,11 @@
 
 #include <zlib.h>
 
+#include "deviceapi.h"
 #include "logging.h"
 #include "miner.h"
-#include "knc-transport.h"
-#include "knc-asic.h"
+#include "knc-asic/knc-transport.h"
+#include "knc-asic/knc-asic.h"
 
 #define MAX_ASICS               6
 #define DIES_PER_ASIC           4
@@ -37,6 +38,8 @@
 #define CORE_SUBMIT_MIN_TIME	2
 #define CORE_TIMEOUT		20
 #define SCAN_ADJUST_RANGE	32
+
+BFG_REGISTER_DRIVER(kncasic_drv)
 
 static struct timeval now;
 static const struct timeval core_check_interval = {
@@ -152,7 +155,6 @@ struct knc_state {
 	struct knc_core_state core[];
 };
 
-int opt_knc_device_idx = 0;
 int opt_knc_device_bus = -1;
 char *knc_log_file = NULL;
 
@@ -249,7 +251,7 @@ static void knc_transfer(struct thr_info *thr, struct knc_core_state *core, int 
 	struct knc_state *knc = cgpu->device_data;
 	struct knc_spi_buffer *buffer = &knc->spi_buffer[knc->send_buffer];
 	/* FPGA control, request header, request body/response, CRC(4), ACK(1), EXTRA(3) */
-	int msglen = 2 + MAX(request_length, 4 + response_length ) + 4 + 1 + 3;
+	int msglen = 2 + max(request_length, 4 + response_length) + 4 + 1 + 3;
 	if (buffer->size + msglen > MAX_SPI_SIZE || buffer->responses >= MAX_SPI_RESPONSES) {
 		applog(LOG_INFO, "KnC: SPI buffer sent, %d messages %d bytes", buffer->responses, buffer->size);
 		knc_flush(thr);
@@ -344,7 +346,7 @@ static bool knc_detect_one(void *ctx)
 	knc->cores = cores;
 	knc->startup = 2;
 
-	cgpu->drv = &knc_drv;
+	cgpu->drv = &kncasic_drv;
 	cgpu->name = "KnCminer";
 	cgpu->threads = 1;
 
@@ -366,14 +368,30 @@ static bool knc_detect_one(void *ctx)
 }
 
 /* Probe devices and register with add_cgpu */
-void knc_detect(bool __maybe_unused hotplug)
+static
+bool kncasic_detect_one(const char * const devpath)
 {
-	void *ctx = knc_trnsp_new(opt_knc_device_idx);
+	void *ctx = knc_trnsp_new(devpath);
 
 	if (ctx != NULL) {
 		if (!knc_detect_one(ctx))
 			knc_trnsp_free(ctx);
+		else
+			return true;
 	}
+	return false;
+}
+
+static
+int kncasic_detect_auto(void)
+{
+	return knc_detect_one(NULL) ? 1 : 0;
+}
+
+static
+void kncasic_detect(void)
+{
+	generic_detect(&kncasic_drv, kncasic_detect_one, kncasic_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
 /* Core helper functions */
@@ -448,7 +466,8 @@ static void knc_core_failure(struct knc_core_state *core)
 	}
 }
 
-static int knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce)
+static
+void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce)
 {
 	int i;
 	if (!slot)
@@ -727,7 +746,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 		if (i % SCAN_ADJUST_RANGE == knc->scan_adjust)
 			clean = true;
 		if ((knc_core_need_work(core) || clean) && !knc->startup) {
-			struct work *work = get_work(thr, thr->id);
+			struct work *work = get_work(thr);
 			knc_core_send_work(thr, core, work, clean);
 		} else {
 			knc_core_request_report(thr, core);
@@ -852,12 +871,28 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-struct device_drv knc_drv = {
-	.drv_id = DRIVER_knc,
-	.dname = "KnCminer Neptune",
-	.name = "KnC",
-	.drv_detect = knc_detect,
-	.hash_work = hash_driver_work,
+static
+void hash_driver_work(struct thr_info * const thr)
+{
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct device_drv * const drv = cgpu->drv;
+	
+	while (likely(!cgpu->shutdown))
+	{
+		int64_t hashes = drv->scanwork(thr);
+		if (unlikely(!hashes_done2(thr, hashes, NULL)))
+			break;
+		
+		if (unlikely(thr->pause || cgpu->deven != DEV_ENABLED))
+			mt_disable(thr);
+	}
+}
+
+struct device_drv kncasic_drv = {
+	.dname = "kncasic",
+	.name = "KNC",
+	.drv_detect = kncasic_detect,
+	.minerloop = hash_driver_work,
 	.flush_work = knc_flush_work,
 	.scanwork = knc_scanwork,
 	.zero_stats = knc_zero_stats,
