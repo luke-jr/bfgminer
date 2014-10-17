@@ -773,8 +773,10 @@ static void knc_zero_stats(struct cgpu_info *cgpu)
 static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 {
 	struct knc_state *knc = cgpu->device_data;
+	struct knc_core_state * const proccore = &knc->core[cgpu->proc_id];
+	struct knc_die * const die = proccore->die;
 	struct api_data *root = NULL;
-	int core, n;
+	int core;
 	char label[256];
 
 	root = api_add_int(root, "dies", &knc->dies, 1);
@@ -793,9 +795,7 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 	root = api_add_int(root, "active", &active, 1);
 
 	/* Per ASIC/die data */
-	for (n = 0; n < knc->dies; n++) {
-		struct knc_die *die = &knc->die[n];
-
+	{
 #define knc_api_die_string(name, value) do { \
 	snprintf(label, sizeof(label), "%d.%d.%s", die->channel, die->die, name); \
 	root = api_add_string(root, label, value, 1); \
