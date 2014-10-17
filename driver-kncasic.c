@@ -428,8 +428,8 @@ static void knc_core_failure(struct knc_core_state *core)
 	if (knc_core_disabled(core))
 		return;
 	if (core->errors_now > CORE_ERROR_LIMIT) {
-		applog(LOG_ERR, "KnC: %d.%d.%d disabled for %d seconds due to repeated hardware errors",
-			core->die->channel, core->die->die, core->core, core_disable_interval.tv_sec);
+		applog(LOG_ERR, "KnC: %d.%d.%d disabled for %ld seconds due to repeated hardware errors",
+			core->die->channel, core->die->die, core->core, (long)core_disable_interval.tv_sec);
 		timeradd(&now, &core_disable_interval, &core->disabled_until);
 	}
 }
@@ -697,7 +697,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			core->hold_work_until = now;
 			core->generation = knc->generation;
 		} else if (timercmp(&core->timeout, &now, <=) && (core->workslot[0].slot > 0 || core->workslot[1].slot > 0 || core->workslot[2].slot > 0)) {
-			applog(LOG_ERR, "KnC %d.%d.%d timeout", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
+			applog(LOG_ERR, "KnC %d.%d.%d timeout gen=%d/%d", core->die->channel, core->die->die, core->core, core->generation, knc->generation);
 			clean = true;
 		}
 		if (!knc_core_has_work(core))
