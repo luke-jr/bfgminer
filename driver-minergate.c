@@ -58,6 +58,9 @@ struct minergate_config {
 	int n_rsp;
 	int queue;
 	char *stats_file;
+	int minimum_roll;
+	int desired_roll;
+	int work_duration;
 	
 	int pkt_req_sz;
 	int pkt_rsp_sz;
@@ -117,6 +120,20 @@ ssize_t minergate_read(const int fd, void * const buf_p, size_t bufLen)
 	return ret;
 }
 
+
+#define DEF_POSITIVE_VAR(VARNAME)  \
+static  \
+const char *minergate_init_ ## VARNAME(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)  \
+{  \
+	struct minergate_config * const mgcfg = proc->device_data;  \
+	int nv = atoi(newvalue);  \
+	if (nv < 0)  \
+		return #VARNAME " must be positive";  \
+	mgcfg->VARNAME = nv;  \
+	return NULL;  \
+}  \
+// END OF DEF_POSITIVE_VAR
+
 static
 const char *minergate_init_protover(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
@@ -132,37 +149,10 @@ const char *minergate_init_protover(struct cgpu_info * const proc, const char * 
 	return NULL;
 }
 
-static
-const char *minergate_init_n_req(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
-{
-	struct minergate_config * const mgcfg = proc->device_data;
-	mgcfg->n_req = atoi(newvalue);
-	return NULL;
-}
-
-static
-const char *minergate_init_n_req_queue(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
-{
-	struct minergate_config * const mgcfg = proc->device_data;
-	mgcfg->n_req_queue = atoi(newvalue);
-	return NULL;
-}
-
-static
-const char *minergate_init_n_rsp(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
-{
-	struct minergate_config * const mgcfg = proc->device_data;
-	mgcfg->n_rsp = atoi(newvalue);
-	return NULL;
-}
-
-static
-const char *minergate_init_queue(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
-{
-	struct minergate_config * const mgcfg = proc->device_data;
-	mgcfg->queue = atoi(newvalue);
-	return NULL;
-}
+DEF_POSITIVE_VAR(n_req)
+DEF_POSITIVE_VAR(n_req_queue)
+DEF_POSITIVE_VAR(n_rsp)
+DEF_POSITIVE_VAR(queue)
 
 static
 const char *minergate_init_stats_file(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
@@ -173,6 +163,10 @@ const char *minergate_init_stats_file(struct cgpu_info * const proc, const char 
 	return NULL;
 }
 
+DEF_POSITIVE_VAR(work_duration)
+DEF_POSITIVE_VAR(minimum_roll)
+DEF_POSITIVE_VAR(desired_roll)
+
 static const struct bfg_set_device_definition minergate_set_device_funcs_probe[] = {
 	{"protover", minergate_init_protover, NULL},
 	{"n_req", minergate_init_n_req, NULL},
@@ -180,6 +174,9 @@ static const struct bfg_set_device_definition minergate_set_device_funcs_probe[]
 	{"n_rsp", minergate_init_n_rsp, NULL},
 	{"queue", minergate_init_queue, NULL},
 	{"stats_file", minergate_init_stats_file, NULL},
+	{"work_duration", minergate_init_work_duration, NULL},
+	{"minimum_roll", minergate_init_minimum_roll, NULL},
+	{"desired_roll", minergate_init_desired_roll, NULL},
 	{NULL},
 };
 
@@ -194,6 +191,9 @@ bool minergate_detect_one_extra(const char * const devpath, const enum minergate
 	struct minergate_config * const mgcfg = malloc(sizeof(*mgcfg));
 	*mgcfg = (struct minergate_config){
 		.protover = def_protover,
+		.work_duration = -1,
+		.minimum_roll = -1,
+		.desired_roll = -1,
 	};
 	drv_set_defaults(&minergate_drv, minergate_set_device_funcs_probe, mgcfg, devpath, NULL, 1);
 	switch (mgcfg->protover)
@@ -204,6 +204,7 @@ bool minergate_detect_one_extra(const char * const devpath, const enum minergate
 			BFGINIT(mgcfg->n_rsp, 300);
 			BFGINIT(mgcfg->queue, 300);
 			mgcfg->pkt_rsp_item_sz = 0x14;
+			mgcfg->minimum_roll = mgcfg->desired_roll = 0;  // not supported
 			break;
 		case MPV_SP30:
 			BFGINIT(mgcfg->n_req, 30);
@@ -211,9 +212,14 @@ bool minergate_detect_one_extra(const char * const devpath, const enum minergate
 			BFGINIT(mgcfg->n_rsp, 60);
 			BFGINIT(mgcfg->queue, 40);
 			mgcfg->pkt_rsp_item_sz = 0x10;
+			if (mgcfg->minimum_roll == -1)
+				mgcfg->minimum_roll = 60;
 			break;
 	}
 	BFGINIT(mgcfg->stats_file, strdup(minergate_stats_file));
+	mgcfg->desired_roll = max(mgcfg->desired_roll, mgcfg->minimum_roll);
+	if (mgcfg->work_duration == -1)
+		mgcfg->work_duration = 0x10;  // reasonable guess?
 	mgcfg->pkt_req_sz = MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * mgcfg->n_req);
 	mgcfg->pkt_rsp_sz = MINERGATE_PKT_HEADER_SZ + (mgcfg->pkt_rsp_item_sz * mgcfg->n_rsp);
 	
@@ -364,6 +370,7 @@ static
 bool minergate_queue_append(struct thr_info * const thr, struct work * const work)
 {
 	struct cgpu_info * const dev = thr->cgpu;
+	struct minergate_config * const mgcfg = dev->device_data;
 	struct minergate_state * const state = thr->cgpu_data;
 	
 	if (minergate_queue_full(thr))
@@ -373,6 +380,20 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 	work->tv_stamp.tv_sec = 0;
 	
 	uint8_t * const my_buf = &state->req_buffer[MINERGATE_PKT_HEADER_SZ + (MINERGATE_PKT_REQ_ITEM_SZ * state->ready_to_queue++)];
+	
+	if (mgcfg->desired_roll)
+	{
+		struct timeval tv_now, tv_latest;
+		timer_set_now(&tv_now);
+		timer_set_delay(&tv_latest, &tv_now, mgcfg->work_duration * 1000000LL);
+		int ntimeroll = work_ntime_range(work, &tv_now, &tv_latest, mgcfg->desired_roll);
+		// NOTE: If minimum_roll bumps ntimeroll up, we may get rejects :(
+		ntimeroll = min(0xff, max(mgcfg->minimum_roll, ntimeroll));
+		pk_u8(my_buf, 0x31, ntimeroll);  // ntime limit
+	}
+	else
+		pk_u8(my_buf, 0x31, 0);  // ntime limit
+	
 	pk_u32be(my_buf,  0, work->device_id);
 	memcpy(&my_buf[   4], &work->data[0x48], 4);  // nbits
 	memcpy(&my_buf[   8], &work->data[0x44], 4);  // ntime
@@ -386,8 +407,7 @@ bool minergate_queue_append(struct thr_info * const thr, struct work * const wor
 	const uint16_t zerobits = log2(floor(work->nonce_diff * 4294967296));
 	work->nonce_diff = pow(2, zerobits) / 4294967296;
 	pk_u8(my_buf, 0x30, zerobits);
-	
-	pk_u8(my_buf, 0x31,    0);  // ntime limit
+	// 0x31 is ntimeroll, which must be set before data ntime (in case it's changed)
 	pk_u8(my_buf, 0x32,    0);  // pv6: ntime offset ; pv30: reserved
 	pk_u8(my_buf, 0x33,    0);  // reserved
 	
@@ -429,13 +449,13 @@ void minergate_queue_flush(struct thr_info * const thr)
 }
 
 static
-bool minergate_submit(struct thr_info * const thr, struct work * const work, const uint32_t nonce)
+bool minergate_submit(struct thr_info * const thr, struct work * const work, const uint32_t nonce, const uint8_t ntime_offset)
 {
 	if (!nonce)
 		return false;
 	
 	if (likely(work))
-		submit_nonce(thr, work, nonce);
+		submit_noffset_nonce(thr, work, nonce, ntime_offset);
 	else
 		inc_hw_errors3(thr, NULL, &nonce, 1.);
 	
@@ -474,21 +494,24 @@ void minergate_poll(struct thr_info * const thr)
 	if (rsp_count || opt_dev_protocol)
 		applog(LOG_DEBUG, "%s: Received %u job completions", dev->dev_repr, rsp_count);
 	uint32_t nonce;
+	uint8_t ntime_offset;
 	int64_t hashes = 0;
 	for (unsigned i = 0; i < rsp_count; ++i, (jobrsp += mgcfg->pkt_rsp_item_sz))
 	{
 		work_device_id_t jobid = upk_u32be(jobrsp, 0);
 		nonce = upk_u32le(jobrsp, 8);
+		ntime_offset = upk_u8(jobrsp, (mgcfg->protover == MPV_SP10) ? 0x10 : 0xc);
+		
 		HASH_FIND(hh, thr->work, &jobid, sizeof(jobid), work);
 		if (unlikely(!work))
 			applog(LOG_ERR, "%s: Unknown job %"PRIwdi, dev->dev_repr, jobid);
 		
-		if (minergate_submit(thr, work, nonce))
+		if (minergate_submit(thr, work, nonce, ntime_offset))
 		{
 			if (mgcfg->protover == MPV_SP10)
 			{
 				nonce = upk_u32le(jobrsp, 0xc);
-				minergate_submit(thr, work, nonce);
+				minergate_submit(thr, work, nonce, ntime_offset);
 			}
 		}
 		else
