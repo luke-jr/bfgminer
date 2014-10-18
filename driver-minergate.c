@@ -449,13 +449,20 @@ void minergate_queue_flush(struct thr_info * const thr)
 }
 
 static
-bool minergate_submit(struct thr_info * const thr, struct work * const work, const uint32_t nonce, const uint8_t ntime_offset)
+bool minergate_submit(struct thr_info * const thr, struct work * const work, const uint32_t nonce, const uint8_t ntime_offset, int64_t * const hashes)
 {
 	if (!nonce)
 		return false;
 	
 	if (likely(work))
+	{
 		submit_noffset_nonce(thr, work, nonce, ntime_offset);
+		
+		struct cgpu_info * const dev = thr->cgpu;
+		struct minergate_config * const mgcfg = dev->device_data;
+		if (mgcfg->desired_roll)
+			*hashes += 0x100000000 * work->nonce_diff;
+	}
 	else
 		inc_hw_errors3(thr, NULL, &nonce, 1.);
 	
@@ -506,12 +513,12 @@ void minergate_poll(struct thr_info * const thr)
 		if (unlikely(!work))
 			applog(LOG_ERR, "%s: Unknown job %"PRIwdi, dev->dev_repr, jobid);
 		
-		if (minergate_submit(thr, work, nonce, ntime_offset))
+		if (minergate_submit(thr, work, nonce, ntime_offset, &hashes))
 		{
 			if (mgcfg->protover == MPV_SP10)
 			{
 				nonce = upk_u32le(jobrsp, 0xc);
-				minergate_submit(thr, work, nonce, ntime_offset);
+				minergate_submit(thr, work, nonce, ntime_offset, &hashes);
 			}
 		}
 		else
@@ -524,8 +531,8 @@ void minergate_poll(struct thr_info * const thr)
 		{
 			HASH_DEL(thr->work, work);
 			applog(LOG_DEBUG, "%s: %s job %"PRIwdi" completed", dev->dev_repr, work->tv_stamp.tv_sec ? "Flushed" : "Active", work->device_id);
-			if (!work->tv_stamp.tv_sec)
-				hashes += 100000000 * work->nonce_diff;
+			if ((!mgcfg->desired_roll) && !work->tv_stamp.tv_sec)
+				hashes += 0x100000000 * work->nonce_diff;
 			free_work(work);
 		}
 	}
