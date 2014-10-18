@@ -362,7 +362,7 @@ bool kncasic_detect_one(const char * const devpath)
 static
 int kncasic_detect_auto(void)
 {
-	return knc_detect_one(NULL) ? 1 : 0;
+	return kncasic_detect_one(NULL) ? 1 : 0;
 }
 
 static
