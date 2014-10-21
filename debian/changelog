@@ -1,3 +1,10 @@
+bfgminer (4.10.0-0precise1) precise; urgency=low
+
+  * minergate: Support for Spondoolies SP30.
+  * titan: Numerous fixes and improvements from the KnCMiner team.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Oct 2014 04:01:46 -0000
+
 bfgminer (4.9.0-0precise1) precise; urgency=low
 
   * titan: Driver for KnCMiner's scrypt ASIC machine.
