@@ -1,3 +1,41 @@
+BFGMiner Version 4.10.0 - October 21, 2014
+
+- Upgraded Windows libjansson from 2.6 to 2.7
+- i2c-tools are not required by Titan
+- minergate: Fix hashmeter
+- minergate: Support minergate-side ntime rolling for SP30 only
+- minergate: Autodetect SP30 on /tmp/connection_pipe_sp30
+- minergate: Make stats file configurable
+- minergate: SP30 only wants max 10 queue requests at a time
+- minergate: Use work_completed flag for SP30
+- minergate: Only SP10 has a second winner_nonce
+- minergate: Simplify multi-winner_nonce handling
+- Bugfix: minergate: Correct endian for 2nd winner_nonce
+- minergate: Vary max jobs queued
+- minergate: Vary number of requests/responses per packet
+- minergate: Support --set MGT:protover=N
+- Titan: fix compiler warning "maybe-uninitialized"
+- Titan: Increase die inactivity timeout to 20 secs
+- Titan: Slightly improve some debug messages
+- Titan: Use multi-part batched SPI transfers for flushes (saves 2 secs on each
+flush)
+- Titan: Fix buffer overflow
+- Titan: Increase queue prefill value up to 20
+- Titan: Flag for fast broadcast flushes. Not enabled: DC/DCs trip off easily!
+- Titan: Monitor die health, reconfigure it if no shares in 10 seconds
+- Titan: Make log level of some messages lower, to not clobber the screen
+- Titan: Work assignment and flushing is per-die, not per-ASIC
+- Titan: Set flush flag after re-configuring the die
+- Titan: Refactoring: intermediate variables for first_proc and repr
+- Titan: Flush cores one-by-one right before reconfiguring them
+- Titan: Define for the broadcast core address
+- Titan: Re-configuring dies through API command "procset"
+- Titan: Use correct version of knc_titan_setup_core
+- Titan: configure_one_die func for configuring single die
+- Titan: fill all non-found ASIC structs with the same (invalid) data
+- Titan: Core init parameters (nonce range) independent of number of found dies
+
+
 BFGMiner Version 4.9.0 - October 5, 2014
 
 - Upgraded Windows libraries:
@@ -88,6 +126,7 @@ USB)
 trouble
 - Bugfix: async minerloop fix for devices disabled at start
 - twinfury: Implement device protocol dump more low-level
+
 
 BFGMiner Version 4.8.0 - September 10, 2014
 
