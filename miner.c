@@ -2151,9 +2151,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--per-device-stats",
 			opt_set_bool, &want_per_device_stats,
 			"Force verbose mode and output per-device statistics"),
-	OPT_WITH_ARG("--userpass|-O",  // duplicate to ensure config loads it before pool-priority
+	OPT_WITH_ARG("--userpass|-O",
 	             set_userpass, NULL, NULL,
-	             opt_hidden),
+	             "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_WITH_ARG("--pool-priority",
 			 set_pool_priority, NULL, NULL,
 			 "Priority for just the previous-defined pool"),
@@ -2322,9 +2322,6 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITHOUT_ARG("--unittest",
 			opt_set_bool, &opt_unittest, opt_hidden),
-	OPT_WITH_ARG("--userpass|-O",
-		     set_userpass, NULL, NULL,
-		     "Username:Password pair for bitcoin JSON-RPC server"),
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
