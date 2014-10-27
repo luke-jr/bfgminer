@@ -85,6 +85,7 @@ struct knc_titan_info {
 	struct cgpu_info *cgpu;
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
+	bool asic_served_by_fpga[KNC_TITAN_MAX_ASICS];
 
 	struct work *workqueue;
 	int workqueue_size;
@@ -360,6 +361,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 		}
 
 		knc->cores = total_cores;
+		knc->asic_served_by_fpga[asic] = true;
 	}
 
 	cgpu_set_defaults(cgpu);
@@ -369,6 +371,9 @@ static bool knc_titan_init(struct thr_info * const thr)
 
 	knc = cgpu->device_data;
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		knc_titan_setup_spi("ASIC", knc->ctx, asic, KNC_TITAN_FPGA_SPI_DIVIDER,
+				    KNC_TITAN_FPGA_SPI_PRECLK, KNC_TITAN_FPGA_SPI_DECLK,
+				    KNC_TITAN_FPGA_SPI_SSLOWMIN);
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			configure_one_die(knc, asic, die);
 			knc->dies[asic][die].next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
@@ -514,6 +519,7 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 				knc->dies[asic][die].need_flush = true;
 			}
+			knc->asic_served_by_fpga[asic] = true;
 		}
 		timer_set_now(&thr->tv_poll);
 	}
@@ -568,6 +574,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct knc_titan_die *die_p;
 	struct timeval tv_now, tv_prev;
 	bool any_was_flushed = false;
+	int num_request_busy;
 
 	knc_titan_prune_local_queue(thr);
 	timer_set_now(&tv_prev);
@@ -595,7 +602,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 					} else {
 						/* Use unicasts */
 						bool work_acc_arr[die_p->cores];
-						struct knc_report reports[die_p->cores];
 						for (proc = first_proc; proc; proc = proc->next_proc) {
 							mythr = proc->thr[0];
 							core1 = mythr->cgpu_data;
@@ -603,24 +609,33 @@ static void knc_titan_poll(struct thr_info * const thr)
 								break;
 							work_acc_arr[core1->coreno] = false;
 						}
-						if (knc_titan_set_work_multi(first_proc->device->dev_repr, knc->ctx, asic, die, 0, die_p->next_slot, work, true, work_acc_arr, reports, die_p->cores)) {
-							for (proc = first_proc; proc; proc = proc->next_proc) {
-								mythr = proc->thr[0];
-								core1 = mythr->cgpu_data;
-								if ((core1->dieno != die) || (core1->asicno != asic))
-									break;
-								if (work_acc_arr[core1->coreno]) {
-									/* Submit stale shares just in case we are working with multi-coin pool
-									 * and those shares still might be useful (merged mining case etc) */
-									if (knc_titan_process_report(knc, core1, &(reports[core1->coreno])))
-										timer_set_now(&(die_p->last_share));
-									work_accepted = true;
+						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
+						if (num_request_busy == 0) {
+							if (knc_titan_set_work_parallel(first_proc->device->dev_repr, knc->ctx, asic, 1 << die, 0, die_p->next_slot, work, true, work_acc_arr, die_p->cores, KNC_TITAN_FPGA_RETRIES)) {
+								work_accepted = true;
+								for (proc = first_proc; proc; proc = proc->next_proc) {
+									mythr = proc->thr[0];
+									core1 = mythr->cgpu_data;
+									if ((core1->dieno != die) || (core1->asicno != asic))
+										break;
+									if (work_acc_arr[core1->coreno]) {
+										/* Submit stale shares just in case we are working with multi-coin pool
+										 * and those shares still might be useful (merged mining case etc) */
+										/* if (knc_titan_process_report(knc, core1, &(reports[core1->coreno]))) */
+										/* 	timer_set_now(&(die_p->last_share)); */
+										work_accepted = true;
+									}
 								}
 							}
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
+					if (knc->asic_served_by_fpga[asic]) {
+						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
+						if (num_request_busy == 0)
+							knc->asic_served_by_fpga[asic] = false;
+					}
+					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
 						work_accepted = false;
 				}
 				knccore = first_proc->thr[0]->cgpu_data;
