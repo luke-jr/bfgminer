@@ -154,3 +154,64 @@ bool knc_titan_setup_core_local(const char *repr, void * const ctx, int channel,
 {
 	return knc_titan_setup_core_(LOG_INFO, ctx, channel, die, core, params);
 }
+
+bool knc_titan_setup_spi(const char *repr, void * const ctx, int asic, int divider, int preclk, int declk, int sslowmin)
+{
+	uint8_t request[7];
+	int request_length;
+	int status;
+
+	request_length = knc_prepare_titan_setup(request, asic, divider, preclk, declk, sslowmin);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, 0, NULL);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: setup_spi failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	return true;
+}
+
+bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, bool *work_accepted, int num, int resend)
+{
+	uint8_t request[9 + BLOCK_HEADER_BYTES_WITHOUT_NONCE];
+	int request_length;
+	int status;
+
+	request_length = knc_prepare_titan_work_request(request, asic, die, slot, core_start, core_start + num - 1, resend, work);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, 0, NULL);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: set_work_parallel failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	return true;
+}
+
+bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int *num_request_busy)
+{
+	uint8_t request[2];
+	int request_length;
+	int response_length = 4;
+	uint8_t response[response_length];
+	int status;
+	uint8_t num_request_busy_byte;
+
+	request_length = knc_prepare_titan_work_status(request, asic);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, response_length, response);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: get_work_status failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	status = knc_decode_work_status(response + 2, &num_request_busy_byte);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: get_work_status got undefined response", repr, asic);
+		return false;
+	}
+
+	*num_request_busy = num_request_busy_byte;
+	return true;
+}
