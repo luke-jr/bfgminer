@@ -4319,9 +4319,14 @@ one_workable_pool: ;
 	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->block_time_str);
 	
-	income = total_diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
-	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	if (blkchain->currentblk->height)
+	{
+		income = total_diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
+		format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	}
+	else
+		strcpy(incomestr, "?");
 	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
 		ts,
 		total_go + total_ro,
