@@ -1142,6 +1142,7 @@ struct blockchain_info {
 };
 
 struct mining_goal_info {
+	unsigned id;
 	char *name;
 	bool is_default;
 	
@@ -1207,6 +1208,7 @@ extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
 extern double best_diff;
+extern struct mining_goal_info *mining_goals;
 
 struct curl_ent {
 	CURL *curl;

@@ -1009,6 +1009,7 @@ int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct 
 
 struct mining_goal_info *get_mining_goal(const char * const name)
 {
+	static unsigned next_goal_id;
 	struct mining_goal_info *goal;
 	HASH_FIND_STR(mining_goals, name, goal);
 	if (!goal)
@@ -1025,6 +1026,7 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
 		
 		*goal = (struct mining_goal_info){
+			.id = next_goal_id++,
 			.name = strdup(name),
 			.is_default = !strcmp(name, "default"),
 			.blkchain = blkchain,

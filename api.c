@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <uthash.h>
+
 #include "compat.h"
 #include "deviceapi.h"
 #ifdef USE_LIBMICROHTTPD
@@ -170,11 +172,9 @@ static const char ISJSON = '{';
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
-#define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
-#define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_END	JSON4 JSON5
@@ -3063,35 +3063,45 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	bool io_open;
 
 	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
-	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECOIN : _MINECOIN COMSTR);
 
+	struct mining_goal_info *goal, *tmpgoal;
+	bool precom = false;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (goal->is_default)
+			io_add(io_data, isjson ? COMSTR JSON1 _MINECOIN JSON2 : _MINECOIN COMSTR);
+		else
+		{
+			sprintf(buf, isjson ? COMSTR JSON1 _MINECOIN "%u" JSON2 : _MINECOIN "%u" COMSTR, goal->id);
+			io_add(io_data, buf);
+		}
+		
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
-		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-	else
+		if (opt_scrypt)
+			root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+		else
 #endif
-		root = api_add_const(root, "Hash Method", SHA256STR, false);
+			root = api_add_const(root, "Hash Method", SHA256STR, false);
 
-	cg_rlock(&ch_lock);
-	struct mining_goal_info * const goal = get_mining_goal("default");
-	struct blockchain_info * const blkchain = goal->blkchain;
-	struct block_info * const blkinfo = blkchain->currentblk;
-	root = api_add_time(root, "Current Block Time", &blkinfo->first_seen_time, true);
-	char fullhash[(sizeof(blkinfo->prevblkhash) * 2) + 1];
-	blkhashstr(fullhash, blkinfo->prevblkhash);
-	root = api_add_string(root, "Current Block Hash", fullhash, true);
-	cg_runlock(&ch_lock);
+		cg_rlock(&ch_lock);
+		struct blockchain_info * const blkchain = goal->blkchain;
+		struct block_info * const blkinfo = blkchain->currentblk;
+		root = api_add_time(root, "Current Block Time", &blkinfo->first_seen_time, true);
+		char fullhash[(sizeof(blkinfo->prevblkhash) * 2) + 1];
+		blkhashstr(fullhash, blkinfo->prevblkhash);
+		root = api_add_string(root, "Current Block Hash", fullhash, true);
+		cg_runlock(&ch_lock);
 
-	root = api_add_bool(root, "LP", &have_longpoll, false);
-	root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
-
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
-	if (isjson && io_open)
-		io_close(io_data);
+		root = api_add_bool(root, "LP", &have_longpoll, false);
+		root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
+		
+		root = print_data(root, buf, isjson, precom);
+		io_add(io_data, buf);
+		if (isjson)
+			io_add(io_data, JSON_CLOSE);
+	}
 }
 
 static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
