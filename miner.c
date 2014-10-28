@@ -3210,7 +3210,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		const uint32_t tmpl_block_id = ((uint32_t*)tmpl->prevblk)[0];
 		if ((!tmpl->cbtxn) && coinbase_script_block_id != tmpl_block_id)
 			refresh_bitcoind_address(false);
-		if (bytes_len(&opt_coinbase_script))
+		if (bytes_len(&opt_coinbase_script) && get_mining_goal("default") == pool->goal)
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
@@ -5584,7 +5584,7 @@ erradd:
 	json_decref(n);
 }
 
-static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe)
+static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe, struct pool * const pool)
 {
 	char *rpc_req;
 
@@ -5604,7 +5604,7 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if (bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr)
+			if ((bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr) && get_mining_goal("default") == pool->goal)
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
@@ -5631,8 +5631,8 @@ gbtfail2:
 	return NULL;
 }
 
-#define prepare_rpc_req(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, false)
-#define prepare_rpc_req_probe(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, true)
+#define prepare_rpc_req(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, false, pool)
+#define prepare_rpc_req_probe(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, true, pool)
 
 static const char *pool_protocol_name(enum pool_protocol proto)
 {
@@ -5673,7 +5673,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 		pool->proto = PLP_GETBLOCKTEMPLATE;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
+	rpc_req = prepare_rpc_req(work, pool->proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		return false;
@@ -9347,7 +9347,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
-	rpc_req = prepare_rpc_req_probe(work, proto, NULL);
+	rpc_req = prepare_rpc_req_probe(work, proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		goto out;
@@ -10689,7 +10689,7 @@ retry_pool:
 
 		struct work *work = make_work();
 		char *lpreq;
-		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id, pool);
 		work->pool = pool;
 		if (!lpreq)
 		{

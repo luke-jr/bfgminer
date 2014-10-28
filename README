@@ -561,7 +561,10 @@ bitcoind). To use this mode, you need to specify the URL of your bitcoind node
 using the usual pool options (--url, --userpass, etc), and the --coinbase-addr
 option to specify the Bitcoin address you wish to receive the block rewards
 mined. When you run Bitcoin Core on the same computer as your miner, the pool
-itself will be automatically configured for you.
+itself will be automatically configured for you. Please be aware that solo
+mining via GBT is at this time only supported for Bitcoin, and only on for the
+default goal - ie, if you are solo mining, don't use --pool-goal on your Bitcoin
+pool(s).
 
 IMPORTANT: If you are solo mining with more than one instance of BFGMiner (or
 any other software) per payout address, you must also specify data using the
