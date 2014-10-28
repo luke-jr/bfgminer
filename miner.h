@@ -1096,7 +1096,8 @@ extern void print_summary(void);
 extern struct mining_goal_info *get_mining_goal(const char *name);
 extern void mining_goal_reset(struct mining_goal_info * const goal);
 extern void adjust_quota_gcd(void);
-extern struct pool *add_pool(void);
+extern struct pool *add_pool2(struct mining_goal_info *);
+#define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16

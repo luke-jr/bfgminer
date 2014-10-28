@@ -1104,7 +1104,7 @@ void adjust_quota_gcd(void)
 }
 
 /* Return value is ignored if not called from add_pool_details */
-struct pool *add_pool(void)
+struct pool *add_pool2(struct mining_goal_info * const goal)
 {
 	struct pool *pool;
 
@@ -1121,7 +1121,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
-	pool->goal = get_mining_goal("default");
+	pool->goal = goal;
 
 	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */

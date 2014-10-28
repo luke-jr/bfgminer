@@ -2365,7 +2365,7 @@ static void copyadvanceafter(char ch, char **param, char **buf)
 	*(dst_b++) = '\0';
 }
 
-static bool pooldetails(char *param, char **url, char **user, char **pass)
+static bool pooldetails(char *param, char **url, char **user, char **pass, char **goalname)
 {
 	char *ptr, *buf;
 
@@ -2393,6 +2393,12 @@ static bool pooldetails(char *param, char **url, char **user, char **pass)
 
 	// copy pass
 	copyadvanceafter(',', &param, &buf);
+	
+	if (*param)
+		*goalname = buf;
+	
+	// copy goalname
+	copyadvanceafter(',', &param, &buf);
 
 	return true;
 
@@ -2403,7 +2409,7 @@ exitsama:
 
 static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	char *url, *user, *pass;
+	char *url, *user, *pass, *goalname = "default";
 	struct pool *pool;
 	char *ptr;
 
@@ -2412,7 +2418,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	if (!pooldetails(param, &url, &user, &pass)) {
+	if (!pooldetails(param, &url, &user, &pass, &goalname))
+	{
 		ptr = escape_string(param, isjson);
 		message(io_data, MSG_INVPDP, 0, ptr, isjson);
 		if (ptr != param)
@@ -2421,7 +2428,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	pool = add_pool();
+	struct mining_goal_info * const goal = get_mining_goal(goalname);
+	pool = add_pool2(goal);
 	detect_stratum(pool, url);
 	add_pool_details(pool, true, url, user, pass);
 
