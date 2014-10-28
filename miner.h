@@ -1094,6 +1094,7 @@ extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
 extern struct mining_goal_info *get_mining_goal(const char *name);
+extern void mining_goal_reset(struct mining_goal_info * const goal);
 extern void adjust_quota_gcd(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
@@ -1405,6 +1406,7 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
+	bool next_goalreset;
 	uint8_t next_target[0x20];
 	char *next_nonce1;
 	int next_n2size;

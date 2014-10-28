@@ -1006,6 +1006,15 @@ int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct 
 	return strcmp(a->name, b->name);
 }
 
+static
+void blkchain_init_block(struct blockchain_info * const blkchain)
+{
+	struct block_info * const dummy_block = calloc(sizeof(*dummy_block), 1);
+	memset(dummy_block->prevblkhash, 0, 0x20);
+	HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
+	blkchain->currentblk = dummy_block;
+}
+
 struct mining_goal_info *get_mining_goal(const char * const name)
 {
 	static unsigned next_goal_id;
@@ -1013,16 +1022,13 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 	HASH_FIND_STR(mining_goals, name, goal);
 	if (!goal)
 	{
-		struct block_info * const dummy_block = calloc(sizeof(*dummy_block), 1);
-		memset(dummy_block->prevblkhash, 0, 0x20);
-		
 		struct blockchain_info * const blkchain = malloc(sizeof(*blkchain) + sizeof(*goal));
 		goal = (void*)(&blkchain[1]);
 		
 		*blkchain = (struct blockchain_info){
-			.currentblk = dummy_block,
+			.currentblk = NULL,
 		};
-		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
+		blkchain_init_block(blkchain);
 		
 		*goal = (struct mining_goal_info){
 			.id = next_goal_id++,
@@ -1040,6 +1046,18 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 #endif
 	}
 	return goal;
+}
+
+void mining_goal_reset(struct mining_goal_info * const goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info *blkinfo, *tmpblkinfo;
+	HASH_ITER(hh, blkchain->blocks, blkinfo, tmpblkinfo)
+	{
+		HASH_DEL(blkchain->blocks, blkinfo);
+		free(blkinfo);
+	}
+	blkchain_init_block(blkchain);
 }
 
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
