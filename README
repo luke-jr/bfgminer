@@ -2,9 +2,8 @@ BFGMiner:
 St. Barbara's Faithfully Glorified Mining Initiative Naturally Exceeding Rivals
 or Basically a Freaking Good Miner
 
-This is a multi-threaded multi-pool ASIC, FPGA, GPU and CPU miner with dynamic
-clocking, monitoring, and fanspeed support for bitcoin. Do not use on multiple
-block chains at the same time!
+This is a multi-threaded, multi-blockchain, multi-pool ASIC, FPGA, GPU and CPU
+miner with dynamic clocking, monitoring, and fanspeed support for bitcoin.
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
@@ -45,6 +44,10 @@ bfgminer -o http://pool:port -u username -p password
 Multiple pools:
 
 bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
+
+Multiple blockchains:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password --pool-goal default -o http://pool2:port -u pool2usernmae -p pool2password --pool-goal freicoin
 
 Single pool with a standard http proxy:
 
