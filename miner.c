@@ -375,6 +375,7 @@ static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
 struct mining_goal_info *mining_goals;
+int active_goals = 1;
 
 
 int swork_id;
@@ -1033,7 +1034,7 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
 		
 #ifdef HAVE_CURSES
-		devcursor = 7 + HASH_COUNT(mining_goals);
+		devcursor = 7 + active_goals;
 		switch_logsize();
 #endif
 	}
@@ -4332,14 +4333,32 @@ void update_block_display_line(const int blky, struct mining_goal_info *goal)
 	wclrtoeol(statuswin);
 }
 
+static bool pool_actively_in_use(const struct pool *, const struct pool *);
+
 static
 void update_block_display(void)
 {
 	struct mining_goal_info *goal, *tmpgoal;
-	int blky = 3;
+	int blky = 3, i, total_found_goals = 0;
 	HASH_ITER(hh, mining_goals, goal, tmpgoal)
 	{
+		for (i = 0; i < total_pools; ++i)
+		{
+			struct pool * const pool = pools[i];
+			if (pool->goal == goal && pool_actively_in_use(pool, NULL))
+				break;
+		}
+		if (i >= total_pools)
+			// no pools using this goal, so it's probably stale anyway
+			continue;
 		update_block_display_line(blky++, goal);
+		++total_found_goals;
+	}
+	if (total_found_goals != active_goals)
+	{
+		active_goals = total_found_goals;
+		devcursor = 7 + active_goals;
+		switch_logsize();
 	}
 }
 
@@ -4679,6 +4698,7 @@ static void switch_logsize(void)
 		unlock_curses();
 	}
 	check_winsizes();
+	update_block_display();
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -6891,6 +6911,9 @@ void switch_pools(struct pool *selected)
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
 
+#ifdef HAVE_CURSES
+	update_block_display();
+#endif
 }
 
 static void discard_work(struct work *work)
