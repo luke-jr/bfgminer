@@ -38,7 +38,7 @@ bool knc_titan_set_work_multi(const char *repr, void * const ctx, int channel, i
 bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int die, int core, struct knc_report *report);
 bool knc_titan_setup_core_local(const char *repr, void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params);
 bool knc_titan_setup_spi(const char *repr, void * const ctx, int asic, int divider, int preclk, int declk, int sslowmin);
-bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, bool *work_accepted, int num, int resend);
+bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, int num, int resend);
 bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int *num_request_busy);
 
 #endif /* __TITAN_ASIC_H */

@@ -575,6 +575,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct timeval tv_now, tv_prev;
 	bool any_was_flushed = false;
 	int num_request_busy;
+	bool fpga_status_checked = false;
 
 	knc_titan_prune_local_queue(thr);
 	timer_set_now(&tv_prev);
@@ -600,32 +601,14 @@ static void knc_titan_poll(struct thr_info * const thr)
 							work_accepted = true;
 						}
 					} else {
-						/* Use unicasts */
-						bool work_acc_arr[die_p->cores];
-						for (proc = first_proc; proc; proc = proc->next_proc) {
-							mythr = proc->thr[0];
-							core1 = mythr->cgpu_data;
-							if ((core1->dieno != die) || (core1->asicno != asic))
-								break;
-							work_acc_arr[core1->coreno] = false;
+						/* Use FPGA accelerated unicasts */
+						if (!fpga_status_checked) {
+							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
+							fpga_status_checked = true;
 						}
-						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
 						if (num_request_busy == 0) {
-							if (knc_titan_set_work_parallel(first_proc->device->dev_repr, knc->ctx, asic, 1 << die, 0, die_p->next_slot, work, true, work_acc_arr, die_p->cores, KNC_TITAN_FPGA_RETRIES)) {
+							if (knc_titan_set_work_parallel(first_proc->device->dev_repr, knc->ctx, asic, 1 << die, 0, die_p->next_slot, work, true, die_p->cores, KNC_TITAN_FPGA_RETRIES)) {
 								work_accepted = true;
-								for (proc = first_proc; proc; proc = proc->next_proc) {
-									mythr = proc->thr[0];
-									core1 = mythr->cgpu_data;
-									if ((core1->dieno != die) || (core1->asicno != asic))
-										break;
-									if (work_acc_arr[core1->coreno]) {
-										/* Submit stale shares just in case we are working with multi-coin pool
-										 * and those shares still might be useful (merged mining case etc) */
-										/* if (knc_titan_process_report(knc, core1, &(reports[core1->coreno]))) */
-										/* 	timer_set_now(&(die_p->last_share)); */
-										work_accepted = true;
-									}
-								}
 							}
 						}
 					}
