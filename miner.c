@@ -364,6 +364,8 @@ unsigned selected_device;
 
 static int max_lpdigits;
 
+// current_hash was replaced with goal->current_goal_detail
+
 static char datestamp[40];
 static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
@@ -2886,16 +2888,17 @@ const char *bfg_workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\
 static
 void __update_block_title(const unsigned char *hash_swap)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
+	struct mining_goal_info * const goal = &global_mining_goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	if (hash_swap) {
 		char tmp[17];
 		// Only provided when the block has actually changed
-		free(blkchain->current_hash);
-		blkchain->current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
+		free(goal->current_goal_detail);
+		goal->current_goal_detail = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
 		bin2hex(tmp, &hash_swap[24], 8);
-		memset(blkchain->current_hash, '.', 3);
-		memcpy(&blkchain->current_hash[3], tmp, 17);
+		memset(goal->current_goal_detail, '.', 3);
+		memcpy(&goal->current_goal_detail[3], tmp, 17);
 		blkchain->known_blkheight_current = false;
 	} else if (likely(blkchain->known_blkheight_current)) {
 		return;
@@ -2903,8 +2906,8 @@ void __update_block_title(const unsigned char *hash_swap)
 	if (blkchain->current_block_id == blkchain->known_blkheight_blkid) {
 		// FIXME: The block number will overflow this sometime around AD 2025-2027
 		if (blkchain->known_blkheight < 1000000) {
-			memmove(&blkchain->current_hash[3], &blkchain->current_hash[11], 8);
-			snprintf(&blkchain->current_hash[11], 20-11, " #%6u", blkchain->known_blkheight);
+			memmove(&goal->current_goal_detail[3], &goal->current_goal_detail[11], 8);
+			snprintf(&goal->current_goal_detail[11], 20-11, " #%6u", blkchain->known_blkheight);
 		}
 		blkchain->known_blkheight_current = true;
 	}
@@ -4311,7 +4314,7 @@ one_workable_pool: ;
 	}
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  blkchain->current_hash, goal->current_diff_str, goal->net_hashrate, blkchain->block_time_str);
+		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->block_time_str);
 	
 	income = total_diff_accepted * 3600 * blkchain->block_subsidy / total_secs / goal->current_diff;
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
@@ -6848,7 +6851,7 @@ static void set_curblock(const uint8_t * const hash)
 	get_timestamp(blkchain->block_time_str, sizeof(blkchain->block_time_str), blkchain->block_time);
 	cg_wunlock(&ch_lock);
 
-	applog(LOG_INFO, "New block: %s diff %s (%s)", blkchain->current_hash, goal->current_diff_str, goal->net_hashrate);
+	applog(LOG_INFO, "New block: %s diff %s (%s)", goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate);
 }
 
 /* Search to see if this prevblkhash has been seen before */

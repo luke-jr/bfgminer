@@ -1126,7 +1126,6 @@ struct blockchain_info {
 	struct block_info *blocks;
 	
 	/* Protected by ch_lock */
-	char *current_hash;
 	uint32_t current_block_id;
 	char *current_fullhash;
 	char block_time_str[0x20];  // was global blocktime
@@ -1144,6 +1143,8 @@ struct mining_goal_info {
 	double current_diff;
 	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
 	char net_hashrate[ALLOC_H2B_SHORT];
+	
+	char *current_goal_detail;
 };
 
 extern struct string_elist *scan_devices;
