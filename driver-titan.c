@@ -86,6 +86,7 @@ struct knc_titan_info {
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
 	bool asic_served_by_fpga[KNC_TITAN_MAX_ASICS];
+	struct timeval tv_prev[KNC_TITAN_MAX_ASICS];
 
 	struct work *workqueue;
 	int workqueue_size;
@@ -572,13 +573,11 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int asic;
 	int die;
 	struct knc_titan_die *die_p;
-	struct timeval tv_now, tv_prev;
-	bool any_was_flushed = false;
+	struct timeval tv_now;
 	int num_request_busy;
 	bool fpga_status_checked = false;
 
 	knc_titan_prune_local_queue(thr);
-	timer_set_now(&tv_prev);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
@@ -603,6 +602,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					} else {
 						/* Use FPGA accelerated unicasts */
 						if (!fpga_status_checked) {
+							timer_set_now(&knc->tv_prev[asic]);
 							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
 							fpga_status_checked = true;
 						}
@@ -615,8 +615,12 @@ static void knc_titan_poll(struct thr_info * const thr)
 				} else {
 					if (knc->asic_served_by_fpga[asic]) {
 						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
-						if (num_request_busy == 0)
+						if (num_request_busy == 0) {
+							timer_set_now(&tv_now);
+							double diff = ((tv_now.tv_sec - knc->tv_prev[asic].tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev[asic].tv_usec)) / 1000000.0;
+							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
 							knc->asic_served_by_fpga[asic] = false;
+						}
 					}
 					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
 						work_accepted = false;
@@ -640,7 +644,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 					}
 					delay_usecs = 0;
 					was_flushed = true;
-					any_was_flushed = true;
 				}
 				--knc->workqueue_size;
 				DL_DELETE(knc->workqueue, work);
@@ -660,10 +663,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
 	timer_set_now(&tv_now);
-	if (any_was_flushed) {
-		double diff = ((tv_now.tv_sec - tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - tv_prev.tv_usec)) / 1000000.0;
-		applog(LOG_INFO, "%s: Flush took %f secs", knc_titan_drv.dname, diff);
-	}
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
