@@ -3078,14 +3078,10 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	cg_rlock(&ch_lock);
 	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
-	if (blkchain->current_fullhash && *blkchain->current_fullhash) {
-		root = api_add_time(root, "Current Block Time", &blkchain->block_time, true);
-		root = api_add_string(root, "Current Block Hash", blkchain->current_fullhash, true);
-	} else {
-		time_t t = 0;
-		root = api_add_time(root, "Current Block Time", &t, true);
-		root = api_add_const(root, "Current Block Hash", BLANK, false);
-	}
+	root = api_add_time(root, "Current Block Time", &blkchain->block_time, true);
+	char fullhash[(sizeof(blkchain->currentblk->prevblkhash) * 2) + 1];
+	blkhashstr(fullhash, blkchain->currentblk->prevblkhash);
+	root = api_add_string(root, "Current Block Hash", fullhash, true);
 	cg_runlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);

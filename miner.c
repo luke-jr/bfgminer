@@ -371,14 +371,6 @@ static char datestamp[40];
 static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
-struct block_info {
-	uint32_t block_id;
-	uint8_t prevblkhash[0x20];
-	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
-	
-	UT_hash_handle hh;
-};
-
 static struct blockchain_info global_blkchain;
 struct mining_goal_info global_mining_goal = {
 	.blkchain = &global_blkchain,
@@ -6824,7 +6816,6 @@ static void restart_threads(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static
 void blkhashstr(char *rv, const unsigned char *hash)
 {
 	unsigned char hash_swap[32];
@@ -6848,9 +6839,6 @@ void set_curblock(struct block_info * const blkinfo)
 	cg_wlock(&ch_lock);
 	blkchain->block_time = time(NULL);
 	__update_block_title(hash_swap);
-	free(blkchain->current_fullhash);
-	blkchain->current_fullhash = malloc(65);
-	bin2hex(blkchain->current_fullhash, hash_swap, 32);
 	get_timestamp(blkchain->block_time_str, sizeof(blkchain->block_time_str), blkchain->block_time);
 	cg_wunlock(&ch_lock);
 

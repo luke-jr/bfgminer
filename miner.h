@@ -1061,6 +1061,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
+extern void blkhashstr(char *out, const unsigned char *hash);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);
@@ -1122,12 +1123,19 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
 #endif
 
+struct block_info {
+	uint32_t block_id;
+	uint8_t prevblkhash[0x20];
+	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
+	
+	UT_hash_handle hh;
+};
+
 struct blockchain_info {
 	struct block_info *blocks;
 	struct block_info *currentblk;
 	
 	/* Protected by ch_lock */
-	char *current_fullhash;
 	char block_time_str[0x20];  // was global blocktime
 	time_t block_time;
 	
