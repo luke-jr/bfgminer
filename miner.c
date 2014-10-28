@@ -2878,49 +2878,58 @@ void free_work(struct work *work)
 const char *bfg_workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
 #define workpadding_bin  bfg_workpadding_bin
 
+static const size_t block_info_str_sz = 3 /* ... */ + 16 /* block hash segment */ + 1;
+
+static
+void block_info_str(char * const out, const struct block_info * const blkinfo)
+{
+	unsigned char hash_swap[32];
+	swap256(hash_swap, blkinfo->prevblkhash);
+	swap32tole(hash_swap, hash_swap, 32 / 4);
+	
+	memset(out, '.', 3);
+	// FIXME: The block number will overflow this sometime around AD 2025-2027
+	if (blkinfo->height > 0 && blkinfo->height < 1000000)
+	{
+		bin2hex(&out[3], &hash_swap[0x1c], 4);
+		snprintf(&out[11], block_info_str_sz-11, " #%6u", blkinfo->height);
+	}
+	else
+		bin2hex(&out[3], &hash_swap[0x18], 8);
+}
+
 // Must only be called with ch_lock held!
 static
-void __update_block_title(const unsigned char *hash_swap)
+void __update_block_title(void)
 {
 	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
 	
-	if (hash_swap) {
-		char tmp[17];
-		// Only provided when the block has actually changed
-		free(goal->current_goal_detail);
-		goal->current_goal_detail = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
-		bin2hex(tmp, &hash_swap[24], 8);
-		memset(goal->current_goal_detail, '.', 3);
-		memcpy(&goal->current_goal_detail[3], tmp, 17);
-		blkchain->known_blkheight_current = false;
-	} else if (likely(blkchain->known_blkheight_current)) {
-		return;
-	}
-	if (blkchain->currentblk->block_id == blkchain->known_blkheight_blkid) {
-		// FIXME: The block number will overflow this sometime around AD 2025-2027
-		if (blkchain->known_blkheight < 1000000) {
-			memmove(&goal->current_goal_detail[3], &goal->current_goal_detail[11], 8);
-			snprintf(&goal->current_goal_detail[11], 20-11, " #%6u", blkchain->known_blkheight);
-		}
-		blkchain->known_blkheight_current = true;
-	}
+	if (!goal->current_goal_detail)
+		goal->current_goal_detail = malloc(block_info_str_sz);
+	block_info_str(goal->current_goal_detail, blkchain->currentblk);
 }
 
+static struct block_info *block_exists(const void *);
+
 static
-void have_block_height(uint32_t block_id, uint32_t blkheight)
+void have_block_height(const void * const prevblkhash, uint32_t blkheight)
 {
 	struct blockchain_info * const blkchain = &global_blkchain;
 	
-	if (blkchain->known_blkheight == blkheight)
+	struct block_info * const blkinfo = block_exists(prevblkhash);
+	if ((!blkinfo) || blkinfo->height)
 		return;
+	
+	uint32_t block_id = ((uint32_t*)prevblkhash)[0];
 	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, (uint32_t)be32toh(block_id), blkheight);
 	cg_wlock(&ch_lock);
-	blkchain->known_blkheight = blkheight;
-	blkchain->known_blkheight_blkid = block_id;
-	blkchain->block_subsidy = 5000000000LL >> (blkheight / 210000);
-	if (block_id == blkchain->currentblk->block_id)
-		__update_block_title(NULL);
+	blkinfo->height = blkheight;
+	if (blkinfo == blkchain->currentblk)
+	{
+		blkchain->currentblk_subsidy = 5000000000LL >> (blkheight / 210000);
+		__update_block_title();
+	}
 	cg_wunlock(&ch_lock);
 }
 
@@ -3262,8 +3271,8 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	if ( (tmp_val = json_object_get(res_val, "height")) ) {
 		uint32_t blkheight = json_number_value(tmp_val);
-		uint32_t block_id = ((uint32_t*)work->data)[1];
-		have_block_height(block_id, blkheight);
+		const void * const prevblkhash = &work->data[4];
+		have_block_height(prevblkhash, blkheight);
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
@@ -4310,7 +4319,7 @@ one_workable_pool: ;
 	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
 		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->block_time_str);
 	
-	income = total_diff_accepted * 3600 * blkchain->block_subsidy / total_secs / goal->current_diff;
+	income = total_diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
 	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
 	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
@@ -6830,15 +6839,13 @@ void set_curblock(struct block_info * const blkinfo)
 {
 	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
-	unsigned char hash_swap[32];
 
 	blkchain->currentblk = blkinfo;
-	swap256(hash_swap, blkinfo->prevblkhash);
-	swap32tole(hash_swap, hash_swap, 32 / 4);
+	blkchain->currentblk_subsidy = 5000000000LL >> (blkinfo->height / 210000);
 
 	cg_wlock(&ch_lock);
 	blkchain->block_time = time(NULL);
-	__update_block_title(hash_swap);
+	__update_block_title();
 	get_timestamp(blkchain->block_time_str, sizeof(blkchain->block_time_str), blkchain->block_time);
 	cg_wunlock(&ch_lock);
 
@@ -6846,7 +6853,8 @@ void set_curblock(struct block_info * const blkinfo)
 }
 
 /* Search to see if this prevblkhash has been seen before */
-static bool block_exists(const void * const prevblkhash)
+static
+struct block_info *block_exists(const void * const prevblkhash)
 {
 	struct blockchain_info * const blkchain = &global_blkchain;
 	struct block_info *s;
@@ -6855,9 +6863,7 @@ static bool block_exists(const void * const prevblkhash)
 	HASH_FIND(hh, blkchain->blocks, prevblkhash, 0x20, s);
 	rd_unlock(&blk_lock);
 
-	if (s)
-		return true;
-	return false;
+	return s;
 }
 
 static int block_sort(struct block_info * const blocka, struct block_info * const blockb)
@@ -9011,11 +9017,11 @@ static void *stratum_thread(void *userdata)
 			cb_height_sz = bin_height[-1];
 			if (cb_height_sz == 3) {
 				// FIXME: The block number will overflow this by AD 2173
-				uint32_t block_id = ((uint32_t*)work->data)[1];
+				const void * const prevblkhash = &work->data[4];
 				uint32_t height = 0;
 				memcpy(&height, bin_height, 3);
 				height = le32toh(height);
-				have_block_height(block_id, height);
+				have_block_height(prevblkhash, height);
 			}
 
 			pool->swork.work_restart_id =
