@@ -1094,6 +1094,7 @@ extern int enabled_pools;
 extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern struct mining_goal_info *get_mining_goal(const char *name);
 extern void adjust_quota_gcd(void);
 extern struct pool *add_pool(void);
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
@@ -1141,6 +1142,8 @@ struct blockchain_info {
 };
 
 struct mining_goal_info {
+	char *name;
+	
 	struct blockchain_info *blkchain;
 	
 	double current_diff;
@@ -1148,6 +1151,8 @@ struct mining_goal_info {
 	char net_hashrate[ALLOC_H2B_SHORT];
 	
 	char *current_goal_detail;
+	
+	UT_hash_handle hh;
 };
 
 extern struct string_elist *scan_devices;
@@ -1198,7 +1203,6 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
-extern struct mining_goal_info global_mining_goal;
 extern double best_diff;
 
 struct curl_ent {

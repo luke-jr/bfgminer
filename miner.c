@@ -371,11 +371,7 @@ static char datestamp[40];
 static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
-static struct blockchain_info global_blkchain;
-struct mining_goal_info global_mining_goal = {
-	.blkchain = &global_blkchain,
-	.current_diff = 0xFFFFFFFFFFFFFFFFULL,
-};
+struct mining_goal_info *mining_goals;
 
 
 int swork_id;
@@ -992,6 +988,33 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+struct mining_goal_info *get_mining_goal(const char * const name)
+{
+	struct mining_goal_info *goal;
+	HASH_FIND_STR(mining_goals, name, goal);
+	if (!goal)
+	{
+		struct block_info * const dummy_block = calloc(sizeof(*dummy_block), 1);
+		memset(dummy_block->prevblkhash, 0, 0x20);
+		
+		struct blockchain_info * const blkchain = malloc(sizeof(*blkchain) + sizeof(*goal));
+		goal = (void*)(&blkchain[1]);
+		
+		*blkchain = (struct blockchain_info){
+			.currentblk = dummy_block,
+		};
+		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
+		
+		*goal = (struct mining_goal_info){
+			.name = strdup(name),
+			.blkchain = blkchain,
+			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
+		};
+		HASH_ADD_STR(mining_goals, name, goal);
+	}
+	return goal;
+}
+
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
@@ -1053,7 +1076,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
-	pool->goal = &global_mining_goal;
+	pool->goal = get_mining_goal("default");
 
 	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -1656,6 +1679,20 @@ static char *set_cbcperc(const char *arg)
 	pool->cb_param.perc = atof(arg) / 100;
 	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
 		return "The percentage should be between 0 and 100";
+	
+	return NULL;
+}
+
+static
+char *set_pool_goal(const char * const arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Usage of --pool-goal before pools are defined does not make sense";
+	
+	pool = pools[total_pools - 1];
+	pool->goal = get_mining_goal(arg);
 	
 	return NULL;
 }
@@ -2350,6 +2387,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 	             set_userpass, NULL, NULL,
 	             "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--pool-goal",
+			 set_pool_goal, NULL, NULL,
+			 "Named goal for the previous-defined pool"),
 	OPT_WITH_ARG("--pool-priority",
 			 set_pool_priority, NULL, NULL,
 			 "Priority for just the previous-defined pool"),
@@ -3022,7 +3062,8 @@ int work_ntime_range(struct work * const work, const struct timeval * const tvp_
 static
 void refresh_bitcoind_address(const bool fresh)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
+	struct mining_goal_info * const goal = get_mining_goal("default");
+	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	if (!have_at_least_one_getcbaddr)
 		return;
@@ -3040,7 +3081,7 @@ void refresh_bitcoind_address(const bool fresh)
 		struct pool * const pool = pools[i];
 		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
 			continue;
-		if (pool->goal->blkchain != blkchain)
+		if (pool->goal != goal)
 			// TODO: Multi-blockchain support
 			continue;
 		
@@ -4186,7 +4227,7 @@ static bool pool_unworkable(const struct pool *);
 static void curses_print_status(const int ts)
 {
 	// TODO: Multi-blockchain support
-	struct mining_goal_info * const goal = &global_mining_goal;
+	struct mining_goal_info * const goal = get_mining_goal("default");
 	struct blockchain_info * const blkchain = goal->blkchain;
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
@@ -7114,7 +7155,7 @@ static void display_pool_summary(struct pool *pool)
 	int pool_secs;
 
 	if (curses_active_locked()) {
-		wlog("Pool: %s\n", pool->rpc_url);
+		wlog("Pool: %s  Goal: %s\n", pool->rpc_url, pool->goal->name);
 		if (pool->solved)
 			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
 		if (!pool->has_stratum)
@@ -12488,7 +12529,6 @@ int main(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
-	struct block_info *block;
 	unsigned int k;
 	int i;
 	int rearrange_pools = 0;
@@ -12630,16 +12670,6 @@ int main(int argc, char *argv[])
 	devcursor = 8;
 	logstart = devcursor;
 	logcursor = logstart;
-
-	block = calloc(sizeof(*block), 1);
-	if (unlikely(!block))
-		quit (1, "main OOM");
-	memset(block->prevblkhash, 0, 0x20);
-	{
-		struct blockchain_info * const blkchain = &global_blkchain;
-		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(block->prevblkhash), block);
-		blkchain->currentblk = block;
-	}
 
 	mutex_init(&submitting_lock);
 

@@ -3076,7 +3076,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		root = api_add_const(root, "Hash Method", SHA256STR, false);
 
 	cg_rlock(&ch_lock);
-	struct mining_goal_info * const goal = &global_mining_goal;
+	struct mining_goal_info * const goal = get_mining_goal("default");
 	struct blockchain_info * const blkchain = goal->blkchain;
 	struct block_info * const blkinfo = blkchain->currentblk;
 	root = api_add_time(root, "Current Block Time", &blkinfo->first_seen_time, true);

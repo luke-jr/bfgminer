@@ -289,6 +289,7 @@ Options for both config file and command line:
 --noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-goal <arg>   Named goal for the previous-defined pool
 --pool-priority <arg> Priority for just the previous-defined pool
 --pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
