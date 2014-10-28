@@ -358,6 +358,9 @@ const char unicode_micro = 'u';
 #define U8_BAD_END   "\xef\x80\x80"
 #define AS_BAD(x) U8_BAD_START x U8_BAD_END
 
+/* logstart is where the log window should start */
+static int devcursor, logstart, logcursor;
+
 bool selecting_device;
 unsigned selected_device;
 #endif
@@ -988,6 +991,21 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+#ifdef HAVE_CURSES
+static void switch_logsize(void);
+#endif
+
+static
+int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)
+{
+	// default always goes first
+	if (a->is_default)
+		return -1;
+	if (b->is_default)
+		return 1;
+	return strcmp(a->name, b->name);
+}
+
 struct mining_goal_info *get_mining_goal(const char * const name)
 {
 	struct mining_goal_info *goal;
@@ -1007,10 +1025,17 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 		
 		*goal = (struct mining_goal_info){
 			.name = strdup(name),
+			.is_default = !strcmp(name, "default"),
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
 		};
 		HASH_ADD_STR(mining_goals, name, goal);
+		HASH_SORT(mining_goals, mining_goals_name_cmp);
+		
+#ifdef HAVE_CURSES
+		devcursor = 7 + HASH_COUNT(mining_goals);
+		switch_logsize();
+#endif
 	}
 	return goal;
 }
@@ -2939,6 +2964,10 @@ void block_info_str(char * const out, const struct block_info * const blkinfo)
 		bin2hex(&out[3], &hash_swap[0x18], 8);
 }
 
+#ifdef HAVE_CURSES
+static void update_block_display(void);
+#endif
+
 // Must only be called with ch_lock held!
 static
 void __update_block_title(struct mining_goal_info * const goal)
@@ -2948,6 +2977,9 @@ void __update_block_title(struct mining_goal_info * const goal)
 	if (!goal->current_goal_detail)
 		goal->current_goal_detail = malloc(block_info_str_sz);
 	block_info_str(goal->current_goal_detail, blkchain->currentblk);
+#ifdef HAVE_CURSES
+	update_block_display();
+#endif
 }
 
 static struct block_info *block_exists(const struct blockchain_info *, const void *);
@@ -3417,8 +3449,6 @@ static int total_staged(void)
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 1.0;
-/* logstart is where the log window should start */
-static int devcursor, logstart, logcursor;
 #ifdef HAVE_CURSES
 static char statusline[256];
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
@@ -4221,18 +4251,106 @@ static int menu_attr = A_REVERSE;
 	bfg_waddstr(win, tmp42); \
 } while (0)
 
+static
+void update_block_display_line(const int blky, struct mining_goal_info *goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = blkchain->currentblk;
+	double income;
+	char incomestr[ALLOC_H2B_SHORT+6+1];
+	
+	if (blkinfo->height)
+	{
+		income = goal->diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
+		format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	}
+	else
+		strcpy(incomestr, "?");
+	
+	int linelen = bfg_win_linelen(statuswin);
+	wmove(statuswin, blky, 0);
+	
+	bfg_waddstr(statuswin, " Block");
+	if (!goal->is_default)
+		linelen -= strlen(goal->name) + 1;
+	linelen -= 6;  // " Block"
+	
+	if (blkinfo->height && blkinfo->height < 1000000)
+	{
+		cg_wprintw(statuswin, " #%6u", blkinfo->height);
+		linelen -= 8;
+	}
+	bfg_waddstr(statuswin, ":");
+	
+	if (linelen > 55)
+		bfg_waddstr(statuswin, " ");
+	if (linelen >= 65)
+		bfg_waddstr(statuswin, "...");
+	
+	{
+		char hexpbh[0x11];
+		if (!(blkinfo->height && blkinfo->height < 1000000))
+		{
+			bin2hex(hexpbh, &blkinfo->prevblkhash[4], 4);
+			bfg_waddstr(statuswin, hexpbh);
+		}
+		bin2hex(hexpbh, &blkinfo->prevblkhash[0], 4);
+		bfg_waddstr(statuswin, hexpbh);
+	}
+	
+	if (linelen >= 55)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " Diff:%s", goal->current_diff_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, "(%s) ", goal->net_hashrate);
+	
+	if (linelen >= 62)
+	{
+		if (linelen >= 69)
+			bfg_waddstr(statuswin, " ");
+		bfg_waddstr(statuswin, "Started:");
+	}
+	else
+		bfg_waddstr(statuswin, "S:");
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	bfg_waddstr(statuswin, blkchain->currentblk_first_seen_time_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " I:%s", incomestr);
+	
+	if (!goal->is_default)
+		cg_wprintw(statuswin, " %s", goal->name);
+	
+	wclrtoeol(statuswin);
+}
+
+static
+void update_block_display(void)
+{
+	struct mining_goal_info *goal, *tmpgoal;
+	int blky = 3;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		update_block_display_line(blky++, goal);
+	}
+}
+
 static bool pool_unworkable(const struct pool *);
 
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(const int ts)
 {
-	// TODO: Multi-blockchain support
-	struct mining_goal_info * const goal = get_mining_goal("default");
-	struct blockchain_info * const blkchain = goal->blkchain;
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
-	double income;
 	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
@@ -4361,18 +4479,10 @@ one_workable_pool: ;
 		             pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->currentblk_first_seen_time_str);
 	
-	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
-	if (blkchain->currentblk->height)
-	{
-		income = total_diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
-		format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
-	}
-	else
-		strcpy(incomestr, "?");
-	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
+	char bwstr[(ALLOC_H2B_SHORT*2)+3+1];
+	
+	cg_mvwprintw(statuswin, devcursor - 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  BS:%s",
 		ts,
 		total_go + total_ro,
 		new_blocks,
@@ -4382,16 +4492,16 @@ one_workable_pool: ;
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
-		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
 	
-	mvwaddstr(statuswin, 5, 0, " ");
+	mvwaddstr(statuswin, devcursor - 3, 0, " ");
 	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 	
+	int devdiv = devcursor - 2;
 	logdiv = statusy - 1;
-	bfg_hline(statuswin, 6);
+	bfg_hline(statuswin, devdiv);
 	bfg_hline(statuswin, logdiv);
 #ifdef USE_UNICODE
 	if (use_unicode)
@@ -4401,10 +4511,10 @@ one_workable_pool: ;
 			offset += max_lpdigits;  // proc letter(s)
 		if (have_unicode_degrees)
 			++offset;  // degrees symbol
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 		offset += 24;  // hashrates etc
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 	}
 #endif
@@ -4789,6 +4899,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	cgpu = get_thr_cgpu(work->thr_id);
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
+		struct mining_goal_info * const goal = pool->goal;
+		
 		mutex_lock(&stats_lock);
 		cgpu->accepted++;
 		total_accepted++;
@@ -4796,6 +4908,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
 		pool->diff_accepted += work->work_difficulty;
+		goal->diff_accepted += work->work_difficulty;
 		mutex_unlock(&stats_lock);
 
 		pool->seq_rejects = 0;
@@ -7455,6 +7568,12 @@ void zero_stats(void)
 	awidth = rwidth = swidth = hwwidth = 1;
 #endif
 
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->diff_accepted = 0;
+	}
+	
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
@@ -8707,6 +8826,8 @@ fishy:
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
+			struct mining_goal_info * const goal = pool->goal;
+			
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
 
 			/* We don't know what device this came from so we can't
@@ -8716,6 +8837,7 @@ fishy:
 			pool->accepted++;
 			total_diff_accepted += pool_diff;
 			pool->diff_accepted += pool_diff;
+			goal->diff_accepted += pool_diff;
 			mutex_unlock(&stats_lock);
 		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
@@ -12667,9 +12789,11 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+#ifdef HAVE_CURSES
 	devcursor = 8;
 	logstart = devcursor;
 	logcursor = logstart;
+#endif
 
 	mutex_init(&submitting_lock);
 

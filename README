@@ -468,14 +468,16 @@ the range of current share difficulties, whether block notification is working
 work.
 
 The block display shows:
-Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
+Block #217364: ...1b89f8d3  Diff:7.67M (54.93T)  Started: [17:17:22]  I:12.99mBTC/hr
 
-This shows a short stretch of the current block, the next block's height and
-difficulty (including the network hashrate that difficulty represents), and when
-the search for the new block started.
+This shows a short stretch of the next block's height, the current block,
+difficulty (including the network hashrate that difficulty represents), when the
+search for the new block started, and finally expected Income, calculated by
+actual shares submitted in 100% PPS value (assumes Bitcoin, does not account for
+altcoin conversions!).
 
 The BFGMiner status line shows:
- ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  I:12.99mBTC/hr  BS:2.71k
+ ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  BS:2.71k
 
 ST is STaged work items (ready to use).
 F  is network Failure occasions (server down or slow to provide work)
@@ -484,8 +486,6 @@ AS is Active Submissions (shares in the process of submitting)
 BW is BandWidth usage on the network (received/sent)
 E  is Efficiency defined as number of shares accepted (multiplied by their
           difficulty) per 2 KB of bandwidth
-I  is expected Income, calculated by actual shares submitted in 100% PPS value
-          (assumes Bitcoin, does not account for altcoin conversions!)
 BS is the all time Best Share difficulty you've found
 
 The totals line shows the following:

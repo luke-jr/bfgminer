@@ -1143,6 +1143,7 @@ struct blockchain_info {
 
 struct mining_goal_info {
 	char *name;
+	bool is_default;
 	
 	struct blockchain_info *blkchain;
 	
@@ -1151,6 +1152,8 @@ struct mining_goal_info {
 	char net_hashrate[ALLOC_H2B_SHORT];
 	
 	char *current_goal_detail;
+	
+	double diff_accepted;
 	
 	UT_hash_handle hh;
 };
