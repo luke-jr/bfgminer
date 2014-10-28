@@ -172,7 +172,7 @@ bool knc_titan_setup_spi(const char *repr, void * const ctx, int asic, int divid
 	return true;
 }
 
-bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, bool *work_accepted, int num, int resend)
+bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, int num, int resend)
 {
 	uint8_t request[9 + BLOCK_HEADER_BYTES_WITHOUT_NONCE];
 	int request_length;
