@@ -369,7 +369,7 @@ static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
 struct block {
-	char hash[40];
+	uint8_t prevblkhash[0x20];
 	UT_hash_handle hh;
 	int block_no;
 };
@@ -6828,14 +6828,13 @@ void blkhashstr(char *rv, const unsigned char *hash)
 	bin2hex(rv, hash_swap, 32);
 }
 
-static void set_curblock(char *hexstr, unsigned char *hash)
+static void set_curblock(const uint8_t * const hash)
 {
 	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
 	unsigned char hash_swap[32];
 
 	blkchain->current_block_id = ((uint32_t*)hash)[0];
-	strcpy(blkchain->current_block, hexstr);
 	swap256(hash_swap, hash);
 	swap32tole(hash_swap, hash_swap, 32 / 4);
 
@@ -6851,33 +6850,20 @@ static void set_curblock(char *hexstr, unsigned char *hash)
 	applog(LOG_INFO, "New block: %s diff %s (%s)", blkchain->current_hash, goal->current_diff_str, goal->net_hashrate);
 }
 
-/* Search to see if this string is from a block that has been seen before */
-static bool block_exists(char *hexstr)
+/* Search to see if this prevblkhash has been seen before */
+static bool block_exists(const void * const prevblkhash)
 {
 	struct blockchain_info * const blkchain = &global_blkchain;
 	struct block *s;
 
 	rd_lock(&blk_lock);
-	HASH_FIND_STR(blkchain->blocks, hexstr, s);
+	HASH_FIND(hh, blkchain->blocks, prevblkhash, 0x20, s);
 	rd_unlock(&blk_lock);
 
 	if (s)
 		return true;
 	return false;
 }
-
-#if 0
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
-{
-	char hexstr[37];
-	bool ret;
-
-	bin2hex(hexstr, work->data + 8, 18);
-	ret = block_exists(hexstr);
-	return ret;
-}
-#endif
 
 static int block_sort(struct block *blocka, struct block *blockb)
 {
@@ -6907,23 +6893,31 @@ static bool test_work_current(struct work *work)
 {
 	struct blockchain_info * const blkchain = &global_blkchain;
 	bool ret = true;
-	char hexstr[65];
 	
 	if (work->mandatory)
 		return ret;
 	
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
+	const uint8_t * const prevblkhash = &work->data[4];
 	
-	/* Hack to work around dud work sneaking into test */
-	bin2hex(hexstr, work->data + 8, 18);
-	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		goto out_free;
+	{
+		/* Hack to work around dud work sneaking into test */
+		bool dudwork = true;
+		for (int i = 8; i < 26; ++i)
+			if (work->data[i])
+			{
+				dudwork = false;
+				break;
+			}
+		if (dudwork)
+			goto out_free;
+	}
 	
 	struct pool * const pool = work->pool;
 	
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr))
+	if (!block_exists(prevblkhash))
 	{
 		struct block *s = calloc(sizeof(struct block), 1);
 		int deleted_block = 0;
@@ -6931,7 +6925,7 @@ static bool test_work_current(struct work *work)
 		
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
-		strcpy(s->hash, hexstr);
+		memcpy(s->prevblkhash, prevblkhash, sizeof(s->prevblkhash));
 		s->block_no = new_blocks++;
 		
 		wr_lock(&blk_lock);
@@ -6948,7 +6942,7 @@ static bool test_work_current(struct work *work)
 			HASH_DEL(blkchain->blocks, oldblock);
 			free(oldblock);
 		}
-		HASH_ADD_STR(blkchain->blocks, hash, s);
+		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(s->prevblkhash), s);
 		set_blockdiff(work);
 		wr_unlock(&blk_lock);
 		pool->block_id = block_id;
@@ -6959,7 +6953,7 @@ static bool test_work_current(struct work *work)
 #if BLKMAKER_VERSION > 1
 		template_nonce = 0;
 #endif
-		set_curblock(hexstr, &work->data[4]);
+		set_curblock(prevblkhash);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 		
@@ -7007,7 +7001,8 @@ static bool test_work_current(struct work *work)
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
-					blkhashstr(hexstr, &work->data[4]);
+					char hexstr[65];
+					blkhashstr(hexstr, prevblkhash);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       pool->pool_no,
@@ -12624,12 +12619,10 @@ int main(int argc, char *argv[])
 	block = calloc(sizeof(struct block), 1);
 	if (unlikely(!block))
 		quit (1, "main OOM");
-	for (i = 0; i < 36; i++)
-		strcat(block->hash, "0");
+	memset(block->prevblkhash, 0, 0x20);
 	{
 		struct blockchain_info * const blkchain = &global_blkchain;
-		HASH_ADD_STR(blkchain->blocks, hash, block);
-		strcpy(blkchain->current_block, block->hash);
+		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(block->prevblkhash), block);
 	}
 
 	mutex_init(&submitting_lock);

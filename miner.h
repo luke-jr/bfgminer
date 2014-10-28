@@ -1125,8 +1125,6 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 struct blockchain_info {
 	struct block *blocks;
 	
-	char current_block[40];
-	
 	/* Protected by ch_lock */
 	char *current_hash;
 	uint32_t current_block_id;
