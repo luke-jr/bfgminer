@@ -1323,6 +1323,7 @@ struct pool {
 	time_t work_restart_time;
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
+	struct mining_goal_info *goal;
 
 	enum pool_protocol proto;
 

@@ -1053,6 +1053,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
+	pool->goal = &global_mining_goal;
 
 	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -2900,9 +2901,8 @@ void block_info_str(char * const out, const struct block_info * const blkinfo)
 
 // Must only be called with ch_lock held!
 static
-void __update_block_title(void)
+void __update_block_title(struct mining_goal_info * const goal)
 {
-	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	if (!goal->current_goal_detail)
@@ -2910,14 +2910,13 @@ void __update_block_title(void)
 	block_info_str(goal->current_goal_detail, blkchain->currentblk);
 }
 
-static struct block_info *block_exists(const void *);
+static struct block_info *block_exists(const struct blockchain_info *, const void *);
 
 static
-void have_block_height(const void * const prevblkhash, uint32_t blkheight)
+void have_block_height(struct mining_goal_info * const goal, const void * const prevblkhash, uint32_t blkheight)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
-	
-	struct block_info * const blkinfo = block_exists(prevblkhash);
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = block_exists(blkchain, prevblkhash);
 	if ((!blkinfo) || blkinfo->height)
 		return;
 	
@@ -2928,7 +2927,7 @@ void have_block_height(const void * const prevblkhash, uint32_t blkheight)
 	if (blkinfo == blkchain->currentblk)
 	{
 		blkchain->currentblk_subsidy = 5000000000LL >> (blkheight / 210000);
-		__update_block_title();
+		__update_block_title(goal);
 	}
 	cg_wunlock(&ch_lock);
 }
@@ -3040,6 +3039,9 @@ void refresh_bitcoind_address(const bool fresh)
 	{
 		struct pool * const pool = pools[i];
 		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			continue;
+		if (pool->goal->blkchain != blkchain)
+			// TODO: Multi-blockchain support
 			continue;
 		
 		applog(LOG_DEBUG, "Refreshing coinbase address from pool %d", pool->pool_no);
@@ -3270,9 +3272,10 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 
 	if ( (tmp_val = json_object_get(res_val, "height")) ) {
+		struct mining_goal_info * const goal = pool->goal;
 		uint32_t blkheight = json_number_value(tmp_val);
 		const void * const prevblkhash = &work->data[4];
-		have_block_height(prevblkhash, blkheight);
+		have_block_height(goal, prevblkhash, blkheight);
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
@@ -4182,6 +4185,7 @@ static bool pool_unworkable(const struct pool *);
 /* Must be called with curses mutex lock held and curses_active */
 static void curses_print_status(const int ts)
 {
+	// TODO: Multi-blockchain support
 	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
 	struct pool *pool = currentpool;
@@ -5977,7 +5981,6 @@ static void pool_died(struct pool *pool)
 
 bool stale_work(struct work *work, bool share)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
 	unsigned work_expiry;
 	struct pool *pool;
 	uint32_t block_id;
@@ -6014,6 +6017,9 @@ bool stale_work(struct work *work, bool share)
 			return true;
 		}
 	} else {
+		struct mining_goal_info * const goal = pool->goal;
+		struct blockchain_info * const blkchain = goal->blkchain;
+		
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
 		if (enabled_pools <= 1 || opt_fail_only) {
@@ -6111,7 +6117,9 @@ double share_diff(const struct work *work)
 static
 void work_check_for_block(struct work * const work)
 {
-	struct mining_goal_info * const goal = &global_mining_goal;
+	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	
 	work->share_diff = share_diff(work);
 	if (unlikely(work->share_diff >= goal->current_diff)) {
 		work->block = true;
@@ -6840,16 +6848,15 @@ void blkhashstr(char *rv, const unsigned char *hash)
 }
 
 static
-void set_curblock(struct block_info * const blkinfo)
+void set_curblock(struct mining_goal_info * const goal, struct block_info * const blkinfo)
 {
-	struct mining_goal_info * const goal = &global_mining_goal;
 	struct blockchain_info * const blkchain = goal->blkchain;
 
 	blkchain->currentblk = blkinfo;
 	blkchain->currentblk_subsidy = 5000000000LL >> (blkinfo->height / 210000);
 
 	cg_wlock(&ch_lock);
-	__update_block_title();
+	__update_block_title(goal);
 	get_timestamp(blkchain->currentblk_first_seen_time_str, sizeof(blkchain->currentblk_first_seen_time_str), blkinfo->first_seen_time);
 	cg_wunlock(&ch_lock);
 
@@ -6858,9 +6865,8 @@ void set_curblock(struct block_info * const blkinfo)
 
 /* Search to see if this prevblkhash has been seen before */
 static
-struct block_info *block_exists(const void * const prevblkhash)
+struct block_info *block_exists(const struct blockchain_info * const blkchain, const void * const prevblkhash)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
 	struct block_info *s;
 
 	rd_lock(&blk_lock);
@@ -6875,9 +6881,9 @@ static int block_sort(struct block_info * const blocka, struct block_info * cons
 	return blocka->block_seen_order - blockb->block_seen_order;
 }
 
-static void set_blockdiff(const struct work *work)
+static
+void set_blockdiff(struct mining_goal_info * const goal, const struct work * const work)
 {
-	struct mining_goal_info * const goal = &global_mining_goal;
 	unsigned char target[32];
 	double diff;
 	uint64_t diff64;
@@ -6896,7 +6902,6 @@ static void set_blockdiff(const struct work *work)
 
 static bool test_work_current(struct work *work)
 {
-	struct blockchain_info * const blkchain = &global_blkchain;
 	bool ret = true;
 	
 	if (work->mandatory)
@@ -6919,10 +6924,12 @@ static bool test_work_current(struct work *work)
 	}
 	
 	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(prevblkhash))
+	if (!block_exists(blkchain, prevblkhash))
 	{
 		struct block_info * const s = calloc(sizeof(struct block_info), 1);
 		int deleted_block = 0;
@@ -6950,7 +6957,7 @@ static bool test_work_current(struct work *work)
 			free(oldblock);
 		}
 		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(s->prevblkhash), s);
-		set_blockdiff(work);
+		set_blockdiff(goal, work);
 		wr_unlock(&blk_lock);
 		pool->block_id = block_id;
 		pool_update_work_restart_time(pool);
@@ -6960,7 +6967,7 @@ static bool test_work_current(struct work *work)
 #if BLKMAKER_VERSION > 1
 		template_nonce = 0;
 #endif
-		set_curblock(s);
+		set_curblock(goal, s);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 		
@@ -9022,11 +9029,12 @@ static void *stratum_thread(void *userdata)
 			cb_height_sz = bin_height[-1];
 			if (cb_height_sz == 3) {
 				// FIXME: The block number will overflow this by AD 2173
+				struct mining_goal_info * const goal = pool->goal;
 				const void * const prevblkhash = &work->data[4];
 				uint32_t height = 0;
 				memcpy(&height, bin_height, 3);
 				height = le32toh(height);
-				have_block_height(prevblkhash, height);
+				have_block_height(goal, prevblkhash, height);
 			}
 
 			pool->swork.work_restart_id =
