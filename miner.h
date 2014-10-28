@@ -1122,6 +1122,32 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
 #endif
 
+struct blockchain_info {
+	struct block *blocks;
+	
+	char current_block[40];
+	
+	/* Protected by ch_lock */
+	char *current_hash;
+	uint32_t current_block_id;
+	char *current_fullhash;
+	char block_time_str[0x20];  // was global blocktime
+	time_t block_time;
+	
+	bool known_blkheight_current;
+	uint32_t known_blkheight;
+	uint32_t known_blkheight_blkid;
+	uint64_t block_subsidy;
+};
+
+struct mining_goal_info {
+	struct blockchain_info *blkchain;
+	
+	double current_diff;
+	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
+	char net_hashrate[ALLOC_H2B_SHORT];
+};
+
 extern struct string_elist *scan_devices;
 extern bool opt_force_dev_init;
 extern int nDevs;
@@ -1170,10 +1196,8 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
-extern char *current_fullhash;
-extern double current_diff;
+extern struct mining_goal_info global_mining_goal;
 extern double best_diff;
-extern time_t block_time;
 
 struct curl_ent {
 	CURL *curl;

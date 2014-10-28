@@ -3076,9 +3076,11 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		root = api_add_const(root, "Hash Method", SHA256STR, false);
 
 	cg_rlock(&ch_lock);
-	if (current_fullhash && *current_fullhash) {
-		root = api_add_time(root, "Current Block Time", &block_time, true);
-		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
+	struct mining_goal_info * const goal = &global_mining_goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
+	if (blkchain->current_fullhash && *blkchain->current_fullhash) {
+		root = api_add_time(root, "Current Block Time", &blkchain->block_time, true);
+		root = api_add_string(root, "Current Block Hash", blkchain->current_fullhash, true);
 	} else {
 		time_t t = 0;
 		root = api_add_time(root, "Current Block Time", &t, true);
@@ -3087,7 +3089,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	cg_runlock(&ch_lock);
 
 	root = api_add_bool(root, "LP", &have_longpoll, false);
-	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
+	root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
 
 	root = print_data(root, buf, isjson, false);
 	io_add(io_data, buf);
