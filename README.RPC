@@ -453,7 +453,8 @@ API V3.3
 
 Modified API command:
  'addpool' - accept an additional argument to indicate mining goal by name
- 'coin' - return multiple elements, when there are multiple mining goals defined
+ 'coin' - return multiple elements, when there are multiple mining goals
+          defined; add 'Difficulty Accepted'
  'pools' - add 'Mining Goal'
 
 ---------

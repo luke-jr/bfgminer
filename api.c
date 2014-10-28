@@ -3106,6 +3106,8 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		root = api_add_bool(root, "LP", &goal->have_longpoll, false);
 		root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
 		
+		root = api_add_diff(root, "Difficulty Accepted", &goal->diff_accepted, false);
+		
 		root = print_data(root, buf, isjson, precom);
 		io_add(io_data, buf);
 		if (isjson)
