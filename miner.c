@@ -4317,7 +4317,7 @@ one_workable_pool: ;
 	}
 	wclrtoeol(statuswin);
 	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->block_time_str);
+		  goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate, blkchain->currentblk_first_seen_time_str);
 	
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
 	if (blkchain->currentblk->height)
@@ -6849,9 +6849,8 @@ void set_curblock(struct block_info * const blkinfo)
 	blkchain->currentblk_subsidy = 5000000000LL >> (blkinfo->height / 210000);
 
 	cg_wlock(&ch_lock);
-	blkchain->block_time = time(NULL);
 	__update_block_title();
-	get_timestamp(blkchain->block_time_str, sizeof(blkchain->block_time_str), blkchain->block_time);
+	get_timestamp(blkchain->currentblk_first_seen_time_str, sizeof(blkchain->currentblk_first_seen_time_str), blkinfo->first_seen_time);
 	cg_wunlock(&ch_lock);
 
 	applog(LOG_INFO, "New block: %s diff %s (%s)", goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate);
@@ -6934,6 +6933,7 @@ static bool test_work_current(struct work *work)
 		memcpy(s->prevblkhash, prevblkhash, sizeof(s->prevblkhash));
 		s->block_id = block_id;
 		s->block_seen_order = new_blocks++;
+		s->first_seen_time = time(NULL);
 		
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since

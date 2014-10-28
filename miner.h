@@ -1128,6 +1128,7 @@ struct block_info {
 	uint8_t prevblkhash[0x20];
 	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
 	uint32_t height;
+	time_t first_seen_time;
 	
 	UT_hash_handle hh;
 };
@@ -1136,10 +1137,7 @@ struct blockchain_info {
 	struct block_info *blocks;
 	struct block_info *currentblk;
 	uint64_t currentblk_subsidy;  // only valid when height is known! (and assumes Bitcoin)
-	
-	/* Protected by ch_lock */
-	char block_time_str[0x20];  // was global blocktime
-	time_t block_time;
+	char currentblk_first_seen_time_str[0x20];  // was global blocktime
 };
 
 struct mining_goal_info {
