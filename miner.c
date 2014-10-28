@@ -368,10 +368,11 @@ static char datestamp[40];
 static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
-struct block {
+struct block_info {
 	uint8_t prevblkhash[0x20];
+	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
+	
 	UT_hash_handle hh;
-	int block_no;
 };
 
 static struct blockchain_info global_blkchain;
@@ -6854,7 +6855,7 @@ static void set_curblock(const uint8_t * const hash)
 static bool block_exists(const void * const prevblkhash)
 {
 	struct blockchain_info * const blkchain = &global_blkchain;
-	struct block *s;
+	struct block_info *s;
 
 	rd_lock(&blk_lock);
 	HASH_FIND(hh, blkchain->blocks, prevblkhash, 0x20, s);
@@ -6865,9 +6866,9 @@ static bool block_exists(const void * const prevblkhash)
 	return false;
 }
 
-static int block_sort(struct block *blocka, struct block *blockb)
+static int block_sort(struct block_info * const blocka, struct block_info * const blockb)
 {
-	return blocka->block_no - blockb->block_no;
+	return blocka->block_seen_order - blockb->block_seen_order;
 }
 
 static void set_blockdiff(const struct work *work)
@@ -6919,14 +6920,14 @@ static bool test_work_current(struct work *work)
 	 * new block and set the current block details to this one */
 	if (!block_exists(prevblkhash))
 	{
-		struct block *s = calloc(sizeof(struct block), 1);
+		struct block_info * const s = calloc(sizeof(struct block_info), 1);
 		int deleted_block = 0;
 		ret = false;
 		
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
 		memcpy(s->prevblkhash, prevblkhash, sizeof(s->prevblkhash));
-		s->block_no = new_blocks++;
+		s->block_seen_order = new_blocks++;
 		
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since
@@ -6934,11 +6935,11 @@ static bool test_work_current(struct work *work)
 		 * want to prevent memory usage from continually rising */
 		if (HASH_COUNT(blkchain->blocks) > 6)
 		{
-			struct block *oldblock;
+			struct block_info *oldblock;
 			
 			HASH_SORT(blkchain->blocks, block_sort);
 			oldblock = blkchain->blocks;
-			deleted_block = oldblock->block_no;
+			deleted_block = oldblock->block_seen_order;
 			HASH_DEL(blkchain->blocks, oldblock);
 			free(oldblock);
 		}
@@ -12473,7 +12474,7 @@ int main(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
-	struct block *block;
+	struct block_info *block;
 	unsigned int k;
 	int i;
 	int rearrange_pools = 0;
@@ -12616,7 +12617,7 @@ int main(int argc, char *argv[])
 	logstart = devcursor;
 	logcursor = logstart;
 
-	block = calloc(sizeof(struct block), 1);
+	block = calloc(sizeof(*block), 1);
 	if (unlikely(!block))
 		quit (1, "main OOM");
 	memset(block->prevblkhash, 0, 0x20);
