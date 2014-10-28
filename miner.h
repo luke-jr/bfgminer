@@ -947,7 +947,6 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
-extern bool have_longpoll;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
@@ -1155,6 +1154,8 @@ struct mining_goal_info {
 	char *current_goal_detail;
 	
 	double diff_accepted;
+	
+	bool have_longpoll;
 	
 	UT_hash_handle hh;
 };

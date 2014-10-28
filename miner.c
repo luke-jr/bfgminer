@@ -147,7 +147,6 @@ char *request_target_str;
 float request_pdiff = 1.0;
 double request_bdiff;
 static bool want_stratum = true;
-bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
@@ -4469,7 +4468,7 @@ static void curses_print_status(const int ts)
 		             lowdiff_pool->diff,
 		             (lowdiff == highdiff) ? "" : "-",
 		             (lowdiff == highdiff) ? "" : highdiff_pool->diff,
-		             have_longpoll ? '+' : '-',
+		             pool->goal->have_longpoll ? '+' : '-',
 		             oldest_work_restart_pool->work_restart_timestamp);
 	}
 	else
@@ -4495,7 +4494,7 @@ one_workable_pool: ;
 		}
 		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
 		             pool->pool_no, pooladdr, pool->diff,
-		             have_longpoll ? '+' : '-', pool_proto_str(pool),
+		             pool->goal->have_longpoll ? '+' : '-', pool_proto_str(pool),
 		             pool->work_restart_timestamp,
 		             pool->rpc_user);
 	}
@@ -6164,6 +6163,8 @@ bool stale_work(struct work *work, bool share)
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
@@ -6173,7 +6174,7 @@ bool stale_work(struct work *work, bool share)
 	else
 		work_expiry = opt_expiry;
 
-	unsigned max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
+	unsigned max_expiry = (goal->have_longpoll ? opt_expiry_lp : opt_expiry);
 	if (work_expiry > max_expiry)
 		work_expiry = max_expiry;
 
@@ -6193,9 +6194,6 @@ bool stale_work(struct work *work, bool share)
 			return true;
 		}
 	} else {
-		struct mining_goal_info * const goal = pool->goal;
-		struct blockchain_info * const blkchain = goal->blkchain;
-		
 		/* If this work isn't for the latest Bitcoin block, it's stale */
 		/* But only care about the current pool if failover-only */
 		if (enabled_pools <= 1 || opt_fail_only) {
@@ -7158,7 +7156,7 @@ static bool test_work_current(struct work *work)
 				       pool->pool_no);
 			}
 			else
-			if (have_longpoll)
+			if (goal->have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
 				applog(LOG_NOTICE, "New block detected on network");
@@ -9256,7 +9254,8 @@ out:
 
 static void init_stratum_thread(struct pool *pool)
 {
-	have_longpoll = true;
+	struct mining_goal_info * const goal = pool->goal;
+	goal->have_longpoll = true;
 
 	if (unlikely(pthread_create(&pool->stratum_thread, NULL, stratum_thread, (void *)pool)))
 		quit(1, "Failed to create stratum thread");
@@ -10603,6 +10602,8 @@ struct pool *_select_longpoll_pool(struct pool *cp, bool(*func)(struct pool *))
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+		if (cp->goal != pool->goal)
+			continue;
 
 		if (func(pool))
 			return pool;
@@ -10674,7 +10675,7 @@ retry_pool:
 	}
 
 	/* Any longpoll from any pool is enough for this to be true */
-	have_longpoll = true;
+	pool->goal->have_longpoll = true;
 
 	wait_lpcurrent(cp);
 
@@ -10780,7 +10781,12 @@ static void stop_longpoll(void)
 		pool->lp_started = false;
 		pthread_cancel(pool->longpoll_thread);
 	}
-	have_longpoll = false;
+	
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->have_longpoll = false;
+	}
 }
 
 static void start_longpoll(void)

@@ -3094,7 +3094,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		root = api_add_string(root, "Current Block Hash", fullhash, true);
 		cg_runlock(&ch_lock);
 
-		root = api_add_bool(root, "LP", &have_longpoll, false);
+		root = api_add_bool(root, "LP", &goal->have_longpoll, false);
 		root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
 		
 		root = print_data(root, buf, isjson, precom);
