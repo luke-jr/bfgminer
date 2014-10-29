@@ -347,6 +347,10 @@ wchar_t unicode_micro = 'u';
 const bool use_unicode;
 static
 const bool have_unicode_degrees;
+#ifdef HAVE_CURSES
+static
+const char unicode_micro = 'u';
+#endif
 #endif
 
 #ifdef HAVE_CURSES
