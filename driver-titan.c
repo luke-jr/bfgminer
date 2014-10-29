@@ -642,12 +642,10 @@ static void knc_titan_poll(struct thr_info * const thr)
 				work->device_id = MAKE_WORKID(asic, die, die_p->next_slot);
 				struct work *replaced_work;
 				struct work *work1, *tmp1;
-				applog(LOG_NOTICE, "Searching for old works to delete...");
 				HASH_ITER(hh, knc->devicework, work1, tmp1) {
 					if (work->device_id == work1->device_id) {
 						HASH_DEL(knc->devicework, work1);
 						free_work(work1);
-						applog(LOG_NOTICE, "Deleted a work");
 					}
 				}
 				HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
