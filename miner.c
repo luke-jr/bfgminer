@@ -347,8 +347,6 @@ wchar_t unicode_micro = 'u';
 const bool use_unicode;
 static
 const bool have_unicode_degrees;
-static
-const char unicode_micro = 'u';
 #endif
 
 #ifdef HAVE_CURSES
@@ -3371,10 +3369,10 @@ static int total_staged(void)
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 1.0;
-static char statusline[256];
 /* logstart is where the log window should start */
 static int devcursor, logstart, logcursor;
 #ifdef HAVE_CURSES
+static char statusline[256];
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
 static int statusy;
 static int devsummaryYOffset;
