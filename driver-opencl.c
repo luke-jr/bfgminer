@@ -308,6 +308,7 @@ void opencl_early_init()
 		struct opencl_device_data * const data = &dataarray[i];
 		*data = (struct opencl_device_data){
 			.dynamic = true,
+			.intensity = intensity_not_set,
 		};
 		gpus[i] = (struct cgpu_info){
 			.device_data = data,
@@ -685,6 +686,7 @@ bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_v
 {
 	struct opencl_device_data * const data = cgpu->device_data;
 	unsigned long oclthreads = 0;
+	float intensity = intensity_not_set;
 	bool dynamic = false;
 	
 	if (!strncasecmp(_val, "d", 1))
@@ -716,6 +718,7 @@ bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_v
 		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
 			return false;
 		oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
+		intensity = v;
 	}
 	
 	// Make actual assignments after we know the values are valid
@@ -723,6 +726,7 @@ bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_v
 	if (data->oclthreads)
 	{
 		data->oclthreads = oclthreads;
+		data->intensity = intensity;
 		pause_dynamic_threads(cgpu->device_id);
 	}
 	else
@@ -1725,6 +1729,8 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			if (data->oclthreads > max_oclthreads)
 				data->oclthreads = max_oclthreads;
 		}
+		if (data->intensity != intensity_not_set)
+			data->intensity = oclthreads_to_intensity(data->oclthreads, !opt_scrypt);
 		memcpy(&(data->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
 		data->intervals = 0;
 	}

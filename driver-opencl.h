@@ -1,6 +1,7 @@
 #ifndef BFG_DRIVER_OPENCL
 #define BFG_DRIVER_OPENCL
 
+#include <float.h>
 #include <stdbool.h>
 
 #include "CL/cl.h"
@@ -32,11 +33,14 @@ enum opencl_binary_usage {
 	OBU_NONE     = 4,
 };
 
+static const float intensity_not_set = FLT_MAX;
+
 struct opencl_device_data {
 	bool mapped;
 	int virtual_gpu;
 	int virtual_adl;
 	unsigned long oclthreads;
+	float intensity;
 	char *_init_intensity;
 	bool dynamic;
 	
