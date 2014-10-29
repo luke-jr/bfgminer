@@ -185,7 +185,8 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		size_t replysz = 590 + idstr_sz;
 		
 		work = get_work(thr);
-		work->nonce_diff = client->desired_share_pdiff;
+		const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+		work->nonce_diff = client->desired_share_pdiff ?: malgo->reasonable_low_nonce_diff;
 		if (work->nonce_diff > work->work_difficulty)
 			work->nonce_diff = work->work_difficulty;
 		
@@ -201,7 +202,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		memcpy(&reply[442], "\",\"hash1\":\"00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000\"},\"id\":", 147);
 		memcpy(&reply[589], idstr ?: "0", idstr_sz);
 		memcpy(&reply[589 + idstr_sz], "}", 1);
-		if (opt_scrypt)
+		if (malgo->algo == POW_SCRYPT)
 		{
 			replysz += 21;
 			reply = realloc(reply, replysz);

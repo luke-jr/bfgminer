@@ -112,7 +112,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 		*client = (struct proxy_client){
 			.username = user,
 			.cgpu = cgpu,
-			.desired_share_pdiff = opt_scrypt ? (1./0x10000) : 1.,
+			.desired_share_pdiff = 0.,
 		};
 		
 		b = HASH_COUNT(proxy_clients);
