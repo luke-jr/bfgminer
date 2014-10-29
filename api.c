@@ -3087,12 +3087,19 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 			io_add(io_data, buf);
 		}
 		
+		switch (goal->malgo->algo)
+		{
 #ifdef USE_SCRYPT
-		if (opt_scrypt)
-			root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-		else
+			case POW_SCRYPT:
+				root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+				break;
 #endif
-			root = api_add_const(root, "Hash Method", SHA256STR, false);
+			case POW_SHA256D:
+				root = api_add_const(root, "Hash Method", SHA256STR, false);
+				break;
+			default:
+				break;
+		}
 
 		cg_rlock(&ch_lock);
 		struct blockchain_info * const blkchain = goal->blkchain;

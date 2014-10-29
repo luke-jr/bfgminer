@@ -790,7 +790,7 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
-void hash_data(unsigned char *out_hash, const unsigned char *data)
+void hash_data(void *out_hash, const void *data)
 {
 	unsigned char blkheader[80];
 	
@@ -2635,6 +2635,8 @@ out:
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
 	double diff;
 
 	diff = json_number_value(json_array_get(val, 0));
@@ -2648,7 +2650,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		diff = bdiff_to_pdiff(diff);
 	}
 	
-	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+	if (malgo->algo == POW_SHA256D && diff < 1 && diff > 0.999)
 		diff = 1;
 	
 #ifdef USE_SCRYPT
@@ -2666,7 +2668,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	// Diff 16 at 1.15 Gh/s = 1 share / 60s
 	// Diff 16 at 7.00 Gh/s = 1 share / 10s
 
-	if (opt_scrypt && (diff >= minimum_broken_scrypt_diff))
+	if (malgo->algo == POW_SCRYPT && (diff >= minimum_broken_scrypt_diff))
 		diff /= broken_scrypt_diff_multiplier;
 #endif
 

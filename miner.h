@@ -1122,6 +1122,15 @@ struct blockchain_info {
 	char currentblk_first_seen_time_str[0x20];  // was global blocktime
 };
 
+struct mining_algorithm {
+	enum pow_algorithm algo;
+	uint8_t ui_skip_hash_bytes;
+	uint8_t worktime_skip_prevblk_u32;
+	float reasonable_low_nonce_diff;
+	
+	void (*hash_data_f)(void *digest, const void *data);
+};
+
 struct mining_goal_info {
 	unsigned id;
 	char *name;
@@ -1131,6 +1140,7 @@ struct mining_goal_info {
 	
 	bytes_t *generation_script;  // was opt_coinbase_script
 	
+	struct mining_algorithm *malgo;
 	double current_diff;
 	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
 	char net_hashrate[ALLOC_H2B_SHORT];
@@ -1156,7 +1166,7 @@ extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
 #ifdef USE_SCRYPT
-extern bool opt_scrypt;
+#define opt_scrypt (get_mining_goal("default")->malgo->algo == POW_SCRYPT)
 #else
 #define opt_scrypt (0)
 #endif
@@ -1576,6 +1586,16 @@ extern const char *bfg_workpadding_bin;
 extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
 extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
+
+static inline
+const struct mining_algorithm *work_mining_algorithm(const struct work * const work)
+{
+	const struct pool * const pool = work->pool;
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
+	return malgo;
+}
+
 extern void work_hash(struct work *);
 
 #define NTIME_DATA_OFFSET  0x44

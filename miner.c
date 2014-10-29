@@ -176,7 +176,6 @@ int opt_g_threads = -1;
 #endif
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
-bool opt_scrypt;
 #else
 static char detect_algo;
 #endif
@@ -993,6 +992,33 @@ static void sharelog(const char*disposition, const struct work*work)
 static void switch_logsize(void);
 #endif
 
+static struct mining_algorithm malgo_sha256d = {
+	.algo = POW_SHA256D,
+	.ui_skip_hash_bytes = 4,
+	.worktime_skip_prevblk_u32 = 1,
+	.reasonable_low_nonce_diff = 1.,
+	
+	.hash_data_f = hash_data,
+};
+
+#ifdef USE_SCRYPT
+static struct mining_algorithm malgo_scrypt = {
+	.algo = POW_SCRYPT,
+	.ui_skip_hash_bytes = 2,
+	.reasonable_low_nonce_diff = 1./0x10000,
+	
+	.hash_data_f = scrypt_hash_data,
+};
+
+static
+const char *set_malgo_scrypt()
+{
+	get_mining_goal("default")->malgo = &malgo_scrypt;
+	return NULL;
+}
+
+#endif
+
 static
 int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)
 {
@@ -1034,6 +1060,7 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 			.is_default = !strcmp(name, "default"),
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
+			.malgo = &malgo_sha256d,
 		};
 		HASH_ADD_STR(mining_goals, name, goal);
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
@@ -2528,7 +2555,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
 #ifdef USE_SCRYPT
 	OPT_WITHOUT_ARG("--scrypt",
-			opt_set_bool, &opt_scrypt,
+	                set_malgo_scrypt, NULL,
 			"Use the scrypt algorithm for mining (non-bitcoin)"),
 #endif
 	OPT_WITH_ARG("--set-device|--set",
@@ -4877,7 +4904,8 @@ void disable_pool(struct pool * const pool, const enum pool_enable enable_status
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
-	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const unsigned char *hashpart = &work->hash[0x1c - malgo->ui_skip_hash_bytes];
 	char shrdiffdisp[ALLOC_H2B_SHORTV];
 	const double tgtdiff = work->work_difficulty;
 	char tgtdiffdisp[ALLOC_H2B_SHORTV];
@@ -5197,10 +5225,12 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			if (work->work_difficulty < 1)
 				diffplaces = 6;
 
+			const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+			const uint8_t * const prevblkhash = &work->data[4];
 			snprintf(worktime, sizeof(worktime),
 				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
+				(unsigned long)be32toh(((uint32_t *)prevblkhash)[7 - malgo->worktime_skip_prevblk_u32]),
+				(unsigned long)be32toh(((uint32_t *)prevblkhash)[6 - malgo->worktime_skip_prevblk_u32]),
 				work->getwork_mode, diffplaces, work->work_difficulty,
 				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
@@ -5538,7 +5568,9 @@ void setup_benchmark_pool()
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
 		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
-		set_target_to_pdiff(swork->target, opt_scrypt ? (1./0x10000) : 1.);
+		const struct mining_goal_info * const goal = get_mining_goal("default");
+		const struct mining_algorithm * const malgo = goal->malgo;
+		set_target_to_pdiff(swork->target, malgo->reasonable_low_nonce_diff);
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
 	}
@@ -10149,12 +10181,8 @@ void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_
 
 void work_hash(struct work * const work)
 {
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		scrypt_hash_data(work->hash, work->data);
-	else
-#endif
-		hash_data(work->hash, work->data);
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	malgo->hash_data_f(work->hash, work->data);
 }
 
 static
@@ -13213,7 +13241,7 @@ int main(int argc, char *argv[])
 #ifdef USE_SCRYPT
 	if (detect_algo == 1 && !opt_scrypt) {
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
-		opt_scrypt = true;
+		set_malgo_scrypt();
 	}
 #endif
 	detect_algo = 0;
