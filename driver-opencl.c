@@ -923,17 +923,11 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 	{
 		case 'i': case 'I':
 		{
+			char promptbuf[0x40];
 			char *intvar;
 
-			if (opt_scrypt) {
-				intvar = curses_input("Set GPU scan intensity (d or "
-						      MIN_SCRYPT_INTENSITY_STR " -> "
-						      MAX_SCRYPT_INTENSITY_STR ")");
-			} else {
-				intvar = curses_input("Set GPU scan intensity (d or "
-						      MIN_SHA_INTENSITY_STR " -> "
-						      MAX_SHA_INTENSITY_STR ")");
-			}
+			snprintf(promptbuf, sizeof(promptbuf), "Set GPU scan intensity (d or %d -> %d)", MIN_INTENSITY, MAX_INTENSITY);
+			intvar = curses_input(promptbuf);
 			if (!intvar)
 				return "Invalid intensity\n";
 			if (!strncasecmp(intvar, "d", 1)) {
