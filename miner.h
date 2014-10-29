@@ -21,6 +21,7 @@
 #include <winsock2.h>
 #endif
 
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/time.h>
@@ -1061,6 +1062,7 @@ extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern void blkhashstr(char *out, const unsigned char *hash);
+static const float minimum_pdiff = max(FLT_MIN, 1./0x100000000);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);

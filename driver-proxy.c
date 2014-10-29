@@ -99,7 +99,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 			.threads = 0,
 			.device_data = client,
 			.device_path = user,
-			.min_nonce_diff = (opt_scrypt ? (1./0x10000) : 1.),
+			.min_nonce_diff = minimum_pdiff,
 		};
 		timer_set_now(&cgpu->cgminer_stats.start_tv);
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
@@ -133,14 +133,17 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 	return client;
 }
 
+// See also, stratumsrv_init_diff in driver-stratum.c
 static
 const char *proxy_set_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct proxy_client * const client = proc->device_data;
-	const double nv = atof(newvalue);
-	if (nv <= 0)
+	double nv = atof(newvalue);
+	if (nv < 0)
 		return "Invalid difficulty";
 	
+	if (nv <= minimum_pdiff)
+		nv = minimum_pdiff;
 	client->desired_share_pdiff = nv;
 	
 #ifdef USE_LIBEVENT

@@ -644,15 +644,18 @@ void stratumsrv_event(struct bufferevent *bev, short events, void *p)
 	}
 }
 
+// See also, proxy_set_diff in driver-proxy.c
 static
 const char *stratumsrv_init_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct stratumsrv_conn * const conn = proc->device_data;
 	
-	const double nv = atof(newvalue);
-	if (nv <= 0)
+	double nv = atof(newvalue);
+	if (nv < 0)
 		return "Invalid difficulty";
 	
+	if (nv <= minimum_pdiff)
+		nv = minimum_pdiff;
 	conn->desired_share_pdiff = nv;
 	
 	return NULL;
