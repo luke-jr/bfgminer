@@ -630,24 +630,26 @@ static void knc_titan_poll(struct thr_info * const thr)
 					break;
 				bool was_flushed = false;
 				if (die_p->need_flush || need_replace) {
-					struct work *work1, *tmp1;
 					applog(LOG_NOTICE, "%s[%d-%d] Flushing stale works (%s)", first_proc->dev_repr, asic, die,
 					       die_p->need_flush ? "New work" : "Slot collision");
 					die_p->need_flush = false;
 					die_p->first_slot = die_p->next_slot;
-					HASH_ITER(hh, knc->devicework, work1, tmp1) {
-						if ( (asic == ASIC_FROM_WORKID(work1->device_id)) &&
-							 (die == DIE_FROM_WORKID(work1->device_id)) ) {
-							HASH_DEL(knc->devicework, work1);
-							free_work(work1);
-						}
-					}
 					delay_usecs = 0;
 					was_flushed = true;
 				}
 				--knc->workqueue_size;
 				DL_DELETE(knc->workqueue, work);
 				work->device_id = MAKE_WORKID(asic, die, die_p->next_slot);
+				struct work *replaced_work;
+				struct work *work1, *tmp1;
+				applog(LOG_NOTICE, "Searching for old works to delete...");
+				HASH_ITER(hh, knc->devicework, work1, tmp1) {
+					if (work->device_id == work1->device_id) {
+						HASH_DEL(knc->devicework, work1);
+						free_work(work1);
+						applog(LOG_NOTICE, "Deleted a work");
+					}
+				}
 				HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
 				if (++(die_p->next_slot) > KNC_TITAN_MAX_WORK_SLOT_NUM)
 					die_p->next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
