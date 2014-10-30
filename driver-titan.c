@@ -86,7 +86,7 @@ struct knc_titan_info {
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
 	bool asic_served_by_fpga[KNC_TITAN_MAX_ASICS];
-	struct timeval tv_prev[KNC_TITAN_MAX_ASICS];
+	struct timeval tv_prev;
 
 	struct work *workqueue;
 	int workqueue_size;
@@ -602,7 +602,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					} else {
 						/* Use FPGA accelerated unicasts */
 						if (!fpga_status_checked) {
-							timer_set_now(&knc->tv_prev[asic]);
+							timer_set_now(&knc->tv_prev);
 							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
 							fpga_status_checked = true;
 						}
@@ -617,7 +617,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
 						if (num_request_busy == 0) {
 							timer_set_now(&tv_now);
-							double diff = ((tv_now.tv_sec - knc->tv_prev[asic].tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev[asic].tv_usec)) / 1000000.0;
+							double diff = ((tv_now.tv_sec - knc->tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev.tv_usec)) / 1000000.0;
 							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
 							knc->asic_served_by_fpga[asic] = false;
 						}
