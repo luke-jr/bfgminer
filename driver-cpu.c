@@ -665,13 +665,9 @@ static enum sha256_algos pick_fastest_algo()
 	return best_algo;
 }
 
-/* FIXME: Use asprintf for better errors. */
 char *set_algo(const char *arg, enum sha256_algos *algo)
 {
 	enum sha256_algos i;
-
-	if (opt_scrypt)
-		return "Can only use scrypt algorithm";
 
 	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
@@ -681,13 +677,6 @@ char *set_algo(const char *arg, enum sha256_algos *algo)
 	}
 	return "Unknown algorithm";
 }
-
-#ifdef WANT_SCRYPT
-void set_scrypt_algo(enum sha256_algos *algo)
-{
-	*algo = ALGO_SCRYPT;
-}
-#endif
 
 void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
@@ -831,7 +820,16 @@ CPUSearch:
 
 	/* scan nonces for a proof-of-work hash */
 	{
-		sha256_func func = sha256_funcs[opt_algo];
+		sha256_func func;
+		switch (work_mining_algorithm(work)->algo)
+		{
+			case POW_SCRYPT:
+				func = scanhash_scrypt;
+				break;
+			case POW_SHA256D:
+				func = sha256_funcs[opt_algo];
+				break;
+		}
 		rc = (*func)(
 			thr,
 			work->midstate,
@@ -872,6 +870,3 @@ struct device_drv cpu_drv = {
 	.scanhash = cpu_scanhash,
 };
 #endif
-
-
-

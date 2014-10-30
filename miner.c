@@ -13083,13 +13083,6 @@ int main(int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
-#ifdef WANT_CPUMINE
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		set_scrypt_algo(&opt_algo);
-#endif
-#endif
-
 	bfg_devapi_init();
 	drv_detect_all();
 	total_devices = total_devices_new;
