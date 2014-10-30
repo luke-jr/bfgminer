@@ -805,9 +805,6 @@ static bool cpu_thread_init(struct thr_info *thr)
 
 	cgpu->kname = algo_names[opt_algo];
 	
-	if (opt_algo == ALGO_SCRYPT)
-		cgpu->min_nonce_diff = 1./0x10000;
-	
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
@@ -867,7 +864,7 @@ struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
 	.probe_priority = 120,
-	.supported_algos = POW_SHA256D | POW_SCRYPT,
+	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
 	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,

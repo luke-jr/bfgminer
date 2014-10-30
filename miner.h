@@ -280,7 +280,6 @@ enum pow_algorithm {
 	POW_SHA256D = 1,
 	POW_SCRYPT  = 2,
 };
-typedef uint8_t supported_algos_t;
 
 struct api_data;
 struct thr_info;
@@ -295,15 +294,19 @@ enum bfg_probe_result_flags_values {
 extern unsigned *_bfg_probe_result_flags();
 #define bfg_probe_result_flags (*_bfg_probe_result_flags())
 
+struct mining_algorithm;
+
 struct device_drv {
 	const char *dname;
 	const char *name;
 	int8_t probe_priority;
 	bool lowl_probe_by_name_only;
-	supported_algos_t supported_algos;
 
 	// DRV-global functions
 	void (*drv_init)();
+	// drv_min_nonce_diff's proc may be NULL
+	// drv_min_nonce_diff should return negative if algorithm is not supported
+	float (*drv_min_nonce_diff)(struct cgpu_info *proc, const struct mining_algorithm *);
 	void (*drv_detect)();
 	bool (*lowl_match)(const struct lowlevel_device_info *);
 	bool (*lowl_probe)(const struct lowlevel_device_info *);
@@ -570,9 +573,6 @@ struct cgpu_info {
 
 	bool disable_watchdog;
 	bool shutdown;
-	
-	// Lowest difficulty supported for finding nonces
-	float min_nonce_diff;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);

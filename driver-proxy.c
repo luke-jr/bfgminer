@@ -71,6 +71,12 @@ void *prune_worklog_thread(void *userdata)
 }
 
 static
+float proxy_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return minimum_pdiff;
+}
+
+static
 void proxy_first_client(struct cgpu_info *cgpu)
 {
 	pthread_create(&prune_worklog_pth, NULL, prune_worklog_thread, cgpu);
@@ -99,7 +105,6 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 			.threads = 0,
 			.device_data = client,
 			.device_path = user,
-			.min_nonce_diff = minimum_pdiff,
 		};
 		timer_set_now(&cgpu->cgminer_stats.start_tv);
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
@@ -170,6 +175,7 @@ static const struct bfg_set_device_definition proxy_set_device_funcs[] = {
 struct device_drv proxy_drv = {
 	.dname = "proxy",
 	.name = "PXY",
+	.drv_min_nonce_diff = proxy_min_nonce_diff,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = proxy_wlogprint_status,
 #endif

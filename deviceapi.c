@@ -86,6 +86,24 @@ void bfg_devapi_init()
 }
 
 
+float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	switch (malgo->algo)
+	{
+		case POW_SCRYPT:
+			return 1./0x10000;
+		case POW_SHA256D:
+			return 1.;
+		default:
+			return -1.;
+	}
+}
+
+float common_scrypt_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return (malgo->algo == POW_SCRYPT) ? (1./0x10000) : -1.;
+}
+
 bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce)
 {
 	struct cgpu_info *cgpu = thr->cgpu;

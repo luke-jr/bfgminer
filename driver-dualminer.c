@@ -107,17 +107,6 @@ void dualminer_init_hashrate(struct cgpu_info * const cgpu)
 		info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
 }
 
-static
-bool dualminer_init(struct thr_info * const thr)
-{
-	struct cgpu_info * const cgpu = thr->cgpu;
-	
-	if (opt_scrypt)
-		cgpu->min_nonce_diff = 1./0x10000;
-	
-	return icarus_init(thr);
-}
-
 // runs when job starts and the device has been reset (or first run)
 static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
@@ -329,9 +318,8 @@ void dualminer_drv_init()
 	dualminer_drv = icarus_drv;
 	dualminer_drv.dname = "dualminer";
 	dualminer_drv.name = "DMU";
-	dualminer_drv.supported_algos = POW_SCRYPT | POW_SHA256D;
+	dualminer_drv.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff;
 	dualminer_drv.lowl_probe = dualminer_lowl_probe;
-	dualminer_drv.thread_init = dualminer_init;
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
 	dualminer_drv.set_device = dualminer_set_device;

@@ -296,6 +296,12 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	return true;
 }
 
+static
+float titan_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return (malgo->algo == POW_SCRYPT) ? DEFAULT_DIFF_FILTERING_FLOAT : -1.;
+}
+
 static bool knc_titan_init(struct thr_info * const thr)
 {
 	const int max_cores = KNC_TITAN_CORES_PER_ASIC;
@@ -308,7 +314,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
 	for (proc = cgpu; proc; ) {
-		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 		if (proc->device != proc) {
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
 			proc = proc->next_proc;
@@ -430,9 +435,7 @@ static bool die_reconfigure(struct knc_titan_info * const knc, int asic, int die
 
 static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 {
-	struct cgpu_info * const cgpu = thr->cgpu;
-
-	work->nonce_diff = cgpu->min_nonce_diff;
+	work->nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 	return true;
 }
 
@@ -792,7 +795,7 @@ struct device_drv knc_titan_drv =
 	/* metadata */
 	.dname = "titan",
 	.name = "KNC",
-	.supported_algos = POW_SCRYPT,
+	.drv_min_nonce_diff = titan_min_nonce_diff,
 	.drv_detect = knc_titan_detect,
 
 	.thread_init = knc_titan_init,

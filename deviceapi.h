@@ -42,6 +42,9 @@ extern void _bfg_register_driver(const struct device_drv *);
 
 extern bool bfg_need_detect_rescan;
 
+extern float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info *, const struct mining_algorithm *);
+extern float common_scrypt_min_nonce_diff(struct cgpu_info *, const struct mining_algorithm *);
+
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
 extern bool hashes_done(struct thr_info *, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce);

@@ -1647,7 +1647,6 @@ static bool opencl_thread_init(struct thr_info *thr)
 #ifdef USE_SCRYPT
 		case KL_SCRYPT:
 			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
-			gpu->min_nonce_diff = 1./0x10000;
 			break;
 #endif
 		default:
@@ -1869,7 +1868,7 @@ struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
 	.probe_priority = 110,
-	.supported_algos = POW_SHA256D | POW_SCRYPT,
+	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.watchdog = opencl_watchdog,

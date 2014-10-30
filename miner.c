@@ -510,6 +510,14 @@ static void applog_and_exit(const char *fmt, ...)
 	exit(1);
 }
 
+static
+float drv_min_nonce_diff(const struct device_drv * const drv, struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	if (drv->drv_min_nonce_diff)
+		return drv->drv_min_nonce_diff(proc, malgo);
+	return (malgo->algo == POW_SHA256D) ? 1. : -1.;
+}
+
 char *devpath_to_devid(const char *devpath)
 {
 #ifndef WIN32
@@ -10059,12 +10067,13 @@ struct work *get_work(struct thr_info *thr)
 	
 	if (work->work_difficulty < 1)
 	{
-		if (unlikely(work->work_difficulty < cgpu->min_nonce_diff))
+		const float min_nonce_diff = drv_min_nonce_diff(cgpu->drv, cgpu, work_mining_algorithm(work));
+		if (unlikely(work->work_difficulty < min_nonce_diff))
 		{
-			if (cgpu->min_nonce_diff - work->work_difficulty > 1./0x10000000)
+			if (min_nonce_diff - work->work_difficulty > 1./0x10000000)
 				applog(LOG_WARNING, "%"PRIpreprv": Using work with lower difficulty than device supports",
 				       cgpu->proc_repr);
-			work->nonce_diff = cgpu->min_nonce_diff;
+			work->nonce_diff = min_nonce_diff;
 		}
 		else
 			work->nonce_diff = work->work_difficulty;
@@ -11994,11 +12003,15 @@ static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t
 }
 
 static
-int drv_algo_check(const struct device_drv * const drv)
+bool drv_algo_check(const struct device_drv * const drv)
 {
-	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
-	const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
-	return (algos & algomatch);
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (drv_min_nonce_diff(drv, NULL, goal->malgo) >= 0)
+			return true;
+	}
+	return false;
 }
 
 #ifndef HAVE_PTHREAD_CANCEL
@@ -12091,7 +12104,6 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	}
 
 	cgpu->max_hashes = 0;
-	BFGINIT(cgpu->min_nonce_diff, 1);
 	
 	BFGINIT(cgpu->cutofftemp, opt_cutofftemp);
 	BFGINIT(cgpu->targettemp, cgpu->cutofftemp - 6);
