@@ -69,6 +69,21 @@ For example:
     sudo bfgminer -S bfsb:auto
 
 
+BFx2
+----
+
+You will need to install the WinUSB driver instead of the default FTDI serial
+driver. The easiest way to do this is using Zadig: http://zadig.akeo.ie/
+
+Note that since it's impossible to tell the BFx2 apart from various other
+devices (including BFL/Cairnsmore1 miners and even many non-mining devices!),
+you must run with the -S bfx:all option (or 'bfx:all' at the M+ menu).
+
+I do not know what this will do with other devices; it may start fires,
+launch nuclear missiles (please don't run BFGMiner on computers with
+missile controls), etc.
+
+
 BI*FURY
 -------
 
