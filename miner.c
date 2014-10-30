@@ -7463,6 +7463,8 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pool->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pool->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pool->rpc_pass));
+		if (strcmp(pool->goal->name, "default"))
+			fprintf(fcfg, "\n\t\t\"pool-goal\" : \"%s\",", pool->goal->name);
 		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pool->prio);
 		if (pool->force_rollntime)
 			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pool->force_rollntime);
