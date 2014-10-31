@@ -575,11 +575,13 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct knc_titan_die *die_p;
 	struct timeval tv_now;
 	int num_request_busy;
-	bool fpga_status_checked = false;
+	bool fpga_status_checked;
 
 	knc_titan_prune_local_queue(thr);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+                fpga_status_checked = false;
+                num_request_busy = KNC_TITAN_DIES_PER_ASIC;
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			die_p = &(knc->dies[asic][die]);
 			if (0 >= die_p->cores)
