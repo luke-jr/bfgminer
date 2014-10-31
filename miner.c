@@ -1293,6 +1293,8 @@ char *set_b58addr(const char * const arg, bytes_t * const b)
 	return NULL;
 }
 
+static char *set_generate_addr2(struct mining_goal_info *, const char *);
+
 static
 char *set_generate_addr(char *arg)
 {
@@ -1307,6 +1309,12 @@ char *set_generate_addr(char *arg)
 	else
 		goal = get_mining_goal("default");
 	
+	return set_generate_addr2(goal, arg);
+}
+
+static
+char *set_generate_addr2(struct mining_goal_info * const goal, const char * const arg)
+{
 	bytes_t newscript = BYTES_INIT;
 	char *estr = set_b58addr(arg, &newscript);
 	if (estr)
@@ -1321,6 +1329,7 @@ char *set_generate_addr(char *arg)
 	}
 	bytes_assimilate(goal->generation_script, &newscript);
 	bytes_free(&newscript);
+	
 	return NULL;
 }
 #endif
@@ -1789,7 +1798,64 @@ static char *set_cbcperc(const char *arg)
 }
 
 static
-char *set_pool_goal(const char * const arg)
+const char *goal_set(struct mining_goal_info * const goal, const char * const optname, const char * const newvalue, bytes_t * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	*out_success = SDR_ERR;
+	if (!(strcasecmp(optname, "malgo") && strcasecmp(optname, "algo")))
+	{
+		if (!newvalue)
+			return "Goal option 'malgo' requires a value (eg, SHA256d)";
+		if (!(strcasecmp(newvalue, "SHA256d") && strcasecmp(newvalue, "SHA256") && strcasecmp(newvalue, "SHA2")))
+			goal->malgo = &malgo_sha256d;
+#ifdef USE_SCRYPT
+		else
+		if (!strcasecmp(newvalue, "scrypt"))
+			goal->malgo = &malgo_scrypt;
+#endif
+		else
+			return "Unrecognised mining algorithm";
+		goto success;
+	}
+#if BLKMAKER_VERSION > 1
+	if (match_strtok("generate-to|generate-to-addr|generate-to-address|genaddress|genaddr|gen-address|gen-addr|generate-address|generate-addr|coinbase-addr|coinbase-address|coinbase-payout|cbaddress|cbaddr|cb-address|cb-addr|payout", "|", optname))
+	{
+		if (!newvalue)
+			return "Missing value for 'generate-to' goal option";
+		const char * const emsg = set_generate_addr2(goal, newvalue);
+		if (emsg)
+			return emsg;
+		goto success;
+	}
+#endif
+	*out_success = SDR_UNKNOWN;
+	return "Unknown goal option";
+
+success:
+	*out_success = SDR_OK;
+	return NULL;
+}
+
+// May leak replybuf if returning an error
+static
+const char *set_goal_params(struct mining_goal_info * const goal, char *arg)
+{
+	bytes_t replybuf = BYTES_INIT;
+	for (char *param, *nextptr; (param = strtok_r(arg, ",", &nextptr)); arg = NULL)
+	{
+		char *val = strchr(param, '=');
+		if (val)
+			val++[0] = '\0';
+		enum bfg_set_device_replytype success;
+		const char * const emsg = goal_set(goal, param, val, &replybuf, &success);
+		if (success != SDR_OK)
+			return emsg ?: "Error setting goal param";
+	}
+	bytes_free(&replybuf);
+	return NULL;
+}
+
+static
+const char *set_pool_goal(const char * const arg)
 {
 	struct pool *pool;
 	
@@ -1797,7 +1863,13 @@ char *set_pool_goal(const char * const arg)
 		return "Usage of --pool-goal before pools are defined does not make sense";
 	
 	pool = pools[total_pools - 1];
+	char *param = strchr(arg, ':');
+	if (param)
+		param++[0] = '\0';
 	pool->goal = get_mining_goal(arg);
+	
+	if (param)
+		return set_goal_params(pool->goal, param);
 	
 	return NULL;
 }

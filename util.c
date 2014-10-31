@@ -1957,6 +1957,17 @@ bool isCalpha(const int c)
 	return false;
 }
 
+bool match_strtok(const char * const optlist, const char * const delim, const char * const needle)
+{
+	const size_t optlist_sz = strlen(optlist) + 1;
+	char opts[optlist_sz];
+	memcpy(opts, optlist, optlist_sz);
+	for (char *el, *nextptr, *s = opts; (el = strtok_r(s, delim, &nextptr)); s = NULL)
+		if (!strcasecmp(el, needle))
+			return true;
+	return false;
+}
+
 static
 bool _appdata_file_call(const char * const appname, const char * const filename, const appdata_file_callback_t cb, void * const userp, const char * const path)
 {

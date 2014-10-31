@@ -125,6 +125,8 @@ bool isCspace(int c)
 	}
 }
 
+extern bool match_strtok(const char *optlist, const char *delim, const char *needle);
+
 typedef bool (*appdata_file_callback_t)(const char *, void *);
 extern bool appdata_file_call(const char *appname, const char *filename, appdata_file_callback_t, void *userp);
 extern char *appdata_file_find_first(const char *appname, const char *filename);
