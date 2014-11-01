@@ -823,9 +823,11 @@ CPUSearch:
 		sha256_func func;
 		switch (work_mining_algorithm(work)->algo)
 		{
+#ifdef USE_SCRYPT
 			case POW_SCRYPT:
 				func = scanhash_scrypt;
 				break;
+#endif
 			case POW_SHA256D:
 				func = sha256_funcs[opt_algo];
 				break;

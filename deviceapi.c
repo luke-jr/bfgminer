@@ -90,8 +90,10 @@ float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info * const proc, co
 {
 	switch (malgo->algo)
 	{
+#ifdef USE_SCRYPT
 		case POW_SCRYPT:
 			return 1./0x10000;
+#endif
 		case POW_SHA256D:
 			return 1.;
 		default:
@@ -99,10 +101,12 @@ float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info * const proc, co
 	}
 }
 
+#ifdef USE_SCRYPT
 float common_scrypt_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
 {
 	return (malgo->algo == POW_SCRYPT) ? (1./0x10000) : -1.;
 }
+#endif
 
 bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashes, uint32_t *max_nonce)
 {

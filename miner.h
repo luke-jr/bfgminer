@@ -278,7 +278,9 @@ struct gpu_adl {
 
 enum pow_algorithm {
 	POW_SHA256D = 1,
+#ifdef USE_SCRYPT
 	POW_SCRYPT  = 2,
+#endif
 };
 
 struct api_data;

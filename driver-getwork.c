@@ -202,6 +202,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 		memcpy(&reply[442], "\",\"hash1\":\"00000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000010000\"},\"id\":", 147);
 		memcpy(&reply[589], idstr ?: "0", idstr_sz);
 		memcpy(&reply[589 + idstr_sz], "}", 1);
+#ifdef USE_SCRYPT
 		if (malgo->algo == POW_SCRYPT)
 		{
 			replysz += 21;
@@ -209,6 +210,7 @@ int handle_getwork(struct MHD_Connection *conn, bytes_t *upbuf)
 			memmove(&reply[443 + 21], &reply[443], replysz - (443 + 21));
 			memcpy(&reply[443], ",\"algorithm\":\"scrypt\"", 21);
 		}
+#endif
 		
 		timer_set_now(&work->tv_work_start);
 		HASH_ADD_KEYPTR(hh, client->work, work->data, 76, work);
