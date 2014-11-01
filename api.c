@@ -2341,7 +2341,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	pool->failover_only = false;
+	manual_enable_pool(pool);
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2459,8 +2459,7 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	pool->failover_only = false;
-	enable_pool(pool);
+	manual_enable_pool(pool);
 
 	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }

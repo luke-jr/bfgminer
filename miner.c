@@ -4606,6 +4606,13 @@ void enable_pool(struct pool * const pool)
 	}
 }
 
+void manual_enable_pool(struct pool * const pool)
+{
+	pool->failover_only = false;
+	BFGINIT(pool->quota, 1);
+	enable_pool(pool);
+}
+
 void disable_pool(struct pool * const pool, const enum pool_enable enable_status)
 {
 	if (pool->enabled == POOL_DISABLED)
@@ -7592,7 +7599,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->failover_only = false;
+		manual_enable_pool(pool);
 		switch_pools(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "d", 1)) {
@@ -7615,8 +7622,7 @@ retry:
 			goto retry;
 		}
 		pool = pools[selected];
-		pool->failover_only = false;
-		enable_pool(pool);
+		manual_enable_pool(pool);
 		goto updated;
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
@@ -7662,6 +7668,8 @@ retry:
 			wlogprint("Invalid negative quota\n");
 			goto retry;
 		}
+		if (selected > 0)
+			pool->failover_only = false;
 		pool->quota = selected;
 		adjust_quota_gcd();
 		goto updated;
