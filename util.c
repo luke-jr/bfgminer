@@ -2564,9 +2564,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
-	if (pool->next_goalreset)
+	// stratum_set_goal ensures these are the same pointer if they match
+	if (pool->goalname != pool->next_goalname)
 	{
-		pool->next_goalreset = false;
+		free(pool->goalname);
+		pool->goalname = pool->next_goalname;
 		mining_goal_reset(pool->goal);
 	}
 	
@@ -2764,7 +2766,17 @@ bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * con
 	if (!uri_get_param_bool(pool->rpc_url, "goalreset", false))
 		return false;
 	
-	pool->next_goalreset = true;
+	const char * const new_goalname = __json_array_string(params, 0);
+	
+	if (pool->next_goalname && pool->next_goalname != pool->goalname)
+		free(pool->next_goalname);
+	
+	// This compares goalname to new_goalname, but matches NULL correctly :)
+	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
+		pool->next_goalname = pool->goalname;
+	else
+		pool->next_goalname = maybe_strdup(new_goalname);
+	
 	return true;
 }
 

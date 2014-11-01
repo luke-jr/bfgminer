@@ -1399,7 +1399,8 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
-	bool next_goalreset;
+	char *goalname;
+	char *next_goalname;
 	uint8_t next_target[0x20];
 	char *next_nonce1;
 	int next_n2size;
