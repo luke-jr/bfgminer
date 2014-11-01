@@ -7518,7 +7518,8 @@ updated:
 			wlogprint("%d: ", pool->prio);
 			switch (pool->enabled) {
 				case POOL_ENABLED:
-					if (pool->failover_only)
+					if ((pool_strategy == POOL_LOADBALANCE) ? (!pool->quota)
+					    : ((pool_strategy != POOL_FAILOVER) ? pool->failover_only : 0))
 						wlogprint("Failover ");
 					else
 						wlogprint("Enabled  ");
