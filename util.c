@@ -3224,6 +3224,16 @@ resend:
 		recvd = true;
 	}
 	
+	if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
+	{
+		// Default: ["notify", "set_difficulty"] (but these must be explicit if mining.capabilities is used)
+		sprintf(s, "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[[\"notify\",\"set_difficulty\",\"set_goal\"]");
+		if (request_target_str)
+			tailsprintf(s, sizeof(s), ", {\"suggested_target\":\"%s\"}", request_target_str);
+		tailsprintf(s, sizeof(s), "]}");
+		_stratum_send(pool, s, strlen(s), true);
+	}
+	
 	if (noresume) {
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
@@ -3325,11 +3335,6 @@ out:
 		if (uri_get_param_bool(pool->rpc_url, "xnsub", false))
 		{
 			sprintf(s, "{\"id\": \"xnsub\", \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
-			_stratum_send(pool, s, strlen(s), true);
-		}
-		if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
-		{
-			sprintf(s, "{\"id\": \"goalsub\", \"method\": \"mining.goal.subscribe\", \"params\": []}");
 			_stratum_send(pool, s, strlen(s), true);
 		}
 	} else {
