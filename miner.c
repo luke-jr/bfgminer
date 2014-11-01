@@ -4781,7 +4781,9 @@ bool pool_actively_desired(const struct pool * const pool, const struct pool *cp
 {
 	if (pool->enabled != POOL_ENABLED)
 		return false;
-	if (pool_strategy == POOL_LOADBALANCE || pool_strategy == POOL_BALANCE)
+	if (pool_strategy == POOL_LOADBALANCE && pool->quota)
+		return true;
+	if (pool_strategy == POOL_BALANCE && !pool->failover_only)
 		return true;
 	if (!cp)
 		cp = current_pool();
