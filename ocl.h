@@ -17,6 +17,7 @@ typedef struct {
 	bool is_mesa;
 	
 	cl_context context;
+	bool kernel_loaded;
 	cl_kernel kernel;
 	cl_command_queue commandQueue;
 	cl_program program;
@@ -41,6 +42,7 @@ typedef struct {
 extern FILE *opencl_open_kernel(const char *filename);
 extern char *file_contents(const char *filename, int *length);
 extern int clDevicesNum(void);
-extern _clState *initCl(unsigned int gpu, char *name, size_t nameSize);
+extern _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize);
+extern bool opencl_load_kernel(struct cgpu_info *, _clState *clState, const char *name);
 #endif /* HAVE_OPENCL */
 #endif /* __OCL_H__ */

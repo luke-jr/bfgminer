@@ -1325,7 +1325,7 @@ select_cgpu:
 		//free(clState);
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
-		clStates[thr_id] = initCl(virtual_gpu, name, sizeof(name));
+		clStates[thr_id] = opencl_create_clState(virtual_gpu, name, sizeof(name));
 		if (!clStates[thr_id]) {
 			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
 			goto select_cgpu;
@@ -1581,7 +1581,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 
 	strcpy(name, "");
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
-	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
+	clStates[i] = opencl_create_clState(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
 #ifdef HAVE_CURSES
 		if (use_curses)
@@ -1627,32 +1627,11 @@ static bool opencl_thread_init(struct thr_info *thr)
 	cl_int status = 0;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int buffersize = SCRYPT_BUFFERSIZE;
 
 	if (!thrdata) {
 		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
 		return false;
-	}
-
-	switch (clState->chosen_kernel) {
-		case KL_POCLBM:
-			thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
-			break;
-		case KL_PHATK:
-			thrdata->queue_kernel_parameters = &queue_phatk_kernel;
-			break;
-		case KL_DIAKGCN:
-			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
-			break;
-#ifdef USE_SCRYPT
-		case KL_SCRYPT:
-			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
-			break;
-#endif
-		default:
-		case KL_DIABLO:
-			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
-			break;
 	}
 
 	thrdata->res = calloc(buffersize, 1);
@@ -1700,6 +1679,32 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *gpu = thr->cgpu;
 	struct opencl_device_data * const data = gpu->device_data;
 	_clState *clState = clStates[thr_id];
+	if (!clState->kernel_loaded)
+	{
+		if (!opencl_load_kernel(gpu, clState, gpu->name))
+			applogr(-1, LOG_ERR, "%s: Failed to load kernel", gpu->dev_repr);
+		
+		switch (clState->chosen_kernel) {
+			case KL_POCLBM:
+				thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
+				break;
+			case KL_PHATK:
+				thrdata->queue_kernel_parameters = &queue_phatk_kernel;
+				break;
+			case KL_DIAKGCN:
+				thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
+				break;
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+				thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
+				break;
+#endif
+			default:
+			case KL_DIABLO:
+				thrdata->queue_kernel_parameters = &queue_diablo_kernel;
+				break;
+		}
+	}
 	const cl_kernel *kernel = &clState->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
 

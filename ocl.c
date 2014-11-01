@@ -640,6 +640,12 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	clState->devid = devices[gpu];
 	free(devices);
 	
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
+		return false;
+	}
+	
 	return clState;
 }
 
@@ -1129,28 +1135,11 @@ built:
 			applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
 			return false;
 		}
-		clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
-	} else
+	}
 #endif
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
-		return false;
-	}
 
+	clState->kernel_loaded = true;
 	return true;
-}
-
-_clState *initCl(const unsigned int gpu, char * const name, const size_t nameSize)
-{
-	struct cgpu_info * const cgpu = &gpus[gpu];
-	_clState * const clState = opencl_create_clState(gpu, name, nameSize);
-	if (!opencl_load_kernel(cgpu, clState, name))
-	{
-		free(clState);
-		return NULL;
-	}
-	return clState;
 }
 
 #endif /* HAVE_OPENCL */
