@@ -6878,7 +6878,7 @@ updated:
 			if (pool->prio != j)
 				continue;
 
-			if (pool == current_pool())
+			if (pool_actively_in_use(pool, NULL))
 				wattron(logwin, A_BOLD);
 			if (pool->enabled != POOL_ENABLED)
 				wattron(logwin, A_DIM);
