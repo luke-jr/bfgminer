@@ -260,8 +260,6 @@ load_opencl_symbols() {
 #endif
 
 
-typedef cl_int (*queue_kernel_parameters_func_t)(_clState *, struct work *, cl_uint);
-
 struct opencl_kernel_interface {
 	const char *kiname;
 	queue_kernel_parameters_func_t queue_kernel_parameters_func;
@@ -309,6 +307,9 @@ void opencl_early_init()
 		*data = (struct opencl_device_data){
 			.dynamic = true,
 			.intensity = intensity_not_set,
+#ifdef USE_SCRYPT
+			.lookup_gap = 2,
+#endif
 		};
 		gpus[i] = (struct cgpu_info){
 			.device_data = data,
@@ -376,8 +377,8 @@ _SET_INT_LIST(worksize, (v >= 1 && v <= 9999)       , work_size)
 
 #ifdef USE_SCRYPT
 _SET_INT_LIST(shaders           , true, shaders)
-_SET_INT_LIST(lookup_gap        , true, opt_lg )
-_SET_INT_LIST(thread_concurrency, true, opt_tc )
+_SET_INT_LIST(lookup_gap        , true, lookup_gap)
+_SET_INT_LIST(thread_concurrency, true, thread_concurrency)
 #endif
 
 enum cl_kernels select_kernel(const char * const arg)
@@ -406,20 +407,26 @@ const char *opencl_get_kernel_interface_name(const enum cl_kernels kern)
 static
 bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 {
-	FILE *F;
 	struct opencl_device_data * const data = cgpu->device_data;
 	
 	size_t knamelen = strlen(_val);
 	char filename[knamelen + 3 + 1];
 	sprintf(filename, "%s.cl", _val);
 	
-	F = opencl_open_kernel(filename);
-	if (!F)
+	int dummy_srclen;
+	enum cl_kernels interface;
+	char *src = opencl_kernel_source(filename, &dummy_srclen, &interface);
+	if (!src)
 		return false;
-	fclose(F);
+	free(src);
 	
-	free(data->kernel_file);
-	data->kernel_file = strdup(_val);
+	char **kfp = &data->kernel_file_sha256d;
+#ifdef USE_SCRYPT
+	if (interface == KL_SCRYPT)
+		kfp = &data->kernel_file_scrypt;
+#endif
+	free(*kfp);
+	*kfp = strdup(_val);
 	
 	return true;
 }
@@ -1005,10 +1012,10 @@ struct opencl_work_data *_opencl_work_data(struct work * const work)
 }
 
 static
-cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, const cl_uint threads)
+cl_int queue_poclbm_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
@@ -1029,7 +1036,8 @@ cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, c
 	CL_SET_BLKARG(cty_g);
 	CL_SET_BLKARG(cty_h);
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset)
+	{
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1060,10 +1068,10 @@ cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, c
 }
 
 static
-cl_int queue_phatk_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_phatk_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
@@ -1105,14 +1113,14 @@ cl_int queue_phatk_kernel(_clState * const clState, struct work * const work, __
 }
 
 static
-cl_int queue_diakgcn_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_diakgcn_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset) {
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1167,14 +1175,14 @@ cl_int queue_diakgcn_kernel(_clState * const clState, struct work * const work, 
 }
 
 static
-cl_int queue_diablo_kernel(_clState * const clState, struct work * const work, const cl_uint threads)
+cl_int queue_diablo_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset) {
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1223,10 +1231,10 @@ cl_int queue_diablo_kernel(_clState * const clState, struct work * const work, c
 
 #ifdef USE_SCRYPT
 static
-cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	unsigned char *midstate = work->midstate;
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_uint le_target;
 	cl_int status = 0;
@@ -1555,7 +1563,6 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 }
 
 struct opencl_thread_data {
-	cl_int (*queue_kernel_parameters)(_clState *, struct work *, cl_uint);
 	uint32_t *res;
 };
 
@@ -1570,7 +1577,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	int virtual_gpu = data->virtual_gpu;
 	int i = thr->id;
 	static bool failmessage = false;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int buffersize = SCRYPT_BUFFERSIZE;
 
 	if (!blank_res)
 		blank_res = calloc(buffersize, 1);
@@ -1659,9 +1666,8 @@ static bool opencl_thread_init(struct thr_info *thr)
 
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
-#ifdef USE_SCRYPT
-	if (!opt_scrypt)
-#endif
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	if (malgo->algo == POW_SHA256D)
 	{
 		struct opencl_work_data * const blk = _opencl_work_data(work);
 		precalc_hash(blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
@@ -1671,6 +1677,88 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 
 extern int opt_dynamic_interval;
 
+const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * const cgpu, _clState * const clState, const struct mining_algorithm * const malgo)
+{
+	struct opencl_device_data * const data = cgpu->device_data;
+	struct opencl_kernel_info *kernelinfo;
+	char *kernel_file;
+	switch (malgo->algo)
+	{
+		case POW_SHA256D:
+			kernelinfo = &clState->kernel_sha256d;
+			if (!data->kernel_file_sha256d)
+			{
+				const char * const vbuff = clState->platform_ver_str;
+				if (clState->is_mesa)
+				{
+					applog(LOG_INFO, "Selecting phatk kernel for Mesa");
+					data->kernel_file_sha256d = strdup("phatk");
+				}
+				else  /* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
+				if (!strstr(cgpu->name, "Tahiti") &&
+				   (strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
+				    strstr(vbuff, "851.4") ||  // Windows 64 bit ""
+				    strstr(vbuff, "831.4") ||
+				    strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
+				    strstr(vbuff, "923.1") ||  // 12.4
+				    strstr(vbuff, "938.2") ||  // SDK 2.7
+				    strstr(vbuff, "1113.2")))  // SDK 2.8
+				{
+					applog(LOG_INFO, "Selecting diablo kernel");
+					data->kernel_file_sha256d = strdup("diablo");
+				}
+				else  /* Detect all 7970s, older ATI and NVIDIA and use poclbm */
+				if (strstr(cgpu->name, "Tahiti") || !clState->hasBitAlign)
+				{
+					applog(LOG_INFO, "Selecting poclbm kernel");
+					data->kernel_file_sha256d = strdup("poclbm");
+				}
+				else  /* Use phatk for the rest R5xxx R6xxx */
+				{
+					applog(LOG_INFO, "Selecting phatk kernel");
+					data->kernel_file_sha256d = strdup("phatk");
+				}
+			}
+			kernel_file = data->kernel_file_sha256d;
+			break;
+#ifdef USE_SCRYPT
+		case POW_SCRYPT:
+			kernelinfo = &clState->kernel_scrypt;
+			BFGINIT(data->kernel_file_scrypt, strdup("scrypt"));
+			kernel_file = data->kernel_file_scrypt;
+			break;
+#endif
+	}
+	if (!kernelinfo->loaded)
+	{
+		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernel_file, malgo))
+			applogr(NULL, LOG_ERR, "%s: Failed to load kernel", cgpu->dev_repr);
+		
+		switch (kernelinfo->interface)
+		{
+			case KL_POCLBM:
+				kernelinfo->queue_kernel_parameters = &queue_poclbm_kernel;
+				break;
+			case KL_PHATK:
+				kernelinfo->queue_kernel_parameters = &queue_phatk_kernel;
+				break;
+			case KL_DIAKGCN:
+				kernelinfo->queue_kernel_parameters = &queue_diakgcn_kernel;
+				break;
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+				kernelinfo->queue_kernel_parameters = &queue_scrypt_kernel;
+				break;
+#endif
+			default:
+			case KL_DIABLO:
+				kernelinfo->queue_kernel_parameters = &queue_diablo_kernel;
+				break;
+		}
+	}
+	return kernelinfo;
+}
+
 static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				int64_t __maybe_unused max_nonce)
 {
@@ -1679,41 +1767,26 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *gpu = thr->cgpu;
 	struct opencl_device_data * const data = gpu->device_data;
 	_clState *clState = clStates[thr_id];
-	if (!clState->kernel_loaded)
-	{
-		if (!opencl_load_kernel(gpu, clState, gpu->name))
-			applogr(-1, LOG_ERR, "%s: Failed to load kernel", gpu->dev_repr);
-		
-		switch (clState->chosen_kernel) {
-			case KL_POCLBM:
-				thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
-				break;
-			case KL_PHATK:
-				thrdata->queue_kernel_parameters = &queue_phatk_kernel;
-				break;
-			case KL_DIAKGCN:
-				thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
-				break;
-#ifdef USE_SCRYPT
-			case KL_SCRYPT:
-				thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
-				break;
-#endif
-			default:
-			case KL_DIABLO:
-				thrdata->queue_kernel_parameters = &queue_diablo_kernel;
-				break;
-		}
-	}
-	const cl_kernel *kernel = &clState->kernel;
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const struct opencl_kernel_info *kinfo = opencl_scanhash_get_kernel(gpu, clState, malgo);
+	if (!kinfo)
+		return -1;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
 
 	cl_int status;
 	size_t globalThreads[1];
-	size_t localThreads[1] = { clState->wsize };
+	size_t localThreads[1] = { kinfo->wsize };
 	int64_t hashes;
-	int found = opt_scrypt ? SCRYPT_FOUND : FOUND;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int found = FOUND;
+	int buffersize = BUFFERSIZE;
+#ifdef USE_SCRYPT
+	if (malgo->algo == POW_SCRYPT)
+	{
+		found = SCRYPT_FOUND;
+		buffersize = SCRYPT_BUFFERSIZE;
+	}
+#endif
 
 	/* Windows' timer resolution is only 15ms so oversample 5x */
 	if (data->dynamic && (++data->intervals * dynamic_us) > 70000) {
@@ -1748,13 +1821,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-	status = thrdata->queue_kernel_parameters(clState, work, globalThreads[0]);
+	status = kinfo->queue_kernel_parameters(kinfo, clState, work, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
 		return -1;
 	}
 
-	if (clState->goffset) {
+	if (kinfo->goffset)
+	{
 		size_t global_work_offset[1];
 
 		global_work_offset[0] = work->blk.nonce;
@@ -1802,13 +1876,20 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	return hashes;
 }
 
+static
+void opencl_clean_kernel_info(struct opencl_kernel_info * const kinfo)
+{
+	clReleaseKernel(kinfo->kernel);
+	clReleaseProgram(kinfo->program);
+}
+
 static void opencl_thread_shutdown(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
 	_clState *clState = clStates[thr_id];
 
-	clReleaseKernel(clState->kernel);
-	clReleaseProgram(clState->program);
+	opencl_clean_kernel_info(&clState->kernel_sha256d);
+	opencl_clean_kernel_info(&clState->kernel_scrypt);
 	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }

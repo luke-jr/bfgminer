@@ -46,13 +46,14 @@ struct opencl_device_data {
 	
 	cl_uint vwidth;
 	size_t work_size;
-	char *kernel_file;
+	char *kernel_file_sha256d;
 	cl_ulong max_alloc;
 	
 	enum opencl_binary_usage opt_opencl_binaries;
 #ifdef USE_SCRYPT
-	int opt_lg, lookup_gap;
-	size_t opt_tc, thread_concurrency;
+	char *kernel_file_scrypt;
+	int lookup_gap;
+	size_t thread_concurrency;
 	size_t shaders;
 #endif
 	struct timeval tv_gpustart;
