@@ -12,6 +12,10 @@
 #include "miner.h"
 
 typedef struct {
+	cl_device_id devid;
+	char *platform_ver_str;
+	bool is_mesa;
+	
 	cl_context context;
 	cl_kernel kernel;
 	cl_command_queue commandQueue;
@@ -26,6 +30,7 @@ typedef struct {
 	bool hasBitAlign;
 	bool hasOpenCL11plus;
 	bool goffset;
+	cl_uint preferred_vwidth;
 	cl_uint vwidth;
 	size_t max_work_size;
 	size_t wsize;
