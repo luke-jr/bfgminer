@@ -370,6 +370,7 @@ static char datestamp[40];
 static char best_share[ALLOC_H2B_SHORTV] = "0";
 double best_diff = 0;
 
+struct mining_algorithm *mining_algorithms;
 struct mining_goal_info *mining_goals;
 int active_goals = 1;
 
@@ -1026,6 +1027,16 @@ const char *set_malgo_scrypt()
 }
 
 #endif
+
+static
+__attribute__((constructor))
+void init_mining_goals(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
+{
+	LL_APPEND(mining_algorithms, (&malgo_sha256d));
+#ifdef USE_SCRYPT
+	LL_APPEND(mining_algorithms, (&malgo_scrypt));
+#endif
+}
 
 static
 int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)

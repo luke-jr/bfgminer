@@ -1131,6 +1131,8 @@ struct mining_algorithm {
 	float reasonable_low_nonce_diff;
 	
 	void (*hash_data_f)(void *digest, const void *data);
+	
+	struct mining_algorithm *next;
 };
 
 struct mining_goal_info {
