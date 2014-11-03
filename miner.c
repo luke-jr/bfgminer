@@ -9710,31 +9710,57 @@ void *cmd_idle_thread(void * const __maybe_unused userp)
 
 static struct work *hash_pop(struct cgpu_info * const proc)
 {
-	struct work *work_found = NULL, *work, *tmp, *work_highdiff = NULL;
+	int hc;
+	struct work *work, *work_found, *tmp;
+	enum {
+		HPWS_NONE     = 0,
+		HPWS_LOWDIFF  = 1,
+		HPWS_ROLLABLE = 2,
+		HPWS_PERFECT  = 3,
+	} work_score = HPWS_NONE;
 	bool did_cmd_idle = false;
 	pthread_t cmd_idle_thr;
 
+retry:
 	mutex_lock(stgd_lock);
 	while (true)
 	{
+		work_found = NULL;
+		work_score = 0;
+		hc = HASH_COUNT(staged_work);
 		HASH_ITER(hh, staged_work, work, tmp)
 		{
 			const struct mining_algorithm * const work_malgo = work_mining_algorithm(work);
 			const float min_nonce_diff = drv_min_nonce_diff(proc->drv, proc, work_malgo);
 			if (min_nonce_diff < work->work_difficulty)
 			{
-				if (unlikely((!work_highdiff) && min_nonce_diff >= 0))
-					work_highdiff = work;
+				if (unlikely(min_nonce_diff >= 0 && work_score < HPWS_LOWDIFF))
+				{
+					work_found = work;
+					work_score = HPWS_LOWDIFF;
+				}
+				continue;
+			}
+			if (work->rolltime && hc > staged_rollable)
+			{
+				if (work_score < HPWS_ROLLABLE)
+				{
+					work_found = work;
+					work_score = HPWS_ROLLABLE;
+				}
 				continue;
 			}
 			
 			// Good match
 			work_found = work;
+			work_score = HPWS_PERFECT;
 			break;
 		}
-		work = work_found ?: work_highdiff;
-		if (work)
+		if (work_found)
+		{
+			work = work_found;
 			break;
+		}
 		
 		// Failed to get a usable work
 		if (unlikely(staged_full))
@@ -9763,6 +9789,14 @@ static struct work *hash_pop(struct cgpu_info * const proc)
 	
 	no_work = false;
 
+	if (can_roll(work) && should_roll(work))
+	{
+		// Instead of consuming it, force it to be cloned and grab the clone
+		mutex_unlock(stgd_lock);
+		clone_available();
+		goto retry;
+	}
+	
 	HASH_DEL(staged_work, work);
 	if (work_rollable(work))
 		staged_rollable--;
