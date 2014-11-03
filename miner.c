@@ -9708,17 +9708,35 @@ void *cmd_idle_thread(void * const __maybe_unused userp)
 	return NULL;
 }
 
-static struct work *hash_pop(void)
+static struct work *hash_pop(struct cgpu_info * const proc)
 {
-	struct work *work = NULL, *tmp;
-	int hc;
+	struct work *work_found = NULL, *work, *tmp, *work_highdiff = NULL;
 	bool did_cmd_idle = false;
 	pthread_t cmd_idle_thr;
 
-retry:
 	mutex_lock(stgd_lock);
-	while (!HASH_COUNT(staged_work))
+	while (true)
 	{
+		HASH_ITER(hh, staged_work, work, tmp)
+		{
+			const struct mining_algorithm * const work_malgo = work_mining_algorithm(work);
+			const float min_nonce_diff = drv_min_nonce_diff(proc->drv, proc, work_malgo);
+			if (min_nonce_diff < work->work_difficulty)
+			{
+				if (unlikely((!work_highdiff) && min_nonce_diff >= 0))
+					work_highdiff = work;
+				continue;
+			}
+			
+			// Good match
+			work_found = work;
+			break;
+		}
+		work = work_found ?: work_highdiff;
+		if (work)
+			break;
+		
+		// Failed to get a usable work
 		if (unlikely(staged_full))
 		{
 			if (likely(opt_queue < 10 + mining_threads))
@@ -9745,24 +9763,6 @@ retry:
 	
 	no_work = false;
 
-	hc = HASH_COUNT(staged_work);
-	/* Find clone work if possible, to allow masters to be reused */
-	if (hc > staged_rollable) {
-		HASH_ITER(hh, staged_work, work, tmp) {
-			if (!work_rollable(work))
-				break;
-		}
-	} else
-		work = staged_work;
-	
-	if (can_roll(work) && should_roll(work))
-	{
-		// Instead of consuming it, force it to be cloned and grab the clone
-		mutex_unlock(stgd_lock);
-		clone_available();
-		goto retry;
-	}
-	
 	HASH_DEL(staged_work, work);
 	if (work_rollable(work))
 		staged_rollable--;
@@ -10093,7 +10093,7 @@ struct work *get_work(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Popping work from get queue to get work", cgpu->proc_repr);
 	while (!work) {
-		work = hash_pop();
+		work = hash_pop(cgpu);
 		if (stale_work(work, false)) {
 			staged_full = false;  // It wasn't really full, since it was stale :(
 			discard_work(work);
