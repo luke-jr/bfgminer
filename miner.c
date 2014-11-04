@@ -5417,7 +5417,8 @@ static struct pool *_select_longpoll_pool(struct pool *, bool(*)(struct pool *))
  * away from them to distribute work evenly. The share count is reset to the
  * rolling average every 10 minutes to not send all work to one pool after it
  * has been disabled/out for an extended period. */
-static struct pool *select_balanced(struct pool *cp)
+static
+struct pool *select_balanced(struct pool *cp, struct mining_algorithm * const malgo)
 {
 	int i, lowest = cp->shares;
 	struct pool *ret = cp, *failover_pool = NULL;
@@ -5425,6 +5426,8 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
+		if (malgo && pool->goal->malgo != malgo)
+			continue;
 		if (pool_unworkable(pool))
 			continue;
 		if (pool->failover_only)
@@ -5437,22 +5440,27 @@ static struct pool *select_balanced(struct pool *cp)
 			ret = pool;
 		}
 	}
+	if (malgo && ret->goal->malgo != malgo)
+		// Yes, we want failover_pool even if it's NULL
+		ret = failover_pool;
+	else
 	if (pool_unworkable(ret) && failover_pool)
 		ret = failover_pool;
 
-	ret->shares++;
+	if (ret)
+		++ret->shares;
 	return ret;
 }
 
 static struct pool *priority_pool(int choice);
 
 static
-struct pool *select_loadbalance()
+struct pool *select_loadbalance(struct mining_algorithm * const malgo)
 {
 	static int rotating_pool = 0;
 	struct pool *pool;
 	bool avail = false;
-	int tested, i;
+	int tested, i, rpsave;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *tp = pools[i];
@@ -5466,28 +5474,58 @@ struct pool *select_loadbalance()
 	/* There are no pools with quota, so reset them. */
 	if (!avail) {
 		for (i = 0; i < total_pools; i++)
-			pools[i]->quota_used = 0;
+		{
+			struct pool * const tp = pools[i];
+			tp->quota_used -= tp->quota_gcd;
+		}
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 	}
 
 	/* Try to find the first pool in the rotation that is usable */
-	pool = NULL;
-	tested = 0;
-	while (!pool && tested++ < total_pools) {
+	// Look for the lowest integer quota_used / quota_gcd in case we are imbalanced by algorithm demands
+	struct pool *pool_lowest = NULL;
+	int lowest = INT_MAX;
+	rpsave = rotating_pool;
+	for (tested = 0; tested < total_pools; ++tested)
+	{
 		pool = pools[rotating_pool];
-		if (pool->quota_used++ < pool->quota_gcd) {
+		if (malgo && pool->goal->malgo != malgo)
+			goto continue_tested;
+		
+		if (pool->quota_used < pool->quota_gcd)
+		{
+			++pool->quota_used;
 			if (!pool_unworkable(pool))
-				break;
+				goto out;
 			/* Failover-only flag for load-balance means distribute
 			 * unused quota to priority pool 0. */
 			if (opt_fail_only)
 				priority_pool(0)->quota_used--;
 		}
-		pool = NULL;
+		if (malgo)
+		{
+			const int count = pool->quota_used / pool->quota_gcd;
+			if (count < lowest)
+			{
+				pool_lowest = pool;
+				lowest = count;
+			}
+		}
+		
+continue_tested: ;
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 	}
+	
+	// Even if pool_lowest is NULL, we want to return that to indicate failure
+	// Note it isn't possible to get here if !malgo
+	pool = pool_lowest;
+	
+out: ;
+	// Restore rotating_pool static, so malgo searches don't affect the usual load balancing
+	if (malgo)
+		rotating_pool = rpsave;
 	
 	return pool;
 }
@@ -5495,12 +5533,15 @@ struct pool *select_loadbalance()
 static bool pool_unusable(struct pool *pool);
 
 static
-struct pool *select_failover()
+struct pool *select_failover(struct mining_algorithm * const malgo)
 {
 	int i;
 	
 	for (i = 0; i < total_pools; i++) {
 		struct pool *tp = priority_pool(i);
+		
+		if (malgo && tp->goal->malgo != malgo)
+			continue;
 		
 		if (!pool_unusable(tp)) {
 			return tp;
@@ -5515,36 +5556,45 @@ static void pool_died(struct pool *);
 
 /* Select any active pool in a rotating fashion when loadbalance is chosen if
  * it has any quota left. */
-static inline struct pool *select_pool(bool lagging)
+static inline struct pool *select_pool(bool lagging, struct mining_algorithm * const malgo)
 {
-	struct pool *pool, *cp;
+	struct pool *pool = NULL, *cp;
 
 retry:
 	cp = current_pool();
 
 	if (pool_strategy == POOL_BALANCE) {
-		pool = select_balanced(cp);
-		if (pool_unworkable(pool))
+		pool = select_balanced(cp, malgo);
+		if ((!pool) || pool_unworkable(pool))
 			goto simple_failover;
 		goto out;
 	}
 
 	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		if (malgo && cp->goal->malgo != malgo)
+			goto simple_failover;
 		pool = cp;
 		goto out;
 	} else
-		pool = select_loadbalance();
+		pool = select_loadbalance(malgo);
 
 simple_failover:
 	/* If there are no alive pools with quota, choose according to
 	 * priority. */
 	if (!pool) {
-		pool = select_failover();
+		pool = select_failover(malgo);
 	}
 
 	/* If still nothing is usable, use the current pool */
 	if (!pool)
+	{
+		if (malgo && cp->goal->malgo != malgo)
+		{
+			applog(LOG_DEBUG, "Failed to select pool for specific mining algorithm");
+			return NULL;
+		}
 		pool = cp;
+	}
 
 out:
 	if (!pool_actively_in_use(pool, cp))
@@ -12089,6 +12139,16 @@ void register_device(struct cgpu_info *cgpu)
 	int thr_objs = cgpu->threads ?: 1;
 	mining_threads += thr_objs;
 	base_queue += thr_objs + cgpu->extra_work_queue;
+	{
+		const struct device_drv * const drv = cgpu->drv;
+		struct mining_algorithm *malgo;
+		LL_FOREACH(mining_algorithms, malgo)
+		{
+			if (drv_min_nonce_diff(drv, cgpu, malgo) < 0)
+				continue;
+			malgo->base_queue += thr_objs + cgpu->extra_work_queue;
+		}
+	}
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
 #endif
@@ -13531,6 +13591,7 @@ begin_bench:
 		bool lagging = false;
 		struct curl_ent *ce;
 		struct work *work;
+		struct mining_algorithm *malgo = NULL;
 
 		cp = current_pool();
 
@@ -13545,6 +13606,19 @@ begin_bench:
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
+			{
+				LL_FOREACH(mining_algorithms, malgo)
+				{
+					if (!malgo->goal_refs)
+						continue;
+					if (malgo->staged < malgo->base_queue + opt_queue)
+					{
+						mutex_unlock(stgd_lock);
+						goto need_malgo_queued;
+					}
+				}
+				malgo = NULL;
+			}
 			staged_full = true;
 			pthread_cond_wait(&gws_cond, stgd_lock);
 			ts = __total_staged();
@@ -13554,6 +13628,7 @@ begin_bench:
 		if (ts > max_staged)
 			continue;
 
+need_malgo_queued: ;
 		work = make_work();
 
 		if (lagging && !pool_tset(cp, &cp->lagging)) {
@@ -13561,11 +13636,11 @@ begin_bench:
 			cp->getfail_occasions++;
 			total_go++;
 		}
-		pool = select_pool(lagging);
+		pool = select_pool(lagging, malgo);
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active || !pool->stratum_notify) {
-				struct pool *altpool = select_pool(true);
+				struct pool *altpool = select_pool(true, malgo);
 
 				if (altpool == pool && pool->has_stratum)
 					cgsleep_ms(5000);
@@ -13627,7 +13702,7 @@ retry:
 			push_curl_entry(ce, pool);
 			++pool->seq_getfails;
 			pool_died(pool);
-			next_pool = select_pool(!opt_fail_only);
+			next_pool = select_pool(!opt_fail_only, malgo);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
 				cgsleep_ms(5000);

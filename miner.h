@@ -1134,6 +1134,7 @@ struct mining_algorithm {
 	
 	int goal_refs;
 	int staged;
+	int base_queue;
 	
 	struct mining_algorithm *next;
 };
