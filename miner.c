@@ -1019,7 +1019,22 @@ void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorith
 	goal->malgo = malgo;
 }
 
+static
+struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
+{
+	struct mining_algorithm *malgo;
+	LL_FOREACH(mining_algorithms, malgo)
+	{
+		if (match_strtok(malgo->aliases, "|", alias))
+			return malgo;
+	}
+	return NULL;
+}
+
 static struct mining_algorithm malgo_sha256d = {
+	.name = "SHA256d",
+	.aliases = "SHA256d|SHA256|SHA2",
+	
 	.algo = POW_SHA256D,
 	.ui_skip_hash_bytes = 4,
 	.worktime_skip_prevblk_u32 = 1,
@@ -1030,6 +1045,9 @@ static struct mining_algorithm malgo_sha256d = {
 
 #ifdef USE_SCRYPT
 static struct mining_algorithm malgo_scrypt = {
+	.name = "scrypt",
+	.aliases = "scrypt",
+	
 	.algo = POW_SCRYPT,
 	.ui_skip_hash_bytes = 2,
 	.reasonable_low_nonce_diff = 1./0x10000,
@@ -1834,15 +1852,8 @@ const char *goal_set(struct mining_goal_info * const goal, const char * const op
 	{
 		if (!newvalue)
 			return "Goal option 'malgo' requires a value (eg, SHA256d)";
-		struct mining_algorithm *new_malgo;
-		if (!(strcasecmp(newvalue, "SHA256d") && strcasecmp(newvalue, "SHA256") && strcasecmp(newvalue, "SHA2")))
-			new_malgo = &malgo_sha256d;
-#ifdef USE_SCRYPT
-		else
-		if (!strcasecmp(newvalue, "scrypt"))
-			new_malgo = &malgo_scrypt;
-#endif
-		else
+		struct mining_algorithm * const new_malgo = mining_algorithm_by_alias(newvalue);
+		if (!new_malgo)
 			return "Unrecognised mining algorithm";
 		goal_set_malgo(goal, new_malgo);
 		goto success;
@@ -5596,7 +5607,7 @@ simple_failover:
 	{
 		if (malgo && cp->goal->malgo != malgo)
 		{
-			applog(LOG_DEBUG, "Failed to select pool for specific mining algorithm");
+			applog(LOG_DEBUG, "Failed to select pool for specific mining algorithm '%s'", malgo->name);
 			return NULL;
 		}
 		pool = cp;
@@ -5612,7 +5623,7 @@ out:
 		}
 		pool_tclear(pool, &pool->idle);
 	}
-	applog(LOG_DEBUG, "Selecting pool %d for work", pool->pool_no);
+	applog(LOG_DEBUG, "Selecting pool %d for %s%swork", pool->pool_no, malgo ? malgo->name : "", malgo ? " " : "");
 	return pool;
 }
 

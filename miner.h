@@ -1125,6 +1125,9 @@ struct blockchain_info {
 };
 
 struct mining_algorithm {
+	const char *name;
+	const char *aliases;
+	
 	enum pow_algorithm algo;
 	uint8_t ui_skip_hash_bytes;
 	uint8_t worktime_skip_prevblk_u32;
