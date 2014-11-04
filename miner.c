@@ -7131,6 +7131,18 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
+static bool work_rollable(struct work *);
+
+static
+void unstage_work(struct work * const work)
+{
+	HASH_DEL(staged_work, work);
+	--work_mining_algorithm(work)->staged;
+	if (work_rollable(work))
+		--staged_rollable;
+	staged_full = false;
+}
+
 static void wake_gws(void)
 {
 	mutex_lock(stgd_lock);
@@ -7146,10 +7158,9 @@ static void discard_stale(void)
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
-			HASH_DEL(staged_work, work);
+			unstage_work(work);
 			discard_work(work);
 			stale++;
-			staged_full = false;
 		}
 	}
 	pthread_cond_signal(&gws_cond);
@@ -7441,6 +7452,7 @@ static bool hash_push(struct work *work)
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
 		staged_rollable++;
+	++work_mining_algorithm(work)->staged;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
@@ -9199,10 +9211,9 @@ static void clear_pool_work(struct pool *pool)
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (work->pool == pool) {
-			HASH_DEL(staged_work, work);
+			unstage_work(work);
 			free_work(work);
 			cleared++;
-			staged_full = false;
 		}
 	}
 	mutex_unlock(stgd_lock);
@@ -9822,9 +9833,7 @@ retry:
 		goto retry;
 	}
 	
-	HASH_DEL(staged_work, work);
-	if (work_rollable(work))
-		staged_rollable--;
+	unstage_work(work);
 
 	/* Signal the getwork scheduler to look for more work */
 	pthread_cond_signal(&gws_cond);

@@ -1133,6 +1133,7 @@ struct mining_algorithm {
 	void (*hash_data_f)(void *digest, const void *data);
 	
 	int goal_refs;
+	int staged;
 	
 	struct mining_algorithm *next;
 };
@@ -1595,11 +1596,11 @@ extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, cons
 extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
 
 static inline
-const struct mining_algorithm *work_mining_algorithm(const struct work * const work)
+struct mining_algorithm *work_mining_algorithm(const struct work * const work)
 {
 	const struct pool * const pool = work->pool;
 	const struct mining_goal_info * const goal = pool->goal;
-	const struct mining_algorithm * const malgo = goal->malgo;
+	struct mining_algorithm * const malgo = goal->malgo;
 	return malgo;
 }
 
