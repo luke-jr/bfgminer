@@ -5444,35 +5444,15 @@ static struct pool *select_balanced(struct pool *cp)
 	return ret;
 }
 
-static bool pool_active(struct pool *, bool pinging);
-static void pool_died(struct pool *);
 static struct pool *priority_pool(int choice);
-static bool pool_unusable(struct pool *pool);
 
-/* Select any active pool in a rotating fashion when loadbalance is chosen if
- * it has any quota left. */
-static inline struct pool *select_pool(bool lagging)
+static
+struct pool *select_loadbalance()
 {
 	static int rotating_pool = 0;
-	struct pool *pool, *cp;
+	struct pool *pool;
 	bool avail = false;
 	int tested, i;
-
-retry:
-	cp = current_pool();
-
-	if (pool_strategy == POOL_BALANCE) {
-		pool = select_balanced(cp);
-		if (pool_unworkable(pool))
-			goto simple_failover;
-		goto out;
-	}
-
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
-		pool = cp;
-		goto out;
-	} else
-		pool = NULL;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *tp = pools[i];
@@ -5492,6 +5472,7 @@ retry:
 	}
 
 	/* Try to find the first pool in the rotation that is usable */
+	pool = NULL;
 	tested = 0;
 	while (!pool && tested++ < total_pools) {
 		pool = pools[rotating_pool];
@@ -5507,19 +5488,58 @@ retry:
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 	}
+	
+	return pool;
+}
+
+static bool pool_unusable(struct pool *pool);
+
+static
+struct pool *select_failover()
+{
+	int i;
+	
+	for (i = 0; i < total_pools; i++) {
+		struct pool *tp = priority_pool(i);
+		
+		if (!pool_unusable(tp)) {
+			return tp;
+		}
+	}
+	
+	return NULL;
+}
+
+static bool pool_active(struct pool *, bool pinging);
+static void pool_died(struct pool *);
+
+/* Select any active pool in a rotating fashion when loadbalance is chosen if
+ * it has any quota left. */
+static inline struct pool *select_pool(bool lagging)
+{
+	struct pool *pool, *cp;
+
+retry:
+	cp = current_pool();
+
+	if (pool_strategy == POOL_BALANCE) {
+		pool = select_balanced(cp);
+		if (pool_unworkable(pool))
+			goto simple_failover;
+		goto out;
+	}
+
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		pool = cp;
+		goto out;
+	} else
+		pool = select_loadbalance();
 
 simple_failover:
 	/* If there are no alive pools with quota, choose according to
 	 * priority. */
 	if (!pool) {
-		for (i = 0; i < total_pools; i++) {
-			struct pool *tp = priority_pool(i);
-
-			if (!pool_unusable(tp)) {
-				pool = tp;
-				break;
-			}
-		}
+		pool = select_failover();
 	}
 
 	/* If still nothing is usable, use the current pool */
