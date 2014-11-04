@@ -243,6 +243,7 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 	}
 	if (dieno > 0) {
 		*nonce_bottom = nonce_tops[dieno - 1][KNC_TITAN_CORES_PER_DIE - 1] + 1;
+		return;
 	}
 	*nonce_bottom = 0;
 }
