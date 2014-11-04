@@ -1001,6 +1001,15 @@ static void sharelog(const char*disposition, const struct work*work)
 static void switch_logsize(void);
 #endif
 
+static
+void goal_set_malgo(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
+{
+	if (goal->malgo == malgo)
+		return;
+	
+	goal->malgo = malgo;
+}
+
 static struct mining_algorithm malgo_sha256d = {
 	.algo = POW_SHA256D,
 	.ui_skip_hash_bytes = 4,
@@ -1022,7 +1031,7 @@ static struct mining_algorithm malgo_scrypt = {
 static
 const char *set_malgo_scrypt()
 {
-	get_mining_goal("default")->malgo = &malgo_scrypt;
+	goal_set_malgo(get_mining_goal("default"), &malgo_scrypt);
 	return NULL;
 }
 
@@ -1079,8 +1088,8 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 			.is_default = !strcmp(name, "default"),
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
-			.malgo = &malgo_sha256d,
 		};
+		goal_set_malgo(goal, &malgo_sha256d);
 		HASH_ADD_STR(mining_goals, name, goal);
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
 		
@@ -1816,15 +1825,17 @@ const char *goal_set(struct mining_goal_info * const goal, const char * const op
 	{
 		if (!newvalue)
 			return "Goal option 'malgo' requires a value (eg, SHA256d)";
+		const struct mining_algorithm *new_malgo;
 		if (!(strcasecmp(newvalue, "SHA256d") && strcasecmp(newvalue, "SHA256") && strcasecmp(newvalue, "SHA2")))
-			goal->malgo = &malgo_sha256d;
+			new_malgo = &malgo_sha256d;
 #ifdef USE_SCRYPT
 		else
 		if (!strcasecmp(newvalue, "scrypt"))
-			goal->malgo = &malgo_scrypt;
+			new_malgo = &malgo_scrypt;
 #endif
 		else
 			return "Unrecognised mining algorithm";
+		goal_set_malgo(goal, new_malgo);
 		goto success;
 	}
 #if BLKMAKER_VERSION > 1
