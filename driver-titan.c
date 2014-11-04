@@ -211,7 +211,7 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, 
 	knc_titan_set_work(repr, ctx, asic, die, core, 0, NULL, true, &unused, &report);
 }
 
-static uint32_t nonce_tops[KNC_TITAN_DIES_PER_ASIC][KNC_TITAN_CORES_PER_DIE];
+static uint32_t nonce_tops[KNC_TITAN_CORES_PER_DIE];
 static bool nonce_tops_inited = false;
 
 static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
@@ -222,29 +222,23 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 		int die, core;
 
 		nonce_f = 0.0;
-		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_ASIC;
+		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_DIE;
 
-		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
-			for (core = 0; core < KNC_TITAN_CORES_PER_DIE; ++core) {
-				nonce_f += nonce_step;
-				if ((core < (KNC_TITAN_CORES_PER_DIE - 1)) || (die < (KNC_TITAN_DIES_PER_ASIC - 1)))
-					top = nonce_f;
-				else
-					top = 0xFFFFFFFF;
-				nonce_tops[die][core] = top;
-			}
+		for (core = 0; core < KNC_TITAN_CORES_PER_DIE; ++core) {
+			nonce_f += nonce_step;
+			if (core < (KNC_TITAN_CORES_PER_DIE - 1))
+				top = nonce_f;
+			else
+				top = 0xFFFFFFFF;
+			nonce_tops[core] = top;
 		}
 
 		nonce_tops_inited = true;
 	}
 
-	*nonce_top = nonce_tops[dieno][coreno];
+	*nonce_top = nonce_tops[coreno];
 	if (coreno > 0) {
-		*nonce_bottom = nonce_tops[dieno][coreno - 1] + 1;
-		return;
-	}
-	if (dieno > 0) {
-		*nonce_bottom = nonce_tops[dieno - 1][KNC_TITAN_CORES_PER_DIE - 1] + 1;
+		*nonce_bottom = nonce_tops[coreno - 1] + 1;
 		return;
 	}
 	*nonce_bottom = 0;
