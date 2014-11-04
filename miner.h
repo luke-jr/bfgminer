@@ -1132,6 +1132,8 @@ struct mining_algorithm {
 	
 	void (*hash_data_f)(void *digest, const void *data);
 	
+	int goal_refs;
+	
 	struct mining_algorithm *next;
 };
 

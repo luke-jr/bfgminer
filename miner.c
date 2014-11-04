@@ -1002,11 +1002,14 @@ static void switch_logsize(void);
 #endif
 
 static
-void goal_set_malgo(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
+void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorithm * const malgo)
 {
 	if (goal->malgo == malgo)
 		return;
 	
+	if (goal->malgo)
+		--goal->malgo->goal_refs;
+	++malgo->goal_refs;
 	goal->malgo = malgo;
 }
 
@@ -1825,7 +1828,7 @@ const char *goal_set(struct mining_goal_info * const goal, const char * const op
 	{
 		if (!newvalue)
 			return "Goal option 'malgo' requires a value (eg, SHA256d)";
-		const struct mining_algorithm *new_malgo;
+		struct mining_algorithm *new_malgo;
 		if (!(strcasecmp(newvalue, "SHA256d") && strcasecmp(newvalue, "SHA256") && strcasecmp(newvalue, "SHA2")))
 			new_malgo = &malgo_sha256d;
 #ifdef USE_SCRYPT
