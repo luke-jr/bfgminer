@@ -1001,6 +1001,8 @@ static void sharelog(const char*disposition, const struct work*work)
 static void switch_logsize(void);
 #endif
 
+static void hotplug_trigger();
+
 static
 void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorithm * const malgo)
 {
@@ -1009,7 +1011,11 @@ void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorith
 	
 	if (goal->malgo)
 		--goal->malgo->goal_refs;
-	++malgo->goal_refs;
+	if (malgo->goal_refs++)
+		// First time using a new mining algorithm may means we need to add mining hardware to support it
+		// api_thr_id is used as an ugly hack to determine if mining has started - if not, we do NOT want to try to hotplug anything (let the initial detect handle it)
+		if (opt_hotplug && api_thr_id)
+			hotplug_trigger();
 	goal->malgo = malgo;
 }
 
@@ -12812,7 +12818,6 @@ void schedule_rescan(const struct timeval * const tvp_when)
 	mutex_unlock(&rescan_mutex);
 }
 
-#ifdef HAVE_BFG_HOTPLUG
 static
 void hotplug_trigger()
 {
@@ -12821,7 +12826,6 @@ void hotplug_trigger()
 	timer_set_now(&tv_now);
 	schedule_rescan(&tv_now);
 }
-#endif
 
 #if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
 
