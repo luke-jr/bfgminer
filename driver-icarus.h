@@ -135,6 +135,9 @@ struct ICARUS_INFO {
 	bool (*job_start_func)(struct thr_info *);
 	
 #ifdef USE_DUALMINER
+#ifdef USE_SCRYPT
+	bool scrypt;
+#endif
 	bool dual_mode;
 #endif
 	

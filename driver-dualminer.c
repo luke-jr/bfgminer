@@ -80,6 +80,16 @@ const struct bfg_set_device_definition dualminer_set_device_funcs[];
 
 // device helper functions
 
+static inline
+bool dualminer_is_scrypt(struct ICARUS_INFO * const info)
+{
+#ifdef USE_SCRYPT
+	return info->scrypt;
+#else
+	return false;
+#endif
+}
+
 static
 void dualminer_teardown_device(int fd)
 {
@@ -97,7 +107,7 @@ void dualminer_init_hashrate(struct cgpu_info * const cgpu)
 
 	// get clear to send (CTS) status
 	if ((gc3355_get_cts_status(fd) != 1) &&  // 0.9v - dip-switch set to B
-		(opt_scrypt))
+		(dualminer_is_scrypt(info)))
 		// adjust hash-rate for voltage
 		info->Hs = DUALMINER_SCRYPT_DM_HASH_TIME;
 }
@@ -109,15 +119,15 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 	struct ICARUS_INFO * const info = icarus->device_data;
 	int fd = icarus->device_fd;
 
-	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, false);
+	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, false, dualminer_is_scrypt(info));
 	
 	dualminer_init_hashrate(icarus);
 
 	applog(LOG_DEBUG, "%"PRIpreprv": dualminer: Init: pll=%d, scrypt: %d, scrypt only: %d",
 		   icarus->proc_repr,
 		   opt_pll_freq,
-		   opt_scrypt,
-		   opt_scrypt && !info->dual_mode);
+		   dualminer_is_scrypt(info),
+		   dualminer_is_scrypt(info) && !info->dual_mode);
 }
 
 // set defaults for options that the user didn't specify
@@ -145,6 +155,22 @@ void dualminer_set_defaults(int fd)
 	}
 }
 
+float dualminer_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	struct ICARUS_INFO * const info = proc ? proc->device_data : NULL;
+	switch (malgo->algo)
+	{
+#ifdef USE_SCRYPT
+		case POW_SCRYPT:
+			return ((!info) || dualminer_is_scrypt(info)) ? (1./0x10000) : -1.;
+#endif
+		case POW_SHA256D:
+			return (info && dualminer_is_scrypt(info)) ? -1. : 1.;
+		default:
+			return -1.;
+	}
+}
+
 // ICARUS_INFO functions - icarus-common.h
 
 // runs after fd is opened but before the device detection code
@@ -153,7 +179,7 @@ bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * con
 {
 	dualminer_set_defaults(fd);
 	
-	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, true);
+	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, true, dualminer_is_scrypt(info));
 
 	return true;
 }
@@ -171,7 +197,7 @@ bool dualminer_job_start(struct thr_info * const thr)
 		// runs when job starts and the device has been reset (or first run)
 		dualminer_init_firstrun(icarus);
 
-	if (opt_scrypt)
+	if (dualminer_is_scrypt(info))
 	{
 		if (info->dual_mode)
 			gc3355_scrypt_reset(fd);
@@ -207,10 +233,15 @@ bool dualminer_detect_one(const char *devpath)
 		.nonce_littleendian = true,
 		.work_division = 1,
 		.detect_init_func = dualminer_detect_init,
-		.job_start_func = dualminer_job_start
+		.job_start_func = dualminer_job_start,
+#ifdef USE_SCRYPT
+		.scrypt = (get_mining_goal("default")->malgo->algo == POW_SCRYPT),
+#endif
 	};
 
-	if (opt_scrypt)
+	drv_set_defaults(drv, dualminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
+
+	if (dualminer_is_scrypt(info))
 	{
 		info->golden_ob = (char*)scrypt_golden_ob;
 		info->golden_nonce = (char*)scrypt_golden_nonce;
@@ -223,15 +254,13 @@ bool dualminer_detect_one(const char *devpath)
 		info->Hs = DUALMINER_SHA2_DM_HASH_TIME;
 	}
 
-	drv_set_defaults(drv, dualminer_set_device_funcs, info, devpath, detectone_meta_info.serial, 1);
-
 	if (!icarus_detect_custom(devpath, drv, info))
 	{
 		free(info);
 		return false;
 	}
 
-	if (opt_scrypt)
+	if (dualminer_is_scrypt(info))
 		info->read_count = DUALMINER_SCRYPT_READ_COUNT; // 4.8s to read
 	else
 		info->read_count = DUALMINER_SHA2_READ_COUNT; // 1.6s to read
@@ -251,9 +280,22 @@ const char *dualminer_set_dual_mode(struct cgpu_info * const proc, const char * 
 	return NULL;
 }
 
+#ifdef USE_SCRYPT
+static
+const char *dualminer_set_scrypt(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	info->scrypt = atoi(newvalue);
+	return NULL;
+}
+#endif
+
 static
 const struct bfg_set_device_definition dualminer_set_device_funcs[] = {
-	{"dual_mode", dualminer_set_dual_mode, "set to 1 to enable dual algorithm mining with two BFGMiner processes"},
+	{"dual_mode", dualminer_set_dual_mode, "set to 1 to enable dual algorithm mining"},
+#ifdef USE_SCRYPT
+	{"scrypt", dualminer_set_scrypt, "set to 1 to put in scrypt mode"},
+#endif
 	{NULL},
 };
 
@@ -285,7 +327,7 @@ bool dualminer_job_prepare(struct thr_info *thr, struct work *work, __maybe_unus
 
 	memset(state->ob_bin, 0, info->ob_size);
 
-	if (opt_scrypt)
+	if (dualminer_is_scrypt(info))
 		gc3355_scrypt_prepare_work(state->ob_bin, work);
 	else
 		gc3355_sha2_prepare_work(state->ob_bin, work);
@@ -316,7 +358,7 @@ void dualminer_drv_init()
 	dualminer_drv = icarus_drv;
 	dualminer_drv.dname = "dualminer";
 	dualminer_drv.name = "DMU";
-	dualminer_drv.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff;
+	dualminer_drv.drv_min_nonce_diff = dualminer_min_nonce_diff;
 	dualminer_drv.lowl_probe = dualminer_lowl_probe;
 	dualminer_drv.thread_shutdown = dualminer_thread_shutdown;
 	dualminer_drv.job_prepare = dualminer_job_prepare;
