@@ -13626,6 +13626,8 @@ begin_bench:
 				{
 					if (!malgo->goal_refs)
 						continue;
+					if (!malgo->base_queue)
+						continue;
 					if (malgo->staged < malgo->base_queue + opt_queue)
 					{
 						mutex_unlock(stgd_lock);
