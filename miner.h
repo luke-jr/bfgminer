@@ -1184,11 +1184,6 @@ extern bool opt_quiet;
 extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
-#ifdef USE_SCRYPT
-#define opt_scrypt (get_mining_goal("default")->malgo->algo == POW_SCRYPT)
-#else
-#define opt_scrypt (0)
-#endif
 extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
