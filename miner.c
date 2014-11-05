@@ -5395,6 +5395,9 @@ static bool pool_unworkable(const struct pool * const pool)
 	return false;
 }
 
+static struct pool *priority_pool(int);
+static bool pool_unusable(struct pool *);
+
 static
 bool pool_actively_desired(const struct pool * const pool, const struct pool *cp)
 {
@@ -5404,7 +5407,23 @@ bool pool_actively_desired(const struct pool * const pool, const struct pool *cp
 		return true;
 	if (!cp)
 		cp = current_pool();
-	return (pool == cp);
+	if (pool == cp)
+		return true;
+	
+	// If we are the highest priority, workable pool for a given algorithm, we are needed
+	struct mining_algorithm * const malgo = pool->goal->malgo;
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool * const other_pool = priority_pool(i);
+		if (other_pool == pool)
+			return true;
+		if (pool_unusable(other_pool))
+			continue;
+		if (other_pool->goal->malgo == malgo)
+			break;
+	}
+	
+	return false;
 }
 
 static
@@ -5468,8 +5487,6 @@ struct pool *select_balanced(struct pool *cp, struct mining_algorithm * const ma
 		++ret->shares;
 	return ret;
 }
-
-static struct pool *priority_pool(int choice);
 
 static
 struct pool *select_loadbalance(struct mining_algorithm * const malgo)
@@ -5546,8 +5563,6 @@ out: ;
 	
 	return pool;
 }
-
-static bool pool_unusable(struct pool *pool);
 
 static
 struct pool *select_failover(struct mining_algorithm * const malgo)
