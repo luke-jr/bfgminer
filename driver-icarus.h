@@ -134,6 +134,10 @@ struct ICARUS_INFO {
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 	bool (*job_start_func)(struct thr_info *);
 	
+#ifdef USE_DUALMINER
+	bool dual_mode;
+#endif
+	
 #ifdef USE_ZEUSMINER
 	// Hardware information, doesn't affect anything directly
 	uint16_t freq;

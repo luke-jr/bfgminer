@@ -13226,6 +13226,8 @@ int main(int argc, char *argv[])
 
 	mutex_init(&submitting_lock);
 
+	// Ensure at least the default goal is created
+	get_mining_goal("default");
 #ifdef HAVE_OPENCL
 	opencl_early_init();
 #endif

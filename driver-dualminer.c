@@ -33,11 +33,6 @@
   #include <io.h>
 #endif
 
-// mining both Scrypt & SHA2 at the same time with two processes
-// SHA2 process must be run first, no arg requirements, first serial port will be used
-// Scrypt process must be launched after, --scrypt and --dual-mode args required
-bool opt_dual_mode = false;
-
 #define DUALMINER_IO_SPEED 115200
 
 #define DUALMINER_SCRYPT_SM_HASH_TIME   0.00001428571429
@@ -111,9 +106,10 @@ void dualminer_init_hashrate(struct cgpu_info * const cgpu)
 static
 void dualminer_init_firstrun(struct cgpu_info *icarus)
 {
+	struct ICARUS_INFO * const info = icarus->device_data;
 	int fd = icarus->device_fd;
 
-	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, false);
+	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, false);
 	
 	dualminer_init_hashrate(icarus);
 
@@ -121,7 +117,7 @@ void dualminer_init_firstrun(struct cgpu_info *icarus)
 		   icarus->proc_repr,
 		   opt_pll_freq,
 		   opt_scrypt,
-		   opt_scrypt && !opt_dual_mode);
+		   opt_scrypt && !info->dual_mode);
 }
 
 // set defaults for options that the user didn't specify
@@ -153,11 +149,11 @@ void dualminer_set_defaults(int fd)
 
 // runs after fd is opened but before the device detection code
 static
-bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * __maybe_unused info)
+bool dualminer_detect_init(const char *devpath, int fd, struct ICARUS_INFO * const info)
 {
 	dualminer_set_defaults(fd);
 	
-	gc3355_init_dualminer(fd, opt_pll_freq, !opt_dual_mode, true);
+	gc3355_init_dualminer(fd, opt_pll_freq, !info->dual_mode, true);
 
 	return true;
 }
@@ -167,6 +163,7 @@ static
 bool dualminer_job_start(struct thr_info * const thr)
 {
 	struct cgpu_info *icarus = thr->cgpu;
+	struct ICARUS_INFO * const info = icarus->device_data;
 	struct icarus_state * const state = thr->cgpu_data;
 	int fd = icarus->device_fd;
 
@@ -176,7 +173,7 @@ bool dualminer_job_start(struct thr_info * const thr)
 
 	if (opt_scrypt)
 	{
-		if (opt_dual_mode)
+		if (info->dual_mode)
 			gc3355_scrypt_reset(fd);
 		else
 			gc3355_scrypt_only_reset(fd);
@@ -248,8 +245,9 @@ bool dualminer_detect_one(const char *devpath)
 static
 const char *dualminer_set_dual_mode(struct cgpu_info * const proc, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
+	struct ICARUS_INFO * const info = proc->device_data;
 	int val = atoi(setting);
-	opt_dual_mode = val == 1;
+	info->dual_mode = val == 1;
 	return NULL;
 }
 
