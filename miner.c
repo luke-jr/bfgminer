@@ -13693,7 +13693,9 @@ begin_bench:
 					if (malgo->staged < malgo->base_queue + opt_queue)
 					{
 						mutex_unlock(stgd_lock);
-						goto need_malgo_queued;
+						pool = select_pool(lagging, malgo);
+						if (pool)
+							goto need_malgo_queued;
 					}
 				}
 				malgo = NULL;
@@ -13707,15 +13709,16 @@ begin_bench:
 		if (ts > max_staged)
 			continue;
 
-need_malgo_queued: ;
-		work = make_work();
-
 		if (lagging && !pool_tset(cp, &cp->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
 			cp->getfail_occasions++;
 			total_go++;
 		}
 		pool = select_pool(lagging, malgo);
+		
+need_malgo_queued: ;
+		work = make_work();
+
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active || !pool->stratum_notify) {
