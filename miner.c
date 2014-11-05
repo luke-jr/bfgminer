@@ -1031,6 +1031,21 @@ struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
 	return NULL;
 }
 
+
+#ifdef HAVE_OPENCL
+static
+float opencl_oclthreads_to_intensity_sha256d(const unsigned long oclthreads)
+{
+	return log2f(oclthreads) - 15.;
+}
+
+static
+unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
+{
+	return powf(2, intensity + 15);
+}
+#endif
+
 static struct mining_algorithm malgo_sha256d = {
 	.name = "SHA256d",
 	.aliases = "SHA256d|SHA256|SHA2",
@@ -1041,9 +1056,32 @@ static struct mining_algorithm malgo_sha256d = {
 	.reasonable_low_nonce_diff = 1.,
 	
 	.hash_data_f = hash_data,
+	
+#ifdef HAVE_OPENCL
+	.opencl_nodefault = true,
+	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_sha256d,
+	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
+	.opencl_min_oclthreads =       0x20,  // intensity -10
+	.opencl_max_oclthreads = 0x20000000,  // intensity  14
+#endif
 };
 
+
 #ifdef USE_SCRYPT
+#ifdef HAVE_OPENCL
+static
+float opencl_oclthreads_to_intensity_scrypt(const unsigned long oclthreads)
+{
+	return log2(oclthreads);
+}
+
+static
+unsigned long opencl_intensity_to_oclthreads_scrypt(float intensity)
+{
+	return pow(2, intensity);
+}
+#endif
+
 static struct mining_algorithm malgo_scrypt = {
 	.name = "scrypt",
 	.aliases = "scrypt",
@@ -1053,6 +1091,13 @@ static struct mining_algorithm malgo_scrypt = {
 	.reasonable_low_nonce_diff = 1./0x10000,
 	
 	.hash_data_f = scrypt_hash_data,
+	
+#ifdef HAVE_OPENCL
+	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_scrypt,
+	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
+	.opencl_min_oclthreads =      0x100,  // intensity   8
+	.opencl_max_oclthreads = 0x20000000,  // intensity  31
+#endif
 };
 
 static
@@ -13387,7 +13432,7 @@ int main(int argc, char *argv[])
 #endif
 
 #if BLKMAKER_VERSION > 1
-	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
+	if (opt_load_bitcoin_conf && !(get_mining_goal("default")->malgo->algo != POW_SHA256D || opt_benchmark))
 		add_local_gbt(total_pools);
 #endif
 	
@@ -13494,7 +13539,7 @@ int main(int argc, char *argv[])
 	} while (!pools_active);
 
 #ifdef USE_SCRYPT
-	if (detect_algo == 1 && !opt_scrypt) {
+	if (detect_algo == 1 && get_mining_goal("default")->malgo->algo != POW_SCRYPT) {
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
 		set_malgo_scrypt();
 	}

@@ -1140,6 +1140,14 @@ struct mining_algorithm {
 	int base_queue;
 	
 	struct mining_algorithm *next;
+	
+#ifdef HAVE_OPENCL
+	bool opencl_nodefault;
+	float (*opencl_oclthreads_to_intensity)(unsigned long oclthreads);
+	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);
+	unsigned long opencl_min_oclthreads;
+	unsigned long opencl_max_oclthreads;
+#endif
 };
 
 struct mining_goal_info {
@@ -1214,6 +1222,7 @@ extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
 extern double best_diff;
+extern struct mining_algorithm *mining_algorithms;
 extern struct mining_goal_info *mining_goals;
 
 struct curl_ent {

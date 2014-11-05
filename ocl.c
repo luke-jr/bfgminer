@@ -12,6 +12,7 @@
 #ifdef HAVE_OPENCL
 
 #include <ctype.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -616,7 +617,10 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		opencl_set_intensity_from_str(cgpu, data->_init_intensity);
 	}
 	else
-		data->oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
+	{
+		data->oclthreads = 1;
+		data->intensity = INT_MIN;
+	}
 	applog(LOG_DEBUG, "Max compute units reported %u", (unsigned)clState->max_compute_units);
 	
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);
@@ -680,7 +684,7 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		data->vwidth = clState->preferred_vwidth;
 	}
 
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, OPENCL_MAX_BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
 		return false;

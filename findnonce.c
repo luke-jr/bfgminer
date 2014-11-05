@@ -137,7 +137,7 @@ void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data)
 struct pc_data {
 	struct thr_info *thr;
 	struct work work;
-	uint32_t res[SCRYPT_MAXBUFFERS];
+	uint32_t res[OPENCL_MAX_BUFFERSIZE];
 	pthread_t pth;
 	int found;
 };
@@ -147,7 +147,11 @@ static void *postcalc_hash(void *userdata)
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
 	unsigned int entry = 0;
-	int found = (work_mining_algorithm(&pcd->work)->algo == POW_SCRYPT) ? SCRYPT_FOUND : FOUND;
+	int found = FOUND;
+#ifdef USE_SCRYPT
+	if (work_mining_algorithm(&pcd->work)->algo == POW_SCRYPT)
+		found = SCRYPT_FOUND;
+#endif
 
 	pthread_detach(pthread_self());
 	RenameThread("postcalchsh");
@@ -188,7 +192,12 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		.thr = thr,
 	};
 	__copy_work(&pcd->work, work);
-	buffersize = (work_mining_algorithm(work)->algo == POW_SCRYPT) ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+#ifdef USE_SCRYPT
+	if (work_mining_algorithm(work)->algo == POW_SCRYPT)
+		buffersize = SCRYPT_BUFFERSIZE;
+	else
+#endif
+		buffersize = BUFFERSIZE;
 	memcpy(&pcd->res, res, buffersize);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {

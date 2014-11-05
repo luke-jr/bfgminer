@@ -11,20 +11,6 @@
 
 #include "miner.h"
 
-#define MIN_SHA_INTENSITY -10
-#define MAX_SHA_INTENSITY 14
-#define MIN_SCRYPT_INTENSITY 8
-#define MAX_SCRYPT_INTENSITY 31
-#ifdef USE_SCRYPT
-#define MIN_INTENSITY (opt_scrypt ? MIN_SCRYPT_INTENSITY : MIN_SHA_INTENSITY)
-#define MAX_INTENSITY (opt_scrypt ? MAX_SCRYPT_INTENSITY : MAX_SHA_INTENSITY)
-#define MAX_GPU_INTENSITY MAX_SCRYPT_INTENSITY
-#else
-#define MIN_INTENSITY MIN_SHA_INTENSITY
-#define MAX_INTENSITY MAX_SHA_INTENSITY
-#define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
-#endif
-
 enum opencl_binary_usage {
 	OBU_DEFAULT  = 0,
 	OBU_LOAD     = 1,
@@ -78,8 +64,7 @@ struct opencl_device_data {
 #endif
 };
 
-extern double oclthreads_to_intensity(unsigned long oclthreads, bool is_sha256d);
-extern unsigned long intensity_to_oclthreads(double intensity, bool is_sha256d);
+extern float opencl_proc_get_intensity(struct cgpu_info *, const char **iunit);
 extern unsigned long xintensity_to_oclthreads(double xintensity, cl_uint max_compute_units);
 extern bool opencl_set_intensity_from_str(struct cgpu_info *, const char *newvalue);
 
