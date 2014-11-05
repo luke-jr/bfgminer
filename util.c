@@ -2570,6 +2570,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		free(pool->goalname);
 		pool->goalname = pool->next_goalname;
 		mining_goal_reset(pool->goal);
+		if (pool->next_goal_malgo)
+		{
+			goal_set_malgo(pool->goal, pool->next_goal_malgo);
+			pool->next_goal_malgo = NULL;
+		}
 	}
 	
 	if (pool->next_nonce1)
@@ -2767,15 +2772,53 @@ bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * con
 		return false;
 	
 	const char * const new_goalname = __json_array_string(params, 0);
+	const char *emsg = NULL;
 	
 	if (pool->next_goalname && pool->next_goalname != pool->goalname)
 		free(pool->next_goalname);
+	if (pool->next_goal_malgo)
+		pool->next_goal_malgo = NULL;
 	
 	// This compares goalname to new_goalname, but matches NULL correctly :)
 	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
 		pool->next_goalname = pool->goalname;
 	else
+	{
 		pool->next_goalname = maybe_strdup(new_goalname);
+		if (json_is_array(params) && json_array_size(params) > 1)
+		{
+			json_t * const j_goaldesc = json_array_get(params, 1);
+			if (json_is_object(j_goaldesc))
+			{
+				json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
+				if (j_malgo && json_is_string(j_malgo))
+				{
+					const char * const newvalue = json_string_value(j_malgo);
+					struct mining_algorithm * const new_malgo = mining_algorithm_by_alias(newvalue);
+					if (new_malgo == pool->goal->malgo)
+					{} // Nothing to do
+					else
+					if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
+						pool->next_goal_malgo = new_malgo;
+					else
+						emsg = "Mining algorithm not supported";
+				}
+			}
+		}
+	}
+	
+	json_t * const j_id = json_object_get(val, "id");
+	if (j_id && !json_is_null(j_id))
+	{
+		char * const idstr = json_dumps_ANY(j_id, 0);
+		char buf[0x80];
+		if (unlikely(emsg))
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
+		else
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":null,\"error\":[-1,\"%s\",null]}", idstr, emsg);
+		free(idstr);
+		stratum_send(pool, buf, strlen(buf));
+	}
 	
 	return true;
 }
@@ -2946,7 +2989,7 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 	
-	// Usage: mining.set_goal("goal name", [reserved])
+	// Usage: mining.set_goal("goal name", {"malgo":"SHA256d", ...})
 	if (!strncasecmp(buf, "mining.set_goal", 15) && stratum_set_goal(pool, val, params))
 		return_via(out, ret = true);
 	

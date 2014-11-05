@@ -1097,7 +1097,9 @@ extern int enabled_pools;
 extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern struct mining_algorithm *mining_algorithm_by_alias(const char *alias);
 extern struct mining_goal_info *get_mining_goal(const char *name);
+extern void goal_set_malgo(struct mining_goal_info *, struct mining_algorithm *);
 extern void mining_goal_reset(struct mining_goal_info * const goal);
 extern void adjust_quota_gcd(void);
 extern struct pool *add_pool2(struct mining_goal_info *);
@@ -1416,6 +1418,7 @@ struct pool {
 	struct stratum_work swork;
 	char *goalname;
 	char *next_goalname;
+	struct mining_algorithm *next_goal_malgo;
 	uint8_t next_target[0x20];
 	char *next_nonce1;
 	int next_n2size;

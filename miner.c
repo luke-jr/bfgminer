@@ -1003,7 +1003,6 @@ static void switch_logsize(void);
 
 static void hotplug_trigger();
 
-static
 void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorithm * const malgo)
 {
 	if (goal->malgo == malgo)
@@ -1019,7 +1018,6 @@ void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorith
 	goal->malgo = malgo;
 }
 
-static
 struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
 {
 	struct mining_algorithm *malgo;
