@@ -241,7 +241,7 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 	int i;
 	uint32_t newbuf[17] = {0}, oldbuf[17] = {0};
 	uint32_t ocounter;
-	long odiff = 0;
+	long long odiff = 0;
 
 	memset(newbuf, 0, 17 * 4);
 	memset(oldbuf, 0, 17 * 4);
@@ -274,9 +274,9 @@ int libbitfury_detect_chip(struct spi_port *port, int chip_n) {
 
 		counter = libbitfury_get_counter(newbuf, oldbuf);
 		if (ocounter) {
-			uint32_t cdiff = libbitfury_c_diff(ocounter, counter);
+			long long cdiff = libbitfury_c_diff(ocounter, counter);
 
-			if (abs(odiff - cdiff) < 5000)
+			if (llabs(odiff - cdiff) < 5000)
 				return 1;
 			odiff = cdiff;
 		}
