@@ -820,7 +820,7 @@ CPUSearch:
 
 	/* scan nonces for a proof-of-work hash */
 	{
-		sha256_func func;
+		sha256_func func = NULL;
 		switch (work_mining_algorithm(work)->algo)
 		{
 #ifdef USE_SCRYPT
@@ -832,6 +832,8 @@ CPUSearch:
 				func = sha256_funcs[opt_algo];
 				break;
 		}
+		if (unlikely(!func))
+			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
 		rc = (*func)(
 			thr,
 			work->midstate,
