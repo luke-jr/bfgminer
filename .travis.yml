@@ -15,7 +15,9 @@ matrix:
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --enable-tool'
     - compiler: ": pkgconf"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev pkgconf' EXTRA_DEPS='libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --enable-tool'
-    - compiler: ": MinGW64"
+    - compiler: ": MinGW64 ncurses"
+      env: UBUNTU_DEPS='gcc-mingw-w64-x86-64' EXTRA_DEPS='pkg-config yasm' CROSS_BINPKGS='x86_64-w64-mingw32+ncurses' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --host=x86_64-w64-mingw32 --disable-knc --disable-bfsb --disable-jingtian --disable-metabank --disable-minergate --disable-titan'
+    - compiler: ": MinGW64 pdcurses"
       env: UBUNTU_DEPS='gcc-mingw-w64-x86-64' EXTRA_DEPS='pkg-config yasm' CROSS_BINPKGS='x86_64-w64-mingw32' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-scrypt --without-system-libbase58 --host=x86_64-w64-mingw32 --disable-knc --disable-bfsb --disable-jingtian --disable-metabank --disable-minergate --disable-titan'
     - compiler: ": Std SHA2"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS=''
