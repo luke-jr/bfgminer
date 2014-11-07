@@ -668,7 +668,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			die_info.cores = die_p->cores; /* core hint */
 			die_info.version = KNC_VERSION_TITAN;
-			if (!knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
+			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
 				continue;
 			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
 				mythr = proc->thr[0];
