@@ -1706,7 +1706,7 @@ extern int opt_dynamic_interval;
 const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * const cgpu, _clState * const clState, const struct mining_algorithm * const malgo)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
-	struct opencl_kernel_info *kernelinfo;
+	struct opencl_kernel_info *kernelinfo = NULL;
 	char *kernel_file;
 	switch (malgo->algo)
 	{
@@ -1755,6 +1755,8 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 			break;
 #endif
 	}
+	if (!kernelinfo)
+		applogr(NULL, LOG_ERR, "%s: Unsupported mining algorithm", cgpu->dev_repr);
 	if (!kernelinfo->loaded)
 	{
 		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernel_file, malgo))
