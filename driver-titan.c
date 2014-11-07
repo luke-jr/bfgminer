@@ -570,6 +570,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct knc_titan_die *die_p;
 	struct timeval tv_now;
 	int num_request_busy;
+	int num_status_byte_error[4];
 	bool fpga_status_checked;
 
 	knc_titan_prune_local_queue(thr);
@@ -600,7 +601,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						/* Use FPGA accelerated unicasts */
 						if (!fpga_status_checked) {
 							timer_set_now(&knc->tv_prev);
-							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
+							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy, num_status_byte_error);
 							fpga_status_checked = true;
 						}
 						if (num_request_busy == 0) {
@@ -611,11 +612,12 @@ static void knc_titan_poll(struct thr_info * const thr)
 					}
 				} else {
 					if (knc->asic_served_by_fpga[asic]) {
-						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy);
+						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy, num_status_byte_error);
 						if (num_request_busy == 0) {
 							timer_set_now(&tv_now);
 							double diff = ((tv_now.tv_sec - knc->tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev.tv_usec)) / 1000000.0;
 							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
+							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
 							knc->asic_served_by_fpga[asic] = false;
 						}
 					}
