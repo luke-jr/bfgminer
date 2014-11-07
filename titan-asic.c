@@ -189,14 +189,15 @@ bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, i
 	return true;
 }
 
-bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int *num_request_busy)
+bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int *num_request_busy, int *num_status_byte_error)
 {
 	uint8_t request[2];
 	int request_length;
-	int response_length = 4;
+	int response_length = 12;
 	uint8_t response[response_length];
 	int status;
 	uint8_t num_request_busy_byte;
+	uint16_t num_status_byte_error_counters[4];
 
 	request_length = knc_prepare_titan_work_status(request, asic);
 
@@ -206,12 +207,14 @@ bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int
 		return false;
 	}
 
-	status = knc_decode_work_status(response + 2, &num_request_busy_byte);
+	status = knc_decode_work_status(response + 2, &num_request_busy_byte, num_status_byte_error_counters);
 	if (status) {
 		applog(LOG_INFO, "%s[%d]: get_work_status got undefined response", repr, asic);
 		return false;
 	}
 
 	*num_request_busy = num_request_busy_byte;
+	for (int i = 0 ; i < KNC_STATUS_BYTE_ERROR_COUNTERS ; i++)
+		num_status_byte_error[i] = num_status_byte_error_counters[i];
 	return true;
 }
