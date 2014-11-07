@@ -164,9 +164,9 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	bin2hex(ntime, &ntime_n, 4);
 	p += sprintf(p, "],\"%s\",\"%s\",\"%s\",%s],\"method\":\"mining.notify\",\"id\":null}\n", version, nbits, ntime, clean ? "true" : "false");
 	
-	const size_t setgoalbufsz = 49 + strlen(pool->goal->name) + (pool->goalname ? (1 + strlen(pool->goalname)) : 0) + 4 + 1;
+	const size_t setgoalbufsz = 49 + strlen(pool->goal->name) + (pool->goalname ? (1 + strlen(pool->goalname)) : 0) + 12 + strlen(pool->goal->malgo->name) + 5 + 1;
 	char * const setgoalbuf = malloc(setgoalbufsz);
-	snprintf(setgoalbuf, setgoalbufsz, "{\"method\":\"mining.set_goal\",\"id\":null,\"params\":[\"%s%s%s\"]}\n", pool->goal->name, pool->goalname ? "/" : "", pool->goalname ?: "");
+	snprintf(setgoalbuf, setgoalbufsz, "{\"method\":\"mining.set_goal\",\"id\":null,\"params\":[\"%s%s%s\",{\"malgo\":\"%s\"}]}\n", pool->goal->name, pool->goalname ? "/" : "", pool->goalname ?: "", pool->goal->malgo->name);
 	
 	ssj = malloc(sizeof(*ssj));
 	*ssj = (struct stratumsrv_job){
