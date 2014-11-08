@@ -303,7 +303,7 @@ int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_rcvd, total_bytes_sent;
 double total_diff1, total_bad_diff1;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
-static int staged_rollable;
+static int staged_rollable, staged_spare;
 unsigned int new_blocks;
 unsigned int found_blocks;
 
@@ -3685,17 +3685,21 @@ void decay_time(double *f, double fadd, double fsecs)
 	*f /= ftotal;
 }
 
-static int __total_staged(void)
+static
+int __total_staged(const bool include_spares)
 {
-	return HASH_COUNT(staged_work);
+	int tot = HASH_COUNT(staged_work);
+	if (!include_spares)
+		tot -= staged_spare;
+	return tot;
 }
 
-static int total_staged(void)
+static int total_staged(const bool include_spares)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = __total_staged();
+	ret = __total_staged(include_spares);
 	mutex_unlock(stgd_lock);
 
 	return ret;
@@ -7285,6 +7289,8 @@ void unstage_work(struct work * const work)
 	--work_mining_algorithm(work)->staged;
 	if (work_rollable(work))
 		--staged_rollable;
+	if (work->spare)
+		--staged_spare;
 	staged_full = false;
 }
 
@@ -7598,6 +7604,8 @@ static bool hash_push(struct work *work)
 	if (work_rollable(work))
 		staged_rollable++;
 	++work_mining_algorithm(work)->staged;
+	if (work->spare)
+		++staged_spare;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
@@ -9894,10 +9902,11 @@ static struct work *hash_pop(struct cgpu_info * const proc)
 	int hc;
 	struct work *work, *work_found, *tmp;
 	enum {
-		HPWS_NONE     = 0,
-		HPWS_LOWDIFF  = 1,
-		HPWS_ROLLABLE = 2,
-		HPWS_PERFECT  = 3,
+		HPWS_NONE,
+		HPWS_LOWDIFF,
+		HPWS_SPARE,
+		HPWS_ROLLABLE,
+		HPWS_PERFECT,
 	} work_score = HPWS_NONE;
 	bool did_cmd_idle = false;
 	pthread_t cmd_idle_thr;
@@ -9913,24 +9922,25 @@ retry:
 		{
 			const struct mining_algorithm * const work_malgo = work_mining_algorithm(work);
 			const float min_nonce_diff = drv_min_nonce_diff(proc->drv, proc, work_malgo);
+#define FOUND_WORK(score)  do{  \
+				if (work_score < score)  \
+				{  \
+					work_found = work;  \
+					work_score = score;  \
+				}  \
+				continue;  \
+}while(0)
 			if (min_nonce_diff < work->work_difficulty)
 			{
-				if (unlikely(min_nonce_diff >= 0 && work_score < HPWS_LOWDIFF))
-				{
-					work_found = work;
-					work_score = HPWS_LOWDIFF;
-				}
-				continue;
+				if (min_nonce_diff < 0)
+					continue;
+				FOUND_WORK(HPWS_LOWDIFF);
 			}
+			if (work->spare)
+				FOUND_WORK(HPWS_SPARE);
 			if (work->rolltime && hc > staged_rollable)
-			{
-				if (work_score < HPWS_ROLLABLE)
-				{
-					work_found = work;
-					work_score = HPWS_ROLLABLE;
-				}
-				continue;
-			}
+				FOUND_WORK(HPWS_ROLLABLE);
+#undef FOUND_WORK
 			
 			// Good match
 			work_found = work;
@@ -9997,7 +10007,7 @@ retry:
  * the future */
 static struct work *clone_work(struct work *work)
 {
-	int mrs = mining_threads + opt_queue - total_staged();
+	int mrs = mining_threads + opt_queue - total_staged(false);
 	struct work *work_clone;
 	bool cloned;
 
@@ -11457,7 +11467,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 #ifdef HAVE_CURSES
-		const int ts = total_staged();
+		const int ts = total_staged(true);
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status(ts);
@@ -13674,7 +13684,7 @@ begin_bench:
 		max_staged += base_queue;
 
 		mutex_lock(stgd_lock);
-		ts = __total_staged();
+		ts = __total_staged(false);
 
 		if (!pool_localgen(cp) && !ts && !opt_fail_only)
 			lagging = true;
@@ -13693,19 +13703,25 @@ begin_bench:
 						mutex_unlock(stgd_lock);
 						pool = select_pool(lagging, malgo);
 						if (pool)
-							goto need_malgo_queued;
+						{
+							work = make_work();
+							work->spare = true;
+							goto retry;
+						}
 					}
 				}
 				malgo = NULL;
 			}
 			staged_full = true;
 			pthread_cond_wait(&gws_cond, stgd_lock);
-			ts = __total_staged();
+			ts = __total_staged(false);
 		}
 		mutex_unlock(stgd_lock);
 
 		if (ts > max_staged)
 			continue;
+
+		work = make_work();
 
 		if (lagging && !pool_tset(cp, &cp->lagging)) {
 			applog(LOG_WARNING, "Pool %d not providing work fast enough", cp->pool_no);
@@ -13713,9 +13729,6 @@ begin_bench:
 			total_go++;
 		}
 		pool = select_pool(lagging, malgo);
-		
-need_malgo_queued: ;
-		work = make_work();
 
 retry:
 		if (pool->has_stratum) {

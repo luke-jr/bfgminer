@@ -1470,6 +1470,7 @@ struct work {
 	bool		longpoll;
 	bool		stale;
 	bool		mandatory;
+	bool spare;
 	bool		block;
 
 	bool		stratum;
