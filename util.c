@@ -2570,11 +2570,11 @@ static bool parse_notify(struct pool *pool, json_t *val)
 		free(pool->goalname);
 		pool->goalname = pool->next_goalname;
 		mining_goal_reset(pool->goal);
-		if (pool->next_goal_malgo)
-		{
-			goal_set_malgo(pool->goal, pool->next_goal_malgo);
-			pool->next_goal_malgo = NULL;
-		}
+	}
+	if (pool->next_goal_malgo)
+	{
+		goal_set_malgo(pool->goal, pool->next_goal_malgo);
+		pool->next_goal_malgo = NULL;
 	}
 	
 	if (pool->next_nonce1)
@@ -2772,41 +2772,49 @@ bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * con
 		return false;
 	
 	const char * const new_goalname = __json_array_string(params, 0);
+	struct mining_algorithm *new_malgo = NULL;
 	const char *emsg = NULL;
+	
+	if (json_is_array(params) && json_array_size(params) > 1)
+	{
+		json_t * const j_goaldesc = json_array_get(params, 1);
+		if (json_is_object(j_goaldesc))
+		{
+			json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
+			if (j_malgo && json_is_string(j_malgo))
+			{
+				const char * const newvalue = json_string_value(j_malgo);
+				new_malgo = mining_algorithm_by_alias(newvalue);
+				// Even if it's the current malgo, we should reset next_goal_malgo in case of a prior set_goal
+				if (new_malgo == pool->goal->malgo)
+				{}  // Do nothing, assignment takes place below
+				if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
+				{}  // Do nothing, assignment takes place below
+				else
+				{
+					emsg = "Mining algorithm not supported";
+					// Ignore even the goal name, if we are failing
+					goto out;
+				}
+				if (new_malgo == pool->goal->malgo)
+					new_malgo = NULL;
+			}
+		}
+	}
+	
+	// Even if the goal name is not changing, we need to adopt and configuration change
+	pool->next_goal_malgo = new_malgo;
 	
 	if (pool->next_goalname && pool->next_goalname != pool->goalname)
 		free(pool->next_goalname);
-	if (pool->next_goal_malgo)
-		pool->next_goal_malgo = NULL;
 	
 	// This compares goalname to new_goalname, but matches NULL correctly :)
 	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
 		pool->next_goalname = pool->goalname;
 	else
-	{
 		pool->next_goalname = maybe_strdup(new_goalname);
-		if (json_is_array(params) && json_array_size(params) > 1)
-		{
-			json_t * const j_goaldesc = json_array_get(params, 1);
-			if (json_is_object(j_goaldesc))
-			{
-				json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
-				if (j_malgo && json_is_string(j_malgo))
-				{
-					const char * const newvalue = json_string_value(j_malgo);
-					struct mining_algorithm * const new_malgo = mining_algorithm_by_alias(newvalue);
-					if (new_malgo == pool->goal->malgo)
-					{} // Nothing to do
-					else
-					if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
-						pool->next_goal_malgo = new_malgo;
-					else
-						emsg = "Mining algorithm not supported";
-				}
-			}
-		}
-	}
 	
+out: ;
 	json_t * const j_id = json_object_get(val, "id");
 	if (j_id && !json_is_null(j_id))
 	{
