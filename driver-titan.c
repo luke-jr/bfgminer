@@ -219,7 +219,7 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 	if (!nonce_tops_inited) {
 		uint32_t top;
 		double nonce_f, nonce_step;
-		int die, core;
+		int core;
 
 		nonce_f = 0.0;
 		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_DIE;
@@ -559,7 +559,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info * const knc = cgpu->device_data;
-	struct knc_titan_core *knccore, *core1;
+	struct knc_titan_core *knccore;
 	struct work *work, *tmp;
 	int workaccept = 0;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
@@ -639,7 +639,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 				--knc->workqueue_size;
 				DL_DELETE(knc->workqueue, work);
 				work->device_id = MAKE_WORKID(asic, die, die_p->next_slot);
-				struct work *replaced_work;
 				struct work *work1, *tmp1;
 				HASH_ITER(hh, knc->devicework, work1, tmp1) {
 					if (work->device_id == work1->device_id) {
