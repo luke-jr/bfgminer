@@ -255,7 +255,6 @@ Options for both config file and command line:
 --cmd-idle <arg>    Execute a command when a device is allowed to be idle (rest or wait)
 --cmd-sick <arg>    Execute a command when a device is declared sick
 --cmd-dead <arg>    Execute a command when a device is declared dead
---coinbase-addr <arg> Set coinbase payout address for solo mining
 --coinbase-check-addr <arg> A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','
 --coinbase-check-total <arg> The least total payout amount expected in coinbase received from the previous-defined pool
 --coinbase-check-percent <arg> The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool
@@ -271,6 +270,7 @@ Options for both config file and command line:
 --expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --failover-switch-delay <arg> Delay in seconds before switching back to a failed pool (default: 300)
+--generate-to <arg> Set an address to generate to for solo mining
 --force-dev-init    Always initialize devices when possible (such as bitstream uploads to some FPGAs)
 --kernel-path <arg> Specify a path to where bitstream and kernel files are
 --load-balance      Change multipool strategy from failover to quota based balance
@@ -561,13 +561,11 @@ SOLO MINING
 
 BFGMiner supports solo mining with any GBT-compatible bitcoin node (such as
 bitcoind). To use this mode, you need to specify the URL of your bitcoind node
-using the usual pool options (--url, --userpass, etc), and the --coinbase-addr
+using the usual pool options (--url, --userpass, etc), and the --generate-to
 option to specify the Bitcoin address you wish to receive the block rewards
 mined. When you run Bitcoin Core on the same computer as your miner, the pool
-itself will be automatically configured for you. Please be aware that solo
-mining via GBT is at this time only supported for Bitcoin, and only on for the
-default goal - ie, if you are solo mining, don't use --pool-goal on your Bitcoin
-pool(s).
+itself will be automatically configured for you (on the default goal). Please be
+aware that solo mining via GBT is at this time only supported for Bitcoin.
 
 IMPORTANT: If you are solo mining with more than one instance of BFGMiner (or
 any other software) per payout address, you must also specify data using the
@@ -584,7 +582,20 @@ rejected; this does not indicate that it has stopped mining.
 Example solo mining usage:
 
 bfgminer -o http://localhost:8332 -u username -p password \
-    --coinbase-addr 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --coinbase-sig "rig1: This is Joe's block!"
+
+If you want to solo mine on multiple GBT-compatible Bitcoin blockchains, you can
+specify --generate-to multiple times with a goal name prefix followed by a
+colon. Note that at this time, the coinbase sig is always shared across all
+goals/pools.
+
+Example multi-blockchain solo mining usage:
+
+bfgminer -o http://localhost:8332 -u username -p password \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    -o http://localhost:7221 -u user2 -p password --pool-goal mychain \
+    --generate-to mychain:1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
     --coinbase-sig "rig1: This is Joe's block!"
 
 

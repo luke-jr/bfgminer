@@ -1149,6 +1149,8 @@ struct mining_goal_info {
 	
 	struct blockchain_info *blkchain;
 	
+	bytes_t *generation_script;  // was opt_coinbase_script
+	
 	double current_diff;
 	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
 	char net_hashrate[ALLOC_H2B_SHORT];

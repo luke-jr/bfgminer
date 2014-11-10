@@ -133,8 +133,6 @@ static bool want_gbt = true;
 static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 static bool opt_load_bitcoin_conf = true;
-static bool have_at_least_one_getcbaddr;
-static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t coinbase_script_block_id;
 static uint32_t template_nonce;
 #endif
@@ -1161,10 +1159,6 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
-#if BLKMAKER_VERSION > 1
-	if (uri_get_param_bool(uri, "getcbaddr", false))
-		have_at_least_one_getcbaddr = true;
-#endif
 }
 
 /* Pool variant of test and set */
@@ -1261,6 +1255,37 @@ char *set_b58addr(const char * const arg, bytes_t * const b)
 		return "Failed to convert address to script";
 	}
 	bytes_assimilate_raw(b, script, scriptsz, scriptsz);
+	return NULL;
+}
+
+static
+char *set_generate_addr(char *arg)
+{
+	char * const colon = strchr(arg, ':');
+	struct mining_goal_info *goal;
+	if (colon)
+	{
+		colon[0] = '\0';
+		goal = get_mining_goal(arg);
+		arg = &colon[1];
+	}
+	else
+		goal = get_mining_goal("default");
+	
+	bytes_t newscript = BYTES_INIT;
+	char *estr = set_b58addr(arg, &newscript);
+	if (estr)
+	{
+		bytes_free(&newscript);
+		return estr;
+	}
+	if (!goal->generation_script)
+	{
+		goal->generation_script = malloc(sizeof(*goal->generation_script));
+		bytes_init(goal->generation_script);
+	}
+	bytes_assimilate(goal->generation_script, &newscript);
+	bytes_free(&newscript);
 	return NULL;
 }
 #endif
@@ -2180,14 +2205,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--cmd-dead",
 	             opt_set_charp, NULL, &cmd_dead,
 	             "Execute a command when a device is declared dead"),
-#if BLKMAKER_VERSION > 1
-	OPT_WITH_ARG("--coinbase-addr",
-		     set_b58addr, NULL, &opt_coinbase_script,
-		     "Set coinbase payout address for solo mining"),
-	OPT_WITH_ARG("--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
-		     set_b58addr, NULL, &opt_coinbase_script,
-		     opt_hidden),
-#endif
 #if BLKMAKER_VERSION > 0
 	OPT_WITH_ARG("--coinbase-sig",
 		     set_strdup, NULL, &opt_coinbase_sig,
@@ -2248,6 +2265,14 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--force-dev-init",
 	        opt_set_bool, &opt_force_dev_init,
 	        "Always initialize devices when possible (such as bitstream uploads to some FPGAs)"),
+#endif
+#if BLKMAKER_VERSION > 1
+	OPT_WITH_ARG("--generate-to",
+	             set_generate_addr, NULL, NULL,
+	             "Set an address to generate to for solo mining"),
+	OPT_WITH_ARG("--generate-to-addr|--generate-to-address|--genaddress|--genaddr|--gen-address|--gen-addr|--generate-address|--generate-addr|--coinbase-addr|--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
+	             set_generate_addr, NULL, NULL,
+	             opt_hidden),
 #endif
 #ifdef HAVE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
@@ -3112,12 +3137,23 @@ int work_ntime_range(struct work * const work, const struct timeval * const tvp_
 
 #if BLKMAKER_VERSION > 1
 static
-void refresh_bitcoind_address(const bool fresh)
+bool goal_has_at_least_one_getcbaddr(const struct mining_goal_info * const goal)
 {
-	struct mining_goal_info * const goal = get_mining_goal("default");
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool * const pool = pools[i];
+		if (uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			return true;
+	}
+	return false;
+}
+
+static
+void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool fresh)
+{
 	struct blockchain_info * const blkchain = goal->blkchain;
 	
-	if (!have_at_least_one_getcbaddr)
+	if (!goal_has_at_least_one_getcbaddr(goal))
 		return;
 	
 	char getcbaddr_req[60];
@@ -3134,7 +3170,6 @@ void refresh_bitcoind_address(const bool fresh)
 		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
 			continue;
 		if (pool->goal != goal)
-			// TODO: Multi-blockchain support
 			continue;
 		
 		applog(LOG_DEBUG, "Refreshing coinbase address from pool %d", pool->pool_no);
@@ -3176,12 +3211,20 @@ void refresh_bitcoind_address(const bool fresh)
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
 			continue;
 		}
-		if (bytes_eq(&newscript, &opt_coinbase_script))
+		if (goal->generation_script)
 		{
-			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
-			break;
+			if (bytes_eq(&newscript, goal->generation_script))
+			{
+				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
+				break;
+			}
 		}
-		bytes_assimilate(&opt_coinbase_script, &newscript);
+		else
+		{
+			goal->generation_script = malloc(sizeof(*goal->generation_script));
+			bytes_init(goal->generation_script);
+		}
+		bytes_assimilate(goal->generation_script, &newscript);
 		coinbase_script_block_id = blkchain->currentblk->block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
 		break;
@@ -3226,17 +3269,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
+		struct mining_goal_info * const goal = pool->goal;
 		const uint32_t tmpl_block_id = ((uint32_t*)tmpl->prevblk)[0];
 		if ((!tmpl->cbtxn) && coinbase_script_block_id != tmpl_block_id)
-			refresh_bitcoind_address(false);
-		if (bytes_len(&opt_coinbase_script) && get_mining_goal("default") == pool->goal)
+			refresh_bitcoind_address(goal, false);
+		if (goal->generation_script)
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
-			blkmk_init_generation2(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script), &newcb);
+			blkmk_init_generation2(tmpl, bytes_buf(goal->generation_script), bytes_len(goal->generation_script), &newcb);
 #else
 			newcb = !tmpl->cbtxn;
-			blkmk_init_generation(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script));
+			blkmk_init_generation(tmpl, bytes_buf(goal->generation_script), bytes_len(goal->generation_script));
 #endif
 			if (newcb)
 			{
@@ -5632,7 +5676,8 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if ((bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr) && get_mining_goal("default") == pool->goal)
+			const struct mining_goal_info * const goal = pool->goal;
+			if (goal->generation_script || goal_has_at_least_one_getcbaddr(goal))
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
@@ -11652,7 +11697,7 @@ err:
 	if (rpcssl == -101)
 		rpcssl = 0;
 	
-	const bool have_cbaddr = bytes_len(&opt_coinbase_script);
+	const bool have_cbaddr = get_mining_goal("default")->generation_script;
 	
 	const int uri_sz = 0x30;
 	char * const uri = malloc(uri_sz);
