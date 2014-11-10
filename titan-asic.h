@@ -17,7 +17,7 @@
 #define	KNC_TITAN_MAX_WORK_SLOT_NUM	15
 
 #define KNC_TITAN_FPGA_SYSCLK_FREQ      24576000
-#define KNC_TITAN_FPGA_SPI_FREQ         3072000
+#define KNC_TITAN_FPGA_SPI_FREQ         6144000
 #define KNC_TITAN_FPGA_SPI_DIVIDER      (KNC_TITAN_FPGA_SYSCLK_FREQ / (2*KNC_TITAN_FPGA_SPI_FREQ) - 1)
 #if KNC_TITAN_FPGA_SYSCLK_FREQ % (2*KNC_TITAN_FPGA_SPI_FREQ) != 0
 #warning Requested SPI frequency could not be accomplished exactly, adjusting as needed
