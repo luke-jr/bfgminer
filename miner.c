@@ -147,7 +147,6 @@ char *request_target_str;
 float request_pdiff = 1.0;
 double request_bdiff;
 static bool want_stratum = true;
-bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
@@ -358,40 +357,24 @@ const char unicode_micro = 'u';
 #define U8_BAD_END   "\xef\x80\x80"
 #define AS_BAD(x) U8_BAD_START x U8_BAD_END
 
+/* logstart is where the log window should start */
+static int devcursor, logstart, logcursor;
+
 bool selecting_device;
 unsigned selected_device;
 #endif
 
 static int max_lpdigits;
 
-static char current_block[40];
-
-/* Protected by ch_lock */
-static char *current_hash;
-static uint32_t current_block_id;
-char *current_fullhash;
+// current_hash was replaced with goal->current_goal_detail
+// current_block_id was replaced with blkchain->currentblk->block_id
 
 static char datestamp[40];
-static char blocktime[32];
-time_t block_time;
 static char best_share[ALLOC_H2B_SHORTV] = "0";
-double current_diff = 0xFFFFFFFFFFFFFFFFULL;
-static char block_diff[ALLOC_H2B_SHORTV];
-static char net_hashrate[ALLOC_H2B_SHORT];
 double best_diff = 0;
 
-static bool known_blkheight_current;
-static uint32_t known_blkheight;
-static uint32_t known_blkheight_blkid;
-static uint64_t block_subsidy;
-
-struct block {
-	char hash[40];
-	UT_hash_handle hh;
-	int block_no;
-};
-
-static struct block *blocks = NULL;
+struct mining_goal_info *mining_goals;
+int active_goals = 1;
 
 
 int swork_id;
@@ -1008,6 +991,75 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+#ifdef HAVE_CURSES
+static void switch_logsize(void);
+#endif
+
+static
+int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)
+{
+	// default always goes first
+	if (a->is_default)
+		return -1;
+	if (b->is_default)
+		return 1;
+	return strcmp(a->name, b->name);
+}
+
+static
+void blkchain_init_block(struct blockchain_info * const blkchain)
+{
+	struct block_info * const dummy_block = calloc(sizeof(*dummy_block), 1);
+	memset(dummy_block->prevblkhash, 0, 0x20);
+	HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
+	blkchain->currentblk = dummy_block;
+}
+
+struct mining_goal_info *get_mining_goal(const char * const name)
+{
+	static unsigned next_goal_id;
+	struct mining_goal_info *goal;
+	HASH_FIND_STR(mining_goals, name, goal);
+	if (!goal)
+	{
+		struct blockchain_info * const blkchain = malloc(sizeof(*blkchain) + sizeof(*goal));
+		goal = (void*)(&blkchain[1]);
+		
+		*blkchain = (struct blockchain_info){
+			.currentblk = NULL,
+		};
+		blkchain_init_block(blkchain);
+		
+		*goal = (struct mining_goal_info){
+			.id = next_goal_id++,
+			.name = strdup(name),
+			.is_default = !strcmp(name, "default"),
+			.blkchain = blkchain,
+			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
+		};
+		HASH_ADD_STR(mining_goals, name, goal);
+		HASH_SORT(mining_goals, mining_goals_name_cmp);
+		
+#ifdef HAVE_CURSES
+		devcursor = 7 + active_goals;
+		switch_logsize();
+#endif
+	}
+	return goal;
+}
+
+void mining_goal_reset(struct mining_goal_info * const goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info *blkinfo, *tmpblkinfo;
+	HASH_ITER(hh, blkchain->blocks, blkinfo, tmpblkinfo)
+	{
+		HASH_DEL(blkchain->blocks, blkinfo);
+		free(blkinfo);
+	}
+	blkchain_init_block(blkchain);
+}
+
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
@@ -1052,7 +1104,7 @@ void adjust_quota_gcd(void)
 }
 
 /* Return value is ignored if not called from add_pool_details */
-struct pool *add_pool(void)
+struct pool *add_pool2(struct mining_goal_info * const goal)
 {
 	struct pool *pool;
 
@@ -1069,6 +1121,7 @@ struct pool *add_pool(void)
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
+	pool->goal = goal;
 
 	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -1671,6 +1724,20 @@ static char *set_cbcperc(const char *arg)
 	pool->cb_param.perc = atof(arg) / 100;
 	if (pool->cb_param.perc < 0.0 || pool->cb_param.perc > 1.0)
 		return "The percentage should be between 0 and 100";
+	
+	return NULL;
+}
+
+static
+char *set_pool_goal(const char * const arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Usage of --pool-goal before pools are defined does not make sense";
+	
+	pool = pools[total_pools - 1];
+	pool->goal = get_mining_goal(arg);
 	
 	return NULL;
 }
@@ -2365,6 +2432,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 	             set_userpass, NULL, NULL,
 	             "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--pool-goal",
+			 set_pool_goal, NULL, NULL,
+			 "Named goal for the previous-defined pool"),
 	OPT_WITH_ARG("--pool-priority",
 			 set_pool_priority, NULL, NULL,
 			 "Priority for just the previous-defined pool"),
@@ -2894,44 +2964,63 @@ void free_work(struct work *work)
 const char *bfg_workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
 #define workpadding_bin  bfg_workpadding_bin
 
-// Must only be called with ch_lock held!
-static
-void __update_block_title(const unsigned char *hash_swap)
-{
-	if (hash_swap) {
-		char tmp[17];
-		// Only provided when the block has actually changed
-		free(current_hash);
-		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
-		bin2hex(tmp, &hash_swap[24], 8);
-		memset(current_hash, '.', 3);
-		memcpy(&current_hash[3], tmp, 17);
-		known_blkheight_current = false;
-	} else if (likely(known_blkheight_current)) {
-		return;
-	}
-	if (current_block_id == known_blkheight_blkid) {
-		// FIXME: The block number will overflow this sometime around AD 2025-2027
-		if (known_blkheight < 1000000) {
-			memmove(&current_hash[3], &current_hash[11], 8);
-			snprintf(&current_hash[11], 20-11, " #%6u", known_blkheight);
-		}
-		known_blkheight_current = true;
-	}
-}
+static const size_t block_info_str_sz = 3 /* ... */ + 16 /* block hash segment */ + 1;
 
 static
-void have_block_height(uint32_t block_id, uint32_t blkheight)
+void block_info_str(char * const out, const struct block_info * const blkinfo)
 {
-	if (known_blkheight == blkheight)
+	unsigned char hash_swap[32];
+	swap256(hash_swap, blkinfo->prevblkhash);
+	swap32tole(hash_swap, hash_swap, 32 / 4);
+	
+	memset(out, '.', 3);
+	// FIXME: The block number will overflow this sometime around AD 2025-2027
+	if (blkinfo->height > 0 && blkinfo->height < 1000000)
+	{
+		bin2hex(&out[3], &hash_swap[0x1c], 4);
+		snprintf(&out[11], block_info_str_sz-11, " #%6u", blkinfo->height);
+	}
+	else
+		bin2hex(&out[3], &hash_swap[0x18], 8);
+}
+
+#ifdef HAVE_CURSES
+static void update_block_display(void);
+#endif
+
+// Must only be called with ch_lock held!
+static
+void __update_block_title(struct mining_goal_info * const goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	
+	if (!goal->current_goal_detail)
+		goal->current_goal_detail = malloc(block_info_str_sz);
+	block_info_str(goal->current_goal_detail, blkchain->currentblk);
+#ifdef HAVE_CURSES
+	update_block_display();
+#endif
+}
+
+static struct block_info *block_exists(const struct blockchain_info *, const void *);
+
+static
+void have_block_height(struct mining_goal_info * const goal, const void * const prevblkhash, uint32_t blkheight)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = block_exists(blkchain, prevblkhash);
+	if ((!blkinfo) || blkinfo->height)
 		return;
+	
+	uint32_t block_id = ((uint32_t*)prevblkhash)[0];
 	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, (uint32_t)be32toh(block_id), blkheight);
 	cg_wlock(&ch_lock);
-	known_blkheight = blkheight;
-	known_blkheight_blkid = block_id;
-	block_subsidy = 5000000000LL >> (blkheight / 210000);
-	if (block_id == current_block_id)
-		__update_block_title(NULL);
+	blkinfo->height = blkheight;
+	if (blkinfo == blkchain->currentblk)
+	{
+		blkchain->currentblk_subsidy = 5000000000LL >> (blkheight / 210000);
+		__update_block_title(goal);
+	}
 	cg_wunlock(&ch_lock);
 }
 
@@ -3025,6 +3114,9 @@ int work_ntime_range(struct work * const work, const struct timeval * const tvp_
 static
 void refresh_bitcoind_address(const bool fresh)
 {
+	struct mining_goal_info * const goal = get_mining_goal("default");
+	struct blockchain_info * const blkchain = goal->blkchain;
+	
 	if (!have_at_least_one_getcbaddr)
 		return;
 	
@@ -3040,6 +3132,9 @@ void refresh_bitcoind_address(const bool fresh)
 	{
 		struct pool * const pool = pools[i];
 		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			continue;
+		if (pool->goal != goal)
+			// TODO: Multi-blockchain support
 			continue;
 		
 		applog(LOG_DEBUG, "Refreshing coinbase address from pool %d", pool->pool_no);
@@ -3087,7 +3182,7 @@ void refresh_bitcoind_address(const bool fresh)
 			break;
 		}
 		bytes_assimilate(&opt_coinbase_script, &newscript);
-		coinbase_script_block_id = current_block_id;
+		coinbase_script_block_id = blkchain->currentblk->block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
 		break;
 	}
@@ -3134,7 +3229,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		const uint32_t tmpl_block_id = ((uint32_t*)tmpl->prevblk)[0];
 		if ((!tmpl->cbtxn) && coinbase_script_block_id != tmpl_block_id)
 			refresh_bitcoind_address(false);
-		if (bytes_len(&opt_coinbase_script))
+		if (bytes_len(&opt_coinbase_script) && get_mining_goal("default") == pool->goal)
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
@@ -3270,9 +3365,10 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 
 	if ( (tmp_val = json_object_get(res_val, "height")) ) {
+		struct mining_goal_info * const goal = pool->goal;
 		uint32_t blkheight = json_number_value(tmp_val);
-		uint32_t block_id = ((uint32_t*)work->data)[1];
-		have_block_height(block_id, blkheight);
+		const void * const prevblkhash = &work->data[4];
+		have_block_height(goal, prevblkhash, blkheight);
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
@@ -3373,8 +3469,6 @@ static int total_staged(void)
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 1.0;
-/* logstart is where the log window should start */
-static int devcursor, logstart, logcursor;
 #ifdef HAVE_CURSES
 static char statusline[256];
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
@@ -4177,6 +4271,116 @@ static int menu_attr = A_REVERSE;
 	bfg_waddstr(win, tmp42); \
 } while (0)
 
+static
+void update_block_display_line(const int blky, struct mining_goal_info *goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = blkchain->currentblk;
+	double income;
+	char incomestr[ALLOC_H2B_SHORT+6+1];
+	
+	if (blkinfo->height)
+	{
+		income = goal->diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
+		format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	}
+	else
+		strcpy(incomestr, "?");
+	
+	int linelen = bfg_win_linelen(statuswin);
+	wmove(statuswin, blky, 0);
+	
+	bfg_waddstr(statuswin, " Block");
+	if (!goal->is_default)
+		linelen -= strlen(goal->name) + 1;
+	linelen -= 6;  // " Block"
+	
+	if (blkinfo->height && blkinfo->height < 1000000)
+	{
+		cg_wprintw(statuswin, " #%6u", blkinfo->height);
+		linelen -= 8;
+	}
+	bfg_waddstr(statuswin, ":");
+	
+	if (linelen > 55)
+		bfg_waddstr(statuswin, " ");
+	if (linelen >= 65)
+		bfg_waddstr(statuswin, "...");
+	
+	{
+		char hexpbh[0x11];
+		if (!(blkinfo->height && blkinfo->height < 1000000))
+		{
+			bin2hex(hexpbh, &blkinfo->prevblkhash[4], 4);
+			bfg_waddstr(statuswin, hexpbh);
+		}
+		bin2hex(hexpbh, &blkinfo->prevblkhash[0], 4);
+		bfg_waddstr(statuswin, hexpbh);
+	}
+	
+	if (linelen >= 55)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " Diff:%s", goal->current_diff_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, "(%s) ", goal->net_hashrate);
+	
+	if (linelen >= 62)
+	{
+		if (linelen >= 69)
+			bfg_waddstr(statuswin, " ");
+		bfg_waddstr(statuswin, "Started:");
+	}
+	else
+		bfg_waddstr(statuswin, "S:");
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	bfg_waddstr(statuswin, blkchain->currentblk_first_seen_time_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " I:%s", incomestr);
+	
+	if (!goal->is_default)
+		cg_wprintw(statuswin, " %s", goal->name);
+	
+	wclrtoeol(statuswin);
+}
+
+static bool pool_actively_in_use(const struct pool *, const struct pool *);
+
+static
+void update_block_display(void)
+{
+	struct mining_goal_info *goal, *tmpgoal;
+	int blky = 3, i, total_found_goals = 0;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		for (i = 0; i < total_pools; ++i)
+		{
+			struct pool * const pool = pools[i];
+			if (pool->goal == goal && pool_actively_in_use(pool, NULL))
+				break;
+		}
+		if (i >= total_pools)
+			// no pools using this goal, so it's probably stale anyway
+			continue;
+		update_block_display_line(blky++, goal);
+		++total_found_goals;
+	}
+	if (total_found_goals != active_goals)
+	{
+		active_goals = total_found_goals;
+		devcursor = 7 + active_goals;
+		switch_logsize();
+	}
+}
+
 static bool pool_unworkable(const struct pool *);
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -4185,7 +4389,6 @@ static void curses_print_status(const int ts)
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
-	double income;
 	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
@@ -4283,7 +4486,7 @@ static void curses_print_status(const int ts)
 		             lowdiff_pool->diff,
 		             (lowdiff == highdiff) ? "" : "-",
 		             (lowdiff == highdiff) ? "" : highdiff_pool->diff,
-		             have_longpoll ? '+' : '-',
+		             pool->goal->have_longpoll ? '+' : '-',
 		             oldest_work_restart_pool->work_restart_timestamp);
 	}
 	else
@@ -4309,18 +4512,15 @@ one_workable_pool: ;
 		}
 		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
 		             pool->pool_no, pooladdr, pool->diff,
-		             have_longpoll ? '+' : '-', pool_proto_str(pool),
+		             pool->goal->have_longpoll ? '+' : '-', pool_proto_str(pool),
 		             pool->work_restart_timestamp,
 		             pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  current_hash, block_diff, net_hashrate, blocktime);
 	
-	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
-	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
-	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
-	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
+	char bwstr[(ALLOC_H2B_SHORT*2)+3+1];
+	
+	cg_mvwprintw(statuswin, devcursor - 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  BS:%s",
 		ts,
 		total_go + total_ro,
 		new_blocks,
@@ -4330,16 +4530,16 @@ one_workable_pool: ;
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
-		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
 	
-	mvwaddstr(statuswin, 5, 0, " ");
+	mvwaddstr(statuswin, devcursor - 3, 0, " ");
 	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 	
+	int devdiv = devcursor - 2;
 	logdiv = statusy - 1;
-	bfg_hline(statuswin, 6);
+	bfg_hline(statuswin, devdiv);
 	bfg_hline(statuswin, logdiv);
 #ifdef USE_UNICODE
 	if (use_unicode)
@@ -4349,10 +4549,10 @@ one_workable_pool: ;
 			offset += max_lpdigits;  // proc letter(s)
 		if (have_unicode_degrees)
 			++offset;  // degrees symbol
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 		offset += 24;  // hashrates etc
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 	}
 #endif
@@ -4517,6 +4717,7 @@ static void switch_logsize(void)
 		unlock_curses();
 	}
 	check_winsizes();
+	update_block_display();
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -4744,6 +4945,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	cgpu = get_thr_cgpu(work->thr_id);
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
+		struct mining_goal_info * const goal = pool->goal;
+		
 		mutex_lock(&stats_lock);
 		cgpu->accepted++;
 		total_accepted++;
@@ -4751,6 +4954,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
 		pool->diff_accepted += work->work_difficulty;
+		goal->diff_accepted += work->work_difficulty;
 		mutex_unlock(&stats_lock);
 
 		pool->seq_rejects = 0;
@@ -5408,7 +5612,7 @@ erradd:
 	json_decref(n);
 }
 
-static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe)
+static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe, struct pool * const pool)
 {
 	char *rpc_req;
 
@@ -5428,7 +5632,7 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if (bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr)
+			if ((bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr) && get_mining_goal("default") == pool->goal)
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
@@ -5455,8 +5659,8 @@ gbtfail2:
 	return NULL;
 }
 
-#define prepare_rpc_req(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, false)
-#define prepare_rpc_req_probe(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, true)
+#define prepare_rpc_req(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, false, pool)
+#define prepare_rpc_req_probe(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, true, pool)
 
 static const char *pool_protocol_name(enum pool_protocol proto)
 {
@@ -5497,7 +5701,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 		pool->proto = PLP_GETBLOCKTEMPLATE;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
+	rpc_req = prepare_rpc_req(work, pool->proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		return false;
@@ -5986,6 +6190,8 @@ bool stale_work(struct work *work, bool share)
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
@@ -5995,7 +6201,7 @@ bool stale_work(struct work *work, bool share)
 	else
 		work_expiry = opt_expiry;
 
-	unsigned max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
+	unsigned max_expiry = (goal->have_longpoll ? opt_expiry_lp : opt_expiry);
 	if (work_expiry > max_expiry)
 		work_expiry = max_expiry;
 
@@ -6020,13 +6226,13 @@ bool stale_work(struct work *work, bool share)
 		if (enabled_pools <= 1 || opt_fail_only) {
 			if (pool->block_id && block_id != pool->block_id)
 			{
-				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 1 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 1 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)blkchain->currentblk->block_id);
 				return true;
 			}
 		} else {
-			if (block_id != current_block_id)
+			if (block_id != blkchain->currentblk->block_id)
 			{
-				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 0 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 0 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)blkchain->currentblk->block_id);
 				return true;
 			}
 		}
@@ -6112,8 +6318,11 @@ double share_diff(const struct work *work)
 static
 void work_check_for_block(struct work * const work)
 {
+	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	
 	work->share_diff = share_diff(work);
-	if (unlikely(work->share_diff >= current_diff)) {
+	if (unlikely(work->share_diff >= goal->current_diff)) {
 		work->block = true;
 		work->pool->solved++;
 		found_blocks++;
@@ -6729,6 +6938,9 @@ void switch_pools(struct pool *selected)
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
 
+#ifdef HAVE_CURSES
+	update_block_display();
+#endif
 }
 
 static void discard_work(struct work *work)
@@ -6830,7 +7042,6 @@ static void restart_threads(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static
 void blkhashstr(char *rv, const unsigned char *hash)
 {
 	unsigned char hash_swap[32];
@@ -6840,60 +7051,42 @@ void blkhashstr(char *rv, const unsigned char *hash)
 	bin2hex(rv, hash_swap, 32);
 }
 
-static void set_curblock(char *hexstr, unsigned char *hash)
+static
+void set_curblock(struct mining_goal_info * const goal, struct block_info * const blkinfo)
 {
-	unsigned char hash_swap[32];
+	struct blockchain_info * const blkchain = goal->blkchain;
 
-	current_block_id = ((uint32_t*)hash)[0];
-	strcpy(current_block, hexstr);
-	swap256(hash_swap, hash);
-	swap32tole(hash_swap, hash_swap, 32 / 4);
+	blkchain->currentblk = blkinfo;
+	blkchain->currentblk_subsidy = 5000000000LL >> (blkinfo->height / 210000);
 
 	cg_wlock(&ch_lock);
-	block_time = time(NULL);
-	__update_block_title(hash_swap);
-	free(current_fullhash);
-	current_fullhash = malloc(65);
-	bin2hex(current_fullhash, hash_swap, 32);
-	get_timestamp(blocktime, sizeof(blocktime), block_time);
+	__update_block_title(goal);
+	get_timestamp(blkchain->currentblk_first_seen_time_str, sizeof(blkchain->currentblk_first_seen_time_str), blkinfo->first_seen_time);
 	cg_wunlock(&ch_lock);
 
-	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
+	applog(LOG_INFO, "New block: %s diff %s (%s)", goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate);
 }
 
-/* Search to see if this string is from a block that has been seen before */
-static bool block_exists(char *hexstr)
+/* Search to see if this prevblkhash has been seen before */
+static
+struct block_info *block_exists(const struct blockchain_info * const blkchain, const void * const prevblkhash)
 {
-	struct block *s;
+	struct block_info *s;
 
 	rd_lock(&blk_lock);
-	HASH_FIND_STR(blocks, hexstr, s);
+	HASH_FIND(hh, blkchain->blocks, prevblkhash, 0x20, s);
 	rd_unlock(&blk_lock);
 
-	if (s)
-		return true;
-	return false;
+	return s;
 }
 
-#if 0
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
+static int block_sort(struct block_info * const blocka, struct block_info * const blockb)
 {
-	char hexstr[37];
-	bool ret;
-
-	bin2hex(hexstr, work->data + 8, 18);
-	ret = block_exists(hexstr);
-	return ret;
-}
-#endif
-
-static int block_sort(struct block *blocka, struct block *blockb)
-{
-	return blocka->block_no - blockb->block_no;
+	return blocka->block_seen_order - blockb->block_seen_order;
 }
 
-static void set_blockdiff(const struct work *work)
+static
+void set_blockdiff(struct mining_goal_info * const goal, const struct work * const work)
 {
 	unsigned char target[32];
 	double diff;
@@ -6903,60 +7096,72 @@ static void set_blockdiff(const struct work *work)
 	diff = target_diff(target);
 	diff64 = diff;
 
-	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
-	format_unit2(net_hashrate, sizeof(net_hashrate),
+	suffix_string(diff64, goal->current_diff_str, sizeof(goal->current_diff_str), 0);
+	format_unit2(goal->net_hashrate, sizeof(goal->net_hashrate),
 	             true, "h/s", H2B_SHORT, diff * 7158278, -1);
-	if (unlikely(current_diff != diff))
-		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
-	current_diff = diff;
+	if (unlikely(goal->current_diff != diff))
+		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", goal->current_diff_str, goal->net_hashrate);
+	goal->current_diff = diff;
 }
 
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char hexstr[65];
 	
 	if (work->mandatory)
 		return ret;
 	
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
+	const uint8_t * const prevblkhash = &work->data[4];
 	
-	/* Hack to work around dud work sneaking into test */
-	bin2hex(hexstr, work->data + 8, 18);
-	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		goto out_free;
+	{
+		/* Hack to work around dud work sneaking into test */
+		bool dudwork = true;
+		for (int i = 8; i < 26; ++i)
+			if (work->data[i])
+			{
+				dudwork = false;
+				break;
+			}
+		if (dudwork)
+			goto out_free;
+	}
 	
 	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr))
+	if (!block_exists(blkchain, prevblkhash))
 	{
-		struct block *s = calloc(sizeof(struct block), 1);
+		struct block_info * const s = calloc(sizeof(struct block_info), 1);
 		int deleted_block = 0;
 		ret = false;
 		
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
-		strcpy(s->hash, hexstr);
-		s->block_no = new_blocks++;
+		memcpy(s->prevblkhash, prevblkhash, sizeof(s->prevblkhash));
+		s->block_id = block_id;
+		s->block_seen_order = new_blocks++;
+		s->first_seen_time = time(NULL);
 		
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since
 		 * work from blocks before this is virtually impossible and we
 		 * want to prevent memory usage from continually rising */
-		if (HASH_COUNT(blocks) > 6)
+		if (HASH_COUNT(blkchain->blocks) > 6)
 		{
-			struct block *oldblock;
+			struct block_info *oldblock;
 			
-			HASH_SORT(blocks, block_sort);
-			oldblock = blocks;
-			deleted_block = oldblock->block_no;
-			HASH_DEL(blocks, oldblock);
+			HASH_SORT(blkchain->blocks, block_sort);
+			oldblock = blkchain->blocks;
+			deleted_block = oldblock->block_seen_order;
+			HASH_DEL(blkchain->blocks, oldblock);
 			free(oldblock);
 		}
-		HASH_ADD_STR(blocks, hash, s);
-		set_blockdiff(work);
+		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(s->prevblkhash), s);
+		set_blockdiff(goal, work);
 		wr_unlock(&blk_lock);
 		pool->block_id = block_id;
 		pool_update_work_restart_time(pool);
@@ -6966,7 +7171,7 @@ static bool test_work_current(struct work *work)
 #if BLKMAKER_VERSION > 1
 		template_nonce = 0;
 #endif
-		set_curblock(hexstr, &work->data[4]);
+		set_curblock(goal, s);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 		
@@ -6978,7 +7183,7 @@ static bool test_work_current(struct work *work)
 				       pool->pool_no);
 			}
 			else
-			if (have_longpoll)
+			if (goal->have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
 				applog(LOG_NOTICE, "New block detected on network");
@@ -7000,7 +7205,7 @@ static bool test_work_current(struct work *work)
 				// Pool actively changed block
 				if (pool == current_pool())
 					restart = true;
-				if (block_id == current_block_id)
+				if (block_id == blkchain->currentblk->block_id)
 				{
 					// Caught up, only announce if this pool is the one in use
 					if (restart)
@@ -7014,7 +7219,8 @@ static bool test_work_current(struct work *work)
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
-					blkhashstr(hexstr, &work->data[4]);
+					char hexstr[65];
+					blkhashstr(hexstr, prevblkhash);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       pool->pool_no,
@@ -7112,7 +7318,7 @@ static void display_pool_summary(struct pool *pool)
 	int pool_secs;
 
 	if (curses_active_locked()) {
-		wlog("Pool: %s\n", pool->rpc_url);
+		wlog("Pool: %s  Goal: %s\n", pool->rpc_url, pool->goal->name);
 		if (pool->solved)
 			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
 		if (!pool->has_stratum)
@@ -7266,6 +7472,8 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pool->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pool->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pool->rpc_pass));
+		if (strcmp(pool->goal->name, "default"))
+			fprintf(fcfg, "\n\t\t\"pool-goal\" : \"%s\",", pool->goal->name);
 		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pool->prio);
 		if (pool->force_rollntime)
 			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pool->force_rollntime);
@@ -7412,6 +7620,12 @@ void zero_stats(void)
 	awidth = rwidth = swidth = hwwidth = 1;
 #endif
 
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->diff_accepted = 0;
+	}
+	
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
@@ -8666,6 +8880,8 @@ fishy:
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
+			struct mining_goal_info * const goal = pool->goal;
+			
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
 
 			/* We don't know what device this came from so we can't
@@ -8675,6 +8891,7 @@ fishy:
 			pool->accepted++;
 			total_diff_accepted += pool_diff;
 			pool->diff_accepted += pool_diff;
+			goal->diff_accepted += pool_diff;
 			mutex_unlock(&stats_lock);
 		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
@@ -9029,11 +9246,12 @@ static void *stratum_thread(void *userdata)
 			cb_height_sz = bin_height[-1];
 			if (cb_height_sz == 3) {
 				// FIXME: The block number will overflow this by AD 2173
-				uint32_t block_id = ((uint32_t*)work->data)[1];
+				struct mining_goal_info * const goal = pool->goal;
+				const void * const prevblkhash = &work->data[4];
 				uint32_t height = 0;
 				memcpy(&height, bin_height, 3);
 				height = le32toh(height);
-				have_block_height(block_id, height);
+				have_block_height(goal, prevblkhash, height);
 			}
 
 			pool->swork.work_restart_id =
@@ -9067,7 +9285,8 @@ out:
 
 static void init_stratum_thread(struct pool *pool)
 {
-	have_longpoll = true;
+	struct mining_goal_info * const goal = pool->goal;
+	goal->have_longpoll = true;
 
 	if (unlikely(pthread_create(&pool->stratum_thread, NULL, stratum_thread, (void *)pool)))
 		quit(1, "Failed to create stratum thread");
@@ -9160,7 +9379,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
-	rpc_req = prepare_rpc_req_probe(work, proto, NULL);
+	rpc_req = prepare_rpc_req_probe(work, proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		goto out;
@@ -10414,6 +10633,8 @@ struct pool *_select_longpoll_pool(struct pool *cp, bool(*func)(struct pool *))
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+		if (cp->goal != pool->goal)
+			continue;
 
 		if (func(pool))
 			return pool;
@@ -10485,7 +10706,7 @@ retry_pool:
 	}
 
 	/* Any longpoll from any pool is enough for this to be true */
-	have_longpoll = true;
+	pool->goal->have_longpoll = true;
 
 	wait_lpcurrent(cp);
 
@@ -10502,7 +10723,7 @@ retry_pool:
 
 		struct work *work = make_work();
 		char *lpreq;
-		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id, pool);
 		work->pool = pool;
 		if (!lpreq)
 		{
@@ -10591,7 +10812,12 @@ static void stop_longpoll(void)
 		pool->lp_started = false;
 		pthread_cancel(pool->longpoll_thread);
 	}
-	have_longpoll = false;
+	
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->have_longpoll = false;
+	}
 }
 
 static void start_longpoll(void)
@@ -12487,7 +12713,6 @@ int main(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
-	struct block *block;
 	unsigned int k;
 	int i;
 	int rearrange_pools = 0;
@@ -12626,17 +12851,11 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+#ifdef HAVE_CURSES
 	devcursor = 8;
 	logstart = devcursor;
 	logcursor = logstart;
-
-	block = calloc(sizeof(struct block), 1);
-	if (unlikely(!block))
-		quit (1, "main OOM");
-	for (i = 0; i < 36; i++)
-		strcat(block->hash, "0");
-	HASH_ADD_STR(blocks, hash, block);
-	strcpy(current_block, block->hash);
+#endif
 
 	mutex_init(&submitting_lock);
 

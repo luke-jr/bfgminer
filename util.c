@@ -2553,6 +2553,12 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	if (pool->next_goalreset)
+	{
+		pool->next_goalreset = false;
+		mining_goal_reset(pool->goal);
+	}
+	
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
@@ -2739,6 +2745,16 @@ err:
 	return true;
 }
 
+static
+bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	if (!uri_get_param_bool(pool->rpc_url, "goalreset", false))
+		return false;
+	
+	pool->next_goalreset = true;
+	return true;
+}
+
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	if (opt_disable_client_reconnect)
@@ -2904,6 +2920,10 @@ bool parse_method(struct pool *pool, char *s)
 		ret = true;
 		goto out;
 	}
+	
+	// Usage: mining.set_goal("goal name", [reserved])
+	if (!strncasecmp(buf, "mining.set_goal", 15) && stratum_set_goal(pool, val, params))
+		return_via(out, ret = true);
 	
 out:
 	if (val)
@@ -3280,6 +3300,11 @@ out:
 		if (uri_get_param_bool(pool->rpc_url, "xnsub", false))
 		{
 			sprintf(s, "{\"id\": \"xnsub\", \"method\": \"mining.extranonce.subscribe\", \"params\": []}");
+			_stratum_send(pool, s, strlen(s), true);
+		}
+		if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
+		{
+			sprintf(s, "{\"id\": \"goalsub\", \"method\": \"mining.goal.subscribe\", \"params\": []}");
 			_stratum_send(pool, s, strlen(s), true);
 		}
 	} else {

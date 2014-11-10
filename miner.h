@@ -947,7 +947,6 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
-extern bool have_longpoll;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
@@ -1061,6 +1060,7 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
+extern void blkhashstr(char *out, const unsigned char *hash);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);
@@ -1093,8 +1093,11 @@ extern int enabled_pools;
 extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern struct mining_goal_info *get_mining_goal(const char *name);
+extern void mining_goal_reset(struct mining_goal_info * const goal);
 extern void adjust_quota_gcd(void);
-extern struct pool *add_pool(void);
+extern struct pool *add_pool2(struct mining_goal_info *);
+#define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
 
 #define MAX_GPUDEVICES 16
@@ -1121,6 +1124,43 @@ extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user
 #define MAX_INTENSITY_STR MAX_SHA_INTENSITY_STR
 #define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
 #endif
+
+struct block_info {
+	uint32_t block_id;
+	uint8_t prevblkhash[0x20];
+	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
+	uint32_t height;
+	time_t first_seen_time;
+	
+	UT_hash_handle hh;
+};
+
+struct blockchain_info {
+	struct block_info *blocks;
+	struct block_info *currentblk;
+	uint64_t currentblk_subsidy;  // only valid when height is known! (and assumes Bitcoin)
+	char currentblk_first_seen_time_str[0x20];  // was global blocktime
+};
+
+struct mining_goal_info {
+	unsigned id;
+	char *name;
+	bool is_default;
+	
+	struct blockchain_info *blkchain;
+	
+	double current_diff;
+	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
+	char net_hashrate[ALLOC_H2B_SHORT];
+	
+	char *current_goal_detail;
+	
+	double diff_accepted;
+	
+	bool have_longpoll;
+	
+	UT_hash_handle hh;
+};
 
 extern struct string_elist *scan_devices;
 extern bool opt_force_dev_init;
@@ -1170,10 +1210,8 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
-extern char *current_fullhash;
-extern double current_diff;
 extern double best_diff;
-extern time_t block_time;
+extern struct mining_goal_info *mining_goals;
 
 struct curl_ent {
 	CURL *curl;
@@ -1297,6 +1335,7 @@ struct pool {
 	time_t work_restart_time;
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
+	struct mining_goal_info *goal;
 
 	enum pool_protocol proto;
 
@@ -1368,6 +1407,7 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
+	bool next_goalreset;
 	uint8_t next_target[0x20];
 	char *next_nonce1;
 	int next_n2size;
