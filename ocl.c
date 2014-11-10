@@ -12,6 +12,7 @@
 #ifdef HAVE_OPENCL
 
 #include <ctype.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -258,6 +259,30 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
+char *opencl_kernel_source(const char * const filename, int * const out_sourcelen, enum cl_kernels * const out_kinterface)
+{
+	char *source = file_contents(filename, out_sourcelen);
+	if (!source)
+		return NULL;
+	char *s = strstr(source, "kernel-interface:"), *q;
+	if (s)
+	{
+		for (s = &s[17]; s[0] && isspace(s[0]); ++s)
+			if (s[0] == '\n' || s[0] == '\r')
+				break;
+		for (q = s; q[0] && !isspace(q[0]); ++q)
+		{}  // Find end of string
+		const size_t kinamelen = q - s;
+		char kiname[kinamelen + 1];
+		memcpy(kiname, s, kinamelen);
+		kiname[kinamelen] = '\0';
+		*out_kinterface = select_kernel(kiname);
+	}
+	else
+		*out_kinterface = KL_NONE;
+	return source;
+}
+
 extern int opt_g_threads;
 
 int clDevicesNum(void) {
@@ -339,20 +364,20 @@ int clDevicesNum(void) {
 	return most_devices;
 }
 
-cl_int bfg_clBuildProgram(_clState * const clState, const cl_device_id devid, const char * const CompilerOptions)
+cl_int bfg_clBuildProgram(cl_program * const program, const cl_device_id devid, const char * const CompilerOptions)
 {
 	cl_int status;
 	
-	status = clBuildProgram(clState->program, 1, &devid, CompilerOptions, NULL, NULL);
+	status = clBuildProgram(*program, 1, &devid, CompilerOptions, NULL, NULL);
 	
 	if (status != CL_SUCCESS)
 	{
 		applog(LOG_ERR, "Error %d: Building Program (clBuildProgram)", status);
 		size_t logSize;
-		status = clGetProgramBuildInfo(clState->program, devid, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+		status = clGetProgramBuildInfo(*program, devid, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 		
 		char *log = malloc(logSize ?: 1);
-		status = clGetProgramBuildInfo(clState->program, devid, CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
+		status = clGetProgramBuildInfo(*program, devid, CL_PROGRAM_BUILD_LOG, logSize, log, NULL);
 		if (logSize > 0 && log[0])
 			applog(LOG_ERR, "%s", log);
 		free(log);
@@ -418,18 +443,15 @@ void patch_opcodes(char *w, unsigned remaining)
 	applog(LOG_DEBUG, "Patched a total of %i BFI_INT instructions", patched);
 }
 
-_clState *initCl(unsigned int gpu, char *name, size_t nameSize)
+_clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 {
 	_clState *clState = calloc(1, sizeof(_clState));
-	bool patchbfi = false, prog_built = false;
-	bool ismesa = false;
 	struct cgpu_info *cgpu = &gpus[gpu];
 	struct opencl_device_data * const data = cgpu->device_data;
 	cl_platform_id platform = NULL;
 	char pbuff[256], vbuff[255];
-	char *s, *q;
+	char *s;
 	cl_platform_id* platforms;
-	cl_uint preferred_vwidth;
 	cl_device_id *devices;
 	cl_uint numPlatforms;
 	cl_uint numDevices;
@@ -472,6 +494,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetPlatformInfo(platform, CL_PLATFORM_VERSION, sizeof(vbuff), vbuff, NULL);
 	if (status == CL_SUCCESS)
 		applog(LOG_INFO, "CL Platform version: %s", vbuff);
+	clState->platform_ver_str = strdup(vbuff);
 
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
@@ -569,12 +592,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		clState->hasOpenCL11plus = true;
 	free(devoclver);
 
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&preferred_vwidth, NULL);
+	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", status);
 		return NULL;
 	}
-	applog(LOG_DEBUG, "Preferred vector width reported %d", preferred_vwidth);
+	applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
@@ -594,7 +617,10 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		opencl_set_intensity_from_str(cgpu, data->_init_intensity);
 	}
 	else
-		data->oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
+	{
+		data->oclthreads = 1;
+		data->intensity = INT_MIN;
+	}
 	applog(LOG_DEBUG, "Max compute units reported %u", (unsigned)clState->max_compute_units);
 	
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);
@@ -626,7 +652,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		}
 		else
 			applog(LOG_DEBUG, "Mesa OpenCL platform detected (v%ld.%ld)", major, minor);
-		ismesa = true;
+		clState->is_mesa = true;
 	}
 	
 	if (data->opt_opencl_binaries == OBU_DEFAULT)
@@ -638,7 +664,44 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		data->opt_opencl_binaries = OBU_LOADSAVE;
 #endif
 	}
+	
+	clState->devid = devices[gpu];
+	free(devices);
+	
+	/* For some reason 2 vectors is still better even if the card says
+	 * otherwise, and many cards lie about their max so use 256 as max
+	 * unless explicitly set on the command line. Tahiti prefers 1 */
+	if (strstr(name, "Tahiti"))
+		clState->preferred_vwidth = 1;
+	else
+	if (clState->preferred_vwidth > 2)
+		clState->preferred_vwidth = 2;
 
+	if (data->vwidth)
+		clState->vwidth = data->vwidth;
+	else {
+		clState->vwidth = clState->preferred_vwidth;
+		data->vwidth = clState->preferred_vwidth;
+	}
+
+	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, OPENCL_MAX_BUFFERSIZE, NULL, &status);
+	if (status != CL_SUCCESS) {
+		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
+		return false;
+	}
+	
+	return clState;
+}
+
+bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState, const char * const name, struct opencl_kernel_info * const kernelinfo, const char * const kernel_file, __maybe_unused const struct mining_algorithm * const malgo)
+{
+	const int gpu = cgpu->device_id;
+	bool patchbfi = false, prog_built = false;
+	struct opencl_device_data * const data = cgpu->device_data;
+	const char * const vbuff = clState->platform_ver_str;
+	char *s;
+	cl_int status;
+	
 	/* Create binary filename based on parameters passed to opencl
 	 * compiler to ensure we only load a binary that matches what would
 	 * have otherwise created. The filename is:
@@ -650,45 +713,12 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	char filename[255];
 	char numbuf[32];
 
-	if (!data->kernel_file)
-	{
-		if (opt_scrypt) {
-			applog(LOG_INFO, "Selecting scrypt kernel");
-			clState->chosen_kernel = KL_SCRYPT;
-		}
-		else if (ismesa)
-		{
-			applog(LOG_INFO, "Selecting phatk kernel for Mesa");
-			clState->chosen_kernel = KL_PHATK;
-		} else if (!strstr(name, "Tahiti") &&
-			/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
-			(strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
-			 strstr(vbuff, "851.4") ||  // Windows 64 bit ""
-			 strstr(vbuff, "831.4") ||
-			 strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
-			 strstr(vbuff, "923.1") ||  // 12.4
-			 strstr(vbuff, "938.2") ||  // SDK 2.7
-			 strstr(vbuff, "1113.2"))) {// SDK 2.8
-				applog(LOG_INFO, "Selecting diablo kernel");
-				clState->chosen_kernel = KL_DIABLO;
-		/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
-		} else if (strstr(name, "Tahiti") || !clState->hasBitAlign) {
-			applog(LOG_INFO, "Selecting poclbm kernel");
-			clState->chosen_kernel = KL_POCLBM;
-		/* Use phatk for the rest R5xxx R6xxx */
-		} else {
-			applog(LOG_INFO, "Selecting phatk kernel");
-			clState->chosen_kernel = KL_PHATK;
-		}
-		data->kernel_file = strdup(opencl_get_kernel_interface_name(clState->chosen_kernel));
-	}
-	
-	snprintf(filename, sizeof(filename), "%s.cl", data->kernel_file);
-	snprintf(binaryfilename, sizeof(filename), "%s", data->kernel_file);
+	snprintf(filename, sizeof(filename), "%s.cl", kernel_file);
+	snprintf(binaryfilename, sizeof(filename), "%s", kernel_file);
 	int pl;
-	char *source = file_contents(filename, &pl);
+	char *source = opencl_kernel_source(filename, &pl, &kernelinfo->interface);
 	if (!source)
-		return NULL;
+		return false;
 	{
 		uint8_t hash[0x20];
 		char hashhex[7];
@@ -696,29 +726,13 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		bin2hex(hashhex, hash, 3);
 		tailsprintf(binaryfilename, sizeof(binaryfilename), "-%s", hashhex);
 	}
-	s = strstr(source, "kernel-interface:");
-	if (s)
+	switch (kernelinfo->interface)
 	{
-		for (s = &s[17]; s[0] && isspace(s[0]); ++s)
-			if (s[0] == '\n' || s[0] == '\r')
-				break;
-		for (q = s; q[0] && !isspace(q[0]); ++q)
-		{}  // Find end of string
-		const size_t kinamelen = q - s;
-		char kiname[kinamelen + 1];
-		memcpy(kiname, s, kinamelen);
-		kiname[kinamelen] = '\0';
-		clState->chosen_kernel = select_kernel(kiname);
-	}
-	else
-	if (opt_scrypt)
-		clState->chosen_kernel = KL_SCRYPT;
-	switch (clState->chosen_kernel) {
 		case KL_NONE:
 			applog(LOG_ERR, "%s: Failed to identify kernel interface for %s",
-			       cgpu->dev_repr, data->kernel_file);
+			       cgpu->dev_repr, kernel_file);
 			free(source);
-			return NULL;
+			return false;
 		case KL_PHATK:
 			if ((strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 			     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
@@ -733,47 +747,30 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			;
 	}
 	applog(LOG_DEBUG, "%s: Using kernel %s with interface %s",
-	       cgpu->dev_repr, data->kernel_file,
-	       opencl_get_kernel_interface_name(clState->chosen_kernel));
+	       cgpu->dev_repr, kernel_file,
+	       opencl_get_kernel_interface_name(kernelinfo->interface));
 
-	/* For some reason 2 vectors is still better even if the card says
-	 * otherwise, and many cards lie about their max so use 256 as max
-	 * unless explicitly set on the command line. Tahiti prefers 1 */
-	if (strstr(name, "Tahiti"))
-		preferred_vwidth = 1;
-	else if (preferred_vwidth > 2)
-		preferred_vwidth = 2;
-
-	if (data->vwidth)
-		clState->vwidth = data->vwidth;
-	else {
-		clState->vwidth = preferred_vwidth;
-		data->vwidth = preferred_vwidth;
-	}
-
-	if (((clState->chosen_kernel == KL_POCLBM || clState->chosen_kernel == KL_DIABLO || clState->chosen_kernel == KL_DIAKGCN) &&
-		clState->vwidth == 1 && clState->hasOpenCL11plus) || opt_scrypt)
-			clState->goffset = true;
+	if (((kernelinfo->interface == KL_POCLBM || kernelinfo->interface == KL_DIABLO || kernelinfo->interface == KL_DIAKGCN || kernelinfo->interface) && clState->vwidth == 1 && clState->hasOpenCL11plus) || kernelinfo->interface == KL_SCRYPT)
+		kernelinfo->goffset = true;
 
 	if (data->work_size && data->work_size <= clState->max_work_size)
-		clState->wsize = data->work_size;
-	else if (opt_scrypt)
-		clState->wsize = 256;
-	else if (strstr(name, "Tahiti"))
-		clState->wsize = 64;
+		kernelinfo->wsize = data->work_size;
 	else
-		clState->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
-	data->work_size = clState->wsize;
+#ifdef USE_SCRYPT
+	if (malgo->algo == POW_SCRYPT)
+		kernelinfo->wsize = 256;
+	else
+#endif
+	if (strstr(name, "Tahiti"))
+		kernelinfo->wsize = 64;
+	else
+		kernelinfo->wsize = (clState->max_work_size <= 256 ? clState->max_work_size : 256) / clState->vwidth;
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt) {
-		if (!data->opt_lg) {
-			applog(LOG_DEBUG, "GPU %d: selecting lookup gap of 2", gpu);
-			data->lookup_gap = 2;
-		} else
-			data->lookup_gap = data->opt_lg;
-
-		if (!data->opt_tc) {
+	if (kernelinfo->interface == KL_SCRYPT)
+	{
+		if (!data->thread_concurrency)
+		{
 			unsigned int sixtyfours;
 
 			sixtyfours =  data->max_alloc / 131072 / 64 - 1;
@@ -784,8 +781,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 					data->thread_concurrency = data->shaders * 5;
 			}
 			applog(LOG_DEBUG, "GPU %u: selecting thread concurrency of %lu", gpu,  (unsigned long)data->thread_concurrency);
-		} else
-			data->thread_concurrency = data->opt_tc;
+		}
 	}
 #endif
 
@@ -800,27 +796,30 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	binary_sizes = calloc(sizeof(size_t) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binary_sizes)) {
 		applog(LOG_ERR, "Unable to calloc binary_sizes");
-		return NULL;
+		return false;
 	}
 	binaries = calloc(sizeof(char *) * MAX_GPUDEVICES * 4, 1);
 	if (unlikely(!binaries)) {
 		applog(LOG_ERR, "Unable to calloc binaries");
-		return NULL;
+		return false;
 	}
 
 	strcat(binaryfilename, name);
-	if (clState->goffset)
+	if (kernelinfo->goffset)
 		strcat(binaryfilename, "g");
-	if (opt_scrypt) {
 #ifdef USE_SCRYPT
+	if (kernelinfo->interface == KL_SCRYPT)
+	{
 		sprintf(numbuf, "lg%utc%u", data->lookup_gap, (unsigned int)data->thread_concurrency);
 		strcat(binaryfilename, numbuf);
+	}
+	else
 #endif
-	} else {
+	{
 		sprintf(numbuf, "v%d", clState->vwidth);
 		strcat(binaryfilename, numbuf);
 	}
-	sprintf(numbuf, "w%d", (int)clState->wsize);
+	sprintf(numbuf, "w%d", (int)kernelinfo->wsize);
 	strcat(binaryfilename, numbuf);
 	sprintf(numbuf, "l%d", (int)sizeof(long));
 	strcat(binaryfilename, numbuf);
@@ -852,7 +851,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 		if (unlikely(!binaries[slot])) {
 			applog(LOG_ERR, "Unable to calloc binaries");
 			fclose(binaryfile);
-			return NULL;
+			return false;
 		}
 
 		if (fread(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot]) {
@@ -862,7 +861,7 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 			goto build;
 		}
 
-		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[slot], (const unsigned char **)binaries, &status, NULL);
+		kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binary_sizes[slot], (const unsigned char **)binaries, &status, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
 			fclose(binaryfile);
@@ -881,26 +880,26 @@ _clState *initCl(unsigned int gpu, char *name, size_t nameSize)
 	/////////////////////////////////////////////////////////////////
 
 build:
-	clState->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
+	kernelinfo->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithSource)", status);
-		return NULL;
+		return false;
 	}
 
 	/* create a cl program executable for all the devices specified */
 	char *CompilerOptions = calloc(1, 256);
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
+	if (kernelinfo->interface == KL_SCRYPT)
 		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			data->lookup_gap, (unsigned int)data->thread_concurrency, (int)clState->wsize);
+			data->lookup_gap, (unsigned int)data->thread_concurrency, (int)kernelinfo->wsize);
 	else
 #endif
 	{
 		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
-			(int)clState->wsize, clState->vwidth, (int)clState->wsize * clState->vwidth);
+			(int)kernelinfo->wsize, clState->vwidth, (int)kernelinfo->wsize * clState->vwidth);
 	}
-	applog(LOG_DEBUG, "Setting worksize to %"PRId64, (int64_t)clState->wsize);
+	applog(LOG_DEBUG, "Setting worksize to %"PRId64, (int64_t)kernelinfo->wsize);
 	if (clState->vwidth > 1)
 		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
 
@@ -945,34 +944,34 @@ build:
 	} else
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
 
-	if (clState->goffset)
+	if (kernelinfo->goffset)
 		strcat(CompilerOptions, " -D GOFFSET");
 
 	if (!clState->hasOpenCL11plus)
 		strcat(CompilerOptions, " -D OCL1");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
-	status = bfg_clBuildProgram(clState, devices[gpu], CompilerOptions);
+	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, CompilerOptions);
 	free(CompilerOptions);
 
 	if (status != CL_SUCCESS)
-		return NULL;
+		return false;
 
 	prog_built = true;
 	
 	if (!(data->opt_opencl_binaries & OBU_SAVE))
 		goto built;
 
-	status = clGetProgramInfo(clState->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error %d: Getting program info CL_PROGRAM_NUM_DEVICES. (clGetProgramInfo)", status);
-		return NULL;
+		return false;
 	}
 
-	status = clGetProgramInfo(clState->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*cpnd, binary_sizes, NULL);
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*cpnd, binary_sizes, NULL);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error %d: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetProgramInfo)", status);
-		return NULL;
+		return false;
 	}
 
 	/* The actual compiled binary ends up in a RANDOM slot! Grr, so we have
@@ -987,13 +986,13 @@ build:
 	       gpu, (unsigned)slot, (int64_t)binary_sizes[slot]);
 	if (!binary_sizes[slot]) {
 		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
-		return NULL;
+		return false;
 	}
 	binaries[slot] = calloc(sizeof(char) * binary_sizes[slot], 1);
-	status = clGetProgramInfo(clState->program, CL_PROGRAM_BINARIES, sizeof(char *) * cpnd, binaries, NULL );
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARIES, sizeof(char *) * cpnd, binaries, NULL );
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error %d: Getting program info. CL_PROGRAM_BINARIES (clGetProgramInfo)", status);
-		return NULL;
+		return false;
 	}
 
 	/* Patch the kernel if the hardware supports BFI_INT but it needs to
@@ -1030,16 +1029,16 @@ build:
 			w, remaining);
 		patch_opcodes(w, length);
 
-		status = clReleaseProgram(clState->program);
+		status = clReleaseProgram(kernelinfo->program);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Releasing program. (clReleaseProgram)", status);
-			return NULL;
+			return false;
 		}
 
-		clState->program = clCreateProgramWithBinary(clState->context, 1, &devices[gpu], &binary_sizes[slot], (const unsigned char **)&binaries[slot], &status, NULL);
+		kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binary_sizes[slot], (const unsigned char **)&binaries[slot], &status, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
-			return NULL;
+			return false;
 		}
 
 		/* Program needs to be rebuilt */
@@ -1056,7 +1055,7 @@ build:
 	} else {
 		if (unlikely(fwrite(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot])) {
 			applog(LOG_ERR, "Unable to fwrite to binaryfile");
-			return NULL;
+			return false;
 		}
 		fclose(binaryfile);
 	}
@@ -1067,27 +1066,28 @@ built:
 	free(binary_sizes);
 
 	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %"PRId64" vectors and worksize %"PRIu64,
-	       filename, clState->hasBitAlign ? "" : "out", (int64_t)clState->vwidth, (uint64_t)clState->wsize);
+	       filename, clState->hasBitAlign ? "" : "out", (int64_t)clState->vwidth, (uint64_t)kernelinfo->wsize);
 
 	if (!prog_built) {
 		/* create a cl program executable for all the devices specified */
-		status = bfg_clBuildProgram(clState, devices[gpu], NULL);
+		status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, NULL);
 		if (status != CL_SUCCESS)
-			return NULL;
+			return false;
 	}
 
 	/* get a kernel object handle for a kernel with the given name */
-	clState->kernel = clCreateKernel(clState->program, "search", &status);
+	kernelinfo->kernel = clCreateKernel(kernelinfo->program, "search", &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Kernel from program. (clCreateKernel)", status);
-		return NULL;
+		return false;
 	}
 	
 	free((void*)cgpu->kname);
-	cgpu->kname = strdup(data->kernel_file);
+	cgpu->kname = strdup(kernel_file);
 
 #ifdef USE_SCRYPT
-	if (opt_scrypt) {
+	if (kernelinfo->interface == KL_SCRYPT && !clState->padbufsize)
+	{
 		size_t ipt = (1024 / data->lookup_gap + (1024 % data->lookup_gap > 0));
 		size_t bufsize = 128 * ipt * data->thread_concurrency;
 
@@ -1107,24 +1107,20 @@ built:
 		clState->padbuffer8 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, bufsize, NULL, &status);
 		if (status != CL_SUCCESS && !clState->padbuffer8) {
 			applog(LOG_ERR, "Error %d: clCreateBuffer (padbuffer8), decrease TC or increase LG", status);
-			return NULL;
+			return false;
 		}
 
 		clState->CLbuffer0 = clCreateBuffer(clState->context, CL_MEM_READ_ONLY, 128, NULL, &status);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: clCreateBuffer (CLbuffer0)", status);
-			return NULL;
+			return false;
 		}
-		clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, SCRYPT_BUFFERSIZE, NULL, &status);
-	} else
-#endif
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, BUFFERSIZE, NULL, &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
-		return NULL;
 	}
+#endif
 
-	return clState;
+	kernelinfo->loaded = true;
+	return true;
 }
+
 #endif /* HAVE_OPENCL */
 

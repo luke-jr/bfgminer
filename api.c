@@ -411,7 +411,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 31" },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
@@ -2682,7 +2682,11 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 		if (data->dynamic)
 			strcpy(intensitystr, DYNAMIC);
 		else
-			snprintf(intensitystr, sizeof(intensitystr), "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
+		{
+			const char *iunit;
+			float intensity = opencl_proc_get_intensity(cgpu, &iunit);
+			snprintf(intensitystr, sizeof(intensitystr), "%s%g", iunit, intensity);
+		}
 	}
 	else
 	{
@@ -3086,12 +3090,19 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 			io_add(io_data, buf);
 		}
 		
+		switch (goal->malgo->algo)
+		{
 #ifdef USE_SCRYPT
-		if (opt_scrypt)
-			root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-		else
+			case POW_SCRYPT:
+				root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+				break;
 #endif
-			root = api_add_const(root, "Hash Method", SHA256STR, false);
+			case POW_SHA256D:
+				root = api_add_const(root, "Hash Method", SHA256STR, false);
+				break;
+			default:
+				break;
+		}
 
 		cg_rlock(&ch_lock);
 		struct blockchain_info * const blkchain = goal->blkchain;
