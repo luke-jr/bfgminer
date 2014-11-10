@@ -11450,7 +11450,7 @@ void drv_set_defaults(const struct device_drv * const drv, const void *datap, vo
 /* Makes sure the hashmeter keeps going even if mining threads stall, updates
  * the screen at regular intervals, and restarts threads if they appear to have
  * died. */
-#define WATCHDOG_SICK_TIME		60
+#define WATCHDOG_SICK_TIME		300
 #define WATCHDOG_DEAD_TIME		600
 #define WATCHDOG_SICK_COUNT		(WATCHDOG_SICK_TIME/WATCHDOG_INTERVAL)
 #define WATCHDOG_DEAD_COUNT		(WATCHDOG_DEAD_TIME/WATCHDOG_INTERVAL)
@@ -11629,7 +11629,7 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			} else if (cgpu->status == LIFE_WELL && (tvp_now->tv_sec - thr->last.tv_sec > WATCHDOG_SICK_TIME)) {
 				thr->rolling = cgpu->rolling = 0;
 				cgpu->status = LIFE_SICK;
-				applog(LOG_ERR, "%s: Idle for more than 60 seconds, declaring SICK!", dev_str);
+				applog(LOG_ERR, "%s: Idle for more than %d seconds, declaring SICK!", dev_str, WATCHDOG_SICK_TIME);
 				cgtime(&thr->sick);
 
 				dev_error(cgpu, REASON_DEV_SICK_IDLE_60);
