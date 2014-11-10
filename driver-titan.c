@@ -551,6 +551,9 @@ static bool knc_titan_process_report(struct knc_titan_info * const knc, struct k
 	}
 	knccore->last_nonce.slot = report->nonce[0].slot;
 	knccore->last_nonce.nonce = report->nonce[0].nonce;
+	
+	thread_reportin(proc->thr[0]);
+	
 	return ret;
 }
 
