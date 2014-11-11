@@ -569,6 +569,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int asic;
 	int die;
 	struct knc_titan_die *die_p;
+	struct knc_titan_die *die_p2;
 	struct timeval tv_now;
 	int num_request_busy;
 	int num_status_byte_error[4];
@@ -622,16 +623,19 @@ static void knc_titan_poll(struct thr_info * const thr)
 							knc->asic_served_by_fpga[asic] = false;
 
 							int core_count = 0;
-							for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
-								mythr = proc->thr[0];
-								knccore = mythr->cgpu_data;
-								if ((knccore->dieno != die) || (knccore->asicno != asic))
-									break;
-								if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
-									continue;
-								core_count++;
-								if (knc_titan_process_report(knc, knccore, &report))
-									timer_set_now(&(die_p->last_share));
+							for (int die2 = 0; die2 < KNC_TITAN_DIES_PER_ASIC; ++die2) {
+								die_p2 = &(knc->dies[asic][die2]);
+								for (proc = die_p2->first_proc; proc; proc = proc->next_proc) {
+									mythr = proc->thr[0];
+									knccore = mythr->cgpu_data;
+									if ((knccore->dieno != die2) || (knccore->asicno != asic))
+										break;
+									if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die2, knccore->coreno, &report))
+										continue;
+									core_count++;
+									if (knc_titan_process_report(knc, knccore, &report))
+										timer_set_now(&(die_p2->last_share));
+								}
 							}
 							applog(LOG_NOTICE, "Manual core polling complete (%d cores polled)", core_count);
 						}
