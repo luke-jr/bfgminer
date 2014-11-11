@@ -555,8 +555,6 @@ static bool knc_titan_process_report(struct knc_titan_info * const knc, struct k
 	knccore->last_nonce.slot = report->nonce[0].slot;
 	knccore->last_nonce.nonce = report->nonce[0].nonce;
 	
-	thread_reportin(proc->thr[0]);
-	
 	return ret;
 }
 
@@ -680,6 +678,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
 				mythr = proc->thr[0];
 				knccore = mythr->cgpu_data;
+				thread_reportin(mythr);
 				if ((knccore->dieno != die) || (knccore->asicno != asic))
 					break;
 				if (!die_info.has_report[knccore->coreno])
