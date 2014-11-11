@@ -620,6 +620,20 @@ static void knc_titan_poll(struct thr_info * const thr)
 							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
 							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
 							knc->asic_served_by_fpga[asic] = false;
+
+							int core_count = 0;
+							for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
+								mythr = proc->thr[0];
+								knccore = mythr->cgpu_data;
+								if ((knccore->dieno != die) || (knccore->asicno != asic))
+									break;
+								if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
+									continue;
+								core_count++;
+								if (knc_titan_process_report(knc, knccore, &report))
+									timer_set_now(&(die_p->last_share));
+							}
+							applog(LOG_NOTICE, "Manual core polling complete (%d cores polled)", core_count);
 						}
 					}
 					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
