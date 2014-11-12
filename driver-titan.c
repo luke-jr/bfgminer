@@ -636,7 +636,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 									knccore->need_manual_check = true;
 								}
 							}
-							applog(LOG_NOTICE, "Manual core polling setup complete");
 						}
 					}
 					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
@@ -722,7 +721,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 			if (0 >= die_p->cores || die_p->manual_check_count < 0)
 				continue;
 
-			applog(LOG_NOTICE, "Starting manual check from core %d", die_p->manual_check_count);
 			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
 				mythr = proc->thr[0];
 				knccore = mythr->cgpu_data;
@@ -747,7 +745,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 				if (die_p->manual_check_count < 0)
 					die_p->manual_check_count = 0;
 			}
-			applog(LOG_NOTICE, "Manual check done");
 		}
 	}
 
