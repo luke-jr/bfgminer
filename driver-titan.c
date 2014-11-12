@@ -629,7 +629,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 							knc->asic_served_by_fpga[asic] = false;
 
 							for (int die2 = 0; die2 < KNC_TITAN_DIES_PER_ASIC; ++die2) {
-								knc->dies[asic][die].manual_check_count = KNC_TITAN_CORES_PER_DIE - MANUAL_CHECK_CORES_PER_POLL;
+								knc->dies[asic][die2].manual_check_count = KNC_TITAN_CORES_PER_DIE - MANUAL_CHECK_CORES_PER_POLL;
 								for (proc = knc->dies[asic][die2].first_proc; proc; proc = proc->next_proc) {
 									mythr = proc->thr[0];
 									knccore = mythr->cgpu_data;
