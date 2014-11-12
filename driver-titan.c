@@ -33,6 +33,8 @@
  * Must be high enough to supply all ASICs with works after a flush */
 #define	WORK_QUEUE_PREFILL			20
 
+#define MANUAL_CHECK_CORES_PER_POLL            100
+
 /* Specify here minimum number of leading zeroes in hash */
 #define	DEFAULT_DIFF_FILTERING_ZEROES	24
 #define	DEFAULT_DIFF_FILTERING_FLOAT	(1. / ((double)(0x00000000FFFFFFFF >> DEFAULT_DIFF_FILTERING_ZEROES)))
@@ -58,6 +60,7 @@ struct knc_titan_core {
 	struct timeval first_hwerr;
 
 	struct nonce_report last_nonce;
+	bool need_manual_check;
 };
 
 struct knc_titan_die {
@@ -78,6 +81,7 @@ struct knc_titan_die {
 	bool broadcast_flushes;
 
 	int freq;
+	int manual_check_count;
 };
 
 struct knc_titan_info {
@@ -291,6 +295,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	die_p->need_flush = true;
 	timer_set_now(&(die_p->last_share));
 	die_p->broadcast_flushes = false;
+	die_p->manual_check_count = 0;
 
 	return true;
 }
@@ -340,6 +345,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 				.proc = proc,
 				.hwerr_in_row = 0,
 				.hwerr_disable_time = KNC_TITAN_HWERR_DISABLE_SECS,
+				.need_manual_check = false,
 			};
 			timer_set_now(&knccore->enable_at);
 			proc->device_data = knc;
@@ -551,6 +557,7 @@ static bool knc_titan_process_report(struct knc_titan_info * const knc, struct k
 	}
 	knccore->last_nonce.slot = report->nonce[0].slot;
 	knccore->last_nonce.nonce = report->nonce[0].nonce;
+	knccore->need_manual_check = false;
 	
 	return ret;
 }
@@ -569,7 +576,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 	int asic;
 	int die;
 	struct knc_titan_die *die_p;
-	struct knc_titan_die *die_p2;
 	struct timeval tv_now;
 	int num_request_busy;
 	int num_status_byte_error[4];
@@ -622,22 +628,15 @@ static void knc_titan_poll(struct thr_info * const thr)
 							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
 							knc->asic_served_by_fpga[asic] = false;
 
-							int core_count = 0;
 							for (int die2 = 0; die2 < KNC_TITAN_DIES_PER_ASIC; ++die2) {
-								die_p2 = &(knc->dies[asic][die2]);
-								for (proc = die_p2->first_proc; proc; proc = proc->next_proc) {
+								knc->dies[asic][die].manual_check_count = KNC_TITAN_CORES_PER_DIE - MANUAL_CHECK_CORES_PER_POLL;
+								for (proc = knc->dies[asic][die2].first_proc; proc; proc = proc->next_proc) {
 									mythr = proc->thr[0];
 									knccore = mythr->cgpu_data;
-									if ((knccore->dieno != die2) || (knccore->asicno != asic))
-										break;
-									if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die2, knccore->coreno, &report))
-										continue;
-									core_count++;
-									if (knc_titan_process_report(knc, knccore, &report))
-										timer_set_now(&(die_p2->last_share));
+									knccore->need_manual_check = true;
 								}
 							}
-							applog(LOG_NOTICE, "Manual core polling complete (%d cores polled)", core_count);
+							applog(LOG_NOTICE, "Manual core polling setup complete");
 						}
 					}
 					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
@@ -714,6 +713,41 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			/* Reconfigure die */
 			configure_one_die(knc, asic, die);
+		}
+	}
+
+	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			die_p = &(knc->dies[asic][die]);
+			if (0 >= die_p->cores || die_p->manual_check_count < 0)
+				continue;
+
+			applog(LOG_NOTICE, "Starting manual check from core %d", die_p->manual_check_count);
+			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
+				mythr = proc->thr[0];
+				knccore = mythr->cgpu_data;
+				int core = knccore->coreno;
+				if (core < die_p->manual_check_count)
+					continue;
+				if (core >= die_p->manual_check_count + MANUAL_CHECK_CORES_PER_POLL)
+					break;
+				if ((knccore->dieno != die) || (knccore->asicno != asic))
+					break;
+				if (!knccore->need_manual_check)
+					continue;
+				if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
+					continue;
+				if (knc_titan_process_report(knc, knccore, &report))
+					timer_set_now(&(die_p->last_share));
+			}
+			if (die_p->manual_check_count == 0) {
+				die_p->manual_check_count = -1;
+			} else {
+				die_p->manual_check_count -= MANUAL_CHECK_CORES_PER_POLL;
+				if (die_p->manual_check_count < 0)
+					die_p->manual_check_count = 0;
+			}
+			applog(LOG_NOTICE, "Manual check done");
 		}
 	}
 
