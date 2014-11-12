@@ -14,7 +14,7 @@ dnl * any later version.  See COPYING for more details.
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [4])
-m4_define([v_min], [9])
+m4_define([v_min], [99])
 m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
@@ -818,7 +818,6 @@ if test "x$titan" != xno && test "x$titan" != xauto; then
 		AC_MSG_ERROR([You explicitly enabled KnC Titan, but did not enable scrypt])
 	fi
 	need_knc_asic=yes
-	need_linux_i2c_dev=yes
 	AC_DEFINE([USE_TITAN], [1], [Defined to 1 if KnC Titan support is wanted])
 	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
 	AH_TEMPLATE([CONTROLLER_BOARD_BACKPLANE])

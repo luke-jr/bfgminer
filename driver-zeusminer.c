@@ -219,7 +219,6 @@ bool zeusminer_thread_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const device = thr->cgpu;
 	
-	device->min_nonce_diff = 1./0x10000;
 	device->set_device_funcs = zeusminer_set_device_funcs_live;
 	
 	return icarus_init(thr);
@@ -320,7 +319,7 @@ void zeusminer_drv_init()
 	// metadata
 	zeusminer_drv.dname = "zeusminer";
 	zeusminer_drv.name = "ZUS";
-	zeusminer_drv.supported_algos = POW_SCRYPT;
+	zeusminer_drv.drv_min_nonce_diff = common_scrypt_min_nonce_diff;
 	
 	// detect device
 	zeusminer_drv.lowl_probe = zeusminer_lowl_probe;

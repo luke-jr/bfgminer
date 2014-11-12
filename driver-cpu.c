@@ -665,13 +665,9 @@ static enum sha256_algos pick_fastest_algo()
 	return best_algo;
 }
 
-/* FIXME: Use asprintf for better errors. */
 char *set_algo(const char *arg, enum sha256_algos *algo)
 {
 	enum sha256_algos i;
-
-	if (opt_scrypt)
-		return "Can only use scrypt algorithm";
 
 	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
@@ -681,13 +677,6 @@ char *set_algo(const char *arg, enum sha256_algos *algo)
 	}
 	return "Unknown algorithm";
 }
-
-#ifdef WANT_SCRYPT
-void set_scrypt_algo(enum sha256_algos *algo)
-{
-	*algo = ALGO_SCRYPT;
-}
-#endif
 
 void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
@@ -805,9 +794,6 @@ static bool cpu_thread_init(struct thr_info *thr)
 
 	cgpu->kname = algo_names[opt_algo];
 	
-	if (opt_algo == ALGO_SCRYPT)
-		cgpu->min_nonce_diff = 1./0x10000;
-	
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
@@ -834,7 +820,20 @@ CPUSearch:
 
 	/* scan nonces for a proof-of-work hash */
 	{
-		sha256_func func = sha256_funcs[opt_algo];
+		sha256_func func = NULL;
+		switch (work_mining_algorithm(work)->algo)
+		{
+#ifdef USE_SCRYPT
+			case POW_SCRYPT:
+				func = scanhash_scrypt;
+				break;
+#endif
+			case POW_SHA256D:
+				func = sha256_funcs[opt_algo];
+				break;
+		}
+		if (unlikely(!func))
+			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
 		rc = (*func)(
 			thr,
 			work->midstate,
@@ -867,7 +866,7 @@ struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
 	.probe_priority = 120,
-	.supported_algos = POW_SHA256D | POW_SCRYPT,
+	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
 	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,
@@ -875,6 +874,3 @@ struct device_drv cpu_drv = {
 	.scanhash = cpu_scanhash,
 };
 #endif
-
-
-

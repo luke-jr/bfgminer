@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <uthash.h>
+
 #include "compat.h"
 #include "deviceapi.h"
 #ifdef USE_LIBMICROHTTPD
@@ -170,11 +172,9 @@ static const char ISJSON = '{';
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
-#define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
-#define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_END	JSON4 JSON5
@@ -411,7 +411,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 31" },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
 #ifdef HAVE_OPENCL
@@ -1934,6 +1934,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_int(root, "Priority", &(pool->prio), false);
 		root = api_add_int(root, "Quota", &pool->quota, false);
+		root = api_add_string(root, "Mining Goal", pool->goal->name, false);
 		root = api_add_string(root, "Long Poll", lp, false);
 		root = api_add_uint(root, "Getworks", &(pool->getwork_requested), false);
 		root = api_add_int(root, "Accepted", &(pool->accepted), false);
@@ -2341,7 +2342,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	pool->failover_only = false;
+	manual_enable_pool(pool);
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2365,7 +2366,7 @@ static void copyadvanceafter(char ch, char **param, char **buf)
 	*(dst_b++) = '\0';
 }
 
-static bool pooldetails(char *param, char **url, char **user, char **pass)
+static bool pooldetails(char *param, char **url, char **user, char **pass, char **goalname)
 {
 	char *ptr, *buf;
 
@@ -2393,6 +2394,12 @@ static bool pooldetails(char *param, char **url, char **user, char **pass)
 
 	// copy pass
 	copyadvanceafter(',', &param, &buf);
+	
+	if (*param)
+		*goalname = buf;
+	
+	// copy goalname
+	copyadvanceafter(',', &param, &buf);
 
 	return true;
 
@@ -2403,7 +2410,7 @@ exitsama:
 
 static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	char *url, *user, *pass;
+	char *url, *user, *pass, *goalname = "default";
 	struct pool *pool;
 	char *ptr;
 
@@ -2412,7 +2419,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	if (!pooldetails(param, &url, &user, &pass)) {
+	if (!pooldetails(param, &url, &user, &pass, &goalname))
+	{
 		ptr = escape_string(param, isjson);
 		message(io_data, MSG_INVPDP, 0, ptr, isjson);
 		if (ptr != param)
@@ -2421,7 +2429,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	pool = add_pool();
+	struct mining_goal_info * const goal = get_mining_goal(goalname);
+	pool = add_pool2(goal);
 	detect_stratum(pool, url);
 	add_pool_details(pool, true, url, user, pass);
 
@@ -2459,8 +2468,7 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	pool->failover_only = false;
-	enable_pool(pool);
+	manual_enable_pool(pool);
 
 	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }
@@ -2674,7 +2682,11 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 		if (data->dynamic)
 			strcpy(intensitystr, DYNAMIC);
 		else
-			snprintf(intensitystr, sizeof(intensitystr), "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
+		{
+			const char *iunit;
+			float intensity = opencl_proc_get_intensity(cgpu, &iunit);
+			snprintf(intensitystr, sizeof(intensitystr), "%s%g", iunit, intensity);
+		}
 	}
 	else
 	{
@@ -3063,36 +3075,54 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	bool io_open;
 
 	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
-	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECOIN : _MINECOIN COMSTR);
 
+	struct mining_goal_info *goal, *tmpgoal;
+	bool precom = false;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (goal->is_default)
+			io_add(io_data, isjson ? COMSTR JSON1 _MINECOIN JSON2 : _MINECOIN COMSTR);
+		else
+		{
+			sprintf(buf, isjson ? COMSTR JSON1 _MINECOIN "%u" JSON2 : _MINECOIN "%u" COMSTR, goal->id);
+			io_add(io_data, buf);
+		}
+		
+		switch (goal->malgo->algo)
+		{
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
-		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-	else
+			case POW_SCRYPT:
+				root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+				break;
 #endif
-		root = api_add_const(root, "Hash Method", SHA256STR, false);
+			case POW_SHA256D:
+				root = api_add_const(root, "Hash Method", SHA256STR, false);
+				break;
+			default:
+				break;
+		}
 
-	cg_rlock(&ch_lock);
-	if (current_fullhash && *current_fullhash) {
-		root = api_add_time(root, "Current Block Time", &block_time, true);
-		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
-	} else {
-		time_t t = 0;
-		root = api_add_time(root, "Current Block Time", &t, true);
-		root = api_add_const(root, "Current Block Hash", BLANK, false);
+		cg_rlock(&ch_lock);
+		struct blockchain_info * const blkchain = goal->blkchain;
+		struct block_info * const blkinfo = blkchain->currentblk;
+		root = api_add_time(root, "Current Block Time", &blkinfo->first_seen_time, true);
+		char fullhash[(sizeof(blkinfo->prevblkhash) * 2) + 1];
+		blkhashstr(fullhash, blkinfo->prevblkhash);
+		root = api_add_string(root, "Current Block Hash", fullhash, true);
+		cg_runlock(&ch_lock);
+
+		root = api_add_bool(root, "LP", &goal->have_longpoll, false);
+		root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
+		
+		root = api_add_diff(root, "Difficulty Accepted", &goal->diff_accepted, false);
+		
+		root = print_data(root, buf, isjson, precom);
+		io_add(io_data, buf);
+		if (isjson)
+			io_add(io_data, JSON_CLOSE);
 	}
-	cg_runlock(&ch_lock);
-
-	root = api_add_bool(root, "LP", &have_longpoll, false);
-	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
-
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
-	if (isjson && io_open)
-		io_close(io_data);
 }
 
 static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)

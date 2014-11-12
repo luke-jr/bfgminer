@@ -1,6 +1,7 @@
 #ifndef BFG_DRIVER_OPENCL
 #define BFG_DRIVER_OPENCL
 
+#include <float.h>
 #include <stdbool.h>
 
 #include "CL/cl.h"
@@ -18,23 +19,27 @@ enum opencl_binary_usage {
 	OBU_NONE     = 4,
 };
 
+static const float intensity_not_set = FLT_MAX;
+
 struct opencl_device_data {
 	bool mapped;
 	int virtual_gpu;
 	int virtual_adl;
 	unsigned long oclthreads;
+	float intensity;
 	char *_init_intensity;
 	bool dynamic;
 	
 	cl_uint vwidth;
 	size_t work_size;
-	char *kernel_file;
+	char *kernel_file_sha256d;
 	cl_ulong max_alloc;
 	
 	enum opencl_binary_usage opt_opencl_binaries;
 #ifdef USE_SCRYPT
-	int opt_lg, lookup_gap;
-	size_t opt_tc, thread_concurrency;
+	char *kernel_file_scrypt;
+	int lookup_gap;
+	size_t thread_concurrency;
 	size_t shaders;
 #endif
 	struct timeval tv_gpustart;
@@ -59,8 +64,7 @@ struct opencl_device_data {
 #endif
 };
 
-extern double oclthreads_to_intensity(unsigned long oclthreads, bool is_sha256d);
-extern unsigned long intensity_to_oclthreads(double intensity, bool is_sha256d);
+extern float opencl_proc_get_intensity(struct cgpu_info *, const char **iunit);
 extern unsigned long xintensity_to_oclthreads(double xintensity, cl_uint max_compute_units);
 extern bool opencl_set_intensity_from_str(struct cgpu_info *, const char *newvalue);
 

@@ -790,7 +790,7 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
-void hash_data(unsigned char *out_hash, const unsigned char *data)
+void hash_data(void *out_hash, const void *data)
 {
 	unsigned char blkheader[80];
 	
@@ -1957,6 +1957,17 @@ bool isCalpha(const int c)
 	return false;
 }
 
+bool match_strtok(const char * const optlist, const char * const delim, const char * const needle)
+{
+	const size_t optlist_sz = strlen(optlist) + 1;
+	char opts[optlist_sz];
+	memcpy(opts, optlist, optlist_sz);
+	for (char *el, *nextptr, *s = opts; (el = strtok_r(s, delim, &nextptr)); s = NULL)
+		if (!strcasecmp(el, needle))
+			return true;
+	return false;
+}
+
 static
 bool _appdata_file_call(const char * const appname, const char * const filename, const appdata_file_callback_t cb, void * const userp, const char * const path)
 {
@@ -2553,6 +2564,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	// stratum_set_goal ensures these are the same pointer if they match
+	if (pool->goalname != pool->next_goalname)
+	{
+		free(pool->goalname);
+		pool->goalname = pool->next_goalname;
+		mining_goal_reset(pool->goal);
+	}
+	if (pool->next_goal_malgo)
+	{
+		goal_set_malgo(pool->goal, pool->next_goal_malgo);
+		pool->next_goal_malgo = NULL;
+	}
+	
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
@@ -2629,6 +2653,8 @@ out:
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
 	double diff;
 
 	diff = json_number_value(json_array_get(val, 0));
@@ -2642,7 +2668,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		diff = bdiff_to_pdiff(diff);
 	}
 	
-	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+	if (malgo->algo == POW_SHA256D && diff < 1 && diff > 0.999)
 		diff = 1;
 	
 #ifdef USE_SCRYPT
@@ -2660,7 +2686,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	// Diff 16 at 1.15 Gh/s = 1 share / 60s
 	// Diff 16 at 7.00 Gh/s = 1 share / 10s
 
-	if (opt_scrypt && (diff >= minimum_broken_scrypt_diff))
+	if (malgo->algo == POW_SCRYPT && (diff >= minimum_broken_scrypt_diff))
 		diff /= broken_scrypt_diff_multiplier;
 #endif
 
@@ -2734,6 +2760,72 @@ err:
 		sprintf(s, "{\"id\": %s, \"result\": null, \"error\": [20, \"Invalid params\"]}", idstr);
 		free(idstr);
 		stratum_send(pool, s, strlen(s));
+	}
+	
+	return true;
+}
+
+static
+bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	if (!uri_get_param_bool(pool->rpc_url, "goalreset", false))
+		return false;
+	
+	const char * const new_goalname = __json_array_string(params, 0);
+	struct mining_algorithm *new_malgo = NULL;
+	const char *emsg = NULL;
+	
+	if (json_is_array(params) && json_array_size(params) > 1)
+	{
+		json_t * const j_goaldesc = json_array_get(params, 1);
+		if (json_is_object(j_goaldesc))
+		{
+			json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
+			if (j_malgo && json_is_string(j_malgo))
+			{
+				const char * const newvalue = json_string_value(j_malgo);
+				new_malgo = mining_algorithm_by_alias(newvalue);
+				// Even if it's the current malgo, we should reset next_goal_malgo in case of a prior set_goal
+				if (new_malgo == pool->goal->malgo)
+				{}  // Do nothing, assignment takes place below
+				if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
+				{}  // Do nothing, assignment takes place below
+				else
+				{
+					emsg = "Mining algorithm not supported";
+					// Ignore even the goal name, if we are failing
+					goto out;
+				}
+				if (new_malgo == pool->goal->malgo)
+					new_malgo = NULL;
+			}
+		}
+	}
+	
+	// Even if the goal name is not changing, we need to adopt and configuration change
+	pool->next_goal_malgo = new_malgo;
+	
+	if (pool->next_goalname && pool->next_goalname != pool->goalname)
+		free(pool->next_goalname);
+	
+	// This compares goalname to new_goalname, but matches NULL correctly :)
+	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
+		pool->next_goalname = pool->goalname;
+	else
+		pool->next_goalname = maybe_strdup(new_goalname);
+	
+out: ;
+	json_t * const j_id = json_object_get(val, "id");
+	if (j_id && !json_is_null(j_id))
+	{
+		char * const idstr = json_dumps_ANY(j_id, 0);
+		char buf[0x80];
+		if (unlikely(emsg))
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
+		else
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":null,\"error\":[-1,\"%s\",null]}", idstr, emsg);
+		free(idstr);
+		stratum_send(pool, buf, strlen(buf));
 	}
 	
 	return true;
@@ -2904,6 +2996,10 @@ bool parse_method(struct pool *pool, char *s)
 		ret = true;
 		goto out;
 	}
+	
+	// Usage: mining.set_goal("goal name", {"malgo":"SHA256d", ...})
+	if (!strncasecmp(buf, "mining.set_goal", 15) && stratum_set_goal(pool, val, params))
+		return_via(out, ret = true);
 	
 out:
 	if (val)
@@ -3177,6 +3273,16 @@ resend:
 			goto out;
 		}
 		recvd = true;
+	}
+	
+	if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
+	{
+		// Default: ["notify", "set_difficulty"] (but these must be explicit if mining.capabilities is used)
+		sprintf(s, "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[[\"notify\",\"set_difficulty\",\"set_goal\"]");
+		if (request_target_str)
+			tailsprintf(s, sizeof(s), ", {\"suggested_target\":\"%s\"}", request_target_str);
+		tailsprintf(s, sizeof(s), "]}");
+		_stratum_send(pool, s, strlen(s), true);
 	}
 	
 	if (noresume) {

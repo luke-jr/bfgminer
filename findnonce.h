@@ -12,9 +12,15 @@
 #define BUFFERSIZE (sizeof(uint32_t) * MAXBUFFERS)
 #define FOUND (0x0F)
 
+#ifdef USE_SCRYPT
 #define SCRYPT_MAXBUFFERS (0x100)
 #define SCRYPT_BUFFERSIZE (sizeof(uint32_t) * SCRYPT_MAXBUFFERS)
 #define SCRYPT_FOUND (0xFF)
+
+#define OPENCL_MAX_BUFFERSIZE  SCRYPT_BUFFERSIZE
+#else
+#define OPENCL_MAX_BUFFERSIZE  BUFFERSIZE
+#endif
 
 #ifdef HAVE_OPENCL
 extern void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data);

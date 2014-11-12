@@ -85,6 +85,8 @@ struct knc_titan_info {
 	struct cgpu_info *cgpu;
 	int cores;
 	struct knc_titan_die dies[KNC_TITAN_MAX_ASICS][KNC_TITAN_DIES_PER_ASIC];
+	bool asic_served_by_fpga[KNC_TITAN_MAX_ASICS];
+	struct timeval tv_prev;
 
 	struct work *workqueue;
 	int workqueue_size;
@@ -209,7 +211,7 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, 
 	knc_titan_set_work(repr, ctx, asic, die, core, 0, NULL, true, &unused, &report);
 }
 
-static uint32_t nonce_tops[KNC_TITAN_DIES_PER_ASIC][KNC_TITAN_CORES_PER_DIE];
+static uint32_t nonce_tops[KNC_TITAN_CORES_PER_DIE];
 static bool nonce_tops_inited = false;
 
 static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
@@ -217,32 +219,27 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 	if (!nonce_tops_inited) {
 		uint32_t top;
 		double nonce_f, nonce_step;
-		int die, core;
+		int core;
 
 		nonce_f = 0.0;
-		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_ASIC;
+		nonce_step = 4294967296.0 / KNC_TITAN_CORES_PER_DIE;
 
-		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
-			for (core = 0; core < KNC_TITAN_CORES_PER_DIE; ++core) {
-				nonce_f += nonce_step;
-				if ((core < (KNC_TITAN_CORES_PER_DIE - 1)) || (die < (KNC_TITAN_DIES_PER_ASIC - 1)))
-					top = nonce_f;
-				else
-					top = 0xFFFFFFFF;
-				nonce_tops[die][core] = top;
-			}
+		for (core = 0; core < KNC_TITAN_CORES_PER_DIE; ++core) {
+			nonce_f += nonce_step;
+			if (core < (KNC_TITAN_CORES_PER_DIE - 1))
+				top = nonce_f;
+			else
+				top = 0xFFFFFFFF;
+			nonce_tops[core] = top;
 		}
 
 		nonce_tops_inited = true;
 	}
 
-	*nonce_top = nonce_tops[dieno][coreno];
+	*nonce_top = nonce_tops[coreno];
 	if (coreno > 0) {
-		*nonce_bottom = nonce_tops[dieno][coreno - 1] + 1;
+		*nonce_bottom = nonce_tops[coreno - 1] + 1;
 		return;
-	}
-	if (dieno > 0) {
-		*nonce_bottom = nonce_tops[dieno - 1][KNC_TITAN_CORES_PER_DIE - 1] + 1;
 	}
 	*nonce_bottom = 0;
 }
@@ -278,6 +275,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 
 	first_proc = die_p->first_proc;
 	repr = first_proc->device->dev_repr;
+	bool success = true;
 	for (proc = first_proc; proc; proc = proc->next_proc) {
 		mythr = proc->thr[0];
 		knccore = mythr->cgpu_data;
@@ -286,14 +284,21 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knc_titan_clean_flush(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
 		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s[%d:%d:%d]: Setup core, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
-		knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params);
+		if (!knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params))
+			success = false;
 	}
-	applog(LOG_NOTICE, "%s[%d-%d] Die configured", repr, asic, die);
+	applog(LOG_NOTICE, "%s[%d-%d] Die configur%s", repr, asic, die, success ? "ed successfully" : "ation failed");
 	die_p->need_flush = true;
 	timer_set_now(&(die_p->last_share));
 	die_p->broadcast_flushes = false;
 
 	return true;
+}
+
+static
+float titan_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return (malgo->algo == POW_SCRYPT) ? DEFAULT_DIFF_FILTERING_FLOAT : -1.;
 }
 
 static bool knc_titan_init(struct thr_info * const thr)
@@ -308,7 +313,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
 	for (proc = cgpu; proc; ) {
-		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 		if (proc->device != proc) {
 			applog(LOG_WARNING, "%"PRIpreprv": Extra processor?", proc->proc_repr);
 			proc = proc->next_proc;
@@ -358,6 +362,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 		}
 
 		knc->cores = total_cores;
+		knc->asic_served_by_fpga[asic] = true;
 	}
 
 	cgpu_set_defaults(cgpu);
@@ -367,6 +372,9 @@ static bool knc_titan_init(struct thr_info * const thr)
 
 	knc = cgpu->device_data;
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		knc_titan_setup_spi("ASIC", knc->ctx, asic, KNC_TITAN_FPGA_SPI_DIVIDER,
+				    KNC_TITAN_FPGA_SPI_PRECLK, KNC_TITAN_FPGA_SPI_DECLK,
+				    KNC_TITAN_FPGA_SPI_SSLOWMIN);
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			configure_one_die(knc, asic, die);
 			knc->dies[asic][die].next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
@@ -430,9 +438,7 @@ static bool die_reconfigure(struct knc_titan_info * const knc, int asic, int die
 
 static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 {
-	struct cgpu_info * const cgpu = thr->cgpu;
-
-	work->nonce_diff = cgpu->min_nonce_diff;
+	work->nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 	return true;
 }
 
@@ -512,6 +518,7 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 			for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 				knc->dies[asic][die].need_flush = true;
 			}
+			knc->asic_served_by_fpga[asic] = true;
 		}
 		timer_set_now(&thr->tv_poll);
 	}
@@ -522,12 +529,41 @@ static void knc_titan_queue_flush(struct thr_info * const thr)
 #define	DIE_FROM_WORKID(workid)			((((uint32_t)(workid)) >> 8) & 0xFF)
 #define	SLOT_FROM_WORKID(workid)		(((uint32_t)(workid)) & 0xFF)
 
+static bool knc_titan_process_report(struct knc_titan_info * const knc, struct knc_titan_core * const knccore, struct knc_report * const report)
+{
+	int i, tmp_int;
+	struct work *work;
+	struct cgpu_info * const proc = knccore->proc;
+	bool ret = false;
+
+	for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
+		if ((report->nonce[i].slot == knccore->last_nonce.slot) &&
+		    (report->nonce[i].nonce == knccore->last_nonce.nonce))
+			break;
+		ret = true;
+		tmp_int = MAKE_WORKID(knccore->asicno, knccore->dieno, report->nonce[i].slot);
+		HASH_FIND_INT(knc->devicework, &tmp_int, work);
+		if (!work) {
+			applog(LOG_WARNING, "%"PRIpreprv"[%d:%d:%d]: Got nonce for unknown work in slot %u", proc->proc_repr, knccore->asicno, knccore->dieno, knccore->coreno, (unsigned)report->nonce[i].slot);
+			continue;
+		}
+		if (submit_nonce(proc->thr[0], work, report->nonce[i].nonce)) {
+			hashes_done2(proc->thr[0], DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
+			knccore->hwerr_in_row = 0;
+		}
+	}
+	knccore->last_nonce.slot = report->nonce[0].slot;
+	knccore->last_nonce.nonce = report->nonce[0].nonce;
+	
+	return ret;
+}
+
 static void knc_titan_poll(struct thr_info * const thr)
 {
 	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_info * const knc = cgpu->device_data;
-	struct knc_titan_core *knccore, *core1;
+	struct knc_titan_core *knccore;
 	struct work *work, *tmp;
 	int workaccept = 0;
 	unsigned long delay_usecs = KNC_POLL_INTERVAL_US;
@@ -535,15 +571,17 @@ static void knc_titan_poll(struct thr_info * const thr)
 	struct knc_die_info die_info;
 	int asic;
 	int die;
-	int i, tmp_int;
 	struct knc_titan_die *die_p;
-	struct timeval tv_now, tv_prev;
-	bool any_was_flushed = false;
+	struct timeval tv_now;
+	int num_request_busy;
+	int num_status_byte_error[4];
+	bool fpga_status_checked;
 
 	knc_titan_prune_local_queue(thr);
-	timer_set_now(&tv_prev);
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+                fpga_status_checked = false;
+                num_request_busy = KNC_TITAN_DIES_PER_ASIC;
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			die_p = &(knc->dies[asic][die]);
 			if (0 >= die_p->cores)
@@ -564,32 +602,30 @@ static void knc_titan_poll(struct thr_info * const thr)
 							work_accepted = true;
 						}
 					} else {
-						/* Use unicasts */
-						bool work_acc_arr[die_p->cores];
-						struct knc_report reports[die_p->cores];
-						for (proc = first_proc; proc; proc = proc->next_proc) {
-							mythr = proc->thr[0];
-							core1 = mythr->cgpu_data;
-							if ((core1->dieno != die) || (core1->asicno != asic))
-								break;
-							work_acc_arr[core1->coreno] = false;
+						/* Use FPGA accelerated unicasts */
+						if (!fpga_status_checked) {
+							timer_set_now(&knc->tv_prev);
+							knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy, num_status_byte_error);
+							fpga_status_checked = true;
 						}
-						if (knc_titan_set_work_multi(first_proc->device->dev_repr, knc->ctx, asic, die, 0, die_p->next_slot, work, true, work_acc_arr, reports, die_p->cores)) {
-							for (proc = first_proc; proc; proc = proc->next_proc) {
-								mythr = proc->thr[0];
-								core1 = mythr->cgpu_data;
-								if ((core1->dieno != die) || (core1->asicno != asic))
-									break;
-								if (work_acc_arr[core1->coreno]) {
-									core1->last_nonce.slot = reports[core1->coreno].nonce[0].slot;
-									core1->last_nonce.nonce = reports[core1->coreno].nonce[0].nonce;
-									work_accepted = true;
-								}
+						if (num_request_busy == 0) {
+							if (knc_titan_set_work_parallel(first_proc->device->dev_repr, knc->ctx, asic, 1 << die, 0, die_p->next_slot, work, true, die_p->cores, KNC_TITAN_FPGA_RETRIES)) {
+								work_accepted = true;
 							}
 						}
 					}
 				} else {
-					if (!knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
+					if (knc->asic_served_by_fpga[asic]) {
+						knc_titan_get_work_status(first_proc->device->dev_repr, knc->ctx, asic, &num_request_busy, num_status_byte_error);
+						if (num_request_busy == 0) {
+							timer_set_now(&tv_now);
+							double diff = ((tv_now.tv_sec - knc->tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev.tv_usec)) / 1000000.0;
+							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
+							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
+							knc->asic_served_by_fpga[asic] = false;
+						}
+					}
+					if (knc->asic_served_by_fpga[asic] || !knc_titan_set_work(first_proc->dev_repr, knc->ctx, asic, die, ALL_CORES, die_p->next_slot, work, false, &work_accepted, &report))
 						work_accepted = false;
 				}
 				knccore = first_proc->thr[0]->cgpu_data;
@@ -597,32 +633,30 @@ static void knc_titan_poll(struct thr_info * const thr)
 					break;
 				bool was_flushed = false;
 				if (die_p->need_flush || need_replace) {
-					struct work *work1, *tmp1;
 					applog(LOG_NOTICE, "%s[%d-%d] Flushing stale works (%s)", first_proc->dev_repr, asic, die,
 					       die_p->need_flush ? "New work" : "Slot collision");
 					die_p->need_flush = false;
 					die_p->first_slot = die_p->next_slot;
-					HASH_ITER(hh, knc->devicework, work1, tmp1) {
-						if ( (asic == ASIC_FROM_WORKID(work1->device_id)) &&
-							 (die == DIE_FROM_WORKID(work1->device_id)) ) {
-							HASH_DEL(knc->devicework, work1);
-							free_work(work1);
-						}
-					}
 					delay_usecs = 0;
 					was_flushed = true;
-					any_was_flushed = true;
 				}
 				--knc->workqueue_size;
 				DL_DELETE(knc->workqueue, work);
 				work->device_id = MAKE_WORKID(asic, die, die_p->next_slot);
+				struct work *work1, *tmp1;
+				HASH_ITER(hh, knc->devicework, work1, tmp1) {
+					if (work->device_id == work1->device_id) {
+						HASH_DEL(knc->devicework, work1);
+						free_work(work1);
+					}
+				}
 				HASH_ADD(hh, knc->devicework, device_id, sizeof(work->device_id), work);
 				if (++(die_p->next_slot) > KNC_TITAN_MAX_WORK_SLOT_NUM)
 					die_p->next_slot = KNC_TITAN_MIN_WORK_SLOT_NUM;
 				++workaccept;
 				/* If we know for sure that this work was urgent, then we don't need to hurry up
 				 * with filling next slot, we have plenty of time until current work completes.
-				 * So, better to proceed with other ASICs/knc. */
+				 * So, better to proceed with other ASICs/dies. */
 				if (was_flushed)
 					break;
 			}
@@ -631,10 +665,6 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	applog(LOG_DEBUG, "%s: %d jobs accepted to queue (max=%d)", knc_titan_drv.dname, workaccept, knc->workqueue_max);
 	timer_set_now(&tv_now);
-	if (any_was_flushed) {
-		double diff = ((tv_now.tv_sec - tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - tv_prev.tv_usec)) / 1000000.0;
-		applog(LOG_INFO, "%s: Flush took %f secs", knc_titan_drv.dname, diff);
-	}
 
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
@@ -643,35 +673,20 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			die_info.cores = die_p->cores; /* core hint */
 			die_info.version = KNC_VERSION_TITAN;
-			if (!knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
+			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
 				continue;
 			for (proc = die_p->first_proc; proc; proc = proc->next_proc) {
 				mythr = proc->thr[0];
 				knccore = mythr->cgpu_data;
+				thread_reportin(mythr);
 				if ((knccore->dieno != die) || (knccore->asicno != asic))
 					break;
 				if (!die_info.has_report[knccore->coreno])
 					continue;
 				if (!knc_titan_get_report(proc->proc_repr, knc->ctx, asic, die, knccore->coreno, &report))
 					continue;
-				timer_set_now(&(die_p->last_share));
-				for (i = 0; i < KNC_TITAN_NONCES_PER_REPORT; ++i) {
-					if ((report.nonce[i].slot == knccore->last_nonce.slot) &&
-					    (report.nonce[i].nonce == knccore->last_nonce.nonce))
-						break;
-					tmp_int = MAKE_WORKID(asic, die, report.nonce[i].slot);
-					HASH_FIND_INT(knc->devicework, &tmp_int, work);
-					if (!work) {
-						applog(LOG_WARNING, "%"PRIpreprv"[%d:%d:%d]: Got nonce for unknown work in slot %u", proc->proc_repr, asic, die, knccore->coreno, (unsigned)report.nonce[i].slot);
-						continue;
-					}
-					if (submit_nonce(mythr, work, report.nonce[i].nonce)) {
-						hashes_done2(mythr, DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
-						knccore->hwerr_in_row = 0;
-					}
-				}
-				knccore->last_nonce.slot = report.nonce[0].slot;
-				knccore->last_nonce.nonce = report.nonce[0].nonce;
+				if (knc_titan_process_report(knc, knccore, &report))
+					timer_set_now(&(die_p->last_share));
 			}
 		}
 
@@ -792,7 +807,7 @@ struct device_drv knc_titan_drv =
 	/* metadata */
 	.dname = "titan",
 	.name = "KNC",
-	.supported_algos = POW_SCRYPT,
+	.drv_min_nonce_diff = titan_min_nonce_diff,
 	.drv_detect = knc_titan_detect,
 
 	.thread_init = knc_titan_init,
