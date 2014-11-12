@@ -27,9 +27,6 @@
 #include "knc-asic/knc-transport.h"
 #include "knc-asic/knc-asic.h"
 
-#define MAX_ASICS               6
-#define DIES_PER_ASIC           4
-#define MAX_CORES_PER_DIE       360
 #define WORKS_PER_CORE          3
 
 #define CORE_ERROR_LIMIT	30
@@ -60,7 +57,6 @@ struct knc_die;
 struct knc_core_state {
 	int generation;
 	int core;
-	int coreid;
 	struct knc_die *die;
 	struct {
 		int slot;
@@ -107,7 +103,7 @@ struct knc_state {
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
 	int dies;
-	struct knc_die die[MAX_ASICS*DIES_PER_ASIC];
+	struct knc_die die[KNC_MAX_ASICS * KNC_MAX_DIES_PER_ASIC];
 	int cores;
 	int scan_adjust;
 	int startup;
@@ -152,7 +148,10 @@ struct knc_state {
 	int send_buffer_count;
 	int read_buffer_count;
 	/* end SPI thread */
-	
+
+	/* lock to protect resources between different threads */
+	pthread_mutex_t state_lock;
+
 	/* Do not add anything below here!! core[] must be last */
 	struct knc_core_state core[];
 };
@@ -255,15 +254,15 @@ static bool knc_detect_one(void *ctx)
 	int channel, die, cores = 0, core;
 	struct cgpu_info *cgpu;
 	struct knc_state *knc;
-	struct knc_die_info die_info[MAX_ASICS][DIES_PER_ASIC];
+	struct knc_die_info die_info[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
 
 	memset(die_info, 0, sizeof(die_info));
 
 	/* Send GETINFO to each die to detect if it is usable */
-	for (channel = 0; channel < MAX_ASICS; channel++) {
+	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
 		if (!knc_trnsp_asic_detect(ctx, channel))
 			continue;
-		for (die = 0; die < DIES_PER_ASIC; die++) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 		    if (knc_detect_die(ctx, channel, die, &die_info[channel][die]) == 0)
 			cores += die_info[channel][die].cores;
 		}
@@ -291,8 +290,8 @@ static bool knc_detect_one(void *ctx)
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
-	for (channel = 0; channel < MAX_ASICS; channel++) {
-		for (die = 0; die < DIES_PER_ASIC; die++) {
+	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
 				knc->die[dies].die = die;
@@ -310,8 +309,6 @@ static bool knc_detect_one(void *ctx)
 			}
 		}
 	}
-	for (core = 0; core < cores; core++)
-		knc->core[core].coreid = core;
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
@@ -325,6 +322,8 @@ static bool knc_detect_one(void *ctx)
 
 	pthread_mutex_init(&knc->spi_qlock, NULL);
 	pthread_cond_init(&knc->spi_qcond, NULL);
+	pthread_mutex_init(&knc->state_lock, NULL);
+
 	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, (void *)cgpu)) {
 		applog(LOG_ERR, "%s%i: SPI thread create failed",
 			cgpu->drv->name, cgpu->device_id);
@@ -679,6 +678,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 	struct knc_state *knc = cgpu->device_data;
 
 	applog(LOG_DEBUG, "KnC running scanwork");
+	mutex_lock(&knc->state_lock);
 
 	gettimeofday(&now, NULL);
 
@@ -739,6 +739,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	knc_flush(thr);
 
+	mutex_unlock(&knc->state_lock);
 	return 0;
 }
 
@@ -748,16 +749,22 @@ static void knc_flush_work(struct cgpu_info *cgpu)
 
 	applog(LOG_INFO, "KnC running flushwork");
 
+	mutex_lock(&knc->state_lock);
+
 	knc->generation++;
 	knc->scan_adjust=0;
 	if (!knc->generation)
 		knc->generation++;
+
+	mutex_unlock(&knc->state_lock);
 }
 
 static void knc_zero_stats(struct cgpu_info *cgpu)
 {
 	int core;
 	struct knc_state *knc = cgpu->device_data;
+
+	mutex_lock(&knc->state_lock);
 	for (core = 0; core < knc->cores; core++) {
 		knc->shares = 0;
 		knc->completed = 0;
@@ -768,6 +775,7 @@ static void knc_zero_stats(struct cgpu_info *cgpu)
 		knc->core[core].shares = 0;
 		knc->core[core].completed = 0;
 	}
+	mutex_unlock(&knc->state_lock);
 }
 
 static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
@@ -778,6 +786,8 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 	struct api_data *root = NULL;
 	int core;
 	char label[256];
+
+	mutex_lock(&knc->state_lock);
 
 	root = api_add_int(root, "dies", &knc->dies, 1);
 	root = api_add_int(root, "cores", &knc->cores, 1);
@@ -845,6 +855,7 @@ static struct api_data *knc_api_stats(struct cgpu_info *cgpu)
 		}
 	}
 
+	mutex_unlock(&knc->state_lock);
 	return root;
 }
 
