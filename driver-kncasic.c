@@ -99,7 +99,6 @@ struct knc_die {
 #define KNC_SPI_BUFFERS		(3)
 
 struct knc_state {
-	struct cgpu_info *cgpu;
 	void *ctx;
 	int generation;    /* work/block generation, incremented on each flush invalidating older works */
 	int dies;
@@ -252,7 +251,6 @@ static bool knc_detect_one(void *ctx)
 {
 	/* Scan device for ASICs */
 	int channel, die, cores = 0, core;
-	struct cgpu_info *cgpu;
 	struct knc_state *knc;
 	struct knc_die_info die_info[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
 
@@ -275,22 +273,25 @@ static bool knc_detect_one(void *ctx)
 
 	applog(LOG_ERR, "Found a KnC miner with %d cores", cores);
 
-	cgpu = calloc(1, sizeof(*cgpu));
 	knc = calloc(1, sizeof(*knc) + cores * sizeof(struct knc_core_state));
-	if (!cgpu || !knc) {
+	if (!knc)
+	{
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");
 		return false;
 	}
 
-	knc->cgpu = cgpu;
 	knc->ctx = ctx;
 	knc->generation = 1;
 
 	/* Index all cores */
+	struct cgpu_info *prev_cgpu = NULL, *first_cgpu;
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
+	int channel_cores_base = 0;
 	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
+		int channel_cores = 0;
+		
 		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
@@ -304,42 +305,49 @@ static bool knc_detect_one(void *ctx)
 					knc->die[dies].core[core].core = core;
 				}
 				cores += knc->die[dies].cores;
+				channel_cores += knc->die[dies].cores;
 				pcore += knc->die[dies].cores;
 				dies++;
 			}
 		}
+		
+		if (channel_cores)
+		{
+			struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
+			*cgpu = (struct cgpu_info){
+				.drv = &kncasic_drv,
+				.name = "KnCminer",
+				.procs = channel_cores,
+				.threads = prev_cgpu ? 0 : 1,
+				.device_data = knc,
+			};
+			add_cgpu_slave(cgpu, prev_cgpu);
+			if (!prev_cgpu)
+				first_cgpu = cgpu;
+			prev_cgpu = cgpu;
+			
+			for_each_managed_proc(proc, cgpu)
+			{
+				knc->core[channel_cores_base++].proc = proc;
+			}
+		}
 	}
+	
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
-
-	cgpu->drv = &kncasic_drv;
-	cgpu->name = "KnCminer";
-	cgpu->procs = cores;
-	cgpu->threads = 1;
-
-	cgpu->device_data = knc;
 
 	pthread_mutex_init(&knc->spi_qlock, NULL);
 	pthread_cond_init(&knc->spi_qcond, NULL);
 	pthread_mutex_init(&knc->state_lock, NULL);
 
-	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, (void *)cgpu)) {
-		applog(LOG_ERR, "%s%i: SPI thread create failed",
-			cgpu->drv->name, cgpu->device_id);
-		free(cgpu);
+	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu))
+	{
+		applog(LOG_ERR, "%s: SPI thread create failed", first_cgpu->dev_repr);
 		free(knc);
 		return false;
 	}
 	
-	add_cgpu(cgpu);
-	
-	core = 0;
-	for_each_managed_proc(proc, cgpu)
-	{
-		knc->core[core++].proc = proc;
-	}
-
 	return true;
 }
 
