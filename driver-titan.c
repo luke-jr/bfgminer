@@ -80,6 +80,13 @@ struct knc_titan_die {
 	/* Don't use this! DC/DCs don't like broadcast urgent setworks */
 	bool broadcast_flushes;
 
+	uint64_t hashes_done;
+/* We store history of hash counters for the last minute (12*5 = 60 s) */
+#define	HASHES_BUF_ONE_ENTRY_TIME	5
+#define	HASHES_BUF_ENTRIES		12
+	uint64_t hashes_buf[HASHES_BUF_ENTRIES];
+	int hashes_buf_idx; /* next write position === the oldest data stored */
+
 	int freq;
 	int manual_check_count;
 };
@@ -99,6 +106,60 @@ struct knc_titan_info {
 
 	struct work *devicework;
 };
+
+static void knc_titan_zero_stats(struct cgpu_info *cgpu)
+{
+	if (cgpu->device != cgpu)
+		return;
+
+	struct knc_titan_core *knccore = cgpu->thr[0]->cgpu_data;
+	struct knc_titan_info *knc = cgpu->device_data;
+	struct knc_titan_die *die;
+	int dieno;
+
+	for (dieno = 0; dieno < KNC_TITAN_DIES_PER_ASIC; ++dieno) {
+		die = &(knc->dies[knccore->asicno][dieno]);
+		die->hashes_done = 0;
+		memset(die->hashes_buf, 0, sizeof(die->hashes_buf));
+	}
+}
+
+static double knc_titan_get_device_rolling_hashrate(struct cgpu_info *device)
+{
+	struct knc_titan_core *knccore = device->thr[0]->cgpu_data;
+	struct knc_titan_info *knc = device->device_data;
+	double hashrate = 0.0;
+	int dieno, i;
+
+	for (dieno = 0; dieno < KNC_TITAN_DIES_PER_ASIC; ++dieno) {
+		for (i = 0; i < HASHES_BUF_ENTRIES; ++i) {
+			hashrate += (double)knc->dies[knccore->asicno][dieno].hashes_buf[i] / 1.0e6;
+		}
+	}
+
+	return hashrate / ((double)(HASHES_BUF_ENTRIES * HASHES_BUF_ONE_ENTRY_TIME));
+}
+
+static void knc_titan_die_hashmeter(struct knc_titan_die *die, uint64_t hashes_done)
+{
+	struct timeval tv_now;
+	cgtime(&tv_now);
+	int cur_idx = (tv_now.tv_sec / HASHES_BUF_ONE_ENTRY_TIME) % HASHES_BUF_ENTRIES;
+
+	if (die->hashes_buf_idx == cur_idx) {
+		die->hashes_done += hashes_done;
+		return;
+	}
+
+	die->hashes_buf[die->hashes_buf_idx] = die->hashes_done;
+	die->hashes_done = hashes_done;
+
+	die->hashes_buf_idx = (die->hashes_buf_idx + 1) % HASHES_BUF_ENTRIES;
+	while (die->hashes_buf_idx != cur_idx) {
+		die->hashes_buf[die->hashes_buf_idx] = 0;
+		die->hashes_buf_idx = (die->hashes_buf_idx + 1) % HASHES_BUF_ENTRIES;
+	}
+}
 
 static bool knc_titan_detect_one(const char *devpath)
 {
@@ -552,6 +613,7 @@ static bool knc_titan_process_report(struct knc_titan_info * const knc, struct k
 		}
 		if (submit_nonce(proc->thr[0], work, report->nonce[i].nonce)) {
 			hashes_done2(proc->thr[0], DEFAULT_DIFF_HASHES_PER_NONCE, NULL);
+			knc_titan_die_hashmeter(knccore->die, DEFAULT_DIFF_HASHES_PER_NONCE);
 			knccore->hwerr_in_row = 0;
 		}
 	}
@@ -588,6 +650,8 @@ static void knc_titan_poll(struct thr_info * const thr)
                 num_request_busy = KNC_TITAN_DIES_PER_ASIC;
 		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 			die_p = &(knc->dies[asic][die]);
+			/* make sure the running average buffers are updated even in the absence of found nonces */
+			knc_titan_die_hashmeter(die_p, 0);
 			if (0 >= die_p->cores)
 				continue;
 			struct cgpu_info *first_proc = die_p->first_proc;
@@ -864,6 +928,10 @@ struct device_drv knc_titan_drv =
 	.queue_flush = knc_titan_queue_flush,
 	.poll = knc_titan_poll,
 	.prepare_work = knc_titan_prepare_work,
+
+	/* additional statistics */
+	.get_master_rolling_hashrate = knc_titan_get_device_rolling_hashrate,
+	.zero_stats = knc_titan_zero_stats,
 
 	/* TUI support - e.g. setting clock via UI */
 #ifdef HAVE_CURSES
