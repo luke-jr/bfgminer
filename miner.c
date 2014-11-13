@@ -3891,7 +3891,10 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 				break;
 		}
 	}
-	
+
+	if ((cgpu->device == cgpu) && (drv->get_master_rolling_hashrate))
+		rolling = drv->get_master_rolling_hashrate(cgpu);
+
 	double wtotal = (waccepted + wnotaccepted);
 	
 	multi_format_unit_array2(
