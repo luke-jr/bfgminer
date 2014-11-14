@@ -761,6 +761,48 @@ static bool cpu_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static
+float cpu_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return minimum_pdiff;
+}
+
+static
+bool scanhash_generic(struct thr_info * const thr, struct work * const work, const uint32_t max_nonce, uint32_t * const last_nonce, uint32_t n)
+{
+	struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	void (* const hash_data_f)(void *, const void *) = malgo->hash_data_f;
+	uint8_t * const hash = work->hash;
+	uint8_t *data = work->data;
+	const uint8_t * const target = work->target;
+	uint32_t * const out_nonce = (uint32_t *)&data[0x4c];
+	bool ret = false;
+	
+	const uint32_t hash7_targ = le32toh(((const uint32_t *)target)[7]);
+	uint32_t * const hash7_tmp = &((uint32_t *)hash)[7];
+	
+	while (true)
+	{
+		*out_nonce = n;
+		
+		hash_data_f(hash, data);
+		
+		if (unlikely(le32toh(*hash7_tmp) <= hash7_targ))
+		{
+			ret = true;
+			break;
+		}
+
+		if ((n >= max_nonce) || thr->work_restart)
+			break;
+
+		n++;
+	}
+	
+	*last_nonce = n;
+	return ret;
+}
+
 static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
 	uint32_t first_nonce = work->blk.nonce;
@@ -773,7 +815,7 @@ CPUSearch:
 
 	/* scan nonces for a proof-of-work hash */
 	{
-		sha256_func func = NULL;
+		sha256_func func = scanhash_generic;
 		switch (work_mining_algorithm(work)->algo)
 		{
 #ifdef USE_SCRYPT
@@ -783,10 +825,11 @@ CPUSearch:
 #endif
 #ifdef USE_SHA256D
 			case POW_SHA256D:
-				func = sha256_funcs[opt_algo];
+				if (work->nonce_diff >= 1.)
+					func = sha256_funcs[opt_algo];
 				break;
 #endif
-			case POW_ALGORITHM_COUNT:
+			default:
 				break;
 		}
 		if (unlikely(!func))
@@ -819,7 +862,7 @@ struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
 	.probe_priority = 120,
-	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
+	.drv_min_nonce_diff = cpu_min_nonce_diff,
 	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,
