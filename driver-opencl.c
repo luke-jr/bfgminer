@@ -383,18 +383,9 @@ _SET_INT_LIST(thread_concurrency, true, thread_concurrency)
 
 enum cl_kernels select_kernel(const char * const arg)
 {
-	if (!strcmp(arg, "diablo"))
-		return KL_DIABLO;
-	if (!strcmp(arg, "diakgcn"))
-		return KL_DIAKGCN;
-	if (!strcmp(arg, "poclbm"))
-		return KL_POCLBM;
-	if (!strcmp(arg, "phatk"))
-		return KL_PHATK;
-#ifdef USE_SCRYPT
-	if (!strcmp(arg, "scrypt"))
-		return KL_SCRYPT;
-#endif
+	for (unsigned i = 0; i < (unsigned)OPENCL_KERNEL_INTERFACE_COUNT; ++i)
+		if (!strcasecmp(arg, kernel_interfaces[i].kiname))
+			return i;
 	return KL_NONE;
 }
 
