@@ -1762,27 +1762,7 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernel_file, malgo))
 			applogr(NULL, LOG_ERR, "%s: Failed to load kernel", cgpu->dev_repr);
 		
-		switch (kernelinfo->interface)
-		{
-			case KL_POCLBM:
-				kernelinfo->queue_kernel_parameters = &queue_poclbm_kernel;
-				break;
-			case KL_PHATK:
-				kernelinfo->queue_kernel_parameters = &queue_phatk_kernel;
-				break;
-			case KL_DIAKGCN:
-				kernelinfo->queue_kernel_parameters = &queue_diakgcn_kernel;
-				break;
-#ifdef USE_SCRYPT
-			case KL_SCRYPT:
-				kernelinfo->queue_kernel_parameters = &queue_scrypt_kernel;
-				break;
-#endif
-			default:
-			case KL_DIABLO:
-				kernelinfo->queue_kernel_parameters = &queue_diablo_kernel;
-				break;
-		}
+		kernelinfo->queue_kernel_parameters = kernel_interfaces[kernelinfo->interface].queue_kernel_parameters_func;
 	}
 	return kernelinfo;
 }
