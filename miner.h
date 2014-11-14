@@ -381,6 +381,9 @@ enum cl_kernels {
 	KL_DIAKGCN,
 	KL_DIABLO,
 #endif
+#ifdef USE_OPENCL_FULLHEADER
+	KL_FULLHEADER,
+#endif
 #ifdef USE_SCRYPT
 	KL_SCRYPT,
 #endif

@@ -1244,6 +1244,34 @@ cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 }
 #endif
 
+#ifdef USE_OPENCL_FULLHEADER
+static
+cl_int queue_fullheader_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+{
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const cl_kernel * const kernel = &kinfo->kernel;
+	unsigned int num = 0;
+	cl_int status = 0;
+	uint8_t blkheader[80];
+	
+	work->nonce_diff = malgo->opencl_min_nonce_diff;
+	
+	if (!kinfo->goffset)
+	{
+		cl_uint nonce_base = work->blk.nonce;
+		CL_SET_ARG(nonce_base);
+	}
+	
+	swap32yes(blkheader, work->data, 80/4);
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, CL_TRUE, 0, sizeof(blkheader), blkheader, 0, NULL, NULL);
+	
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->outputBuffer);
+	
+	return status;
+}
+#endif
+
 
 static
 struct opencl_kernel_interface kernel_interfaces[] = {
@@ -1253,6 +1281,9 @@ struct opencl_kernel_interface kernel_interfaces[] = {
 	{"phatk",   queue_phatk_kernel  },
 	{"diakgcn", queue_diakgcn_kernel},
 	{"diablo",  queue_diablo_kernel },
+#endif
+#ifdef USE_OPENCL_FULLHEADER
+	{"fullheader", queue_fullheader_kernel },
 #endif
 #ifdef USE_SCRYPT
 	{"scrypt",  queue_scrypt_kernel },
