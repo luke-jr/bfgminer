@@ -139,22 +139,18 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	timeradd(&thr->tv_hashes_done, tvp_hashes, &thr->tv_hashes_done);
 	
 	// max_nonce management (optional)
-	if (unlikely((long)thr->tv_hashes_done.tv_sec < cycle)) {
-		int mult;
+	if (max_nonce)
+	{
+		uint64_t new_max_nonce = *max_nonce;
+		new_max_nonce *= cycle;
+		new_max_nonce *= 1000000;
+		new_max_nonce /= ((uint64_t)thr->tv_hashes_done.tv_sec * 1000000) + thr->tv_hashes_done.tv_usec;
 		
-		if (likely(!max_nonce || *max_nonce == 0xffffffff))
-			return true;
+		if (new_max_nonce > 0xffffffff)
+			new_max_nonce = 0xffffffff;
 		
-		mult = 1000000 / ((thr->tv_hashes_done.tv_usec + 0x400) / 0x400) + 0x10;
-		mult *= cycle;
-		if (*max_nonce > ((uint64_t)0xffffffff * 0x400) / mult)
-			*max_nonce = 0xffffffff;
-		else
-			*max_nonce = ((uint64_t)*max_nonce * mult) / 0x400;
-	} else if (unlikely(thr->tv_hashes_done.tv_sec > cycle) && max_nonce)
-		*max_nonce = (uint64_t)*max_nonce * cycle / thr->tv_hashes_done.tv_sec;
-	else if (unlikely(thr->tv_hashes_done.tv_usec > 100000) && max_nonce)
-		*max_nonce = (uint64_t)*max_nonce * 0x400 / ((((uint64_t)cycle * 1000000) + thr->tv_hashes_done.tv_usec) / ((uint64_t)cycle * 1000000 / 0x400));
+		*max_nonce = new_max_nonce;
+	}
 	
 	hashmeter2(thr);
 	
