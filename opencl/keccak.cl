@@ -1,3 +1,9 @@
+/*
+ * Scrypt-jane public domain, OpenCL implementation of scrypt(keccak,chacha,SCRYPTN,1,1) 2013 mtrlt
+ */
+
+// kernel-interface: fullheader Keccak
+
 #define ARGS_25(x) x ## 0, x ## 1, x ## 2, x ## 3, x ## 4, x ## 5, x ## 6, x ## 7, x ## 8, x ## 9, x ## 10, x ## 11, x ## 12, x ## 13, x ## 14, x ## 15, x ## 16, x ## 17, x ## 18, x ## 19, x ## 20, x ## 21, x ## 22, x ## 23, x ## 24
 
 __constant uint2 keccak_round_constants[24] = {
@@ -124,7 +130,3 @@ __kernel void search(__global const uint2*restrict in, __global uint*restrict ou
 		SETFOUND(get_global_id(0));
 	}
 }
-
-/*-
- * Scrypt-jane public domain, OpenCL implementation of scrypt(keccak,chacha,SCRYPTN,1,1) 2013 mtrlt
- */

@@ -329,6 +329,17 @@ void keccak_hash_data(void * const digest, const void * const pdata)
 	memcpy(digest, &result, 0x20);
 }
 
+#ifdef USE_OPENCL
+extern float opencl_oclthreads_to_intensity_sha256d(unsigned long oclthreads);
+extern unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity);
+
+static
+char *opencl_get_default_kernel_file_keccak(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
+{
+	return strdup("keccak");
+}
+#endif
+
 static struct mining_algorithm malgo_keccak = {
 	.name = "Keccak",
 	.aliases = "Keccak",
@@ -339,6 +350,15 @@ static struct mining_algorithm malgo_keccak = {
 	.reasonable_low_nonce_diff = 1.,
 	
 	.hash_data_f = keccak_hash_data,
+	
+#ifdef USE_OPENCL
+	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_sha256d,
+	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
+	.opencl_min_oclthreads =       0x20,  // intensity -10
+	.opencl_max_oclthreads = 0x20000000,  // intensity  14
+	.opencl_min_nonce_diff = 1./0x10,
+	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_keccak,
+#endif
 };
 
 static

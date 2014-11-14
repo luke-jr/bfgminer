@@ -475,6 +475,10 @@ AC_SUBST(JANSSON_LIBS)
 if test "x$USE_OPENCL" = xyes; then
 	adl="yes"
 	
+	if test "x$USE_KECCAK" = xyes; then
+		AC_DEFINE([USE_OPENCL_FULLHEADER],[1],[Defined to 1 if OpenCL fullheader kernel interface is wanted])
+	fi
+	
 driverlist="$driverlist opencl:sensors/with_sensors"
 AC_ARG_WITH([sensors],
 	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
