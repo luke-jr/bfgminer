@@ -182,6 +182,7 @@ BFGMiner driver configuration options:
 	--disable-ztex          Compile support for ZTEX (default enabled)
 
 BFGMiner algorithm configuration option:
+	--enable-keccak         Compile support for Keccak (default disabled)
 	--disable-sha256d       Compile support for SHA256d (default enabled)
 	--enable-scrypt         Compile support for scrypt (default disabled)
 

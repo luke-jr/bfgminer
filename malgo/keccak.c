@@ -1,3 +1,14 @@
+/*
+ * Copyright 2013-2014 Ronny Van Keer (released as CC0)
+ * Copyright 2014 Luke Mitchell
+ * Copyright 2014 Luke Dashjr
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option)
+ * any later version.  See COPYING for more details.
+ */
+
 #include "config.h"
 #include "miner.h"
 
@@ -7,8 +18,7 @@
 
 #include <stdio.h>
 
-#define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
-#define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
+#include <uthash.h>
 
 struct uint256 {
 	unsigned char v[32];
@@ -53,6 +63,7 @@ struct bin32 {
 	UINT64 v3;
 };
 
+static
 void keccak1(unsigned char *out, const unsigned char *inraw, unsigned inrawlen)
 {
 	unsigned char temp[136];
@@ -305,24 +316,34 @@ void keccak1(unsigned char *out, const unsigned char *inraw, unsigned inrawlen)
 	}
 }
 
-void keccak_regenhash(struct work *work)
+static
+void keccak_hash_data(void * const digest, const void * const pdata)
 {
 	uint256 result;
 	
-	unsigned int data[20], datacopy[20]; // aligned for flip80
-	memcpy(datacopy, work->data, 80);
-	flip80(data, datacopy); 
+	unsigned int data[20], datacopy[20]; // aligned for swap32yes
+	memcpy(datacopy, pdata, 80);
+	swap32yes(data, datacopy, 20);
 	keccak1((unsigned char*)&result, (unsigned char*)data, 80);
 	
-	memcpy(work->hash, &result, 32);
+	memcpy(digest, &result, 0x20);
 }
 
-bool keccak_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
+static struct mining_algorithm malgo_keccak = {
+	.name = "Keccak",
+	.aliases = "Keccak",
+	
+	.algo = POW_KECCAK,
+	.ui_skip_hash_bytes = 4,
+	.worktime_skip_prevblk_u32 = 1,
+	.reasonable_low_nonce_diff = 1.,
+	
+	.hash_data_f = keccak_hash_data,
+};
+
+static
+__attribute__((constructor))
+void init_keccak(void)
 {
-	unsigned int src[20], dst[20]; // aligned for flip80
-	int i;
-	memcpy(src, work->data, 80);
-	flip80(dst, src);
-	memcpy(work->blk.keccak_data, dst, 80);
-	return true;
+    LL_APPEND(mining_algorithms, (&malgo_keccak));
 }

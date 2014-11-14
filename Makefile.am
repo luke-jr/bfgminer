@@ -148,6 +148,10 @@ endif
 endif
 
 
+if USE_KECCAK
+bfgminer_SOURCES += malgo/keccak.c
+endif
+
 if USE_SHA256D
 bfgminer_SOURCES += malgo/sha256d.c
 

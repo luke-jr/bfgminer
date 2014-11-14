@@ -361,6 +361,7 @@ AM_CONDITIONAL([USE_UDEVRULES_GROUP], [$use_udevrules_group])
 AC_SUBST([UDEVRULES_GROUP], [$udevrules_group])
 
 
+BFG_ALGO(Keccak,no)
 BFG_ALGO(SHA256d,yes)
 BFG_ALGO(scrypt,no)
 
