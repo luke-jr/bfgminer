@@ -500,11 +500,12 @@ void scrypt_hash_data(void * const out_hash, const void * const pdata)
 	swap32tobe(out_hash, ohash, 32/4);
 }
 
-bool scanhash_scrypt(struct thr_info *thr, const unsigned char __maybe_unused *pmidstate,
-		     unsigned char *pdata, unsigned char __maybe_unused *phash1,
-		     unsigned char __maybe_unused *phash, const unsigned char *ptarget,
+bool scanhash_scrypt(struct thr_info * const thr, struct work * const work,
 		     uint32_t max_nonce, uint32_t *last_nonce, uint32_t n)
 {
+	uint8_t * const pdata = work->data;
+	const uint8_t * const ptarget = work->target;
+	
 	uint32_t *nonce = (uint32_t *)(pdata + 76);
 	char *scratchbuf;
 	uint32_t data[20];

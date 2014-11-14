@@ -1004,14 +1004,6 @@ extern bool our_curl_supports_proxy_uris();
 extern void bin2hex(char *out, const void *in, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce,
-	uint32_t *last_nonce,
-	uint32_t nonce);
-
 extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_queue;

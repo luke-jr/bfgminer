@@ -18,6 +18,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "driver-cpu.h"
 #include "miner.h"
 
 typedef uint32_t u32;
@@ -232,12 +234,17 @@ const uint32_t sha256_init_state[8] = {
 };
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_c(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t *midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	const uint8_t * const target = work->target;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 	unsigned long stat_ctr = 0;

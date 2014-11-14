@@ -17,6 +17,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "driver-cpu.h"
 #include "miner.h"
 
 typedef uint32_t word32;
@@ -104,13 +106,17 @@ static void runhash(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_cryptopp(struct thr_info*thr, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_cryptopp(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t *midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	const uint8_t * const target = work->target;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 
@@ -590,13 +596,17 @@ static void runhash32(void *state, const void *input, const void *init)
 }
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_asm32(struct thr_info*thr, const unsigned char *midstate,
-		unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_asm32(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t * const midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	const uint8_t * const target = work->target;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 

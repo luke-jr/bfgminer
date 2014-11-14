@@ -21,7 +21,7 @@
 
 #define NPAR 32
 
-static void DoubleBlockSHA256(const void* pin, void* pout, const void* pinit, unsigned int hash[8][NPAR], const void* init2);
+static void DoubleBlockSHA256(const void* pin, const void* pout, const void* pinit, unsigned int hash[8][NPAR], const void* init2);
 
 static const unsigned int sha256_consts[] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, /*  0 */
@@ -79,13 +79,16 @@ static const unsigned int pSHA256InitState[8] =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
 
-bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool ScanHash_4WaySSE2(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	const uint32_t * const phash1 = hash1_init;
+	uint8_t * const phash = work->hash;
+	const uint8_t * const ptarget = work->target;
+	
 	uint32_t *hash32 = (uint32_t *)phash;
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
 
@@ -129,10 +132,10 @@ bool ScanHash_4WaySSE2(struct thr_info*thr, const unsigned char *pmidstate,
 }
 
 
-static void DoubleBlockSHA256(const void* pin, void* pad, const void *pre, unsigned int thash[9][NPAR], const void *init)
+static void DoubleBlockSHA256(const void* pin, const void* pad, const void *pre, unsigned int thash[9][NPAR], const void *init)
 {
     unsigned int* In = (unsigned int*)pin;
-    unsigned int* Pad = (unsigned int*)pad;
+    const unsigned int* Pad = pad;
     unsigned int* hPre = (unsigned int*)pre;
     unsigned int* hInit = (unsigned int*)init;
     unsigned int /* i, j, */ k;

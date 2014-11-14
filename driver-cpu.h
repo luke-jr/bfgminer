@@ -69,6 +69,8 @@ enum sha256_algos {
 extern const char *algo_names[];
 extern struct device_drv cpu_drv;
 
+extern const uint32_t hash1_init[];
+
 extern char *set_algo(const char *arg, enum sha256_algos *algo);
 extern void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo);
 extern char *force_nthreads_int(const char *arg, int *i);

@@ -51,13 +51,16 @@ const uint32_t sha256_32init[8]__attribute__((aligned(0x100))) =
 __m128i g_4sha256_k[64];
 __m128i sha256_consts_m128i[64]__asm__("sha256_consts_m128i")__attribute__((aligned(0x1000)));
 
-bool scanhash_sse2_32(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool scanhash_sse2_32(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	const uint32_t * const phash1 = hash1_init;
+	uint8_t * const phash = work->hash;
+	const uint8_t * const ptarget = work->target;
+	
 	uint32_t *hash32 = (uint32_t *)phash;
     uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
     uint32_t m_midstate[8], m_w[16], m_w1[16];

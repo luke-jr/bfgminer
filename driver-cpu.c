@@ -84,58 +84,18 @@ extern int dev_from_id(int thr_id);
 
 
 /* chipset-optimized hash functions */
-extern bool ScanHash_4WaySSE2(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+typedef bool (*sha256_func)(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
-extern bool ScanHash_altivec_4way(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_via(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *target,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_c(struct thr_info*, const unsigned char *midstate, unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_cryptopp(struct thr_info*, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_asm32(struct thr_info*, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_sse2_64(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse4_64(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse2_32(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_scrypt(struct thr_info *, const unsigned char *pmidstate, unsigned char *pdata, unsigned char *phash1, unsigned char __maybe_unused *phash, const unsigned char *ptarget, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
+extern bool ScanHash_4WaySSE2(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool ScanHash_altivec_4way(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_via(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_c(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_cryptopp(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_asm32(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse2_64(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse4_64(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse2_32(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_scrypt(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
 
 #ifdef WANT_CPUMINE
@@ -209,7 +169,7 @@ enum sha256_algos opt_algo = ALGO_FASTAUTO;
 static bool forced_n_threads;
 #endif
 
-static const uint32_t hash1_init[] = {
+const uint32_t hash1_init[] = {
 	0,0,0,0,0,0,0,0,
 	0x80000000,
 	  0,0,0,0,0,0,
@@ -226,7 +186,6 @@ double bench_algo_stage3(
 )
 {
 	struct work work __attribute__((aligned(128)));
-	unsigned char hash1[64];
 
 	get_benchmark_work(&work, false);
 
@@ -237,18 +196,12 @@ double bench_algo_stage3(
 	uint32_t max_nonce = opt_algo == ALGO_FASTAUTO ? (1<<8) : (1<<22);
 	uint32_t last_nonce = 0;
 
-	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
-
 	timer_set_now(&start);
 			{
 				sha256_func func = sha256_funcs[algo];
 				(*func)(
 					&dummy,
-					work.midstate,
-					work.data,
-					hash1,
-					work.hash,
-					work.target,
+					&work,
 					max_nonce,
 					&last_nonce,
 					0
@@ -836,11 +789,7 @@ CPUSearch:
 			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
 		rc = (*func)(
 			thr,
-			work->midstate,
-			work->data,
-			hash1,
-			work->hash,
-			work->target,
+			work,
 			max_nonce,
 			&last_nonce,
 			work->blk.nonce
