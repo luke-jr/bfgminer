@@ -37,7 +37,6 @@ bool scanhash_via(struct thr_info * const thr, struct work * const work,
 		  uint32_t n)
 {
 	uint8_t * const data_inout = work->data;
-	const uint8_t * const target = work->target;
 	
 	unsigned char data[128] __attribute__((aligned(128)));
 	unsigned char tmp_hash[32] __attribute__((aligned(128)));
@@ -70,7 +69,8 @@ bool scanhash_via(struct thr_info * const thr, struct work * const work,
 
 		stat_ctr++;
 
-		if (unlikely((hash32[7] == 0) && fulltest(tmp_hash, target))) {
+		if (unlikely((hash32[7] == 0)))
+		{
 			/* swap nonce'd data back into original storage area;
 			 */
 			*nonce_inout = bswap_32(n);

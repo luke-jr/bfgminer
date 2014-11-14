@@ -86,7 +86,6 @@ bool ScanHash_altivec_4way(struct thr_info * const thr, struct work * const work
 	uint8_t hash1[0x40];
 	memcpy(hash1, hash1_init, sizeof(hash1));
 	uint8_t * const phash = work->hash;
-	const uint8_t * const ptarget = work->target;
 	
 	uint32_t *hash32 = (uint32_t *)phash;
     unsigned int *nNonce_p = (unsigned int*)(pdata + 76);
@@ -111,12 +110,13 @@ bool ScanHash_altivec_4way(struct thr_info * const thr, struct work * const work
                 for (i = 0; i < 32/4; i++)
                     ((unsigned int*)phash)[i] = thash[i][j];
 
-		if (unlikely(hash32[7] == 0 && fulltest(phash, ptarget))) {
+				if (unlikely(hash32[7] == 0))
+				{
 					nonce += j;
 					*last_nonce = nonce;
 					*nNonce_p = nonce;
 					return true;
-		}
+				}
             }
         }
 

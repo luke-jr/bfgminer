@@ -243,7 +243,6 @@ bool scanhash_c(struct thr_info * const thr, struct work * const work,
 	uint8_t hash1[0x40];
 	memcpy(hash1, hash1_init, sizeof(hash1));
 	uint8_t * const hash = work->hash;
-	const uint8_t * const target = work->target;
 	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
@@ -265,7 +264,8 @@ bool scanhash_c(struct thr_info * const thr, struct work * const work,
 
 		stat_ctr++;
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely(hash32[7] == 0))
+		{
 			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;

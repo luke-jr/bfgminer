@@ -59,7 +59,6 @@ bool scanhash_sse2_64(struct thr_info * const thr, struct work * const work,
 	uint8_t *pdata = work->data;
 	const uint32_t * const phash1 = hash1_init;
 	uint8_t * const phash = work->hash;
-	const uint8_t * const ptarget = work->target;
 	
 	uint32_t *hash32 = (uint32_t *)phash;
     uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
@@ -118,7 +117,8 @@ bool scanhash_sse2_64(struct thr_info * const thr, struct work * const work,
 		    *(uint32_t *)&(phash)[i*4] = mi.i[j];
 		}
 
-		if (unlikely(hash32[7] == 0 && fulltest(phash, ptarget))) {
+		if (unlikely(hash32[7] == 0))
+		{
 		     nonce += j;
 		     *last_nonce = nonce + 1;
 		     *nNonce_p = nonce;

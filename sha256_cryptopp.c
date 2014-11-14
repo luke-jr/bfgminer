@@ -115,7 +115,6 @@ bool scanhash_cryptopp(struct thr_info * const thr, struct work * const work,
 	uint8_t hash1[0x40];
 	memcpy(hash1, hash1_init, sizeof(hash1));
 	uint8_t * const hash = work->hash;
-	const uint8_t * const target = work->target;
 	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
@@ -133,7 +132,8 @@ bool scanhash_cryptopp(struct thr_info * const thr, struct work * const work,
 		runhash(hash1, data, midstate);
 		runhash(hash, hash1, sha256_init_state);
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely((hash32[7] == 0)))
+		{
 			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;
@@ -605,7 +605,6 @@ bool scanhash_asm32(struct thr_info * const thr, struct work * const work,
 	uint8_t hash1[0x40];
 	memcpy(hash1, hash1_init, sizeof(hash1));
 	uint8_t * const hash = work->hash;
-	const uint8_t * const target = work->target;
 	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
@@ -618,7 +617,8 @@ bool scanhash_asm32(struct thr_info * const thr, struct work * const work,
 		runhash32(hash1, data, midstate);
 		runhash32(hash, hash1, sha256_init_state);
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely(hash32[7] == 0))
+		{
 			*last_nonce = n;
 			return true;
 		}

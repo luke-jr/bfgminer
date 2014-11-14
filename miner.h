@@ -1004,8 +1004,6 @@ extern bool our_curl_supports_proxy_uris();
 extern void bin2hex(char *out, const void *in, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
 
-extern bool fulltest(const unsigned char *hash, const unsigned char *target);
-
 extern int opt_queue;
 extern int opt_scantime;
 extern int opt_expiry;

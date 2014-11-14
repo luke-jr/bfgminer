@@ -865,15 +865,6 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 	return rc;
 }
 
-// This operates on a native-endian SHA256 state
-// In other words, on little endian platforms, every 4 bytes are in reverse order
-bool fulltest(const unsigned char *hash, const unsigned char *target)
-{
-	unsigned char hash2[32];
-	swap32tobe(hash2, hash, 32 / 4);
-	return hash_target_check_v(hash2, target);
-}
-
 struct thread_q *tq_new(void)
 {
 	struct thread_q *tq;
