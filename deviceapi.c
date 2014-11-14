@@ -147,14 +147,14 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 		
 		mult = 1000000 / ((thr->tv_hashes_done.tv_usec + 0x400) / 0x400) + 0x10;
 		mult *= cycle;
-		if (*max_nonce > (0xffffffff * 0x400) / mult)
+		if (*max_nonce > ((uint64_t)0xffffffff * 0x400) / mult)
 			*max_nonce = 0xffffffff;
 		else
-			*max_nonce = (*max_nonce * mult) / 0x400;
+			*max_nonce = ((uint64_t)*max_nonce * mult) / 0x400;
 	} else if (unlikely(thr->tv_hashes_done.tv_sec > cycle) && max_nonce)
-		*max_nonce = *max_nonce * cycle / thr->tv_hashes_done.tv_sec;
+		*max_nonce = (uint64_t)*max_nonce * cycle / thr->tv_hashes_done.tv_sec;
 	else if (unlikely(thr->tv_hashes_done.tv_usec > 100000) && max_nonce)
-		*max_nonce = *max_nonce * 0x400 / (((cycle * 1000000) + thr->tv_hashes_done.tv_usec) / (cycle * 1000000 / 0x400));
+		*max_nonce = (uint64_t)*max_nonce * 0x400 / ((((uint64_t)cycle * 1000000) + thr->tv_hashes_done.tv_usec) / ((uint64_t)cycle * 1000000 / 0x400));
 	
 	hashmeter2(thr);
 	
