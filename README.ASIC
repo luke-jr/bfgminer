@@ -331,6 +331,29 @@ So for example, an entry would look like this:
         gridseed@6D85278F5650:clock=875
 
 
+ZEUSMINER
+---------
+
+Zeusminer option on from the command line:
+
+   -S zeusminer:\\.\COM<serial_number>
+
+For example, -S zeusminer:\\.\COM3
+
+  --set zeusminer:clock=N        Chips clock N.Default 328
+  --set zeusminer:chips=N        N chips in one COM port
+
+   Blizzard: 6
+   Cyclone: 96
+   Hurricane X2: 48 (2*24)
+   Hurricane X3: 64 (2*32)
+   Thunder X2: 96 (4*24)
+   Thunder X3: 128 (4*32)
+Note: if you do not set this option then the speed will be in Ghash.
+
+For example simple command line:
+bfgminer.exe --scrypt -o stratum+tcp://pool:port -u user -p pass -S zeusminer:\\.\COM3 --set zeusminer:clock=328 --set zeusminer:chips=128
+
 ---
 
 This code is provided entirely free of charge by the programmer in his spare
