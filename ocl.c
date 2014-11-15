@@ -684,7 +684,7 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		data->vwidth = clState->preferred_vwidth;
 	}
 
-	clState->outputBuffer = clCreateBuffer(clState->context, CL_MEM_WRITE_ONLY, OPENCL_MAX_BUFFERSIZE, NULL, &status);
+	clState->outputBuffer = clCreateBuffer(clState->context, 0, OPENCL_MAX_BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
 		return false;
