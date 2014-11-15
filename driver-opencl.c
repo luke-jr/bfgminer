@@ -383,7 +383,7 @@ _SET_INT_LIST(thread_concurrency, true, thread_concurrency)
 
 enum cl_kernels select_kernel(const char * const arg)
 {
-	for (unsigned i = 0; i < (unsigned)OPENCL_KERNEL_INTERFACE_COUNT; ++i)
+	for (unsigned i = 1; i < (unsigned)OPENCL_KERNEL_INTERFACE_COUNT; ++i)
 		if (!strcasecmp(arg, kernel_interfaces[i].kiname))
 			return i;
 	return KL_NONE;
