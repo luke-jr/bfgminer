@@ -31,6 +31,7 @@ uint2 ROTL64_2(const uint2 x, const uint y)
 }
 
 #define RND(i) \
+do{  \
 		m0 = *s0 ^ *s5 ^ *s10 ^ *s15 ^ *s20 ^ ROTL64_1(*s2 ^ *s7 ^ *s12 ^ *s17 ^ *s22, 1);\
 		m1 = *s1 ^ *s6 ^ *s11 ^ *s16 ^ *s21 ^ ROTL64_1(*s3 ^ *s8 ^ *s13 ^ *s18 ^ *s23, 1);\
 		m2 = *s2 ^ *s7 ^ *s12 ^ *s17 ^ *s22 ^ ROTL64_1(*s4 ^ *s9 ^ *s14 ^ *s19 ^ *s24, 1);\
@@ -71,22 +72,15 @@ uint2 ROTL64_2(const uint2 x, const uint y)
 		m5 = *s15; m6 = *s16; *s15 = bitselect(*s15^*s17,*s15,*s16); *s16 = bitselect(*s16^*s18,*s16,*s17); *s17 = bitselect(*s17^*s19,*s17,*s18); *s18 = bitselect(*s18^m5,*s18,*s19); *s19 = bitselect(*s19^m6,*s19,m5);\
 		m5 = *s20; m6 = *s21; *s20 = bitselect(*s20^*s22,*s20,*s21); *s21 = bitselect(*s21^*s23,*s21,*s22); *s22 = bitselect(*s22^*s24,*s22,*s23); *s23 = bitselect(*s23^m5,*s23,*s24); *s24 = bitselect(*s24^m6,*s24,m5);\
 \
-		*s0 ^= keccak_round_constants[i];
+		*s0 ^= keccak_round_constants[i];  \
+}while(0)
 
 void keccak_block_noabsorb(ARGS_25(uint2* s))
 {
 	uint2 m0,m1,m2,m3,m4,m5,m6;
-	RND(0);
-	for (int i = 1; i < 22; ++i) 
-	{
+#pragma unroll
+	for (uint i = 0; i < 24; ++i)
 		RND(i);
-		++i;
-		RND(i);
-		++i;
-		RND(i);
-	}
-	RND(22);
-	RND(23);
 }
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
