@@ -283,7 +283,7 @@ static bool knc_detect_one(void *ctx)
 	knc->generation = 1;
 
 	/* Index all cores */
-	struct cgpu_info *prev_cgpu = NULL, *first_cgpu;
+	struct cgpu_info *prev_cgpu = NULL, *first_cgpu = NULL;
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
