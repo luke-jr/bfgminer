@@ -97,6 +97,7 @@ for build in "${builds[@]}"; do
 		--enable-icarus \
 		--enable-modminer \
 		--enable-ztex \
+		--enable-keccak \
 		--enable-scrypt \
 		--without-system-libbase58 \
 		--host="$machine"
