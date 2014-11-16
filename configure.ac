@@ -116,7 +116,7 @@ AC_FUNC_ALLOCA
 
 lowllist=
 driverlist=
-algolist=SHA256d
+algolist=
 optlist=
 
 has_fpga=no
@@ -270,6 +270,15 @@ AC_ARG_WITH([udevrules-group],
 AM_CONDITIONAL([USE_UDEVRULES_GROUP], [$use_udevrules_group])
 AC_SUBST([UDEVRULES_GROUP], [$udevrules_group])
 
+
+algolist="$algolist SHA256d"
+AC_ARG_ENABLE([sha256d],
+	[AC_HELP_STRING([--disable-sha256d],[Compile support for SHA256d mining (default enabled)])],
+	[sha256d=$enableval],
+	[sha256d=yes])
+if test "x$sha256d" = xyes; then
+	AC_DEFINE([USE_SHA256D], [1], [Defined to 1 if SHA256d mining support is wanted])
+fi
 
 algolist="$algolist scrypt"
 AC_ARG_ENABLE([scrypt],
@@ -1515,6 +1524,7 @@ AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
 AM_CONDITIONAL([NEED_KNC_ASIC], [test x$need_knc_asic = xyes])
+AM_CONDITIONAL([USE_SHA256D], [test x$sha256d = xyes])
 AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])

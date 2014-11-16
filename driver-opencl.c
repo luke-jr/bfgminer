@@ -411,10 +411,19 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 		return false;
 	free(src);
 	
-	char **kfp = &data->kernel_file_sha256d;
+	char **kfp =
+#ifdef USE_SHA256D
+		&data->kernel_file_sha256d;
+#else
+		NULL;
+#endif
 #ifdef USE_SCRYPT
 	if (interface == KL_SCRYPT)
 		kfp = &data->kernel_file_scrypt;
+#endif
+#ifndef USE_SHA256D
+	if (!kfp)
+		return false;
 #endif
 	free(*kfp);
 	*kfp = strdup(_val);
@@ -989,14 +998,12 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
 #define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
 
+#ifdef USE_SHA256D
 static
 void *_opencl_work_data_dup(struct work * const work)
 {
 	struct opencl_work_data *p = malloc(sizeof(*p));
 	memcpy(p, work->device_data, sizeof(*p));
-#ifdef USE_SCRYPT
-	p->work = work;
-#endif
 	return p;
 }
 
@@ -1235,6 +1242,7 @@ cl_int queue_diablo_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 
 	return status;
 }
+#endif
 
 #ifdef USE_SCRYPT
 static
@@ -1266,10 +1274,12 @@ cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 static
 struct opencl_kernel_interface kernel_interfaces[] = {
 	{NULL},
+#ifdef USE_SHA256D
 	{"poclbm",  queue_poclbm_kernel },
 	{"phatk",   queue_phatk_kernel  },
 	{"diakgcn", queue_diakgcn_kernel},
 	{"diablo",  queue_diablo_kernel },
+#endif
 #ifdef USE_SCRYPT
 	{"scrypt",  queue_scrypt_kernel },
 #endif
@@ -1680,7 +1690,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
-
+#ifdef USE_SHA256D
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
 	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
@@ -1691,6 +1701,7 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 	}
 	return true;
 }
+#endif
 
 extern int opt_dynamic_interval;
 
@@ -1701,6 +1712,7 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 	char *kernel_file;
 	switch (malgo->algo)
 	{
+#ifdef USE_SHA256D
 		case POW_SHA256D:
 			kernelinfo = &clState->kernel_sha256d;
 			if (!data->kernel_file_sha256d)
@@ -1738,6 +1750,7 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 			}
 			kernel_file = data->kernel_file_sha256d;
 			break;
+#endif
 #ifdef USE_SCRYPT
 		case POW_SCRYPT:
 			kernelinfo = &clState->kernel_scrypt;
@@ -1968,7 +1981,9 @@ struct device_drv opencl_api = {
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
+#ifdef USE_SHA256D
 	.prepare_work = opencl_prepare_work,
+#endif
 	.scanhash = opencl_scanhash,
 	.thread_shutdown = opencl_thread_shutdown,
 };

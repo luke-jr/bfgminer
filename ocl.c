@@ -733,6 +733,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 			       cgpu->dev_repr, kernel_file);
 			free(source);
 			return false;
+#ifdef USE_SHA256D
 		case KL_PHATK:
 			if ((strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 			     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
@@ -743,6 +744,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 				applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
 				applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
 			}
+#endif
 		default:
 			;
 	}
@@ -754,6 +756,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 		int kernel_goffset_support = 0;  // 0 = none; 1 = optional; 2 = required
 		switch (kernelinfo->interface)
 		{
+#ifdef USE_SHA256D
 			case KL_DIABLO:
 			case KL_DIAKGCN:
 			case KL_POCLBM:
@@ -762,6 +765,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 			case KL_PHATK:
 				kernel_goffset_support = 0;
 				break;
+#endif
 			case KL_NONE: case OPENCL_KERNEL_INTERFACE_COUNT:
 #ifdef USE_SCRYPT
 			case KL_SCRYPT:

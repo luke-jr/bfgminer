@@ -277,7 +277,9 @@ struct gpu_adl {
 #endif
 
 enum pow_algorithm {
+#ifdef USE_SHA256D
 	POW_SHA256D = 1,
+#endif
 #ifdef USE_SCRYPT
 	POW_SCRYPT  = 2,
 #endif
@@ -372,10 +374,12 @@ enum dev_enable {
 
 enum cl_kernels {
 	KL_NONE,
+#ifdef USE_SHA256D
 	KL_POCLBM,
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
+#endif
 #ifdef USE_SCRYPT
 	KL_SCRYPT,
 #endif

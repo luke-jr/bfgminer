@@ -32,7 +32,9 @@ struct opencl_device_data {
 	
 	cl_uint vwidth;
 	size_t work_size;
+#ifdef USE_SHA256D
 	char *kernel_file_sha256d;
+#endif
 	cl_ulong max_alloc;
 	
 	enum opencl_binary_usage opt_opencl_binaries;
@@ -68,6 +70,7 @@ extern float opencl_proc_get_intensity(struct cgpu_info *, const char **iunit);
 extern unsigned long xintensity_to_oclthreads(double xintensity, cl_uint max_compute_units);
 extern bool opencl_set_intensity_from_str(struct cgpu_info *, const char *newvalue);
 
+#ifdef USE_SHA256D
 struct opencl_work_data {
 	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
 	cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
@@ -91,10 +94,8 @@ struct opencl_work_data {
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
-#ifdef USE_SCRYPT
-	struct work *work;
-#endif
 };
+#endif
 
 extern void opencl_early_init();
 extern char *print_ndevs_and_exit(int *ndevs);

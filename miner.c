@@ -516,7 +516,11 @@ float drv_min_nonce_diff(const struct device_drv * const drv, struct cgpu_info *
 {
 	if (drv->drv_min_nonce_diff)
 		return drv->drv_min_nonce_diff(proc, malgo);
+#ifdef USE_SHA256D
 	return (malgo->algo == POW_SHA256D) ? 1. : -1.;
+#else
+	return -1.;
+#endif
 }
 
 char *devpath_to_devid(const char *devpath)
@@ -1030,7 +1034,7 @@ struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
 }
 
 
-#ifdef HAVE_OPENCL
+#if defined(USE_SHA256D) && defined(HAVE_OPENCL)
 static
 float opencl_oclthreads_to_intensity_sha256d(const unsigned long oclthreads)
 {
@@ -1044,6 +1048,7 @@ unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
 }
 #endif
 
+#ifdef USE_SHA256D
 static struct mining_algorithm malgo_sha256d = {
 	.name = "SHA256d",
 	.aliases = "SHA256d|SHA256|SHA2",
@@ -1063,6 +1068,7 @@ static struct mining_algorithm malgo_sha256d = {
 	.opencl_max_oclthreads = 0x20000000,  // intensity  14
 #endif
 };
+#endif
 
 
 #ifdef USE_SCRYPT
@@ -1111,7 +1117,9 @@ static
 __attribute__((constructor))
 void init_mining_goals(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
 {
+#ifdef USE_SHA256D
 	LL_APPEND(mining_algorithms, (&malgo_sha256d));
+#endif
 #ifdef USE_SCRYPT
 	LL_APPEND(mining_algorithms, (&malgo_scrypt));
 #endif
@@ -1159,7 +1167,12 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
 		};
+#ifdef HAVE_SHA256D
 		goal_set_malgo(goal, &malgo_sha256d);
+#else
+		// NOTE: Basically random default
+		goal_set_malgo(goal, mining_algorithms);
+#endif
 		HASH_ADD_STR(mining_goals, name, goal);
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
 		
@@ -1321,6 +1334,14 @@ struct pool *current_pool(void)
 
 	return pool;
 }
+
+#if defined(USE_CPUMINING) && !defined(USE_SHA256D)
+static
+char *arg_ignored(const char * const arg)
+{
+	return NULL;
+}
+#endif
 
 static
 char *set_bool_ignore_arg(const char * const arg, bool * const b)
@@ -2295,6 +2316,7 @@ static char *set_null(const char __maybe_unused *arg)
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
 #ifdef WANT_CPUMINE
+#ifdef USE_SHA256D
 	OPT_WITH_ARG("--algo",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
@@ -2327,7 +2349,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("-a",
 	             set_algo, show_algo, &opt_algo,
 	             opt_hidden),
-#endif
+#else
+	// NOTE: Silently ignoring option, since it is plausable a non-SHA256d miner was using it just to skip benchmarking
+	OPT_WITH_ARG("--algo|-a", arg_ignored, NULL, NULL, opt_hidden),
+#endif  /* USE_SHA256D */
+#endif  /* WANT_CPUMINE */
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
@@ -7831,7 +7857,7 @@ void write_config(FILE *fcfg)
 #ifdef HAVE_OPENCL
 	write_config_opencl(fcfg);
 #endif
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
 	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
 
@@ -11683,7 +11709,7 @@ void print_summary(void)
 	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
@@ -11977,7 +12003,7 @@ out:
 }
 #endif
 
-#if BLKMAKER_VERSION > 1
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
 static
 bool _add_local_gbt(const char * const filepath, void *userp)
 {
@@ -13172,7 +13198,7 @@ int main(int argc, char *argv[])
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
 	init_max_name_len();
 #endif
 
@@ -13454,7 +13480,7 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
-#if BLKMAKER_VERSION > 1
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
 	if (opt_load_bitcoin_conf && !(get_mining_goal("default")->malgo->algo != POW_SHA256D || opt_benchmark))
 		add_local_gbt(total_pools);
 #endif
@@ -13605,7 +13631,7 @@ begin_bench:
 		pause_dynamic_threads(i);
 #endif
 
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_INFO, "%d cpu miner threads started, using '%s' algorithm.",
 		       opt_n_threads, algo_names[opt_algo]);

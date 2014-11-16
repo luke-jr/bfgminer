@@ -94,8 +94,10 @@ float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info * const proc, co
 		case POW_SCRYPT:
 			return 1./0x10000;
 #endif
+#ifdef USE_SHA256D
 		case POW_SHA256D:
 			return 1.;
+#endif
 		default:
 			return -1.;
 	}

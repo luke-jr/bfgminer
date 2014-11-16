@@ -89,7 +89,9 @@ static const char *FALSESTR = "false";
 #ifdef USE_SCRYPT
 static const char *SCRYPTSTR = "scrypt";
 #endif
+#ifdef USE_SHA256D
 static const char *SHA256STR = "sha256";
+#endif
 
 static const char *OSINFO =
 #if defined(__linux)
@@ -1987,12 +1989,6 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	bool io_open;
 	double utility, mhs, work_utility;
 
-#ifdef WANT_CPUMINE
-	char *algo = (char *)(algo_names[opt_algo]);
-	if (algo == NULL)
-		algo = (char *)NULLSTR;
-#endif
-
 	message(io_data, MSG_SUMM, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_SUMMARY : _SUMMARY COMSTR);
 
@@ -2004,9 +2000,9 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
-#ifdef WANT_CPUMINE
+#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
-	root = api_add_string(root, "Algorithm", algo, false);
+		root = api_add_string(root, "Algorithm", (algo_names[opt_algo] ?: NULLSTR), false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
 	char mhsname[27];
@@ -3097,9 +3093,11 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 				root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
 				break;
 #endif
+#ifdef USE_SHA256D
 			case POW_SHA256D:
 				root = api_add_const(root, "Hash Method", SHA256STR, false);
 				break;
+#endif
 			default:
 				break;
 		}

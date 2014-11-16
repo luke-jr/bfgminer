@@ -23,7 +23,9 @@
 #endif
 
 #ifdef HAVE_OPENCL
+#ifdef USE_SHA256D
 extern void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data);
+#endif
 extern void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res);
 #endif /* HAVE_OPENCL */
 #endif /*__FINDNONCE_H__*/

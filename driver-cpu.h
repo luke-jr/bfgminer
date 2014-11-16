@@ -22,6 +22,8 @@
 #define OPT_SHOW_LEN 80
 #endif
 
+#ifdef USE_SHA256D
+
 #if defined(__i386__) && defined(HAVE_SSE2)
 #define WANT_SSE2_4WAY 1
 #endif
@@ -46,11 +48,14 @@
 #define WANT_X8664_SSE4 1
 #endif
 
+#endif  /* USE_SHA256D */
+
 #ifdef USE_SCRYPT
 #define WANT_SCRYPT
 #endif
 
 enum sha256_algos {
+#ifdef USE_SHA256D
 	ALGO_C,			/* plain C */
 	ALGO_4WAY,		/* parallel SSE2 */
 	ALGO_VIA,		/* VIA padlock */
@@ -60,10 +65,17 @@ enum sha256_algos {
 	ALGO_SSE2_64,		/* SSE2 for x86_64 */
 	ALGO_SSE4_64,		/* SSE4 for x86_64 */
 	ALGO_ALTIVEC_4WAY,	/* parallel Altivec */
+#endif
+#ifdef USE_SCRYPT
 	ALGO_SCRYPT,		/* scrypt */
+#endif
 	
+#ifdef USE_SHA256D
 	ALGO_FASTAUTO,		/* fast autodetect */
-	ALGO_AUTO		/* autodetect */
+	ALGO_AUTO,		/* autodetect */
+#endif
+	
+	CUSTOM_CPU_MINING_ALGOS_COUNT,
 };
 
 extern const char *algo_names[];

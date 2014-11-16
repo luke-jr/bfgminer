@@ -137,11 +137,7 @@ bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
 
 kernelsdir = $(pkgdatadir)/opencl
-dist_kernels_DATA = \
-	$(top_srcdir)/opencl/diablo.cl  \
-	$(top_srcdir)/opencl/diakgcn.cl  \
-	$(top_srcdir)/opencl/phatk.cl  \
-	$(top_srcdir)/opencl/poclbm.cl
+dist_kernels_DATA =
 
 dist_doc_DATA += README.GPU
 
@@ -152,28 +148,21 @@ endif
 endif
 
 
-if HAS_SCRYPT
-bfgminer_SOURCES += scrypt.c scrypt.h
-dist_doc_DATA += README.scrypt
-
+if USE_SHA256D
 if HAVE_OPENCL
 dist_kernels_DATA += \
-	$(top_srcdir)/opencl/psw.cl  \
-	$(top_srcdir)/opencl/scrypt.cl  \
-	$(top_srcdir)/opencl/zuikkis.cl
-endif
+	$(top_srcdir)/opencl/diablo.cl  \
+	$(top_srcdir)/opencl/diakgcn.cl  \
+	$(top_srcdir)/opencl/phatk.cl  \
+	$(top_srcdir)/opencl/poclbm.cl
 endif
 
 if HAS_CPUMINE
-dist_doc_DATA += README.CPU
 bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c 	\
 		  sha256_altivec_4way.c
-
-# the CPU portion extracted from original main.c
-bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 
 if HAVE_SSE2
 bfgminer_LDADD  += libsse2cpuminer.a
@@ -202,6 +191,24 @@ endif
 
 endif # HAVE_x86_64
 endif # HAS_YASM
+endif # HAS_CPUMINE
+endif # USE_SHA256D
+
+if HAS_SCRYPT
+bfgminer_SOURCES += scrypt.c scrypt.h
+dist_doc_DATA += README.scrypt
+
+if HAVE_OPENCL
+dist_kernels_DATA += \
+	$(top_srcdir)/opencl/psw.cl  \
+	$(top_srcdir)/opencl/scrypt.cl  \
+	$(top_srcdir)/opencl/zuikkis.cl
+endif
+endif
+
+if HAS_CPUMINE
+dist_doc_DATA += README.CPU
+bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 endif # HAS_CPUMINE
 
 if NEED_BFG_LOWL_VCOM
