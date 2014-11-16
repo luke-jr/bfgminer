@@ -750,8 +750,39 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 	       cgpu->dev_repr, kernel_file,
 	       opencl_get_kernel_interface_name(kernelinfo->interface));
 
-	if (((kernelinfo->interface == KL_POCLBM || kernelinfo->interface == KL_DIABLO || kernelinfo->interface == KL_DIAKGCN || kernelinfo->interface) && clState->vwidth == 1 && clState->hasOpenCL11plus) || kernelinfo->interface == KL_SCRYPT)
-		kernelinfo->goffset = true;
+	{
+		int kernel_goffset_support = 0;  // 0 = none; 1 = optional; 2 = required
+		switch (kernelinfo->interface)
+		{
+			case KL_DIABLO:
+			case KL_DIAKGCN:
+			case KL_POCLBM:
+				kernel_goffset_support = 1;
+				break;
+			case KL_PHATK:
+				kernel_goffset_support = 0;
+				break;
+			case KL_NONE: case OPENCL_KERNEL_INTERFACE_COUNT:
+#ifdef USE_SCRYPT
+			case KL_SCRYPT:
+#endif
+				kernel_goffset_support = 2;
+				break;
+		}
+		const bool device_goffset_support = (clState->hasOpenCL11plus && !clState->is_mesa);
+		if (device_goffset_support)
+		{
+			if (kernel_goffset_support)
+				kernelinfo->goffset = true;
+		}
+		else
+		if (kernel_goffset_support == 2)
+		{
+			// FIXME: Determine this before min_nonce_diff returns positive
+			applog(LOG_ERR, "%s: Need goffset support!", cgpu->dev_repr);
+			return false;
+		}
+	}
 
 	if (data->work_size && data->work_size <= clState->max_work_size)
 		kernelinfo->wsize = data->work_size;
