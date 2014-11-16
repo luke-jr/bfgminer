@@ -84,8 +84,15 @@ void keccak_block_noabsorb(ARGS_25(uint2* s))
 }
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search(__global const uint2*restrict in, __global uint*restrict output)
+__kernel void search(
+#ifndef GOFFSET
+	const uint base,
+#endif
+	__global const uint2*restrict in, __global uint*restrict output)
 {
+#ifdef GOFFSET
+	const uint base = 0;
+#endif
 	uint2 ARGS_25(state);
 	
 	state0 = in[0];
@@ -97,7 +104,7 @@ __kernel void search(__global const uint2*restrict in, __global uint*restrict ou
 	state6 = in[6];
 	state7 = in[7];
 	state8 = in[8];
-	state9 = (uint2)(in[9].x,get_global_id(0));
+	state9 = (uint2)(in[9].x, base + get_global_id(0));
 	state10 = (uint2)(1,0);
 	state11 = 0;
 	state12 = 0;
@@ -121,6 +128,6 @@ __kernel void search(__global const uint2*restrict in, __global uint*restrict ou
 	
 	if ((state3.y & 0xFFFFFFF0U) == 0)
 	{
-		SETFOUND(get_global_id(0));
+		SETFOUND(base + get_global_id(0));
 	}
 }
