@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 #include "CL/cl.h"
 
 #include "miner.h"
@@ -58,5 +58,5 @@ extern char *opencl_kernel_source(const char *filename, int *out_sourcelen, enum
 extern int clDevicesNum(void);
 extern _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize);
 extern bool opencl_load_kernel(struct cgpu_info *, _clState *clState, const char *name, struct opencl_kernel_info *, const char *kernel_file, const struct mining_algorithm *);
-#endif /* HAVE_OPENCL */
+#endif /* USE_OPENCL */
 #endif /* __OCL_H__ */

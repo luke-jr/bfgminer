@@ -143,44 +143,47 @@ BFGMiner driver configuration options:
 	                        Include udev rules for ambiguous devices which may
 	                        not be miners
 	--disable-avalon        Compile support for Avalon (default enabled)
+	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
-	--disable-bfx           Compile support for BFx2 (default if libusb)
+	--disable-bfx           Compile support for BFx2 (default enabled)
 	--disable-bifury        Compile support for Bi*Fury (default enabled)
 	--disable-bigpic        Compile support for Big Picture Mining USB (default
 	                        enabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
-	--enable-cpumining      Build with CPU mining support (default disabled)
+	--disable-cointerra     Compile support for CoinTerra (default enabled)
+	--enable-cpumining      Compile support for CPU mining (default disabled)
 	--disable-drillbit      Compile support for DrillBit (default enabled)
 	--disable-dualminer     Compile support for DualMiner (default enabled)
-	--disable-gridseed      Compile support for GridSeed (default enabled with
-	                        scrypt)
+	--disable-gridseed      Compile support for GridSeed (default enabled)
 	--disable-hashbuster    Compile support for HashBuster Nano (default
 	                        enabled)
-	--disable-hashbusterusb Compile support for HashBuster Micro (default if
-	                        libusb)
+	--disable-hashbusterusb Compile support for HashBuster Micro (default
+	                        enabled)
 	--disable-hashfast      Compile support for HashFast (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--enable-jingtian       Compile support for JingTian (default disabled)
 	--disable-klondike      Compile support for Klondike (default enabled)
 	--enable-knc            Compile support for KnC (default disabled)
+	--enable-kncasic        Compile support for KnC gen 2 (default disabled)
 	--disable-littlefury    Compile support for LittleFury (default enabled)
 	--enable-metabank       Compile support for Metabank (default disabled)
+	--enable-minergate      Compile support for Spondoolies minergate interface
+	                        (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-nanofury      Compile support for NanoFury (default enabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-rockminer     Compile support for RockMiner (default enabled)
 	--enable-titan          Compile support for KnC Titan (default disabled)
-	--disable-twinfury      Compile support for Twinfury USB miner (default
-	                        enabled)
-	--disable-x6500         Compile support for X6500 (default if libusb)
-	--disable-zeusminer     Compile support for ZeusMiner (default enabled with
-	                        scrypt)
-	--disable-ztex          Compile support for ZTEX (default if libusb)
+	--disable-twinfury      Compile support for Twinfury (default enabled)
+	--disable-x6500         Compile support for X6500 (default enabled)
+	--disable-zeusminer     Compile support for ZeusMiner (default enabled)
+	--disable-ztex          Compile support for ZTEX (default enabled)
 
 BFGMiner algorithm configuration option:
-	--enable-scrypt         Compile support for scrypt mining (default disabled)
+	--disable-sha256d       Compile support for SHA256d (default enabled)
+	--enable-scrypt         Compile support for scrypt (default disabled)
 
 BFGMiner dependency configuration options:
 	--without-curses        Compile support for curses TUI (default enabled)

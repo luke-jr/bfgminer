@@ -9,7 +9,7 @@
  */
 
 #include "config.h"
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 
 #include <ctype.h>
 #include <limits.h>
@@ -1157,5 +1157,5 @@ built:
 	return true;
 }
 
-#endif /* HAVE_OPENCL */
+#endif /* USE_OPENCL */
 

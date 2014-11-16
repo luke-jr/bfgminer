@@ -1140,7 +1140,7 @@ struct mining_algorithm {
 	
 	struct mining_algorithm *next;
 	
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	bool opencl_nodefault;
 	float (*opencl_oclthreads_to_intensity)(unsigned long oclthreads);
 	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);

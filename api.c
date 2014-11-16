@@ -75,7 +75,7 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
 #endif
 
@@ -126,7 +126,7 @@ static const char *OSINFO =
 #define _PGA		"PGA"
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define _CPU		"CPU"
 #endif
 
@@ -166,7 +166,7 @@ static const char ISJSON = '{';
 #define JSON_PGA	JSON1 _PGA JSON2
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define JSON_CPU	JSON1 _CPU JSON2
 #endif
 
@@ -203,7 +203,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISID 15
 #define MSG_GPUDEV 17
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define MSG_CPUNON 16
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
@@ -352,7 +352,7 @@ struct CODES {
 	const enum code_parameters params;
 	const char *description;
 } codes[] = {
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_ERR,   MSG_INVGPU,	PARAM_GPUMAX,	"Invalid GPU id %d - range is 0 - %d" },
  { SEVERITY_INFO,  MSG_ALRENA,	PARAM_GPU,	"GPU %d already enabled" },
  { SEVERITY_INFO,  MSG_ALRDIS,	PARAM_GPU,	"GPU %d already disabled" },
@@ -371,13 +371,13 @@ struct CODES {
  },
 
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
  { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
 #endif
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
 #endif
 #ifdef HAVE_AN_FPGA
@@ -390,7 +390,7 @@ struct CODES {
  { SEVERITY_INFO,  MSG_PGADIS,	PARAM_PGA,	"PGA %d set disable flag" },
  { SEVERITY_ERR,   MSG_PGAUNW,	PARAM_PGA,	"PGA %d is not flagged WELL, cannot enable" },
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
@@ -416,7 +416,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 31" },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
  { SEVERITY_ERR,   MSG_GPUEERR,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported failure" },
@@ -1144,7 +1144,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 #ifdef HAVE_AN_FPGA
 	int pga;
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	int cpu;
 #endif
 	int i;
@@ -1183,7 +1183,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 				case PARAM_POOL:
 					sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
 					break;
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 				case PARAM_GPUMAX:
 					sprintf(buf, codes[i].description, paramid, nDevs - 1);
 					break;
@@ -1194,7 +1194,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 					sprintf(buf, codes[i].description, paramid, pga - 1);
 					break;
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 				case PARAM_CPUMAX:
 					if (opt_n_threads > 0)
 						cpu = num_processors;
@@ -1563,7 +1563,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	io_add(io_data, buf);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom)
 {
         if (gpu < 0 || gpu >= nDevs)
@@ -1582,7 +1582,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 }
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom)
 {
         if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
@@ -1628,7 +1628,7 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	return devinfo_internal(devstatus_an, MSG_DEVS, io_data, c, param, isjson, group);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
@@ -1846,7 +1846,7 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 }
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
@@ -2000,7 +2000,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
-#if defined(WANT_CPUMINE) && defined(USE_SHA256D)
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		root = api_add_string(root, "Algorithm", (algo_names[opt_algo] ?: NULLSTR), false);
 #endif
@@ -2049,7 +2049,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 		io_close(io_data);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
@@ -2154,7 +2154,7 @@ static void gpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	bool io_open;
 	int numgpu = 0;
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	numgpu = nDevs;
 #endif
 
@@ -2191,7 +2191,7 @@ static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		io_close(io_data);
 }
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
@@ -2299,7 +2299,7 @@ static void cpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	bool io_open;
 	int count = 0;
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	count = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
@@ -2622,7 +2622,7 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	rpc_url = NULL;
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static bool splitgpuvalue(struct io_data *io_data, char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
@@ -3397,7 +3397,7 @@ struct CMDS {
 	{ "procs",		devstatus,	false,	true },
 	{ "pools",		poolstatus,	false,	true },
 	{ "summary",		summary,	false,	true },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	{ "gpuenable",		gpuenable,	true,	false },
 	{ "gpudisable",		gpudisable,	true,	false },
 	{ "gpurestart",		gpurestart,	true,	false },
@@ -3414,7 +3414,7 @@ struct CMDS {
 	{ "procdisable",		pgadisable,	true,	false },
 	{ "procidentify",	pgaidentify,	true,	false },
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	{ "cpuenable",		cpuenable,	true,	false },
 	{ "cpudisable",		cpudisable,	true,	false },
 	{ "cpurestart",		cpurestart,	true,	false },
@@ -3431,7 +3431,7 @@ struct CMDS {
 	{ "enablepool",		enablepool,	true,	false },
 	{ "disablepool",	disablepool,	true,	false },
 	{ "removepool",		removepool,	true,	false },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	{ "gpuintensity",	gpuintensity,	true,	false },
 	{ "gpumem",		gpumem,		true,	false },
 	{ "gpuengine",		gpuengine,	true,	false },
