@@ -138,10 +138,13 @@ if HAVE_OPENCL
 bfgminer_SOURCES += driver-opencl.h driver-opencl.c
 bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
-bfgminer_SOURCES += opencl/*.cl
 
 kernelsdir = $(pkgdatadir)/opencl
-dist_kernels_DATA = $(top_srcdir)/opencl/*.cl
+dist_kernels_DATA = \
+	$(top_srcdir)/opencl/diablo.cl  \
+	$(top_srcdir)/opencl/diakgcn.cl  \
+	$(top_srcdir)/opencl/phatk.cl  \
+	$(top_srcdir)/opencl/poclbm.cl
 
 dist_doc_DATA += README.GPU
 
@@ -155,6 +158,13 @@ endif
 if HAS_SCRYPT
 bfgminer_SOURCES += scrypt.c scrypt.h
 dist_doc_DATA += README.scrypt
+
+if HAVE_OPENCL
+dist_kernels_DATA += \
+	$(top_srcdir)/opencl/psw.cl  \
+	$(top_srcdir)/opencl/scrypt.cl  \
+	$(top_srcdir)/opencl/zuikkis.cl
+endif
 endif
 
 if HAS_CPUMINE
