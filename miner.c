@@ -80,7 +80,6 @@
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
-#include "scrypt.h"
 #include "util.h"
 
 #ifdef USE_AVALON
@@ -98,7 +97,7 @@
 #endif
 
 #ifdef USE_SCRYPT
-#include "scrypt.h"
+#include "malgo/scrypt.h"
 #endif
 
 #include "version.h"
@@ -1033,128 +1032,8 @@ struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
 	return NULL;
 }
 
-
-#if defined(USE_SHA256D) && defined(USE_OPENCL)
-static
-float opencl_oclthreads_to_intensity_sha256d(const unsigned long oclthreads)
-{
-	return log2f(oclthreads) - 15.;
-}
-
-static
-unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
-{
-	return powf(2, intensity + 15);
-}
-#endif
-
-#ifdef USE_SHA256D
-#ifdef USE_OPENCL
-
-#include "ocl.h"
-
-static
-char *opencl_get_default_kernel_file_sha256d(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
-{
-	const char * const vbuff = clState->platform_ver_str;
-	
-	if (clState->is_mesa)
-	{
-		applog(LOG_INFO, "Selecting phatk kernel for Mesa");
-		return strdup("phatk");
-	}
-	
-	/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
-	if (!strstr(cgpu->name, "Tahiti") &&
-	   (strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
-	    strstr(vbuff, "851.4") ||  // Windows 64 bit ""
-	    strstr(vbuff, "831.4") ||
-	    strstr(vbuff, "898.1") ||  // 12.2 driver SDK
-	    strstr(vbuff, "923.1") ||  // 12.4
-	    strstr(vbuff, "938.2") ||  // SDK 2.7
-	    strstr(vbuff, "1113.2")))  // SDK 2.8
-	{
-		applog(LOG_INFO, "Selecting diablo kernel");
-		return strdup("diablo");
-	}
-	
-	/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
-	if (strstr(cgpu->name, "Tahiti") || !clState->hasBitAlign)
-	{
-		applog(LOG_INFO, "Selecting poclbm kernel");
-		return strdup("poclbm");
-	}
-	
-	/* Use phatk for the rest R5xxx R6xxx */
-	{
-		applog(LOG_INFO, "Selecting phatk kernel");
-		return strdup("phatk");
-	}
-}
-#endif  /* USE_OPENCL */
-
-static struct mining_algorithm malgo_sha256d = {
-	.name = "SHA256d",
-	.aliases = "SHA256d|SHA256|SHA2",
-	
-	.algo = POW_SHA256D,
-	.ui_skip_hash_bytes = 4,
-	.worktime_skip_prevblk_u32 = 1,
-	.reasonable_low_nonce_diff = 1.,
-	
-	.hash_data_f = hash_data,
-	
-#ifdef USE_OPENCL
-	.opencl_nodefault = true,
-	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_sha256d,
-	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
-	.opencl_min_oclthreads =       0x20,  // intensity -10
-	.opencl_max_oclthreads = 0x20000000,  // intensity  14
-	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_sha256d,
-#endif
-};
-#endif
-
-
 #ifdef USE_SCRYPT
-#ifdef USE_OPENCL
-static
-float opencl_oclthreads_to_intensity_scrypt(const unsigned long oclthreads)
-{
-	return log2(oclthreads);
-}
-
-static
-unsigned long opencl_intensity_to_oclthreads_scrypt(float intensity)
-{
-	return pow(2, intensity);
-}
-
-static
-char *opencl_get_default_kernel_file_scrypt(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
-{
-	return strdup("scrypt");
-}
-#endif
-
-static struct mining_algorithm malgo_scrypt = {
-	.name = "scrypt",
-	.aliases = "scrypt",
-	
-	.algo = POW_SCRYPT,
-	.ui_skip_hash_bytes = 2,
-	.reasonable_low_nonce_diff = 1./0x10000,
-	
-	.hash_data_f = scrypt_hash_data,
-	
-#ifdef USE_OPENCL
-	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_scrypt,
-	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
-	.opencl_min_oclthreads =      0x100,  // intensity   8
-	.opencl_max_oclthreads = 0x20000000,  // intensity  31
-	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_scrypt,
-#endif
-};
+extern struct mining_algorithm malgo_scrypt;
 
 static
 const char *set_malgo_scrypt()
@@ -1162,20 +1041,7 @@ const char *set_malgo_scrypt()
 	goal_set_malgo(get_mining_goal("default"), &malgo_scrypt);
 	return NULL;
 }
-
 #endif
-
-static
-__attribute__((constructor))
-void init_mining_goals(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
-{
-#ifdef USE_SHA256D
-	LL_APPEND(mining_algorithms, (&malgo_sha256d));
-#endif
-#ifdef USE_SCRYPT
-	LL_APPEND(mining_algorithms, (&malgo_scrypt));
-#endif
-}
 
 static
 int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)
@@ -1196,6 +1062,8 @@ void blkchain_init_block(struct blockchain_info * const blkchain)
 	HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
 	blkchain->currentblk = dummy_block;
 }
+
+extern struct mining_algorithm malgo_sha256d;
 
 struct mining_goal_info *get_mining_goal(const char * const name)
 {

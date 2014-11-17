@@ -19,7 +19,6 @@
 
 #include "findnonce.h"
 #include "miner.h"
-#include "scrypt.h"
 
 #ifdef USE_SHA256D
 const uint32_t SHA256_K[64] = {
