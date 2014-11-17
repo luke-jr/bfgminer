@@ -193,11 +193,11 @@ bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int
 {
 	uint8_t request[2];
 	int request_length;
-	int response_length = 12;
+	int response_length = 2 + 2 * KNC_STATUS_BYTE_ERROR_COUNTERS;
 	uint8_t response[response_length];
 	int status;
 	uint8_t num_request_busy_byte;
-	uint16_t num_status_byte_error_counters[4];
+	uint16_t num_status_byte_error_counters[KNC_STATUS_BYTE_ERROR_COUNTERS];
 
 	request_length = knc_prepare_titan_work_status(request, asic);
 
@@ -207,7 +207,7 @@ bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int
 		return false;
 	}
 
-	status = knc_decode_work_status(response + 2, &num_request_busy_byte, num_status_byte_error_counters);
+	status = knc_decode_work_status(response, &num_request_busy_byte, num_status_byte_error_counters);
 	if (status) {
 		applog(LOG_INFO, "%s[%d]: get_work_status got undefined response", repr, asic);
 		return false;
