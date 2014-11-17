@@ -9,7 +9,6 @@
  */
 
 #include "config.h"
-#ifdef USE_OPENCL
 
 #include <ctype.h>
 #include <limits.h>
@@ -1175,6 +1174,3 @@ built:
 	kernelinfo->loaded = true;
 	return true;
 }
-
-#endif /* USE_OPENCL */
-

@@ -10,7 +10,6 @@
  */
 
 #include "config.h"
-#ifdef USE_OPENCL
 
 #include <stdint.h>
 #include <stdio.h>
@@ -207,4 +206,3 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		return;
 	}
 }
-#endif /* USE_OPENCL */
