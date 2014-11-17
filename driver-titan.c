@@ -208,11 +208,14 @@ static void knc_titan_detect(void)
 	generic_detect(&knc_titan_drv, knc_titan_detect_one, knc_titan_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
-static void knc_titan_clean_flush(const char *repr, void * const ctx, int asic, int die, int core)
+static void knc_titan_clean_flush(const char *repr, void * const ctx, struct knc_titan_core *knccore)
 {
 	struct knc_report report;
 	bool unused;
-	knc_titan_set_work(repr, ctx, asic, die, core, 0, NULL, true, &unused, &report);
+	if (knc_titan_set_work(repr, ctx, knccore->asicno, knccore->dieno, knccore->coreno, 0, NULL, true, &unused, &report)) {
+		knccore->last_nonce.slot = report.nonce[0].slot;
+		knccore->last_nonce.nonce = report.nonce[0].nonce;
+	}
 }
 
 static uint32_t nonce_tops[KNC_TITAN_CORES_PER_DIE];
@@ -285,7 +288,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 		knccore = mythr->cgpu_data;
 		if ((asic != knccore->asicno) || (die != knccore->dieno))
 			break;
-		knc_titan_clean_flush(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno);
+		knc_titan_clean_flush(repr, knc->ctx, knccore);
 		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s[%d:%d:%d]: Setup core, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		if (!knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params))
