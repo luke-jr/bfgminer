@@ -334,25 +334,24 @@ So for example, an entry would look like this:
 ZEUSMINER
 ---------
 
-Zeusminer option on from the command line:
+Zeusminers do not support autodetection, so you will need to use --scan to probe
+for them:
 
-   -S zeusminer:\\.\COM<serial_number>
+-S zeusminer:\\.\COM3
 
-For example, -S zeusminer:\\.\COM3
+You should also configure the driver for your specific device:
 
-  --set zeusminer:clock=N        Chips clock N.Default 328
-  --set zeusminer:chips=N        N chips in one COM port
+    --set zeusminer:clock=N        Clock frequency (default: 328)
+    --set zeusminer:chips=N        Number of chips per device
+        Blizzard    :  6          Cyclone     :  96
+        Hurricane X2: 48 (2*24)   Hurricane X3:  64 (2*32)
+        Thunder   X2: 96 (4*24)   Thunder   X3: 128 (4*32)
+Note: if you set this option incorrectly, the device may underperform and/or
+      misreport hashrate.
 
-   Blizzard: 6
-   Cyclone: 96
-   Hurricane X2: 48 (2*24)
-   Hurricane X3: 64 (2*32)
-   Thunder X2: 96 (4*24)
-   Thunder X3: 128 (4*32)
-Note: if you do not set this option then the speed will be in Ghash.
+For example:
 
-For example simple command line:
-bfgminer.exe --scrypt -o stratum+tcp://pool:port -u user -p pass -S zeusminer:\\.\COM3 --set zeusminer:clock=328 --set zeusminer:chips=128
+bfgminer --scrypt -o stratum+tcp://pool:port -u user -p pass -S zeusminer:\\.\COM3 --set zeusminer:clock=328 --set zeusminer:chips=128
 
 ---
 
