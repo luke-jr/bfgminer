@@ -98,7 +98,6 @@ extern bool scanhash_sse2_32(struct thr_info *, struct work *, uint32_t max_nonc
 extern bool scanhash_scrypt(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
 
-#ifdef USE_CPUMINING
 #ifdef USE_SHA256D
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
@@ -166,17 +165,12 @@ static const sha256_func sha256_funcs[] = {
 #endif
 };
 #endif
-#endif
 
-
-
-#ifdef USE_CPUMINING
 #ifdef USE_SHA256D
 enum sha256_algos opt_algo = ALGO_FASTAUTO;
 #endif
 
 static bool forced_n_threads;
-#endif
 
 #ifdef USE_SHA256D
 const uint32_t hash1_init[] = {
@@ -187,9 +181,6 @@ const uint32_t hash1_init[] = {
 };
 
 
-
-
-#ifdef USE_CPUMINING
 // Algo benchmark, crash-prone, system independent stage
 double bench_algo_stage3(
 	enum sha256_algos algo
@@ -646,17 +637,13 @@ void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 	strncpy(buf, algo_names[*algo], OPT_SHOW_LEN);
 }
 #endif  /* USE_SHA256D */
-#endif
 
-#ifdef USE_CPUMINING
 char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
 	return set_int_range(arg, i, 0, 9999);
 }
-#endif
 
-#ifdef USE_CPUMINING
 static int cpu_autodetect()
 {
 	RUNONCE(0);
@@ -837,4 +824,3 @@ struct device_drv cpu_drv = {
 	.thread_init = cpu_thread_init,
 	.scanhash = cpu_scanhash,
 };
-#endif
