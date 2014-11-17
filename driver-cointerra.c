@@ -273,12 +273,6 @@ bool cointerra_wait_for_info(struct cointerra_info * const ctainfo, struct lowl_
 }
 
 static
-float cointerra_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
-{
-	return (malgo->algo == POW_SHA256D) ? CTA_INIT_DIFF : -1.;
-}
-
-static
 bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	struct cointerra_info ctainfo = { .set_load = 0, };
@@ -1362,7 +1356,6 @@ static const struct bfg_set_device_definition cointerra_set_device_funcs[] = {
 struct device_drv cointerra_drv = {
 	.dname = "cointerra",
 	.name = "CTA",
-	.drv_min_nonce_diff = cointerra_min_nonce_diff,
 	.lowl_match = cointerra_lowl_match,
 	.lowl_probe = cointerra_lowl_probe,
 	.thread_init = cta_prepare,
