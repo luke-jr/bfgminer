@@ -1049,6 +1049,50 @@ unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
 #endif
 
 #ifdef USE_SHA256D
+#ifdef USE_OPENCL
+
+#include "ocl.h"
+
+static
+char *opencl_get_default_kernel_file_sha256d(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
+{
+	const char * const vbuff = clState->platform_ver_str;
+	
+	if (clState->is_mesa)
+	{
+		applog(LOG_INFO, "Selecting phatk kernel for Mesa");
+		return strdup("phatk");
+	}
+	
+	/* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
+	if (!strstr(cgpu->name, "Tahiti") &&
+	   (strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
+	    strstr(vbuff, "851.4") ||  // Windows 64 bit ""
+	    strstr(vbuff, "831.4") ||
+	    strstr(vbuff, "898.1") ||  // 12.2 driver SDK
+	    strstr(vbuff, "923.1") ||  // 12.4
+	    strstr(vbuff, "938.2") ||  // SDK 2.7
+	    strstr(vbuff, "1113.2")))  // SDK 2.8
+	{
+		applog(LOG_INFO, "Selecting diablo kernel");
+		return strdup("diablo");
+	}
+	
+	/* Detect all 7970s, older ATI and NVIDIA and use poclbm */
+	if (strstr(cgpu->name, "Tahiti") || !clState->hasBitAlign)
+	{
+		applog(LOG_INFO, "Selecting poclbm kernel");
+		return strdup("poclbm");
+	}
+	
+	/* Use phatk for the rest R5xxx R6xxx */
+	{
+		applog(LOG_INFO, "Selecting phatk kernel");
+		return strdup("phatk");
+	}
+}
+#endif  /* USE_OPENCL */
+
 static struct mining_algorithm malgo_sha256d = {
 	.name = "SHA256d",
 	.aliases = "SHA256d|SHA256|SHA2",
@@ -1066,6 +1110,7 @@ static struct mining_algorithm malgo_sha256d = {
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
 	.opencl_min_oclthreads =       0x20,  // intensity -10
 	.opencl_max_oclthreads = 0x20000000,  // intensity  14
+	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_sha256d,
 #endif
 };
 #endif
@@ -1084,6 +1129,12 @@ unsigned long opencl_intensity_to_oclthreads_scrypt(float intensity)
 {
 	return pow(2, intensity);
 }
+
+static
+char *opencl_get_default_kernel_file_scrypt(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
+{
+	return strdup("scrypt");
+}
 #endif
 
 static struct mining_algorithm malgo_scrypt = {
@@ -1101,6 +1152,7 @@ static struct mining_algorithm malgo_scrypt = {
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
 	.opencl_min_oclthreads =      0x100,  // intensity   8
 	.opencl_max_oclthreads = 0x20000000,  // intensity  31
+	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_scrypt,
 #endif
 };
 

@@ -21,6 +21,22 @@ enum opencl_binary_usage {
 
 static const float intensity_not_set = FLT_MAX;
 
+struct opencl_kernel_info;
+struct _clState;
+
+typedef cl_int (*queue_kernel_parameters_func_t)(const struct opencl_kernel_info *, struct _clState *, struct work *, cl_uint);
+
+struct opencl_kernel_info {
+	char *file;
+	bool loaded;
+	cl_program program;
+	cl_kernel kernel;
+	bool goffset;
+	enum cl_kernels interface;
+	size_t wsize;
+	queue_kernel_parameters_func_t queue_kernel_parameters;
+};
+
 struct opencl_device_data {
 	bool mapped;
 	int virtual_gpu;
@@ -32,14 +48,12 @@ struct opencl_device_data {
 	
 	cl_uint vwidth;
 	size_t work_size;
-#ifdef USE_SHA256D
-	char *kernel_file_sha256d;
-#endif
 	cl_ulong max_alloc;
+	
+	struct opencl_kernel_info kernelinfo[POW_ALGORITHM_COUNT];
 	
 	enum opencl_binary_usage opt_opencl_binaries;
 #ifdef USE_SCRYPT
-	char *kernel_file_scrypt;
 	int lookup_gap;
 	size_t thread_concurrency;
 	size_t shaders;

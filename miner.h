@@ -278,11 +278,12 @@ struct gpu_adl {
 
 enum pow_algorithm {
 #ifdef USE_SHA256D
-	POW_SHA256D = 1,
+	POW_SHA256D,
 #endif
 #ifdef USE_SCRYPT
-	POW_SCRYPT  = 2,
+	POW_SCRYPT,
 #endif
+	POW_ALGORITHM_COUNT,
 };
 
 struct api_data;
@@ -1123,6 +1124,10 @@ struct blockchain_info {
 	char currentblk_first_seen_time_str[0x20];  // was global blocktime
 };
 
+struct _clState;
+struct cgpu_info;
+struct mining_algorithm;
+
 struct mining_algorithm {
 	const char *name;
 	const char *aliases;
@@ -1146,6 +1151,7 @@ struct mining_algorithm {
 	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);
 	unsigned long opencl_min_oclthreads;
 	unsigned long opencl_max_oclthreads;
+	char *(*opencl_get_default_kernel_file)(const struct mining_algorithm *, struct cgpu_info *, struct _clState *);
 #endif
 };
 

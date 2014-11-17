@@ -786,6 +786,8 @@ CPUSearch:
 				func = sha256_funcs[opt_algo];
 				break;
 #endif
+			case POW_ALGORITHM_COUNT:
+				break;
 		}
 		if (unlikely(!func))
 			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
