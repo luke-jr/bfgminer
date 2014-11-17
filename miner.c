@@ -169,7 +169,7 @@ unsigned unittest_failures;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = -1;
@@ -516,7 +516,11 @@ float drv_min_nonce_diff(const struct device_drv * const drv, struct cgpu_info *
 {
 	if (drv->drv_min_nonce_diff)
 		return drv->drv_min_nonce_diff(proc, malgo);
+#ifdef USE_SHA256D
 	return (malgo->algo == POW_SHA256D) ? 1. : -1.;
+#else
+	return -1.;
+#endif
 }
 
 char *devpath_to_devid(const char *devpath)
@@ -1030,7 +1034,7 @@ struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
 }
 
 
-#ifdef HAVE_OPENCL
+#if defined(USE_SHA256D) && defined(USE_OPENCL)
 static
 float opencl_oclthreads_to_intensity_sha256d(const unsigned long oclthreads)
 {
@@ -1044,6 +1048,7 @@ unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
 }
 #endif
 
+#ifdef USE_SHA256D
 static struct mining_algorithm malgo_sha256d = {
 	.name = "SHA256d",
 	.aliases = "SHA256d|SHA256|SHA2",
@@ -1055,7 +1060,7 @@ static struct mining_algorithm malgo_sha256d = {
 	
 	.hash_data_f = hash_data,
 	
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	.opencl_nodefault = true,
 	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_sha256d,
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
@@ -1063,10 +1068,11 @@ static struct mining_algorithm malgo_sha256d = {
 	.opencl_max_oclthreads = 0x20000000,  // intensity  14
 #endif
 };
+#endif
 
 
 #ifdef USE_SCRYPT
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static
 float opencl_oclthreads_to_intensity_scrypt(const unsigned long oclthreads)
 {
@@ -1090,7 +1096,7 @@ static struct mining_algorithm malgo_scrypt = {
 	
 	.hash_data_f = scrypt_hash_data,
 	
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_scrypt,
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
 	.opencl_min_oclthreads =      0x100,  // intensity   8
@@ -1111,7 +1117,9 @@ static
 __attribute__((constructor))
 void init_mining_goals(struct mining_goal_info * const goal, const struct mining_algorithm * const malgo)
 {
+#ifdef USE_SHA256D
 	LL_APPEND(mining_algorithms, (&malgo_sha256d));
+#endif
 #ifdef USE_SCRYPT
 	LL_APPEND(mining_algorithms, (&malgo_scrypt));
 #endif
@@ -1159,7 +1167,12 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
 		};
+#ifdef HAVE_SHA256D
 		goal_set_malgo(goal, &malgo_sha256d);
+#else
+		// NOTE: Basically random default
+		goal_set_malgo(goal, mining_algorithms);
+#endif
 		HASH_ADD_STR(mining_goals, name, goal);
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
 		
@@ -1321,6 +1334,14 @@ struct pool *current_pool(void)
 
 	return pool;
 }
+
+#if defined(USE_CPUMINING) && !defined(USE_SHA256D)
+static
+char *arg_ignored(const char * const arg)
+{
+	return NULL;
+}
+#endif
 
 static
 char *set_bool_ignore_arg(const char * const arg, bool * const b)
@@ -2143,7 +2164,7 @@ char *set_temp_target(char *arg)
 	return NULL;
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static
 char *set_no_opencl_binaries(__maybe_unused void * const dummy)
 {
@@ -2294,7 +2315,8 @@ static char *set_null(const char __maybe_unused *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
+#ifdef USE_SHA256D
 	OPT_WITH_ARG("--algo",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
@@ -2327,7 +2349,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("-a",
 	             set_algo, show_algo, &opt_algo,
 	             opt_hidden),
-#endif
+#else
+	// NOTE: Silently ignoring option, since it is plausable a non-SHA256d miner was using it just to skip benchmarking
+	OPT_WITH_ARG("--algo|-a", arg_ignored, NULL, NULL, opt_hidden),
+#endif  /* USE_SHA256D */
+#endif  /* USE_CPUMINING */
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
@@ -2410,7 +2436,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_compact,
 			"Use compact display without per device statistics"),
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	OPT_WITH_ARG("--cpu-threads",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
@@ -2466,7 +2492,7 @@ static struct opt_table opt_config_table[] = {
 	             set_generate_addr, NULL, NULL,
 	             opt_hidden),
 #endif
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
 		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
 		     opt_hidden),
@@ -2511,7 +2537,7 @@ static struct opt_table opt_config_table[] = {
 	             set_intensity, NULL, NULL,
 	             opt_hidden),
 #endif
-#if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 	OPT_WITH_ARG("--kernel-path",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where bitstream and kernel files are"),
@@ -2519,7 +2545,7 @@ static struct opt_table opt_config_table[] = {
 	             opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             opt_hidden),
 #endif
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--kernel|-k",
 	             set_kernel, NULL, NULL,
 	             opt_hidden),
@@ -2623,7 +2649,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITHOUT_ARG("--no-opencl-binaries",
 	                set_no_opencl_binaries, NULL,
 	                opt_hidden),
@@ -2726,7 +2752,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--set-device|--set",
 			opt_string_elist_add, NULL, &opt_set_device_list,
 			"Set default parameters on devices; eg, NFY:osc6_bits=50"),
-#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
+#if defined(USE_SCRYPT) && defined(USE_OPENCL)
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,
 	             opt_hidden),
@@ -2792,7 +2818,7 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
+#if defined(USE_SCRYPT) && defined(USE_OPENCL)
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
 	             opt_hidden),
@@ -2808,7 +2834,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--user|-u",
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
 	             set_vector, NULL, NULL,
 	             opt_hidden),
@@ -2822,7 +2848,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--weighed-stats",
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--worksize|-w",
 	             set_worksize, NULL, NULL,
 	             opt_hidden),
@@ -3058,7 +3084,7 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
 			opt_hidden),
@@ -3716,7 +3742,7 @@ static int statusy;
 static int devsummaryYOffset;
 static int total_lines;
 #endif
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
 struct cgpu_info *cpus;
@@ -7828,10 +7854,10 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	write_config_opencl(fcfg);
 #endif
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
 
@@ -11617,7 +11643,7 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			else if (cgpu->status == LIFE_WAIT)
 				cgpu->status = LIFE_WELL;
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 			if (!strcmp(cgpu->drv->dname, "cpu"))
 				return;
 #endif
@@ -11683,7 +11709,7 @@ void print_summary(void)
 	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
@@ -11789,7 +11815,7 @@ void print_summary(void)
 
 void _bfg_clean_up(bool restarting)
 {
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	clear_adl(nDevs);
 #endif
 #ifdef HAVE_LIBUSB
@@ -11977,7 +12003,7 @@ out:
 }
 #endif
 
-#if BLKMAKER_VERSION > 1
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
 static
 bool _add_local_gbt(const char * const filepath, void *userp)
 {
@@ -12214,7 +12240,7 @@ void enable_curses(void) {
 #endif
 
 /* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
-#ifndef WANT_CPUMINE
+#ifndef USE_CPUMINING
 struct device_drv cpu_drv;
 struct device_drv cpu_drv = {
 	.name = "CPU",
@@ -13172,7 +13198,7 @@ int main(int argc, char *argv[])
 
 	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	init_max_name_len();
 #endif
 
@@ -13198,7 +13224,7 @@ int main(int argc, char *argv[])
 	strcpy(cgminer_path, dirname(s));
 	free(s);
 	strcat(cgminer_path, "/");
-#if defined(WANT_CPUMINE) && defined(WIN32)
+#if defined(USE_CPUMINING) && defined(WIN32)
 	{
 		char buf[32];
 		int gev = GetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf, sizeof(buf));
@@ -13249,7 +13275,7 @@ int main(int argc, char *argv[])
 
 	// Ensure at least the default goal is created
 	get_mining_goal("default");
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	opencl_early_init();
 #endif
 
@@ -13454,7 +13480,7 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
-#if BLKMAKER_VERSION > 1
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
 	if (opt_load_bitcoin_conf && !(get_mining_goal("default")->malgo->algo != POW_SHA256D || opt_benchmark))
 		add_local_gbt(total_pools);
 #endif
@@ -13600,12 +13626,12 @@ begin_bench:
 		start_cgpu(cgpu);
 	}
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	for (i = 0; i < nDevs; i++)
 		pause_dynamic_threads(i);
 #endif
 
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_INFO, "%d cpu miner threads started, using '%s' algorithm.",
 		       opt_n_threads, algo_names[opt_algo]);
@@ -13635,7 +13661,7 @@ begin_bench:
 		quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	/* Create reinit gpu thread */
 	gpur_thr_id = 3;
 	thr = &control_thr[gpur_thr_id];

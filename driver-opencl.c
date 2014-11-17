@@ -50,7 +50,6 @@
 /* TODO: cleanup externals ********************/
 
 
-#ifdef HAVE_OPENCL
 /* Platform API */
 CL_API_ENTRY cl_int CL_API_CALL
 (*clGetPlatformIDs)(cl_uint          /* num_entries */,
@@ -257,7 +256,6 @@ load_opencl_symbols() {
 	
 	return true;
 }
-#endif
 
 
 struct opencl_kernel_interface {
@@ -371,7 +369,6 @@ const char *set_ ## PNAME(char *arg)  \
 #define _SET_INT_LIST(PNAME, VCHECK, FIELD)  \
 	_SET_INT_LIST2(PNAME, VCHECK, ((struct opencl_device_data *)cgpu->device_data)->FIELD)
 
-#ifdef HAVE_OPENCL
 _SET_INT_LIST(vector  , (v == 1 || v == 2 || v == 4), vwidth   )
 _SET_INT_LIST(worksize, (v >= 1 && v <= 9999)       , work_size)
 
@@ -411,10 +408,19 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 		return false;
 	free(src);
 	
-	char **kfp = &data->kernel_file_sha256d;
+	char **kfp =
+#ifdef USE_SHA256D
+		&data->kernel_file_sha256d;
+#else
+		NULL;
+#endif
 #ifdef USE_SCRYPT
 	if (interface == KL_SCRYPT)
 		kfp = &data->kernel_file_scrypt;
+#endif
+#ifndef USE_SHA256D
+	if (!kfp)
+		return false;
 #endif
 	free(*kfp);
 	*kfp = strdup(_val);
@@ -426,7 +432,6 @@ const char *set_kernel(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_kernel", _set_kernel);
 }
-#endif
 
 static
 const char *opencl_init_binary(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
@@ -653,7 +658,6 @@ const char *opencl_set_gpu_vddc(struct cgpu_info * const proc, const char * cons
 _SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
-#ifdef HAVE_OPENCL
 double oclthreads_to_xintensity(const unsigned long oclthreads, const cl_uint max_compute_units)
 {
 	return (double)oclthreads / (double)max_compute_units / 64.;
@@ -751,7 +755,6 @@ const char *set_intensity(char *arg)
 }
 
 _SET_INT_LIST2(gpu_threads, (v >= 1 && v <= 10), cgpu->threads)
-#endif
 
 void write_config_opencl(FILE * const fcfg)
 {
@@ -762,7 +765,6 @@ void write_config_opencl(FILE * const fcfg)
 }
 
 
-#ifdef HAVE_OPENCL
 BFG_REGISTER_DRIVER(opencl_api)
 static const struct bfg_set_device_definition opencl_set_device_funcs_probe[];
 static const struct bfg_set_device_definition opencl_set_device_funcs[];
@@ -775,15 +777,11 @@ char *print_ndevs_and_exit(int *ndevs)
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 	exit(*ndevs);
 }
-#endif
 
 
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
-
-
-#ifdef HAVE_OPENCL
 
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
@@ -811,8 +809,6 @@ void pause_dynamic_threads(int gpu)
 
 struct device_drv opencl_api;
 
-#endif /* HAVE_OPENCL */
-
 float opencl_proc_get_intensity(struct cgpu_info * const proc, const char ** const iunit)
 {
 	struct opencl_device_data * const data = proc->device_data;
@@ -830,7 +826,7 @@ float opencl_proc_get_intensity(struct cgpu_info * const proc, const char ** con
 	return intensity;
 }
 
-#if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
+#ifdef HAVE_CURSES
 static
 void opencl_wlogprint_status(struct cgpu_info *cgpu)
 {
@@ -983,20 +979,16 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 #endif
 
 
-#ifdef HAVE_OPENCL
-
 #define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
 #define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
 
+#ifdef USE_SHA256D
 static
 void *_opencl_work_data_dup(struct work * const work)
 {
 	struct opencl_work_data *p = malloc(sizeof(*p));
 	memcpy(p, work->device_data, sizeof(*p));
-#ifdef USE_SCRYPT
-	p->work = work;
-#endif
 	return p;
 }
 
@@ -1235,6 +1227,7 @@ cl_int queue_diablo_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 
 	return status;
 }
+#endif
 
 #ifdef USE_SCRYPT
 static
@@ -1260,23 +1253,23 @@ cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 	return status;
 }
 #endif
-#endif /* HAVE_OPENCL */
 
 
 static
 struct opencl_kernel_interface kernel_interfaces[] = {
 	{NULL},
+#ifdef USE_SHA256D
 	{"poclbm",  queue_poclbm_kernel },
 	{"phatk",   queue_phatk_kernel  },
 	{"diakgcn", queue_diakgcn_kernel},
 	{"diablo",  queue_diablo_kernel },
+#endif
 #ifdef USE_SCRYPT
 	{"scrypt",  queue_scrypt_kernel },
 #endif
 };
 
 
-#ifdef HAVE_OPENCL
 /* We have only one thread that ever re-initialises GPUs, thus if any GPU
  * init command fails due to a completely wedged GPU, the thread will never
  * return, unable to harm other GPUs. If it does return, it means we only had
@@ -1362,15 +1355,7 @@ select_cgpu:
 out:
 	return NULL;
 }
-#else
-void *reinit_gpu(__maybe_unused void *userdata)
-{
-	return NULL;
-}
-#endif
 
-
-#ifdef HAVE_OPENCL
 struct device_drv opencl_api;
 
 static int opencl_autodetect()
@@ -1680,7 +1665,7 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
-
+#ifdef USE_SHA256D
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
 	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
@@ -1691,6 +1676,7 @@ static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work
 	}
 	return true;
 }
+#endif
 
 extern int opt_dynamic_interval;
 
@@ -1701,6 +1687,7 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 	char *kernel_file;
 	switch (malgo->algo)
 	{
+#ifdef USE_SHA256D
 		case POW_SHA256D:
 			kernelinfo = &clState->kernel_sha256d;
 			if (!data->kernel_file_sha256d)
@@ -1738,6 +1725,7 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 			}
 			kernel_file = data->kernel_file_sha256d;
 			break;
+#endif
 #ifdef USE_SCRYPT
 		case POW_SCRYPT:
 			kernelinfo = &clState->kernel_scrypt;
@@ -1968,8 +1956,9 @@ struct device_drv opencl_api = {
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
+#ifdef USE_SHA256D
 	.prepare_work = opencl_prepare_work,
+#endif
 	.scanhash = opencl_scanhash,
 	.thread_shutdown = opencl_thread_shutdown,
 };
-#endif

@@ -10,7 +10,6 @@
  */
 
 #include "config.h"
-#ifdef HAVE_OPENCL
 
 #include <stdint.h>
 #include <stdio.h>
@@ -22,6 +21,7 @@
 #include "miner.h"
 #include "scrypt.h"
 
+#ifdef USE_SHA256D
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
 	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -133,6 +133,7 @@ void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data)
 	blk->sixA = blk->ctx_g + SHA256_K[6];
 	blk->sevenA = blk->ctx_h + SHA256_K[7];
 }
+#endif
 
 struct pc_data {
 	struct thr_info *thr;
@@ -205,4 +206,3 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		return;
 	}
 }
-#endif /* HAVE_OPENCL */

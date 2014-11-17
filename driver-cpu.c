@@ -98,10 +98,13 @@ extern bool scanhash_sse2_32(struct thr_info *, struct work *, uint32_t max_nonc
 extern bool scanhash_scrypt(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
 
-#ifdef WANT_CPUMINE
+#ifdef USE_SHA256D
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
+#endif
+
 const char *algo_names[] = {
+#ifdef USE_SHA256D
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= "4way",
@@ -125,13 +128,17 @@ const char *algo_names[] = {
 #ifdef WANT_ALTIVEC_4WAY
     [ALGO_ALTIVEC_4WAY] = "altivec_4way",
 #endif
+#endif
 #ifdef WANT_SCRYPT
     [ALGO_SCRYPT] = "scrypt",
 #endif
+#ifdef USE_SHA256D
 	[ALGO_FASTAUTO] = "fastauto",
 	[ALGO_AUTO] = "auto",
+#endif
 };
 
+#ifdef USE_SHA256D
 static const sha256_func sha256_funcs[] = {
 	[ALGO_C]		= (sha256_func)scanhash_c,
 #ifdef WANT_SSE2_4WAY
@@ -156,19 +163,16 @@ static const sha256_func sha256_funcs[] = {
 #ifdef WANT_X8664_SSE4
 	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64,
 #endif
-#ifdef WANT_SCRYPT
-	[ALGO_SCRYPT]		= (sha256_func)scanhash_scrypt
-#endif
 };
 #endif
 
-
-
-#ifdef WANT_CPUMINE
+#ifdef USE_SHA256D
 enum sha256_algos opt_algo = ALGO_FASTAUTO;
-static bool forced_n_threads;
 #endif
 
+static bool forced_n_threads;
+
+#ifdef USE_SHA256D
 const uint32_t hash1_init[] = {
 	0,0,0,0,0,0,0,0,
 	0x80000000,
@@ -177,9 +181,6 @@ const uint32_t hash1_init[] = {
 };
 
 
-
-
-#ifdef WANT_CPUMINE
 // Algo benchmark, crash-prone, system independent stage
 double bench_algo_stage3(
 	enum sha256_algos algo
@@ -635,17 +636,14 @@ void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
 	strncpy(buf, algo_names[*algo], OPT_SHOW_LEN);
 }
-#endif
+#endif  /* USE_SHA256D */
 
-#ifdef WANT_CPUMINE
 char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
 	return set_int_range(arg, i, 0, 9999);
 }
-#endif
 
-#ifdef WANT_CPUMINE
 static int cpu_autodetect()
 {
 	RUNONCE(0);
@@ -699,7 +697,9 @@ static int cpu_autodetect()
 		cgpu->drv = &cpu_drv;
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
+#ifdef USE_SHA256D
 		cgpu->kname = algo_names[opt_algo];
+#endif
 		add_cgpu(cgpu);
 	}
 	return opt_n_threads;
@@ -732,6 +732,7 @@ static uint64_t cpu_can_limit_work(struct thr_info __maybe_unused *thr)
 static bool cpu_thread_init(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
+#ifdef USE_SHA256D
 	struct cgpu_info *cgpu = thr->cgpu;
 
 	mutex_lock(&cpualgo_lock);
@@ -746,6 +747,7 @@ static bool cpu_thread_init(struct thr_info *thr)
 	mutex_unlock(&cpualgo_lock);
 
 	cgpu->kname = algo_names[opt_algo];
+#endif
 	
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -761,12 +763,10 @@ static bool cpu_thread_init(struct thr_info *thr)
 
 static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
-	unsigned char hash1[64];
 	uint32_t first_nonce = work->blk.nonce;
 	uint32_t last_nonce;
 	bool rc;
 
-	memcpy(&hash1[0], &hash1_init[0], sizeof(hash1));
 CPUSearch:
 	last_nonce = first_nonce;
 	rc = false;
@@ -781,9 +781,11 @@ CPUSearch:
 				func = scanhash_scrypt;
 				break;
 #endif
+#ifdef USE_SHA256D
 			case POW_SHA256D:
 				func = sha256_funcs[opt_algo];
 				break;
+#endif
 		}
 		if (unlikely(!func))
 			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
@@ -822,4 +824,3 @@ struct device_drv cpu_drv = {
 	.thread_init = cpu_thread_init,
 	.scanhash = cpu_scanhash,
 };
-#endif

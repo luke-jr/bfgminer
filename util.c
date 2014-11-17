@@ -790,6 +790,7 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
+#ifdef USE_SHA256D
 void hash_data(void *out_hash, const void *data)
 {
 	unsigned char blkheader[80];
@@ -800,6 +801,7 @@ void hash_data(void *out_hash, const void *data)
 	// double-SHA256 to get the block hash
 	gen_hash(blkheader, out_hash, 80);
 }
+#endif
 
 // Example output: 0000000000000000000000000000000000000000000000000000ffff00000000 (bdiff 1)
 void real_block_target(unsigned char *target, const unsigned char *data)
@@ -2659,8 +2661,10 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		diff = bdiff_to_pdiff(diff);
 	}
 	
+#ifdef USE_SHA256D
 	if (malgo->algo == POW_SHA256D && diff < 1 && diff > 0.999)
 		diff = 1;
+#endif
 	
 #ifdef USE_SCRYPT
 	// Broken Scrypt pools multiply difficulty by 0x10000

@@ -9,7 +9,6 @@
  */
 
 #include "config.h"
-#ifdef HAVE_OPENCL
 
 #include <ctype.h>
 #include <limits.h>
@@ -696,7 +695,10 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState, const char * const name, struct opencl_kernel_info * const kernelinfo, const char * const kernel_file, __maybe_unused const struct mining_algorithm * const malgo)
 {
 	const int gpu = cgpu->device_id;
-	bool patchbfi = false, prog_built = false;
+#ifdef USE_SHA256D
+	bool patchbfi = false;
+#endif
+	bool prog_built = false;
 	struct opencl_device_data * const data = cgpu->device_data;
 	const char * const vbuff = clState->platform_ver_str;
 	char *s;
@@ -733,6 +735,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 			       cgpu->dev_repr, kernel_file);
 			free(source);
 			return false;
+#ifdef USE_SHA256D
 		case KL_PHATK:
 			if ((strstr(vbuff, "844.4") || strstr(vbuff, "851.4") ||
 			     strstr(vbuff, "831.4") || strstr(vbuff, "898.1") ||
@@ -743,6 +746,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 				applog(LOG_WARNING, "Downgrade your SDK and delete any .bin files before starting again.");
 				applog(LOG_WARNING, "Or allow BFGMiner to automatically choose a more suitable kernel.");
 			}
+#endif
 		default:
 			;
 	}
@@ -754,6 +758,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 		int kernel_goffset_support = 0;  // 0 = none; 1 = optional; 2 = required
 		switch (kernelinfo->interface)
 		{
+#ifdef USE_SHA256D
 			case KL_DIABLO:
 			case KL_DIAKGCN:
 			case KL_POCLBM:
@@ -762,6 +767,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 			case KL_PHATK:
 				kernel_goffset_support = 0;
 				break;
+#endif
 			case KL_NONE: case OPENCL_KERNEL_INTERFACE_COUNT:
 #ifdef USE_SCRYPT
 			case KL_SCRYPT:
@@ -937,6 +943,7 @@ build:
 	if (clState->hasBitAlign) {
 		strcat(CompilerOptions, " -D BITALIGN");
 		applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
+#ifdef USE_SHA256D
 		if (strstr(name, "Cedar") ||
 		    strstr(name, "Redwood") ||
 		    strstr(name, "Juniper") ||
@@ -958,9 +965,21 @@ build:
 			if ((s = strstr(vbuff, "AMD-APP")) && (s = strchr(s, '(')) && atoi(&s[1]) < 1085)
 				patchbfi = true;
 		}
+#endif
 	} else
 		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
 
+#ifdef USE_SHA256D
+	switch (kernelinfo->interface)
+	{
+		case KL_DIABLO: case KL_DIAKGCN: case KL_PHATK: case KL_POCLBM:
+			// Okay, these actually use BFI_INT hacking
+			break;
+		default:
+			// Anything else has never needed it
+			patchbfi = false;
+			break;
+	}
 	if (patchbfi) {
 		if (data->opt_opencl_binaries == OBU_LOADSAVE)
 		{
@@ -974,6 +993,7 @@ build:
 		}
 	} else
 		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
+#endif
 
 	if (kernelinfo->goffset)
 		strcat(CompilerOptions, " -D GOFFSET");
@@ -1026,6 +1046,7 @@ build:
 		return false;
 	}
 
+#ifdef USE_SHA256D
 	/* Patch the kernel if the hardware supports BFI_INT but it needs to
 	 * be hacked in */
 	if (patchbfi) {
@@ -1075,6 +1096,7 @@ build:
 		/* Program needs to be rebuilt */
 		prog_built = false;
 	}
+#endif
 
 	free(source);
 
@@ -1152,6 +1174,3 @@ built:
 	kernelinfo->loaded = true;
 	return true;
 }
-
-#endif /* HAVE_OPENCL */
-
