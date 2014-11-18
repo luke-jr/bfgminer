@@ -194,7 +194,6 @@ extern char *ucs2_to_utf8_dup(uint16_t *in, size_t sz);
 }while(0)
 
 extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
-extern void hash_data(void *digest, const void *data);
 extern void real_block_target(unsigned char *target, const unsigned char *data);
 extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
 extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);

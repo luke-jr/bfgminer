@@ -32,10 +32,13 @@
 #include "config.h"
 #include "miner.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+#include <uthash.h>
 
 typedef struct SHA256Context {
 	uint32_t state[8];
@@ -545,4 +548,51 @@ bool scanhash_scrypt(struct thr_info * const thr, struct work * const work,
 	
 	free(scratchbuf);
 	return ret;
+}
+
+#ifdef USE_OPENCL
+static
+float opencl_oclthreads_to_intensity_scrypt(const unsigned long oclthreads)
+{
+	return log2(oclthreads);
+}
+
+static
+unsigned long opencl_intensity_to_oclthreads_scrypt(float intensity)
+{
+	return pow(2, intensity);
+}
+
+static
+char *opencl_get_default_kernel_file_scrypt(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
+{
+	return strdup("scrypt");
+}
+#endif
+
+struct mining_algorithm malgo_scrypt = {
+	.name = "scrypt",
+	.aliases = "scrypt",
+	
+	.algo = POW_SCRYPT,
+	.ui_skip_hash_bytes = 2,
+	.reasonable_low_nonce_diff = 1./0x10000,
+	
+	.hash_data_f = scrypt_hash_data,
+	
+#ifdef USE_OPENCL
+	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_scrypt,
+	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
+	.opencl_min_oclthreads =      0x100,  // intensity   8
+	.opencl_max_oclthreads = 0x20000000,  // intensity  31
+	.opencl_min_nonce_diff = 1./0x10000,
+	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_scrypt,
+#endif
+};
+
+static
+__attribute__((constructor))
+void init_scrypt(void)
+{
+	LL_APPEND(mining_algorithms, (&malgo_scrypt));
 }

@@ -3099,6 +3099,7 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 				break;
 #endif
 			default:
+				root = api_add_const(root, "Hash Method", goal->malgo->name, false);
 				break;
 		}
 

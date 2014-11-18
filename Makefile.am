@@ -149,6 +149,8 @@ endif
 
 
 if USE_SHA256D
+bfgminer_SOURCES += malgo/sha256d.c
+
 if USE_OPENCL
 dist_kernels_DATA += \
 	$(top_srcdir)/opencl/diablo.cl  \
@@ -195,7 +197,7 @@ endif # USE_CPUMINING
 endif # USE_SHA256D
 
 if USE_SCRYPT
-bfgminer_SOURCES += scrypt.c scrypt.h
+bfgminer_SOURCES += malgo/scrypt.c malgo/scrypt.h
 dist_doc_DATA += README.scrypt
 
 if USE_OPENCL

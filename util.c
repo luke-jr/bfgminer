@@ -790,19 +790,6 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
-#ifdef USE_SHA256D
-void hash_data(void *out_hash, const void *data)
-{
-	unsigned char blkheader[80];
-	
-	// data is past the first SHA256 step (padding and interpreting as big endian on a little endian platform), so we need to flip each 32-bit chunk around to get the original input block header
-	swap32yes(blkheader, data, 80 / 4);
-	
-	// double-SHA256 to get the block hash
-	gen_hash(blkheader, out_hash, 80);
-}
-#endif
-
 // Example output: 0000000000000000000000000000000000000000000000000000ffff00000000 (bdiff 1)
 void real_block_target(unsigned char *target, const unsigned char *data)
 {

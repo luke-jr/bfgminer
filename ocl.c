@@ -258,24 +258,42 @@ char *file_contents(const char *filename, int *length)
 	return (char*)buffer;
 }
 
-char *opencl_kernel_source(const char * const filename, int * const out_sourcelen, enum cl_kernels * const out_kinterface)
+static
+void extract_word(char * const buf, const size_t bufsz, const char ** const endptr, const char *s)
+{
+	const char *q;
+	for ( ; s[0] && isspace(s[0]); ++s)
+		if (s[0] == '\n' || s[0] == '\r')
+			break;
+	for (q = s; q[0] && !isspace(q[0]); ++q)
+	{}  // Find end of string
+	size_t len = q - s;
+	if (len >= bufsz)
+		len = bufsz - 1;
+	memcpy(buf, s, len);
+	buf[len] = '\0';
+	if (endptr)
+		*endptr = q;
+}
+
+char *opencl_kernel_source(const char * const filename, int * const out_sourcelen, enum cl_kernels * const out_kinterface, struct mining_algorithm ** const out_malgo)
 {
 	char *source = file_contents(filename, out_sourcelen);
 	if (!source)
 		return NULL;
-	char *s = strstr(source, "kernel-interface:"), *q;
+	char *s = strstr(source, "kernel-interface:");
 	if (s)
 	{
-		for (s = &s[17]; s[0] && isspace(s[0]); ++s)
-			if (s[0] == '\n' || s[0] == '\r')
-				break;
-		for (q = s; q[0] && !isspace(q[0]); ++q)
-		{}  // Find end of string
-		const size_t kinamelen = q - s;
-		char kiname[kinamelen + 1];
-		memcpy(kiname, s, kinamelen);
-		kiname[kinamelen] = '\0';
-		*out_kinterface = select_kernel(kiname);
+		const char *q;
+		char buf[0x20];
+		extract_word(buf, sizeof(buf), &q, &s[17]);
+		*out_kinterface = select_kernel(buf);
+		
+		if (out_malgo && (q[0] == '\t' || q[0] == ' '))
+		{
+			extract_word(buf, sizeof(buf), &q, q);
+			*out_malgo = mining_algorithm_by_alias(buf);
+		}
 	}
 	else
 		*out_kinterface = KL_NONE;
@@ -718,7 +736,7 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 	snprintf(filename, sizeof(filename), "%s.cl", kernel_file);
 	snprintf(binaryfilename, sizeof(filename), "%s", kernel_file);
 	int pl;
-	char *source = opencl_kernel_source(filename, &pl, &kernelinfo->interface);
+	char *source = opencl_kernel_source(filename, &pl, &kernelinfo->interface, NULL);
 	if (!source)
 		return false;
 	{

@@ -403,27 +403,17 @@ bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 	
 	int dummy_srclen;
 	enum cl_kernels interface;
-	char *src = opencl_kernel_source(filename, &dummy_srclen, &interface);
+	struct mining_algorithm *malgo;
+	char *src = opencl_kernel_source(filename, &dummy_srclen, &interface, &malgo);
 	if (!src)
 		return false;
 	free(src);
-	
-	char **kfp =
-#ifdef USE_SHA256D
-		&data->kernel_file_sha256d;
-#else
-		NULL;
-#endif
-#ifdef USE_SCRYPT
-	if (interface == KL_SCRYPT)
-		kfp = &data->kernel_file_scrypt;
-#endif
-#ifndef USE_SHA256D
-	if (!kfp)
+	if (!malgo)
 		return false;
-#endif
-	free(*kfp);
-	*kfp = strdup(_val);
+	
+	struct opencl_kernel_info * const kernelinfo = &data->kernelinfo[malgo->algo];
+	free(kernelinfo->file);
+	kernelinfo->file = strdup(_val);
 	
 	return true;
 }
@@ -1665,6 +1655,12 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static
+float opencl_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return malgo->opencl_min_nonce_diff ?: -1.;
+}
+
 #ifdef USE_SHA256D
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
@@ -1684,61 +1680,16 @@ const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * c
 {
 	struct opencl_device_data * const data = cgpu->device_data;
 	struct opencl_kernel_info *kernelinfo = NULL;
-	char *kernel_file;
-	switch (malgo->algo)
+	kernelinfo = &data->kernelinfo[malgo->algo];
+	if (!kernelinfo->file)
 	{
-#ifdef USE_SHA256D
-		case POW_SHA256D:
-			kernelinfo = &clState->kernel_sha256d;
-			if (!data->kernel_file_sha256d)
-			{
-				const char * const vbuff = clState->platform_ver_str;
-				if (clState->is_mesa)
-				{
-					applog(LOG_INFO, "Selecting phatk kernel for Mesa");
-					data->kernel_file_sha256d = strdup("phatk");
-				}
-				else  /* Detect all 2.6 SDKs not with Tahiti and use diablo kernel */
-				if (!strstr(cgpu->name, "Tahiti") &&
-				   (strstr(vbuff, "844.4") ||  // Linux 64 bit ATI 2.6 SDK
-				    strstr(vbuff, "851.4") ||  // Windows 64 bit ""
-				    strstr(vbuff, "831.4") ||
-				    strstr(vbuff, "898.1") ||  // 12.2 driver SDK 
-				    strstr(vbuff, "923.1") ||  // 12.4
-				    strstr(vbuff, "938.2") ||  // SDK 2.7
-				    strstr(vbuff, "1113.2")))  // SDK 2.8
-				{
-					applog(LOG_INFO, "Selecting diablo kernel");
-					data->kernel_file_sha256d = strdup("diablo");
-				}
-				else  /* Detect all 7970s, older ATI and NVIDIA and use poclbm */
-				if (strstr(cgpu->name, "Tahiti") || !clState->hasBitAlign)
-				{
-					applog(LOG_INFO, "Selecting poclbm kernel");
-					data->kernel_file_sha256d = strdup("poclbm");
-				}
-				else  /* Use phatk for the rest R5xxx R6xxx */
-				{
-					applog(LOG_INFO, "Selecting phatk kernel");
-					data->kernel_file_sha256d = strdup("phatk");
-				}
-			}
-			kernel_file = data->kernel_file_sha256d;
-			break;
-#endif
-#ifdef USE_SCRYPT
-		case POW_SCRYPT:
-			kernelinfo = &clState->kernel_scrypt;
-			BFGINIT(data->kernel_file_scrypt, strdup("scrypt"));
-			kernel_file = data->kernel_file_scrypt;
-			break;
-#endif
+		kernelinfo->file = malgo->opencl_get_default_kernel_file(malgo, cgpu, clState);
+		if (!kernelinfo->file)
+			applogr(NULL, LOG_ERR, "%s: Unsupported mining algorithm", cgpu->dev_repr);
 	}
-	if (!kernelinfo)
-		applogr(NULL, LOG_ERR, "%s: Unsupported mining algorithm", cgpu->dev_repr);
 	if (!kernelinfo->loaded)
 	{
-		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernel_file, malgo))
+		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernelinfo->file, malgo))
 			applogr(NULL, LOG_ERR, "%s: Failed to load kernel", cgpu->dev_repr);
 		
 		kernelinfo->queue_kernel_parameters = kernel_interfaces[kernelinfo->interface].queue_kernel_parameters_func;
@@ -1856,7 +1807,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			return -1;
 		}
 		applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
-		postcalc_hash_async(thr, work, thrdata->res);
+		postcalc_hash_async(thr, work, thrdata->res, kinfo->interface);
 		memset(thrdata->res, 0, buffersize);
 		/* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
 		clFinish(clState->commandQueue);
@@ -1874,11 +1825,15 @@ void opencl_clean_kernel_info(struct opencl_kernel_info * const kinfo)
 
 static void opencl_thread_shutdown(struct thr_info *thr)
 {
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct opencl_device_data * const data = cgpu->device_data;
 	const int thr_id = thr->id;
 	_clState *clState = clStates[thr_id];
 
-	opencl_clean_kernel_info(&clState->kernel_sha256d);
-	opencl_clean_kernel_info(&clState->kernel_scrypt);
+	for (unsigned i = 0; i < (unsigned)POW_ALGORITHM_COUNT; ++i)
+	{
+		opencl_clean_kernel_info(&data->kernelinfo[i]);
+	}
 	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
@@ -1943,7 +1898,7 @@ struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
 	.probe_priority = 110,
-	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
+	.drv_min_nonce_diff = opencl_min_nonce_diff,
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.watchdog = opencl_watchdog,
