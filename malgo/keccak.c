@@ -320,14 +320,9 @@ void keccak1(unsigned char *out, const unsigned char *inraw, unsigned inrawlen)
 static
 void keccak_hash_data(void * const digest, const void * const pdata)
 {
-	uint256 result;
-	
-	unsigned int data[20], datacopy[20]; // aligned for swap32yes
-	memcpy(datacopy, pdata, 80);
-	swap32yes(data, datacopy, 20);
-	keccak1((unsigned char*)&result, (unsigned char*)data, 80);
-	
-	memcpy(digest, &result, 0x20);
+	uint32_t data[20];
+	swap32yes(data, pdata, 20);
+	keccak1(digest, (unsigned char*)data, 80);
 }
 
 #ifdef USE_OPENCL
