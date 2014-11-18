@@ -3278,10 +3278,15 @@ resend:
 	if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
 	{
 		// Default: ["notify", "set_difficulty"] (but these must be explicit if mining.capabilities is used)
-		sprintf(s, "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[[\"notify\",\"set_difficulty\",\"set_goal\"]");
+		snprintf(s, sizeof(s), "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[{\"notify\":[],\"set_difficulty\":{},\"set_goal\":[],\"malgo\":{");
+		struct mining_algorithm *malgo;
+		LL_FOREACH(mining_algorithms, malgo)
+		{
+			tailsprintf(s, sizeof(s), "\"%s\":{}%c", malgo->name, malgo->next ? ',' : '}');
+		}
 		if (request_target_str)
-			tailsprintf(s, sizeof(s), ", {\"suggested_target\":\"%s\"}", request_target_str);
-		tailsprintf(s, sizeof(s), "]}");
+			tailsprintf(s, sizeof(s), ",\"suggested_target\":\"%s\"", request_target_str);
+		tailsprintf(s, sizeof(s), "}]}");
 		_stratum_send(pool, s, strlen(s), true);
 	}
 	

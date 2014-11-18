@@ -442,14 +442,11 @@ void stratumsrv_mining_capabilities(struct bufferevent * const bev, json_t * con
 	conn->capabilities = 0;
 	
 	json_t * const caps = (json_array_size(params) < 1) ? NULL : json_array_get(params, 0);
-	if (caps && (!json_is_null(caps)) && json_is_array(caps))
+	if (caps && (!json_is_null(caps)) && json_is_object(caps))
 	{
-		for (size_t i = json_array_size(caps); i-- > 0; )
+		for (void *iter = json_object_iter(caps); iter; iter = json_object_iter_next(caps, iter))
 		{
-			json_t * const j = json_array_get(caps, i);
-			if (!json_is_string(j))
-				continue;
-			const char * const s = json_string_value(j);
+			const char * const s = json_object_iter_key(iter);
 			if (!strcasecmp(s, "notify"))
 				conn->capabilities |= SCC_NOTIFY;
 			else
