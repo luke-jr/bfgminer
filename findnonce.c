@@ -140,6 +140,7 @@ struct pc_data {
 	uint32_t res[OPENCL_MAX_BUFFERSIZE];
 	pthread_t pth;
 	int found;
+	enum cl_kernels kinterface;
 };
 
 static void *postcalc_hash(void *userdata)
@@ -149,7 +150,7 @@ static void *postcalc_hash(void *userdata)
 	unsigned int entry = 0;
 	int found = FOUND;
 #ifdef USE_SCRYPT
-	if (work_mining_algorithm(&pcd->work)->algo == POW_SCRYPT)
+	if (pcd->kinterface == KL_SCRYPT)
 		found = SCRYPT_FOUND;
 #endif
 
@@ -178,7 +179,7 @@ static void *postcalc_hash(void *userdata)
 	return NULL;
 }
 
-void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
+void postcalc_hash_async(struct thr_info * const thr, struct work * const work, uint32_t * const res, const enum cl_kernels kinterface)
 {
 	struct pc_data *pcd = malloc(sizeof(struct pc_data));
 	int buffersize;
@@ -190,10 +191,11 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 
 	*pcd = (struct pc_data){
 		.thr = thr,
+		.kinterface = kinterface,
 	};
 	__copy_work(&pcd->work, work);
 #ifdef USE_SCRYPT
-	if (work_mining_algorithm(work)->algo == POW_SCRYPT)
+	if (kinterface == KL_SCRYPT)
 		buffersize = SCRYPT_BUFFERSIZE;
 	else
 #endif
