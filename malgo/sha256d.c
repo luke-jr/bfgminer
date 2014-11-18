@@ -32,11 +32,13 @@ void hash_data(void *out_hash, const void *data)
 }
 
 #ifdef USE_OPENCL
+static
 float opencl_oclthreads_to_intensity_sha256d(const unsigned long oclthreads)
 {
 	return log2f(oclthreads) - 15.;
 }
 
+static
 unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity)
 {
 	return powf(2, intensity + 15);

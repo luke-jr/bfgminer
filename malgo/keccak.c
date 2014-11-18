@@ -12,6 +12,7 @@
 #include "config.h"
 #include "miner.h"
 
+#include <math.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
@@ -330,8 +331,17 @@ void keccak_hash_data(void * const digest, const void * const pdata)
 }
 
 #ifdef USE_OPENCL
-extern float opencl_oclthreads_to_intensity_sha256d(unsigned long oclthreads);
-extern unsigned long opencl_intensity_to_oclthreads_sha256d(float intensity);
+static
+float opencl_oclthreads_to_intensity_keccak(const unsigned long oclthreads)
+{
+	return log2f(oclthreads) - 13.;
+}
+
+static
+unsigned long opencl_intensity_to_oclthreads_keccak(float intensity)
+{
+	return powf(2, intensity + 13);
+}
 
 static
 char *opencl_get_default_kernel_file_keccak(const struct mining_algorithm * const malgo, struct cgpu_info * const cgpu, struct _clState * const clState)
@@ -352,10 +362,10 @@ static struct mining_algorithm malgo_keccak = {
 	.hash_data_f = keccak_hash_data,
 	
 #ifdef USE_OPENCL
-	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_sha256d,
-	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_sha256d,
-	.opencl_min_oclthreads =       0x20,  // intensity -10
-	.opencl_max_oclthreads = 0x20000000,  // intensity  14
+	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_keccak,
+	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_keccak,
+	.opencl_min_oclthreads =       0x20,  // intensity -8
+	.opencl_max_oclthreads = 0x20000000,  // intensity 16
 	.opencl_min_nonce_diff = 1./0x10,
 	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_keccak,
 #endif
