@@ -1087,7 +1087,7 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 			.blkchain = blkchain,
 			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
 		};
-#ifdef HAVE_SHA256D
+#ifdef USE_SHA256D
 		goal_set_malgo(goal, &malgo_sha256d);
 #else
 		// NOTE: Basically random default
