@@ -585,6 +585,7 @@ struct mining_algorithm malgo_scrypt = {
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
 	.opencl_min_oclthreads =      0x100,  // intensity   8
 	.opencl_max_oclthreads = 0x20000000,  // intensity  31
+	.opencl_min_nonce_diff = 1./0x10000,
 	.opencl_get_default_kernel_file = opencl_get_default_kernel_file_scrypt,
 #endif
 };

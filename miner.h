@@ -1151,6 +1151,7 @@ struct mining_algorithm {
 	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);
 	unsigned long opencl_min_oclthreads;
 	unsigned long opencl_max_oclthreads;
+	float opencl_min_nonce_diff;
 	char *(*opencl_get_default_kernel_file)(const struct mining_algorithm *, struct cgpu_info *, struct _clState *);
 #endif
 };

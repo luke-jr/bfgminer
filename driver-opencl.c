@@ -1655,6 +1655,12 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static
+float opencl_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return malgo->opencl_min_nonce_diff ?: -1.;
+}
+
 #ifdef USE_SHA256D
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
@@ -1892,7 +1898,7 @@ struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
 	.probe_priority = 110,
-	.drv_min_nonce_diff = common_sha256d_and_scrypt_min_nonce_diff,
+	.drv_min_nonce_diff = opencl_min_nonce_diff,
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.watchdog = opencl_watchdog,
