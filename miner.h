@@ -277,6 +277,9 @@ struct gpu_adl {
 #endif
 
 enum pow_algorithm {
+#ifdef USE_KECCAK
+	POW_KECCAK,
+#endif
 #ifdef USE_SHA256D
 	POW_SHA256D,
 #endif
@@ -380,6 +383,9 @@ enum cl_kernels {
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
+#endif
+#ifdef USE_OPENCL_FULLHEADER
+	KL_FULLHEADER,
 #endif
 #ifdef USE_SCRYPT
 	KL_SCRYPT,

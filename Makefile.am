@@ -148,6 +148,14 @@ endif
 endif
 
 
+if USE_KECCAK
+bfgminer_SOURCES += malgo/keccak.c
+
+if USE_OPENCL
+dist_kernels_DATA += $(top_srcdir)/opencl/keccak.cl
+endif
+endif
+
 if USE_SHA256D
 bfgminer_SOURCES += malgo/sha256d.c
 
