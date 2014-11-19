@@ -1514,6 +1514,9 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 			break;
 	}
 
+	if ((!per_proc) && (cgpu->device == cgpu) && (cgpu->drv->get_master_rolling_hashrate))
+		rolling = cgpu->drv->get_master_rolling_hashrate(cgpu);
+
 	root = api_add_int(root, "PGA", &n, true);
 	root = api_add_device_identifier(root, cgpu);
 	root = api_add_string(root, "Enabled", bool2str(enabled), false);
