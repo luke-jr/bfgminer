@@ -592,7 +592,6 @@ BFG_DRIVER(kncasic,KnC gen 2,SHA256d,no,[
 		kncasic_controller=BBB
 	fi
 	need_knc_asic=yes
-	need_linux_i2c_dev=yes
 	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$kncasic_controller],[1])
 ])
 
