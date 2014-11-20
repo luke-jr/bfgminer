@@ -167,7 +167,7 @@ tryagain:
 	bitfury->oldjob = inp[0x10];
 	bitfury->desync_counter = 0;
 	
-	if (opt_debug)
+	if (opt_dev_protocol)
 		bitfury_debug_nonce_array(proc, "Init", inp);
 	
 	return true;
@@ -446,7 +446,7 @@ void bitfury_do_io(struct thr_info * const master_thr)
 			goto out;
 		}
 		
-		if (opt_debug)
+		if (opt_dev_protocol)
 			bitfury_debug_nonce_array(proc, "Read", inp);
 		
 		// To avoid dealing with wrap-around entirely, we rotate array so previous active uint32_t is at index 0
