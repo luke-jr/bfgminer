@@ -2925,7 +2925,7 @@ void refresh_bitcoind_address(const bool fresh)
 		}
 		if (bytes_eq(&newscript, &opt_coinbase_script))
 		{
-			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
+			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
 			break;
 		}
 		bytes_assimilate(&opt_coinbase_script, &newscript);
