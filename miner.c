@@ -10519,6 +10519,7 @@ retry_pool:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+		curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, save_curl_socket);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass,
