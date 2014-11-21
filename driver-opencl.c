@@ -710,19 +710,28 @@ bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_v
 		}
 	}
 	else
-	if (isdigit(_val[0]))
 	{
-		const double v = atof(_val);
-		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
-			return false;
-		oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
+		char *endptr;
+		const double v = strtod(_val, &endptr);
+		if (endptr == _val)
+		{
+			if (!dynamic)
+				return false;
+		}
+		else
+		{
+			if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
+				return false;
+			oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
+		}
 	}
 	
 	// Make actual assignments after we know the values are valid
 	data->dynamic = dynamic;
 	if (data->oclthreads)
 	{
-		data->oclthreads = oclthreads;
+		if (oclthreads)
+			data->oclthreads = oclthreads;
 		pause_dynamic_threads(cgpu->device_id);
 	}
 	else
@@ -917,8 +926,6 @@ void opencl_tui_wlogprint_choices(struct cgpu_info *cgpu)
 static
 const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 {
-	struct opencl_device_data * const data = cgpu->device_data;
-	
 	switch (input)
 	{
 		case 'i': case 'I':
@@ -936,14 +943,11 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			}
 			if (!intvar)
 				return "Invalid intensity\n";
-			if (!strncasecmp(intvar, "d", 1)) {
-				data->dynamic = true;
-				pause_dynamic_threads(cgpu->device_id);
-				free(intvar);
-				return "Dynamic mode enabled\n";
-			}
 			if (!_set_intensity(cgpu, intvar))
+			{
+				free(intvar);
 				return "Invalid intensity (out of range)\n";
+			}
 			free(intvar);
 			return "Intensity changed\n";
 		}
