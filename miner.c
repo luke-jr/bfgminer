@@ -3353,7 +3353,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 		{
 			if (bytes_eq(&newscript, goal->generation_script))
 			{
-				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
+				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
 				break;
 			}
 		}
