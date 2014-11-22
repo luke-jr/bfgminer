@@ -8,8 +8,12 @@ Scrypt mining for GPU is completely different to sha256 used for bitcoin
 mining. It has very different requirements to bitcoin mining and is a
 lot more complicated to get working well. Note that it is a ram dependent
 workload, and requires you to have enough system ram as well as fast enough
-GPU ram. If you have less system ram than your GPU has, it may not be possible
-to mine at any reasonable rate.
+GPU ram.
+
+Since scrypt ASICs are widely available, GPUs are not used by default. If you
+want to use them, use the -S opencl:auto option. Note that scrypt ASICs are
+documented in README.ASIC rather than this file, which only deals with GPU
+mining.
 
 There are 5 main parameters to tuning scrypt, all of which are optional for
 further fine tuning. When you start scrypt mining with the --scrypt option,

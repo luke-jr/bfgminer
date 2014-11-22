@@ -581,6 +581,7 @@ struct mining_algorithm malgo_scrypt = {
 	.hash_data_f = scrypt_hash_data,
 	
 #ifdef USE_OPENCL
+	.opencl_nodefault = true,
 	.opencl_oclthreads_to_intensity = opencl_oclthreads_to_intensity_scrypt,
 	.opencl_intensity_to_oclthreads = opencl_intensity_to_oclthreads_scrypt,
 	.opencl_min_oclthreads =      0x100,  // intensity   8
