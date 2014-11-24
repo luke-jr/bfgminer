@@ -286,7 +286,7 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, struct knc
 static uint32_t nonce_tops[KNC_TITAN_CORES_PER_DIE];
 static bool nonce_tops_inited = false;
 
-static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
+static void get_nonce_range(int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
 {
 	if (!nonce_tops_inited) {
 		uint32_t top;
@@ -347,7 +347,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	bool success = true;
 	for (knccore = die_p->first_core ; knccore ; knccore = knccore->next_core) {
 		knc_titan_clean_flush(repr, knc->ctx, knccore);
-		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
+		get_nonce_range(knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s[%d:%d:%d]: Setup core, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		if (!knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params))
 			success = false;
