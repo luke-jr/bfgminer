@@ -2429,20 +2429,20 @@ size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
 	if (size > 8 && p[0] == 0xff)
 	{
-		*n = upk_u64le(p, 0);
+		*n = upk_u64le(p, 1);
 		return 9;
 	}
 	if (size > 4 && p[0] == 0xfe)
 	{
-		*n = upk_u32le(p, 0);
+		*n = upk_u32le(p, 1);
 		return 5;
 	}
 	if (size > 2 && p[0] == 0xfd)
 	{
-		*n = upk_u16le(p, 0);
+		*n = upk_u16le(p, 1);
 		return 3;
 	}
-	if (size > 0)
+	if (size > 0 && p[0] <= 0xfc)
 	{
 		*n = p[0];
 		return 1;
