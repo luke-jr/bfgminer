@@ -774,30 +774,13 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 
 	{
 		int kernel_goffset_support = 0;  // 0 = none; 1 = optional; 2 = required
-		switch (kernelinfo->interface)
-		{
-#ifdef USE_SHA256D
-			case KL_DIABLO:
-			case KL_DIAKGCN:
-			case KL_POCLBM:
-				kernel_goffset_support = 1;
-				break;
-			case KL_PHATK:
-				kernel_goffset_support = 0;
-				break;
-#endif
-#ifdef USE_OPENCL_FULLHEADER
-			case KL_FULLHEADER:
-				kernel_goffset_support = 1;
-				break;
-#endif
-			case KL_NONE: case OPENCL_KERNEL_INTERFACE_COUNT:
-#ifdef USE_SCRYPT
-			case KL_SCRYPT:
-#endif
-				kernel_goffset_support = 2;
-				break;
-		}
+		if (strstr(source, "def GOFFSET"))
+			kernel_goffset_support = 1;
+		else
+		if (strstr(source, " base,"))
+			kernel_goffset_support = 2;
+		else
+			kernel_goffset_support = 0;
 		bool device_goffset_support = false;
 		switch (data->use_goffset)
 		{
