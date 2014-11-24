@@ -38,7 +38,6 @@ struct _clState {
 	void * cldata;
 #endif
 	bool hasBitAlign;
-	bool hasOpenCL11plus;
 	cl_uint preferred_vwidth;
 	cl_uint vwidth;
 	size_t max_work_size;

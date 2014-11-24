@@ -595,20 +595,6 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		clState->hasBitAlign = true;
 	free(extensions);
 
-	/* Check for OpenCL >= 1.0 support, needed for global offset parameter usage. */
-	char * devoclver = malloc(1024);
-	const char * ocl10 = "OpenCL 1.0";
-
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_VERSION, 1024, (void *)devoclver, NULL);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_VERSION", status);
-		return NULL;
-	}
-	find = strstr(devoclver, ocl10);
-	if (!find)
-		clState->hasOpenCL11plus = true;
-	free(devoclver);
-
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", status);
@@ -1065,9 +1051,6 @@ build:
 
 	if (kernelinfo->goffset)
 		strcat(CompilerOptions, " -D GOFFSET");
-
-	if (!clState->hasOpenCL11plus)
-		strcat(CompilerOptions, " -D OCL1");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, CompilerOptions);
