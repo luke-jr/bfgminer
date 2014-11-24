@@ -206,7 +206,7 @@ static bool knc_titan_detect_one(const char *devpath)
 				.asicno = asic,
 				.dieno = die,
 				.cores = die_info.cores,
-				.proc = cgpu,
+				.proc = NULL, /* Will be assigned at init stage */
 				.first_core = NULL,
 				.freq = KNC_TITAN_DEFAULT_FREQUENCY,
 			};
@@ -367,7 +367,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct knc_titan_core *knccore;
 	struct knc_titan_die *kncdie;
 	struct knc_titan_info *knc;
-	int i, asic, die;
+	int i, asic, logical_dieno, ena_die, die;
 	int total_cores = 0;
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
@@ -378,12 +378,26 @@ static bool knc_titan_init(struct thr_info * const thr)
 		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 		if (proc->device == proc) {
 			asic = atoi(proc->device_path);
-			die = 0;
+			logical_dieno = 0;
 			knc->asic_served_by_fpga[asic] = true;
 		} else {
-			die++;
+			++logical_dieno;
 		}
-		kncdie = ((struct thr_info *)proc->thr[0])->cgpu_data = &knc->dies[asic][die];
+		kncdie = NULL;
+		for (die = 0, ena_die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			if (knc->dies[asic][die].cores <= 0)
+				continue;
+			if (ena_die++ == logical_dieno) {
+				kncdie = &knc->dies[asic][die];
+				break;
+			}
+		}
+		if (NULL == kncdie) {
+			applog(LOG_ERR, "Can not find logical dieno %d", logical_dieno);
+			continue;
+		}
+		kncdie->proc = proc;
+		((struct thr_info *)proc->thr[0])->cgpu_data = kncdie;
 		for (i = 0 ; i < KNC_TITAN_CORES_PER_DIE ; i++) {
 			if (i == 0) {
 				kncdie->first_core = malloc(sizeof(*knccore));
