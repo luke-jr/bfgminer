@@ -304,6 +304,7 @@ void opencl_early_init()
 		struct opencl_device_data * const data = &dataarray[i];
 		*data = (struct opencl_device_data){
 			.dynamic = true,
+			.use_goffset = BTS_UNKNOWN,
 			.intensity = intensity_not_set,
 #ifdef USE_SCRYPT
 			.lookup_gap = 2,
@@ -448,6 +449,19 @@ const char *opencl_init_binary(struct cgpu_info * const proc, const char * const
 	else
 		return "Invalid value passed to opencl binary";
 	
+	return NULL;
+}
+
+static
+const char *opencl_init_goffset(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	char *end;
+	bool nv = bfg_strtobool(newvalue, &end, 0);
+	if (newvalue[0] && !end[0])
+		data->use_goffset = nv;
+	else
+		return "Invalid boolean value";
 	return NULL;
 }
 
@@ -1234,6 +1248,12 @@ cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 	unsigned int num = 0;
 	cl_uint le_target;
 	cl_int status = 0;
+	
+	if (!kinfo->goffset)
+	{
+		cl_uint nonce_base = work->blk.nonce;
+		CL_SET_ARG(nonce_base);
+	}
 
 	le_target = *(cl_uint *)(work->target + 28);
 	clState->cldata = work->data;
@@ -1888,6 +1908,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = 
 	{"vector", opencl_init_vector},
 	{"work_size", opencl_init_worksize},
 	{"binary", opencl_init_binary},
+	{"goffset", opencl_init_goffset},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_init_gpu_map},
 	{"clock", opencl_init_gpu_engine},
@@ -1913,6 +1934,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
 	{"vector", opencl_cannot_set, ""},
 	{"work_size", opencl_cannot_set, ""},
 	{"binary", opencl_cannot_set, ""},
+	{"goffset", opencl_cannot_set, ""},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_cannot_set, "Map to ADL device"},
 	{"clock", opencl_set_gpu_engine, "GPU engine clock"},

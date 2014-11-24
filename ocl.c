@@ -595,20 +595,6 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		clState->hasBitAlign = true;
 	free(extensions);
 
-	/* Check for OpenCL >= 1.0 support, needed for global offset parameter usage. */
-	char * devoclver = malloc(1024);
-	const char * ocl10 = "OpenCL 1.0";
-
-	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_VERSION, 1024, (void *)devoclver, NULL);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_VERSION", status);
-		return NULL;
-	}
-	find = strstr(devoclver, ocl10);
-	if (!find)
-		clState->hasOpenCL11plus = true;
-	free(devoclver);
-
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", status);
@@ -710,6 +696,52 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	return clState;
 }
 
+static
+bool opencl_test_goffset(_clState * const clState)
+{
+	if (sizeof(size_t) < sizeof(uint32_t))
+		return false;
+	
+	const char *source = "__kernel __attribute__((reqd_work_group_size(64, 1, 1))) void runtest(volatile __global uint *out) { *out = get_global_id(0); }";
+	const size_t source_len = strlen(source);
+	cl_int status;
+	cl_program program = clCreateProgramWithSource(clState->context, 1, &source, &source_len, &status);
+	if (status != CL_SUCCESS)
+		applogr(false, LOG_ERR, "Error %d: Loading %s code into cl_program (clCreateProgramWithSource)", status, "goffset test");
+	status = bfg_clBuildProgram(&program, clState->devid, "");
+	if (status != CL_SUCCESS)
+	{
+fail:
+		clReleaseProgram(program);
+		return false;
+	}
+	cl_kernel kernel = clCreateKernel(program, "runtest", &status);
+	if (status != CL_SUCCESS)
+		return_via_applog(fail, , LOG_ERR, "Error %d: Creating kernel from %s program (clCreateKernel)", status, "goffset test");
+	static const uint32_t cleardata = 0;
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->outputBuffer, CL_FALSE, 0, sizeof(cleardata), &cleardata, 0, NULL, NULL);
+	if (status != CL_SUCCESS)
+	{
+		applog(LOG_ERR, "Error %d: Clearing output buffer for %s kernel (clEnqueueWriteBuffer)", status, "goffset test");
+fail2:
+		clReleaseKernel(kernel);
+		goto fail;
+	}
+	status = clSetKernelArg(kernel, 0, sizeof(clState->outputBuffer), &clState->outputBuffer);
+	if (status != CL_SUCCESS)
+		return_via_applog(fail2, , LOG_ERR, "Error %d: Setting kernel argument for %s kernel (clSetKernelArg)", status, "goffset test");
+	const size_t size_t_one = 1, test_goffset = 0xfabd0bf9;
+	status = clEnqueueNDRangeKernel(clState->commandQueue, kernel, 1, &test_goffset, &size_t_one, &size_t_one, 0,  NULL, NULL);
+	if (status != CL_SUCCESS)
+		return_via_applog(fail2, , LOG_DEBUG, "Error %d: Running %s kernel (clEnqueueNDRangeKernel)", status, "goffset test");
+	uint32_t resultdata;
+	status = clEnqueueReadBuffer(clState->commandQueue, clState->outputBuffer, CL_TRUE, 0, sizeof(resultdata), &resultdata, 0, NULL, NULL);
+	if (status != CL_SUCCESS)
+		return_via_applog(fail2, , LOG_DEBUG, "Error %d: Reading result from %s kernel (clEnqueueReadBuffer)", status, "goffset test");
+	applog(LOG_DEBUG, "%s kernel returned 0x%08lx for goffset 0x%08lx", "goffset test", (unsigned long)resultdata, (unsigned long)test_goffset);
+	return (resultdata == test_goffset);
+}
+
 bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState, const char * const name, struct opencl_kernel_info * const kernelinfo, const char * const kernel_file, __maybe_unused const struct mining_algorithm * const malgo)
 {
 	const int gpu = cgpu->device_id;
@@ -774,31 +806,30 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 
 	{
 		int kernel_goffset_support = 0;  // 0 = none; 1 = optional; 2 = required
-		switch (kernelinfo->interface)
+		if (strstr(source, "def GOFFSET"))
+			kernel_goffset_support = 1;
+		else
+		if (strstr(source, " base,"))
+			kernel_goffset_support = 2;
+		else
+			kernel_goffset_support = 0;
+		bool device_goffset_support = false;
+		switch (data->use_goffset)
 		{
-#ifdef USE_SHA256D
-			case KL_DIABLO:
-			case KL_DIAKGCN:
-			case KL_POCLBM:
-				kernel_goffset_support = 1;
+			case BTS_TRUE:
+				device_goffset_support = true;
 				break;
-			case KL_PHATK:
-				kernel_goffset_support = 0;
-				break;
-#endif
-#ifdef USE_OPENCL_FULLHEADER
-			case KL_FULLHEADER:
-				kernel_goffset_support = 1;
-				break;
-#endif
-			case KL_NONE: case OPENCL_KERNEL_INTERFACE_COUNT:
-#ifdef USE_SCRYPT
-			case KL_SCRYPT:
-#endif
-				kernel_goffset_support = 2;
+			case BTS_FALSE:
+				// if the kernel doesn't require goffset, allow the user to disable it
+				if (kernel_goffset_support != 2)
+					break;
+				// fallthru
+			case BTS_UNKNOWN:
+				if (opencl_test_goffset(clState))
+					device_goffset_support = true;
 				break;
 		}
-		const bool device_goffset_support = (clState->hasOpenCL11plus && !clState->is_mesa);
+		applog(LOG_DEBUG, "%s: goffset support: device=%s kernel=%s", cgpu->dev_repr, device_goffset_support ? "yes" : "no", (kernel_goffset_support == 2) ? "required" : ((kernel_goffset_support == 1) ? "optional" : "none"));
 		if (device_goffset_support)
 		{
 			if (kernel_goffset_support)
@@ -1020,9 +1051,6 @@ build:
 
 	if (kernelinfo->goffset)
 		strcat(CompilerOptions, " -D GOFFSET");
-
-	if (!clState->hasOpenCL11plus)
-		strcat(CompilerOptions, " -D OCL1");
 
 	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
 	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, CompilerOptions);

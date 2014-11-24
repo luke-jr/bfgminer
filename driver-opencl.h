@@ -46,6 +46,7 @@ struct opencl_device_data {
 	char *_init_intensity;
 	bool dynamic;
 	
+	enum bfg_tristate use_goffset;
 	cl_uint vwidth;
 	size_t work_size;
 	cl_ulong max_alloc;
