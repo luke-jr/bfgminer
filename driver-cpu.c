@@ -48,6 +48,7 @@ BFG_REGISTER_DRIVER(cpu_drv)
 static inline void drop_policy(void)
 {
 	struct sched_param param;
+	param.sched_priority = 0;
 
 #ifdef SCHED_BATCH
 #ifdef SCHED_IDLE
@@ -63,7 +64,7 @@ static inline void affine_to_cpu(int id, int cpu)
 
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
-	sched_setaffinity(0, sizeof(&set), &set);
+	sched_setaffinity(0, sizeof(set), &set);
 	applog(LOG_INFO, "Binding cpu mining thread %d to cpu %d", id, cpu);
 }
 #else
@@ -671,12 +672,12 @@ static int cpu_autodetect()
 					++num_processors;
 		}
 	}
-	#elif defined(_SC_NPROCESSORS_ONLN)
-		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-	#elif defined(HW_NCPU)
+	#elif defined(_SC_NPROCESSORS_CONF)
+		num_processors = sysconf(_SC_NPROCESSORS_CONF);
+	#elif defined(CTL_HW) && defined(HW_NCPU)
 		int req[] = { CTL_HW, HW_NCPU };
 		size_t len = sizeof(num_processors);
-		v = sysctl(req, 2, &num_processors, &len, NULL, 0);
+		sysctl(req, 2, &num_processors, &len, NULL, 0);
 	#else
 		num_processors = 1;
 	#endif /* !WIN32 */
@@ -756,7 +757,7 @@ static bool cpu_thread_init(struct thr_info *thr)
 	drop_policy();
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
-	if (!(opt_n_threads % num_processors))
+	if (num_processors > 1 && opt_n_threads % num_processors == 0)
 		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
 	return true;
 }
