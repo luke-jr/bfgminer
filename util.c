@@ -197,12 +197,23 @@ static int seek_data_cb(void *user_data, curl_off_t offset, int origin)
 	
 	switch (origin) {
 		case SEEK_SET:
+			if (offset < 0 || offset > ub->len)
+				return 1;
 			ub->pos = offset;
 			break;
 		case SEEK_CUR:
+			// Check the offset is valid, taking care to avoid overflows or negative unsigned numbers
+			if (offset < 0 && ub->pos < (size_t)-offset)
+				return 1;
+			if (ub->len < offset)
+				return 1;
+			if (ub->pos > ub->len - offset)
+				return 1;
 			ub->pos += offset;
 			break;
 		case SEEK_END:
+			if (offset > 0 || (size_t)-offset > ub->len)
+				return 1;
 			ub->pos = ub->len + offset;
 			break;
 		default:
