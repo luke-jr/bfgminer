@@ -798,7 +798,22 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 				kernel_goffset_support = 2;
 				break;
 		}
-		const bool device_goffset_support = (clState->hasOpenCL11plus && !clState->is_mesa);
+		bool device_goffset_support = false;
+		switch (data->use_goffset)
+		{
+			case BTS_TRUE:
+				device_goffset_support = true;
+				break;
+			case BTS_FALSE:
+				// if the kernel doesn't require goffset, allow the user to disable it
+				if (kernel_goffset_support != 2)
+					break;
+				// fallthru
+			case BTS_UNKNOWN:
+				if (clState->hasOpenCL11plus && !clState->is_mesa)
+					device_goffset_support = true;
+				break;
+		}
 		if (device_goffset_support)
 		{
 			if (kernel_goffset_support)

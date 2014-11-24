@@ -2244,6 +2244,7 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 		
 		{true , "enable"},
 		{true , "always"},
+		{true , "force"},
 		{true , "true"},
 		{true , "yes"},
 		{true , "on"},
