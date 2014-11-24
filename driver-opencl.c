@@ -1248,6 +1248,12 @@ cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clSta
 	unsigned int num = 0;
 	cl_uint le_target;
 	cl_int status = 0;
+	
+	if (!kinfo->goffset)
+	{
+		cl_uint nonce_base = work->blk.nonce;
+		CL_SET_ARG(nonce_base);
+	}
 
 	le_target = *(cl_uint *)(work->target + 28);
 	clState->cldata = work->data;
