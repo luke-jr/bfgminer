@@ -13671,6 +13671,7 @@ begin_bench:
 							work->spare = true;
 							goto retry;
 						}
+						mutex_lock(stgd_lock);
 					}
 				}
 				malgo = NULL;
