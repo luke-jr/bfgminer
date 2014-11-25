@@ -1093,7 +1093,7 @@ struct mining_goal_info *get_mining_goal(const char * const name)
 		// NOTE: Basically random default
 		goal_set_malgo(goal, mining_algorithms);
 #endif
-		HASH_ADD_STR(mining_goals, name, goal);
+		HASH_ADD_KEYPTR(hh, mining_goals, goal->name, strlen(goal->name), goal);
 		HASH_SORT(mining_goals, mining_goals_name_cmp);
 		
 #ifdef HAVE_CURSES
