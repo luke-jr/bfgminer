@@ -845,6 +845,11 @@ BFG_DRIVER(minergate,Spondoolies minergate interface,SHA256d,no,[
 	has_asic=yes
 ])
 
+BFG_DRIVER(,Minion,SHA256d,no,[
+	need_lowl_spi=yes
+	has_asic=yes
+])
+
 BFG_DRIVER(,RockMiner,SHA256d,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes

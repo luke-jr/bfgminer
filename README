@@ -170,6 +170,7 @@ BFGMiner driver configuration options:
 	--enable-metabank       Compile support for Metabank (default disabled)
 	--enable-minergate      Compile support for Spondoolies minergate interface
 	                        (default disabled)
+	--enable-minion         Compile support for Minion (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-nanofury      Compile support for NanoFury (default enabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
