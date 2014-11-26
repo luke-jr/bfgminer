@@ -16,7 +16,7 @@
 #include <string.h>
 
 #include <linux/spi/spidev.h>
-#include <uthash.h>
+#include <utlist.h>
 
 #include "deviceapi.h"
 #include "logging.h"
@@ -33,6 +33,7 @@ enum minion_register {
 	MRA_SIGNATURE        = 0x00,
 	MRA_STATUS           = 0x01,
 	MRA_MISC_CTL         = 0x06,
+	MRA_RESET            = 0x07,
 	MRA_FIFO_STATUS      = 0x0b,
 	
 	MRA_RESULT           = 0x20,
@@ -48,6 +49,7 @@ struct minion_chip {
 	uint8_t core_count;
 	uint16_t next_taskid;
 	struct cgpu_info *first_proc;
+	unsigned queue_count;
 };
 
 struct minion_bus {
@@ -169,7 +171,7 @@ bool minion_queue_full(struct minion_chip * const chip)
 	struct cgpu_info *proc = chip->first_proc;
 	struct thr_info *thr = proc->thr[0];
 	
-	const bool full = (HASH_COUNT(thr->work) >= minion_max_queued);
+	const bool full = (chip->queue_count >= minion_max_queued);
 	if (full != thr->queue_full)
 	{
 		for (unsigned i = 0; i < chip->core_count; (proc = proc->next_proc), ++i)
@@ -201,6 +203,7 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 	spi->repr = proc->proc_repr;
 	
 	work->device_id = ++chip->next_taskid;
+	work->tv_stamp.tv_sec = 1;
 	
 	pk_u16be(taskdata, 0, work->device_id);
 	memset(&taskdata[2], 0, 2);
@@ -209,7 +212,8 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 	
 	minion_set(spi, chipid, MRA_TASK, taskdata, sizeof(taskdata));
 	
-	HASH_ADD(hh, thr->work, device_id, sizeof(work->device_id), work);
+	DL_APPEND(thr->work_list, work);
+	++chip->queue_count;
 	
 	minion_queue_full(chip);
 	return true;
@@ -218,6 +222,25 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 static
 void minion_queue_flush(struct thr_info * const thr)
 {
+	struct cgpu_info * const proc = thr->cgpu;
+	struct minion_bus * const mbus = proc->device_data;
+	struct minion_chip * const chip = thr->cgpu_data;
+	if (proc != chip->first_proc)
+		// Redundant, all queues flush at the same time
+		return;
+	const uint8_t chipid = chip->chipid;
+	struct spi_port * const spi = mbus->spi;
+	
+	static const uint8_t flushcmd[4] = {0xfb, 0xff, 0xff, 0xff};
+	minion_set(spi, chipid, MRA_RESET, flushcmd, sizeof(flushcmd));
+	
+	struct work *work;
+	DL_FOREACH(thr->work_list, work)
+	{
+		work->tv_stamp.tv_sec = 0;
+	}
+	chip->queue_count = 0;
+	minion_queue_full(chip);
 }
 
 static
@@ -248,6 +271,7 @@ void minion_poll(struct thr_info * const chip_thr)
 			const bool have_nonce = !(resbuf_i[3] & 0x80);
 			struct cgpu_info *proc;
 			struct thr_info *core_thr;
+			bool clean = false;
 			
 			if (likely(coreid < chip->core_count))
 			{
@@ -265,7 +289,7 @@ void minion_poll(struct thr_info * const chip_thr)
 			}
 			
 			struct work *work;
-			HASH_FIND(hh, chip_thr->work, &taskid, sizeof(taskid), work);
+			DL_SEARCH_SCALAR(chip_thr->work_list, work, device_id, taskid);
 			if (unlikely(!work))
 			{
 				inc_hw_errors_only(core_thr);
@@ -277,18 +301,27 @@ void minion_poll(struct thr_info * const chip_thr)
 			{
 				const uint32_t nonce = upk_u32le(resbuf_i, 4);
 				
-				submit_nonce(core_thr, work, nonce);
+				if (submit_nonce(core_thr, work, nonce))
+					clean = (coreid < chip->core_count);
 			}
 			
-			// Delete the previous work
-			uint16_t taskid_truncated = taskid;
-			--taskid_truncated;
-			taskid = taskid_truncated;
-			HASH_FIND(hh, chip_thr->work, &taskid, sizeof(taskid), work);
-			if (work)
+			// Flag previous work(s) as done, and delete them when we are sure
+			struct work *work_tmp;
+			DL_FOREACH_SAFE(chip_thr->work_list, work, work_tmp)
 			{
-				HASH_DEL(chip_thr->work, work);
-				free_work(work);
+				if (work->device_id == taskid)
+					break;
+				
+				if (work->tv_stamp.tv_sec)
+				{
+					--chip->queue_count;
+					work->tv_stamp.tv_sec = 0;
+				}
+				if (clean)
+				{
+					DL_DELETE(chip_thr->work_list, work);
+					free_work(work);
+				}
 			}
 		}
 		minion_queue_full(chip);
