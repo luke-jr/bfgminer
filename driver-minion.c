@@ -62,6 +62,8 @@ struct minion_chip {
 	uint32_t pllcfg_asserted;
 	uint32_t pllcfg_desired;
 	struct timeval tv_read_temp;
+	unsigned long timeout_us;
+	struct timeval tv_timeout;
 };
 
 struct minion_bus {
@@ -184,6 +186,9 @@ void minion_config_pll(struct spi_port * const spi, struct minion_chip * const c
 	const uint8_t chipid = chip->chipid;
 	minion_set(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_desired, 4);
 	chip->pllcfg_asserted = chip->pllcfg_desired;
+	// NOTE: This assumes we only ever assert pllcfgs we can decode!
+	chip->timeout_us = 0xffffffff / minion_pllcfg_to_freq(chip->pllcfg_asserted);
+	timer_set_delay_from_now(&chip->tv_timeout, chip->timeout_us);
 }
 
 static inline
@@ -192,6 +197,60 @@ void minion_core_enable_register_position(const uint8_t coreid, uint8_t * const 
 	*corereg = MRA_CORE_EN_ + (coreid >> 5);
 	*corebyte = (coreid >> 3) % 4;
 	*corebit = 1 << (coreid % 8);
+}
+
+static
+void minion_reinit(struct cgpu_info * const first_proc, struct minion_chip * const chip, const struct timeval * const tvp_now)
+{
+	struct thr_info * const thr = first_proc->thr[0];
+	struct minion_bus * const mbus = first_proc->device_data;
+	struct spi_port * const spi = mbus->spi;
+	const uint8_t chipid = chip->chipid;
+	uint8_t buf[4];
+	
+	static const uint8_t resetcmd[4] = {0xff, 0xff, 0xa5, 0xf5};
+	minion_set(spi, chipid, MRA_RESET, resetcmd, sizeof(resetcmd));
+	
+	minion_set(spi, chipid, MRA_NONCE_START, "\0\0\0\0", 4);
+	chip->core_nonce_inc = 0xffffffff / chip->core_count;
+	pk_u32le(buf, 0, chip->core_nonce_inc);
+	minion_set(spi, chipid, MRA_NONCE_INC, buf, 4);
+	
+	minion_get(spi, chipid, MRA_TEMP_CFG, buf, 4);
+	buf[0] &= ~(1 << 5);  // Enable temperature sensor
+	buf[0] &= ~(1 << 4);  // 20 C precision (alternative is 40 C)
+	minion_set(spi, chipid, MRA_TEMP_CFG, buf, 4);
+	
+	minion_get(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_asserted, 4);
+	
+	minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
+	buf[0] &= ~(1 << 4);  // Unpause cores
+	buf[0] &= ~(1 << 3);  // Unpause queue
+	buf[0] |= 1 << 2;  // Enable "no nonce" result reports
+	buf[0] &= ~(1 << 1);  // Disable test mode
+	minion_set(spi, chipid, MRA_MISC_CTL, buf, 4);
+	
+	thr->tv_poll = *tvp_now;
+	chip->tv_read_temp = *tvp_now;
+}
+
+static
+void minion_reenable_cores(struct cgpu_info * const first_proc, struct minion_chip * const chip)
+{
+	struct minion_bus * const mbus = first_proc->device_data;
+	struct spi_port * const spi = mbus->spi;
+	const uint8_t chipid = chip->chipid;
+	uint8_t buf[4] = {0,0,0,0};
+	struct cgpu_info *proc = first_proc;
+	for (unsigned coreid = 0; coreid < chip->core_count; (proc = proc->next_proc), ++coreid)
+	{
+		uint8_t corereg, corebyte, corebit;
+		minion_core_enable_register_position(coreid, &corereg, &corebyte, &corebit);
+		if (proc->deven == DEV_ENABLED)
+			buf[corebyte] |= corebit;
+		if (coreid % 0x20 == 0x1f || coreid == chip->core_count - 1)
+			minion_set(spi, chipid, corereg, buf, 4);
+	}
 }
 
 static
@@ -219,36 +278,13 @@ bool minion_init(struct thr_info * const thr)
 		if (!buf[2])
 			continue;
 		
-		static const uint8_t resetcmd[4] = {0xff, 0xff, 0xa5, 0xf5};
-		minion_set(spi, chipid, MRA_RESET, resetcmd, sizeof(resetcmd));
-		
 		*chip = (struct minion_chip){
 			.chipid = chipid,
 			.core_count = buf[2],
 			.first_proc = proc,
 			.pllcfg_desired = minion_freq_to_pllcfg(900),
 		};
-		minion_set(spi, chipid, MRA_NONCE_START, "\0\0\0\0", 4);
-		chip->core_nonce_inc = 0xffffffff / chip->core_count;
-		pk_u32le(buf, 0, chip->core_nonce_inc);
-		minion_set(spi, chipid, MRA_NONCE_INC, buf, 4);
-		
-		minion_get(spi, chipid, MRA_TEMP_CFG, buf, 4);
-		buf[0] &= ~(1 << 5);  // Enable temperature sensor
-		buf[0] &= ~(1 << 4);  // 20 C precision (alternative is 40 C)
-		minion_set(spi, chipid, MRA_TEMP_CFG, buf, 4);
-		
-		minion_get(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_asserted, 4);
-		
-		minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
-		buf[0] &= ~(1 << 4);  // Unpause cores
-		buf[0] &= ~(1 << 3);  // Unpause queue
-		buf[0] |= 1 << 2;  // Enable "no nonce" result reports
-		buf[0] &= ~(1 << 1);  // Disable test mode
-		minion_set(spi, chipid, MRA_MISC_CTL, buf, 4);
-		
-		proc->thr[0]->tv_poll = tv_now;
-		chip->tv_read_temp = tv_now;
+		minion_reinit(proc, chip, &tv_now);
 		
 		for (unsigned coreid = 0; coreid < chip->core_count; ++coreid)
 		{
@@ -373,6 +409,8 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 	return true;
 }
 
+static void minion_refill_queue(struct thr_info *);
+
 static
 void minion_queue_flush(struct thr_info * const thr)
 {
@@ -388,6 +426,13 @@ void minion_queue_flush(struct thr_info * const thr)
 	static const uint8_t flushcmd[4] = {0xfb, 0xff, 0xff, 0xff};
 	minion_set(spi, chipid, MRA_RESET, flushcmd, sizeof(flushcmd));
 	
+	minion_refill_queue(thr);
+}
+
+static
+void minion_refill_queue(struct thr_info * const thr)
+{
+	struct minion_chip * const chip = thr->cgpu_data;
 	struct work *work;
 	DL_FOREACH(thr->work_list, work)
 	{
@@ -531,6 +576,17 @@ void minion_poll(struct thr_info * const chip_thr)
 		for (int j = 0; j < chip->core_count; (proc = proc->next_proc), ++j)
 			proc->temp = temp;
 		timer_set_delay(&chip_thr->tv_poll, &tv_now, minion_temp_interval_us);
+	}
+	
+	if (res_fifo_len)
+		timer_set_delay(&chip->tv_timeout, &tv_now, chip->timeout_us);
+	else
+	if (timer_passed(&chip->tv_timeout, &tv_now))
+	{
+		applog(LOG_WARNING, "%"PRIpreprv": Chip timeout, reinitialising", first_proc->proc_repr);
+		minion_reinit(first_proc, chip, &tv_now);
+		minion_reenable_cores(first_proc, chip);
+		minion_refill_queue(chip_thr);
 	}
 	
 	minion_config_pll(spi, chip);
