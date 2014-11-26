@@ -100,8 +100,6 @@
 #include "malgo/scrypt.h"
 #endif
 
-#include "version.h"
-
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
 #endif
@@ -122,7 +120,7 @@ struct strategies strategies[] = {
 	{ "Balance" },
 };
 
-static char packagename[256];
+#define packagename bfgminer_name_space_ver
 
 bool opt_protocol;
 bool opt_dev_protocol;
@@ -2962,14 +2960,28 @@ static void load_default_config(void)
 
 extern const char *opt_argv0;
 
-static char *opt_verusage_and_exit(const char *extra)
+static
+void bfg_versioninfo(void)
 {
 	puts(packagename);
 	printf("  Lowlevel:%s\n", BFG_LOWLLIST);
 	printf("  Drivers:%s\n", BFG_DRIVERLIST);
 	printf("  Algorithms:%s\n", BFG_ALGOLIST);
 	printf("  Options:%s\n", BFG_OPTLIST);
+}
+
+static char *opt_verusage_and_exit(const char *extra)
+{
+	bfg_versioninfo();
 	printf("%s", opt_usage(opt_argv0, extra));
+	fflush(stdout);
+	exit(0);
+}
+
+static
+const char *my_opt_version_and_exit(void)
+{
+	bfg_versioninfo();
 	fflush(stdout);
 	exit(0);
 }
@@ -3010,7 +3022,7 @@ static struct opt_table opt_cmdline_table[] = {
 			opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
-			opt_version_and_exit, packagename,
+			my_opt_version_and_exit, NULL,
 			"Display version and exit"),
 	OPT_ENDTABLE
 };
@@ -3440,7 +3452,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
-				const char full[] = PACKAGE " " VERSION;
+				const char * const full = bfgminer_name_space_ver;
 				char *need_free = NULL;
 				if (!cbappend) {
 					if ((size_t)ae >= sizeof(full) - 1)
@@ -4584,11 +4596,11 @@ static void curses_print_status(const int ts)
 
 	wattron(statuswin, attr_title);
 	const int linelen = bfg_win_linelen(statuswin);
-	int titlelen = 1 + strlen(PACKAGE) + 1 + strlen(VERSION) + 3 + 21 + 3 + 19;
+	int titlelen = 1 + strlen(PACKAGE) + 1 + strlen(bfgminer_ver) + 3 + 21 + 3 + 19;
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " ");
 	if (titlelen + 17 < linelen)
 		cg_wprintw(statuswin, "version ");
-	cg_wprintw(statuswin, VERSION " - ");
+	cg_wprintw(statuswin, "%s - ", bfgminer_ver);
 	if (titlelen + 9 < linelen)
 		cg_wprintw(statuswin, "Started: ");
 	else
@@ -13119,8 +13131,6 @@ int main(int argc, char *argv[])
 		quit(1, "Failed to create getq");
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
-
-	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
 
 #if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	init_max_name_len();

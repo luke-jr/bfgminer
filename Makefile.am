@@ -95,7 +95,7 @@ update-version:
 	./gen-version.sh >version.h.new
 	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
 version.h: update-version
-bfgminer_SOURCES += version.h
+bfgminer_SOURCES += version.c version.h
 BUILT_SOURCES = version.h
 
 SUBDIRS += $(libbase58_SUBDIRS) $(libblkmaker_SUBDIRS)

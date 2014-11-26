@@ -47,6 +47,10 @@
 #include "logging.h"
 #include "util.h"
 
+extern const char * const bfgminer_name_space_ver;
+extern const char * const bfgminer_name_slash_ver;
+extern const char * const bfgminer_ver;
+
 #ifdef STDC_HEADERS
 # include <stdlib.h>
 # include <stddef.h>

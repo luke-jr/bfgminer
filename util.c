@@ -62,7 +62,6 @@
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
-#include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
 
@@ -528,7 +527,7 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	state->upload_data.pos = 0;
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) state->upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE"/"VERSION);
+	sprintf(user_agent_hdr, "User-Agent: %s", bfgminer_name_slash_ver);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
@@ -2911,7 +2910,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 
 	idstr = json_dumps_ANY(id, 0);
-	sprintf(s, "{\"id\": %s, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", idstr);
+	sprintf(s, "{\"id\": %s, \"result\": \"%s\", \"error\": null}", idstr, bfgminer_name_slash_ver);
 	free(idstr);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
@@ -3319,9 +3318,9 @@ resend:
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\", \"%s\"]}", swork_id++, bfgminer_name_slash_ver, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\"]}", swork_id++, bfgminer_name_slash_ver);
 	}
 
 	if (!_stratum_send(pool, s, strlen(s), true)) {

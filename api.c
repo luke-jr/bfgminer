@@ -37,7 +37,6 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 #include "driver-opencl.h"
-#include "version.h"
 
 #define HAVE_AN_FPGA 1
 
@@ -1273,8 +1272,8 @@ static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	message(io_data, MSG_VERSION, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_VERSION : _VERSION COMSTR);
 
-	root = api_add_string(root, "Miner", PACKAGE " " VERSION, false);
-	root = api_add_string(root, "CGMiner", VERSION, false);
+	root = api_add_string(root, "Miner", bfgminer_name_space_ver, false);
+	root = api_add_string(root, "CGMiner", bfgminer_ver, false);
 	root = api_add_const(root, "API", APIVERSION, false);
 
 	root = print_data(root, buf, isjson, false);
