@@ -30,10 +30,12 @@ static const unsigned minion_max_queued = 0x10;
 static const unsigned minion_poll_us = 10000;
 static const unsigned minion_min_clock =  800;
 static const unsigned minion_max_clock = 1999;
+static const unsigned long minion_temp_interval_us = 5273437;
 
 enum minion_register {
 	MRA_SIGNATURE        = 0x00,
 	MRA_STATUS           = 0x01,
+	MRA_TEMP_CFG         = 0x03,
 	MRA_PLL_CFG          = 0x04,
 	MRA_MISC_CTL         = 0x06,
 	MRA_RESET            = 0x07,
@@ -59,6 +61,7 @@ struct minion_chip {
 	uint32_t core_nonce_inc;
 	uint32_t pllcfg_asserted;
 	uint32_t pllcfg_desired;
+	struct timeval tv_read_temp;
 };
 
 struct minion_bus {
@@ -198,6 +201,9 @@ bool minion_init(struct thr_info * const thr)
 	struct minion_bus * const mbus = dev->device_data;
 	struct spi_port * const spi = mbus->spi;
 	uint8_t buf[max(4, sizeof(minion_chip_signature))];
+	struct timeval tv_now;
+	
+	timer_set_now(&tv_now);
 	
 	struct minion_chip * const chips = malloc(sizeof(*chips) * ((size_t)minion_max_chipid + 1));
 	for (unsigned chipid = 0; proc; ++chipid)
@@ -227,6 +233,11 @@ bool minion_init(struct thr_info * const thr)
 		pk_u32le(buf, 0, chip->core_nonce_inc);
 		minion_set(spi, chipid, MRA_NONCE_INC, buf, 4);
 		
+		minion_get(spi, chipid, MRA_TEMP_CFG, buf, 4);
+		buf[0] &= ~(1 << 5);  // Enable temperature sensor
+		buf[0] &= ~(1 << 4);  // 20 C precision (alternative is 40 C)
+		minion_set(spi, chipid, MRA_TEMP_CFG, buf, 4);
+		
 		minion_get(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_asserted, 4);
 		
 		minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
@@ -236,7 +247,8 @@ bool minion_init(struct thr_info * const thr)
 		buf[0] &= ~(1 << 1);  // Disable test mode
 		minion_set(spi, chipid, MRA_MISC_CTL, buf, 4);
 		
-		timer_set_delay_from_now(&proc->thr[0]->tv_poll, minion_poll_us);
+		proc->thr[0]->tv_poll = tv_now;
+		chip->tv_read_temp = tv_now;
 		
 		for (unsigned coreid = 0; coreid < chip->core_count; ++coreid)
 		{
@@ -508,9 +520,22 @@ void minion_poll(struct thr_info * const chip_thr)
 		minion_queue_full(chip);
 	}
 	
+	struct timeval tv_now;
+	timer_set_now(&tv_now);
+	
+	if (timer_passed(&chip->tv_read_temp, &tv_now))
+	{
+		minion_get(spi, chipid, MRA_STATUS, buf, 4);
+		const float temp = buf[3] * 20.;
+		struct cgpu_info *proc = first_proc;
+		for (int j = 0; j < chip->core_count; (proc = proc->next_proc), ++j)
+			proc->temp = temp;
+		timer_set_delay(&chip_thr->tv_poll, &tv_now, minion_temp_interval_us);
+	}
+	
 	minion_config_pll(spi, chip);
 	
-	timer_set_delay_from_now(&chip_thr->tv_poll, minion_poll_us);
+	timer_set_delay(&chip_thr->tv_poll, &tv_now, minion_poll_us);
 }
 
 static
