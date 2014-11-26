@@ -211,6 +211,9 @@ bool minion_init(struct thr_info * const thr)
 		if (!buf[2])
 			continue;
 		
+		static const uint8_t resetcmd[4] = {0xff, 0xff, 0xa5, 0xf5};
+		minion_set(spi, chipid, MRA_RESET, resetcmd, sizeof(resetcmd));
+		
 		*chip = (struct minion_chip){
 			.chipid = chipid,
 			.core_count = buf[2],
