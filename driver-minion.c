@@ -514,6 +514,21 @@ void minion_poll(struct thr_info * const chip_thr)
 }
 
 static
+struct api_data *minion_get_api_extra_device_status(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct minion_chip * const chip = thr->cgpu_data;
+	struct api_data *root = NULL;
+	double d;
+	
+	d = minion_pllcfg_to_freq(chip->pllcfg_asserted);
+	if (d > 0)
+		root = api_add_freq(root, "Frequency", &d, true);
+	
+	return root;
+}
+
+static
 const char *minion_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct thr_info * const thr = proc->thr[0];
@@ -605,4 +620,6 @@ struct device_drv minion_drv = {
 	.queue_append = minion_queue_append,
 	.queue_flush = minion_queue_flush,
 	.poll = minion_poll,
+	
+	.get_api_extra_device_status = minion_get_api_extra_device_status,
 };
