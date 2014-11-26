@@ -49,9 +49,11 @@ enum minion_register {
 struct minion_chip {
 	uint8_t chipid;
 	uint8_t core_count;
+	uint8_t core_enabled_count;
 	uint16_t next_taskid;
 	struct cgpu_info *first_proc;
 	unsigned queue_count;
+	uint32_t core_nonce_inc;
 };
 
 struct minion_bus {
@@ -153,7 +155,8 @@ bool minion_init(struct thr_info * const thr)
 			.first_proc = proc,
 		};
 		minion_set(spi, chipid, MRA_NONCE_START, "\0\0\0\0", 4);
-		pk_u32le(buf, 0, 0xffffffff / chip->core_count);
+		chip->core_nonce_inc = 0xffffffff / chip->core_count;
+		pk_u32le(buf, 0, chip->core_nonce_inc);
 		minion_set(spi, chipid, MRA_NONCE_INC, buf, 4);
 		
 		minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
@@ -173,7 +176,10 @@ bool minion_init(struct thr_info * const thr)
 				spi->repr = proc->proc_repr;
 				minion_get(spi, chipid, corereg, buf, 4);
 			}
-			proc->deven = (buf[corebyte] & corebit) ? DEV_ENABLED : DEV_DISABLED;
+			if (buf[corebyte] & corebit)
+				++chip->core_enabled_count;
+			else
+				proc->deven = DEV_DISABLED;
 			
 			thr->cgpu_data = chip;
 			
@@ -228,7 +234,10 @@ void minion_core_enabledisable(struct thr_info * const thr, const bool enable)
 	else
 		buf[corebyte] &= ~corebit;
 	if (buf[corebyte] != oldbyte)
+	{
 		minion_set(spi, chipid, corereg, buf, 4);
+		chip->core_enabled_count += enable ? 1 : -1;
+	}
 }
 
 static
@@ -262,6 +271,7 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 	
 	work->device_id = ++chip->next_taskid;
 	work->tv_stamp.tv_sec = 1;
+	work->blk.nonce = 0;
 	
 	pk_u16be(taskdata, 0, work->device_id);
 	memset(&taskdata[2], 0, 2);
@@ -299,6 +309,18 @@ void minion_queue_flush(struct thr_info * const thr)
 	}
 	chip->queue_count = 0;
 	minion_queue_full(chip);
+}
+
+static
+void minion_hashes_done(struct cgpu_info *proc, const uint8_t core_count, const uint64_t hashes)
+{
+	for (int j = 0; j < core_count; (proc = proc->next_proc), ++j)
+	{
+		if (proc->deven != DEV_ENABLED)
+			continue;
+		struct thr_info * const thr = proc->thr[0];
+		hashes_done2(thr, hashes, NULL);
+	}
 }
 
 static
@@ -360,7 +382,27 @@ void minion_poll(struct thr_info * const chip_thr)
 				const uint32_t nonce = upk_u32le(resbuf_i, 4);
 				
 				if (submit_nonce(core_thr, work, nonce))
+				{
 					clean = (coreid < chip->core_count);
+					
+					// It's only 0xffffffff if we prematurely considered it complete
+					if (likely(work->blk.nonce != 0xffffffff))
+					{
+						uint32_t hashes = (nonce % chip->core_nonce_inc);
+						if (hashes > work->blk.nonce)
+						{
+							hashes -= work->blk.nonce - 1;
+							minion_hashes_done(first_proc, chip->core_count, hashes);
+							work->blk.nonce = hashes + 1;
+						}
+					}
+				}
+			}
+			else
+			{
+				const uint32_t hashes = chip->core_nonce_inc - work->blk.nonce;
+				minion_hashes_done(first_proc, chip->core_count, hashes);
+				work->blk.nonce = 0xffffffff;
 			}
 			
 			// Flag previous work(s) as done, and delete them when we are sure
@@ -370,6 +412,13 @@ void minion_poll(struct thr_info * const chip_thr)
 				if (work->device_id == taskid)
 					break;
 				
+				if (work->blk.nonce && work->blk.nonce != 0xffffffff)
+				{
+					// At least one nonce was found, assume the job completed
+					const uint32_t hashes = chip->core_nonce_inc - work->blk.nonce;
+					minion_hashes_done(first_proc, chip->core_count, hashes);
+					work->blk.nonce = 0xffffffff;
+				}
 				if (work->tv_stamp.tv_sec)
 				{
 					--chip->queue_count;
