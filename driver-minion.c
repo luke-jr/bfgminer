@@ -28,6 +28,8 @@ static const uint8_t minion_max_chipid = 0x1f;
 static const uint8_t minion_chip_signature[] = {0x44, 0x8a, 0xac, 0xb1};
 static const unsigned minion_max_queued = 0x10;
 static const unsigned minion_poll_us = 10000;
+static const unsigned minion_min_clock =  800;
+static const unsigned minion_max_clock = 1999;
 
 enum minion_register {
 	MRA_SIGNATURE        = 0x00,
@@ -511,6 +513,30 @@ void minion_poll(struct thr_info * const chip_thr)
 	timer_set_delay_from_now(&chip_thr->tv_poll, minion_poll_us);
 }
 
+static
+const char *minion_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct minion_chip * const chip = thr->cgpu_data;
+	
+	const int nv = atoi(newvalue);
+	if (nv < minion_min_clock || nv > minion_max_clock)
+	{
+		sprintf(replybuf, "Clock frequency must be within range of %u-%u MHz", minion_min_clock, minion_max_clock);
+		return replybuf;
+	}
+	
+	const uint32_t pllcfg = minion_freq_to_pllcfg(nv);
+	chip->pllcfg_desired = pllcfg;
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition minion_set_device_funcs[] = {
+	{"clock", minion_set_clock, "clock frequency"},
+	{NULL},
+};
+
 BFG_REGISTER_DRIVER(minion_drv)
 
 static
@@ -545,6 +571,7 @@ bool minion_detect_one(const char * const devpath)
 		.drv = &minion_drv,
 		.device_path = strdup(devpath),
 		.device_data = mbus,
+		.set_device_funcs = minion_set_device_funcs,
 		.deven = DEV_ENABLED,
 		.procs = total_core_count,
 		.threads = 1,
