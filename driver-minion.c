@@ -36,6 +36,8 @@ enum minion_register {
 	MRA_RESET            = 0x07,
 	MRA_FIFO_STATUS      = 0x0b,
 	
+	MRA_CORE_EN_         = 0x10,
+	
 	MRA_RESULT           = 0x20,
 	
 	MRA_TASK             = 0x30,
@@ -115,6 +117,14 @@ unsigned minion_count_cores(struct spi_port * const spi)
 	return total_core_count;
 }
 
+static inline
+void minion_core_enable_register_position(const uint8_t coreid, uint8_t * const corereg, uint8_t * const corebyte, uint8_t * const corebit)
+{
+	*corereg = MRA_CORE_EN_ + (coreid >> 5);
+	*corebyte = (coreid >> 3) % 4;
+	*corebit = 1 << (coreid % 8);
+}
+
 static
 bool minion_init(struct thr_info * const thr)
 {
@@ -152,9 +162,18 @@ bool minion_init(struct thr_info * const thr)
 		
 		timer_set_delay_from_now(&proc->thr[0]->tv_poll, minion_poll_us);
 		
-		for (unsigned i = 0; i < chip->core_count; ++i)
+		for (unsigned coreid = 0; coreid < chip->core_count; ++coreid)
 		{
 			struct thr_info * const thr = proc->thr[0];
+			
+			uint8_t corereg, corebyte, corebit;
+			minion_core_enable_register_position(coreid, &corereg, &corebyte, &corebit);
+			if (coreid % 0x20 == 0)
+			{
+				spi->repr = proc->proc_repr;
+				minion_get(spi, chipid, corereg, buf, 4);
+			}
+			proc->deven = (buf[corebyte] & corebit) ? DEV_ENABLED : DEV_DISABLED;
 			
 			thr->cgpu_data = chip;
 			
@@ -183,6 +202,45 @@ bool minion_queue_full(struct minion_chip * const chip)
 	}
 	
 	return full;
+}
+
+static
+void minion_core_enabledisable(struct thr_info * const thr, const bool enable)
+{
+	struct cgpu_info * const proc = thr->cgpu;
+	struct minion_bus * const mbus = proc->device_data;
+	struct minion_chip * const chip = thr->cgpu_data;
+	struct spi_port * const spi = mbus->spi;
+	const uint8_t chipid = chip->chipid;
+	
+	uint8_t coreid = 0;
+	for (struct cgpu_info *p = chip->first_proc; p != proc; p = p->next_proc)
+		++coreid;
+	
+	uint8_t corereg, corebyte, corebit;
+	minion_core_enable_register_position(coreid, &corereg, &corebyte, &corebit);
+	
+	uint8_t buf[4];
+	minion_get(spi, chipid, corereg, buf, 4);
+	const uint8_t oldbyte = buf[corebyte];
+	if (enable)
+		buf[corebyte] |= corebit;
+	else
+		buf[corebyte] &= ~corebit;
+	if (buf[corebyte] != oldbyte)
+		minion_set(spi, chipid, corereg, buf, 4);
+}
+
+static
+void minion_core_disable(struct thr_info * const thr)
+{
+	minion_core_enabledisable(thr, false);
+}
+
+static
+void minion_core_enable(struct thr_info * const thr)
+{
+	minion_core_enabledisable(thr, true);
 }
 
 static
@@ -390,6 +448,9 @@ struct device_drv minion_drv = {
 	
 	.thread_init = minion_init,
 	.minerloop = minerloop_queue,
+	
+	.thread_disable = minion_core_disable,
+	.thread_enable = minion_core_enable,
 	
 	.queue_append = minion_queue_append,
 	.queue_flush = minion_queue_flush,
