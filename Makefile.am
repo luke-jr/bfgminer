@@ -390,6 +390,10 @@ if USE_MINERGATE
 bfgminer_SOURCES += driver-minergate.c
 endif
 
+if USE_MINION
+bfgminer_SOURCES += driver-minion.c
+endif
+
 if USE_ROCKMINER
 bfgminer_SOURCES += driver-rockminer.c
 endif
