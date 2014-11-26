@@ -32,6 +32,7 @@ static const unsigned minion_poll_us = 10000;
 enum minion_register {
 	MRA_SIGNATURE        = 0x00,
 	MRA_STATUS           = 0x01,
+	MRA_PLL_CFG          = 0x04,
 	MRA_MISC_CTL         = 0x06,
 	MRA_RESET            = 0x07,
 	MRA_FIFO_STATUS      = 0x0b,
@@ -54,11 +55,62 @@ struct minion_chip {
 	struct cgpu_info *first_proc;
 	unsigned queue_count;
 	uint32_t core_nonce_inc;
+	uint32_t pllcfg_asserted;
+	uint32_t pllcfg_desired;
 };
 
 struct minion_bus {
 	struct spi_port *spi;
 };
+
+static const uint8_t minion_crystal_mhz = 12;
+
+static
+uint32_t minion_freq_to_pllcfg(unsigned freq)
+{
+	uint32_t rv;
+	uint8_t * const pllcfg = (void*)&rv;
+	uint8_t best_rem = 12, pll_dm = 1;
+	for (uint8_t try_dm = 1; try_dm <= 8; ++try_dm)
+	{
+		const unsigned x = freq * try_dm;
+		if (x > 0x100 * minion_crystal_mhz)
+			// We'd overflow pll_dn to continue
+			break;
+		const uint8_t rem = x % minion_crystal_mhz;
+		if (rem > best_rem)
+			continue;
+		best_rem = rem;
+		pll_dm = try_dm;
+		if (!rem)
+			break;
+	}
+	const unsigned pll_dn = freq * pll_dm / minion_crystal_mhz;
+	freq = pll_dn * minion_crystal_mhz / pll_dm;
+	const uint8_t pll_cont = ((freq - 800) / 300);  // 2 bits
+	static const uint8_t pll_dp   = 0;  // 3 bits
+	static const uint8_t pll_byp  = 0;  // 1 bit
+	static const uint8_t pll_div2 = 0;  // 1 bit
+	static const uint8_t sys_div  = 1;  // 3 bits
+	pllcfg[0] = pll_dn - 1;
+	pllcfg[1] = (pll_dm - 1) | (pll_dp << 4);
+	pllcfg[2] = pll_cont | (pll_byp << 2) | (pll_div2 << 4) | (sys_div << 5);
+	pllcfg[3] = 0;
+	return rv;
+}
+
+static
+unsigned minion_pllcfg_to_freq(const uint32_t in_pllcfg)
+{
+	const uint8_t * const pllcfg = (void*)&in_pllcfg;
+	const unsigned pll_dn = (unsigned)pllcfg[0] + 1;
+	const uint8_t pll_dm = (pllcfg[1] & 0xf) + 1;
+	const unsigned freq = pll_dn * minion_crystal_mhz / pll_dm;
+	// FIXME: How to interpret the rest of the pll cfg?
+	if (minion_freq_to_pllcfg(freq) != in_pllcfg)
+		return 0;
+	return freq;
+}
 
 static
 void minion_get(struct spi_port * const spi, const uint8_t chipid, const uint8_t addr, void * const buf, const size_t bufsz)
@@ -120,6 +172,16 @@ unsigned minion_count_cores(struct spi_port * const spi)
 }
 
 static inline
+void minion_config_pll(struct spi_port * const spi, struct minion_chip * const chip)
+{
+	if (chip->pllcfg_asserted == chip->pllcfg_desired)
+		return;
+	const uint8_t chipid = chip->chipid;
+	minion_set(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_desired, 4);
+	chip->pllcfg_asserted = chip->pllcfg_desired;
+}
+
+static inline
 void minion_core_enable_register_position(const uint8_t coreid, uint8_t * const corereg, uint8_t * const corebyte, uint8_t * const corebit)
 {
 	*corereg = MRA_CORE_EN_ + (coreid >> 5);
@@ -153,11 +215,14 @@ bool minion_init(struct thr_info * const thr)
 			.chipid = chipid,
 			.core_count = buf[2],
 			.first_proc = proc,
+			.pllcfg_desired = minion_freq_to_pllcfg(900),
 		};
 		minion_set(spi, chipid, MRA_NONCE_START, "\0\0\0\0", 4);
 		chip->core_nonce_inc = 0xffffffff / chip->core_count;
 		pk_u32le(buf, 0, chip->core_nonce_inc);
 		minion_set(spi, chipid, MRA_NONCE_INC, buf, 4);
+		
+		minion_get(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_asserted, 4);
 		
 		minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
 		buf[0] |= 1 << 2;  // Enable "no nonce" result reports
@@ -278,6 +343,7 @@ bool minion_queue_append(struct thr_info *thr, struct work * const work)
 	memcpy(&taskdata[4], work->midstate, 0x20);
 	memcpy(&taskdata[0x24], &work->data[0x40], 0xc);
 	
+	minion_config_pll(spi, chip);
 	minion_set(spi, chipid, MRA_TASK, taskdata, sizeof(taskdata));
 	
 	DL_APPEND(thr->work_list, work);
@@ -433,6 +499,8 @@ void minion_poll(struct thr_info * const chip_thr)
 		}
 		minion_queue_full(chip);
 	}
+	
+	minion_config_pll(spi, chip);
 	
 	timer_set_delay_from_now(&chip_thr->tv_poll, minion_poll_us);
 }
