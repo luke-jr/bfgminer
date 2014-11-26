@@ -228,7 +228,10 @@ bool minion_init(struct thr_info * const thr)
 		minion_get(spi, chipid, MRA_PLL_CFG, &chip->pllcfg_asserted, 4);
 		
 		minion_get(spi, chipid, MRA_MISC_CTL, buf, 4);
+		buf[0] &= ~(1 << 4);  // Unpause cores
+		buf[0] &= ~(1 << 3);  // Unpause queue
 		buf[0] |= 1 << 2;  // Enable "no nonce" result reports
+		buf[0] &= ~(1 << 1);  // Disable test mode
 		minion_set(spi, chipid, MRA_MISC_CTL, buf, 4);
 		
 		timer_set_delay_from_now(&proc->thr[0]->tv_poll, minion_poll_us);
