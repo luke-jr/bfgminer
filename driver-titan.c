@@ -318,8 +318,6 @@ static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint3
 
 static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 {
-	struct cgpu_info *proc, *first_proc;
-	struct thr_info *mythr;
 	struct knc_titan_core *knccore;
 	char *repr;
 	struct knc_titan_die *die_p;
@@ -371,13 +369,11 @@ float titan_min_nonce_diff(struct cgpu_info * const proc, const struct mining_al
 
 static bool knc_titan_init(struct thr_info * const thr)
 {
-	const int max_cores = KNC_TITAN_CORES_PER_ASIC;
-	struct thr_info *mythr;
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_core *knccore;
 	struct knc_titan_die *kncdie;
 	struct knc_titan_info *knc;
-	int i, asic, die, core_base;
+	int i, asic, die;
 	int total_cores = 0;
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
@@ -618,8 +614,7 @@ static bool knc_titan_process_report(struct knc_titan_info * const knc, struct k
 
 static void knc_titan_poll(struct thr_info * const thr)
 {
-	struct thr_info *mythr;
-	struct cgpu_info * const cgpu = thr->cgpu, *proc;
+	struct cgpu_info * const cgpu = thr->cgpu;
 	struct knc_titan_info * const knc = cgpu->device_data;
 	struct knc_titan_core *knccore;
 	struct work *work, *tmp;
