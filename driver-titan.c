@@ -90,6 +90,10 @@ struct knc_titan_die {
 
 	int freq;
 	int manual_check_count;
+
+	bool reconfigure_request;
+	bool delete_request;
+	int add_request;
 };
 
 struct knc_titan_info {
@@ -206,7 +210,7 @@ static bool knc_titan_detect_one(const char *devpath)
 				.asicno = asic,
 				.dieno = die,
 				.cores = die_info.cores,
-				.proc = cgpu,
+				.proc = NULL, /* Will be assigned at init stage */
 				.first_core = NULL,
 				.freq = KNC_TITAN_DEFAULT_FREQUENCY,
 			};
@@ -286,7 +290,7 @@ static void knc_titan_clean_flush(const char *repr, void * const ctx, struct knc
 static uint32_t nonce_tops[KNC_TITAN_CORES_PER_DIE];
 static bool nonce_tops_inited = false;
 
-static void get_nonce_range(int dieno, int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
+static void get_nonce_range(int coreno, uint32_t *nonce_bottom, uint32_t *nonce_top)
 {
 	if (!nonce_tops_inited) {
 		uint32_t top;
@@ -347,7 +351,7 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	bool success = true;
 	for (knccore = die_p->first_core ; knccore ; knccore = knccore->next_core) {
 		knc_titan_clean_flush(repr, knc->ctx, knccore);
-		get_nonce_range(knccore->dieno, knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
+		get_nonce_range(knccore->coreno, &setup_params.nonce_bottom, &setup_params.nonce_top);
 		applog(LOG_DEBUG, "%s[%d:%d:%d]: Setup core, nonces 0x%08X - 0x%08X", repr, knccore->asicno, knccore->dieno, knccore->coreno, setup_params.nonce_bottom, setup_params.nonce_top);
 		if (!knc_titan_setup_core_local(repr, knc->ctx, knccore->asicno, knccore->dieno, knccore->coreno, &setup_params))
 			success = false;
@@ -373,7 +377,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct knc_titan_core *knccore;
 	struct knc_titan_die *kncdie;
 	struct knc_titan_info *knc;
-	int i, asic, die;
+	int i, asic, logical_dieno, ena_die, die;
 	int total_cores = 0;
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
@@ -383,12 +387,26 @@ static bool knc_titan_init(struct thr_info * const thr)
 		proc->device_data = knc;
 		if (proc->device == proc) {
 			asic = atoi(proc->device_path);
-			die = 0;
+			logical_dieno = 0;
 			knc->asic_served_by_fpga[asic] = true;
 		} else {
-			die++;
+			++logical_dieno;
 		}
-		kncdie = ((struct thr_info *)proc->thr[0])->cgpu_data = &knc->dies[asic][die];
+		kncdie = NULL;
+		for (die = 0, ena_die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			if (knc->dies[asic][die].cores <= 0)
+				continue;
+			if (ena_die++ == logical_dieno) {
+				kncdie = &knc->dies[asic][die];
+				break;
+			}
+		}
+		if (NULL == kncdie) {
+			applog(LOG_ERR, "Can not find logical dieno %d", logical_dieno);
+			continue;
+		}
+		kncdie->proc = proc;
+		((struct thr_info *)proc->thr[0])->cgpu_data = kncdie;
 		for (i = 0 ; i < KNC_TITAN_CORES_PER_DIE ; i++) {
 			if (i == 0) {
 				kncdie->first_core = malloc(sizeof(*knccore));
@@ -442,6 +460,7 @@ static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int di
 {
 	struct knc_die_info die_info;
 	char repr[6];
+	struct knc_titan_die *die_p = &(knc->dies[asic][die]);
 
 	snprintf(repr, sizeof(repr), "%s %d", knc_titan_drv.name, asic);
 	die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
@@ -449,11 +468,13 @@ static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int di
 	if (!knc_titan_get_info(repr, knc->ctx, asic, die, &die_info))
 		die_info.cores = -1;
 	if (0 < die_info.cores) {
+		die_p->add_request = 0;
 		sprintf(errbuf, "Die[%d:%d] not detected", asic, die);
 		return false;
 	}
 
-	/* TODO: add procs */
+	/* TODO: Implement add_request in knc_titan_poll */
+	die_p->add_request = die_info.cores;
 	sprintf(errbuf, "Die[%d:%d] has %d cores; was not added (addition not implemented)", asic, die, die_info.cores);
 
 	return false;
@@ -463,21 +484,22 @@ static bool die_enable(struct knc_titan_info * const knc, int asic, int die, cha
 {
 	bool res = true;
 
-	cgpu_request_control(knc->cgpu);
 	if (0 >= knc->dies[asic][die].cores)
 		res = die_test_and_add(knc, asic, die, errbuf);
 	if (res) {
-		res = configure_one_die(knc, asic, die);
+		struct knc_titan_die *die_p = &(knc->dies[asic][die]);
+		die_p->reconfigure_request = true;
+		res = true;
 	}
-	cgpu_release_control(knc->cgpu);
 
 	return res;
 }
 
 static bool die_disable(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
-	cgpu_request_control(knc->cgpu);
-	/* TODO: delete procs */
+	/* TODO: Implement delete_request in knc_titan_poll */
+	struct knc_titan_die *die_p = &(knc->dies[asic][die]);
+	die_p->delete_request = true;
 	cgpu_release_control(knc->cgpu);
 	sprintf(errbuf, "die_disable[%d:%d] not imnplemented", asic, die);
 	return false;
@@ -632,6 +654,24 @@ static void knc_titan_poll(struct thr_info * const thr)
 
 	knc_titan_prune_local_queue(thr);
 
+	/* Process API requests */
+	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
+		for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
+			die_p = &(knc->dies[asic][die]);
+			if (__sync_bool_compare_and_swap(&die_p->reconfigure_request, true, false)) {
+				configure_one_die(knc, asic, die);
+			}
+			if (__sync_bool_compare_and_swap(&die_p->delete_request, true, false)) {
+				/* TODO: Implement delete_request */
+			}
+			int add_cores = __sync_fetch_and_and(&die_p->add_request, 0);
+			if (0 < add_cores) {
+				/* TODO: Implement add_request */
+			}
+		}
+	}
+
+	/* Send new works */
 	for (asic = 0; asic < KNC_TITAN_MAX_ASICS; ++asic) {
                 fpga_status_checked = false;
                 num_request_busy = KNC_TITAN_DIES_PER_ASIC;
