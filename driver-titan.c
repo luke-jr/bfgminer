@@ -710,7 +710,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						if (num_request_busy == 0) {
 							timer_set_now(&tv_now);
 							double diff = ((tv_now.tv_sec - knc->tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev.tv_usec)) / 1000000.0;
-							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
+							applog(LOG_DEBUG, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
 							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
 							knc->asic_served_by_fpga[asic] = false;
 
@@ -729,7 +729,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					break;
 				bool was_flushed = false;
 				if (die_p->need_flush || need_replace) {
-					applog(LOG_NOTICE, "%s[%d-%d] Flushing stale works (%s)", die_proc->dev_repr, asic, die,
+					applog(LOG_DEBUG, "%s[%d-%d] Flushing stale works (%s)", die_proc->dev_repr, asic, die,
 					       die_p->need_flush ? "New work" : "Slot collision");
 					die_p->need_flush = false;
 					die_p->first_slot = die_p->next_slot;
