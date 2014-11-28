@@ -1187,16 +1187,19 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 	bool patchbfi = opencl_should_patch_bfi_int(cgpu, clState, kernelinfo);
 	
 	bytes_t binary_bytes = BYTES_INIT;
+	bool loaded_kernel = false;
 	if (data->opt_opencl_binaries & OBU_LOAD)
 	{
-		if (!opencl_load_kernel_binary(cgpu, clState, kernelinfo, binaryfilename, &binary_bytes))
+		if (opencl_load_kernel_binary(cgpu, clState, kernelinfo, binaryfilename, &binary_bytes))
+			loaded_kernel = true;
+		else
 		{
 			bytes_free(&binary_bytes);
 			applog(LOG_DEBUG, "No usable binary found, generating from source");
-			goto build;
 		}
 	}
-	else
+	
+	if (!loaded_kernel)
 	{
 build:
 		if (!opencl_build_kernel(cgpu, clState, kernelinfo, source, pl, patchbfi))
@@ -1227,16 +1230,15 @@ build:
 			}
 		}
 #endif
+		
+		if (data->opt_opencl_binaries & OBU_SAVE)
+		{
+			if (!opencl_save_kernel_binary(binaryfilename, &binary_bytes))
+				applog(LOG_DEBUG, "Unable to save file %s", binaryfilename);
+		}
 	}
 	
 	free(source);
-	
-	if ((data->opt_opencl_binaries & OBU_SAVE) && bytes_len(&binary_bytes))
-	{
-		if (!opencl_save_kernel_binary(binaryfilename, &binary_bytes))
-			applog(LOG_DEBUG, "Unable to save file %s", binaryfilename);
-	}
-	
 	bytes_free(&binary_bytes);
 	
 	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %"PRId64" vectors and worksize %"PRIu64,
