@@ -867,6 +867,9 @@ bool opencl_get_kernel_binary(struct cgpu_info * const cgpu, _clState * const cl
 	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
 	if (unlikely(status != CL_SUCCESS))
 		applogr(false, LOG_ERR, "Error %d: Getting program info CL_PROGRAM_NUM_DEVICES. (clGetProgramInfo)", status);
+	
+	if (!cpnd)
+		return false;
 
 	size_t binary_sizes[cpnd];
 	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARY_SIZES, sizeof(binary_sizes), binary_sizes, NULL);
