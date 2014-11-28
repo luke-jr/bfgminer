@@ -705,6 +705,286 @@ err2:
 }
 
 static
+bool opencl_load_kernel_binary(struct cgpu_info * const cgpu, _clState * const clState, struct opencl_kernel_info * const kernelinfo, const char * const binaryfilename, bytes_t * const b)
+{
+	cl_int status;
+	
+	FILE * const binaryfile = fopen(binaryfilename, "rb");
+	if (!binaryfile)
+		return false;
+	
+	struct stat binary_stat;
+	if (unlikely(stat(binaryfilename, &binary_stat)))
+	{
+		applog(LOG_DEBUG, "Unable to stat binary, generating from source");
+		fclose(binaryfile);
+		return false;
+	}
+	if (!binary_stat.st_size)
+	{
+		fclose(binaryfile);
+		return false;
+	}
+	
+	const size_t binsz = binary_stat.st_size;
+	bytes_resize(b, binsz);
+	if (fread(bytes_buf(b), 1, binsz, binaryfile) != binsz)
+	{
+		applog(LOG_ERR, "Unable to fread binaries");
+		fclose(binaryfile);
+		return false;
+	}
+	fclose(binaryfile);
+	
+	kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binsz, (void*)&bytes_buf(b), &status, NULL);
+	if (status != CL_SUCCESS)
+		applogr(false, LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
+	
+	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, NULL);
+	if (status != CL_SUCCESS)
+		return false;
+	
+	applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
+	return true;
+}
+
+static
+bool opencl_should_patch_bfi_int(struct cgpu_info * const cgpu, _clState * const clState, struct opencl_kernel_info * const kernelinfo)
+{
+#ifdef USE_SHA256D
+	struct opencl_device_data * const data = cgpu->device_data;
+	const char * const name = cgpu->name;
+	const char * const vbuff = clState->platform_ver_str;
+	char *s;
+	
+	if (!clState->hasBitAlign)
+		return false;
+	
+	if (!(strstr(name, "Cedar") ||
+	      strstr(name, "Redwood") ||
+	      strstr(name, "Juniper") ||
+	      strstr(name, "Cypress" ) ||
+	      strstr(name, "Hemlock" ) ||
+	      strstr(name, "Caicos" ) ||
+	      strstr(name, "Turks" ) ||
+	      strstr(name, "Barts" ) ||
+	      strstr(name, "Cayman" ) ||
+	      strstr(name, "Antilles" ) ||
+	      strstr(name, "Wrestler" ) ||
+	      strstr(name, "Zacate" ) ||
+	      strstr(name, "WinterPark" )))
+		return false;
+	
+	// BFI_INT patching only works with AMD-APP up to 1084
+	if (strstr(vbuff, "ATI-Stream"))
+	{}
+	else
+	if ((s = strstr(vbuff, "AMD-APP")) && (s = strchr(s, '(')) && atoi(&s[1]) < 1085)
+	{}
+	else
+		return false;
+	
+	switch (kernelinfo->interface)
+	{
+		case KL_DIABLO: case KL_DIAKGCN: case KL_PHATK: case KL_POCLBM:
+			// Okay, these actually use BFI_INT hacking
+			break;
+		default:
+			// Anything else has never needed it
+			return false;
+			break;
+	}
+	
+	if (data->opt_opencl_binaries != OBU_LOADSAVE)
+		applogr(false, LOG_WARNING, "BFI_INT patch requiring device found, but OpenCL binary usage disabled; cannot BFI_INT patch");
+	
+	applog(LOG_DEBUG, "BFI_INT patch requiring device found, will patch source with BFI_INT");
+	return true;
+#else
+	return false;
+#endif
+}
+
+static
+bool opencl_build_kernel(struct cgpu_info * const cgpu, _clState * const clState, struct opencl_kernel_info * const kernelinfo, const char *source, const size_t source_len, const bool patchbfi)
+{
+	struct opencl_device_data * const data = cgpu->device_data;
+	cl_int status;
+	
+	kernelinfo->program = clCreateProgramWithSource(clState->context, 1, &source, &source_len, &status);
+	if (status != CL_SUCCESS)
+		applogr(false, LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithSource)", status);
+
+	/* create a cl program executable for all the devices specified */
+	char *CompilerOptions = calloc(1, 256);
+
+#ifdef USE_SCRYPT
+	if (kernelinfo->interface == KL_SCRYPT)
+		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
+			data->lookup_gap, (unsigned int)data->thread_concurrency, (int)kernelinfo->wsize);
+	else
+#endif
+	{
+		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
+			(int)kernelinfo->wsize, clState->vwidth, (int)kernelinfo->wsize * clState->vwidth);
+	}
+	applog(LOG_DEBUG, "Setting worksize to %"PRId64, (int64_t)kernelinfo->wsize);
+	if (clState->vwidth > 1)
+		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
+
+	if (clState->hasBitAlign)
+	{
+		strcat(CompilerOptions, " -D BITALIGN");
+		applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
+	}
+	else
+		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
+
+#ifdef USE_SHA256D
+	if (patchbfi)
+		strcat(CompilerOptions, " -D BFI_INT");
+#endif
+
+	if (kernelinfo->goffset)
+		strcat(CompilerOptions, " -D GOFFSET");
+
+	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
+	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, CompilerOptions);
+	free(CompilerOptions);
+
+	if (status != CL_SUCCESS)
+		return false;
+	
+	return true;
+}
+
+static
+bool opencl_get_kernel_binary(struct cgpu_info * const cgpu, _clState * const clState, struct opencl_kernel_info * const kernelinfo, bytes_t * const b)
+{
+	cl_int status;
+	cl_uint slot, cpnd;
+	
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
+	if (unlikely(status != CL_SUCCESS))
+		applogr(false, LOG_ERR, "Error %d: Getting program info CL_PROGRAM_NUM_DEVICES. (clGetProgramInfo)", status);
+
+	size_t binary_sizes[cpnd];
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARY_SIZES, sizeof(binary_sizes), binary_sizes, NULL);
+	if (unlikely(status != CL_SUCCESS))
+		applogr(false, LOG_ERR, "Error %d: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetProgramInfo)", status);
+	
+	uint8_t **binaries = malloc(sizeof(*binaries) * cpnd);
+	for (slot = 0; slot < cpnd; ++slot)
+		binaries[slot] = malloc(binary_sizes[slot] + 1);
+
+	/* The actual compiled binary ends up in a RANDOM slot! Grr, so we have
+	 * to iterate over all the binary slots and find where the real program
+	 * is. What the heck is this!? */
+	for (slot = 0; slot < cpnd; slot++)
+		if (binary_sizes[slot])
+			break;
+
+	/* copy over all of the generated binaries. */
+	applog(LOG_DEBUG, "%s: Binary size found in binary slot %u: %"PRId64, cgpu->dev_repr, (unsigned)slot, (int64_t)binary_sizes[slot]);
+	if (!binary_sizes[slot])
+		applogr(false, LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
+	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARIES, sizeof(binaries), binaries, NULL);
+	if (unlikely(status != CL_SUCCESS))
+		applogr(false, LOG_ERR, "Error %d: Getting program info. CL_PROGRAM_BINARIES (clGetProgramInfo)", status);
+	
+	bytes_resize(b, binary_sizes[slot]);
+	memcpy(bytes_buf(b), binaries[slot], bytes_len(b));
+	
+	for (slot = 0; slot < cpnd; ++slot)
+		free(binaries[slot]);
+	free(binaries);
+	
+	return true;
+}
+
+#ifdef USE_SHA256D
+	/* Patch the kernel if the hardware supports BFI_INT but it needs to
+	 * be hacked in */
+static
+bool opencl_patch_kernel_binary(bytes_t * const b)
+{
+	unsigned remaining = bytes_len(b);
+	char *w = (void*)bytes_buf(b);
+	unsigned int start, length;
+
+	/* Find 2nd incidence of .text, and copy the program's
+	* position and length at a fixed offset from that. Then go
+	* back and find the 2nd incidence of \x7ELF (rewind by one
+	* from ELF) and then patch the opcocdes */
+	if (!advance(&w, &remaining, ".text"))
+		return false;
+	w++; remaining--;
+	if (!advance(&w, &remaining, ".text")) {
+		/* 32 bit builds only one ELF */
+		w--; remaining++;
+	}
+	memcpy(&start, w + 285, 4);
+	memcpy(&length, w + 289, 4);
+	w = (void*)bytes_buf(b);
+	remaining = bytes_len(b);
+	if (!advance(&w, &remaining, "ELF"))
+		return false;
+	w++; remaining--;
+	if (!advance(&w, &remaining, "ELF")) {
+		/* 32 bit builds only one ELF */
+		w--; remaining++;
+	}
+	w--; remaining++;
+	w += start; remaining -= start;
+	applog(LOG_DEBUG, "At %p (%u rem. bytes), to begin patching", w, remaining);
+	patch_opcodes(w, length);
+	return true;
+}
+
+static
+bool opencl_replace_binary_kernel(struct cgpu_info * const cgpu, _clState * const clState, struct opencl_kernel_info * const kernelinfo, bytes_t * const b)
+{
+	cl_int status;
+	
+	status = clReleaseProgram(kernelinfo->program);
+	if (status != CL_SUCCESS)
+		applogr(false, LOG_ERR, "Error %d: Releasing program. (clReleaseProgram)", status);
+	
+	const size_t binsz = bytes_len(b);
+	kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binsz, (void*)&bytes_buf(b), &status, NULL);
+	if (status != CL_SUCCESS)
+		applogr(false, LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
+	
+	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, NULL);
+	if (status != CL_SUCCESS)
+		return false;
+	
+	return true;
+}
+#endif
+
+static
+bool opencl_save_kernel_binary(const char * const binaryfilename, bytes_t * const b)
+{
+	FILE *binaryfile;
+	
+	/* Save the binary to be loaded next time */
+	binaryfile = fopen(binaryfilename, "wb");
+	if (!binaryfile)
+		return false;
+	
+	// FIXME: Failure here results in a bad file; better to write and move-replace (but unlink before replacing for Windows)
+	if (unlikely(fwrite(bytes_buf(b), 1, bytes_len(b), binaryfile) != bytes_len(b)))
+	{
+		fclose(binaryfile);
+		return false;
+	}
+	
+	fclose(binaryfile);
+	return true;
+}
+
+static
 bool opencl_test_goffset(_clState * const clState)
 {
 	if (sizeof(size_t) < sizeof(uint32_t))
@@ -753,13 +1033,8 @@ fail2:
 bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState, const char * const name, struct opencl_kernel_info * const kernelinfo, const char * const kernel_file, __maybe_unused const struct mining_algorithm * const malgo)
 {
 	const int gpu = cgpu->device_id;
-#ifdef USE_SHA256D
-	bool patchbfi = false;
-#endif
-	bool prog_built = false;
 	struct opencl_device_data * const data = cgpu->device_data;
 	const char * const vbuff = clState->platform_ver_str;
-	char *s;
 	cl_int status;
 	
 	/* Create binary filename based on parameters passed to opencl
@@ -884,25 +1159,6 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 	}
 #endif
 
-	FILE *binaryfile;
-	size_t *binary_sizes;
-	char **binaries;
-	size_t sourceSize[] = {(size_t)pl};
-	cl_uint slot, cpnd;
-
-	slot = cpnd = 0;
-
-	binary_sizes = calloc(sizeof(size_t) * MAX_GPUDEVICES * 4, 1);
-	if (unlikely(!binary_sizes)) {
-		applog(LOG_ERR, "Unable to calloc binary_sizes");
-		return false;
-	}
-	binaries = calloc(sizeof(char *) * MAX_GPUDEVICES * 4, 1);
-	if (unlikely(!binaries)) {
-		applog(LOG_ERR, "Unable to calloc binaries");
-		return false;
-	}
-
 	strcat(binaryfilename, name);
 	if (kernelinfo->goffset)
 		strcat(binaryfilename, "g");
@@ -928,264 +1184,63 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 	applog(LOG_DEBUG, "OCL%2u: Configured OpenCL kernel name: %s", gpu, binaryfilename);
 	strcat(binaryfilename, ".bin");
 	
-	if (!(data->opt_opencl_binaries & OBU_LOAD))
-		goto build;
-
-	binaryfile = fopen(binaryfilename, "rb");
-	if (!binaryfile) {
-		applog(LOG_DEBUG, "No binary found, generating from source");
-	} else {
-		struct stat binary_stat;
-
-		if (unlikely(stat(binaryfilename, &binary_stat))) {
-			applog(LOG_DEBUG, "Unable to stat binary, generating from source");
-			fclose(binaryfile);
-			goto build;
-		}
-		if (!binary_stat.st_size)
-			goto build;
-
-		binary_sizes[slot] = binary_stat.st_size;
-		binaries[slot] = (char *)calloc(binary_sizes[slot], 1);
-		if (unlikely(!binaries[slot])) {
-			applog(LOG_ERR, "Unable to calloc binaries");
-			fclose(binaryfile);
-			return false;
-		}
-
-		if (fread(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot]) {
-			applog(LOG_ERR, "Unable to fread binaries");
-			fclose(binaryfile);
-			free(binaries[slot]);
-			goto build;
-		}
-
-		kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binary_sizes[slot], (const unsigned char **)binaries, &status, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
-			fclose(binaryfile);
-			free(binaries[slot]);
-			goto build;
-		}
-
-		fclose(binaryfile);
-		applog(LOG_DEBUG, "Loaded binary image %s", binaryfilename);
-
-		goto built;
-	}
-
-	/////////////////////////////////////////////////////////////////
-	// Load CL file, build CL program object, create CL kernel object
-	/////////////////////////////////////////////////////////////////
-
-build:
-	kernelinfo->program = clCreateProgramWithSource(clState->context, 1, (const char **)&source, sourceSize, &status);
-	if (status != CL_SUCCESS) {
-		applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithSource)", status);
-		return false;
-	}
-
-	/* create a cl program executable for all the devices specified */
-	char *CompilerOptions = calloc(1, 256);
-
-#ifdef USE_SCRYPT
-	if (kernelinfo->interface == KL_SCRYPT)
-		sprintf(CompilerOptions, "-D LOOKUP_GAP=%d -D CONCURRENT_THREADS=%d -D WORKSIZE=%d",
-			data->lookup_gap, (unsigned int)data->thread_concurrency, (int)kernelinfo->wsize);
-	else
-#endif
-	{
-		sprintf(CompilerOptions, "-D WORKSIZE=%d -D VECTORS%d -D WORKVEC=%d",
-			(int)kernelinfo->wsize, clState->vwidth, (int)kernelinfo->wsize * clState->vwidth);
-	}
-	applog(LOG_DEBUG, "Setting worksize to %"PRId64, (int64_t)kernelinfo->wsize);
-	if (clState->vwidth > 1)
-		applog(LOG_DEBUG, "Patched source to suit %d vectors", clState->vwidth);
-
-	if (clState->hasBitAlign) {
-		strcat(CompilerOptions, " -D BITALIGN");
-		applog(LOG_DEBUG, "cl_amd_media_ops found, setting BITALIGN");
-#ifdef USE_SHA256D
-		if (strstr(name, "Cedar") ||
-		    strstr(name, "Redwood") ||
-		    strstr(name, "Juniper") ||
-		    strstr(name, "Cypress" ) ||
-		    strstr(name, "Hemlock" ) ||
-		    strstr(name, "Caicos" ) ||
-		    strstr(name, "Turks" ) ||
-		    strstr(name, "Barts" ) ||
-		    strstr(name, "Cayman" ) ||
-		    strstr(name, "Antilles" ) ||
-		    strstr(name, "Wrestler" ) ||
-		    strstr(name, "Zacate" ) ||
-		    strstr(name, "WinterPark" ))
-		{
-			// BFI_INT patching only works with AMD-APP up to 1084
-			if (strstr(vbuff, "ATI-Stream"))
-				patchbfi = true;
-			else
-			if ((s = strstr(vbuff, "AMD-APP")) && (s = strchr(s, '(')) && atoi(&s[1]) < 1085)
-				patchbfi = true;
-		}
-#endif
-	} else
-		applog(LOG_DEBUG, "cl_amd_media_ops not found, will not set BITALIGN");
-
-#ifdef USE_SHA256D
-	switch (kernelinfo->interface)
-	{
-		case KL_DIABLO: case KL_DIAKGCN: case KL_PHATK: case KL_POCLBM:
-			// Okay, these actually use BFI_INT hacking
-			break;
-		default:
-			// Anything else has never needed it
-			patchbfi = false;
-			break;
-	}
-	if (patchbfi) {
-		if (data->opt_opencl_binaries == OBU_LOADSAVE)
-		{
-			strcat(CompilerOptions, " -D BFI_INT");
-			applog(LOG_DEBUG, "BFI_INT patch requiring device found, patched source with BFI_INT");
-		}
-		else
-		{
-			patchbfi = false;
-			applog(LOG_WARNING, "BFI_INT patch requiring device found, but OpenCL binary usage disabled; cannot BFI_INT patch");
-		}
-	} else
-		applog(LOG_DEBUG, "BFI_INT patch requiring device not found, will not BFI_INT patch");
-#endif
-
-	if (kernelinfo->goffset)
-		strcat(CompilerOptions, " -D GOFFSET");
-
-	applog(LOG_DEBUG, "CompilerOptions: %s", CompilerOptions);
-	status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, CompilerOptions);
-	free(CompilerOptions);
-
-	if (status != CL_SUCCESS)
-		return false;
-
-	prog_built = true;
+	bool patchbfi = opencl_should_patch_bfi_int(cgpu, clState, kernelinfo);
 	
-	if (!(data->opt_opencl_binaries & OBU_SAVE))
-		goto built;
-
-	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_NUM_DEVICES, sizeof(cl_uint), &cpnd, NULL);
-	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error %d: Getting program info CL_PROGRAM_NUM_DEVICES. (clGetProgramInfo)", status);
-		return false;
+	bytes_t binary_bytes = BYTES_INIT;
+	if (data->opt_opencl_binaries & OBU_LOAD)
+	{
+		if (!opencl_load_kernel_binary(cgpu, clState, kernelinfo, binaryfilename, &binary_bytes))
+		{
+			bytes_free(&binary_bytes);
+			applog(LOG_DEBUG, "No usable binary found, generating from source");
+			goto build;
+		}
 	}
-
-	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t)*cpnd, binary_sizes, NULL);
-	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error %d: Getting program info CL_PROGRAM_BINARY_SIZES. (clGetProgramInfo)", status);
-		return false;
+	else
+	{
+build:
+		if (!opencl_build_kernel(cgpu, clState, kernelinfo, source, pl, patchbfi))
+		{
+			free(source);
+			return false;
+		}
 	}
-
-	/* The actual compiled binary ends up in a RANDOM slot! Grr, so we have
-	 * to iterate over all the binary slots and find where the real program
-	 * is. What the heck is this!? */
-	for (slot = 0; slot < cpnd; slot++)
-		if (binary_sizes[slot])
-			break;
-
-	/* copy over all of the generated binaries. */
-	applog(LOG_DEBUG, "Binary size for gpu %u found in binary slot %u: %"PRId64,
-	       gpu, (unsigned)slot, (int64_t)binary_sizes[slot]);
-	if (!binary_sizes[slot]) {
-		applog(LOG_ERR, "OpenCL compiler generated a zero sized binary, FAIL!");
-		return false;
+	
+	if ((patchbfi || (data->opt_opencl_binaries & OBU_SAVE)) && !bytes_len(&binary_bytes))
+	{
+		if (!opencl_get_kernel_binary(cgpu, clState, kernelinfo, &binary_bytes))
+		{
+			bytes_free(&binary_bytes);
+			applog(LOG_DEBUG, "%s: Failed to get compiled kernel binary from OpenCL (cannot save it)", cgpu->dev_repr);
+			// NOTE: empty binary_bytes will fail BFI_INT patch on its own
+		}
 	}
-	binaries[slot] = calloc(sizeof(char) * binary_sizes[slot], 1);
-	status = clGetProgramInfo(kernelinfo->program, CL_PROGRAM_BINARIES, sizeof(char *) * cpnd, binaries, NULL );
-	if (unlikely(status != CL_SUCCESS)) {
-		applog(LOG_ERR, "Error %d: Getting program info. CL_PROGRAM_BINARIES (clGetProgramInfo)", status);
-		return false;
-	}
-
+	
 #ifdef USE_SHA256D
-	/* Patch the kernel if the hardware supports BFI_INT but it needs to
-	 * be hacked in */
-	if (patchbfi) {
-		unsigned remaining = binary_sizes[slot];
-		char *w = binaries[slot];
-		unsigned int start, length;
-
-		/* Find 2nd incidence of .text, and copy the program's
-		* position and length at a fixed offset from that. Then go
-		* back and find the 2nd incidence of \x7ELF (rewind by one
-		* from ELF) and then patch the opcocdes */
-		if (!advance(&w, &remaining, ".text"))
+	if (patchbfi)
+	{
+		if (!(opencl_patch_kernel_binary(&binary_bytes)) && opencl_replace_binary_kernel(cgpu, clState, kernelinfo, &binary_bytes))
+		{
+			// Rebuild without BFI_INT
+			patchbfi = false;
+			bytes_free(&binary_bytes);
 			goto build;
-		w++; remaining--;
-		if (!advance(&w, &remaining, ".text")) {
-			/* 32 bit builds only one ELF */
-			w--; remaining++;
 		}
-		memcpy(&start, w + 285, 4);
-		memcpy(&length, w + 289, 4);
-		w = binaries[slot]; remaining = binary_sizes[slot];
-		if (!advance(&w, &remaining, "ELF"))
-			goto build;
-		w++; remaining--;
-		if (!advance(&w, &remaining, "ELF")) {
-			/* 32 bit builds only one ELF */
-			w--; remaining++;
-		}
-		w--; remaining++;
-		w += start; remaining -= start;
-		applog(LOG_DEBUG, "At %p (%u rem. bytes), to begin patching",
-			w, remaining);
-		patch_opcodes(w, length);
-
-		status = clReleaseProgram(kernelinfo->program);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Releasing program. (clReleaseProgram)", status);
-			return false;
-		}
-
-		kernelinfo->program = clCreateProgramWithBinary(clState->context, 1, &clState->devid, &binary_sizes[slot], (const unsigned char **)&binaries[slot], &status, NULL);
-		if (status != CL_SUCCESS) {
-			applog(LOG_ERR, "Error %d: Loading Binary into cl_program (clCreateProgramWithBinary)", status);
-			return false;
-		}
-
-		/* Program needs to be rebuilt */
-		prog_built = false;
 	}
 #endif
-
+	
 	free(source);
-
-	/* Save the binary to be loaded next time */
-	binaryfile = fopen(binaryfilename, "wb");
-	if (!binaryfile) {
-		/* Not a fatal problem, just means we build it again next time */
-		applog(LOG_DEBUG, "Unable to create file %s", binaryfilename);
-	} else {
-		if (unlikely(fwrite(binaries[slot], 1, binary_sizes[slot], binaryfile) != binary_sizes[slot])) {
-			applog(LOG_ERR, "Unable to fwrite to binaryfile");
-			return false;
-		}
-		fclose(binaryfile);
+	
+	if ((data->opt_opencl_binaries & OBU_SAVE) && bytes_len(&binary_bytes))
+	{
+		if (!opencl_save_kernel_binary(binaryfilename, &binary_bytes))
+			applog(LOG_DEBUG, "Unable to save file %s", binaryfilename);
 	}
-built:
-	if (binaries[slot])
-		free(binaries[slot]);
-	free(binaries);
-	free(binary_sizes);
-
+	
+	bytes_free(&binary_bytes);
+	
 	applog(LOG_INFO, "Initialising kernel %s with%s bitalign, %"PRId64" vectors and worksize %"PRIu64,
 	       filename, clState->hasBitAlign ? "" : "out", (int64_t)clState->vwidth, (uint64_t)kernelinfo->wsize);
-
-	if (!prog_built) {
-		/* create a cl program executable for all the devices specified */
-		status = bfg_clBuildProgram(&kernelinfo->program, clState->devid, NULL);
-		if (status != CL_SUCCESS)
-			return false;
-	}
 
 	/* get a kernel object handle for a kernel with the given name */
 	kernelinfo->kernel = clCreateKernel(kernelinfo->program, "search", &status);
