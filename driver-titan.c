@@ -203,7 +203,7 @@ static bool knc_titan_detect_one(const char *devpath)
 	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 		die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 		die_info.version = KNC_VERSION_TITAN;
-		if (!knc_titan_get_info(repr, ctx, asic, die, &die_info))
+		if (!knc_titan_get_info(LOG_NOTICE, ctx, asic, die, &die_info))
 			die_info.cores = -1;
 		if (0 < die_info.cores) {
 			knc->dies[asic][die] = (struct knc_titan_die) {
@@ -454,13 +454,11 @@ static bool knc_titan_init(struct thr_info * const thr)
 static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
 	struct knc_die_info die_info;
-	char repr[6];
 	struct knc_titan_die *die_p = &(knc->dies[asic][die]);
 
-	snprintf(repr, sizeof(repr), "%s %d", knc_titan_drv.name, asic);
 	die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 	die_info.version = KNC_VERSION_TITAN;
-	if (!knc_titan_get_info(repr, knc->ctx, asic, die, &die_info))
+	if (!knc_titan_get_info(LOG_NOTICE, knc->ctx, asic, die, &die_info))
 		die_info.cores = -1;
 	if (0 < die_info.cores) {
 		die_p->add_request = 0;
@@ -771,7 +769,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			die_info.cores = die_p->cores; /* core hint */
 			die_info.version = KNC_VERSION_TITAN;
-			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
+			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(LOG_DEBUG, knc->ctx, asic, die, &die_info))
 				continue;
 			thread_reportin(die_p->proc->thr[0]);
 

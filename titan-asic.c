@@ -13,10 +13,10 @@
 
 #include "titan-asic.h"
 
-bool knc_titan_get_info(const char *repr, void * const ctx, int channel, int die, struct knc_die_info *die_info)
+bool knc_titan_get_info(int log_level, void * const ctx, int channel, int die, struct knc_die_info *die_info)
 {
 	int rc;
-	rc = knc_detect_die(ctx, channel, die, die_info);
+	rc = knc_detect_die_(log_level, ctx, channel, die, die_info);
 	return (0 == rc);
 }
 
