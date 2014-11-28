@@ -1103,12 +1103,16 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 				device_goffset_support = true;
 				break;
 			case BTS_FALSE:
-				// if the kernel doesn't require goffset, allow the user to disable it
-				if (kernel_goffset_support != 2)
-					break;
-				// fallthru
+				// if the kernel requires goffset, don't allow the user to disable it
+				if (kernel_goffset_support == 2)
+				{
+					if (opencl_test_goffset(clState))
+						device_goffset_support = true;
+				}
+				break;
 			case BTS_UNKNOWN:
-				if (opencl_test_goffset(clState))
+				data->use_goffset = opencl_test_goffset(clState);
+				if (data->use_goffset)
 					device_goffset_support = true;
 				break;
 		}
