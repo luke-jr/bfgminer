@@ -818,9 +818,9 @@ bool opencl_load_kernel(struct cgpu_info * const cgpu, _clState * const clState,
 			kernel_goffset_support = 1;
 		else
 		if (strstr(source, " base,"))
-			kernel_goffset_support = 2;
-		else
 			kernel_goffset_support = 0;
+		else
+			kernel_goffset_support = 2;
 		bool device_goffset_support = false;
 		switch (data->use_goffset)
 		{
