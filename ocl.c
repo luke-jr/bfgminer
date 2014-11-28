@@ -1204,30 +1204,30 @@ build:
 			free(source);
 			return false;
 		}
-	}
-	
-	if ((patchbfi || (data->opt_opencl_binaries & OBU_SAVE)) && !bytes_len(&binary_bytes))
-	{
-		if (!opencl_get_kernel_binary(cgpu, clState, kernelinfo, &binary_bytes))
+		
+		if ((patchbfi || (data->opt_opencl_binaries & OBU_SAVE)) && !bytes_len(&binary_bytes))
 		{
-			bytes_free(&binary_bytes);
-			applog(LOG_DEBUG, "%s: Failed to get compiled kernel binary from OpenCL (cannot save it)", cgpu->dev_repr);
-			// NOTE: empty binary_bytes will fail BFI_INT patch on its own
+			if (!opencl_get_kernel_binary(cgpu, clState, kernelinfo, &binary_bytes))
+			{
+				bytes_free(&binary_bytes);
+				applog(LOG_DEBUG, "%s: Failed to get compiled kernel binary from OpenCL (cannot save it)", cgpu->dev_repr);
+				// NOTE: empty binary_bytes will fail BFI_INT patch on its own
+			}
 		}
-	}
-	
+		
 #ifdef USE_SHA256D
-	if (patchbfi)
-	{
-		if (!(opencl_patch_kernel_binary(&binary_bytes)) && opencl_replace_binary_kernel(cgpu, clState, kernelinfo, &binary_bytes))
+		if (patchbfi)
 		{
-			// Rebuild without BFI_INT
-			patchbfi = false;
-			bytes_free(&binary_bytes);
-			goto build;
+			if (!(opencl_patch_kernel_binary(&binary_bytes)) && opencl_replace_binary_kernel(cgpu, clState, kernelinfo, &binary_bytes))
+			{
+				applog(LOG_DEBUG, "%s: BFI_INT patching failed, rebuilding without it", cgpu->dev_repr);
+				patchbfi = false;
+				bytes_free(&binary_bytes);
+				goto build;
+			}
 		}
-	}
 #endif
+	}
 	
 	free(source);
 	
