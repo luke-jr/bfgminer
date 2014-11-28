@@ -4209,7 +4209,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	}
 	else
 #endif
-		snprintf(buf, bufsz, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
+	{
+		if (opt_show_procs)
+			snprintf(buf, bufsz, "%*s ", -(5 + max_lpdigits), cgpu->proc_repr_ns);
+		else
+			snprintf(buf, bufsz, "%-5s ", cgpu->dev_repr_ns);
+	}
 	
 	if (include_serial_in_statline && cgpu->dev_serial)
 		tailsprintf(buf, bufsz, "[serial=%s] ", cgpu->dev_serial);
