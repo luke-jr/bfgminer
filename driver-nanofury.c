@@ -332,6 +332,8 @@ static
 void nanofury_shutdown(struct thr_info * const thr)
 {
 	struct nanofury_state * const state = thr->cgpu_data;
+	if (!state)
+		return;
 	struct mcp2210_device * const mcp = state->mcp;
 	
 	if (mcp)
