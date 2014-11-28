@@ -2648,6 +2648,7 @@ static char *parse_config(json_t *config, bool fileconf, int * const fileconf_lo
 				} else {
 					snprintf(err_buf, sizeof(err_buf), "Parsing JSON option %s: %s",
 						p, err);
+					free(name);
 					return err_buf;
 				}
 			}
@@ -7301,6 +7302,7 @@ void write_config(FILE *fcfg)
 			   0 <= *(int *)opt->u.arg)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 		}
+		free(name);
 	}
 
 	/* Special case options */
