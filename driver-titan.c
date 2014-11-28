@@ -377,7 +377,7 @@ static bool knc_titan_init(struct thr_info * const thr)
 	struct knc_titan_core *knccore;
 	struct knc_titan_die *kncdie;
 	struct knc_titan_info *knc;
-	int i, asic, logical_dieno, ena_die, die;
+	int i, asic = 0, logical_dieno = 0, ena_die, die;
 	int total_cores = 0;
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
