@@ -477,6 +477,8 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Platforms. (clGetPlatformsIDs)", status);
+err:
+		free(clState);
 		return NULL;
 	}
 
@@ -484,24 +486,24 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetPlatformIDs(numPlatforms, platforms, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Platform Ids. (clGetPlatformsIDs)", status);
-		return NULL;
+		goto err;
 	}
 
 	if (opt_platform_id >= (int)numPlatforms) {
 		applog(LOG_ERR, "Specified platform that does not exist");
-		return NULL;
+		goto err;
 	}
 
 	status = clGetPlatformInfo(platforms[opt_platform_id], CL_PLATFORM_VENDOR, sizeof(pbuff), pbuff, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Platform Info. (clGetPlatformInfo)", status);
-		return NULL;
+		goto err;
 	}
 	platform = platforms[opt_platform_id];
 
 	if (platform == NULL) {
 		perror("NULL platform found!\n");
-		return NULL;
+		goto err;
 	}
 
 	applog(LOG_INFO, "CL Platform vendor: %s", pbuff);
@@ -516,10 +518,13 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, NULL, &numDevices);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Getting Device IDs (num)", status);
-		return NULL;
+		goto err;
 	}
 
-	if (numDevices > 0 ) {
+	if (numDevices <= 0)
+		goto err;
+	
+	{
 		devices = (cl_device_id *)malloc(numDevices*sizeof(cl_device_id));
 
 		/* Now, get the device list data */
@@ -527,7 +532,9 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numDevices, devices, NULL);
 		if (status != CL_SUCCESS) {
 			applog(LOG_ERR, "Error %d: Getting Device IDs (list)", status);
-			return NULL;
+err2:
+			free(devices);
+			goto err;
 		}
 
 		applog(LOG_INFO, "List of devices:");
@@ -537,7 +544,7 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 			status = clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error %d: Getting Device Info", status);
-				return NULL;
+				goto err2;
 			}
 
 			applog(LOG_INFO, "\t%i\t%s", i, pbuff);
@@ -547,24 +554,23 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 			status = clGetDeviceInfo(devices[gpu], CL_DEVICE_NAME, sizeof(pbuff), pbuff, NULL);
 			if (status != CL_SUCCESS) {
 				applog(LOG_ERR, "Error %d: Getting Device Info", status);
-				return NULL;
+				goto err2;
 			}
 
 			applog(LOG_INFO, "Selected %i: %s", gpu, pbuff);
 			strncpy(name, pbuff, nameSize);
 		} else {
 			applog(LOG_ERR, "Invalid GPU %i", gpu);
-			return NULL;
+			goto err2;
 		}
-
-	} else return NULL;
+	}
 
 	cl_context_properties cps[3] = { CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0 };
 
 	clState->context = clCreateContextFromType(cps, CL_DEVICE_TYPE_GPU, NULL, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Context. (clCreateContextFromType)", status);
-		return NULL;
+		goto err2;
 	}
 
 	/////////////////////////////////////////////////////////////////
@@ -576,7 +582,7 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 		clState->commandQueue = clCreateCommandQueue(clState->context, devices[gpu], 0 , &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Creating Command Queue. (clCreateCommandQueue)", status);
-		return NULL;
+		goto err2;
 	}
 
 	/* Check for BFI INT support. Hopefully people don't mix devices with
@@ -588,7 +594,8 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_EXTENSIONS, 1024, (void *)extensions, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_EXTENSIONS", status);
-		return NULL;
+		free(extensions);
+		goto err2;
 	}
 	find = strstr(extensions, camo);
 	if (find)
@@ -598,21 +605,21 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), (void *)&clState->preferred_vwidth, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", status);
-		return NULL;
+		goto err2;
 	}
 	applog(LOG_DEBUG, "Preferred vector width reported %d", clState->preferred_vwidth);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), (void *)&clState->max_work_size, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_WORK_GROUP_SIZE", status);
-		return NULL;
+		goto err2;
 	}
 	applog(LOG_DEBUG, "Max work group size reported %"PRId64, (int64_t)clState->max_work_size);
 
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(clState->max_compute_units), (void *)&clState->max_compute_units, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_COMPUTE_UNITS", status);
-		return NULL;
+		goto err2;
 	}
 	if (data->_init_intensity)
 	{
@@ -629,7 +636,7 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	status = clGetDeviceInfo(devices[gpu], CL_DEVICE_MAX_MEM_ALLOC_SIZE , sizeof(cl_ulong), (void *)&data->max_alloc, NULL);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: Failed to clGetDeviceInfo when trying to get CL_DEVICE_MAX_MEM_ALLOC_SIZE", status);
-		return NULL;
+		goto err2;
 	}
 	applog(LOG_DEBUG, "Max mem alloc size is %lu", (unsigned long)data->max_alloc);
 	
@@ -690,7 +697,8 @@ _clState *opencl_create_clState(unsigned int gpu, char *name, size_t nameSize)
 	clState->outputBuffer = clCreateBuffer(clState->context, 0, OPENCL_MAX_BUFFERSIZE, NULL, &status);
 	if (status != CL_SUCCESS) {
 		applog(LOG_ERR, "Error %d: clCreateBuffer (outputBuffer)", status);
-		return false;
+		// NOTE: devices is freed here, but still assigned
+		goto err;
 	}
 	
 	return clState;
