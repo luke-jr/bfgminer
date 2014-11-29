@@ -1,3 +1,22 @@
+BFGMiner Version 3.10.8 - November 29, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.38.0 to 7.39.0
+- - libjansson from 2.6 to 2.7
+- Bugfix: bytes_free: Set buf to NULL so the bytes_t is reusable
+- Bugfix: modminer: Avoid leaking devname when detecting claimed devices
+- Bugfix: free memory allocated for config file loading/writing
+- Bugfix: nanofury: Avoid NULL pointer dereference on init failure
+- cpu: Fix processor count detection with HW_NCPU
+- cpu: SCHED_IDLE and SCHED_BATCH can only be used with sched_priority 0
+- cpu: fix sched_setaffinity parameter : sizeof(cpu_set_t)
+- Update bundled libblkmaker to 0.4.1
+- Bugfix: DevAPI: hashes_done: Explicitly cast to uint64_t for big calculations
+(LLVM was allowing overflow)
+- Bugfix: Highlight all active pools, in pool listing
+- Bugfix: Cannot duplicate userpass option or we end up with it processed double
+
+
 BFGMiner Version 3.10.7 - September 10, 2014
 
 - Bugfix: bitforce: Initialise variable to NULL

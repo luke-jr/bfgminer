@@ -1,3 +1,9 @@
+bfgminer (3.10.8-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 29 Nov 2014 02:29:08 -0000
+
 bfgminer (3.10.7-0precise1) precise; urgency=low
 
   * Bug fixes only.
