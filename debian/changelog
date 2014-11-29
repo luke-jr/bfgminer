@@ -1,3 +1,9 @@
+bfgminer (4.10.1-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 29 Nov 2014 02:06:27 -0000
+
 bfgminer (4.10.0-0precise1) precise; urgency=low
 
   * minergate: Support for Spondoolies SP30.

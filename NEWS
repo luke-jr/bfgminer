@@ -1,3 +1,47 @@
+BFGMiner Version 4.10.1 - November 29, 2014
+
+- Upgraded Windows libcurl from 7.38.0 to 7.39.0
+- Bugfix: bytes_free: Set buf to NULL so the bytes_t is reusable
+- Bugfix: minergate: Avoid malloc(0) if stats file has too few values
+- Bugfix: modminer: Avoid leaking devname when detecting claimed devices
+- Bugfix: free memory allocated for config file loading/writing
+- Bugfix: nanofury: Avoid NULL pointer dereference on init failure
+- Bugfix: varint_decode: Correctly decode multibyte numbers
+- cpu: Fix processor count detection with HW_NCPU
+- cpu: SCHED_IDLE and SCHED_BATCH can only be used with sched_priority 0
+- cpu: fix sched_setaffinity parameter : sizeof(cpu_set_t)
+- Bugfix: opencl: Correctly accept negative intensities and set dynamic
+intensity without changing current value
+- Since longpoll connections are never reused, explicitly forbid reuse so
+libcurl cleans them up immediately
+- Bugfix: Correct already-in-use getcbaddr message
+- Demote some Bitfury debug log messages to only with device protocol dumping
+- Update bundled libbase58 to 0.1.3
+- README.ASIC: Minor cleanups to Zeusminer section
+- README.ASIC: Explain Zeusminer options
+- Makefile: Specify .cl files explicitly, and only include scrypt ones when
+configured with scrypt support
+- Bugfix: DevAPI: hashes_done: Explicitly cast to uint64_t for big calculations
+(LLVM was allowing overflow)
+- Bugfix: titan: First core in each die got too big nonce area to work on
+- Travis: Build MinGW64 with ncurses
+- Bugfix: Declare manual_enable_pool in miner.h, for api.c use
+- Bugfix: bitfury: Use long long and llabs to avoid under/over flows misbehaving
+- Bugfix: Highlight all active pools, in pool listing
+- Set quota to 1 when enabling a failover-only pool, and disable failover-only
+when setting quota
+- Bugfix: pool_actively_desired: Detect failover-only conditions for loadbalance
+and balance strategies
+- Bugfix: Only display pools as Failover state when it is effectively so
+- Make sure KEY_EVENT from wincon is ignored (it conflicts with ncurses)
+- README.ASIC: Add details for BFx2 USB
+- Titan: Submit stale shares while doing flushes
+- README.ASIC: Remove CFLAGS hack not needed for KnCMiner Titan build
+- Bugfix: Need unicode_micro in non-Unicode curses builds
+- Remove unused variables from curses-less builds
+- Bugfix: Cannot duplicate userpass option or we end up with it processed double
+
+
 BFGMiner Version 4.10.0 - October 21, 2014
 
 - Upgraded Windows libjansson from 2.6 to 2.7
