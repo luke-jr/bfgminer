@@ -5,10 +5,13 @@ bfgminer (4.99.1-0precise1) precise; urgency=low
   * Stratum extensions for mining goals: New experimental methods mining.capabilities and mining.set_goal for Stratum allow you to expose control of the mining algorithm to the pool. These extensions are considered draft and may be changed based on the needs of multiblockchain pool operators.
   * RPC: Also extended for multiple mining goals/algorithms. Interface is subject to change.
   * kncasic: New driver for KnCMiner Neptune (and 2nd-gen Jupiter modules).
-  * Titan: Work flushing optimisations from KnCMiner.
+  * minion: New driver for BlackArrow Prospero X1.5.
+  * titan: Work flushing optimisations from KnCMiner, and reduce processor view from per-core to per-die.
   * Keccak: Support for the SHA-3 winner hash as a proof-of-work algorithm.
+  * opencl: Workaround broken global work offset support in buggy drivers.
+  * opencl: GPU mining is now disabled by default for scrypt. Use -S opencl:auto to enable it.
 
- -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 18 Nov 2014 23:07:24 -0000
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 29 Nov 2014 00:56:45 -0000
 
 bfgminer (4.10.0-0precise1) precise; urgency=low
 

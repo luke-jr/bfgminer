@@ -1,5 +1,62 @@
-BFGMiner Version 5.0.0 - Future
+BFGMiner Version 5.0.0 - November 29, 2014
 
+- opencl: Fail gracefully if clGetProgramInfo/CL_PROGRAM_NUM_DEVICES returns
+zero
+- opencl: Remember results of global offset testing
+- opencl: Only save kernel binary when we built from source
+- opencl: Only try to patch BFI_INT when compiling a kernel from source
+- opencl: Major refactor, splitting up opencl_load_kernel into many new
+functions
+- titan: Initialise variables to satisfy compilers
+- Bugfix: opencl: Correctly handle non-goffset kernels
+- Fixing column spacing of non-curses device output
+- Bugfix: opencl: free memory if clState creation fails
+- Titan: Do not do actual configuration job in API thread context. Instead, send
+commands to the worker thread to do the actual job.
+- Titan: bugfix: dies are not configured if die#0 is OFF
+- Titan: unused function argument
+- Titan: unused variables
+- Update knc-asic: Titan FPGA image with spi->i2c commands removed and fixed
+some lock-up scenarios
+- Titan code rework: Use one bfgminer processor per die (instead of core)
+- minion: Reinitialise chips if they don't seem to be progressing
+- minion: Read temperature sensor
+- minion: TUI clock speed control
+- minion: Include "Frequency" in RPC status
+- minion: Add "clock" setting
+- minion: Set configuration parameters we care about
+- minion: Reset chip at initialization
+- minion: Configure PLL to 900 MHz at startup
+- minion: Report hashes done as accurately as we can
+- minion: Core enable/disable control
+- minion: Implement queue flushing
+- minion: Implement basic mining
+- lowl-spi: linux_spi_txrx2 to include device protocol dumping
+- minion: Detection code for the Prospero X1
+- Actually add version.c file
+- Only rebuild a minimal version.c file when git commit changes
+- Bugfix: Use HASH_ADD_KEYPTR for const char *, not HASH_ADD_STR
+- Bugfix: Re-lock stgd_lock when we don't have a malgo-specific pool to use
+- scrypt: Disable OpenCL by default
+- opencl: Remove support for "OCL1" kernel define (indicated OpenCL 1.1+)
+- opencl: Autodetect whether global offset actually works
+- opencl: Add no-goffset support to scrypt kernels
+- opencl: Determine kernel support for goffset by code analysis
+- opencl: Add "goffset" setting to override detection of support for global work
+offsets
+- util: seek_data_cb: Check validity of offset
+- Allow libcurl to rewind the upload buffer
+- cpu: Set the priority of miner threads to idle on Windows
+- cpu: Use _SC_NPROCESSORS_CONF instead of _SC_NPROCESSORS_ONLN
+- cpu: Do not set thread affinity on single-processor systems
+- Adding additional boolean keywords enable and disable
+- AUTHORS: Move Pelle and Vitalii to "Current Maintainers" since they actively
+maintain the Titan driver
+- AUTHORS: Add Ronny Van Keer (Keccak C implementation)
+- Titan: supply its own rolling hashrate implementation
+- A driver can supply its own rolling hashrate function   (in case generic
+rolling hashrate implementation does not work)
+- Bugfix: configure: kncasic does not actually need i2c-tools
 - Keccak: Simplify keccak_hash_data
 - keccak: Adapt opencl intensity interpretation to have approximately the same
 desktop interactivity affect as SHA256d
@@ -165,10 +222,25 @@ additional mining goal
 structs
 
 
-BFGMiner Version 4.10.1 - Future
+BFGMiner Version 4.10.1 - November 29, 2014
 
 - Upgraded Windows libcurl from 7.38.0 to 7.39.0
-- Bump bundled libbase58 to 0.1.3
+- Bugfix: bytes_free: Set buf to NULL so the bytes_t is reusable
+- Bugfix: minergate: Avoid malloc(0) if stats file has too few values
+- Bugfix: modminer: Avoid leaking devname when detecting claimed devices
+- Bugfix: free memory allocated for config file loading/writing
+- Bugfix: nanofury: Avoid NULL pointer dereference on init failure
+- Bugfix: varint_decode: Correctly decode multibyte numbers
+- cpu: Fix processor count detection with HW_NCPU
+- cpu: SCHED_IDLE and SCHED_BATCH can only be used with sched_priority 0
+- cpu: fix sched_setaffinity parameter : sizeof(cpu_set_t)
+- Bugfix: opencl: Correctly accept negative intensities and set dynamic
+intensity without changing current value
+- Since longpoll connections are never reused, explicitly forbid reuse so
+libcurl cleans them up immediately
+- Bugfix: Correct already-in-use getcbaddr message
+- Demote some Bitfury debug log messages to only with device protocol dumping
+- Update bundled libbase58 to 0.1.3
 - README.ASIC: Minor cleanups to Zeusminer section
 - README.ASIC: Explain Zeusminer options
 - Makefile: Specify .cl files explicitly, and only include scrypt ones when
