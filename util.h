@@ -631,7 +631,7 @@ static inline
 void bytes_free(bytes_t *b)
 {
 	free(b->buf);
-	b->sz = b->allocsz = 0;
+	bytes_init(b);
 }
 
 
