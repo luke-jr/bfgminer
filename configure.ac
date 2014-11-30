@@ -399,7 +399,7 @@ BFG_DRIVER(cpumining,CPU mining,,no,[
 	driverlist="$driverlist cpu:asm/has_yasm"
 	driverlist="$driverlist cpu:sse2/have_sse2"
 ])
-driverlist="${driverlist/ cpumining/ cpu}"
+driverlist=`echo "${driverlist}" | sed -e 's/ cpumining/ cpu/'`
 
 BFG_DRIVER(,OpenCL,,no)
 
@@ -1053,7 +1053,7 @@ else
 			AC_SEARCH_LIBS(${sym}, ${preferl}, [
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
-				barelib="${curseslib/-l/}"
+				barelib=`echo "${curseslib}" | sed -e 's/-l//'`
 				optlist="$optlist ${barelib}/curses"
 				if test "x${curseslib}" != "xnone required"; then
 					NCURSES_LIBS="${curseslib}"
@@ -1061,8 +1061,8 @@ else
 				
 				# Need to check for headers in subdirectories, to ensure we get wide stuff
 				AC_MSG_CHECKING([for curses header subdirectory])
-				barelib="${barelib/6/}"
-				barelib="${barelib/5/}"
+				barelib=`echo "${barelib}" | sed -e 's/6//'`
+				barelib=`echo "${barelib}" | sed -e 's/5//'`
 				cursesincl=`echo '#include <'"${barelib}"'/curses.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)curses\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
 				if test "x$cursesincl" != "x"; then
 					NCURSES_CPPFLAGS="-I${cursesincl}"
