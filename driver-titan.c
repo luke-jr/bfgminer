@@ -365,13 +365,19 @@ static bool configure_one_die(struct knc_titan_info *knc, int asic, int die)
 	return true;
 }
 
+static
+float titan_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return (malgo->algo == POW_SCRYPT) ? DEFAULT_DIFF_FILTERING_FLOAT : -1.;
+}
+
 static bool knc_titan_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const cgpu = thr->cgpu, *proc;
 	struct knc_titan_core *knccore;
 	struct knc_titan_die *kncdie;
 	struct knc_titan_info *knc;
-	int i, asic, logical_dieno, ena_die, die;
+	int i, asic = 0, logical_dieno = 0, ena_die, die;
 	int total_cores = 0;
 	int asic_cores[KNC_TITAN_MAX_ASICS] = {0};
 
@@ -379,7 +385,6 @@ static bool knc_titan_init(struct thr_info * const thr)
 
 	for (proc = cgpu ; proc ; proc = proc->next_proc) {
 		proc->device_data = knc;
-		proc->min_nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 		if (proc->device == proc) {
 			asic = atoi(proc->device_path);
 			logical_dieno = 0;
@@ -505,9 +510,7 @@ static bool die_reconfigure(struct knc_titan_info * const knc, int asic, int die
 
 static bool knc_titan_prepare_work(struct thr_info *thr, struct work *work)
 {
-	struct cgpu_info * const cgpu = thr->cgpu;
-
-	work->nonce_diff = cgpu->min_nonce_diff;
+	work->nonce_diff = DEFAULT_DIFF_FILTERING_FLOAT;
 	return true;
 }
 
@@ -929,7 +932,7 @@ struct device_drv knc_titan_drv =
 	/* metadata */
 	.dname = "titan",
 	.name = "KNC",
-	.supported_algos = POW_SCRYPT,
+	.drv_min_nonce_diff = titan_min_nonce_diff,
 	.drv_detect = knc_titan_detect,
 
 	.thread_init = knc_titan_init,

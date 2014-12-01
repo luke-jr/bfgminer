@@ -125,6 +125,8 @@ bool isCspace(int c)
 	}
 }
 
+extern bool match_strtok(const char *optlist, const char *delim, const char *needle);
+
 typedef bool (*appdata_file_callback_t)(const char *, void *);
 extern bool appdata_file_call(const char *appname, const char *filename, appdata_file_callback_t, void *userp);
 extern char *appdata_file_find_first(const char *appname, const char *filename);
@@ -192,7 +194,6 @@ extern char *ucs2_to_utf8_dup(uint16_t *in, size_t sz);
 }while(0)
 
 extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
-extern void hash_data(unsigned char *out_hash, const unsigned char *data);
 extern void real_block_target(unsigned char *target, const unsigned char *data);
 extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
 extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);
@@ -642,7 +643,7 @@ static inline
 void bytes_free(bytes_t *b)
 {
 	free(b->buf);
-	b->sz = b->allocsz = 0;
+	bytes_init(b);
 }
 
 

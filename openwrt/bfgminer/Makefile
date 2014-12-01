@@ -11,7 +11,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=4.10.0
+PKG_VERSION:=5.0.0
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).txz
@@ -62,6 +62,10 @@ config PACKAGE_$(PKG_NAME)_libusb
 	bool "Build with libusb support (X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_keccak
+	bool "Build with Keccak algorithm support"
+	depends on PACKAGE_$(PKG_NAME)
+	default n
 config PACKAGE_$(PKG_NAME)_scrypt
 	bool "Build with scrypt algorithm support"
 	depends on PACKAGE_$(PKG_NAME)
@@ -88,6 +92,10 @@ endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --without-libusb
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_keccak
+CONFIGURE_ARGS += --enable-keccak
 endif
 
 ifdef CONFIG_PACKAGE_$(PKG_NAME)_scrypt

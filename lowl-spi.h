@@ -91,6 +91,7 @@ bool spi_txrx(struct spi_port *port)
 extern int spi_open(struct spi_port *, const char *);
 extern bool sys_spi_txrx(struct spi_port *);
 extern bool linux_spi_txrx(struct spi_port *);
+extern bool linux_spi_txrx2(struct spi_port *);
 
 void spi_bfsb_select_bank(int bank);
 

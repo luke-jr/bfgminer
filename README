@@ -2,9 +2,8 @@ BFGMiner:
 St. Barbara's Faithfully Glorified Mining Initiative Naturally Exceeding Rivals
 or Basically a Freaking Good Miner
 
-This is a multi-threaded multi-pool ASIC, FPGA, GPU and CPU miner with dynamic
-clocking, monitoring, and fanspeed support for bitcoin. Do not use on multiple
-block chains at the same time!
+This is a multi-threaded, multi-blockchain, multi-pool ASIC, FPGA, GPU and CPU
+miner with dynamic clocking, monitoring, and fanspeed support for bitcoin.
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
@@ -45,6 +44,10 @@ bfgminer -o http://pool:port -u username -p password
 Multiple pools:
 
 bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
+
+Multiple blockchains:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password --pool-goal default -o http://pool2:port -u pool2usernmae -p pool2password --pool-goal freicoin
 
 Single pool with a standard http proxy:
 
@@ -140,44 +143,49 @@ BFGMiner driver configuration options:
 	                        Include udev rules for ambiguous devices which may
 	                        not be miners
 	--disable-avalon        Compile support for Avalon (default enabled)
+	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
-	--disable-bfx           Compile support for BFx2 (default if libusb)
+	--disable-bfx           Compile support for BFx2 (default enabled)
 	--disable-bifury        Compile support for Bi*Fury (default enabled)
 	--disable-bigpic        Compile support for Big Picture Mining USB (default
 	                        enabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
-	--enable-cpumining      Build with CPU mining support (default disabled)
+	--disable-cointerra     Compile support for CoinTerra (default enabled)
+	--enable-cpumining      Compile support for CPU mining (default disabled)
 	--disable-drillbit      Compile support for DrillBit (default enabled)
 	--disable-dualminer     Compile support for DualMiner (default enabled)
-	--disable-gridseed      Compile support for GridSeed (default enabled with
-	                        scrypt)
+	--disable-gridseed      Compile support for GridSeed (default enabled)
 	--disable-hashbuster    Compile support for HashBuster Nano (default
 	                        enabled)
-	--disable-hashbusterusb Compile support for HashBuster Micro (default if
-	                        libusb)
+	--disable-hashbusterusb Compile support for HashBuster Micro (default
+	                        enabled)
 	--disable-hashfast      Compile support for HashFast (default enabled)
 	--disable-icarus        Compile support for Icarus (default enabled)
 	--enable-jingtian       Compile support for JingTian (default disabled)
 	--disable-klondike      Compile support for Klondike (default enabled)
 	--enable-knc            Compile support for KnC (default disabled)
+	--enable-kncasic        Compile support for KnC gen 2 (default disabled)
 	--disable-littlefury    Compile support for LittleFury (default enabled)
 	--enable-metabank       Compile support for Metabank (default disabled)
+	--enable-minergate      Compile support for Spondoolies minergate interface
+	                        (default disabled)
+	--enable-minion         Compile support for Minion (default disabled)
 	--disable-modminer      Compile support for ModMiner (default enabled)
 	--disable-nanofury      Compile support for NanoFury (default enabled)
 	--enable-opencl         Compile support for OpenCL (default disabled)
 	--disable-adl           Build without ADL monitoring (default enabled)
 	--disable-rockminer     Compile support for RockMiner (default enabled)
 	--enable-titan          Compile support for KnC Titan (default disabled)
-	--disable-twinfury      Compile support for Twinfury USB miner (default
-	                        enabled)
-	--disable-x6500         Compile support for X6500 (default if libusb)
-	--disable-zeusminer     Compile support for ZeusMiner (default enabled with
-	                        scrypt)
-	--disable-ztex          Compile support for ZTEX (default if libusb)
+	--disable-twinfury      Compile support for Twinfury (default enabled)
+	--disable-x6500         Compile support for X6500 (default enabled)
+	--disable-zeusminer     Compile support for ZeusMiner (default enabled)
+	--disable-ztex          Compile support for ZTEX (default enabled)
 
 BFGMiner algorithm configuration option:
-	--enable-scrypt         Compile support for scrypt mining (default disabled)
+	--enable-keccak         Compile support for Keccak (default disabled)
+	--disable-sha256d       Compile support for SHA256d (default enabled)
+	--enable-scrypt         Compile support for scrypt (default disabled)
 
 BFGMiner dependency configuration options:
 	--without-curses        Compile support for curses TUI (default enabled)
@@ -252,7 +260,6 @@ Options for both config file and command line:
 --cmd-idle <arg>    Execute a command when a device is allowed to be idle (rest or wait)
 --cmd-sick <arg>    Execute a command when a device is declared sick
 --cmd-dead <arg>    Execute a command when a device is declared dead
---coinbase-addr <arg> Set coinbase payout address for solo mining
 --coinbase-check-addr <arg> A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','
 --coinbase-check-total <arg> The least total payout amount expected in coinbase received from the previous-defined pool
 --coinbase-check-percent <arg> The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool
@@ -268,6 +275,7 @@ Options for both config file and command line:
 --expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
 --failover-switch-delay <arg> Delay in seconds before switching back to a failed pool (default: 300)
+--generate-to <arg> Set an address to generate to for solo mining
 --force-dev-init    Always initialize devices when possible (such as bitstream uploads to some FPGAs)
 --kernel-path <arg> Specify a path to where bitstream and kernel files are
 --load-balance      Change multipool strategy from failover to quota based balance
@@ -289,6 +297,7 @@ Options for both config file and command line:
 --noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-goal <arg>   Named goal for the previous-defined pool
 --pool-priority <arg> Priority for just the previous-defined pool
 --pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
@@ -467,14 +476,16 @@ the range of current share difficulties, whether block notification is working
 work.
 
 The block display shows:
-Block: ...1b89f8d3 #217364  Diff:7.67M (54.93Th/s)  Started: [17:17:22]
+Block #217364: ...1b89f8d3  Diff:7.67M (54.93T)  Started: [17:17:22]  I:12.99mBTC/hr
 
-This shows a short stretch of the current block, the next block's height and
-difficulty (including the network hashrate that difficulty represents), and when
-the search for the new block started.
+This shows a short stretch of the next block's height, the current block,
+difficulty (including the network hashrate that difficulty represents), when the
+search for the new block started, and finally expected Income, calculated by
+actual shares submitted in 100% PPS value (assumes Bitcoin, does not account for
+altcoin conversions!).
 
 The BFGMiner status line shows:
- ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  I:12.99mBTC/hr  BS:2.71k
+ ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  BS:2.71k
 
 ST is STaged work items (ready to use).
 F  is network Failure occasions (server down or slow to provide work)
@@ -483,8 +494,6 @@ AS is Active Submissions (shares in the process of submitting)
 BW is BandWidth usage on the network (received/sent)
 E  is Efficiency defined as number of shares accepted (multiplied by their
           difficulty) per 2 KB of bandwidth
-I  is expected Income, calculated by actual shares submitted in 100% PPS value
-          (assumes Bitcoin, does not account for altcoin conversions!)
 BS is the all time Best Share difficulty you've found
 
 The totals line shows the following:
@@ -557,10 +566,11 @@ SOLO MINING
 
 BFGMiner supports solo mining with any GBT-compatible bitcoin node (such as
 bitcoind). To use this mode, you need to specify the URL of your bitcoind node
-using the usual pool options (--url, --userpass, etc), and the --coinbase-addr
+using the usual pool options (--url, --userpass, etc), and the --generate-to
 option to specify the Bitcoin address you wish to receive the block rewards
 mined. When you run Bitcoin Core on the same computer as your miner, the pool
-itself will be automatically configured for you.
+itself will be automatically configured for you (on the default goal). Please be
+aware that solo mining via GBT is at this time only supported for Bitcoin.
 
 IMPORTANT: If you are solo mining with more than one instance of BFGMiner (or
 any other software) per payout address, you must also specify data using the
@@ -577,7 +587,20 @@ rejected; this does not indicate that it has stopped mining.
 Example solo mining usage:
 
 bfgminer -o http://localhost:8332 -u username -p password \
-    --coinbase-addr 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --coinbase-sig "rig1: This is Joe's block!"
+
+If you want to solo mine on multiple GBT-compatible Bitcoin blockchains, you can
+specify --generate-to multiple times with a goal name prefix followed by a
+colon. Note that at this time, the coinbase sig is always shared across all
+goals/pools.
+
+Example multi-blockchain solo mining usage:
+
+bfgminer -o http://localhost:8332 -u username -p password \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    -o http://localhost:7221 -u user2 -p password --pool-goal mychain \
+    --generate-to mychain:1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
     --coinbase-sig "rig1: This is Joe's block!"
 
 

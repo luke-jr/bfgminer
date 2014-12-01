@@ -95,7 +95,7 @@ update-version:
 	./gen-version.sh >version.h.new
 	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
 version.h: update-version
-bfgminer_SOURCES += version.h
+bfgminer_SOURCES += version.c version.h
 BUILT_SOURCES = version.h
 
 SUBDIRS += $(libbase58_SUBDIRS) $(libblkmaker_SUBDIRS)
@@ -131,14 +131,13 @@ bfgminer_CPPFLAGS += $(libevent_CFLAGS)
 endif
 
 
-if HAVE_OPENCL
+if USE_OPENCL
 bfgminer_SOURCES += driver-opencl.h driver-opencl.c
 bfgminer_SOURCES += ocl.c ocl.h findnonce.c findnonce.h
 bfgminer_SOURCES += adl.c adl.h adl_functions.h
-bfgminer_SOURCES += opencl/*.cl
 
 kernelsdir = $(pkgdatadir)/opencl
-dist_kernels_DATA = $(top_srcdir)/opencl/*.cl
+dist_kernels_DATA =
 
 dist_doc_DATA += README.GPU
 
@@ -149,21 +148,31 @@ endif
 endif
 
 
-if HAS_SCRYPT
-bfgminer_SOURCES += scrypt.c scrypt.h
-dist_doc_DATA += README.scrypt
+if USE_KECCAK
+bfgminer_SOURCES += malgo/keccak.c
+
+if USE_OPENCL
+dist_kernels_DATA += $(top_srcdir)/opencl/keccak.cl
+endif
 endif
 
-if HAS_CPUMINE
-dist_doc_DATA += README.CPU
+if USE_SHA256D
+bfgminer_SOURCES += malgo/sha256d.c
+
+if USE_OPENCL
+dist_kernels_DATA += \
+	$(top_srcdir)/opencl/diablo.cl  \
+	$(top_srcdir)/opencl/diakgcn.cl  \
+	$(top_srcdir)/opencl/phatk.cl  \
+	$(top_srcdir)/opencl/poclbm.cl
+endif
+
+if USE_CPUMINING
 bfgminer_SOURCES	+= \
 		  sha256_generic.c sha256_via.c	\
 		  sha256_cryptopp.c sha256_sse2_amd64.c		\
 		  sha256_sse4_amd64.c 	\
 		  sha256_altivec_4way.c
-
-# the CPU portion extracted from original main.c
-bfgminer_SOURCES += driver-cpu.h driver-cpu.c
 
 if HAVE_SSE2
 bfgminer_LDADD  += libsse2cpuminer.a
@@ -192,7 +201,25 @@ endif
 
 endif # HAVE_x86_64
 endif # HAS_YASM
-endif # HAS_CPUMINE
+endif # USE_CPUMINING
+endif # USE_SHA256D
+
+if USE_SCRYPT
+bfgminer_SOURCES += malgo/scrypt.c malgo/scrypt.h
+dist_doc_DATA += README.scrypt
+
+if USE_OPENCL
+dist_kernels_DATA += \
+	$(top_srcdir)/opencl/psw.cl  \
+	$(top_srcdir)/opencl/scrypt.cl  \
+	$(top_srcdir)/opencl/zuikkis.cl
+endif
+endif
+
+if USE_CPUMINING
+dist_doc_DATA += README.CPU
+bfgminer_SOURCES += driver-cpu.h driver-cpu.c
+endif # USE_CPUMINING
 
 if NEED_BFG_LOWL_VCOM
 bfgminer_SOURCES += lowl-vcom.c lowl-vcom.h
@@ -230,11 +257,11 @@ if HAS_ASIC
 dist_doc_DATA += README.ASIC
 endif
 
-if HAS_BITFORCE
+if USE_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 endif
 
-if HAS_BIGPIC
+if USE_BIGPIC
 bfgminer_SOURCES += driver-bigpic.c driver-bigpic.h
 endif
 
@@ -242,11 +269,11 @@ if USE_DRILLBIT
 bfgminer_SOURCES += driver-drillbit.c
 endif
 
-if HAS_TWINFURY
+if USE_TWINFURY
 bfgminer_SOURCES += driver-twinfury.c driver-twinfury.h
 endif
 
-if HAS_ICARUS
+if USE_ICARUS
 bfgminer_SOURCES += driver-icarus.c driver-icarus.h
 bfgminer_SOURCES += driver-cairnsmore.c
 bfgminer_SOURCES += driver-erupter.c
@@ -269,7 +296,7 @@ if USE_ZEUSMINER
 bfgminer_SOURCES += driver-zeusminer.c
 endif
 
-if HAS_AVALON
+if USE_AVALON
 bfgminer_SOURCES += driver-avalon.c driver-avalon.h
 endif
 
@@ -281,23 +308,31 @@ if USE_KNC
 bfgminer_SOURCES += driver-knc.c
 endif
 
-if HAS_KLONDIKE
+if USE_KNCASIC
+bfgminer_SOURCES += driver-kncasic.c
+endif
+
+if USE_KLONDIKE
 bfgminer_SOURCES += driver-klondike.c driver-klondike.h driver-hashbusteravalon.c
 endif
 
-if HAS_MODMINER
+if USE_MODMINER
 bfgminer_SOURCES += driver-modminer.c
 endif
 
 if USE_TITAN
-bfgminer_SOURCES += driver-titan.c titan-asic.c knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c titan-asic.h knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
+bfgminer_SOURCES += driver-titan.c titan-asic.c titan-asic.h
 endif
 
-if HAS_X6500
+if NEED_KNC_ASIC
+bfgminer_SOURCES += knc-asic/knc-asic.c knc-asic/knc-spimux.c knc-asic/knc-transport-spimux.c knc-asic/include/knc-asic.h knc-asic/include/knc-transport.h
+endif
+
+if USE_X6500
 bfgminer_SOURCES += driver-x6500.c jtag.c jtag.h
 endif
 
-if HAS_ZTEX
+if USE_ZTEX
 bfgminer_SOURCES += driver-ztex.c libztex.c libztex.h
 endif
 
@@ -305,10 +340,10 @@ if USE_BIFURY
 bfgminer_SOURCES += driver-bifury.c
 endif
 
-if HAS_BITFURY
+if USE_BITFURY
 bfgminer_SOURCES += driver-bitfury.c driver-bitfury.h libbitfury.c libbitfury.h
 
-if HAS_BFSB
+if USE_BFSB
 bfgminer_SOURCES += driver-bfsb.c
 endif
 
@@ -316,15 +351,15 @@ if USE_BFX
 bfgminer_SOURCES += driver-bfx.c
 endif
 
-if HAS_METABANK
+if USE_METABANK
 bfgminer_SOURCES += driver-metabank.c tm_i2c.h tm_i2c.c
 endif
 
-if HAS_LITTLEFURY
+if USE_LITTLEFURY
 bfgminer_SOURCES += driver-littlefury.c
 endif
 
-if HAS_NANOFURY
+if USE_NANOFURY
 bfgminer_SOURCES += driver-nanofury.c mcp2210.c mcp2210.h
 endif
 
@@ -353,6 +388,10 @@ endif
 
 if USE_MINERGATE
 bfgminer_SOURCES += driver-minergate.c
+endif
+
+if USE_MINION
+bfgminer_SOURCES += driver-minion.c
 endif
 
 if USE_ROCKMINER

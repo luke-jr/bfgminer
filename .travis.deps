@@ -29,7 +29,7 @@ fi
 if [ -n "$CROSS_BINPKGS" ]; then
 	wget "https://github.com/luke-jr/cross-binpkgs/archive/${CROSS_BINPKGS}.zip"
 	unzip "${CROSS_BINPKGS}.zip"
-	for f in "cross-binpkgs-${CROSS_BINPKGS}"/*/*; do
-		sudo tar -C "/usr/${CROSS_BINPKGS}/" -xjvpf "$f"
+	for f in "cross-binpkgs-${CROSS_BINPKGS/+/-}"/*/*; do
+		sudo tar -C "/usr/${CROSS_BINPKGS/+*/}/" -xjvpf "$f"
 	done
 fi

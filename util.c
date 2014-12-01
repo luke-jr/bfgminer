@@ -62,7 +62,6 @@
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
-#include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
 
@@ -78,6 +77,7 @@ struct data_buffer {
 struct upload_buffer {
 	const void	*buf;
 	size_t		len;
+	size_t		pos;
 };
 
 struct header_info {
@@ -177,17 +177,51 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 		pool->lp_active = true;
 	}
 
-	if (len > ub->len)
-		len = ub->len;
+	if (len > ub->len - ub->pos)
+		len = ub->len - ub->pos;
 
 	if (len) {
-		memcpy(ptr, ub->buf, len);
-		ub->buf += len;
-		ub->len -= len;
+		memcpy(ptr, ub->buf + ub->pos, len);
+		ub->pos += len;
 	}
 
 	return len;
 }
+
+#if LIBCURL_VERSION_NUM >= 0x071200
+static int seek_data_cb(void *user_data, curl_off_t offset, int origin)
+{
+	struct json_rpc_call_state * const state = user_data;
+	struct upload_buffer * const ub = &state->upload_data;
+	
+	switch (origin) {
+		case SEEK_SET:
+			if (offset < 0 || offset > ub->len)
+				return 1;
+			ub->pos = offset;
+			break;
+		case SEEK_CUR:
+			// Check the offset is valid, taking care to avoid overflows or negative unsigned numbers
+			if (offset < 0 && ub->pos < (size_t)-offset)
+				return 1;
+			if (ub->len < offset)
+				return 1;
+			if (ub->pos > ub->len - offset)
+				return 1;
+			ub->pos += offset;
+			break;
+		case SEEK_END:
+			if (offset > 0 || (size_t)-offset > ub->len)
+				return 1;
+			ub->pos = ub->len + offset;
+			break;
+		default:
+			return 1;  /* CURL_SEEKFUNC_FAIL */
+	}
+	
+	return 0;  /* CURL_SEEKFUNC_OK */
+}
+#endif
 
 static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 {
@@ -461,6 +495,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state->all_data);
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
 	curl_easy_setopt(curl, CURLOPT_READDATA, state);
+#if LIBCURL_VERSION_NUM >= 0x071200
+	curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, &seek_data_cb);
+	curl_easy_setopt(curl, CURLOPT_SEEKDATA, state);
+#endif
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &state->curl_err_str[0]);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
@@ -486,9 +524,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 
 	state->upload_data.buf = rpc_req;
 	state->upload_data.len = strlen(rpc_req);
+	state->upload_data.pos = 0;
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) state->upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE"/"VERSION);
+	sprintf(user_agent_hdr, "User-Agent: %s", bfgminer_name_slash_ver);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
@@ -790,17 +829,6 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
-void hash_data(unsigned char *out_hash, const unsigned char *data)
-{
-	unsigned char blkheader[80];
-	
-	// data is past the first SHA256 step (padding and interpreting as big endian on a little endian platform), so we need to flip each 32-bit chunk around to get the original input block header
-	swap32yes(blkheader, data, 80 / 4);
-	
-	// double-SHA256 to get the block hash
-	gen_hash(blkheader, out_hash, 80);
-}
-
 // Example output: 0000000000000000000000000000000000000000000000000000ffff00000000 (bdiff 1)
 void real_block_target(unsigned char *target, const unsigned char *data)
 {
@@ -863,15 +891,6 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 	}
 
 	return rc;
-}
-
-// This operates on a native-endian SHA256 state
-// In other words, on little endian platforms, every 4 bytes are in reverse order
-bool fulltest(const unsigned char *hash, const unsigned char *target)
-{
-	unsigned char hash2[32];
-	swap32tobe(hash2, hash, 32 / 4);
-	return hash_target_check_v(hash2, target);
 }
 
 struct thread_q *tq_new(void)
@@ -1957,6 +1976,17 @@ bool isCalpha(const int c)
 	return false;
 }
 
+bool match_strtok(const char * const optlist, const char * const delim, const char * const needle)
+{
+	const size_t optlist_sz = strlen(optlist) + 1;
+	char opts[optlist_sz];
+	memcpy(opts, optlist, optlist_sz);
+	for (char *el, *nextptr, *s = opts; (el = strtok_r(s, delim, &nextptr)); s = NULL)
+		if (!strcasecmp(el, needle))
+			return true;
+	return false;
+}
+
 static
 bool _appdata_file_call(const char * const appname, const char * const filename, const appdata_file_callback_t cb, void * const userp, const char * const path)
 {
@@ -2203,6 +2233,7 @@ struct bfg_strtobool_keyword {
 bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused const int opts)
 {
 	struct bfg_strtobool_keyword keywords[] = {
+		{false, "disable"},
 		{false, "false"},
 		{false, "never"},
 		{false, "none"},
@@ -2210,7 +2241,9 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 		{false, "no"},
 		{false, "0"},
 		
+		{true , "enable"},
 		{true , "always"},
+		{true , "force"},
 		{true , "true"},
 		{true , "yes"},
 		{true , "on"},
@@ -2396,20 +2429,20 @@ size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
 	if (size > 8 && p[0] == 0xff)
 	{
-		*n = upk_u64le(p, 0);
+		*n = upk_u64le(p, 1);
 		return 9;
 	}
 	if (size > 4 && p[0] == 0xfe)
 	{
-		*n = upk_u32le(p, 0);
+		*n = upk_u32le(p, 1);
 		return 5;
 	}
 	if (size > 2 && p[0] == 0xfd)
 	{
-		*n = upk_u16le(p, 0);
+		*n = upk_u16le(p, 1);
 		return 3;
 	}
-	if (size > 0)
+	if (size > 0 && p[0] <= 0xfc)
 	{
 		*n = p[0];
 		return 1;
@@ -2553,6 +2586,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	// stratum_set_goal ensures these are the same pointer if they match
+	if (pool->goalname != pool->next_goalname)
+	{
+		free(pool->goalname);
+		pool->goalname = pool->next_goalname;
+		mining_goal_reset(pool->goal);
+	}
+	if (pool->next_goal_malgo)
+	{
+		goal_set_malgo(pool->goal, pool->next_goal_malgo);
+		pool->next_goal_malgo = NULL;
+	}
+	
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
@@ -2629,6 +2675,8 @@ out:
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
 	double diff;
 
 	diff = json_number_value(json_array_get(val, 0));
@@ -2642,8 +2690,10 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		diff = bdiff_to_pdiff(diff);
 	}
 	
-	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+#ifdef USE_SHA256D
+	if (malgo->algo == POW_SHA256D && diff < 1 && diff > 0.999)
 		diff = 1;
+#endif
 	
 #ifdef USE_SCRYPT
 	// Broken Scrypt pools multiply difficulty by 0x10000
@@ -2660,7 +2710,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	// Diff 16 at 1.15 Gh/s = 1 share / 60s
 	// Diff 16 at 7.00 Gh/s = 1 share / 10s
 
-	if (opt_scrypt && (diff >= minimum_broken_scrypt_diff))
+	if (malgo->algo == POW_SCRYPT && (diff >= minimum_broken_scrypt_diff))
 		diff /= broken_scrypt_diff_multiplier;
 #endif
 
@@ -2739,6 +2789,72 @@ err:
 	return true;
 }
 
+static
+bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	if (!uri_get_param_bool(pool->rpc_url, "goalreset", false))
+		return false;
+	
+	const char * const new_goalname = __json_array_string(params, 0);
+	struct mining_algorithm *new_malgo = NULL;
+	const char *emsg = NULL;
+	
+	if (json_is_array(params) && json_array_size(params) > 1)
+	{
+		json_t * const j_goaldesc = json_array_get(params, 1);
+		if (json_is_object(j_goaldesc))
+		{
+			json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
+			if (j_malgo && json_is_string(j_malgo))
+			{
+				const char * const newvalue = json_string_value(j_malgo);
+				new_malgo = mining_algorithm_by_alias(newvalue);
+				// Even if it's the current malgo, we should reset next_goal_malgo in case of a prior set_goal
+				if (new_malgo == pool->goal->malgo)
+				{}  // Do nothing, assignment takes place below
+				if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
+				{}  // Do nothing, assignment takes place below
+				else
+				{
+					emsg = "Mining algorithm not supported";
+					// Ignore even the goal name, if we are failing
+					goto out;
+				}
+				if (new_malgo == pool->goal->malgo)
+					new_malgo = NULL;
+			}
+		}
+	}
+	
+	// Even if the goal name is not changing, we need to adopt and configuration change
+	pool->next_goal_malgo = new_malgo;
+	
+	if (pool->next_goalname && pool->next_goalname != pool->goalname)
+		free(pool->next_goalname);
+	
+	// This compares goalname to new_goalname, but matches NULL correctly :)
+	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
+		pool->next_goalname = pool->goalname;
+	else
+		pool->next_goalname = maybe_strdup(new_goalname);
+	
+out: ;
+	json_t * const j_id = json_object_get(val, "id");
+	if (j_id && !json_is_null(j_id))
+	{
+		char * const idstr = json_dumps_ANY(j_id, 0);
+		char buf[0x80];
+		if (unlikely(emsg))
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
+		else
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":null,\"error\":[-1,\"%s\",null]}", idstr, emsg);
+		free(idstr);
+		stratum_send(pool, buf, strlen(buf));
+	}
+	
+	return true;
+}
+
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	if (opt_disable_client_reconnect)
@@ -2794,7 +2910,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 
 	idstr = json_dumps_ANY(id, 0);
-	sprintf(s, "{\"id\": %s, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", idstr);
+	sprintf(s, "{\"id\": %s, \"result\": \"%s\", \"error\": null}", idstr, bfgminer_name_slash_ver);
 	free(idstr);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
@@ -2904,6 +3020,10 @@ bool parse_method(struct pool *pool, char *s)
 		ret = true;
 		goto out;
 	}
+	
+	// Usage: mining.set_goal("goal name", {"malgo":"SHA256d", ...})
+	if (!strncasecmp(buf, "mining.set_goal", 15) && stratum_set_goal(pool, val, params))
+		return_via(out, ret = true);
 	
 out:
 	if (val)
@@ -3179,13 +3299,28 @@ resend:
 		recvd = true;
 	}
 	
+	if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
+	{
+		// Default: ["notify", "set_difficulty"] (but these must be explicit if mining.capabilities is used)
+		snprintf(s, sizeof(s), "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[{\"notify\":[],\"set_difficulty\":{},\"set_goal\":[],\"malgo\":{");
+		struct mining_algorithm *malgo;
+		LL_FOREACH(mining_algorithms, malgo)
+		{
+			tailsprintf(s, sizeof(s), "\"%s\":{}%c", malgo->name, malgo->next ? ',' : '}');
+		}
+		if (request_target_str)
+			tailsprintf(s, sizeof(s), ",\"suggested_target\":\"%s\"", request_target_str);
+		tailsprintf(s, sizeof(s), "}]}");
+		_stratum_send(pool, s, strlen(s), true);
+	}
+	
 	if (noresume) {
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\", \"%s\"]}", swork_id++, bfgminer_name_slash_ver, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\"]}", swork_id++, bfgminer_name_slash_ver);
 	}
 
 	if (!_stratum_send(pool, s, strlen(s), true)) {

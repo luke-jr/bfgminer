@@ -316,7 +316,6 @@ bool cointerra_lowl_probe(const struct lowlevel_device_info * const info)
 		.dev_product = maybe_strdup(info->product),
 		.dev_serial = maybe_strdup(info->serial),
 		.deven = DEV_ENABLED,
-		.min_nonce_diff = CTA_INIT_DIFF,
 	};
 	const bool rv = add_cgpu(dev);
 	applog(LOG_INFO, "%s: Successfully set up %s",

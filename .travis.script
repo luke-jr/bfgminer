@@ -2,6 +2,7 @@ test "x$1" = "xI-am-okay-with-destroying-my-system" || exit 1
 set -ex
 
 if [ -n "$CROSS_BINPKGS" ]; then
+	CROSS_BINPKGS="${CROSS_BINPKGS/+*/}"
 	myCC="${CROSS_BINPKGS}-gcc"
 	CC_ARGS="-I/usr/${CROSS_BINPKGS}/usr/include"
 	export LDFLAGS="-L/usr/${CROSS_BINPKGS}/usr/lib -L/usr/${CROSS_BINPKGS}/usr/bin"

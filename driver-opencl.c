@@ -50,7 +50,6 @@
 /* TODO: cleanup externals ********************/
 
 
-#ifdef HAVE_OPENCL
 /* Platform API */
 CL_API_ENTRY cl_int CL_API_CALL
 (*clGetPlatformIDs)(cl_uint          /* num_entries */,
@@ -257,10 +256,7 @@ load_opencl_symbols() {
 	
 	return true;
 }
-#endif
 
-
-typedef cl_int (*queue_kernel_parameters_func_t)(_clState *, struct work *, cl_uint);
 
 struct opencl_kernel_interface {
 	const char *kiname;
@@ -308,6 +304,11 @@ void opencl_early_init()
 		struct opencl_device_data * const data = &dataarray[i];
 		*data = (struct opencl_device_data){
 			.dynamic = true,
+			.use_goffset = BTS_UNKNOWN,
+			.intensity = intensity_not_set,
+#ifdef USE_SCRYPT
+			.lookup_gap = 2,
+#endif
 		};
 		gpus[i] = (struct cgpu_info){
 			.device_data = data,
@@ -369,30 +370,20 @@ const char *set_ ## PNAME(char *arg)  \
 #define _SET_INT_LIST(PNAME, VCHECK, FIELD)  \
 	_SET_INT_LIST2(PNAME, VCHECK, ((struct opencl_device_data *)cgpu->device_data)->FIELD)
 
-#ifdef HAVE_OPENCL
 _SET_INT_LIST(vector  , (v == 1 || v == 2 || v == 4), vwidth   )
 _SET_INT_LIST(worksize, (v >= 1 && v <= 9999)       , work_size)
 
 #ifdef USE_SCRYPT
 _SET_INT_LIST(shaders           , true, shaders)
-_SET_INT_LIST(lookup_gap        , true, opt_lg )
-_SET_INT_LIST(thread_concurrency, true, opt_tc )
+_SET_INT_LIST(lookup_gap        , true, lookup_gap)
+_SET_INT_LIST(thread_concurrency, true, thread_concurrency)
 #endif
 
 enum cl_kernels select_kernel(const char * const arg)
 {
-	if (!strcmp(arg, "diablo"))
-		return KL_DIABLO;
-	if (!strcmp(arg, "diakgcn"))
-		return KL_DIAKGCN;
-	if (!strcmp(arg, "poclbm"))
-		return KL_POCLBM;
-	if (!strcmp(arg, "phatk"))
-		return KL_PHATK;
-#ifdef USE_SCRYPT
-	if (!strcmp(arg, "scrypt"))
-		return KL_SCRYPT;
-#endif
+	for (unsigned i = 1; i < (unsigned)OPENCL_KERNEL_INTERFACE_COUNT; ++i)
+		if (!strcasecmp(arg, kernel_interfaces[i].kiname))
+			return i;
 	return KL_NONE;
 }
 
@@ -405,20 +396,25 @@ const char *opencl_get_kernel_interface_name(const enum cl_kernels kern)
 static
 bool _set_kernel(struct cgpu_info * const cgpu, const char *_val)
 {
-	FILE *F;
 	struct opencl_device_data * const data = cgpu->device_data;
 	
 	size_t knamelen = strlen(_val);
 	char filename[knamelen + 3 + 1];
 	sprintf(filename, "%s.cl", _val);
 	
-	F = opencl_open_kernel(filename);
-	if (!F)
+	int dummy_srclen;
+	enum cl_kernels interface;
+	struct mining_algorithm *malgo;
+	char *src = opencl_kernel_source(filename, &dummy_srclen, &interface, &malgo);
+	if (!src)
 		return false;
-	fclose(F);
+	free(src);
+	if (!malgo)
+		return false;
 	
-	free(data->kernel_file);
-	data->kernel_file = strdup(_val);
+	struct opencl_kernel_info * const kernelinfo = &data->kernelinfo[malgo->algo];
+	free(kernelinfo->file);
+	kernelinfo->file = strdup(_val);
 	
 	return true;
 }
@@ -427,7 +423,6 @@ const char *set_kernel(char *arg)
 {
 	return _set_list(arg, "Invalid value passed to set_kernel", _set_kernel);
 }
-#endif
 
 static
 const char *opencl_init_binary(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
@@ -454,6 +449,19 @@ const char *opencl_init_binary(struct cgpu_info * const proc, const char * const
 	else
 		return "Invalid value passed to opencl binary";
 	
+	return NULL;
+}
+
+static
+const char *opencl_init_goffset(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	char *end;
+	bool nv = bfg_strtobool(newvalue, &end, 0);
+	if (newvalue[0] && !end[0])
+		data->use_goffset = nv;
+	else
+		return "Invalid boolean value";
 	return NULL;
 }
 
@@ -654,23 +662,6 @@ const char *opencl_set_gpu_vddc(struct cgpu_info * const proc, const char * cons
 _SET_INT_LIST(temp_overheat, (v >=     0 && v <   200), adl.overtemp )
 #endif
 
-#ifdef HAVE_OPENCL
-// SHA256d "intensity" has an artificial offset of -15
-double oclthreads_to_intensity(const unsigned long oclthreads, const bool is_sha256d)
-{
-	double intensity = log2(oclthreads);
-	if (is_sha256d)
-		intensity -= 15.;
-	return intensity;
-}
-
-unsigned long intensity_to_oclthreads(double intensity, const bool is_sha256d)
-{
-	if (is_sha256d)
-		intensity += 15;
-	return pow(2, intensity);
-}
-
 double oclthreads_to_xintensity(const unsigned long oclthreads, const cl_uint max_compute_units)
 {
 	return (double)oclthreads / (double)max_compute_units / 64.;
@@ -681,10 +672,33 @@ unsigned long xintensity_to_oclthreads(const double xintensity, const cl_uint ma
 	return xintensity * max_compute_units * 0x40;
 }
 
+static int min_intensity, max_intensity;
+
+// NOTE: This can't be attribute-constructor because then it would race with the mining_algorithms list being populated
+static
+void opencl_calc_intensity_range()
+{
+	RUNONCE();
+	
+	min_intensity = INT_MAX;
+	max_intensity = INT_MIN;
+	struct mining_algorithm *malgo;
+	LL_FOREACH(mining_algorithms, malgo)
+	{
+		const int malgo_min_intensity = malgo->opencl_oclthreads_to_intensity(malgo->opencl_min_oclthreads);
+		const int malgo_max_intensity = malgo->opencl_oclthreads_to_intensity(malgo->opencl_max_oclthreads);
+		if (malgo_min_intensity < min_intensity)
+			min_intensity = malgo_min_intensity;
+		if (malgo_max_intensity > max_intensity)
+			max_intensity = malgo_max_intensity;
+	}
+}
+
 bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_val)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
 	unsigned long oclthreads = 0;
+	float intensity = intensity_not_set;
 	bool dynamic = false;
 	
 	if (!strncasecmp(_val, "d", 1))
@@ -710,19 +724,33 @@ bool opencl_set_intensity_from_str(struct cgpu_info * const cgpu, const char *_v
 		}
 	}
 	else
-	if (isdigit(_val[0]))
 	{
-		const double v = atof(_val);
-		if (v < MIN_INTENSITY || v > MAX_GPU_INTENSITY)
-			return false;
-		oclthreads = intensity_to_oclthreads(v, !opt_scrypt);
+		char *endptr;
+		const double v = strtod(_val, &endptr);
+		if (endptr == _val)
+		{
+			if (!dynamic)
+				return false;
+		}
+		else
+		{
+			opencl_calc_intensity_range();
+			if (v < min_intensity || v > max_intensity)
+				return false;
+			oclthreads = 1;
+			intensity = v;
+		}
 	}
 	
 	// Make actual assignments after we know the values are valid
 	data->dynamic = dynamic;
 	if (data->oclthreads)
 	{
-		data->oclthreads = oclthreads;
+		if (oclthreads)
+		{
+			data->oclthreads = oclthreads;
+			data->intensity = intensity;
+		}
 		pause_dynamic_threads(cgpu->device_id);
 	}
 	else
@@ -742,7 +770,6 @@ const char *set_intensity(char *arg)
 }
 
 _SET_INT_LIST2(gpu_threads, (v >= 1 && v <= 10), cgpu->threads)
-#endif
 
 void write_config_opencl(FILE * const fcfg)
 {
@@ -753,7 +780,6 @@ void write_config_opencl(FILE * const fcfg)
 }
 
 
-#ifdef HAVE_OPENCL
 BFG_REGISTER_DRIVER(opencl_api)
 static const struct bfg_set_device_definition opencl_set_device_funcs_probe[];
 static const struct bfg_set_device_definition opencl_set_device_funcs[];
@@ -766,15 +792,11 @@ char *print_ndevs_and_exit(int *ndevs)
 	applog(LOG_INFO, "%i GPU devices max detected", *ndevs);
 	exit(*ndevs);
 }
-#endif
 
 
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 struct cgpu_info *cpus;
 
-
-
-#ifdef HAVE_OPENCL
 
 /* In dynamic mode, only the first thread of each device will be in use.
  * This potentially could start a thread that was stopped with the start-stop
@@ -802,16 +824,29 @@ void pause_dynamic_threads(int gpu)
 
 struct device_drv opencl_api;
 
-#endif /* HAVE_OPENCL */
+float opencl_proc_get_intensity(struct cgpu_info * const proc, const char ** const iunit)
+{
+	struct opencl_device_data * const data = proc->device_data;
+	struct thr_info *thr = proc->thr[0];
+	const int thr_id = thr->id;
+	_clState * const clState = clStates[thr_id];
+	float intensity = data->intensity;
+	if (intensity == intensity_not_set)
+	{
+		intensity = oclthreads_to_xintensity(data->oclthreads, clState->max_compute_units);
+		*iunit = data->dynamic ? "dx" : "x";
+	}
+	else
+		*iunit = data->dynamic ? "d" : "";
+	return intensity;
+}
 
-#if defined(HAVE_OPENCL) && defined(HAVE_CURSES)
+#ifdef HAVE_CURSES
 static
 void opencl_wlogprint_status(struct cgpu_info *cgpu)
 {
 	struct opencl_device_data * const data = cgpu->device_data;
 	struct thr_info *thr = cgpu->thr[0];
-	const int thr_id = thr->id;
-	_clState * const clState = clStates[thr_id];
 	int i;
 	char checkin[40];
 	double displayed_rolling;
@@ -820,16 +855,9 @@ void opencl_wlogprint_status(struct cgpu_info *cgpu)
 	strcpy(logline, ""); // In case it has no data
 	
 	{
-		double intensity = oclthreads_to_intensity(data->oclthreads, !opt_scrypt);
-		double xintensity = oclthreads_to_xintensity(data->oclthreads, clState->max_compute_units);
-		const char *iunit = "";
-		if (xintensity - (int)xintensity < intensity - (int)intensity)
-		{
-			intensity = xintensity;
-			iunit = "x";
-		}
-		tailsprintf(logline, sizeof(logline), "I:%s%s%g ",
-		            (data->dynamic ? "d" : ""),
+		const char *iunit;
+		float intensity = opencl_proc_get_intensity(cgpu, &iunit);
+		tailsprintf(logline, sizeof(logline), "I:%s%g ",
 		            iunit,
 		            intensity);
 	}
@@ -917,33 +945,23 @@ void opencl_tui_wlogprint_choices(struct cgpu_info *cgpu)
 static
 const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 {
-	struct opencl_device_data * const data = cgpu->device_data;
-	
 	switch (input)
 	{
 		case 'i': case 'I':
 		{
+			char promptbuf[0x40];
 			char *intvar;
 
-			if (opt_scrypt) {
-				intvar = curses_input("Set GPU scan intensity (d or "
-						      MIN_SCRYPT_INTENSITY_STR " -> "
-						      MAX_SCRYPT_INTENSITY_STR ")");
-			} else {
-				intvar = curses_input("Set GPU scan intensity (d or "
-						      MIN_SHA_INTENSITY_STR " -> "
-						      MAX_SHA_INTENSITY_STR ")");
-			}
+			opencl_calc_intensity_range();
+			snprintf(promptbuf, sizeof(promptbuf), "Set GPU scan intensity (d or %d -> %d)", min_intensity, max_intensity);
+			intvar = curses_input(promptbuf);
 			if (!intvar)
 				return "Invalid intensity\n";
-			if (!strncasecmp(intvar, "d", 1)) {
-				data->dynamic = true;
-				pause_dynamic_threads(cgpu->device_id);
-				free(intvar);
-				return "Dynamic mode enabled\n";
-			}
 			if (!_set_intensity(cgpu, intvar))
+			{
+				free(intvar);
 				return "Invalid intensity (out of range)\n";
+			}
 			free(intvar);
 			return "Intensity changed\n";
 		}
@@ -971,20 +989,16 @@ const char *opencl_tui_handle_choice(struct cgpu_info *cgpu, int input)
 #endif
 
 
-#ifdef HAVE_OPENCL
-
 #define CL_SET_BLKARG(blkvar) status |= clSetKernelArg(*kernel, num++, sizeof(uint), (void *)&blk->blkvar)
 #define CL_SET_ARG(var) status |= clSetKernelArg(*kernel, num++, sizeof(var), (void *)&var)
 #define CL_SET_VARG(args, var) status |= clSetKernelArg(*kernel, num++, args * sizeof(uint), (void *)var)
 
+#ifdef USE_SHA256D
 static
 void *_opencl_work_data_dup(struct work * const work)
 {
 	struct opencl_work_data *p = malloc(sizeof(*p));
 	memcpy(p, work->device_data, sizeof(*p));
-#ifdef USE_SCRYPT
-	p->work = work;
-#endif
 	return p;
 }
 
@@ -1007,10 +1021,10 @@ struct opencl_work_data *_opencl_work_data(struct work * const work)
 }
 
 static
-cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, const cl_uint threads)
+cl_int queue_poclbm_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
@@ -1031,7 +1045,8 @@ cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, c
 	CL_SET_BLKARG(cty_g);
 	CL_SET_BLKARG(cty_h);
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset)
+	{
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1062,10 +1077,10 @@ cl_int queue_poclbm_kernel(_clState * const clState, struct work * const work, c
 }
 
 static
-cl_int queue_phatk_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_phatk_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	cl_uint vwidth = clState->vwidth;
 	unsigned int i, num = 0;
 	cl_int status = 0;
@@ -1107,14 +1122,14 @@ cl_int queue_phatk_kernel(_clState * const clState, struct work * const work, __
 }
 
 static
-cl_int queue_diakgcn_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_diakgcn_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset) {
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1169,14 +1184,14 @@ cl_int queue_diakgcn_kernel(_clState * const clState, struct work * const work, 
 }
 
 static
-cl_int queue_diablo_kernel(_clState * const clState, struct work * const work, const cl_uint threads)
+cl_int queue_diablo_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, const cl_uint threads)
 {
 	struct opencl_work_data * const blk = _opencl_work_data(work);
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_int status = 0;
 
-	if (!clState->goffset) {
+	if (!kinfo->goffset) {
 		cl_uint vwidth = clState->vwidth;
 		uint *nonces = alloca(sizeof(uint) * vwidth);
 		unsigned int i;
@@ -1222,16 +1237,23 @@ cl_int queue_diablo_kernel(_clState * const clState, struct work * const work, c
 
 	return status;
 }
+#endif
 
 #ifdef USE_SCRYPT
 static
-cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+cl_int queue_scrypt_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
 {
 	unsigned char *midstate = work->midstate;
-	cl_kernel *kernel = &clState->kernel;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	unsigned int num = 0;
 	cl_uint le_target;
 	cl_int status = 0;
+	
+	if (!kinfo->goffset)
+	{
+		cl_uint nonce_base = work->blk.nonce;
+		CL_SET_ARG(nonce_base);
+	}
 
 	le_target = *(cl_uint *)(work->target + 28);
 	clState->cldata = work->data;
@@ -1247,23 +1269,54 @@ cl_int queue_scrypt_kernel(_clState * const clState, struct work * const work, _
 	return status;
 }
 #endif
-#endif /* HAVE_OPENCL */
+
+#ifdef USE_OPENCL_FULLHEADER
+static
+cl_int queue_fullheader_kernel(const struct opencl_kernel_info * const kinfo, _clState * const clState, struct work * const work, __maybe_unused const cl_uint threads)
+{
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const cl_kernel * const kernel = &kinfo->kernel;
+	unsigned int num = 0;
+	cl_int status = 0;
+	uint8_t blkheader[80];
+	
+	work->nonce_diff = malgo->opencl_min_nonce_diff;
+	
+	if (!kinfo->goffset)
+	{
+		cl_uint nonce_base = work->blk.nonce;
+		CL_SET_ARG(nonce_base);
+	}
+	
+	swap32yes(blkheader, work->data, 80/4);
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, CL_TRUE, 0, sizeof(blkheader), blkheader, 0, NULL, NULL);
+	
+	CL_SET_ARG(clState->CLbuffer0);
+	CL_SET_ARG(clState->outputBuffer);
+	
+	return status;
+}
+#endif
 
 
 static
 struct opencl_kernel_interface kernel_interfaces[] = {
 	{NULL},
+#ifdef USE_SHA256D
 	{"poclbm",  queue_poclbm_kernel },
 	{"phatk",   queue_phatk_kernel  },
 	{"diakgcn", queue_diakgcn_kernel},
 	{"diablo",  queue_diablo_kernel },
+#endif
+#ifdef USE_OPENCL_FULLHEADER
+	{"fullheader", queue_fullheader_kernel },
+#endif
 #ifdef USE_SCRYPT
 	{"scrypt",  queue_scrypt_kernel },
 #endif
 };
 
 
-#ifdef HAVE_OPENCL
 /* We have only one thread that ever re-initialises GPUs, thus if any GPU
  * init command fails due to a completely wedged GPU, the thread will never
  * return, unable to harm other GPUs. If it does return, it means we only had
@@ -1327,7 +1380,7 @@ select_cgpu:
 		//free(clState);
 
 		applog(LOG_INFO, "Reinit GPU thread %d", thr_id);
-		clStates[thr_id] = initCl(virtual_gpu, name, sizeof(name));
+		clStates[thr_id] = opencl_create_clState(virtual_gpu, name, sizeof(name));
 		if (!clStates[thr_id]) {
 			applog(LOG_ERR, "Failed to reinit GPU thread %d", thr_id);
 			goto select_cgpu;
@@ -1349,15 +1402,7 @@ select_cgpu:
 out:
 	return NULL;
 }
-#else
-void *reinit_gpu(__maybe_unused void *userdata)
-{
-	return NULL;
-}
-#endif
 
-
-#ifdef HAVE_OPENCL
 struct device_drv opencl_api;
 
 static int opencl_autodetect()
@@ -1388,13 +1433,9 @@ static int opencl_autodetect()
 	if (!nDevs)
 		return 0;
 
-	/* If opt_g_threads is not set, use default 1 thread on scrypt and
-	 * 2 for regular mining */
 	if (opt_g_threads == -1) {
-		if (opt_scrypt)
-			opt_g_threads = 1;
-		else
-			opt_g_threads = 2;
+		// NOTE: This should ideally default to 2 for non-scrypt
+		opt_g_threads = 1;
 	}
 
 #ifdef HAVE_SENSORS
@@ -1440,9 +1481,13 @@ static int opencl_autodetect()
 
 static void opencl_detect()
 {
-	int flags = 0;
-	if (!opt_scrypt)
-		flags |= GDF_DEFAULT_NOAUTO;
+	int flags = GDF_DEFAULT_NOAUTO;
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (!goal->malgo->opencl_nodefault)
+			flags &= ~GDF_DEFAULT_NOAUTO;
+	}
 	generic_detect(&opencl_api, NULL, opencl_autodetect, flags);
 }
 
@@ -1541,8 +1586,18 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 	root = api_add_int(root, "Powertune", &pt, true);
 
 	char intensity[20];
-	uint32_t oclthreads = data->oclthreads;
-	double intensityf = oclthreads_to_intensity(oclthreads, !opt_scrypt);
+	uint32_t oclthreads;
+	double intensityf = data->intensity;
+	// FIXME: Some way to express intensities malgo-neutral?
+	struct mining_goal_info * const goal = get_mining_goal("default");
+	struct mining_algorithm * const malgo = goal->malgo;
+	if (data->intensity == intensity_not_set)
+	{
+		oclthreads = data->oclthreads;
+		intensityf = malgo->opencl_oclthreads_to_intensity(oclthreads);
+	}
+	else
+		oclthreads = malgo->opencl_intensity_to_oclthreads(intensityf);
 	double xintensity = oclthreads_to_xintensity(oclthreads, clState->max_compute_units);
 	if (data->dynamic)
 		strcpy(intensity, "D");
@@ -1557,7 +1612,6 @@ get_opencl_api_extra_device_status(struct cgpu_info *gpu)
 }
 
 struct opencl_thread_data {
-	cl_int (*queue_kernel_parameters)(_clState *, struct work *, cl_uint);
 	uint32_t *res;
 };
 
@@ -1572,7 +1626,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 	int virtual_gpu = data->virtual_gpu;
 	int i = thr->id;
 	static bool failmessage = false;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int buffersize = OPENCL_MAX_BUFFERSIZE;
 
 	if (!blank_res)
 		blank_res = calloc(buffersize, 1);
@@ -1583,7 +1637,7 @@ static bool opencl_thread_prepare(struct thr_info *thr)
 
 	strcpy(name, "");
 	applog(LOG_INFO, "Init GPU thread %i GPU %i virtual GPU %i", i, gpu, virtual_gpu);
-	clStates[i] = initCl(virtual_gpu, name, sizeof(name));
+	clStates[i] = opencl_create_clState(virtual_gpu, name, sizeof(name));
 	if (!clStates[i]) {
 #ifdef HAVE_CURSES
 		if (use_curses)
@@ -1629,33 +1683,11 @@ static bool opencl_thread_init(struct thr_info *thr)
 	cl_int status = 0;
 	thrdata = calloc(1, sizeof(*thrdata));
 	thr->cgpu_data = thrdata;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int buffersize = OPENCL_MAX_BUFFERSIZE;
 
 	if (!thrdata) {
 		applog(LOG_ERR, "Failed to calloc in opencl_thread_init");
 		return false;
-	}
-
-	switch (clState->chosen_kernel) {
-		case KL_POCLBM:
-			thrdata->queue_kernel_parameters = &queue_poclbm_kernel;
-			break;
-		case KL_PHATK:
-			thrdata->queue_kernel_parameters = &queue_phatk_kernel;
-			break;
-		case KL_DIAKGCN:
-			thrdata->queue_kernel_parameters = &queue_diakgcn_kernel;
-			break;
-#ifdef USE_SCRYPT
-		case KL_SCRYPT:
-			thrdata->queue_kernel_parameters = &queue_scrypt_kernel;
-			gpu->min_nonce_diff = 1./0x10000;
-			break;
-#endif
-		default:
-		case KL_DIABLO:
-			thrdata->queue_kernel_parameters = &queue_diablo_kernel;
-			break;
 	}
 
 	thrdata->res = calloc(buffersize, 1);
@@ -1680,20 +1712,47 @@ static bool opencl_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static
+float opencl_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return malgo->opencl_min_nonce_diff ?: -1.;
+}
 
+#ifdef USE_SHA256D
 static bool opencl_prepare_work(struct thr_info __maybe_unused *thr, struct work *work)
 {
-#ifdef USE_SCRYPT
-	if (!opt_scrypt)
-#endif
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	if (malgo->algo == POW_SHA256D)
 	{
 		struct opencl_work_data * const blk = _opencl_work_data(work);
 		precalc_hash(blk, (uint32_t *)(work->midstate), (uint32_t *)(work->data + 64));
 	}
 	return true;
 }
+#endif
 
 extern int opt_dynamic_interval;
+
+const struct opencl_kernel_info *opencl_scanhash_get_kernel(struct cgpu_info * const cgpu, _clState * const clState, const struct mining_algorithm * const malgo)
+{
+	struct opencl_device_data * const data = cgpu->device_data;
+	struct opencl_kernel_info *kernelinfo = NULL;
+	kernelinfo = &data->kernelinfo[malgo->algo];
+	if (!kernelinfo->file)
+	{
+		kernelinfo->file = malgo->opencl_get_default_kernel_file(malgo, cgpu, clState);
+		if (!kernelinfo->file)
+			applogr(NULL, LOG_ERR, "%s: Unsupported mining algorithm", cgpu->dev_repr);
+	}
+	if (!kernelinfo->loaded)
+	{
+		if (!opencl_load_kernel(cgpu, clState, cgpu->name, kernelinfo, kernelinfo->file, malgo))
+			applogr(NULL, LOG_ERR, "%s: Failed to load kernel", cgpu->dev_repr);
+		
+		kernelinfo->queue_kernel_parameters = kernel_interfaces[kernelinfo->interface].queue_kernel_parameters_func;
+	}
+	return kernelinfo;
+}
 
 static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 				int64_t __maybe_unused max_nonce)
@@ -1703,15 +1762,28 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	struct cgpu_info *gpu = thr->cgpu;
 	struct opencl_device_data * const data = gpu->device_data;
 	_clState *clState = clStates[thr_id];
-	const cl_kernel *kernel = &clState->kernel;
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const struct opencl_kernel_info *kinfo = opencl_scanhash_get_kernel(gpu, clState, malgo);
+	if (!kinfo)
+		return -1;
+	const cl_kernel * const kernel = &kinfo->kernel;
 	const int dynamic_us = opt_dynamic_interval * 1000;
 
 	cl_int status;
 	size_t globalThreads[1];
-	size_t localThreads[1] = { clState->wsize };
+	size_t localThreads[1] = { kinfo->wsize };
 	int64_t hashes;
-	int found = opt_scrypt ? SCRYPT_FOUND : FOUND;
-	int buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+	int found = FOUND;
+	int buffersize = BUFFERSIZE;
+#ifdef USE_SCRYPT
+	if (malgo->algo == POW_SCRYPT)
+	{
+		found = SCRYPT_FOUND;
+		buffersize = SCRYPT_BUFFERSIZE;
+	}
+#endif
+	if (data->intensity != intensity_not_set)
+		data->oclthreads = malgo->opencl_intensity_to_oclthreads(data->intensity);
 
 	/* Windows' timer resolution is only 15ms so oversample 5x */
 	if (data->dynamic && (++data->intervals * dynamic_us) > 70000) {
@@ -1721,16 +1793,18 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 		cgtime(&tv_gpuend);
 		gpu_us = us_tdiff(&tv_gpuend, &data->tv_gpustart) / data->intervals;
 		if (gpu_us > dynamic_us) {
-			const unsigned long min_oclthreads = intensity_to_oclthreads(MIN_INTENSITY, !opt_scrypt);
+			const unsigned long min_oclthreads = malgo->opencl_min_oclthreads;
 			data->oclthreads /= 2;
 			if (data->oclthreads < min_oclthreads)
 				data->oclthreads = min_oclthreads;
 		} else if (gpu_us < dynamic_us / 2) {
-			const unsigned long max_oclthreads = intensity_to_oclthreads(MAX_INTENSITY, !opt_scrypt);
+			const unsigned long max_oclthreads = malgo->opencl_max_oclthreads;
 			data->oclthreads *= 2;
 			if (data->oclthreads > max_oclthreads)
 				data->oclthreads = max_oclthreads;
 		}
+		if (data->intensity != intensity_not_set)
+			data->intensity = malgo->opencl_oclthreads_to_intensity(data->oclthreads);
 		memcpy(&(data->tv_gpustart), &tv_gpuend, sizeof(struct timeval));
 		data->intervals = 0;
 	}
@@ -1744,13 +1818,14 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	if (hashes > gpu->max_hashes)
 		gpu->max_hashes = hashes;
 
-	status = thrdata->queue_kernel_parameters(clState, work, globalThreads[0]);
+	status = kinfo->queue_kernel_parameters(kinfo, clState, work, globalThreads[0]);
 	if (unlikely(status != CL_SUCCESS)) {
 		applog(LOG_ERR, "Error: clSetKernelArg of all params failed.");
 		return -1;
 	}
 
-	if (clState->goffset) {
+	if (kinfo->goffset)
+	{
 		size_t global_work_offset[1];
 
 		global_work_offset[0] = work->blk.nonce;
@@ -1789,7 +1864,7 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 			return -1;
 		}
 		applog(LOG_DEBUG, "GPU %d found something?", gpu->device_id);
-		postcalc_hash_async(thr, work, thrdata->res);
+		postcalc_hash_async(thr, work, thrdata->res, kinfo->interface);
 		memset(thrdata->res, 0, buffersize);
 		/* This finish flushes the writebuffer set with CL_FALSE in clEnqueueWriteBuffer */
 		clFinish(clState->commandQueue);
@@ -1798,13 +1873,24 @@ static int64_t opencl_scanhash(struct thr_info *thr, struct work *work,
 	return hashes;
 }
 
+static
+void opencl_clean_kernel_info(struct opencl_kernel_info * const kinfo)
+{
+	clReleaseKernel(kinfo->kernel);
+	clReleaseProgram(kinfo->program);
+}
+
 static void opencl_thread_shutdown(struct thr_info *thr)
 {
+	struct cgpu_info * const cgpu = thr->cgpu;
+	struct opencl_device_data * const data = cgpu->device_data;
 	const int thr_id = thr->id;
 	_clState *clState = clStates[thr_id];
 
-	clReleaseKernel(clState->kernel);
-	clReleaseProgram(clState->program);
+	for (unsigned i = 0; i < (unsigned)POW_ALGORITHM_COUNT; ++i)
+	{
+		opencl_clean_kernel_info(&data->kernelinfo[i]);
+	}
 	clReleaseCommandQueue(clState->commandQueue);
 	clReleaseContext(clState->context);
 }
@@ -1822,6 +1908,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs_probe[] = 
 	{"vector", opencl_init_vector},
 	{"work_size", opencl_init_worksize},
 	{"binary", opencl_init_binary},
+	{"goffset", opencl_init_goffset},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_init_gpu_map},
 	{"clock", opencl_init_gpu_engine},
@@ -1847,6 +1934,7 @@ static const struct bfg_set_device_definition opencl_set_device_funcs[] = {
 	{"vector", opencl_cannot_set, ""},
 	{"work_size", opencl_cannot_set, ""},
 	{"binary", opencl_cannot_set, ""},
+	{"goffset", opencl_cannot_set, ""},
 #ifdef HAVE_ADL
 	{"adl_mapping", opencl_cannot_set, "Map to ADL device"},
 	{"clock", opencl_set_gpu_engine, "GPU engine clock"},
@@ -1869,7 +1957,7 @@ struct device_drv opencl_api = {
 	.dname = "opencl",
 	.name = "OCL",
 	.probe_priority = 110,
-	.supported_algos = POW_SHA256D | POW_SCRYPT,
+	.drv_min_nonce_diff = opencl_min_nonce_diff,
 	.drv_detect = opencl_detect,
 	.reinit_device = reinit_opencl_device,
 	.watchdog = opencl_watchdog,
@@ -1882,8 +1970,9 @@ struct device_drv opencl_api = {
 	.get_api_extra_device_status = get_opencl_api_extra_device_status,
 	.thread_prepare = opencl_thread_prepare,
 	.thread_init = opencl_thread_init,
+#ifdef USE_SHA256D
 	.prepare_work = opencl_prepare_work,
+#endif
 	.scanhash = opencl_scanhash,
 	.thread_shutdown = opencl_thread_shutdown,
 };
-#endif

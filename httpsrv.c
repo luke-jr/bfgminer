@@ -28,8 +28,8 @@
 #include <microhttpd.h>
 
 #include "logging.h"
+#include "miner.h"
 #include "util.h"
-#include "version.h"
 
 static struct MHD_Daemon *httpsrv;
 
@@ -37,7 +37,7 @@ extern int handle_getwork(struct MHD_Connection *, bytes_t *);
 
 void httpsrv_prepare_resp(struct MHD_Response *resp)
 {
-	MHD_add_response_header(resp, MHD_HTTP_HEADER_SERVER, PACKAGE"/"VERSION" getwork server");
+	MHD_add_response_header(resp, MHD_HTTP_HEADER_SERVER, bfgminer_name_slash_ver);
 }
 
 static

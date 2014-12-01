@@ -5,7 +5,7 @@
 // This file is taken and modified from the public-domain poclbm project, and
 // we have therefore decided to keep it public-domain in Phoenix.
 
-// kernel-interface: poclbm
+// kernel-interface: poclbm SHA256d
 
 #ifdef VECTORS4
 	typedef uint4 u;

@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <uthash.h>
+
 #include "compat.h"
 #include "deviceapi.h"
 #ifdef USE_LIBMICROHTTPD
@@ -35,7 +37,6 @@
 #include "util.h"
 #include "driver-cpu.h" /* for algo_names[], TODO: re-factor dependency */
 #include "driver-opencl.h"
-#include "version.h"
 
 #define HAVE_AN_FPGA 1
 
@@ -73,7 +74,7 @@ static const char *ALIVE = "Alive";
 static const char *REJECTING = "Rejecting";
 static const char *UNKNOWN = "Unknown";
 #define _DYNAMIC "D"
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static const char *DYNAMIC = _DYNAMIC;
 #endif
 
@@ -87,7 +88,9 @@ static const char *FALSESTR = "false";
 #ifdef USE_SCRYPT
 static const char *SCRYPTSTR = "scrypt";
 #endif
+#ifdef USE_SHA256D
 static const char *SHA256STR = "sha256";
+#endif
 
 static const char *OSINFO =
 #if defined(__linux)
@@ -122,7 +125,7 @@ static const char *OSINFO =
 #define _PGA		"PGA"
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define _CPU		"CPU"
 #endif
 
@@ -162,7 +165,7 @@ static const char ISJSON = '{';
 #define JSON_PGA	JSON1 _PGA JSON2
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define JSON_CPU	JSON1 _CPU JSON2
 #endif
 
@@ -170,11 +173,9 @@ static const char ISJSON = '{';
 #define JSON_PGAS	JSON1 _PGAS JSON2
 #define JSON_CPUS	JSON1 _CPUS JSON2
 #define JSON_NOTIFY	JSON1 _NOTIFY JSON2
-#define JSON_DEVDETAILS	JSON1 _DEVDETAILS JSON2
 #define JSON_CLOSE	JSON3
 #define JSON_MINESTATS	JSON1 _MINESTATS JSON2
 #define JSON_CHECK	JSON1 _CHECK JSON2
-#define JSON_MINECOIN	JSON1 _MINECOIN JSON2
 #define JSON_DEBUGSET	JSON1 _DEBUGSET JSON2
 #define JSON_SETCONFIG	JSON1 _SETCONFIG JSON2
 #define JSON_END	JSON4 JSON5
@@ -201,7 +202,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_MISID 15
 #define MSG_GPUDEV 17
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 #define MSG_CPUNON 16
 #define MSG_CPUDEV 18
 #define MSG_INVCPU 19
@@ -350,7 +351,7 @@ struct CODES {
 	const enum code_parameters params;
 	const char *description;
 } codes[] = {
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_ERR,   MSG_INVGPU,	PARAM_GPUMAX,	"Invalid GPU id %d - range is 0 - %d" },
  { SEVERITY_INFO,  MSG_ALRENA,	PARAM_GPU,	"GPU %d already enabled" },
  { SEVERITY_INFO,  MSG_ALRDIS,	PARAM_GPU,	"GPU %d already disabled" },
@@ -369,13 +370,13 @@ struct CODES {
  },
 
  { SEVERITY_SUCC,  MSG_SUMM,	PARAM_NONE,	"Summary" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_INFO,  MSG_GPUDIS,	PARAM_GPU,	"GPU %d set disable flag" },
  { SEVERITY_INFO,  MSG_GPUREI,	PARAM_GPU,	"GPU %d restart attempted" },
 #endif
  { SEVERITY_ERR,   MSG_INVCMD,	PARAM_NONE,	"Invalid command" },
  { SEVERITY_ERR,   MSG_MISID,	PARAM_NONE,	"Missing device id parameter" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_SUCC,  MSG_GPUDEV,	PARAM_GPU,	"GPU%d" },
 #endif
 #ifdef HAVE_AN_FPGA
@@ -388,7 +389,7 @@ struct CODES {
  { SEVERITY_INFO,  MSG_PGADIS,	PARAM_PGA,	"PGA %d set disable flag" },
  { SEVERITY_ERR,   MSG_PGAUNW,	PARAM_PGA,	"PGA %d is not flagged WELL, cannot enable" },
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
  { SEVERITY_ERR,   MSG_CPUNON,	PARAM_NONE,	"No CPUs" },
  { SEVERITY_SUCC,  MSG_CPUDEV,	PARAM_CPU,	"CPU%d" },
  { SEVERITY_ERR,   MSG_INVCPU,	PARAM_CPUMAX,	"Invalid CPU id %d - range is 0 - %d" },
@@ -411,10 +412,10 @@ struct CODES {
  { SEVERITY_ERR,   MSG_MISVAL,	PARAM_NONE,	"Missing comma after GPU number" },
  { SEVERITY_ERR,   MSG_NOADL,	PARAM_NONE,	"ADL is not available" },
  { SEVERITY_ERR,   MSG_NOGPUADL,PARAM_GPU,	"GPU %d does not have ADL" },
- { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range " MIN_SHA_INTENSITY_STR " - " MAX_SCRYPT_INTENSITY_STR },
+ { SEVERITY_ERR,   MSG_INVINT,	PARAM_STR,	"Invalid intensity (%s) - must be '" _DYNAMIC  "' or range -10 - 31" },
  { SEVERITY_INFO,  MSG_GPUINT,	PARAM_BOTH,	"GPU %d set new intensity to %s" },
  { SEVERITY_SUCC,  MSG_MINECONFIG,PARAM_NONE,	"BFGMiner config" },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
  { SEVERITY_ERR,   MSG_GPUMERR,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported failure" },
  { SEVERITY_SUCC,  MSG_GPUMEM,	PARAM_BOTH,	"Setting GPU %d memoryclock to (%s) reported success" },
  { SEVERITY_ERR,   MSG_GPUEERR,	PARAM_BOTH,	"Setting GPU %d clock to (%s) reported failure" },
@@ -1142,7 +1143,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 #ifdef HAVE_AN_FPGA
 	int pga;
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	int cpu;
 #endif
 	int i;
@@ -1181,7 +1182,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 				case PARAM_POOL:
 					sprintf(buf, codes[i].description, paramid, pools[paramid]->rpc_url);
 					break;
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 				case PARAM_GPUMAX:
 					sprintf(buf, codes[i].description, paramid, nDevs - 1);
 					break;
@@ -1192,7 +1193,7 @@ static void message(struct io_data * const io_data, const int messageid2, const 
 					sprintf(buf, codes[i].description, paramid, pga - 1);
 					break;
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 				case PARAM_CPUMAX:
 					if (opt_n_threads > 0)
 						cpu = num_processors;
@@ -1271,8 +1272,8 @@ static void apiversion(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 	message(io_data, MSG_VERSION, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_VERSION : _VERSION COMSTR);
 
-	root = api_add_string(root, "Miner", PACKAGE " " VERSION, false);
-	root = api_add_string(root, "CGMiner", VERSION, false);
+	root = api_add_string(root, "Miner", bfgminer_name_space_ver, false);
+	root = api_add_string(root, "CGMiner", bfgminer_ver, false);
 	root = api_add_const(root, "API", APIVERSION, false);
 
 	root = print_data(root, buf, isjson, false);
@@ -1564,7 +1565,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 	io_add(io_data, buf);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpustatus(struct io_data *io_data, int gpu, bool isjson, bool precom)
 {
         if (gpu < 0 || gpu >= nDevs)
@@ -1583,7 +1584,7 @@ static void pgastatus(struct io_data *io_data, int pga, bool isjson, bool precom
 }
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpustatus(struct io_data *io_data, int cpu, bool isjson, bool precom)
 {
         if (opt_n_threads <= 0 || cpu < 0 || cpu >= num_processors)
@@ -1629,7 +1630,7 @@ static void devstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __ma
 	return devinfo_internal(devstatus_an, MSG_DEVS, io_data, c, param, isjson, group);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
@@ -1847,7 +1848,7 @@ static void pgaidentify(struct io_data *io_data, __maybe_unused SOCKETTYPE c, ch
 }
 #endif
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpudev(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	bool io_open = false;
@@ -1937,6 +1938,7 @@ static void poolstatus(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __m
 		root = api_add_string(root, "Status", status, false);
 		root = api_add_int(root, "Priority", &(pool->prio), false);
 		root = api_add_int(root, "Quota", &pool->quota, false);
+		root = api_add_string(root, "Mining Goal", pool->goal->name, false);
 		root = api_add_string(root, "Long Poll", lp, false);
 		root = api_add_uint(root, "Getworks", &(pool->getwork_requested), false);
 		root = api_add_int(root, "Accepted", &(pool->accepted), false);
@@ -1989,12 +1991,6 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	bool io_open;
 	double utility, mhs, work_utility;
 
-#ifdef WANT_CPUMINE
-	char *algo = (char *)(algo_names[opt_algo]);
-	if (algo == NULL)
-		algo = (char *)NULLSTR;
-#endif
-
 	message(io_data, MSG_SUMM, 0, NULL, isjson);
 	io_open = io_add(io_data, isjson ? COMSTR JSON_SUMMARY : _SUMMARY COMSTR);
 
@@ -2006,9 +2002,9 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 	work_utility = total_diff1 / ( total_secs ? total_secs : 1 ) * 60;
 
 	root = api_add_elapsed(root, "Elapsed", &(total_secs), true);
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
-	root = api_add_string(root, "Algorithm", algo, false);
+		root = api_add_string(root, "Algorithm", (algo_names[opt_algo] ?: NULLSTR), false);
 #endif
 	root = api_add_mhs(root, "MHS av", &(mhs), false);
 	char mhsname[27];
@@ -2055,7 +2051,7 @@ static void summary(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __mayb
 		io_close(io_data);
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static void gpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
@@ -2160,7 +2156,7 @@ static void gpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	bool io_open;
 	int numgpu = 0;
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	numgpu = nDevs;
 #endif
 
@@ -2197,7 +2193,7 @@ static void pgacount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 		io_close(io_data);
 }
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 static void cpuenable(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	int id;
@@ -2305,7 +2301,7 @@ static void cpucount(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 	bool io_open;
 	int count = 0;
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	count = opt_n_threads > 0 ? num_processors : 0;
 #endif
 
@@ -2344,7 +2340,7 @@ static void switchpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	}
 
 	pool = pools[id];
-	pool->failover_only = false;
+	manual_enable_pool(pool);
 	cg_runlock(&control_lock);
 	switch_pools(pool);
 
@@ -2368,7 +2364,7 @@ static void copyadvanceafter(char ch, char **param, char **buf)
 	*(dst_b++) = '\0';
 }
 
-static bool pooldetails(char *param, char **url, char **user, char **pass)
+static bool pooldetails(char *param, char **url, char **user, char **pass, char **goalname)
 {
 	char *ptr, *buf;
 
@@ -2396,6 +2392,12 @@ static bool pooldetails(char *param, char **url, char **user, char **pass)
 
 	// copy pass
 	copyadvanceafter(',', &param, &buf);
+	
+	if (*param)
+		*goalname = buf;
+	
+	// copy goalname
+	copyadvanceafter(',', &param, &buf);
 
 	return true;
 
@@ -2406,7 +2408,7 @@ exitsama:
 
 static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
-	char *url, *user, *pass;
+	char *url, *user, *pass, *goalname = "default";
 	struct pool *pool;
 	char *ptr;
 
@@ -2415,7 +2417,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	if (!pooldetails(param, &url, &user, &pass)) {
+	if (!pooldetails(param, &url, &user, &pass, &goalname))
+	{
 		ptr = escape_string(param, isjson);
 		message(io_data, MSG_INVPDP, 0, ptr, isjson);
 		if (ptr != param)
@@ -2424,7 +2427,8 @@ static void addpool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *
 		return;
 	}
 
-	pool = add_pool();
+	struct mining_goal_info * const goal = get_mining_goal(goalname);
+	pool = add_pool2(goal);
 	detect_stratum(pool, url);
 	add_pool_details(pool, true, url, user, pass);
 
@@ -2462,8 +2466,7 @@ static void enablepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		return;
 	}
 
-	pool->failover_only = false;
-	enable_pool(pool);
+	manual_enable_pool(pool);
 
 	message(io_data, MSG_ENAPOOL, id, NULL, isjson);
 }
@@ -2621,7 +2624,7 @@ static void removepool(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 	rpc_url = NULL;
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static bool splitgpuvalue(struct io_data *io_data, char *param, int *gpu, char **value, bool isjson)
 {
 	int id;
@@ -2677,7 +2680,11 @@ static void gpuintensity(struct io_data *io_data, __maybe_unused SOCKETTYPE c, c
 		if (data->dynamic)
 			strcpy(intensitystr, DYNAMIC);
 		else
-			snprintf(intensitystr, sizeof(intensitystr), "%g", oclthreads_to_intensity(data->oclthreads, !opt_scrypt));
+		{
+			const char *iunit;
+			float intensity = opencl_proc_get_intensity(cgpu, &iunit);
+			snprintf(intensitystr, sizeof(intensitystr), "%s%g", iunit, intensity);
+		}
 	}
 	else
 	{
@@ -3066,36 +3073,57 @@ static void minecoin(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __may
 {
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
-	bool io_open;
 
 	message(io_data, MSG_MINECOIN, 0, NULL, isjson);
-	io_open = io_add(io_data, isjson ? COMSTR JSON_MINECOIN : _MINECOIN COMSTR);
 
+	struct mining_goal_info *goal, *tmpgoal;
+	bool precom = false;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (goal->is_default)
+			io_add(io_data, isjson ? COMSTR JSON1 _MINECOIN JSON2 : _MINECOIN COMSTR);
+		else
+		{
+			sprintf(buf, isjson ? COMSTR JSON1 _MINECOIN "%u" JSON2 : _MINECOIN "%u" COMSTR, goal->id);
+			io_add(io_data, buf);
+		}
+		
+		switch (goal->malgo->algo)
+		{
 #ifdef USE_SCRYPT
-	if (opt_scrypt)
-		root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
-	else
+			case POW_SCRYPT:
+				root = api_add_const(root, "Hash Method", SCRYPTSTR, false);
+				break;
 #endif
-		root = api_add_const(root, "Hash Method", SHA256STR, false);
+#ifdef USE_SHA256D
+			case POW_SHA256D:
+				root = api_add_const(root, "Hash Method", SHA256STR, false);
+				break;
+#endif
+			default:
+				root = api_add_const(root, "Hash Method", goal->malgo->name, false);
+				break;
+		}
 
-	cg_rlock(&ch_lock);
-	if (current_fullhash && *current_fullhash) {
-		root = api_add_time(root, "Current Block Time", &block_time, true);
-		root = api_add_string(root, "Current Block Hash", current_fullhash, true);
-	} else {
-		time_t t = 0;
-		root = api_add_time(root, "Current Block Time", &t, true);
-		root = api_add_const(root, "Current Block Hash", BLANK, false);
+		cg_rlock(&ch_lock);
+		struct blockchain_info * const blkchain = goal->blkchain;
+		struct block_info * const blkinfo = blkchain->currentblk;
+		root = api_add_time(root, "Current Block Time", &blkinfo->first_seen_time, true);
+		char fullhash[(sizeof(blkinfo->prevblkhash) * 2) + 1];
+		blkhashstr(fullhash, blkinfo->prevblkhash);
+		root = api_add_string(root, "Current Block Hash", fullhash, true);
+		cg_runlock(&ch_lock);
+
+		root = api_add_bool(root, "LP", &goal->have_longpoll, false);
+		root = api_add_diff(root, "Network Difficulty", &goal->current_diff, true);
+		
+		root = api_add_diff(root, "Difficulty Accepted", &goal->diff_accepted, false);
+		
+		root = print_data(root, buf, isjson, precom);
+		io_add(io_data, buf);
+		if (isjson)
+			io_add(io_data, JSON_CLOSE);
 	}
-	cg_runlock(&ch_lock);
-
-	root = api_add_bool(root, "LP", &have_longpoll, false);
-	root = api_add_diff(root, "Network Difficulty", &current_diff, true);
-
-	root = print_data(root, buf, isjson, false);
-	io_add(io_data, buf);
-	if (isjson && io_open)
-		io_close(io_data);
 }
 
 static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
@@ -3372,7 +3400,7 @@ struct CMDS {
 	{ "procs",		devstatus,	false,	true },
 	{ "pools",		poolstatus,	false,	true },
 	{ "summary",		summary,	false,	true },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	{ "gpuenable",		gpuenable,	true,	false },
 	{ "gpudisable",		gpudisable,	true,	false },
 	{ "gpurestart",		gpurestart,	true,	false },
@@ -3389,7 +3417,7 @@ struct CMDS {
 	{ "procdisable",		pgadisable,	true,	false },
 	{ "procidentify",	pgaidentify,	true,	false },
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	{ "cpuenable",		cpuenable,	true,	false },
 	{ "cpudisable",		cpudisable,	true,	false },
 	{ "cpurestart",		cpurestart,	true,	false },
@@ -3406,7 +3434,7 @@ struct CMDS {
 	{ "enablepool",		enablepool,	true,	false },
 	{ "disablepool",	disablepool,	true,	false },
 	{ "removepool",		removepool,	true,	false },
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	{ "gpuintensity",	gpuintensity,	true,	false },
 	{ "gpumem",		gpumem,		true,	false },
 	{ "gpuengine",		gpuengine,	true,	false },

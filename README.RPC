@@ -213,12 +213,12 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               stating the results of enabling pool N
                               The Msg includes the pool URL
 
- addpool|URL,USR,PASS (*)
+ addpool|URL,USR,PASS[,GOAL] (*)
                none           There is no reply section just the STATUS section
                               stating the results of attempting to add pool N
                               The Msg includes the pool URL
                               Use '\\' to get a '\' and '\,' to include a comma
-                              inside URL, USR or PASS
+                              inside URL, USR, PASS, or GOAL
 
  poolpriority|N,... (*)
                none           There is no reply section just the STATUS section
@@ -448,6 +448,16 @@ https://www.npmjs.org/package/miner-rpc
 
 Feature Changelog for external applications using the API:
 
+
+API V3.3 (BFGMiner v5.0.0)
+
+Modified API command:
+ 'addpool' - accept an additional argument to indicate mining goal by name
+ 'coin' - return multiple elements, when there are multiple mining goals
+          defined; add 'Difficulty Accepted'
+ 'pools' - add 'Mining Goal'
+
+---------
 
 API V3.2 (BFGMiner v4.1.0)
 

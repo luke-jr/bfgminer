@@ -15,6 +15,7 @@
 #include <winsock2.h>
 #endif
 
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,8 +35,8 @@
 
 #define _ssm_client_octets     work2d_xnonce1sz
 #define _ssm_client_xnonce2sz  work2d_xnonce2sz
-static char *_ssm_notify;
-static int _ssm_notify_sz;
+static char *_ssm_notify, *_ssm_setgoal;
+static int _ssm_notify_sz, _ssm_setgoal_sz;
 static struct stratumsrv_job *_ssm_last_ssj;
 static struct event *ev_notify;
 static notifier_t _ssm_update_notifier;
@@ -65,12 +66,21 @@ struct stratumsrv_conn_userlist {
 	struct stratumsrv_conn_userlist *next;
 };
 
+enum stratumsrv_conn_capability {
+	SCC_NOTIFY    = 1 << 0,
+	SCC_SET_DIFF  = 1 << 1,
+	SCC_SET_GOAL  = 1 << 2,
+};
+typedef uint8_t stratumsrv_conn_capabilities_t;
+
 struct stratumsrv_conn {
 	struct bufferevent *bev;
+	stratumsrv_conn_capabilities_t capabilities;
 	uint32_t xnonce1_le;
 	struct timeval tv_hashes_done;
 	bool hashes_done_ext;
 	float current_share_pdiff;
+	bool desired_default_share_pdiff;  // Set if any authenticated user is configured for the default
 	float desired_share_pdiff;
 	struct stratumsrv_conn_userlist *authorised_users;
 	
@@ -92,6 +102,15 @@ void stratumsrv_send_set_difficulty(struct stratumsrv_conn * const conn, const f
 }
 
 #define _ssm_gen_dummy_work work2d_gen_dummy_work
+
+static
+float stratumsrv_choose_share_pdiff(const struct stratumsrv_conn * const conn, const struct mining_algorithm * const malgo)
+{
+	float conn_pdiff = conn->desired_share_pdiff;
+	if (conn->desired_default_share_pdiff && malgo->reasonable_low_nonce_diff < conn_pdiff)
+		conn_pdiff = malgo->reasonable_low_nonce_diff;
+	return conn_pdiff;
+}
 
 static
 bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
@@ -145,6 +164,10 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	bin2hex(ntime, &ntime_n, 4);
 	p += sprintf(p, "],\"%s\",\"%s\",\"%s\",%s],\"method\":\"mining.notify\",\"id\":null}\n", version, nbits, ntime, clean ? "true" : "false");
 	
+	const size_t setgoalbufsz = 49 + strlen(pool->goal->name) + (pool->goalname ? (1 + strlen(pool->goalname)) : 0) + 12 + strlen(pool->goal->malgo->name) + 5 + 1;
+	char * const setgoalbuf = malloc(setgoalbufsz);
+	snprintf(setgoalbuf, setgoalbufsz, "{\"method\":\"mining.set_goal\",\"id\":null,\"params\":[\"%s%s%s\",{\"malgo\":\"%s\"}]}\n", pool->goal->name, pool->goalname ? "/" : "", pool->goalname ?: "", pool->goal->malgo->name);
+	
 	ssj = malloc(sizeof(*ssj));
 	*ssj = (struct stratumsrv_job){
 		.my_job_id = strdup(my_job_id),
@@ -165,20 +188,37 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	assert(_ssm_notify_sz <= bufsz);
 	free(_ssm_notify);
 	_ssm_notify = buf;
+	const bool setgoal_changed = _ssm_setgoal ? strcmp(setgoalbuf, _ssm_setgoal) : true;
+	if (setgoal_changed)
+	{
+		free(_ssm_setgoal);
+		_ssm_setgoal = setgoalbuf;
+		_ssm_setgoal_sz = setgoalbufsz - 1;
+	}
+	else
+		free(setgoalbuf);
 	_ssm_last_ssj = ssj;
 	
 	float pdiff = target_diff(ssj->swork.target);
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
 	LL_FOREACH(_ssm_connections, conn)
 	{
 		if (unlikely(!conn->xnonce1_le))
 			continue;
-		float conn_pdiff = conn->desired_share_pdiff;
-		if (pdiff < conn_pdiff)
-			conn_pdiff = pdiff;
-		ssj->job_pdiff[conn->xnonce1_le] = conn_pdiff;
-		if (conn_pdiff != conn->current_share_pdiff)
-			stratumsrv_send_set_difficulty(conn, conn_pdiff);
-		bufferevent_write(conn->bev, _ssm_notify, _ssm_notify_sz);
+		if (setgoal_changed && (conn->capabilities & SCC_SET_GOAL))
+			bufferevent_write(conn->bev, setgoalbuf, setgoalbufsz);
+		if (likely(conn->capabilities & SCC_SET_DIFF))
+		{
+			float conn_pdiff = stratumsrv_choose_share_pdiff(conn, malgo);
+			if (pdiff < conn_pdiff)
+				conn_pdiff = pdiff;
+			ssj->job_pdiff[conn->xnonce1_le] = conn_pdiff;
+			if (conn_pdiff != conn->current_share_pdiff)
+				stratumsrv_send_set_difficulty(conn, conn_pdiff);
+		}
+		if (likely(conn->capabilities & SCC_NOTIFY))
+			bufferevent_write(conn->bev, _ssm_notify, _ssm_notify_sz);
 	}
 	
 	return true;
@@ -195,15 +235,21 @@ void stratumsrv_client_changed_diff(struct proxy_client * const client)
 		++connections_affected;
 		
 		float desired_share_pdiff = client->desired_share_pdiff;
+		bool any_default_share_pdiff = !desired_share_pdiff;
 		LL_FOREACH(conn->authorised_users, ule2)
 		{
 			struct proxy_client * const other_client = ule2->client;
+			if (!other_client->desired_share_pdiff)
+				any_default_share_pdiff = true;
+			else
 			if (other_client->desired_share_pdiff < desired_share_pdiff)
 				desired_share_pdiff = other_client->desired_share_pdiff;
 		}
-		if (conn->desired_share_pdiff != desired_share_pdiff)
+		BFGINIT(desired_share_pdiff, FLT_MAX);
+		if (conn->desired_share_pdiff != desired_share_pdiff || conn->desired_default_share_pdiff != any_default_share_pdiff)
 		{
 			conn->desired_share_pdiff = desired_share_pdiff;
+			conn->desired_default_share_pdiff = any_default_share_pdiff;
 			++connections_changed;
 		}
 	}
@@ -369,16 +415,50 @@ void _stratumsrv_failure(struct bufferevent * const bev, const char * const idst
 }while(0)
 
 static
-void _stratumsrv_success(struct bufferevent * const bev, const char * const idstr)
+void stratumsrv_success2(struct bufferevent * const bev, const char * const idstr, const char * const resultstr)
 {
 	if (!idstr)
 		return;
 	
-	size_t bufsz = 36 + strlen(idstr);
+	size_t bufsz = 32 + strlen(resultstr) + strlen(idstr);
 	char buf[bufsz];
 	
-	bufsz = sprintf(buf, "{\"result\":true,\"id\":%s,\"error\":null}\n", idstr);
+	bufsz = sprintf(buf, "{\"result\":%s,\"id\":%s,\"error\":null}\n", resultstr, idstr);
 	bufferevent_write(bev, buf, bufsz);
+}
+
+static inline
+void _stratumsrv_success(struct bufferevent * const bev, const char * const idstr)
+{
+	stratumsrv_success2(bev, idstr, "true");
+}
+
+static
+void stratumsrv_mining_capabilities(struct bufferevent * const bev, json_t * const params, const char * const idstr, struct stratumsrv_conn * const conn)
+{
+	if (json_is_null(params) || (!json_is_array(params)))
+		return_stratumsrv_failure(20, "Bad params");
+	
+	conn->capabilities = 0;
+	
+	json_t * const caps = (json_array_size(params) < 1) ? NULL : json_array_get(params, 0);
+	if (caps && (!json_is_null(caps)) && json_is_object(caps))
+	{
+		for (void *iter = json_object_iter(caps); iter; iter = json_object_iter_next(caps, iter))
+		{
+			const char * const s = json_object_iter_key(iter);
+			if (!strcasecmp(s, "notify"))
+				conn->capabilities |= SCC_NOTIFY;
+			else
+			if (!strcasecmp(s, "set_difficulty"))
+				conn->capabilities |= SCC_SET_DIFF;
+			else
+			if (!strcasecmp(s, "set_goal"))
+				conn->capabilities |= SCC_SET_GOAL;
+		}
+	}
+	
+	stratumsrv_success2(bev, idstr, "null");
 }
 
 static
@@ -407,12 +487,22 @@ void stratumsrv_mining_subscribe(struct bufferevent * const bev, json_t * const 
 	bufsz = sprintf(buf, "{\"id\":%s,\"result\":[[[\"mining.set_difficulty\",\"x\"],[\"mining.notify\",\"%s\"]],\"%s\",%d],\"error\":null}\n", idstr, xnonce1x, xnonce1x, _ssm_client_xnonce2sz);
 	bufferevent_write(bev, buf, bufsz);
 	
-	float pdiff = target_diff(_ssm_last_ssj->swork.target);
-	if (pdiff > conn->desired_share_pdiff)
-		pdiff = conn->desired_share_pdiff;
-	_ssm_last_ssj->job_pdiff[*xnonce1_p] = pdiff;
-	stratumsrv_send_set_difficulty(conn, pdiff);
-	bufferevent_write(bev, _ssm_notify, _ssm_notify_sz);
+	if (conn->capabilities & SCC_SET_GOAL)
+		bufferevent_write(conn->bev, _ssm_setgoal, _ssm_setgoal_sz);
+	if (likely(conn->capabilities & SCC_SET_DIFF))
+	{
+		const struct pool * const pool = _ssm_last_ssj->swork.pool;
+		const struct mining_goal_info * const goal = pool->goal;
+		const struct mining_algorithm * const malgo = goal->malgo;
+		float pdiff = target_diff(_ssm_last_ssj->swork.target);
+		const float conn_pdiff = stratumsrv_choose_share_pdiff(conn, malgo);
+		if (pdiff > conn_pdiff)
+			pdiff = conn_pdiff;
+		_ssm_last_ssj->job_pdiff[*xnonce1_p] = pdiff;
+		stratumsrv_send_set_difficulty(conn, pdiff);
+	}
+	if (likely(conn->capabilities & SCC_NOTIFY))
+		bufferevent_write(bev, _ssm_notify, _ssm_notify_sz);
 }
 
 static
@@ -427,8 +517,19 @@ void stratumsrv_mining_authorize(struct bufferevent * const bev, json_t * const 
 	if (unlikely(!client))
 		return_stratumsrv_failure(20, "Failed creating new cgpu");
 	
-	if ((!conn->authorised_users) || client->desired_share_pdiff < conn->desired_share_pdiff)
-		conn->desired_share_pdiff = client->desired_share_pdiff;
+	if (client->desired_share_pdiff)
+	{
+		if (!conn->authorised_users)
+			conn->desired_default_share_pdiff = false;
+		if ((!conn->authorised_users) || client->desired_share_pdiff < conn->desired_share_pdiff)
+			conn->desired_share_pdiff = client->desired_share_pdiff;
+	}
+	else
+	{
+		conn->desired_default_share_pdiff = true;
+		if (!conn->authorised_users)
+			conn->desired_share_pdiff = FLT_MAX;
+	}
 	
 	struct stratumsrv_conn_userlist *ule = malloc(sizeof(*ule));
 	*ule = (struct stratumsrv_conn_userlist){
@@ -586,6 +687,9 @@ errout:
 	if (!strcasecmp(method, "mining.subscribe"))
 		stratumsrv_mining_subscribe(bev, params, idstr, conn);
 	else
+	if (!strcasecmp(method, "mining.capabilities"))
+		stratumsrv_mining_capabilities(bev, params, idstr, conn);
+	else
 		_stratumsrv_failure(bev, idstr, -3, "Method not supported");
 	
 	free(idstr);
@@ -644,15 +748,18 @@ void stratumsrv_event(struct bufferevent *bev, short events, void *p)
 	}
 }
 
+// See also, proxy_set_diff in driver-proxy.c
 static
 const char *stratumsrv_init_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct stratumsrv_conn * const conn = proc->device_data;
 	
-	const double nv = atof(newvalue);
-	if (nv <= 0)
+	double nv = atof(newvalue);
+	if (nv < 0)
 		return "Invalid difficulty";
 	
+	if (nv <= minimum_pdiff)
+		nv = minimum_pdiff;
 	conn->desired_share_pdiff = nv;
 	
 	return NULL;
@@ -672,7 +779,9 @@ void stratumlistener(struct evconnlistener *listener, evutil_socket_t sock, stru
 	conn = malloc(sizeof(*conn));
 	*conn = (struct stratumsrv_conn){
 		.bev = bev,
-		.desired_share_pdiff = opt_scrypt ? (1./0x10000) : 1.,
+		.capabilities = SCC_NOTIFY | SCC_SET_DIFF,
+		.desired_share_pdiff = FLT_MAX,
+		.desired_default_share_pdiff = true,
 	};
 	drv_set_defaults(&proxy_drv, stratumsrv_set_device_funcs_newconnect, conn, NULL, NULL, 1);
 	LL_PREPEND(_ssm_connections, conn);
