@@ -232,7 +232,7 @@ Build instructions:
 git clone git@github.com:KnCMiner/bfgminer.git
 cd bfgminer
 ./autogen.sh
-./configure --enable-scrypt --enable-titan --disable-other-drivers
+./configure --enable-scrypt --disable-sha256d --enable-titan --disable-other-drivers
 make
 sudo /etc/init.d/bfgminer.sh restart
 screen -r
