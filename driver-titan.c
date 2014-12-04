@@ -463,7 +463,7 @@ static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int di
 
 	die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 	die_info.version = KNC_VERSION_TITAN;
-	if (!knc_titan_get_info(LOG_NOTICE, knc->ctx, asic, die, &die_info))
+	if (!knc_titan_get_info(LOG_INFO, knc->ctx, asic, die, &die_info))
 		die_info.cores = -1;
 	if (0 < die_info.cores) {
 		die_p->add_request = 0;
