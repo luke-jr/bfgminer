@@ -702,6 +702,12 @@ bool minion_detect_one(const char * const devpath)
 	spi->logprio = LOG_WARNING;
 	const unsigned total_core_count = minion_count_cores(spi);
 	
+	if (!total_core_count)
+	{
+		free(spi);
+		applogr(false, LOG_WARNING, "%s: Zero chips detected on %s", minion_drv.dname, devpath);
+	}
+	
 	struct minion_bus * const mbus = malloc(sizeof(*mbus));
 	*mbus = (struct minion_bus){
 		.spi = spi,
