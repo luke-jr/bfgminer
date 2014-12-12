@@ -631,6 +631,8 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		goto error;
 	}
 
+	if (core->workslot[2].work)
+		free_work(core->workslot[2].work);
 	core->workslot[2].work = work;
 	core->workslot[2].slot = slot;
 	core->works++;
