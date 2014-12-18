@@ -37,6 +37,11 @@
 
 BFG_REGISTER_DRIVER(kncasic_drv)
 
+#define KNC_FREE_WORK(WORK) do { \
+	free_work(WORK); \
+	WORK = NULL; \
+} while (0)
+
 static struct timeval now;
 static const struct timeval core_check_interval = {
 	CORE_ERROR_INTERVAL, 0
@@ -509,7 +514,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 			core->die->knc->completed++;
 			core->completed++;
 			applog(LOG_INFO, "%"PRIpreprv": Work completed!", proc->proc_repr);
-			free_work(core->workslot[0].work);
+			KNC_FREE_WORK(core->workslot[0].work);
 		}
 		core->workslot[0] = core->workslot[1];
 		core->workslot[1].work = NULL;
@@ -519,7 +524,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 		if (report->active_slot == core->workslot[2].slot) {
 			applog(LOG_INFO, "%"PRIpreprv": New work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 			if (core->workslot[0].work)
-				free_work(core->workslot[0].work);
+				KNC_FREE_WORK(core->workslot[0].work);
 			core->workslot[0] = core->workslot[2];
 			core->workslot[2].work = NULL;
 			core->workslot[2].slot = -1;
@@ -531,7 +536,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 		applog(LOG_INFO, "%"PRIpreprv": Accepted work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 		/* core accepted next work */
 		if (core->workslot[1].work)
-			free_work(core->workslot[1].work);
+			KNC_FREE_WORK(core->workslot[1].work);
 		core->workslot[1] = core->workslot[2];
 		core->workslot[2].work = NULL;
 		core->workslot[2].slot = -1;
@@ -540,7 +545,7 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
 		had_event = true;
 		applog(LOG_INFO, "%"PRIpreprv": Setwork failed?", proc->proc_repr);
-		free_work(core->workslot[2].work);
+		KNC_FREE_WORK(core->workslot[2].work);
 		core->workslot[2].slot = -1;
 	}
 
@@ -631,6 +636,8 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 		goto error;
 	}
 
+	if (core->workslot[2].work)
+		KNC_FREE_WORK(core->workslot[2].work);
 	core->workslot[2].work = work;
 	core->workslot[2].slot = slot;
 	core->works++;
@@ -646,7 +653,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 error:
 	applog(LOG_INFO, "%"PRIpreprv": Failed to setwork (%d)", proc->proc_repr, core->errors_now);
 	knc_core_failure(core);
-	free_work(work);
+	KNC_FREE_WORK(work);
 	return -1;
 }
 
@@ -716,7 +723,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			int slot;
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
 				if (core->workslot[slot].work)
-					free_work(core->workslot[slot].work);
+					KNC_FREE_WORK(core->workslot[slot].work);
 				core->workslot[slot].slot = -1;
 			}
 			core->hold_work_until = now;
