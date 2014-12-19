@@ -450,11 +450,6 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 	return 0;
 }
 
-<<<<<<< HEAD
-void json_rpc_call_async(CURL *curl, const char *url,
-||||||| parent of c7d6886... allow url based config files
-json_t *json_rpc_call(CURL *curl, const char *url,
-=======
 json_t *json_web_config(CURL *curl, const char *url)
 {
 	struct data_buffer all_data = {NULL, 0};
@@ -468,6 +463,9 @@ json_t *json_web_config(CURL *curl, const char *url)
 
 	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
 
+	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+	curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
+	
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
 
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
@@ -505,12 +503,10 @@ json_t *json_web_config(CURL *curl, const char *url)
 c_out:
 	databuf_free(&all_data);
 	curl_easy_reset(curl);
-	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 	return val;
 }
 
-json_t *json_rpc_call(CURL *curl, const char *url,
->>>>>>> c7d6886... allow url based config files
+void json_rpc_call_async(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool longpoll,
 		      struct pool *pool, bool share,

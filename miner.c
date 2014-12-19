@@ -395,13 +395,9 @@ static int include_count;
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
-<<<<<<<
+#define JSON_WEB_ERROR "WEB config err"
 
 char *cmd_idle, *cmd_sick, *cmd_dead;
-|||||||
-=======
-#define JSON_WEB_ERROR "WEB config err"
->>>>>>>
 
 #if defined(unix) || defined(__APPLE__)
 	static char *opt_stderr_cmd = NULL;
@@ -2908,6 +2904,7 @@ static char *load_web_config(const char *arg)
 {
 	json_t *val;
 	CURL *curl;
+	struct bfg_loaded_configfile *cfginfo;
 
 	curl = curl_easy_init();
 	if (unlikely(!curl))
@@ -2920,12 +2917,15 @@ static char *load_web_config(const char *arg)
 	if (!val || !json_is_object(val))
 		return JSON_WEB_ERROR;
 
-	if (!cnfbuf)
-		cnfbuf = strdup(arg);
+	cfginfo = malloc(sizeof(*cfginfo));
+	*cfginfo = (struct bfg_loaded_configfile){
+		.filename = strdup(arg),
+	};
+	LL_APPEND(bfg_loaded_configfiles, cfginfo);
 
 	config_loaded = true;
 
-	return parse_config(val, true);
+	return parse_config(val, true, &cfginfo->fileconf_load);
 }
 
 static char *load_config(const char *arg, void __maybe_unused *unused)
@@ -2934,23 +2934,11 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	json_t *config;
 	char *json_error;
 	size_t siz;
-<<<<<<<
 	struct bfg_loaded_configfile *cfginfo;
-|||||||
 
-	if (!cnfbuf)
-		cnfbuf = strdup(arg);
-=======
-
-#ifdef HAVE_LIBCURL
 	if (strncasecmp(arg, conf_web1, sizeof(conf_web1)-1) == 0 ||
 	    strncasecmp(arg, conf_web2, sizeof(conf_web2)-1) == 0)
 		return load_web_config(arg);
-#endif
-
-	if (!cnfbuf)
-		cnfbuf = strdup(arg);
->>>>>>>
 
 	cfginfo = malloc(sizeof(*cfginfo));
 	*cfginfo = (struct bfg_loaded_configfile){
