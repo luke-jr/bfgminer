@@ -895,24 +895,8 @@ void avalonmm_tui_wlogprint_choices(struct cgpu_info * const proc)
 	wlogprint("[V]oltage ");
 }
 
-static
-const char *avalonmm_tui_wrapper(struct cgpu_info * const proc, bfg_set_device_func_t func, const char * const prompt)
-{
-	static char replybuf[0x20];
-	char * const cvar = curses_input(prompt);
-	if (!cvar)
-		return "Cancelled\n";
-	
-	const char *reply = func(proc, NULL, cvar, NULL, NULL);
-	free(cvar);
-	if (reply)
-	{
-		snprintf(replybuf, sizeof(replybuf), "%s\n", reply);
-		return replybuf;
-	}
-	
-	return "Successful\n";
-}
+#define avalonmm_tui_wrapper(proc, func, prompt) \
+	proc_set_device_tui_wrapper(proc, NULL, func, prompt, NULL)
 
 static
 const char *avalonmm_tui_handle_choice(struct cgpu_info * const proc, const int input)
