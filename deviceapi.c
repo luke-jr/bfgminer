@@ -993,6 +993,31 @@ const char *proc_set_device(struct cgpu_info * const proc, char * const optname,
 	return rv;
 }
 
+#ifdef HAVE_CURSES
+const char *proc_set_device_tui_wrapper(struct cgpu_info * const proc, char * const optname, const bfg_set_device_func_t func, const char * const prompt, const char * const success_msg)
+{
+	static char replybuf[0x2001];
+	char * const cvar = curses_input(prompt);
+	if (!cvar)
+		return "Cancelled\n";
+	
+	enum bfg_set_device_replytype success;
+	const char * const reply = func(proc, optname, cvar, replybuf, &success);
+	free(cvar);
+	
+	if (reply)
+	{
+		if (reply != replybuf)
+			snprintf(replybuf, sizeof(replybuf), "%s\n", reply);
+		else
+			tailsprintf(replybuf, sizeof(replybuf), "\n");
+		return replybuf;
+	}
+	
+	return success_msg ?: "Successful\n";
+}
+#endif
+
 #ifdef NEED_BFG_LOWL_VCOM
 bool _serial_detect_all(struct lowlevel_device_info * const info, void * const userp)
 {
