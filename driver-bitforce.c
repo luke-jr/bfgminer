@@ -12,6 +12,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -1801,6 +1802,35 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	return true;
 }
 
+static
+const char *bitforce_set_voltage(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success)
+{
+	pthread_mutex_t *mutexp = &proc->device->device_mutex;
+	char cmd[3] = "VFX";
+	
+	const unsigned mV = round(atof(newvalue) * 1000);
+	static const unsigned n[] = {750, 730, 720, 700, 680, 670, 662, 650, 643, 630, 620, 600, 580, 560, 550, 540};
+	for (int i = 0; ; ++i)
+	{
+		if (i >= 0x10)
+			return "Voltage must be from 0.54 to 0.75";
+		if (mV >= n[i])
+		{
+			cmd[1] -= i;
+			break;
+		}
+	}
+	
+	mutex_lock(mutexp);
+	bitforce_cmd1b(proc, replybuf, 8000, cmd, 3);
+	mutex_unlock(mutexp);
+	
+	if (!strncasecmp(replybuf, "OK", 2))
+		return NULL;
+	
+	return replybuf;
+}
+
 #ifdef HAVE_CURSES
 static
 void bitforce_tui_wlogprint_choices(struct cgpu_info *cgpu)
@@ -1969,6 +1999,7 @@ const char *bitforce_rpc_send_cmd1(struct cgpu_info * const proc, const char * c
 
 static const struct bfg_set_device_definition bitforce_set_device_funcs[] = {
 	{"fanmode", bitforce_set_fanmode, "range 0-5 (low to fast) or 9 (auto)"},
+	{"voltage", bitforce_set_voltage, "range 0.54-0.75 V"},
 	{"_cmd1", bitforce_rpc_send_cmd1, NULL},
 	{NULL},
 };
