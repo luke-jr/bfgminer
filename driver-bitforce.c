@@ -1838,6 +1838,7 @@ void bitforce_tui_wlogprint_choices(struct cgpu_info *cgpu)
 	struct bitforce_data *data = cgpu->device_data;
 	if (data->supports_fanspeed)
 		wlogprint("[F]an control ");
+	wlogprint("[V]oltage ");
 }
 
 static
@@ -1872,6 +1873,8 @@ const char *bitforce_tui_handle_choice(struct cgpu_info *cgpu, int input)
 			mutex_unlock(mutexp);
 			return replybuf;
 		}
+		case 'v': case 'V':
+			return proc_set_device_tui_wrapper(cgpu, NULL, bitforce_set_voltage, "Set voltage (0.54-0.75 V)", "Requested voltage change");
 	}
 	return NULL;
 }
