@@ -450,6 +450,62 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 	return 0;
 }
 
+json_t *json_web_config(CURL *curl, const char *url)
+{
+	struct data_buffer all_data = {NULL, 0};
+	char curl_err_str[CURL_ERROR_SIZE];
+	json_error_t err;
+	long timeout = 60;
+	json_t *val;
+	int rc;
+
+	memset(&err, 0, sizeof(err));
+
+	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
+
+	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+	curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
+	
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+	curl_easy_setopt(curl, CURLOPT_URL, url);
+	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+
+	val = NULL;
+	rc = curl_easy_perform(curl);
+	if (rc) {
+		applog(LOG_ERR, "HTTP config request of '%s' failed: %s",
+				url, curl_err_str);
+		goto c_out;
+	}
+
+	if (!all_data.buf) {
+		applog(LOG_ERR, "Empty config data received from '%s'",
+				url);
+		goto c_out;
+	}
+
+	val = JSON_LOADS(all_data.buf, &err);
+	if (!val) {
+		applog(LOG_ERR, "JSON config decode of '%s' failed(%d): %s",
+				url, err.line, err.text);
+		goto c_out;
+	}
+
+c_out:
+	databuf_free(&all_data);
+	curl_easy_reset(curl);
+	return val;
+}
+
 void json_rpc_call_async(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool longpoll,

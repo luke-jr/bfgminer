@@ -2,7 +2,7 @@
  * Copyright 2011-2014 Con Kolivas
  * Copyright 2011-2014 Luke Dashjr
  * Copyright 2014 Nate Woolls
- * Copyright 2012-2013 Andrew Smith
+ * Copyright 2012-2014 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -395,6 +395,7 @@ static int include_count;
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
+#define JSON_WEB_ERROR "WEB config err"
 
 char *cmd_idle, *cmd_sick, *cmd_dead;
 
@@ -2896,6 +2897,37 @@ static char *parse_config(json_t *config, bool fileconf, int * const fileconf_lo
 
 struct bfg_loaded_configfile *bfg_loaded_configfiles;
 
+char conf_web1[] = "http://";
+char conf_web2[] = "https://";
+
+static char *load_web_config(const char *arg)
+{
+	json_t *val;
+	CURL *curl;
+	struct bfg_loaded_configfile *cfginfo;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quithere(1, "CURL initialisation failed");
+
+	val = json_web_config(curl, arg);
+
+	curl_easy_cleanup(curl);
+
+	if (!val || !json_is_object(val))
+		return JSON_WEB_ERROR;
+
+	cfginfo = malloc(sizeof(*cfginfo));
+	*cfginfo = (struct bfg_loaded_configfile){
+		.filename = strdup(arg),
+	};
+	LL_APPEND(bfg_loaded_configfiles, cfginfo);
+
+	config_loaded = true;
+
+	return parse_config(val, true, &cfginfo->fileconf_load);
+}
+
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
@@ -2903,6 +2935,10 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	char *json_error;
 	size_t siz;
 	struct bfg_loaded_configfile *cfginfo;
+
+	if (strncasecmp(arg, conf_web1, sizeof(conf_web1)-1) == 0 ||
+	    strncasecmp(arg, conf_web2, sizeof(conf_web2)-1) == 0)
+		return load_web_config(arg);
 
 	cfginfo = malloc(sizeof(*cfginfo));
 	*cfginfo = (struct bfg_loaded_configfile){
