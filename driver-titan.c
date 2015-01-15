@@ -129,17 +129,17 @@ static void knc_titan_zero_stats(struct cgpu_info *cgpu)
 	}
 }
 
-static double knc_titan_get_device_rolling_hashrate(struct cgpu_info *device)
+static double knc_titan_get_die_rolling_hashrate(struct cgpu_info *device)
 {
-	int asic = ((struct knc_titan_die *)device->thr[0]->cgpu_data)->asicno;
+	struct knc_titan_die *die = device->thr[0]->cgpu_data;
+	int asicno = die->asicno;
+	int dieno = die->dieno;
 	struct knc_titan_info *knc = device->device_data;
 	double hashrate = 0.0;
-	int dieno, i;
+	int i;
 
-	for (dieno = 0; dieno < KNC_TITAN_DIES_PER_ASIC; ++dieno) {
-		for (i = 0; i < HASHES_BUF_ENTRIES; ++i) {
-			hashrate += (double)knc->dies[asic][dieno].hashes_buf[i] / 1.0e6;
-		}
+	for (i = 0; i < HASHES_BUF_ENTRIES; ++i) {
+		hashrate += (double)knc->dies[asicno][dieno].hashes_buf[i] / 1.0e6;
 	}
 
 	return hashrate / ((double)(HASHES_BUF_ENTRIES * HASHES_BUF_ONE_ENTRY_TIME));
@@ -947,7 +947,7 @@ struct device_drv knc_titan_drv =
 	.prepare_work = knc_titan_prepare_work,
 
 	/* additional statistics */
-	.get_master_rolling_hashrate = knc_titan_get_device_rolling_hashrate,
+	.get_proc_rolling_hashrate = knc_titan_get_die_rolling_hashrate,
 	.zero_stats = knc_titan_zero_stats,
 
 	/* TUI support - e.g. setting clock via UI */

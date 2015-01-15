@@ -337,7 +337,7 @@ struct device_drv {
 	void (*proc_tui_wlogprint_choices)(struct cgpu_info *);
 	const char *(*proc_tui_handle_choice)(struct cgpu_info *, int input);
 	void (*zero_stats)(struct cgpu_info *);
-	double (*get_master_rolling_hashrate)(struct cgpu_info *);
+	double (*get_proc_rolling_hashrate)(struct cgpu_info *);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
