@@ -10541,8 +10541,11 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 			{
 				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
 				       pool->pool_no);
-				if (hash_target_check_v(work->hash, pool->next_target))
+				if (hash_target_check_v(work->hash, pool->next_target)) {
 					high_hash = false;
+					memcpy(work->target, pool->next_target, sizeof(work->target));
+					calc_diff(work, 0);
+				}
 			}
 		}
 		if (high_hash)
