@@ -154,8 +154,7 @@ struct knc_state {
 	/* lock to protect resources between different threads */
 	pthread_mutex_t state_lock;
 
-	/* Do not add anything below here!! core[] must be last */
-	struct knc_core_state core[];
+	struct knc_core_state core[KNC_MAX_ASICS * KNC_MAX_DIES_PER_ASIC * KNC_MAX_CORES_PER_DIE];
 };
 
 int opt_knc_device_bus = -1;
@@ -250,6 +249,172 @@ static int knc_transfer_completed(struct knc_state *knc, int stamp)
 	return (int)(knc->read_buffer_count - stamp) >= 1;
 }
 
+static struct cgpu_info * all_cgpus[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC] = {{NULL}};
+
+/* Note: content of knc might be not initialized yet */
+static bool prealloc_all_cgpus(struct knc_state *knc)
+{
+	int channel, die;
+	struct cgpu_info *cgpu, *prev_cgpu;
+
+	prev_cgpu = NULL;
+	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
+		cgpu = all_cgpus[channel][0];
+		if (NULL != cgpu)
+			continue;
+		cgpu = malloc(sizeof(*cgpu));
+		if (NULL == cgpu)
+			return false;
+		*cgpu = (struct cgpu_info){
+			.drv = &kncasic_drv,
+			.name = "KnCminer",
+			.procs = KNC_MAX_DIES_PER_ASIC,
+			.threads = prev_cgpu ? 0 : 1,
+			.device_data = knc,
+			};
+		if (!add_cgpu_slave(cgpu, prev_cgpu)) {
+			free(cgpu);
+			return false;
+		}
+		prev_cgpu = cgpu;
+		die = 0;
+		for_each_managed_proc(proc, cgpu) {
+			proc->deven = DEV_DISABLED;
+			all_cgpus[channel][die++] = proc;
+		}
+	}
+
+	return true;
+}
+
+static struct cgpu_info * get_cgpu(int channel, int die)
+{
+	if ((channel < 0) || (channel >= KNC_MAX_ASICS) || (die < 0) || (die >= KNC_MAX_DIES_PER_ASIC))
+		return NULL;
+	return all_cgpus[channel][die];
+}
+
+int knc_change_die_state(void* device_data, int asic_id, int die_id, bool enable)
+{
+	int ret = 0;
+	struct knc_state *knc = device_data;
+	struct knc_die_info die_info = {};
+	int die, next_die, core;
+
+	applog(LOG_NOTICE, "KnC: %s die, ASIC id=%d, DIE id=%d", enable ? "enable" : "disable", asic_id, die_id);
+	mutex_lock(&knc->state_lock);
+
+	if (asic_id < 0 || asic_id >= KNC_MAX_ASICS || die_id < 0 || die_id >= KNC_MAX_DIES_PER_ASIC) {
+		ret = EINVAL;
+		goto out_unlock;
+	}
+
+	struct cgpu_info *proc = get_cgpu(asic_id, die_id);
+
+	for (die = 0; die < knc->dies; ++die) {
+		if (knc->die[die].channel != asic_id || knc->die[die].die != die_id)
+			continue;
+
+		if (!enable) {
+			int slot, buffer, resp;
+			int deleted_cores = knc->die[die].cores;
+			knc->cores -= deleted_cores;
+			--knc->dies;
+
+			/* cgpu[0][0] must be always enabled */
+			if ((asic_id != 0) || (die_id != 0))
+				proc->deven = DEV_DISABLED;
+
+			struct knc_core_state *pcore_to = knc->die[die].core;
+			struct knc_core_state *pcore_from = pcore_to + knc->die[die].cores;
+			struct knc_core_state *pcore;
+
+			for (pcore = pcore_to; pcore < pcore_from; ++pcore) {
+				for (slot = 0; slot < WORKS_PER_CORE; ++slot) {
+					if (pcore->workslot[slot].work)
+						KNC_FREE_WORK(pcore->workslot[slot].work);
+				}
+			}
+
+			int core_move_count = &(knc->core[knc->cores]) - pcore_to;
+			assert(core_move_count >= 0);
+			memmove(pcore_to, pcore_from, core_move_count * sizeof(struct knc_core_state));
+
+			struct knc_die *pdie_to = &(knc->die[die]);
+			struct knc_die *pdie_from = pdie_to + 1;
+			int die_move_count = knc->dies - die;
+			assert(die_move_count >= 0);
+			memmove(pdie_to, pdie_from, die_move_count * sizeof(struct knc_die));
+
+			/* Now fix pointers */
+			for (next_die = 0; next_die < knc->dies; ++next_die) {
+				assert(knc->die[next_die].core != pcore_to);
+				if (knc->die[next_die].core > pcore_to)
+					knc->die[next_die].core -= deleted_cores;
+			}
+			for (core = 0; core < knc->cores; ++core) {
+				assert(knc->core[core].die != pdie_to);
+				if (knc->core[core].die > pdie_to)
+					--(knc->core[core].die);
+			}
+			for (buffer = 0; buffer < KNC_SPI_BUFFERS; ++buffer) {
+				for (resp = 0; resp < MAX_SPI_RESPONSES; ++resp) {
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_to)
+						continue;
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_from) {
+						knc->spi_buffer[buffer].response_info[resp].core = NULL;
+						continue;
+					}
+					knc->spi_buffer[buffer].response_info[resp].core -= deleted_cores;
+				}
+			}
+		}
+
+		/* die was found */
+		ret = 0;
+		goto out_unlock;
+	}
+
+	/* die was not found */
+	if (enable) {
+		/* Send GETINFO to a die to detect if it is usable */
+		if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
+			if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+				ret = ENODEV;
+				goto out_unlock;
+			}
+		} else {
+			ret = ENODEV;
+			goto out_unlock;
+		}
+
+		memset(&(knc->core[knc->cores]), 0, die_info.cores * sizeof(struct knc_core_state));
+		int next_die = knc->dies;
+
+		knc->die[next_die].channel = asic_id;
+		knc->die[next_die].die = die_id;
+		knc->die[next_die].version = die_info.version;
+		knc->die[next_die].cores = die_info.cores;
+		knc->die[next_die].core = &(knc->core[knc->cores]);
+		knc->die[next_die].knc = knc;
+		knc->die[next_die].proc = proc;
+
+		for (core = 0; core < knc->die[next_die].cores; ++core) {
+			knc->die[next_die].core[core].die = &knc->die[next_die];
+			knc->die[next_die].core[core].core = core;
+		}
+
+		++knc->dies;
+		knc->cores += die_info.cores;
+
+		proc_enable(proc);
+	}
+
+out_unlock:
+	mutex_unlock(&knc->state_lock);
+	return ret;
+}
+
 static bool knc_detect_one(void *ctx)
 {
 	/* Scan device for ASICs */
@@ -276,23 +441,26 @@ static bool knc_detect_one(void *ctx)
 
 	applog(LOG_ERR, "Found a KnC miner with %d cores", cores);
 
-	knc = calloc(1, sizeof(*knc) + cores * sizeof(struct knc_core_state));
-	if (!knc)
-	{
+	knc = calloc(1, sizeof(*knc));
+	if (!knc) {
+err_nomem:
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");
 		return false;
+	}
+	if (!prealloc_all_cgpus(knc)) {
+		free(knc);
+		goto err_nomem;
 	}
 
 	knc->ctx = ctx;
 	knc->generation = 1;
 
 	/* Index all cores */
-	struct cgpu_info *prev_cgpu = NULL, *first_cgpu = NULL;
+	struct cgpu_info *first_cgpu = NULL;
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
 	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
-		int channel_dies = 0, die_base = dies;
 		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
@@ -301,37 +469,21 @@ static bool knc_detect_one(void *ctx)
 				knc->die[dies].cores = die_info[channel][die].cores;
 				knc->die[dies].core = pcore;
 				knc->die[dies].knc = knc;
+				knc->die[dies].proc = get_cgpu(channel, die);
+				knc->die[dies].proc->deven = DEV_ENABLED;
+				if (NULL == first_cgpu)
+					first_cgpu = knc->die[dies].proc;
 				for (core = 0; core < knc->die[dies].cores; core++) {
 					knc->die[dies].core[core].die = &knc->die[dies];
 					knc->die[dies].core[core].core = core;
 				}
 				cores += knc->die[dies].cores;
 				pcore += knc->die[dies].cores;
-				channel_dies++;
 				dies++;
 			}
 		}
-
-		if (channel_dies) {
-			struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
-			*cgpu = (struct cgpu_info){
-				.drv = &kncasic_drv,
-				.name = "KnCminer",
-				.procs = channel_dies,
-				.threads = prev_cgpu ? 0 : 1,
-				.device_data = knc,
-			};
-			add_cgpu_slave(cgpu, prev_cgpu);
-			if (!prev_cgpu)
-				first_cgpu = cgpu;
-			prev_cgpu = cgpu;
-
-			for_each_managed_proc(proc, cgpu) {
-				knc->die[die_base++].proc = proc;
-			}
-		}
 	}
-	
+
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
@@ -340,13 +492,14 @@ static bool knc_detect_one(void *ctx)
 	pthread_cond_init(&knc->spi_qcond, NULL);
 	pthread_mutex_init(&knc->state_lock, NULL);
 
-	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu))
-	{
+	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu)) {
 		applog(LOG_ERR, "%s: SPI thread create failed", first_cgpu->dev_repr);
 		free(knc);
+		/* TODO: free all cgpus. We can not do it at the moment as there is no good
+		 * way to free all cgpu-related resources. */
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -375,6 +528,35 @@ static
 void kncasic_detect(void)
 {
 	generic_detect(&kncasic_drv, kncasic_detect_one, kncasic_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
+}
+
+static
+bool knc_init(struct thr_info * const thr)
+{
+	int channel, die;
+	struct cgpu_info *cgpu = thr->cgpu, *proc;
+	struct knc_state *knc = cgpu->device_data;
+
+	/* Set initial enable/disable state */
+	bool die_detected[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
+	memset(die_detected, 0, sizeof(die_detected));
+	for (die = 0; die < knc->dies; ++die) {
+		if (0 < knc->die[die].cores) {
+			die_detected[knc->die[die].channel][knc->die[die].die] = true;
+		}
+	}
+	/* cgpu[0][0] must be always enabled */
+	die_detected[0][0] = true;
+	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; ++die) {
+			proc = get_cgpu(channel, die);
+			if (NULL != proc) {
+				proc->deven = die_detected[channel][die] ? DEV_ENABLED : DEV_DISABLED;
+			}
+		}
+	}
+
+	return true;
 }
 
 /* Core helper functions */
@@ -561,6 +743,8 @@ static void knc_process_responses(struct thr_info *thr)
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			struct knc_core_state *core = response_info->core;
+			if (NULL == core) /* core was deleted, e.g. by API call */
+				continue;
 			struct cgpu_info * const proc = core->die->proc;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			/* Invert KNC_ACCEPTED to simplify logics below */
@@ -887,6 +1071,7 @@ struct device_drv kncasic_drv = {
 	.dname = "kncasic",
 	.name = "KNC",
 	.drv_detect = kncasic_detect,
+	.thread_init = knc_init,
 	.minerloop = hash_driver_work,
 	.flush_work = knc_flush_work,
 	.scanwork = knc_scanwork,
