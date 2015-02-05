@@ -1076,6 +1076,13 @@ void hash_driver_work(struct thr_info * const thr)
 		
 		if (unlikely(thr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(thr);
+
+		if (unlikely(thr->work_restart)) {
+			thr->work_restart = false;
+			flush_queue(cgpu);
+			drv->flush_work(cgpu);
+		}
+
 	}
 }
 
