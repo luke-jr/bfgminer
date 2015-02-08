@@ -203,7 +203,7 @@ static bool knc_titan_detect_one(const char *devpath)
 	for (die = 0; die < KNC_TITAN_DIES_PER_ASIC; ++die) {
 		die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 		die_info.version = KNC_VERSION_TITAN;
-		if (!knc_titan_get_info(repr, ctx, asic, die, &die_info))
+		if (!knc_titan_get_info(LOG_NOTICE, ctx, asic, die, &die_info))
 			die_info.cores = -1;
 		if (0 < die_info.cores) {
 			knc->dies[asic][die] = (struct knc_titan_die) {
@@ -459,13 +459,11 @@ static bool knc_titan_init(struct thr_info * const thr)
 static bool die_test_and_add(struct knc_titan_info * const knc, int asic, int die, char * const errbuf)
 {
 	struct knc_die_info die_info;
-	char repr[6];
 	struct knc_titan_die *die_p = &(knc->dies[asic][die]);
 
-	snprintf(repr, sizeof(repr), "%s %d", knc_titan_drv.name, asic);
 	die_info.cores = KNC_TITAN_CORES_PER_DIE; /* core hint */
 	die_info.version = KNC_VERSION_TITAN;
-	if (!knc_titan_get_info(repr, knc->ctx, asic, die, &die_info))
+	if (!knc_titan_get_info(LOG_INFO, knc->ctx, asic, die, &die_info))
 		die_info.cores = -1;
 	if (0 < die_info.cores) {
 		die_p->add_request = 0;
@@ -715,7 +713,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 						if (num_request_busy == 0) {
 							timer_set_now(&tv_now);
 							double diff = ((tv_now.tv_sec - knc->tv_prev.tv_sec) * 1000000.0 + (tv_now.tv_usec - knc->tv_prev.tv_usec)) / 1000000.0;
-							applog(LOG_INFO, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
+							applog(LOG_DEBUG, "%s: Flush took %f secs for ASIC %d", knc_titan_drv.dname, diff, asic);
 							applog(LOG_DEBUG, "FPGA CRC error counters: %d %d %d %d", num_status_byte_error[0], num_status_byte_error[1], num_status_byte_error[2], num_status_byte_error[3]);
 							knc->asic_served_by_fpga[asic] = false;
 
@@ -734,7 +732,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 					break;
 				bool was_flushed = false;
 				if (die_p->need_flush || need_replace) {
-					applog(LOG_NOTICE, "%s[%d-%d] Flushing stale works (%s)", die_proc->dev_repr, asic, die,
+					applog(LOG_DEBUG, "%s[%d-%d] Flushing stale works (%s)", die_proc->dev_repr, asic, die,
 					       die_p->need_flush ? "New work" : "Slot collision");
 					die_p->need_flush = false;
 					die_p->first_slot = die_p->next_slot;
@@ -774,7 +772,7 @@ static void knc_titan_poll(struct thr_info * const thr)
 				continue;
 			die_info.cores = die_p->cores; /* core hint */
 			die_info.version = KNC_VERSION_TITAN;
-			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(cgpu->dev_repr, knc->ctx, asic, die, &die_info))
+			if (knc->asic_served_by_fpga[asic] || !knc_titan_get_info(LOG_DEBUG, knc->ctx, asic, die, &die_info))
 				continue;
 			thread_reportin(die_p->proc->thr[0]);
 
