@@ -1486,7 +1486,7 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		if (proc->deven != DEV_DISABLED)
 			enabled = true;
 		total_mhashes += proc->total_mhashes;
-		rolling += proc->rolling;
+		rolling += proc->drv->get_proc_rolling_hashrate ? proc->drv->get_proc_rolling_hashrate(proc) : proc->rolling;
 		utility += proc->utility;
 		accepted += proc->accepted;
 		rejected += proc->rejected;
@@ -1512,9 +1512,6 @@ void devstatus_an(struct io_data *io_data, struct cgpu_info *cgpu, bool isjson, 
 		if (per_proc)
 			break;
 	}
-
-	if ((!per_proc) && (cgpu->device == cgpu) && (cgpu->drv->get_master_rolling_hashrate))
-		rolling = cgpu->drv->get_master_rolling_hashrate(cgpu);
 
 	root = api_add_int(root, "PGA", &n, true);
 	root = api_add_device_identifier(root, cgpu);
