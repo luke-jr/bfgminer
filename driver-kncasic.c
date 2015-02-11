@@ -72,6 +72,7 @@ struct knc_core_state {
 		int slot;
 		uint32_t nonce;
 	} last_nonce;
+	uint32_t last_nonce_verified;
 	uint32_t works;
 	uint32_t shares;
 	uint32_t errors;
@@ -82,8 +83,6 @@ struct knc_core_state {
 	struct timeval hold_work_until;
 	struct timeval timeout;
 	bool inuse;
-	
-	struct cgpu_info *proc;
 };
 
 struct knc_state;
@@ -93,6 +92,7 @@ struct knc_die {
 	int die;
 	int version;
 	int cores;
+	struct cgpu_info *proc;
 	struct knc_state *knc;
 	struct knc_core_state *core;
 };
@@ -155,8 +155,7 @@ struct knc_state {
 	/* lock to protect resources between different threads */
 	pthread_mutex_t state_lock;
 
-	/* Do not add anything below here!! core[] must be last */
-	struct knc_core_state core[];
+	struct knc_core_state core[KNC_MAX_ASICS * KNC_MAX_DIES_PER_ASIC * KNC_MAX_CORES_PER_DIE];
 };
 
 int opt_knc_device_bus = -1;
@@ -251,6 +250,172 @@ static int knc_transfer_completed(struct knc_state *knc, int stamp)
 	return (int)(knc->read_buffer_count - stamp) >= 1;
 }
 
+static struct cgpu_info * all_cgpus[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC] = {{NULL}};
+
+/* Note: content of knc might be not initialized yet */
+static bool prealloc_all_cgpus(struct knc_state *knc)
+{
+	int channel, die;
+	struct cgpu_info *cgpu, *prev_cgpu;
+
+	prev_cgpu = NULL;
+	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
+		cgpu = all_cgpus[channel][0];
+		if (NULL != cgpu)
+			continue;
+		cgpu = malloc(sizeof(*cgpu));
+		if (NULL == cgpu)
+			return false;
+		*cgpu = (struct cgpu_info){
+			.drv = &kncasic_drv,
+			.name = "KnCminer",
+			.procs = KNC_MAX_DIES_PER_ASIC,
+			.threads = prev_cgpu ? 0 : 1,
+			.device_data = knc,
+			};
+		if (!add_cgpu_slave(cgpu, prev_cgpu)) {
+			free(cgpu);
+			return false;
+		}
+		prev_cgpu = cgpu;
+		die = 0;
+		for_each_managed_proc(proc, cgpu) {
+			proc->deven = DEV_DISABLED;
+			all_cgpus[channel][die++] = proc;
+		}
+	}
+
+	return true;
+}
+
+static struct cgpu_info * get_cgpu(int channel, int die)
+{
+	if ((channel < 0) || (channel >= KNC_MAX_ASICS) || (die < 0) || (die >= KNC_MAX_DIES_PER_ASIC))
+		return NULL;
+	return all_cgpus[channel][die];
+}
+
+int knc_change_die_state(void* device_data, int asic_id, int die_id, bool enable)
+{
+	int ret = 0;
+	struct knc_state *knc = device_data;
+	struct knc_die_info die_info = {};
+	int die, next_die, core;
+
+	applog(LOG_NOTICE, "KnC: %s die, ASIC id=%d, DIE id=%d", enable ? "enable" : "disable", asic_id, die_id);
+	mutex_lock(&knc->state_lock);
+
+	if (asic_id < 0 || asic_id >= KNC_MAX_ASICS || die_id < 0 || die_id >= KNC_MAX_DIES_PER_ASIC) {
+		ret = EINVAL;
+		goto out_unlock;
+	}
+
+	struct cgpu_info *proc = get_cgpu(asic_id, die_id);
+
+	for (die = 0; die < knc->dies; ++die) {
+		if (knc->die[die].channel != asic_id || knc->die[die].die != die_id)
+			continue;
+
+		if (!enable) {
+			int slot, buffer, resp;
+			int deleted_cores = knc->die[die].cores;
+			knc->cores -= deleted_cores;
+			--knc->dies;
+
+			/* cgpu[0][0] must be always enabled */
+			if ((asic_id != 0) || (die_id != 0))
+				proc->deven = DEV_DISABLED;
+
+			struct knc_core_state *pcore_to = knc->die[die].core;
+			struct knc_core_state *pcore_from = pcore_to + knc->die[die].cores;
+			struct knc_core_state *pcore;
+
+			for (pcore = pcore_to; pcore < pcore_from; ++pcore) {
+				for (slot = 0; slot < WORKS_PER_CORE; ++slot) {
+					if (pcore->workslot[slot].work)
+						KNC_FREE_WORK(pcore->workslot[slot].work);
+				}
+			}
+
+			int core_move_count = &(knc->core[knc->cores]) - pcore_to;
+			assert(core_move_count >= 0);
+			memmove(pcore_to, pcore_from, core_move_count * sizeof(struct knc_core_state));
+
+			struct knc_die *pdie_to = &(knc->die[die]);
+			struct knc_die *pdie_from = pdie_to + 1;
+			int die_move_count = knc->dies - die;
+			assert(die_move_count >= 0);
+			memmove(pdie_to, pdie_from, die_move_count * sizeof(struct knc_die));
+
+			/* Now fix pointers */
+			for (next_die = 0; next_die < knc->dies; ++next_die) {
+				assert(knc->die[next_die].core != pcore_to);
+				if (knc->die[next_die].core > pcore_to)
+					knc->die[next_die].core -= deleted_cores;
+			}
+			for (core = 0; core < knc->cores; ++core) {
+				assert(knc->core[core].die != pdie_to);
+				if (knc->core[core].die > pdie_to)
+					--(knc->core[core].die);
+			}
+			for (buffer = 0; buffer < KNC_SPI_BUFFERS; ++buffer) {
+				for (resp = 0; resp < MAX_SPI_RESPONSES; ++resp) {
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_to)
+						continue;
+					if (knc->spi_buffer[buffer].response_info[resp].core < pcore_from) {
+						knc->spi_buffer[buffer].response_info[resp].core = NULL;
+						continue;
+					}
+					knc->spi_buffer[buffer].response_info[resp].core -= deleted_cores;
+				}
+			}
+		}
+
+		/* die was found */
+		ret = 0;
+		goto out_unlock;
+	}
+
+	/* die was not found */
+	if (enable) {
+		/* Send GETINFO to a die to detect if it is usable */
+		if (knc_trnsp_asic_detect(knc->ctx, asic_id)) {
+			if (knc_detect_die(knc->ctx, asic_id, die_id, &die_info) != 0) {
+				ret = ENODEV;
+				goto out_unlock;
+			}
+		} else {
+			ret = ENODEV;
+			goto out_unlock;
+		}
+
+		memset(&(knc->core[knc->cores]), 0, die_info.cores * sizeof(struct knc_core_state));
+		int next_die = knc->dies;
+
+		knc->die[next_die].channel = asic_id;
+		knc->die[next_die].die = die_id;
+		knc->die[next_die].version = die_info.version;
+		knc->die[next_die].cores = die_info.cores;
+		knc->die[next_die].core = &(knc->core[knc->cores]);
+		knc->die[next_die].knc = knc;
+		knc->die[next_die].proc = proc;
+
+		for (core = 0; core < knc->die[next_die].cores; ++core) {
+			knc->die[next_die].core[core].die = &knc->die[next_die];
+			knc->die[next_die].core[core].core = core;
+		}
+
+		++knc->dies;
+		knc->cores += die_info.cores;
+
+		proc_enable(proc);
+	}
+
+out_unlock:
+	mutex_unlock(&knc->state_lock);
+	return ret;
+}
+
 static bool knc_detect_one(void *ctx)
 {
 	/* Scan device for ASICs */
@@ -271,31 +436,32 @@ static bool knc_detect_one(void *ctx)
 	}
 
 	if (!cores) {
-		applog(LOG_NOTICE, "no KnCminer cores found");
+		applog(LOG_ERR, "no KnCminer cores found");
 		return false;
 	}
 
-	applog(LOG_ERR, "Found a KnC miner with %d cores", cores);
+	applog(LOG_NOTICE, "Found a KnC miner with %d cores", cores);
 
-	knc = calloc(1, sizeof(*knc) + cores * sizeof(struct knc_core_state));
-	if (!knc)
-	{
+	knc = calloc(1, sizeof(*knc));
+	if (!knc) {
+err_nomem:
 		applog(LOG_ERR, "KnC miner detected, but failed to allocate memory");
 		return false;
+	}
+	if (!prealloc_all_cgpus(knc)) {
+		free(knc);
+		goto err_nomem;
 	}
 
 	knc->ctx = ctx;
 	knc->generation = 1;
 
 	/* Index all cores */
-	struct cgpu_info *prev_cgpu = NULL, *first_cgpu = NULL;
+	struct cgpu_info *first_cgpu = NULL;
 	int dies = 0;
 	cores = 0;
 	struct knc_core_state *pcore = knc->core;
-	int channel_cores_base = 0;
 	for (channel = 0; channel < KNC_MAX_ASICS; channel++) {
-		int channel_cores = 0;
-		
 		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; die++) {
 			if (die_info[channel][die].cores) {
 				knc->die[dies].channel = channel;
@@ -304,39 +470,21 @@ static bool knc_detect_one(void *ctx)
 				knc->die[dies].cores = die_info[channel][die].cores;
 				knc->die[dies].core = pcore;
 				knc->die[dies].knc = knc;
+				knc->die[dies].proc = get_cgpu(channel, die);
+				knc->die[dies].proc->deven = DEV_ENABLED;
+				if (NULL == first_cgpu)
+					first_cgpu = knc->die[dies].proc;
 				for (core = 0; core < knc->die[dies].cores; core++) {
 					knc->die[dies].core[core].die = &knc->die[dies];
 					knc->die[dies].core[core].core = core;
 				}
 				cores += knc->die[dies].cores;
-				channel_cores += knc->die[dies].cores;
 				pcore += knc->die[dies].cores;
 				dies++;
 			}
 		}
-		
-		if (channel_cores)
-		{
-			struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
-			*cgpu = (struct cgpu_info){
-				.drv = &kncasic_drv,
-				.name = "KnCminer",
-				.procs = channel_cores,
-				.threads = prev_cgpu ? 0 : 1,
-				.device_data = knc,
-			};
-			add_cgpu_slave(cgpu, prev_cgpu);
-			if (!prev_cgpu)
-				first_cgpu = cgpu;
-			prev_cgpu = cgpu;
-			
-			for_each_managed_proc(proc, cgpu)
-			{
-				knc->core[channel_cores_base++].proc = proc;
-			}
-		}
 	}
-	
+
 	knc->dies = dies;
 	knc->cores = cores;
 	knc->startup = 2;
@@ -345,13 +493,14 @@ static bool knc_detect_one(void *ctx)
 	pthread_cond_init(&knc->spi_qcond, NULL);
 	pthread_mutex_init(&knc->state_lock, NULL);
 
-	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu))
-	{
+	if (thr_info_create(&knc->spi_thr, NULL, knc_spi, first_cgpu)) {
 		applog(LOG_ERR, "%s: SPI thread create failed", first_cgpu->dev_repr);
 		free(knc);
+		/* TODO: free all cgpus. We can not do it at the moment as there is no good
+		 * way to free all cgpu-related resources. */
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -380,6 +529,35 @@ static
 void kncasic_detect(void)
 {
 	generic_detect(&kncasic_drv, kncasic_detect_one, kncasic_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
+}
+
+static
+bool knc_init(struct thr_info * const thr)
+{
+	int channel, die;
+	struct cgpu_info *cgpu = thr->cgpu, *proc;
+	struct knc_state *knc = cgpu->device_data;
+
+	/* Set initial enable/disable state */
+	bool die_detected[KNC_MAX_ASICS][KNC_MAX_DIES_PER_ASIC];
+	memset(die_detected, 0, sizeof(die_detected));
+	for (die = 0; die < knc->dies; ++die) {
+		if (0 < knc->die[die].cores) {
+			die_detected[knc->die[die].channel][knc->die[die].die] = true;
+		}
+	}
+	/* cgpu[0][0] must be always enabled */
+	die_detected[0][0] = true;
+	for (channel = 0; channel < KNC_MAX_ASICS; ++channel) {
+		for (die = 0; die < KNC_MAX_DIES_PER_ASIC; ++die) {
+			proc = get_cgpu(channel, die);
+			if (NULL != proc) {
+				proc->deven = die_detected[channel][die] ? DEV_ENABLED : DEV_DISABLED;
+			}
+		}
+	}
+
+	return true;
 }
 
 /* Core helper functions */
@@ -448,15 +626,15 @@ static void knc_core_failure(struct knc_core_state *core)
 	if (knc_core_disabled(core))
 		return;
 	if (core->errors_now > CORE_ERROR_LIMIT) {
-		struct cgpu_info * const proc = core->proc;
-		applog(LOG_ERR, "%"PRIpreprv" disabled for %ld seconds due to repeated hardware errors",
-			proc->proc_repr, (long)core_disable_interval.tv_sec);
+		struct cgpu_info * const proc = core->die->proc;
+		applog(LOG_ERR, "%"PRIpreprv"[%d] disabled for %ld seconds due to repeated hardware errors",
+			proc->proc_repr, core->core, (long)core_disable_interval.tv_sec);
 		timeradd(&now, &core_disable_interval, &core->disabled_until);
 	}
 }
 
 static
-void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce)
+void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, int slot, uint32_t nonce, bool comm_errors)
 {
 	int i;
 	if (!slot)
@@ -467,19 +645,25 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 		return;
 	for (i = 0; i < WORKS_PER_CORE; i++) {
 		if (slot == core->workslot[i].slot && core->workslot[i].work) {
-			struct cgpu_info * const proc = core->proc;
+			struct cgpu_info * const proc = core->die->proc;
 			struct thr_info * const corethr = proc->thr[0];
-			
-			applog(LOG_INFO, "%"PRIpreprv" found nonce %08x", proc->proc_repr, nonce);
+			char *comm_err_str = comm_errors ? " (comm error)" : "";
+
+			applog(LOG_INFO, "%"PRIpreprv"[%d] found nonce %08x%s", proc->proc_repr, core->core, nonce, comm_err_str);
 			if (submit_nonce(corethr, core->workslot[i].work, nonce)) {
-				/* Good share */
-				core->shares++;
-				core->die->knc->shares++;
-				hashes_done2(corethr, 0x100000000, NULL);
+				if (nonce != core->last_nonce_verified) {
+					/* Good share */
+					core->shares++;
+					core->die->knc->shares++;
+					hashes_done2(corethr, 0x100000000, NULL);
+					core->last_nonce_verified = nonce;
+				} else {
+					applog(LOG_INFO, "%"PRIpreprv"[%d] duplicate nonce %08x%s", proc->proc_repr, core->core, nonce, comm_err_str);
+				}
 				/* This core is useful. Ignore any errors */
 				core->errors_now = 0;
 			} else {
-				applog(LOG_INFO, "%"PRIpreprv" hwerror nonce %08x", proc->proc_repr, nonce);
+				applog(LOG_INFO, "%"PRIpreprv"[%d] hwerror nonce %08x%s", proc->proc_repr, core->core, nonce, comm_err_str);
 				/* Bad share */
 				knc_core_failure(core);
 			}
@@ -487,14 +671,14 @@ void knc_core_handle_nonce(struct thr_info *thr, struct knc_core_state *core, in
 	}
 }
 
-static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response)
+static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *core, uint8_t *response, bool comm_errors)
 {
-	struct cgpu_info * const proc = core->proc;
+	struct cgpu_info * const proc = core->die->proc;
 	struct knc_report *report = &core->report;
 	knc_decode_report(response, report, core->die->version);
 	bool had_event = false;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Process report %d %d(%d) / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+	applog(LOG_DEBUG, "%"PRIpreprv"[%d]: Process report %d %d(%d) / %d %d %d", proc->proc_repr, core->core, report->active_slot, report->next_slot, report->next_state, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	int n;
 	for (n = 0; n < KNC_NONCES_PER_REPORT; n++) {
 		if (report->nonce[n].slot < 0)
@@ -503,54 +687,56 @@ static int knc_core_process_report(struct thr_info *thr, struct knc_core_state *
 			break;
 	}
 	while(n-- > 0) {
-		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce);
+		knc_core_handle_nonce(thr, core, report->nonce[n].slot, report->nonce[n].nonce, comm_errors);
 	}
 
-	if (report->active_slot && core->workslot[0].slot != report->active_slot) {
-		had_event = true;
-		applog(LOG_INFO, "%"PRIpreprv": New work %d %d / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-		/* Core switched to next work */
-		if (core->workslot[0].work) {
-			core->die->knc->completed++;
-			core->completed++;
-			applog(LOG_INFO, "%"PRIpreprv": Work completed!", proc->proc_repr);
-			KNC_FREE_WORK(core->workslot[0].work);
-		}
-		core->workslot[0] = core->workslot[1];
-		core->workslot[1].work = NULL;
-		core->workslot[1].slot = -1;
-
-		/* or did it switch directly to pending work? */
-		if (report->active_slot == core->workslot[2].slot) {
-			applog(LOG_INFO, "%"PRIpreprv": New work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-			if (core->workslot[0].work)
+	if (!comm_errors) {
+		if (report->active_slot && core->workslot[0].slot != report->active_slot) {
+			had_event = true;
+			applog(LOG_INFO, "%"PRIpreprv"[%d]: New work %d %d / %d %d %d", proc->proc_repr, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			/* Core switched to next work */
+			if (core->workslot[0].work) {
+				core->die->knc->completed++;
+				core->completed++;
+				applog(LOG_INFO, "%"PRIpreprv"[%d]: Work completed!", proc->proc_repr, core->core);
 				KNC_FREE_WORK(core->workslot[0].work);
-			core->workslot[0] = core->workslot[2];
+			}
+			core->workslot[0] = core->workslot[1];
+			core->workslot[1].work = NULL;
+			core->workslot[1].slot = -1;
+
+			/* or did it switch directly to pending work? */
+			if (report->active_slot == core->workslot[2].slot) {
+				applog(LOG_INFO, "%"PRIpreprv"[%d]: New work %d %d %d %d (pending)", proc->proc_repr, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+				if (core->workslot[0].work)
+					KNC_FREE_WORK(core->workslot[0].work);
+				core->workslot[0] = core->workslot[2];
+				core->workslot[2].work = NULL;
+				core->workslot[2].slot = -1;
+			}
+		}
+
+		if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
+			had_event = true;
+			applog(LOG_INFO, "%"PRIpreprv"[%d]: Accepted work %d %d %d %d (pending)", proc->proc_repr, core->core, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+			/* core accepted next work */
+			if (core->workslot[1].work)
+				KNC_FREE_WORK(core->workslot[1].work);
+			core->workslot[1] = core->workslot[2];
 			core->workslot[2].work = NULL;
 			core->workslot[2].slot = -1;
 		}
 	}
 
-	if (report->next_state && core->workslot[2].slot > 0 && (core->workslot[2].slot == report->next_slot  || report->next_slot == -1)) {
-		had_event = true;
-		applog(LOG_INFO, "%"PRIpreprv": Accepted work %d %d %d %d (pending)", proc->proc_repr, report->active_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
-		/* core accepted next work */
-		if (core->workslot[1].work)
-			KNC_FREE_WORK(core->workslot[1].work);
-		core->workslot[1] = core->workslot[2];
-		core->workslot[2].work = NULL;
-		core->workslot[2].slot = -1;
-	}
-
 	if (core->workslot[2].work && knc_transfer_completed(core->die->knc, core->transfer_stamp)) {
 		had_event = true;
-		applog(LOG_INFO, "%"PRIpreprv": Setwork failed?", proc->proc_repr);
+		applog(LOG_INFO, "%"PRIpreprv"[%d]: Setwork failed?", proc->proc_repr, core->core);
 		KNC_FREE_WORK(core->workslot[2].work);
 		core->workslot[2].slot = -1;
 	}
 
 	if (had_event)
-		applog(LOG_INFO, "%"PRIpreprv": Exit report %d %d / %d %d %d", proc->proc_repr, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+		applog(LOG_INFO, "%"PRIpreprv"[%d]: Exit report %d %d / %d %d %d", proc->proc_repr, core->core, report->active_slot, report->next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 
 	return 0;
 }
@@ -566,16 +752,21 @@ static void knc_process_responses(struct thr_info *thr)
 			struct knc_spi_response *response_info = &buffer->response_info[i];
 			uint8_t *rxbuf = &buffer->rxbuf[response_info->offset];
 			struct knc_core_state *core = response_info->core;
-			struct cgpu_info * const proc = core->proc;
+			if (NULL == core) /* core was deleted, e.g. by API call */
+				continue;
+			struct cgpu_info * const proc = core->die->proc;
 			int status = knc_decode_response(rxbuf, response_info->request_length, &rxbuf, response_info->response_length);
 			/* Invert KNC_ACCEPTED to simplify logics below */
 			if (response_info->type == KNC_SETWORK && !KNC_IS_ERROR(status))
 				status ^= KNC_ACCEPTED;
+			bool comm_errors = false;
 			if (core->die->version != KNC_VERSION_JUPITER && status != 0) {
-				applog(LOG_ERR, "%s: Communication error (%x / %d)", proc->proc_repr, status, i);
-				if (status == KNC_ACCEPTED) {
+				if (response_info->type == KNC_SETWORK && status == KNC_ACCEPTED) {
 					/* Core refused our work vector. Likely out of sync. Reset it */
 					core->inuse = false;
+				} else {
+					applog(LOG_INFO, "%"PRIpreprv"[%d]: Communication error (%x / %d)", proc->proc_repr, core->core, status, i);
+					comm_errors = true;
 				}
 				knc_core_failure(core);
 			}
@@ -583,7 +774,7 @@ static void knc_process_responses(struct thr_info *thr)
 			case KNC_REPORT:
 			case KNC_SETWORK:
 				/* Should we care about failed SETWORK explicit? Or simply handle it by next state not loaded indication in reports?  */
-				knc_core_process_report(thr, core, rxbuf);
+				knc_core_process_report(thr, core, rxbuf, comm_errors);
 				break;
 			default:
 				break;
@@ -604,7 +795,7 @@ static void knc_process_responses(struct thr_info *thr)
 static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core, struct work *work, bool clean)
 {
 	struct knc_state *knc = core->die->knc;
-	struct cgpu_info * const proc = core->proc;
+	struct cgpu_info * const proc = core->die->proc;
 	int request_length = 4 + 1 + 6*4 + 3*4 + 8*4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
@@ -613,7 +804,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	if (slot < 0)
 		goto error;
 
-	applog(LOG_INFO, "%"PRIpreprv" setwork%s  = %d, %d %d / %d %d %d", proc->proc_repr, clean ? " CLEAN" : "", slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
+	applog(LOG_INFO, "%"PRIpreprv"[%d] setwork%s  = %d, %d %d / %d %d %d", proc->proc_repr, core->core, clean ? " CLEAN" : "", slot, core->report.active_slot, core->report.next_slot, core->workslot[0].slot, core->workslot[1].slot, core->workslot[2].slot);
 	if (!clean && !knc_core_need_work(core))
 		goto error;
 
@@ -651,7 +842,7 @@ static int knc_core_send_work(struct thr_info *thr, struct knc_core_state *core,
 	return 0;
 
 error:
-	applog(LOG_INFO, "%"PRIpreprv": Failed to setwork (%d)", proc->proc_repr, core->errors_now);
+	applog(LOG_INFO, "%"PRIpreprv"[%d]: Failed to setwork (%d)", proc->proc_repr, core->core, core->errors_now);
 	knc_core_failure(core);
 	KNC_FREE_WORK(work);
 	return -1;
@@ -659,12 +850,12 @@ error:
 
 static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *core)
 {
-	struct cgpu_info * const proc = core->proc;
+	struct cgpu_info * const proc = core->die->proc;
 	int request_length = 4;
 	uint8_t request[request_length];
 	int response_length = 1 + 1 + (1 + 4) * 5;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Request report", proc->proc_repr);
+	applog(LOG_DEBUG, "%"PRIpreprv"[%d]: Request report", proc->proc_repr, core->core);
 
 	request_length = knc_prepare_report(request, core->die->die, core->core);
 
@@ -678,7 +869,7 @@ static int knc_core_request_report(struct thr_info *thr, struct knc_core_state *
 		return 0;
 	}
 
-	applog(LOG_INFO, "%"PRIpreprv": Failed to scan work report", proc->proc_repr);
+	applog(LOG_INFO, "%"PRIpreprv"[%d]: Failed to scan work report", proc->proc_repr, core->core);
 	knc_core_failure(core);
 	return -1;
 }
@@ -713,12 +904,12 @@ static int64_t knc_scanwork(struct thr_info *thr)
 
 	for (i = 0; i < knc->cores; i++) {
 		struct knc_core_state *core = &knc->core[i];
-		struct cgpu_info * const proc = core->proc;
+		struct cgpu_info * const proc = core->die->proc;
 		bool clean = !core->inuse;
 		if (knc_core_disabled(core))
 			continue;
 		if (core->generation != knc->generation) {
-			applog(LOG_INFO, "%"PRIpreprv" flush gen=%d/%d", proc->proc_repr, core->generation, knc->generation);
+			applog(LOG_INFO, "%"PRIpreprv"[%d] flush gen=%d/%d", proc->proc_repr, core->core, core->generation, knc->generation);
 			/* clean set state, forget everything */
 			int slot;
 			for (slot = 0; slot < WORKS_PER_CORE; slot ++) {
@@ -729,7 +920,7 @@ static int64_t knc_scanwork(struct thr_info *thr)
 			core->hold_work_until = now;
 			core->generation = knc->generation;
 		} else if (timercmp(&core->timeout, &now, <=) && (core->workslot[0].slot > 0 || core->workslot[1].slot > 0 || core->workslot[2].slot > 0)) {
-			applog(LOG_ERR, "%"PRIpreprv" timeout gen=%d/%d", proc->proc_repr, core->generation, knc->generation);
+			applog(LOG_INFO, "%"PRIpreprv"[%d] timeout gen=%d/%d", proc->proc_repr, core->core, core->generation, knc->generation);
 			clean = true;
 		}
 		if (!knc_core_has_work(core))
@@ -885,6 +1076,13 @@ void hash_driver_work(struct thr_info * const thr)
 		
 		if (unlikely(thr->pause || cgpu->deven != DEV_ENABLED))
 			mt_disable(thr);
+
+		if (unlikely(thr->work_restart)) {
+			thr->work_restart = false;
+			flush_queue(cgpu);
+			drv->flush_work(cgpu);
+		}
+
 	}
 }
 
@@ -892,6 +1090,7 @@ struct device_drv kncasic_drv = {
 	.dname = "kncasic",
 	.name = "KNC",
 	.drv_detect = kncasic_detect,
+	.thread_init = knc_init,
 	.minerloop = hash_driver_work,
 	.flush_work = knc_flush_work,
 	.scanwork = knc_scanwork,
