@@ -1941,6 +1941,19 @@ static char *set_pool_force_rollntime(const char *arg)
 	return NULL;
 }
 
+static char *set_pool_retroactive_diff(const char *arg)
+{
+	struct pool *pool;
+
+	if (!total_pools)
+		return "Usage of --retroactive-diff before pools are defined does not make sense";
+
+	pool = pools[total_pools - 1];
+	opt_set_bool(&pool->pool_diff_effective_retroactively);
+
+	return NULL;
+}
+
 static char *enable_debug(bool *flag)
 {
 	*flag = true;
@@ -2795,6 +2808,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--worktime",
 			opt_set_bool, &opt_worktime,
 			"Display extra work time debug information"),
+	OPT_WITHOUT_ARG("--retroactive-diff",
+			set_pool_retroactive_diff, NULL,
+			"Adjust difficulty of the shares retroactively (broken pools support)"),
 	OPT_WITH_ARG("--pools",
 			opt_set_bool, NULL, NULL, opt_hidden),
 	OPT_ENDTABLE
@@ -7824,6 +7840,8 @@ void write_config(FILE *fcfg)
 		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pool->prio);
 		if (pool->force_rollntime)
 			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pool->force_rollntime);
+		if (pool->pool_diff_effective_retroactively)
+			fprintf(fcfg, ",\n\t\t\"retroactive-diff\" : true");
 		fprintf(fcfg, "\n\t}");
 	}
 	fputs("\n]\n", fcfg);
@@ -10536,13 +10554,20 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 		struct pool * const pool = work->pool;
 		if (pool->stratum_active)
 		{
-			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
-			if (memcmp(pool->next_target, work->target, sizeof(work->target)))
+			if (pool->pool_diff_effective_retroactively)
 			{
-				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
-				       pool->pool_no);
-				if (hash_target_check_v(work->hash, pool->next_target))
-					high_hash = false;
+				// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
+				if (memcmp(pool->next_target, work->target, sizeof(work->target)))
+				{
+					applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too as requested by user",
+					       pool->pool_no);
+					if (hash_target_check_v(work->hash, pool->next_target))
+					{
+						high_hash = false;
+						memcpy(work->target, pool->next_target, sizeof(work->target));
+						calc_diff(work, 0);
+					}
+				}
 			}
 		}
 		if (high_hash)
