@@ -2153,11 +2153,15 @@ const char *extract_domain(size_t * const out_domainlen, const char * const uri,
 			// part of the URI scheme, ignore it
 			while (p[0] == '/')
 				++p;
-			p = memchr(p, '/', urilen - (p - uri)) ?: &uri[urilen];
+			p = memchr(p, '/', urilen - (p - uri));
 		}
 	}
-	else
-		p = &uri[urilen];
+	if (!p)
+	{
+		p = memchr(uri, '?', urilen) ?:
+		    memchr(uri, '#', urilen) ?:
+		    &uri[urilen];
+	}
 	
 	s = p;
 	q = my_memrchr(uri, ':', p - uri);
@@ -2256,6 +2260,14 @@ void test_domain_funcs()
 	_test_extract_domain("s.m.eligius.st", "stratum+tcp://s.m.eligius.st.:3334///");
 	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334");
 	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334///");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334#foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334?foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st#foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st?foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st#foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st?foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334#foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334?foo");
 	_test_extract_domain("foohost", "foohost:3334");
 	_test_extract_domain("foohost", "foohost:3334///");
 	_test_extract_domain("foohost", "foohost:3334/abc.com//");
