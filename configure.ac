@@ -269,7 +269,7 @@ m4_define([_BFG_AUTOITEM],[
 		fi
 		if test "x$[]_this_USE" != xyes; then
 			if test "x$[]_this_USE" != xauto; then
-				$1_opt="$[]_this_USE"
+				[]_this_drv[]_opt="$[]_this_USE"
 			fi
 			[]_this_USE=yes
 		fi
