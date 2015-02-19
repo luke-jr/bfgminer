@@ -1,3 +1,26 @@
+BFGMiner Version 5.1.0 - February 19, 2015
+
+- Fix broken driver options in configure script
+- Bugfix: extract_domain: Correctly handle query/fragment in URI without path
+- kncasic: Do flush!
+- kncasic: avoid duplicate nonces to be reported
+- kncasic: Fix logging levels
+- kncasic: Neptune-compatible API interface for enabling/disabling dies
+- kncasic: Use one bfgminer processor per die (not per core)
+- Update libblkmaker to 0.5.1
+- Titan: Lower log level when reconfiguring dies
+- Titan: does not need SHA256d algo
+- Titan: lower log level for flush messages
+- Titan: adjust log levels in knc_titan_get_info
+- get_master_rolling_hashrate -> get_proc_rolling_hashrate
+- Update webconfig code to latest BFGMiner
+- allow url based config files
+- kncasic: Fix "double free" error
+- kncasic: We need to free queued work to avoid memory leaks
+- Bugfix: minion: Don't try to add 0-chip devices
+- configure: Avoid BASHisms for better portability
+
+
 BFGMiner Version 5.0.0 - November 29, 2014
 
 - opencl: Fail gracefully if clGetProgramInfo/CL_PROGRAM_NUM_DEVICES returns

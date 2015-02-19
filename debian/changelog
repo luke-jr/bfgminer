@@ -1,4 +1,11 @@
-bfgminer (4.99.1-0precise1) precise; urgency=low
+bfgminer (5.0.0-0precise1) precise; urgency=low
+
+  * Update libblkmaker for compatibility with BIP66 version 3 blocks.
+  * Merge Kano's web-based config file loader from cgminer.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 19 Feb 2015 16:17:18 -0000
+
+bfgminer (5.0.0-0precise1) precise; urgency=low
 
   * Multi-blockchain support: BFGMiner can now be told which pools use the same "mining goals", and will track the blockchain independently for ones that don't. This allows you to mine multiple cryptocurrencies concurrently using any pool strategy (including balance and load-balance).
   * Multi-algorithm support: BFGMiner is now capable of hashing on both scrypt and SHA256d work at the same time, and you can assign the mining algorithm to use on a per-goal basis. As with multi-blockchain support, this works even in balancing strategies. Note that at this time, only CPU, OpenCL, and Proxy drivers actually support multiple algorithms at the same time (DualMiner must be preconfigured for only one, and GridSeed remains scrypt-only).
