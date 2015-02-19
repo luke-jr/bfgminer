@@ -1,3 +1,10 @@
+BFGMiner Version 4.10.2 - February 19, 2015
+
+- Bugfix: extract_domain: Correctly handle query/fragment in URI without path
+- Update libblkmaker to 0.5.1
+- configure: Avoid BASHisms for better portability
+
+
 BFGMiner Version 4.10.1 - November 29, 2014
 
 - Upgraded Windows libcurl from 7.38.0 to 7.39.0
