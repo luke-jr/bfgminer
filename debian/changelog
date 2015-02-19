@@ -1,3 +1,9 @@
+bfgminer (3.10.9-0precise1) precise; urgency=low
+
+  * Update libblkmaker for compatibility with BIP66 version 3 blocks.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 19 Feb 2015 16:54:51 -0000
+
 bfgminer (3.10.8-0precise1) precise; urgency=low
 
   * Bug fixes only.
