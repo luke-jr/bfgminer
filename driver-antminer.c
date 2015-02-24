@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2015 Luke Dashjr
  * Copyright 2013-2014 Nate Woolls
  * Copyright 2013 Lingchao Xu
  *
@@ -37,6 +37,8 @@
 #define ANTMINER_COMMAND_OFFSET 32
 
 BFG_REGISTER_DRIVER(antminer_drv)
+static
+const struct bfg_set_device_definition antminer_set_device_funcs[];
 
 static
 bool antminer_detect_one(const char *devpath)
@@ -54,12 +56,14 @@ bool antminer_detect_one(const char *devpath)
 		.read_size = 5,
 	};
 	
-	if (!icarus_detect_custom(devpath, drv, info))
+	struct cgpu_info * const dev = icarus_detect_custom(devpath, drv, info);
+	if (!dev)
 	{
 		free(info);
 		return false;
 	}
 	
+	dev->set_device_funcs = antminer_set_device_funcs;
 	info->read_count = 15;
 	
 	return true;
@@ -114,7 +118,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 }
 
 static
-char *antminer_set_clock(struct cgpu_info *cgpu, char *setting, char *replybuf)
+const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const optname, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	if (!setting || !*setting)
 		return "missing clock setting";
@@ -129,7 +133,7 @@ char *antminer_set_clock(struct cgpu_info *cgpu, char *setting, char *replybuf)
 	}
 	
 	//remove leading character
-	char *hex_setting = setting + 1;
+	const char * const hex_setting = &setting[1];
 
 	uint8_t reg_data[4] = {0};
 	
@@ -166,18 +170,6 @@ char *antminer_set_clock(struct cgpu_info *cgpu, char *setting, char *replybuf)
 }
 
 static
-char *antminer_set_device(struct cgpu_info *cgpu, char *option, char *setting, char *replybuf)
-{		
-	if (strcasecmp(option, "clock") == 0)
-	{
-		return antminer_set_clock(cgpu, setting, replybuf);
-	}
-
-	sprintf(replybuf, "Unknown option: %s", option);
-	return replybuf;
-}
-
-static
 void antminer_flash_led(const struct cgpu_info *antminer)
 {
 	const int offset = ANTMINER_COMMAND_OFFSET;
@@ -207,13 +199,22 @@ bool antminer_identify(struct cgpu_info *antminer)
 }
 
 static
+const struct bfg_set_device_definition antminer_set_device_funcs[] = {
+	{"baud"         , icarus_set_baud         , "serial baud rate"},
+	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
+	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
+	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
+	{"clock", antminer_set_clock, "clock frequency"},
+	{NULL},
+};
+
+static
 void antminer_drv_init()
 {
 	antminer_drv = icarus_drv;
 	antminer_drv.dname = "antminer";
 	antminer_drv.name = "AMU";
 	antminer_drv.lowl_probe = antminer_lowl_probe;
-	antminer_drv.set_device = antminer_set_device,
 	antminer_drv.identify_device = antminer_identify;
 	++antminer_drv.probe_priority;
 }

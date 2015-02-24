@@ -412,7 +412,6 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 	return NULL;
 }
 
-static
 const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;
@@ -495,7 +494,7 @@ int icarus_probe_work_division(const int fd, const char * const repr, struct ICA
 	return work_division;
 }
 
-bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
+struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *api, struct ICARUS_INFO *info)
 {
 	struct timeval tv_start, tv_finish;
 	int fd;
@@ -514,7 +513,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 	fd = icarus_open2(devpath, baud, true);
 	if (unlikely(fd == -1)) {
 		applog(LOG_DEBUG, "%s: Failed to open %s", api->dname, devpath);
-		return false;
+		return NULL;
 	}
 	
 	// Set a default so that individual drivers need not specify
@@ -576,7 +575,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 				   "Test failed at %s: get %s, should: %s",
 				   api->dname,
 				   devpath, nonce_hex, info->golden_nonce);
-			return false;
+			return NULL;
 		}
 		
 		if (info->read_size - ICARUS_NONCE_SIZE != bytes_left)
@@ -586,7 +585,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 				   "Test failed at %s: expected %d bytes, got %d",
 				   api->dname,
 				   devpath, info->read_size, ICARUS_NONCE_SIZE + bytes_left);
-			return false;
+			return NULL;
 		}
 	}
 	else
@@ -599,7 +598,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 			devpath, nonce_hex);
 
 	if (serial_claim_v(devpath, api))
-		return false;
+		return NULL;
 
 	_icarus_set_timing(info, api->dname, api, "");
 	if (!info->fpga_count)
@@ -638,7 +637,7 @@ bool icarus_detect_custom(const char *devpath, struct device_drv *api, struct IC
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
-	return true;
+	return icarus;
 }
 
 static bool icarus_detect_one(const char *devpath)
@@ -1300,7 +1299,6 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 	return root;
 }
 
-static
 const char *icarus_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;
@@ -1323,7 +1321,6 @@ const char *icarus_set_probe_timeout(struct cgpu_info * const proc, const char *
 	return NULL;
 }
 
-static
 const char *icarus_set_work_division(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;
@@ -1354,7 +1351,6 @@ const char *icarus_set_fpga_count(struct cgpu_info * const proc, const char * co
 	return NULL;
 }
 
-static
 const char *icarus_set_reopen(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;

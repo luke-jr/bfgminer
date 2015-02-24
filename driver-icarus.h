@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "miner.h"
 
@@ -160,11 +161,16 @@ struct icarus_state {
 	uint8_t *ob_bin;
 };
 
-bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
+extern struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
 extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
 extern int icarus_write(int fd, const void *buf, size_t bufLen);
 extern bool icarus_init(struct thr_info *);
 extern void do_icarus_close(struct thr_info *thr);
 extern bool icarus_job_start(struct thr_info *);
+
+extern const char *icarus_set_baud(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_work_division(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_reopen(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_timing(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
 
 #endif
