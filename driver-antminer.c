@@ -175,6 +175,53 @@ const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const
 }
 
 static
+const char *antminer_set_voltage(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (!(newvalue && *newvalue))
+		return "Missing voltage value";
+	
+	// For now we only allow hex values that use BITMAINtech's lookup table
+	// This means values should be prefixed with an x so that later we can
+	// accept and distinguish decimal values
+	if (newvalue[0] != 'x' || strlen(newvalue) != 4)
+invalid_voltage:
+		return "Only raw voltage configurations are currently supported using 'x' followed by 3 hexadecimal digits";
+	
+	char voltagecfg_hex[5];
+	voltagecfg_hex[0] = '0';
+	memcpy(&voltagecfg_hex[1], &newvalue[1], 3);
+	voltagecfg_hex[4] = '\0';
+	
+	uint8_t cmd[4];
+	if (!hex2bin(&cmd[1], voltagecfg_hex, 2))
+		goto invalid_voltage;
+	cmd[0] = 0xaa;
+	cmd[1] |= 0xb0;
+	cmd[3] = 0;
+	cmd[3] = crc5usb(cmd, (4 * 8) - 5);
+	cmd[3] |= 0xc0;
+	
+	if (opt_debug)
+	{
+		char hex[(4 * 2) + 1];
+		bin2hex(hex, cmd, 4);
+		applog(LOG_DEBUG, "%"PRIpreprv": Set voltage: %s", proc->proc_repr, hex);
+	}
+	
+	const int err = icarus_write(proc->proc_repr, proc->device_fd, cmd, sizeof(cmd));
+	
+	if (err)
+	{
+		sprintf(replybuf, "Error sending set voltage (err=%d)", err);
+		return replybuf;
+	}
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Set voltage: OK", proc->proc_repr);
+	
+	return NULL;
+}
+
+static
 void antminer_flash_led(const struct cgpu_info *antminer)
 {
 	const int offset = ANTMINER_COMMAND_OFFSET;
@@ -210,6 +257,7 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
 	{"clock", antminer_set_clock, "clock frequency"},
+	{"voltage", antminer_set_voltage, "voltage ('x' followed by 3 digit hex code)"},
 	{NULL},
 };
 
