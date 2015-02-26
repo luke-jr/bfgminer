@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2015 Luke Dashjr
  * Copyright 2013 Con Kolivas
  * Copyright 2012 Andrew Smith
  * Copyright 2013 Xiangfu
@@ -1056,19 +1056,19 @@ bool valid_baud(int baud)
 	}
 }
 
-bool vcom_set_timeout(const int fdDev, const uint8_t timeout)
+bool vcom_set_timeout_ms(const int fdDev, const unsigned timeout_ms)
 {
 #ifdef WIN32
 	const HANDLE hSerial = (HANDLE)_get_osfhandle(fdDev);
 	// Code must specify a valid timeout value (0 means don't timeout)
-	const DWORD ctoms = ((DWORD)timeout * 100);
+	const DWORD ctoms = timeout_ms;
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
 	return (SetCommTimeouts(hSerial, &cto) != 0);
 #else
 	struct termios my_termios;
 	
 	tcgetattr(fdDev, &my_termios);
-	my_termios.c_cc[VTIME] = (cc_t)timeout;
+	my_termios.c_cc[VTIME] = (cc_t)(timeout_ms + 99) / 100;
 	return (tcsetattr(fdDev, TCSANOW, &my_termios) == 0);
 #endif
 }
