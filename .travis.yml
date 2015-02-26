@@ -21,12 +21,12 @@ matrix:
       env: UBUNTU_DEPS='gcc-mingw-w64-x86-64' EXTRA_DEPS='pkg-config yasm' CROSS_BINPKGS='x86_64-w64-mingw32' BUILD_CFLAGS='-Werror' CONFIGURE_ARGS='--enable-other-drivers --enable-keccak --enable-scrypt --without-system-libbase58 --host=x86_64-w64-mingw32 --disable-knc --disable-bfsb --disable-jingtian --disable-metabank --disable-minergate --disable-titan --disable-kncasic --disable-minion'
     - compiler: ": Standard"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-keccak --enable-scrypt'
-    - compiler: ": Std SHA2"
+    - compiler: ": Std SHA256d"
       env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS=''
     - compiler: ": Std Keccak"
-      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-keccak'
+      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--disable-sha256d --enable-keccak'
     - compiler: ": Std scrypt"
-      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-scrypt'
+      env: myCC='clang' UBUNTU_DEPS='libhidapi-dev linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--disable-sha256d --enable-scrypt'
     - compiler: ": No hidapi"
       env: myCC='clang' UBUNTU_DEPS='linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev libudev-dev libusb-1.0-0-dev libevent-dev libmicrohttpd-dev libi2c-dev yasm libsensors4-dev' CONFIGURE_ARGS='--enable-other-drivers --enable-keccak --enable-scrypt'
     - compiler: ": No VFIO"
@@ -71,12 +71,14 @@ matrix:
       env: myCC='clang' UBUNTU_DEPS='linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-bitforce'
     - compiler: ": Only icarus"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-icarus'
+    - compiler: ": Only dualminer SHA256d"
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-icarus --enable-dualminer'
     - compiler: ": Only dualminer"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-icarus --enable-dualminer --enable-scrypt'
     - compiler: ": Only zeusminer"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-icarus --enable-zeusminer --enable-scrypt'
     - compiler: ": Only gridseed"
-      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-gridseed --enable-scrypt'
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --disable-sha256d --enable-gridseed --enable-scrypt'
     - compiler: ": Only avalon"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-avalon'
     - compiler: ": Only avalonmm"
@@ -84,7 +86,7 @@ matrix:
     - compiler: ": Only knc"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-knc'
     - compiler: ": Only kncasic"
-      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-scrypt --enable-kncasic'
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-kncasic'
     - compiler: ": Only modminer"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-modminer'
     - compiler: ": Only cointerra"
@@ -92,7 +94,7 @@ matrix:
     - compiler: ": Only klondike"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libusb-1.0-0-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-klondike'
     - compiler: ": Only titan"
-      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-scrypt --enable-titan'
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libi2c-dev' CONFIGURE_ARGS='--disable-other-drivers --disable-sha256d --enable-scrypt --enable-titan'
     - compiler: ": Only x6500"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev libusb-1.0-0-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-x6500'
     - compiler: ": Only ztex"
