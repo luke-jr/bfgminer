@@ -1149,6 +1149,8 @@ keepwaiting:
 		// complete it can't have done more than a full nonce
 		if (unlikely(estimate_hashes > 0xffffffff))
 			estimate_hashes = 0xffffffff;
+		if (unlikely(estimate_hashes < 0))
+			estimate_hashes = 0;
 
 		applog(LOG_DEBUG, "%"PRIpreprv" no nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
 		       icarus->proc_repr,
