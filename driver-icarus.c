@@ -622,6 +622,7 @@ struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *a
 	icarus->device_fd = -1;
 	icarus->threads = 1;
 	icarus->procs = info->fpga_count;
+	icarus->device_data = info;
 	icarus->set_device_funcs = icarus_set_device_funcs_live;
 	add_cgpu(icarus);
 
@@ -632,8 +633,6 @@ struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *a
 	applog(LOG_DEBUG, "%"PRIpreprv": Init: baud=%d work_division=%d fpga_count=%d",
 		icarus->proc_repr,
 		baud, work_division, fpga_count);
-
-	icarus->device_data = info;
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
 
