@@ -75,6 +75,8 @@ bool antminer_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, antminer_detect_one);
 }
 
+// Not used for anything, and needs to read a result for every chip
+#if 0
 static
 char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 {
@@ -118,6 +120,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	
 	return NULL;
 }
+#endif
 
 static
 const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const optname, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const out_success)
@@ -167,8 +170,8 @@ const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const
 	
 	// This is confirmed required in order for the clock change to "take"
 	cgsleep_ms(500);
-		
-	return antminer_get_clock(cgpu, replybuf);
+	
+	return NULL;
 }
 
 static
