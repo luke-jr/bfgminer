@@ -162,8 +162,8 @@ struct icarus_state {
 };
 
 extern struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
-extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
-extern int icarus_write(int fd, const void *buf, size_t bufLen);
+extern int icarus_gets(const char *repr, unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
+extern int icarus_write(const char *repr, int fd, const void *buf, size_t bufLen);
 extern bool icarus_init(struct thr_info *);
 extern void do_icarus_close(struct thr_info *thr);
 extern bool icarus_job_start(struct thr_info *);

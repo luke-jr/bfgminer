@@ -92,7 +92,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	applog(LOG_DEBUG, "%"PRIpreprv": Get clock: %02x%02x%02x%02x", cgpu->proc_repr, rdreg_buf[0], rdreg_buf[1], rdreg_buf[2], rdreg_buf[3]);
 	
 	timer_set_now(&tv_now);
-	int err = icarus_write(cgpu->device_fd, rdreg_buf, sizeof(rdreg_buf));
+	int err = icarus_write(cgpu->proc_repr, cgpu->device_fd, rdreg_buf, sizeof(rdreg_buf));
 	
 	if (err != 0)
 	{
@@ -103,7 +103,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	applog(LOG_DEBUG, "%"PRIpreprv": Get clock: OK", cgpu->proc_repr);
 	
 	memset(rebuf, 0, sizeof(rebuf));
-	err = icarus_gets(rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
+	err = icarus_gets(cgpu->proc_repr, rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
 	
 	// Timeout is ok - checking specifically for an error here
 	if (err == ICA_GETS_ERROR)
@@ -153,7 +153,7 @@ const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Set clock: %02x%02x%02x%02x", cgpu->proc_repr, cmd_buf[0], cmd_buf[1], cmd_buf[2], cmd_buf[3]);
 	
-	int err = icarus_write(cgpu->device_fd, cmd_buf, sizeof(cmd_buf));
+	int err = icarus_write(cgpu->proc_repr, cgpu->device_fd, cmd_buf, sizeof(cmd_buf));
 		
 	if (err != 0)
 	{
@@ -183,7 +183,7 @@ void antminer_flash_led(const struct cgpu_info *antminer)
 	cmd_buf[offset + 3] = crc5usb(cmd_buf, sizeof(cmd_buf));
 
 	const int fd = antminer->device_fd;
-	icarus_write(fd, (char *)(&cmd_buf), sizeof(cmd_buf));
+	icarus_write(antminer->proc_repr, fd, (char *)(&cmd_buf), sizeof(cmd_buf));
 }
 
 static
