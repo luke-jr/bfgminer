@@ -1,7 +1,7 @@
 /*
  * Copyright 2011-2014 Andrew Smith
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2015 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -701,7 +701,8 @@ static struct api_data *api_add_extra(struct api_data *root, struct api_data *ex
 	return root;
 }
 
-static struct api_data *api_add_data_full(struct api_data *root, char *name, enum api_data_type type, void *data, bool copy_data)
+static
+struct api_data *api_add_data_full(struct api_data *root, const char * const name, enum api_data_type type, const void *data, bool copy_data)
 {
 	struct api_data *api_data;
 
@@ -727,7 +728,7 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 	// Avoid crashing on bad data
 	if (data == NULL) {
 		api_data->type = type = API_CONST;
-		data = (void *)NULLSTR;
+		data = NULLSTR;
 		api_data->data_was_malloc = copy_data = false;
 	}
 
@@ -738,43 +739,34 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			json_incref((json_t *)data);
 	}
 	else
+	{
+		size_t datalen = 0;
 		switch(type) {
 			case API_ESCAPE:
 			case API_STRING:
 			case API_CONST:
-				api_data->data = (void *)malloc(strlen((char *)data) + 1);
-				strcpy((char*)(api_data->data), (char *)data);
+				datalen = strlen(data) + 1;
 				break;
 			case API_UINT8:
-				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
-				*(uint8_t *)api_data->data = *(uint8_t *)data;
+				datalen = sizeof(uint8_t);
 				break;
 			case API_INT16:
-				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
-				*(int16_t *)api_data->data = *(int16_t *)data;
+				datalen = sizeof(int16_t);
 				break;
 			case API_UINT16:
-				/* Most OSs won't really alloc less than 4 */
-				api_data->data = malloc(4);
-				*(uint16_t *)api_data->data = *(uint16_t *)data;
+				datalen = sizeof(uint16_t);
 				break;
 			case API_INT:
-				api_data->data = (void *)malloc(sizeof(int));
-				*((int *)(api_data->data)) = *((int *)data);
+				datalen = sizeof(int);
 				break;
 			case API_UINT:
-				api_data->data = (void *)malloc(sizeof(unsigned int));
-				*((unsigned int *)(api_data->data)) = *((unsigned int *)data);
+				datalen = sizeof(unsigned int);
 				break;
 			case API_UINT32:
-				api_data->data = (void *)malloc(sizeof(uint32_t));
-				*((uint32_t *)(api_data->data)) = *((uint32_t *)data);
+				datalen = sizeof(uint32_t);
 				break;
 			case API_UINT64:
-				api_data->data = (void *)malloc(sizeof(uint64_t));
-				*((uint64_t *)(api_data->data)) = *((uint64_t *)data);
+				datalen = sizeof(uint64_t);
 				break;
 			case API_DOUBLE:
 			case API_ELAPSED:
@@ -785,164 +777,167 @@ static struct api_data *api_add_data_full(struct api_data *root, char *name, enu
 			case API_HS:
 			case API_DIFF:
 			case API_PERCENT:
-				api_data->data = (void *)malloc(sizeof(double));
-				*((double *)(api_data->data)) = *((double *)data);
+				datalen = sizeof(double);
 				break;
 			case API_BOOL:
-				api_data->data = (void *)malloc(sizeof(bool));
-				*((bool *)(api_data->data)) = *((bool *)data);
+				datalen = sizeof(bool);
 				break;
 			case API_TIMEVAL:
-				api_data->data = (void *)malloc(sizeof(struct timeval));
-				memcpy(api_data->data, data, sizeof(struct timeval));
+				datalen = sizeof(struct timeval);
 				break;
 			case API_TIME:
-				api_data->data = (void *)malloc(sizeof(time_t));
-				*(time_t *)(api_data->data) = *((time_t *)data);
+				datalen = sizeof(time_t);
 				break;
 			case API_VOLTS:
 			case API_TEMP:
-				api_data->data = (void *)malloc(sizeof(float));
-				*((float *)(api_data->data)) = *((float *)data);
+				datalen = sizeof(float);
 				break;
 			case API_JSON:
 				api_data->data_was_malloc = false;
-				api_data->data = (void *)json_deep_copy((json_t *)data);
+				api_data->data = json_deep_copy((json_t *)data);
 				break;
 			default:
 				applog(LOG_ERR, "API: unknown1 data type %d ignored", type);
 				api_data->type = API_STRING;
 				api_data->data_was_malloc = false;
-				api_data->data = (void *)UNKNOWN;
+				api_data->data = UNKNOWN;
 				break;
 		}
+		if (datalen)
+		{
+			void * const copied_data = malloc(datalen);
+			memcpy(copied_data, data, datalen);
+			api_data->data = copied_data;
+		}
+	}
 
 	return root;
 }
 
-struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data)
+struct api_data *api_add_escape(struct api_data * const root, const char * const name, const char * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_ESCAPE, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_ESCAPE, data, copy_data);
 }
 
-struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data)
+struct api_data *api_add_string(struct api_data * const root, const char * const name, const char * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_STRING, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_STRING, data, copy_data);
 }
 
-struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data)
+struct api_data *api_add_const(struct api_data * const root, const char * const name, const char * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_CONST, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_CONST, data, copy_data);
 }
 
-struct api_data *api_add_uint8(struct api_data *root, char *name, uint8_t *data, bool copy_data)
+struct api_data *api_add_uint8(struct api_data * const root, const char * const name, const uint8_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UINT8, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UINT8, data, copy_data);
 }
 
-struct api_data *api_add_int16(struct api_data *root, char *name, uint16_t *data, bool copy_data)
+struct api_data *api_add_int16(struct api_data * const root, const char * const name, const uint16_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_INT16, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_INT16, data, copy_data);
 }
 
-struct api_data *api_add_uint16(struct api_data *root, char *name, uint16_t *data, bool copy_data)
+struct api_data *api_add_uint16(struct api_data * const root, const char * const name, const uint16_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UINT16, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UINT16, data, copy_data);
 }
 
-struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data)
+struct api_data *api_add_int(struct api_data * const root, const char * const name, const int * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_INT, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_INT, data, copy_data);
 }
 
-struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data)
+struct api_data *api_add_uint(struct api_data * const root, const char * const name, const unsigned int * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UINT, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UINT, data, copy_data);
 }
 
-struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data)
+struct api_data *api_add_uint32(struct api_data * const root, const char * const name, const uint32_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UINT32, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UINT32, data, copy_data);
 }
 
-struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *data, bool copy_data)
+struct api_data *api_add_uint64(struct api_data * const root, const char * const name, const uint64_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UINT64, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UINT64, data, copy_data);
 }
 
-struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_double(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_DOUBLE, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_DOUBLE, data, copy_data);
 }
 
-struct api_data *api_add_elapsed(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_elapsed(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_ELAPSED, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_ELAPSED, data, copy_data);
 }
 
-struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data)
+struct api_data *api_add_bool(struct api_data * const root, const char * const name, const bool * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_BOOL, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_BOOL, data, copy_data);
 }
 
-struct api_data *api_add_timeval(struct api_data *root, char *name, struct timeval *data, bool copy_data)
+struct api_data *api_add_timeval(struct api_data * const root, const char * const name, const struct timeval * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_TIMEVAL, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_TIMEVAL, data, copy_data);
 }
 
-struct api_data *api_add_time(struct api_data *root, char *name, time_t *data, bool copy_data)
+struct api_data *api_add_time(struct api_data * const root, const char * const name, const time_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_TIME, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_TIME, data, copy_data);
 }
 
-struct api_data *api_add_mhs(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_mhs(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_MHS, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_MHS, data, copy_data);
 }
 
-struct api_data *api_add_mhtotal(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_mhtotal(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_MHTOTAL, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_MHTOTAL, data, copy_data);
 }
 
-struct api_data *api_add_temp(struct api_data *root, char *name, float *data, bool copy_data)
+struct api_data *api_add_temp(struct api_data * const root, const char * const name, const float * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_TEMP, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_TEMP, data, copy_data);
 }
 
-struct api_data *api_add_utility(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_utility(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_UTILITY, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_UTILITY, data, copy_data);
 }
 
-struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_freq(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_FREQ, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_FREQ, data, copy_data);
 }
 
-struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data)
+struct api_data *api_add_volts(struct api_data * const root, const char * const name, const float * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_VOLTS, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_VOLTS, data, copy_data);
 }
 
-struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_hs(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_HS, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_HS, data, copy_data);
 }
 
-struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_diff(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_DIFF, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_DIFF, data, copy_data);
 }
 
-struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data)
+// json_t is not const since we generally increase the refcount
+struct api_data *api_add_json(struct api_data * const root, const char * const name, json_t * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_JSON, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_JSON, data, copy_data);
 }
 
-struct api_data *api_add_percent(struct api_data *root, char *name, double *data, bool copy_data)
+struct api_data *api_add_percent(struct api_data * const root, const char * const name, const double * const data, const bool copy_data)
 {
-	return api_add_data_full(root, name, API_PERCENT, (void *)data, copy_data);
+	return api_add_data_full(root, name, API_PERCENT, data, copy_data);
 }
 
 static struct api_data *print_data(struct api_data *root, char *buf, bool isjson, bool precom)
@@ -1072,7 +1067,7 @@ static struct api_data *print_data(struct api_data *root, char *buf, bool isjson
 		if (root->type == API_JSON)
 			json_decref((json_t *)root->data);
 		if (root->data_was_malloc)
-			free(root->data);
+			free((void*)root->data);
 
 		if (root->next == root) {
 			free(root);
