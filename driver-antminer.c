@@ -27,6 +27,7 @@
 #include "util.h"
 
 #define ANTMINER_IO_SPEED 115200
+// ANTMINER_HASH_TIME is for U1/U2 only
 #define ANTMINER_HASH_TIME 0.0000000004761
 
 #define ANTMINER_STATUS_LEN 5
@@ -52,8 +53,10 @@ bool antminer_detect_one(const char *devpath)
 	*info = (struct ICARUS_INFO){
 		.baud = ANTMINER_IO_SPEED,
 		.Hs = ANTMINER_HASH_TIME,
-		.timing_mode = MODE_DEFAULT,
+		.timing_mode = MODE_LONG,
+		.do_icarus_timing = true,
 		.read_size = 5,
+		.reopen_mode = IRM_NEVER,
 	};
 	
 	struct cgpu_info * const dev = icarus_detect_custom(devpath, drv, info);
@@ -64,7 +67,7 @@ bool antminer_detect_one(const char *devpath)
 	}
 	
 	dev->set_device_funcs = antminer_set_device_funcs;
-	info->read_timeout_ms = 1500;
+	info->read_timeout_ms = 75;
 	
 	return true;
 }
