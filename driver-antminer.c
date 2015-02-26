@@ -64,7 +64,7 @@ bool antminer_detect_one(const char *devpath)
 	}
 	
 	dev->set_device_funcs = antminer_set_device_funcs;
-	info->read_count = 15;
+	info->read_timeout_ms = 1500;
 	
 	return true;
 }
@@ -82,6 +82,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	unsigned char rebuf[ANTMINER_STATUS_LEN] = {0};
 	
 	struct timeval tv_now;
+	struct timeval tv_timeout, tv_finish;
 	
 	rdreg_buf[0] = 4;
 	rdreg_buf[0] |= 0x80;
@@ -103,7 +104,8 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	applog(LOG_DEBUG, "%"PRIpreprv": Get clock: OK", cgpu->proc_repr);
 	
 	memset(rebuf, 0, sizeof(rebuf));
-	err = icarus_gets(cgpu->proc_repr, rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
+	timer_set_delay(&tv_timeout, &tv_now, 1000000);
+	err = icarus_read(cgpu->proc_repr, rebuf, cgpu->device_fd, &tv_finish, NULL, &tv_timeout, &tv_now, ANTMINER_STATUS_LEN);
 	
 	// Timeout is ok - checking specifically for an error here
 	if (err == ICA_GETS_ERROR)

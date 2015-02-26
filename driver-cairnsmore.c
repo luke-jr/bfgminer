@@ -87,12 +87,11 @@ bool cairnsmore_supports_dynclock(const char * const repr, const int fd)
 
 	uint32_t nonce = 0;
 	{
+		struct timeval tv_now, tv_timeout;
 		struct timeval tv_finish;
-		struct thr_info dummy = {
-			.work_restart = false,
-			.work_restart_notifier = {-1, -1},
-		};
-		icarus_gets(repr, (unsigned char*)&nonce, fd, &tv_finish, &dummy, 1, ICARUS_DEFAULT_READ_SIZE);
+		timer_set_now(&tv_now);
+		timer_set_delay(&tv_timeout, &tv_now, 100000);
+		icarus_read(repr, (uint8_t *)&nonce, fd, &tv_finish, NULL, &tv_timeout, &tv_now, ICARUS_DEFAULT_READ_SIZE);
 	}
 	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x", nonce);
 	switch (nonce) {

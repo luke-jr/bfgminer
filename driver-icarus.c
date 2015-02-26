@@ -84,8 +84,7 @@ ASSERT1(sizeof(uint32_t) == 4);
 #define ICARUS_READ_COUNT_LIMIT_MAX 100
 
 // In timing mode: Default starting value until an estimate can be obtained
-// 5 seconds allows for up to a ~840MH/s device
-#define ICARUS_READ_COUNT_TIMING	(5 * TIME_FACTOR)
+#define ICARUS_READ_COUNT_TIMING_MS  75
 
 // For a standard Icarus REV3
 #define ICARUS_REV3_HASH_TIME 0.00000000264083
@@ -130,10 +129,6 @@ ASSERT1(sizeof(uint32_t) == 4);
 // The value above used is doubled each history until it exceeds:
 #define MAX_MIN_DATA_COUNT 100
 
-#if (TIME_FACTOR != 10)
-#error TIME_FACTOR must be 10
-#endif
-
 static struct timeval history_sec = { HISTORY_SEC, 0 };
 
 static const char *MODE_DEFAULT_STR = "default";
@@ -170,102 +165,126 @@ void icarus_log_protocol(const char * const repr, const void *buf, size_t bufLen
 	applog(LOG_DEBUG, "%"PRIpreprv": DEVPROTO: %s %s", repr, prefix, hex);
 }
 
-int icarus_gets(const char * const repr, unsigned char *buf, int fd, struct timeval *tv_finish, struct thr_info *thr, int read_count, int read_size)
+int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct timeval * const tvp_finish, struct thr_info * const thr, const struct timeval * const tvp_timeout, struct timeval * const tvp_now, int read_size)
 {
-	ssize_t ret = 0;
-	int rc = 0;
-	int epollfd = -1;
-	int epoll_timeout = ICARUS_READ_FAULT_DECISECONDS * 100;
-	int read_amount = read_size;
+	int rv;
+	long remaining_ms;
+	ssize_t ret;
+	struct timeval tv_start = *tvp_now;
 	bool first = true;
-
+	// If there is no thr, then there's no work restart to watch..
+	
 #ifdef HAVE_EPOLL
-	struct epoll_event ev = {
-		.events = EPOLLIN,
-		.data.fd = fd,
-	};
+	bool watching_work_restart = !thr;
+	int epollfd;
 	struct epoll_event evr[2];
-	if (thr && thr->work_restart_notifier[1] != -1) {
+	
 	epollfd = epoll_create(2);
 	if (epollfd != -1) {
+		struct epoll_event ev = {
+			.events = EPOLLIN,
+			.data.fd = fd,
+		};
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
+			applog(LOG_DEBUG, "%"PRIpreprv": Error adding %s fd to epoll", "device", repr);
 			close(epollfd);
 			epollfd = -1;
 		}
+		else
+		if (thr && thr->work_restart_notifier[1] != -1)
 		{
 			ev.data.fd = thr->work_restart_notifier[0];
 			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_notifier[0], &ev))
-				applog(LOG_ERR, "%"PRIpreprv": Error adding work restart fd to epoll", repr);
+				applog(LOG_DEBUG, "%"PRIpreprv": Error adding %s fd to epoll", "work restart", repr);
 			else
-			{
-				epoll_timeout *= read_count;
-				read_count = 1;
-			}
+				watching_work_restart = true;
 		}
 	}
 	else
-		applog(LOG_ERR, "%"PRIpreprv": Error creating epoll", repr);
-	}
+		applog(LOG_DEBUG, "%"PRIpreprv": Error creating epoll", repr);
+	
+	if (epollfd == -1 && (remaining_ms = timer_remaining_us(tvp_timeout, tvp_now)) < 100000)
+		applog(LOG_WARNING, "%"PRIpreprv": Failed to use epoll, and very short read timeout (%ldms)", repr, remaining_ms);
 #endif
-
-	// Read reply 1 byte at a time to get earliest tv_finish
+	
 	while (true) {
+		remaining_ms = timer_remaining_us(tvp_timeout, tvp_now) / 1000;
 #ifdef HAVE_EPOLL
-		if (epollfd != -1 && (ret = epoll_wait(epollfd, evr, 2, epoll_timeout)) != -1)
+		if (epollfd != -1)
 		{
-			if (ret == 1 && evr[0].data.fd == fd)
-				ret = read(fd, buf, 1);
-			else
+			if ((!watching_work_restart) && remaining_ms > 100)
+				remaining_ms = 100;
+			ret = epoll_wait(epollfd, evr, 2, remaining_ms);
+			timer_set_now(tvp_now);
+			switch (ret)
 			{
-				if (ret)
-					notifier_read(thr->work_restart_notifier);
-				ret = 0;
+				case -1:
+					if (unlikely(errno != EINTR))
+						return_via(out, rv = ICA_GETS_ERROR);
+					ret = 0;
+					break;
+				case 0:  // timeout
+					// handled after switch
+					break;
+				case 1:
+					if (evr[0].data.fd != fd)  // must be work restart notifier
+					{
+						notifier_read(thr->work_restart_notifier);
+						ret = 0;
+						break;
+					}
+					// fallthru to...
+				case 2:  // device has data
+					ret = read(fd, buf, read_size);
+					break;
+				default:
+					return_via(out, rv = ICA_GETS_ERROR);
 			}
 		}
 		else
 #endif
-		ret = read(fd, buf, 1);
-		if (ret < 0)
-			return ICA_GETS_ERROR;
-
-		if (first)
-			cgtime(tv_finish);
-
-		if (ret >= read_amount)
 		{
-			if (epollfd != -1)
-				close(epollfd);
-
-			if (opt_dev_protocol && opt_debug)
-				icarus_log_protocol(repr, buf, read_size, "RECV");
-
-			return ICA_GETS_OK;
+			if (remaining_ms > 100)
+				remaining_ms = 100;
+			vcom_set_timeout_ms(fd, remaining_ms);
+			// Read first byte alone to get earliest tv_finish
+			ret = read(fd, buf, first ? 1 : read_size);
+			timer_set_now(tvp_now);
 		}
-
-		if (ret > 0) {
-			buf += ret;
-			read_amount -= ret;
+		if (first)
+			*tvp_finish = *tvp_now;
+		if (ret)
+		{
+			if (unlikely(ret < 0))
+				return_via(out, rv = ICA_GETS_ERROR);
+			
 			first = false;
+			
+			if (opt_dev_protocol && opt_debug)
+				icarus_log_protocol(repr, buf, ret, "RECV");
+			
+			if (ret >= read_size)
+				return_via(out, rv = ICA_GETS_OK);
+			
+			read_size -= ret;
+			buf += ret;
+			// Always continue reading while data is coming in, ignoring the timeout
 			continue;
 		}
-			
-		if (thr && thr->work_restart) {
-			if (epollfd != -1)
-				close(epollfd);
-			applog(LOG_DEBUG, "%"PRIpreprv": Interrupted by work restart", repr);
-			return ICA_GETS_RESTART;
-		}
-
-		rc++;
-		if (rc >= read_count) {
-			if (epollfd != -1)
-				close(epollfd);
-			applog(LOG_DEBUG, "%"PRIpreprv": No data in %.2f seconds",
-			       repr,
-			       (float)rc * epoll_timeout / 1000.);
-			return ICA_GETS_TIMEOUT;
-		}
+		
+		if (thr && thr->work_restart)
+			return_via_applog(out, rv = ICA_GETS_RESTART, LOG_DEBUG, "%"PRIpreprv": Interrupted by work restart", repr);
+		
+		if (timer_passed(tvp_timeout, tvp_now))
+			return_via_applog(out, rv = ICA_GETS_TIMEOUT, LOG_DEBUG, "%"PRIpreprv": No data in %.3f seconds", repr, timer_elapsed_us(&tv_start, tvp_now) / 1e6);
 	}
+
+out:
+#ifdef HAVE_EPOLL
+	if (epollfd != -1)
+		close(epollfd);
+#endif
+	return rv;
 }
 
 int icarus_write(const char * const repr, int fd, const void *buf, size_t bufLen)
@@ -321,14 +340,14 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 
 	if (strcasecmp(buf, MODE_SHORT_STR) == 0) {
 		// short
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_timeout_ms = ICARUS_READ_COUNT_TIMING_MS;
 		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
 	} else if (strncasecmp(buf, MODE_SHORT_STREQ, strlen(MODE_SHORT_STREQ)) == 0) {
 		// short=limit
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_timeout_ms = ICARUS_READ_COUNT_TIMING_MS;
 
 		info->timing_mode = MODE_SHORT;
 		info->do_icarus_timing = true;
@@ -340,14 +359,14 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 			info->read_count_limit = ICARUS_READ_COUNT_LIMIT_MAX;
 	} else if (strcasecmp(buf, MODE_LONG_STR) == 0) {
 		// long
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_timeout_ms = ICARUS_READ_COUNT_TIMING_MS;
 		info->read_count_limit = 0;  // 0 = no limit
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
 	} else if (strncasecmp(buf, MODE_LONG_STREQ, strlen(MODE_LONG_STREQ)) == 0) {
 		// long=limit
-		info->read_count = ICARUS_READ_COUNT_TIMING;
+		info->read_timeout_ms = ICARUS_READ_COUNT_TIMING_MS;
 
 		info->timing_mode = MODE_LONG;
 		info->do_icarus_timing = true;
@@ -362,15 +381,18 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 		info->Hs = Hs / NANOSEC;
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
-		info->read_count = 0;
+		info->read_timeout_ms = 0;
 		if ((eq = strchr(buf, '=')) != NULL)
-			info->read_count = atoi(eq+1);
+			info->read_timeout_ms = atof(&eq[1]) * 100;
 
-		if (info->read_count < 1)
-			info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
-
-		if (unlikely(info->read_count < 1))
-			info->read_count = 1;
+		if (info->read_timeout_ms < 1)
+		{
+			info->read_timeout_ms = info->fullnonce * 1000;
+			if (unlikely(info->read_timeout_ms < 2))
+				info->read_timeout_ms = 1;
+			else
+				--info->read_timeout_ms;
+		}
 
 		info->read_count_limit = 0;  // 0 = no limit
 		
@@ -381,33 +403,35 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 
 		info->fullnonce = info->Hs * (((double)0xffffffff) + 1);
 
-		info->read_count = 0;
+		info->read_timeout_ms = 0;
 		if ((eq = strchr(buf, '=')) != NULL)
-			info->read_count = atoi(eq+1);
+			info->read_timeout_ms = atof(&eq[1]) * 100;
 
-		int def_read_count = ICARUS_READ_COUNT_TIMING;
+		unsigned def_read_timeout_ms = ICARUS_READ_COUNT_TIMING_MS;
 
 		if (info->timing_mode == MODE_DEFAULT) {
 			if (drv == &icarus_drv) {
 				info->do_default_detection = 0x10;
 			} else {
-				def_read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+				def_read_timeout_ms = info->fullnonce * 1000;
+				if (def_read_timeout_ms > 0)
+					--def_read_timeout_ms;
 			}
 
 			info->do_icarus_timing = false;
 		}
-		if (info->read_count < 1)
-			info->read_count = def_read_count;
+		if (info->read_timeout_ms < 1)
+			info->read_timeout_ms = def_read_timeout_ms;
 		
 		info->read_count_limit = 0;  // 0 = no limit
 	}
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_count=%d limit=%dms Hs=%e",
+	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_timeout_ms=%u limit=%dms Hs=%e",
 		repr,
 		timing_mode_str(info->timing_mode),
-		info->read_count, info->read_count_limit, info->Hs);
+		info->read_timeout_ms, info->read_count_limit, info->Hs);
 	
 	return NULL;
 }
@@ -445,6 +469,7 @@ int icarus_excess_nonce_size(int fd, struct ICARUS_INFO *info)
 
 int icarus_probe_work_division(const int fd, const char * const repr, struct ICARUS_INFO * const info)
 {
+	struct timeval tv_now, tv_timeout;
 	struct timeval tv_finish;
 	
 	// For reading the nonce from Icarus
@@ -464,7 +489,9 @@ int icarus_probe_work_division(const int fd, const char * const repr, struct ICA
 	
 	icarus_write(repr, fd, pkt, sizeof(pkt));
 	memset(res_bin, 0, sizeof(res_bin));
-	if (ICA_GETS_OK == icarus_gets(repr, res_bin, fd, &tv_finish, NULL, info->read_count, info->read_size))
+	timer_set_now(&tv_now);
+	timer_set_delay(&tv_timeout, &tv_now, info->read_timeout_ms * 1000);
+	if (ICA_GETS_OK == icarus_read(repr, res_bin, fd, &tv_finish, NULL, &tv_timeout, &tv_now, info->read_size))
 	{
 		memcpy(&res, res_bin, sizeof(res));
 		res = icarus_nonce32toh(info, res);
@@ -559,7 +586,10 @@ struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *a
 		// Do not use info->read_size here, instead read exactly ICARUS_NONCE_SIZE
 		// We will then compare the bytes left in fd with info->read_size to determine
 		// if this is a valid device
-		icarus_gets(devpath, nonce_bin, fd, &tv_finish, NULL, info->probe_read_count, ICARUS_NONCE_SIZE);
+		struct timeval tv_now, tv_timeout;
+		timer_set_now(&tv_now);
+		timer_set_delay(&tv_timeout, &tv_now, info->probe_read_count * 100000);
+		icarus_read(devpath, nonce_bin, fd, &tv_finish, NULL, &tv_timeout, &tv_now, ICARUS_NONCE_SIZE);
 		
 		// How many bytes were left after reading the above nonce
 		int bytes_left = icarus_excess_nonce_size(fd, info);
@@ -821,6 +851,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	struct icarus_state * const state = thr->cgpu_data;
 	int fd = icarus->device_fd;
 	struct timeval tv_now;
+	struct timeval tv_timeout, tv_finish;
 	double delapsed;
 	
 	// For reading the nonce from Icarus
@@ -847,7 +878,8 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			
 			// Try to get more nonces (ignoring work restart)
 			memset(nonce_bin, 0, sizeof(nonce_bin));
-			ret = icarus_gets(icarus->proc_repr, nonce_bin, fd, &tv_now, NULL, (info->fullnonce - delapsed) * 10, info->read_size);
+			timer_set_delay(&tv_timeout, &tv_now, (uint64_t)(info->fullnonce - delapsed) * 1000000);
+			ret = icarus_read(icarus->proc_repr, nonce_bin, fd, &tv_finish, NULL, &tv_timeout, &tv_now, info->read_size);
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
@@ -904,6 +936,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	int64_t hash_count;
 	struct timeval tv_start = {.tv_sec=0}, elapsed;
 	struct timeval tv_history_start, tv_history_finish;
+	struct timeval tv_now, tv_timeout;
 	double Ti, Xi;
 	int i;
 	bool was_hw_error = false;
@@ -912,7 +945,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	struct ICARUS_HISTORY *history0, *history;
 	int count;
 	double Hs, W, fullnonce;
-	int read_count;
+	int read_timeout_ms;
 	bool limited;
 	uint32_t values;
 	int64_t hash_count_range;
@@ -945,11 +978,13 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 		}
 		else
 		{
-			read_count = info->read_count;
+			read_timeout_ms = info->read_timeout_ms;
 keepwaiting:
 			/* Icarus will return info->read_size bytes nonces or nothing */
 			memset(nonce_bin, 0, sizeof(nonce_bin));
-			ret = icarus_gets(icarus->proc_repr, nonce_bin, fd, &state->tv_workfinish, thr, read_count, info->read_size);
+			timer_set_now(&tv_now);
+			timer_set_delay(&tv_timeout, &tv_now, read_timeout_ms * 1000);
+			ret = icarus_read(icarus->proc_repr, nonce_bin, fd, &state->tv_workfinish, thr, &tv_timeout, &tv_now, info->read_size);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -1002,8 +1037,8 @@ keepwaiting:
 			}
 			if (info->continue_search)
 			{
-				read_count = info->read_count - ((timer_elapsed_us(&state->tv_workstart, NULL) / (1000000 / TIME_FACTOR)) + 1);
-				if (read_count)
+				read_timeout_ms = info->read_timeout_ms - ((timer_elapsed_us(&state->tv_workstart, NULL) / 1000) + 1);
+				if (read_timeout_ms)
 				{
 					submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
 					goto keepwaiting;
@@ -1126,7 +1161,9 @@ keepwaiting:
 			// Real Icarus?
 			if (!info->do_default_detection) {
 				applog(LOG_DEBUG, "%"PRIpreprv": Seems to be a real Icarus", icarus->proc_repr);
-				info->read_count = (int)(info->fullnonce * TIME_FACTOR) - 1;
+				info->read_timeout_ms = info->fullnonce * 1000;
+				if (info->read_timeout_ms > 0)
+					--info->read_timeout_ms;
 			}
 		}
 		else
@@ -1215,15 +1252,17 @@ keepwaiting:
 			memset(history0, 0, sizeof(struct ICARUS_HISTORY));
 
 			fullnonce = W + Hs * (((double)0xffffffff) + 1);
-			read_count = (int)(fullnonce * TIME_FACTOR) - 1;
-			if (info->read_count_limit > 0 && read_count > info->read_count_limit) {
-				read_count = info->read_count_limit;
+			read_timeout_ms = fullnonce * 1000;
+			if (read_timeout_ms > 0)
+				--read_timeout_ms;
+			if (info->read_count_limit > 0 && read_timeout_ms > info->read_count_limit * 100) {
+				read_timeout_ms = info->read_count_limit * 100;
 				limited = true;
 			} else
 				limited = false;
 
 			info->Hs = Hs;
-			info->read_count = read_count;
+			info->read_timeout_ms = read_timeout_ms;
 
 			info->fullnonce = fullnonce;
 			info->count = count;
@@ -1237,9 +1276,9 @@ keepwaiting:
 				info->do_icarus_timing = false;
 
 //			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: read_count=%d%s fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->proc_repr, read_count, limited ? " (limited)" : "", fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_count=%d%s fullnonce=%.3fs",
+			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_timeout_ms=%u%s fullnonce=%.3fs",
 					icarus->proc_repr,
-					Hs, W, read_count,
+					Hs, W, read_timeout_ms,
 					limited ? " (limited)" : "", fullnonce);
 		}
 		info->history_count++;
@@ -1278,7 +1317,9 @@ static struct api_data *icarus_drv_stats(struct cgpu_info *cgpu)
 	// care since hashing performance is way more important than
 	// locking access to displaying API debug 'stats'
 	// If locking becomes an issue for any of them, use copy_data=true also
-	root = api_add_int(root, "read_count", &(info->read_count), false);
+	const unsigned read_count_ds = info->read_timeout_ms / 100;
+	root = api_add_uint(root, "read_count", &read_count_ds, true);
+	root = api_add_uint(root, "read_timeout_ms", &(info->read_timeout_ms), false);
 	root = api_add_int(root, "read_count_limit", &(info->read_count_limit), false);
 	root = api_add_double(root, "fullnonce", &(info->fullnonce), false);
 	root = api_add_int(root, "count", &(info->count), false);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2015 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2014 Dualminer Team
  *
@@ -39,8 +39,8 @@
 #define DUALMINER_SCRYPT_DM_HASH_TIME	0.00003333333333
 #define DUALMINER_SHA2_DM_HASH_TIME     0.00000000300000
 
-#define DUALMINER_SCRYPT_READ_COUNT 48  // 4.8s to read
-#define DUALMINER_SHA2_READ_COUNT	16  // 1.6s to read
+#define DUALMINER_SCRYPT_READ_TIMEOUT_MS 4800  // 4.8s to read
+#define DUALMINER_SHA2_READ_TIMEOUT_MS   1600  // 1.6s to read
 
 #define DUALMINER_0_9V_SHA2_UNITS  60
 #define DUALMINER_1_2V_SHA2_UNITS   0
@@ -263,9 +263,9 @@ bool dualminer_detect_one(const char *devpath)
 	}
 
 	if (dualminer_is_scrypt(info))
-		info->read_count = DUALMINER_SCRYPT_READ_COUNT; // 4.8s to read
+		info->read_timeout_ms = DUALMINER_SCRYPT_READ_TIMEOUT_MS; // 4.8s to read
 	else
-		info->read_count = DUALMINER_SHA2_READ_COUNT; // 1.6s to read
+		info->read_timeout_ms = DUALMINER_SHA2_READ_TIMEOUT_MS; // 1.6s to read
 
 	return true;
 }
