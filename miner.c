@@ -4562,6 +4562,8 @@ one_workable_pool: ;
 	}
 	wclrtoeol(statuswin);
 	
+	update_block_display();
+	
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1];
 	
 	cg_mvwprintw(statuswin, devcursor - 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  BS:%s",
