@@ -910,6 +910,7 @@ void _set_auto_sdr(enum bfg_set_device_replytype * const out_success, const char
 		*out_success = SDR_ERR;
 }
 
+static
 const char *_proc_set_device(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	const struct bfg_set_device_definition *sdf;
@@ -938,6 +939,7 @@ const char *_proc_set_device(struct cgpu_info * const proc, const char * const o
 	return replybuf;
 }
 
+static
 const char *__proc_set_device(struct cgpu_info * const proc, char * const optname, char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	if (proc->drv->set_device)
@@ -950,8 +952,10 @@ const char *__proc_set_device(struct cgpu_info * const proc, char * const optnam
 	return _proc_set_device(proc, optname, newvalue, replybuf, out_success);
 }
 
-const char *proc_set_device(struct cgpu_info * const proc, char * const optname, char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+const char *proc_set_device(struct cgpu_info * const proc, char * const optname, char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
+	if (!newvalue)
+		newvalue = "";
 	const char * const rv = __proc_set_device(proc, optname, newvalue, replybuf, out_success);
 	switch (*out_success)
 	{
