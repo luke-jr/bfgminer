@@ -650,7 +650,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 	bool probing = probe && !pool->probed;
 
 	if (rc) {
-		applog(LOG_INFO, "HTTP request failed: %s", state->curl_err_str);
+		applog(LOG_DEBUG, "HTTP request failed: %s", state->curl_err_str);
 		goto err_out;
 	}
 
