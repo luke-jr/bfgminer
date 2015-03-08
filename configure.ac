@@ -213,6 +213,14 @@ m4_define([BFG_PREPROC_IFELSE],
 	],[$3],[$4])
 )
 
+m4_define([BFG_FIND_INCLUDE_PATH],[
+	m4_pushdef([_result_var],[$1])
+	m4_pushdef([_rel_path],[$2])
+	m4_pushdef([_header_file],[$3])
+	_result_var=`echo '[#]include <_rel_path/_header_file.h>' | ${CPP} -M - 2>/dev/null | sed [-E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)]_header_file[\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g']`
+	m4_popdef([_result_var],[_rel_path],[_header_file])
+])
+
 bfg_enableaction() {
 	_var=$1
 	eval "_missingdeps=\"\$${_var}_missingdeps\""
@@ -689,7 +697,7 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 				LIBUSB_LIBS="-l$usb_lib"
 			],[
 				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)libusb\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
+				BFG_FIND_INCLUDE_PATH([libusb_include_path],[libusb-1.0],[libusb])
 				if test "x$libusb_include_path" != "x"; then
 					LIBUSB_LIBS="-l$usb_lib"
 					LIBUSB_CFLAGS="-I$libusb_include_path"
@@ -904,7 +912,8 @@ if test x$need_lowl_vcom = xyes; then
 		],[
 			AC_CHECK_HEADER([ddk/usbiodef.h],[
 				found_ddkusb=true
-				AUTOSCAN_CPPFLAGS="-I"`echo '#include <ddk/usbiodef.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)usbiodef\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
+				BFG_FIND_INCLUDE_PATH([usbiodef_include_path],[ddk],[usbiodef])
+				AUTOSCAN_CPPFLAGS="-I${usbiodef_include_path}"
 			],[
 				true
 			],[
@@ -1063,7 +1072,7 @@ else
 				AC_MSG_CHECKING([for curses header subdirectory])
 				barelib=`echo "${barelib}" | sed -e 's/6//'`
 				barelib=`echo "${barelib}" | sed -e 's/5//'`
-				cursesincl=`echo '#include <'"${barelib}"'/curses.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)curses\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
+				BFG_FIND_INCLUDE_PATH([cursesincl],['"${barelib}"'],[curses])
 				if test "x$cursesincl" != "x"; then
 					NCURSES_CPPFLAGS="-I${cursesincl}"
 					AC_MSG_RESULT([$cursesincl])
