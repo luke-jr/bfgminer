@@ -214,11 +214,29 @@ m4_define([BFG_PREPROC_IFELSE],
 )
 
 m4_define([BFG_FIND_INCLUDE_PATH],[
-	m4_pushdef([_result_var],[$1])
-	m4_pushdef([_rel_path],[$2])
-	m4_pushdef([_header_file],[$3])
-	_result_var=`echo '[#]include <_rel_path/_header_file.h>' | ${CPP} -M - 2>/dev/null | sed [-E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)]_header_file[\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g']`
-	m4_popdef([_result_var],[_rel_path],[_header_file])
+	m4_pushdef([_rel_path],[$1])
+	m4_pushdef([_header_file],[$2])
+	m4_pushdef([_iffound],[$3])
+	m4_pushdef([_ifnotfound],[$4])
+	m4_pushdef([_includes],[$5])
+	m4_pushdef([_result_var],[inclpath_[]patsubst(_header_file,[[./]],[_])])
+	AC_CHECK_HEADER([_rel_path/_header_file],[
+		AC_MSG_CHECKING([_header_file path])
+		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | sed [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
+		if test "x$_result_var" = "x"; then
+			AC_MSG_RESULT([failed])
+			AC_MSG_ERROR([Couldn't determine include path for _header_file])
+		else
+			AC_MSG_RESULT([$_result_var])
+			_iffound
+		fi
+	],[
+		true
+		_ifnotfound
+	],[
+		_includes
+	])
+	m4_popdef([_rel_path],[_header_file],[_iffound],[_ifnotfound],[_result_var])
 ])
 
 bfg_enableaction() {
@@ -696,16 +714,12 @@ PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
 			AC_CHECK_DECL([libusb_init],[
 				LIBUSB_LIBS="-l$usb_lib"
 			],[
-				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				BFG_FIND_INCLUDE_PATH([libusb_include_path],[libusb-1.0],[libusb])
-				if test "x$libusb_include_path" != "x"; then
+				BFG_FIND_INCLUDE_PATH([libusb-1.0],[libusb.h],[
 					LIBUSB_LIBS="-l$usb_lib"
-					LIBUSB_CFLAGS="-I$libusb_include_path"
-					AC_MSG_RESULT([yes])
-				else
+					LIBUSB_CFLAGS="-I${inclpath_libusb_h}"
+				],[
 					USE_LIBUSB=no
-					AC_MSG_RESULT([no])
-				fi
+				])
 			],[#include <libusb.h>])
 	fi
 ])
@@ -910,13 +924,10 @@ if test x$need_lowl_vcom = xyes; then
 		AC_CHECK_HEADER([usbiodef.h],[
 			found_ddkusb=true
 		],[
-			AC_CHECK_HEADER([ddk/usbiodef.h],[
+			BFG_FIND_INCLUDE_PATH([ddk],[usbiodef.h],[
 				found_ddkusb=true
-				BFG_FIND_INCLUDE_PATH([usbiodef_include_path],[ddk],[usbiodef])
-				AUTOSCAN_CPPFLAGS="-I${usbiodef_include_path}"
-			],[
-				true
-			],[
+				AUTOSCAN_CPPFLAGS="-I${inclpath_usbiodef_h}"
+			],[],[
 				#include <windows.h>
 				#include <ddk/usbioctl.h>
 				AC_INCLUDES_DEFAULT
@@ -1069,16 +1080,11 @@ else
 				fi
 				
 				# Need to check for headers in subdirectories, to ensure we get wide stuff
-				AC_MSG_CHECKING([for curses header subdirectory])
 				barelib=`echo "${barelib}" | sed -e 's/6//'`
 				barelib=`echo "${barelib}" | sed -e 's/5//'`
-				BFG_FIND_INCLUDE_PATH([cursesincl],['"${barelib}"'],[curses])
-				if test "x$cursesincl" != "x"; then
-					NCURSES_CPPFLAGS="-I${cursesincl}"
-					AC_MSG_RESULT([$cursesincl])
-				else
-					AC_MSG_RESULT([none found])
-				fi
+				BFG_FIND_INCLUDE_PATH([${barelib}],[curses.h],[
+					NCURSES_CPPFLAGS="-I${inclpath_curses_h}"
+				])
 				
 				break
 			], [
@@ -1094,7 +1100,9 @@ else
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
 		AC_MSG_CHECKING([whether curses library supports wide characters])
-		LIBS="$orig_libs $NCURSES_CPPFLAGS $NCURSES_LIBS"
+		orig_cflags="$CFLAGS"
+		CFLAGS="$orig_cflags $NCURSES_CPPFLAGS"
+		LIBS="$orig_libs $NCURSES_LIBS"
 		AC_LINK_IFELSE([
 			AC_LANG_PROGRAM([
 				#define PDC_WIDE
@@ -1109,6 +1117,7 @@ else
 		],[
 			AC_MSG_RESULT([no])
 		])
+		CFLAGS="$orig_cflags"
 	fi
 	LIBS="$orig_libs"
 fi
