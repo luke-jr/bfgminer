@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2015 Luke Dashjr
  * Copyright 2012-2014 Con Kolivas
  * Copyright 2011 Andrew Smith
  * Copyright 2011 Jeff Garzik
@@ -721,6 +721,15 @@ int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now
 	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
 	timersub(_tvp_now, tvp_timer, &tv);
 	return tv.tv_sec;
+}
+
+static inline
+long timer_remaining_us(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(tvp_timer, _tvp_now, &tv);
+	return timeval_to_us(&tv);
 }
 
 static inline

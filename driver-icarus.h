@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2015 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2012 Xiangfu
  * Copyright 2012 Andrew Smith
@@ -21,11 +21,6 @@
 #include "dynclock.h"
 #include "miner.h"
 
-// Fraction of a second, USB timeout is measured in
-// i.e. 10 means 1/10 of a second
-// Right now, it MUST be 10 due to other assumptions.
-#define TIME_FACTOR 10
-// It's 10 per second, thus value = 10/TIME_FACTOR =
 #define ICARUS_READ_FAULT_DECISECONDS 1
 
 #define NANOSEC 1000000000.0
@@ -77,8 +72,8 @@ struct ICARUS_INFO {
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
-	// Timeout scanning for a nonce (deciseconds)
-	int read_count;
+	// Timeout scanning for a nonce
+	unsigned read_timeout_ms;
 	// Timeout scanning for a golden nonce (deciseconds)
 	int probe_read_count;
 	
@@ -162,8 +157,8 @@ struct icarus_state {
 };
 
 extern struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
-extern int icarus_gets(const char *repr, unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
-extern int icarus_write(const char *repr, int fd, const void *buf, size_t bufLen);
+extern int icarus_read(const char *repr, uint8_t *buf, int fd, struct timeval *tvp_finish, struct thr_info *, const struct timeval *tvp_timeout, struct timeval *tvp_now, int read_size);
+extern int icarus_write(const char * const repr, int fd, const void *buf, size_t bufLen);
 extern bool icarus_init(struct thr_info *);
 extern void do_icarus_close(struct thr_info *thr);
 extern bool icarus_job_start(struct thr_info *);

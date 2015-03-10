@@ -27,6 +27,7 @@
 #include "util.h"
 
 #define ANTMINER_IO_SPEED 115200
+// ANTMINER_HASH_TIME is for U1/U2 only
 #define ANTMINER_HASH_TIME 0.0000000004761
 
 #define ANTMINER_STATUS_LEN 5
@@ -52,8 +53,10 @@ bool antminer_detect_one(const char *devpath)
 	*info = (struct ICARUS_INFO){
 		.baud = ANTMINER_IO_SPEED,
 		.Hs = ANTMINER_HASH_TIME,
-		.timing_mode = MODE_DEFAULT,
+		.timing_mode = MODE_LONG,
+		.do_icarus_timing = true,
 		.read_size = 5,
+		.reopen_mode = IRM_NEVER,
 	};
 	
 	struct cgpu_info * const dev = icarus_detect_custom(devpath, drv, info);
@@ -64,7 +67,7 @@ bool antminer_detect_one(const char *devpath)
 	}
 	
 	dev->set_device_funcs = antminer_set_device_funcs;
-	info->read_count = 15;
+	info->read_timeout_ms = 75;
 	
 	return true;
 }
@@ -75,6 +78,8 @@ bool antminer_lowl_probe(const struct lowlevel_device_info * const info)
 	return vcom_lowl_probe_wrapper(info, antminer_detect_one);
 }
 
+// Not used for anything, and needs to read a result for every chip
+#if 0
 static
 char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 {
@@ -82,6 +87,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	unsigned char rebuf[ANTMINER_STATUS_LEN] = {0};
 	
 	struct timeval tv_now;
+	struct timeval tv_timeout, tv_finish;
 	
 	rdreg_buf[0] = 4;
 	rdreg_buf[0] |= 0x80;
@@ -103,7 +109,8 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	applog(LOG_DEBUG, "%"PRIpreprv": Get clock: OK", cgpu->proc_repr);
 	
 	memset(rebuf, 0, sizeof(rebuf));
-	err = icarus_gets(cgpu->proc_repr, rebuf, cgpu->device_fd, &tv_now, NULL, 10, ANTMINER_STATUS_LEN);
+	timer_set_delay(&tv_timeout, &tv_now, 1000000);
+	err = icarus_read(cgpu->proc_repr, rebuf, cgpu->device_fd, &tv_finish, NULL, &tv_timeout, &tv_now, ANTMINER_STATUS_LEN);
 	
 	// Timeout is ok - checking specifically for an error here
 	if (err == ICA_GETS_ERROR)
@@ -116,6 +123,7 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 	
 	return NULL;
 }
+#endif
 
 static
 const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const optname, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const out_success)
@@ -165,8 +173,55 @@ const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const
 	
 	// This is confirmed required in order for the clock change to "take"
 	cgsleep_ms(500);
-		
-	return antminer_get_clock(cgpu, replybuf);
+	
+	return NULL;
+}
+
+static
+const char *antminer_set_voltage(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (!(newvalue && *newvalue))
+		return "Missing voltage value";
+	
+	// For now we only allow hex values that use BITMAINtech's lookup table
+	// This means values should be prefixed with an x so that later we can
+	// accept and distinguish decimal values
+	if (newvalue[0] != 'x' || strlen(newvalue) != 4)
+invalid_voltage:
+		return "Only raw voltage configurations are currently supported using 'x' followed by 3 hexadecimal digits";
+	
+	char voltagecfg_hex[5];
+	voltagecfg_hex[0] = '0';
+	memcpy(&voltagecfg_hex[1], &newvalue[1], 3);
+	voltagecfg_hex[4] = '\0';
+	
+	uint8_t cmd[4];
+	if (!hex2bin(&cmd[1], voltagecfg_hex, 2))
+		goto invalid_voltage;
+	cmd[0] = 0xaa;
+	cmd[1] |= 0xb0;
+	cmd[3] = 0;
+	cmd[3] = crc5usb(cmd, (4 * 8) - 5);
+	cmd[3] |= 0xc0;
+	
+	if (opt_debug)
+	{
+		char hex[(4 * 2) + 1];
+		bin2hex(hex, cmd, 4);
+		applog(LOG_DEBUG, "%"PRIpreprv": Set voltage: %s", proc->proc_repr, hex);
+	}
+	
+	const int err = icarus_write(proc->proc_repr, proc->device_fd, cmd, sizeof(cmd));
+	
+	if (err)
+	{
+		sprintf(replybuf, "Error sending set voltage (err=%d)", err);
+		return replybuf;
+	}
+	
+	applog(LOG_DEBUG, "%"PRIpreprv": Set voltage: OK", proc->proc_repr);
+	
+	return NULL;
 }
 
 static
@@ -205,6 +260,7 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
 	{"timing"       , icarus_set_timing       , "timing of device; see README.FPGA"},
 	{"clock", antminer_set_clock, "clock frequency"},
+	{"voltage", antminer_set_voltage, "voltage ('x' followed by 3 digit hex code)"},
 	{NULL},
 };
 
