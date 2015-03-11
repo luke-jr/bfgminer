@@ -385,12 +385,14 @@ void rockminer_poll(struct thr_info * const master_thr)
 		}
 	}
 	
-	while (true)
+	bool maybe_more_to_read = true;
+	while (maybe_more_to_read)
 	{
 		size_t buf_read_sz = sizeof(buf) - (master_chip->incomplete_reply_sz ? ROCKMINER_REPLY_SIZE : 0);
 		rsz = rockminer_read(fd, &buf[master_chip->incomplete_reply_sz], buf_read_sz);
 		if (rsz <= 0)
 			break;
+		maybe_more_to_read = (rsz == buf_read_sz);
 		if (master_chip->incomplete_reply_sz)
 		{
 			memcpy(buf, master_chip->incomplete_reply, master_chip->incomplete_reply_sz);
