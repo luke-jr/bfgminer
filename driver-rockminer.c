@@ -454,6 +454,8 @@ void rockminer_poll(struct thr_info * const master_thr)
 					applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
 					thr->queue_full = false;
 					++chip->requested_work;
+					// Delay further reading until after we've send the next task
+					maybe_more_to_read = false;
 					if (proc->deven == DEV_ENABLED)
 						timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
 					break;
