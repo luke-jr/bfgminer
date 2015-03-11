@@ -31,6 +31,7 @@
 #define ROCKMINER_TASK_TIMEOUT_US    5273438
 #define ROCKMINER_IO_SPEED 115200
 #define ROCKMINER_READ_TIMEOUT 1 //deciseconds
+#define ROCKMINER_READ_REPLIES 0x40
 
 #define ROCKMINER_MAX_CHIPS  64
 #define ROCKMINER_WORK_REQ_SIZE  0x40
@@ -51,6 +52,10 @@ struct rockminer_chip_data {
 	uint8_t last_taskid;
 	struct timeval tv_midtask_timeout;
 	int requested_work;
+	
+	// Only used on first chip's struct
+	uint8_t incomplete_reply[ROCKMINER_REPLY_SIZE];
+	size_t incomplete_reply_sz;
 };
 
 static
@@ -348,8 +353,9 @@ static
 void rockminer_poll(struct thr_info * const master_thr)
 {
 	struct cgpu_info * const dev = master_thr->cgpu;
+	struct rockminer_chip_data * const master_chip = master_thr->cgpu_data;
 	int fd = dev->device_fd;
-	uint8_t reply[ROCKMINER_REPLY_SIZE];
+	uint8_t buf[ROCKMINER_REPLY_SIZE * ROCKMINER_READ_REPLIES], *reply;
 	ssize_t rsz;
 	
 	if (fd < 0)
@@ -379,65 +385,81 @@ void rockminer_poll(struct thr_info * const master_thr)
 		}
 	}
 	
-	while ( (rsz = rockminer_read(fd, reply, sizeof(reply))) == sizeof(reply))
+	while (true)
 	{
-// 		const uint8_t status = reply[4] >> 4;
-		const enum rockminer_replies cmd = reply[4] & 0xf;
-// 		const uint8_t prodid = reply[5] >> 6;
-		const uint8_t chipid = reply[5] & 0x3f;
-		const uint8_t taskid = reply[6] & 1;
-		const uint8_t temp = reply[7];
-		struct cgpu_info * const proc = device_proc_by_id(dev, chipid);
-		if (unlikely(!proc))
+		size_t buf_read_sz = sizeof(buf) - (master_chip->incomplete_reply_sz ? ROCKMINER_REPLY_SIZE : 0);
+		rsz = rockminer_read(fd, &buf[master_chip->incomplete_reply_sz], buf_read_sz);
+		if (rsz <= 0)
+			break;
+		if (master_chip->incomplete_reply_sz)
 		{
-			for_each_managed_proc(proc, dev)
-			{
-				struct thr_info * const thr = proc->thr[0];
-				inc_hw_errors_only(thr);
-			}
-			applog(LOG_ERR, "%s: Chip id %d out of range", dev->dev_repr, chipid);
-			continue;
+			memcpy(buf, master_chip->incomplete_reply, master_chip->incomplete_reply_sz);
+			rsz += master_chip->incomplete_reply_sz;
 		}
-		struct thr_info * const thr = proc->thr[0];
-		struct rockminer_chip_data * const chip = thr->cgpu_data;
 		
-		if (temp != 128)
-			proc->temp = temp;
-		
-		switch (cmd) {
-			case ROCKMINER_REPLY_NONCE_FOUND:
+		for (reply = buf; rsz >= ROCKMINER_REPLY_SIZE; (rsz -= ROCKMINER_REPLY_SIZE), (reply += ROCKMINER_REPLY_SIZE))
+		{
+// 			const uint8_t status = reply[4] >> 4;
+			const enum rockminer_replies cmd = reply[4] & 0xf;
+// 			const uint8_t prodid = reply[5] >> 6;
+			const uint8_t chipid = reply[5] & 0x3f;
+			const uint8_t taskid = reply[6] & 1;
+			const uint8_t temp = reply[7];
+			struct cgpu_info * const proc = device_proc_by_id(dev, chipid);
+			if (unlikely(!proc))
 			{
-				const uint32_t nonce = upk_u32be(reply, 0);
-				struct work *work;
-				if (chip->works[taskid] && test_nonce(chip->works[taskid], nonce, false))
-				{}
-				else
-				if (chip->works[taskid ? 0 : 1] && test_nonce(chip->works[taskid ? 0 : 1], nonce, false))
+				for_each_managed_proc(proc, dev)
 				{
-					applog(LOG_DEBUG, "%"PRIpreprv": We have task ids inverted; fixing", proc->proc_repr);
-					work = chip->works[0];
-					chip->works[0] = chip->works[1];
-					chip->works[1] = work;
-					chip->last_taskid = chip->last_taskid ? 0 : 1;
+					struct thr_info * const thr = proc->thr[0];
+					inc_hw_errors_only(thr);
 				}
-				work = chip->works[taskid];
-				submit_nonce(thr, work, nonce);
-				break;
+				applog(LOG_ERR, "%s: Chip id %d out of range", dev->dev_repr, chipid);
+				continue;
 			}
-			case ROCKMINER_REPLY_TASK_COMPLETE:
-				applog(LOG_DEBUG, "%"PRIpreprv": Task %d completed", proc->proc_repr, taskid);
-				hashes_done2(thr, 0x100000000, NULL);
-				if (proc->deven == DEV_ENABLED)
-					timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_TIMEOUT_US);
-				break;
-			case ROCKMINER_REPLY_GET_TASK:
-				applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
-				thr->queue_full = false;
-				++chip->requested_work;
-				if (proc->deven == DEV_ENABLED)
-					timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
-				break;
+			struct thr_info * const thr = proc->thr[0];
+			struct rockminer_chip_data * const chip = thr->cgpu_data;
+			
+			if (temp != 128)
+				proc->temp = temp;
+			
+			switch (cmd) {
+				case ROCKMINER_REPLY_NONCE_FOUND:
+				{
+					const uint32_t nonce = upk_u32be(reply, 0);
+					struct work *work;
+					if (chip->works[taskid] && test_nonce(chip->works[taskid], nonce, false))
+					{}
+					else
+					if (chip->works[taskid ? 0 : 1] && test_nonce(chip->works[taskid ? 0 : 1], nonce, false))
+					{
+						applog(LOG_DEBUG, "%"PRIpreprv": We have task ids inverted; fixing", proc->proc_repr);
+						work = chip->works[0];
+						chip->works[0] = chip->works[1];
+						chip->works[1] = work;
+						chip->last_taskid = chip->last_taskid ? 0 : 1;
+					}
+					work = chip->works[taskid];
+					submit_nonce(thr, work, nonce);
+					break;
+				}
+				case ROCKMINER_REPLY_TASK_COMPLETE:
+					applog(LOG_DEBUG, "%"PRIpreprv": Task %d completed", proc->proc_repr, taskid);
+					hashes_done2(thr, 0x100000000, NULL);
+					if (proc->deven == DEV_ENABLED)
+						timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_MIDTASK_TIMEOUT_US);
+					break;
+				case ROCKMINER_REPLY_GET_TASK:
+					applog(LOG_DEBUG, "%"PRIpreprv": Task %d requested", proc->proc_repr, taskid);
+					thr->queue_full = false;
+					++chip->requested_work;
+					if (proc->deven == DEV_ENABLED)
+						timer_set_delay_from_now(&chip->tv_midtask_timeout, ROCKMINER_TASK_TIMEOUT_US);
+					break;
+			}
 		}
+		master_chip->incomplete_reply_sz = rsz;
+		if (rsz)
+			memcpy(master_chip->incomplete_reply, reply, rsz);
 	}
 	if (rsz < 0)
 		rockminer_dead(dev);
