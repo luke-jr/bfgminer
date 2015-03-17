@@ -1244,7 +1244,7 @@ commerr:
 static char _discardedbuf[0x10];
 
 static
-int bitforce_zox(struct thr_info *thr, const char *cmd)
+int bitforce_zox(struct thr_info *thr, const char *cmd, int * const out_inprog)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
 	struct bitforce_data *data = bitforce->device_data;
@@ -1255,7 +1255,14 @@ int bitforce_zox(struct thr_info *thr, const char *cmd)
 	mutex_lock(mutexp);
 	bitforce_cmd1b(bitforce, pdevbuf, sizeof(data->noncebuf), cmd, 3);
 	if (!strncasecmp(pdevbuf, "INPROCESS:", 10))
+	{
+		if (out_inprog)
+			*out_inprog = atoi(&pdevbuf[10]);
 		bitforce_gets(pdevbuf, sizeof(data->noncebuf), bitforce);
+	}
+	else
+	if (out_inprog)
+		*out_inprog = -1;
 	if (!strncasecmp(pdevbuf, "COUNT:", 6))
 	{
 		count = atoi(&pdevbuf[6]);
@@ -1347,7 +1354,7 @@ void bitforce_job_get_results(struct thr_info *thr, struct work *work)
 		}
 		
 		const char * const cmd = "ZFX";
-		count = bitforce_zox(thr, cmd);
+		count = bitforce_zox(thr, cmd, NULL);
 
 		cgtime(&now);
 		timersub(&now, &bitforce->work_start_tv, &elapsed);
@@ -1759,8 +1766,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 		{}
 	}
 	
-	// NOTE: This doesn't restore the first processor, but it does get us the last one; this is sufficient for the delay debug and start of the next loop below
-	bitforce = thr->cgpu;
+	bitforce = thr->cgpu->device;
 
 	free(initdata->parallels);
 	free(initdata);
@@ -1775,17 +1781,30 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	if (style != BFS_FPGA)
 	{
 		// Clear job and results queue, to start fresh; ignore response
-		int last_xlink_id = -1;
-		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
+		for (int pass = 0, inprog = 1, tmp_inprog; pass < 500 && inprog; ++pass)
 		{
-			struct bitforce_data * const data = bitforce->device_data;
-			if (data->xlink_id == last_xlink_id)
-				continue;
-			last_xlink_id = data->xlink_id;
-			thr = bitforce->thr[0];
-			bitforce_cmd1b(bitforce, buf, sizeof(buf), "ZQX", 3);
-			bitforce_zox(thr, "ZOX");
+			if (pass)
+				cgsleep_ms(10);
+			applog(LOG_DEBUG, "%s: Flushing job and results queue... pass %d", bitforce->dev_repr, pass);
+			
+			int last_xlink_id = -1;
+			inprog = 0;
+			for ( ; bitforce; bitforce = bitforce->next_proc)
+			{
+				struct bitforce_data * const data = bitforce->device_data;
+				if (data->xlink_id == last_xlink_id)
+					continue;
+				last_xlink_id = data->xlink_id;
+				thr = bitforce->thr[0];
+				if (!pass)
+					bitforce_cmd1b(bitforce, buf, sizeof(buf), "ZQX", 3);
+				bitforce_zox(thr, "ZOX", &tmp_inprog);
+				if (tmp_inprog == 1)
+					inprog = 1;
+			}
+			bitforce = thr->cgpu->device;
 		}
+		applog(LOG_DEBUG, "%s: Flushing job and results queue DONE", bitforce->dev_repr);
 	}
 	
 	return true;
@@ -2156,7 +2175,7 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	
 again:
 	noncebuf = &data->noncebuf[0];
-	count = bitforce_zox(thr, "ZOX");
+	count = bitforce_zox(thr, "ZOX", NULL);
 	
 	if (unlikely(count < 0))
 	{
@@ -2529,7 +2548,7 @@ void bitforce_queue_flush(struct thr_info *thr)
 	else
 	if (data->max_queueid)
 		cmd = "FLB";
-	bitforce_zox(thr, cmd);
+	bitforce_zox(thr, cmd, NULL);
 	if (!strncasecmp(buf, "OK:FLUSHED", 10))
 		flushed = atoi(&buf[10]);
 	else
