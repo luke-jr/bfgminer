@@ -43,7 +43,6 @@
 #define BITFORCE_LONG_TIMEOUT_MS (BITFORCE_LONG_TIMEOUT_S * 1000)
 #define BITFORCE_CHECK_INTERVAL_MS 10
 #define WORK_CHECK_INTERVAL_MS 50
-#define MAX_START_DELAY_MS 100
 #define tv_to_ms(tval) ((unsigned long)(tval.tv_sec * 1000 + tval.tv_usec / 1000))
 #define TIME_AVG_CONSTANT 8
 #define BITFORCE_QRESULT_LINE_LEN 165
@@ -1652,7 +1651,6 @@ void bitforce_zero_stats(struct cgpu_info * const proc)
 static bool bitforce_thread_init(struct thr_info *thr)
 {
 	struct cgpu_info *bitforce = thr->cgpu;
-	unsigned int wait;
 	struct bitforce_data *data;
 	struct bitforce_proc_data *procdata;
 	struct bitforce_init_data *initdata = bitforce->device_data;
@@ -1769,12 +1767,6 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 	free(initdata->parallels);
 	free(initdata);
-
-	/* Pause each new thread at least 100ms between initialising
-	 * so the devices aren't making calls all at the same time. */
-	wait = thr->id * MAX_START_DELAY_MS;
-	applog(LOG_DEBUG, "%s: Delaying start by %dms", bitforce->dev_repr, wait / 1000);
-	cgsleep_ms(wait);
 
 	if (unlikely(!bitforce_open(bitforce)))
 	{
