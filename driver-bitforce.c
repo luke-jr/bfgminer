@@ -2155,9 +2155,14 @@ bool bitforce_queue_do_results(struct thr_info *thr)
 	struct cgpu_info *chip_cgpu;
 	struct thr_info *chip_thr;
 	int counts[data->parallel];
+	bool ret = true;
 	
 	if (unlikely(!devdata->is_open))
 		return false;
+	
+	fcount = 0;
+	for (int i = 0; i < data->parallel; ++i)
+		counts[i] = 0;
 	
 again:
 	noncebuf = &data->noncebuf[0];
@@ -2165,18 +2170,14 @@ again:
 	
 	if (unlikely(count < 0))
 	{
-		applog(LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, noncebuf);
 		inc_hw_errors_only(thr);
-		return false;
+		return_via_applog(out, ret = false, LOG_ERR, "%"PRIpreprv": Received unexpected queue result response: %s", bitforce->proc_repr, noncebuf);
 	}
 	
 	applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results on poll (max=%d)", bitforce->proc_repr, count, (int)BITFORCE_MAX_QRESULTS);
 	if (!count)
-		return true;
+		goto done;
 	
-	fcount = 0;
-	for (int i = 0; i < data->parallel; ++i)
-		counts[i] = 0;
 	noncebuf = next_line(noncebuf);
 	while ((buf = noncebuf)[0])
 	{
@@ -2286,6 +2287,7 @@ next_qline: (void)0;
 	if (count >= BITFORCE_MAX_QRESULTS)
 		goto again;
 	
+done:
 	if (data->parallel == 1 && (
 	        (fcount < BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms < BITFORCE_MAX_QRESULT_WAIT && data->queued > 1)
 	     || (fcount > BITFORCE_GOAL_QRESULTS && bitforce->sleep_ms > BITFORCE_MIN_QRESULT_WAIT)  ))
@@ -2303,6 +2305,7 @@ next_qline: (void)0;
 		applog(LOG_DEBUG, "%"PRIpreprv": Received %d queue results after %ums; Wait time unchanged (queued<=%d)",
 		       bitforce->proc_repr, fcount, bitforce->sleep_ms, data->queued);
 	
+out:
 	cgtime(&tv_now);
 	timersub(&tv_now, &data->tv_hashmeter_start, &tv_elapsed);
 	chip_cgpu = bitforce;
@@ -2313,7 +2316,7 @@ next_qline: (void)0;
 	}
 	data->tv_hashmeter_start = tv_now;
 	
-	return true;
+	return ret;
 }
 
 static
