@@ -1357,9 +1357,6 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			}
 			else
 				bitforce_change_mode(bitforce, BFP_QUEUE);
-			
-			// Clear job queue to start fresh; ignore response
-			bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
 		}
 		else
 		{
@@ -1411,7 +1408,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 
 	if (sc)
 	{
-		// Clear results queue last, to start fresh; ignore response
+		// Clear job and results queue, to start fresh; ignore response
 		int last_xlink_id = -1;
 		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
 		{
@@ -1420,6 +1417,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 				continue;
 			last_xlink_id = data->xlink_id;
 			thr = bitforce->thr[0];
+			bitforce_cmd1(fd, data->xlink_id, buf, sizeof(buf), "ZQX");
 			bitforce_zox(thr, "ZOX");
 		}
 	}
