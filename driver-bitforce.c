@@ -156,15 +156,21 @@ ssize_t bitforce_vcom_read(void * const buf_p, size_t bufLen, struct cgpu_info *
 	uint8_t *buf = buf_p;
 	const int fd = dev->device_fd;
 	ssize_t rv, ret = 0;
+	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
+	if (fh == INVALID_HANDLE_VALUE)
+		return -1;
 	while (bufLen > 0)
 	{
-		rv = read(fd, buf, bufLen);
-		if (rv <= 0)
+		DWORD bytes;
+		if (!ReadFile(fh, buf, bufLen, &bytes, NULL))
 		{
 			if (ret > 0)
 				return ret;
-			return rv;
+			return -1;
 		}
+		rv = bytes;
+// 		for (int i = 0; i < rv; ++i)
+// 			buf[i] &= 0x7f;
 		buf += rv;
 		bufLen -= rv;
 		ret += rv;
