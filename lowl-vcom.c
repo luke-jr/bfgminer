@@ -1068,7 +1068,7 @@ bool vcom_set_timeout_ms(const int fdDev, const unsigned timeout_ms)
 	struct termios my_termios;
 	
 	tcgetattr(fdDev, &my_termios);
-	my_termios.c_cc[VTIME] = (cc_t)(timeout_ms + 99) / 100;
+	my_termios.c_cc[VTIME] = (cc_t)((timeout_ms + 99) / 100);
 	return (tcsetattr(fdDev, TCSANOW, &my_termios) == 0);
 #endif
 }
