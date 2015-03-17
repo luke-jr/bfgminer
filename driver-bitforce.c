@@ -1718,9 +1718,6 @@ static bool bitforce_thread_init(struct thr_info *thr)
 			}
 			else
 				bitforce_change_mode(bitforce, BFP_WORK);
-			
-			// Clear job queue to start fresh; ignore response
-			bitforce_cmd1b(bitforce, buf, sizeof(buf), "ZQX", 3);
 		}
 		else
 		{
@@ -1777,7 +1774,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 	
 	if (style != BFS_FPGA)
 	{
-		// Clear results queue last, to start fresh; ignore response
+		// Clear job and results queue, to start fresh; ignore response
 		int last_xlink_id = -1;
 		for (bitforce = bitforce->device; bitforce; bitforce = bitforce->next_proc)
 		{
@@ -1786,6 +1783,7 @@ static bool bitforce_thread_init(struct thr_info *thr)
 				continue;
 			last_xlink_id = data->xlink_id;
 			thr = bitforce->thr[0];
+			bitforce_cmd1b(bitforce, buf, sizeof(buf), "ZQX", 3);
 			bitforce_zox(thr, "ZOX");
 		}
 	}
