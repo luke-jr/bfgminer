@@ -887,7 +887,7 @@ nohelp:
 	
 	size_t matchlen = 0;
 	if (newvalue)
-		while (!isspace(newvalue[0]))
+		while (newvalue[matchlen] && !isspace(newvalue[matchlen]))
 			++matchlen;
 	
 	for ( ; sdf->optname; ++sdf)
