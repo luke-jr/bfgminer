@@ -1,6 +1,6 @@
 [submodule "libblkmaker"]
 	path = libblkmaker
-	url = git://gitorious.org/bitcoin/libblkmaker.git
+	url = git://github.com/bitcoin/libblkmaker.git
 [submodule "ccan"]
 	path = ccan-upstream
 	url = git://git.ozlabs.org/~ccan/ccan
