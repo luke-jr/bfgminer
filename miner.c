@@ -9194,7 +9194,7 @@ bool parse_stratum_response(struct pool *pool, char *s)
 				unsigned mintx = maxtx >> 1;
 				--maxtx;
 				unsigned acttx = (unsigned)json_array_size(res_val);
-				if (acttx < mintx || acttx > maxtx) {
+				if (acttx && (acttx < mintx || acttx > maxtx)) {
 					applog(LOG_WARNING, "Pool %u is sending mismatched block contents to us (%u is not %u-%u)",
 					       pool->pool_no, acttx, mintx, maxtx);
 					goto fishy;
