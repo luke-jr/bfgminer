@@ -3010,7 +3010,7 @@ void block_info_str(char * const out, const struct block_info * const blkinfo)
 }
 
 #ifdef HAVE_CURSES
-static void update_block_display(void);
+static void update_block_display(bool);
 #endif
 
 // Must only be called with ch_lock held!
@@ -3023,7 +3023,7 @@ void __update_block_title(struct mining_goal_info * const goal)
 		goal->current_goal_detail = malloc(block_info_str_sz);
 	block_info_str(goal->current_goal_detail, blkchain->currentblk);
 #ifdef HAVE_CURSES
-	update_block_display();
+	update_block_display(false);
 #endif
 }
 
@@ -4399,10 +4399,13 @@ void update_block_display_line(const int blky, struct mining_goal_info *goal)
 static bool pool_actively_in_use(const struct pool *, const struct pool *);
 
 static
-void update_block_display(void)
+void update_block_display(const bool within_console_lock)
 {
 	struct mining_goal_info *goal, *tmpgoal;
 	int blky = 3, i, total_found_goals = 0;
+	if (!within_console_lock)
+		if (!curses_active_locked())
+			return;
 	HASH_ITER(hh, mining_goals, goal, tmpgoal)
 	{
 		for (i = 0; i < total_pools; ++i)
@@ -4417,6 +4420,12 @@ void update_block_display(void)
 		update_block_display_line(blky++, goal);
 		++total_found_goals;
 	}
+	
+	// We cannot do resizing if called within someone else's console lock
+	if (within_console_lock)
+		return;
+	
+	bfg_console_unlock();
 	if (total_found_goals != active_goals)
 	{
 		active_goals = total_found_goals;
@@ -4562,7 +4571,7 @@ one_workable_pool: ;
 	}
 	wclrtoeol(statuswin);
 	
-	update_block_display();
+	update_block_display(true);
 	
 	char bwstr[(ALLOC_H2B_SHORT*2)+3+1];
 	
@@ -4763,7 +4772,7 @@ static void switch_logsize(void)
 		unlock_curses();
 	}
 	check_winsizes();
-	update_block_display();
+	update_block_display(false);
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -6977,7 +6986,7 @@ void switch_pools(struct pool *selected)
 	mutex_unlock(&lp_lock);
 
 #ifdef HAVE_CURSES
-	update_block_display();
+	update_block_display(false);
 #endif
 }
 
