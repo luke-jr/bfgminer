@@ -162,7 +162,7 @@ void icarus_log_protocol(const char * const repr, const void *buf, size_t bufLen
 {
 	char hex[(bufLen * 2) + 1];
 	bin2hex(hex, buf, bufLen);
-	applog(LOG_DEBUG, "%"PRIpreprv": DEVPROTO: %s %s", repr, prefix, hex);
+	applog(LOG_DEBUG, "%s: DEVPROTO: %s %s", repr, prefix, hex);
 }
 
 int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct timeval * const tvp_finish, struct thr_info * const thr, const struct timeval * const tvp_timeout, struct timeval * const tvp_now, int read_size)
@@ -186,7 +186,7 @@ int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct time
 			.data.fd = fd,
 		};
 		if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev)) {
-			applog(LOG_DEBUG, "%"PRIpreprv": Error adding %s fd to epoll", "device", repr);
+			applog(LOG_DEBUG, "%s: Error adding %s fd to epoll", "device", repr);
 			close(epollfd);
 			epollfd = -1;
 		}
@@ -195,16 +195,16 @@ int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct time
 		{
 			ev.data.fd = thr->work_restart_notifier[0];
 			if (-1 == epoll_ctl(epollfd, EPOLL_CTL_ADD, thr->work_restart_notifier[0], &ev))
-				applog(LOG_DEBUG, "%"PRIpreprv": Error adding %s fd to epoll", "work restart", repr);
+				applog(LOG_DEBUG, "%s: Error adding %s fd to epoll", "work restart", repr);
 			else
 				watching_work_restart = true;
 		}
 	}
 	else
-		applog(LOG_DEBUG, "%"PRIpreprv": Error creating epoll", repr);
+		applog(LOG_DEBUG, "%s: Error creating epoll", repr);
 	
 	if (epollfd == -1 && (remaining_ms = timer_remaining_us(tvp_timeout, tvp_now)) < 100000)
-		applog(LOG_WARNING, "%"PRIpreprv": Failed to use epoll, and very short read timeout (%ldms)", repr, remaining_ms);
+		applog(LOG_WARNING, "%s: Failed to use epoll, and very short read timeout (%ldms)", repr, remaining_ms);
 #endif
 	
 	while (true) {
@@ -273,10 +273,10 @@ int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct time
 		}
 		
 		if (thr && thr->work_restart)
-			return_via_applog(out, rv = ICA_GETS_RESTART, LOG_DEBUG, "%"PRIpreprv": Interrupted by work restart", repr);
+			return_via_applog(out, rv = ICA_GETS_RESTART, LOG_DEBUG, "%s: Interrupted by work restart", repr);
 		
 		if (timer_passed(tvp_timeout, tvp_now))
-			return_via_applog(out, rv = ICA_GETS_TIMEOUT, LOG_DEBUG, "%"PRIpreprv": No data in %.3f seconds", repr, timer_elapsed_us(&tv_start, tvp_now) / 1e6);
+			return_via_applog(out, rv = ICA_GETS_TIMEOUT, LOG_DEBUG, "%s: No data in %.3f seconds", repr, timer_elapsed_us(&tv_start, tvp_now) / 1e6);
 	}
 
 out:
@@ -428,7 +428,7 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 
 	info->min_data_count = MIN_DATA_COUNT;
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: mode=%s read_timeout_ms=%u limit=%dms Hs=%e",
+	applog(LOG_DEBUG, "%s: Init: mode=%s read_timeout_ms=%u limit=%dms Hs=%e",
 		repr,
 		timing_mode_str(info->timing_mode),
 		info->read_timeout_ms, info->read_count_limit, info->Hs);
@@ -439,7 +439,7 @@ const char *_icarus_set_timing(struct ICARUS_INFO * const info, const char * con
 const char *icarus_set_timing(struct cgpu_info * const proc, const char * const optname, const char * const buf, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct ICARUS_INFO * const info = proc->device_data;
-	return _icarus_set_timing(info, proc->proc_repr, proc->drv, buf);
+	return _icarus_set_timing(info, proc->dev_repr, proc->drv, buf);
 }
 
 static uint32_t mask(int work_division)
@@ -629,7 +629,7 @@ struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *a
 	if (serial_claim_v(devpath, api))
 		return NULL;
 
-	_icarus_set_timing(info, api->dname, api, "");
+	_icarus_set_timing(info, devpath, api, "");
 	if (!info->fpga_count)
 	{
 		if (!info->work_division)
@@ -655,12 +655,12 @@ struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *a
 	icarus->set_device_funcs = icarus_set_device_funcs_live;
 	add_cgpu(icarus);
 
-	applog(LOG_INFO, "Found %"PRIpreprv" at %s",
-		icarus->proc_repr,
+	applog(LOG_INFO, "Found %s at %s",
+		icarus->dev_repr,
 		devpath);
 
-	applog(LOG_DEBUG, "%"PRIpreprv": Init: baud=%d work_division=%d fpga_count=%d",
-		icarus->proc_repr,
+	applog(LOG_DEBUG, "%s: Init: baud=%d work_division=%d fpga_count=%d",
+		icarus->dev_repr,
 		baud, work_division, fpga_count);
 
 	timersub(&tv_finish, &tv_start, &(info->golden_tv));
@@ -738,7 +738,7 @@ bool icarus_init(struct thr_info *thr)
 	BFGINIT(state->ob_bin, calloc(1, info->ob_size));
 	
 	if (!info->work_division)
-		info->work_division = icarus_probe_work_division(fd, icarus->proc_repr, info);
+		info->work_division = icarus_probe_work_division(fd, icarus->dev_repr, info);
 	
 	if (!is_power_of_two(info->work_division))
 		info->work_division = upper_power_of_two_u32(info->work_division);
@@ -748,7 +748,7 @@ bool icarus_init(struct thr_info *thr)
 }
 
 static
-struct thr_info *icarus_thread_for_nonce(const struct cgpu_info * const icarus, const uint32_t nonce)
+const struct cgpu_info *icarus_proc_for_nonce(const struct cgpu_info * const icarus, const uint32_t nonce)
 {
 	struct ICARUS_INFO * const info = icarus->device_data;
 	unsigned proc_id = 0;
@@ -756,7 +756,7 @@ struct thr_info *icarus_thread_for_nonce(const struct cgpu_info * const icarus, 
 		if (nonce & (1 << (31 - j)))
 			proc_id |= (1 << j);
 	const struct cgpu_info * const proc = device_proc_by_id(icarus, proc_id) ?: icarus;
-	return proc->thr[0];
+	return proc;
 }
 
 static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, int *fdp)
@@ -767,7 +767,7 @@ static bool icarus_reopen(struct cgpu_info *icarus, struct icarus_state *state, 
 	do_icarus_close(icarus->thr[0]);
 	*fdp = icarus->device_fd = icarus_open(icarus->device_path, info->baud);
 	if (unlikely(-1 == *fdp)) {
-		applog(LOG_ERR, "%"PRIpreprv": Failed to reopen on %s", icarus->proc_repr, icarus->device_path);
+		applog(LOG_ERR, "%s: Failed to reopen on %s", icarus->dev_repr, icarus->device_path);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		state->firstrun = true;
 		return false;
@@ -787,8 +787,8 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
 	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
-		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
-		       icarus->proc_repr);
+		applog(LOG_WARNING, "%s: Received job attempting to send a command, corrupting it!",
+		       icarus->dev_repr);
 		ob_bin[56] = 0;
 	}
 	
@@ -813,20 +813,12 @@ bool icarus_job_start(struct thr_info *thr)
 	
 	cgtime(&state->tv_workstart);
 
-	ret = icarus_write(icarus->proc_repr, fd, ob_bin, info->ob_size);
+	ret = icarus_write(icarus->dev_repr, fd, ob_bin, info->ob_size);
 	if (ret) {
 		do_icarus_close(thr);
-		applog(LOG_ERR, "%"PRIpreprv": Comms error (werr=%d)", icarus->proc_repr, ret);
+		applog(LOG_ERR, "%s: Comms error (werr=%d)", icarus->dev_repr, ret);
 		dev_error(icarus, REASON_DEV_COMMS_ERROR);
 		return false;	/* This should never happen */
-	}
-
-	if (opt_debug) {
-		char ob_hex[(info->ob_size * 2) + 1];
-		bin2hex(ob_hex, ob_bin, info->ob_size);
-		applog(LOG_DEBUG, "%"PRIpreprv" sent: %s",
-			icarus->proc_repr,
-			ob_hex);
 	}
 
 	return true;
@@ -868,7 +860,7 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 	
 	if (!was_first_run)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Waiting for current job to finish", icarus->proc_repr);
+		applog(LOG_DEBUG, "%s: Identify: Waiting for current job to finish", icarus->dev_repr);
 		while (true)
 		{
 			cgtime(&tv_now);
@@ -879,33 +871,33 @@ void handle_identify(struct thr_info * const thr, int ret, const bool was_first_
 			// Try to get more nonces (ignoring work restart)
 			memset(nonce_bin, 0, sizeof(nonce_bin));
 			timer_set_delay(&tv_timeout, &tv_now, (uint64_t)(info->fullnonce - delapsed) * 1000000);
-			ret = icarus_read(icarus->proc_repr, nonce_bin, fd, &tv_finish, NULL, &tv_timeout, &tv_now, info->read_size);
+			ret = icarus_read(icarus->dev_repr, nonce_bin, fd, &tv_finish, NULL, &tv_timeout, &tv_now, info->read_size);
 			if (ret == ICA_GETS_OK)
 			{
 				memcpy(&nonce, nonce_bin, sizeof(nonce));
 				nonce = icarus_nonce32toh(info, nonce);
-				submit_nonce(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
+				submit_nonce(icarus_proc_for_nonce(icarus, nonce)->thr[0], state->last_work, nonce);
 			}
 		}
 	}
 	else
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Current job should already be finished", icarus->proc_repr);
+		applog(LOG_DEBUG, "%s: Identify: Current job should already be finished", icarus->dev_repr);
 	
 	// 3. Delay 3 more seconds
-	applog(LOG_DEBUG, "%"PRIpreprv": Identify: Leaving idle for 3 seconds", icarus->proc_repr);
+	applog(LOG_DEBUG, "%s: Identify: Leaving idle for 3 seconds", icarus->dev_repr);
 	cgsleep_ms(3000);
 	
 	// Check for work restart in the meantime
 	if (thr->work_restart)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Work restart requested during delay", icarus->proc_repr);
+		applog(LOG_DEBUG, "%s: Identify: Work restart requested during delay", icarus->dev_repr);
 		goto no_job_start;
 	}
 	
 	// 4. Start next job
 	if (!state->firstrun)
 	{
-		applog(LOG_DEBUG, "%"PRIpreprv": Identify: Starting next job", icarus->proc_repr);
+		applog(LOG_DEBUG, "%s: Identify: Starting next job", icarus->dev_repr);
 		if (!info->job_start_func(thr))
 no_job_start:
 			state->firstrun = true;
@@ -984,7 +976,7 @@ keepwaiting:
 			memset(nonce_bin, 0, sizeof(nonce_bin));
 			timer_set_now(&tv_now);
 			timer_set_delay(&tv_timeout, &tv_now, read_timeout_ms * 1000);
-			ret = icarus_read(icarus->proc_repr, nonce_bin, fd, &state->tv_workfinish, thr, &tv_timeout, &tv_now, info->read_size);
+			ret = icarus_read(icarus->dev_repr, nonce_bin, fd, &state->tv_workfinish, thr, &tv_timeout, &tv_now, info->read_size);
 			switch (ret) {
 				case ICA_GETS_RESTART:
 					// The prepared work is invalid, and the current work is abandoned
@@ -994,7 +986,7 @@ keepwaiting:
 					return 0;
 				case ICA_GETS_ERROR:
 					do_icarus_close(thr);
-					applog(LOG_ERR, "%"PRIpreprv": Comms error (rerr)", icarus->proc_repr);
+					applog(LOG_ERR, "%s: Comms error (rerr)", icarus->dev_repr);
 					dev_error(icarus, REASON_DEV_COMMS_ERROR);
 					if (!icarus_reopen(icarus, state, &fd))
 						return -1;
@@ -1032,7 +1024,7 @@ keepwaiting:
 			if (nonce_work == state->last2_work)
 			{
 				// nonce was for the last job; submit and keep processing the current one
-				submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
+				submit_nonce(icarus_proc_for_nonce(icarus, nonce)->thr[0], nonce_work, nonce);
 				goto keepwaiting;
 			}
 			if (info->continue_search)
@@ -1040,7 +1032,7 @@ keepwaiting:
 				read_timeout_ms = info->read_timeout_ms - ((timer_elapsed_us(&state->tv_workstart, NULL) / 1000) + 1);
 				if (read_timeout_ms)
 				{
-					submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
+					submit_nonce(icarus_proc_for_nonce(icarus, nonce)->thr[0], nonce_work, nonce);
 					goto keepwaiting;
 				}
 			}
@@ -1094,7 +1086,8 @@ keepwaiting:
 
 	if (ret == ICA_GETS_OK && !was_hw_error)
 	{
-		submit_nonce(icarus_thread_for_nonce(icarus, nonce), nonce_work, nonce);
+		const struct cgpu_info * const proc = icarus_proc_for_nonce(icarus, nonce);
+		submit_nonce(proc->thr[0], nonce_work, nonce);
 		
 		icarus_transition_work(state, work);
 		
@@ -1103,7 +1096,7 @@ keepwaiting:
 		hash_count *= info->fpga_count;
 
 		applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus)",
-		       icarus->proc_repr,
+		       proc->proc_repr,
 		       nonce,
 		       (uint64_t)hash_count,
 		       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
@@ -1113,10 +1106,13 @@ keepwaiting:
 		double estimate_hashes = elapsed.tv_sec;
 		estimate_hashes += ((double)elapsed.tv_usec) / 1000000.;
 		
+		const char *repr = icarus->dev_repr;
 		if (ret == ICA_GETS_OK)
 		{
 			// We can't be sure which processor got the error, but at least this is a decent guess
-			inc_hw_errors(icarus_thread_for_nonce(icarus, nonce), state->last_work, nonce);
+			const struct cgpu_info * const proc = icarus_proc_for_nonce(icarus, nonce);
+			repr = proc->proc_repr;
+			inc_hw_errors(proc->thr[0], state->last_work, nonce);
 			estimate_hashes -= ICARUS_READ_TIME(info->baud, info->read_size);
 		}
 		
@@ -1131,8 +1127,8 @@ keepwaiting:
 		if (unlikely(estimate_hashes < 0))
 			estimate_hashes = 0;
 
-		applog(LOG_DEBUG, "%"PRIpreprv" %s nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
-		       icarus->proc_repr,
+		applog(LOG_DEBUG, "%s %s nonce = 0x%08"PRIx64" hashes (%"PRId64".%06lus)",
+		       repr,
 		       (ret == ICA_GETS_OK) ? "bad" : "no",
 		       (uint64_t)estimate_hashes,
 		       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec);
@@ -1148,10 +1144,10 @@ keepwaiting:
 	if (info->do_default_detection && elapsed.tv_sec >= DEFAULT_DETECT_THRESHOLD) {
 		int MHs = (double)hash_count / ((double)elapsed.tv_sec * 1e6 + (double)elapsed.tv_usec);
 		--info->do_default_detection;
-		applog(LOG_DEBUG, "%"PRIpreprv": Autodetect device speed: %d MH/s", icarus->proc_repr, MHs);
+		applog(LOG_DEBUG, "%s: Autodetect device speed: %d MH/s", icarus->dev_repr, MHs);
 		if (MHs <= 370 || MHs > 420) {
 			// Not a real Icarus: enable short timing
-			applog(LOG_WARNING, "%"PRIpreprv": Seems too %s to be an Icarus; calibrating with short timing", icarus->proc_repr, MHs>380?"fast":"slow");
+			applog(LOG_WARNING, "%s: Seems too %s to be an Icarus; calibrating with short timing", icarus->dev_repr, MHs>380?"fast":"slow");
 			info->timing_mode = MODE_SHORT;
 			info->do_icarus_timing = true;
 			info->do_default_detection = 0;
@@ -1160,7 +1156,7 @@ keepwaiting:
 		if (MHs <= 380) {
 			// Real Icarus?
 			if (!info->do_default_detection) {
-				applog(LOG_DEBUG, "%"PRIpreprv": Seems to be a real Icarus", icarus->proc_repr);
+				applog(LOG_DEBUG, "%s: Seems to be a real Icarus", icarus->dev_repr);
 				info->read_timeout_ms = info->fullnonce * 1000;
 				if (info->read_timeout_ms > 0)
 					--info->read_timeout_ms;
@@ -1169,12 +1165,12 @@ keepwaiting:
 		else
 		if (MHs <= 420) {
 			// Enterpoint Cairnsmore1
-			size_t old_repr_len = strlen(icarus->proc_repr);
+			size_t old_repr_len = strlen(icarus->dev_repr);
 			char old_repr[old_repr_len + 1];
-			strcpy(old_repr, icarus->proc_repr);
+			strcpy(old_repr, icarus->dev_repr);
 			convert_icarus_to_cairnsmore(icarus);
 			info->do_default_detection = 0;
-			applog(LOG_WARNING, "%"PRIpreprv": Detected Cairnsmore1 device, upgrading driver to %"PRIpreprv, old_repr, icarus->proc_repr);
+			applog(LOG_WARNING, "%s: Detected Cairnsmore1 device, upgrading driver to %s", old_repr, icarus->dev_repr);
 		}
 	}
 
@@ -1275,9 +1271,8 @@ keepwaiting:
 			else if (info->timing_mode == MODE_SHORT)
 				info->do_icarus_timing = false;
 
-//			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: read_count=%d%s fullnonce=%fs history count=%d Hs=%e W=%e values=%d hash range=0x%08lx min data count=%u", icarus->proc_repr, read_count, limited ? " (limited)" : "", fullnonce, count, Hs, W, values, hash_count_range, info->min_data_count);
-			applog(LOG_DEBUG, "%"PRIpreprv" Re-estimate: Hs=%e W=%e read_timeout_ms=%u%s fullnonce=%.3fs",
-					icarus->proc_repr,
+			applog(LOG_DEBUG, "%s Re-estimate: Hs=%e W=%e read_timeout_ms=%u%s fullnonce=%.3fs",
+					icarus->dev_repr,
 					Hs, W, read_timeout_ms,
 					limited ? " (limited)" : "", fullnonce);
 		}
