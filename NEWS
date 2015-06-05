@@ -1,3 +1,15 @@
+BFGMiner Version 3.10.10 - June 5, 2015
+
+- Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719
+- gitmodules: Change libblkmaker URI to use GitHub since Gitorious is defunct
+- bitforce: Wait to clear job queue (at init) until we have actually opened the
+device
+- Bugfix: bitforce: Ensure hashes_done is called for every completed job
+- return_via helper function family to assign a variable and goto
+- Bugfix: icarus: Check for impossibly fast hw errors (and don't report Eh/s
+when they occur)
+
+
 BFGMiner Version 3.10.9 - February 19, 2015
 
 - Update libblkmaker to 0.4.2
