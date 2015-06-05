@@ -6,6 +6,23 @@ Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
 KnCMiner's Mercury, Jupiter and Saturn.
 
 
+ANTMINER U3
+-----------
+
+The U3 does not support autodetection, so you will want to use --scan-serial to
+manually probe it. For example, to scan all devices, you can use:
+
+-S antminer:all
+
+Additionally, for optimal performance you will need to set voltage, clock, and
+timing. Neither voltage nor clock for the U3 are documented by the manufacturer,
+thus must be provided as hexadecimal configuration codes. Timing is provided in
+the number of nanoseconds each hash takes at the given configuration. A
+known-working configuration is:
+
+--set antminer:voltage=x800 --set antminer:clock=x1286 --set antminer:timing=0.022421
+
+
 AVALON 1
 --------
 
