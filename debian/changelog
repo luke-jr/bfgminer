@@ -1,4 +1,11 @@
-bfgminer (5.0.0-0precise1) precise; urgency=low
+bfgminer (5.2.0-0precise1) precise; urgency=low
+
+  * antminer: Compatibility with Antminer U3; see README.ASIC for details.
+  * icarus: Refactor timeout logic to work with millisecond precision on Linux and Windows.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 05 Jun 2015 03:53:10 -0000
+
+bfgminer (5.1.0-0precise1) precise; urgency=low
 
   * Update libblkmaker for compatibility with BIP66 version 3 blocks.
   * Merge Kano's web-based config file loader from cgminer.

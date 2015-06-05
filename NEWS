@@ -1,3 +1,52 @@
+BFGMiner Version 5.2.0 - June 5, 2015
+
+- Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719
+- Update bundled libbase58 to 0.1.4
+- README.ASIC: Document usage with AntMiner U3
+- icarus: Include ns/hash estimates for each nonce result, in debug logging
+- icarus: Cleanup dev vs proc repr in logging
+- Bugfix: update_block_display: Ensure we have console lock, and avoid rare
+relock when resizing windows inside curses_print_status
+- gitmodules: Change libblkmaker URI to use GitHub since Gitorious is defunct
+- Bugfix: DevAPI: Avoid infinite hang in set_device help
+- bitforce: Wait until pre-initialisation jobs all flush completely before
+starting to avoid sanity check issues
+- bitforce: Wait to clear job queue (at init) until we have actually opened the
+device
+- bitforce: Remove unnecessary delay
+- Bugfix: vcom: Avoid overflowing cc_t before division to deciseconds
+- Bugfix: bitforce: Ensure hashes_done is called for every completed job
+- antminer: Adapt default configuration to work with U3 as well as U1/U2
+- antminer: Add U3 voltage setting (x??? format only for now)
+- antminer: getstatus needs to read a result for every chip, but we don't use
+the output anyway, so just skip it
+- icarus: Modify work division detection packet to be compatible with Antminer
+U3
+- icarus: Replace decisecond-precision read_count with read_timeout_ms
+(millisecond precision) to handle faster devices like the Antminer U3 that
+complete works in under 1ds
+- lowl-vcom: vcom_set_timeout_ms function (increases precision to ms on Windows
+only)
+- util: timer_remaining_us function
+- configure: Improve path finding macro to work with more possible CPP output
+- configure: Macroify header path search
+- Reduce HTTP request failure log level to DEBUG since it often occurs probing
+stratum pools
+- Bugfix: DevAPI: Guarantee set_device functions never get passed a NULL pointer
+for newvalue
+- Always update block display after pool display in case of username wrapping
+around
+- icarus: Pass device representation to icarus_{gets,write} so logging can use
+it rather than fd numbers
+- Bugfix: icarus: Check for impossibly fast hw errors (and don't report Eh/s
+when they occur)
+- Bugfix: icarus: Avoid a race with watchdog applying settings by setting
+device_data before add_cgpu
+- RPC: Clean up api_add_* somewhat
+- Bugfix: util: Fix is_power_of_two
+- Port antminer driver to use set_device_funcs
+
+
 BFGMiner Version 5.1.0 - February 19, 2015
 
 - Fix broken driver options in configure script
