@@ -1,3 +1,23 @@
+BFGMiner Version 4.10.3 - June 5, 2015
+
+- Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719
+- Update bundled libbase58 to 0.1.4
+- gitmodules: Change libblkmaker URI to use GitHub since Gitorious is defunct
+- Bugfix: DevAPI: Avoid infinite hang in set_device help
+- bitforce: Wait to clear job queue (at init) until we have actually opened the
+device
+- Bugfix: bitforce: Ensure hashes_done is called for every completed job
+- Reduce HTTP request failure log level to DEBUG since it often occurs probing
+stratum pools
+- Bugfix: DevAPI: Guarantee set_device functions never get passed a NULL pointer
+for newvalue
+- Bugfix: icarus: Check for impossibly fast hw errors (and don't report Eh/s
+when they occur)
+- Bugfix: icarus: Avoid a race with watchdog applying settings by setting
+device_data before add_cgpu
+- Bugfix: util: Fix is_power_of_two
+
+
 BFGMiner Version 4.10.2 - February 19, 2015
 
 - Bugfix: extract_domain: Correctly handle query/fragment in URI without path
