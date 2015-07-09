@@ -39,6 +39,7 @@ extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 	_serial_read(fd, buf, bufsiz, &eol)
 extern int serial_close(int fd);
 
+// NOTE: timeout_ms=0 means it never times out
 extern bool vcom_set_timeout_ms(int fd, unsigned timeout_ms);
 #define vcom_set_timeout(fd, timeout)  vcom_set_timeout_ms(fd, (timeout) * 100)
 extern enum bfg_gpio_value get_serial_cts(int fd);
