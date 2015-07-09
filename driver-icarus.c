@@ -246,6 +246,9 @@ int icarus_read(const char * const repr, uint8_t *buf, const int fd, struct time
 		{
 			if (remaining_ms > 100)
 				remaining_ms = 100;
+			else
+			if (remaining_ms < 1)
+				remaining_ms = 1;
 			vcom_set_timeout_ms(fd, remaining_ms);
 			// Read first byte alone to get earliest tv_finish
 			ret = read(fd, buf, first ? 1 : read_size);
