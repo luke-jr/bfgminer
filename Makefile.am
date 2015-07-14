@@ -92,8 +92,8 @@ TEST_EXTENSIONS = .sh
 
 .PHONY: update-version
 update-version:
-	./gen-version.sh >version.h.new
-	cmp version.h version.h.new && rm version.h.new || mv version.h.new version.h
+	$(top_srcdir)/gen-version.sh >version.h.new
+	cmp $(top_srcdir)/version.h version.h.new && rm version.h.new || mv version.h.new $(top_srcdir)/version.h
 version.h: update-version
 bfgminer_SOURCES += version.h
 BUILT_SOURCES = version.h
