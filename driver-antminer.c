@@ -66,6 +66,12 @@ bool antminer_detect_one(const char *devpath)
 }
 
 static
+bool antminer_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Antminer");
+}
+
+static
 bool antminer_lowl_probe(const struct lowlevel_device_info * const info)
 {
 	return vcom_lowl_probe_wrapper(info, antminer_detect_one);
@@ -212,6 +218,7 @@ void antminer_drv_init()
 	antminer_drv = icarus_drv;
 	antminer_drv.dname = "antminer";
 	antminer_drv.name = "AMU";
+	antminer_drv.lowl_match = antminer_lowl_match;
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.set_device = antminer_set_device,
 	antminer_drv.identify_device = antminer_identify;
