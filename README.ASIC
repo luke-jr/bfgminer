@@ -2,8 +2,8 @@ SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
-Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
-KnCMiner's Mercury, Jupiter and Saturn.
+Butterfly Labs' SC range of devices, HashBuster boards, GekkoScience's Compac
+USB stick, Klondike modules, and KnCMiner's Mercury, Jupiter and Saturn.
 
 
 ANTMINER U3
@@ -21,6 +21,12 @@ the number of nanoseconds each hash takes at the given configuration. A
 known-working configuration is:
 
 --set antminer:voltage=x800 --set antminer:clock=x1286 --set antminer:timing=0.022421
+
+Some valid values for clock setting are:
+    x0783 for 100 MHz, x0983 for 125 MHz, x0b83 for 150 MHz, x0d83 for 175 MHz,
+    x0782 for 200 MHz, x0882 for 225 MHz, x0982 for 250 MHz, x0a82 for 275 MHz,
+    x0b82 for 300 MHz, x0c82 for 325 MHz, x0d82 for 350 MHz, x0e82 for 375 MHz,
+    and x08f2 for 400 MHz
 
 
 AVALON 1
@@ -173,6 +179,17 @@ probe; if you know you have no other serial devices, or only ones that can
 tolerate garbage, you can use '--scan-serial erupter:all' to probe all serial
 ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
+
+
+COMPAC
+------
+
+These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
+driver. You can set the clock frequency with
+
+--set compac:clock=x0782
+
+The same values for Antminer U3 (above) are valid for the BM1384.
 
 
 HEX*FURY
