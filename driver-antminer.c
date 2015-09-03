@@ -38,14 +38,13 @@
 #define ANTMINER_COMMAND_OFFSET 32
 
 BFG_REGISTER_DRIVER(antminer_drv)
+BFG_REGISTER_DRIVER(compac_drv)
 static
 const struct bfg_set_device_definition antminer_set_device_funcs[];
 
 static
-bool antminer_detect_one(const char *devpath)
+bool antminer_detect_one_with_drv(const char * const devpath, struct device_drv * const drv)
 {
-	struct device_drv *drv = &antminer_drv;
-	
 	struct ICARUS_INFO *info = calloc(1, sizeof(struct ICARUS_INFO));
 	if (unlikely(!info))
 		quit(1, "Failed to malloc ICARUS_INFO");
@@ -70,6 +69,11 @@ bool antminer_detect_one(const char *devpath)
 	info->read_timeout_ms = 75;
 	
 	return true;
+}
+
+static bool antminer_detect_one(const char * const devpath)
+{
+	return antminer_detect_one_with_drv(devpath, &antminer_drv);
 }
 
 static
@@ -271,6 +275,23 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 };
 
 static
+bool compac_lowl_match(const struct lowlevel_device_info * const info)
+{
+	return lowlevel_match_lowlproduct(info, &lowl_vcom, "Compac", "Bitcoin");
+}
+
+static bool compac_detect_one(const char * const devpath)
+{
+	return antminer_detect_one_with_drv(devpath, &compac_drv);
+}
+
+static
+bool compac_lowl_probe(const struct lowlevel_device_info * const info)
+{
+	return vcom_lowl_probe_wrapper(info, compac_detect_one);
+}
+
+static
 void antminer_drv_init()
 {
 	antminer_drv = icarus_drv;
@@ -280,8 +301,18 @@ void antminer_drv_init()
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.identify_device = antminer_identify;
 	++antminer_drv.probe_priority;
+	
+	compac_drv = antminer_drv;
+	compac_drv.name = "CBM";
+	compac_drv.lowl_match = compac_lowl_match;
+	compac_drv.lowl_probe = compac_lowl_probe;
+	++compac_drv.probe_priority;
 }
 
 struct device_drv antminer_drv = {
+	.drv_init = antminer_drv_init,
+};
+
+struct device_drv compac_drv = {
 	.drv_init = antminer_drv_init,
 };
