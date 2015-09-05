@@ -71,6 +71,7 @@ AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
 AC_PROG_CPP
+AC_PROG_SED
 
 gl_INIT
 
@@ -222,7 +223,7 @@ m4_define([BFG_FIND_INCLUDE_PATH],[
 	m4_pushdef([_result_var],[inclpath_[]patsubst(_header_file,[[./]],[_])])
 	AC_CHECK_HEADER([_rel_path/_header_file],[
 		AC_MSG_CHECKING([_header_file path])
-		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | sed [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
+		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
 		if test "x$_result_var" = "x"; then
 			AC_MSG_RESULT([failed])
 			AC_MSG_ERROR([Couldn't determine include path for _header_file])
@@ -425,7 +426,7 @@ BFG_DRIVER(cpumining,CPU mining,,no,[
 	driverlist="$driverlist cpu:asm/has_yasm"
 	driverlist="$driverlist cpu:sse2/have_sse2"
 ])
-driverlist=`echo "${driverlist}" | sed -e 's/ cpumining/ cpu/'`
+driverlist=`echo "${driverlist}" | ${SED} -e 's/ cpumining/ cpu/'`
 
 BFG_DRIVER(,OpenCL,,no)
 
@@ -943,7 +944,7 @@ if test x$need_lowl_vcom = xyes; then
 		fi
 	else
 		AC_MSG_CHECKING([what baud rates your system supports])
-		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
+		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | ${SED} 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
 		if grep -q IOSPEED iospeeds_local.h; then
 			AC_MSG_RESULT([done])
 		else
@@ -1073,15 +1074,15 @@ else
 			AC_SEARCH_LIBS(${sym}, ${preferl}, [
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
-				barelib=`echo "${curseslib}" | sed -e 's/-l//'`
+				barelib=`echo "${curseslib}" | ${SED} -e 's/-l//'`
 				optlist="$optlist ${barelib}/curses"
 				if test "x${curseslib}" != "xnone required"; then
 					NCURSES_LIBS="${curseslib}"
 				fi
 				
 				# Need to check for headers in subdirectories, to ensure we get wide stuff
-				barelib=`echo "${barelib}" | sed -e 's/6//'`
-				barelib=`echo "${barelib}" | sed -e 's/5//'`
+				barelib=`echo "${barelib}" | ${SED} -e 's/6//'`
+				barelib=`echo "${barelib}" | ${SED} -e 's/5//'`
 				BFG_FIND_INCLUDE_PATH([${barelib}],[curses.h],[
 					NCURSES_CPPFLAGS="-I${inclpath_curses_h}"
 				])
@@ -1292,7 +1293,7 @@ AC_SUBST(LIBUSB_CFLAGS)
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 if echo "$LIBCURL_CFLAGS" | grep '@CPPFLAG_CURL_STATICLIB@' >/dev/null 2>&1; then
 	AC_MSG_WARN([Your libcurl pkgconfig file is broken, applying workaround])
-	LIBCURL_CFLAGS=`echo "$LIBCURL_CFLAGS" | sed 's/@CPPFLAG_CURL_STATICLIB@//'`
+	LIBCURL_CFLAGS=`echo "$LIBCURL_CFLAGS" | ${SED} 's/@CPPFLAG_CURL_STATICLIB@//'`
 fi
 AC_SUBST(LIBCURL_LIBS)
 
@@ -1577,7 +1578,7 @@ BFG_CUSTOM_SUBDIRS_OUTPUT
 
 wordfilter ()
 {
-  echo "$1" | sed 's/ \+/ /g;s/^ *//;s/ *$//'
+  echo "$1" | ${SED} 's/ \+/ /g;s/^ *//;s/ *$//'
 }
 
 echo
