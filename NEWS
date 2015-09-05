@@ -1,3 +1,14 @@
+BFGMiner Version 5.3.0 - September 5, 2015
+
+- README.ASIC: Compac docs
+- antminer: Explicit support for GekkoScience's Compac BM1384 Bitcoin Miner
+- icarus: Use all null padding when probing work division (BM1384 reacts
+strangely - using part as start nonce?)
+- antminer: Match Product strings including "Antminer"
+- Bugfix: icarus: Never set timeout to 0, since it disables the timeout
+altogether
+
+
 BFGMiner Version 5.2.0 - June 5, 2015
 
 - Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719

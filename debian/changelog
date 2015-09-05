@@ -1,3 +1,9 @@
+bfgminer (5.3.0-0precise1) precise; urgency=low
+
+  * compac: Support for the GekkoScience Compac BM1384 USB stick miner
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 05 Sep 2015 06:40:27 -0000
+
 bfgminer (5.2.0-0precise1) precise; urgency=low
 
   * antminer: Compatibility with Antminer U3; see README.ASIC for details.
