@@ -1,5 +1,6 @@
 os: linux
 language: c
+compiler: gcc
 env:
   global:
     - MAKEOPTS=-j3
@@ -119,6 +120,8 @@ matrix:
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-minergate'
     - compiler: ": Only rockminer"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-rockminer'
+  exclude:
+    - compiler: gcc
 install:
   - bash .travis.deps I-am-okay-with-destroying-my-system
 script:
