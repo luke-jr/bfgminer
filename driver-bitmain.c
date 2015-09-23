@@ -757,7 +757,7 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 			memcpy(bm->works[cursendcount].data2, works[index]->data + 64, 12);
 
 			if(cursendcount == 0) {
-				pooldiff = (unsigned int)(works[index]->sdiff);
+				pooldiff = (unsigned int)(works[index]->work_difficulty);
 				difftmp = pooldiff;
 				while(1) {
 					difftmp = difftmp >> 1;
@@ -1171,7 +1171,7 @@ static bool bitmain_decode_nonce(struct thr_info *thr, struct cgpu_info *bitmain
 		} else {
 			if(opt_bitmain_checkn2diff) {
 				int diff = 0;
-				diff = work->sdiff;
+				diff = work->work_difficulty;
 				if(diff&&(diff&(diff-1))) {
 					applog(LOG_DEBUG, "BitMain %d not diff 2 submit_nonce", diff);
 					return submit_nonce(thr, work, nonce);
@@ -1194,7 +1194,7 @@ static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
 	applog(LOG_INFO, "%s%d: No matching work - HW error",
 	       thr->cgpu->drv->name, thr->cgpu->device_id);
 
-	inc_hw_errors(thr);
+	inc_hw_errors_only(thr);
 	info->no_matching_work++;
 }
 
@@ -1439,7 +1439,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 								if(opt_bitmain_hwerror) {
 #ifndef BITMAIN_CALC_DIFF1
 									mutex_lock(&info->qlock);
-									idiff = (int)work->sdiff;
+									idiff = (int)work->work_difficulty;
 									info->nonces+=idiff;
 									info->auto_nonces+=idiff;
 									mutex_unlock(&info->qlock);
@@ -2568,7 +2568,7 @@ struct device_drv bitmain_drv = {
 	.name = "BTM",
 	.drv_detect = bitmain_detect,
 	.thread_prepare = bitmain_prepare,
-	.hash_work = hash_queued_work,
+	.minerloop = hash_queued_work,
 	.queue_full = bitmain_fill,
 	.scanwork = bitmain_scanhash,
 	.flush_work = bitmain_flush_work,
