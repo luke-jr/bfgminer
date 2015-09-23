@@ -713,7 +713,6 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 	int diff = 0;
 	unsigned int difftmp = 0;
 	unsigned int pooldiff = 0;
-	uint64_t netdifftmp = 0;
 	int netdiff = 0;
 	if (unlikely(!bm)) {
 		applog(LOG_WARNING, "bitmain_set_txtask bitmain_txtask_token is null");
@@ -774,6 +773,13 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 						break;
 					}
 				}
+				
+				struct work * const work = works[index];
+				const struct pool * const pool = work->pool;
+				const struct mining_goal_info * const goal = pool->goal;
+				for (uint64_t netdifftmp = goal->current_diff; netdifftmp > 0; netdifftmp >>= 1) {
+					++netdiff;
+				}
 			}
 
 			if(BITMAIN_TEST_PRINT_WORK) {
@@ -791,11 +797,6 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 		return 0;
 	}
 	
-	netdifftmp = current_diff;
-	while(netdifftmp > 0) {
-		netdifftmp = netdifftmp >> 1;
-		netdiff++;
-	}
 	datalen += 48*cursendcount;
 
 	bm->length = datalen-4;
