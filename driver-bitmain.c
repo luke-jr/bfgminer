@@ -36,6 +36,8 @@
 #include "driver-bitmain.h"
 #include "util.h"
 
+BFG_REGISTER_DRIVER(bitmain_drv)
+
 static inline unsigned int bfg_work_block(struct work * const work)
 {
 	return *((unsigned int*)(&work->data[4]));
@@ -2563,8 +2565,7 @@ char *set_bitmain_freq(char *arg)
 }
 
 struct device_drv bitmain_drv = {
-	.drv_id = DRIVER_bitmain,
-	.dname = "Bitmain",
+	.dname = "bitmain",
 	.name = "BTM",
 	.drv_detect = bitmain_detect,
 	.thread_prepare = bitmain_prepare,
