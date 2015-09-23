@@ -700,7 +700,6 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 	int i = 0;
 	int index = work_array;
 	uint8_t new_block= 0;
-	char * ob_hex = NULL;
 	struct bitmain_txtask_token *bm = (struct bitmain_txtask_token *)sendbuf;
 	*sendcount = 0;
 	int cursendcount = 0;
@@ -770,9 +769,9 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 			}
 
 			if(BITMAIN_TEST_PRINT_WORK) {
-				ob_hex = bin2hex(works[index]->data, 76);
+				char ob_hex[(76 * 2) + 1];
+				bin2hex(ob_hex, works[index]->data, 76);
 				applog(LOG_ERR, "work %d data: %s", works[index]->id, ob_hex);
-				free(ob_hex);
 			}
 
 			cursendcount++;
@@ -1283,7 +1282,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	uint32_t checkbit = 0x00000000;
 	bool found = false;
 	struct work *work = NULL;
-	char * ob_hex = NULL;
 	struct bitmain_packet_head packethead;
 	int asicnum = 0;
 	int idiff = 0;
@@ -1417,13 +1415,13 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						if(BITMAIN_TEST_PRINT_WORK) {
 							applog(LOG_ERR, "bitmain_parse_results nonce find work(%d-%d)(%08x)", work->id, rxnoncedata.nonces[j].work_id, rxnoncedata.nonces[j].nonce);
 
-							ob_hex = bin2hex(work->midstate, 32);
+							char ob_hex[(32 * 2) + 1];
+							
+							bin2hex(ob_hex, work->midstate, 32);
 							applog(LOG_ERR, "work %d midstate: %s", work->id, ob_hex);
-							free(ob_hex);
 
-							ob_hex = bin2hex(work->data+64, 12);
+							bin2hex(ob_hex, &work->data[64], 12);
 							applog(LOG_ERR, "work %d data2: %s", work->id, ob_hex);
-							free(ob_hex);
 						}
 
 						if(work->work_block < info->last_work_block) {
