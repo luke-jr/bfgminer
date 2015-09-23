@@ -574,7 +574,7 @@ BFG_DRIVER(,Icarus,SHA256d,auto,[
 	has_asic=yes
 	have_udevrules=true
 ])
-driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS"
+driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS compac/USE_ICARUS"
 
 BFG_DRIVER(,DualMiner,Icarus,auto,[
 	need_gc3355=yes
