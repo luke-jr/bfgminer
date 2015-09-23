@@ -34,7 +34,6 @@
 #include "miner.h"
 #include "usbutils.h"
 #include "driver-bitmain.h"
-#include "hexdump.c"
 #include "util.h"
 
 static inline unsigned int bfg_work_block(struct work * const work)
@@ -1145,8 +1144,9 @@ static int bitmain_send_data(const uint8_t * data, int datalen, struct cgpu_info
 	//delay += 4000;
 
 	if(opt_debug) {
-		applog(LOG_DEBUG, "BitMain: Sent(%d):", datalen);
-		hexdump(data, datalen);
+		char hex[(datalen * 2) + 1];
+		bin2hex(hex, data, datalen);
+		applog(LOG_DEBUG, "BitMain: Sent(%d): %s", datalen, hex);
 	}
 
 	//cgsleep_prepare_r(&ts_start);
@@ -1604,8 +1604,9 @@ static void *bitmain_get_results(void *userdata)
 		}
 
 		if (opt_debug) {
-			applog(LOG_DEBUG, "BitMain: get:");
-			hexdump((uint8_t *)buf, ret);
+			char hex[(ret * 2) + 1];
+			bin2hex(hex, buf, ret);
+			applog(LOG_DEBUG, "BitMain: get: %s", hex);
 		}
 
 		memcpy(readbuf+offset, buf, ret);
@@ -1691,8 +1692,9 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 				  BITMAIN_RESET_TIMEOUT, C_BITMAIN_READ);
 	if(ret > 0) {
 		if (opt_debug) {
-			applog(LOG_DEBUG, "BTM%d Clear Read(%d):", bitmain->device_id, ret);
-			hexdump(data, ret);
+			char hex[(ret * 2) + 1];
+			bin2hex(hex, data, ret);
+			applog(LOG_DEBUG, "BTM%d Clear Read(%d): %s", bitmain->device_id, ret, hex);
 		}
 	}
 
@@ -1715,8 +1717,9 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 				for(i = 0; i < readlen; i++) {
 					if(data[i] == 0xa1) {
 						if (opt_debug) {
-							applog(LOG_DEBUG, "%s%d initset: get:", bitmain->drv->name, bitmain->device_id);
-							hexdump(data, readlen);
+							char hex[(readlen * 2) + 1];
+							bin2hex(hex, data, readlen);
+							applog(LOG_DEBUG, "%s%d initset: get: %s", bitmain->drv->name, bitmain->device_id, hex);
 						}
 						memcpy(&packethead, data+i, sizeof(struct bitmain_packet_head));
 						packethead.length = htole16(packethead.length);
