@@ -37,6 +37,11 @@
 #include "hexdump.c"
 #include "util.h"
 
+static inline unsigned int bfg_work_block(struct work * const work)
+{
+	return *((unsigned int*)(&work->data[4]));
+}
+
 struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 {
 	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
@@ -728,10 +733,11 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 			index = 0;
 		}
 		if(works[index]) {
-			if(works[index]->work_block > *last_work_block) {
-				applog(LOG_ERR, "BTM send task new block %d old(%d)", works[index]->work_block, *last_work_block);
+			const unsigned int work_block = bfg_work_block(works[index]);
+			if(work_block != *last_work_block) {
+				applog(LOG_ERR, "BTM send task new block %d old(%d)", work_block, *last_work_block);
 				new_block = 1;
-				*last_work_block = works[index]->work_block;
+				*last_work_block = work_block;
 			}
 #ifdef BITMAIN_TEST
 			if(!hex2bin(works[index]->data, btm_work_test_data[g_test_index], 128)) {
@@ -1424,7 +1430,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							applog(LOG_ERR, "work %d data2: %s", work->id, ob_hex);
 						}
 
-						if(work->work_block < info->last_work_block) {
+						if(bfg_work_block(work) != info->last_work_block) {
 							applog(LOG_ERR, "BitMain: bitmain_parse_rxnonce work(%d) nonce stale", rxnoncedata.nonces[j].work_id);
 						} else {
 							if (bitmain_decode_nonce(thr, bitmain, info, rxnoncedata.nonces[j].nonce, work)) {
