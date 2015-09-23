@@ -164,8 +164,6 @@ void btm_uninit(struct cgpu_info *cgpu)
 
 void btm_detect(struct device_drv *drv, bool (*device_detect)(const char*))
 {
-	ssize_t count, i;
-
 	applog(LOG_DEBUG, "BTM scan devices: checking for %s devices", drv->name);
 
 	if (total_count >= total_limit) {
@@ -537,7 +535,7 @@ static bool get_option_freq(int *timeout, int *frequency, char * frequency_t, ui
 	char buf[BUFSIZ+1];
 	char *ptr, *comma, *colon, *colon2;
 	size_t max;
-	int i, tmp;
+	int tmp;
 
 	if (opt_bitmain_freq == NULL)
 		return true;
@@ -1539,7 +1537,7 @@ static void *bitmain_get_results(void *userdata)
 {
 	struct cgpu_info *bitmain = (struct cgpu_info *)userdata;
 	struct bitmain_info *info = bitmain->device_data;
-	int offset = 0, read_delay = 0, ret = 0;
+	int offset = 0, ret = 0;
 	const int rsize = BITMAIN_FTDI_READSIZE;
 	char readbuf[BITMAIN_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
@@ -1620,11 +1618,6 @@ static void bitmain_set_timeout(struct bitmain_info *info)
 	info->timeout = BITMAIN_TIMEOUT_FACTOR / info->frequency;
 }
 
-static void *bitmain_send_tasks(void *userdata)
-{
-	return NULL;
-}
-
 static void bitmain_init(struct cgpu_info *bitmain)
 {
 	applog(LOG_INFO, "BitMain: Opened on %s", bitmain->device_path);
@@ -1646,13 +1639,9 @@ static bool bitmain_prepare(struct thr_info *thr)
 	mutex_init(&info->qlock);
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init bitmain qcond");
-	cgsem_init(&info->write_sem);
 
 	if (pthread_create(&info->read_thr, NULL, bitmain_get_results, (void *)bitmain))
 		quit(1, "Failed to create bitmain read_thr");
-
-	//if (pthread_create(&info->write_thr, NULL, bitmain_send_tasks, (void *)bitmain))
-	//	quit(1, "Failed to create bitmain write_thr");
 
 	bitmain_init(bitmain);
 
@@ -1663,7 +1652,7 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 {
 	uint8_t data[BITMAIN_READBUF_SIZE];
 	struct bitmain_info *info = NULL;
-	int ret = 0, spare = 0;
+	int ret = 0;
 	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
 	int readlen = 0;
 	int sendlen = 0;
@@ -2181,12 +2170,9 @@ static void do_bitmain_close(struct thr_info *thr)
 	struct bitmain_info *info = bitmain->device_data;
 
 	pthread_join(info->read_thr, NULL);
-	pthread_join(info->write_thr, NULL);
 	bitmain_running_reset(bitmain, info);
 
 	info->no_matching_work = 0;
-
-	cgsem_destroy(&info->write_sem);
 }
 
 static void get_bitmain_statline_before(char *buf, size_t bufsiz, struct cgpu_info *bitmain)
@@ -2214,7 +2200,6 @@ static bool bitmain_fill(struct cgpu_info *bitmain)
 	bool ret = true;
 	int sendret = 0, sendcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
 	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
-	cgtimer_t ts_start;
 	int senderror = 0;
 	struct timeval now;
 	int timediff = 0;
@@ -2356,19 +2341,7 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 	struct cgpu_info *bitmain = thr->cgpu;
 	struct bitmain_info *info = bitmain->device_data;
 	const int chain_num = info->chain_num;
-	struct timeval now, then, tdiff;
-	int64_t hash_count, us_timeout;
-	struct timespec abstime;
-	int ret;
-
-	/* Half nonce range */
-	us_timeout = 0x80000000ll / info->asic_num / info->frequency;
-	tdiff.tv_sec = us_timeout / 1000000;
-	tdiff.tv_usec = us_timeout - (tdiff.tv_sec * 1000000);
-	cgtime(&now);
-	timeradd(&now, &tdiff, &then);
-	abstime.tv_sec = then.tv_sec;
-	abstime.tv_nsec = then.tv_usec * 1000;
+	int64_t hash_count;
 
 	//applog(LOG_DEBUG, "bitmain_scanhash info->qlock start");
 	mutex_lock(&info->qlock);
@@ -2428,7 +2401,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct bitmain_info *info = cgpu->device_data;
-	char buf[64];
 	int i = 0;
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;

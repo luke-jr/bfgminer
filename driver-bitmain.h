@@ -274,7 +274,6 @@ struct bitmain_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
-	cgsem_t write_sem;
 	int nonces;
 	int fifo_space;
 	int hw_version[4];
