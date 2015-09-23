@@ -42,6 +42,8 @@ static inline unsigned int bfg_work_block(struct work * const work)
 	return *((unsigned int*)(&work->data[4]));
 }
 
+#define htole8(x) (x)
+
 struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 {
 	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
