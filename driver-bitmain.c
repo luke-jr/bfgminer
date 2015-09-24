@@ -30,7 +30,8 @@
   #include <io.h>
 #endif
 
-#include "elist.h"
+#include <uthash.h>
+
 #include "miner.h"
 #include "usbutils.h"
 #include "driver-bitmain.h"
@@ -1354,7 +1355,8 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			} else {
 				struct pool * pool = NULL;
 				for(j = 0; j < nonce_num; j++) {
-					work = clone_queued_work_byid(bitmain, rxnoncedata.nonces[j].work_id);
+					const int work_id = rxnoncedata.nonces[j].work_id;
+					HASH_FIND_INT(bitmain->queued_work, &work_id, work);
 					if(work) {
 						pool = work->pool;
 						if(BITMAIN_TEST_PRINT_WORK) {
@@ -1394,7 +1396,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
 						 	}
 						}
-					 	free_work(work);
 					} else {
 						//bitmain_inc_nvw(info, thr);
 						applog(LOG_ERR, "BitMain: Nonce not find work(%d)", rxnoncedata.nonces[j].work_id);
