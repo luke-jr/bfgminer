@@ -1869,7 +1869,7 @@ shin:
 	return false;
 }
 
-static void bitmain_detect(bool __maybe_unused hotplug)
+static void bitmain_detect()
 {
 	applog(LOG_DEBUG, "BTM detect dev: %s", opt_bitmain_dev);
 	if (strlen(opt_bitmain_dev) > 0) {
