@@ -1718,5 +1718,6 @@ extern struct api_data *api_add_volts(struct api_data *root, const char *name, c
 extern struct api_data *api_add_hs(struct api_data *root, const char *name, const double *data, bool copy_data);
 extern struct api_data *api_add_diff(struct api_data *root, const char *name, const double *data, bool copy_data);
 extern struct api_data *api_add_json(struct api_data *root, const char *name, json_t *data, bool copy_data);
+extern struct api_data *api_add_percent(struct api_data *root, const char *name, const double *data, bool copy_data);
 
 #endif /* __MINER_H__ */
