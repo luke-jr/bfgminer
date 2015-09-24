@@ -1133,7 +1133,7 @@ static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
 	info->no_matching_work++;
 }
 
-static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxstatus_data *bm, double *temp_avg)
+static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxstatus_data *bm, float *temp_avg)
 {
 	int i = 0;
 	int maxfan = 0, maxtemp = 0;
