@@ -37,6 +37,161 @@
 #include "hexdump.c"
 #include "util.h"
 
+struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
+{
+	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
+
+	if (unlikely(!cgpu))
+		quit(1, "Failed to calloc cgpu for %s in usb_alloc_cgpu", drv->dname);
+
+	cgpu->drv = drv;
+	cgpu->deven = DEV_ENABLED;
+	cgpu->threads = threads;
+
+	cgpu->usbinfo.nodev = true;
+	cgpu->device_fd = -1;
+
+	cglock_init(&cgpu->usbinfo.devlock);
+
+	return cgpu;
+}
+
+struct cgpu_info *btm_free_cgpu(struct cgpu_info *cgpu)
+{
+	if (cgpu->drv->copy)
+		free(cgpu->drv);
+
+	if(cgpu->device_path) {
+		free(cgpu->device_path);
+	}
+
+	free(cgpu);
+
+	return NULL;
+}
+
+bool btm_init(struct cgpu_info *cgpu, const char * devpath)
+{
+#ifdef WIN32
+	int fd = -1;
+	signed short timeout = 1;
+	unsigned long baud = 115200;
+	bool purge = true;
+	HANDLE hSerial = NULL;
+	applog(LOG_DEBUG, "btm_init cgpu->device_fd=%d", cgpu->device_fd);
+	if(cgpu->device_fd >= 0) {
+		return false;
+	}
+	hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
+	{
+		DWORD e = GetLastError();
+		switch (e) {
+		case ERROR_ACCESS_DENIED:
+			applog(LOG_DEBUG, "Do not have user privileges required to open %s", devpath);
+			break;
+		case ERROR_SHARING_VIOLATION:
+			applog(LOG_DEBUG, "%s is already in use by another process", devpath);
+			break;
+		default:
+			applog(LOG_DEBUG, "Open %s failed, GetLastError:%d", devpath, (int)e);
+			break;
+		}
+	} else {
+		// thanks to af_newbie for pointers about this
+		COMMCONFIG comCfg = {0};
+		comCfg.dwSize = sizeof(COMMCONFIG);
+		comCfg.wVersion = 1;
+		comCfg.dcb.DCBlength = sizeof(DCB);
+		comCfg.dcb.BaudRate = baud;
+		comCfg.dcb.fBinary = 1;
+		comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
+		comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
+		comCfg.dcb.ByteSize = 8;
+
+		SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
+
+		// Code must specify a valid timeout value (0 means don't timeout)
+		const DWORD ctoms = (timeout * 100);
+		COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
+		SetCommTimeouts(hSerial, &cto);
+
+		if (purge) {
+			PurgeComm(hSerial, PURGE_RXABORT);
+			PurgeComm(hSerial, PURGE_TXABORT);
+			PurgeComm(hSerial, PURGE_RXCLEAR);
+			PurgeComm(hSerial, PURGE_TXCLEAR);
+		}
+		fd = _open_osfhandle((intptr_t)hSerial, 0);
+	}
+#else
+	int fd = -1;
+	if(cgpu->device_fd >= 0) {
+		return false;
+	}
+	fd = open(devpath, O_RDWR|O_EXCL|O_NONBLOCK);
+#endif
+	if(fd == -1) {
+		applog(LOG_DEBUG, "%s open %s error %d",
+				cgpu->drv->dname, devpath, errno);
+		return false;
+	}
+	cgpu->device_path = strdup(devpath);
+	cgpu->device_fd = fd;
+	cgpu->usbinfo.nodev = false;
+	applog(LOG_DEBUG, "btm_init open device fd = %d", cgpu->device_fd);
+	return true;
+}
+
+void btm_uninit(struct cgpu_info *cgpu)
+{
+	applog(LOG_DEBUG, "BTM uninit %s%i", cgpu->drv->name, cgpu->device_fd);
+
+	// May have happened already during a failed initialisation
+	//  if release_cgpu() was called due to a USB NODEV(err)
+	close(cgpu->device_fd);
+	if(cgpu->device_path) {
+		free(cgpu->device_path);
+		cgpu->device_path = NULL;
+	}
+}
+
+void btm_detect(struct device_drv *drv, bool (*device_detect)(const char*))
+{
+	ssize_t count, i;
+
+	applog(LOG_DEBUG, "BTM scan devices: checking for %s devices", drv->name);
+
+	if (total_count >= total_limit) {
+		applog(LOG_DEBUG, "BTM scan devices: total limit %d reached", total_limit);
+		return;
+	}
+
+	if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
+		applog(LOG_DEBUG,
+			"BTM scan devices: %s limit %d reached",
+			drv->dname, drv_count[drv->drv_id].limit);
+		return;
+	}
+	device_detect("asic");
+}
+
+int btm_read(struct cgpu_info *cgpu, char *buf, size_t bufsize)
+{
+	int err = 0;
+	//applog(LOG_DEBUG, "btm_read ----- %d -----", bufsize);
+	err = read(cgpu->device_fd, buf, bufsize);
+	return err;
+}
+
+int btm_write(struct cgpu_info *cgpu, char *buf, size_t bufsize)
+{
+	int err = 0;
+	//applog(LOG_DEBUG, "btm_write ----- %d -----", bufsize);
+	err = write(cgpu->device_fd, buf, bufsize);
+	return err;
+}
+
 #define BITMAIN_CALC_DIFF1	1
 
 #ifdef WIN32
