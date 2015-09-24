@@ -38,6 +38,13 @@
 #include "driver-bitmain.h"
 #include "util.h"
 
+#warning "FIXME: Make these --set able"
+char * const opt_bitmain_dev = "/dev/bitmain-asic";
+char * const opt_bitmain_options = "115200:32:8:7:200:0782:0725";
+const bool opt_bitmain_hwerror = true;
+char * const opt_bitmain_freq = "3:350:0d82";
+char * const opt_bitmain_voltage = "0725";
+
 BFG_REGISTER_DRIVER(bitmain_drv)
 
 static inline unsigned int bfg_work_block(struct work * const work)
@@ -237,8 +244,6 @@ const char btm_work_test_midstate[BITMAIN_TEST_NUM][256] = {
 };
 #endif
 
-char opt_bitmain_dev[256] = {0};
-bool opt_bitmain_hwerror = false;
 bool opt_bitmain_checkall = false;
 bool opt_bitmain_nobeeper = false;
 bool opt_bitmain_notempoverctrl = false;

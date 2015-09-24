@@ -305,17 +305,6 @@ struct bitmain_info {
 
 #define BITMAIN_READ_TIME(baud) ((double)BITMAIN_READ_SIZE * (double)8.0 / (double)(baud))
 #define ASSERT1(condition) __maybe_unused static char sizeof_uint32_t_must_be_4[(condition)?1:-1]
-ASSERT1(sizeof(uint32_t) == 4);
-
-extern struct bitmain_info **bitmain_info;
-extern char opt_bitmain_dev[256];
-extern int opt_bitmain_temp;
-extern int opt_bitmain_overheat;
-extern int opt_bitmain_fan_min;
-extern int opt_bitmain_fan_max;
-extern bool opt_bitmain_auto;
-extern char *set_bitmain_dev(char *arg);
-extern char *set_bitmain_fan(char *arg);
 
 #endif /* USE_BITMAIN */
 #endif	/* BITMAIN_H */
