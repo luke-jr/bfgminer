@@ -65,7 +65,7 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 struct cgpu_info *btm_free_cgpu(struct cgpu_info *cgpu)
 {
 	if(cgpu->device_path) {
-		free(cgpu->device_path);
+		free((char*)cgpu->device_path);
 	}
 
 	free(cgpu);
@@ -153,7 +153,7 @@ void btm_uninit(struct cgpu_info *cgpu)
 	//  if release_cgpu() was called due to a USB NODEV(err)
 	close(cgpu->device_fd);
 	if(cgpu->device_path) {
-		free(cgpu->device_path);
+		free((char*)cgpu->device_path);
 		cgpu->device_path = NULL;
 	}
 }
