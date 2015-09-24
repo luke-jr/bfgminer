@@ -512,7 +512,7 @@ struct cgpu_info {
 		struct ft232r_device_handle *device_ft232r;
 #endif
 	};
-#ifdef USE_AVALON
+#if defined(USE_AVALON) || defined(USE_BITMAIN)
 	struct work **works;
 	int work_array;
 	int queued;

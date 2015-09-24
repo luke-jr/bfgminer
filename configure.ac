@@ -568,6 +568,10 @@ BFG_DRIVER(,BitForce,SHA256d,auto,[
 	have_udevrules=true
 ])
 
+BFG_DRIVER(,BitMain,SHA256d,no,[
+	has_asic=yes
+])
+
 BFG_DRIVER(,Icarus,SHA256d,auto,[
 	need_dynclock=yes
 	need_lowl_vcom=yes
