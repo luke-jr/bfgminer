@@ -291,6 +291,8 @@ struct bitmain_info {
 	bool optimal;
 	
 	char g_miner_version[256];
+	int g_max_fan;
+	int g_max_temp;
 };
 
 #define BITMAIN_READ_SIZE 12

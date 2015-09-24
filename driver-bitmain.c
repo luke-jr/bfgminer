@@ -1167,7 +1167,11 @@ static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxs
 		info->temp_avg = *temp_avg;
 	}
 
-	inc_dev_status(maxfan, maxtemp);
+	// inc_dev_status
+	mutex_lock(&stats_lock);
+	info->g_max_fan = maxfan;
+	info->g_max_temp = maxtemp;
+	mutex_unlock(&stats_lock);
 }
 
 static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info *info,
