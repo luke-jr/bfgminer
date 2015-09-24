@@ -1681,7 +1681,7 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 						info->hw_version[3] = rxstatusdata.hw_version[3];
 						info->nonce_error = 0;
 						info->last_nonce_error = 0;
-						sprintf(g_miner_version, "%d.%d.%d.%d", info->hw_version[0], info->hw_version[1], info->hw_version[2], info->hw_version[3]);
+						sprintf(info->g_miner_version, "%d.%d.%d.%d", info->hw_version[0], info->hw_version[1], info->hw_version[2], info->hw_version[3]);
 						applog(LOG_ERR, "bitmain_initialize rxstatus v(%d) chain(%d) fifo(%d) hwv1(%d) hwv2(%d) hwv3(%d) hwv4(%d) nerr(%d) freq=%d",
 								rxstatusdata.version, info->chain_num, info->fifo_space, info->hw_version[0], info->hw_version[1], info->hw_version[2], info->hw_version[3],
 								rxstatusdata.nonce_error, info->frequency);

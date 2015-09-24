@@ -289,6 +289,8 @@ struct bitmain_info {
 	bool reset;
 	bool overheat;
 	bool optimal;
+	
+	char g_miner_version[256];
 };
 
 #define BITMAIN_READ_SIZE 12
