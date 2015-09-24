@@ -10,6 +10,7 @@
 #include "config.h"
 
 #include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <sys/time.h>
@@ -239,7 +240,6 @@ const char btm_work_test_midstate[BITMAIN_TEST_NUM][256] = {
 char opt_bitmain_dev[256] = {0};
 bool opt_bitmain_hwerror = false;
 bool opt_bitmain_checkall = false;
-bool opt_bitmain_checkn2diff = false;
 bool opt_bitmain_nobeeper = false;
 bool opt_bitmain_notempoverctrl = false;
 bool opt_bitmain_homemode = false;
@@ -710,6 +710,46 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 
 	datalen = 10;
 	applog(LOG_DEBUG, "BTM send work count %d -----", sendworkcount);
+	
+	pooldiff = 0x100;
+	unsigned lowest_goal_diff = UINT_MAX;
+	for (i = 0; i < sendworkcount; ++i) {
+		if (index > work_array_size) {
+			index = 0;
+		}
+		if (!works[index]) {
+			continue;
+		}
+		struct work * const work = works[index];
+		if (work->work_difficulty < pooldiff)
+			pooldiff = work->work_difficulty;
+		const struct pool * const pool = work->pool;
+		const struct mining_goal_info * const goal = pool->goal;
+		if (goal->current_diff < lowest_goal_diff)
+			lowest_goal_diff = goal->current_diff;
+	}
+	{
+		difftmp = pooldiff;
+		while(1) {
+			difftmp = difftmp >> 1;
+			if(difftmp > 0) {
+				diff++;
+				if(diff >= 255) {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+		
+		for (uint64_t netdifftmp = lowest_goal_diff; netdifftmp > 0; netdifftmp >>= 1) {
+			++netdiff;
+		}
+		
+		pooldiff = pow(2, diff);
+	}
+	applog(LOG_DEBUG, "bitmain_set_txtask using nonce_diff=%u (log2=%d) and goal_diff=%u (log2=%d)", pooldiff, diff, lowest_goal_diff, netdiff);
+	
 	for(i = 0; i < sendworkcount; i++) {
 		if(index > work_array_size) {
 			index = 0;
@@ -740,28 +780,7 @@ static int bitmain_set_txtask(uint8_t * sendbuf,
 			memcpy(bm->works[cursendcount].midstate, works[index]->midstate, 32);
 			memcpy(bm->works[cursendcount].data2, works[index]->data + 64, 12);
 
-			if(cursendcount == 0) {
-				pooldiff = (unsigned int)(works[index]->work_difficulty);
-				difftmp = pooldiff;
-				while(1) {
-					difftmp = difftmp >> 1;
-					if(difftmp > 0) {
-						diff++;
-						if(diff >= 255) {
-							break;
-						}
-					} else {
-						break;
-					}
-				}
-				
-				struct work * const work = works[index];
-				const struct pool * const pool = work->pool;
-				const struct mining_goal_info * const goal = pool->goal;
-				for (uint64_t netdifftmp = goal->current_diff; netdifftmp > 0; netdifftmp >>= 1) {
-					++netdiff;
-				}
-			}
+			works[index]->nonce_diff = pooldiff;
 
 			if(BITMAIN_TEST_PRINT_WORK) {
 				char ob_hex[(76 * 2) + 1];
@@ -1098,30 +1117,8 @@ static bool bitmain_decode_nonce(struct thr_info *thr, struct cgpu_info *bitmain
 {
 	info = bitmain->device_data;
 	//info->matching_work[work->subid]++;
-	if(opt_bitmain_hwerror) {
-		applog(LOG_DEBUG, "BitMain: submit direct nonce = %08x", nonce);
-		if(opt_bitmain_checkall) {
-			applog(LOG_DEBUG, "BitMain check all");
-			return submit_nonce(thr, work, nonce);
-		} else {
-			if(opt_bitmain_checkn2diff) {
-				int diff = 0;
-				diff = work->work_difficulty;
-				if(diff&&(diff&(diff-1))) {
-					applog(LOG_DEBUG, "BitMain %d not diff 2 submit_nonce", diff);
-					return submit_nonce(thr, work, nonce);
-				} else {
-					applog(LOG_DEBUG, "BitMain %d diff 2 submit_nonce_direct", diff);
-					return submit_nonce_direct(thr, work, nonce);
-				}
-			} else {
-				return submit_nonce_direct(thr, work, nonce);
-			}
-		}
-	} else {
-		applog(LOG_DEBUG, "BitMain: submit nonce = %08x", nonce);
-		return submit_nonce(thr, work, nonce);
-	}
+	applog(LOG_DEBUG, "BitMain: submit nonce = %08x", nonce);
+	return submit_nonce(thr, work, nonce);
 }
 
 static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
