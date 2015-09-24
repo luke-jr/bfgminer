@@ -165,7 +165,7 @@ void btm_detect(struct device_drv *drv, bool (*device_detect)(const char*))
 	device_detect("asic");
 }
 
-int btm_read(struct cgpu_info *cgpu, char *buf, size_t bufsize)
+int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsize)
 {
 	int err = 0;
 	//applog(LOG_DEBUG, "btm_read ----- %d -----", bufsize);
@@ -173,7 +173,7 @@ int btm_read(struct cgpu_info *cgpu, char *buf, size_t bufsize)
 	return err;
 }
 
-int btm_write(struct cgpu_info *cgpu, char *buf, size_t bufsize)
+int btm_write(struct cgpu_info * const cgpu, void * const buf, const size_t bufsize)
 {
 	int err = 0;
 	//applog(LOG_DEBUG, "btm_write ----- %d -----", bufsize);
@@ -1463,7 +1463,7 @@ static void *bitmain_get_results(void *userdata)
 	struct bitmain_info *info = bitmain->device_data;
 	int offset = 0, ret = 0;
 	const int rsize = BITMAIN_FTDI_READSIZE;
-	char readbuf[BITMAIN_READBUF_SIZE];
+	uint8_t readbuf[BITMAIN_READBUF_SIZE];
 	struct thr_info *thr = info->thr;
 	char threadname[24];
 	int errorcount = 0;
