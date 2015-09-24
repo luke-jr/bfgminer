@@ -1063,15 +1063,14 @@ static int bitmain_write(struct cgpu_info *bitmain, char *buf, ssize_t len)
 
 static int bitmain_send_data(const uint8_t * data, int datalen, struct cgpu_info *bitmain)
 {
-	int delay, ret;
-	struct bitmain_info *info = NULL;
-	cgtimer_t ts_start;
+	int ret;
 
 	if(datalen <= 0) {
 		return 0;
 	}
 
-	info = bitmain->device_data;
+	//struct bitmain_info *info = bitmain->device_data;
+	//int delay;
 	//delay = datalen * 10 * 1000000;
 	//delay = delay / info->baud;
 	//delay += 4000;
@@ -1082,6 +1081,7 @@ static int bitmain_send_data(const uint8_t * data, int datalen, struct cgpu_info
 		applog(LOG_DEBUG, "BitMain: Sent(%d): %s", datalen, hex);
 	}
 
+	//cgtimer_t ts_start;
 	//cgsleep_prepare_r(&ts_start);
 	//applog(LOG_DEBUG, "----bitmain_send_data  start");
 	ret = bitmain_write(bitmain, (char *)data, datalen);
@@ -2068,7 +2068,6 @@ static int64_t bitmain_scanhash(struct thr_info *thr)
 static void bitmain_flush_work(struct cgpu_info *bitmain)
 {
 	struct bitmain_info *info = bitmain->device_data;
-	int i = 0;
 
 	mutex_lock(&info->qlock);
 	/* Will overwrite any work queued */
@@ -2082,7 +2081,7 @@ static void bitmain_flush_work(struct cgpu_info *bitmain)
 	}
 	bitmain->queued = 0;
 	//bitmain->work_array = 0;
-	//for(i = 0; i < BITMAIN_ARRAY_SIZE; i++) {
+	//for (int i = 0; i < BITMAIN_ARRAY_SIZE; ++i) {
 	//	bitmain->works[i] = NULL;
 	//}
 	//pthread_cond_signal(&info->qcond);
@@ -2093,7 +2092,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 {
 	struct api_data *root = NULL;
 	struct bitmain_info *info = cgpu->device_data;
-	int i = 0;
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
@@ -2148,7 +2146,7 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	root = api_add_percent(root, "Device Hardware%", &hwp, true);
 	root = api_add_int(root, "no_matching_work", &(info->no_matching_work), false);
 	/*
-	for (i = 0; i < info->chain_num; i++) {
+	for (int i = 0; i < info->chain_num; ++i) {
 		char mcw[24];
 
 		sprintf(mcw, "match_work_count%d", i + 1);
