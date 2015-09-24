@@ -1353,12 +1353,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			if(bitmain_parse_rxnonce(buf+i, packethead.length+4, &rxnoncedata, &nonce_num) != 0) {
 				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxnonce error len=%d", packethead.length+4);
 			} else {
-				struct pool * pool = NULL;
 				for(j = 0; j < nonce_num; j++) {
 					const int work_id = rxnoncedata.nonces[j].work_id;
 					HASH_FIND_INT(bitmain->queued_work, &work_id, work);
 					if(work) {
-						pool = work->pool;
 						if(BITMAIN_TEST_PRINT_WORK) {
 							applog(LOG_ERR, "bitmain_parse_results nonce find work(%d-%d)(%08x)", work->id, rxnoncedata.nonces[j].work_id, rxnoncedata.nonces[j].nonce);
 
@@ -1375,22 +1373,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							applog(LOG_ERR, "BitMain: bitmain_parse_rxnonce work(%d) nonce stale", rxnoncedata.nonces[j].work_id);
 						} else {
 							if (bitmain_decode_nonce(thr, bitmain, info, rxnoncedata.nonces[j].nonce, work)) {
-								cg_logwork_uint32(work, rxnoncedata.nonces[j].nonce, true);
-								if(opt_bitmain_hwerror) {
-#ifndef BITMAIN_CALC_DIFF1
-									mutex_lock(&info->qlock);
-									idiff = (int)work->work_difficulty;
-									info->nonces+=idiff;
-									info->auto_nonces+=idiff;
-									mutex_unlock(&info->qlock);
-									inc_work_status(thr, pool, idiff);
-#endif
-								} else {
-									mutex_lock(&info->qlock);
-									info->nonces++;
-									info->auto_nonces++;
-									mutex_unlock(&info->qlock);
-								}
+								mutex_lock(&info->qlock);
+								info->nonces++;
+								info->auto_nonces++;
+								mutex_unlock(&info->qlock);
 						 	} else {
 						 		//bitmain_inc_nvw(info, thr);
 						 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
@@ -1420,7 +1406,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 					info->total_nonce_num = rxnoncedata.total_nonce_num;
 					info->fifo_space = rxnoncedata.fifo_space;
 					mutex_unlock(&info->qlock);
-					inc_work_stats(thr, pool, difftmp);
 
 					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d diff=%d rxtnn=%lld tnn=%lld", info->fifo_space, idiff, rxnoncedata.total_nonce_num, info->total_nonce_num);
 				} else {
