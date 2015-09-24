@@ -2206,7 +2206,7 @@ static void bitmain_shutdown(struct thr_info *thr)
 char *set_bitmain_dev(char *arg)
 {
 	if(arg == NULL || strlen(arg) <= 0) {
-		memcpy(opt_bitmain_dev, 0, 256);
+		opt_bitmain_dev[0] = '\0';
 	} else {
 		strncpy(opt_bitmain_dev, arg, 256);
 	}
