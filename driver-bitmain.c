@@ -32,8 +32,8 @@
 
 #include <uthash.h>
 
+#include "deviceapi.h"
 #include "miner.h"
-#include "usbutils.h"
 #include "driver-bitmain.h"
 #include "util.h"
 
