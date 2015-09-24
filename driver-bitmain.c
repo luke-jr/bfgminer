@@ -1912,21 +1912,6 @@ static void do_bitmain_close(struct thr_info *thr)
 	info->no_matching_work = 0;
 }
 
-static void get_bitmain_statline_before(char *buf, size_t bufsiz, struct cgpu_info *bitmain)
-{
-	struct bitmain_info *info = bitmain->device_data;
-	int lowfan = 10000;
-	int i = 0;
-
-	/* Find the lowest fan speed of the ASIC cooling fans. */
-	for(i = 0; i < info->fan_num; i++) {
-		if (info->fan[i] >= 0 && info->fan[i] < lowfan)
-			lowfan = info->fan[i];
-	}
-
-	tailsprintf(buf, bufsiz, "%2d/%3dC %04dR | ", info->temp_avg, info->temp_max, lowfan);
-}
-
 /* We use a replacement algorithm to only remove references to work done from
  * the buffer when we need the extra space for new work. */
 static bool bitmain_fill(struct cgpu_info *bitmain)
@@ -2303,7 +2288,6 @@ struct device_drv bitmain_drv = {
 	.scanwork = bitmain_scanhash,
 	.flush_work = bitmain_flush_work,
 	.get_api_stats = bitmain_api_stats,
-	.get_statline_before = get_bitmain_statline_before,
 	.reinit_device = bitmain_init,
 	.thread_shutdown = bitmain_shutdown,
 };
