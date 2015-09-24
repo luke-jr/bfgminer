@@ -63,9 +63,6 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 
 struct cgpu_info *btm_free_cgpu(struct cgpu_info *cgpu)
 {
-	if (cgpu->drv->copy)
-		free(cgpu->drv);
-
 	if(cgpu->device_path) {
 		free(cgpu->device_path);
 	}
@@ -164,17 +161,6 @@ void btm_detect(struct device_drv *drv, bool (*device_detect)(const char*))
 {
 	applog(LOG_DEBUG, "BTM scan devices: checking for %s devices", drv->name);
 
-	if (total_count >= total_limit) {
-		applog(LOG_DEBUG, "BTM scan devices: total limit %d reached", total_limit);
-		return;
-	}
-
-	if (drv_count[drv->drv_id].count >= drv_count[drv->drv_id].limit) {
-		applog(LOG_DEBUG,
-			"BTM scan devices: %s limit %d reached",
-			drv->dname, drv_count[drv->drv_id].limit);
-		return;
-	}
 	device_detect("asic");
 }
 
