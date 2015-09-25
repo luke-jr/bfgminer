@@ -1,5 +1,6 @@
 /*
- * Copyright 2012-2013 Lingchao Xu <lingchao.xu@bitmaintech.com>
+ * Copyright 2012-2014 Lingchao Xu
+ * Copyright 2015 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
