@@ -1036,7 +1036,7 @@ static int bitmain_parse_rxnonce(const uint8_t * data, int datalen, struct bitma
 	bm->diff = htole16(bm->diff);
 	bm->total_nonce_num = htole64(bm->total_nonce_num);
 	curnoncenum = (datalen-14)/8;
-	applog(LOG_DEBUG, "BitMain RxNonce Data: nonce_num(%d) fifo_space(%d) diff(%d) tnn(%lld)", curnoncenum, bm->fifo_space, bm->diff, bm->total_nonce_num);
+	applog(LOG_DEBUG, "BitMain RxNonce Data: nonce_num(%d) fifo_space(%d) diff(%d) tnn(%"PRIu64")", curnoncenum, bm->fifo_space, bm->diff, bm->total_nonce_num);
 	for(i = 0; i < curnoncenum; i++) {
 		bm->nonces[i].work_id = htole32(bm->nonces[i].work_id);
 		bm->nonces[i].nonce = htole32(bm->nonces[i].nonce);
@@ -1055,7 +1055,7 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 	size_t total = 0;
 
 	if(bitmain == NULL || buf == NULL || bufsize <= 0) {
-		applog(LOG_WARNING, "bitmain_read parameter error bufsize(%d)", bufsize);
+		applog(LOG_WARNING, "bitmain_read parameter error bufsize(%llu)", (unsigned long long)bufsize);
 		return -1;
 	}
 	{
@@ -1203,7 +1203,7 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	}
 	sprintf(tmp, ", TempMAX: %dC", info->temp_max);
 	strcat(msg, tmp);
-	applog(LOG_INFO, msg);
+	applog(LOG_INFO, "%s", msg);
 	info->temp_history_index++;
 	info->temp_sum += bitmain->temp;
 	applog(LOG_DEBUG, "BitMain: temp_index: %d, temp_count: %d, temp_old: %d",
@@ -1409,7 +1409,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 					info->fifo_space = rxnoncedata.fifo_space;
 					mutex_unlock(&info->qlock);
 
-					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d diff=%d rxtnn=%lld tnn=%lld", info->fifo_space, idiff, rxnoncedata.total_nonce_num, info->total_nonce_num);
+					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d diff=%d rxtnn=%"PRIu64" tnn=%"PRIu64, info->fifo_space, idiff, rxnoncedata.total_nonce_num, info->total_nonce_num);
 				} else {
 					mutex_lock(&info->qlock);
 					info->fifo_space = rxnoncedata.fifo_space;
