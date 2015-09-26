@@ -94,7 +94,8 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 	if(cgpu->device_fd >= 0) {
 		return false;
 	}
-	fd = serial_open(devpath, 115200, 1, true);
+	struct bitmain_info *info = cgpu->device_data;
+	fd = serial_open(devpath, info->baud, 1, true);
 	if(fd == -1) {
 		applog(LOG_DEBUG, "%s open %s error %d",
 				cgpu->drv->dname, devpath, errno);
