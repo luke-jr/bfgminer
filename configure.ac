@@ -569,6 +569,7 @@ BFG_DRIVER(,BitForce,SHA256d,auto,[
 ])
 
 BFG_DRIVER(,BitMain,SHA256d,no,[
+	need_lowl_vcom=yes
 	has_asic=yes
 ])
 

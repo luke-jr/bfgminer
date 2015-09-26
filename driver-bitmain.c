@@ -37,10 +37,10 @@
 #include "deviceapi.h"
 #include "miner.h"
 #include "driver-bitmain.h"
+#include "lowl-vcom.h"
 #include "util.h"
 
 #warning "FIXME: Make these --set able"
-char * const opt_bitmain_dev = "/dev/bitmain-asic";
 char * const opt_bitmain_options = "115200:32:8:7:200:0782:0725";
 const bool opt_bitmain_hwerror = true;
 char * const opt_bitmain_freq = "3:350:0d82";
@@ -84,65 +84,12 @@ struct cgpu_info *btm_free_cgpu(struct cgpu_info *cgpu)
 
 bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 {
-#ifdef WIN32
-	int fd = -1;
-	signed short timeout = 1;
-	unsigned long baud = 115200;
-	bool purge = true;
-	HANDLE hSerial = NULL;
 	applog(LOG_DEBUG, "btm_init cgpu->device_fd=%d", cgpu->device_fd);
-	if(cgpu->device_fd >= 0) {
-		return false;
-	}
-	hSerial = CreateFile(devpath, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	if (unlikely(hSerial == INVALID_HANDLE_VALUE))
-	{
-		DWORD e = GetLastError();
-		switch (e) {
-		case ERROR_ACCESS_DENIED:
-			applog(LOG_DEBUG, "Do not have user privileges required to open %s", devpath);
-			break;
-		case ERROR_SHARING_VIOLATION:
-			applog(LOG_DEBUG, "%s is already in use by another process", devpath);
-			break;
-		default:
-			applog(LOG_DEBUG, "Open %s failed, GetLastError:%d", devpath, (int)e);
-			break;
-		}
-	} else {
-		// thanks to af_newbie for pointers about this
-		COMMCONFIG comCfg = {0};
-		comCfg.dwSize = sizeof(COMMCONFIG);
-		comCfg.wVersion = 1;
-		comCfg.dcb.DCBlength = sizeof(DCB);
-		comCfg.dcb.BaudRate = baud;
-		comCfg.dcb.fBinary = 1;
-		comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
-		comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
-		comCfg.dcb.ByteSize = 8;
-
-		SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
-
-		// Code must specify a valid timeout value (0 means don't timeout)
-		const DWORD ctoms = (timeout * 100);
-		COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
-		SetCommTimeouts(hSerial, &cto);
-
-		if (purge) {
-			PurgeComm(hSerial, PURGE_RXABORT);
-			PurgeComm(hSerial, PURGE_TXABORT);
-			PurgeComm(hSerial, PURGE_RXCLEAR);
-			PurgeComm(hSerial, PURGE_TXCLEAR);
-		}
-		fd = _open_osfhandle((intptr_t)hSerial, 0);
-	}
-#else
 	int fd = -1;
 	if(cgpu->device_fd >= 0) {
 		return false;
 	}
-	fd = open(devpath, O_RDWR|O_EXCL|O_NONBLOCK);
-#endif
+	fd = serial_open(devpath, 115200, 1, true);
 	if(fd == -1) {
 		applog(LOG_DEBUG, "%s open %s error %d",
 				cgpu->drv->dname, devpath, errno);
@@ -160,18 +107,14 @@ void btm_uninit(struct cgpu_info *cgpu)
 
 	// May have happened already during a failed initialisation
 	//  if release_cgpu() was called due to a USB NODEV(err)
-	close(cgpu->device_fd);
+	if (cgpu->device_fd >= 0) {
+		serial_close(cgpu->device_fd);
+		cgpu->device_fd = -1;
+	}
 	if(cgpu->device_path) {
 		free((char*)cgpu->device_path);
 		cgpu->device_path = NULL;
 	}
-}
-
-void btm_detect(struct device_drv *drv, bool (*device_detect)(const char*))
-{
-	applog(LOG_DEBUG, "BTM scan devices: checking for %s devices", drv->name);
-
-	device_detect("asic");
 }
 
 int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsize)
@@ -1798,7 +1741,7 @@ static bool bitmain_detect_one(const char * devpath)
 	get_option_freq(&timeout, &frequency, frequency_t, reg_data);
 	get_option_voltage(voltage, voltage_t);
 
-	if (!btm_init(bitmain, opt_bitmain_dev))
+	if (!btm_init(bitmain, devpath))
 		goto shin;
 	applog(LOG_ERR, "bitmain_detect_one btm init ok");
 
@@ -1872,12 +1815,16 @@ shin:
 	return false;
 }
 
+static int bitmain_detect_auto(void)
+{
+	const char * const auto_bitmain_dev = "/dev/bitmain-asic";
+	applog(LOG_DEBUG, "BTM detect dev: %s", auto_bitmain_dev);
+	return bitmain_detect_one(auto_bitmain_dev) ? 1 : 0;
+}
+
 static void bitmain_detect()
 {
-	applog(LOG_DEBUG, "BTM detect dev: %s", opt_bitmain_dev);
-	if (strlen(opt_bitmain_dev) > 0) {
-		btm_detect(&bitmain_drv, bitmain_detect_one);
-	}
+	generic_detect(&bitmain_drv, bitmain_detect_one, bitmain_detect_auto, GDF_REQUIRE_DNAME | GDF_DEFAULT_NOAUTO);
 }
 
 static void do_bitmain_close(struct thr_info *thr)
@@ -2202,17 +2149,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 static void bitmain_shutdown(struct thr_info *thr)
 {
 	do_bitmain_close(thr);
-}
-
-char *set_bitmain_dev(char *arg)
-{
-	if(arg == NULL || strlen(arg) <= 0) {
-		opt_bitmain_dev[0] = '\0';
-	} else {
-		strncpy(opt_bitmain_dev, arg, 256);
-	}
-	applog(LOG_DEBUG, "BTM set device: %s", opt_bitmain_dev);
-	return NULL;
 }
 
 char *set_bitmain_fan(char *arg)
