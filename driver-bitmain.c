@@ -40,13 +40,10 @@
 #include "lowl-vcom.h"
 #include "util.h"
 
-#warning "FIXME: Make these --set able"
-char * const opt_bitmain_options = "115200:32:8:7:200:0782:0725";
 const bool opt_bitmain_hwerror = true;
-char * const opt_bitmain_freq = "3:350:0d82";
-char * const opt_bitmain_voltage = "0725";
 
 BFG_REGISTER_DRIVER(bitmain_drv)
+static const struct bfg_set_device_definition bitmain_set_device_funcs_init[];
 
 static inline unsigned int bfg_work_block(struct work * const work)
 {
@@ -68,6 +65,23 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 
 	cgpu->device_fd = -1;
 
+	struct bitmain_info *info = malloc(sizeof(*info));
+	if (unlikely(!info))
+		quit(1, "Failed to calloc bitmain_info data");
+	cgpu->device_data = info;
+	
+	*info = (struct bitmain_info){
+		.baud = BITMAIN_IO_SPEED,
+		.chain_num = BITMAIN_DEFAULT_CHAIN_NUM,
+		.asic_num = BITMAIN_DEFAULT_ASIC_NUM,
+		.timeout = BITMAIN_DEFAULT_TIMEOUT,
+		.frequency = BITMAIN_DEFAULT_FREQUENCY,
+		.voltage[0] = BITMAIN_DEFAULT_VOLTAGE0,
+		.voltage[1] = BITMAIN_DEFAULT_VOLTAGE1,
+	};
+	sprintf(info->frequency_t, "%d", BITMAIN_DEFAULT_FREQUENCY),
+	strcpy(info->voltage_t, BITMAIN_DEFAULT_VOLTAGE_T);
+	
 	return cgpu;
 }
 
@@ -200,8 +214,6 @@ int opt_bitmain_freq_min = BITMAIN_MIN_FREQUENCY;
 int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
 
-static int option_offset = -1;
-
 // --------------------------------------------------------------
 //      CRC16 check table
 // --------------------------------------------------------------
@@ -307,253 +319,6 @@ static uint32_t num2bit(int num) {
 	case 31: return 0x00000001;
 	default: return 0x00000000;
 	}
-}
-
-static bool get_options(int this_option_offset, int *baud, int *chain_num,
-			int *asic_num, int *timeout, int *frequency, char * frequency_t, uint8_t * reg_data, uint8_t * voltage, char * voltage_t)
-{
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2, *colon3, *colon4, *colon5, *colon6;
-	size_t max;
-	int i, tmp;
-
-	if (opt_bitmain_options == NULL)
-		buf[0] = '\0';
-	else {
-		ptr = opt_bitmain_options;
-		for (i = 0; i < this_option_offset; i++) {
-			comma = strchr(ptr, ',');
-			if (comma == NULL)
-				break;
-			ptr = comma + 1;
-		}
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	if (!(*buf))
-		return false;
-
-	colon = strchr(buf, ':');
-	if (colon)
-		*(colon++) = '\0';
-
-	tmp = atoi(buf);
-	switch (tmp) {
-	case 115200:
-		*baud = 115200;
-		break;
-	case 57600:
-		*baud = 57600;
-		break;
-	case 38400:
-		*baud = 38400;
-		break;
-	case 19200:
-		*baud = 19200;
-		break;
-	default:
-		quit(1, "Invalid bitmain-options for baud (%s) "
-			"must be 115200, 57600, 38400 or 19200", buf);
-	}
-
-	if (colon && *colon) {
-		colon2 = strchr(colon, ':');
-		if (colon2)
-			*(colon2++) = '\0';
-
-		if (*colon) {
-			tmp = atoi(colon);
-			if (tmp > 0) {
-				*chain_num = tmp;
-			} else {
-				quit(1, "Invalid bitmain-options for "
-					"chain_num (%s) must be 1 ~ %d",
-					colon, BITMAIN_DEFAULT_CHAIN_NUM);
-			}
-		}
-
-		if (colon2 && *colon2) {
-			colon3 = strchr(colon2, ':');
-			if (colon3)
-				*(colon3++) = '\0';
-
-			tmp = atoi(colon2);
-			if (tmp > 0 && tmp <= BITMAIN_DEFAULT_ASIC_NUM)
-				*asic_num = tmp;
-			else {
-				quit(1, "Invalid bitmain-options for "
-					"asic_num (%s) must be 1 ~ %d",
-					colon2, BITMAIN_DEFAULT_ASIC_NUM);
-			}
-
-			if (colon3 && *colon3) {
-				colon4 = strchr(colon3, ':');
-				if (colon4)
-					*(colon4++) = '\0';
-
-				tmp = atoi(colon3);
-				if (tmp > 0 && tmp <= 0xff)
-					*timeout = tmp;
-				else {
-					quit(1, "Invalid bitmain-options for "
-						"timeout (%s) must be 1 ~ %d",
-						colon3, 0xff);
-				}
-				if (colon4 && *colon4) {
-					colon5 = strchr(colon4, ':');
-					if(colon5)
-						*(colon5++) = '\0';
-
-					tmp = atoi(colon4);
-					if (tmp < BITMAIN_MIN_FREQUENCY || tmp > BITMAIN_MAX_FREQUENCY) {
-						quit(1, "Invalid bitmain-options for frequency, must be %d <= frequency <= %d",
-						     BITMAIN_MIN_FREQUENCY, BITMAIN_MAX_FREQUENCY);
-					} else {
-						*frequency = tmp;
-						strcpy(frequency_t, colon4);
-					}
-					if (colon5 && *colon5) {
-						colon6 = strchr(colon5, ':');
-						if(colon6)
-							*(colon6++) = '\0';
-
-						if(strlen(colon5) > 8 || strlen(colon5)%2 != 0 || strlen(colon5)/2 == 0) {
-							quit(1, "Invalid bitmain-options for reg data, must be hex now: %s",
-									colon5);
-						}
-						memset(reg_data, 0, 4);
-						if(!hex2bin(reg_data, colon5, strlen(colon5)/2)) {
-							quit(1, "Invalid bitmain-options for reg data, hex2bin error now: %s",
-									colon5);
-						}
-
-						if (colon6 && *colon6) {
-							if(strlen(colon6) > 4 || strlen(colon6)%2 != 0 || strlen(colon6)/2 == 0) {
-								quit(1, "Invalid bitmain-options for voltage data, must be hex now: %s",
-									colon6);
-							}
-							memset(voltage, 0, 2);
-							if(!hex2bin(voltage, colon6, strlen(colon6)/2)) {
-								quit(1, "Invalid bitmain-options for voltage data, hex2bin error now: %s",
-									colon5);
-							} else {
-								sprintf(voltage_t, "%02x%02x", voltage[0], voltage[1]);
-								voltage_t[5] = 0;
-								voltage_t[4] = voltage_t[3];
-								voltage_t[3] = voltage_t[2];
-								voltage_t[2] = voltage_t[1];
-								voltage_t[1] = '.';
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return true;
-}
-
-static bool get_option_freq(int *timeout, int *frequency, char * frequency_t, uint8_t * reg_data)
-{
-	char buf[BUFSIZ+1];
-	char *ptr, *comma, *colon, *colon2;
-	size_t max;
-	int tmp;
-
-	if (opt_bitmain_freq == NULL)
-		return true;
-	else {
-		ptr = opt_bitmain_freq;
-
-		comma = strchr(ptr, ',');
-		if (comma == NULL)
-			max = strlen(ptr);
-		else
-			max = comma - ptr;
-
-		if (max > BUFSIZ)
-			max = BUFSIZ;
-		strncpy(buf, ptr, max);
-		buf[max] = '\0';
-	}
-
-	if (!(*buf))
-		return false;
-
-	colon = strchr(buf, ':');
-	if (colon)
-		*(colon++) = '\0';
-
-	tmp = atoi(buf);
-	if (tmp > 0 && tmp <= 0xff)
-		*timeout = tmp;
-	else {
-		quit(1, "Invalid bitmain-freq for "
-			"timeout (%s) must be 1 ~ %d",
-			buf, 0xff);
-	}
-
-	if (colon && *colon) {
-		colon2 = strchr(colon, ':');
-		if (colon2)
-			*(colon2++) = '\0';
-
-		tmp = atoi(colon);
-		if (tmp < BITMAIN_MIN_FREQUENCY || tmp > BITMAIN_MAX_FREQUENCY) {
-			quit(1, "Invalid bitmain-freq for frequency, must be %d <= frequency <= %d",
-					BITMAIN_MIN_FREQUENCY, BITMAIN_MAX_FREQUENCY);
-		} else {
-			*frequency = tmp;
-			strcpy(frequency_t, colon);
-		}
-
-		if (colon2 && *colon2) {
-			if(strlen(colon2) > 8 || strlen(colon2)%2 != 0 || strlen(colon2)/2 == 0) {
-				quit(1, "Invalid bitmain-freq for reg data, must be hex now: %s",
-						colon2);
-			}
-			memset(reg_data, 0, 4);
-			if(!hex2bin(reg_data, colon2, strlen(colon2)/2)) {
-				quit(1, "Invalid bitmain-freq for reg data, hex2bin error now: %s",
-						colon2);
-			}
-		}
-	}
-	return true;
-}
-
-static bool get_option_voltage(uint8_t * voltage, char * voltage_t)
-{
-	if(opt_bitmain_voltage) {
-		if(strlen(opt_bitmain_voltage) > 4 || strlen(opt_bitmain_voltage)%2 != 0 || strlen(opt_bitmain_voltage)/2 == 0) {
-			applog(LOG_ERR, "Invalid bitmain-voltage for voltage data, must be hex now: %s,set default_volttage",
-				opt_bitmain_voltage);
-			return false;
-		}
-		memset(voltage, 0, 2);
-		if(!hex2bin(voltage, opt_bitmain_voltage, strlen(opt_bitmain_voltage)/2)) {
-			quit(1, "Invalid bitmain-voltage for voltage data, hex2bin error now: %s",
-					opt_bitmain_voltage);
-		} else {
-			sprintf(voltage_t, "%02x%02x", voltage[0], voltage[1]);
-			voltage_t[5] = 0;
-			voltage_t[4] = voltage_t[3];
-			voltage_t[3] = voltage_t[2];
-			voltage_t[2] = voltage_t[1];
-			voltage_t[1] = '.';
-		}
-	}
-	return true;
 }
 
 static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
@@ -1483,11 +1248,6 @@ static void *bitmain_get_results(void *userdata)
 	return NULL;
 }
 
-static void bitmain_set_timeout(struct bitmain_info *info)
-{
-	info->timeout = BITMAIN_TIMEOUT_FACTOR / info->frequency;
-}
-
 static void bitmain_init(struct cgpu_info *bitmain)
 {
 	applog(LOG_INFO, "BitMain: Opened on %s", bitmain->device_path);
@@ -1720,60 +1480,18 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 
 static bool bitmain_detect_one(const char * devpath)
 {
-	int baud, chain_num, asic_num, timeout, frequency = 0;
-	char frequency_t[256] = {0};
-	uint8_t reg_data[4] = {0};
-	uint8_t voltage[2] = {0};
-	char voltage_t[8] = {0};
-	int this_option_offset = ++option_offset;
 	struct bitmain_info *info;
 	struct cgpu_info *bitmain;
-	bool configured;
 	int ret;
 
-	if (opt_bitmain_options == NULL)
-		return false;
-
 	bitmain = btm_alloc_cgpu(&bitmain_drv, BITMAIN_MINER_THREADS);
+	info = bitmain->device_data;
 
-	configured = get_options(this_option_offset, &baud, &chain_num,
-				 &asic_num, &timeout, &frequency, frequency_t, reg_data, voltage, voltage_t);
-	get_option_freq(&timeout, &frequency, frequency_t, reg_data);
-	get_option_voltage(voltage, voltage_t);
+	drv_set_defaults(&bitmain_drv, bitmain_set_device_funcs_init, info, devpath, NULL, 1);
 
 	if (!btm_init(bitmain, devpath))
 		goto shin;
 	applog(LOG_ERR, "bitmain_detect_one btm init ok");
-
-	bitmain->device_data = calloc(sizeof(struct bitmain_info), 1);
-	/*	make sure initialize successfully*/
-	memset(bitmain->device_data,0,sizeof(struct bitmain_info));	
-	if (unlikely(!(bitmain->device_data)))
-		quit(1, "Failed to calloc bitmain_info data");
-	info = bitmain->device_data;
-
-	if (configured) {
-		info->baud = baud;
-		info->chain_num = chain_num;
-		info->asic_num = asic_num;
-		info->timeout = timeout;
-		info->frequency = frequency;
-		strcpy(info->frequency_t, frequency_t);
-		memcpy(info->reg_data, reg_data, 4);
-		memcpy(info->voltage, voltage, 2);
-		strcpy(info->voltage_t, voltage_t);
-	} else {
-		info->baud = BITMAIN_IO_SPEED;
-		info->chain_num = BITMAIN_DEFAULT_CHAIN_NUM;
-		info->asic_num = BITMAIN_DEFAULT_ASIC_NUM;
-		info->timeout = BITMAIN_DEFAULT_TIMEOUT;
-		info->frequency = BITMAIN_DEFAULT_FREQUENCY;
-		sprintf(info->frequency_t, "%d", BITMAIN_DEFAULT_FREQUENCY);
-		memset(info->reg_data, 0, 4);
-		info->voltage[0] = BITMAIN_DEFAULT_VOLTAGE0;
-		info->voltage[1] = BITMAIN_DEFAULT_VOLTAGE1;
-		strcpy(info->voltage_t, BITMAIN_DEFAULT_VOLTAGE_T);
-	}
 
 	info->fan_pwm = BITMAIN_DEFAULT_FAN_MIN_PWM;
 	info->temp_max = 0;
@@ -1791,7 +1509,7 @@ static bool bitmain_detect_one(const char * devpath)
 
 	ret = bitmain_initialize(bitmain);
 	applog(LOG_ERR, "bitmain_detect_one stop bitmain_initialize %d", ret);
-	if (ret && !configured)
+	if (ret)
 		goto unshin;
 
 	info->errorcount = 0;
@@ -2190,6 +1908,118 @@ char *set_bitmain_freq(char *arg)
 
 	return NULL;
 }
+
+const char *bitmain_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	const int baud = atoi(newvalue);
+	if (!valid_baud(baud))
+		return "Invalid baud setting";
+	info->baud = baud;
+	return NULL;
+}
+
+const char *bitmain_set_layout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	char *endptr, *next_field;
+	const long int n_chains = strtol(newvalue, &endptr, 0);
+	if (endptr == newvalue || n_chains < 1)
+		return "Missing chain count";
+	long int n_asics = 0;
+	if (endptr[0] == ':' || endptr[1] == ',')
+	{
+		next_field = &endptr[1];
+		n_asics = strtol(next_field, &endptr, 0);
+	}
+	if (n_asics < 1)
+		return "Missing ASIC count";
+	if (n_asics > BITMAIN_DEFAULT_ASIC_NUM)
+		return "ASIC count too high";
+	info->chain_num = n_chains;
+	info->asic_num = n_asics;
+	return NULL;
+}
+
+const char *bitmain_set_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	const int timeout = atoi(newvalue);
+	if (timeout < 0 || timeout > 0xff)
+		return "Invalid timeout setting";
+	info->timeout = timeout;
+	return NULL;
+}
+
+const char *bitmain_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	const int freq = atoi(newvalue);
+	if (freq < BITMAIN_MIN_FREQUENCY || freq > BITMAIN_MAX_FREQUENCY)
+		return "Invalid clock frequency";
+	info->frequency = freq;
+	sprintf(info->frequency_t, "%d", freq);
+	return NULL;
+}
+
+const char *bitmain_set_reg_data(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	uint8_t reg_data[4] = {0};
+	
+	if (newvalue[0] == 'x')
+		++newvalue;
+	
+	size_t nvlen = strlen(newvalue);
+	if (nvlen > (sizeof(reg_data) * 2) || !nvlen || nvlen % 2)
+		return "reg_data must be a hex string of 2-8 digits (1-4 bytes)";
+	
+	if (!hex2bin(reg_data, newvalue, nvlen / 2))
+		return "Invalid reg data hex";
+	
+	memcpy(info->reg_data, reg_data, sizeof(reg_data));
+	
+	return NULL;
+}
+
+const char *bitmain_set_voltage(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	uint8_t voltage_data[2] = {0};
+	
+	if (newvalue[0] == 'x')
+		++newvalue;
+	else
+voltage_usage:
+		return "voltage must be 'x' followed by a hex string of 1-4 digits (1-2 bytes)";
+	
+	size_t nvlen = strlen(newvalue);
+	if (nvlen > (sizeof(voltage_data) * 2) || !nvlen || nvlen % 2)
+		goto voltage_usage;
+	
+	if (!hex2bin(voltage_data, newvalue, nvlen / 2))
+		return "Invalid voltage data hex";
+	
+	memcpy(info->voltage, voltage_data, sizeof(voltage_data));
+	bin2hex(info->voltage_t, voltage_data, 2);
+	info->voltage_t[5] = 0;
+	info->voltage_t[4] = info->voltage_t[3];
+	info->voltage_t[3] = info->voltage_t[2];
+	info->voltage_t[2] = info->voltage_t[1];
+	info->voltage_t[1] = '.';
+	
+	return NULL;
+}
+
+static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = {
+	{"baud", bitmain_set_baud, "serial baud rate"},
+	{"layout", bitmain_set_layout, "number of chains ':' number of ASICs per chain (eg: 32:8)"},
+	{"timeout", bitmain_set_timeout, "timeout"},
+	{"clock", bitmain_set_clock, "clock frequency"},
+	{"reg_data", bitmain_set_reg_data, "reg_data (eg: x0d82)"},
+	{"voltage", bitmain_set_voltage, "voltage (must be specified as 'x' and hex data; eg: x0725)"},
+	{NULL},
+};
 
 struct device_drv bitmain_drv = {
 	.dname = "bitmain",
