@@ -792,11 +792,11 @@ static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
 	info->no_matching_work++;
 }
 
-static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxstatus_data *bm, float *temp_avg)
+static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxstatus_data *bm, float *temp)
 {
 	int i = 0;
 	int maxfan = 0, maxtemp = 0;
-	*temp_avg = 0;
+	int temp_avg = 0;
 
 	info->fan_num = bm->fan_num;
 	for(i = 0; i < bm->fan_num; i++) {
@@ -813,7 +813,7 @@ static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxs
 			bm->temp[i] &= 0x7f;
 			info->temp[i] = 0 - ((~bm->temp[i] & 0x7f) + 1);
 		}*/
-		*temp_avg += info->temp[i];
+		temp_avg += info->temp[i];
 
 		if(info->temp[i] > info->temp_max) {
 			info->temp_max = info->temp[i];
@@ -823,15 +823,11 @@ static inline void record_temp_fan(struct bitmain_info *info, struct bitmain_rxs
 	}
 
 	if(bm->temp_num > 0) {
-		*temp_avg = *temp_avg / bm->temp_num;
-		info->temp_avg = *temp_avg;
+		temp_avg /= bm->temp_num;
+		info->temp_avg = temp_avg;
 	}
 
-	// inc_dev_status
-	mutex_lock(&stats_lock);
-	info->g_max_fan = maxfan;
-	info->g_max_temp = maxtemp;
-	mutex_unlock(&stats_lock);
+	*temp = maxtemp;
 }
 
 static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info *info,
