@@ -792,15 +792,6 @@ static int bitmain_send_data(const uint8_t * data, int datalen, struct cgpu_info
 	return ret;
 }
 
-static bool bitmain_decode_nonce(struct thr_info *thr, struct cgpu_info *bitmain,
-				struct bitmain_info *info, uint32_t nonce, struct work *work)
-{
-	info = bitmain->device_data;
-	//info->matching_work[work->subid]++;
-	applog(LOG_DEBUG, "BitMain: submit nonce = %08x", nonce);
-	return submit_nonce(thr, work, nonce);
-}
-
 static void bitmain_inc_nvw(struct bitmain_info *info, struct thr_info *thr)
 {
 	applog(LOG_INFO, "%s%d: No matching work - HW error",
@@ -1046,10 +1037,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							applog(LOG_ERR, "work %d data2: %s", work->id, ob_hex);
 						}
 
-						if(bfg_work_block(work) != info->last_work_block) {
-							applog(LOG_ERR, "BitMain: bitmain_parse_rxnonce work(%d) nonce stale", rxnoncedata.nonces[j].work_id);
-						} else {
-							if (bitmain_decode_nonce(thr, bitmain, info, rxnoncedata.nonces[j].nonce, work)) {
+						{
+							const uint32_t nonce = rxnoncedata.nonces[j].nonce;
+							applog(LOG_DEBUG, "BitMain: submit nonce = %08lx", (unsigned long)nonce);
+							if (submit_nonce(thr, work, nonce)) {
 								mutex_lock(&info->qlock);
 								info->nonces++;
 								info->auto_nonces++;
