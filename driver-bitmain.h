@@ -41,10 +41,6 @@
 #define BITMAIN_DEFAULT_FAN_MAX_PWM 0xA0 /* 100% */
 #define BITMAIN_DEFAULT_FAN_MIN_PWM 0x20 /*  20% */
 
-#define BITMAIN_TEMP_TARGET 50
-#define BITMAIN_TEMP_HYSTERESIS 3
-#define BITMAIN_TEMP_OVERHEAT 60
-
 #define BITMAIN_DEFAULT_TIMEOUT 0x2D
 #define BITMAIN_MIN_FREQUENCY 10
 #define BITMAIN_MAX_FREQUENCY 1000000
@@ -287,7 +283,6 @@ struct bitmain_info {
 
 	int idle;
 	bool reset;
-	bool overheat;
 	bool optimal;
 	
 	char g_miner_version[256];

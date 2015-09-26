@@ -52,6 +52,7 @@ static inline unsigned int bfg_work_block(struct work * const work)
 
 #define htole8(x) (x)
 
+static
 struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 {
 	struct cgpu_info *cgpu = calloc(1, sizeof(*cgpu));
@@ -85,17 +86,7 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 	return cgpu;
 }
 
-struct cgpu_info *btm_free_cgpu(struct cgpu_info *cgpu)
-{
-	if(cgpu->device_path) {
-		free((char*)cgpu->device_path);
-	}
-
-	free(cgpu);
-
-	return NULL;
-}
-
+static
 bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 {
 	applog(LOG_DEBUG, "btm_init cgpu->device_fd=%d", cgpu->device_fd);
@@ -115,6 +106,7 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 	return true;
 }
 
+static
 void btm_uninit(struct cgpu_info *cgpu)
 {
 	applog(LOG_DEBUG, "BTM uninit %s%i", cgpu->drv->name, cgpu->device_fd);
@@ -131,6 +123,7 @@ void btm_uninit(struct cgpu_info *cgpu)
 	}
 }
 
+static
 int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsize)
 {
 	int err = 0;
@@ -139,6 +132,7 @@ int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsi
 	return err;
 }
 
+static
 int btm_write(struct cgpu_info * const cgpu, void * const buf, const size_t bufsize)
 {
 	int err = 0;
@@ -206,17 +200,12 @@ bool opt_bitmain_checkall = false;
 bool opt_bitmain_nobeeper = false;
 bool opt_bitmain_notempoverctrl = false;
 bool opt_bitmain_homemode = false;
-int opt_bitmain_temp = BITMAIN_TEMP_TARGET;
-int opt_bitmain_overheat = BITMAIN_TEMP_OVERHEAT;
-int opt_bitmain_fan_min = BITMAIN_DEFAULT_FAN_MIN_PWM;
-int opt_bitmain_fan_max = BITMAIN_DEFAULT_FAN_MAX_PWM;
-int opt_bitmain_freq_min = BITMAIN_MIN_FREQUENCY;
-int opt_bitmain_freq_max = BITMAIN_MAX_FREQUENCY;
 bool opt_bitmain_auto;
 
 // --------------------------------------------------------------
 //      CRC16 check table
 // --------------------------------------------------------------
+static
 const uint8_t chCRCHTalbe[] =                                 // CRC high byte table
 {
  0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41,
@@ -243,6 +232,7 @@ const uint8_t chCRCHTalbe[] =                                 // CRC high byte t
  0x00, 0xC1, 0x81, 0x40
 };
 
+static
 const uint8_t chCRCLTalbe[] =                                 // CRC low byte table
 {
  0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06, 0x07, 0xC7,
@@ -878,16 +868,7 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 		info->temp_history_index = 0;
 		info->temp_sum = 0;
 	}
-	if (unlikely(info->temp_old >= opt_bitmain_overheat)) {
-		applog(LOG_WARNING, "BTM%d overheat! Idling", bitmain->device_id);
-		info->overheat = true;
-	} else if (info->overheat && info->temp_old <= opt_bitmain_temp) {
-		applog(LOG_WARNING, "BTM%d cooled, restarting", bitmain->device_id);
-		info->overheat = false;
-	}
 }
-
-extern void cg_logwork_uint32(struct work *work, uint32_t nonce, bool ok);
 
 static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info *info,
 				 struct thr_info *thr, uint8_t *buf, int *offset)
@@ -1826,46 +1807,7 @@ static void bitmain_shutdown(struct thr_info *thr)
 	do_bitmain_close(thr);
 }
 
-char *set_bitmain_fan(char *arg)
-{
-	int val1, val2, ret;
-
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to bitmain-fan";
-	if (ret == 1)
-		val2 = val1;
-
-	if (val1 < 0 || val1 > 100 || val2 < 0 || val2 > 100 || val2 < val1)
-		return "Invalid value passed to bitmain-fan";
-
-	opt_bitmain_fan_min = val1 * BITMAIN_PWM_MAX / 100;
-	opt_bitmain_fan_max = val2 * BITMAIN_PWM_MAX / 100;
-
-	return NULL;
-}
-
-char *set_bitmain_freq(char *arg)
-{
-	int val1, val2, ret;
-
-	ret = sscanf(arg, "%d-%d", &val1, &val2);
-	if (ret < 1)
-		return "No values passed to bitmain-freq";
-	if (ret == 1)
-		val2 = val1;
-
-	if (val1 < BITMAIN_MIN_FREQUENCY || val1 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < BITMAIN_MIN_FREQUENCY || val2 > BITMAIN_MAX_FREQUENCY ||
-	    val2 < val1)
-		return "Invalid value passed to bitmain-freq";
-
-	opt_bitmain_freq_min = val1;
-	opt_bitmain_freq_max = val2;
-
-	return NULL;
-}
-
+static
 const char *bitmain_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1876,6 +1818,7 @@ const char *bitmain_set_baud(struct cgpu_info * const proc, const char * const o
 	return NULL;
 }
 
+static
 const char *bitmain_set_layout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1898,6 +1841,7 @@ const char *bitmain_set_layout(struct cgpu_info * const proc, const char * const
 	return NULL;
 }
 
+static
 const char *bitmain_set_timeout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1908,6 +1852,7 @@ const char *bitmain_set_timeout(struct cgpu_info * const proc, const char * cons
 	return NULL;
 }
 
+static
 const char *bitmain_set_clock(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1919,6 +1864,7 @@ const char *bitmain_set_clock(struct cgpu_info * const proc, const char * const 
 	return NULL;
 }
 
+static
 const char *bitmain_set_reg_data(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1939,6 +1885,7 @@ const char *bitmain_set_reg_data(struct cgpu_info * const proc, const char * con
 	return NULL;
 }
 
+static
 const char *bitmain_set_voltage(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
