@@ -156,24 +156,6 @@ struct bitmain_txconfig_token {
 	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
-struct bitmain_txtask_work {
-	uint32_t work_id;
-	uint8_t midstate[32];
-	uint8_t data2[12];
-} __attribute__((packed, aligned(4)));
-
-struct bitmain_txtask_token {
-	uint8_t token_type;
-	uint8_t version;
-	uint16_t length;
-	uint8_t new_block            :1;
-	uint8_t reserved1            :7;
-	uint8_t diff;
-	uint16_t net_diff;
-	struct bitmain_txtask_work works[BITMAIN_MAX_WORK_NUM];
-	uint16_t crc;
-} __attribute__((packed, aligned(4)));
-
 struct bitmain_rxstatus_token {
 	uint8_t token_type;
 	uint8_t version;
@@ -241,6 +223,7 @@ struct bitmain_info {
 	char chain_asic_status_t[BITMAIN_MAX_CHAIN_NUM][320];
 	int timeout;
 	int errorcount;
+	int errorcount2;
 	uint32_t nonce_error;
 	uint32_t last_nonce_error;
 	uint8_t reg_data[4];
@@ -265,6 +248,8 @@ struct bitmain_info {
 	char voltage_t[8];
 
 	int diff;
+	float lowest_goal_diff;
+	uint32_t next_work_id;
 
 	int no_matching_work;
 	//int matching_work[BITMAIN_DEFAULT_CHAIN_NUM];
@@ -275,7 +260,6 @@ struct bitmain_info {
 	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
-	int nonces;
 	int fifo_space;
 	int hw_version[4];
 	unsigned int last_work_block;
@@ -291,6 +275,9 @@ struct bitmain_info {
 	bool optimal;
 	
 	char g_miner_version[256];
+	
+	uint8_t readbuf[BITMAIN_READBUF_SIZE];
+	int readbuf_offset;
 };
 
 #define BITMAIN_READ_SIZE 12

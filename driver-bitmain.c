@@ -46,11 +46,6 @@ const bool opt_bitmain_hwerror = true;
 BFG_REGISTER_DRIVER(bitmain_drv)
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[];
 
-static inline unsigned int bfg_work_block(struct work * const work)
-{
-	return *((unsigned int*)(&work->data[4]));
-}
-
 #define htole8(x) (x)
 
 #define BITMAIN_USING_CURL  -2
@@ -82,6 +77,9 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 		.frequency = BITMAIN_DEFAULT_FREQUENCY,
 		.voltage[0] = BITMAIN_DEFAULT_VOLTAGE0,
 		.voltage[1] = BITMAIN_DEFAULT_VOLTAGE1,
+		
+		.diff = 255,
+		.lowest_goal_diff = 255,
 	};
 	sprintf(info->frequency_t, "%d", BITMAIN_DEFAULT_FREQUENCY),
 	strcpy(info->voltage_t, BITMAIN_DEFAULT_VOLTAGE_T);
@@ -444,155 +442,6 @@ static int bitmain_set_txconfig(struct bitmain_txconfig_token *bm,
 					chain_check_time_eft, chip_config_eft, hw_error_eft, beeper_ctrl, temp_over_ctrl,fan_home_mode,chain_num, asic_num,
 					fan_pwm_data, timeout_data, frequency, voltage[0], voltage[1],
 					chain_check_time, reg_data[0], reg_data[1], reg_data[2], reg_data[3], chip_address, reg_address, crc);
-
-	return datalen;
-}
-
-static int bitmain_set_txtask(uint8_t * sendbuf,
-			    unsigned int * last_work_block, struct work **works, int work_array_size, int work_array, int sendworkcount, int * sendcount)
-{
-	uint16_t crc = 0;
-	uint32_t work_id = 0;
-	uint8_t version = 0;
-	int datalen = 0;
-	int i = 0;
-	int index = work_array;
-	uint8_t new_block= 0;
-	struct bitmain_txtask_token *bm = (struct bitmain_txtask_token *)sendbuf;
-	*sendcount = 0;
-	int cursendcount = 0;
-	int diff = 0;
-	unsigned int difftmp = 0;
-	unsigned int pooldiff = 0;
-	int netdiff = 0;
-	if (unlikely(!bm)) {
-		applog(LOG_WARNING, "bitmain_set_txtask bitmain_txtask_token is null");
-		return -1;
-	}
-	if (unlikely(!works)) {
-		applog(LOG_WARNING, "bitmain_set_txtask work is null");
-		return -1;
-	}
-	memset(bm, 0, sizeof(struct bitmain_txtask_token));
-
-	bm->token_type = BITMAIN_TOKEN_TYPE_TXTASK;
-	bm->version = version;
-
-	datalen = 10;
-	applog(LOG_DEBUG, "BTM send work count %d -----", sendworkcount);
-	
-	pooldiff = 0x100;
-	unsigned lowest_goal_diff = UINT_MAX;
-	for (i = 0; i < sendworkcount; ++i) {
-		if (index > work_array_size) {
-			index = 0;
-		}
-		if (!works[index]) {
-			continue;
-		}
-		struct work * const work = works[index];
-		if (work->work_difficulty < pooldiff)
-			pooldiff = work->work_difficulty;
-		const struct pool * const pool = work->pool;
-		const struct mining_goal_info * const goal = pool->goal;
-		if (goal->current_diff < lowest_goal_diff)
-			lowest_goal_diff = goal->current_diff;
-	}
-	{
-		difftmp = pooldiff;
-		while(1) {
-			difftmp = difftmp >> 1;
-			if(difftmp > 0) {
-				diff++;
-				if(diff >= 255) {
-					break;
-				}
-			} else {
-				break;
-			}
-		}
-		
-		for (uint64_t netdifftmp = lowest_goal_diff; netdifftmp > 0; netdifftmp >>= 1) {
-			++netdiff;
-		}
-		
-		pooldiff = pow(2, diff);
-	}
-	applog(LOG_DEBUG, "bitmain_set_txtask using nonce_diff=%u (log2=%d) and goal_diff=%u (log2=%d)", pooldiff, diff, lowest_goal_diff, netdiff);
-	
-	for(i = 0; i < sendworkcount; i++) {
-		if(index > work_array_size) {
-			index = 0;
-		}
-		if(works[index]) {
-			const unsigned int work_block = bfg_work_block(works[index]);
-			if(work_block != *last_work_block) {
-				applog(LOG_ERR, "BTM send task new block %d old(%d)", work_block, *last_work_block);
-				new_block = 1;
-				*last_work_block = work_block;
-			}
-#ifdef BITMAIN_TEST
-			if(!hex2bin(works[index]->data, btm_work_test_data[g_test_index], 128)) {
-				applog(LOG_DEBUG, "BTM send task set test data error");
-			}
-			if(!hex2bin(works[index]->midstate, btm_work_test_midstate[g_test_index], 32)) {
-				applog(LOG_DEBUG, "BTM send task set test midstate error");
-			}
-			g_test_index++;
-			if(g_test_index >= BITMAIN_TEST_USENUM) {
-				g_test_index = 0;
-			}
-			applog(LOG_DEBUG, "BTM test index = %d", g_test_index);
-#endif
-			work_id = works[index]->id;
-			bm->works[cursendcount].work_id = htole32(work_id);
-			applog(LOG_DEBUG, "BTM send task work id:%d %d", bm->works[cursendcount].work_id, work_id);
-			memcpy(bm->works[cursendcount].midstate, works[index]->midstate, 32);
-			memcpy(bm->works[cursendcount].data2, works[index]->data + 64, 12);
-
-			works[index]->nonce_diff = pooldiff;
-
-			if(BITMAIN_TEST_PRINT_WORK) {
-				char ob_hex[(76 * 2) + 1];
-				bin2hex(ob_hex, works[index]->data, 76);
-				applog(LOG_ERR, "work %d data: %s", works[index]->id, ob_hex);
-			}
-
-			cursendcount++;
-		}
-		index++;
-	}
-	if(cursendcount <= 0) {
-		applog(LOG_ERR, "BTM send work count %d", cursendcount);
-		return 0;
-	}
-	
-	datalen += 48*cursendcount;
-
-	bm->length = datalen-4;
-	bm->length = htole16(bm->length);
-	//len = datalen-3;
-	//len = htole16(len);
-	//memcpy(sendbuf+1, &len, 2);
-	bm->new_block = new_block;
-	bm->diff = diff;
-	bm->net_diff = htole16(netdiff);
-
-	sendbuf[4] = htole8(sendbuf[4]);
-
-	applog(LOG_DEBUG, "BitMain TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
-				datalen, bm->length, sendbuf[0],sendbuf[1],sendbuf[2],sendbuf[3],sendbuf[4],sendbuf[5]);
-
-	*sendcount = cursendcount;
-
-	crc = CRC16(sendbuf, datalen-2);
-	crc = htole16(crc);
-	memcpy(sendbuf+datalen-2, &crc, 2);
-
-	applog(LOG_DEBUG, "BitMain TxTask Token: v(%d) new_block(%d) diff(%d pool:%d net:%d) work_num(%d) crc(%04x)",
-						version, new_block, diff, pooldiff,netdiff, cursendcount, crc);
-	applog(LOG_DEBUG, "BitMain TxTask Token: %d %d %02x%02x%02x%02x%02x%02x",
-			datalen, bm->length, sendbuf[0],sendbuf[1],sendbuf[2],sendbuf[3],sendbuf[4],sendbuf[5]);
 
 	return datalen;
 }
@@ -966,6 +815,15 @@ static void bitmain_update_temps(struct cgpu_info *bitmain, struct bitmain_info 
 	}
 }
 
+static void bitmain_set_fifo_space(struct cgpu_info * const dev, const int fifo_space)
+{
+	struct thr_info * const master_thr = dev->thr[0];
+	struct bitmain_info * const info = dev->device_data;
+	
+	info->fifo_space = fifo_space;
+	master_thr->queue_full = !fifo_space;
+}
+
 static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info *info,
 				 struct thr_info *thr, uint8_t *buf, int *offset)
 {
@@ -999,7 +857,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			} else {
 				mutex_lock(&info->qlock);
 				info->chain_num = rxstatusdata.chain_num;
-				info->fifo_space = rxstatusdata.fifo_space;
+				bitmain_set_fifo_space(bitmain, rxstatusdata.fifo_space);
 				info->hw_version[0] = rxstatusdata.hw_version[0];
 				info->hw_version[1] = rxstatusdata.hw_version[1];
 				info->hw_version[2] = rxstatusdata.hw_version[2];
@@ -1088,7 +946,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			}
 			memcpy(&packethead, buf+i, sizeof(struct bitmain_packet_head));
 			packethead.length = htole16(packethead.length);
-			if(packethead.length > 1030) {
+			if(packethead.length > 1038) {
 				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxnonce datalen=%d error", packethead.length+4);
 				continue;
 			}
@@ -1098,9 +956,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 			if(bitmain_parse_rxnonce(buf+i, packethead.length+4, &rxnoncedata, &nonce_num) != 0) {
 				applog(LOG_ERR, "bitmain_parse_results bitmain_parse_rxnonce error len=%d", packethead.length+4);
 			} else {
+				const float nonce_diff = 1 << rxnoncedata.diff;
 				for(j = 0; j < nonce_num; j++) {
-					const int work_id = rxnoncedata.nonces[j].work_id;
-					HASH_FIND_INT(bitmain->queued_work, &work_id, work);
+					const work_device_id_t work_id = rxnoncedata.nonces[j].work_id;
+					HASH_FIND(hh, thr->work_list, &work_id, sizeof(work_id), work);
 					if(work) {
 						if(BITMAIN_TEST_PRINT_WORK) {
 							applog(LOG_ERR, "bitmain_parse_results nonce find work(%d-%d)(%08x)", work->id, rxnoncedata.nonces[j].work_id, rxnoncedata.nonces[j].nonce);
@@ -1117,9 +976,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						{
 							const uint32_t nonce = rxnoncedata.nonces[j].nonce;
 							applog(LOG_DEBUG, "BitMain: submit nonce = %08lx", (unsigned long)nonce);
+							work->nonce_diff = nonce_diff;
 							if (submit_nonce(thr, work, nonce)) {
 								mutex_lock(&info->qlock);
-								info->nonces++;
+								hashes_done2(thr, 0x100000000 * work->nonce_diff, NULL);
 								info->auto_nonces++;
 								mutex_unlock(&info->qlock);
 						 	} else {
@@ -1135,33 +995,28 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 #ifdef BITMAIN_CALC_DIFF1
 				if(opt_bitmain_hwerror) {
 					int difftmp = 0;
-					difftmp = rxnoncedata.diff;
-					idiff = 1;
-					while(difftmp > 0) {
-						difftmp--;
-						idiff = idiff << 1;
-					}
+					idiff = nonce_diff;
 					mutex_lock(&info->qlock);
 					difftmp = idiff*(rxnoncedata.total_nonce_num-info->total_nonce_num);
 					if(difftmp < 0)
 						difftmp = 0;
 
-					info->nonces = info->nonces+difftmp;
+					hashes_done2(thr, 0x100000000 * difftmp, NULL);
 					info->auto_nonces = info->auto_nonces+difftmp;
 					info->total_nonce_num = rxnoncedata.total_nonce_num;
-					info->fifo_space = rxnoncedata.fifo_space;
+					bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
 					mutex_unlock(&info->qlock);
 
 					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d diff=%d rxtnn=%"PRIu64" tnn=%"PRIu64, info->fifo_space, idiff, rxnoncedata.total_nonce_num, info->total_nonce_num);
 				} else {
 					mutex_lock(&info->qlock);
-					info->fifo_space = rxnoncedata.fifo_space;
+					bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
 					mutex_unlock(&info->qlock);
 					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d", info->fifo_space);
 				}
 #else
 				mutex_lock(&info->qlock);
-				info->fifo_space = rxnoncedata.fifo_space;
+				bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
 				mutex_unlock(&info->qlock);
 				applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d", info->fifo_space);
 #endif
@@ -1202,22 +1057,55 @@ static void bitmain_running_reset(struct cgpu_info *bitmain, struct bitmain_info
 	info->reset = false;
 }
 
-static void *bitmain_get_results(void *userdata)
+static void bitmain_poll(struct thr_info * const thr)
 {
-	struct cgpu_info *bitmain = (struct cgpu_info *)userdata;
+	struct cgpu_info *bitmain = thr->cgpu;
 	struct bitmain_info *info = bitmain->device_data;
-	int offset = 0, ret = 0;
+	int offset = info->readbuf_offset, ret = 0;
 	const int rsize = BITMAIN_FTDI_READSIZE;
-	uint8_t readbuf[BITMAIN_READBUF_SIZE];
-	struct thr_info *thr = info->thr;
-	char threadname[24];
-	int errorcount = 0;
+	uint8_t * const readbuf = info->readbuf;
 
-	snprintf(threadname, 24, "btm_recv/%d", bitmain->device_id);
-	RenameThread(threadname);
-
-	while (likely(!bitmain->shutdown)) {
+	{
 		unsigned char buf[rsize];
+
+		if (unlikely(info->reset)) {
+			bitmain_running_reset(bitmain, info);
+			/* Discard anything in the buffer */
+			offset = 0;
+		}
+
+		//cgsleep_prepare_r(&ts_start);
+		//applog(LOG_DEBUG, "======start bitmain_get_results bitmain_read");
+		ret = bitmain_read(bitmain, buf, rsize, BITMAIN_READ_TIMEOUT);
+		//applog(LOG_DEBUG, "======stop bitmain_get_results bitmain_read=%d", ret);
+
+		if ((ret < 1) || (ret == 18)) {
+			++info->errorcount2;
+#ifdef WIN32
+			if(info->errorcount2 > 200) {
+				//applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
+				cgsleep_ms(20);
+				info->errorcount2 = 0;
+			}
+#else
+			if(info->errorcount2 > 3) {
+				//applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
+				cgsleep_ms(20);
+				info->errorcount2 = 0;
+			}
+#endif
+			if(ret < 1)
+				return;
+		}
+
+		if (opt_debug) {
+			char hex[(ret * 2) + 1];
+			bin2hex(hex, buf, ret);
+			applog(LOG_DEBUG, "BitMain: get: %s", hex);
+		}
+
+		memcpy(readbuf+offset, buf, ret);
+		offset += ret;
 
 		//applog(LOG_DEBUG, "+++++++bitmain_get_results offset=%d", offset);
 
@@ -1233,53 +1121,15 @@ static void *bitmain_get_results(void *userdata)
 			offset = 0;
 		}
 
-		if (unlikely(info->reset)) {
-			bitmain_running_reset(bitmain, info);
-			/* Discard anything in the buffer */
-			offset = 0;
-		}
-
 		/* As the usb read returns after just 1ms, sleep long enough
 		 * to leave the interface idle for writes to occur, but do not
 		 * sleep if we have been receiving data as more may be coming. */
 		//if (offset == 0) {
 		//	cgsleep_ms_r(&ts_start, BITMAIN_READ_TIMEOUT);
 		//}
-
-		//cgsleep_prepare_r(&ts_start);
-		//applog(LOG_DEBUG, "======start bitmain_get_results bitmain_read");
-		ret = bitmain_read(bitmain, buf, rsize, BITMAIN_READ_TIMEOUT);
-		//applog(LOG_DEBUG, "======stop bitmain_get_results bitmain_read=%d", ret);
-
-		if ((ret < 1) || (ret == 18)) {
-			errorcount++;
-#ifdef WIN32
-			if(errorcount > 200) {
-				//applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
-				cgsleep_ms(20);
-				errorcount = 0;
-			}
-#else
-			if(errorcount > 3) {
-				//applog(LOG_ERR, "bitmain_read errorcount ret=%d", ret);
-				cgsleep_ms(20);
-				errorcount = 0;
-			}
-#endif
-			if(ret < 1)
-				continue;
-		}
-
-		if (opt_debug) {
-			char hex[(ret * 2) + 1];
-			bin2hex(hex, buf, ret);
-			applog(LOG_DEBUG, "BitMain: get: %s", hex);
-		}
-
-		memcpy(readbuf+offset, buf, ret);
-		offset += ret;
 	}
-	return NULL;
+	
+	info->readbuf_offset = offset;
 }
 
 static void bitmain_init(struct cgpu_info *bitmain)
@@ -1304,11 +1154,13 @@ static bool bitmain_prepare(struct thr_info *thr)
 	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
 		quit(1, "Failed to pthread_cond_init bitmain qcond");
 
-	if (pthread_create(&info->read_thr, NULL, bitmain_get_results, (void *)bitmain))
-		quit(1, "Failed to create bitmain read_thr");
-
+	// To initialise queue_full
+	bitmain_set_fifo_space(bitmain, info->fifo_space);
+	
 	bitmain_init(bitmain);
 
+	timer_set_now(&thr->tv_poll);
+	
 	return true;
 }
 
@@ -1390,6 +1242,7 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 							continue;
 						}
 						info->chain_num = rxstatusdata.chain_num;
+						// NOTE: This is before thr_info is allocated, so we cannot use bitmain_set_fifo_space (bitmain_prepare will re-set it for us)
 						info->fifo_space = rxstatusdata.fifo_space;
 						info->hw_version[0] = rxstatusdata.hw_version[0];
 						info->hw_version[1] = rxstatusdata.hw_version[1];
@@ -1590,204 +1443,79 @@ static void do_bitmain_close(struct thr_info *thr)
 	info->no_matching_work = 0;
 }
 
-/* We use a replacement algorithm to only remove references to work done from
- * the buffer when we need the extra space for new work. */
-static bool bitmain_fill(struct cgpu_info *bitmain)
+static uint8_t diff_to_bitmain(float diff)
 {
-	struct bitmain_info *info = bitmain->device_data;
-	int subid, slot;
-	struct work *work;
-	bool ret = true;
-	int sendret = 0, sendcount = 0, neednum = 0, queuednum = 0, sendnum = 0, sendlen = 0;
-	uint8_t sendbuf[BITMAIN_SENDBUF_SIZE];
-	int senderror = 0;
-	struct timeval now;
-	int timediff = 0;
-
-	//applog(LOG_DEBUG, "BTM bitmain_fill start--------");
-	mutex_lock(&info->qlock);
-	if(info->fifo_space <= 0) {
-		//applog(LOG_DEBUG, "BTM bitmain_fill fifo space empty--------");
-		ret = true;
-		goto out_unlock;
-	}
-	if (bitmain->queued >= BITMAIN_MAX_WORK_QUEUE_NUM) {
-		ret = true;
-	} else {
-		ret = false;
-	}
-	while(info->fifo_space > 0) {
-		neednum = info->fifo_space<BITMAIN_MAX_WORK_NUM?info->fifo_space:BITMAIN_MAX_WORK_NUM;
-		queuednum = bitmain->queued;
-		applog(LOG_DEBUG, "BTM: Work task queued(%d) fifo space(%d) needsend(%d)", queuednum, info->fifo_space, neednum);
-		if(queuednum < neednum) {
-			while(true) {
-				work = get_queued(bitmain);
-				if (unlikely(!work)) {
-					break;
-				} else {
-					applog(LOG_DEBUG, "BTM get work queued number:%d neednum:%d", queuednum, neednum);
-					subid = bitmain->queued++;
-					work->subid = subid;
-					slot = bitmain->work_array + subid;
-					if (slot > BITMAIN_ARRAY_SIZE) {
-						applog(LOG_DEBUG, "bitmain_fill array cyc %d", BITMAIN_ARRAY_SIZE);
-						slot = 0;
-					}
-					if (likely(bitmain->works[slot])) {
-						applog(LOG_DEBUG, "bitmain_fill work_completed %d", slot);
-						work_completed(bitmain, bitmain->works[slot]);
-					}
-					bitmain->works[slot] = work;
-					queuednum++;
-					if(queuednum >= neednum) {
-						break;
-					}
-				}
-			}
-		}
-		if(queuednum < BITMAIN_MAX_DEAL_QUEUE_NUM) {
-			if(queuednum < neednum) {
-				applog(LOG_DEBUG, "BTM: No enough work to send, queue num=%d", queuednum);
-				break;
-			}
-		}
-		sendnum = queuednum < neednum ? queuednum : neednum;
-		sendlen = bitmain_set_txtask(sendbuf, &(info->last_work_block), bitmain->works, BITMAIN_ARRAY_SIZE, bitmain->work_array, sendnum, &sendcount);
-		bitmain->queued -= sendnum;
-		info->send_full_space += sendnum;
-		if (bitmain->queued < 0)
-			bitmain->queued = 0;
-		if (bitmain->work_array + sendnum > BITMAIN_ARRAY_SIZE) {
-			bitmain->work_array = bitmain->work_array + sendnum-BITMAIN_ARRAY_SIZE;
-		} else {
-			bitmain->work_array += sendnum;
-		}
-		applog(LOG_DEBUG, "BTM: Send work array %d", bitmain->work_array);
-		if (sendlen > 0) {
-			info->fifo_space -= sendcount;
-			if (info->fifo_space < 0)
-				info->fifo_space = 0;
-			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
-			if (unlikely(sendret == BTM_SEND_ERROR)) {
-				applog(LOG_ERR, "BTM%i: Comms error(buffer)", bitmain->device_id);
-				//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
-				info->reset = true;
-				info->errorcount++;
-				senderror = 1;
-				if (info->errorcount > 1000) {
-					info->errorcount = 0;
-					applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread", bitmain->drv->name, bitmain->device_id);
-					bitmain->shutdown = true;
-				}
-				break;
-			} else {
-				applog(LOG_DEBUG, "bitmain_send_data send ret=%d", sendret);
-				info->errorcount = 0;
-			}
-		} else {
-			applog(LOG_DEBUG, "BTM: Send work bitmain_set_txtask error: %d", sendlen);
+	uint8_t res = 0;
+	if (diff > UINT64_MAX)
+		diff = UINT64_MAX;
+	for (uint64_t tmp = diff; tmp >>= 1; ) {
+		if (++res == UINT8_MAX)
 			break;
-		}
 	}
-
-out_unlock:
-	cgtime(&now);
-	timediff = now.tv_sec - info->last_status_time.tv_sec;
-	if(timediff < 0) timediff = -timediff;
-	if (timediff > BITMAIN_SEND_STATUS_TIME) {
-		applog(LOG_DEBUG, "BTM: Send RX Status Token fifo_space(%d) timediff(%d)", info->fifo_space, timediff);
-		copy_time(&(info->last_status_time), &now);
-
-		sendlen = bitmain_set_rxstatus((struct bitmain_rxstatus_token *) sendbuf, 0, 0, 0, 0);
-		if (sendlen > 0) {
-			sendret = bitmain_send_data(sendbuf, sendlen, bitmain);
-			if (unlikely(sendret == BTM_SEND_ERROR)) {
-				applog(LOG_ERR, "BTM%i: Comms error(buffer)", bitmain->device_id);
-				//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
-				info->reset = true;
-				info->errorcount++;
-				senderror = 1;
-				if (info->errorcount > 1000) {
-					info->errorcount = 0;
-					applog(LOG_ERR, "%s%d: Device disappeared, shutting down thread", bitmain->drv->name, bitmain->device_id);
-					bitmain->shutdown = true;
-				}
-			} else {
-				info->errorcount = 0;
-				if (info->fifo_space <= 0) {
-					senderror = 1;
-				}
-			}
-		}
-	}
-
-	if(info->send_full_space > BITMAIN_SEND_FULL_SPACE) {
-		info->send_full_space = 0;
-		ret = true;
-		cgsleep_ms(1);
-	}
-	mutex_unlock(&info->qlock);
-	if(senderror) {
-		ret = true;
-		applog(LOG_DEBUG, "bitmain_fill send task sleep");
-		//cgsleep_ms(1);
-	}
-	return ret;
+	return res;
 }
 
-static int64_t bitmain_scanhash(struct thr_info *thr)
+static bool bitmain_queue_append(struct thr_info * const thr, struct work * const work)
 {
-	struct cgpu_info *bitmain = thr->cgpu;
-	struct bitmain_info *info = bitmain->device_data;
-	const int chain_num = info->chain_num;
-	int64_t hash_count;
-
-	//applog(LOG_DEBUG, "bitmain_scanhash info->qlock start");
-	mutex_lock(&info->qlock);
-	hash_count = 0xffffffffull * (uint64_t)info->nonces;
-	bitmain->results += info->nonces + info->idle;
-	if (bitmain->results > chain_num)
-		bitmain->results = chain_num;
-	if (!info->reset)
-		bitmain->results--;
-	info->nonces = info->idle = 0;
-	mutex_unlock(&info->qlock);
-	//applog(LOG_DEBUG, "bitmain_scanhash info->qlock stop");
-
-	/* Check for nothing but consecutive bad results or consistently less
-	 * results than we should be getting and reset the FPGA if necessary */
-	//if (bitmain->results < -chain_num && !info->reset) {
-	//	applog(LOG_ERR, "BTM%d: Result return rate low, resetting!",
-	//		bitmain->device_id);
-	//	info->reset = true;
-	//}
-
-	/* This hashmeter is just a utility counter based on returned shares */
-	return hash_count;
+	struct cgpu_info * const proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
+	struct thr_info * const master_thr = dev->thr[0];
+	struct bitmain_info * const info = dev->device_data;
+	const struct pool * const pool = work->pool;
+	const struct mining_goal_info * const goal = pool->goal;
+	
+	applog(LOG_DEBUG, "%s: %s with fifo_space=%d", dev->dev_repr, __func__, info->fifo_space);
+	
+	if (!info->fifo_space) {
+		thr->queue_full = true;
+		return false;
+	}
+	
+	const size_t buflen = 4 + 0x30 + 6;
+	uint8_t buf[buflen];
+	buf[0] = BITMAIN_TOKEN_TYPE_TXTASK;
+	buf[1] = 0;  // packet version
+	pk_u16le(buf, 2, buflen - 4);  // length of data after this field (including CRC)
+	buf[4] = 0;  // set to (0x80 or 1??) to clear work queues (and skip fifo_space check above)
+	const int work_nonce_bmdiff = diff_to_bitmain(work->nonce_diff);
+	if (work_nonce_bmdiff < info->diff)
+		info->diff = work_nonce_bmdiff;
+	buf[5] = info->diff;
+	if (goal->current_diff < info->lowest_goal_diff)
+		info->lowest_goal_diff = goal->current_diff;
+	pk_u16le(buf, 6, diff_to_bitmain(info->lowest_goal_diff));
+	
+	work->device_id = info->next_work_id++;
+	pk_u32le(buf, 8, work->device_id);
+	memcpy(&buf[0xc], work->midstate, 0x20);
+	memcpy(&buf[0x2c], &work->data[0x40], 0xc);
+	
+	pk_u16le(buf, 0x38, CRC16(buf, 0x38));
+	
+	int sendret = bitmain_send_data(buf, buflen, proc);
+	if (unlikely(sendret == BTM_SEND_ERROR)) {
+		applog(LOG_ERR, "%s: Comms error(buffer)", dev->dev_repr);
+		//dev_error(bitmain, REASON_DEV_COMMS_ERROR);
+		info->reset = true;
+		info->errorcount++;
+		if (info->errorcount > 1000) {
+			info->errorcount = 0;
+			applog(LOG_ERR, "%s: Device disappeared, shutting down thread", dev->dev_repr);
+			dev->shutdown = true;
+		}
+		return false;
+	} else {
+		applog(LOG_DEBUG, "bitmain_send_data send ret=%d", sendret);
+		info->errorcount = 0;
+	}
+	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
+	--info->fifo_space;
+	return true;
 }
 
-static void bitmain_flush_work(struct cgpu_info *bitmain)
+static void bitmain_queue_flush(struct thr_info * const thr)
 {
-	struct bitmain_info *info = bitmain->device_data;
-
-	mutex_lock(&info->qlock);
-	/* Will overwrite any work queued */
-	applog(LOG_ERR, "bitmain_flush_work queued=%d array=%d", bitmain->queued, bitmain->work_array);
-	if(bitmain->queued > 0) {
-		if (bitmain->work_array + bitmain->queued > BITMAIN_ARRAY_SIZE) {
-			bitmain->work_array = bitmain->work_array + bitmain->queued-BITMAIN_ARRAY_SIZE;
-		} else {
-			bitmain->work_array += bitmain->queued;
-		}
-	}
-	bitmain->queued = 0;
-	//bitmain->work_array = 0;
-	//for (int i = 0; i < BITMAIN_ARRAY_SIZE; ++i) {
-	//	bitmain->works[i] = NULL;
-	//}
-	//pthread_cond_signal(&info->qcond);
-	mutex_unlock(&info->qlock);
+	// TODO
 }
 
 static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
@@ -2026,10 +1754,12 @@ struct device_drv bitmain_drv = {
 	.name = "BTM",
 	.drv_detect = bitmain_detect,
 	.thread_prepare = bitmain_prepare,
-	.minerloop = hash_queued_work,
-	.queue_full = bitmain_fill,
-	.scanwork = bitmain_scanhash,
-	.flush_work = bitmain_flush_work,
+	
+	.minerloop = minerloop_queue,
+	.queue_append = bitmain_queue_append,
+	.queue_flush = bitmain_queue_flush,
+	.poll = bitmain_poll,
+	
 	.get_api_stats = bitmain_api_stats,
 	.reinit_device = bitmain_init,
 	.thread_shutdown = bitmain_shutdown,
