@@ -983,12 +983,11 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 								info->auto_nonces++;
 								mutex_unlock(&info->qlock);
 						 	} else {
-						 		//bitmain_inc_nvw(info, thr);
 						 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
 						 	}
 						}
 					} else {
-						//bitmain_inc_nvw(info, thr);
+						bitmain_inc_nvw(info, thr);
 						applog(LOG_ERR, "BitMain: Nonce not find work(%d)", rxnoncedata.nonces[j].work_id);
 					}
 				}
