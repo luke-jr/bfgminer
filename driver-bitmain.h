@@ -261,6 +261,7 @@ struct bitmain_info {
 	pthread_mutex_t qlock;
 	pthread_cond_t qcond;
 	int fifo_space;
+	int max_fifo_space;
 	int hw_version[4];
 	unsigned int last_work_block;
 	struct timeval last_status_time;

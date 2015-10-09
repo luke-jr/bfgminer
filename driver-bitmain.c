@@ -820,6 +820,9 @@ static void bitmain_set_fifo_space(struct cgpu_info * const dev, const int fifo_
 	struct thr_info * const master_thr = dev->thr[0];
 	struct bitmain_info * const info = dev->device_data;
 	
+	if (unlikely(fifo_space > info->max_fifo_space))
+		info->max_fifo_space = fifo_space;
+	
 	info->fifo_space = fifo_space;
 	master_thr->queue_full = !fifo_space;
 }
@@ -1056,6 +1059,24 @@ static void bitmain_running_reset(struct cgpu_info *bitmain, struct bitmain_info
 	info->reset = false;
 }
 
+static void bitmain_prune_old_work(struct cgpu_info * const dev)
+{
+	struct thr_info * const master_thr = dev->thr[0];
+	struct bitmain_info * const info = dev->device_data;
+	
+	const size_t retain_work_items = info->max_fifo_space * 2;
+	const size_t queued_work_items = HASH_COUNT(master_thr->work_list);
+	if (queued_work_items > retain_work_items) {
+		size_t remove_work_items = queued_work_items - retain_work_items;
+		while (remove_work_items--) {
+			// Deletes the first item insertion-order
+			struct work * const work = master_thr->work_list;
+			HASH_DEL(master_thr->work_list, work);
+			free_work(work);
+		}
+	}
+}
+
 static void bitmain_poll(struct thr_info * const thr)
 {
 	struct cgpu_info *bitmain = thr->cgpu;
@@ -1129,6 +1150,8 @@ static void bitmain_poll(struct thr_info * const thr)
 	}
 	
 	info->readbuf_offset = offset;
+	
+	bitmain_prune_old_work(bitmain);
 }
 
 static void bitmain_init(struct cgpu_info *bitmain)
