@@ -239,8 +239,6 @@ int btm_write(struct cgpu_info * const cgpu, void * const buf, const size_t bufs
 	return err;
 }
 
-#define BITMAIN_CALC_DIFF1	1
-
 #ifdef WIN32
 #define BITMAIN_TEST
 #endif
@@ -836,7 +834,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 	struct work *work = NULL;
 	struct bitmain_packet_head packethead;
 	int asicnum = 0;
-	int idiff = 0;
 	int mod = 0,tmp = 0;
 
 	for (i = 0; i <= spare; i++) {
@@ -983,7 +980,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 							if (submit_nonce(thr, work, nonce)) {
 								mutex_lock(&info->qlock);
 								hashes_done2(thr, 0x100000000 * work->nonce_diff, NULL);
-								info->auto_nonces++;
 								mutex_unlock(&info->qlock);
 						 	} else {
 						 		applog(LOG_ERR, "BitMain: bitmain_decode_nonce error work(%d)", rxnoncedata.nonces[j].work_id);
@@ -994,34 +990,10 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 						applog(LOG_ERR, "BitMain: Nonce not find work(%d)", rxnoncedata.nonces[j].work_id);
 					}
 				}
-#ifdef BITMAIN_CALC_DIFF1
-				if(opt_bitmain_hwerror) {
-					int difftmp = 0;
-					idiff = nonce_diff;
-					mutex_lock(&info->qlock);
-					difftmp = idiff*(rxnoncedata.total_nonce_num-info->total_nonce_num);
-					if(difftmp < 0)
-						difftmp = 0;
-
-					hashes_done2(thr, 0x100000000 * difftmp, NULL);
-					info->auto_nonces = info->auto_nonces+difftmp;
-					info->total_nonce_num = rxnoncedata.total_nonce_num;
-					bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
-					mutex_unlock(&info->qlock);
-
-					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d diff=%d rxtnn=%"PRIu64" tnn=%"PRIu64, info->fifo_space, idiff, rxnoncedata.total_nonce_num, info->total_nonce_num);
-				} else {
-					mutex_lock(&info->qlock);
-					bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
-					mutex_unlock(&info->qlock);
-					applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d", info->fifo_space);
-				}
-#else
 				mutex_lock(&info->qlock);
 				bitmain_set_fifo_space(bitmain, rxnoncedata.fifo_space);
 				mutex_unlock(&info->qlock);
 				applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d", info->fifo_space);
-#endif
 
 #ifndef WIN32
 				if(nonce_num < BITMAIN_MAX_NONCE_NUM)
@@ -1055,7 +1027,6 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 
 static void bitmain_running_reset(struct cgpu_info *bitmain, struct bitmain_info *info)
 {
-	bitmain->results = 0;
 	info->reset = false;
 }
 
@@ -1164,17 +1135,7 @@ static bool bitmain_prepare(struct thr_info *thr)
 	struct cgpu_info *bitmain = thr->cgpu;
 	struct bitmain_info *info = bitmain->device_data;
 
-	free(bitmain->works);
-	bitmain->works = calloc(BITMAIN_MAX_WORK_NUM * sizeof(struct work *),
-			       BITMAIN_ARRAY_SIZE);
-	if (!bitmain->works)
-		quit(1, "Failed to calloc bitmain works in bitmain_prepare");
-
-	info->thr = thr;
-	mutex_init(&info->lock);
 	mutex_init(&info->qlock);
-	if (unlikely(pthread_cond_init(&info->qcond, NULL)))
-		quit(1, "Failed to pthread_cond_init bitmain qcond");
 
 	// To initialise queue_full
 	bitmain_set_fifo_space(bitmain, info->fifo_space);
@@ -1346,8 +1307,6 @@ static int bitmain_initialize(struct cgpu_info *bitmain)
 	p.tv_nsec = BITMAIN_RESET_PITCH;
 	nanosleep(&p, NULL);
 
-	cgtime(&info->last_status_time);
-
 	if(statusok) {
 		applog(LOG_ERR, "bitmain_initialize start send txconfig");
 		if(opt_bitmain_hwerror)
@@ -1459,7 +1418,6 @@ static void do_bitmain_close(struct thr_info *thr)
 	struct cgpu_info *bitmain = thr->cgpu;
 	struct bitmain_info *info = bitmain->device_data;
 
-	pthread_join(info->read_thr, NULL);
 	bitmain_running_reset(bitmain, info);
 
 	info->no_matching_work = 0;

@@ -22,11 +22,9 @@
 //#define BITMAIN_TYPE_S3
 #define BITMAIN_TYPE_S4
 
-#define BITMAIN_RESET_FAULT_DECISECONDS 1
 #define BITMAIN_MINER_THREADS 1
 
 #define BITMAIN_IO_SPEED		115200
-#define BITMAIN_HASH_TIME_FACTOR	((float)1.67/0x32)
 #define BITMAIN_RESET_PITCH	(300*1000*1000)
 
 #define BITMAIN_TOKEN_TYPE_TXCONFIG 0x51
@@ -240,7 +238,6 @@ struct bitmain_info {
 	int temp_sum;
 	int temp_old;
 	int fan_pwm;
-	uint64_t total_nonce_num;
 
 	int frequency;
 	char frequency_t[256];
@@ -254,26 +251,12 @@ struct bitmain_info {
 	int no_matching_work;
 	//int matching_work[BITMAIN_DEFAULT_CHAIN_NUM];
 
-	struct thr_info *thr;
-	pthread_t read_thr;
-	pthread_t write_thr;
-	pthread_mutex_t lock;
 	pthread_mutex_t qlock;
-	pthread_cond_t qcond;
 	int fifo_space;
 	int max_fifo_space;
 	int hw_version[4];
-	unsigned int last_work_block;
-	struct timeval last_status_time;
-	int send_full_space;
 
-	int auto_queued;
-	int auto_nonces;
-	int auto_hw;
-
-	int idle;
 	bool reset;
-	bool optimal;
 	
 	char g_miner_version[256];
 	
