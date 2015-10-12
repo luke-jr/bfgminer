@@ -264,6 +264,7 @@ struct bitmain_info {
 	uint8_t queuebuf[BITMAIN_TASK_HEADER_SIZE + (BITMAIN_MAX_WORK_NUM * BITMAIN_WORK_SIZE) + BITMAIN_TASK_FOOTER_SIZE];
 	
 	bool reset;
+	bool work_restart;
 	
 	char g_miner_version[256];
 	

@@ -80,6 +80,7 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 		
 		.diff = 255,
 		.lowest_goal_diff = 255,
+		.work_restart = true,
 	};
 	sprintf(info->frequency_t, "%d", BITMAIN_DEFAULT_FREQUENCY),
 	strcpy(info->voltage_t, BITMAIN_DEFAULT_VOLTAGE_T);
@@ -1444,7 +1445,14 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	const struct pool * const pool = work->pool;
 	const struct mining_goal_info * const goal = pool->goal;
 	
-	applog(LOG_DEBUG, "%s: %s with fifo_space=%d", dev->dev_repr, __func__, info->fifo_space);
+	applog(LOG_DEBUG, "%s: %s with fifo_space=%d (max=%d) work_restart=%d", dev->dev_repr, __func__, info->fifo_space, info->max_fifo_space, (int)info->work_restart);
+	
+	if (info->work_restart) {
+		info->work_restart = false;
+		info->ready_to_queue = 0;
+		bitmain_set_fifo_space(dev, info->max_fifo_space);
+		info->queuebuf[4] = 1;  // clear work queues
+	}
 	
 	if (!info->fifo_space) {
 		thr->queue_full = true;
@@ -1479,7 +1487,7 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	buf[0] = BITMAIN_TOKEN_TYPE_TXTASK;
 	buf[1] = 0;  // packet version
 	pk_u16le(buf, 2, buflen - 4);  // length of data after this field (including CRC)
-	buf[4] = 0;  // set to (0x80 or 1??) to clear work queues (and skip fifo_space check above)
+	// buf[4] is set to 1 to clear work queues, when the first work item is added, and reset to 0 after we send
 	buf[5] = info->diff;
 	pk_u16le(buf, 6, diff_to_bitmain(info->lowest_goal_diff));
 	
@@ -1502,6 +1510,7 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 		applog(LOG_DEBUG, "bitmain_send_data send ret=%d", sendret);
 		info->errorcount = 0;
 	}
+	buf[4] = 0;
 	info->fifo_space -= info->ready_to_queue;
 	info->ready_to_queue = 0;
 	return true;
@@ -1509,7 +1518,13 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 
 static void bitmain_queue_flush(struct thr_info * const thr)
 {
-	// TODO
+	struct cgpu_info * const proc = thr->cgpu;
+	struct cgpu_info * const dev = proc->device;
+	struct bitmain_info * const info = dev->device_data;
+	
+	// Can't use thr->work_restart as that merely triggers this function in minerloop_queue
+	info->work_restart = true;
+	thr->queue_full = false;
 }
 
 static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
