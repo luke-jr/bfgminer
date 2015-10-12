@@ -1451,26 +1451,39 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 		return false;
 	}
 	
-	const size_t buflen = 4 + 0x30 + 6;
-	uint8_t buf[buflen];
+	uint8_t * const wbuf = &info->queuebuf[BITMAIN_TASK_HEADER_SIZE + (BITMAIN_WORK_SIZE * info->ready_to_queue)];
+	const int work_nonce_bmdiff = diff_to_bitmain(work->nonce_diff);
+	if (work_nonce_bmdiff < info->diff)
+		info->diff = work_nonce_bmdiff;
+	if (goal->current_diff < info->lowest_goal_diff)
+		info->lowest_goal_diff = goal->current_diff;
+	
+	work->device_id = info->next_work_id++;
+	pk_u32le(wbuf, 0, work->device_id);
+	memcpy(&wbuf[4], work->midstate, 0x20);
+	memcpy(&wbuf[0x24], &work->data[0x40], 0xc);
+	
+	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
+	++info->ready_to_queue;
+	
+	if (!(info->ready_to_queue == BITMAIN_MAX_WORK_NUM || info->fifo_space == info->ready_to_queue || info->fifo_space == info->max_fifo_space)) {
+		applog(LOG_DEBUG, "%s: %s now has ready_to_queue=%d; deferring send", dev->dev_repr, __func__, info->ready_to_queue);
+		return true;
+	}
+	
+	applog(LOG_DEBUG, "%s: %s now has ready_to_queue=%d; sending to device", dev->dev_repr, __func__, info->ready_to_queue);
+	
+	uint8_t * const buf = info->queuebuf;
+	const size_t buflen = BITMAIN_TASK_HEADER_SIZE + (info->ready_to_queue * BITMAIN_WORK_SIZE) + BITMAIN_TASK_FOOTER_SIZE;
+	
 	buf[0] = BITMAIN_TOKEN_TYPE_TXTASK;
 	buf[1] = 0;  // packet version
 	pk_u16le(buf, 2, buflen - 4);  // length of data after this field (including CRC)
 	buf[4] = 0;  // set to (0x80 or 1??) to clear work queues (and skip fifo_space check above)
-	const int work_nonce_bmdiff = diff_to_bitmain(work->nonce_diff);
-	if (work_nonce_bmdiff < info->diff)
-		info->diff = work_nonce_bmdiff;
 	buf[5] = info->diff;
-	if (goal->current_diff < info->lowest_goal_diff)
-		info->lowest_goal_diff = goal->current_diff;
 	pk_u16le(buf, 6, diff_to_bitmain(info->lowest_goal_diff));
 	
-	work->device_id = info->next_work_id++;
-	pk_u32le(buf, 8, work->device_id);
-	memcpy(&buf[0xc], work->midstate, 0x20);
-	memcpy(&buf[0x2c], &work->data[0x40], 0xc);
-	
-	pk_u16le(buf, 0x38, CRC16(buf, 0x38));
+	pk_u16le(buf, buflen - 2, CRC16(buf, buflen - 2));
 	
 	int sendret = bitmain_send_data(buf, buflen, proc);
 	if (unlikely(sendret == BTM_SEND_ERROR)) {
@@ -1483,13 +1496,14 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 			applog(LOG_ERR, "%s: Device disappeared, shutting down thread", dev->dev_repr);
 			dev->shutdown = true;
 		}
-		return false;
+		// The work is in the queuebuf already, so we're okay-ish for that...
+		return true;
 	} else {
 		applog(LOG_DEBUG, "bitmain_send_data send ret=%d", sendret);
 		info->errorcount = 0;
 	}
-	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
-	--info->fifo_space;
+	info->fifo_space -= info->ready_to_queue;
+	info->ready_to_queue = 0;
 	return true;
 }
 

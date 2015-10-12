@@ -115,6 +115,10 @@
 #define BITMAIN_SEND_FULL_SPACE    512
 #endif
 
+#define BITMAIN_TASK_HEADER_SIZE   8
+#define BITMAIN_TASK_FOOTER_SIZE   2
+#define BITMAIN_WORK_SIZE          0x30
+
 struct bitmain_packet_head {
 	uint8_t token_type;
 	uint8_t version;
@@ -256,6 +260,9 @@ struct bitmain_info {
 	int max_fifo_space;
 	int hw_version[4];
 
+	int ready_to_queue;
+	uint8_t queuebuf[BITMAIN_TASK_HEADER_SIZE + (BITMAIN_MAX_WORK_NUM * BITMAIN_WORK_SIZE) + BITMAIN_TASK_FOOTER_SIZE];
+	
 	bool reset;
 	
 	char g_miner_version[256];
