@@ -43,6 +43,7 @@
 
 const bool opt_bitmain_hwerror = true;
 const unsigned bitmain_poll_interval_us = 10000;
+const unsigned bitmain_work_poll_prio = 1024;
 
 BFG_REGISTER_DRIVER(bitmain_drv)
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[];
@@ -1516,6 +1517,10 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	buf[4] = 0;
 	info->fifo_space -= info->ready_to_queue;
 	info->ready_to_queue = 0;
+	
+	if (info->max_fifo_space - info->fifo_space > bitmain_work_poll_prio) {
+		bitmain_poll(master_thr);
+	}
 	
 	return true;
 }
