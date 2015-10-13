@@ -1361,6 +1361,9 @@ static bool bitmain_detect_one(const char * devpath)
 	info = bitmain->device_data;
 
 	drv_set_defaults(&bitmain_drv, bitmain_set_device_funcs_init, info, devpath, NULL, 1);
+	
+	if (!info->packet_max_work)
+		return_via_applog(shin, , LOG_ERR, "%s: Device not configured (did you forget --set bitmain:model=S5 ?)", bitmain_drv.dname);
 
 	if (!btm_init(bitmain, devpath))
 		goto shin;
@@ -1478,7 +1481,7 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	HASH_ADD(hh, master_thr->work_list, device_id, sizeof(work->device_id), work);
 	++info->ready_to_queue;
 	
-	if (!(info->ready_to_queue == BITMAIN_MAX_WORK_NUM || info->fifo_space == info->ready_to_queue || info->fifo_space == info->max_fifo_space)) {
+	if (!(info->ready_to_queue >= info->packet_max_work || info->fifo_space == info->ready_to_queue || info->fifo_space == info->max_fifo_space)) {
 		applog(LOG_DEBUG, "%s: %s now has ready_to_queue=%d; deferring send", dev->dev_repr, __func__, info->ready_to_queue);
 		return true;
 	}
@@ -1745,8 +1748,31 @@ voltage_usage:
 	return NULL;
 }
 
+static bool bitmain_set_packet_max_work(struct cgpu_info * const dev, const unsigned i)
+{
+	struct bitmain_info * const info = dev->device_data;
+	uint8_t * const new_queuebuf = realloc(info->queuebuf, BITMAIN_TASK_HEADER_SIZE + (i * BITMAIN_WORK_SIZE) + BITMAIN_TASK_FOOTER_SIZE);
+	if (!new_queuebuf)
+		return false;
+	info->packet_max_work = i;
+	info->queuebuf = new_queuebuf;
+	return true;
+}
+
+static const char *bitmain_set_packet_max_work_opt(struct cgpu_info * const proc, const char * const optname, const char *newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	const int i = atoi(newvalue);
+	if (i < 1)
+		return "Invalid setting";
+	if (!bitmain_set_packet_max_work(proc->device, i))
+		return "realloc failure";
+	return NULL;
+}
+
 static const char *bitmain_set_model(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
+	struct cgpu_info * const dev = proc->device;
+	
 	if (toupper(newvalue[0]) != 'S') {
 unknown_model:
 		return "Unknown model";
@@ -1759,16 +1785,20 @@ unknown_model:
 		++endptr;
 	if (endptr[0] && !isspace(endptr[0]))
 		goto unknown_model;
+	
 	switch (Sn) {
 		case 1:
+			bitmain_set_packet_max_work(dev, 8);
 			break;
 		case 2:
+			bitmain_set_packet_max_work(dev, 0x40);
 			break;
 		case 3:
+			bitmain_set_packet_max_work(dev, 8);
 			break;
 		case 4:
-			break;
 		case 5:
+			bitmain_set_packet_max_work(dev, 0x40);
 			break;
 	}
 	return NULL;
@@ -1781,6 +1811,7 @@ static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = 
 	{"clock", bitmain_set_clock, "clock frequency"},
 	{"reg_data", bitmain_set_reg_data, "reg_data (eg: x0d82)"},
 	{"voltage", bitmain_set_voltage, "voltage (must be specified as 'x' and hex data; eg: x0725)"},
+	{"packet_max_work", bitmain_set_packet_max_work_opt, NULL},
 	{NULL},
 };
 

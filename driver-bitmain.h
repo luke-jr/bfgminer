@@ -63,7 +63,6 @@
 #define BITMAIN_LATENCY 1
 
 #ifdef BITMAIN_TYPE_S1
-#define BITMAIN_MAX_WORK_NUM       8
 #define BITMAIN_MAX_WORK_QUEUE_NUM 64
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
 #define BITMAIN_MAX_NONCE_NUM      8
@@ -76,7 +75,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S2
-#define BITMAIN_MAX_WORK_NUM       64
 #define BITMAIN_MAX_WORK_QUEUE_NUM 4096
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
 #define BITMAIN_MAX_NONCE_NUM      128
@@ -89,7 +87,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S3
-#define BITMAIN_MAX_WORK_NUM       8
 #define BITMAIN_MAX_WORK_QUEUE_NUM 1024
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 2
 #define BITMAIN_MAX_NONCE_NUM      128
@@ -102,7 +99,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S4
-#define BITMAIN_MAX_WORK_NUM       64
 #define BITMAIN_MAX_WORK_QUEUE_NUM 4096
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
 #define BITMAIN_MAX_NONCE_NUM      128
@@ -227,6 +223,8 @@ struct bitmain_info {
 	uint32_t nonce_error;
 	uint32_t last_nonce_error;
 	uint8_t reg_data[4];
+	
+	unsigned packet_max_work;  // BITMAIN_MAX_WORK_NUM
 
 	int fan_num;
 	int fan[BITMAIN_MAX_FAN_NUM];
@@ -259,7 +257,7 @@ struct bitmain_info {
 	int hw_version[4];
 
 	int ready_to_queue;
-	uint8_t queuebuf[BITMAIN_TASK_HEADER_SIZE + (BITMAIN_MAX_WORK_NUM * BITMAIN_WORK_SIZE) + BITMAIN_TASK_FOOTER_SIZE];
+	uint8_t *queuebuf;
 	
 	bool reset;
 	bool work_restart;
