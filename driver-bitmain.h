@@ -24,7 +24,6 @@
 
 #define BITMAIN_MINER_THREADS 1
 
-#define BITMAIN_IO_SPEED		115200
 #define BITMAIN_RESET_PITCH	(300*1000*1000)
 
 #define BITMAIN_TOKEN_TYPE_TXCONFIG 0x51
@@ -216,7 +215,6 @@ struct bitmain_info {
 	void *device_curl;
 	SOCKETTYPE curl_sock;
 	
-	int baud;
 	int chain_num;
 	int asic_num;
 	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];

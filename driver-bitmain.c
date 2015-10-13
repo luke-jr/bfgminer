@@ -72,7 +72,6 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 	cgpu->device_data = info;
 	
 	*info = (struct bitmain_info){
-		.baud = BITMAIN_IO_SPEED,
 		.chain_num = BITMAIN_DEFAULT_CHAIN_NUM,
 		.asic_num = BITMAIN_DEFAULT_ASIC_NUM,
 		.timeout = BITMAIN_DEFAULT_TIMEOUT,
@@ -132,7 +131,7 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 		info->device_curl = curl;
 		return true;
 	}
-	fd = serial_open(devpath, info->baud, 1, true);
+	fd = serial_open(devpath, 0, 1, false);
 	if(fd == -1) {
 		applog(LOG_DEBUG, "%s open %s error %d",
 				cgpu->drv->dname, devpath, errno);
@@ -1543,7 +1542,6 @@ static struct api_data *bitmain_api_stats(struct cgpu_info *cgpu)
 	double hwp = (cgpu->hw_errors + cgpu->diff1) ?
 			(double)(cgpu->hw_errors) / (double)(cgpu->hw_errors + cgpu->diff1) : 0;
 
-	root = api_add_int(root, "baud", &(info->baud), false);
 	root = api_add_int(root, "miner_count", &(info->chain_num), false);
 	root = api_add_int(root, "asic_count", &(info->asic_num), false);
 	root = api_add_int(root, "timeout", &(info->timeout), false);
@@ -1650,17 +1648,6 @@ static void bitmain_shutdown(struct thr_info *thr)
 }
 
 static
-const char *bitmain_set_baud(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
-{
-	struct bitmain_info *info = proc->device_data;
-	const int baud = atoi(newvalue);
-	if (!valid_baud(baud))
-		return "Invalid baud setting";
-	info->baud = baud;
-	return NULL;
-}
-
-static
 const char *bitmain_set_layout(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1758,7 +1745,6 @@ voltage_usage:
 }
 
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = {
-	{"baud", bitmain_set_baud, "serial baud rate"},
 	{"layout", bitmain_set_layout, "number of chains ':' number of ASICs per chain (eg: 32:8)"},
 	{"timeout", bitmain_set_timeout, "timeout"},
 	{"clock", bitmain_set_clock, "clock frequency"},
