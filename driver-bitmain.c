@@ -79,6 +79,7 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 		.voltage[0] = BITMAIN_DEFAULT_VOLTAGE0,
 		.voltage[1] = BITMAIN_DEFAULT_VOLTAGE1,
 		
+		.packet_max_nonce = BITMAIN_MAX_PACKET_MAX_NONCE,
 		.poll_prio_threshold = UINT_MAX,
 		
 		.diff = 255,
@@ -1000,7 +1001,7 @@ static void bitmain_parse_results(struct cgpu_info *bitmain, struct bitmain_info
 				applog(LOG_DEBUG, "bitmain_parse_rxnonce fifo space=%d", info->fifo_space);
 
 #ifndef WIN32
-				if(nonce_num < BITMAIN_MAX_NONCE_NUM)
+				if(nonce_num < info->packet_max_nonce)
 					cgsleep_ms(5);
 #endif
 			}
@@ -1771,6 +1772,17 @@ static const char *bitmain_set_packet_max_work_opt(struct cgpu_info * const proc
 }
 
 static
+const char *bitmain_set_packet_max_nonce_opt(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	const int i = atoi(newvalue);
+	if (i < 0 || i > BITMAIN_MAX_PACKET_MAX_NONCE)
+		return "Invalid setting";
+	info->packet_max_nonce = i;
+	return NULL;
+}
+
+static
 const char *bitmain_set_poll_prio_threshold_opt(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct bitmain_info *info = proc->device_data;
@@ -1802,19 +1814,23 @@ unknown_model:
 	switch (Sn) {
 		case 1:
 			bitmain_set_packet_max_work(dev, 8);
+			info->packet_max_nonce = 8;
 			info->poll_prio_threshold = 0x40;
 			break;
 		case 2:
 			bitmain_set_packet_max_work(dev, 0x40);
+			info->packet_max_nonce = 0x80;
 			info->poll_prio_threshold = 0x1000;
 			break;
 		case 3:
 			bitmain_set_packet_max_work(dev, 8);
+			info->packet_max_nonce = 0x80;
 			info->poll_prio_threshold = 0x400;
 			break;
 		case 4:
 		case 5:
 			bitmain_set_packet_max_work(dev, 0x40);
+			info->packet_max_nonce = 0x80;
 			info->poll_prio_threshold = 0x1000;
 			break;
 	}
@@ -1829,6 +1845,7 @@ static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = 
 	{"reg_data", bitmain_set_reg_data, "reg_data (eg: x0d82)"},
 	{"voltage", bitmain_set_voltage, "voltage (must be specified as 'x' and hex data; eg: x0725)"},
 	{"packet_max_work", bitmain_set_packet_max_work_opt, NULL},
+	{"packet_max_nonce", bitmain_set_packet_max_nonce_opt, NULL},
 	{"poll_prio_threshold", bitmain_set_poll_prio_threshold_opt, NULL},
 	{NULL},
 };

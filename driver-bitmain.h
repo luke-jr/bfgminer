@@ -64,7 +64,6 @@
 
 #ifdef BITMAIN_TYPE_S1
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
-#define BITMAIN_MAX_NONCE_NUM      8
 #define BITMAIN_MAX_CHAIN_NUM      8
 #define BITMAIN_MAX_TEMP_NUM       32
 #define BITMAIN_MAX_FAN_NUM        32
@@ -75,7 +74,6 @@
 
 #ifdef BITMAIN_TYPE_S2
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
-#define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      16
 #define BITMAIN_MAX_TEMP_NUM       32
 #define BITMAIN_MAX_FAN_NUM        32
@@ -86,7 +84,6 @@
 
 #ifdef BITMAIN_TYPE_S3
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 2
-#define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      8
 #define BITMAIN_MAX_TEMP_NUM       32
 #define BITMAIN_MAX_FAN_NUM        32
@@ -97,7 +94,6 @@
 
 #ifdef BITMAIN_TYPE_S4
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
-#define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      16
 #define BITMAIN_MAX_TEMP_NUM       32
 #define BITMAIN_MAX_FAN_NUM        32
@@ -109,6 +105,8 @@
 #define BITMAIN_TASK_HEADER_SIZE   8
 #define BITMAIN_TASK_FOOTER_SIZE   2
 #define BITMAIN_WORK_SIZE          0x30
+
+#define BITMAIN_MAX_PACKET_MAX_NONCE  0x80
 
 struct bitmain_packet_head {
 	uint8_t token_type;
@@ -199,7 +197,7 @@ struct bitmain_rxnonce_data {
 	uint16_t fifo_space;
 	uint16_t diff;
 	uint64_t total_nonce_num;
-	struct bitmain_rxnonce_nonce nonces[BITMAIN_MAX_NONCE_NUM];
+	struct bitmain_rxnonce_nonce nonces[BITMAIN_MAX_PACKET_MAX_NONCE];
 	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
@@ -222,6 +220,7 @@ struct bitmain_info {
 	
 	unsigned packet_max_work;  // BITMAIN_MAX_WORK_NUM
 	unsigned poll_prio_threshold;  // BITMAIN_MAX_WORK_QUEUE_NUM
+	unsigned packet_max_nonce;     // BITMAIN_MAX_NONCE_NUM
 
 	int fan_num;
 	int fan[BITMAIN_MAX_FAN_NUM];
