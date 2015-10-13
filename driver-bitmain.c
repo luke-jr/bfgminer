@@ -42,6 +42,7 @@
 #include "util.h"
 
 const bool opt_bitmain_hwerror = true;
+const unsigned bitmain_poll_interval_us = 10000;
 
 BFG_REGISTER_DRIVER(bitmain_drv)
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[];
@@ -1124,6 +1125,8 @@ static void bitmain_poll(struct thr_info * const thr)
 	info->readbuf_offset = offset;
 	
 	bitmain_prune_old_work(bitmain);
+	
+	timer_set_delay_from_now(&thr->tv_poll, bitmain_poll_interval_us);
 }
 
 static void bitmain_init(struct cgpu_info *bitmain)
@@ -1513,6 +1516,7 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	buf[4] = 0;
 	info->fifo_space -= info->ready_to_queue;
 	info->ready_to_queue = 0;
+	
 	return true;
 }
 
