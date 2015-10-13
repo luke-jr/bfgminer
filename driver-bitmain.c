@@ -10,6 +10,7 @@
 
 #include "config.h"
 
+#include <ctype.h>
 #include <limits.h>
 #include <math.h>
 #include <pthread.h>
@@ -1744,7 +1745,37 @@ voltage_usage:
 	return NULL;
 }
 
+static const char *bitmain_set_model(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	if (toupper(newvalue[0]) != 'S') {
+unknown_model:
+		return "Unknown model";
+	}
+	char *endptr;
+	long Sn = strtol(&newvalue[1], &endptr, 10);
+	if (Sn < 1 || Sn > 5)
+		goto unknown_model;
+	if (Sn == 5 && endptr[0] == '+')
+		++endptr;
+	if (endptr[0] && !isspace(endptr[0]))
+		goto unknown_model;
+	switch (Sn) {
+		case 1:
+			break;
+		case 2:
+			break;
+		case 3:
+			break;
+		case 4:
+			break;
+		case 5:
+			break;
+	}
+	return NULL;
+}
+
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = {
+	{"model", bitmain_set_model, "model of unit (S1-S5)"},
 	{"layout", bitmain_set_layout, "number of chains ':' number of ASICs per chain (eg: 32:8)"},
 	{"timeout", bitmain_set_timeout, "timeout"},
 	{"clock", bitmain_set_clock, "clock frequency"},
