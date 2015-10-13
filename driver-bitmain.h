@@ -230,6 +230,7 @@ struct bitmain_rxnonce_data {
 
 struct bitmain_info {
 	void *device_curl;
+	SOCKETTYPE curl_sock;
 	
 	int baud;
 	int chain_num;

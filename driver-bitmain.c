@@ -89,6 +89,14 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 	return cgpu;
 }
 
+static curl_socket_t bitmain_grab_socket_opensocket_cb(void *clientp, __maybe_unused curlsocktype purpose, struct curl_sockaddr *addr)
+{
+	struct bitmain_info * const info = clientp;
+	curl_socket_t sck = bfg_socket(addr->family, addr->socktype, addr->protocol);
+	info->curl_sock = sck;
+	return sck;
+}
+
 static
 bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 {
@@ -102,6 +110,12 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 		CURL *curl = curl_easy_init();
 		if (!curl)
 			applogr(false, LOG_ERR, "%s: curl_easy_init failed", cgpu->drv->dname);
+		
+		// CURLINFO_LASTSOCKET is broken on Win64 (which has a wider SOCKET type than curl_easy_getinfo returns), so we use this hack for now
+		info->curl_sock = -1;
+		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, bitmain_grab_socket_opensocket_cb);
+		curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, info);
+		
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
 		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
 		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
@@ -152,12 +166,17 @@ void btm_uninit(struct cgpu_info *cgpu)
 	}
 }
 
-bool bitmain_curl_all(void *func_p, CURL * const curl, void *p, size_t remsz)
+bool bitmain_curl_all(const bool is_recv, const int fd, CURL * const curl, void *p, size_t remsz)
 {
-	CURLcode (*func)(CURL *, void *, size_t, size_t *) = func_p;
+	CURLcode (* const func)(CURL *, void *, size_t, size_t *) = is_recv ? (void*)curl_easy_recv : (void*)curl_easy_send;
 	CURLcode r;
 	size_t sz;
 	while (remsz) {
+		fd_set otherfds, thisfds;
+		FD_ZERO(&otherfds);
+		FD_ZERO(&thisfds);
+		FD_SET(fd, &thisfds);
+		select(fd + 1, is_recv ? &thisfds : &otherfds, is_recv ? &otherfds : &thisfds, &thisfds, NULL);
 		r = func(curl, p, remsz, &sz);
 		switch (r) {
 			case CURLE_OK:
@@ -183,14 +202,14 @@ int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsi
 		uint8_t headbuf[5];
 		headbuf[0] = 0;
 		pk_u32be(headbuf, 1, bufsize);
-		if (!bitmain_curl_all(curl_easy_send, info->device_curl, headbuf, sizeof(headbuf)))
+		if (!bitmain_curl_all(false, info->curl_sock, info->device_curl, headbuf, sizeof(headbuf)))
 			return -1;
-		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, headbuf, 4))
+		if (!bitmain_curl_all( true, info->curl_sock, info->device_curl, headbuf, 4))
 			return -1;
 		if (headbuf[0] == 0xff && headbuf[1] == 0xff && headbuf[2] == 0xff && headbuf[3] == 0xff)
 			return -1;
 		size_t sz = upk_u32be(headbuf, 0);
-		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, buf, sz))
+		if (!bitmain_curl_all( true, info->curl_sock, info->device_curl, buf, sz))
 			return -1;
 		return sz;
 	}
@@ -208,11 +227,11 @@ int btm_write(struct cgpu_info * const cgpu, void * const buf, const size_t bufs
 		uint8_t headbuf[5];
 		headbuf[0] = 1;
 		pk_u32be(headbuf, 1, bufsize);
-		if (!bitmain_curl_all(curl_easy_send, info->device_curl, headbuf, sizeof(headbuf)))
+		if (!bitmain_curl_all(false, info->curl_sock, info->device_curl, headbuf, sizeof(headbuf)))
 			return -1;
-		if (!bitmain_curl_all(curl_easy_send, info->device_curl, buf, bufsize))
+		if (!bitmain_curl_all(false, info->curl_sock, info->device_curl, buf, bufsize))
 			return -1;
-		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, headbuf, 4))
+		if (!bitmain_curl_all( true, info->curl_sock, info->device_curl, headbuf, 4))
 			return -1;
 		if (headbuf[0] == 0xff && headbuf[1] == 0xff && headbuf[2] == 0xff && headbuf[3] == 0xff)
 			return -1;
