@@ -13,6 +13,8 @@
 
 #ifdef USE_BITMAIN
 
+#include <curl/curl.h>
+
 #include "util.h"
 
 //#define BITMAIN_TYPE_S1
@@ -227,6 +229,8 @@ struct bitmain_rxnonce_data {
 } __attribute__((packed, aligned(4)));
 
 struct bitmain_info {
+	void *device_curl;
+	
 	int baud;
 	int chain_num;
 	int asic_num;

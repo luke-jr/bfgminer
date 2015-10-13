@@ -32,6 +32,7 @@
   #include <io.h>
 #endif
 
+#include <curl/curl.h>
 #include <uthash.h>
 
 #include "deviceapi.h"
@@ -51,6 +52,8 @@ static inline unsigned int bfg_work_block(struct work * const work)
 }
 
 #define htole8(x) (x)
+
+#define BITMAIN_USING_CURL  -2
 
 static
 struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
@@ -95,6 +98,25 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 		return false;
 	}
 	struct bitmain_info *info = cgpu->device_data;
+	if (!strncmp(devpath, "ip:", 3)) {
+		CURL *curl = curl_easy_init();
+		if (!curl)
+			applogr(false, LOG_ERR, "%s: curl_easy_init failed", cgpu->drv->dname);
+		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+		curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5);
+		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+		curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
+		curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 1);
+		curl_easy_setopt(curl, CURLOPT_URL, &devpath[3]);
+		if (curl_easy_perform(curl)) {
+			curl_easy_cleanup(curl);
+			applogr(false, LOG_ERR, "%s: curl_easy_perform failed for %s", cgpu->drv->dname, &devpath[3]);
+		}
+		cgpu->device_path = strdup(devpath);
+		cgpu->device_fd = BITMAIN_USING_CURL;
+		info->device_curl = curl;
+		return true;
+	}
 	fd = serial_open(devpath, info->baud, 1, true);
 	if(fd == -1) {
 		applog(LOG_DEBUG, "%s open %s error %d",
@@ -110,6 +132,8 @@ bool btm_init(struct cgpu_info *cgpu, const char * devpath)
 static
 void btm_uninit(struct cgpu_info *cgpu)
 {
+	struct bitmain_info * const info = cgpu->device_data;
+	
 	applog(LOG_DEBUG, "BTM uninit %s%i", cgpu->drv->name, cgpu->device_fd);
 
 	// May have happened already during a failed initialisation
@@ -118,10 +142,35 @@ void btm_uninit(struct cgpu_info *cgpu)
 		serial_close(cgpu->device_fd);
 		cgpu->device_fd = -1;
 	}
+	if (info->device_curl) {
+		curl_easy_cleanup(info->device_curl);
+		info->device_curl = NULL;
+	}
 	if(cgpu->device_path) {
 		free((char*)cgpu->device_path);
 		cgpu->device_path = NULL;
 	}
+}
+
+bool bitmain_curl_all(void *func_p, CURL * const curl, void *p, size_t remsz)
+{
+	CURLcode (*func)(CURL *, void *, size_t, size_t *) = func_p;
+	CURLcode r;
+	size_t sz;
+	while (remsz) {
+		r = func(curl, p, remsz, &sz);
+		switch (r) {
+			case CURLE_OK:
+				remsz -= sz;
+				p += sz;
+				break;
+			case CURLE_AGAIN:
+				break;
+			default:
+				return false;
+		}
+	}
+	return true;
 }
 
 static
@@ -129,6 +178,22 @@ int btm_read(struct cgpu_info * const cgpu, void * const buf, const size_t bufsi
 {
 	int err = 0;
 	//applog(LOG_DEBUG, "btm_read ----- %d -----", bufsize);
+	if (unlikely(cgpu->device_fd == BITMAIN_USING_CURL)) {
+		struct bitmain_info * const info = cgpu->device_data;
+		uint8_t headbuf[5];
+		headbuf[0] = 0;
+		pk_u32be(headbuf, 1, bufsize);
+		if (!bitmain_curl_all(curl_easy_send, info->device_curl, headbuf, sizeof(headbuf)))
+			return -1;
+		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, headbuf, 4))
+			return -1;
+		if (headbuf[0] == 0xff && headbuf[1] == 0xff && headbuf[2] == 0xff && headbuf[3] == 0xff)
+			return -1;
+		size_t sz = upk_u32be(headbuf, 0);
+		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, buf, sz))
+			return -1;
+		return sz;
+	}
 	err = read(cgpu->device_fd, buf, bufsize);
 	return err;
 }
@@ -138,6 +203,21 @@ int btm_write(struct cgpu_info * const cgpu, void * const buf, const size_t bufs
 {
 	int err = 0;
 	//applog(LOG_DEBUG, "btm_write ----- %d -----", bufsize);
+	if (unlikely(cgpu->device_fd == BITMAIN_USING_CURL)) {
+		struct bitmain_info * const info = cgpu->device_data;
+		uint8_t headbuf[5];
+		headbuf[0] = 1;
+		pk_u32be(headbuf, 1, bufsize);
+		if (!bitmain_curl_all(curl_easy_send, info->device_curl, headbuf, sizeof(headbuf)))
+			return -1;
+		if (!bitmain_curl_all(curl_easy_send, info->device_curl, buf, bufsize))
+			return -1;
+		if (!bitmain_curl_all(curl_easy_recv, info->device_curl, headbuf, 4))
+			return -1;
+		if (headbuf[0] == 0xff && headbuf[1] == 0xff && headbuf[2] == 0xff && headbuf[3] == 0xff)
+			return -1;
+		return upk_u32be(headbuf, 0);
+	}
 	err = write(cgpu->device_fd, buf, bufsize);
 	return err;
 }
