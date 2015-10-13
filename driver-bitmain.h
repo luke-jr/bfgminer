@@ -64,9 +64,6 @@
 
 #ifdef BITMAIN_TYPE_S1
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
-#define BITMAIN_MAX_CHAIN_NUM      8
-#define BITMAIN_MAX_TEMP_NUM       32
-#define BITMAIN_MAX_FAN_NUM        32
 #define BITMAIN_ARRAY_SIZE         16384
 #define BITMAIN_SEND_STATUS_TIME   10 //s
 #define BITMAIN_SEND_FULL_SPACE    128
@@ -74,9 +71,6 @@
 
 #ifdef BITMAIN_TYPE_S2
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
-#define BITMAIN_MAX_CHAIN_NUM      16
-#define BITMAIN_MAX_TEMP_NUM       32
-#define BITMAIN_MAX_FAN_NUM        32
 #define BITMAIN_ARRAY_SIZE         16384
 #define BITMAIN_SEND_STATUS_TIME   15 //s
 #define BITMAIN_SEND_FULL_SPACE    512
@@ -84,9 +78,6 @@
 
 #ifdef BITMAIN_TYPE_S3
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 2
-#define BITMAIN_MAX_CHAIN_NUM      8
-#define BITMAIN_MAX_TEMP_NUM       32
-#define BITMAIN_MAX_FAN_NUM        32
 #define BITMAIN_ARRAY_SIZE         16384
 #define BITMAIN_SEND_STATUS_TIME   15 //s
 #define BITMAIN_SEND_FULL_SPACE    256
@@ -94,19 +85,20 @@
 
 #ifdef BITMAIN_TYPE_S4
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
-#define BITMAIN_MAX_CHAIN_NUM      16
-#define BITMAIN_MAX_TEMP_NUM       32
-#define BITMAIN_MAX_FAN_NUM        32
 #define BITMAIN_ARRAY_SIZE         16384*2
 #define BITMAIN_SEND_STATUS_TIME   15 //s
 #define BITMAIN_SEND_FULL_SPACE    512
 #endif
+
+#define BITMAIN_MAX_CHAIN_NUM      16
 
 #define BITMAIN_TASK_HEADER_SIZE   8
 #define BITMAIN_TASK_FOOTER_SIZE   2
 #define BITMAIN_WORK_SIZE          0x30
 
 #define BITMAIN_MAX_PACKET_MAX_NONCE  0x80
+#define BITMAIN_MAX_TEMP_NUM       32
+#define BITMAIN_MAX_FAN_NUM        32
 
 struct bitmain_packet_head {
 	uint8_t token_type;
