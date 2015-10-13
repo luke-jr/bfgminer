@@ -63,7 +63,6 @@
 #define BITMAIN_LATENCY 1
 
 #ifdef BITMAIN_TYPE_S1
-#define BITMAIN_MAX_WORK_QUEUE_NUM 64
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 1
 #define BITMAIN_MAX_NONCE_NUM      8
 #define BITMAIN_MAX_CHAIN_NUM      8
@@ -75,7 +74,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S2
-#define BITMAIN_MAX_WORK_QUEUE_NUM 4096
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
 #define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      16
@@ -87,7 +85,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S3
-#define BITMAIN_MAX_WORK_QUEUE_NUM 1024
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 2
 #define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      8
@@ -99,7 +96,6 @@
 #endif
 
 #ifdef BITMAIN_TYPE_S4
-#define BITMAIN_MAX_WORK_QUEUE_NUM 4096
 #define BITMAIN_MAX_DEAL_QUEUE_NUM 32
 #define BITMAIN_MAX_NONCE_NUM      128
 #define BITMAIN_MAX_CHAIN_NUM      16
@@ -225,6 +221,7 @@ struct bitmain_info {
 	uint8_t reg_data[4];
 	
 	unsigned packet_max_work;  // BITMAIN_MAX_WORK_NUM
+	unsigned poll_prio_threshold;  // BITMAIN_MAX_WORK_QUEUE_NUM
 
 	int fan_num;
 	int fan[BITMAIN_MAX_FAN_NUM];

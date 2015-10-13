@@ -44,7 +44,6 @@
 
 const bool opt_bitmain_hwerror = true;
 const unsigned bitmain_poll_interval_us = 10000;
-const unsigned bitmain_work_poll_prio = 1024;
 
 BFG_REGISTER_DRIVER(bitmain_drv)
 static const struct bfg_set_device_definition bitmain_set_device_funcs_init[];
@@ -79,6 +78,8 @@ struct cgpu_info *btm_alloc_cgpu(struct device_drv *drv, int threads)
 		.frequency = BITMAIN_DEFAULT_FREQUENCY,
 		.voltage[0] = BITMAIN_DEFAULT_VOLTAGE0,
 		.voltage[1] = BITMAIN_DEFAULT_VOLTAGE1,
+		
+		.poll_prio_threshold = UINT_MAX,
 		
 		.diff = 255,
 		.lowest_goal_diff = 255,
@@ -1521,7 +1522,7 @@ static bool bitmain_queue_append(struct thr_info * const thr, struct work * cons
 	info->fifo_space -= info->ready_to_queue;
 	info->ready_to_queue = 0;
 	
-	if (info->max_fifo_space - info->fifo_space > bitmain_work_poll_prio) {
+	if (info->max_fifo_space - info->fifo_space > info->poll_prio_threshold) {
 		bitmain_poll(master_thr);
 	}
 	
@@ -1769,9 +1770,21 @@ static const char *bitmain_set_packet_max_work_opt(struct cgpu_info * const proc
 	return NULL;
 }
 
+static
+const char *bitmain_set_poll_prio_threshold_opt(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct bitmain_info *info = proc->device_data;
+	const int i = atoi(newvalue);
+	if (i < 0)
+		return "Invalid setting";
+	info->poll_prio_threshold = i;
+	return NULL;
+}
+
 static const char *bitmain_set_model(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	struct cgpu_info * const dev = proc->device;
+	struct bitmain_info * const info = dev->device_data;
 	
 	if (toupper(newvalue[0]) != 'S') {
 unknown_model:
@@ -1789,16 +1802,20 @@ unknown_model:
 	switch (Sn) {
 		case 1:
 			bitmain_set_packet_max_work(dev, 8);
+			info->poll_prio_threshold = 0x40;
 			break;
 		case 2:
 			bitmain_set_packet_max_work(dev, 0x40);
+			info->poll_prio_threshold = 0x1000;
 			break;
 		case 3:
 			bitmain_set_packet_max_work(dev, 8);
+			info->poll_prio_threshold = 0x400;
 			break;
 		case 4:
 		case 5:
 			bitmain_set_packet_max_work(dev, 0x40);
+			info->poll_prio_threshold = 0x1000;
 			break;
 	}
 	return NULL;
@@ -1812,6 +1829,7 @@ static const struct bfg_set_device_definition bitmain_set_device_funcs_init[] = 
 	{"reg_data", bitmain_set_reg_data, "reg_data (eg: x0d82)"},
 	{"voltage", bitmain_set_voltage, "voltage (must be specified as 'x' and hex data; eg: x0725)"},
 	{"packet_max_work", bitmain_set_packet_max_work_opt, NULL},
+	{"poll_prio_threshold", bitmain_set_poll_prio_threshold_opt, NULL},
 	{NULL},
 };
 
