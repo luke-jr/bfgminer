@@ -151,6 +151,8 @@ BFGMiner driver configuration options:
 	                        enabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--enable-bitmain        Compile support for Bitmain Antminer S* series
+	                        (default disabled)
 	--disable-cointerra     Compile support for CoinTerra (default enabled)
 	--enable-cpumining      Compile support for CPU mining (default disabled)
 	--disable-drillbit      Compile support for DrillBit (default enabled)
