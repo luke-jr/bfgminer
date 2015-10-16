@@ -1115,6 +1115,8 @@ extern void adjust_quota_gcd(void);
 extern struct pool *add_pool2(struct mining_goal_info *);
 #define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern int bfg_strategy_parse(const char *strategy);
+extern bool bfg_strategy_change(int strategy, const char *param);
 
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
