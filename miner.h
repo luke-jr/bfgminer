@@ -947,6 +947,8 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
+extern float request_pdiff;
+extern double request_bdiff;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
