@@ -359,6 +359,8 @@ The list of requests - a (*) means it requires privileged access - and replies:
                                                        0 to 9999)
                               coinbase-sig (string)
                               http-port (valid port number)
+                              strategy (name of valid strategy, and optional
+                                        number of minutes if rotate)
                               stratum-port (valid port number)
 
  pgaset|N,opt[,val] (*)
@@ -450,6 +452,13 @@ https://www.npmjs.org/package/miner-rpc
 
 Feature Changelog for external applications using the API:
 
+
+API V3.4 (BFGMiner v5.4.0)
+
+Modified API commands:
+ 'setconfig' - add 'strategy'
+
+---------
 
 API V3.3 (BFGMiner v5.0.0)
 

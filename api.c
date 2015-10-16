@@ -311,6 +311,8 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
 
+#define MSG_INVSTRATEGY 0x102
+
 #define USE_ALTMSG 0x4000
 
 enum code_severity {
@@ -462,6 +464,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
+ { SEVERITY_ERR,   MSG_INVSTRATEGY,	PARAM_STR,	"Invalid strategy for '%s'" },
  { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
@@ -3224,7 +3227,26 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		message(io_data, MSG_SETCONFIG, 1, param, isjson);
 		return;
 	}
+	else
 #endif
+	if (strcasecmp(param, "strategy") == 0) {
+		char * const strategy_name = comma;
+		comma = strchr(strategy_name, ',');
+		if (comma) {
+			*(comma++) = '\0';
+		}
+		value = bfg_strategy_parse(strategy_name);
+		if (value < 0) {
+			message(io_data, MSG_INVSTRATEGY, 0, param, isjson);
+			return;
+		}
+		if (!bfg_strategy_change(value, comma)) {
+			message(io_data, MSG_INVNUM, atoi(comma), param, isjson);
+			return;
+		}
+		message(io_data, MSG_SETCONFIG, value, param, isjson);
+		return;
+	}
 
 	value = atoi(comma);
 	if (value < 0 || value > 9999) {
