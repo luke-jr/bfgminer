@@ -1315,6 +1315,8 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "ADL", (char *)adl, false);
 	root = api_add_string(root, "ADL in use", adlinuse, false);
 	root = api_add_const(root, "Strategy", strategies[pool_strategy].s, false);
+	if (pool_strategy == POOL_ROTATE)
+		root = api_add_int(root, "Rotate Period", &opt_rotate_period, false);
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	
 	strcpy(buf, ""

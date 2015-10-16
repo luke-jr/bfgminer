@@ -156,6 +156,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               ADL=X, <- Y or N if ADL is compiled in the code
                               ADL in use=X, <- Y or N if any GPU has ADL
                               Strategy=Name, <- the current pool strategy
+                              Rotate Period=N, <- rotate strategy period
                               Log Interval=N, <- log interval (--log N)
                               Device Code=GPU ICA , <- spaced list of compiled
                                                        device drivers
@@ -456,6 +457,7 @@ Feature Changelog for external applications using the API:
 API V3.4 (BFGMiner v5.4.0)
 
 Modified API commands:
+ 'config' - add 'Rotate Period'
  'setconfig' - add 'strategy'
 
 ---------
