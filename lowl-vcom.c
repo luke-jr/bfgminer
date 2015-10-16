@@ -1110,20 +1110,27 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
 	comCfg.dcb.ByteSize = 8;
 
-	SetCommConfig(hSerial, &comCfg, sizeof(comCfg));
+		if (!SetCommConfig(hSerial, &comCfg, sizeof(comCfg)))
+			// FIXME: We should probably be setting even if baud is clear (in which case, only LOG_DEBUG this)
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "SetCommConfig", bfg_strerror(GetLastError(), BST_SYSTEM));
 
 	}
 
 	// Code must specify a valid timeout value (0 means don't timeout)
 	const DWORD ctoms = ((DWORD)timeout * 100);
 	COMMTIMEOUTS cto = {ctoms, 0, ctoms, 0, ctoms};
-	SetCommTimeouts(hSerial, &cto);
+	if (!SetCommTimeouts(hSerial, &cto))
+		applog(timeout ? LOG_WARNING : LOG_DEBUG, "%s: %s failed: %s", devpath, "SetCommTimeouts", bfg_strerror(GetLastError(), BST_SYSTEM));
 
 	if (purge) {
-		PurgeComm(hSerial, PURGE_RXABORT);
-		PurgeComm(hSerial, PURGE_TXABORT);
-		PurgeComm(hSerial, PURGE_RXCLEAR);
-		PurgeComm(hSerial, PURGE_TXCLEAR);
+		if (!PurgeComm(hSerial, PURGE_RXABORT))
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "PURGE_RXABORT", bfg_strerror(GetLastError(), BST_SYSTEM));
+		if (!PurgeComm(hSerial, PURGE_TXABORT))
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "PURGE_TXABORT", bfg_strerror(GetLastError(), BST_SYSTEM));
+		if (!PurgeComm(hSerial, PURGE_RXCLEAR))
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "PURGE_RXCLEAR", bfg_strerror(GetLastError(), BST_SYSTEM));
+		if (!PurgeComm(hSerial, PURGE_TXCLEAR))
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "PURGE_TXCLEAR", bfg_strerror(GetLastError(), BST_SYSTEM));
 	}
 
 	return _open_osfhandle((intptr_t)hSerial, 0);
@@ -1156,7 +1163,10 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 
 	struct termios my_termios;
 
-	tcgetattr(fdDev, &my_termios);
+	if (tcgetattr(fdDev, &my_termios))
+		applog(baud ? LOG_WARNING : LOG_DEBUG, "%s: %s failed: %s", devpath, "tcgetattr", bfg_strerror(errno, BST_ERRNO));
+	else
+	{
 
 #ifdef TERMIOS_DEBUG
 	termios_debug(devpath, &my_termios, "before");
@@ -1195,15 +1205,21 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	termios_debug(devpath, &my_termios, "settings");
 #endif
 
-	tcsetattr(fdDev, TCSANOW, &my_termios);
+		if (tcsetattr(fdDev, TCSANOW, &my_termios))
+			applog(baud ? LOG_WARNING : LOG_DEBUG, "%s: %s failed: %s", devpath, "tcsetattr", bfg_strerror(errno, BST_ERRNO));
 
 #ifdef TERMIOS_DEBUG
 	tcgetattr(fdDev, &my_termios);
 	termios_debug(devpath, &my_termios, "after");
 #endif
 
+	}
+
 	if (purge)
-		tcflush(fdDev, TCIOFLUSH);
+	{
+		if (tcflush(fdDev, TCIOFLUSH))
+			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "tcflush", bfg_strerror(errno, BST_ERRNO));
+	}
 	return fdDev;
 #endif
 }
