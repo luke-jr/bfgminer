@@ -350,6 +350,7 @@ The list of requests - a (*) means it requires privileged access - and replies a
                               queue, scantime, expiry (integer in the range
                                                        0 to 9999)
                               coinbase-sig (string)
+                              http-port (valid port number)
 
  pgaset|N,opt[,val] (*)
                none           There is no reply section just the STATUS section
