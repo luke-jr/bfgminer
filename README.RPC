@@ -387,6 +387,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                               queue, scantime, expiry (integer in the range
                                                        0 to 9999)
                               coinbase-sig (string)
+                              http-port (valid port number)
 
  pgaset|N,opt[,val] (*)
                none           This is equivalent to PROCSET on the first
