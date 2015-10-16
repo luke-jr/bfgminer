@@ -296,6 +296,7 @@ void antminer_drv_init()
 	++antminer_drv.probe_priority;
 	
 	compac_drv = antminer_drv;
+	compac_drv.dname = "compac";
 	compac_drv.name = "CBM";
 	compac_drv.lowl_match = compac_lowl_match;
 	compac_drv.lowl_probe = compac_lowl_probe;
