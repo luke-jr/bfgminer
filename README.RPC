@@ -365,6 +365,7 @@ The list of requests - a (*) means it requires privileged access - and replies:
                                                        0 to 9999)
                               coinbase-sig (string)
                               http-port (valid port number)
+                              stratum-port (valid port number)
 
  pgaset|N,opt[,val] (*)
                none           There is no reply section just the STATUS section
@@ -445,6 +446,13 @@ api-example.py - a Python script to access the API
 
 Feature Changelog for external applications using the API:
 
+
+API V1.25.4 (BFGMiner v3.3.0)
+
+Modified API commands:
+ 'setconfig' - add 'stratum-port' number
+
+----------
 
 API V1.25.3 (BFGMiner v3.2.0)
 
