@@ -12,21 +12,16 @@ ANTMINER U3
 The U3 does not support autodetection, so you will want to use --scan-serial to
 manually probe it. For example, to scan all devices, you can use:
 
--S antminer:all
+-S antminer:all --set antminer:chip=BM1382
 
 Additionally, for optimal performance you will need to set voltage, clock, and
-timing. Neither voltage nor clock for the U3 are documented by the manufacturer,
-thus must be provided as hexadecimal configuration codes. Timing is provided in
-the number of nanoseconds each hash takes at the given configuration. A
+timing. Voltage format for the U3 is not documented by the manufacturer, thus
+must be provided as hexadecimal configuration codes. Timing is provided in the
+number of nanoseconds each hash takes at the given configuration. A
 known-working configuration is:
 
---set antminer:voltage=x800 --set antminer:clock=x1286 --set antminer:timing=0.022421
-
-Some valid values for clock setting are:
-    x0783 for 100 MHz, x0983 for 125 MHz, x0b83 for 150 MHz, x0d83 for 175 MHz,
-    x0782 for 200 MHz, x0882 for 225 MHz, x0982 for 250 MHz, x0a82 for 275 MHz,
-    x0b82 for 300 MHz, x0c82 for 325 MHz, x0d82 for 350 MHz, x0e82 for 375 MHz,
-    and x08f2 for 400 MHz
+--set antminer:voltage=x800 --set antminer:clock=237.5
+--set antminer:timing=0.022421
 
 
 AVALON 1
@@ -187,9 +182,7 @@ COMPAC
 These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
 driver. You can set the clock frequency with
 
---set compac:clock=x0782
-
-The same values for Antminer U3 (above) are valid for the BM1384.
+--set compac:clock=200
 
 
 HEX*FURY
