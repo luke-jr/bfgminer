@@ -3162,6 +3162,21 @@ bool auth_stratum(struct pool *pool)
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
+	
+	if (uri_get_param_bool(pool->rpc_url, "cksuggest", false)) {
+		unsigned long req_bdiff = request_bdiff;
+		
+		const char *q = uri_find_param(pool->rpc_url, "cksuggest", NULL);
+		if (q && q != URI_FIND_PARAM_FOUND) {
+			req_bdiff = atoi(q);
+		}
+		
+		if (req_bdiff) {
+			int sz = snprintf(s, sizeof(s), "{\"id\": null, \"method\": \"mining.suggest_difficulty\", \"params\": [%lu]}", req_bdiff);
+			stratum_send(pool, s, sz);
+		}
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -3340,7 +3355,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	bool trysuggest = request_target_str;
+	bool trysuggest = request_target_str && !uri_get_param_bool(pool->rpc_url, "cksuggest", false);
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
