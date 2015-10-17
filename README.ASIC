@@ -7,14 +7,14 @@ boards, GekkoScience's Compac USB stick, Klondike modules, and KnCMiner's
 Mercury, Jupiter and Saturn.
 
 
-ANTMINER S5
------------
+ANTMINER S1-S5
+--------------
 
-BFGMiner must be compiled for and run on the S5's embedded BeagleBone Black
-controller. When configuring, use the --enable-bitmain option to build the
-'bitmain' driver used to interface with this hardware. None of the device
-attributes are autodetected at this time, so you must also tell BFGMiner this
-at runtime with a series of --set options. For example:
+BFGMiner must be compiled for and run on the embedded controller. When
+configuring, use the --enable-bitmain option to build the 'bitmain' driver used
+to interface with this hardware. None of the device attributes are autodetected
+at this time, so you must also tell BFGMiner this at runtime with a series of
+--set options. For example:
 
 -S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
 --set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
@@ -47,9 +47,9 @@ voltage. You can probably use either one, but the 350 MHz clock performs
 better than the 200 MHz clock. You shouldn't mix and match the
 timeout/clock/reg_data combinations, however!
 
-Additionally, since the BBB is underpowered for the S5, you may need to
-experiment with a good queue setting to control how much work BFGMiner tries to
-pre-prepare for it. A reasonable starting place is
+Additionally, since the controllers are underpowered for these devices, you may
+need to experiment with a good queue setting to control how much work BFGMiner
+tries to pre-prepare for it. A reasonable starting place is:
 
 --queue 8192
 
