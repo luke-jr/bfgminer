@@ -95,6 +95,9 @@ struct bfg_set_device_definition {
 	const char *description;
 };
 extern const char *proc_set_device(struct cgpu_info *proc, char *optname, char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+#ifdef HAVE_CURSES
+extern const char *proc_set_device_tui_wrapper(struct cgpu_info *proc, char *optname, bfg_set_device_func_t, const char *prompt, const char *success_msg);
+#endif
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();
