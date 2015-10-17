@@ -8068,6 +8068,55 @@ void zero_stats(void)
 	}
 }
 
+int bfg_strategy_parse(const char * const s)
+{
+	char *endptr;
+	if (!(s && s[0]))
+		return -1;
+	long int selected = strtol(s, &endptr, 0);
+	if (endptr == s || *endptr) {
+		// Look-up by name
+		selected = -1;
+		for (unsigned i = 0; i <= TOP_STRATEGY; ++i) {
+			if (!strcasecmp(strategies[i].s, s)) {
+				selected = i;
+			}
+		}
+	}
+	if (selected < 0 || selected > TOP_STRATEGY) {
+		return -1;
+	}
+	return selected;
+}
+
+bool bfg_strategy_change(const int selected, const char * const param)
+{
+	if (param && param[0]) {
+		switch (selected) {
+			case POOL_ROTATE:
+			{
+				char *endptr;
+				long int n = strtol(param, &endptr, 0);
+				if (n < 0 || n > 9999 || *endptr) {
+					return false;
+				}
+				opt_rotate_period = n;
+				break;
+			}
+			default:
+				return false;
+		}
+	}
+	
+	mutex_lock(&lp_lock);
+	pool_strategy = selected;
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
+	switch_pools(NULL);
+	
+	return true;
+}
+
 #ifdef HAVE_CURSES
 static
 void loginput_mode(const int size)
@@ -8200,25 +8249,25 @@ retry:
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
 			wlogprint("%d: %s\n", i, strategies[i].s);
-		selected = curses_int("Select strategy number type");
+		{
+			char * const selected_str = curses_input("Select strategy type");
+			selected = bfg_strategy_parse(selected_str);
+			free(selected_str);
+		}
 		if (selected < 0 || selected > TOP_STRATEGY) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
+		char *param = NULL;
 		if (selected == POOL_ROTATE) {
-			opt_rotate_period = curses_int("Select interval in minutes");
-
-			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
-				opt_rotate_period = 0;
-				wlogprint("Invalid selection\n");
-				goto retry;
-			}
+			param = curses_input("Select interval in minutes");
 		}
-		mutex_lock(&lp_lock);
-		pool_strategy = selected;
-		pthread_cond_broadcast(&lp_cond);
-		mutex_unlock(&lp_lock);
-		switch_pools(NULL);
+		bool result = bfg_strategy_change(selected, param);
+		free(param);
+		if (!result) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
 		goto updated;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
