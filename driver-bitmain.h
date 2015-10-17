@@ -165,10 +165,18 @@ struct bitmain_rxnonce_data {
 	uint16_t crc;
 } __attribute__((packed, aligned(4)));
 
+enum bitmain_chip {
+	BMC_UNKNOWN,
+	BMC_BM1380,
+	BMC_BM1382,
+	BMC_BM1384,
+};
+
 struct bitmain_info {
 	void *device_curl;
 	SOCKETTYPE curl_sock;
 	
+	enum bitmain_chip chip_type;
 	int chain_num;
 	int asic_num;
 	int chain_asic_num[BITMAIN_MAX_CHAIN_NUM];

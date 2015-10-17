@@ -1365,6 +1365,18 @@ static bool bitmain_detect_one(const char * devpath)
 	
 	if (!info->packet_max_work)
 		return_via_applog(shin, , LOG_ERR, "%s: Device not configured (did you forget --set bitmain:model=S5 ?)", bitmain_drv.dname);
+	
+	if (!(upk_u32be(info->reg_data, 0))) {
+		switch (info->chip_type) {
+			case BMC_BM1382:
+			case BMC_BM1384:
+				if (bm1382_freq_to_reg_data(info->reg_data, info->frequency))
+					break;
+				// fall thru if it failed
+			default:
+				return_via_applog(shin, , LOG_ERR, "%s: Device not configured (did you forget --set bitmain:reg_data=x???? ?)", bitmain_drv.dname);
+		}
+	}
 
 	if (!btm_init(bitmain, devpath))
 		goto shin;
@@ -1801,21 +1813,30 @@ unknown_model:
 	if (endptr[0] && !isspace(endptr[0]))
 		goto unknown_model;
 	
+	info->chip_type = BMC_UNKNOWN;
 	switch (Sn) {
 		case 1:
+			info->chip_type = BMC_BM1380;
 			bitmain_set_packet_max_work(dev, 8);
 			info->packet_max_nonce = 8;
 			break;
 		case 2:
+			info->chip_type = BMC_BM1380;
 			bitmain_set_packet_max_work(dev, 0x40);
 			info->packet_max_nonce = 0x80;
 			break;
 		case 3:
+			info->chip_type = BMC_BM1382;
 			bitmain_set_packet_max_work(dev, 8);
 			info->packet_max_nonce = 0x80;
 			break;
 		case 4:
+			info->chip_type = BMC_BM1382;
+			bitmain_set_packet_max_work(dev, 0x40);
+			info->packet_max_nonce = 0x80;
+			break;
 		case 5:
+			info->chip_type = BMC_BM1384;
 			bitmain_set_packet_max_work(dev, 0x40);
 			info->packet_max_nonce = 0x80;
 			break;

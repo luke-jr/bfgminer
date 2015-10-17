@@ -19,6 +19,9 @@ at runtime with a series of --set options. For example:
 -S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
 --set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
 
+Note that reg_data is optional for S4 and S5 and will be calculated from clock
+if not provided.
+
 The meaning of each of these options are not documented individually at this
 time, but can be determined from the stock cgminer's options. You want to look
 at the "bitmain-options" from the command line, and the "bitmain-freq" and
