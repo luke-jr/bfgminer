@@ -13,8 +13,8 @@ struct driver_registration;
 struct driver_registration {
 	const struct device_drv *drv;
 	
-	UT_hash_handle hh;   // hash & order by dname
-	UT_hash_handle hh2;  // hash by name, order by priority
+	struct driver_registration *next_dname;
+	struct driver_registration *next_prio;
 	struct driver_registration *next;  // DO NOT USE
 };
 
@@ -22,14 +22,10 @@ extern struct driver_registration *_bfg_drvreg1;
 extern struct driver_registration *_bfg_drvreg2;
 extern void bfg_devapi_init();
 
-#define BFG_FIND_DRV_BY_DNAME(reg, name, namelen)  \
-	HASH_FIND(hh , _bfg_drvreg1, name, namelen, reg)
-#define BFG_FIND_DRV_BY_NAME(reg, name, namelen)  \
-	HASH_FIND(hh2, _bfg_drvreg2, name, namelen, reg)
 #define BFG_FOREACH_DRIVER_BY_DNAME(reg, tmp)  \
-	HASH_ITER(hh , _bfg_drvreg1, reg, tmp)
+	LL_FOREACH_SAFE2(_bfg_drvreg1, reg, tmp, next_dname)
 #define BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)  \
-	HASH_ITER(hh2, _bfg_drvreg2, reg, tmp)
+	LL_FOREACH_SAFE2(_bfg_drvreg2, reg, tmp, next_prio)
 
 extern void _bfg_register_driver(const struct device_drv *);
 #define BFG_REGISTER_DRIVER(drv)                \

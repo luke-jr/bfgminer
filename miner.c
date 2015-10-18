@@ -11246,31 +11246,6 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
-{
-	struct driver_registration *dreg;
-	char dname[dnamelen];
-	int i;
-	
-	for (i = 0; i < dnamelen; ++i)
-		dname[i] = tolower(_dname[i]);
-	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
-	if (!dreg)
-	{
-		for (i = 0; i < dnamelen; ++i)
-			dname[i] = toupper(_dname[i]);
-		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
-		if (!dreg)
-			return NULL;
-	}
-	
-	if (!drv_algo_check(dreg->drv))
-		return NULL;
-	
-	return dreg->drv;
-}
-
-static
 bool _probe_device_do_probe(const struct device_drv * const drv, const struct lowlevel_device_info * const info, bool * const request_rescan_p)
 {
 	bfg_probe_result_flags = 0;
@@ -11319,12 +11294,22 @@ void *probe_device_thread(void *p)
 		{
 			if (!_probe_device_match(info, ser))
 				continue;
+			
 			const size_t dnamelen = (colon - dname);
-			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-				continue;
-			if (_probe_device_do_probe(drv, info, &request_rescan))
-				return NULL;
+			char dname_nt[dnamelen + 1];
+			memcpy(dname_nt, dname, dnamelen);
+			dname_nt[dnamelen] = '\0';
+			
+			struct driver_registration *dreg, *dreg_tmp;
+			BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp) {
+				const struct device_drv * const drv = dreg->drv;
+				if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+					continue;
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+				if (_probe_device_do_probe(drv, info, &request_rescan))
+					return NULL;
+			}
 		}
 	}
 	
@@ -11349,8 +11334,14 @@ void *probe_device_thread(void *p)
 			if (strcasecmp("noauto", &colon[1]) && strcasecmp("auto", &colon[1]))
 				continue;
 			const ssize_t dnamelen = (colon - dname);
-			if (dnamelen >= 0 && _probe_device_find_drv(dname, dnamelen) != drv)
-				continue;
+			if (dnamelen >= 0) {
+				char dname_nt[dnamelen + 1];
+				memcpy(dname_nt, dname, dnamelen);
+				dname_nt[dnamelen] = '\0';
+				
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+			}
 			doauto = (tolower(colon[1]) == 'a');
 			if (dnamelen != -1)
 				break;
@@ -11427,15 +11418,24 @@ void *probe_device_thread(void *p)
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
-		const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-		if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-			continue;
-		LL_FOREACH2(infolist, info, same_devid_next)
-		{
-			if (info->lowl->exclude_from_all)
+		char dname_nt[dnamelen + 1];
+		memcpy(dname_nt, dname, dnamelen);
+		dname_nt[dnamelen] = '\0';
+
+		struct driver_registration *dreg, *dreg_tmp;
+		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp) {
+			const struct device_drv * const drv = dreg->drv;
+			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;
-			if (_probe_device_do_probe(drv, info, NULL))
-				return NULL;
+			if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+				continue;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if (info->lowl->exclude_from_all)
+					continue;
+				if (_probe_device_do_probe(drv, info, NULL))
+					return NULL;
+			}
 		}
 	}
 	
