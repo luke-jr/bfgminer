@@ -6,6 +6,24 @@ Butterfly Labs' SC range of devices, HashBuster boards, GekkoScience's Compac
 USB stick, Klondike modules, and KnCMiner's Mercury, Jupiter and Saturn.
 
 
+ALCHEMIST
+---------
+
+This driver has been designed to run each of the 8 blades inside an AlcheMist 256 as a separate miner. To detect all the blades you need to manually probe it with the following serial ports: 
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3 -S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400mhz in 16mhz increments(driver will default to 352mhz if these conditions are not met). Frequency is set with the following —-set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port: --set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running single blades off a raspberry pi. Make sure you have configured gpio pin 25 correctly and scan via -S ALC:/dev/ttyAMA0
+
+
 ANTMINER U3
 -----------
 

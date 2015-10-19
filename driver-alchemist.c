@@ -95,7 +95,8 @@ void alchemist_reset_board(const char * const devpath) {
         strcpy(gpio, "gpio115");
     if(strcmp(devpath, "/dev/ttyUSB3") == 0)
         strcpy(gpio, "gpio116");
-
+    if(strcmp(devpath, "/dev/ttyAMA0") == 0)
+        strcpy(gpio, "gpio25");
     
     sprintf(buf, "/sys/class/gpio/%s/value", gpio);
     
