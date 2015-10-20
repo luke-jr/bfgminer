@@ -3384,15 +3384,18 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			}
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, estrc);
 			free(estr);
+			json_decref(json);
 			continue;
 		}
 		s = bfg_json_obj_string(json, "result", NULL);
 		if (unlikely(!s))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, "(return value was not a String)");
+			json_decref(json);
 			continue;
 		}
 		s2 = set_b58addr(s, &newscript);
+		json_decref(json);
 		if (unlikely(s2))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
