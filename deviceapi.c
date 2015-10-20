@@ -41,21 +41,17 @@ struct driver_registration *_bfg_drvreg2;
 
 void _bfg_register_driver(const struct device_drv *drv)
 {
-	static struct driver_registration *initlist;
 	struct driver_registration *ndr;
 	
 	if (!drv)
 	{
-		// Move initlist to hashtables
-		LL_FOREACH(initlist, ndr)
+		// NOTE: Not sorted at this point (dname and priority may be unassigned until drv_init!)
+		LL_FOREACH2(_bfg_drvreg1, ndr, next_dname)
 		{
 			drv = ndr->drv;
 			if (drv->drv_init)
 				drv->drv_init();
-			HASH_ADD_KEYPTR(hh , _bfg_drvreg1, drv->dname, strlen(drv->dname), ndr);
-			HASH_ADD_KEYPTR(hh2, _bfg_drvreg2, drv->name , strlen(drv->name ), ndr);
 		}
-		initlist = NULL;
 		return;
 	}
 	
@@ -63,7 +59,8 @@ void _bfg_register_driver(const struct device_drv *drv)
 	*ndr = (struct driver_registration){
 		.drv = drv,
 	};
-	LL_PREPEND(initlist, ndr);
+	LL_PREPEND2(_bfg_drvreg1, ndr, next_dname);
+	LL_PREPEND2(_bfg_drvreg2, ndr, next_prio);
 }
 
 static
@@ -81,8 +78,8 @@ int sort_drv_by_priority(struct driver_registration * const a, struct driver_reg
 void bfg_devapi_init()
 {
 	_bfg_register_driver(NULL);
-	HASH_SRT(hh , _bfg_drvreg1, sort_drv_by_dname   );
-	HASH_SRT(hh2, _bfg_drvreg2, sort_drv_by_priority);
+	LL_SORT2(_bfg_drvreg1, sort_drv_by_dname, next_dname);
+	LL_SORT2(_bfg_drvreg2, sort_drv_by_priority, next_prio);
 }
 
 
