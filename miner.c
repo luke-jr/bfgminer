@@ -3395,10 +3395,10 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			continue;
 		}
 		s2 = set_b58addr(s, &newscript);
-		json_decref(json);
 		if (unlikely(s2))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
+			json_decref(json);
 			continue;
 		}
 		if (goal->generation_script)
@@ -3406,6 +3406,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			if (bytes_eq(&newscript, goal->generation_script))
 			{
 				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
+				json_decref(json);
 				break;
 			}
 		}
@@ -3417,6 +3418,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 		bytes_assimilate(goal->generation_script, &newscript);
 		coinbase_script_block_id = blkchain->currentblk->block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
+		json_decref(json);
 		break;
 	}
 	
