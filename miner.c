@@ -3079,20 +3079,22 @@ void refresh_bitcoind_address(const bool fresh)
 			continue;
 		}
 		s2 = set_b58addr(s, &newscript);
-		json_decref(json);
 		if (unlikely(s2))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
+			json_decref(json);
 			continue;
 		}
 		if (bytes_eq(&newscript, &opt_coinbase_script))
 		{
 			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
+			json_decref(json);
 			break;
 		}
 		bytes_assimilate(&opt_coinbase_script, &newscript);
 		coinbase_script_block_id = current_block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
+		json_decref(json);
 		break;
 	}
 	
