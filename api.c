@@ -26,6 +26,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include <utlist.h>
+
 #include "compat.h"
 #include "deviceapi.h"
 #ifdef USE_LIBMICROHTTPD
