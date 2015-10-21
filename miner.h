@@ -1361,7 +1361,7 @@ struct pool {
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
 	struct mining_goal_info *goal;
-	bool pool_diff_effective_retroactively;
+	enum bfg_tristate pool_diff_effective_retroactively;
 
 	enum pool_protocol proto;
 

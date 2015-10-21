@@ -1216,7 +1216,18 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
-	pool->pool_diff_effective_retroactively = uri_get_param_bool(uri, "retrodiff", false);
+	pool->pool_diff_effective_retroactively = uri_get_param_bool2(uri, "retrodiff");
+}
+
+static
+bool pool_diff_effective_retroactively(struct pool * const pool)
+{
+	if (pool->pool_diff_effective_retroactively != BTS_UNKNOWN) {
+		return pool->pool_diff_effective_retroactively;
+	}
+	
+	// By default, we enable retrodiff for stratum pools since some servers implement mining.set_difficulty in this way
+	return pool->stratum_active;
 }
 
 /* Pool variant of test and set */
@@ -10535,21 +10546,18 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	{
 		bool high_hash = true;
 		struct pool * const pool = work->pool;
-		if (pool->stratum_active)
+		if (pool_diff_effective_retroactively(pool))
 		{
-			if (pool->pool_diff_effective_retroactively)
+			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
+			if (memcmp(pool->next_target, work->target, sizeof(work->target)))
 			{
-				// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
-				if (memcmp(pool->next_target, work->target, sizeof(work->target)))
+				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
+				       pool->pool_no);
+				if (hash_target_check_v(work->hash, pool->next_target))
 				{
-					applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too as requested by user",
-					       pool->pool_no);
-					if (hash_target_check_v(work->hash, pool->next_target))
-					{
-						high_hash = false;
-						memcpy(work->target, pool->next_target, sizeof(work->target));
-						calc_diff(work, 0);
-					}
+					high_hash = false;
+					memcpy(work->target, pool->next_target, sizeof(work->target));
+					calc_diff(work, 0);
 				}
 			}
 		}
