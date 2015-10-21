@@ -208,6 +208,28 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 	{NULL},
 };
 
+#ifdef HAVE_CURSES
+static
+void antminer_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	
+	if (info->has_bm1382_freq_register)
+		wlogprint("[C]lock speed ");
+}
+
+static
+const char *antminer_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+			return proc_set_device_tui_wrapper(proc, NULL, antminer_set_clock, "Set clock speed", NULL);
+	}
+	return NULL;
+}
+#endif
+
 static
 void antminer_drv_init()
 {
@@ -216,6 +238,10 @@ void antminer_drv_init()
 	antminer_drv.name = "AMU";
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.identify_device = antminer_identify;
+#ifdef HAVE_CURSES
+	antminer_drv.proc_tui_wlogprint_choices = antminer_tui_wlogprint_choices;
+	antminer_drv.proc_tui_handle_choice = antminer_tui_handle_choice;
+#endif
 	++antminer_drv.probe_priority;
 }
 
