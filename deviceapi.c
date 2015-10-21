@@ -26,6 +26,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <utlist.h>
+
 #include "compat.h"
 #include "deviceapi.h"
 #include "logging.h"
@@ -78,8 +80,17 @@ int sort_drv_by_priority(struct driver_registration * const a, struct driver_reg
 void bfg_devapi_init()
 {
 	_bfg_register_driver(NULL);
+#ifdef LL_SORT2
 	LL_SORT2(_bfg_drvreg1, sort_drv_by_dname, next_dname);
 	LL_SORT2(_bfg_drvreg2, sort_drv_by_priority, next_prio);
+#else
+	#define next next_dname
+	LL_SORT(_bfg_drvreg1, sort_drv_by_dname);
+	#undef next
+	#define next next_prio
+	LL_SORT(_bfg_drvreg2, sort_drv_by_priority);
+	#undef next
+#endif
 }
 
 
