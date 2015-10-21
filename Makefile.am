@@ -261,6 +261,10 @@ if USE_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 endif
 
+if USE_BITMAIN
+bfgminer_SOURCES += driver-bitmain.c driver-bitmain.h
+endif
+
 if USE_BIGPIC
 bfgminer_SOURCES += driver-bigpic.c driver-bigpic.h
 endif

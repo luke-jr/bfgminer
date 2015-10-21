@@ -2,8 +2,56 @@ SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
-Butterfly Labs' SC range of devices, HashBuster boards, GekkoScience's Compac
-USB stick, Klondike modules, and KnCMiner's Mercury, Jupiter and Saturn.
+Bitmain's Antminer S5 and U1-3, Butterfly Labs' SC range of devices, HashBuster
+boards, GekkoScience's Compac USB stick, Klondike modules, and KnCMiner's
+Mercury, Jupiter and Saturn.
+
+
+ANTMINER S1-S5
+--------------
+
+BFGMiner must be compiled for and run on the embedded controller. When
+configuring, use the --enable-bitmain option to build the 'bitmain' driver used
+to interface with this hardware. None of the device attributes are autodetected
+at this time, so you must also tell BFGMiner this at runtime with a series of
+--set options. For example:
+
+-S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
+--set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
+
+Note that reg_data is optional for S4 and S5 and will be calculated from clock
+if not provided.
+
+The meaning of each of these options are not documented individually at this
+time, but can be determined from the stock cgminer's options. You want to look
+at the "bitmain-options" from the command line, and the "bitmain-freq" and
+"bitmain-voltage" in the /config/cgminer.conf file.
+In this case, they were:
+
+NOTE: These are NOT valid BFGMiner options!
+    --bitmain-options 115200:32:8:7:200:0782:0725
+                             |    | |   |    ^^^^ voltage
+                             |    | |   ^^^^ reg_data
+                             |    | ^^^ clock
+                             |    ^ timeout
+                             ^^^^ layout
+    "bitmain-freq" : "3:350:0d82",
+                      | |   ^^^^ reg_data
+                      | ^^^ clock
+                      ^ timeout
+    "bitmain-voltage" : "0725"
+                         ^^^^ voltage
+
+Notice how there are duplicate settings for timeout, clock, reg_data, and
+voltage. You can probably use either one, but the 350 MHz clock performs
+better than the 200 MHz clock. You shouldn't mix and match the
+timeout/clock/reg_data combinations, however!
+
+Additionally, since the controllers are underpowered for these devices, you may
+need to experiment with a good queue setting to control how much work BFGMiner
+tries to pre-prepare for it. A reasonable starting place is:
+
+--queue 8192
 
 
 ANTMINER U3

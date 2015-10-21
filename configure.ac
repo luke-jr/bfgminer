@@ -568,6 +568,11 @@ BFG_DRIVER(,BitForce,SHA256d,auto,[
 	have_udevrules=true
 ])
 
+BFG_DRIVER(bitmain,Bitmain Antminer S* series,SHA256d,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
 BFG_DRIVER(,Icarus,SHA256d,auto,[
 	need_dynclock=yes
 	need_lowl_vcom=yes
