@@ -11748,8 +11748,8 @@ rescan:
 		pthread_join(info->probe_pth, NULL);
 #endif
 	
-	struct driver_registration *reg, *tmp;
-	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
+	struct driver_registration *reg;
+	BFG_FOREACH_DRIVER_BY_PRIORITY(reg)
 	{
 		const struct device_drv * const drv = reg->drv;
 		if (!(drv_algo_check(drv) && drv->drv_detect))
@@ -11962,7 +11962,7 @@ void *probe_device_thread(void *p)
 	
 	// if lowlevel device matches specific user assignment, probe requested driver(s)
 	struct string_elist *sd_iter, *sd_tmp;
-	struct driver_registration *dreg, *dreg_tmp;
+	struct driver_registration *dreg;
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
@@ -11980,8 +11980,7 @@ void *probe_device_thread(void *p)
 			memcpy(dname_nt, dname, dnamelen);
 			dname_nt[dnamelen] = '\0';
 			
-			struct driver_registration *dreg, *dreg_tmp;
-			BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp) {
+			BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
 				const struct device_drv * const drv = dreg->drv;
 				if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 					continue;
@@ -11994,7 +11993,7 @@ void *probe_device_thread(void *p)
 	}
 	
 	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
-	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 	{
 		const struct device_drv * const drv = dreg->drv;
 		
@@ -12074,7 +12073,7 @@ void *probe_device_thread(void *p)
 					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
 					bool dont_rescan = false;
-					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 					{
 						const struct device_drv * const drv = dreg->drv;
 						if (!drv_algo_check(drv))
@@ -12102,8 +12101,7 @@ void *probe_device_thread(void *p)
 		memcpy(dname_nt, dname, dnamelen);
 		dname_nt[dnamelen] = '\0';
 
-		struct driver_registration *dreg, *dreg_tmp;
-		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp) {
+		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
 			const struct device_drv * const drv = dreg->drv;
 			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;

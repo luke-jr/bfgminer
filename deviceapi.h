@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-#include <uthash.h>
+#include <utlist.h>
 
 #include "miner.h"
 
@@ -22,10 +22,10 @@ extern struct driver_registration *_bfg_drvreg1;
 extern struct driver_registration *_bfg_drvreg2;
 extern void bfg_devapi_init();
 
-#define BFG_FOREACH_DRIVER_BY_DNAME(reg, tmp)  \
-	LL_FOREACH_SAFE2(_bfg_drvreg1, reg, tmp, next_dname)
-#define BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)  \
-	LL_FOREACH_SAFE2(_bfg_drvreg2, reg, tmp, next_prio)
+#define BFG_FOREACH_DRIVER_BY_DNAME(reg)  \
+	LL_FOREACH2(_bfg_drvreg1, reg, next_dname)
+#define BFG_FOREACH_DRIVER_BY_PRIORITY(reg)  \
+	LL_FOREACH2(_bfg_drvreg2, reg, next_prio)
 
 extern void _bfg_register_driver(const struct device_drv *);
 #define BFG_REGISTER_DRIVER(drv)                \

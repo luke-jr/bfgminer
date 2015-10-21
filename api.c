@@ -1288,7 +1288,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	bool io_open;
-	struct driver_registration *reg, *regtmp;
+	struct driver_registration *reg;
 	int pgacount = 0;
 	char *adlinuse = (char *)NO;
 	int i;
@@ -1329,7 +1329,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 #endif
 	);
 
-	BFG_FOREACH_DRIVER_BY_DNAME(reg, regtmp)
+	BFG_FOREACH_DRIVER_BY_DNAME(reg)
 	{
 		const struct device_drv * const drv = reg->drv;
 		tailsprintf(buf, sizeof(buf), " %s", drv->name);
