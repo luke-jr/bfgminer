@@ -10556,8 +10556,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 				if (hash_target_check_v(work->hash, pool->next_target))
 				{
 					high_hash = false;
-					memcpy(work->target, pool->next_target, sizeof(work->target));
-					calc_diff(work, 0);
+					work->work_difficulty = target_diff(pool->next_target);
 				}
 			}
 		}
