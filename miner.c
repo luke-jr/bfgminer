@@ -5267,6 +5267,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		if (pool->pool_diff_effective_retroactively == BTS_UNKNOWN) {
 			json_t *errnum;
 			if (work->stratum && err && json_is_array(err) && json_array_size(err) >= 1 && (errnum = json_array_get(err, 0)) && json_is_number(errnum) && ((int)json_number_value(errnum)) == 23) {
+				applog(LOG_DEBUG, "Disabling retroactive difficulty adjustments for pool %u", pool->pool_no);
 				pool->pool_diff_effective_retroactively = false;
 			}
 		}
