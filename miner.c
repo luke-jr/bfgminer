@@ -1227,6 +1227,7 @@ bool pool_diff_effective_retroactively(struct pool * const pool)
 	}
 	
 	// By default, we enable retrodiff for stratum pools since some servers implement mining.set_difficulty in this way
+	// Note that share_result will explicitly disable BTS_UNKNOWN -> BTS_FALSE if a retrodiff share is rejected specifically for its failure to meet the target.
 	return pool->stratum_active;
 }
 
@@ -5260,6 +5261,15 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		char reason[32];
 		put_in_parens(reason, sizeof(reason), extract_reject_reason(val, res, err, work));
 		applog(LOG_DEBUG, "Share above target rejected%s by pool %u as expected, ignoring", reason, pool->pool_no);
+		
+		// Stratum error 23 is "low difficulty share", which suggests this pool tracks job difficulty correctly.
+		// Therefore, we disable retrodiff if it was enabled-by-default.
+		if (pool->pool_diff_effective_retroactively == BTS_UNKNOWN) {
+			json_t *errnum;
+			if (work->stratum && err && json_is_array(err) && json_array_size(err) >= 1 && (errnum = json_array_get(err, 0)) && json_is_number(errnum) && ((int)json_number_value(errnum)) == 23) {
+				pool->pool_diff_effective_retroactively = false;
+			}
+		}
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
