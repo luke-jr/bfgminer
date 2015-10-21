@@ -27,6 +27,7 @@
 #include <sys/types.h>
 
 #include <uthash.h>
+#include <utlist.h>
 
 #include "compat.h"
 #include "deviceapi.h"
