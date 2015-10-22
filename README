@@ -142,6 +142,7 @@ BFGMiner driver configuration options:
 	--enable-broad-udevrules
 	                        Include udev rules for ambiguous devices which may
 	                        not be miners
+	--enable-alchemist      Compile support for AlcheMist (default disabled)
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)

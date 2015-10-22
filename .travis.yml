@@ -68,6 +68,8 @@ matrix:
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-opencl --enable-keccak --enable-scrypt'
     - compiler: ": OpenCL w/o ADL or sensors"
       env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-opencl --enable-keccak --enable-scrypt --disable-adl'
+    - compiler: ": Only alchemist"
+      env: myCC='clang' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-scrypt --enable-alchemist'
     - compiler: ": Only bitforce"
       env: myCC='clang' UBUNTU_DEPS='linux-libc-dev' EXTRA_DEPS='pkg-config libncursesw5-dev' CONFIGURE_ARGS='--disable-other-drivers --enable-bitforce'
     - compiler: ": Only icarus"

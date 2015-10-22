@@ -553,7 +553,7 @@ else
 	adl="no"
 fi
 
-BFG_DRIVER(,AlcheMist,scrypt,auto,[
+BFG_DRIVER(,AlcheMist,scrypt,no,[
 	need_lowl_vcom=yes
 	has_asic=yes
 ])
