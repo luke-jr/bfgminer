@@ -102,9 +102,11 @@ void alchemist_reset_board(const char * const devpath) {
     
     fd = open(buf, O_WRONLY);
 
-    write(fd, "0", 1);
+    if(write(fd, "0", 1) != 1)
+        applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
     cgsleep_ms(100);
-    write(fd, "1", 1);
+    if(write(fd, "1", 1) != 1)
+        applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
     
     
     close(fd);
@@ -411,15 +413,15 @@ void alchemist_submit_nonce(struct thr_info * const thr, const uint8_t buf[9], s
     const uint8_t clstid = buf[7];
     uint32_t range = chips[chipid].clst_offset[clstid];
     uint32_t mutiple = ALCHEMIST_MAX_NONCE/chips[chipid].active_cores;
-    uint64_t hashes = 0;
+    
     double diff_mutiple = .5/work->work_difficulty;
     
     for (unsigned x = 0; x < alchemist_max_cores_per_cluster; ++x) {
         
         if (nonce > range && nonce < (range + mutiple)) {
             uint64_t hashes = (nonce - range)*chips[chipid].active_cores*diff_mutiple;
-            
-            if (hashes < 0 || hashes > ALCHEMIST_MAX_NONCE)
+        
+            if (hashes > ALCHEMIST_MAX_NONCE)
                 hashes = 1;
             
             hashes_done2(thr, hashes, NULL);
