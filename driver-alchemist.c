@@ -1,5 +1,5 @@
  /*
- * Copyright 2015 jstefanop
+ * Copyright 2015 John Stefanopoulos
  * Copyright 2014-2015 Luke Dashjr
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -79,24 +79,27 @@ void alchemist_reset_board(const char * const devpath) {
     int fd;
     char buf[50];
     
+    // TODO: allow custom reset pin through --set for non-stock controller
     if(strcmp(devpath, "/dev/ttyO1") == 0)
         strcpy(gpio, "gpio117");
-    if(strcmp(devpath, "/dev/ttyO2") == 0)
+    else if(strcmp(devpath, "/dev/ttyO2") == 0)
         strcpy(gpio, "gpio110");
-    if(strcmp(devpath, "/dev/ttyO3") == 0)
+    else if(strcmp(devpath, "/dev/ttyO3") == 0)
         strcpy(gpio, "gpio111");
-    if(strcmp(devpath, "/dev/ttyO4") == 0)
+    else if(strcmp(devpath, "/dev/ttyO4") == 0)
         strcpy(gpio, "gpio112");
-    if(strcmp(devpath, "/dev/ttyUSB0") == 0)
+    else if(strcmp(devpath, "/dev/ttyUSB0") == 0)
         strcpy(gpio, "gpio113");
-    if(strcmp(devpath, "/dev/ttyUSB1") == 0)
+    else if(strcmp(devpath, "/dev/ttyUSB1") == 0)
         strcpy(gpio, "gpio114");
-    if(strcmp(devpath, "/dev/ttyUSB2") == 0)
+    else if(strcmp(devpath, "/dev/ttyUSB2") == 0)
         strcpy(gpio, "gpio115");
-    if(strcmp(devpath, "/dev/ttyUSB3") == 0)
+    else if(strcmp(devpath, "/dev/ttyUSB3") == 0)
         strcpy(gpio, "gpio116");
-    if(strcmp(devpath, "/dev/ttyAMA0") == 0)
+    else if(strcmp(devpath, "/dev/ttyAMA0") == 0)
         strcpy(gpio, "gpio25");
+    else
+        return;
     
     sprintf(buf, "/sys/class/gpio/%s/value", gpio);
     

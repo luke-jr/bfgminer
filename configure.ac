@@ -555,11 +555,7 @@ fi
 
 BFG_DRIVER(,AlcheMist,scrypt,auto,[
 	need_lowl_vcom=yes
-	need_lowl_ftdi=yes
-	need_lowl_usb=yes
 	has_asic=yes
-	has_fpga=yes
-	$broad_udevrules && have_udevrules=true
 ])
 
 BFG_DRIVER(,BitForce,SHA256d,auto,[

@@ -8,8 +8,7 @@ USB stick, Klondike modules, and KnCMiner's Mercury, Jupiter and Saturn.
 
 ALCHEMIST
 ---------
-
-This driver has been designed to run each of the 8 blades inside an AlcheMist 256 as a separate miner. To detect all the blades you need to manually probe it with the following serial ports: 
+This driver requires the latest FPGA firmware flashed on the blades (stock firmware has major bug and won’t run properly with this driver). Please visit litecointalk thread for instructions or contact jstefanop at mac com. The driver has been designed to run each of the 8 blades inside an AlcheMist 256 as a separate miner. To detect all the blades you need to manually probe it with the following serial ports: 
 
 -S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3 -S ALC:/dev/ttyO4
 
@@ -21,8 +20,10 @@ The driver supports custom frequency settings in the range of 200-400mhz in 16mh
 
 You can also set the frequency per board by specifying the tty port: --set ALC@/dev/ttyO3:clock=352
 
-Driver also supports running single blades off a raspberry pi. Make sure you have configured gpio pin 25 correctly and scan via -S ALC:/dev/ttyAMA0
+Driver also supports running single blades off a raspberry pi. Make sure you have configured gpio pin 25 correctly (see below) and scan via -S ALC:/dev/ttyAMA0
 
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
 
 ANTMINER U3
 -----------
