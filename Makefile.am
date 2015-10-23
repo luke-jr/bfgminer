@@ -257,6 +257,10 @@ if HAS_ASIC
 dist_doc_DATA += README.ASIC
 endif
 
+if USE_ALCHEMIST
+bfgminer_SOURCES += driver-alchemist.c
+endif
+
 if USE_BITFORCE
 bfgminer_SOURCES += driver-bitforce.c
 endif

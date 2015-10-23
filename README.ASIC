@@ -54,6 +54,38 @@ tries to pre-prepare for it. A reasonable starting place is:
 --queue 8192
 
 
+ALCHEMIST
+---------
+This driver requires the latest FPGA firmware flashed on the blades (stock
+firmware has major bug and won't run properly with this driver). For
+instructions, please visit: https://litecointalk.org/?topic=27370
+The driver has been designed to run each of the 8 blades inside an AlcheMist
+256 as a separate miner. To detect all the blades you need to manually probe it
+with the following serial ports:
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3
+-S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400 MHz in 16
+MHz increments (driver will default to 352 MHz if these conditions are not met).
+Frequency is set with the following --set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port:
+
+--set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running single blades off a Raspberry Pi. Make sure you
+have configured GPIO pin 25 correctly (see below) and scan via
+-S ALC:/dev/ttyAMA0
+
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
+
+
 ANTMINER U3
 -----------
 
