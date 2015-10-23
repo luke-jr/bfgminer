@@ -1,3 +1,23 @@
+BFGMiner Version 4.10.4 -- October 23, 2015
+
+- Bugfix: Restore older knc-asic for 4.10.x
+- DevAPI: Remove unused temporary variable from driver iteration
+- Bugfix: DevAPI: Update includes from uthash to utlist and support older
+versions of uthash
+- Bugfix: RPC: Need to include utlist.h for config file list
+- Bugfix: Keep JSON from getaccountaddress around long enough for debug messages
+- Bugfix: Run gen-version.sh from source directory
+- Fix to enable building into directory out of source tree
+- Bugfix: Clean up JSON from getaccountaddress
+- Bugfix: Do not use hash tables for driver lists, since they require unique
+keys
+- README.RPC: Add missing setconfig|stratum-port documentation
+- README.RPC: Add missing setconfig|http-port documentation
+- Bugfix: lowl-vcom: Check for tcgetattr/tcsetattr/tcflush failure
+- Travis: Workaround Travis bug
+- antminer: Match Product strings including "Antminer"
+
+
 BFGMiner Version 4.10.3 - June 5, 2015
 
 - Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719
