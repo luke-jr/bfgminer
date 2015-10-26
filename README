@@ -142,6 +142,7 @@ BFGMiner driver configuration options:
 	--enable-broad-udevrules
 	                        Include udev rules for ambiguous devices which may
 	                        not be miners
+	--enable-alchemist      Compile support for AlcheMist (default disabled)
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
@@ -151,6 +152,8 @@ BFGMiner driver configuration options:
 	                        enabled)
 	--disable-bitforce      Compile support for BitForce (default enabled)
 	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--enable-bitmain        Compile support for Bitmain Antminer S* series
+	                        (default disabled)
 	--disable-cointerra     Compile support for CoinTerra (default enabled)
 	--enable-cpumining      Compile support for CPU mining (default disabled)
 	--disable-drillbit      Compile support for DrillBit (default enabled)

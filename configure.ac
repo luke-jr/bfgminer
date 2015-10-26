@@ -14,7 +14,7 @@ dnl * any later version.  See COPYING for more details.
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_maj], [5])
-m4_define([v_min], [3])
+m4_define([v_min], [4])
 m4_define([v_mic], [0])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
@@ -553,6 +553,11 @@ else
 	adl="no"
 fi
 
+BFG_DRIVER(,AlcheMist,scrypt,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
 BFG_DRIVER(,BitForce,SHA256d,auto,[
 	driverlist="$driverlist bitforce:pci/need_lowl_pci"
 	if test "x$lowl_pci" = "xyes"; then
@@ -568,6 +573,11 @@ BFG_DRIVER(,BitForce,SHA256d,auto,[
 	have_udevrules=true
 ])
 
+BFG_DRIVER(bitmain,Bitmain Antminer S* series,SHA256d,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
 BFG_DRIVER(,Icarus,SHA256d,auto,[
 	need_dynclock=yes
 	need_lowl_vcom=yes
@@ -575,7 +585,7 @@ BFG_DRIVER(,Icarus,SHA256d,auto,[
 	has_asic=yes
 	have_udevrules=true
 ])
-driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS"
+driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS compac/USE_ICARUS"
 
 BFG_DRIVER(,DualMiner,Icarus,auto,[
 	need_gc3355=yes

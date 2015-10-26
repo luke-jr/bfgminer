@@ -42,6 +42,22 @@ BFG_REGISTER_DRIVER(compac_drv)
 static
 const struct bfg_set_device_definition antminer_set_device_funcs[];
 
+static const char *bm1382_chips[] = {
+	"BM1382",
+	"BM1384",
+	NULL
+};
+
+static bool antminer_chip_has_bm1382_freq_register(const char * const prodstr)
+{
+	for (const char **chipname = bm1382_chips; *chipname; ++chipname) {
+		if (strstr(prodstr, *chipname)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static
 bool antminer_detect_one_with_drv(const char * const devpath, struct device_drv * const drv)
 {
@@ -56,6 +72,8 @@ bool antminer_detect_one_with_drv(const char * const devpath, struct device_drv 
 		.do_icarus_timing = true,
 		.read_size = 5,
 		.reopen_mode = IRM_NEVER,
+		
+		.has_bm1382_freq_register = antminer_chip_has_bm1382_freq_register(detectone_meta_info.product),
 	};
 	
 	struct cgpu_info * const dev = icarus_detect_custom(devpath, drv, info);
@@ -138,26 +156,35 @@ char *antminer_get_clock(struct cgpu_info *cgpu, char *replybuf)
 static
 const char *antminer_set_clock(struct cgpu_info * const cgpu, const char * const optname, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
+	struct ICARUS_INFO * const info = cgpu->device_data;
+	
 	if (!setting || !*setting)
 		return "missing clock setting";
 	
-	// For now we only allow hex values that use BITMAINtech's lookup table
-	// This means values should be prefixed with an x so that later we can
-	// accept and distinguish decimal values
-	if (setting[0] != 'x')
+	uint8_t reg_data[2];
+	
+	if (setting[0] == 'x')
+	{
+		// remove leading character
+		const char * const hex_setting = &setting[1];
+		
+		if (!hex2bin(reg_data, hex_setting, sizeof(reg_data)))
+		{
+			sprintf(replybuf, "invalid clock: '%s' data must be a hexadecimal value", hex_setting);
+			return replybuf;
+		}
+	}
+	else
+	if (info->has_bm1382_freq_register)
+	{
+		const double mhz = atof(setting);
+		if (!bm1382_freq_to_reg_data(reg_data, mhz)) {
+			return "invalid clock";
+		}
+	}
+	else
 	{
 		sprintf(replybuf, "invalid clock: '%s' data must be prefixed with an x", setting);
-		return replybuf;
-	}
-	
-	//remove leading character
-	const char * const hex_setting = &setting[1];
-
-	uint8_t reg_data[4] = {0};
-	
-	if (!hex2bin(reg_data, hex_setting, strlen(hex_setting) / 2))
-	{
-		sprintf(replybuf, "invalid clock: '%s' data must be a hexadecimal value", hex_setting);
 		return replybuf;
 	}
 	
@@ -235,6 +262,16 @@ invalid_voltage:
 }
 
 static
+const char *antminer_set_chip(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	
+	info->has_bm1382_freq_register = antminer_chip_has_bm1382_freq_register(newvalue);
+	
+	return NULL;
+}
+
+static
 void antminer_flash_led(const struct cgpu_info *antminer)
 {
 	const int offset = ANTMINER_COMMAND_OFFSET;
@@ -265,6 +302,7 @@ bool antminer_identify(struct cgpu_info *antminer)
 
 static
 const struct bfg_set_device_definition antminer_set_device_funcs[] = {
+	{"chip", antminer_set_chip, "chip unit is based on (BM1380, BM1382, etc)"},
 	{"baud"         , icarus_set_baud         , "serial baud rate"},
 	{"work_division", icarus_set_work_division, "number of pieces work is split into"},
 	{"reopen"       , icarus_set_reopen       , "how often to reopen device: never, timeout, cycle, (or now for a one-shot reopen)"},
@@ -273,6 +311,28 @@ const struct bfg_set_device_definition antminer_set_device_funcs[] = {
 	{"voltage", antminer_set_voltage, "voltage ('x' followed by 3 digit hex code)"},
 	{NULL},
 };
+
+#ifdef HAVE_CURSES
+static
+void antminer_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	struct ICARUS_INFO * const info = proc->device_data;
+	
+	if (info->has_bm1382_freq_register)
+		wlogprint("[C]lock speed ");
+}
+
+static
+const char *antminer_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+			return proc_set_device_tui_wrapper(proc, NULL, antminer_set_clock, "Set clock speed", NULL);
+	}
+	return NULL;
+}
+#endif
 
 static
 bool compac_lowl_match(const struct lowlevel_device_info * const info)
@@ -300,9 +360,14 @@ void antminer_drv_init()
 	antminer_drv.lowl_match = antminer_lowl_match;
 	antminer_drv.lowl_probe = antminer_lowl_probe;
 	antminer_drv.identify_device = antminer_identify;
+#ifdef HAVE_CURSES
+	antminer_drv.proc_tui_wlogprint_choices = antminer_tui_wlogprint_choices;
+	antminer_drv.proc_tui_handle_choice = antminer_tui_handle_choice;
+#endif
 	++antminer_drv.probe_priority;
 	
 	compac_drv = antminer_drv;
+	compac_drv.dname = "compac";
 	compac_drv.name = "CBM";
 	compac_drv.lowl_match = compac_lowl_match;
 	compac_drv.lowl_probe = compac_lowl_probe;

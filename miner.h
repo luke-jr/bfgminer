@@ -969,6 +969,8 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
+extern float request_pdiff;
+extern double request_bdiff;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
@@ -1115,6 +1117,8 @@ extern void adjust_quota_gcd(void);
 extern struct pool *add_pool2(struct mining_goal_info *);
 #define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern int bfg_strategy_parse(const char *strategy);
+extern bool bfg_strategy_change(int strategy, const char *param);
 
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
@@ -1361,6 +1365,7 @@ struct pool {
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
 	struct mining_goal_info *goal;
+	enum bfg_tristate pool_diff_effective_retroactively;
 
 	enum pool_protocol proto;
 
@@ -1718,5 +1723,6 @@ extern struct api_data *api_add_volts(struct api_data *root, const char *name, c
 extern struct api_data *api_add_hs(struct api_data *root, const char *name, const double *data, bool copy_data);
 extern struct api_data *api_add_diff(struct api_data *root, const char *name, const double *data, bool copy_data);
 extern struct api_data *api_add_json(struct api_data *root, const char *name, json_t *data, bool copy_data);
+extern struct api_data *api_add_percent(struct api_data *root, const char *name, const double *data, bool copy_data);
 
 #endif /* __MINER_H__ */

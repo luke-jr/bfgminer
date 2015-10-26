@@ -830,6 +830,9 @@ extern char *trimmed_strdup(const char *);
 extern void run_cmd(const char *cmd);
 
 
+extern bool bm1382_freq_to_reg_data(uint8_t *out_reg_data, float mhz);
+
+
 extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);
 extern void bfg_init_checksums(void);
 extern uint8_t crc8ccitt(const void *, size_t);

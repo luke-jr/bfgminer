@@ -15,6 +15,7 @@
 
 #include "config.h"
 
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -3162,6 +3163,21 @@ bool auth_stratum(struct pool *pool)
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
+	
+	if (uri_get_param_bool(pool->rpc_url, "cksuggest", false)) {
+		unsigned long req_bdiff = request_bdiff;
+		
+		const char *q = uri_find_param(pool->rpc_url, "cksuggest", NULL);
+		if (q && q != URI_FIND_PARAM_FOUND) {
+			req_bdiff = atoi(q);
+		}
+		
+		if (req_bdiff) {
+			int sz = snprintf(s, sizeof(s), "{\"id\": null, \"method\": \"mining.suggest_difficulty\", \"params\": [%lu]}", req_bdiff);
+			stratum_send(pool, s, sz);
+		}
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -3340,7 +3356,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	bool trysuggest = request_target_str;
+	bool trysuggest = request_target_str && !uri_get_param_bool(pool->rpc_url, "cksuggest", false);
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
@@ -4043,6 +4059,62 @@ void run_cmd(const char *cmd)
 	pthread_t pth;
 	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
 }
+
+
+#if defined(USE_BITMAIN) || defined(USE_ICARUS)
+bool bm1382_freq_to_reg_data(uint8_t * const out_reg_data, float mhz)
+{
+	// We add 1 so fractions don't interfere with near-integer settings
+	++mhz;
+	
+	if (mhz < 100)
+		return false;
+	float best_delta = FLT_MAX;
+	unsigned best_dc = 0;
+	unsigned try_list[4], *tlp = try_list;
+	if (mhz >= 200) {
+		if (mhz >= 403.125) {
+			*(tlp++) = 0x0101;
+			*(tlp++) = 0x0205;
+		} else {
+			*(tlp++) = 0x0202;
+		}
+		*(tlp++) = 0x0406;
+	} else {
+		*(tlp++) = 0x0403;
+	}
+	*(tlp++) = 0x0807;
+	for (unsigned *tli = try_list; tli < tlp; ++tli) {
+		const float d = *tli >> 8;
+		const float df = 25. / d;
+		unsigned n = mhz / df;
+		// NOTE: 0x3f here is 0x3e in the final register
+		if (n > 0x3f) {
+			n = 0x3f;
+		}
+		const float delta = mhz - (n * df);
+		if (delta < best_delta) {
+			best_delta = delta;
+			best_dc = *tli;
+			if (delta == 0) {
+				break;
+			}
+		}
+	}
+	if (!best_dc)
+		return false;
+	const float d = best_dc >> 8;
+	const float df = 25. / d;
+	const unsigned di = best_dc & 0xff;
+	unsigned n = (mhz / df) - 1;
+	if (n > 0x3e) {
+		n = 0x3e;
+	}
+	const uint16_t reg_num = (n << 7) | di;
+	pk_u16be(out_reg_data, 0, reg_num);
+	return true;
+}
+#endif
 
 
 uint8_t crc5usb(unsigned char *ptr, uint8_t len)

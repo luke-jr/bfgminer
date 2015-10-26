@@ -2,8 +2,88 @@ SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
-Butterfly Labs' SC range of devices, HashBuster boards, GekkoScience's Compac
-USB stick, Klondike modules, and KnCMiner's Mercury, Jupiter and Saturn.
+Bitmain's Antminer S5 and U1-3, Butterfly Labs' SC range of devices, HashBuster
+boards, GekkoScience's Compac USB stick, Klondike modules, and KnCMiner's
+Mercury, Jupiter and Saturn.
+
+
+ANTMINER S1-S5
+--------------
+
+BFGMiner must be compiled for and run on the embedded controller. When
+configuring, use the --enable-bitmain option to build the 'bitmain' driver used
+to interface with this hardware. None of the device attributes are autodetected
+at this time, so you must also tell BFGMiner this at runtime with a series of
+--set options. For example:
+
+-S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
+--set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
+
+Note that reg_data is optional for S4 and S5 and will be calculated from clock
+if not provided.
+
+The meaning of each of these options are not documented individually at this
+time, but can be determined from the stock cgminer's options. You want to look
+at the "bitmain-options" from the command line, and the "bitmain-freq" and
+"bitmain-voltage" in the /config/cgminer.conf file.
+In this case, they were:
+
+NOTE: These are NOT valid BFGMiner options!
+    --bitmain-options 115200:32:8:7:200:0782:0725
+                             |    | |   |    ^^^^ voltage
+                             |    | |   ^^^^ reg_data
+                             |    | ^^^ clock
+                             |    ^ timeout
+                             ^^^^ layout
+    "bitmain-freq" : "3:350:0d82",
+                      | |   ^^^^ reg_data
+                      | ^^^ clock
+                      ^ timeout
+    "bitmain-voltage" : "0725"
+                         ^^^^ voltage
+
+Notice how there are duplicate settings for timeout, clock, reg_data, and
+voltage. You can probably use either one, but the 350 MHz clock performs
+better than the 200 MHz clock. You shouldn't mix and match the
+timeout/clock/reg_data combinations, however!
+
+Additionally, since the controllers are underpowered for these devices, you may
+need to experiment with a good queue setting to control how much work BFGMiner
+tries to pre-prepare for it. A reasonable starting place is:
+
+--queue 8192
+
+
+ALCHEMIST
+---------
+This driver requires the latest FPGA firmware flashed on the blades (stock
+firmware has major bug and won't run properly with this driver). For
+instructions, please visit: https://litecointalk.org/?topic=27370
+The driver has been designed to run each of the 8 blades inside an AlcheMist
+256 as a separate miner. To detect all the blades you need to manually probe it
+with the following serial ports:
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3
+-S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400 MHz in 16
+MHz increments (driver will default to 352 MHz if these conditions are not met).
+Frequency is set with the following --set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port:
+
+--set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running single blades off a Raspberry Pi. Make sure you
+have configured GPIO pin 25 correctly (see below) and scan via
+-S ALC:/dev/ttyAMA0
+
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
 
 
 ANTMINER U3
@@ -12,21 +92,16 @@ ANTMINER U3
 The U3 does not support autodetection, so you will want to use --scan-serial to
 manually probe it. For example, to scan all devices, you can use:
 
--S antminer:all
+-S antminer:all --set antminer:chip=BM1382
 
 Additionally, for optimal performance you will need to set voltage, clock, and
-timing. Neither voltage nor clock for the U3 are documented by the manufacturer,
-thus must be provided as hexadecimal configuration codes. Timing is provided in
-the number of nanoseconds each hash takes at the given configuration. A
+timing. Voltage format for the U3 is not documented by the manufacturer, thus
+must be provided as hexadecimal configuration codes. Timing is provided in the
+number of nanoseconds each hash takes at the given configuration. A
 known-working configuration is:
 
---set antminer:voltage=x800 --set antminer:clock=x1286 --set antminer:timing=0.022421
-
-Some valid values for clock setting are:
-    x0783 for 100 MHz, x0983 for 125 MHz, x0b83 for 150 MHz, x0d83 for 175 MHz,
-    x0782 for 200 MHz, x0882 for 225 MHz, x0982 for 250 MHz, x0a82 for 275 MHz,
-    x0b82 for 300 MHz, x0c82 for 325 MHz, x0d82 for 350 MHz, x0e82 for 375 MHz,
-    and x08f2 for 400 MHz
+--set antminer:voltage=x800 --set antminer:clock=237.5
+--set antminer:timing=0.022421
 
 
 AVALON 1
@@ -187,9 +262,7 @@ COMPAC
 These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
 driver. You can set the clock frequency with
 
---set compac:clock=x0782
-
-The same values for Antminer U3 (above) are valid for the BM1384.
+--set compac:clock=200
 
 
 HEX*FURY
