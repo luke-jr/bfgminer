@@ -28,6 +28,23 @@ Some valid values for clock setting are:
     x0b82 for 300 MHz, x0c82 for 325 MHz, x0d82 for 350 MHz, x0e82 for 375 MHz,
     and x08f2 for 400 MHz
 
+To set different frequency and voltage settings for multiple U3 miners on a
+single BFGMiner process use:
+
+--set antminer@\\.\COM10:voltage=xNNNN
+
+or
+
+--set antminer@/dev/ttyUSB1:voltage=xNNNN
+
+Another option is to program the CP2102 chip so they have unique serial numbers;
+this method would avoid problems with the device showing up on different tty/COM
+locations after reboot/hotplug:
+
+/cp210x-program -w -F eeprom-content.AntU3-custom.hex --set-product-string='Antminer U3' --set-serial-number=myveryown0001
+
+Then you can use --set antminer@myveryown0001:voltage=xNNNN
+
 
 AVALON 1
 --------
@@ -190,6 +207,12 @@ driver. You can set the clock frequency with
 --set compac:clock=x0782
 
 The same values for Antminer U3 (above) are valid for the BM1384.
+
+You can also adjust the clock real-time while the stick is hashing using RPC's pgaset:
+
+bfgminer-rpc "pgaset|0,clock,x0982"
+                     |       ^^^^^ hex frequency
+                     ^ device number
 
 
 HEX*FURY
