@@ -451,7 +451,7 @@ void futurebit_thread_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
 	
-	futurebit_reset_board(device->device_path);
+	futurebit_reset_board(device->device_fd);
 	
 	serial_close(device->device_fd);
 }
