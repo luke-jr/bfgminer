@@ -17,9 +17,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
-#include <fcntl.h>
-#include <stropts.h>
-#include <termios.h>
+//#include <fcntl.h>
+//#include <stropts.h>
+//#include <termios.h>
 
 #include "deviceapi.h"
 #include "logging.h"
@@ -76,13 +76,13 @@ void futurebit_chip_init(struct futurebit_chip * const chip, const uint8_t chipi
 static
 void futurebit_reset_board(const int fd)
 {
-	uint16_t gpio;
+	//uint16_t gpio;
 
-    gpio = 0x0100;
-    ioctl(fd, 0x8001, &gpio);
-	cgsleep_ms(100);
-    gpio = 0x0101;
-    ioctl(fd, 0x8001, &gpio);
+    //gpio = 0x0001;
+    //ioctl(fd, 0x8001, &gpio);
+	//cgsleep_ms(100);
+    //gpio = 0x0101;
+    //ioctl(fd, 0x8001, &gpio);
 	
 	
 }
