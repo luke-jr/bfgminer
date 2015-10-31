@@ -197,14 +197,12 @@ bool futurebit_send_work(const struct thr_info * const thr, struct work * const 
 	
 	unsigned char swpdata[80];
 	
-	buf[0] = 0x00;
-	
-	memset(&buf[1], 0, 0x18);
-	memcpy(&buf[25], &target[24], 0x8);
+	memset(&buf[0], 0, 0x18);
+	memcpy(&buf[24], &target[24], 0x8);
 	//pk_u64be(buf, 25, 0x0000feff01000000);
 	
 	swap32tobe(swpdata, work->data, 80/4);
-	memcpy(&buf[33], swpdata, 80);
+	memcpy(&buf[32], swpdata, 80);
 	
 	for (int i = 0; i<112; i++) {
 		cmd[i] = buf[111 - i];
