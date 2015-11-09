@@ -59,7 +59,7 @@ config PACKAGE_$(PKG_NAME)_libmicrohttpd
 	depends on PACKAGE_$(PKG_NAME)
 	default y
 config PACKAGE_$(PKG_NAME)_libusb
-	bool "Build with libusb support (X6500 & ZTEX)"
+	bool "Build with libusb support (HashBuster Micro, Klondike, X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
 endef
