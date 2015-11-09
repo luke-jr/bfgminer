@@ -62,6 +62,10 @@ config PACKAGE_$(PKG_NAME)_libusb
 	bool "Build with libusb support (Cointerra, HashBuster Micro, Klondike, X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_bitmain
+	bool "Build with bitmain driver (only for S* series miners)"
+	depends on PACKAGE_$(PKG_NAME)
+	default n
 config PACKAGE_$(PKG_NAME)_keccak
 	bool "Build with Keccak algorithm support"
 	depends on PACKAGE_$(PKG_NAME)
@@ -92,6 +96,10 @@ endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --without-libusb
+endif
+
+ifndef CONFIG_PACKAGE_$(PKG_NAME)_bitmain
+CONFIGURE_ARGS += --enable-bitmain
 endif
 
 ifdef CONFIG_PACKAGE_$(PKG_NAME)_keccak
