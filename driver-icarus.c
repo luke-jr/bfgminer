@@ -302,7 +302,7 @@ int icarus_write(const char * const repr, int fd, const void *buf, size_t bufLen
 	
 	ret = write(fd, buf, bufLen);
 	if (unlikely(ret != bufLen))
-		return 1;
+		return ret ?: -666;
 
 	return 0;
 }
