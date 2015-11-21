@@ -1,3 +1,9 @@
+bfgminer (5.4.1-0precise1) precise; urgency=low
+
+  * Bugfixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 21 Nov 2015 18:12:26 -0000
+
 bfgminer (5.4.0-0precise1) precise; urgency=low
 
   * RPC: Ability to change pool management strategy.

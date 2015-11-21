@@ -1,3 +1,15 @@
+BFGMiner Version 5.4.1 - November 21, 2015
+
+- bitmain: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- icarus: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- Bugfix: openwrt: Fix bitmain option
+- Bugfix: antminer: Avoid strstr(NULL, ...) when device has no [available]
+product string
+- Update libblkmaker to 0.5.2
+- openwrt: Add option to enable bitmain driver
+- openwrt: Update libusb device list
+
+
 BFGMiner Version 5.4.0 - October 23, 2015
 
 - AUTHORS: Move jstefanop to current maintainers
