@@ -98,7 +98,7 @@ ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --without-libusb
 endif
 
-ifndef CONFIG_PACKAGE_$(PKG_NAME)_bitmain
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_bitmain
 CONFIGURE_ARGS += --enable-bitmain
 endif
 
