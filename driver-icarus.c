@@ -1099,12 +1099,12 @@ keepwaiting:
 		{
 			const uint64_t elapsed_fs = (elapsed.tv_sec * 1000000000000000LL) + (elapsed.tv_usec * 1000000000LL);
 			const uint64_t est_Hs_fs = elapsed_fs / hash_count;
-			applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus; %llu.%06luns/hash)",
+			applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus; %"PRIu64".%06luns/hash)",
 			       proc->proc_repr,
 			       nonce,
 			       (uint64_t)hash_count,
 			       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec,
-			       (unsigned long long)(est_Hs_fs / 1000000LL), (unsigned long)(est_Hs_fs % 1000000LL));
+			       (uint64_t)(est_Hs_fs / 1000000LL), (unsigned long)(est_Hs_fs % 1000000LL));
 		}
 	}
 	else
