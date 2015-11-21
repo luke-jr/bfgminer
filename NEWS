@@ -1,3 +1,9 @@
+BFGMiner Version 4.10.5 -- November 21, 2015
+
+- Update libblkmaker to 0.5.2
+- openwrt: Update libusb device list
+
+
 BFGMiner Version 4.10.4 -- October 23, 2015
 
 - Bugfix: Restore older knc-asic for 4.10.x
