@@ -102,10 +102,11 @@ retry:
 	jtag_write(jp, JTAG_REG_DR, buf, 38);
 	jtag_run(jp);
 #ifdef DEBUG_X6500_SET_REGISTER
-	if (x6500_get_register(jp, addr) != nv)
+	bool test x6500_get_register(jp, addr) != nv;
 #else
-	if (0)
+	bool test = 0;
 #endif
+	if (test)
 	{
 		applog(LOG_WARNING, "x6500_set_register failed %x=%08x", addr, nv);
 		goto retry;
