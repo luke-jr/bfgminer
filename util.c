@@ -308,6 +308,7 @@ static int keep_sockalive(SOCKETTYPE fd)
 	const int tcp_keepidle = 45;
 	const int tcp_keepintvl = 30;
 	int ret = 0;
+	bool unlikely_test;
 
 	if (unlikely(setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&tcp_one, sizeof(tcp_one))))
 		ret = 1;
@@ -324,10 +325,11 @@ static int keep_sockalive(SOCKETTYPE fd)
 
 	if (!opt_delaynet)
 #ifndef __linux
-		if (unlikely(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+		unlikely_test = unlikely(setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one)));
 #else /* __linux */
-		if (unlikely(setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one))))
+		unlikely_test = unlikely(setsockopt(fd, SOL_TCP, TCP_NODELAY, (const void *)&tcp_one, sizeof(tcp_one)));
 #endif /* __linux */
+		if (unlikely_test)
 			ret = 1;
 
 #ifdef __linux
