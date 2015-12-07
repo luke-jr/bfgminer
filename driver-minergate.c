@@ -83,11 +83,13 @@ int minergate_open(const char * const devpath)
 	struct sockaddr_un sa = {
 		.sun_family = AF_UNIX,
 	};
+	bool test;
 #ifdef UNIX_PATH_MAX
-	if (devpath_len >= UNIX_PATH_MAX)
+	test devpath_len >= UNIX_PATH_MAX;
 #else
-	if (devpath_len >= sizeof(sa.sun_path))
+	test = devpath_len >= sizeof(sa.sun_path);
 #endif
+	if (test)
 		return -1;
 	const int fd = socket(PF_UNIX, SOCK_STREAM, 0);
 	strcpy(sa.sun_path, devpath);
