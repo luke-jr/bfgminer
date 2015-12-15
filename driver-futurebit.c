@@ -384,13 +384,12 @@ err:
  */
 
 static
-void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], struct work * const work)
+void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], struct work * const work, struct timeval const start_tv)
 {
     struct cgpu_info *device = thr->cgpu;
     struct futurebit_chip *chips = device->device_data;
     
     uint32_t nonce = *(uint32_t *)buf;
-    uint32_t nonce_h = *(uint32_t *)buf;
     nonce = bswap_32(nonce);
     
     submit_nonce(thr, work, nonce);
@@ -399,22 +398,19 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
     
     const uint8_t clstid = buf[7];
     uint32_t range = chips[0].clst_offset[clstid];
-    uint32_t mutiple = FUTUREBIT_MAX_NONCE / chips[0].active_cores;
+
+    struct timeval now_tv;
+    timer_set_now(&now_tv);
+    int elapsed_ms = ms_tdiff(&now_tv, &start_tv);
     
-    double diff_mutiple = .5/work->work_difficulty;
+    double total_hashes = ((nonce - range)/9.0) * chips[0].active_cores;
+    double hashes_per_ms = total_hashes/elapsed_ms;
+    uint64_t hashes = hashes_per_ms * ms_tdiff(&now_tv, &thr->_tv_last_hashes_done_call);
     
-    for (unsigned x = 0; x < futurebit_max_cores_per_cluster; ++x) {
-        if (nonce_h > range && nonce_h < (range + mutiple)) {
-            uint64_t hashes = (nonce_h - range) * chips[0].active_cores * diff_mutiple;
-            
-            if (hashes > FUTUREBIT_MAX_NONCE)
-                hashes = 1;
-            
-            hashes_done2(thr, hashes, NULL);
-        }
-        
-        range += mutiple;
-    }
+    if(hashes < FUTUREBIT_MAX_NONCE)
+        hashes_done2(thr, hashes, NULL);
+    else
+        hashes_done2(thr, 1000, NULL);
 }
 
 // send work to the device
@@ -453,7 +449,7 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
             continue;
         
         if (read == 8) {
-            futurebit_submit_nonce(thr, buf, work);
+            futurebit_submit_nonce(thr, buf, work, start_tv);
         }
         else
             applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
