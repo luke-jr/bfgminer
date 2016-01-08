@@ -103,10 +103,6 @@ bool futurebit_write_global_reg(const int fd, const struct futurebit_chip * cons
     buf[110] = 0;
     buf[111] = 0xff;
     
-    char output[(sizeof(chip->global_reg) * 2) + 1];
-    bin2hex(output, chip->global_reg, sizeof(chip->global_reg));
-    applog(LOG_DEBUG, "GLOBAL REG %s", output);
-    
     if (write(fd, buf, sizeof(buf)) != sizeof(buf))
         return false;
     return true;
@@ -191,9 +187,9 @@ bool futurebit_send_golden(const int fd, const struct futurebit_chip * const chi
         buf[111] = 0;
     }
     
-    char output[(sizeof(buf) * 2) + 1];
-    bin2hex(output, buf, sizeof(buf));
-    applog(LOG_DEBUG, "GOLDEN OUTPUT %s", output);
+    //char output[(sizeof(buf) * 2) + 1];
+    //bin2hex(output, buf, sizeof(buf));
+    //applog(LOG_DEBUG, "GOLDEN OUTPUT %s", output);
     
     if (write(fd, buf, sizeof(buf)) != sizeof(buf))
         return false;
@@ -221,14 +217,6 @@ bool futurebit_send_work(const struct thr_info * const thr, struct work * const 
     for (int i = 0; i<112; i++) {
         cmd[i] = buf[111 - i];
     }
-    
-    char tar[(sizeof(target) * 2) + 1];
-    bin2hex(tar, target, sizeof(target));
-    applog(LOG_DEBUG, "WORK TARGET %s", tar);
-    
-    char output[(sizeof(cmd) * 2) + 1];
-    bin2hex(output, cmd, sizeof(cmd));
-    applog(LOG_DEBUG, "WORK OUTPUT %s", output);
     
     if (write(device->device_fd, cmd, sizeof(cmd)) != sizeof(cmd))
         return false;
@@ -407,10 +395,10 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
     double hashes_per_ms = total_hashes/elapsed_ms;
     uint64_t hashes = hashes_per_ms * ms_tdiff(&now_tv, &thr->_tv_last_hashes_done_call);
     
-    if(hashes < FUTUREBIT_MAX_NONCE)
+    if(hashes_per_ms < 1500 && hashes < 100000000)
         hashes_done2(thr, hashes, NULL);
     else
-        hashes_done2(thr, 1000, NULL);
+        hashes_done2(thr, 100000, NULL);
 }
 
 // send work to the device
