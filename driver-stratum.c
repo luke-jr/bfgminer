@@ -154,6 +154,22 @@ fail:
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
 	const int n2size = pool->swork.n2size;
+	const size_t coinb2_offset = swork->nonce2_offset + n2size;
+	const size_t coinb2_len = bytes_len(&swork->coinbase) - swork->nonce2_offset - n2size;
+	
+	if (_ssm_last_ssj &&
+	    !(memcmp(&swork->header1[0], &_ssm_last_ssj->swork.header1[0], 0x24)
+	   || swork->nonce2_offset != _ssm_last_ssj->swork.nonce2_offset
+	   || bytes_len(&swork->coinbase) != bytes_len(&_ssm_last_ssj->swork.coinbase)
+	   || memcmp(bytes_buf(&swork->coinbase), bytes_buf(&_ssm_last_ssj->swork.coinbase), swork->nonce2_offset)
+	   || memcmp(&bytes_buf(&swork->coinbase)[coinb2_offset], &bytes_buf(&_ssm_last_ssj->swork.coinbase)[coinb2_offset], coinb2_len)
+	   || memcmp(swork->diffbits, _ssm_last_ssj->swork.diffbits, 4)
+	)) {
+		cg_runlock(&pool->data_lock);
+		applog(LOG_DEBUG, "SSM: Updating with (near?-)identical work2d; skipping...");
+		return false;
+	}
+	
 	char my_job_id[33];
 	int i;
 	struct stratumsrv_job *ssj;
@@ -165,7 +181,6 @@ fail:
 	size_t coinb1in_lenx = swork->nonce2_offset * 2;
 	size_t n2padx = n2pad * 2;
 	size_t coinb1_lenx = coinb1in_lenx + n2padx;
-	size_t coinb2_len = bytes_len(&swork->coinbase) - swork->nonce2_offset - n2size;
 	size_t coinb2_lenx = coinb2_len * 2;
 	sprintf(my_job_id, "%"PRIx64"-%"PRIx64, (uint64_t)time(NULL), _ssm_jobid++);
 	// NOTE: The buffer has up to 2 extra/unused bytes:
@@ -180,7 +195,7 @@ fail:
 	bin2hex(coinb1, bytes_buf(&swork->coinbase), swork->nonce2_offset);
 	work2d_pad_xnonce(&coinb1[coinb1in_lenx], swork, true);
 	coinb1[coinb1_lenx] = '\0';
-	bin2hex(coinb2, &bytes_buf(&swork->coinbase)[swork->nonce2_offset + n2size], coinb2_len);
+	bin2hex(coinb2, &bytes_buf(&swork->coinbase)[coinb2_offset], coinb2_len);
 	p += sprintf(p, "{\"params\":[\"%s\",\"%s\",\"%s\",\"%s\",[", my_job_id, prevhash, coinb1, coinb2);
 	for (i = 0; i < swork->merkles; ++i)
 	{
