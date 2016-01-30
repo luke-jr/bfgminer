@@ -93,10 +93,26 @@ void stratumsrv_send_set_difficulty(struct stratumsrv_conn * const conn, const f
 
 #define _ssm_gen_dummy_work work2d_gen_dummy_work
 
+static void stratumsrv_boot_all_subscribed(const char *);
+static void _ssj_free(struct stratumsrv_job *);
+static void stratumsrv_job_pruner();
+
 static
-bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
+bool stratumsrv_update_notify_str(struct pool * const pool)
 {
+	const bool clean = _ssm_cur_job_work.pool ? stale_work(&_ssm_cur_job_work, true) : true;
+	
 	cg_rlock(&pool->data_lock);
+	
+	if (!pool_has_usable_swork(pool))
+	{
+fail:
+		cg_runlock(&pool->data_lock);
+		applog(LOG_WARNING, "SSM: No usable 2D work upstream!");
+		if (clean)
+			stratumsrv_boot_all_subscribed("Current upstream pool does not have usable 2D work");
+		return false;
+	}
 	
 	struct stratumsrv_conn *conn;
 	const struct stratum_work * const swork = &pool->swork;
@@ -107,8 +123,7 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	ssize_t n2pad = work2d_pad_xnonce_size(swork);
 	if (n2pad < 0)
 	{
-		cg_runlock(&pool->data_lock);
-		return false;
+		goto fail;
 	}
 	size_t coinb1in_lenx = swork->nonce2_offset * 2;
 	size_t n2padx = n2pad * 2;
@@ -153,6 +168,20 @@ bool stratumsrv_update_notify_str(struct pool * const pool, bool clean)
 	stratum_work_cpy(&ssj->swork, swork);
 	
 	cg_runlock(&pool->data_lock);
+	
+	if (clean)
+	{
+		struct stratumsrv_job *ssj, *tmp;
+		
+		applog(LOG_DEBUG, "SSM: Current replacing job stale, pruning all jobs");
+		HASH_ITER(hh, _ssm_jobs, ssj, tmp)
+		{
+			HASH_DEL(_ssm_jobs, ssj);
+			_ssj_free(ssj);
+		}
+	}
+	else
+		stratumsrv_job_pruner();
 	
 	ssj->swork.data_lock_p = NULL;
 	HASH_ADD_KEYPTR(hh, _ssm_jobs, ssj->my_job_id, strlen(ssj->my_job_id), ssj);
@@ -283,7 +312,6 @@ static
 void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused void *p)
 {
 	struct pool *pool = current_pool();
-	bool clean;
 	
 	if (fd == _ssm_update_notifier[0])
 	{
@@ -292,37 +320,11 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 		applog(LOG_DEBUG, "SSM: Update triggered by notifier");
 	}
 	
-	clean = _ssm_cur_job_work.pool ? stale_work(&_ssm_cur_job_work, true) : true;
-	if (clean)
-	{
-		struct stratumsrv_job *ssj, *tmp;
-		
-		applog(LOG_DEBUG, "SSM: Current replacing job stale, pruning all jobs");
-		HASH_ITER(hh, _ssm_jobs, ssj, tmp)
-		{
-			HASH_DEL(_ssm_jobs, ssj);
-			_ssj_free(ssj);
-		}
-	}
-	else
-		stratumsrv_job_pruner();
-	
-	if (!pool_has_usable_swork(pool))
-	{
-		applog(LOG_WARNING, "SSM: No usable 2D work upstream!");
-		if (clean)
-			stratumsrv_boot_all_subscribed("Current upstream pool does not have usable 2D work");
-		goto out;
-	}
-	
-	if (!stratumsrv_update_notify_str(pool, clean))
+	if (!stratumsrv_update_notify_str(pool))
 	{
 		applog(LOG_WARNING, "SSM: Failed to subdivide upstream stratum notify!");
-		if (clean)
-			stratumsrv_boot_all_subscribed("Current upstream pool does not have active stratum");
 	}
 	
-out: ;
 	struct timeval tv_scantime = {
 		.tv_sec = opt_scantime,
 	};
