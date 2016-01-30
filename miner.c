@@ -3106,7 +3106,7 @@ void refresh_bitcoind_address(const bool fresh)
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 #define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
        blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
 #endif
@@ -3285,7 +3285,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	work->tv_staged = tv_now;
 	
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
@@ -3305,15 +3305,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
+			if (swork->tr)
+				tmpl_decref(swork->tr);
 			swork->tr = work->tr;
+			tmpl_incref(swork->tr);
 			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
 			swork->nonce2_offset = cbextranonceoffset;
 			bytes_assimilate_raw(&swork->merkle_bin, branches, branchdatasz, branchdatasz);
 			swork->merkles = branchcount;
-			memcpy(swork->header1, &buf[0], 36);
+			swap32yes(swork->header1, &buf[0], 36 / 4);
 			swork->ntime = le32toh(*(uint32_t *)(&buf[68]));
 			swork->tv_received = tv_now;
-			memcpy(swork->diffbits, &buf[72], 4);
+			swap32yes(swork->diffbits, &buf[72], 4 / 4);
 			memcpy(swork->target, work->target, sizeof(swork->target));
 			free(swork->job_id);
 			swork->job_id = NULL;
@@ -3327,7 +3330,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		else
 			applog(LOG_DEBUG, "blkmk_get_mdata failed for pool %u", pool->pool_no);
 	}
-#endif  // BLKMAKER_VERSION > 4
+#endif  // BLKMAKER_VERSION > 6
 	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
@@ -4868,6 +4871,11 @@ static char *submit_upstream_work_request(struct work *work)
 		unsigned char data[80];
 		
 		swap32yes(data, work->data, 80 / 4);
+#if BLKMAKER_VERSION > 6
+		if (work->stratum) {
+			req = blkmk_submitm_jansson(tmpl, data, bytes_buf(&work->nonce2), bytes_len(&work->nonce2), le32toh(*((uint32_t*)&work->data[76])), work->do_foreign_submit);
+		} else
+#endif
 #if BLKMAKER_VERSION > 3
 		if (work->do_foreign_submit)
 			req = blkmk_submit_foreign_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
@@ -6207,7 +6215,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 	}
 
-	if (work->stratum) {
+	if (work->getwork_mode == GETWORK_MODE_STRATUM) {
 		char *s;
 
 		s = malloc(1024);
@@ -9702,6 +9710,11 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	if (swork->tr) {
+		work->getwork_mode = GETWORK_MODE_GBT;
+		work->tr = swork->tr;
+		tmpl_incref(work->tr);
+	}
 	calc_diff(work, 0);
 }
 

@@ -9,6 +9,7 @@
 
 #include "config.h"
 
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -104,6 +105,7 @@ bool work2d_submit_nonce(struct thr_info * const thr, struct stratum_work * cons
 	work2d_gen_dummy_work(work, swork, tvp_prepared, xnonce2, xnonce1);
 	*(uint32_t *)&work->data[68] = htobe32(ntime);
 	work->nonce_diff = nonce_diff;
+	work->rolltime = INT_MAX;  // FIXME
 	
 	// Check if it's stale, if desired
 	if (out_is_stale)
