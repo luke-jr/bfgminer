@@ -120,6 +120,7 @@ static
 bool stratumsrv_update_notify_str(struct pool * const pool)
 {
 	const bool clean = _ssm_cur_job_work.pool ? stale_work(&_ssm_cur_job_work, true) : true;
+	struct timeval tv_now;
 	
 	cg_rlock(&pool->data_lock);
 	
@@ -131,6 +132,23 @@ fail:
 		if (clean)
 			stratumsrv_boot_all_subscribed("Current upstream pool does not have usable 2D work");
 		return false;
+	}
+	
+	timer_set_now(&tv_now);
+	
+	{
+		struct work work;
+		work2d_gen_dummy_work(&work, &pool->swork, &tv_now, NULL, 0);
+		
+		const bool is_stale = stale_work(&work, false);
+		
+		clean_work(&work);
+		
+		if (is_stale) {
+			cg_runlock(&pool->data_lock);
+			applog(LOG_DEBUG, "SSM: Ignoring work update notification while pool %d has stale swork", pool->pool_no);
+			return false;
+		}
 	}
 	
 	struct stratumsrv_conn *conn;
@@ -187,7 +205,7 @@ fail:
 	*ssj = (struct stratumsrv_job){
 		.my_job_id = strdup(my_job_id),
 	};
-	timer_set_now(&ssj->tv_prepared);
+	ssj->tv_prepared = tv_now;
 	stratum_work_cpy(&ssj->swork, swork);
 	
 	cg_runlock(&pool->data_lock);
@@ -366,10 +384,7 @@ void _stratumsrv_update_notify(evutil_socket_t fd, short what, __maybe_unused vo
 		applog(LOG_DEBUG, "SSM: Update triggered by notifier");
 	}
 	
-	if (!stratumsrv_update_notify_str(pool))
-	{
-		applog(LOG_WARNING, "SSM: Failed to subdivide upstream stratum notify!");
-	}
+	stratumsrv_update_notify_str(pool);
 	
 	struct timeval tv_scantime = {
 		.tv_sec = opt_scantime,
