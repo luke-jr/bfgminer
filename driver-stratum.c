@@ -101,8 +101,6 @@ void stratumsrv_send_set_difficulty(struct stratumsrv_conn * const conn, const f
 	bufferevent_write(bev, buf, bufsz);
 }
 
-#define _ssm_gen_dummy_work work2d_gen_dummy_work
-
 static
 float stratumsrv_choose_share_pdiff(const struct stratumsrv_conn * const conn, const struct mining_algorithm * const malgo)
 {
@@ -138,7 +136,7 @@ fail:
 	
 	{
 		struct work work;
-		work2d_gen_dummy_work(&work, &pool->swork, &tv_now, NULL, 0);
+		work2d_gen_dummy_work_for_stale_check(&work, &pool->swork, &tv_now, NULL);
 		
 		const bool is_stale = stale_work(&work, false);
 		
@@ -239,12 +237,11 @@ fail:
 	else
 		stratumsrv_job_pruner();
 	
-	ssj->swork.data_lock_p = NULL;
 	HASH_ADD_KEYPTR(hh, _ssm_jobs, ssj->my_job_id, strlen(ssj->my_job_id), ssj);
 	
 	if (likely(_ssm_cur_job_work.pool))
 		clean_work(&_ssm_cur_job_work);
-	_ssm_gen_dummy_work(&_ssm_cur_job_work, &ssj->swork, &ssj->tv_prepared, NULL, 0);
+	work2d_gen_dummy_work_for_stale_check(&_ssm_cur_job_work, &ssj->swork, &ssj->tv_prepared, NULL);
 	
 	_ssm_notify_sz = p - buf;
 	assert(_ssm_notify_sz <= bufsz);
