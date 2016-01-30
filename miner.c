@@ -1066,6 +1066,7 @@ struct pool *add_pool(void)
 	if (unlikely(pthread_cond_init(&pool->cr_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
+	pool->swork.data_lock_p = &pool->data_lock;
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
@@ -9591,6 +9592,7 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+	dst->data_lock_p = NULL;
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
@@ -9625,7 +9627,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	clean_work(work);
 	
 	cg_wlock(&pool->data_lock);
-	pool->swork.data_lock_p = &pool->data_lock;
 	
 	const int n2size = pool->swork.n2size;
 	bytes_resize(&work->nonce2, n2size);
@@ -9650,11 +9651,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-
+	unsigned char *coinbase;
+	
 	/* Generate coinbase */
 	coinbase = bytes_buf(&swork->coinbase);
 	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
@@ -9662,7 +9660,29 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	/* Downgrade to a read lock to read off the variables */
 	if (swork->data_lock_p)
 		cg_dwlock(swork->data_lock_p);
+	
+	gen_stratum_work3(work, swork, swork->data_lock_p);
+	
+	if (opt_debug)
+	{
+		char header[161];
+		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+		bin2hex(header, work->data, 80);
+		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
+	}
+}
 
+void gen_stratum_work3(struct work * const work, struct stratum_work * const swork, cglock_t * const data_lock_p)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+	
+	coinbase = bytes_buf(&swork->coinbase);
+	
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
@@ -9689,18 +9709,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = maybe_strdup(swork->job_id);
 	work->nonce1 = maybe_strdup(swork->nonce1);
-	if (swork->data_lock_p)
-		cg_runlock(swork->data_lock_p);
-
-	if (opt_debug)
-	{
-		char header[161];
-		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
-		bin2hex(header, work->data, 80);
-		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
-		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
-	}
+	if (data_lock_p)
+		cg_runlock(data_lock_p);
 
 	calc_midstate(work);
 
