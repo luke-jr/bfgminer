@@ -1,3 +1,21 @@
+BFGMiner Version 5.4.2 - March 26, 2016
+
+- Update official Win32/64 build compiler and libraries:
+- - Win64 compiler (GCC) from 4.7.4 to 5.3.0 (Win32 remains at 4.7.4)
+- - libcurl from 7.39.0 to 7.47.1
+- - libevent from 2.0.21 to 2.1.5-r4
+- - libusb from 1.0.18 (Win32) and 1.0.19 (Win64) to 1.0.20
+- - libmicrohttpd from 0.9.38_pre33603 to 0.9.48
+- Update libblkmaker to 0.5.3
+- Bugfix: Sanitise lock situation for work2d
+- Bugfix: SSM: Never issue the same work2d twice in a row
+- Bugfix: SSM: Never send mining.notify for stale work2d
+- SSM: Refactor work2d check and job pruning from _stratumsrv_update_notify
+into stratumsrv_update_notify_str
+- Updates for OpenWrt 15.05
+- Bugfix: Correct work2d handling for GBT servers
+
+
 BFGMiner Version 5.4.1 - November 21, 2015
 
 - bitmain: Use more portable PRIu64 rather than %llu (which fails on Windows)
