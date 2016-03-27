@@ -1,3 +1,11 @@
+bfgminer (4.10.6-0precise1) precise; urgency=low
+
+  * Fix some possible edge case problems with stratum proxying (--stratum-port)
+  * openwrt: Binary packages for 15.05
+  * Fix 2D work support for GBT servers (requires libblkmaker 0.5.3 or newer)
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 27 Mar 2016 04:40:42 -0000
+
 bfgminer (4.10.4-0precise1) precise; urgency=low
 
   * Bug fixes only.
