@@ -547,7 +547,7 @@ const char *alchemist_set_mode(struct cgpu_info * const device, const char * con
     if (val == 1) {
         
         chip->reset_mode = val;
-        sprintf(replybuf, "Driver mode set to raspery pi controller using USB->UART Dongles";
+        sprintf(replybuf, "Driver mode set to raspery pi controller using USB->UART Dongles");
         return replybuf;
     }
         
