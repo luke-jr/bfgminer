@@ -120,6 +120,8 @@ void alchemist_reset_board(const char * const devpath, struct alchemist_chip * c
         close(fd);
 
     }else {
+        applog(LOG_DEBUG, "START IOCTL RTS RESET");
+        
         if(set_serial_rts(fd, BGV_HIGH) == BGV_ERROR)
             applog(LOG_DEBUG, "IOCTL RTS RESET FAILED");
         
