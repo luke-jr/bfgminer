@@ -124,10 +124,18 @@ void alchemist_reset_board(const char * const devpath, struct alchemist_chip * c
 			applog(LOG_DEBUG, "IOCTL RTS RESET FAILED");
 		}
 		
+		if (set_serial_dtr(fd, BGV_HIGH) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL DTR RESET FAILED");
+		}
+		
 		cgsleep_ms(100);
 		
 		if (set_serial_rts(fd, BGV_LOW) == BGV_ERROR) {
 			applog(LOG_DEBUG, "IOCTL RTS RESET FAILED");
+		}
+		
+		if (set_serial_dtr(fd, BGV_LOW) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL DTR RESET FAILED");
 		}
 	}
 }
