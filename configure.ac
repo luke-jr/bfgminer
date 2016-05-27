@@ -223,7 +223,7 @@ m4_define([BFG_FIND_INCLUDE_PATH],[
 	m4_pushdef([_result_var],[inclpath_[]patsubst(_header_file,[[./]],[_])])
 	AC_CHECK_HEADER([_rel_path/_header_file],[
 		AC_MSG_CHECKING([_header_file path])
-		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
+		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)(\\|\\\\|\/)?]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
 		if test "x$_result_var" = "x"; then
 			AC_MSG_RESULT([failed])
 			AC_MSG_ERROR([Couldn't determine include path for _header_file])
