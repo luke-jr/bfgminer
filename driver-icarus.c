@@ -756,7 +756,7 @@ const struct cgpu_info *icarus_proc_for_nonce(const struct cgpu_info * const ica
 	struct ICARUS_INFO * const info = icarus->device_data;
 	unsigned proc_id = 0;
 	for (int i = info->work_division, j = 0; i /= 2; ++j)
-		if (nonce & (1 << (31 - j)))
+		if (nonce & (1UL << (31 - j)))
 			proc_id |= (1 << j);
 	const struct cgpu_info * const proc = device_proc_by_id(icarus, proc_id) ?: icarus;
 	return proc;
