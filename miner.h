@@ -962,7 +962,7 @@ extern int last_logstatusline_len;
 extern bool have_libusb;
 #endif
 extern int httpsrv_port;
-extern int stratumsrv_port;
+extern long stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;

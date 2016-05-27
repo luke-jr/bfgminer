@@ -190,7 +190,7 @@ bool opt_restart = true;
 int httpsrv_port = -1;
 #endif
 #ifdef USE_LIBEVENT
-int stratumsrv_port = -1;
+long stratumsrv_port = -1;
 #endif
 
 const
@@ -1185,6 +1185,23 @@ static char *set_int_0_to_10(const char *arg, int *i)
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
+}
+
+static char *set_long_1_to_65535_or_neg1(const char * const arg, long * const i)
+{
+	const long min = 1, max = 65535;
+	
+	char * const err = opt_set_longval(arg, i);
+	
+	if (err) {
+		return err;
+	}
+	
+	if (*i != -1 && (*i < min || *i > max)) {
+		return "Value out of range";
+	}
+	
+	return NULL;
 }
 
 char *set_strdup(const char *arg, char **p)
@@ -2467,7 +2484,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set socks proxy (host:port)"),
 #ifdef USE_LIBEVENT
 	OPT_WITH_ARG("--stratum-port",
-	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             set_long_1_to_65535_or_neg1, opt_show_longval, &stratumsrv_port,
 	             "Port number to listen on for stratum miners (-1 means disabled)"),
 #endif
 	OPT_WITHOUT_ARG("--submit-stale",
@@ -7337,7 +7354,7 @@ void write_config(FILE *fcfg)
 #endif
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		fprintf(fcfg, ",\n\"stratum-port\" : %d", stratumsrv_port);
+		fprintf(fcfg, ",\n\"stratum-port\" : %ld", stratumsrv_port);
 #endif
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
@@ -12470,7 +12487,7 @@ void bfg_atexit(void)
 }
 
 extern void bfg_init_threadlocal();
-extern void stratumsrv_start();
+extern bool stratumsrv_change_port(unsigned);
 extern void test_aan_pll(void);
 
 int main(int argc, char *argv[])
@@ -13047,7 +13064,7 @@ begin_bench:
 
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		stratumsrv_start();
+		stratumsrv_change_port(stratumsrv_port);
 #endif
 
 #ifdef HAVE_BFG_HOTPLUG
