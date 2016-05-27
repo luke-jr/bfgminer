@@ -1,12 +1,14 @@
-Open up /etc/opkg.conf (on your router) in your favourite editor. You will see
-a line that looks similar to this at the top (depending on your device):
-	src/gz attitude_adjustment http://downloads.openwrt.org/attitude_adjustment/15.05/ar71xx/generic/packages
-Note the platform following the OpenWrt version. In this example, it is ar71xx.
+First, look at /etc/openwrt_release (on your router). You will see a bunch of
+attributes for the OpenWrt system. The DISTRIB_RELEASE attribute is your
+OpenWrt version, and the first part of DISTRIB_TARGET (before the slash) is
+the router's platform.
 
-Now add a new line immediately below it, similar to this:
+Now, open up /etc/opkg.conf (again, on your router) in your favourite editor.
+Add a new line at the bottom, similar to this:
 	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/latest/openwrt/15.05/ar71xx
-Be sure you put the same OpenWrt version and platform at the end as your OpenWrt repository!
-Also note that you can change "latest" to "stable" or "testing" to get better-tested versions.
+In this example, 15.05 is the version of OpenWrt, and ar71xx is the platform.
+Be sure to change those to match your router! You can also change "latest" to
+"stable" or "testing" to get better-tested versions.
 
 Next, save the file and exit your editor. Tell opkg to reload its package lists
 by running the command:
@@ -16,12 +18,8 @@ you open an issue for your router's platform, it may be possible to add
 support.
 
 If all went well updating your package list, you can now install BFGMiner and
-any drivers and/or bitstreams you might need:
+any drivers you might need:
 	opkg install bfgminer
 	opkg install kmod-usb-serial-ftdi
 	opkg install kmod-usb-serial-cp210x
 	opkg install kmod-usb-serial-pl2303
-	opkg find bitstream*
-	opkg install bitstream-ztex-ufm1_15y1
-	opkg install bitstream-ztex-ufm1_15b1
-	opkg install bitstream-fpgaminer
