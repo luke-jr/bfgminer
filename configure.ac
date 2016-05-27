@@ -661,10 +661,23 @@ AC_ARG_WITH([libevent],
 )
 if test "x$libevent" != "xno"; then
 	PKG_CHECK_MODULES([libevent],[libevent >= 2.0.3],[
-		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+		PKG_CHECK_MODULES([libevent_pthreads],[libevent_pthreads],[
+			libevent_CFLAGS="${libevent_CFLAGS} ${libevent_pthreads_CFLAGS}"
+			libevent_LIBS="${libevent_LIBS} ${libevent_pthreads_LIBS}"
+		],[true])
+		AC_MSG_CHECKING([if libevent supports threading])
+		BFG_PREPROC_IFELSE([EVTHREAD_USE_PTHREADS_IMPLEMENTED || EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED],[event2/thread.h],[
+			AC_MSG_RESULT([yes])
+			have_libevent=yes
+		],[
+			AC_MSG_RESULT([no])
+		])
+	])
+	if test "x$have_libevent" = "xyes"; then
 		libevent=yes
-	],[
-		libevent=no
+		need_work2d=yes
+		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+	else
 		libevent_enableaction="install libevent 2.0.3+"
 		if test -n "$need_bfg_driver_proxy_enableaction"; then
 			need_bfg_driver_proxy_enableaction="${need_bfg_driver_proxy_enableaction} (getwork) or libevent 2.0.3+ (stratum)"
@@ -676,9 +689,7 @@ if test "x$libevent" != "xno"; then
 		else
 			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
-	])
-	if test "x$libevent" = "xyes"; then
-		need_work2d=yes
+		libevent=no
 	fi
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])

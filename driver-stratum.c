@@ -24,6 +24,7 @@
 #include <event2/bufferevent.h>
 #include <event2/event.h>
 #include <event2/listener.h>
+#include <event2/thread.h>
 
 #include <jansson.h>
 
@@ -818,32 +819,42 @@ void stratumlistener(struct evconnlistener *listener, evutil_socket_t sock, stru
 	bufferevent_enable(bev, EV_READ | EV_WRITE);
 }
 
-void stratumsrv_start();
+static bool stratumsrv_init_server(void);
 
-void stratumsrv_change_port()
+bool stratumsrv_change_port(const unsigned port)
 {
-	struct event_base * const evbase = _smm_evbase;
-	
-	if (_smm_listener)
-		evconnlistener_free(_smm_listener);
-	
-	if (!_smm_running)
-	{
-		stratumsrv_start();
-		return;
+	if (!_smm_running) {
+		if (!stratumsrv_init_server()) {
+			return false;
+		}
 	}
+	
+	struct event_base * const evbase = _smm_evbase;
+	struct evconnlistener * const old_smm_listener = _smm_listener;
 	
 	struct sockaddr_in sin = {
 		.sin_family = AF_INET,
 		.sin_addr.s_addr = INADDR_ANY,
-		.sin_port = htons(stratumsrv_port),
+		.sin_port = htons(port),
 	};
 	_smm_listener = evconnlistener_new_bind(evbase, stratumlistener, NULL, (
 		LEV_OPT_CLOSE_ON_FREE | LEV_OPT_CLOSE_ON_EXEC | LEV_OPT_REUSEABLE
 	), 0x10, (void*)&sin, sizeof(sin));
 	
+	if (!_smm_listener) {
+		applog(LOG_ERR, "SSM: Failed to listen on port %u", (unsigned)port);
+		return false;
+	}
+	
 	// NOTE: libevent doesn't seem to implement LEV_OPT_CLOSE_ON_EXEC for Windows, so we must do this ourselves
 	set_cloexec_socket(evconnlistener_get_fd(_smm_listener), true);
+	
+	if (old_smm_listener) {
+		evconnlistener_free(old_smm_listener);
+	}
+	stratumsrv_port = port;
+	
+	return true;
 }
 
 static
@@ -852,29 +863,59 @@ void *stratumsrv_thread(__maybe_unused void *p)
 	pthread_detach(pthread_self());
 	RenameThread("stratumsrv");
 	
+	struct event_base *evbase = _smm_evbase;
+	event_base_dispatch(evbase);
+	_smm_running = false;
+	
+	return NULL;
+}
+
+static
+bool stratumsrv_init_server() {
 	work2d_init();
 	
+	if (-1
+#if EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED
+	 && evthread_use_windows_threads()
+#endif
+#if EVTHREAD_USE_PTHREADS_IMPLEMENTED
+	 && evthread_use_pthreads()
+#endif
+	) {
+		applog(LOG_ERR, "SSM: %s failed", "event_use_*threads");
+		return false;
+	}
+	
 	struct event_base *evbase = event_base_new();
+	if (!evbase) {
+		applog(LOG_ERR, "SSM: %s failed", "event_base_new");
+		return false;
+	}
 	_smm_evbase = evbase;
+	
 	{
 		ev_notify = evtimer_new(evbase, _stratumsrv_update_notify, NULL);
+		if (!ev_notify) {
+			applog(LOG_ERR, "SSM: %s failed", "evtimer_new");
+			return false;
+		}
 		_stratumsrv_update_notify(-1, 0, NULL);
 	}
 	{
 		notifier_init(_ssm_update_notifier);
 		struct event *ev_update_notifier = event_new(evbase, _ssm_update_notifier[0], EV_READ | EV_PERSIST, _stratumsrv_update_notify, NULL);
+		if (!ev_update_notifier) {
+			applog(LOG_ERR, "SSM: %s failed", "event_new");
+			return false;
+		}
 		event_add(ev_update_notifier, NULL);
 	}
-	stratumsrv_change_port();
-	event_base_dispatch(evbase);
 	
-	return NULL;
-}
-
-void stratumsrv_start()
-{
 	_smm_running = true;
+	
 	pthread_t pth;
 	if (unlikely(pthread_create(&pth, NULL, stratumsrv_thread, NULL)))
 		quit(1, "stratumsrv thread create failed");
+	
+	return true;
 }
