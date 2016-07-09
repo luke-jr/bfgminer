@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2011-2016 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2012-2014 Andrew Smith
  * Copyright 2010 Jeff Garzik
@@ -183,7 +183,7 @@ bool opt_restart = true;
 int httpsrv_port = -1;
 #endif
 #ifdef USE_LIBEVENT
-int stratumsrv_port = -1;
+long stratumsrv_port = -1;
 #endif
 
 const
@@ -1173,6 +1173,7 @@ struct pool *add_pool2(struct mining_goal_info * const goal)
 	if (unlikely(pthread_cond_init(&pool->cr_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
+	pool->swork.data_lock_p = &pool->data_lock;
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
@@ -1216,6 +1217,19 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
+	pool->pool_diff_effective_retroactively = uri_get_param_bool2(uri, "retrodiff");
+}
+
+static
+bool pool_diff_effective_retroactively(struct pool * const pool)
+{
+	if (pool->pool_diff_effective_retroactively != BTS_UNKNOWN) {
+		return pool->pool_diff_effective_retroactively;
+	}
+	
+	// By default, we enable retrodiff for stratum pools since some servers implement mining.set_difficulty in this way
+	// Note that share_result will explicitly disable BTS_UNKNOWN -> BTS_FALSE if a retrodiff share is rejected specifically for its failure to meet the target.
+	return pool->stratum_active;
 }
 
 /* Pool variant of test and set */
@@ -1299,6 +1313,23 @@ static char *set_int_0_to_10(const char *arg, int *i)
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
+}
+
+static char *set_long_1_to_65535_or_neg1(const char * const arg, long * const i)
+{
+	const long min = 1, max = 65535;
+	
+	char * const err = opt_set_longval(arg, i);
+	
+	if (err) {
+		return err;
+	}
+	
+	if (*i != -1 && (*i < min || *i > max)) {
+		return "Value out of range";
+	}
+	
+	return NULL;
 }
 
 char *set_strdup(const char *arg, char **p)
@@ -2701,7 +2732,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set socks proxy (host:port)"),
 #ifdef USE_LIBEVENT
 	OPT_WITH_ARG("--stratum-port",
-	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             set_long_1_to_65535_or_neg1, opt_show_longval, &stratumsrv_port,
 	             "Port number to listen on for stratum miners (-1 means disabled)"),
 #endif
 	OPT_WITHOUT_ARG("--submit-stale",
@@ -3384,18 +3415,21 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			}
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, estrc);
 			free(estr);
+			json_decref(json);
 			continue;
 		}
 		s = bfg_json_obj_string(json, "result", NULL);
 		if (unlikely(!s))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, "(return value was not a String)");
+			json_decref(json);
 			continue;
 		}
 		s2 = set_b58addr(s, &newscript);
 		if (unlikely(s2))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
+			json_decref(json);
 			continue;
 		}
 		if (goal->generation_script)
@@ -3403,6 +3437,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			if (bytes_eq(&newscript, goal->generation_script))
 			{
 				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
+				json_decref(json);
 				break;
 			}
 		}
@@ -3414,6 +3449,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 		bytes_assimilate(goal->generation_script, &newscript);
 		coinbase_script_block_id = blkchain->currentblk->block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
+		json_decref(json);
 		break;
 	}
 	
@@ -3425,7 +3461,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 #define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
        blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
 #endif
@@ -3606,7 +3642,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	work->tv_staged = tv_now;
 	
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
@@ -3626,15 +3662,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
+			if (swork->tr)
+				tmpl_decref(swork->tr);
 			swork->tr = work->tr;
+			tmpl_incref(swork->tr);
 			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
 			swork->nonce2_offset = cbextranonceoffset;
 			bytes_assimilate_raw(&swork->merkle_bin, branches, branchdatasz, branchdatasz);
 			swork->merkles = branchcount;
-			memcpy(swork->header1, &buf[0], 36);
+			swap32yes(swork->header1, &buf[0], 36 / 4);
 			swork->ntime = le32toh(*(uint32_t *)(&buf[68]));
 			swork->tv_received = tv_now;
-			memcpy(swork->diffbits, &buf[72], 4);
+			swap32yes(swork->diffbits, &buf[72], 4 / 4);
 			memcpy(swork->target, work->target, sizeof(swork->target));
 			free(swork->job_id);
 			swork->job_id = NULL;
@@ -3648,7 +3687,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		else
 			applog(LOG_DEBUG, "blkmk_get_mdata failed for pool %u", pool->pool_no);
 	}
-#endif  // BLKMAKER_VERSION > 4
+#endif  // BLKMAKER_VERSION > 6
 	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
@@ -5259,6 +5298,16 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		char reason[32];
 		put_in_parens(reason, sizeof(reason), extract_reject_reason(val, res, err, work));
 		applog(LOG_DEBUG, "Share above target rejected%s by pool %u as expected, ignoring", reason, pool->pool_no);
+		
+		// Stratum error 23 is "low difficulty share", which suggests this pool tracks job difficulty correctly.
+		// Therefore, we disable retrodiff if it was enabled-by-default.
+		if (pool->pool_diff_effective_retroactively == BTS_UNKNOWN) {
+			json_t *errnum;
+			if (work->stratum && err && json_is_array(err) && json_array_size(err) >= 1 && (errnum = json_array_get(err, 0)) && json_is_number(errnum) && ((int)json_number_value(errnum)) == 23) {
+				applog(LOG_DEBUG, "Disabling retroactive difficulty adjustments for pool %u", pool->pool_no);
+				pool->pool_diff_effective_retroactively = false;
+			}
+		}
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
@@ -5318,6 +5367,11 @@ static char *submit_upstream_work_request(struct work *work)
 		unsigned char data[80];
 		
 		swap32yes(data, work->data, 80 / 4);
+#if BLKMAKER_VERSION > 6
+		if (work->stratum) {
+			req = blkmk_submitm_jansson(tmpl, data, bytes_buf(&work->nonce2), bytes_len(&work->nonce2), le32toh(*((uint32_t*)&work->data[76])), work->do_foreign_submit);
+		} else
+#endif
 #if BLKMAKER_VERSION > 3
 		if (work->do_foreign_submit)
 			req = blkmk_submit_foreign_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
@@ -6752,7 +6806,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 	}
 
-	if (work->stratum) {
+	if (work->getwork_mode == GETWORK_MODE_STRATUM) {
 		char *s;
 
 		s = malloc(1024);
@@ -7912,7 +7966,7 @@ void write_config(FILE *fcfg)
 #endif
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		fprintf(fcfg, ",\n\"stratum-port\" : %d", stratumsrv_port);
+		fprintf(fcfg, ",\n\"stratum-port\" : %ld", stratumsrv_port);
 #endif
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
@@ -8068,6 +8122,55 @@ void zero_stats(void)
 	}
 }
 
+int bfg_strategy_parse(const char * const s)
+{
+	char *endptr;
+	if (!(s && s[0]))
+		return -1;
+	long int selected = strtol(s, &endptr, 0);
+	if (endptr == s || *endptr) {
+		// Look-up by name
+		selected = -1;
+		for (unsigned i = 0; i <= TOP_STRATEGY; ++i) {
+			if (!strcasecmp(strategies[i].s, s)) {
+				selected = i;
+			}
+		}
+	}
+	if (selected < 0 || selected > TOP_STRATEGY) {
+		return -1;
+	}
+	return selected;
+}
+
+bool bfg_strategy_change(const int selected, const char * const param)
+{
+	if (param && param[0]) {
+		switch (selected) {
+			case POOL_ROTATE:
+			{
+				char *endptr;
+				long int n = strtol(param, &endptr, 0);
+				if (n < 0 || n > 9999 || *endptr) {
+					return false;
+				}
+				opt_rotate_period = n;
+				break;
+			}
+			default:
+				return false;
+		}
+	}
+	
+	mutex_lock(&lp_lock);
+	pool_strategy = selected;
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
+	switch_pools(NULL);
+	
+	return true;
+}
+
 #ifdef HAVE_CURSES
 static
 void loginput_mode(const int size)
@@ -8200,25 +8303,25 @@ retry:
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
 			wlogprint("%d: %s\n", i, strategies[i].s);
-		selected = curses_int("Select strategy number type");
+		{
+			char * const selected_str = curses_input("Select strategy type");
+			selected = bfg_strategy_parse(selected_str);
+			free(selected_str);
+		}
 		if (selected < 0 || selected > TOP_STRATEGY) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
+		char *param = NULL;
 		if (selected == POOL_ROTATE) {
-			opt_rotate_period = curses_int("Select interval in minutes");
-
-			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
-				opt_rotate_period = 0;
-				wlogprint("Invalid selection\n");
-				goto retry;
-			}
+			param = curses_input("Select interval in minutes");
 		}
-		mutex_lock(&lp_lock);
-		pool_strategy = selected;
-		pthread_cond_broadcast(&lp_cond);
-		mutex_unlock(&lp_lock);
-		switch_pools(NULL);
+		bool result = bfg_strategy_change(selected, param);
+		free(param);
+		if (!result) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
 		goto updated;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
@@ -10187,6 +10290,7 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+	dst->data_lock_p = NULL;
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
@@ -10221,7 +10325,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	clean_work(work);
 	
 	cg_wlock(&pool->data_lock);
-	pool->swork.data_lock_p = &pool->data_lock;
 	
 	const int n2size = pool->swork.n2size;
 	bytes_resize(&work->nonce2, n2size);
@@ -10246,11 +10349,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-
+	unsigned char *coinbase;
+	
 	/* Generate coinbase */
 	coinbase = bytes_buf(&swork->coinbase);
 	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
@@ -10258,7 +10358,29 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	/* Downgrade to a read lock to read off the variables */
 	if (swork->data_lock_p)
 		cg_dwlock(swork->data_lock_p);
+	
+	gen_stratum_work3(work, swork, swork->data_lock_p);
+	
+	if (opt_debug)
+	{
+		char header[161];
+		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+		bin2hex(header, work->data, 80);
+		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
+	}
+}
 
+void gen_stratum_work3(struct work * const work, struct stratum_work * const swork, cglock_t * const data_lock_p)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+	
+	coinbase = bytes_buf(&swork->coinbase);
+	
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
@@ -10285,18 +10407,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = maybe_strdup(swork->job_id);
 	work->nonce1 = maybe_strdup(swork->nonce1);
-	if (swork->data_lock_p)
-		cg_runlock(swork->data_lock_p);
-
-	if (opt_debug)
-	{
-		char header[161];
-		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
-		bin2hex(header, work->data, 80);
-		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
-		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
-	}
+	if (data_lock_p)
+		cg_runlock(data_lock_p);
 
 	calc_midstate(work);
 
@@ -10306,6 +10418,11 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	if (swork->tr) {
+		work->getwork_mode = GETWORK_MODE_GBT;
+		work->tr = swork->tr;
+		tmpl_incref(work->tr);
+	}
 	calc_diff(work, 0);
 }
 
@@ -10545,7 +10662,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	{
 		bool high_hash = true;
 		struct pool * const pool = work->pool;
-		if (pool->stratum_active)
+		if (pool_diff_effective_retroactively(pool))
 		{
 			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
 			if (memcmp(pool->next_target, work->target, sizeof(work->target)))
@@ -10553,7 +10670,10 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
 				       pool->pool_no);
 				if (hash_target_check_v(work->hash, pool->next_target))
+				{
 					high_hash = false;
+					work->work_difficulty = target_diff(pool->next_target);
+				}
 			}
 		}
 		if (high_hash)
@@ -12370,8 +12490,8 @@ rescan:
 		pthread_join(info->probe_pth, NULL);
 #endif
 	
-	struct driver_registration *reg, *tmp;
-	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
+	struct driver_registration *reg;
+	BFG_FOREACH_DRIVER_BY_PRIORITY(reg)
 	{
 		const struct device_drv * const drv = reg->drv;
 		if (!(drv_algo_check(drv) && drv->drv_detect))
@@ -12547,31 +12667,6 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
-{
-	struct driver_registration *dreg;
-	char dname[dnamelen];
-	int i;
-	
-	for (i = 0; i < dnamelen; ++i)
-		dname[i] = tolower(_dname[i]);
-	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
-	if (!dreg)
-	{
-		for (i = 0; i < dnamelen; ++i)
-			dname[i] = toupper(_dname[i]);
-		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
-		if (!dreg)
-			return NULL;
-	}
-	
-	if (!drv_algo_check(dreg->drv))
-		return NULL;
-	
-	return dreg->drv;
-}
-
-static
 bool _probe_device_do_probe(const struct device_drv * const drv, const struct lowlevel_device_info * const info, bool * const request_rescan_p)
 {
 	bfg_probe_result_flags = 0;
@@ -12608,7 +12703,7 @@ void *probe_device_thread(void *p)
 	
 	// if lowlevel device matches specific user assignment, probe requested driver(s)
 	struct string_elist *sd_iter, *sd_tmp;
-	struct driver_registration *dreg, *dreg_tmp;
+	struct driver_registration *dreg;
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
@@ -12620,17 +12715,26 @@ void *probe_device_thread(void *p)
 		{
 			if (!_probe_device_match(info, ser))
 				continue;
+			
 			const size_t dnamelen = (colon - dname);
-			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-				continue;
-			if (_probe_device_do_probe(drv, info, &request_rescan))
-				return NULL;
+			char dname_nt[dnamelen + 1];
+			memcpy(dname_nt, dname, dnamelen);
+			dname_nt[dnamelen] = '\0';
+			
+			BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
+				const struct device_drv * const drv = dreg->drv;
+				if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+					continue;
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+				if (_probe_device_do_probe(drv, info, &request_rescan))
+					return NULL;
+			}
 		}
 	}
 	
 	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
-	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 	{
 		const struct device_drv * const drv = dreg->drv;
 		
@@ -12650,8 +12754,14 @@ void *probe_device_thread(void *p)
 			if (strcasecmp("noauto", &colon[1]) && strcasecmp("auto", &colon[1]))
 				continue;
 			const ssize_t dnamelen = (colon - dname);
-			if (dnamelen >= 0 && _probe_device_find_drv(dname, dnamelen) != drv)
-				continue;
+			if (dnamelen >= 0) {
+				char dname_nt[dnamelen + 1];
+				memcpy(dname_nt, dname, dnamelen);
+				dname_nt[dnamelen] = '\0';
+				
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+			}
 			doauto = (tolower(colon[1]) == 'a');
 			if (dnamelen != -1)
 				break;
@@ -12704,7 +12814,7 @@ void *probe_device_thread(void *p)
 					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
 					bool dont_rescan = false;
-					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 					{
 						const struct device_drv * const drv = dreg->drv;
 						if (!drv_algo_check(drv))
@@ -12728,15 +12838,23 @@ void *probe_device_thread(void *p)
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
-		const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-		if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-			continue;
-		LL_FOREACH2(infolist, info, same_devid_next)
-		{
-			if (info->lowl->exclude_from_all)
+		char dname_nt[dnamelen + 1];
+		memcpy(dname_nt, dname, dnamelen);
+		dname_nt[dnamelen] = '\0';
+
+		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
+			const struct device_drv * const drv = dreg->drv;
+			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;
-			if (_probe_device_do_probe(drv, info, NULL))
-				return NULL;
+			if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+				continue;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if (info->lowl->exclude_from_all)
+					continue;
+				if (_probe_device_do_probe(drv, info, NULL))
+					return NULL;
+			}
 		}
 	}
 	
@@ -13107,7 +13225,7 @@ void bfg_atexit(void)
 }
 
 extern void bfg_init_threadlocal();
-extern void stratumsrv_start();
+extern bool stratumsrv_change_port(unsigned);
 extern void test_aan_pll(void);
 
 int main(int argc, char *argv[])
@@ -13670,7 +13788,7 @@ begin_bench:
 
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		stratumsrv_start();
+		stratumsrv_change_port(stratumsrv_port);
 #endif
 
 #ifdef HAVE_BFG_HOTPLUG
