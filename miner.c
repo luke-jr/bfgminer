@@ -7611,6 +7611,11 @@ static bool test_work_current(struct work *work)
 				update_last_work(work);
 			if (was_active)
 			{
+				struct block_info * const t = calloc(sizeof(struct block_info), 1);
+                                memcpy(t->prevblkhash, prevblkhash, sizeof(t->prevblkhash));
+                                t->block_id = block_id;
+                                t->block_seen_order = new_blocks++;
+                                t->first_seen_time = time(NULL);
 				// Pool actively changed block
 				if (pool == current_pool())
 					restart = true;
@@ -7618,9 +7623,13 @@ static bool test_work_current(struct work *work)
 				{
 					// Caught up, only announce if this pool is the one in use
 					if (restart)
+					{
+						set_curblock(goal, t);
+                                                set_blockdiff(goal, work);
 						applog(LOG_NOTICE, "%s %d caught up to new block",
 						       work->longpoll ? "Longpoll from pool" : "Pool",
 						       pool->pool_no);
+					}
 				}
 				else
 				{
@@ -7628,9 +7637,11 @@ static bool test_work_current(struct work *work)
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
+					set_curblock(goal, t);
+					set_blockdiff(goal, work);
 					char hexstr[65];
 					blkhashstr(hexstr, prevblkhash);
-					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
+					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s (Normal if multicoin pool)",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       pool->pool_no,
 					       hexstr);
