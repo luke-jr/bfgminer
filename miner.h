@@ -954,6 +954,11 @@ static inline void cg_runlock(cglock_t *lock)
 	rd_unlock(&lock->rwlock);
 }
 
+static inline void cg_iunlock(cglock_t *lock)
+{
+	mutex_unlock(&lock->mutex);
+}
+
 static inline void cg_wunlock(cglock_t *lock)
 {
 	wr_unlock_noyield(&lock->rwlock);

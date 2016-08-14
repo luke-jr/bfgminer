@@ -3432,22 +3432,27 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 			json_decref(json);
 			continue;
 		}
+		cg_ilock(&control_lock);
 		if (goal->generation_script)
 		{
 			if (bytes_eq(&newscript, goal->generation_script))
 			{
+				cg_iunlock(&control_lock);
 				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
 				json_decref(json);
 				break;
 			}
+			cg_ulock(&control_lock);
 		}
 		else
 		{
+			cg_ulock(&control_lock);
 			goal->generation_script = malloc(sizeof(*goal->generation_script));
 			bytes_init(goal->generation_script);
 		}
 		bytes_assimilate(goal->generation_script, &newscript);
 		coinbase_script_block_id = blkchain->currentblk->block_id;
+		cg_wunlock(&control_lock);
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
 		json_decref(json);
 		break;
