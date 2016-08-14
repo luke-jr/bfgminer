@@ -2904,6 +2904,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		};
 
 		const struct blktmpl_longpoll_req *lp;
+		mutex_lock(&pool->pool_lock);
 		if ((lp = blktmpl_get_longpoll(tmpl)) && ((!pool->lp_id) || strcmp(lp->id, pool->lp_id))) {
 			free(pool->lp_id);
 			pool->lp_id = strdup(lp->id);
@@ -2917,6 +2918,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			}
 #endif
 		}
+		mutex_unlock(&pool->pool_lock);
 	}
 	else
 	if (unlikely(!jobj_binary(res_val, "data", work->data, sizeof(work->data), true))) {
