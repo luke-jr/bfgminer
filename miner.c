@@ -2926,14 +2926,18 @@ void refresh_bitcoind_address(const bool fresh)
 			json_decref(json);
 			continue;
 		}
+		cg_ilock(&control_lock);
 		if (bytes_eq(&newscript, &opt_coinbase_script))
 		{
+			cg_iunlock(&control_lock);
 			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
 			json_decref(json);
 			break;
 		}
+		cg_ulock(&control_lock);
 		bytes_assimilate(&opt_coinbase_script, &newscript);
 		coinbase_script_block_id = current_block_id;
+		cg_wunlock(&control_lock);
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
 		json_decref(json);
 		break;
