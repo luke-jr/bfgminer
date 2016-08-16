@@ -6364,8 +6364,6 @@ static void push_curl_entry(struct curl_ent *ce, struct pool *pool)
 	mutex_unlock(&pool->pool_lock);
 }
 
-bool stale_work(struct work *work, bool share);
-
 static inline bool should_roll(struct work *work)
 {
 	struct timeval now;
@@ -6559,7 +6557,7 @@ static void pool_died(struct pool *pool)
 		mutex_unlock(&lp_lock);
 }
 
-bool stale_work(struct work *work, bool share)
+bool stale_work2(struct work * const work, const bool share, const bool have_pool_data_lock)
 {
 	unsigned work_expiry;
 	struct pool *pool;
@@ -6632,10 +6630,14 @@ bool stale_work(struct work *work, bool share)
 
 		same_job = true;
 
-		cg_rlock(&pool->data_lock);
+		if (!have_pool_data_lock) {
+			cg_rlock(&pool->data_lock);
+		}
 		if (strcmp(work->job_id, pool->swork.job_id))
 			same_job = false;
-		cg_runlock(&pool->data_lock);
+		if (!have_pool_data_lock) {
+			cg_runlock(&pool->data_lock);
+		}
 
 		if (!same_job) {
 			applog(LOG_DEBUG, "Work stale due to stratum job_id mismatch");

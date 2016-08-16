@@ -140,7 +140,7 @@ fail:
 		struct work work;
 		work2d_gen_dummy_work(&work, &pool->swork, &tv_now, NULL, 0);
 		
-		const bool is_stale = stale_work(&work, false);
+		const bool is_stale = stale_work2(&work, false, true);
 		
 		clean_work(&work);
 		

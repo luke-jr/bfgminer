@@ -1073,7 +1073,8 @@ extern void thread_reportin(struct thr_info *thr);
 extern void thread_reportout(struct thr_info *);
 extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
-extern bool stale_work(struct work *, bool share);
+extern bool stale_work2(struct work *, bool share, bool have_pool_data_lock);
+#define stale_work(work, share)  stale_work2(work, share, false)
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
 extern void blkhashstr(char *out, const unsigned char *hash);
 static const float minimum_pdiff = max(FLT_MIN, 1./0x100000000);
