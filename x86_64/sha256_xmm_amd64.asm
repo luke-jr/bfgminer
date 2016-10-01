@@ -25,6 +25,7 @@ BITS 64
 %define data  rdx
 %define init  rcx
 %endif
+%define rel_sha256_consts_m128i  r10
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define SHA_CALC_W_PARA         2
@@ -65,11 +66,7 @@ global sha256_sse2_64_new
     pand      sr3, rE                           ; sr3 = rE & rF
     movdqa    rG, rF                            ; rG  = rF
 
-%ifidn __YASM_OBJFMT__, macho64
-    paddd     sr1, [rcx+rax]
-%else
-    paddd     sr1, sha256_consts_m128i[rax]     ; T1  =                    sha256_consts_m128i[i] + w;
-%endif
+    paddd     sr1, [rel_sha256_consts_m128i+rax] ; T1  =                    sha256_consts_m128i[i] + w;
     pxor      sr2, sr3                          ; sr2 = (rE & rF) ^ (~rE & rG) = Ch (e, f, g)
 
     movdqa    rF, rE                            ; rF  = rE
@@ -257,9 +254,7 @@ sha256_sse2_64_new:
     pshufd    rH, rE, 0xFF          ; rH == H
     pshufd    rE, rE, 0             ; rE == E
 
-%ifidn __YASM_OBJFMT__, macho64
-    lea       rcx, [sha256_consts_m128i wrt rip]
-%endif
+    lea       rel_sha256_consts_m128i, [sha256_consts_m128i wrt rip]
 
 %%SHAROUND_LOOP:
 %assign i 0
