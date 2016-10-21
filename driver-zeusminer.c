@@ -1,7 +1,7 @@
 /*
  * Copyright 2014 Nate Woolls
  * Copyright 2014 ZeusMiner Team
- * Copyright 2014 Luke Dashjr
+ * Copyright 2014-2015 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -133,8 +133,8 @@ bool zeusminer_detect_one(const char *devpath)
 	//golden_speed_per_core is the number of hashes / second / core
 	uint64_t golden_speed_per_core = (uint64_t)(hash_count / duration_sec);
 	//don't combine the following two lines - overflows leaving info->read_count at 0
-	info->read_count = (uint32_t)((4294967296 * 10) / (ZEUSMINER_CHIP_CORES * chips_count_max * golden_speed_per_core * 2));
-	info->read_count = info->read_count * 3 / 4;
+	info->read_timeout_ms = ((uint64_t)(0x100000000 * 1000)) / (ZEUSMINER_CHIP_CORES * chips_count_max * golden_speed_per_core * 2);
+	info->read_timeout_ms = info->read_timeout_ms * 3 / 4;
 	
 	return true;
 }
@@ -219,7 +219,6 @@ bool zeusminer_thread_init(struct thr_info * const thr)
 {
 	struct cgpu_info * const device = thr->cgpu;
 	
-	device->min_nonce_diff = 1./0x10000;
 	device->set_device_funcs = zeusminer_set_device_funcs_live;
 	
 	return icarus_init(thr);
@@ -320,7 +319,7 @@ void zeusminer_drv_init()
 	// metadata
 	zeusminer_drv.dname = "zeusminer";
 	zeusminer_drv.name = "ZUS";
-	zeusminer_drv.supported_algos = POW_SCRYPT;
+	zeusminer_drv.drv_min_nonce_diff = common_scrypt_min_nonce_diff;
 	
 	// detect device
 	zeusminer_drv.lowl_probe = zeusminer_lowl_probe;

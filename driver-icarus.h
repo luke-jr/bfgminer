@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2015 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2012 Xiangfu
  * Copyright 2012 Andrew Smith
@@ -17,14 +17,10 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+#include "deviceapi.h"
 #include "dynclock.h"
 #include "miner.h"
 
-// Fraction of a second, USB timeout is measured in
-// i.e. 10 means 1/10 of a second
-// Right now, it MUST be 10 due to other assumptions.
-#define TIME_FACTOR 10
-// It's 10 per second, thus value = 10/TIME_FACTOR =
 #define ICARUS_READ_FAULT_DECISECONDS 1
 
 #define NANOSEC 1000000000.0
@@ -76,8 +72,8 @@ struct ICARUS_INFO {
 	struct ICARUS_HISTORY history[INFO_HISTORY+1];
 	uint32_t min_data_count;
 
-	// Timeout scanning for a nonce (deciseconds)
-	int read_count;
+	// Timeout scanning for a nonce
+	unsigned read_timeout_ms;
 	// Timeout scanning for a golden nonce (deciseconds)
 	int probe_read_count;
 	
@@ -133,6 +129,14 @@ struct ICARUS_INFO {
 	// Custom driver functions
 	bool (*detect_init_func)(const char *devpath, int fd, struct ICARUS_INFO *);
 	bool (*job_start_func)(struct thr_info *);
+	bool has_bm1382_freq_register;
+	
+#ifdef USE_DUALMINER
+#ifdef USE_SCRYPT
+	bool scrypt;
+#endif
+	bool dual_mode;
+#endif
 	
 #ifdef USE_ZEUSMINER
 	// Hardware information, doesn't affect anything directly
@@ -153,11 +157,16 @@ struct icarus_state {
 	uint8_t *ob_bin;
 };
 
-bool icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
-extern int icarus_gets(unsigned char *, int fd, struct timeval *tv_finish, struct thr_info *, int read_count, int read_size);
-extern int icarus_write(int fd, const void *buf, size_t bufLen);
+extern struct cgpu_info *icarus_detect_custom(const char *devpath, struct device_drv *, struct ICARUS_INFO *);
+extern int icarus_read(const char *repr, uint8_t *buf, int fd, struct timeval *tvp_finish, struct thr_info *, const struct timeval *tvp_timeout, struct timeval *tvp_now, int read_size);
+extern int icarus_write(const char * const repr, int fd, const void *buf, size_t bufLen);
 extern bool icarus_init(struct thr_info *);
 extern void do_icarus_close(struct thr_info *thr);
 extern bool icarus_job_start(struct thr_info *);
+
+extern const char *icarus_set_baud(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_work_division(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_reopen(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+extern const char *icarus_set_timing(struct cgpu_info *proc, const char *optname, const char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
 
 #endif

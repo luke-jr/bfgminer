@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <sys/time.h>
 
-#include <uthash.h>
+#include <utlist.h>
 
 #include "miner.h"
 
@@ -13,8 +13,8 @@ struct driver_registration;
 struct driver_registration {
 	const struct device_drv *drv;
 	
-	UT_hash_handle hh;   // hash & order by dname
-	UT_hash_handle hh2;  // hash by name, order by priority
+	struct driver_registration *next_dname;
+	struct driver_registration *next_prio;
 	struct driver_registration *next;  // DO NOT USE
 };
 
@@ -22,14 +22,10 @@ extern struct driver_registration *_bfg_drvreg1;
 extern struct driver_registration *_bfg_drvreg2;
 extern void bfg_devapi_init();
 
-#define BFG_FIND_DRV_BY_DNAME(reg, name, namelen)  \
-	HASH_FIND(hh , _bfg_drvreg1, name, namelen, reg)
-#define BFG_FIND_DRV_BY_NAME(reg, name, namelen)  \
-	HASH_FIND(hh2, _bfg_drvreg2, name, namelen, reg)
-#define BFG_FOREACH_DRIVER_BY_DNAME(reg, tmp)  \
-	HASH_ITER(hh , _bfg_drvreg1, reg, tmp)
-#define BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)  \
-	HASH_ITER(hh2, _bfg_drvreg2, reg, tmp)
+#define BFG_FOREACH_DRIVER_BY_DNAME(reg)  \
+	LL_FOREACH2(_bfg_drvreg1, reg, next_dname)
+#define BFG_FOREACH_DRIVER_BY_PRIORITY(reg)  \
+	LL_FOREACH2(_bfg_drvreg2, reg, next_prio)
 
 extern void _bfg_register_driver(const struct device_drv *);
 #define BFG_REGISTER_DRIVER(drv)                \
@@ -41,6 +37,9 @@ extern void _bfg_register_driver(const struct device_drv *);
 // END BFG_REGISTER_DRIVER
 
 extern bool bfg_need_detect_rescan;
+
+extern float common_sha256d_and_scrypt_min_nonce_diff(struct cgpu_info *, const struct mining_algorithm *);
+extern float common_scrypt_min_nonce_diff(struct cgpu_info *, const struct mining_algorithm *);
 
 extern void request_work(struct thr_info *);
 extern struct work *get_work(struct thr_info *);
@@ -92,6 +91,9 @@ struct bfg_set_device_definition {
 	const char *description;
 };
 extern const char *proc_set_device(struct cgpu_info *proc, char *optname, char *newvalue, char *replybuf, enum bfg_set_device_replytype *out_success);
+#ifdef HAVE_CURSES
+extern const char *proc_set_device_tui_wrapper(struct cgpu_info *proc, char *optname, bfg_set_device_func_t, const char *prompt, const char *success_msg);
+#endif
 
 typedef bool(*detectone_func_t)(const char*);
 typedef int(*autoscan_func_t)();

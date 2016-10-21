@@ -71,6 +71,12 @@ void *prune_worklog_thread(void *userdata)
 }
 
 static
+float proxy_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return minimum_pdiff;
+}
+
+static
 void proxy_first_client(struct cgpu_info *cgpu)
 {
 	pthread_create(&prune_worklog_pth, NULL, prune_worklog_thread, cgpu);
@@ -99,7 +105,6 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 			.threads = 0,
 			.device_data = client,
 			.device_path = user,
-			.min_nonce_diff = (opt_scrypt ? (1./0x10000) : 1.),
 		};
 		timer_set_now(&cgpu->cgminer_stats.start_tv);
 		if (unlikely(!create_new_cgpus(add_cgpu_live, cgpu)))
@@ -112,7 +117,7 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 		*client = (struct proxy_client){
 			.username = user,
 			.cgpu = cgpu,
-			.desired_share_pdiff = opt_scrypt ? (1./0x10000) : 1.,
+			.desired_share_pdiff = 0.,
 		};
 		
 		b = HASH_COUNT(proxy_clients);
@@ -133,14 +138,17 @@ struct proxy_client *proxy_find_or_create_client(const char *username)
 	return client;
 }
 
+// See also, stratumsrv_init_diff in driver-stratum.c
 static
 const char *proxy_set_diff(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const success)
 {
 	struct proxy_client * const client = proc->device_data;
-	const double nv = atof(newvalue);
-	if (nv <= 0)
+	double nv = atof(newvalue);
+	if (nv < 0)
 		return "Invalid difficulty";
 	
+	if (nv <= minimum_pdiff)
+		nv = minimum_pdiff;
 	client->desired_share_pdiff = nv;
 	
 #ifdef USE_LIBEVENT
@@ -167,6 +175,7 @@ static const struct bfg_set_device_definition proxy_set_device_funcs[] = {
 struct device_drv proxy_drv = {
 	.dname = "proxy",
 	.name = "PXY",
+	.drv_min_nonce_diff = proxy_min_nonce_diff,
 #ifdef HAVE_CURSES
 	.proc_wlogprint_status = proxy_wlogprint_status,
 #endif

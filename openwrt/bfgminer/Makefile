@@ -11,11 +11,15 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=4.8.0
+PKG_VERSION:=5.4.2
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).txz
 PKG_SOURCE_URL:=http://luke.dashjr.org/programs/bitcoin/files/$(PKG_NAME)/$(PKG_VERSION)/
+
+PKG_MAINTAINER:=Luke Dashjr <luke-jr+bfgminer@utopios.org>
+PKG_LICENSE:=GPL-3.0+
+PKG_LICENSE_FILES:=COPYING
 
 PKG_INSTALL:=1
 
@@ -59,9 +63,17 @@ config PACKAGE_$(PKG_NAME)_libmicrohttpd
 	depends on PACKAGE_$(PKG_NAME)
 	default y
 config PACKAGE_$(PKG_NAME)_libusb
-	bool "Build with libusb support (X6500 & ZTEX)"
+	bool "Build with libusb support (Cointerra, HashBuster Micro, Klondike, X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_bitmain
+	bool "Build with bitmain driver (only for S* series miners)"
+	depends on PACKAGE_$(PKG_NAME)
+	default n
+config PACKAGE_$(PKG_NAME)_keccak
+	bool "Build with Keccak algorithm support"
+	depends on PACKAGE_$(PKG_NAME)
+	default n
 config PACKAGE_$(PKG_NAME)_scrypt
 	bool "Build with scrypt algorithm support"
 	depends on PACKAGE_$(PKG_NAME)
@@ -88,6 +100,14 @@ endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --without-libusb
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_bitmain
+CONFIGURE_ARGS += --enable-bitmain
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_keccak
+CONFIGURE_ARGS += --enable-keccak
 endif
 
 ifdef CONFIG_PACKAGE_$(PKG_NAME)_scrypt

@@ -15,6 +15,7 @@
 
 #include "config.h"
 
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -62,7 +63,6 @@
 #include "miner.h"
 #include "compat.h"
 #include "util.h"
-#include "version.h"
 
 #define DEFAULT_SOCKWAIT 60
 
@@ -78,6 +78,7 @@ struct data_buffer {
 struct upload_buffer {
 	const void	*buf;
 	size_t		len;
+	size_t		pos;
 };
 
 struct header_info {
@@ -177,17 +178,51 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 		pool->lp_active = true;
 	}
 
-	if (len > ub->len)
-		len = ub->len;
+	if (len > ub->len - ub->pos)
+		len = ub->len - ub->pos;
 
 	if (len) {
-		memcpy(ptr, ub->buf, len);
-		ub->buf += len;
-		ub->len -= len;
+		memcpy(ptr, ub->buf + ub->pos, len);
+		ub->pos += len;
 	}
 
 	return len;
 }
+
+#if LIBCURL_VERSION_NUM >= 0x071200
+static int seek_data_cb(void *user_data, curl_off_t offset, int origin)
+{
+	struct json_rpc_call_state * const state = user_data;
+	struct upload_buffer * const ub = &state->upload_data;
+	
+	switch (origin) {
+		case SEEK_SET:
+			if (offset < 0 || offset > ub->len)
+				return 1;
+			ub->pos = offset;
+			break;
+		case SEEK_CUR:
+			// Check the offset is valid, taking care to avoid overflows or negative unsigned numbers
+			if (offset < 0 && ub->pos < (size_t)-offset)
+				return 1;
+			if (ub->len < offset)
+				return 1;
+			if (ub->pos > ub->len - offset)
+				return 1;
+			ub->pos += offset;
+			break;
+		case SEEK_END:
+			if (offset > 0 || (size_t)-offset > ub->len)
+				return 1;
+			ub->pos = ub->len + offset;
+			break;
+		default:
+			return 1;  /* CURL_SEEKFUNC_FAIL */
+	}
+	
+	return 0;  /* CURL_SEEKFUNC_OK */
+}
+#endif
 
 static size_t resp_hdr_cb(void *ptr, size_t size, size_t nmemb, void *user_data)
 {
@@ -416,6 +451,62 @@ static int curl_debug_cb(__maybe_unused CURL *handle, curl_infotype type,
 	return 0;
 }
 
+json_t *json_web_config(CURL *curl, const char *url)
+{
+	struct data_buffer all_data = {NULL, 0};
+	char curl_err_str[CURL_ERROR_SIZE];
+	json_error_t err;
+	long timeout = 60;
+	json_t *val;
+	int rc;
+
+	memset(&err, 0, sizeof(err));
+
+	/* it is assumed that 'curl' is freshly [re]initialized at this pt */
+
+	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+	curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
+	
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout);
+
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
+	curl_easy_setopt(curl, CURLOPT_URL, url);
+	curl_easy_setopt(curl, CURLOPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
+
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, all_data_cb);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &all_data);
+	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_err_str);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
+	curl_easy_setopt(curl, CURLOPT_USE_SSL, CURLUSESSL_TRY);
+
+	val = NULL;
+	rc = curl_easy_perform(curl);
+	if (rc) {
+		applog(LOG_ERR, "HTTP config request of '%s' failed: %s",
+				url, curl_err_str);
+		goto c_out;
+	}
+
+	if (!all_data.buf) {
+		applog(LOG_ERR, "Empty config data received from '%s'",
+				url);
+		goto c_out;
+	}
+
+	val = JSON_LOADS(all_data.buf, &err);
+	if (!val) {
+		applog(LOG_ERR, "JSON config decode of '%s' failed(%d): %s",
+				url, err.line, err.text);
+		goto c_out;
+	}
+
+c_out:
+	databuf_free(&all_data);
+	curl_easy_reset(curl);
+	return val;
+}
+
 void json_rpc_call_async(CURL *curl, const char *url,
 		      const char *userpass, const char *rpc_req,
 		      bool longpoll,
@@ -461,6 +552,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state->all_data);
 	curl_easy_setopt(curl, CURLOPT_READFUNCTION, upload_data_cb);
 	curl_easy_setopt(curl, CURLOPT_READDATA, state);
+#if LIBCURL_VERSION_NUM >= 0x071200
+	curl_easy_setopt(curl, CURLOPT_SEEKFUNCTION, &seek_data_cb);
+	curl_easy_setopt(curl, CURLOPT_SEEKDATA, state);
+#endif
 	curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, &state->curl_err_str[0]);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1);
 	curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, resp_hdr_cb);
@@ -486,9 +581,10 @@ void json_rpc_call_async(CURL *curl, const char *url,
 
 	state->upload_data.buf = rpc_req;
 	state->upload_data.len = strlen(rpc_req);
+	state->upload_data.pos = 0;
 	sprintf(len_hdr, "Content-Length: %lu",
 		(unsigned long) state->upload_data.len);
-	sprintf(user_agent_hdr, "User-Agent: %s", PACKAGE"/"VERSION);
+	sprintf(user_agent_hdr, "User-Agent: %s", bfgminer_name_slash_ver);
 
 	headers = curl_slist_append(headers,
 		"Content-type: application/json");
@@ -555,7 +651,7 @@ json_t *json_rpc_call_completed(CURL *curl, int rc, bool probe, int *rolltime, v
 	bool probing = probe && !pool->probed;
 
 	if (rc) {
-		applog(LOG_INFO, "HTTP request failed: %s", state->curl_err_str);
+		applog(LOG_DEBUG, "HTTP request failed: %s", state->curl_err_str);
 		goto err_out;
 	}
 
@@ -790,17 +886,6 @@ char *ucs2_to_utf8_dup(uint16_t * const in, size_t sz)
 	return out;
 }
 
-void hash_data(unsigned char *out_hash, const unsigned char *data)
-{
-	unsigned char blkheader[80];
-	
-	// data is past the first SHA256 step (padding and interpreting as big endian on a little endian platform), so we need to flip each 32-bit chunk around to get the original input block header
-	swap32yes(blkheader, data, 80 / 4);
-	
-	// double-SHA256 to get the block hash
-	gen_hash(blkheader, out_hash, 80);
-}
-
 // Example output: 0000000000000000000000000000000000000000000000000000ffff00000000 (bdiff 1)
 void real_block_target(unsigned char *target, const unsigned char *data)
 {
@@ -863,15 +948,6 @@ bool hash_target_check_v(const unsigned char *hash, const unsigned char *target)
 	}
 
 	return rc;
-}
-
-// This operates on a native-endian SHA256 state
-// In other words, on little endian platforms, every 4 bytes are in reverse order
-bool fulltest(const unsigned char *hash, const unsigned char *target)
-{
-	unsigned char hash2[32];
-	swap32tobe(hash2, hash, 32 / 4);
-	return hash_target_check_v(hash2, target);
 }
 
 struct thread_q *tq_new(void)
@@ -1957,6 +2033,17 @@ bool isCalpha(const int c)
 	return false;
 }
 
+bool match_strtok(const char * const optlist, const char * const delim, const char * const needle)
+{
+	const size_t optlist_sz = strlen(optlist) + 1;
+	char opts[optlist_sz];
+	memcpy(opts, optlist, optlist_sz);
+	for (char *el, *nextptr, *s = opts; (el = strtok_r(s, delim, &nextptr)); s = NULL)
+		if (!strcasecmp(el, needle))
+			return true;
+	return false;
+}
+
 static
 bool _appdata_file_call(const char * const appname, const char * const filename, const appdata_file_callback_t cb, void * const userp, const char * const path)
 {
@@ -2067,11 +2154,15 @@ const char *extract_domain(size_t * const out_domainlen, const char * const uri,
 			// part of the URI scheme, ignore it
 			while (p[0] == '/')
 				++p;
-			p = memchr(p, '/', urilen - (p - uri)) ?: &uri[urilen];
+			p = memchr(p, '/', urilen - (p - uri));
 		}
 	}
-	else
-		p = &uri[urilen];
+	if (!p)
+	{
+		p = memchr(uri, '?', urilen) ?:
+		    memchr(uri, '#', urilen) ?:
+		    &uri[urilen];
+	}
 	
 	s = p;
 	q = my_memrchr(uri, ':', p - uri);
@@ -2170,6 +2261,14 @@ void test_domain_funcs()
 	_test_extract_domain("s.m.eligius.st", "stratum+tcp://s.m.eligius.st.:3334///");
 	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334");
 	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334///");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334#foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st:3334?foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st#foo");
+	_test_extract_domain("s.m.eligius.st", "http://s.m.eligius.st?foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st#foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st?foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334#foo");
+	_test_extract_domain("s.m.eligius.st", "s.m.eligius.st:3334?foo");
 	_test_extract_domain("foohost", "foohost:3334");
 	_test_extract_domain("foohost", "foohost:3334///");
 	_test_extract_domain("foohost", "foohost:3334/abc.com//");
@@ -2203,6 +2302,7 @@ struct bfg_strtobool_keyword {
 bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused const int opts)
 {
 	struct bfg_strtobool_keyword keywords[] = {
+		{false, "disable"},
 		{false, "false"},
 		{false, "never"},
 		{false, "none"},
@@ -2210,7 +2310,9 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 		{false, "no"},
 		{false, "0"},
 		
+		{true , "enable"},
 		{true , "always"},
+		{true , "force"},
 		{true , "true"},
 		{true , "yes"},
 		{true , "on"},
@@ -2396,20 +2498,20 @@ size_t varint_decode(const uint8_t *p, size_t size, uint64_t *n)
 {
 	if (size > 8 && p[0] == 0xff)
 	{
-		*n = upk_u64le(p, 0);
+		*n = upk_u64le(p, 1);
 		return 9;
 	}
 	if (size > 4 && p[0] == 0xfe)
 	{
-		*n = upk_u32le(p, 0);
+		*n = upk_u32le(p, 1);
 		return 5;
 	}
 	if (size > 2 && p[0] == 0xfd)
 	{
-		*n = upk_u16le(p, 0);
+		*n = upk_u16le(p, 1);
 		return 3;
 	}
-	if (size > 0)
+	if (size > 0 && p[0] <= 0xfc)
 	{
 		*n = p[0];
 		return 1;
@@ -2553,6 +2655,19 @@ static bool parse_notify(struct pool *pool, json_t *val)
 	pool->submit_old = !clean;
 	pool->swork.clean = true;
 	
+	// stratum_set_goal ensures these are the same pointer if they match
+	if (pool->goalname != pool->next_goalname)
+	{
+		free(pool->goalname);
+		pool->goalname = pool->next_goalname;
+		mining_goal_reset(pool->goal);
+	}
+	if (pool->next_goal_malgo)
+	{
+		goal_set_malgo(pool->goal, pool->next_goal_malgo);
+		pool->next_goal_malgo = NULL;
+	}
+	
 	if (pool->next_nonce1)
 	{
 		free(pool->swork.nonce1);
@@ -2629,6 +2744,8 @@ out:
 
 static bool parse_diff(struct pool *pool, json_t *val)
 {
+	const struct mining_goal_info * const goal = pool->goal;
+	const struct mining_algorithm * const malgo = goal->malgo;
 	double diff;
 
 	diff = json_number_value(json_array_get(val, 0));
@@ -2642,8 +2759,10 @@ static bool parse_diff(struct pool *pool, json_t *val)
 		diff = bdiff_to_pdiff(diff);
 	}
 	
-	if ((!opt_scrypt) && diff < 1 && diff > 0.999)
+#ifdef USE_SHA256D
+	if (malgo->algo == POW_SHA256D && diff < 1 && diff > 0.999)
 		diff = 1;
+#endif
 	
 #ifdef USE_SCRYPT
 	// Broken Scrypt pools multiply difficulty by 0x10000
@@ -2660,7 +2779,7 @@ static bool parse_diff(struct pool *pool, json_t *val)
 	// Diff 16 at 1.15 Gh/s = 1 share / 60s
 	// Diff 16 at 7.00 Gh/s = 1 share / 10s
 
-	if (opt_scrypt && (diff >= minimum_broken_scrypt_diff))
+	if (malgo->algo == POW_SCRYPT && (diff >= minimum_broken_scrypt_diff))
 		diff /= broken_scrypt_diff_multiplier;
 #endif
 
@@ -2739,6 +2858,72 @@ err:
 	return true;
 }
 
+static
+bool stratum_set_goal(struct pool * const pool, json_t * const val, json_t * const params)
+{
+	if (!uri_get_param_bool(pool->rpc_url, "goalreset", false))
+		return false;
+	
+	const char * const new_goalname = __json_array_string(params, 0);
+	struct mining_algorithm *new_malgo = NULL;
+	const char *emsg = NULL;
+	
+	if (json_is_array(params) && json_array_size(params) > 1)
+	{
+		json_t * const j_goaldesc = json_array_get(params, 1);
+		if (json_is_object(j_goaldesc))
+		{
+			json_t * const j_malgo = json_object_get(j_goaldesc, "malgo");
+			if (j_malgo && json_is_string(j_malgo))
+			{
+				const char * const newvalue = json_string_value(j_malgo);
+				new_malgo = mining_algorithm_by_alias(newvalue);
+				// Even if it's the current malgo, we should reset next_goal_malgo in case of a prior set_goal
+				if (new_malgo == pool->goal->malgo)
+				{}  // Do nothing, assignment takes place below
+				if (new_malgo && uri_get_param_bool(pool->rpc_url, "change_goal_malgo", false))
+				{}  // Do nothing, assignment takes place below
+				else
+				{
+					emsg = "Mining algorithm not supported";
+					// Ignore even the goal name, if we are failing
+					goto out;
+				}
+				if (new_malgo == pool->goal->malgo)
+					new_malgo = NULL;
+			}
+		}
+	}
+	
+	// Even if the goal name is not changing, we need to adopt and configuration change
+	pool->next_goal_malgo = new_malgo;
+	
+	if (pool->next_goalname && pool->next_goalname != pool->goalname)
+		free(pool->next_goalname);
+	
+	// This compares goalname to new_goalname, but matches NULL correctly :)
+	if (pool->goalname ? !strcmp(pool->goalname, new_goalname) : !new_goalname)
+		pool->next_goalname = pool->goalname;
+	else
+		pool->next_goalname = maybe_strdup(new_goalname);
+	
+out: ;
+	json_t * const j_id = json_object_get(val, "id");
+	if (j_id && !json_is_null(j_id))
+	{
+		char * const idstr = json_dumps_ANY(j_id, 0);
+		char buf[0x80];
+		if (unlikely(emsg))
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":true,\"error\":null}", idstr);
+		else
+			snprintf(buf, sizeof(buf), "{\"id\":%s,\"result\":null,\"error\":[-1,\"%s\",null]}", idstr, emsg);
+		free(idstr);
+		stratum_send(pool, buf, strlen(buf));
+	}
+	
+	return true;
+}
+
 static bool parse_reconnect(struct pool *pool, json_t *val)
 {
 	if (opt_disable_client_reconnect)
@@ -2794,7 +2979,7 @@ static bool send_version(struct pool *pool, json_t *val)
 		return false;
 
 	idstr = json_dumps_ANY(id, 0);
-	sprintf(s, "{\"id\": %s, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", idstr);
+	sprintf(s, "{\"id\": %s, \"result\": \"%s\", \"error\": null}", idstr, bfgminer_name_slash_ver);
 	free(idstr);
 	if (!stratum_send(pool, s, strlen(s)))
 		return false;
@@ -2905,6 +3090,10 @@ bool parse_method(struct pool *pool, char *s)
 		goto out;
 	}
 	
+	// Usage: mining.set_goal("goal name", {"malgo":"SHA256d", ...})
+	if (!strncasecmp(buf, "mining.set_goal", 15) && stratum_set_goal(pool, val, params))
+		return_via(out, ret = true);
+	
 out:
 	if (val)
 		json_decref(val);
@@ -2974,6 +3163,21 @@ bool auth_stratum(struct pool *pool)
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
+	
+	if (uri_get_param_bool(pool->rpc_url, "cksuggest", false)) {
+		unsigned long req_bdiff = request_bdiff;
+		
+		const char *q = uri_find_param(pool->rpc_url, "cksuggest", NULL);
+		if (q && q != URI_FIND_PARAM_FOUND) {
+			req_bdiff = atoi(q);
+		}
+		
+		if (req_bdiff) {
+			int sz = snprintf(s, sizeof(s), "{\"id\": null, \"method\": \"mining.suggest_difficulty\", \"params\": [%lu]}", req_bdiff);
+			stratum_send(pool, s, sz);
+		}
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -3152,7 +3356,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	bool trysuggest = request_target_str;
+	bool trysuggest = request_target_str && !uri_get_param_bool(pool->rpc_url, "cksuggest", false);
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;
@@ -3179,13 +3383,28 @@ resend:
 		recvd = true;
 	}
 	
+	if (uri_get_param_bool(pool->rpc_url, "goalreset", false))
+	{
+		// Default: ["notify", "set_difficulty"] (but these must be explicit if mining.capabilities is used)
+		snprintf(s, sizeof(s), "{\"id\":null,\"method\":\"mining.capabilities\",\"params\":[{\"notify\":[],\"set_difficulty\":{},\"set_goal\":[],\"malgo\":{");
+		struct mining_algorithm *malgo;
+		LL_FOREACH(mining_algorithms, malgo)
+		{
+			tailsprintf(s, sizeof(s), "\"%s\":{}%c", malgo->name, malgo->next ? ',' : '}');
+		}
+		if (request_target_str)
+			tailsprintf(s, sizeof(s), ",\"suggested_target\":\"%s\"", request_target_str);
+		tailsprintf(s, sizeof(s), "}]}");
+		_stratum_send(pool, s, strlen(s), true);
+	}
+	
 	if (noresume) {
 		sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
 	} else {
 		if (pool->sessionid)
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\", \"%s\"]}", swork_id++, bfgminer_name_slash_ver, pool->sessionid);
 		else
-			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+			sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"%s\"]}", swork_id++, bfgminer_name_slash_ver);
 	}
 
 	if (!_stratum_send(pool, s, strlen(s), true)) {
@@ -3840,6 +4059,62 @@ void run_cmd(const char *cmd)
 	pthread_t pth;
 	pthread_create(&pth, NULL, cmd_thread, (void*)cmd);
 }
+
+
+#if defined(USE_BITMAIN) || defined(USE_ICARUS)
+bool bm1382_freq_to_reg_data(uint8_t * const out_reg_data, float mhz)
+{
+	// We add 1 so fractions don't interfere with near-integer settings
+	++mhz;
+	
+	if (mhz < 100)
+		return false;
+	float best_delta = FLT_MAX;
+	unsigned best_dc = 0;
+	unsigned try_list[4], *tlp = try_list;
+	if (mhz >= 200) {
+		if (mhz >= 403.125) {
+			*(tlp++) = 0x0101;
+			*(tlp++) = 0x0205;
+		} else {
+			*(tlp++) = 0x0202;
+		}
+		*(tlp++) = 0x0406;
+	} else {
+		*(tlp++) = 0x0403;
+	}
+	*(tlp++) = 0x0807;
+	for (unsigned *tli = try_list; tli < tlp; ++tli) {
+		const float d = *tli >> 8;
+		const float df = 25. / d;
+		unsigned n = mhz / df;
+		// NOTE: 0x3f here is 0x3e in the final register
+		if (n > 0x3f) {
+			n = 0x3f;
+		}
+		const float delta = mhz - (n * df);
+		if (delta < best_delta) {
+			best_delta = delta;
+			best_dc = *tli;
+			if (delta == 0) {
+				break;
+			}
+		}
+	}
+	if (!best_dc)
+		return false;
+	const float d = best_dc >> 8;
+	const float df = 25. / d;
+	const unsigned di = best_dc & 0xff;
+	unsigned n = (mhz / df) - 1;
+	if (n > 0x3e) {
+		n = 0x3e;
+	}
+	const uint16_t reg_num = (n << 7) | di;
+	pk_u16be(out_reg_data, 0, reg_num);
+	return true;
+}
+#endif
 
 
 uint8_t crc5usb(unsigned char *ptr, uint8_t len)

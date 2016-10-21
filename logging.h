@@ -173,6 +173,4 @@ extern void _bfg_clean_up(bool);
 
 #endif
 
-extern void hexdump(const void *, unsigned int len);
-
 #endif /* __LOGGING_H__ */

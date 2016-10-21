@@ -643,3 +643,33 @@ const struct bfg_set_device_definition aan_set_device_funcs[] = {
 	{"diff", aan_set_diff, "desired nonce difficulty"},
 	{NULL},
 };
+
+#ifdef HAVE_CURSES
+void aan_wlogprint_status(struct cgpu_info * const proc)
+{
+	struct thr_info * const thr = proc->thr[0];
+	struct aan_chip_data * const chip = thr->cgpu_data;
+	
+	const double mhz = aan_pll2freq(chip->current_pllreg);
+	wlogprint("Clock speed: %lu\n", (unsigned long)mhz);
+}
+
+void aan_tui_wlogprint_choices(struct cgpu_info * const proc)
+{
+	wlogprint("[C]lock speed ");
+}
+
+const char *aan_tui_handle_choice(struct cgpu_info * const proc, const int input)
+{
+	switch (input)
+	{
+		case 'c': case 'C':
+		{
+			char prompt[0x80];
+			snprintf(prompt, sizeof(prompt), "Set clock speed (%u-%lu)", 1, (unsigned long)AAN_MAX_FREQ);
+			return proc_set_device_tui_wrapper(proc, NULL, aan_set_clock, prompt, NULL);
+		}
+	}
+	return NULL;
+}
+#endif

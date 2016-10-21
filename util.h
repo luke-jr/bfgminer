@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2014 Luke Dashjr
+ * Copyright 2013-2015 Luke Dashjr
  * Copyright 2012-2014 Con Kolivas
  * Copyright 2011 Andrew Smith
  * Copyright 2011 Jeff Garzik
@@ -125,6 +125,8 @@ bool isCspace(int c)
 	}
 }
 
+extern bool match_strtok(const char *optlist, const char *delim, const char *needle);
+
 typedef bool (*appdata_file_callback_t)(const char *, void *);
 extern bool appdata_file_call(const char *appname, const char *filename, appdata_file_callback_t, void *userp);
 extern char *appdata_file_find_first(const char *appname, const char *filename);
@@ -192,7 +194,6 @@ extern char *ucs2_to_utf8_dup(uint16_t *in, size_t sz);
 }while(0)
 
 extern void gen_hash(unsigned char *data, unsigned char *hash, int len);
-extern void hash_data(unsigned char *out_hash, const unsigned char *data);
 extern void real_block_target(unsigned char *target, const unsigned char *data);
 extern bool hash_target_check(const unsigned char *hash, const unsigned char *target);
 extern bool hash_target_check_v(const unsigned char *hash, const unsigned char *target);
@@ -465,7 +466,7 @@ void pk_u64le(void * const bufp, const int offset, const uint64_t nv)
 }while(0)
 
 #define is_power_of_two(n)  \
-	(0 == ((n) && ((n) - 1)))
+	(0 == ((n) & ((n) - 1)))
 
 static inline
 uint32_t upper_power_of_two_u32(uint32_t n)
@@ -642,7 +643,7 @@ static inline
 void bytes_free(bytes_t *b)
 {
 	free(b->buf);
-	b->sz = b->allocsz = 0;
+	bytes_init(b);
 }
 
 
@@ -720,6 +721,15 @@ int timer_elapsed(const struct timeval *tvp_timer, const struct timeval *tvp_now
 	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
 	timersub(_tvp_now, tvp_timer, &tv);
 	return tv.tv_sec;
+}
+
+static inline
+long timer_remaining_us(const struct timeval *tvp_timer, const struct timeval *tvp_now)
+{
+	struct timeval tv;
+	const struct timeval *_tvp_now = _bfg_nullisnow(tvp_now, &tv);
+	timersub(tvp_timer, _tvp_now, &tv);
+	return timeval_to_us(&tv);
 }
 
 static inline
@@ -818,6 +828,9 @@ extern char *trimmed_strdup(const char *);
 
 
 extern void run_cmd(const char *cmd);
+
+
+extern bool bm1382_freq_to_reg_data(uint8_t *out_reg_data, float mhz);
 
 
 extern uint8_t crc5usb(unsigned char *ptr, uint8_t len);

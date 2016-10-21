@@ -1,3 +1,629 @@
+BFGMiner Version 5.4.2 - March 26, 2016
+
+- Update official Win32/64 build compiler and libraries:
+- - Win64 compiler (GCC) from 4.7.4 to 5.3.0 (Win32 remains at 4.7.4)
+- - libcurl from 7.39.0 to 7.47.1
+- - libevent from 2.0.21 to 2.1.5-r4
+- - libusb from 1.0.18 (Win32) and 1.0.19 (Win64) to 1.0.20
+- - libmicrohttpd from 0.9.38_pre33603 to 0.9.48
+- Update libblkmaker to 0.5.3
+- Bugfix: Sanitise lock situation for work2d
+- Bugfix: SSM: Never issue the same work2d twice in a row
+- Bugfix: SSM: Never send mining.notify for stale work2d
+- SSM: Refactor work2d check and job pruning from _stratumsrv_update_notify
+into stratumsrv_update_notify_str
+- Updates for OpenWrt 15.05
+- Bugfix: Correct work2d handling for GBT servers
+
+
+BFGMiner Version 5.4.1 - November 21, 2015
+
+- bitmain: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- icarus: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- Bugfix: openwrt: Fix bitmain option
+- Bugfix: antminer: Avoid strstr(NULL, ...) when device has no [available]
+product string
+- Update libblkmaker to 0.5.2
+- openwrt: Add option to enable bitmain driver
+- openwrt: Update libusb device list
+
+
+BFGMiner Version 5.4.0 - October 23, 2015
+
+- AUTHORS: Move jstefanop to current maintainers
+- Disable alchemist by default, add Travis build, and document configure option
+in README
+- alchemist: New scrypt ASIC driver
+- hashfast: Support setting clock speed from TUI Manage
+- avalon: Support setting clock speed from TUI Manage
+- antminer: Support setting clock speed from TUI Manage (hidden for non-BM1382/4
+devices)
+- jingtian: Allow changing clock speed from TUI
+- Debuglog for retrodiff being disabled
+- Disable retrodiff when it was not explicitly enabled, and the pool doesn't
+seem to like it
+- Bugfix: Only adjust work_difficulty on retrodiff submissions, so we can still
+detect them on rejection
+- (Re-)enable retrodiff by default for stratum pools, since some servers
+implement mining.set_difficulty wrong in this way
+- New pool option "retrodiff"
+- If a share passes difficulty check for the updated pool target,   record that
+target for correct accounting of diff_stale.
+- DevAPI: Remove unused temporary variable from driver iteration
+- README.ASIC: Expand Antminer S5 section to S1-S5 for completeness, since in
+theory they should work
+- bitmain: Make reg_data optional for S4 and S5, calculating it from clock
+- Document Bitmain Antminer S5 support
+- bitmain: Remove poll_prio_threshold and just ensure we poll at a regular
+interval to avoid nonce buffer overruns
+- bitmain: Remove dead per-device constants
+- bitmain: Only have one set of actual maximums
+- bitmain: Migrate BITMAIN_MAX_NONCE_NUM to runtime packet_max_nonce
+- bitmain: Migrate BITMAIN_MAX_WORK_QUEUE_NUM/bitmain_work_poll_prio to runtime
+poll_prio_threshold
+- bitmain: Migrate BITMAIN_MAX_WORK_NUM to runtime packet_max_work
+- bitmain: Dummy model parameter
+- bitmain: Remove baud/flush, as the fake VCOM kernel driver ignores (and
+complains about) both
+- bitmain: Poll after queuing work, once enough is queued
+- bitmain: Sleep a little between polling
+- bitmain: Flush queues for work restarts
+- bitmain: Queue multiple works at a time
+- bitmain: Remove more dead code
+- bitmain: Prune old work eventually
+- Bugfix: bitmain: Properly count work-search failures as HW errors
+- bitmain: Refactor to work with minerloop_queue (leaks work memory)
+- bitmain: Avoid busy-looping on network devices
+- bitmain: Support for talking to a device over the network
+- bitmain: Use the hottest reading for device temperature
+- Bugfix: bitmain: Actually use baud setting
+- bitmain: Remove more dead code
+- bitmain: Handle stale results normally
+- bitmain: Simplify num2bit
+- bitmain: Initial set-device based configuration
+- bitmain: Use lowl-vcom abstractions
+- Update copyrights
+- Bugfix: bitmain: Type-safe printf-format usage
+- Travis: Test bitmain-only build
+- Build bitmain driver
+- bitmain: Hardcode configuration for now
+- bitmain: Rework nonce_diff handling
+- bitmain: Update headers
+- bitmain: Deal with unused variable warnings sanely
+- bitmain: Explicitly de-const device_path for freeing
+- Bugfix: bitmain: Correct type of cgpu->temp reference
+- Bugfix: bitmain: Use uint8_t consistently for binary data
+- Bugfix: bitmain: Clear opt_bitmain_dev string properly
+- bitmain: Remove non-existent bitmain_detect parameter
+- bitmain: Cleanup unnecessary code
+- bitmain: Use uthash to find queued work
+- bitmain: Implement inc_dev_status within record_temp_fan
+- bitmain: Remove non-applicable limits
+- bitmain: Remove obsolete get_statline_before function
+- bitmain: Move g_miner_version to bitmain_info struct
+- bitmain: Remove direct USB code
+- bitmain: Update driver registration
+- bitmain: Update symbol names
+- bitmain: Remove dead code
+- bitmain: Replace custom hexdump with normal bin2hex
+- bitmain: Get network difficulty from first work task
+- bitmain: No-op htole8
+- bitmain: Simulate cgminer work_block somewhat
+- bitmain: Update bin2hex usage for malloc-free version
+- bitmain: Copy low-level code from Bitmain cgminer usbutils
+- Copy working driver-bitmain.c from Bitmain's cgminer at commit
+4ecf89341657ea7efecdf588586ca3f068ab17ab
+- Add api_add_percent to miner.h
+- Bugfix: DevAPI: Update includes from uthash to utlist and support older
+versions of uthash
+- Bugfix: RPC: Need to include utlist.h for config file list
+- Bugfix: antminer: Avoid NULL dereference for non-BM1382/4 devices
+- README.ASIC: Update documentation for BM1382/4 clock calculation support
+- antminer: Support for setting BM1382/4 clock by frequency MHz
+- Bugfix: Keep JSON from getaccountaddress around long enough for debug messages
+- Bugfix: Run gen-version.sh from source directory
+- Fix to enable building into directory out of source tree
+- Bugfix: Clean up JSON from getaccountaddress
+- Bugfix: Do not use hash tables for driver lists, since they require unique
+keys
+- Pool option #cksuggest to use CKPool-compatible mining.suggest_difficulty
+- RPC: Add "Rotate Period" to config
+- RPC: Extend setconfig to change strategy
+- Allow setting strategy by name
+- bitforce: Enable changing voltage from the Manage TUI
+- avalonmm: Use proc_set_device_tui_wrapper instead of avalonmm_tui_wrapper
+- DevAPI: Add generic proc_set_device_tui_wrapper
+- bitforce: Add "voltage" setting to send V?X commands
+- Bugfix: compac: Set dname so assignments match
+- README.RPC: Add missing setconfig|stratum-port documentation
+- README.RPC: Add missing setconfig|http-port documentation
+- Bugfix: lowl-vcom: Check for tcgetattr/tcsetattr/tcflush failure
+- configure: List compac driver in output
+- Travis: Workaround Travis bug
+- configure: Use AC_PROG_SED to find sed
+
+
+BFGMiner Version 5.3.0 - September 5, 2015
+
+- README.ASIC: Compac docs
+- antminer: Explicit support for GekkoScience's Compac BM1384 Bitcoin Miner
+- icarus: Use all null padding when probing work division (BM1384 reacts
+strangely - using part as start nonce?)
+- antminer: Match Product strings including "Antminer"
+- Bugfix: icarus: Never set timeout to 0, since it disables the timeout
+altogether
+
+
+BFGMiner Version 5.2.0 - June 5, 2015
+
+- Upgraded Windows hidapi library from 0.8.0_pre20130121 to 0.8.0_rc1_p20140719
+- Update bundled libbase58 to 0.1.4
+- README.ASIC: Document usage with AntMiner U3
+- icarus: Include ns/hash estimates for each nonce result, in debug logging
+- icarus: Cleanup dev vs proc repr in logging
+- Bugfix: update_block_display: Ensure we have console lock, and avoid rare
+relock when resizing windows inside curses_print_status
+- gitmodules: Change libblkmaker URI to use GitHub since Gitorious is defunct
+- Bugfix: DevAPI: Avoid infinite hang in set_device help
+- bitforce: Wait until pre-initialisation jobs all flush completely before
+starting to avoid sanity check issues
+- bitforce: Wait to clear job queue (at init) until we have actually opened the
+device
+- bitforce: Remove unnecessary delay
+- Bugfix: vcom: Avoid overflowing cc_t before division to deciseconds
+- Bugfix: bitforce: Ensure hashes_done is called for every completed job
+- antminer: Adapt default configuration to work with U3 as well as U1/U2
+- antminer: Add U3 voltage setting (x??? format only for now)
+- antminer: getstatus needs to read a result for every chip, but we don't use
+the output anyway, so just skip it
+- icarus: Modify work division detection packet to be compatible with Antminer
+U3
+- icarus: Replace decisecond-precision read_count with read_timeout_ms
+(millisecond precision) to handle faster devices like the Antminer U3 that
+complete works in under 1ds
+- lowl-vcom: vcom_set_timeout_ms function (increases precision to ms on Windows
+only)
+- util: timer_remaining_us function
+- configure: Improve path finding macro to work with more possible CPP output
+- configure: Macroify header path search
+- Reduce HTTP request failure log level to DEBUG since it often occurs probing
+stratum pools
+- Bugfix: DevAPI: Guarantee set_device functions never get passed a NULL pointer
+for newvalue
+- Always update block display after pool display in case of username wrapping
+around
+- icarus: Pass device representation to icarus_{gets,write} so logging can use
+it rather than fd numbers
+- Bugfix: icarus: Check for impossibly fast hw errors (and don't report Eh/s
+when they occur)
+- Bugfix: icarus: Avoid a race with watchdog applying settings by setting
+device_data before add_cgpu
+- RPC: Clean up api_add_* somewhat
+- Bugfix: util: Fix is_power_of_two
+- Port antminer driver to use set_device_funcs
+
+
+BFGMiner Version 5.1.0 - February 19, 2015
+
+- Fix broken driver options in configure script
+- Bugfix: extract_domain: Correctly handle query/fragment in URI without path
+- kncasic: Do flush!
+- kncasic: avoid duplicate nonces to be reported
+- kncasic: Fix logging levels
+- kncasic: Neptune-compatible API interface for enabling/disabling dies
+- kncasic: Use one bfgminer processor per die (not per core)
+- Update libblkmaker to 0.5.1
+- Titan: Lower log level when reconfiguring dies
+- Titan: does not need SHA256d algo
+- Titan: lower log level for flush messages
+- Titan: adjust log levels in knc_titan_get_info
+- get_master_rolling_hashrate -> get_proc_rolling_hashrate
+- Update webconfig code to latest BFGMiner
+- allow url based config files
+- kncasic: Fix "double free" error
+- kncasic: We need to free queued work to avoid memory leaks
+- Bugfix: minion: Don't try to add 0-chip devices
+- configure: Avoid BASHisms for better portability
+
+
+BFGMiner Version 5.0.0 - November 29, 2014
+
+- opencl: Fail gracefully if clGetProgramInfo/CL_PROGRAM_NUM_DEVICES returns
+zero
+- opencl: Remember results of global offset testing
+- opencl: Only save kernel binary when we built from source
+- opencl: Only try to patch BFI_INT when compiling a kernel from source
+- opencl: Major refactor, splitting up opencl_load_kernel into many new
+functions
+- titan: Initialise variables to satisfy compilers
+- Bugfix: opencl: Correctly handle non-goffset kernels
+- Fixing column spacing of non-curses device output
+- Bugfix: opencl: free memory if clState creation fails
+- Titan: Do not do actual configuration job in API thread context. Instead, send
+commands to the worker thread to do the actual job.
+- Titan: bugfix: dies are not configured if die#0 is OFF
+- Titan: unused function argument
+- Titan: unused variables
+- Update knc-asic: Titan FPGA image with spi->i2c commands removed and fixed
+some lock-up scenarios
+- Titan code rework: Use one bfgminer processor per die (instead of core)
+- minion: Reinitialise chips if they don't seem to be progressing
+- minion: Read temperature sensor
+- minion: TUI clock speed control
+- minion: Include "Frequency" in RPC status
+- minion: Add "clock" setting
+- minion: Set configuration parameters we care about
+- minion: Reset chip at initialization
+- minion: Configure PLL to 900 MHz at startup
+- minion: Report hashes done as accurately as we can
+- minion: Core enable/disable control
+- minion: Implement queue flushing
+- minion: Implement basic mining
+- lowl-spi: linux_spi_txrx2 to include device protocol dumping
+- minion: Detection code for the Prospero X1
+- Actually add version.c file
+- Only rebuild a minimal version.c file when git commit changes
+- Bugfix: Use HASH_ADD_KEYPTR for const char *, not HASH_ADD_STR
+- Bugfix: Re-lock stgd_lock when we don't have a malgo-specific pool to use
+- scrypt: Disable OpenCL by default
+- opencl: Remove support for "OCL1" kernel define (indicated OpenCL 1.1+)
+- opencl: Autodetect whether global offset actually works
+- opencl: Add no-goffset support to scrypt kernels
+- opencl: Determine kernel support for goffset by code analysis
+- opencl: Add "goffset" setting to override detection of support for global work
+offsets
+- util: seek_data_cb: Check validity of offset
+- Allow libcurl to rewind the upload buffer
+- cpu: Set the priority of miner threads to idle on Windows
+- cpu: Use _SC_NPROCESSORS_CONF instead of _SC_NPROCESSORS_ONLN
+- cpu: Do not set thread affinity on single-processor systems
+- Adding additional boolean keywords enable and disable
+- AUTHORS: Move Pelle and Vitalii to "Current Maintainers" since they actively
+maintain the Titan driver
+- AUTHORS: Add Ronny Van Keer (Keccak C implementation)
+- Titan: supply its own rolling hashrate implementation
+- A driver can supply its own rolling hashrate function   (in case generic
+rolling hashrate implementation does not work)
+- Bugfix: configure: kncasic does not actually need i2c-tools
+- Keccak: Simplify keccak_hash_data
+- keccak: Adapt opencl intensity interpretation to have approximately the same
+desktop interactivity affect as SHA256d
+- Keccak: Include support in various builds
+- Travis: Update with Keccak
+- opencl/keccak: Add non-goffset support
+- opencl/keccak: Unroll all the hash rounds properly
+- opencl: Add Keccak support via "fullheader" kernel interface
+- keccak: Adapt for BFGMiner
+- Keccak: Import algorithm code as-is
+- opencl: Add a simple "fullheader" kernel interface
+- Update stratum mining.capabilities method to use a single Object for all
+parameters
+- Bugfix: Correct USE_SHA256D macro name to ensure SHA256d is always preferred
+as default algorithm
+- cpu: Generic scanhash that can support any PoW algorithm
+- RPC: Include Hash Method in minecoin for new algorithms
+- opencl: Teach findnonce to behave based on kernel interface rather than mining
+algorithm
+- opencl: Get min_nonce_diff from struct mining_algorithm
+- Move malgo-specific code to dedicated source files
+- opencl: Simplify kernel-specific data handling
+- Update knc-asic: Fix issue with detect_die crashing due to errors in response
+- titan: Init last_nonce on die reconfiguration to avoid lots of "unknown work"
+messages
+- Bugfix: titan: Extra garbage was sent on SPI with new commands
+- titan: Remove temporary log messages for manual report checks
+- titan: Wrong variable used in new per-die iteration
+- titan: Do manual core checks in parallel with normal ones
+- titan: Fix: Only one die was checked after flush in last commit
+- titan: Manually check all cores for reports after flush
+- opencl: Remove redundant checks for USE_OPENCL
+- cpu: Remove redundant checks for USE_CPUMINING
+- opencl: Only attempt to BFI_INT patch SHA256d kernels
+- Significantly rewrite configure script to handle driver dependencies cleaner
+- Make SHA256d mining optional
+- Bugfix: cointerra: Can handle nonces down to pdiff 1
+- kncasic: Initialise first_cgpu to silence false warning
+- Bugfix: Clarify goffset decision code, and refuse to compile kernels in
+situations where they won't work
+- Bugfix: opencl: Output buffer must be readable by kernel since it is used with
+a count/position iterator
+- Bugfix: opencl: Skip NULL kernel interface entry
+- DevAPI: hashes_done: Simplify and improve precision of max_nonce calculation
+- opencl: Avoid duplicating kernel_interfaces mapping in select_kernel
+- opencl: Avoid duplicating kernel_interfaces mapping in
+opencl_scanhash_get_kernel
+- cpu: Drivers should not be doing fulltest on their own, so remove it
+- cpu: Pass full work struct to scanhash functions
+- kncasic: Split up each ASIC channel to its own device
+- kncasic: Use consistent naming for KNC_MAX_DIES_PER_CORE
+- kncasic: Refactoring: coreid is not used, remove it
+- kncasic: Refactoring: put all device architecture defines in one place (knc-asic.h)
+- kncasic: Add lock to protect concurrent accesses to knc_state
+- kncasic: Fix auto
+- Build system fixes for kncasic driver
+- configure: Deduplicate Linux i2c-dev.h checks for KnCMiner drivers
+- Travis: Update for kncasic driver
+- kncasic: Only show the relevant die for RPC stats
+- kncasic: Use proc_repr for logging
+- kncasic: Split up logical processors
+- kncasic: Silence warning about unhandled enumeration values
+- Bugfix: kncasic: Proper format specifications
+- kncasic: Remove unused code
+- kncasic: Minimal changes to get it compiling
+- kncasic: Import gen 2 driver from cgminer commit
+bc153552be8591250cb3214bf5202501d4a39922
+- titan: Move thread_reportin() call to poll function
+- titan: reportin every process_report to avoid falsely tripping the watchdog
+- titan: Remove unused variables
+- Bump knc-asic submodule
+- titan: Increase FPGA to ASIC SPI frequency to 6 MHz
+- titan: Use new get_work_status prototype and print FPGA CRC error counters to
+log
+- Titan flush optimization fix: Don't send get_info commands when FPGA is
+speaking to ASIC
+- titan: All dies use same nonce working range
+- Titan flush optimization bugfix: FPGA status was checked once per poll instead
+of once per ASIC
+- Titan flush optimization: Bugfix: Flush time measurement only worked with one
+ASIC
+- Titan flush optimization: Point knc-asic submodule to include new FPGA image
+- Titan flush optimization: Remove temporary debug messages
+- Titan flush optimization: Keep works in local queue until slot number is
+reused
+- Titan flush optimization: Point knc-asic submodule to needed revision
+- Titan flush optimization: Measure new flush time
+- Titan flush optimization: Send works to all dies after flush
+- Titan flush optimization: First rough implementation
+- Titan: Less clobber on the screen: group some "failure" messages
+- Bugfix: Prefer not using work created just to ensure a specific algorithm is
+queued, so strategies work as much as possible
+- Stratum: Enable mining.set_goal to change parameters on the current goal
+- cpu: Fail gracefully if unsupported mining algo gets into scanhash
+- opencl: Fail gracefully if unsupported mining algo gets into
+opencl_scanhash_get_kernel
+- SSM: Send goal malgo to goal-enabled clients
+- Allow pools with #change_goal_malgo attribute to change the mining algorithm
+used by their assigned goal
+- Gracefully fail when no pool can be found to generate specific-algo work
+- Remove opt_scrypt
+- dualminer: Replace opt_scrypt with a per-device "scrypt" option
+- dualminer: Make dual_mode a per-device option as it should be
+- opencl: Nearly complete migration to per-work mining algorithms
+- pool_actively_desired: If we are the highest priority, workable pool for a
+given algorithm, we are needed
+- Ignore opt_queue for unused mining algorithms
+- Set name and aliases on mining algorithms
+- When hotplug is enabled and a mining algorithm is configured for the first
+time, schedule a rescan of hardware to pick up anything now applicable that may
+not have been before
+- Try to keep enough work queued for each mining algorithm in use
+- Move select_loadbalance and select_failover logic into their own functions
+- Keep track of how much work is staged per-algorithm
+- Keep track of how many goals reference each mining algorithm
+- Abstract goal_set_malgo function
+- Build a mining_algorithms list
+- get_work: Restore previous getwork rollntime behaviour
+- get_work: Only return work items compatible with processor (degrades getwork
+rollntime support)
+- opencl: Support for per-work mining algorithms
+- Build without POW_SCRYPT at all
+- opencl: Defer loading kernel until it is needed
+- opencl: Split initCl into opencl_create_clState and opencl_load_kernel
+- SSM: Implement mining.capabilities including proxying mining.set_goal
+- Replace mining.goal.subscribe with mining.capabilities
+- Stratum: Avoid resetting the goal if the old and new name match
+- Allow specifying goal options as eg, --pool-goal name:malgo=scrypt
+- cpu: Support for per-work mining algorithms
+- Replace cgpu.min_nonce_diff with drv.drv_min_nonce_diff(cgpu, malgo)
+- proxy: Avoid assumptions about mining algorithm at initialisation
+- Core only: Partially move most of opt_scrypt to mining_goal
+- opencl: Reintroduce independent intensity setting internally
+- Move MAX_*_INTENSITY stuff to driver-opencl.h
+- proxy: Minimise minimum difficulty for proxy clients
+- Enable --generate-to option (was --coinbase-addr) to work with non-default
+goals
+- Save pool goals in written config files
+- README: Update documentation for multiple blockchain support
+- RPC: Add "Difficulty Accepted" to "coin" command
+- RPC: Add "Mining Goal" to "pools" command
+- RPC: Accept an additional argument for "addpool" to indicate mining goal by
+name
+- Stratum: Support for mining.set_goal("goal name") - currently just resetting
+the user-configured goal
+- Teach longpoll logic about multiple mining goals
+- RPC: Include non-default goals in reply to "coin" command
+- Ignore generation address/script on pools using non-default mining goals
+- Only include block display lines for active goals
+- Move income to block display line, and show extra block display lines for each
+additional mining goal
+- New --pool-goal option to set a distinct named goal per-pool
+- Parameterise most references to global mining_goal_info
+- Move block_time to be per block_info
+- Show "?" for income if block height is unknown
+- Move block height tracking onto block_info
+- Calculate current_fullhash only when needed (for RPC 'coins')
+- Replace current_block_id with blkchain->currentblk[->block_id]
+- Move current_hash to goal->current_goal_detail
+- Clean up struct block_info names
+- Use full prevblock hash as block key (also gets rid of dead code)
+- Move global variables related to the blockchain or mining goals on to global
+structs
+
+
+BFGMiner Version 4.10.1 - November 29, 2014
+
+- Upgraded Windows libcurl from 7.38.0 to 7.39.0
+- Bugfix: bytes_free: Set buf to NULL so the bytes_t is reusable
+- Bugfix: minergate: Avoid malloc(0) if stats file has too few values
+- Bugfix: modminer: Avoid leaking devname when detecting claimed devices
+- Bugfix: free memory allocated for config file loading/writing
+- Bugfix: nanofury: Avoid NULL pointer dereference on init failure
+- Bugfix: varint_decode: Correctly decode multibyte numbers
+- cpu: Fix processor count detection with HW_NCPU
+- cpu: SCHED_IDLE and SCHED_BATCH can only be used with sched_priority 0
+- cpu: fix sched_setaffinity parameter : sizeof(cpu_set_t)
+- Bugfix: opencl: Correctly accept negative intensities and set dynamic
+intensity without changing current value
+- Since longpoll connections are never reused, explicitly forbid reuse so
+libcurl cleans them up immediately
+- Bugfix: Correct already-in-use getcbaddr message
+- Demote some Bitfury debug log messages to only with device protocol dumping
+- Update bundled libbase58 to 0.1.3
+- README.ASIC: Minor cleanups to Zeusminer section
+- README.ASIC: Explain Zeusminer options
+- Makefile: Specify .cl files explicitly, and only include scrypt ones when
+configured with scrypt support
+- Bugfix: DevAPI: hashes_done: Explicitly cast to uint64_t for big calculations
+(LLVM was allowing overflow)
+- Bugfix: titan: First core in each die got too big nonce area to work on
+- Travis: Build MinGW64 with ncurses
+- Bugfix: Declare manual_enable_pool in miner.h, for api.c use
+- Bugfix: bitfury: Use long long and llabs to avoid under/over flows misbehaving
+- Bugfix: Highlight all active pools, in pool listing
+- Set quota to 1 when enabling a failover-only pool, and disable failover-only
+when setting quota
+- Bugfix: pool_actively_desired: Detect failover-only conditions for loadbalance
+and balance strategies
+- Bugfix: Only display pools as Failover state when it is effectively so
+- Make sure KEY_EVENT from wincon is ignored (it conflicts with ncurses)
+- README.ASIC: Add details for BFx2 USB
+- Titan: Submit stale shares while doing flushes
+- README.ASIC: Remove CFLAGS hack not needed for KnCMiner Titan build
+- Bugfix: Need unicode_micro in non-Unicode curses builds
+- Remove unused variables from curses-less builds
+- Bugfix: Cannot duplicate userpass option or we end up with it processed double
+
+
+BFGMiner Version 4.10.0 - October 21, 2014
+
+- Upgraded Windows libjansson from 2.6 to 2.7
+- i2c-tools are not required by Titan
+- minergate: Fix hashmeter
+- minergate: Support minergate-side ntime rolling for SP30 only
+- minergate: Autodetect SP30 on /tmp/connection_pipe_sp30
+- minergate: Make stats file configurable
+- minergate: SP30 only wants max 10 queue requests at a time
+- minergate: Use work_completed flag for SP30
+- minergate: Only SP10 has a second winner_nonce
+- minergate: Simplify multi-winner_nonce handling
+- Bugfix: minergate: Correct endian for 2nd winner_nonce
+- minergate: Vary max jobs queued
+- minergate: Vary number of requests/responses per packet
+- minergate: Support --set MGT:protover=N
+- Titan: fix compiler warning "maybe-uninitialized"
+- Titan: Increase die inactivity timeout to 20 secs
+- Titan: Slightly improve some debug messages
+- Titan: Use multi-part batched SPI transfers for flushes (saves 2 secs on each
+flush)
+- Titan: Fix buffer overflow
+- Titan: Increase queue prefill value up to 20
+- Titan: Flag for fast broadcast flushes. Not enabled: DC/DCs trip off easily!
+- Titan: Monitor die health, reconfigure it if no shares in 10 seconds
+- Titan: Make log level of some messages lower, to not clobber the screen
+- Titan: Work assignment and flushing is per-die, not per-ASIC
+- Titan: Set flush flag after re-configuring the die
+- Titan: Refactoring: intermediate variables for first_proc and repr
+- Titan: Flush cores one-by-one right before reconfiguring them
+- Titan: Define for the broadcast core address
+- Titan: Re-configuring dies through API command "procset"
+- Titan: Use correct version of knc_titan_setup_core
+- Titan: configure_one_die func for configuring single die
+- Titan: fill all non-found ASIC structs with the same (invalid) data
+- Titan: Core init parameters (nonce range) independent of number of found dies
+
+
+BFGMiner Version 4.9.0 - October 5, 2014
+
+- Upgraded Windows libraries:
+- - libcurl from 7.37.0 to 7.38.0
+- - libusb from 1.0.18 to 1.0.19 (Win64 only)
+- - mingw64-runtime from 3.1.0 to 3.2.0 (Win64 only)
+- - uthash from 1.9.7 to 1.9.9
+- Travis: Update for titan driver
+- configure: Accept --enable-titan=CONTROLLER to select controller
+- make-release: Remove unnecessary knc-asic/{*.rbf,*system,waas} from release
+source
+- extra_work_queue so devices can influence their effect on the central work
+queue somewhat (titan needs less than 1-per-proc)
+- Avoid adding include paths for titan driver
+- Bugfix: titan: Add missing printf formatting for core busy status
+- avalon: Drop custom hexdump logging
+- Build titan driver independently from knc (Jupiter) driver
+- titan: Do not fill up next slot immediately after urgent setwork
+- titan: Pre-fill work queue so that all ASICs have fresh jobs after a flush
+- Build instructions for KnC Titan
+- Doesn't compile without explicitly included inttypes.h on some machines
+- knc-asic: Updated to e5c986d3c44fde8c5b069508ef6979f2f2be92d6
+- Fix Makefile.am to build bfgminer for titan
+- titan: Subdivide full nonce range only between cores in one ASIC (because
+works are now distributed per-ASIC too)
+- titan: DC/DCs does not like broadcast flushes (urgent setwork). Do not do it!
+- titan: Preparation to setting threads-per-core externally, by user
+- titan: Re-flush cores in case of slot number collision
+- titan: Per-ASIC flush, per-ASIC work management
+- titan: Start cores after flush individually, not by broadcast.
+- titan: Default frequency is 275 MHz
+- titan: Difficulty is offset by one in ASIC cores.
+- titan: Fix first_proc pointer
+- titan: Use 2 threads per core
+- titan: Use setup_core from knc-asic library
+- titan: Poll all enabled ASICs amd dies, not only one
+- titan: Properly set work_accepted flag
+- titan: Hint detection function about expected device type
+- titan: Fix setup_core command
+- titan: Use knc-asic library for transport layer
+- Add knc-asic as submodule
+- titan: Change spi device to spidev1.0
+- titan: Add define to .h file
+- titan: Increase workqueue size up to number of slots per core
+- titan: Send data to hashmeter
+- titan: Disregard stale reports after flush
+- titan: Check for next asic/die switch when processing info results
+- Bugfix: titan: Fix segfault
+- titan: Set actual hardware nonce_diff for works in prepare_work
+- titan: Do clean flush ("purge") on init
+- titan: Store last_nonce right
+- titan: First attempt to process nonce responses
+- titan: Change 'scanhash' minerloop to 'queue'
+- titan: Init all cores for their own nonce ranges
+- titan: For RPi we use spidev0.1
+- titan: Setup_core command implemented
+- titan: New commands set_work & get_report
+- titan: Move asic-specific functionality to the separate file (titan-asic.c)
+- titan: First ugly detect of Titan chip over SPI
+- knc-titan: Begin work on Titan (scrypt miner) driver
+- libbase58: Use git URI for submodule to avoid failure on systems without HTTPS
+support
+- Travis: Cross-compile a Win64 build
+- RPC: Initialise json_config to silence false warning
+- Make sure MOUSE_MOVED from wincon is ignored (it conflicts with curses)
+- Travis: Perform full builds with libbase58's base58 tool (which is used for
+tests)
+- Travis: Test many configuration variations
+- Travis: Build with libsensors and VFIO
+- Travis: Upgrading GCC triggers locale rebuild, so just do the one in use
+- Travis: No need to upgrade GCC for LLVM build
+- Travis build configuration
+- Run BFGMiner's unit tests for 'make check', and have --unittest exit with
+failure if any problems occur
+- libbase58: Update to pick up on LLVM fixes
+- Bugfix: configure: Affect gridseed driver with --disable-other-drivers
+- Bugfix: configure: minergate driver needs lowlevel for claiming sockets
+- Bugfix: configure: --disable-other-drivers should not affect non-driver
+options
+- Bugfix: configure: --with[out]-vfio needs $withval, not $enableval
+- Bugfix: rockminer: Correct types for short read error message
+- Bugfix: icarus: fix the STATS RPC API call crashes with a multi-proc device
+- Bugfix: cointerra: Check lowlevel device is USB before trying to probe it (as
+USB)
+- bitforce: Reinstate device work inprogress count sanity check for 28nm devices
+- littlefury: Read uC temperature sensor
+- littlefury: Keep track of enabled chips and power state explicitly in case of
+trouble
+- Bugfix: async minerloop fix for devices disabled at start
+- twinfury: Implement device protocol dump more low-level
+
+
 BFGMiner Version 4.8.0 - September 10, 2014
 
 - Improve precision of total_secs used in (at least) RPC summary Elapsed
@@ -281,6 +907,7 @@ from git
 
 BFGMiner Version 4.4.0 - July 7, 2014
 
+- Update official Windows build compiler from GCC 4.7.3 to 4.7.4
 - lowl-vcom: Added support for auto scanning (-S auto) on Mac OS X
 - rockminer: implement --device-protocol-dump for debugging
 - README: Update for commandline options
@@ -1135,6 +1762,7 @@ difficulty
 BFGMiner Version 3.10.0 - January 15, 2014
 
 - Downgrade official Windows build compiler to GCC 4.7.3.
+- Update official Win64 build mingw64-runtime from 3.0.0 to 3.1.0
 - Bugfix: Stratum: Accept JSON Number type for port number
 - Bugfix: proxy: Set start timer when creating new virtual devices
 - antminer: Add support for the Identify function - flashes LED 10 times

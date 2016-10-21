@@ -13,9 +13,9 @@ dnl * any later version.  See COPYING for more details.
 
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
-m4_define([v_maj], [4])
-m4_define([v_min], [8])
-m4_define([v_mic], [0])
+m4_define([v_maj], [5])
+m4_define([v_min], [4])
+m4_define([v_mic], [2])
 ##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##--##
 m4_define([v_ver], [v_maj.v_min.v_mic])
 m4_define([lt_rev], m4_eval(v_maj + v_min))
@@ -71,6 +71,7 @@ AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AC_PROG_RANLIB
 AC_PROG_CPP
+AC_PROG_SED
 
 gl_INIT
 
@@ -116,7 +117,7 @@ AC_FUNC_ALLOCA
 
 lowllist=
 driverlist=
-algolist=SHA256d
+algolist=
 optlist=
 
 has_fpga=no
@@ -124,6 +125,7 @@ has_asic=no
 need_binloader=no
 need_dynclock=no
 need_gc3355=no
+need_linux_i2c_dev=no
 need_lowl_vcom=no
 need_lowlevel=no
 need_lowl_ftdi=no
@@ -132,6 +134,7 @@ need_lowl_mswin=no
 need_lowl_pci=no
 need_lowl_spi=no
 need_lowl_usb=no
+need_knc_asic=no
 need_work2d=no
 have_cygwin=false
 have_win32=false
@@ -211,6 +214,122 @@ m4_define([BFG_PREPROC_IFELSE],
 	],[$3],[$4])
 )
 
+m4_define([BFG_FIND_INCLUDE_PATH],[
+	m4_pushdef([_rel_path],[$1])
+	m4_pushdef([_header_file],[$2])
+	m4_pushdef([_iffound],[$3])
+	m4_pushdef([_ifnotfound],[$4])
+	m4_pushdef([_includes],[$5])
+	m4_pushdef([_result_var],[inclpath_[]patsubst(_header_file,[[./]],[_])])
+	AC_CHECK_HEADER([_rel_path/_header_file],[
+		AC_MSG_CHECKING([_header_file path])
+		_result_var=`echo '[#]include <'"_rel_path"'/_header_file>' | ${CPP} -M - 2>/dev/null | ${SED} [-E -e ':a' -e '/\\$/!b b' -e N -e 's/\\\n/ /' -e 't a' -e ':b' -e 's/^[^:]*:[[:space:]]*(([^[:space:]\]|\\.)*[[:space:]])*(([^[:space:]\]|\\.)*)(\\|\\\\|\/)?]patsubst([_header_file],[\.],[\\.])[([[:space:]].*)?$/\3/' -e 't' -e d]`
+		if test "x$_result_var" = "x"; then
+			AC_MSG_RESULT([failed])
+			AC_MSG_ERROR([Couldn't determine include path for _header_file])
+		else
+			AC_MSG_RESULT([$_result_var])
+			_iffound
+		fi
+	],[
+		true
+		_ifnotfound
+	],[
+		_includes
+	])
+	m4_popdef([_rel_path],[_header_file],[_iffound],[_ifnotfound],[_result_var])
+])
+
+bfg_enableaction() {
+	_var=$1
+	eval "_missingdeps=\"\$${_var}_missingdeps\""
+	if test -n "$_missingdeps"; then
+		_enableaction=
+		for _missingdep in $_missingdeps; do
+			eval "_howto=\"\$howto_${_missingdep}\""
+			if test "x$_howto" = "x"; then
+				eval "_label=\"\${label_${_missingdep}-${_missingdep}}\""
+				_howto="enable $_label"
+			fi
+			if test "$_howto" != "x"; then
+				_enableaction="$_enableaction; $_howto"
+			fi
+		done
+		_enableaction="${_enableaction:2}"
+	else
+		eval "_enableaction=\"\$${_var}_enableaction\""
+	fi
+	echo "$_enableaction"
+}
+
+dnl _BFG_AUTOITEM(list,driver,DriverName,dependency list,default:no/auto,CodeIfEnabled)
+m4_define([_BFG_AUTOITEM],[
+	m4_pushdef([_list],[$1])
+	m4_pushdef([_this_drv],m4_default([$2],m4_tolower([$3])))
+	m4_pushdef([_this_drvuc],m4_toupper(_this_drv))
+	m4_pushdef([_this_USE],USE_[]_this_drvuc)
+	m4_pushdef([_this_name],[$3])
+	m4_pushdef([_deplist],[$4])
+	m4_pushdef([_this_default],[$5])
+	m4_pushdef([_this_enablecode],[$6])
+	m4_case(_list,
+		[algo],[algolist="$algolist []_this_name/[]_this_USE"],
+		[driver],[driverlist="$driverlist []_this_drv/[]_this_USE"],
+		[]
+	)
+	label_[]_this_drvuc="[]_this_name"
+	AC_ARG_ENABLE([]_this_drv,
+		m4_bmatch(_this_default,[.*no$],
+			AC_HELP_STRING([--enable-[]_this_drv],[Compile support for ]_this_name[ (default disabled)]),
+			AC_HELP_STRING([--disable-[]_this_drv],[Compile support for ]_this_name[ (default enabled)])),
+		[[]_this_USE=$enableval],
+		[[]_this_USE=[]_this_default]
+		)
+	[]_this_drv[]_opt=
+	if test "x$[]_this_USE" = "xno"; then
+		true
+	else
+		if test "x$[]_this_USE" = xauto; then
+			_wasauto=yes
+		else
+			_wasauto=no
+		fi
+		if test "x$[]_this_USE" != xyes; then
+			if test "x$[]_this_USE" != xauto; then
+				[]_this_drv[]_opt="$[]_this_USE"
+			fi
+			[]_this_USE=yes
+		fi
+		for __drvdep in []m4_toupper(_deplist); do
+			eval "_drvdep=\"\$USE_$__drvdep\""
+			if test "x$_drvdep" != "xyes"; then
+				[]_this_USE[]_missingdeps="$[]_this_USE[]_missingdeps $__drvdep"
+				[]_this_USE=no
+			fi
+		done
+		if test "x$[]_this_USE[]$_wasauto" = xnono; then
+			_enableaction=`bfg_enableaction []_this_USE`
+			AC_MSG_ERROR([To enable []_this_name: $_enableaction])
+		fi
+	fi
+	if test "x$[]_this_USE" = "xyes"; then
+		AC_DEFINE([]_this_USE,[1],[Defined to 1 if []_this_name support is wanted])
+		[]_this_enablecode
+	fi
+	AM_CONDITIONAL([]_this_USE,[test x$[]_this_USE = xyes])
+	m4_popdef([_this_drv],[_this_drvuc],[_this_USE],[_this_name],[_deplist],[_this_default],[_this_enablecode])
+])
+
+dnl BFG_ALGO(AlgoName,default:no/yes,CodeIfEnabled)
+m4_define([BFG_ALGO],[
+	_BFG_AUTOITEM([algo],,[$1],,[$2],[$3])
+])
+
+dnl BFG_DRIVER(driver,DriverName,dependency list,default:no/auto,CodeIfEnabled)
+m4_define([BFG_DRIVER],[
+	_BFG_AUTOITEM([driver],[$1],[$2],[$3],$dd[$4],[$5])
+])
+
 
 AC_CHECK_DECL([HASH_ITER],[
 	AC_CHECK_DECL([DL_CONCAT],[
@@ -269,15 +388,9 @@ AM_CONDITIONAL([USE_UDEVRULES_GROUP], [$use_udevrules_group])
 AC_SUBST([UDEVRULES_GROUP], [$udevrules_group])
 
 
-algolist="$algolist scrypt"
-AC_ARG_ENABLE([scrypt],
-	[AC_HELP_STRING([--enable-scrypt],[Compile support for scrypt mining (default disabled)])],
-	[scrypt=$enableval],
-	[scrypt=no])
-if test "x$scrypt" = xyes; then
-	AC_DEFINE([USE_SCRYPT], [1], [Defined to 1 if scrypt support is wanted])
-fi
-
+BFG_ALGO(Keccak,no)
+BFG_ALGO(SHA256d,yes)
+BFG_ALGO(scrypt,no)
 
 lowl_pci=no
 if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
@@ -309,29 +422,13 @@ if test "x$ac_cv_header_sys_mman_h" = "xyes"; then
 fi
 
 
-driverlist="$driverlist cpu/cpumining"
-AC_ARG_ENABLE([cpumining],
-	[AC_HELP_STRING([--enable-cpumining],[Build with CPU mining support (default disabled)])],
-	[cpumining=$enableval],
-	[cpumining=$ddno]
-	)
-if test "x$cpumining" = xyes; then
-	AC_DEFINE_UNQUOTED([WANT_CPUMINE], [1], [Enable CPUMINING])
+BFG_DRIVER(cpumining,CPU mining,,no,[
 	driverlist="$driverlist cpu:asm/has_yasm"
 	driverlist="$driverlist cpu:sse2/have_sse2"
-fi
-AM_CONDITIONAL([HAS_CPUMINE], [test x$cpumining = xyes])
+])
+driverlist=`echo "${driverlist}" | ${SED} -e 's/ cpumining/ cpu/'`
 
-driverlist="$driverlist opencl"
-AC_ARG_ENABLE([opencl],
-	[AC_HELP_STRING([--enable-opencl],[Compile support for OpenCL (default disabled)])],
-	[opencl=$enableval],
-	[opencl=$ddno]
-	)
-if test "x$opencl" = xyes; then
-	AC_DEFINE([HAVE_OPENCL], [1], [Defined to 1 if OpenCL support is wanted])
-fi
-AM_CONDITIONAL([HAVE_OPENCL], [test x$opencl = xyes])
+BFG_DRIVER(,OpenCL,,no)
 
 m4_define([BFG_PTHREAD_FLAG_CHECK],
 	AC_MSG_CHECKING([for $1])
@@ -402,14 +499,18 @@ PKG_CHECK_MODULES([JANSSON],[jansson],[
 AC_SUBST(JANSSON_CFLAGS)
 AC_SUBST(JANSSON_LIBS)
 
-if test "x$opencl" = xyes; then
+if test "x$USE_OPENCL" = xyes; then
 	adl="yes"
+	
+	if test "x$USE_KECCAK" = xyes; then
+		AC_DEFINE([USE_OPENCL_FULLHEADER],[1],[Defined to 1 if OpenCL fullheader kernel interface is wanted])
+	fi
 	
 driverlist="$driverlist opencl:sensors/with_sensors"
 AC_ARG_WITH([sensors],
 	[AC_HELP_STRING([--without-sensors],[Build with libsensors monitoring (default enabled)])],
 	[true],[with_sensors=auto])
-if test "x$opencl" != xyes; then
+if test "x$USE_OPENCL" != xyes; then
 	with_sensors=no
 fi
 if test "x$with_sensors" != xno; then
@@ -452,14 +553,12 @@ else
 	adl="no"
 fi
 
-driverlist="$driverlist bitforce"
-AC_ARG_ENABLE([bitforce],
-	[AC_HELP_STRING([--disable-bitforce],[Compile support for BitForce (default enabled)])],
-	[bitforce=$enableval],
-	[bitforce=$ddyes]
-	)
-if test "x$bitforce" = xyes; then
-	AC_DEFINE([USE_BITFORCE], [1], [Defined to 1 if BitForce support is wanted])
+BFG_DRIVER(,AlcheMist,scrypt,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
+BFG_DRIVER(,BitForce,SHA256d,auto,[
 	driverlist="$driverlist bitforce:pci/need_lowl_pci"
 	if test "x$lowl_pci" = "xyes"; then
 		need_lowl_pci=yes
@@ -472,152 +571,66 @@ if test "x$bitforce" = xyes; then
 	has_fpga=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_BITFORCE], [test x$bitforce = xyes])
+])
 
-driverlist="$driverlist icarus cairnsmore/icarus erupter/icarus antminer/icarus"
-AC_ARG_ENABLE([icarus],
-	[AC_HELP_STRING([--disable-icarus],[Compile support for Icarus (default enabled)])],
-	[icarus=$enableval],
-	[icarus=$ddyes]
-	)
-if test "x$icarus" = xyes; then
-	AC_DEFINE([USE_ICARUS], [1], [Defined to 1 if Icarus support is wanted])
+BFG_DRIVER(bitmain,Bitmain Antminer S* series,SHA256d,no,[
+	need_lowl_vcom=yes
+	has_asic=yes
+])
+
+BFG_DRIVER(,Icarus,SHA256d,auto,[
 	need_dynclock=yes
 	need_lowl_vcom=yes
 	has_fpga=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_ICARUS], [test x$icarus = xyes])
+])
+driverlist="$driverlist cairnsmore/USE_ICARUS erupter/USE_ICARUS antminer/USE_ICARUS compac/USE_ICARUS"
 
-driverlist="$driverlist dualminer"
-AC_ARG_ENABLE([dualminer],
-	[AC_HELP_STRING([--disable-dualminer],[Compile support for DualMiner (default enabled)])],
-	[dualminer=$enableval],
-	[dualminer=$ddauto]
-	)
-if test "x$dualminer" = "xno"; then
-	true
-elif test "x$icarus" = "xyes"; then
-	dualminer=yes
-elif test "x$dualminer" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled DualMiner])
-else
-	dualminer=no
-fi
-if test "x$dualminer" = "xyes"; then
-	AC_DEFINE([USE_DUALMINER], [1], [Defined to 1 if DualMiner support is wanted])
+BFG_DRIVER(,DualMiner,Icarus,auto,[
 	need_gc3355=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([USE_DUALMINER], [test x$dualminer = xyes])
+])
 
-driverlist="$driverlist zeusminer"
-AC_ARG_ENABLE([zeusminer],
-	[AC_HELP_STRING([--disable-zeusminer],[Compile support for ZeusMiner (default enabled with scrypt)])],
-	[zeusminer=$enableval],
-	[zeusminer=$ddauto])
-if test "x$zeusminer" = "xno"; then
-	true
-elif test "x$icarus$scrypt" = "xyesyes"; then
-	zeusminer=yes
-elif test "x$zeusminer" = "xauto"; then
-	zeusminer=no
-elif test "x$scrypt" = "xno"; then
-	AC_MSG_ERROR([You explicitly enabled ZeusMiner, but did not enable scrypt])
-elif test "x$icarus" = "xno"; then
-	AC_MSG_ERROR([You explicitly disabled Icarus and explicitly enabled ZeusMiner])
-fi
-if test "x$zeusminer" = "xyes"; then
-	AC_DEFINE([USE_ZEUSMINER], [1], [Defined to 1 if ZeusMiner support is wanted])
+BFG_DRIVER(,ZeusMiner,scrypt Icarus,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([USE_ZEUSMINER], [test x$zeusminer = xyes])
+])
 
-driverlist="$driverlist gridseed"
-AC_ARG_ENABLE([gridseed],
-	[AC_HELP_STRING([--disable-gridseed],[Compile support for GridSeed (default enabled with scrypt)])],
-	[gridseed=$enableval],
-	[gridseed=$ddauto])
-if test "x$gridseed" = "xno"; then
-	true
-elif test "x$scrypt" = "xyes"; then
-	gridseed=yes
-elif test "x$gridseed" = "xauto"; then
-	gridseed=no
-else
-	AC_MSG_ERROR([You explicitly enabled GridSeed, but did not enable scrypt (SHA2 not supported)])
-fi
-if test "x$gridseed" = "xyes"; then
-	AC_DEFINE([USE_GRIDSEED], [1], [Defined to 1 if GridSeed support is wanted])
+BFG_DRIVER(,GridSeed,scrypt,auto,[
 	need_gc3355=yes
 	need_lowl_vcom=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([USE_GRIDSEED], [test x$gridseed = xyes])
+])
 
-driverlist="$driverlist avalon"
-avalon="no"
-
-AC_ARG_ENABLE([avalon],
-	[AC_HELP_STRING([--disable-avalon],[Compile support for Avalon (default enabled)])],
-	[avalon=$enableval],
-	[avalon=$ddyes]
-	)
-if test "x$avalon" = xyes; then
-	AC_DEFINE([USE_AVALON], [1], [Defined to 1 if Avalon support is wanted])
+BFG_DRIVER(,Avalon,SHA256d,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_AVALON], [test x$avalon = xyes])
+])
 
-
-driverlist="$driverlist avalonmm"
-AC_ARG_ENABLE([avalonmm],
-	[AC_HELP_STRING([--disable-avalonmm],[Compile support for Avalon2/3 (default enabled)])],
-	[avalonmm=$enableval],
-	[avalonmm=$ddyes]
-	)
-if test "x$avalonmm" = xyes; then
-	AC_DEFINE([USE_AVALONMM], [1], [Defined to 1 if Avalon2/3 support is wanted])
+BFG_DRIVER(avalonmm,Avalon2/3,SHA256d,auto,[
 	need_lowl_vcom=yes
 	need_work2d=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([USE_AVALONMM], [test x$avalonmm = xyes])
+])
 
-
-driverlist="$driverlist knc"
-AC_ARG_ENABLE([knc],
-	[AC_HELP_STRING([--enable-knc],[Compile support for KnC (default disabled)])],
-	[knc=$enableval],
-	[knc=$ddno]
-	)
-if test "x$knc" = xyes; then
-	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
-	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
-		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for knc driver])
-	],[
-		#include <stddef.h>
-		#ifdef HAVE_LINUX_I2C_DEV_USER_H
-		#include <linux/i2c-dev-user.h>
-		#else
-		#ifdef NEED_LINUX_I2C_H
-		#include <linux/i2c.h>
-		#endif
-		#include <linux/i2c-dev.h>
-		#endif
-	])
-	AC_DEFINE([USE_KNC], [1], [Defined to 1 if KnC support is wanted])
+BFG_DRIVER(,KnC,SHA256d,no,[
+	need_linux_i2c_dev=yes
 	need_lowl_spi=yes
-fi
-AM_CONDITIONAL([USE_KNC], [test x$knc = xyes])
+])
+
+BFG_DRIVER(kncasic,KnC gen 2,SHA256d,no,[
+	kncasic_controller="$kncasic_opt"
+	if test "x$kncasic_opt" = "x"; then
+		kncasic_controller=BBB
+	fi
+	need_knc_asic=yes
+	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$kncasic_controller],[1])
+])
 
 AC_ARG_WITH([libmicrohttpd],
 	[AC_HELP_STRING([--without-libmicrohttpd],[Compile support for libmicrohttpd getwork server (default enabled)])],
@@ -648,10 +661,23 @@ AC_ARG_WITH([libevent],
 )
 if test "x$libevent" != "xno"; then
 	PKG_CHECK_MODULES([libevent],[libevent >= 2.0.3],[
-		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+		PKG_CHECK_MODULES([libevent_pthreads],[libevent_pthreads],[
+			libevent_CFLAGS="${libevent_CFLAGS} ${libevent_pthreads_CFLAGS}"
+			libevent_LIBS="${libevent_LIBS} ${libevent_pthreads_LIBS}"
+		],[true])
+		AC_MSG_CHECKING([if libevent supports threading])
+		BFG_PREPROC_IFELSE([EVTHREAD_USE_PTHREADS_IMPLEMENTED || EVTHREAD_USE_WINDOWS_THREADS_IMPLEMENTED],[event2/thread.h],[
+			AC_MSG_RESULT([yes])
+			have_libevent=yes
+		],[
+			AC_MSG_RESULT([no])
+		])
+	])
+	if test "x$have_libevent" = "xyes"; then
 		libevent=yes
-	],[
-		libevent=no
+		need_work2d=yes
+		AC_DEFINE([USE_LIBEVENT],[1],[Defined to 1 if libevent support is wanted])
+	else
 		libevent_enableaction="install libevent 2.0.3+"
 		if test -n "$need_bfg_driver_proxy_enableaction"; then
 			need_bfg_driver_proxy_enableaction="${need_bfg_driver_proxy_enableaction} (getwork) or libevent 2.0.3+ (stratum)"
@@ -663,9 +689,7 @@ if test "x$libevent" != "xno"; then
 		else
 			AC_MSG_WARN([libevent 2.0.3+ not found; stratum proxy will be unavailable])
 		fi
-	])
-	if test "x$libevent" = "xyes"; then
-		need_work2d=yes
+		libevent=no
 	fi
 fi
 AM_CONDITIONAL([USE_LIBEVENT], [test x$libevent = xyes])
@@ -679,25 +703,18 @@ else
 fi
 AM_CONDITIONAL([NEED_BFG_DRIVER_PROXY], [test x$libevent$httpsrv != xnono])
 
-driverlist="$driverlist modminer"
-AC_ARG_ENABLE([modminer],
-	[AC_HELP_STRING([--disable-modminer],[Compile support for ModMiner (default enabled)])],
-	[modminer=$enableval],
-	[modminer=$ddyes]
-	)
-if test "x$modminer" = xyes; then
-	AC_DEFINE([USE_MODMINER], [1], [Defined to 1 if ModMiner support is wanted])
+BFG_DRIVER(,ModMiner,SHA256d,auto,[
 	need_dynclock=yes
 	need_lowl_vcom=yes
 	need_binloader=yes
 	has_fpga=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_MODMINER], [test x$modminer = xyes])
+])
 
 PKG_PROG_PKG_CONFIG()
 
-libusb=no
+label_LIBUSB=libusb
+USE_LIBUSB=no
 libusb_include_path=""
 AC_ARG_WITH([libusb],
 	[AC_HELP_STRING([--without-libusb],[Compile using libusb (default enabled)])],
@@ -705,316 +722,130 @@ AC_ARG_WITH([libusb],
 	[want_libusb=auto]
 	)
 if test "x$want_libusb" != "xno"; then
+	howto_LIBUSB="install libusb 1.0+"
 PKG_CHECK_MODULES([LIBUSB], [libusb-1.0],[
-	libusb=yes
+	USE_LIBUSB=yes
 ],[
 	for usb_lib in usb-1.0 usb; do
 		AC_CHECK_LIB($usb_lib, libusb_init, [
-			libusb=yes
+			USE_LIBUSB=yes
 			break
 		])
 	done
-	if test "x$libusb" = xyes; then
+	if test "x$USE_LIBUSB" = xyes; then
 			AC_CHECK_DECL([libusb_init],[
 				LIBUSB_LIBS="-l$usb_lib"
 			],[
-				AC_MSG_CHECKING([whether libusb_init is declared in subdirectory])
-				libusb_include_path=`echo '#include <libusb-1.0/libusb.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)libusb\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
-				if test "x$libusb_include_path" != "x"; then
+				BFG_FIND_INCLUDE_PATH([libusb-1.0],[libusb.h],[
 					LIBUSB_LIBS="-l$usb_lib"
-					LIBUSB_CFLAGS="-I$libusb_include_path"
-					AC_MSG_RESULT([yes])
-				else
-					libusb=no
-					AC_MSG_RESULT([no])
-				fi
+					LIBUSB_CFLAGS="-I${inclpath_libusb_h}"
+				],[
+					USE_LIBUSB=no
+				])
 			],[#include <libusb.h>])
 	fi
 ])
 fi
 
-driverlist="$driverlist cointerra"
-AC_ARG_ENABLE([cointerra],
-	[AC_HELP_STRING([--disable-cointerra],[Compile support for CoinTerra (default if libusb)])],
-	[cointerra=$enableval],
-	[cointerra=$ddauto]
-	)
-if test "x$cointerra$want_libusb" = xyesno; then
-	AC_MSG_ERROR([You disabled libusb, required for CoinTerra support])
-elif test "x$cointerra$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for CoinTerra support])
-elif test "x$cointerra" = xauto; then
-	cointerra="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for CoinTerra support])
-		cointerra_enableaction="install libusb 1.0+"
-	fi
-fi
-if test "x$cointerra" = xyes; then
-	AC_DEFINE([USE_COINTERRA], [1], [Defined to 1 if CoinTerra support is wanted])
+BFG_DRIVER(,CoinTerra,SHA256d libusb,auto,[
 	need_lowl_usb=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_COINTERRA], [test x$cointerra = xyes])
+])
 
-driverlist="$driverlist klondike hashbusteravalon/klondike"
-AC_ARG_ENABLE([klondike],
-	[AC_HELP_STRING([--disable-klondike],[Compile support for Klondike (default enabled)])],
-	[klondike=$enableval],
-	[klondike=$ddauto]
-	)
-if test "x$klondike$want_libusb" = xyesno; then
-	AC_MSG_ERROR([You disabled libusb, required for Klondike support])
-elif test "x$klondike$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for Klondike support])
-elif test "x$klondike" = xauto; then
-	klondike="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for Klondike support])
-		klondike_enableaction="install libusb 1.0+"
-	fi
-fi
-if test "x$klondike" = xyes; then
-	AC_DEFINE([USE_KLONDIKE], [1], [Defined to 1 if Klondike support is wanted])
+BFG_DRIVER(,Klondike,SHA256d libusb,auto,[
 	need_lowl_usb=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_KLONDIKE], [test x$klondike = xyes])
+])
 
-
-driverlist="$driverlist x6500"
-AC_ARG_ENABLE([x6500],
-	[AC_HELP_STRING([--disable-x6500],[Compile support for X6500 (default if libusb)])],
-	[x6500=$enableval],
-	[x6500=$ddauto]
-	)
-if test "x$x6500$want_libusb" = xyesno; then
-	AC_MSG_ERROR([You disabled libusb, required for X6500 support])
-elif test "x$x6500$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for X6500 support])
-elif test "x$x6500" = xauto; then
-	x6500="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for X6500 support])
-		x6500_enableaction="install libusb 1.0+"
+BFG_DRIVER(titan,KnC Titan,scrypt,no,[
+	if test "x$titan_opt" = "x"; then
+		if test "x$USE_KNCASIC" = "xyes"; then
+			titan_controller="$kncasic_controller"
+		else
+			titan_controller=RPI
+		fi
+	else
+		titan_controller=$titan_opt
+		if test "x$USE_KNCASIC" = "xyes"; then
+			if test "x$kncasic_controller" != "$titan_controller"; then
+				AC_MSG_ERROR([Can only build kncasic and titan drivers together for the same controller (kncasic=$kncasic_controller vs titan=$titan_controller)])
+			fi
+		fi
 	fi
-fi
-if test "x$x6500" = xyes; then
-	AC_DEFINE([USE_X6500], [1], [Defined to 1 if X6500 support is wanted])
+	need_knc_asic=yes
+	AC_DEFINE_UNQUOTED([CONTROLLER_BOARD_$titan_controller],[1])
+	AH_TEMPLATE([CONTROLLER_BOARD_BACKPLANE])
+	AH_TEMPLATE([CONTROLLER_BOARD_BBB])
+	AH_TEMPLATE([CONTROLLER_BOARD_RPI])
+])
+
+BFG_DRIVER(,X6500,SHA256d libusb,auto,[
 	need_dynclock=yes
 	need_lowl_ftdi=yes
 	need_binloader=yes
 	has_fpga=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_X6500], [test x$x6500 = xyes])
+])
 
-driverlist="$driverlist ztex"
-AC_ARG_ENABLE([ztex],
-	[AC_HELP_STRING([--disable-ztex],[Compile support for ZTEX (default if libusb)])],
-	[ztex=$enableval],
-	[ztex=$ddauto]
-	)
-if test "x$ztex$want_libusb" = xyesno; then
-	AC_MSG_ERROR([You disabled libusb, required for ZTEX support])
-elif test "x$ztex$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for ZTEX support])
-elif test "x$ztex" = xauto; then
-	ztex="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for ZTEX support])
-		ztex_enableaction="install libusb 1.0+"
-	fi
-fi
-if test "x$ztex" = xyes; then
-	AC_DEFINE([USE_ZTEX], [1], [Defined to 1 if ZTEX support is wanted])
+BFG_DRIVER(,ZTEX,SHA256d libusb,auto,[
 	need_dynclock=yes
 	need_lowl_usb=yes
 	need_binloader=yes
 	has_fpga=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_ZTEX], [test x$ztex = xyes])
+])
 
-
-driverlist="$driverlist bifury"
-AC_ARG_ENABLE([bifury],
-	[AC_HELP_STRING([--disable-bifury],[Compile support for Bi*Fury (default enabled)])],
-	[bifury=$enableval],
-	[bifury=$ddyes]
-	)
-if test "x$bifury" = "xyes"; then
-	AC_DEFINE([USE_BIFURY], [1], [Defined to 1 if Bi*Fury support is wanted])
+BFG_DRIVER(bifury,Bi*Fury,SHA256d,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_BIFURY], [test x$bifury = xyes])
+])
 
-
-driverlist="$driverlist bitfury_gpio/bitfury"
-AC_ARG_ENABLE([bitfury],
-	[AC_HELP_STRING([--disable-bitfury],[Compile support for Bitfury (default enabled)])],
-	[bitfury=$enableval],
-	[bitfury=$ddyes]
-	)
-if test "x$bitfury" = xyes; then
-	AC_DEFINE([USE_BITFURY], [1], [Defined to 1 if Bitfury support is wanted])
+BFG_DRIVER(,Bitfury,SHA256d,auto,[
 	need_lowl_spi=yes
-fi
-AM_CONDITIONAL([HAS_BITFURY], [test x$bitfury = xyes])
+])
 
+BFG_DRIVER(,BFSB,SHA256d Bitfury,no)
 
-driverlist="$driverlist bfsb"
-AC_ARG_ENABLE([bfsb],
-	[AC_HELP_STRING([--enable-bfsb],[Compile support for BFSB (default disabled)])],
-	[bfsb=$enableval],
-	[bfsb=$ddno]
-	)
-if test "x$bfsb" = "xyes"; then
-	if test "x$bitfury" = "xno"; then
-		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFSB])
-	fi
-	AC_DEFINE([USE_BFSB], [1], [Defined to 1 if BFSB support is wanted])
-fi
-AM_CONDITIONAL([HAS_BFSB], [test x$bfsb = xyes])
-
-
-driverlist="$driverlist bigpic"
-AC_ARG_ENABLE([bigpic],
-	[AC_HELP_STRING([--disable-bigpic],[Compile support for Big Picture Mining USB (default enabled)])],
-	[bigpic=$enableval],
-	[bigpic=$ddauto]
-	)
-if test "x$bigpic" = "xno"; then
-	true
-elif test "x$bitfury" = "xyes"; then
-	bigpic=yes
-elif test "x$bigpic" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BigPic])
-else
-	bigpic=no
-fi
-if test "x$bigpic" = "xyes"; then
-	AC_DEFINE([USE_BIGPIC], [1], [Defined to 1 if Big Picture Mining USB support is wanted])
+BFG_DRIVER(bigpic,Big Picture Mining USB,SHA256d Bitfury,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_BIGPIC], [test x$bigpic = xyes])
+])
 
-
-driverlist="$driverlist bfx"
-AC_ARG_ENABLE([bfx],
-	[AC_HELP_STRING([--disable-bfx],[Compile support for BFx2 (default if libusb)])],
-	[bfx=$enableval],
-	[bfx=$ddauto]
-	)
-if test "x$bfx" = "xno"; then
-	true
-elif test "x$bitfury$libusb" = "xyesyes"; then
-	bfx=yes
-elif test "x$bfx" = "xyes"; then
-	if test "x$want_libusb" = "xno"; then
-		AC_MSG_ERROR([You disabled libusb, required for BFx2 support])
-	elif test "x$libusb" = "xno"; then
-		AC_MSG_ERROR([Could not find libusb, required for BFx2 support])
-	else
-		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled BFx2])
-	fi
-elif test "x$bfx" = "xauto"; then
-	bfx="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for BFx2 support])
-		bfx_enableaction="install libusb 1.0+"
-	fi
-fi
-if test "x$bfx" = xyes; then
-	AC_DEFINE([USE_BFX], [1], [Defined to 1 if BFx2 support is wanted])
+BFG_DRIVER(bfx,BFx2,SHA256d libusb Bitfury,auto,[
 	need_lowl_ftdi=yes
 	has_asic=yes
 	$broad_udevrules && have_udevrules=true
-fi
-AM_CONDITIONAL([USE_BFX], [test x$bfx = xyes])
+])
 
-
-driverlist="$driverlist drillbit"
-AC_ARG_ENABLE([drillbit],
-	[AC_HELP_STRING([--disable-drillbit],[Compile support for DrillBit (default enabled)])],
-	[drillbit=$enableval],
-	[drillbit=$ddauto]
-	)
-if test "x$drillbit" = "xno"; then
-	true
-elif test "x$bitfury" = "xyes"; then
-	drillbit=yes
-elif test "x$drillbit" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled DrillBit])
-else
-	drillbit=no
-fi
-if test "x$drillbit" = "xyes"; then
-	AC_DEFINE([USE_DRILLBIT], [1], [Defined to 1 if DrillBit support is wanted])
+BFG_DRIVER(,DrillBit,SHA256d Bitfury,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_DRILLBIT], [test x$drillbit = xyes])
+])
 
-
-driverlist="$driverlist twinfury"
-AC_ARG_ENABLE([twinfury],
-    [AC_HELP_STRING([--disable-twinfury],[Compile support for Twinfury USB miner (default enabled)])],
-    [twinfury=$enableval],
-    [twinfury=$ddauto]
-    )
-if test "x$twinfury" = "xno"; then
-    true
-elif test "x$bitfury" = "xyes"; then
-    twinfury=yes
-elif test "x$twinfury" = "xyes"; then
-    AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Twinfury])
-else
-    twinfury=no
-fi
-if test "x$twinfury" = "xyes"; then
-    AC_DEFINE([USE_TWINFURY], [1], [Defined to 1 if Twinfury USB miner support is wanted])
+BFG_DRIVER(,Twinfury,SHA256d Bitfury,auto,[
     need_lowl_vcom=yes
     has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_TWINFURY], [test x$twinfury = xyes])
+])
 
-driverlist="$driverlist littlefury"
-AC_ARG_ENABLE([littlefury],
-	[AC_HELP_STRING([--disable-littlefury],[Compile support for LittleFury (default enabled)])],
-	[littlefury=$enableval],
-	[littlefury=$ddauto]
-	)
-if test "x$littlefury" = "xno"; then
-	true
-elif test "x$bitfury" = "xyes"; then
-	littlefury=yes
-elif test "x$littlefury" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled LittleFury])
-else
-	littlefury=no
-fi
-if test "x$littlefury" = "xyes"; then
-	AC_DEFINE([USE_LITTLEFURY], [1], [Defined to 1 if LittleFury support is wanted])
+BFG_DRIVER(,LittleFury,SHA256d Bitfury,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_LITTLEFURY], [test x$littlefury = xyes])
+])
 
 
-found_hidapi=false
+label_HIDAPI=hidapi
+howto_HIDAPI="install hidapi"
+USE_HIDAPI=no
 for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
 	PKG_CHECK_MODULES([hidapi],[$_hidapi_lib],[
-		found_hidapi=true
+		USE_HIDAPI=yes
 		break
 	],[
 		true
@@ -1022,176 +853,59 @@ for _hidapi_lib in hidapi hidapi-hidraw hidapi-libusb; do
 done
 
 
-driverlist="$driverlist nanofury"
-AC_ARG_ENABLE([nanofury],
-	[AC_HELP_STRING([--disable-nanofury],[Compile support for NanoFury (default enabled)])],
-	[nanofury=$enableval],
-	[nanofury=$ddauto]
-	)
-if test "x$nanofury" = "xno"; then
-	true
-elif test "x$bitfury" = "xyes"; then
-	if test x$found_hidapi = xtrue; then
-		nanofury=yes
-	else
-		if test x$nanofury = xauto; then
-			nanofury=no
-			nanofury_enableaction="install hidapi"
-		else
-			AC_MSG_ERROR([Could not find hidapi, required for NanoFury support])
-		fi
-	fi
-elif test "x$nanofury" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled NanoFury])
-else
-	nanofury=no
-fi
-if test "x$nanofury" = "xyes"; then
-	AC_DEFINE([USE_NANOFURY], [1], [Defined to 1 if NanoFury support is wanted])
+BFG_DRIVER(,NanoFury,SHA256d hidapi Bitfury,auto,[
 	need_lowl_hid=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([HAS_NANOFURY], [test x$nanofury = xyes])
+])
 
-
-driverlist="$driverlist hashbuster"
-AC_ARG_ENABLE([hashbuster],
-	[AC_HELP_STRING([--disable-hashbuster],[Compile support for HashBuster Nano (default enabled)])],
-	[hashbuster=$enableval],
-	[hashbuster=$ddauto],
-	)
-if test "x$hashbuster" = "xno"; then
-	true
-elif test "x$bitfury" = "xyes"; then
-	if test x$found_hidapi = xtrue; then
-		hashbuster=yes
-	else
-		if test x$hashbuster = xauto; then
-			hashbuster=no
-			hashbuster_enableaction="install hidapi"
-		else
-			AC_MSG_ERROR([Could not find hidapi, required for HashBuster Nano support])
-		fi
-	fi
-elif test "x$hashbuster" = "xyes"; then
-	AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled HashBuster Nano])
-else
-	hashbuster=no
-fi
-if test "x$hashbuster" = "xyes"; then
-	AC_DEFINE([USE_HASHBUSTER], [1], [Defined to 1 if HashBuster Nano support is wanted])
+BFG_DRIVER(hashbuster,HashBuster Nano,SHA256d hidapi Bitfury,auto,[
 	need_lowl_hid=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_HASHBUSTER], [test x$hashbuster = xyes])
+])
 
-
-driverlist="$driverlist hashbusterusb"
-AC_ARG_ENABLE([hashbusterusb],
-	[AC_HELP_STRING([--disable-hashbusterusb],[Compile support for HashBuster Micro (default if libusb)])],
-	[hashbusterusb=$enableval],
-	[hashbusterusb=$ddauto]
-	)
-if test "x$hashbusterusb$want_libusb" = xyesno; then
-	AC_MSG_ERROR([You disabled libusb, required for HashBuster Micro support])
-elif test "x$hashbusterusb$libusb" = xyesno; then
-	AC_MSG_ERROR([Could not find libusb, required for HashBuster Micro support])
-elif test "x$hashbusterusb" = xauto; then
-	hashbusterusb="$libusb"
-	if test "x$libusb" = xno; then
-		AC_MSG_WARN([Could not find libusb, required for HashBuster Micro support])
-		hashbusterusb_enableaction="install libusb 1.0+"
-	fi
-fi
-if test "x$hashbusterusb" = xyes; then
-	AC_DEFINE([USE_HASHBUSTERUSB], [1], [Defined to 1 if HashBuster Micro support is wanted])
+BFG_DRIVER(hashbusterusb,HashBuster Micro,SHA256d libusb Bitfury,auto,[
 	need_lowl_usb=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_HASHBUSTERUSB], [test x$hashbusterusb = xyes])
+])
 
-
-driverlist="$driverlist hashfast"
-AC_ARG_ENABLE([hashfast],
-	[AC_HELP_STRING([--disable-hashfast],[Compile support for HashFast (default enabled)])],
-	[hashfast=$enableval],
-	[hashfast=$ddyes]
-)
-if test "x$hashfast" = xyes; then
-	AC_DEFINE([USE_HASHFAST], [1], [Defined to 1 if HashFast support is wanted])
+BFG_DRIVER(,HashFast,SHA256d,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_HASHFAST], [test x$hashfast = xyes])
+])
 
-
-driverlist="$driverlist jingtian"
-AC_ARG_ENABLE([jingtian],
-	[AC_HELP_STRING([--enable-jingtian],[Compile support for JingTian (default disabled)])],
-	[jingtian=$enableval],
-	[jingtian=$ddno]
-	)
-if test "x$jingtian" = "xyes"; then
-	AC_DEFINE([USE_JINGTIAN], [1], [Defined to 1 if JingTian support is wanted])
+BFG_DRIVER(,JingTian,SHA256d,no,[
 	need_lowl_spi=yes
 	has_asic=yes
-fi
-AM_CONDITIONAL([USE_JINGTIAN], [test x$jingtian = xyes])
+])
 
+BFG_DRIVER(,Metabank,SHA256d Bitfury,no)
 
-driverlist="$driverlist metabank"
-AC_ARG_ENABLE([metabank],
-	[AC_HELP_STRING([--enable-metabank],[Compile support for Metabank (default disabled)])],
-	[metabank=$enableval],
-	[metabank=$ddno]
-	)
-if test "x$metabank" = "xyes"; then
-	if test "x$bitfury" = "xno"; then
-		AC_MSG_ERROR([You explicitly disabled Bitfury and explicitly enabled Metabank])
-	fi
-	AC_DEFINE([USE_METABANK], [1], [Defined to 1 if Metabank support is wanted])
-fi
-AM_CONDITIONAL([HAS_METABANK], [test x$metabank = xyes])
-
-
-driverlist="$driverlist minergate"
-AC_ARG_ENABLE([minergate],
-	[AC_HELP_STRING([--enable-minergate],[Compile support for Spondoolies minergate interface (default disabled)])],
-	[minergate=$enableval],
-	[minergate=$ddno]
-	)
-if test "x$minergate" = "xyes"; then
-	AC_DEFINE([USE_MINERGATE], [1], [Defined to 1 if Spondoolies minergate interface support is wanted])
+BFG_DRIVER(minergate,Spondoolies minergate interface,SHA256d,no,[
 	need_lowlevel=yes
 	has_asic=yes
-fi
-AM_CONDITIONAL([USE_MINERGATE], [test x$minergate = xyes])
+])
 
+BFG_DRIVER(,Minion,SHA256d,no,[
+	need_lowl_spi=yes
+	has_asic=yes
+])
 
-driverlist="$driverlist rockminer"
-AC_ARG_ENABLE([rockminer],
-	[AC_HELP_STRING([--disable-rockminer],[Compile support for RockMiner (default enabled)])],
-	[rockminer=$enableval],
-	[rockminer=$ddyes]
-)
-if test "x$rockminer" = xyes; then
-	AC_DEFINE([USE_ROCKMINER], [1], [Defined to 1 if RockMiner support is wanted])
+BFG_DRIVER(,RockMiner,SHA256d,auto,[
 	need_lowl_vcom=yes
 	has_asic=yes
 	have_udevrules=true
-fi
-AM_CONDITIONAL([USE_ROCKMINER], [test x$rockminer = xyes])
+])
 
 
 if test "x$need_lowl_vcom" != "xno"; then
 	# Lowlevel VCOM doesn't need libusb, but it can take advantage of it to reattach drivers
-	if test "x$libusb" != xno; then
+	if test "x$USE_LIBUSB" != xno; then
 		need_lowl_usb=yes
-	elif test "x$libusb$want_libusb" = xnoyes; then
+	elif test "x$USE_LIBUSB$want_libusb" = xnoyes; then
 		AC_MSG_ERROR([Could not find libusb, which you specifically requested])
 	fi
 fi
@@ -1208,11 +922,11 @@ if test x$need_lowl_spi = xyes; then
 fi
 
 if test "x$need_lowl_usb" = "xno"; then
-	libusb=no
+	USE_LIBUSB=no
 	LIBUSB_LIBS=''
 	LIBUSB_CFLAGS=''
 fi
-if test "x$libusb" = xyes; then
+if test "x$USE_LIBUSB" = xyes; then
 	AC_DEFINE([HAVE_LIBUSB], [1], [Define if you have libusb-1.0])
 	save_CFLAGS="$CFLAGS"
 	CFLAGS="$LIBUSB_CFLAGS $CFLAGS"
@@ -1232,12 +946,10 @@ if test x$need_lowl_vcom = xyes; then
 		AC_CHECK_HEADER([usbiodef.h],[
 			found_ddkusb=true
 		],[
-			AC_CHECK_HEADER([ddk/usbiodef.h],[
+			BFG_FIND_INCLUDE_PATH([ddk],[usbiodef.h],[
 				found_ddkusb=true
-				AUTOSCAN_CPPFLAGS="-I"`echo '#include <ddk/usbiodef.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)usbiodef\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
-			],[
-				true
-			],[
+				AUTOSCAN_CPPFLAGS="-I${inclpath_usbiodef_h}"
+			],[],[
 				#include <windows.h>
 				#include <ddk/usbioctl.h>
 				AC_INCLUDES_DEFAULT
@@ -1253,7 +965,7 @@ if test x$need_lowl_vcom = xyes; then
 		fi
 	else
 		AC_MSG_CHECKING([what baud rates your system supports])
-		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | sed 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
+		echo '#include <termios.h>' | ${CPP} -dM - 2>/dev/null | ${SED} 's/.*[ 	]B\([0-9][0-9]*\)[ 	].*/IOSPEED(\1)/' | grep IOSPEED >iospeeds_local.h
 		if grep -q IOSPEED iospeeds_local.h; then
 			AC_MSG_RESULT([done])
 		else
@@ -1263,7 +975,7 @@ if test x$need_lowl_vcom = xyes; then
 	fi
 fi
 
-if test "x$opencl$need_lowl_hid" = xnono; then
+if test "x$USE_OPENCL$need_lowl_hid" = xnono; then
 	DLOPEN_FLAGS=""
 fi
 
@@ -1306,6 +1018,23 @@ fi
 
 if test x$need_lowlevel = xyes; then
 	AC_DEFINE([HAVE_BFG_LOWLEVEL], [1], [Defined to 1 if lowlevel drivers are being used])
+fi
+
+if test x$need_linux_i2c_dev = xyes; then
+	AC_CHECK_HEADERS([linux/i2c-dev-user.h])
+	AC_CHECK_DECL([i2c_smbus_read_word_data],[true],[
+		AC_MSG_ERROR([linux/i2c-dev.h header from i2c-tools/libi2c-dev (NOT linux headers) is required for KnCMiner drivers])
+	],[
+		#include <stddef.h>
+		#ifdef HAVE_LINUX_I2C_DEV_USER_H
+		#include <linux/i2c-dev-user.h>
+		#else
+		#ifdef NEED_LINUX_I2C_H
+		#include <linux/i2c.h>
+		#endif
+		#include <linux/i2c-dev.h>
+		#endif
+	])
 fi
 
 
@@ -1366,23 +1095,18 @@ else
 			AC_SEARCH_LIBS(${sym}, ${preferl}, [
 				curses=yes
 				eval "curseslib=\"\${ac_cv_search_${sym}}\""
-				barelib="${curseslib/-l/}"
+				barelib=`echo "${curseslib}" | ${SED} -e 's/-l//'`
 				optlist="$optlist ${barelib}/curses"
 				if test "x${curseslib}" != "xnone required"; then
 					NCURSES_LIBS="${curseslib}"
 				fi
 				
 				# Need to check for headers in subdirectories, to ensure we get wide stuff
-				AC_MSG_CHECKING([for curses header subdirectory])
-				barelib="${barelib/6/}"
-				barelib="${barelib/5/}"
-				cursesincl=`echo '#include <'"${barelib}"'/curses.h>' | ${CPP} -M - 2>/dev/null | sed -E -e 's/^[^:]+:[[:space:]]*(([^[:space:]]|\\\\[[:space:]])*)curses\\.h([[:space:]].*|$)$/\\1/' -e 't my' -e d -e ': my' -e 's/\\\\?([\\\\[:space:]])/\\\\\\1/g'`
-				if test "x$cursesincl" != "x"; then
-					NCURSES_CPPFLAGS="-I${cursesincl}"
-					AC_MSG_RESULT([$cursesincl])
-				else
-					AC_MSG_RESULT([none found])
-				fi
+				barelib=`echo "${barelib}" | ${SED} -e 's/6//'`
+				barelib=`echo "${barelib}" | ${SED} -e 's/5//'`
+				BFG_FIND_INCLUDE_PATH([${barelib}],[curses.h],[
+					NCURSES_CPPFLAGS="-I${inclpath_curses_h}"
+				])
 				
 				break
 			], [
@@ -1398,7 +1122,9 @@ else
 	if test "x$curses" = "xyes"; then
 		AC_DEFINE([HAVE_CURSES], [1], [Defined to 1 if curses TUI support is wanted])
 		AC_MSG_CHECKING([whether curses library supports wide characters])
-		LIBS="$orig_libs $NCURSES_CPPFLAGS $NCURSES_LIBS"
+		orig_cflags="$CFLAGS"
+		CFLAGS="$orig_cflags $NCURSES_CPPFLAGS"
+		LIBS="$orig_libs $NCURSES_LIBS"
 		AC_LINK_IFELSE([
 			AC_LANG_PROGRAM([
 				#define PDC_WIDE
@@ -1413,6 +1139,7 @@ else
 		],[
 			AC_MSG_RESULT([no])
 		])
+		CFLAGS="$orig_cflags"
 	fi
 	LIBS="$orig_libs"
 fi
@@ -1454,11 +1181,11 @@ AM_CONDITIONAL([NEED_BFG_LOWL_PCI], [test x$need_lowl_pci = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWL_SPI], [test x$need_lowl_spi = xyes])
 AM_CONDITIONAL([NEED_BFG_LOWLEVEL], [test x$need_lowlevel = xyes])
 AM_CONDITIONAL([NEED_BFG_WORK2D], [test x$need_work2d = xyes])
-AM_CONDITIONAL([HAS_SCRYPT], [test x$scrypt = xyes])
+AM_CONDITIONAL([NEED_KNC_ASIC], [test x$need_knc_asic = xyes])
 AM_CONDITIONAL([HAVE_CURSES], [test x$curses = xyes])
 AM_CONDITIONAL([HAVE_SENSORS], [test x$with_sensors = xyes])
 AM_CONDITIONAL([HAVE_CYGWIN], [test x$have_cygwin = xtrue])
-AM_CONDITIONAL([HAVE_LIBUSB], [test x$libusb = xyes])
+AM_CONDITIONAL([HAVE_LIBUSB], [test x$USE_LIBUSB = xyes])
 AM_CONDITIONAL([HAVE_WINDOWS], [test x$have_win32 = xtrue])
 AM_CONDITIONAL([HAVE_x86_64], [test x$have_x86_64 = xtrue])
 AM_CONDITIONAL([HAVE_WIN_DDKUSB], [test x$found_ddkusb = xtrue])
@@ -1521,7 +1248,7 @@ fi
 AM_CONDITIONAL([HAS_YASM], [test x$has_yasm = xtrue])
 
 have_sse2=no
-if test "x$cpumining$have_x86_32" = "xyestrue"; then
+if test "x$USE_CPUMINING$have_x86_32" = "xyestrue"; then
 	AC_MSG_CHECKING([if SSE2 code compiles])
 	save_CFLAGS="$CFLAGS"
 	for flags in '' '-msse2'; do
@@ -1587,7 +1314,7 @@ AC_SUBST(LIBUSB_CFLAGS)
 PKG_CHECK_MODULES([LIBCURL], [libcurl >= 7.18.2], ,[AC_MSG_ERROR([Missing required libcurl dev >= 7.18.2])])
 if echo "$LIBCURL_CFLAGS" | grep '@CPPFLAG_CURL_STATICLIB@' >/dev/null 2>&1; then
 	AC_MSG_WARN([Your libcurl pkgconfig file is broken, applying workaround])
-	LIBCURL_CFLAGS=`echo "$LIBCURL_CFLAGS" | sed 's/@CPPFLAG_CURL_STATICLIB@//'`
+	LIBCURL_CFLAGS=`echo "$LIBCURL_CFLAGS" | ${SED} 's/@CPPFLAG_CURL_STATICLIB@//'`
 fi
 AC_SUBST(LIBCURL_LIBS)
 
@@ -1790,14 +1517,23 @@ if test "x$prefix" = xNONE; then
 	prefix=/usr/local
 fi
 
-AM_CONDITIONAL([NEED_BITSTREAM_FPGAMINER], [test x$modminer$x6500 != xnono])
+AM_CONDITIONAL([NEED_BITSTREAM_FPGAMINER], [test x$USE_MODMINER$USE_X6500 != xnono])
 
+dnl Hide unnecessary explanations, only after any fatal errors
+howto_SHA256D=x
+if test "x$USE_SHA256D" = xno; then
+	howto_BITFURY=x
+fi
+if test "x$want_libusb" = xno; then
+	howto_LIBUSB=x
+fi
 
 m4_define([BFG_PRINT_LIST],[
 	eval _mylist="\$$2"
 	_yeslist=
 	_nolist=
 	_enableactions=
+	foundone=no
 	for _opt in $_mylist; do
 		IFS=/ read _opt _var <<EOF
 $_opt
@@ -1806,12 +1542,13 @@ EOF
 		eval "_val=\"\$${_var}\""
 		if test "x$_val" = "xno" || test "x$_val" = "xfalse"; then
 			_nolist="$_nolist $_opt"
-			eval "_enableaction=\"\$${_var}_enableaction\""
+			_enableaction=`bfg_enableaction $_var`
 			if test -n "$_enableaction"; then
-				_enableactions="${_enableactions}~    To enable ${_opt}, ${_enableaction}"
+				_enableactions="${_enableactions}~    To enable ${_opt}: ${_enableaction}"
 			fi
 		else
 			_yeslist="$_yeslist $_opt"
+			foundone=yes
 		fi
 	done
 	_yeslist=`echo "$_yeslist" | tr ' ' '\n' | sort | tr '\n' ' '`
@@ -1822,6 +1559,9 @@ EOF
 BFG_PRINT_LIST([Lowlevel..],[lowllist])
 BFG_PRINT_LIST([Drivers...],[driverlist])
 BFG_PRINT_LIST([Algorithms],[algolist])
+if test "x$foundone" = "xno"; then
+	AC_MSG_ERROR([No mining algorithms configured!])
+fi
 BFG_PRINT_LIST([Options...],[optlist])
 
 
@@ -1859,7 +1599,7 @@ BFG_CUSTOM_SUBDIRS_OUTPUT
 
 wordfilter ()
 {
-  echo "$1" | sed 's/ \+/ /g;s/^ *//;s/ *$//'
+  echo "$1" | ${SED} 's/ \+/ /g;s/^ *//;s/ *$//'
 }
 
 echo

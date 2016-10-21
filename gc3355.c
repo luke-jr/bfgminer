@@ -513,7 +513,7 @@ void gc3355_init_miner(int fd, int pll_freq)
 	gc3355_set_pll_freq(fd, pll_freq);
 }
 
-void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_only)
+void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_only, bool scrypt)
 {
 	gc3355_send_cmds(fd, gcp_chip_reset_cmd);
 
@@ -525,7 +525,7 @@ void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_o
 	// initialize units
 	gc3355_reset_dtr(fd);
 
-	if (opt_scrypt && scrypt_only)
+	if (scrypt && scrypt_only)
 		gc3355_scrypt_only_init(fd);
 	else
 	{
@@ -541,7 +541,7 @@ void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_o
 
 	if (!detect_only)
 	{
-		if (!opt_scrypt)
+		if (!scrypt)
 			// open sha2 units
 			gc3355_open_sha2_units(fd, opt_sha2_units);
 

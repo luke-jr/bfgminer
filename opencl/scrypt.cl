@@ -31,7 +31,7 @@
  * online backup system.
  */
 
-// kernel-interface: scrypt
+// kernel-interface: scrypt scrypt
 
 __constant uint ES[2] = { 0x00FF00FF, 0xFF00FF00 };
 __constant uint K[] = {
@@ -760,13 +760,13 @@ void salsa(uint4 B[8])
 #define Coord(x,y,z) x+y*(x ## SIZE)+z*(y ## SIZE)*(x ## SIZE)
 #define CO Coord(z,x,y)
 
-void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
+void scrypt_core(const uint gid, uint4 X[8], __global uint4 * restrict lookup)
 {
 	shittify(X);
 	const uint zSIZE = 8;
 	const uint ySIZE = (1024/LOOKUP_GAP+(1024%LOOKUP_GAP>0));
 	const uint xSIZE = CONCURRENT_THREADS;
-	uint x = get_global_id(0)%xSIZE;
+	const uint x = gid % xSIZE;
 
 	for(uint y=0; y<1024/LOOKUP_GAP; ++y)
 	{
@@ -817,11 +817,19 @@ void scrypt_core(uint4 X[8], __global uint4*restrict lookup)
 #define SETFOUND(Xnonce) output[output[SCRYPT_FOUND]++] = Xnonce
 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search(__global const uint4 * restrict input,
+__kernel void search(
+#ifndef GOFFSET
+	const uint base,
+#endif
+	__global const uint4 * restrict input,
 volatile __global uint*restrict output, __global uint4*restrict padcache,
 const uint4 midstate0, const uint4 midstate16, const uint target)
 {
-	uint gid = get_global_id(0);
+	const uint gid = get_global_id(0)
+#ifndef GOFFSET
+		+ base
+#endif
+	;
 	uint4 X[8];
 	uint4 tstate0, tstate1, ostate0, ostate1, tmp0, tmp1;
 	uint4 data = (uint4)(input[4].x,input[4].y,input[4].z,gid);
@@ -846,7 +854,7 @@ const uint4 midstate0, const uint4 midstate16, const uint target)
 		SHA256(&pad0,&pad1, data, (uint4)(i+1,K[84],0,0), (uint4)(0,0,0,0), (uint4)(0,0,0, K[87]));
 		SHA256(X+i*2,X+i*2+1, pad0, pad1, (uint4)(K[84], 0U, 0U, 0U), (uint4)(0U, 0U, 0U, K[88]));
 	}
-	scrypt_core(X,padcache);
+	scrypt_core(gid, X, padcache);
 	SHA256(&tmp0,&tmp1, X[0], X[1], X[2], X[3]);
 	SHA256(&tmp0,&tmp1, X[4], X[5], X[6], X[7]);
 	SHA256_fixed(&tmp0,&tmp1);

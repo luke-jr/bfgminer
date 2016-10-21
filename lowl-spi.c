@@ -50,6 +50,8 @@
 
 #include "logging.h"
 #include "lowl-spi.h"
+#include "miner.h"
+#include "util.h"
 
 #ifdef HAVE_LINUX_SPI
 bool sys_spi_txrx(struct spi_port *port);
@@ -251,6 +253,33 @@ bool linux_spi_txrx(struct spi_port * const spi)
 		.bits_per_word = spi->bits,
 	};
 	return (ioctl(fd, SPI_IOC_MESSAGE(1), &xf) > 0);
+}
+
+bool linux_spi_txrx2(struct spi_port * const spi)
+{
+	const size_t bufsz = spi_getbufsz(spi);
+	
+	if (opt_dev_protocol)
+	{
+		const void * const txbuf = spi_gettxbuf(spi);
+		char hex[(bufsz * 2) + 1];
+		bin2hex(hex, txbuf, bufsz);
+		applog(LOG_DEBUG, "%s: %cX %s", spi->repr, 'T', hex);
+	}
+	bool rv = linux_spi_txrx(spi);
+	if (opt_dev_protocol)
+	{
+		if (likely(rv))
+		{
+			void * const rxbuf = spi_getrxbuf(spi);
+			char hex[(bufsz * 2) + 1];
+			bin2hex(hex, rxbuf, bufsz);
+			applog(LOG_DEBUG, "%s: %cX %s", spi->repr, 'R', hex);
+		}
+		else
+			applog(LOG_DEBUG, "%s: SPI ERROR", spi->repr);
+	}
+	return rv;
 }
 
 #endif

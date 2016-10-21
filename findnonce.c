@@ -10,7 +10,6 @@
  */
 
 #include "config.h"
-#ifdef HAVE_OPENCL
 
 #include <stdint.h>
 #include <stdio.h>
@@ -20,8 +19,8 @@
 
 #include "findnonce.h"
 #include "miner.h"
-#include "scrypt.h"
 
+#ifdef USE_SHA256D
 const uint32_t SHA256_K[64] = {
 	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
 	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -133,13 +132,15 @@ void precalc_hash(struct opencl_work_data *blk, uint32_t *state, uint32_t *data)
 	blk->sixA = blk->ctx_g + SHA256_K[6];
 	blk->sevenA = blk->ctx_h + SHA256_K[7];
 }
+#endif
 
 struct pc_data {
 	struct thr_info *thr;
 	struct work work;
-	uint32_t res[SCRYPT_MAXBUFFERS];
+	uint32_t res[OPENCL_MAX_BUFFERSIZE];
 	pthread_t pth;
 	int found;
+	enum cl_kernels kinterface;
 };
 
 static void *postcalc_hash(void *userdata)
@@ -147,7 +148,11 @@ static void *postcalc_hash(void *userdata)
 	struct pc_data *pcd = (struct pc_data *)userdata;
 	struct thr_info *thr = pcd->thr;
 	unsigned int entry = 0;
-	int found = opt_scrypt ? SCRYPT_FOUND : FOUND;
+	int found = FOUND;
+#ifdef USE_SCRYPT
+	if (pcd->kinterface == KL_SCRYPT)
+		found = SCRYPT_FOUND;
+#endif
 
 	pthread_detach(pthread_self());
 	RenameThread("postcalchsh");
@@ -163,6 +168,10 @@ static void *postcalc_hash(void *userdata)
 
 	for (entry = 0; entry < pcd->res[found]; entry++) {
 		uint32_t nonce = pcd->res[entry];
+#ifdef USE_OPENCL_FULLHEADER
+		if (pcd->kinterface == KL_FULLHEADER)
+			nonce = swab32(nonce);
+#endif
 
 		applog(LOG_DEBUG, "OCL NONCE %u found in slot %d", nonce, entry);
 		submit_nonce(thr, &pcd->work, nonce);
@@ -174,7 +183,7 @@ static void *postcalc_hash(void *userdata)
 	return NULL;
 }
 
-void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
+void postcalc_hash_async(struct thr_info * const thr, struct work * const work, uint32_t * const res, const enum cl_kernels kinterface)
 {
 	struct pc_data *pcd = malloc(sizeof(struct pc_data));
 	int buffersize;
@@ -186,9 +195,15 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 
 	*pcd = (struct pc_data){
 		.thr = thr,
+		.kinterface = kinterface,
 	};
 	__copy_work(&pcd->work, work);
-	buffersize = opt_scrypt ? SCRYPT_BUFFERSIZE : BUFFERSIZE;
+#ifdef USE_SCRYPT
+	if (kinterface == KL_SCRYPT)
+		buffersize = SCRYPT_BUFFERSIZE;
+	else
+#endif
+		buffersize = BUFFERSIZE;
 	memcpy(&pcd->res, res, buffersize);
 
 	if (pthread_create(&pcd->pth, NULL, postcalc_hash, (void *)pcd)) {
@@ -196,4 +211,3 @@ void postcalc_hash_async(struct thr_info *thr, struct work *work, uint32_t *res)
 		return;
 	}
 }
-#endif /* HAVE_OPENCL */

@@ -578,7 +578,7 @@ bool minergate_get_stats(struct cgpu_info * const dev)
 		{
 			long nums[0x80];
 			char *endptr;
-			unsigned i;
+			int i;
 			float max_temp = 0;
 			for (i = 0; 1; ++i)
 			{
@@ -596,8 +596,14 @@ bool minergate_get_stats(struct cgpu_info * const dev)
 				p = endptr;
 			}
 			i -= skip_stats;
-			long *new_stats = malloc(sizeof(*state->stats) * i);
-			memcpy(new_stats, &nums[skip_stats], sizeof(*nums) * i);
+			long *new_stats;
+			if (likely(i > 0))
+			{
+				new_stats = malloc(sizeof(*state->stats) * i);
+				memcpy(new_stats, &nums[skip_stats], sizeof(*nums) * i);
+			}
+			else
+				new_stats = NULL;
 			mutex_lock(&dev->device_mutex);
 			free(state->stats);
 			state->stats = new_stats;

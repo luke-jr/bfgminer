@@ -21,6 +21,7 @@
 #include <winsock2.h>
 #endif
 
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/time.h>
@@ -28,6 +29,9 @@
 #include <jansson.h>
 #include <curl/curl.h>
 #include <sched.h>
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
 
 #include <blkmaker.h>
 #include <blktemplate.h>
@@ -42,6 +46,10 @@
 
 #include "logging.h"
 #include "util.h"
+
+extern const char * const bfgminer_name_space_ver;
+extern const char * const bfgminer_name_slash_ver;
+extern const char * const bfgminer_ver;
 
 #ifdef STDC_HEADERS
 # include <stdlib.h>
@@ -273,10 +281,17 @@ struct gpu_adl {
 #endif
 
 enum pow_algorithm {
-	POW_SHA256D = 1,
-	POW_SCRYPT  = 2,
+#ifdef USE_KECCAK
+	POW_KECCAK,
+#endif
+#ifdef USE_SHA256D
+	POW_SHA256D,
+#endif
+#ifdef USE_SCRYPT
+	POW_SCRYPT,
+#endif
+	POW_ALGORITHM_COUNT,
 };
-typedef uint8_t supported_algos_t;
 
 struct api_data;
 struct thr_info;
@@ -291,15 +306,19 @@ enum bfg_probe_result_flags_values {
 extern unsigned *_bfg_probe_result_flags();
 #define bfg_probe_result_flags (*_bfg_probe_result_flags())
 
+struct mining_algorithm;
+
 struct device_drv {
 	const char *dname;
 	const char *name;
 	int8_t probe_priority;
 	bool lowl_probe_by_name_only;
-	supported_algos_t supported_algos;
 
 	// DRV-global functions
 	void (*drv_init)();
+	// drv_min_nonce_diff's proc may be NULL
+	// drv_min_nonce_diff should return negative if algorithm is not supported
+	float (*drv_min_nonce_diff)(struct cgpu_info *proc, const struct mining_algorithm *);
 	void (*drv_detect)();
 	bool (*lowl_match)(const struct lowlevel_device_info *);
 	bool (*lowl_probe)(const struct lowlevel_device_info *);
@@ -318,6 +337,7 @@ struct device_drv {
 	void (*proc_tui_wlogprint_choices)(struct cgpu_info *);
 	const char *(*proc_tui_handle_choice)(struct cgpu_info *, int input);
 	void (*zero_stats)(struct cgpu_info *);
+	double (*get_proc_rolling_hashrate)(struct cgpu_info *);
 
 	// Thread-specific functions
 	bool (*thread_prepare)(struct thr_info *);
@@ -363,11 +383,19 @@ enum dev_enable {
 
 enum cl_kernels {
 	KL_NONE,
+#ifdef USE_SHA256D
 	KL_POCLBM,
 	KL_PHATK,
 	KL_DIAKGCN,
 	KL_DIABLO,
+#endif
+#ifdef USE_OPENCL_FULLHEADER
+	KL_FULLHEADER,
+#endif
+#ifdef USE_SCRYPT
 	KL_SCRYPT,
+#endif
+	OPENCL_KERNEL_INTERFACE_COUNT,
 };
 
 enum dev_reason {
@@ -468,6 +496,7 @@ struct cgpu_info {
 	char proc_repr_ns[9];
 	struct cgpu_info *device;
 	struct cgpu_info *next_proc;
+	int extra_work_queue;
 	
 	const char *device_path;
 	void *device_data;
@@ -565,9 +594,6 @@ struct cgpu_info {
 
 	bool disable_watchdog;
 	bool shutdown;
-	
-	// Lowest difficulty supported for finding nonces
-	float min_nonce_diff;
 };
 
 extern void renumber_cgpu(struct cgpu_info *);
@@ -943,7 +969,8 @@ extern bool opt_protocol;
 extern bool opt_dev_protocol;
 extern char *opt_coinbase_sig;
 extern char *request_target_str;
-extern bool have_longpoll;
+extern float request_pdiff;
+extern double request_bdiff;
 extern int opt_skip_checks;
 extern char *opt_kernel_path;
 extern char *opt_socks_proxy;
@@ -958,7 +985,7 @@ extern int last_logstatusline_len;
 extern bool have_libusb;
 #endif
 extern int httpsrv_port;
-extern int stratumsrv_port;
+extern long stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
@@ -991,22 +1018,13 @@ extern int swork_id;
 extern pthread_rwlock_t netacc_lock;
 
 extern const uint32_t sha256_init_state[];
+extern json_t *json_web_config(CURL *curl, const char *url);
 extern json_t *json_rpc_call(CURL *curl, const char *url, const char *userpass,
 			     const char *rpc_req, bool, bool, int *,
 			     struct pool *pool, bool);
 extern bool our_curl_supports_proxy_uris();
 extern void bin2hex(char *out, const void *in, size_t len);
 extern bool hex2bin(unsigned char *p, const char *hexstr, size_t len);
-
-typedef bool (*sha256_func)(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce,
-	uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool fulltest(const unsigned char *hash, const unsigned char *target);
 
 extern int opt_queue;
 extern int opt_scantime;
@@ -1057,6 +1075,8 @@ extern void clear_stratum_shares(struct pool *pool);
 extern void hashmeter2(struct thr_info *);
 extern bool stale_work(struct work *, bool share);
 extern bool stale_work_future(struct work *, bool share, unsigned long ustime);
+extern void blkhashstr(char *out, const unsigned char *hash);
+static const float minimum_pdiff = max(FLT_MIN, 1./0x100000000);
 extern void set_target_to_pdiff(void *dest_target, double pdiff);
 #define bdiff_to_pdiff(n) (n * 1.0000152587)
 extern void set_target_to_bdiff(void *dest_target, double bdiff);
@@ -1089,34 +1109,91 @@ extern int enabled_pools;
 extern bool get_intrange(const char *arg, int *val1, int *val2);
 extern bool detect_stratum(struct pool *pool, char *url);
 extern void print_summary(void);
+extern struct mining_algorithm *mining_algorithm_by_alias(const char *alias);
+extern struct mining_goal_info *get_mining_goal(const char *name);
+extern void goal_set_malgo(struct mining_goal_info *, struct mining_algorithm *);
+extern void mining_goal_reset(struct mining_goal_info * const goal);
 extern void adjust_quota_gcd(void);
-extern struct pool *add_pool(void);
+extern struct pool *add_pool2(struct mining_goal_info *);
+#define add_pool()  add_pool2(get_mining_goal("default"))
 extern bool add_pool_details(struct pool *pool, bool live, char *url, char *user, char *pass);
+extern int bfg_strategy_parse(const char *strategy);
+extern bool bfg_strategy_change(int strategy, const char *param);
 
 #define MAX_GPUDEVICES 16
 #define MAX_DEVICES 4096
 
-#define MIN_SHA_INTENSITY -10
-#define MIN_SHA_INTENSITY_STR "-10"
-#define MAX_SHA_INTENSITY 14
-#define MAX_SHA_INTENSITY_STR "14"
-#define MIN_SCRYPT_INTENSITY 8
-#define MIN_SCRYPT_INTENSITY_STR "8"
-#define MAX_SCRYPT_INTENSITY 31
-#define MAX_SCRYPT_INTENSITY_STR "31"
-#ifdef USE_SCRYPT
-#define MIN_INTENSITY (opt_scrypt ? MIN_SCRYPT_INTENSITY : MIN_SHA_INTENSITY)
-#define MIN_INTENSITY_STR (opt_scrypt ? MIN_SCRYPT_INTENSITY_STR : MIN_SHA_INTENSITY_STR)
-#define MAX_INTENSITY (opt_scrypt ? MAX_SCRYPT_INTENSITY : MAX_SHA_INTENSITY)
-#define MAX_INTENSITY_STR (opt_scrypt ? MAX_SCRYPT_INTENSITY_STR : MAX_SHA_INTENSITY_STR)
-#define MAX_GPU_INTENSITY MAX_SCRYPT_INTENSITY
-#else
-#define MIN_INTENSITY MIN_SHA_INTENSITY
-#define MIN_INTENSITY_STR MIN_SHA_INTENSITY_STR
-#define MAX_INTENSITY MAX_SHA_INTENSITY
-#define MAX_INTENSITY_STR MAX_SHA_INTENSITY_STR
-#define MAX_GPU_INTENSITY MAX_SHA_INTENSITY
+struct block_info {
+	uint32_t block_id;
+	uint8_t prevblkhash[0x20];
+	unsigned block_seen_order;  // new_blocks when this block was first seen; was 'block_no'
+	uint32_t height;
+	time_t first_seen_time;
+	
+	UT_hash_handle hh;
+};
+
+struct blockchain_info {
+	struct block_info *blocks;
+	struct block_info *currentblk;
+	uint64_t currentblk_subsidy;  // only valid when height is known! (and assumes Bitcoin)
+	char currentblk_first_seen_time_str[0x20];  // was global blocktime
+};
+
+struct _clState;
+struct cgpu_info;
+struct mining_algorithm;
+
+struct mining_algorithm {
+	const char *name;
+	const char *aliases;
+	
+	enum pow_algorithm algo;
+	uint8_t ui_skip_hash_bytes;
+	uint8_t worktime_skip_prevblk_u32;
+	float reasonable_low_nonce_diff;
+	
+	void (*hash_data_f)(void *digest, const void *data);
+	
+	int goal_refs;
+	int staged;
+	int base_queue;
+	
+	struct mining_algorithm *next;
+	
+#ifdef USE_OPENCL
+	bool opencl_nodefault;
+	float (*opencl_oclthreads_to_intensity)(unsigned long oclthreads);
+	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);
+	unsigned long opencl_min_oclthreads;
+	unsigned long opencl_max_oclthreads;
+	float opencl_min_nonce_diff;
+	char *(*opencl_get_default_kernel_file)(const struct mining_algorithm *, struct cgpu_info *, struct _clState *);
 #endif
+};
+
+struct mining_goal_info {
+	unsigned id;
+	char *name;
+	bool is_default;
+	
+	struct blockchain_info *blkchain;
+	
+	bytes_t *generation_script;  // was opt_coinbase_script
+	
+	struct mining_algorithm *malgo;
+	double current_diff;
+	char current_diff_str[ALLOC_H2B_SHORTV];  // was global block_diff
+	char net_hashrate[ALLOC_H2B_SHORT];
+	
+	char *current_goal_detail;
+	
+	double diff_accepted;
+	
+	bool have_longpoll;
+	
+	UT_hash_handle hh;
+};
 
 extern struct string_elist *scan_devices;
 extern bool opt_force_dev_init;
@@ -1129,11 +1206,6 @@ extern bool opt_quiet;
 extern struct thr_info *control_thr;
 extern struct thr_info **mining_thr;
 extern struct cgpu_info gpus[MAX_GPUDEVICES];
-#ifdef USE_SCRYPT
-extern bool opt_scrypt;
-#else
-#define opt_scrypt (0)
-#endif
 extern double total_secs;
 extern int mining_threads;
 extern struct cgpu_info *cpus;
@@ -1166,10 +1238,9 @@ extern int opt_fail_pause;
 extern int opt_log_interval;
 extern unsigned long long global_hashrate;
 extern unsigned unittest_failures;
-extern char *current_fullhash;
-extern double current_diff;
 extern double best_diff;
-extern time_t block_time;
+extern struct mining_algorithm *mining_algorithms;
+extern struct mining_goal_info *mining_goals;
 
 struct curl_ent {
 	CURL *curl;
@@ -1293,6 +1364,8 @@ struct pool {
 	time_t work_restart_time;
 	char work_restart_timestamp[11];
 	uint32_t	block_id;
+	struct mining_goal_info *goal;
+	enum bfg_tristate pool_diff_effective_retroactively;
 
 	enum pool_protocol proto;
 
@@ -1364,6 +1437,9 @@ struct pool {
 	bool stratum_init;
 	bool stratum_notify;
 	struct stratum_work swork;
+	char *goalname;
+	char *next_goalname;
+	struct mining_algorithm *next_goal_malgo;
 	uint8_t next_target[0x20];
 	char *next_nonce1;
 	int next_n2size;
@@ -1415,6 +1491,7 @@ struct work {
 	bool		longpoll;
 	bool		stale;
 	bool		mandatory;
+	bool spare;
 	bool		block;
 
 	bool		stratum;
@@ -1466,6 +1543,7 @@ extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work
 extern void stratum_work_clean(struct stratum_work *);
 extern bool pool_has_usable_swork(const struct pool *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *);
+extern void gen_stratum_work3(struct work *, struct stratum_work *, cglock_t *data_lock_p);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
 void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)
@@ -1518,6 +1596,7 @@ extern void kill_work(void);
 extern int prioritize_pools(char *param, int *pid);
 extern void validate_pool_priorities(void);
 extern void enable_pool(struct pool *);
+extern void manual_enable_pool(struct pool *);
 extern void disable_pool(struct pool *, enum pool_enable);
 extern void switch_pools(struct pool *selected);
 extern void remove_pool(struct pool *pool);
@@ -1550,6 +1629,16 @@ extern const char *bfg_workpadding_bin;
 extern void set_simple_ntime_roll_limit(struct ntime_roll_limits *, uint32_t ntime_base, int ntime_roll, const struct timeval *tvp_ref);
 extern void work_set_simple_ntime_roll_limit(struct work *, int ntime_roll, const struct timeval *tvp_ref);
 extern int work_ntime_range(struct work *, const struct timeval *tvp_earliest, const struct timeval *tvp_latest, int desired_roll);
+
+static inline
+struct mining_algorithm *work_mining_algorithm(const struct work * const work)
+{
+	const struct pool * const pool = work->pool;
+	const struct mining_goal_info * const goal = pool->goal;
+	struct mining_algorithm * const malgo = goal->malgo;
+	return malgo;
+}
+
 extern void work_hash(struct work *);
 
 #define NTIME_DATA_OFFSET  0x44
@@ -1605,35 +1694,36 @@ enum api_data_type {
 struct api_data {
 	enum api_data_type type;
 	char *name;
-	void *data;
+	const void *data;
 	bool data_was_malloc;
 	struct api_data *prev;
 	struct api_data *next;
 };
 
-extern struct api_data *api_add_escape(struct api_data *root, char *name, char *data, bool copy_data);
-extern struct api_data *api_add_string(struct api_data *root, char *name, const char *data, bool copy_data);
-extern struct api_data *api_add_const(struct api_data *root, char *name, const char *data, bool copy_data);
-extern struct api_data *api_add_uint8(struct api_data *root, char *name, uint8_t *data, bool copy_data);
-extern struct api_data *api_add_int16(struct api_data *root, char *name, uint16_t *data, bool copy_data);
-extern struct api_data *api_add_uint16(struct api_data *root, char *name, uint16_t *data, bool copy_data);
-extern struct api_data *api_add_int(struct api_data *root, char *name, int *data, bool copy_data);
-extern struct api_data *api_add_uint(struct api_data *root, char *name, unsigned int *data, bool copy_data);
-extern struct api_data *api_add_uint32(struct api_data *root, char *name, uint32_t *data, bool copy_data);
-extern struct api_data *api_add_uint64(struct api_data *root, char *name, uint64_t *data, bool copy_data);
-extern struct api_data *api_add_double(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_elapsed(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_bool(struct api_data *root, char *name, bool *data, bool copy_data);
-extern struct api_data *api_add_timeval(struct api_data *root, char *name, struct timeval *data, bool copy_data);
-extern struct api_data *api_add_time(struct api_data *root, char *name, time_t *data, bool copy_data);
-extern struct api_data *api_add_mhs(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_mhstotal(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_temp(struct api_data *root, char *name, float *data, bool copy_data);
-extern struct api_data *api_add_utility(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_freq(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_volts(struct api_data *root, char *name, float *data, bool copy_data);
-extern struct api_data *api_add_hs(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_diff(struct api_data *root, char *name, double *data, bool copy_data);
-extern struct api_data *api_add_json(struct api_data *root, char *name, json_t *data, bool copy_data);
+extern struct api_data *api_add_escape(struct api_data *root, const char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_string(struct api_data *root, const char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_const(struct api_data *root, const char *name, const char *data, bool copy_data);
+extern struct api_data *api_add_uint8(struct api_data *root, const char *name, const uint8_t *data, bool copy_data);
+extern struct api_data *api_add_int16(struct api_data *root, const char *name, const uint16_t *data, bool copy_data);
+extern struct api_data *api_add_uint16(struct api_data *root, const char *name, const uint16_t *data, bool copy_data);
+extern struct api_data *api_add_int(struct api_data *root, const char *name, const int *data, bool copy_data);
+extern struct api_data *api_add_uint(struct api_data *root, const char *name, const unsigned int *data, bool copy_data);
+extern struct api_data *api_add_uint32(struct api_data *root, const char *name, const uint32_t *data, bool copy_data);
+extern struct api_data *api_add_uint64(struct api_data *root, const char *name, const uint64_t *data, bool copy_data);
+extern struct api_data *api_add_double(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_elapsed(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_bool(struct api_data *root, const char *name, const bool *data, bool copy_data);
+extern struct api_data *api_add_timeval(struct api_data *root, const char *name, const struct timeval *data, bool copy_data);
+extern struct api_data *api_add_time(struct api_data *root, const char *name, const time_t *data, bool copy_data);
+extern struct api_data *api_add_mhs(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_mhstotal(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_temp(struct api_data *root, const char *name, const float *data, bool copy_data);
+extern struct api_data *api_add_utility(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_freq(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_volts(struct api_data *root, const char *name, const float *data, bool copy_data);
+extern struct api_data *api_add_hs(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_diff(struct api_data *root, const char *name, const double *data, bool copy_data);
+extern struct api_data *api_add_json(struct api_data *root, const char *name, json_t *data, bool copy_data);
+extern struct api_data *api_add_percent(struct api_data *root, const char *name, const double *data, bool copy_data);
 
 #endif /* __MINER_H__ */
