@@ -13,10 +13,10 @@
 
 #include "titan-asic.h"
 
-bool knc_titan_get_info(const char *repr, void * const ctx, int channel, int die, struct knc_die_info *die_info)
+bool knc_titan_get_info(int log_level, void * const ctx, int channel, int die, struct knc_die_info *die_info)
 {
 	int rc;
-	rc = knc_detect_die(ctx, channel, die, die_info);
+	rc = knc_detect_die_(log_level, ctx, channel, die, die_info);
 	return (0 == rc);
 }
 
@@ -147,13 +147,74 @@ bool knc_titan_get_report(const char *repr, void * const ctx, int channel, int d
 	return true;
 }
 
-/* Use bare function without extra checks */
-extern bool knc_titan_setup_core_(void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params);
-
 /* This fails if core is hashing!
  * Stop it before setting up.
  */
 bool knc_titan_setup_core_local(const char *repr, void * const ctx, int channel, int die, int core, struct titan_setup_core_params *params)
 {
-	return knc_titan_setup_core_(ctx, channel, die, core, params);
+	return knc_titan_setup_core_(LOG_INFO, ctx, channel, die, core, params);
+}
+
+bool knc_titan_setup_spi(const char *repr, void * const ctx, int asic, int divider, int preclk, int declk, int sslowmin)
+{
+	uint8_t request[7];
+	int request_length;
+	int status;
+
+	request_length = knc_prepare_titan_setup(request, asic, divider, preclk, declk, sslowmin);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, 0, NULL);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: setup_spi failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	return true;
+}
+
+bool knc_titan_set_work_parallel(const char *repr, void * const ctx, int asic, int die, int core_start, int slot, struct work *work, bool urgent, int num, int resend)
+{
+	uint8_t request[9 + BLOCK_HEADER_BYTES_WITHOUT_NONCE];
+	int request_length;
+	int status;
+
+	request_length = knc_prepare_titan_work_request(request, asic, die, slot, core_start, core_start + num - 1, resend, work);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, 0, NULL);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: set_work_parallel failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	return true;
+}
+
+bool knc_titan_get_work_status(const char *repr, void * const ctx, int asic, int *num_request_busy, int *num_status_byte_error)
+{
+	uint8_t request[2];
+	int request_length;
+	int response_length = 2 + 2 * KNC_STATUS_BYTE_ERROR_COUNTERS;
+	uint8_t response[response_length];
+	int status;
+	uint8_t num_request_busy_byte;
+	uint16_t num_status_byte_error_counters[KNC_STATUS_BYTE_ERROR_COUNTERS];
+
+	request_length = knc_prepare_titan_work_status(request, asic);
+
+	status = knc_syncronous_transfer_fpga(ctx, request_length, request, response_length, response);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: get_work_status failed (%x)", repr, asic, status);
+		return false;
+	}
+
+	status = knc_decode_work_status(response, &num_request_busy_byte, num_status_byte_error_counters);
+	if (status) {
+		applog(LOG_INFO, "%s[%d]: get_work_status got undefined response", repr, asic);
+		return false;
+	}
+
+	*num_request_busy = num_request_busy_byte;
+	for (int i = 0 ; i < KNC_STATUS_BYTE_ERROR_COUNTERS ; i++)
+		num_status_byte_error[i] = num_status_byte_error_counters[i];
+	return true;
 }

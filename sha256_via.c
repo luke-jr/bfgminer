@@ -32,13 +32,12 @@ static void via_sha256(void *hash, void *buf, unsigned len)
 		     :"memory");
 }
 
-bool scanhash_via(struct thr_info*thr, const unsigned char __maybe_unused *pmidstate,
-	unsigned char *data_inout,
-	unsigned char __maybe_unused *phash1, unsigned char __maybe_unused *phash,
-	const unsigned char *target,
+bool scanhash_via(struct thr_info * const thr, struct work * const work,
 		  uint32_t max_nonce, uint32_t *last_nonce,
 		  uint32_t n)
 {
+	uint8_t * const data_inout = work->data;
+	
 	unsigned char data[128] __attribute__((aligned(128)));
 	unsigned char tmp_hash[32] __attribute__((aligned(128)));
 	unsigned char tmp_hash1[32] __attribute__((aligned(128)));
@@ -70,7 +69,8 @@ bool scanhash_via(struct thr_info*thr, const unsigned char __maybe_unused *pmids
 
 		stat_ctr++;
 
-		if (unlikely((hash32[7] == 0) && fulltest(tmp_hash, target))) {
+		if (unlikely((hash32[7] == 0)))
+		{
 			/* swap nonce'd data back into original storage area;
 			 */
 			*nonce_inout = bswap_32(n);

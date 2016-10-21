@@ -221,7 +221,8 @@ bool mcp2210_spi_transfer(struct mcp2210_device * const h, const void * const tx
 				cmd[2] = 0;
 				break;
 			case 0xf8:  // transfer in progress
-				applog(LOG_DEBUG, "%s: SPI transfer rejected temporarily (%d bytes remaining)", __func__, sz);
+				if (opt_dev_protocol)
+					applog(LOG_DEBUG, "%s: SPI transfer rejected temporarily (%d bytes remaining)", __func__, sz);
 				cgsleep_ms(20);
 				goto retry;
 			default:

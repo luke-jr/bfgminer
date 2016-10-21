@@ -1,8 +1,8 @@
 /*
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2011-2016 Luke Dashjr
  * Copyright 2014 Nate Woolls
- * Copyright 2012-2013 Andrew Smith
+ * Copyright 2012-2014 Andrew Smith
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -80,7 +80,6 @@
 #include "adl.h"
 #include "driver-cpu.h"
 #include "driver-opencl.h"
-#include "scrypt.h"
 #include "util.h"
 
 #ifdef USE_AVALON
@@ -98,10 +97,8 @@
 #endif
 
 #ifdef USE_SCRYPT
-#include "scrypt.h"
+#include "malgo/scrypt.h"
 #endif
-
-#include "version.h"
 
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
 #	define USE_FPGA
@@ -123,7 +120,7 @@ struct strategies strategies[] = {
 	{ "Balance" },
 };
 
-static char packagename[256];
+#define packagename bfgminer_name_space_ver
 
 bool opt_protocol;
 bool opt_dev_protocol;
@@ -133,8 +130,6 @@ static bool want_gbt = true;
 static bool want_getwork = true;
 #if BLKMAKER_VERSION > 1
 static bool opt_load_bitcoin_conf = true;
-static bool have_at_least_one_getcbaddr;
-static bytes_t opt_coinbase_script = BYTES_INIT;
 static uint32_t coinbase_script_block_id;
 static uint32_t template_nonce;
 #endif
@@ -147,7 +142,6 @@ char *request_target_str;
 float request_pdiff = 1.0;
 double request_bdiff;
 static bool want_stratum = true;
-bool have_longpoll;
 int opt_skip_checks;
 bool want_per_device_stats;
 bool use_syslog;
@@ -172,14 +166,13 @@ unsigned unittest_failures;
 unsigned long global_quota_gcd = 1;
 time_t last_getwork;
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 int opt_dynamic_interval = 7;
 int nDevs;
 int opt_g_threads = -1;
 #endif
 #ifdef USE_SCRYPT
 static char detect_algo = 1;
-bool opt_scrypt;
 #else
 static char detect_algo;
 #endif
@@ -190,7 +183,7 @@ bool opt_restart = true;
 int httpsrv_port = -1;
 #endif
 #ifdef USE_LIBEVENT
-int stratumsrv_port = -1;
+long stratumsrv_port = -1;
 #endif
 
 const
@@ -307,7 +300,7 @@ int total_getworks, total_stale, total_discarded;
 uint64_t total_bytes_rcvd, total_bytes_sent;
 double total_diff1, total_bad_diff1;
 double total_diff_accepted, total_diff_rejected, total_diff_stale;
-static int staged_rollable;
+static int staged_rollable, staged_spare;
 unsigned int new_blocks;
 unsigned int found_blocks;
 
@@ -358,40 +351,25 @@ const char unicode_micro = 'u';
 #define U8_BAD_END   "\xef\x80\x80"
 #define AS_BAD(x) U8_BAD_START x U8_BAD_END
 
+/* logstart is where the log window should start */
+static int devcursor, logstart, logcursor;
+
 bool selecting_device;
 unsigned selected_device;
 #endif
 
 static int max_lpdigits;
 
-static char current_block[40];
-
-/* Protected by ch_lock */
-static char *current_hash;
-static uint32_t current_block_id;
-char *current_fullhash;
+// current_hash was replaced with goal->current_goal_detail
+// current_block_id was replaced with blkchain->currentblk->block_id
 
 static char datestamp[40];
-static char blocktime[32];
-time_t block_time;
 static char best_share[ALLOC_H2B_SHORTV] = "0";
-double current_diff = 0xFFFFFFFFFFFFFFFFULL;
-static char block_diff[ALLOC_H2B_SHORTV];
-static char net_hashrate[ALLOC_H2B_SHORT];
 double best_diff = 0;
 
-static bool known_blkheight_current;
-static uint32_t known_blkheight;
-static uint32_t known_blkheight_blkid;
-static uint64_t block_subsidy;
-
-struct block {
-	char hash[40];
-	UT_hash_handle hh;
-	int block_no;
-};
-
-static struct block *blocks = NULL;
+struct mining_algorithm *mining_algorithms;
+struct mining_goal_info *mining_goals;
+int active_goals = 1;
 
 
 int swork_id;
@@ -417,6 +395,7 @@ static int include_count;
 #define JSON_LOAD_ERROR_LEN strlen(JSON_LOAD_ERROR)
 #define JSON_MAX_DEPTH 10
 #define JSON_MAX_DEPTH_ERR "Too many levels of JSON includes (limit 10) or a loop"
+#define JSON_WEB_ERROR "WEB config err"
 
 char *cmd_idle, *cmd_sick, *cmd_dead;
 
@@ -528,6 +507,18 @@ static void applog_and_exit(const char *fmt, ...)
 	va_end(ap);
 	_applog(LOG_ERR, exit_buf);
 	exit(1);
+}
+
+static
+float drv_min_nonce_diff(const struct device_drv * const drv, struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	if (drv->drv_min_nonce_diff)
+		return drv->drv_min_nonce_diff(proc, malgo);
+#ifdef USE_SHA256D
+	return (malgo->algo == POW_SHA256D) ? 1. : -1.;
+#else
+	return -1.;
+#endif
 }
 
 char *devpath_to_devid(const char *devpath)
@@ -1008,6 +999,122 @@ static void sharelog(const char*disposition, const struct work*work)
 		applog(LOG_ERR, "sharelog fwrite error");
 }
 
+#ifdef HAVE_CURSES
+static void switch_logsize(void);
+#endif
+
+static void hotplug_trigger();
+
+void goal_set_malgo(struct mining_goal_info * const goal, struct mining_algorithm * const malgo)
+{
+	if (goal->malgo == malgo)
+		return;
+	
+	if (goal->malgo)
+		--goal->malgo->goal_refs;
+	if (malgo->goal_refs++)
+		// First time using a new mining algorithm may means we need to add mining hardware to support it
+		// api_thr_id is used as an ugly hack to determine if mining has started - if not, we do NOT want to try to hotplug anything (let the initial detect handle it)
+		if (opt_hotplug && api_thr_id)
+			hotplug_trigger();
+	goal->malgo = malgo;
+}
+
+struct mining_algorithm *mining_algorithm_by_alias(const char * const alias)
+{
+	struct mining_algorithm *malgo;
+	LL_FOREACH(mining_algorithms, malgo)
+	{
+		if (match_strtok(malgo->aliases, "|", alias))
+			return malgo;
+	}
+	return NULL;
+}
+
+#ifdef USE_SCRYPT
+extern struct mining_algorithm malgo_scrypt;
+
+static
+const char *set_malgo_scrypt()
+{
+	goal_set_malgo(get_mining_goal("default"), &malgo_scrypt);
+	return NULL;
+}
+#endif
+
+static
+int mining_goals_name_cmp(const struct mining_goal_info * const a, const struct mining_goal_info * const b)
+{
+	// default always goes first
+	if (a->is_default)
+		return -1;
+	if (b->is_default)
+		return 1;
+	return strcmp(a->name, b->name);
+}
+
+static
+void blkchain_init_block(struct blockchain_info * const blkchain)
+{
+	struct block_info * const dummy_block = calloc(sizeof(*dummy_block), 1);
+	memset(dummy_block->prevblkhash, 0, 0x20);
+	HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(dummy_block->prevblkhash), dummy_block);
+	blkchain->currentblk = dummy_block;
+}
+
+extern struct mining_algorithm malgo_sha256d;
+
+struct mining_goal_info *get_mining_goal(const char * const name)
+{
+	static unsigned next_goal_id;
+	struct mining_goal_info *goal;
+	HASH_FIND_STR(mining_goals, name, goal);
+	if (!goal)
+	{
+		struct blockchain_info * const blkchain = malloc(sizeof(*blkchain) + sizeof(*goal));
+		goal = (void*)(&blkchain[1]);
+		
+		*blkchain = (struct blockchain_info){
+			.currentblk = NULL,
+		};
+		blkchain_init_block(blkchain);
+		
+		*goal = (struct mining_goal_info){
+			.id = next_goal_id++,
+			.name = strdup(name),
+			.is_default = !strcmp(name, "default"),
+			.blkchain = blkchain,
+			.current_diff = 0xFFFFFFFFFFFFFFFFULL,
+		};
+#ifdef USE_SHA256D
+		goal_set_malgo(goal, &malgo_sha256d);
+#else
+		// NOTE: Basically random default
+		goal_set_malgo(goal, mining_algorithms);
+#endif
+		HASH_ADD_KEYPTR(hh, mining_goals, goal->name, strlen(goal->name), goal);
+		HASH_SORT(mining_goals, mining_goals_name_cmp);
+		
+#ifdef HAVE_CURSES
+		devcursor = 7 + active_goals;
+		switch_logsize();
+#endif
+	}
+	return goal;
+}
+
+void mining_goal_reset(struct mining_goal_info * const goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info *blkinfo, *tmpblkinfo;
+	HASH_ITER(hh, blkchain->blocks, blkinfo, tmpblkinfo)
+	{
+		HASH_DEL(blkchain->blocks, blkinfo);
+		free(blkinfo);
+	}
+	blkchain_init_block(blkchain);
+}
+
 static char *getwork_req = "{\"method\": \"getwork\", \"params\": [], \"id\":0}\n";
 
 /* Adjust all the pools' quota to the greatest common denominator after a pool
@@ -1052,7 +1159,7 @@ void adjust_quota_gcd(void)
 }
 
 /* Return value is ignored if not called from add_pool_details */
-struct pool *add_pool(void)
+struct pool *add_pool2(struct mining_goal_info * const goal)
 {
 	struct pool *pool;
 
@@ -1066,9 +1173,11 @@ struct pool *add_pool(void)
 	if (unlikely(pthread_cond_init(&pool->cr_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
+	pool->swork.data_lock_p = &pool->data_lock;
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
+	pool->goal = goal;
 
 	pool->idle = true;
 	/* Make sure the pool doesn't think we've been idle since time 0 */
@@ -1108,10 +1217,19 @@ static
 void pool_set_uri(struct pool * const pool, char * const uri)
 {
 	pool->rpc_url = uri;
-#if BLKMAKER_VERSION > 1
-	if (uri_get_param_bool(uri, "getcbaddr", false))
-		have_at_least_one_getcbaddr = true;
-#endif
+	pool->pool_diff_effective_retroactively = uri_get_param_bool2(uri, "retrodiff");
+}
+
+static
+bool pool_diff_effective_retroactively(struct pool * const pool)
+{
+	if (pool->pool_diff_effective_retroactively != BTS_UNKNOWN) {
+		return pool->pool_diff_effective_retroactively;
+	}
+	
+	// By default, we enable retrodiff for stratum pools since some servers implement mining.set_difficulty in this way
+	// Note that share_result will explicitly disable BTS_UNKNOWN -> BTS_FALSE if a retrodiff share is rejected specifically for its failure to meet the target.
+	return pool->stratum_active;
 }
 
 /* Pool variant of test and set */
@@ -1149,6 +1267,14 @@ struct pool *current_pool(void)
 
 	return pool;
 }
+
+#if defined(USE_CPUMINING) && !defined(USE_SHA256D)
+static
+char *arg_ignored(const char * const arg)
+{
+	return NULL;
+}
+#endif
 
 static
 char *set_bool_ignore_arg(const char * const arg, bool * const b)
@@ -1189,6 +1315,23 @@ static char *set_int_1_to_10(const char *arg, int *i)
 	return set_int_range(arg, i, 1, 10);
 }
 
+static char *set_long_1_to_65535_or_neg1(const char * const arg, long * const i)
+{
+	const long min = 1, max = 65535;
+	
+	char * const err = opt_set_longval(arg, i);
+	
+	if (err) {
+		return err;
+	}
+	
+	if (*i != -1 && (*i < min || *i > max)) {
+		return "Value out of range";
+	}
+	
+	return NULL;
+}
+
 char *set_strdup(const char *arg, char **p)
 {
 	*p = strdup((char *)arg);
@@ -1208,6 +1351,46 @@ char *set_b58addr(const char * const arg, bytes_t * const b)
 		return "Failed to convert address to script";
 	}
 	bytes_assimilate_raw(b, script, scriptsz, scriptsz);
+	return NULL;
+}
+
+static char *set_generate_addr2(struct mining_goal_info *, const char *);
+
+static
+char *set_generate_addr(char *arg)
+{
+	char * const colon = strchr(arg, ':');
+	struct mining_goal_info *goal;
+	if (colon)
+	{
+		colon[0] = '\0';
+		goal = get_mining_goal(arg);
+		arg = &colon[1];
+	}
+	else
+		goal = get_mining_goal("default");
+	
+	return set_generate_addr2(goal, arg);
+}
+
+static
+char *set_generate_addr2(struct mining_goal_info * const goal, const char * const arg)
+{
+	bytes_t newscript = BYTES_INIT;
+	char *estr = set_b58addr(arg, &newscript);
+	if (estr)
+	{
+		bytes_free(&newscript);
+		return estr;
+	}
+	if (!goal->generation_script)
+	{
+		goal->generation_script = malloc(sizeof(*goal->generation_script));
+		bytes_init(goal->generation_script);
+	}
+	bytes_assimilate(goal->generation_script, &newscript);
+	bytes_free(&newscript);
+	
 	return NULL;
 }
 #endif
@@ -1675,6 +1858,78 @@ static char *set_cbcperc(const char *arg)
 	return NULL;
 }
 
+static
+const char *goal_set(struct mining_goal_info * const goal, const char * const optname, const char * const newvalue, bytes_t * const replybuf, enum bfg_set_device_replytype * const out_success)
+{
+	*out_success = SDR_ERR;
+	if (!(strcasecmp(optname, "malgo") && strcasecmp(optname, "algo")))
+	{
+		if (!newvalue)
+			return "Goal option 'malgo' requires a value (eg, SHA256d)";
+		struct mining_algorithm * const new_malgo = mining_algorithm_by_alias(newvalue);
+		if (!new_malgo)
+			return "Unrecognised mining algorithm";
+		goal_set_malgo(goal, new_malgo);
+		goto success;
+	}
+#if BLKMAKER_VERSION > 1
+	if (match_strtok("generate-to|generate-to-addr|generate-to-address|genaddress|genaddr|gen-address|gen-addr|generate-address|generate-addr|coinbase-addr|coinbase-address|coinbase-payout|cbaddress|cbaddr|cb-address|cb-addr|payout", "|", optname))
+	{
+		if (!newvalue)
+			return "Missing value for 'generate-to' goal option";
+		const char * const emsg = set_generate_addr2(goal, newvalue);
+		if (emsg)
+			return emsg;
+		goto success;
+	}
+#endif
+	*out_success = SDR_UNKNOWN;
+	return "Unknown goal option";
+
+success:
+	*out_success = SDR_OK;
+	return NULL;
+}
+
+// May leak replybuf if returning an error
+static
+const char *set_goal_params(struct mining_goal_info * const goal, char *arg)
+{
+	bytes_t replybuf = BYTES_INIT;
+	for (char *param, *nextptr; (param = strtok_r(arg, ",", &nextptr)); arg = NULL)
+	{
+		char *val = strchr(param, '=');
+		if (val)
+			val++[0] = '\0';
+		enum bfg_set_device_replytype success;
+		const char * const emsg = goal_set(goal, param, val, &replybuf, &success);
+		if (success != SDR_OK)
+			return emsg ?: "Error setting goal param";
+	}
+	bytes_free(&replybuf);
+	return NULL;
+}
+
+static
+const char *set_pool_goal(const char * const arg)
+{
+	struct pool *pool;
+	
+	if (!total_pools)
+		return "Usage of --pool-goal before pools are defined does not make sense";
+	
+	pool = pools[total_pools - 1];
+	char *param = strchr(arg, ':');
+	if (param)
+		param++[0] = '\0';
+	pool->goal = get_mining_goal(arg);
+	
+	if (param)
+		return set_goal_params(pool->goal, param);
+	
+	return NULL;
+}
+
 static char *set_pool_priority(const char *arg)
 {
 	struct pool *pool;
@@ -1859,7 +2114,7 @@ char *set_temp_target(char *arg)
 	return NULL;
 }
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 static
 char *set_no_opencl_binaries(__maybe_unused void * const dummy)
 {
@@ -2010,7 +2265,8 @@ static char *set_null(const char __maybe_unused *arg)
 
 /* These options are available from config file or commandline */
 static struct opt_table opt_config_table[] = {
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
+#ifdef USE_SHA256D
 	OPT_WITH_ARG("--algo",
 		     set_algo, show_algo, &opt_algo,
 		     "Specify sha256 implementation for CPU mining:\n"
@@ -2043,7 +2299,11 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("-a",
 	             set_algo, show_algo, &opt_algo,
 	             opt_hidden),
-#endif
+#else
+	// NOTE: Silently ignoring option, since it is plausable a non-SHA256d miner was using it just to skip benchmarking
+	OPT_WITH_ARG("--algo|-a", arg_ignored, NULL, NULL, opt_hidden),
+#endif  /* USE_SHA256D */
+#endif  /* USE_CPUMINING */
 	OPT_WITH_ARG("--api-allow",
 		     set_api_allow, NULL, NULL,
 		     "Allow API access only to the given list of [G:]IP[/Prefix] addresses[/subnets]"),
@@ -2113,14 +2373,6 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--cmd-dead",
 	             opt_set_charp, NULL, &cmd_dead,
 	             "Execute a command when a device is declared dead"),
-#if BLKMAKER_VERSION > 1
-	OPT_WITH_ARG("--coinbase-addr",
-		     set_b58addr, NULL, &opt_coinbase_script,
-		     "Set coinbase payout address for solo mining"),
-	OPT_WITH_ARG("--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
-		     set_b58addr, NULL, &opt_coinbase_script,
-		     opt_hidden),
-#endif
 #if BLKMAKER_VERSION > 0
 	OPT_WITH_ARG("--coinbase-sig",
 		     set_strdup, NULL, &opt_coinbase_sig,
@@ -2134,7 +2386,7 @@ static struct opt_table opt_config_table[] = {
 			opt_set_bool, &opt_compact,
 			"Use compact display without per device statistics"),
 #endif
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 	OPT_WITH_ARG("--cpu-threads",
 		     force_nthreads_int, opt_show_intval, &opt_n_threads,
 		     "Number of miner CPU threads"),
@@ -2182,7 +2434,15 @@ static struct opt_table opt_config_table[] = {
 	        opt_set_bool, &opt_force_dev_init,
 	        "Always initialize devices when possible (such as bitstream uploads to some FPGAs)"),
 #endif
-#ifdef HAVE_OPENCL
+#if BLKMAKER_VERSION > 1
+	OPT_WITH_ARG("--generate-to",
+	             set_generate_addr, NULL, NULL,
+	             "Set an address to generate to for solo mining"),
+	OPT_WITH_ARG("--generate-to-addr|--generate-to-address|--genaddress|--genaddr|--gen-address|--gen-addr|--generate-address|--generate-addr|--coinbase-addr|--coinbase-address|--coinbase-payout|--cbaddress|--cbaddr|--cb-address|--cb-addr|--payout",
+	             set_generate_addr, NULL, NULL,
+	             opt_hidden),
+#endif
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--gpu-dyninterval",
 		     set_int_1_to_65535, opt_show_intval, &opt_dynamic_interval,
 		     opt_hidden),
@@ -2227,7 +2487,7 @@ static struct opt_table opt_config_table[] = {
 	             set_intensity, NULL, NULL,
 	             opt_hidden),
 #endif
-#if defined(HAVE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
+#if defined(USE_OPENCL) || defined(USE_MODMINER) || defined(USE_X6500) || defined(USE_ZTEX)
 	OPT_WITH_ARG("--kernel-path",
 		     opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             "Specify a path to where bitstream and kernel files are"),
@@ -2235,7 +2495,7 @@ static struct opt_table opt_config_table[] = {
 	             opt_set_charp, opt_show_charp, &opt_kernel_path,
 	             opt_hidden),
 #endif
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--kernel|-k",
 	             set_kernel, NULL, NULL,
 	             opt_hidden),
@@ -2339,7 +2599,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--no-submit-stale",
 			opt_set_invbool, &opt_submit_stale,
 		        "Don't submit shares if they are detected as stale"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITHOUT_ARG("--no-opencl-binaries",
 	                set_no_opencl_binaries, NULL,
 	                opt_hidden),
@@ -2365,6 +2625,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--userpass|-O",
 	             set_userpass, NULL, NULL,
 	             "Username:Password pair for bitcoin JSON-RPC server"),
+	OPT_WITH_ARG("--pool-goal",
+			 set_pool_goal, NULL, NULL,
+			 "Named goal for the previous-defined pool"),
 	OPT_WITH_ARG("--pool-priority",
 			 set_pool_priority, NULL, NULL,
 			 "Priority for just the previous-defined pool"),
@@ -2433,13 +2696,13 @@ static struct opt_table opt_config_table[] = {
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
 #ifdef USE_SCRYPT
 	OPT_WITHOUT_ARG("--scrypt",
-			opt_set_bool, &opt_scrypt,
+	                set_malgo_scrypt, NULL,
 			"Use the scrypt algorithm for mining (non-bitcoin)"),
 #endif
 	OPT_WITH_ARG("--set-device|--set",
 			opt_string_elist_add, NULL, &opt_set_device_list,
 			"Set default parameters on devices; eg, NFY:osc6_bits=50"),
-#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
+#if defined(USE_SCRYPT) && defined(USE_OPENCL)
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,
 	             opt_hidden),
@@ -2469,7 +2732,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set socks proxy (host:port)"),
 #ifdef USE_LIBEVENT
 	OPT_WITH_ARG("--stratum-port",
-	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             set_long_1_to_65535_or_neg1, opt_show_longval, &stratumsrv_port,
 	             "Port number to listen on for stratum miners (-1 means disabled)"),
 #endif
 	OPT_WITHOUT_ARG("--submit-stale",
@@ -2505,7 +2768,7 @@ static struct opt_table opt_config_table[] = {
 			opt_hidden
 #endif
 	),
-#if defined(USE_SCRYPT) && defined(HAVE_OPENCL)
+#if defined(USE_SCRYPT) && defined(USE_OPENCL)
 	OPT_WITH_ARG("--thread-concurrency",
 		     set_thread_concurrency, NULL, NULL,
 	             opt_hidden),
@@ -2521,7 +2784,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_ARG("--user|-u",
 		     set_user, NULL, NULL,
 		     "Username for bitcoin JSON-RPC server"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--vectors|-v",
 	             set_vector, NULL, NULL,
 	             opt_hidden),
@@ -2535,7 +2798,7 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITHOUT_ARG("--weighed-stats",
 	                opt_set_bool, &opt_weighed_stats,
 	                "Display statistics weighed to difficulty 1"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITH_ARG("--worksize|-w",
 	             set_worksize, NULL, NULL,
 	             opt_hidden),
@@ -2648,6 +2911,7 @@ static char *parse_config(json_t *config, bool fileconf, int * const fileconf_lo
 				} else {
 					snprintf(err_buf, sizeof(err_buf), "Parsing JSON option %s: %s",
 						p, err);
+					free(name);
 					return err_buf;
 				}
 			}
@@ -2664,6 +2928,37 @@ static char *parse_config(json_t *config, bool fileconf, int * const fileconf_lo
 
 struct bfg_loaded_configfile *bfg_loaded_configfiles;
 
+char conf_web1[] = "http://";
+char conf_web2[] = "https://";
+
+static char *load_web_config(const char *arg)
+{
+	json_t *val;
+	CURL *curl;
+	struct bfg_loaded_configfile *cfginfo;
+
+	curl = curl_easy_init();
+	if (unlikely(!curl))
+		quithere(1, "CURL initialisation failed");
+
+	val = json_web_config(curl, arg);
+
+	curl_easy_cleanup(curl);
+
+	if (!val || !json_is_object(val))
+		return JSON_WEB_ERROR;
+
+	cfginfo = malloc(sizeof(*cfginfo));
+	*cfginfo = (struct bfg_loaded_configfile){
+		.filename = strdup(arg),
+	};
+	LL_APPEND(bfg_loaded_configfiles, cfginfo);
+
+	config_loaded = true;
+
+	return parse_config(val, true, &cfginfo->fileconf_load);
+}
+
 static char *load_config(const char *arg, void __maybe_unused *unused)
 {
 	json_error_t err;
@@ -2671,6 +2966,10 @@ static char *load_config(const char *arg, void __maybe_unused *unused)
 	char *json_error;
 	size_t siz;
 	struct bfg_loaded_configfile *cfginfo;
+
+	if (strncasecmp(arg, conf_web1, sizeof(conf_web1)-1) == 0 ||
+	    strncasecmp(arg, conf_web2, sizeof(conf_web2)-1) == 0)
+		return load_web_config(arg);
 
 	cfginfo = malloc(sizeof(*cfginfo));
 	*cfginfo = (struct bfg_loaded_configfile){
@@ -2729,14 +3028,28 @@ static void load_default_config(void)
 
 extern const char *opt_argv0;
 
-static char *opt_verusage_and_exit(const char *extra)
+static
+void bfg_versioninfo(void)
 {
 	puts(packagename);
 	printf("  Lowlevel:%s\n", BFG_LOWLLIST);
 	printf("  Drivers:%s\n", BFG_DRIVERLIST);
 	printf("  Algorithms:%s\n", BFG_ALGOLIST);
 	printf("  Options:%s\n", BFG_OPTLIST);
+}
+
+static char *opt_verusage_and_exit(const char *extra)
+{
+	bfg_versioninfo();
 	printf("%s", opt_usage(opt_argv0, extra));
+	fflush(stdout);
+	exit(0);
+}
+
+static
+const char *my_opt_version_and_exit(void)
+{
+	bfg_versioninfo();
 	fflush(stdout);
 	exit(0);
 }
@@ -2771,13 +3084,13 @@ static struct opt_table opt_cmdline_table[] = {
 	OPT_WITHOUT_ARG("--help|-h",
 			opt_verusage_and_exit, NULL,
 			"Print this message"),
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	OPT_WITHOUT_ARG("--ndevs|-n",
 			print_ndevs_and_exit, &nDevs,
 			opt_hidden),
 #endif
 	OPT_WITHOUT_ARG("--version|-V",
-			opt_version_and_exit, packagename,
+			my_opt_version_and_exit, NULL,
 			"Display version and exit"),
 	OPT_ENDTABLE
 };
@@ -2894,44 +3207,63 @@ void free_work(struct work *work)
 const char *bfg_workpadding_bin = "\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x80\x02\0\0";
 #define workpadding_bin  bfg_workpadding_bin
 
-// Must only be called with ch_lock held!
-static
-void __update_block_title(const unsigned char *hash_swap)
-{
-	if (hash_swap) {
-		char tmp[17];
-		// Only provided when the block has actually changed
-		free(current_hash);
-		current_hash = malloc(3 /* ... */ + 16 /* block hash segment */ + 1);
-		bin2hex(tmp, &hash_swap[24], 8);
-		memset(current_hash, '.', 3);
-		memcpy(&current_hash[3], tmp, 17);
-		known_blkheight_current = false;
-	} else if (likely(known_blkheight_current)) {
-		return;
-	}
-	if (current_block_id == known_blkheight_blkid) {
-		// FIXME: The block number will overflow this sometime around AD 2025-2027
-		if (known_blkheight < 1000000) {
-			memmove(&current_hash[3], &current_hash[11], 8);
-			snprintf(&current_hash[11], 20-11, " #%6u", known_blkheight);
-		}
-		known_blkheight_current = true;
-	}
-}
+static const size_t block_info_str_sz = 3 /* ... */ + 16 /* block hash segment */ + 1;
 
 static
-void have_block_height(uint32_t block_id, uint32_t blkheight)
+void block_info_str(char * const out, const struct block_info * const blkinfo)
 {
-	if (known_blkheight == blkheight)
+	unsigned char hash_swap[32];
+	swap256(hash_swap, blkinfo->prevblkhash);
+	swap32tole(hash_swap, hash_swap, 32 / 4);
+	
+	memset(out, '.', 3);
+	// FIXME: The block number will overflow this sometime around AD 2025-2027
+	if (blkinfo->height > 0 && blkinfo->height < 1000000)
+	{
+		bin2hex(&out[3], &hash_swap[0x1c], 4);
+		snprintf(&out[11], block_info_str_sz-11, " #%6u", blkinfo->height);
+	}
+	else
+		bin2hex(&out[3], &hash_swap[0x18], 8);
+}
+
+#ifdef HAVE_CURSES
+static void update_block_display(bool);
+#endif
+
+// Must only be called with ch_lock held!
+static
+void __update_block_title(struct mining_goal_info * const goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	
+	if (!goal->current_goal_detail)
+		goal->current_goal_detail = malloc(block_info_str_sz);
+	block_info_str(goal->current_goal_detail, blkchain->currentblk);
+#ifdef HAVE_CURSES
+	update_block_display(false);
+#endif
+}
+
+static struct block_info *block_exists(const struct blockchain_info *, const void *);
+
+static
+void have_block_height(struct mining_goal_info * const goal, const void * const prevblkhash, uint32_t blkheight)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = block_exists(blkchain, prevblkhash);
+	if ((!blkinfo) || blkinfo->height)
 		return;
+	
+	uint32_t block_id = ((uint32_t*)prevblkhash)[0];
 	applog(LOG_DEBUG, "Learned that block id %08" PRIx32 " is height %" PRIu32, (uint32_t)be32toh(block_id), blkheight);
 	cg_wlock(&ch_lock);
-	known_blkheight = blkheight;
-	known_blkheight_blkid = block_id;
-	block_subsidy = 5000000000LL >> (blkheight / 210000);
-	if (block_id == current_block_id)
-		__update_block_title(NULL);
+	blkinfo->height = blkheight;
+	if (blkinfo == blkchain->currentblk)
+	{
+		blkchain->currentblk_subsidy = 5000000000LL >> (blkheight / 210000);
+		__update_block_title(goal);
+	}
 	cg_wunlock(&ch_lock);
 }
 
@@ -3023,9 +3355,23 @@ int work_ntime_range(struct work * const work, const struct timeval * const tvp_
 
 #if BLKMAKER_VERSION > 1
 static
-void refresh_bitcoind_address(const bool fresh)
+bool goal_has_at_least_one_getcbaddr(const struct mining_goal_info * const goal)
 {
-	if (!have_at_least_one_getcbaddr)
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool * const pool = pools[i];
+		if (uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			return true;
+	}
+	return false;
+}
+
+static
+void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool fresh)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	
+	if (!goal_has_at_least_one_getcbaddr(goal))
 		return;
 	
 	char getcbaddr_req[60];
@@ -3040,6 +3386,8 @@ void refresh_bitcoind_address(const bool fresh)
 	{
 		struct pool * const pool = pools[i];
 		if (!uri_get_param_bool(pool->rpc_url, "getcbaddr", false))
+			continue;
+		if (pool->goal != goal)
 			continue;
 		
 		applog(LOG_DEBUG, "Refreshing coinbase address from pool %d", pool->pool_no);
@@ -3067,28 +3415,41 @@ void refresh_bitcoind_address(const bool fresh)
 			}
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, estrc);
 			free(estr);
+			json_decref(json);
 			continue;
 		}
 		s = bfg_json_obj_string(json, "result", NULL);
 		if (unlikely(!s))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 'g', pool->pool_no, "(return value was not a String)");
+			json_decref(json);
 			continue;
 		}
 		s2 = set_b58addr(s, &newscript);
 		if (unlikely(s2))
 		{
 			applog(LOG_WARNING, "Error %cetting coinbase address from pool %d: %s", 's', pool->pool_no, s2);
+			json_decref(json);
 			continue;
 		}
-		if (bytes_eq(&newscript, &opt_coinbase_script))
+		if (goal->generation_script)
 		{
-			applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s2);
-			break;
+			if (bytes_eq(&newscript, goal->generation_script))
+			{
+				applog(LOG_DEBUG, "Pool %d returned coinbase address already in use (%s)", pool->pool_no, s);
+				json_decref(json);
+				break;
+			}
 		}
-		bytes_assimilate(&opt_coinbase_script, &newscript);
-		coinbase_script_block_id = current_block_id;
+		else
+		{
+			goal->generation_script = malloc(sizeof(*goal->generation_script));
+			bytes_init(goal->generation_script);
+		}
+		bytes_assimilate(goal->generation_script, &newscript);
+		coinbase_script_block_id = blkchain->currentblk->block_id;
 		applog(LOG_NOTICE, "Now using coinbase address %s, provided by pool %d", s, pool->pool_no);
+		json_decref(json);
 		break;
 	}
 	
@@ -3100,7 +3461,7 @@ void refresh_bitcoind_address(const bool fresh)
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 #define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
        blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
 #endif
@@ -3131,17 +3492,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		}
 		work->rolltime = blkmk_time_left(tmpl, tv_now.tv_sec);
 #if BLKMAKER_VERSION > 1
+		struct mining_goal_info * const goal = pool->goal;
 		const uint32_t tmpl_block_id = ((uint32_t*)tmpl->prevblk)[0];
 		if ((!tmpl->cbtxn) && coinbase_script_block_id != tmpl_block_id)
-			refresh_bitcoind_address(false);
-		if (bytes_len(&opt_coinbase_script))
+			refresh_bitcoind_address(goal, false);
+		if (goal->generation_script)
 		{
 			bool newcb;
 #if BLKMAKER_VERSION > 2
-			blkmk_init_generation2(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script), &newcb);
+			blkmk_init_generation2(tmpl, bytes_buf(goal->generation_script), bytes_len(goal->generation_script), &newcb);
 #else
 			newcb = !tmpl->cbtxn;
-			blkmk_init_generation(tmpl, bytes_buf(&opt_coinbase_script), bytes_len(&opt_coinbase_script));
+			blkmk_init_generation(tmpl, bytes_buf(goal->generation_script), bytes_len(goal->generation_script));
 #endif
 			if (newcb)
 			{
@@ -3163,7 +3525,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 				}
 			} else if (ae >= 3 || opt_coinbase_sig) {
 				const char *cbappend = opt_coinbase_sig;
-				const char full[] = PACKAGE " " VERSION;
+				const char * const full = bfgminer_name_space_ver;
 				char *need_free = NULL;
 				if (!cbappend) {
 					if ((size_t)ae >= sizeof(full) - 1)
@@ -3270,16 +3632,17 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 	}
 
 	if ( (tmp_val = json_object_get(res_val, "height")) ) {
+		struct mining_goal_info * const goal = pool->goal;
 		uint32_t blkheight = json_number_value(tmp_val);
-		uint32_t block_id = ((uint32_t*)work->data)[1];
-		have_block_height(block_id, blkheight);
+		const void * const prevblkhash = &work->data[4];
+		have_block_height(goal, prevblkhash, blkheight);
 	}
 
 	memset(work->hash, 0, sizeof(work->hash));
 
 	work->tv_staged = tv_now;
 	
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
@@ -3299,15 +3662,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
+			if (swork->tr)
+				tmpl_decref(swork->tr);
 			swork->tr = work->tr;
+			tmpl_incref(swork->tr);
 			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
 			swork->nonce2_offset = cbextranonceoffset;
 			bytes_assimilate_raw(&swork->merkle_bin, branches, branchdatasz, branchdatasz);
 			swork->merkles = branchcount;
-			memcpy(swork->header1, &buf[0], 36);
+			swap32yes(swork->header1, &buf[0], 36 / 4);
 			swork->ntime = le32toh(*(uint32_t *)(&buf[68]));
 			swork->tv_received = tv_now;
-			memcpy(swork->diffbits, &buf[72], 4);
+			swap32yes(swork->diffbits, &buf[72], 4 / 4);
 			memcpy(swork->target, work->target, sizeof(swork->target));
 			free(swork->job_id);
 			swork->job_id = NULL;
@@ -3321,7 +3687,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		else
 			applog(LOG_DEBUG, "blkmk_get_mdata failed for pool %u", pool->pool_no);
 	}
-#endif  // BLKMAKER_VERSION > 4
+#endif  // BLKMAKER_VERSION > 6
 	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
@@ -3353,17 +3719,21 @@ void decay_time(double *f, double fadd, double fsecs)
 	*f /= ftotal;
 }
 
-static int __total_staged(void)
+static
+int __total_staged(const bool include_spares)
 {
-	return HASH_COUNT(staged_work);
+	int tot = HASH_COUNT(staged_work);
+	if (!include_spares)
+		tot -= staged_spare;
+	return tot;
 }
 
-static int total_staged(void)
+static int total_staged(const bool include_spares)
 {
 	int ret;
 
 	mutex_lock(stgd_lock);
-	ret = __total_staged();
+	ret = __total_staged(include_spares);
 	mutex_unlock(stgd_lock);
 
 	return ret;
@@ -3373,8 +3743,6 @@ static int total_staged(void)
 WINDOW *mainwin, *statuswin, *logwin;
 #endif
 double total_secs = 1.0;
-/* logstart is where the log window should start */
-static int devcursor, logstart, logcursor;
 #ifdef HAVE_CURSES
 static char statusline[256];
 /* statusy is where the status window goes up to in cases where it won't fit at startup */
@@ -3382,7 +3750,7 @@ static int statusy;
 static int devsummaryYOffset;
 static int total_lines;
 #endif
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
 #endif
 struct cgpu_info *cpus;
@@ -3866,7 +4234,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 			slave->utility = slave->accepted / dev_runtime * 60;
 			slave->utility_diff1 = slave->diff_accepted / dev_runtime * 60;
 			
-			rolling += slave->rolling;
+			rolling += drv->get_proc_rolling_hashrate ? drv->get_proc_rolling_hashrate(slave) : slave->rolling;
 			mhashes += slave->total_mhashes;
 			if (opt_weighed_stats)
 			{
@@ -3890,7 +4258,7 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 				break;
 		}
 	}
-	
+
 	double wtotal = (waccepted + wnotaccepted);
 	
 	multi_format_unit_array2(
@@ -3913,7 +4281,12 @@ void get_statline3(char *buf, size_t bufsz, struct cgpu_info *cgpu, bool for_cur
 	}
 	else
 #endif
-		snprintf(buf, bufsz, "%s ", opt_show_procs ? cgpu->proc_repr_ns : cgpu->dev_repr_ns);
+	{
+		if (opt_show_procs)
+			snprintf(buf, bufsz, "%*s ", -(5 + max_lpdigits), cgpu->proc_repr_ns);
+		else
+			snprintf(buf, bufsz, "%-5s ", cgpu->dev_repr_ns);
+	}
 	
 	if (include_serial_in_statline && cgpu->dev_serial)
 		tailsprintf(buf, bufsz, "[serial=%s] ", cgpu->dev_serial);
@@ -4177,6 +4550,125 @@ static int menu_attr = A_REVERSE;
 	bfg_waddstr(win, tmp42); \
 } while (0)
 
+static
+void update_block_display_line(const int blky, struct mining_goal_info *goal)
+{
+	struct blockchain_info * const blkchain = goal->blkchain;
+	struct block_info * const blkinfo = blkchain->currentblk;
+	double income;
+	char incomestr[ALLOC_H2B_SHORT+6+1];
+	
+	if (blkinfo->height)
+	{
+		income = goal->diff_accepted * 3600 * blkchain->currentblk_subsidy / total_secs / goal->current_diff;
+		format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
+	}
+	else
+		strcpy(incomestr, "?");
+	
+	int linelen = bfg_win_linelen(statuswin);
+	wmove(statuswin, blky, 0);
+	
+	bfg_waddstr(statuswin, " Block");
+	if (!goal->is_default)
+		linelen -= strlen(goal->name) + 1;
+	linelen -= 6;  // " Block"
+	
+	if (blkinfo->height && blkinfo->height < 1000000)
+	{
+		cg_wprintw(statuswin, " #%6u", blkinfo->height);
+		linelen -= 8;
+	}
+	bfg_waddstr(statuswin, ":");
+	
+	if (linelen > 55)
+		bfg_waddstr(statuswin, " ");
+	if (linelen >= 65)
+		bfg_waddstr(statuswin, "...");
+	
+	{
+		char hexpbh[0x11];
+		if (!(blkinfo->height && blkinfo->height < 1000000))
+		{
+			bin2hex(hexpbh, &blkinfo->prevblkhash[4], 4);
+			bfg_waddstr(statuswin, hexpbh);
+		}
+		bin2hex(hexpbh, &blkinfo->prevblkhash[0], 4);
+		bfg_waddstr(statuswin, hexpbh);
+	}
+	
+	if (linelen >= 55)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " Diff:%s", goal->current_diff_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, "(%s) ", goal->net_hashrate);
+	
+	if (linelen >= 62)
+	{
+		if (linelen >= 69)
+			bfg_waddstr(statuswin, " ");
+		bfg_waddstr(statuswin, "Started:");
+	}
+	else
+		bfg_waddstr(statuswin, "S:");
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	bfg_waddstr(statuswin, blkchain->currentblk_first_seen_time_str);
+	
+	if (linelen >= 69)
+		bfg_waddstr(statuswin, " ");
+	
+	cg_wprintw(statuswin, " I:%s", incomestr);
+	
+	if (!goal->is_default)
+		cg_wprintw(statuswin, " %s", goal->name);
+	
+	wclrtoeol(statuswin);
+}
+
+static bool pool_actively_in_use(const struct pool *, const struct pool *);
+
+static
+void update_block_display(const bool within_console_lock)
+{
+	struct mining_goal_info *goal, *tmpgoal;
+	int blky = 3, i, total_found_goals = 0;
+	if (!within_console_lock)
+		if (!curses_active_locked())
+			return;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		for (i = 0; i < total_pools; ++i)
+		{
+			struct pool * const pool = pools[i];
+			if (pool->goal == goal && pool_actively_in_use(pool, NULL))
+				break;
+		}
+		if (i >= total_pools)
+			// no pools using this goal, so it's probably stale anyway
+			continue;
+		update_block_display_line(blky++, goal);
+		++total_found_goals;
+	}
+	
+	// We cannot do resizing if called within someone else's console lock
+	if (within_console_lock)
+		return;
+	
+	bfg_console_unlock();
+	if (total_found_goals != active_goals)
+	{
+		active_goals = total_found_goals;
+		devcursor = 7 + active_goals;
+		switch_logsize();
+	}
+}
+
 static bool pool_unworkable(const struct pool *);
 
 /* Must be called with curses mutex lock held and curses_active */
@@ -4185,18 +4677,17 @@ static void curses_print_status(const int ts)
 	struct pool *pool = currentpool;
 	struct timeval now, tv;
 	float efficiency;
-	double income;
 	int logdiv;
 
 	efficiency = total_bytes_xfer ? total_diff_accepted * 2048. / total_bytes_xfer : 0.0;
 
 	wattron(statuswin, attr_title);
 	const int linelen = bfg_win_linelen(statuswin);
-	int titlelen = 1 + strlen(PACKAGE) + 1 + strlen(VERSION) + 3 + 21 + 3 + 19;
+	int titlelen = 1 + strlen(PACKAGE) + 1 + strlen(bfgminer_ver) + 3 + 21 + 3 + 19;
 	cg_mvwprintw(statuswin, 0, 0, " " PACKAGE " ");
 	if (titlelen + 17 < linelen)
 		cg_wprintw(statuswin, "version ");
-	cg_wprintw(statuswin, VERSION " - ");
+	cg_wprintw(statuswin, "%s - ", bfgminer_ver);
 	if (titlelen + 9 < linelen)
 		cg_wprintw(statuswin, "Started: ");
 	else
@@ -4283,7 +4774,7 @@ static void curses_print_status(const int ts)
 		             lowdiff_pool->diff,
 		             (lowdiff == highdiff) ? "" : "-",
 		             (lowdiff == highdiff) ? "" : highdiff_pool->diff,
-		             have_longpoll ? '+' : '-',
+		             pool->goal->have_longpoll ? '+' : '-',
 		             oldest_work_restart_pool->work_restart_timestamp);
 	}
 	else
@@ -4309,18 +4800,17 @@ one_workable_pool: ;
 		}
 		cg_mvwprintw(statuswin, 2, 0, " Pool%2u: %s  Diff:%s  %c%s  LU:%s  User:%s",
 		             pool->pool_no, pooladdr, pool->diff,
-		             have_longpoll ? '+' : '-', pool_proto_str(pool),
+		             pool->goal->have_longpoll ? '+' : '-', pool_proto_str(pool),
 		             pool->work_restart_timestamp,
 		             pool->rpc_user);
 	}
 	wclrtoeol(statuswin);
-	cg_mvwprintw(statuswin, 3, 0, " Block: %s  Diff:%s (%s)  Started: %s",
-		  current_hash, block_diff, net_hashrate, blocktime);
 	
-	income = total_diff_accepted * 3600 * block_subsidy / total_secs / current_diff;
-	char bwstr[(ALLOC_H2B_SHORT*2)+3+1], incomestr[ALLOC_H2B_SHORT+6+1];
-	format_unit3(incomestr, sizeof(incomestr), FUP_BTC, "BTC/hr", H2B_SHORT, income/1e8, -1);
-	cg_mvwprintw(statuswin, 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  I:%s  BS:%s",
+	update_block_display(true);
+	
+	char bwstr[(ALLOC_H2B_SHORT*2)+3+1];
+	
+	cg_mvwprintw(statuswin, devcursor - 4, 0, " ST:%d  F:%d  NB:%d  AS:%d  BW:[%s]  E:%.2f  BS:%s",
 		ts,
 		total_go + total_ro,
 		new_blocks,
@@ -4330,16 +4820,16 @@ one_workable_pool: ;
 		                  (float)(total_bytes_rcvd / total_secs),
 		                  (float)(total_bytes_sent / total_secs)),
 		efficiency,
-		incomestr,
 		best_share);
 	wclrtoeol(statuswin);
 	
-	mvwaddstr(statuswin, 5, 0, " ");
+	mvwaddstr(statuswin, devcursor - 3, 0, " ");
 	bfg_waddstr(statuswin, statusline);
 	wclrtoeol(statuswin);
 	
+	int devdiv = devcursor - 2;
 	logdiv = statusy - 1;
-	bfg_hline(statuswin, 6);
+	bfg_hline(statuswin, devdiv);
 	bfg_hline(statuswin, logdiv);
 #ifdef USE_UNICODE
 	if (use_unicode)
@@ -4349,10 +4839,10 @@ one_workable_pool: ;
 			offset += max_lpdigits;  // proc letter(s)
 		if (have_unicode_degrees)
 			++offset;  // degrees symbol
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 		offset += 24;  // hashrates etc
-		mvwadd_wch(statuswin, 6, offset, WACS_PLUS);
+		mvwadd_wch(statuswin, devdiv, offset, WACS_PLUS);
 		mvwadd_wch(statuswin, logdiv, offset, WACS_BTEE);
 	}
 #endif
@@ -4517,6 +5007,7 @@ static void switch_logsize(void)
 		unlock_curses();
 	}
 	check_winsizes();
+	update_block_display(false);
 }
 
 /* For mandatory printing when mutex is already locked */
@@ -4639,7 +5130,8 @@ void disable_pool(struct pool * const pool, const enum pool_enable enable_status
 static
 void share_result_msg(const struct work *work, const char *disp, const char *reason, bool resubmit, const char *worktime) {
 	struct cgpu_info *cgpu;
-	const unsigned char *hashpart = &work->hash[opt_scrypt ? 26 : 24];
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	const unsigned char *hashpart = &work->hash[0x1c - malgo->ui_skip_hash_bytes];
 	char shrdiffdisp[ALLOC_H2B_SHORTV];
 	const double tgtdiff = work->work_difficulty;
 	char tgtdiffdisp[ALLOC_H2B_SHORTV];
@@ -4744,6 +5236,8 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 	cgpu = get_thr_cgpu(work->thr_id);
 
 	if ((json_is_null(err) || !err) && (json_is_null(res) || json_is_true(res))) {
+		struct mining_goal_info * const goal = pool->goal;
+		
 		mutex_lock(&stats_lock);
 		cgpu->accepted++;
 		total_accepted++;
@@ -4751,6 +5245,7 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		cgpu->diff_accepted += work->work_difficulty;
 		total_diff_accepted += work->work_difficulty;
 		pool->diff_accepted += work->work_difficulty;
+		goal->diff_accepted += work->work_difficulty;
 		mutex_unlock(&stats_lock);
 
 		pool->seq_rejects = 0;
@@ -4803,6 +5298,16 @@ share_result(json_t *val, json_t *res, json_t *err, const struct work *work,
 		char reason[32];
 		put_in_parens(reason, sizeof(reason), extract_reject_reason(val, res, err, work));
 		applog(LOG_DEBUG, "Share above target rejected%s by pool %u as expected, ignoring", reason, pool->pool_no);
+		
+		// Stratum error 23 is "low difficulty share", which suggests this pool tracks job difficulty correctly.
+		// Therefore, we disable retrodiff if it was enabled-by-default.
+		if (pool->pool_diff_effective_retroactively == BTS_UNKNOWN) {
+			json_t *errnum;
+			if (work->stratum && err && json_is_array(err) && json_array_size(err) >= 1 && (errnum = json_array_get(err, 0)) && json_is_number(errnum) && ((int)json_number_value(errnum)) == 23) {
+				applog(LOG_DEBUG, "Disabling retroactive difficulty adjustments for pool %u", pool->pool_no);
+				pool->pool_diff_effective_retroactively = false;
+			}
+		}
 	} else {
 		mutex_lock(&stats_lock);
 		cgpu->rejected++;
@@ -4862,6 +5367,11 @@ static char *submit_upstream_work_request(struct work *work)
 		unsigned char data[80];
 		
 		swap32yes(data, work->data, 80 / 4);
+#if BLKMAKER_VERSION > 6
+		if (work->stratum) {
+			req = blkmk_submitm_jansson(tmpl, data, bytes_buf(&work->nonce2), bytes_len(&work->nonce2), le32toh(*((uint32_t*)&work->data[76])), work->do_foreign_submit);
+		} else
+#endif
 #if BLKMAKER_VERSION > 3
 		if (work->do_foreign_submit)
 			req = blkmk_submit_foreign_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
@@ -4956,10 +5466,12 @@ static bool submit_upstream_work_completed(struct work *work, bool resubmit, str
 			if (work->work_difficulty < 1)
 				diffplaces = 6;
 
+			const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+			const uint8_t * const prevblkhash = &work->data[4];
 			snprintf(worktime, sizeof(worktime),
 				" <-%08lx.%08lx M:%c D:%1.*f G:%02d:%02d:%02d:%1.3f %s (%1.3f) W:%1.3f (%1.3f) S:%1.3f R:%02d:%02d:%02d",
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 32 : 28])),
-				(unsigned long)be32toh(*(uint32_t *)&(work->data[opt_scrypt ? 28 : 24])),
+				(unsigned long)be32toh(((uint32_t *)prevblkhash)[7 - malgo->worktime_skip_prevblk_u32]),
+				(unsigned long)be32toh(((uint32_t *)prevblkhash)[6 - malgo->worktime_skip_prevblk_u32]),
 				work->getwork_mode, diffplaces, work->work_difficulty,
 				tm_getwork.tm_hour, tm_getwork.tm_min,
 				tm_getwork.tm_sec, getwork_time, workclone,
@@ -5002,6 +5514,9 @@ static bool pool_unworkable(const struct pool * const pool)
 	return false;
 }
 
+static struct pool *priority_pool(int);
+static bool pool_unusable(struct pool *);
+
 static
 bool pool_actively_desired(const struct pool * const pool, const struct pool *cp)
 {
@@ -5013,7 +5528,23 @@ bool pool_actively_desired(const struct pool * const pool, const struct pool *cp
 		return true;
 	if (!cp)
 		cp = current_pool();
-	return (pool == cp);
+	if (pool == cp)
+		return true;
+	
+	// If we are the highest priority, workable pool for a given algorithm, we are needed
+	struct mining_algorithm * const malgo = pool->goal->malgo;
+	for (int i = 0; i < total_pools; ++i)
+	{
+		struct pool * const other_pool = priority_pool(i);
+		if (other_pool == pool)
+			return true;
+		if (pool_unusable(other_pool))
+			continue;
+		if (other_pool->goal->malgo == malgo)
+			break;
+	}
+	
+	return false;
 }
 
 static
@@ -5043,7 +5574,8 @@ static struct pool *_select_longpoll_pool(struct pool *, bool(*)(struct pool *))
  * away from them to distribute work evenly. The share count is reset to the
  * rolling average every 10 minutes to not send all work to one pool after it
  * has been disabled/out for an extended period. */
-static struct pool *select_balanced(struct pool *cp)
+static
+struct pool *select_balanced(struct pool *cp, struct mining_algorithm * const malgo)
 {
 	int i, lowest = cp->shares;
 	struct pool *ret = cp, *failover_pool = NULL;
@@ -5051,6 +5583,8 @@ static struct pool *select_balanced(struct pool *cp)
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
+		if (malgo && pool->goal->malgo != malgo)
+			continue;
 		if (pool_unworkable(pool))
 			continue;
 		if (pool->failover_only)
@@ -5063,42 +5597,25 @@ static struct pool *select_balanced(struct pool *cp)
 			ret = pool;
 		}
 	}
+	if (malgo && ret->goal->malgo != malgo)
+		// Yes, we want failover_pool even if it's NULL
+		ret = failover_pool;
+	else
 	if (pool_unworkable(ret) && failover_pool)
 		ret = failover_pool;
 
-	ret->shares++;
+	if (ret)
+		++ret->shares;
 	return ret;
 }
 
-static bool pool_active(struct pool *, bool pinging);
-static void pool_died(struct pool *);
-static struct pool *priority_pool(int choice);
-static bool pool_unusable(struct pool *pool);
-
-/* Select any active pool in a rotating fashion when loadbalance is chosen if
- * it has any quota left. */
-static inline struct pool *select_pool(bool lagging)
+static
+struct pool *select_loadbalance(struct mining_algorithm * const malgo)
 {
 	static int rotating_pool = 0;
-	struct pool *pool, *cp;
+	struct pool *pool;
 	bool avail = false;
-	int tested, i;
-
-retry:
-	cp = current_pool();
-
-	if (pool_strategy == POOL_BALANCE) {
-		pool = select_balanced(cp);
-		if (pool_unworkable(pool))
-			goto simple_failover;
-		goto out;
-	}
-
-	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
-		pool = cp;
-		goto out;
-	} else
-		pool = NULL;
+	int tested, i, rpsave;
 
 	for (i = 0; i < total_pools; i++) {
 		struct pool *tp = pools[i];
@@ -5112,45 +5629,125 @@ retry:
 	/* There are no pools with quota, so reset them. */
 	if (!avail) {
 		for (i = 0; i < total_pools; i++)
-			pools[i]->quota_used = 0;
+		{
+			struct pool * const tp = pools[i];
+			tp->quota_used -= tp->quota_gcd;
+		}
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 	}
 
 	/* Try to find the first pool in the rotation that is usable */
-	tested = 0;
-	while (!pool && tested++ < total_pools) {
+	// Look for the lowest integer quota_used / quota_gcd in case we are imbalanced by algorithm demands
+	struct pool *pool_lowest = NULL;
+	int lowest = INT_MAX;
+	rpsave = rotating_pool;
+	for (tested = 0; tested < total_pools; ++tested)
+	{
 		pool = pools[rotating_pool];
-		if (pool->quota_used++ < pool->quota_gcd) {
+		if (malgo && pool->goal->malgo != malgo)
+			goto continue_tested;
+		
+		if (pool->quota_used < pool->quota_gcd)
+		{
+			++pool->quota_used;
 			if (!pool_unworkable(pool))
-				break;
+				goto out;
 			/* Failover-only flag for load-balance means distribute
 			 * unused quota to priority pool 0. */
 			if (opt_fail_only)
 				priority_pool(0)->quota_used--;
 		}
-		pool = NULL;
+		if (malgo)
+		{
+			const int count = pool->quota_used / pool->quota_gcd;
+			if (count < lowest)
+			{
+				pool_lowest = pool;
+				lowest = count;
+			}
+		}
+		
+continue_tested: ;
 		if (++rotating_pool >= total_pools)
 			rotating_pool = 0;
 	}
+	
+	// Even if pool_lowest is NULL, we want to return that to indicate failure
+	// Note it isn't possible to get here if !malgo
+	pool = pool_lowest;
+	
+out: ;
+	// Restore rotating_pool static, so malgo searches don't affect the usual load balancing
+	if (malgo)
+		rotating_pool = rpsave;
+	
+	return pool;
+}
+
+static
+struct pool *select_failover(struct mining_algorithm * const malgo)
+{
+	int i;
+	
+	for (i = 0; i < total_pools; i++) {
+		struct pool *tp = priority_pool(i);
+		
+		if (malgo && tp->goal->malgo != malgo)
+			continue;
+		
+		if (!pool_unusable(tp)) {
+			return tp;
+		}
+	}
+	
+	return NULL;
+}
+
+static bool pool_active(struct pool *, bool pinging);
+static void pool_died(struct pool *);
+
+/* Select any active pool in a rotating fashion when loadbalance is chosen if
+ * it has any quota left. */
+static inline struct pool *select_pool(bool lagging, struct mining_algorithm * const malgo)
+{
+	struct pool *pool = NULL, *cp;
+
+retry:
+	cp = current_pool();
+
+	if (pool_strategy == POOL_BALANCE) {
+		pool = select_balanced(cp, malgo);
+		if ((!pool) || pool_unworkable(pool))
+			goto simple_failover;
+		goto out;
+	}
+
+	if (pool_strategy != POOL_LOADBALANCE && (!lagging || opt_fail_only)) {
+		if (malgo && cp->goal->malgo != malgo)
+			goto simple_failover;
+		pool = cp;
+		goto out;
+	} else
+		pool = select_loadbalance(malgo);
 
 simple_failover:
 	/* If there are no alive pools with quota, choose according to
 	 * priority. */
 	if (!pool) {
-		for (i = 0; i < total_pools; i++) {
-			struct pool *tp = priority_pool(i);
-
-			if (!pool_unusable(tp)) {
-				pool = tp;
-				break;
-			}
-		}
+		pool = select_failover(malgo);
 	}
 
 	/* If still nothing is usable, use the current pool */
 	if (!pool)
+	{
+		if (malgo && cp->goal->malgo != malgo)
+		{
+			applog(LOG_DEBUG, "Failed to select pool for specific mining algorithm '%s'", malgo->name);
+			return NULL;
+		}
 		pool = cp;
+	}
 
 out:
 	if (!pool_actively_in_use(pool, cp))
@@ -5162,7 +5759,7 @@ out:
 		}
 		pool_tclear(pool, &pool->idle);
 	}
-	applog(LOG_DEBUG, "Selecting pool %d for work", pool->pool_no);
+	applog(LOG_DEBUG, "Selecting pool %d for %s%swork", pool->pool_no, malgo ? malgo->name : "", malgo ? " " : "");
 	return pool;
 }
 
@@ -5299,7 +5896,9 @@ void setup_benchmark_pool()
 		swork->ntime = 0x7fffffff;
 		timer_unset(&swork->tv_received);
 		memcpy(swork->diffbits, "\x17\0\xff\xff", 4);
-		set_target_to_pdiff(swork->target, opt_scrypt ? (1./0x10000) : 1.);
+		const struct mining_goal_info * const goal = get_mining_goal("default");
+		const struct mining_algorithm * const malgo = goal->malgo;
+		set_target_to_pdiff(swork->target, malgo->reasonable_low_nonce_diff);
 		pool->nonce2sz = swork->n2size = GBT_XNONCESZ;
 		pool->nonce2 = 0;
 	}
@@ -5408,7 +6007,7 @@ erradd:
 	json_decref(n);
 }
 
-static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe)
+static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const char *lpid, bool probe, struct pool * const pool)
 {
 	char *rpc_req;
 
@@ -5428,7 +6027,8 @@ static char *prepare_rpc_req2(struct work *work, enum pool_protocol proto, const
 				goto gbtfail;
 			caps |= GBT_LONGPOLL;
 #if BLKMAKER_VERSION > 1
-			if (bytes_len(&opt_coinbase_script) || have_at_least_one_getcbaddr)
+			const struct mining_goal_info * const goal = pool->goal;
+			if (goal->generation_script || goal_has_at_least_one_getcbaddr(goal))
 				caps |= GBT_CBVALUE;
 #endif
 			json_t *req = blktmpl_request_jansson(caps, lpid);
@@ -5455,8 +6055,8 @@ gbtfail2:
 	return NULL;
 }
 
-#define prepare_rpc_req(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, false)
-#define prepare_rpc_req_probe(work, proto, lpid)  prepare_rpc_req2(work, proto, lpid, true)
+#define prepare_rpc_req(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, false, pool)
+#define prepare_rpc_req_probe(work, proto, lpid, pool)  prepare_rpc_req2(work, proto, lpid, true, pool)
 
 static const char *pool_protocol_name(enum pool_protocol proto)
 {
@@ -5497,7 +6097,7 @@ static bool get_upstream_work(struct work *work, CURL *curl)
 		pool->proto = PLP_GETBLOCKTEMPLATE;
 
 tryagain:
-	rpc_req = prepare_rpc_req(work, pool->proto, NULL);
+	rpc_req = prepare_rpc_req(work, pool->proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		return false;
@@ -5986,6 +6586,8 @@ bool stale_work(struct work *work, bool share)
 
 	block_id = ((uint32_t*)work->data)[1];
 	pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 
 	/* Technically the rolltime should be correct but some pools
 	 * advertise a broken expire= that is lower than a meaningful
@@ -5995,7 +6597,7 @@ bool stale_work(struct work *work, bool share)
 	else
 		work_expiry = opt_expiry;
 
-	unsigned max_expiry = (have_longpoll ? opt_expiry_lp : opt_expiry);
+	unsigned max_expiry = (goal->have_longpoll ? opt_expiry_lp : opt_expiry);
 	if (work_expiry > max_expiry)
 		work_expiry = max_expiry;
 
@@ -6020,13 +6622,13 @@ bool stale_work(struct work *work, bool share)
 		if (enabled_pools <= 1 || opt_fail_only) {
 			if (pool->block_id && block_id != pool->block_id)
 			{
-				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 1 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 1 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)blkchain->currentblk->block_id);
 				return true;
 			}
 		} else {
-			if (block_id != current_block_id)
+			if (block_id != blkchain->currentblk->block_id)
 			{
-				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 0 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)current_block_id);
+				applog(LOG_DEBUG, "Work stale due to block mismatch (%08lx != 0 ? %08lx : %08lx)", (long)block_id, (long)pool->block_id, (long)blkchain->currentblk->block_id);
 				return true;
 			}
 		}
@@ -6112,8 +6714,11 @@ double share_diff(const struct work *work)
 static
 void work_check_for_block(struct work * const work)
 {
+	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	
 	work->share_diff = share_diff(work);
-	if (unlikely(work->share_diff >= current_diff)) {
+	if (unlikely(work->share_diff >= goal->current_diff)) {
 		work->block = true;
 		work->pool->solved++;
 		found_blocks++;
@@ -6201,7 +6806,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 	}
 
-	if (work->stratum) {
+	if (work->getwork_mode == GETWORK_MODE_STRATUM) {
 		char *s;
 
 		s = malloc(1024);
@@ -6729,6 +7334,9 @@ void switch_pools(struct pool *selected)
 	pthread_cond_broadcast(&lp_cond);
 	mutex_unlock(&lp_lock);
 
+#ifdef HAVE_CURSES
+	update_block_display(false);
+#endif
 }
 
 static void discard_work(struct work *work)
@@ -6746,6 +7354,20 @@ static void discard_work(struct work *work)
 	free_work(work);
 }
 
+static bool work_rollable(struct work *);
+
+static
+void unstage_work(struct work * const work)
+{
+	HASH_DEL(staged_work, work);
+	--work_mining_algorithm(work)->staged;
+	if (work_rollable(work))
+		--staged_rollable;
+	if (work->spare)
+		--staged_spare;
+	staged_full = false;
+}
+
 static void wake_gws(void)
 {
 	mutex_lock(stgd_lock);
@@ -6761,10 +7383,9 @@ static void discard_stale(void)
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (stale_work(work, false)) {
-			HASH_DEL(staged_work, work);
+			unstage_work(work);
 			discard_work(work);
 			stale++;
-			staged_full = false;
 		}
 	}
 	pthread_cond_signal(&gws_cond);
@@ -6830,7 +7451,6 @@ static void restart_threads(void)
 	rd_unlock(&mining_thr_lock);
 }
 
-static
 void blkhashstr(char *rv, const unsigned char *hash)
 {
 	unsigned char hash_swap[32];
@@ -6840,60 +7460,42 @@ void blkhashstr(char *rv, const unsigned char *hash)
 	bin2hex(rv, hash_swap, 32);
 }
 
-static void set_curblock(char *hexstr, unsigned char *hash)
+static
+void set_curblock(struct mining_goal_info * const goal, struct block_info * const blkinfo)
 {
-	unsigned char hash_swap[32];
+	struct blockchain_info * const blkchain = goal->blkchain;
 
-	current_block_id = ((uint32_t*)hash)[0];
-	strcpy(current_block, hexstr);
-	swap256(hash_swap, hash);
-	swap32tole(hash_swap, hash_swap, 32 / 4);
+	blkchain->currentblk = blkinfo;
+	blkchain->currentblk_subsidy = 5000000000LL >> (blkinfo->height / 210000);
 
 	cg_wlock(&ch_lock);
-	block_time = time(NULL);
-	__update_block_title(hash_swap);
-	free(current_fullhash);
-	current_fullhash = malloc(65);
-	bin2hex(current_fullhash, hash_swap, 32);
-	get_timestamp(blocktime, sizeof(blocktime), block_time);
+	__update_block_title(goal);
+	get_timestamp(blkchain->currentblk_first_seen_time_str, sizeof(blkchain->currentblk_first_seen_time_str), blkinfo->first_seen_time);
 	cg_wunlock(&ch_lock);
 
-	applog(LOG_INFO, "New block: %s diff %s (%s)", current_hash, block_diff, net_hashrate);
+	applog(LOG_INFO, "New block: %s diff %s (%s)", goal->current_goal_detail, goal->current_diff_str, goal->net_hashrate);
 }
 
-/* Search to see if this string is from a block that has been seen before */
-static bool block_exists(char *hexstr)
+/* Search to see if this prevblkhash has been seen before */
+static
+struct block_info *block_exists(const struct blockchain_info * const blkchain, const void * const prevblkhash)
 {
-	struct block *s;
+	struct block_info *s;
 
 	rd_lock(&blk_lock);
-	HASH_FIND_STR(blocks, hexstr, s);
+	HASH_FIND(hh, blkchain->blocks, prevblkhash, 0x20, s);
 	rd_unlock(&blk_lock);
 
-	if (s)
-		return true;
-	return false;
+	return s;
 }
 
-#if 0
-/* Tests if this work is from a block that has been seen before */
-static inline bool from_existing_block(struct work *work)
+static int block_sort(struct block_info * const blocka, struct block_info * const blockb)
 {
-	char hexstr[37];
-	bool ret;
-
-	bin2hex(hexstr, work->data + 8, 18);
-	ret = block_exists(hexstr);
-	return ret;
-}
-#endif
-
-static int block_sort(struct block *blocka, struct block *blockb)
-{
-	return blocka->block_no - blockb->block_no;
+	return blocka->block_seen_order - blockb->block_seen_order;
 }
 
-static void set_blockdiff(const struct work *work)
+static
+void set_blockdiff(struct mining_goal_info * const goal, const struct work * const work)
 {
 	unsigned char target[32];
 	double diff;
@@ -6903,60 +7505,72 @@ static void set_blockdiff(const struct work *work)
 	diff = target_diff(target);
 	diff64 = diff;
 
-	suffix_string(diff64, block_diff, sizeof(block_diff), 0);
-	format_unit2(net_hashrate, sizeof(net_hashrate),
+	suffix_string(diff64, goal->current_diff_str, sizeof(goal->current_diff_str), 0);
+	format_unit2(goal->net_hashrate, sizeof(goal->net_hashrate),
 	             true, "h/s", H2B_SHORT, diff * 7158278, -1);
-	if (unlikely(current_diff != diff))
-		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", block_diff, net_hashrate);
-	current_diff = diff;
+	if (unlikely(goal->current_diff != diff))
+		applog(LOG_NOTICE, "Network difficulty changed to %s (%s)", goal->current_diff_str, goal->net_hashrate);
+	goal->current_diff = diff;
 }
 
 static bool test_work_current(struct work *work)
 {
 	bool ret = true;
-	char hexstr[65];
 	
 	if (work->mandatory)
 		return ret;
 	
 	uint32_t block_id = ((uint32_t*)(work->data))[1];
+	const uint8_t * const prevblkhash = &work->data[4];
 	
-	/* Hack to work around dud work sneaking into test */
-	bin2hex(hexstr, work->data + 8, 18);
-	if (!strncmp(hexstr, "000000000000000000000000000000000000", 36))
-		goto out_free;
+	{
+		/* Hack to work around dud work sneaking into test */
+		bool dudwork = true;
+		for (int i = 8; i < 26; ++i)
+			if (work->data[i])
+			{
+				dudwork = false;
+				break;
+			}
+		if (dudwork)
+			goto out_free;
+	}
 	
 	struct pool * const pool = work->pool;
+	struct mining_goal_info * const goal = pool->goal;
+	struct blockchain_info * const blkchain = goal->blkchain;
 	
 	/* Search to see if this block exists yet and if not, consider it a
 	 * new block and set the current block details to this one */
-	if (!block_exists(hexstr))
+	if (!block_exists(blkchain, prevblkhash))
 	{
-		struct block *s = calloc(sizeof(struct block), 1);
+		struct block_info * const s = calloc(sizeof(struct block_info), 1);
 		int deleted_block = 0;
 		ret = false;
 		
 		if (unlikely(!s))
 			quit (1, "test_work_current OOM");
-		strcpy(s->hash, hexstr);
-		s->block_no = new_blocks++;
+		memcpy(s->prevblkhash, prevblkhash, sizeof(s->prevblkhash));
+		s->block_id = block_id;
+		s->block_seen_order = new_blocks++;
+		s->first_seen_time = time(NULL);
 		
 		wr_lock(&blk_lock);
 		/* Only keep the last hour's worth of blocks in memory since
 		 * work from blocks before this is virtually impossible and we
 		 * want to prevent memory usage from continually rising */
-		if (HASH_COUNT(blocks) > 6)
+		if (HASH_COUNT(blkchain->blocks) > 6)
 		{
-			struct block *oldblock;
+			struct block_info *oldblock;
 			
-			HASH_SORT(blocks, block_sort);
-			oldblock = blocks;
-			deleted_block = oldblock->block_no;
-			HASH_DEL(blocks, oldblock);
+			HASH_SORT(blkchain->blocks, block_sort);
+			oldblock = blkchain->blocks;
+			deleted_block = oldblock->block_seen_order;
+			HASH_DEL(blkchain->blocks, oldblock);
 			free(oldblock);
 		}
-		HASH_ADD_STR(blocks, hash, s);
-		set_blockdiff(work);
+		HASH_ADD(hh, blkchain->blocks, prevblkhash, sizeof(s->prevblkhash), s);
+		set_blockdiff(goal, work);
 		wr_unlock(&blk_lock);
 		pool->block_id = block_id;
 		pool_update_work_restart_time(pool);
@@ -6966,7 +7580,7 @@ static bool test_work_current(struct work *work)
 #if BLKMAKER_VERSION > 1
 		template_nonce = 0;
 #endif
-		set_curblock(hexstr, &work->data[4]);
+		set_curblock(goal, s);
 		if (unlikely(new_blocks == 1))
 			goto out_free;
 		
@@ -6978,7 +7592,7 @@ static bool test_work_current(struct work *work)
 				       pool->pool_no);
 			}
 			else
-			if (have_longpoll)
+			if (goal->have_longpoll)
 				applog(LOG_NOTICE, "New block detected on network before longpoll");
 			else
 				applog(LOG_NOTICE, "New block detected on network");
@@ -7000,7 +7614,7 @@ static bool test_work_current(struct work *work)
 				// Pool actively changed block
 				if (pool == current_pool())
 					restart = true;
-				if (block_id == current_block_id)
+				if (block_id == blkchain->currentblk->block_id)
 				{
 					// Caught up, only announce if this pool is the one in use
 					if (restart)
@@ -7014,7 +7628,8 @@ static bool test_work_current(struct work *work)
 					// This might detect pools trying to double-spend or 51%,
 					// but let's not make any accusations until it's had time
 					// in the real world.
-					blkhashstr(hexstr, &work->data[4]);
+					char hexstr[65];
+					blkhashstr(hexstr, prevblkhash);
 					applog(LOG_WARNING, "%s %d is issuing work for an old block: %s",
 					       work->longpoll ? "Longpoll from pool" : "Pool",
 					       pool->pool_no,
@@ -7062,6 +7677,9 @@ static bool hash_push(struct work *work)
 	mutex_lock(stgd_lock);
 	if (work_rollable(work))
 		staged_rollable++;
+	++work_mining_algorithm(work)->staged;
+	if (work->spare)
+		++staged_spare;
 	if (likely(!getq->frozen)) {
 		HASH_ADD_INT(staged_work, id, work);
 		HASH_SORT(staged_work, tv_sort);
@@ -7112,7 +7730,7 @@ static void display_pool_summary(struct pool *pool)
 	int pool_secs;
 
 	if (curses_active_locked()) {
-		wlog("Pool: %s\n", pool->rpc_url);
+		wlog("Pool: %s  Goal: %s\n", pool->rpc_url, pool->goal->name);
 		if (pool->solved)
 			wlog("SOLVED %d BLOCK%s!\n", pool->solved, pool->solved > 1 ? "S" : "");
 		if (!pool->has_stratum)
@@ -7266,6 +7884,8 @@ void write_config(FILE *fcfg)
 			fprintf(fcfg, "\n\t\t\"pool-proxy\" : \"%s\",", json_escape(pool->rpc_proxy));
 		fprintf(fcfg, "\n\t\t\"user\" : \"%s\",", json_escape(pool->rpc_user));
 		fprintf(fcfg, "\n\t\t\"pass\" : \"%s\",", json_escape(pool->rpc_pass));
+		if (strcmp(pool->goal->name, "default"))
+			fprintf(fcfg, "\n\t\t\"pool-goal\" : \"%s\",", pool->goal->name);
 		fprintf(fcfg, "\n\t\t\"pool-priority\" : \"%d\"", pool->prio);
 		if (pool->force_rollntime)
 			fprintf(fcfg, ",\n\t\t\"force-rollntime\" : %d", pool->force_rollntime);
@@ -7273,10 +7893,10 @@ void write_config(FILE *fcfg)
 	}
 	fputs("\n]\n", fcfg);
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	write_config_opencl(fcfg);
 #endif
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	fprintf(fcfg, ",\n\"algo\" : \"%s\"", algo_names[opt_algo]);
 #endif
 
@@ -7301,6 +7921,7 @@ void write_config(FILE *fcfg)
 			   0 <= *(int *)opt->u.arg)
 				fprintf(fcfg, ",\n\"%s\" : \"%d\"", p+2, *(int *)opt->u.arg);
 		}
+		free(name);
 	}
 
 	/* Special case options */
@@ -7345,7 +7966,7 @@ void write_config(FILE *fcfg)
 #endif
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		fprintf(fcfg, ",\n\"stratum-port\" : %d", stratumsrv_port);
+		fprintf(fcfg, ",\n\"stratum-port\" : %ld", stratumsrv_port);
 #endif
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
@@ -7412,6 +8033,12 @@ void zero_stats(void)
 	awidth = rwidth = swidth = hwwidth = 1;
 #endif
 
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->diff_accepted = 0;
+	}
+	
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
 
@@ -7493,6 +8120,55 @@ void zero_stats(void)
 		if (cgpu->drv->zero_stats)
 			cgpu->drv->zero_stats(cgpu);
 	}
+}
+
+int bfg_strategy_parse(const char * const s)
+{
+	char *endptr;
+	if (!(s && s[0]))
+		return -1;
+	long int selected = strtol(s, &endptr, 0);
+	if (endptr == s || *endptr) {
+		// Look-up by name
+		selected = -1;
+		for (unsigned i = 0; i <= TOP_STRATEGY; ++i) {
+			if (!strcasecmp(strategies[i].s, s)) {
+				selected = i;
+			}
+		}
+	}
+	if (selected < 0 || selected > TOP_STRATEGY) {
+		return -1;
+	}
+	return selected;
+}
+
+bool bfg_strategy_change(const int selected, const char * const param)
+{
+	if (param && param[0]) {
+		switch (selected) {
+			case POOL_ROTATE:
+			{
+				char *endptr;
+				long int n = strtol(param, &endptr, 0);
+				if (n < 0 || n > 9999 || *endptr) {
+					return false;
+				}
+				opt_rotate_period = n;
+				break;
+			}
+			default:
+				return false;
+		}
+	}
+	
+	mutex_lock(&lp_lock);
+	pool_strategy = selected;
+	pthread_cond_broadcast(&lp_cond);
+	mutex_unlock(&lp_lock);
+	switch_pools(NULL);
+	
+	return true;
 }
 
 #ifdef HAVE_CURSES
@@ -7627,25 +8303,25 @@ retry:
 	} else if (!strncasecmp(&input, "c", 1)) {
 		for (i = 0; i <= TOP_STRATEGY; i++)
 			wlogprint("%d: %s\n", i, strategies[i].s);
-		selected = curses_int("Select strategy number type");
+		{
+			char * const selected_str = curses_input("Select strategy type");
+			selected = bfg_strategy_parse(selected_str);
+			free(selected_str);
+		}
 		if (selected < 0 || selected > TOP_STRATEGY) {
 			wlogprint("Invalid selection\n");
 			goto retry;
 		}
+		char *param = NULL;
 		if (selected == POOL_ROTATE) {
-			opt_rotate_period = curses_int("Select interval in minutes");
-
-			if (opt_rotate_period < 0 || opt_rotate_period > 9999) {
-				opt_rotate_period = 0;
-				wlogprint("Invalid selection\n");
-				goto retry;
-			}
+			param = curses_input("Select interval in minutes");
 		}
-		mutex_lock(&lp_lock);
-		pool_strategy = selected;
-		pthread_cond_broadcast(&lp_cond);
-		mutex_unlock(&lp_lock);
-		switch_pools(NULL);
+		bool result = bfg_strategy_change(selected, param);
+		free(param);
+		if (!result) {
+			wlogprint("Invalid selection\n");
+			goto retry;
+		}
 		goto updated;
 	} else if (!strncasecmp(&input, "i", 1)) {
 		selected = curses_int("Select pool number");
@@ -8666,6 +9342,8 @@ fishy:
 		cg_runlock(&pool->data_lock);
 
 		if (json_is_true(res_val)) {
+			struct mining_goal_info * const goal = pool->goal;
+			
 			applog(LOG_NOTICE, "Accepted untracked stratum share from pool %d", pool->pool_no);
 
 			/* We don't know what device this came from so we can't
@@ -8675,6 +9353,7 @@ fishy:
 			pool->accepted++;
 			total_diff_accepted += pool_diff;
 			pool->diff_accepted += pool_diff;
+			goal->diff_accepted += pool_diff;
 			mutex_unlock(&stats_lock);
 		} else {
 			applog(LOG_NOTICE, "Rejected untracked stratum share from pool %d", pool->pool_no);
@@ -8813,10 +9492,9 @@ static void clear_pool_work(struct pool *pool)
 	mutex_lock(stgd_lock);
 	HASH_ITER(hh, staged_work, work, tmp) {
 		if (work->pool == pool) {
-			HASH_DEL(staged_work, work);
+			unstage_work(work);
 			free_work(work);
 			cleared++;
-			staged_full = false;
 		}
 	}
 	mutex_unlock(stgd_lock);
@@ -9029,11 +9707,12 @@ static void *stratum_thread(void *userdata)
 			cb_height_sz = bin_height[-1];
 			if (cb_height_sz == 3) {
 				// FIXME: The block number will overflow this by AD 2173
-				uint32_t block_id = ((uint32_t*)work->data)[1];
+				struct mining_goal_info * const goal = pool->goal;
+				const void * const prevblkhash = &work->data[4];
 				uint32_t height = 0;
 				memcpy(&height, bin_height, 3);
 				height = le32toh(height);
-				have_block_height(block_id, height);
+				have_block_height(goal, prevblkhash, height);
 			}
 
 			pool->swork.work_restart_id =
@@ -9067,7 +9746,8 @@ out:
 
 static void init_stratum_thread(struct pool *pool)
 {
-	have_longpoll = true;
+	struct mining_goal_info * const goal = pool->goal;
+	goal->have_longpoll = true;
 
 	if (unlikely(pthread_create(&pool->stratum_thread, NULL, stratum_thread, (void *)pool)))
 		quit(1, "Failed to create stratum thread");
@@ -9160,7 +9840,7 @@ static bool pool_active(struct pool *pool, bool pinging)
 	proto = want_gbt ? PLP_GETBLOCKTEMPLATE : PLP_GETWORK;
 
 tryagain:
-	rpc_req = prepare_rpc_req_probe(work, proto, NULL);
+	rpc_req = prepare_rpc_req_probe(work, proto, NULL, pool);
 	work->pool = pool;
 	if (!rpc_req)
 		goto out;
@@ -9345,17 +10025,63 @@ void *cmd_idle_thread(void * const __maybe_unused userp)
 	return NULL;
 }
 
-static struct work *hash_pop(void)
+static struct work *hash_pop(struct cgpu_info * const proc)
 {
-	struct work *work = NULL, *tmp;
 	int hc;
+	struct work *work, *work_found, *tmp;
+	enum {
+		HPWS_NONE,
+		HPWS_LOWDIFF,
+		HPWS_SPARE,
+		HPWS_ROLLABLE,
+		HPWS_PERFECT,
+	} work_score = HPWS_NONE;
 	bool did_cmd_idle = false;
 	pthread_t cmd_idle_thr;
 
 retry:
 	mutex_lock(stgd_lock);
-	while (!HASH_COUNT(staged_work))
+	while (true)
 	{
+		work_found = NULL;
+		work_score = 0;
+		hc = HASH_COUNT(staged_work);
+		HASH_ITER(hh, staged_work, work, tmp)
+		{
+			const struct mining_algorithm * const work_malgo = work_mining_algorithm(work);
+			const float min_nonce_diff = drv_min_nonce_diff(proc->drv, proc, work_malgo);
+#define FOUND_WORK(score)  do{  \
+				if (work_score < score)  \
+				{  \
+					work_found = work;  \
+					work_score = score;  \
+				}  \
+				continue;  \
+}while(0)
+			if (min_nonce_diff < work->work_difficulty)
+			{
+				if (min_nonce_diff < 0)
+					continue;
+				FOUND_WORK(HPWS_LOWDIFF);
+			}
+			if (work->spare)
+				FOUND_WORK(HPWS_SPARE);
+			if (work->rolltime && hc > staged_rollable)
+				FOUND_WORK(HPWS_ROLLABLE);
+#undef FOUND_WORK
+			
+			// Good match
+			work_found = work;
+			work_score = HPWS_PERFECT;
+			break;
+		}
+		if (work_found)
+		{
+			work = work_found;
+			break;
+		}
+		
+		// Failed to get a usable work
 		if (unlikely(staged_full))
 		{
 			if (likely(opt_queue < 10 + mining_threads))
@@ -9382,16 +10108,6 @@ retry:
 	
 	no_work = false;
 
-	hc = HASH_COUNT(staged_work);
-	/* Find clone work if possible, to allow masters to be reused */
-	if (hc > staged_rollable) {
-		HASH_ITER(hh, staged_work, work, tmp) {
-			if (!work_rollable(work))
-				break;
-		}
-	} else
-		work = staged_work;
-	
 	if (can_roll(work) && should_roll(work))
 	{
 		// Instead of consuming it, force it to be cloned and grab the clone
@@ -9400,9 +10116,7 @@ retry:
 		goto retry;
 	}
 	
-	HASH_DEL(staged_work, work);
-	if (work_rollable(work))
-		staged_rollable--;
+	unstage_work(work);
 
 	/* Signal the getwork scheduler to look for more work */
 	pthread_cond_signal(&gws_cond);
@@ -9421,7 +10135,7 @@ retry:
  * the future */
 static struct work *clone_work(struct work *work)
 {
-	int mrs = mining_threads + opt_queue - total_staged();
+	int mrs = mining_threads + opt_queue - total_staged(false);
 	struct work *work_clone;
 	bool cloned;
 
@@ -9576,6 +10290,7 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+	dst->data_lock_p = NULL;
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
@@ -9610,7 +10325,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	clean_work(work);
 	
 	cg_wlock(&pool->data_lock);
-	pool->swork.data_lock_p = &pool->data_lock;
 	
 	const int n2size = pool->swork.n2size;
 	bytes_resize(&work->nonce2, n2size);
@@ -9635,11 +10349,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-
+	unsigned char *coinbase;
+	
 	/* Generate coinbase */
 	coinbase = bytes_buf(&swork->coinbase);
 	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
@@ -9647,7 +10358,29 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	/* Downgrade to a read lock to read off the variables */
 	if (swork->data_lock_p)
 		cg_dwlock(swork->data_lock_p);
+	
+	gen_stratum_work3(work, swork, swork->data_lock_p);
+	
+	if (opt_debug)
+	{
+		char header[161];
+		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+		bin2hex(header, work->data, 80);
+		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
+	}
+}
 
+void gen_stratum_work3(struct work * const work, struct stratum_work * const swork, cglock_t * const data_lock_p)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+	
+	coinbase = bytes_buf(&swork->coinbase);
+	
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
@@ -9674,18 +10407,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = maybe_strdup(swork->job_id);
 	work->nonce1 = maybe_strdup(swork->nonce1);
-	if (swork->data_lock_p)
-		cg_runlock(swork->data_lock_p);
-
-	if (opt_debug)
-	{
-		char header[161];
-		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
-		bin2hex(header, work->data, 80);
-		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
-		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
-	}
+	if (data_lock_p)
+		cg_runlock(data_lock_p);
 
 	calc_midstate(work);
 
@@ -9695,6 +10418,11 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	if (swork->tr) {
+		work->getwork_mode = GETWORK_MODE_GBT;
+		work->tr = swork->tr;
+		tmpl_incref(work->tr);
+	}
 	calc_diff(work, 0);
 }
 
@@ -9730,7 +10458,7 @@ struct work *get_work(struct thr_info *thr)
 
 	applog(LOG_DEBUG, "%"PRIpreprv": Popping work from get queue to get work", cgpu->proc_repr);
 	while (!work) {
-		work = hash_pop();
+		work = hash_pop(cgpu);
 		if (stale_work(work, false)) {
 			staged_full = false;  // It wasn't really full, since it was stale :(
 			discard_work(work);
@@ -9776,12 +10504,13 @@ struct work *get_work(struct thr_info *thr)
 	
 	if (work->work_difficulty < 1)
 	{
-		if (unlikely(work->work_difficulty < cgpu->min_nonce_diff))
+		const float min_nonce_diff = drv_min_nonce_diff(cgpu->drv, cgpu, work_mining_algorithm(work));
+		if (unlikely(work->work_difficulty < min_nonce_diff))
 		{
-			if (cgpu->min_nonce_diff - work->work_difficulty > 1./0x10000000)
+			if (min_nonce_diff - work->work_difficulty > 1./0x10000000)
 				applog(LOG_WARNING, "%"PRIpreprv": Using work with lower difficulty than device supports",
 				       cgpu->proc_repr);
-			work->nonce_diff = cgpu->min_nonce_diff;
+			work->nonce_diff = min_nonce_diff;
 		}
 		else
 			work->nonce_diff = work->work_difficulty;
@@ -9898,12 +10627,8 @@ void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_
 
 void work_hash(struct work * const work)
 {
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		scrypt_hash_data(work->hash, work->data);
-	else
-#endif
-		hash_data(work->hash, work->data);
+	const struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	malgo->hash_data_f(work->hash, work->data);
 }
 
 static
@@ -9937,7 +10662,7 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 	{
 		bool high_hash = true;
 		struct pool * const pool = work->pool;
-		if (pool->stratum_active)
+		if (pool_diff_effective_retroactively(pool))
 		{
 			// Some stratum pools are buggy and expect difficulty changes to be immediate retroactively, so if the target has changed, check and submit just in case
 			if (memcmp(pool->next_target, work->target, sizeof(work->target)))
@@ -9945,7 +10670,10 @@ enum test_nonce2_result _test_nonce2(struct work *work, uint32_t nonce, bool che
 				applog(LOG_DEBUG, "Stratum pool %u target has changed since work job issued, checking that too",
 				       pool->pool_no);
 				if (hash_target_check_v(work->hash, pool->next_target))
+				{
 					high_hash = false;
+					work->work_difficulty = target_diff(pool->next_target);
+				}
 			}
 		}
 		if (high_hash)
@@ -10414,6 +11142,8 @@ struct pool *_select_longpoll_pool(struct pool *cp, bool(*func)(struct pool *))
 		return cp;
 	for (i = 0; i < total_pools; i++) {
 		struct pool *pool = pools[i];
+		if (cp->goal != pool->goal)
+			continue;
 
 		if (func(pool))
 			return pool;
@@ -10485,7 +11215,7 @@ retry_pool:
 	}
 
 	/* Any longpoll from any pool is enough for this to be true */
-	have_longpoll = true;
+	pool->goal->have_longpoll = true;
 
 	wait_lpcurrent(cp);
 
@@ -10502,7 +11232,7 @@ retry_pool:
 
 		struct work *work = make_work();
 		char *lpreq;
-		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id);
+		lpreq = prepare_rpc_req(work, pool->lp_proto, pool->lp_id, pool);
 		work->pool = pool;
 		if (!lpreq)
 		{
@@ -10519,6 +11249,7 @@ retry_pool:
 		 * so always establish a fresh connection instead of relying on
 		 * a persistent one. */
 		curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1);
+		curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, save_curl_socket);
 		curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, pool);
 		val = json_rpc_call(curl, lp_url, pool->rpc_userpass,
@@ -10591,7 +11322,12 @@ static void stop_longpoll(void)
 		pool->lp_started = false;
 		pthread_cancel(pool->longpoll_thread);
 	}
-	have_longpoll = false;
+	
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		goal->have_longpoll = false;
+	}
 }
 
 static void start_longpoll(void)
@@ -10877,7 +11613,7 @@ static void *watchdog_thread(void __maybe_unused *userdata)
 		hashmeter(-1, &zero_tv, 0);
 
 #ifdef HAVE_CURSES
-		const int ts = total_staged();
+		const int ts = total_staged(true);
 		if (curses_active_locked()) {
 			change_logwinsize();
 			curses_print_status(ts);
@@ -11014,7 +11750,7 @@ void bfg_watchdog(struct cgpu_info * const cgpu, struct timeval * const tvp_now)
 			else if (cgpu->status == LIFE_WAIT)
 				cgpu->status = LIFE_WELL;
 
-#ifdef WANT_CPUMINE
+#ifdef USE_CPUMINING
 			if (!strcmp(cgpu->drv->dname, "cpu"))
 				return;
 #endif
@@ -11080,7 +11816,7 @@ void print_summary(void)
 	applog(LOG_WARNING, "Started at %s", datestamp);
 	if (total_pools == 1)
 		applog(LOG_WARNING, "Pool: %s", pools[0]->rpc_url);
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_WARNING, "CPU hasher algorithm used: %s", algo_names[opt_algo]);
 #endif
@@ -11186,7 +11922,7 @@ void print_summary(void)
 
 void _bfg_clean_up(bool restarting)
 {
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	clear_adl(nDevs);
 #endif
 #ifdef HAVE_LIBUSB
@@ -11374,7 +12110,7 @@ out:
 }
 #endif
 
-#if BLKMAKER_VERSION > 1
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
 static
 bool _add_local_gbt(const char * const filepath, void *userp)
 {
@@ -11426,7 +12162,7 @@ err:
 	if (rpcssl == -101)
 		rpcssl = 0;
 	
-	const bool have_cbaddr = bytes_len(&opt_coinbase_script);
+	const bool have_cbaddr = get_mining_goal("default")->generation_script;
 	
 	const int uri_sz = 0x30;
 	char * const uri = malloc(uri_sz);
@@ -11611,7 +12347,7 @@ void enable_curses(void) {
 #endif
 
 /* TODO: fix need a dummy CPU device_drv even if no support for CPU mining */
-#ifndef WANT_CPUMINE
+#ifndef USE_CPUMINING
 struct device_drv cpu_drv;
 struct device_drv cpu_drv = {
 	.name = "CPU",
@@ -11634,6 +12370,16 @@ void register_device(struct cgpu_info *cgpu)
 	int thr_objs = cgpu->threads ?: 1;
 	mining_threads += thr_objs;
 	base_queue += thr_objs + cgpu->extra_work_queue;
+	{
+		const struct device_drv * const drv = cgpu->drv;
+		struct mining_algorithm *malgo;
+		LL_FOREACH(mining_algorithms, malgo)
+		{
+			if (drv_min_nonce_diff(drv, cgpu, malgo) < 0)
+				continue;
+			malgo->base_queue += thr_objs + cgpu->extra_work_queue;
+		}
+	}
 #ifdef HAVE_CURSES
 	adj_width(mining_threads, &dev_width);
 #endif
@@ -11708,11 +12454,15 @@ static bool my_blkmaker_sha256_callback(void *digest, const void *buffer, size_t
 }
 
 static
-int drv_algo_check(const struct device_drv * const drv)
+bool drv_algo_check(const struct device_drv * const drv)
 {
-	const int algomatch = opt_scrypt ? POW_SCRYPT : POW_SHA256D;
-	const supported_algos_t algos = drv->supported_algos ?: POW_SHA256D;
-	return (algos & algomatch);
+	struct mining_goal_info *goal, *tmpgoal;
+	HASH_ITER(hh, mining_goals, goal, tmpgoal)
+	{
+		if (drv_min_nonce_diff(drv, NULL, goal->malgo) >= 0)
+			return true;
+	}
+	return false;
 }
 
 #ifndef HAVE_PTHREAD_CANCEL
@@ -11740,8 +12490,8 @@ rescan:
 		pthread_join(info->probe_pth, NULL);
 #endif
 	
-	struct driver_registration *reg, *tmp;
-	BFG_FOREACH_DRIVER_BY_PRIORITY(reg, tmp)
+	struct driver_registration *reg;
+	BFG_FOREACH_DRIVER_BY_PRIORITY(reg)
 	{
 		const struct device_drv * const drv = reg->drv;
 		if (!(drv_algo_check(drv) && drv->drv_detect))
@@ -11805,7 +12555,6 @@ void allocate_cgpu(struct cgpu_info *cgpu, unsigned int *kp)
 	}
 
 	cgpu->max_hashes = 0;
-	BFGINIT(cgpu->min_nonce_diff, 1);
 	
 	BFGINIT(cgpu->cutofftemp, opt_cutofftemp);
 	BFGINIT(cgpu->targettemp, cgpu->cutofftemp - 6);
@@ -11918,31 +12667,6 @@ bool _probe_device_match(const struct lowlevel_device_info * const info, const c
 }
 
 static
-const struct device_drv *_probe_device_find_drv(const char * const _dname, const size_t dnamelen)
-{
-	struct driver_registration *dreg;
-	char dname[dnamelen];
-	int i;
-	
-	for (i = 0; i < dnamelen; ++i)
-		dname[i] = tolower(_dname[i]);
-	BFG_FIND_DRV_BY_DNAME(dreg, dname, dnamelen);
-	if (!dreg)
-	{
-		for (i = 0; i < dnamelen; ++i)
-			dname[i] = toupper(_dname[i]);
-		BFG_FIND_DRV_BY_NAME(dreg, dname, dnamelen);
-		if (!dreg)
-			return NULL;
-	}
-	
-	if (!drv_algo_check(dreg->drv))
-		return NULL;
-	
-	return dreg->drv;
-}
-
-static
 bool _probe_device_do_probe(const struct device_drv * const drv, const struct lowlevel_device_info * const info, bool * const request_rescan_p)
 {
 	bfg_probe_result_flags = 0;
@@ -11979,7 +12703,7 @@ void *probe_device_thread(void *p)
 	
 	// if lowlevel device matches specific user assignment, probe requested driver(s)
 	struct string_elist *sd_iter, *sd_tmp;
-	struct driver_registration *dreg, *dreg_tmp;
+	struct driver_registration *dreg;
 	DL_FOREACH_SAFE(scan_devices, sd_iter, sd_tmp)
 	{
 		const char * const dname = sd_iter->string;
@@ -11991,17 +12715,26 @@ void *probe_device_thread(void *p)
 		{
 			if (!_probe_device_match(info, ser))
 				continue;
+			
 			const size_t dnamelen = (colon - dname);
-			const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-				continue;
-			if (_probe_device_do_probe(drv, info, &request_rescan))
-				return NULL;
+			char dname_nt[dnamelen + 1];
+			memcpy(dname_nt, dname, dnamelen);
+			dname_nt[dnamelen] = '\0';
+			
+			BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
+				const struct device_drv * const drv = dreg->drv;
+				if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
+					continue;
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+				if (_probe_device_do_probe(drv, info, &request_rescan))
+					return NULL;
+			}
 		}
 	}
 	
 	// probe driver(s) with auto enabled and matching VID/PID/Product/etc of device
-	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+	BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 	{
 		const struct device_drv * const drv = dreg->drv;
 		
@@ -12021,8 +12754,14 @@ void *probe_device_thread(void *p)
 			if (strcasecmp("noauto", &colon[1]) && strcasecmp("auto", &colon[1]))
 				continue;
 			const ssize_t dnamelen = (colon - dname);
-			if (dnamelen >= 0 && _probe_device_find_drv(dname, dnamelen) != drv)
-				continue;
+			if (dnamelen >= 0) {
+				char dname_nt[dnamelen + 1];
+				memcpy(dname_nt, dname, dnamelen);
+				dname_nt[dnamelen] = '\0';
+				
+				if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+					continue;
+			}
 			doauto = (tolower(colon[1]) == 'a');
 			if (dnamelen != -1)
 				break;
@@ -12075,7 +12814,7 @@ void *probe_device_thread(void *p)
 					_probe_device_match(info, (dname[0] == '@') ? &dname[1] : dname))
 				{
 					bool dont_rescan = false;
-					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg, dreg_tmp)
+					BFG_FOREACH_DRIVER_BY_PRIORITY(dreg)
 					{
 						const struct device_drv * const drv = dreg->drv;
 						if (!drv_algo_check(drv))
@@ -12099,15 +12838,23 @@ void *probe_device_thread(void *p)
 		if (strcasecmp(&colon[1], "all"))
 			continue;
 		const size_t dnamelen = (colon - dname);
-		const struct device_drv * const drv = _probe_device_find_drv(dname, dnamelen);
-		if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
-			continue;
-		LL_FOREACH2(infolist, info, same_devid_next)
-		{
-			if (info->lowl->exclude_from_all)
+		char dname_nt[dnamelen + 1];
+		memcpy(dname_nt, dname, dnamelen);
+		dname_nt[dnamelen] = '\0';
+
+		BFG_FOREACH_DRIVER_BY_PRIORITY(dreg) {
+			const struct device_drv * const drv = dreg->drv;
+			if (!(drv && drv->lowl_probe && drv_algo_check(drv)))
 				continue;
-			if (_probe_device_do_probe(drv, info, NULL))
-				return NULL;
+			if (strcasecmp(drv->dname, dname_nt) && strcasecmp(drv->name, dname_nt))
+				continue;
+			LL_FOREACH2(infolist, info, same_devid_next)
+			{
+				if (info->lowl->exclude_from_all)
+					continue;
+				if (_probe_device_do_probe(drv, info, NULL))
+					return NULL;
+			}
 		}
 	}
 	
@@ -12294,7 +13041,6 @@ void schedule_rescan(const struct timeval * const tvp_when)
 	mutex_unlock(&rescan_mutex);
 }
 
-#ifdef HAVE_BFG_HOTPLUG
 static
 void hotplug_trigger()
 {
@@ -12303,7 +13049,6 @@ void hotplug_trigger()
 	timer_set_now(&tv_now);
 	schedule_rescan(&tv_now);
 }
-#endif
 
 #if defined(HAVE_LIBUDEV) && defined(HAVE_SYS_EPOLL_H)
 
@@ -12480,14 +13225,13 @@ void bfg_atexit(void)
 }
 
 extern void bfg_init_threadlocal();
-extern void stratumsrv_start();
+extern bool stratumsrv_change_port(unsigned);
 extern void test_aan_pll(void);
 
 int main(int argc, char *argv[])
 {
 	struct sigaction handler;
 	struct thr_info *thr;
-	struct block *block;
 	unsigned int k;
 	int i;
 	int rearrange_pools = 0;
@@ -12557,9 +13301,7 @@ int main(int argc, char *argv[])
 	/* We use the getq mutex as the staged lock */
 	stgd_lock = &getq->mutex;
 
-	snprintf(packagename, sizeof(packagename), "%s %s", PACKAGE, VERSION);
-
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	init_max_name_len();
 #endif
 
@@ -12585,7 +13327,7 @@ int main(int argc, char *argv[])
 	strcpy(cgminer_path, dirname(s));
 	free(s);
 	strcat(cgminer_path, "/");
-#if defined(WANT_CPUMINE) && defined(WIN32)
+#if defined(USE_CPUMINING) && defined(WIN32)
 	{
 		char buf[32];
 		int gev = GetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf, sizeof(buf));
@@ -12626,21 +13368,17 @@ int main(int argc, char *argv[])
 	}
 #endif
 
+#ifdef HAVE_CURSES
 	devcursor = 8;
 	logstart = devcursor;
 	logcursor = logstart;
-
-	block = calloc(sizeof(struct block), 1);
-	if (unlikely(!block))
-		quit (1, "main OOM");
-	for (i = 0; i < 36; i++)
-		strcat(block->hash, "0");
-	HASH_ADD_STR(blocks, hash, block);
-	strcpy(current_block, block->hash);
+#endif
 
 	mutex_init(&submitting_lock);
 
-#ifdef HAVE_OPENCL
+	// Ensure at least the default goal is created
+	get_mining_goal("default");
+#ifdef USE_OPENCL
 	opencl_early_init();
 #endif
 
@@ -12792,13 +13530,6 @@ int main(int argc, char *argv[])
 	if (want_per_device_stats)
 		opt_log_output = true;
 
-#ifdef WANT_CPUMINE
-#ifdef USE_SCRYPT
-	if (opt_scrypt)
-		set_scrypt_algo(&opt_algo);
-#endif
-#endif
-
 	bfg_devapi_init();
 	drv_detect_all();
 	total_devices = total_devices_new;
@@ -12852,8 +13583,8 @@ int main(int argc, char *argv[])
 	switch_logsize();
 #endif
 
-#if BLKMAKER_VERSION > 1
-	if (opt_load_bitcoin_conf && !(opt_scrypt || opt_benchmark))
+#if BLKMAKER_VERSION > 1 && defined(USE_SHA256D)
+	if (opt_load_bitcoin_conf && !(get_mining_goal("default")->malgo->algo != POW_SHA256D || opt_benchmark))
 		add_local_gbt(total_pools);
 #endif
 	
@@ -12960,9 +13691,9 @@ int main(int argc, char *argv[])
 	} while (!pools_active);
 
 #ifdef USE_SCRYPT
-	if (detect_algo == 1 && !opt_scrypt) {
+	if (detect_algo == 1 && get_mining_goal("default")->malgo->algo != POW_SCRYPT) {
 		applog(LOG_NOTICE, "Detected scrypt algorithm");
-		opt_scrypt = true;
+		set_malgo_scrypt();
 	}
 #endif
 	detect_algo = 0;
@@ -12998,12 +13729,12 @@ begin_bench:
 		start_cgpu(cgpu);
 	}
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	for (i = 0; i < nDevs; i++)
 		pause_dynamic_threads(i);
 #endif
 
-#ifdef WANT_CPUMINE
+#if defined(USE_CPUMINING) && defined(USE_SHA256D)
 	if (opt_n_threads > 0)
 		applog(LOG_INFO, "%d cpu miner threads started, using '%s' algorithm.",
 		       opt_n_threads, algo_names[opt_algo]);
@@ -13033,7 +13764,7 @@ begin_bench:
 		quit(1, "watchdog thread create failed");
 	pthread_detach(thr->pth);
 
-#ifdef HAVE_OPENCL
+#ifdef USE_OPENCL
 	/* Create reinit gpu thread */
 	gpur_thr_id = 3;
 	thr = &control_thr[gpur_thr_id];
@@ -13057,7 +13788,7 @@ begin_bench:
 
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		stratumsrv_start();
+		stratumsrv_change_port(stratumsrv_port);
 #endif
 
 #ifdef HAVE_BFG_HOTPLUG
@@ -13087,6 +13818,7 @@ begin_bench:
 		bool lagging = false;
 		struct curl_ent *ce;
 		struct work *work;
+		struct mining_algorithm *malgo = NULL;
 
 		cp = current_pool();
 
@@ -13094,16 +13826,38 @@ begin_bench:
 		max_staged += base_queue;
 
 		mutex_lock(stgd_lock);
-		ts = __total_staged();
+		ts = __total_staged(false);
 
 		if (!pool_localgen(cp) && !ts && !opt_fail_only)
 			lagging = true;
 
 		/* Wait until hash_pop tells us we need to create more work */
 		if (ts > max_staged) {
+			{
+				LL_FOREACH(mining_algorithms, malgo)
+				{
+					if (!malgo->goal_refs)
+						continue;
+					if (!malgo->base_queue)
+						continue;
+					if (malgo->staged < malgo->base_queue + opt_queue)
+					{
+						mutex_unlock(stgd_lock);
+						pool = select_pool(lagging, malgo);
+						if (pool)
+						{
+							work = make_work();
+							work->spare = true;
+							goto retry;
+						}
+						mutex_lock(stgd_lock);
+					}
+				}
+				malgo = NULL;
+			}
 			staged_full = true;
 			pthread_cond_wait(&gws_cond, stgd_lock);
-			ts = __total_staged();
+			ts = __total_staged(false);
 		}
 		mutex_unlock(stgd_lock);
 
@@ -13117,11 +13871,12 @@ begin_bench:
 			cp->getfail_occasions++;
 			total_go++;
 		}
-		pool = select_pool(lagging);
+		pool = select_pool(lagging, malgo);
+
 retry:
 		if (pool->has_stratum) {
 			while (!pool->stratum_active || !pool->stratum_notify) {
-				struct pool *altpool = select_pool(true);
+				struct pool *altpool = select_pool(true, malgo);
 
 				if (altpool == pool && pool->has_stratum)
 					cgsleep_ms(5000);
@@ -13183,7 +13938,7 @@ retry:
 			push_curl_entry(ce, pool);
 			++pool->seq_getfails;
 			pool_died(pool);
-			next_pool = select_pool(!opt_fail_only);
+			next_pool = select_pool(!opt_fail_only, malgo);
 			if (pool == next_pool) {
 				applog(LOG_DEBUG, "Pool %d json_rpc_call failed on get work, retrying in 5s", pool->pool_no);
 				cgsleep_ms(5000);

@@ -216,23 +216,11 @@ bool gridseed_lowl_probe(const struct lowlevel_device_info * const info)
  */
 
 static
-bool gridseed_thread_prepare(struct thr_info *thr)
-{
-	thr->cgpu_data = calloc(1, sizeof(*thr->cgpu_data));
-	
-	struct cgpu_info *device = thr->cgpu;
-	device->min_nonce_diff = 1./0x10000;
-
-	return true;
-}
-
-static
 void gridseed_thread_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
 
 	gc3355_close(device->device_fd);
-	free(thr->cgpu_data);
 }
 
 /*
@@ -446,13 +434,10 @@ struct device_drv gridseed_drv =
 	// metadata
 	.dname = "gridseed",
 	.name = "GSD",
-	.supported_algos = POW_SCRYPT,
+	.drv_min_nonce_diff = common_scrypt_min_nonce_diff,
 	
 	// detect device
 	.lowl_probe = gridseed_lowl_probe,
-	
-	// initialize device
-	.thread_prepare = gridseed_thread_prepare,
 	
 	// specify mining type - scanhash
 	.minerloop = minerloop_scanhash,

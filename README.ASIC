@@ -2,8 +2,106 @@ SUPPORTED DEVICES
 
 Currently supported ASIC devices include Avalon, Bitfountain's Block Erupter
 series (both USB and blades), a large variety of Bitfury-based miners,
-Butterfly Labs' SC range of devices, HashBuster boards, Klondike modules, and
-KnCMiner's Mercury, Jupiter and Saturn.
+Bitmain's Antminer S5 and U1-3, Butterfly Labs' SC range of devices, HashBuster
+boards, GekkoScience's Compac USB stick, Klondike modules, and KnCMiner's
+Mercury, Jupiter and Saturn.
+
+
+ANTMINER S1-S5
+--------------
+
+BFGMiner must be compiled for and run on the embedded controller. When
+configuring, use the --enable-bitmain option to build the 'bitmain' driver used
+to interface with this hardware. None of the device attributes are autodetected
+at this time, so you must also tell BFGMiner this at runtime with a series of
+--set options. For example:
+
+-S bitmain:auto --set btm:model=S5 --set btm:layout=32:8 --set btm:timeout=3
+--set btm:clock=350 --set btm:reg_data=0d82 --set btm:voltage=x0725
+
+Note that reg_data is optional for S4 and S5 and will be calculated from clock
+if not provided.
+
+The meaning of each of these options are not documented individually at this
+time, but can be determined from the stock cgminer's options. You want to look
+at the "bitmain-options" from the command line, and the "bitmain-freq" and
+"bitmain-voltage" in the /config/cgminer.conf file.
+In this case, they were:
+
+NOTE: These are NOT valid BFGMiner options!
+    --bitmain-options 115200:32:8:7:200:0782:0725
+                             |    | |   |    ^^^^ voltage
+                             |    | |   ^^^^ reg_data
+                             |    | ^^^ clock
+                             |    ^ timeout
+                             ^^^^ layout
+    "bitmain-freq" : "3:350:0d82",
+                      | |   ^^^^ reg_data
+                      | ^^^ clock
+                      ^ timeout
+    "bitmain-voltage" : "0725"
+                         ^^^^ voltage
+
+Notice how there are duplicate settings for timeout, clock, reg_data, and
+voltage. You can probably use either one, but the 350 MHz clock performs
+better than the 200 MHz clock. You shouldn't mix and match the
+timeout/clock/reg_data combinations, however!
+
+Additionally, since the controllers are underpowered for these devices, you may
+need to experiment with a good queue setting to control how much work BFGMiner
+tries to pre-prepare for it. A reasonable starting place is:
+
+--queue 8192
+
+
+ALCHEMIST
+---------
+This driver requires the latest FPGA firmware flashed on the blades (stock
+firmware has major bug and won't run properly with this driver). For
+instructions, please visit: https://litecointalk.org/?topic=27370
+The driver has been designed to run each of the 8 blades inside an AlcheMist
+256 as a separate miner. To detect all the blades you need to manually probe it
+with the following serial ports:
+
+-S ALC:all -S ALC:/dev/ttyO1 -S ALC:/dev/ttyO2 -S ALC:/dev/ttyO3
+-S ALC:/dev/ttyO4
+
+(the four ttyUSB ports are auto detected by all)
+
+The driver supports custom frequency settings in the range of 200-400 MHz in 16
+MHz increments (driver will default to 352 MHz if these conditions are not met).
+Frequency is set with the following --set option:
+
+--set ALC:clock=336
+
+You can also set the frequency per board by specifying the tty port:
+
+--set ALC@/dev/ttyO3:clock=352
+
+Driver also supports running single blades off a Raspberry Pi. Make sure you
+have configured GPIO pin 25 correctly (see below) and scan via
+-S ALC:/dev/ttyAMA0
+
+echo 25 > /sys/class/gpio/export
+echo out > /sys/class/gpio/gpio25/direction
+
+
+ANTMINER U3
+-----------
+
+The U3 does not support autodetection, so you will want to use --scan-serial to
+manually probe it. For example, to scan all devices, you can use:
+
+-S antminer:all --set antminer:chip=BM1382
+
+Additionally, for optimal performance you will need to set voltage, clock, and
+timing. Voltage format for the U3 is not documented by the manufacturer, thus
+must be provided as hexadecimal configuration codes. Timing is provided in the
+number of nanoseconds each hash takes at the given configuration. A
+known-working configuration is:
+
+--set antminer:voltage=x800 --set antminer:clock=237.5
+--set antminer:timing=0.022421
 
 
 AVALON 1
@@ -158,6 +256,15 @@ ports. They communicate with the Icarus protocol, which has some additional
 options in README.FPGA
 
 
+COMPAC
+------
+
+These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
+driver. You can set the clock frequency with
+
+--set compac:clock=200
+
+
 HEX*FURY
 --------
 
@@ -232,7 +339,7 @@ Build instructions:
 git clone git@github.com:KnCMiner/bfgminer.git
 cd bfgminer
 ./autogen.sh
-./configure --enable-scrypt --enable-titan --disable-other-drivers
+./configure --enable-scrypt --disable-sha256d --enable-titan --disable-other-drivers
 make
 sudo /etc/init.d/bfgminer.sh restart
 screen -r
@@ -330,6 +437,28 @@ Clock speed: 875
 So for example, an entry would look like this:
         gridseed@6D85278F5650:clock=875
 
+
+ZEUSMINER
+---------
+
+Zeusminers do not support autodetection, so you will need to use --scan to probe
+for them:
+
+-S zeusminer:\\.\COM3
+
+You should also configure the driver for your specific device:
+
+    --set zeusminer:clock=N        Clock frequency (default: 328)
+    --set zeusminer:chips=N        Number of chips per device
+        Blizzard    :  6          Cyclone     :  96
+        Hurricane X2: 48 (2*24)   Hurricane X3:  64 (2*32)
+        Thunder   X2: 96 (4*24)   Thunder   X3: 128 (4*32)
+Note: if you set this option incorrectly, the device may underperform and/or
+      misreport hashrate.
+
+For example:
+
+bfgminer --scrypt -o stratum+tcp://pool:port -u user -p pass -S zeusminer:\\.\COM3 --set zeusminer:clock=328 --set zeusminer:chips=128
 
 ---
 

@@ -44,7 +44,7 @@ extern ssize_t gc3355_read(int fd, char *buf, size_t size);
 extern ssize_t gc3355_write(int fd, const void * const buf, const size_t size);
 
 extern void gc3355_init_miner(int fd, int pll_freq);
-extern void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_only);
+extern void gc3355_init_dualminer(int fd, int pll_freq, bool scrypt_only, bool detect_only, bool scrypt);
 
 extern void gc3355_scrypt_reset(int fd);
 extern void gc3355_scrypt_only_reset(int fd);

@@ -1,6 +1,7 @@
 #ifndef BFG_DRIVER_OPENCL
 #define BFG_DRIVER_OPENCL
 
+#include <float.h>
 #include <stdbool.h>
 
 #include "CL/cl.h"
@@ -18,23 +19,44 @@ enum opencl_binary_usage {
 	OBU_NONE     = 4,
 };
 
+static const float intensity_not_set = FLT_MAX;
+
+struct opencl_kernel_info;
+struct _clState;
+
+typedef cl_int (*queue_kernel_parameters_func_t)(const struct opencl_kernel_info *, struct _clState *, struct work *, cl_uint);
+
+struct opencl_kernel_info {
+	char *file;
+	bool loaded;
+	cl_program program;
+	cl_kernel kernel;
+	bool goffset;
+	enum cl_kernels interface;
+	size_t wsize;
+	queue_kernel_parameters_func_t queue_kernel_parameters;
+};
+
 struct opencl_device_data {
 	bool mapped;
 	int virtual_gpu;
 	int virtual_adl;
 	unsigned long oclthreads;
+	float intensity;
 	char *_init_intensity;
 	bool dynamic;
 	
+	enum bfg_tristate use_goffset;
 	cl_uint vwidth;
 	size_t work_size;
-	char *kernel_file;
 	cl_ulong max_alloc;
+	
+	struct opencl_kernel_info kernelinfo[POW_ALGORITHM_COUNT];
 	
 	enum opencl_binary_usage opt_opencl_binaries;
 #ifdef USE_SCRYPT
-	int opt_lg, lookup_gap;
-	size_t opt_tc, thread_concurrency;
+	int lookup_gap;
+	size_t thread_concurrency;
 	size_t shaders;
 #endif
 	struct timeval tv_gpustart;
@@ -59,11 +81,11 @@ struct opencl_device_data {
 #endif
 };
 
-extern double oclthreads_to_intensity(unsigned long oclthreads, bool is_sha256d);
-extern unsigned long intensity_to_oclthreads(double intensity, bool is_sha256d);
+extern float opencl_proc_get_intensity(struct cgpu_info *, const char **iunit);
 extern unsigned long xintensity_to_oclthreads(double xintensity, cl_uint max_compute_units);
 extern bool opencl_set_intensity_from_str(struct cgpu_info *, const char *newvalue);
 
+#ifdef USE_SHA256D
 struct opencl_work_data {
 	cl_uint ctx_a; cl_uint ctx_b; cl_uint ctx_c; cl_uint ctx_d;
 	cl_uint ctx_e; cl_uint ctx_f; cl_uint ctx_g; cl_uint ctx_h;
@@ -87,10 +109,8 @@ struct opencl_work_data {
 	cl_uint B1addK6, PreVal0addK7, W16addK16, W17addK17;
 	cl_uint zeroA, zeroB;
 	cl_uint oneA, twoA, threeA, fourA, fiveA, sixA, sevenA;
-#ifdef USE_SCRYPT
-	struct work *work;
-#endif
 };
+#endif
 
 extern void opencl_early_init();
 extern char *print_ndevs_and_exit(int *ndevs);

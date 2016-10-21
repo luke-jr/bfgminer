@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 Luke Dashjr
+ * Copyright 2012-2015 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -78,7 +78,7 @@ static bool cairnsmore_send_cmd(int fd, uint8_t cmd, uint8_t data, bool probe)
 	return write(fd, pkt, sizeof(pkt)) == sizeof(pkt);
 }
 
-bool cairnsmore_supports_dynclock(int fd)
+bool cairnsmore_supports_dynclock(const char * const repr, const int fd)
 {
 	if (!cairnsmore_send_cmd(fd, 0, 1, true))
 		return false;
@@ -87,12 +87,11 @@ bool cairnsmore_supports_dynclock(int fd)
 
 	uint32_t nonce = 0;
 	{
+		struct timeval tv_now, tv_timeout;
 		struct timeval tv_finish;
-		struct thr_info dummy = {
-			.work_restart = false,
-			.work_restart_notifier = {-1, -1},
-		};
-		icarus_gets((unsigned char*)&nonce, fd, &tv_finish, &dummy, 1, ICARUS_DEFAULT_READ_SIZE);
+		timer_set_now(&tv_now);
+		timer_set_delay(&tv_timeout, &tv_now, 100000);
+		icarus_read(repr, (uint8_t *)&nonce, fd, &tv_finish, NULL, &tv_timeout, &tv_now, ICARUS_DEFAULT_READ_SIZE);
 	}
 	applog(LOG_DEBUG, "Cairnsmore dynclock detection... Got %08x", nonce);
 	switch (nonce) {
@@ -133,7 +132,7 @@ static bool cairnsmore_init(struct thr_info *thr)
 	struct ICARUS_INFO *info = cm1->device_data;
 	struct icarus_state *state = thr->cgpu_data;
 
-	if (cairnsmore_supports_dynclock(cm1->device_fd)) {
+	if (cairnsmore_supports_dynclock(cm1->proc_repr, cm1->device_fd)) {
 		info->dclk_change_clock_func = cairnsmore_change_clock_func;
 
 		dclk_prepare(&info->dclk);

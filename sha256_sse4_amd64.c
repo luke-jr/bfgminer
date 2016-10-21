@@ -50,13 +50,15 @@ static uint32_t g_sha256_hinit[8] =
 
 __m128i g_4sha256_k[64]__asm__("g_4sha256_k");
 
-bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
+bool scanhash_sse4_64(struct thr_info * const thr, struct work * const work,
 	uint32_t max_nonce, uint32_t *last_nonce,
 	uint32_t nonce)
 {
+	const uint8_t * const pmidstate = work->midstate;
+	uint8_t *pdata = work->data;
+	const uint32_t * const phash1 = hash1_init;
+	uint8_t * const phash = work->hash;
+	
 	uint32_t *hash32 = (uint32_t *)phash;
     uint32_t *nNonce_p = (uint32_t *)(pdata + 76);
     uint32_t m_midstate[8], m_w[16], m_w1[16];
@@ -114,7 +116,8 @@ bool scanhash_sse4_64(struct thr_info*thr, const unsigned char *pmidstate,
 		    *(uint32_t *)&(phash)[i*4] = mi.i[j];
 		}
 
-		if (unlikely(hash32[7] == 0 && fulltest(phash, ptarget))) {
+		if (unlikely(hash32[7] == 0))
+		{
 			nonce += j;
 			*last_nonce = nonce;
 			*nNonce_p = nonce;
