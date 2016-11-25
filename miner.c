@@ -4000,19 +4000,11 @@ char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, cons
 		delimsz = strlen(delim);
 	
 	for (i = 0; i < count; ++i)
-		if (numbers[i] != 0)
-		{
-			pick_unit(numbers[i], &unit);
-			allzero = false;
-		}
-	
-	if (allzero)
-		unit = _unitbase;
-	
-	--count;
-	for (i = 0; i < count; ++i)
 	{
-		format_unit2(buf, bufsz, floatprec, NULL, H2B_NOUNIT, numbers[i], unit);
+		unit = 0;
+		pick_unit(numbers[i], &unit);
+
+		format_unit2(buf, bufsz, floatprec, measurement, fmt, numbers[i], unit);
 		if (isarray)
 		{
 			buf = buflist[i + 1];
@@ -4029,9 +4021,6 @@ char *_multi_format_unit(char **buflist, size_t *bufszlist, bool floatprec, cons
 			bufsz -= delimsz;
 		}
 	}
-	
-	// Last entry has the unit
-	format_unit2(buf, bufsz, floatprec, measurement, fmt, numbers[count], unit);
 	
 	return buflist[0];
 }
