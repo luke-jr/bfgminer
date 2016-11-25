@@ -210,8 +210,64 @@ dist_doc_DATA += README.scrypt
 
 if USE_OPENCL
 dist_kernels_DATA += \
+  $(top_srcdir)/opencl/aes_helper.cl  \
+  $(top_srcdir)/opencl/alexkarnew.cl  \
+  $(top_srcdir)/opencl/alexkarold.cl  \
+  $(top_srcdir)/opencl/animecoin.cl  \
+  $(top_srcdir)/opencl/arebyp.cl  \
+  $(top_srcdir)/opencl/bitblock.cl  \
+  $(top_srcdir)/opencl/bitblockold.cl  \
+  $(top_srcdir)/opencl/blake.cl  \
+  $(top_srcdir)/opencl/blake256.cl  \
+  $(top_srcdir)/opencl/bmw.cl  \
+  $(top_srcdir)/opencl/bufius.cl  \
+  $(top_srcdir)/opencl/ckolivas.cl  \
+  $(top_srcdir)/opencl/cubehash.cl  \
+  $(top_srcdir)/opencl/darkcoin-mod.cl  \
+  $(top_srcdir)/opencl/darkcoin.cl  \
+  $(top_srcdir)/opencl/diamond.cl  \
+  $(top_srcdir)/opencl/echo.cl  \
+  $(top_srcdir)/opencl/fresh.cl  \
+  $(top_srcdir)/opencl/fugue.cl  \
+  $(top_srcdir)/opencl/fuguecoin.cl  \
+  $(top_srcdir)/opencl/groestl.cl  \
+  $(top_srcdir)/opencl/groestl256.cl  \
+  $(top_srcdir)/opencl/groestlcoin-v1.cl  \
+  $(top_srcdir)/opencl/groestlcoin.cl  \
+  $(top_srcdir)/opencl/hamsi.cl  \
+  $(top_srcdir)/opencl/hamsi_helper.cl  \
+  $(top_srcdir)/opencl/hamsi_helper_big.cl  \
+  $(top_srcdir)/opencl/inkcoin.cl  \
+  $(top_srcdir)/opencl/jh.cl  \
+  $(top_srcdir)/opencl/keccak1600.cl  \
+  $(top_srcdir)/opencl/luffa.cl  \
+  $(top_srcdir)/opencl/lyra2.cl  \
+  $(top_srcdir)/opencl/lyra2re.cl  \
+  $(top_srcdir)/opencl/marucoin-mod.cl  \
+  $(top_srcdir)/opencl/marucoin-modold.cl  \
+  $(top_srcdir)/opencl/marucoin.cl  \
+  $(top_srcdir)/opencl/maxcoin.cl  \
+  $(top_srcdir)/opencl/myriadcoin-groestl.cl  \
+  $(top_srcdir)/opencl/neoscrypt.cl  \
+  $(top_srcdir)/opencl/panama.cl  \
+  $(top_srcdir)/opencl/pluck.cl  \
 	$(top_srcdir)/opencl/psw.cl  \
+  $(top_srcdir)/opencl/quarkcoin.cl  \
+  $(top_srcdir)/opencl/qubitcoin.cl  \
 	$(top_srcdir)/opencl/scrypt.cl  \
+  $(top_srcdir)/opencl/shabal.cl  \
+  $(top_srcdir)/opencl/shavite.cl  \
+  $(top_srcdir)/opencl/sifcoin.cl  \
+  $(top_srcdir)/opencl/simd.cl  \
+  $(top_srcdir)/opencl/skein.cl  \
+  $(top_srcdir)/opencl/skein256.cl  \
+  $(top_srcdir)/opencl/talkcoin-mod.cl  \
+  $(top_srcdir)/opencl/twecoin.cl  \
+  $(top_srcdir)/opencl/whirlcoin.cl  \
+  $(top_srcdir)/opencl/whirlpool.cl  \
+  $(top_srcdir)/opencl/whirlpoolx.cl  \
+  $(top_srcdir)/opencl/x14.cl  \
+  $(top_srcdir)/opencl/x14old.cl  \
 	$(top_srcdir)/opencl/zuikkis.cl
 endif
 endif
