@@ -596,6 +596,7 @@ const char *stratumsrv_init_diff(struct cgpu_info * const proc, const char * con
 		return "Invalid difficulty";
 	
 	conn->desired_share_pdiff = nv;
+	conn->desired_default_share_pdiff = false;
 	
 	return NULL;
 }
