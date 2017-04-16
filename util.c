@@ -2331,7 +2331,8 @@ bool bfg_strtobool(const char * const s, char ** const endptr, __maybe_unused co
 	}
 	
 	char *lend;
-	strtol(s, &lend, 0);
+	if (strtol(s, &lend, 0))
+		; // Shut up compiler warning
 	if (lend > s)
 	{
 		if (endptr)
