@@ -182,6 +182,10 @@ bool nanofury_checkport(struct mcp2210_device * const mcp, const unsigned long b
 	
 	nanofury_power_enable(mcp, true, state);
 	
+	// PWR_EN0
+	if (!mcp2210_set_gpio_output(mcp, NANOFURY_GP_PIN_PWR_EN0, MGV_LOW))
+		goto fail;
+	
 	// cancel any outstanding SPI transfers
 	mcp2210_spi_cancel(mcp);
 	
