@@ -313,6 +313,7 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_SETQUOTA 122
 
 #define MSG_INVSTRATEGY 0x102
+#define MSG_FAILPORT 0x103
 
 #define USE_ALTMSG 0x4000
 
@@ -466,6 +467,7 @@ struct CODES {
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
  { SEVERITY_ERR,   MSG_INVSTRATEGY,	PARAM_STR,	"Invalid strategy for '%s'" },
+ { SEVERITY_ERR,   MSG_FAILPORT,	PARAM_BOTH,	"Failed to set port (%d) for '%s'" },
  { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
@@ -3203,12 +3205,12 @@ static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		io_close(io_data);
 }
 
-extern void stratumsrv_change_port();
+extern bool stratumsrv_change_port(unsigned);
 
 static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *comma;
-	int value;
+	long value;
 
 	if (param == NULL || *param == '\0') {
 		message(io_data, MSG_CONPAR, 0, NULL, isjson);
@@ -3251,7 +3253,7 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		return;
 	}
 
-	value = atoi(comma);
+	value = atol(comma);
 	if (value < 0 || value > 9999) {
 		message(io_data, MSG_INVNUM, value, param, isjson);
 		return;
@@ -3275,8 +3277,10 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #ifdef USE_LIBEVENT
 	else if (strcasecmp(param, "stratum-port") == 0)
 	{
-		stratumsrv_port = value;
-		stratumsrv_change_port();
+		if (!stratumsrv_change_port(value)) {
+			message(io_data, MSG_FAILPORT, value, param, isjson);
+			return;
+		}
 	}
 #endif
 	else {

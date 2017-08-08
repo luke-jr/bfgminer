@@ -985,7 +985,7 @@ extern int last_logstatusline_len;
 extern bool have_libusb;
 #endif
 extern int httpsrv_port;
-extern int stratumsrv_port;
+extern long stratumsrv_port;
 extern char *opt_api_allow;
 extern bool opt_api_mcast;
 extern char *opt_api_mcast_addr;
@@ -1543,6 +1543,7 @@ extern void stratum_work_cpy(struct stratum_work *dst, const struct stratum_work
 extern void stratum_work_clean(struct stratum_work *);
 extern bool pool_has_usable_swork(const struct pool *);
 extern void gen_stratum_work2(struct work *, struct stratum_work *);
+extern void gen_stratum_work3(struct work *, struct stratum_work *, cglock_t *data_lock_p);
 extern void inc_hw_errors3(struct thr_info *thr, const struct work *work, const uint32_t *bad_nonce_p, float nonce_diff);
 static inline
 void inc_hw_errors2(struct thr_info * const thr, const struct work * const work, const uint32_t *bad_nonce_p)

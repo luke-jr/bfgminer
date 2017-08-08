@@ -1,5 +1,5 @@
 /*
- * Copyright 2014 Luke Dashjr
+ * Copyright 2014-2016 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -509,7 +509,6 @@ bool avalonmm_update_swork_from_pool(struct cgpu_info * const master_dev, struct
 	stratum_work_cpy(&mmjob->swork, &pool->swork);
 	cg_runlock(&pool->data_lock);
 	timer_set_now(&mmjob->tv_prepared);
-	mmjob->swork.data_lock_p = NULL;
 	if (!avalonmm_send_swork(fd, chain, &mmjob->swork, mmjob->jobid, &mmjob->nonce_diff))
 	{
 		avalonmm_free_job(mmjob);

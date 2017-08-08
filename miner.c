@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2011-2016 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2012-2014 Andrew Smith
  * Copyright 2010 Jeff Garzik
@@ -183,7 +183,7 @@ bool opt_restart = true;
 int httpsrv_port = -1;
 #endif
 #ifdef USE_LIBEVENT
-int stratumsrv_port = -1;
+long stratumsrv_port = -1;
 #endif
 
 const
@@ -1173,6 +1173,7 @@ struct pool *add_pool2(struct mining_goal_info * const goal)
 	if (unlikely(pthread_cond_init(&pool->cr_cond, bfg_condattr)))
 		quit(1, "Failed to pthread_cond_init in add_pool");
 	cglock_init(&pool->data_lock);
+	pool->swork.data_lock_p = &pool->data_lock;
 	mutex_init(&pool->stratum_lock);
 	timer_unset(&pool->swork.tv_transparency);
 	pool->swork.pool = pool;
@@ -1312,6 +1313,23 @@ static char *set_int_0_to_10(const char *arg, int *i)
 static char *set_int_1_to_10(const char *arg, int *i)
 {
 	return set_int_range(arg, i, 1, 10);
+}
+
+static char *set_long_1_to_65535_or_neg1(const char * const arg, long * const i)
+{
+	const long min = 1, max = 65535;
+	
+	char * const err = opt_set_longval(arg, i);
+	
+	if (err) {
+		return err;
+	}
+	
+	if (*i != -1 && (*i < min || *i > max)) {
+		return "Value out of range";
+	}
+	
+	return NULL;
 }
 
 char *set_strdup(const char *arg, char **p)
@@ -2714,7 +2732,7 @@ static struct opt_table opt_config_table[] = {
 		     "Set socks proxy (host:port)"),
 #ifdef USE_LIBEVENT
 	OPT_WITH_ARG("--stratum-port",
-	             opt_set_intval, opt_show_intval, &stratumsrv_port,
+	             set_long_1_to_65535_or_neg1, opt_show_longval, &stratumsrv_port,
 	             "Port number to listen on for stratum miners (-1 means disabled)"),
 #endif
 	OPT_WITHOUT_ARG("--submit-stale",
@@ -3443,7 +3461,7 @@ void refresh_bitcoind_address(struct mining_goal_info * const goal, const bool f
 
 #define GBT_XNONCESZ (sizeof(uint32_t))
 
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 #define blkmk_append_coinbase_safe(tmpl, append, appendsz)  \
        blkmk_append_coinbase_safe2(tmpl, append, appendsz, GBT_XNONCESZ, false)
 #endif
@@ -3624,7 +3642,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 
 	work->tv_staged = tv_now;
 	
-#if BLKMAKER_VERSION > 4
+#if BLKMAKER_VERSION > 6
 	if (work->tr)
 	{
 		blktemplate_t * const tmpl = work->tr->tmpl;
@@ -3644,15 +3662,18 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 			pool_check_coinbase(pool, cbtxn, cbtxnsz);
 			
 			cg_wlock(&pool->data_lock);
+			if (swork->tr)
+				tmpl_decref(swork->tr);
 			swork->tr = work->tr;
+			tmpl_incref(swork->tr);
 			bytes_assimilate_raw(&swork->coinbase, cbtxn, cbtxnsz, cbtxnsz);
 			swork->nonce2_offset = cbextranonceoffset;
 			bytes_assimilate_raw(&swork->merkle_bin, branches, branchdatasz, branchdatasz);
 			swork->merkles = branchcount;
-			memcpy(swork->header1, &buf[0], 36);
+			swap32yes(swork->header1, &buf[0], 36 / 4);
 			swork->ntime = le32toh(*(uint32_t *)(&buf[68]));
 			swork->tv_received = tv_now;
-			memcpy(swork->diffbits, &buf[72], 4);
+			swap32yes(swork->diffbits, &buf[72], 4 / 4);
 			memcpy(swork->target, work->target, sizeof(swork->target));
 			free(swork->job_id);
 			swork->job_id = NULL;
@@ -3666,7 +3687,7 @@ static bool work_decode(struct pool *pool, struct work *work, json_t *val)
 		else
 			applog(LOG_DEBUG, "blkmk_get_mdata failed for pool %u", pool->pool_no);
 	}
-#endif  // BLKMAKER_VERSION > 4
+#endif  // BLKMAKER_VERSION > 6
 	pool_set_opaque(pool, !work->tr);
 
 	ret = true;
@@ -5346,6 +5367,11 @@ static char *submit_upstream_work_request(struct work *work)
 		unsigned char data[80];
 		
 		swap32yes(data, work->data, 80 / 4);
+#if BLKMAKER_VERSION > 6
+		if (work->stratum) {
+			req = blkmk_submitm_jansson(tmpl, data, bytes_buf(&work->nonce2), bytes_len(&work->nonce2), le32toh(*((uint32_t*)&work->data[76])), work->do_foreign_submit);
+		} else
+#endif
 #if BLKMAKER_VERSION > 3
 		if (work->do_foreign_submit)
 			req = blkmk_submit_foreign_jansson(tmpl, data, work->dataid, le32toh(*((uint32_t*)&work->data[76])));
@@ -6780,7 +6806,7 @@ static struct submit_work_state *begin_submission(struct work *work)
 		timer_set_delay_from_now(&sws->tv_staleexpire, 300000000);
 	}
 
-	if (work->stratum) {
+	if (work->getwork_mode == GETWORK_MODE_STRATUM) {
 		char *s;
 
 		s = malloc(1024);
@@ -7940,7 +7966,7 @@ void write_config(FILE *fcfg)
 #endif
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		fprintf(fcfg, ",\n\"stratum-port\" : %d", stratumsrv_port);
+		fprintf(fcfg, ",\n\"stratum-port\" : %ld", stratumsrv_port);
 #endif
 	_write_config_string_elist(fcfg, "device", opt_devices_enabled_list);
 	_write_config_string_elist(fcfg, "set-device", opt_set_device_list);
@@ -10264,6 +10290,7 @@ void stratum_work_cpy(struct stratum_work * const dst, const struct stratum_work
 	dst->job_id = maybe_strdup(src->job_id);
 	bytes_cpy(&dst->coinbase, &src->coinbase);
 	bytes_cpy(&dst->merkle_bin, &src->merkle_bin);
+	dst->data_lock_p = NULL;
 }
 
 void stratum_work_clean(struct stratum_work * const swork)
@@ -10298,7 +10325,6 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 	clean_work(work);
 	
 	cg_wlock(&pool->data_lock);
-	pool->swork.data_lock_p = &pool->data_lock;
 	
 	const int n2size = pool->swork.n2size;
 	bytes_resize(&work->nonce2, n2size);
@@ -10323,11 +10349,8 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 
 void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 {
-	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
-	uint8_t *merkle_bin;
-	uint32_t *data32, *swap32;
-	int i;
-
+	unsigned char *coinbase;
+	
 	/* Generate coinbase */
 	coinbase = bytes_buf(&swork->coinbase);
 	memcpy(&coinbase[swork->nonce2_offset], bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
@@ -10335,7 +10358,29 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	/* Downgrade to a read lock to read off the variables */
 	if (swork->data_lock_p)
 		cg_dwlock(swork->data_lock_p);
+	
+	gen_stratum_work3(work, swork, swork->data_lock_p);
+	
+	if (opt_debug)
+	{
+		char header[161];
+		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
+		bin2hex(header, work->data, 80);
+		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
+		applog(LOG_DEBUG, "Generated stratum header %s", header);
+		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
+	}
+}
 
+void gen_stratum_work3(struct work * const work, struct stratum_work * const swork, cglock_t * const data_lock_p)
+{
+	unsigned char *coinbase, merkle_root[32], merkle_sha[64];
+	uint8_t *merkle_bin;
+	uint32_t *data32, *swap32;
+	int i;
+	
+	coinbase = bytes_buf(&swork->coinbase);
+	
 	/* Generate merkle root */
 	gen_hash(coinbase, merkle_root, bytes_len(&swork->coinbase));
 	memcpy(merkle_sha, merkle_root, 32);
@@ -10362,18 +10407,8 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	memcpy(work->target, swork->target, sizeof(work->target));
 	work->job_id = maybe_strdup(swork->job_id);
 	work->nonce1 = maybe_strdup(swork->nonce1);
-	if (swork->data_lock_p)
-		cg_runlock(swork->data_lock_p);
-
-	if (opt_debug)
-	{
-		char header[161];
-		char nonce2hex[(bytes_len(&work->nonce2) * 2) + 1];
-		bin2hex(header, work->data, 80);
-		bin2hex(nonce2hex, bytes_buf(&work->nonce2), bytes_len(&work->nonce2));
-		applog(LOG_DEBUG, "Generated stratum header %s", header);
-		applog(LOG_DEBUG, "Work job_id %s nonce2 %s", work->job_id, nonce2hex);
-	}
+	if (data_lock_p)
+		cg_runlock(data_lock_p);
 
 	calc_midstate(work);
 
@@ -10383,6 +10418,11 @@ void gen_stratum_work2(struct work *work, struct stratum_work *swork)
 	work->id = total_work++;
 	work->longpoll = false;
 	work->getwork_mode = GETWORK_MODE_STRATUM;
+	if (swork->tr) {
+		work->getwork_mode = GETWORK_MODE_GBT;
+		work->tr = swork->tr;
+		tmpl_incref(work->tr);
+	}
 	calc_diff(work, 0);
 }
 
@@ -13185,7 +13225,7 @@ void bfg_atexit(void)
 }
 
 extern void bfg_init_threadlocal();
-extern void stratumsrv_start();
+extern bool stratumsrv_change_port(unsigned);
 extern void test_aan_pll(void);
 
 int main(int argc, char *argv[])
@@ -13748,7 +13788,7 @@ begin_bench:
 
 #ifdef USE_LIBEVENT
 	if (stratumsrv_port != -1)
-		stratumsrv_start();
+		stratumsrv_change_port(stratumsrv_port);
 #endif
 
 #ifdef HAVE_BFG_HOTPLUG

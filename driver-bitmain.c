@@ -671,7 +671,7 @@ static int bitmain_read(struct cgpu_info *bitmain, unsigned char *buf,
 	size_t total = 0;
 
 	if(bitmain == NULL || buf == NULL || bufsize <= 0) {
-		applog(LOG_WARNING, "bitmain_read parameter error bufsize(%llu)", (unsigned long long)bufsize);
+		applog(LOG_WARNING, "bitmain_read parameter error bufsize(%"PRIu64")", (uint64_t)bufsize);
 		return -1;
 	}
 	{

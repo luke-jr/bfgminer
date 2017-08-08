@@ -50,6 +50,8 @@ static const char *bm1382_chips[] = {
 
 static bool antminer_chip_has_bm1382_freq_register(const char * const prodstr)
 {
+	if (!prodstr)
+		return false;
 	for (const char **chipname = bm1382_chips; *chipname; ++chipname) {
 		if (strstr(prodstr, *chipname)) {
 			return true;
