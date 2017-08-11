@@ -32,6 +32,7 @@ extern struct device_drv *bfg_claim_serial(struct device_drv * const, const bool
 #define serial_claim_v(devpath, drv)  bfg_claim_serial(drv, true , devpath)
 
 extern int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool purge);
+extern int serial_change_baud(int fd, unsigned long baud);
 extern ssize_t _serial_read(int fd, char *buf, size_t buflen, char *eol);
 #define serial_read(fd, buf, count)  \
 	_serial_read(fd, (char*)(buf), count, NULL)
