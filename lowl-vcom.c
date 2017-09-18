@@ -1135,7 +1135,7 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 
 	return _open_osfhandle((intptr_t)hSerial, 0);
 #else
-	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY | O_SYNC);
+	int fdDev = open(devpath, O_RDWR | O_CLOEXEC | O_NOCTTY);
 
 	if (unlikely(fdDev == -1))
 	{
@@ -1181,11 +1181,10 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 		{
 			cfsetispeed(&my_termios, speed);
 			cfsetospeed(&my_termios, speed);
-            cfsetspeed(&my_termios,  speed);
 		}
 	}
 
-	my_termios.c_cflag &= ~(CSIZE | PARENB | CSTOPB);
+	my_termios.c_cflag &= ~(CSIZE | PARENB);
 	my_termios.c_cflag |= CS8;
 	my_termios.c_cflag |= CREAD;
 #ifdef USE_AVALON
@@ -1223,60 +1222,6 @@ int serial_open(const char *devpath, unsigned long baud, uint8_t timeout, bool p
 	}
 	return fdDev;
 #endif
-}
-
-extern int serial_change_baud(int fd, unsigned long baud)
-{
-#ifdef WIN32
-    if (fd == -1)
-		return BGV_ERROR;
-	const HANDLE fh = (HANDLE)_get_osfhandle(fd);
-	if (fh == INVALID_HANDLE_VALUE)
-		return BGV_ERROR;
-
-    if (baud)
-	{
-
-	COMMCONFIG comCfg = {0};
-	comCfg.dwSize = sizeof(COMMCONFIG);
-	comCfg.wVersion = 1;
-	comCfg.dcb.DCBlength = sizeof(DCB);
-	comCfg.dcb.BaudRate = baud;
-	comCfg.dcb.fBinary = 1;
-	comCfg.dcb.fDtrControl = DTR_CONTROL_ENABLE;
-	comCfg.dcb.fRtsControl = RTS_CONTROL_ENABLE;
-	comCfg.dcb.ByteSize = 8;
-
-		if (!SetCommConfig(fh, &comCfg, sizeof(comCfg)))
-			// FIXME: We should probably be setting even if baud is clear (in which case, only LOG_DEBUG this)
-			applog(LOG_WARNING, "%s: %s failed: %s", devpath, "SetCommConfig", bfg_strerror(GetLastError(), BST_SYSTEM));
-
-	}
-  #else
-
-    struct termios my_termios;
-
-	if (tcgetattr(fd, &my_termios))
-		applog(baud ? LOG_WARNING : LOG_DEBUG, "%s: %s failed: tcgetattr", bfg_strerror(errno, BST_ERRNO));
-	else
-	{
-
-
-	if (baud)
-	{
-		speed_t speed = tiospeed_t(baud);
-		if (speed == B0)
-			applog(LOG_WARNING, "Unrecognized baud rate: %lu", baud);
-		else
-		{
-			cfsetispeed(&my_termios, speed);
-			cfsetospeed(&my_termios, speed);
-            tcflush(fd, TCIOFLUSH);
-		}
-	}
-
-	}
-  #endif
 }
 
 int serial_close(const int fd)
