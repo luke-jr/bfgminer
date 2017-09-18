@@ -277,6 +277,10 @@ if USE_DRILLBIT
 bfgminer_SOURCES += driver-drillbit.c
 endif
 
+if USE_FUTUREBIT
+bfgminer_SOURCES += driver-futurebit.c
+endif
+
 if USE_TWINFURY
 bfgminer_SOURCES += driver-twinfury.c driver-twinfury.h
 endif
