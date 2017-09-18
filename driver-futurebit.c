@@ -221,15 +221,6 @@ void futurebit_send_cmds(const int fd, const unsigned char *cmds[])
 	}
 }
 
-//921600bps: 3C ff f8 20 1f 01 82 f6
-static
-void futurebit_set_baudrate(const int fd)
-{
-	const uint8_t cmd[] = {0x3C, 0xff, 0xf8, 0x20, 0x1f, 0x01, 0x82, 0xf6, 0xC3};
-	futurebit_write(fd, cmd, 9);
-	cgsleep_us(100000);
-	serial_change_baud(fd, 921600);
-}
 
 static
 void futurebit_set_frequency(const int fd, uint32_t freq)
