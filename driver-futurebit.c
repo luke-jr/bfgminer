@@ -57,6 +57,7 @@ struct futurebit_chip {
     uint8_t chipid;
     unsigned active_cores;
     unsigned freq;
+    uint32_t last_nonce;
 };
 
 static
@@ -66,6 +67,7 @@ void futurebit_chip_init(struct futurebit_chip * const chip, const uint8_t chipi
         .chipid = chipid,
         .active_cores = 64,
         .freq = FUTUREBIT_DEFAULT_FREQUENCY,
+        .last_nonce = 0x00000000,
     };
 }
 
@@ -261,12 +263,13 @@ void futurebit_config_all_chip(const int fd, uint32_t freq)
 	cgsleep_us(100000);
 #endif
 
-	reg_val = 0xffffffff/futurebit_max_chips;
-	for (i=1; i<(futurebit_max_chips+1); i++)
-	{
-		futurebit_write_register(fd, i, 0x40, 0x00, reg_val*(i-1));
-		cgsleep_us(100000);
-	}
+    //Start Nonce at zero for single chip
+	//reg_val = 0xffffffff/futurebit_max_chips;
+	//for (i=1; i<(futurebit_max_chips+1); i++)
+	//{
+    futurebit_write_register(fd, 0xff, 0x40, 0x00, 0x00000000);
+    cgsleep_us(100000);
+	//}
 
 	futurebit_send_cmds(fd, gcp_cmd_reset);
 	cgsleep_us(100000);
@@ -321,10 +324,22 @@ static
 bool futurebit_send_work(const struct thr_info * const thr, struct work * const work)
 {
     struct cgpu_info *device = thr->cgpu;
+    struct futurebit_chip *chips = device->device_data;
 
     uint32_t *pdata = work->data;
     uint32_t *midstate = work->midstate;
-	const uint32_t *ptarget = work->target;
+    const uint32_t ptarget[8];
+	memset(ptarget, 0, 0x8);
+
+    work->nonce_diff = 32./0x10000;            //set device diff low to keep accurate hashrate and device status
+
+	if(work->work_difficulty < work->nonce_diff){
+        work->nonce_diff = work->work_difficulty;
+        set_target_to_pdiff(&ptarget, work->work_difficulty);
+	}else
+        set_target_to_pdiff(&ptarget, work->nonce_diff);
+
+    //applog(LOG_DEBUG, "TARGET_DIFF %u", work->work_difficulty);
 
     int i, bpos;
     unsigned char bin[156];
@@ -372,7 +387,7 @@ bool futurebit_send_work(const struct thr_info * const thr, struct work * const 
     }
     */
     futurebit_write(device->device_fd, bin, 144);//144bytes
-
+    chips[0].last_nonce = 0x00000000;
 
    /* uint8_t buf[112];
     uint8_t cmd[112];
@@ -565,6 +580,7 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
     struct futurebit_chip *chips = device->device_data;
 
     uint32_t nonce;
+    uint32_t last_hashes;
 
     // swab for big endian
     memcpy((unsigned char *)&nonce, buf+4, 4);
@@ -572,12 +588,26 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
 
     char output[(8 * 2) + 1];
     bin2hex(output, buf, 8);
-    applog(LOG_DEBUG, "NONCE %s", output);
 
+    //applog(LOG_DEBUG, "NONCE %s", output);
+    applog(LOG_DEBUG, "NONCE int %u", nonce);
+    applog(LOG_DEBUG, "LAST NONCE int %u", chips[0].last_nonce);
     submit_nonce(thr, work, nonce);
 
-    /* hashrate calc
+    // hashrate calc
 
+    last_hashes = (nonce+512)-chips[0].last_nonce;
+
+    if(last_hashes > 0 && last_hashes < 0x4000000){
+        hashes_done2(thr, last_hashes, NULL);
+        chips[0].last_nonce = nonce;
+    }else
+       chips[0].last_nonce = nonce;
+
+    if(chips[0].last_nonce == 0){
+         hashes_done2(thr, 3200000*(chips[0].freq/600), NULL);
+    }
+    /*
     const uint8_t clstid = buf[7];
     uint32_t range = chips[0].clst_offset[clstid];
 

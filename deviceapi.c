@@ -44,7 +44,7 @@ struct driver_registration *_bfg_drvreg2;
 void _bfg_register_driver(const struct device_drv *drv)
 {
 	struct driver_registration *ndr;
-	
+
 	if (!drv)
 	{
 		// NOTE: Not sorted at this point (dname and priority may be unassigned until drv_init!)
@@ -56,7 +56,7 @@ void _bfg_register_driver(const struct device_drv *drv)
 		}
 		return;
 	}
-	
+
 	ndr = malloc(sizeof(*ndr));
 	*ndr = (struct driver_registration){
 		.drv = drv,
@@ -122,11 +122,11 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 {
 	struct cgpu_info *cgpu = thr->cgpu;
 	const long cycle = opt_log_interval / 5 ? : 1;
-	
+
 	if (unlikely(hashes == -1)) {
 		if (timer_elapsed(&cgpu->tv_device_last_not_well, NULL) > 0)
 			dev_error(cgpu, REASON_THREAD_ZERO_HASH);
-		
+
 		if (thr->scanhash_working && opt_restart) {
 			applog(LOG_ERR, "%"PRIpreprv" failure, attempting to reinitialize", cgpu->proc_repr);
 			thr->scanhash_working = false;
@@ -141,13 +141,13 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 	}
 	else
 		thr->scanhash_working = true;
-	
+
 	thr->hashes_done += hashes;
 	if (hashes > cgpu->max_hashes)
 		cgpu->max_hashes = hashes;
-	
+
 	timeradd(&thr->tv_hashes_done, tvp_hashes, &thr->tv_hashes_done);
-	
+
 	// max_nonce management (optional)
 	if (max_nonce)
 	{
@@ -155,15 +155,15 @@ bool hashes_done(struct thr_info *thr, int64_t hashes, struct timeval *tvp_hashe
 		new_max_nonce *= cycle;
 		new_max_nonce *= 1000000;
 		new_max_nonce /= ((uint64_t)thr->tv_hashes_done.tv_sec * 1000000) + thr->tv_hashes_done.tv_usec;
-		
+
 		if (new_max_nonce > 0xffffffff)
 			new_max_nonce = 0xffffffff;
-		
+
 		*max_nonce = new_max_nonce;
 	}
-	
+
 	hashmeter2(thr);
-	
+
 	return true;
 }
 
@@ -186,7 +186,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 	fd_set rfds;
 	SOCKETTYPE wrn = thr->work_restart_notifier[0];
 	int rv;
-	
+
 	if (unlikely(thr->work_restart_notifier[1] == INVSOCK))
 	{
 		// This is a bug!
@@ -194,7 +194,7 @@ int restart_wait(struct thr_info *thr, unsigned int mstime)
 		cgsleep_ms(mstime);
 		return (thr->work_restart ? 0 : ETIMEDOUT);
 	}
-	
+
 	timer_set_now(&tv_now);
 	timer_set_delay(&tv_timer, &tv_now, mstime * 1000);
 	while (true)
@@ -221,7 +221,7 @@ struct work *get_and_prepare_work(struct thr_info *thr)
 	struct cgpu_info *proc = thr->cgpu;
 	struct device_drv *api = proc->drv;
 	struct work *work;
-	
+
 	work = get_work(thr);
 	if (!work)
 		return NULL;
@@ -246,14 +246,14 @@ void minerloop_scanhash(struct thr_info *mythr)
 	int64_t hashes;
 	struct work *work;
 	const bool primary = (!mythr->device_thread) || mythr->primary_thread;
-	
+
 #ifdef HAVE_PTHREAD_CANCEL
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 #endif
-	
+
 	if (cgpu->deven != DEV_ENABLED)
 		mt_disable(mythr);
-	
+
 	while (likely(!cgpu->shutdown)) {
 		mythr->work_restart = false;
 		request_work(mythr);
@@ -261,7 +261,7 @@ void minerloop_scanhash(struct thr_info *mythr)
 		if (!work)
 			break;
 		timer_set_now(&work->tv_work_start);
-		
+
 		do {
 			thread_reportin(mythr);
 			/* Only allow the mining thread to be cancelled when
@@ -277,11 +277,11 @@ void minerloop_scanhash(struct thr_info *mythr)
 			pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 			pthread_testcancel();
 			thread_reportin(mythr);
-			
+
 			timersub(&tv_end, &tv_start, &tv_hashes);
 			if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &max_nonce : NULL))
 				goto disabled;
-			
+
 			if (unlikely(mythr->work_restart)) {
 				/* Apart from device_thread 0, we stagger the
 				 * starting of every next thread to try and get
@@ -296,11 +296,11 @@ void minerloop_scanhash(struct thr_info *mythr)
 				}
 				break;
 			}
-			
+
 			if (unlikely(mythr->pause || cgpu->deven != DEV_ENABLED))
 disabled:
 				mt_disable(mythr);
-			
+
 			timersub(&tv_end, &work->tv_work_start, &tv_worktime);
 
 		/* The inner do-while loop will exit unless the device is capable of
@@ -326,7 +326,7 @@ bool do_job_prepare(struct thr_info *mythr, struct timeval *tvp_now)
 	struct cgpu_info *proc = mythr->cgpu;
 	struct device_drv *api = proc->drv;
 	struct timeval tv_worktime;
-	
+
 	mythr->tv_morework.tv_sec = -1;
 	mythr->_job_transition_in_progress = true;
 	if (mythr->work)
@@ -373,7 +373,7 @@ void do_get_results(struct thr_info *mythr, bool proceed_with_new_job)
 	struct cgpu_info *proc = mythr->cgpu;
 	struct device_drv *api = proc->drv;
 	struct work *work = mythr->work;
-	
+
 	mythr->_job_transition_in_progress = true;
 	mythr->tv_results_jobstart = mythr->tv_jobstart;
 	mythr->_proceed_with_new_job = proceed_with_new_job;
@@ -392,9 +392,9 @@ void job_results_fetched(struct thr_info *mythr)
 		if (likely(mythr->prev_work))
 		{
 			struct timeval tv_now;
-			
+
 			timer_set_now(&tv_now);
-			
+
 			do_process_results(mythr, &tv_now, mythr->prev_work, true);
 		}
 		mt_disable_start__async(mythr);
@@ -405,7 +405,7 @@ void do_job_start(struct thr_info *mythr)
 {
 	struct cgpu_info *proc = mythr->cgpu;
 	struct device_drv *api = proc->drv;
-	
+
 	thread_reportin(mythr);
 	api->job_start(mythr);
 }
@@ -413,9 +413,9 @@ void do_job_start(struct thr_info *mythr)
 void mt_job_transition(struct thr_info *mythr)
 {
 	struct timeval tv_now;
-	
+
 	timer_set_now(&tv_now);
-	
+
 	if (mythr->starting_next_work)
 	{
 		mythr->next_work->tv_work_start = tv_now;
@@ -432,19 +432,19 @@ void mt_job_transition(struct thr_info *mythr)
 void job_start_complete(struct thr_info *mythr)
 {
 	struct timeval tv_now;
-	
+
 	if (unlikely(!mythr->prev_work))
 		return;
-	
+
 	timer_set_now(&tv_now);
-	
+
 	do_process_results(mythr, &tv_now, mythr->prev_work, false);
 }
 
 void job_start_abort(struct thr_info *mythr, bool failure)
 {
 	struct cgpu_info *proc = mythr->cgpu;
-	
+
 	if (failure)
 	{
 		proc->deven = DEV_RECOVER_ERR;
@@ -460,18 +460,18 @@ bool do_process_results(struct thr_info *mythr, struct timeval *tvp_now, struct 
 	struct device_drv *api = proc->drv;
 	struct timeval tv_hashes;
 	int64_t hashes = 0;
-	
+
 	if (api->job_process_results)
 		hashes = api->job_process_results(mythr, work, stopping);
 	thread_reportin(mythr);
-	
+
 	if (hashes)
 	{
 		timersub(tvp_now, &mythr->tv_results_jobstart, &tv_hashes);
 		if (!hashes_done(mythr, hashes, &tv_hashes, api->can_limit_work ? &mythr->_max_nonce : NULL))
 			return false;
 	}
-	
+
 	return true;
 }
 
@@ -482,7 +482,7 @@ void do_notifier_select(struct thr_info *thr, struct timeval *tvp_timeout)
 	struct timeval tv_now;
 	int maxfd;
 	fd_set rfds;
-	
+
 	timer_set_now(&tv_now);
 	FD_ZERO(&rfds);
 	FD_SET(thr->notifier[0], &rfds);
@@ -543,10 +543,10 @@ static
 void _minerloop_setup(struct thr_info *mythr)
 {
 	struct cgpu_info * const cgpu = mythr->cgpu, *proc;
-	
+
 	if (mythr->work_restart_notifier[1] == -1)
 		notifier_init(mythr->work_restart_notifier);
-	
+
 	for (proc = cgpu; proc; proc = proc->next_proc)
 	{
 		mythr = proc->thr[0];
@@ -564,23 +564,23 @@ void minerloop_async(struct thr_info *mythr)
 	struct timeval tv_timeout;
 	struct cgpu_info *proc;
 	bool is_running, should_be_running;
-	
+
 	_minerloop_setup(mythr);
-	
+
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		timer_set_now(&tv_now);
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
-			
+
 			// Nothing should happen while we're starting a job
 			if (unlikely(mythr->busy_state == TBS_STARTING_JOB))
 				goto defer_events;
-			
+
 			is_running = mythr->work;
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
-			
+
 			if (should_be_running)
 			{
 				if (unlikely(!(is_running || mythr->_job_transition_in_progress)))
@@ -613,32 +613,32 @@ disabled: ;
 					else  // !mythr->_mt_disable_called
 						mt_disable_start__async(mythr);
 				}
-				
+
 				timer_unset(&mythr->tv_morework);
 			}
-			
+
 			if (timer_passed(&mythr->tv_morework, &tv_now))
 			{
 djp: ;
 				if (!do_job_prepare(mythr, &tv_now))
 					goto disabled;
 			}
-			
+
 defer_events:
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
-			
+
 			if (timer_passed(&mythr->tv_watchdog, &tv_now))
 			{
 				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
 				bfg_watchdog(proc, &tv_now);
 			}
-			
+
 			reduce_timeout_to(&tv_timeout, &mythr->tv_morework);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
-		
+
 		do_notifier_select(thr, &tv_timeout);
 	}
 }
@@ -648,7 +648,7 @@ void do_queue_flush(struct thr_info *mythr)
 {
 	struct cgpu_info *proc = mythr->cgpu;
 	struct device_drv *api = proc->drv;
-	
+
 	api->queue_flush(mythr);
 	if (mythr->next_work)
 	{
@@ -667,29 +667,29 @@ void minerloop_queue(struct thr_info *thr)
 	struct cgpu_info *proc;
 	bool should_be_running;
 	struct work *work;
-	
+
 	_minerloop_setup(thr);
-	
+
 	while (likely(!cgpu->shutdown)) {
 		tv_timeout.tv_sec = -1;
 		timer_set_now(&tv_now);
 		for (proc = cgpu; proc; proc = proc->next_proc)
 		{
 			mythr = proc->thr[0];
-			
+
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 redo:
 			if (should_be_running)
 			{
 				if (unlikely(mythr->_mt_disable_called))
 					mt_disable_finish(mythr);
-				
+
 				if (unlikely(mythr->work_restart))
 				{
 					mythr->work_restart = false;
 					do_queue_flush(mythr);
 				}
-				
+
 				while (!mythr->queue_full)
 				{
 					if (mythr->next_work)
@@ -715,27 +715,27 @@ redo:
 				do_queue_flush(mythr);
 				mt_disable_start(mythr);
 			}
-			
+
 			if (timer_passed(&mythr->tv_poll, &tv_now))
 				api->poll(mythr);
-			
+
 			if (timer_passed(&mythr->tv_watchdog, &tv_now))
 			{
 				timer_set_delay(&mythr->tv_watchdog, &tv_now, WATCHDOG_INTERVAL * 1000000);
 				bfg_watchdog(proc, &tv_now);
 			}
-			
+
 			should_be_running = (proc->deven == DEV_ENABLED && !mythr->pause);
 			if (should_be_running && !mythr->queue_full)
 				goto redo;
-			
+
 			reduce_timeout_to(&tv_timeout, &mythr->tv_poll);
 			reduce_timeout_to(&tv_timeout, &mythr->tv_watchdog);
 		}
-		
+
 		// HACK: Some designs set the main thr tv_poll from secondary thrs
 		reduce_timeout_to(&tv_timeout, &cgpu->thr[0]->tv_poll);
-		
+
 		do_notifier_select(thr, &tv_timeout);
 	}
 }
@@ -762,11 +762,11 @@ void *miner_thread(void *userdata)
 
 	if (drv_ready(cgpu) && !cgpu->already_set_defaults)
 		cgpu_set_defaults(cgpu);
-	
+
 	thread_reportout(mythr);
 	applog(LOG_DEBUG, "Popping ping in miner thread");
 	notifier_read(mythr->notifier);  // Wait for a notification to start
-	
+
 	cgtime(&cgpu->cgminer_stats.start_tv);
 	if (drv->minerloop)
 		drv->minerloop(mythr);
@@ -785,7 +785,7 @@ out: ;
 	mythr->getwork = 0;
 	mythr->has_pth = false;
 	cgsleep_ms(1);
-	
+
 	if (drv->thread_shutdown)
 		drv->thread_shutdown(mythr);
 
@@ -800,29 +800,29 @@ static
 bool _add_cgpu(struct cgpu_info *cgpu)
 {
 	int lpcount;
-	
+
 	if (!cgpu->procs)
 		cgpu->procs = 1;
 	lpcount = cgpu->procs;
 	cgpu->device = cgpu;
-	
+
 	cgpu->dev_repr = malloc(6);
 	cgpu->dev_repr_ns = malloc(6);
-	
+
 #ifdef NEED_BFG_LOWL_VCOM
 	maybe_strdup_if_null(&cgpu->dev_manufacturer, detectone_meta_info.manufacturer);
 	maybe_strdup_if_null(&cgpu->dev_product,      detectone_meta_info.product);
 	maybe_strdup_if_null(&cgpu->dev_serial,       detectone_meta_info.serial);
 #endif
-	
+
 	devices_new = realloc(devices_new, sizeof(struct cgpu_info *) * (total_devices_new + lpcount + 1));
 	devices_new[total_devices_new++] = cgpu;
-	
+
 	if (lpcount > 1)
 	{
 		int tpp = cgpu->threads / lpcount;
 		struct cgpu_info **nlp_p, *slave;
-		
+
 		nlp_p = &cgpu->next_proc;
 		for (int i = 1; i < lpcount; ++i)
 		{
@@ -841,7 +841,7 @@ bool _add_cgpu(struct cgpu_info *cgpu)
 
 	renumber_cgpu(cgpu);
 	cgpu->last_device_valid_work = time(NULL);
-	
+
 	return true;
 }
 
@@ -862,12 +862,12 @@ bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
 {
 	if (!prev_cgpu)
 		return add_cgpu(cgpu);
-	
+
 	while (prev_cgpu->next_proc)
 		prev_cgpu = prev_cgpu->next_proc;
-	
+
 	mutex_lock(&_add_cgpu_mutex);
-	
+
 	int old_total_devices = total_devices_new;
 	if (!_add_cgpu(cgpu))
 	{
@@ -875,9 +875,9 @@ bool add_cgpu_slave(struct cgpu_info *cgpu, struct cgpu_info *prev_cgpu)
 		return false;
 	}
 	prev_cgpu->next_proc = devices_new[old_total_devices];
-	
+
 	mutex_unlock(&_add_cgpu_mutex);
-	
+
 	return true;
 }
 
@@ -886,18 +886,18 @@ const char *proc_set_device_help(struct cgpu_info * const proc, const char * con
 	const struct bfg_set_device_definition *sdf;
 	char *p = replybuf;
 	bool first = true;
-	
+
 	*out_success = SDR_HELP;
 	sdf = proc->set_device_funcs;
 	if (!sdf)
 nohelp:
 		return "No help available";
-	
+
 	size_t matchlen = 0;
 	if (newvalue)
 		while (newvalue[matchlen] && !isspace(newvalue[matchlen]))
 			++matchlen;
-	
+
 	for ( ; sdf->optname; ++sdf)
 	{
 		if (!sdf->description)
@@ -947,7 +947,7 @@ static
 const char *_proc_set_device(struct cgpu_info * const proc, const char * const optname, const char * const newvalue, char * const replybuf, enum bfg_set_device_replytype * const out_success)
 {
 	const struct bfg_set_device_definition *sdf;
-	
+
 	sdf = proc->set_device_funcs;
 	if (!sdf)
 	{
@@ -963,10 +963,10 @@ const char *_proc_set_device(struct cgpu_info * const proc, const char * const o
 				_set_auto_sdr(out_success, rv, optname);
 			return rv;
 		}
-	
+
 	if (!strcasecmp(optname, "help"))
 		return proc_set_device_help(proc, optname, newvalue, replybuf, out_success);
-	
+
 	*out_success = SDR_UNKNOWN;
 	sprintf(replybuf, "Unknown option: %s", optname);
 	return replybuf;
@@ -981,7 +981,7 @@ const char *__proc_set_device(struct cgpu_info * const proc, char * const optnam
 		_set_auto_sdr(out_success, rv, optname);
 		return rv;
 	}
-	
+
 	return _proc_set_device(proc, optname, newvalue, replybuf, out_success);
 }
 
@@ -1012,11 +1012,11 @@ const char *proc_set_device_tui_wrapper(struct cgpu_info * const proc, char * co
 	char * const cvar = curses_input(prompt);
 	if (!cvar)
 		return "Cancelled\n";
-	
+
 	enum bfg_set_device_replytype success;
 	const char * const reply = func(proc, optname, cvar, replybuf, &success);
 	free(cvar);
-	
+
 	if (reply)
 	{
 		if (reply != replybuf)
@@ -1025,7 +1025,7 @@ const char *proc_set_device_tui_wrapper(struct cgpu_info * const proc, char * co
 			tailsprintf(replybuf, sizeof(replybuf), "\n");
 		return replybuf;
 	}
-	
+
 	return success_msg ?: "Successful\n";
 }
 #endif
@@ -1034,10 +1034,10 @@ const char *proc_set_device_tui_wrapper(struct cgpu_info * const proc, char * co
 bool _serial_detect_all(struct lowlevel_device_info * const info, void * const userp)
 {
 	detectone_func_t detectone = userp;
-	
+
 	if (serial_claim(info->path, NULL))
 		applogr(false, LOG_DEBUG, "%s is already claimed... skipping probes", info->path);
-	
+
 	return detectone(info->path);
 }
 #endif
@@ -1090,7 +1090,7 @@ int _serial_detect(struct device_drv *api, detectone_func_t detectone, autoscan_
 			++found;
 		}
 	}
-	
+
 	if ((forceauto || !(inhibitauto || found)) && autoscan)
 		found += autoscan();
 
@@ -1147,10 +1147,10 @@ void close_device_fd(struct thr_info * const thr)
 {
 	struct cgpu_info * const proc = thr->cgpu;
 	const int fd = proc->device_fd;
-	
+
 	if (fd == -1)
 		return;
-	
+
 	if (close(fd))
 		applog(LOG_WARNING, "%"PRIpreprv": Error closing device fd", proc->proc_repr);
 	else
