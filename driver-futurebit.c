@@ -28,9 +28,9 @@
 static const uint8_t futurebit_max_chips = 0x01;
 #define FUTUREBIT_DEFAULT_FREQUENCY  600
 #define FUTUREBIT_MIN_CLOCK          384
-#define FUTUREBIT_MAX_CLOCK          1020
-// Number of seconds chip of 54 cores @ 352mhz takes to scan full range
-#define FUTUREBIT_HASH_SPEED         1130.0
+#define FUTUREBIT_MAX_CLOCK          954
+// Number of seconds chip of 64 cores @ 600mhz takes to scan full range
+#define FUTUREBIT_HASH_SPEED         1300.0
 #define FUTUREBIT_MAX_NONCE          0xffffffff
 #define FUTUREBIT_READ_SIZE            8
 //#define futurebit_max_clusters_per_chip  6
@@ -519,7 +519,7 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     
 
     // amount of time it takes this device to scan a nonce range:
-    uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * 352.0 / FUTUREBIT_DEFAULT_FREQUENCY * 54.0 / chips[0].active_cores;
+    uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * FUTUREBIT_DEFAULT_FREQUENCY / chips[0].freq * 64.0 / chips[0].active_cores;
     // timer to break out of scanning should we close in on an entire nonce range
     // should break out before the range is scanned, so we are doing 95% of the range
     uint64_t nonce_near_range_usec = (nonce_full_range_sec * 1000000. * 0.95);
@@ -596,7 +596,7 @@ const char *futurebit_set_clock(struct cgpu_info * const device, const char * co
     int val = atoi(setting);
 
     if (val < FUTUREBIT_MIN_CLOCK || val > FUTUREBIT_MAX_CLOCK ) {
-        sprintf(replybuf, "invalid clock: '%s' valid range %d-%d. Clock must be a mutiple of 8 between 104-200mhz, and a mutiple of 16 between 208-400mhz",
+        sprintf(replybuf, "invalid clock: '%s' valid range %d-%d. Check the Moonlander 2 Support thread for list of valid clock speeds.",
                 setting, FUTUREBIT_MIN_CLOCK, FUTUREBIT_MAX_CLOCK);
         return replybuf;
     } else
