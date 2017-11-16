@@ -28,9 +28,9 @@
 static const uint8_t futurebit_max_chips = 0x01;
 #define FUTUREBIT_DEFAULT_FREQUENCY  600
 #define FUTUREBIT_MIN_CLOCK          384
-#define FUTUREBIT_MAX_CLOCK          1020
-// Number of seconds chip of 54 cores @ 352mhz takes to scan full range
-#define FUTUREBIT_HASH_SPEED         1130.0
+#define FUTUREBIT_MAX_CLOCK          954
+// Number of seconds chip of 64 cores @ 600mhz takes to scan full range
+#define FUTUREBIT_HASH_SPEED         1300.0
 #define FUTUREBIT_MAX_NONCE          0xffffffff
 #define FUTUREBIT_READ_SIZE            8
 //#define futurebit_max_clusters_per_chip  6
@@ -389,28 +389,6 @@ bool futurebit_send_work(const struct thr_info * const thr, struct work * const 
     futurebit_write(device->device_fd, bin, 144);//144bytes
     chips[0].last_nonce = 0x00000000;
 
-   /* uint8_t buf[112];
-    uint8_t cmd[112];
-    const uint8_t * const target = work->target;
-
-    unsigned char swpdata[80];
-
-    //buf[0] = 0;
-    //memset(&buf[1], 0xff, 0x1f);
-    memset(&buf[0], 0, 0x18);
-    memcpy(&buf[24], &target[24], 0x8);
-
-    swap32tobe(swpdata, work->data, 80/4);
-    memcpy(&buf[32], swpdata, 80);
-
-    for (int i = 0; i<112; i++) {
-        cmd[i] = buf[111 - i];
-    }
-
-    if (write(device->device_fd, cmd, sizeof(cmd)) != sizeof(cmd))
-        return false;
-
-*/
     work->blk.nonce = FUTUREBIT_MAX_NONCE;
 
     return true;
@@ -453,100 +431,10 @@ bool futurebit_detect_one(const char * const devpath)
     struct futurebit_chip * const chip = &chips[0];
     futurebit_chip_init(chip, 0);
     chip->freq = freq;
-
-    futurebit_config_all_chip(fd, freq);
-
-    futurebit_pull_up_payload(fd);
-
-            //chip->global_reg[1] = 0x05;
-            //if (!futurebit_write_global_reg(fd, chip))
-            //    return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "global", devpath);
-            //cgsleep_ms(50);
-
-
-
-
-            /*futurebit_set_diag_mode(chip, true);
-            if (!futurebit_init_pll(fd, chip))
-                return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "init PLL", devpath);
-            cgsleep_ms(50);
-            if (!futurebit_send_golden(fd, chip, futurebit_g_head, NULL))
-                return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "send scan job", devpath);
-
-            while (serial_read(fd, buf, 8) == 8)
-            {
-
-                const uint8_t clsid = buf[7];
-                if (clsid >= futurebit_max_clusters_per_chip)
-                    applog(LOG_DEBUG, "%s: Bad %s id (%u) during scan of %s chip %u", futurebit_drv.dname, "cluster", clsid, devpath, i);
-                const uint8_t coreid = buf[6];
-                if (coreid >= futurebit_max_cores_per_cluster)
-                    applog(LOG_DEBUG, "%s: Bad %s id (%u) during scan of %s chip %u", futurebit_drv.dname, "core", coreid, devpath, i);
-
-                if (buf[0] != 0xd9 || buf[1] != 0xeb || buf[2] != 0x86 || buf[3] != 0x63) {
-                    //chips[i].chip_good[clsid][coreid] = false;
-                    applog(LOG_DEBUG, "%s: Bad %s at core (%u) during scan of %s chip %u cluster %u", futurebit_drv.dname, "nonce", coreid, devpath, i, clsid);
-                } else {
-                    ++total_cores;
-                    chips[i].chip_mask[clsid] |= (1 << coreid);
-                }
-            }
-        }
-    }
-
-    applog(LOG_DEBUG, "%s: Identified %d cores on %s", futurebit_drv.dname, total_cores, devpath);
-
-    if (total_cores == 0)
-        goto err;
-
-    futurebit_reset_board(fd);
-
-    // config nonce ranges per cluster based on core responses
-    unsigned mutiple = FUTUREBIT_MAX_NONCE / total_cores;
-    uint32_t n_offset = 0x00000000;
-
-    for (unsigned i = 0; i < futurebit_max_chips; ++i)
-    {
-        struct futurebit_chip * const chip = &chips[i];
-
-        chips[i].active_cores = total_cores;
-
-        //chip->global_reg[1] = 0x04;
-        //if (!futurebit_write_global_reg(fd, chip))
-        //return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "global", devpath);
-        //cgsleep_ms(50);
-        futurebit_set_diag_mode(chip, false);
-        if (!futurebit_init_pll(fd, chip))
-            return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "init PLL", devpath);
-        cgsleep_ms(50);
-
-        for (unsigned x = 0; x < futurebit_max_clusters_per_chip; ++x) {
-            unsigned gc = 0;
-
-            uint16_t core_mask = chips[i].chip_mask[x];
-            chips[i].clst_offset[x] = n_offset;
-
-            applog(LOG_DEBUG, "OFFSET %u MASK %u CHIP %u CLUSTER %u", n_offset, core_mask, i, x);
-
-            if (!futurebit_write_cluster_reg(fd, chip, core_mask, n_offset, x))
-                return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "send config register", devpath);
-
-            for (unsigned z = 0; z < 15; ++z) {
-                if (core_mask & 0x0001)
-                    gc += 1;
-                core_mask >>= 1;
-            }
-
-            n_offset += mutiple * gc;
-
-            cgsleep_ms(50);
-        }
-    }
-    */
-
+    
     if (serial_claim_v(devpath, &futurebit_drv))
-        goto err;
-
+    goto err;
+    
     //serial_close(fd);
     struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
     *cgpu = (struct cgpu_info){
@@ -559,8 +447,18 @@ bool futurebit_detect_one(const char * const devpath)
     };
     // NOTE: Xcode's clang has a bug where it cannot find fields inside anonymous unions (more details in fpgautils)
     cgpu->device_fd = fd;
+    
+    const bool ret = add_cgpu(cgpu);
+    
+    cgsleep_ms(cgpu->device_id*200);  //add small delay for devices > 0 so all devices dont start up at once
+    
+    //applog(LOG_DEBUG, "DEVICE ID %d", cgpu->device_id);
+    
+    futurebit_config_all_chip(fd, freq);
+    futurebit_pull_up_payload(fd);
 
-    return add_cgpu(cgpu);
+    
+    return ret;
 
 err:
     if (fd >= 0)
@@ -590,8 +488,8 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
     bin2hex(output, buf, 8);
 
     //applog(LOG_DEBUG, "NONCE %s", output);
-    applog(LOG_DEBUG, "NONCE int %u", nonce);
-    applog(LOG_DEBUG, "LAST NONCE int %u", chips[0].last_nonce);
+    //applog(LOG_DEBUG, "NONCE int %u", nonce);
+    //applog(LOG_DEBUG, "LAST NONCE int %u", chips[0].last_nonce);
     submit_nonce(thr, work, nonce);
 
     // hashrate calc
@@ -607,24 +505,7 @@ void futurebit_submit_nonce(struct thr_info * const thr, const uint8_t buf[8], s
     if(chips[0].last_nonce == 0){
          hashes_done2(thr, 3200000*(chips[0].freq/600), NULL);
     }
-    /*
-    const uint8_t clstid = buf[7];
-    uint32_t range = chips[0].clst_offset[clstid];
 
-    struct timeval now_tv;
-    timer_set_now(&now_tv);
-    int elapsed_ms = ms_tdiff(&now_tv, &start_tv);
-
-    double total_hashes = ((nonce - range)/9.0) * chips[0].active_cores;
-    double hashes_per_ms = total_hashes/elapsed_ms;
-    uint64_t hashes = hashes_per_ms * ms_tdiff(&now_tv, &thr->_tv_last_hashes_done_call);
-
-    if(hashes_per_ms < 1500 && hashes < 100000000)
-        hashes_done2(thr, hashes, NULL);
-    else
-        hashes_done2(thr, 100000, NULL);
-
-        */
 }
 
 // send work to the device
@@ -635,9 +516,10 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     int fd = device->device_fd;
     struct futurebit_chip *chips = device->device_data;
     struct timeval start_tv, nonce_range_tv;
+    
 
     // amount of time it takes this device to scan a nonce range:
-    uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * 352.0 / FUTUREBIT_DEFAULT_FREQUENCY * 54.0 / chips[0].active_cores;
+    uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * FUTUREBIT_DEFAULT_FREQUENCY / chips[0].freq * 64.0 / chips[0].active_cores;
     // timer to break out of scanning should we close in on an entire nonce range
     // should break out before the range is scanned, so we are doing 95% of the range
     uint64_t nonce_near_range_usec = (nonce_full_range_sec * 1000000. * 0.95);
@@ -714,7 +596,7 @@ const char *futurebit_set_clock(struct cgpu_info * const device, const char * co
     int val = atoi(setting);
 
     if (val < FUTUREBIT_MIN_CLOCK || val > FUTUREBIT_MAX_CLOCK ) {
-        sprintf(replybuf, "invalid clock: '%s' valid range %d-%d. Clock must be a mutiple of 8 between 104-200mhz, and a mutiple of 16 between 208-400mhz",
+        sprintf(replybuf, "invalid clock: '%s' valid range %d-%d. Check the Moonlander 2 Support thread for list of valid clock speeds.",
                 setting, FUTUREBIT_MIN_CLOCK, FUTUREBIT_MAX_CLOCK);
         return replybuf;
     } else
