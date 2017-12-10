@@ -431,10 +431,10 @@ bool futurebit_detect_one(const char * const devpath)
     struct futurebit_chip * const chip = &chips[0];
     futurebit_chip_init(chip, 0);
     chip->freq = freq;
-    
+
     if (serial_claim_v(devpath, &futurebit_drv))
     goto err;
-    
+
     //serial_close(fd);
     struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
     *cgpu = (struct cgpu_info){
@@ -447,17 +447,17 @@ bool futurebit_detect_one(const char * const devpath)
     };
     // NOTE: Xcode's clang has a bug where it cannot find fields inside anonymous unions (more details in fpgautils)
     cgpu->device_fd = fd;
-    
+
     const bool ret = add_cgpu(cgpu);
-    
+
     cgsleep_ms(cgpu->device_id*200);  //add small delay for devices > 0 so all devices dont start up at once
-    
+
     //applog(LOG_DEBUG, "DEVICE ID %d", cgpu->device_id);
-    
+
     futurebit_config_all_chip(fd, freq);
     futurebit_pull_up_payload(fd);
 
-    
+
     return ret;
 
 err:
@@ -515,8 +515,8 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     struct cgpu_info *device = thr->cgpu;
     int fd = device->device_fd;
     struct futurebit_chip *chips = device->device_data;
-    struct timeval start_tv, nonce_range_tv;
-    
+    struct timeval start_tv, nonce_range_tv, last_submit_tv, now_tv;
+
 
     // amount of time it takes this device to scan a nonce range:
     uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * FUTUREBIT_DEFAULT_FREQUENCY / chips[0].freq * 64.0 / chips[0].active_cores;
@@ -527,6 +527,9 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
 
     // start the job
     timer_set_now(&start_tv);
+    timer_set_delay_from_now(&last_submit_tv, 10*1000000);
+
+    cgsleep_ms(device->device_id*100 + 100);  //add small delay for devices > 0 so all devices dont start up at once
 
     if (!futurebit_send_work(thr, work)) {
         applog(LOG_DEBUG, "Failed to start job");
@@ -536,19 +539,31 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     unsigned char buf[12];
     int read = 0;
     bool range_nearly_scanned = false;
+    bool no_asic_response = false;
 
-    while (!thr->work_restart                                              // true when new work is available (miner.c)
+
+    while (!thr->work_restart                                               // true when new work is available (miner.c)
+           && !(no_asic_response = timer_passed(&last_submit_tv, NULL))     // check for core stall
            && ((read = serial_read(fd, buf, 8)) >= 0)                       // only check for failure - allow 0 bytes
-           && !(range_nearly_scanned = timer_passed(&nonce_range_tv, NULL)))  // true when we've nearly scanned a nonce range
+           && !(range_nearly_scanned = timer_passed(&nonce_range_tv, NULL)))// true when we've nearly scanned a nonce range
     {
         if (read == 0)
             continue;
 
         if (read == 8) {
             futurebit_submit_nonce(thr, buf, work, start_tv);
+            timer_set_delay_from_now(&last_submit_tv, 10*1000000);
         }
         else
             applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
+
+    }
+
+    if(no_asic_response){                             //asic is dead, lets attempt to restart it
+        futurebit_reset_board(device->device_fd);
+        futurebit_config_all_chip(fd, chips[0].freq);
+        futurebit_pull_up_payload(fd);
+        applog(LOG_ERR, "%s: ASIC has stopped hashing, attempting to restart", device->dev_repr);
     }
 
     if (read == -1)
