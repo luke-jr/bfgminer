@@ -529,7 +529,7 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     timer_set_now(&start_tv);
     timer_set_delay_from_now(&last_submit_tv, 10*1000000);
 
-    cgsleep_ms(device->device_id*100 + 100);  //add small delay for devices > 0 so all devices dont start up at once
+    cgsleep_ms(device->device_id*10 + 50);  //add small delay for devices > 0 so all devices dont start up at once
 
     if (!futurebit_send_work(thr, work)) {
         applog(LOG_DEBUG, "Failed to start job");
