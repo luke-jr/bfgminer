@@ -87,17 +87,16 @@ void futurebit_reset_board(const int fd)
     applog(LOG_DEBUG, "RESET END");
 }
 
-
-int futurebit_write(const int fd,  const void *buf, size_t buflen)
+static
+bool futurebit_write(const int fd,  const void *buf, size_t buflen)
 {
 	int repeat = 0;
 	int size = 0;
-	int ret = 0;
 	int nwrite = 0;
 
-	char output[(buflen * 2) + 1];
-    bin2hex(output, buf, buflen);
-    applog(LOG_DEBUG, "WRITE BUFFER %s", output);
+	//char output[(buflen * 2) + 1];
+    //bin2hex(output, buf, buflen);
+    //applog(LOG_DEBUG, "WRITE BUFFER %s", output);
 
 	while(size < buflen)
 	{
@@ -106,7 +105,7 @@ int futurebit_write(const int fd,  const void *buf, size_t buflen)
 		if (nwrite < 0)
 		{
 			applog(LOG_ERR, "FutureBit Write error: %s", strerror(errno));
-			break;
+			return false;
 		}
 
 		size += nwrite;
@@ -118,7 +117,7 @@ int futurebit_write(const int fd,  const void *buf, size_t buflen)
 
 	}
 
-	return 0;
+	return true;
 }
 
 static
@@ -162,7 +161,7 @@ bool futurebit_read (const int fd, unsigned char *buf, int read_amount)
 }
 
 static
-char futurebit_read_register(const int fd, uint32_t chip, uint32_t moudle, uint32_t RegAddr)
+char futurebit_read_register(const int fd, uint32_t chip, uint32_t moudle, uint32_t RegAddr, int pos)
 {
 	uint8_t read_reg_data[8]={0};
 	uint8_t read_reg_cmd[16]={0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0xc3};
@@ -182,20 +181,20 @@ char futurebit_read_register(const int fd, uint32_t chip, uint32_t moudle, uint3
         applog(LOG_DEBUG, "FutureBit read register fail");
 
 
-    applog(LOG_DEBUG, "FutureBit Read Return:");
-    for (int i=0; i<8; i++)
-		{
-			applog(LOG_DEBUG,"0x%02x ", read_reg_data[i]);
-		}
-    applog(LOG_DEBUG,"\n");
+    //applog(LOG_DEBUG, "FutureBit Read Return:");
+    //for (int i=0; i<8; i++)
+	//	{
+	//		applog(LOG_DEBUG,"0x%02x ", read_reg_data[i]);
+	//	}
+    //applog(LOG_DEBUG,"\n");
 
-    return read_reg_data[0];
+    return read_reg_data[pos];
 }
 
 unsigned
 int futurebit_write_register(const int fd, uint32_t chipId, uint32_t moudle, uint32_t Regaddr, uint32_t value)
 {
-	bool ret =true;
+
 	uint8_t read_reg_cmd[16]={0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,0xc3};
 
 	read_reg_cmd[1] = chipId;
@@ -207,9 +206,9 @@ int futurebit_write_register(const int fd, uint32_t chipId, uint32_t moudle, uin
 	read_reg_cmd[7] = (value>>24)&0xff;
 
 
-	futurebit_write(fd, read_reg_cmd, 9);
 
-	return  ret;
+
+	return futurebit_write(fd, read_reg_cmd, 9);
 }
 
 static
@@ -243,6 +242,104 @@ void futurebit_set_frequency(const int fd, uint32_t freq)
 
 }
 
+static
+bool futurebit_soft_reset(int fd)
+{
+    bool ret = false;
+    do
+    {
+		if(!futurebit_write_register(fd, 0xff, 0xf8, 0x1e, 0x00))
+		    break;
+		cgsleep_us(50000);
+		if(!futurebit_write_register(fd, 0xff, 0xf8, 0x1e, 0x03))
+		    break;
+		ret = true;
+    }while(0);
+    return ret;
+}
+
+unsigned char calculate_good_core(unsigned int reg_val)
+{
+
+		unsigned char goodCores=0;
+		unsigned char i;
+		unsigned int RegisterVal = reg_val;
+
+		for(i=0; i<32; i++)
+		{
+				if (RegisterVal & 0x01)
+						goodCores++;
+
+				RegisterVal = RegisterVal>>1;
+		}
+
+		return goodCores;
+}
+
+unsigned
+int futurebit_core_test(int fd, uint32_t freq_t)
+{
+	unsigned int i;
+	unsigned int bist_value = 0;
+	unsigned int goodcores0=0;
+	unsigned int goodcores1=0;
+    unsigned int  total = 0;
+    unsigned int regval=0xff;
+    int ret = -1;
+
+    futurebit_send_cmds(fd, cmd_auto_address);
+    cgsleep_us(100000);
+    futurebit_set_frequency(fd, freq_t);
+	cgsleep_us(100000);
+    futurebit_write_register(fd, 0xff, 0xf8,0x22,0x11090005);//feed through
+	cgsleep_us(100000);
+
+
+    for (i=0; i<8; i++)
+    {
+        regval = 0x0f<<(4*i);
+        if (!futurebit_write_register(fd, 0xff, 0xf8, 0x04, regval)) return ret;
+        cgsleep_us(50000);
+        if(!futurebit_write_register(fd, 0xff, 0xf8, 0x05, regval)) return ret;
+        cgsleep_us(50000);
+
+        do
+        {
+            if(!futurebit_write_register(fd, 0xff, 0x00, 0x3f, 0x00000020))//bist enable
+                return ret;
+
+            cgsleep_us(50000);
+            if(!futurebit_write_register(fd, 0xff, 0x00, 0x23, 0xD799431B))//bist start, data2
+                return ret;
+
+            cgsleep_us(50000);
+
+            goodcores0 = 0;
+            goodcores1 = 0;
+
+            bist_value = futurebit_read_register(fd, 0xff, 0x00, 0xbe, 4);
+
+            if (bist_value > 0)
+                goodcores0  = calculate_good_core(bist_value);
+
+            bist_value = futurebit_read_register(fd, 0xff, 0x00, 0xbe, 4);
+
+            if (bist_value > 0)
+                goodcores1  = calculate_good_core(bist_value);
+
+            ret += ( goodcores0+goodcores1);
+
+        }while(0);
+
+        if(!futurebit_soft_reset(fd)) return ret;//retset
+        cgsleep_us(50000);
+    }
+
+
+
+	return ret;
+}
+
 void futurebit_config_all_chip(const int fd, uint32_t freq)
 {
 	uint32_t reg_val;
@@ -256,12 +353,8 @@ void futurebit_config_all_chip(const int fd, uint32_t freq)
 	//cgsleep_us(100000);
 	futurebit_set_frequency(fd, freq);
 	cgsleep_us(100000);
-
-
-#if 1
 	futurebit_write_register(fd, 0xff, 0xf8,0x22,0x11090005);//feed through
 	cgsleep_us(100000);
-#endif
 
     //Start Nonce at zero for single chip
 	//reg_val = 0xffffffff/futurebit_max_chips;
@@ -386,12 +479,12 @@ bool futurebit_send_work(const struct thr_info * const thr, struct work * const 
         szOutput[idx] = (char)strtol(acTmp, NULL, 16);
     }
     */
-    futurebit_write(device->device_fd, bin, 144);//144bytes
+
     chips[0].last_nonce = 0x00000000;
 
     work->blk.nonce = FUTUREBIT_MAX_NONCE;
 
-    return true;
+    return futurebit_write(device->device_fd, bin, 144);//144bytes
 }
 
 static
@@ -409,7 +502,7 @@ bool futurebit_detect_one(const char * const devpath)
 
     futurebit_reset_board(fd);
 
-    if(futurebit_read_register(fd, 0xff, 0xf8, 0xa6) != 0x3c)
+    if(futurebit_read_register(fd, 0xff, 0xf8, 0xa6, 0) != 0x3c)
         return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", futurebit_drv.dname, "find chip", devpath);
 
 
@@ -431,10 +524,20 @@ bool futurebit_detect_one(const char * const devpath)
     struct futurebit_chip * const chip = &chips[0];
     futurebit_chip_init(chip, 0);
     chip->freq = freq;
-    
+
+    total_cores = futurebit_core_test(fd, freq);
+
+    if(total_cores < 0)
+        return_via_applog(err, , LOG_DEBUG, "%s: %s %s", futurebit_drv.dname, "Failed core detection", devpath);
+    else if(total_cores < 60)
+        applog(LOG_DEBUG, "%s: %s %u%s", futurebit_drv.dname, "Warning:", total_cores, "/64 detected");
+    else
+        applog(LOG_DEBUG, "%s: Identified %u cores on %s", futurebit_drv.dname, total_cores, devpath);
+
+
     if (serial_claim_v(devpath, &futurebit_drv))
     goto err;
-    
+
     //serial_close(fd);
     struct cgpu_info * const cgpu = malloc(sizeof(*cgpu));
     *cgpu = (struct cgpu_info){
@@ -447,17 +550,17 @@ bool futurebit_detect_one(const char * const devpath)
     };
     // NOTE: Xcode's clang has a bug where it cannot find fields inside anonymous unions (more details in fpgautils)
     cgpu->device_fd = fd;
-    
+
     const bool ret = add_cgpu(cgpu);
-    
+
     cgsleep_ms(cgpu->device_id*200);  //add small delay for devices > 0 so all devices dont start up at once
-    
+
     //applog(LOG_DEBUG, "DEVICE ID %d", cgpu->device_id);
-    
+
     futurebit_config_all_chip(fd, freq);
     futurebit_pull_up_payload(fd);
 
-    
+
     return ret;
 
 err:
@@ -515,8 +618,8 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     struct cgpu_info *device = thr->cgpu;
     int fd = device->device_fd;
     struct futurebit_chip *chips = device->device_data;
-    struct timeval start_tv, nonce_range_tv;
-    
+    struct timeval start_tv, nonce_range_tv, last_submit_tv, now_tv;
+
 
     // amount of time it takes this device to scan a nonce range:
     uint32_t nonce_full_range_sec = FUTUREBIT_HASH_SPEED * FUTUREBIT_DEFAULT_FREQUENCY / chips[0].freq * 64.0 / chips[0].active_cores;
@@ -527,6 +630,9 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
 
     // start the job
     timer_set_now(&start_tv);
+    timer_set_delay_from_now(&last_submit_tv, 10*1000000);
+
+    cgsleep_ms(device->device_id*10 + 50);  //add small delay for devices > 0 so all devices dont start up at once
 
     if (!futurebit_send_work(thr, work)) {
         applog(LOG_DEBUG, "Failed to start job");
@@ -536,19 +642,31 @@ int64_t futurebit_scanhash(struct thr_info *thr, struct work *work, int64_t __ma
     unsigned char buf[12];
     int read = 0;
     bool range_nearly_scanned = false;
+    bool no_asic_response = false;
 
-    while (!thr->work_restart                                              // true when new work is available (miner.c)
+
+    while (!thr->work_restart                                               // true when new work is available (miner.c)
+           && !(no_asic_response = timer_passed(&last_submit_tv, NULL))     // check for core stall
            && ((read = serial_read(fd, buf, 8)) >= 0)                       // only check for failure - allow 0 bytes
-           && !(range_nearly_scanned = timer_passed(&nonce_range_tv, NULL)))  // true when we've nearly scanned a nonce range
+           && !(range_nearly_scanned = timer_passed(&nonce_range_tv, NULL)))// true when we've nearly scanned a nonce range
     {
         if (read == 0)
             continue;
 
         if (read == 8) {
             futurebit_submit_nonce(thr, buf, work, start_tv);
+            timer_set_delay_from_now(&last_submit_tv, 10*1000000);
         }
         else
             applog(LOG_ERR, "%"PRIpreprv": Unrecognized response", device->proc_repr);
+
+    }
+
+    if(no_asic_response){                             //asic is dead, lets attempt to restart it
+        futurebit_reset_board(device->device_fd);
+        futurebit_config_all_chip(fd, chips[0].freq);
+        futurebit_pull_up_payload(fd);
+        applog(LOG_ERR, "%s: ASIC has stopped hashing, attempting to restart", device->dev_repr);
     }
 
     if (read == -1)
