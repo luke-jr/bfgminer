@@ -12700,7 +12700,7 @@ void *probe_device_thread(void *p)
 	bool request_rescan = false;
 	
 	{
-		char threadname[5 + strlen(info->devid) + 1];
+		char threadname[6 + strlen(info->devid) + 1];
 		sprintf(threadname, "probe_%s", info->devid);
 		RenameThread(threadname);
 	}
