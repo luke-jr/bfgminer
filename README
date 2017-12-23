@@ -318,7 +318,7 @@ Options for both config file and command line:
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
 --scrypt            Use the scrypt algorithm for mining (non-bitcoin)
---set-device|--set <arg> Set default parameters on devices; eg, NFY:osc6_bits=50
+--set-device|--set <arg> Set default parameters on devices; eg, NFY:osc6_bits=50, bfl:voltage=<value>, compac:clock=<value>
 --setuid <arg>      Username of an unprivileged user to run as
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining 2^32 * N hashes worth of shares (default: unlimited)

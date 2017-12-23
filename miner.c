@@ -2701,7 +2701,12 @@ static struct opt_table opt_config_table[] = {
 #endif
 	OPT_WITH_ARG("--set-device|--set",
 			opt_string_elist_add, NULL, &opt_set_device_list,
-			"Set default parameters on devices; eg, NFY:osc6_bits=50"),
+			"Set default parameters on devices; eg"
+			", NFY:osc6_bits=50"
+			", bfl:voltage=<value>"
+			", compac:clock=<value>"
+	),
+
 #if defined(USE_SCRYPT) && defined(USE_OPENCL)
 	OPT_WITH_ARG("--shaders",
 		     set_shaders, NULL, NULL,

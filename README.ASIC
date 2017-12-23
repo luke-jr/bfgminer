@@ -103,6 +103,23 @@ known-working configuration is:
 --set antminer:voltage=x800 --set antminer:clock=237.5
 --set antminer:timing=0.022421
 
+To set different frequency and voltage settings for multiple U3 miners on a
+single BFGMiner process use:
+
+--set antminer@\\.\COM10:voltage=xNNNN
+
+or
+
+--set antminer@/dev/ttyUSB1:voltage=xNNNN
+
+Another option is to program the CP2102 chip so they have unique serial numbers;
+this method would avoid problems with the device showing up on different tty/COM
+locations after reboot/hotplug:
+
+/cp210x-program -w -F eeprom-content.AntU3-custom.hex --set-product-string='Antminer U3' --set-serial-number=myveryown0001
+
+Then you can use --set antminer@myveryown0001:voltage=xNNNN
+
 
 AVALON 1
 --------
@@ -263,6 +280,12 @@ These USB sticks are based on Bitmain's BM1384 chip, and use the antminer
 driver. You can set the clock frequency with
 
 --set compac:clock=200
+
+You can also adjust the clock real-time while the stick is hashing using RPC's pgaset:
+
+bfgminer-rpc "pgaset|0,clock,x0982"
+                     |       ^^^^^ hex frequency
+                     ^ device number
 
 
 HEX*FURY
