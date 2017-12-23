@@ -83,6 +83,7 @@ AC_CHECK_HEADERS([sys/mman.h])
 AC_CHECK_HEADERS([sys/prctl.h])
 AC_CHECK_HEADERS([sys/file.h])
 AC_CHECK_HEADERS([sys/termios.h])
+AC_CHECK_HEADERS([sys/unistd.h])
 AC_CHECK_HEADERS([linux/spi/spidev.h])
 
 AC_CHECK_MEMBER([struct i2c_msg.buf],[
