@@ -42,7 +42,7 @@ endef
 define Package/$(PKG_NAME)
 $(call Package/$(PKG_NAME)/Default)
 	TITLE:=$(PKG_TITLE) (Bitcoin miner)
-	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_libevent:libevent2 +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
+	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_libevent:libevent2 +PACKAGE_$(PKG_NAME)_libevent:libevent2-pthreads +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
 endef
 
 define Package/$(PKG_NAME)/description
