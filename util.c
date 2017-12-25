@@ -1977,10 +1977,10 @@ bool _appdata_file_call(const char * const appname, const char * const filename,
 bool appdata_file_call(const char *appname, const char * const filename, const appdata_file_callback_t cb, void * const userp)
 {
 	size_t appname_len = strlen(appname);
-	char appname_lcd[appname_len + 1];
+	char appname_lcd[appname_len + 2];
 	appname_lcd[0] = '.';
 	char *appname_lc = &appname_lcd[1];
-	for (size_t i = 0; i <= appname_len; ++i)
+	for (size_t i = 0; i < appname_len; ++i)
 		appname_lc[i] = tolower(appname[i]);
 	appname_lc[appname_len] = '\0';
 	
