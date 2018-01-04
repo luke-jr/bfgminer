@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 John Stefanopoulos
+ * Copyright 2015-2016 John Stefanopoulos
  * Copyright 2014-2015 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it

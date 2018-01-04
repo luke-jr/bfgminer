@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2013-2016 Luke Dashjr
+# Copyright 2013-2017 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free

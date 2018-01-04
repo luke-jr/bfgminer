@@ -1,7 +1,7 @@
 /*
  * Copyright 2011-2014 Andrew Smith
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2012-2015 Luke Dashjr
+ * Copyright 2012-2017 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
