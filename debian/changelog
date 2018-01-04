@@ -1,3 +1,9 @@
+bfgminer (5.5.0-0precise1) precise; urgency=low
+
+  * Support for Alcheminer using a USB->UART dongle
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 30 Dec 2017 10:09:52 -0000
+
 bfgminer (5.4.2-0precise1) precise; urgency=low
 
   * Fix some possible edge case problems with stratum proxying (--stratum-port)

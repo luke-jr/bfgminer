@@ -1,3 +1,40 @@
+BFGMiner Version 5.5.0 - January 3, 2018
+
+- Update official Win32/64 build compiler and libraries:
+- - Win64 compiler (GCC) from 5.3.0 to 7.2.0 (Win32 remains at 4.7.4)
+- - c-ares from 1.10.0-r1 to 1.11.0
+- - libjansson from 2.7 to 2.10
+- - libcurl from 7.47.1 to 7.57.0
+- - libevent from 2.1.5-r4 to 2.1.8
+- - libusb from 1.0.20 to 1.0.21
+- - libmicrohttpd from 0.9.48 to 0.9.58
+- - zlib from 1.2.8-r1 to 1.2.11-r1
+- Update copyrights
+- AUTHORS: Update
+- README.ASIC: Update Alcheminer
+- alchemist: Reset using DTR as well
+- alchemist: Experimental USB->UART Dongle Support on RPi
+- make-release: Add crypt32.dll to OS-provided library list
+- README: Expand on --set-device documentation
+- Update libblkmaker to 0.6.0
+- openwrt: Update for LEDE 17.01
+- ccan: Update to latest version (which fixes musl libc support)
+- Bugfix: probe_device_thread: Fix threadname buffer size
+- Bugfix: appdata_file_call: Fix buffer size and loop
+- Bugfix: SSM: Clear desired_default_share_pdiff when initialising
+desired_share_pdiff before authentication
+- cpu: Avoid relocations for x86_64 assembly that interfere with building
+BFGMiner as a PIE
+- Bugfix: SSM: We already hold the pool lock when we need to call stale_work,
+so avoid trying to lock it a second time inside the function
+- Bugfix: Hold the control lock when updating the generate-to script
+- Bugfix: Hold the pool lock when updating lp_id
+- Bugfix: icarus: Explicitly specify type wide enough for bitshift in
+icarus_proc_for_nonce
+- configure: BFG_FIND_INCLUDE_PATH: Handle more unusual syntax correctly
+- Bugfix: SSM: Handle network problems safely, and use thread-safe libevent
+
+
 BFGMiner Version 5.4.2 - March 26, 2016
 
 - Update official Win32/64 build compiler and libraries:
