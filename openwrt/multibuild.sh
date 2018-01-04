@@ -46,15 +46,20 @@ fi
 
 plat1=''
 for cfn in $vcfglist; do
-	plat="$(perl -ple 's/^(\d+)\.config\.(\w+?)_\w+$/$2/ or $_=""' <<<"$cfn")"
+	plat="$(perl -ple 's/^\d+\.config\.(\w+)$/$1/ or $_=""' <<<"$cfn")"
 	test -n "$plat" ||
 		continue
+	if [[ $plat =~ _pkgs$ ]]; then
+		plat="${plat::-5}"
+	else
+		plat="$(perl -ple 's/_.*//' <<<"$plat")"
+	fi
 	platlist+=("$plat")
 	cp -v "$vcfgdir/$cfn" .config
 	yes '' | make oldconfig
-	make {tools,toolchain}/install package/bfgminer/{clean,compile}
+	make {tools,toolchain}/install package/bfgminer/{clean,compile} V=s
 	mkdir "$reporoot/$plat" -pv
-	files=$(ls "bin/$plat/packages/"{*/,}bfgminer*_${plat}*.ipk || true)
+	files=$(ls bin/"$plat"/packages/{*/,}bfgminer*_${plat}*.ipk bin/packages/"$plat"/{*/,}bfgminer*_${plat}*.ipk || true)
 	if test -z "${files}"; then
 		echo "Cannot find built packages"
 		exit 1
@@ -71,6 +76,7 @@ for cfn in $vcfglist; do
 	fi
 	(
 		cd "$reporoot/$plat/"
+		PATH="${openwrt_root}/staging_dir/host/bin/:${PATH}" \
 		"${openwrt_root}/scripts/ipkg-make-index.sh" .
 	) > "$reporoot/$plat/Packages"
 	gzip -9 < "$reporoot/$plat/Packages" > "$reporoot/$plat/Packages.gz"

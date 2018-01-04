@@ -1,14 +1,16 @@
 First, look at /etc/openwrt_release (on your router). You will see a bunch of
 attributes for the OpenWrt system. The DISTRIB_RELEASE attribute is your
-OpenWrt version, and the first part of DISTRIB_TARGET (before the slash) is
-the router's platform.
+OpenWrt version, the first part of DISTRIB_TARGET (before the slash) is the
+router's platform, and (only on newer versions) DISTRIB_ARCH is the package
+architecture. Older versions of OpenWrt (up to 15.05) use the router's
+platform for packages instead of the package architecture.
 
 Now, open up /etc/opkg.conf (again, on your router) in your favourite editor.
 Add a new line at the bottom, similar to this:
-	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/latest/openwrt/15.05/ar71xx
-In this example, 15.05 is the version of OpenWrt, and ar71xx is the platform.
-Be sure to change those to match your router! You can also change "latest" to
-"stable" or "testing" to get better-tested versions.
+	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/latest/openwrt/17.01/mips_24kc
+In this example, 17.01 is the version of OpenWrt, and mips_24kc is the package
+architecture. Be sure to change those to match your router! You can also change
+"latest" to "stable" or "testing" to get better-tested versions.
 
 Next, save the file and exit your editor. Tell opkg to reload its package lists
 by running the command:
