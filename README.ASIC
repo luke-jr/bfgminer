@@ -78,12 +78,14 @@ You can also set the frequency per board by specifying the tty port:
 
 --set ALC@/dev/ttyO3:clock=352
 
-Driver also supports running single blades off a Raspberry Pi. Make sure you
-have configured GPIO pin 25 correctly (see below) and scan via
+Driver also supports running blades off a Raspberry Pi directly or with USB Dongles. For a single blade off a raspberry Pi make sure you have configured GPIO pin 25 correctly (see below) and scan via
 -S ALC:/dev/ttyAMA0
 
 echo 25 > /sys/class/gpio/export
 echo out > /sys/class/gpio/gpio25/direction
+
+for multiple blades using USB Dongles connected to a pi make sure the reset pin on the alcheminer board is connected to the RTS/DTR pin on the dongle board, and option --set
+ALC:mode=1 added to startup command line.
 
 
 ANTMINER U3

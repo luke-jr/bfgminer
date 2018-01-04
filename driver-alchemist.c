@@ -59,6 +59,7 @@ struct alchemist_chip {
 	uint32_t clst_offset[alchemist_max_clusters_per_chip];
 	unsigned active_cores;
 	unsigned freq;
+	unsigned reset_mode;
 };
 
 static
@@ -71,49 +72,72 @@ void alchemist_chip_init(struct alchemist_chip * const chip, const uint8_t chipi
 		.clst_offset = {0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000},
 		.active_cores = 1728,
 		.freq = ALCHEMIST_DEFAULT_FREQUENCY,
+		.reset_mode = 0,
 	};
 }
 
 static
-void alchemist_reset_board(const char * const devpath)
+void alchemist_reset_board(const char * const devpath, struct alchemist_chip * const chip, const int fd)
 {
-	char gpio[8];
-	int fd;
-	char buf[50];
-	
-	// TODO: allow custom reset pin through --set for non-stock controller
-	if (strcmp(devpath, "/dev/ttyO1") == 0)
-		strcpy(gpio, "gpio117");
-	else if (strcmp(devpath, "/dev/ttyO2") == 0)
-		strcpy(gpio, "gpio110");
-	else if (strcmp(devpath, "/dev/ttyO3") == 0)
-		strcpy(gpio, "gpio111");
-	else if (strcmp(devpath, "/dev/ttyO4") == 0)
-		strcpy(gpio, "gpio112");
-	else if (strcmp(devpath, "/dev/ttyUSB0") == 0)
-		strcpy(gpio, "gpio113");
-	else if (strcmp(devpath, "/dev/ttyUSB1") == 0)
-		strcpy(gpio, "gpio114");
-	else if (strcmp(devpath, "/dev/ttyUSB2") == 0)
-		strcpy(gpio, "gpio115");
-	else if (strcmp(devpath, "/dev/ttyUSB3") == 0)
-		strcpy(gpio, "gpio116");
-	else if (strcmp(devpath, "/dev/ttyAMA0") == 0)
-		strcpy(gpio, "gpio25");
-	else
-		return;
-	
-	sprintf(buf, "/sys/class/gpio/%s/value", gpio);
-	
-	fd = open(buf, O_WRONLY);
-	
-	if (write(fd, "0", 1) != 1)
-		applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
-	cgsleep_ms(100);
-	if (write(fd, "1", 1) != 1)
-		applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
-	
-	close(fd);
+	if (chip->reset_mode == 0) {
+		char gpio[8];
+		int fd;
+		char buf[50];
+		
+		// TODO: allow custom reset pin through --set for non-stock controller
+		if (strcmp(devpath, "/dev/ttyO1") == 0)
+			strcpy(gpio, "gpio117");
+		else if (strcmp(devpath, "/dev/ttyO2") == 0)
+			strcpy(gpio, "gpio110");
+		else if (strcmp(devpath, "/dev/ttyO3") == 0)
+			strcpy(gpio, "gpio111");
+		else if (strcmp(devpath, "/dev/ttyO4") == 0)
+			strcpy(gpio, "gpio112");
+		else if (strcmp(devpath, "/dev/ttyUSB0") == 0)
+			strcpy(gpio, "gpio113");
+		else if (strcmp(devpath, "/dev/ttyUSB1") == 0)
+			strcpy(gpio, "gpio114");
+		else if (strcmp(devpath, "/dev/ttyUSB2") == 0)
+			strcpy(gpio, "gpio115");
+		else if (strcmp(devpath, "/dev/ttyUSB3") == 0)
+			strcpy(gpio, "gpio116");
+		else if (strcmp(devpath, "/dev/ttyAMA0") == 0)
+			strcpy(gpio, "gpio25");
+		else
+			return;
+		
+		sprintf(buf, "/sys/class/gpio/%s/value", gpio);
+		
+		fd = open(buf, O_WRONLY);
+		
+		if (write(fd, "0", 1) != 1)
+			applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
+		cgsleep_ms(100);
+		if (write(fd, "1", 1) != 1)
+			applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "GPIO write error", devpath);
+		
+		close(fd);
+	} else {
+		applog(LOG_DEBUG, "START IOCTL RTS RESET");
+		
+		if (set_serial_rts(fd, BGV_HIGH) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL RTS RESET FAILED");
+		}
+		
+		if (set_serial_dtr(fd, BGV_HIGH) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL DTR RESET FAILED");
+		}
+		
+		cgsleep_ms(100);
+		
+		if (set_serial_rts(fd, BGV_LOW) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL RTS RESET FAILED");
+		}
+		
+		if (set_serial_dtr(fd, BGV_LOW) == BGV_ERROR) {
+			applog(LOG_DEBUG, "IOCTL DTR RESET FAILED");
+		}
+	}
 }
 
 static
@@ -265,7 +289,6 @@ bool alchemist_detect_one(const char * const devpath)
 	
 	applog(LOG_DEBUG, "%s: %s %s", alchemist_drv.dname, "Successfully opened", devpath);
 	
-	alchemist_reset_board(devpath);
 	
 	// Init chips, setup PLL, and scan for good cores
 	chips = malloc(alchemist_max_chips * sizeof(*chips));
@@ -277,8 +300,12 @@ bool alchemist_detect_one(const char * const devpath)
 	drv_set_defaults(&alchemist_drv, alchemist_set_device_funcs_probe, dummy_chip, devpath, detectone_meta_info.serial, 1);
 	
 	unsigned freq = dummy_chip->freq;
+	unsigned mode = dummy_chip->reset_mode;
 	
 	unsigned total_cores = 0;
+	
+	alchemist_reset_board(devpath, dummy_chip, fd);
+	
 	{
 		uint8_t buf[9];
 		for (unsigned i = 0; i < alchemist_max_chips; ++i)
@@ -286,6 +313,7 @@ bool alchemist_detect_one(const char * const devpath)
 			struct alchemist_chip * const chip = &chips[i];
 			alchemist_chip_init(chip, i);
 			chip->freq = freq;
+			chip->reset_mode = mode;
 			alchemist_set_diag_mode(chip, true);
 			if (!alchemist_init_pll(fd, chip))
 				return_via_applog(err, , LOG_DEBUG, "%s: Failed to (%s) %s", alchemist_drv.dname, "init PLL", devpath);
@@ -319,7 +347,7 @@ bool alchemist_detect_one(const char * const devpath)
 	if (!total_cores)
 		goto err;
 	
-	alchemist_reset_board(devpath);
+	alchemist_reset_board(devpath, dummy_chip, fd);
 	
 	// config nonce ranges per cluster based on core responses
 	unsigned mutiple = ALCHEMIST_MAX_NONCE / total_cores;
@@ -486,8 +514,9 @@ static
 void alchemist_thread_shutdown(struct thr_info *thr)
 {
 	struct cgpu_info *device = thr->cgpu;
+	struct alchemist_chip *chips = device->device_data;
 	
-	alchemist_reset_board(device->device_path);
+	alchemist_reset_board(device->device_path, &chips[0], device->device_fd);
 	
 	serial_close(device->device_fd);
 }
@@ -518,8 +547,24 @@ const char *alchemist_set_clock(struct cgpu_info * const device, const char * co
 }
 
 static
+const char *alchemist_set_mode(struct cgpu_info * const device, const char * const option, const char * const setting, char * const replybuf, enum bfg_set_device_replytype * const success)
+{
+	struct alchemist_chip * const chip = device->device_data;
+	int val = atoi(setting);
+	
+	if (val == 1) {
+		chip->reset_mode = val;
+		sprintf(replybuf, "Driver mode set to raspery pi controller using USB->UART Dongles");
+		return replybuf;
+	}
+	
+	return NULL;
+}
+
+static
 const struct bfg_set_device_definition alchemist_set_device_funcs_probe[] = {
 	{ "clock", alchemist_set_clock, NULL },
+	{ "mode", alchemist_set_mode, NULL },
 	{ NULL },
 };
 
