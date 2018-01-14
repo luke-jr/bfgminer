@@ -187,6 +187,8 @@ BFGMiner dependency configuration options:
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 	--without-libusb        Compile using libusb (default enabled)
 	--without-sensors       Build with libsensors monitoring (default enabled)
+	--without-system-libbase58
+	                        Use bundled libbase58 rather than system one
 	--with-system-libblkmaker
 	                        Use system libblkmaker rather than bundled one
 	                        (default disabled)
