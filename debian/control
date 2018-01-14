@@ -1,13 +1,37 @@
 Source: bfgminer
 Priority: optional
-Section: misc
+Section: net
 Maintainer: Luke Dashjr <luke_bfgminer@dashjr.org>
 Standards-Version: 5.5.0
-Build-Depends: build-essential, debhelper, autoconf, automake, libtool, libssl-dev, yasm, pkg-config, libudev-dev, libcurl4-openssl-dev, wget, unzip, libjansson-dev, libncurses5-dev, libudev-dev, libusb-1.0-0-dev, git, quilt, uthash-dev, libsensors4-dev
+Build-Depends: build-essential, debhelper, autoconf, automake, libtool
+ ,libbase58-dev
+ ,libblkmaker-0.1-dev
+ ,libcurl4-gnutls-dev | libcurl-ssl-dev
+ ,libevent-dev
+ ,libjansson-dev
+ ,libmicrohttpd-dev
+ ,libncursesw5-dev
+ ,libsensors4-dev [!hurd-any]
+ ,libudev-dev [!kfreebsd-any]
+ ,libusb-1.0-0-dev
+ ,pkgconf | pkg-config
+ ,uthash-dev
+ ,yasm
+ ,wget
+ ,unzip
+ ,git
+ ,quilt
+ ,libhidapi-dev
+Homepage: https://github.com/luke-jr/bfgminer
 
 Package: bfgminer
 Architecture: any
-Depends: libjansson4, libudev0 | libudev1, libcurl3, libncurses5, libusb-1.0-0, libsensors4
-Description: This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
- monitoring, (over)clocking and fanspeed support for bitcoin and derivative
- coins.
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Suggests: ocl-icd-libopencl1, opencl-icd
+ ,libhidapi-libusb0 | libhidapi-hidraw0
+Description: multi-threaded, multi-blockchain, multi-pool ASIC, FPGA, GPU and CPU
+ miner with dynamic clocking, monitoring, and fanspeed support for bitcoin.
+ .
+ Bitcoin uses peer-to-peer technology to operate with no central authority or
+ banks; managing transactions and the issuing of bitcoins is carried out
+ collectively by the network.
