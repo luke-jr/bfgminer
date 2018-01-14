@@ -62,6 +62,7 @@ Optional Dependencies:
 	  clang 3.3+         http://clang.llvm.org/
 	  libclc             http://libclc.llvm.org/
 	  Mesa 9.2.0+        http://www.mesa3d.org/
+	  libsensors4-dev    https://github.com/groeck/lm-sensors
 	
 	ATi/AMD video card GPU mining (non-free):
 	  AMD APP SDK        http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
