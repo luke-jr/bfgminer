@@ -120,6 +120,9 @@ Optional Dependencies:
 	Stratum proxy:
 	  libevent 2.0.3+    http://libevent.org/
 
+	KnCMiner SHA2 miners:
+	  libi2c-dev         https://i2c.wiki.kernel.org/index.php/I2C_Tools
+	
 	HashBuster Micro, Klondike, X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
 
