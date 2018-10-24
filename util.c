@@ -1833,7 +1833,7 @@ static void clear_sock(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	do {
 		n = 0;
-		if (pool->sock)
+		if (pool->stratum_curl)
 			curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
