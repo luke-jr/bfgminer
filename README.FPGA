@@ -10,7 +10,7 @@ upload it after power on. For this to work, you must first download the
 necessary bitstream file to BFGMiner's "bitstreams" directory, and give it the
 name "fpgaminer_x6500-overclocker-0402.bit". You can download this bitstream
 from FPGA Mining LLC's website:
-    http://www.fpgamining.com/documentation/firmware
+    http://fpgamining.com/documentation/firmware.html
 
 -
 
@@ -235,7 +235,7 @@ upload it after power on. For this to work, you must first download the
 necessary bitstream file to BFGMiner's "bitstreams" directory, and give it the
 name "fpgaminer_x6500-overclocker-0402.bit". You can download this bitstream
 from FPGA Mining LLC's website:
-    http://www.fpgamining.com/documentation/firmware
+    http://fpgamining.com/documentation/firmware.html
 
 
 ZTEX FPGA Boards
