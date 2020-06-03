@@ -3762,10 +3762,6 @@ static int statusy;
 static int devsummaryYOffset;
 static int total_lines;
 #endif
-#ifdef USE_OPENCL
-struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
-#endif
-struct cgpu_info *cpus;
 
 bool _bfg_console_cancel_disabled;
 int _bfg_console_prev_cancelstate;
