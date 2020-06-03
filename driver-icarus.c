@@ -757,7 +757,7 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	memcpy(ob_bin, work->midstate, 32);
 	memcpy(ob_bin + 52, work->data + 64, 12);
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
-	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+	   || memcmp(&ob_bin[0], "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
 		applog(LOG_WARNING, "%"PRIpreprv": Received job attempting to send a command, corrupting it!",
 		       icarus->proc_repr);
