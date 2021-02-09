@@ -11197,8 +11197,10 @@ void _bfg_clean_up(bool restarting)
 			print_summary();
 	}
 
+#ifdef USE_CPUMINING
 	if (opt_n_threads > 0)
 		free(cpus);
+#endif
 
 	curl_global_cleanup();
 	
