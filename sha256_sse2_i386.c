@@ -48,7 +48,6 @@ static uint32_t g_sha256_k[]__attribute__((aligned(0x100))) = {
 const uint32_t sha256_32init[8]__attribute__((aligned(0x100))) =
 {0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
 
-__m128i g_4sha256_k[64];
 __m128i sha256_consts_m128i[64]__asm__("sha256_consts_m128i")__attribute__((aligned(0x1000)));
 
 bool scanhash_sse2_32(struct thr_info * const thr, struct work * const work,

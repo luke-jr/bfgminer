@@ -795,7 +795,6 @@ char *print_ndevs_and_exit(int *ndevs)
 
 
 struct cgpu_info gpus[MAX_GPUDEVICES]; /* Maximum number apparently possible */
-struct cgpu_info *cpus;
 
 
 /* In dynamic mode, only the first thread of each device will be in use.

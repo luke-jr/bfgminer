@@ -2,7 +2,7 @@
 ; * Copyright 2011 Neil Kettle
 ; * Copyright 2011 Ufasoft
 ; * Copyright 2013 James Z.M. Gao
-; * Copyright 2012-2013 Luke Dashjr
+; * Copyright 2012-2016 Luke Dashjr
 ; *
 ; * This program is free software; you can redistribute it and/or modify it
 ; * under the terms of the GNU General Public License as published by the Free
@@ -24,6 +24,7 @@ BITS 64
 %define init rdx
 %define temp rcx
 %endif
+%define rel_g_4sha256_k r10
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define LAB_CALC_PARA	2
@@ -48,6 +49,8 @@ CalcSha256_x64_sse4:
 	movdqa	[rsp + 16*4], xmm10
 	movdqa	[rsp + 16*5], xmm11
 %endif
+
+	lea	rel_g_4sha256_k, [g_4sha256_k wrt rip]
 
 LAB_NEXT_NONCE:
 
@@ -166,7 +169,7 @@ LAB_LOOP:
 
 %macro	lab_loop_blk 0
 	movntdqa	xmm6, [data+rax*4]
-	paddd	xmm6, g_4sha256_k[rax*4]
+	paddd	xmm6, [rel_g_4sha256_k+rax*4]
 	add	rax, 4
 
 	paddd	xmm6, xmm10	; +h

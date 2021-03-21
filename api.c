@@ -1,7 +1,7 @@
 /*
  * Copyright 2011-2014 Andrew Smith
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2012-2015 Luke Dashjr
+ * Copyright 2012-2017 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -27,6 +27,7 @@
 #include <sys/types.h>
 
 #include <uthash.h>
+#include <utlist.h>
 
 #include "compat.h"
 #include "deviceapi.h"
@@ -311,6 +312,9 @@ static const char *JSON_PARAMETER = "parameter";
 #define MSG_INVNEG 121
 #define MSG_SETQUOTA 122
 
+#define MSG_INVSTRATEGY 0x102
+#define MSG_FAILPORT 0x103
+
 #define USE_ALTMSG 0x4000
 
 enum code_severity {
@@ -462,6 +466,8 @@ struct CODES {
  { SEVERITY_ERR,   MSG_UNKCON,	PARAM_STR,	"Unknown config '%s'" },
  { SEVERITY_ERR,   MSG_INVNUM,	PARAM_BOTH,	"Invalid number (%d) for '%s' range is 0-9999" },
  { SEVERITY_ERR,   MSG_INVNEG,	PARAM_BOTH,	"Invalid negative number (%d) for '%s'" },
+ { SEVERITY_ERR,   MSG_INVSTRATEGY,	PARAM_STR,	"Invalid strategy for '%s'" },
+ { SEVERITY_ERR,   MSG_FAILPORT,	PARAM_BOTH,	"Failed to set port (%d) for '%s'" },
  { SEVERITY_SUCC,  MSG_SETQUOTA,PARAM_SET,	"Set pool '%s' to quota %d'" },
  { SEVERITY_ERR,   MSG_CONPAR,	PARAM_NONE,	"Missing config parameters 'name,N'" },
  { SEVERITY_ERR,   MSG_CONVAL,	PARAM_STR,	"Missing config value N for '%s,N'" },
@@ -1282,7 +1288,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	struct api_data *root = NULL;
 	char buf[TMPBUFSIZ];
 	bool io_open;
-	struct driver_registration *reg, *regtmp;
+	struct driver_registration *reg;
 	int pgacount = 0;
 	char *adlinuse = (char *)NO;
 	int i;
@@ -1312,6 +1318,8 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 	root = api_add_const(root, "ADL", (char *)adl, false);
 	root = api_add_string(root, "ADL in use", adlinuse, false);
 	root = api_add_const(root, "Strategy", strategies[pool_strategy].s, false);
+	if (pool_strategy == POOL_ROTATE)
+		root = api_add_int(root, "Rotate Period", &opt_rotate_period, false);
 	root = api_add_int(root, "Log Interval", &opt_log_interval, false);
 	
 	strcpy(buf, ""
@@ -1323,7 +1331,7 @@ static void minerconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, __
 #endif
 	);
 
-	BFG_FOREACH_DRIVER_BY_DNAME(reg, regtmp)
+	BFG_FOREACH_DRIVER_BY_DNAME(reg)
 	{
 		const struct device_drv * const drv = reg->drv;
 		tailsprintf(buf, sizeof(buf), " %s", drv->name);
@@ -3197,12 +3205,12 @@ static void debugstate(struct io_data *io_data, __maybe_unused SOCKETTYPE c, cha
 		io_close(io_data);
 }
 
-extern void stratumsrv_change_port();
+extern bool stratumsrv_change_port(unsigned);
 
 static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char *param, bool isjson, __maybe_unused char group)
 {
 	char *comma;
-	int value;
+	long value;
 
 	if (param == NULL || *param == '\0') {
 		message(io_data, MSG_CONPAR, 0, NULL, isjson);
@@ -3224,9 +3232,28 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 		message(io_data, MSG_SETCONFIG, 1, param, isjson);
 		return;
 	}
+	else
 #endif
+	if (strcasecmp(param, "strategy") == 0) {
+		char * const strategy_name = comma;
+		comma = strchr(strategy_name, ',');
+		if (comma) {
+			*(comma++) = '\0';
+		}
+		value = bfg_strategy_parse(strategy_name);
+		if (value < 0) {
+			message(io_data, MSG_INVSTRATEGY, 0, param, isjson);
+			return;
+		}
+		if (!bfg_strategy_change(value, comma)) {
+			message(io_data, MSG_INVNUM, atoi(comma), param, isjson);
+			return;
+		}
+		message(io_data, MSG_SETCONFIG, value, param, isjson);
+		return;
+	}
 
-	value = atoi(comma);
+	value = atol(comma);
 	if (value < 0 || value > 9999) {
 		message(io_data, MSG_INVNUM, value, param, isjson);
 		return;
@@ -3250,8 +3277,10 @@ static void setconfig(struct io_data *io_data, __maybe_unused SOCKETTYPE c, char
 #ifdef USE_LIBEVENT
 	else if (strcasecmp(param, "stratum-port") == 0)
 	{
-		stratumsrv_port = value;
-		stratumsrv_change_port();
+		if (!stratumsrv_change_port(value)) {
+			message(io_data, MSG_FAILPORT, value, param, isjson);
+			return;
+		}
 	}
 #endif
 	else {

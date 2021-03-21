@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2014 Con Kolivas
- * Copyright 2011-2014 Luke Dashjr
+ * Copyright 2011-2017 Luke Dashjr
  * Copyright 2014 Nate Woolls
  * Copyright 2010-2011 Jeff Garzik
  * Copyright 2012 Giel van Schijndel
@@ -1833,7 +1833,7 @@ static void clear_sock(struct pool *pool)
 	mutex_lock(&pool->stratum_lock);
 	do {
 		n = 0;
-		if (pool->sock)
+		if (pool->stratum_curl)
 			curl_easy_recv(pool->stratum_curl, pool->sockbuf, RECVSIZE, &n);
 	} while (n > 0);
 	mutex_unlock(&pool->stratum_lock);
@@ -2064,10 +2064,10 @@ bool _appdata_file_call(const char * const appname, const char * const filename,
 bool appdata_file_call(const char *appname, const char * const filename, const appdata_file_callback_t cb, void * const userp)
 {
 	size_t appname_len = strlen(appname);
-	char appname_lcd[appname_len + 1];
+	char appname_lcd[appname_len + 2];
 	appname_lcd[0] = '.';
 	char *appname_lc = &appname_lcd[1];
-	for (size_t i = 0; i <= appname_len; ++i)
+	for (size_t i = 0; i < appname_len; ++i)
 		appname_lc[i] = tolower(appname[i]);
 	appname_lc[appname_len] = '\0';
 	
@@ -3163,6 +3163,21 @@ bool auth_stratum(struct pool *pool)
 	applog(LOG_INFO, "Stratum authorisation success for pool %d", pool->pool_no);
 	pool->probed = true;
 	successful_connect = true;
+	
+	if (uri_get_param_bool(pool->rpc_url, "cksuggest", false)) {
+		unsigned long req_bdiff = request_bdiff;
+		
+		const char *q = uri_find_param(pool->rpc_url, "cksuggest", NULL);
+		if (q && q != URI_FIND_PARAM_FOUND) {
+			req_bdiff = atoi(q);
+		}
+		
+		if (req_bdiff) {
+			int sz = snprintf(s, sizeof(s), "{\"id\": null, \"method\": \"mining.suggest_difficulty\", \"params\": [%lu]}", req_bdiff);
+			stratum_send(pool, s, sz);
+		}
+	}
+	
 out:
 	if (val)
 		json_decref(val);
@@ -3341,7 +3356,7 @@ void suspend_stratum(struct pool *pool)
 bool initiate_stratum(struct pool *pool)
 {
 	bool ret = false, recvd = false, noresume = false, sockd = false;
-	bool trysuggest = request_target_str;
+	bool trysuggest = request_target_str && !uri_get_param_bool(pool->rpc_url, "cksuggest", false);
 	char s[RBUFSIZE], *sret = NULL, *nonce1, *sessionid;
 	json_t *val = NULL, *res_val, *err_val;
 	json_error_t err;

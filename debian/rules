@@ -1,14 +1,14 @@
 #!/usr/bin/make -f
+
+export DH_VERBOSE=1
+
 %:
 	dh $@
 
 
 override_dh_auto_configure:
 	NOSUBMODULES=1 ./autogen.sh
-	dh_auto_configure -- --enable-ztex --enable-bitforce --enable-icarus --enable-cpumining --enable-keccak --enable-scrypt --enable-opencl
+	dh_auto_configure -- --enable-other-drivers --enable-keccak --enable-scrypt --with-system-libblkmaker --disable-knc
 
 override_dh_auto_install:
 	$(MAKE) DESTDIR=$(CURDIR)/debian/bfgminer install
-
-override_dh_shlibdeps:
-	dh_shlibdeps -Xbfgminer

@@ -86,7 +86,7 @@ BUILDING BFGMINER
 Everything you probably want, condensed:
 	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
 	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
-	libevent-dev libmicrohttpd-dev hidapi
+	libevent-dev libmicrohttpd-dev libhidapi-dev
 
 Dependencies:
 	autoconf             http://www.gnu.org/software/autoconf/
@@ -112,7 +112,7 @@ Optional Dependencies:
 	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
 	
 	HashBuster Nano & NanoFury USB devices:
-	  hidapi             https://github.com/signal11/hidapi
+	  libhidapi-dev      https://github.com/signal11/hidapi
 	
 	getwork server for Block Erupter Blades:
 	  libmicrohttpd-dev 0.9.5+  http://www.gnu.org/software/libmicrohttpd/
@@ -120,6 +120,9 @@ Optional Dependencies:
 	Stratum proxy:
 	  libevent 2.0.3+    http://libevent.org/
 
+	KnCMiner SHA2 miners:
+	  libi2c-dev         https://i2c.wiki.kernel.org/index.php/I2C_Tools
+	
 	HashBuster Micro, Klondike, X6500 and ZTEX FPGA boards:
 	  libusb-1.0-0-dev   http://www.libusb.org/
 
@@ -128,6 +131,7 @@ Optional Dependencies:
 	  clang 3.3+         http://clang.llvm.org/
 	  libclc             http://libclc.llvm.org/
 	  Mesa 9.2.0+        http://www.mesa3d.org/
+	  libsensors4-dev    https://github.com/groeck/lm-sensors
 	
 	ATi/AMD video card GPU mining (non-free):
 	  AMD APP SDK        http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
@@ -142,6 +146,7 @@ BFGMiner driver configuration options:
 	--enable-broad-udevrules
 	                        Include udev rules for ambiguous devices which may
 	                        not be miners
+	--enable-alchemist      Compile support for AlcheMist (default disabled)
 	--disable-avalon        Compile support for Avalon (default enabled)
 	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
 	--enable-bfsb           Compile support for BFSB (default disabled)
@@ -198,6 +203,8 @@ BFGMiner dependency configuration options:
 	--without-libudev       Autodetect FPGAs using libudev (default enabled)
 	--without-libusb        Compile using libusb (default enabled)
 	--without-sensors       Build with libsensors monitoring (default enabled)
+	--without-system-libbase58
+	                        Use bundled libbase58 rather than system one
 	--with-system-libblkmaker
 	                        Use system libblkmaker rather than bundled one
 	                        (default disabled)
@@ -317,7 +324,7 @@ Options for both config file and command line:
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
 --scrypt            Use the scrypt algorithm for mining (non-bitcoin)
---set-device|--set <arg> Set default parameters on devices; eg, NFY:osc6_bits=50
+--set-device|--set <arg> Set default parameters on devices; eg, NFY:osc6_bits=50, bfl:voltage=<value>, compac:clock=<value>
 --setuid <arg>      Username of an unprivileged user to run as
 --sharelog <arg>    Append share log to file
 --shares <arg>      Quit after mining 2^32 * N hashes worth of shares (default: unlimited)

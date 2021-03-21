@@ -1,3 +1,185 @@
+BFGMiner Version 5.5.0 - January 3, 2018
+
+- Update official Win32/64 build compiler and libraries:
+- - Win64 compiler (GCC) from 5.3.0 to 7.2.0 (Win32 remains at 4.7.4)
+- - c-ares from 1.10.0-r1 to 1.11.0
+- - libjansson from 2.7 to 2.10
+- - libcurl from 7.47.1 to 7.57.0
+- - libevent from 2.1.5-r4 to 2.1.8
+- - libusb from 1.0.20 to 1.0.21
+- - libmicrohttpd from 0.9.48 to 0.9.58
+- - zlib from 1.2.8-r1 to 1.2.11-r1
+- Update copyrights
+- AUTHORS: Update
+- README.ASIC: Update Alcheminer
+- alchemist: Reset using DTR as well
+- alchemist: Experimental USB->UART Dongle Support on RPi
+- make-release: Add crypt32.dll to OS-provided library list
+- README: Expand on --set-device documentation
+- Update libblkmaker to 0.6.0
+- openwrt: Update for LEDE 17.01
+- ccan: Update to latest version (which fixes musl libc support)
+- Bugfix: probe_device_thread: Fix threadname buffer size
+- Bugfix: appdata_file_call: Fix buffer size and loop
+- Bugfix: SSM: Clear desired_default_share_pdiff when initialising
+desired_share_pdiff before authentication
+- cpu: Avoid relocations for x86_64 assembly that interfere with building
+BFGMiner as a PIE
+- Bugfix: SSM: We already hold the pool lock when we need to call stale_work,
+so avoid trying to lock it a second time inside the function
+- Bugfix: Hold the control lock when updating the generate-to script
+- Bugfix: Hold the pool lock when updating lp_id
+- Bugfix: icarus: Explicitly specify type wide enough for bitshift in
+icarus_proc_for_nonce
+- configure: BFG_FIND_INCLUDE_PATH: Handle more unusual syntax correctly
+- Bugfix: SSM: Handle network problems safely, and use thread-safe libevent
+
+
+BFGMiner Version 5.4.2 - March 26, 2016
+
+- Update official Win32/64 build compiler and libraries:
+- - Win64 compiler (GCC) from 4.7.4 to 5.3.0 (Win32 remains at 4.7.4)
+- - libcurl from 7.39.0 to 7.47.1
+- - libevent from 2.0.21 to 2.1.5-r4
+- - libusb from 1.0.18 (Win32) and 1.0.19 (Win64) to 1.0.20
+- - libmicrohttpd from 0.9.38_pre33603 to 0.9.48
+- Update libblkmaker to 0.5.3
+- Bugfix: Sanitise lock situation for work2d
+- Bugfix: SSM: Never issue the same work2d twice in a row
+- Bugfix: SSM: Never send mining.notify for stale work2d
+- SSM: Refactor work2d check and job pruning from _stratumsrv_update_notify
+into stratumsrv_update_notify_str
+- Updates for OpenWrt 15.05
+- Bugfix: Correct work2d handling for GBT servers
+
+
+BFGMiner Version 5.4.1 - November 21, 2015
+
+- bitmain: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- icarus: Use more portable PRIu64 rather than %llu (which fails on Windows)
+- Bugfix: openwrt: Fix bitmain option
+- Bugfix: antminer: Avoid strstr(NULL, ...) when device has no [available]
+product string
+- Update libblkmaker to 0.5.2
+- openwrt: Add option to enable bitmain driver
+- openwrt: Update libusb device list
+
+
+BFGMiner Version 5.4.0 - October 23, 2015
+
+- AUTHORS: Move jstefanop to current maintainers
+- Disable alchemist by default, add Travis build, and document configure option
+in README
+- alchemist: New scrypt ASIC driver
+- hashfast: Support setting clock speed from TUI Manage
+- avalon: Support setting clock speed from TUI Manage
+- antminer: Support setting clock speed from TUI Manage (hidden for non-BM1382/4
+devices)
+- jingtian: Allow changing clock speed from TUI
+- Debuglog for retrodiff being disabled
+- Disable retrodiff when it was not explicitly enabled, and the pool doesn't
+seem to like it
+- Bugfix: Only adjust work_difficulty on retrodiff submissions, so we can still
+detect them on rejection
+- (Re-)enable retrodiff by default for stratum pools, since some servers
+implement mining.set_difficulty wrong in this way
+- New pool option "retrodiff"
+- If a share passes difficulty check for the updated pool target,   record that
+target for correct accounting of diff_stale.
+- DevAPI: Remove unused temporary variable from driver iteration
+- README.ASIC: Expand Antminer S5 section to S1-S5 for completeness, since in
+theory they should work
+- bitmain: Make reg_data optional for S4 and S5, calculating it from clock
+- Document Bitmain Antminer S5 support
+- bitmain: Remove poll_prio_threshold and just ensure we poll at a regular
+interval to avoid nonce buffer overruns
+- bitmain: Remove dead per-device constants
+- bitmain: Only have one set of actual maximums
+- bitmain: Migrate BITMAIN_MAX_NONCE_NUM to runtime packet_max_nonce
+- bitmain: Migrate BITMAIN_MAX_WORK_QUEUE_NUM/bitmain_work_poll_prio to runtime
+poll_prio_threshold
+- bitmain: Migrate BITMAIN_MAX_WORK_NUM to runtime packet_max_work
+- bitmain: Dummy model parameter
+- bitmain: Remove baud/flush, as the fake VCOM kernel driver ignores (and
+complains about) both
+- bitmain: Poll after queuing work, once enough is queued
+- bitmain: Sleep a little between polling
+- bitmain: Flush queues for work restarts
+- bitmain: Queue multiple works at a time
+- bitmain: Remove more dead code
+- bitmain: Prune old work eventually
+- Bugfix: bitmain: Properly count work-search failures as HW errors
+- bitmain: Refactor to work with minerloop_queue (leaks work memory)
+- bitmain: Avoid busy-looping on network devices
+- bitmain: Support for talking to a device over the network
+- bitmain: Use the hottest reading for device temperature
+- Bugfix: bitmain: Actually use baud setting
+- bitmain: Remove more dead code
+- bitmain: Handle stale results normally
+- bitmain: Simplify num2bit
+- bitmain: Initial set-device based configuration
+- bitmain: Use lowl-vcom abstractions
+- Update copyrights
+- Bugfix: bitmain: Type-safe printf-format usage
+- Travis: Test bitmain-only build
+- Build bitmain driver
+- bitmain: Hardcode configuration for now
+- bitmain: Rework nonce_diff handling
+- bitmain: Update headers
+- bitmain: Deal with unused variable warnings sanely
+- bitmain: Explicitly de-const device_path for freeing
+- Bugfix: bitmain: Correct type of cgpu->temp reference
+- Bugfix: bitmain: Use uint8_t consistently for binary data
+- Bugfix: bitmain: Clear opt_bitmain_dev string properly
+- bitmain: Remove non-existent bitmain_detect parameter
+- bitmain: Cleanup unnecessary code
+- bitmain: Use uthash to find queued work
+- bitmain: Implement inc_dev_status within record_temp_fan
+- bitmain: Remove non-applicable limits
+- bitmain: Remove obsolete get_statline_before function
+- bitmain: Move g_miner_version to bitmain_info struct
+- bitmain: Remove direct USB code
+- bitmain: Update driver registration
+- bitmain: Update symbol names
+- bitmain: Remove dead code
+- bitmain: Replace custom hexdump with normal bin2hex
+- bitmain: Get network difficulty from first work task
+- bitmain: No-op htole8
+- bitmain: Simulate cgminer work_block somewhat
+- bitmain: Update bin2hex usage for malloc-free version
+- bitmain: Copy low-level code from Bitmain cgminer usbutils
+- Copy working driver-bitmain.c from Bitmain's cgminer at commit
+4ecf89341657ea7efecdf588586ca3f068ab17ab
+- Add api_add_percent to miner.h
+- Bugfix: DevAPI: Update includes from uthash to utlist and support older
+versions of uthash
+- Bugfix: RPC: Need to include utlist.h for config file list
+- Bugfix: antminer: Avoid NULL dereference for non-BM1382/4 devices
+- README.ASIC: Update documentation for BM1382/4 clock calculation support
+- antminer: Support for setting BM1382/4 clock by frequency MHz
+- Bugfix: Keep JSON from getaccountaddress around long enough for debug messages
+- Bugfix: Run gen-version.sh from source directory
+- Fix to enable building into directory out of source tree
+- Bugfix: Clean up JSON from getaccountaddress
+- Bugfix: Do not use hash tables for driver lists, since they require unique
+keys
+- Pool option #cksuggest to use CKPool-compatible mining.suggest_difficulty
+- RPC: Add "Rotate Period" to config
+- RPC: Extend setconfig to change strategy
+- Allow setting strategy by name
+- bitforce: Enable changing voltage from the Manage TUI
+- avalonmm: Use proc_set_device_tui_wrapper instead of avalonmm_tui_wrapper
+- DevAPI: Add generic proc_set_device_tui_wrapper
+- bitforce: Add "voltage" setting to send V?X commands
+- Bugfix: compac: Set dname so assignments match
+- README.RPC: Add missing setconfig|stratum-port documentation
+- README.RPC: Add missing setconfig|http-port documentation
+- Bugfix: lowl-vcom: Check for tcgetattr/tcsetattr/tcflush failure
+- configure: List compac driver in output
+- Travis: Workaround Travis bug
+- configure: Use AC_PROG_SED to find sed
+
+
 BFGMiner Version 5.3.0 - September 5, 2015
 
 - README.ASIC: Compac docs

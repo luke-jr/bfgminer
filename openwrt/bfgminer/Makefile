@@ -1,5 +1,5 @@
 #
-# Copyright 2013-2014 Luke Dashjr
+# Copyright 2013-2017 Luke Dashjr
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -11,11 +11,15 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bfgminer
 PKG_TITLE:=BFGMiner
-PKG_VERSION:=5.3.0
+PKG_VERSION:=5.5.0
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).txz
 PKG_SOURCE_URL:=http://luke.dashjr.org/programs/bitcoin/files/$(PKG_NAME)/$(PKG_VERSION)/
+
+PKG_MAINTAINER:=Luke Dashjr <luke-jr+bfgminer@utopios.org>
+PKG_LICENSE:=GPL-3.0+
+PKG_LICENSE_FILES:=COPYING
 
 PKG_INSTALL:=1
 
@@ -38,7 +42,7 @@ endef
 define Package/$(PKG_NAME)
 $(call Package/$(PKG_NAME)/Default)
 	TITLE:=$(PKG_TITLE) (Bitcoin miner)
-	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_libevent:libevent2 +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
+	DEPENDS:=+libc +libcurl +libpthread +jansson +PACKAGE_$(PKG_NAME)_libevent:libevent2 +PACKAGE_$(PKG_NAME)_libevent:libevent2-pthreads +PACKAGE_$(PKG_NAME)_curses:libncurses +PACKAGE_$(PKG_NAME)_libmicrohttpd:libmicrohttpd +PACKAGE_$(PKG_NAME)_libusb:libusb-1.0
 endef
 
 define Package/$(PKG_NAME)/description
@@ -59,9 +63,13 @@ config PACKAGE_$(PKG_NAME)_libmicrohttpd
 	depends on PACKAGE_$(PKG_NAME)
 	default y
 config PACKAGE_$(PKG_NAME)_libusb
-	bool "Build with libusb support (X6500 & ZTEX)"
+	bool "Build with libusb support (Cointerra, HashBuster Micro, Klondike, X6500 & ZTEX)"
 	depends on PACKAGE_$(PKG_NAME)
 	default y
+config PACKAGE_$(PKG_NAME)_bitmain
+	bool "Build with bitmain driver (only for S* series miners)"
+	depends on PACKAGE_$(PKG_NAME)
+	default n
 config PACKAGE_$(PKG_NAME)_keccak
 	bool "Build with Keccak algorithm support"
 	depends on PACKAGE_$(PKG_NAME)
@@ -92,6 +100,10 @@ endif
 
 ifndef CONFIG_PACKAGE_$(PKG_NAME)_libusb
 CONFIGURE_ARGS += --without-libusb
+endif
+
+ifdef CONFIG_PACKAGE_$(PKG_NAME)_bitmain
+CONFIGURE_ARGS += --enable-bitmain
 endif
 
 ifdef CONFIG_PACKAGE_$(PKG_NAME)_keccak

@@ -756,7 +756,7 @@ const struct cgpu_info *icarus_proc_for_nonce(const struct cgpu_info * const ica
 	struct ICARUS_INFO * const info = icarus->device_data;
 	unsigned proc_id = 0;
 	for (int i = info->work_division, j = 0; i /= 2; ++j)
-		if (nonce & (1 << (31 - j)))
+		if (nonce & (1UL << (31 - j)))
 			proc_id |= (1 << j);
 	const struct cgpu_info * const proc = device_proc_by_id(icarus, proc_id) ?: icarus;
 	return proc;
@@ -788,7 +788,7 @@ bool icarus_job_prepare(struct thr_info *thr, struct work *work, __maybe_unused 
 	swab256(ob_bin, work->midstate);
 	bswap_96p(&ob_bin[0x34], &work->data[0x40]);
 	if (!(memcmp(&ob_bin[56], "\xff\xff\xff\xff", 4)
-	   || memcmp(&ob_bin, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
+	   || memcmp(&ob_bin[0], "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 32))) {
 		// This sequence is used on cairnsmore bitstreams for commands, NEVER send it otherwise
 		applog(LOG_WARNING, "%s: Received job attempting to send a command, corrupting it!",
 		       icarus->dev_repr);
@@ -1102,12 +1102,12 @@ keepwaiting:
 		{
 			const uint64_t elapsed_fs = (elapsed.tv_sec * 1000000000000000LL) + (elapsed.tv_usec * 1000000000LL);
 			const uint64_t est_Hs_fs = elapsed_fs / hash_count;
-			applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus; %llu.%06luns/hash)",
+			applog(LOG_DEBUG, "%"PRIpreprv" nonce = 0x%08x = 0x%08" PRIx64 " hashes (%"PRId64".%06lus; %"PRIu64".%06luns/hash)",
 			       proc->proc_repr,
 			       nonce,
 			       (uint64_t)hash_count,
 			       (int64_t)elapsed.tv_sec, (unsigned long)elapsed.tv_usec,
-			       (unsigned long long)(est_Hs_fs / 1000000LL), (unsigned long)(est_Hs_fs % 1000000LL));
+			       (uint64_t)(est_Hs_fs / 1000000LL), (unsigned long)(est_Hs_fs % 1000000LL));
 		}
 	}
 	else
