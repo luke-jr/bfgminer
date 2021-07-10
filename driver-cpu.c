@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2012 Con Kolivas
- * Copyright 2011-2012 Luke Dashjr
+ * Copyright 2011-2013 Con Kolivas
+ * Copyright 2011-2014 Luke Dashjr
  * Copyright 2010 Jeff Garzik
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -30,8 +30,10 @@
 #include <libgen.h>
 
 #include "compat.h"
+#include "deviceapi.h"
 #include "miner.h"
-#include "bench_block.h"
+#include "logging.h"
+#include "util.h"
 #include "driver-cpu.h"
 
 #if defined(unix)
@@ -39,11 +41,16 @@
 	#include <fcntl.h>
 #endif
 
+BFG_REGISTER_DRIVER(cpu_drv)
+
+struct cgpu_info *cpus;
+
 #if defined(__linux) && defined(CPU_ZERO)  /* Linux specific policy and affinity management */
 #include <sched.h>
 static inline void drop_policy(void)
 {
 	struct sched_param param;
+	param.sched_priority = 0;
 
 #ifdef SCHED_BATCH
 #ifdef SCHED_IDLE
@@ -59,7 +66,7 @@ static inline void affine_to_cpu(int id, int cpu)
 
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
-	sched_setaffinity(0, sizeof(&set), &set);
+	sched_setaffinity(0, sizeof(set), &set);
 	applog(LOG_INFO, "Binding cpu mining thread %d to cpu %d", id, cpu);
 }
 #else
@@ -67,7 +74,7 @@ static inline void drop_policy(void)
 {
 }
 
-static inline void affine_to_cpu(__maybe_unused int id, __maybe_unused int cpu)
+static inline void affine_to_cpu(int __maybe_unused id, int __maybe_unused cpu)
 {
 }
 #endif
@@ -75,69 +82,32 @@ static inline void affine_to_cpu(__maybe_unused int id, __maybe_unused int cpu)
 
 
 /* TODO: resolve externals */
-extern bool submit_work_sync(struct thr_info *thr, const struct work *work_in);
 extern char *set_int_range(const char *arg, int *i, int min, int max);
 extern int dev_from_id(int thr_id);
 
 
 /* chipset-optimized hash functions */
-extern bool ScanHash_4WaySSE2(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata, unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+typedef bool (*sha256_func)(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
-extern bool ScanHash_altivec_4way(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_via(struct thr_info*, const unsigned char *pmidstate,
-	unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *target,
-	uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_c(struct thr_info*, const unsigned char *midstate, unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_cryptopp(struct thr_info*, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t n);
-
-extern bool scanhash_asm32(struct thr_info*, const unsigned char *midstate,unsigned char *data,
-	      unsigned char *hash1, unsigned char *hash,
-	      const unsigned char *target,
-	      uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
-
-extern bool scanhash_sse2_64(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse4_64(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
-
-extern bool scanhash_sse2_32(struct thr_info*, const unsigned char *pmidstate, unsigned char *pdata,
-	unsigned char *phash1, unsigned char *phash,
-	const unsigned char *ptarget,
-	uint32_t max_nonce, uint32_t *last_nonce,
-	uint32_t nonce);
+extern bool ScanHash_4WaySSE2(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool ScanHash_altivec_4way(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_via(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_c(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_cryptopp(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_asm32(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse2_64(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse4_64(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_sse2_32(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
+extern bool scanhash_scrypt(struct thr_info *, struct work *, uint32_t max_nonce, uint32_t *last_nonce, uint32_t nonce);
 
 
-
-
-#ifdef WANT_CPUMINE
+#ifdef USE_SHA256D
 static size_t max_name_len = 0;
 static char *name_spaces_pad = NULL;
+#endif
+
 const char *algo_names[] = {
+#ifdef USE_SHA256D
 	[ALGO_C]		= "c",
 #ifdef WANT_SSE2_4WAY
 	[ALGO_4WAY]		= "4way",
@@ -161,8 +131,17 @@ const char *algo_names[] = {
 #ifdef WANT_ALTIVEC_4WAY
     [ALGO_ALTIVEC_4WAY] = "altivec_4way",
 #endif
+#endif
+#ifdef WANT_SCRYPT
+    [ALGO_SCRYPT] = "scrypt",
+#endif
+#ifdef USE_SHA256D
+	[ALGO_FASTAUTO] = "fastauto",
+	[ALGO_AUTO] = "auto",
+#endif
 };
 
+#ifdef USE_SHA256D
 static const sha256_func sha256_funcs[] = {
 	[ALGO_C]		= (sha256_func)scanhash_c,
 #ifdef WANT_SSE2_4WAY
@@ -185,68 +164,54 @@ static const sha256_func sha256_funcs[] = {
 	[ALGO_SSE2_64]		= (sha256_func)scanhash_sse2_64,
 #endif
 #ifdef WANT_X8664_SSE4
-	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64
+	[ALGO_SSE4_64]		= (sha256_func)scanhash_sse4_64,
 #endif
 };
 #endif
 
-
-
-#ifdef WANT_CPUMINE
-#if defined(WANT_X8664_SSE2) && defined(__SSE2__)
-enum sha256_algos opt_algo = ALGO_SSE2_64;
-#elif defined(WANT_X8632_SSE2) && defined(__SSE2__)
-enum sha256_algos opt_algo = ALGO_SSE2_32;
-#else
-enum sha256_algos opt_algo = ALGO_C;
+#ifdef USE_SHA256D
+enum sha256_algos opt_algo = ALGO_FASTAUTO;
 #endif
-bool opt_usecpu = false;
-static int cpur_thr_id;
+
 static bool forced_n_threads;
-#endif
+
+#ifdef USE_SHA256D
+const uint32_t hash1_init[] = {
+	0,0,0,0,0,0,0,0,
+	0x80000000,
+	  0,0,0,0,0,0,
+	          0x100,
+};
 
 
-
-
-#ifdef WANT_CPUMINE
 // Algo benchmark, crash-prone, system independent stage
 double bench_algo_stage3(
 	enum sha256_algos algo
 )
 {
-	// Use a random work block pulled from a pool
-	static uint8_t bench_block[] = { CGMINER_BENCHMARK_BLOCK };
 	struct work work __attribute__((aligned(128)));
 
-	size_t bench_size = sizeof(work);
-	size_t work_size = sizeof(bench_block);
-	size_t min_size = (work_size < bench_size ? work_size : bench_size);
-	memset(&work, 0, sizeof(work));
-	memcpy(&work, &bench_block, min_size);
+	get_benchmark_work(&work, false);
 
-	struct thr_info dummy = {0};
+	static struct thr_info dummy;
 
 	struct timeval end;
 	struct timeval start;
-	uint32_t max_nonce = (1<<22);
+	uint32_t max_nonce = opt_algo == ALGO_FASTAUTO ? (1<<8) : (1<<22);
 	uint32_t last_nonce = 0;
 
-	gettimeofday(&start, 0);
+	timer_set_now(&start);
 			{
 				sha256_func func = sha256_funcs[algo];
 				(*func)(
 					&dummy,
-					work.midstate,
-					work.data,
-					work.hash1,
-					work.hash,
-					work.target,
+					&work,
 					max_nonce,
 					&last_nonce,
-					work.blk.nonce
+					0
 				);
 			}
-	gettimeofday(&end, 0);
+	timer_set_now(&end);
 
 	uint64_t usec_end = ((uint64_t)end.tv_sec)*1000*1000 + end.tv_usec;
 	uint64_t usec_start = ((uint64_t)start.tv_sec)*1000*1000 + start.tv_usec;
@@ -457,9 +422,9 @@ static double bench_algo_stage2(
 		}
 
 		// Construct new command line based on that
-		char *p = strlen(cmd_line) + cmd_line;
-		sprintf(p, " --bench-algo %d", algo);
-		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", "1");
+		char buf[0x20];
+		snprintf(buf, sizeof(buf), "%d", algo);
+		SetEnvironmentVariable("BFGMINER_BENCH_ALGO", buf);
 
 		// Launch a debug copy of BFGMiner
 		STARTUPINFO startup_info;
@@ -481,7 +446,7 @@ static double bench_algo_stage2(
 			&process_info		// Pointer to PROCESS_INFORMATION structure
 		);
 		if (!ok) {
-			applog(LOG_ERR, "CreateProcess failed with error %d\n", GetLastError() );
+			applog(LOG_ERR, "CreateProcess failed with error %ld\n", (long)GetLastError() );
 			exit(1);
 		}
 
@@ -657,15 +622,9 @@ static enum sha256_algos pick_fastest_algo()
 	return best_algo;
 }
 
-/* FIXME: Use asprintf for better errors. */
 char *set_algo(const char *arg, enum sha256_algos *algo)
 {
 	enum sha256_algos i;
-
-	if (!strcmp(arg, "auto")) {
-		*algo = pick_fastest_algo();
-		return NULL;
-	}
 
 	for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 		if (algo_names[i] && !strcmp(arg, algo_names[i])) {
@@ -680,26 +639,25 @@ void show_algo(char buf[OPT_SHOW_LEN], const enum sha256_algos *algo)
 {
 	strncpy(buf, algo_names[*algo], OPT_SHOW_LEN);
 }
-#endif
+#endif  /* USE_SHA256D */
 
-#ifdef WANT_CPUMINE
 char *force_nthreads_int(const char *arg, int *i)
 {
 	forced_n_threads = true;
 	return set_int_range(arg, i, 0, 9999);
 }
-#endif
 
-#ifdef WANT_CPUMINE
-static void cpu_detect()
+static int cpu_autodetect()
 {
+	RUNONCE(0);
+	
 	int i;
 
 	// Reckon number of cores in the box
 	#if defined(WIN32)
 	{
-		DWORD system_am;
-		DWORD process_am;
+		DWORD_PTR system_am;
+		DWORD_PTR process_am;
 		BOOL ok = GetProcessAffinityMask(
 			GetCurrentProcess(),
 			&system_am,
@@ -716,24 +674,21 @@ static void cpu_detect()
 					++num_processors;
 		}
 	}
-	#elif defined(_SC_NPROCESSORS_ONLN)
-		num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-	#elif defined(HW_NCPU)
+	#elif defined(_SC_NPROCESSORS_CONF)
+		num_processors = sysconf(_SC_NPROCESSORS_CONF);
+	#elif defined(CTL_HW) && defined(HW_NCPU)
 		int req[] = { CTL_HW, HW_NCPU };
 		size_t len = sizeof(num_processors);
-		v = sysctl(req, 2, &num_processors, &len, NULL, 0);
+		sysctl(req, 2, &num_processors, &len, NULL, 0);
 	#else
 		num_processors = 1;
 	#endif /* !WIN32 */
 
 	if (opt_n_threads < 0 || !forced_n_threads) {
-		if (total_devices && !opt_usecpu)
-			opt_n_threads = 0;
-		else
 			opt_n_threads = num_processors;
 	}
 	if (num_processors < 1)
-		return;
+		return 0;
 
 	cpus = calloc(opt_n_threads, sizeof(struct cgpu_info));
 	if (unlikely(!cpus))
@@ -742,36 +697,61 @@ static void cpu_detect()
 		struct cgpu_info *cgpu;
 
 		cgpu = &cpus[i];
-		cgpu->api = &cpu_api;
-		cgpu->devtype = "CPU";
+		cgpu->drv = &cpu_drv;
 		cgpu->deven = DEV_ENABLED;
 		cgpu->threads = 1;
+#ifdef USE_SHA256D
 		cgpu->kname = algo_names[opt_algo];
+#endif
 		add_cgpu(cgpu);
 	}
+	return opt_n_threads;
 }
 
-static void reinit_cpu_device(struct cgpu_info *cpu)
+static void cpu_detect()
 {
-	tq_push(thr_info[cpur_thr_id].q, cpu);
+	noserial_detect_manual(&cpu_drv, cpu_autodetect);
 }
+
+static pthread_mutex_t cpualgo_lock;
 
 static bool cpu_thread_prepare(struct thr_info *thr)
 {
+	struct cgpu_info *cgpu = thr->cgpu;
+	
+	if (!(cgpu->device_id || thr->device_thread || cgpu->proc_id))
+		mutex_init(&cpualgo_lock);
+	
 	thread_reportin(thr);
 
 	return true;
 }
 
-static uint64_t cpu_can_limit_work(__maybe_unused struct thr_info *thr)
+static uint64_t cpu_can_limit_work(struct thr_info __maybe_unused *thr)
 {
-	return 0xfffff;
+	return 0xffff;
 }
 
 static bool cpu_thread_init(struct thr_info *thr)
 {
 	const int thr_id = thr->id;
+#ifdef USE_SHA256D
+	struct cgpu_info *cgpu = thr->cgpu;
 
+	mutex_lock(&cpualgo_lock);
+	switch (opt_algo)
+	{
+		case ALGO_AUTO:
+		case ALGO_FASTAUTO:
+			opt_algo = pick_fastest_algo();
+		default:
+			break;
+	}
+	mutex_unlock(&cpualgo_lock);
+
+	cgpu->kname = algo_names[opt_algo];
+#endif
+	
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
 	 * error if it fails */
@@ -779,15 +759,55 @@ static bool cpu_thread_init(struct thr_info *thr)
 	drop_policy();
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
-	if (!(opt_n_threads % num_processors))
+	if (num_processors > 1 && opt_n_threads % num_processors == 0)
 		affine_to_cpu(dev_from_id(thr_id), dev_from_id(thr_id) % num_processors);
 	return true;
 }
 
+static
+float cpu_min_nonce_diff(struct cgpu_info * const proc, const struct mining_algorithm * const malgo)
+{
+	return minimum_pdiff;
+}
+
+static
+bool scanhash_generic(struct thr_info * const thr, struct work * const work, const uint32_t max_nonce, uint32_t * const last_nonce, uint32_t n)
+{
+	struct mining_algorithm * const malgo = work_mining_algorithm(work);
+	void (* const hash_data_f)(void *, const void *) = malgo->hash_data_f;
+	uint8_t * const hash = work->hash;
+	uint8_t *data = work->data;
+	const uint8_t * const target = work->target;
+	uint32_t * const out_nonce = (uint32_t *)&data[0x4c];
+	bool ret = false;
+	
+	const uint32_t hash7_targ = le32toh(((const uint32_t *)target)[7]);
+	uint32_t * const hash7_tmp = &((uint32_t *)hash)[7];
+	
+	while (true)
+	{
+		*out_nonce = n;
+		
+		hash_data_f(hash, data);
+		
+		if (unlikely(le32toh(*hash7_tmp) <= hash7_targ))
+		{
+			ret = true;
+			break;
+		}
+
+		if ((n >= max_nonce) || thr->work_restart)
+			break;
+
+		n++;
+	}
+	
+	*last_nonce = n;
+	return ret;
+}
+
 static int64_t cpu_scanhash(struct thr_info *thr, struct work *work, int64_t max_nonce)
 {
-	const int thr_id = thr->id;
-
 	uint32_t first_nonce = work->blk.nonce;
 	uint32_t last_nonce;
 	bool rc;
@@ -798,14 +818,28 @@ CPUSearch:
 
 	/* scan nonces for a proof-of-work hash */
 	{
-		sha256_func func = sha256_funcs[opt_algo];
+		sha256_func func = scanhash_generic;
+		switch (work_mining_algorithm(work)->algo)
+		{
+#ifdef USE_SCRYPT
+			case POW_SCRYPT:
+				func = scanhash_scrypt;
+				break;
+#endif
+#ifdef USE_SHA256D
+			case POW_SHA256D:
+				if (work->nonce_diff >= 1.)
+					func = sha256_funcs[opt_algo];
+				break;
+#endif
+			default:
+				break;
+		}
+		if (unlikely(!func))
+			applogr(0, LOG_ERR, "%"PRIpreprv": Unknown mining algorithm", thr->cgpu->proc_repr);
 		rc = (*func)(
 			thr,
-			work->midstate,
-			work->data,
-			work->hash1,
-			work->hash,
-			work->target,
+			work,
 			max_nonce,
 			&last_nonce,
 			work->blk.nonce
@@ -814,10 +848,8 @@ CPUSearch:
 
 	/* if nonce found, submit work */
 	if (unlikely(rc)) {
-		applog(LOG_DEBUG, "CPU %d found something?", dev_from_id(thr_id));
-		if (unlikely(!submit_work_sync(thr, work))) {
-			applog(LOG_ERR, "Failed to submit_work_sync in miner_thread %d", thr_id);
-		}
+		applog(LOG_DEBUG, "%"PRIpreprv" found something?", thr->cgpu->proc_repr);
+		submit_nonce(thr, work, le32toh(*(uint32_t*)&work->data[76]));
 		work->blk.nonce = last_nonce + 1;
 		goto CPUSearch;
 	}
@@ -829,17 +861,14 @@ CPUSearch:
 	return last_nonce - first_nonce + 1;
 }
 
-struct device_api cpu_api = {
+struct device_drv cpu_drv = {
 	.dname = "cpu",
 	.name = "CPU",
-	.api_detect = cpu_detect,
-	.reinit_device = reinit_cpu_device,
+	.probe_priority = 120,
+	.drv_min_nonce_diff = cpu_min_nonce_diff,
+	.drv_detect = cpu_detect,
 	.thread_prepare = cpu_thread_prepare,
 	.can_limit_work = cpu_can_limit_work,
 	.thread_init = cpu_thread_init,
 	.scanhash = cpu_scanhash,
 };
-#endif
-
-
-

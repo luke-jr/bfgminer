@@ -1,7 +1,9 @@
+BFGMiner:
+St. Barbara's Faithfully Glorified Mining Initiative Naturally Exceeding Rivals
+or Basically a Freaking Good Miner
 
-This is a multi-threaded multi-pool GPU, FPGA and CPU miner with ATI GPU
-monitoring, (over)clocking and fanspeed support for bitcoin and derivative
-coins. Do not use on multiple block chains at the same time!
+This is a multi-threaded, multi-blockchain, multi-pool ASIC, FPGA, GPU and CPU
+miner with dynamic clocking, monitoring, and fanspeed support for bitcoin.
 
 This code is provided entirely free of charge by the programmer in his spare
 time so donations would be greatly appreciated. Please consider donating to the
@@ -28,259 +30,372 @@ irc://irc.freenode.net/eligius
 
 License: GPLv3.  See COPYING for details.
 
-READ EXECUTIVE SUMMARY BELOW FOR FIRST TIME USERS!
+SEE ALSO README.ASIC, README.FPGA, README.GPU, README.RPC, AND README.scrypt FOR
+MORE INFORMATION ON EACH.
+
+---
+
+EXECUTIVE SUMMARY ON USAGE:
+
+Single pool:
+
+bfgminer -o http://pool:port -u username -p password
+
+Multiple pools:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password
+
+Multiple blockchains:
+
+bfgminer -o http://pool1:port -u pool1username -p pool1password --pool-goal default -o http://pool2:port -u pool2usernmae -p pool2password --pool-goal freicoin
+
+Single pool with a standard http proxy:
+
+bfgminer -o http://pool:port -x http://proxy:port -u username -p password
+
+Single pool with a socks5 proxy:
+
+bfgminer -o http://pool:port -x socks5://proxy:port -u username -p password
+
+The list of proxy types are:
+ http:    standard http 1.1 proxy
+ socks4:  socks4 proxy
+ socks5:  socks5 proxy
+ socks4a: socks4a proxy
+ socks5h: socks5 proxy using a hostname
+
+Proxy support requires cURL version 7.21.7 or newer.
+
+If you specify the --socks-proxy option to BFGMiner, it will only be applied to
+all pools that don't specify their own proxy setting like above
+
+
+After saving configuration from the menu ([S],[W]) you do not need to give
+BFGMiner any arguments, it will load your configuration instead.
+
+Any configuration file may also contain a single
+	"include" : "filename"
+to recursively include another configuration file.
+Writing the configuration will save all settings from all files to the output
+configuration file.
+
+
+---
+BUILDING BFGMINER
+
+Everything you probably want, condensed:
+	build-essential autoconf automake libtool pkg-config libcurl4-gnutls-dev
+	libjansson-dev uthash-dev libncursesw5-dev libudev-dev libusb-1.0-0-dev
+	libevent-dev libmicrohttpd-dev libhidapi-dev
 
 Dependencies:
-	curl dev library 	http://curl.haxx.se/libcurl/
-	(libcurl4-openssl-dev)
-	curses dev library
-	(libncurses5-dev or libpdcurses on WIN32)
-	pkg-config		http://www.freedesktop.org/wiki/Software/pkg-config
-	jansson			http://www.digip.org/jansson/
-	(jansson is included in-tree and not necessary)
-	yasm 1.0.1+ http://yasm.tortall.net/
-	(yasm is optional, gives assembly routines for CPU mining)
-	AMD APP SDK		http://developer.amd.com/sdks/AMDAPPSDK
-	(This sdk is mandatory for GPU mining)
-	AMD ADL SDK		http://developer.amd.com/sdks/ADLSDK
-	(This sdk is mandatory for ATI GPU monitoring & clocking)
-	libudev headers
-	(This is only required for FPGA auto-detection and is linux only)
-	libusb headers
-	(This is only required for ZTEX support)
+	autoconf             http://www.gnu.org/software/autoconf/
+	automake             http://www.gnu.org/software/automake/
+	libtool              http://www.gnu.org/software/libtool/
+	pkg-config           http://www.freedesktop.org/wiki/Software/pkg-config
+	...or pkgconf        https://github.com/pkgconf/pkgconf
 
-BFGMiner specific configuration options:
-	--enable-cpumining      Build with cpu mining support(default disabled)
-	--disable-opencl        Override detection and disable building with opencl
-	--disable-adl           Override detection and disable building with adl
-	--enable-bitforce       Compile support for BitForce FPGAs(default disabled)
-	--enable-icarus         Compile support for Icarus Board(default disabled)
-	--enable-modminer       Compile support for ModMiner FPGAs(default disabled)
-	--enable-ztex           Compile support for Ztex Board(default disabled)
+	libcurl4-gnutls-dev  http://curl.haxx.se/libcurl/
+
+	libjansson-dev 2.0+  http://www.digip.org/jansson/
+	
+	uthash-dev 1.9.4+    http://troydhanson.github.io/uthash/
+
+Optional Dependencies:
+	Text-User-Interface (TUI): curses dev library; any one of:
+	  libncurses5-dev    http://www.gnu.org/software/ncurses/ (Linux and Mac)
+	  libncursesw5-dev       ^ same
+	  libpdcurses        http://pdcurses.sourceforge.net/ (Linux/Mac/Windows)
+
+	Multiple ASIC/FPGA autodetection: any one of:
+	  sysfs              (built-in to most Linux kernels, just mount on /sys)
+	  libudev-dev        http://www.freedesktop.org/software/systemd/libudev/
+	
+	HashBuster Nano & NanoFury USB devices:
+	  libhidapi-dev      https://github.com/signal11/hidapi
+	
+	getwork server for Block Erupter Blades:
+	  libmicrohttpd-dev 0.9.5+  http://www.gnu.org/software/libmicrohttpd/
+	
+	Stratum proxy:
+	  libevent 2.0.3+    http://libevent.org/
+
+	KnCMiner SHA2 miners:
+	  libi2c-dev         https://i2c.wiki.kernel.org/index.php/I2C_Tools
+	
+	HashBuster Micro, Klondike, X6500 and ZTEX FPGA boards:
+	  libusb-1.0-0-dev   http://www.libusb.org/
+
+	Video card GPU mining (free):
+	  llvm 3.3+          http://llvm.org/
+	  clang 3.3+         http://clang.llvm.org/
+	  libclc             http://libclc.llvm.org/
+	  Mesa 9.2.0+        http://www.mesa3d.org/
+	  libsensors4-dev    https://github.com/groeck/lm-sensors
+	
+	ATi/AMD video card GPU mining (non-free):
+	  AMD APP SDK        http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/
+
+	CPU mining optimized assembly algorithms:
+	  yasm 1.0.1+        http://yasm.tortall.net/
+
+
+BFGMiner driver configuration options:
+	--disable-other-drivers Build without drivers by default unless explicitly
+	                        enabled
+	--enable-broad-udevrules
+	                        Include udev rules for ambiguous devices which may
+	                        not be miners
+	--enable-alchemist      Compile support for AlcheMist (default disabled)
+	--disable-avalon        Compile support for Avalon (default enabled)
+	--disable-avalonmm      Compile support for Avalon2/3 (default enabled)
+	--enable-bfsb           Compile support for BFSB (default disabled)
+	--disable-bfx           Compile support for BFx2 (default enabled)
+	--disable-bifury        Compile support for Bi*Fury (default enabled)
+	--disable-bigpic        Compile support for Big Picture Mining USB (default
+	                        enabled)
+	--disable-bitforce      Compile support for BitForce (default enabled)
+	--disable-bitfury       Compile support for Bitfury (default enabled)
+	--enable-bitmain        Compile support for Bitmain Antminer S* series
+	                        (default disabled)
+	--disable-cointerra     Compile support for CoinTerra (default enabled)
+	--enable-cpumining      Compile support for CPU mining (default disabled)
+	--disable-drillbit      Compile support for DrillBit (default enabled)
+	--disable-dualminer     Compile support for DualMiner (default enabled)
+	--disable-gridseed      Compile support for GridSeed (default enabled)
+	--disable-hashbuster    Compile support for HashBuster Nano (default
+	                        enabled)
+	--disable-hashbusterusb Compile support for HashBuster Micro (default
+	                        enabled)
+	--disable-hashfast      Compile support for HashFast (default enabled)
+	--disable-icarus        Compile support for Icarus (default enabled)
+	--enable-jingtian       Compile support for JingTian (default disabled)
+	--disable-klondike      Compile support for Klondike (default enabled)
+	--enable-knc            Compile support for KnC (default disabled)
+	--enable-kncasic        Compile support for KnC gen 2 (default disabled)
+	--disable-littlefury    Compile support for LittleFury (default enabled)
+	--enable-metabank       Compile support for Metabank (default disabled)
+	--enable-minergate      Compile support for Spondoolies minergate interface
+	                        (default disabled)
+	--enable-minion         Compile support for Minion (default disabled)
+	--disable-modminer      Compile support for ModMiner (default enabled)
+	--disable-nanofury      Compile support for NanoFury (default enabled)
+	--enable-opencl         Compile support for OpenCL (default disabled)
+	--disable-adl           Build without ADL monitoring (default enabled)
+	--disable-rockminer     Compile support for RockMiner (default enabled)
+	--enable-titan          Compile support for KnC Titan (default disabled)
+	--disable-twinfury      Compile support for Twinfury (default enabled)
+	--disable-x6500         Compile support for X6500 (default enabled)
+	--disable-zeusminer     Compile support for ZeusMiner (default enabled)
+	--disable-ztex          Compile support for ZTEX (default enabled)
+
+BFGMiner algorithm configuration option:
+	--enable-keccak         Compile support for Keccak (default disabled)
+	--disable-sha256d       Compile support for SHA256d (default enabled)
+	--enable-scrypt         Compile support for scrypt (default disabled)
+
+BFGMiner dependency configuration options:
+	--without-curses        Compile support for curses TUI (default enabled)
+	--without-libevent      Compile support for libevent stratum server (default
+	                        enabled)
+	--without-libmicrohttpd Compile support for libmicrohttpd getwork server
+	                        (default enabled)
+	--without-libudev       Autodetect FPGAs using libudev (default enabled)
+	--without-libusb        Compile using libusb (default enabled)
+	--without-sensors       Build with libsensors monitoring (default enabled)
+	--without-system-libbase58
+	                        Use bundled libbase58 rather than system one
+	--with-system-libblkmaker
+	                        Use system libblkmaker rather than bundled one
+	                        (default disabled)
+	--with-udevrulesdir=DIR Install udev rules into this directory
+	--with-udevrules-group=groupname
+	                        Configure mining devices to be owned by a specific
+	                        group (default `video')
+	--without-uio           Compile support for PCI devices via Linux UIO
+	                        interface (default enabled)
+	--without-vfio          Compile support for PCI devices via Linux VFIO
+	                        interface (default enabled)
 
 Basic *nix build instructions:
-	To build with GPU mining support:
-	Install AMD APP sdk, ideal version (see FAQ!) - no official place to
-	install it so just keep track of where it is if you're not installing
-	the include files and library files into the system directory.
-	(Do NOT install the ati amd sdk if you are on nvidia.)
-	To build with GPU monitoring & clocking support:
-	Extract the AMD ADL SDK, latest version - there is also no official
-	place for these files. Copy all the *.h files in the "include"
-	directory into BFGMiner's ADL_SDK directory.
 
-The easiest way to install the ATI AMD SPP sdk on linux is to actually put it
-into a system location. Then building will be simpler. Download the correct
-version for either 32 bit or 64 bit from here:
-	http://developer.amd.com/sdks/AMDAPPSDK/downloads/Pages/default.aspx
+./autogen.sh    # only needed if building from git repo
+./configure  # list configuration options here
+make
 
-This will give you a file with a name like AMD-APP-SDK-v2.4-lnx64.tgz
+No installation is necessary. You may run BFGMiner from the build directory
+directly.
 
-Then:
+On Mac OS X, you can use Homebrew to install the dependency libraries. When you
+are ready to build BFGMiner, you may need to point the configure script at one
+or more pkg-config paths. For example:
+	./configure PKG_CONFIG_PATH=/usr/local/opt/curl/lib/pkgconfig:/usr/local/opt/jansson/lib/pkgconfig
 
-sudo su
-cd /opt
-tar xf /path/to/AMD-APP-SDK-v2.4-lnx64.tgz
-cd /
-tar xf /opt/AMD-APP-SDK-v2.4-lnx64/icd-registration.tgz
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/include/CL /usr/include
-ln -s /opt/AMD-APP-SDK-v2.4-lnx64/lib/x86_64/* /usr/lib/
-ldconfig
-
-If you are on 32 bit, x86_64 in the 2nd last line should be x86
-
-	To actually build:
-
-	./autogen.sh	# only needed if building from git repo
-	CFLAGS="-O2 -Wall -march=native" ./configure
-	or if you haven't installed the ati files in system locations:
-	CFLAGS="-O2 -Wall -march=native -I<path to AMD APP include>" LDFLAGS="-L<path to AMD APP lib/x86_64> ./configure
-	make
-	
-	If it finds the opencl files it will inform you with
-	"OpenCL: FOUND. GPU mining support enabled."
-
-Basic WIN32 build instructions (LIKELY OUTDATED INFO. requires mingw32):
-	./autogen.sh	# only needed if building from git repo
-	rm -f mingw32-config.cache
-	MINGW32_CFLAGS="-O2 -Wall -msse2" mingw32-configure
-	make
-	./mknsis.sh
-	
 Native WIN32 build instructions: see windows-build.txt
+
+If you build BFGMiner from source, it is recommended that you run it from the
+build directory. On *nix, you will usually need to prepend your command with a
+path like this (if you are in the bfgminer directory already): ./bfgminer
+To install system wide run 'sudo make install' or 'make install' as root. You
+can then run from any terminal.
 
 ---
 
 Usage instructions:  Run "bfgminer --help" to see options:
 
-Usage: . [-atDdGCgIKklmpPQqrRsTouvwOchnV] 
+Usage: bfgminer [-DdElmpPQqUsTouOchnV]
+
 Options for both config file and command line:
 --api-allow         Allow API access (if enabled) only to the given list of [W:]IP[/Prefix] address[/subnets]
                     This overrides --api-network and you must specify 127.0.0.1 if it is required
                     W: in front of the IP address gives that address privileged access to all api commands
 --api-description   Description placed in the API status header (default: BFGMiner version)
 --api-groups        API one letter groups G:cmd:cmd[,P:cmd:*...]
-                    See API-README for usage
+                    See README.RPC for usage
 --api-listen        Listen for API requests (default: disabled)
                     By default any command that does not just display data returns access denied
                     See --api-allow to overcome this
+--api-mcast         Enable API Multicast listener, default: disabled
+--api-mcast-addr <arg> API Multicast listen address (default: "224.0.0.75")
+--api-mcast-code <arg> Code expected in the API Multicast message, don't use '-' (default: "FTW")
+--api-mcast-des <arg>  Description appended to the API Multicast reply, default: ''
+--api-mcast-port <arg> API Multicast listen port (default: 4028)
 --api-network       Allow API (if enabled) to listen on/for any address (default: only 127.0.0.1)
 --api-port          Port number of miner API (default: 4028)
+--balance           Change multipool strategy from failover to even share balance
 --benchmark         Run BFGMiner in benchmark mode - produces no shares
+--benchmark-intense Run BFGMiner in intensive benchmark mode - produces no shares
+--chroot-dir <arg>  Chroot to a directory right after startup
+--cmd-idle <arg>    Execute a command when a device is allowed to be idle (rest or wait)
+--cmd-sick <arg>    Execute a command when a device is declared sick
+--cmd-dead <arg>    Execute a command when a device is declared dead
+--coinbase-check-addr <arg> A list of address to check against in coinbase payout list received from the previous-defined pool, separated by ','
+--coinbase-check-total <arg> The least total payout amount expected in coinbase received from the previous-defined pool
+--coinbase-check-percent <arg> The least benefit percentage expected for the sum of addr(s) listed in --cbaddr argument for previous-defined pool
+--coinbase-sig <arg> Set coinbase signature when possible
+--compact           Use compact display without per device statistics
 --debug|-D          Enable debug output
---expiry|-E <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (default: 120)
+--debuglog          Enable debug logging
+--device-protocol-dump Verbose dump of device protocol-level activities
+--device|-d <arg>   Enable only devices matching pattern (default: all)
+--disable-rejecting Automatically disable pools that continually reject shares
+--http-port <arg>   Port number to listen on for HTTP getwork miners (-1 means disabled) (default: -1)
+--expiry <arg>      Upper bound on how many seconds after getting work we consider a share from it stale (w/o longpoll active) (default: 120)
+--expiry-lp <arg>   Upper bound on how many seconds after getting work we consider a share from it stale (with longpoll active) (default: 3600)
 --failover-only     Don't leak work to backup pools when primary pool is lagging
---kernel-path|-K <arg> Specify a path to where bitstream and kernel files are (default: "/usr/local/bin")
---load-balance      Change multipool strategy from failover to even load balance
---log|-l <arg>      Interval in seconds between log output (default: 5)
+--failover-switch-delay <arg> Delay in seconds before switching back to a failed pool (default: 300)
+--generate-to <arg> Set an address to generate to for solo mining
+--force-dev-init    Always initialize devices when possible (such as bitstream uploads to some FPGAs)
+--kernel-path <arg> Specify a path to where bitstream and kernel files are
+--load-balance      Change multipool strategy from failover to quota based balance
+--log|-l <arg>      Interval in seconds between log output (default: 20)
+--log-file|-L <arg> Append log file for output messages
+--log-microseconds  Include microseconds in log output
 --monitor|-m <arg>  Use custom pipe cmd for output messages
---net-delay         Impose small delays in networking to not overload slow routers
+--net-delay         Impose small delays in networking to avoid overloading slow routers
+--no-gbt            Disable getblocktemplate support
+--no-getwork        Disable getwork support
+--no-hotplug        Disable hotplug detection
+--no-local-bitcoin  Disable adding pools for local bitcoin RPC servers
 --no-longpoll       Disable X-Long-Polling support
---no-pool-disable   Do not automatically disable pools that continually reject shares
+--no-pool-redirect  Ignore pool requests to redirect to another server
+--no-restart        Do not attempt to restart devices that hang
+--no-stratum        Disable Stratum detection
 --no-submit-stale   Don't submit shares if they are detected as stale
+--no-unicode        Don't use Unicode characters in TUI
+--noncelog <arg>    Create log of all nonces found
 --pass|-p <arg>     Password for bitcoin JSON-RPC server
 --per-device-stats  Force verbose mode and output per-device statistics
+--pool-goal <arg>   Named goal for the previous-defined pool
+--pool-priority <arg> Priority for just the previous-defined pool
+--pool-proxy|-x     Proxy URI to use for connecting to just the previous-defined pool
 --protocol-dump|-P  Verbose dump of protocol-level activities
 --queue|-Q <arg>    Minimum number of work items to have queued (0 - 10) (default: 1)
 --quiet|-q          Disable logging output, display status and errors
+--quit-summary <arg> Summary printed when you quit: none/devs/procs/detailed
+--quota|-U <arg>    quota;URL combination for server with load-balance strategy quotas
 --real-quiet        Disable all output
---remove-disabled   Remove disabled devices entirely, as if they didn't exist
---retries|-r <arg>  Number of times to retry before giving up, if JSON-RPC call fails (-1 means never) (default: -1)
---retry-pause|-R <arg> Number of seconds to pause, between retries (default: 5)
+--request-diff <arg> Request a specific difficulty from pools (default: 1.0)
+--retries <arg>     Number of times to retry failed submissions before giving up (-1 means never) (default: -1)
 --rotate <arg>      Change multipool strategy from failover to regularly rotate at N minutes (default: 0)
 --round-robin       Change multipool strategy from failover to round robin on failure
---scan-time|-s <arg> Upper bound on time spent scanning current work, in seconds (default: 60)
+--scan|-S <arg>     Configure how to scan for mining devices
+--scan-time <arg>   Upper bound on time spent scanning current work, in seconds (default: 60)
 --sched-start <arg> Set a time of day in HH:MM to start mining (a once off without a stop time)
 --sched-stop <arg>  Set a time of day in HH:MM to stop mining (will quit without a start time)
+--scrypt            Use the scrypt algorithm for mining (non-bitcoin)
+--set-device|--set <arg> Set default parameters on devices; eg, NFY:osc6_bits=50, bfl:voltage=<value>, compac:clock=<value>
+--setuid <arg>      Username of an unprivileged user to run as
 --sharelog <arg>    Append share log to file
---shares <arg>      Quit after mining N shares (default: unlimited)
---socks-proxy <arg> Set socks4 proxy (host:port)
+--shares <arg>      Quit after mining 2^32 * N hashes worth of shares (default: unlimited)
+--show-processors   Show per processor statistics in summary
+--skip-security-checks <arg> Skip security checks sometimes to save bandwidth; only check 1/<arg>th of the time (default: never skip)
+--socks-proxy <arg> Set socks proxy (host:port) for all pools without a proxy specified
+--stratum-port <arg> Port number to listen on for stratum miners (-1 means disabled) (default: -1)
+--submit-threads    Minimum number of concurrent share submissions (default: 64)
 --syslog            Use system log for output messages (default: standard error)
---temp-cutoff <arg> Temperature where a device will be automatically disabled, one value or comma separated list (default: 95)
+--temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
 --text-only|-T      Disable ncurses formatted screen output
+--unicode           Use Unicode characters in TUI
 --url|-o <arg>      URL for bitcoin JSON-RPC server
 --user|-u <arg>     Username for bitcoin JSON-RPC server
 --verbose           Log verbose output to stderr as well as status output
+--weighed-stats     Display statistics weighed to difficulty 1
 --userpass|-O <arg> Username:Password pair for bitcoin JSON-RPC server
+--worktime                     Display extra work time debug information
 Options for command line only:
 --config|-c <arg>   Load a JSON-format configuration file
 See example.conf for an example configuration.
+--no-default-config Inhibit loading default config file
+--default-config    Always load the default config file
 --help|-h           Print this message
 --version|-V        Display version and exit
 
 
 GPU only options:
 
---auto-fan          Automatically adjust all GPU fan speeds to maintain a target temperature
---auto-gpu          Automatically adjust all GPU engine clock speeds to maintain a target temperature
---device|-d <arg>   Select device to use, (Use repeat -d for multiple devices, default: all)
---disable-gpu|-G    Disable GPU mining even if suitable devices exist
---gpu-threads|-g <arg> Number of threads per GPU (1 - 10) (default: 2)
---gpu-dyninterval <arg> Set the refresh interval in ms for GPUs using dynamic intensity (default: 7)
---gpu-engine <arg>  GPU engine (over)clock range in Mhz - one value, range and/or comma separated list (e.g. 850-900,900,750-850)
---gpu-fan <arg>     GPU fan percentage range - one value, range and/or comma separated list (e.g. 25-85,85,65)
 --gpu-map <arg>     Map OpenCL to ADL device order manually, paired CSV (e.g. 1:0,2:1 maps OpenCL 1 to ADL 0, 2 to 1)
---gpu-memclock <arg> Set the GPU memory (over)clock in Mhz - one value for all or separate by commas for per card.
---gpu-memdiff <arg> Set a fixed difference in clock speed between the GPU and memory in auto-gpu mode
 --gpu-platform <arg> Select OpenCL platform ID to use for GPU mining
---gpu-powertune <arg> Set the GPU powertune percentage - one value for all or separate by commas for per card.
 --gpu-reorder       Attempt to reorder GPU devices according to PCI Bus ID
---gpu-vddc <arg>    Set the GPU voltage in Volts - one value for all or separate by commas for per card.
---intensity|-I <arg> Intensity of GPU scanning (d or -10 -> 10, default: d to maintain desktop interactivity)
---kernel|-k <arg>   Override kernel to use (diablo, poclbm, phatk or diakgcn) - one value or comma separated
---ndevs|-n          Enumerate number of detected GPUs and exit
 --no-adl            Disable the ATI display library used for monitoring and setting GPU parameters
---no-restart        Do not attempt to restart GPUs that hang
---temp-hysteresis <arg> Set how much the temperature can fluctuate outside limits when automanaging speeds (default: 3)
---temp-overheat <arg> Overheat temperature when automatically managing fan and GPU speeds (default: 85)
---temp-target <arg> Target temperature when automatically managing fan and GPU speeds (default: 75)
---vectors|-v <arg>  Override detected optimal vector (1, 2 or 4) - one value or comma separated list
---worksize|-w <arg> Override detected optimal worksize - one value or comma separated list
+
+GPU mining is disabled by default for SHA256d if you have any dedicated mining
+devices, but can be enabled explicitly specifying the -S opencl:auto option.
+
+See README.GPU for more information regarding GPU mining.
+See README.scrypt for more information regarding (non-bitcoin) scrypt mining.
 
 
-FPGA mining boards(BitForce, Icarus, ModMiner, Ztex) only options:
+To use ASICs or FPGAs, you will need to be sure the user BFGMiner is running as
+has appropriate permissions. This varies by operating system.
+On Linux, with BFGMiner's udev rules: sudo usermod <username> -a -G video
+Note that on GNU/Linux systems, you will usually need to login again before
+group changes take effect.
 
---scan-serial|-S <arg> Serial port to probe for FPGA mining device
+By default, BFGMiner will scan for autodetected devices. If you want to prevent
+BFGMiner from doing this, you can use "-S noauto". If you want to probe all
+serial ports, you can use "-S all"; note that this may write data to non-mining
+devices which may then behave in unexpected ways!
 
-This option is only for BitForce, Icarus, and/or ModMiner FPGAs
+On Linux, <arg> is usually of the format /dev/ttyUSBn
+On Mac OS X, <arg> is usually of the format /dev/cu.usb*
+On Windows, <arg> is usually of the format \\.\COMn
+(where n = the correct device number for the device)
 
-By default, BFGMiner will scan for autodetected FPGAs unless at least one
--S is specified for that driver. If you specify -S and still want BFGMiner
-to scan, you must also use "-S auto". If you want to prevent BFGMiner from
-scanning without specifying a device, you can use "-S noauto". Note that
-presently, autodetection only works on Linux, and might only detect one
-device depending on the version of udev being used.
-
-On linux <arg> is usually of the format /dev/ttyUSBn
-On windows <arg> is usually of the format \\.\COMn
-(where n = the correct device number for the FPGA device)
-
-The official supplied binaries are compiled with support for all FPGAs.
+The official supplied binaries are compiled with support for all ASICs/FPGAs.
 To force the code to only attempt detection with a specific driver,
-prepend the argument with the driver name followed by a colon.
-For example, "icarus:/dev/ttyUSB0" or "bitforce:\\.\COM5"
+prepend the argument with the driver name followed by an "at" symbol.
+For example, "icarus@/dev/ttyUSB0" or "bitforce@\\.\COM5"
+or using the short name: "ica@/dev/ttyUSB0" or "bfl@\\.\COM5"
 
-For other FPGA details see the FPGA-README
+Some FPGAs do not have non-volatile storage for their bitstreams and must be
+programmed every power cycle, including first use. To use these devices, you
+must download the proper bitstream from the vendor's website and copy it to the
+"bitstreams" directory into your BFGMiner application directory.
 
+See README.ASIC and README.FPGA for more information regarding these.
 
-CPU only options (not included in binaries):
-
---algo|-a <arg>     Specify sha256 implementation for CPU mining:
-        auto            Benchmark at startup and pick fastest algorithm
-        c               Linux kernel sha256, implemented in C
-        4way            tcatm's 4-way SSE2 implementation
-        via             VIA padlock implementation
-        cryptopp        Crypto++ C/C++ implementation
-        sse2_64         SSE2 64 bit implementation for x86_64 machines
-        sse4_64         SSE4.1 64 bit implementation for x86_64 machines (default: sse2_64)
---cpu-threads|-t <arg> Number of miner CPU threads (default: 4)
---enable-cpu|-C     Enable CPU mining with other mining (default: no CPU mining if other devices exist)
-
-
-
----
-
-EXECUTIVE SUMMARY ON USAGE:
-
-After saving configuration from the menu, you do not need to give BFGMiner any
-arguments and it will load your configuration.
-
-Any configuration file may also contain a single
-	"include" : "filename"
-to recursively include another configuration file.
-Writing the configuration will save all settings from all files in the output.
-
-
-Single pool, regular desktop:
-
-bfgminer -o http://pool:port -u username -p password
-
-Single pool, dedicated miner:
-
-bfgminer -o http://pool:port -u username -p password -I 9
-
-Single pool, first card regular desktop, 3 other dedicated cards:
-
-bfgminer -o http://pool:port -u username -p password -I d,9,9,9
-
-Multiple pool, dedicated miner:
-
-bfgminer -o http://pool1:port -u pool1username -p pool1password -o http://pool2:port -u pool2usernmae -p pool2password -I 9
-
-Add overclocking settings, GPU and fan control for all cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950 --gpu-memclock 300
-
-Add overclocking settings, GPU and fan control with different engine settings for 4 cards:
-
-bfgminer -o http://pool:port -u username -p password -I 9 --auto-fan --auto-gpu --gpu-engine 750-950,945,700-930,960 --gpu-memclock 300
-
-READ WARNINGS AND DOCUMENTATION BELOW ABOUT OVERCLOCKING
-
-On Linux you virtually always need to export your display settings before
-starting to get all the cards recognised and/or temperature+clocking working:
-
-export DISPLAY=:0
+See README.CPU for information regarding CPU mining.
 
 ---
 
@@ -288,11 +403,23 @@ WHILE RUNNING:
 
 The following options are available while running with a single keypress:
 
-[P]ool management [G]PU management [S]ettings [D]isplay options [Q]uit
+[M]anage devices [P]ool management [S]ettings [D]isplay options  [H]elp [Q]uit
+
+M gives you something like:
+
+Select processor to manage using up/down arrow keys
+ BFL 0a: 78.0C |  3.64/ 3.70/ 2.91Gh/s | A:46 R:0+0(none) HW:  2/none
+  BitFORCE SHA256 SC from Butterfly Labs
+Serial: FTWN6T67
+
+[D]isable
+Or press Enter when done
+
 
 P gives you:
 
 Current pool management strategy: Failover
+[F]ailover only disabled
 [A]dd pool [R]emove pool [D]isable pool [E]nable pool
 [C]hange management strategy [S]witch pool [I]nformation
 
@@ -304,85 +431,101 @@ S gives you:
 [S]cantime: 60
 [E]xpiry: 120
 [R]etries: -1
-[P]ause: 5
 [W]rite config file
+[B]FGMiner restart
 
 
 D gives you:
 
-Toggle: [D]ebug [N]ormal [S]ilent [V]erbose [R]PC debug
-[L]og interval [C]lear
+[N]ormal [C]lear [S]ilent mode (disable all output)
+[D]ebug:off
+[P]er-device:off
+[Q]uiet:off
+[V]erbose:off
+[R]PC debug:off
+[W]orkTime details:off
+co[M]pact: off
+[L]og interval:5
 
 
 Q quits the application.
 
 
-G gives you something like:
+The running log shows output similar to that below:
 
-GPU 0: [124.2 / 191.3 Mh/s] [Q:212  A:77  R:33  HW:0  E:36%  U:1.73/m]
-Temp: 67.0 C
-Fan Speed: 35% (2500 RPM)
-Engine Clock: 960 MHz
-Memory Clock: 480 Mhz
-Vddc: 1.200 V
-Activity: 93%
-Powertune: 0%
-Last initialised: [2011-09-06 12:03:56]
-Thread 0: 62.4 Mh/s Enabled ALIVE
-Thread 1: 60.2 Mh/s Enabled ALIVE
+ [2013-02-13 00:26:30] Accepted 1758e8df BFL 0  pool 0 Diff 10/1
+ [2013-02-13 00:26:32] Accepted 1d9a2199 MMQ 0a pool 0 Diff 8/1
+ [2013-02-13 00:26:33] Accepted b1304924 ZTX 0  pool 0 Diff 1/1
+ [2013-02-13 00:26:33] Accepted c3ad22f4 XBS 0b pool 0 Diff 1/1
 
-[E]nable [D]isable [R]estart GPU [C]hange settings
-Or press any other key to continue
-
+The 8 byte hex value are the 2nd set of 32 bits from the share submitted to the
+pool. The 2 diff values are the actual difficulty target that share reached
+followed by the difficulty target the pool is currently asking for.
 
 ---
-Also many issues and FAQs are covered in the forum thread
+Also many issues and FAQs are covered in the forum threads
 dedicated to this program,
-	http://forum.bitcoin.org/index.php?topic=28402.0
+	https://bitcointalk.org/?topic=78192
+	https://bitcointalk.org/?topic=168174
 
-The output line shows the following:
-5s:1713.6 avg:1707.8 u:1710.2 Mh/s | A:729  R:8  HW:0  E:242%  U:22.53/m
+If you are mining on a single pool, the pool display shows:
+ Pool 0: ...s.m.eligius.st   Diff:16  +Strtm  LU:[03:26:16]  User:1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
 
-Each column is as follows:
-5s:  A 5 second exponentially decaying average hash rate
-avg: An all time average hash rate
-u:   An all time average hash rate based on actual accepted shares
-A:   The number of Accepted shares
-R:   The number of Rejected shares
-HW:  The number of HardWare errors
-E:   The Efficiency defined as number of shares returned / work item
-U:   The Utility defined as the number of shares / minute
+This tells you which pool you're using, as well as its current share difficulty,
+protocol, and last explicit work update. If BFGMiner has a working block
+notification source, the protocol will be prefixed by a plus sign. If not, a
+minus sign.
 
- GPU 1: 73.5C 2551RPM | 427.3/443.0/442.1Mh/s | A:8 R:0 HW:0 U:4.39/m
+If you are mining on multiple pools at once, the pool display instead shows:
+ Pools: 2 (0,1)              Diff:4-16  +  LU:[03:25:30]
 
-Each column is as follows:
-Temperature (if supported)
-Fanspeed (if supported)
-A 5 second exponentially decaying average hash rate
-An all time average hash rate
-An all time average hash rate based on actual accepted shares
-The number of accepted shares
-The number of rejected shares
-The number of hardware erorrs
-The utility defines as the number of shares / minute
+You get the total number of working pools, the pool numbers for each of those,
+the range of current share difficulties, whether block notification is working
+(plus/minus), and the oldest explicit work update currently being used for new
+work.
+
+The block display shows:
+Block #217364: ...1b89f8d3  Diff:7.67M (54.93T)  Started: [17:17:22]  I:12.99mBTC/hr
+
+This shows a short stretch of the next block's height, the current block,
+difficulty (including the network hashrate that difficulty represents), when the
+search for the new block started, and finally expected Income, calculated by
+actual shares submitted in 100% PPS value (assumes Bitcoin, does not account for
+altcoin conversions!).
 
 The BFGMiner status line shows:
- TQ: 1  ST: 1  SS: 0  DW: 0  NB: 1  GW: 301  LW: 8  GF: 1  RF: 1
+ ST:1  F:0  NB:1  AS:0  BW:[ 75/241 B/s]  E:2.42  BS:2.71k
 
-TQ is Total Queued work items.
 ST is STaged work items (ready to use).
-SS is Stale Shares discarded (detected and not submitted so don't count as rejects)
-DW is Discarded Work items (work from block no longer valid to work on)
+F  is network Failure occasions (server down or slow to provide work)
 NB is New Blocks detected on the network
-GW is GetWork requested (work items from pools)
-LW is Locally generated Work items
-GF is Getwork Fail Occasions (server slow to provide work)
-RF is Remote Fail occasions (server slow to accept work)
+AS is Active Submissions (shares in the process of submitting)
+BW is BandWidth usage on the network (received/sent)
+E  is Efficiency defined as number of shares accepted (multiplied by their
+          difficulty) per 2 KB of bandwidth
+BS is the all time Best Share difficulty you've found
 
-NOTE: Running intensities above 9 with current hardware is likely to only
-diminish return performance even if the hash rate might appear better. A good
-starting baseline intensity to try on dedicated miners is 9. Higher values are
-there to cope with future improvements in hardware.
+The totals line shows the following:
+ 6/32   75.0C | 171.3/170.8/171.2Gh/s | A:729 R:8+0(.01%) HW:0/.81%
+
+Each column is as follows:
+  The number of devices and processors currently mining
+  Hottest temperature reported by any processor
+  20 second exponentially decaying average hash rate (configurable with --log
+      option)
+  An all time average hash rate
+  An all time average hash rate based on actual nonces found, adjusted for pool
+      reject and stale rate
+  The number of Accepted shares
+  The number of Rejected shares and stale shares discarded (never submitted),
+      and the percentage these are of total found.
+  The number of HardWare errors, and percentage invalid of nonces returned
+
+Each device shows:
+ BFL 2: 74.0C | 51.97/58.90/57.17Gh/s | A:847 R:15+0(.54%) HW:496/.91%
+
+Columns are the same as in the totals line.
+
 
 ---
 MULTIPOOL
@@ -407,8 +550,108 @@ This strategy moves at user-defined intervals from one active pool to the next,
 skipping pools that are idle.
 
 LOAD BALANCE:
-This strategy sends work in equal amounts to all the pools specified. If any
-pool falls idle, the rest will take up the slack keeping the miner busy.
+This strategy sends work to all the pools on a quota basis. By default, all
+pools are allocated equal quotas unless specified with --quota. This
+apportioning of work is based on work handed out, not shares returned so is
+independent of difficulty targets or rejected shares. While a pool is disabled
+or dead, its quota is dropped until it is re-enabled. Quotas are forward
+looking, so if the quota is changed on the fly, it only affects future work.
+If all pools are set to zero quota or all pools with quota are dead, it will
+fall back to a failover mode. See quota below for more information.
+
+The failover-only flag has special meaning in combination with load-balance
+mode and it will distribute quota back to priority pool 0 from any pools that
+are unable to provide work for any reason so as to maintain quota ratios
+between the rest of the pools.
+
+BALANCE:
+This strategy monitors the amount of difficulty 1 shares solved for each pool
+and uses it as a basis for trying to doing the same amount of work for each
+pool.
+
+
+---
+SOLO MINING
+
+BFGMiner supports solo mining with any GBT-compatible bitcoin node (such as
+bitcoind). To use this mode, you need to specify the URL of your bitcoind node
+using the usual pool options (--url, --userpass, etc), and the --generate-to
+option to specify the Bitcoin address you wish to receive the block rewards
+mined. When you run Bitcoin Core on the same computer as your miner, the pool
+itself will be automatically configured for you (on the default goal). Please be
+aware that solo mining via GBT is at this time only supported for Bitcoin.
+
+IMPORTANT: If you are solo mining with more than one instance of BFGMiner (or
+any other software) per payout address, you must also specify data using the
+--coinbase-sig option to ensure each miner is working on unique work. Note
+that this data will be publicly seen if your miner finds a block using any
+GBT-enabled pool, even when not solo mining (such as failover).
+
+If your bitcoin node does not support longpolling (for example, bitcoind 0.8.x),
+you should consider setting up a failover pool to provide you with block
+notifications. Note that solo mining does not use shares, so BFGMiner's adjusted
+hashrate (third column) may suddenly drop to zero if a block you submit is
+rejected; this does not indicate that it has stopped mining.
+
+Example solo mining usage:
+
+bfgminer -o http://localhost:8332 -u username -p password \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --coinbase-sig "rig1: This is Joe's block!"
+
+If you want to solo mine on multiple GBT-compatible Bitcoin blockchains, you can
+specify --generate-to multiple times with a goal name prefix followed by a
+colon. Note that at this time, the coinbase sig is always shared across all
+goals/pools.
+
+Example multi-blockchain solo mining usage:
+
+bfgminer -o http://localhost:8332 -u username -p password \
+    --generate-to 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    -o http://localhost:7221 -u user2 -p password --pool-goal mychain \
+    --generate-to mychain:1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh \
+    --coinbase-sig "rig1: This is Joe's block!"
+
+
+---
+QUOTAS
+
+The load-balance multipool strategy works off a quota based scheduler. The
+quotas handed out by default are equal, but the user is allowed to specify any
+arbitrary ratio of quotas. For example, if all the quota values add up to 100,
+each quota value will be a percentage, but if 2 pools are specified and pool0
+is given a quota of 1 and pool1 is given a quota of 9, pool0 will get 10% of
+the work and pool1 will get 90%. Quotas can be changed on the fly with RPC,
+and do not act retrospectively. Setting a quota to zero will effectively
+disable that pool unless all other pools are disabled or dead. In that
+scenario, load-balance falls back to regular failover priority-based strategy.
+While a pool is dead, it loses its quota and no attempt is made to catch up
+when it comes back to life.
+
+To specify quotas on the command line, pools should be specified with a
+semicolon separated --quota(or -U) entry instead of --url. Pools specified with
+--url are given a nominal quota value of 1 and entries can be mixed.
+
+For example:
+--url poolA:portA -u usernameA -p passA --quota "2;poolB:portB" -u usernameB -p passB
+Will give poolA 1/3 of the work and poolB 2/3 of the work.
+
+Writing configuration files with quotas is likewise supported. To use the above
+quotas in a configuration file they would be specified thus:
+
+"pools" : [
+        {
+                "url" : "poolA:portA",
+                "user" : "usernameA",
+                "pass" : "passA"
+        },
+        {
+                "quota" : "2;poolB:portB",
+                "user" : "usernameB",
+                "pass" : "passB"
+        }
+]
+
 
 ---
 LOGGING
@@ -427,6 +670,27 @@ it will log to a file called logfile.txt and otherwise work the same.
 There is also the -m option on linux which will spawn a command of your choice
 and pipe the output directly to that command.
 
+The WorkTime details 'debug' option adds details on the end of each line
+displayed for Accepted or Rejected work done. An example would be:
+
+ <-00000059.ed4834a3 M:X D:1.0 G:17:02:38:0.405 C:1.855 (2.995) W:3.440 (0.000) S:0.461 R:17:02:47
+
+The first 2 hex codes are the previous block hash, the rest are reported in
+seconds unless stated otherwise:
+The previous hash is followed by the getwork mode used M:X where X is one of
+P:Pool, T:Test Pool, L:LP or B:Benchmark,
+then D:d.ddd is the difficulty required to get a share from the work,
+then G:hh:mm:ss:n.nnn, which is when the getwork or LP was sent to the pool and
+the n.nnn is how long it took to reply,
+followed by 'O' on its own if it is an original getwork, or 'C:n.nnn' if it was
+a clone with n.nnn stating how long after the work was recieved that it was
+cloned, (m.mmm) is how long from when the original work was received until work
+started,
+W:n.nnn is how long the work took to process until it was ready to submit,
+(m.mmm) is how long from ready to submit to actually doing the submit, this is
+usually 0.000 unless there was a problem with submitting the work,
+S:n.nnn is how long it took to submit the completed work and await the reply,
+R:hh:mm:ss is the actual time the work submit reply was received
 
 If you start BFGMiner with the --sharelog option, you can get detailed
 information for each share found. The argument to the option may be "-" for
@@ -451,224 +715,51 @@ For example (this is wrapped, but it's all on one line for real):
     0000000000000000000000000000000000000000000000000000000080020000
 
 ---
-OVERCLOCKING WARNING AND INFORMATION
-
-AS WITH ALL OVERCLOCKING TOOLS YOU ARE ENTIRELY RESPONSIBLE FOR ANY HARM YOU
-MAY CAUSE TO YOUR HARDWARE. OVERCLOCKING CAN INVALIDATE WARRANTIES, DAMAGE
-HARDWARE AND EVEN CAUSE FIRES. THE AUTHOR ASSUMES NO RESPONSIBILITY FOR ANY
-DAMAGE YOU MAY CAUSE OR UNPLANNED CHILDREN THAT MAY OCCUR AS A RESULT.
-
-The GPU monitoring, clocking and fanspeed control incorporated into BFGMiner
-comes through use of the ATI Display Library. As such, it only supports ATI
-GPUs. Even if ADL support is successfully built into BFGMiner, unless the card
-and driver supports it, no GPU monitoring/settings will be available.
-
-BFGMiner supports initial setting of GPU engine clock speed, memory clock
-speed, voltage, fanspeed, and the undocumented powertune feature of 69x0+ GPUs.
-The setting passed to BFGMiner is used by all GPUs unless separate values are
-specified. All settings can all be changed within the menu on the fly on a
-per-GPU basis.
-
-For example:
---gpu-engine 950 --gpu-memclock 825
-
-will try to set all GPU engine clocks to 950 and all memory clocks to 825,
-while:
---gpu-engine 950,945,930,960 --gpu-memclock 300
-
-will try to set the engine clock of card 0 to 950, 1 to 945, 2 to 930, 3 to
-960 and all memory clocks to 300.
-
-AUTO MODES:
-There are two "auto" modes in BFGMiner, --auto-fan and --auto-gpu. These can
-be used independently of each other and are complementary. Both auto modes
-are designed to safely change settings while trying to maintain a target
-temperature. By default this is set to 75 degrees C but can be changed with:
-
---temp-target
-e.g.
---temp-target 80
-Sets all cards' target temperature to 80 degrees.
-
---temp-target 75,85
-Sets card 0 target temperature to 75, and card 1 to 85 degrees.
-
-AUTO FAN:
-e.g.
---auto-fan (implies 85% upper limit)
---gpu-fan 25-85,65 --auto-fan
-
-Fan control in auto fan works off the theory that the minimum possible fan
-required to maintain an optimal temperature will use less power, make less
-noise, and prolong the life of the fan. In auto-fan mode, the fan speed is
-limited to 85% if the temperature is below "overheat" intentionally, as
-higher fanspeeds on GPUs do not produce signficantly more cooling, yet
-significanly shorten the lifespan of the fans. If temperature reaches the
-overheat value, fanspeed will still be increased to 100%. The overheat value
-is set to 85 degrees by default and can be changed with:
-
---temp-overheat
-e.g.
---temp-overheat 75,85
-Sets card 0 overheat threshold to 75 degrees and card 1 to 85.
-
-AUTO GPU:
-e.g.
---auto-gpu --gpu-engine 750-950
---auto-gpu --gpu-engine 750-950,945,700-930,960
-
-GPU control in auto gpu tries to maintain as high a clock speed as possible
-while not reaching overheat temperatures. As a lower clock speed limit,
-the auto-gpu mode checks the GPU card's "normal" clock speed and will not go
-below this unless you have manually set a lower speed in the range. Also,
-unless a higher clock speed was specified at startup, it will not raise the
-clockspeed. If the temperature climbs, fanspeed is adjusted and optimised
-before GPU engine clockspeed is adjusted. If fan speed control is not available
-or already optimal, then GPU clock speed is only decreased if it goes over
-the target temperature by the hysteresis amount, which is set to 3 by default
-and can be changed with:
---temp-hysteresis
-If the temperature drops below the target temperature, and engine clock speed
-is not at the highest level set at startup, BFGMiner will raise the clock speed.
-If at any time you manually set an even higher clock speed successfully in
-BFGMiner, it will record this value and use it as its new upper limit (and the
-same for low clock speeds and lower limits). If the temperature goes over the
-cutoff limit (95 degrees by default), BFGMiner will completely disable the GPU
-from mining and it will not be re-enabled unless manually done so. The cutoff
-temperature can be changed with:
-
---temp-cutoff
-e.g.
---temp-cutoff 95,105
-Sets card 0 cutoff temperature to 95 and card 1 to 105.
-
---gpu-memdiff -125
-This setting will modify the memory speed whenever the GPU clock speed is
-modified by --auto-gpu. In this example, it will set the memory speed to
-be 125 Mhz lower than the GPU speed. This is useful for some cards like the
-6970 which normally don't allow a bigger clock speed difference.
-
-
-CHANGING SETTINGS:
-When setting values, it is important to realise that even though the driver
-may report the value was changed successfully, and the new card power profile
-information contains the values you set it to, that the card itself may
-refuse to use those settings. As the performance profile changes dynamically,
-querying the "current" value on the card can be wrong as well. So when changing
-values in BFGMiner, after a pause of 1 second, it will report to you the current
-values where you should check that your change has taken. An example is that
-6970 reference cards will accept low memory values but refuse to actually run
-those lower memory values unless they're within 125 of the engine clock speed.
-In that scenario, they usually set their real speed back to their default.
-
-BFGMiner reports the so-called "safe" range of whatever it is you are modifying
-when you ask to modify it on the fly. However, you can change settings to values
-outside this range. Despite this, the card can easily refuse to accept your
-changes, or worse, to accept your changes and then silently ignore them. So
-there is absolutely to know how far to/from where/to it can set things safely or
-otherwise, and there is nothing stopping you from at least trying to set them
-outside this range. Being very conscious of these possible failures is why
-BFGMiner will report back the current values for you to examine how exactly the
-card has responded. Even within the reported range of accepted values by the
-card, it is very easy to crash just about any card, so it cannot use those
-values to determine what range to set. You have to provide something meaningful
-manually for BFGMiner to work with through experimentation.
-
-STARTUP / SHUTDOWN:
-When BFGMiner starts up, it tries to read off the current profile information
-for clock and fan speeds and stores these values. When quitting BFGMiner, it
-will then try to restore the original values. Changing settings outside of
-BFGMiner while it's running may be reset to the startup BFGMiner values when
-BFGMiner shuts down because of this.
-
----
 
 RPC API
 
-For RPC API details see the API-README file
-
----
-
-GPU DEVICE ISSUES and use of --gpu-map
-
-GPUs mine with OpenCL software via the GPU device driver. This means you need
-to have both an OpenCL SDK installed, and the GPU device driver RUNNING (i.e.
-Xorg up and running configured for all devices that will mine on linux etc.)
-Meanwhile, the hardware monitoring that BFGMiner offers for AMD devices relies
-on the ATI Display Library (ADL) software to work. OpenCL DOES NOT TALK TO THE
-ADL. There is no 100% reliable way to know that OpenCL devices are identical
-to the ADL devices, as neither give off the same information. BFGMiner does its
-best to correlate these devices based on the order that OpenCL and ADL numbers
-them. It is possible that this will fail for the following reasons:
-
-1. The device order is listed differently by OpenCL and ADL (rare), even if the
-number of devices is the same.
-2. There are more OpenCL devices than ADL. OpenCL stupidly sees one GPU as two
-devices if you have two monitors connected to the one GPU.
-3. There are more ADL devices than OpenCL. ADL devices include any ATI GPUs,
-including ones that can't mine, like some older R4xxx cards.
-
-To cope with this, the ADVANCED option for --gpu-map is provided with BFGMiner.
-DO NOT USE THIS UNLESS YOU KNOW WHAT YOU ARE DOING. The default will work the
-vast majority of the time unless you know you have a problem already.
-
-To get useful information, start BFGMiner with just the -n option. You will get
-output that looks like this:
-
-[2012-04-25 13:17:34] CL Platform 0 vendor: Advanced Micro Devices, Inc.
-[2012-04-25 13:17:34] CL Platform 0 name: AMD Accelerated Parallel Processing
-[2012-04-25 13:17:34] CL Platform 0 version: OpenCL 1.1 AMD-APP (844.4)
-[2012-04-25 13:17:34] Platform 0 devices: 3
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
-[2012-04-25 13:17:34] 3 GPU devices max detected
-
-Note the number of devices here match, and the order is the same. If devices 1
-and 2 were different between Tahiti and Cayman, you could run BFGMiner with:
---gpu-map 2:1,1:2
-And it would swap the monitoring it received from ADL device 1 and put it to
-opencl device 2 and vice versa.
-
-If you have 2 monitors connected to the first device it would look like this:
-
-[2012-04-25 13:17:34] Platform 0 devices: 4
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Tahiti
-[2012-04-25 13:17:34]   3       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 6900 Series hardware monitoring enabled
-
-To work around this, you would use:
--d 0 -d 2 -d 3 --gpu-map 2:1,3:2
-
-If you have an older card as well as the rest it would look like this:
-
-[2012-04-25 13:17:34] Platform 0 devices: 3
-[2012-04-25 13:17:34]   0       Tahiti
-[2012-04-25 13:17:34]   1       Tahiti
-[2012-04-25 13:17:34]   2       Cayman
-[2012-04-25 13:17:34] GPU 0 AMD Radeon HD 4500 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 1 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 2 AMD Radeon HD 7900 Series  hardware monitoring enabled
-[2012-04-25 13:17:34] GPU 3 AMD Radeon HD 6900 Series hardware monitoring enabled
-
-To work around this you would use:
---gpu-map 0:1,1:2,2:3
-
+For RPC API details see the README.RPC file
 
 ---
 
 FAQ
 
+Q: Why can't BFGMiner find lib<something> even after I installed it from source
+code?
+A: On UNIX-like operating systems, you often need to run one or more commands to
+reload library caches, such as "ldconfig" or similar. A couple of systems (such
+as Fedora) ship with /usr/local/lib missing from their library search path. In
+this case, you can usually add it like this:
+    echo /usr/local/lib >/etc/ld.so.conf.d/local.conf
+Please note that if your libraries installed into lib64 instead of lib, you
+should use that in the ld.so config file above instead.
+
 Q: BFGMiner segfaults when I change my shell window size.
 A: Older versions of libncurses have a bug to do with refreshing a window
 after a size change. Upgrading to a new version of curses will fix it.
+
+Q: I have multiple USB stick devices but I can't get them all to work at once?
+A: Very few USB hubs deliver the promised power required to run as many devices
+as they fit if all of them draw power from USB. Devices may use up to 2.5 watts
+of power (or 4.5 watts for USB 3 devices), and mining USB sticks usually need it
+all. You can estimate how much power your USB hub can provide by multiplying its
+power supply's output amps by volts (so, if it says 12V 2.5A, you have 12*2.5=
+30 watts).
+
+Q: I've confirmed my USB miners are powered sufficiently, but BFGMiner still
+is having problems running more than a few at once?
+A: Some USB hosts cannot deal with polling as often as miners may need for quick
+delivery of shares. On Linux, you can request putting VCOM devices in "high
+latency" mode (or rather, disabling the default "low latency" mode) using the
+setserial command:
+    setserial /dev/ttyUSB0 '^low_latency'
+You can further tweak device latency by finding the latency_timer attribute in
+sysfs.
+
+Q: I've plugged my devices into my USB hub but nothing shows up?
+A: RPis and Windows have incomplete or non-standard USB3 support so they may
+never work. It may be possible to get a USB3 hub to work by plugging it into a
+USB2 hub.
 
 Q: Can I mine on servers from different networks (eg smartcoin and bitcoin) at
 the same time?
@@ -676,154 +767,195 @@ A: No, BFGMiner keeps a database of the block it's working on to ensure it does
 not work on stale blocks, and having different blocks from two networks would
 make it invalidate the work from each other.
 
-Q: Can I change the intensity settings individually for each GPU?
-A: Yes, pass a list separated by commas such as -I d,4,9,9
+Q: Can I configure BFGMiner to mine with different login credentials or pools
+for each separate device?
+A: No such feature has been implemented to support this.
 
 Q: Can I put multiple pools in the config file?
 A: Yes, check the example.conf file. Alternatively, set up everything either on
-the command line or via the menu after startup and choose settings->write
+the command line or via the menu after startup and choose [S]ettings->[W]rite
 config file and the file will be loaded one each startup.
 
 Q: The build fails with gcc is unable to build a binary.
-A: Remove the "-march=native" component of your CFLAGS as your version of gcc
+A: Remove the "-march=native" component of your CFLAGS as your version of GCC
 does not support it.
-
-Q: The CPU usage is high.
-A: The ATI drivers after 11.6 have a bug that makes them consume 100% of one
-CPU core unnecessarily so downgrade to 11.6. Binding BFGMiner to one CPU core on
-windows can minimise it to 100% (instead of more than one core). Driver version
-11.11 on linux and 11.12 on windows appear to have fixed this issue. Note that
-later drivers may have an apparent return of high CPU usage. Try
-'export GPU_USE_SYNC_OBJECTS=1' on Linux before starting BFGMiner.
 
 Q: Can you implement feature X?
 A: I can, but time is limited, and people who donate are more likely to get
 their feature requests implemented.
 
-Q: My GPU hangs and I have to reboot it to get it going again?
-A: The more aggressively the mining software uses your GPU, the less overclock
-you will be able to run. You are more likely to hit your limits with BFGMiner
-and you will find you may need to overclock your GPU less aggressively. The
-software cannot be responsible and make your GPU hang directly. If you simply
-cannot get it to ever stop hanging, try decreasing the intensity, and if even
-that fails, try changing to the poclbm kernel with -k poclbm, though you will
-sacrifice performance. BFGMiner is designed to try and safely restart GPUs as
-much as possible, but NOT if that restart might actually crash the rest of the
-GPUs mining, or even the machine. It tries to restart them with a separate
-thread and if that separate thread dies, it gives up trying to restart any more
-GPUs.
-
 Q: Work keeps going to my backup pool even though my primary pool hasn't
 failed?
 A: BFGMiner checks for conditions where the primary pool is lagging and will
 pass some work to the backup servers under those conditions. The reason for
-doing this is to try its absolute best to keep the GPUs working on something
+doing this is to try its absolute best to keep the devices working on something
 useful and not risk idle periods. You can disable this behaviour with the
 option --failover-only.
 
 Q: Is this a virus?
-A: BFGMiner is being packaged with other trojan scripts and some antivirus
-software is falsely accusing bfgminer.exe as being the actual virus, rather
-than whatever it is being packaged with. If you installed BFGMiner yourself,
-then you do not have a virus on your computer. Complain to your antivirus
-software company.
+A: As BFGMiner is being packaged with other trojan scripts, some antivirus
+software is falsely accusing bfgminer.exe as being the actual virus, rather than
+whatever it is being packaged with. If you installed BFGMiner yourself from a
+reputable source then you do not have a virus on your computer. Complain to your
+antivirus software company. They seem to be flagging even source code from
+BFGMiner as malicious now, even though text source files can't do anything by
+themselves.
 
 Q: Can you modify the display to include more of one thing in the output and
 less of another, or can you change the quiet mode or can you add yet another
 output mode?
-A: Everyone will always have their own view of what's important to monitor.
+A: Everyone will always have their own view of what is important to monitor.
 The defaults are very sane and I have very little interest in changing this
 any further.
 
-Q: Can you change the autofan/autogpu to change speeds in a different manner?
-A: The defaults are sane and safe. I'm not interested in changing them
-further. The starting fan speed is set to 50% in auto-fan mode as a safety
-precaution.
-
-Q: Why is my efficiency above/below 100%?
-A: Efficiency simply means how many shares you return for the amount of work
-you request. It does not correlate with efficient use of your hardware, and is
-a measure of a combination of hardware speed, block luck, pool design and other
-factors
+Q: Why is my efficiency above/below 1.00?
+A: Efficiency simply means how many shares you return for the amount of
+bandwidth used. It does not correlate with efficient use of your hardware, and
+is a measure of a combination of hardware speed, block luck, pool design and
+many other factors.
 
 Q: What are the best parameters to pass for X pool/hardware/device.
 A: Virtually always, the DEFAULT parameters give the best results. Most user
-defined settings lead to worse performance. The ONLY thing most users should
-need to set is the Intensity.
+defined settings lead to worse performance.
 
 Q: What happened to CPU mining?
-A: Being increasingly irrelevant for most users, and a maintenance issue, it is
-no longer under active development and will not be supported unless someone
-steps up to help maintain it. No binary builds supporting CPU mining will be
-released but CPU mining can be built into BFGMiner when it is compiled.
+A: See README.CPU for more information.
 
-Q: I upgraded BFGMiner version and my hashrate suddenly dropped!
-A: No, you upgraded your SDK version unwittingly between upgrades of BFGMiner
-and that caused  your hashrate to drop. See the next question.
+Q: Is there a GUI version?
+A: Yes, there are a number of GUI interfaces for BFGMiner:
+Name        Website                                Operating system(s)
+----        -------                                -------------------
+EasyMiner   http://www.butterflylabs.com/drivers/  Android, Linux, Windows
+MacMiner    http://fabulouspanda.co.uk/macminer/   Mac
+MultiMiner  http://www.multiminerapp.com/          Linux, Mac, Windows (.NET)
 
-Q: I upgraded my ATI driver/SDK/BFGMiner and my hashrate suddenly dropped!
-A: The hashrate performance in BFGMiner is tied to the version of the ATI SDK
-that is installed only for the very first time BFGMiner is run. This generates
-binaries that are used by the GPU every time after that. Any upgrades to the
-SDK after that time will have no effect on the binaries. However, if you
-install a fresh version of BFGMiner, and have since upgraded your SDK, new
-binaries will be built. It is known that the 2.6 ATI SDK has a huge hashrate
-penalty on generating new binaries. It is recommended to not use this SDK at
-this time unless you are using an ATI 7xxx card that needs it.
-
-Q: Which ATI SDK is the best for BFGMiner?
-A: At the moment, versions 2.4 and 2.5 work the best. If you are forced to use
-the 2.6 SDK, the phatk kernel will perform poorly, while the diablo or my
-custom modified poclbm kernel are optimised for it.
-
-Q: I have multiple SDKs installed, can I choose which one it uses?
-A: Run bfgminer with the -n option and it will list all the platforms currently
-installed. Then you can tell BFGMiner which platform to use with --gpu-platform.
-
-Q: GUI version?
-A: No. The RPC interface makes it possible for someone else to write one
-though.
+Q: Is there a "bare-metal" version?
+A: Yes, there are a few dedicated mining operating systems built on BFGMiner:
+Name        Website                              Hardware
+----        -------                              --------
+Controla    http://hashra.com/support            Raspberry Pi
+MinePeon    http://mineforeman.com/minepeon/     BeagleBone Black, Raspberry Pi
+Minera      http://getminera.com/                Raspberry Pi
+PiMP        http://getpimp.org/                  x86
 
 Q: I'm having an issue. What debugging information should I provide?
 A: Start BFGMiner with your regular commands and add -D -T --verbose and provide
-the full startup output and a summary of your hardware, operating system, ATI
-driver version and ATI stream version.
+the full startup output and a summary of your hardware, operating system, and if
+applicable, ATI driver version and ATI stream version.
 
-Q: BFGMiner reports no devices or only one device on startup on Linux although
-I have multiple devices and drivers+SDK installed properly?
-A: Try 'export DISPLAY=:0" before running BFGMiner.
+Q: Why isn't BFGMiner performing well or working on my Raspberry Pi?
+A: Raspberry Pis have hardware defect(s) which affect USB devices to varying
+degrees. Some devices will never be able to work on them, some work fine, and
+some require hacks to workaround the problem. One common workaround is to add
+the dwc_otg.speed=1 parameter to /boot/cmdline.txt. Note that this will slow
+down the USB bus to USB 1.1 speeds, which also affects network bandwidth since
+the Raspberry Pi uses a USB network interface. You may wish to consider
+upgrading to a BeagleBone or UDOO controller.
+
+Q: Can I mine with BFGMiner on a Mac?
+A: BFGMiner will compile on OS X, but the performance of GPU mining is
+compromised due to the OpenCL implementation on OS X, there is no temperature or
+fanspeed monitoring and the cooling design of most Macs, despite having
+powerful GPUs, will usually not cope with constant usage leading to a high risk
+of thermal damage. It is highly recommended not to mine on a Mac unless it is
+with an external USB device.
 
 Q: My network gets slower and slower and then dies for a minute?
-A; Try the --net-delay option.
+A; Try the --net-delay option if you are on a getwork or GBT server.
 
-Q: How do I tune for p2pool?
-A: p2pool has very rapid expiration of work and new blocks, it is suggested you
+Q: How do I tune for P2Pool?
+A: P2Pool has very rapid expiration of work and new blocks, it is suggested you
 decrease intensity by 1 from your optimal value, and decrease GPU threads to 1
-with -g 1. It is also recommended to use --failover-only since the work is
-effectively like a different block chain. If mining with a minirig, it is worth
-adding the --bfl-range option.
-
-Q: Are kernels from other mining software useable in BFGMiner?
-A: No, the APIs are slightly different between the different software and they
-will not work.
+with --set-device OCL:threads=1. It is also recommended to use --failover-only
+since the work is effectively like a different block chain. If mining with a
+Mini Rig, it is worth adding the --bfl-range option.
 
 Q: I run PHP on windows to access the API with the example miner.php. Why does
 it fail when php is installed properly but I only get errors about Sockets not
 working in the logs?
-A: http://us.php.net/manual/en/sockets.installation.php
+A: Please check http://us.php.net/manual/en/sockets.installation.php
 
 Q: What is a PGA?
-A: At the moment, BFGMiner supports 4 FPGAs: BitForce, Icarus, ModMiner, and Ztex.
+A: At the moment, BFGMiner supports 5 FPGAs: BitForce, Icarus, ModMiner, X6500,
+and ZTEX.
 They are Field-Programmable Gate Arrays that have been programmed to do Bitcoin
 mining. Since the acronym needs to be only 3 characters, the "Field-" part has
-been skipped.
+been skipped. "PGA" is also used for devices built with Application-Specific
+Integrated Circuits (ASICs).
 
-Q: How do I get my BFL device to auto-recognise?
-A: They are only automatically recognised on linux, and no option needs to be
-passed to them. The only thing that needs to be done is to load the driver for
-them, which on linux would require:
-sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+Q: What is an ASIC?
+A: They are Application Specific Integrated Circuit devices and provide the
+highest performance per unit power due to being dedicated to only one purpose.
 
+Q: How do I get my BFL/Icarus/Lancelot/Cairnsmore device to auto-recognise?
+A: On Linux, if the /dev/ttyUSB* devices don't automatically appear, the only
+thing that needs to be done is to load the driver for them:
+  BitForce:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6014
+  Erupter:    sudo modprobe cp210x   vendor=0x10c4 product=0xea60
+  Icarus:     sudo modprobe pl2303   vendor=0x067b product=0x0230
+  Lancelot:   sudo modprobe ftdi_sio vendor=0x0403 product=0x6001
+  Cairnsmore: sudo modprobe ftdi_sio vendor=0x0403 product=0x8350
+On some systems you must manally install the driver required for the device.
+OpenWrt drivers (install with opkg):
+  FTDI:       kmod-usb-serial-ftdi
+  Erupter:    kmod-usb-serial-cp210x
+  Icarus:     kmod-usb-serial-pl2303
+Windows drivers:
+  FTDI:       http://www.ftdichip.com/Drivers/VCP.htm
+  Erupter:    http://www.silabs.com/products/mcu/pages/usbtouartbridgevcpdrivers.aspx
+  Icarus:     http://prolificusa.com/pl-2303hx-drivers/
+
+Q: I ran cgminer, and now BFGMiner doesn't work!
+A: cgminer has its own non-standard implementations of the drivers for most USB
+devices, and requires you to replace the official drivers with WinUSB on Windows
+(usually using Zadig). Before you can use BFGMiner, you will need to restore the
+original driver. Uninstalling the device (and WinUSB driver) from Device Manager
+and re-plugging it will usually trigger driver re-installation to the default
+drivers.
+
+Q: On Linux I can see the /dev/ttyUSB* devices, but BFGMiner can't mine on them?
+A: Make sure you have the required privileges to access the /dev/ttyUSB*
+devices:
+ sudo ls -las /dev/ttyUSB*
+will give output like:
+ 0 crw-rw---- 1 root video   188, 0 2012-09-11 13:49 /dev/ttyUSB0
+This means your account must have the group 'video' or root privileges.
+To permanently give your account the 'video' group:
+ sudo usermod -G video -a `whoami`
+Then logout and back in again.
+
+Q: Can I mine scrypt with FPGAs or ASICs?
+A: BFGMiner supports scrypt mining with GridSeed GC3355 ASICs, using either
+DualMiner USB sticks or the 5-chip orb.
+
+Q: Why does BFGMiner show a fractional difficulty when mining scrypt?
+A: BFGMiner consistently uses pdiff measurement for difficulty everywhere,
+rather than other measurements that may exist. For scrypt, pdiff 1 is very
+difficult, and higher get exponentially harder. It is unlikely you will want to
+use pdiff 1+ with scrypt any time soon.
+
+Q: What is stratum and how do I use it?
+A: Stratum is a protocol designed to reduce resources for mining pools at the
+cost of keeping the miner in the dark and blindly transferring his mining
+authority to the pool. It is a return to the problems of the old centralized
+"getwork" protocol, but capable of scaling to hardware of any speed like the
+standard GBT protocol. If a pool uses stratum instead of GBT, BFGMiner will
+automatically detect it and switch to the support as advertised if it can.
+Stratum uses direct TCP connections to the pool and thus it will NOT currently
+work through a http proxy but will work via a socks proxy if you need to use
+one. If you input the stratum port directly into your configuration, or use the
+special prefix "stratum+tcp://" instead of "http://", BFGMiner will ONLY try to
+use stratum protocol mining.
+
+Q: Why don't the statistics add up: Accepted, Rejected, Stale, Hardware Errors,
+Diff1 Work, etc. when mining greater than 1 difficulty shares?
+A: As an example, if you look at 'Difficulty Accepted' in the RPC API, the number
+of difficulty shares accepted does not usually exactly equal the amount of work
+done to find them. If you are mining at 8 difficulty, then you would expect on
+average to find one 8 difficulty share, per 8 single difficulty shares found.
+However, the number is actually random and converges over time as it is an
+average, not an exact value, thus you may find more or less than the expected
+average.
 
 ---
 

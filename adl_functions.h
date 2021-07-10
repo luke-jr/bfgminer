@@ -7,7 +7,7 @@
  * e.g. INCREASING THE VOLTAGES AND FREQUENCIES IN CONJUNCTION WITH LOWERING THE
  *      FAN SPEED IS NOT ADVISABLE!
 
- * Copyright(C) Thorsten Gilling (tgilling@web.de)
+ * Copyright 2010-2011 Thorsten Gilling
 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -29,7 +29,7 @@
 // AMD ADL function types from Version 3.0
 // ------------------------------------------------------------------------------------------------------------
 
-#if defined (linux)
+#ifndef WIN32
  #include <dlfcn.h>	//dyopen, dlsym, dlclose
  #include <stdlib.h>
  #include <string.h>	//memeset
@@ -38,7 +38,7 @@
  #include <tchar.h>
 #endif
 
-#include "ADL_SDK/adl_sdk.h"
+#include "ADL/adl_sdk.h"
 
 // Definitions of the used function pointers. Add more if you use other ADL APIs
 

@@ -1,0 +1,35 @@
+test "x$1" = "xI-am-okay-with-destroying-my-system" || exit 1
+set -ex
+
+# Upgrading GCC triggers locale rebuild, so just do the one in use
+sudo rm /var/lib/locales/supported.d/*
+echo $LANG UTF-8 | sudo tee /var/lib/locales/supported.d/en
+
+echo -e 'deb http://ftp.us.debian.org/debian/ wheezy main\ndeb http://security.debian.org/ wheezy/updates main' | sudo tee '/etc/apt/sources.list'
+sudo rm -r /etc/apt/sources.list.d
+curl https://ftp-master.debian.org/keys/archive-key-7.0.asc | sudo apt-key add -
+sudo apt-get update -qq
+if [ -z "$CROSS_BINPKGS" ]; then
+	DEV_DEPS='libcurl4-gnutls-dev libjansson-dev uthash-dev'
+fi
+sudo apt-get install -y build-essential autoconf automake libtool $DEV_DEPS $EXTRA_DEPS
+
+if [ -n "$UBUNTU_DEPS" ]; then
+	cat <<\EOF | sudo tee '/etc/apt/sources.list'
+deb http://gb.archive.ubuntu.com/ubuntu/ trusty main restricted universe
+deb http://gb.archive.ubuntu.com/ubuntu/ trusty-updates main restricted universe
+deb http://gb.archive.ubuntu.com/ubuntu/ trusty-backports main restricted universe
+deb http://security.ubuntu.com/ubuntu trusty-security main restricted universe
+EOF
+	sudo apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 3B4FE6ACC0B21F32
+	sudo apt-get update -qq
+	sudo apt-get install -y $UBUNTU_DEPS
+fi
+
+if [ -n "$CROSS_BINPKGS" ]; then
+	wget "https://github.com/luke-jr/cross-binpkgs/archive/${CROSS_BINPKGS}.zip"
+	unzip "${CROSS_BINPKGS}.zip"
+	for f in "cross-binpkgs-${CROSS_BINPKGS/+/-}"/*/*; do
+		sudo tar -C "/usr/${CROSS_BINPKGS/+*/}/" -xjvpf "$f"
+	done
+fi

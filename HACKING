@@ -1,0 +1,125 @@
+Driver API
+==========
+
+NOTE: This API is subject to change. It is recommended that you submit your
+driver, even if obscure, to the mainline BFGMiner codebase so that it will be
+updated when the API changes.
+
+BFGMiner defines 3 different units that drivers can use:
+- "Device" is a logical unit used for mining. It is represented by its first
+  processor's `struct cgpu_info`. Example: ButterFly Labs MiniRig SC.
+- "Processor" is a logical work processing unit. It is represented by a `struct
+  cgpu_info` and one or more `struct thr_info`. Example: a single board within
+  ButterFly Labs MiniRig SC.
+- "Thread" is a sequence of instructions and stack that manages hashing on one
+  or more Processors within a single Device. It is represented by a `struct
+  thr_info`.
+
+It should be noted that while every Processor has a `struct thr_info`, this may
+not represent the same Thread which is managing hashing on the Processor.
+Instead, this `struct thr_info` is only used to store status information needed
+for the Processor, and is maintained by the managing Thread in addition to its
+own `struct thr_info`. New drivers are encouraged to use an asynchronous model
+to manage as many Processors as possible within a single Thread.
+
+struct device_drv basics
+------------------------
+
+Every driver defines a `struct device_drv`. The `dname` field contains a
+short name of the driver. This should consist only of lowercase alphabetic
+characters, and be the same name used in the source file: driver-foobar.c
+defines `dname` "foobar". The `name` field contains a three-letter abbreviation
+for the device, used in the representation of devices. For example, `dname`
+"FOO" would result in devices represented as "FOO 0", "FOO 1", etc and
+processors represented as "FOO 0a", "FOO 0b", etc.
+
+Drivers must define a function `drv_detect`, which is run at startup to detect
+devices. For each device (note: NOT each processor), it should allocate a
+`struct cgpu_info`, set some basic parameters on it, and call the `add_cgpu`
+function with it as an argument. Various values you can initialize are:
+	.drv         This MUST be set to your driver's `struct device_drv`!
+	.deven       Should be set to DEV_ENABLED
+	.procs       Number of Processors for this device
+	.threads     Number of threads your device needs - should be either a
+	             multiple of .procs (threads will be allocated to each
+	             Processor), or one (a single thread will be allocated only to
+	             the Device, to manage all Processors)
+	.name        Null-terminated name of the device itself
+`drv_detect` should return the total number of devices created. It should leave
+the device in an unused state, as the user may opt to delete it outright.
+
+Threads
+-------
+
+The first interaction BFGMiner will have with a device is by calling the
+driver's `thread_prepare` function for each Thread. This occurs while BFGMiner
+is still in a single-threaded state, before any Threads have actually started
+running independently. It should do only the minimal initialization necessary
+to proceed, and return true iff successful.
+
+Once all the Threads are setup, BFGMiner starts them off by calling the
+`thread_init` function. This should do all initialization that can occur in
+parallel with other Threads.
+
+The driver should specify a `minerloop` to use. For the purposes of this
+document, it is assumed you will be using `minerloop_async`. Please note that
+the default is currently `minerloop_scanhash`, and much of the documentation
+here will NOT work with this `minerloop`.
+
+Processors
+----------
+
+Processors work with `struct work` objects, which each represent a block header
+to find a solution for. Before your driver sees a `struct work`, it will be
+passed to the function `prepare_work` with pointers to the Processor `struct
+thr_info` and the `struct work` as arguments. Most drivers do not need to do
+anything at this stage, so feel free to omit the `prepare_work` function.
+
+For each job, the `job_prepare` function is called in advance, with three
+arguments: Processor `struct thr_info *`, `struct work *`, and a `uint64_t`
+limiting how many nonces to check (starting from `work->blk.nonce`). Unless you
+implement a `can_limit_work` function, you will always receive a full nonce
+range from 0 to 0xffffffff. `job_prepare` increments `work->blk.nonce` to the
+last nonce the processor will be attempting and returns true when successful.
+Please note this will be called while the previous job is still executing.
+
+When it is time to actually start the new job, the `job_start` function will be
+called. This is given the Processor `struct thr_info *` as its only argument,
+and should start the job most recently prepared with `job_prepare`. Note that
+it is possible for `job_prepare` to be called for a job that never starts
+(another `job_prepare` may be executed to override the previous one instead).
+`job_start` must call `mt_job_transition` as soon as the actual switchover to
+the new job takes place, and must call `job_start_complete` when successful;
+in case of a failure, it should call `job_start_abort` instead. `job_start`
+must set `thr->tv_morework` to the time the device expects to need its next
+work item. It is generally advisable to set this a bit early to ensure any
+delays do not make it late. `job_start` is expected to always succeed and does
+not have a return value.
+
+Immediately before `job_start` is called to change from one job to the next,
+`job_get_results` will be called to fetch any volatile results from the
+previous job. It is provided the Processor's `struct thr_info *` and the
+currently executing job's `struct work *`. It should ONLY fetch the raw data
+for the results, and not spend any time processing or submitting it. If
+`job_get_results` is defined for your driver, it must (directly or indirectly)
+ensure `job_results_fetched` is called when complete (including the case of
+failure). After the new job has been started, your driver's
+`job_process_results` function will be called to complete the submission of
+these results with the same arguments, plus a bool to tell you whether the
+processor is being stopped. If it is, your driver must call `mt_disable_start`
+when it has successfully stopped hashing.
+
+Drivers may define a `poll` function. If this is defined, `thr->tv_poll` must
+always be set to a valid time to next execute it, for each Processor.
+
+Whenever a solution is found (at any point), the function `submit_nonce` should
+be called, passing the Processor `struct thr_info *`, `struct work *`, and
+nonce as arguments. If the solution is invalid (any of the final 32 bits of the
+hash are nonzero), it will be recorded as a hardware error and your driver's
+`hw_error` function (if one is defined) will be called.
+
+As often as results are processed, your driver should call the `hashes_done`
+function with a number of arguments: Processor `struct thr_info *`, count of
+hashes completed (including calls to `submit_nonce`), a `struct timeval *`
+that tells how long it took to find these hashes (usually time since the last
+call to `hashes_done`, and a `uint32_t *` which should usually be NULL.

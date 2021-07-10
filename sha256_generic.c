@@ -1,15 +1,9 @@
 /*
- * Cryptographic API.
- *
- * SHA-256, as specified in
- * http://csrc.nist.gov/groups/STM/cavp/documents/shs/sha256-384-512.pdf
- *
- * SHA-256 code by Jean-Luc Cooke <jlcooke@certainkey.com>.
- *
- * Copyright (c) Jean-Luc Cooke <jlcooke@certainkey.com>
- * Copyright (c) Andrew McDonald <andrew@mcdonald.org.uk>
- * Copyright (c) 2002 James Morris <jmorris@intercode.com.au>
- * SHA224 Support Copyright 2007 Intel Corporation <jonathan.lynch@intel.com>
+ * Copyright Jean-Luc Cooke
+ * Copyright Andrew McDonald
+ * Copyright 2002 James Morris
+ * SHA224 Support Copyright 2007 Intel Corporation (by Jonathan Lynch)
+ * Copyright 2012-2013 Luke Dashjr
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the Free
@@ -24,6 +18,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "driver-cpu.h"
 #include "miner.h"
 
 typedef uint32_t u32;
@@ -51,8 +47,7 @@ static inline u32 Maj(u32 x, u32 y, u32 z)
 
 static inline void LOAD_OP(int I, u32 *W, const u8 *input)
 {
-	/* byteswap is commented out, because bitcoin input
-	 * is already big-endian
+	/* byteswap is handled once in scanhash_c
 	 */
 	W[I] = /* ntohl */ ( ((u32*)(input))[I] );
 }
@@ -239,36 +234,50 @@ const uint32_t sha256_init_state[8] = {
 };
 
 /* suspiciously similar to ScanHash* from bitcoin */
-bool scanhash_c(struct thr_info*thr, const unsigned char *midstate, unsigned char *data,
-	        unsigned char *hash1, unsigned char *hash,
-		const unsigned char *target,
+bool scanhash_c(struct thr_info * const thr, struct work * const work,
 	        uint32_t max_nonce, uint32_t *last_nonce,
 		uint32_t n)
 {
+	const uint8_t *midstate = work->midstate;
+	uint8_t *data = work->data;
+	uint8_t hash1[0x40];
+	memcpy(hash1, hash1_init, sizeof(hash1));
+	uint8_t * const hash = work->hash;
+	
 	uint32_t *hash32 = (uint32_t *) hash;
 	uint32_t *nonce = (uint32_t *)(data + 76);
 	unsigned long stat_ctr = 0;
 
 	data += 64;
 
-	while (1) {
-		n++;
-		*nonce = n;
+	// Midstate and data are stored in little endian
+	LOCAL_swap32le(unsigned char, midstate, 32/4)
+	LOCAL_swap32le(unsigned char, data, 64/4)
+	uint32_t *nonce_w = (uint32_t *)(data + 12);
 
+	while (1) {
+		*nonce_w = n;
+
+		// runhash expects int32 data preprocessed into native endian
 		runhash(hash1, data, midstate);
 		runhash(hash, hash1, sha256_init_state);
 
 		stat_ctr++;
 
-		if (unlikely((hash32[7] == 0) && fulltest(hash, target))) {
+		if (unlikely(hash32[7] == 0))
+		{
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return true;
 		}
 
 		if ((n >= max_nonce) || thr->work_restart) {
+			*nonce = htole32(n);
 			*last_nonce = n;
 			return false;
 		}
+
+		n++;
 	}
 }
 

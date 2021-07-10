@@ -89,16 +89,16 @@ shutting down the PC to ensure all data is written to the USB
 11) sudo aticonfig --adapter=all --odgt
    this checks it can access all the cards ...
 
-12) get AMD-APP-SDK-v2.4-lnx64.tgz from
- http://developer.amd.com/sdks/amdappsdk/downloads/pages/default.aspx
-  ( http://developer.amd.com/Downloads/AMD-APP-SDK-v2.4-lnx64.tgz )
+12) get AMD-APP-SDK-v2.8-lnx64.tgz from
+ http://developer.amd.com/tools/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/
+  ( http://developer.amd.com/wordpress/media/2012/11/AMD-APP-SDK-v2.8-lnx64.tgz )
 
  sudo su
  cd /opt
   (replace /home/ubuntu/ with wherever you put the file: )
- tar -xvzf /home/ubuntu/AMD-APP-SDK-v2.4-lnx64.tgz
+ tar -xvzf /home/ubuntu/AMD-APP-SDK-v2.8-lnx64.tgz
 
- cd AMD-APP-SDK-v2.4-lnx64/
+ cd AMD-APP-SDK-v2.8-lnx64/
  cp -pv lib/x86_64/* /usr/lib/
  rsync -avl include/CL/ /usr/include/CL/
  tar -xvzf icd-registration.tgz
@@ -112,9 +112,8 @@ shutting down the PC to ensure all data is written to the USB
 13) BFGMiner:
  sudo apt-get install curl
 
- get the binary Linux BFGMiner
- (see the bitcoin forum bfgminer thread for where to get it)
- https://bitcointalk.org/index.php?topic=28402.0
+ get the binary Ubuntu BFGMiner from PPA
+ https://launchpad.net/~unit3/+archive/bfgminer
 
  ./bfgminer -n
    this shows you the GPU's it found on your PC

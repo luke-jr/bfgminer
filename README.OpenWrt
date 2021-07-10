@@ -1,0 +1,27 @@
+First, look at /etc/openwrt_release (on your router). You will see a bunch of
+attributes for the OpenWrt system. The DISTRIB_RELEASE attribute is your
+OpenWrt version, the first part of DISTRIB_TARGET (before the slash) is the
+router's platform, and (only on newer versions) DISTRIB_ARCH is the package
+architecture. Older versions of OpenWrt (up to 15.05) use the router's
+platform for packages instead of the package architecture.
+
+Now, open up /etc/opkg.conf (again, on your router) in your favourite editor.
+Add a new line at the bottom, similar to this:
+	src/gz bfgminer http://luke.dashjr.org/programs/bitcoin/files/bfgminer/latest/openwrt/17.01/mips_24kc
+In this example, 17.01 is the version of OpenWrt, and mips_24kc is the package
+architecture. Be sure to change those to match your router! You can also change
+"latest" to "stable" or "testing" to get better-tested versions.
+
+Next, save the file and exit your editor. Tell opkg to reload its package lists
+by running the command:
+	opkg update
+If you get a "404 Not Found" error, then your router may not be supported. If
+you open an issue for your router's platform, it may be possible to add
+support.
+
+If all went well updating your package list, you can now install BFGMiner and
+any drivers you might need:
+	opkg install bfgminer
+	opkg install kmod-usb-serial-ftdi
+	opkg install kmod-usb-serial-cp210x
+	opkg install kmod-usb-serial-pl2303

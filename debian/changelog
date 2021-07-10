@@ -1,146 +1,704 @@
-cgminer (2.4.2-1) stable; urgency=medium
-  Version 2.4.2 - June 2, 2012
+bfgminer (5.5.0-0precise1) precise; urgency=low
 
-  - API.class compiled with Java SE 6.0_03 - works with Win7x64
-  - miner.php highlight devs too slow finding shares (possibly failing)
-  - API update version to V1.11 and document changes
-  - API save default config file if none specified
-  - api.c save success incorrectly returns error
-  - api.c replace BUFSIZ (linux/windows have different values)
-  - Move RPC API content out of README to API-README
-  - Open a longpoll connection if a pool is in the REJECTING state as it's the
-    only way to re-enable it automatically.
-  - Use only one longpoll as much as possible by using a pthread conditional
-    broadcast that each longpoll thread waits on and checks if it's the current pool
-    before
-  - If shares are known stale, don't use them to decide to disable a pool for
-    sequential rejects.
-  - Restarting cgminer from within after ADL has been corrupted only leads to a
-    crash. Display a warning only and disable fanspeed monitoring.
-  - Icarus: fix abort calculation/allow user specified abort
-  - Icarus: make --icarus-timing hidden and document it in FPGA-README
-  - Icarus: high accuracy timing and other bitstream speed support
-  - add-MIPSEB-to-icarus-for-BIG_ENDIAN
-  - work_decode only needs swab32 on midstate under BIG ENDIAN
-  - add compile command to api-example.c
-  - save config bugfix: writing an extra ',' when no gpus
-  - Add dpkg-source commits
+  * Support for Alcheminer using a USB->UART dongle
 
- -- nushor <nushor11@gmail.com>  Sun, 03 Jun 2012 22:02:03 -0500
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 30 Dec 2017 10:09:52 -0000
 
-cgminer (2.4.1-1) stable; urgency=low
-  Version 2.4.1-1 - May 6, 2012
-  - In the unlikely event of finding a block, display the block solved count with
-    the pool it came from for auditing.
-  - Display the device summary on exit even if a device has been disabled.
-  - Use correct pool enabled enums in api.c.
-  - Import Debian packaging configs
-  - Ensure we test for a pool recovering from idle so long as it's not set to
-    disabled.
-  - Fix pool number display.
-  - Give cgminer -T message only if curses is in use.
-  - Reinit_adl is no longer used.
-  - API 'stats' allow devices to add their own stats also for testing/debug
-  - API add getwork stats to cgminer - accesable from API 'stats'
-  - Don't initialise variables to zero when in global scope since they're already
-    initialised.
-  - Get rid of unitialised variable warning when it's false.
-  - Move a pool to POOL_REJECTING to be disabled only after 3 minutes of
-    continuous rejected shares.
-  - Some tweaks to reporting and logging.
-  - Change FPGA detection order since BFL hangs on an ICA
-  - API support new pool status
-  - Add a temporarily disabled state for enabled pools called POOL_REJECTING and
-    use the work from each longpoll to help determine when a rejecting pool has
-    started working again. Switch pools based on the multipool strategy once a pool
-    is re-enabled.
-  - Removing extra debug
-  - Fix the benchmark feature by bypassing the new networking code.
-  - Reset sequential reject counter after a pool is disabled for when it is
-    re-enabled.
-  - Icarus - correct MH/s and U: with work restart set at 8 seconds
-  - ztex updateFreq was always reporting on fpga 0
-  - Trying harder to get 1.15y working
-  - Specifying threads on multi fpga boards extra cgpu
-  - Missing the add cgpu per extra fpga on 1.15y boards
-  - API add last share time to each pool
-  - Don't try to reap curls if benchmarking is enabled.
+bfgminer (5.4.2-0precise1) precise; urgency=low
 
- -- nushor <nushor11@gmail.com>  Sun, 06 May 2012 11:09:46 -0500
+  * Fix some possible edge case problems with stratum proxying (--stratum-port)
+  * openwrt: Binary packages for 15.05
+  * Fix 2D work support for GBT servers (requires libblkmaker 0.5.3 or newer)
 
-cgminer (2.4.0-1) stable; urgency=low
-  Version 2.4.0 - May 3, 2012
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Mar 2016 06:52:15 -0000
 
-  - Only show longpoll warning once when it has failed.
-  - Convert hashes to an unsigned long long as well.
-  - Detect pools that have issues represented by endless rejected shares and
-    disable them, with a parameter to optionally disable this feature.
-  - Bugfix: Use a 64-bit type for hashes_done (miner_thread) since it can overflow
-    32-bit on some FPGAs
-  - Implement an older header fix for a label existing before the pthread_cleanup
-    macro.
-  - Limit the number of curls we recruit on communication failures and with
-    delaynet enabled to 5 by maintaining a per-pool curl count, and using a pthread
-    conditional that wakes up when one is returned to the ring buffer.
-  - Generalise add_pool() functions since they're repeated in add_pool_details.
-  - Bugfix: Return failure, rather than quit, if BFwrite fails
-  - Disable failing devices such that the user can attempt to re-enable them
-  - Bugfix: thread_shutdown shouldn't try to free the device, since it's needed
-    afterward
-  - API bool's and 1TBS fixes
-  - Icarus - minimise code delays and name timer variables
-  - api.c V1.9 add 'restart' + redesign 'quit' so thread exits cleanly
-  - api.c bug - remove extra ']'s in notify command
-  - Increase pool watch interval to 30 seconds.
-  - Reap curls that are unused for over a minute. This allows connections to be
-    closed, thereby allowing the number of curl handles to always be the minimum
-    necessary to not delay networking.
-  - Use the ringbuffer of curls from the same pool for submit as well as getwork
-    threads. Since the curl handles were already connected to the same pool and are
-    immediately available, share submission will not be delayed by getworks.
-  - Implement a scaleable networking framework designed to cope with any sized
-    network requirements, yet minimise the number of connections being reopened. Do
-    this by create a ring buffer linked list of curl handles to be used by getwork,
-    recruiting extra handles when none is immediately available.
-  - There is no need for the submit and getwork curls to be tied to the pool
-    struct.
-  - Do not recruit extra connection threads if there have been connection errors
-    to the pool in question.
-  - We should not retry submitting shares indefinitely or we may end up with a
-    huge backlog during network outages, so discard stale shares if we failed to
-    submit them and they've become stale in the interim.
+bfgminer (5.4.1-0precise1) precise; urgency=low
 
- -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 10:43:22 -0500
+  * Bugfixes only.
 
-cgminer (2.3.6-3) stable; urgency=low
-  Version 2.3.6-3 - may 3, 2012
-  - More bug fixes, Pre 2.4.1 release.
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 21 Nov 2015 18:12:26 -0000
 
- -- nushor <nushor11@gmail.com>  Thurs, 03 May 2012 00:36:50 -0500
+bfgminer (5.4.0-0precise1) precise; urgency=low
 
-cgminer (2.3.6-2) stable; urgency=low
-  Version 2.3.6-2 - May 2, 2012
-  - Various bug fixes, latest build from repository.
+  * RPC: Ability to change pool management strategy.
+  * Pool option #cksuggest to use CKPool-compatible mining.suggest_difficulty stratum extension.
+  * alchemist: New scrypt ASIC driver, written and maintained by jstefanop (requires custom FPGA reprogramming).
+  * antminer, avalon, compac, hashfast, and jingtian: Support for setting clock frequency from the TUI's device management interface.
+  * antminer & compac: Support for setting clock by frequency MHz.
+  * bitforce: Ability to change voltages from RPC and TUI.
+  * bitmain: New driver for Bitmain Antminer S-series units (up to S5).
 
- -- nushor <nushor11@gmail.com>  Wed, 02 May 2012 18:17:49 -0500
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 23 Oct 2015 03:38:05 -0000
 
-cgminer (2.3.6-1) stable; urgency=low
+bfgminer (5.3.0-0precise1) precise; urgency=low
 
-  Version 2.3.6 - April 29, 2012
-  - Shorten stale share messages slightly.
-  - Protect the freeing of current_hash under mutex_lock to prevent racing on it
-    when set_curblock is hit concurrently.
-  - Change default behaviour to submitting stale, removing the --submit-stale
-    option and adding a --no-submit-stale option.
-  - Make sure to start the getwork and submit threads when a pool is added on the
-    fly. This fixes a crash when a pool is added to running cgminer and then
-    switched to.
-  - Faster hardware can easily outstrip the speed we can get work and submit
-    shares when using only one connection per pool.
-  - Test the queued list to see if any get/submits are already queued and if they
-    are, start recruiting extra connections by generating new threads.
-  - This allows us to reuse network connections at low loads but recuit new open
-    connections as they're needed, so that cgminer can scale to hardware of any
-    size.
+  * compac: Support for the GekkoScience Compac BM1384 USB stick miner
 
- -- nushor <nushor11@gmail.com>  Tue, 01 May 2012 13:26:09 -0500
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 05 Sep 2015 06:40:27 -0000
+
+bfgminer (5.2.0-0precise1) precise; urgency=low
+
+  * antminer: Compatibility with Antminer U3; see README.ASIC for details.
+  * icarus: Refactor timeout logic to work with millisecond precision on Linux and Windows.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 05 Jun 2015 03:53:10 -0000
+
+bfgminer (5.1.0-0precise1) precise; urgency=low
+
+  * Update libblkmaker for compatibility with BIP66 version 3 blocks.
+  * Merge Kano's web-based config file loader from cgminer.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 19 Feb 2015 16:17:18 -0000
+
+bfgminer (5.0.0-0precise1) precise; urgency=low
+
+  * Multi-blockchain support: BFGMiner can now be told which pools use the same "mining goals", and will track the blockchain independently for ones that don't. This allows you to mine multiple cryptocurrencies concurrently using any pool strategy (including balance and load-balance).
+  * Multi-algorithm support: BFGMiner is now capable of hashing on both scrypt and SHA256d work at the same time, and you can assign the mining algorithm to use on a per-goal basis. As with multi-blockchain support, this works even in balancing strategies. Note that at this time, only CPU, OpenCL, and Proxy drivers actually support multiple algorithms at the same time (DualMiner must be preconfigured for only one, and GridSeed remains scrypt-only).
+  * Stratum extensions for mining goals: New experimental methods mining.capabilities and mining.set_goal for Stratum allow you to expose control of the mining algorithm to the pool. These extensions are considered draft and may be changed based on the needs of multiblockchain pool operators.
+  * RPC: Also extended for multiple mining goals/algorithms. Interface is subject to change.
+  * kncasic: New driver for KnCMiner Neptune (and 2nd-gen Jupiter modules).
+  * minion: New driver for BlackArrow Prospero X1.5.
+  * titan: Work flushing optimisations from KnCMiner, and reduce processor view from per-core to per-die.
+  * Keccak: Support for the SHA-3 winner hash as a proof-of-work algorithm.
+  * opencl: Workaround broken global work offset support in buggy drivers.
+  * opencl: GPU mining is now disabled by default for scrypt. Use -S opencl:auto to enable it.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 29 Nov 2014 00:56:45 -0000
+
+bfgminer (4.10.0-0precise1) precise; urgency=low
+
+  * minergate: Support for Spondoolies SP30.
+  * titan: Numerous fixes and improvements from the KnCMiner team.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Oct 2014 04:01:46 -0000
+
+bfgminer (4.9.0-0precise1) precise; urgency=low
+
+  * titan: Driver for KnCMiner's scrypt ASIC machine.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 05 Oct 2014 05:34:21 -0000
+
+bfgminer (4.8.0-0precise1) precise; urgency=low
+
+  * New option --benchmark-intense for hardware manufacturers to properly test their miners can perform properly as Bitcoin grows.
+  * Logic to check validity and optionally benefactors of the generation transaction (GBT and Stratum only). See the new --coinbase-check-* options to configure it, or append #skipcbcheck to pool URIs to disable it.
+  * cointerra: New driver for the TerraMiner
+  * Stratum proxy: Numerous crash conditions fixed.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 10 Sep 2014 03:57:13 -0000
+
+bfgminer (4.7.0-0precise1) precise; urgency=low
+
+  * avalonmm: Guess sensible defaults when user does not specify clock/voltage.
+  * minergate: New driver supporting the Spondoolies SP10.
+  * Stratum: Support for mining.set_extranonce extension; put "#xnsub" at the end of the pool URI to enable.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 17 Aug 2014 02:08:49 -0000
+
+bfgminer (4.6.0-0precise1) precise; urgency=low
+
+  * avalonmm: New driver for both Avalon2 and Avalon3 rigs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 02 Aug 2014 03:10:10 -0000
+
+bfgminer (4.5.0-0precise1) precise; urgency=low
+
+  * bitforce: A new setup-vfio shell script is included to simplify configuring VFIO for Monarchs on PCIe.
+  * cairnsmore, icarus, zeusminer: Per-core mining statistics support.
+  * gridseed: Ability to set clock speed via Manage TUI.
+  * hashfast: Include chip/core address in RPC procdetails.
+  * hashfast: Implement ability to change clock setting at runtime.
+  * rockminer: Allow setting clock 300-2560 as long as prefixed by "unsafe:".
+  * zeusminer: Support for the GAW War Machine.
+  * zeusminer: Ability to set clock speed via Manage TUI.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Jul 2014 16:26:25 -0000
+
+bfgminer (4.4.0-0precise1) precise; urgency=low
+
+  * getwork and stratum proxy drivers: Proxy-share difficulty is now adjustable using --set pxy:diff=N and/or --set pxy@username:diff=N
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 07 Jul 2014 16:34:42 -0000
+
+bfgminer (4.3.0-0precise1) precise; urgency=low
+
+  * URI parameter #getcbaddr to request coinbase address from bitcoind or compatible servers for solo mining.
+  * When running on systems with a configured Bitcoin Core server, it is automatically configured as a final failover and used for local block submission (GBT pools only) to reduce the risk of a stale block.
+  * bitforce: Implement some last-minute Monarch interface changes.
+  * zeusminer: New driver for these scrypt ASIC devices.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 30 Jun 2014 14:55:06 -0000
+
+bfgminer (4.2.0-0precise1) precise; urgency=low
+
+  * rockminer: New driver for ROCKMINER R-BOX.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 11 Jun 2014 03:03:50 -0000
+
+bfgminer (4.1.0-0precise1) precise; urgency=low
+
+  * Stratum: Fix recovery of dead pools.
+  * gridseed: 80-chip G-Blade support.
+  * Stratum: Support for authenticated TLS with the CA model, using #tlsca URI parameter.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 06 Jun 2014 02:35:20 -0000
+
+bfgminer (4.0.0-0precise1) precise; urgency=low
+
+  * Various options (specifically, --temp-cutoff, --temp-target, and the various --<driver>-options) have been migrated to the --set-device interface.
+  * Automatic hotplug support for Linux and Windows.
+  * TUI: Redesigned pool information line to include share difficulties in multipool modes and timestamp of the last explicit work update (which are no longer logged).
+  * Forbid cross-domain server redirection by default, unless pool URI has #redirect in it.
+  * Stratum: Unauthenticated TLS support.
+  * Stratum: Improve support for stratum-compliant scrypt servers, while still cleanly handling the expectations of many broken servers.
+  * bifury: Support for OneStringMiner and Hex*Fury (see README.ASIC for notes about boards with buggy firmware).
+  * bitfury: Detect gen2 chips and report hashrate correctly.
+  * bfx: New driver for BFx2 Bitfury USB stick miners.
+  * bitforce: Support for Monarch 28nm cards, including PCI-Express support on Linux (see README.ASIC for setup instructions).
+  * drillbit: Add support for protocol version 4 devices.
+  * dualminer: New driver, supporting both SHA256d and scrypt ASIC mining.
+  * gridseed: New driver, supporting only scrypt ASIC mining.
+  * hashbusteravalon: New driver for Avalon2-based HashBuster devices, such as the HashBuster Alpha.
+  * hashfast: Display of temperature and voltage, as well as setting clock frequency at startup.
+  * icarus & cairnsmore: Since Block Erupters are far more popular, and less unprofitable, the erupter driver is now preferred over icarus and cairnsmore drivers. This means you must change -S all to -S icarus:all or -S cairnsmore:all.
+  * knc: Added a use_dcdc setting that can be used on Nov batch units to avoid triggering DCDC problems (--set knc:use_dcdc=no).
+  * nanofury: Support for new, multi-chip NF2 and NF6 units.
+  * RPC: cpu* and gpu* commands have all been deprecated; CPUs and GPUs are now accessible using pga* and proc* commands just like everything else.
+  * Stratum proxy: Support for GBT upstream pools, as well as scrypt algorithm.
+  * getwork proxy: Support for scrypt and included in Win64 binaries.
+  * opencl: Major updating of code to use set-device interfaces.
+  * opencl: Support for loading kernels by filename, provided they use a known interface. Loading most scrypt kernel should just work, and most SHA2 kernels can be enabled by adding a single comment to the CL source.
+  * opencl: Support for new "xintensity" unit by using --set-device OCL:intensity=x5 (for example).
+  * opencl: Raise max scrypt GPU intensity to 31, and enabled driver by default for scrypt.
+  * opencl: Add some optimised scrypt kernels by zuikkis and psw.
+  * scrypt: Fixed nonce-based (third) hashrate, and display sub-one share difficulties.
+  * Default log interval (and first hashrate rolling average) increased from 5 seconds to 20 seconds to make it more useful.
+  * Benchmark mode refactored to work for both SHA256d and scrypt, and with the third hashrate.
+  * Many uncommon options (including CPU and GPU mining related ones) have had their "shorthand" forms deprecated. A future release will remove (and perhaps redefine) these shorthands entirely.
+  * Bundled a start-bfgminer.sh shell script for *nix which will start/restart BFGMiner in a screen session, and can safely be used in init/cron tasks.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 26 May 2014 19:47:18 -0000
+
+bfgminer (3.10.0-0precise1) precise; urgency=low
+
+  * Support for AntMiner U1, Drillbit, and HashFast devices.
+  * Option --weighed-stats to display share-count columns (A/R) weighed to difficulty 1.
+  * x6500: maxclock setting (use with --set-device) to limit dynamic clocking range.
+  * opencl/adl: Fixed crash on exit with R9 series GPUs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 15 Jan 2014 20:16:48 -0000
+
+bfgminer (3.9.0-0precise1) precise; urgency=low
+
+  * hashbusterusb: Voltage/VRM controls, and support for identify function (5 second LED colour change).
+  * nanofury: Support for identify function by turning LED off for 5 seconds.
+  * twinfury: Support for voltage information/control.
+  * Linux: New udev rules file to automatically put supported (and autodetectable) mining devices in the "video" UNIX group.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 25 Dec 2013 00:25:57 -0000
+
+bfgminer (3.8.1-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 09 Dec 2013 03:19:55 -0000
+
+bfgminer (3.8.0-0precise1) precise; urgency=low
+
+  * New driver for HashBuster Micro boards.
+  * klondike: Add support for boards built with 55nm Avalon2 chips.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 02 Dec 2013 01:35:48 -0000
+
+bfgminer (3.7.0-0precise1) precise; urgency=low
+
+  * Support for new Bi*fury and Twinfury mining devices.
+  * Device probing has been rewritten to scan all devices in parallel (much faster). As a result, the order of devices found is no longer deterministic (consistent) at all.
+  * Parallel device probing makes --device's former syntax unusable, so it has been modified to use the same pattern matching as --set-device. Note that things like --scan-serial ztex:all are now valid, but probably much more dangerous than with VCOM drivers; a bare driverless "all" only affects VCOM drivers for this reason.
+  * Pattern matching for --set-device (and now --device) supports identifying specific devices by serial number or path. To use this, insert either of these between @ symbols where you would have previously put an index. So for example, --device 'BFL@FTWOTOP4' (bitforce device with serial FTWOTOP4) or  --set-device '@/dev/ttyUSB0@a:osc6_bits=52' (first processor of device on /dev/ttyUSB0).
+  * BFGMiner-written config files now include the scan-serial and set-device settings.
+  * cpu and opencl drivers have been disabled by default in all cases. Use -S cpu:auto or -S opencl:auto if you need them.
+  * Automatically workaround cgminer driver breakage on Linux.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 27 Nov 2013 13:46:42 -0000
+
+bfgminer (3.6.0-1precise1) precise; urgency=medium
+
+  * Explicitly added OpenCL to Debian build rules.
+
+ -- graeme <graeme@sudo.ca>  Thu, 21 Nov 2013 10:19:10 -0800
+
+bfgminer (3.6.0-0precise1) precise; urgency=low
+
+  * klondike: New driver, just imported from cgminer mostly as-is for now.
+  * opencl: Support will remain, but it is not compiled by default. Use --enable-opencl to build it.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 12 Nov 2013 07:55:01 -0000
+
+
+bfgminer (3.5.2-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 12 Nov 2013 07:59:00 -0000
+
+
+bfgminer (3.5.1-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 07 Nov 2013 03:42:48 -0000
+
+
+bfgminer (3.5.0-0precise1) precise; urgency=low
+
+  * hashbuster: New driver for HasbBuster nano ASIC miners.
+  * littlefury: Updated driver to use latest bitfury code.
+  * Autodetection support for Windows extended to all VCOM-based devices (instead of just FTDI, libusb, and hidapi); this includes at least ModMiner, Big Picture Mining (BF1, RedFury, BlueFury), and USB Block Erupters.
+  * Reworked autodetection to scan system devices once and share results with all drivers.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 06 Nov 2013 05:52:28 -0000
+
+
+bfgminer (3.4.0-0precise1) precise; urgency=low
+
+  * New drivers for KnC miners and NanoFury USB miners.
+  * Per-chip dynamic osc6_bits detection for BFSB, MegaBigPower, and Metabank bitfury boards.
+  * Ability to set default options for various devices using --set-device commandline option; for example, if you have all your NanoFury miners in a USB 3 hub (with 900 mA power available), you can increase the oscillator speed with: --set-device NFY:osc6_bits=53 (or "set-device":["NFY:osc6_bits=53"] in a config file).
+  * Con Kolivas's completely rewritten load-balance strategy with per pool quota support. See the updated README to see how it works.
+  * If we switch away from a pool in failover mode, we will now only switch back to it if it's up for at least 5 minutes to avoid reconnecting to pools that are only intermittently up - good for DDoS situations which we've seen a lot of lately. (by Con Kolivas)
+  * Updated miner.php from Kano.
+  * Proxy settings now default to SOCKS5 instead of SOCKS4. Prefix your proxy IP with "socks4://" if you need to use the older protocol.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 26 Oct 2013 19:53:59 -0000
+
+
+bfgminer (3.3.0-0precise1) precise; urgency=low
+
+  * New drivers for bitfury-based devices: BFSB/MegaBigPower(v2 only!) kits, Big Picture Mining USB (BF1, RedFury, BlueFury, etc), LittleFury, and Metabank. See README.ASIC for setup instructions.
+  * Support for proxy virtual devices has been extended to include the stratum protocol when the upstream pool selected is also stratum and supplies sufficient extranonce2 space. If the upstream pool does not meet this criteria, stratum clients will be disconnected and new ones will fail to subscribe. You can take advantage of this to failover to the getwork proxy. Support for upstream getwork pools is impossble, but GBT is planned.
+  * opencl: Driver is disabled by default if FPGAs or ASICs are detected. To enable, use -S opencl:auto
+  * Third hashrate displayed is now based on nonces found, adjusted for pool rejected/stale shares. It should still be approximately equivalent to your effective/earning hashrate, but with better accuracy.
+  * Utility on the TUI status line has been replaced with expected Income, measured as 100% PPS BTC per hour for easy comparison with electric costs.
+  * RPC: Methods shared with cgminer now only consider entire devices, to be more compatible. A set of new processor-detail methods have been added to get full information per-processor.
+  * RPC: Old devdetail method has been made compatible with cgminer devdetails and renamed.
+  * New options --chroot-dir and --setuid on POSIX systems (thanks Ricardo!).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 11 Oct 2013 20:32:15 -0000
+
+
+bfgminer (3.2.1-0precise1) precise; urgency=low
+
+  * Allow startup with no devices, even if RPC and HTTP server are disabled, so long as the user can add new ones via the curses TUI.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 19 Sep 2013 04:37:01 -0000
+
+
+bfgminer (3.2.0-0precise1) precise; urgency=low
+
+  * modminer, x6500 & ztex: Completely removed bitstreams from BFGMiner distribution, and replaced with instructions on where to find them officially.
+  * New embedded getwork server to drive Block Erupter Blades and similar devices off BFGMiner. Instructions in README.ASIC.
+  * Fixed stratum pool-switch crash regressed in BFGMiner 3.1.0.
+  * Added stratum support for --request-diff by attempting to send a mining.suggest_target notification to pools when connecting.
+  * erupter & icarus: Various optimizations to catch racing nonces, and otherwise reduce hardware errors.
+  * Enable simple notifications for idle/sick/dead devices via --cmd-idle, --cmd-sick and --cmd-dead options that execute commands when the events occur.
+  * Support for probing/hotplugging new devices from the TUI ([M]anage, plus key).
+  * Simple multicast RPC detection.
+  * Imported Aaron D. Gifford's fast SHA256 implementation (used for share validation on CPU).
+  * Due to random font issues, Unicode is disabled by default. Use --unicode to enable it.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 29 Aug 2013 23:54:22 -0000
+
+
+bfgminer (3.1.4-0precise1) precise; urgency=low
+
+  * Enable triggering "identify" (flash LED) function from Manage device TUI for devices that support it.
+  * modminer & x6500: Enable changing clock frequency from Manage devices TUI interface.
+  * Device ailments (SICK, ERR, etc) are now displayed in red/pink.
+  * erupter: Add support for "identify" (flash LED) function. After some delay (up to 13 seconds), the LED will light for 3 seconds (hashing stops during this time).
+  * bitforce: Display voltages in Manage device TUI.
+  * Reorganised TUI display, adding network transfer rate, and totals summary line including count of total devices/processors hashing as well as hottest temperature across all sensors.
+  * Improved timer functionality under the hood, taking advantage of clock_gettime. This should fix issues (eg, erupters reporting insane hashrates) related to system clock changes (such as NTP drift adjustment).
+  * Removed blank/wasted lines above/below log window in TUI mode.
+  * bitforce: Clear queues at startup to avoid spurious warnings.
+  * Stratum: Add support for rolling ntime header.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 02 Aug 2013 02:28:17 -0000
+
+
+bfgminer (3.1.3-0precise1) precise; urgency=low
+
+  * Fix 100% CPU usage hang with GBT/getwork pools.
+  * Make staged work underrun detection less overly aggressive.
+  * Generate baud rate list from OS on *nix (fixes Mac/BSD build).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 11 Jul 2013 18:52:25 -0000
+
+
+bfgminer (3.1.2-0precise1) precise; urgency=low
+
+  * TUI: The "GPU management" interface has been replaced with a new generic "Manage devices" interface, allowing easy enable and disable of non-GPU devices.
+  * Major CPU usage reduction for faster mining rigs (on my minirig host system, from 35% down to 13%!).
+  * erupter: New icarus-based driver to handle autodetection of (branded) Block Erupter devices.
+  * opencl: Add support for AMD Catalyst 13.2+ drivers.
+  * The device statlines have been condensed by reducing the device-specific space down to a single temperature reading. More detailed information (such as GPU fan speeds) is still available via RPC and the new "Manage devices" interface.
+  * RPC: New "devscan" command to probe for new devices on demand. The effect is the same as starting BFGMiner with -S noauto -S <parameter>.
+  * TUI: Display percentage invalid of found nonces with hw errors.
+  * cpu & opencl: These legacy drivers now respect the --scan-serial auto/noauto directives, and the old -C (enable CPU) and -G (disable GPU) options are now deprecated.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 08 Jul 2013 18:46:53 -0000
+
+bfgminer (3.1.1-0precise1) precise; urgency=low
+
+  * bitforce: Support for Little Single boards, and Jalapenos with 1.2 firmware.
+  * avalon: Support new overclocking speeds (325, 350 and 375).
+  * Fixed a bunch of bugs, including GPU mining and at least one stratum-related crash.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 22 Jun 2013 17:41:21 -0000
+
+bfgminer (3.1.0-1precise1) precise; urgency=low
+
+  * Properly added in new submodules to Debian packaging.
+  * Added missing fpgautils.h include.
+
+ -- graeme <graeme@sudo.ca>  Fri, 14 Jun 2013 09:52:55 -0700
+
+bfgminer (3.1.0-0precise1) precise; urgency=low
+
+  * BitForce: Support for new long-board job-per-chip protocol.
+  * Reformatted TUI summaries, including percentage of shares rejected or stale.
+  * Icarus-compatible devices: Autodetect work_division by default (eg, for Block Erupter USB ASICs).
+  * Avalon: Driver is now compiled in by default, including in official binaries
+  * Avalon: Will only configure with specific -S avalon:/dev/ttyUSBn option (note the driver name must be included), since there is no reliable probe for it.
+  * Avalon: Full data for 4-module devices in RPC.
+  * OpenCL: Support for reading temperature from free software radeon drivers via libsensors.
+  * Fixes for writing configuration files when --device and/or --remove-disabled are specified.
+  * Faster startup now when pools are slow, connecting to the first pool available!
+  * Adding a pool now from the menu will return quickly while it leaves probing it to the background.
+  * Scrypt: Fixed the failure to create high thread concurrencies.
+  * Scrypt: Intensities above 13 will not lead to garbage being generated on GCN (7xxx) hardware now.
+  * Scrypt: Decreased default GPU threads to 1. Intensities above 13 cannot handle more.
+  * Scrypt: Changed the default choice of thread concurrency if no options are passed as a hint, based on amount of available GPU RAM.
+  * Scrypt: Extensive updates to the SCRYPT-README file in line with changes to the code and new information.
+  * Scrypt: Slightly larger buffer which may lead to less hardware errors on very fast GPUs.
+  * CPU mining: Numerous improvements to portability.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 13 Jun 2013 20:05:29 -0000
+
+bfgminer (3.0.2-1precise1) precise; urgency=low
+
+  * Added scrypt build option.
+  * Fixed dependancies on raring.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Apr 2013 05:22:53 -0000
+
+bfgminer (3.0.2-0precise1) precise; urgency=low
+
+  * Fix stratum on Windows.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Apr 2013 05:22:53 -0000
+
+
+bfgminer (3.0.1-0precise1) precise; urgency=low
+
+  * Bitforce SC: Switched to using bulk queue mode for all ASIC-based devices.
+  * Bitforce SC: Fix reinitialization-on-failure, so devices can autorecover from some problems.
+  * OpenCL: Support for mining with completely free (non-proprietary) Mesa/LLVM OpenCL on Linux (requires git Mesa/LLVM).
+  * OpenCL: Include platform in kernel binary filenames to avoid using stale binaries from other SDK installs.
+  * Added network hashrate (based on block difficulty) to block status line.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 24 Apr 2013 02:40:23 -0000
+
+
+bfgminer (3.0.0-0precise1) precise; urgency=low
+
+  * New device driver for ASIC devices, including both Butterfly Labs' BitForce SC and Avalon.
+  * Enhanced device driver API, enabling devices to asynchronously handle multiple slave processors. Use --show-processors to view each individually (not yet supported for Avalon).
+  * You can now use --request-diff <difficulty> to ask for a specific share target from pools that support BIP 23 GBT Basic Pool Extensions.
+  * Support for submitting found blocks to a local Bitcoin GBT server (bitcoind or Bitcoin-Qt with -server flag): just append #allblocks to the end of your bitcoind's URI.
+  * Stratum connection resuming support - if you lose an active stratum connection, BFGMiner will attempt to resubmit any lost shares when it reconnects.
+  * Android target support. You will have to compile it yourself, but it should just work - no patching needed.
+  * New Python RPC client example from Christian Berendt.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 05 Apr 2013 17:12:20 -0000
+
+
+bfgminer (2.10.5-0precise1) precise; urgency=low
+
+  * Fix critical solo mining bug.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 08 Feb 2013 06:43:27 -0000
+
+
+bfgminer (2.10.4-0precise1) precise; urgency=low
+
+  * Better big-endian compatibility.
+  * Kano's RPC example is now included as the bfgminer-rpc program.
+  * Improved bitstream for ModMiners, with gains of about 10 Mh/s on average. This was originally supposed to be part of BFGMiner 2.9.2, but somehow slipped through the cracks! You'll need to power cycle your board, or use the --force-dev-init option to upload the new bitstream.
+  * Many bugfixes and some small improvements all over.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 07 Feb 2013 04:49:38 -0000
+
+
+bfgminer (2.10.3-0precise1) precise; urgency=low
+
+  * Current block display shows end of the previous block hash and (when GBT or Stratum servers are active) the next block's (that you're looking for) height.
+  * miner.php and RPC API updates from Kano, including multiuser support for miner.php
+  * Finally fix long-standing scrypt difficulty and u-hashrate calculation bugs.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 22 Jan 2013 00:20:02 -0000
+
+
+bfgminer (2.10.2-0precise1) precise; urgency=low
+
+  * There is now a [Z]ero stats option under the display menu which resets all the visible statistics.
+  * The current pool and block target difficulties are now shown in the status lines.
+  * Block solve detection is now supported with scrypt mining as well (BLOCK! written at end of share and solved blocks listed under pool stats).
+  * Stratum support for scrypt mining.
+  * Numerous subtle bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Dec 2012 11:20:53 -0000
+
+
+bfgminer (2.10.1-0precise1) precise; urgency=low
+
+  * modminer: Enable frequency adjustments up to 230 MHz, and allow changing the frequency (non-sticky) via the new "pgaset" RPC command.
+  * Numerous stratum fixes, including failover recovery. Also allow using stratum with scrypt.
+  * Replaced the work-based efficiency with new bandwidth-based efficiency.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 21 Dec 2012 07:29:23 -0000
+
+
+bfgminer (2.10.0-0precise1) precise; urgency=low
+
+  * Avoid fetching more GBT jobs when we already have a usable one, or are already in the process of getting a new one that will suffice. This drastically improves efficiency on GBT pools and reduces unnecessary bandwidth waste.
+  * Share submissions are now processed asyncronously in parallel, in a single dedicated thread, instead of spawning a new thread for every submission. This makes BFGMiner scale better to bigger rigs with more shares, and enables it to react to network outages better. Additionally, a new "AS" (Active Submissions) number has been added to the status line to make it easy to see at a glance what's going on.
+  * New --skip-security-checks option to allow miners to skip checks when it saves bandwidth (stratum).
+  * Additional extranonce to count template requests for GBT solo mining, to ensure we never work on hashing the same data redundantly.
+  * Con's new work scheduler: The old work scheduler would spawn threads that all tried to grab work as best as they could, and this would lead to much more work than necessary being grabbed from getwork pools, and potentially hitting the pool at precisely the same time from multiple threads making a getwork failure more likely. It was also very difficult to track how much work was really available at any one time since all the threads were off doing their own thing. Centralising the work creation means it is strictly tracked now and as soon as one work item is taken, the scheduler will generate or download another one. The advantage here is to maximise the efficiency of work we get from any getwork source, be it with or without rolltime. It is also much less likely to have dips in providing work, should lead to less getwork failures, and scale to higher hashrates even with the old getwork protocols.
+  * When the primary pool is stratum, GBT, or getwork in failover mode, no backup connections will be maintained to backup pools. The total number of unused stratum connections now should be extremely small.
+  * Ztex driver improvements courtesy of Denis and Peter.
+  * Lots of work under the hood and other minor goodies. Check full changelog.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 11 Dec 2012 05:28:02 -0000
+
+
+bfgminer (2.9.5-0precise1) precise; urgency=low
+
+  * Bug fixes only.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 11 Dec 2012 03:11:49 -0000
+
+
+bfgminer (2.9.4-0precise1) precise; urgency=low
+
+  * Documented solo mining in README.
+  * Lots of small bugfixes everywhere.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 04 Dec 2012 03:13:43 -0000
+
+
+bfgminer (2.9.3-0precise1) precise; urgency=low
+
+  * Many stratum bugfixes, including support for fractional difficulties.
+  * Fix GBT to work properly with very short expiration times.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Fri, 16 Nov 2012 03:49:51 -0000
+
+
+bfgminer (2.9.2-0precise1) precise; urgency=low
+
+  * modminer & x6500: New bitstream, improving functional performance by about 10 Mh/s on average. You'll need to power cycle your device, or use the new --force-dev-init option to upload the new bitstream.
+  * x6500: Support for temperature sensors, including --temp-target & co.
+  * x6500: Extended per-FPGA details in RPC API.
+  * x6500: Support for older X6500 devices by manually specifying their serial numbers as --scan-serial x6500:serialnumber.
+  * Some basic stratum transparency checks to help keep pools accountable using new mining.get_transactions method.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Wed, 07 Nov 2012 18:46:00 -0000
+
+
+bfgminer (2.9.1-0precise1) precise; urgency=low
+
+  * RPC: Add support for X6500 FPGAs.
+  * Enforce --expiry option to make solo mining without longpoll move on eventually.
+  * Always detect non-scrypt if Stratum is in use.
+  * Various other bug fixes, including a number of memory leaks.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 30 Oct 2012 16:16:22 -0000
+
+
+bfgminer (2.9.0-0precise1) precise; urgency=low
+
+  * X6500: New driver for mining on FPGA Mining LLC's X6500 coprocessor.
+  * Support for solo mining against bitcoind 0.7's GBT interface using new --coinbase-addr option (powered by libblkmaker 0.2.0).
+  * OpenCL: Rewritten dynamic intensity code should fix remaining issues with it.
+  * BFGMiner now displays the share's best difficulty as well as the current pool difficulty.
+  * Support for saving and restoring pool priorities in config file, as well as changing them all at once in the curses TUI (by "blinkier").
+  * OpenCL: Updated kernels which should allow ultra low memory speeds once again (idea courtesy of Vbs).
+  * Stratum support by Con.
+  * BFGMiner now tries to actually catch crashes and unless the --no-restart option is given, it will try to restart cleanly.
+  * OpenCL: Scrypt will now not fail when setting high thread concurrency values that still return some RAM even if OpenCL returns an error on that RAM allocation.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sun, 28 Oct 2012 10:39:56 -0000
+
+
+bfgminer (2.8.3-0precise1) precise; urgency=low
+
+  * Various bugs fixed, no new features.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 18 Oct 2012 12:56:56 -0000
+
+
+bfgminer (2.8.2-0precise1) precise; urgency=low
+
+  * Numerous fixups for Enterpoint's Cairsmore dynamic clocking; it has actually been tested this time. :)
+  * Support for --temp-target and --temp-hysteresis controls on ModMiner FPGA devices.
+  * Generic failure management for all devices, including automatically attempting to restart dead devices.
+  * Improved portability to new platforms, partially including Cygwin.
+  * Various minor error handling improvements and bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 08 Oct 2012 23:13:01 -0000
+
+
+bfgminer (2.8.1-0precise1) precise; urgency=low
+
+  * Many improvements for Enterpoint's Cairsmore, including (experimental) support for Glasswalker's dynamic frequency bitstream.
+  * New --coinbase-sig option that lets you embed a short tidbit in any blocks you personally find (only on GBT-enabled pools).
+  * Generic dynamic clocking framework based on the Ztex driver's (written by nelisky), now used by ModMiner and (Glasswalker) Cairnsmore.
+  * New RPC "identify" command to flash LEDs on some FPGAs (currently BitForce and GW Cairnsmore).
+  * Include share difficulty information in log and RPC.
+  * Lots of other various bugfixes and small improvements.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Sep 2012 06:20:05 -0000
+
+
+bfgminer (2.8.0-0precise1) precise; urgency=low
+
+  * Basic getblocktemplate decentralized mining protocol support, including rolling extranonce (based on libblkmaker 0.1).
+  * New Cairnsmore driver, including autodetection (based in part on Kano's Icarus "timing" feature).
+  * Support for per-pool proxies, based in part on Kano's similar work (but cleaned up and not compatible).
+  * Numerous minor fixups to Ztex driver.
+  * Minor improvements to Icarus driver, including the ability to disable the reopen quirk and detection when the default hash speed is wrong.
+  * Updated RPC API from Kano to include debug and setconfig methods.
+  * Updated miner.php from Kano to hide IP addresses for security (configurable).
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Sat, 15 Sep 2012 20:57:28 -0000
+
+
+bfgminer (2.7.5-0precise1) precise; urgency=low
+
+  * ModMiner: Revamped the dynamic clocking algorithm to keep FPGAs at higher speeds with fewer hardware errors.
+  * OpenCL: Restored old default for Cypress (Radeon 58xx) worksize, to fix performance regression introduced in 2.7.2.
+  * Failover is now fixed, courtesy of Con.
+  * FPGAs: "-S all" option to try probing all enumerated serial ports on systems without non-miner serial devices.
+  * Reverted "restart on ADL failure" feature that never did anything useful (if I'm wrong, complain and I'll make a switch to add it back)
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 27 Aug 2012 17:12:09 -0000
+
+
+bfgminer (2.7.4-0precise1) precise; urgency=low
+
+  * More fixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 23 Aug 2012 21:48:02 -0000
+
+
+bfgminer (2.7.3-0precise1) precise; urgency=low
+
+  * Bugfixes for networking, new kernels, and updated miner.php.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Thu, 23 Aug 2012 08:05:32 -0000
+
+
+bfgminer (2.7.1-0precise1) precise; urgency=low
+
+  * The occasional strange behaviour where lots of work would end up on backup pools in failover mode should be fixed.
+  * The occasional scenario where one pool dies and the others behave like they're slow to provide work should be fixed.
+  * Very high hashrate (U > 100) machines should now be able to work unhindered even on pools that don't support rolltime.
+  * The --retry-pause/-R option no longer does anything and is deprecated in preference for faster communications and simpler code.
+  * -r was removed as a shortcut for --retries.
+  * Hopefully the dynamic mode for GPUs is fixed on windows.
+  * Hopefully the 7 day windows crash bug has been fixed
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Aug 2012 16:43:09 -0000
+
+
+bfgminer (2.7.0-0precise1) precise; urgency=low
+
+  * The main change in this version is a complete rewrite of the getwork requesting mechanism. Con had been slowly hacking away at the old one for some time, but finally gave up in disgust and has rewritten it to some extent. Previously, mining threads would occasionally throw out a request for more work, some arbitrary test would be done on whether more work should be requested, and it handed off the message to another thread which spawned another thread and that then sent the request and so on. Worse yet it was hard to find the right place to reuse work and so it was never reused to its utmost potential. The rewrite involves scheduling a new request based on the rate the old work items get used up, and is much better at predicting when it needs to leak work to backup pools and less likely to throw a "pool is not providing work fast enough" message. Overall you should now see much more Local Work (LW), the efficiency will be higher on pools that support rolltime, less work will be discarded, any magnitude rig will be kept solidly busy - note this MAY mean your overclocks will become that much more stressed if you have set clocks very aggressively. Thanks to Con and the numerous people who tested this during its development phase.
+  * New pool strategy: Balance.
+  * With the change to queueing and more roll work being possible than ever before, the imbalance between pools that support rolltime and those that don't will now be extreme in load balance strategy. To offset that, and since the number of people using load balance has been increasing, the new strategy was added to try and give roughly the same number of shares to each pool.
+  * Other minor bugfixes.
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Tue, 21 Aug 2012 01:50:33 -0000
+
+
+bfgminer (2.6.5-0precise1) precise; urgency=low
+
+  * New BitFORCE firmware flash utility. When compiled with BitFORCE support, run `bitforce-firmware-flash` to get usage.
+  * Fixed hanging when using "Switch User" on Windows. This feature still kills ADL, though, so use --no-restart (and don't enable fan control or overclocking) if you plan to use it.
+  * Fixed dynamic mode on Windows. By default, Windows timer resolution is only 15ms and we're trying to sample much smaller than that. This was leading to the time taken to do GPU work appearing as zero for many samples. Now, a Windows multimedia timing API will be used to request more precision.
+  * gpu-memdiff should now take effect when you change gpu engine clock from the menu as well.
+  * The ADL gpu-map feature should work now when you have more ADL devices than OpenCL (eg, ATI cards that don't support OpenCL).
+  * More tweaks to the queueing mechanism to increase efficiency and keep minirigs fully work laden.
+  * Failover-only can now be changed via the RPC API.
+  * Updated miner.php from Kano
+
+ -- Luke Dashjr <luke+bfgminer@dashjr.org>  Mon, 20 Aug 2012 23:59:19 -0000
+
+
+bfgminer (2.6.4-0precise1) precise; urgency=low
+
+  * More drastic improvements to ModMiner clock adjustment algorithm. Downclocking should be more conservative, and BFGMiner will even raise the clock speed when it's doing well.
+  * ModMiners are now kept busier (less idle time) and nonces are checked against the previous work to catch races. This may result in a higher utility (effective hashrate).
+  * Tested and fixed problems managing throttling BitFORCE Singles. An 880 MH/s Single that was throttling to 440 MH/s before (and throwing lots of garbled errors) is now working cleanly at 590 MH/s - a 34% improvement in hashrate!
+  * A bunch of annoying crashes were fixed:
+  * * With high-share devices when network connectivity is lost.
+  * * GPU mining not functional when any OpenCL platform fails.
+  * * Occasional deadlock/hang during exit.
+  * New --debuglog option to include debug information in log file (see README) but not in main console.
+  * The scrypt code was updated - now ALL results from a GPU are checked to see if they're valid and if not, instead of being submitted where they are guaranteed to be rejected, they register as hardware errors. This will make tuning your scrypt parameters easier as HW error count will rise if you've set the parameters too high.
+  * Updated miner.php from Kano
+
+ -- graeme <graeme@sudo.ca>  Thu, 09 Aug 2012 10:39:00 -0700
+
+
+bfgminer (2.6.3.2-0precise2) precise; urgency=low
+
+  * Switched to a Debian native package so that building minor packaging versions is easier.
+  * Dropped debhelper reqs to version 7, so we can build on Lucid.
+
+ -- graeme <graeme@sudo.ca>  Thu, 09 Aug 2012 10:39:00 -0700
+
+
+bfgminer (2.6.3.2-0precise1) precise; urgency=low
+
+  * Added modprobe config for bitforce devices.
+
+ -- graeme <graeme@sudo.ca>  Wed, 08 Aug 2012 11:56:28 -0700
+
+
+bfgminer (2.6.3.1-0precise1) precise; urgency=medium
+  Version 2.6.3.1 - August 8, 2012
+
+  * Added minor version increment so that Launchpad will accept new orig.tar.xz upload. :/
+
+ -- graeme <graeme@sudo.ca>  Wed, 08 Aug 2012 11:11:28 -0700
+
+bfgminer (2.6.3-1precise1) precise; urgency=medium
+  Version 2.6.3 - August 6, 2012
+
+  * First release to attempt Debian packaging.
+  * Complete rewrite of the queueing mechanism which gets new work from the pools. The code in that section had gotten out of hand and become a "state machine" that was difficult to model its behaviour and occasionally led to stalls during startup and what-not without work and perhaps queued too much work in general. Now it monitors carefully the amount of queued and available work on a pool-by-pool basis and only queues when needed, but tries hard to make sure it doesn't run empty. You will notice the the TQ value now hovers around zero when all is well, and only jumps up transiently, all going well. Hopefully the efficiency is even higher now too. Detection of pool lag should be more accurate now, and less shares should leak to backup pools now as well.
+  * Numerous bugfixes and workarounds for ModMiner driver, bringing it to a functional level even on Windows.
+  * Scrypt support enabled for Windows binaries.
+  * Can set failover-only mode now from the menu during runtime.
+  * One-shot schedules (exactly one of --sched-stop or --sched-start) now handle times beyond midnight properly.
+  * ModMiner now shows bitstream upload in summary line rather than spamming the log (progress is still logged every 10% for timestamps).
+  * The RPC API should be able to bind to the port immediately on linux now instead of having to wait 60 seconds as it used to.
+  * Proper big endian (routers) support, including fixing and enabling functionality that crashed before.
+  * Minimal support for the Enterpoint's Cairnsmore1 FPGA mining board.
+  * Throttling episodes on bitforce devices will now perform reasonably (given the circumstances) and/or register as HW errors.
+  * Support for all FPGA drivers enabled by default when compiling from source.
+
+ -- graeme <graeme@sudo.ca>  Tue, 07 Aug 2012 10:51:00 -0500

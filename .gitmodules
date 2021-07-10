@@ -1,0 +1,12 @@
+[submodule "libblkmaker"]
+	path = libblkmaker
+	url = git://github.com/bitcoin/libblkmaker.git
+[submodule "ccan"]
+	path = ccan-upstream
+	url = git://git.ozlabs.org/~ccan/ccan
+[submodule "libbase58"]
+	path = libbase58
+	url = git://github.com/luke-jr/libbase58.git
+[submodule "knc-asic"]
+	path = knc-asic
+	url = git://github.com/KnCMiner/knc-asic

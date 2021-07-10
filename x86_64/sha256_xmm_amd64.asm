@@ -1,20 +1,12 @@
 ;/*
-; * Copyright (C) 2011 - Neil Kettle <neil@digit-labs.org>
+; * Copyright 2011 Neil Kettle
+; * Copyright 2013 James Z.M. Gao
+; * Copyright 2012-2016 Luke Dashjr
 ; *
-; * This file is part of cpuminer-ng.
-; *
-; * cpuminer-ng is free software: you can redistribute it and/or modify
-; * it under the terms of the GNU General Public License as published by
-; * the Free Software Foundation, either version 3 of the License, or
-; * (at your option) any later version.
-; *
-; * cpuminer-ng is distributed in the hope that it will be useful,
-; * but WITHOUT ANY WARRANTY; without even the implied warranty of
-; * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-; * GNU General Public License for more details.
-; *
-; * You should have received a copy of the GNU General Public License
-; * along with cpuminer-ng.  If not, see <http://www.gnu.org/licenses/>.
+; * This program is free software; you can redistribute it and/or modify it
+; * under the terms of the GNU General Public License as published by the Free
+; * Software Foundation; either version 3 of the License, or (at your option)
+; * any later version.  See COPYING for more details.
 ; */
 
 ; %rbp, %rbx, and %r12-%r15 - callee save
@@ -22,10 +14,18 @@
 ALIGN 32
 BITS 64
 
+%ifidn __OUTPUT_FORMAT__,win64
+%define hash  rcx
+%define hash1 rdx
+%define data  r8
+%define init  r9
+%else
 %define hash  rdi
 %define hash1 rsi
 %define data  rdx
 %define init  rcx
+%endif
+%define rel_sha256_consts_m128i  r10
 
 ; 0 = (1024 - 256) (mod (LAB_CALC_UNROLL*LAB_CALC_PARA*16))
 %define SHA_CALC_W_PARA         2
@@ -33,19 +33,10 @@ BITS 64
 
 %define SHA_ROUND_LOOP_UNROLL   16
 
-%ifidn __YASM_OBJFMT__, macho64
-extern _sha256_consts_m128i
-extern _sha256_init
-%else
 extern sha256_consts_m128i
-extern sha256_init
-%endif
+extern sha256_init_sse2
 
-%ifidn __YASM_OBJFMT__, macho64
-global _sha256_sse2_64_new
-%else
 global sha256_sse2_64_new
-%endif
 
 %define sr1   xmm6
 %define sr2   xmm1
@@ -75,11 +66,7 @@ global sha256_sse2_64_new
     pand      sr3, rE                           ; sr3 = rE & rF
     movdqa    rG, rF                            ; rG  = rF
 
-%ifidn __YASM_OBJFMT__, macho64
-    paddd     sr1, [rcx+rax]
-%else
-    paddd     sr1, sha256_consts_m128i[rax]     ; T1  =                    sha256_consts_m128i[i] + w;
-%endif
+    paddd     sr1, [rel_sha256_consts_m128i+rax] ; T1  =                    sha256_consts_m128i[i] + w;
     pxor      sr2, sr3                          ; sr2 = (rE & rF) ^ (~rE & rG) = Ch (e, f, g)
 
     movdqa    rF, rE                            ; rF  = rE
@@ -220,13 +207,18 @@ global sha256_sse2_64_new
 
 ; _sha256_sse2_64_new hash(rdi), hash1(rsi), data(rdx), init(rcx),
 
-%ifidn __YASM_OBJFMT__, macho64
-_sha256_sse2_64_new:
-%else
 sha256_sse2_64_new:
-%endif
 
     push        rbx
+%ifidn __OUTPUT_FORMAT__,win64
+    sub         rsp, 16 * 6
+    movdqa      [rsp + 16*0], xmm6
+    movdqa      [rsp + 16*1], xmm7
+    movdqa      [rsp + 16*2], xmm8
+    movdqa      [rsp + 16*3], xmm9
+    movdqa      [rsp + 16*4], xmm10
+    movdqa      [rsp + 16*5], xmm13
+%endif
 
 %macro  SHA_256  0
     mov         rbx, 64*4   ; rbx is # of SHA-2 rounds
@@ -262,9 +254,7 @@ sha256_sse2_64_new:
     pshufd    rH, rE, 0xFF          ; rH == H
     pshufd    rE, rE, 0             ; rE == E
 
-%ifidn __YASM_OBJFMT__, macho64
-    lea       rcx, [_sha256_consts_m128i wrt rip]
-%endif
+    lea       rel_sha256_consts_m128i, [sha256_consts_m128i wrt rip]
 
 %%SHAROUND_LOOP:
 %assign i 0
@@ -311,13 +301,22 @@ sha256_sse2_64_new:
     movdqa    [hash1+7*16], rH
 
     mov       data, hash1
-    mov       init, sha256_init
+    mov       init, qword sha256_init_sse2
 
     SHA_256
 
     movdqa    [hash+7*16], rH
 
 LAB_RET:
+%ifidn __OUTPUT_FORMAT__,win64
+    movdqa    xmm6, [rsp + 16*0]
+    movdqa    xmm7, [rsp + 16*1]
+    movdqa    xmm8, [rsp + 16*2]
+    movdqa    xmm9, [rsp + 16*3]
+    movdqa    xmm10, [rsp + 16*4]
+    movdqa    xmm13, [rsp + 16*5]
+    add       rsp, 16 * 6
+%endif
     pop       rbx
     ret
 

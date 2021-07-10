@@ -1,4 +1,94 @@
-Original CPU mining software: Jeff Garzik <jgarzik@pobox.com>
-GPU mining and refactor: Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
-FPGA mining and refactor: Luke Dashjr <luke-jr+bfgminer@utopios.org> 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
-API+: Andrew Smith <kanoi2@kano-kun.net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
+CURRENT MAINTAINERS:
+
+Luke Dashjr <luke-jr+bfgminer@utopios.org> 1QATWksNFGeUJCWBrN4g6hGM178Lovm7Wh
+John Stefanopoulos <jstefanop@mac.com>
+
+Debian packaging: Dmitry Smirnov <onlyjob@member.fsf.org>
+
+---
+
+PAST MAINTAINERS:
+
+Anatoly Legkodymov <legko777@fastmail.fm>
+Andreas Auer <aauer1@gmail.com>
+Andrew Smith <kan0i@kano-kun.net> 1Jjk2LmktEQKnv8r2cZ9MvLiZwZ9gxabKm
+Con Kolivas <kernel@kolivas.org> 15qSxP1SQcUX3o4nhkfdbgyoWEFMomJ4rZ
+Jeff Garzik <jgarzik@pobox.com>
+Nate Woolls <nwoolls@gmail.com> 1JnZoFeCVYJgaKbKwDUxSkTZWWpBmwWTgV
+Nelisky <nelisky.btc@gmail.com>
+Pelle Nilsson <per.nilsson@xelmo.com>
+Vitalii Demianets <vitalii@orsoc.se>
+Xiangfu <xiangfu@openmobilefree.net>
+
+---
+
+CONTRIBUTORS:
+
+Abracadabra <hocuscapocus@gmail.com>
+anajavi
+Andrew McDonald <andrew@mcdonald.org.uk>
+Ang Iongchun <angiongchun@gmail.com>
+ArtForz
+BFL_Jonathon <jonathon@butterflylabs.com>
+Bitfury
+blinkier <blinkiest@gmail.com>
+bluemurder <bluemurder@engineer.com>
+capa66 <capa66@x204.com>
+Christian Berendt <berendt@b1-systems.de>
+Colin Percival
+Daniel Mack <daniel@caiaq.de>
+Denis Ahrens <denis@h3q.com>
+Dmitriy Korniychuk <dmitriy@korniychuk.org.ua>
+Dmitry Sorokin <asfins@gmail.com>
+Dualminer Team <dualminer@broadeng.net>
+fleger <florian6.leger@laposte.net>
+Glenn Francis Murray <glenn@gfm.cc>
+gluk <glukolog@mail.ru>
+Graeme Humphries <graeme@sudo.ca>
+GridSeed Team <develop@gridseed.com>
+HashBuster team <contact@hashbuster.com>
+Huang Le <4tarhl@gmail.com>
+Isidoro Ghezzi <isidoro.ghezzi@icloud.com>
+James Hilliard <james.hilliard1@gmail.com>
+James Morris <jmorris@intercode.com.au>
+Jason Hughes <wizkid057@gmail.com>
+Jason Snell <abysss@gmail.com>
+Jean-Luc Cooke <jlcooke@certainkey.com>
+Jonathan Lynch <jonathan.lynch@intel.com>
+Josh Lehan <krellan@krellan.net>
+Kiyoaki Matsugae <matsugae.kiyoaki@gmail.com>
+Lauri Kasanen <curaga@operamail.com>
+Lingchao Xu <lingchao.xu@bitmaintech.com>
+Luke Mitchell <Luke.Mitchell.2011@my.bristol.ac.uk>
+Mark Crichton <crichton@gmail.com>
+Martin Danielsen <kalroth@gmail.com>
+Michael Kedzierski <michael@kedzierski.id.au>
+Mr O <notanatheist@gmail.com>
+mtrlt
+Neil Kettle <neil@digit-labs.org>
+Nico Oelgart <nico@nicoswd.com>
+Olivier Gay <olivier.gay@a3.epfl.ch>
+Paul Sheppard <shepsoft@gmail.com>
+Paul Wouters <pwouters@redhat.com>
+Pavel Semjanov <pavel@semjanov.com>
+Peter Stuge <peter@stuge.se>
+Phateus <Jesse.Moll@gmail.com>
+Philip Kaufmann <phil.kaufmann@t-online.de>
+pontus <liquidpontus@yahoo.se>
+pooler <pooler@litecoinpool.org>
+Raulo <p987341@gmail.com>
+Red_Wolf_2 <redwolf@wolfnexus.net>
+Ricardo Iván Vieitez Parra <cop3504@memoryplate.com>
+Ronny Van Keer
+Rusty Russell <rusty@rustcorp.com.au>
+Серёга <netswalker@yandex.ru>
+slax0r <frcole@gmail.com>
+Teemu Suikki <zuikkis@gmail.com>
+Thorsten Gilling <tgilling@web.de>
+Tim Bartletts <github@tim.bartletts.id.au>
+Tydus <Tydus@Tydus.org>
+Ufasoft <support@ufasoft.com>
+Vladimir Strinski <vstrinski@nanofury.com>
+Zefir Kurtisi <zefir.kurtisi@gmail.com>
+ZeusMiner Team <cs@zeusminer.com>
+Znort 987 <znort987@yahoo.com>
